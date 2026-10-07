@@ -45,3 +45,21 @@ if(MCE_BUILD_TESTS)
         DOCTEST_CONFIG_USE_STD_HEADERS)
     add_library(mce::doctest ALIAS mce_doctest)
 endif()
+
+# ---- DirectXMath (math test oracle only — core.md §2.7/§7, never linked into engine targets) ----
+if(MCE_BUILD_TESTS)
+    FetchContent_Declare(directxmath
+        GIT_REPOSITORY https://github.com/microsoft/DirectXMath.git
+        GIT_TAG        jun2026
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  _no_cmake_)   # header-only: we only need Inc/
+    FetchContent_MakeAvailable(directxmath)
+
+    add_library(mce_directxmath INTERFACE)
+    target_include_directories(mce_directxmath SYSTEM INTERFACE "${directxmath_SOURCE_DIR}/Inc")
+    if(NOT WIN32)
+        # DirectXMath needs a sal.h off Windows; a no-op annotation stub is enough.
+        target_include_directories(mce_directxmath SYSTEM INTERFACE "${PROJECT_SOURCE_DIR}/tests/support/sal")
+    endif()
+    add_library(mce::directxmath ALIAS mce_directxmath)
+endif()

@@ -16,4 +16,4 @@ deps never reach `mce_engine`.
 every machine (three commands, no vcpkg bootstrap). First configure clones the deps into the build tree
 (~10 s). Swapping back to a vcpkg manifest later only touches `cmake/Dependencies.cmake`.
 
-Pinned today: spdlog v1.17.0, Tracy v0.14.1 (on-demand client), doctest v2.5.3 (tests only).
+Pinned today: spdlog v1.17.0, Tracy v0.14.1 (on-demand client), doctest v2.5.3 (tests only), DirectXMath jun2026 (math oracle test only, `test_math_oracle`).
