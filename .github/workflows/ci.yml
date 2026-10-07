@@ -76,15 +76,21 @@ jobs:
         shell: bash
         run: |
           cmake --preset ${{ matrix.debug }} -DMCE_BUILD_TESTS=OFF
-          cmake --build --preset ${{ matrix.debug }} --target sample_02_boids
+          cmake --build --preset ${{ matrix.debug }} --target sample_02_boids sample_physics2d_headless
           cmake --preset ${{ matrix.release }} -DMCE_BUILD_TESTS=OFF
-          cmake --build --preset ${{ matrix.release }} --target sample_02_boids
+          cmake --build --preset ${{ matrix.release }} --target sample_02_boids sample_physics2d_headless
       - name: 3 runs x Debug/Release must hash identically
         shell: bash
         run: >
           python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1000 -boids 20000"
           build/${{ matrix.debug }}/samples/02_boids/sample_02_boids${{ matrix.exe }}
           build/${{ matrix.release }}/samples/02_boids/sample_02_boids${{ matrix.exe }}
+      - name: Physics 2D — 3 runs x Debug/Release must hash identically
+        shell: bash
+        run: >
+          python3 scripts/ci/determinism.py --runs 3 --args "-ticks 2000"
+          build/${{ matrix.debug }}/samples/physics2d_headless/sample_physics2d_headless${{ matrix.exe }}
+          build/${{ matrix.release }}/samples/physics2d_headless/sample_physics2d_headless${{ matrix.exe }}
 
   windows:
     name: Windows ${{ matrix.preset }}
