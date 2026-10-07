@@ -44,7 +44,7 @@ jobs:
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
       - name: Test
-        run: xvfb-run -a -s "-screen 0 1280x1024x24" ctest --preset ${{ matrix.preset }}
+        run: xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" ctest --preset ${{ matrix.preset }}
 
   tidy:
     name: clang-tidy
