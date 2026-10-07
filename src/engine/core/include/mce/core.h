@@ -22,4 +22,5 @@
 #include "mce/result.h"
 #include "mce/state_stack.h"
 #include "mce/string_id.h"
+#include "mce/type_name.h"
 #include "mce/types.h"

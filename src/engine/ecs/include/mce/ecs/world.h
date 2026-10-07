@@ -1,0 +1,708 @@
+#pragma once
+// mce_ecs: archetype tables, generational entities, queries, phases + sync points, deferred
+// Commands, double-buffered typed events, resources, state_hash (ecs-gameplay.md §2–§3).
+//
+// Safety property: nothing mutates table structure while a phase runs. Systems change structure
+// only through Commands, applied at the sync point that ends each phase, in recorded order.
+
+#include <cstring>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+
+#include "mce/containers/array.h"
+#include "mce/containers/flat_map.h"
+#include "mce/containers/hash_map.h"
+#include "mce/ecs/entity.h"
+#include "mce/memory/allocator.h"
+
+namespace mce {
+
+template <>
+struct Hash<ecs::ComponentMask> {
+    u64 operator()(const ecs::ComponentMask& m) const {
+        u64 h = 0;
+        for (usize i = 0; i < ecs::ComponentMask::kWords; ++i) h = hash_combine(h, m.word_at(i));
+        return h;
+    }
+};
+
+class World;
+class Frame;
+
+// The complete phase list (adding a phase is a design event).
+enum class Phase : u8 {
+    Startup,              // once, after scene load, deterministic order
+    FixedUpdate_Pre,      // input apply, timers, gameplay pre
+    FixedUpdate_Physics,  // owned by physics
+    FixedUpdate_Post,     // transform propagation, triggers, gameplay post
+    Render_Pre,           // per render frame: extract, interpolate ("RenderExtract" group, fix F9)
+    Render_Submit,        // renderer only
+    Editor,               // editor-only systems
+    Count
+};
+inline constexpr usize kPhaseCount = static_cast<usize>(Phase::Count);
+const char* phase_name(Phase p);
+
+using SystemFn = void (*)(Frame& f);
+
+namespace ecs::detail {
+
+struct Column {
+    ComponentId id = kInvalidComponent;
+    u32 size = 0;
+    u32 align = 0;
+    u8* data = nullptr;
+};
+
+// One archetype: every entity with exactly this component set, stored column-wise.
+class Table {
+public:
+    Table(mem::IAllocator& alloc, u32 id, const ComponentMask& mask, Span<const ComponentInfo> infos);
+    ~Table();
+    Table(const Table&) = delete;
+    Table& operator=(const Table&) = delete;
+
+    u32 id() const { return id_; }
+    const ComponentMask& mask() const { return mask_; }
+    u32 size() const { return static_cast<u32>(entities_.size()); }
+    Span<const Entity> entities() const { return entities_.span(); }
+    Span<const Column> columns() const { return columns_.span(); }
+    Span<const ComponentId> ids() const { return ids_.span(); }
+
+    // Column data pointer for a component, or nullptr if absent (tags have no column).
+    u8* column(ComponentId c) const {
+        const u8 i = col_of_[c];
+        return i == kNoColumn ? nullptr : columns_[i].data;
+    }
+    u8* cell(ComponentId c, u32 row) const {
+        const u8 i = col_of_[c];
+        return i == kNoColumn ? nullptr : columns_[i].data + usize(row) * columns_[i].size;
+    }
+
+    // Appends a zero-initialized row. Returns its index.
+    u32 push_row(Entity e);
+    // Appends `n` zero-initialized rows.
+    u32 push_rows(u32 n, const Entity* es);
+    // Removes `row` by moving the last row into it. Returns the entity that moved (null if none).
+    Entity swap_remove(u32 row);
+
+    FlatMap<ComponentId, u32>& add_edges() { return add_edges_; }
+    FlatMap<ComponentId, u32>& remove_edges() { return remove_edges_; }
+
+private:
+    static constexpr u8 kNoColumn = 0xFF;
+    void reserve(u32 capacity);
+
+    mem::IAllocator& alloc_;
+    u32 id_;
+    ComponentMask mask_;
+    SmallVector<ComponentId, 8> ids_;
+    Array<Column> columns_;
+    Array<Entity> entities_;
+    u32 capacity_ = 0;
+    u8 col_of_[kMaxComponents];
+    FlatMap<ComponentId, u32> add_edges_;
+    FlatMap<ComponentId, u32> remove_edges_;
+};
+
+// Type-erased event queue (double-buffered; swapped at its producer phase's sync point).
+class EventQueueBase {
+public:
+    virtual ~EventQueueBase() = default;
+    virtual void swap() = 0;
+    virtual usize back_size() const = 0;
+    virtual usize front_size() const = 0;
+
+    StringView name;
+    Phase producer_phase = Phase::FixedUpdate_Pre;
+    u64 total_pushed = 0;
+    SmallVector<u16, 4> producers;  // system indices that pushed
+    SmallVector<u16, 4> consumers;  // system indices that read
+};
+
+template <class T>
+class EventQueue final : public EventQueueBase {
+public:
+    explicit EventQueue(mem::IAllocator& a) : front_(a), back_(a) {}
+    void push(const T& ev) {
+        back_.push_back(ev);
+        ++total_pushed;
+    }
+    Span<const T> read() const { return front_.span(); }
+    void swap() override {
+        std::swap(front_, back_);
+        back_.clear();
+    }
+    usize back_size() const override { return back_.size(); }
+    usize front_size() const override { return front_.size(); }
+
+private:
+    Array<T> front_;
+    Array<T> back_;
+};
+
+}  // namespace ecs::detail
+
+// Deferred structural changes. Records into a byte stream; applied at the next sync point in
+// fixed passes: spawns, then add/remove/set in recorded order, then destroys.
+class Commands {
+public:
+    explicit Commands(World& w);
+
+    // The handle is valid (alive) immediately; its components appear at the sync point.
+    Entity spawn();
+    template <class... Ts>
+    Entity spawn(const Ts&... components);
+    // Spawns n entities sharing one initial component value. Handles are appended to `out`.
+    template <class T>
+    void spawn_n(u32 n, const T& initial, Array<Entity>* out = nullptr);
+    void destroy(Entity e);
+    template <class T>
+    void add(Entity e, const T& value = T{});
+    template <class T>
+    void remove(Entity e);
+    template <class T>
+    void set(Entity e, const T& value);
+
+    u32 pending() const { return count_; }
+    bool empty() const { return count_ == 0; }
+
+private:
+    friend class World;
+    enum class Op : u8 { Spawn, SpawnN, Destroy, Add, Remove, Set };
+    struct Header {
+        Op op;
+        u8 pad;
+        ecs::ComponentId comp;
+        u32 payload;  // payload bytes following the header (8-byte padded)
+        Entity entity;
+    };
+    static_assert(sizeof(Header) == 16);
+
+    void* record(Op op, Entity e, ecs::ComponentId comp, usize payload_bytes);
+    void clear() {
+        bytes_.clear();
+        count_ = 0;
+    }
+
+    World& world_;
+    Array<u8> bytes_;
+    u32 count_ = 0;
+};
+
+// Read/write access to typed events from a system.
+class EventAccess {
+public:
+    explicit EventAccess(World& w) : world_(w) {}
+    template <class T>
+    void push(const T& ev);
+    template <class T>
+    Span<const T> read();
+
+private:
+    World& world_;
+};
+
+template <class... Cs>
+class Query;
+
+// The only context a system receives (fix F3: the per-tick context of record).
+class Frame {
+public:
+    u64 tick = 0;          // fixed-step counter
+    f32 dt = 0;            // exactly 1/sim_hz — never scaled (FR-RUN-050)
+    f32 alpha = 0;         // render interpolation factor; valid in Render_Pre
+    f32 time_scale = 1.0f;
+    Phase phase = Phase::FixedUpdate_Pre;
+
+    explicit Frame(World& w) : world_(&w) {}
+
+    World& world() { return *world_; }
+    Commands& commands();
+    EventAccess events() { return EventAccess(*world_); }
+    template <class T>
+    T& resource();
+    template <class T>
+    T* try_resource();
+    template <class... Cs>
+    Query<Cs...> query();
+
+private:
+    World* world_;
+};
+
+namespace ecs::detail {
+template <class C>
+using component_t = std::remove_cvref_t<C>;
+template <class C>
+using column_ptr_t = std::conditional_t<std::is_const_v<std::remove_reference_t<C>>, const component_t<C>*, component_t<C>*>;
+}  // namespace ecs::detail
+
+// Frame-scoped view over every table containing Cs (plus with<>, minus without<>).
+// Iteration order: tables in creation order, rows in row order — deterministic.
+template <class... Cs>
+class Query {
+public:
+    explicit Query(World& w);
+
+    template <class... Ts>
+    Query& with();
+    template <class... Ts>
+    Query& without();
+
+    // fn(Entity, Cs&...) or fn(Cs&...)
+    template <class Fn>
+    void each(Fn&& fn);
+    usize count();
+
+private:
+    World& world_;
+    ecs::ComponentMask required_;
+    ecs::ComponentMask excluded_;
+    ecs::ComponentId ids_[sizeof...(Cs) > 0 ? sizeof...(Cs) : 1];
+};
+
+struct WorldMetrics {
+    u32 entities = 0;
+    u32 tables = 0;
+    u32 avg_table_occupancy_x100 = 0;  // average rows per non-empty table, x100
+    u32 pending_commands = 0;
+    u32 components = 0;
+    u64 structure_version = 0;
+};
+
+struct EventInfo {
+    StringView name;
+    Phase producer_phase;
+    u64 total_pushed;
+    usize readable;  // events visible to readers right now
+    SmallVector<StringView, 4> producers;
+    SmallVector<StringView, 4> consumers;
+};
+
+class World {
+public:
+    explicit World(mem::IAllocator& alloc = mem::heap());
+    ~World();
+    World(const World&) = delete;
+    World& operator=(const World&) = delete;
+
+    // ---- components ------------------------------------------------------
+    template <class T>
+    ecs::ComponentId component_id() {
+        return register_component_info(ecs::component_info<T>());
+    }
+    template <class... Ts>
+    void register_components() {
+        (component_id<Ts>(), ...);
+    }
+    const ecs::ComponentInfo& component(ecs::ComponentId id) const { return components_[id]; }
+    usize component_count() const { return components_.size(); }
+
+    using HookFn = void (*)(World& w, Entity e);
+    template <class T>
+    void set_hooks(HookFn on_add, HookFn on_remove) {
+        const ecs::ComponentId c = component_id<T>();
+        hooks_[c].on_add = on_add;
+        hooks_[c].on_remove = on_remove;
+    }
+
+    // ---- entities (immediate; structural calls are illegal while a phase runs) -----
+    Entity spawn();
+    template <class... Ts>
+    Entity spawn_with(const Ts&... components);
+    void destroy(Entity e);
+    bool alive(Entity e) const;
+    template <class T>
+    bool has(Entity e) const;
+    template <class T>
+    const T* try_get(Entity e) const;
+    template <class T>
+    T* try_get_mut(Entity e);
+    // Data write; adds the component (structural) when missing.
+    template <class T>
+    void set(Entity e, const T& value);
+    template <class T>
+    void add(Entity e, const T& value = T{}) {
+        set<T>(e, value);
+    }
+    template <class T>
+    void remove(Entity e);
+    u32 entity_count() const { return alive_count_; }
+
+    // ---- systems & phases -------------------------------------------------
+    // Registration order within a phase IS execution order. `after` (optional) names a system
+    // that must already be registered in the same phase — asserted, never reordered.
+    void add_system(Phase phase, const char* name, SystemFn fn, const char* after = nullptr);
+    Span<const char* const> system_names(Phase phase) const;
+    void install_module(void (*fn)(World&)) { fn(*this); }
+
+    // Runs one phase, then its sync point.
+    void run_phase(Phase phase, Frame& frame);
+    // Startup phase (once) + the three fixed phases.
+    void tick(f64 dt, u64 tick_index, f32 time_scale = 1.0f);
+    void render(f32 alpha);
+    // Applies pending commands and swaps the given phase's event queues.
+    void sync(Phase phase);
+    bool in_phase() const { return in_phase_; }
+    u64 current_tick() const { return tick_; }
+
+    Commands& commands() { return commands_; }
+
+    // ---- events -------------------------------------------------------------
+    template <class T>
+    void register_event(Phase producer_phase);
+    template <class T>
+    ecs::detail::EventQueue<T>* event_queue();
+    void event_registry(Array<EventInfo>& out) const;
+
+    // ---- resources (singletons; not entities) ---------------------------------
+    template <class T>
+    T& set_resource(T value);
+    template <class T>
+    T* try_resource();
+    template <class T>
+    T& resource() {
+        T* r = try_resource<T>();
+        MCE_ASSERT_MSG(r != nullptr, "missing world resource");
+        return *r;
+    }
+
+    // ---- queries & determinism ------------------------------------------------------
+    template <class... Cs>
+    Query<Cs...> query() {
+        return Query<Cs...>(*this);
+    }
+    // Order-total hash of every table: component identities, entities, and column bytes.
+    u64 state_hash(u64 seed = kFnv64Offset) const;
+    WorldMetrics metrics() const;
+
+    // ---- internals used by Query/Commands/EventAccess (mce::ecs::detail level) ----
+    Span<const mem::UniquePtr<ecs::detail::Table>> tables() const { return tables_.span(); }
+    ecs::ComponentId register_component_info(const ecs::ComponentInfo& info);
+    Entity reserve_entity();
+    void note_event_access(ecs::detail::EventQueueBase& q, bool producer);
+
+private:
+    friend class Commands;
+    struct Location {
+        u32 table = kNoTable;
+        u32 row = 0;
+    };
+    struct Hooks {
+        HookFn on_add = nullptr;
+        HookFn on_remove = nullptr;
+    };
+    struct SystemEntry {
+        const char* name;
+        SystemFn fn;
+        u16 id;  // global system index (event producer/consumer attribution)
+    };
+    struct Resource {
+        void* ptr = nullptr;
+        void (*destroy)(mem::IAllocator&, void*) = nullptr;
+    };
+    static constexpr u32 kNoTable = ~u32(0);       // reserved by Commands::spawn, not yet placed
+    static constexpr u32 kEmptyTable = 0;          // table 0 = the empty archetype
+
+    ecs::detail::Table& table_for(const ecs::ComponentMask& mask);
+    u32 table_with(u32 from, ecs::ComponentId c, bool add);
+    // Moves e to table `to`, copying shared columns. Returns the new row.
+    u32 move_entity(Entity e, u32 to);
+    void place_entity(Entity e, u32 table);
+    void add_component_raw(Entity e, ecs::ComponentId c, const void* value);
+    void remove_component_raw(Entity e, ecs::ComponentId c);
+    void destroy_now(Entity e);
+    void apply_commands();
+    void assert_not_in_phase(const char* what) const;
+
+    mem::IAllocator& alloc_;
+    Array<ecs::ComponentInfo> components_;
+    HashMap<u64, ecs::ComponentId> component_ids_;
+    Array<Hooks> hooks_;
+
+    Array<u32> generations_;
+    Array<Location> locations_;
+    Array<u32> free_list_;
+    u32 alive_count_ = 0;
+
+    Array<mem::UniquePtr<ecs::detail::Table>> tables_;
+    HashMap<ecs::ComponentMask, u32> table_index_;
+    u64 structure_version_ = 0;
+
+    Array<SystemEntry> systems_[kPhaseCount];
+    Array<const char*> system_name_cache_[kPhaseCount];
+    Array<const char*> system_names_all_;  // index = global system id
+    u16 current_system_ = 0xFFFF;
+
+    HashMap<u64, mem::UniquePtr<ecs::detail::EventQueueBase>> events_;
+    Array<ecs::detail::EventQueueBase*> events_by_phase_[kPhaseCount];
+    Array<ecs::detail::EventQueueBase*> events_ordered_;
+
+    HashMap<u64, Resource> resources_;
+
+    Commands commands_;
+    bool in_phase_ = false;
+    bool started_ = false;
+    u64 tick_ = 0;
+};
+
+// =====================================================================================
+// Template implementations
+// =====================================================================================
+
+template <class... Ts>
+Entity World::spawn_with(const Ts&... components) {
+    assert_not_in_phase("spawn_with");
+    ecs::ComponentMask mask;
+    const ecs::ComponentId ids[] = {component_id<Ts>()...};
+    for (ecs::ComponentId c : ids) mask.set(c);
+    Entity e = reserve_entity();
+    const u32 t = table_for(mask).id();
+    place_entity(e, t);
+    const Location loc = locations_[e.index];
+    ecs::detail::Table& table = *tables_[loc.table];
+    usize i = 0;
+    (
+        [&] {
+            if constexpr (!std::is_empty_v<Ts>) std::memcpy(table.cell(ids[i], loc.row), &components, sizeof(Ts));
+            ++i;
+        }(),
+        ...);
+    for (ecs::ComponentId c : ids)
+        if (hooks_[c].on_add) hooks_[c].on_add(*this, e);
+    return e;
+}
+
+template <class T>
+bool World::has(Entity e) const {
+    if (!alive(e)) return false;
+    const auto it = component_ids_.find(kTypeHash<T>);
+    if (!it) return false;
+    const Location loc = locations_[e.index];
+    return loc.table != kNoTable && tables_[loc.table]->mask().test(*it);
+}
+
+template <class T>
+const T* World::try_get(Entity e) const {
+    static_assert(!std::is_empty_v<T>, "tags have no data; use has<T>()");
+    if (!alive(e)) return nullptr;
+    const auto it = component_ids_.find(kTypeHash<T>);
+    if (!it) return nullptr;
+    const Location loc = locations_[e.index];
+    if (loc.table == kNoTable) return nullptr;
+    return reinterpret_cast<const T*>(tables_[loc.table]->cell(*it, loc.row));
+}
+
+template <class T>
+T* World::try_get_mut(Entity e) {
+    return const_cast<T*>(static_cast<const World*>(this)->try_get<T>(e));
+}
+
+template <class T>
+void World::set(Entity e, const T& value) {
+    if (!alive(e)) return;
+    const ecs::ComponentId c = component_id<T>();
+    const Location loc = locations_[e.index];
+    if (loc.table != kNoTable && tables_[loc.table]->mask().test(c)) {
+        if constexpr (!std::is_empty_v<T>) std::memcpy(tables_[loc.table]->cell(c, loc.row), &value, sizeof(T));
+        return;
+    }
+    assert_not_in_phase("add (structural set)");
+    add_component_raw(e, c, std::is_empty_v<T> ? nullptr : &value);
+}
+
+template <class T>
+void World::remove(Entity e) {
+    assert_not_in_phase("remove");
+    if (!alive(e)) return;
+    remove_component_raw(e, component_id<T>());
+}
+
+template <class T>
+void World::register_event(Phase producer_phase) {
+    auto [slot, inserted] = events_.try_emplace(kTypeHash<T>);
+    if (!inserted) return;
+    auto* q = mem::make<ecs::detail::EventQueue<T>>(alloc_, alloc_);
+    q->name = type_name<T>();
+    q->producer_phase = producer_phase;
+    *slot = mem::UniquePtr<ecs::detail::EventQueueBase>(alloc_, q);
+    events_by_phase_[static_cast<usize>(producer_phase)].push_back(q);
+    events_ordered_.push_back(q);
+}
+
+template <class T>
+ecs::detail::EventQueue<T>* World::event_queue() {
+    auto* slot = events_.find(kTypeHash<T>);
+    return slot ? static_cast<ecs::detail::EventQueue<T>*>(slot->get()) : nullptr;
+}
+
+template <class T>
+T& World::set_resource(T value) {
+    if (T* existing = try_resource<T>()) {
+        *existing = std::move(value);
+        return *existing;
+    }
+    T* p = mem::make<T>(alloc_, std::move(value));
+    Resource r;
+    r.ptr = p;
+    r.destroy = [](mem::IAllocator& a, void* ptr) { mem::destroy(a, static_cast<T*>(ptr)); };
+    resources_.insert_or_assign(kTypeHash<T>, r);
+    return *p;
+}
+
+template <class T>
+T* World::try_resource() {
+    Resource* r = resources_.find(kTypeHash<T>);
+    return r ? static_cast<T*>(r->ptr) : nullptr;
+}
+
+// ---- Commands ------------------------------------------------------------------------
+
+template <class... Ts>
+Entity Commands::spawn(const Ts&... components) {
+    const Entity e = world_.reserve_entity();
+    usize bytes = 0;
+    ((bytes += 8 + align_up(std::is_empty_v<Ts> ? 0 : sizeof(Ts), 8)), ...);
+    u8* p = static_cast<u8*>(record(Op::Spawn, e, ecs::kInvalidComponent, bytes));
+    (
+        [&] {
+            const ecs::ComponentId c = world_.component_id<Ts>();
+            const u32 size = std::is_empty_v<Ts> ? 0u : static_cast<u32>(sizeof(Ts));
+            std::memcpy(p, &c, sizeof(c));
+            std::memcpy(p + 4, &size, sizeof(size));
+            if constexpr (!std::is_empty_v<Ts>) std::memcpy(p + 8, &components, sizeof(Ts));
+            p += 8 + align_up(size, 8);
+        }(),
+        ...);
+    return e;
+}
+
+template <class T>
+void Commands::spawn_n(u32 n, const T& initial, Array<Entity>* out) {
+    const ecs::ComponentId c = world_.component_id<T>();
+    const usize value_bytes = align_up(std::is_empty_v<T> ? 0 : sizeof(T), 8);
+    u8* p = static_cast<u8*>(record(Op::SpawnN, Entity::null, c, 8 + value_bytes + usize(n) * sizeof(Entity)));
+    std::memcpy(p, &n, sizeof(n));
+    if constexpr (!std::is_empty_v<T>) std::memcpy(p + 8, &initial, sizeof(T));
+    Entity* es = reinterpret_cast<Entity*>(p + 8 + value_bytes);
+    for (u32 i = 0; i < n; ++i) {
+        const Entity e = world_.reserve_entity();
+        std::memcpy(es + i, &e, sizeof(e));
+        if (out) out->push_back(e);
+    }
+}
+
+template <class T>
+void Commands::add(Entity e, const T& value) {
+    const ecs::ComponentId c = world_.component_id<T>();
+    const usize size = std::is_empty_v<T> ? 0 : sizeof(T);
+    void* p = record(Op::Add, e, c, size);
+    if constexpr (!std::is_empty_v<T>) std::memcpy(p, &value, sizeof(T));
+}
+
+template <class T>
+void Commands::remove(Entity e) {
+    record(Op::Remove, e, world_.component_id<T>(), 0);
+}
+
+template <class T>
+void Commands::set(Entity e, const T& value) {
+    static_assert(!std::is_empty_v<T>, "tags have no data; use add<T>()");
+    void* p = record(Op::Set, e, world_.component_id<T>(), sizeof(T));
+    std::memcpy(p, &value, sizeof(T));
+}
+
+// ---- events & frame ---------------------------------------------------------------------
+
+template <class T>
+void EventAccess::push(const T& ev) {
+    ecs::detail::EventQueue<T>* q = world_.event_queue<T>();
+    MCE_ASSERT_MSG(q != nullptr, "event type not registered (World::register_event)");
+    if (!q) return;
+    world_.note_event_access(*q, true);
+    q->push(ev);
+}
+
+template <class T>
+Span<const T> EventAccess::read() {
+    ecs::detail::EventQueue<T>* q = world_.event_queue<T>();
+    MCE_ASSERT_MSG(q != nullptr, "event type not registered (World::register_event)");
+    if (!q) return {};
+    world_.note_event_access(*q, false);
+    return q->read();
+}
+
+inline Commands& Frame::commands() { return world_->commands(); }
+
+template <class T>
+T& Frame::resource() {
+    return world_->resource<T>();
+}
+template <class T>
+T* Frame::try_resource() {
+    return world_->try_resource<T>();
+}
+template <class... Cs>
+Query<Cs...> Frame::query() {
+    return Query<Cs...>(*world_);
+}
+
+// ---- Query ---------------------------------------------------------------------------------
+
+template <class... Cs>
+Query<Cs...>::Query(World& w) : world_(w) {
+    static_assert(((!std::is_empty_v<ecs::detail::component_t<Cs>>) && ...), "tags go in with<>(), not the item list");
+    usize i = 0;
+    ((ids_[i++] = w.component_id<ecs::detail::component_t<Cs>>()), ...);
+    for (usize k = 0; k < sizeof...(Cs); ++k) required_.set(ids_[k]);
+}
+
+template <class... Cs>
+template <class... Ts>
+Query<Cs...>& Query<Cs...>::with() {
+    (required_.set(world_.component_id<Ts>()), ...);
+    return *this;
+}
+
+template <class... Cs>
+template <class... Ts>
+Query<Cs...>& Query<Cs...>::without() {
+    (excluded_.set(world_.component_id<Ts>()), ...);
+    return *this;
+}
+
+template <class... Cs>
+template <class Fn>
+void Query<Cs...>::each(Fn&& fn) {
+    for (const auto& tp : world_.tables()) {
+        const ecs::detail::Table& t = *tp;
+        const u32 rows = t.size();
+        if (rows == 0 || !t.mask().contains_all(required_) || t.mask().intersects(excluded_)) continue;
+        const Entity* es = t.entities().data();
+        [&]<usize... I>(std::index_sequence<I...>) {
+            std::tuple<ecs::detail::column_ptr_t<Cs>...> cols{
+                reinterpret_cast<ecs::detail::column_ptr_t<Cs>>(t.column(ids_[I]))...};
+            for (u32 r = 0; r < rows; ++r) {
+                if constexpr (std::is_invocable_v<Fn&, Entity, decltype(*std::get<I>(cols))...>) {
+                    fn(es[r], std::get<I>(cols)[r]...);
+                } else {
+                    fn(std::get<I>(cols)[r]...);
+                }
+            }
+        }(std::index_sequence_for<Cs...>{});
+    }
+}
+
+template <class... Cs>
+usize Query<Cs...>::count() {
+    usize n = 0;
+    for (const auto& tp : world_.tables()) {
+        const ecs::detail::Table& t = *tp;
+        if (t.mask().contains_all(required_) && !t.mask().intersects(excluded_)) n += t.size();
+    }
+    return n;
+}
+
+}  // namespace mce

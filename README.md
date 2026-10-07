@@ -15,6 +15,11 @@ ctest --preset msvc-debug
 ```
 
 Run the headless harness: `build/<preset>/tests/devhost/mce_devhost -ticks 10000`.
+Run the first sample: `build/<preset>/samples/01_triangle/01_triangle` (needs a GL 4.5 driver; Esc quits).
+
+On Linux, SDL3 builds against the X11 headers: `sudo apt-get install libx11-dev libxext-dev libxcursor-dev
+libxrandr-dev libxi-dev libxss-dev libxtst-dev libxfixes-dev libxkbcommon-dev libgl-dev`. Tests that need a display
+and a GL driver register with `-DMCE_GPU_TESTS=ON` (CI runs them under Xvfb + Mesa llvmpipe).
 
 Cook a project (`<project>/assets/` → `<project>/cooked/`, plus `assets.mce` with `--pack`):
 `build/<preset>/tools/cook/mce_cook <project> [--pack] [--force] [--adopt]` — exit 0 ok, 1 cook errors, 2 usage.
@@ -27,11 +32,16 @@ Cook a project (`<project>/assets/` → `<project>/cooked/`, plus `assets.mce` w
 | `src/engine/asset` | `mce_asset` (L2): `.mce` container, GUIDs, cooked chunk formats, runtime asset registry (handles, refcount, hot-reload commit) |
 | `src/engine/asset/cook` | `mce_asset_cook`: cook library — scan, sidecars, importers (PNG/JPG, WAV, TTF, `.mcmat`, `.mcscene`), dependency graph, cook DB, pack |
 | `tools/cook` | `mce_cook` CLI |
+| `src/engine/platform` | `mce_platform` (L1): SDL3 window + event pump, clock, boot-failure message box (the SDL wall) |
+| `src/engine/rhi` | `mce_rhi` (L2): backend-neutral handles, `RenderDevice`, recorded `CommandBuffer` |
+| `src/engine/rhi_gl` | `mce_rhi_gl` (L2): the OpenGL 4.5 core backend (DSA, persistent-mapped rings, fences) — the only GL code |
+| `samples/` | the sample ladder: `01_triangle` |
+| `third_party/glad` | generated glad2 GL 4.5 core loader (private to `mce_rhi_gl`) |
 | `tests/` | doctest unit tests (`test_<module>`) and `mce_devhost` |
 | `scripts/ci/check_walls.py` | GL / SDL / ImGui / JPH / Box2D / stb / cook grep walls and the engine container ban |
 | `cmake/` | compile policy (`MceTarget.cmake`) and pinned dependencies (`Dependencies.cmake`) |
 
 ## Status
 
-M0 in progress: `mce_core` and the headless loop are in; platform (SDL3), RHI/GL triangle and the editor shell
-are next. See ROADMAP §2.
+M0 in progress: `mce_core`, the headless loop, `mce_platform` (SDL3), `mce_rhi` + `mce_rhi_gl` and `01_triangle`
+are in; the editor shell is next. See ROADMAP §2.

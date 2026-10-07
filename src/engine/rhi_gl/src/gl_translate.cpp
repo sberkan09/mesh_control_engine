@@ -1,0 +1,279 @@
+// mce_rhi_gl translate stage: recorded CommandBuffer stream -> GL calls (rhi-renderer.md §3.4 step 5).
+// Payloads (uniform blocks, transient geometry) are copied into the slot's persistent-mapped rings.
+
+#include <cstring>
+
+#include "gl_device.h"
+#include "mce/log.h"
+
+namespace mce::rhi::gl {
+namespace {
+
+GLenum gl_compare(CompareOp op) {
+    switch (op) {
+        case CompareOp::Never: return GL_NEVER;
+        case CompareOp::Less: return GL_LESS;
+        case CompareOp::Equal: return GL_EQUAL;
+        case CompareOp::LessEqual: return GL_LEQUAL;
+        case CompareOp::Greater: return GL_GREATER;
+        case CompareOp::NotEqual: return GL_NOTEQUAL;
+        case CompareOp::GreaterEqual: return GL_GEQUAL;
+        case CompareOp::Always: return GL_ALWAYS;
+    }
+    return GL_LEQUAL;
+}
+
+GLenum gl_topology(PrimitiveTopology t) {
+    switch (t) {
+        case PrimitiveTopology::Triangles: return GL_TRIANGLES;
+        case PrimitiveTopology::Lines: return GL_LINES;
+        case PrimitiveTopology::LineStrip: return GL_LINE_STRIP;
+        case PrimitiveTopology::Points: return GL_POINTS;
+    }
+    return GL_TRIANGLES;
+}
+
+usize index_size(IndexFormat f) { return f == IndexFormat::U16 ? 2 : 4; }
+
+}  // namespace
+
+void GlDevice::reset_translate_state() {
+    ts_.pipeline = nullptr;
+    ts_.vb_valid = ts_.ib_valid = false;
+    ts_.vb = ts_.ib = 0;
+}
+
+void GlDevice::exec_begin_pass(const cmd::BeginPass& p) {
+    ++stats_.passes;
+    ts_.pass_scope = p.debug_name && *p.debug_name;
+    if (ts_.pass_scope) glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, p.debug_name);
+
+    // Null color/depth handles name the window's default framebuffer.
+    bool backbuffer = p.color_count == 0 ? (!p.has_depth || p.depth.texture.is_null()) : p.colors[0].texture.is_null();
+    GLuint fbo = 0;
+    Extent2D size;
+    if (backbuffer) {
+        MCE_ASSERT_MSG(!p.has_depth || p.depth.texture.is_null(), "backbuffer pass needs the default depth buffer");
+        size = backbuffer_size();
+    } else {
+        FramebufferKey key{};
+        for (u32 i = 0; i < p.color_count; ++i) key.colors[i] = p.colors[i].texture;
+        if (p.has_depth) key.depth = p.depth.texture;
+        fbo = framebuffer_for(key);
+        size = texture_size(p.color_count ? p.colors[0].texture : p.depth.texture);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    ts_.target_size = size;
+
+    Rect2D vp = p.viewport;
+    if (vp.width == 0 || vp.height == 0) vp = Rect2D{0, 0, size.width, size.height};
+    const auto gl_y = static_cast<GLint>(size.height) - vp.y - static_cast<GLint>(vp.height);
+    glViewport(vp.x, gl_y, static_cast<GLsizei>(vp.width), static_cast<GLsizei>(vp.height));
+    glDisable(GL_SCISSOR_TEST);
+
+    // Clears ignore pipeline state except the write masks: open them first.
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthMask(GL_TRUE);
+    glStencilMask(0xFF);
+    ts_.depth_write = true;
+    for (u32 i = 0; i < p.color_count; ++i) {
+        if (p.colors[i].load != LoadOp::Clear) continue;
+        // The default framebuffer's color buffer is draw buffer 0.
+        glClearNamedFramebufferfv(fbo, GL_COLOR, backbuffer ? 0 : static_cast<GLint>(i), p.colors[i].clear.color);
+    }
+    if (p.has_depth && p.depth.load == LoadOp::Clear) {
+        const TextureFormat df = backbuffer ? TextureFormat::D24_UNorm_S8 : [&] {
+            const GlTexture* t = textures_.try_get(p.depth.texture);
+            return t ? t->format : TextureFormat::D32_Float;
+        }();
+        if (df == TextureFormat::D24_UNorm_S8) {
+            glClearNamedFramebufferfi(fbo, GL_DEPTH_STENCIL, 0, p.depth.clear.depth, p.depth.clear.stencil);
+        } else {
+            glClearNamedFramebufferfv(fbo, GL_DEPTH, 0, &p.depth.clear.depth);
+        }
+    }
+    // A pipeline bound in an earlier pass must re-apply its depth mask.
+    ts_.pipeline = nullptr;
+}
+
+void GlDevice::exec_bind_pipeline(PipelineHandle h) {
+    const GlPipeline* p = pipelines_.try_get(h);
+    MCE_ASSERT_MSG(p, "bind_pipeline: stale handle");
+    ts_.pipeline = p;
+    if (!p) return;
+    glBindProgramPipeline(p->pipeline);
+    glBindVertexArray(p->vao);
+    ts_.topology = gl_topology(p->state.topology);
+
+    const FixedState& s = p->state;
+    if (s.depth.test) {
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(gl_compare(s.depth.compare));
+    } else {
+        glDisable(GL_DEPTH_TEST);
+    }
+    glDepthMask(s.depth.write ? GL_TRUE : GL_FALSE);
+    ts_.depth_write = s.depth.write;
+
+    switch (s.blend.mode) {
+        case BlendMode::Opaque: glDisable(GL_BLEND); break;
+        case BlendMode::PremultipliedAlpha:
+            glEnable(GL_BLEND);
+            glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+            break;
+        case BlendMode::Alpha:
+            glEnable(GL_BLEND);
+            glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+            break;
+        case BlendMode::Additive:
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_ONE, GL_ONE);
+            break;
+    }
+
+    if (s.raster.cull == CullMode::None) {
+        glDisable(GL_CULL_FACE);
+    } else {
+        glEnable(GL_CULL_FACE);
+        glCullFace(s.raster.cull == CullMode::Back ? GL_BACK : GL_FRONT);
+    }
+    glFrontFace(s.raster.front_ccw ? GL_CCW : GL_CW);
+    glPolygonMode(GL_FRONT_AND_BACK, s.raster.fill == FillMode::Wireframe ? GL_LINE : GL_FILL);
+}
+
+void GlDevice::exec_draw(const cmd::Draw* indexed, const cmd::DrawNonIndexed* plain) {
+    const GlPipeline* p = ts_.pipeline;
+    if (!p) {
+        MCE_ASSERT_MSG(false, "draw without a bound pipeline");
+        return;
+    }
+    if (!ts_.vb_valid && p->stride > 0) return;  // vertex data overflowed or never set: skip
+    if (ts_.vb_valid) glVertexArrayVertexBuffer(p->vao, 0, ts_.vb, static_cast<GLintptr>(ts_.vb_offset),
+                                                static_cast<GLsizei>(p->stride));
+    if (indexed) {
+        if (!ts_.ib_valid) return;
+        glVertexArrayElementBuffer(p->vao, ts_.ib);
+        const usize offset = ts_.ib_offset + usize(indexed->first_index) * index_size(ts_.ib_format);
+        glDrawElementsInstancedBaseVertexBaseInstance(
+            ts_.topology, static_cast<GLsizei>(indexed->index_count),
+            ts_.ib_format == IndexFormat::U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT,
+            reinterpret_cast<const void*>(offset), static_cast<GLsizei>(indexed->instance_count),
+            indexed->base_vertex, indexed->base_instance);
+    } else {
+        glDrawArraysInstancedBaseInstance(ts_.topology, static_cast<GLint>(plain->first_vertex),
+                                          static_cast<GLsizei>(plain->vertex_count),
+                                          static_cast<GLsizei>(plain->instance_count), plain->base_instance);
+    }
+    ++stats_.draws;
+}
+
+void GlDevice::submit(const CommandBuffer& cb) {
+    MCE_ASSERT_MSG(in_frame_, "submit outside begin_frame/end_frame");
+    MCE_ASSERT_MSG(!cb.in_pass(), "submit with an open pass");
+    reset_translate_state();
+    bool overflow_logged = false;
+    auto overflow = [&](const char* ring, usize size) {
+        ++stats_.ring_overflows;
+        if (!overflow_logged) {
+            MCE_LOG_WARN("rhi.gl: {} ring overflow ({} bytes requested); commands dropped", ring, size);
+            overflow_logged = true;
+        }
+    };
+
+    const CmdHeader* h = nullptr;
+    const void* payload = nullptr;
+    for (CommandBuffer::Reader r = cb.reader(); r.next(h, payload);) {
+        ++stats_.commands;
+        switch (h->type) {
+            case CmdType::BeginPass: exec_begin_pass(*static_cast<const cmd::BeginPass*>(payload)); break;
+            case CmdType::EndPass:
+                if (ts_.pass_scope) glPopDebugGroup();
+                ts_.pass_scope = false;
+                break;
+            case CmdType::BindPipeline:
+                exec_bind_pipeline(static_cast<const cmd::BindPipeline*>(payload)->pipeline);
+                break;
+            case CmdType::SetUniforms: {
+                const auto* c = static_cast<const cmd::SetUniforms*>(payload);
+                const usize at = uniform_ring_.alloc(c->size, uniform_align_);
+                if (at == StagingRing::kOverflow) {
+                    overflow("uniform", c->size);
+                    break;
+                }
+                std::memcpy(uniform_ring_.mapped + at, CommandBuffer::inline_data(c, c->size).data(), c->size);
+                glBindBufferRange(GL_UNIFORM_BUFFER, c->bank, uniform_ring_.buffer, static_cast<GLintptr>(at),
+                                  static_cast<GLsizeiptr>(c->size));
+                break;
+            }
+            case CmdType::BindTexture: {
+                const auto* c = static_cast<const cmd::BindTexture*>(payload);
+                const GlTexture* t = textures_.try_get(c->texture);
+                const GlSampler* s = samplers_.try_get(c->sampler);
+                glBindTextureUnit(c->slot, t ? t->id : 0);
+                glBindSampler(c->slot, s ? s->id : 0);
+                break;
+            }
+            case CmdType::BindStorageBuffer: {
+                const auto* c = static_cast<const cmd::BindStorageBuffer*>(payload);
+                const GlBuffer* b = buffers_.try_get(c->buffer);
+                if (!b) break;
+                if (c->size == 0) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, c->binding, b->id);
+                else glBindBufferRange(GL_SHADER_STORAGE_BUFFER, c->binding, b->id, static_cast<GLintptr>(c->offset),
+                                       static_cast<GLsizeiptr>(c->size));
+                break;
+            }
+            case CmdType::SetVertexData: {
+                const auto* c = static_cast<const cmd::SetVertexData*>(payload);
+                const usize at = geometry_ring_.alloc(c->size, 16);
+                ts_.vb_valid = at != StagingRing::kOverflow;
+                if (!ts_.vb_valid) {
+                    overflow("geometry", c->size);
+                    break;
+                }
+                std::memcpy(geometry_ring_.mapped + at, CommandBuffer::inline_data(c, c->size).data(), c->size);
+                ts_.vb = geometry_ring_.buffer;
+                ts_.vb_offset = at;
+                break;
+            }
+            case CmdType::SetIndexData: {
+                const auto* c = static_cast<const cmd::SetIndexData*>(payload);
+                const usize at = geometry_ring_.alloc(c->size, 16);
+                ts_.ib_valid = at != StagingRing::kOverflow;
+                if (!ts_.ib_valid) {
+                    overflow("geometry", c->size);
+                    break;
+                }
+                std::memcpy(geometry_ring_.mapped + at, CommandBuffer::inline_data(c, c->size).data(), c->size);
+                ts_.ib = geometry_ring_.buffer;
+                ts_.ib_offset = at;
+                ts_.ib_format = c->format;
+                break;
+            }
+            case CmdType::BindVertexBuffer: {
+                const auto* c = static_cast<const cmd::BindVertexBuffer*>(payload);
+                const GlBuffer* b = buffers_.try_get(c->buffer);
+                ts_.vb_valid = b != nullptr;
+                ts_.vb = b ? b->id : 0;
+                ts_.vb_offset = c->offset;
+                break;
+            }
+            case CmdType::BindIndexBuffer: {
+                const auto* c = static_cast<const cmd::BindIndexBuffer*>(payload);
+                const GlBuffer* b = buffers_.try_get(c->buffer);
+                ts_.ib_valid = b != nullptr;
+                ts_.ib = b ? b->id : 0;
+                ts_.ib_offset = c->offset;
+                ts_.ib_format = c->format;
+                break;
+            }
+            case CmdType::Draw: exec_draw(static_cast<const cmd::Draw*>(payload), nullptr); break;
+            case CmdType::DrawNonIndexed: exec_draw(nullptr, static_cast<const cmd::DrawNonIndexed*>(payload)); break;
+            case CmdType::PushDebugScope:
+                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 1, -1, static_cast<const cmd::PushDebugScope*>(payload)->name);
+                break;
+            case CmdType::PopDebugScope: glPopDebugGroup(); break;
+        }
+    }
+}
+
+}  // namespace mce::rhi::gl
