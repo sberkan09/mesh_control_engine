@@ -11,3 +11,12 @@ mce_add_test(test_core
     DEPS
         mce::mce_core)
 target_include_directories(test_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+# DirectXMath oracle (core.md §8 test 1). Separate executable so the test-only DirectXMath
+# dependency stays out of every other target (CI "DirectXMath wall").
+mce_add_test(test_math_oracle
+    SOURCES
+        test_math_oracle.cpp
+    DEPS
+        mce::mce_core
+        mce::directxmath)
