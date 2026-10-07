@@ -27,7 +27,35 @@ FetchContent_Declare(tracy
     GIT_SHALLOW    TRUE
     SYSTEM)
 
-FetchContent_MakeAvailable(spdlog tracy)
+# ---- SDL3 (window, events, GL context; mce_platform + mce_rhi_gl only) --------
+# Static, no subsystems we do not use yet. Audio/gamepad join with mce_audio / mce_input.
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+set(SDL_STATIC ON CACHE BOOL "" FORCE)
+set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+set(SDL_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
+set(SDL_GPU OFF CACHE BOOL "" FORCE)
+set(SDL_RENDER OFF CACHE BOOL "" FORCE)
+set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
+set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
+set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(SDL3
+    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+    GIT_TAG        release-3.4.18
+    GIT_SHALLOW    TRUE
+    SYSTEM)
+
+FetchContent_MakeAvailable(spdlog tracy SDL3)
+
+# ---- glad2 (GL 4.5 core loader, generated, vendored in third_party/glad) ---------
+# Regenerate: python -m glad --api gl:core=4.5 \
+#     --extensions GL_ARB_shader_draw_parameters,GL_KHR_debug --out-path third_party/glad c
+# Private to mce_rhi_gl (the GL wall): nothing else may link it.
+add_library(mce_glad STATIC "${PROJECT_SOURCE_DIR}/third_party/glad/src/gl.c")
+target_include_directories(mce_glad SYSTEM PUBLIC "${PROJECT_SOURCE_DIR}/third_party/glad/include")
+set_target_properties(mce_glad PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # ---- doctest (tests only) ----------------------------------------------------
 if(MCE_BUILD_TESTS)
