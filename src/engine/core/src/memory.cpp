@@ -71,7 +71,9 @@ HeapAllocator& heap_instance() {
 
 thread_local LinearArena* t_frame_arena = nullptr;
 
+#if MCE_ASSERTS_ENABLED
 constexpr u8 kResetFill = 0xCD;
+#endif
 
 }  // namespace
 

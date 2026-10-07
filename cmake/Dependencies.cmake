@@ -40,6 +40,8 @@ if(MCE_BUILD_TESTS)
 
     add_library(mce_doctest INTERFACE)
     target_include_directories(mce_doctest SYSTEM INTERFACE "${doctest_SOURCE_DIR}")
-    target_compile_definitions(mce_doctest INTERFACE DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS)
+    # USE_STD_HEADERS: doctest's std::ostream forward declaration breaks MSVC 14.5x headers.
+    target_compile_definitions(mce_doctest INTERFACE DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
+        DOCTEST_CONFIG_USE_STD_HEADERS)
     add_library(mce::doctest ALIAS mce_doctest)
 endif()

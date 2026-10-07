@@ -19,7 +19,7 @@ public:
     ~ExpectAssert();
 
 private:
-    u32 before_;
+    [[maybe_unused]] u32 before_;
 };
 
 }  // namespace mce::test
