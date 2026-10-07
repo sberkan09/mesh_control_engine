@@ -98,7 +98,7 @@ TEST_CASE("audio: decode 16-bit PCM with a smpl loop") {
 TEST_CASE("audio: malformed WAVs are rejected with a reason") {
     PcmClip clip;
     FixedString<128> why;
-    const std::string junk = "RIFF\x04\x00\x00\x00WAVX";
+    const std::string junk("RIFF\x04\x00\x00\x00WAVX", 12);  // explicit length: the literal holds NULs
     CHECK(!decode_wav(Span<const byte>(reinterpret_cast<const byte*>(junk.data()), junk.size()), clip, why));
     CHECK(!why.empty());
     std::string wav = cook_test::make_wav(44100, 1, 100, 440.0);
