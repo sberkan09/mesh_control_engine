@@ -143,7 +143,6 @@ TEST_CASE("world: Coulomb friction stops a sliding box near v^2 / (2 mu g)") {
 
 TEST_CASE("world: impulses and forces") {
     World2D w;
-    PhysicsConfig cfg;
     BodyDesc d;
     d.body.type = BodyType::Dynamic;
     d.body.gravity_scale = 0.0f;
