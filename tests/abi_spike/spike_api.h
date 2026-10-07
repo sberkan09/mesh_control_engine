@@ -67,7 +67,11 @@ struct Damage {
     i32 amount;
 };
 
+// MSVC rejects `extern` together with dllexport (C4910), so the engine's own TUs skip the
+// declaration there; GCC/Clang need it everywhere because it carries the visibility.
+#if !(defined(_WIN32) && defined(MCE_SPIKE_ENGINE_BUILD))
 extern template class MCE_SPIKE_API EventLog<Damage>;
+#endif
 
 // What the host hands the module: engine-owned state the module mutates through exported code.
 struct HostContext {
