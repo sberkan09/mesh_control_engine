@@ -27,8 +27,8 @@ FetchContent_Declare(tracy
     GIT_SHALLOW    TRUE
     SYSTEM)
 
-# ---- SDL3 (window, events, GL context; mce_platform + mce_rhi_gl only) --------
-# Static, no subsystems we do not use yet. Audio/gamepad join with mce_audio / mce_input.
+# ---- SDL3 (window, events, GL context, audio output; mce_platform + mce_rhi_gl only) ----
+# Static, no subsystems we do not use yet. Gamepad joins with mce_input at v0.5.
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)

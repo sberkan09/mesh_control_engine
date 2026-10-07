@@ -1,0 +1,124 @@
+#pragma once
+// InputSystem: device state + tick-quantized sampling + action evaluation (audio-input-ui §2.1,
+// §3.1–3.2). Engine-internal API — the run loop and hosts call this; gameplay reads InputState.
+//
+// Per render frame:   input.begin_frame(events)          (events stamped by mce_platform)
+// Per sim tick N:     const InputState& s = input.sample_for_tick(N)
+//
+// Tick N (1-based, as app::TickContext::tick_index) owns the half-open window
+// [origin + (N-1)·T, origin + N·T), T = 1/tick_hz, boundaries computed exactly as
+// origin + N·1'000'000 / tick_hz (no float drift). sample_for_tick folds, in timestamp order,
+// every queued event stamped before tick N's close; later events wait for N+1. A tick's input is
+// therefore independent of render pacing (FR-INP-030). The origin must not be later than the
+// fixed-step accumulator's start (set it when the loop starts, or leave the default: the moment
+// the InputSystem was constructed).
+
+#include "mce/containers/array.h"
+#include "mce/containers/bitset.h"
+#include "mce/input/input_map.h"
+
+namespace mce::input {
+
+class InputRecorder;
+class InputReplayer;
+
+struct InputStats {
+    u64 events_folded = 0;
+    u64 events_dropped = 0;  // queue overflow (oldest dropped)
+    u64 events_ignored = 0;  // captured by the editor or not input-relevant
+};
+
+class InputSystem {
+public:
+    static constexpr u32 kQueueCapacity = 1024;
+    static constexpr u32 kMaxMapStack = 8;
+
+    explicit InputSystem(mem::IAllocator& a = mem::heap());
+    InputSystem(const InputSystem&) = delete;
+    InputSystem& operator=(const InputSystem&) = delete;
+
+    // ---- maps ------------------------------------------------------------------------
+    // Loads a cooked input-map chunk, replacing every map. The stack is reset to the first map
+    // in the chunk; held state and edges reset (one-tick grace on hot reload, §4.2).
+    Result<void> load_map(Span<const byte> chunk);
+    // Overlay maps: the top map's actions shadow same-named actions below it; a map flagged
+    // BlocksBelow hides everything beneath. Returns false for an unknown map / full stack.
+    bool push_map(StringId map_name);
+    void pop_map();
+    Span<const u32> map_stack() const { return Span<const u32>(stack_, stack_size_); }
+    const InputMapSet& maps() const { return set_; }
+    // In-session rebinding (FR-INP-020): replace binding `index` of `action` in `map`. Applies
+    // from the next sampled tick. Persistence is FR-INP-040 (v0.5).
+    bool rebind(StringId map, StringId action, u32 index, const BindingDef& binding);
+
+    // ---- clock -----------------------------------------------------------------------
+    void set_tick_rate(u32 hz);
+    void set_tick_origin_us(u64 origin_us);
+    u64 tick_origin_us() const { return origin_us_; }
+    u64 tick_close_us(u64 tick) const;
+
+    // ---- per frame / per tick ----------------------------------------------------------
+    // Queues one render frame's events (any order; kept sorted by timestamp).
+    void begin_frame(Span<const platform::Event> events);
+    void push_event(const platform::Event& e);
+    const InputState& sample_for_tick(u64 tick);
+    const InputState& sample_for_tick(u64 tick, u64 tick_close_us);
+    const InputState& state() const { return cur_; }
+    usize queued_events() const { return queue_.size(); }
+
+    // ---- raw device state (§2.2: editor camera, tools; NOT for gameplay) ------------------
+    bool key_held(platform::Key k) const;
+    bool mouse_held(platform::MouseButton b) const;
+    vec2 mouse_pos() const { return mouse_pos_; }
+
+    // ---- record / replay (FR-RUN-070) --------------------------------------------------------
+    // While a recorder is set every sampled tick is appended to it. While a replayer is set,
+    // sample_for_tick ignores devices and returns the recorded stream (events still drain).
+    void set_recorder(InputRecorder* r) { recorder_ = r; }
+    void set_replayer(InputReplayer* r) { replayer_ = r; }
+
+    const InputStats& stats() const { return stats_; }
+
+private:
+    static constexpr u32 kKeyCount = 512;
+    static constexpr u32 kMouseButtons = 8;
+
+    void reset_devices();
+    void fold(const platform::Event& e);
+    void evaluate(InputState& out, const InputState& prev) const;
+    f32 binding_value(const BindingDef& b) const;
+
+    mem::IAllocator& alloc_;
+    InputMapSet set_;
+    u32 stack_[kMaxMapStack] = {};
+    u32 stack_size_ = 0;
+
+    u32 tick_hz_ = 60;
+    u64 origin_us_ = 0;
+    u64 last_tick_ = 0;
+
+    Array<platform::Event> queue_;  // sorted by timestamp; front = oldest
+    usize queue_head_ = 0;
+
+    // Device state as of the last folded event.
+    BitSet<kKeyCount> keys_;
+    BitSet<kKeyCount> keys_tapped_;         // went down during the current tick window
+    BitSet<kKeyCount> keys_release_pending_;  // tapped and released inside one window: release next tick
+    BitSet<kMouseButtons> buttons_;
+    BitSet<kMouseButtons> buttons_tapped_;
+    BitSet<kMouseButtons> buttons_release_pending_;
+    vec2 mouse_pos_;
+    bool have_mouse_pos_ = false;
+    vec2 tick_wheel_;
+    vec2 tick_delta_;
+    char tick_text_[kMaxTextBytes] = {};
+    u32 tick_text_len_ = 0;
+
+    InputState cur_;
+    InputState prev_;
+    InputRecorder* recorder_ = nullptr;
+    InputReplayer* replayer_ = nullptr;
+    InputStats stats_;
+};
+
+}  // namespace mce::input

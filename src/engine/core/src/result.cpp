@@ -27,6 +27,8 @@ const char* errc_name(Errc code) {
         case Errc::ShaderCompile: return "ShaderCompile";
         case Errc::PipelineCreate: return "PipelineCreate";
         case Errc::DeviceLost: return "DeviceLost";
+        case Errc::AudioDeviceOpen: return "AudioDeviceOpen";
+        case Errc::AudioQueueFull: return "AudioQueueFull";
     }
     return "Errc(?)";
 }

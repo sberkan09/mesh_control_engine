@@ -37,6 +37,8 @@ add_subdirectory(src/engine/ecs)
 add_subdirectory(src/engine/platform)
 add_subdirectory(src/engine/rhi)
 add_subdirectory(src/engine/rhi_gl)
+add_subdirectory(src/engine/input)
+add_subdirectory(src/engine/audio)
 
 if(MCE_BUILD_EDITOR)
     add_subdirectory(src/editor)

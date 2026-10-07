@@ -40,7 +40,10 @@ enum class Errc : u16 {
     ShaderCompile = 0x0300,
     PipelineCreate,
     DeviceLost,
-    // 0x0400 audio, 0x0500 physics, 0x0600 scene: allocated by their modules.
+    // 0x0400 audio
+    AudioDeviceOpen = 0x0400,
+    AudioQueueFull,
+    // 0x0500 physics, 0x0600 scene: allocated by their modules.
 };
 
 const char* errc_name(Errc code);
