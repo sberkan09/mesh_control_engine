@@ -572,7 +572,7 @@ Entity Commands::spawn(const Ts&... components) {
             const u32 size = std::is_empty_v<Ts> ? 0u : static_cast<u32>(sizeof(Ts));
             std::memcpy(p, &c, sizeof(c));
             std::memcpy(p + 4, &size, sizeof(size));
-            if (size) std::memcpy(p + 8, &components, size);
+            if constexpr (!std::is_empty_v<Ts>) std::memcpy(p + 8, &components, sizeof(Ts));
             p += 8 + align_up(size, 8);
         }(),
         ...);
@@ -599,7 +599,7 @@ void Commands::add(Entity e, const T& value) {
     const ecs::ComponentId c = world_.component_id<T>();
     const usize size = std::is_empty_v<T> ? 0 : sizeof(T);
     void* p = record(Op::Add, e, c, size);
-    if (size) std::memcpy(p, &value, size);
+    if constexpr (!std::is_empty_v<T>) std::memcpy(p, &value, sizeof(T));
 }
 
 template <class T>
