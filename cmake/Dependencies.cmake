@@ -57,6 +57,30 @@ add_library(mce_glad STATIC "${PROJECT_SOURCE_DIR}/third_party/glad/src/gl.c")
 target_include_directories(mce_glad SYSTEM PUBLIC "${PROJECT_SOURCE_DIR}/third_party/glad/include")
 set_target_properties(mce_glad PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# ---- Dear ImGui, docking branch (editor only: mce_editor_layer is its sole consumer) ---------
+# The ImGui wall (ARCHITECTURE §1.2 #3): nothing under src/engine/ may link or include it.
+# Only the core library is compiled: the platform and renderer backends are our own
+# (src/editor/layer), over mce::platform events and mce_rhi, so no GL or SDL_Event crosses a wall.
+if(MCE_BUILD_EDITOR)
+    FetchContent_Declare(imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG        v1.92.9b-docking
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  _no_cmake_)
+    FetchContent_MakeAvailable(imgui)
+
+    add_library(mce_imgui STATIC
+        "${imgui_SOURCE_DIR}/imgui.cpp"
+        "${imgui_SOURCE_DIR}/imgui_demo.cpp"
+        "${imgui_SOURCE_DIR}/imgui_draw.cpp"
+        "${imgui_SOURCE_DIR}/imgui_tables.cpp"
+        "${imgui_SOURCE_DIR}/imgui_widgets.cpp")
+    target_include_directories(mce_imgui SYSTEM PUBLIC "${imgui_SOURCE_DIR}")
+    target_compile_definitions(mce_imgui PUBLIC IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
+    set_target_properties(mce_imgui PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    add_library(mce::imgui ALIAS mce_imgui)
+endif()
+
 # ---- doctest (tests only) ----------------------------------------------------
 if(MCE_BUILD_TESTS)
     FetchContent_Declare(doctest
