@@ -73,7 +73,7 @@ TEST_CASE("rhi: command buffer records and reads back in order") {
                 const auto* p = static_cast<const cmd::SetUniforms*>(payload);
                 CHECK(p->bank == bank::kFrame);
                 REQUIRE(p->size == sizeof(uniforms));
-                CHECK(std::memcmp(CommandBuffer::inline_data(p, p->size).data(), uniforms, sizeof(uniforms)) == 0);
+                CHECK(std::memcmp(CommandBuffer::inline_data(p, p->size).data(), uniforms, sizeof(uniforms)) == 0);  // NOLINT(bugprone-suspicious-memory-comparison): checks a bit-exact copy
                 break;
             }
             case CmdType::SetIndexData: {

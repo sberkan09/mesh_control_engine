@@ -67,7 +67,7 @@ TEST_CASE("Array destroys elements and frees memory") {
         Array<Tracked> c = std::move(a);
         CHECK(Tracked::live == 66);
         CHECK(c.size() == 33);
-        CHECK(a.empty());
+        CHECK(a.empty());  // NOLINT(bugprone-use-after-move): moved-from state is specified
     }
     CHECK(Tracked::live == 0);
     CHECK(mem::heap_live_allocations() == live_before);
@@ -88,7 +88,7 @@ TEST_CASE("SmallVector stays inline then spills") {
     inl.emplace_back(1);
     SmallVector<Tracked, 2> inl2 = std::move(inl);
     CHECK(inl2[0].v == 1);
-    CHECK(inl.empty());
+    CHECK(inl.empty());  // NOLINT(bugprone-use-after-move): moved-from state is specified
 }
 
 #if MCE_ASSERTS_ENABLED
