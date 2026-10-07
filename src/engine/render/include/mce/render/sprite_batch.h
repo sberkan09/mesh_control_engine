@@ -152,6 +152,8 @@ public:
     SpriteBatch(const SpriteSets& sets, mem::IAllocator& frame);
 
     void begin(const View2D& view, PassId pass = PassId::World2D);
+    // Pre-sizes the per-frame arrays for `quads` sprites/glyphs (avoids regrowth on the arena).
+    void reserve(usize quads);
     void add(const SpriteInstance& sprite);
     void add_text(const Font& font, const TextLayout& layout, const TextPlacement& placement);
     // Culls the layer's chunks against the view and queues the visible ones as one item.

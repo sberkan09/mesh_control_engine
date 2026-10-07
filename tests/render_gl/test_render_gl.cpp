@@ -360,3 +360,77 @@ TEST_CASE("render_gl: mip chains and array layers upload through update_texture"
     f.device->destroy_texture(tex.value());
     CHECK(f.device->validation_error_count() == 0);
 }
+
+#if MCE_RENDER_HAS_ASSET
+#include "mce/render/asset_upload.h"
+
+TEST_CASE("render_gl: cooked CHNK_TEX and CHNK_FONT payloads upload through the asset sink") {
+    Fixture f;
+    // A cooked 2-layer sRGB texture with a 2-level mip chain, exactly as the cook writes it.
+    Array<u8> mip0, mip1;
+    for (u32 layer = 0; layer < 2; ++layer)
+        for (u32 i = 0; i < 16; ++i) {
+            const u8 px[4] = {u8(layer ? 0 : 255), u8(layer ? 255 : 0), 0, 255};
+            for (u8 c : px) mip0.push_back(c);
+        }
+    for (u32 i = 0; i < 2 * 4; ++i) {
+        const u8 px[4] = {128, 128, 128, 255};
+        for (u8 c : px) mip1.push_back(c);
+    }
+    const asset::TextureMipData mips[] = {{4, 4, std::as_bytes(mip0.span())}, {2, 2, std::as_bytes(mip1.span())}};
+    Array<byte> blob;
+    asset::write_texture(asset::TextureFormat::RGBA8, 2, asset::TextureFlags::Srgb, mips, blob);
+
+    asset::AssetSystem assets;  // no mounts: generation() answers 0 for every key
+    AssetUploadSink sink(f.renderer, assets);
+    constexpr asset::AssetKey kKey = 5;
+    REQUIRE(sink.upload_texture(kKey, blob.span(), asset::TextureFlags::Srgb).has_value());
+    const rhi::TextureDesc d = f.device->texture_desc(f.renderer.textures().get(kKey));
+    CHECK(d.format == rhi::TextureFormat::RGBA8_SRGB);
+    CHECK(d.array_layers == 2);
+    CHECK(d.mip_levels == 2);
+
+    const SpriteRegion regions[] = {{0, 0, 0, 1, 1, 1, 1}, {1, 0, 0, 1, 1, 1, 1}};
+    SpriteSetDesc sd;
+    sd.texture_key = kKey;
+    sd.regions = regions;
+    const SpriteSetId set = f.renderer.create_sprite_set(sd);
+    f.render([&](SpriteBatch& b) {
+        b.add(f.sprite(set, vec2(-2, 0), 0));
+        b.add(f.sprite(set, vec2(2, 0), 1));
+    });
+    CHECK(f.at_world(vec2(-2, 0)).r == 255);
+    CHECK(f.at_world(vec2(2, 0)).g == 255);
+
+    const asset::RetiredAsset retired{kKey, 0, asset::ChunkType::Texture};
+    sink.destroy_gpu_objects(Span<const asset::RetiredAsset>(&retired, 1));
+    CHECK_FALSE(f.renderer.textures().contains(kKey));
+
+    // Truncated cooked bytes fail cleanly.
+    CHECK_FALSE(sink.upload_texture(kKey, blob.span().subspan(0, 40), 0).has_value());
+
+    // Font chunk -> Font.
+    asset::FontHeader fh{};
+    fh.pixel_height = 16;
+    fh.ascent = 12;
+    fh.descent = -4;
+    fh.atlas_width = 16;
+    fh.atlas_height = 16;
+    asset::FontGlyph g{};
+    g.codepoint = 'X';
+    g.x1 = 8;
+    g.y1 = 12;
+    g.yoff = -12;
+    g.xoff2 = 8;
+    g.xadvance = 10;
+    Array<byte> atlas;
+    atlas.resize(256, byte{255});
+    Array<byte> font_blob;
+    asset::write_font(fh, Span<const asset::FontGlyph>(&g, 1), {}, atlas.span(), font_blob);
+    auto font = load_cooked_font(f.renderer, font_blob.span());
+    REQUIRE(font.has_value());
+    CHECK(font.value().face.find('X') != nullptr);
+    CHECK(font.value().face.metrics().ascent == 12.0f);
+    CHECK(f.device->validation_error_count() == 0);
+}
+#endif

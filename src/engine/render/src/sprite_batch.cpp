@@ -138,6 +138,13 @@ void SpriteBatch::begin(const View2D& view, PassId pass) {
     built_ = false;
 }
 
+void SpriteBatch::reserve(usize quads) {
+    keys_.reserve(quads);
+    items_.reserve(quads);
+    quads_.reserve(quads);
+    vertices_.reserve(quads * 4);
+}
+
 u16 SpriteBatch::material(SpriteBlend blend, SpriteSetId set) {
     return static_cast<u16>((static_cast<u32>(blend) << 12) | (set.value & 0xFFFu));
 }

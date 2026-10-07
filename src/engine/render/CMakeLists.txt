@@ -14,3 +14,11 @@ mce_add_library(mce_render
     PUBLIC_DEPS
         mce::mce_rhi
         mce::mce_core)
+
+# The IGpuUploadSink implementation (render -> asset include direction, fix F6) builds once
+# mce_asset is part of the tree.
+if(TARGET mce_asset)
+    target_sources(mce_render PRIVATE src/asset_upload.cpp)
+    target_link_libraries(mce_render PUBLIC mce::mce_asset)
+    target_compile_definitions(mce_render PUBLIC MCE_RENDER_HAS_ASSET=1)
+endif()
