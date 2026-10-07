@@ -1,0 +1,27 @@
+---
+# Conservative bug-finding set; style is handled by .clang-format.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-macro-parentheses,
+  -bugprone-reserved-identifier,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-unchecked-optional-access,
+  -bugprone-sizeof-expression,
+  -bugprone-multi-level-implicit-pointer-conversion,
+  performance-*,
+  -performance-enum-size,
+  -performance-no-int-to-ptr,
+  misc-redundant-expression,
+  misc-unused-using-decls,
+  misc-definitions-in-headers,
+  modernize-use-override,
+  modernize-use-nullptr,
+  readability-misleading-indentation,
+  readability-container-size-empty
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/(src|samples|tests)/.*'
+FormatStyle: none
+...
