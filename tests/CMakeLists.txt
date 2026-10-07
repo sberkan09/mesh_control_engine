@@ -6,4 +6,5 @@ mce_apply_compile_policy(mce_doctest_main)
 add_library(mce::doctest_main ALIAS mce_doctest_main)
 
 add_subdirectory(core)
+add_subdirectory(refl)
 add_subdirectory(devhost)

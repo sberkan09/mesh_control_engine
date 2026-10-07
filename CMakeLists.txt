@@ -29,6 +29,7 @@ if(MCE_BUILD_TESTS)
 endif()
 
 add_subdirectory(src/engine/core)
+add_subdirectory(src/engine/refl)
 
 if(MCE_BUILD_TESTS)
     add_subdirectory(tests)
