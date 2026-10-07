@@ -87,7 +87,7 @@ void label(GLenum kind, GLuint id, const char* name) {
 
 void GLAD_API_PTR debug_callback(GLenum /*source*/, GLenum type, GLuint /*id*/, GLenum severity, GLsizei /*length*/,
                              const GLchar* message, const void* user) {
-    static_cast<GlDevice*>(const_cast<void*>(user))->on_debug_message(type, severity, message);
+    const_cast<GlDevice*>(static_cast<const GlDevice*>(user))->on_debug_message(type, severity, message);
 }
 
 // Compiles one separable program; on failure returns the info log in `log`.

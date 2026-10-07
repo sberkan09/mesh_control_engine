@@ -11,6 +11,7 @@ Checks: >
   -bugprone-unchecked-optional-access,
   -bugprone-sizeof-expression,
   -bugprone-multi-level-implicit-pointer-conversion,
+  -bugprone-branch-clone,
   performance-*,
   -performance-enum-size,
   -performance-no-int-to-ptr,
