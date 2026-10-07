@@ -1,6 +1,7 @@
 #include "mce/editor/draw_clip.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace mce::editor {
 namespace {
@@ -15,7 +16,7 @@ ClipVertex lerp_vertex(const ClipVertex& a, const ClipVertex& b, f32 t) {
     for (u32 shift = 0; shift < 32; shift += 8) {
         const f32 ca = static_cast<f32>((a.rgba >> shift) & 0xFFu);
         const f32 cb = static_cast<f32>((b.rgba >> shift) & 0xFFu);
-        const u32 c = static_cast<u32>(ca + (cb - ca) * t + 0.5f);
+        const u32 c = static_cast<u32>(std::lround(ca + (cb - ca) * t));
         r.rgba |= std::min(c, 255u) << shift;
     }
     return r;
