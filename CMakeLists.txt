@@ -19,6 +19,8 @@ option(MCE_ENABLE_TRACY    "Compile the Tracy client in (on-demand)"  ON)
 option(MCE_FORCE_ASSERTS   "Keep MCE_ASSERT active in release builds" OFF)
 option(MCE_WARNINGS_AS_ERRORS "Treat warnings as errors"              ON)
 option(MCE_ASAN            "Build with AddressSanitizer"              OFF)
+option(MCE_BUILD_SAMPLES   "Build the sample ladder (samples/)"       ON)
+option(MCE_GPU_TESTS       "Register tests that need a display + GL 4.5 driver" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(MceTarget)
@@ -30,6 +32,13 @@ endif()
 
 add_subdirectory(src/engine/core)
 add_subdirectory(src/engine/refl)
+add_subdirectory(src/engine/platform)
+add_subdirectory(src/engine/rhi)
+add_subdirectory(src/engine/rhi_gl)
+
+if(MCE_BUILD_SAMPLES)
+    add_subdirectory(samples)
+endif()
 
 if(MCE_BUILD_TESTS)
     add_subdirectory(tests)

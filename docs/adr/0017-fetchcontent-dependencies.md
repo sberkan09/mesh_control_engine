@@ -16,4 +16,9 @@ deps never reach `mce_engine`.
 every machine (three commands, no vcpkg bootstrap). First configure clones the deps into the build tree
 (~10 s). Swapping back to a vcpkg manifest later only touches `cmake/Dependencies.cmake`.
 
-Pinned today: spdlog v1.17.0, Tracy v0.14.1 (on-demand client), doctest v2.5.3 (tests only), DirectXMath jun2026 (math oracle test only, `test_math_oracle`).
+Pinned today: spdlog v1.17.0, Tracy v0.14.1 (on-demand client), doctest v2.5.3 (tests only), DirectXMath jun2026 (math oracle test only,
+`test_math_oracle`), SDL3 release-3.4.18
+(static; `mce_platform` + `mce_rhi_gl` only). glad2 is a generator, not a library: its GL 4.5 core output is
+vendored in `third_party/glad` (the regenerate command is in `cmake/Dependencies.cmake`) and linked privately by
+`mce_rhi_gl`. On Linux, SDL3 needs the X11 development headers (`libx11-dev libxext-dev libxcursor-dev libxrandr-dev
+libxi-dev libxss-dev libxtst-dev libxfixes-dev libxkbcommon-dev`).
