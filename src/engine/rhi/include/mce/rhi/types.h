@@ -80,9 +80,16 @@ struct BufferDesc {
     const char* debug_name = "";
 };
 
+enum class TextureDimension : u8 {
+    Tex2D,
+    Tex2DArray,  // GL_TEXTURE_2D_ARRAY: sprite-set pages, font atlases (rendering-2d D3); shaders use sampler2DArray
+};
+
 struct TextureDesc {
     Extent2D size;
     u16 mip_levels = 1;
+    u16 array_layers = 1;  // > 1 requires Tex2DArray
+    TextureDimension dimension = TextureDimension::Tex2D;
     TextureFormat format = TextureFormat::RGBA8_UNorm;
     TextureUsage usage = TextureUsage::Sampled;
     const char* debug_name = "";
@@ -95,6 +102,15 @@ struct SamplerDesc {
     AddressMode wrap_s = AddressMode::ClampToEdge;
     AddressMode wrap_t = AddressMode::ClampToEdge;
     f32 max_aniso = 1.0f;
+};
+
+// One mip level of one array layer (or a sub-rectangle of it) for RenderDevice::update_texture.
+// Rows are tightly packed; row 0 is sampled at v = 0 (same convention as create_texture).
+struct TextureRegion {
+    u32 mip = 0;
+    u32 layer = 0;
+    u32 x = 0, y = 0;
+    u32 width = 0, height = 0;  // zero = the whole mip level
 };
 
 // ---- pipelines ---------------------------------------------------------------------------------
@@ -166,6 +182,16 @@ struct RenderPassDesc {
     const char* debug_name = "";
 };
 
+// glMultiDrawElementsIndirect / vkCmdDrawIndexedIndirect argument layout (rhi-renderer.md §3.2).
+struct DrawIndexedIndirectCommand {
+    u32 index_count;
+    u32 instance_count;
+    u32 first_index;
+    i32 base_vertex;
+    u32 base_instance;
+};
+static_assert(sizeof(DrawIndexedIndirectCommand) == 20);
+
 // Fixed binding banks (rhi-renderer.md §3.3).
 namespace bank {
 inline constexpr u32 kFrame = 0;
@@ -173,6 +199,8 @@ inline constexpr u32 kPass = 1;
 inline constexpr u32 kMaterial = 2;
 inline constexpr u32 kObjects = 3;
 inline constexpr u32 kFirstSampler = 6;
+inline constexpr u32 kAtlasArray = 6;  // 2D sprite-set array texture
+inline constexpr u32 kFont = 11;
 inline constexpr u32 kUniformBanks = 3;
 }  // namespace bank
 

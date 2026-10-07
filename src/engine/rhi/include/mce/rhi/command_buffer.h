@@ -34,6 +34,8 @@ enum class CmdType : u16 {
     BindIndexBuffer,
     Draw,
     DrawNonIndexed,
+    SetDrawArgs,
+    DrawIndirect,
     PushDebugScope,
     PopDebugScope,
 };
@@ -68,6 +70,8 @@ struct BindVertexBuffer { BufferHandle buffer; u64 offset; };
 struct BindIndexBuffer { BufferHandle buffer; u64 offset; IndexFormat format; };
 struct Draw { u32 index_count; u32 instance_count; u32 first_index; i32 base_vertex; u32 base_instance; };
 struct DrawNonIndexed { u32 vertex_count; u32 instance_count; u32 first_vertex; u32 base_instance; };
+struct SetDrawArgs { u32 count; };            // followed by count * DrawIndexedIndirectCommand
+struct DrawIndirect { u32 first_command; u32 draw_count; };
 struct PushDebugScope { const char* name; };
 }  // namespace cmd
 
@@ -92,6 +96,11 @@ public:
     void draw(u32 index_count, u32 instance_count = 1, u32 first_index = 0, u32 base_instance = 0,
               i32 base_vertex = 0);
     void draw_non_indexed(u32 vertex_count, u32 instance_count = 1, u32 first_vertex = 0, u32 base_instance = 0);
+    // Multi-draw-indirect (rhi-renderer.md §3.2): set_draw_args copies the commands into the
+    // slot's indirect ring at submit; draw_indirect issues `draw_count` of them, starting at
+    // `first_command`, as ONE MultiDrawElementsIndirect against the bound vertex/index data.
+    void set_draw_args(Span<const DrawIndexedIndirectCommand> commands);
+    void draw_indirect(u32 draw_count, u32 first_command = 0);
     // No-op on GL; a real barrier on a future explicit backend.
     void barrier() {}
     void push_debug_scope(const char* name);  // `name` must outlive submit (string literal)

@@ -129,3 +129,38 @@ TEST_CASE("rhi: misuse asserts") {
         cb.set_uniforms(7, {});
     }
 }
+
+TEST_CASE("rhi: draw args and indirect draws round-trip") {
+    CommandBuffer cb;
+    PassAttachment color;
+    RenderPassDesc pass;
+    pass.colors = Span<const PassAttachment>(&color, 1);
+    const DrawIndexedIndirectCommand cmds[3] = {{6, 1, 0, 0, 0}, {12, 1, 6, 4, 0}, {6, 2, 0, 16, 1}};
+    cb.begin_pass(pass);
+    cb.set_draw_args(Span<const DrawIndexedIndirectCommand>(cmds));
+    cb.draw_indirect(2, 1);
+    cb.end_pass();
+
+    const CmdHeader* h = nullptr;
+    const void* p = nullptr;
+    auto r = cb.reader();
+    REQUIRE(r.next(h, p));
+    CHECK(h->type == CmdType::BeginPass);
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::SetDrawArgs);
+    const auto* args = static_cast<const cmd::SetDrawArgs*>(p);
+    REQUIRE(args->count == 3);
+    const Span<const byte> data =
+        CommandBuffer::inline_data(args, static_cast<u32>(args->count * sizeof(DrawIndexedIndirectCommand)));
+    const auto* copied = reinterpret_cast<const DrawIndexedIndirectCommand*>(data.data());
+    CHECK(copied[1].index_count == 12);
+    CHECK(copied[1].first_index == 6);
+    CHECK(copied[1].base_vertex == 4);
+    CHECK(copied[2].instance_count == 2);
+    CHECK(copied[2].base_instance == 1);
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::DrawIndirect);
+    CHECK(static_cast<const cmd::DrawIndirect*>(p)->first_command == 1);
+    CHECK(static_cast<const cmd::DrawIndirect*>(p)->draw_count == 2);
+    CHECK(std::string_view(cmd_type_name(CmdType::DrawIndirect)) == "DrawIndirect");
+}

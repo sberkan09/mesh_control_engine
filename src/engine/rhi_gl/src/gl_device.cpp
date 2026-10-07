@@ -199,6 +199,7 @@ ResultV GlDevice::init() {
 
     MCE_TRY(create_ring(geometry_ring_, desc_.geometry_ring_bytes, "mce.ring.geometry"));
     MCE_TRY(create_ring(uniform_ring_, desc_.uniform_ring_bytes, "mce.ring.uniform"));
+    MCE_TRY(create_ring(indirect_ring_, desc_.indirect_ring_bytes, "mce.ring.indirect"));
 
     swap_interval_ = desc_.vsync ? 1 : 0;
     SDL_GL_SetSwapInterval(swap_interval_);
@@ -248,6 +249,7 @@ void GlDevice::release_gl_objects() {
     for (const FramebufferEntry& f : framebuffers_) glDeleteFramebuffers(1, &f.fbo);
     destroy_ring(geometry_ring_);
     destroy_ring(uniform_ring_);
+    destroy_ring(indirect_ring_);
 }
 
 // ---- debug -----------------------------------------------------------------------------------
@@ -291,27 +293,43 @@ void GlDevice::update_buffer(BufferHandle h, u64 offset, Span<const byte> data) 
 
 TextureHandle GlDevice::create_texture(const TextureDesc& desc, Span<const byte> initial_data) {
     MCE_ASSERT_MSG(desc.size.width > 0 && desc.size.height > 0, "create_texture: empty extent");
+    const bool array = desc.dimension == TextureDimension::Tex2DArray;
+    MCE_ASSERT_MSG(array || desc.array_layers <= 1, "create_texture: layers > 1 need TextureDimension::Tex2DArray");
     const GlFormat fmt = gl_format(desc.format);
     GlTexture t;
     t.size = desc.size;
     t.format = desc.format;
-    const u16 mips = desc.mip_levels ? desc.mip_levels : 1;
-    glCreateTextures(GL_TEXTURE_2D, 1, &t.id);
-    glTextureStorage2D(t.id, mips, fmt.internal, static_cast<GLsizei>(desc.size.width),
-                       static_cast<GLsizei>(desc.size.height));
-    for (u32 m = 0; m < mips; ++m)
-        t.bytes += level_bytes(desc.format, math::max(1u, desc.size.width >> m), math::max(1u, desc.size.height >> m));
+    t.dimension = desc.dimension;
+    t.usage = desc.usage;
+    t.mips = desc.mip_levels ? desc.mip_levels : 1;
+    t.layers = array ? (desc.array_layers ? desc.array_layers : 1) : 1;
+    const auto w = static_cast<GLsizei>(desc.size.width);
+    const auto hgt = static_cast<GLsizei>(desc.size.height);
+    if (array) {
+        glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &t.id);
+        glTextureStorage3D(t.id, t.mips, fmt.internal, w, hgt, t.layers);
+    } else {
+        glCreateTextures(GL_TEXTURE_2D, 1, &t.id);
+        glTextureStorage2D(t.id, t.mips, fmt.internal, w, hgt);
+    }
+    for (u32 m = 0; m < t.mips; ++m)
+        t.bytes += level_bytes(desc.format, math::max(1u, desc.size.width >> m), math::max(1u, desc.size.height >> m)) *
+                   t.layers;
+    // Mip levels that are never uploaded must not be sampled: clamp until update_texture fills them.
+    glTextureParameteri(t.id, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(t.mips - 1));
 
     if (!initial_data.empty()) {
-        const usize need = level_bytes(desc.format, desc.size.width, desc.size.height);
+        const usize need = level_bytes(desc.format, desc.size.width, desc.size.height) * t.layers;
         MCE_ASSERT_MSG(initial_data.size() >= need, "create_texture: initial data smaller than mip 0");
         MCE_ASSERT_MSG(!is_depth_format(desc.format), "create_texture: depth formats take no initial data");
         if (initial_data.size() >= need && !is_depth_format(desc.format)) {
-            const auto w = static_cast<GLsizei>(desc.size.width);
-            const auto hgt = static_cast<GLsizei>(desc.size.height);
-            if (is_compressed_format(desc.format)) {
-                glCompressedTextureSubImage2D(t.id, 0, 0, 0, w, hgt, fmt.internal, static_cast<GLsizei>(need),
-                                              initial_data.data());
+            const auto bytes = static_cast<GLsizei>(need);
+            if (array && is_compressed_format(desc.format)) {
+                glCompressedTextureSubImage3D(t.id, 0, 0, 0, 0, w, hgt, t.layers, fmt.internal, bytes, initial_data.data());
+            } else if (array) {
+                glTextureSubImage3D(t.id, 0, 0, 0, 0, w, hgt, t.layers, fmt.format, fmt.type, initial_data.data());
+            } else if (is_compressed_format(desc.format)) {
+                glCompressedTextureSubImage2D(t.id, 0, 0, 0, w, hgt, fmt.internal, bytes, initial_data.data());
             } else {
                 glTextureSubImage2D(t.id, 0, 0, 0, w, hgt, fmt.format, fmt.type, initial_data.data());
             }
@@ -320,6 +338,40 @@ TextureHandle GlDevice::create_texture(const TextureDesc& desc, Span<const byte>
     label(GL_TEXTURE, t.id, desc.debug_name);
     texture_bytes_ += t.bytes;
     return textures_.insert(t);
+}
+
+void GlDevice::update_texture(TextureHandle h, const TextureRegion& region, Span<const byte> data) {
+    const GlTexture* t = textures_.try_get(h);
+    MCE_ASSERT_MSG(t, "update_texture: stale handle");
+    if (!t) return;
+    MCE_ASSERT_MSG(region.mip < t->mips && region.layer < t->layers, "update_texture: mip/layer out of range");
+    if (region.mip >= t->mips || region.layer >= t->layers || is_depth_format(t->format)) return;
+    const u32 mw = math::max(1u, t->size.width >> region.mip);
+    const u32 mh = math::max(1u, t->size.height >> region.mip);
+    const u32 rw = region.width ? region.width : mw;
+    const u32 rh = region.height ? region.height : mh;
+    const bool in_range = region.x + rw <= mw && region.y + rh <= mh;
+    MCE_ASSERT_MSG(in_range, "update_texture: rectangle outside the mip level");
+    const usize need = level_bytes(t->format, rw, rh);
+    MCE_ASSERT_MSG(data.size() >= need, "update_texture: data smaller than the region");
+    if (!in_range || data.size() < need) return;
+    const GlFormat fmt = gl_format(t->format);
+    const auto level = static_cast<GLint>(region.mip);
+    const auto x = static_cast<GLint>(region.x), y = static_cast<GLint>(region.y);
+    const auto w = static_cast<GLsizei>(rw), hgt = static_cast<GLsizei>(rh);
+    if (t->dimension == TextureDimension::Tex2DArray) {
+        const auto z = static_cast<GLint>(region.layer);
+        if (is_compressed_format(t->format))
+            glCompressedTextureSubImage3D(t->id, level, x, y, z, w, hgt, 1, fmt.internal, static_cast<GLsizei>(need),
+                                          data.data());
+        else
+            glTextureSubImage3D(t->id, level, x, y, z, w, hgt, 1, fmt.format, fmt.type, data.data());
+    } else {
+        if (is_compressed_format(t->format))
+            glCompressedTextureSubImage2D(t->id, level, x, y, w, hgt, fmt.internal, static_cast<GLsizei>(need), data.data());
+        else
+            glTextureSubImage2D(t->id, level, x, y, w, hgt, fmt.format, fmt.type, data.data());
+    }
 }
 
 SamplerHandle GlDevice::create_sampler(const SamplerDesc& desc) {
@@ -462,6 +514,19 @@ Extent2D GlDevice::texture_size(TextureHandle h) const {
     return t ? t->size : Extent2D{};
 }
 
+TextureDesc GlDevice::texture_desc(TextureHandle h) const {
+    TextureDesc d;
+    const GlTexture* t = textures_.try_get(h);
+    if (!t) return d;
+    d.size = t->size;
+    d.mip_levels = t->mips;
+    d.array_layers = t->layers;
+    d.dimension = t->dimension;
+    d.format = t->format;
+    d.usage = t->usage;
+    return d;
+}
+
 GLuint GlDevice::framebuffer_for(const FramebufferKey& key) {
     for (const FramebufferEntry& e : framebuffers_)
         if (e.key == key) return e.fbo;
@@ -472,6 +537,7 @@ GLuint GlDevice::framebuffer_for(const FramebufferKey& key) {
     for (u32 i = 0; i < cmd::kMaxColorAttachments; ++i) {
         const GlTexture* t = textures_.try_get(key.colors[i]);
         if (!t) continue;
+        MCE_ASSERT_MSG(t->dimension == TextureDimension::Tex2D, "render targets must be 2D textures");
         glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0 + i, t->id, 0);
         draw_buffers[n++] = GL_COLOR_ATTACHMENT0 + i;
     }
@@ -529,8 +595,8 @@ void GlDevice::begin_frame(u64 frame_index) {
         fences_[slot_] = nullptr;
     }
     flush_deletes(slot_);
-    geometry_ring_.slot = uniform_ring_.slot = slot_;
-    geometry_ring_.head = uniform_ring_.head = 0;
+    geometry_ring_.slot = uniform_ring_.slot = indirect_ring_.slot = slot_;
+    geometry_ring_.head = uniform_ring_.head = indirect_ring_.head = 0;
     stats_ = FrameStats{};
     in_frame_ = true;
 }
@@ -540,6 +606,7 @@ void GlDevice::end_frame() {
     fences_[slot_] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     stats_.geometry_bytes = geometry_ring_.head;
     stats_.uniform_bytes = uniform_ring_.head;
+    stats_.indirect_bytes = indirect_ring_.head;
     last_stats_ = stats_;
     in_frame_ = false;
 }

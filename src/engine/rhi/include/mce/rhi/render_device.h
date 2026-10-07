@@ -25,6 +25,7 @@ struct DeviceDesc {
     bool vsync = true;
     usize geometry_ring_bytes = 4 * MiB;  // per frame slot (§3.1)
     usize uniform_ring_bytes = 1 * MiB;   // per frame slot (§3.1)
+    usize indirect_ring_bytes = 256 * KiB;  // per frame slot (§3.1)
 };
 
 struct DeviceCaps {
@@ -42,6 +43,8 @@ struct FrameStats {
     u32 commands = 0;
     usize geometry_bytes = 0;
     usize uniform_bytes = 0;
+    usize indirect_bytes = 0;
+    u32 indirect_draws = 0;  // MDI submits (each counts once in `draws` too)
     u32 ring_overflows = 0;
 };
 
@@ -53,8 +56,13 @@ public:
     // every frame that could reference the object (MCE_FRAMES_IN_FLIGHT frames later).
     virtual BufferHandle create_buffer(const BufferDesc& desc, Span<const byte> initial_data = {}) = 0;
     virtual void update_buffer(BufferHandle buffer, u64 offset, Span<const byte> data) = 0;
-    // `initial_data` fills mip 0 with tightly packed rows; row 0 is sampled at v = 0.
+    // `initial_data` fills mip 0 with tightly packed rows; row 0 is sampled at v = 0. For array
+    // textures it holds every layer's mip 0, layers contiguous.
     virtual TextureHandle create_texture(const TextureDesc& desc, Span<const byte> initial_data = {}) = 0;
+    // Uploads one mip of one layer (or a sub-rectangle). Uncompressed formats may update any
+    // rectangle; block-compressed formats need 4-aligned rectangles. Immediate (DSA upload); the
+    // caller must not update a texture a frame still in flight samples unless the race is benign.
+    virtual void update_texture(TextureHandle texture, const TextureRegion& region, Span<const byte> data) = 0;
     virtual SamplerHandle create_sampler(const SamplerDesc& desc) = 0;
     virtual Result<PipelineHandle> create_pipeline(const GraphicsPipelineDesc& desc) = 0;
     virtual void destroy_buffer(BufferHandle) = 0;
@@ -66,6 +74,7 @@ public:
     virtual bool is_alive(TextureHandle) const = 0;
     virtual bool is_alive(PipelineHandle) const = 0;
     virtual Extent2D texture_size(TextureHandle) const = 0;
+    virtual TextureDesc texture_desc(TextureHandle) const = 0;  // debug_name is not kept
 
     // ---- frames
     virtual void begin_frame(u64 frame_index) = 0;
