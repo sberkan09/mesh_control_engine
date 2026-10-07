@@ -61,7 +61,55 @@ public:
     void present(bool) override { ++presents; }
 };
 
+// Records the window end the loop hands each tick (the mce_input seam).
+class RecordingInput final : public IInputSource {
+public:
+    u64 closes[64] = {};
+    u64 count = 0;
+    const input::InputState* sample_for_tick(u64 tick, u64 tick_close_us) override {
+        if (tick <= 64) closes[tick - 1] = tick_close_us;
+        count = tick;
+        return nullptr;
+    }
+};
+
 }  // namespace
+
+TEST_CASE("input source gets exact rational tick window ends (FR-INP-030)") {
+    CountingApp app;
+    FakeClock clock(1.0 / 144.0);
+    RecordingInput input;
+    AppDesc desc;
+    desc.headless = true;
+    desc.clock = &clock;
+    desc.input_source = &input;
+    desc.max_ticks = 60;
+    desc.frame_arena_size = 64 * 1024;
+    run(app, desc);
+    REQUIRE(input.count == 60);
+    for (u64 n = 1; n <= 60; ++n) CHECK(input.closes[n - 1] == (n * 1'000'000ull) / 60);
+    mem::set_frame_arena(nullptr);
+}
+
+TEST_CASE("clamped wall time shifts later input windows instead of piling up events") {
+    CountingApp app;
+    FakeClock clock(1.0);  // each frame takes a second; 5 ticks run, the rest is skipped
+    RecordingInput input;
+    AppDesc desc;
+    desc.headless = true;
+    desc.clock = &clock;
+    desc.input_source = &input;
+    desc.max_frames = 3;
+    desc.frame_arena_size = 64 * 1024;
+    run(app, desc);
+    REQUIRE(input.count == 15);
+    // Frame 1 covers wall [0,1): 5 ticks, 1 - 5/60 s skipped before they run.
+    const u64 skipped_us = 1'000'000 - (5 * 1'000'000ull) / 60;
+    CHECK(input.closes[0] == skipped_us + 1'000'000ull / 60);
+    // Every tick's window still ends at or before the frame's wall time.
+    for (u64 n = 1; n <= 15; ++n) CHECK(input.closes[n - 1] <= ((n + 4) / 5) * 1'000'000ull);
+    mem::set_frame_arena(nullptr);
+}
 
 TEST_CASE("headless run ticks exactly max_ticks with a constant dt (FR-RUN-025)") {
     CountingApp app;
