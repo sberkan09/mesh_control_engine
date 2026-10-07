@@ -17,6 +17,14 @@ EXTS = {".h", ".hpp", ".inl", ".c", ".cc", ".cpp"}
 WALLS = [
     ("GL wall", re.compile(r"\bgl[A-Z]\w*\s*\("), ["src/engine/rhi_gl/"], ["src/", "samples/", "games/"]),
     ("SDL wall", re.compile(r"\bSDL_Event\b"), ["src/engine/platform/"], ["src/", "samples/", "games/"]),
+    # SDL headers: platform, plus the sanctioned native_handle() consumers (GL context, ImGui backend).
+    (
+        "SDL include wall",
+        re.compile(r"[<\"]SDL3/"),
+        ["src/engine/platform/", "src/engine/rhi_gl/", "src/editor/layer/"],
+        ["src/", "samples/", "games/"],
+    ),
+    ("glad wall", re.compile(r"[<\"]glad/"), ["src/engine/rhi_gl/"], ["src/", "samples/", "games/", "tests/"]),
     ("ImGui wall", re.compile(r"\bImGui(::|zmo)|[<\"]imgui"), ["src/editor/layer/"], ["src/", "samples/", "games/"]),
     ("JPH wall", re.compile(r"\bJPH::|[<\"]Jolt/"), ["src/engine/physics3d/"], ["src/", "samples/", "games/", "tests/"]),
     ("Box2D wall", re.compile(r"\bb2[A-Z]\w*|[<\"]box2d/"), ["tests/test_physics2d/"], ["src/", "samples/", "games/", "tests/", "tools/"]),
