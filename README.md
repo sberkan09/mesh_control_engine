@@ -21,18 +21,24 @@ On Linux, SDL3 builds against the X11 headers: `sudo apt-get install libx11-dev 
 libxrandr-dev libxi-dev libxss-dev libxtst-dev libxfixes-dev libxkbcommon-dev libgl-dev`. Tests that need a display
 and a GL driver register with `-DMCE_GPU_TESTS=ON` (CI runs them under Xvfb + Mesa llvmpipe).
 
+Cook a project (`<project>/assets/` → `<project>/cooked/`, plus `assets.mce` with `--pack`):
+`build/<preset>/tools/cook/mce_cook <project> [--pack] [--force] [--adopt]` — exit 0 ok, 1 cook errors, 2 usage.
+
 ## Layout
 
 | Path | What |
 |---|---|
 | `src/engine/core` | `mce_core` (L0): allocators, containers, math, `Result`, log/assert, convars, jobs, the app loop |
+| `src/engine/asset` | `mce_asset` (L2): `.mce` container, GUIDs, cooked chunk formats, runtime asset registry (handles, refcount, hot-reload commit) |
+| `src/engine/asset/cook` | `mce_asset_cook`: cook library — scan, sidecars, importers (PNG/JPG, WAV, TTF, `.mcmat`, `.mcscene`), dependency graph, cook DB, pack |
+| `tools/cook` | `mce_cook` CLI |
 | `src/engine/platform` | `mce_platform` (L1): SDL3 window + event pump, clock, boot-failure message box (the SDL wall) |
 | `src/engine/rhi` | `mce_rhi` (L2): backend-neutral handles, `RenderDevice`, recorded `CommandBuffer` |
 | `src/engine/rhi_gl` | `mce_rhi_gl` (L2): the OpenGL 4.5 core backend (DSA, persistent-mapped rings, fences) — the only GL code |
 | `samples/` | the sample ladder: `01_triangle` |
 | `third_party/glad` | generated glad2 GL 4.5 core loader (private to `mce_rhi_gl`) |
 | `tests/` | doctest unit tests (`test_<module>`) and `mce_devhost` |
-| `scripts/ci/check_walls.py` | GL / SDL / ImGui / JPH / Box2D grep walls and the engine container ban |
+| `scripts/ci/check_walls.py` | GL / SDL / ImGui / JPH / Box2D / stb / cook grep walls and the engine container ban |
 | `cmake/` | compile policy (`MceTarget.cmake`) and pinned dependencies (`Dependencies.cmake`) |
 
 ## Status

@@ -24,6 +24,16 @@ const char* errc_name(Errc code) {
         case Errc::VersionTooNew: return "VersionTooNew";
         case Errc::Truncated: return "Truncated";
         case Errc::MissingRef: return "MissingRef";
+        case Errc::OutOfBounds: return "OutOfBounds";
+        case Errc::ReservedNonZero: return "ReservedNonZero";
+        case Errc::Misaligned: return "Misaligned";
+        case Errc::PayloadCrcMismatch: return "PayloadCrcMismatch";
+        case Errc::ChunkVersionTooNew: return "ChunkVersionTooNew";
+        case Errc::DuplicateGuid: return "DuplicateGuid";
+        case Errc::MissingSidecar: return "MissingSidecar";
+        case Errc::DependencyCycle: return "DependencyCycle";
+        case Errc::ParseError: return "ParseError";
+        case Errc::ImportFailed: return "ImportFailed";
         case Errc::ShaderCompile: return "ShaderCompile";
         case Errc::PipelineCreate: return "PipelineCreate";
         case Errc::DeviceLost: return "DeviceLost";
