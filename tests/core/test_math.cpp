@@ -6,7 +6,7 @@ using namespace mce;
 using namespace mce::math;
 
 // Hand-computed reference cases for the M0 function set. The DirectXMath randomized oracle sweep
-// lands with M1 (ROADMAP M0 note).
+// lives in test_math_oracle.cpp.
 
 TEST_CASE("vector basics") {
     CHECK(dot(vec3{1, 2, 3}, vec3{4, 5, 6}) == 32.0f);
