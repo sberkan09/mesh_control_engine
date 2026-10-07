@@ -5,6 +5,14 @@
 
 using namespace mce;
 
+// No-exception doctest: a failed REQUIRE does not leave the test case, so bail out explicitly.
+#define MCE_REQUIRE_OR_RETURN(...)              \
+    do {                                        \
+        const bool mce_req_ok_ = (__VA_ARGS__); \
+        REQUIRE_MESSAGE(mce_req_ok_, #__VA_ARGS__); \
+        if (!mce_req_ok_) return;               \
+    } while (0)
+
 namespace {
 
 struct Recorder {
@@ -37,7 +45,7 @@ struct PlatformScope {
 TEST_CASE("platform: init, driver, shutdown") {
     {
         PlatformScope p;
-        REQUIRE(p.ok);
+        MCE_REQUIRE_OR_RETURN(p.ok);
         CHECK(platform::is_initialized());
         CHECK(StringView(platform::video_driver()) == "dummy");
         CHECK_FALSE(platform::pump_events());
@@ -50,20 +58,20 @@ TEST_CASE("platform: window create requires init") {
     platform::WindowDesc wd;
     wd.opengl = false;
     auto w = platform::Window::create(wd);
-    REQUIRE_FALSE(w.has_value());
+    MCE_REQUIRE_OR_RETURN(!w.has_value());
     CHECK(w.error().code == Errc::PlatformInit);
 }
 
 TEST_CASE("platform: window lifecycle and close request") {
     PlatformScope p;
-    REQUIRE(p.ok);
+    MCE_REQUIRE_OR_RETURN(p.ok);
     platform::WindowDesc wd;
     wd.title = "test";
     wd.width = 320;
     wd.height = 200;
     wd.opengl = false;  // the dummy driver has no GL
     auto w = platform::Window::create(wd);
-    REQUIRE(w.has_value());
+    MCE_REQUIRE_OR_RETURN(w.has_value());
     platform::Window& win = *w.value();
     CHECK(win.native_handle() != nullptr);
     CHECK(win.id() != 0);
