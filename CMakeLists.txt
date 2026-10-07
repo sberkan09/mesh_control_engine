@@ -32,6 +32,7 @@ endif()
 
 add_subdirectory(src/engine/core)
 add_subdirectory(src/engine/refl)
+add_subdirectory(src/engine/ecs)
 add_subdirectory(src/engine/platform)
 add_subdirectory(src/engine/rhi)
 add_subdirectory(src/engine/rhi_gl)
