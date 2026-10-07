@@ -1,0 +1,47 @@
+# Build output
+build/
+build-*/
+out/
+bin/
+obj/
+*.obj
+*.pdb
+*.ilk
+*.lib
+*.a
+*.exe
+*.dll
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake-install.cmake
+CMakeUserPresets.json
+DependInfo.cmake
+cmake_check_*.cxx
+
+# vcpkg
+vcpkg_installed/
+
+# IDE / editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.sln
+*.vcxproj*
+
+# Cooked / cached content (never commit; regenerated from source assets)
+data/cooked/
+*.mcepak
+
+# Tool artifacts
+*.log
+Tracy-*/
+RenderDoc captures/
+*.rdc
+*.tracy
+
+# OS
+Thumbs.db
+.DS_Store
