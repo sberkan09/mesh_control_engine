@@ -212,7 +212,7 @@ Result<void> AssetSystem::make_resident(Row& row, AssetKey key) {
     } else {
         // cooked/<aa>/<guid-hex>/<content-hash>.mce (assets.md §3.1)
         const FixedString<40> hex = to_hex(row.guid);
-        char name[64];
+        char name[96];  // sized for FixedString<40>'s worst case, not just a 32-char GUID
         std::snprintf(name, sizeof(name), "/%.2s/%s/%016llx.mce", hex.c_str(), hex.c_str(),
                       static_cast<unsigned long long>(row.content_hash));
         FixedString<1024> file(m.root.view());
