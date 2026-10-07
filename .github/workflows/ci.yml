@@ -37,6 +37,41 @@ jobs:
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
 
+  determinism:
+    name: Determinism (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            debug: linux-gcc-debug
+            release: linux-gcc-release
+            exe: ""
+          - os: windows-latest
+            debug: msvc-debug
+            release: msvc-release
+            exe: ".exe"
+    steps:
+      - uses: actions/checkout@v4
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Build Debug and Release
+        shell: bash
+        run: |
+          cmake --preset ${{ matrix.debug }} -DMCE_BUILD_TESTS=OFF
+          cmake --build --preset ${{ matrix.debug }} --target sample_02_boids
+          cmake --preset ${{ matrix.release }} -DMCE_BUILD_TESTS=OFF
+          cmake --build --preset ${{ matrix.release }} --target sample_02_boids
+      - name: 3 runs x Debug/Release must hash identically
+        shell: bash
+        run: >
+          python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1000 -boids 20000"
+          build/${{ matrix.debug }}/samples/02_boids/sample_02_boids${{ matrix.exe }}
+          build/${{ matrix.release }}/samples/02_boids/sample_02_boids${{ matrix.exe }}
+
   windows:
     name: Windows ${{ matrix.preset }}
     runs-on: windows-latest
