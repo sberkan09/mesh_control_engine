@@ -1,0 +1,156 @@
+// .mcmat -> CHNK_MAT: fixed-width metallic-roughness param block + texture refs by GUID
+// (assets.md §5.2). Texture GUIDs are dependencies: a missing or non-texture reference is a cook
+// error naming file:line:col.
+//
+// {
+//   "format": "mce-material", "version": 1, "guid": "<uuid>",
+//   "base_color": [1, 1, 1, 1], "metallic": 0, "roughness": 1, "emissive": [0, 0, 0],
+//   "alpha_mode": "opaque" | "mask" | "blend", "alpha_cutoff": 0.5,
+//   "double_sided": false, "unlit": false,
+//   "textures": { "base_color": "guid:<uuid>", "normal": ..., "metallic_roughness": ..., "emissive": ... }
+// }
+
+#include <cstring>
+
+#include "importer_common.h"
+#include "mce/asset/formats.h"
+
+namespace mce::cook {
+
+namespace {
+
+constexpr const char* kStage = "cook.material";
+constexpr u32 kMaterialFormatVersion = 1;
+constexpr StringView kSlotNames[] = {"base_color", "normal", "metallic_roughness", "emissive"};
+
+bool read_vec(JsonValue doc, StringView key, f32* out, u32 n, StringView file, DiagList& diags) {
+    const JsonValue v = doc.get(key);
+    if (!v.valid()) return true;
+    if (!v.is_array() || v.size() != n) {
+        String msg;
+        appendf(msg, "'%.*s' must be an array of %u numbers", static_cast<int>(key.size()), key.data(), n);
+        detail::error_at(diags, Errc::ParseError, file, v, kStage, msg);
+        return false;
+    }
+    for (u32 i = 0; i < n; ++i) {
+        if (!v.at(i).is_number()) {
+            detail::error_at(diags, Errc::ParseError, file, v.at(i), kStage, "expected a number");
+            return false;
+        }
+        out[i] = static_cast<f32>(v.at(i).as_number());
+    }
+    return true;
+}
+
+class MaterialImporter final : public IImporter {
+public:
+    StringView id() const override { return "material"; }
+    u32 version() const override { return 1; }
+    ChunkType type() const override { return ChunkType::Material; }
+    bool native() const override { return true; }
+    bool handles_extension(StringView ext) const override { return ext == ".mcmat"; }
+
+    void scan_dependencies(const ImportInput& in, Array<DepRef>& out, DiagList& diags) const override {
+        const JsonValue tex = in.settings.get("textures");
+        if (!tex.valid()) return;
+        if (!tex.is_object()) {
+            detail::error_at(diags, Errc::ParseError, in.display_path, tex, kStage, "'textures' must be an object");
+            return;
+        }
+        for (u32 i = 0; i < tex.size(); ++i) {
+            const JsonValue v = tex.at(i);
+            if (v.is_null()) continue;
+            Guid g;
+            if (!v.is_string() || !parse_guid_ref(v.as_string(), g)) {
+                detail::error_at(diags, Errc::ParseError, in.display_path, v, kStage, "texture reference must be \"guid:<uuid>\" or null");
+                continue;
+            }
+            DepRef d;
+            d.guid = g;
+            d.expected = ChunkType::Texture;
+            d.line = v.line();
+            d.col = v.col();
+            d.where.assign("textures.");
+            d.where.append(tex.key_at(i));
+            out.push_back(d);
+        }
+    }
+
+    bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
+        const JsonValue doc = in.settings;
+        const StringView file = in.display_path;
+        const u32 errors_before = diags.error_count();
+        if (!detail::check_keys(doc, {"format", "version", "guid", "name", "base_color", "metallic", "roughness", "emissive", "alpha_mode",
+                                      "alpha_cutoff", "double_sided", "unlit", "textures"},
+                                file, kStage, diags))
+            return false;
+        const JsonValue fmt = doc.get("format");
+        if (!fmt.is_string() || fmt.as_string() != "mce-material") {
+            detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-material\"");
+            return false;
+        }
+        const JsonValue ver = doc.get("version");
+        if (!ver.is_integer() || ver.as_number() != kMaterialFormatVersion) {
+            String msg;
+            appendf(msg, "unsupported material version (this cook reads version %u)", kMaterialFormatVersion);
+            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
+            return false;
+        }
+
+        asset::MaterialChunk m{};
+        m.base_color[0] = m.base_color[1] = m.base_color[2] = m.base_color[3] = 1.0f;
+        m.roughness = 1.0f;
+        m.alpha_cutoff = 0.5f;
+        f64 metallic = 0, roughness = 1, cutoff = 0.5;
+        bool double_sided = false, unlit = false;
+        read_vec(doc, "base_color", m.base_color, 4, file, diags);
+        read_vec(doc, "emissive", m.emissive, 3, file, diags);
+        detail::read_number(doc, "metallic", 0, metallic, file, kStage, diags);
+        detail::read_number(doc, "roughness", 1, roughness, file, kStage, diags);
+        detail::read_number(doc, "alpha_cutoff", 0.5, cutoff, file, kStage, diags);
+        detail::read_bool(doc, "double_sided", false, double_sided, file, kStage, diags);
+        detail::read_bool(doc, "unlit", false, unlit, file, kStage, diags);
+        m.metallic = static_cast<f32>(metallic);
+        m.roughness = static_cast<f32>(roughness);
+        m.alpha_cutoff = static_cast<f32>(cutoff);
+        if (double_sided) m.flags |= asset::MaterialFlags::DoubleSided;
+        if (unlit) m.flags |= asset::MaterialFlags::Unlit;
+        if (const JsonValue mode = doc.get("alpha_mode"); mode.valid()) {
+            const StringView s = mode.is_string() ? mode.as_string() : StringView();
+            if (s == "mask") m.flags |= asset::MaterialFlags::AlphaMask;
+            else if (s == "blend") m.flags |= asset::MaterialFlags::AlphaBlend;
+            else if (s != "opaque") detail::error_at(diags, Errc::ParseError, file, mode, kStage, "'alpha_mode' must be opaque, mask or blend");
+        }
+
+        if (const JsonValue tex = doc.get("textures"); tex.is_object()) {
+            for (u32 i = 0; i < tex.size(); ++i) {
+                u32 slot = 0;
+                while (slot < 4 && kSlotNames[slot] != tex.key_at(i)) ++slot;
+                if (slot == 4) {
+                    detail::error_at(diags, Errc::ParseError, file, tex.at(i), kStage,
+                                     "unknown texture slot (base_color, normal, metallic_roughness, emissive)");
+                    continue;
+                }
+                Guid g;
+                if (tex.at(i).is_string() && parse_guid_ref(tex.at(i).as_string(), g)) {
+                    m.textures[slot][0] = g.hi;
+                    m.textures[slot][1] = g.lo;
+                }
+            }
+        }
+        if (diags.error_count() != errors_before) return false;
+
+        asset::ContainerWriter::ChunkDesc d;
+        d.type = ChunkType::Material;
+        d.version = asset::chunk_version(asset::MATERIAL_VERSION, 0);
+        d.guid = in.guid;
+        out.add(d, asset::as_bytes_of(m));
+        return true;
+    }
+};
+
+}  // namespace
+
+mem::UniquePtr<IImporter> make_material_importer() { return mem::make_unique<MaterialImporter>(mem::heap()); }
+
+}  // namespace mce::cook

@@ -21,4 +21,4 @@ Pinned today: spdlog v1.17.0, Tracy v0.14.1 (on-demand client), doctest v2.5.3 (
 (static; `mce_platform` + `mce_rhi_gl` only). glad2 is a generator, not a library: its GL 4.5 core output is
 vendored in `third_party/glad` (the regenerate command is in `cmake/Dependencies.cmake`) and linked privately by
 `mce_rhi_gl`. On Linux, SDL3 needs the X11 development headers (`libx11-dev libxext-dev libxcursor-dev libxrandr-dev
-libxi-dev libxss-dev libxtst-dev libxfixes-dev libxkbcommon-dev`).
+libxi-dev libxss-dev libxtst-dev libxfixes-dev libxkbcommon-dev`). stb @2c980bb is cook-time only (`mce_asset_cook`, ADR-0019).
