@@ -98,9 +98,20 @@ inline f32 length(vec3 v) { return std::sqrt(dot(v, v)); }
 inline f32 length(vec4 v) { return std::sqrt(dot(v, v)); }
 constexpr f32 length_sq(vec2 v) { return dot(v, v); }
 constexpr f32 length_sq(vec3 v) { return dot(v, v); }
-inline vec2 normalize(vec2 v) { return v / length(v); }
-inline vec3 normalize(vec3 v) { return v / length(v); }
-inline vec4 normalize(vec4 v) { return v / length(v); }
+// Zero-length input (including lengths that underflow to 0) returns the zero vector instead of
+// NaN, matching XMVector*Normalize (oracle-tested), so a stray zero never poisons sim state.
+inline vec2 normalize(vec2 v) {
+    const f32 l = length(v);
+    return l > 0.0f ? v / l : vec2{};
+}
+inline vec3 normalize(vec3 v) {
+    const f32 l = length(v);
+    return l > 0.0f ? v / l : vec3{};
+}
+inline vec4 normalize(vec4 v) {
+    const f32 l = length(v);
+    return l > 0.0f ? v / l : vec4{};
+}
 constexpr vec2 lerp(vec2 a, vec2 b, f32 t) { return a + (b - a) * t; }
 constexpr vec3 lerp(vec3 a, vec3 b, f32 t) { return a + (b - a) * t; }
 constexpr vec4 lerp(vec4 a, vec4 b, f32 t) { return a + (b - a) * t; }
@@ -128,9 +139,11 @@ constexpr quat operator*(quat a, quat b) {
 }
 constexpr f32 dot(quat a, quat b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
 constexpr quat conjugate(quat q) { return {-q.x, -q.y, -q.z, q.w}; }
+// Zero quaternion in -> zero quaternion out (matches XMQuaternionNormalize), never NaN.
 inline quat normalize(quat q) {
-    const f32 inv = 1.0f / std::sqrt(dot(q, q));
-    return {q.x * inv, q.y * inv, q.z * inv, q.w * inv};
+    const f32 l = std::sqrt(dot(q, q));
+    if (!(l > 0.0f)) return {0, 0, 0, 0};
+    return {q.x / l, q.y / l, q.z / l, q.w / l};
 }
 inline quat quat_from_axis_angle(vec3 axis_unit, f32 angle) {
     const f32 s = std::sin(angle * 0.5f);

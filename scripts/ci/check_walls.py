@@ -28,6 +28,7 @@ WALLS = [
     ("ImGui wall", re.compile(r"\bImGui(::|zmo)|[<\"]imgui"), ["src/editor/layer/"], ["src/", "samples/", "games/"]),
     ("JPH wall", re.compile(r"\bJPH::|[<\"]Jolt/"), ["src/engine/physics3d/"], ["src/", "samples/", "games/", "tests/"]),
     ("Box2D wall", re.compile(r"\bb2[A-Z]\w*|[<\"]box2d/"), ["tests/test_physics2d/"], ["src/", "samples/", "games/", "tests/", "tools/"]),
+    ("DirectXMath wall", re.compile(r"[<\"]DirectX\w*\.h|\bDirectX::"), ["tests/core/test_math_oracle"], ["src/", "samples/", "games/", "tests/", "tools/"]),
     (
         "engine container ban",
         re.compile(r"std::(vector|unordered_map|unordered_set|string\b|list\b|map\b)|#include\s*<(iostream|sstream|fstream)>"),
