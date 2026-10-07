@@ -16,13 +16,19 @@ ctest --preset msvc-debug
 
 Run the headless harness: `build/<preset>/tests/devhost/mce_devhost -ticks 10000`.
 
+Cook a project (`<project>/assets/` → `<project>/cooked/`, plus `assets.mce` with `--pack`):
+`build/<preset>/tools/cook/mce_cook <project> [--pack] [--force] [--adopt]` — exit 0 ok, 1 cook errors, 2 usage.
+
 ## Layout
 
 | Path | What |
 |---|---|
 | `src/engine/core` | `mce_core` (L0): allocators, containers, math, `Result`, log/assert, convars, jobs, the app loop |
+| `src/engine/asset` | `mce_asset` (L2): `.mce` container, GUIDs, cooked chunk formats, runtime asset registry (handles, refcount, hot-reload commit) |
+| `src/engine/asset/cook` | `mce_asset_cook`: cook library — scan, sidecars, importers (PNG/JPG, WAV, TTF, `.mcmat`, `.mcscene`), dependency graph, cook DB, pack |
+| `tools/cook` | `mce_cook` CLI |
 | `tests/` | doctest unit tests (`test_<module>`) and `mce_devhost` |
-| `scripts/ci/check_walls.py` | GL / SDL / ImGui / JPH / Box2D grep walls and the engine container ban |
+| `scripts/ci/check_walls.py` | GL / SDL / ImGui / JPH / Box2D / stb / cook grep walls and the engine container ban |
 | `cmake/` | compile policy (`MceTarget.cmake`) and pinned dependencies (`Dependencies.cmake`) |
 
 ## Status

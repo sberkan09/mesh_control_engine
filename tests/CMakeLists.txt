@@ -7,4 +7,5 @@ add_library(mce::doctest_main ALIAS mce_doctest_main)
 
 add_subdirectory(core)
 add_subdirectory(refl)
+add_subdirectory(asset)
 add_subdirectory(devhost)

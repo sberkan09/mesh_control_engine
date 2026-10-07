@@ -30,6 +30,8 @@ endif()
 
 add_subdirectory(src/engine/core)
 add_subdirectory(src/engine/refl)
+add_subdirectory(src/engine/asset)
+add_subdirectory(tools/cook)
 
 if(MCE_BUILD_TESTS)
     add_subdirectory(tests)
