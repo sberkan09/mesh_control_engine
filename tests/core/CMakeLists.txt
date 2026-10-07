@@ -20,3 +20,10 @@ mce_add_test(test_math_oracle
     DEPS
         mce::mce_core
         mce::directxmath)
+# DirectXMath's SSE store paths type-pun (XMStoreFloat3 writes x,y through a double* via
+# _mm_store_sd). That breaks strict aliasing, and GCC -O2 then reads stale floats (seen as a
+# BoundingBox::CreateMerged center of 0,0 in linux-gcc-release). The oracle must not depend on
+# that UB, so this one target opts out of strict aliasing.
+if(NOT MSVC)
+    target_compile_options(test_math_oracle PRIVATE -fno-strict-aliasing)
+endif()
