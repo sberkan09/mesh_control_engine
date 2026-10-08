@@ -58,12 +58,15 @@ stage_tidy() {
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
     cmake --preset linux-gcc-debug -DMCE_GPU_TESTS="${GPU_TESTS[linux-gcc-debug]}" &&
-        cmake --build --preset linux-gcc-debug --target sample_02_boids &&
+        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless &&
         cmake --preset linux-gcc-release -DMCE_GPU_TESTS="${GPU_TESTS[linux-gcc-release]}" &&
-        cmake --build --preset linux-gcc-release --target sample_02_boids &&
+        cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1000 -boids 20000" \
             build/linux-gcc-debug/samples/02_boids/sample_02_boids \
-            build/linux-gcc-release/samples/02_boids/sample_02_boids
+            build/linux-gcc-release/samples/02_boids/sample_02_boids &&
+        python3 scripts/ci/determinism.py --runs 3 --args "-ticks 2000" \
+            build/linux-gcc-debug/samples/physics2d_headless/sample_physics2d_headless \
+            build/linux-gcc-release/samples/physics2d_headless/sample_physics2d_headless
 }
 
 run_stage() {
