@@ -48,6 +48,13 @@ public:
         out = g.value();
         return true;
     }
+    bool native_document(Guid g, JsonValue& out, StringView& source_path) const override {
+        const AssetRecord* rec = reg_.by_guid(g);
+        if (!rec || !rec->importer->native()) return false;
+        out = rec->settings();
+        source_path = rec->source_path.view();
+        return out.valid();
+    }
 
 private:
     const AssetRegistry& reg_;

@@ -6,6 +6,8 @@
 // template (M8), until then a game cooks its own scenes with a cook that links its components.
 
 #include "mce/audio/components.h"     // AudioSource
+#include "mce/ecs/hierarchy.h"        // ChildOf, WorldTransform
+#include "mce/ecs/save.h"             // SaveKey
 #include "mce/ecs/transform.h"        // LocalTransform
 #include "mce/kit/components.h"       // Sprite, TextLabel, Camera2DComponent
 #include "mce/physics/components.h"   // RigidBody2D, Collider2D, CharacterController2D, ...

@@ -4,6 +4,13 @@
 //
 // Safety property: nothing mutates table structure while a phase runs. Systems change structure
 // only through Commands, applied at the sync point that ends each phase, in recorded order.
+//
+// Change detection (v0.5, ecs-gameplay.md §2.7/§3.6, FR-ENT-040): every data column carries two
+// parallel u32 tick columns (added, changed). Writes stamp the current write tick: the running
+// system's run tick inside a phase, the sync tick while commands apply, a fresh tick for direct
+// calls outside a phase. Stamping writes: set/add, Commands, try_get_mut, touch, and mutable
+// (non-const) query items for every row visited. A pointer kept and written later is not seen —
+// call touch<T>(). Tags have no column and therefore no ticks.
 
 #include <cstring>
 #include <tuple>
@@ -53,7 +60,15 @@ struct Column {
     u32 size = 0;
     u32 align = 0;
     u8* data = nullptr;
+    u32* added = nullptr;    // per-row tick the component was added (change detection)
+    u32* changed = nullptr;  // per-row tick of the last stamped write
 };
+
+// Wrapping tick comparison (Bevy-style): `tick` is newer than `since` when it is younger relative
+// to `now`. Correct while every stored age stays below 2^32 — World::clamp_change_ticks keeps
+// them below kMaxChangeAge.
+inline constexpr u32 kMaxChangeAge = 3u << 30;
+constexpr bool tick_newer(u32 tick, u32 since, u32 now) { return u32(now - tick) < u32(now - since); }
 
 // One archetype: every entity with exactly this component set, stored column-wise.
 class Table {
@@ -79,11 +94,21 @@ public:
         const u8 i = col_of_[c];
         return i == kNoColumn ? nullptr : columns_[i].data + usize(row) * columns_[i].size;
     }
+    // Tick columns for a data component, or nullptr if absent / a tag.
+    u32* added_ticks(ComponentId c) const {
+        const u8 i = col_of_[c];
+        return i == kNoColumn ? nullptr : columns_[i].added;
+    }
+    u32* changed_ticks(ComponentId c) const {
+        const u8 i = col_of_[c];
+        return i == kNoColumn ? nullptr : columns_[i].changed;
+    }
+    Span<Column> columns_mut() { return columns_.span(); }
 
-    // Appends a zero-initialized row. Returns its index.
-    u32 push_row(Entity e);
+    // Appends a zero-initialized row (added/changed ticks = `tick`). Returns its index.
+    u32 push_row(Entity e, u32 tick = 0);
     // Appends `n` zero-initialized rows.
-    u32 push_rows(u32 n, const Entity* es);
+    u32 push_rows(u32 n, const Entity* es, u32 tick = 0);
     // Removes `row` by moving the last row into it. Returns the entity that moved (null if none).
     Entity swap_remove(u32 row);
 
@@ -158,6 +183,9 @@ public:
     template <class T>
     void spawn_n(u32 n, const T& initial, Array<Entity>* out = nullptr);
     void destroy(Entity e);
+    // Type-erased spawn of an already reserved handle (World::reserve_entity): prefab
+    // instantiation inside a phase. `components` data is copied at record time.
+    void spawn_raw(Entity reserved, Span<const ecs::RawComponent> components);
     template <class T>
     void add(Entity e, const T& value = T{});
     template <class T>
@@ -227,6 +255,11 @@ public:
     T* try_resource();
     template <class... Cs>
     Query<Cs...> query();
+    // Change detection relative to the running system's previous run (FR-ENT-040).
+    template <class T>
+    bool is_added(Entity e) const;
+    template <class T>
+    bool is_changed(Entity e) const;
 
 private:
     World* world_;
@@ -250,6 +283,18 @@ public:
     Query& with();
     template <class... Ts>
     Query& without();
+    // Change filters (v0.5): only rows whose T was added / written after the reader tick — the
+    // running system's previous run, or since() when given. T must be a data component.
+    template <class... Ts>
+    Query& added();
+    template <class... Ts>
+    Query& changed();
+    // Overrides the reader tick (outside a system the default reader sees every row as new).
+    Query& since(u32 tick) {
+        since_ = tick;
+        has_since_ = true;
+        return *this;
+    }
 
     // fn(Entity, Cs&...) or fn(Cs&...)
     template <class Fn>
@@ -257,10 +302,19 @@ public:
     usize count();
 
 private:
+    struct TickFilter {
+        ecs::ComponentId id;
+        bool added;  // false = changed
+    };
+    bool row_passes(const ecs::detail::Table& t, u32 row, u32 now) const;
+
     World& world_;
     ecs::ComponentMask required_;
     ecs::ComponentMask excluded_;
     ecs::ComponentId ids_[sizeof...(Cs) > 0 ? sizeof...(Cs) : 1];
+    SmallVector<TickFilter, 2> tick_filters_;
+    u32 since_ = 0;
+    bool has_since_ = false;
 };
 
 struct WorldMetrics {
@@ -307,11 +361,18 @@ public:
         hooks_[c].on_add = on_add;
         hooks_[c].on_remove = on_remove;
     }
+    // Runs for every entity about to be destroyed, before its component on_remove hooks and before
+    // its row goes (the hierarchy uses it to destroy children first). May destroy other entities.
+    void add_destroy_hook(HookFn fn) { destroy_hooks_.push_back(fn); }
+    // The registered component whose mce_refl type name hashes to `refl_id`, or kInvalidComponent.
+    ecs::ComponentId find_component_by_refl(u64 refl_id) const;
 
     // ---- entities (immediate; structural calls are illegal while a phase runs) -----
     Entity spawn();
     template <class... Ts>
     Entity spawn_with(const Ts&... components);
+    // Places a reserved handle (reserve_entity) with type-erased components now; outside phases.
+    void spawn_raw(Entity reserved, Span<const ecs::RawComponent> components);
     void destroy(Entity e);
     bool alive(Entity e) const;
     template <class T>
@@ -330,6 +391,31 @@ public:
     template <class T>
     void remove(Entity e);
     u32 entity_count() const { return alive_count_; }
+
+    // ---- change detection (v0.5, FR-ENT-040) ---------------------------------
+    // The tick counter advances once per system run, per sync point and per direct (out-of-phase)
+    // write. `since` is a tick previously read from change_tick() or a reader tick.
+    u32 change_tick() const { return change_tick_; }
+    // Tick a query/Frame helper compares against: the running system's previous run tick, or 0
+    // outside a system.
+    u32 reader_tick() const;
+    bool in_system() const { return current_system_ != 0xFFFF; }
+    template <class T>
+    bool is_added(Entity e, u32 since) const;
+    template <class T>
+    bool is_changed(Entity e, u32 since) const;
+    // Marks T on e as changed now (writes through a retained pointer are otherwise invisible).
+    template <class T>
+    void touch(Entity e);
+    // Type-erased variants (prefab instantiation, inspector).
+    void touch(Entity e, ecs::ComponentId c);
+    bool is_changed(Entity e, ecs::ComponentId c, u32 since) const;
+    bool is_added(Entity e, ecs::ComponentId c, u32 since) const;
+    // The tick a write right now would be stamped with (advances it outside a phase).
+    u32 write_tick();
+    // Test hook: advance the counter to `tick` as if the ticks in between had elapsed (wrapping
+    // forward; stored ticks are clamped exactly as periodic sync clamping would).
+    void debug_set_change_tick(u32 tick);
 
     // ---- type-erased access (scene loader, editor preview world) ------------------------
     // For code that knows a component only by its id (refl::TypeRecord::type_hash ->
@@ -410,6 +496,7 @@ private:
         const char* name;
         SystemFn fn;
         u16 id;  // global system index (event producer/consumer attribution)
+        u32 last_run = 0;  // change tick of this system's previous run (0 = never ran)
     };
     struct Resource {
         void* ptr = nullptr;
@@ -428,6 +515,8 @@ private:
     void destroy_now(Entity e);
     void apply_commands();
     void assert_not_in_phase(const char* what) const;
+    void clamp_change_ticks();
+    const SystemEntry* current_system_entry() const;
 
     mem::IAllocator& alloc_;
     Array<ecs::ComponentInfo> components_;
@@ -447,6 +536,14 @@ private:
     Array<const char*> system_name_cache_[kPhaseCount];
     Array<const char*> system_names_all_;  // index = global system id
     u16 current_system_ = 0xFFFF;
+    u16 current_phase_ = 0;      // valid while current_system_ is
+    u16 current_slot_ = 0;       // index into systems_[current_phase_]
+
+    Array<HookFn> destroy_hooks_;
+    u32 change_tick_ = 1;        // 0 is reserved for "never"
+    u32 stamp_tick_ = 0;         // write tick while stamping_ (system run / sync)
+    bool stamping_ = false;
+    u32 last_tick_clamp_ = 1;
 
     HashMap<u64, mem::UniquePtr<ecs::detail::EventQueueBase>> events_;
     Array<ecs::detail::EventQueueBase*> events_by_phase_[kPhaseCount];
@@ -509,7 +606,12 @@ const T* World::try_get(Entity e) const {
 
 template <class T>
 T* World::try_get_mut(Entity e) {
-    return const_cast<T*>(static_cast<const World*>(this)->try_get<T>(e));
+    T* p = const_cast<T*>(static_cast<const World*>(this)->try_get<T>(e));
+    if (p) {
+        const Location loc = locations_[e.index];
+        tables_[loc.table]->changed_ticks(*component_ids_.find(kTypeHash<T>))[loc.row] = write_tick();
+    }
+    return p;
 }
 
 template <class T>
@@ -518,7 +620,10 @@ void World::set(Entity e, const T& value) {
     const ecs::ComponentId c = component_id<T>();
     const Location loc = locations_[e.index];
     if (loc.table != kNoTable && tables_[loc.table]->mask().test(c)) {
-        if constexpr (!std::is_empty_v<T>) std::memcpy(tables_[loc.table]->cell(c, loc.row), &value, sizeof(T));
+        if constexpr (!std::is_empty_v<T>) {
+            std::memcpy(tables_[loc.table]->cell(c, loc.row), &value, sizeof(T));
+            tables_[loc.table]->changed_ticks(c)[loc.row] = write_tick();
+        }
         return;
     }
     assert_not_in_phase("add (structural set)");
@@ -530,6 +635,23 @@ void World::remove(Entity e) {
     assert_not_in_phase("remove");
     if (!alive(e)) return;
     remove_component_raw(e, component_id<T>());
+}
+
+template <class T>
+bool World::is_added(Entity e, u32 since) const {
+    const ecs::ComponentId* c = component_ids_.find(kTypeHash<T>);
+    return c && is_added(e, *c, since);
+}
+
+template <class T>
+bool World::is_changed(Entity e, u32 since) const {
+    const ecs::ComponentId* c = component_ids_.find(kTypeHash<T>);
+    return c && is_changed(e, *c, since);
+}
+
+template <class T>
+void World::touch(Entity e) {
+    if (const ecs::ComponentId* c = component_ids_.find(kTypeHash<T>)) touch(e, *c);
 }
 
 template <class T>
@@ -660,11 +782,19 @@ template <class... Cs>
 Query<Cs...> Frame::query() {
     return Query<Cs...>(*world_);
 }
+template <class T>
+bool Frame::is_added(Entity e) const {
+    return world_->is_added<T>(e, world_->reader_tick());
+}
+template <class T>
+bool Frame::is_changed(Entity e) const {
+    return world_->is_changed<T>(e, world_->reader_tick());
+}
 
 // ---- Query ---------------------------------------------------------------------------------
 
 template <class... Cs>
-Query<Cs...>::Query(World& w) : world_(w) {
+Query<Cs...>::Query(World& w) : world_(w), since_(w.reader_tick()), has_since_(w.in_system()) {
     static_assert(((!std::is_empty_v<ecs::detail::component_t<Cs>>) && ...), "tags go in with<>(), not the item list");
     usize i = 0;
     ((ids_[i++] = w.component_id<ecs::detail::component_t<Cs>>()), ...);
@@ -686,8 +816,38 @@ Query<Cs...>& Query<Cs...>::without() {
 }
 
 template <class... Cs>
+template <class... Ts>
+Query<Cs...>& Query<Cs...>::added() {
+    static_assert(((!std::is_empty_v<Ts>) && ...), "tags have no ticks; change filters need data components");
+    ((required_.set(world_.component_id<Ts>()), tick_filters_.push_back(TickFilter{world_.component_id<Ts>(), true})), ...);
+    return *this;
+}
+
+template <class... Cs>
+template <class... Ts>
+Query<Cs...>& Query<Cs...>::changed() {
+    static_assert(((!std::is_empty_v<Ts>) && ...), "tags have no ticks; change filters need data components");
+    ((required_.set(world_.component_id<Ts>()), tick_filters_.push_back(TickFilter{world_.component_id<Ts>(), false})), ...);
+    return *this;
+}
+
+template <class... Cs>
+bool Query<Cs...>::row_passes(const ecs::detail::Table& t, u32 row, u32 now) const {
+    if (!has_since_) return true;  // no reader tick: every row is new
+    for (const TickFilter& f : tick_filters_) {
+        const u32* ticks = f.added ? t.added_ticks(f.id) : t.changed_ticks(f.id);
+        if (!ecs::detail::tick_newer(ticks[row], since_, now)) return false;
+    }
+    return true;
+}
+
+template <class... Cs>
 template <class Fn>
 void Query<Cs...>::each(Fn&& fn) {
+    // Mutable items stamp their row's changed tick (one write tick per each() call).
+    constexpr bool kAnyMutable = (!std::is_const_v<std::remove_reference_t<Cs>> || ...);
+    [[maybe_unused]] const u32 stamp = kAnyMutable ? world_.write_tick() : 0;
+    const u32 now = world_.change_tick();
     for (const auto& tp : world_.tables()) {
         const ecs::detail::Table& t = *tp;
         const u32 rows = t.size();
@@ -696,11 +856,18 @@ void Query<Cs...>::each(Fn&& fn) {
         [&]<usize... I>(std::index_sequence<I...>) {
             std::tuple<ecs::detail::column_ptr_t<Cs>...> cols{
                 reinterpret_cast<ecs::detail::column_ptr_t<Cs>>(t.column(ids_[I]))...};
+            u32* stamps[sizeof...(Cs) > 0 ? sizeof...(Cs) : 1] = {
+                (std::is_const_v<std::remove_reference_t<Cs>> ? nullptr : t.changed_ticks(ids_[I]))...};
             for (u32 r = 0; r < rows; ++r) {
+                if (!tick_filters_.empty() && !row_passes(t, r, now)) continue;
                 if constexpr (std::is_invocable_v<Fn&, Entity, decltype(*std::get<I>(cols))...>) {
                     fn(es[r], std::get<I>(cols)[r]...);
                 } else {
                     fn(std::get<I>(cols)[r]...);
+                }
+                if constexpr (kAnyMutable) {
+                    for (u32* st : stamps)
+                        if (st) st[r] = stamp;
                 }
             }
         }(std::index_sequence_for<Cs...>{});
@@ -710,9 +877,15 @@ void Query<Cs...>::each(Fn&& fn) {
 template <class... Cs>
 usize Query<Cs...>::count() {
     usize n = 0;
+    const u32 now = world_.change_tick();
     for (const auto& tp : world_.tables()) {
         const ecs::detail::Table& t = *tp;
-        if (t.mask().contains_all(required_) && !t.mask().intersects(excluded_)) n += t.size();
+        if (!t.mask().contains_all(required_) || t.mask().intersects(excluded_)) continue;
+        if (tick_filters_.empty()) {
+            n += t.size();
+            continue;
+        }
+        for (u32 r = 0; r < t.size(); ++r) n += row_passes(t, r, now) ? 1 : 0;
     }
     return n;
 }
