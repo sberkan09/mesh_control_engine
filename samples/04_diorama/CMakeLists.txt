@@ -1,7 +1,7 @@
 # Artifact B (ROADMAP M4): the lit 3D diorama. Its content is Kenney CC0 kit meshes (CREDITS.md)
 # under assets/, cooked at build time by mce_cook into a pack the sample mounts.
 mce_add_executable(sample_04_diorama SOURCES main.cpp
-    DEPS mce::mce_render mce::mce_asset mce::mce_platform mce::mce_rhi_gl)
+    DEPS mce::mce_render mce::mce_asset mce::mce_platform mce::mce_rhi_default)
 target_include_directories(sample_04_diorama PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../common")
 mce_sample_pack(sample_04_diorama)
 

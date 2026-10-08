@@ -1,4 +1,4 @@
-mce_add_executable(sprites_2d SOURCES main.cpp DEPS mce::mce_platform mce::mce_render mce::mce_rhi_gl)
+mce_add_executable(sprites_2d SOURCES main.cpp DEPS mce::mce_platform mce::mce_render mce::mce_rhi_default)
 target_include_directories(sprites_2d PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../common)
 set_target_properties(sprites_2d PROPERTIES OUTPUT_NAME "sprites_2d")
 

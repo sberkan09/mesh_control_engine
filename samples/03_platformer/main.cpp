@@ -37,7 +37,7 @@
 #include "mce/platform/window.h"
 #include "mce/render/renderer.h"
 #include "mce/render/sprite_animation.h"
-#include "mce/rhi_gl/gl_device.h"
+#include "mce/rhi/default_device.h"
 #include "ship_paths.h"
 #if defined(MCE_PLATFORMER_MODULE)
 #include "mce/module_host.h"
@@ -638,8 +638,8 @@ int run_windowed() {
     if (!window) return fail("window creation failed", window.error());
     rhi::DeviceDesc dd;
     dd.debug_layer = cv_gl_debug.get_bool();
-    auto device = rhi::gl::create_device(*window.value(), dd);
-    if (!device) return fail("OpenGL 4.5 device creation failed", device.error());
+    auto device = rhi::create_default_device(*window.value(), dd);
+    if (!device) return fail("render device creation failed", device.error());
     auto audio = audio::AudioDevice::create({});  // falls back to Silent when no output device opens
     if (!audio) return fail("audio init failed", audio.error());
 
