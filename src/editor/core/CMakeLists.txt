@@ -15,6 +15,7 @@ mce_add_library(mce_editor_core
         src/gizmo.cpp
         src/hot_reload.cpp
         src/inspector.cpp
+        src/orbit_camera.cpp
         src/play_session.cpp
         src/preview_renderer.cpp
         src/project.cpp
@@ -29,4 +30,5 @@ mce_add_library(mce_editor_core
         mce::mce_gameplay_kit
         mce::mce_asset_cook
         mce::mce_physics2d
+        mce::mce_physics3d
         mce::mce_audio)

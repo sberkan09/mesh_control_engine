@@ -67,3 +67,18 @@ made without writing the user's file, which host the play world copies, and what
 **Measured (Linux container, Debug):** texture edit → swapped 2.7 ms, material 6.4 ms, scene 6.3 ms (budget 1 s,
 `test_hot_reload`); `samples/03_platformer` module edit → rebuilt, loaded and ticked: median 2.66 s, worst 2.71 s
 over 3 rounds (budget 10 s).
+
+## 3. The orbit-camera collision gate
+
+1. **A 3D inspection view, not a 3D editor.** View → "3D orbit view" (O) swaps the 2D viewport for an orbit camera
+   around the scene: left drag orbits, right/middle drag pans, the wheel dollies, F frames the colliders. It draws the
+   scene's colliders as wireframe boxes. Picking and gizmos stay in the 2D view.
+2. **The gate is `World3D::camera_sweep`.** `OrbitCamera::resolve` sweeps a sphere (`probe_radius`, 0.2 m) along the
+   boom from the target to the eye against static and kinematic geometry. The camera stops in front of a wall or
+   above the floor, and slides back out as the obstacle clears. This is the same query the runtime's third-person
+   boom uses (the `04_cubes` walk).
+3. **The world comes from the document.** `OrbitColliders` turns every entity with a `LocalTransform` and a
+   non-sensor `Collider2D` into a static box. The 2D shape is extruded `depth` metres along Z (View → Collider
+   depth, default 1 m). It rebuilds only when an entity it reads changed. Sensors never
+   stop the camera. A 3D collider component joins it when the ECS physics3d bridge lands.
+4. **Off switch.** View → "Orbit camera collision" turns the gate off to look through geometry on purpose.
