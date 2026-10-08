@@ -93,3 +93,17 @@ that is tens of KiB, and the byte bound evicts old entries if a large scene relo
    prefab's `ChildOf` links, so moving, rotating or undoing the instance moves its content.
 3. **Kept current.** Ghosts are rebuilt with the preview (a document change, a rebuild) and after a hot reload that
    swapped assets, so a prefab edited on disk shows its new layout without reopening the scene.
+
+## 7. Asset browser with drag-drop
+
+1. **A headless model, a thin panel.** `AssetBrowserModel` turns the catalog into a folder tree and the entries of
+   one folder, filtered by name (searching every folder) and by type. The Assets panel draws it.
+2. **Drag-drop.** Every entry is a drag source carrying its GUID. Dropped on the viewport, a texture becomes a sprite
+   entity at the cursor, a prefab becomes an instance ("Instantiate prefab"), a scene opens (asking first when the
+   open one is dirty). Dropped on a hierarchy row, it becomes a child of that row; on an inspector asset field of the
+   matching type, it fills the field.
+3. **Rename and move keep the GUID (FR-EDT-110).** F2 or the context menu renames; dropping an entry on a folder moves
+   it. `EditorProject::move_asset` moves the file through the cook's `AssetRegistry::move` (refusing a changed
+   extension, `..` or an absolute path); `EditorSession::rename_asset` follows the open scene when it is the file moved and hot-reloads, so
+   references, which are by GUID, keep working.
+4. **Not yet:** thumbnails (FR-EDT-110's v1.0 half).

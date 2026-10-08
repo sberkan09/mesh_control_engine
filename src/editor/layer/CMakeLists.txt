@@ -5,6 +5,7 @@
 
 mce_add_library(mce_editor_layer
     SOURCES
+        src/asset_panel.cpp
         src/draw_clip.cpp
         src/editor_shell.cpp
         src/imgui_draw_ctx.cpp

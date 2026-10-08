@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "scene_panels.h"
+
 namespace mce::editor {
 
 namespace {
@@ -138,6 +140,20 @@ bool ImGuiDrawCtx::asset_field(const char* label, asset::Guid* guid, StringView 
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", asset::to_string(a.guid).c_str());
         }
         ImGui::EndCombo();
+    }
+    // An asset dragged from the browser onto the field, when it is of the field's type.
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kAssetPayload, ImGuiDragDropFlags_AcceptBeforeDelivery)) {
+            asset::Guid g;
+            std::memcpy(&g, p->Data, sizeof(g));
+            const ProjectAsset* a = project.find(g);
+            const bool fits = a && (asset_type.empty() || asset_type == StringView(asset_type_name(a->type)));
+            if (fits && p->IsDelivery() && !(g == *guid)) {
+                *guid = g;
+                changed = true;
+            }
+        }
+        ImGui::EndDragDropTarget();
     }
     return changed;
 }

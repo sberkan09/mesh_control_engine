@@ -183,6 +183,19 @@ void EditorSession::discard_autosave() {
     autosaved_revision_ = ~u64(0);
 }
 
+Result<void> EditorSession::rename_asset(asset::Guid guid, StringView new_rel_path) {
+    const ProjectAsset* a = project_.find(guid);
+    if (!a) return Error(Errc::NotFound, "editor.rename", asset::to_string(guid).view());
+    const cook::String old_abs = project_.asset_path(a->path.view());
+    const bool is_open_scene = !scene_.path().empty() && scene_.path() == old_abs.view();
+    MCE_TRY(project_.move_asset(guid, new_rel_path));
+    if (is_open_scene) scene_.set_path(project_.asset_path(new_rel_path).view());
+    watcher_.poll(0.0, 0.0);  // the move is ours: re-baseline the watcher
+    hot_reload();
+    MCE_LOG_INFO("editor: renamed {} -> {}", old_abs.view(), new_rel_path);
+    return ok();
+}
+
 bool EditorSession::tick_hot_reload(f64 now, f64 interval) {
     Array<cook::String> changed;
     if (!project_.is_open() || !watcher_.poll(now, interval, &changed)) return false;

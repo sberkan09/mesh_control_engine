@@ -384,6 +384,15 @@ void EditorShell::handle_shortcuts() {
     }
 }
 
+void EditorShell::request_open_scene(StringView path) {
+    if (scene().dirty()) {
+        pending_open_.assign(path);
+        popup_ = Popup::ConfirmOpen;
+        return;
+    }
+    open_scene(path);
+}
+
 void EditorShell::draw_popups() {
     static constexpr const char* kIds[] = {"", "Open Scene", "Save Scene As", "Unsaved changes##quit",
                                            "Unsaved changes##new", "Unsaved changes##open", "Recover unsaved changes"};
@@ -618,6 +627,7 @@ void EditorShell::draw_dockspace() {
         ImGui::DockBuilderDockWindow("Cook", bottom);
         ImGui::DockBuilderDockWindow("Stats", bottom);
         ImGui::DockBuilderDockWindow("Play", bottom);
+        ImGui::DockBuilderDockWindow("Assets", bottom);
         ImGui::DockBuilderFinish(id);
         for (auto& p : panels_) p->open = true;
     }

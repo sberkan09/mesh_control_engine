@@ -8,6 +8,7 @@
 
 mce_add_library(mce_editor_core
     SOURCES
+        src/asset_browser.cpp
         src/console_model.cpp
         src/editor_scene.cpp
         src/editor_session.cpp

@@ -73,6 +73,9 @@ public:
     // unmodified document is re-read from disk; a modified one is kept (and a warning logged).
     HotReloadResult hot_reload(Span<const cook::String> changed = {});
     const HotReloadResult& last_hot_reload() const { return last_reload_; }
+    // Asset browser rename/move (GUID-stable, FR-EDT-110): moves the file, follows the open scene
+    // when it is the one moved, and hot-reloads so the mount sees the new path.
+    Result<void> rename_asset(asset::Guid guid, StringView new_rel_path);
 
     // Every scene in the catalog, by path.
     void list_scenes(Array<const ProjectAsset*>& out) const;
