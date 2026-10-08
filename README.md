@@ -31,6 +31,8 @@ Cook a project (`<project>/assets/` → `<project>/cooked/`, plus `assets.mce` w
 There is no hosted CI. Before merging a PR, run `scripts/ci/local_ci.sh` on Linux (all stages) or
 `scripts/ci/local_ci.sh --quick` (walls + gcc debug with GPU tests); it prints a pass/fail summary and keeps logs
 in `build/local-ci-logs/`. Windows/MSVC builds are checked by hand on a Windows machine.
+`scripts/ci/setup_env.sh` installs its Ubuntu 24.04 packages (cloud sessions run it on start through
+`.claude/settings.json`). With ccache installed, rebuilds of an emptied `build/` are cached.
 
 ## Layout
 

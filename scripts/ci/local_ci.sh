@@ -9,9 +9,11 @@
 # GPU tests run under Xvfb + Mesa llvmpipe. Windows/MSVC presets are not covered; build them on a Windows
 # machine when a change touches platform-specific code.
 #
-# Ubuntu 24.04 deps: cmake ninja-build gcc g++ clang clang-tidy-18 python3 xvfb libgl1-mesa-dri libgl-dev
-#   libegl-dev libx11-dev libxext-dev libxcursor-dev libxrandr-dev libxi-dev libxss-dev libxtst-dev
-#   libxfixes-dev libxkbcommon-dev
+# Ubuntu 24.04 deps: scripts/ci/setup_env.sh installs them (and ccache).
+#
+# Speed: compiles go through ccache when it is installed; third-party sources are fetched once into
+# build/_fetch/<hash of cmake/Dependencies.cmake> and shared by every preset; the build trees are
+# configured in parallel before the first stage; tests run in parallel.
 #
 # Exit code 0 only if every selected stage passed. A summary table is printed at the end.
 
@@ -29,7 +31,7 @@ stages=()
 for arg in "$@"; do
     case "$arg" in
         --quick) stages+=(walls linux-gcc-debug) ;;
-        -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
         *) stages+=("$arg") ;;
     esac
 done
@@ -38,19 +40,91 @@ done
 LOG_DIR="$ROOT/build/local-ci-logs"
 mkdir -p "$LOG_DIR"
 
+JOBS="$(nproc 2>/dev/null || echo 4)"
+
+# Extra configure arguments shared by every preset.
+COMMON_ARGS=()
+if command -v ccache > /dev/null; then
+    export CCACHE_BASEDIR="$ROOT" CCACHE_NOHASHDIR=1  # hits survive a different checkout path
+    COMMON_ARGS+=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
+fi
+
+# Third-party sources (FetchContent) are cloned once and reused by every later configure via
+# FETCHCONTENT_SOURCE_DIR_<NAME>. The cache is keyed by the hash of cmake/Dependencies.cmake, so a
+# tag bump fetches fresh sources. Only sources are shared; each tree keeps its own dep build dirs.
+FETCH_DIR="$ROOT/build/_fetch/$(sha1sum cmake/Dependencies.cmake | cut -c1-12)"
+# A tree that fetched a dependency itself keeps its own copy, so its source paths never change.
+fetch_args() {
+    local src name
+    for src in "$FETCH_DIR"/*-src; do
+        [[ -d "$src" ]] || continue
+        name="$(basename "$src" -src)"
+        [[ -d "build/$1/_deps/$name-src" ]] && continue
+        printf '%s\n' "-DFETCHCONTENT_SOURCE_DIR_${name^^}=$src"
+    done
+}
+
+# Hard-links sources a tree had to fetch itself into the shared cache (same filesystem: no copy).
+stash_fetched() {
+    local src name
+    mkdir -p "$FETCH_DIR"
+    for src in "build/$1/_deps/"*-src; do
+        [[ -d "$src" && ! -L "$src" ]] || continue
+        name="$(basename "$src")"
+        [[ -e "$FETCH_DIR/$name" ]] && continue
+        rm -rf "$FETCH_DIR/.tmp" && cp -al "$src" "$FETCH_DIR/.tmp" && mv "$FETCH_DIR/.tmp" "$FETCH_DIR/$name"
+    done
+}
+
+# Every stage configures a tree with the same arguments, so a second configure is a no-op.
+configure() {
+    local preset="$1" args
+    mapfile -t args < <(fetch_args "$preset")
+    [[ -n "${GPU_TESTS[$preset]:-}" ]] && args+=(-DMCE_GPU_TESTS="${GPU_TESTS[$preset]}")
+    cmake --preset "$preset" "${COMMON_ARGS[@]}" "${args[@]}" && stash_fetched "$preset"
+}
+
+# CMake's configure step is mostly single-threaded (~20-60 s per tree, SDL's feature checks), so
+# the trees the selected stages need are configured up front in parallel: the first alone (it
+# fetches the sources), the rest together. Failures are not reported here: the stage that needs
+# the tree configures it again and logs the error.
+preconfigure() {
+    local -A want=()
+    local s p first=""
+    for s in "${stages[@]}"; do
+        case "$s" in
+            linux-*) [[ -n "${GPU_TESTS[$s]:-}" ]] && want[$s]=1 ;;
+            tidy) want[linux-clang-debug]=1 ;;
+            determinism) want[linux-gcc-debug]=1; want[linux-gcc-release]=1 ;;
+        esac
+    done
+    [[ ${#want[@]} -gt 1 ]] || return 0
+    echo "=== configure (${!want[*]})"
+    local start=$SECONDS
+    if ! compgen -G "$FETCH_DIR/*-src" > /dev/null; then
+        for p in linux-gcc-debug "${!want[@]}"; do [[ -n "${want[$p]:-}" ]] && { first=$p; break; }; done
+        configure "$first" > "$LOG_DIR/configure-$first.log" 2>&1
+    fi
+    for p in "${!want[@]}"; do
+        [[ "$p" == "$first" ]] || configure "$p" > "$LOG_DIR/configure-$p.log" 2>&1 &
+    done
+    wait
+    echo "    done ($((SECONDS - start))s)"
+}
+
 run_tests() {
-    xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" ctest --preset "$1"
+    xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" ctest --preset "$1" -j "$JOBS"
 }
 
 stage_preset() {
     local preset="$1"
-    cmake --preset "$preset" -DMCE_GPU_TESTS="${GPU_TESTS[$preset]}" &&
+    configure "$preset" &&
         cmake --build --preset "$preset" &&
         run_tests "$preset"
 }
 
 stage_tidy() {
-    cmake --preset linux-clang-debug &&
+    configure linux-clang-debug &&
         cmake --build --preset linux-clang-debug &&
         run-clang-tidy-18 -p build/linux-clang-debug -quiet "^$ROOT/(src|samples|tests)/"
 }
@@ -83,9 +157,9 @@ stage_physics3d_determinism() {
 
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
-    cmake --preset linux-gcc-debug -DMCE_GPU_TESTS="${GPU_TESTS[linux-gcc-debug]}" &&
+    configure linux-gcc-debug &&
         cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content &&
-        cmake --preset linux-gcc-release -DMCE_GPU_TESTS="${GPU_TESTS[linux-gcc-release]}" &&
+        configure linux-gcc-release &&
         cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1000 -boids 20000" \
             build/linux-gcc-debug/samples/02_boids/sample_02_boids \
@@ -115,6 +189,8 @@ run_stage() {
         *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]})"; return 2 ;;
     esac
 }
+
+preconfigure
 
 declare -A RESULT
 failed=0
