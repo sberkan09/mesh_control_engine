@@ -8,6 +8,7 @@
 #include <cmath>
 
 #include "mce/math/math.h"
+#include "mce/refl/macros.h"
 
 namespace mce {
 
@@ -16,6 +17,7 @@ struct LocalTransform {
     math::quat rotation;
     math::vec3 scale{1.0f, 1.0f, 1.0f};
 };
+MCE_COMPONENT(LocalTransform, (position, Save), (rotation, Save), (scale, Save))
 
 // Rotation of `radians` about +Z (the 2D plane's rotation axis).
 inline math::quat rotation_z(f32 radians) {

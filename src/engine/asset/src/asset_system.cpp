@@ -18,6 +18,7 @@ bool chunk_type_for_asset_name(StringView name, ChunkType& out) {
         {Texture::name, Texture::chunk}, {Mesh::name, Mesh::chunk}, {Material::name, Material::chunk},
         {Shader::name, Shader::chunk},   {Sfx::name, Sfx::chunk},   {Font::name, Font::chunk},
         {Atlas::name, Atlas::chunk},     {Scene::name, Scene::chunk}, {InputMap::name, InputMap::chunk},
+        {Prefab::name, Prefab::chunk},
     };
     for (const Pair& p : kTable) {
         if (name == p.name) {
@@ -48,6 +49,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::Font: return FONT_VERSION;
         case ChunkType::Material: return MATERIAL_VERSION;
         case ChunkType::Scene: return SCENE_VERSION;
+        case ChunkType::Prefab: return PREFAB_VERSION;
         case ChunkType::Mesh: return MESH_VERSION;
         default: return 0;
     }
@@ -106,6 +108,7 @@ void build_placeholders(Array<byte>* out) {
         b.resize(sizeof(h));
         std::memcpy(b.data(), &h, sizeof(h));
     }
+    out[slot(ChunkType::Prefab)] = out[slot(ChunkType::Scene)];  // empty prefab: same layout
     {  // empty mesh: no geometry, no nodes (draws nothing)
         write_mesh(MeshData{}, out[slot(ChunkType::Mesh)]);
     }

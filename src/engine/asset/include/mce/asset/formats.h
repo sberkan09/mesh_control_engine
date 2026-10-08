@@ -18,6 +18,7 @@ inline constexpr u8 FONT_VERSION = 1;
 inline constexpr u8 MATERIAL_VERSION = 1;
 inline constexpr u8 SCENE_VERSION = 1;
 inline constexpr u8 MESH_VERSION = 1;
+inline constexpr u8 PREFAB_VERSION = 1;  // CHNK_Prefab: the scene layout below (v0.5, FR-ENT-070)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
 // GUID -> {logical path, content hash, primary chunk type}. Entries sorted by GUID (the sort is
@@ -363,7 +364,9 @@ struct MeshData {
 };
 void write_mesh(const MeshData& data, Array<byte>& out);
 
-// ------------------------------------------------------------------ scene (CHNK_SCENE)
+// ------------------------------------------------------------------ scene (CHNK_SCENE) / prefab (CHNK_PREFAB)
+// CHNK_PREFAB payloads use this exact layout too (one reader, SceneView): a prefab is a cooked
+// entity sub-tree whose entity 0 is the root, with nested prefabs already flattened by the cook.
 // The columnar transform of a .mcscene (assets.md §6, FR-ENT-060). Per component type one
 // column: the entity indices that carry it (ascending) and the raw component rows, laid out
 // exactly as the reflected C++ type. AssetRef fields hold the GUID with a null handle; EntityRef

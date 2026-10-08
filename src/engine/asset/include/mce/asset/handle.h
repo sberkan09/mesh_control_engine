@@ -26,6 +26,7 @@ struct Font     { static constexpr ChunkType chunk = ChunkType::Font;     static
 struct Atlas    { static constexpr ChunkType chunk = ChunkType::Atlas;    static constexpr const char* name = "Atlas"; };
 struct Scene    { static constexpr ChunkType chunk = ChunkType::Scene;    static constexpr const char* name = "Scene"; };
 struct InputMap { static constexpr ChunkType chunk = ChunkType::InputMap; static constexpr const char* name = "InputMap"; };
+struct Prefab   { static constexpr ChunkType chunk = ChunkType::Prefab;   static constexpr const char* name = "Prefab"; };
 // clang-format on
 
 // Asset type name ("Texture") -> chunk type; false when unknown. Used by the scene cook.

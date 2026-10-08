@@ -30,6 +30,7 @@
 #include <type_traits>
 
 #include "mce/refl/field_traits.h"
+#include "mce/type_name.h"
 
 namespace mce::refl {
 
@@ -179,6 +180,7 @@ private:
                                                     MCE_CONCAT(mce_refl_fields_, T).size),                    \
         nullptr,                                                                                              \
         &::mce::refl::detail::construct_default<T>,                                                           \
+        ::mce::kTypeHash<T>,                                                                                  \
     };                                                                                                        \
     [[maybe_unused]] inline const ::mce::refl::TypeRecord& mce_refl_type_record(T*) {                         \
         return MCE_CONCAT(mce_refl_record_, T);                                                               \
