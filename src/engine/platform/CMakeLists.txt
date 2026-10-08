@@ -7,6 +7,7 @@ mce_add_library(mce_platform
         src/platform.cpp
         src/window.cpp
         src/audio_output.cpp
+        src/library.cpp
     PUBLIC_DEPS
         mce::mce_core
     PRIVATE_DEPS

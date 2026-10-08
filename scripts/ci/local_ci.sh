@@ -55,18 +55,35 @@ stage_tidy() {
         run-clang-tidy-18 -p build/linux-clang-debug -quiet "^$ROOT/(src|samples|tests)/"
 }
 
+# A game module ticked by the devhost: same World state hash across runs and Debug/Release.
+# The module path differs per tree, so each tree is compared against itself and the two hashes
+# are then compared.
+stage_module_determinism() {
+    local h=()
+    for t in linux-gcc-debug linux-gcc-release; do
+        python3 scripts/ci/determinism.py --runs 3 \
+            --args "-module build/$t/tests/module/modules/libmodtest_good.so -ticks 2000" \
+            "build/$t/tests/devhost/mce_devhost" || return 1
+        h+=("$("build/$t/tests/devhost/mce_devhost" -module "build/$t/tests/module/modules/libmodtest_good.so" \
+            -ticks 2000 | grep -o 'state_hash [0-9a-f]*')")
+    done
+    echo "module state hash: debug ${h[0]}, release ${h[1]}"
+    [[ "${h[0]}" == "${h[1]}" ]]
+}
+
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
     cmake --preset linux-gcc-debug -DMCE_GPU_TESTS="${GPU_TESTS[linux-gcc-debug]}" &&
-        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless &&
+        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good &&
         cmake --preset linux-gcc-release -DMCE_GPU_TESTS="${GPU_TESTS[linux-gcc-release]}" &&
-        cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless &&
+        cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1000 -boids 20000" \
             build/linux-gcc-debug/samples/02_boids/sample_02_boids \
             build/linux-gcc-release/samples/02_boids/sample_02_boids &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 2000" \
             build/linux-gcc-debug/samples/physics2d_headless/sample_physics2d_headless \
-            build/linux-gcc-release/samples/physics2d_headless/sample_physics2d_headless
+            build/linux-gcc-release/samples/physics2d_headless/sample_physics2d_headless &&
+        stage_module_determinism
 }
 
 run_stage() {

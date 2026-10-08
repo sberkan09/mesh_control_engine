@@ -13,6 +13,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# The engine libraries (and their static third-party deps) are linked into the mce_engine shared
+# library that game modules and their hosts share (scripting.md §3.1), so everything is PIC.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(MCE_BUILD_TESTS     "Build unit tests"                         ON)
 option(MCE_ENABLE_TRACY    "Compile the Tracy client in (on-demand)"  ON)
@@ -26,6 +29,7 @@ option(MCE_GPU_TESTS       "Register tests that need a display + GL 4.5 driver" 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(MceTarget)
 include(Dependencies)
+include(EngineId)
 
 if(MCE_BUILD_TESTS)
     enable_testing()
@@ -43,6 +47,7 @@ add_subdirectory(src/engine/rhi)
 add_subdirectory(src/engine/rhi_gl)
 add_subdirectory(src/engine/render)
 add_subdirectory(src/engine/audio)
+add_subdirectory(src/module)
 
 if(MCE_BUILD_EDITOR)
     add_subdirectory(src/editor)

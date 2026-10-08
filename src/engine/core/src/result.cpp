@@ -39,6 +39,10 @@ const char* errc_name(Errc code) {
         case Errc::DeviceLost: return "DeviceLost";
         case Errc::AudioDeviceOpen: return "AudioDeviceOpen";
         case Errc::AudioQueueFull: return "AudioQueueFull";
+        case Errc::ModuleNotFound: return "ModuleNotFound";
+        case Errc::ModuleMissingEntry: return "ModuleMissingEntry";
+        case Errc::EngineIdMismatch: return "EngineIdMismatch";
+        case Errc::ModuleInstallFailed: return "ModuleInstallFailed";
     }
     return "Errc(?)";
 }
