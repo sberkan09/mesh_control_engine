@@ -7,6 +7,8 @@ namespace mce::editor {
 
 // Registers Hierarchy, Inspector and Cook.
 void add_scene_panels(EditorShell& shell);
+// Registers the Play panel (play_panel.cpp).
+void add_play_panel(EditorShell& shell);
 // Destroys every selected entity (Del in the Hierarchy and the Viewport).
 void delete_selection(EditorScene& scene);
 

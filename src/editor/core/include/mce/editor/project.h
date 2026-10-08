@@ -57,6 +57,8 @@ public:
     u64 generation() const { return generation_; }
     // Rescans + cooks only when the cooked manifest is missing (first open of a fresh checkout).
     void ensure_cooked();
+    // The cook's importers (play-in-editor cooks the open document with them).
+    const cook::ImporterRegistry& importers() const { return service_.importers(); }
 
 private:
     cook::CookService service_;

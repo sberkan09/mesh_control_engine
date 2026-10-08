@@ -7,6 +7,7 @@
 // take paths relative to the project's assets/ folder, which is how the catalog lists them.
 
 #include "mce/editor/editor_scene.h"
+#include "mce/editor/play_session.h"
 #include "mce/editor/project.h"
 
 namespace mce::editor {
@@ -54,6 +55,15 @@ public:
     bool recover();
     void discard_autosave();
 
+    // ---- play-in-editor (FR-EDT-060) ----
+    // Plays the open document as it is now (saved or not); cook, open and new stop it first.
+    // On failure play_diags() says why.
+    bool enter_play();
+    void stop_play() { play_.stop(); }
+    PlaySession& play() { return play_; }
+    const PlaySession& play() const { return play_; }
+    const cook::DiagList& play_diags() const { return play_diags_; }
+
     // Every scene in the catalog, by path.
     void list_scenes(Array<const ProjectAsset*>& out) const;
     // Absolute path of a scene path given relative to assets/ (or `path` unchanged).
@@ -66,6 +76,8 @@ private:
     EditorScene scene_;
     PreviewRenderer* preview_ = nullptr;
     cook::DiagList scene_diags_;
+    PlaySession play_;  // after project_: it reads the project's mounted tree until destroyed
+    cook::DiagList play_diags_;
     u64 autosaved_revision_ = ~u64(0);
     f64 autosave_clock_ = -1.0;  // time of the last autosave (or scene open); < 0: not started
 };

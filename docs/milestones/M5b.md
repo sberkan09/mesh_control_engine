@@ -19,6 +19,15 @@ hot-reload matrix and the editor orbit-camera collision gate are editor work and
 | 2D/3D mirror signatures (physics.md §2.2) | `tests/physics3d/test_mirror.cpp` | compile-time: both worlds spell `step`, `create_body`, `destroy_body`, `has_body`, `set_linear_velocity`, `teleport`, `body_state`, `raycast`, `shape_cast`, `controller_state`, `hash_state`, `stats`, `config` the same |
 | Same-binary determinism, 3D poses (physics.md §6 test 13) | `samples/physics3d_headless` + the determinism stage | 3 runs × Debug and Release give one hash (2000 ticks, 134 bodies, a character, a camera boom) |
 
+## Editor half (ADR-0028)
+
+| ROADMAP M5b item | Where | Evidence |
+|---|---|---|
+| Play-in-editor: embedded host, pause / step / slow-mo (FR-EDT-060) | `mce_editor_core`: `PlaySession` (`mce/editor/play_session.h`), `cook::cook_document`; layer: Play panel, menu-bar Play/Pause/Step/Stop (F5/F6/F10), viewport through the game camera | `test_editor` "play:" cases; `editor_play_smoke` (GPU): the scene runs in the viewport for 90 frames, document untouched |
+| Play enter ≤ 1 s (NFR-M-03) | in-memory cook + `scene::instantiate`, no save, no pack | `scene_demo` (6 entities): 1.1 ms, Debug |
+| Play→Stop→Play reproduces the tick-0 hash | the play world is rebuilt from the document each time; nothing writes the document while playing | "play: Play -> Stop -> Play…": same post-instantiate, first-tick and 300-tick hashes |
+| Same world as the shipped runtime | `mce_player -headless`'s setup (physics2d, audio bridge on a Silent device, `scene::instantiate`), the app loop's fixed step | "play: enter builds the player's world…": 600 ticks in the editor = `mce_player -headless 1 -ticks 600` on the cooked pack |
+
 ## Budget table
 
 | Measure | Target | Result |
@@ -31,7 +40,7 @@ hot-reload matrix and the editor orbit-camera collision gate are editor work and
 
 | Item | State |
 |---|---|
-| Play-in-editor (embedded host, pause/step/slow-mo, ≤ 1 s enter, Play→Stop→Play hash) | editor work, not in this landing |
+| Play-in-editor (embedded host, pause/step/slow-mo, ≤ 1 s enter, Play→Stop→Play hash) | shipped, see *Editor half*; game modules do not load inside the editor process (ADR-0028 §1.7) |
 | Hot-reload matrix (textures/materials/scenes ≤ 1 s, game.dll ≤ 10 s) | editor work, not in this landing |
 | Editor orbit camera collision gate | needs the editor viewport camera; `camera_sweep` is ready for it |
 | `04_cubes` capsule walk | waits for the M5a `04_cubes` sample |

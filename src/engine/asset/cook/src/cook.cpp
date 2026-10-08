@@ -394,4 +394,52 @@ CookReport CookService::cook(StringView project_root, const CookOptions& opt) {
     return report;
 }
 
+bool cook_document(const AssetRegistry& registry, const IImporter& importer, Guid guid, StringView source_rel_path,
+                   StringView text, Array<byte>& out, DiagList& diags) {
+    const String disp = path_join("assets", source_rel_path);
+    JsonDoc doc;
+    JsonError je;
+    if (!doc.parse(text, je)) {
+        diags.error(Errc::ParseError, disp, je.line, je.col, "cook.document", je.message.view());
+        return false;
+    }
+    const RegistryLookup lookup(registry);
+    ImportInput in;
+    in.guid = guid;
+    in.display_path = disp;
+    in.source_path = source_rel_path;
+    in.source = Span<const byte>(reinterpret_cast<const byte*>(text.data()), text.size());
+    in.settings = doc.root();
+    in.lookup = &lookup;
+    // The graph build's reference checks: a missing or mistyped asset blocks the document.
+    Array<DepRef> deps;
+    const u32 errors_before = diags.error_count();
+    importer.scan_dependencies(in, deps, diags);
+    for (const DepRef& d : deps) {
+        const AssetRecord* target = registry.by_guid(d.guid);
+        String msg;
+        if (!target)
+            appendf(msg, "missing reference %s", asset::to_string(d.guid).c_str());
+        else if (d.expected != ChunkType::Manifest && target->importer->type() != d.expected)
+            appendf(msg, "reference %s is a %s asset, expected %s", asset::to_string(d.guid).c_str(),
+                    asset::chunk_type_name(target->importer->type()), asset::chunk_type_name(d.expected));
+        else
+            continue;
+        if (!d.where.empty()) {
+            msg += " (";
+            msg += d.where.view();
+            msg += ')';
+        }
+        diags.error(Errc::MissingRef, disp, d.line, d.col, kStageGraph, msg);
+    }
+    if (diags.error_count() != errors_before) return false;
+    asset::ContainerWriter writer;
+    if (!importer.cook(in, writer, diags)) {
+        if (diags.error_count() == 0) diags.error(Errc::ImportFailed, disp, 0, 0, "cook.document", "importer failed");
+        return false;
+    }
+    writer.finish(out);
+    return true;
+}
+
 }  // namespace mce::cook

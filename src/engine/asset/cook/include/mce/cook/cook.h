@@ -102,6 +102,7 @@ public:
     CookService();
     ~CookService();
     ImporterRegistry& importers() { return importers_; }
+    const ImporterRegistry& importers() const { return importers_; }
 
     // Full + incremental cook of a project directory.
     CookReport cook(StringView project_root, const CookOptions& opt);
@@ -109,6 +110,13 @@ public:
 private:
     ImporterRegistry importers_;
 };
+
+// Cooks one native document from memory (the editor's unsaved scene, for play-in-editor) exactly
+// as the cook would cook it from `source_rel_path`: same importer, references and prefab instances
+// resolved against `registry` (a scan of the project). `out` receives the container bytes. False
+// (with diagnostics) when the text does not parse or the importer refuses it.
+bool cook_document(const AssetRegistry& registry, const IImporter& importer, Guid guid, StringView source_rel_path,
+                   StringView text, Array<byte>& out, DiagList& diags);
 
 // Fresh UUIDv4 (sidecar creation only — the cook never needs deterministic GUIDs, only stable ones).
 Guid generate_guid();

@@ -29,6 +29,11 @@ if(MCE_BUILD_TESTS)
                      COMMAND mce_editor -project "${project_dir}" -scene scenes/demo.mcscene -editor.select Ball -frames 90 -selftest
                              -editor.ini "" -platform.error_box 0 -r.vsync 0)
             set_tests_properties(editor_scene_smoke PROPERTIES LABELS gpu)
+            # Play-in-editor (M5b, FR-EDT-060): the scene runs in the viewport, the document stays.
+            add_test(NAME editor_play_smoke
+                     COMMAND mce_editor -project "${project_dir}" -scene scenes/demo.mcscene -editor.play 1 -frames 90 -selftest
+                             -editor.ini "" -platform.error_box 0 -r.vsync 0)
+            set_tests_properties(editor_play_smoke PROPERTIES LABELS gpu)
         endif()
     endif()
 endif()

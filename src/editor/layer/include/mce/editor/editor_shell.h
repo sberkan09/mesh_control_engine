@@ -55,6 +55,7 @@ struct ViewSettings {
     u32 grid_major = 8;
     bool snap = false;      // gizmo drags land on multiples of snap_step (Ctrl inverts)
     f32 snap_step = 0.5f;   // metres
+    bool play_camera = true;  // while playing, the viewport looks through the scene's primary camera
 };
 
 class EditorShell {
@@ -95,7 +96,12 @@ public:
     bool save_scene();                 // Save As prompt when the scene has no file yet
     void new_scene();                  // asks first when the open scene is dirty
     void cook(bool pack = false);
-    // Run-in-player (FR-EDT-090): save, cook with --pack, start mce_player on the open scene as a
+    // Play-in-editor (FR-EDT-060, F5): the open document runs in the viewport; editing is locked
+    // until Stop, and the document comes back exactly as it was.
+    bool play_in_editor();
+    void stop_play();
+    bool playing() const { return session_.play().active(); }
+    // Run-in-player (FR-EDT-090, Ctrl+F5): save, cook with --pack, start mce_player on the open scene as a
     // child process. False (and the reason logged / shown in the Cook panel) when it cannot.
     bool play();
     void stop_player();
