@@ -111,10 +111,10 @@ struct CharacterGround2D {
     u32 flags = 0;  // ControllerFlags bits
     vec2 ground_normal;
     vec2 platform_velocity;  // carry velocity of the platform underfoot
-    Entity ground_body;      // null when airborne (not reflected until Entity gets FieldTraits)
+    Entity ground_body;      // null when airborne
 };
 MCE_COMPONENT(CharacterGround2D, (flags, ReadOnly, Transient), (ground_normal, ReadOnly, Transient),
-              (platform_velocity, ReadOnly, Transient))
+              (platform_velocity, ReadOnly, Transient), (ground_body, ReadOnly, Transient))
 
 // ---- events (double-buffered EventQueue<T>, producer FixedUpdate_Physics) -------------------
 struct TriggerEnter {  // exactly once per entry (FR-PHY-035)
