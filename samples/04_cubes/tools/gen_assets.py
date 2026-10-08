@@ -12,6 +12,7 @@ library only (struct, zlib, json, math, uuid).
   models/orrery.glb       5-node hierarchy, two clips ("spin": LINEAR rotations on three nodes +
                           CUBICSPLINE bob; "pulse": STEP scale + LINEAR rotation) - multi-node tracks
   models/bulb.glb         low-poly unlit sphere, tinted per point light
+  models/walker.glb       the M5b capsule character (r 0.3 m, 1.8 m tall, centred) with a glowing visor
   textures/*.png          the maps above (linear maps carry "srgb": false sidecars) + an equirect sky
 """
 
@@ -259,6 +260,29 @@ def uv_sphere(radius, seg, rings):
     return pos, nrm, uv, idx
 
 
+def capsule(radius, half_height, seg, rings):
+    """A uv sphere split at the equator, hemispheres pushed apart by +-half_height (rings even)."""
+    half = rings // 2
+    rows = [(r, half_height) for r in range(half + 1)] + [(r, -half_height) for r in range(half, rings + 1)]
+    pos, nrm, uv, idx = [], [], [], []
+    for k, (r, y_off) in enumerate(rows):
+        th = math.pi * r / rings
+        for s in range(seg + 1):
+            ph = 2 * math.pi * s / seg
+            n = (math.sin(th) * math.cos(ph), math.cos(th), -math.sin(th) * math.sin(ph))
+            pos += [r6(radius * n[0]), r6(radius * n[1] + y_off), r6(radius * n[2])]
+            nrm += [r6(c) for c in n]
+            uv += [r6(s / seg), r6(k / (len(rows) - 1))]
+    for k in range(len(rows) - 1):
+        for s in range(seg):
+            a, b = k * (seg + 1) + s, (k + 1) * (seg + 1) + s
+            if k != 0:
+                idx += [a, b, a + 1]
+            if k != len(rows) - 2:
+                idx += [a + 1, b, b + 1]
+    return pos, nrm, uv, idx
+
+
 def box(hx, hy, hz, uv_scale=1.0):
     pos, nrm, uv, idx = [], [], [], []
     faces = [((1, 0, 0), (0, 0, -1), (0, 1, 0)), ((-1, 0, 0), (0, 0, 1), (0, 1, 0)), ((0, 1, 0), (1, 0, 0), (0, 0, -1)),
@@ -385,6 +409,20 @@ def build_models():
     g.doc["extensionsUsed"] = ["KHR_materials_unlit"]
     g.node({"name": "bulb", "mesh": g.mesh("bulb", uv_sphere(0.06, 8, 5), mat)}, root=True)
     models["bulb.glb"] = g
+
+    # ---- the M5b walker: World3D's default controller capsule (radius 0.3, cylinder half height 0.6)
+    g = Gltf()
+    paint = g.material({"name": "walker_paint", "pbrMetallicRoughness": {"baseColorFactor": [0.85, 0.22, 0.12, 1],
+                                                                        "metallicFactor": 0.0, "roughnessFactor": 0.35}})
+    visor = g.material({"name": "walker_visor", "pbrMetallicRoughness": {"baseColorFactor": [0.02, 0.02, 0.03, 1],
+                                                                        "metallicFactor": 0.0, "roughnessFactor": 0.1},
+                        "emissiveFactor": [0.2, 0.8, 1.0],
+                        "extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": 4.0}}})
+    g.doc["extensionsUsed"] = ["KHR_materials_emissive_strength"]
+    walker = g.node({"name": "walker", "mesh": g.mesh("walker_body", capsule(0.3, 0.6, 32, 16), paint)}, root=True)
+    g.node({"name": "visor", "mesh": g.mesh("walker_visor", box(0.2, 0.06, 0.06), visor), "translation": [0, 0.55, 0.27]},
+           parent=walker)
+    models["walker.glb"] = g
     return models
 
 

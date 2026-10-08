@@ -230,11 +230,15 @@ stage_determinism() {
         stage_cubes_determinism
 }
 
-# M5a: 04_cubes (cascade fit, Forward+ clustering, node animation) across runs and Debug/Release.
+# M5a: 04_cubes (cascade fit, Forward+ clustering, node animation) across runs and Debug/Release;
+# M5b: the same with the capsule walk (World3D state + the swept camera boom in the hash).
 stage_cubes_determinism() {
     cmake --build --preset linux-gcc-debug --target sample_04_cubes &&
         cmake --build --preset linux-gcc-release --target sample_04_cubes &&
         python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -ticks 600" \
+            build/linux-gcc-debug/samples/04_cubes/sample_04_cubes \
+            build/linux-gcc-release/samples/04_cubes/sample_04_cubes &&
+        python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -walk 1 -ticks 600" \
             build/linux-gcc-debug/samples/04_cubes/sample_04_cubes \
             build/linux-gcc-release/samples/04_cubes/sample_04_cubes
 }
