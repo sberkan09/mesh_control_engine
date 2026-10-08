@@ -83,7 +83,7 @@ stage_determinism() {
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 2000" \
             build/linux-gcc-debug/samples/physics2d_headless/sample_physics2d_headless \
             build/linux-gcc-release/samples/physics2d_headless/sample_physics2d_headless &&
-        python3 scripts/ci/determinism.py --runs 3 --args "-headless 1 -ticks 1800" \
+        python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -ticks 1800" \
             build/linux-gcc-debug/samples/03_platformer/sample_03_platformer \
             build/linux-gcc-release/samples/03_platformer/sample_03_platformer &&
         stage_module_determinism
