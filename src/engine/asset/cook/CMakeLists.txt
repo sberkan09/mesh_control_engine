@@ -15,6 +15,7 @@ mce_add_library(mce_asset_cook
         src/diagnostics.cpp
         src/font_importer.cpp
         src/fs_util.cpp
+        src/gltf_importer.cpp
         src/importer_registry.cpp
         src/json.cpp
         src/material_importer.cpp
@@ -26,4 +27,5 @@ mce_add_library(mce_asset_cook
     PUBLIC_DEPS
         mce::mce_asset
     PRIVATE_DEPS
-        mce_stb)
+        mce_stb
+        mce_meshopt)

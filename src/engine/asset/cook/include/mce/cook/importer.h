@@ -26,6 +26,9 @@ struct DepRef {
 class IAssetLookup {
 public:
     virtual bool type_of(Guid g, ChunkType& out) const = 0;
+    // The asset registered at `rel_path` (relative to assets/, forward slashes): how interchange
+    // formats that reference siblings by URI (glTF images) name their dependencies.
+    virtual bool guid_for_path(StringView rel_path, Guid& out) const = 0;
 
 protected:
     ~IAssetLookup() = default;
@@ -34,6 +37,7 @@ protected:
 struct ImportInput {
     Guid guid;
     StringView display_path;   // "assets/textures/hero.png" — diagnostics only, never cooked
+    StringView source_path;    // "textures/hero.png" (relative to assets/) — resolves relative URIs
     Span<const byte> source;   // source file bytes
     JsonValue settings;        // interchange: sidecar "settings" (may be invalid = none);
                                // native: the parsed document root
@@ -72,7 +76,7 @@ public:
     const IImporter* for_extension(StringView lower_ext) const;
     Span<const mem::UniquePtr<IImporter>> all() const { return importers_.span(); }
 
-    // Registry with every built-in importer (texture, wav, font, material, scene).
+    // Registry with every built-in importer (texture, wav, font, material, scene, glTF).
     static void add_builtins(ImporterRegistry& reg);
 
 private:
@@ -85,6 +89,7 @@ mem::UniquePtr<IImporter> make_wav_importer();
 mem::UniquePtr<IImporter> make_font_importer();
 mem::UniquePtr<IImporter> make_material_importer();
 mem::UniquePtr<IImporter> make_scene_importer();
+mem::UniquePtr<IImporter> make_gltf_importer();
 
 // Parses "guid:<canonical>" (the typed asset-reference spelling in native text assets).
 bool parse_guid_ref(StringView text, Guid& out);

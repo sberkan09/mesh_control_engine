@@ -17,6 +17,7 @@ inline constexpr u8 SFX_VERSION = 1;
 inline constexpr u8 FONT_VERSION = 1;
 inline constexpr u8 MATERIAL_VERSION = 1;
 inline constexpr u8 SCENE_VERSION = 1;
+inline constexpr u8 MESH_VERSION = 1;
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
 // GUID -> {logical path, content hash, primary chunk type}. Entries sorted by GUID (the sort is
@@ -216,6 +217,145 @@ struct MaterialChunk {  // the whole payload: fixed-width param block + texture 
     static Result<const MaterialChunk*> read(Span<const byte> payload);
 };
 static_assert(sizeof(MaterialChunk) == 112);
+
+// ------------------------------------------------------------------ mesh (CHNK_MESH)
+// A static glTF scene (assets.md §5.2, FR-R3D-010): meshopt-optimized, quantized vertex streams,
+// one submesh per glTF primitive, the node tree that places them, and the file's node-transform
+// animation clips. Geometry is node-local; the renderer composes node world matrices (rest pose,
+// or a sampled clip) with the instance transform.
+//
+// Quantization (assets.md §5.2): positions are snorm16 relative to the submesh's bounds
+// (p = center + q * extent), normals are octahedral snorm16, UVs are unorm16 over the submesh's
+// UV rectangle (uv = uv_offset + q * uv_scale). Indices are relative to the submesh's
+// base_vertex, u16 unless MeshFlags::Index32.
+//
+// Deviation (recorded in ADR-0022): animation clips ride in this chunk instead of a separate
+// CHNK_ANIM — at MVP a clip only ever animates the nodes of the file it came from.
+
+namespace MeshFlags {
+enum : u32 {
+    Index32 = 1u << 0,
+};
+}
+
+struct MeshVertex {
+    i16 position[4];  // snorm16; [3] is zero padding
+    i16 normal[2];    // octahedral, snorm16
+    u16 uv[2];        // unorm16
+};
+static_assert(sizeof(MeshVertex) == 16);
+
+struct MeshHeader {
+    u32 vertex_count;
+    u32 index_count;
+    u32 submesh_count;
+    u32 node_count;
+    u32 clip_count;
+    u32 channel_count;
+    u32 key_count;     // f32 values in the key pool
+    u32 flags;         // MeshFlags
+    f32 bounds_min[3]; // rest pose, model space
+    f32 bounds_max[3];
+    u32 strings_size;
+    u32 reserved;
+    u64 vertices_offset;
+    u64 indices_offset;
+    u64 submeshes_offset;
+    u64 nodes_offset;
+    u64 clips_offset;
+    u64 channels_offset;
+    u64 keys_offset;
+    u64 strings_offset;
+};
+static_assert(sizeof(MeshHeader) == 128);
+
+struct MeshSubmesh {
+    u32 first_index;
+    u32 index_count;
+    u32 base_vertex;
+    u32 vertex_count;
+    u32 node;          // the node whose world transform places it
+    u32 reserved[3];
+    f32 center[3];     // position dequantization; node-local bounds are center +- extent
+    f32 extent[3];
+    f32 uv_offset[2];
+    f32 uv_scale[2];
+    MaterialChunk material;  // inline glTF material (texture refs by GUID)
+    u32 reserved2[2];
+};
+static_assert(sizeof(MeshSubmesh) == 192);
+
+struct MeshNode {  // parents precede children
+    i32 parent;    // -1 = root
+    u32 name_offset;
+    u32 name_size;
+    u32 reserved;
+    f32 translation[3];
+    f32 scale[3];
+    f32 rotation[4];  // quaternion x, y, z, w
+};
+static_assert(sizeof(MeshNode) == 56);
+
+struct MeshClip {
+    u32 name_offset;
+    u32 name_size;
+    f32 duration;      // seconds: the last key time over its channels
+    u32 first_channel;
+    u32 channel_count;
+    u32 reserved[3];
+};
+static_assert(sizeof(MeshClip) == 32);
+
+enum class AnimPath : u32 { Translation = 0, Rotation = 1, Scale = 2 };
+enum class AnimInterp : u32 { Linear = 0, Step = 1 };
+
+struct MeshChannel {
+    u32 node;
+    AnimPath path;
+    AnimInterp interp;
+    u32 key_count;
+    u32 times_offset;   // index into the key pool: key_count ascending times
+    u32 values_offset;  // index into the key pool: key_count * (3 | 4) values
+    u32 reserved[2];
+};
+static_assert(sizeof(MeshChannel) == 32);
+
+struct MeshView {
+    const MeshHeader* header = nullptr;
+    Span<const MeshVertex> vertices;
+    Span<const byte> indices;  // u16 or u32 per MeshFlags::Index32
+    Span<const MeshSubmesh> submeshes;
+    Span<const MeshNode> nodes;
+    Span<const MeshClip> clips;
+    Span<const MeshChannel> channels;
+    Span<const f32> keys;
+    Span<const char> strings;
+
+    bool index32() const { return header && (header->flags & MeshFlags::Index32); }
+    u32 index(u32 i) const;
+    StringView node_name(u32 node) const;
+    StringView clip_name(u32 clip) const;
+    // Clip index by name, or clips.size() when absent.
+    u32 find_clip(StringView name) const;
+    // Validates every offset, every index against its submesh's vertex range, node parents and
+    // channel ranges: the payload is untrusted bytes and its indices reach the GPU.
+    static Result<MeshView> read(Span<const byte> payload);
+};
+
+struct MeshData {
+    Span<const MeshVertex> vertices;
+    Span<const byte> indices;  // u16 or u32 per `flags`
+    Span<const MeshSubmesh> submeshes;
+    Span<const MeshNode> nodes;
+    Span<const MeshClip> clips;
+    Span<const MeshChannel> channels;
+    Span<const f32> keys;
+    Span<const char> strings;
+    u32 flags = 0;
+    f32 bounds_min[3] = {0, 0, 0};
+    f32 bounds_max[3] = {0, 0, 0};
+};
+void write_mesh(const MeshData& data, Array<byte>& out);
 
 // ------------------------------------------------------------------ scene (CHNK_SCENE)
 // The columnar transform of a .mcscene (assets.md §6, FR-ENT-060). Per component type one

@@ -253,6 +253,107 @@ Result<const MaterialChunk*> MaterialChunk::read(Span<const byte> payload) {
     return m;
 }
 
+// ------------------------------------------------------------------ mesh
+
+u32 MeshView::index(u32 i) const {
+    if (index32()) return reinterpret_cast<const u32*>(indices.data())[i];
+    return reinterpret_cast<const u16*>(indices.data())[i];
+}
+
+StringView MeshView::node_name(u32 node) const {
+    const MeshNode& n = nodes[node];
+    return StringView(strings.data() + n.name_offset, n.name_size);
+}
+
+StringView MeshView::clip_name(u32 clip) const {
+    const MeshClip& c = clips[clip];
+    return StringView(strings.data() + c.name_offset, c.name_size);
+}
+
+u32 MeshView::find_clip(StringView name) const {
+    for (u32 i = 0; i < clips.size(); ++i)
+        if (clip_name(i) == name) return i;
+    return static_cast<u32>(clips.size());
+}
+
+Result<MeshView> MeshView::read(Span<const byte> payload) {
+    constexpr const char* kStage = "asset.mesh.read";
+    const auto* h = header_of<MeshHeader>(payload);
+    if (!h) return Error(Errc::Truncated, kStage);
+    if (h->flags & ~u32(MeshFlags::Index32)) return Error(Errc::ReservedNonZero, kStage);
+    MeshView v;
+    v.header = h;
+    const u64 isize = (h->flags & MeshFlags::Index32) ? 4 : 2;
+    if (!span_at(payload, h->vertices_offset, h->vertex_count, v.vertices)) return bad(kStage, 1);
+    if (!in_bounds(h->indices_offset, u64(h->index_count) * isize, payload.size()) || h->indices_offset % isize != 0)
+        return bad(kStage, 2);
+    v.indices = payload.subspan(static_cast<usize>(h->indices_offset), static_cast<usize>(u64(h->index_count) * isize));
+    if (!span_at(payload, h->submeshes_offset, h->submesh_count, v.submeshes)) return bad(kStage, 3);
+    if (!span_at(payload, h->nodes_offset, h->node_count, v.nodes)) return bad(kStage, 4);
+    if (!span_at(payload, h->clips_offset, h->clip_count, v.clips)) return bad(kStage, 5);
+    if (!span_at(payload, h->channels_offset, h->channel_count, v.channels)) return bad(kStage, 6);
+    if (!span_at(payload, h->keys_offset, h->key_count, v.keys)) return bad(kStage, 7);
+    if (!span_at(payload, h->strings_offset, h->strings_size, v.strings)) return bad(kStage, 8);
+
+    for (u32 i = 0; i < h->node_count; ++i) {
+        const MeshNode& n = v.nodes[i];
+        if (n.parent < -1 || n.parent >= static_cast<i32>(i)) return bad(kStage, 0x100 + i);
+        if (!in_bounds(n.name_offset, n.name_size, h->strings_size)) return bad(kStage, 0x100 + i);
+    }
+    for (u32 s = 0; s < h->submesh_count; ++s) {
+        const MeshSubmesh& sm = v.submeshes[s];
+        if (sm.node >= h->node_count) return bad(kStage, 0x10000 + s);
+        if (!in_bounds(sm.first_index, sm.index_count, h->index_count)) return bad(kStage, 0x10000 + s);
+        if (!in_bounds(sm.base_vertex, sm.vertex_count, h->vertex_count)) return bad(kStage, 0x10000 + s);
+        for (u32 i = 0; i < sm.index_count; ++i)
+            if (v.index(sm.first_index + i) >= sm.vertex_count) return bad(kStage, 0x10000 + s);
+    }
+    for (u32 c = 0; c < h->clip_count; ++c) {
+        const MeshClip& clip = v.clips[c];
+        if (!in_bounds(clip.first_channel, clip.channel_count, h->channel_count)) return bad(kStage, 0x20000 + c);
+        if (!in_bounds(clip.name_offset, clip.name_size, h->strings_size)) return bad(kStage, 0x20000 + c);
+    }
+    for (u32 c = 0; c < h->channel_count; ++c) {
+        const MeshChannel& ch = v.channels[c];
+        const u32 width = ch.path == AnimPath::Rotation ? 4 : 3;
+        if (ch.node >= h->node_count || static_cast<u32>(ch.path) > 2 || static_cast<u32>(ch.interp) > 1 || ch.key_count == 0)
+            return bad(kStage, 0x30000 + c);
+        if (!in_bounds(ch.times_offset, ch.key_count, h->key_count)) return bad(kStage, 0x30000 + c);
+        if (!in_bounds(ch.values_offset, u64(ch.key_count) * width, h->key_count)) return bad(kStage, 0x30000 + c);
+    }
+    return v;
+}
+
+void write_mesh(const MeshData& d, Array<byte>& out) {
+    PayloadBuilder b(out);
+    MeshHeader h{};
+    h.vertex_count = static_cast<u32>(d.vertices.size());
+    const usize isize = (d.flags & MeshFlags::Index32) ? 4 : 2;
+    h.index_count = static_cast<u32>(d.indices.size() / isize);
+    h.submesh_count = static_cast<u32>(d.submeshes.size());
+    h.node_count = static_cast<u32>(d.nodes.size());
+    h.clip_count = static_cast<u32>(d.clips.size());
+    h.channel_count = static_cast<u32>(d.channels.size());
+    h.key_count = static_cast<u32>(d.keys.size());
+    h.flags = d.flags;
+    for (int i = 0; i < 3; ++i) {
+        h.bounds_min[i] = d.bounds_min[i];
+        h.bounds_max[i] = d.bounds_max[i];
+    }
+    h.strings_size = static_cast<u32>(d.strings.size());
+    const usize at = b.append(&h, sizeof(h));
+    h.vertices_offset = b.append_span(d.vertices);
+    h.indices_offset = b.append_span(d.indices);
+    h.submeshes_offset = b.append_span(d.submeshes);
+    h.nodes_offset = b.append_span(d.nodes);
+    h.clips_offset = b.append_span(d.clips);
+    h.channels_offset = b.append_span(d.channels);
+    h.keys_offset = b.append_span(d.keys);
+    h.strings_offset = b.append_span(d.strings);
+    b.patch(at, h);
+    b.finish();
+}
+
 // ------------------------------------------------------------------ scene
 
 Span<const u32> SceneView::rows(u32 column) const {

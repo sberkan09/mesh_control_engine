@@ -42,6 +42,12 @@ public:
         out = rec->importer->type();
         return true;
     }
+    bool guid_for_path(StringView rel_path, Guid& out) const override {
+        auto g = reg_.guid_for_path(rel_path);
+        if (!g) return false;
+        out = g.value();
+        return true;
+    }
 
 private:
     const AssetRegistry& reg_;
@@ -74,6 +80,7 @@ ImportInput input_for(const AssetRecord& rec, const String& disp, const IAssetLo
     ImportInput in;
     in.guid = rec.guid;
     in.display_path = disp;
+    in.source_path = rec.source_path;
     in.source = rec.source.span();
     in.settings = rec.settings();
     in.lookup = lookup;

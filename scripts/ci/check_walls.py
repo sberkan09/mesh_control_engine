@@ -32,6 +32,7 @@ WALLS = [
     # Cook-time-only third-party code (FR-AST-010): stb lives in the cook library, never in a
     # runtime target; runtime code never includes the cook library.
     ("stb wall", re.compile(r"\bstb(i|tt|rp)_\w*\s*\(|[<\"]stb_\w+\.h"), ["src/engine/asset/cook/"], ["src/", "samples/", "games/", "tests/", "tools/"]),
+    ("meshopt wall", re.compile(r"\bmeshopt_\w*\s*\(|[<\"]meshoptimizer\.h"), ["src/engine/asset/cook/"], ["src/", "samples/", "games/", "tests/", "tools/"]),
     ("cook wall", re.compile(r"[<\"]mce/cook/"), ["src/engine/asset/cook/", "src/editor/", "tools/cook/"], ["src/", "samples/", "games/"]),
     (
         "engine container ban",
