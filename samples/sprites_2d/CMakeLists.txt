@@ -1,0 +1,8 @@
+mce_add_executable(sprites_2d SOURCES main.cpp DEPS mce::mce_platform mce::mce_render mce::mce_rhi_gl)
+set_target_properties(sprites_2d PROPERTIES OUTPUT_NAME "sprites_2d")
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # Windowed smoke run: 10k sprites + tilemap + HUD text for 120 frames, GL debug layer on, exit 0.
+    add_test(NAME sample_sprites_2d COMMAND sprites_2d -frames 120 -sprites 10000 -platform.error_box 0 -r.vsync 0)
+    set_tests_properties(sample_sprites_2d PROPERTIES LABELS gpu)
+endif()
