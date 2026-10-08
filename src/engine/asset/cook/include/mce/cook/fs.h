@@ -13,6 +13,10 @@ Result<void> create_directories(StringView path);
 // parent directories. A crash mid-write leaves the previous file intact.
 Result<void> write_file_atomic(StringView path, Span<const byte> bytes);
 Result<void> rename(StringView from, StringView to);
+// Deletes a file; true when it existed and is gone.
+bool remove(StringView path);
+// Whole file as text; false when it cannot be read.
+bool read_text(StringView path, String& out);
 // Regular files under `root`, as paths relative to it with forward slashes, sorted bytewise.
 // Entries whose name starts with '.' (and everything below them) are skipped.
 Result<void> list_files(StringView root, Array<String>& out);

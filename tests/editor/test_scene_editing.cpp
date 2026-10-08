@@ -16,10 +16,12 @@
 #include "cook_test_util.h"
 #include "mce/ecs/transform.h"
 #include "mce/editor/editor_session.h"
+#include "mce/editor/gizmo.h"
 #include "mce/editor/inspector.h"
 #include "mce/editor/viewport2d.h"
 #include "mce/kit/components.h"
 #include "mce/physics/components.h"
+#include "mce/platform/process.h"
 
 using namespace mce;
 using namespace mce::editor;
@@ -496,4 +498,256 @@ TEST_CASE("session: open the demo project, edit, save, cook; a broken scene is a
     CHECK_FALSE(session.open_scene("scenes/copy.mcscene"));
     CHECK(session.scene_diags().error_count() > 0);
     CHECK(session.scene().doc().size() == before);
+}
+
+// ---- M3: clipboard, gizmo, snap ------------------------------------------------------------------
+
+TEST_CASE("clipboard: copy/paste keeps internal references, clears external ones, duplicates in place") {
+    EditorScene s;
+    const EntityId outside = s.create_entity("Outside");
+    const EntityId a = s.create_entity("A");
+    const EntityId b = s.create_entity("B");
+    s.add_component(a, refl::type_of<edtest::EdFollow>());
+    s.add_component(b, refl::type_of<edtest::EdFollow>());
+    edtest::EdFollow fa, fb;
+    fa.target = doc_entity_ref(b);  // inside the copy
+    fb.target = doc_entity_ref(outside);
+    fb.distance = 7.0f;
+    s.set(a, fa);
+    s.set(b, fb);
+
+    cook::String clip;
+    const EntityId copy_ids[] = {b, a};  // order of the ids does not matter: document order wins
+    s.copy_entities(Span<const EntityId>(copy_ids, 2), clip);
+    CHECK(std::string(clip.c_str()).find("Outside") == std::string::npos);
+
+    cook::DiagList diags;
+    Array<EntityId> pasted;
+    REQUIRE(s.paste_entities(clip.view(), -1, diags, &pasted));
+    REQUIRE(pasted.size() == 2);
+    CHECK(s.doc().size() == 5);
+    const DocEntity& pa = *s.doc().find(pasted[0]);
+    const DocEntity& pb = *s.doc().find(pasted[1]);
+    CHECK(pa.name.view() == "A");
+    CHECK(pb.name.view() == "B");
+    CHECK(s.get<edtest::EdFollow>(pa.id)->target == doc_entity_ref(pb.id));  // internal: remapped
+    CHECK(s.get<edtest::EdFollow>(pb.id)->target.is_null());                // external: cleared
+    CHECK(s.get<edtest::EdFollow>(pb.id)->distance == 7.0f);
+    CHECK(s.selection().items().size() == 2);
+    CHECK(s.verify_world());
+
+    // Duplicate lands right after the original.
+    Array<EntityId> dup;
+    const EntityId one[] = {outside};
+    REQUIRE(s.duplicate_entities(Span<const EntityId>(one, 1), &dup));
+    CHECK(s.doc().index_of(dup[0]) == s.doc().index_of(outside) + 1);
+    CHECK(s.doc().find(dup[0])->name.view() == "Outside");
+    CHECK(s.verify_world());
+
+    // Garbage on the clipboard changes nothing.
+    const usize before = s.doc().size();
+    cook::DiagList bad;
+    CHECK_FALSE(s.paste_entities("hello", -1, bad));
+    CHECK(s.doc().size() == before);
+}
+
+TEST_CASE("gizmo: handles hit-test in screen pixels; drags constrain, snap and cancel") {
+    EditorScene s;
+    const EntityId a = s.create_entity("A");
+    const EntityId b = s.create_entity("B");
+    LocalTransform ta, tb;
+    ta.position = {1.0f, 1.0f, 0.5f};
+    tb.position = {3.0f, 0.0f, 0.0f};
+    s.set(a, ta);
+    s.set(b, tb);
+    s.selection().set(a);
+    s.selection().toggle(b);
+
+    EditorCamera2D cam;
+    cam.center = {0, 0};
+    const rhi::Extent2D size{800, 600};
+    math::vec2 pivot;
+    REQUIRE(TranslateGizmo::pivot(s, pivot));
+    CHECK(pivot.x == 1.0f);
+    const math::vec2 o = cam.world_to_screen(pivot, size);
+    CHECK(TranslateGizmo::hit(cam, size, pivot, o) == GizmoPart::XY);
+    CHECK(TranslateGizmo::hit(cam, size, pivot, o + math::vec2{50, 1}) == GizmoPart::X);
+    CHECK(TranslateGizmo::hit(cam, size, pivot, o + math::vec2{-1, -50}) == GizmoPart::Y);  // screen +y is down
+    CHECK(TranslateGizmo::hit(cam, size, pivot, o + math::vec2{50, 50}) == GizmoPart::None);
+    // Constant on screen: zooming out keeps the same pixel hit area.
+    cam.zoom = 0.25f;
+    const math::vec2 o2 = cam.world_to_screen(pivot, size);
+    CHECK(TranslateGizmo::hit(cam, size, pivot, o2 + math::vec2{50, 1}) == GizmoPart::X);
+    Array<OverlayLine> lines;
+    TranslateGizmo g;
+    g.lines(cam, pivot, GizmoPart::X, lines);
+    CHECK(lines.size() >= 12);
+
+    // X drag: y is locked; both selected entities move together.
+    REQUIRE(g.begin(s, GizmoPart::X, {1.0f, 1.0f}));
+    g.update(s, {2.3f, 5.0f}, 0.0f);
+    CHECK(s.get<LocalTransform>(a)->position.x == doctest::Approx(2.3f));
+    CHECK(s.get<LocalTransform>(a)->position.y == 1.0f);
+    CHECK(s.get<LocalTransform>(a)->position.z == 0.5f);
+    CHECK(s.get<LocalTransform>(b)->position.x == doctest::Approx(4.3f));
+    // Snap: the anchor lands on the grid, the other keeps its offset.
+    g.update(s, {2.3f, 5.0f}, 0.5f);
+    CHECK(s.get<LocalTransform>(a)->position.x == doctest::Approx(2.5f));
+    CHECK(s.get<LocalTransform>(b)->position.x == doctest::Approx(4.5f));
+    CHECK(s.verify_world());
+    // Cancel restores everything.
+    g.cancel(s);
+    CHECK_FALSE(g.dragging());
+    CHECK(s.get<LocalTransform>(a)->position.x == 1.0f);
+    CHECK(s.get<LocalTransform>(b)->position.x == 3.0f);
+
+    // Free XY drag with snap.
+    REQUIRE(g.begin(s, GizmoPart::XY, {1.0f, 1.0f}));
+    g.update(s, {1.9f, -0.2f}, 1.0f);
+    g.end();
+    CHECK(s.get<LocalTransform>(a)->position.x == 2.0f);
+    CHECK(s.get<LocalTransform>(a)->position.y == 0.0f);
+    CHECK(s.get<LocalTransform>(b)->position.x == 4.0f);
+    CHECK(snap_value(-0.26f, 0.5f) == -0.5f);
+    CHECK(snap_value(0.3f, 0.0f) == 0.3f);
+    CHECK(s.verify_world());
+}
+
+// ---- M4: autosave + recovery -------------------------------------------------------------------
+
+TEST_CASE("autosave: written on the timer while dirty, offered after a crash, gone after save") {
+    const std::string root = demo_project("autosave_demo");
+    {
+        EditorSession session;
+        REQUIRE(session.open_project(StringView(root.data(), root.size())));
+        REQUIRE(session.open_scene("scenes/demo.mcscene"));
+        CHECK_FALSE(session.has_recovery());
+        const std::string path(session.autosave_path().c_str());
+        CHECK(path == root + "/.mce/autosave/scenes/demo.mcscene.autosave");
+
+        session.tick_autosave(0.0, 300.0);  // clock starts
+        CHECK_FALSE(session.autosave());     // clean scene: nothing to save
+        session.scene().create_entity("Unsaved Work");
+        session.tick_autosave(100.0, 300.0);
+        CHECK_FALSE(std::filesystem::exists(path));
+        session.tick_autosave(301.0, 300.0);
+        CHECK(std::filesystem::exists(path));
+        CHECK(read_file(path).find("Unsaved Work") != std::string::npos);
+        // The "crash": the session ends without saving.
+    }
+    {
+        EditorSession session;
+        REQUIRE(session.open_project(StringView(root.data(), root.size())));
+        REQUIRE(session.open_scene("scenes/demo.mcscene"));
+        CHECK(session.scene().doc().size() == 6);  // the file itself is untouched
+        REQUIRE(session.has_recovery());
+        REQUIRE(session.recover());
+        CHECK(session.scene().doc().size() == 7);
+        CHECK(session.scene().dirty());
+        CHECK(session.scene().verify_world());
+        // The path stays the original scene; saving clears the autosave.
+        REQUIRE(session.save_scene());
+        CHECK_FALSE(session.has_recovery());
+        CHECK_FALSE(std::filesystem::exists(session.autosave_path().c_str()));
+    }
+    {
+        // Untitled scenes autosave too, and Discard removes the file.
+        EditorSession session;
+        REQUIRE(session.open_project(StringView(root.data(), root.size())));
+        session.scene().create_entity("Draft");
+        REQUIRE(session.autosave());
+        CHECK(std::string(session.autosave_path().c_str()).find("untitled.mcscene.autosave") != std::string::npos);
+        CHECK(session.has_recovery());
+        session.discard_autosave();
+        CHECK_FALSE(session.has_recovery());
+    }
+}
+
+// ---- UC-C loop rehearsal (M4): editor-only actions -> cooked, launchable content ------------------
+
+TEST_CASE("UC-C rehearsal: new scene -> author -> save -> cook --pack -> the player runs it") {
+    const std::string root = demo_project("ucc_rehearsal");
+    EditorSession session;
+    REQUIRE(session.open_project(StringView(root.data(), root.size())));
+    const ProjectAsset* crate = nullptr;
+    const ProjectAsset* font = nullptr;
+    for (const ProjectAsset& a : session.project().assets()) {
+        if (a.path.view() == "textures/crate.png") crate = &a;
+        if (asset::ChunkType::Font == a.type) font = &a;
+    }
+    REQUIRE(crate);
+    REQUIRE(font);
+
+    // 1. New scene, a camera, a floor, a stack of crates (duplicate), a label.
+    session.new_scene("level1");
+    EditorScene& s = session.scene();
+    const EntityId cam = s.create_entity("Camera");
+    s.add_component(cam, refl::type_of<kit::Camera2DComponent>());
+    const EntityId floor = s.create_entity("Floor");
+    s.add_component(floor, refl::type_of<kit::Sprite>());
+    s.add_component(floor, refl::type_of<physics::RigidBody2D>());
+    s.add_component(floor, refl::type_of<physics::Collider2D>());
+    kit::Sprite fs;
+    fs.texture.guid = crate->guid;
+    fs.size = {10, 1};
+    s.set(floor, fs);
+    physics::Collider2D fc = *s.get<physics::Collider2D>(floor);
+    fc.shape.half = {5, 0.5f};
+    s.set(floor, fc);
+    LocalTransform ft;
+    ft.position = {0, -3, 0};
+    s.set(floor, ft);
+
+    const EntityId box = s.create_entity("Crate");
+    s.add_component(box, refl::type_of<kit::Sprite>());
+    kit::Sprite bs;
+    bs.texture.guid = crate->guid;
+    s.set(box, bs);
+    s.add_component(box, refl::type_of<physics::RigidBody2D>());
+    physics::RigidBody2D rb;
+    rb.type = physics::BodyType::Dynamic;
+    s.set(box, rb);
+    s.add_component(box, refl::type_of<physics::Collider2D>());
+    s.selection().set(box);
+    TranslateGizmo g;
+    for (int i = 0; i < 3; ++i) {  // duplicate + drag up, three times
+        Array<EntityId> dup;
+        const EntityId sel[] = {s.selection().anchor()};
+        REQUIRE(s.duplicate_entities(Span<const EntityId>(sel, 1), &dup));
+        REQUIRE(g.begin(s, GizmoPart::Y, {0, 0}));
+        g.update(s, {0.1f, 1.1f}, 0.5f);
+        g.end();
+    }
+    const EntityId label = s.create_entity("Label");
+    s.add_component(label, refl::type_of<kit::TextLabel>());
+    kit::TextLabel tl;
+    tl.font.guid = font->guid;
+    tl.text.assign("LEVEL 1");
+    s.set(label, tl);
+    CHECK(s.doc().size() == 7);
+    CHECK(s.verify_world());
+
+    // 2. Save As, cook with --pack (what Play does).
+    REQUIRE(session.save_scene_as("scenes/level1.mcscene"));
+    const cook::CookReport& r = session.cook(true);
+    REQUIRE_MESSAGE(r.ok(), diag_text(r.diags));
+    CHECK(r.pack_hash != 0);
+
+    // 3. The player runs the cooked pack headless on that scene: 7 entities, physics settles.
+    const std::string pack = root + "/assets.mce";
+    const std::string guid(asset::to_string(s.doc().guid()).c_str());
+    const StringView args[] = {MCE_PLAYER_EXE, "-headless", "1", "-ticks", "240", "-pack",
+                               StringView(pack.data(), pack.size()), "-scene", StringView(guid.data(), guid.size())};
+    platform::Process player;
+    REQUIRE(player.start(Span<const StringView>(args, 9), true));
+    Array<char> out;
+    const i32 code = player.wait(&out);
+    const std::string text(out.data(), out.size());
+    CHECK_MESSAGE(code == 0, text);
+    CHECK_MESSAGE(text.find("240 ticks, 7 entities, state_hash") != std::string::npos, text);
+
+    // A missing executable is an error, not a crash.
+    platform::Process none;
+    const StringView missing[] = {"/nonexistent/mce_player"};
+    CHECK_FALSE(none.start(Span<const StringView>(missing, 1)));
 }

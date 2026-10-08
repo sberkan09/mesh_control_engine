@@ -212,6 +212,12 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
                 continue;
             }
             DocComponent* dc = add_component(static_cast<EntityId>(i + 1), *t);
+            // Omitted references are null, not "$0": pre-fill them with the no-entity index the
+            // reader writes for an explicit null (both read back as Entity::null below).
+            visit_entity_refs(*t, dc->data(), [](Entity* f, void*) {
+                f->index = cook::kNoSceneEntity;  // the reader's layout: the index in the first u32
+                f->generation = 0;
+            }, nullptr);
             cook::String path;
             cook::appendf(path, "entities[%u].", i);
             path += tname;
