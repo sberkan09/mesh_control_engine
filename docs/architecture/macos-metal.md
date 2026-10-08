@@ -27,7 +27,7 @@ anchored to it. Metal is a port, not a second source of truth.
 |---|---|---|
 | Backend selection | Every host calls `rhi::gl::create_device(window, desc)` directly (`samples/*/main.cpp`, `src/player`, `src/editor/app`) | One factory in `mce_rhi` (e.g. `rhi::create_default_device`) that picks GL or Metal by platform/CMake option; hosts call only that |
 | Window surface | `WindowDesc::opengl`, `SDL_WINDOW_OPENGL`, GL attributes in `window.cpp` | A Metal-capable window (`SDL_WINDOW_METAL` + `SDL_Metal_CreateView`/`CAMetalLayer`); the GL attribute block only on the GL path |
-| Shaders | `ShaderSource::glsl` (GLSL 4.50, separable programs, `gl_PerVertex`, binding banks, `gl_BaseInstanceARB`) | MSL for Metal. Default: GLSL stays the single source and is translated **at cook time** (glslang → SPIR-V → SPIRV-Cross → MSL), so no translator links into a runtime target (FR-AST-010). ADR-0025 records the pick |
+| Shaders | `ShaderSource::glsl` (GLSL 4.50, separable programs, `gl_PerVertex`, binding banks, `gl_BaseInstanceARB`) | MSL for Metal. Default: GLSL stays the single source and is translated **at cook time** (glslang → SPIR-V → SPIRV-Cross → MSL), so no translator links into a runtime target (FR-AST-010). ADR-0028 records the pick: translation at pipeline creation inside `mce_rhi_metal` until shaders are cooked assets |
 | MDI + base instance | `glMultiDrawElementsIndirect`, `gl_BaseInstanceARB` object data | `drawIndexedPrimitives` per indirect record (or ICBs later), `[[base_instance]]` |
 | Persistent-mapped rings + fences | `glBufferStorage` + `glFenceSync`/`glClientWaitSync`, `MCE_FRAMES_IN_FLIGHT = 3` | `MTLStorageModeShared` buffers + a semaphore signalled from the command buffer completion handler, same 3 slots |
 | Dynamic libraries | `load_library` (`.dll` / `.so`) | `.dylib`, plus `@rpath` for `game` modules and the player |
@@ -50,7 +50,7 @@ through the roadmap. To keep the two out of each other's way, files are split th
 - `src/engine/platform/src/macos/**` (any macOS-only platform code: Metal view, bundle paths, `.dylib` loading)
 - `cmake/macos/**`, the `macos-*` entries in `CMakePresets.json`
 - `scripts/ci/local_ci_macos.sh`
-- `docs/adr/0025-metal-backend.md`, `docs/milestones/M-MAC.md`
+- `docs/adr/0028-metal-backend.md`, `docs/milestones/M-MAC.md`
 
 **Cloud-owned — the Mac session does not edit these:** everything under `src/engine/rhi_gl/**`, the renderer
 (`src/engine/render/**`), and every other engine module. A rendering bug the Mac session finds in shared code goes

@@ -43,6 +43,29 @@
       "name": "linux-asan",
       "inherits": "linux-base",
       "cacheVariables": { "CMAKE_CXX_COMPILER": "g++", "CMAKE_C_COMPILER": "gcc", "CMAKE_BUILD_TYPE": "Debug", "MCE_ASAN": "ON", "MCE_ENABLE_TRACY": "OFF" }
+    },
+    {
+      "name": "macos-base",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_C_COMPILER": "/usr/bin/clang", "CMAKE_CXX_COMPILER": "/usr/bin/clang++", "CMAKE_OSX_DEPLOYMENT_TARGET": "26.0",
+        "CMAKE_C_FLAGS": "-fmath-errno", "CMAKE_CXX_FLAGS": "-fmath-errno" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+    },
+    { "name": "macos-debug",   "displayName": "macOS Debug (AppleClang, Metal)",   "inherits": "macos-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "macos-release", "displayName": "macOS Release (AppleClang, Metal)", "inherits": "macos-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+    {
+      "name": "macos-asan",
+      "displayName": "macOS UBSan (AppleClang, Metal; ASan's runtime hangs at startup on macOS 26.6, see M-MAC.md)",
+      "inherits": "macos-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug", "MCE_ASAN": "OFF", "MCE_ENABLE_TRACY": "OFF",
+        "CMAKE_C_FLAGS": "-fmath-errno -fsanitize=undefined -fno-sanitize=vptr -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fmath-errno -fsanitize=undefined -fno-sanitize=vptr -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=undefined",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=undefined",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fsanitize=undefined"
+      }
     }
   ],
   "buildPresets": [
@@ -54,7 +77,10 @@
     { "name": "linux-gcc-release",   "configurePreset": "linux-gcc-release" },
     { "name": "linux-clang-debug",   "configurePreset": "linux-clang-debug" },
     { "name": "linux-clang-release", "configurePreset": "linux-clang-release" },
-    { "name": "linux-asan",          "configurePreset": "linux-asan" }
+    { "name": "linux-asan",          "configurePreset": "linux-asan" },
+    { "name": "macos-debug",         "configurePreset": "macos-debug" },
+    { "name": "macos-release",       "configurePreset": "macos-release" },
+    { "name": "macos-asan",          "configurePreset": "macos-asan" }
   ],
   "testPresets": [
     { "name": "msvc-debug",          "configurePreset": "msvc-debug",          "output": { "outputOnFailure": true } },
@@ -64,6 +90,9 @@
     { "name": "linux-gcc-release",   "configurePreset": "linux-gcc-release",   "output": { "outputOnFailure": true } },
     { "name": "linux-clang-debug",   "configurePreset": "linux-clang-debug",   "output": { "outputOnFailure": true } },
     { "name": "linux-clang-release", "configurePreset": "linux-clang-release", "output": { "outputOnFailure": true } },
-    { "name": "linux-asan",          "configurePreset": "linux-asan",          "output": { "outputOnFailure": true } }
+    { "name": "linux-asan",          "configurePreset": "linux-asan",          "output": { "outputOnFailure": true } },
+    { "name": "macos-debug",         "configurePreset": "macos-debug",         "output": { "outputOnFailure": true } },
+    { "name": "macos-release",       "configurePreset": "macos-release",       "output": { "outputOnFailure": true } },
+    { "name": "macos-asan",          "configurePreset": "macos-asan",          "output": { "outputOnFailure": true } }
   ]
 }
