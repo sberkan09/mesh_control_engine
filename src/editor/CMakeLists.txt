@@ -6,3 +6,4 @@
 add_subdirectory(core)
 add_subdirectory(layer)
 add_subdirectory(app)
+add_subdirectory(mcp)

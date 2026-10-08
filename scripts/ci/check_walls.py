@@ -54,6 +54,13 @@ WALLS = [
         [],
         ["src/engine/"],
     ),
+    # Editor MCP server (ADR-0027, N7): stdio is its only transport, no socket API in its code.
+    (
+        "MCP socket wall",
+        re.compile(r"\b(socket|bind|listen|accept|connect|getaddrinfo)\s*\(|[<\"](sys/socket\.h|netinet/|arpa/inet\.h|winsock2?\.h|ws2tcpip\.h)"),
+        [],
+        ["src/editor/mcp/"],
+    ),
 ]
 
 # CMake link walls: (name, pattern, allowed path prefixes). Scans every CMakeLists.txt under
@@ -61,6 +68,10 @@ WALLS = [
 LINK_WALLS = [
     # Jolt (ADR-0003): linked by mce_physics3d alone, privately.
     ("Jolt link wall", re.compile(r"(?<![\w/.-])Jolt(?![\w/.-])"), ["src/engine/physics3d/"]),
+    # The MCP server (and its JSON-RPC layer) is editor tooling: never linked by a runtime target.
+    ("MCP link wall", re.compile(r"\bmce_mcp_core\b"), ["src/editor/mcp/", "tests/mcp/"]),
+    # The cook library carries the JSON codec (FR-AST-010: the runtime never parses JSON).
+    ("cook link wall", re.compile(r"\bmce_asset_cook\b"), ["src/engine/asset/", "src/editor/", "tools/", "tests/"]),
 ]
 
 

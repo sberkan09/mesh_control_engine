@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mce": {
+      "command": "build/linux-gcc-debug/src/editor/mcp/mce_mcp",
+      "args": ["--project", "samples/scene_demo"]
+    }
+  }
+}

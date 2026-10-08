@@ -1,0 +1,23 @@
+# Editor MCP server (editor-mcp.md, FR-EDT-160, ADR-0027): two targets.
+#   mce_mcp_core  (L5) JSON-RPC protocol, tool table, value codec, headless run. Headless and
+#                 ImGui-free: links mce_editor_core, never mce_editor_layer, never a socket.
+#   mce_mcp       (L6) the executable: the MCP stdio transport over mce_mcp_core.
+# The JSON codec is the cook's (mce/cook/json.h); no runtime target links either target
+# (scripts/ci/check_walls.py link wall).
+
+mce_add_library(mce_mcp_core
+    SOURCES
+        src/headless_run.cpp
+        src/json_writer.cpp
+        src/server.cpp
+        src/tools.cpp
+        src/values.cpp
+    PUBLIC_DEPS
+        mce::mce_editor_core)
+
+mce_add_executable(mce_mcp
+    SOURCES
+        app/main.cpp
+        app/engine_components.cpp
+    DEPS
+        mce::mce_mcp_core)
