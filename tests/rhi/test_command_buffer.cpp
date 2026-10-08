@@ -164,3 +164,32 @@ TEST_CASE("rhi: draw args and indirect draws round-trip") {
     CHECK(static_cast<const cmd::DrawIndirect*>(p)->draw_count == 2);
     CHECK(std::string_view(cmd_type_name(CmdType::DrawIndirect)) == "DrawIndirect");
 }
+
+TEST_CASE("rhi: resolve records outside a pass; the uniform bank range covers kObject") {
+    CommandBuffer cb;
+    const TextureHandle src{3, 1}, dst{4, 2};
+    cb.resolve(src, dst);
+    const CmdHeader* h = nullptr;
+    const void* p = nullptr;
+    auto r = cb.reader();
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::Resolve);
+    CHECK(static_cast<const cmd::Resolve*>(p)->src == src);
+    CHECK(static_cast<const cmd::Resolve*>(p)->dst == dst);
+    CHECK(std::string_view(cmd_type_name(CmdType::Resolve)) == "Resolve");
+    CHECK(vertex_format_size(VertexFormat::SNorm16x4) == 8);
+    CHECK(vertex_format_size(VertexFormat::SNorm16x2) == 4);
+    CHECK(vertex_format_size(VertexFormat::UNorm16x2) == 4);
+
+    PassAttachment color;
+    RenderPassDesc pass;
+    pass.colors = Span<const PassAttachment>(&color, 1);
+    cb.begin_pass(pass);
+    const byte object[16] = {};
+    cb.set_uniforms(bank::kObject, Span<const byte>(object));
+    {
+        test::ExpectAssert expect;
+        cb.resolve(src, dst);  // inside a pass
+    }
+    cb.end_pass();
+}

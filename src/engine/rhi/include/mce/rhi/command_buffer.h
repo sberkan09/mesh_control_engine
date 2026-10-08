@@ -38,6 +38,7 @@ enum class CmdType : u16 {
     DrawIndirect,
     PushDebugScope,
     PopDebugScope,
+    Resolve,
 };
 
 const char* cmd_type_name(CmdType t);
@@ -73,6 +74,7 @@ struct DrawNonIndexed { u32 vertex_count; u32 instance_count; u32 first_vertex; 
 struct SetDrawArgs { u32 count; };            // followed by count * DrawIndexedIndirectCommand
 struct DrawIndirect { u32 first_command; u32 draw_count; };
 struct PushDebugScope { const char* name; };
+struct Resolve { TextureHandle src; TextureHandle dst; };
 }  // namespace cmd
 
 class CommandBuffer {
@@ -103,6 +105,9 @@ public:
     void draw_indirect(u32 draw_count, u32 first_command = 0);
     // No-op on GL; a real barrier on a future explicit backend.
     void barrier() {}
+    // Resolves a multisampled color target into a single-sample one of the same size and format
+    // (outside a pass). The transient-RT pool's MSAA -> tonemap-source step (rhi-renderer.md §3.5).
+    void resolve(TextureHandle src, TextureHandle dst);
     void push_debug_scope(const char* name);  // `name` must outlive submit (string literal)
     void pop_debug_scope();
 

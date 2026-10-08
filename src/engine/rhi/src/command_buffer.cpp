@@ -22,6 +22,7 @@ const char* cmd_type_name(CmdType t) {
         case CmdType::DrawIndirect: return "DrawIndirect";
         case CmdType::PushDebugScope: return "PushDebugScope";
         case CmdType::PopDebugScope: return "PopDebugScope";
+        case CmdType::Resolve: return "Resolve";
     }
     return "?";
 }
@@ -77,7 +78,7 @@ void CommandBuffer::end_pass() {
 void CommandBuffer::bind_pipeline(PipelineHandle pipeline) { push(CmdType::BindPipeline, cmd::BindPipeline{pipeline}); }
 
 void CommandBuffer::set_uniforms(u32 bank, Span<const byte> data) {
-    MCE_ASSERT_MSG(bank < bank::kUniformBanks, "uniform bank out of range (0..2)");
+    MCE_ASSERT_MSG(bank < bank::kUniformBanks, "uniform bank out of range (0..3)");
     push(CmdType::SetUniforms, cmd::SetUniforms{bank, static_cast<u32>(data.size())}, data);
 }
 
@@ -122,6 +123,11 @@ void CommandBuffer::set_draw_args(Span<const DrawIndexedIndirectCommand> command
 void CommandBuffer::draw_indirect(u32 draw_count, u32 first_command) {
     MCE_ASSERT_MSG(in_pass_, "draw outside a pass");
     push(CmdType::DrawIndirect, cmd::DrawIndirect{first_command, draw_count});
+}
+
+void CommandBuffer::resolve(TextureHandle src, TextureHandle dst) {
+    MCE_ASSERT_MSG(!in_pass_, "resolve inside a pass");
+    push(CmdType::Resolve, cmd::Resolve{src, dst});
 }
 
 void CommandBuffer::push_debug_scope(const char* name) {
