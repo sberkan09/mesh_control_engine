@@ -116,6 +116,24 @@ if(MCE_BUILD_TESTS)
     add_library(mce::directxmath ALIAS mce_directxmath)
 endif()
 
+# ---- Box2D v3 (2D physics test oracle only — ADR-0016, never linked into engine targets) ----
+# Linked into test_physics2d alone (the Box2D wall in scripts/ci/check_walls.py). Static, no
+# samples/tests of its own; SIMD stays on its scalar-compatible SSE2 default (no AVX2).
+if(MCE_BUILD_TESTS AND MCE_PHYSICS_ORACLE)
+    set(BOX2D_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(BOX2D_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+    set(BOX2D_BENCHMARKS OFF CACHE BOOL "" FORCE)
+    set(BOX2D_DOCS OFF CACHE BOOL "" FORCE)
+    set(BOX2D_PROFILE OFF CACHE BOOL "" FORCE)
+    set(BOX2D_AVX2 OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(box2d
+        GIT_REPOSITORY https://github.com/erincatto/box2d.git
+        GIT_TAG        v3.1.1
+        GIT_SHALLOW    TRUE
+        SYSTEM)
+    FetchContent_MakeAvailable(box2d)
+endif()
+
 # ---- stb (cook-time only: stb_image, stb_truetype, stb_rect_pack; stb_image_write in tests) ----
 # Header-only, no release tags upstream: pinned by commit. Confined to mce_asset_cook (and tests)
 # by the "stb wall" in scripts/ci/check_walls.py — never linked into a runtime target (FR-AST-010).

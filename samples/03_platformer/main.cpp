@@ -217,6 +217,21 @@ public:
 
     u64 state_hash() { return hash_combine(hash_game(world_, kFnv64Offset), hash_combine(input_hash_, audio_.command_hash())); }
     const GameState& game() { return world_.resource<GameState>(); }
+    // fn(crate, body state, distance from the crate's bottom to the nearest solid below it).
+    template <class Fn>
+    void each_crate(Fn&& fn) {
+        const auto& pw = world_.resource<physics::World2D>();
+        world_.query<const Crate&>().each([&](Entity e, const Crate& c) {
+            physics::BodyState s;
+            if (!pw.body_state(e, s)) return;
+            physics::QueryFilter below;
+            const Entity self[] = {e};
+            below.exclude = self;
+            const auto hit = pw.raycast(s.position, {0, -1}, 5.0f, below);
+            fn(c, s, hit ? hit->t - 0.5f : -1.0f);
+        });
+    }
+
     u64 ticks() const { return ticks_; }
 
 private:
@@ -418,6 +433,12 @@ private:
                     case Sprite::Spike: s.region = art::Spike; break;
                     case Sprite::Flag: s.region = art::Flag; break;
                     case Sprite::Platform: s.region = art::Platform; break;
+                    case Sprite::Crate: {
+                        // Crates rotate: draw the physics angle (no interpolation needed at 60 Hz).
+                        s.region = art::Crate;
+                        s.rotation = angle_z(lt.rotation);
+                        break;
+                    }
                     case Sprite::Count: return;
                 }
                 b.add(s);
@@ -528,6 +549,11 @@ void report(PlatformerApp& app) {
     std::printf("03_platformer: %llu ticks | coins %u/%u stomps %u deaths %u won %d | hash %016llx\n",
                 static_cast<unsigned long long>(app.ticks()), gs.coins, gs.coins_total, gs.stomps, gs.deaths,
                 gs.won ? 1 : 0, static_cast<unsigned long long>(app.state_hash()));
+    // Crates (M3.5 demo): where the solver left them, and the gap to whatever they stand on.
+    app.each_crate([](const Crate& c, const physics::BodyState& s, f32 support_gap) {
+        std::printf("  crate %u at (%.3f, %.3f) angle %.4f speed %.4f | gap below %.4f\n", c.id, s.position.x,
+                    s.position.y, s.angle, length(s.linear_velocity), support_gap);
+    });
 }
 
 int fail(const char* what, const Error& e) {

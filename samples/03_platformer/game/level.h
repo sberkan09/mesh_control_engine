@@ -13,6 +13,7 @@ using mce::usize;
 // ---- the built-in level ---------------------------------------------------------------------------
 // Legend: # ground   = one-way plank   P player start   E enemy   o coin   ^ spikes
 //         M platform moving sideways   V platform moving up/down   F goal flag
+//         C crate (dynamic)   O platform orbiting a 1.5 m circle with a crate riding on it
 // One character = one 1 m tile. Rows run top to bottom; short rows are padded with air.
 inline constexpr const char* kLevel[] = {
     "#                                                                                                  #",
@@ -24,13 +25,13 @@ inline constexpr const char* kLevel[] = {
     "#                                                                 o                                #",
     "#                                                               =====                              #",
     "#                                                    o  oE o                                       #",
-    "#                                                 #############                                    #",
+    "#         O                                       #############                                    #",
     "#                                                                                       o          #",
     "#             o o                   o                                                 =====        #",
     "#            =====                                                                                 #",
     "#                       o         ##   ##     V                                   ##           F   #",
-    "#      o o o                    ####   ##                                       ####       #########",
-    "#  P              E           ###### ^^## E                 E     ^^  o o o   ######       #########",
+    "#C     o o o                    ####   ##                                       ####       #########",
+    "#C P              E           ###### ^^## E                 E     ^^  o o o   ######       #########",
     "#####################   M   #################    ###################################################",
     "#####################       #################    ###################################################",
 };

@@ -205,6 +205,22 @@ void make_atlas(Array<u8>& out) {
         const Painter p = layer(Hill);
         p.ellipse(8.0f, 16.0f, 8.0f, 14.0f, Rgba{120, 190, 120, 255});
     }
+    {
+        // Wooden crate: dark frame, planks, a diagonal brace.
+        const Painter p = layer(Crate);
+        const Rgba frame{110, 70, 35, 255}, plank{190, 135, 70, 255}, light{220, 170, 100, 255};
+        p.rect(0, 0, 15, 15, plank);
+        for (i32 y = 4; y < 12; y += 4) p.rect(2, y, 13, y, Rgba{160, 110, 55, 255});
+        p.rect(0, 0, 15, 1, frame);
+        p.rect(0, 14, 15, 15, frame);
+        p.rect(0, 0, 1, 15, frame);
+        p.rect(14, 0, 15, 15, frame);
+        for (i32 i = 2; i < 14; ++i) {
+            p.set(i, 15 - i, frame);
+            p.set(i, 14 - i, frame);
+        }
+        p.rect(2, 2, 13, 2, light);
+    }
     (void)kClear;
 }
 

@@ -16,6 +16,7 @@ namespace {
 
 constexpr u32 kNoSlot = ~0u;
 constexpr f32 kOneWayDepenetration = 0.1f;  // metres
+constexpr f32 kDynamicCarrySpeed = 0.05f;   // m/s: a resting crate's residual velocity is not carry
 
 struct Controller {
     f32 max_slope_cos = 0.70710678f;
@@ -67,7 +68,9 @@ struct ConstraintPoint {
 };
 
 struct Contact {
+    u64 key = 0;       // pair_key(lo, hi): contacts are kept sorted by it (warm-start lookup)
     u32 a = 0, b = 0;  // body slots in manifold order (polygon first)
+    u32 island = 0;    // lowest dynamic body slot of the contact's island
     Manifold m;
     vec2 normal;
     ConstraintPoint pts[2];
@@ -100,7 +103,13 @@ struct World2D::Impl {
     DynamicTree tree;
 
     Array<u64> pairs;        // scratch
-    Array<Contact> contacts;  // rebuilt every step
+    Array<Contact> contacts;  // rebuilt every step, sorted by key
+    Array<Contact> prev_contacts;  // last step's contacts: the warm-start cache
+    Array<u32> island_parent;      // union-find over body slots (scratch)
+    Array<u32> solve_order;        // contact indices grouped by island (scratch)
+    Array<u32> island_ranges;      // [begin, end) pairs into solve_order (scratch)
+    u32 island_count = 0;    // dynamic-body islands last step (stats)
+    u32 solved_islands = 0;  // islands with at least one contact = island_ranges.size() / 2
     Array<u64> touching;      // open contact pairs (lo<<32|hi), sorted
     Array<u64> touching_next;
     Array<u64> sensor_open;   // (sensor<<32|other), sorted
@@ -115,7 +124,8 @@ struct World2D::Impl {
     Array<ContactEnd2D> pending_contact_ends;
 
     explicit Impl(const PhysicsConfig& c, mem::IAllocator& a)
-        : cfg(c), alloc(&a), bodies(a), free_slots(a), slot_of(a), pairs(a), contacts(a), touching(a),
+        : cfg(c), alloc(&a), bodies(a), free_slots(a), slot_of(a), pairs(a), contacts(a), prev_contacts(a),
+          island_parent(a), solve_order(a), island_ranges(a), touching(a),
           touching_next(a), sensor_open(a), sensor_next(a), trigger_enters(a), trigger_exits(a), contact_begins(a),
           contact_ends(a), pending_trigger_exits(a), pending_contact_ends(a) {}
 
@@ -263,8 +273,9 @@ struct World2D::Impl {
             b.v *= 1.0f / (1.0f + dt * b.linear_damping);
         }
 
-        // 2. collide (start-of-step poses)
+        // 2. collide (start-of-step poses), carrying last step's impulses forward (warm start)
         find_pairs(pairs);
+        std::swap(contacts, prev_contacts);
         contacts.clear();
         for (const u64 k : pairs) {
             const u32 ia = key_hi(k), ib = key_lo(k);
@@ -274,6 +285,7 @@ struct World2D::Impl {
             if (ba.type != BodyType::Dynamic && bb.type != BodyType::Dynamic) continue;
             if (!layers_collide(ba.layer, ba.mask, bb.layer, bb.mask)) continue;
             Contact c;
+            c.key = k;
             bool swapped = false;
             collide_any(ba.shape, ba.xf, bb.shape, bb.xf, c.m, &swapped);
             if (c.m.count == 0) continue;
@@ -297,6 +309,7 @@ struct World2D::Impl {
             c.restitution = math::max(A.restitution, B.restitution);
             c.point = wm.points[0];
             if (c.count == 2) c.point = 0.5f * (wm.points[0] + wm.points[1]);
+            const vec2 tangent = cross(c.normal, 1.0f);
             for (u32 j = 0; j < c.count; ++j) {
                 ConstraintPoint& cp = c.pts[j];
                 cp.ra = wm.points[j] - A.c;
@@ -305,59 +318,33 @@ struct World2D::Impl {
                 const f32 rnb = cross(cp.rb, c.normal);
                 const f32 kn = A.inv_mass + B.inv_mass + A.inv_i * rna * rna + B.inv_i * rnb * rnb;
                 cp.normal_mass = kn > 0.0f ? 1.0f / kn : 0.0f;
-                const vec2 tangent = cross(c.normal, 1.0f);
                 const f32 rta = cross(cp.ra, tangent);
                 const f32 rtb = cross(cp.rb, tangent);
                 const f32 kt = A.inv_mass + B.inv_mass + A.inv_i * rta * rta + B.inv_i * rtb * rtb;
                 cp.tangent_mass = kt > 0.0f ? 1.0f / kt : 0.0f;
+                // Restitution bias from the pre-solve approach speed (before warm starting), only
+                // above the threshold so resting contacts stay quiet.
                 const f32 vrel =
                     dot(c.normal, B.v + cross(B.w, cp.rb) - A.v - cross(A.w, cp.ra));
-                if (vrel < -kRestitutionThreshold) cp.velocity_bias = -c.restitution * vrel;
+                if (vrel < -cfg.restitution_threshold) cp.velocity_bias = -c.restitution * vrel;
                 if (-vrel > c.approach) c.approach = -vrel;
             }
+            if (cfg.warm_starting) match_impulses(c);
             contacts.push_back(c);
         }
 
-        // 3. velocity iterations (sequential impulse; friction first, Box2D order)
-        for (u32 it = 0; it < cfg.velocity_iterations; ++it) {
-            for (Contact& c : contacts) {
-                Body& A = bodies[c.a];
-                Body& B = bodies[c.b];
-                const vec2 n = c.normal;
-                const vec2 tangent = cross(n, 1.0f);
-                for (u32 j = 0; j < c.count; ++j) {
-                    ConstraintPoint& cp = c.pts[j];
-                    const vec2 dv = B.v + cross(B.w, cp.rb) - A.v - cross(A.w, cp.ra);
-                    const f32 vt = dot(dv, tangent);
-                    f32 lambda = cp.tangent_mass * (-vt);
-                    const f32 max_f = c.friction * cp.normal_impulse;
-                    const f32 next = math::clamp(cp.tangent_impulse + lambda, -max_f, max_f);
-                    lambda = next - cp.tangent_impulse;
-                    cp.tangent_impulse = next;
-                    const vec2 p = lambda * tangent;
-                    A.v -= A.inv_mass * p;
-                    A.w -= A.inv_i * cross(cp.ra, p);
-                    B.v += B.inv_mass * p;
-                    B.w += B.inv_i * cross(cp.rb, p);
-                }
-                for (u32 j = 0; j < c.count; ++j) {
-                    ConstraintPoint& cp = c.pts[j];
-                    const vec2 dv = B.v + cross(B.w, cp.rb) - A.v - cross(A.w, cp.ra);
-                    const f32 vn = dot(dv, n);
-                    f32 lambda = -cp.normal_mass * (vn - cp.velocity_bias);
-                    const f32 next = math::max(cp.normal_impulse + lambda, 0.0f);
-                    lambda = next - cp.normal_impulse;
-                    cp.normal_impulse = next;
-                    const vec2 p = lambda * n;
-                    A.v -= A.inv_mass * p;
-                    A.w -= A.inv_i * cross(cp.ra, p);
-                    B.v += B.inv_mass * p;
-                    B.w += B.inv_i * cross(cp.rb, p);
-                }
-            }
+        // 3. islands: contact-connected dynamic bodies (static/kinematic bodies do not link)
+        build_islands();
+
+        // 4. velocity solve per island: warm start, then sequential impulse (friction first)
+        for (u32 is = 0; is < solved_islands; ++is) {
+            const u32 begin = island_ranges[2 * is], end = island_ranges[2 * is + 1];
+            for (u32 i = begin; i < end; ++i) warm_start(contacts[solve_order[i]]);
+            for (u32 it = 0; it < cfg.velocity_iterations; ++it)
+                for (u32 i = begin; i < end; ++i) solve_velocity(contacts[solve_order[i]]);
         }
 
-        // 4. integrate positions
+        // 5. integrate positions
         const f32 max_translation = kMaxLinearSpeed * dt;
         for (Body& b : bodies) {
             if (!b.alive || !b.enabled || b.type == BodyType::Static || b.is_controller) continue;
@@ -376,36 +363,15 @@ struct World2D::Impl {
             sync_xf(b);
         }
 
-        // 5. position iterations (Box2D 2.x non-linear Gauss-Seidel)
-        for (u32 it = 0; it < cfg.position_iterations; ++it) {
-            f32 min_sep = 0.0f;
-            for (const Contact& c : contacts) {
-                Body& A = bodies[c.a];
-                Body& B = bodies[c.b];
-                const f32 ma = A.inv_mass, mb = B.inv_mass, ia = A.inv_i, ib = B.inv_i;
-                if (ma == 0.0f && mb == 0.0f) continue;
-                for (u32 j = 0; j < c.count; ++j) {
-                    vec2 normal, point;
-                    f32 separation = 0.0f;
-                    psm(c, A, B, j, normal, point, separation);
-                    const vec2 ra = point - A.c;
-                    const vec2 rb = point - B.c;
-                    min_sep = math::min(min_sep, separation);
-                    const f32 C = math::clamp(kBaumgarte * (separation + kLinearSlop), -kMaxLinearCorrection, 0.0f);
-                    const f32 rna = cross(ra, normal);
-                    const f32 rnb = cross(rb, normal);
-                    const f32 k = ma + mb + ia * rna * rna + ib * rnb * rnb;
-                    const f32 impulse = k > 0.0f ? -C / k : 0.0f;
-                    const vec2 p = impulse * normal;
-                    A.c -= ma * p;
-                    A.a -= ia * cross(ra, p);
-                    B.c += mb * p;
-                    B.a += ib * cross(rb, p);
-                    sync_xf(A);
-                    sync_xf(B);
-                }
+        // 5b. position iterations per island (Box2D 2.x non-linear Gauss-Seidel); each island
+        //     stops on its own once its deepest penetration is within slop.
+        for (u32 is = 0; is < solved_islands; ++is) {
+            const u32 begin = island_ranges[2 * is], end = island_ranges[2 * is + 1];
+            for (u32 it = 0; it < cfg.position_iterations; ++it) {
+                f32 min_sep = 0.0f;
+                for (u32 i = begin; i < end; ++i) min_sep = math::min(min_sep, solve_position(contacts[solve_order[i]]));
+                if (min_sep >= -3.0f * kLinearSlop) break;
             }
-            if (min_sep >= -3.0f * kLinearSlop) break;
         }
 
         // 6. clear forces, refresh broadphase
@@ -418,6 +384,147 @@ struct World2D::Impl {
 
         update_contact_events();
         update_sensors();
+    }
+
+    // ---- solver pieces ----------------------------------------------------------------------------
+    // Carries last step's accumulated impulses onto `c` when the same pair touched with the same
+    // orientation; points match by feature id (Box2D 2.x contact update).
+    void match_impulses(Contact& c) const {
+        const Contact* lo = prev_contacts.begin();
+        const Contact* hi = prev_contacts.end();
+        const Contact* it = std::lower_bound(lo, hi, c.key, [](const Contact& x, u64 k) { return x.key < k; });
+        if (it == hi || it->key != c.key || it->a != c.a) return;
+        for (u32 j = 0; j < c.count; ++j)
+            for (u32 o = 0; o < it->count; ++o)
+                if (it->m.points[o].id == c.m.points[j].id) {
+                    c.pts[j].normal_impulse = it->pts[o].normal_impulse;
+                    c.pts[j].tangent_impulse = it->pts[o].tangent_impulse;
+                    break;
+                }
+    }
+
+    u32 find_root(u32 x) {
+        while (island_parent[x] != x) {
+            island_parent[x] = island_parent[island_parent[x]];
+            x = island_parent[x];
+        }
+        return x;
+    }
+
+    // Union-find over dynamic bodies linked by contacts; the root is always the lowest slot, so
+    // islands (and the contacts inside them) come out in body-slot order (D8).
+    void build_islands() {
+        const u32 n = static_cast<u32>(bodies.size());
+        island_parent.resize(n);
+        for (u32 i = 0; i < n; ++i) island_parent[i] = i;
+        auto dynamic = [&](u32 s) { return bodies[s].type == BodyType::Dynamic; };
+        for (const Contact& c : contacts) {
+            if (!dynamic(c.a) || !dynamic(c.b)) continue;
+            const u32 ra = find_root(c.a), rb = find_root(c.b);
+            if (ra < rb) island_parent[rb] = ra;
+            else if (rb < ra) island_parent[ra] = rb;
+        }
+        island_count = 0;
+        for (u32 i = 0; i < n; ++i) {
+            const Body& b = bodies[i];
+            if (b.alive && b.enabled && b.type == BodyType::Dynamic && find_root(i) == i) ++island_count;
+        }
+        for (Contact& c : contacts) c.island = find_root(dynamic(c.a) ? c.a : c.b);
+
+        solve_order.clear();
+        for (u32 i = 0; i < contacts.size(); ++i) solve_order.push_back(i);
+        std::stable_sort(solve_order.begin(), solve_order.end(),
+                         [&](u32 x, u32 y) { return contacts[x].island < contacts[y].island; });
+        island_ranges.clear();
+        for (u32 i = 0; i < solve_order.size();) {
+            u32 j = i;
+            while (j < solve_order.size() && contacts[solve_order[j]].island == contacts[solve_order[i]].island) ++j;
+            island_ranges.push_back(i);
+            island_ranges.push_back(j);
+            i = j;
+        }
+        // Contact-free islands need no solving: only the ranges above are iterated.
+        solved_islands = static_cast<u32>(island_ranges.size() / 2);
+    }
+
+    void warm_start(Contact& c) {
+        Body& A = bodies[c.a];
+        Body& B = bodies[c.b];
+        const vec2 tangent = cross(c.normal, 1.0f);
+        for (u32 j = 0; j < c.count; ++j) {
+            const ConstraintPoint& cp = c.pts[j];
+            const vec2 p = cp.normal_impulse * c.normal + cp.tangent_impulse * tangent;
+            A.v -= A.inv_mass * p;
+            A.w -= A.inv_i * cross(cp.ra, p);
+            B.v += B.inv_mass * p;
+            B.w += B.inv_i * cross(cp.rb, p);
+        }
+    }
+
+    void solve_velocity(Contact& c) {
+        Body& A = bodies[c.a];
+        Body& B = bodies[c.b];
+        const vec2 n = c.normal;
+        const vec2 tangent = cross(n, 1.0f);
+        for (u32 j = 0; j < c.count; ++j) {
+            ConstraintPoint& cp = c.pts[j];
+            const vec2 dv = B.v + cross(B.w, cp.rb) - A.v - cross(A.w, cp.ra);
+            const f32 vt = dot(dv, tangent);
+            f32 lambda = cp.tangent_mass * (-vt);
+            const f32 max_f = c.friction * cp.normal_impulse;
+            const f32 next = math::clamp(cp.tangent_impulse + lambda, -max_f, max_f);
+            lambda = next - cp.tangent_impulse;
+            cp.tangent_impulse = next;
+            const vec2 p = lambda * tangent;
+            A.v -= A.inv_mass * p;
+            A.w -= A.inv_i * cross(cp.ra, p);
+            B.v += B.inv_mass * p;
+            B.w += B.inv_i * cross(cp.rb, p);
+        }
+        for (u32 j = 0; j < c.count; ++j) {
+            ConstraintPoint& cp = c.pts[j];
+            const vec2 dv = B.v + cross(B.w, cp.rb) - A.v - cross(A.w, cp.ra);
+            const f32 vn = dot(dv, n);
+            f32 lambda = -cp.normal_mass * (vn - cp.velocity_bias);
+            const f32 next = math::max(cp.normal_impulse + lambda, 0.0f);
+            lambda = next - cp.normal_impulse;
+            cp.normal_impulse = next;
+            const vec2 p = lambda * n;
+            A.v -= A.inv_mass * p;
+            A.w -= A.inv_i * cross(cp.ra, p);
+            B.v += B.inv_mass * p;
+            B.w += B.inv_i * cross(cp.rb, p);
+        }
+    }
+
+    // One NGS pass over the contact's points; returns the deepest separation seen.
+    f32 solve_position(const Contact& c) {
+        Body& A = bodies[c.a];
+        Body& B = bodies[c.b];
+        const f32 ma = A.inv_mass, mb = B.inv_mass, ia = A.inv_i, ib = B.inv_i;
+        f32 min_sep = 0.0f;
+        if (ma == 0.0f && mb == 0.0f) return min_sep;
+        for (u32 j = 0; j < c.count; ++j) {
+            vec2 normal, point;
+            f32 separation = 0.0f;
+            psm(c, A, B, j, normal, point, separation);
+            const vec2 ra = point - A.c;
+            const vec2 rb = point - B.c;
+            min_sep = math::min(min_sep, separation);
+            const f32 C = math::clamp(kBaumgarte * (separation + kLinearSlop), -kMaxLinearCorrection, 0.0f);
+            const f32 rna = cross(ra, normal);
+            const f32 rnb = cross(rb, normal);
+            const f32 k = ma + mb + ia * rna * rna + ib * rnb * rnb;
+            const f32 impulse = k > 0.0f ? -C / k : 0.0f;
+            const vec2 p = impulse * normal;
+            A.c -= ma * p;
+            A.a -= ia * cross(ra, p);
+            B.c += mb * p;
+            B.a += ib * cross(rb, p);
+            sync_xf(A);
+            sync_xf(B);
+        }
+        return min_sep;
     }
 
     // Box2D 2.x position-solver manifold
@@ -515,8 +622,18 @@ struct World2D::Impl {
         std::swap(sensor_open, sensor_next);
     }
 
+    // Drops the warm-start cache entries of slot `s` (destroyed body, or a shape whose feature ids
+    // no longer mean the same thing), so a reused slot never inherits stale impulses.
+    void forget_contacts(u32 s) {
+        usize w = 0;
+        for (usize i = 0; i < contacts.size(); ++i)
+            if (contacts[i].a != s && contacts[i].b != s) contacts[w++] = contacts[i];
+        contacts.resize(w);
+    }
+
     // Drops every open pair touching `s`, synthesizing exits/ends for the next step's events.
     void close_pairs(u32 s) {
+        forget_contacts(s);
         usize w = 0;
         for (usize i = 0; i < sensor_open.size(); ++i) {
             const u64 k = sensor_open[i];
@@ -708,7 +825,10 @@ struct World2D::Impl {
         r.flags |= ControllerFlags::Ground;
         r.ground_normal = hit.normal;
         r.ground_body = g.entity;
-        if (g.type == BodyType::Kinematic && !g.is_controller && math::length_sq(g.v) > 0.0f) {
+        // Carry comes from the ground body's solver velocity: a kinematic platform, or a dynamic
+        // body (a crate riding a platform) once it moves faster than solver noise.
+        const f32 min_speed = g.type == BodyType::Dynamic ? kDynamicCarrySpeed : 0.0f;
+        if (g.type != BodyType::Static && !g.is_controller && math::length_sq(g.v) > min_speed * min_speed) {
             r.flags |= ControllerFlags::OnMovingPlatform;
             r.platform_velocity = g.v;
         } else {
@@ -784,6 +904,7 @@ bool World2D::set_collider(Entity e, const Collider2D& c) {
     if (!b) return false;
     const vec2 origin = b->xf.p;
     if (!impl_->apply_collider(*b, c)) return false;
+    impl_->forget_contacts(impl_->slot(e));
     b->xf.p = origin;
     impl_->update_mass(*b);  // recomputes the centre of mass from the unchanged origin
     impl_->refresh_proxy(*b, {}, true);
@@ -1101,6 +1222,7 @@ World2D::Stats World2D::stats() const {
     Stats s;
     for (const Body& b : w.bodies) s.bodies += b.alive ? 1u : 0u;
     s.contacts = static_cast<u32>(w.contacts.size());
+    s.islands = w.island_count;
     s.sensor_pairs = static_cast<u32>(w.sensor_open.size());
     s.proxies = w.tree.proxy_count();
     s.tree_height = w.tree.height();

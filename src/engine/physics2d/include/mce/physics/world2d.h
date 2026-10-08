@@ -3,8 +3,8 @@
 //
 //  - static / kinematic / dynamic bodies; box, circle and convex colliders (one per body)
 //  - dynamic AABB tree broadphase; SAT + clipping manifolds; GJK distance for casts
-//  - sequential-impulse solver (8 velocity / 3 position iterations, Box2D 2.x constants);
-//    warm starting and islands are M3.5 (solver hardening)
+//  - sequential-impulse solver (8 velocity / 3 position iterations, Box2D 2.x constants), warm
+//    started from last step's impulses matched by feature id, solved island by island (M3.5)
 //  - swept kinematic character controller (move_and_collide), sensors, queries, events
 //
 // Determinism (D8): single-threaded, float only, compiled with precise FP everywhere, every loop
@@ -27,6 +27,8 @@ struct PhysicsConfig {
     f32 fixed_dt = 1.0f / 60.0f;  // used by the controller's platform carry
     u32 velocity_iterations = 8;
     u32 position_iterations = 3;
+    bool warm_starting = true;          // carry accumulated impulses across steps (M3.5)
+    f32 restitution_threshold = 1.0f;   // m/s: slower approaches never bounce (resting stays quiet)
     u32 max_contact_events_per_tick = 256;  // ContactBegin2D/End2D cap (risk R5)
 };
 
@@ -165,6 +167,7 @@ public:
     struct Stats {
         u32 bodies = 0;
         u32 contacts = 0;      // touching contact constraints last step
+        u32 islands = 0;       // contact-connected groups of enabled dynamic bodies last step
         u32 sensor_pairs = 0;  // open sensor overlaps
         u32 proxies = 0;
         i32 tree_height = 0;

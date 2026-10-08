@@ -20,6 +20,8 @@ Run the first sample: `build/<preset>/samples/01_triangle/01_triangle` (needs a 
 On Linux, SDL3 builds against the X11 headers: `sudo apt-get install libx11-dev libxext-dev libxcursor-dev
 libxrandr-dev libxi-dev libxss-dev libxtst-dev libxfixes-dev libxkbcommon-dev libgl-dev`. Tests that need a display
 and a GL driver register with `-DMCE_GPU_TESTS=ON` (the local CI script runs them under Xvfb + Mesa llvmpipe).
+`test_physics2d` also steps its oracle scenes in Box2D v3 (ADR-0016); `-DMCE_PHYSICS_ORACLE=OFF` skips that
+download when you only need the in-house tests.
 
 Cook a project (`<project>/assets/` → `<project>/cooked/`, plus `assets.mce` with `--pack`):
 `build/<preset>/tools/cook/mce_cook <project> [--pack] [--force] [--adopt]` — exit 0 ok, 1 cook errors, 2 usage.
