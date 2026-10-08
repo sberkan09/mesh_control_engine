@@ -12,6 +12,7 @@
 #include "mce/editor/console_model.h"
 #include "mce/editor/editor_session.h"
 #include "mce/editor/gizmo.h"
+#include "mce/editor/tilemap_editor.h"
 #include "mce/editor/orbit_camera.h"
 #include "mce/editor/preview_renderer.h"
 #include "mce/editor/stub_world.h"
@@ -62,6 +63,7 @@ struct ViewSettings {
     bool orbit_collision = true;
     f32 orbit_depth = OrbitColliders::kDefaultDepth;  // extrusion of 2D colliders along Z (metres)
     GizmoMode gizmo = GizmoMode::Move;  // W / E / R
+    bool tile_paint = false;  // the viewport paints the selected TilemapLayer (Tilemap panel, T)
 };
 
 class EditorShell {
@@ -97,6 +99,7 @@ public:
     OrbitCamera& orbit() { return orbit_; }
     OrbitColliders& orbit_colliders() { return orbit_colliders_; }
     ViewSettings& view() { return view_; }
+    TilemapEditor& tilemap() { return tilemap_; }
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
@@ -161,6 +164,7 @@ private:
     OrbitCamera orbit_;
     OrbitColliders orbit_colliders_;
     ViewSettings view_;
+    TilemapEditor tilemap_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;
     ViewportInfo viewport_;
     FixedString<256> ini_path_;

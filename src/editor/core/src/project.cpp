@@ -28,6 +28,7 @@ const char* asset_type_name(asset::ChunkType type) {
         case asset::Scene::chunk: return asset::Scene::name;
         case asset::InputMap::chunk: return asset::InputMap::name;
         case asset::Prefab::chunk: return asset::Prefab::name;
+        case asset::Tilemap::chunk: return asset::Tilemap::name;
         default: return "";
     }
 }

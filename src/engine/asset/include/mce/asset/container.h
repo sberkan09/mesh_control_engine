@@ -45,6 +45,7 @@ enum class ChunkType : u16 {  // closed set, appended only
     Manifest,
     ParticlePreset,  // v0.5
     StringTable,     // v0.5
+    Tilemap,         // v0.5: CHNK_TILE, one tile layer (FR-R2D-115)
 };
 
 const char* chunk_type_name(ChunkType t);

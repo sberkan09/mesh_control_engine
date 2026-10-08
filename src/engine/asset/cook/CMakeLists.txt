@@ -24,6 +24,7 @@ mce_add_library(mce_asset_cook
         src/scene_writer.cpp
         src/string.cpp
         src/texture_importer.cpp
+        src/tilemap_importer.cpp
         src/wav_importer.cpp
     PUBLIC_DEPS
         mce::mce_asset

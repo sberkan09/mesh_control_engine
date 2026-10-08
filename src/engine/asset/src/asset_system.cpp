@@ -18,7 +18,7 @@ bool chunk_type_for_asset_name(StringView name, ChunkType& out) {
         {Texture::name, Texture::chunk}, {Mesh::name, Mesh::chunk}, {Material::name, Material::chunk},
         {Shader::name, Shader::chunk},   {Sfx::name, Sfx::chunk},   {Font::name, Font::chunk},
         {Atlas::name, Atlas::chunk},     {Scene::name, Scene::chunk}, {InputMap::name, InputMap::chunk},
-        {Prefab::name, Prefab::chunk},
+        {Prefab::name, Prefab::chunk},   {Tilemap::name, Tilemap::chunk},
     };
     for (const Pair& p : kTable) {
         if (name == p.name) {
@@ -50,6 +50,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::Material: return MATERIAL_VERSION;
         case ChunkType::Scene: return SCENE_VERSION;
         case ChunkType::Prefab: return PREFAB_VERSION;
+        case ChunkType::Tilemap: return TILEMAP_VERSION;
         case ChunkType::Mesh: return MESH_VERSION;
         default: return 0;
     }

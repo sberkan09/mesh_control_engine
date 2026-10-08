@@ -2,7 +2,6 @@
 
 **Scope:** the editor half of ROADMAP M6 (the ECS, subsystem, 2D-extras and content halves are tracked separately).
 Design decisions: ADR-0030. **Measured on:** the Linux CI container (4 cores), gcc 13, `scripts/ci/local_ci.sh`.
-This record is updated with every PR in the series.
 
 | ROADMAP M6 item | Where | Evidence |
 |---|---|---|
@@ -11,9 +10,12 @@ This record is updated with every PR in the series.
 | Tree hierarchy (`ChildOf`, FR-ENT-050) | Hierarchy panel tree (drag to re-parent, Shift-drop to reorder, drop below to unparent; Create Child / Unparent); `EditorScene::set_parent`, `world_transform`, `local_for_world`, cascading delete; the preview writes `WorldTransform`; `scene::instantiate` installs the runtime hierarchy; the kit draws at `WorldTransform` (ADR-0030 §5) | `test_editor` "hierarchy:" cases: re-parenting keeps the scene placement, orders the file and is one undo step; deleting a parent deletes its subtree and undo restores it; the gizmo drags children in scene space and skips a selected ancestor's children; the play world composes `WorldTransform` through the runtime hierarchy |
 | Prefab content in the viewport (FR-EDT-080 placement) | `EditorScene::set_assets` / `refresh_prefabs`: each prefab instance shows its cooked prefab's entities as preview-only ghosts placed at the instance; `scene::instantiate(..., hierarchy)`; the session refreshes ghosts after a hot reload (ADR-0030 §6) | `test_editor` "prefab preview" case: two ghosts at the instance, they follow a move and its undo, the saved scene holds only the instance, a prefab edited on disk shows its new layout after hot reload |
 | Asset browser with drag-drop (FR-EDT-110 v0.5, FR-EDT-050) | `AssetBrowserModel` (folder tree, search, type filter); Assets panel: drag to the viewport (texture → sprite, prefab → instance, scene → open), to a hierarchy row (child) or an inspector asset field; F2 rename and drop-on-folder move keep the GUID (`EditorProject::move_asset`, `EditorSession::rename_asset`) (ADR-0030 §7) | `test_editor` "asset browser:" cases: folders, entries, search and type filter; a dropped texture makes a sprite and a prefab an instance, one undo step each; rename / move keeps the GUID, users still resolve it, the open scene follows its file |
+| Tilemap panel: rectangle fill + re-bake loop (FR-EDT-120, FR-R2D-115) | new `.mctilemap` asset → `CHNK_TILE` (`tilemap` importer, `TilemapView`); `kit::TilemapLayer` drawn and re-baked by `SpriteExtract`; `TilemapEditor` (create, paint, rectangle fill, strokes with their own undo); Tilemap panel + viewport paint tool (T: left paints, Ctrl erases, Shift+drag fills); every stroke saves through `EditorSession::write_asset` and hot-reloads (ADR-0030 §8) | `test_editor` "tilemap:" cases: the document round-trips and clips; create → cooked and mounted, paint and fill land in the live mount, a held handle goes stale (the kit re-bakes), stroke save + re-bake 1.7 ms (budget 1 s, Debug), undo/redo, the scene saves only the reference and cooks and plays; a tile beyond the tileset is a cook error at `file:3` |
 
 ## Open
 
 | Item | State |
 |---|---|
-| Tilemap panel (rectangle fill + re-bake loop, FR-EDT-120 / FR-R2D-115) | next PR in the series |
+| Asset thumbnails (FR-EDT-110 v1.0) | not in v0.5 |
+| Tilemap palette thumbnails, multiple layers per asset, auto-tiling | not yet (ADR-0030 §8.5) |
+| Prefab override display, apply/revert (FR-EDT-080 v1.0) | instances show their content (§6); editing overrides is v1.0 |

@@ -11,7 +11,7 @@ the viewport, an asset browser with drag-drop, and a tilemap panel. The design a
 reflection-serialized property diffs with drag coalescing, bounded at 256 entries / 16 MiB, and named its acceptance
 test: N random inspector/gizmo operations, undo all, the document byte-identical to before. Since then the editor MCP
 server (ADR-0027) also edits through `EditorScene`, and hot reload (ADR-0029 §2) re-opens a scene another process
-saved. Both need to sit in the same history. Sections are added as each part lands.
+saved. Both need to sit in the same history.
 
 ## 1. Undo/redo: the funnel records, commands do not
 
@@ -107,3 +107,25 @@ that is tens of KiB, and the byte bound evicts old entries if a large scene relo
    extension, `..` or an absolute path); `EditorSession::rename_asset` follows the open scene when it is the file moved and hot-reloads, so
    references, which are by GUID, keep working.
 4. **Not yet:** thumbnails (FR-EDT-110's v1.0 half).
+
+## 8. Tilemaps
+
+1. **A new asset type, `.mctilemap` → `CHNK_TILE`.** A text asset written by the editor: a `width × height` grid of
+   tile indices over a tileset texture cut into `columns × rows` cells (0 = empty, n = cell n−1, rows bottom-first),
+   plus `tile_size` in metres. The cook validates it with `file:line:col` errors and records the tileset as a texture
+   dependency. `ChunkType::Tilemap` is appended to the closed set; the runtime format is `TilemapHeader` + `u32` tiles
+   (`TILEMAP_VERSION` 1).
+2. **Drawn by the kit.** A `kit::TilemapLayer` component (map, tint, order, layer) places the map's tile (0, 0) corner
+   at the entity's position. `SpriteExtract` bakes it once through the renderer's tilemap API (a sprite set over the
+   tileset's cells) and re-bakes only when the asset's handle goes stale (hot reload) or the placement, tint or order
+   changes.
+3. **The Tilemap panel and the paint tool.** For the selected entity the panel creates a new tilemap (file, tileset,
+   cells, size, tile size; one scene undo entry adds the `TilemapLayer`), then shows the brush palette. The viewport's
+   paint tool (T) paints with left drag, erases with Ctrl, and fills a rectangle with Shift+drag (FR-EDT-120's
+   rectangle fill), with a grid overlay and a hover highlight.
+4. **Every stroke saves and re-bakes.** A press-to-release stroke is one save through `EditorSession::write_asset`,
+   which writes the file and hot-reloads it at once, so the viewport shows the re-baked layer on the next frame. The
+   tiles live in the asset, not the scene, so strokes have their own undo/redo in the panel (whole-grid snapshots,
+   bounded at 32 MiB).
+5. **Not yet:** palette thumbnails (sprite textures are array textures the ImGui pass does not sample), multiple
+   layers per asset, auto-tiling.

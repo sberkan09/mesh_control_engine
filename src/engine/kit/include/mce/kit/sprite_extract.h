@@ -1,6 +1,7 @@
 #pragma once
 // SpriteExtract — the render extract for the starter-kit components (renderer.h: "extract lives
-// with the gameplay kit"). Reads Sprite / TextLabel / Camera2DComponent + LocalTransform and fills
+// with the gameplay kit"). Reads Sprite / TextLabel / TilemapLayer / Camera2DComponent + LocalTransform
+// (WorldTransform when the hierarchy wrote one) and fills
 // a SpriteBatch in ECS iteration order (deterministic draw order, FR-RUN-040).
 //
 //   kit::SpriteExtract extract;
@@ -52,6 +53,20 @@ private:
         render::Font font;
         bool ok = false;
     };
+    // One baked TilemapLayer: re-baked when the asset hot-reloads or the layer moves.
+    struct TilemapEntry {
+        asset::Guid guid;
+        asset::AnyHandle handle;
+        render::TilemapId id;
+        render::SpriteSetId set;  // the tileset cut into its grid
+        math::vec2 origin;
+        math::Color tint;
+        i32 order = 0;
+        i16 layer = 0;
+        bool used = false;
+    };
+    void draw_tilemap(const TilemapLayer& layer, math::vec2 origin, render::SpriteBatch& batch);
+    void destroy_tilemap(TilemapEntry& e);
 
     void release_handles();
 
@@ -62,6 +77,7 @@ private:
     u32 white_key_ = 0;
     Array<TextureEntry> textures_;
     Array<FontEntry> fonts_;
+    Array<TilemapEntry> tilemaps_;
 };
 
 // The first primary Camera2DComponent with a LocalTransform, in ECS order. False (and a default
