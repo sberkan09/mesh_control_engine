@@ -19,6 +19,10 @@ enum class Device : u8 {
     MouseButton,  // code = platform::MouseButton
     MouseWheel,   // axis selects x/y; value = wheel delta accumulated over the tick window
     MouseDelta,   // axis selects x/y; value = pointer motion over the tick window (pixels)
+    // v0.5 (ROADMAP M6). A gamepad binding reads every connected pad (single-player "any pad"):
+    // a button is held if any pad holds it; an axis takes the pad with the largest deflection.
+    GamepadButton,  // code = platform::GamepadButton
+    GamepadAxis,    // code = platform::GamepadAxis; deadzone + curve apply (sticks -1..1, y down)
 };
 
 enum class Curve : u8 {
@@ -114,6 +118,9 @@ public:
     InputMapBuilder& mouse_button(platform::MouseButton b);
     InputMapBuilder& mouse_delta(u8 axis, f32 scale = 1.f);
     InputMapBuilder& mouse_wheel(u8 axis, f32 scale = 1.f);
+    InputMapBuilder& gamepad_button(platform::GamepadButton b, u8 axis = 0, f32 scale = 1.f);
+    InputMapBuilder& gamepad_axis(platform::GamepadAxis a, u8 axis = 0, f32 scale = 1.f, Deadzone dz = {0.2f, 1.f},
+                                  Curve curve = Curve::Linear);
 
     const InputMapSet& set() const { return set_; }
     void encode(Array<byte>& out) const { encode_input_map(set_, out); }
