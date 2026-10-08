@@ -31,7 +31,7 @@ ecs::ComponentId component_for(World& world, const refl::TypeRecord& type) {
     return world.register_component_info(info);
 }
 
-Result<void> instantiate(World& world, const asset::SceneView& scene, Array<Entity>* spawned) {
+Result<void> instantiate(World& world, const asset::SceneView& scene, Array<Entity>* spawned, bool hierarchy) {
     const asset::SceneHeader& h = *scene.header;
 
     // Validate every column against this process's registry before touching the world.
@@ -87,7 +87,7 @@ Result<void> instantiate(World& world, const asset::SceneView& scene, Array<Enti
     }
     // A scene with a ChildOf column gets the transform hierarchy: WorldTransforms are composed
     // now and kept by "transform_propagate" (ADR-0030 §5). Scenes without one are untouched.
-    for (u32 c = 0; c < h.column_count; ++c) {
+    for (u32 c = 0; hierarchy && c < h.column_count; ++c) {
         if (plan[c].type != &refl::type_of<ChildOf>()) continue;
         ecs::install_hierarchy(world);
         ecs::propagate_transforms(world);
