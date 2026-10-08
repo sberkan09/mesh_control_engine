@@ -36,6 +36,21 @@ f64 now_seconds();
 u64 now_us();
 void sleep_ms(u32 ms);
 
+// ---- gamepads (v0.5) ------------------------------------------------------------------------
+// Pads are opened on hot-plug and given the lowest free player slot; GamepadAdded/Removed and the
+// button/axis events are delivered to the focused window (else the first one). Main thread only.
+bool gamepad_connected(u32 slot);
+const char* gamepad_name(u32 slot);  // "" when the slot is empty
+// FR-INP-050 (Could): rumble for `ms` milliseconds, intensities 0..1. False if unsupported.
+bool gamepad_rumble(u32 slot, f32 low, f32 high, u32 ms);
+
+// A software pad with the full standard layout (SDL virtual joystick): tests, bots, demos.
+// Returns an id for the setters below, or 0 on failure. It hot-plugs like real hardware.
+u32 attach_virtual_gamepad(const char* name = "MCE Virtual Gamepad");
+void detach_virtual_gamepad(u32 id);
+void set_virtual_gamepad_button(u32 id, GamepadButton b, bool down);
+void set_virtual_gamepad_axis(u32 id, GamepadAxis a, f32 value);  // same ranges as GamepadAxis events
+
 // Boot-failure report (core.md §2.1, FR-SHP-010): a modal message box, when allowed. Always also
 // logs. Suppressed when the `platform.error_box` convar is 0 (CI, tests) or no display exists.
 void show_error_box(const char* title, const char* message);

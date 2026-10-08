@@ -23,6 +23,12 @@ enum class EventType : u8 {
     MouseWheel,     // x, y = scroll delta (positive y = away from the user)
     TextInput,      // code = Unicode code point (one event per code point)
     Quit,           // OS-level quit request (SIGINT, logout, last window closed)
+    // Gamepads (v0.5, FR-INP-010): flags = player slot (0..kMaxGamepads-1).
+    GamepadAdded,
+    GamepadRemoved,
+    GamepadButtonDown,  // code = GamepadButton
+    GamepadButtonUp,
+    GamepadAxis,        // code = GamepadAxis, x = value (sticks -1..1, triggers 0..1)
 };
 
 // Key codes are USB HID keyboard usages (layout-independent physical keys); SDL scancodes use the
@@ -38,6 +44,19 @@ enum class Key : u32 {
 };
 
 enum class MouseButton : u32 { Left = 1, Middle = 2, Right = 3, X1 = 4, X2 = 5 };
+
+// The SDL standard gamepad layout (positional: South is A on Xbox, Cross on PlayStation).
+// Values match SDL_GamepadButton / SDL_GamepadAxis, so the platform passes them through.
+enum class GamepadButton : u32 {
+    South = 0, East, West, North, Back, Guide, Start, LeftStick, RightStick, LeftShoulder, RightShoulder,
+    DpadUp, DpadDown, DpadLeft, DpadRight, Misc1, RightPaddle1, LeftPaddle1, RightPaddle2, LeftPaddle2,
+    Touchpad, Misc2, Misc3, Misc4, Misc5, Misc6,
+    Count,
+};
+// Sticks: x right-positive, y DOWN-positive (SDL convention); triggers 0 (released) .. 1.
+enum class GamepadAxis : u32 { LeftX = 0, LeftY, RightX, RightY, LeftTrigger, RightTrigger, Count };
+
+inline constexpr u32 kMaxGamepads = 4;  // player slots (FR-INP-060: more is not a supported scenario)
 
 namespace EventFlag {
 enum : u32 {

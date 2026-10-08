@@ -28,7 +28,7 @@ FetchContent_Declare(tracy
     SYSTEM)
 
 # ---- SDL3 (window, events, GL context, audio output; mce_platform + mce_rhi_gl only) ----
-# Static, no subsystems we do not use yet. Gamepad joins with mce_input at v0.5.
+# Static, no subsystems we do not use yet.
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
@@ -41,6 +41,12 @@ set(SDL_RENDER OFF CACHE BOOL "" FORCE)
 set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
 set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
 set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
+# M6 input (ADR-0026): gamepads for mce_input — joystick/gamepad API, HIDAPI drivers, rumble, and
+# the virtual-joystick driver the input tests and bots drive.
+set(SDL_JOYSTICK ON CACHE BOOL "" FORCE)
+set(SDL_HIDAPI ON CACHE BOOL "" FORCE)
+set(SDL_HAPTIC ON CACHE BOOL "" FORCE)
+set(SDL_VIRTUAL_JOYSTICK ON CACHE BOOL "" FORCE)
 FetchContent_Declare(SDL3
     GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
     GIT_TAG        release-3.4.18

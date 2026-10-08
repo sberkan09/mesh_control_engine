@@ -8,7 +8,9 @@ mce_add_library(mce_input
         src/replay.cpp
         src/default_map.cpp
         src/ecs_bridge.cpp
+        src/bindings.cpp
     PUBLIC_DEPS
         mce::mce_core
         mce::mce_platform
-        mce::mce_ecs)
+        mce::mce_ecs
+        mce::mce_refl)
