@@ -23,6 +23,8 @@ const char* cmd_type_name(CmdType t) {
         case CmdType::PushDebugScope: return "PushDebugScope";
         case CmdType::PopDebugScope: return "PopDebugScope";
         case CmdType::Resolve: return "Resolve";
+        case CmdType::SetStorageData: return "SetStorageData";
+        case CmdType::WriteTimestamp: return "WriteTimestamp";
     }
     return "?";
 }
@@ -88,6 +90,16 @@ void CommandBuffer::bind_texture(u32 slot, TextureHandle texture, SamplerHandle 
 
 void CommandBuffer::bind_storage_buffer(u32 binding, BufferHandle buffer, u64 offset, u64 size) {
     push(CmdType::BindStorageBuffer, cmd::BindStorageBuffer{binding, buffer, offset, size});
+}
+
+void CommandBuffer::set_storage_data(u32 binding, Span<const byte> data) {
+    MCE_ASSERT_MSG(!data.empty(), "set_storage_data: empty data");
+    push(CmdType::SetStorageData, cmd::SetStorageData{binding, static_cast<u32>(data.size())}, data);
+}
+
+void CommandBuffer::write_timestamp(u32 index) {
+    MCE_ASSERT_MSG(index < kMaxTimestamps, "write_timestamp: index out of range");
+    push(CmdType::WriteTimestamp, cmd::WriteTimestamp{index});
 }
 
 void CommandBuffer::set_vertex_data(Span<const byte> data) {

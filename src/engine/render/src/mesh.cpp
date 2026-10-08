@@ -75,8 +75,14 @@ ResultV MeshStore::upload(u32 key, u32 generation, Span<const byte> blob, Textur
         g.bounds = {c - e, c + e};
         g.uv_rect = {s.uv_offset[0], s.uv_offset[1], s.uv_scale[0], s.uv_scale[1]};
         g.material = s.material;
-        const asset::Guid tex = s.material.texture(asset::MaterialSlot::BaseColor);
-        if (tex.hi != 0 || tex.lo != 0) g.albedo_key = textures(tex);
+        auto key_of = [&](asset::MaterialSlot slot) {
+            const asset::Guid tex = s.material.texture(slot);
+            return tex.hi != 0 || tex.lo != 0 ? textures(tex) : ~0u;
+        };
+        g.albedo_key = key_of(asset::MaterialSlot::BaseColor);
+        g.normal_key = key_of(asset::MaterialSlot::Normal);
+        g.orm_key = key_of(asset::MaterialSlot::MetallicRoughness);
+        g.emissive_key = key_of(asset::MaterialSlot::Emissive);
         m.submeshes.push_back(g);
     }
     for (u32 c = 0; c < view.clips.size(); ++c) {
@@ -142,6 +148,87 @@ u32 find_key(const f32* times, u32 count, f32 t) {
     return lo;
 }
 
+
+// Local TRS of every node, inline for small meshes.
+class LocalPose {
+public:
+    explicit LocalPose(usize n) : n_(n) {
+        if (n > kInline) {
+            heap_.resize(n);
+            data_ = heap_.data();
+        }
+    }
+    GpuMeshNode& operator[](usize i) { return data_[i]; }
+    const GpuMeshNode& operator[](usize i) const { return data_[i]; }
+    usize size() const { return n_; }
+
+private:
+    static constexpr usize kInline = 64;
+    GpuMeshNode inline_[kInline];
+    Array<GpuMeshNode> heap_;
+    GpuMeshNode* data_ = inline_;
+    usize n_;
+};
+
+// Cubic Hermite over glTF CUBICSPLINE triplets {in, value, out}: p0 = value k, m0 = out k * dt,
+// p1 = value k1, m1 = in k1 * dt (glTF 2.0 Appendix C).
+void hermite(const f32* v0, const f32* v1, u32 width, f32 a, f32 dt, f32* out) {
+    const f32 a2 = a * a, a3 = a2 * a;
+    const f32 h00 = 2 * a3 - 3 * a2 + 1, h10 = a3 - 2 * a2 + a, h01 = -2 * a3 + 3 * a2, h11 = a3 - a2;
+    for (u32 c = 0; c < width; ++c) {
+        const f32 p0 = v0[width + c], m0 = v0[2 * width + c] * dt;
+        const f32 p1 = v1[width + c], m1 = v1[c] * dt;
+        out[c] = h00 * p0 + h10 * m0 + h01 * p1 + h11 * m1;
+    }
+}
+
+// Overwrites the animated components of `local` with clip `clip` sampled at `time` (looping).
+// `touched`, when given, gets bit 0/1/2 (T/R/S) set per animated node component.
+void sample_clip(const GpuMesh& mesh, u32 clip, f32 time, LocalPose& local, u8* touched) {
+    const GpuMeshClip& c = mesh.clips[clip];
+    const f32 t = c.duration > 0.0f ? std::fmod(math::max(time, 0.0f), c.duration) : 0.0f;
+    for (u32 ci = 0; ci < c.channel_count; ++ci) {
+        const asset::MeshChannel& ch = mesh.channels[c.first_channel + ci];
+        const f32* times = mesh.keys.data() + ch.times_offset;
+        const f32* values = mesh.keys.data() + ch.values_offset;
+        const u32 width = ch.path == asset::AnimPath::Rotation ? 4 : 3;
+        const bool cubic = ch.interp == asset::AnimInterp::CubicSpline;
+        const u32 stride = cubic ? width * 3 : width;
+        const u32 k = find_key(times, ch.key_count, t);
+        const u32 k1 = k + 1 < ch.key_count ? k + 1 : k;
+        const f32 dt = times[k1] - times[k];
+        f32 a = 0.0f;
+        if (ch.interp != asset::AnimInterp::Step && k1 != k && dt > 0.0f) a = math::clamp((t - times[k]) / dt, 0.0f, 1.0f);
+        const f32* v0 = values + usize(k) * stride;
+        const f32* v1 = values + usize(k1) * stride;
+        f32 v[4];
+        if (cubic) {
+            if (k1 == k) {
+                for (u32 i = 0; i < width; ++i) v[i] = v0[width + i];
+            } else {
+                hermite(v0, v1, width, a, dt, v);
+            }
+        } else if (ch.path == asset::AnimPath::Rotation) {
+            const quat q = slerp(quat{v0[0], v0[1], v0[2], v0[3]}, quat{v1[0], v1[1], v1[2], v1[3]}, a);
+            v[0] = q.x, v[1] = q.y, v[2] = q.z, v[3] = q.w;
+        } else {
+            for (u32 i = 0; i < 3; ++i) v[i] = math::lerp(v0[i], v1[i], a);
+        }
+        GpuMeshNode& node = local[ch.node];
+        switch (ch.path) {
+            case asset::AnimPath::Translation: node.translation = {v[0], v[1], v[2]}; break;
+            case asset::AnimPath::Rotation: node.rotation = normalize(quat{v[0], v[1], v[2], v[3]}); break;
+            case asset::AnimPath::Scale: node.scale = {v[0], v[1], v[2]}; break;
+        }
+        if (touched) touched[ch.node] |= static_cast<u8>(1u << static_cast<u32>(ch.path));
+    }
+}
+
+void compose(const LocalPose& local, Span<mat4> out) {
+    for (usize i = 0; i < local.size(); ++i)
+        out[i] = local[i].parent < 0 ? node_local(local[i]) : out[static_cast<usize>(local[i].parent)] * node_local(local[i]);
+}
+
 }  // namespace
 
 void pose_nodes(const GpuMesh& mesh, u32 clip, f32 time, Span<mat4> out) {
@@ -151,42 +238,84 @@ void pose_nodes(const GpuMesh& mesh, u32 clip, f32 time, Span<mat4> out) {
         for (usize i = 0; i < n; ++i) out[i] = mesh.rest_pose[i];
         return;
     }
-    const GpuMeshClip& c = mesh.clips[clip];
-    const f32 t = c.duration > 0.0f ? std::fmod(math::max(time, 0.0f), c.duration) : 0.0f;
     // Local TRS per node, starting from the rest pose; channels overwrite their component.
-    constexpr usize kInline = 64;
-    GpuMeshNode inline_nodes[kInline];
-    Array<GpuMeshNode> heap_nodes;
-    GpuMeshNode* local = inline_nodes;
-    if (n > kInline) {
-        heap_nodes.resize(n);
-        local = heap_nodes.data();
-    }
+    LocalPose local(n);
     for (usize i = 0; i < n; ++i) local[i] = mesh.nodes[i];
-    for (u32 ci = 0; ci < c.channel_count; ++ci) {
-        const asset::MeshChannel& ch = mesh.channels[c.first_channel + ci];
-        const f32* times = mesh.keys.data() + ch.times_offset;
-        const f32* values = mesh.keys.data() + ch.values_offset;
-        const u32 k = find_key(times, ch.key_count, t);
-        const u32 k1 = k + 1 < ch.key_count ? k + 1 : k;
-        f32 a = 0.0f;
-        if (ch.interp == asset::AnimInterp::Linear && k1 != k && times[k1] > times[k])
-            a = math::clamp((t - times[k]) / (times[k1] - times[k]), 0.0f, 1.0f);
-        GpuMeshNode& node = local[ch.node];
-        if (ch.path == asset::AnimPath::Rotation) {
-            const f32* q0 = values + usize(k) * 4;
-            const f32* q1 = values + usize(k1) * 4;
-            node.rotation = normalize(slerp(quat{q0[0], q0[1], q0[2], q0[3]}, quat{q1[0], q1[1], q1[2], q1[3]}, a));
-        } else {
-            const f32* v0 = values + usize(k) * 3;
-            const f32* v1 = values + usize(k1) * 3;
-            const vec3 v = lerp(vec3{v0[0], v0[1], v0[2]}, vec3{v1[0], v1[1], v1[2]}, a);
-            if (ch.path == asset::AnimPath::Translation) node.translation = v;
-            else node.scale = v;
+    sample_clip(mesh, clip, time, local, nullptr);
+    compose(local, out);
+}
+
+void pose_nodes_blend(const GpuMesh& mesh, Span<const ClipSample> samples, Span<mat4> out) {
+    const usize n = mesh.nodes.size();
+    MCE_ASSERT_MSG(out.size() >= n, "pose_nodes_blend: output too small");
+    f32 total = 0.0f;
+    for (const ClipSample& s : samples) total += math::max(s.weight, 0.0f);
+    if (!(total > 0.0f)) {
+        for (usize i = 0; i < n; ++i) out[i] = mesh.rest_pose[i];
+        return;
+    }
+    LocalPose acc(n), one(n);
+    for (usize i = 0; i < n; ++i) {
+        acc[i] = mesh.nodes[i];
+        acc[i].translation = {};
+        acc[i].scale = {};
+        acc[i].rotation = {0, 0, 0, 0};
+    }
+    for (const ClipSample& s : samples) {
+        const f32 w = math::max(s.weight, 0.0f) / total;
+        if (w <= 0.0f) continue;
+        for (usize i = 0; i < n; ++i) one[i] = mesh.nodes[i];
+        if (s.clip < mesh.clips.size()) sample_clip(mesh, s.clip, s.time, one, nullptr);
+        for (usize i = 0; i < n; ++i) {
+            acc[i].translation += one[i].translation * w;
+            acc[i].scale += one[i].scale * w;
+            quat q = one[i].rotation;
+            if (dot(q, mesh.nodes[i].rotation) < 0.0f) q = {-q.x, -q.y, -q.z, -q.w};  // one hemisphere
+            acc[i].rotation = {acc[i].rotation.x + q.x * w, acc[i].rotation.y + q.y * w, acc[i].rotation.z + q.z * w,
+                               acc[i].rotation.w + q.w * w};
         }
     }
-    for (usize i = 0; i < n; ++i)
-        out[i] = local[i].parent < 0 ? node_local(local[i]) : out[static_cast<usize>(local[i].parent)] * node_local(local[i]);
+    for (usize i = 0; i < n; ++i) {
+        const quat q = normalize(acc[i].rotation);
+        acc[i].rotation = dot(q, q) > 0.0f ? q : mesh.nodes[i].rotation;
+    }
+    compose(acc, out);
+}
+
+void AnimationPlayer::play(u32 clip, f32 fade, f32 speed) {
+    if (fade > 0.0f && current_.clip != ~0u) {
+        previous_ = current_;
+        fade_length_ = fade;
+    } else {
+        previous_ = Track{};
+        fade_length_ = 0.0f;
+    }
+    fade_ = 0.0f;
+    current_ = Track{clip, 0.0f, speed};
+}
+
+void AnimationPlayer::advance(f32 dt) {
+    current_.time += dt * current_.speed;
+    if (previous_.clip != ~0u) {
+        previous_.time += dt * previous_.speed;
+        fade_ += dt;
+        if (fade_ >= fade_length_) {
+            previous_ = Track{};
+            fade_length_ = 0.0f;
+        }
+    }
+}
+
+void AnimationPlayer::pose(const GpuMesh& mesh, Span<mat4> out) const {
+    if (previous_.clip == ~0u) {
+        pose_nodes(mesh, current_.clip, current_.time, out);
+        return;
+    }
+    // Smoothstep weight: no velocity pop at either end of the fade.
+    const f32 x = blend();
+    const f32 w = x * x * (3.0f - 2.0f * x);
+    const ClipSample s[2] = {{previous_.clip, previous_.time, 1.0f - w}, {current_.clip, current_.time, w}};
+    pose_nodes_blend(mesh, Span<const ClipSample>(s, 2), out);
 }
 
 }  // namespace mce::render

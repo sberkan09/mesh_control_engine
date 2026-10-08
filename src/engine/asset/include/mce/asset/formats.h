@@ -201,6 +201,11 @@ enum : u32 {
     AlphaMask = 1u << 1,
     DoubleSided = 1u << 2,
     Unlit = 1u << 3,
+    // M5a (ADR-0024): the MetallicRoughness texture is an ORM map whose R channel is ambient
+    // occlusion (glTF occlusionTexture packed with metallicRoughnessTexture).
+    OcclusionInMR = 1u << 4,
+    // The MetallicRoughness slot holds an occlusion-only map: R is AO, G/B are not data.
+    OcclusionOnly = 1u << 5,
 };
 }
 
@@ -308,7 +313,8 @@ struct MeshClip {
 static_assert(sizeof(MeshClip) == 32);
 
 enum class AnimPath : u32 { Translation = 0, Rotation = 1, Scale = 2 };
-enum class AnimInterp : u32 { Linear = 0, Step = 1 };
+// CubicSpline (M5a): glTF CUBICSPLINE, values stored as {in-tangent, value, out-tangent} per key.
+enum class AnimInterp : u32 { Linear = 0, Step = 1, CubicSpline = 2 };
 
 struct MeshChannel {
     u32 node;
@@ -316,7 +322,7 @@ struct MeshChannel {
     AnimInterp interp;
     u32 key_count;
     u32 times_offset;   // index into the key pool: key_count ascending times
-    u32 values_offset;  // index into the key pool: key_count * (3 | 4) values
+    u32 values_offset;  // index into the key pool: key_count * (3 | 4) values (x3 for CubicSpline)
     u32 reserved[2];
 };
 static_assert(sizeof(MeshChannel) == 32);

@@ -316,10 +316,11 @@ Result<MeshView> MeshView::read(Span<const byte> payload) {
     for (u32 c = 0; c < h->channel_count; ++c) {
         const MeshChannel& ch = v.channels[c];
         const u32 width = ch.path == AnimPath::Rotation ? 4 : 3;
-        if (ch.node >= h->node_count || static_cast<u32>(ch.path) > 2 || static_cast<u32>(ch.interp) > 1 || ch.key_count == 0)
+        if (ch.node >= h->node_count || static_cast<u32>(ch.path) > 2 || static_cast<u32>(ch.interp) > 2 || ch.key_count == 0)
             return bad(kStage, 0x30000 + c);
+        const u64 per_key = ch.interp == AnimInterp::CubicSpline ? u64(width) * 3 : u64(width);
         if (!in_bounds(ch.times_offset, ch.key_count, h->key_count)) return bad(kStage, 0x30000 + c);
-        if (!in_bounds(ch.values_offset, u64(ch.key_count) * width, h->key_count)) return bad(kStage, 0x30000 + c);
+        if (!in_bounds(ch.values_offset, u64(ch.key_count) * per_key, h->key_count)) return bad(kStage, 0x30000 + c);
     }
     return v;
 }
