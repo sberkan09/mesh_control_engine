@@ -1,12 +1,16 @@
-// mce_editor — the M0 docking editor (ROADMAP M0: "editor opens 01_triangle rendered in a docking
-// viewport"). Window + GL device + EditorShell, driven by the one app loop (mce::app::run).
+// mce_editor — the docking editor. Window + GL device + EditorShell, driven by the one app loop
+// (mce::app::run). Without a project the viewport shows the M0 stub world; with -project it edits
+// scenes (open/save, hierarchy, inspector, picking, cook).
 //
 //   mce_editor                          run until the window closes
+//   mce_editor -project samples/scene_demo [-scene scenes/demo.mcscene]
+//   mce_editor -project samples/scene_demo -frames 90 -selftest   CI smoke in scene mode
 //   mce_editor -frames 120 -selftest    CI smoke: check the viewport and shell pixels, then quit
 //   mce_editor -frames 60 -capture shot.ppm
 //   mce_editor -editor.ini ""           no dock-layout persistence
 
 #include <cstdio>
+#include <cstdlib>
 
 #include "mce/core.h"
 #include "mce/editor/editor_shell.h"
@@ -22,6 +26,9 @@ MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window 
 MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this .ppm path", CVarFlags::None);
 MCE_CVAR(cv_selftest, "selftest", false, "With -frames: verify the viewport and shell pixels on the last frame",
          CVarFlags::None);
+MCE_CVAR(cv_project, "project", "", "Project folder to open (holds assets/)", CVarFlags::None);
+MCE_CVAR(cv_scene, "scene", "", "Scene to open, relative to assets/ (default: the first scene)", CVarFlags::None);
+MCE_CVAR(cv_select, "editor.select", "", "Select the entity with this name after opening the scene", CVarFlags::None);
 MCE_CVAR(cv_ini, "editor.ini", "mce_editor.ini", "Dock layout file (empty = no persistence)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 
@@ -39,6 +46,16 @@ public:
         desc.ini_path = ini.c_str();
         MCE_TRY(shell_.init(desc));
         window_.set_event_handler(&EditorApp::on_event, this);
+        if (!cv_project.get_string().empty()) {
+            if (!shell_.open_project(cv_project.get_string())) return Error(Errc::FileNotFound, "mce_editor", cv_project.get_string());
+            StringView scene = cv_scene.get_string();
+            Array<const editor::ProjectAsset*> scenes;
+            shell_.session().list_scenes(scenes);
+            if (scene.empty() && !scenes.empty()) scene = scenes[0]->path.view();
+            if (!scene.empty() && !shell_.open_scene(scene)) return Error(Errc::ParseError, "mce_editor", scene);
+            for (const editor::DocEntity& e : shell_.scene().doc().entities())
+                if (!cv_select.get_string().empty() && e.name.view() == cv_select.get_string()) shell_.scene().selection().set(e.id);
+        }
         return ok();
     }
 
@@ -54,7 +71,7 @@ public:
         const bool last = cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
         if (last) {
             if (!cv_capture.get_string().empty()) capture(cv_capture.get_string().data());
-            if (cv_selftest.get_bool() && !selftest()) exit_code_ = 3;
+            if (cv_selftest.get_bool() && !(shell_.scene_mode() ? scene_selftest() : selftest())) exit_code_ = 3;
         }
         device_.end_frame();
         if (last || shell_.quit_requested()) quit(exit_code_);
@@ -66,7 +83,12 @@ public:
     }
 
     // app::IPlatformHooks
-    bool pump_events() override { return platform::pump_events(); }
+    // Returns true to quit. A window close goes through the shell, which asks before dropping
+    // unsaved changes; on_render quits once the shell agrees.
+    bool pump_events() override {
+        if (platform::pump_events()) shell_.request_quit();
+        return false;
+    }
     void present(bool vsync) override { device_.present(vsync); }
 
 private:
@@ -129,6 +151,44 @@ private:
         MCE_LOG_INFO("selftest: viewport {}x{} red/green/blue px {}/{}/{}; backbuffer {}+ colors", v.size.width,
                      v.size.height, dominant[0], dominant[1], dominant[2], distinct);
         return dominant[0] > 0 && dominant[1] > 0 && dominant[2] > 0 && distinct >= 8;
+    }
+
+    // Scene mode: the document mirrors into the preview world and the viewport shows its sprites
+    // (more than a handful of colours over the clear colour, i.e. textures arrived through the
+    // cooked tree), and a pick at an entity's centre selects it.
+    bool scene_selftest() {
+        editor::EditorScene& scene = shell_.scene();
+        if (scene.doc().size() == 0 || !scene.verify_world()) {
+            MCE_LOG_ERROR("selftest: scene empty or preview world out of sync");
+            return false;
+        }
+        const editor::ViewportInfo& v = shell_.viewport();
+        if (v.target.is_null() || v.size.width < 16 || v.size.height < 16) {
+            MCE_LOG_ERROR("selftest: viewport panel not visible");
+            return false;
+        }
+        Array<u8> px;
+        if (!read(v.target, v.size, px)) return false;
+        u32 non_clear = 0, distinct = 0;
+        u32 seen[64] = {};
+        for (usize i = 0; i < px.size(); i += 4) {
+            const int r = px[i], g = px[i + 1], b = px[i + 2];
+            if (std::abs(r - 28) + std::abs(g - 28) + std::abs(b - 31) > 40) ++non_clear;
+            const u32 c = (u32(r) >> 4) | ((u32(g) >> 4) << 4) | ((u32(b) >> 4) << 8);
+            bool found = false;
+            for (u32 k = 0; k < distinct; ++k) found |= seen[k] == c;
+            if (!found && distinct < 64) seen[distinct++] = c;
+        }
+        editor::EntityId probe = editor::kNoEntity;
+        for (const editor::DocEntity& e : scene.doc().entities()) {
+            math::vec2 q[4];
+            if (!editor::entity_quad(scene, e.id, q)) continue;
+            const math::vec2 c = (q[0] + q[2]) * 0.5f;
+            if (editor::pick_entity(scene, c) == e.id) probe = e.id;
+        }
+        MCE_LOG_INFO("selftest: scene {} entities; viewport {}x{}, {} non-clear px, {} colours; pick probe {}",
+                     scene.doc().size(), v.size.width, v.size.height, non_clear, distinct, probe);
+        return non_clear > v.size.width * v.size.height / 50 && distinct >= 6 && probe != editor::kNoEntity;
     }
 
     platform::Window& window_;

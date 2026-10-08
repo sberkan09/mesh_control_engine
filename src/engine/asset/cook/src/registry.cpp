@@ -3,7 +3,7 @@
 
 #include <random>
 
-#include "fs_util.h"
+#include "mce/cook/fs.h"
 #include "mce/asset/file_io.h"
 #include "mce/asset/xxhash.h"
 #include "mce/cook/cook.h"

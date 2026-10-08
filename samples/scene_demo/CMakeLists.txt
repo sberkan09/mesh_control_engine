@@ -22,5 +22,13 @@ if(MCE_BUILD_TESTS)
         add_test(NAME scene_demo_player_gpu
                  COMMAND mce_player -pack "${pack}" -frames 90 -platform.error_box 0 -r.vsync 0)
         set_tests_properties(scene_demo_player_gpu PROPERTIES LABELS gpu)
+        if(TARGET mce_editor)
+            # The editor in scene mode over the cooked copy: preview world in sync, sprites drawn
+            # in the viewport, picking hits (mce_editor's scene selftest).
+            add_test(NAME editor_scene_smoke
+                     COMMAND mce_editor -project "${project_dir}" -scene scenes/demo.mcscene -editor.select Ball -frames 90 -selftest
+                             -editor.ini "" -platform.error_box 0 -r.vsync 0)
+            set_tests_properties(editor_scene_smoke PROPERTIES LABELS gpu)
+        endif()
     endif()
 endif()
