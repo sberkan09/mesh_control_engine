@@ -35,6 +35,7 @@ enum Layer : u32 {
     White,
     Cloud,
     Hill,
+    Crate,
     LayerCount
 };
 

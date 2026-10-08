@@ -38,6 +38,10 @@ constexpr f32 kSightRange = 7.0f;
 constexpr f32 kLoseRange = 10.0f;
 constexpr u32 kChaseMemoryTicks = 90;
 
+constexpr f32 kWorldGravity = 9.81f;  // PhysicsConfig default; crates scale it up to kGravity
+constexpr vec2 kCrateHalf{0.5f, 0.5f};
+constexpr f32 kOrbitRadius = 1.5f;
+
 constexpr u16 bit(Layer l) { return static_cast<u16>(1u << l); }
 
 LocalTransform at(vec2 p) {
@@ -88,8 +92,22 @@ void play(Frame& f, audio::ClipHandle clip, f32 gain_db = 0.0f) {
 }
 
 vec2 mover_target(const Mover& m, f32 t) {
-    const f32 s = std::sin(math::kTau * t / m.period + m.phase);
-    return m.origin + m.extent * s;
+    const f32 a = math::kTau * t / m.period + m.phase;
+    return m.origin + m.extent * std::sin(a) + m.extent_cos * std::cos(a);
+}
+
+// Dynamic crate: falls like the player (kGravity), rotates, stacks, rides platforms by friction.
+void spawn_crate(World& w, vec2 p, u32 id) {
+    RigidBody2D rb;
+    rb.type = BodyType::Dynamic;
+    rb.layer = Layer_World;
+    rb.mask = 0xFFFF;
+    rb.gravity_scale = kGravity / kWorldGravity;
+    Collider2D c;
+    c.shape = ColliderShape::box(kCrateHalf);
+    c.density = 1.0f;
+    c.friction = 0.6f;
+    w.spawn_with(rb, c, Crate{id}, PrevPos{p}, look(Sprite::Crate, 2.0f * kCrateHalf, 4), at(p));
 }
 
 void spawn_level(World& w, const Level& lv, GameState& gs) {
@@ -118,6 +136,7 @@ void spawn_level(World& w, const Level& lv, GameState& gs) {
         }
     }
 
+    u32 crates = 0;
     for (i32 y = 0; y < static_cast<i32>(lv.height); ++y) {
         for (i32 x = 0; x < static_cast<i32>(lv.width); ++x) {
             const vec2 p = Level::center(x, y);
@@ -158,6 +177,25 @@ void spawn_level(World& w, const Level& lv, GameState& gs) {
                     w.spawn_with(body(BodyType::Static, Layer_Sensor, bit(Layer_Player)),
                                  collider(ColliderShape::box({0.3f, 1.0f}), true), Goal{}, PrevPos{c},
                                  look(Sprite::Flag, {1, 2}, 1), at(c));
+                    break;
+                }
+                case 'C': {
+                    spawn_crate(w, {p.x, static_cast<f32>(y) + kCrateHalf.y}, crates++);
+                    break;
+                }
+                case 'O': {
+                    // Orbit: starts at the top of a 1.5 m circle around the tile and goes clockwise,
+                    // with a crate riding on it (friction carry through the solver, M3.5 demo).
+                    Mover m;
+                    m.origin = p;
+                    m.extent = {kOrbitRadius, 0.0f};
+                    m.extent_cos = {0.0f, kOrbitRadius};
+                    m.period = 6.0f;
+                    const vec2 start = mover_target(m, 0.0f);
+                    w.spawn_with(body(BodyType::Kinematic, Layer_World, world_mask),
+                                 collider(ColliderShape::box({1.5f, 0.25f})), m, PrevPos{start},
+                                 look(Sprite::Platform, {3, 0.5f}, 3), at(start));
+                    spawn_crate(w, {start.x, start.y + 0.25f + kCrateHalf.y}, crates++);
                     break;
                 }
                 case 'M':

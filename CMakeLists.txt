@@ -25,6 +25,7 @@ option(MCE_ASAN            "Build with AddressSanitizer"              OFF)
 option(MCE_BUILD_SAMPLES   "Build the sample ladder (samples/)"       ON)
 option(MCE_BUILD_EDITOR    "Build the editor (mce_editor_core/layer + mce_editor)" ON)
 option(MCE_GPU_TESTS       "Register tests that need a display + GL 4.5 driver" OFF)
+option(MCE_PHYSICS_ORACLE  "Link Box2D v3 into test_physics2d as the solver oracle (ADR-0016)" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(MceTarget)

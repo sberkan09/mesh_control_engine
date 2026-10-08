@@ -19,7 +19,6 @@ inline constexpr f32 kPolygonRadius = 2.0f * kLinearSlop;  // unused by default:
 inline constexpr f32 kAabbMargin = 0.1f;
 inline constexpr f32 kBaumgarte = 0.2f;
 inline constexpr f32 kMaxLinearCorrection = 0.2f;
-inline constexpr f32 kRestitutionThreshold = 1.0f;  // m/s
 inline constexpr f32 kMaxLinearSpeed = 200.0f;      // m/s velocity clamp (tunneling guard)
 inline constexpr f32 kMaxRotation = 0.5f * math::kPi;  // rad per step
 inline constexpr f32 kEpsilon = 1.1920929e-7f;

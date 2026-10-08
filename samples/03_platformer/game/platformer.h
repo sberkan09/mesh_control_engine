@@ -36,7 +36,7 @@ enum Layer : mce::u8 { Layer_World = 0, Layer_Player = 1, Layer_Enemy = 2, Layer
 // ---- components (trivially copyable, padding-free: World::state_hash hashes their bytes) ------
 
 // What the host draws for an entity. `sprite` is a game-defined art id (see Sprite).
-enum class Sprite : u32 { Player, Enemy, Coin, Spike, Flag, Platform, Count };
+enum class Sprite : u32 { Player, Enemy, Coin, Spike, Flag, Platform, Crate, Count };
 struct Look {
     Sprite sprite = Sprite::Player;
     i32 order = 0;
@@ -70,12 +70,19 @@ struct Enemy {
     u32 seen = 0;            // ticks since the player was last seen (chase memory)
 };
 
-// Kinematic platform: position(t) = origin + extent * sin(tau * t / period).
+// Kinematic platform: position(t) = origin + extent * sin(a) + extent_cos * cos(a), a = tau * t /
+// period + phase. A zero extent_cos is a back-and-forth line; extent ⟂ extent_cos is an orbit.
 struct Mover {
     vec2 origin;
     vec2 extent;
     f32 period = 4.0f;
     f32 phase = 0.0f;
+    vec2 extent_cos;
+};
+
+// A dynamic box the solver owns (M3.5): stacks, gets pushed, rides platforms.
+struct Crate {
+    u32 id = 0;
 };
 
 struct Pickup {
