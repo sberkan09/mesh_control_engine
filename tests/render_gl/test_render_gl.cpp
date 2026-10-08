@@ -8,7 +8,7 @@
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/renderer.h"
-#include "mce/rhi_gl/gl_device.h"
+#include "mce/rhi/default_device.h"
 
 using namespace mce;
 using namespace mce::render;
@@ -35,7 +35,7 @@ struct Fixture {
         auto w = platform::Window::create(wd);
         REQUIRE(w.has_value());
         window = std::move(w).value();
-        auto d = rhi::gl::create_device(*window);
+        auto d = rhi::create_default_device(*window);
         REQUIRE(d.has_value());
         device = std::move(d).value();
         REQUIRE(renderer.init(*device).has_value());

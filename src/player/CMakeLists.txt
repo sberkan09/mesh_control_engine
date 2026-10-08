@@ -13,5 +13,5 @@ mce_add_executable(mce_player
         mce::mce_audio
         mce::mce_render
         mce::mce_platform
-        mce::mce_rhi_gl)
+        mce::mce_rhi_default)
 target_include_directories(mce_player PRIVATE "${PROJECT_SOURCE_DIR}/samples/common")

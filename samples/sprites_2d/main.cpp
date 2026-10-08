@@ -14,7 +14,7 @@
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/renderer.h"
-#include "mce/rhi_gl/gl_device.h"
+#include "mce/rhi/default_device.h"
 
 namespace {
 
@@ -332,9 +332,9 @@ int main(int argc, char** argv) {
         } else {
             rhi::DeviceDesc dd;
             dd.debug_layer = cv_gl_debug.get_bool();
-            auto device = rhi::gl::create_device(*window.value(), dd);
+            auto device = rhi::create_default_device(*window.value(), dd);
             if (!device) {
-                rc = fail("OpenGL 4.5 device creation failed", device.error());
+                rc = fail("render device creation failed", device.error());
             } else {
                 SpritesApp app(*window.value(), *device.value());
                 app::AppDesc desc;

@@ -15,6 +15,11 @@
 # build/_fetch/<hash of cmake/Dependencies.cmake> and shared by every preset; the build trees are
 # configured in parallel before the first stage; tests run in parallel.
 #
+# In a project container (/mnt/project-files exists) the ccache directory is restored from a shared
+# snapshot before the first stage, so a fresh session starts warm, and saved back after a green full
+# run when the snapshot is missing or older than 12 h (after any green run with --save-cache).
+# MCE_CCACHE_SNAPSHOT overrides the snapshot path; an empty value turns the snapshot off.
+#
 # Exit code 0 only if every selected stage passed. A summary table is printed at the end.
 
 set -uo pipefail
@@ -28,14 +33,17 @@ ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-gcc-release linux-as
 declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=ON [linux-gcc-release]=OFF [linux-asan]=OFF)
 
 stages=()
+save_cache=0
 for arg in "$@"; do
     case "$arg" in
         --quick) stages+=(walls linux-gcc-debug) ;;
-        -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+        --save-cache) save_cache=1 ;;
+        -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
         *) stages+=("$arg") ;;
     esac
 done
-[[ ${#stages[@]} -eq 0 ]] && stages=("${ALL_STAGES[@]}")
+full_run=0
+[[ ${#stages[@]} -eq 0 ]] && { stages=("${ALL_STAGES[@]}"); full_run=1; }
 
 LOG_DIR="$ROOT/build/local-ci-logs"
 mkdir -p "$LOG_DIR"
@@ -44,10 +52,51 @@ JOBS="$(nproc 2>/dev/null || echo 4)"
 
 # Extra configure arguments shared by every preset.
 COMMON_ARGS=()
+SNAPSHOT=""
 if command -v ccache > /dev/null; then
     export CCACHE_BASEDIR="$ROOT" CCACHE_NOHASHDIR=1  # hits survive a different checkout path
+    export CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}" CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-3G}"
     COMMON_ARGS+=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
+    if [[ -d /mnt/project-files/ ]] && command -v zstd > /dev/null; then
+        SNAPSHOT="${MCE_CCACHE_SNAPSHOT-/mnt/project-files/.cache/ccache-linux.tar.zst}"
+    fi
 fi
+
+# The shared snapshot: one zstd tarball of the ccache directory, so the sync folder sees a single file.
+restore_cache() {
+    [[ -n "$SNAPSHOT" && -f "$SNAPSHOT" ]] || return 0
+    # Only into an empty cache: a local cache is at least as fresh as the snapshot it came from.
+    [[ -n "$(ls -A "$CCACHE_DIR" 2>/dev/null)" ]] && return 0
+    local start=$SECONDS
+    mkdir -p "$CCACHE_DIR"
+    if tar -I zstd -xf "$SNAPSHOT" -C "$CCACHE_DIR"; then
+        echo "=== ccache restored from $SNAPSHOT ($((SECONDS - start))s)"
+    else
+        echo "=== ccache snapshot unreadable, starting cold"
+        rm -rf "${CCACHE_DIR:?}"/*
+    fi
+}
+
+save_cache_snapshot() {
+    [[ -n "$SNAPSHOT" && -d "$CCACHE_DIR" ]] || return 0
+    if [[ $save_cache -eq 0 ]]; then
+        # Automatic saves only after a full run, so a --quick run never pins a half-warm snapshot.
+        [[ $full_run -eq 1 ]] || return 0
+        [[ -f "$SNAPSHOT" && $(( $(date +%s) - $(stat -c %Y "$SNAPSHOT") )) -lt 43200 ]] && return 0
+    fi
+    local start=$SECONDS tmp
+    tmp="$(mktemp "${TMPDIR:-/tmp}/ccache-snapshot.XXXXXX")"
+    ccache --cleanup > /dev/null 2>&1
+    # Written locally first, then moved into place: the shared folder never holds a half-written file.
+    if tar -I 'zstd -1 -T0' -cf "$tmp" -C "$CCACHE_DIR" . && mkdir -p "$(dirname "$SNAPSHOT")" &&
+        cp "$tmp" "$SNAPSHOT.tmp" && mv "$SNAPSHOT.tmp" "$SNAPSHOT"; then
+        echo "=== ccache snapshot saved to $SNAPSHOT ($(du -h "$SNAPSHOT" | cut -f1), $((SECONDS - start))s)"
+    else
+        echo "=== ccache snapshot not saved (not fatal)"
+        rm -f "$SNAPSHOT.tmp"
+    fi
+    rm -f "$tmp"
+}
 
 # Third-party sources (FetchContent) are cloned once and reused by every later configure via
 # FETCHCONTENT_SOURCE_DIR_<NAME>. The cache is keyed by the hash of cmake/Dependencies.cmake, so a
@@ -204,6 +253,8 @@ run_stage() {
     esac
 }
 
+restore_cache
+[[ ${#COMMON_ARGS[@]} -gt 0 ]] && ccache --zero-stats > /dev/null
 preconfigure
 
 declare -A RESULT
@@ -224,4 +275,9 @@ done
 echo
 echo "=== Summary ($(git rev-parse --short HEAD 2>/dev/null))"
 for s in "${stages[@]}"; do printf '  %-22s %s\n' "$s" "${RESULT[$s]}"; done
+if [[ ${#COMMON_ARGS[@]} -gt 0 ]]; then
+    ccache --show-stats 2> /dev/null | grep -E '^(Cacheable calls|  Hits|  Misses)' | awk '!seen[$0]++' |
+        sed 's/^/  ccache: /'
+    [[ $failed -eq 0 ]] && save_cache_snapshot
+fi
 exit $failed
