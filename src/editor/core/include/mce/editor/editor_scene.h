@@ -45,6 +45,8 @@ public:
     void new_scene(StringView name);
     // Loads a .mcscene file; on failure the current scene is kept and `diags` says why.
     Result<void> open(StringView path, cook::DiagList& diags);
+    // Replaces the document with `text` (an autosave) but keeps path(); the scene is dirty after.
+    bool recover(StringView text, cook::DiagList& diags);
     // Atomic save (temp file + rename): a crash mid-write leaves the previous file intact.
     Result<void> save(StringView path);
     // Serialization only (also used for autosave and copy/paste).
@@ -65,6 +67,16 @@ public:
     bool remove_component(EntityId id, const refl::TypeRecord& type);
     // Replaces the whole component value (inspector / gizmo commit). No-op when unchanged.
     bool set_component(EntityId id, const refl::TypeRecord& type, const void* value);
+    // ---- clipboard (FR-EDT-030 copy/paste) ----
+    // Writes `ids` (in document order) as a .mcscene text: the system clipboard format.
+    // References between copied entities survive; references to anything else become null.
+    void copy_entities(Span<const EntityId> ids, cook::String& out) const;
+    // Inserts the entities of a copy_entities() text at `at` (-1: the end) with fresh ids and
+    // selects them. False (nothing changed) when the text is not a scene fragment.
+    bool paste_entities(StringView text, i32 at, cook::DiagList& diags, Array<EntityId>* pasted = nullptr);
+    // Copy + paste right after the last of `ids`.
+    bool duplicate_entities(Span<const EntityId> ids, Array<EntityId>* created = nullptr);
+
     // Typed convenience for reflected components.
     template <class T>
     bool set(EntityId id, const T& value) {
