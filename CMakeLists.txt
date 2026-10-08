@@ -29,6 +29,7 @@ option(MCE_PHYSICS_ORACLE  "Link Box2D v3 into test_physics2d as the solver orac
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(MceTarget)
+include(MceShip)
 include(Dependencies)
 include(EngineId)
 

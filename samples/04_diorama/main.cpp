@@ -11,7 +11,7 @@
 // orbit, F toggles fog, Esc quits.
 //
 // The pack: -pack <path>, else assets.mce next to the executable (a shipped build), else the build
-// tree's cooked pack (MCE_DIORAMA_DEV_PACK).
+// tree's cooked pack (MCE_SAMPLE_DEV_PACK).
 
 #include <cmath>
 #include <cstdio>
@@ -24,6 +24,7 @@
 #include "mce/render/asset_upload.h"
 #include "mce/render/renderer.h"
 #include "mce/rhi_gl/gl_device.h"
+#include "ship_paths.h"
 
 namespace {
 
@@ -214,6 +215,7 @@ public:
             MCE_TRY_ASSIGN(font_, renderer_.create_font(hud.metrics, hud.glyphs.span(), {}, std::as_bytes(hud.atlas.span()),
                                                         "04_diorama.hud_font"));
             window_->set_event_handler(&DioramaApp::on_event, this);
+            apply_window_icon(*window_, assets_, "icon.png");
         }
         load_ms_ = static_cast<f32>(now_ms() - t0);
         MCE_LOG_INFO("04_diorama: {} assets loaded in {} ms", assets_.asset_count(), load_ms_);
@@ -260,8 +262,16 @@ public:
         rhi::CommandBuffer cmd(mem::frame());
         renderer_.record_3d(cmd, scene);
         record_hud(cmd, scene, bb);
+        const f64 t2 = now_ms();
         device_->submit(cmd);
+        const f64 t3 = now_ms();
         build_ms_ = static_cast<f32>(t1 - t0);
+        if (rc.frame_index >= 10) {  // skip warm-up
+            timing_.build += t1 - t0;
+            timing_.record += t2 - t1;
+            timing_.submit += t3 - t2;
+            ++timing_.frames;
+        }
 
         const bool last = cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
         if (last && !cv_capture.get_string().empty()) capture(cv_capture.get_string().data(), bb);
@@ -280,6 +290,15 @@ public:
     bool pump_events() override { return platform::pump_events(); }
     void present(bool vsync) override { device_->present(vsync); }
 
+    // Per-stage CPU means over the run (NFR-F-01 table shape); empty when nothing rendered.
+    void report_timing() const {
+        if (timing_.frames == 0) return;
+        const f64 n = static_cast<f64>(timing_.frames);
+        std::printf("04_diorama: avg CPU ms over %llu frames: scene build (anim+cull+sort+shadow fit) %.3f, "
+                    "record %.3f, GL translate+submit %.3f\n",
+                    static_cast<unsigned long long>(timing_.frames), timing_.build / n, timing_.record / n, timing_.submit / n);
+    }
+
     u64 state_hash() const { return hash_; }
     u64 ticks() const { return ticks_; }
     const Scene3D::Stats& last_stats() const { return last_stats_; }
@@ -292,18 +311,7 @@ private:
 
     ResultV mount_pack() {
         FixedString<1024> path;
-        if (!cv_pack.get_string().empty()) {
-            path.append(cv_pack.get_string());
-        } else {
-            path.append(platform::base_path());
-            path.append("assets.mce");
-            if (std::FILE* f = std::fopen(path.c_str(), "rb")) {
-                std::fclose(f);
-            } else {
-                path.clear();
-                path.append(MCE_DIORAMA_DEV_PACK);
-            }
-        }
+        resolve_shipped_path(cv_pack.get_string(), "assets.mce", MCE_SAMPLE_DEV_PACK, path);
         const StringView roots[1] = {path.view()};
         asset::MountOptions mo;
         mo.verify_payload_crc = false;  // a pack verifies once at mount (assets.md §3)
@@ -496,6 +504,10 @@ private:
     vec2 mouse_;
     f32 load_ms_ = 0.0f, build_ms_ = 0.0f, first_frame_ms_ = 0.0f;
     Scene3D::Stats last_stats_;
+    struct {
+        f64 build = 0, record = 0, submit = 0;
+        u64 frames = 0;
+    } timing_;
     u64 hash_ = kFnv64Offset;
     u64 ticks_ = 0;
 };
@@ -544,6 +556,7 @@ int run_windowed() {
     desc.fences = device.value().get();
     app::RunStats stats;
     int rc = app::run(app, desc, &stats);
+    app.report_timing();
     const u32 gl_errors = device.value()->validation_error_count();
     const Scene3D::Stats& st = app.last_stats();
     std::printf("04_diorama: %llu frames, %u visible tris, %u GL errors\n", static_cast<unsigned long long>(stats.frames),

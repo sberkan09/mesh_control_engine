@@ -241,6 +241,8 @@ Trigger/one-shot vocabulary (producer systems → audio): `AnimFrameEvent` (rhi-
 
 ### 2.5 Runtime UI (`mce_ui`, v1.0 — design-committed, sketch depth per FR-UI-020)
 
+> **M4:** the full design is [ui.md](ui.md); this section is its seed and stays for the decisions' history.
+
 ```cpp
 // mce_ui/ui.h — retained widget tree; rendered through rhi-renderer's 2D MDI batch.
 namespace mce::ui {
@@ -370,6 +372,8 @@ All nodes are POD param structs + one process function, scalar-first, SIMD pair 
 Computed **once at command time on the main thread** (not per sample): given listener + source world positions, produce `{gain_lin (attenuation curve id), pan (constant-power, listener-relative angle)}` and ship them inside the `Play` command; a moving source re-sends gain/pan at most every tick via `Gain` commands from the bridge (ramped — no zippers). 2D sounds skip the listener entirely (`attenuation_id == 0` → pan-only). Velocity-based Doppler is out of scope (FR-AUD-080 adjacent; recorded, not built).
 
 ### 3.9 Runtime UI internals (v1.0 sketch — full doc at M4)
+
+> Superseded in detail by [ui.md](ui.md) §3–§5.
 
 Retained tree of `Widget` nodes in a flat pool (stable `WidgetId`, parent/first-child/next-sibling indices — same shape as the ECS hierarchy index). Per render frame in `Render_Pre`: (1) resolve anchors parent→child (one linear pass in depth order); (2) dirty-flag re-layout of changed subtrees (Nystrom); (3) hit-test input actions → focus set → widget state machines (button hover/press/confirm); (4) `DrawList2D` append: quads into the same atlas/9-slice/text pipelines the sprite batch uses — **no second renderer, one extra MDI batch at most** (FR-UI-020 acceptance is "renders through the sprite batcher"). Gamepad focus = an explicit navigation graph (authored edges, auto-generated fallback by geometry). Data binding = reflection property path + poll in `Render_Pre` (read-only; gameplay never imports `mce_ui`, FR-UI-030).
 
@@ -549,7 +553,7 @@ Tier names with ROADMAP milestone IDs (ARCHITECTURE §10.1 is the mapping author
 - **ROADMAP M0 (MVP):** nothing of this subsystem builds yet; the ImGui event seam ships with the editor shell.
 - **MVP (ROADMAP M3):** input wrapper + action layer + fixed-field binding + tick quantization + determinism/replay tests (FR-INP-010/020/030); audio device callback + SPSC FIFO + voice pool (8) + one-shot/loop + gain/pan + streamed music loop + Master bus only (FR-AUD-010/020@8/040, FR-AST-100 contract) + `AudioSource`/`AudioListener` starter kit + bridge system; **60 Hz command granularity — sample-accurate `play_at` scheduling deferred to v0.5 (finding F2)**; Artifact A's SFX + music loop run through it.
 - **v0.5 (ROADMAP M6):** gamepads as binding targets + rumble (Could), runtime rebinding + persistence (FR-INP-040), bus graph Music/SFX/UI + per-bus biquad EQ + Freeverb send + master limiter (FR-AUD-030/060), 48 voices (FR-AUD-020), **sample-accurate `play_at` scheduling on the `mixSample` clock (§3.4, deferred from MVP)**, 2D/3D spatialization with attenuation curves (FR-AUD-050), event-driven one-shots from animation frames (FR-AUD-055), editor mixer + voice debug panels, input rebinding UI.
-- **v1.0 (ROADMAP M8):** `mce::ui` build (design is committed in this document; finalized during M8): anchored-rect tree, panel/image/text/button/slider primitives through the sprite batch, action-driven focus navigation, read-only reflection data binding, shipped debug console over convars (FR-UI-010/020/030/045); RmlUi fallback ADR only if the prototype slips (the pre-approved trigger — ROADMAP M8 holds `mce_ui` to it).
+- **v1.0 (ROADMAP M8):** `mce::ui` build (design finalized at M4 in [ui.md](ui.md), per CF21): anchored-rect tree, panel/image/text/button/slider primitives through the sprite batch, action-driven focus navigation, read-only reflection data binding, shipped debug console over convars (FR-UI-010/020/030/045); RmlUi fallback ADR only if the prototype slips (the pre-approved trigger — ROADMAP M8 holds `mce_ui` to it).
 
 ## References
 

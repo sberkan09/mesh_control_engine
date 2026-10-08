@@ -10,7 +10,8 @@ if(MCE_GAME_MODULES_SUPPORTED)
 
     add_executable(sample_03_platformer main.cpp art.cpp)
     target_link_libraries(sample_03_platformer PRIVATE mce::mce_engine)
-    target_compile_definitions(sample_03_platformer PRIVATE MCE_PLATFORMER_MODULE="$<TARGET_FILE:platformer>")
+    target_compile_definitions(sample_03_platformer PRIVATE MCE_PLATFORMER_MODULE="$<TARGET_FILE:platformer>"
+                                                            MCE_PLATFORMER_MODULE_NAME="$<TARGET_FILE_NAME:platformer>")
     add_dependencies(sample_03_platformer platformer)
     mce_apply_compile_policy(sample_03_platformer)
 else()
@@ -19,6 +20,7 @@ else()
              mce::mce_rhi_gl)
 endif()
 target_include_directories(sample_03_platformer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../common")
+mce_sample_pack(sample_03_platformer)  # Kenney CC0 SFX (assets/sfx, CREDITS.md)
 
 if(MCE_BUILD_TESTS)
     # Sample ladder rule: every sample runs 300 headless steps in CI.
@@ -35,3 +37,5 @@ if(MCE_BUILD_TESTS)
         set_tests_properties(sample_03_platformer_gpu PROPERTIES LABELS gpu)
     endif()
 endif()
+mce_ship_metadata(sample_03_platformer NAME "Ember Step" DESCRIPTION "Mesh Control Engine - Ember Step platformer (Artifact A)"
+    ICON "${CMAKE_CURRENT_SOURCE_DIR}/icon.ico")

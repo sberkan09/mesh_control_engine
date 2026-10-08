@@ -135,7 +135,7 @@ Above the walls sit three composition principles (P6 — one path, thin seams):
 | `mce_input` | `src/engine/input` | L2 | core, platform, asset, ecs | Action maps (cooked chunk) → tick-quantized `InputState` snapshots; record/replay streams |
 | `mce_render` | `src/engine/render` | L3 | core, ecs, asset, rhi, rhi_gl | Extract/cull/sort/batch, 2D+3D passes, DebugDraw, editor views, picking, golden capture |
 | `mce_gameplay_kit` | `src/engine/kit` | L4 | L0–L3 | FR-ENT-080 starter components/systems; the 12-type gameplay surface consumers actually touch |
-| `mce_ui` (v1.0) | `src/engine/ui` | L4 | L0–L3 | Retained anchored-rect runtime UI rendered through the 2D MDI batch (FR-UI-020; design doc is an **M4 deliverable** — CF21) |
+| `mce_ui` (v1.0) | `src/engine/ui` | L4 | L0–L3 | Retained anchored-rect runtime UI rendered through the 2D MDI batch (FR-UI-020; design doc is an **M4 deliverable** — CF21: [architecture/ui.md](architecture/ui.md)) |
 | `mce_engine` (dll) | `src/module` | L5 | all of L0–L4 | The umbrella shared library: exports `mce::` gameplay API, carries `MCE_ENGINE_ID`, hosts the game-module loader (fix F8) |
 | `mce_editor_core` | `src/editor/core` | L5 | mce_engine | Headless editor logic: `SceneDocument` + `SceneCommand` funnel, `UndoStack`, `SelectionSet`, picking, `PlaySession` — CI-testable with no ImGui |
 | `mce_editor_layer` | `src/editor/layer` | L5 | mce_editor_core, ImGui | The only ImGui consumer: panels, viewport widget, gizmos, console; implements `DrawCtx` |

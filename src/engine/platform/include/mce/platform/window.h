@@ -44,6 +44,8 @@ public:
     void set_title(const char* title);
     void set_size(u32 width, u32 height);
     void set_cursor_visible(bool visible);
+    // Taskbar/title-bar icon from tightly packed RGBA8 rows (FR-SHP-010). False when the platform refuses it.
+    bool set_icon(u32 width, u32 height, Span<const u8> rgba);
 
     // Queues a Close event for this window (delivered by the next pump_events()).
     void request_close();
