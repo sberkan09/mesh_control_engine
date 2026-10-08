@@ -11,7 +11,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCAN_DIRS = ["src", "samples", "games", "tests", "tools"]
-EXTS = {".h", ".hpp", ".inl", ".c", ".cc", ".cpp"}
+EXTS = {".h", ".hpp", ".inl", ".c", ".cc", ".cpp", ".mm"}
 
 # (name, pattern, allowed path prefixes, scanned path prefixes)
 WALLS = [
@@ -21,10 +21,24 @@ WALLS = [
     (
         "SDL include wall",
         re.compile(r"[<\"]SDL3/"),
-        ["src/engine/platform/", "src/engine/rhi_gl/", "src/editor/layer/"],
+        ["src/engine/platform/", "src/engine/rhi_gl/", "src/engine/rhi_metal/", "src/editor/layer/"],
         ["src/", "samples/", "games/"],
     ),
     ("glad wall", re.compile(r"[<\"]glad/"), ["src/engine/rhi_gl/"], ["src/", "samples/", "games/", "tests/"]),
+    # Metal (ADR-0028, docs/architecture/macos-metal.md §3): the mirror of the GL wall.
+    (
+        "Metal wall",
+        re.compile(r"\bMTL[A-Z]\w*|[<\"]Metal/|[<\"]QuartzCore/"),
+        ["src/engine/rhi_metal/", "src/engine/platform/src/macos/"],
+        ["src/", "samples/", "games/", "tests/"],
+    ),
+    # The GLSL -> MSL translator (glslang, SPIRV-Cross) is private to the Metal backend.
+    (
+        "shader-cross wall",
+        re.compile(r"[<\"](glslang|SPIRV)/|[<\"]spirv_\w+\.hpp|\bspirv_cross::|\bglslang::"),
+        ["src/engine/rhi_metal/"],
+        ["src/", "samples/", "games/", "tests/", "tools/"],
+    ),
     ("ImGui wall", re.compile(r"\bImGui(::|zmo)|[<\"]imgui"), ["src/editor/layer/"], ["src/", "samples/", "games/"]),
     ("JPH wall", re.compile(r"\bJPH::|[<\"]Jolt/"), ["src/engine/physics3d/"], ["src/", "samples/", "games/", "tests/"]),
     ("Box2D wall", re.compile(r"\bb2[A-Z]\w*|[<\"]box2d/"), ["tests/physics2d/oracle/"], ["src/", "samples/", "games/", "tests/", "tools/"]),

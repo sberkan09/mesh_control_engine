@@ -1,7 +1,7 @@
 # ROADMAP M5a: the PBR showcase, plus the M5b capsule walk (-walk 1). Procedural content
 # (tools/gen_assets.py, regenerated deterministically) cooked at build time into a pack the sample mounts.
 mce_add_executable(sample_04_cubes SOURCES main.cpp
-    DEPS mce::mce_render mce::mce_asset mce::mce_platform mce::mce_rhi_gl mce::mce_physics3d)
+    DEPS mce::mce_render mce::mce_asset mce::mce_platform mce::mce_rhi_default mce::mce_physics3d)
 target_include_directories(sample_04_cubes PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../common")
 mce_sample_pack(sample_04_cubes)
 

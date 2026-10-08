@@ -17,7 +17,7 @@ if(MCE_GAME_MODULES_SUPPORTED)
 else()
     mce_add_executable(sample_03_platformer SOURCES main.cpp art.cpp ${PLATFORMER_GAME_SOURCES}
         DEPS mce::mce_ecs mce::mce_physics2d mce::mce_input mce::mce_audio mce::mce_platform mce::mce_render
-             mce::mce_rhi_gl)
+             mce::mce_rhi_default)
 endif()
 target_include_directories(sample_03_platformer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../common")
 mce_sample_pack(sample_03_platformer)  # Kenney CC0 SFX (assets/sfx, CREDITS.md)

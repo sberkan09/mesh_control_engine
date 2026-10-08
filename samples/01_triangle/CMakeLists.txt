@@ -1,4 +1,4 @@
-mce_add_executable(01_triangle SOURCES main.cpp DEPS mce::mce_platform mce::mce_rhi_gl)
+mce_add_executable(01_triangle SOURCES main.cpp DEPS mce::mce_platform mce::mce_rhi_default)
 set_target_properties(01_triangle PROPERTIES OUTPUT_NAME "01_triangle")
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)

@@ -1,5 +1,5 @@
 # mce_editor (L6): the docking editor executable — a thin main over mce_editor_layer.
-mce_add_executable(mce_editor SOURCES main.cpp DEPS mce::mce_editor_layer mce::mce_rhi_gl)
+mce_add_executable(mce_editor SOURCES main.cpp DEPS mce::mce_editor_layer mce::mce_rhi_default)
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
     # Windowed smoke run: the shell builds its default layout, the viewport shows the stub world,
