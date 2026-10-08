@@ -1,7 +1,7 @@
-# ADR-0027 — The Metal backend (`mce_rhi_metal`) and GLSL → MSL translation at pipeline creation
+# ADR-0028 — The Metal backend (`mce_rhi_metal`) and GLSL → MSL translation at pipeline creation
 
 **Status:** Accepted (2026-10-08). The design note `docs/architecture/macos-metal.md` reserves this ADR as
-"ADR-0025"; that number (and 0026) went to other work first, so it is 0027.
+"ADR-0025"; 0025–0027 went to other work first, so it is 0028.
 
 **Context.** macOS caps OpenGL at 4.1 (no DSA, no persistent mapping, no MDI, no `ARB_shader_draw_parameters`), so
 `mce_rhi_gl` cannot run there. REQUIREMENTS §8 Q2 and ROADMAP M-MAC call for a second backend behind the `mce_rhi`

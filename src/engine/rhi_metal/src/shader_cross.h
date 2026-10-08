@@ -1,5 +1,5 @@
 #pragma once
-// GLSL 450 core -> SPIR-V (glslang, OpenGL client semantics) -> MSL (SPIRV-Cross), ADR-0027.
+// GLSL 450 core -> SPIR-V (glslang, OpenGL client semantics) -> MSL (SPIRV-Cross), ADR-0028.
 //
 // The engine's shaders are written against the GL backend's conventions (rhi/types.h): separable
 // stages, std140 uniform blocks at the fixed banks, combined samplers at 6+, SSBOs, gl_BaseInstanceARB.

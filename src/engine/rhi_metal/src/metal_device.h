@@ -1,5 +1,5 @@
 #pragma once
-// MetalDevice: the mce_rhi_metal implementation of RenderDevice (ADR-0027). Split across
+// MetalDevice: the mce_rhi_metal implementation of RenderDevice (ADR-0028). Split across
 // metal_device.mm (layer, resources, frames, readback) and metal_translate.mm (command stream ->
 // encoders). Objective-C++ under manual reference counting: objects live in plain structs inside
 // HandleTables, so every `id` member is an owned (+1) reference released explicitly.

@@ -1,4 +1,4 @@
-// GLSL -> MSL translation (mce_rhi_metal's shader_cross, ADR-0027) without a GPU: the fixed binding
+// GLSL -> MSL translation (mce_rhi_metal's shader_cross, ADR-0028) without a GPU: the fixed binding
 // map, the clip-space fixup and the switchable Y flip are visible in the generated source.
 
 #include <doctest/doctest.h>

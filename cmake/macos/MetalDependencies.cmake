@@ -1,4 +1,4 @@
-# glslang + SPIRV-Cross, pinned by tag (ADR-0017 policy; ADR-0027 for why).
+# glslang + SPIRV-Cross, pinned by tag (ADR-0017 policy; ADR-0028 for why).
 #
 # The engine's shaders are GLSL 450 core source (rhi::ShaderSource). macOS caps OpenGL at 4.1, so the
 # Metal backend translates them at pipeline creation: glslang to SPIR-V (OpenGL client semantics),

@@ -1,4 +1,4 @@
-# mce_rhi_metal (L2): the Metal backend of mce_rhi on macOS (ADR-0027) — the only Metal code in the
+# mce_rhi_metal (L2): the Metal backend of mce_rhi on macOS (ADR-0028) — the only Metal code in the
 # engine. SDL3, glslang and SPIRV-Cross are PRIVATE: Metal/ObjC types and the shader translator never
 # leak past this target (the Metal wall and the shader-cross wall in check_walls.py).
 

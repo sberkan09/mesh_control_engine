@@ -1,4 +1,4 @@
-// mce_rhi_metal: layer, resources, staging rings, frame fences, uploads and readback (ADR-0027).
+// mce_rhi_metal: layer, resources, staging rings, frame fences, uploads and readback (ADR-0028).
 
 #include "metal_device.h"
 

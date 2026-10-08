@@ -2,7 +2,7 @@
 
 **Status:** first landing — `mce_rhi_metal`, the backend factory, the macOS build and `local_ci_macos.sh`. Every
 pipeline the engine creates today renders on Metal; `.app` packaging and the parity backlog are open (below).
-**Design and ownership:** `docs/architecture/macos-metal.md`. **Decision record:** ADR-0027.
+**Design and ownership:** `docs/architecture/macos-metal.md`. **Decision record:** ADR-0028.
 **Measured on:** MacBook (Apple M4), macOS 26.6, Xcode toolchain (AppleClang 17), `scripts/ci/local_ci_macos.sh`.
 
 ## What shipped
@@ -13,7 +13,7 @@ pipeline the engine creates today renders on Metal; `.app` packaging and the par
 | Metal-capable window | `platform/src/window.cpp` | `SDL_WINDOW_METAL` on macOS, GL attributes only on the GL path |
 | Metal wall (+ shader-cross wall) | `scripts/ci/check_walls.py` | `MTL*`, `<Metal/…>`, `<QuartzCore/…>` only under `rhi_metal` and `platform/src/macos`; glslang/SPIRV-Cross only under `rhi_metal` |
 | `mce_rhi_metal` | `src/engine/rhi_metal` | buffers, textures (2D, arrays, MSAA, BCn, depth), samplers (incl. compare), pipelines, `CommandBuffer` → encoders, 3 frame slots on shared rings, MDI with `[[base_instance]]`, resolve, readback |
-| Shaders | `rhi_metal/src/shader_cross.cpp` | GLSL 450 → SPIR-V → MSL at pipeline creation (ADR-0027 §2: deviation from the cook-time default, see Open) |
+| Shaders | `rhi_metal/src/shader_cross.cpp` | GLSL 450 → SPIR-V → MSL at pipeline creation (ADR-0028 §2: deviation from the cook-time default, see Open) |
 | `.dylib` modules | `src/module/CMakeLists.txt` | `-force_load` umbrella, `@loader_path` rpath; `test_module`, `abi_spike`, the devhost and `03_platformer` load game modules |
 | Presets | `CMakePresets.json` | `macos-debug`, `macos-release`, `macos-asan` |
 | Mac CI | `scripts/ci/local_ci_macos.sh` | walls, three presets, Metal validation, windowed samples with captures, determinism |
@@ -34,7 +34,7 @@ Filled per landing in the PR description; the first landing's table is in the PR
 
 | Item | State |
 |---|---|
-| Shader translation at cook time (ADR-0027 §2) | waits for cooked shaders (`ShaderKey`); then the translator moves into the cook and leaves `mce_rhi_metal` |
+| Shader translation at cook time (ADR-0028 §2) | waits for cooked shaders (`ShaderKey`); then the translator moves into the cook and leaves `mce_rhi_metal` |
 | `.app` packaging for the player, 10-minute soak from Finder | not started (`scripts/ship.py` produces the Linux/Windows layouts) |
 | Xcode GPU capture per backend feature | not yet recorded |
 | Deployment target below macOS 26 | needs a float `from_chars` fallback in the cook's JSON reader (cloud-owned) |

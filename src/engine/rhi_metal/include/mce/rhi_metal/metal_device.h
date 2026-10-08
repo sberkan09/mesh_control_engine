@@ -1,5 +1,5 @@
 #pragma once
-// mce_rhi_metal: creates the Metal RenderDevice for a platform window (macOS, ADR-0027).
+// mce_rhi_metal: creates the Metal RenderDevice for a platform window (macOS, ADR-0028).
 //
 // The device attaches a CAMetalLayer to Window::native_handle() through SDL's Metal view (the
 // sanctioned SDL leak, ARCHITECTURE §1.2). The window must have been created Metal-capable
