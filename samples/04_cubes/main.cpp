@@ -284,7 +284,8 @@ private:
         const u32 side = max(1u, static_cast<u32>(std::ceil(std::sqrt(f32(n)))));
         for (u32 i = 0; i < n; ++i) {
             LightRig r;
-            const f32 u = (f32(i % side) + 0.5f) / f32(side), v = (f32(i / side) + 0.5f) / f32(side);
+            const u32 gx = i % side, gz = i / side;
+            const f32 u = (f32(gx) + 0.5f) / f32(side), v = (f32(gz) + 0.5f) / f32(side);
             r.anchor = {(u - 0.5f) * 24.0f, 0.3f + 0.5f * hash01(i * 3 + 1), (v - 0.5f) * 24.0f};
             r.color = hue(hash01(i * 3 + 2));
             r.orbit = 0.4f + 0.8f * hash01(i * 5 + 3);

@@ -282,7 +282,8 @@ TEST_CASE("render3d_gl: clustered point and spot lights light only their neighbo
         night(s);
         for (u32 i = 0; i < 256; ++i) {
             PointLight l;
-            l.position = {-5.5f + 0.04f * f32(i % 16), 0.3f, -5.5f + 0.04f * f32(i / 16)};
+            const u32 col = i % 16, row = i / 16;
+            l.position = {-5.5f + 0.04f * f32(col), 0.3f, -5.5f + 0.04f * f32(row)};
             l.radius = 0.4f;
             l.color = {0.2f, 0.2f, 1.0f};
             s.add_point_light(l);
