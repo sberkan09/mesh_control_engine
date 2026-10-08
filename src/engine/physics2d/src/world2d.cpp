@@ -65,7 +65,7 @@ struct Body {
     f32 sleep_time = 0.0f;  // seconds under the sleep tolerances
 };
 
-// Distance + revolute joints, Box2D 2.x formulation (b2DistanceJoint / b2RevoluteJoint, Catto).
+// Distance + revolute joints in the Box2D 2.x formulation (Catto).
 struct Joint {
     enum class Kind : u8 { Distance, Revolute };
     Kind kind = Kind::Distance;
@@ -97,7 +97,7 @@ struct Joint {
     bool fixed_rotation = false;
 };
 
-// 2x2 symmetric solve K x = b (Box2D b2Mat22::Solve).
+// 2x2 symmetric solve K x = b (Box2D 2.x Mat22 solve).
 vec2 solve22(f32 k11, f32 k12, f32 k22, vec2 b) {
     f32 det = k11 * k22 - k12 * k12;
     if (det != 0.0f) det = 1.0f / det;
@@ -663,7 +663,7 @@ struct World2D::Impl {
             f32 inv = ma + ia * cra * cra + mb + ib * crb * crb;
             j.mass = inv != 0.0f ? 1.0f / inv : 0.0f;
             if (j.min_length < j.max_length && j.hertz > 0.0f) {
-                // b2LinearStiffness: spring constants from the pair's effective linear mass.
+                // Box2D 2.x linear stiffness: spring constants from the pair's effective linear mass.
                 const f32 m_a = A.type == BodyType::Dynamic ? A.mass : 0.0f;
                 const f32 m_b = B.type == BodyType::Dynamic ? B.mass : 0.0f;
                 const f32 m = m_a > 0.0f && m_b > 0.0f ? m_a * m_b / (m_a + m_b) : (m_a > 0.0f ? m_a : m_b);
@@ -970,7 +970,7 @@ struct World2D::Impl {
         }
     }
 
-    // Box2D 2.x b2ContactSolver: a two-point manifold is solved as one 2x2 LCP when its
+    // Box2D 2.x contact solver: a two-point manifold is solved as one 2x2 LCP when its
     // effective-mass matrix is well conditioned; otherwise the second point is dropped (the two
     // points are nearly redundant and solving them one by one would fight).
     void prepare_block(Contact& c, const Body& A, const Body& B) {
@@ -992,7 +992,7 @@ struct World2D::Impl {
     }
 
     // Total enumeration of the 2x2 LCP vn = A x + b, vn >= 0, x >= 0, vn_i x_i = 0 on the
-    // accumulated impulses (Box2D 2.x b2ContactSolver::SolveVelocityConstraints).
+    // accumulated impulses (the Box2D 2.x velocity block solver).
     void solve_block(Contact& c, Body& A, Body& B) {
         ConstraintPoint& c1 = c.pts[0];
         ConstraintPoint& c2 = c.pts[1];
