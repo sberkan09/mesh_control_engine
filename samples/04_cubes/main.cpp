@@ -6,14 +6,19 @@
 //   * a low sun with 3 texel-snapped shadow cascades, the sky dome, bloom, ACES, FXAA
 //   * an orrery animated by multi-node glTF tracks, cross-fading between two clips
 //   * the per-stage frame-budget table (CPU from the clock, GPU from timestamp queries)
+//   * M5b (-walk 1, or C): a capsule character walks the floor through World3D::move_character
+//     (mce_physics3d over Jolt), followed by a third-person boom that World3D::camera_sweep pulls in
+//     front of any panel cube it would pass through. Without input the character patrols on its own.
 //
 //   04_cubes                              run until the window closes
 //   04_cubes -frames 300                  run 300 frames, then print the budget table
 //   04_cubes -frames 60 -capture a.ppm    also write the last frame as a PPM image
 //   04_cubes -headless 1 -ticks 300       determinism run: no GL, CPU mesh store, prints the hash
+//   04_cubes -headless 1 -walk 1          the same with the capsule walk (physics + camera in the hash)
 //
 // Keys: drag (left mouse) or arrows orbit, wheel or Z/X zoom, Space auto orbit, L lights,
 // B bloom, A FXAA, 1/2/3 cascades, K sky texture, N night, P cross-fade the orrery clip, Esc quits.
+// Walk mode (C toggles): arrows move relative to the camera, Space jumps, drag orbits the boom.
 
 #include <cmath>
 #include <cstdio>
@@ -21,11 +26,12 @@
 #include "hud_font.h"
 #include "mce/asset/asset_system.h"
 #include "mce/core.h"
+#include "mce/physics3d/world3d.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
 #include "mce/render/renderer.h"
-#include "mce/rhi_gl/gl_device.h"
+#include "mce/rhi/default_device.h"
 #include "ship_paths.h"
 
 namespace {
@@ -51,10 +57,26 @@ MCE_CVAR(cv_yaw, "cam.yaw", 0.35f, "Initial orbit yaw (radians)", CVarFlags::Non
 MCE_CVAR(cv_pitch, "cam.pitch", 0.42f, "Initial orbit pitch (radians, down from the horizon)", CVarFlags::None);
 MCE_CVAR(cv_dist, "cam.dist", 12.0f, "Initial orbit distance (meters)", CVarFlags::None);
 MCE_CVAR(cv_orbit, "cam.auto", true, "Slow automatic orbit", CVarFlags::None);
+MCE_CVAR(cv_walk, "walk", false, "M5b: start in walk mode (capsule character + swept third-person camera)", CVarFlags::None);
 
-enum Model : u32 { SphereRow, Floor, PanelCube, Orrery, Bulb, kModelCount };
+enum Model : u32 { SphereRow, Floor, PanelCube, Orrery, Bulb, Walker, kModelCount };
 constexpr const char* kModelPaths[kModelCount] = {"models/sphere_row.glb", "models/floor.glb", "models/panel_cube.glb",
-                                                  "models/orrery.glb", "models/bulb.glb"};
+                                                  "models/orrery.glb", "models/bulb.glb", "models/walker.glb"};
+
+// M5b walk: World3D's default controller capsule, a 4 m/s walk, the boom 5 m behind the head.
+constexpr f32 kWalkSpeed = 4.0f;
+constexpr f32 kJumpSpeed = 5.0f;
+constexpr f32 kGravity = 9.81f;
+constexpr f32 kBoomLength = 5.0f;
+constexpr f32 kBoomPitch = 0.22f;
+constexpr f32 kBoomRadius = 0.2f;
+constexpr vec3 kHeadOffset{0.0f, 0.6f, 0.0f};  // boom pivot above the capsule centre
+// The autopilot's patrol: the lanes between the panel cubes, then across the middle past the orrery.
+constexpr vec3 kPatrol[] = {{-6.4f, 0, 6.4f}, {6.4f, 0, 6.4f}, {6.4f, 0, 0.0f},   {-6.4f, 0, 0.0f},
+                            {-6.4f, 0, -6.4f}, {6.4f, 0, -6.4f}, {6.4f, 0, 0.0f}, {-6.4f, 0, 0.0f}};
+
+Entity body_id(u32 i) { return Entity{i, 1}; }
+constexpr u32 kCharacterId = 1;
 constexpr const char* kSkyPath = "textures/sky_equirect.png";
 
 f64 now_ms() { return platform::now_seconds() * 1000.0; }
@@ -133,6 +155,8 @@ public:
         player_.play(spin_clip_);
 
         build_layout();
+        build_physics();
+        walking_ = cv_walk.get_bool();
         yaw_ = prev_yaw_ = cv_yaw.get_float();
         pitch_ = cv_pitch.get_float();
         distance_ = cv_dist.get_float();
@@ -151,9 +175,13 @@ public:
         prev_time_ = time_;
         time_ += dt;
         prev_yaw_ = yaw_;
-        if (auto_orbit_) yaw_ += 0.1f * dt;
-        yaw_ += static_cast<f32>(key_yaw_) * 1.2f * dt;
-        pitch_ = clamp(pitch_ + static_cast<f32>(key_pitch_) * 0.9f * dt, 0.08f, 1.45f);
+        if (walking_) {
+            walk(dt);
+        } else {
+            if (auto_orbit_) yaw_ += 0.1f * dt;
+            yaw_ += static_cast<f32>(key_yaw_) * 1.2f * dt;
+            pitch_ = clamp(pitch_ + static_cast<f32>(key_pitch_) * 0.9f * dt, 0.08f, 1.45f);
+        }
         // The orrery alternates its clips every 6 s with a 0.8 s cross-fade (or on P).
         if (ticks_ % 360 == 359 || toggle_clip_) {
             player_.play(player_.clip() == spin_clip_ ? pulse_clip_ : spin_clip_, 0.8f);
@@ -245,6 +273,12 @@ public:
     }
     void report_headless() const {
         const f64 n = f64(max<u64>(budget_.frames, 1));
+        if (walking_) {
+            std::printf("04_cubes: walk | %.1f m walked, %u jumps, %u grounded ticks, %u wall ticks, %u waypoints | "
+                        "camera hits %u, closest boom %.2f m | physics %.3f ms (mean)\n",
+                        f64(walked_), jumps_, grounded_ticks_, wall_ticks_, waypoints_reached_, camera_hits_,
+                        f64(closest_boom_), physics_ms_ / n);
+        }
         std::printf("04_cubes: %llu ticks | %u instances, %u visible submeshes, %u tris, %u point lights, %u light "
                     "indices | cluster build %.3f ms, scene build %.3f ms (mean) | hash %016llx\n",
                     static_cast<unsigned long long>(ticks_), stats_.instances, stats_.visible, stats_.triangles,
@@ -295,8 +329,125 @@ private:
         }
     }
 
+    // The physics mirror of build_layout(): floor, panel cubes, the sphere row and the orrery's
+    // stand. Ids are creation order, so the World3D hash is stable.
+    void build_physics() {
+        u32 id = 100;
+        auto add_box = [&](vec3 pos, vec3 half, quat rot) {
+            physics::BodyDesc3D d;
+            d.shape = physics::Shape3D::box(half);
+            d.position = pos;
+            d.rotation = rot;
+            MCE_VERIFY(world_.create_body(body_id(id++), d));
+        };
+        add_box({0.0f, -0.5f, 0.0f}, {15.0f, 0.5f, 15.0f}, {});  // floor.glb: 30 m, top at y = 0
+        for (i32 j = 0; j < 6; ++j)
+            for (i32 i = 0; i < 6; ++i) {
+                if ((i == 2 || i == 3) && (j >= 1 && j <= 4)) continue;
+                const u32 h = hash_u32(u32(i * 7 + j * 131));
+                const f32 height = 0.6f + 1.8f * hash01(h);
+                add_box({(f32(i) - 2.5f) * 3.2f, 0.5f * height, (f32(j) - 2.5f) * 3.2f}, {0.5f, 0.5f * height, 0.5f},
+                        quat_from_axis_angle({0, 1, 0}, 0.4f * hash01(h + 1)));
+            }
+        for (i32 row = 0; row < 2; ++row)  // sphere_row.glb at z = -2.2: radius 0.42, resting on the floor
+            for (i32 i = 0; i < 7; ++i) {
+                physics::BodyDesc3D d;
+                d.shape = physics::Shape3D::sphere(0.42f);
+                d.position = {f32(i - 3), 0.42f, -2.2f + 1.1f * f32(row)};
+                MCE_VERIFY(world_.create_body(body_id(id++), d));
+            }
+        add_box({0.0f, 0.15f, 1.6f}, {0.6f, 0.15f, 0.6f}, {});  // orrery base + pillar (the arm swings free)
+        add_box({0.0f, 0.9f, 1.6f}, {0.08f, 0.7f, 0.08f}, {});
+        const physics::ControllerParams3D cp;
+        char_pos_ = prev_char_pos_ = kPatrol[0] + vec3{0.0f, cp.half_height + cp.radius + cp.padding, 0.0f};
+        MCE_VERIFY(world_.create_character(body_id(kCharacterId), char_pos_, cp));
+        heading_ = 0.5f * kPi;  // facing +x, the first patrol leg
+        pivot_ = prev_pivot_ = char_pos_ + kHeadOffset;
+    }
+
+    // One fixed tick of the M5b walk: input (or the autopilot) -> move_character -> step -> the boom.
+    void walk(f32 dt) {
+        const f64 t0 = now_ms();
+        prev_char_pos_ = char_pos_;
+        prev_pivot_ = pivot_;
+        prev_boom_ = boom_;
+        prev_heading_ = heading_;
+        // Camera-relative input; with none held the autopilot walks the patrol.
+        const vec3 cam_fwd{-std::sin(yaw_), 0.0f, -std::cos(yaw_)}, cam_right{std::cos(yaw_), 0.0f, -std::sin(yaw_)};
+        vec3 dir = cam_fwd * f32(key_pitch_) + cam_right * f32(key_yaw_);
+        const bool manual = key_pitch_ != 0 || key_yaw_ != 0;
+        if (!manual) {
+            vec3 to = kPatrol[waypoint_] - vec3{char_pos_.x, 0.0f, char_pos_.z};
+            if (length(to) < 0.5f || ticks_ - waypoint_tick_ > 600) {  // reached, or stuck for 10 s
+                waypoint_ = (waypoint_ + 1) % u32(sizeof(kPatrol) / sizeof(kPatrol[0]));
+                waypoint_tick_ = ticks_;
+                ++waypoints_reached_;
+                to = kPatrol[waypoint_] - vec3{char_pos_.x, 0.0f, char_pos_.z};
+            }
+            dir = to;
+            if (ticks_ % 150 == 75) jump_ = true;  // a hop every 2.5 s
+        }
+        const bool grounded = (last_move_.flags & physics::ControllerFlags3D::Ground) != 0;
+        const f32 len = length(dir);
+        vec3 v{};
+        if (len > 1e-4f) {
+            v = dir * (kWalkSpeed / len);
+            // Turn toward the walk direction at 10 rad/s (the shortest way round).
+            f32 d = std::atan2(v.x, v.z) - heading_;
+            while (d > kPi) d -= kTau;
+            while (d < -kPi) d += kTau;
+            heading_ += clamp(d, -10.0f * dt, 10.0f * dt);
+        }
+        if (grounded) {
+            vy_ = 0.0f;
+            if (jump_) {
+                vy_ = kJumpSpeed;
+                ++jumps_;
+            }
+        }
+        jump_ = false;
+        vy_ -= kGravity * dt;
+        v = v + last_move_.ground_velocity;
+        last_move_ = world_.move_character(body_id(kCharacterId), {v.x * dt, vy_ * dt, v.z * dt});
+        if (last_move_.hit_ceiling && vy_ > 0.0f) vy_ = 0.0f;
+        world_.step(dt);
+        const vec3 moved = last_move_.position - char_pos_;
+        walked_ += length(vec3{moved.x, 0.0f, moved.z});
+        char_pos_ = last_move_.position;
+        if (last_move_.flags & physics::ControllerFlags3D::Ground) ++grounded_ticks_;
+        if (last_move_.flags & physics::ControllerFlags3D::Wall) ++wall_ticks_;
+
+        // The autopilot's boom trails the heading (it swings across the cubes on every turn).
+        if (!manual && !dragging_) {
+            f32 d = (heading_ + kPi) - yaw_;
+            while (d > kPi) d -= kTau;
+            while (d < -kPi) d += kTau;
+            yaw_ += d * min(1.0f, 2.0f * dt);
+            pitch_ = kBoomPitch;
+        }
+        // UC-B camera gate: sweep the boom sphere from the head to the wanted eye; on a hit the eye
+        // sits at the hit centre, still on the boom, so the orientation is unchanged.
+        pivot_ = char_pos_ + kHeadOffset;
+        const vec3 want = orbit_camera(pivot_, yaw_, pitch_, kBoomLength).position;
+        boom_ = kBoomLength;
+        if (std::optional<physics::ShapeHit3D> hit = world_.camera_sweep(pivot_, want, kBoomRadius)) {
+            boom_ = length(hit->position - pivot_);
+            if (boom_ < kBoomLength - 0.05f) ++camera_hits_;  // pulled in (not just grazing at full length)
+            closest_boom_ = min(closest_boom_, boom_);
+        }
+        physics_ms_ += now_ms() - t0;
+    }
+
     Camera3D camera(f32 alpha) const {
         const f32 yaw = math::lerp(prev_yaw_, yaw_, alpha);
+        if (walking_) {
+            // Interpolate the pivot and boom length, then rebuild: the eye stays on the swept boom.
+            const vec3 pivot = math::lerp(prev_pivot_, pivot_, alpha);
+            Camera3D c = orbit_camera(pivot, yaw, pitch_, math::lerp(prev_boom_, boom_, alpha), radians(60.0f));
+            c.near_z = 0.05f;
+            c.far_z = 120.0f;
+            return c;
+        }
         Camera3D c = orbit_camera({0.0f, 0.6f, 0.0f}, yaw, pitch_, distance_, radians(50.0f));
         c.far_z = 120.0f;
         return c;
@@ -344,6 +495,14 @@ private:
         o.pose = orrery_pose_.span();
         scene.add(o);
 
+        if (walking_) {
+            MeshInstance w;
+            w.mesh = keys_[Walker];
+            w.world = trs(math::lerp(prev_char_pos_, char_pos_, alpha),
+                          quat_from_axis_angle({0, 1, 0}, math::lerp(prev_heading_, heading_, alpha)), {1.0f, 1.0f, 1.0f});
+            scene.add(w);
+        }
+
         if (lights_on_) {
             for (u32 i = 0; i < rigs_.size(); ++i) {
                 const LightRig& r = rigs_[i];
@@ -377,6 +536,10 @@ private:
         h = fnv1a64(cl.ranges().data(), cl.ranges().size_bytes(), h);
         h = fnv1a64(cl.indices().data(), cl.indices().size_bytes(), h);
         h = fnv1a64(orrery_pose_.data(), orrery_pose_.size() * sizeof(mat4), h);
+        if (walking_) {  // M5b: World3D state + the swept boom (the camera itself is in the cascades)
+            h = world_.hash_state(h);
+            h = fnv1a64(&boom_, sizeof(boom_), h);
+        }
         hash_ = h;
         stats_ = scene.stats();
         light_indices_ = static_cast<u32>(cl.indices().size());
@@ -385,16 +548,22 @@ private:
     void record_hud(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Extent2D bb) {
         const Scene3D::Stats& st = scene.stats();
         const Forward3DStats& fs = renderer_.forward_3d().last_stats();
-        char line[640];
+        char walk_line[160];
+        if (walking_)
+            std::snprintf(walk_line, sizeof(walk_line), "\nWALK: ARROWS MOVE  SPACE JUMP  C ORBIT  |  %s  BOOM %.1f M  CAMERA HITS %u",
+                          (last_move_.flags & physics::ControllerFlags3D::Ground) ? "GROUND" : "AIR", f64(boom_), camera_hits_);
+        else
+            std::snprintf(walk_line, sizeof(walk_line), "\nC WALK (M5B CAPSULE + SWEPT CAMERA)");
+        char line[800];
         std::snprintf(line, sizeof(line),
                       "MCE 04 CUBES - M5A RENDERER\n"
                       "TRIS %u  DRAWS %u  SHADOW DRAWS %u  CASCADES %u  LIGHTS %u  LIGHT INDICES %u\n"
                       "CPU MS: SCENE %.2f  CLUSTERS %.3f  RECORD %.2f  SUBMIT %.2f\n"
                       "GPU MS: SHADOW %.2f  MAIN %.2f  POST %.2f  TOTAL %.2f\n"
-                      "L LIGHTS  B BLOOM %s  A FXAA %s  1-3 CASCADES  K SKY TEX  N NIGHT  P CLIP",
+                      "L LIGHTS  B BLOOM %s  A FXAA %s  1-3 CASCADES  K SKY TEX  N NIGHT  P CLIP%s",
                       st.triangles, fs.main_draws, fs.shadow_draws, fs.cascades, fs.point_lights, fs.light_indices,
                       last_.scene, last_.clusters, last_.record, last_.submit, gpu_.shadow, gpu_.main, gpu_.post(), gpu_.total,
-                      cv_bloom.get_bool() ? "ON" : "OFF", cv_fxaa.get_bool() ? "ON" : "OFF");
+                      cv_bloom.get_bool() ? "ON" : "OFF", cv_fxaa.get_bool() ? "ON" : "OFF", walk_line);
         TextLayout layout(mem::frame());
         layout_text(font_.face, line, {}, layout);
         SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
@@ -445,7 +614,11 @@ private:
                 const i32 v = down ? 1 : 0;
                 switch (static_cast<Key>(e.code)) {
                     case Key::Escape: if (down) self->quit(0); break;
-                    case Key::Space: if (down) self->auto_orbit_ = !self->auto_orbit_; break;
+                    case Key::Space:
+                        if (down && self->walking_) self->jump_ = true;
+                        else if (down) self->auto_orbit_ = !self->auto_orbit_;
+                        break;
+                    case Key::C: if (down) self->walking_ = !self->walking_; break;
                     case Key::L: if (down) self->lights_on_ = !self->lights_on_; break;
                     case Key::B: if (down) toggle(cv_bloom); break;
                     case Key::A: if (down) toggle(cv_fxaa); break;
@@ -512,6 +685,19 @@ private:
     Array<LightRig> rigs_;
     Font font_;
 
+    // M5b walk.
+    physics::World3D world_;
+    bool walking_ = false, jump_ = false;
+    physics::MoveResult3D last_move_;
+    vec3 char_pos_, prev_char_pos_, pivot_, prev_pivot_;
+    f32 heading_ = 0.0f, prev_heading_ = 0.0f, vy_ = 0.0f;
+    f32 boom_ = kBoomLength, prev_boom_ = kBoomLength, closest_boom_ = kBoomLength;
+    u32 waypoint_ = 1;
+    u64 waypoint_tick_ = 0;
+    f32 walked_ = 0.0f;
+    u32 jumps_ = 0, grounded_ticks_ = 0, wall_ticks_ = 0, waypoints_reached_ = 0, camera_hits_ = 0;
+    f64 physics_ms_ = 0.0;
+
     f32 time_ = 0.0f, prev_time_ = 0.0f;
     f32 yaw_ = 0.0f, prev_yaw_ = 0.0f, pitch_ = 0.4f, distance_ = 12.0f;
     bool auto_orbit_ = true, lights_on_ = true, dragging_ = false;
@@ -558,8 +744,8 @@ int run_windowed() {
     if (!window) return fail("window creation failed", window.error());
     rhi::DeviceDesc dd;
     dd.debug_layer = cv_gl_debug.get_bool();
-    auto device = rhi::gl::create_device(*window.value(), dd);
-    if (!device) return fail("OpenGL 4.5 device creation failed", device.error());
+    auto device = rhi::create_default_device(*window.value(), dd);
+    if (!device) return fail("render device creation failed", device.error());
 
     CubesApp app(window.value().get(), device.value().get());
     app::AppDesc desc;

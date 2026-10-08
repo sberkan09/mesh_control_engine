@@ -23,7 +23,7 @@ target_include_directories(mce_module_host PUBLIC "${MCE_GENERATED_INCLUDE_DIR}"
 
 set(MCE_ENGINE_LIBS
     mce_core mce_refl mce_asset mce_ecs mce_physics2d mce_platform mce_input
-    mce_rhi mce_rhi_gl mce_render mce_audio mce_scene mce_gameplay_kit mce_module_host)
+    mce_rhi ${MCE_RHI_BACKEND} mce_rhi_default mce_render mce_audio mce_scene mce_gameplay_kit mce_module_host)
 
 if(WIN32)
     set(MCE_GAME_MODULES_SUPPORTED OFF CACHE INTERNAL "")
@@ -37,7 +37,11 @@ set(MCE_GAME_MODULES_SUPPORTED ON CACHE INTERNAL "")
 # build-tree path to libmce_engine is recorded relative to $ORIGIN, so a shipped folder never
 # depends on (or silently loads from) the build tree.
 set(CMAKE_BUILD_RPATH_USE_ORIGIN ON PARENT_SCOPE)
-set(CMAKE_BUILD_RPATH "\$ORIGIN" PARENT_SCOPE)
+if(APPLE)
+    set(CMAKE_BUILD_RPATH "@loader_path" PARENT_SCOPE)  # macOS spelling of $ORIGIN
+else()
+    set(CMAKE_BUILD_RPATH "\$ORIGIN" PARENT_SCOPE)
+endif()
 
 add_library(mce_engine SHARED src/engine_dll.cpp)
 add_library(mce::mce_engine ALIAS mce_engine)
@@ -49,11 +53,23 @@ set(_mce_whole_archive "")
 foreach(lib ${MCE_ENGINE_LIBS})
     list(APPEND _mce_whole_archive "$<TARGET_FILE:${lib}>")
 endforeach()
-target_link_libraries(mce_engine
-    PRIVATE "-Wl,--whole-archive" ${_mce_whole_archive} "-Wl,--no-whole-archive" ${MCE_ENGINE_LIBS}
-    INTERFACE "$<COMPILE_ONLY:${MCE_ENGINE_LIBS}>")
-if(NOT MCE_ASAN)  # sanitizer runtimes resolve at load time
-    target_link_options(mce_engine PRIVATE "LINKER:--no-undefined")
+if(APPLE)
+    # ld64 has no --whole-archive: -force_load per archive. Undefined symbols are already a link
+    # error for dylibs by default (the --no-undefined below).
+    set(_mce_force_load "")
+    foreach(lib ${_mce_whole_archive})
+        list(APPEND _mce_force_load "-Wl,-force_load,${lib}")
+    endforeach()
+    target_link_libraries(mce_engine
+        PRIVATE ${_mce_force_load} ${MCE_ENGINE_LIBS}
+        INTERFACE "$<COMPILE_ONLY:${MCE_ENGINE_LIBS}>")
+else()
+    target_link_libraries(mce_engine
+        PRIVATE "-Wl,--whole-archive" ${_mce_whole_archive} "-Wl,--no-whole-archive" ${MCE_ENGINE_LIBS}
+        INTERFACE "$<COMPILE_ONLY:${MCE_ENGINE_LIBS}>")
+    if(NOT MCE_ASAN)  # sanitizer runtimes resolve at load time
+        target_link_options(mce_engine PRIVATE "LINKER:--no-undefined")
+    endif()
 endif()
 mce_apply_compile_policy(mce_engine)
 
@@ -69,7 +85,7 @@ function(mce_add_game_module name)
     set_target_properties(${name} PROPERTIES
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON)
-    if(NOT MCE_ASAN)
+    if(NOT MCE_ASAN AND NOT APPLE)
         target_link_options(${name} PRIVATE "LINKER:--no-undefined")
     endif()
     mce_apply_compile_policy(${name})
