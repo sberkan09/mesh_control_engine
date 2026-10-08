@@ -38,6 +38,7 @@ Result<void> EditorSession::open_project(StringView root) {
     if (preview_) preview_->set_assets(nullptr);
     Result<void> r = project_.open(root);
     if (r) project_.ensure_cooked();
+    watcher_.watch(r ? project_.root() : StringView());
     attach_preview();
     if (!r) return r;
     new_scene("untitled");
@@ -177,6 +178,56 @@ void EditorSession::discard_autosave() {
     const cook::String path = autosave_path();
     if (!path.empty()) cook::fs::remove(path.view());
     autosaved_revision_ = ~u64(0);
+}
+
+bool EditorSession::tick_hot_reload(f64 now, f64 interval) {
+    Array<cook::String> changed;
+    if (!project_.is_open() || !watcher_.poll(now, interval, &changed)) return false;
+    hot_reload(changed.span());
+    return true;
+}
+
+HotReloadResult EditorSession::hot_reload(Span<const cook::String> changed) {
+    if (!project_.is_open()) return {};
+    struct Ctx {
+        EditorSession* self;
+    } ctx{this};
+    last_reload_ = project_.reload([](void* user) {
+        EditorSession& s = *static_cast<Ctx*>(user)->self;
+        s.play_.stop();  // both hold the mount that is about to be replaced
+        if (s.preview_) s.preview_->set_assets(nullptr);
+    }, &ctx);
+    if (last_reload_.remounted) attach_preview();
+
+    // The open scene, changed on disk by something other than this editor's own save.
+    cook::String rel;
+    if (!scene_.path().empty() && project_.relative_asset_path(scene_.path(), rel)) {
+        bool hit = false;
+        for (const cook::String& c : changed) hit = hit || c.view() == rel.view();
+        cook::String on_disk, mine;
+        if (hit && cook::fs::read_text(scene_.path(), on_disk)) {
+            scene_.serialize(mine);
+            if (!(on_disk == mine)) {
+                if (scene_.dirty()) {
+                    MCE_LOG_WARN("editor: {} changed on disk; keeping your unsaved edits (save overwrites it)", rel.view());
+                } else {
+                    Array<EntityId> keep;
+                    for (EntityId id : scene_.selection().items()) keep.push_back(id);
+                    const cook::String path(scene_.path());
+                    play_.stop();
+                    if (open_scene(path.view())) {
+                        for (EntityId id : keep)
+                            if (scene_.doc().find(id)) scene_.selection().toggle(id);
+                        last_reload_.scene_reloaded = true;
+                    }
+                }
+            }
+        }
+    }
+    MCE_LOG_INFO("editor: hot reload: {} swapped, {} failed{}{} in {:.0f} ms", last_reload_.reloaded, last_reload_.failed,
+                 last_reload_.remounted ? ", remounted" : "", last_reload_.scene_reloaded ? ", scene re-read" : "",
+                 last_reload_.seconds * 1000.0);
+    return last_reload_;
 }
 
 bool EditorSession::enter_play() {

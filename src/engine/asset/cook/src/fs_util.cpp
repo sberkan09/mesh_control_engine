@@ -110,4 +110,16 @@ Result<void> list_files(StringView root, Array<String>& out) {
     return ok();
 }
 
+bool stat(StringView path, u64& size, i64& mtime) {
+    std::error_code ec;
+    const stdfs::path p = to_path(path);
+    const auto sz = stdfs::file_size(p, ec);
+    if (ec) return false;
+    const auto t = stdfs::last_write_time(p, ec);
+    if (ec) return false;
+    size = static_cast<u64>(sz);
+    mtime = static_cast<i64>(t.time_since_epoch().count());
+    return true;
+}
+
 }  // namespace mce::cook::fs

@@ -42,3 +42,28 @@ made without writing the user's file, which host the play world copies, and what
    module host.
 
 **Measured (Linux container, Debug):** enter 1.1 ms for `scene_demo` (6 entities; budget 1 s).
+
+## 2. Hot reload
+
+1. **Polling, not OS notifications.** `AssetWatcher` rescans `assets/` (path, size, mtime) every
+   `editor.hot_reload_interval` seconds (default 0.5; 0 turns it off), the same polling choice ADR-0015 made for the
+   cook watch mode: portable, and cheap at project scale. A change list (relative paths) goes to
+   `EditorSession::hot_reload`; the File menu's "Hot reload now" forces one.
+2. **Re-cook incrementally, swap in place.** `EditorProject::reload` runs the normal cook (the cook DB re-cooks what
+   changed and its dependents) and, when the mounted tree already knows every cooked asset and none went away, feeds
+   each re-cooked output to `AssetSystem::commit_reload`. Handles stay valid; resident assets bump their generation,
+   so the viewport's sprite/material caches, the play world and the clip bank re-resolve on their next frame. Play
+   keeps running across a swap.
+3. **New or removed assets remount.** Play stops and the preview detaches first (both hold the mount being
+   replaced), then the fresh mount is attached.
+4. **A failed re-cook keeps the previous output.** The error goes to the console with `file:line`; the old
+   generation keeps serving, so a broken texture never blanks the viewport.
+5. **The open scene follows its file.** When the open scene's file changed on disk (an MCP client or a text editor
+   saved it) and the document has no unsaved edits, it is re-opened from disk; with unsaved edits the document is
+   kept and a warning logged.
+6. **Game modules are timed on the module host** (§1.7): `scripts/module_reload_stopwatch.py` touches a module
+   source, rebuilds the module target with ccache disabled, and has `mce_devhost` load the fresh image and tick.
+
+**Measured (Linux container, Debug):** texture edit → swapped 2.7 ms, material 6.4 ms, scene 6.3 ms (budget 1 s,
+`test_hot_reload`); `samples/03_platformer` module edit → rebuilt, loaded and ticked: median 2.66 s, worst 2.71 s
+over 3 rounds (budget 10 s).

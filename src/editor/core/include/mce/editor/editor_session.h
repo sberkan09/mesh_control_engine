@@ -64,6 +64,16 @@ public:
     const PlaySession& play() const { return play_; }
     const cook::DiagList& play_diags() const { return play_diags_; }
 
+    // ---- hot reload (FR-AST-090) ----
+    // Watches the project's assets/ folder; tick_hot_reload() polls it every `interval` seconds
+    // and calls hot_reload() when something changed. True when a reload ran.
+    bool tick_hot_reload(f64 now, f64 interval);
+    // Re-cooks what changed and swaps it into the live mount (play keeps running unless a remount
+    // is needed). When the open scene's file is among `changed` and differs from the document, an
+    // unmodified document is re-read from disk; a modified one is kept (and a warning logged).
+    HotReloadResult hot_reload(Span<const cook::String> changed = {});
+    const HotReloadResult& last_hot_reload() const { return last_reload_; }
+
     // Every scene in the catalog, by path.
     void list_scenes(Array<const ProjectAsset*>& out) const;
     // Absolute path of a scene path given relative to assets/ (or `path` unchanged).
@@ -76,6 +86,8 @@ private:
     EditorScene scene_;
     PreviewRenderer* preview_ = nullptr;
     cook::DiagList scene_diags_;
+    AssetWatcher watcher_;
+    HotReloadResult last_reload_;
     PlaySession play_;  // after project_: it reads the project's mounted tree until destroyed
     cook::DiagList play_diags_;
     u64 autosaved_revision_ = ~u64(0);

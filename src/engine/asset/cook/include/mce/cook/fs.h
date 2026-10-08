@@ -20,5 +20,8 @@ bool read_text(StringView path, String& out);
 // Regular files under `root`, as paths relative to it with forward slashes, sorted bytewise.
 // Entries whose name starts with '.' (and everything below them) are skipped.
 Result<void> list_files(StringView root, Array<String>& out);
+// Size and last-write time (filesystem clock ticks: only compare values of one machine). False
+// when the file cannot be inspected.
+bool stat(StringView path, u64& size, i64& mtime);
 
 }  // namespace mce::cook::fs

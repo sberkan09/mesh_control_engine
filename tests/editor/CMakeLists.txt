@@ -3,6 +3,7 @@ mce_add_test(test_editor
     SOURCES
         test_console_model.cpp
         test_draw_clip.cpp
+        test_hot_reload.cpp
         test_play_session.cpp
         test_scene_editing.cpp
         test_stub_world.cpp
