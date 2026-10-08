@@ -54,12 +54,12 @@ M5b's demo (a capsule walking `04_cubes`' floor with `camera_sweep` collision) a
    3D additions `move_character` and `camera_sweep`. A compile-time test in `tests/physics3d` names both worlds'
    shared methods so the spelling cannot drift (physics.md §2.2). Body ids never leave the facade.
 
-4. **Layers.** MCE's collision model (16 layers, a per-body layer index and 16-bit mask) maps onto Jolt's
-   `ObjectLayerPairFilterMask`: group = `1 << layer` plus a static or moving bit, mask = the body's mask plus the
-   bits it may touch (statics never test against statics). Two broad-phase layers (static, moving) are configured
-   with `BroadPhaseLayerInterfaceMask`. Queries take a `QueryFilter3D` (layer mask, exclude list, sensors) that
-   mirrors the 2D `QueryFilter`; unifying the two into one shared type needs an edit to `mce_physics2d` and is
-   left for the ECS bridge work.
+4. **Layers.** MCE's collision model (16 layers, a per-body layer index and 16-bit mask, as in 2D) is packed into
+   Jolt's 32-bit `ObjectLayer`: layer index in bits 0–3, a moving bit (bit 4), the mask in bits 16–31. Three small
+   filter classes inside `world3d.cpp` decode it: two broad-phase layers (static, moving), statics never tested
+   against statics, and a pair collides only when each one's layer is in the other's mask. Queries take a
+   `QueryFilter3D` (layer mask, exclude list, dynamic bodies on/off) that mirrors the 2D `QueryFilter`;
+   unifying the two into one shared type needs an edit to `mce_physics2d` and is left for the ECS bridge work.
 
 5. **Simulation contract.** `World3D::step(dt)` asserts `dt == config.fixed_dt` (1/60 s) and steps with one
    collision step on `JobSystemSingleThreaded`. The `TempAllocator` is a fixed 4 MiB `TempAllocatorImpl` created
