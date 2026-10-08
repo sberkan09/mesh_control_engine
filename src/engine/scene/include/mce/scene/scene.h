@@ -18,7 +18,11 @@
 
 namespace mce::scene {
 
-Result<void> instantiate(World& world, const asset::SceneView& scene, Array<Entity>* spawned = nullptr);
+// A scene with a ChildOf column also gets the transform hierarchy (ecs::install_hierarchy +
+// propagate_transforms) unless `hierarchy` is false (the editor's preview world places children
+// itself).
+Result<void> instantiate(World& world, const asset::SceneView& scene, Array<Entity>* spawned = nullptr,
+                         bool hierarchy = true);
 
 // Loads the Scene asset `guid` from `assets` (one reference held only for the duration of the call)
 // and instantiates it.

@@ -12,6 +12,10 @@
 #include "mce/editor/scene_document.h"
 #include "mce/memory/allocator.h"
 
+namespace mce::asset {
+class AssetSystem;
+}
+
 namespace mce::editor {
 
 class SelectionSet {
@@ -159,6 +163,14 @@ public:
     }
 
     // ---- preview world ----
+    // Prefab instances show their prefab's content in the preview (ADR-0030 §6): the cooked
+    // prefab is read from `assets` (the project's mounted tree; null: instances draw as markers)
+    // and instantiated as preview-only "ghost" entities placed at the instance. Call
+    // refresh_prefabs() when the mounted prefabs changed (a cook, a hot reload).
+    void set_assets(asset::AssetSystem* assets);
+    void refresh_prefabs() { sync_prefab_ghosts(); }
+    // Ghost entities in the preview world (not in the document; never picked or saved).
+    usize ghost_count() const { return ghosts_.size(); }
     Entity runtime_entity(EntityId id) const;
     EntityId entity_for(Entity e) const;
     // Rebuilds the preview world from the document (load, or the user's "fix drift" command).
@@ -186,6 +198,9 @@ private:
     // used ChildOf (the renderer draws WorldTransform when present).
     void sync_world_transforms();
     bool world_transforms_ = false;
+    void sync_prefab_ghosts();
+    asset::AssetSystem* assets_ = nullptr;
+    Array<Entity> ghosts_;
 
     SceneDocument doc_;
     mem::UniquePtr<World> world_;

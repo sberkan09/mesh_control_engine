@@ -7,6 +7,7 @@ mce_add_test(test_editor
         test_hot_reload.cpp
         test_orbit_camera.cpp
         test_play_session.cpp
+        test_prefab_preview.cpp
         test_scene_editing.cpp
         test_stub_world.cpp
         test_transform_gizmo.cpp

@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "mce/cook/cook.h"
+#include "mce/asset/asset_system.h"
 #include "mce/cook/fs.h"
 #include "mce/log.h"
 #include "mce/scene/scene.h"
@@ -107,6 +108,7 @@ void EditorScene::touch() {
     dirty_ = true;
     ++revision_;
     sync_world_transforms();
+    sync_prefab_ghosts();
 }
 
 // ---------------------------------------------------------------- preview world
@@ -145,7 +147,81 @@ void EditorScene::rebuild_world() {
     for (const DocEntity& e : doc_.entities())
         for (const DocComponent& c : e.components) mirror(e.id, c);
     world_transforms_ = false;
+    ghosts_.clear();
     sync_world_transforms();
+    sync_prefab_ghosts();
+}
+
+void EditorScene::set_assets(asset::AssetSystem* assets) {
+    assets_ = assets;
+    sync_prefab_ghosts();
+}
+
+void EditorScene::sync_prefab_ghosts() {
+    for (Entity g : ghosts_) world_->destroy(g);
+    ghosts_.clear();
+    if (!assets_) return;
+    const refl::TypeRecord& child_of = refl::type_of<ChildOf>();
+    const refl::TypeRecord& local_type = refl::type_of<LocalTransform>();
+    const ecs::ComponentId wt = scene::component_for(*world_, refl::type_of<WorldTransform>());
+    for (const DocEntity& e : doc_.entities()) {
+        if (e.prefab.is_null()) continue;
+        const asset::AssetKey key = assets_->find(e.prefab);
+        if (key == asset::kInvalidAssetKey) continue;
+        Result<asset::AssetHandle<asset::Prefab>> h = assets_->load_sync<asset::Prefab>(key);
+        if (!h) continue;
+        Array<Entity> spawned;
+        Result<asset::SceneView> view = asset::SceneView::read(assets_->resolve(h.value()));
+        const bool ok_spawn = view && scene::instantiate(*world_, view.value(), &spawned, false);
+        assets_->release(asset::AnyHandle(h.value()));
+        for (Entity g : spawned) ghosts_.push_back(g);
+        if (!ok_spawn || spawned.empty()) continue;
+        // The instance's own components override the prefab root, as the cook does; its
+        // placement is the root's.
+        const Entity root = spawned[0];
+        for (const DocComponent& c : e.components) {
+            if (c.type == &child_of) continue;
+            Array<u64> tmp;
+            tmp.resize(c.storage.size());
+            std::memcpy(tmp.data(), c.storage.data(), c.storage.size() * sizeof(u64));
+            visit_entity_refs(*c.type, tmp.data(), [](Entity* f, void* user) {
+                *f = static_cast<const EditorScene*>(user)->runtime_entity(doc_entity_id(*f));
+            }, this);
+            world_->set_raw(root, scene::component_for(*world_, *c.type), tmp.data());
+        }
+        // Scene placement of every ghost: the root at the instance, the rest down their ChildOf.
+        const WorldTransform at = e.find(local_type) ? world_transform(e.id) : ecs::to_world(LocalTransform{});
+        Array<WorldTransform> placed;
+        placed.resize(spawned.size());
+        Array<u8> done;
+        done.resize(spawned.size(), 0);
+        placed[0] = at;
+        done[0] = 1;
+        for (usize pass = 0; pass < spawned.size(); ++pass) {
+            bool progress = false;
+            for (usize i = 1; i < spawned.size(); ++i) {
+                if (done[i]) continue;
+                const ChildOf* link = world_->try_get<ChildOf>(spawned[i]);
+                usize parent = 0;  // a template root without ChildOf hangs off the instance too
+                if (link) {
+                    for (usize k = 0; k < spawned.size(); ++k)
+                        if (spawned[k] == link->parent) parent = k;
+                }
+                if (!done[parent]) continue;
+                const LocalTransform* t = world_->try_get<LocalTransform>(spawned[i]);
+                placed[i] = ecs::compose(placed[parent], t ? *t : LocalTransform{});
+                done[i] = 1;
+                progress = true;
+            }
+            if (!progress) break;
+        }
+        for (usize i = 0; i < spawned.size(); ++i)
+            if (done[i]) world_->set_raw(spawned[i], wt, &placed[i]);
+        if (!world_transforms_) {  // the document's own entities draw from WorldTransform too now
+            world_transforms_ = true;
+            sync_world_transforms();
+        }
+    }
 }
 
 void EditorScene::sync_world_transforms() {
@@ -191,7 +267,7 @@ bool EditorScene::verify_world() const {
             if (id != wt && world_->has(r, static_cast<ecs::ComponentId>(id))) ++live_comps;  // WorldTransform: derived
         if (live_comps != comps) return false;
     }
-    return world_->entity_count() == expected;
+    return world_->entity_count() == expected + ghosts_.size();
 }
 
 void EditorScene::select_range(EntityId to, bool additive) {

@@ -81,3 +81,15 @@ that is tens of KiB, and the byte bound evicts old entries if a large scene relo
    scene has a `ChildOf` column, so the play world and `mce_player` propagate transforms. `kit::SpriteExtract` draws
    an entity at its `WorldTransform` when it has one and at its `LocalTransform` otherwise, so flat scenes draw as
    before.
+
+## 6. Prefab content in the viewport
+
+1. **Ghosts, not document entities.** A prefab instance stays one entity in the document (its prefab link and its
+   overrides). The preview world shows the prefab's entities as preview-only "ghosts": `EditorScene` reads the cooked
+   prefab from the mounted tree and instantiates it into the preview world without the runtime hierarchy. Ghosts are
+   never picked, saved or seen by undo.
+2. **Placed at the instance.** The instance's components (except `ChildOf`) override the prefab root's, which is how
+   the cook flattens an instance. Ghost `WorldTransform`s are composed from the instance's world transform down the
+   prefab's `ChildOf` links, so moving, rotating or undoing the instance moves its content.
+3. **Kept current.** Ghosts are rebuilt with the preview (a document change, a rebuild) and after a hot reload that
+   swapped assets, so a prefab edited on disk shows its new layout without reopening the scene.

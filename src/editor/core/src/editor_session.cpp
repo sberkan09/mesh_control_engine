@@ -31,11 +31,13 @@ void EditorSession::set_preview(PreviewRenderer* preview) {
 
 void EditorSession::attach_preview() {
     if (preview_) preview_->set_assets(project_.mounted());
+    scene_.set_assets(project_.mounted());  // prefab instances draw their content
 }
 
 Result<void> EditorSession::open_project(StringView root) {
     play_.stop();
     if (preview_) preview_->set_assets(nullptr);
+    scene_.set_assets(nullptr);
     Result<void> r = project_.open(root);
     if (r) project_.ensure_cooked();
     watcher_.watch(r ? project_.root() : StringView());
@@ -104,6 +106,7 @@ Result<void> EditorSession::save_scene_as(StringView path) {
 const cook::CookReport& EditorSession::cook(bool pack) {
     play_.stop();  // the play world reads the mounted tree the cook replaces
     if (preview_) preview_->set_assets(nullptr);
+    scene_.set_assets(nullptr);
     const cook::CookReport& report = project_.cook(pack);
     attach_preview();
     return report;
@@ -196,8 +199,10 @@ HotReloadResult EditorSession::hot_reload(Span<const cook::String> changed) {
         EditorSession& s = *static_cast<Ctx*>(user)->self;
         s.play_.stop();  // both hold the mount that is about to be replaced
         if (s.preview_) s.preview_->set_assets(nullptr);
+        s.scene_.set_assets(nullptr);
     }, &ctx);
     if (last_reload_.remounted) attach_preview();
+    else if (last_reload_.reloaded > 0) scene_.refresh_prefabs();  // a prefab may have been swapped
 
     // The open scene, changed on disk by something other than this editor's own save.
     cook::String rel;
