@@ -25,3 +25,14 @@ The Freeverb send is not built (ADR-0026 §1).
 | Tick-quantized pad input (FR-INP-010) | `InputSystem` pad state | identical sim-visible streams at 30 Hz and 144 Hz render rates; one-tick visibility floor for taps |
 | Capture rebinding (FR-INP-040) | `begin_rebind`, `rebind_result` | capturing press swallowed, applied next tick; Escape cancels; stick captured onto an axis keeps its sign |
 | Rebinding persistence (FR-INP-040) | `bindings.h`, `save_bindings`/`load_bindings` | overrides round-trip through reflection and survive a restart; bad and stale files load as defaults |
+
+## Physics2d v0.5
+
+| ROADMAP / FR item | Where | Evidence |
+|---|---|---|
+| Distance joint: rod, rope, spring (FR-PHY-060) | `create_distance_joint` | `test_joints_sleep`: one solve gives the hand-computed common axial velocity with momentum conserved; pendulum keeps length and period 2π√(L/g); spring oscillates at its hertz; rope only pulls |
+| Revolute joint: limit, motor (FR-PHY-060) | `create_revolute_joint` | pinned points share a velocity after the solve (hand-computed); limit holds; motor reaches its speed or its torque cap |
+| Island sleeping | `enable_sleep`, `update_sleep` | sleeps after `time_to_sleep`, freezes, wakes on contact and API; removing the support wakes the island; sensors keep sleeping bodies inside |
+| 20-body stack settles < 1 s, no jitter (FR-PHY-060) | `block_solver` + 16 iterations (stacking profile) | top box at 19.5 m ± 1 %, max speed < 0.05 m/s after 1 s, creep < 5 mm over the next 2 s, all 20 asleep |
+| 2,000 bodies broadphase + integrate < 3 ms (FR-PHY-050) | M3 dynamic AABB tree | 0.83 ms per step in Release (budget asserted in optimized builds); a 2,000-body pile stays valid and deterministic |
+| Existing behaviour untouched | defaults off | sleeping-off test; 03_platformer and physics2d_headless hashes unchanged; Box2D v3 oracle suite green |
