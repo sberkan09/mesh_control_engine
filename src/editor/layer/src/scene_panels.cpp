@@ -26,8 +26,10 @@ namespace {
 constexpr const char* kEntityPayload = "MCE_ENTITY";
 
 // ---- Hierarchy ---------------------------------------------------------------------------------
-// The scene's entities in file order (flat until ChildOf lands in M6): select, multi-select
-// (Ctrl), create, rename (F2 / double-click), delete (Del), drag to reorder.
+// The scene's entities as a ChildOf tree (siblings in file order): select, multi-select (Ctrl
+// toggles, Shift selects a range), create, rename (F2 / double-click), delete (Del, with the
+// subtree). Drag onto an entity to make it the parent (the child keeps its place in the scene),
+// Shift-drag to put it before that entity among its siblings, drag below the tree to unparent.
 class HierarchyPanel final : public IEditorPanel {
 public:
     const char* name() const override { return "Hierarchy"; }
@@ -51,54 +53,34 @@ public:
         ImGui::Separator();
 
         if (ImGui::BeginChild("##entities")) {
-            i32 move_from = -1;
-            EntityId move_id = kNoEntity;
-            i32 move_to = -1;
-            for (usize i = 0; i < doc.size(); ++i) {
-                const DocEntity& e = doc.at(i);
-                ImGui::PushID(static_cast<int>(e.id));
-                if (rename_ == e.id) {
-                    draw_rename(scene, e);
+            drop_ = Drop{};
+            Array<EntityId> roots;
+            scene.children_of(kNoEntity, roots);
+            for (EntityId id : roots) draw_node(shell, id, 0);
+            if (drop_.id != kNoEntity) {
+                if (drop_.reorder_before != kNoEntity) {
+                    // Shift-drop: same parent as the target, placed before it.
+                    scene.begin_edit("Reorder");
+                    scene.set_parent(drop_.id, scene.parent_of(drop_.reorder_before));
+                    const i32 from = doc.index_of(drop_.id), to = doc.index_of(drop_.reorder_before);
+                    scene.move_entity(drop_.id, static_cast<usize>(from < to ? to - 1 : to));
+                    scene.end_edit();
                 } else {
-                    const bool selected = scene.selection().contains(e.id);
-                    const char* label = e.name.view().empty() ? "(unnamed)" : e.name.c_str();
-                    if (ImGui::Selectable(label, selected, ImGuiSelectableFlags_AllowDoubleClick)) {
-                        const ImGuiIO& io = ImGui::GetIO();
-                        if (io.KeyShift) scene.select_range(e.id, io.KeyCtrl);
-                        else if (io.KeyCtrl) scene.selection().toggle(e.id);
-                        else scene.selection().set(e.id);
-                        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) shell.frame_scene();
-                    }
-                    if (ImGui::BeginDragDropSource()) {
-                        const EntityId id = e.id;
-                        ImGui::SetDragDropPayload(kEntityPayload, &id, sizeof(id));
-                        ImGui::TextUnformatted(label);
-                        ImGui::EndDragDropSource();
-                    }
-                    if (ImGui::BeginDragDropTarget()) {
-                        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kEntityPayload)) {
-                            std::memcpy(&move_id, p->Data, sizeof(move_id));
-                            move_from = doc.index_of(move_id);
-                            move_to = static_cast<i32>(i);
-                        }
-                        ImGui::EndDragDropTarget();
-                    }
-                    if (ImGui::BeginPopupContextItem("##ctx")) {
-                        if (!scene.selection().contains(e.id)) scene.selection().set(e.id);
-                        if (ImGui::MenuItem("Rename", "F2")) begin_rename(e);
-                        if (ImGui::MenuItem("Delete", "Del")) delete_selection(scene);
-                        ImGui::Separator();
-                        if (ImGui::MenuItem("Create Entity Below")) create(shell, static_cast<i32>(i) + 1);
-                        ImGui::EndPopup();
-                    }
+                    scene.set_parent(drop_.id, drop_.parent);
                 }
-                ImGui::PopID();
             }
-            if (move_from >= 0 && move_to >= 0) scene.move_entity(move_id, static_cast<usize>(move_to));
 
             // Empty space: click clears the selection, right-click creates.
             ImGui::Dummy(ImGui::GetContentRegionAvail());
             if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) scene.selection().clear();
+            if (ImGui::BeginDragDropTarget()) {  // dropped below the tree: becomes a root
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kEntityPayload)) {
+                    EntityId id = kNoEntity;
+                    std::memcpy(&id, p->Data, sizeof(id));
+                    scene.set_parent(id, kNoEntity);
+                }
+                ImGui::EndDragDropTarget();
+            }
             if (ImGui::BeginPopupContextItem("##empty")) {
                 if (ImGui::MenuItem("Create Entity")) create(shell, -1);
                 ImGui::EndPopup();
@@ -114,14 +96,81 @@ public:
     }
 
 private:
-    void create(EditorShell& shell, i32 at) {
+    struct Drop {
+        EntityId id = kNoEntity;              // the dragged entity
+        EntityId parent = kNoEntity;          // its new parent
+        EntityId reorder_before = kNoEntity;  // Shift-drop: its new next sibling
+    };
+
+    void draw_node(EditorShell& shell, EntityId id, usize depth) {
+        EditorScene& scene = shell.scene();
+        const DocEntity* ep = scene.doc().find(id);
+        if (!ep || depth > scene.doc().size()) return;  // a ChildOf cycle draws once around
+        const DocEntity& e = *ep;
+        Array<EntityId> kids;
+        scene.children_of(id, kids);
+        ImGui::PushID(static_cast<int>(e.id));
+        if (rename_ == e.id) {
+            ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+            draw_rename(scene, e);
+            ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+        } else {
+            const bool selected = scene.selection().contains(e.id);
+            const char* label = e.name.view().empty() ? "(unnamed)" : e.name.c_str();
+            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth |
+                                       ImGuiTreeNodeFlags_DefaultOpen;
+            if (kids.empty()) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+            if (selected) flags |= ImGuiTreeNodeFlags_Selected;
+            const bool expanded = ImGui::TreeNodeEx("##node", flags, "%s", label);
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen()) {
+                const ImGuiIO& io = ImGui::GetIO();
+                if (io.KeyShift) scene.select_range(e.id, io.KeyCtrl);
+                else if (io.KeyCtrl) scene.selection().toggle(e.id);
+                else scene.selection().set(e.id);
+                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) shell.frame_scene();
+            }
+            if (ImGui::BeginDragDropSource()) {
+                const EntityId dragged = e.id;
+                ImGui::SetDragDropPayload(kEntityPayload, &dragged, sizeof(dragged));
+                ImGui::TextUnformatted(label);
+                ImGui::EndDragDropSource();
+            }
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kEntityPayload)) {
+                    std::memcpy(&drop_.id, p->Data, sizeof(drop_.id));
+                    if (ImGui::GetIO().KeyShift) drop_.reorder_before = e.id;
+                    else drop_.parent = e.id;
+                }
+                ImGui::EndDragDropTarget();
+            }
+            if (ImGui::BeginPopupContextItem("##ctx")) {
+                if (!scene.selection().contains(e.id)) scene.selection().set(e.id);
+                if (ImGui::MenuItem("Rename", "F2")) begin_rename(e);
+                if (ImGui::MenuItem("Delete", "Del")) delete_selection(scene);
+                if (ImGui::MenuItem("Unparent", nullptr, false, scene.parent_of(e.id) != kNoEntity)) scene.set_parent(e.id, kNoEntity);
+                ImGui::Separator();
+                if (ImGui::MenuItem("Create Child")) create(shell, scene.doc().index_of(e.id) + 1, e.id);
+                if (ImGui::MenuItem("Create Entity Below")) create(shell, scene.doc().index_of(e.id) + 1);
+                ImGui::EndPopup();
+            }
+            if (expanded && !kids.empty()) {
+                for (EntityId k : kids) draw_node(shell, k, depth + 1);
+                ImGui::TreePop();
+            }
+        }
+        ImGui::PopID();
+    }
+
+    void create(EditorShell& shell, i32 at, EntityId parent = kNoEntity) {
         EditorScene& scene = shell.scene();
         scene.begin_edit("Create entity");
         const EntityId id = scene.create_entity("Entity", true, at);
-        // New entities appear where the user is looking.
+        // New entities appear where the user is looking (a child: on its parent).
         LocalTransform t;
         t.position = {shell.camera().center.x, shell.camera().center.y, 0.0f};
+        if (parent != kNoEntity) t.position = scene.world_transform(parent).position;
         scene.set(id, t);
+        if (parent != kNoEntity) scene.set_parent(id, parent);
         scene.end_edit();
         scene.selection().set(id);
         begin_rename(*scene.doc().find(id));
@@ -180,6 +229,7 @@ private:
     }
 
     EntityId rename_ = kNoEntity;
+    Drop drop_;
     char rename_buf_[64] = {};
     bool rename_focus_ = false;
     char project_buf_[512] = {};

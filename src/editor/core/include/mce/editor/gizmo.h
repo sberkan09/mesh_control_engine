@@ -39,7 +39,9 @@ public:
     }
     GizmoMode mode() const { return mode_; }
 
-    // The pivot: the selection anchor's position. False when nothing movable is selected.
+    // The pivot: the selection anchor's position in the scene. False when nothing movable is
+    // selected. Children (ChildOf) are dragged in scene space and written back parent-relative;
+    // a selected entity whose ancestor is also selected follows that ancestor instead.
     static bool pivot(const EditorScene& scene, math::vec2& out);
     // Which handle is under `mouse_px` (viewport pixels) for a gizmo at `pivot_world`.
     static GizmoPart hit(const EditorCamera2D& cam, rhi::Extent2D size, math::vec2 pivot_world, math::vec2 mouse_px,
@@ -69,10 +71,12 @@ public:
 private:
     struct Start {
         EntityId id;
-        math::vec3 position;
+        math::vec3 position;  // in the scene (the composed WorldTransform), what the drag edits
         math::quat rotation;
         math::vec3 scale;
+        LocalTransform local;  // as authored, for cancel
     };
+    void place(EditorScene& scene, const Start& st, math::vec3 position, math::quat rotation, math::vec3 scale) const;
     Array<Start> starts_;
     math::vec2 grab_;   // mouse world position at begin
     math::vec2 pivot_;  // the anchor's position at begin
