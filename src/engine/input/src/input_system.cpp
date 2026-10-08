@@ -258,9 +258,9 @@ void InputSystem::fold(const Event& e) {
 
 // ---------------------------------------------------------------------------- sampling
 
-const InputState& InputSystem::sample_for_tick(u64 tick) { return sample_for_tick(tick, tick_close_us(tick)); }
+const InputState& InputSystem::sample_for_tick(u64 tick) { return *sample_for_tick(tick, tick_close_us(tick)); }
 
-const InputState& InputSystem::sample_for_tick(u64 tick, u64 close_us) {
+const InputState* InputSystem::sample_for_tick(u64 tick, u64 close_us) {
     MCE_ASSERT_MSG(tick > last_tick_, "input: ticks must be sampled in increasing order");
     last_tick_ = tick;
 
@@ -299,7 +299,7 @@ const InputState& InputSystem::sample_for_tick(u64 tick, u64 close_us) {
         evaluate(cur_, prev_);
     }
     if (recorder_) recorder_->record(cur_);
-    return cur_;
+    return &cur_;
 }
 
 f32 InputSystem::binding_value(const BindingDef& b) const {

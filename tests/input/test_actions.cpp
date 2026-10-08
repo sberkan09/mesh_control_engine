@@ -289,3 +289,27 @@ TEST_CASE("InputState is published as a world resource") {
     CHECK(w.resource<InputState>().jump_pressed);
     CHECK(w.resource<InputState>().tick == 1);
 }
+
+namespace {
+struct CountingApp final : app::Application {
+    InputSystem* in = nullptr;
+    u64 ticks_with_actions = 0;
+    ResultV on_init(app::Context&) override { return ok(); }
+    void on_tick(const app::TickContext& tc) override {
+        if (tc.actions == &in->state() && tc.actions->tick == tc.tick_index) ++ticks_with_actions;
+    }
+};
+}  // namespace
+
+TEST_CASE("app::run samples InputSystem once per tick through IInputSource") {
+    InputSystem in;
+    test::setup_default(in);
+    CountingApp a;
+    a.in = &in;
+    app::AppDesc d;
+    d.headless = true;
+    d.max_ticks = 30;
+    d.input_source = &in;
+    CHECK(app::run(a, d) == 0);
+    CHECK(a.ticks_with_actions == 30);
+}

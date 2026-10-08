@@ -11,8 +11,9 @@
 // every queued event stamped before tick N's close; later events wait for N+1. A tick's input is
 // therefore independent of render pacing (FR-INP-030). The origin must not be later than the
 // fixed-step accumulator's start (set it when the loop starts, or leave the default: the moment
-// the InputSystem was constructed).
+// the InputSystem was constructed). Under app::run, the loop passes each tick's close itself.
 
+#include "mce/app.h"
 #include "mce/containers/array.h"
 #include "mce/containers/bitset.h"
 #include "mce/input/input_map.h"
@@ -28,7 +29,9 @@ struct InputStats {
     u64 events_ignored = 0;  // captured by the editor or not input-relevant
 };
 
-class InputSystem {
+// Implements core's app::IInputSource: set AppDesc::input_source = &input and the run loop hands
+// every tick its window close on the app clock (shifted by time the clamp/time_scale skipped).
+class InputSystem final : public app::IInputSource {
 public:
     static constexpr u32 kQueueCapacity = 1024;
     static constexpr u32 kMaxMapStack = 8;
@@ -62,7 +65,7 @@ public:
     void begin_frame(Span<const platform::Event> events);
     void push_event(const platform::Event& e);
     const InputState& sample_for_tick(u64 tick);
-    const InputState& sample_for_tick(u64 tick, u64 tick_close_us);
+    const InputState* sample_for_tick(u64 tick, u64 tick_close_us) override;
     const InputState& state() const { return cur_; }
     usize queued_events() const { return queue_.size(); }
 
