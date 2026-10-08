@@ -210,3 +210,6 @@ if(MSVC)
 else()
     target_compile_options(Jolt PRIVATE -w)
 endif()
+
+# ---- glslang + SPIRV-Cross (macOS only) ---------------------------------------------------
+# Declared in cmake/macos/MetalDependencies.cmake and pulled in by src/engine/rhi_metal (ADR-0028).
