@@ -40,12 +40,22 @@ void Mixer::process_commands() {
             case CmdType::Stop: cmd_stop(c); break;
             case CmdType::VoiceGain:
             case CmdType::VoicePan:
+            case CmdType::VoiceGainPan:
                 if (VoiceRT* v = find_voice(c.index, c.voice.generation); v && !v->ending) {
-                    if (c.type == CmdType::VoiceGain) v->gain = c.voice.gain;
-                    else v->pan = c.voice.pan;
-                    set_targets(*v, kRampFrames);
+                    if (c.type != CmdType::VoicePan) v->gain = c.voice.gain;
+                    if (c.type != CmdType::VoiceGain) v->pan = c.voice.pan;
+                    // A scheduled voice that has not started yet jumps straight to its new level.
+                    set_targets(*v, v->start > mix_sample_ ? 0 : kRampFrames);
                 }
                 break;
+            case CmdType::BusParent:
+                if (c.index > 0 && c.index < kBusCount && c.bus < c.index) bus_[c.index].parent = c.bus;
+                break;
+            case CmdType::BusEq:
+                if (c.index < kBusCount && (c.flags & 0x7f) < kEqBands)
+                    bus_[c.index].eq[c.flags & 0x7f].set(c.eq.coeffs, (c.flags & 0x80) == 0);
+                break;
+            case CmdType::Limiter: limiter_.configure(c.flags != 0, c.voice.gain, c.voice.pan); break;
             case CmdType::BusGain:
                 if (c.index < kBusCount) {
                     BusRT& b = bus_[c.index];
@@ -142,6 +152,23 @@ void Mixer::cmd_play(const AudioCommand& c) {
         end_voice(nv);  // stale clip: the handle still has to come back
         return;
     }
+    // play_at (§3.4): a future start waits silently in its slot; a late one starts that far into
+    // an in-memory clip (streams start at once: their ring is primed from frame 0).
+    if (c.voice.start_sample > mix_sample_) {
+        nv.start = c.voice.start_sample;
+    } else if (c.voice.start_sample != 0 && clips_[nv.clip].stream < 0) {
+        const ClipRT& clip = clips_[nv.clip];
+        const u64 late = mix_sample_ - c.voice.start_sample;
+        if (late < clip.frame_count) {
+            nv.pos = late;
+        } else if (nv.loop) {
+            const u64 body = clip.frame_count - clip.loop_start;
+            nv.pos = clip.loop_start + (late - clip.frame_count) % body;
+        } else {
+            end_voice(nv);  // the whole clip is already in the past
+            return;
+        }
+    }
     set_targets(nv, 0);  // one-shots start at full level: no softened transients
 
     // 1) a free real voice
@@ -202,8 +229,8 @@ void Mixer::cmd_play(const AudioCommand& c) {
 void Mixer::cmd_stop(const AudioCommand& c) {
     VoiceRT* v = find_voice(c.index, c.voice.generation);
     if (!v) return;
-    if (v >= virtual_ && v < virtual_ + kMaxVirtualVoices) {
-        end_voice(*v);
+    if ((v >= virtual_ && v < virtual_ + kMaxVirtualVoices) || v->start > mix_sample_) {
+        end_voice(*v);  // virtual or not started yet: nothing audible to fade
         return;
     }
     v->ending = true;
@@ -215,6 +242,12 @@ void Mixer::cmd_stop(const AudioCommand& c) {
 
 void Mixer::advance_virtual(VoiceRT& v, u32 frames) {
     const ClipRT& clip = clips_[v.clip];
+    if (v.start > mix_sample_) {
+        const u64 wait = v.start - mix_sample_;
+        if (wait >= frames) return;  // not started yet
+        frames -= static_cast<u32>(wait);
+    }
+    v.start = 0;
     v.pos += frames;
     if (clip.stream >= 0) {
         u64 f;
@@ -235,6 +268,13 @@ void Mixer::advance_virtual(VoiceRT& v, u32 frames) {
 }
 
 void Mixer::mix_voice(VoiceRT& v, f32* dst, u32 frames) {
+    if (v.start > mix_sample_) {
+        const u64 wait = v.start - mix_sample_;
+        if (wait >= frames) return;  // scheduled past this block
+        dst += wait * kChannels;     // sample-accurate start inside the block
+        frames -= static_cast<u32>(wait);
+    }
+    v.start = 0;
     const ClipRT& clip = clips_[v.clip];
     StreamRing* ring = clip.stream >= 0 ? streams_[clip.stream] : nullptr;
     u64 filled = ring ? ring->filled.load(std::memory_order_acquire) : 0;
@@ -309,7 +349,7 @@ void Mixer::promote_virtual() {
 void Mixer::render(f32* out, u32 frames) {
     mem::NoHeapScope rt_guard;  // FR-AUD-010: any heap traffic in here asserts
     process_commands();
-    f32 peak = 0.f;
+    f32 peak = 0.f, lim_gain = 1.f;
     u32 done = 0;
     while (done < frames) {
         const u32 n = frames - done < kBlockFrames ? frames - done : kBlockFrames;
@@ -323,21 +363,27 @@ void Mixer::render(f32* out, u32 frames) {
             if (v.active) advance_virtual(v, n);
         promote_virtual();
 
-        // Buses → master (ramped gains), master gain, hard clip (the v0.5 limiter goes here).
+        // Bus graph (FR-AUD-030): user buses fold into their (lower-id) parents in one
+        // descending pass, then Music/SFX/UI into Master in ascending order — the same summation
+        // order as the MVP's fixed four-bus mix. Each bus is EQ'd after its children arrive.
+        for (u32 b = kBusCount - 1; b >= Bus_User0; --b) fold_bus(b, n);
+        for (u32 b = 1; b < Bus_User0; ++b) fold_bus(b, n);
+        f32* master = bus_buf_[Bus_Master];
+        for (BiquadRT& q : bus_[Bus_Master].eq) q.process(master, n);
+
+        // Master gain → look-ahead limiter (when on) → hard clip as the last safety.
         f32* dst = out + done * kChannels;
+        BusRT& mb = bus_[Bus_Master];
         for (u32 i = 0; i < n; ++i) {
-            f32 l = bus_buf_[Bus_Master][i * 2], r = bus_buf_[Bus_Master][i * 2 + 1];
-            for (u32 b = 1; b < kBusCount; ++b) {
-                l += bus_buf_[b][i * 2] * bus_[b].cur;
-                r += bus_buf_[b][i * 2 + 1] * bus_[b].cur;
+            f32 l = master[i * 2] * mb.cur, r = master[i * 2 + 1] * mb.cur;
+            if (mb.ramp_left) {
+                mb.cur += mb.inc;
+                if (--mb.ramp_left == 0) mb.cur = mb.target;
             }
-            l *= bus_[Bus_Master].cur;
-            r *= bus_[Bus_Master].cur;
-            for (BusRT& b : bus_)
-                if (b.ramp_left) {
-                    b.cur += b.inc;
-                    if (--b.ramp_left == 0) b.cur = b.target;
-                }
+            if (limiter_.enabled) {
+                const f32 g = limiter_.process(l, r);
+                if (g < lim_gain) lim_gain = g;
+            }
             l = math::clamp(l, -1.f, 1.f);
             r = math::clamp(r, -1.f, 1.f);
             dst[i * 2] = l;
@@ -348,10 +394,25 @@ void Mixer::render(f32* out, u32 frames) {
         done += n;
         mix_sample_ += n;
     }
-    publish_stats(peak);
+    publish_stats(peak, lim_gain);
 }
 
-void Mixer::publish_stats(f32 peak) {
+void Mixer::fold_bus(u32 b, u32 frames) {
+    BusRT& bus = bus_[b];
+    f32* src = bus_buf_[b];
+    f32* dst = bus_buf_[bus.parent];
+    for (BiquadRT& q : bus.eq) q.process(src, frames);
+    for (u32 i = 0; i < frames; ++i) {
+        dst[i * 2] += src[i * 2] * bus.cur;
+        dst[i * 2 + 1] += src[i * 2 + 1] * bus.cur;
+        if (bus.ramp_left) {
+            bus.cur += bus.inc;
+            if (--bus.ramp_left == 0) bus.cur = bus.target;
+        }
+    }
+}
+
+void Mixer::publish_stats(f32 peak, f32 limiter_gain) {
     u32 real = 0, virt = 0;
     for (const VoiceRT& v : real_) real += v.active ? 1 : 0;
     for (const VoiceRT& v : virtual_) virt += v.active ? 1 : 0;
@@ -361,6 +422,7 @@ void Mixer::publish_stats(f32 peak) {
     stats_.dropped.store(dropped_, std::memory_order_relaxed);
     stats_.underruns.store(underruns_, std::memory_order_relaxed);
     stats_.master_peak.store(peak, std::memory_order_relaxed);
+    stats_.limiter_gain.store(limiter_gain, std::memory_order_relaxed);
     stats_.mix_sample.store(mix_sample_, std::memory_order_release);
 }
 
