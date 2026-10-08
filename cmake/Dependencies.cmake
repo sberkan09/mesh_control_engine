@@ -168,3 +168,39 @@ if(MSVC)
 else()
     target_compile_options(mce_meshopt PRIVATE -w)
 endif()
+
+# ---- Jolt Physics 5 (3D physics; mce_physics3d only — ADR-0003) ----------------------------------
+# The JPH wall in scripts/ci/check_walls.py confines Jolt includes and JPH:: symbols to
+# src/engine/physics3d/. Built through Jolt's own Build/CMakeLists.txt, which keeps its flag
+# changes in its own directory scope; everything that would fight our compile policy is off:
+# no exceptions/RTTI, no LTO, no CXX flag override, no static MSVC runtime, no GPU compute,
+# no debug renderer/profiler/object streams. CROSS_PLATFORM_DETERMINISTIC gives precise FP
+# without FMA contraction (ADR-0007), and the SIMD level stops at SSE4.2 so the binary runs on
+# the same machines as the rest of the engine (ADR-0018).
+set(JOLT_OPTIONS
+    CPP_EXCEPTIONS_ENABLED=OFF CPP_RTTI_ENABLED=OFF OVERRIDE_CXX_FLAGS=OFF INTERPROCEDURAL_OPTIMIZATION=OFF
+    ENABLE_ALL_WARNINGS=OFF ENABLE_INSTALL=OFF GENERATE_DEBUG_SYMBOLS=OFF USE_STATIC_MSVC_RUNTIME_LIBRARY=OFF
+    FLOATING_POINT_EXCEPTIONS_ENABLED=OFF CROSS_PLATFORM_DETERMINISTIC=ON DOUBLE_PRECISION=OFF USE_ASSERTS=OFF
+    USE_AVX=OFF USE_AVX2=OFF USE_AVX512=OFF USE_LZCNT=OFF USE_TZCNT=OFF USE_F16C=OFF USE_FMADD=OFF
+    DEBUG_RENDERER_IN_DEBUG_AND_RELEASE=OFF PROFILER_IN_DEBUG_AND_RELEASE=OFF ENABLE_OBJECT_STREAM=OFF
+    JPH_USE_DX12=OFF JPH_USE_VK=OFF JPH_USE_MTL=OFF JPH_USE_CPU_COMPUTE=OFF JPH_BUILD_SHARED_LIBS=OFF)
+foreach(opt IN LISTS JOLT_OPTIONS)
+    string(REPLACE "=" ";" kv "${opt}")
+    list(GET kv 0 k)
+    list(GET kv 1 v)
+    set(${k} ${v} CACHE BOOL "" FORCE)
+endforeach()
+set(OBJECT_LAYER_BITS 32 CACHE STRING "" FORCE)  # 16-bit MCE layer group + 16-bit mask (ADR-0003 §4)
+FetchContent_Declare(JoltPhysics
+    GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
+    GIT_TAG        v5.6.0
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  Build
+    SYSTEM)
+FetchContent_MakeAvailable(JoltPhysics)
+set_target_properties(Jolt PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(Jolt PRIVATE /W0)
+else()
+    target_compile_options(Jolt PRIVATE -w)
+endif()

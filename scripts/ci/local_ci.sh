@@ -71,6 +71,16 @@ stage_module_determinism() {
     [[ "${h[0]}" == "${h[1]}" ]]
 }
 
+# M5b (ADR-0003 §8): the Jolt-backed 3D scene hashes the same across runs and Debug/Release. Runs
+# after stage_determinism has configured both gcc trees.
+stage_physics3d_determinism() {
+    cmake --build --preset linux-gcc-debug --target sample_physics3d_headless &&
+        cmake --build --preset linux-gcc-release --target sample_physics3d_headless &&
+        python3 scripts/ci/determinism.py --runs 3 --args "-ticks 2000" \
+            build/linux-gcc-debug/samples/physics3d_headless/sample_physics3d_headless \
+            build/linux-gcc-release/samples/physics3d_headless/sample_physics3d_headless
+}
+
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
     cmake --preset linux-gcc-debug -DMCE_GPU_TESTS="${GPU_TESTS[linux-gcc-debug]}" &&
@@ -90,6 +100,7 @@ stage_determinism() {
             build/linux-gcc-debug/samples/04_diorama/sample_04_diorama \
             build/linux-gcc-release/samples/04_diorama/sample_04_diorama &&
         stage_module_determinism &&
+        stage_physics3d_determinism &&
         stage_cubes_determinism
 }
 
