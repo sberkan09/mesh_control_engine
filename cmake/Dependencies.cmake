@@ -27,8 +27,8 @@ FetchContent_Declare(tracy
     GIT_SHALLOW    TRUE
     SYSTEM)
 
-# ---- SDL3 (window, events, GL context; mce_platform + mce_rhi_gl only) --------
-# Static, no subsystems we do not use yet. Audio/gamepad join with mce_audio / mce_input.
+# ---- SDL3 (window, events, GL context, audio output; mce_platform + mce_rhi_gl only) ----
+# Static, no subsystems we do not use yet. Gamepad joins with mce_input at v0.5.
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
@@ -115,3 +115,16 @@ if(MCE_BUILD_TESTS)
     endif()
     add_library(mce::directxmath ALIAS mce_directxmath)
 endif()
+
+# ---- stb (cook-time only: stb_image, stb_truetype, stb_rect_pack; stb_image_write in tests) ----
+# Header-only, no release tags upstream: pinned by commit. Confined to mce_asset_cook (and tests)
+# by the "stb wall" in scripts/ci/check_walls.py — never linked into a runtime target (FR-AST-010).
+FetchContent_Declare(stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        2c980bb59875b0d32144a71867fbdebb2f77cd20
+    SOURCE_SUBDIR  _no_cmake_)
+FetchContent_MakeAvailable(stb)
+
+add_library(mce_stb_headers INTERFACE)
+target_include_directories(mce_stb_headers SYSTEM INTERFACE "${stb_SOURCE_DIR}")
+add_library(mce::stb_headers ALIAS mce_stb_headers)

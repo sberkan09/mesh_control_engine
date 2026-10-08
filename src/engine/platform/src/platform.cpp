@@ -19,6 +19,10 @@ constexpr u32 kMaxWindows = 8;
 struct State {
     bool initialized = false;
     Window* windows[kMaxWindows] = {};
+    // SDL stamps events with SDL_GetTicksNS() (time since SDL init); the engine clock is
+    // now_us(). Event::timestamp_us is rebased onto now_us() so mce_input can quantize events
+    // against the same clock the fixed-step accumulator runs on (audio-input-ui §3.2).
+    i64 sdl_to_engine_us = 0;
 };
 State g_state;
 
@@ -95,6 +99,7 @@ ResultV init(const PlatformDesc& desc) {
         return Error(Errc::PlatformInit, "platform.init", SDL_GetError());
     }
     g_state.initialized = true;
+    g_state.sdl_to_engine_us = static_cast<i64>(now_us()) - static_cast<i64>(SDL_GetTicksNS() / 1000);
     MCE_LOG_INFO("platform: SDL {}.{}.{}, video driver '{}'", SDL_MAJOR_VERSION, SDL_MINOR_VERSION,
                  SDL_MICRO_VERSION, video_driver());
     return ok();
@@ -121,7 +126,7 @@ bool pump_events() {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         Event e;
-        e.timestamp_us = ev.common.timestamp / 1000;
+        e.timestamp_us = static_cast<u64>(static_cast<i64>(ev.common.timestamp / 1000) + g_state.sdl_to_engine_us);
         switch (ev.type) {
             case SDL_EVENT_QUIT:
                 e.type = EventType::Quit;

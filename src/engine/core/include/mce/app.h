@@ -57,6 +57,18 @@ public:
     virtual mem::FrameSlotFence* fence_for_frame(u64 frame_index) = 0;
 };
 
+// Implemented by mce_input (fix F2: core sees only this seam). Called once per tick, before
+// on_tick, with the end of the tick's input window on the clock's microsecond timeline:
+//   tick_close_us(N) = origin_us + skipped_us + (N * 1'000'000) / sim_hz
+// origin_us is the clock at loop start; skipped_us is wall time that never became sim time
+// (spiral-of-death clamp, time_scale < 1). With neither, window ends are exact integers
+// independent of render rate (FR-INP-030, audio-input-ui.md §3.2).
+class IInputSource {
+public:
+    virtual ~IInputSource() = default;
+    virtual const input::InputState* sample_for_tick(u64 tick, u64 tick_close_us) = 0;
+};
+
 struct AppDesc {
     const char* name = "mce";
     bool headless = false;        // also enabled by the `headless` convar
@@ -70,7 +82,8 @@ struct AppDesc {
     IClock* clock = nullptr;
     IPlatformHooks* platform = nullptr;
     IFrameFenceSource* fences = nullptr;
-    const input::InputState* input = nullptr;
+    const input::InputState* input = nullptr;  // fixed snapshot for every tick (tests, harnesses)
+    IInputSource* input_source = nullptr;      // per-tick sampling; wins over `input`
 };
 
 struct Context {

@@ -1,6 +1,7 @@
 #include "mce/app.h"
 
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 
 #include "mce/convar.h"
@@ -76,6 +77,8 @@ int run(Application& app, const AppDesc& desc, RunStats* stats_out) {
 
     RunStats stats;
     f64 previous = clock.now_seconds();
+    const u64 origin_us = previous > 0.0 ? static_cast<u64>(std::llround(previous * 1e6)) : 0;
+    f64 skipped = 0.0;  // wall seconds that did not become sim time (clamp, time_scale); signed
     f64 accumulator = 0.0;
     u64 tick = 0;
     u64 frame = 0;
@@ -90,11 +93,14 @@ int run(Application& app, const AppDesc& desc, RunStats* stats_out) {
         f64 frame_time = now - previous;
         previous = now;
         if (frame_time > max_frame_time) {
+            skipped += frame_time - max_frame_time;
             frame_time = max_frame_time;
             ++stats.clamped_frames;
         }
         if (frame_time < 0.0) frame_time = 0.0;
-        accumulator += frame_time * static_cast<f64>(cv_time_scale.get_float());
+        const f64 scale = static_cast<f64>(cv_time_scale.get_float());
+        accumulator += frame_time * scale;
+        if (scale != 1.0) skipped += frame_time * (1.0 - scale);
 
         if (desc.platform && desc.platform->pump_events()) app.quit(0);
 
@@ -106,6 +112,13 @@ int run(Application& app, const AppDesc& desc, RunStats* stats_out) {
                 tc.dt = fixed_dt;
                 tc.tick_index = ++tick;
                 tc.actions = desc.input;
+                if (desc.input_source) {
+                    // skipped is negative under time_scale > 1 (sim runs ahead of the wall).
+                    const i64 skipped_us = static_cast<i64>(std::llround(skipped * 1e6));
+                    const i64 close = static_cast<i64>(origin_us + (tick * 1'000'000ull) / desc.sim_hz) + skipped_us;
+                    const u64 close_us = close > 0 ? static_cast<u64>(close) : 0;
+                    tc.actions = desc.input_source->sample_for_tick(tick, close_us);
+                }
                 app.on_tick(tc);
                 accumulator -= fixed_dt;
                 if (desc.max_ticks && tick >= desc.max_ticks) app.quit(0);

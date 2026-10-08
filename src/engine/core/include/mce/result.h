@@ -36,11 +36,24 @@ enum class Errc : u16 {
     VersionTooNew,
     Truncated,
     MissingRef,
+    OutOfBounds,          // TOC / chunk range outside the container or the mapped bytes
+    ReservedNonZero,      // reserved header bytes set (forward-compat discipline)
+    Misaligned,           // chunk payload not 16-byte aligned
+    PayloadCrcMismatch,   // header CRC is CrcMismatch; payload CRC gets its own code
+    ChunkVersionTooNew,
+    DuplicateGuid,
+    MissingSidecar,
+    DependencyCycle,
+    ParseError,
+    ImportFailed,
     // 0x0300 rhi
     ShaderCompile = 0x0300,
     PipelineCreate,
     DeviceLost,
-    // 0x0400 audio, 0x0500 physics, 0x0600 scene: allocated by their modules.
+    // 0x0400 audio
+    AudioDeviceOpen = 0x0400,
+    AudioQueueFull,
+    // 0x0500 physics, 0x0600 scene: allocated by their modules.
 };
 
 const char* errc_name(Errc code);

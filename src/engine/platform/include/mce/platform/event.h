@@ -46,6 +46,9 @@ enum : u32 {
     Alt = 1u << 2,
     Gui = 1u << 3,
     Repeat = 1u << 8,
+    // Set by the editor's UI layer on events it captured (ImGui WantCaptureKeyboard/Mouse) before
+    // they reach mce_input; input ignores captured presses but still honors releases (§4.6).
+    ConsumedByEditor = 1u << 9,
 };
 }
 
@@ -55,7 +58,7 @@ struct Event {
     u32 code = 0;
     u32 flags = 0;
     f32 x = 0, y = 0;
-    u64 timestamp_us = 0;
+    u64 timestamp_us = 0;  // engine clock (platform::now_us() base), not SDL ticks
 };
 
 const char* event_type_name(EventType t);

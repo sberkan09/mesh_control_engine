@@ -36,6 +36,19 @@ protected:
 IAllocator& heap();
 usize heap_live_allocations();
 
+// Real-time guard (FR-AUD-010): while a NoHeapScope is live on a thread, any heap() allocate/free
+// on that thread is a programmer error — it asserts and bumps heap_rt_violations() (the counter
+// runs in every build so release tests can check it too). The audio callback runs inside one.
+class NoHeapScope {
+public:
+    NoHeapScope();
+    ~NoHeapScope();
+    NoHeapScope(const NoHeapScope&) = delete;
+    NoHeapScope& operator=(const NoHeapScope&) = delete;
+};
+bool heap_forbidden_on_this_thread();
+usize heap_rt_violations();
+
 // Typed helpers over any allocator.
 template <class T, class... Args>
 T* make(IAllocator& a, Args&&... args) {
