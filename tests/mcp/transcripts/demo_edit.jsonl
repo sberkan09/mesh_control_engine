@@ -1,0 +1,20 @@
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"transcript","version":"1"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+{"jsonrpc":"2.0","id":3,"method":"resources/list"}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"refl_describe_component","arguments":{"name":"Sprite"}}}
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"scene_open","arguments":{"path":"scenes/demo.mcscene"}}}
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"scene_list_entities","arguments":{}}}
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"asset_list","arguments":{"type":"Texture"}}}
+{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"entity_create","arguments":{"name":"Pickup","components":{"Sprite":{"texture":"guid:5ce4e000-0000-4000-8000-000000000003","size":[0.5,0.5]},"Collider2D":{"is_sensor":true,"shape":{"type":"Circle","radius":0.25}}}}}}
+{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"component_set","arguments":{"entity":7,"component":"LocalTransform","path":"position","value":[3,1,0]}}}
+{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"component_set","arguments":{"entity":7,"component":"LocalTransform","path":"position.y","value":"up"}}}
+{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"scene_get_entity","arguments":{"entity":7}}}
+{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"scene_save","arguments":{}}}
+{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"cook_run","arguments":{}}}
+{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"run_headless","arguments":{"ticks":300},"_meta":{"progressToken":"run-1"}}}
+{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"console_exec","arguments":{"line":"time_scale 4"}}}
+{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"scene_open","arguments":{"path":"../../etc/passwd.mcscene"}}}
+{"jsonrpc":"2.0","id":17,"method":"no/such/method"}
+{"jsonrpc":"2.0","id":18,"method":"ping"}
+{this is not json
