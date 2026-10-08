@@ -12,10 +12,15 @@
 //   FixedUpdate_Pre   pf_enemies   enemy FSM: Patrol -> Chase -> Return
 //   FixedUpdate_Post  pf_triggers  pickups, hazards, goal (sensor TriggerEnter events)
 //   FixedUpdate_Post  pf_combat    stomp or get hurt on enemy contact
+//
+// The game's state outside components is the GameState resource; the host hands sound clips in
+// through the Sounds resource before install.
 
 #include "mce/audio/audio.h"
 #include "mce/ecs/world.h"
 #include "mce/math/math.h"
+#include "mce/physics/world2d.h"
+#include "mce/result.h"
 
 namespace platformer {
 
@@ -105,25 +110,27 @@ struct GameState {
     Sounds sounds;
 };
 
-struct Config {
-    const char* const* level = nullptr;  // rows, top to bottom; null = the built-in level
-    u32 rows = 0;
-};
-
-// Registers components, events, the physics module, gameplay systems and the GameState resource,
-// then spawns the level. `sounds` may be all-null (silent). The audio bridge must be installed
-// by the host (audio::install) for PlaySfx events to make sound.
-void install(mce::World& world, const Config& cfg = {}, const Sounds& sounds = {});
-
-// The legend-mapped level as tiles for the host's tilemap: width*height, row 0 = bottom.
-// 0 empty, 1 ground top, 2 ground fill, 3 one-way plank.
-struct TileGrid {
-    u32 width = 0, height = 0;
-    mce::Array<u32> tiles;
-};
-void level_tiles(const Config& cfg, TileGrid& out);
+// Registers the game's systems and the GameState resource, then spawns the level. The host
+// installs the engine runtime first — input (InputState resource), physics2d and the audio bridge
+// (PlaySfx) — and may set a Sounds resource (absent: silent). Safe to call through the
+// game-module entry point: no state outside the World.
+mce::ResultV install(mce::World& world);
 
 // Order-total hash of the gameplay state on top of World::state_hash (determinism harness).
-u64 hash_game(mce::World& world, u64 seed);
+// Inline: a host that loads the game as a module calls it without linking the game.
+inline u64 hash_game(mce::World& world, u64 seed) {
+    const GameState& gs = world.resource<GameState>();
+    mce::Hasher64 h(world.state_hash(seed));
+    h.u64v(world.resource<mce::physics::World2D>().hash_state(seed));
+    h.u64v(gs.level_ticks);
+    h.u32v(gs.coins);
+    h.u32v(gs.deaths);
+    h.u32v(gs.stomps);
+    h.u32v(gs.flash_ticks);
+    h.u32v(gs.paused ? 1u : 0u);
+    h.u32v(gs.won ? 1u : 0u);
+    h.u64v(gs.won_at);
+    return h.value();
+}
 
 }  // namespace platformer

@@ -18,6 +18,7 @@
 #include <cstdio>
 
 #include "art.h"
+#include "game/level.h"
 #include "game/platformer.h"
 #include "hud_font.h"
 #include "mce/audio/components.h"
@@ -136,9 +137,12 @@ public:
         sounds.stomp = register_clip(clips_.stomp);
         sounds.win = register_clip(clips_.win);
 
+        // Engine runtime first, then the game on top (the game-module contract).
         input::install(world_);
+        physics::install_physics2d(world_);
         audio::install(world_, audio_);
-        platformer::install(world_, {}, sounds);
+        world_.set_resource(sounds);
+        MCE_TRY(platformer::install(world_));
 
         // Music: a streamed clip looping on the music bus through the AudioSource bridge.
         audio::ClipPayload music;
@@ -252,7 +256,7 @@ private:
         tiles_set_ = renderer_.create_sprite_set(sd);
 
         TileGrid grid;
-        level_tiles({}, grid);
+        level_tiles(grid);
         TilemapDesc td;
         td.set = tiles_set_;
         td.width = grid.width;

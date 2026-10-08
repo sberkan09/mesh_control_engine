@@ -1,10 +1,12 @@
 #include "platformer.h"
 
+#include "level.h"
+
 #include <cmath>
 
 #include "mce/audio/components.h"
 #include "mce/ecs/transform.h"
-#include "mce/input/ecs.h"
+#include "mce/input/actions.h"
 #include "mce/physics/module.h"
 
 namespace platformer {
@@ -13,31 +15,6 @@ using namespace mce;
 using namespace mce::physics;
 
 namespace {
-
-// ---- the built-in level ---------------------------------------------------------------------------
-// Legend: # ground   = one-way plank   P player start   E enemy   o coin   ^ spikes
-//         M platform moving sideways   V platform moving up/down   F goal flag
-// One character = one 1 m tile. Rows run top to bottom; short rows are padded with air.
-constexpr const char* kLevel[] = {
-    "#                                                                                                  #",
-    "#                                                                                                  #",
-    "#                                                                                                  #",
-    "#                                                                                                  #",
-    "#                                                                                                  #",
-    "#                                                                                                  #",
-    "#                                                                 o                                #",
-    "#                                                               =====                              #",
-    "#                                                    o  oE o                                       #",
-    "#                                                 #############                                    #",
-    "#                                                                                       o          #",
-    "#             o o                   o                                                 =====        #",
-    "#            =====                                                                                 #",
-    "#                       o         ##   ##     V                                   ##           F   #",
-    "#      o o o                    ####   ##                                       ####       #########",
-    "#  P              E           ###### ^^## E                 E     ^^  o o o   ######       #########",
-    "#####################   M   #################    ###################################################",
-    "#####################       #################    ###################################################",
-};
 
 // ---- tuning (metres, seconds) -------------------------------------------------------------------
 constexpr vec2 kPlayerHalf{0.35f, 0.45f};
@@ -62,30 +39,6 @@ constexpr f32 kLoseRange = 10.0f;
 constexpr u32 kChaseMemoryTicks = 90;
 
 constexpr u16 bit(Layer l) { return static_cast<u16>(1u << l); }
-
-struct Level {
-    const char* const* rows;
-    u32 height;
-    u32 width;
-
-    explicit Level(const Config& cfg)
-        : rows(cfg.level ? cfg.level : kLevel), height(cfg.level ? cfg.rows : u32(sizeof(kLevel) / sizeof(kLevel[0]))), width(0) {
-        for (u32 r = 0; r < height; ++r) {
-            u32 n = 0;
-            while (rows[r][n] != '\0') ++n;
-            if (n > width) width = n;
-        }
-    }
-    // (x, y) in tiles, y = 0 is the bottom row.
-    char at(i32 x, i32 y) const {
-        if (x < 0 || y < 0 || x >= static_cast<i32>(width) || y >= static_cast<i32>(height)) return ' ';
-        const char* row = rows[height - 1 - static_cast<u32>(y)];
-        for (i32 i = 0; i < x; ++i)
-            if (row[i] == '\0') return ' ';
-        return row[x] == '\0' ? ' ' : row[x];
-    }
-    static vec2 center(i32 x, i32 y) { return {static_cast<f32>(x) + 0.5f, static_cast<f32>(y) + 0.5f}; }
-};
 
 LocalTransform at(vec2 p) {
     LocalTransform t;
@@ -470,9 +423,11 @@ void pf_combat(Frame& f) {
 
 }  // namespace
 
-void install(World& world, const Config& cfg, const Sounds& sounds) {
-    install_physics2d(world);
-    if (!world.try_resource<input::InputState>()) input::install(world);
+ResultV install(World& world) {
+    if (!world.try_resource<World2D>() || !world.try_resource<input::InputState>() ||
+        !world.event_queue<audio::PlaySfx>())
+        return Error(Errc::InvalidArgument, "platformer.install",
+                     "the host installs input, physics2d and the audio bridge first");
 
     world.add_system(Phase::FixedUpdate_Pre, "pf_prev", &pf_prev);
     world.add_system(Phase::FixedUpdate_Pre, "pf_state", &pf_state, "pf_prev");
@@ -482,43 +437,13 @@ void install(World& world, const Config& cfg, const Sounds& sounds) {
     world.add_system(Phase::FixedUpdate_Post, "pf_triggers", &pf_triggers);
     world.add_system(Phase::FixedUpdate_Post, "pf_combat", &pf_combat, "pf_triggers");
 
-    const Level lv(cfg);
+    const Level lv;
     GameState gs;
-    gs.sounds = sounds;
+    if (const Sounds* sounds = world.try_resource<Sounds>()) gs.sounds = *sounds;
     gs.level_size = {static_cast<f32>(lv.width), static_cast<f32>(lv.height)};
     spawn_level(world, lv, gs);
     world.set_resource(gs);
-}
-
-void level_tiles(const Config& cfg, TileGrid& out) {
-    const Level lv(cfg);
-    out.width = lv.width;
-    out.height = lv.height;
-    out.tiles.clear();
-    out.tiles.resize(usize(lv.width) * lv.height);
-    for (i32 y = 0; y < static_cast<i32>(lv.height); ++y)
-        for (i32 x = 0; x < static_cast<i32>(lv.width); ++x) {
-            const char c = lv.at(x, y);
-            u32 t = 0;
-            if (c == '#') t = lv.at(x, y + 1) == '#' ? 2u : 1u;
-            else if (c == '=') t = 3;
-            out.tiles[usize(y) * lv.width + usize(x)] = t;
-        }
-}
-
-u64 hash_game(World& world, u64 seed) {
-    const GameState& gs = world.resource<GameState>();
-    Hasher64 h(world.state_hash(seed));
-    h.u64v(world.resource<World2D>().hash_state(seed));
-    h.u64v(gs.level_ticks);
-    h.u32v(gs.coins);
-    h.u32v(gs.deaths);
-    h.u32v(gs.stomps);
-    h.u32v(gs.flash_ticks);
-    h.u32v(gs.paused ? 1u : 0u);
-    h.u32v(gs.won ? 1u : 0u);
-    h.u64v(gs.won_at);
-    return h.value();
+    return ok();
 }
 
 }  // namespace platformer
