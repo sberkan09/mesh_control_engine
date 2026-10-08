@@ -5,6 +5,7 @@
 # per-type code.
 mce_add_library(mce_gameplay_kit
     SOURCES
+        src/particles.cpp
         src/sprite_extract.cpp
     PUBLIC_DEPS
         mce::mce_ecs

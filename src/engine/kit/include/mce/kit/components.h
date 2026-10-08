@@ -77,4 +77,18 @@ struct TilemapLayer {
 };
 MCE_COMPONENT(TilemapLayer, map, tint, order, (layer, Range{-100, 100}))
 
+// A particle emitter (FR-R2D-070; the simulation is kit::ParticleSystem in particles.h). Emits
+// particles from the entity's position (LocalTransform, or WorldTransform when the
+// hierarchy wrote one). The preset holds the look; the component holds the instance state that
+// a scene authors.
+struct ParticleEmitter {
+    asset::AssetRef<asset::ParticlePreset> preset;
+    u32 seed = 1;                 // per-emitter random stream (mixed with the entity index)
+    i32 order = 0;                // sort order inside the layer
+    i16 layer = 0;
+    bool playing = true;          // emitting; clearing it stops emission, live particles finish
+    bool destroy_when_done = false;  // one-shots: destroy the entity once emission ended and every particle died
+};
+MCE_COMPONENT(ParticleEmitter, preset, seed, order, (layer, Range{-100, 100}), playing, destroy_when_done)
+
 }  // namespace mce::kit

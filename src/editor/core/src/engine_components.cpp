@@ -6,5 +6,5 @@
 #include "mce/ecs/hierarchy.h"        // ChildOf, WorldTransform
 #include "mce/ecs/save.h"             // SaveKey
 #include "mce/ecs/transform.h"        // LocalTransform
-#include "mce/kit/components.h"       // Sprite, TextLabel, Camera2DComponent
+#include "mce/kit/components.h"       // Sprite, TextLabel, Camera2DComponent, TilemapLayer, ParticleEmitter
 #include "mce/physics/components.h"   // RigidBody2D, Collider2D, CharacterController2D, ...

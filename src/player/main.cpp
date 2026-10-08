@@ -14,6 +14,7 @@
 #include "mce/audio/components.h"
 #include "mce/core.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/particles.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/physics/module.h"
 #include "mce/platform/platform.h"
@@ -59,6 +60,7 @@ public:
 
         physics::install_physics2d(world_);
         audio::install(world_, audio_, &clips_);
+        kit::install_particles(world_, &assets_);
         if (device_) {
             MCE_TRY(renderer_.init(*device_));
             assets_.set_upload_sink(&sink_);

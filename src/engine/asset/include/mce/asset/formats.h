@@ -19,6 +19,7 @@ inline constexpr u8 MATERIAL_VERSION = 1;
 inline constexpr u8 SCENE_VERSION = 1;
 inline constexpr u8 MESH_VERSION = 1;
 inline constexpr u8 TILEMAP_VERSION = 1;  // CHNK_TILE: one tile layer (v0.5, FR-R2D-115)
+inline constexpr u8 PARTICLE_VERSION = 1;  // CHNK_PART: one particle emitter preset (v0.5, FR-R2D-070)
 inline constexpr u8 PREFAB_VERSION = 1;  // CHNK_Prefab: the scene layout below (v0.5, FR-ENT-070)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -248,6 +249,39 @@ struct TilemapView {
     Span<const u32> tiles;
     static Result<TilemapView> read(Span<const byte> payload);
 };
+
+// ------------------------------------------------------------------ particle preset (CHNK_PART)
+// One emitter's parameters (FR-R2D-070, assets.md §2): the kit's particle system simulates them on
+// the CPU and draws every particle through the sprite batch. Ranges are {min, max}, picked per
+// particle from the emitter's seeded generator; colors are linear RGBA.
+namespace ParticleFlags {
+inline constexpr u32 Additive = 1u << 0;  // additive blend (glows, sparks) instead of alpha "over"
+}
+
+struct ParticlePresetChunk {  // the whole payload
+    u64 texture[2];           // sprite texture GUID {hi, lo}; null = a solid quad in the color
+    f32 rate;                 // particles per second while emitting (0 = bursts only)
+    u32 burst;                // particles emitted at once when the emitter starts
+    u32 max_particles;        // live cap; emission past it is dropped
+    f32 duration;             // seconds of emission; 0 = emit until stopped
+    f32 lifetime[2];          // seconds
+    f32 speed[2];             // metres per second
+    f32 direction;            // radians, 0 = +X, CCW
+    f32 spread;               // half-angle around `direction`, radians
+    f32 gravity[2];           // metres per second squared
+    f32 drag;                 // velocity damping per second
+    f32 size_start;           // metres (square)
+    f32 size_end;
+    f32 spin[2];              // radians per second
+    f32 area[2];              // half extents of the emission box (0, 0 = a point)
+    f32 color_start[4];
+    f32 color_end[4];
+    u32 flags;                // ParticleFlags
+    u32 reserved[4];
+    Guid texture_guid() const { return Guid{texture[0], texture[1]}; }
+    static Result<const ParticlePresetChunk*> read(Span<const byte> payload);
+};
+static_assert(sizeof(ParticlePresetChunk) == 144);
 
 // ------------------------------------------------------------------ mesh (CHNK_MESH)
 // A static glTF scene (assets.md §5.2, FR-R3D-010): meshopt-optimized, quantized vertex streams,

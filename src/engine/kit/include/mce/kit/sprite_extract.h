@@ -1,7 +1,8 @@
 #pragma once
 // SpriteExtract — the render extract for the starter-kit components (renderer.h: "extract lives
 // with the gameplay kit"). Reads Sprite / TextLabel / TilemapLayer / Camera2DComponent + LocalTransform
-// (WorldTransform when the hierarchy wrote one) and fills
+// (WorldTransform when the hierarchy wrote one), plus the ParticleSystem resource's live particles,
+// and fills
 // a SpriteBatch in ECS iteration order (deterministic draw order, FR-RUN-040).
 //
 //   kit::SpriteExtract extract;
