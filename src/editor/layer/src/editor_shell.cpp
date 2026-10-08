@@ -7,7 +7,11 @@
 
 #include "imgui_platform.h"
 #include "imgui_renderer.h"
+#include "mce/convar.h"
 #include "mce/log.h"
+#include "mce/platform/library.h"
+#include "mce/platform/platform.h"
+#include "mce/platform/process.h"
 
 namespace mce::editor {
 
@@ -15,10 +19,16 @@ struct EditorShell::Impl {
     ImGuiContext* context = nullptr;
     ImGuiPlatform platform;
     ImGuiRhiRenderer renderer;
+    platform::Process player;
     bool layout_checked = false;
 };
 
 namespace {
+
+MCE_CVAR(cv_autosave_interval, "editor.autosave_interval", 300.0f,
+         "Seconds of unsaved changes before the editor autosaves (0 = only on focus loss)", CVarFlags::None);
+MCE_CVAR(cv_player, "editor.player", "", "mce_player executable for Play (empty: next to the editor / build tree)",
+         CVarFlags::None);
 
 constexpr const char* kDockspace = "mce.dockspace";
 constexpr f32 kClearColor[4] = {0.06f, 0.06f, 0.07f, 1.0f};
@@ -65,6 +75,8 @@ void EditorShell::shutdown() {
     if (!impl_) return;
     for (auto& p : panels_) p->shutdown(*this);
     panels_.clear();
+    impl_->player.kill();
+    impl_->player.wait();
     session_.set_preview(nullptr);
     preview_.shutdown();
     world_.shutdown();
@@ -77,7 +89,11 @@ void EditorShell::shutdown() {
     impl_ = nullptr;
 }
 
-bool EditorShell::on_event(const platform::Event& e) { return impl_ && impl_->platform.on_event(e); }
+bool EditorShell::on_event(const platform::Event& e) {
+    // Leaving the editor window is a natural checkpoint: autosave unsaved work (M4).
+    if (e.type == platform::EventType::FocusOut && scene_mode()) session_.autosave();
+    return impl_ && impl_->platform.on_event(e);
+}
 
 void EditorShell::add_panel(mem::UniquePtr<IEditorPanel> panel) { panels_.push_back(std::move(panel)); }
 
@@ -111,6 +127,12 @@ void EditorShell::build_ui(f64 frame_dt) {
     if (show_demo_) ImGui::ShowDemoWindow(&show_demo_);
     ImGui::Render();
     if (asset::AssetSystem* a = session_.project().mounted()) a->end_frame();
+    if (scene_mode()) {
+        const f32 interval = cv_autosave_interval.get_float();
+        if (interval > 0.0f) session_.tick_autosave(platform::now_seconds(), static_cast<f64>(interval));
+    }
+    if (impl_->player.started() && !impl_->player.running())
+        MCE_LOG_INFO("editor: player exited ({})", impl_->player.exit_code());
     update_title();
     ++frames_;
 }
@@ -142,8 +164,113 @@ bool EditorShell::open_scene(StringView path) {
         focus_panel("Cook");
         return false;
     }
+    if (session_.has_recovery()) popup_ = Popup::Recover;
     frame_scene();
     return true;
+}
+
+// ---- run-in-player ------------------------------------------------------------------------------
+
+namespace {
+
+#if defined(_WIN32)
+constexpr const char* kPlayerExe = "mce_player.exe";
+#else
+constexpr const char* kPlayerExe = "mce_player";
+#endif
+
+// -editor.player, else next to the editor (shipped layout), else the build tree's src/player.
+bool find_player(FixedString<512>& out) {
+    out.clear();
+    if (!cv_player.get_string().empty()) {
+        out.append(cv_player.get_string());
+        return platform::file_exists(out.view());
+    }
+    const char* candidates[] = {"", "../../player/", "../player/"};
+    for (const char* rel : candidates) {
+        out.clear();
+        out.append(platform::base_path());
+        out.append(rel);
+        out.append(kPlayerExe);
+        if (platform::file_exists(out.view())) return true;
+    }
+    return false;
+}
+
+}  // namespace
+
+bool EditorShell::player_running() const { return impl_ && impl_->player.started(); }
+
+void EditorShell::stop_player() {
+    if (!player_running()) return;
+    impl_->player.kill();
+    impl_->player.wait();
+    MCE_LOG_INFO("editor: player stopped");
+}
+
+bool EditorShell::play() {
+    if (!scene_mode()) return false;
+    if (scene().path().empty()) {
+        MCE_LOG_WARN("editor: save the scene once before Play");
+        popup_ = Popup::SaveAs;
+        return false;
+    }
+    if (scene().dirty() && !save_scene()) return false;
+    const cook::CookReport& r = session_.cook(true);
+    if (!r.ok()) {
+        MCE_LOG_ERROR("editor: Play needs a clean cook ({} error(s))", r.diags.error_count());
+        focus_panel("Cook");
+        return false;
+    }
+    FixedString<512> player;
+    if (!find_player(player)) {
+        MCE_LOG_ERROR("editor: mce_player not found (set -editor.player <path>)");
+        return false;
+    }
+    stop_player();
+    const cook::String pack = cook::path_join(session_.project().root(), "assets.mce");
+    const asset::GuidString guid = asset::to_string(scene().doc().guid());
+    const StringView args[] = {player.view(), "-pack", pack.view(), "-scene", guid.view()};
+    if (Result<void> s = impl_->player.start(Span<const StringView>(args, 5)); !s) {
+        MCE_LOG_ERROR("editor: cannot start {}", player.view());
+        return false;
+    }
+    MCE_LOG_INFO("editor: playing {} in {}", scene().doc().name(), player.view());
+    return true;
+}
+
+// ---- clipboard ----------------------------------------------------------------------------------
+
+void EditorShell::copy_selection() {
+    if (!scene_mode() || scene().selection().empty()) return;
+    cook::String text;
+    scene().copy_entities(scene().selection().items(), text);
+    ImGui::SetClipboardText(text.c_str());
+}
+
+void EditorShell::cut_selection() {
+    copy_selection();
+    Array<EntityId> ids;
+    for (EntityId id : scene().selection().items()) ids.push_back(id);
+    for (EntityId id : ids) scene().destroy_entity(id);
+}
+
+void EditorShell::paste() {
+    if (!scene_mode()) return;
+    const char* text = ImGui::GetClipboardText();
+    if (!text || !*text) return;
+    // After the anchor, else at the end.
+    const i32 anchor = scene().doc().index_of(scene().selection().anchor());
+    cook::DiagList diags;
+    if (!scene().paste_entities(StringView(text), anchor < 0 ? -1 : anchor + 1, diags))
+        MCE_LOG_WARN("editor: the clipboard holds no entities");
+}
+
+void EditorShell::duplicate_selection() {
+    if (!scene_mode() || scene().selection().empty()) return;
+    Array<EntityId> ids;
+    for (EntityId id : scene().selection().items()) ids.push_back(id);
+    scene().duplicate_entities(ids.span());
 }
 
 bool EditorShell::save_scene() {
@@ -200,11 +327,21 @@ void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_O)) popup_ = Popup::OpenScene;
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_N)) new_scene();
     if (ImGui::IsKeyPressed(ImGuiKey_F7, false)) cook();
+    if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
+        if (player_running()) stop_player();
+        else play();
+    }
+    // Entity clipboard: only while no text field owns the keyboard.
+    if (ImGui::GetIO().WantTextInput) return;
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_C)) copy_selection();
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_X)) cut_selection();
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) paste();
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_D)) duplicate_selection();
 }
 
 void EditorShell::draw_popups() {
     static constexpr const char* kIds[] = {"", "Open Scene", "Save Scene As", "Unsaved changes##quit",
-                                           "Unsaved changes##new", "Unsaved changes##open"};
+                                           "Unsaved changes##new", "Unsaved changes##open", "Recover unsaved changes"};
     if (popup_ != Popup::None && !popup_opened_) {
         ImGui::OpenPopup(kIds[static_cast<int>(popup_)]);
         popup_opened_ = true;
@@ -290,9 +427,31 @@ void EditorShell::draw_popups() {
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Discard")) proceed();
+        if (ImGui::Button("Discard")) {
+            session_.discard_autosave();
+            proceed();
+        }
         ImGui::SameLine();
         if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) close();
+        ImGui::EndPopup();
+    }
+
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Recover unsaved changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        const cook::String path = session_.autosave_path();
+        ImGui::TextUnformatted("The editor closed without saving this scene.");
+        ImGui::TextDisabled("%s", path.c_str());
+        if (ImGui::Button("Recover")) {
+            session_.recover();
+            close();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Discard")) {
+            session_.discard_autosave();
+            close();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Later") || ImGui::IsKeyPressed(ImGuiKey_Escape)) close();
         ImGui::EndPopup();
     }
 }
@@ -316,8 +475,23 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Cook", "F7", false, proj)) cook(false);
         if (ImGui::MenuItem("Cook + Pack", nullptr, false, proj)) cook(true);
         if (ImGui::MenuItem("Rescan assets", nullptr, false, proj)) session_.project().rescan();
+        if (ImGui::MenuItem("Play in player", "F5", false, proj && !player_running())) play();
         ImGui::Separator();
         if (ImGui::MenuItem("Quit", "Ctrl+Q")) request_quit();
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Edit", scene_mode())) {
+        const bool sel = !scene().selection().empty();
+        if (ImGui::MenuItem("Cut", "Ctrl+X", false, sel)) cut_selection();
+        if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
+        if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();
+        if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, sel)) duplicate_selection();
+        ImGui::Separator();
+        ImGui::MenuItem("Snap to grid", nullptr, &view_.snap);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+        ImGui::DragFloat("Snap step", &view_.snap_step, 0.05f, 0.05f, 16.0f, "%.2f m");
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+        ImGui::DragFloat("Grid step", &view_.grid_step, 0.05f, 0.05f, 16.0f, "%.2f m");
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("View")) {
@@ -328,6 +502,16 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Frame scene", "F", false, scene_mode())) frame_scene();
         ImGui::MenuItem("ImGui demo", nullptr, &show_demo_);
         ImGui::EndMenu();
+    }
+    if (scene_mode()) {
+        // Play / Stop, centred in the menu bar.
+        const char* label = player_running() ? "Stop (F5)" : "Play (F5)";
+        const f32 w = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - w) * 0.5f);
+        if (ImGui::MenuItem(label)) {
+            if (player_running()) stop_player();
+            else play();
+        }
     }
     ImGui::EndMainMenuBar();
 }

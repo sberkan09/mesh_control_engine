@@ -14,17 +14,6 @@ namespace {
 
 constexpr const char* kStage = "editor.scene";
 
-bool read_text_file(StringView path, cook::String& out) {
-    FixedString<1024> p(path);
-    std::FILE* f = std::fopen(p.c_str(), "rb");
-    if (!f) return false;
-    out.clear();
-    char buf[4096];
-    usize n;
-    while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0) out.append(StringView(buf, n));
-    std::fclose(f);
-    return true;
-}
 
 }  // namespace
 
@@ -72,7 +61,7 @@ void EditorScene::new_scene(StringView name) {
 
 Result<void> EditorScene::open(StringView path, cook::DiagList& diags) {
     cook::String text;
-    if (!read_text_file(path, text)) {
+    if (!cook::fs::read_text(path, text)) {
         diags.error(Errc::FileNotFound, path, 0, 0, kStage, "cannot read the scene file");
         return Error(Errc::FileNotFound, kStage, path);
     }
@@ -85,6 +74,16 @@ Result<void> EditorScene::open(StringView path, cook::DiagList& diags) {
     dirty_ = false;
     ++revision_;
     return ok();
+}
+
+bool EditorScene::recover(StringView text, cook::DiagList& diags) {
+    SceneDocument loaded;
+    if (!loaded.parse(text, "autosave", diags)) return false;
+    doc_ = std::move(loaded);
+    selection_.clear();
+    rebuild_world();
+    touch();  // recovered work is unsaved until the user saves it
+    return true;
 }
 
 Result<void> EditorScene::save(StringView path) {
@@ -248,6 +247,78 @@ bool EditorScene::remove_component(EntityId id, const refl::TypeRecord& type) {
     if (cid != ecs::kInvalidComponent) world_->remove_raw(runtime_entity(id), cid);
     touch();
     return true;
+}
+
+void EditorScene::copy_entities(Span<const EntityId> ids, cook::String& out) const {
+    SceneDocument clip;
+    clip.reset("clipboard");
+    for (const DocEntity& e : doc_.entities()) {
+        bool wanted = false;
+        for (EntityId id : ids) wanted |= id == e.id;
+        if (!wanted) continue;
+        clip.insert(e.name.view(), -1, e.id);  // same ids: internal references keep resolving
+        clip.find(e.id)->prefab = e.prefab;
+        for (const DocComponent& c : e.components) {
+            DocComponent* dst = clip.add_component(e.id, *c.type);
+            std::memcpy(dst->data(), c.data(), c.type->size);
+        }
+    }
+    out.clear();
+    clip.serialize(out);
+}
+
+bool EditorScene::paste_entities(StringView text, i32 at, cook::DiagList& diags, Array<EntityId>* pasted) {
+    SceneDocument clip;
+    if (!clip.parse(text, "clipboard", diags) || clip.size() == 0) return false;
+    // Fresh ids for every pasted entity; references inside the fragment follow the remap.
+    struct Remap {
+        Array<EntityId> from, to;
+        EntityId map(EntityId id) const {
+            for (usize i = 0; i < from.size(); ++i)
+                if (from[i] == id) return to[i];
+            return kNoEntity;
+        }
+    } remap;
+    const usize base = at < 0 || static_cast<usize>(at) > doc_.size() ? doc_.size() : static_cast<usize>(at);
+    for (usize i = 0; i < clip.size(); ++i) {
+        const DocEntity& src = clip.at(i);
+        const EntityId id = doc_.insert(src.name.view(), static_cast<i32>(base + i));
+        doc_.find(id)->prefab = src.prefab;
+        spawn_mirror(*doc_.find(id));
+        remap.from.push_back(src.id);
+        remap.to.push_back(id);
+    }
+    for (usize i = 0; i < clip.size(); ++i) {
+        const DocEntity& src = clip.at(i);
+        for (const DocComponent& c : src.components) {
+            DocComponent* dst = doc_.add_component(remap.to[i], *c.type);
+            std::memcpy(dst->data(), c.data(), c.type->size);
+            visit_entity_refs(*c.type, dst->data(), [](Entity* f, void* user) {
+                *f = doc_entity_ref(static_cast<const Remap*>(user)->map(doc_entity_id(*f)));
+            }, &remap);
+        }
+    }
+    selection_.clear();
+    for (EntityId id : remap.to) {
+        for (const DocComponent& c : doc_.find(id)->components) mirror(id, c);
+        selection_.toggle(id);
+    }
+    if (pasted) {
+        pasted->clear();
+        for (EntityId id : remap.to) pasted->push_back(id);
+    }
+    touch();
+    return true;
+}
+
+bool EditorScene::duplicate_entities(Span<const EntityId> ids, Array<EntityId>* created) {
+    i32 last = -1;
+    for (EntityId id : ids) last = doc_.index_of(id) > last ? doc_.index_of(id) : last;
+    if (last < 0) return false;
+    cook::String text;
+    copy_entities(ids, text);
+    cook::DiagList diags;
+    return paste_entities(text.view(), last + 1, diags, created);
 }
 
 bool EditorScene::set_component(EntityId id, const refl::TypeRecord& type, const void* value) {
