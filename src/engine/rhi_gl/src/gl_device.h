@@ -68,6 +68,8 @@ public:
 struct FramebufferKey {
     TextureHandle colors[cmd::kMaxColorAttachments];
     TextureHandle depth;
+    u16 color_layers[cmd::kMaxColorAttachments] = {};
+    u16 depth_layer = 0;
     bool operator==(const FramebufferKey& o) const;
 };
 
@@ -103,6 +105,7 @@ public:
 
     const DeviceCaps& caps() const override { return caps_; }
     const FrameStats& last_frame_stats() const override { return last_stats_; }
+    const GpuTimestamps& last_gpu_timestamps() const override { return last_timestamps_; }
     usize texture_memory_bytes() const override { return texture_bytes_; }
     u32 validation_error_count() const override { return validation_errors_; }
 
@@ -139,6 +142,8 @@ private:
     void exec_draw(const cmd::Draw* indexed, const cmd::DrawNonIndexed* plain);
     void exec_draw_indirect(const cmd::DrawIndirect& d);
     void exec_resolve(const cmd::Resolve& r);
+    void exec_write_timestamp(u32 index);
+    void collect_timestamps(u32 slot);
     void reset_translate_state();
 
     platform::Window& window_;
@@ -147,6 +152,7 @@ private:
     bool gl_loaded_ = false;
     DeviceCaps caps_;
     usize uniform_align_ = kUniformAlignment;
+    usize storage_align_ = 256;
 
     HandleTable<GlBuffer, BufferTag> buffers_;
     HandleTable<GlTexture, TextureTag> textures_;
@@ -161,6 +167,10 @@ private:
     GlFence fence_objs_[MCE_FRAMES_IN_FLIGHT];
     Array<DeadObject> dead_[MCE_FRAMES_IN_FLIGHT];
     Array<FramebufferEntry> framebuffers_;
+    GLuint timestamp_queries_[MCE_FRAMES_IN_FLIGHT][kMaxTimestamps] = {};
+    u32 timestamps_written_[MCE_FRAMES_IN_FLIGHT] = {};
+    u64 timestamps_frame_[MCE_FRAMES_IN_FLIGHT] = {};
+    GpuTimestamps last_timestamps_;
 
     u64 frame_index_ = 0;
     u32 slot_ = 0;
