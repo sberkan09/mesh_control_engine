@@ -11,6 +11,15 @@
 
 using namespace mce;
 
+// The tests build with DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS, so a failed REQUIRE records
+// the failure but does not leave the test case. Bail out explicitly before dereferencing results.
+#define MCE_REQUIRE_OR_RETURN(...)              \
+    do {                                        \
+        const bool mce_req_ok_ = (__VA_ARGS__); \
+        REQUIRE_MESSAGE(mce_req_ok_, #__VA_ARGS__); \
+        if (!mce_req_ok_) return;               \
+    } while (0)
+
 namespace {
 
 constexpr const char* kVS = R"(#version 450 core
@@ -39,8 +48,10 @@ struct Vertex {
 constexpr u32 kW = 256, kH = 256;
 
 struct Fixture {
+    // A display or GL driver that is missing (or an Xvfb that reset between test cases) fails the
+    // test case instead of crashing it: every test returns early when `ok` is false.
     Fixture() {
-        REQUIRE(platform::init().has_value());
+        MCE_REQUIRE_OR_RETURN(platform::init().has_value());
         platform::WindowDesc wd;
         wd.title = "test_rhi_gl";
         wd.width = kW;
@@ -48,11 +59,12 @@ struct Fixture {
         wd.resizable = false;
         wd.high_dpi = false;
         auto w = platform::Window::create(wd);
-        REQUIRE(w.has_value());
+        MCE_REQUIRE_OR_RETURN(w.has_value());
         window = std::move(w).value();
         auto d = rhi::gl::create_device(*window);
-        REQUIRE(d.has_value());
+        MCE_REQUIRE_OR_RETURN(d.has_value());
         device = std::move(d).value();
+        ok = true;
     }
     ~Fixture() {
         device.reset();
@@ -60,6 +72,7 @@ struct Fixture {
         platform::shutdown();
     }
 
+    // Null handle (and a recorded failure) when the pipeline does not build.
     rhi::PipelineHandle make_pipeline() {
         static constexpr rhi::VertexAttribute kAttrs[] = {
             {0, rhi::VertexFormat::Float2, offsetof(Vertex, x)},
@@ -72,7 +85,7 @@ struct Fixture {
         desc.debug_name = "test";
         auto p = device->create_pipeline(desc);
         REQUIRE(p.has_value());
-        return p.value();
+        return p.has_value() ? p.value() : rhi::PipelineHandle{};
     }
 
     // Clear green, then a red triangle hugging the top-left: (-1,1) (-1,-1) (0,1) in NDC.
@@ -104,6 +117,7 @@ struct Fixture {
 
     mem::UniquePtr<platform::Window> window;
     mem::UniquePtr<rhi::RenderDevice> device;
+    bool ok = false;
 };
 
 struct Rgba {
@@ -132,6 +146,7 @@ void check_scene(const Array<u8>& px, u32 w, u32 h) {
 
 TEST_CASE("rhi_gl: device caps") {
     Fixture f;
+    if (!f.ok) return;
     const rhi::DeviceCaps& caps = f.device->caps();
     CHECK(caps.api_major == 4);
     CHECK(caps.api_minor >= 5);
@@ -141,17 +156,19 @@ TEST_CASE("rhi_gl: device caps") {
 
 TEST_CASE("rhi_gl: clear + triangle to the backbuffer, read back") {
     Fixture f;
+    if (!f.ok) return;
     const rhi::PipelineHandle pipe = f.make_pipeline();
+    if (pipe.is_null()) return;
     f.device->begin_frame(0);
     rhi::CommandBuffer cmd;
     f.record_scene(cmd, {}, pipe);
     f.device->submit(cmd);
 
     const rhi::Extent2D bb = f.device->backbuffer_size();
-    REQUIRE(bb.width >= kW);
+    MCE_REQUIRE_OR_RETURN(bb.width >= kW && bb.height >= kH);
     Array<u8> px;
     px.resize(usize(bb.width) * bb.height * 4);
-    REQUIRE(f.device->read_pixels({}, rhi::Rect2D{0, 0, bb.width, bb.height}, px.span()).has_value());
+    MCE_REQUIRE_OR_RETURN(f.device->read_pixels({}, rhi::Rect2D{0, 0, bb.width, bb.height}, px.span()).has_value());
     f.device->end_frame();
     f.device->present(false);
     check_scene(px, bb.width, bb.height);
@@ -165,14 +182,16 @@ TEST_CASE("rhi_gl: clear + triangle to the backbuffer, read back") {
 
 TEST_CASE("rhi_gl: offscreen color target + persistent buffers") {
     Fixture f;
+    if (!f.ok) return;
     const rhi::PipelineHandle pipe = f.make_pipeline();
+    if (pipe.is_null()) return;
     rhi::TextureDesc td;
     td.size = {128, 64};
     td.format = rhi::TextureFormat::RGBA8_UNorm;
     td.usage = rhi::TextureUsage::SampledColorTarget;
     td.debug_name = "offscreen";
     const rhi::TextureHandle rt = f.device->create_texture(td);
-    REQUIRE(f.device->is_alive(rt));
+    MCE_REQUIRE_OR_RETURN(f.device->is_alive(rt));
     CHECK(f.device->texture_size(rt) == rhi::Extent2D{128, 64});
     CHECK(f.device->texture_memory_bytes() == 128u * 64u * 4u);
 
@@ -186,7 +205,7 @@ TEST_CASE("rhi_gl: offscreen color target + persistent buffers") {
     }
     Array<u8> px;
     px.resize(128 * 64 * 4);
-    REQUIRE(f.device->read_pixels(rt, rhi::Rect2D{0, 0, 128, 64}, px.span()).has_value());
+    MCE_REQUIRE_OR_RETURN(f.device->read_pixels(rt, rhi::Rect2D{0, 0, 128, 64}, px.span()).has_value());
     check_scene(px, 128, 64);
 
     // Persistent vertex/index buffers instead of transient ring data.
@@ -212,7 +231,7 @@ TEST_CASE("rhi_gl: offscreen color target + persistent buffers") {
     cmd.draw(6);
     cmd.end_pass();
     f.device->submit(cmd);
-    REQUIRE(f.device->read_pixels(rt, rhi::Rect2D{60, 30, 2, 2}, Span<u8>(px.data(), 16)).has_value());
+    MCE_REQUIRE_OR_RETURN(f.device->read_pixels(rt, rhi::Rect2D{60, 30, 2, 2}, Span<u8>(px.data(), 16)).has_value());
     f.device->end_frame();
     CHECK(px[0] == 0);
     CHECK(px[2] == 255);  // blue quad fills the target
@@ -227,22 +246,24 @@ TEST_CASE("rhi_gl: offscreen color target + persistent buffers") {
 
 TEST_CASE("rhi_gl: shader compile errors are Results, not crashes") {
     Fixture f;
+    if (!f.ok) return;
     rhi::GraphicsPipelineDesc desc;
     desc.vertex_shader = {"#version 450 core\nvoid main() { this is not glsl }\n", "broken.vert"};
     desc.fragment_shader = {kFS, "test.frag"};
     auto p = f.device->create_pipeline(desc);
-    REQUIRE_FALSE(p.has_value());
+    MCE_REQUIRE_OR_RETURN(!p.has_value());
     CHECK(p.error().code == Errc::ShaderCompile);
     CHECK(p.error().path == StringView("broken.vert"));
 }
 
 TEST_CASE("rhi_gl: frame fences gate core frame slots") {
     Fixture f;
+    if (!f.ok) return;
     for (u64 frame = 0; frame < 2 * MCE_FRAMES_IN_FLIGHT; ++frame) {
         f.device->begin_frame(frame);
         f.device->end_frame();
         mem::FrameSlotFence* fence = f.device->fence_for_frame(frame);
-        REQUIRE(fence != nullptr);
+        MCE_REQUIRE_OR_RETURN(fence != nullptr);
         fence->wait_blocking();
         CHECK(fence->is_signaled());
     }
