@@ -18,6 +18,10 @@ Result<mem::UniquePtr<Window>> Window::create(const WindowDesc& desc) {
     if (desc.resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (desc.high_dpi) flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (desc.hidden) flags |= SDL_WINDOW_HIDDEN;
+#if defined(__APPLE__)
+    // macOS renders through mce_rhi_metal (ADR-0027): the GPU surface is a CAMetalLayer, no GL attributes.
+    if (desc.opengl) flags |= SDL_WINDOW_METAL;
+#else
     if (desc.opengl) {
         flags |= SDL_WINDOW_OPENGL;
         // Default framebuffer: RGBA8 + D24S8, double-buffered. Context version/profile attributes
@@ -30,6 +34,7 @@ Result<mem::UniquePtr<Window>> Window::create(const WindowDesc& desc) {
         SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     }
+#endif
 
     SDL_Window* handle =
         SDL_CreateWindow(desc.title, static_cast<int>(desc.width), static_cast<int>(desc.height), flags);
