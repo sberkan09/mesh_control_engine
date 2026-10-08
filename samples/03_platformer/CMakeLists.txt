@@ -36,6 +36,10 @@ if(MCE_BUILD_TESTS)
                  -platform.error_box 0 -r.vsync 0)
         set_tests_properties(sample_03_platformer_gpu PROPERTIES LABELS gpu)
     endif()
+    # The module host copies the module to libplatformer_loaded_N.so beside it, so tests that
+    # load it must not overlap under ctest -j.
+    get_property(_platformer_tests DIRECTORY PROPERTY TESTS)
+    set_tests_properties(${_platformer_tests} PROPERTIES RESOURCE_LOCK platformer_module)
 endif()
 mce_ship_metadata(sample_03_platformer NAME "Ember Step" DESCRIPTION "Mesh Control Engine - Ember Step platformer (Artifact A)"
     ICON "${CMAKE_CURRENT_SOURCE_DIR}/icon.ico")

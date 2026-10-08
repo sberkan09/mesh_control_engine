@@ -9,13 +9,18 @@ ClipHandle resolve(ClipBank* bank, asset::Guid guid, ClipHandle direct) {
     return direct;
 }
 
-AudioHandle start(AudioDevice& dev, AudioSource& s, ClipHandle clip) {
+AudioHandle start(AudioDevice& dev, AudioSource& s, AudioSpatial* sp, ClipHandle clip, math::vec3 position) {
     PlayParams p;
     p.gain_db = s.gain_db;
     p.pan = s.pan;
     p.priority = s.priority;
     p.bus = s.bus;
     p.loop = s.loop;
+    if (sp) {
+        p.attenuation_id = sp->attenuation_id;
+        p.position = position;
+        sp->applied_position = position;
+    }
     s.playing_clip = clip;
     s.applied_gain_db = s.gain_db;
     s.applied_pan = s.pan;
@@ -32,6 +37,7 @@ void on_source_removed(World& w, Entity e) {
 
 void install(World& world, AudioDevice& device, ClipBank* clips, const char* after) {
     world.register_components<AudioSource>();
+    world.register_components<AudioSpatial, AudioListener>();
     world.register_event<PlaySfx>(Phase::FixedUpdate_Pre);
     world.set_resource(AudioRef{&device, clips});
     world.set_hooks<AudioSource>(nullptr, &on_source_removed);
@@ -43,20 +49,43 @@ void audio_bridge(Frame& f) {
     AudioDevice* dev = ref.device;
     if (!dev) return;
 
+    // The listener first, so this tick's plays and moves spatialize against this tick's ear.
+    bool have_listener = false;
+    f.query<const AudioListener&>().each([&](Entity e, const AudioListener& al) {
+        if (have_listener) return;
+        have_listener = true;
+        Listener l;
+        l.gain_db = al.gain_db;
+        if (const LocalTransform* t = f.world().try_get<LocalTransform>(e)) {
+            l.position = t->position;
+            l.forward = math::rotate(t->rotation, math::vec3{0.f, 0.f, -1.f});
+            l.up = math::rotate(t->rotation, math::vec3{0.f, 1.f, 0.f});
+        }
+        const Listener& cur = dev->listener();
+        if (l.position != cur.position || l.forward != cur.forward || l.up != cur.up || l.gain_db != cur.gain_db)
+            dev->set_listener(l);
+    });
+
     for (const PlaySfx& ev : f.events().read<PlaySfx>()) {
         PlayParams p;
         p.gain_db = ev.gain_db;
         p.pan = ev.pan;
         p.priority = ev.priority;
         p.bus = ev.bus;
+        p.attenuation_id = ev.attenuation_id;
+        p.position = ev.position;
         const ClipHandle clip = resolve(ref.clips, ev.clip, ev.clip_handle);
         if (!clip.is_null()) dev->play(clip, p);
     }
 
-    f.query<AudioSource&>().each([&](Entity, AudioSource& s) {
+    f.query<AudioSource&>().each([&](Entity e, AudioSource& s) {
+        AudioSpatial* sp = f.world().try_get_mut<AudioSpatial>(e);
+        math::vec3 pos;
+        if (sp)
+            if (const LocalTransform* t = f.world().try_get<LocalTransform>(e)) pos = t->position;
         if (!s.started) {
             if (!s.play_on_start) return;
-            s.handle = start(*dev, s, resolve(ref.clips, s.clip.guid, s.clip_handle));
+            s.handle = start(*dev, s, sp, resolve(ref.clips, s.clip.guid, s.clip_handle), pos);
             s.started = true;
             return;
         }
@@ -67,7 +96,7 @@ void audio_bridge(Frame& f) {
             const ClipHandle now = ref.clips->find(s.clip.guid);
             if (!(now == s.playing_clip)) {
                 dev->stop(s.handle);
-                s.handle = start(*dev, s, now);
+                s.handle = start(*dev, s, sp, now, pos);
                 return;
             }
         }
@@ -83,6 +112,10 @@ void audio_bridge(Frame& f) {
         if (s.pan != s.applied_pan) {
             dev->set_handle_pan(s.handle, s.pan);
             s.applied_pan = s.pan;
+        }
+        if (sp && pos != sp->applied_position) {
+            dev->set_handle_position(s.handle, pos);
+            sp->applied_position = pos;
         }
     });
 }

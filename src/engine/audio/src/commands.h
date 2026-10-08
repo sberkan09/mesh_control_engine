@@ -6,7 +6,11 @@
 
 namespace mce::audio::detail {
 
-enum class CmdType : u8 { Play, Stop, VoiceGain, VoicePan, BusGain, RegisterClip, ReleaseClip, StopAll };
+enum class CmdType : u8 {
+    Play, Stop, VoiceGain, VoicePan, BusGain, RegisterClip, ReleaseClip, StopAll,
+    // v0.5
+    VoiceGainPan, BusParent, BusEq, Limiter,
+};
 
 namespace CmdFlag {
 enum : u8 { Loop = 1u << 0 };
@@ -15,8 +19,13 @@ enum : u8 { Loop = 1u << 0 };
 struct VoiceArgs {
     u32 generation;
     u32 clip;
-    f32 gain;  // linear
-    f32 pan;   // Play/VoicePan; Stop: fade frames (as f32)
+    f32 gain;  // linear; Limiter: ceiling
+    f32 pan;   // Play/VoicePan/VoiceGainPan; Stop: fade frames (as f32); Limiter: release coefficient
+    u64 start_sample;  // Play: mixer frame to start on (0 = as soon as drained)
+};
+
+struct EqArgs {
+    BiquadCoeffs coeffs;
 };
 
 struct ClipArgs {
@@ -34,11 +43,13 @@ struct AudioCommand {
     union {
         VoiceArgs voice;
         ClipArgs clip;
+        EqArgs eq;
     };
     // RegisterClip extras packed in the header bytes: bus = channels, priority = stream index + 1
-    // (0 = in-memory clip).
+    // (0 = in-memory clip). BusParent: index = bus, bus = parent. BusEq: index = bus, flags = band
+    // (bit 7 = bypass). Limiter: flags = enabled.
 
-    AudioCommand() : voice{0, 0, 0.f, 0.f} {}
+    AudioCommand() : voice{0, 0, 0.f, 0.f, 0} {}
 };
 static_assert(sizeof(AudioCommand) <= 32, "AudioCommand must stay a small POD (§3.3)");
 

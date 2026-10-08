@@ -9,6 +9,7 @@ mce_add_library(mce_audio
         src/stream.cpp
         src/bridge.cpp
         src/clip_bank.cpp
+        src/spatial.cpp
     PUBLIC_DEPS
         mce::mce_core
         mce::mce_platform

@@ -26,11 +26,12 @@ MCE_CVAR(cv_sfx_db, "audio.sfx_db", 0.0f, "SFX bus gain (dB)", CVarFlags::Saved)
 MCE_CVAR(cv_ui_db, "audio.ui_db", 0.0f, "UI bus gain (dB)", CVarFlags::Saved);
 MCE_CVAR(cv_enabled, "audio.enabled", true, "Open an audio device (false = run silent)", CVarFlags::RequiresRestart);
 
-ConVar* const kBusConvars[kBusCount] = {&cv_master_db, &cv_music_db, &cv_sfx_db, &cv_ui_db};
+inline constexpr u32 kNamedBuses = Bus_User0;  // Master/Music/SFX/UI have options-screen convars
+ConVar* const kBusConvars[kNamedBuses] = {&cv_master_db, &cv_music_db, &cv_sfx_db, &cv_ui_db};
 
 void on_bus_convar(ConVar& var) {
     if (!g_convar_device) return;
-    for (u32 b = 0; b < kBusCount; ++b)
+    for (u32 b = 0; b < kNamedBuses; ++b)
         if (kBusConvars[b] == &var) g_convar_device->set_bus_gain(static_cast<BusId>(b), var.get_float());
 }
 
@@ -46,6 +47,12 @@ struct ClipMain {
 struct HandleSlot {
     u32 generation = 1;
     bool live = false;
+    // 3D voices (attenuation != 0): the main thread owns the spatial state and re-sends gain/pan
+    // only when the result changes.
+    u16 attenuation = 0;
+    f32 base_gain = 1.f;  // linear, before attenuation
+    math::vec3 position;
+    f32 sent_gain = 0.f, sent_pan = 0.f;
 };
 
 struct StreamMain {
@@ -63,6 +70,19 @@ void hash_command(u64& h, const AudioCommand& c) {
     hs.f32v(c.voice.gain);
     hs.f32v(c.voice.pan);
     hs.u32v(static_cast<u32>(c.bus) | (static_cast<u32>(c.priority) << 8) | (static_cast<u32>(c.flags) << 16));
+    // Only scheduled plays carry a start: immediate plays hash exactly as they did before play_at.
+    if (c.type == CmdType::Play && c.voice.start_sample != 0) hs.u64v(c.voice.start_sample);
+    h = hs.value();
+}
+
+// Mixer configuration (graph/EQ/limiter): the fields that define it, never the union's other views.
+void hash_config(u64& h, const AudioCommand& c, f32 a = 0.f, f32 b = 0.f) {
+    Hasher64 hs(h);
+    hs.u32v(static_cast<u32>(c.type));
+    hs.u32v(c.index);
+    hs.u32v(static_cast<u32>(c.bus) | (static_cast<u32>(c.flags) << 16));
+    hs.f32v(a);
+    hs.f32v(b);
     h = hs.value();
 }
 
@@ -86,6 +106,8 @@ struct AudioDevice::Impl {
 
     HandleSlot handles[kMaxHandles];
     u32 free_handles[kMaxHandles];
+
+    AttenuationCurve curves[kMaxAttenuationCurves];
 
     u64 commands_dropped = 0;
     u32 warned_this_frame = 0;
@@ -113,6 +135,7 @@ Result<mem::UniquePtr<AudioDevice>> AudioDevice::create(const AudioDesc& desc) {
     for (u32 i = 0; i < kMaxHandles; ++i) impl->free_handles[i] = kMaxHandles - 1 - i;
     dev->free_handle_count_ = kMaxHandles;
     dev->command_hash_ = kFnv64Offset;
+    for (BusId& p : dev->bus_parent_) p = Bus_Master;
 
     dev->backend_ = desc.backend;
     if (desc.backend == Backend::Device && !cv_enabled.get_bool()) dev->backend_ = Backend::Silent;
@@ -137,7 +160,7 @@ Result<mem::UniquePtr<AudioDevice>> AudioDevice::create(const AudioDesc& desc) {
 
     if (desc.bind_convars) {
         g_convar_device = dev.get();
-        for (u32 b = 0; b < kBusCount; ++b) {
+        for (u32 b = 0; b < kNamedBuses; ++b) {
             kBusConvars[b]->set_on_change(&on_bus_convar);
             if (kBusConvars[b]->get_float() != 0.f) dev->set_bus_gain(static_cast<BusId>(b), kBusConvars[b]->get_float());
         }
@@ -226,7 +249,9 @@ void AudioDevice::release_clip(ClipHandle h) {
 
 // ---------------------------------------------------------------------------- playback
 
-AudioHandle AudioDevice::play(ClipHandle clip, const PlayParams& p) {
+AudioHandle AudioDevice::play(ClipHandle clip, const PlayParams& p) { return play_at(clip, 0, p); }
+
+AudioHandle AudioDevice::play_at(ClipHandle clip, u64 mix_sample, const PlayParams& p) {
     Impl& impl = *impl_;
     if (!is_clip_registered(clip) || impl.clips[clip.index].state != ClipMain::State::Live) return {};
     ClipMain& m = impl.clips[clip.index];
@@ -251,6 +276,14 @@ AudioHandle AudioDevice::play(ClipHandle clip, const PlayParams& p) {
     c.voice.clip = clip.index;
     c.voice.gain = db_to_linear(p.gain_db);
     c.voice.pan = p.pan;
+    c.voice.start_sample = mix_sample;
+    const bool spatial = p.attenuation_id != 0 && p.attenuation_id < kMaxAttenuationCurves;
+    const f32 base_gain = c.voice.gain;
+    if (spatial) {
+        const Spatial sp = spatialize(listener_, impl.curves[p.attenuation_id], p.position);
+        c.voice.gain = base_gain * sp.gain;
+        c.voice.pan = sp.pan;
+    }
     // A stream's ring is rewound and primed while no voice reads it, before the Play is visible.
     if (m.stream >= 0) impl.stream_rings[m.stream]->reset(m.payload, p.loop);
     if (!impl.commands.push(c)) {
@@ -261,6 +294,11 @@ AudioHandle AudioDevice::play(ClipHandle clip, const PlayParams& p) {
     hash_command(command_hash_, c);
     --free_handle_count_;
     slot.live = true;
+    slot.attenuation = spatial ? p.attenuation_id : u16(0);
+    slot.base_gain = base_gain;
+    slot.position = p.position;
+    slot.sent_gain = c.voice.gain;
+    slot.sent_pan = c.voice.pan;
     const AudioHandle h{idx, slot.generation};
     if (m.stream >= 0) impl.streams[m.stream].playing = h;
     return h;
@@ -284,6 +322,12 @@ void AudioDevice::stop(AudioHandle h, f32 fade_s) {
 
 void AudioDevice::set_handle_gain(AudioHandle h, f32 gain_db) {
     if (!is_playing(h)) return;
+    HandleSlot& slot = impl_->handles[h.index];
+    if (slot.attenuation != 0) {
+        slot.base_gain = db_to_linear(gain_db);
+        respatialize(h.index);
+        return;
+    }
     AudioCommand c;
     c.type = CmdType::VoiceGain;
     c.index = h.index;
@@ -291,6 +335,49 @@ void AudioDevice::set_handle_gain(AudioHandle h, f32 gain_db) {
     c.voice.gain = db_to_linear(gain_db);
     if (impl_->commands.push(c)) hash_command(command_hash_, c);
     else ++impl_->commands_dropped;
+}
+
+void AudioDevice::set_handle_position(AudioHandle h, math::vec3 position) {
+    if (!is_playing(h)) return;
+    HandleSlot& slot = impl_->handles[h.index];
+    if (slot.attenuation == 0) return;
+    slot.position = position;
+    respatialize(h.index);
+}
+
+void AudioDevice::respatialize(u32 index) {
+    HandleSlot& slot = impl_->handles[index];
+    const Spatial sp = spatialize(listener_, impl_->curves[slot.attenuation], slot.position);
+    const f32 gain = slot.base_gain * sp.gain;
+    if (gain == slot.sent_gain && sp.pan == slot.sent_pan) return;  // nothing audible changed
+    AudioCommand c;
+    c.type = CmdType::VoiceGainPan;
+    c.index = index;
+    c.voice.generation = slot.generation;
+    c.voice.gain = gain;
+    c.voice.pan = sp.pan;
+    if (impl_->commands.push(c)) {
+        hash_command(command_hash_, c);
+        slot.sent_gain = gain;
+        slot.sent_pan = sp.pan;
+    } else {
+        ++impl_->commands_dropped;  // retried by the next position/listener change
+    }
+}
+
+void AudioDevice::set_listener(const Listener& l) {
+    listener_ = l;
+    for (u32 i = 0; i < kMaxHandles; ++i)
+        if (impl_->handles[i].live && impl_->handles[i].attenuation != 0) respatialize(i);
+}
+
+Result<void> AudioDevice::set_attenuation(u16 id, const AttenuationCurve& curve) {
+    if (id == 0 || id >= kMaxAttenuationCurves)
+        return Error(Errc::InvalidArgument, "audio.attenuation", "curve id out of range", id);
+    if (!(curve.min_distance > 0.f) || curve.max_distance < curve.min_distance || curve.rolloff < 0.f)
+        return Error(Errc::InvalidArgument, "audio.attenuation", "needs 0 < min_distance <= max_distance, rolloff >= 0");
+    impl_->curves[id] = curve;
+    return ok();
 }
 
 void AudioDevice::set_handle_pan(AudioHandle h, f32 pan) {
@@ -314,6 +401,46 @@ void AudioDevice::set_bus_gain(BusId bus, f32 gain_db) {
     if (impl_->commands.push(c)) hash_command(command_hash_, c);
     else ++impl_->commands_dropped;
 }
+
+// ---------------------------------------------------------------------------- graph + DSP
+
+Result<void> AudioDevice::set_bus_parent(BusId bus, BusId parent) {
+    if (bus == Bus_Master || bus >= kBusCount || parent >= bus)
+        return Error(Errc::InvalidArgument, "audio.bus.parent", "a bus feeds a lower-id parent (Master is the root)", bus);
+    AudioCommand c;
+    c.type = CmdType::BusParent;
+    c.index = bus;
+    c.bus = parent;
+    if (!impl_->commands.push(c)) return Error(Errc::AudioQueueFull, "audio.bus.parent");
+    bus_parent_[bus] = parent;
+    hash_config(command_hash_, c);
+    return ok();
+}
+
+Result<void> AudioDevice::set_bus_eq(BusId bus, u32 band, const BiquadDesc& d) {
+    if (bus >= kBusCount || band >= kEqBands) return Error(Errc::InvalidArgument, "audio.bus.eq", "bus/band", band);
+    AudioCommand c;
+    c.type = CmdType::BusEq;
+    c.index = bus;
+    c.flags = static_cast<u8>(band | (d.type == BiquadDesc::Type::Off ? 0x80u : 0u));
+    c.eq.coeffs = biquad_coeffs(d);
+    if (!impl_->commands.push(c)) return Error(Errc::AudioQueueFull, "audio.bus.eq");
+    hash_config(command_hash_, c, d.freq_hz, d.gain_db);
+    return ok();
+}
+
+void AudioDevice::set_limiter(const LimiterDesc& d) {
+    AudioCommand c;
+    c.type = CmdType::Limiter;
+    c.flags = d.enabled ? 1 : 0;
+    c.voice.gain = db_to_linear(d.ceiling_db);
+    const f32 frames = d.release_ms > 0.f ? d.release_ms * 0.001f * static_cast<f32>(kSampleRate) : 1.f;
+    c.voice.pan = 1.f - std::exp(-1.f / frames);
+    if (impl_->commands.push(c)) hash_config(command_hash_, c, c.voice.gain, c.voice.pan);
+    else ++impl_->commands_dropped;
+}
+
+u64 AudioDevice::mix_clock() const { return impl_->mixer->stats().mix_sample.load(std::memory_order_acquire); }
 
 // ---------------------------------------------------------------------------- per frame
 
@@ -371,6 +498,7 @@ AudioStats AudioDevice::stats() const {
     s.dropped = a.dropped.load(std::memory_order_relaxed);
     s.underruns = a.underruns.load(std::memory_order_relaxed);
     s.master_peak = a.master_peak.load(std::memory_order_relaxed);
+    s.limiter_gain = a.limiter_gain.load(std::memory_order_relaxed);
     s.mix_sample = a.mix_sample.load(std::memory_order_acquire);
     s.commands_dropped = impl_->commands_dropped;
     return s;

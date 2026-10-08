@@ -128,6 +128,7 @@ Above the walls sit three composition principles (P6 — one path, thin seams):
 | `mce_ecs` | `src/engine/ecs` | L1 | core, refl | Archetype tables, generational entities, phases + sync points, `Commands`, `EventQueue<T>`, `Frame`, `World::state_hash` |
 | `mce_rhi` | `src/engine/rhi` | L2 | core | RenderDevice + recorded CommandBuffer interface (no GL) |
 | `mce_rhi_gl` | `src/engine/rhi_gl` | L2 | rhi, platform (window handle) | The only GL 4.5 code: DSA, persistent-mapped rings, MDI, fences |
+| `mce_rhi_metal` (M-MAC, planned) | `src/engine/rhi_metal` | L2 | rhi, platform (window handle) | The only Metal code (macOS); a port of the GL backend behind the same interface — macos-metal.md |
 | `mce_asset` | `src/engine/asset` | L2 | core, refl, platform | `.mce` container reader, GUID registry, cook library, hot-reload commit machinery, `IGpuUploadSink` (fix F6) |
 | `mce_physics2d` | `src/engine/physics2d` | L2 | core, ecs | Hand-written Catto-style 2D world: solver, character controller, queries, events |
 | `mce_physics3d` (v0.5) | `src/engine/physics3d` | L2 | core, ecs | `World3D` facade over embedded Jolt 5 (ADR-0003 gate before first include) |
