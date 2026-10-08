@@ -4,6 +4,7 @@
 #include <type_traits>
 
 #include "mce/containers/bitset.h"
+#include "mce/refl/field_traits.h"
 #include "mce/type_name.h"
 
 namespace mce {
@@ -22,6 +23,15 @@ inline constexpr Entity Entity::null{};
 template <>
 struct Hash<Entity> {
     u64 operator()(Entity e) const { return mix64((u64(e.generation) << 32) | e.index); }
+};
+
+// Entity fields are EntityRef in reflection: scenes and prefabs store a document-local index in
+// the first u32, remapped to a live handle at instantiation (ecs-gameplay.md §3.8).
+template <>
+struct refl::FieldTraits<Entity> {
+    static constexpr bool supported = true;
+    static constexpr refl::FieldKind kind = refl::FieldKind::EntityRef;
+    static constexpr const char* type_name = "Entity";
 };
 
 namespace ecs {
@@ -44,6 +54,14 @@ struct ComponentInfo {
     u32 size = 0;
     u32 align = 0;
     bool is_tag = false;  // empty struct: lives in the mask only, no column
+    u64 refl_id = 0;      // StringId of the mce_refl type name (0 = not reflected); how cooked
+                          // scene/prefab columns find their ComponentId
+};
+
+// One component value for the type-erased spawn paths (prefab/scene instantiation).
+struct RawComponent {
+    ComponentId id = kInvalidComponent;
+    const void* data = nullptr;  // component_size bytes; ignored for tags
 };
 
 template <class T>
@@ -55,6 +73,7 @@ ComponentInfo component_info() {
     info.is_tag = std::is_empty_v<T>;
     info.size = info.is_tag ? 0u : static_cast<u32>(sizeof(T));
     info.align = static_cast<u32>(alignof(T));
+    if constexpr (refl::ReflectedStruct<T>) info.refl_id = refl::type_id<T>().value;
     return info;
 }
 

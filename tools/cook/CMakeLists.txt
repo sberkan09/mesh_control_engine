@@ -3,4 +3,5 @@ mce_add_executable(mce_cook
     SOURCES
         main.cpp
     DEPS
-        mce::mce_asset_cook)
+        mce::mce_asset_cook
+        mce::mce_ecs)
