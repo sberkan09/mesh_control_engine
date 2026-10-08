@@ -331,6 +331,18 @@ public:
     void remove(Entity e);
     u32 entity_count() const { return alive_count_; }
 
+    // ---- type-erased access (scene loader, editor preview world) ------------------------
+    // For code that knows a component only by its id (refl::TypeRecord::type_hash ->
+    // find_component / register_component_info), never by its C++ type. Same rules as the typed
+    // calls: structural changes are illegal while a phase runs.
+    ecs::ComponentId find_component(u64 type_hash) const;  // kInvalidComponent when unregistered
+    bool has(Entity e, ecs::ComponentId c) const;
+    const void* get_raw(Entity e, ecs::ComponentId c) const;  // null when absent (or a tag)
+    void* get_raw_mut(Entity e, ecs::ComponentId c) { return const_cast<void*>(static_cast<const World*>(this)->get_raw(e, c)); }
+    // Copies components(c).size bytes from `value` (null for tags); adds the component when missing.
+    void set_raw(Entity e, ecs::ComponentId c, const void* value);
+    void remove_raw(Entity e, ecs::ComponentId c);
+
     // ---- systems & phases -------------------------------------------------
     // Registration order within a phase IS execution order. `after` (optional) names a system
     // that must already be registered in the same phase — asserted, never reordered.
