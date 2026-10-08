@@ -26,10 +26,10 @@ their own milestone records.
 
 | Measure | Target | Result |
 |---|---|---|
-| NFR-T-01 `02_boids` integrate, 100k entities | < 1.5 ms/iteration | BOIDS_RESULT |
-| Hierarchy tick, 5,000 entities (1,000 roots × 4 children), nothing dirty | — | HIER_IDLE |
-| Same, every root dirty (5,000 re-composed) | — | HIER_FULL |
-| Same, one entity dirty | — | HIER_ONE |
+| NFR-T-01 `02_boids` integrate, 100k entities | < 1.5 ms/iteration | integrate 0.10–0.11 ms/tick, full tick 1.06–1.15 ms (3 runs, 300 ticks; mutable query items now stamp change ticks) |
+| Hierarchy tick, 5,000 entities (1,000 roots × 4 children), nothing dirty | — | 0.03–0.05 ms |
+| Same, every root dirty (5,000 re-composed) | — | 0.82–1.19 ms |
+| Same, one entity dirty | — | 0.03 ms (the idle cost: the seed queries; 1 entity re-composed) |
 | Change-tick memory | 4 B/instance (§2.7) | 8 B/instance (added + changed; ADR-0025 §1) |
 
 ## Determinism
