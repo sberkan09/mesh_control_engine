@@ -25,7 +25,7 @@ WALLS = [
         ["src/", "samples/", "games/"],
     ),
     ("glad wall", re.compile(r"[<\"]glad/"), ["src/engine/rhi_gl/"], ["src/", "samples/", "games/", "tests/"]),
-    # Metal (ADR-0027, docs/architecture/macos-metal.md §3): the mirror of the GL wall.
+    # Metal (ADR-0028, docs/architecture/macos-metal.md §3): the mirror of the GL wall.
     (
         "Metal wall",
         re.compile(r"\bMTL[A-Z]\w*|[<\"]Metal/|[<\"]QuartzCore/"),
