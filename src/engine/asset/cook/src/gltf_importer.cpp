@@ -446,14 +446,14 @@ struct TextureRef {
     f32 uv_rotation = 0;
 };
 
-bool base_color_texture(Ctx& cx, const Gltf& g, u32 mi, TextureRef& out) {
+// The texture of a glTF textureInfo object `info` (inside material `mi`, at JSON pointer suffix
+// `where`) -> image URI resolved against the registry. Absent info = no texture, not an error.
+bool texture_ref(Ctx& cx, const Gltf& g, u32 mi, JsonValue info, StringView where, TextureRef& out) {
     out = TextureRef{};
-    const JsonValue mat = g.root.get("materials").at(mi);
-    const JsonValue info = mat.get("pbrMetallicRoughness").get("baseColorTexture");
     if (!info.valid()) return true;
     out.pointer.clear();
     append_pointer(out.pointer, "materials", mi);
-    out.pointer += "/pbrMetallicRoughness/baseColorTexture";
+    out.pointer += where;
     out.at = info;
     const JsonValue ti = info.get("index");
     const JsonValue textures = g.root.get("textures");
@@ -506,6 +506,41 @@ bool base_color_texture(Ctx& cx, const Gltf& g, u32 mi, TextureRef& out) {
     return true;
 }
 
+// The material's texture slots (M5a): base color, normal, metallic-roughness (+ occlusion packed
+// into its R channel: the ORM convention), emissive, and a separate occlusion texture.
+enum class TexSlot : u32 { BaseColor, Normal, MetallicRoughness, Emissive, Occlusion, Count };
+
+bool material_texture(Ctx& cx, const Gltf& g, u32 mi, TexSlot slot, TextureRef& out) {
+    const JsonValue mat = g.root.get("materials").at(mi);
+    switch (slot) {
+        case TexSlot::BaseColor:
+            return texture_ref(cx, g, mi, mat.get("pbrMetallicRoughness").get("baseColorTexture"),
+                               "/pbrMetallicRoughness/baseColorTexture", out);
+        case TexSlot::Normal: return texture_ref(cx, g, mi, mat.get("normalTexture"), "/normalTexture", out);
+        case TexSlot::MetallicRoughness:
+            return texture_ref(cx, g, mi, mat.get("pbrMetallicRoughness").get("metallicRoughnessTexture"),
+                               "/pbrMetallicRoughness/metallicRoughnessTexture", out);
+        case TexSlot::Emissive: return texture_ref(cx, g, mi, mat.get("emissiveTexture"), "/emissiveTexture", out);
+        case TexSlot::Occlusion: return texture_ref(cx, g, mi, mat.get("occlusionTexture"), "/occlusionTexture", out);
+        case TexSlot::Count: break;
+    }
+    out = TextureRef{};
+    return true;
+}
+
+bool base_color_texture(Ctx& cx, const Gltf& g, u32 mi, TextureRef& out) {
+    return material_texture(cx, g, mi, TexSlot::BaseColor, out);
+}
+
+bool same_transform(const TextureRef& a, const TextureRef& b) {
+    return a.uv_offset[0] == b.uv_offset[0] && a.uv_offset[1] == b.uv_offset[1] && a.uv_scale[0] == b.uv_scale[0] &&
+           a.uv_scale[1] == b.uv_scale[1] && a.uv_rotation == b.uv_rotation;
+}
+
+void set_texture(asset::MaterialChunk& m, asset::MaterialSlot slot, Guid g) {
+    m.textures[static_cast<u32>(slot)][0] = g.hi;
+    m.textures[static_cast<u32>(slot)][1] = g.lo;
+}
 
 asset::MaterialChunk convert_material(Ctx& cx, const Gltf& g, JsonValue mat_index, TextureRef& tex) {
     asset::MaterialChunk m{};
@@ -539,12 +574,46 @@ asset::MaterialChunk convert_material(Ctx& cx, const Gltf& g, JsonValue mat_inde
     }
     if (mat.get("doubleSided").is_bool() && mat.get("doubleSided").as_bool()) m.flags |= asset::MaterialFlags::DoubleSided;
     if (mat.get("extensions").get("KHR_materials_unlit").valid()) m.flags |= asset::MaterialFlags::Unlit;
-    if (mat.get("normalTexture").valid() || pbr.get("metallicRoughnessTexture").valid() || mat.get("emissiveTexture").valid() ||
-        mat.get("occlusionTexture").valid())
-        cx.warning(mat, "only the base color texture is imported at MVP (normal/ORM/emissive maps are v0.5)");
-    if (base_color_texture(cx, g, mi, tex) && tex.present) {
-        m.textures[static_cast<u32>(asset::MaterialSlot::BaseColor)][0] = tex.guid.hi;
-        m.textures[static_cast<u32>(asset::MaterialSlot::BaseColor)][1] = tex.guid.lo;
+    if (base_color_texture(cx, g, mi, tex) && tex.present) set_texture(m, asset::MaterialSlot::BaseColor, tex.guid);
+    // The other maps share TEXCOORD_0 and the base color's KHR_texture_transform (baked into the
+    // UVs once per submesh); a map with a different transform samples with the base one.
+    TextureRef normal, mr, emissive, occlusion;
+    const bool ok = material_texture(cx, g, mi, TexSlot::Normal, normal) && material_texture(cx, g, mi, TexSlot::MetallicRoughness, mr) &&
+                    material_texture(cx, g, mi, TexSlot::Emissive, emissive) &&
+                    material_texture(cx, g, mi, TexSlot::Occlusion, occlusion);
+    if (!ok) return m;
+    const TextureRef* uv_owner = tex.present ? &tex : nullptr;
+    for (const TextureRef* t : {&normal, &mr, &emissive, &occlusion}) {
+        if (!t->present) continue;
+        if (!uv_owner) uv_owner = t;
+        else if (!same_transform(*t, *uv_owner))
+            cx.warning(t->at, "KHR_texture_transform differs from the material's first texture; one UV transform per material is imported");
+    }
+    if (!tex.present && uv_owner) {  // no base color map: the first other map's transform is baked
+        tex = *uv_owner;
+        tex.guid = Guid{};
+    }
+    if (normal.present) {
+        set_texture(m, asset::MaterialSlot::Normal, normal.guid);
+        if (const JsonValue sc = normal.at.get("scale"); sc.is_number() && sc.as_number() != 1.0)
+            cx.warning(normal.at, "normalTexture.scale is ignored (1.0 is used)");
+    }
+    if (mr.present) set_texture(m, asset::MaterialSlot::MetallicRoughness, mr.guid);
+    if (emissive.present) set_texture(m, asset::MaterialSlot::Emissive, emissive.guid);
+    if (occlusion.present) {
+        if (mr.present && occlusion.guid == mr.guid) {
+            m.flags |= asset::MaterialFlags::OcclusionInMR;
+        } else if (!mr.present) {
+            // An occlusion-only map: sample it through the ORM slot with roughness/metallic left
+            // to the factors (its G/B channels are not roughness/metallic data).
+            set_texture(m, asset::MaterialSlot::MetallicRoughness, occlusion.guid);
+            m.flags |= asset::MaterialFlags::OcclusionInMR | asset::MaterialFlags::OcclusionOnly;
+        } else {
+            cx.warning(occlusion.at, "a separate occlusion texture is ignored: pack occlusion into the metallicRoughness "
+                                     "texture's R channel (ORM)");
+        }
+        if (const JsonValue st = occlusion.at.get("strength"); st.is_number() && st.as_number() != 1.0)
+            cx.warning(occlusion.at, "occlusionTexture.strength is ignored (1.0 is used)");
     }
     return m;
 }
@@ -919,7 +988,7 @@ bool import_animations(Ctx& cx, const Gltf& g, const Array<i32>& remap, f32 impo
             if (interp == "STEP") mc.interp = asset::AnimInterp::Step;
             else if (interp == "CUBICSPLINE") {
                 cubic = true;
-                cx.warning(smp, "CUBICSPLINE is imported as LINEAR over its values (tangents dropped)");
+                mc.interp = asset::AnimInterp::CubicSpline;
             }
             Array<f32> times, values;
             if (!read_accessor(cx, g, smp.get("input"), 1, false, times, cptr)) return false;
@@ -939,10 +1008,12 @@ bool import_animations(Ctx& cx, const Gltf& g, const Array<i32>& remap, f32 impo
             for (f32 t : times) out.keys.push_back(t);
             mc.values_offset = static_cast<u32>(out.keys.size());
             // Root-node translation/scale tracks carry the import scale like the rest pose does.
+            // CUBICSPLINE keeps glTF's {in-tangent, value, out-tangent} triplet per key; tangents
+            // are in value units per second and scale with the value.
             const bool root = out.nodes[mc.node].parent < 0 && mc.path != asset::AnimPath::Rotation;
-            for (usize k = 0; k < keys; ++k)
+            for (usize k = 0; k < values.size() / width; ++k)
                 for (u32 c = 0; c < width; ++c) {
-                    const f32 v = values[(cubic ? k * 3 + 1 : k) * width + c];
+                    const f32 v = values[k * width + c];
                     out.keys.push_back(root ? v * import_scale : v);
                 }
             clip.duration = math::max(clip.duration, times[keys - 1]);
@@ -962,7 +1033,7 @@ mat4 node_local(const asset::MeshNode& n) {
 class GltfImporter final : public IImporter {
 public:
     StringView id() const override { return "gltf"; }
-    u32 version() const override { return 1; }
+    u32 version() const override { return 2; }  // 2: normal/ORM/emissive maps, CUBICSPLINE tracks (M5a)
     ChunkType type() const override { return ChunkType::Mesh; }
     bool native() const override { return false; }
     bool handles_extension(StringView ext) const override { return ext == ".glb" || ext == ".gltf"; }
@@ -975,15 +1046,20 @@ public:
         if (!parse_container(cx, g)) return;
         const JsonValue mats = g.root.get("materials");
         for (u32 i = 0; mats.is_array() && i < mats.size(); ++i) {
-            TextureRef tex;
-            if (!base_color_texture(cx, g, i, tex) || !tex.present) continue;
-            DepRef d;
-            d.guid = tex.guid;
-            d.expected = ChunkType::Texture;
-            d.line = tex.at.line();
-            d.col = tex.at.col();
-            d.where.assign(tex.pointer.view());
-            out.push_back(d);
+            for (u32 slot = 0; slot < static_cast<u32>(TexSlot::Count); ++slot) {
+                TextureRef tex;
+                if (!material_texture(cx, g, i, static_cast<TexSlot>(slot), tex) || !tex.present) continue;
+                bool dup = false;
+                for (const DepRef& e : out) dup = dup || e.guid == tex.guid;
+                if (dup) continue;
+                DepRef d;
+                d.guid = tex.guid;
+                d.expected = ChunkType::Texture;
+                d.line = tex.at.line();
+                d.col = tex.at.col();
+                d.where.assign(tex.pointer.view());
+                out.push_back(d);
+            }
         }
     }
 

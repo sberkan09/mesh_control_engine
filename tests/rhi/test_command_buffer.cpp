@@ -193,3 +193,45 @@ TEST_CASE("rhi: resolve records outside a pass; the uniform bank range covers kO
     }
     cb.end_pass();
 }
+
+TEST_CASE("rhi: storage data and timestamps round-trip; layered attachments default to layer 0") {
+    CommandBuffer cb;
+    cb.write_timestamp(0);
+    PassAttachment depth;
+    CHECK(depth.layer == 0);
+    depth.layer = 2;
+    RenderPassDesc pass;
+    pass.depth = depth;
+    cb.begin_pass(pass);
+    const u32 rows[4] = {1, 2, 3, 4};
+    cb.set_storage_data(bank::kClusters, as_bytes(Span<const u32>(rows)));
+    cb.end_pass();
+    cb.write_timestamp(5);
+
+    const CmdHeader* h = nullptr;
+    const void* p = nullptr;
+    auto r = cb.reader();
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::WriteTimestamp);
+    CHECK(static_cast<const cmd::WriteTimestamp*>(p)->index == 0);
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::BeginPass);
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::SetStorageData);
+    const auto* sd = static_cast<const cmd::SetStorageData*>(p);
+    CHECK(sd->binding == bank::kClusters);
+    REQUIRE(sd->size == sizeof(rows));
+    CHECK(std::memcmp(CommandBuffer::inline_data(sd, sd->size).data(), rows, sizeof(rows)) == 0);  // NOLINT(bugprone-suspicious-memory-comparison): checks a bit-exact copy
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::EndPass);
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::WriteTimestamp);
+    CHECK(static_cast<const cmd::WriteTimestamp*>(p)->index == 5);
+    CHECK_FALSE(r.next(h, p));
+    CHECK(std::string_view(cmd_type_name(CmdType::SetStorageData)) == "SetStorageData");
+    CHECK(std::string_view(cmd_type_name(CmdType::WriteTimestamp)) == "WriteTimestamp");
+    {
+        test::ExpectAssert expect;
+        cb.write_timestamp(kMaxTimestamps);
+    }
+}

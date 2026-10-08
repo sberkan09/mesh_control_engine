@@ -177,6 +177,7 @@ struct GraphicsPipelineDesc {
 
 struct PassAttachment {
     TextureHandle texture;  // null = the window backbuffer (color) / default depth buffer (depth)
+    u16 layer = 0;          // array layer of a Tex2DArray target (cascaded shadow maps); 0 otherwise
     LoadOp load = LoadOp::Clear;
     StoreOp store = StoreOp::Store;
     ClearValue clear;
@@ -209,11 +210,20 @@ inline constexpr u32 kFirstSampler = 6;
 inline constexpr u32 kAtlasArray = 6;  // 2D sprite-set array texture
 inline constexpr u32 kObject = 3;      // per-draw ObjectU uniform block (3D, MVP); the Objects SSBO shares the number
 inline constexpr u32 kAlbedo = 6;      // 3D base color (2D array, layer 0); shares the slot with the atlas
-inline constexpr u32 kShadowMap = 9;
+inline constexpr u32 kShadowMap = 9;   // sampler2DArrayShadow: the CSM cascades (M5a)
+inline constexpr u32 kNormal = 7;      // 3D tangent-space normal map
+inline constexpr u32 kOrm = 8;         // 3D occlusion/roughness/metallic (glTF metallicRoughness + packed AO)
+inline constexpr u32 kSky = 10;        // equirect sky texture (2D array, layer 0)
 inline constexpr u32 kFont = 11;
+inline constexpr u32 kEmissive = 13;   // 3D emissive map (the spare slot of the §3.3 table)
+// std430 storage bindings (their own namespace in GL, independent of the sampler units above).
+inline constexpr u32 kClusters = 4;     // Forward+ per-cluster {offset, count}
+inline constexpr u32 kLightPool = 5;    // point lights
+inline constexpr u32 kLightIndices = 6; // the clusters' light index list
 inline constexpr u32 kUniformBanks = 4;  // FrameU, PassU, MaterialU, ObjectU
 }  // namespace bank
 
 inline constexpr usize kUniformAlignment = 256;
+inline constexpr u32 kMaxTimestamps = 32;  // GPU timestamp queries per frame slot (CommandBuffer::write_timestamp)
 
 }  // namespace mce::rhi

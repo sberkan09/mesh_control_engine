@@ -138,8 +138,8 @@ usize StagingRing::alloc(usize size, usize align) {
 
 bool FramebufferKey::operator==(const FramebufferKey& o) const {
     for (u32 i = 0; i < cmd::kMaxColorAttachments; ++i)
-        if (!(colors[i] == o.colors[i])) return false;
-    return depth == o.depth;
+        if (!(colors[i] == o.colors[i]) || color_layers[i] != o.color_layers[i]) return false;
+    return depth == o.depth && depth_layer == o.depth_layer;
 }
 
 bool GlFence::is_signaled() { return device->slot_signaled(slot); }
@@ -198,6 +198,12 @@ ResultV GlDevice::init() {
     glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &v);
     if (v > 0 && usize(v) > uniform_align_) uniform_align_ = usize(v);
     caps_.shader_draw_parameters = GLAD_GL_ARB_shader_draw_parameters != 0;
+    glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &v);
+    if (v > 0) storage_align_ = usize(v);
+    caps_.storage_buffer_alignment = static_cast<u32>(storage_align_);
+    GLint timer_bits = 0;
+    glGetQueryiv(GL_TIMESTAMP, GL_QUERY_COUNTER_BITS, &timer_bits);
+    caps_.timestamp_queries = timer_bits > 0;
     MCE_LOG_INFO("rhi.gl: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 
     if (desc_.debug_layer) {
@@ -214,6 +220,8 @@ ResultV GlDevice::init() {
     MCE_TRY(create_ring(geometry_ring_, desc_.geometry_ring_bytes, "mce.ring.geometry"));
     MCE_TRY(create_ring(uniform_ring_, desc_.uniform_ring_bytes, "mce.ring.uniform"));
     MCE_TRY(create_ring(indirect_ring_, desc_.indirect_ring_bytes, "mce.ring.indirect"));
+    if (caps_.timestamp_queries)
+        for (u32 s = 0; s < MCE_FRAMES_IN_FLIGHT; ++s) glCreateQueries(GL_TIMESTAMP, kMaxTimestamps, timestamp_queries_[s]);
 
     swap_interval_ = desc_.vsync ? 1 : 0;
     SDL_GL_SetSwapInterval(swap_interval_);
@@ -261,6 +269,8 @@ void GlDevice::release_gl_objects() {
         glDeleteVertexArrays(1, &p.vao);
     }
     for (const FramebufferEntry& f : framebuffers_) glDeleteFramebuffers(1, &f.fbo);
+    if (caps_.timestamp_queries)
+        for (u32 s = 0; s < MCE_FRAMES_IN_FLIGHT; ++s) glDeleteQueries(kMaxTimestamps, timestamp_queries_[s]);
     destroy_ring(geometry_ring_);
     destroy_ring(uniform_ring_);
     destroy_ring(indirect_ring_);
@@ -568,8 +578,11 @@ GLuint GlDevice::framebuffer_for(const FramebufferKey& key) {
     for (u32 i = 0; i < cmd::kMaxColorAttachments; ++i) {
         const GlTexture* t = textures_.try_get(key.colors[i]);
         if (!t) continue;
-        MCE_ASSERT_MSG(t->dimension == TextureDimension::Tex2D, "render targets must be 2D textures");
-        glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0 + i, t->id, 0);
+        MCE_ASSERT_MSG(key.color_layers[i] < t->layers, "render target layer out of range");
+        if (t->dimension == TextureDimension::Tex2DArray)
+            glNamedFramebufferTextureLayer(fbo, GL_COLOR_ATTACHMENT0 + i, t->id, 0, key.color_layers[i]);
+        else
+            glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0 + i, t->id, 0);
         draw_buffers[n++] = GL_COLOR_ATTACHMENT0 + i;
     }
     if (n > 0) glNamedFramebufferDrawBuffers(fbo, n, draw_buffers);
@@ -577,7 +590,9 @@ GLuint GlDevice::framebuffer_for(const FramebufferKey& key) {
     if (const GlTexture* d = textures_.try_get(key.depth)) {
         const GLenum attach =
             d->format == TextureFormat::D24_UNorm_S8 ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT;
-        glNamedFramebufferTexture(fbo, attach, d->id, 0);
+        MCE_ASSERT_MSG(key.depth_layer < d->layers, "depth target layer out of range");
+        if (d->dimension == TextureDimension::Tex2DArray) glNamedFramebufferTextureLayer(fbo, attach, d->id, 0, key.depth_layer);
+        else glNamedFramebufferTexture(fbo, attach, d->id, 0);
     }
     const GLenum status = glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
@@ -626,10 +641,35 @@ void GlDevice::begin_frame(u64 frame_index) {
         fences_[slot_] = nullptr;
     }
     flush_deletes(slot_);
+    collect_timestamps(slot_);
     geometry_ring_.slot = uniform_ring_.slot = indirect_ring_.slot = slot_;
     geometry_ring_.head = uniform_ring_.head = indirect_ring_.head = 0;
     stats_ = FrameStats{};
     in_frame_ = true;
+}
+
+// The slot's fence has passed, so every query written in it has its result.
+void GlDevice::collect_timestamps(u32 slot) {
+    const u32 written = timestamps_written_[slot];
+    if (written == 0) return;
+    GpuTimestamps t;
+    t.frame_index = timestamps_frame_[slot];
+    t.written = written;
+    for (u32 i = 0; i < kMaxTimestamps; ++i) {
+        if (!((written >> i) & 1u)) continue;
+        GLuint64 v = 0;
+        glGetQueryObjectui64v(timestamp_queries_[slot][i], GL_QUERY_RESULT, &v);
+        t.ns[i] = v;
+    }
+    last_timestamps_ = t;
+    timestamps_written_[slot] = 0;
+}
+
+void GlDevice::exec_write_timestamp(u32 index) {
+    if (!caps_.timestamp_queries || index >= kMaxTimestamps) return;
+    glQueryCounter(timestamp_queries_[slot_][index], GL_TIMESTAMP);
+    timestamps_written_[slot_] |= 1u << index;
+    timestamps_frame_[slot_] = frame_index_;
 }
 
 void GlDevice::end_frame() {
