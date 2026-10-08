@@ -3,7 +3,11 @@ mce_add_test(test_editor
     SOURCES
         test_console_model.cpp
         test_draw_clip.cpp
+        test_scene_editing.cpp
         test_stub_world.cpp
     DEPS
         mce::mce_editor_layer)
-target_include_directories(test_editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(test_editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_compile_definitions(test_editor PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp"
+    MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}" MCE_PLAYER_EXE="$<TARGET_FILE:mce_player>")
+add_dependencies(test_editor mce_player)

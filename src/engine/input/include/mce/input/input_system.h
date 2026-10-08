@@ -16,12 +16,19 @@
 #include "mce/app.h"
 #include "mce/containers/array.h"
 #include "mce/containers/bitset.h"
+#include "mce/input/bindings.h"
 #include "mce/input/input_map.h"
 
 namespace mce::input {
 
 class InputRecorder;
 class InputReplayer;
+
+// Runtime rebinding (FR-INP-040): which devices a capture accepts, and where it stands.
+namespace RebindAccept {
+enum : u8 { Keyboard = 1u << 0, Mouse = 1u << 1, Gamepad = 1u << 2, All = 0x7 };
+}
+enum class RebindState : u8 { Idle, Waiting, Captured, TimedOut, Cancelled };
 
 struct InputStats {
     u64 events_folded = 0;
@@ -51,8 +58,29 @@ public:
     Span<const u32> map_stack() const { return Span<const u32>(stack_, stack_size_); }
     const InputMapSet& maps() const { return set_; }
     // In-session rebinding (FR-INP-020): replace binding `index` of `action` in `map`. Applies
-    // from the next sampled tick. Persistence is FR-INP-040 (v0.5).
+    // from the next sampled tick and is recorded as an override (persisted by save_bindings).
     bool rebind(StringId map, StringId action, u32 index, const BindingDef& binding);
+
+    // ---- runtime rebinding + persistence (FR-INP-040, v0.5) --------------------------------------
+    // Options-screen capture: the next press on an accepted device inside a sampled tick becomes
+    // binding `index` of `action` (keeping that binding's axis and sign; a stick takes its
+    // direction from the push). The capturing press is swallowed, so it never fires the action.
+    // Escape always cancels (it cannot itself be captured), and the capture times out after
+    // `timeout_s` of sim time. Returns false for an unknown map/action/index.
+    bool begin_rebind(StringId map, StringId action, u32 index, f32 timeout_s = 5.f, u8 accept = RebindAccept::All);
+    void cancel_rebind();
+    RebindState rebind_state() const { return rebind_.state; }
+    const BindingDef& rebind_result() const { return rebind_.result; }  // valid when Captured
+
+    // Every binding that differs from the cooked map (one per map/action/index).
+    Span<const BindingOverride> binding_overrides() const { return overrides_.span(); }
+    void reset_bindings();  // back to the cooked map, overrides cleared
+    // Reflection-serialized text (bindings.h). deserialize replaces the overrides and applies them;
+    // overrides naming something the current map lacks are dropped with one warning.
+    void serialize_bindings(Array<char>& out) const;
+    Result<void> deserialize_bindings(StringView text);
+    Result<void> save_bindings(StringView path) const;  // atomic: temp file + rename
+    Result<void> load_bindings(StringView path);        // FileNotFound when there is no save yet
 
     // ---- clock -----------------------------------------------------------------------
     void set_tick_rate(u32 hz);
@@ -73,6 +101,9 @@ public:
     bool key_held(platform::Key k) const;
     bool mouse_held(platform::MouseButton b) const;
     vec2 mouse_pos() const { return mouse_pos_; }
+    bool gamepad_connected(u32 slot) const { return slot < platform::kMaxGamepads && pads_[slot].connected; }
+    bool gamepad_held(u32 slot, platform::GamepadButton b) const;
+    f32 gamepad_axis(u32 slot, platform::GamepadAxis a) const;
 
     // ---- record / replay (FR-RUN-070) --------------------------------------------------------
     // While a recorder is set every sampled tick is appended to it. While a replayer is set,
@@ -88,11 +119,17 @@ private:
 
     void reset_devices();
     void fold(const platform::Event& e);
+    bool try_capture(const platform::Event& e);  // rebind capture; true = event swallowed
+    BindingDef* find_binding(StringId map, StringId action, u32 index, const ActionDef** def = nullptr);
+    void set_override(StringId map, StringId action, u32 index, const BindingDef& b);
+    void apply_overrides();
     void evaluate(InputState& out, const InputState& prev) const;
     f32 binding_value(const BindingDef& b) const;
 
     mem::IAllocator& alloc_;
     InputMapSet set_;
+    Array<BindingDef> cooked_bindings_;  // the map as loaded, for reset and override diffs
+    Array<BindingOverride> overrides_;
     u32 stack_[kMaxMapStack] = {};
     u32 stack_size_ = 0;
 
@@ -116,6 +153,25 @@ private:
     vec2 tick_delta_;
     char tick_text_[kMaxTextBytes] = {};
     u32 tick_text_len_ = 0;
+
+    static constexpr u32 kPadButtons = static_cast<u32>(platform::GamepadButton::Count);
+    static constexpr u32 kPadAxes = static_cast<u32>(platform::GamepadAxis::Count);
+    struct PadState {
+        bool connected = false;
+        BitSet<kPadButtons> buttons, tapped, release_pending;
+        f32 axes[kPadAxes] = {};
+    };
+    PadState pads_[platform::kMaxGamepads];
+
+    struct Rebind {
+        RebindState state = RebindState::Idle;
+        StringId map, action;
+        u32 index = 0;
+        u8 accept = RebindAccept::All;
+        u64 deadline_tick = 0;
+        bool button_action = true;
+        BindingDef result;
+    } rebind_;
 
     InputState cur_;
     InputState prev_;

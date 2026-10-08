@@ -109,3 +109,47 @@ TEST_CASE("platform: event names") {
     CHECK(static_cast<u32>(platform::Key::Escape) == 41);  // USB HID usage, = SDL_SCANCODE_ESCAPE
     CHECK(static_cast<u32>(platform::Key::Z) == 29);
 }
+
+TEST_CASE("platform: a virtual gamepad hot-plugs into slot 0 and streams standard-layout events") {
+    PlatformScope p;
+    MCE_REQUIRE_OR_RETURN(p.ok);
+    platform::WindowDesc wd;
+    wd.opengl = false;
+    auto w = platform::Window::create(wd);
+    MCE_REQUIRE_OR_RETURN(w.has_value());
+    Recorder rec;
+    w.value()->set_event_handler(&Recorder::on_event, &rec);
+
+    const u32 pad = platform::attach_virtual_gamepad("test pad");
+    MCE_REQUIRE_OR_RETURN(pad != 0);
+    platform::pump_events();
+    CHECK(rec.saw(platform::EventType::GamepadAdded));
+    CHECK(platform::gamepad_connected(0));
+    CHECK_FALSE(platform::gamepad_connected(1));
+    CHECK(StringView(platform::gamepad_name(0)).size() > 0);
+
+    rec.count = 0;
+    platform::set_virtual_gamepad_button(pad, platform::GamepadButton::South, true);
+    platform::set_virtual_gamepad_axis(pad, platform::GamepadAxis::LeftX, -1.f);
+    platform::set_virtual_gamepad_axis(pad, platform::GamepadAxis::RightTrigger, 0.5f);
+    platform::pump_events();
+    bool south = false, left = false, trigger = false;
+    for (u32 i = 0; i < rec.count; ++i) {
+        const platform::Event& e = rec.events[i];
+        CHECK(e.flags == 0);  // slot 0
+        if (e.type == platform::EventType::GamepadButtonDown && e.code == u32(platform::GamepadButton::South)) south = true;
+        if (e.type == platform::EventType::GamepadAxis && e.code == u32(platform::GamepadAxis::LeftX)) left = e.x == doctest::Approx(-1.f);
+        if (e.type == platform::EventType::GamepadAxis && e.code == u32(platform::GamepadAxis::RightTrigger))
+            trigger = e.x == doctest::Approx(0.5f).epsilon(1e-3);
+    }
+    CHECK(south);
+    CHECK(left);
+    CHECK(trigger);
+
+    rec.count = 0;
+    platform::detach_virtual_gamepad(pad);
+    platform::pump_events();
+    CHECK(rec.saw(platform::EventType::GamepadRemoved));
+    CHECK_FALSE(platform::gamepad_connected(0));
+    w.value()->set_event_handler(nullptr, nullptr);
+}

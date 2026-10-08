@@ -226,7 +226,17 @@ stage_determinism() {
             --args="-headless 1 -ticks 600 -pack build/linux-gcc-debug/samples/scene_demo/project/assets.mce" \
             build/linux-gcc-debug/src/player/mce_player build/linux-gcc-release/src/player/mce_player &&
         stage_module_determinism &&
-        stage_physics3d_determinism
+        stage_physics3d_determinism &&
+        stage_cubes_determinism
+}
+
+# M5a: 04_cubes (cascade fit, Forward+ clustering, node animation) across runs and Debug/Release.
+stage_cubes_determinism() {
+    cmake --build --preset linux-gcc-debug --target sample_04_cubes &&
+        cmake --build --preset linux-gcc-release --target sample_04_cubes &&
+        python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -ticks 600" \
+            build/linux-gcc-debug/samples/04_cubes/sample_04_cubes \
+            build/linux-gcc-release/samples/04_cubes/sample_04_cubes
 }
 
 run_stage() {

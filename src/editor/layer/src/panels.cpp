@@ -1,21 +1,31 @@
-// The M0 panel set (editor-tools.md §2.7, §2.9): Viewport, Console, Stats.
+// The shell's panel set (editor-tools.md §2.7, §2.9): Viewport, Console, Stats, plus the
+// scene-editing panels (scene_panels.cpp).
 
 #include <imgui.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #include "imgui_renderer.h"
 #include "mce/editor/editor_shell.h"
+#include "mce/editor/gizmo.h"
 #include "mce/log.h"
+#include "scene_panels.h"
 
 namespace mce::editor {
 namespace {
 
 // ---- Viewport ----------------------------------------------------------------------------------
-// Displays the stub world's render target. The target is sized to the panel in pixels (widget
-// size x framebuffer scale, FR-R2D-080) and rebuilt when that changes; the old one's destroy is
-// deferred by the device until in-flight frames are done with it.
+// Displays the stub world (no project) or the open scene's preview world (project open). The
+// target is sized to the panel in pixels (widget size x framebuffer scale, FR-R2D-080) and
+// rebuilt when that changes; the old one's destroy is deferred by the device until in-flight
+// frames are done with it.
+//
+// Scene mode: wheel zooms at the cursor, right/middle drag pans, left click picks (Ctrl toggles),
+// left drag on an entity or the translate gizmo moves the selection (snap: Edit menu, Ctrl
+// inverts; Esc or right click cancels the drag), F frames the selection (or the scene), Del
+// deletes the selection.
 class ViewportPanel final : public IEditorPanel {
 public:
     const char* name() const override { return "Viewport"; }
@@ -42,13 +52,33 @@ public:
             }
         }
         // Render targets are stored bottom row first (GL convention): flip V to show them upright.
+        const ImVec2 origin = ImGui::GetCursorScreenPos();
         ImGui::Image(ImGuiRhiRenderer::to_id(target_), avail, ImVec2(0, 1), ImVec2(1, 0));
-        shell.set_viewport(ViewportInfo{target_, size_, ImGui::IsItemHovered()});
+        const bool hovered = ImGui::IsItemHovered();
+        shell.set_viewport(ViewportInfo{target_, size_, hovered});
+        if (shell.scene_mode()) interact(shell, origin, scale, hovered);
     }
 
     void record(EditorShell& shell, rhi::CommandBuffer& cmd, f32 alpha) override {
         const ViewportInfo& v = shell.viewport();
-        if (!v.target.is_null()) shell.world().record(cmd, v.target, v.size, alpha);
+        if (v.target.is_null()) return;
+        if (!shell.scene_mode()) {
+            shell.world().record(cmd, v.target, v.size, alpha);
+            return;
+        }
+        EditorScene& scene = shell.scene();
+        lines_.clear();
+        const ViewSettings& view = shell.view();
+        if (view.show_grid) grid_lines(shell.camera(), v.size, view.grid_step, view.grid_major, lines_);
+        math::vec2 q[4];
+        if (hover_ != kNoEntity && !scene.selection().contains(hover_) && entity_quad(scene, hover_, q))
+            quad_lines(q, math::Color{1.0f, 1.0f, 1.0f, 0.35f}, 1.0f, lines_);
+        for (EntityId id : scene.selection().items())
+            if (entity_quad(scene, id, q)) quad_lines(q, math::Color{1.0f, 0.62f, 0.1f, 1.0f}, 2.0f, lines_);
+        math::vec2 pivot;
+        if (TranslateGizmo::pivot(scene, pivot)) gizmo_.lines(shell.camera(), pivot, hot_, lines_);
+        shell.preview().record(cmd, scene.world(), v.target, v.size, shell.camera(), lines_.span(),
+                               math::Color{0.11f, 0.11f, 0.12f, 1.0f});
     }
 
     void shutdown(EditorShell& shell) override {
@@ -57,8 +87,89 @@ public:
     }
 
 private:
+    void interact(EditorShell& shell, ImVec2 origin, ImVec2 scale, bool hovered) {
+        EditorScene& scene = shell.scene();
+        EditorCamera2D& cam = shell.camera();
+        if (shell.take_frame_request()) frame(scene, cam);
+
+        const ImGuiIO& io = ImGui::GetIO();
+        const math::vec2 mouse{(io.MousePos.x - origin.x) * scale.x, (io.MousePos.y - origin.y) * scale.y};
+        const math::vec2 mouse_world = cam.screen_to_world(mouse, size_);
+        math::vec2 pivot;
+        const bool has_pivot = TranslateGizmo::pivot(scene, pivot);
+        hot_ = hovered && has_pivot && !gizmo_.dragging() ? TranslateGizmo::hit(cam, size_, pivot, mouse) : GizmoPart::None;
+        hover_ = hovered && hot_ == GizmoPart::None ? pick_entity(scene, mouse_world) : kNoEntity;
+
+        if (hovered && io.MouseWheel != 0.0f) cam.zoom_at(mouse, size_, std::pow(1.15f, io.MouseWheel));
+
+        // Drag in progress: move, cancel, or finish.
+        if (gizmo_.dragging()) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                gizmo_.cancel(scene);
+            } else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                gizmo_.end();
+            } else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 3.0f)) {
+                const ViewSettings& view = shell.view();
+                const bool snap = view.snap != io.KeyCtrl;
+                gizmo_.update(scene, mouse_world, snap ? view.snap_step : 0.0f);
+                const math::vec2 d = gizmo_.delta();
+                ImGui::SetTooltip("%+.2f, %+.2f m%s", static_cast<f64>(d.x), static_cast<f64>(d.y), snap ? "  (snap)" : "");
+            }
+            return;
+        }
+
+        if (hovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsMouseClicked(ImGuiMouseButton_Middle)))
+            panning_ = true;
+        if (panning_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Right) || ImGui::IsMouseDown(ImGuiMouseButton_Middle))
+                cam.pan_pixels({io.MouseDelta.x * scale.x, io.MouseDelta.y * scale.y});
+            else
+                panning_ = false;
+        }
+
+        // Press: a gizmo handle starts a constrained drag; an entity is selected (Ctrl toggles)
+        // and starts a free drag; empty space clears the selection.
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            if (hot_ != GizmoPart::None) {
+                gizmo_.begin(scene, hot_, mouse_world);
+            } else if (hover_ == kNoEntity) {
+                if (!io.KeyCtrl) scene.selection().clear();
+            } else if (io.KeyCtrl) {
+                scene.selection().toggle(hover_);
+            } else {
+                if (!scene.selection().contains(hover_)) scene.selection().set(hover_);
+                gizmo_.begin(scene, GizmoPart::XY, mouse_world);
+            }
+        }
+        if (ImGui::IsWindowFocused() && !io.WantTextInput) {
+            if (ImGui::IsKeyPressed(ImGuiKey_F, false)) frame(scene, cam);
+            if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) delete_selection(scene);
+        }
+    }
+
+    // Frames the selection, or the whole scene when nothing is selected.
+    void frame(const EditorScene& scene, EditorCamera2D& cam) {
+        math::aabb2 box{{1e30f, 1e30f}, {-1e30f, -1e30f}};
+        bool any = false;
+        math::vec2 q[4];
+        for (EntityId id : scene.selection().items()) {
+            if (!entity_quad(scene, id, q)) continue;
+            for (const math::vec2& p : q) {
+                box.min = math::min(box.min, p);
+                box.max = math::max(box.max, p);
+            }
+            any = true;
+        }
+        cam.frame(any ? box : scene_bounds(scene), size_);
+    }
+
     rhi::TextureHandle target_;
     rhi::Extent2D size_;
+    Array<OverlayLine> lines_;
+    EntityId hover_ = kNoEntity;
+    TranslateGizmo gizmo_;
+    GizmoPart hot_ = GizmoPart::None;
+    bool panning_ = false;
 };
 
 // ---- Console -----------------------------------------------------------------------------------
@@ -218,6 +329,7 @@ public:
 
 void add_default_panels(EditorShell& shell) {
     shell.add_panel(mem::make_unique<ViewportPanel>(mem::heap()));
+    add_scene_panels(shell);
     shell.add_panel(mem::make_unique<ConsolePanel>(mem::heap()));
     shell.add_panel(mem::make_unique<StatsPanel>(mem::heap()));
 }

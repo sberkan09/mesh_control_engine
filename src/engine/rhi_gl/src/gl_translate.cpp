@@ -59,8 +59,14 @@ void GlDevice::exec_begin_pass(const cmd::BeginPass& p) {
         size = backbuffer_size();
     } else {
         FramebufferKey key{};
-        for (u32 i = 0; i < p.color_count; ++i) key.colors[i] = p.colors[i].texture;
-        if (p.has_depth) key.depth = p.depth.texture;
+        for (u32 i = 0; i < p.color_count; ++i) {
+            key.colors[i] = p.colors[i].texture;
+            key.color_layers[i] = p.colors[i].layer;
+        }
+        if (p.has_depth) {
+            key.depth = p.depth.texture;
+            key.depth_layer = p.depth.layer;
+        }
         fbo = framebuffer_for(key);
         size = texture_size(p.color_count ? p.colors[0].texture : p.depth.texture);
     }
@@ -339,6 +345,21 @@ void GlDevice::submit(const CommandBuffer& cb) {
                 break;
             case CmdType::PopDebugScope: glPopDebugGroup(); break;
             case CmdType::Resolve: exec_resolve(*static_cast<const cmd::Resolve*>(payload)); break;
+            case CmdType::SetStorageData: {
+                const auto* c = static_cast<const cmd::SetStorageData*>(payload);
+                const usize at = geometry_ring_.alloc(c->size, storage_align_);
+                if (at == StagingRing::kOverflow) {
+                    overflow("geometry (storage)", c->size);
+                    break;
+                }
+                std::memcpy(geometry_ring_.mapped + at, CommandBuffer::inline_data(c, c->size).data(), c->size);
+                glBindBufferRange(GL_SHADER_STORAGE_BUFFER, c->binding, geometry_ring_.buffer, static_cast<GLintptr>(at),
+                                  static_cast<GLsizeiptr>(c->size));
+                break;
+            }
+            case CmdType::WriteTimestamp:
+                exec_write_timestamp(static_cast<const cmd::WriteTimestamp*>(payload)->index);
+                break;
         }
     }
 }

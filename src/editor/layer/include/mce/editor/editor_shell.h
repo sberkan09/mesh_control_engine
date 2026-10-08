@@ -1,13 +1,17 @@
 #pragma once
-// EditorShell — the M0 editor frame (editor-tools.md §2.2, §2.7, §2.10): ImGui docking shell with
-// a panel registry, the viewport and console panels over a stub world, and dock-layout
-// persistence. This header is ImGui-free: mce_editor.exe sees only this.
+// EditorShell — the editor frame (editor-tools.md §2.2, §2.7, §2.10): ImGui docking shell with a
+// panel registry, dock-layout persistence, the file menu, and the editing session (project +
+// scene + preview renderer + editor camera). Without a project the viewport shows the M0 stub
+// world; with one it shows the open scene. This header is ImGui-free: mce_editor.exe sees only
+// this.
 //
 // Per frame (main thread, inside device.begin_frame/end_frame):
 //   shell.build_ui(dt);              // ImGui frame: menu, dockspace, panels
 //   shell.record(cmd, alpha);        // viewport world -> its render target, then ImGui -> backbuffer
 
 #include "mce/editor/console_model.h"
+#include "mce/editor/editor_session.h"
+#include "mce/editor/preview_renderer.h"
 #include "mce/editor/stub_world.h"
 #include "mce/memory/allocator.h"
 #include "mce/platform/window.h"
@@ -44,6 +48,15 @@ struct ViewportInfo {
     bool hovered = false;
 };
 
+// Editor-side view settings shared by the viewport and the menus.
+struct ViewSettings {
+    bool show_grid = true;
+    f32 grid_step = 1.0f;  // metres
+    u32 grid_major = 8;
+    bool snap = false;      // gizmo drags land on multiples of snap_step (Ctrl inverts)
+    f32 snap_step = 0.5f;   // metres
+};
+
 class EditorShell {
 public:
     EditorShell();
@@ -64,8 +77,43 @@ public:
     IEditorPanel* find_panel(StringView name);
     usize panel_count() const { return panels_.size(); }
 
-    void request_quit() { quit_requested_ = true; }
+    // Asks before discarding unsaved scene changes (Save / Discard / Cancel).
+    void request_quit();
+    void force_quit() { quit_requested_ = true; }
     bool quit_requested() const { return quit_requested_; }
+
+    // ---- editing session ----
+    EditorSession& session() { return session_; }
+    EditorScene& scene() { return session_.scene(); }
+    PreviewRenderer& preview() { return preview_; }
+    EditorCamera2D& camera() { return camera_; }
+    ViewSettings& view() { return view_; }
+    // True once a project is open: the viewport shows the scene instead of the stub world.
+    bool scene_mode() const { return session_.project().is_open(); }
+    bool open_project(StringView root);
+    bool open_scene(StringView path);  // absolute, or relative to the project's assets/ (offers autosave recovery)
+    bool save_scene();                 // Save As prompt when the scene has no file yet
+    void new_scene();                  // asks first when the open scene is dirty
+    void cook(bool pack = false);
+    // Run-in-player (FR-EDT-090): save, cook with --pack, start mce_player on the open scene as a
+    // child process. False (and the reason logged / shown in the Cook panel) when it cannot.
+    bool play();
+    void stop_player();
+    bool player_running() const;
+    // Clipboard (system clipboard, .mcscene text).
+    void copy_selection();
+    void cut_selection();
+    void paste();
+    void duplicate_selection();
+    // The viewport frames the whole scene (or the selection) on its next draw.
+    void frame_scene() { frame_request_ = true; }
+    bool take_frame_request() {
+        const bool r = frame_request_;
+        frame_request_ = false;
+        return r;
+    }
+    // Focus a panel by name on the next frame (e.g. the cook panel after a failed cook).
+    void focus_panel(const char* name) { focus_panel_ = name; }
     void reset_layout() { reset_layout_ = true; }
 
     rhi::RenderDevice& device() { return *device_; }
@@ -83,12 +131,19 @@ private:
     struct Impl;
     void draw_menu_bar();
     void draw_dockspace();
+    void draw_popups();
+    void handle_shortcuts();
+    void update_title();
 
     Impl* impl_ = nullptr;
     platform::Window* window_ = nullptr;
     rhi::RenderDevice* device_ = nullptr;
     StubWorld world_;
     ConsoleModel console_;
+    EditorSession session_;
+    PreviewRenderer preview_;
+    EditorCamera2D camera_;
+    ViewSettings view_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;
     ViewportInfo viewport_;
     FixedString<256> ini_path_;
@@ -96,9 +151,18 @@ private:
     bool quit_requested_ = false;
     bool reset_layout_ = false;
     bool show_demo_ = false;
+    bool frame_request_ = false;
+    const char* focus_panel_ = nullptr;
+    // Pending modal popups (opened on the next frame, inside the ImGui frame).
+    enum class Popup : u8 { None, OpenScene, SaveAs, ConfirmQuit, ConfirmNew, ConfirmOpen, Recover };
+    Popup popup_ = Popup::None;
+    bool popup_opened_ = false;
+    char save_as_buf_[256] = {};
+    FixedString<512> pending_open_;
+    FixedString<512> title_;
 };
 
-// Registers the M0 panel set: Viewport, Console, Stats.
+// Registers the panel set: Viewport, Hierarchy, Inspector, Cook, Console, Stats.
 void add_default_panels(EditorShell& shell);
 
 }  // namespace mce::editor

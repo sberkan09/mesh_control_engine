@@ -7,9 +7,11 @@ mce_add_library(mce_editor_layer
     SOURCES
         src/draw_clip.cpp
         src/editor_shell.cpp
+        src/imgui_draw_ctx.cpp
         src/imgui_platform.cpp
         src/imgui_renderer.cpp
         src/panels.cpp
+        src/scene_panels.cpp
     PUBLIC_DEPS
         mce::mce_editor_core
         mce::mce_platform
