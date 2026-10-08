@@ -213,7 +213,6 @@ void make_atlas(Array<u8>& out) {
 namespace {
 
 constexpr f32 kRate = 48000.0f;
-constexpr f32 kTau = 6.28318530718f;
 
 usize frames(f32 seconds) { return static_cast<usize>(seconds * kRate); }
 
