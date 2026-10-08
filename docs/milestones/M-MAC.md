@@ -40,5 +40,6 @@ Filled per landing in the PR description; the first landing's table is in the PR
 | Deployment target below macOS 26 | needs a float `from_chars` fallback in the cook's JSON reader (cloud-owned) |
 | Readback of R11G11B10F / depth targets | unsupported (returns `Unsupported`); GL reads them |
 | AddressSanitizer on macOS | the ASan runtime (AppleClang 17 and Homebrew LLVM 21) hangs in shadow-memory init on macOS 26.6 even for a 3-line program; `macos-asan` runs UBSan only until a toolchain update fixes it |
+| GPU timestamps (`write_timestamp`, M5a budget tables) | `caps().timestamp_queries` is false on Metal; needs `MTLCounterSampleBuffer` |
 | Indirect command buffers for MDI | one direct draw per record today |
 | Parity with RHI features that land on GL after this (M5a PBR, CSM, post chain, …) | per feature, as they land |

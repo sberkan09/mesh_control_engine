@@ -221,6 +221,8 @@ ResultV MetalDevice::init() {
         caps_.max_texture_size = 16384;
         caps_.max_uniform_block_size = 64 * 1024;
         caps_.shader_draw_parameters = true;  // [[base_instance]] is native
+        caps_.timestamp_queries = false;      // M-MAC backlog: MTLCounterSampleBuffer
+        caps_.storage_buffer_alignment = 256;
         MCE_LOG_INFO("rhi.metal: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 
         MCE_TRY(create_ring(geometry_ring_, desc_.geometry_ring_bytes, "mce.ring.geometry"));

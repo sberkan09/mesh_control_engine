@@ -93,8 +93,9 @@ void MetalDevice::exec_begin_pass(const cmd::BeginPass& p) {
             const MtlTexture* t = textures_.try_get(p.colors[i].texture);
             MCE_ASSERT_MSG(t, "begin_pass: stale color target");
             if (!t) continue;
-            MCE_ASSERT_MSG(t->dimension == TextureDimension::Tex2D, "render targets must be 2D textures");
+            MCE_ASSERT_MSG(p.colors[i].layer < t->layers, "render target layer out of range");
             rp.colorAttachments[i].texture = t->texture;
+            rp.colorAttachments[i].slice = p.colors[i].layer;
             rp.colorAttachments[i].loadAction = mtl_load(p.colors[i].load);
             rp.colorAttachments[i].storeAction = mtl_store(p.colors[i].store);
             const f32* c = p.colors[i].clear.color;
@@ -108,13 +109,16 @@ void MetalDevice::exec_begin_pass(const cmd::BeginPass& p) {
             MCE_ASSERT_MSG(t, "begin_pass: stale depth target");
             if (t) {
                 const MTLPixelFormat df = [t->texture pixelFormat];
+                MCE_ASSERT_MSG(p.depth.layer < t->layers, "depth target layer out of range");
                 rp.depthAttachment.texture = t->texture;
+                rp.depthAttachment.slice = p.depth.layer;
                 rp.depthAttachment.loadAction = mtl_load(p.depth.load);
                 rp.depthAttachment.storeAction = mtl_store(p.depth.store);
                 rp.depthAttachment.clearDepth = p.depth.clear.depth;
                 f.depth = df;
                 if (df == MTLPixelFormatDepth32Float_Stencil8 || df == MTLPixelFormatDepth24Unorm_Stencil8) {
                     rp.stencilAttachment.texture = t->texture;
+                    rp.stencilAttachment.slice = p.depth.layer;
                     rp.stencilAttachment.loadAction = mtl_load(p.depth.load);
                     rp.stencilAttachment.storeAction = mtl_store(p.depth.store);
                     rp.stencilAttachment.clearStencil = p.depth.clear.stencil;
@@ -362,6 +366,24 @@ void MetalDevice::submit(const CommandBuffer& cb) {
                     }
                     break;
                 }
+                case CmdType::SetStorageData: {
+                    const auto* c = static_cast<const cmd::SetStorageData*>(payload);
+                    const usize at = geometry_ring_.alloc(c->size, caps_.storage_buffer_alignment);
+                    if (at == StagingRing::kOverflow) {
+                        overflow("geometry (storage)", c->size);
+                        break;
+                    }
+                    std::memcpy(geometry_ring_.mapped + at, CommandBuffer::inline_data(c, c->size).data(), c->size);
+                    if (c->binding >= kMaxStorageBindings) break;
+                    storage_[c->binding] = BufferBinding{geometry_ring_.buffer, at};
+                    if (ts_.enc) {
+                        const u32 idx = kStorageBufferBase + c->binding;
+                        [ts_.enc setVertexBuffer:geometry_ring_.buffer offset:at atIndex:idx];
+                        [ts_.enc setFragmentBuffer:geometry_ring_.buffer offset:at atIndex:idx];
+                    }
+                    break;
+                }
+                case CmdType::WriteTimestamp: break;  // caps().timestamp_queries == false on Metal (yet)
                 case CmdType::SetVertexData: {
                     const auto* c = static_cast<const cmd::SetVertexData*>(payload);
                     const usize at = geometry_ring_.alloc(c->size, 16);

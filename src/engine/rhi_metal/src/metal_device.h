@@ -129,6 +129,8 @@ public:
 
     const DeviceCaps& caps() const override { return caps_; }
     const FrameStats& last_frame_stats() const override { return last_stats_; }
+    // Timestamp queries are not wired yet (caps().timestamp_queries == false): always "none".
+    const GpuTimestamps& last_gpu_timestamps() const override { return timestamps_; }
     usize texture_memory_bytes() const override { return texture_bytes_; }
     u32 validation_error_count() const override { return validation_errors_; }
 
@@ -214,6 +216,7 @@ private:
     u32 validation_errors_ = 0;
     FrameStats stats_;
     FrameStats last_stats_;
+    GpuTimestamps timestamps_;
 
     // Bindings: persistent across submits (GL binding-point semantics).
     BufferBinding uniforms_[kMaxBufferBanks];
