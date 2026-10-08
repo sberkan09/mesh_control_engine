@@ -61,6 +61,15 @@ void deliver(Window* w, const Event& e) {
     if (w) w->dispatch(e);
 }
 
+// Process-level device events (gamepads) go to the window with keyboard focus, else the first.
+Window* input_window() {
+    if (SDL_Window* f = SDL_GetKeyboardFocus())
+        if (Window* w = find_window(SDL_GetWindowID(f))) return w;
+    for (Window* w : g_state.windows)
+        if (w) return w;
+    return nullptr;
+}
+
 }  // namespace
 
 const char* event_type_name(EventType t) {
@@ -81,6 +90,11 @@ const char* event_type_name(EventType t) {
         case EventType::MouseWheel: return "MouseWheel";
         case EventType::TextInput: return "TextInput";
         case EventType::Quit: return "Quit";
+        case EventType::GamepadAdded: return "GamepadAdded";
+        case EventType::GamepadRemoved: return "GamepadRemoved";
+        case EventType::GamepadButtonDown: return "GamepadButtonDown";
+        case EventType::GamepadButtonUp: return "GamepadButtonUp";
+        case EventType::GamepadAxis: return "GamepadAxis";
     }
     return "?";
 }
@@ -98,6 +112,8 @@ ResultV init(const PlatformDesc& desc) {
         MCE_LOG_ERROR("platform: SDL_Init failed: {}", SDL_GetError());
         return Error(Errc::PlatformInit, "platform.init", SDL_GetError());
     }
+    // Gamepads are optional: a missing joystick backend leaves the game keyboard/mouse-only.
+    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) MCE_LOG_WARN("platform: no gamepad support: {}", SDL_GetError());
     g_state.initialized = true;
     g_state.sdl_to_engine_us = static_cast<i64>(now_us()) - static_cast<i64>(SDL_GetTicksNS() / 1000);
     MCE_LOG_INFO("platform: SDL {}.{}.{}, video driver '{}'", SDL_MAJOR_VERSION, SDL_MINOR_VERSION,
@@ -108,6 +124,7 @@ ResultV init(const PlatformDesc& desc) {
 void shutdown() {
     if (!g_state.initialized) return;
     for (Window* w : g_state.windows) MCE_ASSERT_MSG(w == nullptr, "platform::shutdown with a live window");
+    detail::close_gamepads();
     SDL_Quit();
     g_state.initialized = false;
 }
@@ -204,6 +221,42 @@ bool pump_events() {
                 }
                 deliver(find_window(ev.wheel.windowID), e);
                 break;
+            case SDL_EVENT_GAMEPAD_ADDED: {
+                const u32 slot = detail::open_gamepad(ev.gdevice.which);
+                if (slot == detail::kNoSlot) break;
+                e.type = EventType::GamepadAdded;
+                e.flags = slot;
+                deliver(input_window(), e);
+                break;
+            }
+            case SDL_EVENT_GAMEPAD_REMOVED: {
+                const u32 slot = detail::close_gamepad(ev.gdevice.which);
+                if (slot == detail::kNoSlot) break;
+                e.type = EventType::GamepadRemoved;
+                e.flags = slot;
+                deliver(input_window(), e);
+                break;
+            }
+            case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+            case SDL_EVENT_GAMEPAD_BUTTON_UP: {
+                const u32 slot = detail::find_gamepad(ev.gbutton.which);
+                if (slot == detail::kNoSlot) break;
+                e.type = ev.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ? EventType::GamepadButtonDown : EventType::GamepadButtonUp;
+                e.code = ev.gbutton.button;
+                e.flags = slot;
+                deliver(input_window(), e);
+                break;
+            }
+            case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+                const u32 slot = detail::find_gamepad(ev.gaxis.which);
+                if (slot == detail::kNoSlot) break;
+                e.type = EventType::GamepadAxis;
+                e.code = ev.gaxis.axis;
+                e.flags = slot;
+                e.x = detail::gamepad_axis_value(ev.gaxis.axis, ev.gaxis.value);
+                deliver(input_window(), e);
+                break;
+            }
             case SDL_EVENT_TEXT_INPUT: {
                 e.type = EventType::TextInput;
                 e.window_id = ev.text.windowID;

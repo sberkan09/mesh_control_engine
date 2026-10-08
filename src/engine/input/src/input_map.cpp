@@ -65,7 +65,7 @@ Result<void> decode_input_map(Span<const byte> chunk, InputMapSet& out) {
     }
     for (usize i = 0; i < out.bindings.size(); ++i) {
         const BindingDef& b = out.bindings[i];
-        if (static_cast<u8>(b.device) > static_cast<u8>(Device::MouseDelta) || b.axis > 1 ||
+        if (static_cast<u8>(b.device) > static_cast<u8>(Device::GamepadAxis) || b.axis > 1 ||
             static_cast<u8>(b.curve) > static_cast<u8>(Curve::Cubic) || !(b.dz.outer > b.dz.inner))
             return Error(Errc::InvalidArgument, kStage, "bad binding", static_cast<u32>(i));
     }
@@ -142,6 +142,26 @@ InputMapBuilder& InputMapBuilder::mouse_wheel(u8 axis, f32 scale) {
     b.device = Device::MouseWheel;
     b.axis = axis;
     b.scale = scale;
+    return bind(b);
+}
+
+InputMapBuilder& InputMapBuilder::gamepad_button(platform::GamepadButton btn, u8 axis, f32 scale) {
+    BindingDef b;
+    b.device = Device::GamepadButton;
+    b.code = static_cast<u32>(btn);
+    b.axis = axis;
+    b.scale = scale;
+    return bind(b);
+}
+
+InputMapBuilder& InputMapBuilder::gamepad_axis(platform::GamepadAxis a, u8 axis, f32 scale, Deadzone dz, Curve curve) {
+    BindingDef b;
+    b.device = Device::GamepadAxis;
+    b.code = static_cast<u32>(a);
+    b.axis = axis;
+    b.scale = scale;
+    b.dz = dz;
+    b.curve = curve;
     return bind(b);
 }
 

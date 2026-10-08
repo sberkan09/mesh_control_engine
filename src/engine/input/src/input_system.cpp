@@ -1,9 +1,11 @@
 #include "mce/input/input_system.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include "mce/input/replay.h"
+#include "mce/fixed_string.h"
 #include "mce/log.h"
 #include "mce/platform/platform.h"
 
@@ -24,6 +26,11 @@ bool is_input_event(EventType t) {
         case EventType::MouseWheel:
         case EventType::TextInput:
         case EventType::FocusOut:
+        case EventType::GamepadAdded:
+        case EventType::GamepadRemoved:
+        case EventType::GamepadButtonDown:
+        case EventType::GamepadButtonUp:
+        case EventType::GamepadAxis:
             return true;
         default:
             return false;
@@ -56,7 +63,11 @@ f32 apply_curve(f32 v, Curve c) {
     return v < 0.f ? -r : r;
 }
 
-bool bounded(Device d) { return d == Device::Keyboard || d == Device::MouseButton; }
+bool bounded(Device d) {
+    return d == Device::Keyboard || d == Device::MouseButton || d == Device::GamepadButton || d == Device::GamepadAxis;
+}
+
+constexpr f32 kCaptureAxisThreshold = 0.6f;  // a stick must be pushed this far to be captured
 
 // Appends one code point as UTF-8; drops it whole when it does not fit.
 void append_utf8(char* buf, u32& len, u32 cp) {
@@ -88,7 +99,7 @@ void append_utf8(char* buf, u32& len, u32 cp) {
 
 }  // namespace
 
-InputSystem::InputSystem(mem::IAllocator& a) : alloc_(a), set_(a), queue_(a) {
+InputSystem::InputSystem(mem::IAllocator& a) : alloc_(a), set_(a), cooked_bindings_(a), overrides_(a), queue_(a) {
     queue_.reserve(kQueueCapacity);
     origin_us_ = platform::now_us();
 }
@@ -99,6 +110,9 @@ Result<void> InputSystem::load_map(Span<const byte> chunk) {
     InputMapSet parsed(alloc_);
     MCE_TRY(decode_input_map(chunk, parsed));
     set_ = std::move(parsed);
+    cooked_bindings_ = set_.bindings;
+    apply_overrides();  // the player's persisted rebinds survive a map (re)load
+    if (rebind_.state == RebindState::Waiting) rebind_.state = RebindState::Cancelled;
     stack_size_ = 0;
     stack_[stack_size_++] = 0;
     // Hot reload resets held state: a one-tick grace instead of stale edges.
@@ -127,17 +141,177 @@ void InputSystem::pop_map() {
     if (stack_size_ > 0) --stack_size_;
 }
 
-bool InputSystem::rebind(StringId map, StringId action, u32 index, const BindingDef& binding) {
+BindingDef* InputSystem::find_binding(StringId map, StringId action, u32 index, const ActionDef** def) {
     const ActionMapDef* m = set_.find_map(map);
-    if (!m) return false;
+    if (!m) return nullptr;
     for (u32 i = 0; i < m->action_count; ++i) {
         const ActionDef& a = set_.actions[m->first_action + i];
         if (a.name != action) continue;
-        if (index >= a.binding_count) return false;
-        set_.bindings[a.first_binding + index] = binding;
-        return true;
+        if (index >= a.binding_count) return nullptr;
+        if (def) *def = &a;
+        return &set_.bindings[a.first_binding + index];
     }
-    return false;
+    return nullptr;
+}
+
+bool InputSystem::rebind(StringId map, StringId action, u32 index, const BindingDef& binding) {
+    BindingDef* b = find_binding(map, action, index);
+    if (!b) return false;
+    *b = binding;
+    set_override(map, action, index, binding);
+    return true;
+}
+
+void InputSystem::set_override(StringId map, StringId action, u32 index, const BindingDef& b) {
+    const BindingDef& cooked = cooked_bindings_[static_cast<usize>(find_binding(map, action, index) - set_.bindings.data())];
+    const bool is_default = cooked.device == b.device && cooked.axis == b.axis && cooked.curve == b.curve &&
+                            cooked.flags == b.flags && cooked.code == b.code && cooked.scale == b.scale &&
+                            cooked.dz.inner == b.dz.inner && cooked.dz.outer == b.dz.outer;
+    for (usize i = 0; i < overrides_.size(); ++i) {
+        BindingOverride& o = overrides_[i];
+        if (o.map != map.value || o.action != action.value || o.index != index) continue;
+        if (is_default) {
+            overrides_.erase(i);  // rebinding back to the default leaves nothing to persist
+        } else {
+            o = BindingOverride::make(map, action, index, b);
+        }
+        return;
+    }
+    if (!is_default) overrides_.push_back(BindingOverride::make(map, action, index, b));
+}
+
+void InputSystem::apply_overrides() {
+    u32 dropped = 0;
+    for (usize i = 0; i < overrides_.size();) {
+        const BindingOverride& o = overrides_[i];
+        if (BindingDef* b = find_binding(StringId(o.map), StringId(o.action), o.index)) {
+            *b = o.binding();
+            ++i;
+        } else {
+            overrides_.erase(i);
+            ++dropped;
+        }
+    }
+    if (dropped) MCE_LOG_WARN("input: dropped {} saved binding(s) the current input map no longer has", dropped);
+}
+
+void InputSystem::reset_bindings() {
+    if (cooked_bindings_.size() == set_.bindings.size()) set_.bindings = cooked_bindings_;
+    overrides_.clear();
+}
+
+void InputSystem::serialize_bindings(Array<char>& out) const { write_bindings(overrides_.span(), out); }
+
+Result<void> InputSystem::deserialize_bindings(StringView text) {
+    Array<BindingOverride> parsed(alloc_);
+    MCE_TRY(read_bindings(text, parsed));
+    for (const BindingOverride& o : parsed.span()) {
+        if (static_cast<u8>(o.device) > static_cast<u8>(Device::GamepadAxis) || o.axis > 1)
+            return Error(Errc::InvalidArgument, "input.bindings.read", "binding out of range");
+    }
+    reset_bindings();
+    overrides_ = std::move(parsed);
+    apply_overrides();
+    return ok();
+}
+
+Result<void> InputSystem::save_bindings(StringView path) const {
+    Array<char> text(alloc_);
+    serialize_bindings(text);
+    FixedString<512> p(path), tmp(path);
+    tmp.append(".tmp");
+    std::FILE* f = std::fopen(tmp.c_str(), "wb");
+    if (!f) return Error(Errc::IoError, "input.bindings.save", "cannot open for writing");
+    const bool wrote = std::fwrite(text.data(), 1, text.size(), f) == text.size();
+    const bool closed = std::fclose(f) == 0;
+    if (!wrote || !closed) {
+        std::remove(tmp.c_str());
+        return Error(Errc::IoError, "input.bindings.save", "write failed");
+    }
+    std::remove(p.c_str());  // rename() does not replace an existing file on Windows
+    if (std::rename(tmp.c_str(), p.c_str()) != 0) return Error(Errc::IoError, "input.bindings.save", "rename failed");
+    return ok();
+}
+
+Result<void> InputSystem::load_bindings(StringView path) {
+    FixedString<512> p(path);
+    std::FILE* f = std::fopen(p.c_str(), "rb");
+    if (!f) return Error(Errc::FileNotFound, "input.bindings.load");
+    Array<char> text(alloc_);
+    char buf[1024];
+    for (usize n; (n = std::fread(buf, 1, sizeof(buf), f)) > 0;)
+        for (usize i = 0; i < n; ++i) text.push_back(buf[i]);
+    std::fclose(f);
+    return deserialize_bindings(StringView(text.data(), text.size()));
+}
+
+bool InputSystem::begin_rebind(StringId map, StringId action, u32 index, f32 timeout_s, u8 accept) {
+    const ActionDef* def = nullptr;
+    if (!find_binding(map, action, index, &def)) return false;
+    rebind_ = Rebind{};
+    rebind_.state = RebindState::Waiting;
+    rebind_.map = map;
+    rebind_.action = action;
+    rebind_.index = index;
+    rebind_.accept = accept;
+    rebind_.button_action = def->type == ActionType::Button;
+    rebind_.deadline_tick = last_tick_ + 1 + static_cast<u64>(timeout_s * static_cast<f32>(tick_hz_));
+    return true;
+}
+
+void InputSystem::cancel_rebind() {
+    if (rebind_.state == RebindState::Waiting) rebind_.state = RebindState::Cancelled;
+}
+
+bool InputSystem::try_capture(const Event& e) {
+    if (rebind_.state != RebindState::Waiting) return false;
+    BindingDef* target = find_binding(rebind_.map, rebind_.action, rebind_.index);
+    if (!target) {
+        rebind_.state = RebindState::Cancelled;
+        return false;
+    }
+    BindingDef nb;
+    nb.axis = target->axis;
+    const f32 sign = target->scale < 0.f ? -1.f : 1.f;
+    nb.scale = sign;
+    switch (e.type) {
+        case EventType::KeyDown:
+            if (e.flags & platform::EventFlag::Repeat) return true;
+            if (e.code == static_cast<u32>(platform::Key::Escape)) {
+                rebind_.state = RebindState::Cancelled;
+                return true;
+            }
+            if (!(rebind_.accept & RebindAccept::Keyboard)) return false;
+            nb.device = Device::Keyboard;
+            nb.code = e.code;
+            break;
+        case EventType::MouseButtonDown:
+            if (!(rebind_.accept & RebindAccept::Mouse)) return false;
+            nb.device = Device::MouseButton;
+            nb.code = e.code;
+            break;
+        case EventType::GamepadButtonDown:
+            if (!(rebind_.accept & RebindAccept::Gamepad)) return false;
+            nb.device = Device::GamepadButton;
+            nb.code = e.code;
+            break;
+        case EventType::GamepadAxis: {
+            if (!(rebind_.accept & RebindAccept::Gamepad) || std::fabs(e.x) < kCaptureAxisThreshold) return false;
+            nb.device = Device::GamepadAxis;
+            nb.code = e.code;
+            nb.dz = {0.2f, 1.f};
+            // A button action fires when the stick is pushed the captured way; an axis binding
+            // keeps its sign relative to the push (the "left" half of Move stays left).
+            const f32 dir = e.x < 0.f ? -1.f : 1.f;
+            nb.scale = rebind_.button_action ? dir : sign * dir;
+            break;
+        }
+        default: return false;
+    }
+    rebind_.result = nb;
+    rebind_.state = RebindState::Captured;
+    rebind(rebind_.map, rebind_.action, rebind_.index, nb);
+    return true;
 }
 
 // ---------------------------------------------------------------------------- clock
@@ -189,6 +363,12 @@ void InputSystem::push_event(const Event& e) {
 }
 
 void InputSystem::reset_devices() {
+    for (PadState& p : pads_) {
+        p.buttons.clear();
+        p.tapped.clear();
+        p.release_pending.clear();
+        for (f32& a : p.axes) a = 0.f;
+    }
     keys_.clear();
     keys_tapped_.clear();
     keys_release_pending_.clear();
@@ -199,7 +379,33 @@ void InputSystem::reset_devices() {
 
 void InputSystem::fold(const Event& e) {
     ++stats_.events_folded;
+    if (try_capture(e)) return;
+    const u32 slot = e.flags & 0xffu;  // gamepad events: player slot
     switch (e.type) {
+        case EventType::GamepadAdded:
+        case EventType::GamepadRemoved:
+            if (slot < platform::kMaxGamepads) {
+                pads_[slot] = PadState{};  // a plugged/unplugged pad reads neutral
+                pads_[slot].connected = e.type == EventType::GamepadAdded;
+            }
+            break;
+        case EventType::GamepadButtonDown:
+            if (slot < platform::kMaxGamepads && e.code < kPadButtons) {
+                pads_[slot].buttons.set(e.code);
+                pads_[slot].tapped.set(e.code);
+                pads_[slot].release_pending.reset(e.code);
+            }
+            break;
+        case EventType::GamepadButtonUp:
+            if (slot < platform::kMaxGamepads && e.code < kPadButtons) {
+                PadState& p = pads_[slot];
+                if (p.tapped.test(e.code)) p.release_pending.set(e.code);
+                else p.buttons.reset(e.code);
+            }
+            break;
+        case EventType::GamepadAxis:
+            if (slot < platform::kMaxGamepads && e.code < kPadAxes) pads_[slot].axes[e.code] = e.x;
+            break;
         case EventType::KeyDown: {
             if (e.flags & platform::EventFlag::Repeat) break;  // OS auto-repeat is not a new press
             if (e.code >= kKeyCount) break;
@@ -273,6 +479,12 @@ const InputState* InputSystem::sample_for_tick(u64 tick, u64 close_us) {
     keys_tapped_.clear();
     buttons_release_pending_.clear();
     buttons_tapped_.clear();
+    for (PadState& p : pads_) {
+        for (u32 b = 0; b < kPadButtons; ++b)
+            if (p.release_pending.test(b)) p.buttons.reset(b);
+        p.release_pending.clear();
+        p.tapped.clear();
+    }
     tick_wheel_ = vec2();
     tick_delta_ = vec2();
     tick_text_len_ = 0;
@@ -283,6 +495,8 @@ const InputState* InputSystem::sample_for_tick(u64 tick, u64 close_us) {
         queue_.clear();
         queue_head_ = 0;
     }
+
+    if (rebind_.state == RebindState::Waiting && tick >= rebind_.deadline_tick) rebind_.state = RebindState::TimedOut;
 
     prev_ = cur_;
     if (replayer_) {
@@ -309,6 +523,16 @@ f32 InputSystem::binding_value(const BindingDef& b) const {
         case Device::MouseButton: v = (b.code < kMouseButtons && buttons_.test(b.code)) ? 1.f : 0.f; break;
         case Device::MouseWheel: v = b.axis == 0 ? tick_wheel_.x : tick_wheel_.y; break;
         case Device::MouseDelta: v = b.axis == 0 ? tick_delta_.x : tick_delta_.y; break;
+        case Device::GamepadButton:
+            if (b.code < kPadButtons)
+                for (const PadState& p : pads_)
+                    if (p.buttons.test(b.code)) v = 1.f;
+            break;
+        case Device::GamepadAxis:
+            if (b.code < kPadAxes)
+                for (const PadState& p : pads_)
+                    if (std::fabs(p.axes[b.code]) > std::fabs(v)) v = p.axes[b.code];
+            break;
     }
     if (bounded(b.device)) v = apply_curve(apply_deadzone(v, b.dz), b.curve);
     if (b.flags & BindingFlag::Invert) v = -v;
@@ -413,6 +637,16 @@ void InputSystem::evaluate(InputState& out, const InputState& prev) const {
 bool InputSystem::key_held(platform::Key k) const {
     const u32 c = static_cast<u32>(k);
     return c < kKeyCount && keys_.test(c);
+}
+
+bool InputSystem::gamepad_held(u32 slot, platform::GamepadButton b) const {
+    const u32 c = static_cast<u32>(b);
+    return slot < platform::kMaxGamepads && c < kPadButtons && pads_[slot].buttons.test(c);
+}
+
+f32 InputSystem::gamepad_axis(u32 slot, platform::GamepadAxis a) const {
+    const u32 c = static_cast<u32>(a);
+    return slot < platform::kMaxGamepads && c < kPadAxes ? pads_[slot].axes[c] : 0.f;
 }
 
 bool InputSystem::mouse_held(platform::MouseButton b) const {
