@@ -106,6 +106,7 @@ void EditorScene::assign_new_guid() {
 void EditorScene::touch() {
     dirty_ = true;
     ++revision_;
+    sync_world_transforms();
 }
 
 // ---------------------------------------------------------------- preview world
@@ -143,6 +144,23 @@ void EditorScene::rebuild_world() {
     for (const DocEntity& e : doc_.entities()) spawn_mirror(e);
     for (const DocEntity& e : doc_.entities())
         for (const DocComponent& c : e.components) mirror(e.id, c);
+    world_transforms_ = false;
+    sync_world_transforms();
+}
+
+void EditorScene::sync_world_transforms() {
+    const refl::TypeRecord& child_of = refl::type_of<ChildOf>();
+    bool any = world_transforms_;
+    for (const DocEntity& e : doc_.entities()) any = any || e.find(child_of) != nullptr;
+    if (!any) return;
+    world_transforms_ = true;
+    const ecs::ComponentId wt = scene::component_for(*world_, refl::type_of<WorldTransform>());
+    for (const DocEntity& e : doc_.entities()) {
+        const Entity r = runtime_entity(e.id);
+        if (r.is_null() || !e.find(refl::type_of<LocalTransform>())) continue;
+        const WorldTransform w = world_transform(e.id);
+        world_->set_raw(r, wt, &w);
+    }
 }
 
 bool EditorScene::verify_world() const {
@@ -168,8 +186,9 @@ bool EditorScene::verify_world() const {
         }
         // The mirror holds exactly the document's components.
         u32 live_comps = 0;
+        const ecs::ComponentId wt = world_->find_component(refl::type_of<WorldTransform>().type_hash);
         for (usize id = 0; id < world_->component_count(); ++id)
-            if (world_->has(r, static_cast<ecs::ComponentId>(id))) ++live_comps;
+            if (id != wt && world_->has(r, static_cast<ecs::ComponentId>(id))) ++live_comps;  // WorldTransform: derived
         if (live_comps != comps) return false;
     }
     return world_->entity_count() == expected;
@@ -197,6 +216,93 @@ void EditorScene::select_range(EntityId to, bool additive) {
         if (!selection_.contains(id)) selection_.toggle(id);
 }
 
+// ---------------------------------------------------------------- hierarchy
+
+EntityId EditorScene::parent_of(EntityId id) const {
+    const ChildOf* c = get<ChildOf>(id);
+    if (!c) return kNoEntity;
+    const EntityId p = doc_entity_id(c->parent);
+    return p != id && doc_.find(p) ? p : kNoEntity;
+}
+
+void EditorScene::children_of(EntityId id, Array<EntityId>& out) const {
+    for (const DocEntity& e : doc_.entities()) {
+        if (e.id == id) continue;
+        const EntityId p = parent_of(e.id);
+        // An entity in a ChildOf cycle has no root above it: it is listed with the roots too.
+        if (p == id || (id == kNoEntity && is_ancestor(e.id, e.id))) out.push_back(e.id);
+    }
+}
+
+bool EditorScene::is_ancestor(EntityId ancestor, EntityId id) const {
+    if (ancestor == kNoEntity) return false;
+    EntityId p = parent_of(id);
+    for (usize guard = 0; p != kNoEntity && guard <= doc_.size(); ++guard) {
+        if (p == ancestor) return true;
+        p = parent_of(p);
+    }
+    return false;
+}
+
+WorldTransform EditorScene::world_transform(EntityId id) const {
+    // Root first; a cycle stops the walk where it repeats.
+    EntityId chain[64];
+    usize n = 0;
+    for (EntityId e = id; e != kNoEntity && n < 64; e = parent_of(e)) {
+        bool seen = false;
+        for (usize i = 0; i < n; ++i) seen = seen || chain[i] == e;
+        if (seen) break;
+        chain[n++] = e;
+    }
+    WorldTransform w;
+    for (usize i = n; i-- > 0;) {
+        const LocalTransform* t = get<LocalTransform>(chain[i]);
+        const LocalTransform local = t ? *t : LocalTransform{};
+        w = i + 1 == n ? ecs::to_world(local) : ecs::compose(w, local);
+    }
+    if (n == 0) w = ecs::to_world(LocalTransform{});
+    return w;
+}
+
+LocalTransform EditorScene::local_for_world(EntityId id, const WorldTransform& world) const {
+    const EntityId parent = parent_of(id);
+    if (parent == kNoEntity) return LocalTransform{world.position, world.rotation, world.scale};
+    const WorldTransform p = world_transform(parent);
+    const auto div = [](f32 a, f32 b) { return b != 0.0f ? a / b : a; };
+    const math::quat inv = math::conjugate(p.rotation);
+    const math::vec3 d = math::rotate(inv, world.position - p.position);
+    LocalTransform out;
+    out.position = {div(d.x, p.scale.x), div(d.y, p.scale.y), div(d.z, p.scale.z)};
+    out.rotation = math::normalize(inv * world.rotation);
+    out.scale = {div(world.scale.x, p.scale.x), div(world.scale.y, p.scale.y), div(world.scale.z, p.scale.z)};
+    return out;
+}
+
+bool EditorScene::set_parent(EntityId child, EntityId parent) {
+    if (!doc_.find(child) || (parent != kNoEntity && !doc_.find(parent))) return false;
+    if (parent == child || is_ancestor(child, parent) || parent_of(child) == parent) return false;
+    Edit edit(*this, "Reparent");
+    const WorldTransform placed = world_transform(child);
+    const refl::TypeRecord& child_of = refl::type_of<ChildOf>();
+    if (parent == kNoEntity) {
+        remove_component(child, child_of);
+    } else {
+        if (!get<ChildOf>(child)) add_component(child, child_of);
+        set(child, ChildOf{doc_entity_ref(parent)});
+    }
+    if (get<LocalTransform>(child)) set(child, local_for_world(child, placed));
+    if (parent != kNoEntity) {
+        // After the new parent's subtree, so the file reads parent-first.
+        i32 last = doc_.index_of(parent);
+        for (const DocEntity& e : doc_.entities())
+            if (e.id != child && is_ancestor(parent, e.id) && !is_ancestor(child, e.id)) last = doc_.index_of(e.id) > last ? doc_.index_of(e.id) : last;
+        const i32 from = doc_.index_of(child);
+        const i32 to = from <= last ? last : last + 1;
+        if (to != from) move_entity(child, static_cast<usize>(to));
+    }
+    return true;
+}
+
 // ---------------------------------------------------------------- commands
 
 EntityId EditorScene::create_entity(StringView name, bool with_transform, i32 at) {
@@ -219,6 +325,8 @@ EntityId EditorScene::create_entity(StringView name, bool with_transform, i32 at
 bool EditorScene::destroy_entity(EntityId id) {
     if (!doc_.find(id)) return false;
     Edit edit(*this, "Delete entity");
+    Array<EntityId> kids;  // the subtree goes too, after this entity (a ChildOf cycle ends there)
+    children_of(id, kids);
     record(id);
     note(StructOp::Erase, id, static_cast<usize>(doc_.index_of(id)));
     doc_.erase(id);
@@ -249,6 +357,7 @@ bool EditorScene::destroy_entity(EntityId id) {
             mirror(e.id, c);
         }
     }
+    for (EntityId k : kids) destroy_entity(k);
     touch();
     return true;
 }

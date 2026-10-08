@@ -61,3 +61,23 @@ that is tens of KiB, and the byte bound evicts old entries if a large scene relo
 3. **Selecting several entities.** In the viewport, Ctrl toggles and Shift adds; a drag over empty space draws a
    marquee and selects what it touches on release (Ctrl/Shift add). In the hierarchy, Shift selects the range from
    the last clicked row (`EditorScene::select_range`), Ctrl+Shift extends it.
+
+## 5. Tree hierarchy (`ChildOf`)
+
+1. **The document stays flat; the tree is a view of `ChildOf`.** The Hierarchy panel draws roots and their children
+   as a tree in document order. Dropping a row on another re-parents it (`EditorScene::set_parent`), Shift-drop
+   reorders it before that row, and dropping below the tree unparents it. The context menu has Create Child, Create
+   Entity Below and Unparent.
+2. **Re-parenting keeps where the entity sits.** `set_parent` computes the `LocalTransform` that keeps the world
+   placement under the new parent, adds or removes `ChildOf`, moves the child after its new parent's subtree, refuses
+   cycles, and is one undo entry. Deleting an entity deletes its subtree, as the runtime does.
+3. **The preview places children itself.** The preview world runs no systems, so `EditorScene` writes
+   `WorldTransform` (the `LocalTransform` composed up the chain) into it whenever a scene uses `ChildOf`. Picking,
+   selection outlines, gizmos and the orbit colliders use `world_transform()`; gizmos write back through
+   `local_for_world()`, and an entity whose ancestor is also selected is left to its parent, so a subtree never
+   moves twice. `verify_world` ignores the derived
+   `WorldTransform`.
+4. **The runtime gets the real hierarchy.** `scene::instantiate` installs the hierarchy (`install_hierarchy`) when a
+   scene has a `ChildOf` column, so the play world and `mce_player` propagate transforms. `kit::SpriteExtract` draws
+   an entity at its `WorldTransform` when it has one and at its `LocalTransform` otherwise, so flat scenes draw as
+   before.

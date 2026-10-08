@@ -26,9 +26,10 @@ struct Footprint {
 };
 
 bool collider_footprint(const EditorScene& scene, EntityId id, Footprint& out) {
-    const LocalTransform* t = scene.get<LocalTransform>(id);
     const physics::Collider2D* c = scene.get<physics::Collider2D>(id);
-    if (!t || !c || c->is_sensor) return false;
+    if (!scene.get<LocalTransform>(id) || !c || c->is_sensor) return false;
+    const WorldTransform placed = scene.world_transform(id);
+    const WorldTransform* t = &placed;
     const physics::ColliderShape& sh = c->shape;
     vec2 half{0.25f, 0.25f};
     f32 local_angle = 0.0f;

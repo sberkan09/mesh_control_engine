@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include "mce/ecs/hierarchy.h"
 #include "mce/log.h"
 #include "mce/refl/refl.h"
 
@@ -83,6 +84,14 @@ Result<void> instantiate(World& world, const asset::SceneView& scene, Array<Enti
             }
             world.set_raw(out[rows[r]], plan[c].id, row);
         }
+    }
+    // A scene with a ChildOf column gets the transform hierarchy: WorldTransforms are composed
+    // now and kept by "transform_propagate" (ADR-0030 §5). Scenes without one are untouched.
+    for (u32 c = 0; c < h.column_count; ++c) {
+        if (plan[c].type != &refl::type_of<ChildOf>()) continue;
+        ecs::install_hierarchy(world);
+        ecs::propagate_transforms(world);
+        break;
     }
     return ok();
 }

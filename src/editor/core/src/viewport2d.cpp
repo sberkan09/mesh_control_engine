@@ -62,8 +62,9 @@ f32 cross(vec2 a, vec2 b, vec2 p) { return (b.x - a.x) * (p.y - a.y) - (b.y - a.
 }  // namespace
 
 bool entity_quad(const EditorScene& scene, EntityId id, vec2 out[4]) {
-    const LocalTransform* t = scene.get<LocalTransform>(id);
-    if (!t) return false;
+    if (!scene.get<LocalTransform>(id)) return false;
+    const WorldTransform placed = scene.world_transform(id);  // children sit where their parent puts them
+    const WorldTransform* t = &placed;
     const vec2 pos{t->position.x, t->position.y};
     const vec2 sc{t->scale.x, t->scale.y};
     const f32 angle = angle_z(t->rotation);

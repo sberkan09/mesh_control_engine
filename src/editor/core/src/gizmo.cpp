@@ -36,10 +36,20 @@ const char* gizmo_mode_label(GizmoMode mode) {
 }
 
 bool TransformGizmo::pivot(const EditorScene& scene, vec2& out) {
-    const LocalTransform* t = scene.get<LocalTransform>(scene.selection().anchor());
-    if (!t) return false;
-    out = {t->position.x, t->position.y};
+    const EntityId anchor = scene.selection().anchor();
+    if (!scene.get<LocalTransform>(anchor)) return false;
+    const WorldTransform w = scene.world_transform(anchor);
+    out = {w.position.x, w.position.y};
     return true;
+}
+
+void TransformGizmo::place(EditorScene& scene, const Start& st, vec3 position, quat rotation, vec3 scale) const {
+    if (!scene.get<LocalTransform>(st.id)) return;
+    WorldTransform w;
+    w.position = position;
+    w.rotation = rotation;
+    w.scale = scale;
+    scene.set(st.id, scene.local_for_world(st.id, w));
 }
 
 GizmoPart TransformGizmo::hit(const EditorCamera2D& cam, rhi::Extent2D size, vec2 pivot_world, vec2 mouse_px, GizmoMode mode) {
@@ -117,15 +127,26 @@ bool TransformGizmo::begin(const EditorScene& scene, GizmoPart part, vec2 mouse_
     if ((part == GizmoPart::Ring) != (mode_ == GizmoMode::Rotate)) return false;
     // The anchor first: snapping is computed on it, and it is the pivot.
     const EntityId anchor = scene.selection().anchor();
-    if (const LocalTransform* t = scene.get<LocalTransform>(anchor)) starts_.push_back({anchor, t->position, t->rotation, t->scale});
-    for (EntityId id : scene.selection().items()) {
-        if (id == anchor) continue;
-        if (const LocalTransform* t = scene.get<LocalTransform>(id)) starts_.push_back({id, t->position, t->rotation, t->scale});
-    }
+    const auto add = [&](EntityId id) {
+        const LocalTransform* t = scene.get<LocalTransform>(id);
+        if (!t) return;
+        for (EntityId other : scene.selection().items())
+            if (scene.is_ancestor(other, id)) return;  // moves with its selected ancestor
+        const WorldTransform w = scene.world_transform(id);
+        starts_.push_back({id, w.position, w.rotation, w.scale, *t});
+    };
+    add(anchor);
+    for (EntityId id : scene.selection().items())
+        if (id != anchor) add(id);
     if (starts_.empty()) return false;
     part_ = part;
     grab_ = mouse_world;
-    pivot_ = {starts_[0].position.x, starts_[0].position.y};
+    if (const LocalTransform* t = scene.get<LocalTransform>(anchor); t && starts_[0].id != anchor) {
+        const WorldTransform w = scene.world_transform(anchor);  // a child of the moved group
+        pivot_ = {w.position.x, w.position.y};
+    } else {
+        pivot_ = {starts_[0].position.x, starts_[0].position.y};
+    }
     delta_ = {};
     angle_ = 0.0f;
     factor_ = {1.0f, 1.0f};
@@ -145,13 +166,9 @@ void TransformGizmo::update(EditorScene& scene, vec2 mouse_world, f32 snap) {
         const f32 c = std::cos(a), s = std::sin(a);
         const quat turn = rotation_z(a);
         for (const Start& st : starts_) {
-            const LocalTransform* cur = scene.get<LocalTransform>(st.id);
-            if (!cur) continue;
-            LocalTransform t = *cur;
             const vec2 off{st.position.x - pivot_.x, st.position.y - pivot_.y};
-            t.position = {pivot_.x + off.x * c - off.y * s, pivot_.y + off.x * s + off.y * c, st.position.z};
-            t.rotation = normalize(turn * st.rotation);
-            scene.set(st.id, t);
+            place(scene, st, {pivot_.x + off.x * c - off.y * s, pivot_.y + off.x * s + off.y * c, st.position.z},
+                  normalize(turn * st.rotation), st.scale);
         }
         return;
     }
@@ -171,18 +188,13 @@ void TransformGizmo::update(EditorScene& scene, vec2 mouse_world, f32 snap) {
         // A drag through the pivot shrinks to the minimum instead of mirroring the selection.
         f = max(f, vec2{kMinScale, kMinScale});
         factor_ = f;
-        for (const Start& st : starts_) {
-            const LocalTransform* cur = scene.get<LocalTransform>(st.id);
-            if (!cur) continue;
-            LocalTransform t = *cur;
-            const auto scaled = [](f32 v, f32 k) {
-                const f32 r = v * k;
-                return std::fabs(r) < kMinScale ? (v < 0.0f ? -kMinScale : kMinScale) : r;
-            };
-            t.scale = {scaled(st.scale.x, f.x), scaled(st.scale.y, f.y), st.scale.z};
-            t.position = {pivot_.x + (st.position.x - pivot_.x) * f.x, pivot_.y + (st.position.y - pivot_.y) * f.y, st.position.z};
-            scene.set(st.id, t);
-        }
+        const auto scaled = [](f32 v, f32 k) {
+            const f32 r = v * k;
+            return std::fabs(r) < kMinScale ? (v < 0.0f ? -kMinScale : kMinScale) : r;
+        };
+        for (const Start& st : starts_)
+            place(scene, st, {pivot_.x + (st.position.x - pivot_.x) * f.x, pivot_.y + (st.position.y - pivot_.y) * f.y, st.position.z},
+                  st.rotation, {scaled(st.scale.x, f.x), scaled(st.scale.y, f.y), st.scale.z});
         return;
     }
     vec2 d = mouse_world - grab_;
@@ -194,25 +206,12 @@ void TransformGizmo::update(EditorScene& scene, vec2 mouse_world, f32 snap) {
         if (part_ != GizmoPart::X) d.y = snap_value(a.y + d.y, snap) - a.y;
     }
     delta_ = d;
-    for (const Start& s : starts_) {
-        const LocalTransform* cur = scene.get<LocalTransform>(s.id);
-        if (!cur) continue;
-        LocalTransform t = *cur;
-        t.position = {s.position.x + d.x, s.position.y + d.y, s.position.z};
-        scene.set(s.id, t);
-    }
+    for (const Start& s : starts_) place(scene, s, {s.position.x + d.x, s.position.y + d.y, s.position.z}, s.rotation, s.scale);
 }
 
 void TransformGizmo::cancel(EditorScene& scene) {
-    for (const Start& s : starts_) {
-        const LocalTransform* cur = scene.get<LocalTransform>(s.id);
-        if (!cur) continue;
-        LocalTransform t = *cur;
-        t.position = s.position;
-        t.rotation = s.rotation;
-        t.scale = s.scale;
-        scene.set(s.id, t);
-    }
+    for (const Start& s : starts_)
+        if (scene.get<LocalTransform>(s.id)) scene.set(s.id, s.local);
     part_ = GizmoPart::None;
     delta_ = {};
     angle_ = 0.0f;

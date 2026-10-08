@@ -7,6 +7,7 @@
 // are visible the same frame (two-world model), and verify_world() is the drift killer.
 
 #include "mce/cook/diagnostics.h"
+#include "mce/ecs/hierarchy.h"
 #include "mce/ecs/world.h"
 #include "mce/editor/scene_document.h"
 #include "mce/memory/allocator.h"
@@ -103,6 +104,21 @@ public:
     // Copy + paste right after the last of `ids`.
     bool duplicate_entities(Span<const EntityId> ids, Array<EntityId>* created = nullptr);
 
+    // ---- hierarchy (ChildOf, FR-ENT-050, ADR-0030 §5) ----
+    // Deleting an entity deletes its subtree, as the runtime does (orphans-destroy).
+    EntityId parent_of(EntityId id) const;  // kNoEntity: a root, or a ChildOf naming nothing
+    // Direct children in document order; `id` == kNoEntity lists the roots.
+    void children_of(EntityId id, Array<EntityId>& out) const;
+    bool is_ancestor(EntityId ancestor, EntityId id) const;
+    // Where the entity sits in the scene: its LocalTransform composed up the ChildOf chain.
+    WorldTransform world_transform(EntityId id) const;
+    // The LocalTransform that places `id` at `world` under its current parent.
+    LocalTransform local_for_world(EntityId id, const WorldTransform& world) const;
+    // Re-parents `child` (`parent` == kNoEntity: makes it a root) keeping where it sits in the
+    // scene, and moves it after its new parent's subtree in the document. One undo entry. False
+    // when nothing changed, an entity is missing, or the link would close a cycle.
+    bool set_parent(EntityId child, EntityId parent);
+
     // ---- undo/redo (FR-EDT-040) ----
     // Groups every mutation until the matching end_edit() into one undo entry named `label`
     // (nests: only the outermost pair counts). A mutation outside any group is its own entry.
@@ -166,6 +182,10 @@ private:
     void touch();
     void mirror(EntityId id, const DocComponent& c);
     void spawn_mirror(const DocEntity& e);
+    // Writes every entity's composed WorldTransform into the preview world once the document has
+    // used ChildOf (the renderer draws WorldTransform when present).
+    void sync_world_transforms();
+    bool world_transforms_ = false;
 
     SceneDocument doc_;
     mem::UniquePtr<World> world_;

@@ -1,5 +1,6 @@
 #include "mce/kit/sprite_extract.h"
 
+#include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/log.h"
 #include "mce/memory/frame_slots.h"
@@ -121,8 +122,30 @@ const render::Font* SpriteExtract::font(asset::Guid guid) {
     return e.ok ? &fonts_.back().font : nullptr;
 }
 
+// Where an entity is drawn: its WorldTransform when the hierarchy wrote one (ChildOf scenes,
+// ADR-0030 §5), else its LocalTransform. Hierarchy-less scenes (every scene before M6) take only
+// the first query of each pair, in the same order as before.
+namespace {
+
+struct Placement {
+    math::vec3 position;
+    math::quat rotation;
+    math::vec3 scale;
+};
+inline Placement placement(const LocalTransform& t) { return {t.position, t.rotation, t.scale}; }
+inline Placement placement(const WorldTransform& t) { return {t.position, t.rotation, t.scale}; }
+
+template <typename C, typename Fn>
+void each_placed(World& world, Fn&& fn) {
+    world.query<const LocalTransform, const C>().template without<WorldTransform>().each(
+        [&](const LocalTransform& t, const C& c) { fn(placement(t), c); });
+    world.query<const WorldTransform, const C>().each([&](const WorldTransform& t, const C& c) { fn(placement(t), c); });
+}
+
+}  // namespace
+
 void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
-    world.query<const LocalTransform, const Sprite>().each([&](const LocalTransform& t, const Sprite& s) {
+    each_placed<Sprite>(world, [&](const Placement& t, const Sprite& s) {
         render::SpriteInstance inst;
         inst.position = {t.position.x, t.position.y};
         inst.rotation = angle_z(t.rotation);
@@ -138,7 +161,7 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         batch.add(inst);
     });
 
-    world.query<const LocalTransform, const TextLabel>().each([&](const LocalTransform& t, const TextLabel& l) {
+    each_placed<TextLabel>(world, [&](const Placement& t, const TextLabel& l) {
         const render::Font* f = font(l.font.guid);
         if (!f || l.text.view().empty() || f->face.metrics().pixel_height <= 0.0f) return;
         render::TextLayout layout(mem::frame());
