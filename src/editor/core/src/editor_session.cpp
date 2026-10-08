@@ -211,14 +211,14 @@ HotReloadResult EditorSession::hot_reload(Span<const cook::String> changed) {
                 if (scene_.dirty()) {
                     MCE_LOG_WARN("editor: {} changed on disk; keeping your unsaved edits (save overwrites it)", rel.view());
                 } else {
-                    Array<EntityId> keep;
-                    for (EntityId id : scene_.selection().items()) keep.push_back(id);
-                    const cook::String path(scene_.path());
+                    // One undoable step (Ctrl+Z brings back what the other tool replaced).
                     play_.stop();
-                    if (open_scene(path.view())) {
-                        for (EntityId id : keep)
-                            if (scene_.doc().find(id)) scene_.selection().toggle(id);
+                    cook::DiagList diags;
+                    if (scene_.reload_text(on_disk.view(), scene_.path(), diags)) {
+                        scene_.mark_clean();
                         last_reload_.scene_reloaded = true;
+                    } else {
+                        log_diags(diags);
                     }
                 }
             }

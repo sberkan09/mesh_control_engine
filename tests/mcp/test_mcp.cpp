@@ -194,7 +194,7 @@ TEST_CASE("mcp protocol: JSON-RPC framing, initialize handshake, errors, lists")
     auto tools = c.request("tools/list");
     const cook::JsonValue list = tools->root().get("result").get("tools");
     REQUIRE(list.is_array());
-    CHECK(list.size() == 20);
+    CHECK(list.size() == 22);
     for (u32 i = 0; i < list.size(); ++i) {
         CHECK(list.at(i).get("name").is_string());
         CHECK(str(list.at(i).get("inputSchema").get("type")) == "object");
@@ -343,6 +343,51 @@ TEST_CASE("mcp tools: read and edit through the funnel; values are validated bef
     CHECK(c.server.session().scene().doc().find(static_cast<editor::EntityId>(copy)) == nullptr);
     CHECK(c.server.session().scene().verify_world());
     CHECK(c.ok("scene_info").v().get("dirty").as_bool());
+}
+
+TEST_CASE("mcp tools: scene_undo / scene_redo step through tools/call edits (FR-EDT-040)") {
+    const std::string root = demo_project("mcp_undo");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const auto text = [&] {
+        cook::String t;
+        c.server.session().scene().serialize(t);
+        return std::string(t.view());
+    };
+    const std::string original = text();
+    CHECK(c.fails("scene_undo").find("nothing to undo") != std::string::npos);
+
+    // entity_create with components is one call, so one step.
+    c.ok("entity_create", R"({"name":"Pickup","components":{"Sprite":{"size":[0.5,0.5]}}})");
+    const std::string created = text();
+    c.ok("component_set", R"({"entity":3,"component":"LocalTransform","path":"position.x","value":9})");
+    c.ok("entity_delete", R"({"entity":4})");
+    c.ok("scene_info");  // reads are no step
+    const std::string last = text();
+
+    auto u = c.ok("scene_undo");
+    CHECK(str(u.v().get("undone")) == "entity_delete");
+    CHECK(u.v().get("can_redo").as_bool());
+    c.ok("scene_undo");
+    CHECK(text() == created);
+    auto u3 = c.ok("scene_undo");
+    CHECK(str(u3.v().get("undone")) == "entity_create");
+    CHECK_FALSE(u3.v().get("can_undo").as_bool());
+    CHECK(text() == original);
+    CHECK(c.server.session().scene().verify_world());
+
+    c.ok("scene_redo");
+    c.ok("scene_redo");
+    auto r = c.ok("scene_redo");
+    CHECK(str(r.v().get("redone")) == "entity_delete");
+    CHECK(text() == last);
+    CHECK(c.fails("scene_redo").find("nothing to redo") != std::string::npos);
+
+    // A failed call leaves no step behind.
+    const usize steps = c.server.session().scene().undo_count();
+    c.fails("entity_create", R"({"name":"X","components":{"Bogus":{}}})");
+    CHECK(c.server.session().scene().undo_count() == steps);
 }
 
 TEST_CASE("mcp tools: persistence stays inside the project and never clobbers silently") {

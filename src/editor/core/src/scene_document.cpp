@@ -115,6 +115,15 @@ bool SceneDocument::remove_component(EntityId id, const refl::TypeRecord& type) 
     return false;
 }
 
+void SceneDocument::insert_entity(DocEntity&& e, usize at) {
+    if (e.id >= next_id_) next_id_ = e.id + 1;
+    entities_.insert(at > entities_.size() ? entities_.size() : at, std::move(e));
+}
+
+bool SceneDocument::same_header(const SceneDocument& other) const {
+    return guid_ == other.guid_ && name_.view() == other.name_.view() && settings_ == other.settings_;
+}
+
 bool SceneDocument::move(EntityId id, usize index) {
     const i32 from = index_of(id);
     if (from < 0) return false;

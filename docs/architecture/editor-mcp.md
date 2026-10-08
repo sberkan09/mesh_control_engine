@@ -63,7 +63,7 @@ FR-AST-010 says the *shipped runtime* never parses JSON. MCP is JSON-RPC, so:
 ## 4. Tool surface (MVP)
 
 Names follow `area_verb`. Every write goes through the `EditorScene` command funnel (`create_entity`,
-`set_component`, `paste_entities`, ... — ADR-0025) — the same funnel as the inspector and gizmos (editor-tools §3.2) — so mirroring, dirty tracking and (once FR-EDT-040 lands) undo apply to
+`set_component`, `paste_entities`, ... — ADR-0025) — the same funnel as the inspector and gizmos (editor-tools §3.2) — so mirroring, dirty tracking and undo (FR-EDT-040, ADR-0030 §1–§3) apply to
 agent edits exactly as to human ones. Nothing touches disk unless a tool says so.
 
 | Group | Tools | Notes |
@@ -71,6 +71,7 @@ agent edits exactly as to human ones. Nothing touches disk unless a tool says so
 | Discover | `refl_list_components`, `refl_describe_component` | Field names, types, ranges, enum values, read-only flags — straight from `mce_refl`. |
 | Read | `scene_info`, `scene_list_entities`, `scene_get_entity`, `asset_list` | Entities by persistent `EntityId`; components as reflected field maps; assets from the GUID registry (type filter). |
 | Edit | `entity_create`, `entity_delete`, `entity_duplicate`, `component_add`, `component_remove`, `component_set` | `component_set` takes a refl property path + value; type errors come back as tool errors with the expected type. |
+| Undo | `scene_undo`, `scene_redo` | The editor's undo history (FR-EDT-040, ADR-0030 §1–§3): each editing `tools/call` is one step, named after the tool. |
 | Persist | `scene_open`, `scene_save` | `.mcscene` text format; save uses the same temp-write-then-rename as autosave. |
 | Build | `cook_run`, `cook_errors` | Through `CookService`; errors carry file + line (FR-EDT-070 data). |
 | Verify | `run_headless` | Cooks to a temp pack, loads the game module headless, runs N fixed ticks (optional recorded input), returns `state_hash`, `World::metrics`, last log lines, and pass/fail of any asserts. |

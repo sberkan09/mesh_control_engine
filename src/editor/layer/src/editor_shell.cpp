@@ -130,6 +130,8 @@ void EditorShell::build_ui(f64 frame_dt) {
         ImGui::End();
     }
     focus_panel_ = nullptr;
+    // A drag in a widget is one undo step: coalescing ends when no widget is held any more.
+    if (scene_mode() && !ImGui::IsAnyItemActive()) scene().seal_undo();
     draw_popups();
     if (show_demo_) ImGui::ShowDemoWindow(&show_demo_);
     ImGui::Render();
@@ -271,7 +273,9 @@ void EditorShell::cut_selection() {
     copy_selection();
     Array<EntityId> ids;
     for (EntityId id : scene().selection().items()) ids.push_back(id);
+    scene().begin_edit("Cut");
     for (EntityId id : ids) scene().destroy_entity(id);
+    scene().end_edit();
 }
 
 void EditorShell::paste() {
@@ -364,6 +368,9 @@ void EditorShell::handle_shortcuts() {
     }
     // Entity clipboard: only while no text field owns the keyboard.
     if (ImGui::GetIO().WantTextInput) return;
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Z)) scene().undo();
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Y) || ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z))
+        scene().redo();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_C)) copy_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_X)) cut_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) paste();
@@ -519,6 +526,14 @@ void EditorShell::draw_menu_bar() {
     }
     if (ImGui::BeginMenu("Edit", scene_mode() && !playing())) {
         const bool sel = !scene().selection().empty();
+        FixedString<96> undo_text, redo_text;
+        undo_text.append("Undo ");
+        undo_text.append(scene().undo_label());
+        redo_text.append("Redo ");
+        redo_text.append(scene().redo_label());
+        if (ImGui::MenuItem(undo_text.c_str(), "Ctrl+Z", false, scene().can_undo())) scene().undo();
+        if (ImGui::MenuItem(redo_text.c_str(), "Ctrl+Y", false, scene().can_redo())) scene().redo();
+        ImGui::Separator();
         if (ImGui::MenuItem("Cut", "Ctrl+X", false, sel)) cut_selection();
         if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
         if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();

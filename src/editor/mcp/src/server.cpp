@@ -189,7 +189,12 @@ void Server::call_tool(cook::JsonValue id, cook::JsonValue params) {
     JsonWriter out(structured);
     cook::String err;
     ToolCall call{*this, args, valid_id(token) ? token : cook::JsonValue(), out, err};
+    // Each call that can edit is one undo entry named after the tool (undo/redo move the history).
+    const StringView tool_name(tool->name);
+    const bool group = tool_name != "scene_undo" && tool_name != "scene_redo";
+    if (group) session_.scene().begin_edit(tool_name);
     const bool ok = tool->fn(call);
+    if (group) session_.scene().end_edit();
     MCE_ASSERT_MSG(!ok || (out.depth() == 0 && !structured.empty()), "tool wrote an incomplete result");
 
     cook::String result;

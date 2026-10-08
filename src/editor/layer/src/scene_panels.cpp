@@ -16,7 +16,9 @@ namespace mce::editor {
 void delete_selection(EditorScene& scene) {
     Array<EntityId> ids;
     for (EntityId id : scene.selection().items()) ids.push_back(id);
+    scene.begin_edit("Delete");
     for (EntityId id : ids) scene.destroy_entity(id);
+    scene.end_edit();
 }
 
 namespace {
@@ -112,11 +114,13 @@ public:
 private:
     void create(EditorShell& shell, i32 at) {
         EditorScene& scene = shell.scene();
+        scene.begin_edit("Create entity");
         const EntityId id = scene.create_entity("Entity", true, at);
         // New entities appear where the user is looking.
         LocalTransform t;
         t.position = {shell.camera().center.x, shell.camera().center.y, 0.0f};
         scene.set(id, t);
+        scene.end_edit();
         scene.selection().set(id);
         begin_rename(*scene.doc().find(id));
     }

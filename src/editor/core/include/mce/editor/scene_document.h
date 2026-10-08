@@ -81,6 +81,10 @@ public:
     bool remove_component(EntityId id, const refl::TypeRecord& type);
     // Moves the entity to `index` (hierarchy order = file order).
     bool move(EntityId id, usize index);
+    // Inserts a whole entity (its id must be free) at `at` (clamped): how undo restores one.
+    void insert_entity(DocEntity&& e, usize at);
+    // Same GUID, name and settings: the documents differ in their entities at most.
+    bool same_header(const SceneDocument& other) const;
 
     // ---- text (.mcscene) ----
     // Replaces the document with `text`. On error the document is left empty and `diags` holds

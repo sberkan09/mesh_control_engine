@@ -681,6 +681,24 @@ bool console_exec(ToolCall& c) {
 
 // ---------------------------------------------------------------- the table
 
+// Undo/redo over the same history the editor keeps (FR-EDT-040): every tools/call that edits the
+// scene is one entry, labelled with the tool's name.
+bool undo_redo(ToolCall& c, bool redo) {
+    EditorScene& s = scene(c);
+    cook::String label(redo ? s.redo_label() : s.undo_label());
+    if (!(redo ? s.redo() : s.undo())) return fail(c, redo ? "nothing to redo" : "nothing to undo");
+    c.out.begin_object();
+    c.out.key(redo ? "redone" : "undone").str(label.view());
+    c.out.key("can_undo").boolean(s.can_undo());
+    c.out.key("can_redo").boolean(s.can_redo());
+    c.out.key("entities").num_u(s.doc().size());
+    c.out.end_object();
+    return true;
+}
+
+bool scene_undo(ToolCall& c) { return undo_redo(c, false); }
+bool scene_redo(ToolCall& c) { return undo_redo(c, true); }
+
 constexpr const char* kNoArgs = R"({"type":"object","properties":{},"additionalProperties":false})";
 constexpr const char* kEntityArg = R"({"type":"object","properties":{"entity":{"type":"integer","description":"Entity id"}},"required":["entity"]})";
 
@@ -730,6 +748,9 @@ const ToolDef kTools[] = {
      "Save the scene (atomic write). With 'path' (under assets/): save as. Refuses to overwrite a file that "
      "changed on disk since it was opened, or another existing file, unless force.",
      R"({"type":"object","properties":{"path":{"type":"string"},"force":{"type":"boolean"}}})", scene_save},
+    {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
+     scene_undo},
+    {"scene_redo", "Redo the last undone scene edit.", kNoArgs, scene_redo},
     {"cook_run", "Cook the project (incremental). pack: also write assets.mce. Returns counts and diagnostics with file:line.",
      R"({"type":"object","properties":{"pack":{"type":"boolean","default":false}}})", cook_run},
     {"cook_errors", "Diagnostics of the last cook (file, line, col, stage, message).", kNoArgs, cook_errors},
