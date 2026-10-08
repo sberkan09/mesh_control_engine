@@ -19,7 +19,7 @@ Result<mem::UniquePtr<Window>> Window::create(const WindowDesc& desc) {
     if (desc.high_dpi) flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (desc.hidden) flags |= SDL_WINDOW_HIDDEN;
 #if defined(__APPLE__)
-    // macOS renders through mce_rhi_metal (ADR-0027): the GPU surface is a CAMetalLayer, no GL attributes.
+    // macOS renders through mce_rhi_metal (ADR-0028): the GPU surface is a CAMetalLayer, no GL attributes.
     if (desc.opengl) flags |= SDL_WINDOW_METAL;
 #else
     if (desc.opengl) {

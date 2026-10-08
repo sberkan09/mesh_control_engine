@@ -212,4 +212,4 @@ else()
 endif()
 
 # ---- glslang + SPIRV-Cross (macOS only) ---------------------------------------------------
-# Declared in cmake/macos/MetalDependencies.cmake and pulled in by src/engine/rhi_metal (ADR-0027).
+# Declared in cmake/macos/MetalDependencies.cmake and pulled in by src/engine/rhi_metal (ADR-0028).
