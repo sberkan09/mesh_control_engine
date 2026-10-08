@@ -55,7 +55,7 @@ TEST_CASE("audio_bridge: AudioSource play_on_start, live edits, PlaySfx, and rem
     World w;
     install(w, *dev);
     AudioSource src;
-    src.clip = h;
+    src.clip_handle = h;
     src.loop = true;
     src.play_on_start = true;
     const Entity e = w.spawn_with(src);
@@ -83,7 +83,7 @@ TEST_CASE("audio_bridge: AudioSource play_on_start, live edits, PlaySfx, and rem
     w.add_system(Phase::FixedUpdate_Pre, "shoot", [](Frame& f) {
         if (f.tick == 4) {
             PlaySfx ev;
-            ev.clip = g_sfx_clip;
+            ev.clip_handle = g_sfx_clip;
             f.events().push(ev);
         }
     });

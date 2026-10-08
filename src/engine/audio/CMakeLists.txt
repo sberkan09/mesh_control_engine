@@ -8,8 +8,10 @@ mce_add_library(mce_audio
         src/mixer.cpp
         src/stream.cpp
         src/bridge.cpp
+        src/clip_bank.cpp
     PUBLIC_DEPS
         mce::mce_core
         mce::mce_platform
         mce::mce_ecs
-        mce::mce_refl)
+        mce::mce_refl
+        mce::mce_asset)
