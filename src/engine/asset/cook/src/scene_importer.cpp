@@ -33,6 +33,7 @@
 #include <cstring>
 
 #include "importer_common.h"
+#include "mce/cook/scene_text.h"
 #include "mce/asset/formats.h"
 #include "mce/asset/handle.h"
 #include "mce/asset/xxhash.h"
@@ -43,8 +44,7 @@ namespace mce::cook {
 namespace {
 
 constexpr const char* kStage = "cook.scene";
-constexpr u32 kSceneFormatVersion = 1;
-constexpr u32 kNoEntity = 0xFFFFFFFFu;
+constexpr u32 kNoEntity = kNoSceneEntity;
 
 bool asset_type_for(StringId type_id, ChunkType& out, const char*& name) {
     static constexpr const char* kNames[] = {asset::Texture::name, asset::Mesh::name,     asset::Material::name,
@@ -719,6 +719,18 @@ private:
 };
 
 }  // namespace
+
+bool read_scene_component(const refl::TypeRecord& type, JsonValue obj, void* dst, u32 entity_count, StringView file,
+                          StringView path, DiagList& diags) {
+    const u32 errors_before = diags.error_count();
+    Array<u32> identity;  // a lone document: local index == flattened index
+    for (u32 i = 0; i < entity_count; ++i) identity.push_back(i);
+    Walker w(file, diags);
+    w.set_context(file, &identity);
+    String p(path);
+    w.write_struct(type, obj, static_cast<u8*>(dst), 0, 0, 0, p);
+    return diags.error_count() == errors_before;
+}
 
 mem::UniquePtr<IImporter> make_scene_importer() {
     return mem::make_unique<SceneImporter>(mem::heap(), kSceneDoc, ChunkType::Scene, asset::SCENE_VERSION, "scene", ".mcscene");

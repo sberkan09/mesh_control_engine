@@ -21,6 +21,7 @@ mce_add_library(mce_asset_cook
         src/material_importer.cpp
         src/registry.cpp
         src/scene_importer.cpp
+        src/scene_writer.cpp
         src/string.cpp
         src/texture_importer.cpp
         src/wav_importer.cpp
