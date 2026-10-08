@@ -114,6 +114,11 @@ void shutdown() {
 
 bool is_initialized() { return g_state.initialized; }
 
+const char* base_path() {
+    const char* p = SDL_GetBasePath();  // owned and cached by SDL
+    return p ? p : "";
+}
+
 const char* video_driver() {
     if (!g_state.initialized) return "";
     const char* d = SDL_GetCurrentVideoDriver();

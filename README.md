@@ -43,7 +43,7 @@ in `build/local-ci-logs/`. Windows/MSVC builds are checked by hand on a Windows 
 | `src/engine/platform` | `mce_platform` (L1): SDL3 window + event pump, clock, boot-failure message box (the SDL wall) |
 | `src/engine/rhi` | `mce_rhi` (L2): backend-neutral handles, `RenderDevice`, recorded `CommandBuffer` |
 | `src/engine/rhi_gl` | `mce_rhi_gl` (L2): the OpenGL 4.5 core backend (DSA, persistent-mapped rings, fences) — the only GL code |
-| `samples/` | the sample ladder: `01_triangle` |
+| `samples/` | the sample ladder: `01_triangle`, `02_boids`, `sprites_2d`, `03_platformer` (Artifact A), `04_diorama` (Artifact B: the lit 3D diorama of Kenney CC0 kit meshes, cooked at build time) |
 | `third_party/glad` | generated glad2 GL 4.5 core loader (private to `mce_rhi_gl`) |
 | `tests/` | doctest unit tests (`test_<module>`) and `mce_devhost` |
 | `scripts/ci/local_ci.sh` | local CI (no GitHub Actions): walls, Linux presets + tests, clang-tidy, determinism |

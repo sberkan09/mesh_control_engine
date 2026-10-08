@@ -27,6 +27,10 @@ const char* video_driver();
 // Returns true when the user asked to quit (last window closed, SIGINT, OS logout).
 bool pump_events();
 
+// Directory holding the running executable, with a trailing separator ("" when unknown). Shipped
+// builds find their pack next to the exe this way (FR-SHP-010); works before init().
+const char* base_path();
+
 // The engine wall clock (std::chrono::steady_clock; same source as app::steady_clock()).
 f64 now_seconds();
 u64 now_us();
