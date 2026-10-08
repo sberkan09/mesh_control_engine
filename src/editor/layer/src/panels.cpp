@@ -126,7 +126,10 @@ private:
         }
         if (hovered && io.MouseWheel != 0.0f) cam.zoom_at(mouse, size_, std::pow(1.15f, io.MouseWheel));
         if (shell.playing()) {  // play-in-editor: look around, but the document is locked
-            if (gizmo_.dragging()) gizmo_.cancel(scene);
+            if (gizmo_.dragging()) {
+                gizmo_.cancel(scene);
+                scene.end_edit();
+            }
             hot_ = GizmoPart::None;
             hover_ = kNoEntity;
             pan(cam, hovered, scale);
@@ -137,8 +140,10 @@ private:
         if (gizmo_.dragging()) {
             if (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
                 gizmo_.cancel(scene);
+                scene.end_edit();
             } else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                 gizmo_.end();
+                scene.end_edit();  // the whole drag is one undo step
             } else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 3.0f)) {
                 const ViewSettings& view = shell.view();
                 const bool snap = view.snap != io.KeyCtrl;
@@ -155,14 +160,14 @@ private:
         // and starts a free drag; empty space clears the selection.
         if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
             if (hot_ != GizmoPart::None) {
-                gizmo_.begin(scene, hot_, mouse_world);
+                if (gizmo_.begin(scene, hot_, mouse_world)) scene.begin_edit("Move");
             } else if (hover_ == kNoEntity) {
                 if (!io.KeyCtrl) scene.selection().clear();
             } else if (io.KeyCtrl) {
                 scene.selection().toggle(hover_);
             } else {
                 if (!scene.selection().contains(hover_)) scene.selection().set(hover_);
-                gizmo_.begin(scene, GizmoPart::XY, mouse_world);
+                if (gizmo_.begin(scene, GizmoPart::XY, mouse_world)) scene.begin_edit("Move");
             }
         }
         if (ImGui::IsWindowFocused() && !io.WantTextInput) {
@@ -176,6 +181,10 @@ private:
     void interact_orbit(EditorShell& shell, bool hovered, ImVec2 scale) {
         OrbitCamera& orbit = shell.orbit();
         const ImGuiIO& io = ImGui::GetIO();
+        if (gizmo_.dragging()) {
+            gizmo_.cancel(shell.scene());
+            shell.scene().end_edit();
+        }
         hot_ = GizmoPart::None;
         hover_ = kNoEntity;
         if (shell.take_frame_request() || (ImGui::IsWindowFocused() && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F, false))) {

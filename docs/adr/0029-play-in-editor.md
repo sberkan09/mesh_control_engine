@@ -59,8 +59,8 @@ made without writing the user's file, which host the play world copies, and what
 4. **A failed re-cook keeps the previous output.** The error goes to the console with `file:line`; the old
    generation keeps serving, so a broken texture never blanks the viewport.
 5. **The open scene follows its file.** When the open scene's file changed on disk (an MCP client or a text editor
-   saved it) and the document has no unsaved edits, it is re-opened from disk; with unsaved edits the document is
-   kept and a warning logged.
+   saved it) and the document has no unsaved edits, it is re-read as one undoable "Reload from disk" entry
+   (ADR-0030 §3); with unsaved edits the document is kept and a warning logged.
 6. **Game modules are timed on the module host** (§1.7): `scripts/module_reload_stopwatch.py` touches a module
    source, rebuilds the module target with ccache disabled, and has `mce_devhost` load the fresh image and tick.
 
