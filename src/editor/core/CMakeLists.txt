@@ -13,6 +13,7 @@ mce_add_library(mce_editor_core
         src/editor_session.cpp
         src/engine_components.cpp
         src/gizmo.cpp
+        src/hot_reload.cpp
         src/inspector.cpp
         src/play_session.cpp
         src/preview_renderer.cpp

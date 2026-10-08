@@ -10,6 +10,7 @@
 
 #include "mce/asset/asset_system.h"
 #include "mce/cook/cook.h"
+#include "mce/editor/hot_reload.h"
 #include "mce/memory/allocator.h"
 
 namespace mce::editor {
@@ -57,10 +58,19 @@ public:
     u64 generation() const { return generation_; }
     // Rescans + cooks only when the cooked manifest is missing (first open of a fresh checkout).
     void ensure_cooked();
+    // Hot reload: an incremental cook whose re-cooked assets are swapped into the live mount
+    // (AssetSystem::commit_reload: handles stay valid, mounted() and generation() do not change).
+    // When the set of assets changed (or nothing is mounted) the tree is remounted instead, and
+    // `before_remount(user)` runs first so holders of mounted() can let go of it.
+    using BeforeRemountFn = void (*)(void* user);
+    HotReloadResult reload(BeforeRemountFn before_remount = nullptr, void* user = nullptr);
     // The cook's importers (play-in-editor cooks the open document with them).
     const cook::ImporterRegistry& importers() const { return service_.importers(); }
 
 private:
+    void log_report() const;
+    void remount();
+
     cook::CookService service_;
     cook::String root_;
     Array<ProjectAsset> assets_;

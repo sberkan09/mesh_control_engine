@@ -27,6 +27,8 @@ namespace {
 
 MCE_CVAR(cv_autosave_interval, "editor.autosave_interval", 300.0f,
          "Seconds of unsaved changes before the editor autosaves (0 = only on focus loss)", CVarFlags::None);
+MCE_CVAR(cv_hot_reload, "editor.hot_reload_interval", 0.5f,
+         "Seconds between polls of assets/ for hot reload (0 = off)", CVarFlags::None);
 MCE_CVAR(cv_player, "editor.player", "", "mce_player executable for Play (empty: next to the editor / build tree)",
          CVarFlags::None);
 
@@ -112,7 +114,10 @@ void EditorShell::build_ui(f64 frame_dt) {
     impl_->platform.new_frame(frame_dt);
     ImGui::NewFrame();
 
-    // Play-in-editor runs on wall time, before the panels draw this frame's state.
+    // Hot reload first (a re-cooked texture swaps in this frame), then play-in-editor on wall time,
+    // before the panels draw this frame's state.
+    if (scene_mode() && cv_hot_reload.get_float() > 0.0f)
+        session_.tick_hot_reload(platform::now_seconds(), static_cast<f64>(cv_hot_reload.get_float()));
     if (scene_mode()) session_.play().advance(frame_dt);
     handle_shortcuts();
     draw_menu_bar();
@@ -501,6 +506,7 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Cook", "F7", false, proj)) cook(false);
         if (ImGui::MenuItem("Cook + Pack", nullptr, false, proj)) cook(true);
         if (ImGui::MenuItem("Rescan assets", nullptr, false, proj)) session_.project().rescan();
+        if (ImGui::MenuItem("Hot reload now", nullptr, false, proj)) session_.hot_reload();
         if (ImGui::MenuItem("Play in editor", "F5", false, proj && !playing())) play_in_editor();
         if (ImGui::MenuItem("Run in player", "Ctrl+F5", false, proj && !player_running())) play();
         ImGui::Separator();

@@ -1,7 +1,9 @@
 #include "mce/editor/project.h"
 
+#include "mce/asset/file_io.h"
 #include "mce/cook/fs.h"
 #include "mce/log.h"
+#include "mce/platform/platform.h"
 
 namespace mce::editor {
 
@@ -95,6 +97,12 @@ const cook::CookReport& EditorProject::cook(bool pack) {
     opt.pack = pack;
     report_ = service_.cook(root_.view(), opt);
     cooked_ = true;
+    log_report();
+    remount();
+    return report_;
+}
+
+void EditorProject::log_report() const {
     MCE_LOG_INFO("editor: cook {}: {} cooked, {} up to date, {} failed, {} error(s)", root_.view(), report_.cooked,
                  report_.up_to_date, report_.failed, report_.diags.error_count());
     for (const cook::Diagnostic& d : report_.diags.all()) {
@@ -103,7 +111,10 @@ const cook::CookReport& EditorProject::cook(bool pack) {
         if (d.severity == cook::Severity::Error) MCE_LOG_ERROR("{}", line.view());
         else MCE_LOG_WARN("{}", line.view());
     }
-    // Mount the cooked tree fresh: assets that failed this pass still serve their previous output.
+}
+
+// Mounts the cooked tree fresh: assets that failed this pass still serve their previous output.
+void EditorProject::remount() {
     const cook::String cooked = cook::path_join(root_.view(), "cooked");
     if (is_file(cook::path_join(cooked.view(), "manifest.mce"))) {
         auto fresh = mem::make_unique<asset::AssetSystem>(mem::heap());
@@ -117,7 +128,54 @@ const cook::CookReport& EditorProject::cook(bool pack) {
         }
     }
     ++generation_;
-    return report_;
+}
+
+HotReloadResult EditorProject::reload(BeforeRemountFn before_remount, void* user) {
+    HotReloadResult out;
+    if (!is_open()) return out;
+    const f64 t0 = platform::now_seconds();
+    rescan();
+    report_ = service_.cook(root_.view(), cook::CookOptions{});
+    cooked_ = true;
+    log_report();
+    out.failed = report_.failed;
+
+    // Swap in place only when the mount already knows every cooked asset and nothing went away.
+    bool same_set = mounted_.get() != nullptr;
+    for (const cook::AssetReport& a : report_.assets)
+        if (same_set && a.output_hash != 0 && mounted_->find(a.guid) == asset::kInvalidAssetKey) same_set = false;
+    for (asset::AssetKey k = 0; same_set && k < mounted_->asset_count(); ++k) {
+        bool listed = false;
+        for (const cook::AssetReport& a : report_.assets) listed = listed || a.guid == mounted_->info(k).guid;
+        same_set = listed;
+    }
+    if (!same_set) {
+        if (before_remount) before_remount(user);
+        remount();
+        out.remounted = true;
+    } else {
+        const cook::String cooked = cook::path_join(root_.view(), "cooked");
+        for (const cook::AssetReport& a : report_.assets) {
+            if (a.status != cook::AssetStatus::Cooked) continue;
+            const FixedString<40> hex = asset::to_hex(a.guid);
+            cook::String path = cooked;
+            cook::appendf(path, "/%.2s/%s/%016llx.mce", hex.c_str(), hex.c_str(), static_cast<unsigned long long>(a.output_hash));
+            Array<byte> bytes;
+            Result<void> r = asset::read_file(path.view(), bytes) ? mounted_->commit_reload(a.guid, bytes.span())
+                                                                  : Result<void>(Error(Errc::FileNotFound, kStage, path.view()));
+            if (r) {
+                ++out.reloaded;
+                MCE_LOG_INFO("editor: hot reload {}", a.path.view());
+            } else {
+                ++out.failed;
+                FixedString<512> msg;
+                format_error(r.error(), msg);
+                MCE_LOG_ERROR("editor: hot reload of {} failed: {}", a.path.view(), msg.view());
+            }
+        }
+    }
+    out.seconds = platform::now_seconds() - t0;
+    return out;
 }
 
 void EditorProject::ensure_cooked() {

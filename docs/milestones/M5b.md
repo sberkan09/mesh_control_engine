@@ -28,6 +28,8 @@ hot-reload matrix and the editor orbit-camera collision gate are editor work and
 | Play enter ≤ 1 s (NFR-M-03) | in-memory cook + `scene::instantiate`, no save, no pack | `scene_demo` (6 entities): 1.1 ms, Debug |
 | Play→Stop→Play reproduces the tick-0 hash | the play world is rebuilt from the document each time; nothing writes the document while playing | "play: Play -> Stop -> Play…": same post-instantiate, first-tick and 300-tick hashes |
 | Same world as the shipped runtime | `mce_player -headless`'s setup (physics2d, audio bridge on a Silent device, `scene::instantiate`), the app loop's fixed step | "play: enter builds the player's world…": 600 ticks in the editor = `mce_player -headless 1 -ticks 600` on the cooked pack |
+| Hot reload: textures / materials / scenes ≤ 1 s (FR-AST-090) | `mce_editor_core`: `AssetWatcher` (`mce/editor/hot_reload.h`), `EditorProject::reload` → `AssetSystem::commit_reload`; layer: polled every `editor.hot_reload_interval` s, File → Hot reload now | `test_editor` "hot reload:" cases: texture 2.7 ms, material 6.4 ms, scene 6.3 ms (Debug); a broken texture keeps the previous output; play keeps running across a swap |
+| Hot reload: game module ≤ 10 s | module host (`mce_devhost`), ADR-0029 §2.6 | `scripts/module_reload_stopwatch.py build/linux-gcc-debug`: `03_platformer` edit → rebuild + load + tick, median 2.66 s, worst 2.71 s |
 
 ## Budget table
 
@@ -43,7 +45,7 @@ hot-reload matrix and the editor orbit-camera collision gate are editor work and
 | Item | State |
 |---|---|
 | Play-in-editor (embedded host, pause/step/slow-mo, ≤ 1 s enter, Play→Stop→Play hash) | shipped, see *Editor half*; game modules do not load inside the editor process (ADR-0029 §1.7) |
-| Hot-reload matrix (textures/materials/scenes ≤ 1 s, game.dll ≤ 10 s) | editor work, not in this landing |
+| Hot-reload matrix (textures/materials/scenes ≤ 1 s, game.dll ≤ 10 s) | shipped, see *Editor half* (ADR-0029 §2) |
 | Editor orbit camera collision gate | needs the editor viewport camera; `camera_sweep` is ready for it |
 | ECS bridge (`install_physics3d`, `RigidBody3D`/`Collider3D`/`CharacterController3D` components, contact events) | next physics step; the facade is shaped for it |
 | Cooked mesh colliders (ADR-0003 §9) | runtime-built meshes for now; the cook path replaces them without changing the facade |
