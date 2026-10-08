@@ -16,7 +16,9 @@ flowchart LR
     M2 --> M3["M3 2D gameplay stack<br/>physics2d+input+audio<br/>03_platformer playable"]
     M3 --> M35["M3.5 solver hardening<br/>+ Box2D oracle suite<br/>(stretch, slip absorber)"]
     M35 --> M4["M4 3D diorama + ship<br/>Artifact A+B, MVP GATE"]
-    M4 --> M5a["M5a 3D rendering real<br/>PBR/Forward+/CSM +<br/>frame-budget tables"]
+    M4 --> EC["Editor catch-up<br/>M2–M4 editor items"]
+    EC --> M45["M4.5 editor MCP server<br/>AI tooling over refl +<br/>headless runs (slip absorber)"]
+    M45 --> M5a["M5a 3D rendering real<br/>PBR/Forward+/CSM +<br/>frame-budget tables"]
     M5a --> M5b["M5b Jolt + play-in-editor<br/>+ hot-reload matrix"]
     M4 --> M6["M6 depth+editor respect<br/>hierarchy, prefabs, undo,<br/>audio buses — full Ember Step<br/>v0.5 GATE (part 1)"]
     M5b --> M7["M7 Ashen Court build-out<br/>v0.5 GATE (part 2)"]
@@ -25,6 +27,7 @@ flowchart LR
     M8 --> M9["M9 UC-D proof game<br/>v1.0 GATE (part 2)"]
     M35 -.slip whole into v0.5.-> M5b
     M4 -.cut rung 7.-> M5a
+    M45 -.slip whole past.-> M5b
 ```
 
 Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because Artifact A is the earliest shippable artifact and the cut ladder's final rung reduces the MVE to Artifact A alone — Artifact B is structured as an **addition, not a dependency** (REQUIREMENTS cut-ladder rung 7). The cook pipeline precedes everything that loads content; the determinism harness precedes everything that could break it.
@@ -86,6 +89,16 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 **Cut-ladder checkpoint:** if the 2D game is not playable by month 12 of real time, rung 7 executes (3D diorama becomes the first v0.5 milestone) — pre-agreed, no re-negotiation.
 **Budget table:** NFR-F-01 per-stage frame table; NFR-M-01/02; both artifacts' zips.
 
+### M4.5 — Editor MCP server (AI-native tooling) · **size S (≈ 35–60 h engineering)** · tier: off-tier tooling (between the MVP gate and v0.5)
+
+*Added 2026-10-08. Sequenced after the editor catch-up (the M2–M4 editor items — SceneDocument + SceneCommand funnel, inspector, CRUD, cook panel, headless player — finished after the M4 gate) and before M5a. Design: `docs/architecture/editor-mcp.md`.*
+
+**Builds:** `mce_mcp` — a headless Model Context Protocol server (JSON-RPC 2.0 over **stdio only**, no socket — N7 intact) linking `mce_editor_core` + `mce_engine`, never ImGui · `mce_mcp_core` (protocol, tool table, editor-side JSON codec — hand-written by default, ADR-0024 records the pick; the runtime stays JSON-free per FR-AST-010) · MVP tool table: discover (`refl_list_components`/`refl_describe_component` straight from `mce_refl`), read (scene, entities, components, GUID-registry assets), edit (entity create/delete/duplicate, component add/remove/set by refl property path — **every write goes through `SceneDocument::apply`**, the same funnel as the inspector), persist (`scene_open`/`scene_save`), build (`cook_run`/`cook_errors`), verify (`run_headless`: N fixed ticks → `state_hash` + `World::metrics` + log tail), console (`console_list`/`console_exec`, cheats refused by default) · resources `mce://scene/current`, `mce://log`, `mce://refl/schema` · a checked-in `.mcp.json` so Claude Code can use it from a clone. **Stretch, cut in this order:** attach-to-running-editor (same tool table over a local pipe, edits visible live) first, then `render_frame` (offscreen PNG as MCP image content).
+
+**Demo (running):** from a fresh clone, an MCP client connected to `mce_mcp --project samples/03_platformer` adds a pickup to the level through the tools, saves, cooks, calls `run_headless` for 300 ticks and gets a hash back; the same edit done through C++ `SceneCommand`s gives a byte-identical `.mcscene` and the same hash.
+**Gates:** FR-EDT-160 acceptance · scripted MCP transcript test (initialize → tools/list → calls → shutdown, golden responses) · JSON codec fuzz target ASan-clean · walls: no ImGui and no socket symbols in `mce_mcp*`, no JSON codec linked into any runtime target · all of it inside `scripts/ci/local_ci.sh`.
+**Overrun rule:** carries **no Must FRs**; like M3.5 it may slip whole (past M5b) without gating anything. In-game AI (LLM NPCs, runtime generation) is explicitly **not** this milestone — it is listed under M10+.
+
 ### M5a — The 3D renderer becomes real · **size L (≈ 90–150 h engineering)** · tier: v0.5 (part 1a)
 
 *Split 2026-10-06 (finding F28): the old M5 bundled four multi-week flagship projects (PBR/Forward+, CSM, the Jolt embed, play-in-editor) into one XL milestone. M5a is the rendering half, gated by its own demo; M5b carries the embed + the stateful editor machinery. The frame-budget tables land in M5a — a budget miss there must not strand the physics/UI half mid-milestone.*
@@ -144,13 +157,14 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
-Skinned animation (only via Open Question 3 promotion), scene streaming (FR-ENT-120, trigger: a game outgrows one chunk), auto-parallel scheduling experiment (M3+ flag, gated by FR-RUN-040), engine-level live DLL reload (N13, measured trigger), Vulkan/D3D12 backend (N14, after both anchor games ship), mod support, networking, localization — each with its recorded re-entry trigger from REQUIREMENTS §5/§6.3.
+Skinned animation (only via Open Question 3 promotion), scene streaming (FR-ENT-120, trigger: a game outgrows one chunk), auto-parallel scheduling experiment (M3+ flag, gated by FR-RUN-040), engine-level live DLL reload (N13, measured trigger), Vulkan/D3D12 backend (N14, after both anchor games ship), mod support, networking, localization, **in-game AI (LLM-driven NPCs/dialogue, runtime content generation — latency, per-call cost and sim non-determinism vs FR-RUN-040; would also need the network stack N7 rules out)** — each with its recorded re-entry trigger from REQUIREMENTS §5/§6.3.
 
 **Milestone → tier map (effort-summed, finding F3):**
 
 | Tier | Milestones | Calendar | Effort (sum of per-milestone estimates) |
 |---|---|---|---|
 | MVP | M0–M4 (+ M3.5 stretch) | months 0–14 | ≈ 500–790 h engineering (M0 70–110 + M1 70–110 + M2 110–170 + M3 130–190 + M3.5 30–70 + M4 90–140) + ≈ 50–70 h content |
+| Tooling (off-tier) | M4.5 editor MCP server | after the editor catch-up, before M5a | ≈ 35–60 h engineering (not summed into the tier bands; slips whole past M5b if needed) |
 | v0.5 | M5a + M5b + M6 + M7 | months 14–24 | ≈ 390–620 h engineering + ≈ 140–220 h content |
 | v1.0 | M8–M9 (UC-D may slip to named v1.1) | months 24–36 | ≈ 180–310 h engineering + ≈ 30–50 h content |
 
