@@ -63,6 +63,7 @@ ResultV Renderer::init(rhi::RenderDevice& device, const RendererDesc& desc) {
     device_ = &device;
     desc_ = desc;
     MCE_TRY(textures_.init(device));
+    meshes_.init(&device);
     MCE_TRY(create_pipelines());
 
     rhi::SamplerDesc sd;
@@ -116,6 +117,8 @@ ResultV Renderer::create_pipelines() {
 
 void Renderer::shutdown() {
     if (!device_) return;
+    forward_.shutdown();
+    meshes_.shutdown();
     for (TilemapSlot& t : tilemaps_)
         if (t.alive) device_->destroy_buffer(t.buffer);
     tilemaps_.clear();
@@ -221,6 +224,20 @@ const TilemapBake* Renderer::tilemap(TilemapId id) const {
 
 void Renderer::add_tilemap(SpriteBatch& batch, TilemapId id) const {
     if (const TilemapBake* b = tilemap(id)) batch.add_tilemap(id.value, *b);
+}
+
+ResultV Renderer::init_3d(const Forward3DDesc& desc) {
+    MCE_ASSERT_MSG(device_, "Renderer::init_3d before init");
+    if (forward_.initialized()) return ok();
+    Forward3DDesc d = desc;
+    d.encode_srgb_output = desc_.encode_srgb_output;
+    return forward_.init(*device_, textures_, d);
+}
+
+void Renderer::record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target) {
+    MCE_ASSERT_MSG(forward_.initialized(), "record_3d before init_3d");
+    if (!forward_.initialized()) return;
+    forward_.record(cmd, scene, target);
 }
 
 void Renderer::record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch) {

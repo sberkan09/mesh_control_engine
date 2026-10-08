@@ -42,6 +42,9 @@ u32 vertex_format_size(VertexFormat f) {
         case VertexFormat::Float4: return 16;
         case VertexFormat::UNorm8x4: return 4;
         case VertexFormat::UInt1: return 4;
+        case VertexFormat::SNorm16x2: return 4;
+        case VertexFormat::SNorm16x4: return 8;
+        case VertexFormat::UNorm16x2: return 4;
     }
     return 0;
 }

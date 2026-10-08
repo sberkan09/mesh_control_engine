@@ -56,6 +56,20 @@ usize level_bytes(TextureFormat f, u32 w, u32 h) {
     return usize(w) * h * bytes_per_pixel(f);
 }
 
+GLenum gl_compare_func(CompareOp op) {
+    switch (op) {
+        case CompareOp::Never: return GL_NEVER;
+        case CompareOp::Less: return GL_LESS;
+        case CompareOp::Equal: return GL_EQUAL;
+        case CompareOp::LessEqual: return GL_LEQUAL;
+        case CompareOp::Greater: return GL_GREATER;
+        case CompareOp::NotEqual: return GL_NOTEQUAL;
+        case CompareOp::GreaterEqual: return GL_GEQUAL;
+        case CompareOp::Always: return GL_ALWAYS;
+    }
+    return GL_LEQUAL;
+}
+
 GLenum gl_filter(Filter f, MipFilter mip) {
     if (f == Filter::Nearest) {
         switch (mip) {
@@ -305,7 +319,13 @@ TextureHandle GlDevice::create_texture(const TextureDesc& desc, Span<const byte>
     t.layers = array ? (desc.array_layers ? desc.array_layers : 1) : 1;
     const auto w = static_cast<GLsizei>(desc.size.width);
     const auto hgt = static_cast<GLsizei>(desc.size.height);
-    if (array) {
+    t.samples = desc.samples > 1 ? desc.samples : 1;
+    MCE_ASSERT_MSG(t.samples == 1 || (!array && t.mips == 1 && initial_data.empty()),
+                   "create_texture: multisampled textures are single-mip 2D render targets");
+    if (t.samples > 1) {
+        glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &t.id);
+        glTextureStorage2DMultisample(t.id, static_cast<GLsizei>(t.samples), fmt.internal, w, hgt, GL_TRUE);
+    } else if (array) {
         glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &t.id);
         glTextureStorage3D(t.id, t.mips, fmt.internal, w, hgt, t.layers);
     } else {
@@ -315,8 +335,9 @@ TextureHandle GlDevice::create_texture(const TextureDesc& desc, Span<const byte>
     for (u32 m = 0; m < t.mips; ++m)
         t.bytes += level_bytes(desc.format, math::max(1u, desc.size.width >> m), math::max(1u, desc.size.height >> m)) *
                    t.layers;
+    t.bytes *= t.samples;
     // Mip levels that are never uploaded must not be sampled: clamp until update_texture fills them.
-    glTextureParameteri(t.id, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(t.mips - 1));
+    if (t.samples == 1) glTextureParameteri(t.id, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(t.mips - 1));
 
     if (!initial_data.empty()) {
         const usize need = level_bytes(desc.format, desc.size.width, desc.size.height) * t.layers;
@@ -383,6 +404,10 @@ SamplerHandle GlDevice::create_sampler(const SamplerDesc& desc) {
     glSamplerParameteri(s.id, GL_TEXTURE_WRAP_S, static_cast<GLint>(gl_wrap(desc.wrap_s)));
     glSamplerParameteri(s.id, GL_TEXTURE_WRAP_T, static_cast<GLint>(gl_wrap(desc.wrap_t)));
     if (desc.max_aniso > 1.0f) glSamplerParameterf(s.id, kTextureMaxAnisotropy, desc.max_aniso);
+    if (desc.compare) {
+        glSamplerParameteri(s.id, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+        glSamplerParameteri(s.id, GL_TEXTURE_COMPARE_FUNC, static_cast<GLint>(gl_compare_func(desc.compare_op)));
+    }
     return samplers_.insert(s);
 }
 
@@ -436,6 +461,11 @@ Result<PipelineHandle> GlDevice::create_pipeline(const GraphicsPipelineDesc& des
                 glVertexArrayAttribFormat(p.vao, a.location, 4, GL_UNSIGNED_BYTE, GL_TRUE, a.offset);
                 break;
             case VertexFormat::UInt1: glVertexArrayAttribIFormat(p.vao, a.location, 1, GL_UNSIGNED_INT, a.offset); break;
+            case VertexFormat::SNorm16x2: glVertexArrayAttribFormat(p.vao, a.location, 2, GL_SHORT, GL_TRUE, a.offset); break;
+            case VertexFormat::SNorm16x4: glVertexArrayAttribFormat(p.vao, a.location, 4, GL_SHORT, GL_TRUE, a.offset); break;
+            case VertexFormat::UNorm16x2:
+                glVertexArrayAttribFormat(p.vao, a.location, 2, GL_UNSIGNED_SHORT, GL_TRUE, a.offset);
+                break;
         }
         glVertexArrayAttribBinding(p.vao, a.location, 0);
     }
@@ -524,6 +554,7 @@ TextureDesc GlDevice::texture_desc(TextureHandle h) const {
     d.dimension = t->dimension;
     d.format = t->format;
     d.usage = t->usage;
+    d.samples = t->samples;
     return d;
 }
 

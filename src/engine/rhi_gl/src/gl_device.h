@@ -23,6 +23,7 @@ struct GlTexture {
     TextureDimension dimension = TextureDimension::Tex2D;
     u16 mips = 1;
     u16 layers = 1;
+    u8 samples = 1;
     TextureUsage usage = TextureUsage::Sampled;
     usize bytes = 0;
 };
@@ -137,6 +138,7 @@ private:
     void exec_bind_pipeline(PipelineHandle h);
     void exec_draw(const cmd::Draw* indexed, const cmd::DrawNonIndexed* plain);
     void exec_draw_indirect(const cmd::DrawIndirect& d);
+    void exec_resolve(const cmd::Resolve& r);
     void reset_translate_state();
 
     platform::Window& window_;

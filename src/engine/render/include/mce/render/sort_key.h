@@ -23,6 +23,12 @@ constexpr u64 sort_key_2d(PassId pass, i16 layer, u16 material, i32 order) {
     return (u64(static_cast<u8>(pass)) << 56) | (layer_bits << 40) | (u64(material) << 24) | order_bits;
 }
 
+// 3D: [39:24] material (texture key / state bits), [23:00] quantized view depth. Opaque passes
+// pass the depth as is (front-to-back); transparent passes invert it (back-to-front).
+constexpr u64 sort_key_3d(PassId pass, u16 material, u32 depth24) {
+    return (u64(static_cast<u8>(pass)) << 56) | (u64(material) << 24) | (u64(depth24) & 0xFFFFFFu);
+}
+
 constexpr PassId sort_key_pass(u64 key) { return static_cast<PassId>(key >> 56); }
 constexpr i16 sort_key_layer(u64 key) { return static_cast<i16>(static_cast<i32>((key >> 40) & 0xFFFF) - 0x8000); }
 constexpr u16 sort_key_material(u64 key) { return static_cast<u16>((key >> 24) & 0xFFFF); }

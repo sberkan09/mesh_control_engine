@@ -17,6 +17,8 @@
 //   cmd.end_pass();
 
 #include "mce/containers/array.h"
+#include "mce/render/forward3d.h"
+#include "mce/render/mesh.h"
 #include "mce/render/sprite_batch.h"
 #include "mce/render/texture_store.h"
 #include "mce/rhi/command_buffer.h"
@@ -51,6 +53,8 @@ public:
     const TextureStore& textures() const { return textures_; }
     SpriteSets& sprite_sets() { return sets_; }
     const SpriteSets& sprite_sets() const { return sets_; }
+    MeshStore& meshes() { return meshes_; }
+    const MeshStore& meshes() const { return meshes_; }
 
     // ---- content
     SpriteSetId create_sprite_set(const SpriteSetDesc& desc) { return sets_.create(desc); }
@@ -69,9 +73,18 @@ public:
     // Culls the layer's chunks against the batch's view and queues the visible ones.
     void add_tilemap(SpriteBatch& batch, TilemapId id) const;
 
+    // ---- 3D (rhi-renderer.md §3.5 "MVP — 3D diorama frame"): created on first use so 2D-only
+    // games never allocate the HDR/MSAA/shadow targets.
+    ResultV init_3d(const Forward3DDesc& desc = {});
+    bool has_3d() const { return forward_.initialized(); }
+    Forward3D& forward_3d() { return forward_; }
+
     // ---- frame
     // Records a built batch into the currently open pass of `cmd`: one MDI per batch group.
     void record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch);
+    // Records a built Scene3D (shadow, forward HDR, resolve, tonemap) into `target` (null =
+    // backbuffer). Outside any pass; init_3d() first.
+    void record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target = {});
 
     rhi::SamplerHandle sampler(rhi::Filter filter) const {
         return filter == rhi::Filter::Nearest ? point_sampler_ : linear_sampler_;
@@ -98,6 +111,8 @@ private:
     RendererDesc desc_;
     TextureStore textures_;
     SpriteSets sets_;
+    MeshStore meshes_;
+    Forward3D forward_;
     rhi::PipelineHandle pipelines_[static_cast<u32>(SpriteBlend::Count)];
     rhi::SamplerHandle point_sampler_;
     rhi::SamplerHandle linear_sampler_;

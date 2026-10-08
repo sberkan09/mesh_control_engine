@@ -46,7 +46,10 @@ u32 bytes_per_pixel(TextureFormat f);
 
 // Vertex attribute formats. The architecture sketch reuses TextureFormat for attributes; a separate
 // enum keeps float2/float3 (which have no texture format) expressible.
-enum class VertexFormat : u8 { Float1, Float2, Float3, Float4, UNorm8x4, UInt1 };
+enum class VertexFormat : u8 {
+    Float1, Float2, Float3, Float4, UNorm8x4, UInt1,
+    SNorm16x2, SNorm16x4, UNorm16x2,  // quantized mesh streams (CHNK_MESH): read as normalized floats
+};
 u32 vertex_format_size(VertexFormat f);
 
 enum class BufferUsage : u16 { Vertex, Index, Uniform, Storage, Indirect, Staging, IndirectArgs };
@@ -89,6 +92,7 @@ struct TextureDesc {
     Extent2D size;
     u16 mip_levels = 1;
     u16 array_layers = 1;  // > 1 requires Tex2DArray
+    u8 samples = 1;        // > 1: a multisampled render target (Tex2D, one mip, never sampled; resolve() it)
     TextureDimension dimension = TextureDimension::Tex2D;
     TextureFormat format = TextureFormat::RGBA8_UNorm;
     TextureUsage usage = TextureUsage::Sampled;
@@ -102,6 +106,9 @@ struct SamplerDesc {
     AddressMode wrap_s = AddressMode::ClampToEdge;
     AddressMode wrap_t = AddressMode::ClampToEdge;
     f32 max_aniso = 1.0f;
+    // Depth-compare sampling (shadow maps): texture() returns the comparison result, filtered.
+    bool compare = false;
+    CompareOp compare_op = CompareOp::LessEqual;
 };
 
 // One mip level of one array layer (or a sub-rectangle of it) for RenderDevice::update_texture.
@@ -200,8 +207,11 @@ inline constexpr u32 kMaterial = 2;
 inline constexpr u32 kObjects = 3;
 inline constexpr u32 kFirstSampler = 6;
 inline constexpr u32 kAtlasArray = 6;  // 2D sprite-set array texture
+inline constexpr u32 kObject = 3;      // per-draw ObjectU uniform block (3D, MVP); the Objects SSBO shares the number
+inline constexpr u32 kAlbedo = 6;      // 3D base color (2D array, layer 0); shares the slot with the atlas
+inline constexpr u32 kShadowMap = 9;
 inline constexpr u32 kFont = 11;
-inline constexpr u32 kUniformBanks = 3;
+inline constexpr u32 kUniformBanks = 4;  // FrameU, PassU, MaterialU, ObjectU
 }  // namespace bank
 
 inline constexpr usize kUniformAlignment = 256;

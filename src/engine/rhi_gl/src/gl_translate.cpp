@@ -210,6 +210,20 @@ void GlDevice::exec_draw_indirect(const cmd::DrawIndirect& d) {
     ++stats_.indirect_draws;
 }
 
+void GlDevice::exec_resolve(const cmd::Resolve& r) {
+    const GlTexture* src = textures_.try_get(r.src);
+    const GlTexture* dst = textures_.try_get(r.dst);
+    const bool ok = src && dst && src->size == dst->size && src->format == dst->format && !is_depth_format(src->format);
+    MCE_ASSERT_MSG(ok, "resolve: needs two live color targets of the same size and format");
+    if (!ok) return;
+    FramebufferKey ks{}, kd{};
+    ks.colors[0] = r.src;
+    kd.colors[0] = r.dst;
+    const GLuint fs = framebuffer_for(ks), fd = framebuffer_for(kd);
+    const auto w = static_cast<GLint>(src->size.width), h = static_cast<GLint>(src->size.height);
+    glBlitNamedFramebuffer(fs, fd, 0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+}
+
 void GlDevice::submit(const CommandBuffer& cb) {
     MCE_ASSERT_MSG(in_frame_, "submit outside begin_frame/end_frame");
     MCE_ASSERT_MSG(!cb.in_pass(), "submit with an open pass");
@@ -324,6 +338,7 @@ void GlDevice::submit(const CommandBuffer& cb) {
                 glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 1, -1, static_cast<const cmd::PushDebugScope*>(payload)->name);
                 break;
             case CmdType::PopDebugScope: glPopDebugGroup(); break;
+            case CmdType::Resolve: exec_resolve(*static_cast<const cmd::Resolve*>(payload)); break;
         }
     }
 }

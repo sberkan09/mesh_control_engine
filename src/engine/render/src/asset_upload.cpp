@@ -37,8 +37,13 @@ Result<void> AssetUploadSink::upload_texture(asset::AssetKey key, Span<const byt
     return ok();
 }
 
-Result<void> AssetUploadSink::upload_mesh(asset::AssetKey, Span<const byte>) {
-    return ok();  // 3D meshes arrive with the M4 forward path
+Result<void> AssetUploadSink::upload_mesh(asset::AssetKey key, Span<const byte> blob) {
+    // Base color textures resolve by GUID to their AssetKey; the host loads them (a mesh does not
+    // own its textures: kit pieces share one colormap).
+    TextureKeyResolver resolve;
+    resolve.ctx = const_cast<asset::AssetSystem*>(&assets_);
+    resolve.fn = [](void* ctx, asset::Guid g) -> u32 { return static_cast<const asset::AssetSystem*>(ctx)->find(g); };
+    return renderer_.meshes().upload(key, assets_.generation(key), blob, resolve);
 }
 
 Result<void> AssetUploadSink::update_material(asset::AssetKey, Span<const byte>) {
@@ -48,6 +53,7 @@ Result<void> AssetUploadSink::update_material(asset::AssetKey, Span<const byte>)
 void AssetUploadSink::destroy_gpu_objects(Span<const asset::RetiredAsset> retired) {
     for (const asset::RetiredAsset& r : retired)
         if (r.type == asset::ChunkType::Texture) renderer_.textures().retire(r.key, r.generation);
+        else if (r.type == asset::ChunkType::Mesh) renderer_.meshes().retire(r.key, r.generation);
 }
 
 Result<Font> load_cooked_font(Renderer& renderer, Span<const byte> blob, const char* debug_name) {
