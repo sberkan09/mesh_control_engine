@@ -1,7 +1,6 @@
 #include "mce/physics/module.h"
 
 #include <algorithm>
-#include <cstring>
 
 #include "mce/ecs/transform.h"
 #include "mce/log.h"
@@ -31,11 +30,6 @@ struct ImportItem {
     const Collider2D* collider;
 };
 
-template <class T>
-bool same(const T& a, const T& b) {
-    return std::memcmp(&a, &b, sizeof(T)) == 0;
-}
-
 void on_body_removed(World& w, Entity e) {
     if (World2D* pw = w.try_resource<World2D>()) pw->destroy_body(e);
     if (SyncState* s = w.try_resource<SyncState>(); s && e.index < s->entries.size()) s->entries[e.index] = {};
@@ -60,7 +54,7 @@ void import(Frame& f, World2D& pw, SyncState& sync) {
         if (known && pw.has_body(e) && s.has_controller != (ctrl != nullptr)) pw.destroy_body(e);
 
         if (!pw.has_body(e)) {
-            if (known && s.failed && same(s.body, *it.body) && same(s.collider, *it.collider)) continue;
+            if (known && s.failed && s.body == *it.body && s.collider == *it.collider) continue;
             BodyDesc d;
             d.body = *it.body;
             d.collider = *it.collider;
@@ -78,16 +72,16 @@ void import(Frame& f, World2D& pw, SyncState& sync) {
             s.failed = !pw.create_body(e, d);
             if (s.failed) MCE_LOG_WARN("physics2d: entity {} has a malformed Collider2D; no body created", e.index);
         } else {
-            if (!same(s.body, *it.body)) {
+            if (s.body != *it.body) {
                 pw.set_body_config(e, *it.body);
                 s.body = *it.body;
             }
-            if (!same(s.collider, *it.collider)) {
+            if (s.collider != *it.collider) {
                 if (!pw.set_collider(e, *it.collider))
                     MCE_LOG_WARN("physics2d: entity {} Collider2D edit is malformed; keeping the old shape", e.index);
                 s.collider = *it.collider;
             }
-            if (ctrl && !same(s.controller, *ctrl)) {
+            if (ctrl && s.controller != *ctrl) {
                 pw.set_controller(e, *ctrl);
                 s.controller = *ctrl;
             }

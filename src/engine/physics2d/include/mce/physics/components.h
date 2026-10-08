@@ -57,6 +57,7 @@ struct ColliderShape {
         s.vertex_count = static_cast<u8>(n);
         return s;
     }
+    friend bool operator==(const ColliderShape&, const ColliderShape&) = default;
 };
 MCE_REFL_STRUCT(ColliderShape, type, vertex_count, half, offset, rotation, radius, vertices)
 
@@ -70,6 +71,7 @@ struct RigidBody2D {
     u16 pad2_ = 0;
     f32 gravity_scale = 1.0f;
     f32 linear_damping = 0.0f;
+    friend bool operator==(const RigidBody2D&, const RigidBody2D&) = default;
 };
 MCE_COMPONENT(RigidBody2D, type, fixed_rotation, (layer, Range{0, 15}), mask, gravity_scale, linear_damping)
 
@@ -82,6 +84,7 @@ struct Collider2D {
     bool is_sensor = false;  // FR-PHY-035: overlap events, no response
     bool one_way = false;    // FR-PHY-030: blocks downward controller sweeps only
     u8 pad_[2] = {};
+    friend bool operator==(const Collider2D&, const Collider2D&) = default;
 };
 MCE_COMPONENT(Collider2D, shape, density, (friction, Range{0, 2}), (restitution, Range{0, 1}), is_sensor, one_way)
 
@@ -90,6 +93,7 @@ struct CharacterController2D {
     f32 max_slope_deg = 45.0f;
     f32 snap_down_distance = 0.05f;  // metres; keeps ground contact on stair descents
     f32 skin_width = 0.005f;
+    friend bool operator==(const CharacterController2D&, const CharacterController2D&) = default;
 };
 MCE_COMPONENT(CharacterController2D, (max_slope_deg, Range{0, 89}), snap_down_distance, skin_width)
 

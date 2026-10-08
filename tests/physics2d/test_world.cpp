@@ -404,7 +404,9 @@ TEST_CASE("world: a pile of bodies is bit-reproducible (FR-RUN-040)") {
         REQUIRE(add_box(w, ent(3), BodyType::Static, {6, 2}, {0.25f, 3}));
         u32 n = 10;
         for (u32 i = 0; i < 40; ++i) {
-            const vec2 p{-4.0f + f32(i % 8), 2.0f + 1.2f * f32(i / 8)};
+            const u32 col = i % 8;
+            const u32 row = i / 8;
+            const vec2 p{-4.0f + f32(col), 2.0f + 1.2f * f32(row)};
             if (i % 2) REQUIRE(add_box(w, ent(n++), BodyType::Dynamic, p, {0.3f, 0.3f}, 0.5f, 0.1f, 0.1f * f32(i)));
             else REQUIRE(add_circle(w, ent(n++), BodyType::Dynamic, p, 0.3f, 0.5f, 0.2f));
         }
