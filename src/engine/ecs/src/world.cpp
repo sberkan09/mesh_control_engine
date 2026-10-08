@@ -270,6 +270,43 @@ void World::remove_component_raw(Entity e, ecs::ComponentId c) {
     move_entity(e, table_with(locations_[e.index].table, c, false));
 }
 
+// ---------------------------------------------------------------- type-erased access
+
+ecs::ComponentId World::find_component(u64 type_hash) const {
+    const ecs::ComponentId* id = component_ids_.find(type_hash);
+    return id ? *id : ecs::kInvalidComponent;
+}
+
+bool World::has(Entity e, ecs::ComponentId c) const {
+    if (!alive(e) || c >= components_.size()) return false;
+    const Location loc = locations_[e.index];
+    return loc.table != kNoTable && tables_[loc.table]->mask().test(c);
+}
+
+const void* World::get_raw(Entity e, ecs::ComponentId c) const {
+    if (!has(e, c)) return nullptr;
+    const Location loc = locations_[e.index];
+    return tables_[loc.table]->cell(c, loc.row);
+}
+
+void World::set_raw(Entity e, ecs::ComponentId c, const void* value) {
+    if (!alive(e)) return;
+    MCE_ASSERT_MSG(c < components_.size(), "set_raw: unregistered component id");
+    if (has(e, c)) {
+        const Location loc = locations_[e.index];
+        if (value && components_[c].size) std::memcpy(tables_[loc.table]->cell(c, loc.row), value, components_[c].size);
+        return;
+    }
+    assert_not_in_phase("set_raw (structural)");
+    add_component_raw(e, c, value);
+}
+
+void World::remove_raw(Entity e, ecs::ComponentId c) {
+    assert_not_in_phase("remove_raw");
+    if (!alive(e) || c >= components_.size()) return;
+    remove_component_raw(e, c);
+}
+
 // ---------------------------------------------------------------- systems & phases
 
 void World::add_system(Phase phase, const char* name, SystemFn fn, const char* after) {

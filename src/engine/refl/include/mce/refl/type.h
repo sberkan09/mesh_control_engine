@@ -79,6 +79,9 @@ struct TypeRecord {
     Span<const FieldRecord> fields;
     const TypeRecord* base = nullptr;  // reserved: flattened plain structs only, no inheritance
     void (*construct_default)(void* dst) = nullptr;  // placement-new T{} (default member values)
+    // kTypeHash<T> of the C++ type: the ECS component identity, so code that only has the record
+    // (scene loader, editor preview world) addresses the same component a typed World::set<T> does.
+    u64 type_hash = 0;
 
     const FieldRecord* find_field(StringId field_name) const;
     constexpr bool is_component() const { return (flags & TypeFlags::Component) != 0; }

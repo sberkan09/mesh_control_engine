@@ -1,6 +1,11 @@
 # mce_cook (L6): CLI over the cook library. Exit codes: 0 ok, 1 cook errors, 2 usage (FR-AST-070).
+# The engine component libraries are linked for their reflected types only (engine_components.cpp).
 mce_add_executable(mce_cook
     SOURCES
         main.cpp
+        engine_components.cpp
     DEPS
-        mce::mce_asset_cook)
+        mce::mce_asset_cook
+        mce::mce_gameplay_kit
+        mce::mce_physics2d
+        mce::mce_audio)
