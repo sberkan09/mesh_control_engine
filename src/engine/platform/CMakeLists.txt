@@ -9,6 +9,7 @@ mce_add_library(mce_platform
         src/audio_output.cpp
         src/library.cpp
         src/gamepad.cpp
+        src/process.cpp
     PUBLIC_DEPS
         mce::mce_core
     PRIVATE_DEPS

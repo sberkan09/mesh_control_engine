@@ -35,7 +35,7 @@ MCP host (Claude Code, …)
     ▼
 mce_mcp(.exe)  ──►  mce_mcp_core (protocol + tool table, headless, ImGui-free)
                        │
-                       ├─► mce_editor_core  (SceneDocument + SceneCommand funnel, CookService client,
+                       ├─► mce_editor_core  (SceneDocument + EditorScene funnel, EditorSession/CookService,
                        │                     ConsoleModel, GUID registry scan)
                        └─► mce_engine       (refl registry, ecs::World, game-module loader, headless host)
 ```
@@ -57,13 +57,13 @@ FR-AST-010 says the *shipped runtime* never parses JSON. MCP is JSON-RPC, so:
   existing symbol scan gains `mce_mcp_core` as a forbidden link of runtime targets.
 - **Default: a small hand-written codec** (reader + writer, `Result<T,Error>`, no exceptions, depth/size limits),
   matching the engine's hand-written-core rule and fuzzed like the `.mce` container. Fallback if it grows past
-  ~600 lines: an ADR'd FetchContent dependency (yyjson) under ADR-0017's rules. ADR-0024 records the pick at
-  milestone start.
+  ~600 lines: an ADR'd FetchContent dependency (yyjson) under ADR-0017's rules. ADR-0026 records the pick at
+  milestone start (0024/0025 went to the editor catch-up).
 
 ## 4. Tool surface (MVP)
 
-Names follow `area_verb`. Every write goes through `SceneDocument::apply(SceneCommand)` — the same funnel as the
-inspector and gizmos (editor-tools §3.2) — so mirroring, dirty tracking and (once FR-EDT-040 lands) undo apply to
+Names follow `area_verb`. Every write goes through the `EditorScene` command funnel (`create_entity`,
+`set_component`, `paste_entities`, ... — ADR-0025) — the same funnel as the inspector and gizmos (editor-tools §3.2) — so mirroring, dirty tracking and (once FR-EDT-040 lands) undo apply to
 agent edits exactly as to human ones. Nothing touches disk unless a tool says so.
 
 | Group | Tools | Notes |

@@ -38,6 +38,22 @@ public:
     // Cooks the project (pack: also writes <root>/assets.mce) and remounts the preview.
     const cook::CookReport& cook(bool pack = false);
 
+    // ---- autosave + recovery (editor-tools.md §2.11) ----
+    // Where the open scene autosaves: <root>/.mce/autosave/<path under assets/>.autosave (an
+    // untitled scene uses "untitled.mcscene"), or "<scene file>.autosave" outside a project.
+    // Empty when there is nowhere to put it (no project and never saved).
+    cook::String autosave_path() const;
+    // Writes the autosave (atomic) when the scene changed since the last one. True if written.
+    bool autosave();
+    // Autosaves once `interval` seconds have passed since the last autosave (or since the scene
+    // was opened) while there are unsaved changes. `now` is any monotonic clock in seconds.
+    void tick_autosave(f64 now, f64 interval);
+    // True when an autosave exists for the open scene and differs from what is on disk: the
+    // editor ended without saving (crash or kill). The editor offers recover() / discard.
+    bool has_recovery() const;
+    bool recover();
+    void discard_autosave();
+
     // Every scene in the catalog, by path.
     void list_scenes(Array<const ProjectAsset*>& out) const;
     // Absolute path of a scene path given relative to assets/ (or `path` unchanged).
@@ -50,6 +66,8 @@ private:
     EditorScene scene_;
     PreviewRenderer* preview_ = nullptr;
     cook::DiagList scene_diags_;
+    u64 autosaved_revision_ = ~u64(0);
+    f64 autosave_clock_ = -1.0;  // time of the last autosave (or scene open); < 0: not started
 };
 
 }  // namespace mce::editor

@@ -53,6 +53,8 @@ struct ViewSettings {
     bool show_grid = true;
     f32 grid_step = 1.0f;  // metres
     u32 grid_major = 8;
+    bool snap = false;      // gizmo drags land on multiples of snap_step (Ctrl inverts)
+    f32 snap_step = 0.5f;   // metres
 };
 
 class EditorShell {
@@ -89,10 +91,20 @@ public:
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
-    bool open_scene(StringView path);  // absolute, or relative to the project's assets/
+    bool open_scene(StringView path);  // absolute, or relative to the project's assets/ (offers autosave recovery)
     bool save_scene();                 // Save As prompt when the scene has no file yet
     void new_scene();                  // asks first when the open scene is dirty
     void cook(bool pack = false);
+    // Run-in-player (FR-EDT-090): save, cook with --pack, start mce_player on the open scene as a
+    // child process. False (and the reason logged / shown in the Cook panel) when it cannot.
+    bool play();
+    void stop_player();
+    bool player_running() const;
+    // Clipboard (system clipboard, .mcscene text).
+    void copy_selection();
+    void cut_selection();
+    void paste();
+    void duplicate_selection();
     // The viewport frames the whole scene (or the selection) on its next draw.
     void frame_scene() { frame_request_ = true; }
     bool take_frame_request() {
@@ -142,7 +154,7 @@ private:
     bool frame_request_ = false;
     const char* focus_panel_ = nullptr;
     // Pending modal popups (opened on the next frame, inside the ImGui frame).
-    enum class Popup : u8 { None, OpenScene, SaveAs, ConfirmQuit, ConfirmNew, ConfirmOpen };
+    enum class Popup : u8 { None, OpenScene, SaveAs, ConfirmQuit, ConfirmNew, ConfirmOpen, Recover };
     Popup popup_ = Popup::None;
     bool popup_opened_ = false;
     char save_as_buf_[256] = {};

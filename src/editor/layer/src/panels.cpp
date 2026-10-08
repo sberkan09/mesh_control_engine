@@ -9,6 +9,7 @@
 
 #include "imgui_renderer.h"
 #include "mce/editor/editor_shell.h"
+#include "mce/editor/gizmo.h"
 #include "mce/log.h"
 #include "scene_panels.h"
 
@@ -22,7 +23,9 @@ namespace {
 // frames are done with it.
 //
 // Scene mode: wheel zooms at the cursor, right/middle drag pans, left click picks (Ctrl toggles),
-// F frames the selection (or the scene), Del deletes the selection.
+// left drag on an entity or the translate gizmo moves the selection (snap: Edit menu, Ctrl
+// inverts; Esc or right click cancels the drag), F frames the selection (or the scene), Del
+// deletes the selection.
 class ViewportPanel final : public IEditorPanel {
 public:
     const char* name() const override { return "Viewport"; }
@@ -72,6 +75,8 @@ public:
             quad_lines(q, math::Color{1.0f, 1.0f, 1.0f, 0.35f}, 1.0f, lines_);
         for (EntityId id : scene.selection().items())
             if (entity_quad(scene, id, q)) quad_lines(q, math::Color{1.0f, 0.62f, 0.1f, 1.0f}, 2.0f, lines_);
+        math::vec2 pivot;
+        if (TranslateGizmo::pivot(scene, pivot)) gizmo_.lines(shell.camera(), pivot, hot_, lines_);
         shell.preview().record(cmd, scene.world(), v.target, v.size, shell.camera(), lines_.span(),
                                math::Color{0.11f, 0.11f, 0.12f, 1.0f});
     }
@@ -89,8 +94,30 @@ private:
 
         const ImGuiIO& io = ImGui::GetIO();
         const math::vec2 mouse{(io.MousePos.x - origin.x) * scale.x, (io.MousePos.y - origin.y) * scale.y};
-        hover_ = hovered ? pick_entity(scene, cam.screen_to_world(mouse, size_)) : kNoEntity;
+        const math::vec2 mouse_world = cam.screen_to_world(mouse, size_);
+        math::vec2 pivot;
+        const bool has_pivot = TranslateGizmo::pivot(scene, pivot);
+        hot_ = hovered && has_pivot && !gizmo_.dragging() ? TranslateGizmo::hit(cam, size_, pivot, mouse) : GizmoPart::None;
+        hover_ = hovered && hot_ == GizmoPart::None ? pick_entity(scene, mouse_world) : kNoEntity;
+
         if (hovered && io.MouseWheel != 0.0f) cam.zoom_at(mouse, size_, std::pow(1.15f, io.MouseWheel));
+
+        // Drag in progress: move, cancel, or finish.
+        if (gizmo_.dragging()) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                gizmo_.cancel(scene);
+            } else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                gizmo_.end();
+            } else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 3.0f)) {
+                const ViewSettings& view = shell.view();
+                const bool snap = view.snap != io.KeyCtrl;
+                gizmo_.update(scene, mouse_world, snap ? view.snap_step : 0.0f);
+                const math::vec2 d = gizmo_.delta();
+                ImGui::SetTooltip("%+.2f, %+.2f m%s", static_cast<f64>(d.x), static_cast<f64>(d.y), snap ? "  (snap)" : "");
+            }
+            return;
+        }
+
         if (hovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsMouseClicked(ImGuiMouseButton_Middle)))
             panning_ = true;
         if (panning_) {
@@ -99,16 +126,19 @@ private:
             else
                 panning_ = false;
         }
-        if (hovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
-            ImGui::GetMouseDragDelta(ImGuiMouseButton_Left).x * ImGui::GetMouseDragDelta(ImGuiMouseButton_Left).x +
-                    ImGui::GetMouseDragDelta(ImGuiMouseButton_Left).y * ImGui::GetMouseDragDelta(ImGuiMouseButton_Left).y <
-                16.0f) {
-            if (hover_ == kNoEntity) {
+
+        // Press: a gizmo handle starts a constrained drag; an entity is selected (Ctrl toggles)
+        // and starts a free drag; empty space clears the selection.
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            if (hot_ != GizmoPart::None) {
+                gizmo_.begin(scene, hot_, mouse_world);
+            } else if (hover_ == kNoEntity) {
                 if (!io.KeyCtrl) scene.selection().clear();
             } else if (io.KeyCtrl) {
                 scene.selection().toggle(hover_);
             } else {
-                scene.selection().set(hover_);
+                if (!scene.selection().contains(hover_)) scene.selection().set(hover_);
+                gizmo_.begin(scene, GizmoPart::XY, mouse_world);
             }
         }
         if (ImGui::IsWindowFocused() && !io.WantTextInput) {
@@ -137,6 +167,8 @@ private:
     rhi::Extent2D size_;
     Array<OverlayLine> lines_;
     EntityId hover_ = kNoEntity;
+    TranslateGizmo gizmo_;
+    GizmoPart hot_ = GizmoPart::None;
     bool panning_ = false;
 };
 

@@ -12,6 +12,7 @@ mce_add_library(mce_editor_core
         src/editor_scene.cpp
         src/editor_session.cpp
         src/engine_components.cpp
+        src/gizmo.cpp
         src/inspector.cpp
         src/preview_renderer.cpp
         src/project.cpp

@@ -71,6 +71,23 @@ Result<void> rename(StringView from, StringView to) {
     return ok();
 }
 
+bool remove(StringView path) {
+    std::error_code ec;
+    return stdfs::remove(to_path(path), ec) && !ec;
+}
+
+bool read_text(StringView path, String& out) {
+    const FixedString<1024> p(path);
+    std::FILE* f = std::fopen(p.c_str(), "rb");
+    if (!f) return false;
+    out.clear();
+    char buf[4096];
+    usize n;
+    while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0) out.append(StringView(buf, n));
+    std::fclose(f);
+    return true;
+}
+
 Result<void> list_files(StringView root, Array<String>& out) {
     out.clear();
     std::error_code ec;
