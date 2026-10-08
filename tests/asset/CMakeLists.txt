@@ -16,6 +16,7 @@ target_compile_definitions(test_asset PRIVATE ${MCE_ASSET_TEST_DEFS})
 # Cook side: JSON, audio processing, importers, full project cooks.
 mce_add_test(test_cook
     SOURCES
+        test_cook_gltf.cpp
         test_cook_json_audio.cpp
         test_cook_project.cpp
     DEPS

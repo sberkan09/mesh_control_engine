@@ -146,3 +146,25 @@ FetchContent_MakeAvailable(stb)
 add_library(mce_stb_headers INTERFACE)
 target_include_directories(mce_stb_headers SYSTEM INTERFACE "${stb_SOURCE_DIR}")
 add_library(mce::stb_headers ALIAS mce_stb_headers)
+
+# ---- meshoptimizer (cook-time only: vertex cache / fetch optimization of glTF meshes) ----
+# Confined to mce_asset_cook by the "meshopt wall" in scripts/ci/check_walls.py (FR-AST-010):
+# runtimes read the already-optimized CHNK_MESH. Only the sources the cook calls are compiled.
+FetchContent_Declare(meshoptimizer
+    GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+    GIT_TAG        v0.25
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  _no_cmake_)
+FetchContent_MakeAvailable(meshoptimizer)
+
+add_library(mce_meshopt STATIC
+    "${meshoptimizer_SOURCE_DIR}/src/indexgenerator.cpp"
+    "${meshoptimizer_SOURCE_DIR}/src/vcacheoptimizer.cpp"
+    "${meshoptimizer_SOURCE_DIR}/src/vfetchoptimizer.cpp")
+target_include_directories(mce_meshopt SYSTEM PUBLIC "${meshoptimizer_SOURCE_DIR}/src")
+set_target_properties(mce_meshopt PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(mce_meshopt PRIVATE /W0)
+else()
+    target_compile_options(mce_meshopt PRIVATE -w)
+endif()

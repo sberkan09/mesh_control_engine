@@ -38,7 +38,7 @@ in `build/local-ci-logs/`. Windows/MSVC builds are checked by hand on a Windows 
 |---|---|
 | `src/engine/core` | `mce_core` (L0): allocators, containers, math, `Result`, log/assert, convars, jobs, the app loop |
 | `src/engine/asset` | `mce_asset` (L2): `.mce` container, GUIDs, cooked chunk formats, runtime asset registry (handles, refcount, hot-reload commit) |
-| `src/engine/asset/cook` | `mce_asset_cook`: cook library — scan, sidecars, importers (PNG/JPG, WAV, TTF, `.mcmat`, `.mcscene`), dependency graph, cook DB, pack |
+| `src/engine/asset/cook` | `mce_asset_cook`: cook library — scan, sidecars, importers (PNG/JPG, WAV, TTF, glTF/GLB, `.mcmat`, `.mcscene`), dependency graph, cook DB, pack |
 | `tools/cook` | `mce_cook` CLI |
 | `src/engine/platform` | `mce_platform` (L1): SDL3 window + event pump, clock, boot-failure message box (the SDL wall) |
 | `src/engine/rhi` | `mce_rhi` (L2): backend-neutral handles, `RenderDevice`, recorded `CommandBuffer` |

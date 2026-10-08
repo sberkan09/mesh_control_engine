@@ -300,7 +300,8 @@ TEST_CASE("asset system: placeholders are valid payloads of their type") {
     CHECK(FontView::read(as.placeholder<Font>()).has_value());
     CHECK(MaterialChunk::read(as.placeholder<Material>()).has_value());
     CHECK(SceneView::read(as.placeholder<Scene>()).has_value());
-    CHECK(as.placeholder<Mesh>().empty());
+    REQUIRE(MeshView::read(as.placeholder<Mesh>()).has_value());
+    CHECK(MeshView::read(as.placeholder<Mesh>()).value().submeshes.empty());
 }
 
 TEST_CASE("asset system: missing mount root is an error") {

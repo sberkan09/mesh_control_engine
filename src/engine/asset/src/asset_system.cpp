@@ -48,6 +48,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::Font: return FONT_VERSION;
         case ChunkType::Material: return MATERIAL_VERSION;
         case ChunkType::Scene: return SCENE_VERSION;
+        case ChunkType::Mesh: return MESH_VERSION;
         default: return 0;
     }
 }
@@ -105,7 +106,10 @@ void build_placeholders(Array<byte>* out) {
         b.resize(sizeof(h));
         std::memcpy(b.data(), &h, sizeof(h));
     }
-    // Mesh/Shader/...: empty payload until their formats land (an empty mesh draws nothing).
+    {  // empty mesh: no geometry, no nodes (draws nothing)
+        write_mesh(MeshData{}, out[slot(ChunkType::Mesh)]);
+    }
+    // Shader/...: empty payload until their formats land.
 }
 
 }  // namespace

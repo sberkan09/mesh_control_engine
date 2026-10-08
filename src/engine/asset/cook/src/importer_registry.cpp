@@ -25,6 +25,7 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_font_importer());
     reg.add(make_material_importer());
     reg.add(make_scene_importer());
+    reg.add(make_gltf_importer());
 }
 
 bool parse_guid_ref(StringView text, Guid& out) {
