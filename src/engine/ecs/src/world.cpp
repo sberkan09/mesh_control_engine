@@ -43,8 +43,11 @@ Table::Table(mem::IAllocator& alloc, u32 id, const ComponentMask& mask, Span<con
 }
 
 Table::~Table() {
-    for (Column& c : columns_)
+    for (Column& c : columns_) {
         if (c.data) alloc_.free(c.data);
+        if (c.added) alloc_.free(c.added);
+        if (c.changed) alloc_.free(c.changed);
+    }
 }
 
 void Table::reserve(u32 capacity) {
@@ -59,14 +62,24 @@ void Table::reserve(u32 capacity) {
             alloc_.free(c.data);
         }
         c.data = fresh;
+        for (u32** ticks : {&c.added, &c.changed}) {
+            mem::Allocation t = alloc_.allocate(sizeof(u32) * capacity, alignof(u32));
+            MCE_ASSERT_MSG(t.ptr != nullptr, "ECS tick column allocation failed");
+            u32* fresh_ticks = static_cast<u32*>(t.ptr);
+            if (*ticks) {
+                if (rows) std::memcpy(fresh_ticks, *ticks, rows * sizeof(u32));
+                alloc_.free(*ticks);
+            }
+            *ticks = fresh_ticks;
+        }
     }
     entities_.reserve(capacity);
     capacity_ = capacity;
 }
 
-u32 Table::push_row(Entity e) { return push_rows(1, &e); }
+u32 Table::push_row(Entity e, u32 tick) { return push_rows(1, &e, tick); }
 
-u32 Table::push_rows(u32 n, const Entity* es) {
+u32 Table::push_rows(u32 n, const Entity* es, u32 tick) {
     const u32 first = size();
     if (first + n > capacity_) {
         u32 cap = capacity_ ? capacity_ : 16;
@@ -74,7 +87,10 @@ u32 Table::push_rows(u32 n, const Entity* es) {
         reserve(cap);
     }
     for (u32 i = 0; i < n; ++i) entities_.push_back(es[i]);
-    for (Column& c : columns_) std::memset(c.data + usize(first) * c.size, 0, usize(n) * c.size);
+    for (Column& c : columns_) {
+        std::memset(c.data + usize(first) * c.size, 0, usize(n) * c.size);
+        for (u32 i = 0; i < n; ++i) c.added[first + i] = c.changed[first + i] = tick;
+    }
     return first;
 }
 
@@ -83,7 +99,11 @@ Entity Table::swap_remove(u32 row) {
     MCE_ASSERT_MSG(row <= last, "swap_remove row out of range");
     Entity moved = Entity::null;
     if (row != last) {
-        for (Column& c : columns_) std::memcpy(c.data + usize(row) * c.size, c.data + usize(last) * c.size, c.size);
+        for (Column& c : columns_) {
+            std::memcpy(c.data + usize(row) * c.size, c.data + usize(last) * c.size, c.size);
+            c.added[row] = c.added[last];
+            c.changed[row] = c.changed[last];
+        }
         entities_[row] = entities_[last];
         moved = entities_[row];
     }
@@ -120,12 +140,25 @@ Entity Commands::spawn() {
 
 void Commands::destroy(Entity e) { record(Op::Destroy, e, ecs::kInvalidComponent, 0); }
 
+void Commands::spawn_raw(Entity reserved, Span<const ecs::RawComponent> components) {
+    usize bytes = 0;
+    for (const ecs::RawComponent& rc : components) bytes += 8 + align_up(world_.component(rc.id).size, 8);
+    u8* p = static_cast<u8*>(record(Op::Spawn, reserved, ecs::kInvalidComponent, bytes));
+    for (const ecs::RawComponent& rc : components) {
+        const u32 size = world_.component(rc.id).size;
+        std::memcpy(p, &rc.id, sizeof(rc.id));
+        std::memcpy(p + 4, &size, sizeof(size));
+        if (size) std::memcpy(p + 8, rc.data, size);
+        p += 8 + align_up(size, 8);
+    }
+}
+
 // ====================================================================== World
 
 World::World(mem::IAllocator& alloc)
     : alloc_(alloc), components_(alloc), component_ids_(alloc), hooks_(alloc), generations_(alloc), locations_(alloc),
-      free_list_(alloc), tables_(alloc), table_index_(alloc), system_names_all_(alloc), events_(alloc),
-      events_ordered_(alloc), resources_(alloc), commands_(*this) {
+      free_list_(alloc), tables_(alloc), table_index_(alloc), system_names_all_(alloc), destroy_hooks_(alloc),
+      events_(alloc), events_ordered_(alloc), resources_(alloc), commands_(*this) {
     for (usize i = 0; i < kPhaseCount; ++i) {
         systems_[i] = Array<SystemEntry>(alloc);
         system_name_cache_[i] = Array<const char*>(alloc);
@@ -176,7 +209,7 @@ bool World::alive(Entity e) const {
 }
 
 void World::place_entity(Entity e, u32 table) {
-    const u32 row = tables_[table]->push_row(e);
+    const u32 row = tables_[table]->push_row(e, write_tick());
     locations_[e.index] = Location{table, row};
     ++structure_version_;
 }
@@ -188,12 +221,30 @@ Entity World::spawn() {
     return e;
 }
 
+void World::spawn_raw(Entity e, Span<const ecs::RawComponent> components) {
+    assert_not_in_phase("spawn_raw");
+    MCE_ASSERT_MSG(alive(e) && locations_[e.index].table == kNoTable, "spawn_raw expects a reserved, unplaced handle");
+    ecs::ComponentMask mask;
+    for (const ecs::RawComponent& rc : components) mask.set(rc.id);
+    place_entity(e, table_for(mask).id());
+    const Location loc = locations_[e.index];
+    ecs::detail::Table& table = *tables_[loc.table];
+    for (const ecs::RawComponent& rc : components)
+        if (u8* cell = table.cell(rc.id, loc.row)) std::memcpy(cell, rc.data, components_[rc.id].size);
+    for (ecs::ComponentId c : table.ids())
+        if (hooks_[c].on_add) hooks_[c].on_add(*this, e);
+}
+
 void World::destroy(Entity e) {
     assert_not_in_phase("destroy");
     destroy_now(e);
 }
 
 void World::destroy_now(Entity e) {
+    if (!alive(e)) return;
+    // Destroy hooks may destroy other entities (hierarchy children) — never `e` itself, which
+    // stays alive until below.
+    for (usize i = 0; i < destroy_hooks_.size(); ++i) destroy_hooks_[i](*this, e);
     if (!alive(e)) return;
     const Location loc = locations_[e.index];
     if (loc.table != kNoTable) {
@@ -239,9 +290,13 @@ u32 World::move_entity(Entity e, u32 to) {
     const Location loc = locations_[e.index];
     ecs::detail::Table& src = *tables_[loc.table];
     ecs::detail::Table& dst = *tables_[to];
-    const u32 row = dst.push_row(e);
+    const u32 row = dst.push_row(e, write_tick());
     for (const ecs::detail::Column& col : dst.columns()) {
-        if (const u8* from = src.cell(col.id, loc.row)) std::memcpy(dst.cell(col.id, row), from, col.size);
+        if (const u8* from = src.cell(col.id, loc.row)) {
+            std::memcpy(dst.cell(col.id, row), from, col.size);
+            col.added[row] = src.added_ticks(col.id)[loc.row];
+            col.changed[row] = src.changed_ticks(col.id)[loc.row];
+        }
     }
     const Entity moved = src.swap_remove(loc.row);
     if (!moved.is_null()) locations_[moved.index].row = loc.row;
@@ -259,7 +314,10 @@ void World::add_component_raw(Entity e, ecs::ComponentId c, const void* value) {
         table = table_with(loc.table, c, true);
         row = move_entity(e, table);
     }
-    if (value && components_[c].size) std::memcpy(tables_[table]->cell(c, row), value, components_[c].size);
+    if (value && components_[c].size) {
+        std::memcpy(tables_[table]->cell(c, row), value, components_[c].size);
+        tables_[table]->changed_ticks(c)[row] = write_tick();
+    }
     if (!had && hooks_[c].on_add) hooks_[c].on_add(*this, e);
 }
 
@@ -268,6 +326,46 @@ void World::remove_component_raw(Entity e, ecs::ComponentId c) {
     if (loc.table == kNoTable || !tables_[loc.table]->mask().test(c)) return;
     if (hooks_[c].on_remove) hooks_[c].on_remove(*this, e);
     move_entity(e, table_with(locations_[e.index].table, c, false));
+}
+
+// ---------------------------------------------------------------- type-erased access
+
+ecs::ComponentId World::find_component(u64 type_hash) const {
+    const ecs::ComponentId* id = component_ids_.find(type_hash);
+    return id ? *id : ecs::kInvalidComponent;
+}
+
+bool World::has(Entity e, ecs::ComponentId c) const {
+    if (!alive(e) || c >= components_.size()) return false;
+    const Location loc = locations_[e.index];
+    return loc.table != kNoTable && tables_[loc.table]->mask().test(c);
+}
+
+const void* World::get_raw(Entity e, ecs::ComponentId c) const {
+    if (!has(e, c)) return nullptr;
+    const Location loc = locations_[e.index];
+    return tables_[loc.table]->cell(c, loc.row);
+}
+
+void World::set_raw(Entity e, ecs::ComponentId c, const void* value) {
+    if (!alive(e)) return;
+    MCE_ASSERT_MSG(c < components_.size(), "set_raw: unregistered component id");
+    if (has(e, c)) {
+        const Location loc = locations_[e.index];
+        if (value && components_[c].size) {
+            std::memcpy(tables_[loc.table]->cell(c, loc.row), value, components_[c].size);
+            tables_[loc.table]->changed_ticks(c)[loc.row] = write_tick();
+        }
+        return;
+    }
+    assert_not_in_phase("set_raw (structural)");
+    add_component_raw(e, c, value);
+}
+
+void World::remove_raw(Entity e, ecs::ComponentId c) {
+    assert_not_in_phase("remove_raw");
+    if (!alive(e) || c >= components_.size()) return;
+    remove_component_raw(e, c);
 }
 
 // ---------------------------------------------------------------- systems & phases
@@ -294,10 +392,18 @@ void World::run_phase(Phase phase, Frame& frame) {
     MCE_ASSERT_MSG(!in_phase_, "phases do not nest");
     frame.phase = phase;
     in_phase_ = true;
-    for (const SystemEntry& s : systems_[static_cast<usize>(phase)]) {
-        current_system_ = s.id;
-        s.fn(frame);
+    Array<SystemEntry>& list = systems_[static_cast<usize>(phase)];
+    for (usize i = 0; i < list.size(); ++i) {
+        current_system_ = list[i].id;
+        current_phase_ = static_cast<u16>(phase);
+        current_slot_ = static_cast<u16>(i);
+        // The system's writes carry its run tick; its reader tick is its previous run.
+        stamp_tick_ = ++change_tick_;
+        stamping_ = true;
+        list[i].fn(frame);
+        list[i].last_run = stamp_tick_;
     }
+    stamping_ = false;
     current_system_ = 0xFFFF;
     in_phase_ = false;
     sync(phase);
@@ -327,7 +433,13 @@ void World::render(f32 alpha) {
 }
 
 void World::sync(Phase phase) {
-    apply_commands();
+    if (!commands_.empty()) {
+        stamp_tick_ = ++change_tick_;
+        stamping_ = true;
+        apply_commands();
+        stamping_ = false;
+    }
+    if (u32(change_tick_ - last_tick_clamp_) >= (1u << 29)) clamp_change_ticks();
     for (ecs::detail::EventQueueBase* q : events_by_phase_[static_cast<usize>(phase)]) q->swap();
 }
 
@@ -414,6 +526,78 @@ void World::apply_commands() {
         });
     }
     MCE_ASSERT_MSG(commands_.empty(), "hooks keep enqueueing commands (16 rounds)");
+}
+
+// ---------------------------------------------------------------- change detection
+
+u32 World::write_tick() { return stamping_ ? stamp_tick_ : ++change_tick_; }
+
+const World::SystemEntry* World::current_system_entry() const {
+    if (current_system_ == 0xFFFF) return nullptr;
+    return &systems_[current_phase_][current_slot_];
+}
+
+u32 World::reader_tick() const {
+    const SystemEntry* s = current_system_entry();
+    return s ? s->last_run : 0;
+}
+
+void World::touch(Entity e, ecs::ComponentId c) {
+    if (!get_raw(e, c)) return;
+    const Location loc = locations_[e.index];
+    tables_[loc.table]->changed_ticks(c)[loc.row] = write_tick();
+}
+
+bool World::is_changed(Entity e, ecs::ComponentId c, u32 since) const {
+    if (!get_raw(e, c)) return false;
+    const Location loc = locations_[e.index];
+    return ecs::detail::tick_newer(tables_[loc.table]->changed_ticks(c)[loc.row], since, change_tick_);
+}
+
+bool World::is_added(Entity e, ecs::ComponentId c, u32 since) const {
+    if (!get_raw(e, c)) return false;
+    const Location loc = locations_[e.index];
+    return ecs::detail::tick_newer(tables_[loc.table]->added_ticks(c)[loc.row], since, change_tick_);
+}
+
+// Keeps every stored age below kMaxChangeAge so the wrapping comparison stays exact (Bevy's
+// check_change_ticks). Runs every 2^29 ticks from sync; ticks older than the window read as
+// "very old", which is all a reader can ask of them.
+void World::clamp_change_ticks() {
+    const u32 now = change_tick_;
+    auto clamp = [now](u32& t) {
+        if (u32(now - t) > ecs::detail::kMaxChangeAge) t = now - ecs::detail::kMaxChangeAge;
+    };
+    for (auto& tp : tables_) {
+        const u32 rows = tp->size();
+        for (ecs::detail::Column& c : tp->columns_mut()) {
+            for (u32 r = 0; r < rows; ++r) {
+                clamp(c.added[r]);
+                clamp(c.changed[r]);
+            }
+        }
+    }
+    for (auto& list : systems_)
+        for (SystemEntry& s : list) clamp(s.last_run);
+    last_tick_clamp_ = now;
+}
+
+void World::debug_set_change_tick(u32 tick) {
+    // As if the ticks in between had elapsed: advance in clamp-sized steps.
+    u32 remaining = tick - change_tick_;
+    while (remaining) {
+        const u32 step = remaining < (1u << 29) ? remaining : (1u << 29);
+        change_tick_ += step;
+        remaining -= step;
+        clamp_change_ticks();
+    }
+}
+
+ecs::ComponentId World::find_component_by_refl(u64 refl_id) const {
+    if (refl_id == 0) return ecs::kInvalidComponent;
+    for (usize i = 0; i < components_.size(); ++i)
+        if (components_[i].refl_id == refl_id) return static_cast<ecs::ComponentId>(i);
+    return ecs::kInvalidComponent;
 }
 
 // ---------------------------------------------------------------- events

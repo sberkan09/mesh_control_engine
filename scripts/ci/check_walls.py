@@ -42,9 +42,34 @@ WALLS = [
     ),
 ]
 
+# CMake link walls: (name, pattern, allowed path prefixes). Scans every CMakeLists.txt under
+# SCAN_DIRS, comment lines excluded, so a third-party target can only be linked where its wall says.
+LINK_WALLS = [
+    # Jolt (ADR-0003): linked by mce_physics3d alone, privately.
+    ("Jolt link wall", re.compile(r"(?<![\w/.-])Jolt(?![\w/.-])"), ["src/engine/physics3d/"]),
+]
+
+
+def link_violations() -> list:
+    out = []
+    for d in SCAN_DIRS:
+        base = ROOT / d
+        if not base.exists():
+            continue
+        for path in base.rglob("CMakeLists.txt"):
+            rel = path.relative_to(ROOT).as_posix()
+            for name, pattern, allowed in LINK_WALLS:
+                if any(rel.startswith(a) for a in allowed):
+                    continue
+                for no, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                    code = line.split("#", 1)[0]
+                    if pattern.search(code):
+                        out.append(f"{rel}:{no}: {name}: {line.strip()}")
+    return out
+
 
 def main() -> int:
-    violations = []
+    violations = link_violations()
     for d in SCAN_DIRS:
         base = ROOT / d
         if not base.exists():

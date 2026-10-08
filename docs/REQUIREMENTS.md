@@ -210,6 +210,7 @@ Conventions: **Anchor** = A (UC-A), B (UC-B), D (UC-D), C (UC-C), ★ = shared c
 | FR-EDT-130 | Timeline/curve editor for FR-ENT-110. | Should | v1.0 | Timeline view edits and scrubs a cooked timeline. |
 | FR-EDT-140 | Multi-scene tabs, scene-diff view, in-editor profiling dashboards. | Could | — | Demo-able. |
 | FR-EDT-150 | Visual scripting, node-graph material editors, multi-user editing, plugin API, theming/localization. | Won't | — | §5. |
+| FR-EDT-160 | Editor MCP server: a headless, stdio-only Model Context Protocol server exposing reflection discovery, scene read/edit (through the `SceneDocument` mutation funnel), save, cook and headless deterministic runs to an external AI client (editor-mcp.md). Editor-side only; no runtime target links it. | Should | ROADMAP M4.5 (off-tier tooling) | An edit made through the MCP tools saves a `.mcscene` byte-identical to the same edit made via `SceneCommand`s, and `run_headless` returns the same state hash for both (test). |
 
 ### 3.10 FR-UI — Runtime game UI (deferred, designed now)
 
