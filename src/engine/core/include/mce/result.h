@@ -54,6 +54,11 @@ enum class Errc : u16 {
     AudioDeviceOpen = 0x0400,
     AudioQueueFull,
     // 0x0500 physics, 0x0600 scene: allocated by their modules.
+    // 0x0700 game module loader (scripting.md §2.2)
+    ModuleNotFound = 0x0700,
+    ModuleMissingEntry,
+    EngineIdMismatch,
+    ModuleInstallFailed,
 };
 
 const char* errc_name(Errc code);
