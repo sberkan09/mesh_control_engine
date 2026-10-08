@@ -76,3 +76,35 @@ re-open on default change.
 
 **Not built (recorded):** per-player pad ownership; the rebinding UI screen (lands with the UI work).
 Rumble is a platform passthrough (`gamepad_rumble`) with no input-map surface yet.
+
+## 3. Physics2d v0.5: joints, sleeping, stacking, 2,000 bodies (FR-PHY-050/060)
+
+1. **Joints are the Box2D 2.x formulations.** `DistanceJointDesc` is a rigid rod by default, a rope with
+   `min_length < max_length`, or a soft spring toward `length` with `hertz > 0` (stiffness and damping from the
+   pair's effective mass, `b2LinearStiffness`). `RevoluteJointDesc` is the 2x2 point constraint with an optional
+   angle limit and a motor capped by `max_motor_torque`. Joints solve before contacts in both the velocity and
+   position passes, are warm started, and are addressed by a generational `JointId`; destroying a body destroys
+   its joints. `collide_connected = false` (the default) filters the pair out of collision.
+2. **Islands link through joints, and islands sleep (Box2D tolerances).** An island whose bodies all stayed
+   under 0.01 m/s and 2 deg/s for `time_to_sleep` (0.5 s) stops being integrated, collided and solved. Its
+   contacts and sensor overlaps carry over unchanged, so a sleeping stack keeps its warm-start impulses and fires
+   no spurious exit events. Anything that touches it, a joint to an awake body, a moving kinematic body, or an
+   API call (velocity, impulse, force, teleport, config change, destroy of a neighbour) wakes the whole island.
+3. **Two-point manifolds get the Box2D 2.x block solver.** `block_solver` solves both normal impulses as one
+   2x2 LCP by total enumeration, and drops the second point when the effective-mass matrix is ill-conditioned
+   (condition number > 1000). Without it a 20-box column sinks half a metre and leans even at 30 iterations.
+   With it, 8 velocity iterations still lean over within seconds (Gauss-Seidel does not converge down 20 bodies
+   in 8 sweeps); 16 holds the column, settles it within 1 s and sleeps it. That pair (`block_solver = true`,
+   `velocity_iterations = 16`) is the documented **stacking profile**.
+4. **Everything new is opt-in, for the hashes.** `enable_sleep` and `block_solver` default to `false`, and the
+   state hash folds sleep flags only with sleeping on and joints only when one exists. The M3/M3.5 solver path is
+   therefore bit-identical: the 03_platformer and physics2d_headless hashes and the Box2D v3 oracle diffs are
+   unchanged. New games should turn both on.
+5. **The 2,000-body budget needed no new broadphase.** The M3 dynamic AABB tree with fat proxies already meets
+   FR-PHY-050: 2,000 free-falling dynamic bodies step (broadphase + integrate) in 0.83 ms in Release, against the
+   3 ms budget. Sleeping skips sleeping bodies in the pair query and the proxy refresh, so settled piles cost
+   less still. A fully colliding 2,000-body pile (3,500 contacts) is a solver load, not a broadphase one, and is
+   reported but not budgeted.
+
+**Not built (recorded):** prismatic, wheel, weld and mouse joints; joint break forces; continuous collision
+between dynamic bodies; a persistent contact graph (contacts are rebuilt each step from the pair list).
