@@ -111,9 +111,9 @@ struct GameState {
 };
 
 // Registers the game's systems and the GameState resource, then spawns the level. The host
-// installs the engine runtime first — input (InputState resource), physics2d and the audio bridge
-// (PlaySfx) — and may set a Sounds resource (absent: silent). Safe to call through the
-// game-module entry point: no state outside the World.
+// installs the engine runtime first — input (InputState resource), physics2d and, for sound, the
+// audio bridge — and may set a Sounds resource (absent: silent). This is the game-module entry
+// point's install (game/module.cpp): no state outside the World.
 mce::ResultV install(mce::World& world);
 
 // Order-total hash of the gameplay state on top of World::state_hash (determinism harness).

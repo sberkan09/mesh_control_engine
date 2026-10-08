@@ -11,6 +11,9 @@
 //   sample_03_platformer -headless 1 -ticks N    determinism run: bot input, prints the state hash
 //   sample_03_platformer -frames 600 -autoplay 1 -capture shot.ppm
 //
+// Where game modules are supported the game is loaded from libplatformer.so (-module <path>
+// overrides the build-tree path); elsewhere it is linked in.
+//
 // The determinism hash folds the ECS state, the physics world, the game state, every tick's
 // input snapshot and the audio command hash (ROADMAP M3: physics + input + audio).
 
@@ -33,6 +36,9 @@
 #include "mce/render/renderer.h"
 #include "mce/render/sprite_animation.h"
 #include "mce/rhi_gl/gl_device.h"
+#if defined(MCE_PLATFORMER_MODULE)
+#include "mce/module_host.h"
+#endif
 
 namespace {
 
@@ -45,6 +51,9 @@ MCE_CVAR(cv_ticks, "ticks", 0, "Headless: ticks to simulate", CVarFlags::None);
 MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window closes)", CVarFlags::None);
 MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this .ppm path", CVarFlags::None);
 MCE_CVAR(cv_autoplay, "autoplay", false, "A scripted bot plays (always on when headless)", CVarFlags::None);
+#if defined(MCE_PLATFORMER_MODULE)
+MCE_CVAR(cv_module, "module", MCE_PLATFORMER_MODULE, "The game module to load", CVarFlags::RequiresRestart);
+#endif
 MCE_CVAR(cv_trace, "trace", 0, "Print the player's state every N ticks", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 
@@ -142,7 +151,13 @@ public:
         physics::install_physics2d(world_);
         audio::install(world_, audio_);
         world_.set_resource(sounds);
+#if defined(MCE_PLATFORMER_MODULE)
+        MCE_TRY_ASSIGN(module_.module, load_game_module(cv_module.get_string(), world_));
+        MCE_LOG_INFO("03_platformer: game module '{}' v{} from {}", module_.module.info->name,
+                     module_.module.info->module_version, module_.module.loaded_path.c_str());
+#else
         MCE_TRY(platformer::install(world_));
+#endif
 
         // Music: a streamed clip looping on the music bus through the AudioSource bridge.
         audio::ClipPayload music;
@@ -484,6 +499,13 @@ private:
     rhi::RenderDevice* device_;
     audio::AudioDevice& audio_;
     bool autoplay_;
+#if defined(MCE_PLATFORMER_MODULE)
+    // Declared before the World so it is destroyed after it: the World holds the module's code.
+    struct ModuleGuard {
+        LoadedModule module;
+        ~ModuleGuard() { unload_game_module(module); }
+    } module_;
+#endif
     World world_;
     Bot bot_;
     art::Clips clips_;

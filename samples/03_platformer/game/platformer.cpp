@@ -424,10 +424,10 @@ void pf_combat(Frame& f) {
 }  // namespace
 
 ResultV install(World& world) {
-    if (!world.try_resource<World2D>() || !world.try_resource<input::InputState>() ||
-        !world.event_queue<audio::PlaySfx>())
-        return Error(Errc::InvalidArgument, "platformer.install",
-                     "the host installs input, physics2d and the audio bridge first");
+    if (!world.try_resource<World2D>() || !world.try_resource<input::InputState>())
+        return Error(Errc::InvalidArgument, "platformer.install", "the host installs input and physics2d first");
+    // The audio bridge registers it too (idempotent); a host without audio just drops the events.
+    world.register_event<audio::PlaySfx>(Phase::FixedUpdate_Pre);
 
     world.add_system(Phase::FixedUpdate_Pre, "pf_prev", &pf_prev);
     world.add_system(Phase::FixedUpdate_Pre, "pf_state", &pf_state, "pf_prev");
