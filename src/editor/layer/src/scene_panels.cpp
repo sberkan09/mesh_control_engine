@@ -8,6 +8,7 @@
 
 #include "imgui_draw_ctx.h"
 #include "mce/ecs/transform.h"
+#include "mce/editor/asset_browser.h"
 #include "mce/editor/editor_shell.h"
 #include "scene_panels.h"
 
@@ -57,6 +58,12 @@ public:
             Array<EntityId> roots;
             scene.children_of(kNoEntity, roots);
             for (EntityId id : roots) draw_node(shell, id, 0);
+            if (!drop_.asset.is_null()) {
+                if (const ProjectAsset* a = shell.session().project().find(drop_.asset)) {
+                    const math::vec3 at = scene.world_transform(drop_.parent).position;
+                    drop_asset(scene, *a, {at.x, at.y}, drop_.parent);
+                }
+            }
             if (drop_.id != kNoEntity) {
                 if (drop_.reorder_before != kNoEntity) {
                     // Shift-drop: same parent as the target, placed before it.
@@ -79,6 +86,12 @@ public:
                     std::memcpy(&id, p->Data, sizeof(id));
                     scene.set_parent(id, kNoEntity);
                 }
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kAssetPayload)) {
+                    asset::Guid g;
+                    std::memcpy(&g, p->Data, sizeof(g));
+                    if (const ProjectAsset* a = shell.session().project().find(g))
+                        drop_asset(scene, *a, shell.camera().center);
+                }
                 ImGui::EndDragDropTarget();
             }
             if (ImGui::BeginPopupContextItem("##empty")) {
@@ -100,6 +113,7 @@ private:
         EntityId id = kNoEntity;              // the dragged entity
         EntityId parent = kNoEntity;          // its new parent
         EntityId reorder_before = kNoEntity;  // Shift-drop: its new next sibling
+        asset::Guid asset;                    // an asset from the browser, dropped on `parent`
     };
 
     void draw_node(EditorShell& shell, EntityId id, usize depth) {
@@ -140,6 +154,10 @@ private:
                     std::memcpy(&drop_.id, p->Data, sizeof(drop_.id));
                     if (ImGui::GetIO().KeyShift) drop_.reorder_before = e.id;
                     else drop_.parent = e.id;
+                }
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kAssetPayload)) {  // a child made from the asset
+                    std::memcpy(&drop_.asset, p->Data, sizeof(drop_.asset));
+                    drop_.parent = e.id;
                 }
                 ImGui::EndDragDropTarget();
             }

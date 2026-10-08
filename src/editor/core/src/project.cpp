@@ -27,6 +27,7 @@ const char* asset_type_name(asset::ChunkType type) {
         case asset::Atlas::chunk: return asset::Atlas::name;
         case asset::Scene::chunk: return asset::Scene::name;
         case asset::InputMap::chunk: return asset::InputMap::name;
+        case asset::Prefab::chunk: return asset::Prefab::name;
         default: return "";
     }
 }
@@ -82,6 +83,24 @@ void EditorProject::rescan() {
         a.type = r.importer ? r.importer->type() : asset::ChunkType::Manifest;
         assets_.push_back(std::move(a));
     }
+}
+
+Result<void> EditorProject::move_asset(asset::Guid guid, StringView new_rel_path) {
+    const ProjectAsset* a = find(guid);
+    if (!is_open() || !a) return Error(Errc::NotFound, kStage, asset::to_string(guid).view());
+    if (new_rel_path.empty() || new_rel_path.find("..") != StringView::npos || new_rel_path[0] == '/')
+        return Error(Errc::InvalidArgument, kStage, new_rel_path);
+    if (!(cook::lower_extension(new_rel_path) == cook::lower_extension(a->path.view())))
+        return Error(Errc::InvalidArgument, kStage, "an asset keeps its extension when renamed");
+    cook::AssetRegistry reg;
+    cook::DiagList diags;
+    reg.scan(root_.view(), service_.importers(), false, diags);
+    const cook::String target = asset_path(new_rel_path);
+    const usize slash = target.view().rfind('/');
+    if (slash != StringView::npos) MCE_TRY(cook::fs::create_directories(target.view().substr(0, slash)));
+    Result<void> r = reg.move(guid, new_rel_path);
+    rescan();
+    return r;
 }
 
 const ProjectAsset* EditorProject::find(asset::Guid g) const {

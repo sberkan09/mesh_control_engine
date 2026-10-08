@@ -9,6 +9,7 @@
 
 #include "imgui_renderer.h"
 #include "mce/editor/editor_shell.h"
+#include "mce/editor/asset_browser.h"
 #include "mce/editor/gizmo.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/log.h"
@@ -58,6 +59,21 @@ public:
         ImGui::Image(ImGuiRhiRenderer::to_id(target_), avail, ImVec2(0, 1), ImVec2(1, 0));
         const bool hovered = ImGui::IsItemHovered();
         shell.set_viewport(ViewportInfo{target_, size_, hovered});
+        // An asset dragged from the browser: a texture becomes a sprite, a prefab an instance,
+        // where it is dropped; a scene opens.
+        if (shell.scene_mode() && !shell.playing() && ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kAssetPayload)) {
+                asset::Guid g;
+                std::memcpy(&g, p->Data, sizeof(g));
+                if (const ProjectAsset* a = shell.session().project().find(g)) {
+                    const ImVec2 m = ImGui::GetIO().MousePos;
+                    const math::vec2 at{(m.x - origin.x) * scale.x, (m.y - origin.y) * scale.y};
+                    if (asset_drop_kind(a->type) == AssetDrop::OpenScene) shell.request_open_scene(a->path.view());
+                    else drop_asset(shell.scene(), *a, shell.camera().screen_to_world(at, size_));
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
         if (shell.scene_mode()) interact(shell, origin, scale, hovered);
     }
 
@@ -485,6 +501,7 @@ void add_default_panels(EditorShell& shell) {
     shell.add_panel(mem::make_unique<ConsolePanel>(mem::heap()));
     shell.add_panel(mem::make_unique<StatsPanel>(mem::heap()));
     add_play_panel(shell);
+    add_asset_panel(shell);
 }
 
 }  // namespace mce::editor

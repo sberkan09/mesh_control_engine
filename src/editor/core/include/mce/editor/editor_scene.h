@@ -86,11 +86,16 @@ public:
     void assign_new_guid();
 
     StringView path() const { return path_.view(); }  // empty until saved/opened
+    // The scene's file moved (asset browser rename): same document, new path.
+    void set_path(StringView path) { path_.assign(path); }
     bool dirty() const { return dirty_; }
     u64 revision() const { return revision_; }        // bumps on every mutation
 
     // ---- commands (the only writers) ----
     EntityId create_entity(StringView name, bool with_transform = true, i32 at = -1);
+    // An instance of the prefab `prefab` (the cook expands it here; its components override the
+    // prefab root). With a LocalTransform.
+    EntityId create_prefab_instance(StringView name, asset::Guid prefab, i32 at = -1);
     bool destroy_entity(EntityId id);
     bool rename_entity(EntityId id, StringView name);
     bool move_entity(EntityId id, usize index);

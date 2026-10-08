@@ -101,6 +101,7 @@ public:
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
     bool open_scene(StringView path);  // absolute, or relative to the project's assets/ (offers autosave recovery)
+    void request_open_scene(StringView path);  // asks first when the open scene is dirty
     bool save_scene();                 // Save As prompt when the scene has no file yet
     void new_scene();                  // asks first when the open scene is dirty
     void cook(bool pack = false);

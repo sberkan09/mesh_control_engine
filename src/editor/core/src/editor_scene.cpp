@@ -398,6 +398,14 @@ EntityId EditorScene::create_entity(StringView name, bool with_transform, i32 at
     return id;
 }
 
+EntityId EditorScene::create_prefab_instance(StringView name, asset::Guid prefab, i32 at) {
+    Edit edit(*this, "Instantiate prefab");
+    const EntityId id = create_entity(name, true, at);
+    doc_.find(id)->prefab = prefab;
+    touch();
+    return id;
+}
+
 bool EditorScene::destroy_entity(EntityId id) {
     if (!doc_.find(id)) return false;
     Edit edit(*this, "Delete entity");

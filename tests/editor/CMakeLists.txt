@@ -1,6 +1,7 @@
 # Headless editor tests: editor_core logic and the layer's ImGui-free pieces. No window, no GPU.
 mce_add_test(test_editor
     SOURCES
+        test_asset_browser.cpp
         test_console_model.cpp
         test_draw_clip.cpp
         test_hierarchy.cpp

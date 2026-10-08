@@ -44,6 +44,10 @@ public:
 
     // ---- catalog ----
     void rescan();
+    // Renames/moves an asset under assets/ keeping its GUID (FR-EDT-110): the source and its
+    // sidecar move together, so every reference (by GUID) still resolves. The extension (the
+    // importer) cannot change. Rescans; the next cook / hot reload picks the new path up.
+    Result<void> move_asset(asset::Guid guid, StringView new_rel_path);
     Span<const ProjectAsset> assets() const { return assets_.span(); }
     const ProjectAsset* find(asset::Guid g) const;
     const cook::DiagList& scan_diags() const { return scan_diags_; }
