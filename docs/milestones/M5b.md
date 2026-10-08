@@ -20,7 +20,7 @@ hot-reload matrix and the editor orbit-camera collision gate are editor work and
 | Same-binary determinism, 3D poses (physics.md §6 test 13) | `samples/physics3d_headless` + the determinism stage | 3 runs × Debug and Release give one hash (2000 ticks, 134 bodies, a character, a camera boom) |
 | `04_cubes` capsule walk (ROADMAP M5b demo) | `samples/04_cubes` (`-walk 1`, or `C` in the window) | a capsule (`walker.glb`, the default `ControllerParams3D` shape) walks the floor through `move_character` against a `World3D` mirror of the layout (floor, 28 panel cubes, 14 spheres, orrery stand), hops every 2.5 s, and a 5 m third-person boom is `camera_sweep`-ed every tick: 600 ticks walk 40 m with 105 pulled-in boom ticks (closest 0.53 m). Arrows walk camera-relative, Space jumps, no input runs the patrol. `sample_04_cubes_walk_300` ctest requires a pulled-in boom; the determinism stage adds `-walk 1 -ticks 600` (World3D hash + boom folded in) across 3 runs × Debug/Release. Walk off keeps the M5a hash (`a31c44f2772f1e8f` at 600 ticks) |
 
-## Editor half (ADR-0028)
+## Editor half (ADR-0029)
 
 | ROADMAP M5b item | Where | Evidence |
 |---|---|---|
@@ -42,7 +42,7 @@ hot-reload matrix and the editor orbit-camera collision gate are editor work and
 
 | Item | State |
 |---|---|
-| Play-in-editor (embedded host, pause/step/slow-mo, ≤ 1 s enter, Play→Stop→Play hash) | shipped, see *Editor half*; game modules do not load inside the editor process (ADR-0028 §1.7) |
+| Play-in-editor (embedded host, pause/step/slow-mo, ≤ 1 s enter, Play→Stop→Play hash) | shipped, see *Editor half*; game modules do not load inside the editor process (ADR-0029 §1.7) |
 | Hot-reload matrix (textures/materials/scenes ≤ 1 s, game.dll ≤ 10 s) | editor work, not in this landing |
 | Editor orbit camera collision gate | needs the editor viewport camera; `camera_sweep` is ready for it |
 | ECS bridge (`install_physics3d`, `RigidBody3D`/`Collider3D`/`CharacterController3D` components, contact events) | next physics step; the facade is shaped for it |

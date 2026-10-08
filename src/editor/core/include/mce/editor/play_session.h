@@ -1,5 +1,5 @@
 #pragma once
-// PlaySession — play-in-editor (editor-tools.md §2.8, FR-EDT-060, ADR-0028): the open scene runs
+// PlaySession — play-in-editor (editor-tools.md §2.8, FR-EDT-060, ADR-0029): the open scene runs
 // inside the editor in a world of its own, built the way mce_player builds it.
 //
 //   enter    serialize the document -> cook it in memory with the scene importer (the same bytes the

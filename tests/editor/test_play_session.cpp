@@ -1,4 +1,4 @@
-// Play-in-editor (FR-EDT-060, NFR-M-03, ADR-0028), headless: enter builds the play world from the
+// Play-in-editor (FR-EDT-060, NFR-M-03, ADR-0029), headless: enter builds the play world from the
 // document the way mce_player builds it from the cooked pack, pause/step/slow-mo ride the fixed
 // step, Play -> Stop -> Play reproduces the first-tick state, and play never touches the document.
 

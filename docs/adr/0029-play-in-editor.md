@@ -1,4 +1,4 @@
-# ADR-0028: Play-in-editor, hot reload and the orbit-camera gate (M5b editor side)
+# ADR-0029: Play-in-editor, hot reload and the orbit-camera gate (M5b editor side)
 
 **Status:** Accepted (2026-10-08). **Milestone:** M5b. **Requirements:** FR-EDT-060, NFR-M-03, FR-AST-090,
 FR-DX-040. **Design:** `docs/architecture/editor-tools.md` §2.8, §4.1.
