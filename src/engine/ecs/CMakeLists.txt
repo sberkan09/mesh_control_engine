@@ -1,6 +1,7 @@
 # mce_ecs (L1): archetype tables, generational entities, queries, phases, Commands, events,
-# change ticks and the ChildOf transform hierarchy (v0.5). Reflection (mce_refl) names the
-# engine components so cooked scene/prefab columns can find them.
+# change ticks and the ChildOf transform hierarchy (v0.5). Component identity is
+# mce::kTypeHash<T>; mce_refl records carry the same hash (refl::TypeRecord::type_hash), so
+# reflected components can also be reached type-erased.
 mce_add_library(mce_ecs
     SOURCES
         src/world.cpp

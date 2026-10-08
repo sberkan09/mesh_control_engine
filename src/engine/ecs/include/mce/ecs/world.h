@@ -373,9 +373,6 @@ public:
     Entity spawn_with(const Ts&... components);
     // Places a reserved handle (reserve_entity) with type-erased components now; outside phases.
     void spawn_raw(Entity reserved, Span<const ecs::RawComponent> components);
-    // Type-erased add/overwrite of one component (save load, tools); outside phases when
-    // structural. `value` null = zero bytes.
-    void add_raw(Entity e, ecs::ComponentId c, const void* value);
     void destroy(Entity e);
     bool alive(Entity e) const;
     template <class T>
@@ -419,8 +416,18 @@ public:
     // Test hook: advance the counter to `tick` as if the ticks in between had elapsed (wrapping
     // forward; stored ticks are clamped exactly as periodic sync clamping would).
     void debug_set_change_tick(u32 tick);
-    // Raw row pointer for component `c` (nullptr when absent or a tag). Does not stamp.
-    void* get_raw(Entity e, ecs::ComponentId c) const;
+
+    // ---- type-erased access (scene loader, editor preview world) ------------------------
+    // For code that knows a component only by its id (refl::TypeRecord::type_hash ->
+    // find_component / register_component_info), never by its C++ type. Same rules as the typed
+    // calls: structural changes are illegal while a phase runs.
+    ecs::ComponentId find_component(u64 type_hash) const;  // kInvalidComponent when unregistered
+    bool has(Entity e, ecs::ComponentId c) const;
+    const void* get_raw(Entity e, ecs::ComponentId c) const;  // null when absent (or a tag)
+    void* get_raw_mut(Entity e, ecs::ComponentId c) { return const_cast<void*>(static_cast<const World*>(this)->get_raw(e, c)); }
+    // Copies components(c).size bytes from `value` (null for tags); adds the component when missing.
+    void set_raw(Entity e, ecs::ComponentId c, const void* value);
+    void remove_raw(Entity e, ecs::ComponentId c);
 
     // ---- systems & phases -------------------------------------------------
     // Registration order within a phase IS execution order. `after` (optional) names a system

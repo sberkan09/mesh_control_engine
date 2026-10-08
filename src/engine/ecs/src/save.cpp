@@ -240,9 +240,9 @@ Result<LoadStats> read_save(World& w, Span<const byte> payload, SaveInfo* info, 
                 Array<byte> def;
                 def.resize(t->size, byte{0});
                 if (t->construct_default) t->construct_default(def.data());
-                w.add_raw(e, c, def.data());
+                w.set_raw(e, c, def.data());
             }
-            byte* row = static_cast<byte*>(w.get_raw(e, c));
+            byte* row = static_cast<byte*>(w.get_raw_mut(e, c));
             for (u32 fi = 0; fi < cp.field_count; ++fi) {
                 const Field& fd = fields[cp.first_field + fi];
                 const refl::FieldRecord* f = t->find_field(StringId(fd.name));

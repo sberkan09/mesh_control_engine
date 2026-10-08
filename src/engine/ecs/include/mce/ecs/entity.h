@@ -25,15 +25,18 @@ struct Hash<Entity> {
     u64 operator()(Entity e) const { return mix64((u64(e.generation) << 32) | e.index); }
 };
 
-// Entity fields are EntityRef in reflection: scenes and prefabs store a document-local index in
-// the first u32, remapped to a live handle at instantiation (ecs-gameplay.md §3.8).
+}  // namespace mce
+
+// Reflection: Entity fields are FieldKind::EntityRef. Scenes spell them "$<entity index>" (the
+// cook stores the scene-local index; the scene loader stamps the spawned entity).
 template <>
-struct refl::FieldTraits<Entity> {
+struct mce::refl::FieldTraits<mce::Entity> {
     static constexpr bool supported = true;
-    static constexpr refl::FieldKind kind = refl::FieldKind::EntityRef;
+    static constexpr FieldKind kind = FieldKind::EntityRef;
     static constexpr const char* type_name = "Entity";
 };
 
+namespace mce {
 namespace ecs {
 
 using ComponentId = u16;

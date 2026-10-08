@@ -6,8 +6,9 @@
 hierarchy with depth-ordered dirty propagation (FR-ENT-050), prefab cook + instantiate without runtime
 inheritance (FR-ENT-070), and save/persistence + replay (FR-RUN-065/070). `ecs-gameplay.md` §2.7, §2.8, §2.11,
 §2.13, §3.6–§3.9 commit the shapes; this ADR records what was built and where it deviates. The M2 scene chunk
-(CHNK_SCENE) existed, but nothing loaded it into a World yet: the instantiation path below is also the first
-`load_scene`.
+(CHNK_SCENE) existed; ADR-0024 (`mce_scene`, merged in parallel) added a scene loader with type-erased World
+access (`find_component`, `get_raw`, `set_raw`). This work keeps that API (its `set_raw` now stamps change
+ticks) and adds the prefab path beside it.
 
 **Decisions.**
 
@@ -36,9 +37,9 @@ inheritance (FR-ENT-070), and save/persistence + replay (FR-RUN-065/070). `ecs-g
    walked depth-first with a visited set, so rotating one parent re-composes exactly its subtree
    (`HierarchyStats::propagated`, asserted in `test_hierarchy`). Missing WorldTransforms are added through
    Commands and land at the FixedUpdate_Post sync — before render, same tick.
-5. **New additive World API.** `add_destroy_hook` (orphans-destroy needs to see a parent before its row goes;
-   component hooks cannot, the parent may carry no hierarchy component), `spawn_raw`/`Commands::spawn_raw`/
-   `add_raw` (type-erased spawn of reserved handles), `find_component_by_refl`, `get_raw`, and the tick API.
+5. **New additive World API.** (Next to ADR-0024's type-erased calls, which this work uses.) `add_destroy_hook` (orphans-destroy needs to see a parent before its row goes;
+   component hooks cannot, the parent may carry no hierarchy component), `spawn_raw`/`Commands::spawn_raw`
+   (type-erased spawn of reserved handles), `find_component_by_refl`, and the tick API.
    Nothing was renamed or removed (the editor inspector reads this API in parallel).
 6. **`mce_ecs` links `mce_refl`.** `ComponentInfo::refl_id` (the StringId of the reflected type name) is how a
    cooked column finds its ComponentId; `FieldTraits<Entity>` makes `Entity` fields EntityRef. A column whose
@@ -82,6 +83,11 @@ inheritance (FR-ENT-070), and save/persistence + replay (FR-RUN-065/070). `ecs-g
     `InputRecorder` bytes with module version, scene GUID, start tick, tick count and the start/final
     `state_hash`; a corrupt stream is rejected before a tick runs. The test drives a 3,600-tick (60 s) session
     live, then replays it into a fresh World and compares final hashes (FR-RUN-070 acceptance).
+
+**Two loaders for now.** `scene::instantiate` (ADR-0024) loads plain scenes and auto-registers components from
+reflection; `ecs::instantiate`/`load_scene` add replicas, overrides, a parent, asset stamping and in-phase use
+(Commands). They read the same chunk layout and agree on identity; folding `mce_scene` onto `ecs::instantiate`
+is a small follow-up once the player is the only caller.
 
 **Not in this change.** Editor prefab authoring and the hierarchy tree view (the editor threads own
 `src/editor/**`); render-extract interpolation driven by changed ticks (the renderer's side of FR-ENT-040);

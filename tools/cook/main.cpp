@@ -9,7 +9,6 @@
 #include <cstring>
 
 #include "mce/cook/cook.h"
-#include "mce/ecs/hierarchy.h"  // reflects LocalTransform / ChildOf / WorldTransform into this cook
 #include "mce/log.h"
 
 namespace {

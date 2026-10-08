@@ -157,3 +157,42 @@ TEST_CASE("metrics") {
     CHECK(m.components == 2);
     CHECK(m.avg_table_occupancy_x100 == 250);
 }
+
+TEST_CASE("type-erased access: raw calls address the same component as the typed API") {
+    World w;
+    const ecs::ComponentId pos = w.component_id<Position>();
+    CHECK(w.find_component(kTypeHash<Position>) == pos);
+    CHECK(w.find_component(kTypeHash<Velocity>) == ecs::kInvalidComponent);
+
+    Entity e = w.spawn();
+    CHECK_FALSE(w.has(e, pos));
+    CHECK(w.get_raw(e, pos) == nullptr);
+    const Position p{3, 4};
+    w.set_raw(e, pos, &p);  // structural add
+    CHECK(w.has<Position>(e));
+    CHECK(w.try_get<Position>(e)->x == 3);
+    const Position q{5, 6};
+    w.set_raw(e, pos, &q);  // in-place write
+    CHECK(static_cast<const Position*>(w.get_raw(e, pos))->y == 6);
+    static_cast<Position*>(w.get_raw_mut(e, pos))->x = 9;
+    CHECK(w.try_get<Position>(e)->x == 9);
+
+    // A component registered from (hash, size, align) unifies with the later typed registration.
+    ecs::ComponentInfo info;
+    info.type_hash = kTypeHash<Health>;
+    info.name = "Health";
+    info.size = sizeof(Health);
+    info.align = alignof(Health);
+    const ecs::ComponentId hc = w.register_component_info(info);
+    const Health h{42};
+    w.set_raw(e, hc, &h);
+    CHECK(w.component_id<Health>() == hc);
+    CHECK(w.try_get<Health>(e)->hp == 42);
+
+    w.remove_raw(e, pos);
+    CHECK_FALSE(w.has<Position>(e));
+    CHECK(w.has<Health>(e));
+    w.destroy(e);
+    CHECK_FALSE(w.has(e, hc));
+    CHECK(w.get_raw(e, hc) == nullptr);
+}

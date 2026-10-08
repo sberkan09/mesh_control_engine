@@ -235,17 +235,6 @@ void World::spawn_raw(Entity e, Span<const ecs::RawComponent> components) {
         if (hooks_[c].on_add) hooks_[c].on_add(*this, e);
 }
 
-void World::add_raw(Entity e, ecs::ComponentId c, const void* value) {
-    if (!alive(e) || c >= components_.size()) return;
-    if (void* cell = get_raw(e, c)) {
-        if (value && components_[c].size) std::memcpy(cell, value, components_[c].size);
-        touch(e, c);
-        return;
-    }
-    assert_not_in_phase("add_raw (structural)");
-    add_component_raw(e, c, value);
-}
-
 void World::destroy(Entity e) {
     assert_not_in_phase("destroy");
     destroy_now(e);
@@ -337,6 +326,46 @@ void World::remove_component_raw(Entity e, ecs::ComponentId c) {
     if (loc.table == kNoTable || !tables_[loc.table]->mask().test(c)) return;
     if (hooks_[c].on_remove) hooks_[c].on_remove(*this, e);
     move_entity(e, table_with(locations_[e.index].table, c, false));
+}
+
+// ---------------------------------------------------------------- type-erased access
+
+ecs::ComponentId World::find_component(u64 type_hash) const {
+    const ecs::ComponentId* id = component_ids_.find(type_hash);
+    return id ? *id : ecs::kInvalidComponent;
+}
+
+bool World::has(Entity e, ecs::ComponentId c) const {
+    if (!alive(e) || c >= components_.size()) return false;
+    const Location loc = locations_[e.index];
+    return loc.table != kNoTable && tables_[loc.table]->mask().test(c);
+}
+
+const void* World::get_raw(Entity e, ecs::ComponentId c) const {
+    if (!has(e, c)) return nullptr;
+    const Location loc = locations_[e.index];
+    return tables_[loc.table]->cell(c, loc.row);
+}
+
+void World::set_raw(Entity e, ecs::ComponentId c, const void* value) {
+    if (!alive(e)) return;
+    MCE_ASSERT_MSG(c < components_.size(), "set_raw: unregistered component id");
+    if (has(e, c)) {
+        const Location loc = locations_[e.index];
+        if (value && components_[c].size) {
+            std::memcpy(tables_[loc.table]->cell(c, loc.row), value, components_[c].size);
+            tables_[loc.table]->changed_ticks(c)[loc.row] = write_tick();
+        }
+        return;
+    }
+    assert_not_in_phase("set_raw (structural)");
+    add_component_raw(e, c, value);
+}
+
+void World::remove_raw(Entity e, ecs::ComponentId c) {
+    assert_not_in_phase("remove_raw");
+    if (!alive(e) || c >= components_.size()) return;
+    remove_component_raw(e, c);
 }
 
 // ---------------------------------------------------------------- systems & phases
@@ -511,13 +540,6 @@ const World::SystemEntry* World::current_system_entry() const {
 u32 World::reader_tick() const {
     const SystemEntry* s = current_system_entry();
     return s ? s->last_run : 0;
-}
-
-void* World::get_raw(Entity e, ecs::ComponentId c) const {
-    if (!alive(e) || c >= components_.size()) return nullptr;
-    const Location loc = locations_[e.index];
-    if (loc.table == kNoTable) return nullptr;
-    return tables_[loc.table]->cell(c, loc.row);
 }
 
 void World::touch(Entity e, ecs::ComponentId c) {
