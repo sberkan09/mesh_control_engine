@@ -35,6 +35,20 @@ struct DeviceCaps {
     u32 max_texture_size = 0;
     u32 max_uniform_block_size = 0;
     bool shader_draw_parameters = false;  // gl_BaseInstanceARB for MDI (§3.2)
+    bool timestamp_queries = false;       // CommandBuffer::write_timestamp produces values
+    u32 storage_buffer_alignment = 256;   // offset alignment of set_storage_data ranges
+};
+
+// GPU timestamps of one completed frame (CommandBuffer::write_timestamp). Values are nanoseconds
+// on the GPU clock: only differences are meaningful.
+struct GpuTimestamps {
+    u64 frame_index = ~u64(0);  // the frame they were written in; ~0 = none completed yet
+    u32 written = 0;            // bit i set = index i was written that frame
+    u64 ns[kMaxTimestamps] = {};
+
+    bool has(u32 i) const { return i < kMaxTimestamps && (written >> i) & 1u; }
+    // Milliseconds between two written timestamps, or -1 when either is missing.
+    f64 ms(u32 from, u32 to) const { return has(from) && has(to) ? f64(i64(ns[to] - ns[from])) * 1e-6 : -1.0; }
 };
 
 struct FrameStats {
@@ -91,6 +105,8 @@ public:
 
     virtual const DeviceCaps& caps() const = 0;
     virtual const FrameStats& last_frame_stats() const = 0;
+    // The newest frame whose timestamps the GPU has finished (MCE_FRAMES_IN_FLIGHT behind).
+    virtual const GpuTimestamps& last_gpu_timestamps() const = 0;
     virtual usize texture_memory_bytes() const = 0;
     // Errors reported by the API validation layer (GL_KHR_debug) since device creation.
     virtual u32 validation_error_count() const = 0;

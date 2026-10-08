@@ -1,0 +1,98 @@
+#pragma once
+// Forward+ clustered light assignment on the CPU (rhi-renderer.md §3.6, FR-R3D-030).
+//
+// The view frustum is cut into a grid of clusters: `x × y` screen tiles times `z` depth slices
+// spaced exponentially between the camera's near and far planes. Every point light whose sphere
+// touches a cluster is listed in it. The fragment shader finds its cluster from gl_FragCoord and
+// view depth and loops over that cluster's lights only, so light count is not a special case.
+//
+//   per light: frustum test -> clipped-sphere screen bounds (tangent planes, Mara & McGuire 2013)
+//              -> tile rectangle × slice range -> exact sphere-vs-cluster-AABB test per cluster
+//   then:      count per cluster -> prefix sum -> scatter (light order kept inside a cluster)
+//
+// The result is three std430 arrays for banks 4–6: per-cluster {offset, count}, the light pool,
+// and the flat light-index list. Deterministic: a pure function of (view, lights, grid).
+
+#include "mce/containers/array.h"
+#include "mce/math/math.h"
+
+namespace mce::render {
+
+struct View3D;
+
+struct PointLight {
+    math::vec3 position;
+    f32 radius = 5.0f;              // influence range in meters: the light is exactly 0 beyond it
+    math::vec3 color{1.0f, 1.0f, 1.0f};  // linear
+    f32 intensity = 1.0f;           // radiance scale; see ADR-0024 for the unit convention
+};
+
+struct ClusterGridDesc {
+    u32 x = 32;  // screen tiles across
+    u32 y = 16;  // screen tiles down
+    u32 z = 24;  // exponential depth slices (at most 256)
+    u32 max_indices = 192 * 1024;  // light-index list capacity (overflowing pairs are dropped + counted)
+};
+
+// std430 rows (bank 5 LightPool).
+struct GpuPointLight {
+    math::vec4 position_radius;  // xyz world position, w radius
+    math::vec4 color;            // rgb = color * intensity, w = 1 / radius²
+};
+static_assert(sizeof(GpuPointLight) == 32);
+
+// std430 rows (bank 4 Clusters).
+struct ClusterRange {
+    u32 offset;
+    u32 count;
+};
+
+class ClusterLights {
+public:
+    struct Stats {
+        u32 lights = 0;           // submitted
+        u32 visible = 0;          // touching at least one cluster
+        u32 indices = 0;          // light-index list length
+        u32 max_per_cluster = 0;
+        u32 dropped = 0;          // (light, cluster) pairs over max_indices
+    };
+
+    explicit ClusterLights(mem::IAllocator& alloc = mem::heap());
+
+    void build(const View3D& view, Span<const PointLight> lights, const ClusterGridDesc& grid = {});
+    void clear();
+
+    const ClusterGridDesc& grid() const { return grid_; }
+    u32 cluster_count() const { return grid_.x * grid_.y * grid_.z; }
+    // Cluster of (tile x, tile y, slice): x fastest, then y, then z — the shader's indexing.
+    u32 cluster_index(u32 tx, u32 ty, u32 slice) const { return tx + grid_.x * (ty + grid_.y * slice); }
+    // Depth slice of a positive view depth (meters in front of the camera), clamped to the grid.
+    u32 slice_of(f32 view_depth) const;
+    // slice = floor(log(depth) * scale + bias)
+    f32 slice_scale() const { return slice_scale_; }
+    f32 slice_bias() const { return slice_bias_; }
+
+    Span<const GpuPointLight> lights() const { return gpu_lights_.span(); }
+    Span<const ClusterRange> ranges() const { return ranges_.span(); }
+    Span<const u32> indices() const { return indices_.span(); }
+    // The lights touching cluster `c`, as indices into lights().
+    Span<const u32> lights_in(u32 c) const;
+    const Stats& stats() const { return stats_; }
+
+private:
+    ClusterGridDesc grid_;
+    f32 slice_scale_ = 0.0f, slice_bias_ = 0.0f;
+    Array<GpuPointLight> gpu_lights_;
+    Array<ClusterRange> ranges_;
+    Array<u32> indices_;
+    Array<u32> pairs_;  // scratch: (cluster, light) pairs as cluster, light, cluster, light, ...
+    Stats stats_;
+};
+
+// Screen-space bounds of a view-space sphere along one axis, clipped by the near plane:
+// `a` is the sphere centre's coordinate on that axis (x or y), `depth` its distance in front of
+// the camera (-z), `proj_scale` the projection's diagonal term for the axis (P[0][0] or P[1][1]).
+// Returns false when the sphere is entirely behind the near plane. NDC results are unclamped.
+bool sphere_ndc_bounds(f32 a, f32 depth, f32 radius, f32 near_z, f32 proj_scale, f32& lo, f32& hi);
+
+}  // namespace mce::render

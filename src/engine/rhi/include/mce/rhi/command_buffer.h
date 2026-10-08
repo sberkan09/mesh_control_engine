@@ -39,6 +39,8 @@ enum class CmdType : u16 {
     PushDebugScope,
     PopDebugScope,
     Resolve,
+    SetStorageData,
+    WriteTimestamp,
 };
 
 const char* cmd_type_name(CmdType t);
@@ -75,6 +77,8 @@ struct SetDrawArgs { u32 count; };            // followed by count * DrawIndexed
 struct DrawIndirect { u32 first_command; u32 draw_count; };
 struct PushDebugScope { const char* name; };
 struct Resolve { TextureHandle src; TextureHandle dst; };
+struct SetStorageData { u32 binding; u32 size; };  // followed by `size` bytes
+struct WriteTimestamp { u32 index; };
 }  // namespace cmd
 
 class CommandBuffer {
@@ -89,6 +93,9 @@ public:
     void set_uniforms(u32 bank, Span<const byte> data);
     void bind_texture(u32 slot, TextureHandle texture, SamplerHandle sampler);
     void bind_storage_buffer(u32 binding, BufferHandle buffer, u64 offset, u64 size);
+    // Transient std430 data (Forward+ light lists): copied into the slot's geometry ring at submit
+    // and bound at `binding` for the rest of the submit. Valid for this frame only.
+    void set_storage_data(u32 binding, Span<const byte> data);
     // Transient geometry: copied into the slot's staging ring at submit (valid for this frame).
     void set_vertex_data(Span<const byte> data);
     void set_index_data(Span<const byte> data, IndexFormat format);
@@ -108,6 +115,10 @@ public:
     // Resolves a multisampled color target into a single-sample one of the same size and format
     // (outside a pass). The transient-RT pool's MSAA -> tonemap-source step (rhi-renderer.md §3.5).
     void resolve(TextureHandle src, TextureHandle dst);
+    // Records a GPU timestamp into query `index` (< kMaxTimestamps) of this frame slot; read back
+    // MCE_FRAMES_IN_FLIGHT frames later through RenderDevice::last_gpu_timestamps(). Per-stage GPU
+    // times for the frame-budget tables (NFR-F-01). Allowed inside and outside passes.
+    void write_timestamp(u32 index);
     void push_debug_scope(const char* name);  // `name` must outlive submit (string literal)
     void pop_debug_scope();
 
