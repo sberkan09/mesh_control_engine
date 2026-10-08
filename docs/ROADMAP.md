@@ -28,6 +28,8 @@ flowchart LR
     M35 -.slip whole into v0.5.-> M5b
     M4 -.cut rung 7.-> M5a
     M45 -.slip whole past.-> M5b
+    M4 --> MMAC["M-MAC macOS port<br/>mce_rhi_metal + macOS platform<br/>(parallel track, built on the Mac)"]
+    MMAC -.parity backlog.-> M5a
 ```
 
 Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because Artifact A is the earliest shippable artifact and the cut ladder's final rung reduces the MVE to Artifact A alone — Artifact B is structured as an **addition, not a dependency** (REQUIREMENTS cut-ladder rung 7). The cook pipeline precedes everything that loads content; the determinism harness precedes everything that could break it.
@@ -99,6 +101,18 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 **Gates:** FR-EDT-160 acceptance · scripted MCP transcript test (initialize → tools/list → calls → shutdown, golden responses) · JSON codec fuzz target ASan-clean · walls: no ImGui and no socket symbols in `mce_mcp*`, no JSON codec linked into any runtime target · all of it inside `scripts/ci/local_ci.sh`.
 **Overrun rule:** carries **no Must FRs**; like M3.5 it may slip whole (past M5b) without gating anything. In-game AI (LLM NPCs, runtime generation) is explicitly **not** this milestone — it is listed under M10+.
 
+### M-MAC — macOS port: Metal backend + macOS platform · **size L (≈ 100–160 h engineering)** · tier: off-tier platform track (parallel, gates nothing)
+
+*Added 2026-10-08 by user decision. Built by a Claude Code session on the user's Mac (Apple silicon), in parallel with the cloud threads that continue M4.5 → M5a → …; it does not block, and is not blocked by, any other milestone. Design, file ownership and the Mac-only verification list: `docs/architecture/macos-metal.md`. Implements the "second RHI backend" path pre-agreed in REQUIREMENTS §8 Q2 (Mac migration note).*
+
+**Builds:** ADR-0025 (Metal over MoltenVK; cook-time GLSL → SPIR-V → MSL via glslang + SPIRV-Cross, no translator in runtime targets) · **seam PRs first**, each small and merged before the backend work leans on it: (1) one backend factory in `mce_rhi` so hosts stop calling `rhi::gl::create_device` directly, plus the Metal wall in `check_walls.py`; (2) a Metal-capable `platform::Window` (`SDL_WINDOW_METAL`, GL attributes only on the GL path); (3) MSL in the shader cook + `ShaderSource` · `mce_rhi_metal` (`src/engine/rhi_metal`): buffers/textures/samplers/pipelines, recorded `CommandBuffer` → Metal encoders, 3 frame slots on shared-storage rings + completion-handler semaphore, indirect draws with `[[base_instance]]` · macOS platform bits (`.dylib` module loading, bundle paths) · `macos-debug` / `macos-release` / `macos-asan` presets · `scripts/ci/local_ci_macos.sh` · `.app` packaging for the player.
+
+**File ownership (binding while M-MAC is open):** the Mac session alone edits `src/engine/rhi_metal/**`, `tests/rhi_metal/**`, `src/engine/platform/src/macos/**`, `cmake/macos/**`, the `macos-*` presets, `scripts/ci/local_ci_macos.sh`, ADR-0025 and `docs/milestones/M-MAC.md`. Cloud threads never touch those. The Mac session never edits `rhi_gl`, the renderer or other engine modules; shared seams (`mce_rhi` headers, `platform/window.*`, host `main.cpp` device creation, CMake roots, `check_walls.py`) change only in dedicated seam PRs that pass the Linux `local_ci.sh` (verified and merged by a cloud thread) and keep `mce_rhi_gl` green. **Parity rule:** new RHI features land on GL first; Metal catch-up is M-MAC's backlog, never a reason for a cloud milestone to wait.
+
+**Demo (running, on the Mac):** `01_triangle`, `sprites_2d`, `03_platformer` and `04_diorama` run natively on Metal on the Mac with screenshots perceptually matching the GL goldens; the 3D diorama keeps its shadow, fog and spinning prop; the packaged `.app` launches from Finder and soaks 10 minutes clean.
+**Gates (run on the Mac, cannot run in the cloud):** `local_ci_macos.sh` green — the three macOS presets build and pass `ctest`, walls (GL/SDL/Metal) clean, Metal API + shader validation layers report zero errors, determinism ladder Debug = Release on the Mac (own baselines; never compared with Windows/Linux hashes, ADR-0007) — and an Xcode GPU capture per backend feature (the Metal side of FR-DBG-020). Seam PRs additionally pass the Linux `local_ci.sh`.
+**Overrun rule:** carries **no Must FRs**; it can pause at any point without affecting a tier gate. If the cook-time shader translation becomes a sink (> 40 h), fall back to hand-written MSL for the sample shaders and record a slip note.
+
 ### M5a — The 3D renderer becomes real · **size L (≈ 90–150 h engineering)** · tier: v0.5 (part 1a)
 
 *Split 2026-10-06 (finding F28): the old M5 bundled four multi-week flagship projects (PBR/Forward+, CSM, the Jolt embed, play-in-editor) into one XL milestone. M5a is the rendering half, gated by its own demo; M5b carries the embed + the stateful editor machinery. The frame-budget tables land in M5a — a budget miss there must not strand the physics/UI half mid-milestone.*
@@ -157,7 +171,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
-Skinned animation (only via Open Question 3 promotion), scene streaming (FR-ENT-120, trigger: a game outgrows one chunk), auto-parallel scheduling experiment (M3+ flag, gated by FR-RUN-040), engine-level live DLL reload (N13, measured trigger), Vulkan/D3D12 backend (N14, after both anchor games ship), mod support, networking, localization, **in-game AI (LLM-driven NPCs/dialogue, runtime content generation — latency, per-call cost and sim non-determinism vs FR-RUN-040; would also need the network stack N7 rules out)** — each with its recorded re-entry trigger from REQUIREMENTS §5/§6.3.
+Skinned animation (only via Open Question 3 promotion), scene streaming (FR-ENT-120, trigger: a game outgrows one chunk), auto-parallel scheduling experiment (M3+ flag, gated by FR-RUN-040), engine-level live DLL reload (N13, measured trigger), Vulkan/D3D12 backend (N14, after both anchor games ship; the Metal backend is the sanctioned exception, M-MAC), mod support, networking, localization, **in-game AI (LLM-driven NPCs/dialogue, runtime content generation — latency, per-call cost and sim non-determinism vs FR-RUN-040; would also need the network stack N7 rules out)** — each with its recorded re-entry trigger from REQUIREMENTS §5/§6.3.
 
 **Milestone → tier map (effort-summed, finding F3):**
 
@@ -165,6 +179,7 @@ Skinned animation (only via Open Question 3 promotion), scene streaming (FR-ENT-
 |---|---|---|---|
 | MVP | M0–M4 (+ M3.5 stretch) | months 0–14 | ≈ 500–790 h engineering (M0 70–110 + M1 70–110 + M2 110–170 + M3 130–190 + M3.5 30–70 + M4 90–140) + ≈ 50–70 h content |
 | Tooling (off-tier) | M4.5 editor MCP server | after the editor catch-up, before M5a | ≈ 35–60 h engineering (not summed into the tier bands; slips whole past M5b if needed) |
+| Platform (off-tier) | M-MAC macOS port | parallel, from now; built on the user's Mac | ≈ 100–160 h engineering (not summed into the tier bands; gates nothing) |
 | v0.5 | M5a + M5b + M6 + M7 | months 14–24 | ≈ 390–620 h engineering + ≈ 140–220 h content |
 | v1.0 | M8–M9 (UC-D may slip to named v1.1) | months 24–36 | ≈ 180–310 h engineering + ≈ 30–50 h content |
 
