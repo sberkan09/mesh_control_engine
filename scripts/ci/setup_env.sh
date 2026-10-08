@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs what scripts/ci/local_ci.sh needs on Ubuntu 24.04 (plus ccache). Idempotent and quiet:
+# Installs what scripts/ci/local_ci.sh needs on Ubuntu 24.04 (plus ccache and zstd for its cache snapshot). Idempotent and quiet:
 # when every package is already present it returns in well under a second without touching apt.
 #
 #   scripts/ci/setup_env.sh
@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-PKGS=(cmake ninja-build gcc g++ clang clang-tidy-18 python3 xvfb xauth ccache libgl1-mesa-dri libgl-dev
+PKGS=(cmake ninja-build gcc g++ clang clang-tidy-18 python3 xvfb xauth ccache zstd libgl1-mesa-dri libgl-dev
     libegl-dev libx11-dev libxext-dev libxcursor-dev libxrandr-dev libxi-dev libxss-dev libxtst-dev
     libxfixes-dev libxkbcommon-dev)
 
