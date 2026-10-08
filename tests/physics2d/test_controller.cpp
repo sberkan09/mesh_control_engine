@@ -71,6 +71,26 @@ TEST_CASE("controller: walls stop horizontal motion at skin distance") {
     CHECK(r.position.x == doctest::Approx(-2.5f + 0.25f + kSkin).epsilon(1e-3));
 }
 
+TEST_CASE("controller: jumping up against a wall slides, it is not a ceiling") {
+    // Regression (03_platformer): pressed against a wall at skin distance, the upward sweep saw
+    // the parallel wall face with a ~1e-5 normal error, took it for approach and reported a
+    // Ceiling hit at t = 0: the jump stopped dead.
+    World2D w;
+    make_ground(w);
+    REQUIRE(add_box(w, ent(3), BodyType::Static, {3, 0.5f}, {0.5f, 0.5f}));  // left face x = 2.5, top y = 1
+    make_player(w, {2.0f, 0.505f});
+    MoveResult2D r;
+    for (int i = 0; i < 10; ++i) r = w.move_and_collide(kPlayer, {0.1f, -0.1f});
+    REQUIRE(has(r.flags, ControllerFlags::WallRight));
+    const f32 y0 = r.position.y;
+    for (int i = 0; i < 5; ++i) {
+        r = w.move_and_collide(kPlayer, {0.1f, 0.2f});
+        CHECK_FALSE(r.hit_ceiling);
+        CHECK_FALSE(has(r.flags, ControllerFlags::Ceiling));
+    }
+    CHECK(r.position.y == doctest::Approx(y0 + 1.0f).epsilon(1e-3));
+}
+
 TEST_CASE("controller: ceiling bump") {
     World2D w;
     make_ground(w);

@@ -679,6 +679,8 @@ CastResult shape_cast(const Shape& a, const Xf& xa, vec2 delta, const Shape& b, 
     CastResult out;
     constexpr u32 kMaxIters = 32;
     const f32 tolerance = 0.25f * kLinearSlop;
+    constexpr f32 kParallelCos = 1e-3f;  // |cos| below this (within ~0.06 deg of parallel) is grazing
+    const f32 delta_len = math::length(delta);
     f32 t = 0.0f;
     vec2 last_n;
     for (u32 iter = 0; iter < kMaxIters; ++iter) {
@@ -699,7 +701,10 @@ CastResult shape_cast(const Shape& a, const Xf& xa, vec2 delta, const Shape& b, 
         const vec2 n = math::normalize(d.point_b - d.point_a);  // a -> b
         last_n = n;
         const f32 approach = dot(delta, n);
-        if (approach <= kEpsilon) return out;  // separating: distance only grows (convexity)
+        // Separating, or sliding along a face already within `target` of it: GJK leaves the
+        // normal of two parallel faces a few 1e-5 off, which must not read as approach (a jump
+        // up a wall would stop dead with a "ceiling" hit at t = 0).
+        if (approach <= kEpsilon + kParallelCos * delta_len) return out;
         if (d.distance < target + tolerance) {
             out.kind = CastResult::Kind::Hit;
             out.t = t;
