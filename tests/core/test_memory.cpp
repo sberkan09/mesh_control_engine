@@ -110,3 +110,21 @@ TEST_CASE("Pool acquire/release") {
     pool.release(d);
     CHECK(pool.live() == 0);
 }
+
+TEST_CASE("NoHeapScope flags heap traffic on the guarded thread only") {
+    using namespace mce;
+    const usize before = mem::heap_rt_violations();
+    CHECK_FALSE(mem::heap_forbidden_on_this_thread());
+    {
+        mem::NoHeapScope guard;
+        CHECK(mem::heap_forbidden_on_this_thread());
+        test::ExpectAssert expect;
+        mem::Allocation a = mem::heap().allocate(16);
+        mem::heap().free(a.ptr);
+    }
+    CHECK_FALSE(mem::heap_forbidden_on_this_thread());
+    CHECK(mem::heap_rt_violations() == before + 2);
+    mem::Allocation b = mem::heap().allocate(16);  // fine again outside the scope
+    mem::heap().free(b.ptr);
+    CHECK(mem::heap_rt_violations() == before + 2);
+}

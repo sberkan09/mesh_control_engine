@@ -1,9 +1,14 @@
-# mce_input (L2): tick-quantized input sampling (audio-input-ui.md §3.2, FR-INP-030).
-# M1 skeleton: fixed keyboard/mouse bindings into the InputState fast-path fields. Cooked action
-# maps, name lookup, rebinding and record/replay arrive at M3.
+# mce_input (L2): tick-quantized device sampling + the action mapping layer (audio-input-ui §2.1,
+# §3.1–3.2). Gameplay reads mce::input::InputState; it never sees a device or an SDL event.
 mce_add_library(mce_input
     SOURCES
-        src/input.cpp
+        src/input_map.cpp
+        src/input_state.cpp
+        src/input_system.cpp
+        src/replay.cpp
+        src/default_map.cpp
+        src/ecs_bridge.cpp
     PUBLIC_DEPS
         mce::mce_core
-        mce::mce_platform)
+        mce::mce_platform
+        mce::mce_ecs)

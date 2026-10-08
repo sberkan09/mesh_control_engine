@@ -27,9 +27,20 @@ struct HeapHeader {
     usize offset;  // bytes from the raw malloc pointer to the user pointer
 };
 
+thread_local u32 t_no_heap_depth = 0;
+std::atomic<usize> g_rt_violations{0};
+
+void check_rt_heap(const char* what) {
+    if (t_no_heap_depth == 0) return;
+    g_rt_violations.fetch_add(1, std::memory_order_relaxed);
+    MCE_ASSERT_MSG(false, what);
+    (void)what;  // asserts compile out in release
+}
+
 class HeapAllocator final : public IAllocator {
 public:
     Allocation allocate(usize size, usize align) override {
+        check_rt_heap("heap allocation inside a NoHeapScope (real-time thread)");
         if (align < alignof(HeapHeader)) align = alignof(HeapHeader);
         MCE_ASSERT_MSG(is_pow2(align), "alignment must be a power of two");
         const usize total = size + align + sizeof(HeapHeader);
@@ -48,6 +59,7 @@ public:
 
     void free(void* ptr) override {
         if (!ptr) return;
+        check_rt_heap("heap free inside a NoHeapScope (real-time thread)");
         MCE_TRACY_FREE(ptr, "heap");
         HeapHeader* h = static_cast<HeapHeader*>(ptr) - 1;
         used_.fetch_sub(h->size, std::memory_order_relaxed);
@@ -79,6 +91,11 @@ constexpr u8 kResetFill = 0xCD;
 
 IAllocator& heap() { return heap_instance(); }
 usize heap_live_allocations() { return heap_instance().live(); }
+
+NoHeapScope::NoHeapScope() { ++t_no_heap_depth; }
+NoHeapScope::~NoHeapScope() { --t_no_heap_depth; }
+bool heap_forbidden_on_this_thread() { return t_no_heap_depth != 0; }
+usize heap_rt_violations() { return g_rt_violations.load(std::memory_order_relaxed); }
 
 // ------------------------------------------------------------------ LinearArena
 
