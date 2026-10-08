@@ -7,7 +7,8 @@ if(MCE_GAME_MODULES_SUPPORTED)
     if(TARGET modtest_good)
         # Sample-ladder rule for modules: load + 300 headless fixed steps (scripting.md §6.5).
         add_test(NAME devhost_module_300 COMMAND mce_devhost -module $<TARGET_FILE:modtest_good> -ticks 300)
-        set_tests_properties(devhost_module_300 PROPERTIES PASS_REGULAR_EXPRESSION "module modtest v3, 3 entities")
+        set_tests_properties(devhost_module_300 PROPERTIES PASS_REGULAR_EXPRESSION "module modtest v3, 3 entities"
+            RESOURCE_LOCK modtest_module)  # shares libmodtest_good_loaded_N.so with test_module
     endif()
 else()
     mce_add_executable(mce_devhost SOURCES main.cpp DEPS mce::mce_core)
