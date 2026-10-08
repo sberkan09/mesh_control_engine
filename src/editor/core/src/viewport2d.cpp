@@ -109,6 +109,19 @@ bool point_in_quad(const vec2 q[4], vec2 p) {
     return !(pos && neg);
 }
 
+void entities_in_rect(const EditorScene& scene, const aabb2& rect, Array<EntityId>& out) {
+    for (const DocEntity& e : scene.doc().entities()) {
+        vec2 q[4];
+        if (!entity_quad(scene, e.id, q)) continue;
+        aabb2 b{q[0], q[0]};
+        for (const vec2& p : q) {
+            b.min = min(b.min, p);
+            b.max = max(b.max, p);
+        }
+        if (b.overlaps(rect)) out.push_back(e.id);
+    }
+}
+
 EntityId pick_entity(const EditorScene& scene, vec2 world) {
     EntityId best = kNoEntity;
     i64 best_key = 0;

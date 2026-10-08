@@ -48,3 +48,16 @@ saved. Both need to sit in the same history. Sections are added as each part lan
 **Consequences.** Memory per entry is the touched entities' component bytes twice, which is small for authoring edits
 (a drag of 50 entities is a few KiB). A "Reload from disk" entry holds every entity on both sides; at sample scale
 that is tens of KiB, and the byte bound evicts old entries if a large scene reloads often.
+
+## 4. Rotate/scale gizmos and multi-select
+
+1. **Still hand-rolled (ADR-0025 §1).** `TransformGizmo` (formerly `TranslateGizmo`, kept as an alias) gains two
+   modes. Rotate is a ring around the pivot; the drag angle turns every selected entity about the pivot (snap: 15°).
+   Scale has X/Y handles and a centre square for uniform scale; each entity's scale is multiplied and its offset from
+   the pivot scaled with it (snap: 0.1; the factor never goes below 0.01, so a drag through the pivot cannot mirror).
+   W / E / R pick the mode (Edit menu too); the undo label is the mode's name.
+2. **A multi-selection transforms as one group** about the selection anchor. Esc or right-click cancels and restores every
+   entity's `LocalTransform`; the whole drag is one undo entry (§2.1).
+3. **Selecting several entities.** In the viewport, Ctrl toggles and Shift adds; a drag over empty space draws a
+   marquee and selects what it touches on release (Ctrl/Shift add). In the hierarchy, Shift selects the range from
+   the last clicked row (`EditorScene::select_range`), Ctrl+Shift extends it.

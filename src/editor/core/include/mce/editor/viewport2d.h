@@ -34,6 +34,8 @@ bool point_in_quad(const math::vec2 q[4], math::vec2 p);
 // The top-most entity whose quad contains `world` (sprite layer, then order, then file order —
 // the draw order), or kNoEntity.
 EntityId pick_entity(const EditorScene& scene, math::vec2 world);
+// Marquee selection: every entity whose quad's bounds overlap `rect`, in document order.
+void entities_in_rect(const EditorScene& scene, const math::aabb2& rect, Array<EntityId>& out);
 // Bounds of every entity quad (empty scene: a 10 m box around the origin).
 math::aabb2 scene_bounds(const EditorScene& scene);
 

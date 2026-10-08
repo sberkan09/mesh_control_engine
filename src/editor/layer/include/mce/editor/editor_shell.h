@@ -11,6 +11,7 @@
 
 #include "mce/editor/console_model.h"
 #include "mce/editor/editor_session.h"
+#include "mce/editor/gizmo.h"
 #include "mce/editor/orbit_camera.h"
 #include "mce/editor/preview_renderer.h"
 #include "mce/editor/stub_world.h"
@@ -60,6 +61,7 @@ struct ViewSettings {
     bool orbit_view = false;  // 3D orbit inspection view (wireframe, camera collision against colliders)
     bool orbit_collision = true;
     f32 orbit_depth = OrbitColliders::kDefaultDepth;  // extrusion of 2D colliders along Z (metres)
+    GizmoMode gizmo = GizmoMode::Move;  // W / E / R
 };
 
 class EditorShell {

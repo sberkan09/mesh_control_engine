@@ -7,12 +7,12 @@ This record is updated with every PR in the series.
 | ROADMAP M6 item | Where | Evidence |
 |---|---|---|
 | Undo/redo, covering MCP edits (FR-EDT-040) | `EditorScene` snapshot history (`begin_edit`/`end_edit`, `seal_undo`, `undo`/`redo`); Edit menu + Ctrl+Z / Ctrl+Y; `mce_mcp` wraps each tool call in an edit group and adds `scene_undo` / `scene_redo`; a scene re-read from disk is one "Reload from disk" entry (ADR-0030 §1–§3) | `test_editor` "undo fuzz": 40 seeds × 200 random commands (create, delete, rename, reorder, components, references, duplicate, grouped multi-step edits), undo all → byte-identical document, redo all → the edited one, `verify_world` throughout; drag coalescing, edit groups, bounded history, reload-from-disk cases; `test_mcp` undo/redo over MCP; FR-EDT-160 transcript test green |
+| Rotate/scale gizmos + multi-select (FR-EDT-030, FR-EDT-050) | `TransformGizmo` move/rotate/scale modes (W/E/R, Edit menu); viewport Ctrl/Shift click and marquee; hierarchy Shift range select (`EditorScene::select_range`) (ADR-0030 §4) | `test_editor` "gizmo:" cases: ring hit area, the group turns about the anchor, 15° snap, cancel restores; axis and uniform scale with offsets scaled, 0.1 snap, no flip through the pivot; "selection:" range select in document order and the marquee; the whole drag is one undo step |
 
 ## Open
 
 | Item | State |
 |---|---|
-| Rotate/scale gizmos + multi-select | next PR in the series |
 | Tree hierarchy (`ChildOf`) | next PR in the series |
 | Prefab content in the viewport | next PR in the series |
 | Asset browser with drag-drop | next PR in the series |

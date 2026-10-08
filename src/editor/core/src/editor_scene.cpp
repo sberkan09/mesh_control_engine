@@ -175,6 +175,28 @@ bool EditorScene::verify_world() const {
     return world_->entity_count() == expected;
 }
 
+void EditorScene::select_range(EntityId to, bool additive) {
+    const EntityId anchor = selection_.anchor();
+    const i32 a = doc_.index_of(anchor), b = doc_.index_of(to);
+    if (b < 0) return;
+    if (a < 0) {
+        selection_.set(to);
+        return;
+    }
+    Array<EntityId> keep;
+    if (additive)
+        for (EntityId id : selection_.items())
+            if (id != anchor) keep.push_back(id);
+    selection_.set(anchor);
+    const i32 lo = a < b ? a : b, hi = a < b ? b : a;
+    for (i32 i = lo; i <= hi; ++i) {
+        const EntityId id = doc_.at(static_cast<usize>(i)).id;
+        if (id != anchor) selection_.toggle(id);
+    }
+    for (EntityId id : keep)
+        if (!selection_.contains(id)) selection_.toggle(id);
+}
+
 // ---------------------------------------------------------------- commands
 
 EntityId EditorScene::create_entity(StringView name, bool with_transform, i32 at) {

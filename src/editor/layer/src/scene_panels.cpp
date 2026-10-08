@@ -63,7 +63,9 @@ public:
                     const bool selected = scene.selection().contains(e.id);
                     const char* label = e.name.view().empty() ? "(unnamed)" : e.name.c_str();
                     if (ImGui::Selectable(label, selected, ImGuiSelectableFlags_AllowDoubleClick)) {
-                        if (ImGui::GetIO().KeyCtrl) scene.selection().toggle(e.id);
+                        const ImGuiIO& io = ImGui::GetIO();
+                        if (io.KeyShift) scene.select_range(e.id, io.KeyCtrl);
+                        else if (io.KeyCtrl) scene.selection().toggle(e.id);
                         else scene.selection().set(e.id);
                         if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) shell.frame_scene();
                     }
