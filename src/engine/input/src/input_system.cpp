@@ -529,9 +529,20 @@ f32 InputSystem::binding_value(const BindingDef& b) const {
                     if (p.buttons.test(b.code)) v = 1.f;
             break;
         case Device::GamepadAxis:
-            if (b.code < kPadAxes)
-                for (const PadState& p : pads_)
-                    if (std::fabs(p.axes[b.code]) > std::fabs(v)) v = p.axes[b.code];
+            // The largest deflection across pads wins. The magnitude lives in its own variable:
+            // the fabs(a) > fabs(v) form dropped negative deflections under AppleClang 17 -O2
+            // (arm64) while every Linux build and sanitizer passed.
+            if (b.code < kPadAxes) {
+                f32 best_mag = 0.f;
+                for (const PadState& p : pads_) {
+                    const f32 a = p.axes[b.code];
+                    const f32 mag = a < 0.f ? -a : a;
+                    if (mag > best_mag) {
+                        best_mag = mag;
+                        v = a;
+                    }
+                }
+            }
             break;
     }
     if (bounded(b.device)) v = apply_curve(apply_deadzone(v, b.dz), b.curve);
