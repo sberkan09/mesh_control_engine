@@ -20,11 +20,15 @@ namespace mce::render {
 
 struct View3D;
 
+// A point light, or a spot light when `spot_outer` > 0 (clustered by its bounding sphere either way).
 struct PointLight {
     math::vec3 position;
     f32 radius = 5.0f;              // influence range in meters: the light is exactly 0 beyond it
     math::vec3 color{1.0f, 1.0f, 1.0f};  // linear
     f32 intensity = 1.0f;           // radiance scale; see ADR-0024 for the unit convention
+    math::vec3 direction{0.0f, -1.0f, 0.0f};  // spot only: the way the cone points
+    f32 spot_inner = 0.0f;          // spot only: half-angle (radians) of full intensity
+    f32 spot_outer = 0.0f;          // spot half-angle (radians) where it reaches 0; 0 = point light
 };
 
 struct ClusterGridDesc {
@@ -38,8 +42,9 @@ struct ClusterGridDesc {
 struct GpuPointLight {
     math::vec4 position_radius;  // xyz world position, w radius
     math::vec4 color;            // rgb = color * intensity, w = 1 / radius²
+    math::vec4 spot{0.0f, 0.0f, 0.0f, 1.0f};  // cone = saturate(dot(-L, xyz) + w): xyz = dir * scale, w = offset
 };
-static_assert(sizeof(GpuPointLight) == 32);
+static_assert(sizeof(GpuPointLight) == 48);
 
 // std430 rows (bank 4 Clusters).
 struct ClusterRange {

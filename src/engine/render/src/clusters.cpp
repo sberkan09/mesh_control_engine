@@ -118,6 +118,11 @@ void ClusterLights::build(const View3D& view, Span<const PointLight> lights, con
         const f32 r = max(l.radius, 1e-3f);
         g.position_radius = vec4(l.position, r);
         g.color = vec4(l.color * l.intensity, 1.0f / (r * r));
+        if (l.spot_outer > 0.0f) {  // smooth cone: 0 at the outer angle, 1 inside the inner one
+            const f32 co = std::cos(min(l.spot_outer, 3.1f)), ci = std::cos(clamp(l.spot_inner, 0.0f, min(l.spot_outer, 3.1f)));
+            const f32 scale = 1.0f / max(ci - co, 1e-4f);
+            g.spot = vec4(normalize(l.direction) * scale, -co * scale);
+        }
         gpu_lights_.push_back(g);
     }
 

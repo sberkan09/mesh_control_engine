@@ -1,13 +1,16 @@
-// The MVP 3D frame against a real GL 4.5 driver (CI: Xvfb + Mesa llvmpipe): a lit box on a ground
-// slab rendered through shadow -> forward HDR (MSAA) -> resolve -> tonemap into an offscreen
-// target, read back and probed: lit faces, the box's shadow on the ground, fog, MSAA on/off
-// agreement, the RHI additions (multisample resolve, depth-compare sampling, snorm/unorm16
-// vertex streams) and zero GL validation errors.
+// The 3D frame against a real GL 4.5 driver (CI: Xvfb + Mesa llvmpipe): a lit box on a ground
+// slab rendered through cascaded shadows -> Forward+ PBR HDR (MSAA) + sky -> resolve -> bloom ->
+// tonemap -> FXAA into an offscreen target, read back and probed: lit faces, the box's shadow on
+// the ground, fog, MSAA on/off agreement, metal vs dielectric, clustered point lights, the sky,
+// the post toggles, GPU timestamps, the RHI additions (multisample resolve, layered depth targets,
+// depth-compare array sampling, storage data, snorm/unorm16 vertex streams) and zero GL
+// validation errors.
 
 #include <doctest/doctest.h>
 
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 
 #include "../render/mesh_fixture.h"
 #include "mce/core.h"
@@ -84,8 +87,9 @@ struct Fixture3D {
         platform::shutdown();
     }
 
-    void render(f32 fog_density = 0.0f, bool shadows = true) {
-        camera = orbit_camera({0, 0.5f, 0}, 0.0f, math::radians(35.0f), 7.0f);
+    // `setup` runs after the defaults (sun, fog, ground, box) and before build().
+    void render(f32 fog_density = 0.0f, bool shadows = true, const std::function<void(Scene3D&)>& setup = {}) {
+        camera = orbit_camera({0, 0.5f, 0}, 0.0f, math::radians(pitch_deg), 7.0f);
         device->begin_frame(frame++);
         Scene3D scene(renderer.meshes(), mem::heap());
         scene.begin(camera, {kW, kH});
@@ -96,12 +100,16 @@ struct Fixture3D {
         Fog fog;
         fog.density = fog_density;
         scene.set_fog(fog);
+        ShadowSettings ss;
+        ss.resolution = 1024;  // = Forward3DDesc::shadow_size below
+        scene.set_shadows(ss);
         MeshInstance ground;
         ground.mesh = 2;
         scene.add(ground);
         MeshInstance box;
         box.mesh = 1;
         scene.add(box);
+        if (setup) setup(scene);
         scene.build();
         view = scene.view();
         rhi::CommandBuffer cmd;
@@ -136,6 +144,7 @@ struct Fixture3D {
     Renderer renderer;
     rhi::TextureHandle target;
     Array<u8> pixels;
+    f32 pitch_deg = 35.0f;
     Camera3D camera;
     View3D view;
     rhi::FrameStats gpu;
@@ -153,15 +162,184 @@ TEST_CASE("render3d_gl: lit box, its shadow on the ground, zero validation error
     INFO("top " << top.r << "," << top.g << "," << top.b << " shadow " << shadow.luma() << " lit " << lit.luma());
     CHECK(top.r > top.g + 40);           // the red material survives lighting + tonemap
     CHECK(lit.luma() > shadow.luma() + 30);  // the shadow pass darkens the ground
-    CHECK(f.renderer.forward_3d().last_stats().shadow_draws == 2);
-    CHECK(f.renderer.forward_3d().last_stats().main_draws == 2);
-    CHECK(f.gpu.passes == 3);  // shadow, forward, tonemap
+    const Forward3DStats& st = f.renderer.forward_3d().last_stats();
+    CHECK(st.cascades == 3);
+    CHECK(st.shadow_draws >= 3);  // the ground in every cascade, the box in the near ones
+    CHECK(st.shadow_draws <= 6);
+    CHECK(st.main_draws == 2);
+    CHECK(st.bloom_levels > 0);
+    CHECK(st.fxaa);
+    // A pass per cascade, forward, bloom down + up chains, tonemap, FXAA.
+    CHECK(f.gpu.passes == st.cascades + 1 + (2 * st.bloom_levels - 1) + 1 + 1);
     CHECK(f.device->validation_error_count() == 0);
 
-    // Shadows off: the same ground point is lit.
+    // Shadows off: the same ground point is lit, and no shadow passes run.
     f.render(0.0f, false);
     CHECK(f.at_world({-0.8f, 0, -0.3f}).luma() > shadow.luma() + 30);
-    CHECK(f.gpu.passes == 2);
+    CHECK(f.renderer.forward_3d().last_stats().cascades == 0);
+    CHECK(f.gpu.passes == 1 + (2 * f.renderer.forward_3d().last_stats().bloom_levels - 1) + 1 + 1);
+}
+
+TEST_CASE("render3d_gl: post toggles: bloom and FXAA off leave forward + tonemap") {
+    Fixture3D f;
+    const auto no_post = [](Scene3D& s) {
+        PostFx p;
+        p.bloom = false;
+        p.fxaa = false;
+        s.set_post(p);
+    };
+    f.render(0.0f, true, no_post);
+    const Forward3DStats& st = f.renderer.forward_3d().last_stats();
+    CHECK(st.bloom_levels == 0);
+    CHECK_FALSE(st.fxaa);
+    CHECK(f.gpu.passes == st.cascades + 2);
+    const Rgb plain = f.at_world({2.0f, 0, 2.0f});
+    // Bloom adds a little light, FXAA leaves flat areas alone: the open ground barely changes.
+    f.render();
+    const Rgb post = f.at_world({2.0f, 0, 2.0f});
+    CHECK(std::abs(plain.luma() - post.luma()) <= 12);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: the sky dome fills the background above the horizon") {
+    Fixture3D f;
+    f.pitch_deg = 5.0f;  // looking nearly level: the top rows are above the horizon
+    f.render();
+    const usize i = (usize(2) * kW + kW / 2) * 4;
+    const Rgb top{f.pixels[i], f.pixels[i + 1], f.pixels[i + 2]};
+    INFO("sky " << top.r << "," << top.g << "," << top.b);
+    CHECK(top.b > top.r + 10);
+    CHECK(top.luma() > 120);
+    // Sky off: the fog color clear (also pale blue), equal across the row.
+    f.render(0.0f, true, [](Scene3D& s) {
+        Sky sky;
+        sky.enabled = false;
+        s.set_sky(sky);
+    });
+    const Rgb a{f.pixels[i], f.pixels[i + 1], f.pixels[i + 2]};
+    const usize j = (usize(2) * kW + 4) * 4;
+    CHECK(std::abs(int(f.pixels[j]) - a.r) <= 2);
+    CHECK(std::abs(int(f.pixels[j + 2]) - a.b) <= 2);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a metal box has no diffuse term; a rough dielectric does") {
+    Fixture3D f;
+    const auto upload = [&](u32 key, f32 metallic) {
+        mesh_fixture::Builder mb;
+        mb.add_node(-1);
+        mesh_fixture::Box b;
+        b.center = {0, 0.5f, 0};
+        b.half = {0.5f, 0.5f, 0.5f};
+        b.color[0] = 0.9f;
+        b.color[1] = 0.3f;
+        b.color[2] = 0.2f;
+        mb.add_box(b);
+        mb.submeshes.back().material.metallic = metallic;
+        mb.submeshes.back().material.roughness = 0.9f;
+        REQUIRE(f.renderer.meshes().upload(key, 1, mb.build().span()).has_value());
+    };
+    upload(5, 0.0f);
+    upload(6, 1.0f);
+    const auto with = [](u32 key) {
+        return [key](Scene3D& s) {
+            MeshInstance m;
+            m.mesh = key;
+            m.world = math::translation({1.6f, 0, 0.8f});
+            s.add(m);
+        };
+    };
+    f.render(0.0f, true, with(5));
+    const Rgb dielectric = f.at_world({1.6f, 1.0f, 0.8f});
+    f.render(0.0f, true, with(6));
+    const Rgb metal = f.at_world({1.6f, 1.0f, 0.8f});
+    INFO("dielectric " << dielectric.luma() << " metal " << metal.luma());
+    CHECK(dielectric.r > dielectric.g + 40);
+    CHECK(metal.luma() + 20 < dielectric.luma());  // rough metal off the specular peak: dark
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: clustered point and spot lights light only their neighbourhood") {
+    Fixture3D f;
+    // Night: no sun, no ambient, no sky reflections; 256 dim lights far off to the side plus one
+    // red light just above the open ground at (2, 0, 2).
+    const auto night = [](Scene3D& s) {
+        DirectionalLight sun;
+        sun.intensity = 0.0f;
+        sun.ambient_sky = sun.ambient_ground = {0, 0, 0};
+        sun.shadows = false;
+        s.set_light(sun);
+        Sky sky;
+        sky.enabled = false;
+        s.set_sky(sky);
+        Fog fog;
+        fog.color = {0, 0, 0};
+        s.set_fog(fog);
+    };
+    f.render(0.0f, false, night);
+    const Rgb dark = f.at_world({2.0f, 0, 2.0f});
+    f.render(0.0f, false, [&](Scene3D& s) {
+        night(s);
+        for (u32 i = 0; i < 256; ++i) {
+            PointLight l;
+            l.position = {-5.5f + 0.04f * f32(i % 16), 0.3f, -5.5f + 0.04f * f32(i / 16)};
+            l.radius = 0.4f;
+            l.color = {0.2f, 0.2f, 1.0f};
+            s.add_point_light(l);
+        }
+        PointLight red;
+        red.position = {2.0f, 0.4f, 2.0f};
+        red.radius = 1.5f;
+        red.color = {1.0f, 0.1f, 0.05f};
+        red.intensity = 0.15f;
+        s.add_point_light(red);
+    });
+    const Rgb lit = f.at_world({2.0f, 0, 2.0f});
+    const Rgb outside = f.at_world({-2.0f, 0, 2.0f});  // beyond the red light's radius
+    INFO("dark " << dark.luma() << " lit " << lit.r << "," << lit.g << "," << lit.b << " outside " << outside.luma());
+    CHECK(dark.luma() < 10);
+    CHECK(lit.r > lit.g + 60);
+    CHECK(outside.luma() < 10);
+    const Forward3DStats& st = f.renderer.forward_3d().last_stats();
+    CHECK(st.point_lights == 257);
+    CHECK(st.light_indices > 0);
+
+    // A spot light straight down with a 20° cone: the spot under it is lit, ground 45° off its
+    // axis (well inside the radius) is not.
+    f.render(0.0f, false, [&](Scene3D& s) {
+        night(s);
+        PointLight spot;
+        spot.position = {2.0f, 1.0f, 2.0f};
+        spot.radius = 4.0f;
+        spot.color = {0.1f, 1.0f, 0.1f};
+        spot.intensity = 0.4f;
+        spot.direction = {0, -1, 0};
+        spot.spot_inner = math::radians(10.0f);
+        spot.spot_outer = math::radians(20.0f);
+        s.add_point_light(spot);
+    });
+    const Rgb under = f.at_world({2.0f, 0, 2.0f});
+    const Rgb off_axis = f.at_world({3.0f, 0, 2.0f});
+    INFO("under " << under.r << "," << under.g << "," << under.b << " off axis " << off_axis.luma());
+    CHECK(under.g > under.r + 60);
+    CHECK(off_axis.luma() < 10);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: GPU timestamps time every stage") {
+    Fixture3D f;
+    if (!f.device->caps().timestamp_queries) return;  // the driver has no timer queries
+    for (int i = 0; i < 6; ++i) f.render();  // timestamps are read back once their frame's fence passes
+    const Forward3DGpuTimes t = f.renderer.forward_3d().gpu_times(f.device->last_gpu_timestamps());
+    CHECK(t.frame_index != ~u64(0));
+    CHECK(t.shadow >= 0.0);
+    CHECK(t.main >= 0.0);
+    CHECK(t.resolve >= 0.0);
+    CHECK(t.bloom >= 0.0);
+    CHECK(t.tonemap >= 0.0);
+    CHECK(t.fxaa >= 0.0);
+    CHECK(t.total >= t.main);
+    CHECK(f.device->validation_error_count() == 0);
 }
 
 TEST_CASE("render3d_gl: dense fog converges on the fog color") {

@@ -95,7 +95,7 @@ layout(binding = 8) uniform sampler2DArray u_orm;
 layout(binding = 9) uniform sampler2DArrayShadow u_shadow;
 layout(binding = 13) uniform sampler2DArray u_emissive;
 layout(std430, binding = 4) readonly buffer Clusters { uvec2 c_ranges[]; };
-struct Light { vec4 pos_radius; vec4 color; };
+struct Light { vec4 pos_radius; vec4 color; vec4 spot; };
 layout(std430, binding = 5) readonly buffer LightPool { Light l_lights[]; };
 layout(std430, binding = 6) readonly buffer LightIndices { uint l_indices[]; };
 layout(location = 0) in vec3 v_world;
@@ -225,7 +225,7 @@ void main() {
         float sh = dot(n, l) > 0.0 ? shadow_term(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), l, depth) : 0.0;
         color = direct(n, v, l, diffuse, f0, a, p_light_color.rgb) * sh;
 
-        // Forward+ point lights of this fragment's cluster.
+        // Forward+ point and spot lights of this fragment's cluster.
         uvec2 range = c_ranges[cluster_of(depth)];
         for (uint i = 0u; i < range.y; ++i) {
             Light L = l_lights[l_indices[range.x + i]];
@@ -234,8 +234,11 @@ void main() {
             float f = d2 * L.color.w;
             float win = clamp(1.0 - f * f, 0.0, 1.0);
             float att = win * win / max(d2, 0.01);  // inverse square, windowed to 0 at the radius
+            vec3 ld = dl * inversesqrt(d2);
+            float cone = clamp(dot(-ld, L.spot.xyz) + L.spot.w, 0.0, 1.0);  // point lights: 0·x + 1
+            att *= cone * cone;
             if (att <= 0.0) continue;
-            color += direct(n, v, dl * inversesqrt(d2), diffuse, f0, a, L.color.rgb * att);
+            color += direct(n, v, ld, diffuse, f0, a, L.color.rgb * att);
         }
 
         // Ambient: hemisphere diffuse + sky reflections through the analytic split-sum.

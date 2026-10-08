@@ -350,6 +350,58 @@ TEST_CASE("gltf: import scale applies to the root nodes and their animation trac
     CHECK(m.keys[tr.values_offset + 3 + 1] == doctest::Approx(1.5f));
 }
 
+TEST_CASE("gltf: normal, metallic-roughness, occlusion and emissive maps; CUBICSPLINE tracks") {
+    Fixture f = build_buffer();
+    // Cubic translation keys for node 1 at t = 0, 2: {in, value, out} per key.
+    const size_t cubic_off = f.bin.size();
+    const float cubic[18] = {0, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 4, 0, 0, 0, 0, 0};
+    for (float x : cubic) put_f32(f.bin, x);
+    std::string j = json_doc(f, embedded_buffer(f));
+    const auto replace = [&](const std::string& from, const std::string& to) {
+        const size_t at = j.find(from);
+        REQUIRE(at != std::string::npos);
+        j.replace(at, from.size(), to);
+    };
+    replace("}],\"accessors\":[", "},{\"buffer\":0,\"byteOffset\":" + std::to_string(cubic_off) + ",\"byteLength\":72}],\"accessors\":[");
+    replace("\"type\":\"VEC3\"}],\"images\"",
+            "\"type\":\"VEC3\"},{\"bufferView\":8,\"componentType\":5126,\"count\":6,\"type\":\"VEC3\"}],\"images\"");
+    // Every map on the one image; occlusion shares the metallic-roughness texture (ORM packing).
+    replace("\"doubleSided\":true}", "\"doubleSided\":true,\"normalTexture\":{\"index\":0},\"occlusionTexture\":{\"index\":0},"
+                                     "\"emissiveTexture\":{\"index\":0},\"emissiveFactor\":[1,0.5,0]}");
+    replace("\"roughnessFactor\":0.75,", "\"roughnessFactor\":0.75,\"metallicRoughnessTexture\":{\"index\":0},");
+    replace("\"interpolation\":\"STEP\"}]",
+            "\"interpolation\":\"STEP\"},{\"input\":5,\"output\":8,\"interpolation\":\"CUBICSPLINE\"}]");
+    replace("\"path\":\"translation\"}}]", "\"path\":\"translation\"}},{\"sampler\":2,\"target\":{\"node\":1,\"path\":\"translation\"}}]");
+
+    const std::string root = make_project("gltf_maps", j, false);
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    INFO(diag_text(r));
+    REQUIRE(r.ok());
+    const std::vector<byte> a = cooked_mesh(root, kGltfGuid);
+    const MeshView m = MeshView::read(Span<const byte>(a.data(), a.size())).value();
+    const MeshSubmesh& cube = m.submeshes[0];
+    CHECK(cube.material.texture(MaterialSlot::Normal) == G(kTexGuid));
+    CHECK(cube.material.texture(MaterialSlot::MetallicRoughness) == G(kTexGuid));
+    CHECK(cube.material.texture(MaterialSlot::Emissive) == G(kTexGuid));
+    CHECK((cube.material.flags & MaterialFlags::OcclusionInMR) != 0);
+    CHECK((cube.material.flags & MaterialFlags::OcclusionOnly) == 0);
+    CHECK(cube.material.emissive[1] == doctest::Approx(0.5f));
+    // The base color's KHR_texture_transform differs from the other maps' (none): a warning,
+    // since one UV transform per submesh is baked.
+    CHECK(r.diags.warning_count() >= 1);
+
+    REQUIRE(m.clips[0].channel_count == 3);
+    const MeshChannel& cu = m.channels[m.clips[0].first_channel + 2];
+    CHECK(cu.node == 1);
+    CHECK(cu.path == AnimPath::Translation);
+    CHECK(cu.interp == AnimInterp::CubicSpline);
+    CHECK(cu.key_count == 2);
+    CHECK(m.keys[cu.values_offset + 6] == doctest::Approx(1.0f));   // key 0 out-tangent x
+    CHECK(m.keys[cu.values_offset + 9] == doctest::Approx(-1.0f));  // key 1 in-tangent x
+    CHECK(m.keys[cu.values_offset + 12] == doctest::Approx(4.0f));  // key 1 value x
+}
+
 namespace {
 
 bool has_error(const CookReport& r, const char* needle, Errc code = Errc::Unknown) {

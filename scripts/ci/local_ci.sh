@@ -89,7 +89,17 @@ stage_determinism() {
         python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -ticks 600" \
             build/linux-gcc-debug/samples/04_diorama/sample_04_diorama \
             build/linux-gcc-release/samples/04_diorama/sample_04_diorama &&
-        stage_module_determinism
+        stage_module_determinism &&
+        stage_cubes_determinism
+}
+
+# M5a: 04_cubes (cascade fit, Forward+ clustering, node animation) across runs and Debug/Release.
+stage_cubes_determinism() {
+    cmake --build --preset linux-gcc-debug --target sample_04_cubes &&
+        cmake --build --preset linux-gcc-release --target sample_04_cubes &&
+        python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -ticks 600" \
+            build/linux-gcc-debug/samples/04_cubes/sample_04_cubes \
+            build/linux-gcc-release/samples/04_cubes/sample_04_cubes
 }
 
 run_stage() {
