@@ -23,8 +23,9 @@ namespace {
 // rebuilt when that changes; the old one's destroy is deferred by the device until in-flight
 // frames are done with it.
 //
-// Scene mode: wheel zooms at the cursor, right/middle drag pans, left click picks (Ctrl toggles),
-// left drag on an entity or the translate gizmo moves the selection (snap: Edit menu, Ctrl
+// Scene mode: wheel zooms at the cursor, right/middle drag pans, left click picks (Ctrl toggles,
+// Shift adds), left drag on empty space draws a selection marquee, left drag on an entity moves
+// the selection, and the gizmo moves, rotates or scales it (W / E / R; snap: Edit menu, Ctrl
 // inverts; Esc or right click cancels the drag), F frames the selection (or the scene), Del
 // deletes the selection.
 class ViewportPanel final : public IEditorPanel {
@@ -96,7 +97,12 @@ public:
         for (EntityId id : scene.selection().items())
             if (entity_quad(scene, id, q)) quad_lines(q, math::Color{1.0f, 0.62f, 0.1f, 1.0f}, 2.0f, lines_);
         math::vec2 pivot;
-        if (TranslateGizmo::pivot(scene, pivot)) gizmo_.lines(shell.camera(), pivot, hot_, lines_);
+        if (TransformGizmo::pivot(scene, pivot)) gizmo_.lines(shell.camera(), pivot, hot_, lines_);
+        if (marquee_) {
+            const math::vec2 a = marquee_from_, b = marquee_to_;
+            const math::vec2 m[4] = {a, {b.x, a.y}, b, {a.x, b.y}};
+            quad_lines(m, math::Color{0.45f, 0.75f, 1.0f, 0.9f}, 1.0f, lines_);
+        }
         shell.preview().record(cmd, scene.world(), v.target, v.size, shell.camera(), lines_.span(),
                                math::Color{0.11f, 0.11f, 0.12f, 1.0f});
     }
@@ -116,8 +122,10 @@ private:
         const math::vec2 mouse{(io.MousePos.x - origin.x) * scale.x, (io.MousePos.y - origin.y) * scale.y};
         const math::vec2 mouse_world = cam.screen_to_world(mouse, size_);
         math::vec2 pivot;
-        const bool has_pivot = TranslateGizmo::pivot(scene, pivot);
-        hot_ = hovered && has_pivot && !gizmo_.dragging() ? TranslateGizmo::hit(cam, size_, pivot, mouse) : GizmoPart::None;
+        const bool has_pivot = TransformGizmo::pivot(scene, pivot);
+        gizmo_.set_mode(shell.view().gizmo);  // ignored mid-drag
+        hot_ = hovered && has_pivot && !gizmo_.dragging() ? TransformGizmo::hit(cam, size_, pivot, mouse, gizmo_.mode())
+                                                          : GizmoPart::None;
         hover_ = hovered && hot_ == GizmoPart::None ? pick_entity(scene, mouse_world) : kNoEntity;
 
         if (shell.view().orbit_view && !shell.playing()) {
@@ -132,7 +140,25 @@ private:
             }
             hot_ = GizmoPart::None;
             hover_ = kNoEntity;
+            marquee_ = false;
             pan(cam, hovered, scale);
+            return;
+        }
+
+        // Marquee in progress: drag a rectangle over empty space, release to select what it touches.
+        if (marquee_) {
+            marquee_to_ = mouse_world;
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                marquee_ = false;
+            } else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                marquee_ = false;
+                const math::aabb2 rect{min(marquee_from_, marquee_to_), max(marquee_from_, marquee_to_)};
+                Array<EntityId> hit;
+                entities_in_rect(scene, rect, hit);
+                if (!marquee_add_) scene.selection().clear();
+                for (EntityId id : hit)
+                    if (!scene.selection().contains(id)) scene.selection().toggle(id);
+            }
             return;
         }
 
@@ -148,26 +174,40 @@ private:
                 const ViewSettings& view = shell.view();
                 const bool snap = view.snap != io.KeyCtrl;
                 gizmo_.update(scene, mouse_world, snap ? view.snap_step : 0.0f);
-                const math::vec2 d = gizmo_.delta();
-                ImGui::SetTooltip("%+.2f, %+.2f m%s", static_cast<f64>(d.x), static_cast<f64>(d.y), snap ? "  (snap)" : "");
+                const char* snapped = snap ? "  (snap)" : "";
+                if (gizmo_.mode() == GizmoMode::Rotate) {
+                    ImGui::SetTooltip("%+.1f deg%s", static_cast<f64>(gizmo_.angle() * 57.2957795f), snapped);
+                } else if (gizmo_.mode() == GizmoMode::Scale) {
+                    const math::vec2 f = gizmo_.factor();
+                    ImGui::SetTooltip("x%.2f, x%.2f%s", static_cast<f64>(f.x), static_cast<f64>(f.y), snapped);
+                } else {
+                    const math::vec2 d = gizmo_.delta();
+                    ImGui::SetTooltip("%+.2f, %+.2f m%s", static_cast<f64>(d.x), static_cast<f64>(d.y), snapped);
+                }
             }
             return;
         }
 
         pan(cam, hovered, scale);
 
-        // Press: a gizmo handle starts a constrained drag; an entity is selected (Ctrl toggles)
-        // and starts a free drag; empty space clears the selection.
+        // Press: a gizmo handle starts a constrained drag (move, rotate or scale, W/E/R); an entity
+        // is selected (Ctrl toggles, Shift adds) and, with the move tool, starts a free drag; empty
+        // space starts a marquee (Ctrl/Shift add to the selection).
         if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
             if (hot_ != GizmoPart::None) {
-                if (gizmo_.begin(scene, hot_, mouse_world)) scene.begin_edit("Move");
+                if (gizmo_.begin(scene, hot_, mouse_world)) scene.begin_edit(gizmo_mode_label(gizmo_.mode()));
             } else if (hover_ == kNoEntity) {
-                if (!io.KeyCtrl) scene.selection().clear();
+                marquee_ = true;
+                marquee_add_ = io.KeyCtrl || io.KeyShift;
+                marquee_from_ = marquee_to_ = mouse_world;
             } else if (io.KeyCtrl) {
                 scene.selection().toggle(hover_);
+            } else if (io.KeyShift) {
+                if (!scene.selection().contains(hover_)) scene.selection().toggle(hover_);
             } else {
                 if (!scene.selection().contains(hover_)) scene.selection().set(hover_);
-                if (gizmo_.begin(scene, GizmoPart::XY, mouse_world)) scene.begin_edit("Move");
+                if (gizmo_.mode() == GizmoMode::Move && gizmo_.begin(scene, GizmoPart::XY, mouse_world))
+                    scene.begin_edit("Move");
             }
         }
         if (ImGui::IsWindowFocused() && !io.WantTextInput) {
@@ -181,6 +221,7 @@ private:
     void interact_orbit(EditorShell& shell, bool hovered, ImVec2 scale) {
         OrbitCamera& orbit = shell.orbit();
         const ImGuiIO& io = ImGui::GetIO();
+        marquee_ = false;
         if (gizmo_.dragging()) {
             gizmo_.cancel(shell.scene());
             shell.scene().end_edit();
@@ -275,8 +316,11 @@ private:
     World empty_;  // the orbit view draws overlays only
     bool orbiting_ = false;
     EntityId hover_ = kNoEntity;
-    TranslateGizmo gizmo_;
+    TransformGizmo gizmo_;
     GizmoPart hot_ = GizmoPart::None;
+    bool marquee_ = false;
+    bool marquee_add_ = false;
+    math::vec2 marquee_from_, marquee_to_;  // world
     bool panning_ = false;
 };
 

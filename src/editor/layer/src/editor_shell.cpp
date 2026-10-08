@@ -375,6 +375,9 @@ void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_X)) cut_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) paste();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_D)) duplicate_selection();
+    if (ImGui::IsKeyChordPressed(ImGuiKey_W)) view_.gizmo = GizmoMode::Move;
+    if (ImGui::IsKeyChordPressed(ImGuiKey_E)) view_.gizmo = GizmoMode::Rotate;
+    if (ImGui::IsKeyChordPressed(ImGuiKey_R)) view_.gizmo = GizmoMode::Scale;
     if (ImGui::IsKeyChordPressed(ImGuiKey_O)) {
         view_.orbit_view = !view_.orbit_view;
         if (view_.orbit_view) frame_scene();
@@ -538,6 +541,10 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
         if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();
         if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, sel)) duplicate_selection();
+        ImGui::Separator();
+        if (ImGui::MenuItem("Move tool", "W", view_.gizmo == GizmoMode::Move)) view_.gizmo = GizmoMode::Move;
+        if (ImGui::MenuItem("Rotate tool", "E", view_.gizmo == GizmoMode::Rotate)) view_.gizmo = GizmoMode::Rotate;
+        if (ImGui::MenuItem("Scale tool", "R", view_.gizmo == GizmoMode::Scale)) view_.gizmo = GizmoMode::Scale;
         ImGui::Separator();
         ImGui::MenuItem("Snap to grid", nullptr, &view_.snap);
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);

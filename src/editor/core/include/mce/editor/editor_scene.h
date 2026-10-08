@@ -63,6 +63,9 @@ public:
     World& world() { return *world_; }
     SelectionSet& selection() { return selection_; }
     const SelectionSet& selection() const { return selection_; }
+    // Shift-click: selects every entity from the anchor to `to` in document order, the anchor
+    // staying the anchor (nothing selected: just `to`). `additive` (Ctrl+Shift) keeps the rest.
+    void select_range(EntityId to, bool additive = false);
 
     // ---- document lifecycle ----
     void new_scene(StringView name);
