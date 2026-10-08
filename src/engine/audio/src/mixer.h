@@ -8,6 +8,7 @@
 
 #include "commands.h"
 #include "mce/containers/ring_buffer.h"
+#include "dsp.h"
 #include "stream.h"
 
 namespace mce::audio::detail {
@@ -32,6 +33,7 @@ struct VoiceRT {
     u32 clip = 0;
     u64 pos = 0;         // frame cursor in the clip / stream timeline
     u64 order = 0;       // start order (age) for stealing
+    u64 start = 0;       // play_at: mixer frame of the first output frame (0 = already started)
     f32 gain = 1.f;      // logical linear gain
     f32 pan = 0.f;
     f32 cur_l = 0.f, cur_r = 0.f;  // channel gains being applied
@@ -59,6 +61,7 @@ public:
         std::atomic<u64> underruns{0};
         std::atomic<u64> mix_sample{0};
         std::atomic<f32> master_peak{0.f};
+        std::atomic<f32> limiter_gain{1.f};
     };
     const Atomics& stats() const { return stats_; }
 
@@ -73,7 +76,9 @@ private:
     // Mixes `frames` of `v` into `dst` (stereo interleaved); ends the voice when it finishes.
     void mix_voice(VoiceRT& v, f32* dst, u32 frames);
     void promote_virtual();
-    void publish_stats(f32 peak);
+    // Sums bus `b` (EQ'd) into its parent with b's ramped gain.
+    void fold_bus(u32 b, u32 frames);
+    void publish_stats(f32 peak, f32 limiter_gain);
 
     RingBuffer<AudioCommand>& commands_;
     RingBuffer<AudioReply>& replies_;
@@ -90,7 +95,10 @@ private:
     struct BusRT {
         f32 cur = 1.f, target = 1.f, inc = 0.f;
         u32 ramp_left = 0;
+        u8 parent = Bus_Master;
+        BiquadRT eq[kEqBands];
     } bus_[kBusCount];
+    LimiterRT limiter_;
 
     f32 bus_buf_[kBusCount][kBlockFrames * kChannels];
     Atomics stats_;
