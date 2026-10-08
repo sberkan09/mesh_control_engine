@@ -1,7 +1,7 @@
 # Architecture: Editor MCP server (`mce_mcp`) — design document
 
 **Project:** Mesh Control Engine (MCE) · **Subsystem:** `editor-tools` (tooling extension) · **Date:** 2026-10-08
-**Status:** Plan (design-only; no implementation). **Build:** ROADMAP M4.5. **Requirement:** FR-EDT-160 (Should).
+**Status:** Implemented in M4.5 (`src/editor/mcp`, ADR-0027; record: `docs/milestones/M4.5.md`). **Build:** ROADMAP M4.5. **Requirement:** FR-EDT-160 (Should).
 **Inputs:** `docs/REQUIREMENTS.md` (FR-EDT, FR-RUN-040, FR-AST-010, §5 N7/N8/N10), `docs/architecture/editor-tools.md`
 (§2.1 process model, §2.3 scene document, §3.1–§3.3 mutation funnel), `docs/architecture/core.md` (convars/confuncs),
 Model Context Protocol specification (JSON-RPC 2.0 over stdio).
@@ -57,8 +57,8 @@ FR-AST-010 says the *shipped runtime* never parses JSON. MCP is JSON-RPC, so:
   existing symbol scan gains `mce_mcp_core` as a forbidden link of runtime targets.
 - **Default: a small hand-written codec** (reader + writer, `Result<T,Error>`, no exceptions, depth/size limits),
   matching the engine's hand-written-core rule and fuzzed like the `.mce` container. Fallback if it grows past
-  ~600 lines: an ADR'd FetchContent dependency (yyjson) under ADR-0017's rules. ADR-0026 records the pick at
-  milestone start (0024/0025 went to the editor catch-up).
+  ~600 lines: an ADR'd FetchContent dependency (yyjson) under ADR-0017's rules. ADR-0027 records the pick at
+  milestone start (0024–0026 went to the editor catch-up and M6). **Picked: the cook's existing hand-written codec (`mce/cook/json.h`) plus a small writer; no new codec, no dependency.**
 
 ## 4. Tool surface (MVP)
 
