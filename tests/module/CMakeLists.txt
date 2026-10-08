@@ -33,3 +33,4 @@ target_compile_definitions(test_module PRIVATE
 add_dependencies(test_module ${_modtest_modules})
 mce_apply_compile_policy(test_module)
 add_test(NAME test_module COMMAND test_module)
+set_tests_properties(test_module PROPERTIES RESOURCE_LOCK modtest_module)  # see tests/devhost
