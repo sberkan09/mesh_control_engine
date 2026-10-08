@@ -70,8 +70,9 @@ public:
     ResultV update_tilemap(TilemapId id, const TilemapDesc& desc);
     void destroy_tilemap(TilemapId id);
     const TilemapBake* tilemap(TilemapId id) const;
-    // Culls the layer's chunks against the batch's view and queues the visible ones.
-    void add_tilemap(SpriteBatch& batch, TilemapId id) const;
+    // Culls the layer's chunks against the batch's view and queues the visible ones; `offset`
+    // translates the layer at draw time (parallax) without a re-bake.
+    void add_tilemap(SpriteBatch& batch, TilemapId id, math::vec2 offset = {}) const;
 
     // ---- 3D (rhi-renderer.md §3.5 "MVP — 3D diorama frame"): created on first use so 2D-only
     // games never allocate the HDR/MSAA/shadow targets.

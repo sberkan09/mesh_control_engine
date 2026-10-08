@@ -142,6 +142,7 @@ public:
         u32 tilemap;        // tilemap: caller's tilemap index (add_tilemap's `id`)
         u32 first_command;  // into draw_args()
         u32 command_count;
+        math::vec2 offset;  // tilemap: world translation applied at record (parallax layers)
     };
     struct Segment {
         u32 first_vertex;
@@ -156,8 +157,9 @@ public:
     void reserve(usize quads);
     void add(const SpriteInstance& sprite);
     void add_text(const Font& font, const TextLayout& layout, const TextPlacement& placement);
-    // Culls the layer's chunks against the view and queues the visible ones as one item.
-    void add_tilemap(u32 id, const TilemapBake& bake);
+    // Culls the layer's chunks against the view and queues the visible ones as one item. `offset`
+    // translates the baked layer at draw time (parallax) without re-baking it.
+    void add_tilemap(u32 id, const TilemapBake& bake, math::vec2 offset = {});
     void build();
 
     const View2D& view() const { return view_; }
@@ -182,6 +184,7 @@ private:
         u32 first_arg;  // into tile_args_
         u32 arg_count;
         u32 quads;
+        math::vec2 offset;
     };
 
     void push_item(u64 key, ItemKind kind, u32 index);

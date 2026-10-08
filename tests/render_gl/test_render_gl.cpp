@@ -247,6 +247,36 @@ TEST_CASE("render_gl: tilemap chunks draw from their persistent buffer and inter
     CHECK(f.device->validation_error_count() == 0);
 }
 
+TEST_CASE("render_gl: a tilemap offset (parallax) translates the baked layer without a re-bake") {
+    Fixture f;
+    const u32 key = f.solid_atlas({{0, 255, 0, 255}});
+    const SpriteRegion region{0, 0, 0, 1, 1, 1, 1};
+    SpriteSetDesc sd;
+    sd.texture_key = key;
+    sd.regions = Span<const SpriteRegion>(&region, 1);
+    const SpriteSetId set = f.renderer.create_sprite_set(sd);
+    const u32 tiles[1] = {1};
+    TilemapDesc td;
+    td.set = set;
+    td.width = td.height = 1;
+    td.origin = vec2(0, 0);
+    td.tiles = tiles;
+    auto tm = f.renderer.create_tilemap(td);
+    REQUIRE(tm.has_value());
+
+    f.render([&](SpriteBatch& b) {
+        f.renderer.add_tilemap(b, tm.value(), vec2(-3, 1));
+        b.add(f.sprite(set, vec2(2.5f, -2.5f)));  // a dynamic sprite after it draws untranslated
+    });
+    CHECK(f.at_world(vec2(-2.5f, 1.5f)).g == 255);
+    CHECK(f.at_world(vec2(0.5f, 0.5f)).g == 0);
+    CHECK(f.at_world(vec2(2.5f, -2.5f)).g == 255);
+    // Culling uses the shifted bounds: far off-screen the layer is not drawn at all.
+    f.render([&](SpriteBatch& b) { f.renderer.add_tilemap(b, tm.value(), vec2(100, 0)); });
+    CHECK(f.stats.tile_quads == 0);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
 TEST_CASE("render_gl: coverage text renders through the batch") {
     Fixture f;
     // A one-glyph font: 'X' is a solid 8×12 coverage block.

@@ -222,8 +222,8 @@ const TilemapBake* Renderer::tilemap(TilemapId id) const {
     return id.value < tilemaps_.size() && tilemaps_[id.value].alive ? &tilemaps_[id.value].bake : nullptr;
 }
 
-void Renderer::add_tilemap(SpriteBatch& batch, TilemapId id) const {
-    if (const TilemapBake* b = tilemap(id)) batch.add_tilemap(id.value, *b);
+void Renderer::add_tilemap(SpriteBatch& batch, TilemapId id, math::vec2 offset) const {
+    if (const TilemapBake* b = tilemap(id)) batch.add_tilemap(id.value, *b, offset);
 }
 
 ResultV Renderer::init_3d(const Forward3DDesc& desc) {
@@ -257,7 +257,15 @@ void Renderer::record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch) {
     u32 bound_pipeline = ~0u;
     u32 bound_segment = ~0u;
     u32 bound_set = ~0u;
+    math::vec2 bound_offset{};
     for (const SpriteBatch::Group& g : batch.groups()) {
+        // Tilemaps drawn with a parallax offset translate the view; everything else draws at zero.
+        const math::vec2 offset = g.source == SpriteBatch::GroupSource::Tilemap ? g.offset : math::vec2{};
+        if (offset.x != bound_offset.x || offset.y != bound_offset.y) {
+            fu.view_proj = batch.view().view_proj * math::translation({offset.x, offset.y, 0.0f});
+            cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
+            bound_offset = offset;
+        }
         const auto blend = static_cast<u32>(g.blend);
         if (blend != bound_pipeline) {
             cmd.bind_pipeline(pipelines_[blend]);

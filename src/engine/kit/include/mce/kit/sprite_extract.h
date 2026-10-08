@@ -66,7 +66,7 @@ private:
         i16 layer = 0;
         bool used = false;
     };
-    void draw_tilemap(const TilemapLayer& layer, math::vec2 origin, render::SpriteBatch& batch);
+    void draw_tilemap(const TilemapLayer& layer, math::vec2 origin, math::vec2 offset, render::SpriteBatch& batch);
     void destroy_tilemap(TilemapEntry& e);
 
     void release_handles();
