@@ -1,5 +1,5 @@
 #pragma once
-// Cook-side filesystem helpers (std::filesystem error_code overloads only: no exceptions).
+// Cook- and editor-side filesystem helpers (std::filesystem error_code overloads only: no exceptions).
 
 #include "mce/cook/string.h"
 #include "mce/result.h"

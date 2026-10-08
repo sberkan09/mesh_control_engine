@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
-#include "fs_util.h"
+#include "mce/cook/fs.h"
 #include "mce/asset/file_io.h"
 
 namespace mce::cook {
