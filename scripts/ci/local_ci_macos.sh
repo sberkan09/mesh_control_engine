@@ -10,7 +10,7 @@
 #   macos-debug/-release  build + ctest, GPU tests (test_rhi_metal, test_render_gl on Metal) included
 #   macos-asan            UBSan build + ctest, no GPU tests (ASan's runtime hangs on macOS 26.6: M-MAC.md)
 #   validation            the GPU tests again under MTL_DEBUG_LAYER + MTL_SHADER_VALIDATION
-#   samples               01_triangle, sprites_2d, 03_platformer, 04_diorama: 120 frames each under
+#   samples               01_triangle, sprites_2d, 03_platformer, 04_diorama, 04_cubes: 120 frames each under
 #                         Metal validation, last frame captured to build/local-ci-logs/shots/*.png
 #   determinism           scripts/ci/determinism.py, Debug vs Release hashes on this Mac (ADR-0007)
 #
@@ -82,7 +82,8 @@ stage_samples() {
     local b=build/macos-debug/samples
     local rc=0 name bin
     for spec in "01_triangle:$b/01_triangle/01_triangle" "sprites_2d:$b/sprites_2d/sprites_2d" \
-                "03_platformer:$b/03_platformer/sample_03_platformer" "04_diorama:$b/04_diorama/sample_04_diorama"; do
+                "03_platformer:$b/03_platformer/sample_03_platformer" "04_diorama:$b/04_diorama/sample_04_diorama" \
+                "04_cubes:$b/04_cubes/sample_04_cubes"; do
         name="${spec%%:*}"
         bin="${spec#*:}"
         rm -f "$SHOTS/$name.ppm" "$SHOTS/$name.png"
