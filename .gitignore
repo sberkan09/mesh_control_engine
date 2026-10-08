@@ -45,3 +45,6 @@ RenderDoc captures/
 # OS
 Thumbs.db
 .DS_Store
+
+# scripts/ship.py output
+dist/

@@ -24,6 +24,8 @@
 #include "game/level.h"
 #include "game/platformer.h"
 #include "hud_font.h"
+#include "mce/asset/asset_system.h"
+#include "mce/audio/clip_bank.h"
 #include "mce/audio/components.h"
 #include "mce/core.h"
 #include "mce/ecs/transform.h"
@@ -36,6 +38,7 @@
 #include "mce/render/renderer.h"
 #include "mce/render/sprite_animation.h"
 #include "mce/rhi_gl/gl_device.h"
+#include "ship_paths.h"
 #if defined(MCE_PLATFORMER_MODULE)
 #include "mce/module_host.h"
 #endif
@@ -52,8 +55,10 @@ MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window 
 MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this .ppm path", CVarFlags::None);
 MCE_CVAR(cv_autoplay, "autoplay", false, "A scripted bot plays (always on when headless)", CVarFlags::None);
 #if defined(MCE_PLATFORMER_MODULE)
-MCE_CVAR(cv_module, "module", MCE_PLATFORMER_MODULE, "The game module to load", CVarFlags::RequiresRestart);
+MCE_CVAR(cv_module, "module", "", "The game module to load (default: next to the executable, then the build tree)",
+         CVarFlags::RequiresRestart);
 #endif
+MCE_CVAR(cv_pack, "pack", "", "Cooked SFX pack (default: assets.mce next to the executable)", CVarFlags::None);
 MCE_CVAR(cv_trace, "trace", 0, "Print the player's state every N ticks", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 
@@ -139,11 +144,14 @@ public:
 
     ResultV on_init(app::Context&) override {
         art::make_clips(clips_);
+        // SFX: Kenney CC0 clips cooked into the pack (assets/sfx, CREDITS.md); the synthesized set
+        // stands in for any clip the pack lacks, and the win jingle and music stay synthesized.
+        mount_sfx_pack();
         Sounds sounds;
-        sounds.jump = register_clip(clips_.jump);
-        sounds.pickup = register_clip(clips_.pickup);
-        sounds.hurt = register_clip(clips_.hurt);
-        sounds.stomp = register_clip(clips_.stomp);
+        sounds.jump = cooked_or(StringView("sfx/jump.wav"), clips_.jump);
+        sounds.pickup = cooked_or(StringView("sfx/pickup.wav"), clips_.pickup);
+        sounds.hurt = cooked_or(StringView("sfx/hurt.wav"), clips_.hurt);
+        sounds.stomp = cooked_or(StringView("sfx/stomp.wav"), clips_.stomp);
         sounds.win = register_clip(clips_.win);
 
         // Engine runtime first, then the game on top (the game-module contract).
@@ -152,7 +160,10 @@ public:
         audio::install(world_, audio_);
         world_.set_resource(sounds);
 #if defined(MCE_PLATFORMER_MODULE)
-        MCE_TRY_ASSIGN(module_.module, load_game_module(cv_module.get_string(), world_));
+        FixedString<1024> module_path;
+        samples::resolve_shipped_path(cv_module.get_string(), MCE_PLATFORMER_MODULE_NAME, MCE_PLATFORMER_MODULE,
+                                      module_path);
+        MCE_TRY_ASSIGN(module_.module, load_game_module(module_path.view(), world_));
         MCE_LOG_INFO("03_platformer: game module '{}' v{} from {}", module_.module.info->name,
                      module_.module.info->module_version, module_.module.loaded_path.c_str());
 #else
@@ -179,6 +190,7 @@ public:
             input::default_map_chunk(map);
             MCE_TRY(input_.load_map(map.span()));
             window_->set_event_handler(&PlatformerApp::on_event, this);
+            if (pack_mounted_) samples::apply_window_icon(*window_, assets_, "icon.png");
         }
         if (device_) MCE_TRY(init_render());
         return ok();
@@ -244,6 +256,37 @@ private:
                     static_cast<unsigned long long>(tick), static_cast<double>(ps.position.x),
                     static_cast<double>(ps.position.y), static_cast<double>(p->vel.x), static_cast<double>(p->vel.y),
                     p->grounded, gs.coins, gs.deaths);
+    }
+
+    void mount_sfx_pack() {
+        FixedString<1024> pack;
+        samples::resolve_shipped_path(cv_pack.get_string(), "assets.mce", MCE_SAMPLE_DEV_PACK, pack);
+        asset::MountOptions mo;
+        mo.verify_payload_crc = false;  // a pack verifies once at mount
+        const StringView roots[1] = {pack.view()};
+        if (ResultV r = assets_.mount(Span<const StringView>(roots, 1), mo); !r) {
+            MCE_LOG_WARN("03_platformer: no SFX pack at {} (synthesized sounds)", pack.view());
+            return;
+        }
+        MCE_LOG_INFO("03_platformer: SFX pack {}", pack.view());
+        pack_mounted_ = true;
+    }
+
+    audio::ClipHandle cooked_or(StringView path, const Array<f32>& fallback) {
+        if (pack_mounted_) {
+            for (asset::AssetKey k = 0; k < assets_.asset_count(); ++k) {
+                if (assets_.info(k).path != path) continue;
+                auto h = assets_.load_sync<asset::Sfx>(k);
+                if (!h) break;
+                sfx_handles_.push_back(asset::AnyHandle(h.value()));  // keeps the payload the mixer reads
+                auto clip = audio::clip_payload_from_sfx(assets_.resolve(h.value()));
+                if (!clip) break;
+                if (auto c = audio_.register_clip(clip.value())) return c.value();
+                break;
+            }
+            MCE_LOG_WARN("03_platformer: {} missing from the pack (synthesized stand-in)", path);
+        }
+        return register_clip(fallback);
     }
 
     audio::ClipHandle register_clip(const Array<f32>& pcm) {
@@ -520,6 +563,9 @@ private:
     rhi::RenderDevice* device_;
     audio::AudioDevice& audio_;
     bool autoplay_;
+    asset::AssetSystem assets_;  // the SFX pack; outlives the World (declared before it)
+    Array<asset::AnyHandle> sfx_handles_;
+    bool pack_mounted_ = false;
 #if defined(MCE_PLATFORMER_MODULE)
     // Declared before the World so it is destroyed after it: the World holds the module's code.
     struct ModuleGuard {

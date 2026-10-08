@@ -70,6 +70,16 @@ void Window::set_size(u32 width, u32 height) {
     SDL_SetWindowSize(sdl(handle_), static_cast<int>(width), static_cast<int>(height));
 }
 
+bool Window::set_icon(u32 width, u32 height, Span<const u8> rgba) {
+    if (width == 0 || height == 0 || rgba.size() < usize(width) * height * 4) return false;
+    SDL_Surface* surface = SDL_CreateSurfaceFrom(static_cast<int>(width), static_cast<int>(height), SDL_PIXELFORMAT_RGBA32,
+                                                 const_cast<u8*>(rgba.data()), static_cast<int>(width * 4));
+    if (!surface) return false;
+    const bool ok = SDL_SetWindowIcon(sdl(handle_), surface);  // SDL copies the pixels
+    SDL_DestroySurface(surface);
+    return ok;
+}
+
 void Window::set_cursor_visible(bool visible) {
     if (visible) SDL_ShowCursor();
     else SDL_HideCursor();

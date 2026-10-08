@@ -33,6 +33,11 @@ if(WIN32)
     return()
 endif()
 set(MCE_GAME_MODULES_SUPPORTED ON CACHE INTERNAL "")
+# Relocatable run paths (scripts/ship.py): every binary looks next to itself first, and the
+# build-tree path to libmce_engine is recorded relative to $ORIGIN, so a shipped folder never
+# depends on (or silently loads from) the build tree.
+set(CMAKE_BUILD_RPATH_USE_ORIGIN ON PARENT_SCOPE)
+set(CMAKE_BUILD_RPATH "\$ORIGIN" PARENT_SCOPE)
 
 add_library(mce_engine SHARED src/engine_dll.cpp)
 add_library(mce::mce_engine ALIAS mce_engine)
