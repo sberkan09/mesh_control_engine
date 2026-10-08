@@ -2,3 +2,4 @@
 add_subdirectory(01_triangle)
 add_subdirectory(02_boids)
 add_subdirectory(physics2d_headless)
+add_subdirectory(sprites_2d)

@@ -41,6 +41,8 @@ void GlDevice::reset_translate_state() {
     ts_.pipeline = nullptr;
     ts_.vb_valid = ts_.ib_valid = false;
     ts_.vb = ts_.ib = 0;
+    ts_.draw_args = nullptr;
+    ts_.draw_arg_count = 0;
 }
 
 void GlDevice::exec_begin_pass(const cmd::BeginPass& p) {
@@ -167,6 +169,47 @@ void GlDevice::exec_draw(const cmd::Draw* indexed, const cmd::DrawNonIndexed* pl
     ++stats_.draws;
 }
 
+void GlDevice::exec_draw_indirect(const cmd::DrawIndirect& d) {
+    const GlPipeline* p = ts_.pipeline;
+    if (!p) {
+        MCE_ASSERT_MSG(false, "draw_indirect without a bound pipeline");
+        return;
+    }
+    MCE_ASSERT_MSG(ts_.draw_args && u64(d.first_command) + d.draw_count <= ts_.draw_arg_count,
+                   "draw_indirect: commands out of range of the last set_draw_args");
+    if (!ts_.draw_args || u64(d.first_command) + d.draw_count > ts_.draw_arg_count || d.draw_count == 0) return;
+    if (!ts_.ib_valid || (!ts_.vb_valid && p->stride > 0)) return;  // geometry overflowed or never set: skip
+
+    // Indirect first_index counts from the start of the element buffer, so rebase the commands
+    // onto the bound index-data offset while copying them into the slot's indirect ring.
+    const usize isz = index_size(ts_.ib_format);
+    MCE_ASSERT_MSG(ts_.ib_offset % isz == 0, "index data offset not aligned to the index size");
+    const u32 index_base = static_cast<u32>(ts_.ib_offset / isz);
+    const usize bytes = usize(d.draw_count) * sizeof(DrawIndexedIndirectCommand);
+    const usize at = indirect_ring_.alloc(bytes, 16);
+    if (at == StagingRing::kOverflow) {
+        ++stats_.ring_overflows;
+        MCE_LOG_WARN("rhi.gl: indirect ring overflow ({} bytes requested); draw dropped", bytes);
+        return;
+    }
+    auto* dst = reinterpret_cast<DrawIndexedIndirectCommand*>(indirect_ring_.mapped + at);
+    for (u32 i = 0; i < d.draw_count; ++i) {
+        DrawIndexedIndirectCommand c = ts_.draw_args[d.first_command + i];
+        c.first_index += index_base;
+        std::memcpy(dst + i, &c, sizeof(c));
+    }
+
+    if (ts_.vb_valid)
+        glVertexArrayVertexBuffer(p->vao, 0, ts_.vb, static_cast<GLintptr>(ts_.vb_offset), static_cast<GLsizei>(p->stride));
+    glVertexArrayElementBuffer(p->vao, ts_.ib);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirect_ring_.buffer);
+    glMultiDrawElementsIndirect(ts_.topology, ts_.ib_format == IndexFormat::U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT,
+                                reinterpret_cast<const void*>(at), static_cast<GLsizei>(d.draw_count),
+                                static_cast<GLsizei>(sizeof(DrawIndexedIndirectCommand)));
+    ++stats_.draws;
+    ++stats_.indirect_draws;
+}
+
 void GlDevice::submit(const CommandBuffer& cb) {
     MCE_ASSERT_MSG(in_frame_, "submit outside begin_frame/end_frame");
     MCE_ASSERT_MSG(!cb.in_pass(), "submit with an open pass");
@@ -268,6 +311,15 @@ void GlDevice::submit(const CommandBuffer& cb) {
             }
             case CmdType::Draw: exec_draw(static_cast<const cmd::Draw*>(payload), nullptr); break;
             case CmdType::DrawNonIndexed: exec_draw(nullptr, static_cast<const cmd::DrawNonIndexed*>(payload)); break;
+            case CmdType::SetDrawArgs: {
+                const auto* c = static_cast<const cmd::SetDrawArgs*>(payload);
+                const Span<const byte> data =
+                    CommandBuffer::inline_data(c, static_cast<u32>(c->count * sizeof(DrawIndexedIndirectCommand)));
+                ts_.draw_args = reinterpret_cast<const DrawIndexedIndirectCommand*>(data.data());
+                ts_.draw_arg_count = c->count;
+                break;
+            }
+            case CmdType::DrawIndirect: exec_draw_indirect(*static_cast<const cmd::DrawIndirect*>(payload)); break;
             case CmdType::PushDebugScope:
                 glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 1, -1, static_cast<const cmd::PushDebugScope*>(payload)->name);
                 break;

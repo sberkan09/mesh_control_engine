@@ -20,6 +20,10 @@ struct GlTexture {
     GLuint id = 0;
     Extent2D size;
     TextureFormat format = TextureFormat::RGBA8_UNorm;
+    TextureDimension dimension = TextureDimension::Tex2D;
+    u16 mips = 1;
+    u16 layers = 1;
+    TextureUsage usage = TextureUsage::Sampled;
     usize bytes = 0;
 };
 
@@ -76,6 +80,7 @@ public:
     BufferHandle create_buffer(const BufferDesc& desc, Span<const byte> initial_data) override;
     void update_buffer(BufferHandle buffer, u64 offset, Span<const byte> data) override;
     TextureHandle create_texture(const TextureDesc& desc, Span<const byte> initial_data) override;
+    void update_texture(TextureHandle texture, const TextureRegion& region, Span<const byte> data) override;
     SamplerHandle create_sampler(const SamplerDesc& desc) override;
     Result<PipelineHandle> create_pipeline(const GraphicsPipelineDesc& desc) override;
     void destroy_buffer(BufferHandle) override;
@@ -86,6 +91,7 @@ public:
     bool is_alive(TextureHandle h) const override { return textures_.is_alive(h); }
     bool is_alive(PipelineHandle h) const override { return pipelines_.is_alive(h); }
     Extent2D texture_size(TextureHandle) const override;
+    TextureDesc texture_desc(TextureHandle) const override;
 
     void begin_frame(u64 frame_index) override;
     void submit(const CommandBuffer& cmd) override;
@@ -130,6 +136,7 @@ private:
     void exec_begin_pass(const cmd::BeginPass& p);
     void exec_bind_pipeline(PipelineHandle h);
     void exec_draw(const cmd::Draw* indexed, const cmd::DrawNonIndexed* plain);
+    void exec_draw_indirect(const cmd::DrawIndirect& d);
     void reset_translate_state();
 
     platform::Window& window_;
@@ -147,6 +154,7 @@ private:
 
     StagingRing geometry_ring_;
     StagingRing uniform_ring_;
+    StagingRing indirect_ring_;
     GLsync fences_[MCE_FRAMES_IN_FLIGHT] = {};
     GlFence fence_objs_[MCE_FRAMES_IN_FLIGHT];
     Array<DeadObject> dead_[MCE_FRAMES_IN_FLIGHT];
@@ -173,6 +181,8 @@ private:
         bool ib_valid = false;
         Extent2D target_size;
         bool depth_write = true;
+        const DrawIndexedIndirectCommand* draw_args = nullptr;  // points into the submitted stream
+        u32 draw_arg_count = 0;
         bool pass_scope = false;
     } ts_;
 };

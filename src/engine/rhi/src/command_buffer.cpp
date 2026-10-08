@@ -18,6 +18,8 @@ const char* cmd_type_name(CmdType t) {
         case CmdType::BindIndexBuffer: return "BindIndexBuffer";
         case CmdType::Draw: return "Draw";
         case CmdType::DrawNonIndexed: return "DrawNonIndexed";
+        case CmdType::SetDrawArgs: return "SetDrawArgs";
+        case CmdType::DrawIndirect: return "DrawIndirect";
         case CmdType::PushDebugScope: return "PushDebugScope";
         case CmdType::PopDebugScope: return "PopDebugScope";
     }
@@ -111,6 +113,15 @@ void CommandBuffer::draw(u32 index_count, u32 instance_count, u32 first_index, u
 void CommandBuffer::draw_non_indexed(u32 vertex_count, u32 instance_count, u32 first_vertex, u32 base_instance) {
     MCE_ASSERT_MSG(in_pass_, "draw outside a pass");
     push(CmdType::DrawNonIndexed, cmd::DrawNonIndexed{vertex_count, instance_count, first_vertex, base_instance});
+}
+
+void CommandBuffer::set_draw_args(Span<const DrawIndexedIndirectCommand> commands) {
+    push(CmdType::SetDrawArgs, cmd::SetDrawArgs{static_cast<u32>(commands.size())}, std::as_bytes(commands));
+}
+
+void CommandBuffer::draw_indirect(u32 draw_count, u32 first_command) {
+    MCE_ASSERT_MSG(in_pass_, "draw outside a pass");
+    push(CmdType::DrawIndirect, cmd::DrawIndirect{first_command, draw_count});
 }
 
 void CommandBuffer::push_debug_scope(const char* name) {
