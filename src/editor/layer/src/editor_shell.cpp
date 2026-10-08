@@ -368,6 +368,10 @@ void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_X)) cut_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) paste();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_D)) duplicate_selection();
+    if (ImGui::IsKeyChordPressed(ImGuiKey_O)) {
+        view_.orbit_view = !view_.orbit_view;
+        if (view_.orbit_view) frame_scene();
+    }
 }
 
 void EditorShell::draw_popups() {
@@ -533,6 +537,10 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Reset layout")) reset_layout();
         ImGui::MenuItem("Grid", nullptr, &view_.show_grid, scene_mode());
         ImGui::MenuItem("Game camera while playing", nullptr, &view_.play_camera, scene_mode());
+        if (ImGui::MenuItem("3D orbit view", "O", &view_.orbit_view, scene_mode()) && view_.orbit_view) frame_scene();
+        ImGui::MenuItem("Orbit camera collision", nullptr, &view_.orbit_collision, scene_mode() && view_.orbit_view);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+        ImGui::DragFloat("Collider depth", &view_.orbit_depth, 0.05f, 0.05f, 50.0f, "%.2f m");
         if (ImGui::MenuItem("Frame scene", "F", false, scene_mode())) frame_scene();
         ImGui::MenuItem("ImGui demo", nullptr, &show_demo_);
         ImGui::EndMenu();

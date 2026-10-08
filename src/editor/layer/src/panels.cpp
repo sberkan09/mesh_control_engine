@@ -85,6 +85,10 @@ public:
             shell.preview().record(cmd, *play.world(), v.target, v.size, cam, lines_.span(), clear);
             return;
         }
+        if (view.orbit_view) {
+            record_orbit(shell, cmd, v);
+            return;
+        }
         if (view.show_grid) grid_lines(shell.camera(), v.size, view.grid_step, view.grid_major, lines_);
         math::vec2 q[4];
         if (hover_ != kNoEntity && !scene.selection().contains(hover_) && entity_quad(scene, hover_, q))
@@ -116,6 +120,10 @@ private:
         hot_ = hovered && has_pivot && !gizmo_.dragging() ? TranslateGizmo::hit(cam, size_, pivot, mouse) : GizmoPart::None;
         hover_ = hovered && hot_ == GizmoPart::None ? pick_entity(scene, mouse_world) : kNoEntity;
 
+        if (shell.view().orbit_view && !shell.playing()) {
+            interact_orbit(shell, hovered, scale);
+            return;
+        }
         if (hovered && io.MouseWheel != 0.0f) cam.zoom_at(mouse, size_, std::pow(1.15f, io.MouseWheel));
         if (shell.playing()) {  // play-in-editor: look around, but the document is locked
             if (gizmo_.dragging()) gizmo_.cancel(scene);
@@ -163,6 +171,65 @@ private:
         }
     }
 
+    // 3D orbit view (M5b camera-collision gate): left drag orbits, right/middle drag pans, wheel
+    // dollies, F frames the colliders. Inspection only: picking and gizmos stay in the 2D view.
+    void interact_orbit(EditorShell& shell, bool hovered, ImVec2 scale) {
+        OrbitCamera& orbit = shell.orbit();
+        const ImGuiIO& io = ImGui::GetIO();
+        hot_ = GizmoPart::None;
+        hover_ = kNoEntity;
+        if (shell.take_frame_request() || (ImGui::IsWindowFocused() && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F, false))) {
+            shell.orbit_colliders().sync(shell.scene(), shell.view().orbit_depth);
+            math::aabb3 box = shell.orbit_colliders().bounds();
+            if (box.min.x > box.max.x) {
+                const math::aabb2 b2 = scene_bounds(shell.scene());
+                box = math::aabb3{{b2.min.x, b2.min.y, -0.5f}, {b2.max.x, b2.max.y, 0.5f}};
+            }
+            orbit.frame(box);
+        }
+        if (hovered && io.MouseWheel != 0.0f) orbit.dolly(io.MouseWheel);
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) orbiting_ = true;
+        if (orbiting_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) orbit.orbit({io.MouseDelta.x * scale.x, io.MouseDelta.y * scale.y});
+            else orbiting_ = false;
+        }
+        if (hovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsMouseClicked(ImGuiMouseButton_Middle)))
+            panning_ = true;
+        if (panning_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Right) || ImGui::IsMouseDown(ImGuiMouseButton_Middle))
+                orbit.pan({io.MouseDelta.x * scale.x, io.MouseDelta.y * scale.y}, size_);
+            else
+                panning_ = false;
+        }
+        const f32 cut = orbit.distance - orbit.effective;
+        ImGui::SetCursorScreenPos(ImVec2(ImGui::GetItemRectMin().x + 8, ImGui::GetItemRectMin().y + 6));
+        ImGui::TextColored(cut > 1e-3f ? ImVec4(1, 0.7f, 0.3f, 1) : ImVec4(0.7f, 0.7f, 0.7f, 1),
+                           "orbit  boom %.2f m%s  (%u colliders)", static_cast<double>(orbit.effective),
+                           cut > 1e-3f ? "  cut by collision" : "", shell.orbit_colliders().body_count());
+    }
+
+    void record_orbit(EditorShell& shell, rhi::CommandBuffer& cmd, const ViewportInfo& v) {
+        const ViewSettings& view = shell.view();
+        OrbitCamera& orbit = shell.orbit();
+        OrbitColliders& colliders = shell.orbit_colliders();
+        colliders.sync(shell.scene(), view.orbit_depth);
+        if (view.orbit_collision) orbit.resolve(colliders.world());
+        else orbit.unresolved();
+        const render::View3D view3d = render::compute_view_3d(orbit.camera(), v.size);
+        segments_.clear();
+        orbit_wireframe(shell.scene(), view.orbit_depth, segments_);
+        // Pixels -> the 2D overlay path: a camera with one pixel per metre centred on the viewport.
+        EditorCamera2D px_cam;
+        px_cam.pixels_per_meter = 1.0f;
+        const math::vec2 half{0.5f * static_cast<f32>(v.size.width), 0.5f * static_cast<f32>(v.size.height)};
+        for (const Segment3D& seg : segments_) {
+            math::vec2 a, b;
+            if (!project_segment(view3d, seg, a, b)) continue;
+            lines_.push_back({{a.x - half.x, half.y - a.y}, {b.x - half.x, half.y - b.y}, seg.color, 1.5f});
+        }
+        shell.preview().record(cmd, empty_, v.target, v.size, px_cam, lines_.span(), math::Color{0.09f, 0.09f, 0.1f, 1.0f});
+    }
+
     // Right or middle drag pans the editor camera.
     void pan(EditorCamera2D& cam, bool hovered, ImVec2 scale) {
         const ImGuiIO& io = ImGui::GetIO();
@@ -195,6 +262,9 @@ private:
     rhi::TextureHandle target_;
     rhi::Extent2D size_;
     Array<OverlayLine> lines_;
+    Array<Segment3D> segments_;
+    World empty_;  // the orbit view draws overlays only
+    bool orbiting_ = false;
     EntityId hover_ = kNoEntity;
     TranslateGizmo gizmo_;
     GizmoPart hot_ = GizmoPart::None;

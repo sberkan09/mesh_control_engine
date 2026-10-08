@@ -11,6 +11,7 @@
 
 #include "mce/editor/console_model.h"
 #include "mce/editor/editor_session.h"
+#include "mce/editor/orbit_camera.h"
 #include "mce/editor/preview_renderer.h"
 #include "mce/editor/stub_world.h"
 #include "mce/memory/allocator.h"
@@ -56,6 +57,9 @@ struct ViewSettings {
     bool snap = false;      // gizmo drags land on multiples of snap_step (Ctrl inverts)
     f32 snap_step = 0.5f;   // metres
     bool play_camera = true;  // while playing, the viewport looks through the scene's primary camera
+    bool orbit_view = false;  // 3D orbit inspection view (wireframe, camera collision against colliders)
+    bool orbit_collision = true;
+    f32 orbit_depth = OrbitColliders::kDefaultDepth;  // extrusion of 2D colliders along Z (metres)
 };
 
 class EditorShell {
@@ -88,6 +92,8 @@ public:
     EditorScene& scene() { return session_.scene(); }
     PreviewRenderer& preview() { return preview_; }
     EditorCamera2D& camera() { return camera_; }
+    OrbitCamera& orbit() { return orbit_; }
+    OrbitColliders& orbit_colliders() { return orbit_colliders_; }
     ViewSettings& view() { return view_; }
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
@@ -149,6 +155,8 @@ private:
     EditorSession session_;
     PreviewRenderer preview_;
     EditorCamera2D camera_;
+    OrbitCamera orbit_;
+    OrbitColliders orbit_colliders_;
     ViewSettings view_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;
     ViewportInfo viewport_;
