@@ -1,0 +1,8 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "5e1f0c2a-7b3d-4c8e-9a10-2f6b8d4e0a03",
+  "base_color": [1, 1, 1, 1],
+  "roughness": 0.8,
+  "textures": { "base_color": "guid:5e1f0c2a-7b3d-4c8e-9a10-2f6b8d4e0a01" }
+}
