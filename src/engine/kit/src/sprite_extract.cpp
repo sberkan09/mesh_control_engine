@@ -1,5 +1,6 @@
 #include "mce/kit/sprite_extract.h"
 
+
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/log.h"
@@ -45,6 +46,8 @@ ResultV SpriteExtract::init(render::Renderer& renderer, asset::AssetSystem* asse
 }
 
 void SpriteExtract::release_handles() {
+    for (TilemapEntry& e : tilemaps_) destroy_tilemap(e);
+    tilemaps_.clear();
     if (assets_)
         for (const TextureEntry& t : textures_)
             if (t.handle.generation != 0) assets_->release(t.handle);
@@ -180,6 +183,101 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         p.origin = {x, t.position.y + 0.5f * layout.height * upp};
         batch.add_text(*f, layout, p);
     });
+
+    for (TilemapEntry& e : tilemaps_) e.used = false;
+    each_placed<TilemapLayer>(world, [&](const Placement& t, const TilemapLayer& l) { draw_tilemap(l, {t.position.x, t.position.y}, batch); });
+    // Layers that went away this frame free their baked buffers.
+    for (usize i = tilemaps_.size(); i-- > 0;) {
+        if (tilemaps_[i].used) continue;
+        destroy_tilemap(tilemaps_[i]);
+        tilemaps_.erase(i);
+    }
+}
+
+void SpriteExtract::destroy_tilemap(TilemapEntry& e) {
+    if (renderer_ && e.id.valid()) renderer_->destroy_tilemap(e.id);
+    if (renderer_ && e.set.valid()) renderer_->sprite_sets().destroy(e.set);
+    if (assets_ && e.handle.generation != 0) assets_->release(e.handle);
+    e = TilemapEntry{};
+}
+
+void SpriteExtract::draw_tilemap(const TilemapLayer& layer, math::vec2 origin, render::SpriteBatch& batch) {
+    const asset::Guid guid = layer.map.guid;
+    if (guid == asset::Guid{} || !assets_ || !renderer_) return;
+    // The n-th layer of one map this frame takes the n-th entry (two layers may share a map).
+    TilemapEntry* e = nullptr;
+    for (TilemapEntry& t : tilemaps_)
+        if (!t.used && t.guid == guid) {
+            e = &t;
+            break;
+        }
+    if (!e) {
+        tilemaps_.push_back(TilemapEntry{});
+        e = &tilemaps_.back();
+        e->guid = guid;
+    }
+    e->used = true;
+    const bool stale = e->handle.generation == 0 || !assets_->is_alive(e->handle);  // first sight, or hot-reloaded
+    const bool moved = !(e->origin.x == origin.x && e->origin.y == origin.y) || e->order != layer.order ||
+                       e->layer != layer.layer || !(e->tint.r == layer.tint.r && e->tint.g == layer.tint.g && e->tint.b == layer.tint.b && e->tint.a == layer.tint.a);
+    if (stale || moved || !e->id.valid()) {
+        if (stale) {
+            if (e->handle.generation != 0) assets_->release(e->handle);
+            e->handle = {};
+            const asset::AssetKey key = assets_->find(guid);
+            Result<asset::AssetHandle<asset::Tilemap>> h =
+                key == asset::kInvalidAssetKey ? Result<asset::AssetHandle<asset::Tilemap>>(Error(Errc::NotFound, "kit.tilemap"))
+                                               : assets_->load_sync<asset::Tilemap>(key);
+            if (!h) {
+                MCE_LOG_WARN("kit: tilemap {} cannot be loaded; the layer is skipped", asset::to_string(guid).view());
+                return;
+            }
+            e->handle = asset::AnyHandle(h.value());
+        }
+        Result<asset::TilemapView> view = asset::TilemapView::read(assets_->resolve(asset::AssetHandle<asset::Tilemap>{e->handle.index, e->handle.generation}));
+        if (!view) return;
+        const asset::TilemapHeader& th = *view.value().header;
+        // The tileset cut into columns x rows cells, top row first (cell n = tile n + 1).
+        Array<render::SpriteRegion> cells;
+        for (u32 r = 0; r < th.rows; ++r)
+            for (u32 c = 0; c < th.columns; ++c) {
+                render::SpriteRegion reg;
+                reg.u0 = static_cast<f32>(c) / static_cast<f32>(th.columns);
+                reg.u1 = static_cast<f32>(c + 1) / static_cast<f32>(th.columns);
+                reg.v0 = static_cast<f32>(r) / static_cast<f32>(th.rows);
+                reg.v1 = static_cast<f32>(r + 1) / static_cast<f32>(th.rows);
+                cells.push_back(reg);
+            }
+        const render::SpriteSetId whole = sprite_set(th.tileset_guid());  // loads and holds the texture
+        render::SpriteSetDesc sd;
+        sd.texture_key = renderer_->sprite_sets().texture_key(whole);
+        sd.regions = cells.span();
+        sd.debug_name = "kit.tileset";
+        if (e->set.valid()) renderer_->sprite_sets().update(e->set, sd);
+        else e->set = renderer_->create_sprite_set(sd);
+        render::TilemapDesc td;
+        td.set = e->set;
+        td.width = th.width;
+        td.height = th.height;
+        td.tile_size = th.tile_size;
+        td.origin = origin;
+        td.tiles = view.value().tiles;
+        td.tint = layer.tint;
+        td.sort_layer = layer.layer;
+        td.sort_order = layer.order;
+        if (e->id.valid()) {
+            if (!renderer_->update_tilemap(e->id, td)) return;
+        } else {
+            Result<render::TilemapId> id = renderer_->create_tilemap(td);
+            if (!id) return;
+            e->id = id.value();
+        }
+        e->origin = origin;
+        e->tint = layer.tint;
+        e->order = layer.order;
+        e->layer = layer.layer;
+    }
+    renderer_->add_tilemap(batch, e->id);
 }
 
 bool primary_camera(World& world, render::Camera2D& out, f32& pixels_per_meter, math::Color* clear_color) {

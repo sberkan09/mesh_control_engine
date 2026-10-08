@@ -378,6 +378,7 @@ void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiKey_W)) view_.gizmo = GizmoMode::Move;
     if (ImGui::IsKeyChordPressed(ImGuiKey_E)) view_.gizmo = GizmoMode::Rotate;
     if (ImGui::IsKeyChordPressed(ImGuiKey_R)) view_.gizmo = GizmoMode::Scale;
+    if (ImGui::IsKeyChordPressed(ImGuiKey_T)) view_.tile_paint = !view_.tile_paint;
     if (ImGui::IsKeyChordPressed(ImGuiKey_O)) {
         view_.orbit_view = !view_.orbit_view;
         if (view_.orbit_view) frame_scene();
@@ -554,6 +555,7 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Move tool", "W", view_.gizmo == GizmoMode::Move)) view_.gizmo = GizmoMode::Move;
         if (ImGui::MenuItem("Rotate tool", "E", view_.gizmo == GizmoMode::Rotate)) view_.gizmo = GizmoMode::Rotate;
         if (ImGui::MenuItem("Scale tool", "R", view_.gizmo == GizmoMode::Scale)) view_.gizmo = GizmoMode::Scale;
+        ImGui::MenuItem("Paint tiles", "T", &view_.tile_paint);
         ImGui::Separator();
         ImGui::MenuItem("Snap to grid", nullptr, &view_.snap);
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
@@ -628,6 +630,7 @@ void EditorShell::draw_dockspace() {
         ImGui::DockBuilderDockWindow("Stats", bottom);
         ImGui::DockBuilderDockWindow("Play", bottom);
         ImGui::DockBuilderDockWindow("Assets", bottom);
+        ImGui::DockBuilderDockWindow("Tilemap", right);
         ImGui::DockBuilderFinish(id);
         for (auto& p : panels_) p->open = true;
     }

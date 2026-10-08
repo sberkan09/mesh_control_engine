@@ -22,6 +22,7 @@ mce_add_library(mce_editor_core
         src/project.cpp
         src/scene_document.cpp
         src/stub_world.cpp
+        src/tilemap_editor.cpp
         src/viewport2d.cpp
     PUBLIC_DEPS
         mce::mce_core

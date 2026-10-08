@@ -27,6 +27,7 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_scene_importer());
     reg.add(make_gltf_importer());
     reg.add(make_prefab_importer());
+    reg.add(make_tilemap_importer());
 }
 
 bool parse_guid_ref(StringView text, Guid& out) {

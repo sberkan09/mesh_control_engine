@@ -65,4 +65,16 @@ struct Camera2DComponent {
 MCE_COMPONENT(Camera2DComponent, (zoom, Range{0.05f, 32}), (pixels_per_meter, Range{1, 512}), clear_color, primary,
               pixel_snap)
 
+// One baked tile layer (FR-R2D-115): the .mctilemap asset drawn with its tile (0, 0) bottom-left
+// corner at the entity's position. The tiles live in the asset; the editor's Tilemap panel
+// paints them and the asset hot-reloads (re-bake) on save.
+struct TilemapLayer {
+    asset::AssetRef<asset::Tilemap> map;
+    math::Color tint;
+    i32 order = 0;
+    i16 layer = 0;
+    u8 pad_[2] = {};
+};
+MCE_COMPONENT(TilemapLayer, map, tint, order, (layer, Range{-100, 100}))
+
 }  // namespace mce::kit

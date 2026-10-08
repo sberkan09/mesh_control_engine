@@ -18,6 +18,7 @@ inline constexpr u8 FONT_VERSION = 1;
 inline constexpr u8 MATERIAL_VERSION = 1;
 inline constexpr u8 SCENE_VERSION = 1;
 inline constexpr u8 MESH_VERSION = 1;
+inline constexpr u8 TILEMAP_VERSION = 1;  // CHNK_TILE: one tile layer (v0.5, FR-R2D-115)
 inline constexpr u8 PREFAB_VERSION = 1;  // CHNK_Prefab: the scene layout below (v0.5, FR-ENT-070)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -223,6 +224,30 @@ struct MaterialChunk {  // the whole payload: fixed-width param block + texture 
     static Result<const MaterialChunk*> read(Span<const byte> payload);
 };
 static_assert(sizeof(MaterialChunk) == 112);
+
+// ------------------------------------------------------------------ tilemap (CHNK_TILE)
+// One tile layer (FR-R2D-115, ADR-0030 §8): a width x height grid of tile indices, row 0 at the
+// bottom, over a tileset texture cut into `columns` x `rows` equal cells. Tile 0 is empty; tile n
+// is cell n-1, counted left to right from the top row of the texture. The runtime bakes it into
+// static quads (render::bake_tilemap) placed at the owning entity.
+struct TilemapHeader {
+    u64 tileset[2];  // texture GUID {hi, lo}
+    u32 width;       // tiles
+    u32 height;
+    u32 columns;     // tileset cells across
+    u32 rows;        // tileset cells down
+    f32 tile_size;   // metres per tile edge
+    u32 reserved[3];
+    // u32 tiles[width * height] follow
+    Guid tileset_guid() const { return Guid{tileset[0], tileset[1]}; }
+};
+static_assert(sizeof(TilemapHeader) == 48);
+
+struct TilemapView {
+    const TilemapHeader* header = nullptr;
+    Span<const u32> tiles;
+    static Result<TilemapView> read(Span<const byte> payload);
+};
 
 // ------------------------------------------------------------------ mesh (CHNK_MESH)
 // A static glTF scene (assets.md §5.2, FR-R3D-010): meshopt-optimized, quantized vertex streams,

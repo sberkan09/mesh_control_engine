@@ -14,6 +14,7 @@ mce_add_library(mce_editor_layer
         src/panels.cpp
         src/play_panel.cpp
         src/scene_panels.cpp
+        src/tilemap_panel.cpp
     PUBLIC_DEPS
         mce::mce_editor_core
         mce::mce_platform

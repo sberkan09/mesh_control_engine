@@ -50,7 +50,7 @@ bool asset_type_for(StringId type_id, ChunkType& out, const char*& name) {
     static constexpr const char* kNames[] = {asset::Texture::name, asset::Mesh::name,     asset::Material::name,
                                              asset::Shader::name,  asset::Sfx::name,      asset::Font::name,
                                              asset::Atlas::name,   asset::Scene::name,    asset::InputMap::name,
-                                             asset::Prefab::name};
+                                             asset::Prefab::name,  asset::Tilemap::name};
     for (const char* n : kNames) {
         if (StringId(n) == type_id) {
             name = n;

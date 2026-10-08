@@ -113,7 +113,11 @@ public:
         for (EntityId id : scene.selection().items())
             if (entity_quad(scene, id, q)) quad_lines(q, math::Color{1.0f, 0.62f, 0.1f, 1.0f}, 2.0f, lines_);
         math::vec2 pivot;
-        if (TransformGizmo::pivot(scene, pivot)) gizmo_.lines(shell.camera(), pivot, hot_, lines_);
+        if (painting_tiles(shell)) {
+            tile_lines(shell);
+        } else if (TransformGizmo::pivot(scene, pivot)) {
+            gizmo_.lines(shell.camera(), pivot, hot_, lines_);
+        }
         if (marquee_) {
             const math::vec2 a = marquee_from_, b = marquee_to_;
             const math::vec2 m[4] = {a, {b.x, a.y}, b, {a.x, b.y}};
@@ -157,6 +161,7 @@ private:
             hot_ = GizmoPart::None;
             hover_ = kNoEntity;
             marquee_ = false;
+            tile_hover_ = false;
             pan(cam, hovered, scale);
             return;
         }
@@ -205,6 +210,7 @@ private:
         }
 
         pan(cam, hovered, scale);
+        if (paint_tiles(shell, hovered, mouse_world)) return;
 
         // Press: a gizmo handle starts a constrained drag (move, rotate or scale, W/E/R); an entity
         // is selected (Ctrl toggles, Shift adds) and, with the move tool, starts a free drag; empty
@@ -296,6 +302,84 @@ private:
         shell.preview().record(cmd, empty_, v.target, v.size, px_cam, lines_.span(), math::Color{0.09f, 0.09f, 0.1f, 1.0f});
     }
 
+    // ---- tile painting (Tilemap panel, ADR-0030 §8) ----
+    // Active when the paint toggle is on and the single selected entity has a TilemapLayer.
+    bool painting_tiles(EditorShell& shell) {
+        EditorScene& scene = shell.scene();
+        TilemapEditor& tm = shell.tilemap();
+        if (!shell.view().tile_paint || scene.selection().items().size() != 1) return false;
+        return tm.bind(shell.session(), scene.selection().items()[0]);
+    }
+
+    // Left drag paints the brush, Ctrl+left erases, Shift+left drag fills the rectangle on release
+    // (Ctrl+Shift erases it), Esc cancels a rectangle. One press to release is one stroke: one
+    // save, one re-bake, one tile undo step.
+    bool paint_tiles(EditorShell& shell, bool hovered, math::vec2 mouse_world) {
+        tile_hover_ = false;
+        if (!painting_tiles(shell)) {
+            if (shell.tilemap().in_stroke()) finish_stroke(shell);
+            tile_rect_ = false;
+            return false;
+        }
+        TilemapEditor& tm = shell.tilemap();
+        const ImGuiIO& io = ImGui::GetIO();
+        i32 x = 0, y = 0;
+        const bool on_map = tm.tile_at(shell.scene(), mouse_world, x, y);
+        tile_hover_ = hovered && on_map;
+        tile_x_ = x;
+        tile_y_ = y;
+        const u32 tile = io.KeyCtrl ? 0u : tm.brush;
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            tm.begin_stroke();
+            tile_rect_ = io.KeyShift;
+            rect_x_ = x;
+            rect_y_ = y;
+            if (!tile_rect_ && on_map) tm.paint(x, y, tile);
+            return true;
+        }
+        if (!tm.in_stroke()) return hovered;  // the paint tool owns left clicks over the viewport
+        if (tile_rect_ && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            tile_rect_ = false;
+            finish_stroke(shell);
+        } else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            if (tile_rect_) tm.fill(rect_x_, rect_y_, x, y, tile);
+            tile_rect_ = false;
+            finish_stroke(shell);
+        } else if (!tile_rect_ && on_map) {
+            tm.paint(x, y, tile);
+        } else if (tile_rect_) {
+            ImGui::SetTooltip("%d x %d", std::abs(x - rect_x_) + 1, std::abs(y - rect_y_) + 1);
+        }
+        return true;
+    }
+
+    void finish_stroke(EditorShell& shell) {
+        Result<f64> r = shell.tilemap().end_stroke(shell.session());
+        if (!r) {
+            FixedString<512> msg;
+            format_error(r.error(), msg);
+            MCE_LOG_ERROR("editor: tilemap save failed: {}", msg.view());
+        }
+    }
+
+    void tile_lines(EditorShell& shell) {
+        const TilemapEditor& tm = shell.tilemap();
+        const EditorScene& scene = shell.scene();
+        tm.lines(scene, lines_);
+        math::vec2 lo, hi;
+        if (tile_rect_ && tm.in_stroke()) {
+            math::vec2 lo2, hi2;
+            tm.tile_rect(scene, std::min(rect_x_, tile_x_), std::min(rect_y_, tile_y_), lo, hi);
+            tm.tile_rect(scene, std::max(rect_x_, tile_x_), std::max(rect_y_, tile_y_), lo2, hi2);
+            const math::vec2 q[4] = {lo, {hi2.x, lo.y}, hi2, {lo.x, hi2.y}};
+            quad_lines(q, math::Color{0.45f, 0.75f, 1.0f, 0.9f}, 2.0f, lines_);
+        } else if (tile_hover_) {
+            tm.tile_rect(scene, tile_x_, tile_y_, lo, hi);
+            const math::vec2 q[4] = {lo, {hi.x, lo.y}, hi, {lo.x, hi.y}};
+            quad_lines(q, math::Color{1.0f, 1.0f, 1.0f, 0.9f}, 2.0f, lines_);
+        }
+    }
+
     // Right or middle drag pans the editor camera.
     void pan(EditorCamera2D& cam, bool hovered, ImVec2 scale) {
         const ImGuiIO& io = ImGui::GetIO();
@@ -338,6 +422,9 @@ private:
     bool marquee_add_ = false;
     math::vec2 marquee_from_, marquee_to_;  // world
     bool panning_ = false;
+    bool tile_hover_ = false;
+    bool tile_rect_ = false;  // Shift+drag rectangle fill in progress
+    i32 tile_x_ = 0, tile_y_ = 0, rect_x_ = 0, rect_y_ = 0;
 };
 
 // ---- Console -----------------------------------------------------------------------------------
@@ -502,6 +589,7 @@ void add_default_panels(EditorShell& shell) {
     shell.add_panel(mem::make_unique<StatsPanel>(mem::heap()));
     add_play_panel(shell);
     add_asset_panel(shell);
+    add_tilemap_panel(shell);
 }
 
 }  // namespace mce::editor

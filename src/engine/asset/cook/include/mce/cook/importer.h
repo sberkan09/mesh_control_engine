@@ -84,7 +84,8 @@ public:
     const IImporter* for_extension(StringView lower_ext) const;
     Span<const mem::UniquePtr<IImporter>> all() const { return importers_.span(); }
 
-    // Registry with every built-in importer (texture, wav, font, material, scene, glTF, prefab).
+    // Registry with every built-in importer (texture, wav, font, material, scene, glTF, prefab,
+    // tilemap).
     static void add_builtins(ImporterRegistry& reg);
 
 private:
@@ -99,6 +100,7 @@ mem::UniquePtr<IImporter> make_material_importer();
 mem::UniquePtr<IImporter> make_scene_importer();
 mem::UniquePtr<IImporter> make_prefab_importer();  // .mcprefab -> CHNK_PREFAB (v0.5)
 mem::UniquePtr<IImporter> make_gltf_importer();
+mem::UniquePtr<IImporter> make_tilemap_importer();  // .mctilemap -> CHNK_TILE (v0.5)
 
 // Parses "guid:<canonical>" (the typed asset-reference spelling in native text assets).
 bool parse_guid_ref(StringView text, Guid& out);

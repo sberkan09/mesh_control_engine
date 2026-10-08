@@ -196,6 +196,19 @@ Result<void> EditorSession::rename_asset(asset::Guid guid, StringView new_rel_pa
     return ok();
 }
 
+Result<HotReloadResult> EditorSession::write_asset(StringView rel_path, StringView text) {
+    if (!project_.is_open()) return Error(Errc::InvalidArgument, "editor.write_asset", "no project is open");
+    if (rel_path.empty() || rel_path[0] == '/' || rel_path.find("..") != StringView::npos)
+        return Error(Errc::InvalidArgument, "editor.write_asset", rel_path);
+    const cook::String abs = project_.asset_path(rel_path);
+    const usize slash = abs.view().rfind('/');
+    if (slash != StringView::npos) MCE_TRY(cook::fs::create_directories(abs.view().substr(0, slash)));
+    MCE_TRY(cook::fs::write_file_atomic(abs.view(), Span<const byte>(reinterpret_cast<const byte*>(text.data()), text.size())));
+    watcher_.poll(0.0, 0.0);  // the write is ours: re-baseline the watcher
+    const cook::String rel(rel_path);
+    return hot_reload(Span<const cook::String>(&rel, 1));
+}
+
 bool EditorSession::tick_hot_reload(f64 now, f64 interval) {
     Array<cook::String> changed;
     if (!project_.is_open() || !watcher_.poll(now, interval, &changed)) return false;

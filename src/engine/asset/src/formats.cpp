@@ -253,6 +253,20 @@ Result<const MaterialChunk*> MaterialChunk::read(Span<const byte> payload) {
     return m;
 }
 
+// ------------------------------------------------------------------ tilemap
+
+Result<TilemapView> TilemapView::read(Span<const byte> payload) {
+    TilemapView v;
+    v.header = header_of<TilemapHeader>(payload);
+    if (!v.header) return Error(Errc::Truncated, "asset.tilemap.read");
+    const u64 count = u64(v.header->width) * v.header->height;
+    if (v.header->width == 0 || v.header->height == 0 || v.header->columns == 0 || v.header->rows == 0 ||
+        count > (payload.size() - sizeof(TilemapHeader)) / sizeof(u32))
+        return Error(Errc::Truncated, "asset.tilemap.read");
+    v.tiles = Span<const u32>(reinterpret_cast<const u32*>(payload.data() + sizeof(TilemapHeader)), static_cast<usize>(count));
+    return v;
+}
+
 // ------------------------------------------------------------------ mesh
 
 u32 MeshView::index(u32 i) const {

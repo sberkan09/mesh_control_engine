@@ -76,6 +76,9 @@ public:
     // Asset browser rename/move (GUID-stable, FR-EDT-110): moves the file, follows the open scene
     // when it is the one moved, and hot-reloads so the mount sees the new path.
     Result<void> rename_asset(asset::Guid guid, StringView new_rel_path);
+    // Writes a text asset the editor authors (a tilemap) under assets/ and hot-reloads it at once:
+    // the file is cooked and swapped (or mounted, when new) before this returns.
+    Result<HotReloadResult> write_asset(StringView rel_path, StringView text);
 
     // Every scene in the catalog, by path.
     void list_scenes(Array<const ProjectAsset*>& out) const;
