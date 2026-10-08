@@ -37,6 +37,10 @@ public:
         }
         EditorScene& scene = shell.scene();
         const SceneDocument& doc = scene.doc();
+        if (shell.playing()) {  // selection still works (the Play panel inspects it); edits do not
+            draw_locked(shell);
+            return;
+        }
         const f32 right = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
         const StringView scene_name = doc.name().empty() ? StringView("untitled") : doc.name();
         ImGui::Text("%.*s%s", static_cast<int>(scene_name.size()), scene_name.data(), scene.dirty() ? " *" : "");
@@ -117,6 +121,21 @@ private:
         begin_rename(*scene.doc().find(id));
     }
 
+    void draw_locked(EditorShell& shell) {
+        EditorScene& scene = shell.scene();
+        ImGui::TextDisabled("Playing: the scene is locked until Stop (F5).");
+        ImGui::Separator();
+        if (ImGui::BeginChild("##entities")) {
+            for (const DocEntity& e : scene.doc().entities()) {
+                ImGui::PushID(static_cast<int>(e.id));
+                const char* label = e.name.view().empty() ? "(unnamed)" : e.name.c_str();
+                if (ImGui::Selectable(label, scene.selection().contains(e.id))) scene.selection().set(e.id);
+                ImGui::PopID();
+            }
+        }
+        ImGui::EndChild();
+    }
+
     void begin_rename(const DocEntity& e) {
         rename_ = e.id;
         std::snprintf(rename_buf_, sizeof(rename_buf_), "%s", e.name.c_str());
@@ -174,6 +193,10 @@ public:
         const EntityId id = scene.selection().anchor();
         if (id == kNoEntity || !scene.doc().find(id)) {
             ImGui::TextDisabled("Select an entity in the Hierarchy or the Viewport.");
+            return;
+        }
+        if (shell.playing()) {
+            ImGui::TextDisabled("Playing: live values are in the Play panel; Stop (F5) to edit.");
             return;
         }
         if (scene.selection().items().size() > 1)

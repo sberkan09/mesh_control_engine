@@ -11,6 +11,7 @@ mce_add_library(mce_editor_layer
         src/imgui_platform.cpp
         src/imgui_renderer.cpp
         src/panels.cpp
+        src/play_panel.cpp
         src/scene_panels.cpp
     PUBLIC_DEPS
         mce::mce_editor_core

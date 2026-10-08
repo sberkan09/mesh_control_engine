@@ -10,6 +10,7 @@
 #include "imgui_renderer.h"
 #include "mce/editor/editor_shell.h"
 #include "mce/editor/gizmo.h"
+#include "mce/kit/sprite_extract.h"
 #include "mce/log.h"
 #include "scene_panels.h"
 
@@ -69,6 +70,21 @@ public:
         EditorScene& scene = shell.scene();
         lines_.clear();
         const ViewSettings& view = shell.view();
+        if (PlaySession& play = shell.session().play(); play.active()) {
+            // Play-in-editor: the play world, through the game's camera (or the editor's).
+            EditorCamera2D cam = shell.camera();
+            render::Camera2D game;
+            f32 ppm = cam.pixels_per_meter;
+            math::Color clear{0.08f, 0.09f, 0.12f, 1.0f};
+            if (view.play_camera && kit::primary_camera(*play.world(), game, ppm, &clear)) {
+                cam.center = game.position;
+                cam.zoom = game.zoom;
+                cam.pixels_per_meter = ppm;
+            }
+            if (view.show_grid && !view.play_camera) grid_lines(cam, v.size, view.grid_step, view.grid_major, lines_);
+            shell.preview().record(cmd, *play.world(), v.target, v.size, cam, lines_.span(), clear);
+            return;
+        }
         if (view.show_grid) grid_lines(shell.camera(), v.size, view.grid_step, view.grid_major, lines_);
         math::vec2 q[4];
         if (hover_ != kNoEntity && !scene.selection().contains(hover_) && entity_quad(scene, hover_, q))
@@ -101,6 +117,13 @@ private:
         hover_ = hovered && hot_ == GizmoPart::None ? pick_entity(scene, mouse_world) : kNoEntity;
 
         if (hovered && io.MouseWheel != 0.0f) cam.zoom_at(mouse, size_, std::pow(1.15f, io.MouseWheel));
+        if (shell.playing()) {  // play-in-editor: look around, but the document is locked
+            if (gizmo_.dragging()) gizmo_.cancel(scene);
+            hot_ = GizmoPart::None;
+            hover_ = kNoEntity;
+            pan(cam, hovered, scale);
+            return;
+        }
 
         // Drag in progress: move, cancel, or finish.
         if (gizmo_.dragging()) {
@@ -118,14 +141,7 @@ private:
             return;
         }
 
-        if (hovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsMouseClicked(ImGuiMouseButton_Middle)))
-            panning_ = true;
-        if (panning_) {
-            if (ImGui::IsMouseDown(ImGuiMouseButton_Right) || ImGui::IsMouseDown(ImGuiMouseButton_Middle))
-                cam.pan_pixels({io.MouseDelta.x * scale.x, io.MouseDelta.y * scale.y});
-            else
-                panning_ = false;
-        }
+        pan(cam, hovered, scale);
 
         // Press: a gizmo handle starts a constrained drag; an entity is selected (Ctrl toggles)
         // and starts a free drag; empty space clears the selection.
@@ -144,6 +160,19 @@ private:
         if (ImGui::IsWindowFocused() && !io.WantTextInput) {
             if (ImGui::IsKeyPressed(ImGuiKey_F, false)) frame(scene, cam);
             if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) delete_selection(scene);
+        }
+    }
+
+    // Right or middle drag pans the editor camera.
+    void pan(EditorCamera2D& cam, bool hovered, ImVec2 scale) {
+        const ImGuiIO& io = ImGui::GetIO();
+        if (hovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsMouseClicked(ImGuiMouseButton_Middle)))
+            panning_ = true;
+        if (panning_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Right) || ImGui::IsMouseDown(ImGuiMouseButton_Middle))
+                cam.pan_pixels({io.MouseDelta.x * scale.x, io.MouseDelta.y * scale.y});
+            else
+                panning_ = false;
         }
     }
 
@@ -332,6 +361,7 @@ void add_default_panels(EditorShell& shell) {
     add_scene_panels(shell);
     shell.add_panel(mem::make_unique<ConsolePanel>(mem::heap()));
     shell.add_panel(mem::make_unique<StatsPanel>(mem::heap()));
+    add_play_panel(shell);
 }
 
 }  // namespace mce::editor

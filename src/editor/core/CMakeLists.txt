@@ -14,6 +14,7 @@ mce_add_library(mce_editor_core
         src/engine_components.cpp
         src/gizmo.cpp
         src/inspector.cpp
+        src/play_session.cpp
         src/preview_renderer.cpp
         src/project.cpp
         src/scene_document.cpp

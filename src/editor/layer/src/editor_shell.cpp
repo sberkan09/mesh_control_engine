@@ -112,6 +112,8 @@ void EditorShell::build_ui(f64 frame_dt) {
     impl_->platform.new_frame(frame_dt);
     ImGui::NewFrame();
 
+    // Play-in-editor runs on wall time, before the panels draw this frame's state.
+    if (scene_mode()) session_.play().advance(frame_dt);
     handle_shortcuts();
     draw_menu_bar();
     draw_dockspace();
@@ -239,6 +241,18 @@ bool EditorShell::play() {
     return true;
 }
 
+bool EditorShell::play_in_editor() {
+    if (!scene_mode()) return false;
+    if (!session_.enter_play()) {
+        focus_panel("Cook");
+        return false;
+    }
+    focus_panel("Viewport");
+    return true;
+}
+
+void EditorShell::stop_play() { session_.stop_play(); }
+
 // ---- clipboard ----------------------------------------------------------------------------------
 
 void EditorShell::copy_selection() {
@@ -327,9 +341,21 @@ void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_O)) popup_ = Popup::OpenScene;
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_N)) new_scene();
     if (ImGui::IsKeyPressed(ImGuiKey_F7, false)) cook();
-    if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_F5)) {
         if (player_running()) stop_player();
         else play();
+    } else if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
+        if (playing()) stop_play();
+        else play_in_editor();
+    }
+    if (playing()) {
+        if (ImGui::IsKeyPressed(ImGuiKey_F6, false)) {
+            PlaySession& p = session_.play();
+            if (p.state() == PlaySession::State::Paused) p.resume();
+            else p.pause();
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_F10, false)) session_.play().step();
+        return;  // the document is locked while playing
     }
     // Entity clipboard: only while no text field owns the keyboard.
     if (ImGui::GetIO().WantTextInput) return;
@@ -475,12 +501,13 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Cook", "F7", false, proj)) cook(false);
         if (ImGui::MenuItem("Cook + Pack", nullptr, false, proj)) cook(true);
         if (ImGui::MenuItem("Rescan assets", nullptr, false, proj)) session_.project().rescan();
-        if (ImGui::MenuItem("Play in player", "F5", false, proj && !player_running())) play();
+        if (ImGui::MenuItem("Play in editor", "F5", false, proj && !playing())) play_in_editor();
+        if (ImGui::MenuItem("Run in player", "Ctrl+F5", false, proj && !player_running())) play();
         ImGui::Separator();
         if (ImGui::MenuItem("Quit", "Ctrl+Q")) request_quit();
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Edit", scene_mode())) {
+    if (ImGui::BeginMenu("Edit", scene_mode() && !playing())) {
         const bool sel = !scene().selection().empty();
         if (ImGui::MenuItem("Cut", "Ctrl+X", false, sel)) cut_selection();
         if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
@@ -499,18 +526,31 @@ void EditorShell::draw_menu_bar() {
         ImGui::Separator();
         if (ImGui::MenuItem("Reset layout")) reset_layout();
         ImGui::MenuItem("Grid", nullptr, &view_.show_grid, scene_mode());
+        ImGui::MenuItem("Game camera while playing", nullptr, &view_.play_camera, scene_mode());
         if (ImGui::MenuItem("Frame scene", "F", false, scene_mode())) frame_scene();
         ImGui::MenuItem("ImGui demo", nullptr, &show_demo_);
         ImGui::EndMenu();
     }
     if (scene_mode()) {
-        // Play / Stop, centred in the menu bar.
-        const char* label = player_running() ? "Stop (F5)" : "Play (F5)";
-        const f32 w = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        // Play / Pause / Step / Stop, centred in the menu bar; the player run stays in the File menu.
+        PlaySession& p = session_.play();
+        const bool paused = p.state() == PlaySession::State::Paused;
+        const char* run = !playing() ? "Play (F5)" : (paused ? "Resume (F6)" : "Pause (F6)");
+        const ImGuiStyle& st = ImGui::GetStyle();
+        f32 w = ImGui::CalcTextSize(run).x + st.FramePadding.x * 2.0f;
+        if (playing()) w += ImGui::CalcTextSize("Step (F10)Stop (F5)").x + st.FramePadding.x * 4.0f + st.ItemSpacing.x * 2.0f;
         ImGui::SetCursorPosX((ImGui::GetWindowWidth() - w) * 0.5f);
-        if (ImGui::MenuItem(label)) {
-            if (player_running()) stop_player();
-            else play();
+        if (ImGui::MenuItem(run)) {
+            if (!playing()) play_in_editor();
+            else if (paused) p.resume();
+            else p.pause();
+        }
+        if (playing()) {
+            if (ImGui::MenuItem("Step (F10)")) p.step();
+            if (ImGui::MenuItem("Stop (F5)")) stop_play();
+            ImGui::TextDisabled("tick %llu", static_cast<unsigned long long>(p.ticks()));
+        } else if (player_running()) {
+            if (ImGui::MenuItem("Stop player")) stop_player();
         }
     }
     ImGui::EndMainMenuBar();
@@ -541,6 +581,7 @@ void EditorShell::draw_dockspace() {
         ImGui::DockBuilderDockWindow("Console", bottom);
         ImGui::DockBuilderDockWindow("Cook", bottom);
         ImGui::DockBuilderDockWindow("Stats", bottom);
+        ImGui::DockBuilderDockWindow("Play", bottom);
         ImGui::DockBuilderFinish(id);
         for (auto& p : panels_) p->open = true;
     }

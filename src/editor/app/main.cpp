@@ -5,6 +5,7 @@
 //   mce_editor                          run until the window closes
 //   mce_editor -project samples/scene_demo [-scene scenes/demo.mcscene]
 //   mce_editor -project samples/scene_demo -frames 90 -selftest   CI smoke in scene mode
+//   mce_editor -project samples/scene_demo -editor.play 1 -frames 90 -selftest   play-in-editor smoke
 //   mce_editor -frames 120 -selftest    CI smoke: check the viewport and shell pixels, then quit
 //   mce_editor -frames 60 -capture shot.ppm
 //   mce_editor -editor.ini ""           no dock-layout persistence
@@ -29,6 +30,8 @@ MCE_CVAR(cv_selftest, "selftest", false, "With -frames: verify the viewport and 
 MCE_CVAR(cv_project, "project", "", "Project folder to open (holds assets/)", CVarFlags::None);
 MCE_CVAR(cv_scene, "scene", "", "Scene to open, relative to assets/ (default: the first scene)", CVarFlags::None);
 MCE_CVAR(cv_select, "editor.select", "", "Select the entity with this name after opening the scene", CVarFlags::None);
+MCE_CVAR(cv_play, "editor.play", false, "Enter play-in-editor after opening the scene (the -selftest checks it)",
+         CVarFlags::None);
 MCE_CVAR(cv_ini, "editor.ini", "mce_editor.ini", "Dock layout file (empty = no persistence)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 
@@ -55,6 +58,7 @@ public:
             if (!scene.empty() && !shell_.open_scene(scene)) return Error(Errc::ParseError, "mce_editor", scene);
             for (const editor::DocEntity& e : shell_.scene().doc().entities())
                 if (!cv_select.get_string().empty() && e.name.view() == cv_select.get_string()) shell_.scene().selection().set(e.id);
+            if (cv_play.get_bool() && !shell_.play_in_editor()) return Error(Errc::InvalidArgument, "mce_editor", "play");
         }
         return ok();
     }
@@ -71,7 +75,8 @@ public:
         const bool last = cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
         if (last) {
             if (!cv_capture.get_string().empty()) capture(cv_capture.get_string().data());
-            if (cv_selftest.get_bool() && !(shell_.scene_mode() ? scene_selftest() : selftest())) exit_code_ = 3;
+            if (cv_selftest.get_bool() && !(shell_.playing() ? play_selftest() : shell_.scene_mode() ? scene_selftest() : selftest()))
+                exit_code_ = 3;
         }
         device_.end_frame();
         if (last || shell_.quit_requested()) quit(exit_code_);
@@ -189,6 +194,30 @@ private:
         MCE_LOG_INFO("selftest: scene {} entities; viewport {}x{}, {} non-clear px, {} colours; pick probe {}",
                      scene.doc().size(), v.size.width, v.size.height, non_clear, distinct, probe);
         return non_clear > v.size.width * v.size.height / 50 && distinct >= 6 && probe != editor::kNoEntity;
+    }
+
+    // Play-in-editor: the play world ticked on wall time, the document never changed, and the
+    // viewport shows the running scene (its sprites over the game camera's clear colour).
+    bool play_selftest() {
+        editor::PlaySession& play = shell_.session().play();
+        const editor::ViewportInfo& v = shell_.viewport();
+        if (v.target.is_null() || play.ticks() == 0 || shell_.scene().dirty() || !shell_.scene().verify_world()) {
+            MCE_LOG_ERROR("selftest: play not running ({} ticks) or the document changed", play.ticks());
+            return false;
+        }
+        Array<u8> px;
+        if (!read(v.target, v.size, px)) return false;
+        u32 distinct = 0;
+        u32 seen[64] = {};
+        for (usize i = 0; i < px.size(); i += 4) {
+            const u32 c = (u32(px[i]) >> 4) | ((u32(px[i + 1]) >> 4) << 4) | ((u32(px[i + 2]) >> 4) << 8);
+            bool found = false;
+            for (u32 k = 0; k < distinct; ++k) found |= seen[k] == c;
+            if (!found && distinct < 64) seen[distinct++] = c;
+        }
+        MCE_LOG_INFO("selftest: playing, {} ticks, {} entities, hash {:016x}; viewport {} colours", play.ticks(),
+                     play.entity_count(), play.state_hash(), distinct);
+        return distinct >= 6;
     }
 
     platform::Window& window_;

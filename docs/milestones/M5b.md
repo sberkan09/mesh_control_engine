@@ -20,6 +20,15 @@ hot-reload matrix and the editor orbit-camera collision gate are editor work and
 | Same-binary determinism, 3D poses (physics.md §6 test 13) | `samples/physics3d_headless` + the determinism stage | 3 runs × Debug and Release give one hash (2000 ticks, 134 bodies, a character, a camera boom) |
 | `04_cubes` capsule walk (ROADMAP M5b demo) | `samples/04_cubes` (`-walk 1`, or `C` in the window) | a capsule (`walker.glb`, the default `ControllerParams3D` shape) walks the floor through `move_character` against a `World3D` mirror of the layout (floor, 28 panel cubes, 14 spheres, orrery stand), hops every 2.5 s, and a 5 m third-person boom is `camera_sweep`-ed every tick: 600 ticks walk 40 m with 105 pulled-in boom ticks (closest 0.53 m). Arrows walk camera-relative, Space jumps, no input runs the patrol. `sample_04_cubes_walk_300` ctest requires a pulled-in boom; the determinism stage adds `-walk 1 -ticks 600` (World3D hash + boom folded in) across 3 runs × Debug/Release. Walk off keeps the M5a hash (`a31c44f2772f1e8f` at 600 ticks) |
 
+## Editor half (ADR-0029)
+
+| ROADMAP M5b item | Where | Evidence |
+|---|---|---|
+| Play-in-editor: embedded host, pause / step / slow-mo (FR-EDT-060) | `mce_editor_core`: `PlaySession` (`mce/editor/play_session.h`), `cook::cook_document`; layer: Play panel, menu-bar Play/Pause/Step/Stop (F5/F6/F10), viewport through the game camera | `test_editor` "play:" cases; `editor_play_smoke` (GPU): the scene runs in the viewport for 90 frames, document untouched |
+| Play enter ≤ 1 s (NFR-M-03) | in-memory cook + `scene::instantiate`, no save, no pack | `scene_demo` (6 entities): 1.1 ms, Debug |
+| Play→Stop→Play reproduces the tick-0 hash | the play world is rebuilt from the document each time; nothing writes the document while playing | "play: Play -> Stop -> Play…": same post-instantiate, first-tick and 300-tick hashes |
+| Same world as the shipped runtime | `mce_player -headless`'s setup (physics2d, audio bridge on a Silent device, `scene::instantiate`), the app loop's fixed step | "play: enter builds the player's world…": 600 ticks in the editor = `mce_player -headless 1 -ticks 600` on the cooked pack |
+
 ## Budget table
 
 | Measure | Target | Result |
@@ -33,7 +42,7 @@ hot-reload matrix and the editor orbit-camera collision gate are editor work and
 
 | Item | State |
 |---|---|
-| Play-in-editor (embedded host, pause/step/slow-mo, ≤ 1 s enter, Play→Stop→Play hash) | editor work, not in this landing |
+| Play-in-editor (embedded host, pause/step/slow-mo, ≤ 1 s enter, Play→Stop→Play hash) | shipped, see *Editor half*; game modules do not load inside the editor process (ADR-0029 §1.7) |
 | Hot-reload matrix (textures/materials/scenes ≤ 1 s, game.dll ≤ 10 s) | editor work, not in this landing |
 | Editor orbit camera collision gate | needs the editor viewport camera; `camera_sweep` is ready for it |
 | ECS bridge (`install_physics3d`, `RigidBody3D`/`Collider3D`/`CharacterController3D` components, contact events) | next physics step; the facade is shaped for it |

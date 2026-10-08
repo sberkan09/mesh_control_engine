@@ -34,6 +34,7 @@ void EditorSession::attach_preview() {
 }
 
 Result<void> EditorSession::open_project(StringView root) {
+    play_.stop();
     if (preview_) preview_->set_assets(nullptr);
     Result<void> r = project_.open(root);
     if (r) project_.ensure_cooked();
@@ -44,6 +45,7 @@ Result<void> EditorSession::open_project(StringView root) {
 }
 
 void EditorSession::new_scene(StringView name) {
+    play_.stop();
     scene_.new_scene(name);
     scene_diags_ = cook::DiagList{};
     autosaved_revision_ = ~u64(0);
@@ -58,6 +60,7 @@ cook::String EditorSession::resolve(StringView path) const {
 }
 
 bool EditorSession::open_scene(StringView path) {
+    play_.stop();
     cook::DiagList diags;
     const cook::String full = resolve(path);
     const bool ok_open = static_cast<bool>(scene_.open(full.view(), diags));
@@ -98,6 +101,7 @@ Result<void> EditorSession::save_scene_as(StringView path) {
 }
 
 const cook::CookReport& EditorSession::cook(bool pack) {
+    play_.stop();  // the play world reads the mounted tree the cook replaces
     if (preview_) preview_->set_assets(nullptr);
     const cook::CookReport& report = project_.cook(pack);
     attach_preview();
@@ -173,6 +177,17 @@ void EditorSession::discard_autosave() {
     const cook::String path = autosave_path();
     if (!path.empty()) cook::fs::remove(path.view());
     autosaved_revision_ = ~u64(0);
+}
+
+bool EditorSession::enter_play() {
+    play_diags_ = cook::DiagList{};
+    project_.ensure_cooked();
+    if (Result<void> r = play_.enter(project_, scene_.doc(), scene_.path(), play_diags_); !r) {
+        MCE_LOG_ERROR("editor: cannot play {}", scene_.doc().name());
+        log_diags(play_diags_);
+        return false;
+    }
+    return true;
 }
 
 void EditorSession::list_scenes(Array<const ProjectAsset*>& out) const {
