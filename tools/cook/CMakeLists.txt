@@ -8,4 +8,5 @@ mce_add_executable(mce_cook
         mce::mce_asset_cook
         mce::mce_gameplay_kit
         mce::mce_physics2d
-        mce::mce_audio)
+        mce::mce_audio
+        mce::mce_ecs_scene)

@@ -29,6 +29,14 @@ public:
     // The asset registered at `rel_path` (relative to assets/, forward slashes): how interchange
     // formats that reference siblings by URI (glTF images) name their dependencies.
     virtual bool guid_for_path(StringView rel_path, Guid& out) const = 0;
+    // The parsed document of a native asset and its path relative to assets/: how prefab
+    // instances are flattened at cook (FR-ENT-070). False when unknown or not a native asset.
+    virtual bool native_document(Guid g, JsonValue& out, StringView& source_path) const {
+        (void)g;
+        (void)out;
+        (void)source_path;
+        return false;
+    }
 
 protected:
     ~IAssetLookup() = default;
@@ -76,7 +84,7 @@ public:
     const IImporter* for_extension(StringView lower_ext) const;
     Span<const mem::UniquePtr<IImporter>> all() const { return importers_.span(); }
 
-    // Registry with every built-in importer (texture, wav, font, material, scene, glTF).
+    // Registry with every built-in importer (texture, wav, font, material, scene, glTF, prefab).
     static void add_builtins(ImporterRegistry& reg);
 
 private:
@@ -89,6 +97,7 @@ mem::UniquePtr<IImporter> make_wav_importer();
 mem::UniquePtr<IImporter> make_font_importer();
 mem::UniquePtr<IImporter> make_material_importer();
 mem::UniquePtr<IImporter> make_scene_importer();
+mem::UniquePtr<IImporter> make_prefab_importer();  // .mcprefab -> CHNK_PREFAB (v0.5)
 mem::UniquePtr<IImporter> make_gltf_importer();
 
 // Parses "guid:<canonical>" (the typed asset-reference spelling in native text assets).

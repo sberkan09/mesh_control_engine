@@ -1,5 +1,5 @@
-// .mcscene -> CHNK_SCENE: the columnar transform of the editor's canonical scene document
-// (assets.md §6, FR-ENT-060). Every field name and type comes from mce_refl — there is no
+// .mcscene -> CHNK_SCENE and .mcprefab -> CHNK_PREFAB: the columnar transform of the editor's
+// canonical scene / prefab documents (assets.md §6, FR-ENT-060/070). Every field name and type comes from mce_refl — there is no
 // field list anywhere in this file, so a new reflected component needs zero cook changes
 // (FR-DX-020).
 //
@@ -21,6 +21,13 @@
 // arrays as JSON arrays of exactly `count` elements. Omitted fields keep the C++ default member
 // values; Transient fields must not appear. The cook accepts only the current "version" —
 // migration happens at editor load (assets.md §6).
+//
+// Prefabs (v0.5): a .mcprefab has the same shape with "format": "mce-prefab" and no "settings";
+// its entity 0 is the root. In either document an entity may instead be a prefab instance,
+//   { "name": "Grunt A", "prefab": "guid:<uuid>", "components": { "LocalTransform": { ... } } }
+// which the cook flattens: the prefab's entities (nested instances already expanded) take its
+// place, and "components" overrides the root's fields (adding components it lacks). The runtime
+// never sees an instance — only rows (no runtime inheritance, ecs-gameplay.md §2.11).
 
 #include <algorithm>
 #include <cstring>
@@ -40,9 +47,10 @@ constexpr u32 kSceneFormatVersion = 1;
 constexpr u32 kNoEntity = 0xFFFFFFFFu;
 
 bool asset_type_for(StringId type_id, ChunkType& out, const char*& name) {
-    static constexpr const char* kNames[] = {asset::Texture::name, asset::Mesh::name, asset::Material::name,
-                                             asset::Shader::name,  asset::Sfx::name,  asset::Font::name,
-                                             asset::Atlas::name,   asset::Scene::name, asset::InputMap::name};
+    static constexpr const char* kNames[] = {asset::Texture::name, asset::Mesh::name,     asset::Material::name,
+                                             asset::Shader::name,  asset::Sfx::name,      asset::Font::name,
+                                             asset::Atlas::name,   asset::Scene::name,    asset::InputMap::name,
+                                             asset::Prefab::name};
     for (const char* n : kNames) {
         if (StringId(n) == type_id) {
             name = n;
@@ -69,7 +77,14 @@ struct ColumnBuilder {
 // Walks a document against reflection metadata, writing rows and collecting references.
 class Walker {
 public:
-    Walker(StringView file, DiagList& diags, u32 entity_count) : file_(file), diags_(diags), entity_count_(entity_count) {}
+    Walker(StringView file, DiagList& diags) : file_(file), diags_(diags) {}
+
+    // The document being walked: diagnostics name `file`; "$<i>" resolves through `map` (the
+    // document's local entity index -> flattened entity index).
+    void set_context(StringView file, const Array<u32>* map) {
+        file_ = file;
+        map_ = map;
+    }
 
     Array<PendingFixup> asset_fixups;
     Array<PendingFixup> entity_fixups;
@@ -224,11 +239,11 @@ private:
                     if (s.size() < 2 || s[0] != '$') return err(v, path, "expected \"$<entity index>\" or null");
                     u64 n = 0;
                     for (char c : s.substr(1)) {
-                        if (c < '0' || c > '9' || n > entity_count_) return err(v, path, "expected \"$<entity index>\" or null");
+                        if (c < '0' || c > '9' || n > map_->size()) return err(v, path, "expected \"$<entity index>\" or null");
                         n = n * 10 + static_cast<u64>(c - '0');
                     }
-                    if (n >= entity_count_) return err(v, path, "entity reference out of range");
-                    index = static_cast<u32>(n);
+                    if (n >= map_->size()) return err(v, path, "entity reference out of range");
+                    index = (*map_)[static_cast<usize>(n)];
                 }
                 put<u32>(at, index);
                 entity_fixups.push_back(PendingFixup{column, row, row_offset, {}, 0});
@@ -267,59 +282,198 @@ private:
 
     StringView file_;
     DiagList& diags_;
-    u32 entity_count_;
+    const Array<u32>* map_ = nullptr;
 };
 
 struct SceneBuild {
     Array<ColumnBuilder> columns;
-    Array<String> names;
-    Walker* walker = nullptr;
+    Array<String> names;  // by flattened entity index
 };
 
-// Validates the document envelope and walks every entity. Returns false on a structural error.
-bool walk_scene(JsonValue doc, StringView file, DiagList& diags, SceneBuild& out, Walker& walker) {
-    if (!detail::check_keys(doc, {"format", "version", "guid", "name", "settings", "entities"}, file, kStage, diags)) return false;
+constexpr u32 kMaxPrefabDepth = 16;
+
+// What a document is: the envelope keys and format string it must carry.
+struct DocKind {
+    const char* format;
+    std::initializer_list<StringView> keys;
+};
+const DocKind kSceneDoc{"mce-scene", {"format", "version", "guid", "name", "settings", "entities"}};
+const DocKind kPrefabDoc{"mce-prefab", {"format", "version", "guid", "name", "entities"}};
+
+// Validates a document envelope. Returns the entities array (possibly invalid = none) or false.
+bool check_envelope(JsonValue doc, const DocKind& kind, StringView file, DiagList& diags, JsonValue& ents) {
+    if (!detail::check_keys(doc, kind.keys, file, kStage, diags)) return false;
     const JsonValue fmt = doc.get("format");
-    if (!fmt.is_string() || fmt.as_string() != "mce-scene") {
-        detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-scene\"");
+    if (!fmt.is_string() || fmt.as_string() != kind.format) {
+        String msg;
+        appendf(msg, "\"format\" must be \"%s\"", kind.format);
+        detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, msg);
         return false;
     }
     const JsonValue ver = doc.get("version");
     if (!ver.is_integer() || ver.as_number() != kSceneFormatVersion) {
         String msg;
-        appendf(msg, "scene version not accepted by this cook (expects %u): open and re-save in the editor first", kSceneFormatVersion);
+        appendf(msg, "%s version not accepted by this cook (expects %u): open and re-save in the editor first", kind.format,
+                kSceneFormatVersion);
         detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
         return false;
     }
-    const JsonValue ents = doc.get("entities");
+    ents = doc.get("entities");
     if (ents.valid() && !ents.is_array()) {
         detail::error_at(diags, Errc::ParseError, file, ents, kStage, "'entities' must be an array");
         return false;
     }
-    const u32 count = ents.valid() ? ents.size() : 0;
-    for (u32 e = 0; e < count; ++e) {
-        const JsonValue ent = ents.at(e);
-        String path;
-        appendf(path, "entities[%u]", e);
-        if (!ent.is_object()) {
-            detail::error_at(diags, Errc::ParseError, file, ent, kStage, "entity must be an object");
-            continue;
-        }
-        if (ent.get("prefab").valid()) {
-            detail::error_at(diags, Errc::Unsupported, file, ent.get("prefab"), kStage, "prefab instances arrive at v0.5 (MVP copies prefab contents)");
-            continue;
-        }
-        if (!detail::check_keys(ent, {"name", "components"}, file, kStage, diags)) continue;
-        const JsonValue name = ent.get("name");
-        if (name.valid() && !name.is_string()) detail::error_at(diags, Errc::ParseError, file, name, kStage, "'name' must be a string");
-        out.names.push_back(String(name.is_string() ? name.as_string() : StringView()));
+    return true;
+}
 
-        const JsonValue comps = ent.get("components");
-        if (!comps.valid()) continue;
-        if (!comps.is_object()) {
-            detail::error_at(diags, Errc::ParseError, file, comps, kStage, "'components' must be an object");
-            continue;
+// Expands a scene/prefab document into flattened entities (FR-ENT-070): an entity spelled
+// { "prefab": "guid:<uuid>", "name": ..., "components": {...} } is replaced by the prefab's whole
+// entity list (its entity 0 = the instance root), recursively, and its "components" are applied
+// to that root as field-level overrides on top of the prefab's values. "$<i>" references always
+// resolve within the document that spells them. In scan mode (dependency scan) instances are not
+// expanded: each becomes one placeholder entity and a dependency on the prefab.
+class Flattener {
+public:
+    Flattener(const ImportInput& in, DiagList& diags, Walker& w, SceneBuild& b, bool scan)
+        : in_(in), diags_(diags), walker_(w), build_(b), scan_(scan) {}
+
+    Array<DepRef> prefab_deps;
+
+    // Flattened entity count of `ents` (a document's entities array). False on error (reported).
+    bool count(JsonValue ents, StringView file, u32 depth, u32& out) {
+        out = 0;
+        const u32 n = ents.valid() ? ents.size() : 0;
+        for (u32 i = 0; i < n; ++i) {
+            const JsonValue ent = ents.at(i);
+            if (!ent.is_object() || !ent.get("prefab").valid() || scan_) {
+                ++out;
+                continue;
+            }
+            JsonValue pents;
+            StringView pfile;
+            asset::Guid g;
+            if (!resolve(ent.get("prefab"), file, depth, pents, pfile, g)) return false;
+            stack_.push_back(g);
+            u32 sub = 0;
+            const bool ok = count(pents, pfile, depth + 1, sub);
+            stack_.pop_back();
+            if (!ok) return false;
+            out += sub;
         }
+        return true;
+    }
+
+    // Walks `ents` into flattened entities [base, base + count).
+    void walk(JsonValue ents, StringView file, u32 base, u32 depth) {
+        const u32 n = ents.valid() ? ents.size() : 0;
+        Array<u32> map;
+        map.resize(n);
+        u32 cursor = base;
+        Array<u32> sizes;
+        sizes.resize(n, 1);
+        for (u32 i = 0; i < n; ++i) {
+            map[i] = cursor;
+            const JsonValue ent = ents.at(i);
+            if (!scan_ && ent.is_object() && ent.get("prefab").valid()) {
+                JsonValue pents;
+                StringView pfile;
+                asset::Guid g;
+                if (resolve(ent.get("prefab"), file, depth, pents, pfile, g)) {
+                    stack_.push_back(g);
+                    (void)count(pents, pfile, depth + 1, sizes[i]);
+                    stack_.pop_back();
+                }
+            }
+            cursor += sizes[i];
+        }
+        for (u32 i = 0; i < n; ++i) {
+            const JsonValue ent = ents.at(i);
+            String path;
+            appendf(path, "entities[%u]", i);
+            if (!ent.is_object()) {
+                detail::error_at(diags_, Errc::ParseError, file, ent, kStage, "entity must be an object");
+                continue;
+            }
+            const JsonValue prefab = ent.get("prefab");
+            if (prefab.valid()) {
+                if (!detail::check_keys(ent, {"name", "prefab", "components"}, file, kStage, diags_)) continue;
+                if (scan_) {
+                    asset::Guid g;
+                    if (prefab.is_string() && parse_guid_ref(prefab.as_string(), g)) {
+                        DepRef d;
+                        d.guid = g;
+                        d.expected = ChunkType::Prefab;
+                        d.line = prefab.line();
+                        d.col = prefab.col();
+                        d.where.assign(path.view().substr(0, 127));
+                        prefab_deps.push_back(d);
+                    }
+                } else {
+                    JsonValue pents;
+                    StringView pfile;
+                    asset::Guid g;
+                    if (!resolve(prefab, file, depth, pents, pfile, g)) continue;
+                    stack_.push_back(g);
+                    walk(pents, pfile, map[i], depth + 1);
+                    stack_.pop_back();
+                }
+            } else if (!detail::check_keys(ent, {"name", "components"}, file, kStage, diags_)) {
+                continue;
+            }
+            const JsonValue name = ent.get("name");
+            if (name.valid() && !name.is_string()) detail::error_at(diags_, Errc::ParseError, file, name, kStage, "'name' must be a string");
+            if (name.is_string() || !prefab.valid()) build_.names[map[i]] = String(name.is_string() ? name.as_string() : StringView());
+            apply_components(ent.get("components"), map[i], file, map, path);
+        }
+    }
+
+private:
+    // "prefab": "guid:<uuid>" -> the prefab document's entities. Reports and returns false on any
+    // problem (bad spelling, unknown GUID, not a prefab, cycle, nesting too deep).
+    bool resolve(JsonValue ref, StringView file, u32 depth, JsonValue& ents, StringView& pfile, asset::Guid& g) {
+        if (!ref.is_string() || !parse_guid_ref(ref.as_string(), g)) {
+            detail::error_at(diags_, Errc::ParseError, file, ref, kStage, "'prefab' must be \"guid:<uuid>\"");
+            return false;
+        }
+        JsonValue pdoc;
+        StringView rel;
+        ChunkType t = ChunkType::Manifest;
+        if (!in_.lookup || !in_.lookup->type_of(g, t) || t != ChunkType::Prefab ||
+            !in_.lookup->native_document(g, pdoc, rel)) {
+            detail::error_at(diags_, Errc::MissingRef, file, ref, kStage, "'prefab' does not name a .mcprefab asset of this project");
+            return false;
+        }
+        if (depth + 1 >= kMaxPrefabDepth || stack_.contains(g)) {
+            detail::error_at(diags_, Errc::DependencyCycle, file, ref, kStage, "prefab nesting cycle (or deeper than 16 levels)");
+            return false;
+        }
+        // Display path storage must outlive the walk: keep one String per resolved file.
+        String disp("assets/");
+        disp += rel;
+        usize k = 0;
+        while (k < files_.size() && files_[k].view() != disp.view()) ++k;
+        if (k == files_.size()) files_.push_back(std::move(disp));
+        pfile = files_[k].view();
+        DiagList scratch;
+        if (!check_envelope(pdoc, kPrefabDoc, pfile, envelope_checked(g) ? scratch : diags_, ents)) return false;
+        if (!ents.valid() || ents.size() == 0) {
+            if (!envelope_checked(g)) detail::error_at(diags_, Errc::InvalidArgument, pfile, pdoc, kStage, "a prefab needs at least one entity (entity 0 is its root)");
+            return false;
+        }
+        checked_.push_back(g);
+        return true;
+    }
+
+    bool envelope_checked(asset::Guid g) const { return checked_.contains(g); }
+
+    // Writes (or overrides) components of flattened entity `flat`.
+    void apply_components(JsonValue comps, u32 flat, StringView file, const Array<u32>& map, String& path) {
+        if (!comps.valid()) return;
+        if (!comps.is_object()) {
+            detail::error_at(diags_, Errc::ParseError, file, comps, kStage, "'components' must be an object");
+            return;
+        }
+        walker_.set_context(file, &map);
         for (u32 c = 0; c < comps.size(); ++c) {
             const StringView tname = comps.key_at(c);
             const refl::TypeRecord* t = refl::find_type(StringId(tname));
@@ -327,46 +481,78 @@ bool walk_scene(JsonValue doc, StringView file, DiagList& diags, SceneBuild& out
                 String msg("unknown component type '");
                 msg += tname;
                 msg += t ? "' (reflected, but not an MCE_COMPONENT)" : "' (not registered with mce_refl in this cook)";
-                detail::error_at(diags, Errc::NotFound, file, comps.at(c), kStage, msg);
+                detail::error_at(diags_, Errc::NotFound, file, comps.at(c), kStage, msg);
                 continue;
             }
             u32 col = 0;
-            while (col < out.columns.size() && out.columns[col].type != t) ++col;
-            if (col == out.columns.size()) {
-                out.columns.push_back(ColumnBuilder{});
-                out.columns.back().type = t;
+            while (col < build_.columns.size() && build_.columns[col].type != t) ++col;
+            if (col == build_.columns.size()) {
+                build_.columns.push_back(ColumnBuilder{});
+                build_.columns.back().type = t;
             }
-            ColumnBuilder& cb = out.columns[col];
-            const u32 row = static_cast<u32>(cb.rows.size());
-            cb.rows.push_back(e);
-            const usize at = cb.data.size();
-            cb.data.resize(at + t->size, 0);
-            if (t->construct_default) t->construct_default(cb.data.data() + at);
+            ColumnBuilder& cb = build_.columns[col];
+            u32 row = 0;
+            while (row < cb.rows.size() && cb.rows[row] != flat) ++row;
+            if (row == cb.rows.size()) {  // new row: C++ defaults, then the document's fields
+                cb.rows.push_back(flat);
+                const usize at = cb.data.size();
+                cb.data.resize(at + t->size, 0);
+                if (t->construct_default) t->construct_default(cb.data.data() + at);
+            }
             const usize mark = path.size();
             path += '.';
             path += tname;
-            walker.write_struct(*t, comps.at(c), cb.data.data() + at, 0, col, row, path);
+            walker_.write_struct(*t, comps.at(c), cb.data.data() + usize(row) * t->size, 0, col, row, path);
             path = String(path.view().substr(0, mark));
         }
     }
+
+    const ImportInput& in_;
+    DiagList& diags_;
+    Walker& walker_;
+    SceneBuild& build_;
+    bool scan_;
+    Array<asset::Guid> stack_;    // prefabs being expanded (cycle guard)
+    Array<asset::Guid> checked_;  // prefab envelopes already validated (report once)
+    Array<String> files_;
+};
+
+// Walks a whole document into `out`. Returns false on a structural error (already reported).
+bool build_document(const ImportInput& in, const DocKind& kind, DiagList& diags, SceneBuild& out, Walker& walker, bool scan,
+                    Array<DepRef>* prefab_deps) {
+    JsonValue ents;
+    if (!check_envelope(in.settings, kind, in.display_path, diags, ents)) return false;
+    Flattener fl(in, diags, walker, out, scan);
+    u32 total = 0;
+    if (!fl.count(ents, in.display_path, 0, total)) return false;
+    if (&kind == &kPrefabDoc && total == 0) {
+        detail::error_at(diags, Errc::InvalidArgument, in.display_path, in.settings, kStage, "a prefab needs at least one entity (entity 0 is its root)");
+        return false;
+    }
+    out.names.resize(total);
+    fl.walk(ents, in.display_path, 0, 0);
+    if (prefab_deps)
+        for (const DepRef& d : fl.prefab_deps) prefab_deps->push_back(d);
     return true;
 }
 
 class SceneImporter final : public IImporter {
 public:
-    StringView id() const override { return "scene"; }
-    u32 version() const override { return 1; }
-    ChunkType type() const override { return ChunkType::Scene; }
+    SceneImporter(const DocKind& kind, ChunkType type, u8 major, StringView id, StringView ext)
+        : kind_(kind), type_(type), major_(major), id_(id), ext_(ext) {}
+
+    StringView id() const override { return id_; }
+    u32 version() const override { return 2; }  // 2: prefab instances flattened (v0.5)
+    ChunkType type() const override { return type_; }
     bool native() const override { return true; }
-    bool handles_extension(StringView ext) const override { return ext == ".mcscene"; }
+    bool handles_extension(StringView ext) const override { return ext == ext_; }
 
     void scan_dependencies(const ImportInput& in, Array<DepRef>& out, DiagList& diags) const override {
         (void)diags;  // structural errors are reported once, by cook()
         DiagList scratch;
-        const JsonValue ents = in.settings.get("entities");
-        Walker w(in.display_path, scratch, ents.is_array() ? ents.size() : 0);
+        Walker w(in.display_path, scratch);
         SceneBuild b;
-        walk_scene(in.settings, in.display_path, scratch, b, w);
+        build_document(in, kind_, scratch, b, w, true, &out);
         for (const DepRef& d : w.deps) out.push_back(d);
     }
 
@@ -374,11 +560,35 @@ public:
         const JsonValue doc = in.settings;
         const StringView file = in.display_path;
         const u32 errors_before = diags.error_count();
-        const JsonValue ents = doc.get("entities");
-        Walker w(file, diags, ents.is_array() ? ents.size() : 0);
+        Walker w(file, diags);
         SceneBuild b;
-        if (!walk_scene(doc, file, diags, b, w) || diags.error_count() != errors_before) return false;
+        if (!build_document(in, kind_, diags, b, w, false, nullptr) || diags.error_count() != errors_before) return false;
         const u32 entity_count = static_cast<u32>(b.names.size());
+
+        // Rows ascend by entity index (the reader's invariant): overrides and nested prefabs can
+        // append a row for an earlier entity, so sort each column and remap fixup rows.
+        Array<Array<u32>> row_remap;
+        for (ColumnBuilder& cb : b.columns) {
+            Array<u32> perm;
+            for (u32 i = 0; i < cb.rows.size(); ++i) perm.push_back(i);
+            std::sort(perm.begin(), perm.end(), [&](u32 x, u32 y) { return cb.rows[x] < cb.rows[y]; });
+            Array<u32> rows;
+            Array<u8> data;
+            Array<u32> inv;
+            inv.resize(perm.size());
+            const u32 sz = cb.type->size;
+            data.resize(cb.data.size());
+            for (u32 i = 0; i < perm.size(); ++i) {
+                rows.push_back(cb.rows[perm[i]]);
+                if (sz) std::memcpy(data.data() + usize(i) * sz, cb.data.data() + usize(perm[i]) * sz, sz);
+                inv[perm[i]] = i;
+            }
+            cb.rows = std::move(rows);
+            cb.data = std::move(data);
+            row_remap.push_back(std::move(inv));
+        }
+        for (PendingFixup& f : w.asset_fixups) f.row = row_remap[f.column][f.row];
+        for (PendingFixup& f : w.entity_fixups) f.row = row_remap[f.column][f.row];
 
         // Columns sorted by type name (deterministic, independent of first-use order).
         Array<u32> order;
@@ -387,6 +597,20 @@ public:
         Array<u32> remap;
         remap.resize(order.size());
         for (u32 i = 0; i < order.size(); ++i) remap[order[i]] = i;
+
+        // A field written twice (prefab value, then an instance override) keeps its last fixup.
+        auto keep_last = [](Array<PendingFixup>& fx) {
+            Array<PendingFixup> outv;
+            for (usize i = 0; i < fx.size(); ++i) {
+                bool later = false;
+                for (usize j = i + 1; j < fx.size() && !later; ++j)
+                    later = fx[j].column == fx[i].column && fx[j].row == fx[i].row && fx[j].offset == fx[i].offset;
+                if (!later) outv.push_back(fx[i]);
+            }
+            fx = std::move(outv);
+        };
+        keep_last(w.asset_fixups);
+        keep_last(w.entity_fixups);
 
         // Unique asset refs, sorted by GUID; one GUID used as two asset types is an error.
         Array<asset::SceneAssetRef> refs;
@@ -479,16 +703,29 @@ public:
         if (!cols.empty()) std::memcpy(payload.data() + h.columns_offset, cols.data(), cols.size() * sizeof(asset::SceneColumn));
 
         asset::ContainerWriter::ChunkDesc d;
-        d.type = ChunkType::Scene;
-        d.version = asset::chunk_version(asset::SCENE_VERSION, 0);
+        d.type = type_;
+        d.version = asset::chunk_version(major_, 0);
         d.guid = in.guid;
         out.add(d, payload.span());
         return true;
     }
+
+private:
+    const DocKind& kind_;
+    ChunkType type_;
+    u8 major_;
+    StringView id_;
+    StringView ext_;
 };
 
 }  // namespace
 
-mem::UniquePtr<IImporter> make_scene_importer() { return mem::make_unique<SceneImporter>(mem::heap()); }
+mem::UniquePtr<IImporter> make_scene_importer() {
+    return mem::make_unique<SceneImporter>(mem::heap(), kSceneDoc, ChunkType::Scene, asset::SCENE_VERSION, "scene", ".mcscene");
+}
+
+mem::UniquePtr<IImporter> make_prefab_importer() {
+    return mem::make_unique<SceneImporter>(mem::heap(), kPrefabDoc, ChunkType::Prefab, asset::PREFAB_VERSION, "prefab", ".mcprefab");
+}
 
 }  // namespace mce::cook
