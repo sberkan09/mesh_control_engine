@@ -40,7 +40,7 @@ bool sphere_ndc_bounds(f32 a, f32 d, f32 r, f32 n, f32 s, f32& lo, f32& hi) {
     return lo <= hi;
 }
 
-ClusterLights::ClusterLights(mem::IAllocator& alloc) : gpu_lights_(alloc), ranges_(alloc), indices_(alloc), pairs_(alloc) {}
+ClusterLights::ClusterLights(mem::IAllocator& alloc) : gpu_lights_(alloc), ranges_(alloc), indices_(alloc), pairs_(alloc), tile_x_(alloc), tile_y_(alloc) {}
 
 void ClusterLights::clear() {
     gpu_lights_.clear();
@@ -63,19 +63,22 @@ Span<const u32> ClusterLights::lights_in(u32 c) const {
 
 namespace {
 
-// Squared distance from p to the box [lo, hi].
-f32 dist_sq_box(vec3 p, vec3 lo, vec3 hi) {
-    f32 d = 0.0f;
-    for (int i = 0; i < 3; ++i) {
-        const f32 v = p[usize(i)] < lo[usize(i)] ? lo[usize(i)] - p[usize(i)] : (p[usize(i)] > hi[usize(i)] ? p[usize(i)] - hi[usize(i)] : 0.0f);
-        d += v * v;
-    }
-    return d;
+// Squared distance from v to the interval [lo, hi].
+f32 dist_sq_range(f32 v, f32 lo, f32 hi) {
+    const f32 d = v < lo ? lo - v : (v > hi ? v - hi : 0.0f);
+    return d * d;
 }
 
 u32 tile_floor(f32 ndc, u32 tiles) {
     const f32 t = std::floor((clamp(ndc, -1.0f, 1.0f) * 0.5f + 0.5f) * f32(tiles));
     return static_cast<u32>(clamp(t, 0.0f, f32(tiles - 1)));
+}
+
+// View-space extent of tile column/row t over the depth range [dn, df] (the frustum wedge's AABB).
+void tile_extent(u32 t, u32 tiles, f32 scale, f32 dn, f32 df, f32& lo, f32& hi) {
+    const f32 n0 = f32(t) / f32(tiles) * 2.0f - 1.0f, n1 = f32(t + 1) / f32(tiles) * 2.0f - 1.0f;
+    lo = min(n0 * dn, n0 * df) / scale;
+    hi = max(n1 * dn, n1 * df) / scale;
 }
 
 }  // namespace
@@ -99,8 +102,17 @@ void ClusterLights::build(const View3D& view, Span<const PointLight> lights, con
     f32 edge[257];
     for (u32 k = 0; k <= grid_.z; ++k) edge[k] = zn * std::pow(zf / zn, f32(k) / f32(grid_.z));
     const f32 px = view.proj.c[0][0], py = view.proj.c[1][1];
+    tile_x_.resize(usize(grid_.z) * grid_.x * 2);
+    tile_y_.resize(usize(grid_.z) * grid_.y * 2);
+    for (u32 k = 0; k < grid_.z; ++k) {
+        for (u32 t = 0; t < grid_.x; ++t) tile_extent(t, grid_.x, px, edge[k], edge[k + 1], tile_x_[(usize(k) * grid_.x + t) * 2], tile_x_[(usize(k) * grid_.x + t) * 2 + 1]);
+        for (u32 t = 0; t < grid_.y; ++t) tile_extent(t, grid_.y, py, edge[k], edge[k + 1], tile_y_[(usize(k) * grid_.y + t) * 2], tile_y_[(usize(k) * grid_.y + t) * 2 + 1]);
+    }
 
     gpu_lights_.reserve(lights.size());
+    // Scenes are usually rebuilt per frame on a frame allocator: size the scratch once up front
+    // (a light rarely touches more than ~128 clusters) instead of growing it pair by pair.
+    pairs_.reserve(min(usize(grid_.max_indices), lights.size() * 128) * 2);
     for (const PointLight& l : lights) {
         GpuPointLight g;
         const f32 r = max(l.radius, 1e-3f);
@@ -122,24 +134,29 @@ void ClusterLights::build(const View3D& view, Span<const PointLight> lights, con
         const u32 ty0 = tile_floor(y0, grid_.y), ty1 = tile_floor(y1, grid_.y);
         const u32 s0 = slice_of(max(d - r, zn)), s1 = slice_of(min(d + r, zf));
         bool touched = false;
+        const f32 r2 = r * r;
+        // The cluster AABB test is separable: depth per slice, y per row, x per column.
         for (u32 s = s0; s <= s1; ++s) {
-            const f32 dn = edge[s], df = edge[s + 1];
+            const f32 dz2 = dist_sq_range(c.z, -edge[s + 1], -edge[s]);
+            if (dz2 > r2) continue;
+            const f32* xb = &tile_x_[usize(s) * grid_.x * 2];
+            const f32* yb = &tile_y_[usize(s) * grid_.y * 2];
             for (u32 ty = ty0; ty <= ty1; ++ty) {
-                // View-space y range of the tile row over the slice's depth range.
-                const f32 ny0 = f32(ty) / f32(grid_.y) * 2.0f - 1.0f, ny1 = f32(ty + 1) / f32(grid_.y) * 2.0f - 1.0f;
-                const f32 ylo = min(ny0 * dn, ny0 * df) / py, yhi = max(ny1 * dn, ny1 * df) / py;
+                const f32 dyz2 = dz2 + dist_sq_range(c.y, yb[ty * 2], yb[ty * 2 + 1]);
+                if (dyz2 > r2) continue;
+                // Column extents grow monotonically with tx, so the hits on this row are one run.
+                const f32 w = std::sqrt(r2 - dyz2);
+                const u32 row = (s * grid_.y + ty) * grid_.x;
                 for (u32 tx = tx0; tx <= tx1; ++tx) {
-                    const f32 nx0 = f32(tx) / f32(grid_.x) * 2.0f - 1.0f, nx1 = f32(tx + 1) / f32(grid_.x) * 2.0f - 1.0f;
-                    const f32 xlo = min(nx0 * dn, nx0 * df) / px, xhi = max(nx1 * dn, nx1 * df) / px;
-                    if (dist_sq_box(c, {xlo, ylo, -df}, {xhi, yhi, -dn}) > r * r) continue;
-                    const u32 ci = cluster_index(tx, ty, s);
-                    if (pairs_.size() / 2 >= grid_.max_indices) {
+                    if (xb[tx * 2 + 1] < c.x - w) continue;
+                    if (xb[tx * 2] > c.x + w) break;
+                    if (pairs_.size() >= usize(grid_.max_indices) * 2) {
                         ++stats_.dropped;
                         continue;
                     }
-                    pairs_.push_back(ci);
+                    pairs_.push_back(row + tx);
                     pairs_.push_back(li);
-                    ++ranges_[ci].count;
+                    ++ranges_[row + tx].count;
                     touched = true;
                 }
             }

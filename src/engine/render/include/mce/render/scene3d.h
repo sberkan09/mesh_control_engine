@@ -100,6 +100,7 @@ struct MeshInstance {
     math::mat4 world = math::mat4::identity();
     Span<const math::mat4> pose;             // model-space node matrices (pose_nodes); empty = rest pose
     math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f}; // multiplies the material's base color
+    bool cast_shadows = true;
 };
 
 struct View3D {

@@ -86,6 +86,8 @@ private:
     Array<ClusterRange> ranges_;
     Array<u32> indices_;
     Array<u32> pairs_;  // scratch: (cluster, light) pairs as cluster, light, cluster, light, ...
+    Array<f32> tile_x_;  // scratch: per slice, per column view-space x extent (lo, hi)
+    Array<f32> tile_y_;  // scratch: per slice, per row view-space y extent (lo, hi)
     Stats stats_;
 };
 

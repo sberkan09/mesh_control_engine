@@ -179,7 +179,8 @@ void Scene3D::build() {
             d.view_depth = dot(c - view_.position, forward);
             d.center = c;
             d.radius = length(wb.extents());
-            if (light_.shadows && !(sm.material.flags & asset::MaterialFlags::AlphaBlend)) shadow_draws_.push_back(d);
+            if (light_.shadows && inst.cast_shadows && !(sm.material.flags & asset::MaterialFlags::AlphaBlend))
+                shadow_draws_.push_back(d);
             ++stats_.submeshes;
             if (!sphere_visible(view_, c, length(wb.extents()))) continue;
             draws_.push_back(d);
