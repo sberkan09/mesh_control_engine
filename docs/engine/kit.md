@@ -1,0 +1,119 @@
+# kit — starter-kit gameplay components, particles, sequences, FSM helper and the 2D extract
+
+`mce_gameplay_kit` is an L3 library in `src/engine/kit/` (headers under `include/mce/kit/`). Its
+public dependencies are `mce_ecs`, `mce_refl`, `mce_asset`, `mce_render`, `mce_ecs_scene`,
+`mce_audio` and `mce_physics2d` (`src/engine/kit/CMakeLists.txt`). It holds the reflected
+components an editor-authored 2D scene is made of (FR-ENT-080) and their render extract, which is
+the "extract lives with the gameplay kit" half of `mce_render`'s contract (`renderer.h`). Because
+the components use `MCE_COMPONENT`, the cook, the scene loader, the editor inspector and the MCP
+server see them with no per-type code.
+
+It is linked by `mce_editor_core`, the `mce_engine` umbrella, `mce_player_runtime` (directly when
+game modules are unsupported), `tools/cook` (which registers the engine components), the samples
+`03_platformer` and `05_ashen_court`, and `test_kit` / `test_scene`. Game modules see
+`mce/kit/components.h` through the `mce/gameplay.h` umbrella header.
+
+## Public surface
+
+`components.h` (namespace `mce::kit`): plain reflected structs. Units are metres, Y up; the entity's
+`LocalTransform` (or `WorldTransform` when the hierarchy wrote one) places them.
+
+- `Sprite`: textured or solid quad, optional `normal_map` for lit 2D, tint, size, pivot, `layer`
+  (authoritative stacking) and `order`, flips.
+- `TextLabel`: world-space text from a cooked font (`FixedString<64>`), height, alignment.
+- `Camera2DComponent`: zoom, `pixels_per_meter`, clear colour, `primary`, `pixel_snap`.
+- `Post2DComponent`: vignette, colour-grade LUT and chromatic aberration for the camera on the same
+  entity (FR-R2D-100).
+- `TilemapLayer`: one baked `.mctilemap` layer drawn from the entity's position (FR-R2D-115).
+- `ParticleEmitter`: preset, seed, layer and order, `playing`, `destroy_when_done` (FR-R2D-070).
+- `Light2D`: point or ambient light for sprites with a normal map (FR-R2D-090).
+- `Parallax`: per-axis scroll factor against the camera and `repeat_x` (FR-R2D-050).
+- `SequencePlayer`: plays a cooked `.mcseq` or a code-defined sequence by name; its progress fields
+  carry the `Save` flag (FR-ENT-100).
+
+`sprite_extract.h`:
+
+- `SpriteExtract`: `init(renderer, assets)`, `extract(world, batch)` fills a `render::SpriteBatch`
+  from the kit components and live particles in ECS iteration order; `sprite_set`, `font`,
+  `post_2d`, `reset` (after remounting a pack). Textures load on first sight, one reference per GUID.
+- `primary_camera(world, cam, ppm, clear)`: the first primary `Camera2DComponent` in ECS order.
+
+`particles.h`:
+
+- `ParticleSystem`: the CPU simulation resource. `advance(world, dt)`, `burst(entity, n)`,
+  `draw(batch, resolve, user)`, `hash()`, `stats()`, `set_preset` for code-built presets.
+- `install_particles(world, assets)`: registers `ParticleEmitter`, the resource and
+  `"particles_advance"` in `FixedUpdate_Post` (after `"transform_propagate"` when installed).
+
+`sequence.h`:
+
+- `SequenceRegistry`: code-defined sequences (`define`), the named call table (`register_call`,
+  `validate_calls`), and step factories (`wait`, `wait_event`, `move_to`, `anim`, `sound`,
+  `stop_sound`, `emit`, `call_step`, `spawn`, `destroy`).
+- Events `SeqSignal` (emit / wait_event) and `SeqAnimRequest` (for the game's animator).
+- `install_sequences(world, assets)` and the system `sequence_runner` in `FixedUpdate_Post`.
+
+`fsm.h` (header-only, namespace `mce::fsm`):
+
+- `Trans<S>` rows (`from`, `to`, guard `when` or timed `after`, `entry`, `exit` actions),
+  `validate(table, initial)`, `step(...)` for one entity, `run<C>(frame, table)` over every entity
+  with component `C`, optional `StateChanged<S>` event.
+
+## Rules and invariants
+
+- Determinism: `SpriteExtract` draws in ECS iteration order (FR-RUN-040). Particles run on the fixed
+  tick, each emitter owns a PCG stream seeded from `seed` and the entity index, and
+  `ParticleSystem::hash()` covers every live particle so replays can check it next to
+  `World::state_hash`. Particles live in world space and die in swap-remove order.
+- Sequence timing is tick math (ADR-0032 §3): a waiting step owns its tick and the next step starts
+  on the next tick; a 64-step per-tick budget (`kStepBudget`) stops runaway loops. A loop with no
+  waiting step is rejected by the cook and by `define`.
+- Sequence steps reach other systems only through existing paths: `World2D::set_linear_velocity`
+  or `LocalTransform` for `move_to`, `audio::PlaySfx` for `sound`, removing `AudioSource` for
+  `stop_sound`, `ecs::instantiate` through Commands for `spawn`.
+- FSM semantics: `state_time` advances first, then rows for the current state are checked in table
+  order; at most one transition per entity per tick; exit then entry, exactly once each. Guards and
+  actions are function pointers and never serialized; `state` and `state_time` are component
+  fields. Guards run mid-query and must not change structure directly.
+- Missing or unloadable textures draw as the magenta checker (FR-DX-050); a null texture GUID draws
+  a solid quad.
+- Component layouts carry explicit `pad_` fields so hashed component bytes stay defined.
+- The renderer has no particle code; particles are sprite instances in the one sprite batch.
+- Engine container ban applies (`scripts/ci/check_walls.py`).
+
+## How it is tested
+
+ctest `test_kit` (no GPU), `tests/kit/`:
+
+- `test_fsm.cpp`: "fsm: a timed transition fires on its exact tick and resets state time", exit and
+  entry order, `StateChanged`, validation, "fsm: state and state time survive a save mid-state".
+- `test_particles.cpp`: burst, rate, duration, cap, integration, determinism per seed, one-shots,
+  the hierarchy, MDI grouping, "FR-R2D-070: a 2,000-particle burst simulates and batches within
+  budget", `.mcpart` cook and errors.
+- `test_sequence.cpp`: wait timing, `move_to` on plain entities and kinematic bodies, emit and
+  wait_event, the call table, loops, "sequence: save mid-step, load into a fresh world, finish on the
+  same tick in the same state", `.mcseq` cook and errors.
+
+ctest `test_kit_gl` (label `gpu`, registered only with `MCE_GPU_TESTS`; CI uses Xvfb and Mesa
+llvmpipe): parallax factors and `repeat_x`, particles on screen, Light2D with a cooked normal map,
+`Post2DComponent` to renderer settings.
+
+`test_scene` also checks `Sprite` and `primary_camera` through a cooked scene. The `extras_2d`
+sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
+
+## Design records
+
+- [ECS and gameplay architecture](../architecture/ecs-gameplay.md) §2.9 starter kit.
+- [Scripting architecture](../architecture/scripting.md) §2.5 FSM helper, §2.6 sequences.
+- [ADR-0024 The runtime scene path](../adr/0024-runtime-scene-path.md) decision 4.
+- [ADR-0031 M6 2D extras](../adr/0031-m6-2d-extras.md): particles, parallax, lit 2D, 2D post.
+- [ADR-0032 SequenceRunner](../adr/0032-sequence-runner.md).
+- [M6 2D extras](../milestones/M6-2d.md) and [M6 gameplay](../milestones/M6-gameplay.md).
+
+## Known gaps
+
+- `Sprite` shows its whole texture; atlas regions and animation wait for the sprite-sheet importer
+  (comment on `Sprite`, ADR-0024 decision 4).
+- Not built (ADR-0032): the editor sequence live view and TimelinePlayer (FR-ENT-110, v1.0).
+- The lit-2D GPU cost at 10k sprites and the 2D post cost at 1080p are open until measured on a
+  hardware GPU (M6 2D budget table).
