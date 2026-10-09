@@ -38,15 +38,18 @@ public:
 
     void extract(World& world, render::SpriteBatch& batch);
 
-    // Sprite set for a texture GUID (solid white for a null GUID, magenta for a missing one).
-    render::SpriteSetId sprite_set(asset::Guid texture);
+    // Sprite set for a texture GUID (solid white for a null GUID, magenta for a missing one). With
+    // a normal map GUID the set is lit (FR-R2D-090); a normal map that cannot load leaves it unlit.
+    render::SpriteSetId sprite_set(asset::Guid texture, asset::Guid normal_map = {});
     // Font for a GUID, or null when it cannot be loaded.
     const render::Font* font(asset::Guid guid);
 
 private:
     struct TextureEntry {
         asset::Guid guid;
+        asset::Guid normal;
         asset::AnyHandle handle;
+        asset::AnyHandle normal_handle;
         render::SpriteSetId set;
     };
     struct FontEntry {
@@ -66,6 +69,7 @@ private:
         i16 layer = 0;
         bool used = false;
     };
+    void collect_lights(World& world, render::SpriteBatch& batch);
     void draw_tilemap(const TilemapLayer& layer, math::vec2 origin, math::vec2 offset, render::SpriteBatch& batch);
     void destroy_tilemap(TilemapEntry& e);
 

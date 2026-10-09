@@ -28,6 +28,10 @@ struct SpriteSetDesc {
     f32 pixels_per_meter = 48.0f;       // art density (rendering-2d §9)
     rhi::Filter filter = rhi::Filter::Nearest;  // pixel art default: point sampling, no mips
     bool coverage = false;              // font atlas: R8 coverage sampled as alpha
+    // Lit sets (FR-R2D-090): `normal_key` is the TextureStore key of a tangent-space normal map laid
+    // out like the atlas (same layers, same regions). +X right, +Y up, +Z out of the screen.
+    bool lit = false;
+    u32 normal_key = 0;
     const char* debug_name = "";
 };
 
@@ -46,6 +50,8 @@ public:
     u32 texture_key(SpriteSetId id) const { return sets_[id.value].texture_key; }
     rhi::Filter filter(SpriteSetId id) const { return sets_[id.value].filter; }
     bool coverage(SpriteSetId id) const { return sets_[id.value].coverage; }
+    u32 normal_key(SpriteSetId id) const { return sets_[id.value].normal_key; }
+    bool lit(SpriteSetId id) const { return sets_[id.value].lit; }
     f32 pixels_per_meter(SpriteSetId id) const { return sets_[id.value].pixels_per_meter; }
     u32 region_count(SpriteSetId id) const { return static_cast<u32>(sets_[id.value].regions.size()); }
     // Out-of-range regions resolve to the whole texture (layer 0), never to garbage.
@@ -59,6 +65,8 @@ private:
         rhi::Filter filter = rhi::Filter::Nearest;
         bool coverage = false;
         bool alive = false;
+        bool lit = false;
+        u32 normal_key = 0;
     };
     Array<Set> sets_;
     Array<u16> free_;
@@ -153,6 +161,9 @@ public:
     SpriteBatch(const SpriteSets& sets, mem::IAllocator& frame);
 
     void begin(const View2D& view, PassId pass = PassId::World2D);
+    // The lights lit sprite sets are shaded with (FR-R2D-090); begin() resets to the default.
+    void set_lights(const Lights2D& lights) { lights_ = lights; }
+    const Lights2D& lights() const { return lights_; }
     // Pre-sizes the per-frame arrays for `quads` sprites/glyphs (avoids regrowth on the arena).
     void reserve(usize quads);
     void add(const SpriteInstance& sprite);
@@ -195,6 +206,7 @@ private:
     const SpriteSets& sets_;
     mem::IAllocator& alloc_;
     View2D view_;
+    Lights2D lights_;
     PassId pass_ = PassId::World2D;
     Array<u64> keys_;
     Array<Item> items_;

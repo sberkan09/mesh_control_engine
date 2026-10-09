@@ -7,7 +7,8 @@ namespace mce::render {
 namespace {
 
 // The sprite uber shader (rhi-renderer.md §2.7: material params ride in the vertex, zero
-// per-sprite uniforms). Bindings follow the bank table: FrameU = 0, atlas array = 6, font = 11.
+// per-sprite uniforms). Bindings follow the bank table: FrameU = 0, LightsU = 1 (the pass bank),
+// atlas array = 6, normal array = 7, font = 11.
 constexpr const char* kSpriteVS = R"(#version 450 core
 layout(std140, binding = 0) uniform FrameU { mat4 u_view_proj; vec4 u_params; };
 layout(location = 0) in vec2 a_pos;
@@ -17,25 +18,51 @@ layout(location = 3) in uint a_packed;
 layout(location = 0) out vec2 v_uv;
 layout(location = 1) out vec4 v_color;
 layout(location = 2) flat out uint v_packed;
+layout(location = 3) out vec2 v_world;
 out gl_PerVertex { vec4 gl_Position; };
 void main() {
     v_uv = a_uv;
     v_color = a_color;
     v_packed = a_packed;
+    v_world = a_pos;
     gl_Position = u_view_proj * vec4(a_pos, 0.0, 1.0);
 }
 )";
 
 // Texels and tints are linear after decode; the output is premultiplied and (unless the target
 // is sRGB) re-encoded to sRGB, which keeps 2D blending in display space like every 2D engine.
+//
+// Lit quads (FR-R2D-090) turn their tangent-space normal by the packed orientation and are shaded
+// with ambient + point lights (Lambert, (1 - d²/r²)² falloff, the light `height` above the plane).
 constexpr const char* kSpriteFS = R"(#version 450 core
 layout(std140, binding = 0) uniform FrameU { mat4 u_view_proj; vec4 u_params; };
+layout(std140, binding = 1) uniform LightsU { vec4 u_ambient; vec4 u_light_count; vec4 u_light_pos[16]; vec4 u_light_color[16]; };
 layout(binding = 6) uniform sampler2DArray u_atlas;
+layout(binding = 7) uniform sampler2DArray u_normal;
 layout(binding = 11) uniform sampler2DArray u_font;
 layout(location = 0) in vec2 v_uv;
 layout(location = 1) in vec4 v_color;
 layout(location = 2) flat in uint v_packed;
+layout(location = 3) in vec2 v_world;
 layout(location = 0) out vec4 o_color;
+vec3 shade(float layer) {
+    vec3 n = texture(u_normal, vec3(v_uv, layer)).xyz * 2.0 - 1.0;
+    uint o = (v_packed >> 8) & 0xFFFFu;
+    if ((o & 0x4000u) != 0u) n.x = -n.x;
+    if ((o & 0x8000u) != 0u) n.y = -n.y;
+    float a = float(o & 0x3FFFu) * (6.28318530718 / 16384.0);
+    float ca = cos(a), sa = sin(a);
+    n = normalize(vec3(ca * n.x - sa * n.y, sa * n.x + ca * n.y, n.z));
+    vec3 light = u_ambient.rgb;
+    int count = int(u_light_count.x);
+    for (int i = 0; i < count; ++i) {
+        vec3 d = vec3(u_light_pos[i].xy - v_world, u_light_pos[i].z);
+        float r = u_light_pos[i].w;
+        float k = clamp(1.0 - dot(d.xy, d.xy) / (r * r), 0.0, 1.0);
+        light += u_light_color[i].rgb * u_light_color[i].a * (k * k) * max(dot(n, normalize(d)), 0.0);
+    }
+    return light;
+}
 vec3 srgb_to_linear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
 vec3 linear_to_srgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
 void main() {
@@ -44,6 +71,7 @@ void main() {
     vec4 texel = (flags & 1u) != 0u ? vec4(1.0, 1.0, 1.0, texture(u_font, vec3(v_uv, layer)).r)
                                     : texture(u_atlas, vec3(v_uv, layer));
     vec4 c = texel * vec4(srgb_to_linear(v_color.rgb), v_color.a);
+    if ((flags & 2u) != 0u) c.rgb *= shade(layer);
     vec3 rgb = u_params.x > 0.5 ? linear_to_srgb(clamp(c.rgb, 0.0, 1.0)) : c.rgb;
     o_color = vec4(rgb * c.a, c.a);
 }
@@ -53,6 +81,14 @@ struct FrameU {
     math::mat4 view_proj;
     f32 params[4];  // x: encode sRGB output
 };
+
+struct LightsU {
+    math::vec4 ambient;
+    math::vec4 count;  // x
+    math::vec4 pos[kMaxLights2D];    // xy position, z height, w radius
+    math::vec4 color[kMaxLights2D];  // rgb linear color, a intensity
+};
+static_assert(sizeof(LightsU) == 32 + 32 * kMaxLights2D);
 
 }  // namespace
 
@@ -251,6 +287,16 @@ void Renderer::record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch) {
     fu.params[0] = desc_.encode_srgb_output ? 1.0f : 0.0f;
     fu.params[1] = fu.params[2] = fu.params[3] = 0.0f;
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
+    const Lights2D& lights = batch.lights();
+    LightsU lu{};
+    lu.ambient = {lights.ambient.r, lights.ambient.g, lights.ambient.b, 1.0f};
+    lu.count.x = static_cast<f32>(math::min(lights.count, kMaxLights2D));
+    for (u32 i = 0; i < lights.count && i < kMaxLights2D; ++i) {
+        const PointLight2D& p = lights.points[i];
+        lu.pos[i] = {p.position.x, p.position.y, p.height, math::max(p.radius, 1e-3f)};
+        lu.color[i] = {p.color.r, p.color.g, p.color.b, p.intensity};
+    }
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(lu));
     cmd.set_draw_args(batch.draw_args());
     cmd.bind_index_buffer(quad_indices_, rhi::IndexFormat::U32);
 
@@ -287,6 +333,8 @@ void Renderer::record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch) {
             const bool coverage = sets_.valid(g.set) && sets_.coverage(g.set);
             cmd.bind_texture(rhi::bank::kAtlasArray, coverage ? textures_.white() : tex, smp);
             cmd.bind_texture(rhi::bank::kFont, coverage ? tex : textures_.white(), smp);
+            const bool lit = sets_.valid(g.set) && sets_.lit(g.set);
+            cmd.bind_texture(rhi::bank::kNormal, lit ? textures_.get(sets_.normal_key(g.set)) : textures_.white(), smp);
             bound_set = g.set.value;
         }
         cmd.draw_indirect(g.command_count, g.first_command);

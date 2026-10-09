@@ -4,12 +4,16 @@
 
 #include <doctest/doctest.h>
 
+#include "cook_test_util.h"
+#include "mce/asset/asset_system.h"
+#include "mce/cook/cook.h"
 #include "mce/core.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
+#include "mce/render/asset_upload.h"
 #include "mce/render/renderer.h"
 #include "mce/rhi/default_device.h"
 
@@ -81,6 +85,7 @@ struct Fixture {
         extract.extract(world, batch);
         batch.build();
         stats = batch.stats();
+        lights = batch.lights();
         rhi::PassAttachment color;
         color.texture = target;
         color.clear.color[3] = 1.0f;
@@ -111,6 +116,7 @@ struct Fixture {
     rhi::TextureHandle target;
     Array<u8> pixels;
     render::BatchStats stats;
+    render::Lights2D lights;
     u64 frame = 0;
 };
 
@@ -189,4 +195,55 @@ TEST_CASE("FR-R2D-070: particles reach the screen through the kit extract") {
     f.render();
     CHECK(is(f.at_view({2, 1}), 255, 0, 255));
     CHECK(is(f.at_view({0, 0}), 0, 0, 0));
+}
+
+TEST_CASE("FR-R2D-090: Light2D entities and a cooked normal map light a kit sprite") {
+    using namespace cook_test;
+    const std::string root = fresh_dir("kit_lit");
+    std::vector<u8> white(4 * 4 * 4, 255), tilted;
+    for (u32 i = 0; i < 16; ++i) tilted.insert(tilted.end(), {238, 128, 191, 255});  // 60° toward +X
+    write_file(root + "/assets/rock.png", make_png(4, 4, white));
+    write_file(root + "/assets/rock.png.mceasset", sidecar("1170000a-0000-4000-8000-000000000001", "texture", R"({ "srgb": true, "mips": false })"));
+    write_file(root + "/assets/rock_n.png", make_png(4, 4, tilted));
+    write_file(root + "/assets/rock_n.png.mceasset", sidecar("1170000a-0000-4000-8000-000000000002", "texture", R"({ "srgb": false, "mips": false })"));
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+
+    Fixture f;
+    asset::AssetSystem assets;
+    render::AssetUploadSink sink(f.renderer, assets);
+    assets.set_upload_sink(&sink);
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    f.extract.reset(&assets);
+
+    f.camera({0, 0});
+    kit::Sprite rock;
+    rock.texture.guid = asset::parse_guid("1170000a-0000-4000-8000-000000000001").value();
+    rock.normal_map.guid = asset::parse_guid("1170000a-0000-4000-8000-000000000002").value();
+    f.world.spawn_with(LocalTransform{{0, 0, 0}, math::quat::identity(), {1, 1, 1}}, rock);
+    f.sprite({3, 0}, kWhite);  // unlit
+    kit::Light2D amb;
+    amb.kind = kit::Light2DKind::Ambient;
+    amb.color = math::Color{0.05f, 0.05f, 0.05f, 1};
+    f.world.spawn_with(LocalTransform{}, amb);
+    kit::Light2D lamp;
+    lamp.height = 0.5f;
+    lamp.radius = 4.0f;
+    const Entity light = f.world.spawn_with(LocalTransform{{1, 0, 0}, math::quat::identity(), {1, 1, 1}}, lamp);
+    kit::Light2D far_lamp = lamp;
+    f.world.spawn_with(LocalTransform{{100, 0, 0}, math::quat::identity(), {1, 1, 1}}, far_lamp);  // culled
+
+    f.render();
+    CHECK(f.lights.count == 1);
+    CHECK(f.lights.ambient.r == doctest::Approx(0.05f));
+    const u8 lit_right = f.at_view({0, 0}).r;
+    CHECK(is(f.at_view({3, 0}), 255, 255, 255));  // the unlit sprite ignores the dim ambient
+
+    f.world.set(light, LocalTransform{{-1, 0, 0}, math::quat::identity(), {1, 1, 1}});
+    f.render();
+    const u8 lit_left = f.at_view({0, 0}).r;
+    CHECK(lit_right > lit_left + 60);  // the normal faces +X
+    f.extract.reset(nullptr);
 }

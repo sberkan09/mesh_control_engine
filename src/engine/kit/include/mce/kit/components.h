@@ -16,6 +16,7 @@ namespace mce::kit {
 // `size`; atlas regions and animation arrive with the sprite-sheet importer.
 struct Sprite {
     asset::AssetRef<asset::Texture> texture;  // null GUID: a solid quad in `tint`
+    asset::AssetRef<asset::Texture> normal_map;  // set: lit by Light2D (FR-R2D-090); import it with srgb off
     math::Color tint;
     math::vec2 size{1.0f, 1.0f};    // metres
     math::vec2 pivot{0.5f, 0.5f};   // normalized; (0, 0) = bottom-left
@@ -26,6 +27,7 @@ struct Sprite {
 };
 MCE_COMPONENT(Sprite,
     texture,
+    (normal_map, Help{"tangent-space normal map (srgb off): the sprite is lit by Light2D entities"}),
     tint,
     (size, Help{"world size in metres"}),
     (pivot, Help{"normalized pivot, (0,0) = bottom-left"}),
@@ -90,6 +92,23 @@ struct ParticleEmitter {
     bool destroy_when_done = false;  // one-shots: destroy the entity once emission ended and every particle died
 };
 MCE_COMPONENT(ParticleEmitter, preset, seed, order, (layer, Range{-100, 100}), playing, destroy_when_done)
+
+// A 2D light (FR-R2D-090) at the entity's position. Point lights shade lit sprites (those with a
+// normal map) within `radius`; ambient lights add up into the base light every lit sprite gets
+// (white when the scene has none). At most 16 point lights touching the view are used, in ECS
+// order. Unlit sprites, text and particles ignore lights.
+enum class Light2DKind : u8 { Point, Ambient };
+MCE_ENUM(Light2DKind, Point, Ambient)
+
+struct Light2D {
+    math::Color color;
+    f32 intensity = 1.0f;
+    f32 radius = 6.0f;   // metres; the falloff reaches zero here
+    f32 height = 1.5f;   // metres above the sprite plane
+    Light2DKind kind = Light2DKind::Point;
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(Light2D, color, (intensity, Range{0, 64}), (radius, Range{0.05f, 1000}), (height, Range{0.01f, 100}), kind)
 
 // A parallax layer (FR-R2D-050): the entity's Sprite, TilemapLayer and TextLabel scroll against
 // the camera by `factor` per axis. 1 moves with the world, 0.5 at half speed (a far background), 0

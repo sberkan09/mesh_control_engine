@@ -534,3 +534,41 @@ TEST_CASE("render: batch build is deterministic") {
     REQUIRE(a.size() == b.size());
     CHECK(std::memcmp(a.data(), b.data(), a.size() * sizeof(SpriteVertex)) == 0);
 }
+
+TEST_CASE("FR-R2D-090: lit quads carry their orientation in the reserved vertex bits") {
+    CHECK(pack_orientation(0.0f, false, false) == 0u);
+    CHECK(pack_orientation(3.14159265f, false, false) == 8192u);
+    CHECK(pack_orientation(-1.57079633f, false, false) == 12288u);  // -90° = 270°
+    CHECK(pack_orientation(6.28318531f * 3.0f, true, false) == (1u << 14));
+    CHECK(pack_orientation(0.0f, false, true) == (1u << 15));
+    const u32 packed = pack_layer_flags(5, vertex_flags::kLit, pack_orientation(3.14159265f, true, true));
+    CHECK((packed & 0xFFu) == 5u);
+    CHECK(((packed >> 8) & 0x3FFFu) == 8192u);
+    CHECK(((packed >> 22) & 3u) == 3u);
+    CHECK((packed >> 24) == vertex_flags::kLit);
+
+    // A lit set marks its quads (and only lit sets turn the orientation on).
+    SpriteSets sets;
+    SpriteRegion r;
+    SpriteSetDesc d;
+    d.regions = Span<const SpriteRegion>(&r, 1);
+    const SpriteSetId plain = sets.create(d);
+    d.lit = true;
+    d.normal_key = 9;
+    const SpriteSetId lit = sets.create(d);
+    SpriteBatch b(sets, mem::heap());
+    Camera2D cam;
+    b.begin(compute_view_2d(cam, {256, 256}, 16.0f));
+    SpriteInstance s;
+    s.set = plain;
+    s.rotation = 1.0f;
+    b.add(s);
+    s.set = lit;
+    s.position = {2, 0};
+    b.add(s);
+    b.build();
+    REQUIRE(b.vertices().size() == 8);
+    CHECK(b.vertices()[0].packed == 0u);
+    CHECK((b.vertices()[4].packed >> 24) == vertex_flags::kLit);
+    CHECK(((b.vertices()[4].packed >> 8) & 0x3FFFu) == pack_orientation(1.0f, false, false));
+}

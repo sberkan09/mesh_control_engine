@@ -28,6 +28,14 @@ u32 encode_channel(f32 linear) {
 
 }  // namespace
 
+u32 pack_orientation(f32 rotation, bool flip_x, bool flip_y) {
+    constexpr f32 kTurn = 6.28318530718f;
+    f32 turns = rotation / kTurn;
+    turns -= std::floor(turns);  // [0, 1)
+    const u32 q = static_cast<u32>(std::lround(turns * 16384.0f)) & 0x3FFFu;
+    return q | (flip_x ? 1u << 14 : 0u) | (flip_y ? 1u << 15 : 0u);
+}
+
 u32 pack_color_srgb(math::Color c) {
     if (c == math::Color::white()) return 0xFFFFFFFFu;  // the common case: skip three pow()s
     const u32 a = static_cast<u32>(std::lround(math::clamp(c.a, 0.0f, 1.0f) * 255.0f));

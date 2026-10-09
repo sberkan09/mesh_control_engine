@@ -53,3 +53,28 @@ optimized-build check is < 2 ms (`test_kit`).
    tile layer). Dynamic sprites always draw at offset zero.
 4. **`repeat_x`** turns one sprite into an endless background: the extract emits copies one width apart covering the
    view's horizontal extent (at most 256), each culled normally.
+
+## 3. Lit 2D sprites (FR-R2D-090)
+
+1. **Per sprite set.** `SpriteSetDesc::lit` + `normal_key` give a set a tangent-space normal map laid out like its
+   atlas (same layers and regions; +X right, +Y up, +Z out of the screen, imported with `srgb` off). Quads of a lit set
+   carry `vertex_flags::kLit`; unlit sets, text and particles never pay for lighting.
+2. **Orientation in the vertex.** The 16 bits of `SpriteVertex::packed` reserved since M3 now hold the quad's rotation
+   (14 bits over a turn) and its flips, so the fragment shader turns the sampled normal into world space without a
+   per-sprite uniform (rendering-2d D1 stays: zero per-sprite uniforms). The vertex format is unchanged (24 bytes).
+3. **Lights per batch.** `Lights2D` (ambient + up to 16 `PointLight2D`: position, height above the plane, radius,
+   color, intensity) rides on the `SpriteBatch` (`set_lights`, reset by `begin`) and is uploaded once per
+   `record_2d` into the pass uniform bank (`LightsU`, bank 1); the normal array binds to bank 7 (`kNormal`). Shading
+   is Lambert with a `(1 − d²/r²)²` falloff toward a light `height` metres above the plane, in linear space before the
+   sRGB encode. The default (white ambient, no points) draws a lit sprite exactly like an unlit one.
+4. **Kit.** `Sprite::normal_map` (a texture ref) makes the sprite's set lit; `Light2D { color, intensity, radius,
+   height, kind }` entities are collected by `SpriteExtract` each frame: ambient lights sum (white when there are
+   none), point lights whose radius touches the view are taken in ECS order up to 16.
+5. **Scene re-cook on layout change.** Adding the field showed a gap: the cook's cache key did not cover component
+   layouts, so a dev build kept serving scenes cooked with the old `Sprite` size (refused at load with "re-cook").
+   `IImporter::schema_hash()` now joins the key of native assets; the scene and prefab importers hash every reflected
+   type's size and fields.
+
+**Budget.** FR-R2D-090 asks ≤ 0.5 ms added GPU at 10k sprites on the dev GPU; llvmpipe cannot measure that, so the
+number is open until a run on real hardware (the shader adds one texture fetch and ≤ 16 light iterations, only on lit
+quads).

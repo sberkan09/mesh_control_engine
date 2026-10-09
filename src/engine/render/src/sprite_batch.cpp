@@ -36,6 +36,8 @@ void SpriteSets::update(SpriteSetId id, const SpriteSetDesc& desc) {
     s.pixels_per_meter = desc.pixels_per_meter > 0.0f ? desc.pixels_per_meter : 48.0f;
     s.filter = desc.filter;
     s.coverage = desc.coverage;
+    s.lit = desc.lit;
+    s.normal_key = desc.normal_key;
 }
 
 void SpriteSets::destroy(SpriteSetId id) {
@@ -67,7 +69,7 @@ ResultV bake_tilemap(const TilemapDesc& d, const SpriteSets& sets, TilemapBake& 
     out.blend = d.blend;
 
     const u32 color = pack_color_srgb(d.tint);
-    const u32 flags = sets.coverage(d.set) ? vertex_flags::kCoverage : 0u;
+    const u32 flags = (sets.coverage(d.set) ? vertex_flags::kCoverage : 0u) | (sets.lit(d.set) ? vertex_flags::kLit : 0u);
     const u32 regions = sets.region_count(d.set);
     const u32 cx_count = (d.width + kTileChunkSize - 1) / kTileChunkSize;
     const u32 cy_count = (d.height + kTileChunkSize - 1) / kTileChunkSize;
@@ -124,6 +126,7 @@ SpriteBatch::SpriteBatch(const SpriteSets& sets, mem::IAllocator& frame)
 
 void SpriteBatch::begin(const View2D& view, PassId pass) {
     view_ = view;
+    lights_ = Lights2D{};
     pass_ = pass;
     keys_.clear();
     items_.clear();
@@ -180,7 +183,9 @@ void SpriteBatch::expand_sprite(const SpriteInstance& s, SpriteVertex out[4]) co
         vt = t;
     }
     const u32 color = pack_color_srgb(s.tint);
-    const u32 packed = pack_layer_flags(r.layer, sets_.coverage(s.set) ? vertex_flags::kCoverage : 0u);
+    const bool lit = sets_.lit(s.set);
+    const u32 flags = (sets_.coverage(s.set) ? vertex_flags::kCoverage : 0u) | (lit ? vertex_flags::kLit : 0u);
+    const u32 packed = pack_layer_flags(r.layer, flags, lit ? pack_orientation(s.rotation, s.flip_x, s.flip_y) : 0u);
     const vec2 p0 = place(x0, y0), p1 = place(x1, y0), p2 = place(x1, y1), p3 = place(x0, y1);
     out[0] = {p0.x, p0.y, ul, vb, color, packed};
     out[1] = {p1.x, p1.y, ur, vb, color, packed};

@@ -149,7 +149,7 @@ bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& import
             rec.guid = parsed.value();
             rec.importer = imp;
             rec.settings_node = rec.doc.root().index();
-            rec.settings_hash = hash_combine(fnv1a64(imp->id()), imp->version());
+            rec.settings_hash = hash_combine(hash_combine(fnv1a64(imp->id()), imp->version()), imp->schema_hash());
         } else {
             Sidecar* sc = sidecar_for(f);
             if (!sc) {

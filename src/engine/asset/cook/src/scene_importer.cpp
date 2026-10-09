@@ -543,6 +543,17 @@ public:
 
     StringView id() const override { return id_; }
     u32 version() const override { return 2; }  // 2: prefab instances flattened (v0.5)
+    // Scene chunks store component rows in this build's layout: any reflected type change re-cooks.
+    u64 schema_hash() const override {
+        u64 h = kFnv64Offset;
+        for (const refl::TypeRecord* t : refl::all()) {
+            h = hash_combine(h, t->id.value);
+            h = hash_combine(h, (u64(t->size) << 32) | t->align);
+            for (const refl::FieldRecord& f : t->fields)
+                h = hash_combine(hash_combine(h, f.name.value), (u64(f.offset) << 40) ^ (u64(f.size) << 16) ^ (u64(f.count) << 8) ^ u64(f.kind));
+        }
+        return h;
+    }
     ChunkType type() const override { return type_; }
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ext_; }
