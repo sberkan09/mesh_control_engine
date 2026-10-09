@@ -1,0 +1,51 @@
+{
+  "format": "mce-particles",
+  "version": 1,
+  "guid": "2c1bb720-25fa-47ea-9dc2-a80c1225a6dd",
+  "name": "spark",
+  "texture": "guid:02a864ba-95ef-44e4-81c2-237723e80a4a",
+  "rate": 0,
+  "burst": 0,
+  "max_particles": 256,
+  "duration": 0,
+  "lifetime": [
+    0.15,
+    0.4
+  ],
+  "speed": [
+    3,
+    7
+  ],
+  "direction": 90,
+  "spread": 180,
+  "gravity": [
+    0,
+    -6
+  ],
+  "drag": 3.0,
+  "size": [
+    0.14,
+    0.02
+  ],
+  "spin": [
+    0,
+    0
+  ],
+  "area": [
+    0,
+    0
+  ],
+  "color_start": [
+    1,
+    1,
+    0.8,
+    1
+  ],
+  "color_end": [
+    1,
+    0.6,
+    0.2,
+    0
+  ],
+  "blend": "additive"
+}
