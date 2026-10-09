@@ -205,7 +205,7 @@ TEST_CASE("mcp protocol: JSON-RPC framing, initialize handshake, errors, lists")
     auto tools = c.request("tools/list");
     const cook::JsonValue list = tools->root().get("result").get("tools");
     REQUIRE(list.is_array());
-    CHECK(list.size() == 24);
+    CHECK(list.size() == 25);
     for (u32 i = 0; i < list.size(); ++i) {
         CHECK(list.at(i).get("name").is_string());
         CHECK(str(list.at(i).get("inputSchema").get("type")) == "object");
@@ -281,6 +281,14 @@ TEST_CASE("mcp tools: read and edit through the funnel; values are validated bef
     CHECK(str(crate.v().get("name")) == "Crate A");
     CHECK(compact(crate.v().get("components").get("LocalTransform")) == R"({"position":[-2,2,0]})");
     CHECK(c.fails("scene_get_entity", R"({"entity":99})").find("no entity with id 99") != std::string::npos);
+    // By name, when the name is unique.
+    auto by_name = c.ok("scene_get_entity", R"({"entity":"Crate A"})");
+    CHECK(by_name.v().get("id").as_number() == 3);
+    CHECK(c.fails("scene_get_entity", R"({"entity":"Nobody"})").find("no entity named 'Nobody'") != std::string::npos);
+    CHECK(c.fails("scene_get_entity", R"({"entity":true})").find("entity id (an integer) or an entity name") != std::string::npos);
+    c.ok("component_set", R"({"entity":"Crate A","component":"LocalTransform","path":"position.x","value":-3})");
+    CHECK(compact(c.ok("scene_get_entity", R"({"entity":3})").v().get("components").get("LocalTransform")) == R"({"position":[-3,2,0]})");
+    c.ok("scene_undo");
 
     auto textures = c.ok("asset_list", R"({"type":"Texture"})");
     CHECK(textures.v().get("assets").size() == 3);
@@ -350,6 +358,7 @@ TEST_CASE("mcp tools: read and edit through the funnel; values are validated bef
     REQUIRE(dup.v().get("ids").size() == 1);
     const int copy = static_cast<int>(dup.v().get("ids").at(0).as_number());
     CHECK(str(c.ok("scene_get_entity", "{\"entity\":" + std::to_string(copy) + "}").v().get("name")) == "Crate A");
+    CHECK(c.fails("scene_get_entity", R"({"entity":"Crate A"})").find("more than one entity") != std::string::npos);  // two now
     c.ok("entity_delete", "{\"entity\":" + std::to_string(copy) + "}");
     CHECK(c.server.session().scene().doc().find(static_cast<editor::EntityId>(copy)) == nullptr);
     CHECK(c.server.session().scene().verify_world());
@@ -427,13 +436,50 @@ TEST_CASE("mcp tools: persistence stays inside the project and never clobbers si
     c.ok("component_set", R"({"entity":7,"component":"LocalTransform","path":"position.x","value":2})");
     c.ok("scene_save");  // our own last write is not a conflict
 
-    // Save As: a new file (new GUID), never over another existing file unless forced.
-    auto as = c.ok("scene_save", R"({"path":"scenes/copy.mcscene"})");
+    // Ids are saved with the file: after a delete and a reopen the survivors keep theirs.
+    c.ok("entity_delete", R"({"entity":2})");
+    c.ok("scene_save");
+    CHECK(read_file(file).find("\"id\": 7,") != std::string::npos);
+    c.ok("scene_open", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(str(c.ok("scene_get_entity", R"({"entity":7})").v().get("name")) == "Marker");
+    CHECK(c.fails("scene_get_entity", R"({"entity":2})").find("no entity with id 2") != std::string::npos);
+    CHECK(c.ok("entity_create", R"({"name":"Later"})").v().get("id").as_number() == 8);
+    c.ok("scene_undo");
+
+    // Save As: a new file (new GUID), never over another existing file unless forced; forced, the
+    // target keeps its own GUID. 'name' renames the scene.
+    auto as = c.ok("scene_save", R"({"path":"scenes/copy.mcscene","name":"copy"})");
     CHECK(str(as.v().get("path")) == "scenes/copy.mcscene");
-    CHECK(str(as.v().get("guid")) != kDemoGuid);
+    CHECK(str(as.v().get("name")) == "copy");
+    const std::string copy_guid = str(as.v().get("guid"));
+    CHECK(copy_guid != kDemoGuid);
     CHECK(std::filesystem::exists(root + "/assets/scenes/copy.mcscene"));
     CHECK(c.fails("scene_save", R"({"path":"scenes/demo.mcscene"})").find("already exists") != std::string::npos);
     CHECK(c.ok("asset_list", R"({"type":"Scene"})").v().get("assets").size() == 2);
+    auto over = c.ok("scene_save", R"({"path":"scenes/demo.mcscene","force":true})");
+    CHECK(str(over.v().get("guid")) == kDemoGuid);  // demo.mcscene is still the asset the .mceproj names
+    CHECK(read_file(file).find(kDemoGuid) != std::string::npos);
+    CHECK(c.ok("asset_list", R"({"type":"Scene"})").v().get("assets").size() == 2);
+
+    // run_headless plays another saved scene by path; asset_delete removes a file and its sidecar.
+    auto other = c.ok("run_headless", R"({"scene":"scenes/copy.mcscene","ticks":5,"log_lines":0,"inspect":{"component":"RigidBody2D"}})");
+    CHECK(str(other.v().get("scene")) == "scenes/copy.mcscene");
+    CHECK(other.v().get("inspect").get("entities").at(0).get("id").is_null());  // not the open scene: no ids
+    CHECK(c.fails("run_headless", R"({"scene":"scenes/copy.mcscene","inspect":{"entities":[7]}})").find("inspect.component") != std::string::npos);
+    CHECK(c.fails("run_headless", R"({"scene":"scenes/nope.mcscene"})").find("no such scene") != std::string::npos);
+    CHECK(c.fails("asset_delete", R"({"path":"scenes/demo.mcscene"})").find("open scene") != std::string::npos);
+    CHECK(c.fails("asset_delete", R"({"path":"../x.png"})").find("under assets/") != std::string::npos);
+    CHECK(c.fails("asset_delete", R"({"path":"scenes"})").find("directory") != std::string::npos);
+    auto del = c.ok("asset_delete", R"({"path":"scenes/copy.mcscene"})");
+    CHECK_FALSE(del.v().get("sidecar").as_bool());  // a scene carries its GUID inside: no sidecar
+    write_file(root + "/assets/textures/extra.png", read_file(root + "/assets/textures/ball.png"));
+    c.ok("cook_run", R"({"adopt":true})");
+    CHECK(std::filesystem::exists(root + "/assets/textures/extra.png.mceasset"));
+    CHECK(c.ok("asset_delete", R"({"path":"textures/extra.png"})").v().get("sidecar").as_bool());
+    CHECK_FALSE(std::filesystem::exists(root + "/assets/textures/extra.png.mceasset"));
+    CHECK_FALSE(std::filesystem::exists(root + "/assets/scenes/copy.mcscene"));
+    CHECK_FALSE(std::filesystem::exists(root + "/assets/scenes/copy.mcscene.mceasset"));
+    CHECK(c.ok("asset_list", R"({"type":"Scene"})").v().get("assets").size() == 1);
 
     c.ok("scene_new", R"({"name":"fresh"})");
     CHECK(c.ok("scene_info").v().get("path").is_null());
@@ -450,8 +496,11 @@ TEST_CASE("mcp tools: persistence stays inside the project and never clobbers si
     CHECK(errs.v().get("errors").as_number() >= 1);
     CHECK(c.fails("run_headless").find("cook failed") != std::string::npos);
     std::filesystem::remove(root + "/assets/scenes/broken.mcscene");
-    CHECK(c.ok("cook_run", R"({"pack":true})").v().get("ok").as_bool());
+    auto packed = c.ok("cook_run", R"({"pack":true})");
+    CHECK(packed.v().get("ok").as_bool());
     CHECK(std::filesystem::exists(root + "/assets.mce"));
+    CHECK(str(packed.v().get("pack")) == "assets.mce");
+    CHECK(str(packed.v().get("cooked_dir")) == "cooked");
 }
 
 namespace {

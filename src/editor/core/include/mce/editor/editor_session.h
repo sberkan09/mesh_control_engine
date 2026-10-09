@@ -33,7 +33,9 @@ public:
     // On failure the current scene stays open and scene_diags() says why.
     bool open_scene(StringView path);
     Result<void> save_scene();                       // to path(); fails when the scene was never saved
-    Result<void> save_scene_as(StringView path);     // same path resolution as open_scene
+    // Same path resolution as open_scene. A new file gets a fresh GUID; `keep` (non-null) is the
+    // GUID the file keeps instead, i.e. the existing file's when overwriting it on purpose.
+    Result<void> save_scene_as(StringView path, asset::Guid keep = {});
     const cook::DiagList& scene_diags() const { return scene_diags_; }
 
     // Cooks the project (pack: also writes <root>/assets.mce) and remounts the preview.

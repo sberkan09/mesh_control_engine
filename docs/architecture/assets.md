@@ -306,7 +306,7 @@ The `.mcscene` document is the **only** serialized truth for scenes (binding: ed
   "settings": { "gravity": [0.0, -9.81, 0.0], "ambient": [0.04, 0.04, 0.05] },
 
   "entities": [
-    { "name": "Player",
+    { "id": 1, "name": "Player",   // "id": the editor's persistent entity id (optional; the cook ignores it)
       "components": {
         "LocalTransform": { "position": [0.0, 2.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": 1.0 },
         "Sprite":         { "atlas": "guid:9f2c...", "frame": 0, "sort_layer": 0, "tint": [1,1,1,1] },

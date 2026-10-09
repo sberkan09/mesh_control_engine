@@ -170,6 +170,39 @@ TEST_CASE("SceneDocument: parse -> serialize -> parse is byte-stable") {
     CHECK(once == text);
 }
 
+TEST_CASE("SceneDocument: entity ids are saved and survive a reopen; files without ids number by position") {
+    SceneDocument a;
+    a.reset("ids");
+    const EntityId e1 = a.insert("A"), e2 = a.insert("B"), e3 = a.insert("C");
+    CHECK((e1 == 1 && e2 == 2 && e3 == 3));
+    REQUIRE(a.erase(e2));
+    const std::string text = serialize(a);
+    CHECK(text.find("\"id\": 1,") != std::string::npos);
+    CHECK(text.find("\"id\": 3,") != std::string::npos);
+
+    SceneDocument b;
+    cook::DiagList diags;
+    REQUIRE_MESSAGE(b.parse(StringView(text.data(), text.size()), "ids", diags), diag_text(diags));
+    REQUIRE(b.size() == 2);
+    CHECK(b.at(0).id == 1);
+    CHECK(b.at(1).id == 3);
+    CHECK(b.find(3)->name.view() == "C");
+    CHECK(b.insert("D") == 4);  // never reuses 2
+
+    // No ids (an older or hand-written file): 1..N in file order, and a duplicate id falls back.
+    const char* plain = R"({"format":"mce-scene","version":1,"guid":"5ce4e000-0000-4000-8000-0000000000aa","name":"p",
+        "entities":[{"name":"X","components":{}},{"name":"Y","components":{}},{"id":2,"name":"Z","components":{}}]})";
+    SceneDocument p;
+    REQUIRE(p.parse(plain, "plain", diags));
+    CHECK(p.at(0).id == 1);
+    CHECK(p.at(1).id == 2);
+    CHECK(p.at(2).id == 3);
+    const char* bad = R"({"format":"mce-scene","version":1,"guid":"5ce4e000-0000-4000-8000-0000000000aa","name":"p",
+        "entities":[{"id":0,"name":"X","components":{}}]})";
+    CHECK_FALSE(p.parse(bad, "bad", diags));
+    CHECK(diag_text(diags).find("'id' must be an integer >= 1") != std::string::npos);
+}
+
 TEST_CASE("SceneDocument: newer format versions and unknown components are file:line errors") {
     SceneDocument d;
     cook::DiagList diags;
@@ -191,7 +224,7 @@ TEST_CASE("SceneDocument: newer format versions and unknown components are file:
 TEST_CASE("SceneDocument: prefab instance links and their overrides survive a round-trip") {
     const char* text = "{\n  \"format\": \"mce-scene\",\n  \"version\": 1,\n"
                        "  \"guid\": \"5ce4e000-2222-4000-8000-000000000002\",\n  \"name\": \"p\",\n  \"entities\": [\n"
-                       "    {\n      \"name\": \"Grunt\",\n      \"prefab\": \"guid:5ce4e000-2222-4000-8000-000000000003\",\n"
+                       "    {\n      \"id\": 1,\n      \"name\": \"Grunt\",\n      \"prefab\": \"guid:5ce4e000-2222-4000-8000-000000000003\",\n"
                        "      \"components\": {\n        \"LocalTransform\": { \"position\": [2, 0, 0] }\n      }\n    }\n  ]\n}\n";
     SceneDocument d;
     cook::DiagList diags;

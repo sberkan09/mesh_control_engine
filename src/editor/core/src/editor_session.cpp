@@ -118,11 +118,13 @@ Result<void> EditorSession::save_scene() {
     return ok();
 }
 
-Result<void> EditorSession::save_scene_as(StringView path) {
+Result<void> EditorSession::save_scene_as(StringView path, asset::Guid keep) {
     const cook::String full = resolve(path);
     const cook::String old_autosave = autosave_path();
-    // Two files must never share a GUID: a copy of a scene that already lives on disk is a new asset.
-    if (!scene_.path().empty() && scene_.path() != full.view()) scene_.assign_new_guid();
+    // Two files must never share a GUID: a copy of a scene that already lives on disk is a new asset,
+    // unless the caller overwrites an existing file and hands over that file's GUID.
+    if (!keep.is_null()) scene_.set_guid(keep);
+    else if (!scene_.path().empty() && scene_.path() != full.view()) scene_.assign_new_guid();
     MCE_TRY(scene_.save(full.view()));
     MCE_LOG_INFO("editor: saved {}", full.view());
     if (!old_autosave.empty()) cook::fs::remove(old_autosave.view());

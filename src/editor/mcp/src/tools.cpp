@@ -79,16 +79,50 @@ bool arg_bool(ToolCall& c, const char* name, bool& out) {
 
 EditorScene& scene(ToolCall& c) { return c.server.session().scene(); }
 
-bool arg_entity(ToolCall& c, const char* name, EntityId& out) {
-    u64 id = 0;
-    if (!arg_uint(c, name, id, 1, 0xFFFFFFFEu, true)) return false;
-    if (!scene(c).doc().find(static_cast<EntityId>(id))) {
+// An entity argument: its id (an integer) or its name (a string; the name must be unique in the
+// scene). Ids are persistent (saved in the file), names are what a client wrote.
+bool resolve_entity(ToolCall& c, const char* arg_name, const cook::JsonValue& v, EntityId& out) {
+    const editor::SceneDocument& doc = scene(c).doc();
+    if (v.is_string()) {
+        const StringView name = v.as_string();
+        EntityId found = editor::kNoEntity;
+        u32 matches = 0;
+        for (const DocEntity& e : doc.entities()) {
+            if (e.name.view() != name) continue;
+            found = e.id;
+            ++matches;
+        }
+        if (matches == 1) {
+            out = found;
+            return true;
+        }
+        c.error += "argument '";
+        c.error += arg_name;
+        c.error += matches == 0 ? "': no entity named '" : "': more than one entity is named '";
+        c.error += name;
+        c.error += matches == 0 ? "' in the scene (scene_list_entities lists them)" : "': use its id (scene_list_entities lists them)";
+        return false;
+    }
+    if (!v.is_integer() || v.as_number() < 1.0 || v.as_number() > 4294967294.0) {
+        c.error += "argument '";
+        c.error += arg_name;
+        c.error += "' must be an entity id (an integer) or an entity name (a string)";
+        return false;
+    }
+    const u64 id = static_cast<u64>(v.as_number());
+    if (!doc.find(static_cast<EntityId>(id))) {
         cook::appendf(c.error, "no entity with id %llu in the scene (scene_list_entities lists them)",
                       static_cast<unsigned long long>(id));
         return false;
     }
     out = static_cast<EntityId>(id);
     return true;
+}
+
+bool arg_entity(ToolCall& c, const char* name, EntityId& out) {
+    const cook::JsonValue v = arg(c, name);
+    if (!v.valid()) return arg_missing(c, name, "an entity id (integer) or name (string)");
+    return resolve_entity(c, name, v, out);
 }
 
 bool arg_component(ToolCall& c, const char* name, const refl::TypeRecord*& out) {
@@ -534,17 +568,39 @@ bool scene_open(ToolCall& c) {
     return true;
 }
 
+// The "guid" of a scene file on disk (null when unreadable): an overwrite keeps it, so references
+// to that file stay valid.
+asset::Guid guid_of_file(StringView abs) {
+    cook::String text;
+    if (!cook::fs::read_text(abs, text)) return {};
+    cook::JsonDoc doc;
+    cook::JsonError err;
+    if (!doc.parse(text.view(), err) || !doc.root().is_object()) return {};
+    const cook::JsonValue g = doc.root().get("guid");
+    if (!g.is_string()) return {};
+    const Result<asset::Guid> parsed = asset::parse_guid(g.as_string());
+    return parsed ? parsed.value() : asset::Guid{};
+}
+
 bool scene_save(ToolCall& c) {
-    StringView path;
+    StringView path, name;
     bool force = false;
-    if (!need_project(c) || !arg_string(c, "path", path, false) || !arg_bool(c, "force", force)) return false;
+    if (!need_project(c) || !arg_string(c, "path", path, false) || !arg_string(c, "name", name, false) ||
+        !arg_bool(c, "force", force))
+        return false;
+    if (!name.empty() && name.size() >= 64) return fail(c, "argument 'name' must be 1-63 bytes");
     Server::SceneFile& file = c.server.scene_file();
     editor::EditorSession& session = c.server.session();
+    if (!name.empty() && name != scene(c).doc().name()) scene(c).set_name(name);
     cook::String abs;
     if (!path.empty() && path != file.rel.view()) {
         if (!scene_path(c.server, path, abs, c.error)) return false;
-        if (cook::fs::exists(abs.view()) && !force) return fail(c, "a file already exists there: pass force: true to overwrite it");
-        if (Result<void> r = session.save_scene_as(abs.view()); !r) {
+        asset::Guid keep;
+        if (cook::fs::exists(abs.view())) {
+            if (!force) return fail(c, "a file already exists there: pass force: true to overwrite it (the file keeps its GUID)");
+            keep = guid_of_file(abs.view());
+        }
+        if (Result<void> r = session.save_scene_as(abs.view(), keep); !r) {
             FixedString<512> msg;
             format_error(r.error(), msg);
             return fail(c, msg.view());
@@ -591,8 +647,33 @@ bool cook_run(ToolCall& c) {
     progress(c.server, c.progress_token, 1, 1);
     c.out.begin_object();
     write_report(c.out, r);
+    // Output locations, relative to the project folder the server was started with.
+    c.out.key("cooked_dir").str("cooked");
     if (pack) c.out.key("pack").str("assets.mce");
     c.out.end_object();
+    return true;
+}
+
+// Deletes a source file under assets/ with its .mceasset sidecar (the GUID registry entry); the
+// catalog is rescanned. The open scene's own file is refused. The next cook drops its outputs.
+bool asset_delete(ToolCall& c) {
+    StringView rel;
+    if (!need_project(c) || !arg_string(c, "path", rel, true)) return false;
+    if (rel.empty() || rel.size() > 400 || rel[0] == '/' || rel.find('\\') != StringView::npos ||
+        rel.find(':') != StringView::npos || rel.find("..") != StringView::npos)
+        return fail(c, "argument 'path' must be a file path under assets/ (forward slashes, no '..')");
+    if (rel == c.server.scene_file().rel.view()) return fail(c, "that is the open scene: scene_open another scene first");
+    editor::EditorProject& project = c.server.session().project();
+    const cook::String abs = project.asset_path(rel);
+    if (!cook::fs::exists(abs.view())) return fail(c, "no such file under assets/ (asset_list lists the registered ones)");
+    if (cook::fs::is_directory(abs.view())) return fail(c, "argument 'path' names a directory; asset_delete removes one file");
+    cook::String sidecar(abs.view());
+    sidecar += ".mceasset";
+    const bool had_sidecar = cook::fs::exists(sidecar.view());
+    if (!cook::fs::remove(abs.view())) return fail(c, "the file could not be deleted");
+    if (had_sidecar) cook::fs::remove(sidecar.view());
+    project.rescan();
+    c.out.begin_object().key("deleted").str(rel).key("sidecar").boolean(had_sidecar).end_object();
     return true;
 }
 
@@ -624,6 +705,7 @@ struct Inspect {
     Array<const refl::TypeRecord*> show;         // components to print (empty: the scene entity's own)
     cook::String json;                           // the "inspect" array
     Span<const Entity> spawned;                  // during the callback
+    bool other_scene = false;                    // the run played another file: no scene ids
 };
 
 const refl::TypeRecord* component_named(StringView name) {
@@ -637,17 +719,11 @@ bool arg_inspect(ToolCall& c, Inspect& in) {
     if (!v.is_object()) return arg_missing(c, "inspect", "an object: {\"entities\": [ids], \"component\": \"Type\", \"show\": [\"Type\"]}");
     const cook::JsonValue ids = v.get("entities");
     if (ids.valid()) {
-        if (!ids.is_array()) return arg_missing(c, "inspect.entities", "an array of entity ids");
+        if (!ids.is_array()) return arg_missing(c, "inspect.entities", "an array of entity ids or names");
         for (u32 i = 0; i < ids.size(); ++i) {
-            const cook::JsonValue e = ids.at(i);
-            const f64 n = e.is_number() ? e.as_number() : -1.0;
-            if (n < 1.0 || n != static_cast<f64>(static_cast<u64>(n)) || !in.doc->find(static_cast<EntityId>(n))) {
-                c.error += "inspect.entities: no entity ";
-                c.error += e.is_number() ? "with that id" : "(ids are integers)";
-                c.error += " in the scene (scene_list_entities lists them)";
-                return false;
-            }
-            in.ids.push_back(static_cast<EntityId>(n));
+            EntityId id = editor::kNoEntity;
+            if (!resolve_entity(c, "inspect.entities", ids.at(i), id)) return false;
+            in.ids.push_back(id);
         }
     }
     const cook::JsonValue comp = v.get("component");
@@ -671,7 +747,7 @@ bool arg_inspect(ToolCall& c, Inspect& in) {
 // The scene id of a run entity (spawned[i] is scene entity i when the cooked scene has exactly the
 // document's entities, i.e. no prefab instance expanded); kNoEntity for entities the run created.
 EntityId scene_id_of(const Inspect& in, Entity e) {
-    if (e.is_null() || in.spawned.size() != in.doc->size()) return editor::kNoEntity;
+    if (e.is_null() || in.other_scene || in.spawned.size() != in.doc->size()) return editor::kNoEntity;
     for (usize i = 0; i < in.spawned.size(); ++i)
         if (in.spawned[i] == e) return in.doc->entities()[i].id;
     return editor::kNoEntity;
@@ -804,12 +880,32 @@ bool run_headless_tool(ToolCall& c) {
     if (!arg_input(c, script)) return false;
     if (script.last_tick() > ticks)
         MCE_LOG_WARN("run_headless: the input script reaches tick {} but the run is {} ticks", script.last_tick(), ticks);
+    // The scene to play: the open one (saved), or another saved scene of the project by path.
+    StringView other;
+    if (!arg_string(c, "scene", other, false)) return false;
     const Server::SceneFile& file = c.server.scene_file();
-    if (file.rel.empty()) return fail(c, "the scene was never saved: scene_save it (with a path under assets/) first");
-    if (scene(c).dirty()) return fail(c, "the scene has unsaved changes: scene_save first (run_headless plays the cooked file)");
+    StringView played = file.rel.view();
+    asset::Guid played_guid = scene(c).doc().guid();
+    if (!other.empty() && other != file.rel.view()) {
+        cook::String abs;
+        if (!scene_path(c.server, other, abs, c.error)) return false;
+        const editor::ProjectAsset* found = nullptr;
+        for (const editor::ProjectAsset& a : c.server.session().project().assets())
+            if (a.type == asset::ChunkType::Scene && a.path.view() == other) found = &a;
+        if (!found) return fail(c, "argument 'scene': no such scene in the project (asset_list with type Scene lists them)");
+        played = other;
+        played_guid = found->guid;
+    } else {
+        if (file.rel.empty()) return fail(c, "the scene was never saved: scene_save it (with a path under assets/) first");
+        if (scene(c).dirty()) return fail(c, "the scene has unsaved changes: scene_save first (run_headless plays the cooked file)");
+    }
+    const bool other_scene = played != file.rel.view();
     Inspect inspect;
     inspect.doc = &scene(c).doc();
     if (!arg_inspect(c, inspect)) return false;
+    if (other_scene && !inspect.ids.empty())
+        return fail(c, "inspect.entities names entities of the open scene; with 'scene' use inspect.component");
+    inspect.other_scene = other_scene;
     const bool inspecting = !inspect.ids.empty() || inspect.filter;
 
     const u64 since = log::console_last_seq();
@@ -821,7 +917,7 @@ bool run_headless_tool(ToolCall& c) {
     }
     const cook::String cooked = cook::path_join(c.server.session().project().root(), "cooked");
     RunProgress rp{&c.server, c.progress_token};
-    Result<HeadlessRun> run = run_headless(cooked.view(), scene(c).doc().guid(), ticks,
+    Result<HeadlessRun> run = run_headless(cooked.view(), played_guid, ticks,
                                            c.progress_token.valid() ? [](u64 done, u64 total, void* user) {
                                                auto* p = static_cast<RunProgress*>(user);
                                                progress(*p->server, p->token, done, total);
@@ -844,7 +940,7 @@ bool run_headless_tool(ToolCall& c) {
     }
     const HeadlessRun& h = run.value();
     c.out.begin_object();
-    c.out.key("scene").str(file.rel.view());
+    c.out.key("scene").str(played);
     c.out.key("ticks").num_u(h.ticks);
     c.out.key("entities").num_u(h.entities);
     cook::String hash;
@@ -961,7 +1057,7 @@ bool scene_undo(ToolCall& c) { return undo_redo(c, false); }
 bool scene_redo(ToolCall& c) { return undo_redo(c, true); }
 
 constexpr const char* kNoArgs = R"({"type":"object","properties":{},"additionalProperties":false})";
-constexpr const char* kEntityArg = R"({"type":"object","properties":{"entity":{"type":"integer","description":"Entity id"}},"required":["entity"]})";
+constexpr const char* kEntityArg = R"({"type":"object","properties":{"entity":{"type":["integer","string"],"description":"Entity id, or its name when unique"}},"required":["entity"]})";
 
 const ToolDef kTools[] = {
     {"refl_list_components", "List every reflected component type (name and field count).", kNoArgs, refl_list_components},
@@ -975,8 +1071,8 @@ const ToolDef kTools[] = {
      R"({"type":"object","properties":{"component":{"type":"string","description":"Only entities with this component"}}})",
      scene_list_entities},
     {"scene_get_entity",
-     "One entity with its component values in .mcscene form (fields at their default are omitted; entity "
-     "references are \"$<id>\").",
+     "One entity (by id, or by name when unique) with its component values in .mcscene form (fields at their "
+     "default are omitted; entity references are \"$<id>\"). Ids are saved in the file and survive scene_open.",
      kEntityArg, scene_get_entity},
     {"asset_list", "Assets of the project (GUID registry): guid as \"guid:<uuid>\", path under assets/, type.",
      R"({"type":"object","properties":{"type":{"type":"string","description":"Texture, Font, Sfx, Scene, Mesh, Material, ..."}}})",
@@ -994,16 +1090,16 @@ const ToolDef kTools[] = {
     {"scene_clear", "Delete every entity of the open scene (one undo step): re-author a scene keeping its GUID and path.", kNoArgs, scene_clear},
     {"entity_duplicate", "Duplicate an entity right after itself. Returns the new id(s).", kEntityArg, entity_duplicate},
     {"component_add", "Add a component (default values, or patched with 'value': an object of fields).",
-     R"({"type":"object","properties":{"entity":{"type":"integer"},"component":{"type":"string"},"value":{"type":"object"}},"required":["entity","component"]})",
+     R"({"type":"object","properties":{"entity":{"type":["integer","string"],"description":"Entity id, or its name when unique"},"component":{"type":"string"},"value":{"type":"object"}},"required":["entity","component"]})",
      component_add},
     {"component_remove", "Remove a component from an entity.",
-     R"({"type":"object","properties":{"entity":{"type":"integer"},"component":{"type":"string"}},"required":["entity","component"]})",
+     R"({"type":"object","properties":{"entity":{"type":["integer","string"],"description":"Entity id, or its name when unique"},"component":{"type":"string"}},"required":["entity","component"]})",
      component_remove},
     {"component_set",
      "Change a component. Without 'path', 'value' is an object of fields to change. With a property path "
      "(\"position\", \"position.x\", \"shape.half\", \"items[2]\"), 'value' is that property's value. Type errors "
      "name the expected type.",
-     R"({"type":"object","properties":{"entity":{"type":"integer"},"component":{"type":"string"},"path":{"type":"string"},"value":{}},"required":["entity","component","value"]})",
+     R"({"type":"object","properties":{"entity":{"type":["integer","string"],"description":"Entity id, or its name when unique"},"component":{"type":"string"},"path":{"type":"string"},"value":{}},"required":["entity","component","value"]})",
      component_set},
     {"scene_new", "Start a new, empty, unsaved scene (refuses to drop unsaved changes unless force).",
      R"({"type":"object","properties":{"name":{"type":"string"},"force":{"type":"boolean"}},"required":["name"]})", scene_new},
@@ -1011,28 +1107,35 @@ const ToolDef kTools[] = {
      R"({"type":"object","properties":{"path":{"type":"string","description":"e.g. scenes/demo.mcscene"},"force":{"type":"boolean"}},"required":["path"]})",
      scene_open},
     {"scene_save",
-     "Save the scene (atomic write). With 'path' (under assets/): save as. Refuses to overwrite a file that "
-     "changed on disk since it was opened, or another existing file, unless force.",
-     R"({"type":"object","properties":{"path":{"type":"string"},"force":{"type":"boolean"}}})", scene_save},
+     "Save the scene (atomic write; entity ids are saved with it). With 'path' (under assets/): save as, with a "
+     "fresh GUID for a new file. 'name' renames the scene. Refuses to overwrite a file that changed on disk since "
+     "it was opened, or another existing file, unless force (an overwritten file keeps its GUID).",
+     R"({"type":"object","properties":{"path":{"type":"string"},"name":{"type":"string","description":"New scene name"},"force":{"type":"boolean"}}})", scene_save},
     {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
      scene_undo},
     {"scene_redo", "Redo the last undone scene edit.", kNoArgs, scene_redo},
     {"cook_run",
-     "Cook the project (incremental). pack: also write assets.mce. adopt: give new source files (a PNG, WAV or TTF "
-     "added under assets/ with no .mceasset sidecar) a sidecar with a fresh GUID instead of a cook error. Returns "
-     "counts and diagnostics with file:line.",
+     "Cook the project (incremental) into <project>/cooked. pack: also write <project>/assets.mce (a host built "
+     "from the project plays its own build-tree pack unless started with -pack <that file or the cooked dir>). "
+     "adopt: give new source files (a PNG, WAV or TTF added under assets/ with no .mceasset sidecar) a sidecar "
+     "with a fresh GUID instead of a cook error. Returns counts, diagnostics with file:line and the output paths "
+     "(relative to the project folder).",
      R"({"type":"object","properties":{"pack":{"type":"boolean","default":false},"adopt":{"type":"boolean","default":false}}})",
      cook_run},
     {"cook_errors", "Diagnostics of the last cook (file, line, col, stage, message).", kNoArgs, cook_errors},
+    {"asset_delete", "Delete a source file under assets/ together with its .mceasset sidecar (not the open scene). The catalog is rescanned.",
+     R"({"type":"object","properties":{"path":{"type":"string","description":"Path under assets/, e.g. scenes/try2.mcscene"}},"required":["path"]})",
+     asset_delete},
     {"run_headless",
      "Cook, then play the saved scene headless for N fixed ticks exactly as the game's host plays it with -headless "
-     "(the game's own systems included in a project server). Returns the World state_hash (same scene + ticks + input = "
+     "(the game's own systems included in a project server), or another saved scene of the project with 'scene'. "
+     "Returns the World state_hash (same scene + ticks + input = "
      "same hash), World metrics and the log tail. input: scripted keyboard/gamepad actions per tick, as the game reads "
      "them from InputState (\"Move\" [x,y], \"Jump\", \"Fire\", \"Pause\", \"Confirm\", \"Cancel\" and any "
      "game-defined action name); a press is a one-tick segment, a hold a range. inspect: after the last tick, report the "
      "live component values (Transient runtime fields included) of scene entities by id and/or of every entity with a "
      "component (at most 64); show picks the components to print.",
-     R"json({"type":"object","properties":{"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20},"input":{"description":"Either a script string, one segment per line: \"<from>[-<to>] Action[=value] ...\" (e.g. \"10-70 Move=1,0 Jump\\n100 Fire\"), or an array of segments","type":["string","array"],"items":{"type":"object","properties":{"from":{"type":"integer","minimum":1,"description":"First tick (1-based)"},"to":{"type":"integer","description":"Last tick, inclusive (default: from)"},"actions":{"type":"object","description":"Action name -> true, a number, or [x, y]","additionalProperties":{"type":["boolean","number","array"]}}},"required":["from","actions"]}},"inspect":{"type":"object","properties":{"entities":{"type":"array","items":{"type":"integer"},"description":"Scene entity ids"},"component":{"type":"string","description":"Every live entity with this component (also ones the run spawned)"},"show":{"type":"array","items":{"type":"string"},"description":"Components to print (default: the entity's scene components, or the filter component + LocalTransform)"}}}}})json",
+     R"json({"type":"object","properties":{"scene":{"type":"string","description":"Play this saved scene (path under assets/) instead of the open one; inspect then takes 'component' only"},"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20},"input":{"description":"Either a script string, one segment per line: \"<from>[-<to>] Action[=value] ...\" (e.g. \"10-70 Move=1,0 Jump\\n100 Fire\"), or an array of segments","type":["string","array"],"items":{"type":"object","properties":{"from":{"type":"integer","minimum":1,"description":"First tick (1-based)"},"to":{"type":"integer","description":"Last tick, inclusive (default: from)"},"actions":{"type":"object","description":"Action name -> true, a number, or [x, y]","additionalProperties":{"type":["boolean","number","array"]}}},"required":["from","actions"]}},"inspect":{"type":"object","properties":{"entities":{"type":"array","items":{"type":["integer","string"]},"description":"Scene entity ids or names"},"component":{"type":"string","description":"Every live entity with this component (also ones the run spawned)"},"show":{"type":"array","items":{"type":"string"},"description":"Components to print (default: the entity's scene components, or the filter component + LocalTransform)"}}}}})json",
      run_headless_tool},
     {"console_list", "List console variables (type, value, flags, help) and console functions. Optional name prefix.",
      R"({"type":"object","properties":{"prefix":{"type":"string"}}})", console_list},
