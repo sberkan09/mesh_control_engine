@@ -227,7 +227,8 @@ stage_determinism() {
             build/linux-gcc-debug/src/player/mce_player build/linux-gcc-release/src/player/mce_player &&
         stage_module_determinism &&
         stage_physics3d_determinism &&
-        stage_cubes_determinism
+        stage_cubes_determinism &&
+        stage_court_determinism
 }
 
 # M5a: 04_cubes (cascade fit, Forward+ clustering, node animation) across runs and Debug/Release;
@@ -241,6 +242,16 @@ stage_cubes_determinism() {
         python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -walk 1 -ticks 600" \
             build/linux-gcc-debug/samples/04_cubes/sample_04_cubes \
             build/linux-gcc-release/samples/04_cubes/sample_04_cubes
+}
+
+# M7: Ashen Court with the bot playing (enemy FSMs, combat, World3D characters, the swept boom,
+# 3D audio commands) across runs and Debug/Release; 3000 ticks covers a cleared court and a restart.
+stage_court_determinism() {
+    cmake --build --preset linux-gcc-debug --target sample_05_ashen_court &&
+        cmake --build --preset linux-gcc-release --target sample_05_ashen_court &&
+        python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -ticks 3000" \
+            build/linux-gcc-debug/samples/05_ashen_court/sample_05_ashen_court \
+            build/linux-gcc-release/samples/05_ashen_court/sample_05_ashen_court
 }
 
 run_stage() {

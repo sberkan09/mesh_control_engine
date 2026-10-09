@@ -414,6 +414,32 @@ bool has_error(const CookReport& r, const char* needle, Errc code = Errc::Unknow
 
 }  // namespace
 
+TEST_CASE("gltf: a sidecar triangle budget fails the cook when the mesh exceeds it") {
+    const Fixture f = build_buffer();
+    CookService svc;
+    SUBCASE("within budget") {
+        const std::string root = make_project("gltf_budget_ok", json_doc(f, embedded_buffer(f)), false);
+        write_file(root + "/assets/models/crate.gltf.mceasset", sidecar(kGltfGuid, "gltf", "{ \"max_triangles\": 100000 }"));
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        INFO(diag_text(r));
+        CHECK(r.ok());
+    }
+    SUBCASE("over budget") {
+        const std::string root = make_project("gltf_budget_over", json_doc(f, embedded_buffer(f)), false);
+        write_file(root + "/assets/models/crate.gltf.mceasset", sidecar(kGltfGuid, "gltf", "{ \"max_triangles\": 1 }"));
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        INFO(diag_text(r));
+        CHECK(!r.ok());
+        CHECK(has_error(r, "over the mesh's budget of 1 (sidecar 'max_triangles')", Errc::InvalidArgument));
+    }
+    SUBCASE("malformed budget") {
+        const std::string root = make_project("gltf_budget_bad", json_doc(f, embedded_buffer(f)), false);
+        write_file(root + "/assets/models/crate.gltf.mceasset", sidecar(kGltfGuid, "gltf", "{ \"max_triangles\": 2.5 }"));
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        CHECK(has_error(r, "'max_triangles' must be a whole number"));
+    }
+}
+
 TEST_CASE("gltf: unsupported and malformed input fails with the JSON pointer") {
     const Fixture f = build_buffer();
     CookService svc;
