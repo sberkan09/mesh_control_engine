@@ -13,6 +13,7 @@ mce_add_library(mce_editor_layer
         src/imgui_renderer.cpp
         src/panels.cpp
         src/play_panel.cpp
+        src/profiler_panel.cpp
         src/scene_panels.cpp
         src/tilemap_panel.cpp
     PUBLIC_DEPS

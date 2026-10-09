@@ -24,7 +24,7 @@ The game is `samples/05_ashen_court`. Gameplay is `game/court.{h,cpp}`: ECS, `Wo
 | 4–6 point lights + sun | 6 brazier point lights with value-noise flicker and a low dusk sun with 3 shadow cascades. Each wisp core, orb and heart adds its own light (11 lights in the screenshot frame). Fog and bloom are on. | Screenshots below; `sample_05_ashen_court_gpu` (GL debug layer, 0 errors) |
 | HUD via text sprites + scene states | `Mode`: Title → Playing ⇄ Paused → Dead or Victory → restart. The HUD shows an HP bar, foes left, kills, time and render stats, plus a banner per state. | the restart test above; screenshots |
 | Determinism | The bot (`court::autopilot`) is a pure function of the world. It hunts the nearest enemy, sidesteps a brute's wind-up and fetches a heart when hurt. | `test_ashen_court` "the bot clears the court, the same way every run": 9/9 kills, no deaths, equal hashes. The determinism stage runs `-headless 1 -ticks 3000` (a cleared court, then a restart) 3 times in Debug and Release: one hash. |
-| Editor perf dashboards | — | Not in this PR (next M7 item). |
+| Editor perf dashboards | the editor's Profiler panel | `docs/milestones/M7-editor-perf.md` |
 
 ## Triangle budgets (cook-checked)
 

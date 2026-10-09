@@ -63,6 +63,10 @@ public:
     u64 enter_hash() const { return enter_hash_; }
     // Wall time of the last enter(): cook-in-memory + instantiate (NFR-M-03 budget: 1 s).
     f64 enter_seconds() const { return enter_seconds_; }
+    // Wall time and tick count of the last advance() that ran (the Profiler's simulation stage).
+    // The play world profiles its systems (World::system_timings).
+    f64 last_advance_ms() const { return last_advance_ms_; }
+    u32 last_advance_ticks() const { return last_advance_ticks_; }
     usize entity_count() const { return entities_.size(); }
     // The play-world entity spawned for scene entity `i` (document order).
     Span<const Entity> entities() const { return entities_.span(); }
@@ -81,6 +85,8 @@ private:
     u64 ticks_ = 0;
     u64 enter_hash_ = 0;
     f64 enter_seconds_ = 0.0;
+    f64 last_advance_ms_ = 0.0;
+    u32 last_advance_ticks_ = 0;
 };
 
 }  // namespace mce::editor

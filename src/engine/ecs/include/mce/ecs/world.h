@@ -51,6 +51,17 @@ enum class Phase : u8 {
 inline constexpr usize kPhaseCount = static_cast<usize>(Phase::Count);
 const char* phase_name(Phase p);
 
+// Wall time one system took (World::set_profiling). Observation only: never hashed, never read by
+// the simulation, so profiling on or off leaves every state hash unchanged.
+struct SystemTiming {
+    const char* name = nullptr;
+    Phase phase = Phase::Startup;
+    f64 last_ms = 0.0;   // the system's most recent run
+    f64 total_ms = 0.0;  // since profiling was turned on (or reset)
+    u64 runs = 0;
+    f64 mean_ms() const { return runs ? total_ms / f64(runs) : 0.0; }
+};
+
 using SystemFn = void (*)(Frame& f);
 
 namespace ecs::detail {
@@ -434,6 +445,12 @@ public:
     // that must already be registered in the same phase — asserted, never reordered.
     void add_system(Phase phase, const char* name, SystemFn fn, const char* after = nullptr);
     Span<const char* const> system_names(Phase phase) const;
+    // Per-system wall time (editor perf dashboards). Off by default: the hot path reads no clock.
+    // Turning it on resets the totals. Timings are listed in phase, then execution, order.
+    void set_profiling(bool on);
+    bool profiling() const { return profiling_; }
+    void system_timings(Array<SystemTiming>& out) const;
+    void reset_system_timings();
     void install_module(void (*fn)(World&)) { fn(*this); }
 
     // Runs one phase, then its sync point.
@@ -497,6 +514,9 @@ private:
         SystemFn fn;
         u16 id;  // global system index (event producer/consumer attribution)
         u32 last_run = 0;  // change tick of this system's previous run (0 = never ran)
+        f64 last_ms = 0.0;  // profiling only
+        f64 total_ms = 0.0;
+        u64 runs = 0;
     };
     struct Resource {
         void* ptr = nullptr;
@@ -554,6 +574,7 @@ private:
     Commands commands_;
     bool in_phase_ = false;
     bool started_ = false;
+    bool profiling_ = false;
     u64 tick_ = 0;
 };
 

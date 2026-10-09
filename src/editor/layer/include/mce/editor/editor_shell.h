@@ -14,6 +14,7 @@
 #include "mce/editor/gizmo.h"
 #include "mce/editor/tilemap_editor.h"
 #include "mce/editor/orbit_camera.h"
+#include "mce/editor/perf_monitor.h"
 #include "mce/editor/preview_renderer.h"
 #include "mce/editor/stub_world.h"
 #include "mce/memory/allocator.h"
@@ -81,6 +82,10 @@ public:
     void tick(f64 dt) { world_.tick(dt); }
     void build_ui(f64 frame_dt);
     void record(rhi::CommandBuffer& cmd, f32 alpha);
+    // The host calls this after RenderDevice::submit with the submit's wall time: the frame's
+    // sample (sim / UI / record / submit / GPU) goes to the Profiler's history.
+    void end_frame_perf(f64 submit_ms);
+    PerfMonitor& perf() { return perf_; }
 
     void add_panel(mem::UniquePtr<IEditorPanel> panel);
     IEditorPanel* find_panel(StringView name);
@@ -165,6 +170,8 @@ private:
     OrbitColliders orbit_colliders_;
     ViewSettings view_;
     TilemapEditor tilemap_;
+    PerfMonitor perf_;
+    FrameSample perf_pending_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;
     ViewportInfo viewport_;
     FixedString<256> ini_path_;
@@ -183,7 +190,7 @@ private:
     FixedString<512> title_;
 };
 
-// Registers the panel set: Viewport, Hierarchy, Inspector, Cook, Console, Stats.
+// Registers the panel set: Viewport, Hierarchy, Inspector, Cook, Console, Stats, Profiler, ...
 void add_default_panels(EditorShell& shell);
 
 }  // namespace mce::editor

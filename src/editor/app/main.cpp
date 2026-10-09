@@ -32,6 +32,7 @@ MCE_CVAR(cv_scene, "scene", "", "Scene to open, relative to assets/ (default: th
 MCE_CVAR(cv_select, "editor.select", "", "Select the entity with this name after opening the scene", CVarFlags::None);
 MCE_CVAR(cv_play, "editor.play", false, "Enter play-in-editor after opening the scene (the -selftest checks it)",
          CVarFlags::None);
+MCE_CVAR(cv_focus, "editor.panel", "", "Bring this panel's tab to the front at startup (e.g. Profiler)", CVarFlags::None);
 MCE_CVAR(cv_ini, "editor.ini", "mce_editor.ini", "Dock layout file (empty = no persistence)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 
@@ -60,6 +61,8 @@ public:
                 if (!cv_select.get_string().empty() && e.name.view() == cv_select.get_string()) shell_.scene().selection().set(e.id);
             if (cv_play.get_bool() && !shell_.play_in_editor()) return Error(Errc::InvalidArgument, "mce_editor", "play");
         }
+        focus_.append(cv_focus.get_string());  // last: opening a project focuses the Cook panel
+        if (!focus_.empty()) shell_.focus_panel(focus_.c_str());
         return ok();
     }
 
@@ -70,7 +73,9 @@ public:
         shell_.build_ui(rc.frame_dt);
         rhi::CommandBuffer cmd(mem::frame());
         shell_.record(cmd, rc.alpha);
+        const f64 t0 = platform::now_seconds();
         device_.submit(cmd);
+        shell_.end_frame_perf((platform::now_seconds() - t0) * 1000.0);
 
         const bool last = cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
         if (last) {
@@ -223,6 +228,7 @@ private:
     platform::Window& window_;
     rhi::RenderDevice& device_;
     editor::EditorShell shell_;
+    FixedString<64> focus_;
     int exit_code_ = 0;
 };
 

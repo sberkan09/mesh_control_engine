@@ -55,6 +55,7 @@ Result<void> PlaySession::enter(EditorProject& project, const SceneDocument& doc
     MCE_TRY_ASSIGN(audio_, audio::AudioDevice::create(ad));
     clips_ = mem::make_unique<audio::ClipBank>(mem::heap(), *assets, *audio_);
     world_ = mem::make_unique<World>(mem::heap());
+    world_->set_profiling(true);  // the Profiler panel ranks the play world's systems (never hashed)
     physics::install_physics2d(*world_);
     audio::install(*world_, *audio_, clips_.get());
     kit::install_particles(*world_, assets);
@@ -105,8 +106,11 @@ void PlaySession::tick_once() {
 u32 PlaySession::advance(f64 real_dt) {
     if (state_ != State::Playing) {
         if (clips_) clips_->sync();
+        last_advance_ms_ = 0.0;
+        last_advance_ticks_ = 0;
         return 0;
     }
+    const f64 t0 = platform::now_seconds();
     accumulator_ += (real_dt > 0.0 ? real_dt : 0.0) * static_cast<f64>(time_scale_);
     const f64 cap = kTickDt * kMaxCatchup;
     if (accumulator_ > cap) accumulator_ = cap;
@@ -119,6 +123,8 @@ u32 PlaySession::advance(f64 real_dt) {
     if (accumulator_ < 0.0) accumulator_ = 0.0;
     audio_->update();
     clips_->sync();
+    last_advance_ms_ = (platform::now_seconds() - t0) * 1000.0;
+    last_advance_ticks_ = n;
     return n;
 }
 

@@ -587,6 +587,7 @@ void add_default_panels(EditorShell& shell) {
     add_scene_panels(shell);
     shell.add_panel(mem::make_unique<ConsolePanel>(mem::heap()));
     shell.add_panel(mem::make_unique<StatsPanel>(mem::heap()));
+    add_profiler_panel(shell);
     add_play_panel(shell);
     add_asset_panel(shell);
     add_tilemap_panel(shell);
