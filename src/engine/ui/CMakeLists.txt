@@ -3,8 +3,11 @@
 
 mce_add_library(mce_ui
     SOURCES
+        src/dev_console.cpp
         src/ui.cpp
     PUBLIC_DEPS
         mce::mce_render
         mce::mce_input
+        mce::mce_ecs
+        mce::mce_refl
         mce::mce_core)

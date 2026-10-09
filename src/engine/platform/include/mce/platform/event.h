@@ -37,7 +37,7 @@ enum class Key : u32 {
     Unknown = 0,
     A = 4, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
     Num1 = 30, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, Num0,
-    Return = 40, Escape = 41, Backspace = 42, Tab = 43, Space = 44,
+    Return = 40, Escape = 41, Backspace = 42, Tab = 43, Space = 44, Grave = 53,
     F1 = 58, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
     Right = 79, Left = 80, Down = 81, Up = 82,
     LCtrl = 224, LShift = 225, LAlt = 226, LGui = 227, RCtrl = 228, RShift = 229, RAlt = 230, RGui = 231,

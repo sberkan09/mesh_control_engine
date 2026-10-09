@@ -5,7 +5,8 @@
 //   mce_player -pack p.mce -frames 120 -capture a.ppm  CI smoke: write the last frame
 //
 // Without -scene the first Scene asset of the pack (by source path) plays. F7 toggles 2D post. Controls: Esc pauses
-// and resumes (the pause overlay), Q quits while paused.
+// and resumes (the pause overlay), Q quits while paused, ` or F1 opens the developer console (FR-UI-045: the log,
+// convars and console functions; -console 0 removes it from a shipped build's command line).
 //
 // Lifecycle (FR-RUN-060): losing focus or minimizing pauses the sim (the pause overlay is up when the player comes
 // back, so nothing moves before they choose to resume) and mutes the master bus until focus returns. With
@@ -31,6 +32,7 @@
 #include "mce/render/renderer.h"
 #include "mce/rhi/default_device.h"
 #include "mce/scene/scene.h"
+#include "mce/ui/ui.h"
 
 namespace {
 
@@ -48,6 +50,8 @@ MCE_CVAR(cv_pause_on_focus_loss, "pause_on_focus_loss", true, "Pause and mute wh
 MCE_CVAR(cv_save, "save", "", "Save slot: loaded at start when it exists, written on clean quit (empty = off)",
          CVarFlags::None);
 MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the per-user MCE save folder)", CVarFlags::None);
+MCE_CVAR(cv_console, "console", true, "Allow the developer console (` or F1)", CVarFlags::None);
+MCE_CVAR(cv_console_open, "console_open", false, "Start with the developer console open", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 
 int fail(const char* what, const Error& e) {
@@ -83,6 +87,9 @@ public:
             samples::HudFont hud;
             MCE_TRY_ASSIGN(font_, renderer_.create_font(hud.metrics, hud.glyphs.span(), {}, std::as_bytes(hud.atlas.span()),
                                                         "player.hud_font"));
+            MCE_TRY(ui::create_builtin_skin(renderer_, skin_));
+            console_.init(skin_.skin, 0.5f);
+            if (cv_console.get_bool() && cv_console_open.get_bool()) set_console(true);
             window_->set_event_handler(&PlayerApp::on_event, this);
         }
         MCE_TRY(scene::load(world_, assets_, scene, &entities_));
@@ -119,6 +126,9 @@ public:
         Color clear{0.08f, 0.09f, 0.12f, 1.0f};
         kit::primary_camera(world_, cam, ppm, &clear);
 
+        update_console(bb);
+        const bool overlay = paused_ || console_.is_open();
+
         render::SpriteBatch batch(renderer_.sprite_sets(), mem::frame());
         batch.begin(render::compute_view_2d(cam, bb, ppm));
         extract_.extract(world_, batch);
@@ -143,18 +153,18 @@ public:
         if (use_post) {
             cmd.end_pass();
             renderer_.record_post_2d(cmd, post_target_, bb, post);
-            if (paused_) {
+            if (overlay) {
                 rhi::PassAttachment over;
                 over.load = rhi::LoadOp::Load;
                 rhi::RenderPassDesc op;
                 op.colors = Span<const rhi::PassAttachment>(&over, 1);
                 op.debug_name = "player.overlay";
                 cmd.begin_pass(op);
-                record_pause_overlay(cmd, bb);
+                record_overlay(cmd, bb);
                 cmd.end_pass();
             }
         } else {
-            if (paused_) record_pause_overlay(cmd, bb);
+            if (overlay) record_overlay(cmd, bb);
             cmd.end_pass();
         }
         device_->submit(cmd);
@@ -221,9 +231,42 @@ private:
         return assets_.info(best).guid;
     }
 
-    void record_pause_overlay(rhi::CommandBuffer& cmd, rhi::Extent2D bb) {
+    // ---- the developer console (FR-UI-045) ----------------------------------------------------
+
+    void set_console(bool open) {
+        console_.set_open(open);
+        window_->set_text_input(open);
+    }
+
+    void update_console(rhi::Extent2D bb) {
+        ui::UpdateContext ctx;
+        ctx.viewport = bb;
+        ctx.ui_scale = window_->display_scale();
+        input::InputState in;
+        in.cancel_pressed = con_.cancel;
+        ctx.actions = &in;
+        ctx.text_input = con_.typed.view();
+        ctx.key_backspace = con_.backspace;
+        ctx.key_enter = con_.enter;
+        ctx.key_up = con_.up;
+        ctx.key_down = con_.down;
+        ctx.dt = 1.0 / 60.0;
+        const bool was_open = console_.is_open();
+        console_.update(ctx);  // pulls the log ring even while closed
+        if (was_open && !console_.is_open()) window_->set_text_input(false);  // closed with Esc
+        con_ = ConsoleKeys{};
+    }
+
+    void record_overlay(rhi::CommandBuffer& cmd, rhi::Extent2D bb) {
         render::SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
         hud.begin(render::compute_screen_view(bb), render::PassId::Screen2D);
+        if (paused_) add_pause_overlay(hud, bb);
+        console_.submit(hud, 200);
+        hud.build();
+        renderer_.record_2d(cmd, hud);
+    }
+
+    void add_pause_overlay(render::SpriteBatch& hud, rhi::Extent2D bb) {
         render::SpriteInstance dim;  // a translucent veil over the frozen frame
         dim.set = extract_.sprite_set(asset::Guid{});
         dim.position = {0.5f * static_cast<f32>(bb.width), 0.5f * static_cast<f32>(bb.height)};
@@ -239,8 +282,6 @@ private:
         p.origin = {0.5f * (static_cast<f32>(bb.width) - layout.width), 0.5f * (static_cast<f32>(bb.height) - layout.height)};
         p.sort_order = 1;
         hud.add_text(font_, layout, p);
-        hud.build();
-        renderer_.record_2d(cmd, hud);
     }
 
     void ensure_post_target(rhi::Extent2D size) {
@@ -297,8 +338,32 @@ private:
             case platform::EventType::Restored: self->set_background(false); return;
             default: break;
         }
+        if (self->console_.is_open()) {  // the console owns the keyboard while open
+            if (e.type == platform::EventType::TextInput && e.code >= 32 && e.code < 127 && e.code != '`') {
+                const char c = static_cast<char>(e.code);
+                self->con_.typed.append(StringView(&c, 1));
+            }
+            if (e.type != platform::EventType::KeyDown) return;
+            switch (static_cast<platform::Key>(e.code)) {
+                case platform::Key::Escape: self->con_.cancel = true; break;
+                case platform::Key::Return: self->con_.enter = true; break;
+                case platform::Key::Backspace: self->con_.backspace = true; break;
+                case platform::Key::Up: self->con_.up = true; break;
+                case platform::Key::Down: self->con_.down = true; break;
+                case platform::Key::Grave:
+                case platform::Key::F1:
+                    if (!(e.flags & platform::EventFlag::Repeat)) self->set_console(false);
+                    break;
+                default: break;
+            }
+            return;
+        }
         if (e.type != platform::EventType::KeyDown) return;
         switch (static_cast<platform::Key>(e.code)) {
+            case platform::Key::Grave:
+            case platform::Key::F1:
+                if (cv_console.get_bool() && !(e.flags & platform::EventFlag::Repeat)) self->set_console(true);
+                break;
             case platform::Key::Escape: self->paused_ = !self->paused_; break;
             case platform::Key::Q:
                 if (self->paused_) self->quit(0);
@@ -317,6 +382,13 @@ private:
     audio::ClipBank clips_;
     kit::SpriteExtract extract_;
     render::Font font_;
+    ui::BuiltinSkin skin_;
+    ui::DevConsole console_;
+    struct ConsoleKeys {  // this frame's console input, gathered by on_event
+        FixedString<64> typed;
+        bool cancel = false, enter = false, backspace = false, up = false, down = false;
+    };
+    ConsoleKeys con_;
     World world_;
     Array<Entity> entities_;
     FixedString<256> scene_path_;

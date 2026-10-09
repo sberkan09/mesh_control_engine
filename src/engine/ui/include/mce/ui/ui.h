@@ -22,7 +22,9 @@
 // scale 1 and multiplied by UpdateContext::ui_scale.
 
 #include "mce/containers/array.h"
+#include "mce/ecs/world.h"
 #include "mce/fixed_string.h"
+#include "mce/refl/property_path.h"
 #include "mce/input/actions.h"
 #include "mce/memory/handle.h"
 #include "mce/render/sprite_batch.h"
@@ -120,6 +122,7 @@ struct DocumentStats {
     u32 widgets = 0;
     u64 layout_passes = 0;  // full layout runs (zero while nothing is dirty)
     u32 quads = 0;          // emitted by the last submit()
+    u64 binding_updates = 0;  // property bindings that changed their widget
 };
 
 // The named action navigation reads (a vec2, +y up like InputState::move). Without it, navigation
@@ -160,6 +163,12 @@ public:
     // Two-way convar binding (options screens): the widget shows the convar's value; a change goes
     // through console::execute so it is logged. Cheat convars are refused.
     bool bind_convar(WidgetId w, StringView convar);
+    // Read-only property binding (ui.md §4.4, FR-UI-030): "<Component>/<field path>" on `entity`
+    // (the refl path syntax the inspector uses, e.g. "Health/hp" or "Body/velocity.x"). The path
+    // resolves once; each update() reads the field and touches the widget only when it changed: a
+    // Text re-formats with `format` (printf, one double; default "%g"), others take it as value.
+    // Numeric and bool leaves only. The world must outlive the binding; a dead entity reads nothing.
+    bool bind_property(WidgetId w, const World& world, Entity entity, StringView path, const char* format = nullptr);
 
     // Per frame, Render_Pre: removal -> layout (dirty only) -> input -> state machines -> bindings.
     void update(const UpdateContext& ctx);
@@ -236,6 +245,18 @@ private:
     void emit(UiEvent::Kind kind, WidgetId w, f32 value = 0.0f) { events_.push_back(UiEvent{kind, w, value}); }
     void change_value(u32 index, f32 v);
     void sync_bindings();
+    void sync_properties();
+    struct PropertyBinding {
+        WidgetId widget;
+        const World* world = nullptr;
+        Entity entity;
+        const refl::TypeRecord* type = nullptr;
+        refl::PropertyRef ref;
+        ecs::ComponentId component = ecs::kInvalidComponent;
+        FixedString<32> format;
+        f64 last = 0.0;
+        bool has_last = false;
+    };
     void update_console(u32 index, const UpdateContext& ctx);
     void draw_quad(render::SpriteBatch& batch, const Rect& r, Color c, i16 layer, i32 order) const;
     void draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u32 region, i16 layer, i32 order) const;
@@ -249,6 +270,7 @@ private:
     Array<WidgetId> pending_remove_;
     Array<UiEvent> events_;
     Array<ConsoleData*> consoles_;
+    Array<PropertyBinding> properties_;
     FixedString<256> submitted_;
     WidgetId root_, focused_, hovered_, pressed_, default_focus_;
     Skin skin_;
@@ -298,6 +320,32 @@ private:
     Builder child(WidgetKind kind, StringView name);
     Document* doc_;
     WidgetId id_;
+};
+
+// The shipped developer console (FR-UI-045): a modal document holding one console widget over the
+// top of the screen. It mirrors the log ring (mce::log::read_console), runs submitted lines through
+// console::execute (convars and confuncs; "help" lists them, "clear" empties the scrollback) and
+// closes on cancel. The host toggles it (` or F1 by convention), turns platform text input on
+// while it is open, and stops feeding game input meanwhile.
+class DevConsole {
+public:
+    explicit DevConsole(mem::IAllocator& a = mem::heap());
+    void init(const Skin& skin, f32 height_fraction = 0.6f);
+    bool is_open() const { return open_; }
+    void set_open(bool open);
+    void toggle() { set_open(!open_); }
+    // Pulls new log lines (open or not, so nothing is missed), then updates the document while open.
+    void update(const UpdateContext& ctx);
+    void submit(render::SpriteBatch& batch, i16 sort_layer = 200) const;
+    Document& document() { return doc_; }
+    WidgetId widget() const { return console_; }
+
+private:
+    void run(StringView line);
+    Document doc_;
+    WidgetId console_;
+    u64 seq_ = 0;
+    bool open_ = false;
 };
 
 // The default look for interactive widgets (dark panel, lighter on hover, accent on focus).
