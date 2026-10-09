@@ -25,11 +25,13 @@ option(MCE_ASAN            "Build with AddressSanitizer"              OFF)
 option(MCE_BUILD_SAMPLES   "Build the sample ladder (samples/)"       ON)
 option(MCE_BUILD_EDITOR    "Build the editor (mce_editor_core/layer + mce_editor)" ON)
 option(MCE_GPU_TESTS       "Register tests that need a display + GL 4.5 driver" OFF)
+option(MCE_TEMPLATE_PROBE  "Stamp the project template into the build tree and build it (tests the generator)" ON)
 option(MCE_PHYSICS_ORACLE  "Link Box2D v3 into test_physics2d as the solver oracle (ADR-0016)" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(MceTarget)
 include(MceShip)
+include(MceProject)
 include(Dependencies)
 include(EngineId)
 
@@ -66,6 +68,32 @@ endif()
 
 if(MCE_BUILD_SAMPLES)
     add_subdirectory(samples)
+endif()
+
+# Projects made with scripts/new_project.py (assets.md §4.4): every projects/<name>/ with a CMakeLists.txt.
+file(GLOB _mce_projects LIST_DIRECTORIES true "${PROJECT_SOURCE_DIR}/projects/*")
+foreach(_dir IN LISTS _mce_projects)
+    if(EXISTS "${_dir}/CMakeLists.txt")
+        add_subdirectory("${_dir}")
+    endif()
+endforeach()
+
+# The generator's own test (ROADMAP M8 "the generator produces a compiling, cooking, shipping
+# project"): a fresh project stamped from templates/project at configure time and built like any
+# other, so a template change that stops compiling, cooking or running fails every CI preset.
+if(MCE_TEMPLATE_PROBE AND MCE_BUILD_TESTS)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(_probe_root "${CMAKE_BINARY_DIR}/template_probe")
+    file(GLOB_RECURSE _template_files CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/templates/project/*")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/scripts/new_project.py")
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/new_project.py" TemplateProbe --dest "${_probe_root}"
+                --seed 1 --force
+        RESULT_VARIABLE _probe_rc OUTPUT_QUIET)
+    if(NOT _probe_rc EQUAL 0)
+        message(FATAL_ERROR "scripts/new_project.py failed to stamp the template probe")
+    endif()
+    add_subdirectory("${_probe_root}/TemplateProbe" "${CMAKE_BINARY_DIR}/template_probe_build")
 endif()
 
 if(MCE_BUILD_TESTS)
