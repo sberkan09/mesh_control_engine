@@ -19,6 +19,7 @@ mce_add_test(test_cook
         test_cook_gltf.cpp
         test_cook_json_audio.cpp
         test_cook_project.cpp
+        test_cook_shader.cpp
     DEPS
         mce::mce_asset_cook)
 target_include_directories(test_cook PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -32,3 +33,16 @@ add_test(NAME mce_cook_cli
         -DDATA_DIR=${CMAKE_CURRENT_SOURCE_DIR}/data
         -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/cli
         -P ${CMAKE_CURRENT_SOURCE_DIR}/cook_cli_test.cmake)
+
+# Cooked shader variants on a real GL 4.5 driver (CI: Xvfb + Mesa llvmpipe). Always builds;
+# registers only with MCE_GPU_TESTS.
+find_package(Threads REQUIRED)
+add_executable(test_shader_gl test_shader_gl.cpp)
+target_link_libraries(test_shader_gl PRIVATE mce::mce_asset_cook mce::mce_rhi_default mce::doctest_main Threads::Threads)
+target_include_directories(test_shader_gl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_compile_definitions(test_shader_gl PRIVATE ${MCE_ASSET_TEST_DEFS})
+mce_apply_compile_policy(test_shader_gl)
+if(MCE_GPU_TESTS)
+    add_test(NAME test_shader_gl COMMAND test_shader_gl)
+    set_tests_properties(test_shader_gl PROPERTIES LABELS gpu)
+endif()

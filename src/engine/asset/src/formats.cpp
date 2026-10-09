@@ -295,6 +295,76 @@ Result<SequenceView> SequenceView::read(Span<const byte> payload) {
     return v;
 }
 
+// ------------------------------------------------------------------ shader
+
+StringView ShaderView::define(u32 i) const {
+    const char* d = header->defines[i];
+    usize n = 0;
+    while (n < sizeof(header->defines[i]) && d[n] != '\0') ++n;
+    return StringView(d, n);
+}
+
+const ShaderVariant* ShaderView::find(u32 mask) const {
+    for (const ShaderVariant& v : variants)
+        if (v.mask == mask) return &v;
+    return nullptr;
+}
+
+Span<const u32> ShaderView::spirv(const ShaderVariant& v) const {
+    const byte* base = reinterpret_cast<const byte*>(header);
+    return Span<const u32>(reinterpret_cast<const u32*>(base + v.spirv_offset), v.spirv_words);
+}
+
+Span<const ShaderResource> ShaderView::resources_of(const ShaderVariant& v) const {
+    return resources.subspan(v.first_resource, v.resource_count);
+}
+
+void ShaderView::compose(u32 mask, Array<char>& out) const {
+    out.clear();
+    usize at = 0;  // after the #version line (or the start when there is none)
+    const usize v = source.find("#version");
+    if (v != StringView::npos) {
+        const usize eol = source.find('\n', v);
+        at = eol == StringView::npos ? source.size() : eol + 1;
+    }
+    auto put = [&](StringView s) {
+        for (char c : s) out.push_back(c);
+    };
+    put(source.substr(0, at));
+    if (at > 0 && source[at - 1] != '\n') out.push_back('\n');
+    for (u32 i = 0; i < header->define_count; ++i) {
+        put("#define ");
+        put(define(i));
+        put((mask >> i) & 1u ? " 1\n" : " 0\n");
+    }
+    put(source.substr(at));
+}
+
+Result<ShaderView> ShaderView::read(Span<const byte> payload) {
+    constexpr const char* kStage = "asset.shader.read";
+    ShaderView s;
+    s.header = header_of<ShaderHeader>(payload);
+    if (!s.header) return Error(Errc::Truncated, kStage);
+    const ShaderHeader& h = *s.header;
+    if (h.define_count > kMaxShaderDefines || h.variant_count == 0 || h.variant_count > (1u << h.define_count))
+        return Error(Errc::InvalidArgument, kStage);
+    const usize variants_at = sizeof(ShaderHeader);
+    const usize resources_at = variants_at + usize(h.variant_count) * sizeof(ShaderVariant);
+    const usize source_at = resources_at + usize(h.resource_count) * sizeof(ShaderResource);
+    if (source_at + h.source_size > payload.size()) return Error(Errc::Truncated, kStage);
+    s.variants = Span<const ShaderVariant>(reinterpret_cast<const ShaderVariant*>(payload.data() + variants_at), h.variant_count);
+    s.resources =
+        Span<const ShaderResource>(reinterpret_cast<const ShaderResource*>(payload.data() + resources_at), h.resource_count);
+    s.source = StringView(reinterpret_cast<const char*>(payload.data() + source_at), h.source_size);
+    for (const ShaderVariant& v : s.variants) {
+        if (v.spirv_offset % 4 != 0 || v.spirv_offset < source_at + h.source_size ||
+            v.spirv_offset + usize(v.spirv_words) * 4 > payload.size() || v.first_resource + v.resource_count > h.resource_count ||
+            v.mask >= (1u << h.define_count))
+            return Error(Errc::Truncated, kStage);
+    }
+    return s;
+}
+
 // ------------------------------------------------------------------ mesh
 
 u32 MeshView::index(u32 i) const {

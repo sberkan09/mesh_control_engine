@@ -24,6 +24,7 @@ mce_add_library(mce_asset_cook
         src/scene_importer.cpp
         src/scene_writer.cpp
         src/sequence_importer.cpp
+        src/shader_importer.cpp
         src/string.cpp
         src/texture_importer.cpp
         src/tilemap_importer.cpp
@@ -32,4 +33,6 @@ mce_add_library(mce_asset_cook
         mce::mce_asset
     PRIVATE_DEPS
         mce_stb
-        mce_meshopt)
+        mce_meshopt
+        glslang::glslang
+        glslang::glslang-default-resource-limits)

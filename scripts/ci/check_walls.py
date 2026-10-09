@@ -32,11 +32,12 @@ WALLS = [
         ["src/engine/rhi_metal/", "src/engine/platform/src/macos/"],
         ["src/", "samples/", "games/", "tests/"],
     ),
-    # The GLSL -> MSL translator (glslang, SPIRV-Cross) is private to the Metal backend.
+    # The GLSL -> MSL translator (glslang, SPIRV-Cross) is private to the Metal backend; glslang is
+    # also the shader cook's validator, inside the cook library (ADR-0033).
     (
         "shader-cross wall",
         re.compile(r"[<\"](glslang|SPIRV)/|[<\"]spirv_\w+\.hpp|\bspirv_cross::|\bglslang::"),
-        ["src/engine/rhi_metal/"],
+        ["src/engine/rhi_metal/", "src/engine/asset/cook/src/shader_importer.cpp"],
         ["src/", "samples/", "games/", "tests/", "tools/"],
     ),
     ("ImGui wall", re.compile(r"\bImGui(::|zmo)|[<\"]imgui"), ["src/editor/layer/"], ["src/", "samples/", "games/"]),

@@ -211,5 +211,35 @@ else()
     target_compile_options(Jolt PRIVATE -w)
 endif()
 
-# ---- glslang + SPIRV-Cross (macOS only) ---------------------------------------------------
+# ---- glslang (shader cook, every platform) ---------------------------------------------------
+# The cook validates .glsl stages and compiles their variants to SPIR-V (ADR-0033). Same tag and
+# options as cmake/macos/MetalDependencies.cmake: this declaration comes first, so on macOS the
+# Metal backend links this same glslang and only adds SPIRV-Cross. Linked privately by
+# mce_asset_cook (a cook-time library, never a runtime target).
+set(ENABLE_OPT OFF CACHE BOOL "" FORCE)
+set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
+set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+set(ENABLE_SPVREMAPPER OFF CACHE BOOL "" FORCE)
+set(ENABLE_CTEST OFF CACHE BOOL "" FORCE)
+set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
+set(GLSLANG_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(glslang
+    GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
+    GIT_TAG        16.6.0
+    GIT_SHALLOW    TRUE
+    SYSTEM)
+FetchContent_MakeAvailable(glslang)
+foreach(t glslang glslang-default-resource-limits)
+    if(TARGET ${t})
+        set_target_properties(${t} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        if(MSVC)
+            target_compile_options(${t} PRIVATE /W0)
+        else()
+            target_compile_options(${t} PRIVATE -w)
+        endif()
+    endif()
+endforeach()
+
+# ---- SPIRV-Cross (macOS only) ---------------------------------------------------------------
 # Declared in cmake/macos/MetalDependencies.cmake and pulled in by src/engine/rhi_metal (ADR-0028).
