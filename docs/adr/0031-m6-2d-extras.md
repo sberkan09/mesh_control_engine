@@ -37,3 +37,19 @@ code", lighting and post are renderer features gated to v0.5.
 
 **Budget.** A 2,000-particle burst, advanced and batched every frame: 1.27 ms in Debug on the CI container; the
 optimized-build check is < 2 ms (`test_kit`).
+
+## 2. Parallax layers (FR-R2D-050)
+
+1. **Data on the layer.** `kit::Parallax { factor, repeat_x }` sits next to a `Sprite`, `TilemapLayer` or `TextLabel`.
+   The extract draws the entity at `position + camera × (1 − factor)`, per axis, with the camera being the batch view's
+   (snapped, shaken) center. 1 is the world, 0.5 half speed, 0 fixed to the camera, above 1 a foreground. A layer is
+   authored where it appears with the camera at the origin, so the editor viewport (camera at the scene's camera) and
+   the game agree.
+2. **Draw order is unchanged** for scenes without parallax: the extract runs the old two queries with
+   `without<Parallax>`, then the parallax entities. Layers are separated by sort layer anyway.
+3. **Tilemaps are not re-baked** when they scroll. `SpriteBatch::add_tilemap` takes a draw-time `offset`: chunks cull
+   against the shifted bounds and the group carries the offset; `Renderer::record_2d` re-sets the frame uniform with
+   `view_proj × translate(offset)` only when the offset changes between groups (one extra uniform update per parallax
+   tile layer). Dynamic sprites always draw at offset zero.
+4. **`repeat_x`** turns one sprite into an endless background: the extract emits copies one width apart covering the
+   view's horizontal extent (at most 256), each culled normally.

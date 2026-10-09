@@ -238,12 +238,12 @@ void SpriteBatch::add_text(const Font& font, const TextLayout& layout, const Tex
     }
 }
 
-void SpriteBatch::add_tilemap(u32 id, const TilemapBake& bake) {
+void SpriteBatch::add_tilemap(u32 id, const TilemapBake& bake, vec2 offset) {
     if (!sets_.valid(bake.set) || bake.chunks.empty()) return;
-    TilemapItem t{id, static_cast<u32>(tile_args_.size()), 0, 0};
+    TilemapItem t{id, static_cast<u32>(tile_args_.size()), 0, 0, offset};
     for (const TilemapBake::Chunk& c : bake.chunks) {
         ++stats_.submitted;
-        if (!c.bounds.overlaps(view_.world_bounds)) {
+        if (!aabb2{c.bounds.min + offset, c.bounds.max + offset}.overlaps(view_.world_bounds)) {
             ++stats_.culled;
             continue;
         }
@@ -298,7 +298,7 @@ void SpriteBatch::build() {
             close_group();
             segment_open = false;
             const TilemapItem& t = tilemaps_[it.index];
-            Group g{GroupSource::Tilemap, blend, set, 0, t.id, static_cast<u32>(args_.size()), t.arg_count};
+            Group g{GroupSource::Tilemap, blend, set, 0, t.id, static_cast<u32>(args_.size()), t.arg_count, t.offset};
             for (u32 a = 0; a < t.arg_count; ++a) args_.push_back(tile_args_[t.first_arg + a]);
             groups_.push_back(g);
             stats_.tile_quads += t.quads;
@@ -310,7 +310,7 @@ void SpriteBatch::build() {
         }
         if (!group_open || mat != group_material) {
             close_group();
-            groups_.push_back(Group{GroupSource::Dynamic, blend, set, static_cast<u32>(segments_.size() - 1), 0, 0, 0});
+            groups_.push_back(Group{GroupSource::Dynamic, blend, set, static_cast<u32>(segments_.size() - 1), 0, 0, 0, {}});
             group_open = true;
             group_material = mat;
             group_first_quad = segments_.back().vertex_count / 4;

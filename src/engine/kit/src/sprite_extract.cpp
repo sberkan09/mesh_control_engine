@@ -1,8 +1,10 @@
 #include "mce/kit/sprite_extract.h"
 
+#include <cmath>
+
 #include "mce/ecs/hierarchy.h"
-#include "mce/kit/particles.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/particles.h"
 #include "mce/log.h"
 #include "mce/memory/frame_slots.h"
 #include "mce/render/asset_upload.h"
@@ -138,17 +140,31 @@ struct Placement {
 inline Placement placement(const LocalTransform& t) { return {t.position, t.rotation, t.scale}; }
 inline Placement placement(const WorldTransform& t) { return {t.position, t.rotation, t.scale}; }
 
+// Parallax layers draw shifted by camera × (1 − factor) (FR-R2D-050). Entities without one take
+// the first two queries, in the same order as before parallax existed.
+Placement shifted(Placement p, const Parallax& px, math::vec2 cam) {
+    p.position.x += cam.x * (1.0f - px.factor.x);
+    p.position.y += cam.y * (1.0f - px.factor.y);
+    return p;
+}
+
 template <typename C, typename Fn>
-void each_placed(World& world, Fn&& fn) {
-    world.query<const LocalTransform, const C>().template without<WorldTransform>().each(
-        [&](const LocalTransform& t, const C& c) { fn(placement(t), c); });
-    world.query<const WorldTransform, const C>().each([&](const WorldTransform& t, const C& c) { fn(placement(t), c); });
+void each_placed(World& world, math::vec2 cam, Fn&& fn) {
+    world.query<const LocalTransform, const C>().template without<WorldTransform, Parallax>().each(
+        [&](const LocalTransform& t, const C& c) { fn(placement(t), c, nullptr); });
+    world.query<const WorldTransform, const C>().template without<Parallax>().each(
+        [&](const WorldTransform& t, const C& c) { fn(placement(t), c, nullptr); });
+    world.query<const LocalTransform, const C, const Parallax>().template without<WorldTransform>().each(
+        [&](const LocalTransform& t, const C& c, const Parallax& p) { fn(shifted(placement(t), p, cam), c, &p); });
+    world.query<const WorldTransform, const C, const Parallax>().each(
+        [&](const WorldTransform& t, const C& c, const Parallax& p) { fn(shifted(placement(t), p, cam), c, &p); });
 }
 
 }  // namespace
 
 void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
-    each_placed<Sprite>(world, [&](const Placement& t, const Sprite& s) {
+    const math::vec2 cam = batch.view().center;
+    each_placed<Sprite>(world, cam, [&](const Placement& t, const Sprite& s, const Parallax* px) {
         render::SpriteInstance inst;
         inst.position = {t.position.x, t.position.y};
         inst.rotation = angle_z(t.rotation);
@@ -161,10 +177,25 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         inst.sort_order = s.order;
         inst.flip_x = s.flip_x;
         inst.flip_y = s.flip_y;
-        batch.add(inst);
+        if (!px || !px->repeat_x) {
+            batch.add(inst);
+            return;
+        }
+        // Endless background: copies one width apart across the view, starting left of it.
+        const f32 w = std::fabs(inst.scale.x);
+        if (w <= 0.0f) return;
+        const math::aabb2& view = batch.view().world_bounds;
+        const f32 left = inst.position.x - w * inst.pivot.x;  // the authored copy's left edge
+        const f32 k0 = std::floor((view.min.x - left) / w);
+        const f32 k1 = std::ceil((view.max.x - left) / w);
+        for (f32 k = k0; k < k1 && k - k0 < 256.0f; k += 1.0f) {
+            render::SpriteInstance copy = inst;
+            copy.position.x = inst.position.x + k * w;
+            batch.add(copy);
+        }
     });
 
-    each_placed<TextLabel>(world, [&](const Placement& t, const TextLabel& l) {
+    each_placed<TextLabel>(world, cam, [&](const Placement& t, const TextLabel& l, const Parallax*) {
         const render::Font* f = font(l.font.guid);
         if (!f || l.text.view().empty() || f->face.metrics().pixel_height <= 0.0f) return;
         render::TextLayout layout(mem::frame());
@@ -189,7 +220,12 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         ps->draw(batch, [](void* self, asset::Guid tex) { return static_cast<SpriteExtract*>(self)->sprite_set(tex); }, this);
 
     for (TilemapEntry& e : tilemaps_) e.used = false;
-    each_placed<TilemapLayer>(world, [&](const Placement& t, const TilemapLayer& l) { draw_tilemap(l, {t.position.x, t.position.y}, batch); });
+    each_placed<TilemapLayer>(world, cam, [&](const Placement& t, const TilemapLayer& l, const Parallax* px) {
+        // A parallax layer stays baked where it was authored; the shift is a draw-time offset.
+        const math::vec2 at{t.position.x, t.position.y};
+        const math::vec2 shift = px ? math::vec2{cam.x * (1.0f - px->factor.x), cam.y * (1.0f - px->factor.y)} : math::vec2{};
+        draw_tilemap(l, at - shift, shift, batch);
+    });
     // Layers that went away this frame free their baked buffers.
     for (usize i = tilemaps_.size(); i-- > 0;) {
         if (tilemaps_[i].used) continue;
@@ -205,7 +241,7 @@ void SpriteExtract::destroy_tilemap(TilemapEntry& e) {
     e = TilemapEntry{};
 }
 
-void SpriteExtract::draw_tilemap(const TilemapLayer& layer, math::vec2 origin, render::SpriteBatch& batch) {
+void SpriteExtract::draw_tilemap(const TilemapLayer& layer, math::vec2 origin, math::vec2 offset, render::SpriteBatch& batch) {
     const asset::Guid guid = layer.map.guid;
     if (guid == asset::Guid{} || !assets_ || !renderer_) return;
     // The n-th layer of one map this frame takes the n-th entry (two layers may share a map).
@@ -281,7 +317,7 @@ void SpriteExtract::draw_tilemap(const TilemapLayer& layer, math::vec2 origin, r
         e->order = layer.order;
         e->layer = layer.layer;
     }
-    renderer_->add_tilemap(batch, e->id);
+    renderer_->add_tilemap(batch, e->id, offset);
 }
 
 bool primary_camera(World& world, render::Camera2D& out, f32& pixels_per_meter, math::Color* clear_color) {

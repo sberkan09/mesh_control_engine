@@ -91,4 +91,16 @@ struct ParticleEmitter {
 };
 MCE_COMPONENT(ParticleEmitter, preset, seed, order, (layer, Range{-100, 100}), playing, destroy_when_done)
 
+// A parallax layer (FR-R2D-050): the entity's Sprite, TilemapLayer and TextLabel scroll against
+// the camera by `factor` per axis. 1 moves with the world, 0.5 at half speed (a far background), 0
+// stays fixed to the camera (a sky); above 1 is a foreground that passes faster. The layer is
+// authored where it sits when the camera is at the origin: drawn at position + camera × (1 −
+// factor). `repeat_x` tiles a Sprite horizontally across the view, for endless backgrounds.
+struct Parallax {
+    math::vec2 factor{1.0f, 1.0f};
+    bool repeat_x = false;
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(Parallax, (factor, Help{"scroll factor per axis: 1 = world, 0 = fixed to the camera"}), repeat_x)
+
 }  // namespace mce::kit
