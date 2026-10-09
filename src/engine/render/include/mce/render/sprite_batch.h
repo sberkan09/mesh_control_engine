@@ -174,6 +174,7 @@ public:
     void build();
 
     const View2D& view() const { return view_; }
+    const SpriteSets& sets() const { return sets_; }
     Span<const SpriteVertex> vertices() const { return vertices_.span(); }
     Span<const rhi::DrawIndexedIndirectCommand> draw_args() const { return args_.span(); }
     Span<const Group> groups() const { return groups_.span(); }
