@@ -122,10 +122,10 @@ directory). Helpers are in `input_test_util.h`.
 - [audio-input-ui.md](../architecture/audio-input-ui.md): §2.1 action maps and the snapshot, §2.2
   device and text surface, §2.4 ECS surface, §3.1 input layering, §3.2 the tick-quantization
   algorithm, §4.2 input lifecycle, §4.4 pause and focus, §4.6 the editor input seam, §6.1 tests.
-- [ADR-0026](../adr/0026-m6-subsystems.md) §2: gamepads and rebinding persistence.
-- Milestones: [M6-subsystems.md](../milestones/M6-subsystems.md) (input section),
-  [M6-gameplay.md](../milestones/M6-gameplay.md) (focus-loss pause),
-  [M6-ember-step.md](../milestones/M6-ember-step.md) (a host-built map).
+- ADR-0026 (`docs/adr/0026-m6-subsystems.md`) §2: gamepads and rebinding persistence.
+- Milestones: M6-subsystems.md (`docs/milestones/M6-subsystems.md`) (input section),
+  M6-gameplay.md (`docs/milestones/M6-gameplay.md`) (focus-loss pause),
+  M6-ember-step.md (`docs/milestones/M6-ember-step.md`) (a host-built map).
 
 ## Known gaps
 

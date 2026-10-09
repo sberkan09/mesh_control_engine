@@ -4,9 +4,18 @@
 #   games/kindle/module/    the game module libkindle: components (kindle.h), systems (kindle.cpp)
 #   games/kindle/host/      the thin host executable kindle
 #
-# Build: the engine tree adds every projects/<name>/ directory; `cmake --build --preset <preset>
-# --target kindle` builds the host, the module and the pack. Ship: python3 scripts/ship.py
-# --project projects/Kindle
+# Two ways to build it:
+#   - against an installed engine (the SDK, where it is share/mce/examples/Kindle): `mce example
+#     Kindle` copies it out, then `mce build Kindle`, `mce play Kindle`, `mce editor Kindle`
+#   - inside the engine tree: the engine's CMake adds every projects/<name>/ directory;
+#     `cmake --build --preset <preset> --target kindle` builds the host, the module and the pack
+#     and python3 scripts/ship.py --project projects/Kindle ships it.
+cmake_minimum_required(VERSION 3.28)
+if(NOT COMMAND mce_add_project)
+    project(Kindle LANGUAGES C CXX)
+    find_package(MCE REQUIRED)
+endif()
+
 mce_add_project(kindle
     TITLE "Kindle"
     GAME_SOURCES games/kindle/module/kindle.cpp
@@ -17,8 +26,9 @@ mce_add_project(kindle
 
 # Kindle's own test (UC-D): the cooked level played through the game's systems with scripted
 # input, the switch mechanic, and a full run to the flag (tests/test_kindle.cpp). The game sources
-# link in statically, as samples/03_platformer's test_ember_step does.
-if(MCE_BUILD_TESTS)
+# link in statically, as samples/03_platformer's test_ember_step does. Engine tree only: against
+# the SDK the engine's static libraries it links are not installed (the host plays it instead).
+if(MCE_BUILD_TESTS AND NOT MCE_SDK)
     mce_add_test(kindle_level SOURCES tests/test_kindle.cpp games/kindle/module/kindle.cpp
         DEPS mce::mce_ecs mce::mce_ecs_scene mce::mce_scene mce::mce_asset mce::mce_gameplay_kit mce::mce_physics2d
              mce::mce_input mce::mce_audio mce::mce_module_host)

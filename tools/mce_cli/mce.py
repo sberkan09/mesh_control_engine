@@ -2,6 +2,7 @@
 """mce: the installed engine's command (installed as <sdk>/bin/mce by cmake/MceInstall.cmake).
 
     mce new <Name> [--game id] [--title "Title"] [--dest dir]   stamp a project from the template
+    mce example [<Name>] [--dest dir]           copy an example project out of the SDK (no name: list them)
     mce build <project> [--config Debug|Release] [-D<var>=<v>...]  configure (find_package(MCE)) + build
     mce play <project> [player flags...]        run the game (its host) from the build
     mce headless <project> [--ticks N] [flags]  run it without a window; prints the state hash
@@ -95,6 +96,25 @@ def cmd_new(args):
     if args.force:
         cmd += ["--force"]
     return run(cmd)
+
+
+def cmd_example(args):
+    examples = SHARE / "examples"
+    names = sorted(p.name for p in examples.iterdir() if (p / "CMakeLists.txt").is_file()) if examples.is_dir() else []
+    if not args.name:
+        print("examples in this SDK (mce example <Name> copies one to ./<Name>):")
+        for n in names:
+            print(f"  {n}")
+        return 0
+    if args.name not in names:
+        sys.exit(f"mce: no example named {args.name}; the SDK has: {', '.join(names) or 'none'}")
+    dst = pathlib.Path(args.dest).resolve() / args.name
+    if dst.exists() and any(dst.iterdir()) and not args.force:
+        sys.exit(f"mce: {dst} exists (use --force to overwrite)")
+    shutil.copytree(examples / args.name, dst, dirs_exist_ok=True)
+    print(f"mce: {args.name} -> {dst}")
+    print(f"  build: mce build {dst}    play: mce play {dst}    edit: mce editor {dst}")
+    return 0
 
 
 def cmd_build(args):
@@ -199,6 +219,12 @@ def main(argv):
     s.add_argument("--dest", default=os.getcwd())
     s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_new)
+
+    s = sub.add_parser("example", help="copy an example project out of the SDK (no name: list them)")
+    s.add_argument("name", nargs="?")
+    s.add_argument("--dest", default=os.getcwd())
+    s.add_argument("--force", action="store_true")
+    s.set_defaults(fn=cmd_example)
 
     s = sub.add_parser("build", help="configure and build a project against this SDK")
     s.add_argument("project")

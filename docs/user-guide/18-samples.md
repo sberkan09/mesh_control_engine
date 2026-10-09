@@ -1,7 +1,10 @@
 # 18. Samples and example projects
 
 Each sample is one milestone's running demo and a worked example of a feature set. Projects under
-`projects/` are complete games made with the template. Use them as copy sources.
+`projects/` are complete games made with the template. Use them as copy sources. With the
+installed SDK (chapter 1) Kindle is in `share/mce/examples/`: `mce example Kindle` copies it out and
+`mce build Kindle` builds it against the SDK; the other projects and the samples are in the engine
+checkout only.
 
 ## 18.1 Projects (template-based games)
 

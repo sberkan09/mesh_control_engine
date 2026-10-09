@@ -81,12 +81,12 @@ Also: `sample_physics3d_headless_300`, the determinism stage (3 runs, Debug and 
 
 ## Design records
 
-- [ADR-0003 Embed Jolt Physics 5 for 3D](../adr/0003-embed-jolt-for-3d.md): version, build flags,
+- ADR-0003 Embed Jolt Physics 5 for 3D (`docs/adr/0003-embed-jolt-for-3d.md`): version, build flags,
   facade, layers, simulation contract, character, camera sweep, determinism, deferrals, Plan B.
 - [Physics architecture](../architecture/physics.md): D1, D4, D7, §2.2 world facades, §3.7 the Jolt
   embed, §6 tests 6, 7, 10 and 13.
-- [ADR-0029 Play-in-editor](../adr/0029-play-in-editor.md) §3: the editor orbit camera collision gate.
-- [M5b milestone](../milestones/M5b.md) and [M7 Ashen Court](../milestones/M7-ashen-court.md)
+- ADR-0029 Play-in-editor (`docs/adr/0029-play-in-editor.md`) §3: the editor orbit camera collision gate.
+- M5b milestone (`docs/milestones/M5b.md`) and M7 Ashen Court (`docs/milestones/M7-ashen-court.md`)
   (third-person character and camera on `World3D`).
 
 ## Known gaps

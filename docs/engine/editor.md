@@ -159,14 +159,14 @@ GPU (label `gpu`, `MCE_GPU_TESTS`): `editor_smoke` (default layout over the stub
   §2.6 inspector, §2.8 play session, §3.1 two-world model, §3.2 funnel invariants, §3.5
   editor/runtime separation.
 - [Editor MCP architecture](../architecture/editor-mcp.md).
-- ADRs: [0025 editor scene authoring](../adr/0025-editor-scene-authoring.md),
-  [0027 editor MCP server](../adr/0027-editor-mcp-server.md),
-  [0029 play-in-editor](../adr/0029-play-in-editor.md),
-  [0030 M6 editor authoring](../adr/0030-m6-editor-authoring.md).
-- Milestones: [editor catch-up](../milestones/editor-catch-up.md), [M4.5](../milestones/M4.5.md),
-  [M5b](../milestones/M5b.md), [M6 editor](../milestones/M6-editor.md),
-  [M7 editor perf](../milestones/M7-editor-perf.md), [M8 editor](../milestones/M8-editor.md),
-  [M8 project template](../milestones/M8-project-template.md).
+- ADRs: 0025 editor scene authoring (`docs/adr/0025-editor-scene-authoring.md`),
+  0027 editor MCP server (`docs/adr/0027-editor-mcp-server.md`),
+  0029 play-in-editor (`docs/adr/0029-play-in-editor.md`),
+  0030 M6 editor authoring (`docs/adr/0030-m6-editor-authoring.md`).
+- Milestones: editor catch-up (`docs/milestones/editor-catch-up.md`), M4.5 (`docs/milestones/M4.5.md`),
+  M5b (`docs/milestones/M5b.md`), M6 editor (`docs/milestones/M6-editor.md`),
+  M7 editor perf (`docs/milestones/M7-editor-perf.md`), M8 editor (`docs/milestones/M8-editor.md`),
+  M8 project template (`docs/milestones/M8-project-template.md`).
 
 ## Known gaps
 

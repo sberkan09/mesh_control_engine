@@ -10,12 +10,14 @@ projects/MyGame/
   MyGame.mceproj                 # identity: name, title, engine version, games, start scene
   CMakeLists.txt                 # one call: mce_add_project(my_game ...)
   README.md                      # the commands for this project
+  CREDITS.md                     # third-party content and licences (the shipped folder carries it)
   .gitignore                     # cooked/ and assets.mce are build outputs
   assets/                        # what you edit; the editor and the cook open this directory
     scenes/main.mcscene          # the start scene (text, JSON-like)
     textures/block.png           # a source file ...
     textures/block.png.mceasset  # ... and its sidecar: GUID + importer settings
     textures/ground.png (+ .mceasset)
+    fonts/ProggyClean.ttf (+ .mceasset)   # the title label's font (MIT); any TTF works the same way
   games/my_game/
     module/components.h          # your components (MCE_COMPONENT), data only
     module/my_game.h             # declares my_game::install

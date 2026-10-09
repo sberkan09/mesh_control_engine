@@ -44,6 +44,13 @@
         "RigidBody2D": { "type": "Dynamic" },
         "Sprite": { "texture": "guid:@GUID_TEX_BLOCK@" }
       }
+    },
+    {
+      "name": "Title",
+      "components": {
+        "LocalTransform": { "position": [0, 5, 0] },
+        "TextLabel": { "font": "guid:@GUID_FONT@", "text": "@TITLE@", "color": [1, 0.95, 0.8, 1], "height": 0.6 }
+      }
     }
   ]
 }

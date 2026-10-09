@@ -21,6 +21,14 @@ console. Gamepad: left stick / d-pad, A, X.
 | `games/kindle/host/` | the thin host executable (the engine's player runtime + this game) |
 | `tests/test_kindle.cpp` | ctest `kindle_level`: the switch mechanic and a scripted run to the flag |
 
+With the installed SDK (chapter 1 of the user guide), where this project is `share/mce/examples/Kindle`:
+
+    mce example Kindle          # copies it to ./Kindle
+    mce build Kindle && mce play Kindle
+    mce editor Kindle           # the installed editor with libkindle loaded
+    mce mcp Kindle              # the MCP server (tools/author_level_mcp.py --mcp can drive it)
+    mce ship Kindle --version 1.0
+
 From the engine checkout:
 
     cmake --preset linux-gcc-debug                      # picks up projects/Kindle

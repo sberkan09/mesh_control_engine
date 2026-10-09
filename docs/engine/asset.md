@@ -140,20 +140,20 @@ Scene and prefab chunks are also exercised end to end by `tests/ecs/test_prefab.
   (§10).
 - [../ARCHITECTURE.md](../ARCHITECTURE.md) §4.1 (import, cook, hot reload flow), fix F6 (upload sink) and F12
   / ADR-0015 (editor-owned watcher) in §5.1.
-- [../adr/0019-asset-pipeline-m2.md](../adr/0019-asset-pipeline-m2.md): stb dependency, hand-written cook
+- `docs/adr/0019-asset-pipeline-m2.md`: stb dependency, hand-written cook
   JSON, container layout fixes.
-- [../adr/0022-gltf-static-import-m4.md](../adr/0022-gltf-static-import-m4.md): glTF import and `CHNK_MESH` as
+- `docs/adr/0022-gltf-static-import-m4.md`: glTF import and `CHNK_MESH` as
   built.
-- [../adr/0033-shader-cook.md](../adr/0033-shader-cook.md): shader validation, variants and SPIR-V reflection.
-- [../adr/0024-runtime-scene-path.md](../adr/0024-runtime-scene-path.md): cooked scenes into entities.
-- [../adr/0029-play-in-editor.md](../adr/0029-play-in-editor.md) §2: hot reload in the editor.
-- [../adr/0030-m6-editor-authoring.md](../adr/0030-m6-editor-authoring.md) §8 (tilemaps),
-  [../adr/0031-m6-2d-extras.md](../adr/0031-m6-2d-extras.md) (particle presets),
-  [../adr/0032-sequence-runner.md](../adr/0032-sequence-runner.md) (sequences).
-- Milestones: [../milestones/M4.md](../milestones/M4.md),
-  [../milestones/M6-shader-cook.md](../milestones/M6-shader-cook.md),
-  [../milestones/M6-2d.md](../milestones/M6-2d.md),
-  [../milestones/M8-project-template.md](../milestones/M8-project-template.md) (per-project `<game>_cook` that
+- `docs/adr/0033-shader-cook.md`: shader validation, variants and SPIR-V reflection.
+- `docs/adr/0024-runtime-scene-path.md`: cooked scenes into entities.
+- `docs/adr/0029-play-in-editor.md` §2: hot reload in the editor.
+- `docs/adr/0030-m6-editor-authoring.md` §8 (tilemaps),
+  `docs/adr/0031-m6-2d-extras.md` (particle presets),
+  `docs/adr/0032-sequence-runner.md` (sequences).
+- Milestones: `docs/milestones/M4.md`,
+  `docs/milestones/M6-shader-cook.md`,
+  `docs/milestones/M6-2d.md`,
+  `docs/milestones/M8-project-template.md` (per-project `<game>_cook` that
   links the game's component types).
 
 ## Known gaps

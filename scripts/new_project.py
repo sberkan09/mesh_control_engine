@@ -27,7 +27,7 @@ import zlib
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "templates" / "project"
 IN_ENGINE_TREE = (ROOT / "CMakeLists.txt").is_file()
-TEXT_SUFFIXES = {".txt", ".md", ".cpp", ".h", ".mceproj", ".mcscene", ".gitignore", ".json"}
+TEXT_SUFFIXES = {".txt", ".md", ".cpp", ".h", ".mceproj", ".mcscene", ".mceasset", ".gitignore", ".json"}
 
 
 def game_id(name):
@@ -113,6 +113,7 @@ def main():
         "@GUID_SCENE@": new_guid(),
         "@GUID_TEX_BLOCK@": new_guid(),
         "@GUID_TEX_GROUND@": new_guid(),
+        "@GUID_FONT@": new_guid(),
     }
 
     def stamp(text):

@@ -141,11 +141,11 @@ checks with `tests/crash_report_check.py` that `scripts/symbolicate.py` resolves
   and containers (§3), the thread roster and frame lifecycle (§4), test strategy (§6).
 - [../ARCHITECTURE.md](../ARCHITECTURE.md) §1.2 (walls), §6 (threading and memory model), §7 (dependency
   rule), §9 (ADR-0005 frame slots, ADR-0007 determinism, ADR-0009 reflection).
-- [../adr/0017-fetchcontent-dependencies.md](../adr/0017-fetchcontent-dependencies.md) (how spdlog and Tracy
-  are fetched) and [../adr/0018-portable-build.md](../adr/0018-portable-build.md) (Linux presets beside MSVC).
-- [../adr/0021-game-module-loader-m3.md](../adr/0021-game-module-loader-m3.md): one engine instance (one
+- `docs/adr/0017-fetchcontent-dependencies.md` (how spdlog and Tracy
+  are fetched) and `docs/adr/0018-portable-build.md` (Linux presets beside MSVC).
+- `docs/adr/0021-game-module-loader-m3.md`: one engine instance (one
   convar registry, one log, one allocator state) shared by host and game module.
-- [../milestones/M8-packaging.md](../milestones/M8-packaging.md): the crash handler, symbolication, version
+- `docs/milestones/M8-packaging.md`: the crash handler, symbolication, version
   metadata and the cheat guard.
 
 ## Known gaps

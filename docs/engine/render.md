@@ -121,17 +121,17 @@ Built-in shaders are GLSL 450 strings in `src/renderer.cpp` (2D) and `src/shader
   model, §3.4 per-frame pipeline (extract, cull, sort, batch, record), §3.5 pass lists, §3.6
   lighting, §3.7 render targets, §6 test strategy. Where the built code differs, the ADRs below
   record it.
-- [ADR-0020](../adr/0020-2d-render-path.md): the 2D path as built (extract in the kit, 24-byte
+- ADR-0020 (`docs/adr/0020-2d-render-path.md`): the 2D path as built (extract in the kit, 24-byte
   `SpriteVertex`, segment MDI, sRGB in the shader, array textures, runtime tilemap bake).
-- [ADR-0031](../adr/0031-m6-2d-extras.md): particles, parallax, lit 2D, 2D post.
-- [ADR-0022](../adr/0022-gltf-static-import-m4.md): `CHNK_MESH` format.
-- [ADR-0023](../adr/0023-3d-render-path-m4.md): the M4 3D path (MeshStore, quantized streams,
+- ADR-0031 (`docs/adr/0031-m6-2d-extras.md`): particles, parallax, lit 2D, 2D post.
+- ADR-0022 (`docs/adr/0022-gltf-static-import-m4.md`): `CHNK_MESH` format.
+- ADR-0023 (`docs/adr/0023-3d-render-path-m4.md`): the M4 3D path (MeshStore, quantized streams,
   per-draw `ObjectU`, CPU node animation, shadow fit, tonemap).
-- [ADR-0024](../adr/0024-pbr-forward-plus-csm-m5a.md): PBR, Forward+, CSM, sky, post, timing.
-- [ADR-0033](../adr/0033-shader-cook.md): shader cook.
-- Milestones: [M4.md](../milestones/M4.md), [M5a.md](../milestones/M5a.md),
-  [M6-2d.md](../milestones/M6-2d.md), [M6-shader-cook.md](../milestones/M6-shader-cook.md),
-  [M7-ashen-court.md](../milestones/M7-ashen-court.md).
+- ADR-0024 (`docs/adr/0024-pbr-forward-plus-csm-m5a.md`): PBR, Forward+, CSM, sky, post, timing.
+- ADR-0033 (`docs/adr/0033-shader-cook.md`): shader cook.
+- Milestones: M4.md (`docs/milestones/M4.md`), M5a.md (`docs/milestones/M5a.md`),
+  M6-2d.md (`docs/milestones/M6-2d.md`), M6-shader-cook.md (`docs/milestones/M6-shader-cook.md`),
+  M7-ashen-court.md (`docs/milestones/M7-ashen-court.md`).
 
 ## Known gaps
 

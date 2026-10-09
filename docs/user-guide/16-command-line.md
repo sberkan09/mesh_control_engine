@@ -112,6 +112,7 @@ scripts/ci/setup_env.sh                               # Ubuntu 24.04 packages
 
 ```
 mce new <Name> [--game id] [--title "Title"] [--dest dir] [--force]
+mce example [<Name>] [--dest dir] [--force]
 mce build <project> [--config Debug|Release] [-D<var>=<value> ...]
 mce play <project> [player flags ...]
 mce headless <project> [--ticks N] [player flags ...]
@@ -124,6 +125,8 @@ mce --help
 ```
 
 Each subcommand prints the command it runs and exits with that tool's code (2 for a usage error).
+`mce example` with no name lists the SDK's example projects (`share/mce/examples/`); with one it
+copies that project to `<dir>/<Name>`, ready for `mce build`.
 `mce editor`, `mce mcp` and `mce cook` run the SDK's `mce_editor`, `mce_mcp` and `mce_cook` with
 `-module <project>/build/lib<game>.so`; `mce ship` writes `<project>/dist/<Name>-<version>-<os>.zip`
 holding the host, the module, `libmce_engine`, `assets.mce`, `VERSION.txt` and `README.txt`.

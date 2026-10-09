@@ -71,13 +71,13 @@ End to end:
 
 ## Design records
 
-- [ADR-0024 The runtime scene path](../adr/0024-runtime-scene-path.md): reflection-addressed ECS
+- ADR-0024 The runtime scene path (`docs/adr/0024-runtime-scene-path.md`): reflection-addressed ECS
   writes, `mce_scene`, the starter kit and `mce_player`.
-- [ADR-0025 ECS v0.5](../adr/0025-ecs-v05-change-ticks-hierarchy-prefabs.md), "Two loaders for now".
-- [ADR-0030 M6 editor authoring](../adr/0030-m6-editor-authoring.md) §5: the runtime hierarchy.
-- [ADR-0032 Sequence runner](../adr/0032-sequence-runner.md) decision 7: the reflection id fix.
+- ADR-0025 ECS v0.5 (`docs/adr/0025-ecs-v05-change-ticks-hierarchy-prefabs.md`), "Two loaders for now".
+- ADR-0030 M6 editor authoring (`docs/adr/0030-m6-editor-authoring.md`) §5: the runtime hierarchy.
+- ADR-0032 Sequence runner (`docs/adr/0032-sequence-runner.md`) decision 7: the reflection id fix.
 - [Assets architecture](../architecture/assets.md) §6 scene serialization, §7.3 scene load path.
-- [Editor catch-up milestone](../milestones/editor-catch-up.md) and [M5b](../milestones/M5b.md).
+- Editor catch-up milestone (`docs/milestones/editor-catch-up.md`) and M5b (`docs/milestones/M5b.md`).
 
 ## Known gaps
 
