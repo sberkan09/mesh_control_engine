@@ -61,7 +61,8 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
 
 ## Building a 2D game on the kit (what M9 needed)
 
-The kit draws; it has no gameplay. A scene-authored platformer (UC-D's `projects/Kindle`) puts these
+The kit draws; it has no gameplay. A scene-authored platformer (UC-D's `projects/Kindle`, the SDK's
+`share/mce/examples/Kindle`) puts these
 together:
 
 - **Screen-space HUD.** There is no HUD component: a `TextLabel` with `Parallax {factor: [0, 0]}`
@@ -130,10 +131,10 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
 
 - [ECS and gameplay architecture](../architecture/ecs-gameplay.md) §2.9 starter kit.
 - [Scripting architecture](../architecture/scripting.md) §2.5 FSM helper, §2.6 sequences.
-- [ADR-0024 The runtime scene path](../adr/0024-runtime-scene-path.md) decision 4.
-- [ADR-0031 M6 2D extras](../adr/0031-m6-2d-extras.md): particles, parallax, lit 2D, 2D post.
-- [ADR-0032 SequenceRunner](../adr/0032-sequence-runner.md).
-- [M6 2D extras](../milestones/M6-2d.md) and [M6 gameplay](../milestones/M6-gameplay.md).
+- ADR-0024 The runtime scene path (`docs/adr/0024-runtime-scene-path.md`) decision 4.
+- ADR-0031 M6 2D extras (`docs/adr/0031-m6-2d-extras.md`): particles, parallax, lit 2D, 2D post.
+- ADR-0032 SequenceRunner (`docs/adr/0032-sequence-runner.md`).
+- M6 2D extras (`docs/milestones/M6-2d.md`) and M6 gameplay (`docs/milestones/M6-gameplay.md`).
 
 ## Known gaps
 

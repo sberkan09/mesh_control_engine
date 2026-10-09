@@ -120,10 +120,10 @@ the full gameplay stack.
 
 - [Physics architecture](../architecture/physics.md): §0 decisions D1–D9, §2.1 components, §3.2
   internals, §3.3 body lifecycle, §3.6 controller, §4 threading, §6 test plan.
-- [ADR-0016 Box2D v3 as the test-time oracle](../adr/0016-box2d-test-oracle.md)
-- [ADR-0026 M6 subsystems](../adr/0026-m6-subsystems.md) §3: joints, sleeping, block solver,
+- ADR-0016 Box2D v3 as the test-time oracle (`docs/adr/0016-box2d-test-oracle.md`)
+- ADR-0026 M6 subsystems (`docs/adr/0026-m6-subsystems.md`) §3: joints, sleeping, block solver,
   2,000 bodies.
-- [M6 subsystems milestone](../milestones/M6-subsystems.md), "Physics2d v0.5" section.
+- M6 subsystems milestone (`docs/milestones/M6-subsystems.md`), "Physics2d v0.5" section.
 - ROADMAP M3 (rung-6 shape) and M3.5 (solver hardening).
 
 ## Known gaps

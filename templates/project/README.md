@@ -8,6 +8,15 @@ Made with the MCE project template (`scripts/new_project.py`). Layout (assets.md
 | `assets/` | the content you edit; the editor opens this directory. `cooked/` and `assets.mce` are build outputs |
 | `games/@GAME@/module/` | the game module: `components.h` components, `@GAME@.cpp` systems + `install`, `module.cpp` entry, `types.cpp` for the cook |
 | `games/@GAME@/host/` | the thin host executable (the engine's player runtime + this game) |
+| `CREDITS.md` | third-party content (the template's ProggyClean font, MIT); `mce ship` / `ship.py` copy it into the shipped folder |
+
+With the installed SDK (`mce` on your PATH; chapter 1 of the user guide):
+
+    mce build @PROJECT@                 # find_package(MCE) + build into @PROJECT@/build
+    mce play @PROJECT@                  # play (Esc pauses, ` opens the console)
+    mce editor @PROJECT@                # the installed editor with lib@GAME@ loaded
+    mce mcp @PROJECT@                   # the MCP server for an AI agent (user guide chapter 14)
+    mce ship @PROJECT@ --version 1.0    # the ship zip in @PROJECT@/dist/
 
 From the engine checkout:
 

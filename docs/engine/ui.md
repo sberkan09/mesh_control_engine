@@ -93,7 +93,7 @@ indirect draws, no GL validation errors), `sample_ui_gallery_{title,options,leve
   §9 decisions.
 - [Audio, input and UI architecture](../architecture/audio-input-ui.md) §2.5 and §3.9 (the earlier
   sketch ui.md supersedes).
-- [M8 runtime UI milestone](../milestones/M8-ui.md): what shipped, budgets, what is not done.
+- M8 runtime UI milestone (`docs/milestones/M8-ui.md`): what shipped, budgets, what is not done.
 
 ## Known gaps
 
@@ -101,7 +101,7 @@ From the M8 UI milestone record ("Not yet") and ui.md:
 
 - No entity lookup by name: `bind_property` takes the `Entity` and the host finds it.
 - The M8 UI record noted that `console::execute` does not check the `Cheat` flag. Packaging v2
-  ([M8-packaging](../milestones/M8-packaging.md)) added `console::set_cheats_allowed(false)`,
+  (M8-packaging (`docs/milestones/M8-packaging.md`)) added `console::set_cheats_allowed(false)`,
   which shipped folders call through `samples/common/ship_paths.h`; development builds still allow
   cheat convars from the console.
 - Style transitions (`transition_ms`), 9-slice images and world-space UI are not built. Images draw

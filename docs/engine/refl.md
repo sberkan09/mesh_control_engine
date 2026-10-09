@@ -109,12 +109,12 @@ saves in `tests/ecs` (see [ecs.md](ecs.md)).
   metadata source.
 - [../architecture/ecs-gameplay.md](../architecture/ecs-gameplay.md) §2.1 (the component rule) and §2.13 (the
   `[Save]` marker).
-- [../adr/0025-ecs-v05-change-ticks-hierarchy-prefabs.md](../adr/0025-ecs-v05-change-ticks-hierarchy-prefabs.md):
+- `docs/adr/0025-ecs-v05-change-ticks-hierarchy-prefabs.md`:
   `mce_ecs` links `mce_refl`; prefab overrides are a property path plus a typed value.
-- [../adr/0019-asset-pipeline-m2.md](../adr/0019-asset-pipeline-m2.md): the reflection-driven `.mcscene` cook.
-- [../adr/0021-game-module-loader-m3.md](../adr/0021-game-module-loader-m3.md): one refl registry shared by
+- `docs/adr/0019-asset-pipeline-m2.md`: the reflection-driven `.mcscene` cook.
+- `docs/adr/0021-game-module-loader-m3.md`: one refl registry shared by
   host and module.
-- [../adr/0027-editor-mcp-server.md](../adr/0027-editor-mcp-server.md): MCP component reads and writes by refl
+- `docs/adr/0027-editor-mcp-server.md`: MCP component reads and writes by refl
   property path.
 
 ## Known gaps

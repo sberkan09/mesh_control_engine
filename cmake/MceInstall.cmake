@@ -9,7 +9,8 @@
 #   lib/cmake/MCE/   MCEConfig.cmake (find_package(MCE)): imported targets mce::mce_engine,
 #               mce::mce_player_runtime, mce::mce_module_api, the tool paths, and the same
 #               MceTarget / MceProject / MceShip helpers the engine tree uses
-#   share/mce/  the project template, new_project.py and VERSION
+#   share/mce/  the project template, new_project.py, VERSION and examples/Kindle (projects/Kindle)
+#   share/doc/mce/   the user guide, the engine and architecture pages, ARCHITECTURE.md, REQUIREMENTS.md
 #
 # A project made from the template builds against it with find_package(MCE) (its CMakeLists.txt),
 # or through `mce new` / `mce build` / `mce play` / `mce editor` / `mce mcp` / `mce ship`
@@ -69,3 +70,16 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/scripts/new_project.py" DESTINATION ${CM
 file(WRITE "${PROJECT_BINARY_DIR}/sdk/VERSION" "${PROJECT_VERSION}\n${MCE_ENGINE_DESCRIBE}\n")
 install(FILES "${PROJECT_BINARY_DIR}/sdk/VERSION" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce.py" DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME mce)
+
+# The example project (`mce example Kindle` copies it out): sources and content, no build outputs.
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/projects/Kindle" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/examples
+        PATTERN "cooked" EXCLUDE PATTERN "build" EXCLUDE PATTERN "dist" EXCLUDE
+        PATTERN "assets.mce" EXCLUDE PATTERN "__pycache__" EXCLUDE)
+
+# The documentation a project author reads (docs/user-guide/README.md is its table of contents).
+set(_mce_doc_dir "${CMAKE_INSTALL_DATADIR}/doc/mce")
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/docs/user-guide" "${PROJECT_SOURCE_DIR}/docs/engine"
+                  "${PROJECT_SOURCE_DIR}/docs/architecture"
+        DESTINATION ${_mce_doc_dir} FILES_MATCHING PATTERN "*.md" PATTERN "*.png" PATTERN "*.svg")
+install(FILES "${PROJECT_SOURCE_DIR}/docs/ARCHITECTURE.md" "${PROJECT_SOURCE_DIR}/docs/REQUIREMENTS.md"
+        DESTINATION ${_mce_doc_dir})

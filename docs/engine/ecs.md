@@ -131,14 +131,14 @@ Headless sample runs exercise the ECS end to end, for example `sample_02_boids_3
   determinism machinery), threading (§4).
 - [../ARCHITECTURE.md](../ARCHITECTURE.md) §9: ADR-0004 (archetype tables over sparse sets), ADR-0007
   (determinism enforced by CI), ADR-0009 (reflection as the metadata source).
-- [../adr/0025-ecs-v05-change-ticks-hierarchy-prefabs.md](../adr/0025-ecs-v05-change-ticks-hierarchy-prefabs.md):
+- `docs/adr/0025-ecs-v05-change-ticks-hierarchy-prefabs.md`:
   change ticks, hierarchy, prefabs as scene chunks, cook-time flattening, `mce_ecs_scene`, `SaveKey` saves,
   replays.
-- [../adr/0024-runtime-scene-path.md](../adr/0024-runtime-scene-path.md): reflection-addressed type-erased
+- `docs/adr/0024-runtime-scene-path.md`: reflection-addressed type-erased
   World writes and `mce_scene`.
-- [../adr/0021-game-module-loader-m3.md](../adr/0021-game-module-loader-m3.md): game modules and the shared
+- `docs/adr/0021-game-module-loader-m3.md`: game modules and the shared
   engine instance.
-- Milestones: [../milestones/M6-ecs.md](../milestones/M6-ecs.md).
+- Milestones: `docs/milestones/M6-ecs.md`.
 
 ## Known gaps
 

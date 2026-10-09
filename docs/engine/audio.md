@@ -120,9 +120,9 @@ cases use the Offline backend.
 - [audio-input-ui.md](../architecture/audio-input-ui.md): §2.3 main-thread API, §2.4 ECS surface,
   §3.3 mixer graph and RT contract, §3.4 sample-accurate scheduling, §3.5 voice stealing, §3.6
   streaming, §3.7 DSP chain, §3.8 spatialization, §4.1 threads, §4.3 audio lifecycle, §6.2 tests.
-- [ADR-0026](../adr/0026-m6-subsystems.md) §1: audio v0.5 as built.
-- Milestones: [M6-subsystems.md](../milestones/M6-subsystems.md) (audio section),
-  [M6-gameplay.md](../milestones/M6-gameplay.md) (master bus muted on focus loss by the player).
+- ADR-0026 (`docs/adr/0026-m6-subsystems.md`) §1: audio v0.5 as built.
+- Milestones: M6-subsystems.md (`docs/milestones/M6-subsystems.md`) (audio section),
+  M6-gameplay.md (`docs/milestones/M6-gameplay.md`) (master bus muted on focus loss by the player).
 
 ## Known gaps
 

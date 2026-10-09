@@ -26,5 +26,5 @@ Ordered by layer, bottom up:
 | [modules](modules.md) | `mce_engine` + module host | the shared engine library, game modules, the player runtime |
 | [editor](editor.md) | `mce_editor_*` | scene document, inspector, play-in-editor, hot reload, MCP server |
 
-Decisions behind these pages are indexed in [`docs/adr/README.md`](../adr/README.md). Milestone records
-(what each milestone built, with evidence) are in [`docs/milestones/`](../milestones/).
+Decisions behind these pages are indexed in `docs/adr/README.md`. Milestone records
+(what each milestone built, with evidence) are in `docs/milestones/`.

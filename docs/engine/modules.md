@@ -135,12 +135,14 @@ supported) lays out `bin/` (the tools and the `mce` command, `tools/mce_cli/mce.
 `mce/log.h`), `lib/cmake/MCE/` (`MCEConfig.cmake` from `cmake/MCEConfig.cmake.in`: imported
 `mce::mce_engine` with the engine's public compile definitions, `mce::mce_player_runtime`,
 `mce::mce_module_api`, the tool paths `MCE_*_EXE`, then `MceTarget.cmake`, `MceShip.cmake` and
-`MceProject.cmake` themselves) and `share/mce/` (the project template, `new_project.py`,
-`VERSION`). With `MCE_SDK` set by the config, `mce_add_project` builds only the module, the host
+`MceProject.cmake` themselves), `share/mce/` (the project template with its font, `new_project.py`,
+`VERSION`, `examples/Kindle` for `mce example`) and `share/doc/mce/` (the user guide, this
+directory, `docs/architecture/`, `ARCHITECTURE.md`, `REQUIREMENTS.md`). With `MCE_SDK` set by the config, `mce_add_project` builds only the module, the host
 and the content (cooked by the installed `mce_cook --module`), and the template's `CMakeLists.txt`
 calls `find_package(MCE)` when `mce_add_project` is not already defined. ctest `sdk_install`
 (`tests/sdk/`) installs the build tree into a scratch prefix and runs `mce new`, `mce build`, `mce
-headless`, `mce cook` and `mce ship` against it, then plays the shipped folder.
+headless`, `mce cook` and `mce ship` against it, plays the shipped folder, then builds and plays
+the copied-out Kindle example.
 
 ## How it is tested
 
@@ -171,13 +173,13 @@ None of the non-GPU tests above need a display.
 
 - [Scripting architecture](../architecture/scripting.md): §2.1 module contract, §2.2 host loader,
   §2.3 `mce/gameplay.h`, §2.4 module rules, §3.1 one engine DLL plus one game DLL, §6 tests.
-- [ADR-0021 The M3 game-module loader and mce_engine](../adr/0021-game-module-loader-m3.md)
-- [ADR-0024 The runtime scene path](../adr/0024-runtime-scene-path.md) decision 6 (`mce_player`).
-- [ADR-0029 Play-in-editor](../adr/0029-play-in-editor.md) §2 hot reload of a game module.
-- [ADR-0018 Portable build](../adr/0018-portable-build.md).
-- Milestones: [M8 project template](../milestones/M8-project-template.md),
-  [M8 packaging v2](../milestones/M8-packaging.md), [M-MAC](../milestones/M-MAC.md) (`.dylib`
-  modules), [M6 gameplay](../milestones/M6-gameplay.md) (focus loss and save on quit).
+- ADR-0021 The M3 game-module loader and mce_engine (`docs/adr/0021-game-module-loader-m3.md`)
+- ADR-0024 The runtime scene path (`docs/adr/0024-runtime-scene-path.md`) decision 6 (`mce_player`).
+- ADR-0029 Play-in-editor (`docs/adr/0029-play-in-editor.md`) §2 hot reload of a game module.
+- ADR-0018 Portable build (`docs/adr/0018-portable-build.md`).
+- Milestones: M8 project template (`docs/milestones/M8-project-template.md`),
+  M8 packaging v2 (`docs/milestones/M8-packaging.md`), M-MAC (`docs/milestones/M-MAC.md`) (`.dylib`
+  modules), M6 gameplay (`docs/milestones/M6-gameplay.md`) (focus loss and save on quit).
 
 ## Known gaps
 

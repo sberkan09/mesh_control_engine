@@ -106,12 +106,12 @@ stdout, `kill`, `exit_code`). The editor's run-in-player button uses it.
 - [audio-input-ui.md](../architecture/audio-input-ui.md) §4.3 (audio device seam) and §4.6 (the
   editor input seam behind `ConsumedByEditor`).
 - [macos-metal.md](../architecture/macos-metal.md) §2: the Metal-capable window seam.
-- [ADR-0026](../adr/0026-m6-subsystems.md) §2: gamepads through the platform layer.
-- [ADR-0028](../adr/0028-metal-backend.md) §7: `WindowDesc::opengl` on macOS.
-- [ADR-0021](../adr/0021-game-module-loader-m3.md): the game-module loader that uses
+- ADR-0026 (`docs/adr/0026-m6-subsystems.md`) §2: gamepads through the platform layer.
+- ADR-0028 (`docs/adr/0028-metal-backend.md`) §7: `WindowDesc::opengl` on macOS.
+- ADR-0021 (`docs/adr/0021-game-module-loader-m3.md`): the game-module loader that uses
   `load_library`.
-- Milestones: [M6-subsystems.md](../milestones/M6-subsystems.md),
-  [M-MAC.md](../milestones/M-MAC.md), [M7-ashen-court.md](../milestones/M7-ashen-court.md).
+- Milestones: M6-subsystems.md (`docs/milestones/M6-subsystems.md`),
+  M-MAC.md (`docs/milestones/M-MAC.md`), M7-ashen-court.md (`docs/milestones/M7-ashen-court.md`).
 
 ## Known gaps
 

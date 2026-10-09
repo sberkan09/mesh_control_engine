@@ -145,16 +145,16 @@ sources to MSL when a pipeline is created.
   `gl_pipeline.cpp`, `gl_debug.cpp`) is a plan; the built backend has two files.
 - [macos-metal.md](../architecture/macos-metal.md): why Metal, the seams it needed, and file
   ownership between the cloud threads and the Mac session.
-- [ADR-0028](../adr/0028-metal-backend.md): Metal backend, GLSL to MSL at pipeline creation,
+- ADR-0028 (`docs/adr/0028-metal-backend.md`): Metal backend, GLSL to MSL at pipeline creation,
   fixed binding map, `create_default_device`.
-- [ADR-0033](../adr/0033-shader-cook.md): shader cook and the binding-bank check.
-- [ADR-0023](../adr/0023-3d-render-path-m4.md) §7: what the RHI gained for the M4 3D path
+- ADR-0033 (`docs/adr/0033-shader-cook.md`): shader cook and the binding-bank check.
+- ADR-0023 (`docs/adr/0023-3d-render-path-m4.md`) §7: what the RHI gained for the M4 3D path
   (`TextureDesc::samples`, `SamplerDesc::compare`, SNorm/UNorm16 vertex formats, `resolve`, a
   fourth uniform bank).
-- [ADR-0024](../adr/0024-pbr-forward-plus-csm-m5a.md) "RHI additions": `PassAttachment::layer`,
+- ADR-0024 (`docs/adr/0024-pbr-forward-plus-csm-m5a.md`) "RHI additions": `PassAttachment::layer`,
   `SetStorageData`, `WriteTimestamp`, `GpuTimestamps` and the bank-table additions.
-- Milestones: [M-MAC.md](../milestones/M-MAC.md), [M6-shader-cook.md](../milestones/M6-shader-cook.md),
-  [M5a.md](../milestones/M5a.md).
+- Milestones: M-MAC.md (`docs/milestones/M-MAC.md`), M6-shader-cook.md (`docs/milestones/M6-shader-cook.md`),
+  M5a.md (`docs/milestones/M5a.md`).
 
 ## Known gaps
 
