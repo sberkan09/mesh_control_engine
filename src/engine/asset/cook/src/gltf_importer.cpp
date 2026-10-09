@@ -16,7 +16,9 @@
 // meshopt_optimizeVertexFetch, then quantize (formats.h MeshVertex). Deterministic: no hashing of
 // pointers, no clocks, stable iteration order everywhere.
 //
-// sidecar settings: { "scale": 1.0 }   uniform scale applied to every root node
+// sidecar settings: { "scale": 1.0 }          uniform scale applied to every root node
+//                   { "max_triangles": N }   the mesh's triangle budget (M7 per-mesh budget table):
+//                                            more triangles is a cook error naming both counts
 
 #include <cmath>
 #include <cstring>
@@ -1064,11 +1066,17 @@ public:
     }
 
     bool cook(const ImportInput& in, asset::ContainerWriter& writer, DiagList& diags) const override {
-        if (!detail::check_keys(in.settings, {"scale"}, in.display_path, kStage, diags)) return false;
-        f64 scale = 1.0;
+        if (!detail::check_keys(in.settings, {"scale", "max_triangles"}, in.display_path, kStage, diags)) return false;
+        f64 scale = 1.0, max_triangles = 0.0;
         if (!detail::read_number(in.settings, "scale", 1.0, scale, in.display_path, kStage, diags)) return false;
+        if (!detail::read_number(in.settings, "max_triangles", 0.0, max_triangles, in.display_path, kStage, diags))
+            return false;
         if (!(scale > 0.0)) {
             diags.error(Errc::ParseError, in.display_path, 0, 0, kStage, "'scale' must be positive");
+            return false;
+        }
+        if (max_triangles < 0.0 || max_triangles != std::floor(max_triangles)) {
+            diags.error(Errc::ParseError, in.display_path, 0, 0, kStage, "'max_triangles' must be a whole number >= 0 (0 = no budget)");
             return false;
         }
         Ctx cx(in, diags);
@@ -1081,6 +1089,13 @@ public:
         if (!import_animations(cx, g, remap, static_cast<f32>(scale), out)) return false;
         if (diags.error_count() != errors_before) return false;
         if (out.geo.submeshes.empty()) cx.warning(g.root, "the scene has no mesh primitives");
+        const usize triangles = out.geo.indices.size() / 3;
+        if (max_triangles > 0.0 && static_cast<f64>(triangles) > max_triangles) {
+            String msg;
+            appendf(msg, "%zu triangles, over the mesh's budget of %.0f (sidecar 'max_triangles')", triangles, max_triangles);
+            diags.error(Errc::InvalidArgument, in.display_path, 0, 0, kStage, msg.view());
+            return false;
+        }
 
         // Rest-pose model bounds over every submesh's node-local box.
         Array<mat4> world;
