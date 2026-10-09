@@ -4,6 +4,7 @@
 #include <charconv>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #include "mce/log.h"
 
@@ -277,6 +278,17 @@ void ConFunc::collect(Array<ConFunc*>& out) {
 namespace console {
 namespace {
 std::atomic<bool> g_cheats_allowed{true};
+MCE_CVAR(cv_help, "help", false, "Print the command line reference (every console variable) and exit", CVarFlags::None);
+
+const char* type_name(CVarType t) {
+    switch (t) {
+        case CVarType::Bool: return "bool";
+        case CVarType::Int: return "int";
+        case CVarType::Float: return "float";
+        case CVarType::String: return "string";
+    }
+    return "?";
+}
 
 bool cheat_locked(const ConVar& v, const char* where) {
     if (!(v.flags() & CVarFlags::Cheat) || g_cheats_allowed.load()) return false;
@@ -340,13 +352,57 @@ bool execute(StringView line) {
     return false;
 }
 
+bool help_requested() { return cv_help.get_bool(); }
+
+void print_help(const char* app_name, const char* usage, std::FILE* out) {
+    if (!out) out = stdout;
+    if (usage && *usage) {
+        std::fputs(usage, out);
+        if (usage[std::strlen(usage) - 1] != '\n') std::fputc('\n', out);
+    } else {
+        std::fprintf(out, "usage: %s [-name value ...] [+func args ...]\n", app_name ? app_name : "app");
+    }
+    std::fputs("\nEvery option is a console variable: -name value sets it, -flag alone sets a bool to true,\n"
+               "+func args calls a console function. Values: true/false, integers, floats, strings.\n\nOptions:\n",
+               out);
+    Array<ConVar*> vars;
+    ConVar::collect(vars);
+    for (const ConVar* v : vars) {
+        FixedString<128> value;
+        v->to_string(value);
+        FixedString<160> head("  -");
+        head.append(v->name());
+        head.append(" <");
+        head.append(type_name(v->type()));
+        head.append(">");
+        std::fprintf(out, "%-34s %s", head.c_str(), v->help() ? v->help() : "");
+        if (v->type() == CVarType::String) std::fprintf(out, " [default: \"%s\"]", value.c_str());
+        else std::fprintf(out, " [default: %s]", value.c_str());
+        if (v->flags() & CVarFlags::Cheat) std::fputs(" (cheat)", out);
+        if (v->flags() & CVarFlags::ReadOnly) std::fputs(" (read-only)", out);
+        if (v->flags() & CVarFlags::RequiresRestart) std::fputs(" (restart)", out);
+        std::fputc('\n', out);
+    }
+    Array<ConFunc*> funcs;
+    ConFunc::collect(funcs);
+    if (!funcs.empty()) std::fputs("\nConsole functions (+name args):\n", out);
+    for (const ConFunc* f : funcs) {
+        FixedString<160> head("  +");
+        head.append(f->name());
+        std::fprintf(out, "%-34s %s\n", head.c_str(), f->help() ? f->help() : "");
+    }
+    std::fflush(out);
+}
+
 u32 parse_command_line(int argc, const char* const* argv) {
     u32 unknown = 0;
     int i = 1;
     while (i < argc) {
         const StringView tok(argv[i]);
         if (tok.size() > 1 && tok[0] == '-') {
-            ConVar* v = ConVar::find(StringId(tok.substr(tok[1] == '-' ? 2 : 1)));
+            StringView name = tok.substr(tok[1] == '-' ? 2 : 1);
+            if (name == "h" || name == "?") name = "help";  // the usual spellings of -help
+            ConVar* v = ConVar::find(StringId(name));
             const bool has_value = i + 1 < argc && argv[i + 1][0] != '-' && argv[i + 1][0] != '+';
             if (!v) {
                 ++unknown;

@@ -49,6 +49,10 @@ public:
 int main(int argc, char** argv) {
     mce::log::init({.app_name = "devhost", .level = mce::log::Level::Info});
     mce::console::parse_command_line(argc, argv);
+    if (mce::console::help_requested()) {
+        mce::console::print_help("mce_devhost", "usage: mce_devhost [-ticks N] [-module <game module>] [-help]");
+        return 0;
+    }
 
     HeadlessProbe app;
     mce::app::AppDesc desc;

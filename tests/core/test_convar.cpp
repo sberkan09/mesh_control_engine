@@ -1,5 +1,8 @@
 #include <doctest/doctest.h>
 
+#include <cstdio>
+#include <string>
+
 #include "mce/convar.h"
 
 using namespace mce;
@@ -95,6 +98,32 @@ TEST_CASE("command line parsing") {
     cv_test_int.reset();
     cv_test_bool.reset();
     cv_test_ro.reset();
+}
+
+TEST_CASE("command line -help") {
+    CHECK_FALSE(console::help_requested());
+    const char* argv[] = {"exe", "--help"};
+    CHECK(console::parse_command_line(2, argv) == 0);
+    CHECK(console::help_requested());
+    ConVar::find(StringId("help"))->reset();
+    const char* argv2[] = {"exe", "-h"};
+    CHECK(console::parse_command_line(2, argv2) == 0);
+    CHECK(console::help_requested());
+    ConVar::find(StringId("help"))->reset();
+    CHECK_FALSE(console::help_requested());
+    // The reference names every convar (the test's own among them) with its help text.
+    std::FILE* f = std::tmpfile();
+    REQUIRE(f != nullptr);
+    console::print_help("exe", "usage: exe [options]", f);
+    REQUIRE(std::fseek(f, 0, SEEK_SET) == 0);
+    std::string text;
+    char buf[512];
+    while (std::fgets(buf, sizeof(buf), f)) text += buf;
+    std::fclose(f);
+    CHECK(text.find("usage: exe [options]") != std::string::npos);
+    CHECK(text.find("-test.int <int>") != std::string::npos);
+    CHECK(text.find("-help <bool>") != std::string::npos);
+    CHECK(text.find("+test.fn") != std::string::npos);
 }
 
 TEST_CASE("cheat lock (shipped builds)") {

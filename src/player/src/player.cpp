@@ -5,6 +5,8 @@
 //   mce_player -pack <assets.mce | cooked dir> [-scene <guid | source path>] [-module <game module>]
 //   mce_player -pack p.mce -headless 1 -ticks 600      determinism: prints the World state hash
 //   mce_player -pack p.mce -frames 120 -capture a.ppm  CI smoke: write the last frame
+//   mce_player -pack p.mce -capture_tick 300 -capture a.ppm   the frame after sim tick 300, then quit
+//   mce_player -help                                   every convar with its help (the whole command line)
 //
 // Without -scene the first Scene asset of the pack (by source path) plays. F7 toggles 2D post. Controls: Esc pauses
 // and resumes (the pause overlay), Q quits while paused, ` or F1 opens the developer console (FR-UI-045: the log,
@@ -21,7 +23,9 @@
 // published as the InputState resource the game module reads. Headless runs publish an empty
 // InputState every tick, so -headless hashes stay a function of the scene and the tick count.
 
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 
 #include "hud_font.h"
 #include "mce/asset/asset_system.h"
@@ -36,6 +40,7 @@
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/physics/module.h"
+#include "mce/platform/library.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
@@ -58,8 +63,12 @@ MCE_CVAR(cv_module, "module", "", "Game module to install on top of the engine s
          CVarFlags::None);
 MCE_CVAR(cv_scene, "scene", "", "Scene to play: GUID or source path (default: the first scene)", CVarFlags::None);
 MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window closes)", CVarFlags::None);
-MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this .ppm path", CVarFlags::None);
-MCE_CVAR(cv_ticks, "ticks", 600, "Headless: ticks to simulate", CVarFlags::None);
+MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames or -capture_tick) to this .ppm path (relative to the working directory; parents are created)",
+         CVarFlags::None);
+MCE_CVAR(cv_capture_tick, "capture_tick", 0,
+         "Windowed: quit (and -capture) on the first frame after this many sim ticks, whatever the frame rate (0 = off)",
+         CVarFlags::None);
+MCE_CVAR(cv_ticks, "ticks", 600, "Headless: ticks to simulate (windowed runs use -frames)", CVarFlags::None);
 MCE_CVAR(cv_post, "r.post2d", true, "Apply the camera's Post2DComponent effects (F7 toggles)", CVarFlags::None);
 MCE_CVAR(cv_pause_on_focus_loss, "pause_on_focus_loss", true, "Pause and mute when the window loses focus or minimizes",
          CVarFlags::None);
@@ -211,7 +220,10 @@ public:
         }
         device_->submit(cmd);
 
-        const bool last = cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
+        // The run ends on the Nth frame (-frames) or on the first frame after sim tick N (-capture_tick):
+        // the latter catches a moment of the simulation however fast or slow the frames come.
+        const bool last = (cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int())) ||
+                          (cv_capture_tick.get_int() > 0 && sim_ticks_ >= static_cast<u64>(cv_capture_tick.get_int()));
         if (last && !cv_capture.get_string().empty()) capture(cv_capture.get_string().data(), bb);
         device_->end_frame();
         assets_.end_frame();
@@ -338,13 +350,21 @@ private:
         post_size_ = size;
     }
 
+    // `path` is taken as given (relative: against the working directory); a missing directory
+    // in it is created, so "-capture shots/title.ppm" works from a fresh project folder.
     void capture(const char* path, rhi::Extent2D size) {
         Array<u8> px;
         px.resize(usize(size.width) * size.height * 4);
         if (!device_->read_pixels({}, rhi::Rect2D{0, 0, size.width, size.height}, px.span())) return;
+        const StringView p(path);
+        usize sep = 0;
+        for (usize i = 0; i < p.size(); ++i)
+            if (p[i] == '/' || p[i] == '\\') sep = i;
+        if (sep > 0) (void)platform::create_directories(p.substr(0, sep));  // fopen below reports the failure
         std::FILE* f = std::fopen(path, "wb");
         if (!f) {
-            MCE_LOG_ERROR("mce_player: cannot write '{}'", path);
+            MCE_LOG_ERROR("mce_player: cannot write '{}' ({}; relative paths are taken from the working directory)", path,
+                          std::strerror(errno));
             return;
         }
         std::fprintf(f, "P6\n%u %u\n255\n", size.width, size.height);
@@ -458,6 +478,12 @@ private:
 };
 
 int run_headless(const player::PlayerDesc& pd) {
+    // The windowed-only flags: say so instead of silently running the default tick count.
+    if (cv_frames.get_int() > 0)
+        MCE_LOG_WARN("{}: -frames applies to windowed runs; headless runs -ticks N (running {} ticks)", pd.app_name,
+                     cv_ticks.get_int() > 0 ? cv_ticks.get_int() : 600);
+    if (!cv_capture.get_string().empty() || cv_capture_tick.get_int() > 0)
+        MCE_LOG_WARN("{}: -capture / -capture_tick need a window; nothing is drawn headless", pd.app_name);
     audio::AudioDesc ad;
     ad.backend = audio::Backend::Silent;
     auto audio = audio::AudioDevice::create(ad);
@@ -511,7 +537,15 @@ int mce::player::run(int argc, char** argv, const PlayerDesc& pd) {
     log::init(log_desc);
     const samples::BuildInfo build = samples::begin_build();
     console::parse_command_line(argc, argv);
-    if (!samples::start_build(pd.app_name, build)) {
+    FixedString<1024> usage;
+    usage.append("usage: ");
+    usage.append(pd.app_name);
+    usage.append(pd.pack ? " [-pack <assets.mce | cooked dir>]" : " -pack <assets.mce | cooked dir>");
+    usage.append(" [-scene <guid | path under assets/>] [-module <game module>] [-headless 1 -ticks N]\n"
+                 "       [-frames N | -capture_tick N] [-capture <file.ppm>] [-save <slot>] [-version] [-help]\n"
+                 "  Windowed by default (Esc pauses, Q quits while paused, ` or F1 opens the console).\n"
+                 "  -headless 1 runs -ticks fixed steps without a window and prints the World state hash.");
+    if (!samples::start_build(pd.app_name, build, usage.c_str())) {
         log::shutdown();
         return 0;
     }

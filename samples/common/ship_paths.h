@@ -74,9 +74,14 @@ inline BuildInfo begin_build() {
     return info;
 }
 
-// After it: -version prints the version line and returns false (exit 0). Otherwise logs the line,
-// installs the crash handler (unless -crash_reports 0) and honours -crash_test.
-inline bool start_build(const char* app_name, const BuildInfo& info) {
+// After it: -help prints the command-line reference (`usage` first, then every convar) and
+// -version prints the version line; both return false (exit 0). Otherwise logs the line, installs
+// the crash handler (unless -crash_reports 0) and honours -crash_test.
+inline bool start_build(const char* app_name, const BuildInfo& info, const char* usage = nullptr) {
+    if (console::help_requested()) {
+        console::print_help(app_name, usage);
+        return false;
+    }
     if (g_cv_version.get_bool()) {
         std::printf("%s %s (engine %s)\n", app_name, info.version.c_str(), engine_describe());
         return false;

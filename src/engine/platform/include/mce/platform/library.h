@@ -16,5 +16,7 @@ void unload_library(void* library);
 bool file_exists(StringView path);
 // Copies `from` over `to` (replacing it). Errc::FileNotFound / Errc::IoError.
 ResultV copy_file(StringView from, StringView to);
+// Creates `path` and every missing parent (no-op when it exists). Errc::IoError.
+ResultV create_directories(StringView path);
 
 }  // namespace mce::platform

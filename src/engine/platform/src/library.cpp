@@ -43,4 +43,14 @@ ResultV copy_file(StringView from, StringView to) {
     return ok();
 }
 
+ResultV create_directories(StringView path) {
+    if (path.empty()) return ok();
+    const FixedString<512> p(path);
+    if (!SDL_CreateDirectory(p.c_str())) {  // creates the parents too; an existing directory is a success
+        MCE_LOG_ERROR("platform: create_directories {}: {}", p.c_str(), SDL_GetError());
+        return Error(Errc::IoError, "platform.create_directories", path);
+    }
+    return ok();
+}
+
 }  // namespace mce::platform

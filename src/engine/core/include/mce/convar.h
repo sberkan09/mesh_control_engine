@@ -7,7 +7,10 @@
 //   MCE_CONFUNC(cf_quit, "quit", my_quit_fn, "Quit the application");
 //
 // Command line: "-name value" sets a convar ("-flag" alone sets a bool to true);
-// "+func a b" calls a confunc with the following non-flag tokens.
+// "+func a b" calls a confunc with the following non-flag tokens. "-help" (also --help, -h, -?)
+// asks for the listing every app prints with console::print_help before it exits.
+
+#include <cstdio>
 
 #include "mce/containers/array.h"
 #include "mce/fixed_string.h"
@@ -116,6 +119,13 @@ namespace console {
 bool execute(StringView line);
 // Applies argv per the command-line rules above. Returns the number of unknown entries.
 u32 parse_command_line(int argc, const char* const* argv);
+// True after parse_command_line saw -help (the `help` convar): the app prints print_help and
+// exits 0 instead of running.
+bool help_requested();
+// The command-line reference: `usage` (one or more lines naming the app's own flags; may be null)
+// followed by every registered convar (name, type, default, help, flags) and every confunc, sorted
+// by name, to `out` (stdout when null). Convars are the whole command line, so this is complete.
+void print_help(const char* app_name, const char* usage, std::FILE* out = nullptr);
 // The cheat lock (shipped builds): while cheats are not allowed, execute() and the command line
 // refuse to set a Cheat convar, and locking resets every Cheat convar to its default. Code may
 // still set them (a game's own slow-motion). Allowed by default (development builds).

@@ -66,6 +66,13 @@ source path, else `PlayerDesc::start_scene`, else the first scene by path), inst
 pause overlay and the developer console (backtick or F1), pauses and mutes on focus loss, loads and
 writes `-save` slots, and with `-headless 1 -ticks N` prints the World state hash.
 
+The command line is the convar set: `-help` prints it (usage line, then every convar with its
+type, default and help; `console::print_help`), `-frames N` ends a windowed run on frame N and
+`-capture_tick N` on the first frame after sim tick N (so a moment of the simulation can be
+captured whatever the frame rate), `-capture <file.ppm>` writes that last frame (a relative path
+is taken from the working directory; missing directories are created). Headless runs take
+`-ticks N`; `-frames` and `-capture` are windowed-only and headless runs warn when they are set.
+
 Input for the game module (M9): windowed, the runtime samples the starter-kit map
 (`input::default_map_chunk`, map "Gameplay": `Move` on WASD / arrows / left stick / d-pad, `Jump`
 on Space / A, `Fire` on J / left mouse / X, `Pause` on Escape / Start, `Look` on the mouse) once per
