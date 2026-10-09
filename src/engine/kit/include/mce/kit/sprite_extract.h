@@ -41,6 +41,10 @@ public:
     // Sprite set for a texture GUID (solid white for a null GUID, magenta for a missing one). With
     // a normal map GUID the set is lit (FR-R2D-090); a normal map that cannot load leaves it unlit.
     render::SpriteSetId sprite_set(asset::Guid texture, asset::Guid normal_map = {});
+    // The primary camera's Post2DComponent as renderer settings (the LUT texture loaded and held);
+    // false when the camera has none or every effect is off.
+    bool post_2d(World& world, render::Post2D& out);
+
     // Font for a GUID, or null when it cannot be loaded.
     const render::Font* font(asset::Guid guid);
 

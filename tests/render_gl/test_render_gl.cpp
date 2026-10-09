@@ -346,6 +346,116 @@ TEST_CASE("FR-R2D-090: lit sprites shade by their normal map, rotation and flip;
     CHECK(f.device->validation_error_count() == 0);
 }
 
+TEST_CASE("FR-R2D-100: 2D post — copy, vignette, LUT grade and chromatic aberration toggle at runtime") {
+    Fixture f;
+    const u32 key = f.solid_atlas({{255, 255, 255, 255}, {200, 100, 50, 255}});
+    const SpriteRegion regions[] = {{0, 0, 0, 1, 1, 1, 1}, {1, 0, 0, 1, 1, 1, 1}};
+    SpriteSetDesc sd;
+    sd.texture_key = key;
+    sd.regions = regions;
+    const SpriteSetId set = f.renderer.create_sprite_set(sd);
+
+    rhi::TextureDesc td;
+    td.size = {kSize, kSize};
+    td.usage = rhi::TextureUsage::SampledColorTarget;
+    td.debug_name = "test.post_out";
+    const rhi::TextureHandle out = f.device->create_texture(td);
+
+    // Luts: identity and inverted, uploaded linear (UNorm): a LUT maps display values.
+    Array<u8> lut;
+    make_identity_lut(lut);
+    const u32 ident = f.renderer.textures().allocate_key();
+    const TextureMipUpload mip{kLutSize * kLutSize, kLutSize, std::as_bytes(lut.span())};
+    TextureUpload up;
+    up.format = rhi::TextureFormat::RGBA8_UNorm;
+    up.mips = Span<const TextureMipUpload>(&mip, 1);
+    REQUIRE(f.renderer.textures().upload(ident, 1, up).has_value());
+    Array<u8> inv = lut;
+    for (usize i = 0; i < inv.size(); i += 4)
+        for (u32 c = 0; c < 3; ++c) inv[i + c] = static_cast<u8>(255 - inv[i + c]);
+    const u32 inverted = f.renderer.textures().allocate_key();
+    const TextureMipUpload imip{kLutSize * kLutSize, kLutSize, std::as_bytes(inv.span())};
+    up.mips = Span<const TextureMipUpload>(&imip, 1);
+    REQUIRE(f.renderer.textures().upload(inverted, 1, up).has_value());
+
+    // The 2D frame: a colored quad filling the view, a white bar in the middle of the left half.
+    Array<u8> post_px;
+    post_px.resize(usize(kSize) * kSize * 4);
+    auto run = [&](const Post2D& post) {
+        f.render([&](SpriteBatch& b) {
+            SpriteInstance bg = f.sprite(set, vec2(0, 0), 1);
+            bg.scale = {8, 8};
+            b.add(bg);
+            SpriteInstance bar = f.sprite(set, vec2(-2, 0), 0);
+            bar.scale = {0.25f, 8};
+            bar.sort_order = 1;
+            b.add(bar);
+        });
+        f.device->begin_frame(f.frame++);
+        rhi::CommandBuffer cmd;
+        f.renderer.record_post_2d(cmd, f.target, {kSize, kSize}, post, out);
+        f.device->submit(cmd);
+        REQUIRE(f.device->read_pixels(out, rhi::Rect2D{0, 0, kSize, kSize}, post_px.span()).has_value());
+        f.device->end_frame();
+    };
+    auto px = [&](u32 x, u32 y) {
+        const usize i = (usize(y) * kSize + x) * 4;
+        return Rgba{post_px[i], post_px[i + 1], post_px[i + 2], post_px[i + 3]};
+    };
+
+    run(Post2D{});  // nothing enabled: a copy
+    for (u32 y : {5u, 64u, 120u})
+        for (u32 x : {3u, 32u, 64u, 125u}) {
+            const Rgba a = f.at_px(x, y), b = px(x, y);
+            CHECK(near(a.r, b.r, 1));
+            CHECK(near(a.g, b.g, 1));
+            CHECK(near(a.b, b.b, 1));
+        }
+    const Rgba bg = px(100, 64);
+    CHECK(near(bg.r, 200, 2));
+    CHECK(near(bg.g, 100, 2));
+
+    Post2D v;
+    v.vignette = true;
+    run(v);
+    CHECK(near(px(100, 64).r, 200, 2));  // inside the radius: untouched
+    CHECK(px(1, 1).r < 150);             // the corner darkens
+    CHECK(px(1, 1).r < px(10, 20).r);
+
+    Post2D g;
+    g.color_grade = true;
+    g.lut_key = ident;
+    run(g);
+    CHECK(near(px(100, 64).r, 200, 4));
+    CHECK(near(px(100, 64).g, 100, 4));
+    CHECK(near(px(100, 64).b, 50, 4));
+    g.lut_key = inverted;
+    run(g);
+    CHECK(near(px(100, 64).r, 55, 4));
+    CHECK(near(px(100, 64).g, 155, 4));
+    CHECK(near(px(100, 64).b, 205, 4));
+    g.lut_strength = 0.5f;
+    run(g);
+    CHECK(near(px(100, 64).r, 128, 4));
+
+    // Aberration: left of center the red channel is sampled further out (left), blue further in,
+    // so the bar's left edge shows red-only pixels and its right edge blue-only ones.
+    Post2D ca;
+    ca.chromatic_aberration = true;
+    ca.aberration = 0.02f;
+    run(ca);
+    bool red_fringe = false, blue_fringe = false;
+    for (u32 x = 20; x < 44; ++x) {
+        const Rgba p = px(x, 64);
+        if (p.r > 240 && p.b < 100) red_fringe = true;
+        if (p.b > 240 && p.r < 240 && p.g < 240) blue_fringe = true;
+    }
+    CHECK(red_fringe);
+    CHECK(blue_fringe);
+    f.device->destroy_texture(out);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
 TEST_CASE("render_gl: coverage text renders through the batch") {
     Fixture f;
     // A one-glyph font: 'X' is a solid 8×12 coverage block.

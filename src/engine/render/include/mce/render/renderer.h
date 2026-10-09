@@ -32,6 +32,27 @@ struct RendererDesc {
     bool encode_srgb_output = true;
 };
 
+// 2D post effects (FR-R2D-100): one full-screen pass over the finished 2D frame, each effect a
+// runtime toggle. Works in display (sRGB-encoded) space, like the 2D blending before it.
+struct Post2D {
+    bool vignette = false;
+    f32 vignette_intensity = 0.45f;  // darkening at the corners, 0..1
+    f32 vignette_radius = 0.8f;      // where darkening starts, in half-heights from the center
+    f32 vignette_softness = 0.6f;    // width of the ramp
+    bool color_grade = false;
+    u32 lut_key = 0;                 // TextureStore key of a 256 × 16 strip LUT (16³; see make_identity_lut)
+    f32 lut_strength = 1.0f;         // 0 = ungraded, 1 = fully graded
+    bool chromatic_aberration = false;
+    f32 aberration = 0.004f;         // red/blue UV split at the corners (fraction of the screen)
+    bool any() const { return vignette || color_grade || chromatic_aberration; }
+};
+
+// The identity 16³ color-grade LUT as a 256 × 16 RGBA8 strip: 16 slices across (blue), red
+// increasing within a slice, green increasing downwards. Paint over it (or grade a screenshot of it)
+// in an image editor to author a LUT.
+inline constexpr u32 kLutSize = 16;
+void make_identity_lut(Array<u8>& out_rgba);
+
 struct TilemapId {
     u32 value = ~0u;
     constexpr bool valid() const { return value != ~0u; }
@@ -83,6 +104,11 @@ public:
     // ---- frame
     // Records a built batch into the currently open pass of `cmd`: one MDI per batch group.
     void record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch);
+    // Records the 2D post pass (FR-R2D-100): samples `source` (the finished 2D frame, a sampled
+    // color target of `size`) and writes `target` (null = backbuffer). Outside any pass. With no
+    // effect enabled it is a plain copy.
+    void record_post_2d(rhi::CommandBuffer& cmd, rhi::TextureHandle source, rhi::Extent2D size, const Post2D& post,
+                        rhi::TextureHandle target = {});
     // Records a built Scene3D (shadow, forward HDR, resolve, tonemap) into `target` (null =
     // backbuffer). Outside any pass; init_3d() first.
     void record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target = {});
@@ -115,6 +141,7 @@ private:
     MeshStore meshes_;
     Forward3D forward_;
     rhi::PipelineHandle pipelines_[static_cast<u32>(SpriteBlend::Count)];
+    rhi::PipelineHandle post_2d_;
     rhi::SamplerHandle point_sampler_;
     rhi::SamplerHandle linear_sampler_;
     rhi::BufferHandle quad_indices_;

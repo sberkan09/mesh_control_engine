@@ -379,6 +379,30 @@ void SpriteExtract::draw_tilemap(const TilemapLayer& layer, math::vec2 origin, m
     renderer_->add_tilemap(batch, e->id, offset);
 }
 
+bool SpriteExtract::post_2d(World& world, render::Post2D& out) {
+    out = render::Post2D{};
+    bool found = false;
+    world.query<const Camera2DComponent, const Post2DComponent>().each([&](const Camera2DComponent& c, const Post2DComponent& p) {
+        if (found || !c.primary) return;
+        found = true;
+        out.vignette = p.vignette;
+        out.vignette_intensity = p.vignette_intensity;
+        out.vignette_radius = p.vignette_radius;
+        out.vignette_softness = p.vignette_softness;
+        out.chromatic_aberration = p.chromatic_aberration;
+        out.aberration = p.aberration;
+        out.lut_strength = p.lut_strength;
+        if (p.color_grade && p.lut.guid != asset::Guid{}) {
+            const render::SpriteSetId set = sprite_set(p.lut.guid);  // loads and holds the texture
+            if (set.valid() && !(set == missing_set_)) {
+                out.color_grade = true;
+                out.lut_key = renderer_->sprite_sets().texture_key(set);
+            }
+        }
+    });
+    return found && out.any();
+}
+
 bool primary_camera(World& world, render::Camera2D& out, f32& pixels_per_meter, math::Color* clear_color) {
     out = render::Camera2D{};
     pixels_per_meter = 48.0f;

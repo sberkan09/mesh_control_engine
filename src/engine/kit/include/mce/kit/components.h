@@ -67,6 +67,25 @@ struct Camera2DComponent {
 MCE_COMPONENT(Camera2DComponent, (zoom, Range{0.05f, 32}), (pixels_per_meter, Range{1, 512}), clear_color, primary,
               pixel_snap)
 
+// 2D post effects (FR-R2D-100) for the view of the Camera2DComponent on the same entity. Each
+// effect toggles at runtime; the player renders the 2D frame offscreen only while one is on.
+// The LUT is a 256 × 16 strip (render::make_identity_lut) imported with srgb off.
+struct Post2DComponent {
+    asset::AssetRef<asset::Texture> lut;
+    f32 vignette_intensity = 0.45f;
+    f32 vignette_radius = 0.8f;
+    f32 vignette_softness = 0.6f;
+    f32 lut_strength = 1.0f;
+    f32 aberration = 0.004f;
+    bool vignette = false;
+    bool color_grade = false;
+    bool chromatic_aberration = false;
+    u8 pad_ = 0;
+};
+MCE_COMPONENT(Post2DComponent, vignette, (vignette_intensity, Range{0, 1}), (vignette_radius, Range{0, 2}),
+              (vignette_softness, Range{0.01f, 2}), color_grade, (lut, Help{"256x16 strip LUT, imported with srgb off"}),
+              (lut_strength, Range{0, 1}), chromatic_aberration, (aberration, Range{0, 0.05f}))
+
 // One baked tile layer (FR-R2D-115): the .mctilemap asset drawn with its tile (0, 0) bottom-left
 // corner at the entity's position. The tiles live in the asset; the editor's Tilemap panel
 // paints them and the asset hot-reloads (re-bake) on save.
