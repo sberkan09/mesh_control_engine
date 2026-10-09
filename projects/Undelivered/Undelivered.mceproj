@@ -1,0 +1,10 @@
+{
+  "format": "mce-project",
+  "version": 1,
+  "name": "Undelivered",
+  "title": "Undelivered",
+  "engine_version": "0.0.1",
+  "games": ["undelivered"],
+  "start_scene": "4b7b4501-a48c-467b-b304-1fed7b03e258",
+  "plugins": []
+}

@@ -1,0 +1,23 @@
+{
+  "guid": "33218a5e-c81d-450b-ae66-8de6aac93a05",
+  "importer": "font",
+  "importer_version": 1,
+  "settings": {
+    "size": 32,
+    "ranges": [
+      [
+        32,
+        126
+      ],
+      [
+        160,
+        255
+      ],
+      [
+        256,
+        383
+      ]
+    ],
+    "padding": 2
+  }
+}

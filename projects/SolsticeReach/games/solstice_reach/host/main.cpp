@@ -60,6 +60,7 @@ MCE_CVAR(cv_hour, "hour", -1.0f, "Photo mode: the hour to start at (17.5 .. 30.5
 MCE_CVAR(cv_save, "save", "autosave", "Save slot: loaded at start when it exists, written at every mirror", CVarFlags::None);
 MCE_CVAR(cv_newgame, "newgame", false, "Ignore the save slot at start", CVarFlags::None);
 MCE_CVAR(cv_scatter, "r.scatter", true, "Draw the scatter volumes (grass, flowers, rocks, trees)", CVarFlags::None);
+MCE_CVAR(cv_hud, "hud", true, "Photo mode: start with the HUD on (H toggles it)", CVarFlags::None);
 
 f64 now_ms() { return platform::now_seconds() * 1000.0; }
 
@@ -286,7 +287,7 @@ public:
         poses_.reserve(16384);
         if (cv_photo.get_bool()) {
             photo_.active = true;
-            photo_.hud = true;
+            photo_.hud = cv_hud.get_bool();
             photo_.hour = static_cast<f32>(cv_hour.get_float());
             photo_.pos = {0.0f, 24.0f, 96.0f};
             photo_.yaw = kPi;
