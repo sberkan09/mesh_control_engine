@@ -39,7 +39,9 @@ EditorProject::EditorProject() = default;
 EditorProject::~EditorProject() = default;
 
 Result<void> EditorProject::open(StringView root) {
-    cook::String r(root);
+    // Absolute, so every path joined to it (save-as, asset_path, resolve) means one place whatever
+    // the caller passed: a relative root once made save-as write under assets/<root>/assets/.
+    cook::String r = cook::fs::absolute(root);
     while (r.size() > 1 && (r.view().back() == '/' || r.view().back() == '\\')) r = cook::String(r.view().substr(0, r.size() - 1));
     if (!is_dir(cook::path_join(r.view(), "assets"))) return Error(Errc::FileNotFound, kStage, root);
     close();

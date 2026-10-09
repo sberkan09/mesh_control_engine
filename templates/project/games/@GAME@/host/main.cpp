@@ -12,6 +12,7 @@ int main(int argc, char** argv) {
     desc.title = MCE_PROJECT_TITLE;
     desc.pack = "assets.mce";
     desc.pack_fallback = MCE_PROJECT_PACK;
+    desc.start_scene = MCE_PROJECT_START_SCENE;  // the .mceproj's start_scene
 #if defined(MCE_PROJECT_STATIC_MODULE)
     desc.static_module = &mce_game_module;
 #else

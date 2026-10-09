@@ -34,6 +34,9 @@ struct PlayerDesc {
     // Platforms without game modules link the game into the host: its mce_game_module() entry,
     // whose install() runs where a loaded module's would. Ignored when -module names a file.
     const ModuleInfo* (*static_module)() = nullptr;
+    // The scene played when -scene is not given: a GUID (a project's .mceproj start_scene). Null
+    // or empty: the first scene in the pack by path.
+    const char* start_scene = nullptr;
 };
 
 // Parses the command line into convars, then runs headless (-headless 1) or windowed. Returns the

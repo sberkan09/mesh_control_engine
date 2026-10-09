@@ -518,6 +518,18 @@ TEST_CASE("mcp tools: cook_run adopt gives new source files a sidecar") {
     CHECK(c.ok("cook_run").v().get("ok").as_bool());  // registered now: a plain cook is clean
 }
 
+TEST_CASE("mcp tools: a relative --project path saves where it says") {
+    const std::string root = demo_project("mcp_relative");
+    const std::string rel = std::filesystem::relative(root).generic_string();
+    REQUIRE(rel.front() != '/');
+    Client c;
+    REQUIRE(c.server.open_project(sv(rel), "scenes/demo.mcscene"));
+    c.init();
+    c.ok("scene_save", R"({"path":"scenes/copy.mcscene"})");
+    CHECK(std::filesystem::exists(root + "/assets/scenes/copy.mcscene"));
+    CHECK_FALSE(std::filesystem::exists(root + "/assets/" + rel));  // once: assets/<rel>/assets/scenes/copy.mcscene
+}
+
 TEST_CASE("mcp tools: console list/exec, cheats refused by default") {
     Client c;
     c.init();

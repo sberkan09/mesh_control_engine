@@ -7,6 +7,8 @@
 namespace mce::cook::fs {
 
 bool exists(StringView path);
+// `path` made absolute against the working directory and lexically normalized (forward slashes).
+String absolute(StringView path);
 bool is_directory(StringView path);
 Result<void> create_directories(StringView path);
 // Writes to "<path>.tmp" then renames over `path` (replace-existing on every platform), creating

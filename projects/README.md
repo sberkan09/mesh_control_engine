@@ -11,3 +11,5 @@ The layout and the rules are in `docs/architecture/assets.md` §4.4; the record 
 `docs/milestones/M8-project-template.md`.
 
 `Kindle/` is the UC-D proof game (ROADMAP M9, `docs/milestones/M9-ucd.md`).
+
+`PrismBreak/` is the MCP dogfood game: a brick breaker authored through `prism_break_mcp` (`docs/research/mcp-dogfood.md`).
