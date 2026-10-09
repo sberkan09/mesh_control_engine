@@ -293,4 +293,38 @@ Filled in as they are hit; each row says what was done about it in the game.
 | No skinning | the Keeper is a rigid node proxy | node clips on body/staff/lantern | FR-R3D-060 |
 | No vertex colours in the glTF importer | terrain blending must be per-submesh | terrain split into material submeshes by slope and altitude | COLOR_0 → a vertex attribute the PBR shader multiplies |
 | No IBL | metals reflect the sky gradient only | `specular_ambient` per regime | prefiltered equirect |
-| (more rows as found) | | | |
+| `Sky` texture replaced the gradient entirely | a star field at night would black out the horizon glow | added `Sky::texture_additive` to the engine (this thread): gradient + texture | done; keep |
+| A command-line convar value starting with `-` reads as the next flag | `-cam "-10,20,..."` is silently dropped (one warning) | the host accepts a `@` prefix on the value | `-name=value` spelling in `parse_command_line` |
+| No `save::remove` (only `exists`, `path_of`) | the title's NEW GAME cannot drop the autosave through the API | `std::remove(save::path_of(name))` in the host, then an in-place `reset_run` | a `save::remove(name)` |
+| `Scatter`-style placement is per game | every 3D game rewrites the seeded placement, the cells and the distance thinning | `ScatterCache` resource in the module (16 m cells) | part of a future `mce_kit3d` |
+| The editor viewport cannot show a 3D scene | the island was placed by numbers (`author_island_mcp.py` + `island.height`) and checked in captures | the authoring script drops every prop on the height field; `-photo 1 -cam` captures replace the viewport | a 3D extract in the editor's preview |
+| The stock headless runner has no bot hook | `run_headless` through MCP plays without the autopilot, so a route check needs the host | `solstice_reach -headless 1 -autoplay 1 -trace N`; the ctest presets the `ReachState` resource with `autopilot = 1` | a `preset resources` argument on `run_headless` |
+
+## 10. As built (what differs from the plan above)
+
+- **Mirror order and route.** The chain is fixed, not free-order: 1 windmill terrace, 2 Cistern
+  Garden, 3 Crystal Cut, 4 Colonnade, 5 Stair of Hours top, 6 Stair landing, 7 the Vault. The walk
+  is the loop a player finds: Landing, terraces, the garden, up to the quarry, along the ridge to the
+  colonnade, down the Stair, back east along the terraces and up the goat path (two legs and a
+  landing) to the summit. Each mirror's beam goes to the next; the seventh goes up into the oculus.
+- **Island layout.** `tools/island.py` applies plateaus first and ramps after, with each ramp's
+  ends inside the plateaus it joins and a mostly linear grade (`grade(t)`); `python3 tools/island.py`
+  prints the steepest grade of every ramp (all under 40°, the character's limit is 52°). The
+  summit sits on a 35 m pinnacle (the base terrain is 15 m there), which reads as a Meteora rock.
+- **Counts.** 49 sunshards (not 42; the HUD counts whatever the scene has), 87 lanterns, 12
+  fireflies, 8 sconces, 34 columns, 33 waypoints, 416 entities, about 6.7 k scatter instances.
+- **Autopilot** is `Waypoint` entities in the scene (not tick-indexed input segments): the bot
+  walks to each in order, holds Interact on the mirror ones, hops when its walk stalls for a third
+  of a second, and sprints when the target is far. The full run takes about 7,200 ticks.
+- **Photo mode** keys: `1`..`8` hours, B bloom, G fog, T anti-aliasing, H HUD, C capture (a `.ppm`
+  beside the save, not PNG); no `[` `]` nudge (the key map has no bracket keys). `-photo 1 -hour H
+  -cam "@x,y,z,yaw,pitch" -frames 2 -capture f.ppm` is how the showcase captures were taken.
+- **Time of day** is nine `SkyKey`s (sun or moon direction, colours, ambient, fog, stars, exposure,
+  lantern gain) smooth-stepped by the hour; fog densities were halved from the first draft so the
+  island reads from the sea.
+- **Saves** restore `Progress`, the mirrors, the shards and the Keeper (`SaveKey`s); NEW GAME on
+  the title deletes the autosave and resets the run in place (`reset_run`).
+- **Not built**: plaques (`Plaque`), the sunshard-count-driven crystal glow, the Vault's inner glow
+  at 42 shards, gamepad testing, Windows/Metal captures (planned on a Mac through Remote Control).
+
+Screenshots (llvmpipe, 1280×720): `/mnt/project-files/showcase-games/solstice-reach/`.

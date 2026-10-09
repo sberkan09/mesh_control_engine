@@ -61,6 +61,7 @@ struct Sky {
     f32 sun_intensity = 12.0f;                 // disk radiance = light color * light intensity * this
     u32 texture = ~0u;                         // TextureStore key of an equirect map; ~0u = gradient
     f32 texture_intensity = 1.0f;
+    bool texture_additive = false;             // true: gradient + texture * intensity (a star field over a dusk gradient)
     f32 specular_ambient = 0.5f;               // scale of sky reflections on surfaces
     bool enabled = true;                       // false: clear to the fog color (the M4 look)
 };

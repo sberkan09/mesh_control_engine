@@ -36,7 +36,7 @@ struct PassU {
     vec4 sky_zenith;   // w: sky on
     vec4 sky_horizon;  // w: specular ambient
     vec4 sky_ground;   // w: sky texture max lod, -1 = gradient
-    vec4 sun;          // x: cos disk, y: disk intensity, z: texture intensity
+    vec4 sun;          // x: cos disk, y: disk intensity, z: texture intensity, w: texture additive
 };
 
 struct ObjectU {
@@ -385,7 +385,7 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     pu.sky_zenith = vec4(sky.zenith, sky.enabled ? 1.0f : 0.0f);
     pu.sky_horizon = vec4(sky.horizon, sky.specular_ambient);
     pu.sky_ground = vec4(sky.ground, sky_lod);
-    pu.sun = {sky.sun_size, sky.sun_intensity, sky.texture_intensity, 0.0f};
+    pu.sun = {sky.sun_size, sky.sun_intensity, sky.texture_intensity, sky.texture_additive ? 1.0f : 0.0f};
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);

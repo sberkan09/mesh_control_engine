@@ -34,7 +34,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_sky_zenith;     // rgb, w: sky enabled
     vec4 p_sky_horizon;    // rgb, w: specular ambient scale
     vec4 p_sky_ground;     // rgb, w: sky texture max lod (-1 = gradient)
-    vec4 p_sun;            // x: cos of the disk radius, y: disk intensity, z: sky texture intensity
+    vec4 p_sun;            // x: cos of the disk radius, y: disk intensity, z: sky texture intensity, w: texture is additive
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -46,8 +46,9 @@ vec3 sky_gradient(vec3 d) {
 }
 // Sky radiance along d; `lod` blurs the texture path (roughness), the gradient is smooth already.
 vec3 sky_radiance(vec3 d, float lod) {
-    if (p_sky_ground.w >= 0.0) return textureLod(u_sky, vec3(equirect_uv(d), 0.0), min(lod, p_sky_ground.w)).rgb * p_sun.z;
-    return sky_gradient(d);
+    if (p_sky_ground.w < 0.0) return sky_gradient(d);
+    vec3 tex = textureLod(u_sky, vec3(equirect_uv(d), 0.0), min(lod, p_sky_ground.w)).rgb * p_sun.z;
+    return p_sun.w > 0.5 ? sky_gradient(d) + tex : tex;  // additive: a star field over a gradient
 }
 )"
 
