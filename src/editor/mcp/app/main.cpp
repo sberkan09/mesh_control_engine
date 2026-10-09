@@ -1,7 +1,7 @@
 // mce_mcp — the editor's MCP server over stdio (editor-mcp.md §2): the MCP host spawns it and
 // speaks newline-delimited JSON-RPC on its stdin/stdout. No socket, no listener, no port (N7).
 //
-//   mce_mcp --project <dir> [--scene <path under assets/>] [--allow-cheats]
+//   mce_mcp --project <dir> [--module <game module>] [--scene <path under assets/>] [--allow-cheats]
 //
 // stdout carries protocol messages only: at startup the real stdout is moved to a private
 // descriptor and fd 1 becomes a copy of stderr, so the engine's log (and any stray print) lands on
@@ -48,10 +48,12 @@ void send_line(StringView message, void* user) {
 
 int usage(std::FILE* out = stderr, int rc = 2) {
     std::fprintf(out,
-                 "usage: mce_mcp --project <dir> [--scene <path under assets/>] [--allow-cheats]\n"
+                 "usage: mce_mcp --project <dir> [--module <game module>] [--scene <path under assets/>] [--allow-cheats]\n"
                  "  Model Context Protocol server for the MCE editor (JSON-RPC 2.0 over stdio): an MCP host\n"
                  "  spawns it and authors the project's scenes through its tools (tools/list describes them).\n"
                  "  --project <dir>   the project folder (holds <name>.mceproj and assets/)\n"
+                 "  --module <path>   the project's game module (lib<game>.so / .dll): its components become\n"
+                 "                    known to the tools and its systems run in run_headless\n"
                  "  --scene <path>    open this scene (under assets/) at start; default: the project's first scene\n"
                  "  --allow-cheats    let console_exec set Cheat and RequiresRestart convars\n"
                  "  --help            this text\n");
@@ -61,11 +63,12 @@ int usage(std::FILE* out = stderr, int rc = 2) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    StringView project, scene;
+    StringView project, scene, module;
     mcp::ServerOptions opt;
     for (int i = 1; i < argc; ++i) {
         const StringView a = argv[i];
         if (a == "--project" && i + 1 < argc) project = argv[++i];
+        else if (a == "--module" && i + 1 < argc) module = argv[++i];
         else if (a == "--scene" && i + 1 < argc) scene = argv[++i];
         else if (a == "--allow-cheats") opt.allow_cheats = true;
         else if (a == "--help" || a == "-h" || a == "-help") return usage(stdout, 0);
@@ -83,6 +86,16 @@ int main(int argc, char** argv) {
 
     mcp::Server server(opt);
     server.set_sink(send_line, out);
+    if (!module.empty()) {
+        if (Result<void> r = server.load_module(module); !r) {
+            FixedString<512> msg;
+            format_error(r.error(), msg);
+            std::fprintf(stderr, "mce_mcp: cannot load game module %.*s: %s\n", static_cast<int>(module.size()), module.data(),
+                         msg.c_str());
+            log::shutdown();
+            return 1;
+        }
+    }
     if (!project.empty()) {
         if (Result<void> r = server.open_project(project, scene); !r) {
             FixedString<512> msg;

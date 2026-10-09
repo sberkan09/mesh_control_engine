@@ -17,13 +17,14 @@ From the engine checkout:
     python3 scripts/ship.py --project projects/@PROJECT@ # the ship zip in dist/
 
 Add components to `components.h` (MCE_COMPONENT), systems to `@GAME@.cpp` (`install`), and author
-them in scenes with the project's editor, which knows the game's components (the stock `mce_editor`
-does not):
+them in scenes with the editor, which loads the game module to know its components:
 
-    cmake --build --preset linux-gcc-debug --target @GAME@_editor
-    build/linux-gcc-debug/projects/@PROJECT@/@GAME@_editor -project projects/@PROJECT@
+    cmake --build --preset linux-gcc-debug --target mce_editor @GAME@_game
+    build/linux-gcc-debug/src/editor/app/mce_editor -module build/linux-gcc-debug/projects/@PROJECT@/lib@GAME@.so -project projects/@PROJECT@
 
-An MCP client (an AI agent) authors the same scenes through the project's MCP server, `@GAME@_mcp
---project projects/@PROJECT@` (docs/engine/editor.md). In the windowed game the starter-kit input
+(On Windows, where game modules are not built, the project's own `@GAME@_editor` target compiles the
+game in instead.) An MCP client (an AI agent) authors the same scenes through the MCP server,
+`mce_mcp --module <that lib@GAME@.so> --project projects/@PROJECT@` (docs/engine/editor.md), and
+`mce_cook --module <that lib@GAME@.so> projects/@PROJECT@ --pack` cooks them. In the windowed game the starter-kit input
 map is live (WASD / arrows move, Space jumps, J fires); `@GAME@.cpp` reads it as the `InputState`
 resource.

@@ -35,6 +35,37 @@ include(MceProject)
 include(Dependencies)
 include(EngineId)
 
+# The engine as one image (scripting.md §3.1, src/module): mce_engine is every runtime engine
+# library linked whole into one shared library, so a host and the game module it loads share one
+# engine instance. On Windows the umbrella needs the M4 export decorations (MCE_API + the
+# explicit-instantiation ledger, finding F33), so modules are not supported there yet and every
+# tool links the static libraries instead (mce_engine_deps in cmake/MceTarget.cmake).
+if(WIN32)
+    set(MCE_GAME_MODULES_SUPPORTED OFF)
+else()
+    set(MCE_GAME_MODULES_SUPPORTED ON)
+endif()
+if(APPLE)
+    set(MCE_RHI_BACKEND mce_rhi_metal)  # ADR-0028: rhi::create_default_device picks the native backend
+else()
+    set(MCE_RHI_BACKEND mce_rhi_gl)
+endif()
+set(MCE_ENGINE_LIBS
+    mce_core mce_refl mce_asset mce_ecs mce_physics2d mce_physics3d mce_platform mce_input
+    mce_rhi ${MCE_RHI_BACKEND} mce_rhi_default mce_render mce_ui mce_audio mce_scene mce_ecs_scene mce_gameplay_kit
+    mce_module_host)
+if(MCE_GAME_MODULES_SUPPORTED)
+    # Relocatable run paths (scripts/ship.py): every binary looks next to itself first, and the
+    # build-tree path to libmce_engine is recorded relative to $ORIGIN, so a shipped folder never
+    # depends on (or silently loads from) the build tree. Set before any executable is defined.
+    set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
+    if(APPLE)
+        set(CMAKE_BUILD_RPATH "@loader_path")  # macOS spelling of $ORIGIN
+    else()
+        set(CMAKE_BUILD_RPATH "\$ORIGIN")
+    endif()
+endif()
+
 if(MCE_BUILD_TESTS)
     enable_testing()
 endif()

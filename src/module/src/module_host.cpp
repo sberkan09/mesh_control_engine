@@ -2,6 +2,12 @@
 
 #include <cstdio>
 
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 #include "mce/log.h"
 #include "mce/platform/library.h"
 
@@ -13,7 +19,7 @@ constexpr u32 kSlotCount = 8;
 
 struct Slot {
     bool used = false;
-    bool world_alive = false;  // the World the module was installed into still exists
+    u32 worlds_alive = 0;  // Worlds the module was installed into that still exist
     FixedString<512> loaded_path;
 };
 Slot g_slots[kSlotCount];
@@ -38,12 +44,22 @@ struct ModuleWorldBinding {
     ~ModuleWorldBinding() { release(); }
 
     void release() {
-        if (slot < kSlotCount) g_slots[slot].world_alive = false;
+        if (slot < kSlotCount && g_slots[slot].worlds_alive > 0) --g_slots[slot].worlds_alive;
         slot = ~0u;
     }
 };
 
-// "<dir>/libgame.so" + 1 -> "<dir>/libgame_loaded_1.so"
+u32 process_id() {
+#if defined(_WIN32)
+    return static_cast<u32>(GetCurrentProcessId());
+#else
+    return static_cast<u32>(getpid());
+#endif
+}
+
+// "<dir>/libgame.so" + 1 -> "<dir>/libgame_loaded_<pid>_1.so". The process id keeps two processes
+// mapping the same module apart (the editor and the running game): copy_in_use only knows this
+// process's copies, and overwriting a copy another process has mapped corrupts its code.
 FixedString<512> copy_path(StringView source, u32 n) {
     usize sep = 0;  // one past the last path separator
     for (usize i = 0; i < source.size(); ++i)
@@ -55,8 +71,8 @@ FixedString<512> copy_path(StringView source, u32 n) {
             break;
         }
     }
-    char suffix[24];
-    std::snprintf(suffix, sizeof suffix, "_loaded_%u", n);
+    char suffix[40];
+    std::snprintf(suffix, sizeof suffix, "_loaded_%u_%u", process_id(), n);
     FixedString<512> out(source.substr(0, dot));
     out.append(suffix);
     out.append(source.substr(dot));
@@ -77,10 +93,8 @@ void release_slot(u32 slot) {
 
 }  // namespace
 
-Result<LoadedModule> load_game_module(StringView path, World& world) {
+Result<LoadedModule> open_game_module(StringView path) {
     if (!platform::file_exists(path)) return Error(Errc::ModuleNotFound, "module.open", path);
-    if (world.try_resource<ModuleWorldBinding>() != nullptr)
-        return Error(Errc::AlreadyExists, "module.install", path);
 
     u32 slot = kSlotCount;
     for (u32 i = 0; i < kSlotCount; ++i) {
@@ -127,27 +141,42 @@ Result<LoadedModule> load_game_module(StringView path, World& world) {
         release_slot(slot);
         return Error(Errc::EngineIdMismatch, "module.version", path);
     }
+    MCE_LOG_INFO("module: loaded {} v{} from {} (engine {:016x})", m.info->name, m.info->module_version,
+                 m.loaded_path.c_str(), MCE_ENGINE_ID);
+    return m;
+}
 
-    g_slots[slot].world_alive = true;
-    world.set_resource(ModuleWorldBinding(slot));
+ResultV install_game_module(const LoadedModule& m, World& world) {
+    if (!m.loaded() || m.slot >= kSlotCount || !g_slots[m.slot].used)
+        return Error(Errc::InvalidArgument, "module.install", "module not loaded");
+    if (world.try_resource<ModuleWorldBinding>() != nullptr)
+        return Error(Errc::AlreadyExists, "module.install", m.source_path.view());
+    ++g_slots[m.slot].worlds_alive;
+    world.set_resource(ModuleWorldBinding(m.slot));
     const ResultV installed = m.info->install(world);
     if (!installed) {
         FixedString<512> msg;
         format_error(installed.error(), msg);
         // The World may already hold code pointers into the module: it stays mapped (and its
-        // slot taken) until process exit. The caller discards the World.
+        // slot taken) until the World is gone. The caller discards the World.
         MCE_LOG_ERROR("module: {} install failed: {}", m.info->name, msg.c_str());
-        return Error(Errc::ModuleInstallFailed, "module.install", path);
+        return Error(Errc::ModuleInstallFailed, "module.install", m.source_path.view());
     }
-    MCE_LOG_INFO("module: loaded {} v{} from {} (engine {:016x})", m.info->name, m.info->module_version,
-                 m.loaded_path.c_str(), MCE_ENGINE_ID);
+    return ok();
+}
+
+Result<LoadedModule> load_game_module(StringView path, World& world) {
+    if (world.try_resource<ModuleWorldBinding>() != nullptr)
+        return Error(Errc::AlreadyExists, "module.install", path);
+    MCE_TRY_ASSIGN(LoadedModule m, open_game_module(path));
+    MCE_TRY(install_game_module(m, world));
     return m;
 }
 
 void unload_game_module(LoadedModule& module) {
     if (!module.loaded()) return;
     MCE_ASSERT_MSG(module.slot < kSlotCount && g_slots[module.slot].used, "unknown module slot");
-    MCE_ASSERT_MSG(!g_slots[module.slot].world_alive,
+    MCE_ASSERT_MSG(g_slots[module.slot].worlds_alive == 0,
                    "destroy the World before unloading its game module (it holds module code pointers)");
     platform::unload_library(module.handle);
     release_slot(module.slot);

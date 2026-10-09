@@ -6,7 +6,7 @@
 #   EditorProject                 project folder, GUID catalog, cook + mount
 #   viewport2d / PreviewRenderer  editor camera, picking, preview drawing
 
-mce_add_library(mce_editor_core
+mce_add_library(mce_editor_core UMBRELLA
     SOURCES
         src/asset_browser.cpp
         src/console_model.cpp

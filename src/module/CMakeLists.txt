@@ -9,8 +9,9 @@
 #   mce_add_game_module(<name> SOURCES ... [DEPS ...])   builds a game module (MODULE library)
 #
 # Hosts that load modules link mce::mce_engine and NO static engine library (that would be a
-# second engine instance). On Windows the umbrella needs the M4 export decorations (MCE_API +
-# the explicit-instantiation ledger, finding F33), so it is not built there yet.
+# second engine instance): the player runtime, and the editor, the MCP server and the cook with
+# their libraries (UMBRELLA targets). On Windows the umbrella needs the M4 export decorations
+# (MCE_API + the explicit-instantiation ledger, finding F33), so it is not built there yet.
 
 mce_add_library(mce_module_host
     SOURCES
@@ -21,27 +22,14 @@ mce_add_library(mce_module_host
         mce::mce_platform)
 target_include_directories(mce_module_host PUBLIC "${MCE_GENERATED_INCLUDE_DIR}")
 
-set(MCE_ENGINE_LIBS
-    mce_core mce_refl mce_asset mce_ecs mce_physics2d mce_platform mce_input
-    mce_rhi ${MCE_RHI_BACKEND} mce_rhi_default mce_render mce_ui mce_audio mce_scene mce_ecs_scene mce_gameplay_kit
-    mce_module_host)
-
-if(WIN32)
-    set(MCE_GAME_MODULES_SUPPORTED OFF CACHE INTERNAL "")
+# MCE_ENGINE_LIBS, MCE_GAME_MODULES_SUPPORTED and the $ORIGIN run paths are set by the root
+# CMakeLists.txt (before the first executable), and UMBRELLA targets (cmake/MceTarget.cmake) link
+# the umbrella defined here in place of the static libraries.
+if(NOT MCE_GAME_MODULES_SUPPORTED)
     message(STATUS "mce_engine shared library: not built on Windows until the M4 export ledger")
     function(mce_add_game_module name)
     endfunction()
     return()
-endif()
-set(MCE_GAME_MODULES_SUPPORTED ON CACHE INTERNAL "")
-# Relocatable run paths (scripts/ship.py): every binary looks next to itself first, and the
-# build-tree path to libmce_engine is recorded relative to $ORIGIN, so a shipped folder never
-# depends on (or silently loads from) the build tree.
-set(CMAKE_BUILD_RPATH_USE_ORIGIN ON PARENT_SCOPE)
-if(APPLE)
-    set(CMAKE_BUILD_RPATH "@loader_path" PARENT_SCOPE)  # macOS spelling of $ORIGIN
-else()
-    set(CMAKE_BUILD_RPATH "\$ORIGIN" PARENT_SCOPE)
 endif()
 
 add_library(mce_engine SHARED src/engine_dll.cpp)

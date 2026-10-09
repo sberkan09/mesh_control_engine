@@ -10,7 +10,7 @@ mce_add_test(test_ecs
         mce::mce_ecs)
 
 # Scene/prefab instantiation end to end: author -> mce_asset_cook -> CHNK_PREFAB/SCENE -> World.
-mce_add_test(test_ecs_scene
+mce_add_test(test_ecs_scene UMBRELLA
     SOURCES
         test_prefab.cpp
         test_save.cpp

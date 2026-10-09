@@ -7,7 +7,7 @@ else()
     target_compile_options(mce_stb PRIVATE -w)
 endif()
 
-mce_add_library(mce_asset_cook
+mce_add_library(mce_asset_cook UMBRELLA
     SOURCES
         src/audio.cpp
         src/cook.cpp

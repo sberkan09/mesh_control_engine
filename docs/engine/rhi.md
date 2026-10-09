@@ -11,8 +11,8 @@ The RHI is four L2 libraries (layer per the CMake comments):
   private, so GL symbols never leak past the target.
 - `mce_rhi_default` (`src/engine/rhi_default/`): `rhi::create_default_device`, the one place that
   picks the native backend. Public dependencies `mce_rhi` and `mce_platform`; the backend
-  (`mce_rhi_metal` on Apple, `mce_rhi_gl` elsewhere) is a private dependency chosen in CMake and
-  exported to the parent scope as `MCE_RHI_BACKEND`. Hosts link this target instead of a backend:
+  (`mce_rhi_metal` on Apple, `mce_rhi_gl` elsewhere) is a private dependency named by
+  `MCE_RHI_BACKEND`, set in the root `CMakeLists.txt`. Hosts link this target instead of a backend:
   the `mce_editor` executable, the `mce_engine` umbrella, `mce_player_runtime` (directly only where
   game modules are unsupported; otherwise through the umbrella), the samples (`01_triangle`, `sprites_2d`,
   `03_platformer`, `04_diorama`, `04_cubes`, `05_ashen_court`, `ui_gallery`), project editors made

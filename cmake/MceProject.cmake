@@ -19,7 +19,14 @@
 #   mce_add_project(<game> TITLE "<window title>" GAME_SOURCES ... MODULE_ENTRY game/module.cpp
 #                   TYPES game/types.cpp HOST host/main.cpp [INCLUDE_DIRS ...])
 #
-# scripts/ship.py --project <dir> packages the host, the module and the pack into the ship zip.
+# The per-project tools above compile the game in; where game modules are supported the stock
+# tools load the module instead and need no project-specific build:
+#   mce_editor -module <build>/projects/<name>/lib<game>.so -project projects/<name>
+#   mce_mcp --module <that .so> --project projects/<name>
+#   mce_cook --module <that .so> projects/<name> --pack
+# (The tools and their libraries are UMBRELLA targets, cmake/MceTarget.cmake, so the module shares
+# their engine.) scripts/ship.py --project <dir> packages the host, the module and the pack into
+# the ship zip.
 function(mce_add_project game)
     cmake_parse_arguments(ARG "" "TITLE;MODULE_ENTRY;HOST" "GAME_SOURCES;TYPES;INCLUDE_DIRS" ${ARGN})
     if(NOT ARG_TITLE)
@@ -35,8 +42,8 @@ function(mce_add_project game)
     add_executable(${game}_cook "${PROJECT_SOURCE_DIR}/tools/cook/main.cpp" "${PROJECT_SOURCE_DIR}/tools/cook/engine_components.cpp"
                                 ${ARG_TYPES})
     target_include_directories(${game}_cook PRIVATE ${includes})
-    target_link_libraries(${game}_cook PRIVATE mce::mce_asset_cook mce::mce_gameplay_kit mce::mce_physics2d mce::mce_audio
-                                               mce::mce_ecs_scene)
+    mce_engine_deps(cook_deps mce::mce_asset_cook mce::mce_gameplay_kit mce::mce_physics2d mce::mce_audio mce::mce_ecs_scene)
+    target_link_libraries(${game}_cook PRIVATE ${cook_deps})
     mce_apply_compile_policy(${game}_cook)
 
     # The start scene the host plays when -scene is not given: <name>.mceproj's start_scene
@@ -101,8 +108,8 @@ const bool kRegistered = (mce::editor::set_play_game_install(&${game}::install),
 " @ONLY)
         add_executable(${game}_editor "${PROJECT_SOURCE_DIR}/src/editor/app/main.cpp" ${ARG_GAME_SOURCES} "${hook}")
         target_include_directories(${game}_editor PRIVATE ${includes})
-        target_link_libraries(${game}_editor PRIVATE mce::mce_editor_layer mce::mce_rhi_default mce::mce_module_host
-                                                     mce::mce_input)
+        mce_engine_deps(editor_deps mce::mce_editor_layer mce::mce_rhi_default mce::mce_module_host mce::mce_input)
+        target_link_libraries(${game}_editor PRIVATE ${editor_deps})
         mce_apply_compile_policy(${game}_editor)
     endif()
 
@@ -123,7 +130,8 @@ const bool kRegistered = (mce::editor::set_play_game_install(&${game}::install),
                                    "${PROJECT_SOURCE_DIR}/src/editor/mcp/app/engine_components.cpp" ${ARG_TYPES}
                                    ${ARG_GAME_SOURCES} "${mcp_hook}")
         target_include_directories(${game}_mcp PRIVATE ${includes})
-        target_link_libraries(${game}_mcp PRIVATE mce::mce_mcp_core mce::mce_module_host)
+        mce_engine_deps(mcp_deps mce::mce_mcp_core mce::mce_module_host)
+        target_link_libraries(${game}_mcp PRIVATE ${mcp_deps})
         mce_apply_compile_policy(${game}_mcp)
     endif()
 
@@ -141,7 +149,8 @@ const bool kRegistered = (mce::editor::set_play_game_install(&${game}::install),
                 set_tests_properties(${game}_editor_gpu PROPERTIES LABELS gpu)
             endif()
         endif()
-        # The module host maps lib<game>_loaded_N copies beside the module: no overlap under -j.
+        # The module host maps lib<game>_loaded_<pid>_N copies beside the module; one test at a time
+        # keeps the project folder quiet under -j.
         get_property(tests DIRECTORY PROPERTY TESTS)
         set_tests_properties(${tests} PROPERTIES RESOURCE_LOCK ${game}_module)
     endif()

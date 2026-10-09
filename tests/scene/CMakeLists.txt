@@ -1,6 +1,6 @@
 # The authored-scene runtime path: .mcscene -> cook -> mount -> mce_scene -> World, and the
 # starter-kit components it carries.
-mce_add_test(test_scene
+mce_add_test(test_scene UMBRELLA
     SOURCES
         test_scene.cpp
     DEPS
