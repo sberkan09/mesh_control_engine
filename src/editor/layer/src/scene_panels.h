@@ -11,6 +11,7 @@ void add_scene_panels(EditorShell& shell);
 void add_play_panel(EditorShell& shell);
 // Registers the Assets browser (asset_panel.cpp).
 void add_asset_panel(EditorShell& shell);
+void add_profiler_panel(EditorShell& shell);
 void add_tilemap_panel(EditorShell& shell);
 // Drag-drop payload of the asset browser: the asset's Guid.
 inline constexpr const char* kAssetPayload = "MCE_ASSET";

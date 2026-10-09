@@ -110,6 +110,9 @@ u32 EditorShell::imgui_vertex_count() const { return impl_ ? impl_->renderer.las
 u32 EditorShell::imgui_clipped_vertex_count() const { return impl_ ? impl_->renderer.last_clipped_triangles() : 0; }
 
 void EditorShell::build_ui(f64 frame_dt) {
+    const f64 t0 = platform::now_seconds();
+    perf_pending_ = FrameSample{};
+    perf_pending_.frame_ms = static_cast<f32>(frame_dt * 1000.0);
     console_.poll();
     impl_->platform.new_frame(frame_dt);
     ImGui::NewFrame();
@@ -118,7 +121,11 @@ void EditorShell::build_ui(f64 frame_dt) {
     // before the panels draw this frame's state.
     if (scene_mode() && cv_hot_reload.get_float() > 0.0f)
         session_.tick_hot_reload(platform::now_seconds(), static_cast<f64>(cv_hot_reload.get_float()));
-    if (scene_mode()) session_.play().advance(frame_dt);
+    if (scene_mode()) {
+        session_.play().advance(frame_dt);
+        perf_pending_.sim_ms = static_cast<f32>(session_.play().last_advance_ms());
+        perf_pending_.sim_ticks = session_.play().last_advance_ticks();
+    }
     handle_shortcuts();
     draw_menu_bar();
     draw_dockspace();
@@ -129,7 +136,7 @@ void EditorShell::build_ui(f64 frame_dt) {
         if (ImGui::Begin(p->name(), &p->open)) p->draw(*this);
         ImGui::End();
     }
-    focus_panel_ = nullptr;
+    if (frames_ >= 2) focus_panel_ = nullptr;  // held over the first frames: the default dock layout lands on frame 1
     // A drag in a widget is one undo step: coalescing ends when no widget is held any more.
     if (scene_mode() && !ImGui::IsAnyItemActive()) scene().seal_undo();
     draw_popups();
@@ -144,6 +151,8 @@ void EditorShell::build_ui(f64 frame_dt) {
         MCE_LOG_INFO("editor: player exited ({})", impl_->player.exit_code());
     update_title();
     ++frames_;
+    const f32 build_ms = static_cast<f32>((platform::now_seconds() - t0) * 1000.0);
+    perf_pending_.ui_ms = build_ms > perf_pending_.sim_ms ? build_ms - perf_pending_.sim_ms : 0.0f;
 }
 
 // ---- file commands ------------------------------------------------------------------------------
@@ -512,10 +521,29 @@ void EditorShell::draw_popups() {
 }
 
 void EditorShell::record(rhi::CommandBuffer& cmd, f32 alpha) {
+    const f64 t0 = platform::now_seconds();
     for (auto& p : panels_) p->record(*this, cmd, alpha);
     ImDrawData* dd = ImGui::GetDrawData();
     impl_->renderer.update_textures(dd);
     impl_->renderer.record(dd, cmd, kClearColor);
+    perf_pending_.record_ms = static_cast<f32>((platform::now_seconds() - t0) * 1000.0);
+}
+
+void EditorShell::end_frame_perf(f64 submit_ms) {
+    perf_pending_.submit_ms = static_cast<f32>(submit_ms);
+    // GPU: the span between the first and last timestamp the frame wrote (none: not measured).
+    const rhi::GpuTimestamps& ts = device_->last_gpu_timestamps();
+    perf_pending_.gpu_ms = -1.0f;
+    if (ts.written != 0) {
+        u32 first = ~0u, last = 0;
+        for (u32 i = 0; i < rhi::kMaxTimestamps; ++i)
+            if (ts.has(i)) {
+                if (first == ~0u) first = i;
+                last = i;
+            }
+        if (first != ~0u && last > first) perf_pending_.gpu_ms = static_cast<f32>(ts.ms(first, last));
+    }
+    perf_.push(perf_pending_);
 }
 
 void EditorShell::draw_menu_bar() {
@@ -628,6 +656,7 @@ void EditorShell::draw_dockspace() {
         ImGui::DockBuilderDockWindow("Console", bottom);
         ImGui::DockBuilderDockWindow("Cook", bottom);
         ImGui::DockBuilderDockWindow("Stats", bottom);
+        ImGui::DockBuilderDockWindow("Profiler", bottom);
         ImGui::DockBuilderDockWindow("Play", bottom);
         ImGui::DockBuilderDockWindow("Assets", bottom);
         ImGui::DockBuilderDockWindow("Tilemap", right);

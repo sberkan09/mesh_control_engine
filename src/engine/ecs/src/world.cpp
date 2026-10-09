@@ -1,5 +1,6 @@
 #include "mce/ecs/world.h"
 
+#include "mce/app.h"
 #include "mce/hash.h"
 
 namespace mce {
@@ -388,6 +389,34 @@ Span<const char* const> World::system_names(Phase phase) const {
     return system_name_cache_[static_cast<usize>(phase)].span();
 }
 
+void World::set_profiling(bool on) {
+    if (on && !profiling_) reset_system_timings();
+    profiling_ = on;
+}
+
+void World::reset_system_timings() {
+    for (Array<SystemEntry>& list : systems_)
+        for (SystemEntry& e : list) {
+            e.last_ms = 0.0;
+            e.total_ms = 0.0;
+            e.runs = 0;
+        }
+}
+
+void World::system_timings(Array<SystemTiming>& out) const {
+    out.clear();
+    for (usize p = 0; p < kPhaseCount; ++p)
+        for (const SystemEntry& e : systems_[p]) {
+            SystemTiming t;
+            t.name = e.name;
+            t.phase = static_cast<Phase>(p);
+            t.last_ms = e.last_ms;
+            t.total_ms = e.total_ms;
+            t.runs = e.runs;
+            out.push_back(t);
+        }
+}
+
 void World::run_phase(Phase phase, Frame& frame) {
     MCE_ASSERT_MSG(!in_phase_, "phases do not nest");
     frame.phase = phase;
@@ -400,7 +429,17 @@ void World::run_phase(Phase phase, Frame& frame) {
         // The system's writes carry its run tick; its reader tick is its previous run.
         stamp_tick_ = ++change_tick_;
         stamping_ = true;
-        list[i].fn(frame);
+        if (profiling_) {
+            app::IClock& clock = app::steady_clock();
+            const f64 t0 = clock.now_seconds();
+            list[i].fn(frame);
+            const f64 ms = (clock.now_seconds() - t0) * 1000.0;
+            list[i].last_ms = ms;
+            list[i].total_ms += ms;
+            ++list[i].runs;
+        } else {
+            list[i].fn(frame);
+        }
         list[i].last_run = stamp_tick_;
     }
     stamping_ = false;

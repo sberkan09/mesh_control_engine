@@ -17,6 +17,7 @@ mce_add_library(mce_editor_core
         src/hot_reload.cpp
         src/inspector.cpp
         src/orbit_camera.cpp
+        src/perf_monitor.cpp
         src/play_session.cpp
         src/preview_renderer.cpp
         src/project.cpp
