@@ -69,8 +69,8 @@ agent edits exactly as to human ones. Nothing touches disk unless a tool says so
 | Group | Tools | Notes |
 |---|---|---|
 | Discover | `refl_list_components`, `refl_describe_component` | Field names, types, ranges, enum values, read-only flags — straight from `mce_refl`. |
-| Read | `scene_info`, `scene_list_entities`, `scene_get_entity`, `asset_list` | Entities by persistent `EntityId`; components as reflected field maps; assets from the GUID registry (type filter). |
-| Edit | `entity_create`, `entity_delete`, `entity_duplicate`, `component_add`, `component_remove`, `component_set` | `component_set` takes a refl property path + value; type errors come back as tool errors with the expected type. |
+| Read | `scene_info`, `scene_list_entities`, `scene_get_entity`, `asset_list` | Entities by persistent `EntityId`; components as reflected field maps; assets from the GUID registry (type filter). `asset_set_import_settings` rewrites a sidecar's importer settings (the one write outside the scene). |
+| Edit | `entity_create`, `entity_delete`, `entity_duplicate`, `scene_clear`, `component_add`, `component_remove`, `component_set` | `component_set` takes a refl property path + value; type errors come back as tool errors with the expected type. |
 | Undo | `scene_undo`, `scene_redo` | The editor's undo history (FR-EDT-040, ADR-0030 §1–§3): each editing `tools/call` is one step, named after the tool. |
 | Persist | `scene_open`, `scene_save` | `.mcscene` text format; save uses the same temp-write-then-rename as autosave. |
 | Build | `cook_run`, `cook_errors` | Through `CookService`; errors carry file + line (FR-EDT-070 data). `adopt` writes sidecars for new source files (`mce_cook --adopt`). |

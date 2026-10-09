@@ -63,8 +63,8 @@ scissor state). ImGui platform and renderer backends are in `layer/src/` and ren
 `mce_mcp_core` (`mcp/include/mce/mcp/`): `Server` (`server.h`: `open_project`, `handle(line)`,
 `notify`), `run_headless` (`headless_run.h`), `JsonWriter` (`json_writer.h`) and the value codec
 (`values.h`). Tools (`mcp/src/tools.cpp`): `refl_list_components`, `refl_describe_component`,
-`scene_info`, `scene_list_entities`, `scene_get_entity`, `asset_list`, `entity_create`,
-`entity_delete`, `entity_duplicate`, `component_add`, `component_remove`, `component_set`,
+`scene_info`, `scene_list_entities`, `scene_get_entity`, `asset_list`, `asset_set_import_settings`,
+`entity_create`, `entity_delete`, `entity_duplicate`, `scene_clear`, `component_add`, `component_remove`, `component_set`,
 `scene_new`, `scene_open`, `scene_save`, `scene_undo`, `scene_redo`, `cook_run`, `cook_errors`,
 `run_headless`, `console_list`, `console_exec`.
 
@@ -80,12 +80,13 @@ one message per line, on its stdin/stdout (`initialize`, `notifications/initiali
 Values use the `.mcscene` spelling: vectors as arrays, assets as `"guid:<uuid>"` (take them from
 `asset_list`), enums by name, nested structs as objects (`{"shape": {"type": "Circle", "radius":
 0.3}}`). `entity_duplicate` inserts the copy right after its source, and `scene_new` makes a fresh
-GUID, so to re-author a scene a `.mceproj` names, `scene_open` it and `entity_delete` its entities
+GUID, so to re-author a scene a `.mceproj` names, `scene_open` it and `scene_clear` it (one undo step)
 instead. `run_headless` takes `inspect` (`{"entities": [ids], "component": "Type", "show": ["Type"]}`):
 after the last tick it reports the live component values, Transient runtime fields included, of
 scene entities by id and of every entity with a component (also ones the run spawned), at most 64.
 New source files under `assets/` (a PNG with no `.mceasset`) are a cook error until `cook_run` with
-`"adopt": true` writes their sidecars. `projects/Kindle/tools/author_level_mcp.py` is a complete client.
+`"adopt": true` writes their sidecars (with empty settings: a normal map or a LUT then needs
+`asset_set_import_settings` with `{"srgb": false}`, which rewrites the sidecar's `settings` and rescans). `projects/Kindle/tools/author_level_mcp.py` is a complete client.
 
 ## Rules and invariants
 
