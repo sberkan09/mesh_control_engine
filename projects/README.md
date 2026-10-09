@@ -15,3 +15,5 @@ The layout and the rules are in `docs/architecture/assets.md` §4.4; the record 
 `PrismBreak/` is the MCP dogfood game: a brick breaker authored through `prism_break_mcp` (`docs/research/mcp-dogfood.md`).
 
 `Undertow/` is the second MCP dogfood game: a lit-2D cave-diving drone with a rope, currents and hazards, authored through `undertow_mcp` (`docs/research/mcp-dogfood-undertow.md`).
+
+The third round, `docs/research/mcp-blind-test.md`, made a game without the engine source (an SDK-like setup); that project is kept in the project files, not here.
