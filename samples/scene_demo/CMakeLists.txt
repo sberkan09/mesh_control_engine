@@ -18,6 +18,11 @@ add_dependencies(scene_demo_content mce_player)
 if(MCE_BUILD_TESTS)
     add_test(NAME scene_demo_player_600 COMMAND mce_player -headless 1 -ticks 600 -pack "${pack}")
     set_tests_properties(scene_demo_player_600 PROPERTIES PASS_REGULAR_EXPRESSION "600 ticks, 6 entities, state_hash [0-9a-f]+")
+    # -input: the scripted input stands in for the keyboard (parsed, logged, published every tick).
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/input_script.txt" "# scripted input\n10-70 Move=1,0 Jump\n100 Fire\n")
+    add_test(NAME scene_demo_player_input COMMAND mce_player -headless 1 -ticks 120 -pack "${pack}"
+                                                  -input "${CMAKE_CURRENT_BINARY_DIR}/input_script.txt")
+    set_tests_properties(scene_demo_player_input PROPERTIES PASS_REGULAR_EXPRESSION "3 segments, last tick 100.*120 ticks, 6 entities, state_hash [0-9a-f]+")
     if(MCE_GPU_TESTS)
         add_test(NAME scene_demo_player_gpu
                  COMMAND mce_player -pack "${pack}" -frames 90 -platform.error_box 0 -r.vsync 0)

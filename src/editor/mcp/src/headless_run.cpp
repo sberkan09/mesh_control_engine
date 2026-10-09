@@ -43,6 +43,7 @@ public:
     }
 
     void on_tick(const app::TickContext& t) override {
+        if (t.actions) input::publish(world_, *t.actions);  // the scripted input, as the player publishes the keyboard's
         world_.tick(t.dt, sim_ticks_);
         ++sim_ticks_;
         audio_.update();  // the Silent backend mixes one block per call
@@ -79,7 +80,7 @@ private:
 }  // namespace
 
 Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, TickProgressFn progress, void* user,
-                                 InspectFn inspect, void* inspect_user) {
+                                 InspectFn inspect, void* inspect_user, app::IInputSource* input) {
     if (ticks == 0) return Error(Errc::InvalidArgument, "mcp.run_headless", "ticks must be > 0");
     asset::AssetSystem assets;
     const StringView roots[1] = {pack};
@@ -95,6 +96,7 @@ Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, 
         desc.name = "mce_mcp.run_headless";
         desc.headless = true;
         desc.max_ticks = ticks;
+        desc.input_source = input;
         if (app::run(app, desc) != 0) return app.error();
         out.ticks = app.ticks();
         out.entities = app.entity_count();
