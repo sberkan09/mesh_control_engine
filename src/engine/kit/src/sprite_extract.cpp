@@ -51,8 +51,10 @@ void SpriteExtract::release_handles() {
     for (TilemapEntry& e : tilemaps_) destroy_tilemap(e);
     tilemaps_.clear();
     if (assets_)
-        for (const TextureEntry& t : textures_)
+        for (const TextureEntry& t : textures_) {
             if (t.handle.generation != 0) assets_->release(t.handle);
+            if (t.normal_handle.generation != 0) assets_->release(t.normal_handle);
+        }
     if (renderer_)
         for (const TextureEntry& t : textures_)
             if (t.set.valid() && !(t.set == missing_set_)) renderer_->sprite_sets().destroy(t.set);
@@ -77,26 +79,51 @@ void SpriteExtract::reset(asset::AssetSystem* assets) {
     assets_ = assets;
 }
 
-render::SpriteSetId SpriteExtract::sprite_set(asset::Guid guid) {
-    if (guid == asset::Guid{}) return white_set_;
+render::SpriteSetId SpriteExtract::sprite_set(asset::Guid guid, asset::Guid normal) {
+    if (guid == asset::Guid{} && (normal == asset::Guid{} || !assets_)) return white_set_;
     for (const TextureEntry& t : textures_)
-        if (t.guid == guid) return t.set;
+        if (t.guid == guid && t.normal == normal) return t.set;
     TextureEntry e;
     e.guid = guid;
+    e.normal = normal;
     e.set = missing_set_;
+    auto load = [&](asset::Guid g, asset::AnyHandle& out) -> asset::AssetKey {
+        const asset::AssetKey key = assets_->find(g);
+        if (key == asset::kInvalidAssetKey) {
+            MCE_LOG_WARN("kit: texture {} is not in the mounted content", asset::to_string(g).view());
+            return key;
+        }
+        Result<asset::AssetHandle<asset::Texture>> h = assets_->load_sync<asset::Texture>(key);
+        if (!h) {
+            MCE_LOG_WARN("kit: texture {} failed to load; drawing the missing-texture checker", asset::to_string(g).view());
+            return asset::kInvalidAssetKey;
+        }
+        out = asset::AnyHandle(h.value());
+        return key;
+    };
     if (assets_) {
-        const asset::AssetKey key = assets_->find(guid);
-        if (key != asset::kInvalidAssetKey) {
-            Result<asset::AssetHandle<asset::Texture>> h = assets_->load_sync<asset::Texture>(key);
-            if (h) {
-                e.handle = asset::AnyHandle(h.value());
-                e.set = whole_texture_set(*renderer_, key, rhi::Filter::Nearest, "kit.sprite");
-            } else {
-                MCE_LOG_WARN("kit: texture {} failed to load; drawing the missing-texture checker",
-                             asset::to_string(guid).view());
+        // The color texture: an asset, or the white texture under a lit solid quad.
+        u32 color_key = white_key_;
+        bool color_ok = true;
+        if (guid != asset::Guid{}) {
+            const asset::AssetKey key = load(guid, e.handle);
+            color_ok = key != asset::kInvalidAssetKey;
+            color_key = key;
+        }
+        if (color_ok) {
+            render::SpriteSetDesc d;
+            d.texture_key = color_key;
+            d.regions = Span<const render::SpriteRegion>(&kWholeTexture, 1);
+            d.debug_name = "kit.sprite";
+            if (normal != asset::Guid{}) {
+                const asset::AssetKey nkey = load(normal, e.normal_handle);
+                if (nkey != asset::kInvalidAssetKey) {
+                    d.lit = true;
+                    d.normal_key = nkey;
+                    d.debug_name = "kit.sprite.lit";
+                }
             }
-        } else {
-            MCE_LOG_WARN("kit: texture {} is not in the mounted content", asset::to_string(guid).view());
+            e.set = renderer_->create_sprite_set(d);
         }
     }
     textures_.push_back(e);
@@ -162,8 +189,40 @@ void each_placed(World& world, math::vec2 cam, Fn&& fn) {
 
 }  // namespace
 
+void SpriteExtract::collect_lights(World& world, render::SpriteBatch& batch) {
+    render::Lights2D lights;
+    bool any_ambient = false;
+    math::Color ambient{0, 0, 0, 1};
+    const math::aabb2& view = batch.view().world_bounds;
+    auto add = [&](const Placement& t, const Light2D& l) {
+        if (l.kind == Light2DKind::Ambient) {
+            any_ambient = true;
+            ambient.r += l.color.r * l.intensity;
+            ambient.g += l.color.g * l.intensity;
+            ambient.b += l.color.b * l.intensity;
+            return;
+        }
+        const math::vec2 p{t.position.x, t.position.y};
+        const math::aabb2 reach{p - math::vec2(l.radius), p + math::vec2(l.radius)};
+        if (l.intensity <= 0.0f || !reach.overlaps(view)) return;
+        render::PointLight2D pl;
+        pl.position = p;
+        pl.height = l.height;
+        pl.radius = l.radius;
+        pl.color = l.color;
+        pl.intensity = l.intensity;
+        lights.add(pl);  // past 16, the rest are dropped (ECS order)
+    };
+    world.query<const LocalTransform, const Light2D>().without<WorldTransform>().each(
+        [&](const LocalTransform& t, const Light2D& l) { add(placement(t), l); });
+    world.query<const WorldTransform, const Light2D>().each([&](const WorldTransform& t, const Light2D& l) { add(placement(t), l); });
+    if (any_ambient) lights.ambient = ambient;
+    batch.set_lights(lights);
+}
+
 void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
     const math::vec2 cam = batch.view().center;
+    collect_lights(world, batch);
     each_placed<Sprite>(world, cam, [&](const Placement& t, const Sprite& s, const Parallax* px) {
         render::SpriteInstance inst;
         inst.position = {t.position.x, t.position.y};
@@ -171,7 +230,7 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         inst.scale = {s.size.x * t.scale.x, s.size.y * t.scale.y};
         inst.pivot = s.pivot;
         inst.tint = s.tint;
-        inst.set = sprite_set(s.texture.guid);
+        inst.set = sprite_set(s.texture.guid, s.normal_map.guid);
         inst.region = 0;
         inst.sort_layer = s.layer;
         inst.sort_order = s.order;

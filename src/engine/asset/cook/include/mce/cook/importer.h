@@ -57,6 +57,9 @@ public:
     virtual ~IImporter() = default;
     virtual StringView id() const = 0;  // sidecar "importer"
     virtual u32 version() const = 0;    // bump => every asset of this importer re-cooks
+    // Hash of the runtime layouts the output bakes in (the scene cook: every reflected component's
+    // size and fields). Part of the re-cook key, so a changed component re-cooks its scenes.
+    virtual u64 schema_hash() const { return 0; }
     virtual ChunkType type() const = 0; // primary chunk type it produces
     // Native assets (.mcscene, .mcmat) carry their GUID inline; interchange sources use a sidecar.
     virtual bool native() const = 0;

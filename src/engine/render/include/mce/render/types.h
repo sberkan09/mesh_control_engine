@@ -17,15 +17,48 @@ struct SpriteVertex {
     f32 x, y;      // world (or screen) position
     f32 u, v;      // texel-normalized; v = 0 is the top row of the art
     u32 color;     // RGBA8 tint, sRGB-encoded, straight alpha (the shader premultiplies)
-    u32 packed;    // [7:0] array layer, [23:8] reserved (v0.5 octahedral normal), [31:24] flags
+    u32 packed;    // [7:0] array layer, [23:8] orientation of lit quads (below), [31:24] flags
 };
 static_assert(sizeof(SpriteVertex) == 24);
 
 namespace vertex_flags {
 inline constexpr u32 kCoverage = 1u << 0;  // sample the font atlas (R8 coverage) instead of the sprite atlas
+inline constexpr u32 kLit = 1u << 1;       // normal-mapped: shaded by the batch's Lights2D (FR-R2D-090)
 }
 
-constexpr u32 pack_layer_flags(u32 layer, u32 flags) { return (layer & 0xFFu) | ((flags & 0xFFu) << 24); }
+constexpr u32 pack_layer_flags(u32 layer, u32 flags, u32 orientation = 0) {
+    return (layer & 0xFFu) | ((orientation & 0xFFFFu) << 8) | ((flags & 0xFFu) << 24);
+}
+
+// Orientation of a lit quad, so the shader can turn its tangent-space normals into the world:
+// [13:0] rotation quantized over one turn, [14] flip_x, [15] flip_y (bits [21:8] / 22 / 23 of
+// SpriteVertex::packed).
+u32 pack_orientation(f32 rotation, bool flip_x, bool flip_y);
+
+// ---- 2D lighting (FR-R2D-090): ambient + a small set of point lights per batch ----------------
+
+inline constexpr u32 kMaxLights2D = 16;
+
+struct PointLight2D {
+    math::vec2 position;   // world
+    f32 height = 1.5f;     // metres above the sprite plane: low lights graze, high lights flatten
+    f32 radius = 6.0f;     // falloff reaches zero here
+    math::Color color = math::Color::white();
+    f32 intensity = 1.0f;
+};
+
+// Lit sprites receive ambient + Σ points; unlit sprites ignore all of it. The default (white
+// ambient, no points) draws lit sprites exactly like unlit ones.
+struct Lights2D {
+    math::Color ambient = math::Color::white();
+    u32 count = 0;
+    PointLight2D points[kMaxLights2D];
+    bool add(const PointLight2D& p) {
+        if (count >= kMaxLights2D) return false;
+        points[count++] = p;
+        return true;
+    }
+};
 
 // Linear Color -> RGBA8 with sRGB-encoded rgb (alpha stays linear). Inverse of the shader decode.
 u32 pack_color_srgb(math::Color c);

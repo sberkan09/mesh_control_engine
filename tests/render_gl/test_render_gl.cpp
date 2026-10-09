@@ -277,6 +277,75 @@ TEST_CASE("render_gl: a tilemap offset (parallax) translates the baked layer wit
     CHECK(f.device->validation_error_count() == 0);
 }
 
+TEST_CASE("FR-R2D-090: lit sprites shade by their normal map, rotation and flip; unlit ones ignore lights") {
+    Fixture f;
+    // Color: white. Normals: layer 0 flat (+Z), layer 1 tilted 60° toward +X. Linear, not sRGB.
+    const u32 color = f.solid_atlas({{255, 255, 255, 255}, {255, 255, 255, 255}});
+    const u32 normals = f.solid_atlas({{128, 128, 255, 255}, {238, 128, 191, 255}}, rhi::TextureFormat::RGBA8_UNorm);
+    const SpriteRegion regions[] = {{0, 0, 0, 1, 1, 1, 1}, {1, 0, 0, 1, 1, 1, 1}};
+    SpriteSetDesc sd;
+    sd.texture_key = color;
+    sd.regions = regions;
+    const SpriteSetId unlit = f.renderer.create_sprite_set(sd);
+    sd.lit = true;
+    sd.normal_key = normals;
+    const SpriteSetId lit = f.renderer.create_sprite_set(sd);
+
+    // Default lights (white ambient, no points): lit draws exactly like unlit.
+    f.render([&](SpriteBatch& b) {
+        b.add(f.sprite(lit, vec2(-1.5f, 0)));
+        b.add(f.sprite(unlit, vec2(1.5f, 0)));
+    });
+    CHECK(f.at_world(vec2(-1.5f, 0)).r == 255);
+    CHECK(f.at_world(vec2(1.5f, 0)).r == 255);
+
+    Lights2D lights;
+    lights.ambient = math::Color{0.0f, 0.0f, 0.0f, 1.0f};
+    PointLight2D above;
+    above.position = vec2(-1.5f, 0);
+    above.height = 1.0f;
+    above.radius = 3.0f;
+    above.color = math::Color{1.0f, 0.5f, 0.0f, 1.0f};
+    lights.add(above);
+    f.render([&](SpriteBatch& b) {
+        b.set_lights(lights);
+        b.add(f.sprite(lit, vec2(-1.5f, 0)));
+        b.add(f.sprite(unlit, vec2(1.5f, 0)));
+        b.add(f.sprite(lit, vec2(3.4f, 3.4f)));  // beyond the radius: ambient only (black)
+    });
+    const Rgba under = f.at_world(vec2(-1.5f, 0));  // N·L = 1 at the light's foot, falloff 1
+    CHECK(under.r >= 250);
+    CHECK(under.g > 170);  // 0.5 linear -> ~188 sRGB, minus the texel-center falloff
+    CHECK(under.b == 0);
+    CHECK(f.at_world(vec2(1.5f, 0)).r == 255);  // unlit: untouched
+    CHECK(f.at_world(vec2(3.4f, 3.4f)).r == 0);
+
+    // A normal tilted toward +X is lit by a light to its right and dark from the left; rotating
+    // the sprite half a turn or flipping it swaps the sides.
+    auto brightness = [&](f32 light_x, f32 rotation, bool flip) {
+        Lights2D l;
+        l.ambient = math::Color{0, 0, 0, 1};
+        PointLight2D p;
+        p.position = vec2(light_x, 0);
+        p.height = 0.5f;
+        p.radius = 4.0f;
+        l.add(p);
+        f.render([&](SpriteBatch& b) {
+            b.set_lights(l);
+            SpriteInstance s = f.sprite(lit, vec2(0, 0), 1);
+            s.rotation = rotation;
+            s.flip_x = flip;
+            b.add(s);
+        });
+        return static_cast<int>(f.at_world(vec2(0, 0)).r);
+    };
+    const int right = brightness(1.0f, 0.0f, false), left = brightness(-1.0f, 0.0f, false);
+    CHECK(right > left + 60);
+    CHECK(brightness(-1.0f, 3.14159265f, false) > brightness(1.0f, 3.14159265f, false) + 60);
+    CHECK(brightness(-1.0f, 0.0f, true) > brightness(1.0f, 0.0f, true) + 60);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
 TEST_CASE("render_gl: coverage text renders through the batch") {
     Fixture f;
     // A one-glyph font: 'X' is a solid 8×12 coverage block.
