@@ -1,5 +1,6 @@
 #include "mce/convar.h"
 
+#include <atomic>
 #include <charconv>
 #include <cstdio>
 #include <cstdlib>
@@ -274,6 +275,26 @@ void ConFunc::collect(Array<ConFunc*>& out) {
 // ------------------------------------------------------------------ console
 
 namespace console {
+namespace {
+std::atomic<bool> g_cheats_allowed{true};
+
+bool cheat_locked(const ConVar& v, const char* where) {
+    if (!(v.flags() & CVarFlags::Cheat) || g_cheats_allowed.load()) return false;
+    MCE_LOG_WARN("{}: '{}' is a cheat and cheats are locked in this build", where, v.name());
+    return true;
+}
+}  // namespace
+
+void set_cheats_allowed(bool allowed) {
+    g_cheats_allowed.store(allowed);
+    if (allowed) return;
+    Array<ConVar*> vars;
+    ConVar::collect(vars);
+    for (ConVar* v : vars)
+        if (v->flags() & CVarFlags::Cheat) v->reset();
+}
+
+bool cheats_allowed() { return g_cheats_allowed.load(); }
 
 bool execute(StringView line) {
     constexpr usize kMaxTokens = 16;
@@ -304,6 +325,7 @@ bool execute(StringView line) {
             MCE_LOG_INFO("{} = {}  ({})", v->name(), s.c_str(), v->help());
             return true;
         }
+        if (cheat_locked(*v, "console")) return false;
         if (!v->set_from_string(tokens[1])) {
             MCE_LOG_WARN("console: cannot set '{}' to '{}'", v->name(), tokens[1]);
             return false;
@@ -329,6 +351,11 @@ u32 parse_command_line(int argc, const char* const* argv) {
             if (!v) {
                 ++unknown;
                 MCE_LOG_WARN("command line: unknown convar '{}'", tok);
+                i += has_value ? 2 : 1;
+                continue;
+            }
+            if (cheat_locked(*v, "command line")) {
+                ++unknown;
                 i += has_value ? 2 : 1;
                 continue;
             }

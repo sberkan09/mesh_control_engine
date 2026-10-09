@@ -672,7 +672,12 @@ int main(int argc, char** argv) {
     log::LogDesc log_desc;
     log_desc.app_name = "05_ashen_court";
     log::init(log_desc);
+    const samples::BuildInfo build = samples::begin_build();
     console::parse_command_line(argc, argv);
+    if (!samples::start_build("05_ashen_court", build)) {
+        log::shutdown();
+        return 0;
+    }
 
     const ConVar* headless = ConVar::find(StringId("headless"));
     int rc = 1;

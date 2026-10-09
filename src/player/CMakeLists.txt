@@ -22,3 +22,15 @@ endif()
 mce_apply_compile_policy(mce_player_runtime)
 
 mce_add_executable(mce_player SOURCES main.cpp DEPS mce::mce_player_runtime)
+
+# Packaging v2: -crash_test writes a crash report that scripts/symbolicate.py resolves against the
+# build tree (not under ASan, whose own SEGV report takes over; not on Windows, where the report is
+# a minidump read by the debugger).
+if(MCE_BUILD_TESTS AND UNIX AND NOT MCE_ASAN)
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_FOUND)
+        add_test(NAME player_crash_report
+                 COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/crash_report_check.py
+                         $<TARGET_FILE:mce_player> ${PROJECT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/crash_report_check)
+    endif()
+endif()

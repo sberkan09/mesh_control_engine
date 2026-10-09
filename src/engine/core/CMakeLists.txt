@@ -6,15 +6,25 @@ mce_add_library(mce_core
         src/app.cpp
         src/assert.cpp
         src/convar.cpp
+        src/crash.cpp
         src/hash.cpp
         src/jobs.cpp
         src/log.cpp
         src/math.cpp
         src/memory.cpp
         src/result.cpp
+        src/version.cpp
     PUBLIC_DEPS
         spdlog::spdlog
         Tracy::TracyClient)
+
+# The crash handler (mce/crash.h): dladdr/dl_iterate_phdr live in libdl before glibc 2.34. Windows
+# loads dbghelp at install time instead of linking it.
+if(NOT WIN32)
+    target_link_libraries(mce_core PRIVATE ${CMAKE_DL_LIBS})
+endif()
+# mce/version.h reads the configure-time engine stamp (cmake/EngineId.cmake).
+target_include_directories(mce_core PRIVATE "${MCE_GENERATED_INCLUDE_DIR}")
 
 target_compile_definitions(mce_core PUBLIC
     SPDLOG_NO_EXCEPTIONS

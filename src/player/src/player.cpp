@@ -61,7 +61,6 @@ MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the pe
 MCE_CVAR(cv_console, "console", true, "Allow the developer console (` or F1)", CVarFlags::None);
 MCE_CVAR(cv_console_open, "console_open", false, "Start with the developer console open", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
-
 int fail(const char* what, const Error& e) {
     FixedString<512> msg;
     format_error(e, msg);
@@ -487,7 +486,12 @@ int mce::player::run(int argc, char** argv, const PlayerDesc& pd) {
     log::LogDesc log_desc;
     log_desc.app_name = pd.app_name;
     log::init(log_desc);
+    const samples::BuildInfo build = samples::begin_build();
     console::parse_command_line(argc, argv);
+    if (!samples::start_build(pd.app_name, build)) {
+        log::shutdown();
+        return 0;
+    }
 
     const ConVar* headless = ConVar::find(StringId("headless"));
     const bool is_headless = headless && headless->get_bool();

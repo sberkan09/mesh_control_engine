@@ -10,6 +10,7 @@ MCE_CVAR(cv_test_float, "test.float", 0.5f, "test float", CVarFlags::None);
 MCE_CVAR(cv_test_bool, "test.bool", false, "test bool", CVarFlags::None);
 MCE_CVAR(cv_test_str, "test.str", "hello", "test string", CVarFlags::None);
 MCE_CVAR(cv_test_ro, "test.readonly", 1, "read-only", CVarFlags::ReadOnly);
+MCE_CVAR(cv_test_cheat, "test.cheat", 1.0f, "cheat", CVarFlags::Cheat);
 
 int g_calls = 0;
 StringView g_last_arg;
@@ -94,4 +95,30 @@ TEST_CASE("command line parsing") {
     cv_test_int.reset();
     cv_test_bool.reset();
     cv_test_ro.reset();
+}
+
+TEST_CASE("cheat lock (shipped builds)") {
+    REQUIRE(console::cheats_allowed());
+    CHECK(console::execute("test.cheat 4"));
+    CHECK(cv_test_cheat.get_float() == 4.0f);
+
+    console::set_cheats_allowed(false);  // locking resets every cheat convar
+    CHECK(cv_test_cheat.get_float() == 1.0f);
+    CHECK_FALSE(console::execute("test.cheat 9"));
+    CHECK(cv_test_cheat.get_float() == 1.0f);
+    CHECK(console::execute("test.cheat"));  // reading is still fine
+    CHECK(console::execute("test.int 5"));  // and so are ordinary convars
+    const char* argv[] = {"exe", "-test.cheat", "7", "-test.bool"};
+    CHECK(console::parse_command_line(4, argv) == 1);
+    CHECK(cv_test_cheat.get_float() == 1.0f);
+    CHECK(cv_test_bool.get_bool());       // the token after the refused value still parses
+    CHECK(cv_test_cheat.set_float(2.0f));  // code may still set it
+    cv_test_cheat.reset();
+
+    console::set_cheats_allowed(true);
+    CHECK(console::execute("test.cheat 3"));
+    CHECK(cv_test_cheat.get_float() == 3.0f);
+    cv_test_cheat.reset();
+    cv_test_int.reset();
+    cv_test_bool.reset();
 }

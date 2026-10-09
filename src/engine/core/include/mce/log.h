@@ -50,5 +50,8 @@ u64 console_last_seq();
 // Visits the breadcrumb ring, oldest first.
 using BreadcrumbFn = void (*)(const ConsoleLine& line, void* user);
 void visit_breadcrumbs(BreadcrumbFn fn, void* user);
+// Same, but gives up (returns false) instead of waiting when the ring is locked: the crash handler
+// may run on a thread that died holding it.
+bool try_visit_breadcrumbs(BreadcrumbFn fn, void* user);
 
 }  // namespace mce::log

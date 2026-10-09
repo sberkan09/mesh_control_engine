@@ -116,6 +116,11 @@ namespace console {
 bool execute(StringView line);
 // Applies argv per the command-line rules above. Returns the number of unknown entries.
 u32 parse_command_line(int argc, const char* const* argv);
+// The cheat lock (shipped builds): while cheats are not allowed, execute() and the command line
+// refuse to set a Cheat convar, and locking resets every Cheat convar to its default. Code may
+// still set them (a game's own slow-motion). Allowed by default (development builds).
+void set_cheats_allowed(bool allowed);
+bool cheats_allowed();
 }  // namespace console
 
 }  // namespace mce
