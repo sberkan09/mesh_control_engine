@@ -56,6 +56,14 @@ Headers live under `include/mce/input/`.
 - `replay.h`: `InputRecorder` (appends the live part of each snapshot) and `InputReplayer`
   (`next` returns false at the end or on corrupt data).
 
+Scripted input (`mce/input/script.h`)
+- `InputScript`: segments `(action, from tick, to tick, x, y)` added by `add` or parsed from the text
+  form (`"<from>[-<to>] Action[=value] ..."` per line; `#` comments), evaluated per tick into an
+  `InputState` with `evaluate(tick)` or through `app::IInputSource` (`AppDesc::input_source`). Edges
+  and `held_time` follow the InputSystem's rules against the previously evaluated tick; the fast-path
+  fields are filled by action name. Backs `mce_player -input <file>` and the MCP `run_headless` `input`
+  argument (headless runs of keyboard games).
+
 ## Rules and invariants
 
 - **Tick quantization (FR-INP-030).** Tick N owns the half-open window
@@ -129,4 +137,5 @@ directory). Helpers are in `input_test_util.h`.
 - M7: no relative-mouse or pointer-lock mode in `mce_platform`, so mouse look uses raw deltas.
 - M9: there is no input-map asset type a project cooks (`ChunkType::InputMap` exists in the
   container, with no importer), so the player runtime uses `default_map_chunk` for every game. The
-  editor's play mode feeds no input at all.
+  editor's play mode feeds no input at all (headless runs take an `InputScript`; play-in-editor still
+  has no input).

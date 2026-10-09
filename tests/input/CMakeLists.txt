@@ -3,6 +3,7 @@ mce_add_test(test_input
         test_actions.cpp
         test_quantization.cpp
         test_replay.cpp
+        test_script.cpp
         test_gamepad_rebind.cpp
     DEPS
         mce::mce_input)

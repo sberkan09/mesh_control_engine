@@ -4,8 +4,10 @@
 //
 //   mce_player -pack <assets.mce | cooked dir> [-scene <guid | source path>] [-module <game module>]
 //   mce_player -pack p.mce -headless 1 -ticks 600      determinism: prints the World state hash
+//   mce_player -pack p.mce -headless 1 -input moves.txt  scripted input (mce/input/script.h) instead of the keyboard
 //   mce_player -pack p.mce -frames 120 -capture a.ppm  CI smoke: write the last frame
 //   mce_player -pack p.mce -capture_tick 300 -capture a.ppm   the frame after sim tick 300, then quit
+//   mce_player -pack p.mce -input moves.txt -capture_tick 300 -capture a.ppm   ... with the scripted input
 //   mce_player -help                                   every convar with its help (the whole command line)
 //
 // Without -scene the first Scene asset of the pack (by source path) plays. F7 toggles 2D post. Controls: Esc pauses
@@ -36,6 +38,7 @@
 #include "mce/input/default_map.h"
 #include "mce/input/ecs.h"
 #include "mce/input/input_system.h"
+#include "mce/input/script.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
@@ -69,6 +72,9 @@ MCE_CVAR(cv_capture_tick, "capture_tick", 0,
          "Windowed: quit (and -capture) on the first frame after this many sim ticks, whatever the frame rate (0 = off)",
          CVarFlags::None);
 MCE_CVAR(cv_ticks, "ticks", 600, "Headless: ticks to simulate (windowed runs use -frames)", CVarFlags::None);
+MCE_CVAR(cv_input, "input", "",
+         "Input script file: per-tick action states (\"10-70 Move=1,0 Jump\" per line) published to the game instead of the keyboard",
+         CVarFlags::None);
 MCE_CVAR(cv_post, "r.post2d", true, "Apply the camera's Post2DComponent effects (F7 toggles)", CVarFlags::None);
 MCE_CVAR(cv_pause_on_focus_loss, "pause_on_focus_loss", true, "Pause and mute when the window loses focus or minimizes",
          CVarFlags::None);
@@ -477,6 +483,26 @@ private:
     rhi::Extent2D post_size_;
 };
 
+// -input <file>: the script that stands in for the keyboard (both modes). Null without -input;
+// a bad file is an error the caller reports (exit 1), not a silent keyboard-less run.
+Result<input::InputScript*> load_input_script(const player::PlayerDesc& pd) {
+    static input::InputScript script;
+    const StringView path = cv_input.get_string();
+    if (path.empty()) return static_cast<input::InputScript*>(nullptr);
+    const FixedString<1024> p(path);
+    std::FILE* f = std::fopen(p.c_str(), "rb");
+    if (!f) return Error(Errc::FileNotFound, "player.input", path);
+    Array<char> text;
+    char buf[4096];
+    for (usize n; (n = std::fread(buf, 1, sizeof buf, f)) > 0;)
+        for (usize i = 0; i < n; ++i) text.push_back(buf[i]);
+    std::fclose(f);
+    MCE_TRY(script.parse(StringView(text.data(), text.size())));
+    MCE_LOG_INFO("{}: input script {} ({} segments, last tick {})", pd.app_name, path, script.segments().size(),
+                 script.last_tick());
+    return &script;
+}
+
 int run_headless(const player::PlayerDesc& pd) {
     // The windowed-only flags: say so instead of silently running the default tick count.
     if (cv_frames.get_int() > 0)
@@ -488,11 +514,14 @@ int run_headless(const player::PlayerDesc& pd) {
     ad.backend = audio::Backend::Silent;
     auto audio = audio::AudioDevice::create(ad);
     if (!audio) return 1;
+    Result<input::InputScript*> script = load_input_script(pd);
+    if (!script) return fail("input script", script.error());
     PlayerApp app(pd, nullptr, nullptr, *audio.value());
     app::AppDesc desc;
     desc.name = pd.app_name;
     desc.headless = true;
     desc.max_ticks = static_cast<u64>(cv_ticks.get_int() > 0 ? cv_ticks.get_int() : 600);
+    desc.input_source = script.value();
     const int rc = app::run(app, desc);
     if (rc == 0)
         std::printf("%s: %llu ticks, %zu entities, state_hash %016llx\n", pd.app_name, static_cast<unsigned long long>(app.ticks()),
@@ -514,12 +543,14 @@ int run_windowed(const player::PlayerDesc& pd) {
     auto audio = audio::AudioDevice::create({});  // falls back to Silent when no output device opens
     if (!audio) return fail("audio init failed", audio.error());
 
+    Result<input::InputScript*> script = load_input_script(pd);
+    if (!script) return fail("input script", script.error());
     PlayerApp app(pd, window.value().get(), device.value().get(), *audio.value());
     app::AppDesc desc;
     desc.name = pd.app_name;
     desc.platform = &app;
     desc.fences = device.value().get();
-    desc.input_source = &app.input();
+    desc.input_source = script.value() ? static_cast<app::IInputSource*>(script.value()) : &app.input();
     app::RunStats stats;
     int rc = app::run(app, desc, &stats);
     const u32 gl_errors = device.value()->validation_error_count();
@@ -541,7 +572,7 @@ int mce::player::run(int argc, char** argv, const PlayerDesc& pd) {
     usage.append("usage: ");
     usage.append(pd.app_name);
     usage.append(pd.pack ? " [-pack <assets.mce | cooked dir>]" : " -pack <assets.mce | cooked dir>");
-    usage.append(" [-scene <guid | path under assets/>] [-module <game module>] [-headless 1 -ticks N]\n"
+    usage.append(" [-scene <guid | path under assets/>] [-module <game module>] [-headless 1 -ticks N] [-input <script>]\n"
                  "       [-frames N | -capture_tick N] [-capture <file.ppm>] [-save <slot>] [-version] [-help]\n"
                  "  Windowed by default (Esc pauses, Q quits while paused, ` or F1 opens the console).\n"
                  "  -headless 1 runs -ticks fixed steps without a window and prints the World state hash.");

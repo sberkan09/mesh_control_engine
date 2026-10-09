@@ -4,8 +4,11 @@
 // (input, physics2d, the audio bridge on a Silent device, particles, sequences, then the game's
 // install() when a project server registered one with editor::set_play_game_install, scene::load,
 // the app loop's stepping clock), so the same scene + ticks give the same World::state_hash as the
-// player, or as the project's host with its game module (tests/mcp checks this).
+// player, or as the project's host with its game module (tests/mcp checks this). With `input` (an
+// input::InputScript, the tool's `input` argument) every tick's InputState is published before
+// World::tick, as the player publishes the keyboard's: the game's systems see presses and holds.
 
+#include "mce/app.h"
 #include "mce/asset/guid.h"
 #include "mce/ecs/world.h"
 
@@ -26,8 +29,9 @@ inline constexpr u64 kProgressTicks = 60;
 // entity for scene entity i (file order, prefab instances flattened).
 using InspectFn = void (*)(const World& world, Span<const Entity> spawned, void* user);
 
-// `pack` is a cooked/ directory or an assets.mce pack.
+// `pack` is a cooked/ directory or an assets.mce pack. `input` (optional) is sampled per tick.
 Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, TickProgressFn progress = nullptr,
-                                 void* user = nullptr, InspectFn inspect = nullptr, void* inspect_user = nullptr);
+                                 void* user = nullptr, InspectFn inspect = nullptr, void* inspect_user = nullptr,
+                                 app::IInputSource* input = nullptr);
 
 }  // namespace mce::mcp

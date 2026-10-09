@@ -6,6 +6,7 @@ mce_add_library(mce_input
         src/input_state.cpp
         src/input_system.cpp
         src/replay.cpp
+        src/script.cpp
         src/default_map.cpp
         src/ecs_bridge.cpp
         src/bindings.cpp

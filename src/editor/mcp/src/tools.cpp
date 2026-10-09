@@ -11,6 +11,7 @@
 #include "mce/cook/fs.h"
 #include "mce/cook/scene_text.h"
 #include "mce/ecs/transform.h"
+#include "mce/input/script.h"
 #include "mce/log.h"
 #include "mce/mcp/headless_run.h"
 #include "mce/mcp/values.h"
@@ -750,12 +751,59 @@ void inspect_run(const World& world, Span<const Entity> spawned, void* user) {
     w.end_array().end_object();
 }
 
+// run_headless's `input`: the text form of an input script (mce/input/script.h), or an array of
+// segments {"from": tick, "to": tick, "actions": {"Move": [1, 0], "Jump": true, "Fire": 1}}.
+bool arg_input(ToolCall& c, input::InputScript& script) {
+    const cook::JsonValue v = arg(c, "input");
+    if (!v.valid()) return true;
+    if (v.is_string()) {
+        if (Result<void> r = script.parse(v.as_string()); !r) {
+            c.error += "input: ";
+            c.error += r.error().path.view();
+            return false;
+        }
+        return true;
+    }
+    if (!v.is_array())
+        return arg_missing(c, "input", "a script string (\"10-70 Move=1,0 Jump\") or an array of {from, to, actions}");
+    for (u32 i = 0; i < v.size(); ++i) {
+        const cook::JsonValue seg = v.at(i);
+        if (!seg.is_object()) return arg_missing(c, "input[]", "an object {from, to, actions}");
+        const cook::JsonValue from = seg.get("from"), to = seg.get("to"), actions = seg.get("actions");
+        if (!from.is_integer() || from.as_number() < 1.0) return arg_missing(c, "input[].from", "a tick >= 1");
+        const u64 f = static_cast<u64>(from.as_number());
+        u64 t = f;
+        if (to.valid()) {
+            if (!to.is_integer() || to.as_number() < static_cast<f64>(f)) return arg_missing(c, "input[].to", "a tick >= from");
+            t = static_cast<u64>(to.as_number());
+        }
+        if (!actions.is_object() || actions.size() == 0)
+            return arg_missing(c, "input[].actions", "an object: action name -> true, a number, or [x, y]");
+        for (u32 a = 0; a < actions.size(); ++a) {
+            const cook::JsonValue val = actions.at(a);
+            f32 x = 1.f, y = 0.f;
+            if (val.is_bool()) x = val.as_bool() ? 1.f : 0.f;
+            else if (val.is_number()) x = static_cast<f32>(val.as_number());
+            else if (val.is_array() && val.size() == 2 && val.at(0).is_number() && val.at(1).is_number()) {
+                x = static_cast<f32>(val.at(0).as_number());
+                y = static_cast<f32>(val.at(1).as_number());
+            } else return arg_missing(c, "input[].actions values", "true/false, a number, or [x, y]");
+            if (!script.add(actions.key_at(a), f, t, x, y)) return arg_missing(c, "input[].actions keys", "action names of 1-31 characters");
+        }
+    }
+    return true;
+}
+
 bool run_headless_tool(ToolCall& c) {
     u64 ticks = kDefaultTicks;
     u64 log_lines = 20;
     if (!need_project(c) || !arg_uint(c, "ticks", ticks, 1, kMaxTicks, false) ||
         !arg_uint(c, "log_lines", log_lines, 0, kMaxLogLines, false))
         return false;
+    input::InputScript script;
+    if (!arg_input(c, script)) return false;
+    if (script.last_tick() > ticks)
+        MCE_LOG_WARN("run_headless: the input script reaches tick {} but the run is {} ticks", script.last_tick(), ticks);
     const Server::SceneFile& file = c.server.scene_file();
     if (file.rel.empty()) return fail(c, "the scene was never saved: scene_save it (with a path under assets/) first");
     if (scene(c).dirty()) return fail(c, "the scene has unsaved changes: scene_save first (run_headless plays the cooked file)");
@@ -778,7 +826,8 @@ bool run_headless_tool(ToolCall& c) {
                                                auto* p = static_cast<RunProgress*>(user);
                                                progress(*p->server, p->token, done, total);
                                            } : static_cast<TickProgressFn>(nullptr),
-                                           &rp, inspecting ? &inspect_run : nullptr, &inspect);
+                                           &rp, inspecting ? &inspect_run : nullptr, &inspect,
+                                           script.empty() ? nullptr : &script);
     Array<log::ConsoleLine> lines;
     read_log(since, lines);
     if (!run) {
@@ -801,6 +850,7 @@ bool run_headless_tool(ToolCall& c) {
     cook::String hash;
     cook::appendf(hash, "%016llx", static_cast<unsigned long long>(h.state_hash));
     c.out.key("state_hash").str(hash.view());
+    c.out.key("input_segments").num_u(script.segments().size());
     c.out.key("metrics").begin_object();
     c.out.key("entities").num_u(h.metrics.entities);
     c.out.key("tables").num_u(h.metrics.tables);
@@ -976,11 +1026,13 @@ const ToolDef kTools[] = {
     {"cook_errors", "Diagnostics of the last cook (file, line, col, stage, message).", kNoArgs, cook_errors},
     {"run_headless",
      "Cook, then play the saved scene headless for N fixed ticks exactly as the game's host plays it with -headless "
-     "(the game's own systems included in a project server). Returns the World state_hash (same scene + ticks = same "
-     "hash), World metrics and the log tail. inspect: after the last tick, report the live component values (Transient "
-     "runtime fields included) of scene entities by id and/or of every entity with a component (at most 64); show "
-     "picks the components to print.",
-     R"json({"type":"object","properties":{"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20},"inspect":{"type":"object","properties":{"entities":{"type":"array","items":{"type":"integer"},"description":"Scene entity ids"},"component":{"type":"string","description":"Every live entity with this component (also ones the run spawned)"},"show":{"type":"array","items":{"type":"string"},"description":"Components to print (default: the entity's scene components, or the filter component + LocalTransform)"}}}}})json",
+     "(the game's own systems included in a project server). Returns the World state_hash (same scene + ticks + input = "
+     "same hash), World metrics and the log tail. input: scripted keyboard/gamepad actions per tick, as the game reads "
+     "them from InputState (\"Move\" [x,y], \"Jump\", \"Fire\", \"Pause\", \"Confirm\", \"Cancel\" and any "
+     "game-defined action name); a press is a one-tick segment, a hold a range. inspect: after the last tick, report the "
+     "live component values (Transient runtime fields included) of scene entities by id and/or of every entity with a "
+     "component (at most 64); show picks the components to print.",
+     R"json({"type":"object","properties":{"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20},"input":{"description":"Either a script string, one segment per line: \"<from>[-<to>] Action[=value] ...\" (e.g. \"10-70 Move=1,0 Jump\\n100 Fire\"), or an array of segments","type":["string","array"],"items":{"type":"object","properties":{"from":{"type":"integer","minimum":1,"description":"First tick (1-based)"},"to":{"type":"integer","description":"Last tick, inclusive (default: from)"},"actions":{"type":"object","description":"Action name -> true, a number, or [x, y]","additionalProperties":{"type":["boolean","number","array"]}}},"required":["from","actions"]}},"inspect":{"type":"object","properties":{"entities":{"type":"array","items":{"type":"integer"},"description":"Scene entity ids"},"component":{"type":"string","description":"Every live entity with this component (also ones the run spawned)"},"show":{"type":"array","items":{"type":"string"},"description":"Components to print (default: the entity's scene components, or the filter component + LocalTransform)"}}}}})json",
      run_headless_tool},
     {"console_list", "List console variables (type, value, flags, help) and console functions. Optional name prefix.",
      R"({"type":"object","properties":{"prefix":{"type":"string"}}})", console_list},

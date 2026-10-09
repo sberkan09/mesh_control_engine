@@ -79,8 +79,11 @@ on Space / A, `Fire` on J / left mouse / X, `Pause` on Escape / Start, `Look` on
 fixed tick through `AppDesc::input_source` and publishes it before `World::tick`, so a module's
 systems read `f.resource<input::InputState>()` (`move`, `jump_pressed`, `jump_held`,
 `fire_pressed`, ...). Events go to the input system while the console is closed; key releases and
-focus loss always do. Headless runs publish nothing, so the resource stays zeroed and `-headless`
-hashes depend only on the scene and the tick count. A game cannot ship its own map through the
+focus loss always do. Headless runs publish nothing unless `-input <file>` names an input script
+(`mce/input/script.h`: `"10-70 Move=1,0 Jump"` per line, one segment per action and tick range),
+which stands in for the keyboard in both modes, so `-headless` hashes depend on the scene, the tick
+count and the script. The editor MCP server's `run_headless` takes the same script as its `input`
+argument. A game cannot ship its own map through the
 pack yet (see Known gaps); actions the default map lacks read as zero (`has_action` is false).
 
 ## Rules and invariants

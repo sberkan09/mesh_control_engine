@@ -15,6 +15,7 @@
 #include "cook_test_util.h"
 #include "mce/audio/components.h"
 #include "mce/editor/play_session.h"
+#include "mce/input/ecs.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/components.h"
 #include "mce/mcp/headless_run.h"
@@ -43,8 +44,10 @@ MCE_COMPONENT(McpProbe, hp, (computed, ReadOnly), target, label, points)
 struct McpCounter {
     u32 step = 1;
     u32 ticks = 0;  // runtime
+    u32 jumps = 0;  // runtime: Jump presses seen (run_headless input)
+    f32 moved = 0;  // runtime: sum of Move.x
 };
-MCE_COMPONENT(McpCounter, step, (ticks, ReadOnly, Transient))
+MCE_COMPONENT(McpCounter, step, (ticks, ReadOnly, Transient), (jumps, ReadOnly, Transient), (moved, ReadOnly, Transient))
 
 }  // namespace mcptest
 
@@ -454,7 +457,12 @@ TEST_CASE("mcp tools: persistence stays inside the project and never clobbers si
 namespace {
 
 void count_ticks(Frame& f) {
-    f.query<mcptest::McpCounter&>().each([](mcptest::McpCounter& c) { c.ticks += c.step; });
+    const input::InputState& in = f.resource<input::InputState>();
+    f.query<mcptest::McpCounter&>().each([&](mcptest::McpCounter& c) {
+        c.ticks += c.step;
+        if (in.jump_pressed) ++c.jumps;
+        c.moved += in.move.x;
+    });
 }
 
 ResultV counter_game_install(World& w) {
@@ -496,6 +504,21 @@ TEST_CASE("mcp tools: run_headless runs the project's game systems and inspects 
     const cook::JsonValue comps = by_id.v().get("inspect").get("entities").at(0).get("components");
     CHECK(comps.get("LocalTransform").is_object());
     CHECK_FALSE(comps.get("McpCounter").valid());
+    // Scripted input: presses and holds reach the game's systems through the InputState resource.
+    editor::set_play_game_install(&counter_game_install);
+    auto driven = c.ok("run_headless", R"({"ticks":20,"log_lines":0,"input":"3-10 Move=1,0\n5 Jump\n12-14 Jump","inspect":{"component":"McpCounter"}})");
+    e = driven.v().get("inspect").get("entities").at(0);
+    CHECK(driven.v().get("input_segments").as_number() == 3);
+    CHECK(e.get("components").get("McpCounter").get("jumps").as_number() == 2);
+    CHECK(e.get("components").get("McpCounter").get("moved").as_number() == 8);
+    CHECK(str(driven.v().get("state_hash")) != str(game.v().get("state_hash")));
+    auto segs = c.ok("run_headless", R"({"ticks":20,"log_lines":0,"input":[{"from":2,"to":4,"actions":{"Move":[1,0],"Jump":true}},{"from":9,"actions":{"Jump":1}}],"inspect":{"component":"McpCounter"}})");
+    e = segs.v().get("inspect").get("entities").at(0);
+    CHECK(e.get("components").get("McpCounter").get("jumps").as_number() == 2);
+    CHECK(e.get("components").get("McpCounter").get("moved").as_number() == 3);
+    editor::set_play_game_install(nullptr);
+    CHECK(c.fails("run_headless", R"({"input":"x Jump"})").find("line 1") != std::string::npos);
+    CHECK(c.fails("run_headless", R"({"input":[{"to":3,"actions":{"Jump":true}}]})").find("from") != std::string::npos);
     CHECK(c.fails("run_headless", R"({"inspect":{"entities":[9999]}})").find("no entity") != std::string::npos);
     CHECK(c.fails("run_headless", R"({"inspect":{"component":"Nope"}})").find("unknown component") != std::string::npos);
     CHECK(c.fails("run_headless", R"({"inspect":{}})").find("give 'entities'") != std::string::npos);
