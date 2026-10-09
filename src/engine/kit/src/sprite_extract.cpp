@@ -1,7 +1,7 @@
 #include "mce/kit/sprite_extract.h"
 
-
 #include "mce/ecs/hierarchy.h"
+#include "mce/kit/particles.h"
 #include "mce/ecs/transform.h"
 #include "mce/log.h"
 #include "mce/memory/frame_slots.h"
@@ -183,6 +183,10 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         p.origin = {x, t.position.y + 0.5f * layout.height * upp};
         batch.add_text(*f, layout, p);
     });
+
+    // Particles go through the same batch as sprites (FR-R2D-070).
+    if (const ParticleSystem* ps = world.try_resource<ParticleSystem>())
+        ps->draw(batch, [](void* self, asset::Guid tex) { return static_cast<SpriteExtract*>(self)->sprite_set(tex); }, this);
 
     for (TilemapEntry& e : tilemaps_) e.used = false;
     each_placed<TilemapLayer>(world, [&](const Placement& t, const TilemapLayer& l) { draw_tilemap(l, {t.position.x, t.position.y}, batch); });

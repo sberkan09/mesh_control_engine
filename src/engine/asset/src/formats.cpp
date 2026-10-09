@@ -267,6 +267,14 @@ Result<TilemapView> TilemapView::read(Span<const byte> payload) {
     return v;
 }
 
+// ------------------------------------------------------------------ particle preset
+
+Result<const ParticlePresetChunk*> ParticlePresetChunk::read(Span<const byte> payload) {
+    const ParticlePresetChunk* p = header_of<ParticlePresetChunk>(payload);
+    if (!p) return Error(Errc::Truncated, "asset.particle.read");
+    return p;
+}
+
 // ------------------------------------------------------------------ mesh
 
 u32 MeshView::index(u32 i) const {

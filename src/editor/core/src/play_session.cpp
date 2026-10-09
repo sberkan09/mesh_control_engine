@@ -2,6 +2,7 @@
 
 #include "mce/audio/clip_bank.h"
 #include "mce/audio/components.h"
+#include "mce/kit/particles.h"
 #include "mce/log.h"
 #include "mce/memory/frame_slots.h"
 #include "mce/physics/module.h"
@@ -55,6 +56,7 @@ Result<void> PlaySession::enter(EditorProject& project, const SceneDocument& doc
     world_ = mem::make_unique<World>(mem::heap());
     physics::install_physics2d(*world_);
     audio::install(*world_, *audio_, clips_.get());
+    kit::install_particles(*world_, assets);
     if (Result<void> r = scene::instantiate(*world_, scene, &entities_); !r) {
         diags.error(r.error().code, rel.view(), 0, 0, kStage, "the scene does not instantiate");
         stop();

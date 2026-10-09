@@ -19,6 +19,7 @@ mce_add_library(mce_asset_cook
         src/importer_registry.cpp
         src/json.cpp
         src/material_importer.cpp
+        src/particle_importer.cpp
         src/registry.cpp
         src/scene_importer.cpp
         src/scene_writer.cpp
