@@ -19,7 +19,11 @@
 
 namespace mce::editor {
 
-using EntityId = u32;  // persistent within a document; never reused while it is open
+// Persistent per document: saved as each entity's "id" and read back, so an id names the same
+// entity across saves and reopens (MCP clients address entities by it). Never reused while a
+// document is open; a file without ids (older saves, hand-written scenes) numbers them 1..N in
+// file order.
+using EntityId = u32;
 inline constexpr EntityId kNoEntity = 0;
 
 struct DocComponent {
@@ -71,7 +75,7 @@ void visit_entity_refs(const refl::TypeRecord& type, void* value, void (*fn)(Ent
 
 class SceneDocument {
 public:
-    static constexpr u32 kFormatVersion = 1;
+    static constexpr u32 kFormatVersion = 1;  // entity "id" keys are optional within version 1
 
     SceneDocument();
 

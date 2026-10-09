@@ -84,6 +84,10 @@ public:
     void serialize(cook::String& out) const { doc_.serialize(out); }
     // Fresh GUID (Save As to a new file: two files must never share one).
     void assign_new_guid();
+    // A given GUID (Save As over an existing file keeps that file's identity).
+    void set_guid(asset::Guid g);
+    // The scene's display name (the file's "name"); marks the scene dirty.
+    void set_name(StringView name);
 
     StringView path() const { return path_.view(); }  // empty until saved/opened
     // The scene's file moved (asset browser rename): same document, new path.

@@ -5,6 +5,7 @@
   "name": "demo",
   "entities": [
     {
+      "id": 1,
       "name": "Camera",
       "components": {
         "Camera2DComponent": { "pixels_per_meter": 40 },
@@ -12,6 +13,7 @@
       }
     },
     {
+      "id": 2,
       "name": "Ground",
       "components": {
         "Collider2D": { "shape": { "half": [12, 0.5] }, "density": 0 },
@@ -21,6 +23,7 @@
       }
     },
     {
+      "id": 3,
       "name": "Crate A",
       "components": {
         "Collider2D": {},
@@ -30,6 +33,7 @@
       }
     },
     {
+      "id": 4,
       "name": "Crate B",
       "components": {
         "Collider2D": {},
@@ -39,6 +43,7 @@
       }
     },
     {
+      "id": 5,
       "name": "Ball",
       "components": {
         "Collider2D": { "shape": { "type": "Circle", "radius": 0.4 }, "restitution": 0.6 },
@@ -48,6 +53,7 @@
       }
     },
     {
+      "id": 6,
       "name": "Title",
       "components": {
         "LocalTransform": { "position": [0, 8, 0] },

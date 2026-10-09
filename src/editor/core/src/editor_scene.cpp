@@ -104,6 +104,16 @@ void EditorScene::assign_new_guid() {
     touch();
 }
 
+void EditorScene::set_guid(asset::Guid g) {
+    doc_.set_guid(g);
+    touch();
+}
+
+void EditorScene::set_name(StringView name) {
+    doc_.set_name(name);
+    touch();
+}
+
 void EditorScene::touch() {
     dirty_ = true;
     ++revision_;

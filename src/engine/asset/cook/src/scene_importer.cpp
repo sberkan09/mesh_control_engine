@@ -397,7 +397,8 @@ public:
             }
             const JsonValue prefab = ent.get("prefab");
             if (prefab.valid()) {
-                if (!detail::check_keys(ent, {"name", "prefab", "components"}, file, kStage, diags_)) continue;
+                // "id" is the editor's persistent entity id (SceneDocument); the cook addresses entities by position.
+                if (!detail::check_keys(ent, {"id", "name", "prefab", "components"}, file, kStage, diags_)) continue;
                 if (scan_) {
                     asset::Guid g;
                     if (prefab.is_string() && parse_guid_ref(prefab.as_string(), g)) {
@@ -418,7 +419,7 @@ public:
                     walk(pents, pfile, map[i], depth + 1);
                     stack_.pop_back();
                 }
-            } else if (!detail::check_keys(ent, {"name", "components"}, file, kStage, diags_)) {
+            } else if (!detail::check_keys(ent, {"id", "name", "components"}, file, kStage, diags_)) {
                 continue;
             }
             const JsonValue name = ent.get("name");

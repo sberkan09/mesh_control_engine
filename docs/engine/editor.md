@@ -81,7 +81,11 @@ Values use the `.mcscene` spelling: vectors as arrays, assets as `"guid:<uuid>"`
 `asset_list`), enums by name, nested structs as objects (`{"shape": {"type": "Circle", "radius":
 0.3}}`). `entity_duplicate` inserts the copy right after its source, and `scene_new` makes a fresh
 GUID, so to re-author a scene a `.mceproj` names, `scene_open` it and `scene_clear` it (one undo step)
-instead. `run_headless` takes `inspect` (`{"entities": [ids], "component": "Type", "show": ["Type"]}`):
+instead. Entity arguments take an id or a unique name; ids are written into the `.mcscene` (`"id"`) on
+save, so they name the same entities after a `scene_open`. `scene_save` with `path` gives a new file a
+fresh GUID and keeps the GUID of a file overwritten with `force`; `asset_delete` removes a source file
+and its sidecar. `run_headless` takes `scene` (another saved scene by path), `input` (scripted actions,
+`mce/input/script.h`) and `inspect` (`{"entities": [ids or names], "component": "Type", "show": ["Type"]}`):
 after the last tick it reports the live component values, Transient runtime fields included, of
 scene entities by id and of every entity with a component (also ones the run spawned), at most 64.
 New source files under `assets/` (a PNG with no `.mceasset`) are a cook error until `cook_run` with

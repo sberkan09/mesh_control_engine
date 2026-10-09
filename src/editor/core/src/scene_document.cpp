@@ -234,20 +234,31 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
         return false;
     }
     const u32 count = ents.valid() ? ents.size() : 0;
-    // Ids follow file order, so "$<index>" maps to index + 1.
+    // "$<index>" references are by file position. Ids come from the file's "id" keys (a save
+    // writes them, so they survive a reopen); an entity without one, or with a duplicate, gets the
+    // next free id, which for a file with no ids at all is index + 1.
+    Array<EntityId> ids;
     for (u32 i = 0; i < count; ++i) {
         const cook::JsonValue ent = ents.at(i);
         const cook::JsonValue en = ent.is_object() ? ent.get("name") : cook::JsonValue();
-        insert(en.is_string() ? en.as_string() : StringView(), -1, static_cast<EntityId>(i + 1));
+        const cook::JsonValue eid = ent.is_object() ? ent.get("id") : cook::JsonValue();
+        EntityId want = kNoEntity;
+        if (eid.valid()) {
+            if (!eid.is_integer() || eid.as_number() < 1.0 || eid.as_number() > 4294967294.0)
+                error(diags, file, eid, "'id' must be an integer >= 1");
+            else want = static_cast<EntityId>(eid.as_number());
+        }
+        ids.push_back(insert(en.is_string() ? en.as_string() : StringView(), -1, want));
         if (!ent.is_object()) {
             error(diags, file, ent, "entity must be an object");
             continue;
         }
+        const EntityId id = ids[i];
         if (const cook::JsonValue pf = ent.get("prefab"); pf.valid()) {
             const StringView ref = pf.is_string() ? pf.as_string() : StringView();
             Result<asset::Guid> pg = ref.size() > 5 && ref.substr(0, 5) == "guid:" ? asset::parse_guid(ref.substr(5))
                                                                                  : Result<asset::Guid>(Error(Errc::ParseError, kStage, ref));
-            if (pg) find(static_cast<EntityId>(i + 1))->prefab = pg.value();
+            if (pg) find(id)->prefab = pg.value();
             else error(diags, file, pf, "expected \"guid:<uuid>\" for 'prefab'");
         }
         const cook::JsonValue comps = ent.get("components");
@@ -266,7 +277,7 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
                 diags.error(Errc::NotFound, file, comps.at(c).line(), comps.at(c).col(), kStage, msg);
                 continue;
             }
-            DocComponent* dc = add_component(static_cast<EntityId>(i + 1), *t);
+            DocComponent* dc = add_component(id, *t);
             // Omitted references are null, not "$0": pre-fill them with the no-entity index the
             // reader writes for an explicit null (both read back as Entity::null below).
             visit_entity_refs(*t, dc->data(), [](Entity* f, void*) {
@@ -278,7 +289,7 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
             path += tname;
             cook::read_scene_component(*t, comps.at(c), dc->data(), count, file, path, diags);
             // An instance overrides exactly the fields its file names.
-            if (!find(static_cast<EntityId>(i + 1))->prefab.is_null()) {
+            if (!find(id)->prefab.is_null()) {
                 const cook::JsonValue obj = comps.at(c);
                 for (u32 k = 0; obj.is_object() && k < obj.size(); ++k)
                     for (usize fi = 0; fi < t->fields.size() && fi < 64; ++fi)
@@ -286,15 +297,16 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
             }
         }
     }
-    // Scene-local indices (first u32 of each EntityRef, CHNK_SCENE layout) -> document ids.
+    // Scene-local indices (first u32 of each EntityRef, CHNK_SCENE layout) -> the ids of the
+    // entities at those file positions.
     for (DocEntity& e : entities_) {
         for (DocComponent& c : e.components) {
             visit_entity_refs(*c.type, c.data(), [](Entity* f, void* user) {
                 u32 index = 0;
                 std::memcpy(&index, f, sizeof(index));
-                const u32 total = *static_cast<const u32*>(user);
-                *f = index == cook::kNoSceneEntity || index >= total ? Entity::null : doc_entity_ref(index + 1);
-            }, const_cast<u32*>(&count));
+                const Array<EntityId>& by_index = *static_cast<const Array<EntityId>*>(user);
+                *f = index == cook::kNoSceneEntity || index >= by_index.size() ? Entity::null : doc_entity_ref(by_index[index]);
+            }, &ids);
         }
     }
     if (diags.error_count() != errors_before) {
@@ -324,7 +336,8 @@ void SceneDocument::serialize(cook::String& out) const {
     } ctx{this};
     for (usize i = 0; i < entities_.size(); ++i) {
         const DocEntity& e = entities_[i];
-        out += i ? ",\n    {\n      \"name\": " : "\n    {\n      \"name\": ";
+        out += i ? ",\n    {\n      \"id\": " : "\n    {\n      \"id\": ";
+        cook::appendf(out, "%u,\n      \"name\": ", e.id);
         cook::append_json_string(out, e.name.view());
         if (!e.prefab.is_null()) {
             out += ",\n      \"prefab\": \"guid:";
