@@ -365,4 +365,32 @@ read. The MCP `run_headless` with `inspect` on `NovelSave` is the quick check us
 | No screen-space UI for projects (`mce_ui` is host-only) | menus and the box are scene entities pinned with `Parallax {0,0}` | the `UiRole` pattern | a HUD anchor component, or `mce_ui` documents authored as assets |
 | No per-character text reveal, rich text or italics | typewriter is the module's; italics are a tint | `reveal` counter on code points | glyph-range styling in `TextLabel` |
 | No fade/transition helper | a full-screen quad whose alpha the module drives | the `Fade` role | a `ScreenFade` kit component |
-| (more rows as found) | | | |
+| A game module's convars register after the stock player parsed the command line | `-nv.label`, `-nv.autoplay` cannot live in the module | the host declares them (`games/undelivered/host/main.cpp`) and the module reads them with `ConVar::find` | parse the command line again after the module installs, or let `install` see argv |
+| The stock player has no project input map and owns Esc (its pause overlay, Q quits) | no `Cancel`/backlog/skip keys of the game's own; the design's Ctrl/L/A bindings are not possible | the default map only: Confirm/Fire advance, hold Fire skips, Navigate chooses, the mouse wheel opens the backlog and leaves the drawer | a project input map chunk the player loads from the pack, and a way to hand Esc to the game |
+| `save::read_save` runs outside phases | a module cannot load a save from a title menu | the host passes `-save undelivered_autosave`, the player loads it at start and *Continue* resumes the loaded `NovelSave`; the module writes the slot at every journal | a load request the player applies between ticks |
+| No asset lookup by name from a module (no `AssetSystem` resource) | the module needs 114 textures and 20 clips by name | `kit::SequenceRegistry::assets()` reaches the player's asset system; the module builds its tables from `AssetInfo::path` | an `AssetSystem` (or path lookup) resource the player sets |
+| A looping `AudioSource` swaps its clip only on hot reload | music changes need a stop and a restart | the module stops the voice through the `AudioRef` resource and clears `started` | a `restart` flag or `clip` change detection on the bridge |
+| `cook_run` without `adopt` fails on new files, and `asset_set_import_settings` needs the sidecar first | an authoring script has to cook twice | `author_scene_mcp.py`: adopt, set srgb off on the normal map and LUTs, then author, save and cook | import settings on adopt (`adopt: {path: settings}`) |
+| The editor's 2D viewport shows authored defaults only | the stage looks empty in the editor (every part starts transparent and the game fills it) | the MCP `run_headless` and the host's `-nv.label` captures are the preview | a "play in editor" tick of the module |
+
+## 11. As built (this thread)
+
+- **Script**: 5 files, 14,747 words, 1,409 statements, 476 pages, 48 choices with 126 options, 339
+  labels; the compiler wraps with Crimson Pro 32 px over 860 px (four lines of at most 62 bytes) and
+  options over two lines. Day 1 (prologue, three conversations, the drawer), the day loop (mornings
+  that react to yesterday's letter, the drawer, the delivery, four companions with four scenes each
+  plus a fifth, the night journal and letter 7 on Day 6), the seven letters, six deliveries with
+  sealed and read variants, Day 7 with the five endings and an epilogue card per recipient.
+- **Variables**: as §2.6, with `resolve` counted per letter handled with its recipient's trust ≥ 1,
+  plus one for finding the father's addresses and one for the telegram; `kemal_boat` comes from
+  Yusuf's letter answered; Return Address needs `wrote_back` and `resolve ≥ 5`.
+- **Module** (`undelivered.cpp`, about 1,000 lines): the VM over `NovelSave` (52 Save-flagged
+  scalars), the bot with five policies, input on the default map, the presentation over 79 `UiPart`
+  entities, the autosave at the journal. Headless: `300 ticks, 79 entities, state_hash 01a9e1d3…`.
+- **Bot runs** (the test): first → The Last Ferry (177 pages), leave → Open Water (198), stay →
+  Lamp Keeper (194), shut → The Drawer Stays Shut (125), write → Return Address (199); each in
+  about 250 ticks headless. A save written at the third night reloads and finishes the same run;
+  two runs hash the same.
+- **Not built**: the global `seen` table across slots (the title's *Letters* page shows the slot's
+  own endings and letters), the auto-advance mode, manual save slots, mouse hover on choices, the
+  design's own key bindings (see the gap log), the optional/greyed reasons in brackets.

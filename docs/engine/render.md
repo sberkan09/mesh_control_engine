@@ -47,7 +47,10 @@ Headers live under `include/mce/render/`.
 - `scene3d.h`: `Camera3D`, `orbit_camera`, `DirectionalLight`, `Fog`, `Sky`, `PostFx`,
   `ShadowSettings`, `Cascade`, `MeshInstance`, `View3D`, `compute_view_3d`, `sphere_visible`, and
   `Scene3D` (per-frame `begin` / `add` / `add_point_light` / `build`: cull, sort, cascades,
-  clusters). Free helpers `transform_aabb`, `frustum_slice_sphere`, `fit_cascade`.
+  clusters). Free helpers `transform_aabb`, `frustum_slice_sphere`, `fit_cascade`. `Sky` is the
+  gradient dome with a sun disk, or an equirect texture (`texture_key`, scaled by
+  `texture_intensity`); with `texture_additive` the texture is added over the gradient instead of
+  replacing it (a star field fading in over a dusk sky: Solstice Reach's night).
 - `clusters.h`: CPU Forward+ light assignment. `PointLight` (spot when `spot_outer > 0`),
   `ClusterGridDesc`, `ClusterLights`, `GpuPointLight`, `sphere_ndc_bounds`.
 - `forward3d.h`: `Forward3D`, the 3D frame: cascaded shadows, Forward+ PBR main pass into an

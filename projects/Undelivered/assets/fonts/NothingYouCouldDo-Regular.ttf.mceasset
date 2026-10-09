@@ -1,0 +1,23 @@
+{
+  "guid": "dd04c9ce-d300-44fe-b60b-d1208935c861",
+  "importer": "font",
+  "importer_version": 1,
+  "settings": {
+    "size": 30,
+    "ranges": [
+      [
+        32,
+        126
+      ],
+      [
+        160,
+        255
+      ],
+      [
+        256,
+        383
+      ]
+    ],
+    "padding": 2
+  }
+}

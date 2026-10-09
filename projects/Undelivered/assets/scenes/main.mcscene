@@ -1,0 +1,721 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "4b7b4501-a48c-467b-b304-1fed7b03e258",
+  "name": "main",
+  "entities": [
+    {
+      "id": 80,
+      "name": "Camera",
+      "components": {
+        "Camera2DComponent": { "pixels_per_meter": 64, "clear_color": [0.05, 0.045, 0.04, 1], "pixel_snap": false },
+        "LocalTransform": {},
+        "Post2DComponent": { "vignette": true, "vignette_intensity": 0.38, "vignette_radius": 0.85, "vignette_softness": 0.7, "color_grade": true, "lut": "guid:2c84d534-a533-4689-a7d6-40d0455c52b9", "lut_strength": 0.85 },
+        "UiPart": { "role": "Camera" }
+      }
+    },
+    {
+      "id": 81,
+      "name": "Story",
+      "components": {
+        "LocalTransform": {},
+        "NovelSave": {},
+        "SaveKey": { "key": 1 },
+        "UiPart": { "role": "Save" }
+      }
+    },
+    {
+      "id": 82,
+      "name": "Paper 0",
+      "components": {
+        "LocalTransform": {},
+        "Sprite": { "tint": [1, 1, 1, 0], "size": [20, 11.25] },
+        "UiPart": { "role": "Background" }
+      }
+    },
+    {
+      "id": 83,
+      "name": "Paper 1",
+      "components": {
+        "LocalTransform": {},
+        "Sprite": { "tint": [1, 1, 1, 0], "size": [20, 11.25], "order": 1 },
+        "UiPart": { "role": "Background", "index": 1 }
+      }
+    },
+    {
+      "id": 84,
+      "name": "Paper 2",
+      "components": {
+        "LocalTransform": {},
+        "Sprite": { "tint": [1, 1, 1, 0], "size": [20, 11.25], "order": 2 },
+        "UiPart": { "role": "Background", "index": 2 }
+      }
+    },
+    {
+      "id": 85,
+      "name": "Paper 3",
+      "components": {
+        "LocalTransform": {},
+        "Sprite": { "tint": [1, 1, 1, 0], "size": [20, 11.25], "order": 3 },
+        "UiPart": { "role": "Background", "index": 3 }
+      }
+    },
+    {
+      "id": 86,
+      "name": "Paper 4",
+      "components": {
+        "LocalTransform": {},
+        "Sprite": { "tint": [1, 1, 1, 0], "size": [20, 11.25], "order": 4 },
+        "UiPart": { "role": "Background", "index": 4 }
+      }
+    },
+    {
+      "id": 87,
+      "name": "Daylight",
+      "components": {
+        "Light2D": { "kind": "Ambient" },
+        "LocalTransform": {},
+        "UiPart": { "role": "AmbientLight" }
+      }
+    },
+    {
+      "id": 88,
+      "name": "Lamp",
+      "components": {
+        "Light2D": { "color": [1, 0.95, 0.85, 1], "radius": 12, "height": 2.5 },
+        "LocalTransform": { "position": [0, 5, 0] },
+        "UiPart": { "role": "Light" }
+      }
+    },
+    {
+      "id": 89,
+      "name": "Cast 0",
+      "components": {
+        "LocalTransform": { "position": [-5.5, -1, 0] },
+        "Sprite": { "tint": [1, 1, 1, 0], "size": [5.625, 11.25], "layer": 2 },
+        "UiPart": { "role": "Cast" }
+      }
+    },
+    {
+      "id": 90,
+      "name": "Cast 1",
+      "components": {
+        "LocalTransform": { "position": [0, -1, 0] },
+        "Sprite": { "tint": [1, 1, 1, 0], "size": [5.625, 11.25], "layer": 2 },
+        "UiPart": { "role": "Cast", "index": 1 }
+      }
+    },
+    {
+      "id": 91,
+      "name": "Cast 2",
+      "components": {
+        "LocalTransform": { "position": [5.5, -1, 0] },
+        "Sprite": { "tint": [1, 1, 1, 0], "size": [5.625, 11.25], "layer": 2 },
+        "UiPart": { "role": "Cast", "index": 2 }
+      }
+    },
+    {
+      "id": 92,
+      "name": "Dim",
+      "components": {
+        "LocalTransform": {},
+        "Sprite": { "tint": [0.02, 0.015, 0.01, 0], "size": [22, 13.25], "layer": 5 },
+        "UiPart": { "role": "Dim" }
+      }
+    },
+    {
+      "id": 93,
+      "name": "Fade",
+      "components": {
+        "LocalTransform": {},
+        "Sprite": { "tint": [0, 0, 0, 1], "size": [22, 13.25], "layer": 12 },
+        "UiPart": { "role": "Fade" }
+      }
+    },
+    {
+      "id": 94,
+      "name": "Glow",
+      "components": {
+        "LocalTransform": { "position": [0, 3, 0] },
+        "Sprite": { "texture": "guid:a4dde353-36ab-484e-9fbb-26ea85bcb923", "tint": [1, 0.9, 0.7, 0], "size": [16, 2.4], "layer": 6 },
+        "UiPart": { "role": "Glow" }
+      }
+    },
+    {
+      "id": 95,
+      "name": "Box",
+      "components": {
+        "LocalTransform": { "position": [0, -3.8281, 0] },
+        "Sprite": { "texture": "guid:57dfde89-1efc-4cbd-98f2-9d70f8cc2d16", "tint": [1, 1, 1, 0], "size": [20, 3.5938], "layer": 6 },
+        "UiPart": { "role": "Box" }
+      }
+    },
+    {
+      "id": 96,
+      "name": "Name tag",
+      "components": {
+        "LocalTransform": { "position": [-6.3, -1.95, 0] },
+        "Sprite": { "texture": "guid:7117d7e9-3784-4ad0-85fe-60383679fcf9", "tint": [1, 1, 1, 0], "size": [5, 0.9375], "layer": 7 },
+        "UiPart": { "role": "NameTag" }
+      }
+    },
+    {
+      "id": 97,
+      "name": "Name",
+      "components": {
+        "LocalTransform": { "position": [-6.3, -1.95, 0] },
+        "TextLabel": { "font": "guid:5595d781-239a-4615-b610-eccdd66e323a", "color": [1, 0.93, 0.8, 1], "height": 0.42, "layer": 8 },
+        "UiPart": { "role": "NameText" }
+      }
+    },
+    {
+      "id": 98,
+      "name": "Line 0",
+      "components": {
+        "LocalTransform": { "position": [-6.7, -2.85, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "Line" }
+      }
+    },
+    {
+      "id": 99,
+      "name": "Line 1",
+      "components": {
+        "LocalTransform": { "position": [-6.7, -3.47, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "Line", "index": 1 }
+      }
+    },
+    {
+      "id": 100,
+      "name": "Line 2",
+      "components": {
+        "LocalTransform": { "position": [-6.7, -4.09, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "Line", "index": 2 }
+      }
+    },
+    {
+      "id": 101,
+      "name": "Line 3",
+      "components": {
+        "LocalTransform": { "position": [-6.7, -4.71, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "Line", "index": 3 }
+      }
+    },
+    {
+      "id": 102,
+      "name": "Row 0",
+      "components": {
+        "LocalTransform": { "position": [0, 3, 0] },
+        "Sprite": { "texture": "guid:4f489e5d-b9a1-48b0-95fb-63e3b1583cac", "tint": [1, 1, 1, 0], "size": [14.0625, 0.9688], "layer": 7 },
+        "UiPart": { "role": "ChoiceRow" }
+      }
+    },
+    {
+      "id": 103,
+      "name": "Row text 0",
+      "components": {
+        "LocalTransform": { "position": [-6.6, 3, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "ChoiceText" }
+      }
+    },
+    {
+      "id": 104,
+      "name": "Row text 0 b",
+      "components": {
+        "LocalTransform": { "position": [-6.6, 2.63, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "ChoiceText2" }
+      }
+    },
+    {
+      "id": 105,
+      "name": "Row 1",
+      "components": {
+        "LocalTransform": { "position": [0, 1.1, 0] },
+        "Sprite": { "texture": "guid:4f489e5d-b9a1-48b0-95fb-63e3b1583cac", "tint": [1, 1, 1, 0], "size": [14.0625, 0.9688], "layer": 7 },
+        "UiPart": { "role": "ChoiceRow", "index": 1 }
+      }
+    },
+    {
+      "id": 106,
+      "name": "Row text 1",
+      "components": {
+        "LocalTransform": { "position": [-6.6, 1.1, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "ChoiceText", "index": 1 }
+      }
+    },
+    {
+      "id": 107,
+      "name": "Row text 1 b",
+      "components": {
+        "LocalTransform": { "position": [-6.6, 0.73, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "ChoiceText2", "index": 1 }
+      }
+    },
+    {
+      "id": 108,
+      "name": "Row 2",
+      "components": {
+        "LocalTransform": { "position": [0, -0.8, 0] },
+        "Sprite": { "texture": "guid:4f489e5d-b9a1-48b0-95fb-63e3b1583cac", "tint": [1, 1, 1, 0], "size": [14.0625, 0.9688], "layer": 7 },
+        "UiPart": { "role": "ChoiceRow", "index": 2 }
+      }
+    },
+    {
+      "id": 109,
+      "name": "Row text 2",
+      "components": {
+        "LocalTransform": { "position": [-6.6, -0.8, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "ChoiceText", "index": 2 }
+      }
+    },
+    {
+      "id": 110,
+      "name": "Row text 2 b",
+      "components": {
+        "LocalTransform": { "position": [-6.6, -1.17, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "ChoiceText2", "index": 2 }
+      }
+    },
+    {
+      "id": 111,
+      "name": "Row 3",
+      "components": {
+        "LocalTransform": { "position": [0, -2.7, 0] },
+        "Sprite": { "texture": "guid:4f489e5d-b9a1-48b0-95fb-63e3b1583cac", "tint": [1, 1, 1, 0], "size": [14.0625, 0.9688], "layer": 7 },
+        "UiPart": { "role": "ChoiceRow", "index": 3 }
+      }
+    },
+    {
+      "id": 112,
+      "name": "Row text 3",
+      "components": {
+        "LocalTransform": { "position": [-6.6, -2.7, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "ChoiceText", "index": 3 }
+      }
+    },
+    {
+      "id": 113,
+      "name": "Row text 3 b",
+      "components": {
+        "LocalTransform": { "position": [-6.6, -3.07, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
+        "UiPart": { "role": "ChoiceText2", "index": 3 }
+      }
+    },
+    {
+      "id": 114,
+      "name": "Letter",
+      "components": {
+        "LocalTransform": { "position": [0, 0.3, 0] },
+        "Sprite": { "texture": "guid:8d1a8e12-90dc-4eb2-bb67-95bc163b956e", "tint": [1, 1, 1, 0], "size": [15.625, 10], "layer": 9 },
+        "UiPart": { "role": "LetterCard" }
+      }
+    },
+    {
+      "id": 115,
+      "name": "Letter line 0",
+      "components": {
+        "LocalTransform": { "position": [-6.6, 4.4, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine" }
+      }
+    },
+    {
+      "id": 116,
+      "name": "Letter line 1",
+      "components": {
+        "LocalTransform": { "position": [-6.6, 3.66, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine", "index": 1 }
+      }
+    },
+    {
+      "id": 117,
+      "name": "Letter line 2",
+      "components": {
+        "LocalTransform": { "position": [-6.6, 2.92, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine", "index": 2 }
+      }
+    },
+    {
+      "id": 118,
+      "name": "Letter line 3",
+      "components": {
+        "LocalTransform": { "position": [-6.6, 2.18, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine", "index": 3 }
+      }
+    },
+    {
+      "id": 119,
+      "name": "Letter line 4",
+      "components": {
+        "LocalTransform": { "position": [-6.6, 1.44, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine", "index": 4 }
+      }
+    },
+    {
+      "id": 120,
+      "name": "Letter line 5",
+      "components": {
+        "LocalTransform": { "position": [-6.6, 0.7, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine", "index": 5 }
+      }
+    },
+    {
+      "id": 121,
+      "name": "Letter line 6",
+      "components": {
+        "LocalTransform": { "position": [-6.6, -0.04, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine", "index": 6 }
+      }
+    },
+    {
+      "id": 122,
+      "name": "Letter line 7",
+      "components": {
+        "LocalTransform": { "position": [-6.6, -0.78, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine", "index": 7 }
+      }
+    },
+    {
+      "id": 123,
+      "name": "Letter line 8",
+      "components": {
+        "LocalTransform": { "position": [-6.6, -1.52, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine", "index": 8 }
+      }
+    },
+    {
+      "id": 124,
+      "name": "Letter line 9",
+      "components": {
+        "LocalTransform": { "position": [-6.6, -2.26, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine", "index": 9 }
+      }
+    },
+    {
+      "id": 125,
+      "name": "Letter line 10",
+      "components": {
+        "LocalTransform": { "position": [-6.6, -3, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine", "index": 10 }
+      }
+    },
+    {
+      "id": 126,
+      "name": "Letter line 11",
+      "components": {
+        "LocalTransform": { "position": [-6.6, -3.74, 0] },
+        "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "LetterLine", "index": 11 }
+      }
+    },
+    {
+      "id": 127,
+      "name": "Panel",
+      "components": {
+        "LocalTransform": { "position": [0, 0.2, 0] },
+        "Sprite": { "texture": "guid:41ac7d38-dc7f-48d4-979d-04de793a9451", "tint": [1, 1, 1, 0], "size": [17.1875, 9.6875], "layer": 9 },
+        "UiPart": { "role": "Panel" }
+      }
+    },
+    {
+      "id": 128,
+      "name": "Panel line 0",
+      "components": {
+        "LocalTransform": { "position": [-7.6, 4.3, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine" }
+      }
+    },
+    {
+      "id": 129,
+      "name": "Panel line 1",
+      "components": {
+        "LocalTransform": { "position": [-7.6, 3.68, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 1 }
+      }
+    },
+    {
+      "id": 130,
+      "name": "Panel line 2",
+      "components": {
+        "LocalTransform": { "position": [-7.6, 3.06, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 2 }
+      }
+    },
+    {
+      "id": 131,
+      "name": "Panel line 3",
+      "components": {
+        "LocalTransform": { "position": [-7.6, 2.44, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 3 }
+      }
+    },
+    {
+      "id": 132,
+      "name": "Panel line 4",
+      "components": {
+        "LocalTransform": { "position": [-7.6, 1.82, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 4 }
+      }
+    },
+    {
+      "id": 133,
+      "name": "Panel line 5",
+      "components": {
+        "LocalTransform": { "position": [-7.6, 1.2, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 5 }
+      }
+    },
+    {
+      "id": 134,
+      "name": "Panel line 6",
+      "components": {
+        "LocalTransform": { "position": [-7.6, 0.58, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 6 }
+      }
+    },
+    {
+      "id": 135,
+      "name": "Panel line 7",
+      "components": {
+        "LocalTransform": { "position": [-7.6, -0.04, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 7 }
+      }
+    },
+    {
+      "id": 136,
+      "name": "Panel line 8",
+      "components": {
+        "LocalTransform": { "position": [-7.6, -0.66, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 8 }
+      }
+    },
+    {
+      "id": 137,
+      "name": "Panel line 9",
+      "components": {
+        "LocalTransform": { "position": [-7.6, -1.28, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 9 }
+      }
+    },
+    {
+      "id": 138,
+      "name": "Panel line 10",
+      "components": {
+        "LocalTransform": { "position": [-7.6, -1.9, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 10 }
+      }
+    },
+    {
+      "id": 139,
+      "name": "Panel line 11",
+      "components": {
+        "LocalTransform": { "position": [-7.6, -2.52, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 11 }
+      }
+    },
+    {
+      "id": 140,
+      "name": "Panel line 12",
+      "components": {
+        "LocalTransform": { "position": [-7.6, -3.14, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 12 }
+      }
+    },
+    {
+      "id": 141,
+      "name": "Panel line 13",
+      "components": {
+        "LocalTransform": { "position": [-7.6, -3.76, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
+        "UiPart": { "role": "PanelLine", "index": 13 }
+      }
+    },
+    {
+      "id": 142,
+      "name": "Envelope 1",
+      "components": {
+        "LocalTransform": { "position": [-6, 1.6, 0] },
+        "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
+        "UiPart": { "role": "Envelope" }
+      }
+    },
+    {
+      "id": 143,
+      "name": "Envelope 2",
+      "components": {
+        "LocalTransform": { "position": [-2, 1.6, 0] },
+        "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
+        "UiPart": { "role": "Envelope", "index": 1 }
+      }
+    },
+    {
+      "id": 144,
+      "name": "Envelope 3",
+      "components": {
+        "LocalTransform": { "position": [2, 1.6, 0] },
+        "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
+        "UiPart": { "role": "Envelope", "index": 2 }
+      }
+    },
+    {
+      "id": 145,
+      "name": "Envelope 4",
+      "components": {
+        "LocalTransform": { "position": [6, 1.6, 0] },
+        "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
+        "UiPart": { "role": "Envelope", "index": 3 }
+      }
+    },
+    {
+      "id": 146,
+      "name": "Envelope 5",
+      "components": {
+        "LocalTransform": { "position": [-4, -1.6, 0] },
+        "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
+        "UiPart": { "role": "Envelope", "index": 4 }
+      }
+    },
+    {
+      "id": 147,
+      "name": "Envelope 6",
+      "components": {
+        "LocalTransform": { "position": [0, -1.6, 0] },
+        "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
+        "UiPart": { "role": "Envelope", "index": 5 }
+      }
+    },
+    {
+      "id": 148,
+      "name": "Envelope 7",
+      "components": {
+        "LocalTransform": { "position": [4, -1.6, 0] },
+        "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
+        "UiPart": { "role": "Envelope", "index": 6 }
+      }
+    },
+    {
+      "id": 149,
+      "name": "Stamp 1",
+      "components": {
+        "LocalTransform": { "position": [-5.4, 1.3, 0], "rotation": [0, 0, -0.1045, 0.9945] },
+        "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
+        "UiPart": { "role": "Stamp" }
+      }
+    },
+    {
+      "id": 150,
+      "name": "Stamp 2",
+      "components": {
+        "LocalTransform": { "position": [-1.4, 1.3, 0], "rotation": [0, 0, -0.1045, 0.9945] },
+        "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
+        "UiPart": { "role": "Stamp", "index": 1 }
+      }
+    },
+    {
+      "id": 151,
+      "name": "Stamp 3",
+      "components": {
+        "LocalTransform": { "position": [2.6, 1.3, 0], "rotation": [0, 0, -0.1045, 0.9945] },
+        "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
+        "UiPart": { "role": "Stamp", "index": 2 }
+      }
+    },
+    {
+      "id": 152,
+      "name": "Stamp 4",
+      "components": {
+        "LocalTransform": { "position": [6.6, 1.3, 0], "rotation": [0, 0, -0.1045, 0.9945] },
+        "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
+        "UiPart": { "role": "Stamp", "index": 3 }
+      }
+    },
+    {
+      "id": 153,
+      "name": "Stamp 5",
+      "components": {
+        "LocalTransform": { "position": [-3.4, -1.9, 0], "rotation": [0, 0, -0.1045, 0.9945] },
+        "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
+        "UiPart": { "role": "Stamp", "index": 4 }
+      }
+    },
+    {
+      "id": 154,
+      "name": "Stamp 6",
+      "components": {
+        "LocalTransform": { "position": [0.6, -1.9, 0], "rotation": [0, 0, -0.1045, 0.9945] },
+        "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
+        "UiPart": { "role": "Stamp", "index": 5 }
+      }
+    },
+    {
+      "id": 155,
+      "name": "Hud",
+      "components": {
+        "LocalTransform": { "position": [9.6, 5.15, 0] },
+        "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.3, 0.24, 0.19, 0.85], "height": 0.38, "layer": 11, "align": "Right" },
+        "UiPart": { "role": "Hud" }
+      }
+    },
+    {
+      "id": 156,
+      "name": "Title",
+      "components": {
+        "LocalTransform": { "position": [0, 4.6, 0] },
+        "TextLabel": { "font": "guid:5595d781-239a-4615-b610-eccdd66e323a", "color": [0.98, 0.94, 0.85, 1], "height": 1.25, "layer": 11 },
+        "UiPart": { "role": "Title" }
+      }
+    },
+    {
+      "id": 157,
+      "name": "Music",
+      "components": {
+        "AudioSource": { "gain_db": -8, "bus": 1, "loop": true },
+        "LocalTransform": {},
+        "UiPart": { "role": "Music" }
+      }
+    },
+    {
+      "id": 158,
+      "name": "Ambience",
+      "components": {
+        "AudioSource": { "gain_db": -12, "loop": true },
+        "LocalTransform": {},
+        "UiPart": { "role": "Ambience" }
+      }
+    }
+  ]
+}
