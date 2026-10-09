@@ -102,9 +102,22 @@ For a game id `my_game` the build defines:
 | `my_game_headless_300` | a ctest: the host headless for 300 ticks |
 | `my_game_gpu`, `my_game_editor_gpu` | ctests that need a display (registered with `MCE_GPU_TESTS=ON`) |
 
-The stock `mce_editor`, `mce_cook` and `mce_mcp` know only the engine's components. Opening a scene
-that uses `Spin` in the stock editor fails with "unknown component type"; use the project's own
-executables.
+Without a game module the stock `mce_editor`, `mce_cook` and `mce_mcp` know only the engine's
+components: opening a scene that uses `Spin` fails with "unknown component type". Either use the
+project's own executables above, or hand the stock tools the module, which is what the SDK does
+(`mce_editor -module build/<preset>/projects/MyGame/libmy_game.so -project projects/MyGame`,
+`mce_mcp --module ...`, `mce_cook --module ...`; on Windows, where modules are not built, only the
+project's own executables work).
+
+## 2.4a Building against the installed SDK
+
+The same folder builds on its own against an installed engine (chapter 1, section 1.9): the
+template's `CMakeLists.txt` calls `find_package(MCE)` when `mce_add_project` is not already defined,
+so `mce build MyGame` (or `cmake -S MyGame -B MyGame/build -DCMAKE_PREFIX_PATH=<sdk>`) works
+from anywhere. The targets are then `my_game`, `my_game_game` and `my_game_content` only; the
+build runs the SDK's `mce_cook --module` for the pack, and `mce editor`, `mce mcp` and `mce cook`
+run the SDK's tools with the module loaded. The outputs land in `MyGame/build/` (`my_game`,
+`libmy_game.so`, `project/assets.mce`).
 
 ## 2.5 Where runtime files go
 

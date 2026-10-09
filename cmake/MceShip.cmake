@@ -18,6 +18,6 @@ function(mce_ship_metadata target)
     set(MCE_RC_VERSION_PATCH ${PROJECT_VERSION_PATCH})
     set(MCE_RC_VERSION "${PROJECT_VERSION}")
     set(rc "${CMAKE_CURRENT_BINARY_DIR}/${target}_ship.rc")
-    configure_file("${PROJECT_SOURCE_DIR}/cmake/ship.rc.in" "${rc}" @ONLY)
+    configure_file("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/ship.rc.in" "${rc}" @ONLY)  # also installed with the SDK
     target_sources(${target} PRIVATE "${rc}")
 endfunction()

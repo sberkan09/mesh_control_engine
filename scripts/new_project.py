@@ -22,8 +22,11 @@ import sys
 import uuid
 import zlib
 
+# In the engine tree: scripts/new_project.py beside templates/project and CMakeLists.txt. Installed
+# with the SDK: share/mce/scripts/new_project.py beside share/mce/templates/project and VERSION.
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "templates" / "project"
+IN_ENGINE_TREE = (ROOT / "CMakeLists.txt").is_file()
 TEXT_SUFFIXES = {".txt", ".md", ".cpp", ".h", ".mceproj", ".mcscene", ".gitignore", ".json"}
 
 
@@ -37,6 +40,9 @@ def game_id(name):
 
 
 def engine_version():
+    if not IN_ENGINE_TREE:  # the SDK's VERSION: the version line, then the engine's build stamp
+        version = ROOT / "VERSION"
+        return version.read_text(encoding="utf-8").splitlines()[0].strip() if version.is_file() else "0.0.0"
     text = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     m = re.search(r"project\(MeshControlEngine[^)]*VERSION\s+([0-9.]+)", text, re.S)
     return m.group(1) if m else "0.0.0"
@@ -78,7 +84,8 @@ def main():
     ap.add_argument("name", help="project name, e.g. MyGame (letters, digits, _ and -)")
     ap.add_argument("--game", help="game id (default: the name in snake_case)")
     ap.add_argument("--title", help="window title (default: the name)")
-    ap.add_argument("--dest", default=str(ROOT / "projects"), help="parent directory (default: projects/)")
+    ap.add_argument("--dest", default=str(ROOT / "projects") if IN_ENGINE_TREE else os.getcwd(),
+                    help="parent directory (default: projects/ in the engine tree, the current directory with the SDK)")
     ap.add_argument("--seed", type=int, help="derive the GUIDs from this seed (reproducible output)")
     ap.add_argument("--force", action="store_true", help="overwrite an existing project directory")
     args = ap.parse_args()
@@ -134,10 +141,14 @@ def main():
     (tex / "ground.png.mceasset").write_text(sidecar(tokens["@GUID_TEX_GROUND@"]), encoding="utf-8", newline="\n")
     written += 4
 
-    rel_out = os.path.relpath(out, ROOT)
-    print(f"new_project: {args.name} (game '{game}') -> {rel_out} ({written} files)")
-    print(f"  build: cmake --preset <preset> && cmake --build --preset <preset> --target {game}")
-    print(f"  ship:  python3 scripts/ship.py --project {rel_out}")
+    if IN_ENGINE_TREE:
+        rel_out = os.path.relpath(out, ROOT)
+        print(f"new_project: {args.name} (game '{game}') -> {rel_out} ({written} files)")
+        print(f"  build: cmake --preset <preset> && cmake --build --preset <preset> --target {game}")
+        print(f"  ship:  python3 scripts/ship.py --project {rel_out}")
+    else:
+        print(f"new_project: {args.name} (game '{game}') -> {out} ({written} files)")
+        print(f"  build: mce build {out}    play: mce play {out}    edit: mce editor {out}")
     return 0
 
 

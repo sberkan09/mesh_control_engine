@@ -46,10 +46,11 @@ code as built and why; this guide links to them where you may want the full deta
 
 ## Where things stand
 
-The engine is used **from its source checkout**: projects live in `projects/<Name>/` inside the
-repository and are built by the engine's own CMake. An installable SDK (headers, prebuilt
-libraries, a stock editor that loads your game, a CMake package) is in progress; when it lands,
-chapter 1 will gain an "installed SDK" path and the rest of this guide applies unchanged.
+The engine is used either **from its source checkout** (projects live in `projects/<Name>/` inside
+the repository and are built by the engine's own CMake) or **from the installed SDK** (headers,
+prebuilt tools and `libmce_engine`, a CMake package, the `mce` command; chapter 1, section 1.9), on
+Linux and macOS. The guide's commands are written for the checkout; the SDK forms are `mce build`,
+`mce play`, `mce editor`, `mce mcp`, `mce cook`, `mce ship` and the stock tools with `-module`.
 
 The current state of each feature, including what is not built yet, is in the "Known gaps"
 section of the matching `docs/engine/` page. This guide repeats the gaps that change what you do.

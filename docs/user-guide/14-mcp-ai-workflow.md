@@ -1,6 +1,7 @@
 # 14. Working with an AI agent (MCP)
 
-Every project builds an MCP (Model Context Protocol) server, `<game>_mcp`, that gives an AI agent
+Every project has an MCP (Model Context Protocol) server (`<game>_mcp` from the checkout build, or
+the stock `mce_mcp --module <lib<game>.so>`, `mce mcp` with the SDK) that gives an AI agent
 the same scene-editing commands a person has in the editor, plus cook and headless verification.
 Three games in the repository were authored entirely this way (Kindle's level, Prism Break and
 Undertow), and a fourth (Lamplighter) by an agent that had never seen the engine source. This
@@ -12,12 +13,14 @@ chapter is the workflow that worked and the pitfalls it found.
 build/<preset>/projects/MyGame/my_game_mcp --project projects/MyGame
 build/<preset>/projects/MyGame/my_game_mcp --project projects/MyGame --scene scenes/main.mcscene
 build/<preset>/projects/MyGame/my_game_mcp --project projects/MyGame --allow-cheats
+build/<preset>/src/editor/mcp/mce_mcp --module build/<preset>/projects/MyGame/libmy_game.so --project projects/MyGame
+mce mcp MyGame                                      # the SDK: the line above with its own paths
 ```
 
 The server speaks JSON-RPC 2.0 over stdin and stdout, one message per line (the MCP stdio
-transport); it opens no socket. Use the **project's** server: the stock `mce_mcp` knows only the
-engine's components and refuses scenes that use yours. After a rebuild that adds components,
-restart the server.
+transport); it opens no socket. Use the **project's** server or the stock one **with the module**:
+without `--module`, `mce_mcp` knows only the engine's components and refuses scenes that use yours.
+After a rebuild that adds components, restart the server.
 
 Registering it with a client is the client's business. For Claude Code, a `.mcp.json` in the
 project root:
@@ -75,8 +78,8 @@ agent checks "did the player reach the flag" without a window.
 
 ## 14.3 A workflow that works
 
-1. **Build first.** `cmake --build --preset <preset> --target my_game my_game_mcp`; the server
-   needs the module's components compiled in.
+1. **Build first.** `cmake --build --preset <preset> --target my_game my_game_mcp` (`mce build
+   MyGame` with the SDK); the server needs the module's components, compiled in or loaded.
 2. **Discover.** `refl_list_components`, then `refl_describe_component` for the ones you will
    author (your own and `Sprite`, `RigidBody2D`, `Collider2D`, `TextLabel`, `Camera2DComponent`).
 3. **Content.** Copy art and sounds under `assets/`, `cook_run {"adopt": true}` to give them
@@ -102,7 +105,7 @@ code. Every MCP-authored game so far shipped one.
 | Entity ids are per session | ids restart from 1 after `scene_open`; a batch written against stale ids edits the wrong entities | re-list with `scene_list_entities` after every `scene_open`; prefer names in your own notes; `scene_undo` repairs a bad batch |
 | `run_headless` plays the saved file | unsaved edits are refused | `scene_save` first |
 | The MCP cook writes `cooked/`, not the pack | the game executable still plays the old pack | `cook_run {"pack": true}`, or rebuild `my_game` (the build cooks the pack) |
-| Stock server vs project server | "unknown component type" for your components | run `<game>_mcp`, and restart it after adding components |
+| Stock server without the module | "unknown component type" for your components | run `<game>_mcp` or `mce_mcp --module <lib<game>.so>`, and restart it after adding components |
 | `scene_new` makes a new GUID | a `.mceproj` that names the old scene points at nothing if you save over it | to re-author the start scene, `scene_open` it and `scene_clear` it |
 | `scene_save` with `force` over another file | that file gets the open scene's GUID | save as a new path, or clear and re-author the existing scene |
 | Adopted textures default to sRGB | normal maps and LUTs come out wrong | `asset_set_import_settings {"settings": {"srgb": false}}` |

@@ -16,7 +16,9 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-headless 1` | off | run without a window, renderer or audio device; prints the state hash at the end |
 | `-ticks N` | 600 | headless: fixed ticks to simulate |
 | `-frames N` | 0 | windowed: quit after N rendered frames |
-| `-capture <path.ppm>` | | with `-frames`: write the last frame as a PPM (absolute path) |
+| `-capture <path.ppm>` | | with `-frames` or `-capture_tick`: write the last frame as a PPM (the directory is created) |
+| `-capture_tick N` | 0 | windowed: quit after N simulation ticks (frame-rate independent, unlike `-frames`) |
+| `-input <file>` | | play a scripted input file instead of the keyboard (`<from>[-<to>] Action[=value]` per line; chapter 11) |
 | `-save <slot>` | off | load the slot at start if it exists; write it on a clean quit |
 | `-save_dir <dir>` | the per-user save folder | where slots live |
 | `-console 0` | 1 | disable the developer console |
@@ -39,6 +41,9 @@ flag below is also a console variable you can print or set at run time (`name` a
 In-game keys: Esc pauses (the pause overlay), backtick or F1 toggles the console, F7 toggles 2D
 post effects.
 
+Every executable also takes `-help` (`--help`, `-h`): the usage line plus every convar with its
+type, default, help and flags, and every console function. The list below is the useful subset.
+
 ## 16.2 The editor
 
 `mce_editor`, `my_game_editor`. The player flags that make sense for an editor apply too
@@ -47,6 +52,7 @@ post effects.
 | Flag | Default | Meaning |
 |---|---|---|
 | `-project <dir>` | | the project folder (holds `assets/`) |
+| `-module <file>` | | the game module to load (`lib<game>.so`): its components in the inspector and the cook, its `install()` in play-in-editor (`my_game_editor` has them compiled in) |
 | `-scene <path under assets/>` | the first scene | the scene to open |
 | `-editor.panel <name>` | | bring a panel's tab to the front at start-up (`Profiler`, `Play`, ...) |
 | `-editor.select <name>` | | select the entity with this name after opening |
@@ -56,6 +62,8 @@ post effects.
 | `-editor.autosave_interval s` | 300 | seconds of unsaved changes before an autosave (0: only on focus loss) |
 | `-editor.hot_reload_interval s` | 0.5 | seconds between polls of `assets/` (0: off) |
 | `-frames N` | 0 | quit after N frames (smoke tests) |
+| `-capture <file.ppm>` | | with `-frames`: write the last frame |
+| `-selftest` | | with `-frames`: check the viewport and shell pixels, exit 3 on failure |
 
 ## 16.3 The MCP server
 
@@ -63,15 +71,21 @@ post effects.
 
 ```
 my_game_mcp --project <dir> [--scene <path under assets/>] [--allow-cheats]
+mce_mcp --project <dir> --module <lib<game>.so> [--scene <path under assets/>] [--allow-cheats]
 ```
+
+`--module` loads the game module (the SDK's way; `my_game_mcp` has the game compiled in): its
+components become known to the tools and its systems run in `run_headless`.
 
 ## 16.4 The cook
 
 ```
 my_game_cook <project-dir> [--pack] [--force] [--adopt] [--quiet]
+mce_cook <project-dir> [--module <lib<game>.so>] [--pack] [--force] [--adopt] [--quiet]
 ```
 
-Exit 0 clean, 1 cook errors, 2 usage. `mce_cook` has the same interface for engine-only content.
+Exit 0 clean, 1 cook errors (a module that fails to load among them), 2 usage. `mce_cook`
+without `--module` knows engine components only.
 
 ## 16.5 Scripts
 
@@ -90,3 +104,26 @@ scripts/ci/setup_env.sh                               # Ubuntu 24.04 packages
 `-lights N`, `-r.cascades N`, `-night 1`, `-cam.yaw`, `-cam.pitch`, `-cam.dist`, `-cam.auto 0`),
 `sample_05_ashen_court` (`-autoplay 1`), `sample_02_boids` (`-boids N`), `sprites_2d` (`-sprites N`),
 `ui_gallery` (`-page title|options|levels|console`). Each sample's `main.cpp` header lists them.
+
+## 16.7 The `mce` command (installed SDK)
+
+`<sdk>/bin/mce`, Python 3. `<project>` is a folder with one `<Name>.mceproj`; its build is
+`<project>/build`.
+
+```
+mce new <Name> [--game id] [--title "Title"] [--dest dir] [--force]
+mce build <project> [--config Debug|Release] [-D<var>=<value> ...]
+mce play <project> [player flags ...]
+mce headless <project> [--ticks N] [player flags ...]
+mce editor <project> [editor flags ...]
+mce mcp <project> [--scene <path>] [--allow-cheats]
+mce cook <project> [--pack] [--force] [--adopt] [--quiet]
+mce ship <project> [--out dir] [--version v]
+mce version
+mce --help
+```
+
+Each subcommand prints the command it runs and exits with that tool's code (2 for a usage error).
+`mce editor`, `mce mcp` and `mce cook` run the SDK's `mce_editor`, `mce_mcp` and `mce_cook` with
+`-module <project>/build/lib<game>.so`; `mce ship` writes `<project>/dist/<Name>-<version>-<os>.zip`
+holding the host, the module, `libmce_engine`, `assets.mce`, `VERSION.txt` and `README.txt`.
