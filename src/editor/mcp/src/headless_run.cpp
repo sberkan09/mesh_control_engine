@@ -4,6 +4,10 @@
 #include "mce/asset/asset_system.h"
 #include "mce/audio/clip_bank.h"
 #include "mce/audio/components.h"
+#include "mce/editor/play_session.h"
+#include "mce/input/ecs.h"
+#include "mce/kit/particles.h"
+#include "mce/kit/sequence.h"
 #include "mce/physics/module.h"
 #include "mce/scene/scene.h"
 
@@ -11,7 +15,9 @@ namespace mce::mcp {
 
 namespace {
 
-// mce_player's PlayerApp with no window and no device (src/player/main.cpp): keep the two in step.
+// mce_player's PlayerApp with no window and no device (src/player/src/player.cpp): keep the two in
+// step. The game is the one a project's MCP server links in (mce_add_project's <game>_mcp hands its
+// install() to editor::set_play_game_install, as <game>_editor does for play-in-editor).
 class HeadlessApp final : public app::Application {
 public:
     HeadlessApp(asset::AssetSystem& assets, audio::AudioDevice& audio, asset::Guid scene, u64 total,
@@ -20,8 +26,17 @@ public:
           user_(user) {}
 
     ResultV on_init(app::Context&) override {
+        input::install(world_);
         physics::install_physics2d(world_);
         audio::install(world_, audio_, &clips_);
+        kit::install_particles(world_, &assets_);
+        kit::install_sequences(world_, &assets_);
+        if (const editor::GameInstallFn game = editor::play_game_install()) {
+            if (ResultV g = game(world_); !g) {
+                error_ = g.error();
+                return g;
+            }
+        }
         ResultV r = scene::load(world_, assets_, scene_, &entities_);
         if (!r) error_ = r.error();
         return r;
@@ -42,6 +57,7 @@ public:
     void on_shutdown() override { clips_.release_all(); }
 
     World& world() { return world_; }
+    Span<const Entity> spawned() const { return entities_.span(); }
     u64 ticks() const { return sim_ticks_; }
     usize entity_count() const { return entities_.size(); }
     const Error& error() const { return error_; }
@@ -62,7 +78,8 @@ private:
 
 }  // namespace
 
-Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, TickProgressFn progress, void* user) {
+Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, TickProgressFn progress, void* user,
+                                 InspectFn inspect, void* inspect_user) {
     if (ticks == 0) return Error(Errc::InvalidArgument, "mcp.run_headless", "ticks must be > 0");
     asset::AssetSystem assets;
     const StringView roots[1] = {pack};
@@ -83,6 +100,7 @@ Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, 
         out.entities = app.entity_count();
         out.state_hash = app.world().state_hash();
         out.metrics = app.world().metrics();
+        if (inspect) inspect(app.world(), app.spawned(), inspect_user);
     }
     return out;
 }

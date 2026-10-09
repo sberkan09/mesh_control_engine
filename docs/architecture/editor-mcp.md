@@ -73,8 +73,8 @@ agent edits exactly as to human ones. Nothing touches disk unless a tool says so
 | Edit | `entity_create`, `entity_delete`, `entity_duplicate`, `component_add`, `component_remove`, `component_set` | `component_set` takes a refl property path + value; type errors come back as tool errors with the expected type. |
 | Undo | `scene_undo`, `scene_redo` | The editor's undo history (FR-EDT-040, ADR-0030 §1–§3): each editing `tools/call` is one step, named after the tool. |
 | Persist | `scene_open`, `scene_save` | `.mcscene` text format; save uses the same temp-write-then-rename as autosave. |
-| Build | `cook_run`, `cook_errors` | Through `CookService`; errors carry file + line (FR-EDT-070 data). |
-| Verify | `run_headless` | Cooks to a temp pack, loads the game module headless, runs N fixed ticks (optional recorded input), returns `state_hash`, `World::metrics`, last log lines, and pass/fail of any asserts. |
+| Build | `cook_run`, `cook_errors` | Through `CookService`; errors carry file + line (FR-EDT-070 data). `adopt` writes sidecars for new source files (`mce_cook --adopt`). |
+| Verify | `run_headless` | Cooks, then plays the saved scene headless with what `mce_player` installs plus the game's `install()` (a project's `<game>_mcp` registers it), runs N fixed ticks, returns `state_hash`, `World::metrics`, last log lines and, with `inspect`, the final component values (Transient fields included) of chosen entities. Recorded input is not wired yet. |
 | See | `render_frame` | Renders one frame of the scene offscreen (llvmpipe in CI) and returns a PNG as MCP image content. Stretch; cut second. |
 | Console | `console_list`, `console_exec` | Convars/confuncs via `ConsoleModel`; `Cheat`/`RequiresRestart` vars refused unless `--allow-cheats`. |
 

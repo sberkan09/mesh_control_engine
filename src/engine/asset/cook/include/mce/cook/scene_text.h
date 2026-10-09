@@ -31,6 +31,11 @@ using SceneEntityIndexFn = u32 (*)(const void* field, void* user);
 void write_scene_component(const refl::TypeRecord& type, const void* value, String& out, SceneEntityIndexFn entity_index,
                            void* user);
 
+// Appends every field of `value`, Transient and default ones included: a live component as tools
+// inspect it (MCP run_headless). Never cooked; the scene importer ignores Transient fields.
+void write_scene_component_state(const refl::TypeRecord& type, const void* value, String& out, SceneEntityIndexFn entity_index,
+                                 void* user);
+
 // Appends exactly the fields of `value` whose bit is set in `field_mask` (bit i = type.fields[i];
 // Transient fields never), whether or not they hold the default. A prefab instance's overrides:
 // the cook writes them over the prefab root's values, so an override back to the C++ default

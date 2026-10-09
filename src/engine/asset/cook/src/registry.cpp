@@ -193,7 +193,7 @@ bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& import
                 sc = &sidecars.back();
             }
             if (!sc) {
-                diags.error(Errc::MissingSidecar, disp, 0, 0, kStage, "unregistered asset (no .mceasset sidecar): run the editor or mce_cook --adopt");
+                diags.error(Errc::MissingSidecar, disp, 0, 0, kStage, "unregistered asset (no .mceasset sidecar): cook with adopt (mce_cook --adopt, or the MCP cook_run with \"adopt\": true)");
                 continue;
             }
             sc->claimed = true;
