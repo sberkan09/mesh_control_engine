@@ -69,7 +69,8 @@ The cook pipeline (`src/cook.cpp`):
 6. With `--pack`, `<project>/assets.mce`: the manifest chunk first, then every live asset's chunks in GUID
    order.
 
-`mce_cook <project-dir> [--pack] [--force] [--adopt] [--quiet]` exits 0 (clean), 1 (cook errors) or 2 (usage).
+`mce_cook <project-dir> [--module <game module>] [--pack] [--force] [--adopt] [--quiet]` exits 0 (clean), 1 (cook
+errors, a module that fails to load among them) or 2 (usage).
 
 ## Rules and invariants
 
@@ -164,7 +165,7 @@ Scene and prefab chunks are also exercised end to end by `tests/ecs/test_prefab.
 - The shader placeholder is an empty payload (`src/asset_system.cpp`: "Shader/...: empty payload until their
   formats land").
 - Cook stages go through `mce::jobs`, which runs jobs inline today, so the cook is single-threaded.
-- Plain `mce_cook` and `mce_editor` only know the engine's reflected components
-  (`tools/cook/engine_components.cpp`); a game's components cook through the project's own `<game>_cook`
-  (M8-project-template.md).
+- `mce_cook` and `mce_editor` know the engine's reflected components (`tools/cook/engine_components.cpp`)
+  plus the game module given with `--module` / `-module` (modules.md); on Windows, where modules are not
+  built, a game's components cook only through the project's own `<game>_cook` (M8-project-template.md).
 - macOS deployment below macOS 26 needs a float `from_chars` fallback in the cook's JSON reader (M-MAC.md).

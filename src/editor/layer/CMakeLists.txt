@@ -3,7 +3,14 @@
 # Window::native_handle(), for cursors/clipboard/text input) and rendering through mce_rhi, so the
 # editor never touches GL.
 
-mce_add_library(mce_editor_layer
+# SDL3 is already inside the umbrella (mce_platform links it static); linking it again here
+# would make a second SDL. On the umbrella the layer takes SDL's headers only.
+if(MCE_GAME_MODULES_SUPPORTED)
+    set(_mce_layer_sdl "$<COMPILE_ONLY:SDL3::SDL3-static>")
+else()
+    set(_mce_layer_sdl SDL3::SDL3-static)
+endif()
+mce_add_library(mce_editor_layer UMBRELLA
     SOURCES
         src/asset_panel.cpp
         src/draw_clip.cpp
@@ -21,4 +28,4 @@ mce_add_library(mce_editor_layer
         mce::mce_platform
     PRIVATE_DEPS
         mce::imgui
-        SDL3::SDL3-static)
+        ${_mce_layer_sdl})

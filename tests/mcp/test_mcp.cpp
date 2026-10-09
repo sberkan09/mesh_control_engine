@@ -755,6 +755,55 @@ TEST_CASE("FR-EDT-160 gate: MCP edit == SceneCommand edit (same .mcscene bytes, 
     CHECK_MESSAGE(text.find("300 ticks, 8 entities, state_hash " + hash_a) != std::string::npos, text);
 }
 
+#if defined(MCE_PROBE_MODULE)
+// The stock server with a game module loaded (mce_mcp --module): the module's reflected components
+// register as it maps, so the project's scenes (which use them) cook and list; its install() runs in
+// run_headless, so the run hashes exactly like the project's own host playing the same scene.
+TEST_CASE("mcp server: a loaded game module cooks its components and plays like the project's host") {
+    const std::string root = fresh_dir("mcp_probe");
+    std::filesystem::copy(std::string(MCE_PROBE_PROJECT) + "/assets", root + "/assets",
+                          std::filesystem::copy_options::recursive);
+    {
+        Client bare;  // without the module the game's components are unknown: the project's cook fails
+        REQUIRE(bare.server.open_project(sv(root)));
+        CHECK_FALSE(bare.server.session().cook().ok());
+    }
+
+    Client c;
+    REQUIRE(c.server.load_module(MCE_PROBE_MODULE));
+    CHECK(std::string(c.server.module().info->name) == "template_probe");
+    CHECK_FALSE(c.server.load_module(MCE_PROBE_MODULE));  // one module per server
+    REQUIRE(c.server.open_project(sv(root), "scenes/main.mcscene"));
+    c.init();
+    auto comps = c.ok("refl_list_components");
+    bool spin = false, bob = false;
+    const cook::JsonValue list = comps.v().get("components");
+    for (u32 i = 0; i < list.size(); ++i) {
+        spin |= str(list.at(i).get("name")) == "Spin";
+        bob |= str(list.at(i).get("name")) == "Bob";
+    }
+    CHECK(spin);
+    CHECK(bob);
+    CHECK(c.ok("refl_describe_component", R"({"name":"Spin"})").v().get("fields").size() == 1);
+
+    auto run = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"inspect":{"component":"Bob"}})");
+    const std::string hash = str(run.v().get("state_hash"));
+    const cook::JsonValue bobs = run.v().get("inspect").get("entities");
+    REQUIRE(bobs.size() >= 1);
+    CHECK(bobs.at(0).get("components").get("Bob").get("started").as_bool());  // the game's system ran
+
+    const StringView args[] = {MCE_PROBE_HOST, "-headless", "1", "-ticks", "300"};
+    platform::Process host;
+    REQUIRE(host.start(Span<const StringView>(args, 5), true));
+    Array<char> out;
+    const i32 code = host.wait(&out);
+    const std::string text(out.data(), out.size());
+    CHECK_MESSAGE(code == 0, text);
+    const bool played = text.find("300 ticks, ") != std::string::npos && text.find("state_hash " + hash) != std::string::npos;
+    CHECK_MESSAGE(played, text);
+}
+#endif
+
 // ---- fuzz --------------------------------------------------------------------------------------
 
 TEST_CASE("mcp fuzz: mutated and random requests always get well-formed answers") {

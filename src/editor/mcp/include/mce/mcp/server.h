@@ -12,6 +12,7 @@
 
 #include "mce/editor/editor_session.h"
 #include "mce/mcp/json_writer.h"
+#include "mce/module_host.h"
 
 namespace mce::mcp {
 
@@ -41,6 +42,13 @@ public:
     Server& operator=(const Server&) = delete;
 
     void set_sink(SendFn fn, void* user);
+
+    // Loads the project's game module (lib<game>.so / .dll) for the server's lifetime: its reflected
+    // components join refl_list_components, the cook and the inspector, and its install() runs in
+    // every run_headless world (as the project host runs it). Call before open_project, so the
+    // first cook already knows the game's components. One module per server.
+    Result<void> load_module(StringView path);
+    const LoadedModule& module() const { return module_.module; }
 
     // The project every tool works in (`root` holds assets/); cooks it when nothing is cooked yet.
     // `scene` (relative to assets/) is opened too when given.
@@ -72,6 +80,12 @@ private:
     void call_tool(cook::JsonValue id, cook::JsonValue params);
 
     ServerOptions opt_;
+    // Before session_: destroyed after it, so no World still holds the module's code and no
+    // document its component records when the library unmaps.
+    struct ModuleGuard {
+        LoadedModule module;
+        ~ModuleGuard();
+    } module_;
     editor::EditorSession session_;
     SceneFile scene_file_;
     SendFn send_ = nullptr;

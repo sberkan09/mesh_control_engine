@@ -11,10 +11,14 @@ The editor lives in `src/editor/` and is built when `MCE_BUILD_EDITOR` is on. It
 | `mce_mcp_core` | L5 | `mce_editor_core` | MCP JSON-RPC protocol, tool table, value codec, headless run |
 | `mce_mcp` | L6 | `mce_mcp_core` | the MCP stdio transport executable |
 
-The editor links the static engine libraries, not the `mce_engine` umbrella, so it cannot load a game
-module in process (ADR-0029 §1.7). `mce_add_project` instead builds a per-project `<game>_editor`
-from `app/main.cpp` plus the game sources and registers the game's `install` with
-`editor::set_play_game_install`.
+Where game modules are supported the editor, the MCP server, the cook and their libraries are
+`UMBRELLA` targets (modules.md): they link the `mce_engine` umbrella instead of the static engine
+libraries, so `mce_editor -module <lib<game>.so> -project <dir>` loads a project's game module in
+process (`open_game_module` at startup, kept mapped until the shell is gone): its components show in
+the inspector and cook, and its `install` runs in play-in-editor through
+`editor::set_play_game_install`. `mce_add_project` also builds a per-project `<game>_editor` from
+`app/main.cpp` plus the game sources, which registers `install` the same way; on Windows (no
+umbrella) that is the only way.
 
 ## Public surface
 
@@ -68,13 +72,14 @@ scissor state). ImGui platform and renderer backends are in `layer/src/` and ren
 `scene_new`, `scene_open`, `scene_save`, `scene_undo`, `scene_redo`, `cook_run`, `cook_errors`,
 `run_headless`, `console_list`, `console_exec`.
 
-Project MCP server (M9): `mce_mcp` knows only the engine's components, so a scene that uses a
-game's components cannot be opened or edited with it (`unknown component type`). `mce_add_project`
-therefore builds `<game>_mcp` as well: `mce_mcp`'s `app/main.cpp` and `engine_components.cpp` plus the
-project's `TYPES` and `GAME_SOURCES`, linked against `mce_mcp_core`. A generated hook hands the game's
-`install` to `editor::set_play_game_install` (as `<game>_editor` does for play-in-editor), so
-`run_headless` runs the game's systems and hashes like `<game> -headless 1`. Run it as
-`<game>_mcp --project projects/<Name> [--scene scenes/main.mcscene]`; the client speaks JSON-RPC 2.0,
+Project MCP server (M9): a scene that uses a game's components cannot be opened or edited without
+them (`unknown component type`). `mce_mcp --module <lib<game>.so> --project projects/<Name>
+[--scene scenes/main.mcscene]` loads the project's game module (`Server::load_module`, before
+`open_project` so the first cook knows the components) and hands its `install` to
+`editor::set_play_game_install`, so `run_headless` runs the game's systems and hashes like
+`<game> -headless 1`. `mce_add_project` also builds `<game>_mcp`: `mce_mcp`'s `app/main.cpp` and
+`engine_components.cpp` plus the project's `TYPES` and `GAME_SOURCES` linked against `mce_mcp_core`,
+with a generated hook registering `install`; the only route on Windows. The client speaks JSON-RPC 2.0,
 one message per line, on its stdin/stdout (`initialize`, `notifications/initialized`, then
 `tools/call` with `{"name", "arguments"}`; each result's `content[0].text` is the tool's JSON).
 Values use the `.mcscene` spelling: vectors as arrays, assets as `"guid:<uuid>"` (take them from

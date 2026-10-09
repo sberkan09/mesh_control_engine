@@ -44,7 +44,7 @@ mce_mcp(.exe)  ──►  mce_mcp_core (protocol + tool table, headless, ImGui-f
   editor-tools §2.1 / ARCHITECTURE F7) and never ImGui, so it builds and runs in `local_ci.sh` without a display.
 - **stdio only.** No socket, no listener, no port: the MCP host spawns `mce_mcp` as its child and talks over pipes.
   This keeps N7 (no networking) intact; a CI grep wall forbids socket APIs in `mce_mcp*`.
-- **One project per process**, chosen on the command line: `mce_mcp --project <dir> [--scene <file>]`. Every path a
+- **One project per process**, chosen on the command line: `mce_mcp --project <dir> [--module <game module>] [--scene <file>]`. Every path a
   tool accepts is resolved inside that root; anything escaping it is an error.
 - **Attaching to a running GUI editor** (same tool table, served by the editor process over a local pipe so the
   human sees edits live) is a stretch goal; it reuses `mce_mcp_core` unchanged and is cut first.
@@ -74,7 +74,7 @@ agent edits exactly as to human ones. Nothing touches disk unless a tool says so
 | Undo | `scene_undo`, `scene_redo` | The editor's undo history (FR-EDT-040, ADR-0030 §1–§3): each editing `tools/call` is one step, named after the tool. |
 | Persist | `scene_open`, `scene_save` | `.mcscene` text format; save uses the same temp-write-then-rename as autosave. Save As gives a new file a fresh GUID, keeps the GUID of a file overwritten with `force`, and `name` renames the scene. |
 | Build | `cook_run`, `cook_errors` | Through `CookService`; errors carry file + line (FR-EDT-070 data). `adopt` writes sidecars for new source files (`mce_cook --adopt`). The result names the cooked tree and, with `pack`, the `assets.mce` it wrote: a project host plays its own build-tree pack unless started with `-pack` pointing at one of these. |
-| Verify | `run_headless` | Cooks, then plays the saved scene (or another saved scene of the project, `scene`) headless with what `mce_player` installs plus the game's `install()` (a project's `<game>_mcp` registers it), runs N fixed ticks, returns `state_hash`, `World::metrics`, last log lines and, with `inspect`, the final component values (Transient fields included) of chosen entities. `input` scripts the actions the game reads from `InputState` per tick (`mce/input/script.h`: a text script `"10-70 Move=1,0 Jump"` or segments `{from, to, actions}`), so a keyboard game can be played to its win and lose states without a window. |
+| Verify | `run_headless` | Cooks, then plays the saved scene (or another saved scene of the project, `scene`) headless with what `mce_player` installs plus the game's `install()` (`--module`, or a project's `<game>_mcp`, registers it), runs N fixed ticks, returns `state_hash`, `World::metrics`, last log lines and, with `inspect`, the final component values (Transient fields included) of chosen entities. `input` scripts the actions the game reads from `InputState` per tick (`mce/input/script.h`: a text script `"10-70 Move=1,0 Jump"` or segments `{from, to, actions}`), so a keyboard game can be played to its win and lose states without a window. |
 | See | `render_frame` | Renders one frame of the scene offscreen (llvmpipe in CI) and returns a PNG as MCP image content. Stretch; cut second. |
 | Console | `console_list`, `console_exec` | Convars/confuncs via `ConsoleModel`; `Cheat`/`RequiresRestart` vars refused unless `--allow-cheats`. |
 

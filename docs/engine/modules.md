@@ -12,10 +12,19 @@ Dependencies, from the CMakeLists files:
   include directory that holds `mce/engine_version.h`.
 - `mce_engine` (shared): every library in `MCE_ENGINE_LIBS` linked whole (`--whole-archive` on ELF,
   `-force_load` on macOS): `mce_core`, `mce_refl`, `mce_asset`, `mce_ecs`, `mce_physics2d`,
-  `mce_platform`, `mce_input`, `mce_rhi`, the RHI backend, `mce_rhi_default`, `mce_render`,
-  `mce_ui`, `mce_audio`, `mce_scene`, `mce_ecs_scene`, `mce_gameplay_kit`, `mce_module_host`. Its
-  interface carries their compile requirements only (`$<COMPILE_ONLY:...>`). `mce_physics3d` is not
-  in the list.
+  `mce_physics3d`, `mce_platform`, `mce_input`, `mce_rhi`, the RHI backend, `mce_rhi_default`,
+  `mce_render`, `mce_ui`, `mce_audio`, `mce_scene`, `mce_ecs_scene`, `mce_gameplay_kit`,
+  `mce_module_host`. The list (`MCE_ENGINE_LIBS`), `MCE_GAME_MODULES_SUPPORTED` and the `$ORIGIN`
+  run paths are set by the root `CMakeLists.txt` before any target. Its interface carries the
+  libraries' compile requirements only (`$<COMPILE_ONLY:...>`).
+- `UMBRELLA` targets (`cmake/MceTarget.cmake`: `mce_add_library`, `mce_add_executable`,
+  `mce_add_test`): the tools that load a game module and the libraries they link, `mce_asset_cook`,
+  `mce_editor_core`, `mce_editor_layer`, `mce_mcp_core`, `mce_cook`, `mce_editor`, `mce_mcp` and
+  their tests. Where modules are supported, `mce_engine_deps` swaps every engine library in their
+  dependencies for `mce_engine`, so the tool and the module share one engine instance (one convar
+  registry, one reflection registry, one allocator); `mce_editor_layer` then takes SDL3 compile-only
+  too, since the umbrella already carries it. A non-`UMBRELLA` target that links an `UMBRELLA`
+  library is a configure error (it would link a second engine). On Windows the flag changes nothing.
 - `mce_player_runtime` (static): `mce_engine` where game modules are supported, otherwise the static
   libraries directly (`mce_scene`, `mce_gameplay_kit`, `mce_physics2d`, `mce_audio`, `mce_render`,
   `mce_platform`, `mce_ui`, `mce_module_host`, `mce_rhi_default`).
@@ -37,10 +46,16 @@ Linked by: `mce_player`, every project host made by `mce_add_project` (`cmake/Mc
 
 `src/module/include/mce/module_host.h`, the host side:
 
-- `load_game_module(path, world)`: copy-and-load (maps `<stem>_loaded_<N><ext>`), checks the engine
-  id, runs `install`. Errors: `ModuleNotFound`, `IoError`, `ModuleMissingEntry`,
-  `EngineIdMismatch`, `AlreadyExists` (one module per World), `ModuleInstallFailed`.
-- `unload_game_module(module)`: unmaps and deletes the copy; asserts the World is already destroyed.
+- `open_game_module(path)`: copy-and-load (maps `<stem>_loaded_<pid>_<N><ext>`, so processes never
+  share a copy) and checks the engine id,
+  without installing: the module's reflected components register with `mce_refl` as it maps. Errors:
+  `ModuleNotFound`, `IoError`, `ModuleMissingEntry`, `EngineIdMismatch`.
+- `install_game_module(module, world)`: runs `install` on a World (`AlreadyExists`: one module per
+  World; `ModuleInstallFailed`). A mapped module can be installed into any number of Worlds in turn:
+  the tools keep one mapped for the process and install it into each play or headless world.
+- `load_game_module(path, world)`: the two together, what hosts call.
+- `unload_game_module(module)`: unmaps and deletes the copy; asserts every World it was installed
+  into is already destroyed.
 - `LoadedModule`, `engine_id()`, `loaded_module_count()`.
 
 `src/module/include/mce/gameplay.h`: the one include a game module is meant to use. It pulls in core,
@@ -103,6 +118,12 @@ pack yet (see Known gaps); actions the default map lacks read as zero (`has_acti
   from the build tree (`scripts/ship.py`).
 - Windows: `MCE_GAME_MODULES_SUPPORTED` is OFF and `mce_add_game_module` is a no-op until the
   export ledger exists. Hosts link the game in and use `PlayerDesc::static_module`.
+- The stock tools load a module where modules are supported: `mce_editor -module <lib>` (the
+  module's components in the inspector and the in-editor cook, its `install` in play-in-editor),
+  `mce_mcp --module <lib>` (`Server::load_module`: the same for the MCP tools and `run_headless`)
+  and `mce_cook --module <lib>` (the module's components cook). Each maps the module once at
+  startup with `open_game_module`, hands `ModuleInfo::install` to `editor::set_play_game_install`,
+  and unmaps it last, after every document and World (a guard declared before them).
 - UI gameplay wall: module sources under `games/*/module/` may not include `mce/ui/`.
 
 ## How it is tested
@@ -150,8 +171,9 @@ None of the non-GPU tests above need a display.
   instantiations, finding F33) is not built.
 - Projects build inside the engine checkout; an installed engine package (`find_package(MCE)`)
   does not exist (M8 project template).
-- The stock `mce_editor` does not load game modules; each project gets its own `<game>_editor`
-  executable (M8 project template, ADR-0029 §1.7), and its own MCP server `<game>_mcp`.
+- Windows has no stock-tool module loading either (no umbrella): there the per-project
+  `<game>_editor`, `<game>_mcp` and `<game>_cook` executables of `mce_add_project`, which compile the
+  game in, are the only way the tools know a game's components.
 - The player runtime's input map is the engine's default map. There is no input-map asset a project
   can cook into its pack and no `PlayerDesc` field for one, so a game needing other actions (Ember
   Step's `Dash`) falls back to the default ones (Kindle dashes on `Fire`). Rebinding persistence

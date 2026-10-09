@@ -2,6 +2,7 @@
 
 #include "mce/asset/xxhash.h"
 #include "mce/cook/fs.h"
+#include "mce/editor/play_session.h"
 #include "tools.h"
 
 namespace mce::mcp {
@@ -35,6 +36,19 @@ u64 file_content_hash(StringView path) {
 
 Server::Server(const ServerOptions& opt) : opt_(opt) {}
 Server::~Server() = default;
+
+Server::ModuleGuard::~ModuleGuard() {
+    if (!module.loaded()) return;
+    editor::set_play_game_install(nullptr);
+    unload_game_module(module);
+}
+
+Result<void> Server::load_module(StringView path) {
+    if (module_.module.loaded()) return Error(Errc::AlreadyExists, "mcp.load_module", module_.module.source_path.view());
+    MCE_TRY_ASSIGN(module_.module, open_game_module(path));
+    editor::set_play_game_install(module_.module.info->install);
+    return ok();
+}
 
 void Server::set_sink(SendFn fn, void* user) {
     send_ = fn;

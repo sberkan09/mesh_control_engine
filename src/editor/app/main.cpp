@@ -4,6 +4,7 @@
 //
 //   mce_editor                          run until the window closes
 //   mce_editor -project samples/scene_demo [-scene scenes/demo.mcscene]
+//   mce_editor -module build/.../libkindle.so -project projects/Kindle   a project's game loaded
 //   mce_editor -project samples/scene_demo -frames 90 -selftest   CI smoke in scene mode
 //   mce_editor -project samples/scene_demo -editor.play 1 -frames 90 -selftest   play-in-editor smoke
 //   mce_editor -frames 120 -selftest    CI smoke: check the viewport and shell pixels, then quit
@@ -16,6 +17,8 @@
 
 #include "mce/core.h"
 #include "mce/editor/editor_shell.h"
+#include "mce/editor/play_session.h"
+#include "mce/module_host.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/rhi/default_device.h"
@@ -29,6 +32,9 @@ MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this
 MCE_CVAR(cv_selftest, "selftest", false, "With -frames: verify the viewport and shell pixels on the last frame",
          CVarFlags::None);
 MCE_CVAR(cv_project, "project", "", "Project folder to open (holds assets/)", CVarFlags::None);
+MCE_CVAR(cv_module, "module", "",
+         "Game module to load (lib<game>.so / .dll): its components in the inspector and the cook, its install() in play",
+         CVarFlags::None);
 MCE_CVAR(cv_scene, "scene", "", "Scene to open, relative to assets/ (default: the first scene)", CVarFlags::None);
 MCE_CVAR(cv_select, "editor.select", "", "Select the entity with this name after opening the scene", CVarFlags::None);
 MCE_CVAR(cv_play, "editor.play", false, "Enter play-in-editor after opening the scene (the -selftest checks it)",
@@ -253,14 +259,33 @@ int main(int argc, char** argv) {
     console::parse_command_line(argc, argv);
     if (console::help_requested()) {
         console::print_help("mce_editor",
-                            "usage: mce_editor [-project <dir> [-scene <path under assets/>]] [-editor.play 1]\n"
-                            "                  [-frames N [-capture <file.ppm>] [-selftest]] [-editor.ini <file>] [-help]\n"
+                            "usage: mce_editor [-project <dir> [-module <game module>] [-scene <path under assets/>]]\n"
+                            "                  [-editor.play 1] [-frames N [-capture <file.ppm>] [-selftest]] [-editor.ini <file>] [-help]\n"
                             "  The docking editor. Without -project the viewport shows the stub world.");
         log::shutdown();
         return 0;
     }
 
+    // The game module outlives everything below: the shell's documents hold its component records
+    // and the play world its code until they are gone.
+    struct ModuleGuard {
+        LoadedModule module;
+        ~ModuleGuard() {
+            if (!module.loaded()) return;
+            editor::set_play_game_install(nullptr);
+            unload_game_module(module);
+        }
+    } game;
     int rc = 1;
+    if (!cv_module.get_string().empty()) {
+        Result<LoadedModule> loaded = open_game_module(cv_module.get_string());
+        if (!loaded) {
+            log::shutdown();
+            return fail("game module", loaded.error());
+        }
+        game.module = loaded.value();
+        editor::set_play_game_install(game.module.info->install);
+    }
     if (ResultV r = platform::init(); !r) {
         rc = fail("platform init failed", r.error());
     } else {

@@ -5,7 +5,7 @@
 # The JSON codec is the cook's (mce/cook/json.h); no runtime target links either target
 # (scripts/ci/check_walls.py link wall).
 
-mce_add_library(mce_mcp_core
+mce_add_library(mce_mcp_core UMBRELLA
     SOURCES
         src/headless_run.cpp
         src/json_writer.cpp
@@ -16,9 +16,10 @@ mce_add_library(mce_mcp_core
         mce::mce_editor_core
         mce::mce_input)
 
-mce_add_executable(mce_mcp
+mce_add_executable(mce_mcp UMBRELLA
     SOURCES
         app/main.cpp
         app/engine_components.cpp
     DEPS
-        mce::mce_mcp_core)
+        mce::mce_mcp_core
+        mce::mce_module_host)
