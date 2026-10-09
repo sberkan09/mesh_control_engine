@@ -1,0 +1,2035 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "e2d00000-0000-4000-8000-000000000100",
+  "name": "extras",
+  "entities": [
+    {
+      "name": "Camera",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            10,
+            4,
+            0
+          ]
+        },
+        "Camera2DComponent": {
+          "pixels_per_meter": 32,
+          "clear_color": [
+            0.05,
+            0.05,
+            0.08,
+            1
+          ]
+        },
+        "Post2DComponent": {
+          "vignette": true,
+          "vignette_intensity": 0.55,
+          "color_grade": true,
+          "lut": "guid:e2d00000-0000-4000-8000-000000000007",
+          "chromatic_aberration": true,
+          "aberration": 0.002
+        }
+      }
+    },
+    {
+      "name": "Sky",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000001",
+          "size": [
+            46,
+            26
+          ],
+          "layer": -50
+        },
+        "Parallax": {
+          "factor": [
+            0,
+            0
+          ],
+          "repeat_x": true
+        }
+      }
+    },
+    {
+      "name": "Mountains",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            2.4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000002",
+          "size": [
+            32,
+            12
+          ],
+          "layer": -40
+        },
+        "Parallax": {
+          "factor": [
+            0.2,
+            0.6
+          ],
+          "repeat_x": true
+        }
+      }
+    },
+    {
+      "name": "Hills",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0.2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000003",
+          "size": [
+            24,
+            6
+          ],
+          "layer": -30
+        },
+        "Parallax": {
+          "factor": [
+            0.5,
+            0.8
+          ],
+          "repeat_x": true
+        }
+      }
+    },
+    {
+      "name": "Brick 0.0",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -12,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -10,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -8,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -6,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.4",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -4,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.5",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -2,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.6",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.7",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            2,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.8",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            4,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.9",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            6,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.10",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            8,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.11",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            10,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.12",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            12,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.13",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            14,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.14",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            16,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.15",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            18,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.16",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            20,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.17",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            22,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.18",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            24,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.19",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            26,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.20",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            28,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.21",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            30,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 0.22",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            32,
+            -2,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.0",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -12,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -10,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -8,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -6,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.4",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -4,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.5",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -2,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.6",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.7",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            2,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.8",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            4,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.9",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            6,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.10",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            8,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.11",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            10,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.12",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            12,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.13",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            14,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.14",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            16,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.15",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            18,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.16",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            20,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.17",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            22,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.18",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            24,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.19",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            26,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.20",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            28,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.21",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            30,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 1.22",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            32,
+            -4,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.0",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -12,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -10,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -8,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -6,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.4",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -4,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.5",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -2,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.6",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.7",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            2,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.8",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            4,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.9",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            6,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.10",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            8,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.11",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            10,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.12",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            12,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.13",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            14,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.14",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            16,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.15",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            18,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.16",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            20,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.17",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            22,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.18",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            24,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.19",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            26,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.20",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            28,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.21",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            30,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 2.22",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            32,
+            -6,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.0",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -12,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -10,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -8,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -6,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.4",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -4,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.5",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -2,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.6",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.7",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            2,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.8",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            4,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.9",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            6,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.10",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            8,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.11",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            10,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.12",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            12,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.13",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            14,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.14",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            16,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.15",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            18,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.16",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            20,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.17",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            22,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.18",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            24,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.19",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            26,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.20",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            28,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.21",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            30,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Brick 3.22",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            32,
+            -8,
+            0
+          ]
+        },
+        "Sprite": {
+          "texture": "guid:e2d00000-0000-4000-8000-000000000004",
+          "normal_map": "guid:e2d00000-0000-4000-8000-000000000005",
+          "size": [
+            2,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "name": "Ambient",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "Light2D": {
+          "kind": "Ambient",
+          "color": [
+            0.22,
+            0.24,
+            0.42,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "name": "Torch 0",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            5,
+            -0.6,
+            0
+          ]
+        },
+        "Light2D": {
+          "color": [
+            1,
+            0.62,
+            0.3,
+            1
+          ],
+          "intensity": 2.2,
+          "radius": 7,
+          "height": 1.2
+        },
+        "ParticleEmitter": {
+          "preset": "guid:e2d00000-0000-4000-8000-000000000010",
+          "seed": 1,
+          "layer": 5
+        }
+      }
+    },
+    {
+      "name": "Torch 1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            15,
+            -0.6,
+            0
+          ]
+        },
+        "Light2D": {
+          "color": [
+            1,
+            0.62,
+            0.3,
+            1
+          ],
+          "intensity": 2.2,
+          "radius": 7,
+          "height": 1.2
+        },
+        "ParticleEmitter": {
+          "preset": "guid:e2d00000-0000-4000-8000-000000000010",
+          "seed": 2,
+          "layer": 5
+        }
+      }
+    }
+  ]
+}

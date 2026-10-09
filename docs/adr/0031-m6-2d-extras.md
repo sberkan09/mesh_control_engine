@@ -78,3 +78,32 @@ optimized-build check is < 2 ms (`test_kit`).
 **Budget.** FR-R2D-090 asks ≤ 0.5 ms added GPU at 10k sprites on the dev GPU; llvmpipe cannot measure that, so the
 number is open until a run on real hardware (the shader adds one texture fetch and ≤ 16 light iterations, only on lit
 quads).
+
+## 4. 2D post effects (FR-R2D-100)
+
+1. **One pass.** `Renderer::record_post_2d(cmd, source, size, Post2D, target)` draws one full-screen triangle that
+   samples the finished 2D frame and applies, in order: chromatic aberration (red and blue sampled radially out/in by
+   `aberration` × the distance from the center), a color grade through a 16³ LUT (blend by `lut_strength`), and a
+   vignette (`intensity` over a `smoothstep` from `radius` to `radius + softness`, aspect-corrected). Each effect is a
+   uniform toggle, so turning one on or off at runtime costs nothing structural; with none on the pass is a copy.
+2. **Display space.** The sprite shader already writes sRGB-encoded values into a plain RGBA8 target (2D blending in
+   display space, rendering-2d), so the post pass grades and darkens display values and writes them out unchanged —
+   the same space LUT tools and image editors work in.
+3. **LUT format.** A 256 × 16 strip: 16 slices across (blue), red increasing inside a slice, green increasing
+   downwards; `render::make_identity_lut` writes the identity to start from. It is an ordinary texture imported with
+   `srgb` off (the shader treats its texels as display values); two bilinear fetches blend between blue slices.
+4. **Kit and player.** `Post2DComponent` on the camera entity carries the settings and the LUT texture ref;
+   `SpriteExtract::post_2d` turns the primary camera's component into `render::Post2D` (the LUT loads through the
+   texture cache). `mce_player` renders the world into an offscreen target only while an effect is on, runs the post
+   pass into the backbuffer and draws the pause overlay after it; `r.post2d` (F7) switches it all off. The editor
+   viewport shows the scene without post.
+
+**Budget.** FR-R2D-100 asks < 1 ms GPU combined at 1080p; like §3 it needs a hardware GPU to measure (the pass is
+three to five texture fetches per pixel).
+
+## 5. The demo
+
+`samples/extras_2d` is an editor project (no code) holding one scene with all four: three `repeat_x` parallax
+backdrops, a normal-mapped brick wall under two warm `Light2D` torches and a cool ambient light, ember emitters at
+the torches, and vignette + warm LUT + slight aberration on the camera. CI cooks it, plays it headless (600 ticks) and
+renders 120 frames on the GPU.

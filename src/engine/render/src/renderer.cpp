@@ -77,6 +77,56 @@ void main() {
 }
 )";
 
+// 2D post (FR-R2D-100): chromatic aberration (radial R/B split), a 16³ strip-LUT grade, then the
+// vignette. Bindings: PostU = 1, the frame = 6, the LUT = 7.
+constexpr const char* kPostVS = R"(#version 450 core
+layout(location = 0) out vec2 v_uv;
+out gl_PerVertex { vec4 gl_Position; };
+void main() {
+    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+    v_uv = p;
+    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}
+)";
+
+constexpr const char* kPostFS = R"(#version 450 core
+layout(std140, binding = 1) uniform PostU { vec4 u_enable; vec4 u_vignette; vec4 u_grade; };
+layout(binding = 6) uniform sampler2D u_src;
+layout(binding = 7) uniform sampler2DArray u_lut;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+vec3 grade(vec3 c) {
+    c = clamp(c, 0.0, 1.0) * 15.0;
+    float b0 = floor(c.b), b1 = min(b0 + 1.0, 15.0);
+    vec2 rg = vec2((c.r + 0.5) / 256.0, (c.g + 0.5) / 16.0);
+    vec3 s0 = textureLod(u_lut, vec3(rg + vec2(b0 / 16.0, 0.0), 0.0), 0.0).rgb;
+    vec3 s1 = textureLod(u_lut, vec3(rg + vec2(b1 / 16.0, 0.0), 0.0), 0.0).rgb;
+    return mix(s0, s1, c.b - b0);
+}
+void main() {
+    vec2 d = v_uv - 0.5;
+    vec3 c;
+    if (u_enable.z > 0.5) {
+        vec2 off = d * (2.0 * u_grade.z);
+        c = vec3(texture(u_src, v_uv + off).r, texture(u_src, v_uv).g, texture(u_src, v_uv - off).b);
+    } else {
+        c = texture(u_src, v_uv).rgb;
+    }
+    if (u_enable.y > 0.5) c = mix(c, grade(c), u_grade.x);
+    if (u_enable.x > 0.5) {
+        float r = length(vec2(d.x * u_vignette.w, d.y)) * 2.0;
+        c *= 1.0 - u_vignette.x * smoothstep(u_vignette.y, u_vignette.y + u_vignette.z, r);
+    }
+    o_color = vec4(c, 1.0);
+}
+)";
+
+struct PostU {
+    math::vec4 enable;    // x vignette, y grade, z aberration
+    math::vec4 vignette;  // intensity, radius, softness, aspect
+    math::vec4 grade;     // lut strength, -, aberration
+};
+
 struct FrameU {
     math::mat4 view_proj;
     f32 params[4];  // x: encode sRGB output
@@ -148,6 +198,13 @@ ResultV Renderer::create_pipelines() {
         pd.debug_name = static_cast<SpriteBlend>(b) == SpriteBlend::Additive ? "sprite.additive" : "sprite.alpha";
         MCE_TRY_ASSIGN(pipelines_[b], device_->create_pipeline(pd));
     }
+    rhi::GraphicsPipelineDesc post;
+    post.vertex_shader = {kPostVS, "post2d.vert"};
+    post.fragment_shader = {kPostFS, "post2d.frag"};
+    post.state.depth = {};
+    post.state.raster.cull = rhi::CullMode::None;
+    post.debug_name = "post2d";
+    MCE_TRY_ASSIGN(post_2d_, device_->create_pipeline(post));
     return ok();
 }
 
@@ -167,6 +224,8 @@ void Renderer::shutdown() {
         device_->destroy_pipeline(p);
         p = {};
     }
+    device_->destroy_pipeline(post_2d_);
+    post_2d_ = {};
     device_->destroy_sampler(point_sampler_);
     device_->destroy_sampler(linear_sampler_);
     device_->destroy_buffer(quad_indices_);
@@ -274,6 +333,41 @@ void Renderer::record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Tex
     MCE_ASSERT_MSG(forward_.initialized(), "record_3d before init_3d");
     if (!forward_.initialized()) return;
     forward_.record(cmd, scene, target);
+}
+
+void make_identity_lut(Array<u8>& out) {
+    out.resize(usize(kLutSize) * kLutSize * kLutSize * 4);
+    for (u32 y = 0; y < kLutSize; ++y)
+        for (u32 x = 0; x < kLutSize * kLutSize; ++x) {
+            u8* p = out.data() + (usize(y) * kLutSize * kLutSize + x) * 4;
+            p[0] = static_cast<u8>((x % kLutSize) * 255 / (kLutSize - 1));
+            p[1] = static_cast<u8>(y * 255 / (kLutSize - 1));
+            p[2] = static_cast<u8>((x / kLutSize) * 255 / (kLutSize - 1));
+            p[3] = 255;
+        }
+}
+
+void Renderer::record_post_2d(rhi::CommandBuffer& cmd, rhi::TextureHandle source, rhi::Extent2D size, const Post2D& post,
+                              rhi::TextureHandle target) {
+    MCE_ASSERT_MSG(!cmd.in_pass(), "record_post_2d: inside a pass");
+    rhi::PassAttachment out;
+    out.texture = target;
+    out.load = rhi::LoadOp::DontCare;
+    rhi::RenderPassDesc pass;
+    pass.colors = Span<const rhi::PassAttachment>(&out, 1);
+    pass.debug_name = "post2d";
+    cmd.begin_pass(pass);
+    PostU pu{};
+    pu.enable = {post.vignette ? 1.0f : 0.0f, post.color_grade ? 1.0f : 0.0f, post.chromatic_aberration ? 1.0f : 0.0f, 0.0f};
+    pu.vignette = {math::clamp(post.vignette_intensity, 0.0f, 1.0f), post.vignette_radius, math::max(post.vignette_softness, 1e-3f),
+                   size.height ? static_cast<f32>(size.width) / static_cast<f32>(size.height) : 1.0f};
+    pu.grade = {math::clamp(post.lut_strength, 0.0f, 1.0f), 0.0f, post.aberration, 0.0f};
+    cmd.bind_pipeline(post_2d_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
+    cmd.bind_texture(rhi::bank::kAtlasArray, source, linear_sampler_);
+    cmd.bind_texture(rhi::bank::kNormal, post.color_grade ? textures_.get(post.lut_key) : textures_.white(), linear_sampler_);
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
 }
 
 void Renderer::record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch) {

@@ -247,3 +247,23 @@ TEST_CASE("FR-R2D-090: Light2D entities and a cooked normal map light a kit spri
     CHECK(lit_right > lit_left + 60);  // the normal faces +X
     f.extract.reset(nullptr);
 }
+
+TEST_CASE("FR-R2D-100: the primary camera's Post2DComponent becomes renderer post settings") {
+    Fixture f;
+    const Entity cam = f.camera({0, 0});
+    render::Post2D post;
+    CHECK_FALSE(f.extract.post_2d(f.world, post));  // no component
+    kit::Post2DComponent pc;
+    f.world.add(cam, pc);
+    CHECK_FALSE(f.extract.post_2d(f.world, post));  // every effect off
+    pc.vignette = true;
+    pc.vignette_intensity = 0.7f;
+    pc.chromatic_aberration = true;
+    pc.color_grade = true;  // no LUT texture: grading stays off
+    f.world.set(cam, pc);
+    REQUIRE(f.extract.post_2d(f.world, post));
+    CHECK(post.vignette);
+    CHECK(post.vignette_intensity == 0.7f);
+    CHECK(post.chromatic_aberration);
+    CHECK_FALSE(post.color_grade);
+}

@@ -4,7 +4,7 @@
 //   mce_player -pack p.mce -headless 1 -ticks 600      determinism: prints the World state hash
 //   mce_player -pack p.mce -frames 120 -capture a.ppm  CI smoke: write the last frame
 //
-// Without -scene the first Scene asset of the pack (by source path) plays. Controls: Esc pauses
+// Without -scene the first Scene asset of the pack (by source path) plays. F7 toggles 2D post. Controls: Esc pauses
 // and resumes (the pause overlay), Q quits while paused.
 
 #include <cstdio>
@@ -34,6 +34,7 @@ MCE_CVAR(cv_scene, "scene", "", "Scene to play: GUID or source path (default: th
 MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window closes)", CVarFlags::None);
 MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this .ppm path", CVarFlags::None);
 MCE_CVAR(cv_ticks, "ticks", 600, "Headless: ticks to simulate", CVarFlags::None);
+MCE_CVAR(cv_post, "r.post2d", true, "Apply the camera's Post2DComponent effects (F7 toggles)", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 
 int fail(const char* what, const Error& e) {
@@ -99,8 +100,13 @@ public:
         extract_.extract(world_, batch);
         batch.build();
 
+        // With 2D post on, the world renders offscreen and the post pass writes the backbuffer.
+        render::Post2D post;
+        const bool use_post = cv_post.get_bool() && extract_.post_2d(world_, post);
+        if (use_post) ensure_post_target(bb);
         rhi::CommandBuffer cmd(mem::frame());
         rhi::PassAttachment color;
+        color.texture = use_post ? post_target_ : rhi::TextureHandle{};
         color.clear.color[0] = clear.r;
         color.clear.color[1] = clear.g;
         color.clear.color[2] = clear.b;
@@ -110,8 +116,23 @@ public:
         pass.debug_name = "player.world";
         cmd.begin_pass(pass);
         renderer_.record_2d(cmd, batch);
-        if (paused_) record_pause_overlay(cmd, bb);
-        cmd.end_pass();
+        if (use_post) {
+            cmd.end_pass();
+            renderer_.record_post_2d(cmd, post_target_, bb, post);
+            if (paused_) {
+                rhi::PassAttachment over;
+                over.load = rhi::LoadOp::Load;
+                rhi::RenderPassDesc op;
+                op.colors = Span<const rhi::PassAttachment>(&over, 1);
+                op.debug_name = "player.overlay";
+                cmd.begin_pass(op);
+                record_pause_overlay(cmd, bb);
+                cmd.end_pass();
+            }
+        } else {
+            if (paused_) record_pause_overlay(cmd, bb);
+            cmd.end_pass();
+        }
         device_->submit(cmd);
 
         const bool last = cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
@@ -123,6 +144,7 @@ public:
 
     void on_shutdown() override {
         if (window_) window_->set_event_handler(nullptr, nullptr);
+        if (device_ && !post_target_.is_null()) device_->destroy_texture(post_target_);
         clips_.release_all();
         extract_.shutdown();
         if (device_) renderer_.shutdown();
@@ -181,6 +203,17 @@ private:
         renderer_.record_2d(cmd, hud);
     }
 
+    void ensure_post_target(rhi::Extent2D size) {
+        if (!post_target_.is_null() && post_size_.width == size.width && post_size_.height == size.height) return;
+        if (!post_target_.is_null()) device_->destroy_texture(post_target_);
+        rhi::TextureDesc td;
+        td.size = size;
+        td.usage = rhi::TextureUsage::SampledColorTarget;
+        td.debug_name = "player.post2d_src";
+        post_target_ = device_->create_texture(td);
+        post_size_ = size;
+    }
+
     void capture(const char* path, rhi::Extent2D size) {
         Array<u8> px;
         px.resize(usize(size.width) * size.height * 4);
@@ -204,6 +237,7 @@ private:
             case platform::Key::Q:
                 if (self->paused_) self->quit(0);
                 break;
+            case platform::Key::F7: cv_post.set_bool(!cv_post.get_bool()); break;
             default: break;
         }
     }
@@ -222,6 +256,8 @@ private:
     FixedString<256> scene_path_;
     u64 sim_ticks_ = 0;
     bool paused_ = false;
+    rhi::TextureHandle post_target_;
+    rhi::Extent2D post_size_;
 };
 
 int run_headless() {
