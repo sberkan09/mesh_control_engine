@@ -25,6 +25,13 @@ class ClipBank;
 
 namespace mce::editor {
 
+// The game a project editor plays (mce_add_project's <game>_editor links the game in): its install()
+// runs on the play world after the engine systems, as a loaded module's would in the host. Null
+// (mce_editor itself): engine systems only.
+using GameInstallFn = ResultV (*)(World& world);
+void set_play_game_install(GameInstallFn install);
+GameInstallFn play_game_install();
+
 class PlaySession {
 public:
     enum class State : u8 { Stopped, Playing, Paused };

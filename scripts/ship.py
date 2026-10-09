@@ -4,6 +4,7 @@
     python3 scripts/ship.py diorama              # Artifact B -> dist/MCE-Diorama-<version>-<os>.zip
     python3 scripts/ship.py platformer           # Artifact A -> dist/Ember-Step-<version>-<os>.zip
     python3 scripts/ship.py all --version 0.1.0  # both
+    python3 scripts/ship.py --project projects/MyGame   # a project from scripts/new_project.py
 
 What a zip holds (one folder, double-click the executable):
     <Name>[.exe]        the sample executable, renamed (Windows: icon + VERSIONINFO resource)
@@ -20,8 +21,10 @@ part of the build (mce_sample_pack in samples/CMakeLists.txt). Exit code 0 = zip
 import argparse
 import datetime
 import hashlib
+import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -80,18 +83,57 @@ def sha256(path):
     return h.hexdigest()
 
 
-def ship(key, args):
-    art = ARTIFACTS[key]
+def sample_outputs(key, args):
+    """A sample artifact: its target, module and cooked pack under build/<preset>/samples/<sample>."""
+    art = dict(ARTIFACTS[key])
+    sample_dir = os.path.join(ROOT, "build", args.preset, "samples", art["sample"])
+    art["targets"] = [art["target"]] + ([art["module"]] if art["module"] and os.name != "nt" else [])
+    art["exe"] = os.path.join(sample_dir, art["target"] + EXE)
+    art["pack"] = os.path.join(sample_dir, "project", "assets.mce")
+    art["module_file"] = os.path.join(sample_dir, MODULE_PREFIX + art["module"] + MODULE_SUFFIX) if art["module"] else None
+    art["credits"] = os.path.join(ROOT, "samples", art["sample"], "CREDITS.md")
+    art["autoplay"] = bool(art["module"])
+    return art
+
+
+def project_outputs(project, args):
+    """A project made from the template (mce_add_project): <game> host, <game>_game module, the pack."""
+    proj_dir = os.path.abspath(project)
+    files = [f for f in os.listdir(proj_dir) if f.endswith(".mceproj")] if os.path.isdir(proj_dir) else []
+    if len(files) != 1:
+        sys.exit(f"ship: {project} is not a project directory (expected one <name>.mceproj)")
+    with open(os.path.join(proj_dir, files[0]), encoding="utf-8") as f:
+        meta = json.load(f)
+    game = meta["games"][0]
+    rel = os.path.relpath(proj_dir, ROOT)
+    if rel.startswith(".."):
+        sys.exit("ship: --project must be inside the engine checkout (projects/<name>)")
+    out_dir = os.path.join(ROOT, "build", args.preset, rel)
+    title = meta.get("title") or meta["name"]
+    credits = os.path.join(proj_dir, "CREDITS.md")
+    return {
+        "name": re.sub(r"[^A-Za-z0-9_.-]+", "-", title).strip("-") or meta["name"],
+        "title": title,
+        "targets": [game] + ([game + "_game"] if os.name != "nt" else []),
+        "exe": os.path.join(out_dir, game + EXE),
+        "pack": os.path.join(out_dir, "project", "assets.mce"),
+        "module": game,
+        "module_file": os.path.join(out_dir, MODULE_PREFIX + game + MODULE_SUFFIX),
+        "credits": credits if os.path.isfile(credits) else None,
+        "controls": "Esc pauses, ` or F1 opens the developer console.",
+        "autoplay": False,
+    }
+
+
+def ship(art, args):
     build_dir = os.path.join(ROOT, "build", args.preset)
-    sample_dir = os.path.join(build_dir, "samples", art["sample"])
-    targets = [art["target"]] + ([art["module"]] if art["module"] and os.name != "nt" else [])
     if not args.no_build:
         run(["cmake", "--preset", args.preset])
-        run(["cmake", "--build", "--preset", args.preset, "--target", *targets])
+        run(["cmake", "--build", "--preset", args.preset, "--target", *art["targets"]])
 
-    exe = os.path.join(sample_dir, art["target"] + EXE)
-    pack = os.path.join(sample_dir, "project", "assets.mce")
-    module = os.path.join(sample_dir, MODULE_PREFIX + art["module"] + MODULE_SUFFIX) if art["module"] else None
+    exe = art["exe"]
+    pack = art["pack"]
+    module = art["module_file"]
     if module and not os.path.isfile(module) and os.name == "nt":
         module = None  # no game modules on Windows until the export ledger: the game is linked in
     for p in [exe, pack] + ([module] if module else []):
@@ -102,8 +144,9 @@ def ship(key, args):
     stage = os.path.join(args.out, stem)
     shutil.rmtree(stage, ignore_errors=True)
     os.makedirs(stage)
-    files = {art["name"] + EXE: exe, "assets.mce": pack,
-             "CREDITS.md": os.path.join(ROOT, "samples", art["sample"], "CREDITS.md")}
+    files = {art["name"] + EXE: exe, "assets.mce": pack}
+    if art["credits"]:
+        files["CREDITS.md"] = art["credits"]
     if module:
         files[os.path.basename(module)] = module
     # The engine umbrella shared library, when the build has one (game-module platforms).
@@ -129,7 +172,8 @@ def ship(key, args):
         f.write(f"Run: double-click {art['name'] + EXE} (it needs an OpenGL 4.5 driver).\n")
         f.write(f"Controls: {art['controls']}\n\n")
         f.write("Keep every file of this folder together: the executable loads assets.mce and its libraries from here.\n")
-        f.write("Content credits: CREDITS.md.\n")
+        if art["credits"]:
+            f.write("Content credits: CREDITS.md.\n")
     hashes = {name: sha256(os.path.join(stage, name)) for name in sorted(os.listdir(stage))}
     with open(os.path.join(stage, "VERSION.txt"), "w", newline="\n") as f:
         f.write(f"version {args.version}\nengine_commit {commit}{' (dirty)' if dirty else ''}\n")
@@ -177,7 +221,7 @@ def smoke(stage, art, args):
     """Runs the staged artifact from a copy outside the build tree: proves it finds its own pack."""
     exe = os.path.join(stage, art["name"] + EXE)
     cmd = [exe, "-frames", "60", "-r.vsync", "0", "-platform.error_box", "0"]
-    if art["module"]:
+    if art["autoplay"]:
         cmd += ["-autoplay", "1"]
     if args.smoke_headless:
         cmd = [exe, "-headless", "1", "-ticks", "300"]
@@ -195,7 +239,8 @@ def smoke(stage, art, args):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("artifact", choices=[*ARTIFACTS, "all"])
+    ap.add_argument("artifact", nargs="?", choices=[*ARTIFACTS, "all"])
+    ap.add_argument("--project", help="ship a project directory made by scripts/new_project.py instead")
     ap.add_argument("--preset", default=default_preset())
     ap.add_argument("--version", default=None, help="default: <project version>+<short commit>")
     ap.add_argument("--out", default=os.path.join(ROOT, "dist"))
@@ -216,8 +261,13 @@ def main():
         args.version = f"{base}+{short}" if short else base
     args.out = os.path.abspath(args.out)
     os.makedirs(args.out, exist_ok=True)
+    if args.project:
+        ship(project_outputs(args.project, args), args)
+        return
+    if not args.artifact:
+        ap.error("name an artifact or pass --project <dir>")
     for key in (list(ARTIFACTS) if args.artifact == "all" else [args.artifact]):
-        ship(key, args)
+        ship(sample_outputs(key, args), args)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@
 namespace mce::editor {
 
 namespace {
+GameInstallFn g_game_install = nullptr;  // set once at startup by a project editor's main
 
 constexpr const char* kStage = "editor.play";
 
@@ -60,6 +61,13 @@ Result<void> PlaySession::enter(EditorProject& project, const SceneDocument& doc
     audio::install(*world_, *audio_, clips_.get());
     kit::install_particles(*world_, assets);
     kit::install_sequences(*world_, assets);
+    if (g_game_install) {
+        if (Result<void> r = g_game_install(*world_); !r) {
+            diags.error(r.error().code, rel.view(), 0, 0, kStage, "the game's install() failed");
+            stop();
+            return r;
+        }
+    }
     if (Result<void> r = scene::instantiate(*world_, scene, &entities_); !r) {
         diags.error(r.error().code, rel.view(), 0, 0, kStage, "the scene does not instantiate");
         stop();
@@ -75,6 +83,9 @@ Result<void> PlaySession::enter(EditorProject& project, const SceneDocument& doc
                  enter_seconds_ * 1000.0);
     return ok();
 }
+
+void set_play_game_install(GameInstallFn install) { g_game_install = install; }
+GameInstallFn play_game_install() { return g_game_install; }
 
 void PlaySession::stop() {
     if (clips_) clips_->release_all();

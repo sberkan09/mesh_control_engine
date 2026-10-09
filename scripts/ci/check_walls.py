@@ -10,7 +10,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SCAN_DIRS = ["src", "samples", "games", "tests", "tools"]
+SCAN_DIRS = ["src", "samples", "games", "projects", "templates", "tests", "tools"]
 EXTS = {".h", ".hpp", ".inl", ".c", ".cc", ".cpp", ".mm"}
 
 # (name, pattern, allowed path prefixes, scanned path prefixes)
@@ -68,7 +68,11 @@ WALLS = [
 PATH_WALLS = [
     # Gameplay never includes the runtime UI (ui.md §4.4, FR-UI-030): UI intents reach gameplay as
     # events through the runtime state, and HUD values are read by binding, not pushed by game code.
-    ("UI gameplay wall", re.compile(r"[<\"]mce/ui/"), re.compile(r"^(samples|games)/[^/]+/(game|module)/")),
+    (
+        "UI gameplay wall",
+        re.compile(r"[<\"]mce/ui/"),
+        re.compile(r"^(samples/[^/]+/game/|(projects/[^/]+/|templates/project/)?games/[^/]+/module/)"),
+    ),
 ]
 
 # CMake link walls: (name, pattern, allowed path prefixes). Scans every CMakeLists.txt under
