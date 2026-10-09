@@ -44,6 +44,8 @@ public:
     void set_title(const char* title);
     void set_size(u32 width, u32 height);
     void set_cursor_visible(bool visible);
+    // TextInput events flow only while on (an IME may show); a console turns it on while open.
+    void set_text_input(bool on);
     // Taskbar/title-bar icon from tightly packed RGBA8 rows (FR-SHP-010). False when the platform refuses it.
     bool set_icon(u32 width, u32 height, Span<const u8> rgba);
 

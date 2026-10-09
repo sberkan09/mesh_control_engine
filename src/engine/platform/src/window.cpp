@@ -90,6 +90,12 @@ void Window::set_cursor_visible(bool visible) {
     else SDL_HideCursor();
 }
 
+void Window::set_text_input(bool on) {
+    auto* w = static_cast<SDL_Window*>(handle_);
+    if (on) SDL_StartTextInput(w);
+    else SDL_StopTextInput(w);
+}
+
 void Window::request_close() {
     SDL_Event ev{};
     ev.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;

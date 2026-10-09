@@ -64,6 +64,13 @@ WALLS = [
     ),
 ]
 
+# Path-pattern walls: (name, pattern, regex over the repo-relative path of files that may NOT match).
+PATH_WALLS = [
+    # Gameplay never includes the runtime UI (ui.md §4.4, FR-UI-030): UI intents reach gameplay as
+    # events through the runtime state, and HUD values are read by binding, not pushed by game code.
+    ("UI gameplay wall", re.compile(r"[<\"]mce/ui/"), re.compile(r"^(samples|games)/[^/]+/(game|module)/")),
+]
+
 # CMake link walls: (name, pattern, allowed path prefixes). Scans every CMakeLists.txt under
 # SCAN_DIRS, comment lines excluded, so a third-party target can only be linked where its wall says.
 LINK_WALLS = [
@@ -105,6 +112,12 @@ def main() -> int:
                 continue
             rel = path.relative_to(ROOT).as_posix()
             lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            for name, pattern, forbidden_in in PATH_WALLS:
+                if not forbidden_in.match(rel):
+                    continue
+                for no, line in enumerate(lines, 1):
+                    if pattern.search(line):
+                        violations.append(f"{rel}:{no}: {name}: {line.strip()}")
             for name, pattern, allowed, scanned in WALLS:
                 if not any(rel.startswith(s) for s in scanned):
                     continue

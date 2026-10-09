@@ -292,7 +292,14 @@ TEST_CASE("SPSC under a real second thread: commands and replies stay consistent
         PlayParams p;
         p.priority = static_cast<u8>(i % 250);
         p.pan = static_cast<f32>(i % 21) / 10.f - 1.f;
-        const AudioHandle v = dev->play(h, p);
+        // Every handle can be in flight when the mixer thread is descheduled (a loaded CI machine):
+        // give it a chance to retire voices instead of counting on the scheduler.
+        AudioHandle v = dev->play(h, p);
+        for (u32 retry = 0; v.is_null() && retry < 1000; ++retry) {
+            std::this_thread::yield();
+            dev->update();
+            v = dev->play(h, p);
+        }
         if (!v.is_null()) ++played;
         if (i % 3 == 0) dev->stop(v);
         if (i % 5 == 0) dev->set_handle_gain(v, -6.f);
