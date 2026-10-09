@@ -30,6 +30,7 @@ const char* asset_type_name(asset::ChunkType type) {
         case asset::Prefab::chunk: return asset::Prefab::name;
         case asset::Tilemap::chunk: return asset::Tilemap::name;
         case asset::ParticlePreset::chunk: return asset::ParticlePreset::name;
+        case asset::Sequence::chunk: return asset::Sequence::name;
         default: return "";
     }
 }

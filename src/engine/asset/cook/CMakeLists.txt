@@ -23,6 +23,7 @@ mce_add_library(mce_asset_cook
         src/registry.cpp
         src/scene_importer.cpp
         src/scene_writer.cpp
+        src/sequence_importer.cpp
         src/string.cpp
         src/texture_importer.cpp
         src/tilemap_importer.cpp

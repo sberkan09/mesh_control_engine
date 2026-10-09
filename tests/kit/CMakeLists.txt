@@ -1,8 +1,9 @@
 # The gameplay starter kit's systems without a GPU: particles (FR-R2D-070) simulated, cooked from
-# .mcpart and drawn into a CPU-built sprite batch.
+# .mcpart and drawn into a CPU-built sprite batch; action-list sequences (FR-ENT-100).
 mce_add_test(test_kit
     SOURCES
         test_particles.cpp
+        test_sequence.cpp
     DEPS
         mce::mce_gameplay_kit
         mce::mce_scene

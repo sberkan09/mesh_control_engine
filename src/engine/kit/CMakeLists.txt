@@ -6,9 +6,13 @@
 mce_add_library(mce_gameplay_kit
     SOURCES
         src/particles.cpp
+        src/sequence.cpp
         src/sprite_extract.cpp
     PUBLIC_DEPS
         mce::mce_ecs
         mce::mce_refl
         mce::mce_asset
-        mce::mce_render)
+        mce::mce_render
+        mce::mce_ecs_scene
+        mce::mce_audio
+        mce::mce_physics2d)

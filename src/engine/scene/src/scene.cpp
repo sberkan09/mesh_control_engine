@@ -25,6 +25,7 @@ ecs::ComponentId component_for(World& world, const refl::TypeRecord& type) {
     ecs::ComponentInfo info;
     info.type_hash = type.type_hash;
     info.name = StringView(type.name);
+    info.refl_id = type.id.value;  // so prefab instantiation finds scene-registered components
     info.is_tag = type.fields.empty() && type.size == 1;  // MCE_COMPONENT(Tag): an empty struct
     info.size = info.is_tag ? 0u : type.size;
     info.align = type.align;

@@ -22,6 +22,7 @@ const char* chunk_type_name(ChunkType t) {
         case ChunkType::ParticlePreset: return "ParticlePreset";
         case ChunkType::StringTable: return "StringTable";
         case ChunkType::Tilemap: return "Tilemap";
+        case ChunkType::Sequence: return "Sequence";
     }
     return "ChunkType(?)";
 }
