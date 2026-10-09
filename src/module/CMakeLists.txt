@@ -23,7 +23,8 @@ target_include_directories(mce_module_host PUBLIC "${MCE_GENERATED_INCLUDE_DIR}"
 
 set(MCE_ENGINE_LIBS
     mce_core mce_refl mce_asset mce_ecs mce_physics2d mce_platform mce_input
-    mce_rhi ${MCE_RHI_BACKEND} mce_rhi_default mce_render mce_audio mce_scene mce_gameplay_kit mce_module_host)
+    mce_rhi ${MCE_RHI_BACKEND} mce_rhi_default mce_render mce_audio mce_scene mce_ecs_scene mce_gameplay_kit
+    mce_module_host)
 
 if(WIN32)
     set(MCE_GAME_MODULES_SUPPORTED OFF CACHE INTERNAL "")

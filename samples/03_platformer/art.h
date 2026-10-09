@@ -36,6 +36,9 @@ enum Layer : u32 {
     Cloud,
     Hill,
     Crate,
+    Crumble,     // cracked ember-stone block (X tiles)
+    Dot,         // soft round particle
+    PlayerDash,  // stretched pose
     LayerCount
 };
 

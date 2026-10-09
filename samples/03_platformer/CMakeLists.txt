@@ -16,14 +16,19 @@ if(MCE_GAME_MODULES_SUPPORTED)
     mce_apply_compile_policy(sample_03_platformer)
 else()
     mce_add_executable(sample_03_platformer SOURCES main.cpp art.cpp ${PLATFORMER_GAME_SOURCES}
-        DEPS mce::mce_ecs mce::mce_physics2d mce::mce_input mce::mce_audio mce::mce_platform mce::mce_render
+        DEPS mce::mce_ecs mce::mce_ecs_scene mce::mce_gameplay_kit mce::mce_physics2d mce::mce_input mce::mce_audio
+             mce::mce_platform mce::mce_render
              mce::mce_rhi_default)
 endif()
 target_include_directories(sample_03_platformer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../common")
 mce_sample_pack(sample_03_platformer)  # Kenney CC0 SFX (assets/sfx, CREDITS.md)
 
 if(MCE_BUILD_TESTS)
-    # Sample ladder rule: every sample runs 300 headless steps in CI.
+    # The v0.5 mechanics and flow against the real systems (the game sources linked statically).
+    mce_add_test(test_ember_step SOURCES tests/test_ember_step.cpp ${PLATFORMER_GAME_SOURCES}
+        DEPS mce::mce_ecs mce::mce_ecs_scene mce::mce_physics2d mce::mce_input mce::mce_audio)
+    target_include_directories(test_ember_step PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/game")
+        # Sample ladder rule: every sample runs 300 headless steps in CI.
     add_test(NAME sample_03_platformer_300 COMMAND sample_03_platformer -headless 1 -ticks 300)
     if(MCE_GAME_MODULES_SUPPORTED)
         # The module under the generic headless module host (scripting.md §6.5).
