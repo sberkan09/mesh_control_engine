@@ -125,12 +125,15 @@ struct Writer {
         return std::memcmp(p, def, usize(f.size) * f.count) == 0;
     }
 
-    void object(const refl::TypeRecord& type, const u8* p, const u8* def) {
+    // `mask` (top level only): exactly the fields whose bit is set (field index order), defaults
+    // included; null: the non-default fields.
+    void object(const refl::TypeRecord& type, const u8* p, const u8* def, const u64* mask = nullptr) {
         out += '{';
         bool first = true;
-        for (const refl::FieldRecord& f : type.fields) {
+        for (usize fi = 0; fi < type.fields.size(); ++fi) {
+            const refl::FieldRecord& f = type.fields[fi];
             if (f.has(refl::FieldFlags::Transient)) continue;
-            if (is_default(f, p + f.offset, def + f.offset)) continue;
+            if (mask ? fi >= 64 || ((*mask >> fi) & 1u) == 0 : is_default(f, p + f.offset, def + f.offset)) continue;
             out += first ? " " : ", ";
             first = false;
             append_json_string(out, f.name_str);
@@ -168,6 +171,15 @@ void write_scene_component(const refl::TypeRecord& type, const void* value, Stri
     if (type.construct_default) type.construct_default(def.data());
     Writer w{out, entity_index, user};
     w.object(type, static_cast<const u8*>(value), reinterpret_cast<const u8*>(def.data()));
+}
+
+void write_scene_component_fields(const refl::TypeRecord& type, const void* value, u64 field_mask, String& out,
+                                  SceneEntityIndexFn entity_index, void* user) {
+    Array<u64> def;
+    def.resize(type.size / 8 + 1, 0);
+    if (type.construct_default) type.construct_default(def.data());
+    Writer w{out, entity_index, user};
+    w.object(type, static_cast<const u8*>(value), reinterpret_cast<const u8*>(def.data()), &field_mask);
 }
 
 }  // namespace mce::cook

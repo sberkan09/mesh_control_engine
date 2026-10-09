@@ -31,6 +31,13 @@ using SceneEntityIndexFn = u32 (*)(const void* field, void* user);
 void write_scene_component(const refl::TypeRecord& type, const void* value, String& out, SceneEntityIndexFn entity_index,
                            void* user);
 
+// Appends exactly the fields of `value` whose bit is set in `field_mask` (bit i = type.fields[i];
+// Transient fields never), whether or not they hold the default. A prefab instance's overrides:
+// the cook writes them over the prefab root's values, so an override back to the C++ default
+// must still be written.
+void write_scene_component_fields(const refl::TypeRecord& type, const void* value, u64 field_mask, String& out,
+                                  SceneEntityIndexFn entity_index, void* user);
+
 // Shortest decimal that reads back as exactly `v` (as a float), JSON-safe (NaN/Inf write 0).
 void append_json_f32(String& out, f32 v);
 

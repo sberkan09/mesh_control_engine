@@ -49,7 +49,52 @@ void visit_entity_refs(const refl::TypeRecord& type, void* value, void (*fn)(Ent
 
 SceneDocument::SceneDocument() { reset("untitled"); }
 
+u64 all_fields_mask(const refl::TypeRecord& type) {
+    const usize n = type.fields.size() < 64 ? type.fields.size() : 64;
+    return n == 64 ? ~u64(0) : (u64(1) << n) - 1;
+}
+
+u64 changed_fields_mask(const refl::TypeRecord& type, const void* a, const void* b) {
+    const auto* pa = static_cast<const u8*>(a);
+    const auto* pb = static_cast<const u8*>(b);
+    u64 mask = 0;
+    for (usize i = 0; i < type.fields.size() && i < 64; ++i) {
+        const refl::FieldRecord& f = type.fields[i];
+        if (f.has(refl::FieldFlags::Transient)) continue;
+        if (std::memcmp(pa + f.offset, pb + f.offset, usize(f.size) * f.count) != 0) mask |= u64(1) << i;
+    }
+    return mask;
+}
+
+void copy_fields(const refl::TypeRecord& type, u64 mask, const void* src, void* dst) {
+    for (usize i = 0; i < type.fields.size() && i < 64; ++i) {
+        if (((mask >> i) & 1u) == 0) continue;
+        const refl::FieldRecord& f = type.fields[i];
+        std::memcpy(static_cast<u8*>(dst) + f.offset, static_cast<const u8*>(src) + f.offset, usize(f.size) * f.count);
+    }
+}
+
+namespace {
+bool holds_entity_ref(const refl::FieldRecord& f) {
+    if (f.kind == refl::FieldKind::EntityRef) return true;
+    if (f.kind != refl::FieldKind::Struct) return false;
+    const refl::TypeRecord* t = refl::find_type(f.type_id);
+    if (!t) return false;
+    for (const refl::FieldRecord& sub : t->fields)
+        if (holds_entity_ref(sub)) return true;
+    return false;
+}
+}  // namespace
+
+u64 entity_ref_fields_mask(const refl::TypeRecord& type) {
+    u64 mask = 0;
+    for (usize i = 0; i < type.fields.size() && i < 64; ++i)
+        if (holds_entity_ref(type.fields[i])) mask |= u64(1) << i;
+    return mask;
+}
+
 void SceneDocument::reset(StringView scene_name) {
+    kind_ = DocKind::Scene;
     guid_ = cook::generate_guid();
     name_.assign(scene_name);
     entities_.clear();
@@ -121,7 +166,7 @@ void SceneDocument::insert_entity(DocEntity&& e, usize at) {
 }
 
 bool SceneDocument::same_header(const SceneDocument& other) const {
-    return guid_ == other.guid_ && name_.view() == other.name_.view() && settings_ == other.settings_;
+    return kind_ == other.kind_ && guid_ == other.guid_ && name_.view() == other.name_.view() && settings_ == other.settings_;
 }
 
 bool SceneDocument::move(EntityId id, usize index) {
@@ -152,10 +197,11 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
         return false;
     }
     const cook::JsonValue fmt = root.get("format");
-    if (!fmt.is_string() || fmt.as_string() != "mce-scene") {
-        error(diags, file, fmt.valid() ? fmt : root, "\"format\" must be \"mce-scene\"");
+    if (!fmt.is_string() || (fmt.as_string() != "mce-scene" && fmt.as_string() != "mce-prefab")) {
+        error(diags, file, fmt.valid() ? fmt : root, "\"format\" must be \"mce-scene\" or \"mce-prefab\"");
         return false;
     }
+    kind_ = fmt.as_string() == "mce-prefab" ? DocKind::Prefab : DocKind::Scene;
     const cook::JsonValue ver = root.get("version");
     if (!ver.is_integer() || ver.as_number() < 1) {
         error(diags, file, ver.valid() ? ver : root, "\"version\" must be a positive integer");
@@ -231,6 +277,13 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
             cook::appendf(path, "entities[%u].", i);
             path += tname;
             cook::read_scene_component(*t, comps.at(c), dc->data(), count, file, path, diags);
+            // An instance overrides exactly the fields its file names.
+            if (!find(static_cast<EntityId>(i + 1))->prefab.is_null()) {
+                const cook::JsonValue obj = comps.at(c);
+                for (u32 k = 0; obj.is_object() && k < obj.size(); ++k)
+                    for (usize fi = 0; fi < t->fields.size() && fi < 64; ++fi)
+                        if (obj.key_at(k) == StringView(t->fields[fi].name_str)) dc->overrides |= u64(1) << fi;
+            }
         }
     }
     // Scene-local indices (first u32 of each EntityRef, CHNK_SCENE layout) -> document ids.
@@ -253,14 +306,14 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
 }
 
 void SceneDocument::serialize(cook::String& out) const {
-    out += "{\n  \"format\": \"mce-scene\",\n";
+    out += kind_ == DocKind::Prefab ? "{\n  \"format\": \"mce-prefab\",\n" : "{\n  \"format\": \"mce-scene\",\n";
     cook::appendf(out, "  \"version\": %u,\n", kFormatVersion);
     out += "  \"guid\": \"";
     out += asset::to_string(guid_).view();
     out += "\",\n  \"name\": ";
     cook::append_json_string(out, name_.view());
     out += ",\n";
-    if (!settings_.empty()) {
+    if (!settings_.empty() && kind_ == DocKind::Scene) {
         out += "  \"settings\": ";
         out += settings_.view();
         out += ",\n";
@@ -283,14 +336,17 @@ void SceneDocument::serialize(cook::String& out) const {
             out += c ? ",\n        " : "\n        ";
             cook::append_json_string(out, e.components[c].type->name);
             out += ": ";
-            cook::write_scene_component(*e.components[c].type, e.components[c].data(), out,
-                                        [](const void* field, void* user) {
-                                            Entity ref;
-                                            std::memcpy(&ref, field, sizeof(ref));
-                                            const i32 idx = static_cast<const Ctx*>(user)->doc->index_of(doc_entity_id(ref));
-                                            return idx < 0 ? cook::kNoSceneEntity : static_cast<u32>(idx);
-                                        },
-                                        &ctx);
+            const cook::SceneEntityIndexFn index_of_ref = [](const void* field, void* user) {
+                Entity ref;
+                std::memcpy(&ref, field, sizeof(ref));
+                const i32 idx = static_cast<const Ctx*>(user)->doc->index_of(doc_entity_id(ref));
+                return idx < 0 ? cook::kNoSceneEntity : static_cast<u32>(idx);
+            };
+            const DocComponent& dc = e.components[c];
+            if (e.prefab.is_null())
+                cook::write_scene_component(*dc.type, dc.data(), out, index_of_ref, &ctx);
+            else  // an instance: its overrides, nothing else (the rest is the prefab's)
+                cook::write_scene_component_fields(*dc.type, dc.data(), dc.overrides, out, index_of_ref, &ctx);
         }
         out += e.components.empty() ? "}\n    }" : "\n      }\n    }";
     }

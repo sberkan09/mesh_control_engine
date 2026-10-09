@@ -110,7 +110,9 @@ private:
                 ImGui::Selectable(label.c_str(), selected_ == a->guid, ImGuiSelectableFlags_AllowDoubleClick);
                 if (ImGui::IsItemClicked()) selected_ = a->guid;
                 if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                    if (asset_drop_kind(a->type) == AssetDrop::OpenScene) open_scene = a->guid;
+                    // A scene opens; so does a prefab, for editing the asset itself (FR-EDT-080).
+                    if (asset_drop_kind(a->type) == AssetDrop::OpenScene || a->type == asset::ChunkType::Prefab)
+                        open_scene = a->guid;
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s  %s\n%s", type, a->path.c_str(), asset::to_string(a->guid).c_str());
                 if (ImGui::BeginDragDropSource()) {
@@ -126,6 +128,7 @@ private:
                                         !shell.playing() && (kind == AssetDrop::Sprite || kind == AssetDrop::PrefabInstance)))
                         drop_asset(shell.scene(), *a, shell.camera().center);
                     if (ImGui::MenuItem("Open scene", nullptr, false, kind == AssetDrop::OpenScene)) open_scene = a->guid;
+                    if (kind == AssetDrop::PrefabInstance && ImGui::MenuItem("Open prefab")) open_scene = a->guid;
                     if (ImGui::MenuItem("Copy GUID")) ImGui::SetClipboardText(asset::to_string(a->guid).c_str());
                     ImGui::EndPopup();
                 }

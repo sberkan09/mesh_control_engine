@@ -32,6 +32,34 @@ void EditorSession::set_preview(PreviewRenderer* preview) {
 void EditorSession::attach_preview() {
     if (preview_) preview_->set_assets(project_.mounted());
     scene_.set_assets(project_.mounted());  // prefab instances draw their content
+    scene_.set_prefab_apply([](void* user, asset::Guid prefab, const DocComponent& value, u64 fields) {
+        return static_cast<EditorSession*>(user)->apply_to_prefab(prefab, value, fields);
+    }, this);
+}
+
+Result<void> EditorSession::apply_to_prefab(asset::Guid prefab, const DocComponent& value, u64 fields) {
+    const ProjectAsset* a = project_.is_open() ? project_.find(prefab) : nullptr;
+    if (!a) return Error(Errc::NotFound, "editor.prefab_apply", "the prefab is not in the open project");
+    const cook::String rel(a->path);
+    const cook::String abs = project_.asset_path(rel.view());
+    cook::String text;
+    if (!cook::fs::read_text(abs.view(), text)) return Error(Errc::IoError, "editor.prefab_apply", abs.view());
+    SceneDocument doc;
+    cook::DiagList diags;
+    if (!doc.parse(text.view(), abs.view(), diags) || doc.kind() != DocKind::Prefab || doc.size() == 0) {
+        log_diags(diags);
+        return Error(Errc::ParseError, "editor.prefab_apply", abs.view());
+    }
+    // The prefab root takes the values; a root that is itself an instance overrides them.
+    const EntityId root = doc.at(0).id;
+    DocComponent* dst = doc.add_component(root, *value.type);
+    copy_fields(*value.type, fields, value.data(), dst->data());
+    if (!doc.at(0).prefab.is_null()) dst->overrides |= fields;
+    cook::String out;
+    doc.serialize(out);
+    MCE_TRY(write_asset(rel.view(), out.view()));  // re-cooks the prefab and refreshes the ghosts
+    MCE_LOG_INFO("editor: applied {} to prefab {}", value.type->name, rel.view());
+    return ok();
 }
 
 Result<void> EditorSession::open_project(StringView root) {

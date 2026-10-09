@@ -422,6 +422,10 @@ void EditorShell::draw_popups() {
         Array<const ProjectAsset*> scenes;
         session_.list_scenes(scenes);
         if (scenes.empty()) ImGui::TextDisabled("No .mcscene files under assets/ yet.");
+        // Prefab assets open the same way (FR-EDT-080): entity 0 is the root; saving re-cooks
+        // every scene that uses it.
+        for (const ProjectAsset& a : session_.project().assets())
+            if (a.type == asset::ChunkType::Prefab) scenes.push_back(&a);
         for (const ProjectAsset* a : scenes) {
             if (ImGui::Selectable(a->path.c_str(), false, ImGuiSelectableFlags_NoAutoClosePopups)) {
                 if (scene().dirty()) {
@@ -444,14 +448,17 @@ void EditorShell::draw_popups() {
     if (ImGui::BeginPopupModal("Save Scene As", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextUnformatted("Path relative to assets/:");
         if (ImGui::IsWindowAppearing()) {
-            if (save_as_buf_[0] == 0) std::snprintf(save_as_buf_, sizeof(save_as_buf_), "scenes/untitled.mcscene");
+            if (save_as_buf_[0] == 0)
+                std::snprintf(save_as_buf_, sizeof(save_as_buf_), "%s",
+                              scene().doc().kind() == DocKind::Prefab ? "prefabs/untitled.mcprefab" : "scenes/untitled.mcscene");
             ImGui::SetKeyboardFocusHere();
         }
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 24.0f);
         const bool enter = ImGui::InputText("##path", save_as_buf_, sizeof(save_as_buf_), ImGuiInputTextFlags_EnterReturnsTrue);
         const StringView path(save_as_buf_);
-        const bool valid = path.size() > 8 && path.substr(path.size() - 8) == ".mcscene";
-        if (!valid) ImGui::TextColored(ImVec4(1, 0.6f, 0.4f, 1), "The file must end in .mcscene");
+        const StringView ext = scene().doc().kind() == DocKind::Prefab ? StringView(".mcprefab") : StringView(".mcscene");
+        const bool valid = path.size() > ext.size() && path.substr(path.size() - ext.size()) == ext;
+        if (!valid) ImGui::TextColored(ImVec4(1, 0.6f, 0.4f, 1), "The file must end in %.*s", static_cast<int>(ext.size()), ext.data());
         ImGui::BeginDisabled(!valid);
         if (ImGui::Button("Save") || (enter && valid)) {
             if (Result<void> r = session_.save_scene_as(path); !r) {

@@ -37,6 +37,18 @@ public:
     virtual void read_only(const char* label, StringView text) = 0;
     virtual void help(const char* text) = 0;  // tooltip for the previous widget
 
+    // Prefab instances (FR-EDT-080). Called before each top-level field of an instance's
+    // component: whether the instance overrides it (else it shows the prefab's value).
+    virtual void override_mark(bool overridden) { (void)overridden; }
+    // In an instance's component (not its placement): offers "revert to the prefab" (when there
+    // is something of its own) and "apply to the prefab" (when there is something to apply).
+    enum class OverrideAction : u8 { None, Revert, Apply };
+    virtual OverrideAction override_actions(bool can_revert, bool can_apply) {
+        (void)can_revert;
+        (void)can_apply;
+        return OverrideAction::None;
+    }
+
     // Offers the components the entity does not have yet; returns the chosen one or null.
     virtual const refl::TypeRecord* add_component_menu(Span<const refl::TypeRecord* const> addable) = 0;
 };

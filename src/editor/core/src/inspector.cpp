@@ -1,5 +1,7 @@
 #include "mce/editor/inspector.h"
 #include "mce/asset/handle.h"
+#include "mce/ecs/transform.h"
+#include "mce/log.h"
 
 #include <cmath>
 #include <cstdio>
@@ -255,10 +257,14 @@ struct FieldDrawer {
         return changed;
     }
 
-    bool fields(const refl::TypeRecord& type, u8* value) {
+    // `overrides` (a prefab instance's component, top level only): marks each field overridden
+    // or inherited before drawing it.
+    bool fields(const refl::TypeRecord& type, u8* value, const u64* overrides = nullptr) {
         bool changed = false;
-        for (const refl::FieldRecord& f : type.fields) {
+        for (usize fi = 0; fi < type.fields.size(); ++fi) {
+            const refl::FieldRecord& f = type.fields[fi];
             if (f.has(refl::FieldFlags::Transient)) continue;  // runtime-only: not authored
+            if (overrides) ui.override_mark(fi < 64 && ((*overrides >> fi) & 1u) != 0);
             if (f.count > 1) {
                 if (ui.begin_group(f.name_str, false)) {
                     for (u32 i = 0; i < f.count; ++i) {
@@ -294,9 +300,21 @@ bool draw_inspector(DrawCtx& ui, EditorScene& scene, EntityId id) {
     std::memcpy(name, e->name.view().data(), n);
     name[n] = 0;
     if (ui.text_field("Name", name, sizeof(name))) changed |= scene.rename_entity(id, name);
-    if (!e->prefab.is_null()) {
+    const bool instance = !e->prefab.is_null();
+    if (instance) {
         ui.read_only("Prefab", asset::to_string(e->prefab).view());
-        ui.help("Prefab instance: the cook expands the prefab here; the components below override its root.");
+        ui.help("Prefab instance: the cook expands the prefab here. Fields you edit override the prefab root; "
+                "the rest follow the prefab.");
+        // The root's components this instance does not carry: inherited as they are.
+        Array<const DocComponent*> base;
+        scene.prefab_base_components(id, base);
+        FixedString<256> inherited;
+        for (const DocComponent* b : base) {
+            if (e->find(*b->type)) continue;
+            if (!inherited.empty()) inherited.append(", ");
+            inherited.append(b->type->name);
+        }
+        if (!inherited.empty()) ui.read_only("Inherited", inherited.view());
     }
 
     // Draw over a copy of each component; commit the copy when a widget changed it. The entity
@@ -313,12 +331,31 @@ bool draw_inspector(DrawCtx& ui, EditorScene& scene, EntityId id) {
         bool remove = false;
         const bool open = ui.begin_component(type.name, &remove);
         bool edited = false;
+        DrawCtx::OverrideAction action = DrawCtx::OverrideAction::None;
         if (open) {
+            const u64 overrides = c.overrides;
+            if (instance && &type != &refl::type_of<LocalTransform>())
+                action = ui.override_actions(overrides != 0 || !scene.prefab_base(id, type),
+                                             (overrides & ~entity_ref_fields_mask(type)) != 0);
             FieldDrawer d{ui, scene};
-            edited = d.fields(type, reinterpret_cast<u8*>(copy.data()));
+            edited = d.fields(type, reinterpret_cast<u8*>(copy.data()), instance ? &overrides : nullptr);
             ui.end_component();
         }
         if (edited) changed |= scene.set_component(id, type, copy.data());
+        if (action == DrawCtx::OverrideAction::Revert) {
+            changed |= scene.revert_override(id, type);
+            break;  // the component may be gone; the next frame draws the rest
+        }
+        if (action == DrawCtx::OverrideAction::Apply) {
+            if (Result<void> r = scene.apply_override(id, type); !r) {
+                FixedString<512> msg;
+                format_error(r.error(), msg);
+                MCE_LOG_WARN("inspector: apply to prefab failed: {}", msg.c_str());
+            } else {
+                changed = true;
+            }
+            break;
+        }
         if (remove) {
             changed |= scene.remove_component(id, type);
             break;  // indices shifted; the next frame draws the rest

@@ -93,8 +93,8 @@ public:
 
     // ---- commands (the only writers) ----
     EntityId create_entity(StringView name, bool with_transform = true, i32 at = -1);
-    // An instance of the prefab `prefab` (the cook expands it here; its components override the
-    // prefab root). With a LocalTransform.
+    // An instance of the prefab `prefab` (the cook expands it here; its overridden fields are
+    // written over the prefab root). With a LocalTransform, which is always its own.
     EntityId create_prefab_instance(StringView name, asset::Guid prefab, i32 at = -1);
     bool destroy_entity(EntityId id);
     bool rename_entity(EntityId id, StringView name);
@@ -103,6 +103,29 @@ public:
     bool remove_component(EntityId id, const refl::TypeRecord& type);
     // Replaces the whole component value (inspector / gizmo commit). No-op when unchanged.
     bool set_component(EntityId id, const refl::TypeRecord& type, const void* value);
+    // ---- prefab overrides (FR-EDT-080) ----
+    // An instance's component overrides the prefab root field by field: set_component marks the
+    // fields it changes (DocComponent::overrides); the rest show the prefab's values.
+    // The prefab root's value of `type` as this instance inherits it (null: the root lacks it, or
+    // the prefab is not mounted). References inside the prefab read as null.
+    const DocComponent* prefab_base(EntityId id, const refl::TypeRecord& type) const;
+    void prefab_base_components(EntityId id, Array<const DocComponent*>& out) const;
+    // Drops the overrides in `fields` (all by default): they take the prefab's values again. A
+    // component left with no override, or one the prefab root does not have, is removed from
+    // the instance. One undo entry. The placement (LocalTransform) always stays the instance's.
+    bool revert_override(EntityId id, const refl::TypeRecord& type, u64 fields = ~u64(0));
+    // Writes the instance's overrides of `type` into the prefab asset (through the hook the
+    // session installs: it edits the .mcprefab root, saves it and hot-reloads), after which they
+    // are the prefab's values and no longer overrides. Every instance of the prefab sees them.
+    // EntityRef fields stay overrides (they name this scene's entities). The prefab file is not
+    // part of the undo history; the instance side is.
+    Result<void> apply_override(EntityId id, const refl::TypeRecord& type);
+    using PrefabApplyFn = Result<void> (*)(void* user, asset::Guid prefab, const DocComponent& value, u64 fields);
+    void set_prefab_apply(PrefabApplyFn fn, void* user) {
+        apply_fn_ = fn;
+        apply_user_ = user;
+    }
+
     // ---- clipboard (FR-EDT-030 copy/paste) ----
     // Writes `ids` (in document order) as a .mcscene text: the system clipboard format.
     // References between copied entities survive; references to anything else become null.
@@ -206,6 +229,13 @@ private:
     void sync_prefab_ghosts();
     asset::AssetSystem* assets_ = nullptr;
     Array<Entity> ghosts_;
+    struct PrefabBase {
+        EntityId id = kNoEntity;
+        Array<DocComponent> components;  // the prefab root's values, refs nulled
+    };
+    Array<PrefabBase> bases_;  // one per mounted instance, rebuilt with the ghosts
+    PrefabApplyFn apply_fn_ = nullptr;
+    void* apply_user_ = nullptr;
 
     SceneDocument doc_;
     mem::UniquePtr<World> world_;

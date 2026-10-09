@@ -30,6 +30,8 @@ public:
     bool entity_field(const char* label, EntityId* id) override;
     void read_only(const char* label, StringView text) override;
     void help(const char* text) override;
+    void override_mark(bool overridden) override;
+    OverrideAction override_actions(bool can_revert, bool can_apply) override;
     const refl::TypeRecord* add_component_menu(Span<const refl::TypeRecord* const> addable) override;
 
 private:
