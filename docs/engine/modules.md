@@ -53,12 +53,14 @@ not part of it.
 `src/player/include/mce/player/player.h`:
 
 - `PlayerDesc`: app name, window title, pack and module file names (looked up beside the
-  executable) with build-tree fallbacks, and `static_module` for platforms without modules.
+  executable) with build-tree fallbacks, `static_module` for platforms without modules, and
+  `start_scene` (a project host passes its `.mceproj` `start_scene`, which `mce_add_project` reads
+  at configure time into `MCE_PROJECT_START_SCENE`).
 - `run(argc, argv, desc)`: parses the command line into convars and runs headless or windowed.
   `src/player/main.cpp` is `return mce::player::run(argc, argv);`.
 
 What `run` does (`src/player/src/player.cpp`): mounts the pack, picks the scene (`-scene` GUID or
-source path, else the first scene), installs the `InputState` resource (`input::install`),
+source path, else `PlayerDesc::start_scene`, else the first scene by path), installs the `InputState` resource (`input::install`),
 `physics2d`, the audio bridge, particles and sequences, installs the game (static module, or
 `-module` / `PlayerDesc::module`), then `scene::load`. It draws the kit components, offers the Esc
 pause overlay and the developer console (backtick or F1), pauses and mutes on focus loss, loads and

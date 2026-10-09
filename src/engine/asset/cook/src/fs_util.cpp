@@ -23,6 +23,12 @@ bool exists(StringView path) {
     return stdfs::exists(to_path(path), ec);
 }
 
+String absolute(StringView path) {
+    std::error_code ec;
+    const stdfs::path p = stdfs::absolute(to_path(path), ec);
+    return ec ? String(path) : from_path(p.lexically_normal());
+}
+
 bool is_directory(StringView path) {
     std::error_code ec;
     return stdfs::is_directory(to_path(path), ec);

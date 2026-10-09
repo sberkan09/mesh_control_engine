@@ -93,7 +93,10 @@ public:
         if (pack.empty()) return Error(Errc::InvalidArgument, "mce_player: -pack <path> is required");
         const StringView roots[1] = {pack.view()};
         MCE_TRY(assets_.mount(Span<const StringView>(roots, 1)));
-        MCE_TRY_ASSIGN(const asset::Guid scene, pick_scene(cv_scene.get_string()));
+        const StringView want_scene = !cv_scene.get_string().empty() ? cv_scene.get_string()
+                                      : desc_.start_scene                ? StringView(desc_.start_scene)
+                                                                         : StringView();
+        MCE_TRY_ASSIGN(const asset::Guid scene, pick_scene(want_scene));
 
         input::install(world_);
         physics::install_physics2d(world_);

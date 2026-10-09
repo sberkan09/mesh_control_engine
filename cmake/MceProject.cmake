@@ -39,6 +39,20 @@ function(mce_add_project game)
                                                mce::mce_ecs_scene)
     mce_apply_compile_policy(${game}_cook)
 
+    # The start scene the host plays when -scene is not given: <name>.mceproj's start_scene
+    # (re-read when the file changes).
+    set(start_scene "")
+    file(GLOB mceproj "${src}/*.mceproj")
+    if(mceproj)
+        list(GET mceproj 0 mceproj)
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${mceproj}")
+        file(READ "${mceproj}" mceproj_text)
+        string(JSON start_scene ERROR_VARIABLE start_scene_error GET "${mceproj_text}" start_scene)
+        if(start_scene_error)
+            set(start_scene "")
+        endif()
+    endif()
+
     # Content: the committed assets/ tree cooked into a shipping pack at build time.
     set(project_dir "${CMAKE_CURRENT_BINARY_DIR}/project")
     set(pack "${project_dir}/assets.mce")
@@ -69,7 +83,7 @@ function(mce_add_project game)
     endif()
     target_link_libraries(${game} PRIVATE mce::mce_player_runtime)
     target_compile_definitions(${game} PRIVATE MCE_PROJECT_NAME="${game}" MCE_PROJECT_TITLE="${ARG_TITLE}"
-                                               MCE_PROJECT_PACK="${pack}")
+                                               MCE_PROJECT_PACK="${pack}" MCE_PROJECT_START_SCENE="${start_scene}")
     add_dependencies(${game} ${game}_content)
     set_target_properties(${game} PROPERTIES MCE_SAMPLE_PACK "${pack}")
     mce_apply_compile_policy(${game})
