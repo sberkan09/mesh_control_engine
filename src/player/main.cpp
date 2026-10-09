@@ -6,6 +6,12 @@
 //
 // Without -scene the first Scene asset of the pack (by source path) plays. F7 toggles 2D post. Controls: Esc pauses
 // and resumes (the pause overlay), Q quits while paused.
+//
+// Lifecycle (FR-RUN-060): losing focus or minimizing pauses the sim (the pause overlay is up when the player comes
+// back, so nothing moves before they choose to resume) and mutes the master bus until focus returns. With
+// -save <slot>, a save of that name is loaded on top of the scene at start and written on every clean quit (window
+// close, Q, -frames / -ticks reached) before anything shuts down; the write is atomic with a .bak, so a kill during
+// it keeps the last good save (ecs/save.h).
 
 #include <cstdio>
 
@@ -13,6 +19,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/audio/components.h"
 #include "mce/core.h"
+#include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
@@ -36,6 +43,11 @@ MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window 
 MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this .ppm path", CVarFlags::None);
 MCE_CVAR(cv_ticks, "ticks", 600, "Headless: ticks to simulate", CVarFlags::None);
 MCE_CVAR(cv_post, "r.post2d", true, "Apply the camera's Post2DComponent effects (F7 toggles)", CVarFlags::None);
+MCE_CVAR(cv_pause_on_focus_loss, "pause_on_focus_loss", true, "Pause and mute when the window loses focus or minimizes",
+         CVarFlags::None);
+MCE_CVAR(cv_save, "save", "", "Save slot: loaded at start when it exists, written on clean quit (empty = off)",
+         CVarFlags::None);
+MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the per-user MCE save folder)", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 
 int fail(const char* what, const Error& e) {
@@ -76,11 +88,21 @@ public:
         MCE_TRY(scene::load(world_, assets_, scene, &entities_));
         MCE_LOG_INFO("mce_player: scene {} ({}) with {} entities", asset::to_string(scene).view(), scene_path_.view(),
                      entities_.size());
+        scene_guid_ = scene;
+        if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());
+        if (const StringView slot = cv_save.get_string(); !slot.empty() && save::exists(slot)) {
+            save::SaveInfo info;
+            MCE_TRY_ASSIGN(const save::LoadStats st, save::load_game(world_, slot, &info));
+            sim_ticks_ = info.tick;
+            std::printf("mce_player: save '%.*s' loaded (%u entities, tick %llu)\n", static_cast<int>(slot.size()), slot.data(),
+                        st.entities, static_cast<unsigned long long>(info.tick));
+        }
         return ok();
     }
 
     void on_tick(const app::TickContext& t) override {
         if (paused_) return;
+        tick_dt_ = t.dt;
         world_.tick(t.dt, sim_ticks_);
         ++sim_ticks_;
         if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
@@ -145,6 +167,22 @@ public:
     }
 
     void on_shutdown() override {
+        // A clean quit flushes the save before anything is torn down (FR-RUN-060).
+        if (const StringView slot = cv_save.get_string(); !slot.empty()) {
+            save::SaveInfo info;
+            info.scene = scene_guid_;
+            info.tick = sim_ticks_;
+            info.playtime = static_cast<f64>(sim_ticks_) * tick_dt_;
+            if (Result<void> r = save::save_game(world_, slot, info); !r) {
+                FixedString<512> why;
+                format_error(r.error(), why);
+                MCE_LOG_ERROR("mce_player: save '{}' failed: {}", slot, why.view());
+            } else {
+                std::printf("mce_player: save '%.*s' written (tick %llu)\n", static_cast<int>(slot.size()), slot.data(),
+                            static_cast<unsigned long long>(sim_ticks_));
+            }
+        }
+        set_muted(false);
         if (window_) window_->set_event_handler(nullptr, nullptr);
         if (device_ && !post_target_.is_null()) device_->destroy_texture(post_target_);
         clips_.release_all();
@@ -231,8 +269,34 @@ private:
         MCE_LOG_INFO("mce_player: wrote {}", path);
     }
 
+    // Unfocused / minimized: pause (the overlay waits for the player) and mute the master bus.
+    void set_background(bool background) {
+        if (!cv_pause_on_focus_loss.get_bool() || background == background_) return;
+        background_ = background;
+        if (background) paused_ = true;
+        set_muted(background);
+    }
+
+    void set_muted(bool muted) {
+        if (muted == muted_) return;
+        muted_ = muted;
+        if (muted) {
+            master_db_ = audio_.bus_gain_db(audio::Bus_Master);
+            audio_.set_bus_gain(audio::Bus_Master, -80.0f);
+        } else {
+            audio_.set_bus_gain(audio::Bus_Master, master_db_);
+        }
+    }
+
     static void on_event(const platform::Event& e, void* user) {
         auto* self = static_cast<PlayerApp*>(user);
+        switch (e.type) {
+            case platform::EventType::FocusOut:
+            case platform::EventType::Minimized: self->set_background(true); return;
+            case platform::EventType::FocusIn:
+            case platform::EventType::Restored: self->set_background(false); return;
+            default: break;
+        }
         if (e.type != platform::EventType::KeyDown) return;
         switch (static_cast<platform::Key>(e.code)) {
             case platform::Key::Escape: self->paused_ = !self->paused_; break;
@@ -258,6 +322,11 @@ private:
     FixedString<256> scene_path_;
     u64 sim_ticks_ = 0;
     bool paused_ = false;
+    bool background_ = false;  // unfocused or minimized
+    bool muted_ = false;
+    f32 master_db_ = 0.0f;     // the master gain to restore when focus returns
+    f64 tick_dt_ = 1.0 / 60.0;
+    asset::Guid scene_guid_;
     rhi::TextureHandle post_target_;
     rhi::Extent2D post_size_;
 };
