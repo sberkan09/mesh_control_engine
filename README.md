@@ -2,6 +2,8 @@
 
 A from-scratch 2D/3D game engine with an integrated editor. The design lives in `docs/`:
 [REQUIREMENTS](docs/REQUIREMENTS.md), [ARCHITECTURE](docs/ARCHITECTURE.md), [ROADMAP](docs/ROADMAP.md).
+Making a game with it starts at the [user guide](docs/user-guide/README.md); the per-subsystem reference is
+[`docs/engine/`](docs/engine/README.md).
 
 ## Build
 
