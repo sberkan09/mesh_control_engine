@@ -11,8 +11,13 @@ What a zip holds (one folder, double-click the executable):
     <module>            the game module next to it, when the artifact has one
     assets.mce          the cooked shipping pack (mce_cook --pack; CRC-verified once at mount)
     CREDITS.md          content attribution (CC0 Kenney packs)
-    VERSION.txt         version, engine commit, build preset, file hashes
+    VERSION.txt         version, engine commit, build preset, file hashes, build ids
     README.txt          how to run it
+
+Beside the zip, never inside it: <stem>-symbols.zip, the debug info of every shipped binary
+(Linux: objcopy --only-keep-debug files under .build-id/, the shipped copies stripped; Windows:
+the PDBs). A crash report from the field (mce/crash.h) resolves against it with
+scripts/symbolicate.py <report> --symbols <unzipped symbols folder>.
 
 The build uses the given CMake preset (default: the platform's release preset); the cook runs as
 part of the build (mce_sample_pack in samples/CMakeLists.txt). Exit code 0 = zip written.
@@ -155,14 +160,24 @@ def ship(art, args):
         files[os.path.basename(engine)] = engine
     for name, src in files.items():
         shutil.copy2(src, os.path.join(stage, name))
+    binaries = [art["name"] + EXE] + [n for n in files if n.endswith(MODULE_SUFFIX)]
+    symbols = os.path.join(args.out, stem + "-symbols")
+    shutil.rmtree(symbols, ignore_errors=True)
+    build_ids = {}
     if os.name != "nt":
         os.chmod(os.path.join(stage, art["name"] + EXE), 0o755)
+        for name in binaries:
+            bid = elf_build_id(os.path.join(stage, name))
+            if bid:
+                build_ids[name] = bid
         if not args.keep_symbols:
+            archive_symbols_elf(stage, binaries, build_ids, symbols)
             strip = shutil.which("strip")
             if strip:
-                subprocess.run([strip, "--strip-unneeded", os.path.join(stage, art["name"] + EXE)], check=True)
-                for lib in [n for n in files if n.endswith(MODULE_SUFFIX)]:
-                    subprocess.run([strip, "--strip-unneeded", os.path.join(stage, lib)], check=True)
+                for name in binaries:
+                    subprocess.run([strip, "--strip-unneeded", os.path.join(stage, name)], check=True)
+    else:
+        archive_symbols_pdb(files, binaries, symbols)
     check_self_contained(stage)
 
     commit = git("rev-parse", "HEAD") or "unknown"
@@ -180,6 +195,8 @@ def ship(art, args):
         f.write(f"preset {args.preset}\nplatform {os_tag()}\nbuilt {datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')}\n")
         for name, h in hashes.items():
             f.write(f"sha256 {h}  {name}\n")
+        for name, bid in sorted(build_ids.items()):
+            f.write(f"build_id {bid}  {name}\n")
 
     zip_path = os.path.join(args.out, stem + ".zip")
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
@@ -190,9 +207,55 @@ def ship(art, args):
                 z.writestr(info, src.read())
     size = os.path.getsize(zip_path)
     print(f"ship: {zip_path} ({size / 1024:.0f} KiB, sha256 {sha256(zip_path)[:16]}...)")
+    if os.path.isdir(symbols):
+        sym_zip = symbols + ".zip"
+        with zipfile.ZipFile(sym_zip, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+            for root, _, names in os.walk(symbols):
+                for name in sorted(names):
+                    full = os.path.join(root, name)
+                    z.write(full, arcname=os.path.join(stem + "-symbols", os.path.relpath(full, symbols)))
+        print(f"ship: {sym_zip} (symbols, keep it; never ship it)")
     if args.smoke:
         smoke(stage, art, args)
     return zip_path
+
+
+def elf_build_id(path):
+    """The GNU build id of an ELF file (readelf -n), or None."""
+    readelf = shutil.which("readelf")
+    if not readelf:
+        return None
+    out = subprocess.run([readelf, "-n", path], capture_output=True, text=True).stdout
+    m = re.search(r"Build ID: ([0-9a-f]+)", out)
+    return m.group(1) if m else None
+
+
+def archive_symbols_elf(stage, binaries, build_ids, symbols):
+    """Linux: the debug info of each shipped binary, as .build-id/ab/cdef....debug (gdb's layout)."""
+    objcopy = shutil.which("objcopy")
+    if not objcopy:
+        print("ship: objcopy not found, no symbol archive", flush=True)
+        return
+    for name in binaries:
+        bid = build_ids.get(name)
+        if not bid:
+            print(f"ship: {name} has no build id, its symbols are not archived", flush=True)
+            continue
+        dest = os.path.join(symbols, ".build-id", bid[:2], bid[2:] + ".debug")
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        subprocess.run([objcopy, "--only-keep-debug", os.path.join(stage, name), dest], check=True)
+    with open(os.path.join(symbols, "INDEX.txt"), "w", newline="\n") as f:
+        for name, bid in sorted(build_ids.items()):
+            f.write(f"{bid}  {name}\n")
+
+
+def archive_symbols_pdb(files, binaries, symbols):
+    """Windows: the PDB next to each shipped binary's build output, renamed with it."""
+    for name in binaries:
+        pdb = os.path.splitext(files.get(name, ""))[0] + ".pdb"
+        if os.path.isfile(pdb):
+            os.makedirs(symbols, exist_ok=True)
+            shutil.copy2(pdb, os.path.join(symbols, os.path.basename(pdb)))
 
 
 def check_self_contained(stage):

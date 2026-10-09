@@ -10,6 +10,7 @@
 #include "mce/containers/mpsc_queue.h"
 #include "mce/containers/ring_buffer.h"
 #include "mce/convar.h"
+#include "mce/crash.h"
 #include "mce/fixed_string.h"
 #include "mce/hash.h"
 #include "mce/jobs.h"
@@ -24,3 +25,4 @@
 #include "mce/string_id.h"
 #include "mce/type_name.h"
 #include "mce/types.h"
+#include "mce/version.h"

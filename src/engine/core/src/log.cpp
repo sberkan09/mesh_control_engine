@@ -93,4 +93,13 @@ void visit_breadcrumbs(BreadcrumbFn fn, void* user) {
     for (u64 i = r.crumb_count - count; i < r.crumb_count; ++i) fn(r.crumbs[i % kBreadcrumbCount], user);
 }
 
+bool try_visit_breadcrumbs(BreadcrumbFn fn, void* user) {
+    Rings& r = rings();
+    std::unique_lock<std::mutex> lock(r.mutex, std::try_to_lock);
+    if (!lock.owns_lock()) return false;
+    const u64 count = r.crumb_count < kBreadcrumbCount ? r.crumb_count : kBreadcrumbCount;
+    for (u64 i = r.crumb_count - count; i < r.crumb_count; ++i) fn(r.crumbs[i % kBreadcrumbCount], user);
+    return true;
+}
+
 }  // namespace mce::log

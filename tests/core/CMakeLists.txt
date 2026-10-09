@@ -3,6 +3,7 @@ mce_add_test(test_core
         test_app.cpp
         test_containers.cpp
         test_convar.cpp
+        test_crash.cpp
         test_hash.cpp
         test_math.cpp
         test_memory.cpp
