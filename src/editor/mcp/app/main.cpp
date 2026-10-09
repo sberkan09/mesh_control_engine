@@ -46,11 +46,16 @@ void send_line(StringView message, void* user) {
     std::fflush(out);
 }
 
-int usage() {
-    std::fprintf(stderr,
+int usage(std::FILE* out = stderr, int rc = 2) {
+    std::fprintf(out,
                  "usage: mce_mcp --project <dir> [--scene <path under assets/>] [--allow-cheats]\n"
-                 "  Model Context Protocol server for the MCE editor (JSON-RPC 2.0 over stdio).\n");
-    return 2;
+                 "  Model Context Protocol server for the MCE editor (JSON-RPC 2.0 over stdio): an MCP host\n"
+                 "  spawns it and authors the project's scenes through its tools (tools/list describes them).\n"
+                 "  --project <dir>   the project folder (holds <name>.mceproj and assets/)\n"
+                 "  --scene <path>    open this scene (under assets/) at start; default: the project's first scene\n"
+                 "  --allow-cheats    let console_exec set Cheat and RequiresRestart convars\n"
+                 "  --help            this text\n");
+    return rc;
 }
 
 }  // namespace
@@ -63,6 +68,7 @@ int main(int argc, char** argv) {
         if (a == "--project" && i + 1 < argc) project = argv[++i];
         else if (a == "--scene" && i + 1 < argc) scene = argv[++i];
         else if (a == "--allow-cheats") opt.allow_cheats = true;
+        else if (a == "--help" || a == "-h" || a == "-help") return usage(stdout, 0);
         else return usage();
     }
 

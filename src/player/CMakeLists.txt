@@ -23,6 +23,12 @@ mce_apply_compile_policy(mce_player_runtime)
 
 mce_add_executable(mce_player SOURCES main.cpp DEPS mce::mce_player_runtime)
 
+if(MCE_BUILD_TESTS)
+    # -help prints the command-line reference (every convar) and exits 0, before any pack is needed.
+    add_test(NAME player_help COMMAND mce_player -help)
+    set_tests_properties(player_help PROPERTIES PASS_REGULAR_EXPRESSION "usage: mce_player.*-capture_tick <int>.*-pack <string>")
+endif()
+
 # Packaging v2: -crash_test writes a crash report that scripts/symbolicate.py resolves against the
 # build tree (not under ASan, whose own SEGV report takes over; not on Windows, where the report is
 # a minidump read by the debugger).

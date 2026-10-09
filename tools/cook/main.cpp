@@ -13,15 +13,17 @@
 
 namespace {
 
-int usage() {
+int usage(std::FILE* out = stderr, int rc = 2) {
     std::fputs(
         "usage: mce_cook <project-dir> [--pack] [--force] [--adopt] [--quiet]\n"
+        "  Cooks <project-dir>/assets into <project-dir>/cooked (incremental: the cook DB skips what is up to date).\n"
         "  --pack    also write <project-dir>/assets.mce (shipping pack)\n"
         "  --force   ignore the cook DB and re-cook every asset\n"
         "  --adopt   create .mceasset sidecars for unregistered sources\n"
-        "  --quiet   print errors and the summary only\n",
-        stderr);
-    return 2;
+        "  --quiet   print errors and the summary only\n"
+        "  --help    this text\n",
+        out);
+    return rc;
 }
 
 const char* status_name(mce::cook::AssetStatus s) {
@@ -47,7 +49,7 @@ int main(int argc, char** argv) {
         else if (a == "--force") opt.force = true;
         else if (a == "--adopt") opt.adopt = true;
         else if (a == "--quiet") quiet = true;
-        else if (a == "--help" || a == "-h") return usage();
+        else if (a == "--help" || a == "-h" || a == "-help") return usage(stdout, 0);
         else if (!a.empty() && a[0] == '-') return usage();
         else if (!project) project = argv[i];
         else return usage();

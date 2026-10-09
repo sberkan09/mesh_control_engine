@@ -64,8 +64,10 @@ Errors, logging and asserts
 Configuration
 - `mce/convar.h`: `ConVar` (bool/int/float/string, flags `Cheat`, `Saved`, `ReadOnly`, `RequiresRestart`),
   `ConFunc`, `MCE_CVAR`, `MCE_CONFUNC`; `console::execute`, `console::parse_command_line` (`-name value`,
-  `+func args`), and the cheat lock `console::set_cheats_allowed` / `cheats_allowed`. Core itself registers
-  `time_scale` (Cheat), `sim.max_catchup`, `headless` and `r.vsync` in `src/app.cpp`.
+  `+func args`; `-help` / `--help` / `-h` sets the `help` convar, `console::help_requested()`, and
+  `console::print_help` writes the reference every app prints before exiting 0), and the cheat lock
+  `console::set_cheats_allowed` / `cheats_allowed`. Core itself registers `time_scale` (Cheat),
+  `sim.max_catchup`, `headless`, `r.vsync` and `help`.
 
 Runtime shell
 - `mce/app.h`: `app::run(Application&, AppDesc, RunStats*)`, the only main loop in the engine: a fixed-step

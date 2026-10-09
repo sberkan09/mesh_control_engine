@@ -9,6 +9,7 @@
 //   mce_editor -frames 120 -selftest    CI smoke: check the viewport and shell pixels, then quit
 //   mce_editor -frames 60 -capture shot.ppm
 //   mce_editor -editor.ini ""           no dock-layout persistence
+//   mce_editor -help                    every convar with its help
 
 #include <cstdio>
 #include <cstdlib>
@@ -250,6 +251,14 @@ int main(int argc, char** argv) {
     log_desc.app_name = "mce_editor";
     log::init(log_desc);
     console::parse_command_line(argc, argv);
+    if (console::help_requested()) {
+        console::print_help("mce_editor",
+                            "usage: mce_editor [-project <dir> [-scene <path under assets/>]] [-editor.play 1]\n"
+                            "                  [-frames N [-capture <file.ppm>] [-selftest]] [-editor.ini <file>] [-help]\n"
+                            "  The docking editor. Without -project the viewport shows the stub world.");
+        log::shutdown();
+        return 0;
+    }
 
     int rc = 1;
     if (ResultV r = platform::init(); !r) {
