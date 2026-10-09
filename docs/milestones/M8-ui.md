@@ -16,7 +16,9 @@
 | Non-modal documents (HUD) never take focus | `set_modal(false)` | "a non-modal document never takes focus" |
 | Per-state styles | `Style` × {Normal, Hover, Pressed, Focused, Disabled}. Colors are sRGB as authored; the batch gets linear. `apply_default_style` sets the stock look. | screenshots |
 | Convar binding, two-way (§4.4, FR-UI-030) | Sliders, toggles and string labels bind to a convar. A UI change goes through `console::execute`, so it is logged. Convar changes show up on the next `update()` without an event. Cheat convars are refused. | "sliders and toggles bind two-way to convars; cheats are refused" |
+| Property-path binding, read-only (§4.4, FR-UI-030) | `bind_property(w, world, entity, "Health/hp", "HP %.0f")`. The component and field resolve once through `mce_refl` (the inspector's path syntax; numeric and bool leaves only). Each `update()` reads the field and touches the widget only when the value changed: a Text re-formats, a slider or bar takes the value. A dead entity reads nothing, and the binding is dropped with its widget. | "a health bar bound to UiHealth/hp updates on change and is untouched otherwise": 30 unchanged frames do 0 binding updates and 0 layout passes; a change updates exactly the 2 bound widgets |
 | Console widget (FR-UI-045) | Line editing (UTF-8-safe backspace), Enter submits (`Submitted` + `console_submitted()`), a 32-line history on Up/Down, and a 256-line scrollback ring. | "the console edits, submits and recalls history" |
+| Shipped developer console (FR-UI-045) | `ui::DevConsole`: a modal document over the top of the screen. It mirrors the log ring (`log::read_console`, the whole ring, so startup warnings show; warnings yellow, errors red). It runs lines through `console::execute`; `help` lists convars (cheats hidden) and console functions, and `clear` empties the scrollback. Esc closes it. **`mce_player`** opens it with \` or F1 (`-console 0` removes it; `-console_open 1` starts with it open). While it is open it owns the keyboard and platform text input is on. | `test_ui` "the developer console mirrors the log, runs convars and closes on cancel"; GPU `scene_demo_player_console_gpu` (0 GL errors); screenshot `player-console.png` |
 | Drawing through `SpriteBatch`, ≤ 2 MDI groups (§4.5, FR-UI-020 acceptance) | Quads use the skin's white region on `sort_layer`; text uses the font on `sort_layer + 1`. That makes one group per set, with text above its document's quads whatever the set ids are. | `test_ui` "a menu draws through SpriteBatch in two groups"; GPU `test_ui_gl`: pixel probes of panel, focus tint and label ink, 2 indirect draws, 0 GL validation errors |
 | Built-in skin | `create_builtin_skin`: ProggyClean (MIT) baked at 13 px by `scripts/gen_builtin_font.py` into `builtin_font_data.inc` (printable ASCII), plus a white texture. | "the built-in font covers printable ASCII at 13 px" |
 | ImGui stays out of the runtime (FR-UI-048) | `ui_no_imgui_symbols`: `nm` over `libmce_engine.so` and `mce_player` must find no `ImGui` symbol. The same scan over `mce_editor` finds 2,283, so the test can fail. | ctest `ui_no_imgui_symbols` |
@@ -29,15 +31,15 @@
 |---|---|---|
 | `update()` of a menu, nothing dirty | < 0.02 ms | 0.019–0.023 ms for a whole page (options: 14 widgets plus the HUD document) |
 | update + submit + batch build of a page | — | 0.13–0.17 ms |
-| Draw cost | ≤ 2 MDI groups per document | 2 for page + HUD together (both documents share the skin and font) |
+| Draw cost | ≤ 2 MDI groups per document | 2 for page + HUD together; 4 with the console open on its own layer (each document stays at 2) |
 
 ## Not yet
 
-- **Property-path binding (`player/Health/hp` through `mce_refl`).** Only convar binding exists so far. This is the next M8 item.
-- **The console in `mce_player`.** The widget exists; wiring it to the log ring and a toggle key in the shipped player is the next item.
+- **Entity lookup by name.** The runtime has no entity names, so `bind_property` takes the `Entity` and the host finds it (ui.md wrote `player/Health/hp` with a name in front).
+- **Cheat convars can still be set from the console.** `console::execute` does not check the `Cheat` flag; a shipped-build guard belongs with packaging v2.
 - **Style transitions (`transition_ms`), 9-slice images and world-space UI** are not built. Images draw one region.
 - **Replay determinism of a recorded menu session** (ui.md §6, last row) is not tested yet. `update()` is a pure function of the context, so it should hold.
 
 ## Screenshots
 
-`/mnt/project-files/m8-ui/ui-gallery-{title,options,levels,console}.png`
+`/mnt/project-files/m8-ui/ui-gallery-{title,options,levels,console}.png`, `/mnt/project-files/m8-ui/player-console.png`

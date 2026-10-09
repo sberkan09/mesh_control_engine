@@ -340,6 +340,91 @@ bool Document::bind_convar(WidgetId w, StringView convar) {
     return true;
 }
 
+bool Document::bind_property(WidgetId w, const World& world, Entity entity, StringView path, const char* format) {
+    Node* n = node(w);
+    if (!n) return false;
+    const usize slash = path.find('/');
+    if (slash == StringView::npos) {
+        MCE_LOG_ERROR("ui: property path '{}' needs '<Component>/<field>'", path);
+        return false;
+    }
+    const refl::TypeRecord* type = refl::find_type(StringId(path.substr(0, slash)));
+    if (!type || !type->is_component()) {
+        MCE_LOG_ERROR("ui: '{}' is not a reflected component", path.substr(0, slash));
+        return false;
+    }
+    Result<refl::PropertyRef> ref = refl::resolve_path(*type, path.substr(slash + 1));
+    if (!ref) {
+        MCE_LOG_ERROR("ui: property path '{}' does not resolve", path);
+        return false;
+    }
+    const refl::FieldKind k = ref.value().kind;
+    const bool numeric = k == refl::FieldKind::Bool || (k >= refl::FieldKind::I8 && k <= refl::FieldKind::F64);
+    if (!numeric || ref.value().count != 1) {
+        MCE_LOG_ERROR("ui: property '{}' is not a numeric or bool leaf", path);
+        return false;
+    }
+    PropertyBinding b;
+    b.widget = w;
+    b.world = &world;
+    b.entity = entity;
+    b.type = type;
+    b.ref = ref.value();
+    if (format) b.format.assign(format);
+    properties_.push_back(b);
+    sync_properties();
+    return true;
+}
+
+namespace {
+f64 read_number(const void* p, refl::FieldKind k) {
+    switch (k) {
+        case refl::FieldKind::Bool: return *static_cast<const bool*>(p) ? 1.0 : 0.0;
+        case refl::FieldKind::I8: return *static_cast<const i8*>(p);
+        case refl::FieldKind::I16: return *static_cast<const i16*>(p);
+        case refl::FieldKind::I32: return *static_cast<const i32*>(p);
+        case refl::FieldKind::I64: return static_cast<f64>(*static_cast<const i64*>(p));
+        case refl::FieldKind::U8: return *static_cast<const u8*>(p);
+        case refl::FieldKind::U16: return *static_cast<const u16*>(p);
+        case refl::FieldKind::U32: return *static_cast<const u32*>(p);
+        case refl::FieldKind::U64: return static_cast<f64>(*static_cast<const u64*>(p));
+        case refl::FieldKind::F32: return *static_cast<const f32*>(p);
+        case refl::FieldKind::F64: return *static_cast<const f64*>(p);
+        default: break;
+    }
+    return 0.0;
+}
+}  // namespace
+
+void Document::sync_properties() {
+    for (usize i = 0; i < properties_.size();) {
+        PropertyBinding& b = properties_[i];
+        Node* n = node(b.widget);
+        if (!n) {  // the widget was removed: drop its binding
+            properties_.erase_swap(i);
+            continue;
+        }
+        ++i;
+        // The component is registered lazily (first spawn), so resolve until it exists.
+        if (b.component == ecs::kInvalidComponent) b.component = b.world->find_component_by_refl(b.type->id.value);
+        if (b.component == ecs::kInvalidComponent) continue;
+        const void* obj = b.world->get_raw(b.entity, b.component);
+        if (!obj) continue;
+        const f64 v = read_number(static_cast<const byte*>(obj) + b.ref.offset, b.ref.kind);
+        if (b.has_last && v == b.last) continue;
+        b.last = v;
+        b.has_last = true;
+        ++stats_.binding_updates;
+        if (n->kind == WidgetKind::Text) {
+            char text[96];
+            std::snprintf(text, sizeof(text), b.format.empty() ? "%g" : b.format.c_str(), v);
+            set_text(b.widget, text);
+        } else {
+            n->value = static_cast<f32>(v) < n->lo ? n->lo : (static_cast<f32>(v) > n->hi ? n->hi : static_cast<f32>(v));
+        }
+    }
+}
+
 WidgetKind Document::kind(WidgetId w) const {
     const Node* n = node(w);
     return n ? n->kind : WidgetKind::Panel;
@@ -785,8 +870,9 @@ void Document::update(const UpdateContext& ctx) {
     // 6. The focused console edits its line.
     if (Node* f = node(focused_); f && f->kind == WidgetKind::Console) update_console(focused_.index, ctx);
 
-    // 7. Bindings pull the convars' values (a refused write snaps back here).
+    // 7. Bindings pull the convars' values (a refused write snaps back here) and the properties.
     sync_bindings();
+    sync_properties();
     if (layout_dirty_) layout();  // a bound string changed a label
 }
 

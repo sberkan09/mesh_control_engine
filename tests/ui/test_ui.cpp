@@ -6,6 +6,9 @@
 
 #include "mce/convar.h"
 #include "mce/core.h"
+#include "mce/ecs/world.h"
+#include "mce/log.h"
+#include "mce/refl/refl.h"
 #include "mce/render/camera2d.h"
 #include "mce/render/sprite_batch.h"
 #include "mce/ui/ui.h"
@@ -19,6 +22,13 @@ namespace {
 MCE_CVAR(cv_test_ui_volume, "test_ui.volume", 0.5f, "ui test convar", CVarFlags::None);
 MCE_CVAR(cv_test_ui_flag, "test_ui.flag", false, "ui test convar", CVarFlags::None);
 MCE_CVAR(cv_test_ui_cheat, "test_ui.cheat", false, "ui test convar", CVarFlags::Cheat);
+
+struct UiHealth {
+    f32 hp = 100.0f;
+    i32 lives = 3;
+    bool shielded = false;
+};
+MCE_COMPONENT(UiHealth, hp, lives, shielded)
 
 // The built-in font as a headless Font (no renderer; the set id is a CPU-only sprite set).
 struct Fixture {
@@ -506,4 +516,89 @@ TEST_CASE("ui: a menu draws through SpriteBatch in two groups, text above its pa
     REQUIRE(batch.groups().size() == 2);
     CHECK(batch.groups()[0].set == f.skin.set);  // quads first ...
     CHECK(batch.groups()[1].set == f.font.set);  // ... then text, whatever the set ids
+}
+
+TEST_CASE("ui: a health bar bound to UiHealth/hp updates on change and is untouched otherwise") {
+    Fixture f;
+    World world;
+    const Entity player = world.spawn();
+    world.set(player, UiHealth{});
+    Document d;
+    d.set_skin(f.skin);
+    d.set_modal(false);
+    Builder b(d, d.root());
+    const WidgetId bar = b.slider("hp_bar", 0.0f, 100.0f, 0.0f).at({0.5f, 1.0f}, {300, 16}).id();
+    d.set_interactable(bar, false);
+    const WidgetId label = b.text("hp", "").at({0.0f, 0.0f}, {0, 0}).id();
+    const WidgetId lives = b.text("lives", "").at({1.0f, 0.0f}, {0, 0}).id();
+    CHECK(d.bind_property(bar, world, player, "UiHealth/hp"));
+    CHECK(d.bind_property(label, world, player, "UiHealth/hp", "HP %.0f"));
+    CHECK(d.bind_property(lives, world, player, "UiHealth/lives", "x%.0f"));
+    CHECK_FALSE(d.bind_property(label, world, player, "UiHealth/nope"));
+    CHECK_FALSE(d.bind_property(label, world, player, "NotAType/hp"));
+    CHECK_FALSE(d.bind_property(label, world, player, "hp"));
+    d.update(frame());
+    CHECK(d.value(bar) == 100.0f);
+    CHECK(d.text(label) == "HP 100");
+    CHECK(d.text(lives) == "x3");
+    const u64 passes = d.stats().layout_passes, updates = d.stats().binding_updates;
+
+    for (int i = 0; i < 30; ++i) d.update(frame());  // nothing changed: no work
+    CHECK(d.stats().layout_passes == passes);
+    CHECK(d.stats().binding_updates == updates);
+
+    world.try_get_mut<UiHealth>(player)->hp = 37.5f;
+    d.update(frame());
+    CHECK(d.value(bar) == 37.5f);
+    CHECK(d.text(label) == "HP 38");
+    CHECK(d.text(lives) == "x3");
+    CHECK(d.stats().binding_updates == updates + 2);  // the bar and the label, not lives
+    CHECK(d.stats().layout_passes == passes + 1);
+
+    world.destroy(player);  // a dead entity reads nothing; the widget keeps its last value
+    d.update(frame());
+    CHECK(d.text(label) == "HP 38");
+    d.remove(label);  // the binding goes with its widget
+    d.update(frame());
+}
+
+TEST_CASE("ui: the developer console mirrors the log, runs convars and closes on cancel") {
+    Fixture f;
+    cv_test_ui_volume.reset();
+    DevConsole con;
+    con.init(f.skin);
+    CHECK_FALSE(con.is_open());
+    MCE_LOG_WARN("test_ui: a line for the console");
+    con.update(frame());  // closed: still pulls the log
+    const u32 lines = con.document().console_line_count(con.widget());
+    CHECK(lines >= 2);  // the banner + the warning
+
+    con.set_open(true);
+    UpdateContext c = frame();
+    c.text_input = "test_ui.volume 0.25";
+    c.key_enter = true;
+    con.update(c);
+    CHECK(cv_test_ui_volume.get_float() == doctest::Approx(0.25f));
+    c = frame();
+    c.text_input = "no_such_thing 1";
+    c.key_enter = true;
+    con.update(c);
+    c = frame();
+    c.text_input = "help";
+    c.key_enter = true;
+    con.update(c);
+    CHECK(con.document().console_line_count(con.widget()) > lines + 4);  // echoes, the error, the listing
+    c = frame();
+    c.text_input = "clear";
+    c.key_enter = true;
+    con.update(c);
+    CHECK(con.document().console_line_count(con.widget()) == 0);
+
+    input::InputState in;
+    in.cancel_pressed = true;
+    c = frame();
+    c.actions = &in;
+    con.update(c);
+    CHECK_FALSE(con.is_open());
+    cv_test_ui_volume.reset();
 }

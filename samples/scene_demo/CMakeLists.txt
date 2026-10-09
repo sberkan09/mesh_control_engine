@@ -22,6 +22,10 @@ if(MCE_BUILD_TESTS)
         add_test(NAME scene_demo_player_gpu
                  COMMAND mce_player -pack "${pack}" -frames 90 -platform.error_box 0 -r.vsync 0)
         set_tests_properties(scene_demo_player_gpu PROPERTIES LABELS gpu)
+        # The shipped developer console open over the scene (FR-UI-045): GL debug layer, 0 errors.
+        add_test(NAME scene_demo_player_console_gpu
+                 COMMAND mce_player -pack "${pack}" -frames 30 -console_open 1 -platform.error_box 0 -r.vsync 0)
+        set_tests_properties(scene_demo_player_console_gpu PROPERTIES LABELS gpu)
         if(TARGET mce_editor)
             # The editor in scene mode over the cooked copy: preview world in sync, sprites drawn
             # in the viewport, picking hits (mce_editor's scene selftest).

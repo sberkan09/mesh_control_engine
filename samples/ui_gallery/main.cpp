@@ -1,11 +1,11 @@
 // ui_gallery — mce_ui end to end (ROADMAP M8, docs/architecture/ui.md): a title menu, an options
 // page whose sliders and toggles are bound two-way to convars (one of them is the UI scale itself),
-// a 3×3 level grid navigated geometrically, and a console page. Everything draws through one
+// a 3×3 level grid navigated geometrically, and the shipped developer console (ui::DevConsole). Everything draws through one
 // SpriteBatch in PassId::Screen2D with the built-in skin; there is no ImGui in this executable.
 //
-//   ui_gallery                                 arrows / Enter / Esc, or the mouse; F1 opens the console
+//   ui_gallery                                 arrows / Enter / Esc, or the mouse; F1 or ` toggles the console
 //   ui_gallery -page options -frames 30 -capture out.ppm
-//                                              start on a page (title|options|levels|console), write the last frame
+//                                              start on a page (title|options|levels; console = title + the console), write the last frame
 
 #include <cstdio>
 
@@ -33,7 +33,7 @@ MCE_CVAR(cv_music, "gallery.music", 0.5f, "Music volume (demo)", CVarFlags::Save
 MCE_CVAR(cv_subtitles, "gallery.subtitles", true, "Show subtitles (demo)", CVarFlags::Saved);
 MCE_CVAR(cv_shake, "gallery.screen_shake", false, "Screen shake (demo)", CVarFlags::Saved);
 
-enum class Page : u8 { Title, Options, Levels, Console };
+enum class Page : u8 { Title, Options, Levels };
 
 class GalleryApp final : public app::Application, public app::IPlatformHooks {
 public:
@@ -45,9 +45,13 @@ public:
         build_title();
         build_options();
         build_levels();
-        build_console();
+        dev_.init(skin_.skin);
         const StringView start = cv_page.get_string();
-        open(start == "options" ? Page::Options : start == "levels" ? Page::Levels : start == "console" ? Page::Console : Page::Title);
+        open(start == "options" ? Page::Options : start == "levels" ? Page::Levels : Page::Title);
+        if (start == "console") {
+            MCE_LOG_INFO("ui_gallery: try 'gallery.volume 0.3', then look at the options page");
+            set_console(true);
+        }
         window_.set_event_handler(&GalleryApp::on_event, this);
         return ok();
     }
@@ -81,11 +85,21 @@ public:
         typed_.clear();
 
         const f64 t0 = platform::now_seconds();
+        // While the console is open it owns the input; the page below still updates (and draws).
+        const bool console = dev_.is_open();
+        ui::UpdateContext page_ctx = ctx;
+        if (console) {
+            page_ctx.actions = nullptr;
+            page_ctx.pointer = vec2(-1, -1);
+            page_ctx.pointer_pressed = page_ctx.pointer_released = page_ctx.pointer_down = false;
+        }
         ui::Document& doc = page_doc(page_);
-        doc.update(ctx);
+        doc.update(page_ctx);
         handle(doc);
         ui::Document& shown = page_doc(page_);  // handle() may have switched pages
-        if (&shown != &doc) shown.update(ctx);
+        if (&shown != &doc) shown.update(page_ctx);
+        dev_.update(ctx);
+        if (console && !dev_.is_open()) window_.set_text_input(false);  // closed with Esc
         hud_text();
         hud_.update(ctx);
         const f64 t1 = platform::now_seconds();
@@ -94,6 +108,7 @@ public:
         batch.begin(compute_screen_view(bb), PassId::Screen2D);
         shown.submit(batch, 100);
         hud_.submit(batch, 110);
+        dev_.submit(batch, 200);
         batch.build();
         ui_ms_ = static_cast<f32>((platform::now_seconds() - t0) * 1000.0);
         update_ms_ = static_cast<f32>((t1 - t0) * 1000.0);
@@ -203,75 +218,40 @@ private:
         root.text("hint", "GEOMETRIC NAVIGATION: NO EDGES AUTHORED.  LOCKED LEVELS ARE SKIPPED.").at({0.5f, 0.94f}, {0, 0});
     }
 
-    void build_console() {
-        console_doc_.set_skin(skin_.skin);
-        ui::Builder root(console_doc_, console_doc_.root());
-        ui::Anchors top;
-        top.min = vec2(0, 0);
-        top.max = vec2(1, 0.6f);
-        console_ = root.console("console").anchors(top).id();
-        console_doc_.console_push_line(console_, "mce console. 'help' lists commands; Up/Down recall; F1 or Esc closes.",
-                                       Color{1.0f, 0.85f, 0.45f, 1});
-        console_doc_.console_push_line(console_, "> gallery.volume 0.3");
-        console_doc_.console_push_line(console_, "gallery.volume = 0.3  (Master volume (demo))");
+    void set_console(bool on) {
+        dev_.set_open(on);
+        window_.set_text_input(on);
     }
 
     ui::Document& page_doc(Page p) {
         switch (p) {
             case Page::Options: return options_doc_;
             case Page::Levels: return levels_doc_;
-            case Page::Console: return console_doc_;
             case Page::Title: break;
         }
         return title_doc_;
     }
 
     void open(Page p) {
-        back_ = page_;
         page_ = p;
-        window_.set_text_input(p == Page::Console);
     }
 
     void handle(ui::Document& doc) {
         for (const ui::UiEvent& e : doc.events()) {
             if (e.kind == ui::UiEvent::Cancelled) {
-                open(page_ == Page::Console ? back_ : Page::Title);
+                open(Page::Title);
                 return;
             }
-            if (e.kind == ui::UiEvent::Submitted) run_console_line(doc.console_submitted());
             if (e.kind != ui::UiEvent::Confirmed) continue;
             if (e.widget == btn_play_) open(Page::Levels);
             else if (e.widget == btn_options_) open(Page::Options);
-            else if (e.widget == btn_console_) open(Page::Console);
+            else if (e.widget == btn_console_) set_console(true);
             else if (e.widget == btn_quit_) quit(0);
             else if (e.widget == opt_back_) open(Page::Title);
             else if (&doc == &levels_doc_) {
-                FixedString<96> line("level picked: ");
-                line.append(doc.text(e.widget));
-                console_doc_.console_push_line(console_, line.view());
-                MCE_LOG_INFO("ui_gallery: {}", line.c_str());
+                MCE_LOG_INFO("ui_gallery: level picked: {}", doc.text(e.widget));
             }
         }
-    }
-
-    void run_console_line(StringView line) {
-        FixedString<260> echo("> ");
-        echo.append(line);
-        console_doc_.console_push_line(console_, echo.view(), Color{0.6f, 0.8f, 1.0f, 1});
-        if (line == "help") {
-            Array<ConVar*> vars;
-            ConVar::collect(vars);
-            for (const ConVar* v : vars) {
-                FixedString<128> value;
-                v->to_string(value);
-                FixedString<192> out(v->name());
-                out.append(" = ");
-                out.append(value.view());
-                console_doc_.console_push_line(console_, out.view());
-            }
-            return;
-        }
-        if (!console::execute(line)) console_doc_.console_push_line(console_, "unknown command", Color{1, 0.4f, 0.35f, 1});
     }
 
     void hud_text() {
@@ -316,7 +296,7 @@ private:
                 const bool down = e.type == platform::EventType::KeyDown;
                 const bool fresh = down && !(e.flags & platform::EventFlag::Repeat);
                 const auto key = static_cast<Key>(e.code);
-                const bool console = self->page_ == Page::Console;
+                const bool console = self->dev_.is_open();
                 if (key == Key::Left) self->held_.x = down ? -1.0f : (self->held_.x < 0 ? 0.0f : self->held_.x);
                 if (key == Key::Right) self->held_.x = down ? 1.0f : (self->held_.x > 0 ? 0.0f : self->held_.x);
                 if (!console && key == Key::Up) self->held_.y = down ? 1.0f : (self->held_.y > 0 ? 0.0f : self->held_.y);
@@ -327,7 +307,7 @@ private:
                 if (key == Key::Backspace) self->backspace_ = true;
                 if (key == Key::Return) (console ? self->enter_ : self->confirm_) = fresh || console;
                 if (fresh && key == Key::Escape) self->cancel_ = true;
-                if (fresh && key == Key::F1) self->open(console ? self->back_ : Page::Console);
+                if (fresh && (key == Key::F1 || key == Key::Grave)) self->set_console(!console);
                 break;
             }
             case platform::EventType::TextInput: {
@@ -358,9 +338,10 @@ private:
     rhi::RenderDevice& device_;
     Renderer renderer_;
     ui::BuiltinSkin skin_;
-    ui::Document title_doc_, options_doc_, levels_doc_, console_doc_, hud_;
-    ui::WidgetId btn_play_, btn_options_, btn_console_, btn_quit_, opt_scale_, opt_back_, console_, hud_line_;
-    Page page_ = Page::Title, back_ = Page::Title;
+    ui::Document title_doc_, options_doc_, levels_doc_, hud_;
+    ui::DevConsole dev_;
+    ui::WidgetId btn_play_, btn_options_, btn_console_, btn_quit_, opt_scale_, opt_back_, hud_line_;
+    Page page_ = Page::Title;
     vec2 held_, pointer_{-1, -1};
     bool confirm_ = false, cancel_ = false, pointer_down_ = false, pointer_pressed_ = false, pointer_released_ = false;
     bool backspace_ = false, enter_ = false, key_up_ = false, key_down_ = false;
