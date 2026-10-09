@@ -105,6 +105,7 @@ mem::UniquePtr<IImporter> make_prefab_importer();  // .mcprefab -> CHNK_PREFAB (
 mem::UniquePtr<IImporter> make_gltf_importer();
 mem::UniquePtr<IImporter> make_tilemap_importer();  // .mctilemap -> CHNK_TILE (v0.5)
 mem::UniquePtr<IImporter> make_particle_importer();  // .mcpart -> CHNK_PART (v0.5)
+mem::UniquePtr<IImporter> make_sequence_importer();  // .mcseq -> CHNK_SEQ (v0.5)
 
 // Parses "guid:<canonical>" (the typed asset-reference spelling in native text assets).
 bool parse_guid_ref(StringView text, Guid& out);

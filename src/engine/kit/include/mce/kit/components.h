@@ -141,4 +141,21 @@ struct Parallax {
 };
 MCE_COMPONENT(Parallax, (factor, Help{"scroll factor per axis: 1 = world, 0 = fixed to the camera"}), repeat_x)
 
+// Plays an action-list sequence (FR-ENT-100; the runner is kit::install_sequences in
+// sequence.h): a cooked .mcseq asset, or a sequence defined from code by `name` when `sequence`
+// has no GUID. The progress fields are the whole runtime state, so a save game resumes a
+// sequence mid-step (they carry the Save flag; give the entity a SaveKey).
+struct SequencePlayer {
+    asset::AssetRef<asset::Sequence> sequence;
+    FixedString<32> name;
+    bool active = true;           // cleared by the runner when the sequence ends
+    bool anchored = false;        // `anchor` holds the current MoveTo's start
+    u16 step = 0;                 // the step being run
+    f32 elapsed = 0.0f;           // seconds into a Wait
+    math::vec3 anchor;            // where a relative MoveTo started
+    u32 pad_ = 0;
+};
+MCE_COMPONENT(SequencePlayer, sequence, name, (active, Save), (anchored, Save, ReadOnly), (step, Save, ReadOnly),
+              (elapsed, Save, ReadOnly), (anchor, Save, ReadOnly))
+
 }  // namespace mce::kit

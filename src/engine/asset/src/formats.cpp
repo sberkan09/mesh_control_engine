@@ -275,6 +275,26 @@ Result<const ParticlePresetChunk*> ParticlePresetChunk::read(Span<const byte> pa
     return p;
 }
 
+// ------------------------------------------------------------------ sequence
+
+StringView SequenceView::name() const {
+    usize n = 0;
+    while (n < sizeof(header->name) && header->name[n] != '\0') ++n;
+    return StringView(header->name, n);
+}
+
+Result<SequenceView> SequenceView::read(Span<const byte> payload) {
+    SequenceView v;
+    v.header = header_of<SequenceHeader>(payload);
+    if (!v.header) return Error(Errc::Truncated, "asset.sequence.read");
+    if (v.header->step_count == 0 || v.header->step_count > (payload.size() - sizeof(SequenceHeader)) / sizeof(SequenceStep))
+        return Error(Errc::Truncated, "asset.sequence.read");
+    v.steps = Span<const SequenceStep>(reinterpret_cast<const SequenceStep*>(payload.data() + sizeof(SequenceHeader)),
+                                       v.header->step_count);
+    if (v.steps[v.steps.size() - 1].kind != SequenceStepKind::End) return Error(Errc::InvalidArgument, "asset.sequence.no_end");
+    return v;
+}
+
 // ------------------------------------------------------------------ mesh
 
 u32 MeshView::index(u32 i) const {

@@ -20,6 +20,7 @@ inline constexpr u8 SCENE_VERSION = 1;
 inline constexpr u8 MESH_VERSION = 1;
 inline constexpr u8 TILEMAP_VERSION = 1;  // CHNK_TILE: one tile layer (v0.5, FR-R2D-115)
 inline constexpr u8 PARTICLE_VERSION = 1;  // CHNK_PART: one particle emitter preset (v0.5, FR-R2D-070)
+inline constexpr u8 SEQUENCE_VERSION = 1;  // CHNK_SEQ: one action-list sequence (v0.5, FR-ENT-100)
 inline constexpr u8 PREFAB_VERSION = 1;  // CHNK_Prefab: the scene layout below (v0.5, FR-ENT-070)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -282,6 +283,48 @@ struct ParticlePresetChunk {  // the whole payload
     static Result<const ParticlePresetChunk*> read(Span<const byte> payload);
 };
 static_assert(sizeof(ParticlePresetChunk) == 144);
+
+// ------------------------------------------------------------------ sequence (CHNK_SEQ)
+// One action-list sequence (FR-ENT-100, scripting.md §2.6): a name (the id SequencePlayer
+// components play) and a closed list of steps the kit's SequenceRunner advances.
+enum class SequenceStepKind : u8 {
+    Wait, WaitForEvent, MoveTo, PlayAnim, PlaySound, StopSound, Emit, Call, Spawn, Destroy, End,
+};
+
+namespace SequenceStepFlags {
+inline constexpr u8 Relative = 1u << 0;  // MoveTo / Spawn: `pos` is relative to the entity
+}
+
+struct SequenceStep {
+    SequenceStepKind kind;
+    u8 flags;            // SequenceStepFlags
+    u8 pad_[6];
+    u64 id;              // StringId: event / clip / call name
+    u64 guid[2];         // PlaySound sfx, Spawn prefab {hi, lo}
+    f32 a;               // Wait seconds; MoveTo speed; PlaySound gain dB
+    f32 b;               // MoveTo arrival tolerance
+    f32 pos[3];          // MoveTo target / Spawn position
+    u32 pad2_[3];
+    Guid asset() const { return Guid{guid[0], guid[1]}; }
+};
+static_assert(sizeof(SequenceStep) == 64);
+
+struct SequenceHeader {
+    char name[32];       // NUL-padded; the id is StringId(name)
+    u32 step_count;
+    u32 flags;           // bit 0: loops
+    u32 reserved[2];
+    // SequenceStep steps[step_count] follow (the last is End)
+};
+static_assert(sizeof(SequenceHeader) == 48);
+
+struct SequenceView {
+    const SequenceHeader* header = nullptr;
+    Span<const SequenceStep> steps;
+    StringView name() const;
+    bool loops() const { return (header->flags & 1u) != 0; }
+    static Result<SequenceView> read(Span<const byte> payload);
+};
 
 // ------------------------------------------------------------------ mesh (CHNK_MESH)
 // A static glTF scene (assets.md §5.2, FR-R3D-010): meshopt-optimized, quantized vertex streams,
