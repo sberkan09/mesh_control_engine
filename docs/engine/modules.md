@@ -58,11 +58,21 @@ not part of it.
   `src/player/main.cpp` is `return mce::player::run(argc, argv);`.
 
 What `run` does (`src/player/src/player.cpp`): mounts the pack, picks the scene (`-scene` GUID or
-source path, else the first scene), installs `physics2d`, the audio bridge, particles and sequences,
-installs the game (static module, or `-module` / `PlayerDesc::module`), then `scene::load`. It
-draws the kit components, offers the Esc pause overlay and the developer console (backtick or F1),
-pauses and mutes on focus loss, loads and writes `-save` slots, and with `-headless 1 -ticks N`
-prints the World state hash.
+source path, else the first scene), installs the `InputState` resource (`input::install`),
+`physics2d`, the audio bridge, particles and sequences, installs the game (static module, or
+`-module` / `PlayerDesc::module`), then `scene::load`. It draws the kit components, offers the Esc
+pause overlay and the developer console (backtick or F1), pauses and mutes on focus loss, loads and
+writes `-save` slots, and with `-headless 1 -ticks N` prints the World state hash.
+
+Input for the game module (M9): windowed, the runtime samples the starter-kit map
+(`input::default_map_chunk`, map "Gameplay": `Move` on WASD / arrows / left stick / d-pad, `Jump`
+on Space / A, `Fire` on J / left mouse / X, `Pause` on Escape / Start, `Look` on the mouse) once per
+fixed tick through `AppDesc::input_source` and publishes it before `World::tick`, so a module's
+systems read `f.resource<input::InputState>()` (`move`, `jump_pressed`, `jump_held`,
+`fire_pressed`, ...). Events go to the input system while the console is closed; key releases and
+focus loss always do. Headless runs publish nothing, so the resource stays zeroed and `-headless`
+hashes depend only on the scene and the tick count. A game cannot ship its own map through the
+pack yet (see Known gaps); actions the default map lacks read as zero (`has_action` is false).
 
 ## Rules and invariants
 
@@ -100,6 +110,11 @@ prints the World state hash.
   then symbolication; Unix, not under ASan), and GPU runs `scene_demo_player_gpu` and
   `scene_demo_player_console_gpu`.
 - Project template: `template_probe_headless_300`, `template_probe_gpu`, `template_probe_editor_gpu`.
+- Projects: every project gets the same three (`kindle_headless_300`, `kindle_gpu`,
+  `kindle_editor_gpu` for `projects/Kindle`); a project may add its own tests in its
+  `CMakeLists.txt` after `mce_add_project` (Kindle's `kindle_level` links the game sources
+  statically with `mce_add_test`, mounts the project's cooked pack and plays the scene with scripted
+  `InputState`s).
 
 None of the non-GPU tests above need a display.
 
@@ -124,6 +139,10 @@ None of the non-GPU tests above need a display.
 - Projects build inside the engine checkout; an installed engine package (`find_package(MCE)`)
   does not exist (M8 project template).
 - The stock `mce_editor` does not load game modules; each project gets its own `<game>_editor`
-  executable (M8 project template, ADR-0029 §1.7).
+  executable (M8 project template, ADR-0029 §1.7), and its own MCP server `<game>_mcp`.
+- The player runtime's input map is the engine's default map. There is no input-map asset a project
+  can cook into its pack and no `PlayerDesc` field for one, so a game needing other actions (Ember
+  Step's `Dash`) falls back to the default ones (Kindle dashes on `Fire`). Rebinding persistence
+  (`InputSystem::save_bindings`) is not wired into the runtime either.
 - Crash reporting gaps from packaging v2: the Windows path has not been run, Windows `abort()`
   leaves no report, POSIX unwinds only the crashing thread, and reports are not uploaded.

@@ -1,0 +1,10 @@
+{
+  "format": "mce-project",
+  "version": 1,
+  "name": "Kindle",
+  "title": "Kindle",
+  "engine_version": "0.0.1",
+  "games": ["kindle"],
+  "start_scene": "3ef6698e-b57e-4d0a-a199-816f20ed8b65",
+  "plugins": []
+}
