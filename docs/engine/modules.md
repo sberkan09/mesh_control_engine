@@ -126,6 +126,22 @@ pack yet (see Known gaps); actions the default map lacks read as zero (`has_acti
   and unmaps it last, after every document and World (a guard declared before them).
 - UI gameplay wall: module sources under `games/*/module/` may not include `mce/ui/`.
 
+## The installed SDK
+
+`cmake --install <build> --prefix <dir>` (`cmake/MceInstall.cmake`, where game modules are
+supported) lays out `bin/` (the tools and the `mce` command, `tools/mce_cli/mce.py`, with
+`INSTALL_RPATH` `$ORIGIN:$ORIGIN/../lib`), `lib/` (`libmce_engine`, `libmce_player_runtime`),
+`include/` (every `src/**/include` tree, the generated `mce/engine_version.h`, spdlog's headers for
+`mce/log.h`), `lib/cmake/MCE/` (`MCEConfig.cmake` from `cmake/MCEConfig.cmake.in`: imported
+`mce::mce_engine` with the engine's public compile definitions, `mce::mce_player_runtime`,
+`mce::mce_module_api`, the tool paths `MCE_*_EXE`, then `MceTarget.cmake`, `MceShip.cmake` and
+`MceProject.cmake` themselves) and `share/mce/` (the project template, `new_project.py`,
+`VERSION`). With `MCE_SDK` set by the config, `mce_add_project` builds only the module, the host
+and the content (cooked by the installed `mce_cook --module`), and the template's `CMakeLists.txt`
+calls `find_package(MCE)` when `mce_add_project` is not already defined. ctest `sdk_install`
+(`tests/sdk/`) installs the build tree into a scratch prefix and runs `mce new`, `mce build`, `mce
+headless`, `mce cook` and `mce ship` against it, then plays the shipped folder.
+
 ## How it is tested
 
 - `test_module` (`tests/module/`, built only when modules are supported): a host linked against
@@ -169,8 +185,10 @@ None of the non-GPU tests above need a display.
   directory (ADR-0021 "Not in this change", comment in `gameplay.h`).
 - No Windows game modules: the `mce_engine.dll` export ledger (MCE_API decorations and explicit
   instantiations, finding F33) is not built.
-- Projects build inside the engine checkout; an installed engine package (`find_package(MCE)`)
-  does not exist (M8 project template).
+- The installed SDK exists for the platforms with game modules only (no Windows SDK until the
+  export ledger); it ships one build configuration per prefix, and a project must use a compiler
+  compatible with the one that built it (`mce version` prints the stamp; there is no ABI check
+  beyond `MCE_ENGINE_ID`).
 - Windows has no stock-tool module loading either (no umbrella): there the per-project
   `<game>_editor`, `<game>_mcp` and `<game>_cook` executables of `mce_add_project`, which compile the
   game in, are the only way the tools know a game's components.

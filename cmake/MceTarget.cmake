@@ -8,7 +8,11 @@
 #   mce_add_library(<name> [UMBRELLA] SOURCES ... [PUBLIC_DEPS ...] [PRIVATE_DEPS ...])
 #   mce_add_executable(<name> [UMBRELLA] SOURCES ... [DEPS ...])
 #   mce_add_test(<name> [UMBRELLA] [NO_CTEST] SOURCES ... [DEPS ...])
+#   mce_add_game_module(<name> SOURCES ... [DEPS ...])
 #   mce_engine_deps(<out> <deps...>)
+#
+# This file is also installed with the SDK (cmake/MceInstall.cmake) and loaded by MCEConfig.cmake,
+# so a project built against an installed engine gets the same helpers and the same policy.
 #
 # UMBRELLA marks a target that loads game modules, or is linked by one that does: the editor, the
 # MCP server, the cook and their libraries. Where game modules are supported such a target links
@@ -136,4 +140,20 @@ function(mce_add_test name)
     if(NOT ARG_NO_CTEST)
         add_test(NAME ${name} COMMAND ${name})
     endif()
+endfunction()
+
+# A game module (scripting.md §2): a MODULE library linked against the engine umbrella, exporting
+# nothing but mce_game_module(). Hosts load it with mce::load_game_module; the tools with -module.
+function(mce_add_game_module name)
+    cmake_parse_arguments(ARG "" "" "SOURCES;DEPS" ${ARGN})
+    add_library(${name} MODULE ${ARG_SOURCES})
+    target_link_libraries(${name} PRIVATE mce::mce_module_api ${ARG_DEPS})
+    # Only mce_game_module() is exported (MCE_MODULE_EXPORT); everything else stays inside.
+    set_target_properties(${name} PROPERTIES
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON)
+    if(NOT MCE_ASAN AND NOT APPLE)
+        target_link_options(${name} PRIVATE "LINKER:--no-undefined")
+    endif()
+    mce_apply_compile_policy(${name})
 endfunction()

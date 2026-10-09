@@ -3,9 +3,12 @@
 By the end of this chapter you will have built the engine, run a sample, created a project of
 your own, played it, and opened it in its editor.
 
-> **Where the engine lives.** Today the engine is used from its source checkout: your project is a
-> folder under `projects/` and the engine's CMake builds it together with the engine. An
-> installable SDK is being built in parallel; until it lands, follow this chapter.
+> **Two ways to use the engine.** From its **source checkout** (sections 1.2 to 1.8): your project
+> is a folder under `projects/` and the engine's CMake builds it together with the engine. Or from
+> the **installed SDK** (section 1.9): a prefix with the prebuilt tools, `libmce_engine`, the headers
+> and a CMake package; your project lives anywhere, builds with `find_package(MCE)` or the `mce`
+> command, and never sees the engine's source. The rest of the guide applies to both; where a
+> command differs, the SDK form is given beside the checkout form.
 
 ## 1.1 Requirements
 
@@ -45,15 +48,16 @@ Everything lands under `build/<preset>/`. The executables you will use most:
 
 | Executable | Path under `build/<preset>/` | What it is |
 |---|---|---|
-| `mce_editor` | `src/editor/app/mce_editor` | the stock scene editor (engine components only) |
-| `mce_player` | `src/player/mce_player` | the stock player: runs a cooked pack with the engine systems |
-| `mce_cook` | `tools/cook/mce_cook` | the asset cook (engine components only) |
-| `mce_mcp` | `src/editor/mcp/mce_mcp` | the editor's MCP server for AI agents (engine components only) |
+| `mce_editor` | `src/editor/app/mce_editor` | the scene editor; `-module <lib<game>.so>` loads a game's components and systems |
+| `mce_player` | `src/player/mce_player` | the stock player: runs a cooked pack with the engine systems (and `-module`) |
+| `mce_cook` | `tools/cook/mce_cook` | the asset cook; `--module <lib<game>.so>` for scenes that use a game's components |
+| `mce_mcp` | `src/editor/mcp/mce_mcp` | the editor's MCP server for AI agents; `--module` as above |
 | samples | `samples/<name>/<target>` | the sample ladder, for example `samples/03_platformer/sample_03_platformer` |
 
-"Engine components only" matters: once your game defines its own components, you use the
-per-project editor, cook and MCP server that the build makes for you (section 1.4), not the stock
-ones.
+Without a module the tools know only the engine's components; once your game defines its own,
+either hand them the game module (`-module` / `--module`, how the SDK works) or use the
+per-project editor, cook and MCP server that the checkout build also makes (section 1.4). On
+Windows, where game modules are not built yet, only the per-project tools know your components.
 
 Useful configure options (pass them as `-D<name>=ON/OFF` after the preset):
 
@@ -106,7 +110,10 @@ cmake --build --preset linux-gcc-debug --target my_game my_game_editor my_game_m
 | `my_game_mcp` | `my_game_mcp` | the MCP server with your components, for an AI agent |
 
 Building `my_game` also cooks `projects/MyGame/assets/` into
-`build/<preset>/projects/MyGame/project/assets.mce`, the pack the game loads.
+`build/<preset>/projects/MyGame/project/assets.mce`, the pack the game loads. The three
+per-project tools are conveniences of the checkout build: the stock `mce_editor -module
+build/<preset>/projects/MyGame/libmy_game.so -project projects/MyGame` (and `mce_mcp --module`,
+`mce_cook --module`) do the same by loading the module, which is how the SDK's tools work.
 
 ## 1.5 Play it
 
@@ -130,6 +137,8 @@ you will later use to check that a change did what you meant (chapter 14).
 
 ```sh
 build/linux-gcc-debug/projects/MyGame/my_game_editor -project projects/MyGame
+# or the stock editor with the module loaded:
+build/linux-gcc-debug/src/editor/app/mce_editor -module build/linux-gcc-debug/projects/MyGame/libmy_game.so -project projects/MyGame
 ```
 
 The editor opens the project's start scene (`assets/scenes/main.mcscene`). Select the Spinner in the
@@ -167,3 +176,62 @@ no hosted CI.
 scripts/ci/local_ci.sh --quick     # walls + gcc debug build with GPU tests under Xvfb
 scripts/ci/local_ci.sh             # every stage: walls, four Linux presets, clang-tidy, determinism
 ```
+
+## 1.9 The installed SDK
+
+The SDK is the engine as a normal, installed engine: no source checkout, no engine build on your
+side. It exists for Linux and macOS (the platforms with game modules; on Windows use the checkout).
+
+### Install it
+
+From an engine checkout, once (a release build is the one to install):
+
+```sh
+cmake --preset linux-gcc-release
+cmake --build --preset linux-gcc-release
+cmake --install build/linux-gcc-release --prefix ~/mce-sdk
+```
+
+`~/mce-sdk` then holds:
+
+| Path | What |
+|---|---|
+| `bin/` | `mce` (the command below), `mce_editor`, `mce_mcp`, `mce_cook`, `mce_player`, `mce_devhost` |
+| `lib/` | `libmce_engine.so` (the engine; every tool and every game module shares it), `libmce_player_runtime.a` (what your host links) |
+| `include/` | the engine headers (`mce/gameplay.h` is the one a game module includes), `mce/engine_version.h` (this engine's id) |
+| `lib/cmake/MCE/` | `MCEConfig.cmake` for `find_package(MCE)`, and the `mce_add_project` / `mce_add_game_module` helpers |
+| `share/mce/` | the project template, `new_project.py`, `VERSION` |
+
+Put `~/mce-sdk/bin` on your `PATH`, or call `~/mce-sdk/bin/mce` by path. The SDK needs the same
+tools a project build needs (CMake 3.28+, Ninja, a C++20 compiler of the same family the engine
+was built with: `mce version` prints the engine's build stamp) and Python 3 for `mce` itself.
+
+### Make, build, play, edit, ship a project
+
+```sh
+mce new MyGame                 # -> ./MyGame (anywhere; --dest picks the parent folder)
+mce build MyGame               # cmake -S MyGame -B MyGame/build -DCMAKE_PREFIX_PATH=<sdk> + build (--config Release for a release build)
+mce play MyGame                # the game; flags after the project pass through (chapter 16)
+mce headless MyGame --ticks 600   # no window; prints the state hash
+mce editor MyGame              # mce_editor -module MyGame/build/libmy_game.so -project MyGame
+mce mcp MyGame                 # mce_mcp --module ... --project MyGame, over stdio (chapter 14)
+mce cook MyGame --pack         # mce_cook --module ... MyGame --pack (the build cooks too)
+mce ship MyGame --version 1.0  # MyGame/dist/MyGame-1.0-linux.zip: host, module, libmce_engine, pack
+```
+
+The project is the same folder the checkout build uses (chapter 2); its `CMakeLists.txt` begins
+with `find_package(MCE)` when it is built on its own, so plain CMake works as well:
+
+```sh
+cmake -S MyGame -B MyGame/build -G Ninja -DCMAKE_PREFIX_PATH=~/mce-sdk
+cmake --build MyGame/build
+MyGame/build/my_game
+```
+
+Against the SDK the build makes `my_game` (the host), `libmy_game.so` (the module) and the pack;
+the cook, the editor and the MCP server are the installed ones with the module loaded, so there
+are no `my_game_cook`, `my_game_editor` or `my_game_mcp` targets.
+
+A module only loads into the engine it was built against: `include/mce/engine_version.h` stamps
+your module with the SDK's engine id, and a module from another SDK is refused with
+`EngineIdMismatch` (rebuild it). The same stamp is the second line of `share/mce/VERSION`.

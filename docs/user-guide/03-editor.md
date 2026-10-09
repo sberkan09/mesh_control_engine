@@ -18,7 +18,9 @@ Flags you may want (all are convars, see chapter 16): `-scene <path under assets
 `-editor.panel Profiler` (bring a panel's tab to the front), `-editor.select Player` (select an
 entity after opening), `-editor.ini ""` (do not persist the dock layout).
 
-The stock `mce_editor` works the same way but only for scenes that use engine components.
+The stock `mce_editor` works the same way with the module loaded (`mce_editor -module
+build/<preset>/projects/MyGame/libmy_game.so -project projects/MyGame`; `mce editor MyGame` with the
+SDK); without `-module` it knows engine components only.
 
 ## 3.2 The panels
 

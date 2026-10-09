@@ -20,8 +20,10 @@ Symptoms, what they mean, what to do.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `unknown component type 'Spin'` | the stock cook, editor or MCP server is being used, or the component is not in `types.cpp` | use `my_game_cook`, `my_game_editor`, `my_game_mcp`; include the header in `types.cpp`; rebuild |
-| A PNG under `assets/` is a cook error | no sidecar | `my_game_cook projects/MyGame --adopt`, or MCP `cook_run {"adopt": true}` |
+| `unknown component type 'Spin'` | the stock cook, editor or MCP server runs without the game module, or the component is not in `types.cpp` | use `my_game_cook`, `my_game_editor`, `my_game_mcp`, or the stock tool with `-module` / `--module <lib<game>.so>` (`mce editor`, `mce mcp`, `mce cook`); include the header in `types.cpp`; rebuild |
+| A PNG under `assets/` is a cook error | no sidecar | `my_game_cook projects/MyGame --adopt` (`mce cook MyGame --adopt`), or MCP `cook_run {"adopt": true}` |
+| `EngineIdMismatch` when a tool or the host loads the module | the module was built against another engine build (another SDK, a reconfigured checkout) | rebuild the module (`mce build`, or the `<game>_game` target) |
+| `find_package(MCE)` fails | the SDK prefix is not on `CMAKE_PREFIX_PATH` | `mce build` passes it; by hand, `-DCMAKE_PREFIX_PATH=<sdk>` or `-DMCE_DIR=<sdk>/lib/cmake/MCE` |
 | `file:line:col: error: ... "guid:..." not found` | a reference to a GUID no asset has | `asset_list` or the Assets panel for the right GUID; check the sidecar moved with the file |
 | Magenta checker instead of a texture | the texture failed to load or the reference is stale | the log names the asset; re-cook; check `srgb`/format; for a stale handle after a hot reload, references re-stamp on next use |
 | A normal map or LUT looks wrong | imported as sRGB | `"srgb": false` in the sidecar |
@@ -66,7 +68,7 @@ Symptoms, what they mean, what to do.
 |---|---|---|
 | Edits land on the wrong entities | ids restarted after `scene_open` | `scene_list_entities`, then `scene_undo` the batch |
 | `run_headless` refuses | unsaved changes | `scene_save` |
-| The server does not know a new component | its table is compiled in | rebuild `my_game_mcp` and restart it |
+| The server does not know a new component | its table comes from the build (compiled in, or the loaded module) | rebuild (`my_game_mcp`, or the module for `--module`) and restart it |
 | `console_exec time_scale 2` refused | cheat convar | start the server with `--allow-cheats` |
 
 ## Shipped builds

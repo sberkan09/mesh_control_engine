@@ -21,11 +21,14 @@ FetchContent_Declare(spdlog
 set(TRACY_ENABLE ${MCE_ENABLE_TRACY} CACHE BOOL "" FORCE)
 set(TRACY_ON_DEMAND ON CACHE BOOL "" FORCE)
 set(TRACY_NO_BROADCAST ON CACHE BOOL "" FORCE)
+# EXCLUDE_FROM_ALL: Tracy's own install rules stay out of the SDK (cmake/MceInstall.cmake); the
+# client library is still built as mce_core's dependency.
 FetchContent_Declare(tracy
     GIT_REPOSITORY https://github.com/wolfpld/tracy.git
     GIT_TAG        v0.14.1
     GIT_SHALLOW    TRUE
-    SYSTEM)
+    SYSTEM
+    EXCLUDE_FROM_ALL)
 
 # ---- SDL3 (window, events, GL context, audio output; mce_platform + mce_rhi_gl only) ----
 # Static, no subsystems we do not use yet.
@@ -136,7 +139,8 @@ if(MCE_BUILD_TESTS AND MCE_PHYSICS_ORACLE)
         GIT_REPOSITORY https://github.com/erincatto/box2d.git
         GIT_TAG        v3.1.1
         GIT_SHALLOW    TRUE
-        SYSTEM)
+        SYSTEM
+        EXCLUDE_FROM_ALL)  # a test oracle: never installed with the SDK
     FetchContent_MakeAvailable(box2d)
 endif()
 

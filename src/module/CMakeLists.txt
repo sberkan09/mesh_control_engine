@@ -6,7 +6,7 @@
 #                     convar registry, one log, one allocator state)
 #   mce_module_api    what a game module links: mce_engine + MCE_ENGINE_ID + the compile policy
 #
-#   mce_add_game_module(<name> SOURCES ... [DEPS ...])   builds a game module (MODULE library)
+#   mce_add_game_module(<name> SOURCES ... [DEPS ...])   builds a game module (cmake/MceTarget.cmake)
 #
 # Hosts that load modules link mce::mce_engine and NO static engine library (that would be a
 # second engine instance): the player runtime, and the editor, the MCP server and the cook with
@@ -62,20 +62,8 @@ else()
 endif()
 mce_apply_compile_policy(mce_engine)
 
+# mce_module_api: what a game module links. mce_add_game_module itself lives in
+# cmake/MceTarget.cmake, which the installed SDK ships too (cmake/MceInstall.cmake).
 add_library(mce_module_api INTERFACE)
 add_library(mce::mce_module_api ALIAS mce_module_api)
 target_link_libraries(mce_module_api INTERFACE mce::mce_engine)
-
-function(mce_add_game_module name)
-    cmake_parse_arguments(ARG "" "" "SOURCES;DEPS" ${ARGN})
-    add_library(${name} MODULE ${ARG_SOURCES})
-    target_link_libraries(${name} PRIVATE mce::mce_module_api ${ARG_DEPS})
-    # Only mce_game_module() is exported (MCE_MODULE_EXPORT); everything else stays inside.
-    set_target_properties(${name} PROPERTIES
-        CXX_VISIBILITY_PRESET hidden
-        VISIBILITY_INLINES_HIDDEN ON)
-    if(NOT MCE_ASAN AND NOT APPLE)
-        target_link_options(${name} PRIVATE "LINKER:--no-undefined")
-    endif()
-    mce_apply_compile_policy(${name})
-endfunction()

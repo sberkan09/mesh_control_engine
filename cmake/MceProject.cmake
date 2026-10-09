@@ -27,6 +27,11 @@
 # (The tools and their libraries are UMBRELLA targets, cmake/MceTarget.cmake, so the module shares
 # their engine.) scripts/ship.py --project <dir> packages the host, the module and the pack into
 # the ship zip.
+#
+# Against an installed engine (MCE_SDK, set by MCEConfig.cmake; the project is its own top-level
+# CMake project with find_package(MCE)) only <game>_game, <game> and <game>_content exist: the
+# installed mce_cook cooks the content with the module loaded, and the installed mce_editor /
+# mce_mcp open the project the same way (`mce editor`, `mce mcp`, `mce cook` in the mce CLI).
 function(mce_add_project game)
     cmake_parse_arguments(ARG "" "TITLE;MODULE_ENTRY;HOST" "GAME_SOURCES;TYPES;INCLUDE_DIRS" ${ARGN})
     if(NOT ARG_TITLE)
@@ -38,13 +43,16 @@ function(mce_add_project game)
         list(APPEND includes "${src}/${dir}")
     endforeach()
 
-    # The project's cook: the engine's component types plus the game's.
-    add_executable(${game}_cook "${PROJECT_SOURCE_DIR}/tools/cook/main.cpp" "${PROJECT_SOURCE_DIR}/tools/cook/engine_components.cpp"
-                                ${ARG_TYPES})
-    target_include_directories(${game}_cook PRIVATE ${includes})
-    mce_engine_deps(cook_deps mce::mce_asset_cook mce::mce_gameplay_kit mce::mce_physics2d mce::mce_audio mce::mce_ecs_scene)
-    target_link_libraries(${game}_cook PRIVATE ${cook_deps})
-    mce_apply_compile_policy(${game}_cook)
+    # The project's cook: the engine's component types plus the game's. Against the SDK the
+    # installed mce_cook loads the game module instead (below).
+    if(NOT MCE_SDK)
+        add_executable(${game}_cook "${PROJECT_SOURCE_DIR}/tools/cook/main.cpp" "${PROJECT_SOURCE_DIR}/tools/cook/engine_components.cpp"
+                                    ${ARG_TYPES})
+        target_include_directories(${game}_cook PRIVATE ${includes})
+        mce_engine_deps(cook_deps mce::mce_asset_cook mce::mce_gameplay_kit mce::mce_physics2d mce::mce_audio mce::mce_ecs_scene)
+        target_link_libraries(${game}_cook PRIVATE ${cook_deps})
+        mce_apply_compile_policy(${game}_cook)
+    endif()
 
     # The start scene the host plays when -scene is not given: <name>.mceproj's start_scene
     # (re-read when the file changes).
@@ -60,20 +68,6 @@ function(mce_add_project game)
         endif()
     endif()
 
-    # Content: the committed assets/ tree cooked into a shipping pack at build time.
-    set(project_dir "${CMAKE_CURRENT_BINARY_DIR}/project")
-    set(pack "${project_dir}/assets.mce")
-    file(GLOB_RECURSE content CONFIGURE_DEPENDS "${src}/assets/*")
-    add_custom_command(
-        OUTPUT "${pack}"
-        COMMAND ${CMAKE_COMMAND} -E rm -rf "${project_dir}/assets"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${src}/assets" "${project_dir}/assets"
-        COMMAND $<TARGET_FILE:${game}_cook> "${project_dir}" --pack --quiet
-        DEPENDS ${game}_cook ${content}
-        COMMENT "Cooking ${game} content"
-        VERBATIM)
-    add_custom_target(${game}_content ALL DEPENDS "${pack}")
-
     # The game and its host.
     if(MCE_GAME_MODULES_SUPPORTED)
         mce_add_game_module(${game}_game SOURCES ${ARG_GAME_SOURCES} ${ARG_MODULE_ENTRY})
@@ -88,12 +82,41 @@ function(mce_add_project game)
         target_compile_definitions(${game} PRIVATE MCE_PROJECT_STATIC_MODULE=1)
         target_include_directories(${game} PRIVATE ${includes})
     endif()
+    # Content: the committed assets/ tree cooked into a shipping pack at build time, by the
+    # project's cook or (SDK) the installed cook with the game module loaded.
+    set(project_dir "${CMAKE_CURRENT_BINARY_DIR}/project")
+    set(pack "${project_dir}/assets.mce")
+    file(GLOB_RECURSE content CONFIGURE_DEPENDS "${src}/assets/*")
+    if(MCE_SDK)
+        set(cook_command "${MCE_COOK_EXE}" --module "$<TARGET_FILE:${game}_game>")
+        set(cook_depends ${game}_game)
+    else()
+        set(cook_command "$<TARGET_FILE:${game}_cook>")
+        set(cook_depends ${game}_cook)
+    endif()
+    add_custom_command(
+        OUTPUT "${pack}"
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${project_dir}/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${src}/assets" "${project_dir}/assets"
+        COMMAND ${cook_command} "${project_dir}" --pack --quiet
+        DEPENDS ${cook_depends} ${content}
+        COMMENT "Cooking ${game} content"
+        VERBATIM)
+    add_custom_target(${game}_content ALL DEPENDS "${pack}")
+
     target_link_libraries(${game} PRIVATE mce::mce_player_runtime)
     target_compile_definitions(${game} PRIVATE MCE_PROJECT_NAME="${game}" MCE_PROJECT_TITLE="${ARG_TITLE}"
                                                MCE_PROJECT_PACK="${pack}" MCE_PROJECT_START_SCENE="${start_scene}")
     add_dependencies(${game} ${game}_content)
     set_target_properties(${game} PROPERTIES MCE_SAMPLE_PACK "${pack}")
     mce_apply_compile_policy(${game})
+    if(MCE_SDK)
+        # Shipped: the module, the pack and libmce_engine sit beside the executable ($ORIGIN first);
+        # in the build tree the engine is found in the SDK.
+        set_target_properties(${game} ${game}_game PROPERTIES BUILD_RPATH_USE_ORIGIN ON
+                              BUILD_RPATH "${MCE_ORIGIN_RPATH};${MCE_LIB_DIR}")
+        return()
+    endif()
 
     # The project's editor: the game's types and systems linked into mce_editor's main.
     if(TARGET mce_editor_layer)

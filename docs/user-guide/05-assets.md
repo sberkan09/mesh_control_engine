@@ -79,9 +79,10 @@ build/<preset>/projects/MyGame/my_game_cook projects/MyGame --adopt    # write m
 Exit codes: 0 clean, 1 cook errors, 2 usage. Errors are printed as `file:line:col: error: message
 [stage]`, the same text the editor's Cook panel shows.
 
-Use the **project's** cook (`my_game_cook`) for a project: it knows your components, so scenes
-that use them cook. The stock `mce_cook` only knows the engine's and fails on `Spin` with "unknown
-component type".
+Use the **project's** cook (`my_game_cook`), or the stock `mce_cook --module
+build/<preset>/projects/MyGame/libmy_game.so projects/MyGame` (`mce cook MyGame` with the SDK): both
+know your components, so scenes that use them cook. The stock `mce_cook` without `--module` only
+knows the engine's and fails on `Spin` with "unknown component type".
 
 What the cook does, so its behaviour makes sense:
 

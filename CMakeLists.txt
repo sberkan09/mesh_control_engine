@@ -130,3 +130,7 @@ endif()
 if(MCE_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
+
+# `cmake --install`: the SDK (tools, libmce_engine, headers, find_package(MCE), the project
+# template and the mce command). Last, so every target it installs exists.
+include(MceInstall)
