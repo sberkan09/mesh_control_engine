@@ -68,6 +68,19 @@ scissor state). ImGui platform and renderer backends are in `layer/src/` and ren
 `scene_new`, `scene_open`, `scene_save`, `scene_undo`, `scene_redo`, `cook_run`, `cook_errors`,
 `run_headless`, `console_list`, `console_exec`.
 
+Project MCP server (M9): `mce_mcp` knows only the engine's components, so a scene that uses a
+game's components cannot be opened or edited with it (`unknown component type`). `mce_add_project`
+therefore builds `<game>_mcp` as well: `mce_mcp`'s `app/main.cpp` and `engine_components.cpp` plus the
+project's `TYPES` source, linked against `mce_mcp_core`. Run it as
+`<game>_mcp --project projects/<Name> [--scene scenes/main.mcscene]`; the client speaks JSON-RPC 2.0,
+one message per line, on its stdin/stdout (`initialize`, `notifications/initialized`, then
+`tools/call` with `{"name", "arguments"}`; each result's `content[0].text` is the tool's JSON).
+Values use the `.mcscene` spelling: vectors as arrays, assets as `"guid:<uuid>"` (take them from
+`asset_list`), enums by name, nested structs as objects (`{"shape": {"type": "Circle", "radius":
+0.3}}`). `entity_duplicate` inserts the copy right after its source, and `scene_new` makes a fresh
+GUID, so to re-author a scene a `.mceproj` names, `scene_open` it and `entity_delete` its entities
+instead. `projects/Kindle/tools/author_level_mcp.py` is a complete client.
+
 ## Rules and invariants
 
 - Two-world model (editor-tools.md §3.1): the document is the truth; the preview world is derived,
@@ -147,5 +160,14 @@ GPU (label `gpu`, `MCE_GPU_TESTS`): `editor_smoke` (default layout over the stub
 - The stock `mce_editor` does not load game modules (ADR-0029 §1.7); projects use `<game>_editor`.
 - MCP (M4.5): no cancellation of a running tool, no recorded input for `run_headless`, no
   attach-to-running-editor and no `render_frame`.
+- MCP `run_headless` installs physics2d and the audio bridge but not the project's game: in
+  `<game>_mcp` it plays the scene without the game's systems, so its `state_hash` is not the host's
+  (`<game> -headless 1`). Use the project's own headless test for gameplay (M9).
+- Play-in-editor runs the game's `install()` but feeds no input: the module sees an `InputState`
+  only if it installs one itself, and it stays idle, so a player character cannot be driven in the
+  editor viewport; play the game from the host (`<game>`) instead. The play view looks through the
+  scene's primary camera (View > "Game camera while playing") at the viewport panel's size, so HUD
+  text pinned to the screen (Parallax 0) for the 1280×720 window can sit outside a smaller
+  viewport (M9).
 - The orbit view collides only with `Collider2D` boxes extruded along Z; 3D colliders join when the
   physics3d ECS bridge lands (comment in `orbit_camera.h`).

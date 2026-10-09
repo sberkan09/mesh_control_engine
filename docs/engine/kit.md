@@ -59,6 +59,31 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   `validate(table, initial)`, `step(...)` for one entity, `run<C>(frame, table)` over every entity
   with component `C`, optional `StateChanged<S>` event.
 
+## Building a 2D game on the kit (what M9 needed)
+
+The kit draws; it has no gameplay. A scene-authored platformer (UC-D's `projects/Kindle`) puts these
+together:
+
+- **Screen-space HUD.** There is no HUD component: a `TextLabel` with `Parallax {factor: [0, 0]}`
+  stays fixed to the camera. Author it where it should sit relative to the camera centre (for a
+  1280×720 window at 48 px/m the view is ±13.3 m by ±7.5 m) and give it a high `layer`. The game
+  writes `TextLabel::text` (a `FixedString<64>`) to show live values.
+- **Backdrops.** `Sprite` + `Parallax` with `repeat_x`; a `factor.y` of 0 pins the layer vertically
+  to the camera, which suits a camera that only scrolls sideways.
+- **Frame animation.** `Sprite` shows a whole texture, so animate by assigning another texture:
+  `sprite.texture = asset::AssetRef<asset::Texture>{guid, {}}`. The extract resolves a GUID on first
+  sight and keeps it, so swapping between a few frames costs nothing after the first draw. Keep the
+  frame GUIDs as `AssetRef<Texture>` fields on a game component so the editor sets them.
+- **Tile art.** A sprite stretches its texture to `size`, so a long platform drawn as one sprite
+  smears a 16×16 tile. Use one `Sprite` per tile (separate from the collider entity) or a
+  `TilemapLayer`; a `.mctilemap` is painted in the editor's Tilemap panel, which the MCP server does
+  not expose.
+- **Fading.** `Sprite::tint.a` fades a sprite (Kindle's inactive blocks draw at alpha 0.22).
+- **Not in the kit:** a player controller, pickups, hazards, a goal, a follow camera, crumbling or
+  moving platforms. Ember Step's versions live in `samples/03_platformer/game/`, are not reflected,
+  and are spawned from code, so a new game ports them into its own module as `MCE_COMPONENT`s
+  (Kindle's `components.h` is a worked example of each).
+
 ## Rules and invariants
 
 - Determinism: `SpriteExtract` draws in ECS iteration order (FR-RUN-040). Particles run on the fixed
@@ -117,3 +142,5 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
 - Not built (ADR-0032): the editor sequence live view and TimelinePlayer (FR-ENT-110, v1.0).
 - The lit-2D GPU cost at 10k sprites and the 2D post cost at 1080p are open until measured on a
   hardware GPU (M6 2D budget table).
+- No gameplay starter components (controller, pickups, follow camera); see "Building a 2D game on
+  the kit" above (M9).

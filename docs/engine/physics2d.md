@@ -70,6 +70,17 @@ code.
   mirrors it into `LocalTransform` each fixed tick. Move such entities with `teleport`, not by
   writing `LocalTransform`. Pose and velocity are not components.
 - Body ids never leave `World2D`; callers name bodies by `Entity`. Stale handles are a no-op.
+- Authoring conventions a scene needs (M9): `RigidBody2D::layer` is a layer index (0..15) and
+  `mask` a bit set of layers, so a sensor that should see only the player on layer 1 has `mask: 2`.
+  A character is a `Kinematic` body with `fixed_rotation`, `gravity_scale: 0`, a box `Collider2D`
+  and `CharacterController2D`; gameplay applies gravity itself and moves it with
+  `move_and_collide`. Static and kinematic colliders take `density: 0`. A body exists only after the
+  first `physics_step` (IMPORT), so `has_body` is false during the first tick's `FixedUpdate_Pre`.
+- `World2D::set_enabled(e, false)` is how gameplay switches a body off (crumbling blocks, Kindle's
+  colour blocks): the body keeps its slot, neither collides nor raises sensor events, and the ECS
+  bridge leaves it disabled: IMPORT touches an existing body only when its `RigidBody2D`,
+  `Collider2D` or `CharacterController2D` bytes change, so gameplay should not rewrite those
+  components on a disabled body.
 - Body mutation belongs in `FixedUpdate` systems (gameplay uses `FixedUpdate_Pre` through
   `f.resource<physics::World2D>()`). Queries are read-only and allowed in any phase.
 - Malformed shapes (degenerate box, fewer than 3 hull points) make `create_body` return false; the

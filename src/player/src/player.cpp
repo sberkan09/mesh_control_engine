@@ -15,6 +15,11 @@
 // -save <slot>, a save of that name is loaded on top of the scene at start and written on every clean quit (window
 // close, Q, -frames / -ticks reached) before anything shuts down; the write is atomic with a .bak, so a kill during
 // it keeps the last good save (ecs/save.h).
+//
+// Input: windowed, the starter-kit "Gameplay" map (mce/input/default_map.h: Move on WASD / arrows /
+// left stick, Jump on Space / A, Fire on J / left mouse / X, Pause) is sampled once per tick and
+// published as the InputState resource the game module reads. Headless runs publish an empty
+// InputState every tick, so -headless hashes stay a function of the scene and the tick count.
 
 #include <cstdio>
 
@@ -24,6 +29,9 @@
 #include "mce/core.h"
 #include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
+#include "mce/input/default_map.h"
+#include "mce/input/ecs.h"
+#include "mce/input/input_system.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
@@ -87,6 +95,7 @@ public:
         MCE_TRY(assets_.mount(Span<const StringView>(roots, 1)));
         MCE_TRY_ASSIGN(const asset::Guid scene, pick_scene(cv_scene.get_string()));
 
+        input::install(world_);
         physics::install_physics2d(world_);
         audio::install(world_, audio_, &clips_);
         kit::install_particles(world_, &assets_);
@@ -116,6 +125,9 @@ public:
             MCE_TRY(ui::create_builtin_skin(renderer_, skin_));
             console_.init(skin_.skin, 0.5f);
             if (cv_console.get_bool() && cv_console_open.get_bool()) set_console(true);
+            Array<byte> map;
+            input::default_map_chunk(map);
+            MCE_TRY(input_.load_map(map.span()));
             window_->set_event_handler(&PlayerApp::on_event, this);
         }
         MCE_TRY(scene::load(world_, assets_, scene, &entities_));
@@ -136,6 +148,7 @@ public:
     void on_tick(const app::TickContext& t) override {
         if (paused_) return;
         tick_dt_ = t.dt;
+        if (t.actions) input::publish(world_, *t.actions);
         world_.tick(t.dt, sim_ticks_);
         ++sim_ticks_;
         if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
@@ -230,6 +243,7 @@ public:
     void present(bool vsync) override { device_->present(vsync); }
 
     u64 state_hash() { return world_.state_hash(); }
+    input::InputSystem& input() { return input_; }
     u64 ticks() const { return sim_ticks_; }
     usize entity_count() const { return entities_.size(); }
 
@@ -357,6 +371,10 @@ private:
 
     static void on_event(const platform::Event& e, void* user) {
         auto* self = static_cast<PlayerApp*>(user);
+        // The game's input: every event while the console is closed; releases and focus changes
+        // always, so no key sticks behind the console or the pause overlay.
+        if (!self->console_.is_open() || e.type == platform::EventType::KeyUp || e.type == platform::EventType::FocusOut)
+            self->input_.push_event(e);
         switch (e.type) {
             case platform::EventType::FocusOut:
             case platform::EventType::Minimized: self->set_background(true); return;
@@ -411,6 +429,7 @@ private:
     render::Font font_;
     ui::BuiltinSkin skin_;
     ui::DevConsole console_;
+    input::InputSystem input_;
     struct ConsoleKeys {  // this frame's console input, gathered by on_event
         FixedString<64> typed;
         bool cancel = false, enter = false, backspace = false, up = false, down = false;
@@ -471,6 +490,7 @@ int run_windowed(const player::PlayerDesc& pd) {
     desc.name = pd.app_name;
     desc.platform = &app;
     desc.fences = device.value().get();
+    desc.input_source = &app.input();
     app::RunStats stats;
     int rc = app::run(app, desc, &stats);
     const u32 gl_errors = device.value()->validation_error_count();

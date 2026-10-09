@@ -10,6 +10,9 @@
 #                   header must be <game>.h declaring <game>::install (the template's shape)
 #   <game>_cook     mce_cook with the game's reflected components linked in (TYPES), so scenes that
 #                   use them cook; the build runs it over a copy of assets/ into <build>/project/assets.mce
+#   <game>_mcp      the editor MCP server (mce_mcp, editor-mcp.md) with the game's reflected
+#                   components linked in (TYPES), so an MCP client can author scenes that use them:
+#                   <game>_mcp --project projects/<name> --scene scenes/main.mcscene
 #   <game>_headless_300 (tests)  the host headless for 300 ticks: module loaded, scene played
 #
 #   mce_add_project(<game> TITLE "<window title>" GAME_SOURCES ... MODULE_ENTRY game/module.cpp
@@ -86,6 +89,16 @@ const bool kRegistered = (mce::editor::set_play_game_install(&${game}::install),
         target_link_libraries(${game}_editor PRIVATE mce::mce_editor_layer mce::mce_rhi_default mce::mce_module_host
                                                      mce::mce_input)
         mce_apply_compile_policy(${game}_editor)
+    endif()
+
+    # The project's MCP server: mce_mcp's stdio main plus the game's types (editor tooling; never
+    # linked by a runtime target).
+    if(TARGET mce_mcp_core)
+        add_executable(${game}_mcp "${PROJECT_SOURCE_DIR}/src/editor/mcp/app/main.cpp"
+                                   "${PROJECT_SOURCE_DIR}/src/editor/mcp/app/engine_components.cpp" ${ARG_TYPES})
+        target_include_directories(${game}_mcp PRIVATE ${includes})
+        target_link_libraries(${game}_mcp PRIVATE mce::mce_mcp_core)
+        mce_apply_compile_policy(${game}_mcp)
     endif()
 
     if(MCE_BUILD_TESTS)
