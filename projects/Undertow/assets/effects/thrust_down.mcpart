@@ -1,0 +1,51 @@
+{
+  "format": "mce-particles",
+  "version": 1,
+  "guid": "4374b5c8-8ca8-44eb-83ab-0a6398bb4437",
+  "name": "thrust_down",
+  "texture": "guid:f7fa24f2-457c-45a0-a01d-34d407f83d16",
+  "rate": 90,
+  "burst": 0,
+  "max_particles": 256,
+  "duration": 0,
+  "lifetime": [
+    0.25,
+    0.5
+  ],
+  "speed": [
+    2.5,
+    4.5
+  ],
+  "direction": 270,
+  "spread": 16,
+  "gravity": [
+    0,
+    0
+  ],
+  "drag": 2.5,
+  "size": [
+    0.5,
+    0.08
+  ],
+  "spin": [
+    0,
+    0
+  ],
+  "area": [
+    0,
+    0
+  ],
+  "color_start": [
+    0.75,
+    0.95,
+    1,
+    0.9
+  ],
+  "color_end": [
+    0.2,
+    0.4,
+    1,
+    0
+  ],
+  "blend": "additive"
+}

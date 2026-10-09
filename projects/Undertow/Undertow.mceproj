@@ -1,0 +1,10 @@
+{
+  "format": "mce-project",
+  "version": 1,
+  "name": "Undertow",
+  "title": "Undertow",
+  "engine_version": "0.0.1",
+  "games": ["undertow"],
+  "start_scene": "922c6109-ebfd-4932-bb71-aa56de081678",
+  "plugins": []
+}
