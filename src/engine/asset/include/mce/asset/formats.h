@@ -20,7 +20,8 @@ inline constexpr u8 SCENE_VERSION = 1;
 inline constexpr u8 MESH_VERSION = 1;
 inline constexpr u8 TILEMAP_VERSION = 1;  // CHNK_TILE: one tile layer (v0.5, FR-R2D-115)
 inline constexpr u8 PARTICLE_VERSION = 1;  // CHNK_PART: one particle emitter preset (v0.5, FR-R2D-070)
-inline constexpr u8 SEQUENCE_VERSION = 1;  // CHNK_SEQ: one action-list sequence (v0.5, FR-ENT-100)
+inline constexpr u8 SEQUENCE_VERSION = 1;
+inline constexpr u8 SHADER_VERSION = 1;  // CHNK_SHD: one validated GLSL stage + variants + reflection (v0.5)  // CHNK_SEQ: one action-list sequence (v0.5, FR-ENT-100)
 inline constexpr u8 PREFAB_VERSION = 1;  // CHNK_Prefab: the scene layout below (v0.5, FR-ENT-070)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -324,6 +325,65 @@ struct SequenceView {
     StringView name() const;
     bool loops() const { return (header->flags & 1u) != 0; }
     static Result<SequenceView> read(Span<const byte> payload);
+};
+
+// ------------------------------------------------------------------ shader (CHNK_SHD)
+// One GLSL 4.5 stage (assets.md §5.2, FR-AST-060): the validated source text, the variant table
+// (every combination of the boolean defines its `// @variant NAME` header lines declare), and per
+// variant the SPIR-V the cook compiled (OpenGL client semantics) plus a reflection list of the
+// resources it uses. GL recompiles the source at load (`compose`); SPIR-V serves backends that
+// translate from it and tools. Payload layout:
+//   ShaderHeader | ShaderVariant[variant_count] | ShaderResource[resource_count]
+//   | source text (source_size bytes, padded to 4) | SPIR-V words
+enum class ShaderStageKind : u8 { Vertex, Fragment, Compute };
+enum class ShaderResourceKind : u8 { UniformBlock, StorageBlock, Sampler, Input, Output };
+
+inline constexpr u32 kMaxShaderDefines = 6;  // 64 variants at most
+
+struct ShaderHeader {
+    ShaderStageKind stage;
+    u8 define_count;
+    u16 variant_count;
+    u32 resource_count;   // all variants
+    u32 source_size;      // bytes, without padding
+    u32 reserved;
+    char defines[kMaxShaderDefines][24];  // NUL-padded; bit i of a variant mask = defines[i]
+};
+static_assert(sizeof(ShaderHeader) == 160);
+
+struct ShaderVariant {
+    u32 mask;             // which defines are 1 (the others are 0)
+    u32 spirv_offset;     // bytes from the payload start
+    u32 spirv_words;
+    u32 first_resource;
+    u32 resource_count;
+    u32 reserved[3];
+};
+static_assert(sizeof(ShaderVariant) == 32);
+
+struct ShaderResource {
+    char name[32];        // NUL-padded (block or variable name, truncated)
+    ShaderResourceKind kind;
+    u8 pad_;
+    u16 binding;          // blocks and samplers: binding; inputs/outputs: location
+    u32 size;             // uniform/storage block bytes (0 otherwise)
+};
+static_assert(sizeof(ShaderResource) == 40);
+
+struct ShaderView {
+    const ShaderHeader* header = nullptr;
+    Span<const ShaderVariant> variants;
+    Span<const ShaderResource> resources;
+    StringView source;  // as authored
+
+    StringView define(u32 i) const;
+    const ShaderVariant* find(u32 mask) const;
+    Span<const u32> spirv(const ShaderVariant& v) const;
+    Span<const ShaderResource> resources_of(const ShaderVariant& v) const;
+    // The text a GL driver compiles for `mask`: the source with "#define NAME 0|1" lines after
+    // its #version line (the same text the cook validated).
+    void compose(u32 mask, Array<char>& out) const;
+    static Result<ShaderView> read(Span<const byte> payload);
 };
 
 // ------------------------------------------------------------------ mesh (CHNK_MESH)

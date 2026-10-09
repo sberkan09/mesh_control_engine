@@ -54,6 +54,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::Tilemap: return TILEMAP_VERSION;
         case ChunkType::ParticlePreset: return PARTICLE_VERSION;
         case ChunkType::Sequence: return SEQUENCE_VERSION;
+        case ChunkType::Shader: return SHADER_VERSION;
         case ChunkType::Mesh: return MESH_VERSION;
         default: return 0;
     }
