@@ -319,6 +319,57 @@ bool asset_list(ToolCall& c) {
     return true;
 }
 
+// Replaces the "settings" object of an asset's .mceasset sidecar (cook_run with adopt writes an
+// empty one: a normal map or a LUT needs {"srgb": false}). The importer validates the keys at the
+// next cook; the catalog is rescanned so the cook sees the change.
+bool asset_set_import_settings(ToolCall& c) {
+    if (!need_project(c)) return false;
+    StringView path, guid_text;
+    if (!arg_string(c, "path", path, false) || !arg_string(c, "guid", guid_text, false)) return false;
+    const cook::JsonValue settings = arg(c, "settings");
+    if (!settings.is_object()) return arg_missing(c, "settings", "an object of importer settings, e.g. {\"srgb\": false}");
+    if (path.empty() == guid_text.empty()) return fail(c, "give one of 'path' (under assets/) or 'guid' (\"guid:<uuid>\")");
+    editor::EditorProject& project = c.server.session().project();
+    const editor::ProjectAsset* found = nullptr;
+    if (!path.empty()) {
+        for (const editor::ProjectAsset& a : project.assets())
+            if (a.path.view() == path) found = &a;
+        if (!found) return fail(c, "no registered asset at that path (asset_list lists them; a new file needs cook_run with \"adopt\": true first)");
+    } else {
+        if (guid_text.size() > 5 && guid_text.substr(0, 5) == "guid:") guid_text = guid_text.substr(5);
+        const Result<asset::Guid> g = asset::parse_guid(guid_text);
+        if (!g) return arg_missing(c, "guid", "\"guid:<uuid>\"");
+        found = project.find(g.value());
+        if (!found) return fail(c, "no registered asset with that guid (asset_list lists them)");
+    }
+    cook::String sidecar = project.asset_path(found->path.view());
+    sidecar += ".mceasset";
+    cook::String text;
+    if (!cook::fs::read_text(sidecar.view(), text)) return fail(c, "could not read the asset's .mceasset sidecar");
+    cook::JsonDoc doc;
+    cook::JsonError je;
+    if (!doc.parse(text.view(), je) || !doc.root().is_object()) return fail(c, "the asset's .mceasset sidecar is not a JSON object");
+    // Every other top-level member is kept as it is (guid, importer, importer_version, ...).
+    cook::String out;
+    JsonWriter w(out);
+    w.begin_object();
+    const cook::JsonValue root = doc.root();
+    for (u32 i = 0; i < root.size(); ++i) {
+        if (root.key_at(i) == "settings") continue;
+        w.key(root.key_at(i)).copy(root.at(i));
+    }
+    w.key("settings").copy(settings);
+    w.end_object();
+    out += '\n';
+    if (!cook::fs::write_file_atomic(sidecar.view(), Span<const byte>(reinterpret_cast<const byte*>(out.c_str()), out.size())))
+        return fail(c, "could not write the asset's .mceasset sidecar");
+    const asset::Guid guid = found->guid;  // rescan invalidates `found`
+    const cook::String rel = found->path;
+    project.rescan();
+    c.out.begin_object().key("guid").str(guid_ref(guid).view()).key("path").str(rel.view()).key("settings").copy(settings).end_object();
+    return true;
+}
+
 // ---------------------------------------------------------------- edit
 
 bool entity_create(ToolCall& c) {
@@ -378,6 +429,19 @@ bool entity_duplicate(ToolCall& c) {
     c.out.begin_object().key("ids").begin_array();
     for (EntityId e : created) c.out.num_u(e);
     c.out.end_array().end_object();
+    return true;
+}
+
+// Every entity of the open scene, one undo step: re-authoring a scene the .mceproj names by GUID
+// (scene_open, scene_clear, then entity_create...) instead of one entity_delete per entity.
+bool scene_clear(ToolCall& c) {
+    EditorScene& s = c.server.session().scene();
+    Array<EntityId> ids;
+    for (const DocEntity& e : s.doc().entities()) ids.push_back(e.id);
+    u64 deleted = 0;
+    for (EntityId id : ids)
+        if (s.destroy_entity(id)) ++deleted;  // a subtree goes with its root: later ids may be gone already
+    c.out.begin_object().key("deleted").num_u(deleted).end_object();
     return true;
 }
 
@@ -867,12 +931,17 @@ const ToolDef kTools[] = {
     {"asset_list", "Assets of the project (GUID registry): guid as \"guid:<uuid>\", path under assets/, type.",
      R"({"type":"object","properties":{"type":{"type":"string","description":"Texture, Font, Sfx, Scene, Mesh, Material, ..."}}})",
      asset_list},
+    {"asset_set_import_settings",
+     "Replace an asset's importer settings in its .mceasset sidecar (texture: {\"srgb\": bool, \"mips\": bool}; a normal map or LUT needs srgb false). Keys are validated by the next cook_run.",
+     R"({"type":"object","properties":{"path":{"type":"string","description":"Path under assets/, e.g. textures/rock_n.png"},"guid":{"type":"string","description":"\"guid:<uuid>\" instead of path"},"settings":{"type":"object"}},"required":["settings"]})",
+     asset_set_import_settings},
     {"entity_create",
      "Create an entity (with a LocalTransform unless transform is false) and optionally components, e.g. "
      "{\"Sprite\": {\"texture\": \"guid:...\", \"size\": [1, 1]}}. Returns its id.",
      R"({"type":"object","properties":{"name":{"type":"string"},"transform":{"type":"boolean","default":true},"at":{"type":"integer","description":"Index in the hierarchy; default: the end"},"components":{"type":"object","description":"Type name -> object of fields"}},"required":["name"]})",
      entity_create},
     {"entity_delete", "Delete an entity (references to it become null).", kEntityArg, entity_delete},
+    {"scene_clear", "Delete every entity of the open scene (one undo step): re-author a scene keeping its GUID and path.", kNoArgs, scene_clear},
     {"entity_duplicate", "Duplicate an entity right after itself. Returns the new id(s).", kEntityArg, entity_duplicate},
     {"component_add", "Add a component (default values, or patched with 'value': an object of fields).",
      R"({"type":"object","properties":{"entity":{"type":"integer"},"component":{"type":"string"},"value":{"type":"object"}},"required":["entity","component"]})",

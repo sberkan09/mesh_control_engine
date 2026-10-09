@@ -202,7 +202,7 @@ TEST_CASE("mcp protocol: JSON-RPC framing, initialize handshake, errors, lists")
     auto tools = c.request("tools/list");
     const cook::JsonValue list = tools->root().get("result").get("tools");
     REQUIRE(list.is_array());
-    CHECK(list.size() == 22);
+    CHECK(list.size() == 24);
     for (u32 i = 0; i < list.size(); ++i) {
         CHECK(list.at(i).get("name").is_string());
         CHECK(str(list.at(i).get("inputSchema").get("type")) == "object");
@@ -516,6 +516,58 @@ TEST_CASE("mcp tools: cook_run adopt gives new source files a sidecar") {
     CHECK(std::filesystem::exists(root + "/assets/textures/new_ball.png.mceasset"));
     CHECK(compact(c.ok("asset_list", R"({"type":"Texture"})").v()).find("textures/new_ball.png") != std::string::npos);
     CHECK(c.ok("cook_run").v().get("ok").as_bool());  // registered now: a plain cook is clean
+}
+
+TEST_CASE("mcp tools: scene_clear empties the scene in one undo step") {
+    const std::string root = demo_project("mcp_clear");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const auto count = [&] { return c.ok("scene_info").v().get("entities").as_number(); };
+    const double before = count();
+    REQUIRE(before > 1);
+    auto r = c.ok("scene_clear");
+    CHECK(r.v().get("deleted").as_number() == before);
+    CHECK(count() == 0);
+    CHECK(c.server.session().scene().verify_world());
+    CHECK(c.ok("scene_info").v().get("dirty").as_bool());
+    // The scene keeps its identity: the .mceproj still names it after a save.
+    CHECK(str(c.ok("scene_info").v().get("guid")) == kDemoGuid);
+    auto u = c.ok("scene_undo");
+    CHECK(str(u.v().get("undone")) == "scene_clear");
+    CHECK(count() == before);
+    CHECK(c.server.session().scene().verify_world());
+    c.ok("scene_redo");
+    CHECK(count() == 0);
+    CHECK(c.ok("scene_clear").v().get("deleted").as_number() == 0);  // already empty: no error
+}
+
+TEST_CASE("mcp tools: asset_set_import_settings rewrites a sidecar's settings") {
+    const std::string root = demo_project("mcp_import_settings");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    CHECK(c.fails("asset_set_import_settings", R"({"path":"textures/ball.png"})").find("'settings'") != std::string::npos);
+    CHECK(c.fails("asset_set_import_settings", R"({"settings":{}})").find("one of 'path'") != std::string::npos);
+    CHECK(c.fails("asset_set_import_settings", R"({"path":"textures/nope.png","settings":{}})").find("no registered asset") != std::string::npos);
+    CHECK(c.fails("asset_set_import_settings", R"({"guid":"guid:5ce4e000-0000-4000-8000-0000000000ff","settings":{}})").find("no registered asset") != std::string::npos);
+
+    auto r = c.ok("asset_set_import_settings", R"({"path":"textures/ball.png","settings":{"srgb":false,"mips":false}})");
+    CHECK(str(r.v().get("guid")) == kBallGuid);
+    CHECK_FALSE(r.v().get("settings").get("srgb").as_bool());
+    std::string sidecar = read_file(root + "/assets/textures/ball.png.mceasset");
+    auto p = parse(sidecar);
+    CHECK(str(p->root().get("guid")) == std::string(kBallGuid).substr(5));  // the other members survived
+    CHECK(str(p->root().get("importer")) == "texture");
+    CHECK_FALSE(p->root().get("settings").get("srgb").as_bool());
+    CHECK_FALSE(p->root().get("settings").get("mips").as_bool());
+    // By guid, and back to the defaults: the cook takes the change (and rejects an unknown key).
+    CHECK(c.ok("asset_set_import_settings", std::string("{\"guid\":\"") + kBallGuid + R"(","settings":{"srgb":true}})").v().get("path").as_string() == "textures/ball.png");
+    CHECK(c.ok("cook_run").v().get("ok").as_bool());
+    c.ok("asset_set_import_settings", R"({"path":"textures/ball.png","settings":{"bogus":1}})");
+    auto cook = c.ok("cook_run");
+    CHECK_FALSE(cook.v().get("ok").as_bool());
+    CHECK(compact(cook.v().get("diagnostics")).find("bogus") != std::string::npos);
 }
 
 TEST_CASE("mcp tools: a relative --project path saves where it says") {
