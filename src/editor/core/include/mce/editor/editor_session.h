@@ -79,6 +79,9 @@ public:
     // Writes a text asset the editor authors (a tilemap) under assets/ and hot-reloads it at once:
     // the file is cooked and swapped (or mounted, when new) before this returns.
     Result<HotReloadResult> write_asset(StringView rel_path, StringView text);
+    // EditorScene::apply_override's hook: writes `fields` of `value` into the root of the prefab
+    // asset `prefab` (its .mcprefab under assets/) and hot-reloads.
+    Result<void> apply_to_prefab(asset::Guid prefab, const DocComponent& value, u64 fields);
 
     // Every scene in the catalog, by path.
     void list_scenes(Array<const ProjectAsset*>& out) const;

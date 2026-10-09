@@ -195,6 +195,31 @@ void ImGuiDrawCtx::help(const char* text) {
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("%s", text);
 }
 
+// An overridden field of a prefab instance: a blue bar in the margin left of its widget (Unity's
+// convention), drawn without taking layout space.
+void ImGuiDrawCtx::override_mark(bool overridden) {
+    if (!overridden) return;
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    const f32 h = ImGui::GetFrameHeight();
+    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(p.x - 5.0f, p.y), ImVec2(p.x - 2.0f, p.y + h), IM_COL32(70, 150, 255, 255));
+}
+
+DrawCtx::OverrideAction ImGuiDrawCtx::override_actions(bool can_revert, bool can_apply) {
+    OverrideAction action = OverrideAction::None;
+    ImGui::BeginDisabled(!can_revert);
+    if (ImGui::SmallButton("Revert")) action = OverrideAction::Revert;
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Drop this instance's overrides: the component follows the prefab again");
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!can_apply);
+    if (ImGui::SmallButton("Apply to prefab")) action = OverrideAction::Apply;
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Write the overridden fields into the prefab asset: every instance gets them");
+    return action;
+}
+
 const refl::TypeRecord* ImGuiDrawCtx::add_component_menu(Span<const refl::TypeRecord* const> addable) {
     ImGui::Spacing();
     ImGui::Separator();

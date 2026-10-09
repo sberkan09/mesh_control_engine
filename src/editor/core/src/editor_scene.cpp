@@ -160,6 +160,7 @@ void EditorScene::set_assets(asset::AssetSystem* assets) {
 void EditorScene::sync_prefab_ghosts() {
     for (Entity g : ghosts_) world_->destroy(g);
     ghosts_.clear();
+    bases_.clear();
     if (!assets_) return;
     const refl::TypeRecord& child_of = refl::type_of<ChildOf>();
     const refl::TypeRecord& local_type = refl::type_of<LocalTransform>();
@@ -173,12 +174,44 @@ void EditorScene::sync_prefab_ghosts() {
         Array<Entity> spawned;
         Result<asset::SceneView> view = asset::SceneView::read(assets_->resolve(h.value()));
         const bool ok_spawn = view && scene::instantiate(*world_, view.value(), &spawned, false);
+        Array<u64> column_types;  // read before the release: the view points into the asset
+        if (view)
+            for (const asset::SceneColumn& col : view.value().columns) column_types.push_back(col.type_id);
         assets_->release(asset::AnyHandle(h.value()));
         for (Entity g : spawned) ghosts_.push_back(g);
         if (!ok_spawn || spawned.empty()) continue;
-        // The instance's own components override the prefab root, as the cook does; its
-        // placement is the root's.
+        // The prefab root's own values (what an instance inherits; references inside the prefab
+        // read as null here), then the instance's overridden fields over them, as the cook does.
         const Entity root = spawned[0];
+        PrefabBase& base = bases_.push_back(PrefabBase{e.id, {}});
+        for (u64 type_id : column_types) {
+            const refl::TypeRecord* t = refl::find_type(StringId(type_id));
+            const ecs::ComponentId cid = t ? world_->find_component(t->type_hash) : ecs::kInvalidComponent;
+            const void* v = cid != ecs::kInvalidComponent ? world_->get_raw(root, cid) : nullptr;
+            if (!v || t == &child_of) continue;
+            DocComponent bc;
+            bc.type = t;
+            bc.storage.resize(t->size / 8 + 1, 0);
+            std::memcpy(bc.data(), v, t->size);
+            visit_entity_refs(*t, bc.data(), [](Entity* f, void*) { *f = Entity::null; }, nullptr);
+            base.components.push_back(std::move(bc));
+        }
+        // The document keeps an instance's components at their effective values: inherited
+        // fields follow the prefab (also after it changed on disk), so the inspector shows and
+        // edits what the cook will produce. Not an edit: only overridden fields are ever saved.
+        if (DocEntity* me = doc_.find(e.id)) {
+            for (DocComponent& c : me->components) {
+                const DocComponent* bc = nullptr;
+                for (const DocComponent& b : base.components)
+                    if (b.type == c.type) bc = &b;
+                if (!bc || c.type == &local_type) continue;
+                const u64 inherit = all_fields_mask(*c.type) & ~c.overrides & ~entity_ref_fields_mask(*c.type);
+                if (changed_fields_mask(*c.type, c.data(), bc->data()) & inherit) {
+                    copy_fields(*c.type, inherit, bc->data(), c.data());
+                    mirror(e.id, c);
+                }
+            }
+        }
         for (const DocComponent& c : e.components) {
             if (c.type == &child_of) continue;
             Array<u64> tmp;
@@ -187,7 +220,12 @@ void EditorScene::sync_prefab_ghosts() {
             visit_entity_refs(*c.type, tmp.data(), [](Entity* f, void* user) {
                 *f = static_cast<const EditorScene*>(user)->runtime_entity(doc_entity_id(*f));
             }, this);
-            world_->set_raw(root, scene::component_for(*world_, *c.type), tmp.data());
+            const ecs::ComponentId cid = scene::component_for(*world_, *c.type);
+            if (void* at_root = world_->get_raw_mut(root, cid)) {
+                copy_fields(*c.type, c.overrides, tmp.data(), at_root);
+            } else {
+                world_->set_raw(root, cid, tmp.data());
+            }
         }
         // Scene placement of every ghost: the root at the instance, the rest down their ChildOf.
         const WorldTransform at = e.find(local_type) ? world_transform(e.id) : ecs::to_world(LocalTransform{});
@@ -401,7 +439,9 @@ EntityId EditorScene::create_entity(StringView name, bool with_transform, i32 at
 EntityId EditorScene::create_prefab_instance(StringView name, asset::Guid prefab, i32 at) {
     Edit edit(*this, "Instantiate prefab");
     const EntityId id = create_entity(name, true, at);
-    doc_.find(id)->prefab = prefab;
+    DocEntity* e = doc_.find(id);
+    e->prefab = prefab;
+    if (DocComponent* t = e->find(refl::type_of<LocalTransform>())) t->overrides = all_fields_mask(*t->type);
     touch();
     return id;
 }
@@ -502,6 +542,7 @@ void EditorScene::copy_entities(Span<const EntityId> ids, cook::String& out) con
         for (const DocComponent& c : e.components) {
             DocComponent* dst = clip.add_component(e.id, *c.type);
             std::memcpy(dst->data(), c.data(), c.type->size);
+            dst->overrides = c.overrides;
         }
     }
     out.clear();
@@ -537,6 +578,7 @@ bool EditorScene::paste_entities(StringView text, i32 at, cook::DiagList& diags,
         for (const DocComponent& c : src.components) {
             DocComponent* dst = doc_.add_component(remap.to[i], *c.type);
             std::memcpy(dst->data(), c.data(), c.type->size);
+            dst->overrides = c.overrides;
             visit_entity_refs(*c.type, dst->data(), [](Entity* f, void* user) {
                 *f = doc_entity_ref(static_cast<const Remap*>(user)->map(doc_entity_id(*f)));
             }, &remap);
@@ -574,10 +616,71 @@ bool EditorScene::set_component(EntityId id, const refl::TypeRecord& type, const
     // One continuous drag of one component is one entry (coalescing until seal_undo()).
     Edit edit(*this, "Edit component", (type.type_hash ^ (u64(id) * 0x9E3779B97F4A7C15ull)) | 1u);
     record(id);
+    if (!e->prefab.is_null()) c->overrides |= changed_fields_mask(type, c->data(), value);
     std::memcpy(c->data(), value, type.size);
     mirror(id, *c);
     touch();
     return true;
+}
+
+// ---------------------------------------------------------------- prefab overrides (FR-EDT-080)
+
+const DocComponent* EditorScene::prefab_base(EntityId id, const refl::TypeRecord& type) const {
+    for (const PrefabBase& b : bases_) {
+        if (b.id != id) continue;
+        for (const DocComponent& c : b.components)
+            if (c.type == &type) return &c;
+    }
+    return nullptr;
+}
+
+void EditorScene::prefab_base_components(EntityId id, Array<const DocComponent*>& out) const {
+    out.clear();
+    for (const PrefabBase& b : bases_)
+        if (b.id == id)
+            for (const DocComponent& c : b.components) out.push_back(&c);
+}
+
+bool EditorScene::revert_override(EntityId id, const refl::TypeRecord& type, u64 fields) {
+    DocEntity* e = doc_.find(id);
+    DocComponent* c = e ? e->find(type) : nullptr;
+    if (!c || e->prefab.is_null()) return false;
+    const DocComponent* base = prefab_base(id, type);
+    const u64 clear = c->overrides & fields;
+    // The instance's placement is its own, and a component the prefab root lacks has no base.
+    if (&type == &refl::type_of<LocalTransform>()) return false;
+    if (!base) return remove_component(id, type);
+    if (clear == 0 && c->overrides != 0) return false;
+    Edit edit(*this, "Revert override", 0);
+    record(id);
+    copy_fields(type, clear & ~entity_ref_fields_mask(type), base->data(), c->data());
+    c->overrides &= ~clear;
+    if (c->overrides == 0) {  // nothing of its own left: the component is the prefab's again
+        doc_.remove_component(id, type);
+        const ecs::ComponentId cid = world_->find_component(type.type_hash);
+        if (cid != ecs::kInvalidComponent) world_->remove_raw(runtime_entity(id), cid);
+    } else {
+        mirror(id, *c);
+    }
+    touch();
+    return true;
+}
+
+Result<void> EditorScene::apply_override(EntityId id, const refl::TypeRecord& type) {
+    const DocEntity* e = doc_.find(id);
+    const DocComponent* c = e ? e->find(type) : nullptr;
+    if (!c || e->prefab.is_null()) return Error(Errc::InvalidArgument, "editor.prefab_apply", type.name);
+    if (&type == &refl::type_of<LocalTransform>())
+        return Error(Errc::InvalidArgument, "editor.prefab_apply", "an instance's placement stays its own");
+    if (!apply_fn_) return Error(Errc::Unsupported, "editor.prefab_apply", "no project is open");
+    const u64 fields = c->overrides & ~entity_ref_fields_mask(type);
+    if (fields == 0) return ok();
+    const asset::Guid prefab = e->prefab;
+    MCE_TRY(apply_fn_(apply_user_, prefab, *c, fields));
+    // The prefab now holds these values (the session re-cooked and refreshed it): they are no
+    // longer this instance's own.
+    revert_override(id, type, fields);
+    return ok();
 }
 
 // ---------------------------------------------------------------- undo/redo
@@ -591,7 +694,7 @@ bool same_snapshot(const EntitySnapshot& a, const EntitySnapshot& b) {
     for (usize i = 0; i < a.components.size(); ++i) {
         const DocComponent& x = a.components[i];
         const DocComponent& y = b.components[i];
-        if (x.type != y.type || std::memcmp(x.data(), y.data(), x.type->size) != 0) return false;
+        if (x.type != y.type || x.overrides != y.overrides || std::memcmp(x.data(), y.data(), x.type->size) != 0) return false;
     }
     return true;
 }
@@ -599,6 +702,7 @@ bool same_snapshot(const EntitySnapshot& a, const EntitySnapshot& b) {
 DocComponent copy_component(const DocComponent& c) {
     DocComponent out;
     out.type = c.type;
+    out.overrides = c.overrides;
     out.storage.resize(c.storage.size());
     std::memcpy(out.storage.data(), c.storage.data(), c.storage.size() * sizeof(u64));
     return out;
