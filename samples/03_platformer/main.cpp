@@ -1,12 +1,15 @@
-// Sample 03_platformer (ROADMAP M3): the playable 2D platformer. The game itself lives in
-// game/platformer.cpp (ECS + physics2d + input actions + audio events, no host knowledge); this
-// file is the host: window, GL renderer, input system, audio device, camera and HUD.
+// Sample 03_platformer — Ember Step (ROADMAP M3, full game M6): the playable 2D platformer. The
+// game itself lives in game/platformer.cpp (ECS + physics2d + input actions + audio events, no
+// host knowledge); this file is the host: window, GL renderer, input map, audio device, camera,
+// particles, menus/HUD and the best-times save.
 //
-// The player runs and jumps on AABB physics, rides moving platforms (velocity accumulation),
-// collects coins (sensor trigger -> SFX + screen flash), stomps or dodges enemies whose FSM
-// patrols, chases and returns, avoids spikes and reaches the flag. Music loops gaplessly.
+// Five levels (game/level.h). The player runs, jumps (coyote time, jump buffer), wall-slides and
+// wall-jumps, dashes, rides moving platforms, races over crumbling blocks, collects coins, stomps
+// or dodges enemies whose FSM patrols, chases and returns, avoids spikes and reaches the flag.
+// Menu -> level -> pause -> results; best times persist through the engine's save system.
 //
-//   sample_03_platformer                         play (arrows/WASD move, Space jump, Esc pause)
+//   sample_03_platformer                         play (arrows/WASD move, Space jump, Shift/K dash,
+//                                                Esc pause; gamepad: stick/d-pad, A jump, X/RB dash)
 //   sample_03_platformer -autoplay 1             attract mode: a scripted bot plays
 //   sample_03_platformer -headless 1 -ticks N    determinism run: bot input, prints the state hash
 //   sample_03_platformer -frames 600 -autoplay 1 -capture shot.ppm
@@ -28,10 +31,13 @@
 #include "mce/audio/clip_bank.h"
 #include "mce/audio/components.h"
 #include "mce/core.h"
+#include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
 #include "mce/input/default_map.h"
 #include "mce/input/ecs.h"
+#include "mce/input/input_map.h"
 #include "mce/input/input_system.h"
+#include "mce/kit/particles.h"
 #include "mce/physics/module.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
@@ -60,6 +66,10 @@ MCE_CVAR(cv_module, "module", "", "The game module to load (default: next to the
 #endif
 MCE_CVAR(cv_pack, "pack", "", "Cooked SFX pack (default: assets.mce next to the executable)", CVarFlags::None);
 MCE_CVAR(cv_trace, "trace", 0, "Print the player's state every N ticks", CVarFlags::None);
+MCE_CVAR(cv_save, "save", "ember_step", "Best-times save name (interactive play only; empty = no save)",
+         CVarFlags::None);
+MCE_CVAR(cv_save_dir, "save_dir", "", "Save folder (default: the per-user MCE/EmberStep/saves)", CVarFlags::None);
+MCE_CVAR(cv_level, "level", 1, "Level to start on when skipping the menu (autoplay / headless: 1)", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 
 constexpr f32 kPpm = 16.0f;
@@ -78,7 +88,7 @@ public:
         const GameState& gs = world.resource<GameState>();
         const physics::World2D& pw = world.resource<physics::World2D>();
         physics::BodyState ps;
-        if (gs.won || !pw.body_state(gs.player, ps)) return s;
+        if (gs.won || gs.mode != Mode::Playing || !pw.body_state(gs.player, ps)) return s;
         const Player& pl = *world.try_get<Player>(gs.player);
         const vec2 at = ps.position;
 
@@ -185,15 +195,170 @@ public:
             world_.spawn_with(src);
         }
 
+        GameState& gs = world_.resource<GameState>();
+        if (cv_level.get_int() > 1) gs.load_request = static_cast<i32>(cv_level.get_int() - 1);
+        interactive_ = window_ && !autoplay_;
+        if (interactive_) {
+            gs.mode = Mode::Menu;
+            gs.paused = true;
+            load_records();
+        }
+
         if (window_) {
             Array<byte> map;
-            input::default_map_chunk(map);
+            build_input_map(map);
             MCE_TRY(input_.load_map(map.span()));
             window_->set_event_handler(&PlatformerApp::on_event, this);
             if (pack_mounted_) samples::apply_window_icon(*window_, assets_, "icon.png");
         }
-        if (device_) MCE_TRY(init_render());
+        if (device_) {
+            kit::install_particles(world_, nullptr);
+            setup_fx();
+            MCE_TRY(init_render());
+        }
         return ok();
+    }
+
+    // ---- effects ---------------------------------------------------------------------------------
+    // Four code-built particle presets (burst-only), each with a small ring of emitter entities so
+    // effects of one kind in the same tick do not share a position. The game asks through
+    // GameState::fx; the host moves an emitter there and bursts it.
+    enum FxPreset : u32 { Dust, Spark, Ember, Debris, FxPresetCount };
+    static constexpr u32 kEmittersPerPreset = 4;
+
+    static asset::ParticlePresetChunk preset(f32 life0, f32 life1, f32 speed0, f32 speed1, f32 spread, f32 gravity,
+                                             f32 size0, f32 size1, Color c0, Color c1, bool additive) {
+        asset::ParticlePresetChunk p{};
+        p.max_particles = 256;
+        p.lifetime[0] = life0;
+        p.lifetime[1] = life1;
+        p.speed[0] = speed0;
+        p.speed[1] = speed1;
+        p.direction = 0.5f * kPi;
+        p.spread = spread;
+        p.gravity[1] = gravity;
+        p.drag = 2.0f;
+        p.size_start = size0;
+        p.size_end = size1;
+        p.area[0] = 0.3f;
+        p.area[1] = 0.1f;
+        const f32 start[4] = {c0.r, c0.g, c0.b, c0.a}, end[4] = {c1.r, c1.g, c1.b, c1.a};
+        for (u32 i = 0; i < 4; ++i) {
+            p.color_start[i] = start[i];
+            p.color_end[i] = end[i];
+        }
+        p.flags = additive ? asset::ParticleFlags::Additive : 0u;
+        return p;
+    }
+
+    void setup_fx() {
+        auto& ps = world_.resource<kit::ParticleSystem>();
+        const asset::ParticlePresetChunk presets[FxPresetCount] = {
+            preset(0.3f, 0.6f, 1.0f, 3.0f, 1.3f, -3.0f, 0.35f, 0.1f, Color{0.85f, 0.75f, 0.6f, 0.8f},
+                   Color{0.85f, 0.75f, 0.6f, 0.0f}, false),
+            preset(0.3f, 0.7f, 2.0f, 6.0f, kPi, -6.0f, 0.3f, 0.05f, Color{1.0f, 0.9f, 0.35f, 1.0f},
+                   Color{1.0f, 0.45f, 0.1f, 0.0f}, true),
+            preset(0.25f, 0.55f, 0.5f, 2.5f, kPi, 1.5f, 0.45f, 0.1f, Color{1.0f, 0.55f, 0.15f, 0.9f},
+                   Color{0.8f, 0.1f, 0.05f, 0.0f}, true),
+            preset(0.4f, 0.8f, 2.0f, 5.0f, 1.0f, -20.0f, 0.25f, 0.2f, Color{0.45f, 0.32f, 0.28f, 1.0f},
+                   Color{0.3f, 0.2f, 0.18f, 0.0f}, false),
+        };
+        for (u32 k = 0; k < FxPresetCount; ++k) {
+            const asset::Guid guid{0xE5B0'0000'0000'0000ull, k + 1};
+            ps.set_preset(guid, presets[k]);
+            for (u32 i = 0; i < kEmittersPerPreset; ++i) {
+                kit::ParticleEmitter em;
+                em.preset.guid = guid;
+                em.seed = k * kEmittersPerPreset + i + 1;
+                em.order = k == Dust || k == Debris ? 8 : 12;
+                emitters_[k][i] = world_.spawn_with(em, LocalTransform{});
+            }
+        }
+    }
+
+    void burst(FxPreset k, vec2 at, u32 count) {
+        const Entity e = emitters_[k][next_emitter_[k]++ % kEmittersPerPreset];
+        if (LocalTransform* t = world_.try_get_mut<LocalTransform>(e)) t->position = {at.x, at.y, 0.0f};
+        world_.resource<kit::ParticleSystem>().burst(e, count);
+    }
+
+    void spawn_fx(const GameState& gs) {
+        for (u32 i = 0; i < gs.fx_count; ++i) {
+            const FxRequest& r = gs.fx[i];
+            const vec2 feet = r.pos - vec2{0.0f, 0.4f};
+            switch (r.kind) {
+                case Fx::Jump: burst(Dust, feet, 8); break;
+                case Fx::Land: burst(Dust, feet, 14); break;
+                case Fx::Dash: burst(Ember, r.pos, 18); break;
+                case Fx::WallJump:
+                    burst(Ember, r.pos, 8);
+                    burst(Dust, r.pos - vec2{0.35f * static_cast<f32>(r.dir), 0.0f}, 6);
+                    break;
+                case Fx::Coin: burst(Spark, r.pos, 14); break;
+                case Fx::Stomp: burst(Debris, r.pos, 10); break;
+                case Fx::Hurt: burst(Ember, r.pos, 24); break;
+                case Fx::Crumble: burst(Debris, r.pos - vec2{0.0f, 0.3f}, 6); break;
+                case Fx::Win: burst(Spark, r.pos + vec2{0.0f, 0.5f}, 40); break;
+            }
+        }
+    }
+
+    static SpriteSetId resolve_fx(void* user, asset::Guid) { return static_cast<PlatformerApp*>(user)->fx_set_; }
+
+    // The game's actions: Move / Jump / Dash / Pause for play, Confirm / Cancel for the menus, all
+    // on keyboard and gamepad (one map; menus read Move.y, so the stick and d-pad navigate too).
+    static void build_input_map(Array<byte>& out) {
+        using platform::GamepadAxis;
+        using platform::GamepadButton;
+        using platform::Key;
+        input::InputMapBuilder b;
+        b.map(MCE_SID("EmberStep"));
+        b.action(MCE_SID("Move"), input::ActionType::Axis2D)
+            .key(Key::D, 0, +1.f).key(Key::A, 0, -1.f).key(Key::W, 1, +1.f).key(Key::S, 1, -1.f)
+            .key(Key::Right, 0, +1.f).key(Key::Left, 0, -1.f).key(Key::Up, 1, +1.f).key(Key::Down, 1, -1.f)
+            .gamepad_axis(GamepadAxis::LeftX, 0, +1.f).gamepad_axis(GamepadAxis::LeftY, 1, -1.f)
+            .gamepad_button(GamepadButton::DpadRight, 0, +1.f).gamepad_button(GamepadButton::DpadLeft, 0, -1.f)
+            .gamepad_button(GamepadButton::DpadUp, 1, +1.f).gamepad_button(GamepadButton::DpadDown, 1, -1.f);
+        b.action(MCE_SID("Jump")).key(Key::Space).key(Key::Z).gamepad_button(GamepadButton::South);
+        b.action(MCE_SID("Dash")).key(Key::LShift).key(Key::K).key(Key::X)
+            .gamepad_button(GamepadButton::West).gamepad_button(GamepadButton::RightShoulder);
+        b.action(MCE_SID("Pause")).key(Key::Escape).key(Key::P).gamepad_button(GamepadButton::Start);
+        b.action(MCE_SID("Confirm")).key(Key::Return).key(Key::Space).gamepad_button(GamepadButton::South);
+        b.action(MCE_SID("Cancel")).key(Key::Backspace).gamepad_button(GamepadButton::East);
+        b.encode(out);
+    }
+
+    // Best times: the Records entity (SaveKey 1) through the engine's save files.
+    void load_records() {
+        const StringView name = cv_save.get_string();
+        if (name.empty()) return;
+        if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());
+        else save::set_root(save::default_root("EmberStep").view());
+        if (save::exists(name)) {
+            if (auto st = save::load_game(world_, name); st) {
+                MCE_LOG_INFO("03_platformer: best times loaded from '{}'", save::path_of(name).view());
+            } else {
+                FixedString<512> msg;
+                format_error(st.error(), msg);
+                MCE_LOG_WARN("03_platformer: ignoring the save: {}", msg.view());
+            }
+        }
+        saved_serial_ = world_.resource<GameState>().records_serial;
+    }
+
+    void save_records() {
+        const StringView name = cv_save.get_string();
+        GameState& gs = world_.resource<GameState>();
+        if (!interactive_ || name.empty() || gs.records_serial == saved_serial_) return;
+        saved_serial_ = gs.records_serial;
+        save::SaveInfo info;
+        info.module_version = 1;
+        info.tick = ticks_;
+        if (Result<void> r = save::save_game(world_, name, info); !r) {
+            FixedString<512> msg;
+            format_error(r.error(), msg);
+            MCE_LOG_WARN("03_platformer: best times not saved: {}", msg.view());
+        }
     }
 
     void on_tick(const app::TickContext& t) override {
@@ -207,6 +372,9 @@ public:
         GameState& gs = world_.resource<GameState>();
         if (gs.shake > 0.0f) shake_.add_trauma(gs.shake);
         gs.shake = 0.0f;
+        if (device_) spawn_fx(gs);
+        gs.fx_count = 0;
+        save_records();
         shake_.tick(static_cast<f32>(t.dt));
         if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
     }
@@ -218,6 +386,7 @@ public:
     }
 
     void on_shutdown() override {
+        save_records();
         if (device_) renderer_.shutdown();
     }
 
@@ -322,14 +491,32 @@ private:
         sd.debug_name = "03_platformer.sprites";
         sprites_ = renderer_.create_sprite_set(sd);
 
+        const SpriteRegion dot = regions[art::Dot];
+        sd.regions = Span<const SpriteRegion>(&dot, 1);
+        sd.debug_name = "03_platformer.fx";
+        fx_set_ = renderer_.create_sprite_set(sd);
+
         // Tile set: TileGrid value n draws region n-1.
         const SpriteRegion tile_regions[] = {regions[art::GroundTop], regions[art::GroundFill], regions[art::Plank]};
         sd.regions = tile_regions;
         sd.debug_name = "03_platformer.tiles";
         tiles_set_ = renderer_.create_sprite_set(sd);
 
+        MCE_TRY(build_tilemap());
+
+        samples::HudFont hud;
+        MCE_TRY_ASSIGN(font_, renderer_.create_font(hud.metrics, hud.glyphs.span(), {}, std::as_bytes(hud.atlas.span()),
+                                                    "03_platformer.hud_font"));
+        return ok();
+    }
+
+    // The level's tiles; rebuilt whenever the game loads another level.
+    ResultV build_tilemap() {
+        const GameState& gs = world_.resource<GameState>();
+        if (tilemap_built_) renderer_.destroy_tilemap(tilemap_);
+        tilemap_built_ = false;
         TileGrid grid;
-        level_tiles(grid);
+        level_tiles(gs.level, grid);
         TilemapDesc td;
         td.set = tiles_set_;
         td.width = grid.width;
@@ -337,10 +524,9 @@ private:
         td.tiles = grid.tiles.span();
         td.sort_layer = -1;
         MCE_TRY_ASSIGN(tilemap_, renderer_.create_tilemap(td));
-
-        samples::HudFont hud;
-        MCE_TRY_ASSIGN(font_, renderer_.create_font(hud.metrics, hud.glyphs.span(), {}, std::as_bytes(hud.atlas.span()),
-                                                    "03_platformer.hud_font"));
+        tilemap_built_ = true;
+        tile_serial_ = gs.level_serial;
+        camera_init_ = false;
         return ok();
     }
 
@@ -356,6 +542,9 @@ private:
         device_->begin_frame(rc.frame_index);
         const rhi::Extent2D bb = device_->backbuffer_size();
         const GameState& gs = world_.resource<GameState>();
+        if (gs.level_serial != tile_serial_) {
+            if (ResultV r = build_tilemap(); !r) MCE_LOG_ERROR("03_platformer: tilemap rebuild failed");
+        }
 
         // Camera: follow the player with a little look-ahead, clamped to the level.
         camera_.zoom = static_cast<f32>(bb.height) / (kViewHeightTiles * kPpm);
@@ -379,6 +568,7 @@ private:
         add_background(world, half);
         renderer_.add_tilemap(world, tilemap_);
         add_entities(world, rc.alpha);
+        world_.resource<kit::ParticleSystem>().draw(world, &PlatformerApp::resolve_fx, this);
         world.build();
 
         SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
@@ -387,9 +577,11 @@ private:
         hud.build();
 
         rhi::PassAttachment color;
-        color.clear.color[0] = 0.36f;
-        color.clear.color[1] = 0.62f;
-        color.clear.color[2] = 0.92f;
+        // Sky: day on the first level, warming to ember dusk on the climb to the summit.
+        const f32 dusk = static_cast<f32>(gs.level) / static_cast<f32>(kLevelCount - 1);
+        color.clear.color[0] = lerp(0.36f, 0.55f, dusk);
+        color.clear.color[1] = lerp(0.62f, 0.30f, dusk);
+        color.clear.color[2] = lerp(0.92f, 0.38f, dusk);
         rhi::RenderPassDesc pass;
         pass.colors = Span<const rhi::PassAttachment>(&color, 1);
         pass.debug_name = "03_platformer";
@@ -455,9 +647,13 @@ private:
                 switch (l.sprite) {
                     case Sprite::Player: {
                         const Player& p = *world_.try_get<Player>(e);
-                        s.region = !p.grounded ? art::PlayerJump : p.running ? clip_region(run_clip, t) : art::PlayerIdle;
-                        s.flip_x = p.facing < 0;
+                        s.region = p.dash_ticks > 0 ? art::PlayerDash
+                                   : !p.grounded    ? art::PlayerJump
+                                   : p.running      ? clip_region(run_clip, t)
+                                                    : art::PlayerIdle;
+                        s.flip_x = p.sliding ? p.wall > 0 : p.facing < 0;
                         s.position.y += 0.5f - 0.45f;  // art feet sit on the collider's bottom
+                        if (!p.dash_ready && !p.grounded) s.tint = Color{0.7f, 0.8f, 1.0f, 1.0f};  // dash spent
                         if (p.invuln > 0 && (p.invuln / 4) % 2 == 0) s.tint.a = 0.35f;
                         break;
                     }
@@ -476,6 +672,17 @@ private:
                     case Sprite::Spike: s.region = art::Spike; break;
                     case Sprite::Flag: s.region = art::Flag; break;
                     case Sprite::Platform: s.region = art::Platform; break;
+                    case Sprite::Crumble: {
+                        const Crumble& c = *world_.try_get<Crumble>(e);
+                        if (c.state == CrumbleState::Gone) return;
+                        s.region = art::Crumble;
+                        if (c.state == CrumbleState::Shaking) {
+                            s.position.x += ((c.timer / 2) % 2 ? 0.05f : -0.05f);
+                            const f32 heat = 1.0f - static_cast<f32>(c.timer) / 30.0f;
+                            s.tint = Color{1.0f, 1.0f - 0.4f * heat, 1.0f - 0.6f * heat, 1.0f};
+                        }
+                        break;
+                    }
                     case Sprite::Crate: {
                         // Crates rotate: draw the physics angle (no interpolation needed at 60 Hz).
                         s.region = art::Crate;
@@ -494,8 +701,36 @@ private:
         return current_region(clip, st);
     }
 
+    static void format_time(char (&out)[16], u64 ticks) {
+        if (ticks == 0) std::snprintf(out, sizeof(out), "--.-");
+        else std::snprintf(out, sizeof(out), "%.1f", static_cast<f64>(ticks) / 60.0);
+    }
+
+    void overlay(SpriteBatch& b, f32 w, f32 h, Color c) {
+        SpriteInstance s;
+        s.set = sprites_;
+        s.region = art::White;
+        s.position = vec2{0.5f * w, 0.5f * h};
+        s.scale = vec2{w, h};
+        s.tint = c;
+        s.sort_layer = 9;
+        b.add(s);
+    }
+
+    // A vertical list of entries centred at y; the selected one is gold with a marker.
+    void menu(SpriteBatch& b, f32 w, f32 y, const char* const* items, u32 count, u32 selected) {
+        for (u32 i = 0; i < count; ++i) {
+            char line[96];
+            std::snprintf(line, sizeof(line), "%s %s", i == selected ? ">" : " ", items[i]);
+            const bool sel = i == selected;
+            text(b, line, vec2{0.5f * w - 150.0f, y + 30.0f * static_cast<f32>(i)},
+                 sel ? Color{1, 0.85f, 0.3f, 1} : Color{1, 1, 1, 0.8f});
+        }
+    }
+
     void add_hud(SpriteBatch& b, rhi::Extent2D bb) {
         const GameState& gs = world_.resource<GameState>();
+        const Records* rec = world_.try_get<Records>(gs.records);
         const f32 w = static_cast<f32>(bb.width), h = static_cast<f32>(bb.height);
         if (gs.flash_ticks > 0) {
             SpriteInstance s;
@@ -509,17 +744,57 @@ private:
             b.add(s);
         }
 
-        const f64 secs = static_cast<f64>(gs.won ? gs.won_at : gs.level_ticks) / 60.0;
-        char line[160];
-        std::snprintf(line, sizeof(line), "COINS %u/%u   STOMPS %u   DEATHS %u   TIME %.1f", gs.coins, gs.coins_total,
-                      gs.stomps, gs.deaths, secs);
+        char line[160], now[16], best[16];
+        format_time(now, gs.won ? gs.won_at : gs.level_ticks);
+        format_time(best, rec ? rec->best(gs.level) : 0);
+        const Color gold{1, 0.85f, 0.3f, 1};
+
+        if (gs.mode == Mode::Menu) {
+            overlay(b, w, h, Color{0.05f, 0.03f, 0.08f, 0.72f});
+            text(b, "EMBER STEP", vec2{0.5f * w - 60, 0.22f * h}, gold);
+            const char* items[kLevelCount];
+            char rows[kLevelCount][64];
+            const u32 open = menu_options(gs, rec);
+            for (u32 i = 0; i < kLevelCount; ++i) {
+                char t[16];
+                format_time(t, rec ? rec->best(i) : 0);
+                if (i < open) std::snprintf(rows[i], sizeof(rows[i]), "%u  %-15s BEST %s", i + 1, kLevels[i].name, t);
+                else std::snprintf(rows[i], sizeof(rows[i]), "%u  LOCKED", i + 1);
+                items[i] = rows[i];
+            }
+            menu(b, w, 0.22f * h + 50.0f, items, kLevelCount, gs.selection);
+            text(b, "UP/DOWN CHOOSE   ENTER/SPACE/A PLAY", vec2{0.5f * w - 210, 0.22f * h + 220.0f},
+                 Color{1, 1, 1, 0.7f});
+            return;
+        }
+
+        std::snprintf(line, sizeof(line), "%u %s   COINS %u/%u   DEATHS %u   TIME %s   BEST %s", gs.level + 1,
+                      kLevels[gs.level].name, gs.coins, gs.coins_total, gs.deaths, now, best);
         text(b, line, vec2{14, 12}, Color{1, 1, 1, 1});
-        text(b, autoplay_ ? "AUTOPLAY" : "ARROWS/WASD MOVE   SPACE JUMP   ESC PAUSE", vec2{14, h - 30},
-             Color{1, 1, 1, 0.8f});
-        if (gs.paused) text(b, "PAUSED", vec2{0.5f * w - 36, 0.5f * h - 10}, Color{1, 0.9f, 0.3f, 1});
-        if (gs.won) {
-            std::snprintf(line, sizeof(line), "YOU WIN!  %u/%u COINS IN %.1f S", gs.coins, gs.coins_total, secs);
-            text(b, line, vec2{0.5f * w - 190, 0.5f * h - 10}, Color{1, 0.9f, 0.3f, 1});
+        const char* help = "MOVE ARROWS/WASD   JUMP SPACE   DASH SHIFT/K   PAUSE ESC   GAMEPAD: A JUMP X DASH";
+        text(b, autoplay_ ? "AUTOPLAY" : help, vec2{14, h - 30}, Color{1, 1, 1, 0.75f});
+
+        if (gs.mode == Mode::Paused) {
+            overlay(b, w, h, Color{0.05f, 0.03f, 0.08f, 0.6f});
+            text(b, "PAUSED", vec2{0.5f * w - 36, 0.35f * h}, gold);
+            const char* items[] = {"RESUME", "RESTART LEVEL", "LEVEL SELECT"};
+            menu(b, w, 0.35f * h + 50.0f, items, 3, gs.selection);
+        } else if (gs.mode == Mode::Results) {
+            overlay(b, w, h, Color{0.05f, 0.03f, 0.08f, 0.6f});
+            std::snprintf(line, sizeof(line), "%s CLEAR!", kLevels[gs.level].name);
+            text(b, line, vec2{0.5f * w - 120, 0.3f * h}, gold);
+            std::snprintf(line, sizeof(line), "TIME %s   BEST %s%s", now, best, gs.new_best ? "   NEW BEST!" : "");
+            text(b, line, vec2{0.5f * w - 170, 0.3f * h + 34}, Color{1, 1, 1, 1});
+            std::snprintf(line, sizeof(line), "COINS %u/%u   STOMPS %u   DEATHS %u", gs.coins, gs.coins_total,
+                          gs.stomps, gs.deaths);
+            text(b, line, vec2{0.5f * w - 170, 0.3f * h + 64}, Color{1, 1, 1, 0.85f});
+            const bool has_next = gs.level + 1 < kLevelCount;
+            const char* with_next[] = {"NEXT LEVEL", "RETRY", "LEVEL SELECT"};
+            const char* last[] = {"RETRY", "LEVEL SELECT"};
+            menu(b, w, 0.3f * h + 114.0f, has_next ? with_next : last, has_next ? 3u : 2u, gs.selection);
+        } else if (gs.won) {
+            text(b, gs.level + 1 == kLevelCount ? "THE SUMMIT IS YOURS!" : "LEVEL CLEAR!",
+                 vec2{0.5f * w - 110, 0.5f * h - 10}, gold);
         }
     }
 
@@ -579,10 +854,18 @@ private:
     u64 input_hash_ = kFnv64Offset;
     u64 ticks_ = 0;
 
+    bool interactive_ = false;  // a person plays: menus on, best times saved
+    u32 saved_serial_ = 0;
+
     Renderer renderer_;
     SpriteSetId sprites_;
     SpriteSetId tiles_set_;
+    SpriteSetId fx_set_;
     TilemapId tilemap_;
+    bool tilemap_built_ = false;
+    u32 tile_serial_ = 0;
+    Entity emitters_[FxPresetCount][kEmittersPerPreset];
+    u32 next_emitter_[FxPresetCount] = {};
     Font font_;
     Camera2D camera_;
     vec2 cam_pos_;

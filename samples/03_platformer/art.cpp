@@ -221,6 +221,39 @@ void make_atlas(Array<u8>& out) {
         }
         p.rect(2, 2, 13, 2, light);
     }
+    {
+        // Crumbling block: warm stone with glowing cracks.
+        const Painter p = layer(Crumble);
+        const Rgba stone{120, 85, 75, 255}, dark{80, 55, 50, 255}, crack{255, 140, 40, 255};
+        p.rect(0, 0, 15, 15, stone);
+        p.rect(0, 0, 15, 1, Rgba{160, 115, 95, 255});
+        p.rect(0, 14, 15, 15, dark);
+        p.rect(0, 0, 0, 15, dark);
+        p.rect(15, 0, 15, 15, dark);
+        const i32 cx[] = {3, 4, 5, 5, 6, 7, 8, 9, 10, 10, 11, 12};
+        for (i32 i = 0; i < 12; ++i) p.set(cx[i], 2 + i, crack);
+        for (i32 i = 0; i < 5; ++i) p.set(9 + i, 6 - i / 2, crack);
+        p.set(2, 9, crack);
+        p.set(3, 10, crack);
+    }
+    {
+        const Painter p = layer(Dot);
+        for (i32 y = 0; y < 16; ++y)
+            for (i32 x = 0; x < 16; ++x) {
+                const f32 dx = (f32(x) + 0.5f - 8.0f) / 8.0f, dy = (f32(y) + 0.5f - 8.0f) / 8.0f;
+                const f32 d = 1.0f - std::sqrt(dx * dx + dy * dy);
+                if (d > 0.0f) p.set(x, y, Rgba{255, 255, 255, static_cast<u8>(255.0f * std::fmin(1.0f, d * 1.6f))});
+            }
+    }
+    {
+        // Dash: the jump pose leaning forward, with speed lines behind.
+        const Painter p = layer(PlayerDash);
+        hero(p, 3);
+        const Rgba line{255, 220, 150, 200};
+        p.rect(0, 6, 2, 6, line);
+        p.rect(0, 9, 1, 9, line);
+        p.rect(0, 12, 2, 12, line);
+    }
     (void)kClear;
 }
 
