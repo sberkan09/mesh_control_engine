@@ -71,7 +71,9 @@ scissor state). ImGui platform and renderer backends are in `layer/src/` and ren
 Project MCP server (M9): `mce_mcp` knows only the engine's components, so a scene that uses a
 game's components cannot be opened or edited with it (`unknown component type`). `mce_add_project`
 therefore builds `<game>_mcp` as well: `mce_mcp`'s `app/main.cpp` and `engine_components.cpp` plus the
-project's `TYPES` source, linked against `mce_mcp_core`. Run it as
+project's `TYPES` and `GAME_SOURCES`, linked against `mce_mcp_core`. A generated hook hands the game's
+`install` to `editor::set_play_game_install` (as `<game>_editor` does for play-in-editor), so
+`run_headless` runs the game's systems and hashes like `<game> -headless 1`. Run it as
 `<game>_mcp --project projects/<Name> [--scene scenes/main.mcscene]`; the client speaks JSON-RPC 2.0,
 one message per line, on its stdin/stdout (`initialize`, `notifications/initialized`, then
 `tools/call` with `{"name", "arguments"}`; each result's `content[0].text` is the tool's JSON).
@@ -79,7 +81,11 @@ Values use the `.mcscene` spelling: vectors as arrays, assets as `"guid:<uuid>"`
 `asset_list`), enums by name, nested structs as objects (`{"shape": {"type": "Circle", "radius":
 0.3}}`). `entity_duplicate` inserts the copy right after its source, and `scene_new` makes a fresh
 GUID, so to re-author a scene a `.mceproj` names, `scene_open` it and `entity_delete` its entities
-instead. `projects/Kindle/tools/author_level_mcp.py` is a complete client.
+instead. `run_headless` takes `inspect` (`{"entities": [ids], "component": "Type", "show": ["Type"]}`):
+after the last tick it reports the live component values, Transient runtime fields included, of
+scene entities by id and of every entity with a component (also ones the run spawned), at most 64.
+New source files under `assets/` (a PNG with no `.mceasset`) are a cook error until `cook_run` with
+`"adopt": true` writes their sidecars. `projects/Kindle/tools/author_level_mcp.py` is a complete client.
 
 ## Rules and invariants
 
@@ -109,6 +115,8 @@ instead. `projects/Kindle/tools/author_level_mcp.py` is a complete client.
   `assets/`; `scene_save` refuses to overwrite a file changed on disk unless `force`;
   `console_exec` refuses `Cheat` and `RequiresRestart` convars unless `--allow-cheats`;
   `run_headless` plays the saved file and refuses unsaved changes.
+- `run_headless` installs what `mce_player` installs, in the same order (input, physics2d, audio,
+  particles, sequences, the game, then the scene): keep `headless_run.cpp` and `player.cpp` in step.
 
 ## How it is tested
 
@@ -126,7 +134,7 @@ mce_player", "play: Play -> Stop -> Play gives the same first-tick state and the
 `test_stub_world.cpp`. It depends on `mce_player` being built.
 
 MCP (`tests/mcp/`): ctest `test_mcp` (JSON-RPC framing, tools through the funnel, undo/redo,
-persistence rails, cheats refused, "FR-EDT-160 gate: MCP edit == SceneCommand edit (same .mcscene
+persistence rails, cheats refused, the game install and `inspect`, `cook_run` adopt, "FR-EDT-160 gate: MCP edit == SceneCommand edit (same .mcscene
 bytes, same run_headless hash, same as mce_player)", and a fuzz case); `mcp_transcript` (drives the
 real `mce_mcp` over pipes against `transcripts/demo_edit.golden.jsonl`); `mcp_symbol_wall` (no
 socket symbols in `mce_mcp_core`, no ImGui symbols in `mce_mcp_core` or `mce_mcp`; not on Windows).

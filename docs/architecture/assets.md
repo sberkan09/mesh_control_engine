@@ -171,7 +171,7 @@ Every source asset has `<source-file>.mceasset` beside it, checked into version 
 
 Rules:
 
-- Sidecars are created by the editor on import (or by `mce_cook --init` for CI-only projects); a source without a sidecar is a **cook error** ("unregistered asset, run editor or `mce_cook --adopt`") rather than a silent new GUID — silent GUID churn is how reference graphs rot.
+- Sidecars are created by the editor on import (or by `mce_cook --init` for CI-only projects); a source without a sidecar is a **cook error** ("unregistered asset", fixed by `mce_cook --adopt` or the MCP `cook_run` with `adopt`) rather than a silent new GUID — silent GUID churn is how reference graphs rot.
 - MCE-native text assets (`.mcmat`, `.mcscene`, ...) carry their GUID **inline** in a `"guid"` top-level field instead of a sidecar — they are already MCE-controlled files, and a second file per scene is noise. One exception, two lines of code, fewer files.
 - Renaming *inside the editor* = move source + sidecar together + update registry. An external (non-editor) rename is detected at the next scan as an orphan (GUID with no file) plus an unregistered file with identical content hash → auto-repair + info log, not an error.
 

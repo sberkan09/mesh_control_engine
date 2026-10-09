@@ -16,6 +16,7 @@ struct Writer {
     String& out;
     SceneEntityIndexFn entity_index;
     void* user;
+    bool all = false;  // every field, Transient and default ones included (write_scene_component_state)
 
     template <class T>
     static T load(const u8* p) {
@@ -132,8 +133,8 @@ struct Writer {
         bool first = true;
         for (usize fi = 0; fi < type.fields.size(); ++fi) {
             const refl::FieldRecord& f = type.fields[fi];
-            if (f.has(refl::FieldFlags::Transient)) continue;
-            if (mask ? fi >= 64 || ((*mask >> fi) & 1u) == 0 : is_default(f, p + f.offset, def + f.offset)) continue;
+            if (!all && f.has(refl::FieldFlags::Transient)) continue;
+            if (mask ? fi >= 64 || ((*mask >> fi) & 1u) == 0 : !all && is_default(f, p + f.offset, def + f.offset)) continue;
             out += first ? " " : ", ";
             first = false;
             append_json_string(out, f.name_str);
@@ -171,6 +172,12 @@ void write_scene_component(const refl::TypeRecord& type, const void* value, Stri
     if (type.construct_default) type.construct_default(def.data());
     Writer w{out, entity_index, user};
     w.object(type, static_cast<const u8*>(value), reinterpret_cast<const u8*>(def.data()));
+}
+
+void write_scene_component_state(const refl::TypeRecord& type, const void* value, String& out, SceneEntityIndexFn entity_index,
+                                 void* user) {
+    Writer w{out, entity_index, user, true};
+    w.object(type, static_cast<const u8*>(value), static_cast<const u8*>(value));
 }
 
 void write_scene_component_fields(const refl::TypeRecord& type, const void* value, u64 field_mask, String& out,

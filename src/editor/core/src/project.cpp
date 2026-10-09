@@ -112,12 +112,14 @@ const ProjectAsset* EditorProject::find(asset::Guid g) const {
     return nullptr;
 }
 
-const cook::CookReport& EditorProject::cook(bool pack) {
+const cook::CookReport& EditorProject::cook(bool pack, bool adopt) {
     if (!is_open()) return report_;
     rescan();
     cook::CookOptions opt;
     opt.pack = pack;
+    opt.adopt = adopt;
     report_ = service_.cook(root_.view(), opt);
+    if (adopt) rescan();  // the catalog picks up the sidecars the cook just wrote
     cooked_ = true;
     log_report();
     remount();

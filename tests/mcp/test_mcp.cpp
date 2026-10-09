@@ -14,6 +14,7 @@
 
 #include "cook_test_util.h"
 #include "mce/audio/components.h"
+#include "mce/editor/play_session.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/components.h"
 #include "mce/mcp/headless_run.h"
@@ -37,6 +38,13 @@ struct McpProbe {
     math::vec2 points[3];
 };
 MCE_COMPONENT(McpProbe, hp, (computed, ReadOnly), target, label, points)
+
+// A game component with runtime state: the game install below counts ticks into it.
+struct McpCounter {
+    u32 step = 1;
+    u32 ticks = 0;  // runtime
+};
+MCE_COMPONENT(McpCounter, step, (ticks, ReadOnly, Transient))
 
 }  // namespace mcptest
 
@@ -441,6 +449,73 @@ TEST_CASE("mcp tools: persistence stays inside the project and never clobbers si
     std::filesystem::remove(root + "/assets/scenes/broken.mcscene");
     CHECK(c.ok("cook_run", R"({"pack":true})").v().get("ok").as_bool());
     CHECK(std::filesystem::exists(root + "/assets.mce"));
+}
+
+namespace {
+
+void count_ticks(Frame& f) {
+    f.query<mcptest::McpCounter&>().each([](mcptest::McpCounter& c) { c.ticks += c.step; });
+}
+
+ResultV counter_game_install(World& w) {
+    w.register_components<mcptest::McpCounter>();
+    w.add_system(Phase::FixedUpdate_Pre, "mcp_test_count", &count_ticks);
+    return ok();
+}
+
+}  // namespace
+
+TEST_CASE("mcp tools: run_headless runs the project's game systems and inspects the final state") {
+    const std::string root = demo_project("mcp_game");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const std::string id = std::to_string(static_cast<int>(
+        c.ok("entity_create", R"({"name":"Counter","components":{"McpCounter":{"step":3}}})").v().get("id").as_number()));
+    c.ok("scene_save");
+    const std::string args = R"({"ticks":20,"log_lines":0,"inspect":{"component":"McpCounter"}})";
+
+    // mce_mcp alone: engine systems only, the counter never moves.
+    auto bare = c.ok("run_headless", args);
+    cook::JsonValue e = bare.v().get("inspect").get("entities").at(0);
+    CHECK(e.get("id").as_number() == std::stod(id));
+    CHECK(str(e.get("name")) == "Counter");
+    CHECK(e.get("components").get("McpCounter").get("ticks").as_number() == 0);  // Transient fields are reported
+
+    // A project server (<game>_mcp) registers the game's install(): its systems run in the run.
+    editor::set_play_game_install(&counter_game_install);
+    auto game = c.ok("run_headless", args);
+    editor::set_play_game_install(nullptr);
+    e = game.v().get("inspect").get("entities").at(0);
+    CHECK(e.get("components").get("McpCounter").get("ticks").as_number() == 60);
+    CHECK(e.get("components").get("McpCounter").get("step").as_number() == 3);
+    CHECK(str(game.v().get("state_hash")) != str(bare.v().get("state_hash")));
+
+    // By id, with chosen components; a scene entity's own components by default.
+    auto by_id = c.ok("run_headless", "{\"ticks\":1,\"inspect\":{\"entities\":[" + id + R"(],"show":["LocalTransform"]}})");
+    const cook::JsonValue comps = by_id.v().get("inspect").get("entities").at(0).get("components");
+    CHECK(comps.get("LocalTransform").is_object());
+    CHECK_FALSE(comps.get("McpCounter").valid());
+    CHECK(c.fails("run_headless", R"({"inspect":{"entities":[9999]}})").find("no entity") != std::string::npos);
+    CHECK(c.fails("run_headless", R"({"inspect":{"component":"Nope"}})").find("unknown component") != std::string::npos);
+    CHECK(c.fails("run_headless", R"({"inspect":{}})").find("give 'entities'") != std::string::npos);
+}
+
+TEST_CASE("mcp tools: cook_run adopt gives new source files a sidecar") {
+    const std::string root = demo_project("mcp_adopt");
+    std::filesystem::copy_file(root + "/assets/textures/ball.png", root + "/assets/textures/new_ball.png");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    auto cook = c.ok("cook_run");
+    CHECK_FALSE(cook.v().get("ok").as_bool());
+    const std::string diags = compact(cook.v().get("diagnostics"));
+    CHECK(diags.find("new_ball.png") != std::string::npos);
+    CHECK(diags.find("adopt") != std::string::npos);
+    CHECK(c.ok("cook_run", R"({"adopt":true})").v().get("ok").as_bool());
+    CHECK(std::filesystem::exists(root + "/assets/textures/new_ball.png.mceasset"));
+    CHECK(compact(c.ok("asset_list", R"({"type":"Texture"})").v()).find("textures/new_ball.png") != std::string::npos);
+    CHECK(c.ok("cook_run").v().get("ok").as_bool());  // registered now: a plain cook is clean
 }
 
 TEST_CASE("mcp tools: console list/exec, cheats refused by default") {

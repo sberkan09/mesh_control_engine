@@ -1,8 +1,10 @@
 #pragma once
 // run_headless (editor-mcp.md §5): the player's headless path, in process. A fresh AssetSystem
 // mounts the project's cooked tree and the scene plays exactly as `mce_player -headless 1` plays it
-// (physics2d + the audio bridge on a Silent device, scene::load, the app loop's stepping clock), so
-// the same scene + ticks give the same World::state_hash as the player (tests/mcp checks this).
+// (input, physics2d, the audio bridge on a Silent device, particles, sequences, then the game's
+// install() when a project server registered one with editor::set_play_game_install, scene::load,
+// the app loop's stepping clock), so the same scene + ticks give the same World::state_hash as the
+// player, or as the project's host with its game module (tests/mcp checks this).
 
 #include "mce/asset/guid.h"
 #include "mce/ecs/world.h"
@@ -20,8 +22,12 @@ struct HeadlessRun {
 using TickProgressFn = void (*)(u64 done, u64 total, void* user);
 inline constexpr u64 kProgressTicks = 60;
 
+// Called once after the last tick, while the world is still alive: `spawned[i]` is the run's
+// entity for scene entity i (file order, prefab instances flattened).
+using InspectFn = void (*)(const World& world, Span<const Entity> spawned, void* user);
+
 // `pack` is a cooked/ directory or an assets.mce pack.
 Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, TickProgressFn progress = nullptr,
-                                 void* user = nullptr);
+                                 void* user = nullptr, InspectFn inspect = nullptr, void* inspect_user = nullptr);
 
 }  // namespace mce::mcp

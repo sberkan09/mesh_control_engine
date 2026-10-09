@@ -13,7 +13,8 @@ mce_add_library(mce_mcp_core
         src/tools.cpp
         src/values.cpp
     PUBLIC_DEPS
-        mce::mce_editor_core)
+        mce::mce_editor_core
+        mce::mce_input)
 
 mce_add_executable(mce_mcp
     SOURCES

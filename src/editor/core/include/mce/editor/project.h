@@ -53,7 +53,9 @@ public:
     const cook::DiagList& scan_diags() const { return scan_diags_; }
 
     // ---- cook ----
-    const cook::CookReport& cook(bool pack = false);
+    // `adopt`: unregistered sources (a new PNG with no .mceasset) get a fresh sidecar, as
+    // `mce_cook --adopt` does, instead of a cook error.
+    const cook::CookReport& cook(bool pack = false, bool adopt = false);
     bool has_cooked() const { return cooked_; }
     const cook::CookReport& last_report() const { return report_; }
     // The cooked tree, mounted after the last cook (null before the first cook or when nothing

@@ -4,10 +4,13 @@
 
 #include "tools.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "mce/convar.h"
 #include "mce/cook/fs.h"
+#include "mce/cook/scene_text.h"
+#include "mce/ecs/transform.h"
 #include "mce/log.h"
 #include "mce/mcp/headless_run.h"
 #include "mce/mcp/values.h"
@@ -516,10 +519,10 @@ void write_report(JsonWriter& w, const cook::CookReport& r) {
 }
 
 bool cook_run(ToolCall& c) {
-    bool pack = false;
-    if (!need_project(c) || !arg_bool(c, "pack", pack)) return false;
+    bool pack = false, adopt = false;
+    if (!need_project(c) || !arg_bool(c, "pack", pack) || !arg_bool(c, "adopt", adopt)) return false;
     progress(c.server, c.progress_token, 0, 1);
-    const cook::CookReport& r = c.server.session().cook(pack);
+    const cook::CookReport& r = c.server.session().cook(pack, adopt);
     progress(c.server, c.progress_token, 1, 1);
     c.out.begin_object();
     write_report(c.out, r);
@@ -544,6 +547,145 @@ struct RunProgress {
     cook::JsonValue token;
 };
 
+// run_headless's `inspect`: which entities of the finished run to report, and the JSON written while
+// the run's world is still alive.
+constexpr usize kMaxInspected = 64;
+constexpr usize kMaxInspectTypes = 32;
+
+struct Inspect {
+    const editor::SceneDocument* doc = nullptr;
+    Array<EntityId> ids;                         // scene entities asked for by id
+    const refl::TypeRecord* filter = nullptr;    // every live entity with this component
+    Array<const refl::TypeRecord*> show;         // components to print (empty: the scene entity's own)
+    cook::String json;                           // the "inspect" array
+    Span<const Entity> spawned;                  // during the callback
+};
+
+const refl::TypeRecord* component_named(StringView name) {
+    const refl::TypeRecord* t = refl::find_type(StringId(name));
+    return t && t->is_component() ? t : nullptr;
+}
+
+bool arg_inspect(ToolCall& c, Inspect& in) {
+    const cook::JsonValue v = arg(c, "inspect");
+    if (!v.valid()) return true;
+    if (!v.is_object()) return arg_missing(c, "inspect", "an object: {\"entities\": [ids], \"component\": \"Type\", \"show\": [\"Type\"]}");
+    const cook::JsonValue ids = v.get("entities");
+    if (ids.valid()) {
+        if (!ids.is_array()) return arg_missing(c, "inspect.entities", "an array of entity ids");
+        for (u32 i = 0; i < ids.size(); ++i) {
+            const cook::JsonValue e = ids.at(i);
+            const f64 n = e.is_number() ? e.as_number() : -1.0;
+            if (n < 1.0 || n != static_cast<f64>(static_cast<u64>(n)) || !in.doc->find(static_cast<EntityId>(n))) {
+                c.error += "inspect.entities: no entity ";
+                c.error += e.is_number() ? "with that id" : "(ids are integers)";
+                c.error += " in the scene (scene_list_entities lists them)";
+                return false;
+            }
+            in.ids.push_back(static_cast<EntityId>(n));
+        }
+    }
+    const cook::JsonValue comp = v.get("component");
+    if (comp.valid()) {
+        in.filter = comp.is_string() ? component_named(comp.as_string()) : nullptr;
+        if (!in.filter) return fail(c, "inspect.component: unknown component type (refl_list_components lists them)");
+    }
+    const cook::JsonValue show = v.get("show");
+    if (show.valid()) {
+        if (!show.is_array()) return arg_missing(c, "inspect.show", "an array of component type names");
+        for (u32 i = 0; i < show.size() && in.show.size() < kMaxInspectTypes; ++i) {
+            const refl::TypeRecord* t = show.at(i).is_string() ? component_named(show.at(i).as_string()) : nullptr;
+            if (!t) return fail(c, "inspect.show: unknown component type (refl_list_components lists them)");
+            in.show.push_back(t);
+        }
+    }
+    if (in.ids.empty() && !in.filter) return fail(c, "inspect: give 'entities' (scene ids), 'component' (a type), or both");
+    return true;
+}
+
+// The scene id of a run entity (spawned[i] is scene entity i when the cooked scene has exactly the
+// document's entities, i.e. no prefab instance expanded); kNoEntity for entities the run created.
+EntityId scene_id_of(const Inspect& in, Entity e) {
+    if (e.is_null() || in.spawned.size() != in.doc->size()) return editor::kNoEntity;
+    for (usize i = 0; i < in.spawned.size(); ++i)
+        if (in.spawned[i] == e) return in.doc->entities()[i].id;
+    return editor::kNoEntity;
+}
+
+void write_inspected(Inspect& in, JsonWriter& w, const World& world, Entity e) {
+    const EntityId id = scene_id_of(in, e);
+    const DocEntity* de = id == editor::kNoEntity ? nullptr : in.doc->find(id);
+    w.begin_object();
+    if (id == editor::kNoEntity) w.key("id").null();
+    else w.key("id").num_u(id);
+    if (de) w.key("name").str(de->name.view());
+    w.key("alive").boolean(world.alive(e));
+    w.key("components").begin_object();
+    auto print = [&](const refl::TypeRecord& t) {
+        const ecs::ComponentId cid = world.find_component(t.type_hash);
+        const void* value = cid == ecs::kInvalidComponent || !world.alive(e) ? nullptr : world.get_raw(e, cid);
+        if (!value) return;
+        cook::String text;
+        cook::write_scene_component_state(t, value, text,
+                                          [](const void* field, void* user) {
+                                              Entity ref;
+                                              std::memcpy(&ref, field, sizeof(ref));
+                                              const EntityId rid = scene_id_of(*static_cast<const Inspect*>(user), ref);
+                                              return rid == editor::kNoEntity ? cook::kNoSceneEntity : rid;
+                                          },
+                                          &in);
+        w.key(t.name).raw(text.view());
+    };
+    if (!in.show.empty()) {
+        for (const refl::TypeRecord* t : in.show) print(*t);
+    } else if (de) {
+        for (const DocComponent& dc : de->components) print(*dc.type);
+    } else if (in.filter) {
+        print(*in.filter);
+        if (in.filter != &refl::type_of<LocalTransform>()) print(refl::type_of<LocalTransform>());
+    }
+    w.end_object().end_object();
+}
+
+void inspect_run(const World& world, Span<const Entity> spawned, void* user) {
+    Inspect& in = *static_cast<Inspect*>(user);
+    in.spawned = spawned;
+    Array<Entity> picked;
+    for (EntityId id : in.ids) {
+        for (usize i = 0; i < in.doc->size() && i < spawned.size(); ++i)
+            if (in.doc->entities()[i].id == id && spawned.size() == in.doc->size()) picked.push_back(spawned[i]);
+    }
+    bool truncated = false;
+    if (in.filter) {
+        const ecs::ComponentId cid = world.find_component(in.filter->type_hash);
+        if (cid != ecs::kInvalidComponent) {
+            for (const auto& table : world.tables()) {
+                const Span<const ecs::ComponentId> ids = table->ids();
+                if (std::find(ids.begin(), ids.end(), cid) == ids.end()) continue;
+                for (Entity e : table->entities()) {
+                    if (std::find(picked.begin(), picked.end(), e) != picked.end()) continue;
+                    if (picked.size() >= kMaxInspected) {
+                        truncated = true;
+                        break;
+                    }
+                    picked.push_back(e);
+                }
+            }
+        }
+    }
+    // Scene order first (by id), then entities the run made, by handle: stable across runs.
+    std::sort(picked.begin(), picked.end(), [&](Entity a, Entity b) {
+        const EntityId ia = scene_id_of(in, a), ib = scene_id_of(in, b);
+        if ((ia == editor::kNoEntity) != (ib == editor::kNoEntity)) return ib == editor::kNoEntity;
+        if (ia != ib) return ia < ib;
+        return a.index < b.index;
+    });
+    JsonWriter w(in.json);
+    w.begin_object().key("count").num_u(picked.size()).key("truncated").boolean(truncated).key("entities").begin_array();
+    for (Entity e : picked) write_inspected(in, w, world, e);
+    w.end_array().end_object();
+}
+
 bool run_headless_tool(ToolCall& c) {
     u64 ticks = kDefaultTicks;
     u64 log_lines = 20;
@@ -553,6 +695,10 @@ bool run_headless_tool(ToolCall& c) {
     const Server::SceneFile& file = c.server.scene_file();
     if (file.rel.empty()) return fail(c, "the scene was never saved: scene_save it (with a path under assets/) first");
     if (scene(c).dirty()) return fail(c, "the scene has unsaved changes: scene_save first (run_headless plays the cooked file)");
+    Inspect inspect;
+    inspect.doc = &scene(c).doc();
+    if (!arg_inspect(c, inspect)) return false;
+    const bool inspecting = !inspect.ids.empty() || inspect.filter;
 
     const u64 since = log::console_last_seq();
     const cook::CookReport& r = c.server.session().cook(false);
@@ -568,7 +714,7 @@ bool run_headless_tool(ToolCall& c) {
                                                auto* p = static_cast<RunProgress*>(user);
                                                progress(*p->server, p->token, done, total);
                                            } : static_cast<TickProgressFn>(nullptr),
-                                           &rp);
+                                           &rp, inspecting ? &inspect_run : nullptr, &inspect);
     Array<log::ConsoleLine> lines;
     read_log(since, lines);
     if (!run) {
@@ -601,6 +747,7 @@ bool run_headless_tool(ToolCall& c) {
     c.out.key("log").begin_object().key("warnings").num_u(warnings).key("errors").num_u(errors).key("tail");
     write_log_lines(c.out, lines.span(), static_cast<usize>(log_lines));
     c.out.end_object();
+    if (inspecting) c.out.key("inspect").raw(inspect.json.view());
     c.out.end_object();
     return true;
 }
@@ -751,13 +898,20 @@ const ToolDef kTools[] = {
     {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
      scene_undo},
     {"scene_redo", "Redo the last undone scene edit.", kNoArgs, scene_redo},
-    {"cook_run", "Cook the project (incremental). pack: also write assets.mce. Returns counts and diagnostics with file:line.",
-     R"({"type":"object","properties":{"pack":{"type":"boolean","default":false}}})", cook_run},
+    {"cook_run",
+     "Cook the project (incremental). pack: also write assets.mce. adopt: give new source files (a PNG, WAV or TTF "
+     "added under assets/ with no .mceasset sidecar) a sidecar with a fresh GUID instead of a cook error. Returns "
+     "counts and diagnostics with file:line.",
+     R"({"type":"object","properties":{"pack":{"type":"boolean","default":false},"adopt":{"type":"boolean","default":false}}})",
+     cook_run},
     {"cook_errors", "Diagnostics of the last cook (file, line, col, stage, message).", kNoArgs, cook_errors},
     {"run_headless",
-     "Cook, then play the saved scene headless for N fixed ticks exactly as mce_player -headless does. Returns the "
-     "World state_hash (same scene + ticks = same hash), World metrics and the log tail.",
-     R"({"type":"object","properties":{"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20}}})",
+     "Cook, then play the saved scene headless for N fixed ticks exactly as the game's host plays it with -headless "
+     "(the game's own systems included in a project server). Returns the World state_hash (same scene + ticks = same "
+     "hash), World metrics and the log tail. inspect: after the last tick, report the live component values (Transient "
+     "runtime fields included) of scene entities by id and/or of every entity with a component (at most 64); show "
+     "picks the components to print.",
+     R"json({"type":"object","properties":{"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20},"inspect":{"type":"object","properties":{"entities":{"type":"array","items":{"type":"integer"},"description":"Scene entity ids"},"component":{"type":"string","description":"Every live entity with this component (also ones the run spawned)"},"show":{"type":"array","items":{"type":"string"},"description":"Components to print (default: the entity's scene components, or the filter component + LocalTransform)"}}}}})json",
      run_headless_tool},
     {"console_list", "List console variables (type, value, flags, help) and console functions. Optional name prefix.",
      R"({"type":"object","properties":{"prefix":{"type":"string"}}})", console_list},
