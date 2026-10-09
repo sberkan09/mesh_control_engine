@@ -1,0 +1,183 @@
+# 4. Scenes, entities and prefabs
+
+A scene is a list of entities, each a named bag of components. The editor, an MCP agent and your
+text editor all write the same file format, and the cook turns it into the binary the game loads.
+
+## 4.1 The scene file
+
+`assets/scenes/main.mcscene` from the template:
+
+```json
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "0d4f8a7e-...",
+  "name": "main",
+  "entities": [
+    {
+      "name": "Camera",
+      "components": {
+        "Camera2DComponent": { "pixels_per_meter": 48 },
+        "LocalTransform": { "position": [0, 2, 0] }
+      }
+    },
+    {
+      "name": "Ground",
+      "components": {
+        "Collider2D": { "shape": { "half": [10, 0.5] }, "density": 0 },
+        "LocalTransform": { "position": [0, -3, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:5b1c...", "size": [20, 1] }
+      }
+    },
+    {
+      "name": "Spinner",
+      "components": {
+        "LocalTransform": { "position": [-3, 1.5, 0] },
+        "Sprite": { "texture": "guid:9e02...", "size": [1.5, 1.5] },
+        "Spin": { "degrees_per_second": 120 }
+      }
+    }
+  ]
+}
+```
+
+How values are spelled, by field kind:
+
+| Field kind | Spelling |
+|---|---|
+| bool | `true` / `false` |
+| integer, float | a number (integers must be whole and in range) |
+| string (`FixedString<N>`) | `"text"` within the capacity |
+| enum | the enumerator name, `"Dynamic"` |
+| vec2 / vec3 / vec4 / quat / colour | a number array, `[x, y]`, `[r, g, b, a]` |
+| asset reference | `"guid:<uuid>"` or `null` |
+| entity reference | `"$<index>"` into this file's `entities` array, or `null` |
+| nested struct | an object, `{"type": "Circle", "radius": 0.3}` |
+| fixed array | an array of exactly `count` elements |
+
+Omitted fields keep their C++ defaults, which is why `"RigidBody2D": {}` is a valid static body.
+`Transient` fields must not appear. Component names are the unqualified C++ names
+(`Sprite`, not `mce::kit::Sprite`), engine and game alike.
+
+The editor saves in this exact shape (sorted components, canonical formatting), so a scene
+written by hand or by an agent and then saved by the editor diffs cleanly.
+
+## 4.2 Entities and components
+
+An entity is nothing but an id; what it is comes from its components. The engine's components you
+will use most:
+
+| Component | Chapter | Purpose |
+|---|---|---|
+| `LocalTransform` | here | position, rotation (quaternion), scale: the pose of record |
+| `ChildOf` | here | parent entity; the engine composes `WorldTransform` |
+| `Sprite`, `TextLabel`, `Camera2DComponent`, `Parallax`, `Light2D`, `Post2DComponent`, `TilemapLayer`, `ParticleEmitter` | 7 | the 2D drawing kit |
+| `RigidBody2D`, `Collider2D`, `CharacterController2D` | 9 | 2D physics |
+| `AudioSource`, `AudioSpatial`, `AudioListener` | 10 | sound |
+| `SequencePlayer` | 13 | scripted action lists |
+| `SaveKey` | 13 | stable identity for save games |
+
+Your game adds its own (chapter 6). Every component is a plain struct the inspector, the cook, the
+scene loader and the MCP server all understand through reflection, so a new component needs no
+editor or cook change.
+
+`LocalTransform` places an entity; 2D scenes use `position.x`, `position.y` and the rotation about
+Z. Rotation is a quaternion in the file (`[x, y, z, w]`); the inspector shows it as three Euler
+angles in degrees, so for 2D you edit the Z lane.
+
+## 4.3 Hierarchy
+
+Add `ChildOf {"parent": "$<index>"}` (or drag in the Hierarchy panel) to attach an entity to
+another. The child's `LocalTransform` is then relative to the parent, and the engine writes a
+read-only `WorldTransform` every tick after the fixed update. Rules:
+
+- Destroying a parent destroys its subtree.
+- A `ChildOf` that would form a cycle is rejected; the entity stays a root.
+- In 2D, a bodied child (one with `RigidBody2D`) is placed by physics, not by its parent, during
+  play. Keep physics bodies as roots or make them kinematic and move them yourself.
+- Systems that read `WorldTransform` must run after `transform_propagate` in `FixedUpdate_Post`
+  (chapter 6).
+
+## 4.4 Entity references
+
+A component field of type `Entity` is an entity reference. In the file it is `"$<index>"`, the
+position of the target in the same file. The editor's picker and MCP's `component_set` take the
+target's entity id and write the index for you. At load the reference becomes the spawned entity;
+an index outside the scene becomes null.
+
+Prefab instances can reference entities inside the prefab; references from an instance to the
+containing scene are resolved after flattening (section 4.6).
+
+## 4.5 Several scenes
+
+A project can hold any number of `.mcscene` files. `start_scene` in the `.mceproj` names the one the
+game starts with; `-scene scenes/other.mcscene` (or its GUID) plays another. There is no built-in
+scene switching at run time yet: a game that needs several levels either keeps them in one scene
+and moves the player between areas, or loads the next scene from code (`scene::load` with a GUID
+the game stores on a component) after destroying the old entities. The samples take the first
+route. The editor opens one document at a time.
+
+## 4.6 Prefabs
+
+A prefab is a reusable entity tree in a `.mcprefab` file. The format is the scene format with
+`"format": "mce-prefab"`, no `settings`, and entity 0 as the root:
+
+```json
+{
+  "format": "mce-prefab", "version": 1, "guid": "a1b2...", "name": "turret",
+  "entities": [
+    { "name": "Turret", "components": {
+        "LocalTransform": { "position": [0, 1, 0] },
+        "Sprite": { "texture": "guid:..." },
+        "Health": { "hp": 50 } } },
+    { "name": "Barrel", "components": {
+        "LocalTransform": { "position": [1, 0, 0] },
+        "ChildOf": { "parent": "$0" } } }
+  ]
+}
+```
+
+**Instancing.** In a scene (or in another prefab), an entity may be an instance instead of a
+plain entity:
+
+```json
+{ "name": "Turret A", "prefab": "guid:a1b2...", "components": {
+    "LocalTransform": { "position": [5, 0, 0] },
+    "Health": { "hp": 99 } } }
+```
+
+`components` on an instance are **overrides** of the root entity's fields (and may add components
+the root lacks). `LocalTransform` is always the instance's own placement. Overrides apply to the
+root only; per-child overrides are not supported yet.
+
+**Flattening.** The cook expands instances into plain entities (nested instances included), so the
+runtime never sees a prefab, only rows. Editing a prefab asset re-cooks every scene that uses it.
+
+**In the editor.**
+
+- Drag a `.mcprefab` from the Assets panel into the viewport to create an instance.
+- Instance fields show an override mark in the Inspector when they differ from the prefab.
+  **Revert** drops the override; **Apply to prefab** writes the value into the prefab file for
+  every instance (entity references are not applied, since they name this scene's entities).
+- Open a prefab asset (double-click or "Open prefab") to edit it like a scene; Save re-cooks its
+  users and the instances in your scene follow on hot reload.
+- To make a **new** prefab, write the `.mcprefab` file (copy the entities out of a scene and set
+  the format and a fresh GUID, or ask an MCP agent to do it with `scene_new` and `scene_save`),
+  then "Rescan assets". The editor has no "save selection as prefab" command yet.
+
+**At run time.** `ecs::instantiate` spawns a cooked prefab from code with a replica count, a parent
+and typed overrides (`PrefabOverride::of("Health.hp", 99.0f)`), which is how a game spawns enemies,
+bullets or pickups it did not place in the scene (chapter 6).
+
+## 4.7 Authoring tips
+
+- **Name entities.** Names are how the Hierarchy, `-editor.select`, MCP's listings and your own
+  debugging find things; they cost nothing at run time.
+- **Author in metres.** The template camera shows 48 pixels per metre, so a 1280 x 720 window sees
+  about 26.7 by 15 metres. A one-metre sprite is a sensible tile.
+- **Keep runtime state out of the file.** Mark fields that only the game writes (`started`,
+  `timer`, `vel`) as `Transient` (and `ReadOnly` for the inspector) so scenes stay small and the
+  cook's determinism check is not disturbed by stale values.
+- **A scene without a camera** still cooks and plays; the player then renders nothing useful. Put
+  exactly one `Camera2DComponent` with `primary: true` in every playable scene.
