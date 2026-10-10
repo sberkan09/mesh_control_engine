@@ -38,6 +38,7 @@ import zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXE = ".exe" if os.name == "nt" else ""
 MODULE_PREFIX, MODULE_SUFFIX = ("", ".dll") if os.name == "nt" else ("lib", ".so")
+ENGINE_SUFFIX = ".dylib" if sys.platform == "darwin" else MODULE_SUFFIX  # SHARED, not MODULE
 
 ARTIFACTS = {
     "diorama": {
@@ -155,12 +156,12 @@ def ship(art, args):
     if module:
         files[os.path.basename(module)] = module
     # The engine umbrella shared library, when the build has one (game-module platforms).
-    engine = os.path.join(build_dir, "src", "module", MODULE_PREFIX + "mce_engine" + MODULE_SUFFIX)
+    engine = os.path.join(build_dir, "src", "module", MODULE_PREFIX + "mce_engine" + ENGINE_SUFFIX)
     if module and os.path.isfile(engine):
         files[os.path.basename(engine)] = engine
     for name, src in files.items():
         shutil.copy2(src, os.path.join(stage, name))
-    binaries = [art["name"] + EXE] + [n for n in files if n.endswith(MODULE_SUFFIX)]
+    binaries = [art["name"] + EXE] + [n for n in files if n.endswith((MODULE_SUFFIX, ENGINE_SUFFIX))]
     symbols = os.path.join(args.out, stem + "-symbols")
     shutil.rmtree(symbols, ignore_errors=True)
     build_ids = {}

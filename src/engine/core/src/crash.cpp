@@ -459,8 +459,35 @@ void on_signal(int sig, siginfo_t* info, void* uctx) {
             break;
         }
     }
+#if defined(__APPLE__)
+    // Darwin's frame-pointer walk skips the faulting frame itself: it goes from _sigtramp straight to
+    // the caller. Report the pc as #0 and continue from the frame after _sigtramp.
+    bool pc_first = false;
+    if (first == 0 && pc != 0 && (n == 0 || reinterpret_cast<uintptr_t>(frames[0]) != pc)) {
+        for (int i = 0; i < n; ++i) {
+            Dl_info di{};
+            if (dladdr(frames[i], &di) && di.dli_sname && std::strcmp(di.dli_sname, "_sigtramp") == 0) {
+                first = i + 1;
+                pc_first = true;
+                break;
+            }
+        }
+        // The next entry can be a stale link register inside the faulting function itself (its last
+        // call's return address), not a caller: drop it when it lands in the same symbol before pc.
+        Dl_info at_pc{};
+        Dl_info next{};
+        if (pc_first && first < n && dladdr(reinterpret_cast<void*>(static_cast<uintptr_t>(pc)), &at_pc) &&
+            dladdr(frames[first], &next) && at_pc.dli_saddr && at_pc.dli_saddr == next.dli_saddr &&
+            reinterpret_cast<uintptr_t>(frames[first]) < pc)
+            ++first;
+    }
+#else
+    constexpr bool pc_first = false;
+#endif
     o.put("backtrace:\n");
-    for (int i = first; i < n; ++i) put_frame(o, static_cast<usize>(i - first), reinterpret_cast<uintptr_t>(frames[i]));
+    usize index = 0;
+    if (pc_first) put_frame(o, index++, pc);
+    for (int i = first; i < n; ++i) put_frame(o, index++, reinterpret_cast<uintptr_t>(frames[i]));
     put_modules(o);
     put_breadcrumbs(o);
     o.put("crash report: ");
