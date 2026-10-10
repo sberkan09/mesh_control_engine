@@ -181,7 +181,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
-Skinned animation (only via Open Question 3 promotion), scene streaming (FR-ENT-120, trigger: a game outgrows one chunk), auto-parallel scheduling experiment (M3+ flag, gated by FR-RUN-040), engine-level live DLL reload (N13, measured trigger), Vulkan/D3D12 backend (N14, after both anchor games ship; the Metal backend is the sanctioned exception, M-MAC), mod support, networking, localization, **in-game AI (LLM-driven NPCs/dialogue, runtime content generation — latency, per-call cost and sim non-determinism vs FR-RUN-040; would also need the network stack N7 rules out)** — each with its recorded re-entry trigger from REQUIREMENTS §5/§6.3.
+Skinned animation (only via Open Question 3 promotion), scene streaming (FR-ENT-120, trigger: a game outgrows one chunk), auto-parallel scheduling (**experiment run 2026-10-10 and not merged**: deterministic under FR-RUN-040 but no win for any MCE game, whose fixed-step sims take microseconds per tick in `after`-chained phases; findings and re-entry trigger in `docs/research/auto-parallel-scheduling.md`), engine-level live DLL reload (N13, measured trigger), Vulkan/D3D12 backend (N14, after both anchor games ship; the Metal backend is the sanctioned exception, M-MAC), mod support, networking, localization, **in-game AI (LLM-driven NPCs/dialogue, runtime content generation — latency, per-call cost and sim non-determinism vs FR-RUN-040; would also need the network stack N7 rules out)** — each with its recorded re-entry trigger from REQUIREMENTS §5/§6.3.
 
 **Milestone → tier map (effort-summed, finding F3):**
 

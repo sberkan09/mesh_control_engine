@@ -150,5 +150,5 @@ Headless sample runs exercise the ECS end to end, for example `sample_02_boids_3
   M6-ecs.md).
 - The renderer's extract does not use `changed<WorldTransform>()` for interpolation yet (M6-ecs.md, ADR-0025).
 - Per-subsystem hashers composed into `state_hash` are not done (ADR-0025, "Not in this change").
-- Systems run serially on the main thread. The auto-parallel experiment in ecs-gameplay.md §4.1 is not built,
-  and `mce::jobs` runs inline.
+- Systems run serially on the main thread, and `mce::jobs` runs inline. The auto-parallel experiment
+  (ecs-gameplay.md §4.1) was built, measured and not merged; see `docs/research/auto-parallel-scheduling.md`.
