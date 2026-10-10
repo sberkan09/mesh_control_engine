@@ -71,3 +71,19 @@ one), `-headless 1 -ticks N` (no window; prints `N ticks, E entities, state_hash
 Regenerate after changing the island's shape: `python3 tools/gen_assets.py`, update
 `tools/terrain_ref.txt` (the test's reference heights; see the test), then re-author the scene with
 `tools/author_island_mcp.py` so every prop sits on the new ground.
+
+## Measured on Apple M4 (Metal)
+
+`solstice_reach -frames 600 -autoplay 1`, macOS release build, Metal backend (MSL 2.3 via SPIRV-Cross),
+1280x720 window, vsync on; averaged over 590 frames (129,992 triangles drawn, 3,220 instances).
+
+| stage | CPU ms |
+|---|---|
+| gameplay tick (ECS + World3D) | 0.095 |
+| scene build (scatter cells + cull + sort + cascades + clusters) | 0.891 |
+| command recording (3D + HUD) | 0.936 |
+| translate + submit (the table still labels it "GL") | 6.448 |
+
+Wall clock: 600 frames in 5.19 s, about 8.7 ms a frame (115 fps). Most of the submit time is probably the wait
+for the next drawable under vsync (not measured separately). The GPU column is empty because the Metal device does not record
+timestamp queries yet (`caps().timestamp_queries == false`), so the HUD shows `GPU -1.00 MS`.
