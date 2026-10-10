@@ -15,6 +15,7 @@ pipeline the engine creates today renders on Metal; `.app` packaging and the par
 | `mce_rhi_metal` | `src/engine/rhi_metal` | buffers, textures (2D, arrays, MSAA, BCn, depth), samplers (incl. compare), pipelines, `CommandBuffer` → encoders, 3 frame slots on shared rings, MDI with `[[base_instance]]`, resolve, readback |
 | Shaders | `rhi_metal/src/shader_cross.cpp` | GLSL 450 → SPIR-V → MSL at pipeline creation (ADR-0028 §2: deviation from the cook-time default, see Open) |
 | GPU timestamps | `rhi_metal/src/metal_device.mm` (`init_timestamps`, `collect_timestamps`) | `caps().timestamp_queries` true on Apple silicon; every encoder samples start/end into the slot's `MTLCounterSampleBuffer` (Apple GPUs only sample at stage boundaries), `write_timestamp(i)` = latest valid sample of the encoders before it (GL `glQueryCounter` semantics); `render3d_gl: GPU timestamps time every stage` now runs on Metal |
+| Xcode GPU captures | `rhi_metal/src/metal_device.mm` (`init_capture`, `begin_capture`, `end_capture`) | `MTL_CAPTURE_ENABLED=1 MCE_METAL_CAPTURE=<frame>:<path>.gputrace <exe>` writes that frame (begin_frame to present) as an Xcode GPU trace through `MTLCaptureManager`. Recorded 2026-10-11 at frame 90 (release, M4), kept on the Mac (`~/Projects/metal_captures/gputrace-2026-10-11/`, 26-152 MB each, not in git): Solstice Reach (cascaded shadows, Forward+ PBR, sky, MSAA resolve, bloom, tonemap, FXAA, GPU timestamps), `04_cubes` (MDI + `[[base_instance]]`), `04_diorama`, `sprites_2d` (2D batches), `03_platformer` |
 | `.dylib` modules | `src/module/CMakeLists.txt` | `-force_load` umbrella, `@loader_path` rpath; `test_module`, `abi_spike`, the devhost and `03_platformer` load game modules |
 | Presets | `CMakePresets.json` | `macos-debug`, `macos-release`, `macos-asan` |
 | Mac CI | `scripts/ci/local_ci_macos.sh` | walls, three presets, Metal validation, windowed samples with captures, determinism |
@@ -38,7 +39,6 @@ Filled per landing in the PR description; the first landing's table is in the PR
 |---|---|
 | Shader translation at cook time (ADR-0028 §2) | waits for cooked shaders (`ShaderKey`); then the translator moves into the cook and leaves `mce_rhi_metal` |
 | `.app` packaging for the player, 10-minute soak from Finder | not started (`scripts/ship.py` produces the Linux/Windows layouts) |
-| Xcode GPU capture per backend feature | not yet recorded |
 | Deployment target below macOS 26 | needs a float `from_chars` fallback in the cook's JSON reader (cloud-owned) |
 | Readback of R11G11B10F / depth targets | unsupported (returns `Unsupported`); GL reads them |
 | AddressSanitizer on macOS | the ASan runtime (AppleClang 17 and Homebrew LLVM 21) hangs in shadow-memory init on macOS 26.6 even for a 3-line program; `macos-asan` runs UBSan only until a toolchain update fixes it |
