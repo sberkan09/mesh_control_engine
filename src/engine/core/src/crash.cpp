@@ -21,11 +21,17 @@
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <fcntl.h>
-#include <link.h>
 #include <signal.h>
 #include <sys/stat.h>
-#include <ucontext.h>
 #include <unistd.h>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#include <mach-o/loader.h>
+#include <sys/ucontext.h>  // <ucontext.h> needs _XOPEN_SOURCE on macOS
+#elif defined(__linux__)
+#include <link.h>
+#include <ucontext.h>
+#endif
 #endif
 
 #if defined(__SANITIZE_ADDRESS__)
@@ -47,7 +53,7 @@ struct State {
     char app[64] = {};
     char header[512] = {};
     usize header_len = 0;
-#if !defined(_WIN32)
+#if defined(__linux__)
     char exe[512] = {};  // /proc/self/exe, for the main module (dl_iterate_phdr reports it as "")
 #endif
     bool hooked = false;
@@ -301,9 +307,15 @@ const char* signal_name(int sig) {
 u64 fault_pc(void* uctx) {
     if (!uctx) return 0;
     const auto* uc = static_cast<const ucontext_t*>(uctx);
-#if defined(__x86_64__)
+#if defined(__APPLE__) && defined(__x86_64__)
+    return static_cast<u64>(uc->uc_mcontext->__ss.__rip);
+#elif defined(__APPLE__) && defined(__aarch64__) && defined(arm_thread_state64_get_pc)
+    return static_cast<u64>(arm_thread_state64_get_pc(uc->uc_mcontext->__ss));
+#elif defined(__APPLE__) && defined(__aarch64__)
+    return static_cast<u64>(uc->uc_mcontext->__ss.__pc);
+#elif defined(__linux__) && defined(__x86_64__)
     return static_cast<u64>(uc->uc_mcontext.gregs[REG_RIP]);
-#elif defined(__aarch64__) && defined(__linux__)
+#elif defined(__linux__) && defined(__aarch64__)
     return static_cast<u64>(uc->uc_mcontext.pc);
 #else
     (void)uc;
@@ -311,6 +323,44 @@ u64 fault_pc(void* uctx) {
 #endif
 }
 
+#if defined(__APPLE__)
+// "build_id <hex>" from the image's LC_UUID (what atos/dSYMs match on), or nothing.
+void put_build_id(Out& o, const mach_header* mh) {
+    const bool is64 = mh->magic == MH_MAGIC_64;
+    if (!is64 && mh->magic != MH_MAGIC) return;
+    const auto* p = reinterpret_cast<const unsigned char*>(mh) + (is64 ? sizeof(mach_header_64) : sizeof(mach_header));
+    for (u32 i = 0; i < mh->ncmds; ++i) {
+        const auto* lc = reinterpret_cast<const load_command*>(p);
+        if (lc->cmd == LC_UUID) {
+            const auto* uc = reinterpret_cast<const uuid_command*>(lc);
+            static constexpr char kHex[] = "0123456789abcdef";
+            o.put(" build_id ");
+            for (unsigned char b : uc->uuid) {
+                o.put(&kHex[b >> 4], 1);
+                o.put(&kHex[b & 0xF], 1);
+            }
+            return;
+        }
+        p += lc->cmdsize;
+    }
+}
+
+// One "module <load address> build_id <uuid> <path>" line per loaded image (dyld's list).
+void put_modules(Out& o) {
+    const u32 count = _dyld_image_count();
+    for (u32 i = 0; i < count; ++i) {
+        const mach_header* mh = _dyld_get_image_header(i);
+        const char* name = _dyld_get_image_name(i);
+        if (!mh) continue;
+        o.put("module ");
+        o.hex(reinterpret_cast<uintptr_t>(mh));
+        put_build_id(o, mh);
+        o.put(" ");
+        o.put(name ? name : "?");
+        o.put("\n");
+    }
+}
+#elif defined(__linux__)
 // "build_id <hex>" from the module's PT_NOTE segments (NT_GNU_BUILD_ID), or nothing.
 void put_build_id(Out& o, const dl_phdr_info* info) {
     for (ElfW(Half) i = 0; i < info->dlpi_phnum; ++i) {
@@ -348,6 +398,11 @@ int put_module(dl_phdr_info* info, size_t, void* user) {
     o.put("\n");
     return 0;
 }
+
+void put_modules(Out& o) { dl_iterate_phdr(&put_module, &o); }
+#else
+void put_modules(Out&) {}  // no portable module list on other POSIX systems
+#endif
 
 void put_frame(Out& o, usize index, u64 pc) {
     o.put("#");
@@ -406,7 +461,7 @@ void on_signal(int sig, siginfo_t* info, void* uctx) {
     }
     o.put("backtrace:\n");
     for (int i = first; i < n; ++i) put_frame(o, static_cast<usize>(i - first), reinterpret_cast<uintptr_t>(frames[i]));
-    dl_iterate_phdr(&put_module, &o);
+    put_modules(o);
     put_breadcrumbs(o);
     o.put("crash report: ");
     o.put(report);
@@ -423,8 +478,10 @@ void on_signal(int sig, siginfo_t* info, void* uctx) {
 }
 
 [[maybe_unused]] bool hook() {  // unused under ASan (see install)
+#if defined(__linux__)
     const ssize_t len = ::readlink("/proc/self/exe", g_state.exe, sizeof(g_state.exe) - 1);
     g_state.exe[len > 0 ? len : 0] = '\0';
+#endif
     void* warm[1];
     (void)backtrace(warm, 1);  // loads the unwinder now, not inside the handler
 
