@@ -1,5 +1,9 @@
 #include <doctest/doctest.h>
 
+#include <filesystem>
+#include <fstream>
+#include <string>
+
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 
@@ -152,4 +156,23 @@ TEST_CASE("platform: a virtual gamepad hot-plugs into slot 0 and streams standar
     CHECK(rec.saw(platform::EventType::GamepadRemoved));
     CHECK_FALSE(platform::gamepad_connected(0));
     w.value()->set_event_handler(nullptr, nullptr);
+}
+
+TEST_CASE("platform: list_files names the regular files of a folder, sorted; a missing folder is empty") {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::path(MCE_TEST_TMP_DIR) / "list_files";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "sub.mce");
+    for (const char* n : {"b.mce", "a.mce", "load_order.txt"}) std::ofstream(dir / n) << "x";
+    const std::string d = dir.generic_string() + "/";
+    Array<FixedString<256>> names;
+    mce::platform::list_files(StringView(d.data(), d.size()), names);
+    REQUIRE(names.size() == 3);  // the sub.mce directory is left out
+    if (names.size() != 3) return;
+    CHECK(names[0].view() == "a.mce");
+    CHECK(names[1].view() == "b.mce");
+    CHECK(names[2].view() == "load_order.txt");
+    const std::string missing = (dir / "nope").generic_string();
+    mce::platform::list_files(StringView(missing.data(), missing.size()), names);
+    CHECK(names.empty());
 }

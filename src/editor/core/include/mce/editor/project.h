@@ -61,6 +61,9 @@ public:
     // The cooked tree, mounted after the last cook (null before the first cook or when nothing
     // could be mounted). Replaced on every cook: holders re-read it when generation() moves.
     asset::AssetSystem* mounted() { return mounted_.get(); }
+    // A mod project's game packs (mod.json "base", ADR-0034), mounted after the cooked tree so the
+    // mod's scenes see the game's assets. Empty for an ordinary project. Refreshed by every mount.
+    Span<const StringView> base_roots() const { return base_views_.span(); }
     u64 generation() const { return generation_; }
     // Rescans + cooks only when the cooked manifest is missing (first open of a fresh checkout).
     void ensure_cooked();
@@ -83,6 +86,9 @@ private:
     cook::DiagList scan_diags_;
     cook::CookReport report_;
     mem::UniquePtr<asset::AssetSystem> mounted_;
+    Array<cook::String> bases_;
+    Array<StringView> base_views_;                     // into bases_
+    HashMap<asset::Guid, asset::ChunkType> base_assets_;  // what the bases hold (reload skips them)
     u64 generation_ = 0;
     bool cooked_ = false;
 };

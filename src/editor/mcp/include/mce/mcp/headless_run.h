@@ -30,8 +30,9 @@ inline constexpr u64 kProgressTicks = 60;
 using InspectFn = void (*)(const World& world, Span<const Entity> spawned, void* user);
 
 // `pack` is a cooked/ directory or an assets.mce pack. `input` (optional) is sampled per tick.
+// `base`: packs mounted after `pack` (a mod project's game, ADR-0034), so its assets win over them.
 Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, TickProgressFn progress = nullptr,
                                  void* user = nullptr, InspectFn inspect = nullptr, void* inspect_user = nullptr,
-                                 app::IInputSource* input = nullptr);
+                                 app::IInputSource* input = nullptr, Span<const StringView> base = {});
 
 }  // namespace mce::mcp

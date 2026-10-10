@@ -23,6 +23,7 @@ const char* chunk_type_name(ChunkType t) {
         case ChunkType::StringTable: return "StringTable";
         case ChunkType::Tilemap: return "Tilemap";
         case ChunkType::Sequence: return "Sequence";
+        case ChunkType::ModInfo: return "ModInfo";
     }
     return "ChunkType(?)";
 }

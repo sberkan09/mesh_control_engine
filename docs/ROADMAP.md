@@ -188,9 +188,11 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
-Auto-parallel scheduling (**experiment run 2026-10-10 and not merged**: deterministic under FR-RUN-040 but no win for any MCE game, whose fixed-step sims take microseconds per tick in `after`-chained phases; findings and re-entry trigger in `docs/research/auto-parallel-scheduling.md`), engine-level live DLL reload (N13, measured trigger), Vulkan/D3D12 backend (N14, after both anchor games ship; the Metal backend is the sanctioned exception, M-MAC), mod support, networking, localization, **in-game AI (LLM-driven NPCs/dialogue, runtime content generation — latency, per-call cost and sim non-determinism vs FR-RUN-040; would also need the network stack N7 rules out)** — each with its recorded re-entry trigger from REQUIREMENTS §5/§6.3.
+Auto-parallel scheduling (**experiment run 2026-10-10 and not merged**: deterministic under FR-RUN-040 but no win for any MCE game, whose fixed-step sims take microseconds per tick in `after`-chained phases; findings and re-entry trigger in `docs/research/auto-parallel-scheduling.md`), engine-level live DLL reload (N13, measured trigger), Vulkan/D3D12 backend (N14, after both anchor games ship; the Metal backend is the sanctioned exception, M-MAC), code mods (N10), networking, localization, **in-game AI (LLM-driven NPCs/dialogue, runtime content generation — latency, per-call cost and sim non-determinism vs FR-RUN-040; would also need the network stack N7 rules out)** — each with its recorded re-entry trigger from REQUIREMENTS §5/§6.3.
 
 **Scene streaming left this list (2026-10-10, the user's decision):** FR-ENT-120 shipped as an opt-in feature: `SceneChunk` entities in a base scene load their chunk scene around a `StreamingFocus` (async file reads on the asset loader thread, budgeted instantiation, hysteresis between load and unload distances) and every host streams with no game code; a scene without chunks is untouched. World-partition editor tooling stays deferred. Record: `docs/milestones/scene-streaming.md`.
+
+**Promoted out of this list on the user's request (2026-10-10):** **data mods** are built (ADR-0034, FR-RUN-090 now Should): opt-in per game through `PlayerDesc::mods_dir`, mod packs cooked from a project with a `mod.json` against the game's pack, overrides and additions by GUID, `load_order.txt`, `-mods 0`. Code mods stay out (N10).
 
 **Milestone → tier map (effort-summed, finding F3):**
 
@@ -237,4 +239,4 @@ Estimated total ≈ 1,070–1,720 h engineering + ≈ 220–340 h content produc
 
 ## 5. What would change this plan
 
-Recorded triggers, not surprises: Open Question 1 (weekly hours) rescales the calendar, not the scope discipline; Open Question 3 (skinned protagonist) is settled as opt-in skinning (M-SKIN; FR-R3D-060 built, still Should, nothing displaced); a committed commercial release promotes FR-SHP-030 and re-opens N15. Any other change enters by written slip note only — the roadmap bends at gates, never silently between them.
+Recorded triggers, not surprises: Open Question 1 (weekly hours) rescales the calendar, not the scope discipline; Open Question 3 (skinned protagonist) is settled as opt-in skinning (M-SKIN; FR-R3D-060 built, still Should, nothing displaced); a committed commercial release promotes FR-SHP-030 and re-opens N15. The user's 2026-10-10 request promoted data mods (FR-RUN-090, ADR-0034) out of N10; code mods remain out. Any other change enters by written slip note only — the roadmap bends at gates, never silently between them.

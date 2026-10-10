@@ -12,6 +12,8 @@
 //  - Texture targets are rendered Y-flipped (shader_cross.h), so their memory layout, read_pixels
 //    and sampling match GL exactly; the backbuffer is not flipped.
 //  - Metal command buffers retain the resources they reference, so destroy_* releases immediately.
+//  - Frame captures: MTL_CAPTURE_ENABLED=1 MCE_METAL_CAPTURE="<frame>:<path>.gputrace" records that
+//    frame (begin_frame to present) into an Xcode GPU trace document through MTLCaptureManager.
 //  - GPU timestamps: Apple GPUs sample counters only at encoder (stage) boundaries, so every encoder
 //    of a frame records its start and end into the slot's MTLCounterSampleBuffer and
 //    write_timestamp(i) resolves to the end of the last encoder before it, the moment a GL
@@ -182,6 +184,9 @@ private:
     id<MTLRenderPipelineState> pso_for(PipelineHandle h, const MtlPipeline& p, const PassFormats& f);
     id<MTLDepthStencilState> depth_state(const DepthState& d);
     ResultV create_ring(StagingRing& ring, usize per_slot, const char* name);
+    void init_capture();
+    void begin_capture();
+    void end_capture();
     void init_timestamps();
     void collect_timestamps(u32 slot);
     // The sample indices for the next encoder, or false when it is not timed.
@@ -236,6 +241,9 @@ private:
     FrameStats stats_;
     FrameStats last_stats_;
     GpuTimestamps timestamps_;
+    u64 capture_frame_ = ~u64(0);  // MCE_METAL_CAPTURE: the frame to record (~0 = none)
+    FixedString<1024> capture_path_;
+    bool capturing_ = false;
     TimestampSlot ts_slots_[MCE_FRAMES_IN_FLIGHT];
     bool timestamps_active_ = false;  // set by the first write_timestamp: encoders are timed from then on
     f64 gpu_to_ns_ = 1.0;             // GPU clock -> CPU nanoseconds (sampleTimestamps calibration)

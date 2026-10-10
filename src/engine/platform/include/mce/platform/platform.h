@@ -4,6 +4,8 @@
 // Init order (core.md §4.4): log -> platform::init -> window -> rhi device. Shutdown in reverse.
 // Nothing in here exposes SDL types; SDL_Event never leaves this module (FR-INP-010).
 
+#include "mce/containers/array.h"
+#include "mce/fixed_string.h"
 #include "mce/platform/event.h"
 #include "mce/result.h"
 
@@ -30,6 +32,11 @@ bool pump_events();
 // Directory holding the running executable, with a trailing separator ("" when unknown). Shipped
 // builds find their pack next to the exe this way (FR-SHP-010); works before init().
 const char* base_path();
+
+// Names (not paths) of the regular files directly inside `dir`, sorted bytewise. A missing
+// directory is an empty list, not an error; names longer than 255 bytes are left out. Works
+// before init(). Used for folders a player fills by hand (the mods folder, ADR-0034).
+void list_files(StringView dir, Array<FixedString<256>>& out);
 
 // The engine wall clock (std::chrono::steady_clock; same source as app::steady_clock()).
 f64 now_seconds();
