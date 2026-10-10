@@ -588,7 +588,7 @@ Convar registry is the single configuration surface for the engine (a shipped ga
 | **Job workers ×N−1** | core `jobs` | flag-gated, v0.5 (M5a) | Fork-join with counters only; no locks across job boundaries; frame-arena contexts. **Serial inline implementation until enabled** so call sites are written once. |
 | **Cook worker** | `assets` (via job system) | during cook | One thread at MVP; posts progress/errors to the main thread over `MpScQueue` (F10). |
 
-Total steady-state thread count ≤ 5. Everything else is main-thread; every non-main thread's frame-allocator slot is separate (thread-local arenas make "which arena am I on" a non-question). Cross-thread communication is exclusively: SPSC `RingBuffer`, `MpScQueue`, atomics (audio snapshots, stream `filled_upto`), and frame fences. No mutex is ever held across a subsystem boundary. Module code (`game.dll`) never leaves the main thread — which keeps the future auto-parallel experiment a zero-change option for gameplay code.
+Total steady-state thread count ≤ 5. Everything else is main-thread; every non-main thread's frame-allocator slot is separate (thread-local arenas make "which arena am I on" a non-question). Cross-thread communication is exclusively: SPSC `RingBuffer`, `MpScQueue`, atomics (audio snapshots, stream `filled_upto`), and frame fences. No mutex is ever held across a subsystem boundary. Module code (`game.dll`) never leaves the main thread (the auto-parallel experiment was not merged, REQUIREMENTS N17).
 
 ### 4.2 Frame lifecycle (single frame, step by step)
 

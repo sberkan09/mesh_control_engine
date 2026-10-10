@@ -462,7 +462,7 @@ What is deliberately **not** in the loop: no mid-session code reload (N13), no s
 
 ### 4.2 Threads
 
-Module code runs **only on the main thread, only inside fixed-step phases** — there is no module-visible threading surface at all (no spawn-API in `gameplay.h`; jobs are engine-internal). The audio thread never executes module code (commands cross the SPSC FIFO via the audio bridge, FR-AUD-010); the editor watch/cook threads never execute module code. The M3+ auto-parallel *experiment* (ecs-gameplay §4.1) is the only future place module systems could run off-main, it stays flag-gated and determinism-gated, and it requires no module-code changes because systems are already pure functions of `Frame` — that is the payoff of rule §2.4.1.
+Module code runs **only on the main thread, only inside fixed-step phases** — there is no module-visible threading surface at all (no spawn-API in `gameplay.h`; jobs are engine-internal). The audio thread never executes module code (commands cross the SPSC FIFO via the audio bridge, FR-AUD-010); the editor watch/cook threads never execute module code. The auto-parallel experiment (ecs-gameplay §4.1) was the only place module systems could have run off-main; it was run on 2026-10-10 and not merged (REQUIREMENTS N17), so this rule holds without exception.
 
 ### 4.3 Module lifecycle states
 

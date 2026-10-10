@@ -507,7 +507,7 @@ Load is: mmap → validate (done by `assets`) → per-archetype bulk row append 
 - **MVP through v0.5: single-threaded sim and render on the main thread.** The phase pipeline is explicitly ordered; there is no scheduler to debug and determinism is trivial to defend (research §4.2, platform-engineering §3.4). Tracy zones wrap every system (`MCE_SYSTEM` emits the zone) and every phase.
 - **The audio thread never touches the World.** Gameplay→audio crosses only via the `audio-input-ui` SPSC command FIFO, fed by an audio-bridge system at a sync point (Doumler's real-time rules; FR-AUD-010).
 - **Editor:** the editor's preview world and play-mode world are `World` instances on the main thread; ImGui reads them between ticks, never concurrently. Play-mode edit application happens in the editor's own phase, not inside sim phases.
-- **Auto-parallel experiment (M3+, off by default):** derive per-system read/write sets from query signatures, run disjoint systems in `FixedUpdate_Pre/Post` on the `core` job graph behind a flag; the determinism CI test is the gate that keeps it honest. It is an experiment, not a promise — the committed model is ordered phases.
+- **Auto-parallel experiment (run 2026-10-10, not merged):** systems with hand-declared read/write sets ran in batches on worker threads behind a flag. The state hash matched serial execution, but the engine's games gain nothing: their sims take microseconds per tick and their phases are `after` chains. Systems stay serial on the main thread; numbers and the re-entry trigger are in `docs/research/auto-parallel-scheduling.md` (REQUIREMENTS N17).
 
 ### 4.2 Lifecycle states
 

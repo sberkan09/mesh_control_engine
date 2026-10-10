@@ -1,100 +1,9 @@
 #include "mce/ecs/world.h"
 
-#include <atomic>
-#include <condition_variable>
-#include <mutex>
-#include <thread>
-
 #include "mce/app.h"
 #include "mce/hash.h"
 
 namespace mce {
-
-namespace {
-// A parallel batch member's run context. Only worker jobs set these, so the main thread (and any
-// other World on any thread) keeps using World::run_.
-thread_local const World* t_world = nullptr;
-thread_local ecs::detail::RunCtx* t_ctx = nullptr;
-}  // namespace
-
-namespace ecs::detail {
-
-// Fixed worker threads for the auto-parallel scheduling experiment. run() hands out n jobs to the
-// workers and the calling thread and returns once every worker has checked in for this run (so no
-// straggler can still be reading the previous run's job). Workers spin briefly between batches
-// (a phase is several batches in a row), then sleep.
-class SystemPool {
-public:
-    using Job = void (*)(void* ctx, u32 index);
-
-    explicit SystemPool(u32 workers) : threads_(mem::heap()) {
-        for (u32 i = 0; i < workers; ++i) threads_.push_back(std::thread([this] { worker(); }));
-    }
-    ~SystemPool() {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            quit_ = true;
-            generation_.fetch_add(1, std::memory_order_release);
-        }
-        wake_.notify_all();
-        for (std::thread& t : threads_) t.join();
-    }
-    u32 workers() const { return static_cast<u32>(threads_.size()); }
-
-    void run(u32 n, Job job, void* ctx) {
-        job_ = job;
-        ctx_ = ctx;
-        count_ = n;
-        next_.store(0, std::memory_order_relaxed);
-        arrived_.store(0, std::memory_order_relaxed);
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            generation_.fetch_add(1, std::memory_order_release);
-        }
-        wake_.notify_all();
-        drain();
-        while (arrived_.load(std::memory_order_acquire) != threads_.size()) std::this_thread::yield();
-    }
-
-private:
-    void drain() {
-        for (u32 i = next_.fetch_add(1, std::memory_order_acq_rel); i < count_; i = next_.fetch_add(1, std::memory_order_acq_rel)) {
-            job_(ctx_, i);
-        }
-    }
-    void worker() {
-        u64 seen = 0;
-        for (;;) {
-            u64 g = generation_.load(std::memory_order_acquire);
-            for (u32 spin = 0; g == seen && spin < 4096; ++spin) {
-                std::this_thread::yield();
-                g = generation_.load(std::memory_order_acquire);
-            }
-            if (g == seen) {
-                std::unique_lock<std::mutex> lock(mutex_);
-                wake_.wait(lock, [&] { return generation_.load(std::memory_order_acquire) != seen; });
-                g = generation_.load(std::memory_order_acquire);
-            }
-            seen = g;
-            if (quit_) return;
-            drain();
-            arrived_.fetch_add(1, std::memory_order_acq_rel);
-        }
-    }
-
-    Array<std::thread> threads_;
-    std::mutex mutex_;
-    std::condition_variable wake_;
-    std::atomic<u64> generation_{0};
-    std::atomic<u32> next_{0};
-    std::atomic<u32> arrived_{0};  // workers done with the current run
-    Job job_ = nullptr;
-    void* ctx_ = nullptr;
-    u32 count_ = 0;
-    bool quit_ = false;
-};
-
-}  // namespace ecs::detail
 
 const char* phase_name(Phase p) {
     switch (p) {
@@ -254,15 +163,12 @@ World::World(mem::IAllocator& alloc)
     for (usize i = 0; i < kPhaseCount; ++i) {
         systems_[i] = Array<SystemEntry>(alloc);
         system_name_cache_[i] = Array<const char*>(alloc);
-        batch_starts_[i] = Array<u16>(alloc);
-        batches_dirty_[i] = true;
         events_by_phase_[i] = Array<ecs::detail::EventQueueBase*>(alloc);
     }
     table_for(ecs::ComponentMask{});  // table 0: the empty archetype
 }
 
 World::~World() {
-    pool_.reset();
     for (auto& r : resources_)
         if (r.value.ptr) r.value.destroy(alloc_, r.value.ptr);
 }
@@ -274,7 +180,6 @@ void World::assert_not_in_phase(const char* what) const {
 
 ecs::ComponentId World::register_component_info(const ecs::ComponentInfo& info) {
     if (const ecs::ComponentId* id = component_ids_.find(info.type_hash)) return *id;
-    MCE_ASSERT_MSG(!batch_running_, "first use of a component inside a parallel batch: declare it in SystemAccess");
     MCE_ASSERT_MSG(components_.size() < ecs::kMaxComponents, "component type budget (256) exhausted");
     const auto id = static_cast<ecs::ComponentId>(components_.size());
     components_.push_back(info);
@@ -286,7 +191,6 @@ ecs::ComponentId World::register_component_info(const ecs::ComponentInfo& info) 
 // ---------------------------------------------------------------- entities
 
 Entity World::reserve_entity() {
-    MCE_ASSERT_MSG(!batch_running_, "entity reservation inside a parallel batch");
     u32 index;
     if (!free_list_.empty()) {
         index = free_list_.back();
@@ -477,88 +381,8 @@ void World::add_system(Phase phase, const char* name, SystemFn fn, const char* a
     }
     const auto id = static_cast<u16>(system_names_all_.size());
     system_names_all_.push_back(name);
-    SystemEntry entry;
-    entry.name = name;
-    entry.fn = fn;
-    entry.id = id;
-    entry.after = after;
-    list.push_back(std::move(entry));
+    list.push_back(SystemEntry{name, fn, id});
     system_name_cache_[static_cast<usize>(phase)].push_back(name);
-    batches_dirty_[static_cast<usize>(phase)] = true;
-}
-
-void World::set_system_access(Phase phase, const char* name, const SystemAccess& access) {
-    assert_not_in_phase("set_system_access");
-    SystemEntry* found = nullptr;
-    for (SystemEntry& s : systems_[static_cast<usize>(phase)])
-        if (StringView(s.name) == StringView(name)) found = &s;
-    MCE_ASSERT_MSG(found != nullptr, "set_system_access: no such system in that phase");
-    if (!found) return;
-    SystemEntry& s = *found;
-    s.declared = true;
-    s.uses_commands = access.commands_;
-    s.reads.clear();
-    s.writes.clear();
-    for (const ecs::ComponentInfo& c : access.writes_) s.writes.set(register_component_info(c));
-    for (const ecs::ComponentInfo& c : access.reads_) {
-        const ecs::ComponentId id = register_component_info(c);
-        if (!s.writes.test(id)) s.reads.set(id);
-    }
-    s.resources.clear();
-    for (u64 h : access.resources_) s.resources.push_back(h);
-    s.events.clear();
-    for (u64 h : access.events_) s.events.push_back(h);
-    access_checks_ = true;
-    batches_dirty_[static_cast<usize>(phase)] = true;
-}
-
-void World::set_parallel(u32 workers) {
-    assert_not_in_phase("set_parallel");
-    pool_.reset();
-    if (workers > 0) pool_ = mem::UniquePtr<ecs::detail::SystemPool>(alloc_, mem::make<ecs::detail::SystemPool>(alloc_, workers));
-}
-
-u32 World::parallel_workers() const { return pool_ ? pool_->workers() : 0; }
-
-bool World::conflicts(const SystemEntry& a, const SystemEntry& b) {
-    // Commands::spawn reserves entity handles immediately (generations_/locations_ may grow), so a
-    // recording system cannot overlap anything that looks entities up: it runs alone.
-    if (!a.declared || !b.declared || a.uses_commands || b.uses_commands) return true;
-    if (a.writes.intersects(b.writes) || a.writes.intersects(b.reads) || b.writes.intersects(a.reads)) return true;
-    for (u64 r : a.resources)
-        if (b.resources.contains(r)) return true;
-    for (u64 ev : a.events)
-        if (b.events.contains(ev)) return true;
-    return false;
-}
-
-// Contiguous batches in registration order: a system joins the open batch only when it is
-// declared, conflicts with no member, and its `after` target is not a member. Every conflicting
-// pair therefore keeps its serial order; only commuting systems overlap.
-void World::build_batches(Phase phase) {
-    const usize p = static_cast<usize>(phase);
-    const Array<SystemEntry>& list = systems_[p];
-    Array<u16>& starts = batch_starts_[p];
-    starts.clear();
-    usize open = 0;
-    for (usize i = 0; i < list.size(); ++i) {
-        bool joins = i > 0 && list[i].declared && list[open].declared;
-        for (usize j = open; joins && j < i; ++j) {
-            if (conflicts(list[i], list[j])) joins = false;
-            if (list[i].after && StringView(list[i].after) == StringView(list[j].name)) joins = false;
-        }
-        if (!joins) {
-            open = i;
-            starts.push_back(static_cast<u16>(i));
-        }
-    }
-    batches_dirty_[p] = false;
-}
-
-void World::parallel_batches(Phase phase, Array<u16>& out) {
-    if (batches_dirty_[static_cast<usize>(phase)]) build_batches(phase);
-    out.clear();
-    for (u16 s : batch_starts_[static_cast<usize>(phase)]) out.push_back(s);
 }
 
 Span<const char* const> World::system_names(Phase phase) const {
@@ -593,89 +417,33 @@ void World::system_timings(Array<SystemTiming>& out) const {
         }
 }
 
-void World::run_system(SystemEntry& s, Frame& frame) {
-    if (profiling_) {
-        app::IClock& clock = app::steady_clock();
-        const f64 t0 = clock.now_seconds();
-        s.fn(frame);
-        const f64 ms = (clock.now_seconds() - t0) * 1000.0;
-        s.last_ms = ms;
-        s.total_ms += ms;
-        ++s.runs;
-    } else {
-        s.fn(frame);
-    }
-}
-
-namespace {
-struct BatchJob {
-    World* world;
-    Frame* frame;
-    u16 phase;
-    u16 first;
-    u32 first_stamp;
-    void (*run)(BatchJob& b, u32 index);
-};
-}  // namespace
-
 void World::run_phase(Phase phase, Frame& frame) {
     MCE_ASSERT_MSG(!in_phase_, "phases do not nest");
     frame.phase = phase;
     in_phase_ = true;
-    const usize p = static_cast<usize>(phase);
-    Array<SystemEntry>& list = systems_[p];
-    if (pool_ && batches_dirty_[p]) build_batches(phase);
-    const Array<u16>* starts = pool_ ? &batch_starts_[p] : nullptr;
-    for (usize i = 0; i < list.size();) {
-        usize end = i + 1;
-        if (starts) {
-            // starts holds every batch's first index; find the next one after i.
-            end = list.size();
-            for (u16 st : *starts)
-                if (st > i) {
-                    end = st;
-                    break;
-                }
-        }
-        if (end - i == 1) {
-            run_.system = list[i].id;
-            run_.phase = static_cast<u16>(phase);
-            run_.slot = static_cast<u16>(i);
-            // The system's writes carry its run tick; its reader tick is its previous run.
-            run_.stamp = ++change_tick_;
-            run_.stamping = true;
-            run_system(list[i], frame);
-            list[i].last_run = run_.stamp;
+    Array<SystemEntry>& list = systems_[static_cast<usize>(phase)];
+    for (usize i = 0; i < list.size(); ++i) {
+        current_system_ = list[i].id;
+        current_phase_ = static_cast<u16>(phase);
+        current_slot_ = static_cast<u16>(i);
+        // The system's writes carry its run tick; its reader tick is its previous run.
+        stamp_tick_ = ++change_tick_;
+        stamping_ = true;
+        if (profiling_) {
+            app::IClock& clock = app::steady_clock();
+            const f64 t0 = clock.now_seconds();
+            list[i].fn(frame);
+            const f64 ms = (clock.now_seconds() - t0) * 1000.0;
+            list[i].last_ms = ms;
+            list[i].total_ms += ms;
+            ++list[i].runs;
         } else {
-            // Same ticks as the serial order: member k of the batch is stamped first_stamp + k.
-            BatchJob job{this, &frame, static_cast<u16>(phase), static_cast<u16>(i), change_tick_ + 1, nullptr};
-            change_tick_ += static_cast<u32>(end - i);
-            job.run = [](BatchJob& b, u32 k) {
-                World& w = *b.world;
-                ecs::detail::RunCtx ctx;
-                ctx.system = w.systems_[b.phase][b.first + k].id;
-                ctx.phase = b.phase;
-                ctx.slot = static_cast<u16>(b.first + k);
-                ctx.stamp = b.first_stamp + k;
-                ctx.stamping = true;
-                const World* prev_world = t_world;
-                ecs::detail::RunCtx* prev_ctx = t_ctx;
-                t_world = &w;
-                t_ctx = &ctx;
-                SystemEntry& s = w.systems_[b.phase][b.first + k];
-                w.run_system(s, *b.frame);
-                s.last_run = ctx.stamp;
-                t_world = prev_world;
-                t_ctx = prev_ctx;
-            };
-            batch_running_ = true;
-            pool_->run(static_cast<u32>(end - i), [](void* c, u32 k) { auto& b = *static_cast<BatchJob*>(c); b.run(b, k); }, &job);
-            batch_running_ = false;
+            list[i].fn(frame);
         }
-        i = end;
+        list[i].last_run = stamp_tick_;
     }
-    run_.stamping = false;
-    run_.system = 0xFFFF;
+    stamping_ = false;
+    current_system_ = 0xFFFF;
     in_phase_ = false;
     sync(phase);
 }
@@ -705,10 +473,10 @@ void World::render(f32 alpha) {
 
 void World::sync(Phase phase) {
     if (!commands_.empty()) {
-        run_.stamp = ++change_tick_;
-        run_.stamping = true;
+        stamp_tick_ = ++change_tick_;
+        stamping_ = true;
         apply_commands();
-        run_.stamping = false;
+        stamping_ = false;
     }
     if (u32(change_tick_ - last_tick_clamp_) >= (1u << 29)) clamp_change_ticks();
     for (ecs::detail::EventQueueBase* q : events_by_phase_[static_cast<usize>(phase)]) q->swap();
@@ -801,54 +569,11 @@ void World::apply_commands() {
 
 // ---------------------------------------------------------------- change detection
 
-ecs::detail::RunCtx& World::ctx() { return t_world == this ? *t_ctx : run_; }
-const ecs::detail::RunCtx& World::ctx() const { return t_world == this ? *t_ctx : run_; }
-
-u32 World::write_tick() {
-    const ecs::detail::RunCtx& c = ctx();
-    return c.stamping ? c.stamp : ++change_tick_;
-}
+u32 World::write_tick() { return stamping_ ? stamp_tick_ : ++change_tick_; }
 
 const World::SystemEntry* World::current_system_entry() const {
-    const ecs::detail::RunCtx& c = ctx();
-    if (c.system == 0xFFFF) return nullptr;
-    return &systems_[c.phase][c.slot];
-}
-
-void World::check_component_access(const ecs::ComponentMask& reads, const ecs::ComponentMask& writes) const {
-    const SystemEntry* s = current_system_entry();
-    if (!s || !s->declared) return;
-    for (usize i = 0; i < ecs::kMaxComponents; ++i) {
-        if (writes.test(i)) MCE_ASSERT_MSG(s->writes.test(i), "system writes a component its SystemAccess does not declare");
-        if (reads.test(i))
-            MCE_ASSERT_MSG(s->writes.test(i) || s->reads.test(i), "system reads a component its SystemAccess does not declare");
-    }
-}
-
-void World::check_component_access(ecs::ComponentId c, bool write) const {
-    ecs::ComponentMask r, w;
-    (write ? w : r).set(c);
-    check_component_access(r, w);
-}
-
-void World::check_resource_access(u64 type_hash) const {
-    const SystemEntry* s = current_system_entry();
-    if (!s || !s->declared) return;
-    MCE_ASSERT_MSG(s->resources.contains(type_hash), "system uses a resource its SystemAccess does not declare");
-    (void)type_hash;
-}
-
-void World::check_event_access(u64 type_hash) const {
-    const SystemEntry* s = current_system_entry();
-    if (!s || !s->declared) return;
-    MCE_ASSERT_MSG(s->events.contains(type_hash), "system uses an event its SystemAccess does not declare");
-    (void)type_hash;
-}
-
-void World::check_commands_access() const {
-    const SystemEntry* s = current_system_entry();
-    if (!s || !s->declared) return;
-    MCE_ASSERT_MSG(s->uses_commands, "system records Commands but its SystemAccess does not declare commands()");
+    if (current_system_ == 0xFFFF) return nullptr;
+    return &systems_[current_phase_][current_slot_];
 }
 
 u32 World::reader_tick() const {
@@ -917,10 +642,9 @@ ecs::ComponentId World::find_component_by_refl(u64 refl_id) const {
 // ---------------------------------------------------------------- events
 
 void World::note_event_access(ecs::detail::EventQueueBase& q, bool producer) {
-    const u16 system = ctx().system;
-    if (system == 0xFFFF) return;
+    if (current_system_ == 0xFFFF) return;
     auto& set = producer ? q.producers : q.consumers;
-    if (!set.contains(system)) set.push_back(system);
+    if (!set.contains(current_system_)) set.push_back(current_system_);
 }
 
 void World::event_registry(Array<EventInfo>& out) const {

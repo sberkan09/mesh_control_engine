@@ -64,62 +64,7 @@ struct SystemTiming {
 
 using SystemFn = void (*)(Frame& f);
 
-// Declared data access of one system: the input of the auto-parallel scheduling experiment
-// (World::set_parallel, off by default). Systems with no declaration always run alone. Two
-// declared systems in one phase may share a batch when neither writes what the other touches;
-// Commands and each event type count as writes. In builds with asserts, a declared system's
-// queries, try_get/try_get_mut/set/touch, resources, events and commands are checked against it.
-class SystemAccess {
-public:
-    template <class... Ts>
-    SystemAccess& reads() {
-        (reads_.push_back(ecs::component_info<Ts>()), ...);
-        return *this;
-    }
-    template <class... Ts>
-    SystemAccess& writes() {
-        (writes_.push_back(ecs::component_info<Ts>()), ...);
-        return *this;
-    }
-    // Resources are not split into read/write: try_resource<T> hands out a mutable pointer.
-    template <class... Ts>
-    SystemAccess& resources() {
-        (resources_.push_back(kTypeHash<Ts>), ...);
-        return *this;
-    }
-    template <class... Ts>
-    SystemAccess& events() {
-        (events_.push_back(kTypeHash<Ts>), ...);
-        return *this;
-    }
-    // A system that records Commands runs alone (spawns reserve handles immediately).
-    SystemAccess& commands() {
-        commands_ = true;
-        return *this;
-    }
-
-private:
-    friend class World;
-    SmallVector<ecs::ComponentInfo, 4> reads_;
-    SmallVector<ecs::ComponentInfo, 4> writes_;
-    SmallVector<u64, 4> resources_;
-    SmallVector<u64, 2> events_;
-    bool commands_ = false;
-};
-
 namespace ecs::detail {
-
-class SystemPool;
-
-// Who is running right now, per thread: the main thread's lives in the World, a parallel batch
-// worker's on its stack (World::ctx()).
-struct RunCtx {
-    u32 stamp = 0;          // write tick while stamping (system run / sync)
-    u16 system = 0xFFFF;    // global system id, 0xFFFF outside a system
-    u16 phase = 0;          // valid while system is
-    u16 slot = 0;           // index into the phase's system list
-    bool stamping = false;
-};
 
 struct Column {
     ComponentId id = kInvalidComponent;
@@ -465,7 +410,7 @@ public:
     // Tick a query/Frame helper compares against: the running system's previous run tick, or 0
     // outside a system.
     u32 reader_tick() const;
-    bool in_system() const { return ctx().system != 0xFFFF; }
+    bool in_system() const { return current_system_ != 0xFFFF; }
     template <class T>
     bool is_added(Entity e, u32 since) const;
     template <class T>
@@ -507,16 +452,6 @@ public:
     void system_timings(Array<SystemTiming>& out) const;
     void reset_system_timings();
     void install_module(void (*fn)(World&)) { fn(*this); }
-    // Auto-parallel scheduling experiment. Declares what a registered system touches; see
-    // SystemAccess. Registers the named components.
-    void set_system_access(Phase phase, const char* name, const SystemAccess& access);
-    // 0 (the default) runs every phase serially on the calling thread. N > 0 starts N worker
-    // threads; each phase then runs as contiguous batches of mutually non-conflicting declared
-    // systems, in registration order, with the same change ticks serial execution assigns.
-    void set_parallel(u32 workers);
-    u32 parallel_workers() const;
-    // The batches the scheduler would run for a phase: index of each batch's first system.
-    void parallel_batches(Phase phase, Array<u16>& batch_starts);
 
     // Runs one phase, then its sync point.
     void run_phase(Phase phase, Frame& frame);
@@ -528,12 +463,7 @@ public:
     bool in_phase() const { return in_phase_; }
     u64 current_tick() const { return tick_; }
 
-    Commands& commands() {
-#if MCE_ASSERTS_ENABLED
-        if (access_checks_) check_commands_access();
-#endif
-        return commands_;
-    }
+    Commands& commands() { return commands_; }
 
     // ---- events -------------------------------------------------------------
     template <class T>
@@ -568,13 +498,6 @@ public:
     ecs::ComponentId register_component_info(const ecs::ComponentInfo& info);
     Entity reserve_entity();
     void note_event_access(ecs::detail::EventQueueBase& q, bool producer);
-    // Declared-access checks (asserts builds; only for a running system with a declaration).
-    bool access_checks() const { return access_checks_; }
-    void check_component_access(const ecs::ComponentMask& reads, const ecs::ComponentMask& writes) const;
-    void check_component_access(ecs::ComponentId c, bool write) const;
-    void check_resource_access(u64 type_hash) const;
-    void check_event_access(u64 type_hash) const;
-    void check_commands_access() const;
 
 private:
     friend class Commands;
@@ -587,21 +510,13 @@ private:
         HookFn on_remove = nullptr;
     };
     struct SystemEntry {
-        const char* name = nullptr;
-        SystemFn fn = nullptr;
-        u16 id = 0;  // global system index (event producer/consumer attribution)
-        const char* after = nullptr;
+        const char* name;
+        SystemFn fn;
+        u16 id;  // global system index (event producer/consumer attribution)
         u32 last_run = 0;  // change tick of this system's previous run (0 = never ran)
         f64 last_ms = 0.0;  // profiling only
         f64 total_ms = 0.0;
         u64 runs = 0;
-        // Declared access (set_system_access); undeclared systems always run alone.
-        bool declared = false;
-        bool uses_commands = false;
-        ecs::ComponentMask reads;   // read-only
-        ecs::ComponentMask writes;
-        SmallVector<u64, 4> resources;
-        SmallVector<u64, 2> events;
     };
     struct Resource {
         void* ptr = nullptr;
@@ -622,11 +537,6 @@ private:
     void assert_not_in_phase(const char* what) const;
     void clamp_change_ticks();
     const SystemEntry* current_system_entry() const;
-    ecs::detail::RunCtx& ctx();
-    const ecs::detail::RunCtx& ctx() const;
-    void run_system(SystemEntry& s, Frame& frame);
-    void build_batches(Phase phase);
-    static bool conflicts(const SystemEntry& a, const SystemEntry& b);
 
     mem::IAllocator& alloc_;
     Array<ecs::ComponentInfo> components_;
@@ -645,10 +555,14 @@ private:
     Array<SystemEntry> systems_[kPhaseCount];
     Array<const char*> system_name_cache_[kPhaseCount];
     Array<const char*> system_names_all_;  // index = global system id
-    ecs::detail::RunCtx run_;    // the calling (main) thread's
+    u16 current_system_ = 0xFFFF;
+    u16 current_phase_ = 0;      // valid while current_system_ is
+    u16 current_slot_ = 0;       // index into systems_[current_phase_]
 
     Array<HookFn> destroy_hooks_;
     u32 change_tick_ = 1;        // 0 is reserved for "never"
+    u32 stamp_tick_ = 0;         // write tick while stamping_ (system run / sync)
+    bool stamping_ = false;
     u32 last_tick_clamp_ = 1;
 
     HashMap<u64, mem::UniquePtr<ecs::detail::EventQueueBase>> events_;
@@ -661,13 +575,7 @@ private:
     bool in_phase_ = false;
     bool started_ = false;
     bool profiling_ = false;
-    bool access_checks_ = false;  // any system has a declared access
-    bool batch_running_ = false;  // worker threads are running systems: no registry inserts
     u64 tick_ = 0;
-
-    mem::UniquePtr<ecs::detail::SystemPool> pool_;
-    Array<u16> batch_starts_[kPhaseCount];
-    bool batches_dirty_[kPhaseCount] = {};
 };
 
 // =====================================================================================
@@ -712,9 +620,6 @@ const T* World::try_get(Entity e) const {
     if (!alive(e)) return nullptr;
     const auto it = component_ids_.find(kTypeHash<T>);
     if (!it) return nullptr;
-#if MCE_ASSERTS_ENABLED
-    if (access_checks_) check_component_access(*it, false);
-#endif
     const Location loc = locations_[e.index];
     if (loc.table == kNoTable) return nullptr;
     return reinterpret_cast<const T*>(tables_[loc.table]->cell(*it, loc.row));
@@ -724,12 +629,8 @@ template <class T>
 T* World::try_get_mut(Entity e) {
     T* p = const_cast<T*>(static_cast<const World*>(this)->try_get<T>(e));
     if (p) {
-        const ecs::ComponentId c = *component_ids_.find(kTypeHash<T>);
-#if MCE_ASSERTS_ENABLED
-        if (access_checks_) check_component_access(c, true);
-#endif
         const Location loc = locations_[e.index];
-        tables_[loc.table]->changed_ticks(c)[loc.row] = write_tick();
+        tables_[loc.table]->changed_ticks(*component_ids_.find(kTypeHash<T>))[loc.row] = write_tick();
     }
     return p;
 }
@@ -741,9 +642,6 @@ void World::set(Entity e, const T& value) {
     const Location loc = locations_[e.index];
     if (loc.table != kNoTable && tables_[loc.table]->mask().test(c)) {
         if constexpr (!std::is_empty_v<T>) {
-#if MCE_ASSERTS_ENABLED
-            if (access_checks_) check_component_access(c, true);
-#endif
             std::memcpy(tables_[loc.table]->cell(c, loc.row), &value, sizeof(T));
             tables_[loc.table]->changed_ticks(c)[loc.row] = write_tick();
         }
@@ -774,12 +672,7 @@ bool World::is_changed(Entity e, u32 since) const {
 
 template <class T>
 void World::touch(Entity e) {
-    if (const ecs::ComponentId* c = component_ids_.find(kTypeHash<T>)) {
-#if MCE_ASSERTS_ENABLED
-        if (access_checks_) check_component_access(*c, true);
-#endif
-        touch(e, *c);
-    }
+    if (const ecs::ComponentId* c = component_ids_.find(kTypeHash<T>)) touch(e, *c);
 }
 
 template <class T>
@@ -802,7 +695,6 @@ ecs::detail::EventQueue<T>* World::event_queue() {
 
 template <class T>
 T& World::set_resource(T value) {
-    MCE_ASSERT_MSG(!batch_running_, "set_resource inside a parallel batch");
     if (T* existing = try_resource<T>()) {
         *existing = std::move(value);
         return *existing;
@@ -817,9 +709,6 @@ T& World::set_resource(T value) {
 
 template <class T>
 T* World::try_resource() {
-#if MCE_ASSERTS_ENABLED
-    if (access_checks_) check_resource_access(kTypeHash<T>);
-#endif
     Resource* r = resources_.find(kTypeHash<T>);
     return r ? static_cast<T*>(r->ptr) : nullptr;
 }
@@ -887,9 +776,6 @@ void EventAccess::push(const T& ev) {
     ecs::detail::EventQueue<T>* q = world_.event_queue<T>();
     MCE_ASSERT_MSG(q != nullptr, "event type not registered (World::register_event)");
     if (!q) return;
-#if MCE_ASSERTS_ENABLED
-    if (world_.access_checks()) world_.check_event_access(kTypeHash<T>);
-#endif
     world_.note_event_access(*q, true);
     q->push(ev);
 }
@@ -899,9 +785,6 @@ Span<const T> EventAccess::read() {
     ecs::detail::EventQueue<T>* q = world_.event_queue<T>();
     MCE_ASSERT_MSG(q != nullptr, "event type not registered (World::register_event)");
     if (!q) return {};
-#if MCE_ASSERTS_ENABLED
-    if (world_.access_checks()) world_.check_event_access(kTypeHash<T>);
-#endif
     world_.note_event_access(*q, false);
     return q->read();
 }
@@ -937,14 +820,6 @@ Query<Cs...>::Query(World& w) : world_(w), since_(w.reader_tick()), has_since_(w
     usize i = 0;
     ((ids_[i++] = w.component_id<ecs::detail::component_t<Cs>>()), ...);
     for (usize k = 0; k < sizeof...(Cs); ++k) required_.set(ids_[k]);
-#if MCE_ASSERTS_ENABLED
-    if (w.access_checks()) {
-        ecs::ComponentMask reads, writes;
-        usize k = 0;
-        ((std::is_const_v<std::remove_reference_t<Cs>> ? reads.set(ids_[k++]) : writes.set(ids_[k++])), ...);
-        w.check_component_access(reads, writes);
-    }
-#endif
 }
 
 template <class... Cs>
@@ -966,9 +841,6 @@ template <class... Ts>
 Query<Cs...>& Query<Cs...>::added() {
     static_assert(((!std::is_empty_v<Ts>) && ...), "tags have no ticks; change filters need data components");
     ((required_.set(world_.component_id<Ts>()), tick_filters_.push_back(TickFilter{world_.component_id<Ts>(), true})), ...);
-#if MCE_ASSERTS_ENABLED
-    if (world_.access_checks()) (world_.check_component_access(world_.component_id<Ts>(), false), ...);
-#endif
     return *this;
 }
 
@@ -977,9 +849,6 @@ template <class... Ts>
 Query<Cs...>& Query<Cs...>::changed() {
     static_assert(((!std::is_empty_v<Ts>) && ...), "tags have no ticks; change filters need data components");
     ((required_.set(world_.component_id<Ts>()), tick_filters_.push_back(TickFilter{world_.component_id<Ts>(), false})), ...);
-#if MCE_ASSERTS_ENABLED
-    if (world_.access_checks()) (world_.check_component_access(world_.component_id<Ts>(), false), ...);
-#endif
     return *this;
 }
 

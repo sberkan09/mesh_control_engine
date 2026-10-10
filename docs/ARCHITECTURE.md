@@ -112,7 +112,7 @@ Above the walls sit three composition principles (P6 — one path, thin seams):
 - **One scene truth.** The editor's `SceneDocument` is canonical; cooking produces immutable columnar `.mce` scene chunks; the runtime *instantiates* them and never mutates the canonical scene (FR-ENT-060). Play-in-editor, run-in-player, and the shipped game all reach a running world through the same `load_scene` path.
 - **One frame-memory discipline.** Everything per-frame comes from the frame-linear allocator in the frame-slot ring; everything cross-frame is a persistent arena, a pool, or a generational handle. "When is it safe to overwrite last frame's memory" has one answer for the whole engine: after the fence for slot *N−MCE_FRAMES_IN_FLIGHT* signals (§6).
 
-**What is deliberately absent at MVP:** no frame graph (fixed hand-authored pass list per view with pooled transients — rhi-renderer D3), no scheduler (explicit phase pipeline only; auto-parallel is an M3+ flag-gated experiment gated by the determinism CI test), no scripting VM, no observers/relationship pairs, no second render path ("old/new systems" is the solo-engine death pattern — P6).
+**What is deliberately absent at MVP:** no frame graph (fixed hand-authored pass list per view with pooled transients — rhi-renderer D3), no scheduler (explicit phase pipeline only; the auto-parallel experiment was run and not merged, REQUIREMENTS N17), no scripting VM, no observers/relationship pairs, no second render path ("old/new systems" is the solo-engine death pattern — P6).
 
 ---
 
@@ -470,7 +470,7 @@ Owner = the module that defines and evolves the API. Consumers list who may call
 | **Job workers ×N−1** | core jobs | M3+ only, flag-gated | fork-join counters; serial inline implementation until M3 so call sites are written once |
 | **Cook worker** | assets (via job system) | during cook | one thread at MVP; posts progress/errors to the main thread over `MpScQueue` (F10) |
 
-Cross-thread communication is exclusively: SPSC `RingBuffer` (audio commands, log ring), `MpScQueue` (editor/cook events), atomics (audio snapshots, stream `filled_upto`), and frame fences. No mutex is ever held across a subsystem boundary; the audio hot path has none. Module code (`game.dll`) never leaves the main thread — which is what keeps the M3+ auto-parallel experiment a zero-change option for gameplay code.
+Cross-thread communication is exclusively: SPSC `RingBuffer` (audio commands, log ring), `MpScQueue` (editor/cook events), atomics (audio snapshots, stream `filled_upto`), and frame fences. No mutex is ever held across a subsystem boundary; the audio hot path has none. Module code (`game.dll`) never leaves the main thread (the auto-parallel experiment would have broken this rule and was not merged, REQUIREMENTS N17).
 
 ### 6.2 Memory map
 

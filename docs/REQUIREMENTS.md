@@ -335,6 +335,7 @@ A solo engine dies of scope. Every item below is **rejected**, with the one cond
 | N14 | A second graphics backend (D3D12/Vulkan) on a schedule (Metal for macOS is the sanctioned exception, ROADMAP M-MAC) | The RHI seam keeps the exit door open; a second backend before two shipped games is architecture tourism | After both anchor games ship, as an explicit learning milestone |
 | N15 | Accessibility beyond standard rebinding (full remap UX, colorblind filters, screen readers) | Important, but beyond what two small games require; recorded as a decision, not an oversight | A shipped game published commercially |
 | N16 | Cross-machine/cross-driver bit-identical rendering; golden-image tests as a CI gate | Driver variance makes byte equality a false-alarm machine; determinism is defined narrowly (FR-RUN-040) | Never planned |
+| N17 | Automatic parallel scheduling of ECS systems | Built and measured on 2026-10-10 (`docs/research/auto-parallel-scheduling.md`): it kept FR-RUN-040, but MCE games' fixed-step sims take 11–14 µs/tick in `after`-chained phases, so there is nothing to overlap, and waking workers at 60 Hz costs about 0.2 ms per phase. It would also need hand-written access declarations and module code off the main thread. | A game's fixed-step systems exceed about 2 ms/tick, with two or more independent systems of at least 50 µs each in one phase (profiling evidence); try a `par_each` inside the heavy system first |
 
 ---
 
