@@ -1,7 +1,8 @@
 # M-MAC — macOS port: Metal backend + macOS platform (milestone record)
 
 **Status:** first landing — `mce_rhi_metal`, the backend factory, the macOS build and `local_ci_macos.sh`. Every
-pipeline the engine creates today renders on Metal; `.app` packaging and the parity backlog are open (below).
+pipeline the engine creates today renders on Metal; `scripts/ship.py` produces a signed `.app`. The parity backlog
+is open (below).
 **Design and ownership:** `docs/architecture/macos-metal.md`. **Decision record:** ADR-0028.
 **Measured on:** MacBook (Apple M4), macOS 26.6, Xcode toolchain (AppleClang 17), `scripts/ci/local_ci_macos.sh`.
 
@@ -15,9 +16,12 @@ pipeline the engine creates today renders on Metal; `.app` packaging and the par
 | `mce_rhi_metal` | `src/engine/rhi_metal` | buffers, textures (2D, arrays, MSAA, BCn, depth), samplers (incl. compare), pipelines, `CommandBuffer` → encoders, 3 frame slots on shared rings, MDI with `[[base_instance]]`, resolve, readback |
 | Shaders | `rhi_metal/src/shader_cross.cpp` | GLSL 450 → SPIR-V → MSL at pipeline creation (ADR-0028 §2: deviation from the cook-time default, see Open) |
 | GPU timestamps | `rhi_metal/src/metal_device.mm` (`init_timestamps`, `collect_timestamps`) | `caps().timestamp_queries` true on Apple silicon; every encoder samples start/end into the slot's `MTLCounterSampleBuffer` (Apple GPUs only sample at stage boundaries), `write_timestamp(i)` = latest valid sample of the encoders before it (GL `glQueryCounter` semantics); `render3d_gl: GPU timestamps time every stage` now runs on Metal |
+| Xcode GPU captures | `rhi_metal/src/metal_device.mm` (`init_capture`, `begin_capture`, `end_capture`) | `MTL_CAPTURE_ENABLED=1 MCE_METAL_CAPTURE=<frame>:<path>.gputrace <exe>` writes that frame (begin_frame to present) as an Xcode GPU trace through `MTLCaptureManager`. Recorded 2026-10-11 at frame 90 (release, M4), kept on the Mac (`~/Projects/metal_captures/gputrace-2026-10-11/`, 26-152 MB each, not in git): Solstice Reach (cascaded shadows, Forward+ PBR, sky, MSAA resolve, bloom, tonemap, FXAA, GPU timestamps), `04_cubes` (MDI + `[[base_instance]]`), `04_diorama`, `sprites_2d` (2D batches), `03_platformer` |
 | `.dylib` modules | `src/module/CMakeLists.txt` | `-force_load` umbrella, `@loader_path` rpath; `test_module`, `abi_spike`, the devhost and `03_platformer` load game modules |
 | Presets | `CMakePresets.json` | `macos-debug`, `macos-release`, `macos-asan` |
-| Mac CI | `scripts/ci/local_ci_macos.sh` | walls, three presets, Metal validation, windowed samples with captures, determinism |
+| Mac CI | `scripts/ci/local_ci_macos.sh` | walls, three presets, Metal validation, windowed samples with captures, determinism, ship |
+| `.app` packaging | `cmake/macos/macos_bundle.py`, darwin hooks in `scripts/ship.py` | `ship.py platformer` / `--project projects/SolsticeReach` write `<Name>.app` (executable + game module + `libmce_engine.dylib` in `Contents/MacOS`, pack/VERSION/CREDITS in `Contents/Resources`, where `SDL_GetBasePath` points; a module symlink there keeps the base-path lookup), dSYM symbol archive beside the zip (`symbolicate.py` finds it by LC_UUID), `strip -x`, ad-hoc signature, `codesign --verify --strict`. Zips keep the bundle symlink; `ditto -x -k` extraction verifies |
+| 10-minute Finder soak | Ember Step `.app`, opened through LaunchServices (`open`, the Finder path) | 2026-10-10: 10 min alive, RSS flat at 138.6 MB after start-up, CPU steady 11.5 %, clean exit on SIGTERM, no crash report (title screen, no input; lid closed, so audio ran silent) |
 
 ## Tests on Metal
 
@@ -37,8 +41,7 @@ Filled per landing in the PR description; the first landing's table is in the PR
 | Item | State |
 |---|---|
 | Shader translation at cook time (ADR-0028 §2) | waits for cooked shaders (`ShaderKey`); then the translator moves into the cook and leaves `mce_rhi_metal` |
-| `.app` packaging for the player, 10-minute soak from Finder | not started (`scripts/ship.py` produces the Linux/Windows layouts) |
-| Xcode GPU capture per backend feature | not yet recorded |
+| Developer ID signing + notarization | out of scope until FR-SHP-030; bundles are signed ad hoc |
 | Deployment target below macOS 26 | needs a float `from_chars` fallback in the cook's JSON reader (cloud-owned) |
 | Readback of R11G11B10F / depth targets | unsupported (returns `Unsupported`); GL reads them |
 | AddressSanitizer on macOS | the ASan runtime (AppleClang 17 and Homebrew LLVM 21) hangs in shadow-memory init on macOS 26.6 even for a 3-line program; `macos-asan` runs UBSan only until a toolchain update fixes it |

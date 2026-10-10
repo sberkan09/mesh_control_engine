@@ -36,7 +36,12 @@ Runtime (`src/engine/asset/include/mce/asset/`)
   successful call), `retain`/`release`, `resolve` (a null or stale handle resolves to the type's placeholder
   and logs once), `resolve(AssetRef&)` (re-stamps a handle left stale by a reload), `commit_reload`,
   `end_frame`, double-buffered `events()` (`Reloaded`, `Unloading`, `UnloadFailed`, `LoadFailed`),
-  `set_upload_sink`.
+  `set_upload_sink`. Async loading (FR-ENT-120): `request_async<T>(key)` returns an `AsyncTicket`; a dev
+  mount's file is read, hashed and CRC-checked on a loader thread (started by the first such request) and
+  committed on the main thread by `poll_async()` (also run by `end_frame`), exactly as `load_sync` would make it
+  resident. Resident and pack assets are ready at once. `async_status`, `take_async` (the handle with one
+  reference, or the load error), `cancel_async` (drops a pending read, releases a ready one), `wait_async`,
+  `async_pending`. A reload that changes the content hash while a read is in flight falls back to a sync load.
 - `gpu_upload_sink.h`: `IGpuUploadSink`, the inverted seam to the renderer (fix F6): `upload_mesh`,
   `upload_texture`, `update_material`, `destroy_gpu_objects`. Defined here and implemented by `mce_render`, so
   the include direction stays render to asset.
@@ -160,8 +165,9 @@ Scene and prefab chunks are also exercised end to end by `tests/ecs/test_prefab.
 
 - `file_io.h` is a placeholder until `mce_platform`'s filesystem and mmap land: files are read whole into heap
   memory, including a mounted pack.
-- Loading is synchronous only. `asset_system.h` notes that async loading (v0.5) will add a loader thread that
-  only builds ready-to-commit entries; it does not exist yet.
+- Async loading (`request_async`) moves only the file read, hash and CRC check of a dev mount off the main
+  thread. A pack is read whole at mount, so its async requests are synchronous binds; GPU uploads still
+  happen at commit on the main thread.
 - The shader placeholder is an empty payload (`src/asset_system.cpp`: "Shader/...: empty payload until their
   formats land").
 - Cook stages go through `mce::jobs`, which runs jobs inline today, so the cook is single-threaded.

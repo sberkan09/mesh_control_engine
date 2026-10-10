@@ -5,6 +5,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_metal.h>
 
+#include <cstdlib>
 #include <cstring>
 
 #include "mce/log.h"
@@ -200,6 +201,7 @@ ResultV MetalDevice::init() {
         }
         view_ = view;
         layer_ = (__bridge CAMetalLayer*)SDL_Metal_GetLayer(view);
+        init_capture();
         device_ = MTLCreateSystemDefaultDevice();
         if (!layer_ || !device_) return Error(Errc::Unsupported, "rhi.metal.device", "no Metal device");
         queue_ = [device_ newCommandQueue];
@@ -695,6 +697,7 @@ void MetalDevice::begin_frame(u64 frame_index) {
     }
     collect_timestamps(slot_);
     ts_slots_[slot_].frame_index = frame_index;
+    if (frame_index == capture_frame_) begin_capture();
     geometry_ring_.slot = uniform_ring_.slot = slot_;
     geometry_ring_.head = uniform_ring_.head = 0;
     stats_ = FrameStats{};
@@ -728,6 +731,56 @@ void MetalDevice::present(bool vsync) {
         [drawable_ release];
         drawable_ = nil;
     }
+    if (capturing_) end_capture();
+}
+
+// ---- frame captures ---------------------------------------------------------------------------
+
+void MetalDevice::init_capture() {
+    const char* spec = std::getenv("MCE_METAL_CAPTURE");
+    if (!spec || !*spec) return;
+    char* end = nullptr;
+    const unsigned long long frame = std::strtoull(spec, &end, 10);
+    if (end == spec || *end != ':' || !end[1]) {
+        MCE_LOG_WARN("rhi.metal: MCE_METAL_CAPTURE wants \"<frame>:<path>.gputrace\", got '{}'", spec);
+        return;
+    }
+    capture_frame_ = frame;
+    capture_path_.assign(StringView(end + 1));
+    // Metal reads it when the framework loads (SDL has loaded it by now), so it has to come from the
+    // environment that launched the process.
+    const char* enabled = std::getenv("MTL_CAPTURE_ENABLED");
+    if (!enabled || std::strcmp(enabled, "1") != 0)
+        MCE_LOG_WARN("rhi.metal: MCE_METAL_CAPTURE needs MTL_CAPTURE_ENABLED=1 in the environment too");
+}
+
+void MetalDevice::begin_capture() {
+    MTLCaptureManager* m = [MTLCaptureManager sharedCaptureManager];
+    if (![m supportsDestination:MTLCaptureDestinationGPUTraceDocument]) {
+        MCE_LOG_WARN("rhi.metal: GPU trace capture unavailable (launch with MTL_CAPTURE_ENABLED=1)");
+        return;
+    }
+    MTLCaptureDescriptor* d = [[MTLCaptureDescriptor new] autorelease];
+    d.captureObject = device_;
+    d.destination = MTLCaptureDestinationGPUTraceDocument;
+    d.outputURL = [NSURL fileURLWithPath:[NSString stringWithUTF8String:capture_path_.c_str()]];
+    NSError* err = nil;
+    if (![m startCaptureWithDescriptor:d error:&err]) {
+        MCE_LOG_ERROR("rhi.metal: capture of frame {} failed to start: {}", capture_frame_,
+                      err ? [[err localizedDescription] UTF8String] : "unknown");
+        return;
+    }
+    capturing_ = true;
+    MCE_LOG_INFO("rhi.metal: capturing frame {} into {}", capture_frame_, capture_path_.c_str());
+}
+
+void MetalDevice::end_capture() {
+    @autoreleasepool {
+        commit_open(true);  // everything recorded for the frame lands in the trace
+    }
+    [[MTLCaptureManager sharedCaptureManager] stopCapture];
+    capturing_ = false;
+    MCE_LOG_INFO("rhi.metal: wrote {} (open it in Xcode)", capture_path_.c_str());
 }
 
 // ---- GPU timestamps -----------------------------------------------------------------------------

@@ -12,3 +12,4 @@
 #include "mce/kit/components.h"       // Sprite, TextLabel, Camera2DComponent, TilemapLayer, ParticleEmitter,
                                       // Light2D, Parallax, Post2DComponent, SequencePlayer
 #include "mce/physics/components.h"   // RigidBody2D, Collider2D, CharacterController2D, ...
+#include "mce/scene/streaming.h"      // SceneChunk, StreamingFocus, SceneChunkStatus

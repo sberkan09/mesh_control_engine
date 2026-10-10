@@ -13,6 +13,9 @@ mce_add_library(mce_asset
     PUBLIC_DEPS
         mce::mce_core
         mce::mce_refl)
+# The async loader thread (AssetSystem::request_async).
+find_package(Threads REQUIRED)
+target_link_libraries(mce_asset PUBLIC Threads::Threads)
 
 # mce_asset_cook: the cook library (scan, registry, importers, dependency graph, cook DB,
 # content-addressed outputs, pack). Backs mce_cook and the editor's cook button. Cook-time-only
