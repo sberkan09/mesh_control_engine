@@ -500,3 +500,45 @@ TEST_CASE("rhi_metal: frame fences gate core frame slots") {
         CHECK(fence->is_signaled());
     }
 }
+
+TEST_CASE("rhi_metal: GPU timestamps bracket passes, MCE_FRAMES_IN_FLIGHT frames later") {
+    Fixture f;
+    if (!f.ok) return;
+    CHECK(f.device->caps().timestamp_queries);  // Apple silicon samples at stage boundaries
+    if (!f.device->caps().timestamp_queries) return;
+    const rhi::PipelineHandle pipe = f.make_pipeline();
+    const rhi::TextureHandle target = f.make_target(512, 512);
+    if (pipe.is_null()) return;
+    CHECK(f.device->last_gpu_timestamps().frame_index == ~u64(0));
+    for (u64 frame = 0; frame < 2 * MCE_FRAMES_IN_FLIGHT; ++frame) {
+        f.device->begin_frame(frame);
+        rhi::CommandBuffer cmd;
+        cmd.write_timestamp(0);
+        f.record_scene(cmd, target, pipe);
+        cmd.write_timestamp(1);
+        cmd.write_timestamp(2);  // nothing between 1 and 2: an empty stage
+        f.record_scene(cmd, target, pipe);
+        f.record_scene(cmd, {}, pipe);
+        cmd.write_timestamp(3);
+        f.device->submit(cmd);
+        f.device->end_frame();
+        f.device->present(false);
+    }
+    const rhi::GpuTimestamps& ts = f.device->last_gpu_timestamps();
+    CHECK(ts.frame_index == MCE_FRAMES_IN_FLIGHT - 1);  // begin_frame(2F - 1) collected frame F - 1
+    CHECK(ts.has(0));
+    CHECK(ts.has(1));
+    CHECK(ts.has(2));
+    CHECK(ts.has(3));
+    CHECK_FALSE(ts.has(4));
+    CHECK(ts.ms(0, 4) == -1.0);
+    CHECK(ts.ms(1, 2) == 0.0);
+    CHECK(ts.ms(0, 1) >= 0.0);
+    CHECK(ts.ms(2, 3) >= 0.0);
+    CHECK(ts.ms(0, 3) > 0.0);
+    CHECK(ts.ms(0, 3) < 1000.0);
+    MESSAGE("pass A " << ts.ms(0, 1) << " ms, passes B+C " << ts.ms(2, 3) << " ms");
+    CHECK(f.device->validation_error_count() == 0);
+    f.device->destroy_texture(target);
+    f.device->destroy_pipeline(pipe);
+}

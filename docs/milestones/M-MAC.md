@@ -14,6 +14,7 @@ pipeline the engine creates today renders on Metal; `.app` packaging and the par
 | Metal wall (+ shader-cross wall) | `scripts/ci/check_walls.py` | `MTL*`, `<Metal/…>`, `<QuartzCore/…>` only under `rhi_metal` and `platform/src/macos`; glslang/SPIRV-Cross only under `rhi_metal` |
 | `mce_rhi_metal` | `src/engine/rhi_metal` | buffers, textures (2D, arrays, MSAA, BCn, depth), samplers (incl. compare), pipelines, `CommandBuffer` → encoders, 3 frame slots on shared rings, MDI with `[[base_instance]]`, resolve, readback |
 | Shaders | `rhi_metal/src/shader_cross.cpp` | GLSL 450 → SPIR-V → MSL at pipeline creation (ADR-0028 §2: deviation from the cook-time default, see Open) |
+| GPU timestamps | `rhi_metal/src/metal_device.mm` (`init_timestamps`, `collect_timestamps`) | `caps().timestamp_queries` true on Apple silicon; every encoder samples start/end into the slot's `MTLCounterSampleBuffer` (Apple GPUs only sample at stage boundaries), `write_timestamp(i)` = latest valid sample of the encoders before it (GL `glQueryCounter` semantics); `render3d_gl: GPU timestamps time every stage` now runs on Metal |
 | `.dylib` modules | `src/module/CMakeLists.txt` | `-force_load` umbrella, `@loader_path` rpath; `test_module`, `abi_spike`, the devhost and `03_platformer` load game modules |
 | Presets | `CMakePresets.json` | `macos-debug`, `macos-release`, `macos-asan` |
 | Mac CI | `scripts/ci/local_ci_macos.sh` | walls, three presets, Metal validation, windowed samples with captures, determinism |
@@ -22,6 +23,7 @@ pipeline the engine creates today renders on Metal; `.app` packaging and the par
 
 | Suite | What it covers |
 |---|---|
+| `test_rhi_metal` timestamps | indices bracket passes, an empty stage reads 0 ms, unwritten indices stay missing, read back MCE_FRAMES_IN_FLIGHT frames later |
 | `test_shader_cross` (no GPU) | binding map, base instance, `gl_InstanceID` fix, clip fixup, flip constant, error Results |
 | `test_rhi_metal` | the `test_rhi_gl` cases plus: rendered textures sample upright, back-face culling agrees between backbuffer and texture targets, depth test on a depth target and on the default depth buffer, 4× MSAA resolve, SSBO + `gl_BaseInstanceARB` through `draw_indirect`, ordered `update_buffer` |
 | `test_render_gl` (via the factory) | the renderer's 2D and 3D pixel probes, unchanged, on Metal |
@@ -40,6 +42,5 @@ Filled per landing in the PR description; the first landing's table is in the PR
 | Deployment target below macOS 26 | needs a float `from_chars` fallback in the cook's JSON reader (cloud-owned) |
 | Readback of R11G11B10F / depth targets | unsupported (returns `Unsupported`); GL reads them |
 | AddressSanitizer on macOS | the ASan runtime (AppleClang 17 and Homebrew LLVM 21) hangs in shadow-memory init on macOS 26.6 even for a 3-line program; `macos-asan` runs UBSan only until a toolchain update fixes it |
-| GPU timestamps (`write_timestamp`, M5a budget tables) | `caps().timestamp_queries` is false on Metal; needs `MTLCounterSampleBuffer` |
 | Indirect command buffers for MDI | one direct draw per record today |
 | Parity with RHI features that land on GL after this (M5a PBR, CSM, post chain, …) | per feature, as they land |
