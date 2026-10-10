@@ -55,6 +55,13 @@ WALLS = [
         [],
         ["src/engine/"],
     ),
+    # ENet (ADR-0034): the optional networking module's transport, private to mce_net's sources.
+    (
+        "ENet wall",
+        re.compile(r"[<\"]enet/|\benet_[a-z_]+\s*\(|\bENet[A-Z]\w*"),
+        ["src/engine/net/src/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
     # Editor MCP server (ADR-0027, N7): stdio is its only transport, no socket API in its code.
     (
         "MCP socket wall",
@@ -84,7 +91,22 @@ LINK_WALLS = [
     ("MCP link wall", re.compile(r"\bmce_mcp_core\b"), ["src/editor/mcp/", "tests/mcp/"]),
     # The cook library carries the JSON codec (FR-AST-010: the runtime never parses JSON).
     ("cook link wall", re.compile(r"\bmce_asset_cook\b"), ["src/engine/asset/", "src/editor/", "tools/", "tests/"]),
+    # Networking is opt-in (ADR-0034): only games, samples and tests link mce_net; no engine
+    # library, host, tool or the editor does, so the engine and every other game stay network-free.
+    ("net opt-in wall", re.compile(r"\bmce_net\b"), ["src/engine/net/", "samples/", "games/", "projects/", "templates/", "tests/"]),
+    ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
 ]
+
+# The umbrella's library list (root CMakeLists.txt): mce_net must never join it (ADR-0034).
+ENGINE_LIBS_RE = re.compile(r"set\(MCE_ENGINE_LIBS\b(.*?)\)", re.S)
+
+
+def umbrella_violations() -> list:
+    text = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    m = ENGINE_LIBS_RE.search(text)
+    if m and re.search(r"\bmce_net\b", m.group(1)):
+        return ["CMakeLists.txt: net opt-in wall: mce_net is listed in MCE_ENGINE_LIBS"]
+    return []
 
 
 def link_violations() -> list:
@@ -106,7 +128,7 @@ def link_violations() -> list:
 
 
 def main() -> int:
-    violations = link_violations()
+    violations = link_violations() + umbrella_violations()
     for d in SCAN_DIRS:
         base = ROOT / d
         if not base.exists():

@@ -27,6 +27,7 @@ option(MCE_BUILD_EDITOR    "Build the editor (mce_editor_core/layer + mce_editor
 option(MCE_GPU_TESTS       "Register tests that need a display + GL 4.5 driver" OFF)
 option(MCE_TEMPLATE_PROBE  "Stamp the project template into the build tree and build it (tests the generator)" ON)
 option(MCE_PHYSICS_ORACLE  "Link Box2D v3 into test_physics2d as the solver oracle (ADR-0016)" ON)
+option(MCE_WITH_NET        "Build the optional networking module mce_net (ENet; a game opts in, ADR-0034)" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(MceTarget)
@@ -89,6 +90,11 @@ add_subdirectory(src/engine/ui)
 add_subdirectory(src/engine/audio)
 add_subdirectory(src/engine/scene)
 add_subdirectory(src/engine/kit)
+if(MCE_WITH_NET)
+    # Opt-in (ADR-0034): not in MCE_ENGINE_LIBS, so mce_engine and every game that does not link
+    # mce::mce_net stay network-free.
+    add_subdirectory(src/engine/net)
+endif()
 add_subdirectory(tools/cook)
 add_subdirectory(src/module)
 add_subdirectory(src/player)

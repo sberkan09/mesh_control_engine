@@ -17,7 +17,11 @@
 #   <game>_headless_300 (tests)  the host headless for 300 ticks: module loaded, scene played
 #
 #   mce_add_project(<game> TITLE "<window title>" GAME_SOURCES ... MODULE_ENTRY game/module.cpp
-#                   TYPES game/types.cpp HOST host/main.cpp [INCLUDE_DIRS ...])
+#                   TYPES game/types.cpp HOST host/main.cpp [INCLUDE_DIRS ...] [DEPS ...])
+#
+# DEPS: optional engine libraries the game's sources use, linked wherever those sources are
+# compiled (the module, or the host where modules are not supported, and the project editor and
+# MCP server). Today that is mce::mce_net, the opt-in networking module (ADR-0034).
 #
 # The per-project tools above compile the game in; where game modules are supported the stock
 # tools load the module instead and need no project-specific build:
@@ -33,7 +37,7 @@
 # installed mce_cook cooks the content with the module loaded, and the installed mce_editor /
 # mce_mcp open the project the same way (`mce editor`, `mce mcp`, `mce cook` in the mce CLI).
 function(mce_add_project game)
-    cmake_parse_arguments(ARG "" "TITLE;MODULE_ENTRY;HOST" "GAME_SOURCES;TYPES;INCLUDE_DIRS" ${ARGN})
+    cmake_parse_arguments(ARG "" "TITLE;MODULE_ENTRY;HOST" "GAME_SOURCES;TYPES;INCLUDE_DIRS;DEPS" ${ARGN})
     if(NOT ARG_TITLE)
         set(ARG_TITLE "${game}")
     endif()
@@ -73,6 +77,7 @@ function(mce_add_project game)
         mce_add_game_module(${game}_game SOURCES ${ARG_GAME_SOURCES} ${ARG_MODULE_ENTRY})
         set_target_properties(${game}_game PROPERTIES OUTPUT_NAME "${game}")
         target_include_directories(${game}_game PRIVATE ${includes})
+        target_link_libraries(${game}_game PRIVATE ${ARG_DEPS})
         add_executable(${game} ${ARG_HOST})
         target_compile_definitions(${game} PRIVATE MCE_PROJECT_MODULE="$<TARGET_FILE:${game}_game>"
                                                    MCE_PROJECT_MODULE_NAME="$<TARGET_FILE_NAME:${game}_game>")
@@ -81,6 +86,7 @@ function(mce_add_project game)
         add_executable(${game} ${ARG_HOST} ${ARG_GAME_SOURCES} ${ARG_MODULE_ENTRY})
         target_compile_definitions(${game} PRIVATE MCE_PROJECT_STATIC_MODULE=1)
         target_include_directories(${game} PRIVATE ${includes})
+        target_link_libraries(${game} PRIVATE ${ARG_DEPS})
     endif()
     # Content: the committed assets/ tree cooked into a shipping pack at build time, by the
     # project's cook or (SDK) the installed cook with the game module loaded.
@@ -131,7 +137,7 @@ const bool kRegistered = (mce::editor::set_play_game_install(&${game}::install),
 " @ONLY)
         add_executable(${game}_editor "${PROJECT_SOURCE_DIR}/src/editor/app/main.cpp" ${ARG_GAME_SOURCES} "${hook}")
         target_include_directories(${game}_editor PRIVATE ${includes})
-        mce_engine_deps(editor_deps mce::mce_editor_layer mce::mce_rhi_default mce::mce_module_host mce::mce_input)
+        mce_engine_deps(editor_deps mce::mce_editor_layer mce::mce_rhi_default mce::mce_module_host mce::mce_input ${ARG_DEPS})
         target_link_libraries(${game}_editor PRIVATE ${editor_deps})
         mce_apply_compile_policy(${game}_editor)
     endif()
@@ -153,7 +159,7 @@ const bool kRegistered = (mce::editor::set_play_game_install(&${game}::install),
                                    "${PROJECT_SOURCE_DIR}/src/editor/mcp/app/engine_components.cpp" ${ARG_TYPES}
                                    ${ARG_GAME_SOURCES} "${mcp_hook}")
         target_include_directories(${game}_mcp PRIVATE ${includes})
-        mce_engine_deps(mcp_deps mce::mce_mcp_core mce::mce_module_host)
+        mce_engine_deps(mcp_deps mce::mce_mcp_core mce::mce_module_host ${ARG_DEPS})
         target_link_libraries(${game}_mcp PRIVATE ${mcp_deps})
         mce_apply_compile_policy(${game}_mcp)
     endif()

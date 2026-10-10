@@ -16,7 +16,7 @@ set(MCE "${PYTHON}" "${PREFIX}/bin/mce")
 # 1. Install this build tree as an SDK.
 expect_exit(0 ${CMAKE_COMMAND} --install "${BUILD_DIR}" --prefix "${PREFIX}")
 foreach(f bin/mce bin/mce_player bin/mce_editor bin/mce_mcp bin/mce_cook lib/cmake/MCE/MCEConfig.cmake
-          include/mce/gameplay.h include/mce/engine_version.h include/spdlog/spdlog.h
+          include/mce/gameplay.h include/mce/engine_version.h include/spdlog/spdlog.h include/mce/net/net.h
           share/mce/templates/project/CMakeLists.txt share/mce/templates/project/assets/fonts/ProggyClean.ttf
           share/mce/scripts/new_project.py share/mce/VERSION share/mce/examples/Kindle/CMakeLists.txt
           share/doc/mce/user-guide/README.md share/doc/mce/engine/modules.md share/doc/mce/ARCHITECTURE.md)
@@ -76,6 +76,44 @@ expect_exit(0 "${shipped_host}" -headless 1 -ticks 300)
 if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
     message(FATAL_ERROR "the shipped host:\n${LAST_OUTPUT}")
 endif()
+# 3b. The project opts into the networking module (ADR-0034): DEPS mce::mce_net links the SDK's
+# libmce_net into the module, whose engine calls resolve against the SDK's libmce_engine.
+file(GLOB net_lib "${PREFIX}/lib/*mce_net*")
+if(net_lib)
+    set(module_dir "${project}/games/sdk_probe/module")
+    file(WRITE "${module_dir}/net_probe.cpp" [=[
+#include "mce/net/net.h"
+
+namespace sdk_probe {
+bool net_probe() {
+    mce::net::ByteWriter w;
+    w.write_varu32(300);
+    mce::net::ByteReader r(w.data());
+    mce::net::Host host;
+    const bool opened = host.open_client();
+    host.close();
+    return opened && r.read_varu32() == 300 && r.ok();
+}
+}  // namespace sdk_probe
+]=])
+    file(READ "${module_dir}/sdk_probe.cpp" game_src)
+    string(REPLACE "ResultV install(World& world) {"
+                   "bool net_probe();\nResultV install(World& world) {\n    std::printf(\"net probe %s\\n\", net_probe() ? \"ok\" : \"failed\");"
+                   game_src "${game_src}")
+    file(WRITE "${module_dir}/sdk_probe.cpp" "#include <cstdio>\n${game_src}")
+    file(READ "${project}/CMakeLists.txt" project_cmake)
+    string(REPLACE "GAME_SOURCES games/sdk_probe/module/sdk_probe.cpp"
+                   "GAME_SOURCES games/sdk_probe/module/sdk_probe.cpp games/sdk_probe/module/net_probe.cpp"
+                   project_cmake "${project_cmake}")
+    string(REPLACE "INCLUDE_DIRS games/sdk_probe/module)" "INCLUDE_DIRS games/sdk_probe/module\n    DEPS mce::mce_net)"
+                   project_cmake "${project_cmake}")
+    file(WRITE "${project}/CMakeLists.txt" "${project_cmake}")
+    expect_exit(0 ${MCE} build "${project}" --config "${CONFIG}" ${defines})
+    expect_exit(0 ${MCE} headless "${project}" --ticks 300)
+    if(NOT LAST_OUTPUT MATCHES "net probe ok" OR NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
+        message(FATAL_ERROR "mce headless with mce_net:\n${LAST_OUTPUT}")
+    endif()
+endif()
 # 4. The example project copies out of the SDK and builds against it the same way.
 expect_exit(0 ${MCE} example)
 if(NOT LAST_OUTPUT MATCHES "Kindle")
@@ -91,4 +129,4 @@ expect_exit(0 ${MCE} headless "${example}" --ticks 300)
 if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
     message(FATAL_ERROR "mce headless (Kindle):\n${LAST_OUTPUT}")
 endif()
-message(STATUS "SDK contract holds: install, new, build, headless, cook, ship, example")
+message(STATUS "SDK contract holds: install, new, build, headless, cook, ship, net, example")

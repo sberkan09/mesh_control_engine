@@ -4,7 +4,8 @@
 #   mce_add_project(my_game ...)      # the project template's one call (cmake/MceProject.cmake)
 #
 # Targets:  mce::mce_engine (the engine, shared), mce::mce_player_runtime (static; a host links it),
-#           mce::mce_module_api (what a game module links; mce_add_game_module uses it)
+#           mce::mce_module_api (what a game module links; mce_add_game_module uses it),
+#           mce::mce_net (static, optional networking; mce_add_project(... DEPS mce::mce_net))
 # Helpers:  mce_add_project, mce_add_game_module, mce_add_executable, mce_add_library, mce_add_test,
 #           mce_apply_compile_policy (no exceptions, no RTTI, precise FP, warnings as errors)
 # Tools:    MCE_PLAYER_EXE, MCE_EDITOR_EXE, MCE_MCP_EXE, MCE_COOK_EXE, MCE_BIN_DIR, MCE_LIB_DIR,
@@ -62,6 +63,13 @@ if(NOT TARGET mce::mce_engine)
     set_target_properties(mce::mce_player_runtime PROPERTIES
         IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_RUNTIME_FILE@"
         INTERFACE_LINK_LIBRARIES "mce::mce_engine")
+
+    if(NOT "@MCE_SDK_NET_FILE@" STREQUAL "")
+        add_library(mce::mce_net STATIC IMPORTED)
+        set_target_properties(mce::mce_net PROPERTIES
+            IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_NET_FILE@"
+            INTERFACE_LINK_LIBRARIES "mce::mce_engine")
+    endif()
 
     add_library(mce_module_api INTERFACE)
     add_library(mce::mce_module_api ALIAS mce_module_api)
