@@ -20,6 +20,7 @@ constexpr u32 kSlotCount = 8;
 struct Slot {
     bool used = false;
     u32 worlds_alive = 0;  // Worlds the module was installed into that still exist
+    bool owns_copy = false;  // loaded_path is our copy (deleted on release), not the source mapped in place
     FixedString<512> loaded_path;
 };
 Slot g_slots[kSlotCount];
@@ -87,7 +88,7 @@ bool copy_in_use(StringView path) {
 
 void release_slot(u32 slot) {
     Slot& s = g_slots[slot];
-    std::remove(s.loaded_path.c_str());
+    if (s.owns_copy) std::remove(s.loaded_path.c_str());
     s = Slot{};
 }
 
@@ -115,9 +116,16 @@ Result<LoadedModule> open_game_module(StringView path) {
     if (m.source_path.truncated() || m.loaded_path.truncated())
         return Error(Errc::InvalidArgument, "module.copy", path);
 
-    if (const ResultV copied = platform::copy_file(path, m.loaded_path); !copied)
-        return Error(Errc::IoError, "module.copy", m.loaded_path);
+    // A read-only install (a translocated or /Applications .app, a read-only Program Files or /opt)
+    // cannot take the copy: map the module in place. Only rebuilding it while mapped needs the copy,
+    // and that happens in a writable build tree.
+    const bool copied = platform::copy_file(path, m.loaded_path).has_value();
+    if (!copied) {
+        MCE_LOG_INFO("module: cannot copy {} next to itself (read-only folder?); mapping it in place", path);
+        m.loaded_path = path;
+    }
     g_slots[slot].used = true;
+    g_slots[slot].owns_copy = copied;
     g_slots[slot].loaded_path = m.loaded_path;
 
     const Result<void*> lib = platform::load_library(m.loaded_path);
