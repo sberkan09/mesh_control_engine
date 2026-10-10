@@ -68,8 +68,15 @@ configure_build() {
 }
 
 stage_preset() {
-    # UBSan findings fail the test that hit them instead of scrolling past.
-    configure_build "$1" && UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --preset "$1" --timeout 600
+    # UBSan findings fail the test that hit them instead of scrolling past. Known findings in
+    # cloud-owned code are suppressed (cmake/macos/ubsan.supp, each one reported). sdk_install is
+    # skipped under UBSan: its consumer project builds without -fsanitize and cannot link the
+    # instrumented SDK libraries; the debug and release stages run it.
+    local exclude=""
+    [[ "$1" == macos-asan ]] && exclude="-LE sdk"
+    configure_build "$1" &&
+        UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1:suppressions=$ROOT/cmake/macos/ubsan.supp" \
+            ctest --preset "$1" --timeout 600 $exclude
 }
 
 stage_validation() {

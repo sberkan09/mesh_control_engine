@@ -44,6 +44,17 @@ void MetalDevice::reset_translate_state() {
     ts_.draw_arg_count = 0;
 }
 
+void MetalDevice::attach_samples(MTLRenderPassDescriptor* rp) {
+    u32 start = 0, end = 0;
+    if (!next_encoder_samples(start, end)) return;
+    MTLRenderPassSampleBufferAttachmentDescriptor* a = rp.sampleBufferAttachments[0];
+    a.sampleBuffer = ts_slots_[slot_].samples;
+    a.startOfVertexSampleIndex = start;
+    a.endOfVertexSampleIndex = MTLCounterDontSample;
+    a.startOfFragmentSampleIndex = MTLCounterDontSample;
+    a.endOfFragmentSampleIndex = end;
+}
+
 void MetalDevice::exec_begin_pass(const cmd::BeginPass& p) {
     ++stats_.passes;
     end_blit();
@@ -131,6 +142,7 @@ void MetalDevice::exec_begin_pass(const cmd::BeginPass& p) {
     }
     ts_.formats = f;
     ts_.target_size = size;
+    attach_samples(rp);
 
     ts_.enc = [[command_buffer() renderCommandEncoderWithDescriptor:rp] retain];
     ts_.pass_scope = p.debug_name && *p.debug_name;
@@ -290,6 +302,7 @@ void MetalDevice::exec_resolve(const cmd::Resolve& r) {
     rp.colorAttachments[0].loadAction = MTLLoadActionLoad;
     rp.colorAttachments[0].storeAction = MTLStoreActionMultisampleResolve;
     rp.colorAttachments[0].resolveTexture = dst->texture;
+    attach_samples(rp);
     id<MTLRenderCommandEncoder> e = [command_buffer() renderCommandEncoderWithDescriptor:rp];
     [e setLabel:@"mce.resolve"];
     [e endEncoding];
@@ -383,7 +396,9 @@ void MetalDevice::submit(const CommandBuffer& cb) {
                     }
                     break;
                 }
-                case CmdType::WriteTimestamp: break;  // caps().timestamp_queries == false on Metal (yet)
+                case CmdType::WriteTimestamp:
+                    exec_write_timestamp(static_cast<const cmd::WriteTimestamp*>(payload)->index);
+                    break;
                 case CmdType::SetVertexData: {
                     const auto* c = static_cast<const cmd::SetVertexData*>(payload);
                     const usize at = geometry_ring_.alloc(c->size, 16);

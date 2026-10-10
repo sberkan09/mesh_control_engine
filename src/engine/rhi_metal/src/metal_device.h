@@ -12,6 +12,10 @@
 //  - Texture targets are rendered Y-flipped (shader_cross.h), so their memory layout, read_pixels
 //    and sampling match GL exactly; the backbuffer is not flipped.
 //  - Metal command buffers retain the resources they reference, so destroy_* releases immediately.
+//  - GPU timestamps: Apple GPUs sample counters only at encoder (stage) boundaries, so every encoder
+//    of a frame records its start and end into the slot's MTLCounterSampleBuffer and
+//    write_timestamp(i) resolves to the end of the last encoder before it, the moment a GL
+//    glQueryCounter would report (all previously submitted work done).
 
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -96,6 +100,16 @@ public:
 inline constexpr u32 kMaxBufferBanks = 8;    // uniform banks 0..7 -> [[buffer(0..7)]]
 inline constexpr u32 kMaxStorageBindings = 8;  // SSBO binding b -> [[buffer(8 + b)]]
 inline constexpr u32 kMaxTextureSlots = 16;
+inline constexpr u32 kMaxSampledEncoders = 256;  // per frame; later encoders are not timed
+
+// One frame slot's GPU timestamp state (see the header comment).
+struct TimestampSlot {
+    id<MTLCounterSampleBuffer> samples = nil;  // owned: 2 samples (start, end) per encoder
+    u32 encoders = 0;                          // encoders created in the slot's frame
+    u32 written = 0;                           // bit i = write_timestamp(i) recorded
+    u64 frame_index = 0;
+    u32 position[kMaxTimestamps] = {};         // encoders created before write_timestamp(i)
+};
 
 class MetalDevice final : public RenderDevice {
 public:
@@ -129,7 +143,6 @@ public:
 
     const DeviceCaps& caps() const override { return caps_; }
     const FrameStats& last_frame_stats() const override { return last_stats_; }
-    // Timestamp queries are not wired yet (caps().timestamp_queries == false): always "none".
     const GpuTimestamps& last_gpu_timestamps() const override { return timestamps_; }
     usize texture_memory_bytes() const override { return texture_bytes_; }
     u32 validation_error_count() const override { return validation_errors_; }
@@ -169,6 +182,11 @@ private:
     id<MTLRenderPipelineState> pso_for(PipelineHandle h, const MtlPipeline& p, const PassFormats& f);
     id<MTLDepthStencilState> depth_state(const DepthState& d);
     ResultV create_ring(StagingRing& ring, usize per_slot, const char* name);
+    void init_timestamps();
+    void collect_timestamps(u32 slot);
+    // The sample indices for the next encoder, or false when it is not timed.
+    bool next_encoder_samples(u32& start, u32& end);
+    void exec_write_timestamp(u32 index);
     void release_all();
 
     // metal_translate.mm
@@ -179,6 +197,7 @@ private:
     void exec_draw_indirect(const cmd::DrawIndirect& d);
     void exec_resolve(const cmd::Resolve& r);
     void apply_bindings();
+    void attach_samples(MTLRenderPassDescriptor* rp);  // times the pass (GPU timestamps)
     void reset_translate_state();
 
     platform::Window& window_;
@@ -217,6 +236,10 @@ private:
     FrameStats stats_;
     FrameStats last_stats_;
     GpuTimestamps timestamps_;
+    TimestampSlot ts_slots_[MCE_FRAMES_IN_FLIGHT];
+    bool timestamps_active_ = false;  // set by the first write_timestamp: encoders are timed from then on
+    f64 gpu_to_ns_ = 1.0;             // GPU clock -> CPU nanoseconds (sampleTimestamps calibration)
+    MTLTimestamp calib_cpu_ = 0, calib_gpu_ = 0;
 
     // Bindings: persistent across submits (GL binding-point semantics).
     BufferBinding uniforms_[kMaxBufferBanks];

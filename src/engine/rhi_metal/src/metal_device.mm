@@ -221,8 +221,8 @@ ResultV MetalDevice::init() {
         caps_.max_texture_size = 16384;
         caps_.max_uniform_block_size = 64 * 1024;
         caps_.shader_draw_parameters = true;  // [[base_instance]] is native
-        caps_.timestamp_queries = false;      // M-MAC backlog: MTLCounterSampleBuffer
         caps_.storage_buffer_alignment = 256;
+        init_timestamps();
         MCE_LOG_INFO("rhi.metal: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 
         MCE_TRY(create_ring(geometry_ring_, desc_.geometry_ring_bytes, "mce.ring.geometry"));
@@ -269,6 +269,7 @@ void MetalDevice::release_all() {
     }
     for (PsoEntry& e : psos_) [e.pso release];
     for (DepthEntry& e : depth_states_) [e.state release];
+    for (TimestampSlot& t : ts_slots_) [t.samples release];
     [geometry_ring_.buffer release];
     [uniform_ring_.buffer release];
     [drawable_ release];
@@ -292,7 +293,17 @@ id<MTLCommandBuffer> MetalDevice::command_buffer() {
 }
 
 id<MTLBlitCommandEncoder> MetalDevice::blit_encoder() {
-    if (!blit_) blit_ = [[command_buffer() blitCommandEncoder] retain];
+    if (blit_) return blit_;
+    u32 start = 0, end = 0;
+    if (next_encoder_samples(start, end)) {
+        MTLBlitPassDescriptor* bp = [MTLBlitPassDescriptor blitPassDescriptor];
+        bp.sampleBufferAttachments[0].sampleBuffer = ts_slots_[slot_].samples;
+        bp.sampleBufferAttachments[0].startOfEncoderSampleIndex = start;
+        bp.sampleBufferAttachments[0].endOfEncoderSampleIndex = end;
+        blit_ = [[command_buffer() blitCommandEncoderWithDescriptor:bp] retain];
+    } else {
+        blit_ = [[command_buffer() blitCommandEncoder] retain];
+    }
     return blit_;
 }
 
@@ -682,6 +693,8 @@ void MetalDevice::begin_frame(u64 frame_index) {
         ++validation_errors_;
         MCE_LOG_ERROR("rhi.metal: frame slot {} command buffer failed", slot_);
     }
+    collect_timestamps(slot_);
+    ts_slots_[slot_].frame_index = frame_index;
     geometry_ring_.slot = uniform_ring_.slot = slot_;
     geometry_ring_.head = uniform_ring_.head = 0;
     stats_ = FrameStats{};
@@ -715,6 +728,104 @@ void MetalDevice::present(bool vsync) {
         [drawable_ release];
         drawable_ = nil;
     }
+}
+
+// ---- GPU timestamps -----------------------------------------------------------------------------
+
+void MetalDevice::init_timestamps() {
+    caps_.timestamp_queries = false;
+    if (![device_ supportsCounterSampling:MTLCounterSamplingPointAtStageBoundary]) return;
+    id<MTLCounterSet> set = nil;
+    for (id<MTLCounterSet> s in [device_ counterSets])
+        if ([[s name] isEqualToString:MTLCommonCounterSetTimestamp]) set = s;
+    if (!set) return;
+    MTLCounterSampleBufferDescriptor* d = [[MTLCounterSampleBufferDescriptor new] autorelease];
+    d.counterSet = set;
+    d.storageMode = MTLStorageModeShared;  // resolved on the CPU once the slot's fence passes
+    d.sampleCount = kMaxSampledEncoders * 2;
+    for (u32 s = 0; s < MCE_FRAMES_IN_FLIGHT; ++s) {
+        d.label = [NSString stringWithFormat:@"mce.timestamps.%u", s];
+        NSError* err = nil;
+        ts_slots_[s].samples = [device_ newCounterSampleBufferWithDescriptor:d error:&err];
+        if (!ts_slots_[s].samples) {
+            MCE_LOG_WARN("rhi.metal: no timestamp sample buffer ({}); GPU timings disabled",
+                         err ? [[err localizedDescription] UTF8String] : "unknown");
+            for (TimestampSlot& t : ts_slots_) {
+                [t.samples release];
+                t.samples = nil;
+            }
+            return;
+        }
+    }
+    [device_ sampleTimestamps:&calib_cpu_ gpuTimestamp:&calib_gpu_];
+    caps_.timestamp_queries = true;
+}
+
+bool MetalDevice::next_encoder_samples(u32& start, u32& end) {
+    if (!timestamps_active_ || !in_frame_) return false;
+    TimestampSlot& t = ts_slots_[slot_];
+    if (t.encoders >= kMaxSampledEncoders) return false;
+    start = t.encoders * 2;
+    end = start + 1;
+    ++t.encoders;
+    return true;
+}
+
+void MetalDevice::exec_write_timestamp(u32 index) {
+    if (!caps_.timestamp_queries || index >= kMaxTimestamps) return;
+    timestamps_active_ = true;
+    end_blit();  // the open blit encoder (uploads) is work that comes before this timestamp
+    TimestampSlot& t = ts_slots_[slot_];
+    t.position[index] = t.encoders;
+    t.written |= 1u << index;
+}
+
+// The slot's fence has passed, so every sample its frame wrote is final. A timestamp at position
+// k is the latest sample of encoders [0, k): GL's "all prior work done". Empty encoders sample 0,
+// and passes overlap on the GPU, so the latest *valid* sample is used, which also keeps the values
+// monotonic in recording order. A timestamp before any timed encoder takes the first valid sample
+// after it.
+void MetalDevice::collect_timestamps(u32 slot) {
+    TimestampSlot& t = ts_slots_[slot];
+    if (t.written == 0) {
+        t.encoders = 0;
+        return;
+    }
+    const u32 count = t.encoders < kMaxSampledEncoders ? t.encoders : kMaxSampledEncoders;
+    GpuTimestamps out;
+    out.frame_index = t.frame_index;
+    if (count > 0) {
+        @autoreleasepool {
+            NSData* data = [t.samples resolveCounterRange:NSMakeRange(0, count * 2)];
+            const auto* v = data ? static_cast<const MTLCounterResultTimestamp*>([data bytes]) : nullptr;
+            const usize n = data ? [data length] / sizeof(MTLCounterResultTimestamp) : 0;
+            auto valid = [&](usize i) { return i < n && v[i].timestamp != 0 && v[i].timestamp != MTLCounterErrorValue; };
+
+            MTLTimestamp cpu = 0, gpu = 0;
+            [device_ sampleTimestamps:&cpu gpuTimestamp:&gpu];
+            if (gpu > calib_gpu_ && cpu > calib_cpu_) gpu_to_ns_ = f64(cpu - calib_cpu_) / f64(gpu - calib_gpu_);
+
+            for (u32 i = 0; i < kMaxTimestamps; ++i) {
+                if (!((t.written >> i) & 1u)) continue;
+                const usize k = t.position[i] * 2;  // samples [0, k) belong to earlier encoders
+                u64 best = 0;
+                for (usize s = 0; s < k && s < n; ++s)
+                    if (valid(s) && v[s].timestamp > best) best = v[s].timestamp;
+                if (best == 0)
+                    for (usize s = k; s < n; ++s)
+                        if (valid(s)) {
+                            best = v[s].timestamp;
+                            break;
+                        }
+                if (best == 0) continue;
+                out.written |= 1u << i;
+                out.ns[i] = u64(f64(best - calib_gpu_) * gpu_to_ns_);
+            }
+        }
+    }
+    timestamps_ = out;
+    t.written = 0;
+    t.encoders = 0;
 }
 
 Extent2D MetalDevice::backbuffer_size() const {
