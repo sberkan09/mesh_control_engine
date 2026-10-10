@@ -85,8 +85,8 @@ stdout, `kill`, `exit_code`). The editor's run-in-player button uses it.
   - SDL wall: `SDL_Event` only under `src/engine/platform/`.
   - SDL include wall: `<SDL3/...>` only under `src/engine/platform/`, `src/engine/rhi_gl/`,
     `src/engine/rhi_metal/` and `src/editor/layer/` (the `native_handle()` consumers).
-  - Metal wall: `src/engine/platform/src/macos/` is reserved for macOS-only platform code (no such
-    directory exists yet).
+  - Metal wall: `MTL*` and `<Metal/...>` stay out of platform; the little macOS-specific code sits
+    under `__APPLE__` in the shared platform files.
   - The engine container ban applies.
 
 ## How it is tested

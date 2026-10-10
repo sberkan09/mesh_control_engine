@@ -118,8 +118,7 @@ sources to MSL when a pipeline is created. Xcode GPU captures (`src/metal_device
   - glad wall: `<glad/...>` only under `src/engine/rhi_gl/` (tests included).
   - SDL include wall: `<SDL3/...>` is allowed in `rhi_gl` and `rhi_metal` (they consume
     `native_handle()`), as well as platform and the editor layer.
-  - Metal wall: `MTL*`, `<Metal/...>`, `<QuartzCore/...>` only under `src/engine/rhi_metal/` and
-    `src/engine/platform/src/macos/`.
+  - Metal wall: `MTL*`, `<Metal/...>`, `<QuartzCore/...>` only under `src/engine/rhi_metal/`.
   - shader-cross wall: glslang and SPIRV-Cross only under `src/engine/rhi_metal/` and the cook's
     `shader_importer.cpp`.
   - The `std::vector`/`std::string`/iostream ban applies to all of `src/engine/`.
