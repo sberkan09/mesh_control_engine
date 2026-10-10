@@ -1,8 +1,9 @@
 # M-MAC — macOS port: Metal backend + macOS platform (milestone record)
 
-**Status:** first landing — `mce_rhi_metal`, the backend factory, the macOS build and `local_ci_macos.sh`. Every
-pipeline the engine creates today renders on Metal; `scripts/ship.py` produces a signed `.app`. The parity backlog
-is open (below).
+**Status:** backlog closed (2026-10-11) — `mce_rhi_metal`, the backend factory, the macOS build and
+`local_ci_macos.sh`, GPU timestamps, Xcode GPU captures, R11G11B10F readback and a signed `.app` from `scripts/ship.py`.
+Every pipeline the engine creates today renders on Metal, including Solstice Reach's M5a chain. What remains (below)
+waits on other work.
 **Design and ownership:** `docs/architecture/macos-metal.md`. **Decision record:** ADR-0028.
 **Measured on:** MacBook (Apple M4), macOS 26.6, Xcode toolchain (AppleClang 17), `scripts/ci/local_ci_macos.sh`.
 
@@ -12,7 +13,7 @@ is open (below).
 |---|---|---|
 | Backend factory: hosts stop calling `rhi::gl::create_device` | `src/engine/rhi_default` (`rhi::create_default_device`) | samples, `mce_player`, `mce_editor`, `test_render_gl` link `mce_rhi_default`; Metal on macOS, GL elsewhere |
 | Metal-capable window | `platform/src/window.cpp` | `SDL_WINDOW_METAL` on macOS, GL attributes only on the GL path |
-| Metal wall (+ shader-cross wall) | `scripts/ci/check_walls.py` | `MTL*`, `<Metal/…>`, `<QuartzCore/…>` only under `rhi_metal` and `platform/src/macos`; glslang/SPIRV-Cross only under `rhi_metal` |
+| Metal wall (+ shader-cross wall) | `scripts/ci/check_walls.py` | `MTL*`, `<Metal/…>`, `<QuartzCore/…>` only under `rhi_metal`; glslang/SPIRV-Cross only under `rhi_metal` |
 | `mce_rhi_metal` | `src/engine/rhi_metal` | buffers, textures (2D, arrays, MSAA, BCn, depth), samplers (incl. compare), pipelines, `CommandBuffer` → encoders, 3 frame slots on shared rings, MDI with `[[base_instance]]`, resolve, readback |
 | Shaders | `rhi_metal/src/shader_cross.cpp` | GLSL 450 → SPIR-V → MSL at pipeline creation (ADR-0028 §2: deviation from the cook-time default, see Open) |
 | GPU timestamps | `rhi_metal/src/metal_device.mm` (`init_timestamps`, `collect_timestamps`) | `caps().timestamp_queries` true on Apple silicon; every encoder samples start/end into the slot's `MTLCounterSampleBuffer` (Apple GPUs only sample at stage boundaries), `write_timestamp(i)` = latest valid sample of the encoders before it (GL `glQueryCounter` semantics); `render3d_gl: GPU timestamps time every stage` now runs on Metal |
@@ -47,4 +48,4 @@ Filled per landing in the PR description; the first landing's table is in the PR
 | Deployment target below macOS 26 | needs a float `from_chars` fallback in the cook's JSON reader (cloud-owned) |
 | AddressSanitizer on macOS | the ASan runtime (AppleClang 17 and Homebrew LLVM 21) hangs in shadow-memory init on macOS 26.6 even for a 3-line program; `macos-asan` runs UBSan only until a toolchain update fixes it |
 | Indirect command buffers for MDI | measured 2026-10-11, deferred: with the records CPU-side (they live in the recorded stream) a CPU-encoded ICB + `executeCommandsInBuffer` costs the same as direct draws on the M4 (2k draws 0.074 vs 0.077 ms, 10k 0.378 vs 0.397 ms; only 50k shows 1.52 vs 1.95 ms), far above today's draw counts. Worth it once draw args are GPU-written (GPU culling), where the ICB is encoded on the GPU |
-| Parity with RHI features that land on GL after this (M5a PBR, CSM, post chain, …) | per feature, as they land |
+| Parity with RHI features that land on GL after 2026-10-11 | per feature, as they land (M5a PBR, CSM and the post chain run on Metal: see the Solstice Reach capture above) |

@@ -29,7 +29,7 @@ WALLS = [
     (
         "Metal wall",
         re.compile(r"\bMTL[A-Z]\w*|[<\"]Metal/|[<\"]QuartzCore/"),
-        ["src/engine/rhi_metal/", "src/engine/platform/src/macos/"],
+        ["src/engine/rhi_metal/"],
         ["src/", "samples/", "games/", "tests/"],
     ),
     # The GLSL -> MSL translator (glslang, SPIRV-Cross) is private to the Metal backend; glslang is
