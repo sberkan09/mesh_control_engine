@@ -18,6 +18,7 @@ Exit code: 0 when the faulting frame resolved, 1 otherwise.
 """
 
 import argparse
+import atexit
 import os
 import re
 import shutil
@@ -139,6 +140,7 @@ def atos(debug_file, offset):
 
 
 DSYM_CACHE = {}
+DSYM_TMP = []  # one scratch directory per run, removed at exit (a dSYM of the engine is ~85 MB)
 
 
 def dsym_dwarf(path):
@@ -149,7 +151,10 @@ def dsym_dwarf(path):
     name = os.path.basename(path)
     dwarf = os.path.join(path + ".dSYM", "Contents", "Resources", "DWARF", name)
     if not os.path.isfile(dwarf) and shutil.which("dsymutil"):
-        out = os.path.join(tempfile.mkdtemp(prefix="mce_dsym_"), name + ".dSYM")
+        if not DSYM_TMP:
+            DSYM_TMP.append(tempfile.mkdtemp(prefix="mce_dsym_"))
+            atexit.register(shutil.rmtree, DSYM_TMP[0], True)
+        out = os.path.join(DSYM_TMP[0], f"{len(DSYM_CACHE)}-{name}.dSYM")
         subprocess.run(["dsymutil", path, "-o", out], capture_output=True)
         dwarf = os.path.join(out, "Contents", "Resources", "DWARF", name)
     DSYM_CACHE[path] = dwarf if os.path.isfile(dwarf) else path
