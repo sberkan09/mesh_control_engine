@@ -24,6 +24,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 
 FRAME_RE = re.compile(r"^#(\d+) (0x[0-9a-f]+)(?: base (0x[0-9a-f]+) \+(0x[0-9a-f]+))?(?: (\S+))?$")
 MODULE_RE = re.compile(r"^module (0x[0-9a-f]+)(?: build_id ([0-9a-f]+))? (.+)$")
@@ -137,9 +138,27 @@ def atos(debug_file, offset):
     return pairs
 
 
+DSYM_CACHE = {}
+
+
+def dsym_dwarf(path):
+    """The DWARF file of a Mach-O image: <path>.dSYM beside it, else one dsymutil links now (the
+    linked image only points at its objects' DWARF, and atos cannot read members of static archives)."""
+    if path in DSYM_CACHE:
+        return DSYM_CACHE[path]
+    name = os.path.basename(path)
+    dwarf = os.path.join(path + ".dSYM", "Contents", "Resources", "DWARF", name)
+    if not os.path.isfile(dwarf) and shutil.which("dsymutil"):
+        out = os.path.join(tempfile.mkdtemp(prefix="mce_dsym_"), name + ".dSYM")
+        subprocess.run(["dsymutil", path, "-o", out], capture_output=True)
+        dwarf = os.path.join(out, "Contents", "Resources", "DWARF", name)
+    DSYM_CACHE[path] = dwarf if os.path.isfile(dwarf) else path
+    return DSYM_CACHE[path]
+
+
 def resolve(debug_file, offset):
     if macho_uuid(debug_file):
-        return atos(debug_file, offset) if shutil.which("atos") else []
+        return atos(dsym_dwarf(debug_file), offset) if shutil.which("atos") else []
     return addr2line(debug_file, offset)
 
 

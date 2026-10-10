@@ -472,6 +472,14 @@ void on_signal(int sig, siginfo_t* info, void* uctx) {
                 break;
             }
         }
+        // The next entry can be a stale link register inside the faulting function itself (its last
+        // call's return address), not a caller: drop it when it lands in the same symbol before pc.
+        Dl_info at_pc{};
+        Dl_info next{};
+        if (pc_first && first < n && dladdr(reinterpret_cast<void*>(static_cast<uintptr_t>(pc)), &at_pc) &&
+            dladdr(frames[first], &next) && at_pc.dli_saddr && at_pc.dli_saddr == next.dli_saddr &&
+            reinterpret_cast<uintptr_t>(frames[first]) < pc)
+            ++first;
     }
 #else
     constexpr bool pc_first = false;
