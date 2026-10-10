@@ -46,5 +46,5 @@ Filled per landing in the PR description; the first landing's table is in the PR
 | Xcode GPU capture per backend feature | not yet recorded |
 | Deployment target below macOS 26 | needs a float `from_chars` fallback in the cook's JSON reader (cloud-owned) |
 | AddressSanitizer on macOS | the ASan runtime (AppleClang 17 and Homebrew LLVM 21) hangs in shadow-memory init on macOS 26.6 even for a 3-line program; `macos-asan` runs UBSan only until a toolchain update fixes it |
-| Indirect command buffers for MDI | one direct draw per record today |
+| Indirect command buffers for MDI | measured 2026-10-11, deferred: with the records CPU-side (they live in the recorded stream) a CPU-encoded ICB + `executeCommandsInBuffer` costs the same as direct draws on the M4 (2k draws 0.074 vs 0.077 ms, 10k 0.378 vs 0.397 ms; only 50k shows 1.52 vs 1.95 ms), far above today's draw counts. Worth it once draw args are GPU-written (GPU culling), where the ICB is encoded on the GPU |
 | Parity with RHI features that land on GL after this (M5a PBR, CSM, post chain, …) | per feature, as they land |
