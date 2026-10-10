@@ -10,8 +10,11 @@
 #include "cook_test_util.h"
 #include "mce/ecs/transform.h"
 #include "mce/editor/editor_session.h"
+#include "mce/input/actions.h"
+#include "mce/input/input_system.h"
 #include "mce/kit/components.h"
 #include "mce/physics/components.h"
+#include "mce/platform/platform.h"
 #include "mce/platform/process.h"
 
 using namespace mce;
@@ -189,4 +192,51 @@ TEST_CASE("play: a document that does not cook does not play, with a file:line r
     CHECK_FALSE(session.enter_play());
     CHECK_FALSE(session.play().active());
     CHECK(session.play_diags().error_count() > 0);
+}
+
+TEST_CASE("play: window events drive the game's actions; editor-kept presses do not") {
+    const std::string root = play_project("play_input");
+    EditorSession session;
+    REQUIRE(session.open_project(StringView(root.data(), root.size())));
+    REQUIRE(session.open_scene("scenes/demo.mcscene"));
+    PlaySession& play = session.play();
+    REQUIRE(session.enter_play());
+    REQUIRE(play.input() != nullptr);
+    play.pause();
+    const input::InputState* in = play.world()->try_resource<input::InputState>();
+    REQUIRE(in != nullptr);
+
+    auto key = [&](platform::EventType type, platform::Key k, u32 flags = 0) {
+        platform::Event e;
+        e.type = type;
+        e.code = static_cast<u32>(k);
+        e.flags = flags;
+        e.timestamp_us = platform::now_us();
+        play.push_event(e);
+    };
+    // The scene_demo project has no .mcinput: the built-in map, Move on WASD.
+    key(platform::EventType::KeyDown, platform::Key::D);
+    play.step();
+    CHECK(in->move.x == doctest::Approx(1.0f));
+    key(platform::EventType::KeyUp, platform::Key::D);
+    play.step();
+    CHECK(in->move.x == doctest::Approx(0.0f));
+
+    // A press the editor kept (a panel had focus) never reaches the game; its release still does.
+    key(platform::EventType::KeyDown, platform::Key::A, platform::EventFlag::ConsumedByEditor);
+    play.step();
+    CHECK(in->move.x == doctest::Approx(0.0f));
+    key(platform::EventType::KeyDown, platform::Key::Space);
+    play.step();
+    CHECK(in->jump_pressed);
+    play.step();
+    CHECK(in->jump_held);
+    CHECK_FALSE(in->jump_pressed);
+    key(platform::EventType::KeyUp, platform::Key::Space, platform::EventFlag::ConsumedByEditor);
+    play.step();
+    CHECK_FALSE(in->jump_held);
+
+    // Stopping drops the session's input with the world.
+    session.stop_play();
+    CHECK(play.input() == nullptr);
 }

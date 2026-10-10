@@ -10,6 +10,11 @@
 //            anything changed in the play world is discarded by design.
 //   advance  the app loop's fixed-step accumulator (1/60 s ticks, time scale scales the inflow,
 //            at most kMaxCatchup ticks per call); pause stops it and step() runs exactly one tick.
+//   input    the project's action map (the first cooked .mcinput by path, else the built-in
+//            default map, as mce_player picks it) on an InputSystem of the session's own. The host
+//            feeds it window events with push_event; each tick samples the events stamped before
+//            its close and publishes the InputState resource before the world ticks. Without
+//            events the snapshot stays zero, so headless runs keep mce_player's hash.
 //
 // The cooked tree the play world reads (textures, fonts, clips) is the project's mounted one: stop
 // before anything remounts it (EditorSession::cook does).
@@ -17,6 +22,14 @@
 #include "mce/ecs/world.h"
 #include "mce/editor/project.h"
 #include "mce/editor/scene_document.h"
+
+namespace mce::input {
+class InputSystem;
+}  // namespace mce::input
+
+namespace mce::platform {
+struct Event;
+}  // namespace mce::platform
 
 namespace mce::audio {
 class AudioDevice;
@@ -60,6 +73,13 @@ public:
     void set_time_scale(f32 scale);
     f32 time_scale() const { return time_scale_; }
 
+    // The game's input (FR-EDT-060): one window event, stamped on the engine clock. The editor
+    // passes everything while playing and flags presses it kept for itself ConsumedByEditor, so
+    // a key held when the viewport loses focus still releases. Ignored while stopped.
+    void push_event(const platform::Event& e);
+    // The play world's InputSystem (null while stopped): tools and tests read state and stats.
+    input::InputSystem* input() { return input_.get(); }
+
     State state() const { return state_; }
     bool active() const { return state_ != State::Stopped; }
     World* world() { return world_.get(); }
@@ -79,8 +99,10 @@ public:
     Span<const Entity> entities() const { return entities_.span(); }
 
 private:
-    void tick_once();
+    // `close_us`: the end of this tick's input window on the engine clock.
+    void tick_once(u64 close_us);
 
+    mem::UniquePtr<input::InputSystem> input_;
     mem::UniquePtr<audio::AudioDevice> audio_;
     mem::UniquePtr<audio::ClipBank> clips_;
     mem::UniquePtr<World> world_;
@@ -90,6 +112,7 @@ private:
     f64 accumulator_ = 0.0;
     f32 time_scale_ = 1.0f;
     u64 ticks_ = 0;
+    u64 last_close_us_ = 0;
     u64 enter_hash_ = 0;
     f64 enter_seconds_ = 0.0;
     f64 last_advance_ms_ = 0.0;

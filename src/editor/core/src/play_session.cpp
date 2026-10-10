@@ -2,6 +2,9 @@
 
 #include "mce/audio/clip_bank.h"
 #include "mce/audio/components.h"
+#include "mce/input/default_map.h"
+#include "mce/input/ecs.h"
+#include "mce/input/input_system.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/log.h"
@@ -17,6 +20,26 @@ namespace {
 GameInstallFn g_game_install = nullptr;  // set once at startup by a project editor's main
 
 constexpr const char* kStage = "editor.play";
+
+// The project's action map, picked the way mce_player picks it with no -input_map: the first
+// cooked .mcinput by path, else the built-in default map.
+Result<void> load_project_input_map(asset::AssetSystem& assets, input::InputSystem& in) {
+    asset::AssetKey best = asset::kInvalidAssetKey;
+    for (asset::AssetKey k = 0; k < assets.asset_count(); ++k) {
+        const asset::AssetInfo info = assets.info(k);
+        if (info.type != asset::ChunkType::InputMap) continue;
+        if (best == asset::kInvalidAssetKey || info.path < assets.info(best).path) best = k;
+    }
+    if (best == asset::kInvalidAssetKey) {
+        Array<byte> map;
+        input::default_map_chunk(map);
+        return in.load_map(map.span());
+    }
+    MCE_TRY_ASSIGN(const asset::AssetHandle<asset::InputMap> h, assets.load_sync<asset::InputMap>(best));
+    const Result<void> r = in.load_map(assets.resolve(h));
+    assets.release(asset::AnyHandle(h));
+    return r;
+}
 
 }  // namespace
 
@@ -51,13 +74,20 @@ Result<void> PlaySession::enter(EditorProject& project, const SceneDocument& doc
     if (chunk >= view.chunk_count()) return Error(Errc::ImportFailed, kStage, "no scene chunk");
     MCE_TRY_ASSIGN(asset::SceneView scene, asset::SceneView::read(view.payload(chunk)));
 
-    // 2. mce_player's headless world: physics2d, the audio bridge on a Silent device, the scene.
+    // 2. mce_player's world: input, physics2d, the audio bridge on a Silent device, the scene.
+    input_ = mem::make_unique<input::InputSystem>(mem::heap());
+    if (Result<void> r = load_project_input_map(*assets, *input_); !r) {
+        diags.error(r.error().code, rel.view(), 0, 0, kStage, "the project's input map does not load");
+        stop();
+        return r;
+    }
     audio::AudioDesc ad;
     ad.backend = audio::Backend::Silent;
     MCE_TRY_ASSIGN(audio_, audio::AudioDevice::create(ad));
     clips_ = mem::make_unique<audio::ClipBank>(mem::heap(), *assets, *audio_);
     world_ = mem::make_unique<World>(mem::heap());
     world_->set_profiling(true);  // the Profiler panel ranks the play world's systems (never hashed)
+    input::install(*world_);
     physics::install_physics2d(*world_);
     audio::install(*world_, *audio_, clips_.get());
     kit::install_particles(*world_, assets);
@@ -84,6 +114,8 @@ Result<void> PlaySession::enter(EditorProject& project, const SceneDocument& doc
     state_ = State::Playing;
     accumulator_ = 0.0;
     ticks_ = 0;
+    last_close_us_ = platform::now_us();
+    input_->set_tick_origin_us(last_close_us_);
     enter_hash_ = world_->state_hash();
     enter_seconds_ = platform::now_seconds() - t0;
     MCE_LOG_INFO("editor: play {} ({} entities, entered in {:.0f} ms)", rel.view(), entities_.size(),
@@ -99,6 +131,7 @@ void PlaySession::stop() {
     world_.reset();  // before the bank and the device: audio components hold clip handles
     clips_.reset();
     audio_.reset();
+    input_.reset();
     entities_.clear();
     if (state_ != State::Stopped) MCE_LOG_INFO("editor: play stopped after {} ticks", ticks_);
     state_ = State::Stopped;
@@ -107,7 +140,11 @@ void PlaySession::stop() {
 
 u64 PlaySession::state_hash() const { return world_ ? world_->state_hash() : 0; }
 
-void PlaySession::tick_once() {
+void PlaySession::push_event(const platform::Event& e) {
+    if (input_ && state_ != State::Stopped) input_->push_event(e);
+}
+
+void PlaySession::tick_once(u64 close_us) {
     // The editor ticks inside its own app frame; tests and tools call this outside one.
     mem::LinearArena* prev = nullptr;
     const bool own_arena = !mem::has_frame_arena();
@@ -115,6 +152,11 @@ void PlaySession::tick_once() {
         scratch_->reset();
         prev = mem::set_frame_arena(scratch_.get());
     }
+    // The tick's input: events stamped before its close (wall clock: pause, catch-up clamps and
+    // slow motion move the tick grid, so the grid is not origin + N*T here). Closes only advance.
+    if (close_us <= last_close_us_) close_us = last_close_us_ + 1;
+    last_close_us_ = close_us;
+    input::publish(*world_, *input_->sample_for_tick(ticks_ + 1, close_us));
     scene::pump_streaming(*world_);
     world_->tick(kTickDt, ticks_);
     ++ticks_;
@@ -134,10 +176,16 @@ u32 PlaySession::advance(f64 real_dt) {
     const f64 cap = kTickDt * kMaxCatchup;
     if (accumulator_ > cap) accumulator_ = cap;
     u32 n = 0;
-    while (accumulator_ + 1e-9 >= kTickDt) {
-        tick_once();
+    for (f64 left = accumulator_; left + 1e-9 >= kTickDt; left -= kTickDt) ++n;
+    // This frame's ticks share out the wall time up to now: the last one closes at now, each
+    // earlier one a tick's worth of time before it (+1: the close is exclusive, and an event
+    // stamped this microsecond is already in).
+    const u64 now = platform::now_us() + 1;
+    const u64 tick_us = static_cast<u64>(kTickDt * 1e6);
+    for (u32 i = 0; i < n; ++i) {
+        const u64 back = static_cast<u64>(n - 1 - i) * tick_us;
+        tick_once(now > back ? now - back : 0);
         accumulator_ -= kTickDt;
-        ++n;
     }
     if (accumulator_ < 0.0) accumulator_ = 0.0;
     audio_->update();
@@ -164,7 +212,7 @@ void PlaySession::step() {
         pause();
         return;
     }
-    tick_once();
+    tick_once(platform::now_us() + 1);
     clips_->sync();
 }
 

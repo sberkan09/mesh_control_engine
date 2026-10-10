@@ -50,6 +50,7 @@ struct ViewportInfo {
     rhi::TextureHandle target;  // null while the panel is hidden
     rhi::Extent2D size;         // pixels
     bool hovered = false;
+    bool focused = false;  // the panel has keyboard focus and no text field owns the keyboard
 };
 
 // Editor-side view settings shared by the viewport and the menus.
@@ -157,6 +158,8 @@ private:
     void draw_popups();
     void handle_shortcuts();
     void update_title();
+    // `e` as the play world's input sees it (on_event, while playing).
+    platform::Event game_event(const platform::Event& e) const;
 
     Impl* impl_ = nullptr;
     platform::Window* window_ = nullptr;

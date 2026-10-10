@@ -36,7 +36,7 @@ Symptoms, what they mean, what to do.
 | Symptom | Cause | Fix |
 |---|---|---|
 | "Open a project to edit a scene" | started without `-project` | pass `-project projects/MyGame` |
-| Play-in-editor: the character does not move | play mode feeds no input | drive it from the real game (`my_game`, or Ctrl+F5) |
+| Play-in-editor: the character does not move | the Viewport does not have focus, so keys stay with the editor | click the Viewport, then press the keys |
 | Inspector is greyed out | play mode | Stop (F5) |
 | HUD text is off-screen in play mode | the play view is the viewport's size, the label was authored for the window | ignore in the editor, or enlarge the viewport |
 | "Recover unsaved changes" on open | the previous session ended without saving | Recover or Discard |
