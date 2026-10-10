@@ -14,7 +14,7 @@ and written type-erased, so a new reflected component needs no loader change (FR
 
 ## Public surface
 
-One header, `include/mce/scene/scene.h`, namespace `mce::scene`.
+Loading, `include/mce/scene/scene.h`, namespace `mce::scene`:
 
 - `instantiate(world, SceneView, spawned = nullptr, hierarchy = true)`: spawns one entity per scene
   entity and writes every column. `spawned[i]` is the entity created for scene entity `i`. When the
@@ -32,6 +32,22 @@ One header, `include/mce/scene/scene.h`, namespace `mce::scene`.
 
 The input type `asset::SceneView` and the chunk layout live in `mce_asset` (`mce/asset/formats.h`).
 
+Streaming, `include/mce/scene/streaming.h` (FR-ENT-120, opt-in):
+
+- Components: `SceneChunk` (an `AssetRef<Scene>`, a box `half_extents` around the entity's position,
+  `load_distance`, `unload_distance`, `pinned`, `disabled`), `StreamingFocus` (`enabled`) and the
+  pump-written `SceneChunkStatus` (`state`, `entity_count`). All three are registered in the cook,
+  the editor and the MCP server (`engine_components.cpp`).
+- `install_streaming(world, assets, StreamingConfig)` adds the `SceneStreaming` resource;
+  `pump_streaming(world, PumpMode)` runs it, once per tick, outside phases (it spawns and destroys).
+  `Budgeted` follows the config: `async` requests go through `AssetSystem::request_async` and at most
+  `max_instantiations_per_pump` chunks instantiate per pump; with `async` off a wanted chunk loads in
+  the same pump (still budgeted). `Settle` loads everything wanted now, synchronously.
+- `SceneStreaming::entities(chunk)` lists what a loaded chunk spawned; `stats()` counts chunks,
+  states, streamed entities, loads and unloads. `distance_to_box` is the distance rule.
+- Hosts: `mce_player` (async when windowed, sync when headless), `PlaySession` and the MCP headless
+  run (sync) install it, settle after the base scene and pump before every `World::tick`.
+
 ## Rules and invariants
 
 - All-or-nothing: every column is validated before anything is spawned. A column whose type is not
@@ -46,6 +62,13 @@ The input type `asset::SceneView` and the chunk layout live in `mce_asset` (`mce
 - Fields omitted in the `.mcscene` keep their C++ defaults.
 - Instantiating the same scene twice spawns a second, independent copy.
 - A missing scene GUID returns an error, never crashes.
+- Streaming: a chunk loads when any enabled focus is within `load_distance` of its box and unloads
+  when every focus is beyond `max(unload_distance, load_distance)`; `disabled` wins over `pinned`.
+  Unloading destroys only the entities the chunk spawned (those still alive). A destroyed chunk
+  entity, or one that lost its `SceneChunk`, unloads on the next pump; a changed `scene` GUID swaps
+  the contents. A failed chunk (missing GUID, bad scene) is marked `Failed` and retried after the
+  focus leaves and returns. Ready async loads instantiate in request order. With `async` off the
+  outcome is a function of the pump sequence alone (the determinism test).
 - Engine walls that apply: the engine container ban (no `std::vector`, `std::string`, iostreams
   under `src/engine/`). The runtime never parses JSON; scene text is read only by the cook library.
 
@@ -59,6 +82,19 @@ ctest `test_scene` (no GPU), `tests/scene/test_scene.cpp`. It cooks a temporary 
   `Sprite` with an asset GUID, `kit::primary_camera`, and a second independent instantiation.
 - "scene: a missing scene GUID is an error, never a crash".
 - "scene: components registered from reflection unify with typed registration".
+
+`tests/scene/test_streaming.cpp` (same binary) cooks a base scene with three chunks:
+
+- "streaming: chunks load near the focus and unload past the hysteresis band": settle, walk to the
+  next chunk, the band between the two distances, `pinned` and `disabled`.
+- "streaming: budgeted pumps instantiate one chunk at a time; removed chunks take their entities",
+  including a changed `scene` GUID.
+- "streaming: a chunk whose scene is missing fails without touching the world".
+- "streaming: async loads read off-thread and land on a later pump", including a cancel in flight.
+- "streaming: synchronous streaming is deterministic" and "a world without chunks is untouched".
+
+`test_asset_system` covers `request_async` / `take_async` / `cancel_async` on dev and pack mounts and
+a corrupt file read on the loader thread.
 
 End to end:
 
@@ -85,4 +121,8 @@ End to end:
   components; `ecs::instantiate` / `load_scene` in `mce_ecs_scene` add replicas, overrides, a parent,
   asset stamping and in-phase use through Commands. Folding `mce_scene` onto `ecs::instantiate` is a
   recorded follow-up.
-- `load` is synchronous only (assets.md §7.3 describes the sync MVP load path).
+- `load` is synchronous only (assets.md §7.3 describes the sync MVP load path); streaming is the async
+  path.
+- Streaming does not offset a chunk scene by its chunk entity's transform (chunk scenes are in world
+  coordinates), does not split one chunk's instantiation across ticks, and is not tracked by save
+  games (a `SaveKey` inside a chunk scene is unsupported).

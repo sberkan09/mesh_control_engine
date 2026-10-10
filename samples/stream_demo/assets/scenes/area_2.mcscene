@@ -1,0 +1,63 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "5ce4e000-0000-4000-8000-000000000203",
+  "name": "area_2",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Ground",
+      "components": {
+        "LocalTransform": {
+          "position": [40, -1.5, 0]
+        },
+        "Sprite": {
+          "tint": [0.4, 0.55, 0.8, 1],
+          "size": [19.5, 1]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Pillar 0",
+      "components": {
+        "LocalTransform": {
+          "position": [34, 0.75, 0]
+        },
+        "Sprite": {
+          "tint": [0.32000000000000006, 0.44000000000000006, 0.6400000000000001, 1],
+          "size": [1, 3.5],
+          "layer": 1
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Pillar 1",
+      "components": {
+        "LocalTransform": {
+          "position": [40, -0.25, 0]
+        },
+        "Sprite": {
+          "tint": [0.32000000000000006, 0.44000000000000006, 0.6400000000000001, 1],
+          "size": [1, 1.5],
+          "layer": 1
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Pillar 2",
+      "components": {
+        "LocalTransform": {
+          "position": [46, 0.25, 0]
+        },
+        "Sprite": {
+          "tint": [0.32000000000000006, 0.44000000000000006, 0.6400000000000001, 1],
+          "size": [1, 2.5],
+          "layer": 1
+        }
+      }
+    }
+  ]
+}

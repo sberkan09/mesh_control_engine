@@ -9,6 +9,7 @@
 #include "mce/physics/module.h"
 #include "mce/platform/platform.h"
 #include "mce/scene/scene.h"
+#include "mce/scene/streaming.h"
 
 namespace mce::editor {
 
@@ -68,11 +69,17 @@ Result<void> PlaySession::enter(EditorProject& project, const SceneDocument& doc
             return r;
         }
     }
+    // Scene streaming (FR-ENT-120), inert without SceneChunks. Synchronous here: play ticks are
+    // driven step by step by tools and tests, which expect a chunk to be in once it is wanted.
+    scene::StreamingConfig streaming;
+    streaming.async = false;
+    scene::install_streaming(*world_, *assets, streaming);
     if (Result<void> r = scene::instantiate(*world_, scene, &entities_); !r) {
         diags.error(r.error().code, rel.view(), 0, 0, kStage, "the scene does not instantiate");
         stop();
         return r;
     }
+    scene::pump_streaming(*world_, scene::PumpMode::Settle);
     if (!scratch_) scratch_ = mem::make_unique<mem::LinearArena>(mem::heap(), mem::heap(), 16 * MiB, "editor.play");
     state_ = State::Playing;
     accumulator_ = 0.0;
@@ -108,6 +115,7 @@ void PlaySession::tick_once() {
         scratch_->reset();
         prev = mem::set_frame_arena(scratch_.get());
     }
+    scene::pump_streaming(*world_);
     world_->tick(kTickDt, ticks_);
     ++ticks_;
     audio_->update();  // the Silent backend mixes one block per call (mce_player -headless)

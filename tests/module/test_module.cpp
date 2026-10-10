@@ -2,6 +2,8 @@
 #include <doctest/doctest.h>
 
 #include <cstdio>
+#include <filesystem>
+#include <system_error>
 
 #include "mce/core.h"
 #include "mce/module_host.h"
@@ -119,6 +121,40 @@ TEST_CASE("module: two live copies of one module map distinct images") {
     }
     unload_game_module(ma);
     unload_game_module(mb);
+}
+
+TEST_CASE("module: a read-only folder maps the module in place") {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / ("mce_module_ro_" + std::to_string(fs::file_size(MODTEST_GOOD)));
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    REQUIRE(fs::create_directories(dir));
+    const fs::path source = dir / fs::path(MODTEST_GOOD).filename();
+    REQUIRE(fs::copy_file(MODTEST_GOOD, source));
+    fs::permissions(dir, fs::perms::owner_write | fs::perms::group_write | fs::perms::others_write,
+                    fs::perm_options::remove);
+    // Root (and Windows, where folder bits do not stop writes) can still write: nothing to prove there.
+    std::FILE* probe = std::fopen((dir / "probe").string().c_str(), "wb");
+    const bool writable = probe != nullptr;
+    if (probe) std::fclose(probe);
+    if (!writable) {
+        LoadedModule mod;
+        {
+            World w;
+            Result<LoadedModule> r = load_game_module(source.string().c_str(), w);
+            REQUIRE(r.has_value());
+            mod = r.value();
+            CHECK(mod.loaded_path.view() == mod.source_path.view());
+            run_ticks(w, 3);
+            CHECK(total_hp(w) == static_cast<i32>(kSpawned) * (kStartHp - 3));
+        }
+        unload_game_module(mod);
+        CHECK(fs::exists(source));  // the source is never deleted
+    } else {
+        MESSAGE("folder stays writable for this user (root?); in-place mapping not exercised");
+    }
+    fs::permissions(dir, fs::perms::owner_all, fs::perm_options::add);
+    fs::remove_all(dir, ec);
 }
 
 TEST_CASE("module: one module per world") {

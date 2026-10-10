@@ -311,3 +311,134 @@ TEST_CASE("asset system: missing mount root is an error") {
     REQUIRE(!r);
     CHECK(r.error().code == Errc::FileNotFound);
 }
+
+TEST_CASE("asset system: async load reads off the main thread, commits on poll") {
+    const std::string root = tmp_dir("dev_async");
+    u64 th = 0, sh = 0;
+    make_cooked_tree(root, th, sh);
+    AssetSystem as;
+    CountingSink sink;
+    as.set_upload_sink(&sink);
+    const StringView roots[] = {root};
+    REQUIRE(as.mount(Span<const StringView>(roots, 1)));
+    const AssetKey tk = as.find(kTex);
+
+    const AsyncTicket t = as.request_async<Texture>(tk);
+    REQUIRE(t.valid());
+    CHECK(as.async_status(t) == AsyncStatus::Pending);
+    CHECK(as.async_pending() == 1);
+    CHECK(as.refcount(tk) == 0);  // nothing is committed before a poll
+    CHECK(!as.take_async(t));     // not ready yet: the ticket stays live
+    as.wait_async();
+    REQUIRE(as.async_status(t) == AsyncStatus::Ready);
+    CHECK(sink.textures == 1);  // uploaded at commit, on the main thread
+    auto h = as.take_async(t);
+    REQUIRE(h);
+    CHECK(as.async_status(t) == AsyncStatus::Unknown);  // spent
+    CHECK(as.refcount(tk) == 1);
+    auto tv = TextureView::read(as.resolve(AssetHandle<Texture>{h.value().index, h.value().generation}));
+    REQUIRE(tv);
+    CHECK(static_cast<u8>(tv.value().pixels(0)[0]) == 0x40);
+
+    // Already resident: ready at once, one more reference, no second read or upload.
+    const AsyncTicket t2 = as.request_async<Texture>(tk);
+    CHECK(as.async_status(t2) == AsyncStatus::Ready);
+    auto h2 = as.take_async(t2);
+    REQUIRE(h2);
+    CHECK(h2.value().generation == h.value().generation);
+    CHECK(as.refcount(tk) == 2);
+    CHECK(sink.textures == 1);
+    as.release(h.value());
+    as.release(h2.value());
+
+    // Wrong type and unknown keys fail at once.
+    const AsyncTicket bad = as.request_async<Sfx>(tk);
+    CHECK(as.async_status(bad) == AsyncStatus::Failed);
+    CHECK(!as.take_async(bad));
+    const AsyncTicket missing = as.request_async<Texture>(kInvalidAssetKey);
+    REQUIRE(as.async_status(missing) == AsyncStatus::Failed);
+    CHECK(as.take_async(missing).error().code == Errc::NotFound);
+}
+
+TEST_CASE("asset system: cancelled async loads leave nothing behind") {
+    const std::string root = tmp_dir("dev_async_cancel");
+    u64 th = 0, sh = 0;
+    make_cooked_tree(root, th, sh);
+    AssetSystem as;
+    const StringView roots[] = {root};
+    REQUIRE(as.mount(Span<const StringView>(roots, 1)));
+    const AssetKey sk = as.find(kSfx);
+
+    const AsyncTicket pending = as.request_async<Sfx>(sk);
+    as.cancel_async(pending);  // the read in flight finishes and is dropped
+    CHECK(as.async_status(pending) == AsyncStatus::Unknown);
+    as.wait_async();
+    CHECK(as.refcount(sk) == 0);
+
+    const AsyncTicket ready = as.request_async<Sfx>(sk);
+    as.wait_async();
+    REQUIRE(as.async_status(ready) == AsyncStatus::Ready);
+    CHECK(as.refcount(sk) == 1);
+    as.cancel_async(ready);  // releases the reference the commit took
+    CHECK(as.refcount(sk) == 0);
+
+    // A ticket left pending when the system goes away is joined cleanly by the destructor.
+    (void)as.request_async<Sfx>(sk);
+}
+
+TEST_CASE("asset system: an async read of a corrupt file fails like load_sync") {
+    const std::string root = tmp_dir("dev_async_corrupt");
+    u64 th = 0, sh = 0;
+    make_cooked_tree(root, th, sh);
+    {
+        std::FILE* f = std::fopen(cooked_path(root, kTex, th).c_str(), "r+b");
+        REQUIRE(f);
+        std::fseek(f, 120, SEEK_SET);
+        std::fputc(0x7F, f);
+        std::fclose(f);
+    }
+    AssetSystem as;
+    const StringView roots[] = {root};
+    REQUIRE(as.mount(Span<const StringView>(roots, 1)));
+    const AsyncTicket t = as.request_async<Texture>(as.find(kTex));
+    as.wait_async();
+    REQUIRE(as.async_status(t) == AsyncStatus::Failed);
+    CHECK(as.take_async(t).error().code == Errc::CrcMismatch);
+    as.end_frame();
+    bool saw = false;
+    for (const AssetEvent& e : as.events()) saw = saw || e.kind == AssetEvent::Kind::LoadFailed;
+    CHECK(saw);
+}
+
+TEST_CASE("asset system: async loads from a pack are ready at once") {
+    const std::string root = tmp_dir("pack_async");
+    Array<byte> sfx;
+    sfx_container(sfx);
+    ManifestItem items[1] = {{kSfx, xxh64(sfx.data(), sfx.size()), ChunkType::Sfx, "b.wav"}};
+    Array<byte> mp;
+    write_manifest(Span<ManifestItem>(items, 1), mp);
+    ContainerWriter w;
+    ContainerWriter::ChunkDesc md;
+    md.type = ChunkType::Manifest;
+    w.add(md, mp.span());
+    auto v = ContainerView::open(sfx.span());
+    REQUIRE(v);
+    ContainerWriter::ChunkDesc d;
+    d.type = v.value().entry(0).type;
+    d.version = v.value().entry(0).chunk_version;
+    d.guid = v.value().entry(0).guid();
+    w.add(d, v.value().payload(0));
+    Array<byte> pack;
+    w.finish(pack);
+    const std::string pack_path = root + "/assets.mce";
+    write_bytes(pack_path, pack.span());
+
+    AssetSystem as;
+    const StringView roots[] = {pack_path};
+    REQUIRE(as.mount(Span<const StringView>(roots, 1)));
+    const AsyncTicket t = as.request_async<Sfx>(as.find(kSfx));
+    CHECK(as.async_status(t) == AsyncStatus::Ready);
+    auto h = as.take_async(t);
+    REQUIRE(h);
+    as.release(h.value());
+}

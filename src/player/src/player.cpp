@@ -52,6 +52,7 @@
 #include "mce/module_host.h"
 #include "mce/player/player.h"
 #include "mce/scene/scene.h"
+#include "mce/scene/streaming.h"
 #include "mce/ui/ui.h"
 #include "ship_paths.h"
 
@@ -148,7 +149,13 @@ public:
             MCE_TRY(input_.load_map(map.span()));
             window_->set_event_handler(&PlayerApp::on_event, this);
         }
+        // Scene streaming (FR-ENT-120) is inert unless the scene places SceneChunks. Headless runs
+        // load chunks inside the pump that wants them, so -headless hashes stay deterministic.
+        scene::StreamingConfig streaming;
+        streaming.async = device_ != nullptr;
+        scene::install_streaming(world_, assets_, streaming);
         MCE_TRY(scene::load(world_, assets_, scene, &entities_));
+        scene::pump_streaming(world_, scene::PumpMode::Settle);
         MCE_LOG_INFO("{}: scene {} ({}) with {} entities", desc_.app_name, asset::to_string(scene).view(), scene_path_.view(),
                      entities_.size());
         scene_guid_ = scene;
@@ -167,6 +174,7 @@ public:
         if (paused_) return;
         tick_dt_ = t.dt;
         if (t.actions) input::publish(world_, *t.actions);
+        scene::pump_streaming(world_);
         world_.tick(t.dt, sim_ticks_);
         ++sim_ticks_;
         if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
@@ -267,6 +275,10 @@ public:
     input::InputSystem& input() { return input_; }
     u64 ticks() const { return sim_ticks_; }
     usize entity_count() const { return entities_.size(); }
+    const scene::StreamingStats* streaming_stats() {
+        const scene::SceneStreaming* s = world_.try_resource<scene::SceneStreaming>();
+        return s ? &s->stats() : nullptr;
+    }
 
 private:
     // A GUID, a source path ("scenes/level.mcscene"), or empty for the first scene by path.
@@ -526,6 +538,10 @@ int run_headless(const player::PlayerDesc& pd) {
     if (rc == 0)
         std::printf("%s: %llu ticks, %zu entities, state_hash %016llx\n", pd.app_name, static_cast<unsigned long long>(app.ticks()),
                     app.entity_count(), static_cast<unsigned long long>(app.state_hash()));
+    if (const scene::StreamingStats* st = app.streaming_stats(); rc == 0 && st && st->chunks > 0)
+        std::printf("%s: streaming %u/%u chunks loaded, %u streamed entities, %llu loads, %llu unloads\n", pd.app_name,
+                    st->loaded, st->chunks, st->streamed_entities, static_cast<unsigned long long>(st->total_loads),
+                    static_cast<unsigned long long>(st->total_unloads));
     return rc;
 }
 

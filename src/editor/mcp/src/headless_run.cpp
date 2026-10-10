@@ -10,6 +10,7 @@
 #include "mce/kit/sequence.h"
 #include "mce/physics/module.h"
 #include "mce/scene/scene.h"
+#include "mce/scene/streaming.h"
 
 namespace mce::mcp {
 
@@ -37,13 +38,18 @@ public:
                 return g;
             }
         }
+        scene::StreamingConfig streaming;
+        streaming.async = false;  // deterministic, as mce_player -headless
+        scene::install_streaming(world_, assets_, streaming);
         ResultV r = scene::load(world_, assets_, scene_, &entities_);
         if (!r) error_ = r.error();
+        else scene::pump_streaming(world_, scene::PumpMode::Settle);
         return r;
     }
 
     void on_tick(const app::TickContext& t) override {
         if (t.actions) input::publish(world_, *t.actions);  // the scripted input, as the player publishes the keyboard's
+        scene::pump_streaming(world_);
         world_.tick(t.dt, sim_ticks_);
         ++sim_ticks_;
         audio_.update();  // the Silent backend mixes one block per call

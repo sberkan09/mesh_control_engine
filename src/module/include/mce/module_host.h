@@ -25,7 +25,7 @@ struct LoadedModule {
     void* handle = nullptr;           // platform library handle (opaque)
     u32 slot = ~0u;                   // copy-and-load slot
     FixedString<512> source_path;     // what the caller asked for
-    FixedString<512> loaded_path;     // the copy actually mapped
+    FixedString<512> loaded_path;     // the copy actually mapped (the source itself in a read-only folder)
 
     bool loaded() const { return handle != nullptr; }
 };

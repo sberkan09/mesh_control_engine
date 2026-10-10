@@ -11,4 +11,5 @@ mce_add_executable(mce_cook UMBRELLA
         mce::mce_physics2d
         mce::mce_audio
         mce::mce_ecs_scene
+        mce::mce_scene
         mce::mce_module_host)

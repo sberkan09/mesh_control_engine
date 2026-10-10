@@ -1,7 +1,10 @@
 #include "mce/asset/asset_system.h"
 
+#include <condition_variable>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
+#include <thread>
 
 #include "mce/asset/file_io.h"
 #include "mce/asset/xxhash.h"
@@ -127,7 +130,84 @@ AssetSystem::AssetSystem(mem::IAllocator& a)
     build_placeholders(placeholders_);
 }
 
-AssetSystem::~AssetSystem() = default;
+// The loader thread: reads, hashes and CRC-checks container files, nothing else. It never
+// touches the asset tables; the main thread commits its results in poll_async().
+struct AssetSystem::AsyncLoader {
+    struct Job {
+        u32 id = 0;
+        u64 content_hash = 0;
+        bool verify = true;
+        FixedString<1024> file;
+    };
+    struct Done {
+        u32 id = 0;
+        Array<byte> bytes;
+        Errc error = Errc::Ok;
+    };
+
+    std::mutex mutex;
+    std::condition_variable wake;  // jobs queued or stop
+    std::condition_variable idle;  // a job finished
+    Array<Job> jobs;
+    usize head = 0;
+    Array<Done> done;
+    u32 busy = 0;
+    bool stop = false;
+    std::thread thread;
+
+    AsyncLoader() : thread([this] { run(); }) {}
+    ~AsyncLoader() {
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            stop = true;
+        }
+        wake.notify_all();
+        thread.join();
+    }
+
+    void push(const Job& job) {
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            jobs.push_back(job);
+        }
+        wake.notify_one();
+    }
+
+    void run() {
+        for (;;) {
+            Job job;
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                wake.wait(lock, [this] { return stop || head < jobs.size(); });
+                if (stop) return;
+                job = jobs[head++];
+                if (head == jobs.size()) {
+                    jobs.clear();
+                    head = 0;
+                }
+                ++busy;
+            }
+            Done d;
+            d.id = job.id;
+            if (Result<void> r = read_file(job.file.view(), d.bytes); !r) {
+                d.error = r.error().code;
+            } else if (xxh64(d.bytes.data(), d.bytes.size()) != job.content_hash) {
+                d.error = Errc::CrcMismatch;
+            } else if (auto v = ContainerView::open(d.bytes.span(), job.file.view(), OpenOptions{job.verify}); !v) {
+                d.error = v.error().code;
+            }
+            if (d.error != Errc::Ok) d.bytes = Array<byte>();
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                done.push_back(std::move(d));
+                --busy;
+            }
+            idle.notify_all();
+        }
+    }
+};
+
+AssetSystem::~AssetSystem() { loader_.reset(); }
 
 Result<void> AssetSystem::mount(Span<const StringView> roots, MountOptions opt) {
     for (StringView r : roots) MCE_TRY(mount_one(r, opt));
@@ -184,6 +264,23 @@ AssetInfo AssetSystem::info(AssetKey key) const {
     return AssetInfo{r.guid, r.type, r.content_hash, StringView(strings_.data() + r.path_offset, r.path_size)};
 }
 
+void AssetSystem::fail_load(Row& row, AssetKey key, Errc code) {
+    row.state = State::Failed;
+    row.owned.clear();
+    row.payload = {};
+    post(AssetEvent{AssetEvent::Kind::LoadFailed, row.guid, key, row.generation, row.generation, code});
+    MCE_LOG_WARN("asset load failed: {} ({})", StringView(strings_.data() + row.path_offset, row.path_size), errc_name(code));
+}
+
+void AssetSystem::become_resident(Row& row, AssetKey key) {
+    row.state = State::Resident;
+    row.generation = next_generation(row.generation);
+    row.stale_logged = false;
+    if (auto u = upload(row, key); !u)
+        MCE_LOG_WARN("gpu upload failed: {} ({})", StringView(strings_.data() + row.path_offset, row.path_size),
+                     errc_name(u.error().code));
+}
+
 Result<AnyHandle> AssetSystem::load_any(AssetKey key, ChunkType type) {
     if (key >= rows_.size()) return Error(Errc::NotFound, "asset.load", {}, key);
     Row& row = rows_[key];
@@ -193,17 +290,10 @@ Result<AnyHandle> AssetSystem::load_any(AssetKey key, ChunkType type) {
     if (row.state != State::Resident) {
         auto r = make_resident(row, key);
         if (!r) {
-            row.state = State::Failed;
-            row.owned.clear();
-            row.payload = {};
-            post(AssetEvent{AssetEvent::Kind::LoadFailed, row.guid, key, row.generation, row.generation, r.error().code});
-            MCE_LOG_WARN("asset load failed: {} ({})", path, errc_name(r.error().code));
+            fail_load(row, key, r.error().code);
             return r.error();
         }
-        row.state = State::Resident;
-        row.generation = next_generation(row.generation);
-        row.stale_logged = false;
-        if (auto u = upload(row, key); !u) MCE_LOG_WARN("gpu upload failed: {} ({})", path, errc_name(u.error().code));
+        become_resident(row, key);
     }
     ++row.refcount;
     MCE_ASSERT_MSG(row.refcount != 0, "asset refcount overflow");
@@ -214,25 +304,34 @@ Result<AnyHandle> AssetSystem::load_any(AssetKey key, ChunkType type) {
     return h;
 }
 
+namespace {
+
+// cooked/<aa>/<guid-hex>/<content-hash>.mce under a dev mount (assets.md §3.1)
+void container_file(StringView root, Guid guid, u64 content_hash, FixedString<1024>& out) {
+    const FixedString<40> hex = to_hex(guid);
+    char name[96];  // sized for FixedString<40>'s worst case, not just a 32-char GUID
+    std::snprintf(name, sizeof(name), "/%.2s/%s/%016llx.mce", hex.c_str(), hex.c_str(),
+                  static_cast<unsigned long long>(content_hash));
+    out.assign(root);
+    out.append(name);
+}
+
+}  // namespace
+
 Result<void> AssetSystem::make_resident(Row& row, AssetKey key) {
     (void)key;
     const Mount& m = mounts_[row.mount];
     const StringView path(strings_.data() + row.path_offset, row.path_size);
-    ContainerView view;
-    if (m.is_pack) {
-        view = m.view;
-    } else {
-        // cooked/<aa>/<guid-hex>/<content-hash>.mce (assets.md §3.1)
-        const FixedString<40> hex = to_hex(row.guid);
-        char name[96];  // sized for FixedString<40>'s worst case, not just a 32-char GUID
-        std::snprintf(name, sizeof(name), "/%.2s/%s/%016llx.mce", hex.c_str(), hex.c_str(),
-                      static_cast<unsigned long long>(row.content_hash));
-        FixedString<1024> file(m.root.view());
-        file.append(name);
-        MCE_TRY(read_file(file.view(), row.owned));
-        if (xxh64(row.owned.data(), row.owned.size()) != row.content_hash) return Error(Errc::CrcMismatch, "asset.load.content_hash", path);
-        MCE_TRY_ASSIGN(view, ContainerView::open(row.owned.span(), path, OpenOptions{m.verify}));
-    }
+    if (m.is_pack) return bind_payload(row, m.view, path);
+    FixedString<1024> file;
+    container_file(m.root.view(), row.guid, row.content_hash, file);
+    MCE_TRY(read_file(file.view(), row.owned));
+    if (xxh64(row.owned.data(), row.owned.size()) != row.content_hash) return Error(Errc::CrcMismatch, "asset.load.content_hash", path);
+    MCE_TRY_ASSIGN(const ContainerView view, ContainerView::open(row.owned.span(), path, OpenOptions{m.verify}));
+    return bind_payload(row, view, path);
+}
+
+Result<void> AssetSystem::bind_payload(Row& row, ContainerView view, StringView path) {
     const u32 ci = view.find(row.type, row.guid);
     if (ci == view.chunk_count()) return Error(Errc::MissingRef, "asset.load.chunk", path);
     if (const u8 major = supported_major(row.type); major != 0) MCE_TRY(ContainerView::check_version(view.entry(ci), major, path));
@@ -258,6 +357,150 @@ void AssetSystem::destroy_gpu(AssetKey key, u32 generation, ChunkType type) {
     if (type != ChunkType::Texture && type != ChunkType::Mesh && type != ChunkType::Material) return;
     const RetiredAsset r{key, generation, type};
     sink_->destroy_gpu_objects(Span<const RetiredAsset>(&r, 1));
+}
+
+// ---- async loading -----------------------------------------------------------------------------
+
+AssetSystem::AsyncRequest* AssetSystem::find_async(AsyncTicket t) {
+    for (AsyncRequest& r : async_)
+        if (r.id == t.id && t.valid()) return &r;
+    return nullptr;
+}
+
+const AssetSystem::AsyncRequest* AssetSystem::find_async(AsyncTicket t) const {
+    return const_cast<AssetSystem*>(this)->find_async(t);
+}
+
+AsyncTicket AssetSystem::request_async(AssetKey key, ChunkType type) {
+    AsyncRequest req;
+    req.id = next_async_id_++;
+    if (next_async_id_ == 0) next_async_id_ = 1;
+    req.key = key;
+    req.type = type;
+    auto settle = [&](Result<AnyHandle> r) {
+        if (r) {
+            req.status = AsyncStatus::Ready;
+            req.handle = r.value();
+        } else {
+            req.status = AsyncStatus::Failed;
+            req.error = r.error().code;
+        }
+    };
+    if (key >= rows_.size() || rows_[key].type != type || rows_[key].state == State::Resident || mounts_[rows_[key].mount].is_pack) {
+        // Nothing to read off the main thread: resident already, a pack's bytes, or an error.
+        settle(load_any(key, type));
+    } else {
+        const Row& row = rows_[key];
+        const Mount& m = mounts_[row.mount];
+        req.content_hash = row.content_hash;
+        AsyncLoader::Job job;
+        job.id = req.id;
+        job.content_hash = row.content_hash;
+        job.verify = m.verify;
+        container_file(m.root.view(), row.guid, row.content_hash, job.file);
+        if (!loader_) loader_ = mem::make_unique<AsyncLoader>(*alloc_);
+        loader_->push(job);
+    }
+    async_.push_back(req);
+    return AsyncTicket{req.id};
+}
+
+AsyncStatus AssetSystem::async_status(AsyncTicket t) const {
+    const AsyncRequest* r = find_async(t);
+    return r ? r->status : AsyncStatus::Unknown;
+}
+
+Result<AnyHandle> AssetSystem::take_async(AsyncTicket t) {
+    AsyncRequest* r = find_async(t);
+    if (!r || r->status == AsyncStatus::Pending) return Error(Errc::InvalidArgument, "asset.take_async");
+    const AsyncRequest req = *r;
+    async_.erase_swap(static_cast<usize>(r - async_.data()));
+    if (req.status == AsyncStatus::Failed)
+        return Error(req.error, "asset.load_async", req.key < rows_.size() ? info(req.key).path : StringView());
+    return req.handle;
+}
+
+void AssetSystem::cancel_async(AsyncTicket t) {
+    AsyncRequest* r = find_async(t);
+    if (!r) return;
+    if (r->status == AsyncStatus::Ready) release(r->handle);
+    async_.erase_swap(static_cast<usize>(r - async_.data()));  // a read in flight is discarded by poll_async
+}
+
+u32 AssetSystem::async_pending() const {
+    u32 n = 0;
+    for (const AsyncRequest& r : async_) n += r.status == AsyncStatus::Pending ? 1u : 0u;
+    return n;
+}
+
+void AssetSystem::poll_async() {
+    if (!loader_) return;
+    Array<AsyncLoader::Done> done;
+    {
+        std::lock_guard<std::mutex> lock(loader_->mutex);
+        done = std::move(loader_->done);
+        loader_->done = Array<AsyncLoader::Done>();
+    }
+    for (AsyncLoader::Done& d : done) {
+        AsyncRequest* req = find_async(AsyncTicket{d.id});
+        if (!req || req->status != AsyncStatus::Pending) continue;  // cancelled meanwhile
+        commit_read(*req, d.bytes, d.error);
+    }
+}
+
+void AssetSystem::wait_async() {
+    if (!loader_) return;
+    {
+        std::unique_lock<std::mutex> lock(loader_->mutex);
+        loader_->idle.wait(lock, [this] { return loader_->head == loader_->jobs.size() && loader_->busy == 0; });
+    }
+    poll_async();
+}
+
+void AssetSystem::commit_read(AsyncRequest& req, Array<byte>& bytes, Errc read_error) {
+    Row& row = rows_[req.key];
+    auto settle = [&](Result<AnyHandle> r) {
+        if (r) {
+            req.status = AsyncStatus::Ready;
+            req.handle = r.value();
+        } else {
+            req.status = AsyncStatus::Failed;
+            req.error = r.error().code;
+        }
+    };
+    // A load_sync got there first, or a reload re-cooked the asset while the old file was read:
+    // the synchronous path does the right thing (a refcount bump, or a read of the current file).
+    if (row.state == State::Resident || row.content_hash != req.content_hash) {
+        settle(load_any(req.key, req.type));
+        return;
+    }
+    if (read_error != Errc::Ok) {
+        fail_load(row, req.key, read_error);
+        req.status = AsyncStatus::Failed;
+        req.error = read_error;
+        return;
+    }
+    const StringView path(strings_.data() + row.path_offset, row.path_size);
+    row.owned = std::move(bytes);
+    Result<void> bound = [&]() -> Result<void> {
+        // The loader verified the payload CRC already.
+        MCE_TRY_ASSIGN(const ContainerView view, ContainerView::open(row.owned.span(), path, OpenOptions{false}));
+        return bind_payload(row, view, path);
+    }();
+    if (!bound) {
+        fail_load(row, req.key, bound.error().code);
+        req.status = AsyncStatus::Failed;
+        req.error = bound.error().code;
+        return;
+    }
+    become_resident(row, req.key);
+    ++row.refcount;
+    AnyHandle h;
+    h.index = req.key;
+    h.generation = row.generation;
+    h.type = row.type;
+    req.status = AsyncStatus::Ready;
+    req.handle = h;
 }
 
 void AssetSystem::retain(AnyHandle h) {
@@ -352,6 +595,7 @@ Result<void> AssetSystem::commit_reload(Guid guid, Span<const byte> container_by
 }
 
 void AssetSystem::end_frame() {
+    poll_async();
     for (usize i = 0; i < pending_unload_.size();) {
         Pending& p = pending_unload_[i];
         if (--p.frames_left != 0) {
