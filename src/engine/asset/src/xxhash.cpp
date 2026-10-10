@@ -63,12 +63,12 @@ u64 xxh64(const void* data, usize size, u64 seed) {
         h = seed + P5;
     }
     h += static_cast<u64>(size);
-    while (p + 8 <= end) {
+    while (end - p >= 8) {
         h ^= xxround(0, read64(p));
         h = rotl(h, 27) * P1 + P4;
         p += 8;
     }
-    if (p + 4 <= end) {
+    if (end - p >= 4) {
         h ^= static_cast<u64>(read32(p)) * P1;
         h = rotl(h, 23) * P2 + P3;
         p += 4;
