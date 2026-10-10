@@ -36,6 +36,7 @@ pitfalls come from them.
 | `04_cubes` | the M5 renderer: PBR, Forward+ point and spot lights, cascaded shadows, sky, bloom, FXAA, GPU timings; a capsule walk on 3D physics; skinned reeds (optional skinning, `G` or `-skin 0` turns the skeletons off) | `sample_04_cubes`, `-walk 1`, `-skin 0` |
 | `05_ashen_court` (Ashen Court) | a third-person melee slice: `World3D` characters, a swept camera boom, FSM enemies, 3D one-shots, a triangle budget | `sample_05_ashen_court`, `-autoplay 1` |
 | `physics2d_headless`, `physics3d_headless` | physics-only determinism scenes | `-ticks 1200` |
+| `net_headless` | the optional networking module: a server and a client in one process over loopback, snapshot replication, a client-driven player ([Multiplayer](20-multiplayer.md)) | `sample_net_headless -ticks 300` |
 
 Windowed samples accept `-frames N` and `-capture out.ppm`; most accept `-headless 1 -ticks N` and
 print a state hash.

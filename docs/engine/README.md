@@ -23,6 +23,7 @@ Ordered by layer, bottom up (the L column is the layer each library's `CMakeList
 | [render](render.md) | L3 | `mce_render` | 2D sprite path, 3D forward path (PBR, Forward+, shadows, post, skinning — M-SKIN) |
 | [kit](kit.md) | L3 | `mce_gameplay_kit` | starter-kit components, particles, sequences, FSM, 2D extract |
 | [ui](ui.md) | L4 | `mce_ui` | retained widget documents, the shipped developer console |
+| [net](net.md) | L3 | `mce_net` (optional) | opt-in multiplayer: UDP hosts, the message codec, snapshot replication |
 | [modules](modules.md) | — | `mce_engine` + module host | the shared engine library, game modules, the player runtime (`mce_player`, L6) |
 | [editor](editor.md) | L5 / L6 | `mce_editor_*`, `mce_mcp_core` / `mce_mcp` | scene document, inspector, play-in-editor, hot reload, MCP server |
 

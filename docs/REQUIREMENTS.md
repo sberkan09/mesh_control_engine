@@ -262,6 +262,19 @@ Conventions: **Anchor** = A (UC-A), B (UC-B), D (UC-D), C (UC-C), ★ = shared c
 | FR-DX-070 | Graded sample ladder kept green in CI forever: `01_triangle` (M0) → `02_boids` (M1) → `03_platformer` (M1–v0.5) → `04_cubes` (v0.5) → `05_showcase` (v1.0). Each README ≤ 2 pages: what it demonstrates, the 5–12 types it touches, what to open in the editor. Samples are the golden-image and determinism test subjects. | Must | MVP, growing | Each sample: builds in CI, cooks in CI, runs 300 headless fixed steps without error. |
 | FR-DX-080 | Learning gates LRN-1..LRN-7 (RHI/DSA, fixed-timestep+allocator, archetype internals, reflection end-to-end, RHI seam, Catto solver + RT audio, cook pipeline): at each gate the builder writes the subsystem's doc from memory and answers the recorded self-exam before the milestone closes. If a gate cannot close in its timebox, cut feature scope — never the gate. | Must | per milestone | Gate recorded in the milestone doc; a gate that cannot close blocks the milestone (binding). |
 
+### 3.14 FR-NET — Optional networking (added 2026-10-10 by user decision; reopens N1 and the networking part of N7)
+
+The user asked for multiplayer that a game developer can add when they want it. Everything here is **opt-in**:
+the engine library, the tools and every game that does not link `mce_net` stay network-free (ADR-0035).
+
+| ID | Requirement | MoSCoW | Tier | Acceptance criterion |
+|---|---|---|---|---|
+| FR-NET-010 | Opt-in module: `mce_net` is a separate library a project links with `mce_add_project(... DEPS mce::mce_net)` (also from the installed SDK); it is never part of `mce_engine`, and a game that does not link it is byte-for-byte unaffected. | Must | ROADMAP M-NET (off-tier) | `check_walls.py` net opt-in wall (not in `MCE_ENGINE_LIBS`, linked only by games/samples/projects/tests) and ENet wall green; SDK contract test builds and runs a template project with `DEPS mce::mce_net`. |
+| FR-NET-020 | Transport: client-server over UDP (ENet) with reliable-ordered, unreliable-sequenced and unreliable delivery per channel; connect/disconnect events with user data; timeouts; RTT/loss stats. Single-threaded, polled by the game. | Must | M-NET | `test_net` loopback session: connect, reliable both ways on two channels, 100 ordered messages, graceful disconnect seen by both sides, port clash refused. |
+| FR-NET-030 | Message codec: little-endian scalars, varints, length-prefixed bytes; reads fail closed on short or hostile input. | Must | M-NET | `test_net` codec cases including over-long varints and lengths past the end. |
+| FR-NET-040 | Server-authoritative snapshot replication of `NetId` entities (`LocalTransform` + game bytes via hooks); the client mirrors through `Commands` (spawn/update/despawn) and rejects malformed or stale snapshots whole. The server's simulation stays deterministic (FR-RUN-040): the network is input applied at a fixed point of the tick. | Must | M-NET | `test_net` replication cases (every truncation rejected with no command queued); `sample_net_headless_300`: the client's mirror equals the server's replicated state bit for bit after 300 ticks. |
+| FR-NET-050 | Prediction/reconciliation, interpolation, delta compression, interest management, encryption, NAT traversal, lobbies, multiplayer play-in-editor. | Could | later | Each needs its own ADR when a game asks for it. |
+
 ---
 
 ## 4. Non-functional requirements
@@ -319,13 +332,13 @@ A solo engine dies of scope. Every item below is **rejected**, with the one cond
 
 | # | Won't | Why not | Re-entry trigger |
 |---|---|---|---|
-| N1 | Multiplayer/netcode of any kind | Doubles the hardest problem class; determinism is kept only because it is nearly free and pays off in testing/replay | A completed shipped game + explicit design doc |
+| N1 | ~~Multiplayer/netcode of any kind~~ **Reopened 2026-10-10 by user decision** as the opt-in `mce_net` module (FR-NET, ADR-0035). Still out: networking inside the engine core or forced on games | Doubles the hardest problem class; determinism is kept only because it is nearly free and pays off in testing/replay | (triggered: the user asked for opt-in multiplayer) |
 | N2 | Scripting VM (Lua) in v1; visual scripting; blueprint graphs | Native C++20 systems are the committed gameplay model; a VM before the ECS is proven is a second runtime to debug | After Ashen Court ships, if measured recompile-iterations dominate editor time |
 | N3 | 3D physics from scratch beyond the character controller | Hand-rolling 3D rigid bodies is a year of edge cases Ashen Court doesn't need; Jolt 5 is the pre-approved exception | FR-PHY-090 Could — only if a third game demands knockable props |
 | N4 | Terrain, foliage, ray tracing, GI beyond probes, SSR, virtualized geometry, volumetrics | All optimize beyond the "small complete game" ceiling; GL 4.5 ceiling stated honestly | A committed game concept whose art direction requires it |
 | N5 | Asset-creation DCC features (mesh editing, texture painting, rigging, authoring animation from scratch) | Blender exists; MCE imports-cooks-inspects, it does not compete with Blender | Never planned (the v1.0 curve/timeline editor is the only authoring surface) |
 | N6 | Mobile/console/web/VR platforms, 32-bit, non-Windows desktops | Windows 10 x64 is the stated machine; porting multiplies every subsystem's cost | A shipped game with commercial demand on another platform |
-| N7 | Networking, accounts, telemetry, achievements, cloud saves, DRM | Solo offline games; online services are a second product | Never planned |
+| N7 | Accounts, telemetry, achievements, cloud saves, DRM (game networking itself was reopened 2026-10-10 as the opt-in `mce_net`, FR-NET / ADR-0035) | Solo offline games; online services are a second product | Never planned |
 | N8 | Engine-as-product: installer, plugin API, third-party docs, API stability guarantees, asset store | MCE ships *games*; the engine is the curriculum; API-stability discipline taxes the architecture for no anchor-UC benefit | A second developer joins |
 | N9 | Mega-scale sparse entities (100k+), GPU-driven everything | Targets are thousands; the archetype ECS already gives the headroom that matters | Profiling shows a real game hitting 10k entities |
 | N10 | Code mods (native or scripted), UGC services, in-game editors. *Data mods were admitted on 2026-10-10 by the user's request (FR-RUN-090, ADR-0034)* | A downloaded native module is arbitrary code execution with nothing to contain it; data mods go through the bounds-checked chunk readers instead | A sandboxed scripting runtime exists (N2's trigger first) |
@@ -368,7 +381,9 @@ Project skeleton (CMake presets, vcpkg, CI, target graph) · core runtime (frame
 
 IBL · cascaded shadow maps (if not already) · editor maturity (prefab instantiate + override UI, multi-scene, thumbnails, timeline/curve editor) · runtime UI `mce::ui` powering shipped menus/HUD (FR-UI-010; the pre-approved RmlUi fallback trigger of audio-input-ui R6 stands if `mce::ui` overruns) · packaging (versioned zip, symbolicated crash dumps, shipped debug console) · post FX (bloom, vignette) · Ashen Court complete · **UC-D: a vertical-slice proof game built exclusively through the editor + project template, as the v1.0 proof of engine.** If M8 overruns, the first cuts are thumbnails and the timeline/curve editor (cut-ladder rung 1) — UC-D does not depend on either.
 
-**Explicitly deferred beyond v1.0 (named so they cannot sneak in):** scripting VM (Lua/sol2), world-partition editor tooling (opt-in scene streaming itself shipped, FR-ENT-120), job-parallel runtime scheduling, hot-reloadable game DLL (the platform/game split is designed *for* it now; building it is deferred), Vulkan/D3D12 backend, networking, GPU particles, terrain, navmesh/AI.
+**Off-tier, opt-in (2026-10-10):** game networking, `mce_net` (FR-NET, ROADMAP M-NET) — built outside the tiers, gates nothing, linked only by games that ask for it.
+
+**Explicitly deferred beyond v1.0 (named so they cannot sneak in):** scripting VM (Lua/sol2), world-partition editor tooling (opt-in scene streaming itself shipped, FR-ENT-120), job-parallel runtime scheduling, hot-reloadable game DLL (the platform/game split is designed *for* it now; building it is deferred), Vulkan/D3D12 backend, GPU particles, terrain, navmesh/AI.
 
 ### 6.3 The cut ladder (decided now, executed without re-negotiation)
 

@@ -54,10 +54,11 @@ file name when the number alone is ambiguous.
 | [0032](0032-sequence-runner.md) | M6 | SequenceRunner action lists |
 | [0033](0033-shader-cook.md) | M6 | Shader cook: validation, variants, SPIR-V reflection |
 | [0034](0034-data-mods.md) | post-M9 | Data mods, opt-in per game: mod packs, load order, cooking against a game pack |
+| [0035](0035-optional-networking.md) | M-NET | Optional networking module `mce_net`: client-server over ENet, snapshot replication |
 | [0036](0036-skeletal-skinning.md) | M-SKIN | Optional skeletal skinning: `CHNK_MESH` skin section, glTF skins, joint palette bank |
 | [0037](0037-scene-streaming.md) | post-M9 | Optional scene streaming: `SceneChunk` components, host-driven pump, asset loader thread |
 
-ADR-0035 is reserved by work in flight. Some records amend earlier ones in dated "Amendment" sections at the end
+Some records amend earlier ones in dated "Amendment" sections at the end
 of the file (0017, 0018, 0021, 0022, 0029, 0032) or are superseded in part by later ADRs (0022 §7 and 0023 by 0036).
 
 Experiments that were run and reverted get a research note, not an ADR: the auto-parallel system scheduler is

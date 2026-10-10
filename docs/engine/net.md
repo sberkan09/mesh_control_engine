@@ -1,0 +1,122 @@
+# net — optional client-server networking: UDP hosts, the message codec, snapshot replication
+
+`mce_net` is an **optional** L2 library in `src/engine/net/` (headers under `include/mce/net/`). Its
+public dependencies are `mce_core` and `mce_ecs`; its transport is ENet 1.3.18, compiled into the
+archive (`cmake/Dependencies.cmake`). It is **not** part of the `mce_engine` umbrella: a game that
+wants multiplayer links it, every other game and every engine tool stays free of socket code
+(ADR-0035).
+
+It is linked by `test_net`, `sample_net_headless`, and any project that asks for it:
+
+```cmake
+mce_add_project(my_game
+    ...
+    INCLUDE_DIRS games/my_game/module
+    DEPS mce::mce_net)        # links mce_net into the module, the project editor and MCP server
+```
+
+Against the installed SDK the same line works: the SDK ships `lib/libmce_net.a` and `find_package(MCE)`
+defines `mce::mce_net`. Configure with `-DMCE_WITH_NET=OFF` to leave the module out of an engine build.
+
+## Public surface
+
+`mce/net/net.h` includes the three headers below.
+
+`host.h` — `Host`, one UDP endpoint:
+
+- `listen(HostDesc)` makes a server: bind address (`"127.0.0.1"`, or empty for every interface), port
+  (`0` picks a free one, `bound_port()` reports it), `max_peers`, `channels`, bandwidth caps,
+  `timeout_ms`.
+- `open_client()` + `connect(host, port, user_data)` makes a client; the returned `PeerId` names the
+  server.
+- `poll(Event&, timeout_ms)` sends queued traffic and returns the next event: `Connected`,
+  `Disconnected` (both carry the other side's `user_data`) or `Received` (`channel` + `data`, valid until
+  the next `poll`).
+- `send(peer, channel, bytes, Delivery)`, `broadcast(...)`, `flush()`. `Delivery::Reliable` (resent,
+  ordered per channel), `Delivery::Sequenced` (unreliable, older-than-delivered dropped: snapshots,
+  inputs), `Delivery::Unreliable` (unordered).
+- `disconnect` (graceful, reported to both sides), `disconnect_now`, `close()`; `is_connected`,
+  `connected_count`, `connected_peers`, `stats(peer)` (RTT, loss), `bytes_sent/received`.
+
+`bytes.h` — `ByteWriter` / `ByteReader`: `u8/u16/u32/u64/i32/f32/bool`, LEB128 `varu32`, length-prefixed
+`bytes`/`string`, raw `append`. Little-endian on the wire regardless of the machine. The reader fails
+closed: a read past the end, an over-long varint or a length past the end sets `ok()` to false and every
+later read returns zero.
+
+`replication.h` — server-authoritative snapshots:
+
+- `NetId { id, kind }`: the component that marks an entity as replicated. `id` is assigned by the
+  server, `kind` is the game's own archetype number.
+- `ReplicationServer::assign(cmd_or_world, entity, kind)` tags an entity; `write_snapshot(world, tick,
+  writer)` writes every `NetId` + `LocalTransform` entity in id order.
+- `ReplicationClient::apply(cmd, world, bytes)` mirrors one snapshot through `Commands`: spawns entities
+  it has not seen (with `NetId` + `LocalTransform`), updates the rest, destroys those the snapshot no
+  longer lists. `find(net_id)` gives the local entity; `reset(cmd, world)` drops the mirror (call it on
+  disconnect).
+- `ReplicationHooks`: `write_extra` / `read_extra` carry per-entity game state (health, animation)
+  after the transform, length-prefixed; `on_spawn` adds the client-only parts (sprite, mesh) from
+  `NetId::kind`; `on_despawn` runs before a mirrored entity is destroyed.
+
+## A minimal game loop
+
+```cpp
+// Server: once per tick, after World::tick.
+for (net::Event ev; host.poll(ev);) { /* Connected: spawn a player + assign(); Received: inputs */ }
+world.tick(dt, ++tick);
+writer.clear();
+replication.write_snapshot(world, u32(tick), writer);
+host.broadcast(kSnapshotChannel, writer.data(), net::Delivery::Sequenced);
+
+// Client: poll between ticks, keep the newest snapshot, apply it from a FixedUpdate_Pre system.
+for (net::Event ev; host.poll(ev);)
+    if (ev.kind == net::EventKind::Received && ev.channel == kSnapshotChannel) { pending.clear(); pending.append(ev.data); }
+// in the system:
+client.apply(f.commands(), f.world(), pending.data());
+```
+
+`samples/net_headless/main.cpp` is this loop complete: a server and a client in one process over
+loopback, a client-driven player, and the bit-for-bit check.
+
+## Rules and invariants
+
+- **Opt-in.** `mce_net` never joins `MCE_ENGINE_LIBS`; only games, samples, projects and tests link it.
+  `check_walls.py` enforces both, and confines ENet headers and symbols to `src/engine/net/src/`.
+- **Single-threaded.** Nothing runs in the background; traffic moves only inside `poll()` / `flush()`.
+- **Determinism (FR-RUN-040).** The network is input. The server's simulation never waits on a socket,
+  and received bytes enter the world at a fixed point of the tick, so the server's state hashes and
+  replays behave as without the network. Clients mirror; they are not expected to hash like the server.
+- **Fail closed.** A malformed, truncated, stale or trailing-garbage snapshot is rejected whole before
+  any command is queued (`ApplyResult::ok == false`). Messages a game parses itself should check
+  `ByteReader::ok()` the same way and clamp values from the network (the sample clamps its input).
+- **Ids are the server's.** Client entity handles differ from the server's; only `NetId::id` is
+  shared. A client-side destroy of a mirrored entity is repaired by the next snapshot.
+- **Replicated entities should be roots** (or have their parent replicated too): the snapshot carries
+  `LocalTransform` as-is.
+
+## How it is tested
+
+- `test_net` (doctest): codec round-trips, varint sizes, short/hostile inputs; a client and a server
+  over real loopback UDP (connect with user data, reliable messages both ways on two channels, 100
+  ordered reliable messages, graceful disconnect on both sides, port clash, invalid descriptions);
+  replication between two worlds (spawn/update/despawn, every truncation of a snapshot rejected with no
+  command queued, stale tick ignored, hooks, local-destroy repair, `reset`, apply from inside a system).
+- `sample_net_headless_300`: 300 ticks of a server and client; the client's mirror must match the
+  server bit for bit and the client-driven player must have moved.
+- The SDK contract test (`tests/sdk`) builds a template project with `DEPS mce::mce_net` against the
+  installed SDK and runs it headless.
+
+## Design records
+
+- ADR-0035 (`docs/adr/0035-optional-networking.md`): why client-server over lockstep, why ENet, the
+  opt-in linking, the snapshot format.
+- REQUIREMENTS §3.14 FR-NET; N1/N7 reopened on 2026-10-10 by the user's decision.
+
+## Known gaps
+
+- No client-side prediction, reconciliation or interpolation buffer: a client shows the newest
+  snapshot as-is (smooth enough on a LAN at 60 Hz; visible steps at high latency).
+- Full snapshots only: no delta compression, no interest management (every client gets every entity).
+- No encryption or authentication; no NAT traversal, lobbies or matchmaking.
+- The editor does not run multiplayer sessions: play-in-editor is one world. Test with a server host
+  and a client host (or one process, as the sample does).
+- A shipped game that links `mce_net` must carry ENet's MIT notice in its credits.

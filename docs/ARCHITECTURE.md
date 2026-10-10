@@ -149,6 +149,7 @@ libraries where game modules are supported (Linux, macOS; `cmake/MceTarget.cmake
 | `mce_physics3d` | `src/engine/physics3d` | L2 | core, ecs [Jolt] | `World3D` facade over Jolt 5 (ADR-0003) |
 | `mce_audio` | `src/engine/audio` | L2 | core, platform, ecs, refl, asset | 48 kHz float32 mixer on the SDL3 callback; SPSC command FIFO; voices/buses; streaming; spatial |
 | `mce_input` | `src/engine/input` | L2 | core, platform, ecs, refl | Action maps → tick-quantized `InputState`; record/replay; bindings persistence |
+| `mce_net` (optional) | `src/engine/net` | L3 | core, ecs [ENet] (umbrella) | Opt-in multiplayer: UDP `Host` (reliable/sequenced/unreliable channels), the byte codec, server-authoritative snapshot replication; never part of `mce_engine`, a game links it (ADR-0035) |
 | `mce_render` | `src/engine/render` | L3 | rhi, asset, core | 2D batches, `Scene3D` / `Forward3D` (PBR, Forward+, CSM, post, skinning), text, sort keys, GPU uploads |
 | `mce_gameplay_kit` | `src/engine/kit` | L4 | ecs, refl, asset, render, ecs_scene, audio, physics2d | Starter components and systems, `mce/kit/fsm.h`, `SequenceRunner`, particles, sprite extract |
 | `mce_ui` | `src/engine/ui` | L4 | render, input, ecs, refl, core | Retained anchored-rect runtime UI and the shipped `DevConsole` ([architecture/ui.md](architecture/ui.md)) |
@@ -531,6 +532,7 @@ nlohmann/json and GitHub Actions; none of them was adopted.*
 | Window/input/platform | SDL3 | release-3.4.18, static; linked by `mce_platform`, `mce_rhi_gl`, `mce_rhi_metal`, `mce_editor_layer` (headers only on the umbrella) | wrapped |
 | Graphics API | OpenGL 4.5 Core (Linux, Windows); Metal (macOS) | GL loader glad2, generated and vendored in `third_party/glad`; Metal via system frameworks | loader is boilerplate |
 | Shader toolchain | glslang (shader cook validation and SPIR-V reflection, ADR-0033); on macOS glslang + SPIRV-Cross translate GLSL → MSL at pipeline creation (ADR-0028) | glslang 16.6.0, SPIRV-Cross vulkan-sdk-1.4.363.0 | dependency |
+| Networking (optional) | ENet, linked only by `mce_net` (ADR-0035) | v1.3.18 | dependency |
 | RHI | `mce_rhi` + `mce_rhi_gl` / `mce_rhi_metal`, chosen by `mce_rhi_default` | — | **hand-written** |
 | Renderer | `mce_render` (2D batches; 3D PBR, Forward+, CSM, post, skinning) | — | **hand-written** |
 | ECS | `mce_ecs` (archetype tables) | — | **hand-written** |
@@ -577,7 +579,7 @@ mesh_control_engine/
 │   │   ├── rhi/        rhi_gl/     rhi_metal/  rhi_default/
 │   │   ├── asset/      (asset/cook/: mce_asset_cook, mce_stb)   scene/      render/
 │   │   ├── physics2d/  physics3d/  audio/      input/
-│   │   └── kit/        ui/
+│   │   └── kit/        ui/         net/        (net/: optional mce_net, not in mce_engine)
 │   ├── module/                     # mce_module_host, mce_engine (shared), mce_module_api, mce/gameplay.h
 │   ├── player/                     # mce_player_runtime + mce_player
 │   └── editor/

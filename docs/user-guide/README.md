@@ -31,6 +31,7 @@ code as built and why; this guide links to them where you may want the full deta
 | 17 | [Troubleshooting](17-troubleshooting.md) | What a symptom means and what to do about it |
 | 18 | [Samples and example projects](18-samples.md) | Where to look for a worked example of each feature |
 | 19 | [Mods](19-mods.md) | Letting players add data mods: turning them on, making a mod, load order |
+| 20 | [Multiplayer (optional)](20-multiplayer.md) | Opt a game into networking, run a server and clients, replicate entities |
 
 ## Conventions used in this guide
 

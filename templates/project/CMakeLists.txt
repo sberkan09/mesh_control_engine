@@ -24,3 +24,5 @@ mce_add_project(@GAME@
     TYPES games/@GAME@/module/types.cpp
     HOST games/@GAME@/host/main.cpp
     INCLUDE_DIRS games/@GAME@/module)
+# Multiplayer is opt-in: add `DEPS mce::mce_net` to the call above to link the networking module
+# (client-server over UDP, snapshot replication; the engine's docs/engine/net.md).
