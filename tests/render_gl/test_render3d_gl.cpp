@@ -416,3 +416,66 @@ TEST_CASE("render3d_gl: an animated node moves its submesh") {
     CHECK(blue_at(1.0f, {0, 1.0f, -2}));   // a quarter turn later it is at -Z
     CHECK(f.device->validation_error_count() == 0);
 }
+
+TEST_CASE("render3d_gl: a skinned bone bends with its joint; skinning off draws the bind pose") {
+    Fixture3D f;
+    // Joint A at the origin, joint B 1 m up; a green 1 m segment on each (FR-R3D-060), each its
+    // own submesh and skin over {A, B}.
+    mesh_fixture::Builder arm;
+    const u32 root = arm.add_node(-1);
+    const u32 a = arm.add_node(static_cast<i32>(root));
+    const u32 b = arm.add_node(static_cast<i32>(a), {0, 1, 0});
+    for (f32 y : {0.5f, 1.5f}) {
+        mesh_fixture::Box seg;
+        seg.center = {0, y, 0};
+        seg.half = {0.2f, 0.5f, 0.2f};
+        seg.node = root;
+        seg.color[0] = 0.1f;
+        seg.color[1] = 0.8f;
+        seg.color[2] = 0.15f;
+        arm.add_box(seg);
+    }
+    arm.skin_submesh(0, {a, b}, [](vec3) { return 0u; });
+    arm.skin_submesh(1, {a, b}, [](vec3) { return 1u; });
+    REQUIRE(f.renderer.meshes().upload(3, 1, arm.build().span()).has_value());
+    const GpuMesh& m = *f.renderer.meshes().get(3);
+    REQUIRE(m.skinned());
+
+    // The rest pose, or joint B bent 90 degrees about +Z (the upper half lies along -X).
+    auto green_at = [&](bool bent, bool skinning, vec3 probe) {
+        math::mat4 pose[3];
+        pose_nodes(m, ~0u, 0.0f, Span<math::mat4>(pose, 3));
+        if (bent) pose[b] = pose[a] * math::trs({0, 1, 0}, math::quat_from_axis_angle({0, 0, 1}, math::kPi * 0.5f), {1, 1, 1});
+        f.device->begin_frame(f.frame++);
+        Scene3D scene(f.renderer.meshes(), mem::heap());
+        scene.begin(orbit_camera({0, 1, 0}, 0.0f, math::radians(10.0f), 6.0f), {kW, kH});
+        MeshInstance ground;
+        ground.mesh = 2;
+        scene.add(ground);
+        MeshInstance inst;
+        inst.mesh = 3;
+        inst.pose = Span<const math::mat4>(pose, 3);
+        inst.skinning = skinning;
+        scene.add(inst);
+        scene.build();
+        CHECK(scene.joint_palette().size() == (skinning ? 4u : 0u));
+        f.view = scene.view();
+        rhi::CommandBuffer cmd;
+        f.renderer.record_3d(cmd, scene, f.target);
+        f.device->submit(cmd);
+        REQUIRE(f.device->read_pixels(f.target, rhi::Rect2D{0, 0, kW, kH}, f.pixels.span()).has_value());
+        f.device->end_frame();
+        const Rgb c = f.at_world(probe);
+        return c.g > c.r + 40 && c.g > c.b + 40;
+    };
+    const vec3 upper{0, 1.7f, 0.2f}, side{-0.6f, 1.0f, 0.2f}, lower{0, 0.4f, 0.2f};
+    CHECK(green_at(false, true, upper));
+    CHECK_FALSE(green_at(false, true, side));
+    CHECK(green_at(true, true, side));  // bent: the upper half swung to -X
+    CHECK_FALSE(green_at(true, true, upper));
+    CHECK(green_at(true, true, lower));  // joint A did not move
+    CHECK(f.renderer.forward_3d().last_stats().joints == 4);
+    CHECK(green_at(true, false, upper));  // skeleton off: the bind pose, whatever the pose says
+    CHECK_FALSE(green_at(true, false, side));
+    CHECK(f.device->validation_error_count() == 0);
+}

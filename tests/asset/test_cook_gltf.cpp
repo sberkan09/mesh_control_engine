@@ -519,3 +519,131 @@ TEST_CASE("gltf: MeshView rejects corrupt payloads") {
         CHECK(!MeshView::read(Span<const byte>(a.data(), a.size())).has_value());
     }
 }
+
+namespace {
+
+// A skinned bar (FR-R3D-060): 8 corners of a 0.4 x 2 x 0.4 box standing on the origin; the bottom
+// four belong wholly to joint 0 ("hip"), the top four 0.75 to joint 1 ("knee", 1 m up) and 0.25
+// to joint 0. Node order: armature -> hip -> knee, armature -> body (mesh + skin 0).
+std::string skinned_doc(u8 top_joint = 1, const char* skin_extra = "") {
+    std::string bin;
+    for (int i = 0; i < 8; ++i) {
+        put_f32(bin, (i & 1) ? 0.2f : -0.2f);
+        put_f32(bin, (i & 2) ? 2.0f : 0.0f);
+        put_f32(bin, (i & 4) ? 0.2f : -0.2f);
+    }
+    const size_t joints_off = bin.size();
+    for (int i = 0; i < 8; ++i) {
+        const bool top = (i & 2) != 0;
+        bin.push_back(static_cast<char>(top ? top_joint : 0));
+        bin.push_back(0);
+        bin.push_back(0);
+        bin.push_back(0);
+    }
+    const size_t weights_off = bin.size();
+    for (int i = 0; i < 8; ++i) {
+        const bool top = (i & 2) != 0;
+        put_f32(bin, top ? 0.75f : 1.0f);
+        put_f32(bin, top ? 0.25f : 0.0f);
+        put_f32(bin, 0.0f);
+        put_f32(bin, 0.0f);
+    }
+    const size_t ibm_off = bin.size();
+    for (int m = 0; m < 2; ++m)
+        for (int k = 0; k < 16; ++k) put_f32(bin, k % 5 == 0 ? 1.0f : (m == 1 && k == 13 ? -1.0f : 0.0f));
+    const size_t idx_off = bin.size();
+    const u16 faces[36] = {0, 1, 3, 3, 2, 0, 4, 6, 7, 7, 5, 4, 0, 4, 5, 5, 1, 0, 2, 3, 7, 7, 6, 2, 0, 2, 6, 6, 4, 0, 1, 5, 7, 7, 3, 1};
+    for (u16 i : faces) put16le(bin, i);
+    auto view = [](size_t off, size_t len) {
+        return "{\"buffer\":0,\"byteOffset\":" + std::to_string(off) + ",\"byteLength\":" + std::to_string(len) + "}";
+    };
+    std::string s = "{\"asset\":{\"version\":\"2.0\"},";
+    s += "\"buffers\":[{\"byteLength\":" + std::to_string(bin.size()) + ",\"uri\":\"data:application/octet-stream;base64," +
+         base64(bin) + "\"}],";
+    s += "\"bufferViews\":[" + view(0, 96) + "," + view(joints_off, 32) + "," + view(weights_off, 128) + "," + view(ibm_off, 128) +
+         "," + view(idx_off, 72) + "],";
+    s += "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":8,\"type\":\"VEC3\"},"
+         "{\"bufferView\":1,\"componentType\":5121,\"count\":8,\"type\":\"VEC4\"},"
+         "{\"bufferView\":2,\"componentType\":5126,\"count\":8,\"type\":\"VEC4\"},"
+         "{\"bufferView\":3,\"componentType\":5126,\"count\":2,\"type\":\"MAT4\"},"
+         "{\"bufferView\":4,\"componentType\":5123,\"count\":36,\"type\":\"SCALAR\"}],";
+    s += "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"JOINTS_0\":1,\"WEIGHTS_0\":2},\"indices\":4}]}],";
+    s += "\"nodes\":[{\"name\":\"armature\",\"children\":[1,3]},{\"name\":\"hip\",\"children\":[2]},"
+         "{\"name\":\"knee\",\"translation\":[0,1,0]},{\"name\":\"body\",\"mesh\":0,\"skin\":0}],";
+    s += "\"skins\":[{\"joints\":[1,2],\"inverseBindMatrices\":3" + std::string(skin_extra) + "}],";
+    s += "\"scenes\":[{\"nodes\":[0]}],\"scene\":0}";
+    return s;
+}
+
+}  // namespace
+
+TEST_CASE("gltf: skins import joints, inverse binds, 4 unorm8 influences and per-joint bind bounds") {
+    const std::string root = make_project("gltf_skin", skinned_doc(), false);
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    INFO(diag_text(r));
+    REQUIRE(r.ok());
+    const std::vector<byte> a = cooked_mesh(root, kGltfGuid);
+    const MeshView m = MeshView::read(Span<const byte>(a.data(), a.size())).value();
+    REQUIRE(m.skinned());
+    REQUIRE(m.skins.size() == 1);
+    REQUIRE(m.joints.size() == 2);
+    CHECK(m.node_name(m.joints[0].node) == "hip");
+    CHECK(m.node_name(m.joints[1].node) == "knee");
+    CHECK(m.joints[1].inverse_bind[13] == doctest::Approx(-1.0f));
+    REQUIRE(m.submesh_skins.size() == 1);
+    CHECK(m.submesh_skins[0] == 0);
+    const MeshSubmesh& sm = m.submeshes[0];
+    u32 tops = 0;
+    for (u32 v = 0; v < sm.vertex_count; ++v) {
+        const MeshSkinVertex& sv = m.skin_vertices[sm.base_vertex + v];
+        CHECK(sv.weights[0] + sv.weights[1] + sv.weights[2] + sv.weights[3] == 255);
+        if (dequant(sm, m.vertices[sm.base_vertex + v]).y > 1.0f) {
+            ++tops;
+            CHECK(sv.joints[0] == 1);
+            CHECK(sv.weights[0] == 191);  // 0.75 * 255 = 191.25, 0.25 * 255 = 63.75: the remainder goes to 63.75
+            CHECK(sv.weights[1] == 64);
+        } else {
+            CHECK(sv.joints[0] == 0);
+            CHECK(sv.weights[0] == 255);
+        }
+    }
+    CHECK(tops == 4);
+    // Joint 0 moves every vertex (the tops carry a quarter of it), joint 1 only the tops.
+    CHECK(m.joints[0].bounds_min[1] == doctest::Approx(0.0f));
+    CHECK(m.joints[0].bounds_max[1] == doctest::Approx(2.0f));
+    CHECK(m.joints[1].bounds_min[1] == doctest::Approx(2.0f));
+    CHECK(m.header->bounds_max[1] == doctest::Approx(2.0f).epsilon(1e-3));
+    CHECK(m.header->bounds_min[0] == doctest::Approx(-0.2f).epsilon(1e-3));
+}
+
+TEST_CASE("gltf: skinning is optional per asset; bad skins fail with the JSON pointer") {
+    CookService svc;
+    SUBCASE("sidecar skinning: false imports the same file as a static mesh") {
+        const std::string root = make_project("gltf_skin_off", skinned_doc(), false);
+        write_file(root + "/assets/models/crate.gltf.mceasset", sidecar(kGltfGuid, "gltf", "{ \"skinning\": false }"));
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        INFO(diag_text(r));
+        REQUIRE(r.ok());
+        CHECK(r.diags.warning_count() == 0);
+        const std::vector<byte> a = cooked_mesh(root, kGltfGuid);
+        const MeshView m = MeshView::read(Span<const byte>(a.data(), a.size())).value();
+        CHECK_FALSE(m.skinned());
+        CHECK(m.skins.empty());
+        REQUIRE(m.submeshes.size() == 1);
+        CHECK(m.node_name(m.submeshes[0].node) == "body");
+    }
+    SUBCASE("a joint index outside the skin") {
+        const std::string root = make_project("gltf_skin_joint", skinned_doc(5), false);
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        CHECK(has_error(r, "/meshes/0/primitives/0: JOINTS_0 names a joint outside the node's skin"));
+    }
+    SUBCASE("a skin joint outside the imported scene") {
+        std::string j = skinned_doc();
+        const std::string from = "\"joints\":[1,2]";
+        j.replace(j.find(from), from.size(), "\"joints\":[1,9]");
+        const std::string root = make_project("gltf_skin_node", j, false);
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        CHECK(has_error(r, "/skins/0: skin joint is not a node of the imported scene"));
+    }
+}

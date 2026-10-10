@@ -392,7 +392,8 @@ Result<MeshView> MeshView::read(Span<const byte> payload) {
     constexpr const char* kStage = "asset.mesh.read";
     const auto* h = header_of<MeshHeader>(payload);
     if (!h) return Error(Errc::Truncated, kStage);
-    if (h->flags & ~u32(MeshFlags::Index32)) return Error(Errc::ReservedNonZero, kStage);
+    if (h->flags & ~u32(MeshFlags::Index32 | MeshFlags::Skinned)) return Error(Errc::ReservedNonZero, kStage);
+    if (!(h->flags & MeshFlags::Skinned) && h->skin_offset != 0) return Error(Errc::ReservedNonZero, kStage);
     MeshView v;
     v.header = h;
     const u64 isize = (h->flags & MeshFlags::Index32) ? 4 : 2;
@@ -434,6 +435,35 @@ Result<MeshView> MeshView::read(Span<const byte> payload) {
         if (!in_bounds(ch.times_offset, ch.key_count, h->key_count)) return bad(kStage, 0x30000 + c);
         if (!in_bounds(ch.values_offset, u64(ch.key_count) * per_key, h->key_count)) return bad(kStage, 0x30000 + c);
     }
+    if (h->flags & MeshFlags::Skinned) {
+        const auto* sh = header_of<MeshSkinHeader>(payload.subspan(std::min<usize>(h->skin_offset, payload.size())));
+        if (!sh || h->skin_offset % CHUNK_ALIGN != 0) return bad(kStage, 9);
+        if (sh->vertex_count != h->vertex_count || sh->submesh_count != h->submesh_count || sh->skin_count == 0)
+            return bad(kStage, 9);
+        if (!span_at(payload, sh->skins_offset, sh->skin_count, v.skins)) return bad(kStage, 10);
+        if (!span_at(payload, sh->joints_offset, sh->joint_count, v.joints)) return bad(kStage, 11);
+        if (!span_at(payload, sh->vertices_offset, sh->vertex_count, v.skin_vertices)) return bad(kStage, 12);
+        if (!span_at(payload, sh->submesh_skins_offset, sh->submesh_count, v.submesh_skins)) return bad(kStage, 13);
+        for (u32 k = 0; k < sh->skin_count; ++k) {
+            const MeshSkin& skin = v.skins[k];
+            if (skin.joint_count == 0 || skin.joint_count > kMaxSkinJoints || !in_bounds(skin.first_joint, skin.joint_count, sh->joint_count))
+                return bad(kStage, 0x40000 + k);
+        }
+        for (u32 j = 0; j < sh->joint_count; ++j)
+            if (v.joints[j].node >= h->node_count) return bad(kStage, 0x50000 + j);
+        for (u32 s = 0; s < h->submesh_count; ++s) {
+            const i32 k = v.submesh_skins[s];
+            if (k < 0) continue;
+            if (static_cast<u32>(k) >= sh->skin_count) return bad(kStage, 0x60000 + s);
+            const MeshSubmesh& sm = v.submeshes[s];
+            const u32 joints = v.skins[static_cast<u32>(k)].joint_count;
+            for (u32 i = 0; i < sm.vertex_count; ++i) {
+                const MeshSkinVertex& sv = v.skin_vertices[sm.base_vertex + i];
+                for (u32 c = 0; c < 4; ++c)  // all four: the shader reads every slot, weighted or not
+                    if (sv.joints[c] >= joints) return bad(kStage, 0x60000 + s);
+            }
+        }
+    }
     return v;
 }
 
@@ -463,6 +493,23 @@ void write_mesh(const MeshData& d, Array<byte>& out) {
     h.channels_offset = b.append_span(d.channels);
     h.keys_offset = b.append_span(d.keys);
     h.strings_offset = b.append_span(d.strings);
+    if (!d.skins.empty()) {
+        MCE_ASSERT_MSG(d.skin_vertices.size() == d.vertices.size() && d.submesh_skins.size() == d.submeshes.size(),
+                       "write_mesh: the skin section needs one entry per vertex and per submesh");
+        h.flags |= MeshFlags::Skinned;
+        MeshSkinHeader sh{};
+        sh.skin_count = static_cast<u32>(d.skins.size());
+        sh.joint_count = static_cast<u32>(d.joints.size());
+        sh.vertex_count = h.vertex_count;
+        sh.submesh_count = h.submesh_count;
+        const usize skin_at = b.append(&sh, sizeof(sh));
+        h.skin_offset = static_cast<u32>(skin_at);
+        sh.skins_offset = b.append_span(d.skins);
+        sh.joints_offset = b.append_span(d.joints);
+        sh.vertices_offset = b.append_span(d.skin_vertices);
+        sh.submesh_skins_offset = b.append_span(d.submesh_skins);
+        b.patch(skin_at, sh);
+    }
     b.patch(at, h);
     b.finish();
 }

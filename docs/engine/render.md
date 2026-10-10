@@ -43,7 +43,9 @@ Headers live under `include/mce/render/`.
   newest or the magenta checker. Also `TextureUpload` and the free `create_texture`.
 - `mesh.h`: `MeshStore` (cooked `CHNK_MESH` payloads as `GpuMesh`, keyed and generational like
   textures; works without a device for headless tests), `GpuSubmesh` (dequantization matrix,
-  inline material, texture keys), `pose_nodes`, `pose_nodes_blend`, `AnimationPlayer`.
+  inline material, texture keys, optional skin index), `pose_nodes`, `pose_nodes_blend`,
+  `AnimationPlayer` (with `ClipEvent` playback markers), and the optional skinning pieces:
+  `GpuSkin`, `GpuJoint`, `SkinnedMeshVertex`, `skin_palette`, `skin_bounds` (FR-R3D-060).
 - `scene3d.h`: `Camera3D`, `orbit_camera`, `DirectionalLight`, `Fog`, `Sky`, `PostFx`,
   `ShadowSettings`, `Cascade`, `MeshInstance`, `View3D`, `compute_view_3d`, `sphere_visible`, and
   `Scene3D` (per-frame `begin` / `add` / `add_point_light` / `build`: cull, sort, cascades,
@@ -107,13 +109,16 @@ Built-in shaders are GLSL 450 strings in `src/renderer.cpp` (2D) and `src/shader
   - `test_render3d_m5a.cpp`: Forward+ cluster bounds and assignment ("every point inside a light's
     sphere finds the light in its cluster"), CSM slice spheres and texel snapping ("cascades snap to
     whole texels as the camera moves (no shimmer)"), CUBICSPLINE keys and cross-fades.
+  - `test_render3d_skin.cpp`: the skin section round trip and corrupt-section rejection, joint
+    palettes, posed bounds, per-instance opt-out, playback events.
 - `test_render_gl` (`tests/render_gl/`, GPU, label `gpu`, via `rhi::create_default_device`): pixel
   probes. `test_render_gl.cpp`: two atlas layers in one MDI, premultiplied and additive blending,
   tilemaps interleaving with sprites, parallax offset, lit sprites, 2D post toggles, coverage text,
   texture hot reload and magenta fallback, mip and layer uploads, cooked `CHNK_TEX` / `CHNK_FONT`
   through the asset sink. `test_render3d_gl.cpp`: "lit box, its shadow on the ground, zero
   validation errors", post toggles, sky, metal vs dielectric, clustered point and spot lights, GPU
-  timestamps per stage, fog, MSAA off, animated node.
+  timestamps per stage, fog, MSAA off, animated node, "a skinned bone bends with its joint;
+  skinning off draws the bind pose".
 - GPU tests register only with `-DMCE_GPU_TESTS=ON` (Xvfb + Mesa llvmpipe in
   `scripts/ci/local_ci.sh`). The samples register windowed runs the same way, labelled `gpu`
   (for example `sample_04_cubes_gpu`, `sample_05_ashen_court_gpu`, `sample_03_platformer_gpu`).
@@ -132,6 +137,8 @@ Built-in shaders are GLSL 450 strings in `src/renderer.cpp` (2D) and `src/shader
   per-draw `ObjectU`, CPU node animation, shadow fit, tonemap).
 - ADR-0024 (`docs/adr/0024-pbr-forward-plus-csm-m5a.md`): PBR, Forward+, CSM, sky, post, timing.
 - ADR-0033 (`docs/adr/0033-shader-cook.md`): shader cook.
+- M-SKIN.md (`docs/milestones/M-SKIN.md`): optional skinning, the skin section of `CHNK_MESH`
+  and the skinned pipelines.
 - Milestones: M4.md (`docs/milestones/M4.md`), M5a.md (`docs/milestones/M5a.md`),
   M6-2d.md (`docs/milestones/M6-2d.md`), M6-shader-cook.md (`docs/milestones/M6-shader-cook.md`),
   M7-ashen-court.md (`docs/milestones/M7-ashen-court.md`).
@@ -139,11 +146,14 @@ Built-in shaders are GLSL 450 strings in `src/renderer.cpp` (2D) and `src/shader
 ## Known gaps
 
 - M5a "Not built, by design": depth prepass, MDI over a persistent object buffer, IBL
-  prefiltering, skinning (FR-R3D-060) and a jobified cluster build.
+  prefiltering and a jobified cluster build. (Skinning, also listed there, was built later as an
+  opt-in feature: M-SKIN.)
 - Built-in shaders are not cooked assets yet (M6-shader-cook "Not built"), and the ≤ 1 s shader
   save-to-pixels loop is not built.
 - Real-GPU numbers, RenderDoc captures and golden images need hardware (M5a, M6-2d, M7): CI has
   only llvmpipe. The lit-2D and 2D-post GPU budgets in M6-2d are open for that reason.
-- M7: characters are static node-transform proxies, with no skinning.
+- M7: Ashen Court's characters are static node-transform proxies; skinning exists (M-SKIN) but
+  the game does not use it. Skinning has no morph targets, dual quaternions or GPU palette
+  compute, and the editor does not preview skeletons.
 - `AssetUploadSink::update_material` is a no-op; 3D materials travel inline in the mesh chunk
   (`GpuSubmesh::material`).

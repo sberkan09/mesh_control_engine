@@ -38,6 +38,7 @@ struct Forward3DStats {
     u32 texture_binds = 0;
     u32 point_lights = 0;
     u32 light_indices = 0;
+    u32 joints = 0;          // joint matrices uploaded for skinned meshes
     u32 bloom_levels = 0;
     bool fxaa = false;
 };
@@ -91,6 +92,10 @@ private:
     rhi::PipelineHandle mesh_cull_;      // back-face culled
     rhi::PipelineHandle mesh_two_sided_;
     rhi::PipelineHandle mesh_blend_;
+    rhi::PipelineHandle skinned_shadow_pipe_;  // FR-R3D-060: SkinnedMeshVertex twins of the above
+    rhi::PipelineHandle skinned_cull_;
+    rhi::PipelineHandle skinned_two_sided_;
+    rhi::PipelineHandle skinned_blend_;
     rhi::PipelineHandle sky_;
     rhi::PipelineHandle bloom_down_;
     rhi::PipelineHandle bloom_up_;       // additive

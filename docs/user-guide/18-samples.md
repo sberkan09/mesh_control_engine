@@ -30,7 +30,7 @@ pitfalls come from them.
 | `extras_2d` | parallax layers, lit sprites, 2D post effects, particles, a save round trip; assets only, played by the stock player | `mce_player -pack build/<preset>/samples/extras_2d/project/assets.mce` |
 | `ui_gallery` | runtime UI: a title menu, options bound to convars, a level grid, the developer console | `ui_gallery -page options` |
 | `04_diorama` | glTF kit meshes, one directional light with a shadow map, fog, node animation; Artifact B | `sample_04_diorama` |
-| `04_cubes` | the M5 renderer: PBR, Forward+ point and spot lights, cascaded shadows, sky, bloom, FXAA, GPU timings; a capsule walk on 3D physics | `sample_04_cubes`, `-walk 1` |
+| `04_cubes` | the M5 renderer: PBR, Forward+ point and spot lights, cascaded shadows, sky, bloom, FXAA, GPU timings; a capsule walk on 3D physics; skinned reeds (optional skinning, `G` or `-skin 0` turns the skeletons off) | `sample_04_cubes`, `-walk 1`, `-skin 0` |
 | `05_ashen_court` (Ashen Court) | a third-person melee slice: `World3D` characters, a swept camera boom, FSM enemies, 3D one-shots, a triangle budget | `sample_05_ashen_court`, `-autoplay 1` |
 | `physics2d_headless`, `physics3d_headless` | physics-only determinism scenes | `-ticks 1200` |
 

@@ -18,6 +18,7 @@ inline constexpr u8 FONT_VERSION = 1;
 inline constexpr u8 MATERIAL_VERSION = 1;
 inline constexpr u8 SCENE_VERSION = 1;
 inline constexpr u8 MESH_VERSION = 1;
+inline constexpr u8 MESH_MINOR_SKIN = 1;  // minor of a chunk with MeshFlags::Skinned
 inline constexpr u8 TILEMAP_VERSION = 1;  // CHNK_TILE: one tile layer (v0.5, FR-R2D-115)
 inline constexpr u8 PARTICLE_VERSION = 1;  // CHNK_PART: one particle emitter preset (v0.5, FR-R2D-070)
 inline constexpr u8 SEQUENCE_VERSION = 1;
@@ -399,10 +400,17 @@ struct ShaderView {
 //
 // Deviation (recorded in ADR-0022): animation clips ride in this chunk instead of a separate
 // CHNK_ANIM — at MVP a clip only ever animates the nodes of the file it came from.
+//
+// Skins (v0.5, FR-R3D-060, optional): a mesh with MeshFlags::Skinned carries a skin section at
+// MeshHeader::skin_offset — the glTF skins (joint nodes + inverse bind matrices + per-joint bind
+// bounds), one MeshSkinVertex per vertex (parallel to the vertex stream) and a skin index per
+// submesh (-1 = rigid, placed by its node as before). Joints are ordinary nodes, so the node clips
+// above animate skeletons too. A mesh without the flag is exactly the static layout (minor 0).
 
 namespace MeshFlags {
 enum : u32 {
     Index32 = 1u << 0,
+    Skinned = 1u << 1,  // a MeshSkinHeader at MeshHeader::skin_offset (chunk minor 1)
 };
 }
 
@@ -425,7 +433,7 @@ struct MeshHeader {
     f32 bounds_min[3]; // rest pose, model space
     f32 bounds_max[3];
     u32 strings_size;
-    u32 reserved;
+    u32 skin_offset;   // MeshSkinHeader, when MeshFlags::Skinned (0 otherwise)
     u64 vertices_offset;
     u64 indices_offset;
     u64 submeshes_offset;
@@ -474,6 +482,46 @@ struct MeshClip {
 };
 static_assert(sizeof(MeshClip) == 32);
 
+// Skinning (MeshFlags::Skinned). Up to 4 influences per vertex: `joints` index the submesh's
+// skin's joint list (every slot, weighted or not: unused slots name joint 0), `weights` are unorm8
+// summing to 255 (all zero = not skinned).
+struct MeshSkinVertex {
+    u8 joints[4];
+    u8 weights[4];
+};
+static_assert(sizeof(MeshSkinVertex) == 8);
+
+inline constexpr u32 kMaxSkinJoints = 256;  // u8 joint indices
+
+struct MeshSkin {
+    u32 first_joint;   // into the joint table
+    u32 joint_count;   // 1..kMaxSkinJoints
+    u32 reserved[2];
+};
+static_assert(sizeof(MeshSkin) == 16);
+
+struct MeshJoint {
+    u32 node;               // the node whose model-space matrix drives the joint
+    u32 reserved[3];
+    f32 inverse_bind[16];   // column-major: bind space -> joint space
+    f32 bounds_min[3];      // bind-space AABB of the vertices this joint influences; min > max = none
+    f32 bounds_max[3];
+    u32 reserved2[2];
+};
+static_assert(sizeof(MeshJoint) == 112);
+
+struct MeshSkinHeader {
+    u32 skin_count;
+    u32 joint_count;
+    u32 vertex_count;   // == MeshHeader::vertex_count
+    u32 submesh_count;  // == MeshHeader::submesh_count
+    u64 skins_offset;
+    u64 joints_offset;
+    u64 vertices_offset;  // MeshSkinVertex[vertex_count]
+    u64 submesh_skins_offset;  // i32[submesh_count]: skin index, -1 = rigid
+};
+static_assert(sizeof(MeshSkinHeader) == 48);
+
 enum class AnimPath : u32 { Translation = 0, Rotation = 1, Scale = 2 };
 // CubicSpline (M5a): glTF CUBICSPLINE, values stored as {in-tangent, value, out-tangent} per key.
 enum class AnimInterp : u32 { Linear = 0, Step = 1, CubicSpline = 2 };
@@ -499,15 +547,22 @@ struct MeshView {
     Span<const MeshChannel> channels;
     Span<const f32> keys;
     Span<const char> strings;
+    // Skin section (empty unless skinned()).
+    Span<const MeshSkin> skins;
+    Span<const MeshJoint> joints;
+    Span<const MeshSkinVertex> skin_vertices;
+    Span<const i32> submesh_skins;
 
+    bool skinned() const { return header && (header->flags & MeshFlags::Skinned); }
     bool index32() const { return header && (header->flags & MeshFlags::Index32); }
     u32 index(u32 i) const;
     StringView node_name(u32 node) const;
     StringView clip_name(u32 clip) const;
     // Clip index by name, or clips.size() when absent.
     u32 find_clip(StringView name) const;
-    // Validates every offset, every index against its submesh's vertex range, node parents and
-    // channel ranges: the payload is untrusted bytes and its indices reach the GPU.
+    // Validates every offset, every index against its submesh's vertex range, node parents,
+    // channel ranges and the skin section (joint nodes, per-vertex joint indices against the
+    // submesh's skin): the payload is untrusted bytes and its indices reach the GPU.
     static Result<MeshView> read(Span<const byte> payload);
 };
 
@@ -520,6 +575,12 @@ struct MeshData {
     Span<const MeshChannel> channels;
     Span<const f32> keys;
     Span<const char> strings;
+    // Optional skin section: written (and MeshFlags::Skinned set) when `skins` is non-empty;
+    // `skin_vertices` then has one entry per vertex and `submesh_skins` one per submesh.
+    Span<const MeshSkin> skins;
+    Span<const MeshJoint> joints;
+    Span<const MeshSkinVertex> skin_vertices;
+    Span<const i32> submesh_skins;
     u32 flags = 0;
     f32 bounds_min[3] = {0, 0, 0};
     f32 bounds_max[3] = {0, 0, 0};

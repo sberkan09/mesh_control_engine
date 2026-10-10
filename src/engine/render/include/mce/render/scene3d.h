@@ -9,7 +9,7 @@
 //   scene.begin(camera, viewport);
 //   scene.set_light(sun);
 //   scene.set_fog(fog);
-//   for (...) scene.add({mesh_key, world});
+//   for (...) scene.add({mesh_key, world});   // + .pose for animated / skinned meshes
 //   scene.add_point_light(lamp);        // Forward+ (M5a): any number, clustered at build()
 //   scene.build();                      // frustum cull, 64-bit key radix sort, cascades, clusters
 //   renderer.record_3d(cmd, scene);     // CSM, forward+ PBR HDR pass + sky, resolve, post chain
@@ -102,6 +102,11 @@ struct MeshInstance {
     Span<const math::mat4> pose;             // model-space node matrices (pose_nodes); empty = rest pose
     math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f}; // multiplies the material's base color
     bool cast_shadows = true;
+    // Skinned meshes only (FR-R3D-060): true deforms the skinned submeshes by `pose` (their
+    // joints' node matrices); false draws them rigidly in their bind pose under `world` — the
+    // game picks per instance whether a character uses its skeleton. Ignored for meshes without
+    // skins.
+    bool skinning = true;
 };
 
 struct View3D {
@@ -126,8 +131,10 @@ public:
         u32 instance;
         u32 submesh;
         const GpuMesh* mesh;
-        math::mat4 model;   // world * node * dequant: quantized vertex -> world
-        math::mat4 normal;  // inverse-transpose of world * node (upper 3x3 used)
+        math::mat4 model;   // world * node * dequant: quantized vertex -> world (skinned: world)
+        math::mat4 normal;  // inverse-transpose of world * node (upper 3x3 used; skinned: of world)
+        math::mat4 dequant; // skinned draws: quantized vertex -> bind space (identity otherwise)
+        u32 palette;        // skinned draws: first joint matrix in joint_palette(); ~0u = rigid
         f32 view_depth;     // positive distance along the view axis
         math::vec3 center;  // world bounding sphere
         f32 radius;
@@ -138,6 +145,8 @@ public:
         u32 visible = 0;         // survived frustum culling
         u32 shadow_casters = 0;
         u32 triangles = 0;       // visible
+        u32 skinned_instances = 0;
+        u32 joints = 0;          // joint matrices in the palette
         u32 point_lights = 0;
         u32 cascade_casters[kMaxCascades] = {};
         f32 cluster_ms = 0.0f;   // CPU time of the Forward+ light assignment (not deterministic)
@@ -181,6 +190,9 @@ public:
     u32 opaque_count() const { return opaque_count_; }
     // Every submesh of every instance (shadows come from off-screen casters too).
     Span<const Draw> shadow_draws() const { return shadow_draws_.span(); }
+    // Joint matrices (model space) of every skinned instance, skin by skin: Draw::palette indexes
+    // it. Uploaded once per frame as the skinned shaders' storage buffer.
+    Span<const math::mat4> joint_palette() const { return joint_palette_.span(); }
     // World-space bounds of all instances and the light's view-projection fitted to them (the M4
     // single-map fit; kept as the cascade fallback and in the diorama's determinism hash).
     const math::aabb3& scene_bounds() const { return scene_bounds_; }
@@ -208,6 +220,7 @@ private:
     Array<MeshInstance> instances_;
     Array<Draw> draws_;
     Array<Draw> shadow_draws_;
+    Array<math::mat4> joint_palette_;
     u32 opaque_count_ = 0;
     math::aabb3 scene_bounds_{};
     math::mat4 light_view_proj_ = math::mat4::identity();
