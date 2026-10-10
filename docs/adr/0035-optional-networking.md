@@ -2,7 +2,7 @@
 
 **Status:** Accepted (2026-10-10). **Milestone:** M-NET (off-tier, opt-in). **Requirements:** FR-NET-010..050;
 reopens N1 and the networking part of N7 (REQUIREMENTS §5) by the user's decision of 2026-10-10.
-**Reference:** `docs/engine/net.md`, user guide chapter 19.
+**Reference:** `docs/engine/net.md`, user guide chapter 20.
 
 **Context.** REQUIREMENTS ruled networking out (N1 "multiplayer/netcode of any kind", N7 "networking ...") because
 the anchor games are single-player. On 2026-10-10 the user asked for multiplayer support that a game developer can

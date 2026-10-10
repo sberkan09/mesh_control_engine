@@ -86,11 +86,12 @@ private:
 }  // namespace
 
 Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, TickProgressFn progress, void* user,
-                                 InspectFn inspect, void* inspect_user, app::IInputSource* input) {
+                                 InspectFn inspect, void* inspect_user, app::IInputSource* input, Span<const StringView> base) {
     if (ticks == 0) return Error(Errc::InvalidArgument, "mcp.run_headless", "ticks must be > 0");
     asset::AssetSystem assets;
     const StringView roots[1] = {pack};
     MCE_TRY(assets.mount(Span<const StringView>(roots, 1)));
+    MCE_TRY(assets.mount(base));
     audio::AudioDesc ad;
     ad.backend = audio::Backend::Silent;
     MCE_TRY_ASSIGN(mem::UniquePtr<audio::AudioDevice> device, audio::AudioDevice::create(ad));

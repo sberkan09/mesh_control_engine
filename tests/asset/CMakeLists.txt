@@ -8,6 +8,7 @@ mce_add_test(test_asset
         test_asset_system.cpp
         test_container.cpp
         test_guid_formats.cpp
+        test_mods.cpp
     DEPS
         mce::mce_asset)
 target_include_directories(test_asset PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -18,6 +19,7 @@ mce_add_test(test_cook UMBRELLA
     SOURCES
         test_cook_gltf.cpp
         test_cook_json_audio.cpp
+        test_cook_mod.cpp
         test_cook_project.cpp
         test_cook_shader.cpp
     DEPS

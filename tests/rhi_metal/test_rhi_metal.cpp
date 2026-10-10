@@ -542,3 +542,48 @@ TEST_CASE("rhi_metal: GPU timestamps bracket passes, MCE_FRAMES_IN_FLIGHT frames
     f.device->destroy_texture(target);
     f.device->destroy_pipeline(pipe);
 }
+
+TEST_CASE("rhi_metal: R11G11B10F targets read back as RGBA8 like GL (clamped, alpha 1)") {
+    Fixture f;
+    if (!f.ok) return;
+    rhi::TextureDesc td;
+    td.size = {8, 8};
+    td.format = rhi::TextureFormat::R11G11B10F;
+    td.usage = rhi::TextureUsage::SampledColorTarget;
+    td.debug_name = "hdr";
+    const rhi::TextureHandle t = f.device->create_texture(td);
+    MCE_REQUIRE_OR_RETURN(!t.is_null());
+    rhi::PassAttachment color;
+    color.texture = t;
+    color.clear.color[0] = 0.5f;   // exact in 6 mantissa bits
+    color.clear.color[1] = 4.0f;   // HDR: clamps to 255
+    color.clear.color[2] = 0.25f;
+    color.clear.color[3] = 0.0f;   // no alpha channel: reads as 1
+    rhi::RenderPassDesc pass;
+    pass.colors = Span<const rhi::PassAttachment>(&color, 1);
+    f.device->begin_frame(0);
+    rhi::CommandBuffer cmd;
+    cmd.begin_pass(pass);
+    cmd.end_pass();
+    f.device->submit(cmd);
+    const Array<u8> px = f.read(t, 8, 8);
+    f.device->end_frame();
+    const Rgba c = pixel(px, 8, 3, 3);
+    CHECK(c.r == 128);
+    CHECK(c.g == 255);
+    CHECK(c.b == 64);
+    CHECK(c.a == 255);
+    // Depth and multisampled targets stay unreadable, as on GL.
+    rhi::TextureDesc dd;
+    dd.size = {8, 8};
+    dd.format = rhi::TextureFormat::D32_Float;
+    dd.usage = rhi::TextureUsage::DepthTarget;
+    const rhi::TextureHandle d = f.device->create_texture(dd);
+    Array<u8> out;
+    out.resize(8 * 8 * 4);
+    const auto r = f.device->read_pixels(d, rhi::Rect2D{0, 0, 8, 8}, out.span());
+    CHECK_FALSE(r.has_value());
+    CHECK(f.device->validation_error_count() == 0);
+    f.device->destroy_texture(d);
+    f.device->destroy_texture(t);
+}

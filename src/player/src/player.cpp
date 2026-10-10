@@ -25,12 +25,15 @@
 // published as the InputState resource the game module reads. Headless runs publish an empty
 // InputState every tick, so -headless hashes stay a function of the scene and the tick count.
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
 
 #include "hud_font.h"
 #include "mce/asset/asset_system.h"
+#include "mce/asset/file_io.h"
+#include "mce/asset/mods.h"
 #include "mce/audio/components.h"
 #include "mce/core.h"
 #include "mce/ecs/save.h"
@@ -64,6 +67,10 @@ using namespace mce::math;
 MCE_CVAR(cv_pack, "pack", "", "Cooked pack (assets.mce) or cooked/ directory to mount (a host's default: assets.mce beside it)",
          CVarFlags::None);
 MCE_CVAR(cv_module, "module", "", "Game module to install on top of the engine systems (a host's default: its own module)",
+         CVarFlags::None);
+MCE_CVAR(cv_mods, "mods", true, "Load the mods in the game's mods folder (only for games that take mods)",
+         CVarFlags::None);
+MCE_CVAR(cv_mods_dir, "mods_dir", "", "Mods folder override (only for games that take mods; default: the game's own)",
          CVarFlags::None);
 MCE_CVAR(cv_scene, "scene", "", "Scene to play: GUID or source path (default: the first scene)", CVarFlags::None);
 MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window closes)", CVarFlags::None);
@@ -107,6 +114,7 @@ public:
             samples::resolve_shipped_path(cv_pack.get_string(), desc_.pack ? desc_.pack : "", desc_.pack_fallback ? desc_.pack_fallback : "",
                                           pack);
         if (pack.empty()) return Error(Errc::InvalidArgument, "mce_player: -pack <path> is required");
+        mount_mods();
         const StringView roots[1] = {pack.view()};
         MCE_TRY(assets_.mount(Span<const StringView>(roots, 1)));
         const StringView want_scene = !cv_scene.get_string().empty() ? cv_scene.get_string()
@@ -114,6 +122,7 @@ public:
                                                                          : StringView();
         MCE_TRY_ASSIGN(const asset::Guid scene, pick_scene(want_scene));
 
+        if (desc_.mods_dir) world_.set_resource(mods_);  // game code lists them: try_resource<asset::ModList>()
         input::install(world_);
         physics::install_physics2d(world_);
         audio::install(world_, audio_, &clips_);
@@ -281,6 +290,70 @@ public:
     }
 
 private:
+    // Data mods (ADR-0034): resolves the mods folder and mounts the mods ahead of the game's pack,
+    // the last in load order first, since AssetSystem lets earlier mounts win. A mod that cannot be
+    // read or mounted is skipped with a warning; the game always starts.
+    void mount_mods() {
+        if (!desc_.mods_dir) return;
+        if (!cv_mods.get_bool()) {
+            MCE_LOG_INFO("{}: mods off (-mods 0)", desc_.app_name);
+            return;
+        }
+        FixedString<1024> dir(cv_mods_dir.get_string().empty() ? StringView(desc_.mods_dir) : cv_mods_dir.get_string());
+        const bool absolute = !dir.empty() && (dir.view()[0] == '/' || dir.view()[0] == '\\' || (dir.size() > 1 && dir.view()[1] == ':'));
+        if (!absolute && cv_mods_dir.get_string().empty()) {  // the game's folder sits beside the executable
+            FixedString<1024> full(platform::base_path());
+            full.append(dir.view());
+            dir = full;
+        }
+        if (dir.truncated()) return;
+        if (dir.view().back() != '/' && dir.view().back() != '\\') dir.append("/");
+
+        Array<FixedString<256>> names;
+        platform::list_files(dir.view(), names);
+        Array<FixedString<1024>> paths;
+        bool has_order = false;
+        for (const FixedString<256>& n : names) {
+            if (n.view() == "load_order.txt") has_order = true;
+            if (n.size() < 5 || n.view().substr(n.size() - 4) != ".mce") continue;
+            FixedString<1024> p(dir.view());
+            p.append(n.view());
+            if (!p.truncated()) paths.push_back(p);
+        }
+        Array<StringView> views;
+        for (const FixedString<1024>& p : paths) views.push_back(p.view());
+        Array<byte> order_text;
+        StringView order;
+        if (has_order) {
+            FixedString<1024> p(dir.view());
+            p.append("load_order.txt");
+            if (asset::read_file(p.view(), order_text)) order = StringView(reinterpret_cast<const char*>(order_text.data()), order_text.size());
+        }
+        asset::ModList found = asset::resolve_mods(views.span(), has_order ? &order : nullptr,
+                                                   desc_.mods_game_id ? StringView(desc_.mods_game_id) : StringView());
+        for (const asset::ModSkipped& s : found.skipped) MCE_LOG_WARN("{}: mod skipped: {} ({})", desc_.app_name, s.what.view(), s.reason.view());
+        for (usize i = found.mods.size(); i-- > 0;) {
+            const asset::ModEntry& m = found.mods[i];
+            const StringView root[1] = {m.path.view()};
+            if (Result<void> r = assets_.mount(Span<const StringView>(root, 1)); !r) {
+                FixedString<512> msg;
+                format_error(r.error(), msg);
+                MCE_LOG_WARN("{}: mod skipped: {} (cannot mount: {})", desc_.app_name, m.path.view(), msg.view());
+                asset::ModSkipped s;
+                s.what.assign(m.path.view());
+                s.reason.assign("cannot mount the pack");
+                found.skipped.push_back(s);
+                continue;
+            }
+            mods_.mods.push_back(m);
+        }
+        std::reverse(mods_.mods.begin(), mods_.mods.end());  // back to load order
+        mods_.skipped = std::move(found.skipped);
+        for (const asset::ModEntry& m : mods_.mods)
+            MCE_LOG_INFO("{}: mod '{}' {} ({} assets) from {}", desc_.app_name, m.name.view(), m.version.view(), m.asset_count, m.path.view());
+        if (!mods_.mods.empty()) std::printf("%s: %zu mod(s) loaded\n", desc_.app_name, mods_.mods.size());
+    }
+
     // A GUID, a source path ("scenes/level.mcscene"), or empty for the first scene by path.
     Result<asset::Guid> pick_scene(StringView want) {
         if (!want.empty()) {
@@ -484,6 +557,7 @@ private:
     World world_;
     Array<Entity> entities_;
     FixedString<256> scene_path_;
+    asset::ModList mods_;  // mounted mods in load order (published as a resource when the game takes mods)
     u64 sim_ticks_ = 0;
     bool paused_ = false;
     bool background_ = false;  // unfocused or minimized

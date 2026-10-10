@@ -20,6 +20,8 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-capture_tick N` | 0 | windowed: quit after N simulation ticks (frame-rate independent, unlike `-frames`) |
 | `-input <file>` | | play a scripted input file instead of the keyboard (`<from>[-<to>] Action[=value]` per line; chapter 11) |
 | `-save <slot>` | off | load the slot at start if it exists; write it on a clean quit |
+| `-mods 0` | 1 | games that take mods (chapter 19): start without them |
+| `-mods_dir <dir>` | the game's `mods/` | games that take mods: read mods from this folder instead |
 | `-save_dir <dir>` | the per-user save folder | where slots live |
 | `-console 0` | 1 | disable the developer console |
 | `-console_open 1` | 0 | start with the console open |
@@ -80,12 +82,13 @@ components become known to the tools and its systems run in `run_headless`.
 ## 16.4 The cook
 
 ```
-my_game_cook <project-dir> [--pack] [--force] [--adopt] [--quiet]
-mce_cook <project-dir> [--module <lib<game>.so>] [--pack] [--force] [--adopt] [--quiet]
+my_game_cook <project-dir> [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]
+mce_cook <project-dir> [--module <lib<game>.so>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]
 ```
 
 Exit 0 clean, 1 cook errors (a module that fails to load among them), 2 usage. `mce_cook`
-without `--module` knows engine components only.
+without `--module` knows engine components only. `--base` names a game pack the project builds
+on (a mod, chapter 19): references may name its assets and same-GUID assets override them.
 
 ## 16.5 Scripts
 

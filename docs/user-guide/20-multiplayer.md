@@ -1,18 +1,18 @@
-# 19. Multiplayer (optional)
+# 20. Multiplayer (optional)
 
 Networking is an **opt-in** module, `mce_net`. A game that does not ask for it is built exactly as
 before, with no socket code in it. A game that does gets three things: a UDP connection layer, a
 small message codec, and server-authoritative replication of entities. The reference page is
 [`docs/engine/net.md`](../engine/net.md); the decision record is ADR-0035.
 
-## 19.1 The model
+## 20.1 The model
 
 One process is the **server**: it runs the real simulation. Players run **clients**: they send their
 inputs to the server and show what the server sends back. Every tick the server sends a snapshot of the
 entities you marked as replicated; each client mirrors it. Clients can be on different operating
 systems, because they never simulate the shared state themselves.
 
-## 19.2 Turn it on
+## 20.2 Turn it on
 
 In your project's `CMakeLists.txt`, add one line to the `mce_add_project` call:
 
@@ -26,7 +26,7 @@ mce_add_project(my_game
 Then `#include "mce/net/net.h"` in your game code. This works in the engine checkout and against the
 installed SDK (`mce build`).
 
-## 19.3 Connect
+## 20.3 Connect
 
 ```cpp
 // Server
@@ -70,7 +70,7 @@ Write and read messages with `net::ByteWriter` and `net::ByteReader`. A reader t
 of a message sets `ok()` to false instead of crashing, so check it before acting on what you read, and
 clamp numbers that come from the network.
 
-## 19.4 Replicate entities
+## 20.4 Replicate entities
 
 On the server, give each entity players should see a `NetId` with `ReplicationServer::assign`, and
 broadcast a snapshot every tick:
@@ -101,7 +101,7 @@ client_rep.apply(f.commands(), f.world(), latest_snapshot);
 To send more than position, rotation and scale (health, an animation state), set `write_extra` on the
 server and `read_extra` on the client. When the client disconnects, call `client_rep.reset(...)`.
 
-## 19.5 Try it
+## 20.5 Try it
 
 `samples/net_headless` runs a server and a client in one process over loopback and checks that the
 client's copy matches the server exactly:
@@ -113,7 +113,7 @@ build/linux-gcc-debug/samples/net_headless/sample_net_headless -ticks 300
 To test your own game on one machine, run a server host and a client host connecting to
 `127.0.0.1`. The editor's play mode runs a single world, so it does not play multiplayer sessions.
 
-## 19.6 What it does not do yet
+## 20.6 What it does not do yet
 
 Clients show the newest snapshot without prediction or smoothing, every client receives every
 replicated entity, and traffic is not encrypted. There are no lobbies, matchmaking or NAT traversal:

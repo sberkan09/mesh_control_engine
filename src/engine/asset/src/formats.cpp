@@ -582,4 +582,45 @@ Result<SceneView> SceneView::read(Span<const byte> payload) {
     return v;
 }
 
+// ------------------------------------------------------------------ mod info
+
+Result<ModInfoView> ModInfoView::read(Span<const byte> payload) {
+    constexpr const char* kStage = "asset.mod_info.read";
+    const auto* h = header_of<ModInfoHeader>(payload);
+    if (!h) return Error(Errc::Truncated, kStage);
+    for (u32 r : h->reserved)
+        if (r != 0) return Error(Errc::ReservedNonZero, kStage);
+    if (!in_bounds(sizeof(ModInfoHeader), h->strings_size, payload.size())) return bad(kStage);
+    const char* blob = reinterpret_cast<const char*>(payload.data() + sizeof(ModInfoHeader));
+    const ModInfoString* fields[5] = {&h->id, &h->name, &h->version, &h->game, &h->description};
+    StringView out[5];
+    for (u32 i = 0; i < 5; ++i) {
+        if (!in_bounds(fields[i]->offset, fields[i]->size, h->strings_size)) return bad(kStage, i);
+        out[i] = StringView(blob + fields[i]->offset, fields[i]->size);
+    }
+    ModInfoView v;
+    v.data = ModInfoData{out[0], out[1], out[2], out[3], out[4]};
+    return v;
+}
+
+void write_mod_info(const ModInfoData& info, Array<byte>& out) {
+    ModInfoHeader h{};
+    Array<char> strings;
+    auto put = [&](StringView s, ModInfoString& at) {
+        at.offset = static_cast<u32>(strings.size());
+        at.size = static_cast<u32>(s.size());
+        for (char c : s) strings.push_back(c);
+    };
+    put(info.id, h.id);
+    put(info.name, h.name);
+    put(info.version, h.version);
+    put(info.game, h.game);
+    put(info.description, h.description);
+    h.strings_size = static_cast<u32>(strings.size());
+    out.clear();
+    out.resize(align_up(sizeof(h) + strings.size(), CHUNK_ALIGN), byte{0});
+    std::memcpy(out.data(), &h, sizeof(h));
+    if (!strings.empty()) std::memcpy(out.data() + sizeof(h), strings.data(), strings.size());
+}
+
 }  // namespace mce::asset

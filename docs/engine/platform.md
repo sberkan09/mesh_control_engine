@@ -23,6 +23,8 @@ Headers live under `include/mce/platform/`.
   picks the SDL video driver, for example `dummy` for tests.
 - `pump_events()`: drains the OS queue and delivers each event to its window's handler. Returns
   true on quit (SDL quit, or a close request on any window).
+- `list_files(dir, names)`: names of the regular files directly in `dir`, sorted bytewise (SDL's directory
+  enumeration); a missing directory gives an empty list. The player lists the mods folder with it (ADR-0034).
 - `base_path()`: directory of the running executable, with a trailing separator. Works before
   `init`; shipped builds find their pack this way.
 - Clock: `now_seconds()`, `now_us()` (both `std::chrono::steady_clock`, the same source as

@@ -8,6 +8,7 @@
 
 #include "mce/asset/guid.h"
 #include "mce/cook/importer.h"
+#include "mce/cook/mod_project.h"
 
 namespace mce::cook {
 
@@ -87,6 +88,9 @@ struct CookReport {
     u32 failed = 0;
     u64 manifest_hash = 0;  // xxh64 of cooked/manifest.mce
     u64 pack_hash = 0;      // xxh64 of assets.mce when --pack
+    bool mod = false;       // the project has a mod.json (its pack carries a ModInfo chunk)
+    u32 base_assets = 0;    // assets in the base packs references may name (mods, --base)
+    u32 overrides = 0;      // project assets that replace a base asset (same GUID, same type)
 
     bool ok() const { return diags.error_count() == 0; }
 };
@@ -95,6 +99,9 @@ struct CookOptions {
     bool force = false;  // ignore the cook DB, re-cook everything
     bool pack = false;   // also write <project>/assets.mce (FR-SHP-010)
     bool adopt = false;  // create sidecars for unregistered sources
+    // Packs (or cooked dirs) this project builds on, added to a mod.json's "base" (ADR-0034):
+    // references may name their assets, and a project asset with one of their GUIDs overrides it.
+    Array<String> base_packs;
 };
 
 class CookService {

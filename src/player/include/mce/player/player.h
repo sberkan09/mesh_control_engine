@@ -14,6 +14,9 @@
 //   }
 //
 // The command line still wins (-pack, -module, -scene, -headless, -frames, ... see player.cpp).
+//
+// A game that takes data mods adds `d.mods_dir = "mods";` (and usually `d.mods_game_id`): see
+// docs/user-guide/19-mods.md.
 
 namespace mce {
 struct ModuleInfo;
@@ -37,6 +40,14 @@ struct PlayerDesc {
     // The scene played when -scene is not given: a GUID (a project's .mceproj start_scene). Null
     // or empty: the first scene in the pack by path.
     const char* start_scene = nullptr;
+    // Data mods (FR-RUN-090, ADR-0034), off unless the game turns them on: the folder of mod packs
+    // (<id>.mce, plus an optional load_order.txt) mounted over the pack, relative to the executable
+    // unless absolute. Null: this game takes no mods, and no command line changes that. Players
+    // turn a modding game's mods off with -mods 0 and point elsewhere with -mods_dir.
+    const char* mods_dir = nullptr;
+    // The game id a mod's mod.json names in "game" to load here; mods for other games are skipped.
+    // Null or empty: no check.
+    const char* mods_game_id = nullptr;
 };
 
 // Parses the command line into convars, then runs headless (-headless 1) or windowed. Returns the
