@@ -171,7 +171,22 @@ struct Client {
     }
 };
 
-bool same_bits(const LocalTransform& a, const LocalTransform& b) { return std::memcmp(&a, &b, sizeof a) == 0; }
+// Bit-identical, field by field (NaN-safe, padding-free).
+bool same_bits(f32 a, f32 b) {
+    u32 x = 0, y = 0;
+    std::memcpy(&x, &a, sizeof x);
+    std::memcpy(&y, &b, sizeof y);
+    return x == y;
+}
+bool same_bits(const LocalTransform& a, const LocalTransform& b) {
+    const f32 fa[10] = {a.position.x, a.position.y, a.position.z, a.rotation.x, a.rotation.y,
+                        a.rotation.z, a.rotation.w, a.scale.x,    a.scale.y,    a.scale.z};
+    const f32 fb[10] = {b.position.x, b.position.y, b.position.z, b.rotation.x, b.rotation.y,
+                        b.rotation.z, b.rotation.w, b.scale.x,    b.scale.y,    b.scale.z};
+    for (int i = 0; i < 10; ++i)
+        if (!same_bits(fa[i], fb[i])) return false;
+    return true;
+}
 
 int run() {
     Server server;
