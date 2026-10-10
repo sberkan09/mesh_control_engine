@@ -59,6 +59,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::Sequence: return SEQUENCE_VERSION;
         case ChunkType::Shader: return SHADER_VERSION;
         case ChunkType::Mesh: return MESH_VERSION;
+        case ChunkType::ModInfo: return MOD_INFO_VERSION;
         default: return 0;
     }
 }
@@ -236,7 +237,24 @@ Result<void> AssetSystem::mount_one(StringView root, MountOptions opt) {
     const u32 mount_index = static_cast<u32>(mounts_.size());
     for (u32 i = 0; i < manifest.size(); ++i) {
         const ManifestEntry& e = manifest.entry(i);
-        if (by_guid_.contains(e.guid())) continue;  // earlier roots win
+        if (const AssetKey* k = by_guid_.find(e.guid())) {
+            // Earlier roots win (a mod over the game), but only with the same type: an override
+            // that changes it would break every reference the later root's content makes, so the
+            // later root keeps that GUID instead, while nothing has loaded it yet.
+            Row& prev = rows_[*k];
+            if (prev.type == e.type || prev.state != State::Unloaded || prev.refcount != 0) continue;
+            MCE_LOG_WARN("asset {}: {} is a {} in {}, but {} here; the override is ignored", asset::to_string(e.guid()).view(),
+                         StringView(strings_.data() + prev.path_offset, prev.path_size), chunk_type_name(prev.type),
+                         mounts_[prev.mount].root.view(), chunk_type_name(e.type));
+            prev.content_hash = e.content_hash;
+            prev.type = e.type;
+            prev.mount = mount_index;
+            const StringView path = manifest.path(i);
+            prev.path_offset = static_cast<u32>(strings_.size());
+            prev.path_size = static_cast<u32>(path.size());
+            for (char c : path) strings_.push_back(c);
+            continue;
+        }
         Row row;
         row.guid = e.guid();
         row.content_hash = e.content_hash;

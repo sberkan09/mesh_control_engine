@@ -29,6 +29,15 @@ if(MCE_BUILD_TESTS)
     set_tests_properties(player_help PROPERTIES PASS_REGULAR_EXPRESSION "usage: mce_player.*-capture_tick <int>.*-pack <string>")
 endif()
 
+# Data mods end to end (ADR-0034): mce_cook builds a game pack and a mod pack over it; mce_player
+# -headless plays the game with the mod, with -mods 0 and with a load_order.txt that disables it.
+if(MCE_BUILD_TESTS AND TARGET mce_cook)
+    add_test(NAME player_mods
+             COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/mods_test
+                     -P ${PROJECT_SOURCE_DIR}/tests/asset/mods_player_test.cmake)
+endif()
+
 # Packaging v2: -crash_test writes a crash report that scripts/symbolicate.py resolves against the
 # build tree (not under ASan, whose own SEGV report takes over; not on Windows, where the report is
 # a minidump read by the debugger).

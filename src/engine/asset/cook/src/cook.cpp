@@ -35,10 +35,16 @@ String output_rel_path(Guid g, u64 hash) {
 
 class RegistryLookup final : public IAssetLookup {
 public:
-    explicit RegistryLookup(const AssetRegistry& r) : reg_(r) {}
+    explicit RegistryLookup(const AssetRegistry& r, const HashMap<Guid, ChunkType>* base = nullptr) : reg_(r), base_(base) {}
     bool type_of(Guid g, ChunkType& out) const override {
         const AssetRecord* rec = reg_.by_guid(g);
-        if (!rec) return false;
+        if (!rec) {
+            // A base pack's asset (mods): known by type only, never as a document.
+            const ChunkType* t = base_ ? base_->find(g) : nullptr;
+            if (!t) return false;
+            out = *t;
+            return true;
+        }
         out = rec->importer->type();
         return true;
     }
@@ -58,6 +64,7 @@ public:
 
 private:
     const AssetRegistry& reg_;
+    const HashMap<Guid, ChunkType>* base_;
 };
 
 struct Node {
@@ -182,7 +189,28 @@ CookReport CookService::cook(StringView project_root, const CookOptions& opt) {
     AssetRegistry registry;
     registry.set_known_sources(known.span());
     registry.scan(project_root, importers_, opt.adopt, report.diags);
-    RegistryLookup lookup(registry);
+
+    // Mods (ADR-0034): mod.json, and the base packs references may reach into.
+    ModProject mod;
+    report.mod = is_mod_project(project_root);
+    if (report.mod) read_mod_project(project_root, mod, report.diags);
+    for (const String& b : opt.base_packs) mod.base.push_back(b);
+    HashMap<Guid, ChunkType> base;
+    read_base_assets(mod.base.span(), base, report.diags);
+    report.base_assets = static_cast<u32>(base.size());
+    for (usize i = 0; i < registry.size(); ++i) {
+        const AssetRecord& rec = registry.at(i);
+        const ChunkType* t = base.find(rec.guid);
+        if (!t) continue;
+        if (*t != rec.importer->type()) {
+            String msg;
+            appendf(msg, "overrides base asset %s, a %s, with a %s: an override keeps the type", asset::to_string(rec.guid).c_str(),
+                    asset::chunk_type_name(*t), asset::chunk_type_name(rec.importer->type()));
+            report.diags.error(Errc::InvalidArgument, display(rec), 0, 0, kStageGraph, msg);
+        }
+        ++report.overrides;
+    }
+    RegistryLookup lookup(registry, &base);
 
     // 2. Graph build: importers declare references; missing and mistyped refs are reported as a
     //    batch with file:line:col.
@@ -199,6 +227,22 @@ CookReport CookService::cook(StringView project_root, const CookOptions& opt) {
         rec.importer->scan_dependencies(input_for(rec, disp, &lookup), rec.deps, report.diags);
         for (const DepRef& d : rec.deps) {
             const u32* target = node_of.find(d.guid);
+            if (const ChunkType* bt = target ? nullptr : base.find(d.guid)) {
+                // Into a base pack: type-checked here, no edge (the base is fixed input, not cooked).
+                if (d.expected != ChunkType::Manifest && *bt != d.expected) {
+                    String msg;
+                    appendf(msg, "reference %s is a %s asset in the base pack, expected %s", asset::to_string(d.guid).c_str(),
+                            asset::chunk_type_name(*bt), asset::chunk_type_name(d.expected));
+                    if (!d.where.empty()) {
+                        msg += " (";
+                        msg += d.where.view();
+                        msg += ')';
+                    }
+                    report.diags.error(Errc::MissingRef, disp, d.line, d.col, kStageGraph, msg);
+                    nodes[i].bad_refs = true;
+                }
+                continue;
+            }
             if (!target) {
                 String msg("missing reference ");
                 msg += asset::to_string(d.guid).view();
@@ -363,6 +407,16 @@ CookReport CookService::cook(StringView project_root, const CookOptions& opt) {
         }
         asset::ContainerWriter pw;
         pw.add(md, manifest_payload.span());
+        Array<byte> mod_payload;
+        if (report.mod) {  // the pack's identity in a mods folder (ADR-0034): right after the manifest
+            asset::write_mod_info(asset::ModInfoData{mod.id.view(), mod.name.view(), mod.version.view(), mod.game.view(),
+                                                     mod.description.view()},
+                                  mod_payload);
+            asset::ContainerWriter::ChunkDesc d;
+            d.type = ChunkType::ModInfo;
+            d.version = asset::chunk_version(asset::MOD_INFO_VERSION, 0);
+            pw.add(d, mod_payload.span());
+        }
         std::sort(items.begin(), items.end(), [](const asset::ManifestItem& a, const asset::ManifestItem& b) { return a.guid < b.guid; });
         for (const asset::ManifestItem& it : items) {
             const String path = path_join(cooked_root, output_rel_path(it.guid, it.content_hash));

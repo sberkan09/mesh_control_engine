@@ -30,6 +30,7 @@ code as built and why; this guide links to them where you may want the full deta
 | 16 | [Command-line reference](16-command-line.md) | Flags and convars of the player, the editor, the MCP server and the cook |
 | 17 | [Troubleshooting](17-troubleshooting.md) | What a symptom means and what to do about it |
 | 18 | [Samples and example projects](18-samples.md) | Where to look for a worked example of each feature |
+| 19 | [Mods](19-mods.md) | Letting players add data mods: turning them on, making a mod, load order |
 
 ## Conventions used in this guide
 

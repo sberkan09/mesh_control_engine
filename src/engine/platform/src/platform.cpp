@@ -2,6 +2,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+
 #include "internal.h"
 #include "mce/app.h"
 #include "mce/convar.h"
@@ -134,6 +136,28 @@ bool is_initialized() { return g_state.initialized; }
 const char* base_path() {
     const char* p = SDL_GetBasePath();  // owned and cached by SDL
     return p ? p : "";
+}
+
+void list_files(StringView dir, Array<FixedString<256>>& out) {
+    out.clear();
+    FixedString<1024> root(dir);
+    if (root.truncated() || root.empty()) return;
+    struct Ctx {
+        Array<FixedString<256>>* out;
+        const char* root;
+    } ctx{&out, root.c_str()};
+    auto on_entry = [](void* user, const char* dirname, const char* fname) -> SDL_EnumerationResult {
+        auto& c = *static_cast<Ctx*>(user);
+        FixedString<1300> full(dirname);
+        full.append(fname);
+        SDL_PathInfo info;
+        const FixedString<256> name(fname);
+        if (!full.truncated() && !name.truncated() && SDL_GetPathInfo(full.c_str(), &info) && info.type == SDL_PATHTYPE_FILE)
+            c.out->push_back(name);
+        return SDL_ENUM_CONTINUE;
+    };
+    if (!SDL_EnumerateDirectory(ctx.root, on_entry, &ctx)) out.clear();
+    std::sort(out.begin(), out.end(), [](const FixedString<256>& a, const FixedString<256>& b) { return a.view() < b.view(); });
 }
 
 const char* video_driver() {

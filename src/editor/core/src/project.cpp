@@ -142,10 +142,25 @@ void EditorProject::log_report() const {
 // Mounts the cooked tree fresh: assets that failed this pass still serve their previous output.
 void EditorProject::remount() {
     const cook::String cooked = cook::path_join(root_.view(), "cooked");
+    // A mod project mounts its game after its own tree: the mod's assets win, the game's fill in.
+    bases_.clear();
+    base_views_.clear();
+    base_assets_.clear();
+    if (cook::is_mod_project(root_.view())) {
+        cook::ModProject mod;
+        cook::DiagList diags;  // the cook reported these already
+        if (cook::read_mod_project(root_.view(), mod, diags) && cook::read_base_assets(mod.base.span(), base_assets_, diags))
+            bases_ = std::move(mod.base);
+    }
+    Array<StringView> roots;
+    roots.push_back(cooked.view());
+    for (const cook::String& b : bases_) {
+        base_views_.push_back(b.view());
+        roots.push_back(b.view());
+    }
     if (is_file(cook::path_join(cooked.view(), "manifest.mce"))) {
         auto fresh = mem::make_unique<asset::AssetSystem>(mem::heap());
-        const StringView roots[1] = {cooked.view()};
-        if (Result<void> r = fresh->mount(Span<const StringView>(roots, 1)); r) {
+        if (Result<void> r = fresh->mount(roots.span()); r) {
             mounted_ = std::move(fresh);
         } else {
             FixedString<512> msg;
@@ -171,7 +186,7 @@ HotReloadResult EditorProject::reload(BeforeRemountFn before_remount, void* user
     for (const cook::AssetReport& a : report_.assets)
         if (same_set && a.output_hash != 0 && mounted_->find(a.guid) == asset::kInvalidAssetKey) same_set = false;
     for (asset::AssetKey k = 0; same_set && k < mounted_->asset_count(); ++k) {
-        bool listed = false;
+        bool listed = base_assets_.contains(mounted_->info(k).guid);  // a mod's game asset: not the cook's
         for (const cook::AssetReport& a : report_.assets) listed = listed || a.guid == mounted_->info(k).guid;
         same_set = listed;
     }

@@ -9,6 +9,7 @@ mce_add_library(mce_asset
         src/file_io.cpp
         src/formats.cpp
         src/guid.cpp
+        src/mods.cpp
         src/xxhash.cpp
     PUBLIC_DEPS
         mce::mce_core
