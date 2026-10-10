@@ -1,5 +1,5 @@
 #pragma once
-// mce::net::Host — one UDP endpoint with connected peers (ADR-0034). The same class is the
+// mce::net::Host — one UDP endpoint with connected peers (ADR-0035). The same class is the
 // server (listen() on a port, many peers) and the client (open_client() + connect(), one peer).
 // Transport is ENet: per-channel reliable ordered, unreliable sequenced and unreliable unordered
 // delivery, fragmentation, RTT and timeouts. No ENet type crosses this header.

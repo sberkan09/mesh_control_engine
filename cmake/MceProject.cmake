@@ -21,7 +21,7 @@
 #
 # DEPS: optional engine libraries the game's sources use, linked wherever those sources are
 # compiled (the module, or the host where modules are not supported, and the project editor and
-# MCP server). Today that is mce::mce_net, the opt-in networking module (ADR-0034).
+# MCP server). Today that is mce::mce_net, the opt-in networking module (ADR-0035).
 #
 # The per-project tools above compile the game in; where game modules are supported the stock
 # tools load the module instead and need no project-specific build:

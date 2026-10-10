@@ -4,7 +4,7 @@
 public dependencies are `mce_core` and `mce_ecs`; its transport is ENet 1.3.18, compiled into the
 archive (`cmake/Dependencies.cmake`). It is **not** part of the `mce_engine` umbrella: a game that
 wants multiplayer links it, every other game and every engine tool stays free of socket code
-(ADR-0034).
+(ADR-0035).
 
 It is linked by `test_net`, `sample_net_headless`, and any project that asks for it:
 
@@ -107,7 +107,7 @@ loopback, a client-driven player, and the bit-for-bit check.
 
 ## Design records
 
-- ADR-0034 (`docs/adr/0034-optional-networking.md`): why client-server over lockstep, why ENet, the
+- ADR-0035 (`docs/adr/0035-optional-networking.md`): why client-server over lockstep, why ENet, the
   opt-in linking, the snapshot format.
 - REQUIREMENTS §3.14 FR-NET; N1/N7 reopened on 2026-10-10 by the user's decision.
 

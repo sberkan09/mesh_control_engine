@@ -265,7 +265,7 @@ Conventions: **Anchor** = A (UC-A), B (UC-B), D (UC-D), C (UC-C), ★ = shared c
 ### 3.14 FR-NET — Optional networking (added 2026-10-10 by user decision; reopens N1 and the networking part of N7)
 
 The user asked for multiplayer that a game developer can add when they want it. Everything here is **opt-in**:
-the engine library, the tools and every game that does not link `mce_net` stay network-free (ADR-0034).
+the engine library, the tools and every game that does not link `mce_net` stay network-free (ADR-0035).
 
 | ID | Requirement | MoSCoW | Tier | Acceptance criterion |
 |---|---|---|---|---|
@@ -332,13 +332,13 @@ A solo engine dies of scope. Every item below is **rejected**, with the one cond
 
 | # | Won't | Why not | Re-entry trigger |
 |---|---|---|---|
-| N1 | ~~Multiplayer/netcode of any kind~~ **Reopened 2026-10-10 by user decision** as the opt-in `mce_net` module (FR-NET, ADR-0034). Still out: networking inside the engine core or forced on games | Doubles the hardest problem class; determinism is kept only because it is nearly free and pays off in testing/replay | (triggered: the user asked for opt-in multiplayer) |
+| N1 | ~~Multiplayer/netcode of any kind~~ **Reopened 2026-10-10 by user decision** as the opt-in `mce_net` module (FR-NET, ADR-0035). Still out: networking inside the engine core or forced on games | Doubles the hardest problem class; determinism is kept only because it is nearly free and pays off in testing/replay | (triggered: the user asked for opt-in multiplayer) |
 | N2 | Scripting VM (Lua) in v1; visual scripting; blueprint graphs | Native C++20 systems are the committed gameplay model; a VM before the ECS is proven is a second runtime to debug | After Ashen Court ships, if measured recompile-iterations dominate editor time |
 | N3 | 3D physics from scratch beyond the character controller | Hand-rolling 3D rigid bodies is a year of edge cases Ashen Court doesn't need; Jolt 5 is the pre-approved exception | FR-PHY-090 Could — only if a third game demands knockable props |
 | N4 | Terrain, foliage, ray tracing, GI beyond probes, SSR, virtualized geometry, volumetrics | All optimize beyond the "small complete game" ceiling; GL 4.5 ceiling stated honestly | A committed game concept whose art direction requires it |
 | N5 | Asset-creation DCC features (mesh editing, texture painting, rigging, authoring animation from scratch) | Blender exists; MCE imports-cooks-inspects, it does not compete with Blender | Never planned (the v1.0 curve/timeline editor is the only authoring surface) |
 | N6 | Mobile/console/web/VR platforms, 32-bit, non-Windows desktops | Windows 10 x64 is the stated machine; porting multiplies every subsystem's cost | A shipped game with commercial demand on another platform |
-| N7 | Accounts, telemetry, achievements, cloud saves, DRM (game networking itself was reopened 2026-10-10 as the opt-in `mce_net`, FR-NET / ADR-0034) | Solo offline games; online services are a second product | Never planned |
+| N7 | Accounts, telemetry, achievements, cloud saves, DRM (game networking itself was reopened 2026-10-10 as the opt-in `mce_net`, FR-NET / ADR-0035) | Solo offline games; online services are a second product | Never planned |
 | N8 | Engine-as-product: installer, plugin API, third-party docs, API stability guarantees, asset store | MCE ships *games*; the engine is the curriculum; API-stability discipline taxes the architecture for no anchor-UC benefit | A second developer joins |
 | N9 | Mega-scale sparse entities (100k+), GPU-driven everything | Targets are thousands; the archetype ECS already gives the headroom that matters | Profiling shows a real game hitting 10k entities |
 | N10 | Runtime mod support, UGC, in-game editors | Shipping untrusted content is a security + format-versioning project | Never planned |

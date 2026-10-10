@@ -76,7 +76,7 @@ expect_exit(0 "${shipped_host}" -headless 1 -ticks 300)
 if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
     message(FATAL_ERROR "the shipped host:\n${LAST_OUTPUT}")
 endif()
-# 3b. The project opts into the networking module (ADR-0034): DEPS mce::mce_net links the SDK's
+# 3b. The project opts into the networking module (ADR-0035): DEPS mce::mce_net links the SDK's
 # libmce_net into the module, whose engine calls resolve against the SDK's libmce_engine.
 file(GLOB net_lib "${PREFIX}/lib/*mce_net*")
 if(net_lib)

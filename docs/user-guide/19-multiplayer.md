@@ -3,7 +3,7 @@
 Networking is an **opt-in** module, `mce_net`. A game that does not ask for it is built exactly as
 before, with no socket code in it. A game that does gets three things: a UDP connection layer, a
 small message codec, and server-authoritative replication of entities. The reference page is
-[`docs/engine/net.md`](../engine/net.md); the decision record is ADR-0034.
+[`docs/engine/net.md`](../engine/net.md); the decision record is ADR-0035.
 
 ## 19.1 The model
 

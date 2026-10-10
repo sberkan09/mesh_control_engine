@@ -1,5 +1,5 @@
 #pragma once
-// mce_net, the optional networking module (ADR-0034). Link mce::mce_net to use it; a game that
+// mce_net, the optional networking module (ADR-0035). Link mce::mce_net to use it; a game that
 // does not carries no socket code (mce_engine never contains it).
 //
 //   host.h         Host: a UDP endpoint (server or client) with reliable / sequenced / unreliable

@@ -1,5 +1,5 @@
 #pragma once
-// Message codec for mce_net (ADR-0034): explicit little-endian scalars, LEB128 varints and
+// Message codec for mce_net (ADR-0035): explicit little-endian scalars, LEB128 varints and
 // length-prefixed byte strings. The reader never reads past its span: a short or malformed
 // message sets ok() to false and every later read returns zero, so a hostile packet costs one
 // check at the end instead of one per field.

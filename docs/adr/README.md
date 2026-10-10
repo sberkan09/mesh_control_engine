@@ -52,4 +52,4 @@ file name when the number alone is ambiguous.
 | [0031](0031-m6-2d-extras.md) | M6 | Particles, parallax, lit 2D, 2D post |
 | [0032](0032-sequence-runner.md) | M6 | SequenceRunner action lists |
 | [0033](0033-shader-cook.md) | M6 | Shader cook: validation, variants, SPIR-V reflection |
-| [0034](0034-optional-networking.md) | M-NET | Optional networking module `mce_net`: client-server over ENet, snapshot replication |
+| [0035](0035-optional-networking.md) | M-NET | Optional networking module `mce_net`: client-server over ENet, snapshot replication |

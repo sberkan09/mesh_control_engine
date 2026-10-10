@@ -1,4 +1,4 @@
-# The optional networking module's running demo (ADR-0034): a server and a client in one process
+# The optional networking module's running demo (ADR-0035): a server and a client in one process
 # over loopback UDP, replicating a small scene and a client-driven player. Not a ladder rung.
 if(TARGET mce_net)
     mce_add_executable(sample_net_headless UMBRELLA SOURCES main.cpp DEPS mce::mce_net)

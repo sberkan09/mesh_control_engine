@@ -1,4 +1,4 @@
-# ADR-0034: Optional networking module (`mce_net`)
+# ADR-0035: Optional networking module (`mce_net`)
 
 **Status:** Accepted (2026-10-10). **Milestone:** M-NET (off-tier, opt-in). **Requirements:** FR-NET-010..050;
 reopens N1 and the networking part of N7 (REQUIREMENTS §5) by the user's decision of 2026-10-10.

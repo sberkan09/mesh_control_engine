@@ -1,4 +1,4 @@
-# mce_net (L3, optional — ADR-0034): client-server networking over UDP (ENet), a little-endian byte
+# mce_net (L3, optional — ADR-0035): client-server networking over UDP (ENet), a little-endian byte
 # codec, and snapshot replication of LocalTransform for entities tagged with NetId.
 #
 # Opt-in: not in MCE_ENGINE_LIBS, so libmce_engine never contains it. A game links it explicitly

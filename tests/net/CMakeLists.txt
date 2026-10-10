@@ -1,4 +1,4 @@
-# mce_net (ADR-0034): the byte codec, a loopback client-server session over real UDP sockets, and
+# mce_net (ADR-0035): the byte codec, a loopback client-server session over real UDP sockets, and
 # snapshot replication between two worlds.
 mce_add_test(test_net UMBRELLA
     SOURCES

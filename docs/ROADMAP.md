@@ -188,7 +188,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 
 ### M-NET — Optional networking module · **size M (≈ 30–50 h)** · tier: off-tier, opt-in · **built 2026-10-10**
 
-*Added 2026-10-10 by user request: multiplayer support a game developer can add if they want it. Reopens N1 and the networking part of N7 (REQUIREMENTS §3.14 FR-NET, §5); ADR-0034 records the design.*
+*Added 2026-10-10 by user request: multiplayer support a game developer can add if they want it. Reopens N1 and the networking part of N7 (REQUIREMENTS §3.14 FR-NET, §5); ADR-0035 records the design.*
 
 **Builds:** `mce_net` (`src/engine/net`) — client-server over UDP with ENet (reliable / sequenced / unreliable channels, connect/disconnect events, timeouts, RTT), a fail-closed little-endian message codec, and server-authoritative snapshot replication (`NetId`, `ReplicationServer`/`ReplicationClient`, hooks for game state and client-only parts). **Opt-in at link level:** not in `MCE_ENGINE_LIBS`; a project adds `DEPS mce::mce_net` to `mce_add_project`, the SDK installs `libmce_net.a` + `mce::mce_net`; walls keep ENet inside the module and `mce_net` out of the engine, the tools and the editor. Lockstep was rejected because determinism is per platform (ADR-0007).
 **Demo:** `sample_net_headless` — a server and a client in one process over loopback for 300 ticks; the client's mirror equals the server's replicated state bit for bit and a client-driven player moves. **Tests:** `test_net` (codec, loopback session, replication incl. malformed/stale snapshots); the SDK contract test builds a template project with `DEPS mce::mce_net`.

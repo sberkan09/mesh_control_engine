@@ -35,7 +35,7 @@ install(TARGETS ${_mce_sdk_tools} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(TARGETS mce_engine LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(TARGETS mce_player_runtime ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 if(TARGET mce_net)
-    # The opt-in networking module (ADR-0034): a static archive a game links on request.
+    # The opt-in networking module (ADR-0035): a static archive a game links on request.
     install(TARGETS mce_net ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
     set(MCE_SDK_NET_FILE "$<TARGET_FILE_NAME:mce_net>")
 else()

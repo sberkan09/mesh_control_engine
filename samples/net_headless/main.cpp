@@ -1,4 +1,4 @@
-// Server and client in one process over loopback UDP (mce_net, ADR-0034): the smallest complete
+// Server and client in one process over loopback UDP (mce_net, ADR-0035): the smallest complete
 // multiplayer loop the module supports, and its CI check.
 //
 //   server world: eight drifters circle the origin; a player entity appears for each client that

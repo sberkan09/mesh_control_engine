@@ -1,5 +1,5 @@
 #pragma once
-// Snapshot replication (ADR-0034): the server is authoritative; every send tick it writes one
+// Snapshot replication (ADR-0035): the server is authoritative; every send tick it writes one
 // full snapshot of the entities tagged with NetId (their LocalTransform plus optional game
 // bytes), and each client mirrors it — spawning entities it has not seen, updating the ones it
 // has, destroying the ones the snapshot no longer lists. Full snapshots on a Sequenced channel:
