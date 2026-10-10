@@ -30,6 +30,7 @@ struct AudioSource {
     ClipHandle clip_handle;
     // ---- engine-written, not serialized ----
     bool started = false;
+    u8 pad_[3] = {};  // explicit and zeroed: World::state_hash hashes component bytes (ADR-0007)
     AudioHandle handle;
     ClipHandle playing_clip;  // what `handle` plays; a hot reload swaps it and restarts loops
     f32 applied_gain_db = 0.f;
