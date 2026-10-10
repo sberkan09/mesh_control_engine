@@ -4,14 +4,14 @@
     python3 scripts/symbolicate.py <report.crash> [--symbols DIR ...]
 
 Each backtrace frame names its module by load base; the report's module list gives that module's
-GNU build id, and the debug file is looked up by build id in each DIR, in order:
+GNU build id (the LC_UUID on macOS), and the debug file is looked up by build id in each DIR, in order:
 
     DIR/.build-id/ab/cdef....debug   the symbol archive scripts/ship.py writes beside the zip
-    any ELF file under DIR           a build tree (unstripped binaries), matched by build id
+    any ELF/Mach-O file under DIR    a build tree (unstripped binaries), matched by build id
 
 The module's own path from the report wins over a directory scan when that file still has the
-same build id (a crash on the machine that built it). Frames resolve with addr2line (-f -C -i);
-a return address is looked up at offset - 1 so the call site's line is reported. Windows reports carry a .dmp next to
+same build id (a crash on the machine that built it). Frames resolve with addr2line (-f -C -i),
+or with atos (-i) for Mach-O files; a return address is looked up at offset - 1 so the call site's line is reported. Windows reports carry a .dmp next to
 them: open that in Visual Studio or WinDbg with the archived PDBs instead.
 
 Exit code: 0 when the faulting frame resolved, 1 otherwise.
@@ -27,6 +27,7 @@ import sys
 
 FRAME_RE = re.compile(r"^#(\d+) (0x[0-9a-f]+)(?: base (0x[0-9a-f]+) \+(0x[0-9a-f]+))?(?: (\S+))?$")
 MODULE_RE = re.compile(r"^module (0x[0-9a-f]+)(?: build_id ([0-9a-f]+))? (.+)$")
+ATOS_RE = re.compile(r"^(.+) \(in [^)]+\) \((.+:\d+)\)$")  # "func (in module) (file.cpp:12)"
 
 
 def elf_build_id(path):
@@ -61,6 +62,34 @@ def elf_build_id(path):
     return None
 
 
+def macho_uuid(path):
+    """The LC_UUID of a thin 64-bit little-endian Mach-O file, or None."""
+    try:
+        with open(path, "rb") as f:
+            hdr = f.read(32)
+            if len(hdr) < 32 or struct.unpack_from("<I", hdr)[0] != 0xFEEDFACF:
+                return None
+            ncmds, sizeofcmds = struct.unpack_from("<II", hdr, 16)
+            cmds = f.read(sizeofcmds)
+        p = 0
+        for _ in range(ncmds):
+            if p + 8 > len(cmds):
+                return None
+            cmd, size = struct.unpack_from("<II", cmds, p)
+            if cmd == 0x1B and size >= 24:  # LC_UUID
+                return cmds[p + 8:p + 24].hex()
+            if size < 8:
+                return None
+            p += size
+    except OSError:
+        return None
+    return None
+
+
+def binary_id(path):
+    return elf_build_id(path) or macho_uuid(path)
+
+
 class SymbolIndex:
     def __init__(self, dirs):
         self.dirs = dirs
@@ -76,7 +105,7 @@ class SymbolIndex:
                     path = os.path.join(root, name)
                     if os.path.islink(path) or os.path.getsize(path) < 64:
                         continue
-                    bid = elf_build_id(path)
+                    bid = binary_id(path)
                     if bid and bid not in self.scanned:
                         self.scanned[bid] = path
 
@@ -86,12 +115,32 @@ class SymbolIndex:
                 cand = os.path.join(d, ".build-id", build_id[:2], build_id[2:] + ".debug")
                 if os.path.isfile(cand):
                     return cand
-        if module_path and os.path.isfile(module_path) and (not build_id or elf_build_id(module_path) == build_id):
+        if module_path and os.path.isfile(module_path) and (not build_id or binary_id(module_path) == build_id):
             return module_path
         if build_id:
             self._scan()
             return self.scanned.get(build_id)
         return None
+
+
+def atos(debug_file, offset):
+    # Offsets are from the image's mach header, i.e. the start of __TEXT: load it anywhere and ask
+    # for load + offset. With -i, atos prints the inlined frames innermost first, the caller last.
+    load = 0x100000000
+    out = subprocess.run(["atos", "-i", "-o", debug_file, "-l", hex(load), hex(load + offset)],
+                         capture_output=True, text=True).stdout.splitlines()
+    pairs = []
+    for line in out:
+        m = ATOS_RE.match(line.strip())
+        if m:
+            pairs.append((m.group(1), m.group(2)))
+    return pairs
+
+
+def resolve(debug_file, offset):
+    if macho_uuid(debug_file):
+        return atos(debug_file, offset) if shutil.which("atos") else []
+    return addr2line(debug_file, offset)
 
 
 def addr2line(debug_file, offset):
@@ -111,8 +160,8 @@ def main():
     ap.add_argument("report")
     ap.add_argument("--symbols", action="append", default=[], help="symbol archive or build tree (repeatable)")
     args = ap.parse_args()
-    if not shutil.which("addr2line"):
-        sys.exit("symbolicate: addr2line not found (binutils)")
+    if not shutil.which("addr2line") and not shutil.which("atos"):
+        sys.exit("symbolicate: neither addr2line (binutils) nor atos (Xcode tools) found")
 
     with open(args.report, encoding="utf-8", errors="replace") as f:
         lines = f.read().splitlines()
@@ -134,7 +183,7 @@ def main():
         build_id, path = modules.get(base, (None, None))
         debug = index.find(build_id, path)
         where = os.path.basename(path) if path else "?"
-        resolved = addr2line(debug, off - 1 if frame > 0 else off) if debug else []
+        resolved = resolve(debug, off - 1 if frame > 0 else off) if debug else []
         if not resolved:
             print(f"{line}   [{where}{'' if debug else ': no symbols'}]")
         else:

@@ -459,8 +459,27 @@ void on_signal(int sig, siginfo_t* info, void* uctx) {
             break;
         }
     }
+#if defined(__APPLE__)
+    // Darwin's frame-pointer walk skips the faulting frame itself: it goes from _sigtramp straight to
+    // the caller. Report the pc as #0 and continue from the frame after _sigtramp.
+    bool pc_first = false;
+    if (first == 0 && pc != 0 && (n == 0 || reinterpret_cast<uintptr_t>(frames[0]) != pc)) {
+        for (int i = 0; i < n; ++i) {
+            Dl_info di{};
+            if (dladdr(frames[i], &di) && di.dli_sname && std::strcmp(di.dli_sname, "_sigtramp") == 0) {
+                first = i + 1;
+                pc_first = true;
+                break;
+            }
+        }
+    }
+#else
+    constexpr bool pc_first = false;
+#endif
     o.put("backtrace:\n");
-    for (int i = first; i < n; ++i) put_frame(o, static_cast<usize>(i - first), reinterpret_cast<uintptr_t>(frames[i]));
+    usize index = 0;
+    if (pc_first) put_frame(o, index++, pc);
+    for (int i = first; i < n; ++i) put_frame(o, index++, reinterpret_cast<uintptr_t>(frames[i]));
     put_modules(o);
     put_breadcrumbs(o);
     o.put("crash report: ");

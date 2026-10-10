@@ -35,8 +35,10 @@ BIN = PREFIX / "bin"
 LIB = PREFIX / "lib"
 SHARE = PREFIX / "share" / "mce"
 EXE = ".exe" if os.name == "nt" else ""
-MODULE_PREFIX, MODULE_SUFFIX = ("", ".dll") if os.name == "nt" else ("lib", ".dylib" if sys.platform == "darwin" else ".so")
-ENGINE_LIB = f"{MODULE_PREFIX}mce_engine{MODULE_SUFFIX}"
+# Game modules are CMake MODULE libraries (.so on macOS too); the engine is a SHARED one (.dylib there).
+MODULE_PREFIX, MODULE_SUFFIX = ("", ".dll") if os.name == "nt" else ("lib", ".so")
+ENGINE_SUFFIX = ".dylib" if sys.platform == "darwin" else MODULE_SUFFIX
+ENGINE_LIB = f"{MODULE_PREFIX}mce_engine{ENGINE_SUFFIX}"
 
 
 def tool(name):
