@@ -48,6 +48,7 @@ struct SceneChunk {
     f32 unload_distance = 16.0f;  // unload when every focus is farther than this (>= load_distance)
     bool pinned = false;          // stay loaded regardless of distance
     bool disabled = false;        // stay unloaded regardless of distance (wins over pinned)
+    u8 pad_[2] = {};              // explicit, so state_hash never reads indeterminate padding
 };
 MCE_COMPONENT(SceneChunk,
     (scene, Help{"the chunk's scene, authored in world coordinates"}),
@@ -69,6 +70,7 @@ MCE_ENUM(ChunkState, Unloaded, Loading, Loaded, Failed)
 // Written by the pump on every SceneChunk entity; read-only for games.
 struct SceneChunkStatus {
     ChunkState state = ChunkState::Unloaded;
+    u8 pad_[3] = {};       // explicit, so state_hash never reads indeterminate padding
     u32 entity_count = 0;  // entities the chunk spawned (loaded chunks)
 };
 MCE_COMPONENT(SceneChunkStatus, (state, ReadOnly), (entity_count, ReadOnly))

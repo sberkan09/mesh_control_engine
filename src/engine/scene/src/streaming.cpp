@@ -226,7 +226,9 @@ void SceneStreaming::pump(World& world, PumpMode mode) {
         stats_.loading += r.state == ChunkState::Loading ? 1u : 0u;
         stats_.failed += r.state == ChunkState::Failed ? 1u : 0u;
         stats_.streamed_entities += alive;
-        const SceneChunkStatus status{r.state, r.state == ChunkState::Loaded ? alive : 0u};
+        SceneChunkStatus status;
+        status.state = r.state;
+        status.entity_count = r.state == ChunkState::Loaded ? alive : 0u;
         const SceneChunkStatus* cur = world.try_get<SceneChunkStatus>(r.chunk);
         if (!cur || cur->state != status.state || cur->entity_count != status.entity_count) world.set(r.chunk, status);
     }
