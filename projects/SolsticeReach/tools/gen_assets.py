@@ -292,7 +292,7 @@ def terrain_chunks():
     return chunks
 
 
-def rings_disc(radius, rings, y=0.0):
+def rings_disc(radius, rings, y=0.0, uv_scale=0.02):
     pos, nrm, uv, idx = [0, r6(y), 0], [0, 1, 0], [0, 0], []
     seg = 48
     radii = [radius * (k + 1) / rings for k in range(rings)]
@@ -301,7 +301,7 @@ def rings_disc(radius, rings, y=0.0):
             ph = 2 * math.pi * s / seg
             pos += [r6(rad * math.cos(ph)), r6(y), r6(-rad * math.sin(ph))]
             nrm += [0, 1, 0]
-            uv += [r6(rad * math.cos(ph) * 0.02), r6(rad * math.sin(ph) * 0.02)]
+            uv += [r6(rad * math.cos(ph) * uv_scale), r6(rad * math.sin(ph) * uv_scale)]
     for s in range(seg):
         idx += [0, 1 + s, 1 + (s + 1) % seg]
     for r in range(rings - 1):
@@ -416,8 +416,15 @@ def build_models():
         g.doc["meshes"].append({"name": name[:-4], "primitives": prims})
         g.node({"name": name[:-4], "mesh": len(g.doc["meshes"]) - 1}, root=True)
         models[name] = g
-    models["sea.glb"] = single("sea", rings_disc(420.0, 5), lambda g: flat_mat(
-        g, "sea", (0.05, 0.30, 0.34, 0.84), 0.0, 0.06, alpha="BLEND"))
+    # The terrain stops at [-HALF, HALF]^2; without a floor under the rest of the disc the translucent water
+    # shows the seabed inside that square and the clear colour outside it (a hard square edge). The seabed
+    # disc sits just under the terrain's sea floor and carries the terrain's sand.
+    g = Gltf()
+    g.node({"name": "sea", "mesh": mesh_prims(g, "sea", [
+        (rings_disc(420.0, 1, island.SEA_FLOOR - 0.05, uv_scale=0.25), tex_mat(g, "seabed", "sand")),
+        (rings_disc(420.0, 5), flat_mat(g, "sea", (0.05, 0.30, 0.34, 0.84), 0.0, 0.06, alpha="BLEND")),
+    ])}, root=True)
+    models["sea.glb"] = g
 
     # ---- the Vault: floor, entablature ring, dome with an oculus; 16 columns are placed by the scene
     v = Geo()
