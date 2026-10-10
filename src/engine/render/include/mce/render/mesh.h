@@ -9,6 +9,13 @@
 //
 // A store created without a device keeps only the CPU side: culling, sorting and animation are
 // testable headless.
+//
+// Skinning is optional per asset (FR-R3D-060): a mesh cooked from a glTF with skins also keeps
+// its skins (joint nodes, inverse bind matrices, per-joint bind bounds) and uploads one
+// interleaved SkinnedMeshVertex stream instead of the plain one. Joints are nodes, so the clips,
+// pose_nodes and AnimationPlayer below drive skeletons exactly as they drive node hierarchies;
+// skin_palette() turns a node pose into the joint matrices the skinned shaders read. A mesh
+// without skins is untouched by all of this.
 
 #include "mce/asset/formats.h"
 #include "mce/containers/array.h"
@@ -30,7 +37,27 @@ struct GpuSubmesh {
     u32 normal_key = ~0u;   // tangent-space normal map (~0u = none: the vertex normal)
     u32 orm_key = ~0u;      // occlusion (R, when OcclusionInMR) / roughness (G) / metallic (B)
     u32 emissive_key = ~0u; // emissive map, multiplied by the emissive factor
+    u32 skin = ~0u;         // GpuMesh::skins index; ~0u = rigid (placed by `node`)
 };
+
+struct GpuSkin {
+    u32 first_joint = 0;  // into GpuMesh::joints
+    u32 joint_count = 0;
+};
+
+struct GpuJoint {
+    u32 node = 0;
+    math::mat4 inverse_bind;
+    math::aabb3 bounds;       // bind space, of the vertices this joint moves
+    bool influences = false;  // false: the joint moves no vertex (bounds unused)
+};
+
+// The GPU vertex of a skinned mesh: the plain stream plus its influences (24 bytes).
+struct SkinnedMeshVertex {
+    asset::MeshVertex base;
+    asset::MeshSkinVertex skin;
+};
+static_assert(sizeof(SkinnedMeshVertex) == 24);
 
 struct GpuMeshNode {
     i32 parent = -1;
@@ -55,12 +82,20 @@ struct GpuMesh {
     math::aabb3 bounds;  // rest pose, model space
     Array<GpuSubmesh> submeshes;
     Array<GpuMeshNode> nodes;
+    Array<FixedString<64>> node_names;
     Array<math::mat4> rest_pose;  // model-space node matrices
     Array<GpuMeshClip> clips;
     Array<asset::MeshChannel> channels;
     Array<f32> keys;
+    Array<GpuSkin> skins;     // empty = a static / node-animated mesh
+    Array<GpuJoint> joints;
 
+    // True when the vertex buffer holds SkinnedMeshVertex (every submesh then draws through the
+    // skinned pipelines; rigid submeshes of such a mesh just skip the palette).
+    bool skinned() const { return !skins.empty(); }
     u32 find_clip(StringView name) const;
+    // Index of the node named `name`, or nodes.size() when absent (attachment points, joints).
+    u32 find_node(StringView name) const;
     u32 triangle_count() const;
 };
 
@@ -105,6 +140,16 @@ private:
 // channel of the clip drives its node (multi-node tracks); LINEAR, STEP and CUBICSPLINE keys.
 void pose_nodes(const GpuMesh& mesh, u32 clip, f32 time, Span<math::mat4> out);
 
+// Joint matrices of skin `skin` for a node pose (pose_nodes output; empty = rest pose):
+// out[j] = pose[joint j's node] * inverse_bind[j], bind space -> model space. `out` must hold the
+// skin's joint_count matrices. The skinned vertex is sum_j weight_j * out[j] * bind position.
+void skin_palette(const GpuMesh& mesh, u32 skin, Span<const math::mat4> pose, Span<math::mat4> out);
+
+// Model-space bounds of skin `skin` under `palette` (skin_palette output): the union of every
+// influencing joint's bind box moved by its matrix. Conservative: a blended vertex lies in the
+// convex hull of its joints' moved positions.
+math::aabb3 skin_bounds(const GpuMesh& mesh, u32 skin, Span<const math::mat4> palette);
+
 // One clip's contribution to a blended pose.
 struct ClipSample {
     u32 clip = ~0u;   // out of range = the rest pose
@@ -117,14 +162,26 @@ struct ClipSample {
 // TRS with that clip's weight. Weights are normalized; all-zero weights give the rest pose.
 void pose_nodes_blend(const GpuMesh& mesh, Span<const ClipSample> samples, Span<math::mat4> out);
 
+// A marker on a clip's timeline (FR-R3D-060 playback events: footsteps, hit frames). The game
+// owns the list; `id` is whatever it dispatches on (a StringId, an enum).
+struct ClipEvent {
+    u32 clip = ~0u;
+    f32 time = 0.0f;  // seconds into the clip
+    u64 id = 0;
+};
+
 // Plays one clip at a time with timed cross-fades between clips (FR-R3D-060's "cross-fade with no
-// pop" for node tracks). Pure function of the calls made: deterministic.
+// pop", for node hierarchies and skeletons alike). Pure function of the calls made: deterministic.
 class AnimationPlayer {
 public:
     // Starts `clip` from time 0, cross-fading from the current clip over `fade` seconds (0 = cut).
     void play(u32 clip, f32 fade = 0.0f, f32 speed = 1.0f);
     void advance(f32 dt);
     void pose(const GpuMesh& mesh, Span<math::mat4> out) const;
+    // Markers of the current clip the last advance() passed over: time in [before, after) of the
+    // clip's looping timeline, once per pass (a long step over several loops repeats them). Ids go
+    // to `out` in marker order, then by loop; returns how many were written (capped at out.size()).
+    u32 events(const GpuMesh& mesh, Span<const ClipEvent> markers, Span<u64> out) const;
 
     u32 clip() const { return current_.clip; }
     f32 time() const { return current_.time; }
@@ -139,6 +196,7 @@ private:
     };
     Track current_, previous_;
     f32 fade_ = 0.0f, fade_length_ = 0.0f;
+    f32 last_time_ = 0.0f;  // current_.time before the last advance()
 };
 
 }  // namespace mce::render

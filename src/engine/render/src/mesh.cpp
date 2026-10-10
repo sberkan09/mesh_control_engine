@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "mce/log.h"
+#include "mce/render/scene3d.h"
 
 namespace mce::render {
 
@@ -12,6 +13,12 @@ u32 GpuMesh::find_clip(StringView name) const {
     for (u32 i = 0; i < clips.size(); ++i)
         if (clips[i].name.view() == name) return i;
     return static_cast<u32>(clips.size());
+}
+
+u32 GpuMesh::find_node(StringView name) const {
+    for (u32 i = 0; i < node_names.size(); ++i)
+        if (node_names[i].view() == name) return i;
+    return static_cast<u32>(nodes.size());
 }
 
 u32 GpuMesh::triangle_count() const {
@@ -52,7 +59,9 @@ ResultV MeshStore::upload(u32 key, u32 generation, Span<const byte> blob, Textur
     m.bounds = {{h.bounds_min[0], h.bounds_min[1], h.bounds_min[2]}, {h.bounds_max[0], h.bounds_max[1], h.bounds_max[2]}};
     m.index_format = view.index32() ? rhi::IndexFormat::U32 : rhi::IndexFormat::U16;
 
-    for (const asset::MeshNode& n : view.nodes) {
+    for (u32 i = 0; i < view.nodes.size(); ++i) {
+        const asset::MeshNode& n = view.nodes[i];
+        m.node_names.push_back(FixedString<64>(view.node_name(i)));
         GpuMeshNode g;
         g.parent = n.parent;
         g.translation = {n.translation[0], n.translation[1], n.translation[2]};
@@ -85,6 +94,20 @@ ResultV MeshStore::upload(u32 key, u32 generation, Span<const byte> blob, Textur
         g.emissive_key = key_of(asset::MaterialSlot::Emissive);
         m.submeshes.push_back(g);
     }
+    if (view.skinned()) {
+        for (u32 s = 0; s < view.submeshes.size(); ++s)
+            if (view.submesh_skins[s] >= 0) m.submeshes[s].skin = static_cast<u32>(view.submesh_skins[s]);
+        for (const asset::MeshSkin& sk : view.skins) m.skins.push_back(GpuSkin{sk.first_joint, sk.joint_count});
+        for (const asset::MeshJoint& j : view.joints) {
+            GpuJoint g;
+            g.node = j.node;
+            for (int c = 0; c < 4; ++c)
+                for (int r = 0; r < 4; ++r) g.inverse_bind.c[c][r] = j.inverse_bind[c * 4 + r];
+            g.influences = j.bounds_min[0] <= j.bounds_max[0];
+            g.bounds = {{j.bounds_min[0], j.bounds_min[1], j.bounds_min[2]}, {j.bounds_max[0], j.bounds_max[1], j.bounds_max[2]}};
+            m.joints.push_back(g);
+        }
+    }
     for (u32 c = 0; c < view.clips.size(); ++c) {
         GpuMeshClip clip;
         clip.name.assign(view.clip_name(c));
@@ -99,9 +122,18 @@ ResultV MeshStore::upload(u32 key, u32 generation, Span<const byte> blob, Textur
     if (device_ && !view.vertices.empty() && !view.indices.empty()) {
         rhi::BufferDesc vd;
         vd.usage = rhi::BufferUsage::Vertex;
-        vd.size_bytes = view.vertices.size_bytes();
         vd.debug_name = "asset.mesh.vertices";
-        m.vertices = device_->create_buffer(vd, std::as_bytes(view.vertices));
+        if (m.skinned()) {  // one interleaved stream: the RHI binds a single vertex buffer
+            Array<SkinnedMeshVertex> sv;
+            sv.resize(view.vertices.size());
+            for (usize i = 0; i < sv.size(); ++i) sv[i] = SkinnedMeshVertex{view.vertices[i], view.skin_vertices[i]};
+            vd.size_bytes = sv.span().size_bytes();
+            vd.debug_name = "asset.mesh.skinned_vertices";
+            m.vertices = device_->create_buffer(vd, std::as_bytes(sv.span()));
+        } else {
+            vd.size_bytes = view.vertices.size_bytes();
+            m.vertices = device_->create_buffer(vd, std::as_bytes(view.vertices));
+        }
         rhi::BufferDesc id;
         id.usage = rhi::BufferUsage::Index;
         id.size_bytes = view.indices.size();
@@ -282,6 +314,31 @@ void pose_nodes_blend(const GpuMesh& mesh, Span<const ClipSample> samples, Span<
     compose(acc, out);
 }
 
+void skin_palette(const GpuMesh& mesh, u32 skin, Span<const mat4> pose, Span<mat4> out) {
+    MCE_ASSERT_MSG(skin < mesh.skins.size(), "skin_palette: skin out of range");
+    const GpuSkin& s = mesh.skins[skin];
+    MCE_ASSERT_MSG(out.size() >= s.joint_count, "skin_palette: output too small");
+    for (u32 j = 0; j < s.joint_count; ++j) {
+        const GpuJoint& joint = mesh.joints[s.first_joint + j];
+        const mat4& node = joint.node < pose.size() ? pose[joint.node] : mesh.rest_pose[joint.node];
+        out[j] = node * joint.inverse_bind;
+    }
+}
+
+aabb3 skin_bounds(const GpuMesh& mesh, u32 skin, Span<const mat4> palette) {
+    const GpuSkin& s = mesh.skins[skin];
+    aabb3 out{};
+    bool any = false;
+    for (u32 j = 0; j < s.joint_count && j < palette.size(); ++j) {
+        const GpuJoint& joint = mesh.joints[s.first_joint + j];
+        if (!joint.influences) continue;
+        const aabb3 b = transform_aabb(palette[j], joint.bounds);
+        out = any ? merge(out, b) : b;
+        any = true;
+    }
+    return out;
+}
+
 void AnimationPlayer::play(u32 clip, f32 fade, f32 speed) {
     if (fade > 0.0f && current_.clip != ~0u) {
         previous_ = current_;
@@ -292,9 +349,11 @@ void AnimationPlayer::play(u32 clip, f32 fade, f32 speed) {
     }
     fade_ = 0.0f;
     current_ = Track{clip, 0.0f, speed};
+    last_time_ = 0.0f;
 }
 
 void AnimationPlayer::advance(f32 dt) {
+    last_time_ = current_.time;
     current_.time += dt * current_.speed;
     if (previous_.clip != ~0u) {
         previous_.time += dt * previous_.speed;
@@ -304,6 +363,25 @@ void AnimationPlayer::advance(f32 dt) {
             fade_length_ = 0.0f;
         }
     }
+}
+
+u32 AnimationPlayer::events(const GpuMesh& mesh, Span<const ClipEvent> markers, Span<u64> out) const {
+    if (current_.clip >= mesh.clips.size()) return 0;
+    const f32 duration = mesh.clips[current_.clip].duration;
+    const f32 lo = math::min(last_time_, current_.time), hi = math::max(last_time_, current_.time);
+    u32 n = 0;
+    for (const ClipEvent& e : markers) {
+        if (e.clip != current_.clip) continue;
+        if (!(duration > 0.0f)) {  // a single-key clip: its markers fire once, when time starts
+            if (lo <= 0.0f && hi > 0.0f && e.time <= 0.0f && n < out.size()) out[n++] = e.id;
+            continue;
+        }
+        // Passes of e.time + k * duration through [lo, hi): ceil((hi - t) / d) - ceil((lo - t) / d).
+        const f32 t = math::clamp(e.time, 0.0f, duration);
+        const auto passes = static_cast<i64>(std::ceil(f64(hi - t) / duration) - std::ceil(f64(lo - t) / duration));
+        for (i64 k = 0; k < passes && n < out.size(); ++k) out[n++] = e.id;
+    }
+    return n;
 }
 
 void AnimationPlayer::pose(const GpuMesh& mesh, Span<mat4> out) const {

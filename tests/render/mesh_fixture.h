@@ -1,8 +1,9 @@
 #pragma once
 // Builds CHNK_MESH payloads in tests (no cook): boxes as submeshes, quantized exactly the way the
-// glTF importer quantizes, plus an optional one-node rotation clip.
+// glTF importer quantizes, plus an optional one-node rotation clip and optional skins.
 
 #include <cmath>
+#include <initializer_list>
 
 #include "mce/asset/formats.h"
 #include "mce/math/math.h"
@@ -28,6 +29,61 @@ struct Builder {
     Array<asset::MeshChannel> channels;
     Array<f32> keys;
     Array<char> strings;
+    Array<asset::MeshSkin> skins;
+    Array<asset::MeshJoint> joints;
+    Array<asset::MeshSkinVertex> skin_vertices;  // sized by build()
+    Array<i32> submesh_skins;                    // sized by build(); -1 = rigid
+
+    // Rest-pose model translation of `node` (fixture nodes only translate).
+    math::vec3 rest_position(u32 node) const {
+        math::vec3 p{};
+        for (i32 n = static_cast<i32>(node); n >= 0; n = nodes[static_cast<usize>(n)].parent)
+            p += math::vec3{nodes[static_cast<usize>(n)].translation[0], nodes[static_cast<usize>(n)].translation[1],
+                            nodes[static_cast<usize>(n)].translation[2]};
+        return p;
+    }
+
+    // Skins submesh `s` over `joint_nodes` (inverse bind = the inverse of each joint's rest
+    // matrix); every vertex goes wholly to joint `joint_of(bind position)`.
+    template <class F>
+    void skin_submesh(u32 s, std::initializer_list<u32> joint_nodes, F joint_of) {
+        skin_vertices.resize(vertices.size(), asset::MeshSkinVertex{});
+        submesh_skins.resize(submeshes.size(), -1);
+        asset::MeshSkin skin{};
+        skin.first_joint = static_cast<u32>(joints.size());
+        skin.joint_count = static_cast<u32>(joint_nodes.size());
+        for (u32 node : joint_nodes) {
+            asset::MeshJoint j{};
+            j.node = node;
+            const math::vec3 t = rest_position(node);
+            for (int k = 0; k < 16; ++k) j.inverse_bind[k] = k % 5 == 0 ? 1.0f : 0.0f;
+            j.inverse_bind[12] = -t.x;
+            j.inverse_bind[13] = -t.y;
+            j.inverse_bind[14] = -t.z;
+            j.bounds_min[0] = 1.0f;  // empty until a vertex lands on it
+            j.bounds_max[0] = -1.0f;
+            joints.push_back(j);
+        }
+        const asset::MeshSubmesh& sm = submeshes[s];
+        for (u32 v = 0; v < sm.vertex_count; ++v) {
+            const asset::MeshVertex& q = vertices[sm.base_vertex + v];
+            const f32 p[3] = {sm.center[0] + q.position[0] / 32767.0f * sm.extent[0], sm.center[1] + q.position[1] / 32767.0f * sm.extent[1],
+                              sm.center[2] + q.position[2] / 32767.0f * sm.extent[2]};
+            const u32 j = joint_of(math::vec3{p[0], p[1], p[2]});
+            asset::MeshSkinVertex& sv = skin_vertices[sm.base_vertex + v];
+            sv = {};
+            sv.joints[0] = static_cast<u8>(j);
+            sv.weights[0] = 255;
+            asset::MeshJoint& mj = joints[skin.first_joint + j];
+            const bool first = mj.bounds_min[0] > mj.bounds_max[0];
+            for (int c = 0; c < 3; ++c) {
+                mj.bounds_min[c] = first ? p[c] : math::min(mj.bounds_min[c], p[c]);
+                mj.bounds_max[c] = first ? p[c] : math::max(mj.bounds_max[c], p[c]);
+            }
+        }
+        submesh_skins[s] = static_cast<i32>(skins.size());
+        skins.push_back(skin);
+    }
 
     u32 add_node(i32 parent, math::vec3 t = {}) {
         asset::MeshNode n{};
@@ -131,6 +187,16 @@ struct Builder {
         d.channels = channels.span();
         d.keys = keys.span();
         d.strings = strings.span();
+        Array<asset::MeshSkinVertex> sv = skin_vertices;
+        Array<i32> ss = submesh_skins;
+        if (!skins.empty()) {
+            sv.resize(vertices.size(), asset::MeshSkinVertex{});
+            ss.resize(submeshes.size(), -1);
+            d.skins = skins.span();
+            d.joints = joints.span();
+            d.skin_vertices = sv.span();
+            d.submesh_skins = ss.span();
+        }
         bool any = false;
         for (const asset::MeshSubmesh& s : submeshes)
             for (int k = 0; k < 3; ++k) {

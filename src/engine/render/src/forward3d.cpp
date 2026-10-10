@@ -47,11 +47,17 @@ struct ObjectU {
     vec4 emissive;  // w: emissive map
     vec4 params;    // x: alpha cutoff (0 = no mask), y: unlit, z: roughness, w: metallic
     vec4 maps;      // x: normal map, y: ORM map, z: occlusion in ORM.r, w: occlusion-only
+    mat4 dequant;   // skinned draws: quantized -> bind space
+    vec4 skin;      // x: first palette joint, -1 = rigid
 };
 
-struct ShadowU {
+struct ShadowU {  // the rigid shadow shader reads only `mvp`
     mat4 mvp;
+    mat4 dequant;
+    vec4 skin;
 };
+
+f32 palette_index(u32 palette) { return palette == ~0u ? -1.0f : f32(palette); }
 
 struct PostU {
     vec4 texel;
@@ -117,6 +123,14 @@ ResultV Forward3D::create_pipelines() {
         {2, rhi::VertexFormat::UNorm16x2, offsetof(asset::MeshVertex, uv)},
     };
     const rhi::VertexLayout layout{kAttrs, sizeof(asset::MeshVertex)};
+    static constexpr rhi::VertexAttribute kSkinnedAttrs[] = {
+        {0, rhi::VertexFormat::SNorm16x4, offsetof(SkinnedMeshVertex, base) + offsetof(asset::MeshVertex, position)},
+        {1, rhi::VertexFormat::SNorm16x2, offsetof(SkinnedMeshVertex, base) + offsetof(asset::MeshVertex, normal)},
+        {2, rhi::VertexFormat::UNorm16x2, offsetof(SkinnedMeshVertex, base) + offsetof(asset::MeshVertex, uv)},
+        {3, rhi::VertexFormat::UNorm8x4, offsetof(SkinnedMeshVertex, skin) + offsetof(asset::MeshSkinVertex, joints)},
+        {4, rhi::VertexFormat::UNorm8x4, offsetof(SkinnedMeshVertex, skin) + offsetof(asset::MeshSkinVertex, weights)},
+    };
+    const rhi::VertexLayout skinned_layout{kSkinnedAttrs, sizeof(SkinnedMeshVertex)};
 
     rhi::GraphicsPipelineDesc pd;
     pd.vertex_shader = {kMeshVS, "pbr.vert"};
@@ -134,6 +148,23 @@ ResultV Forward3D::create_pipelines() {
     pd.debug_name = "pbr.blend";
     MCE_TRY_ASSIGN(mesh_blend_, device_->create_pipeline(pd));
 
+    // Skinned twins (FR-R3D-060): the same states over the SkinnedMeshVertex stream.
+    rhi::GraphicsPipelineDesc kd;
+    kd.vertex_shader = {kSkinnedMeshVS, "pbr_skinned.vert"};
+    kd.fragment_shader = {kMeshFS, "pbr.frag"};
+    kd.vertex = skinned_layout;
+    kd.state.depth = {true, true, rhi::CompareOp::LessEqual};
+    kd.state.raster.cull = rhi::CullMode::Back;
+    kd.debug_name = "pbr.skinned.opaque";
+    MCE_TRY_ASSIGN(skinned_cull_, device_->create_pipeline(kd));
+    kd.state.raster.cull = rhi::CullMode::None;
+    kd.debug_name = "pbr.skinned.two_sided";
+    MCE_TRY_ASSIGN(skinned_two_sided_, device_->create_pipeline(kd));
+    kd.state.depth.write = false;
+    kd.state.blend.mode = rhi::BlendMode::Alpha;
+    kd.debug_name = "pbr.skinned.blend";
+    MCE_TRY_ASSIGN(skinned_blend_, device_->create_pipeline(kd));
+
     rhi::GraphicsPipelineDesc sp;
     sp.vertex_shader = {kShadowVS, "shadow.vert"};
     sp.fragment_shader = {kShadowFS, "shadow.frag"};
@@ -142,6 +173,10 @@ ResultV Forward3D::create_pipelines() {
     sp.state.raster.cull = rhi::CullMode::None;  // kit meshes are often single-sided shells
     sp.debug_name = "mesh.shadow";
     MCE_TRY_ASSIGN(shadow_pipe_, device_->create_pipeline(sp));
+    sp.vertex_shader = {kSkinnedShadowVS, "shadow_skinned.vert"};
+    sp.vertex = skinned_layout;
+    sp.debug_name = "mesh.shadow.skinned";
+    MCE_TRY_ASSIGN(skinned_shadow_pipe_, device_->create_pipeline(sp));
 
     rhi::GraphicsPipelineDesc sky;
     sky.vertex_shader = {kSkyVS, "sky.vert"};
@@ -229,7 +264,8 @@ void Forward3D::shutdown() {
     if (!device_) return;
     destroy_targets();
     for (rhi::PipelineHandle* p :
-         {&shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_}) {
+         {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &skinned_cull_,
+          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
@@ -269,6 +305,10 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     const rhi::Extent2D size = scene.view().viewport;
     if (size.width == 0 || size.height == 0) return;
     ensure_targets(size);
+    // The joint palette stays bound for the shadow and main passes (one copy per frame).
+    const Span<const mat4> palette = scene.joint_palette();
+    if (!palette.empty()) cmd.set_storage_data(rhi::bank::kJointPalette, std::as_bytes(palette));
+    stats_.joints = static_cast<u32>(palette.size());
     timestamp(cmd, kTsBegin);
     record_shadows(cmd, scene);
     timestamp(cmd, kTsShadow);
@@ -296,18 +336,23 @@ void Forward3D::record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         sp.depth = depth;
         sp.debug_name = "shadow.cascade";
         cmd.begin_pass(sp);
-        cmd.bind_pipeline(shadow_pipe_);
+        rhi::PipelineHandle bound_pipe;
         const GpuMesh* bound = nullptr;
         for (u32 k = 0; k < c.caster_count; ++k) {
             const Scene3D::Draw& d = casters[lists[c.first_caster + k]];
             if (d.mesh->vertices.is_null()) continue;
+            const rhi::PipelineHandle pipe = d.mesh->skinned() ? skinned_shadow_pipe_ : shadow_pipe_;
+            if (!(pipe == bound_pipe)) {
+                cmd.bind_pipeline(pipe);
+                bound_pipe = pipe;
+            }
             if (d.mesh != bound) {
                 cmd.bind_vertex_buffer(d.mesh->vertices);
                 cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
                 bound = d.mesh;
             }
             const GpuSubmesh& sm = d.mesh->submeshes[d.submesh];
-            const ShadowU su{c.view_proj * d.model};
+            const ShadowU su{c.view_proj * d.model, d.dequant, {palette_index(d.palette), 0.0f, 0.0f, 0.0f}};
             cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(su));
             cmd.draw(sm.index_count, 1, sm.first_index, 0, static_cast<i32>(sm.base_vertex));
             ++stats_.shadow_draws;
@@ -419,9 +464,10 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             if (d.mesh->vertices.is_null()) continue;
             const GpuSubmesh& sm = d.mesh->submeshes[d.submesh];
             const asset::MaterialChunk& mat = sm.material;
-            const rhi::PipelineHandle pipe = i >= scene.opaque_count()                         ? mesh_blend_
-                                             : (mat.flags & asset::MaterialFlags::DoubleSided) ? mesh_two_sided_
-                                                                                               : mesh_cull_;
+            const bool skinned = d.mesh->skinned();
+            const rhi::PipelineHandle pipe = i >= scene.opaque_count()                         ? (skinned ? skinned_blend_ : mesh_blend_)
+                                             : (mat.flags & asset::MaterialFlags::DoubleSided) ? (skinned ? skinned_two_sided_ : mesh_two_sided_)
+                                                                                               : (skinned ? skinned_cull_ : mesh_cull_);
             if (!(pipe == bound_pipe)) {
                 cmd.bind_pipeline(pipe);
                 bound_pipe = pipe;
@@ -449,6 +495,8 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             ou.maps = {sm.normal_key != ~0u ? 1.0f : 0.0f, sm.orm_key != ~0u ? 1.0f : 0.0f,
                        (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
                        (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
+            ou.dequant = d.dequant;
+            ou.skin = {palette_index(d.palette), 0.0f, 0.0f, 0.0f};
             cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
             cmd.draw(sm.index_count, 1, sm.first_index, 0, static_cast<i32>(sm.base_vertex));
             ++stats_.main_draws;

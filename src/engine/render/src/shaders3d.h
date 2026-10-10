@@ -1,7 +1,8 @@
 #pragma once
 // GLSL 450 of the 3D frame (Forward3D, ADR-0024). Uniform blocks follow the fixed bank table
 // (rhi-renderer.md §3.3): FrameU 0, PassU 1, ObjectU 3; std430 Clusters 4, LightPool 5,
-// LightIndices 6; samplers albedo 6, normal 7, ORM 8, shadow cascades 9, sky 10, emissive 13.
+// LightIndices 6, JointPalette 7 (skinned vertex shaders); samplers albedo 6, normal 7, ORM 8,
+// shadow cascades 9, sky 10, emissive 13.
 // The C++ mirrors of the blocks live in forward3d.cpp and must match member for member.
 
 namespace mce::render::shaders3d {
@@ -61,6 +62,8 @@ layout(std140, binding = 3) uniform ObjectU {
     vec4 o_emissive;   // rgb factor, w: emissive map
     vec4 o_params;     // x: alpha cutoff (0 = no mask), y: unlit, z: roughness, w: metallic
     vec4 o_maps;       // x: normal map, y: ORM map, z: occlusion in ORM.r, w: occlusion-only map
+    mat4 o_dequant;    // skinned draws: quantized -> bind space (o_model is then the instance's world)
+    vec4 o_skin;       // x: first joint in the palette, -1 = rigid
 };
 )"
 // clang-format on
@@ -84,6 +87,46 @@ void main() {
     vec4 w = o_model * vec4(a_pos.xyz, 1.0);
     v_world = w.xyz;
     v_normal = mat3(o_normal) * oct_decode(a_oct);
+    v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
+    gl_Position = u_view_proj * w;
+}
+)";
+
+// Skinning (FR-R3D-060, optional): the joint palette (model-space joint matrices, Scene3D) and
+// the skin matrix of a vertex's 4 influences. Joint indices arrive as unorm8 (x255 to index).
+#define MCE_GLSL_SKIN R"(
+layout(location = 3) in vec4 a_joints;
+layout(location = 4) in vec4 a_weights;
+layout(std430, binding = 7) readonly buffer JointPalette { mat4 j_palette[]; };
+mat4 skin_matrix(float first) {
+    if (first < 0.0 || dot(a_weights, vec4(1.0)) <= 0.0) return mat4(1.0);
+    int base = int(first);
+    ivec4 j = ivec4(a_joints * 255.0 + 0.5);
+    return j_palette[base + j.x] * a_weights.x + j_palette[base + j.y] * a_weights.y +
+           j_palette[base + j.z] * a_weights.z + j_palette[base + j.w] * a_weights.w;
+}
+)"
+
+// The skinned twin of kMeshVS (SkinnedMeshVertex streams): bind-space vertex -> skin -> world.
+// Rigid submeshes of a skinned mesh (o_skin.x < 0) take the identity skin and the rigid model.
+constexpr const char* kSkinnedMeshVS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_OBJECT_U MCE_GLSL_SKIN R"(
+layout(location = 0) in vec4 a_pos;
+layout(location = 1) in vec2 a_oct;
+layout(location = 2) in vec2 a_uv;
+layout(location = 0) out vec3 v_world;
+layout(location = 1) out vec3 v_normal;
+layout(location = 2) out vec2 v_uv;
+out gl_PerVertex { vec4 gl_Position; };
+vec3 oct_decode(vec2 e) {
+    vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
+    if (n.z < 0.0) n.xy = (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    return normalize(n);
+}
+void main() {
+    mat4 s = skin_matrix(o_skin.x);
+    vec4 w = o_model * (s * (o_dequant * vec4(a_pos.xyz, 1.0)));
+    v_world = w.xyz;
+    v_normal = mat3(o_normal) * (mat3(s) * oct_decode(a_oct));
     v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
     gl_Position = u_view_proj * w;
 }
@@ -265,6 +308,14 @@ layout(std140, binding = 3) uniform ShadowU { mat4 s_mvp; };
 layout(location = 0) in vec4 a_pos;
 out gl_PerVertex { vec4 gl_Position; };
 void main() { gl_Position = s_mvp * vec4(a_pos.xyz, 1.0); }
+)";
+
+constexpr const char* kSkinnedShadowVS = "#version 450 core\n" R"(
+layout(std140, binding = 3) uniform ShadowU { mat4 s_mvp; mat4 s_dequant; vec4 s_skin; };
+layout(location = 0) in vec4 a_pos;
+)" MCE_GLSL_SKIN R"(
+out gl_PerVertex { vec4 gl_Position; };
+void main() { gl_Position = s_mvp * (skin_matrix(s_skin.x) * (s_dequant * vec4(a_pos.xyz, 1.0))); }
 )";
 
 constexpr const char* kShadowFS = R"(#version 450 core
@@ -467,5 +518,6 @@ void main() {
 #undef MCE_GLSL_PASS_U
 #undef MCE_GLSL_OBJECT_U
 #undef MCE_GLSL_POST_U
+#undef MCE_GLSL_SKIN
 
 }  // namespace mce::render::shaders3d

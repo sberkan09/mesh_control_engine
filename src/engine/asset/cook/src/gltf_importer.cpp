@@ -1,10 +1,12 @@
 // glTF 2.0 (.glb / .gltf) -> CHNK_MESH: static meshes, the node tree, inline metallic-roughness
-// materials and node-transform animation clips (assets.md §5.2, FR-R3D-010).
+// materials, node-transform animation clips (assets.md §5.2, FR-R3D-010) and, optionally, skins
+// (FR-R3D-060, v0.5).
 //
 // Scope is locked (assets.md §10 risk 2): triangle-list primitives with POSITION, optional NORMAL
 // (generated when absent) and TEXCOORD_0; materials' factors + base color texture; node TRS (or
-// a decomposable matrix); translation/rotation/scale animation channels. Skins, morph targets,
-// cameras and lights are ignored with a warning. Required extensions other than the supported
+// a decomposable matrix); translation/rotation/scale animation channels; skins with JOINTS_0 /
+// WEIGHTS_0 (4 influences, up to 256 joints per skin) and inverse bind matrices. Morph targets,
+// JOINTS_1+, cameras and lights are ignored with a warning. Required extensions other than the supported
 // set are a cook error naming the extension; merely-used ones are a warning.
 //
 // Buffers must be inside the file: the GLB binary chunk or base64 `data:` URIs (the cook is pure
@@ -19,6 +21,9 @@
 // sidecar settings: { "scale": 1.0 }          uniform scale applied to every root node
 //                   { "max_triangles": N }   the mesh's triangle budget (M7 per-mesh budget table):
 //                                            more triangles is a cook error naming both counts
+//                   { "skinning": true }     false: import skinned meshes as static ones (skins
+//                                            dropped, primitives placed by their node: the
+//                                            node-transform / static character path)
 
 #include <cmath>
 #include <cstring>
@@ -281,9 +286,10 @@ bool load_buffers(Ctx& cx, Gltf& g) {
     return true;
 }
 
-// Reads accessor `index` as `comps` floats per element (normalized integer types are converted).
+// Reads accessor `index` as `comps` floats per element (normalized integer types are converted;
+// `allow_uint` also accepts plain UNSIGNED_BYTE/SHORT vectors, read as their integer values).
 bool read_accessor(Ctx& cx, const Gltf& g, JsonValue index_v, u32 comps, bool allow_int_normalized, Array<f32>& out,
-                   StringView ptr_for_errors) {
+                   StringView ptr_for_errors, bool allow_uint = false) {
     out.clear();
     if (!nonneg(index_v)) {
         cx.error(index_v, ptr_for_errors, "accessor index must be an integer");
@@ -305,7 +311,7 @@ bool read_accessor(Ctx& cx, const Gltf& g, JsonValue index_v, u32 comps, bool al
     static constexpr struct {
         StringView name;
         u32 n;
-    } kTypes[] = {{"SCALAR", 1}, {"VEC2", 2}, {"VEC3", 3}, {"VEC4", 4}};
+    } kTypes[] = {{"SCALAR", 1}, {"VEC2", 2}, {"VEC3", 3}, {"VEC4", 4}, {"MAT4", 16}};
     const StringView type = a.get("type").is_string() ? a.get("type").as_string() : StringView();
     u32 n = 0;
     for (const auto& t : kTypes)
@@ -329,7 +335,8 @@ bool read_accessor(Ctx& cx, const Gltf& g, JsonValue index_v, u32 comps, bool al
     }
     const bool is_float = ctype == 5126;
     const bool is_index = comps == 1 && !normalized && (ctype == 5121 || ctype == 5123 || ctype == 5125);
-    if (!is_float && !is_index && !(allow_int_normalized && normalized && ctype != 5125)) {
+    const bool is_uint = allow_uint && !normalized && (ctype == 5121 || ctype == 5123);
+    if (!is_float && !is_index && !is_uint && !(allow_int_normalized && normalized && ctype != 5125)) {
         cx.error(a, ptr, "component type not supported for this attribute");
         return false;
     }
@@ -624,6 +631,8 @@ struct FatVertex {
     f32 p[3];
     f32 n[3];
     f32 uv[2];
+    f32 joints[4];   // skinned primitives only (zero otherwise): skin-local joint indices
+    f32 weights[4];  // normalized to sum 1
 };
 
 i16 snorm16(f32 v) {
@@ -646,13 +655,59 @@ void oct_encode(const f32 n[3], f32 out[2]) {
     out[1] = y;
 }
 
-struct Geometry {
-    Array<asset::MeshVertex> vertices;
-    Array<u32> indices;  // relative to the submesh's base_vertex
-    Array<asset::MeshSubmesh> submeshes;
+// Bind-space bounds of the vertices one joint influences.
+struct JointBox {
+    f32 min[3] = {0, 0, 0};
+    f32 max[3] = {0, 0, 0};
+    bool any = false;
+
+    void add(const f32 p[3]) {
+        for (int c = 0; c < 3; ++c) {
+            min[c] = any ? math::min(min[c], p[c]) : p[c];
+            max[c] = any ? math::max(max[c], p[c]) : p[c];
+        }
+        any = true;
+    }
 };
 
-bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u32 node, Geometry& geo) {
+struct Geometry {
+    Array<asset::MeshVertex> vertices;
+    Array<asset::MeshSkinVertex> skin_vertices;  // parallel to `vertices` (zero for rigid ones)
+    Array<u32> indices;  // relative to the submesh's base_vertex
+    Array<asset::MeshSubmesh> submeshes;
+    Array<i32> submesh_gltf_skin;           // per submesh: the glTF skin index, -1 = rigid
+    Array<Array<JointBox>> joint_boxes;     // per glTF skin, per joint
+};
+
+// Rounds normalized weights to unorm8 summing to exactly 255 (largest remainder; ties by slot).
+void quantize_weights(const f32 w[4], u8 out[4]) {
+    u32 total = 0;
+    f32 rem[4];
+    for (int c = 0; c < 4; ++c) {
+        const f32 x = math::clamp(w[c], 0.0f, 1.0f) * 255.0f;
+        out[c] = static_cast<u8>(std::floor(x));
+        rem[c] = x - std::floor(x);
+        total += out[c];
+    }
+    while (total < 255) {
+        int best = 0;
+        for (int c = 1; c < 4; ++c)
+            if (rem[c] > rem[best]) best = c;
+        if (rem[best] <= 0.0f) {  // all remainders spent: the heaviest influence takes the rest
+            for (int c = 1; c < 4; ++c)
+                if (out[c] > out[best]) best = c;
+            out[best] = static_cast<u8>(out[best] + (255 - total));
+            return;
+        }
+        ++out[best];
+        rem[best] = 0.0f;
+        ++total;
+    }
+}
+
+// `skin` is the glTF skin of the primitive's node (-1 = rigid) with `skin_joints` joints.
+bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u32 node, i32 skin, u32 skin_joints,
+                      Geometry& geo) {
     if (const JsonValue mode = prim.get("mode"); mode.valid() && !(nonneg(mode) && mode.as_number() == 4)) {
         cx.error(mode, ptr, "only triangle lists (mode 4) are supported");
         return false;
@@ -663,14 +718,24 @@ bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u3
         return false;
     }
     if (prim.get("targets").valid()) cx.warning(prim, "morph targets are ignored (static import)");
-    if (attrs.get("JOINTS_0").valid()) cx.warning(prim, "skinning attributes are ignored (static import, skinning is v0.5)");
+    if (skin >= 0 && !(attrs.get("JOINTS_0").valid() && attrs.get("WEIGHTS_0").valid())) {
+        cx.warning(prim, "primitive of a skinned node has no JOINTS_0/WEIGHTS_0: imported rigid");
+        skin = -1;
+    }
+    if (skin >= 0 && (attrs.get("JOINTS_1").valid() || attrs.get("WEIGHTS_1").valid()))
+        cx.warning(prim, "JOINTS_1/WEIGHTS_1 are ignored: 4 influences per vertex are imported");
 
-    Array<f32> pos, nrm, uv;
+    Array<f32> pos, nrm, uv, joints, weights;
     if (!read_accessor(cx, g, attrs.get("POSITION"), 3, false, pos, ptr)) return false;
     const usize vcount = pos.size() / 3;
     if (attrs.get("NORMAL").valid() && !read_accessor(cx, g, attrs.get("NORMAL"), 3, false, nrm, ptr)) return false;
     if (attrs.get("TEXCOORD_0").valid() && !read_accessor(cx, g, attrs.get("TEXCOORD_0"), 2, true, uv, ptr)) return false;
-    if ((!nrm.empty() && nrm.size() != vcount * 3) || (!uv.empty() && uv.size() != vcount * 2)) {
+    if (skin >= 0) {
+        if (!read_accessor(cx, g, attrs.get("JOINTS_0"), 4, false, joints, ptr, true)) return false;
+        if (!read_accessor(cx, g, attrs.get("WEIGHTS_0"), 4, true, weights, ptr)) return false;
+    }
+    if ((!nrm.empty() && nrm.size() != vcount * 3) || (!uv.empty() && uv.size() != vcount * 2) ||
+        (skin >= 0 && (joints.size() != vcount * 4 || weights.size() != vcount * 4))) {
         cx.error(attrs, ptr, "attribute counts differ");
         return false;
     }
@@ -710,6 +775,21 @@ bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u3
         }
         f.uv[0] = u;
         f.uv[1] = w;
+        if (skin >= 0) {
+            f32 sum = 0.0f;
+            for (int c = 0; c < 4; ++c) {
+                const f32 wt = math::max(weights[v * 4 + c], 0.0f);
+                const f32 j = joints[v * 4 + c];
+                if (wt > 0.0f && j >= f32(skin_joints)) {
+                    cx.error(attrs.get("JOINTS_0"), ptr, "JOINTS_0 names a joint outside the node's skin");
+                    return false;
+                }
+                f.joints[c] = wt > 0.0f ? j : 0.0f;
+                f.weights[c] = wt;
+                sum += wt;
+            }
+            for (f32& wt : f.weights) wt = sum > 0.0f ? wt / sum : 0.0f;
+        }
     }
     if (nrm.empty()) {  // area-weighted smooth normals over the indexed triangles
         for (usize t = 0; t + 2 < idx.size(); t += 3) {
@@ -785,8 +865,24 @@ bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u3
         for (int c = 0; c < 2; ++c) q.uv[c] = unorm16((opt[v].uv[c] - sm.uv_offset[c]) / sm.uv_scale[c]);
         geo.vertices.push_back(q);
     }
+    if (skin >= 0 && geo.joint_boxes.size() <= static_cast<usize>(skin)) geo.joint_boxes.resize(static_cast<usize>(skin) + 1);
+    for (usize v = 0; v < used; ++v) {
+        asset::MeshSkinVertex sv{};
+        if (skin >= 0) {
+            quantize_weights(opt[v].weights, sv.weights);
+            Array<JointBox>& boxes = geo.joint_boxes[static_cast<usize>(skin)];
+            if (boxes.size() < skin_joints) boxes.resize(skin_joints);
+            for (int c = 0; c < 4; ++c) {
+                if (sv.weights[c] == 0) continue;
+                sv.joints[c] = static_cast<u8>(opt[v].joints[c]);
+                boxes[sv.joints[c]].add(opt[v].p);
+            }
+        }
+        geo.skin_vertices.push_back(sv);
+    }
     for (u32 i : idx) geo.indices.push_back(i);
     geo.submeshes.push_back(sm);
+    geo.submesh_gltf_skin.push_back(skin);
     return true;
 }
 
@@ -843,8 +939,9 @@ struct Output {
     Array<char> strings;
 };
 
-// Node tree in depth-first order (parents first) from the default scene's roots.
-bool import_nodes(Ctx& cx, const Gltf& g, f32 import_scale, Output& out, Array<i32>& remap) {
+// Node tree in depth-first order (parents first) from the default scene's roots. With `skinning`
+// off, skinned nodes import their primitives rigidly (the static character path).
+bool import_nodes(Ctx& cx, const Gltf& g, f32 import_scale, bool skinning, Output& out, Array<i32>& remap) {
     const JsonValue nodes = g.root.get("nodes");
     const u32 count = nodes.is_array() ? nodes.size() : 0;
     remap.clear();
@@ -909,7 +1006,26 @@ bool import_nodes(Ctx& cx, const Gltf& g, f32 import_scale, Output& out, Array<i
                 mn.translation[i] *= import_scale;
                 mn.scale[i] *= import_scale;
             }
-        if (n.get("skin").valid()) cx.warning(n, "skins are ignored (static import, skinning is v0.5)");
+        i32 skin = -1;
+        u32 skin_joints = 0;
+        if (const JsonValue skin_v = n.get("skin"); skin_v.valid() && skinning && n.get("mesh").valid()) {
+            const JsonValue skins = g.root.get("skins");
+            if (!nonneg(skin_v) || !skins.is_array() || skin_v.as_number() >= skins.size()) {
+                cx.error(skin_v, ptr, "skin index out of range");
+                return false;
+            }
+            skin = static_cast<i32>(skin_v.as_number());
+            const JsonValue js = skins.at(static_cast<u32>(skin)).get("joints");
+            skin_joints = js.is_array() ? js.size() : 0;
+            if (skin_joints == 0 || skin_joints > asset::kMaxSkinJoints) {
+                String m;
+                appendf(m, "a skin needs 1..%u joints, this one has %u", asset::kMaxSkinJoints, skin_joints);
+                String sptr;
+                append_pointer(sptr, "skins", static_cast<u32>(skin));
+                cx.error(skins.at(static_cast<u32>(skin)), sptr, m);
+                return false;
+            }
+        }
         const StringView name = n.get("name").is_string() ? n.get("name").as_string() : StringView();
         mn.name_offset = add_string(out.strings, name, mn.name_size);
         const auto self = static_cast<i32>(out.nodes.size());
@@ -927,7 +1043,7 @@ bool import_nodes(Ctx& cx, const Gltf& g, f32 import_scale, Output& out, Array<i
             for (u32 p = 0; prims.is_array() && p < prims.size(); ++p) {
                 String pptr;
                 appendf(pptr, "/meshes/%u/primitives/%u", mi, p);
-                if (!import_primitive(cx, g, prims.at(p), pptr, static_cast<u32>(self), out.geo)) return false;
+                if (!import_primitive(cx, g, prims.at(p), pptr, static_cast<u32>(self), skin, skin_joints, out.geo)) return false;
             }
         }
         if (const JsonValue ch = n.get("children"); ch.is_array())
@@ -1032,10 +1148,77 @@ mat4 node_local(const asset::MeshNode& n) {
                normalize(quat{n.rotation[0], n.rotation[1], n.rotation[2], n.rotation[3]}), {n.scale[0], n.scale[1], n.scale[2]});
 }
 
+struct SkinOutput {
+    Array<asset::MeshSkin> skins;
+    Array<asset::MeshJoint> joints;
+    Array<i32> submesh_skins;
+};
+
+// The glTF skins the submeshes use, in order of first use: joints remapped to imported nodes,
+// inverse bind matrices (identity when absent) and the per-joint bind bounds.
+bool import_skins(Ctx& cx, const Gltf& g, const Array<i32>& remap, const Geometry& geo, SkinOutput& out) {
+    const JsonValue skins = g.root.get("skins");
+    Array<i32> mapped;  // glTF skin -> our skin
+    mapped.resize(skins.is_array() ? skins.size() : 0, -1);
+    for (usize s = 0; s < geo.submeshes.size(); ++s) {
+        const i32 gs = geo.submesh_gltf_skin[s];
+        if (gs < 0) {
+            out.submesh_skins.push_back(-1);
+            continue;
+        }
+        if (mapped[static_cast<usize>(gs)] < 0) {
+            const JsonValue sk = skins.at(static_cast<u32>(gs));
+            String ptr;
+            append_pointer(ptr, "skins", static_cast<u32>(gs));
+            const JsonValue js = sk.get("joints");
+            asset::MeshSkin skin{};
+            skin.first_joint = static_cast<u32>(out.joints.size());
+            skin.joint_count = js.size();
+            Array<f32> ibm;
+            if (sk.get("inverseBindMatrices").valid()) {
+                if (!read_accessor(cx, g, sk.get("inverseBindMatrices"), 16, false, ibm, ptr)) return false;
+                if (ibm.size() != usize(skin.joint_count) * 16) {
+                    cx.error(sk, ptr, "inverseBindMatrices count differs from the joint count");
+                    return false;
+                }
+            }
+            const Array<JointBox>* boxes =
+                static_cast<usize>(gs) < geo.joint_boxes.size() ? &geo.joint_boxes[static_cast<usize>(gs)] : nullptr;
+            for (u32 j = 0; j < skin.joint_count; ++j) {
+                const JsonValue jv = js.at(j);
+                if (!nonneg(jv) || jv.as_number() >= static_cast<f64>(remap.size()) || remap[static_cast<usize>(jv.as_number())] < 0) {
+                    cx.error(jv, ptr, "skin joint is not a node of the imported scene");
+                    return false;
+                }
+                asset::MeshJoint mj{};
+                mj.node = static_cast<u32>(remap[static_cast<usize>(jv.as_number())]);
+                for (u32 k = 0; k < 16; ++k) mj.inverse_bind[k] = ibm.empty() ? (k % 5 == 0 ? 1.0f : 0.0f) : ibm[usize(j) * 16 + k];
+                const JointBox* b = boxes && j < boxes->size() ? &(*boxes)[j] : nullptr;
+                for (int c = 0; c < 3; ++c) {
+                    mj.bounds_min[c] = b && b->any ? b->min[c] : 1.0f;  // min > max: influences nothing
+                    mj.bounds_max[c] = b && b->any ? b->max[c] : -1.0f;
+                }
+                out.joints.push_back(mj);
+            }
+            mapped[static_cast<usize>(gs)] = static_cast<i32>(out.skins.size());
+            out.skins.push_back(skin);
+        }
+        out.submesh_skins.push_back(mapped[static_cast<usize>(gs)]);
+    }
+    return true;
+}
+
+mat4 mat4_from(const f32 m[16]) {
+    mat4 r;
+    for (int c = 0; c < 4; ++c)
+        for (int k = 0; k < 4; ++k) r.c[c][k] = m[c * 4 + k];
+    return r;
+}
+
 class GltfImporter final : public IImporter {
 public:
     StringView id() const override { return "gltf"; }
-    u32 version() const override { return 2; }  // 2: normal/ORM/emissive maps, CUBICSPLINE tracks (M5a)
+    u32 version() const override { return 3; }  // 2: normal/ORM/emissive maps, CUBICSPLINE tracks (M5a); 3: skins
     ChunkType type() const override { return ChunkType::Mesh; }
     bool native() const override { return false; }
     bool handles_extension(StringView ext) const override { return ext == ".glb" || ext == ".gltf"; }
@@ -1066,8 +1249,10 @@ public:
     }
 
     bool cook(const ImportInput& in, asset::ContainerWriter& writer, DiagList& diags) const override {
-        if (!detail::check_keys(in.settings, {"scale", "max_triangles"}, in.display_path, kStage, diags)) return false;
+        if (!detail::check_keys(in.settings, {"scale", "max_triangles", "skinning"}, in.display_path, kStage, diags)) return false;
         f64 scale = 1.0, max_triangles = 0.0;
+        bool skinning = true;
+        if (!detail::read_bool(in.settings, "skinning", true, skinning, in.display_path, kStage, diags)) return false;
         if (!detail::read_number(in.settings, "scale", 1.0, scale, in.display_path, kStage, diags)) return false;
         if (!detail::read_number(in.settings, "max_triangles", 0.0, max_triangles, in.display_path, kStage, diags))
             return false;
@@ -1085,8 +1270,10 @@ public:
         if (!parse_container(cx, g) || !load_buffers(cx, g)) return false;
         Output out;
         Array<i32> remap;
-        if (!import_nodes(cx, g, static_cast<f32>(scale), out, remap)) return false;
+        if (!import_nodes(cx, g, static_cast<f32>(scale), skinning, out, remap)) return false;
         if (!import_animations(cx, g, remap, static_cast<f32>(scale), out)) return false;
+        SkinOutput skin_out;
+        if (!import_skins(cx, g, remap, out.geo, skin_out)) return false;
         if (diags.error_count() != errors_before) return false;
         if (out.geo.submeshes.empty()) cx.warning(g.root, "the scene has no mesh primitives");
         const usize triangles = out.geo.indices.size() / 3;
@@ -1105,19 +1292,36 @@ public:
         asset::MeshData d;
         bool any = false;
         u32 max_vertices = 0;
-        for (const asset::MeshSubmesh& sm : out.geo.submeshes) {
+        auto grow = [&](const vec3& w) {
+            const f32 c[3] = {w.x, w.y, w.z};
+            for (int k = 0; k < 3; ++k) {
+                d.bounds_min[k] = any ? math::min(d.bounds_min[k], c[k]) : c[k];
+                d.bounds_max[k] = any ? math::max(d.bounds_max[k], c[k]) : c[k];
+            }
+            any = true;
+        };
+        for (usize si = 0; si < out.geo.submeshes.size(); ++si) {
+            const asset::MeshSubmesh& sm = out.geo.submeshes[si];
             max_vertices = math::max(max_vertices, sm.vertex_count);
+            if (const i32 sk = skin_out.submesh_skins[si]; sk >= 0) {
+                // Skinned: the rest pose of each joint (world * inverse bind) moves its bind box.
+                const asset::MeshSkin& skin = skin_out.skins[static_cast<usize>(sk)];
+                for (u32 j = 0; j < skin.joint_count; ++j) {
+                    const asset::MeshJoint& mj = skin_out.joints[skin.first_joint + j];
+                    if (mj.bounds_min[0] > mj.bounds_max[0]) continue;
+                    const mat4 m = world[mj.node] * mat4_from(mj.inverse_bind);
+                    for (int corner = 0; corner < 8; ++corner)
+                        grow(transform_point(m, {(corner & 1) ? mj.bounds_max[0] : mj.bounds_min[0],
+                                                 (corner & 2) ? mj.bounds_max[1] : mj.bounds_min[1],
+                                                 (corner & 4) ? mj.bounds_max[2] : mj.bounds_min[2]}));
+                }
+                continue;
+            }
             for (int corner = 0; corner < 8; ++corner) {
                 const vec3 p{sm.center[0] + ((corner & 1) ? sm.extent[0] : -sm.extent[0]),
                              sm.center[1] + ((corner & 2) ? sm.extent[1] : -sm.extent[1]),
                              sm.center[2] + ((corner & 4) ? sm.extent[2] : -sm.extent[2])};
-                const vec3 w = transform_point(world[sm.node], p);
-                const f32 c[3] = {w.x, w.y, w.z};
-                for (int k = 0; k < 3; ++k) {
-                    d.bounds_min[k] = any ? math::min(d.bounds_min[k], c[k]) : c[k];
-                    d.bounds_max[k] = any ? math::max(d.bounds_max[k], c[k]) : c[k];
-                }
-                any = true;
+                grow(transform_point(world[sm.node], p));
             }
         }
 
@@ -1137,11 +1341,17 @@ public:
         d.channels = out.channels.span();
         d.keys = out.keys.span();
         d.strings = out.strings.span();
+        if (!skin_out.skins.empty()) {
+            d.skins = skin_out.skins.span();
+            d.joints = skin_out.joints.span();
+            d.skin_vertices = out.geo.skin_vertices.span();
+            d.submesh_skins = skin_out.submesh_skins.span();
+        }
         Array<byte> payload;
         asset::write_mesh(d, payload);
         asset::ContainerWriter::ChunkDesc desc;
         desc.type = ChunkType::Mesh;
-        desc.version = asset::chunk_version(asset::MESH_VERSION, 0);
+        desc.version = asset::chunk_version(asset::MESH_VERSION, skin_out.skins.empty() ? 0 : asset::MESH_MINOR_SKIN);
         desc.guid = in.guid;
         writer.add(desc, payload.span());
         return true;

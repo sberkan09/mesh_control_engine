@@ -13,6 +13,8 @@ library only (struct, zlib, json, math, uuid).
                           CUBICSPLINE bob; "pulse": STEP scale + LINEAR rotation) - multi-node tracks
   models/bulb.glb         low-poly unlit sphere, tinted per point light
   models/walker.glb       the M5b capsule character (r 0.3 m, 1.8 m tall, centred) with a glowing visor
+  models/reed.glb         a 2.4 m tapered reed skinned to a 4-joint chain, clip "sway" (FR-R3D-060:
+                          JOINTS_0 / WEIGHTS_0, inverse bind matrices, LINEAR joint rotations)
   textures/*.png          the maps above (linear maps carry "srgb": false sidecars) + an equirect sky
 """
 
@@ -176,10 +178,10 @@ class Gltf:
         return len(self.doc["bufferViews"]) - 1
 
     def accessor(self, values, comps, ctype=5126, target=None, minmax=False):
-        fmt = {5126: "f", 5123: "H", 5125: "I"}[ctype]
+        fmt = {5126: "f", 5121: "B", 5123: "H", 5125: "I"}[ctype]
         data = struct.pack("<%d%s" % (len(values), fmt), *values)
         acc = {"bufferView": self._view(data, target), "componentType": ctype, "count": len(values) // comps,
-               "type": {1: "SCALAR", 2: "VEC2", 3: "VEC3", 4: "VEC4"}[comps]}
+               "type": {1: "SCALAR", 2: "VEC2", 3: "VEC3", 4: "VEC4", 16: "MAT4"}[comps]}
         if minmax:
             acc["min"] = [min(values[i::comps]) for i in range(comps)]
             acc["max"] = [max(values[i::comps]) for i in range(comps)]
@@ -310,6 +312,32 @@ def quat_y(angle):
     return [0.0, r6(math.sin(angle / 2)), 0.0, r6(math.cos(angle / 2))]
 
 
+def quat_mul(a, b):
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz]
+
+
+def tapered_tube(r0, r1, height, seg, rings):
+    """An open tube along +Y from radius r0 at the foot to r1 at the top (normals radial)."""
+    pos, nrm, uv, idx = [], [], [], []
+    for r in range(rings + 1):
+        f = r / rings
+        rad = r0 + (r1 - r0) * f
+        for s in range(seg + 1):
+            ph = 2 * math.pi * s / seg
+            n = (math.cos(ph), 0.0, -math.sin(ph))
+            pos += [r6(rad * n[0]), r6(height * f), r6(rad * n[2])]
+            nrm += [r6(c) for c in n]
+            uv += [r6(s / seg), r6(f)]
+    for r in range(rings):
+        for s in range(seg):
+            a, b = r * (seg + 1) + s, (r + 1) * (seg + 1) + s
+            idx += [a, a + 1, b, b, a + 1, b + 1]
+    return pos, nrm, uv, idx
+
+
 def build_models():
     models = {}
 
@@ -423,6 +451,54 @@ def build_models():
     g.node({"name": "visor", "mesh": g.mesh("walker_visor", box(0.2, 0.06, 0.06), visor), "translation": [0, 0.55, 0.27]},
            parent=walker)
     models["walker.glb"] = g
+
+    # ---- the skinned reed (FR-R3D-060): 4 joints up a 2.4 m tube, each vertex blended between the
+    # two joints around its height; "sway" bends every joint about Z and X with a phase lag.
+    g = Gltf()
+    height, joints = 2.4, 4
+    step = height / joints
+    pos, nrm, uv, idx = tapered_tube(0.09, 0.025, height, 12, 24)
+    jw, ww = [], []
+    for v in range(len(pos) // 3):
+        f = min(pos[v * 3 + 1] / step, joints - 1e-6)
+        j = int(f)
+        t = f - j
+        if j + 1 < joints:
+            jw += [j, j + 1, 0, 0]
+            ww += [r6(1 - t), r6(t), 0.0, 0.0]
+        else:
+            jw += [j, 0, 0, 0]
+            ww += [1.0, 0.0, 0.0, 0.0]
+    leaf = g.material({"name": "reed", "pbrMetallicRoughness": {"baseColorFactor": [0.16, 0.62, 0.38, 1],
+                                                               "metallicFactor": 0.0, "roughnessFactor": 0.45},
+                       "doubleSided": True})
+    acc = g.geometry((pos, nrm, uv, idx))
+    acc["attributes"]["JOINTS_0"] = g.accessor(jw, 4, 5121, target=34962)
+    acc["attributes"]["WEIGHTS_0"] = g.accessor(ww, 4, target=34962)
+    root = g.node({"name": "reed"}, root=True)
+    bones, parent = [], root
+    for k in range(joints):
+        parent = g.node({"name": "bone%d" % k, "translation": [0, r6(step if k else 0.0), 0]}, parent=parent)
+        bones.append(parent)
+    ibm = []
+    for k in range(joints):
+        ibm += [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, r6(-step * k), 0, 1]
+    g.doc["skins"] = [{"name": "reed_skin", "joints": bones, "inverseBindMatrices": g.accessor(ibm, 16)}]
+    g.node({"name": "reed_mesh", "mesh": g.mesh("reed", acc, leaf), "skin": 0}, parent=root)
+    period, keys = 3.0, 16
+    times = [r6(period * i / keys) for i in range(keys + 1)]
+    samplers, chans = [], []
+    for k in range(1, joints):
+        values = []
+        for i in range(keys + 1):
+            a = 2 * math.pi * i / keys - 0.7 * k
+            qz = [0.0, 0.0, math.sin(0.1 * math.sin(a)), math.cos(0.1 * math.sin(a))]  # half-angles: +-0.2 rad
+            qx = [math.sin(0.04 * math.cos(a)), 0.0, 0.0, math.cos(0.04 * math.cos(a))]
+            values += [r6(c) for c in quat_mul(qz, qx)]
+        samplers.append({"input": g.accessor(times, 1, minmax=True), "output": g.accessor(values, 4)})
+        chans.append({"sampler": len(samplers) - 1, "target": {"node": bones[k], "path": "rotation"}})
+    g.doc["animations"] = [{"name": "sway", "samplers": samplers, "channels": chans}]
+    models["reed.glb"] = g
     return models
 
 

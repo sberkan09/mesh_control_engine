@@ -5,6 +5,8 @@
 //   * 256 moving point lights through Forward+ CPU-clustered lighting
 //   * a low sun with 3 texel-snapped shadow cascades, the sky dome, bloom, ACES, FXAA
 //   * an orrery animated by multi-node glTF tracks, cross-fading between two clips
+//   * three reeds skinned to 4-joint chains (FR-R3D-060, optional skinning): G turns their
+//     skeletons off, and they stand rigid in their bind pose
 //   * the per-stage frame-budget table (CPU from the clock, GPU from timestamp queries)
 //   * M5b (-walk 1, or C): a capsule character walks the floor through World3D::move_character
 //     (mce_physics3d over Jolt), followed by a third-person boom that World3D::camera_sweep pulls in
@@ -15,9 +17,11 @@
 //   04_cubes -frames 60 -capture a.ppm    also write the last frame as a PPM image
 //   04_cubes -headless 1 -ticks 300       determinism run: no GL, CPU mesh store, prints the hash
 //   04_cubes -headless 1 -walk 1          the same with the capsule walk (physics + camera in the hash)
+//   04_cubes -skin 0                      the reeds without their skeletons (rigid bind pose)
 //
 // Keys: drag (left mouse) or arrows orbit, wheel or Z/X zoom, Space auto orbit, L lights,
-// B bloom, A FXAA, 1/2/3 cascades, K sky texture, N night, P cross-fade the orrery clip, Esc quits.
+// B bloom, A FXAA, 1/2/3 cascades, K sky texture, N night, P cross-fade the orrery clip, G reed
+// skeletons on/off, Esc quits.
 // Walk mode (C toggles): arrows move relative to the camera, Space jumps, drag orbits the boom.
 
 #include <cmath>
@@ -58,10 +62,15 @@ MCE_CVAR(cv_pitch, "cam.pitch", 0.42f, "Initial orbit pitch (radians, down from 
 MCE_CVAR(cv_dist, "cam.dist", 12.0f, "Initial orbit distance (meters)", CVarFlags::None);
 MCE_CVAR(cv_orbit, "cam.auto", true, "Slow automatic orbit", CVarFlags::None);
 MCE_CVAR(cv_walk, "walk", false, "M5b: start in walk mode (capsule character + swept third-person camera)", CVarFlags::None);
+MCE_CVAR(cv_skin, "skin", true, "FR-R3D-060: the reeds use their skeletons (G toggles; off = rigid bind pose)", CVarFlags::None);
 
-enum Model : u32 { SphereRow, Floor, PanelCube, Orrery, Bulb, Walker, kModelCount };
+enum Model : u32 { SphereRow, Floor, PanelCube, Orrery, Bulb, Walker, Reed, kModelCount };
 constexpr const char* kModelPaths[kModelCount] = {"models/sphere_row.glb", "models/floor.glb", "models/panel_cube.glb",
-                                                  "models/orrery.glb", "models/bulb.glb", "models/walker.glb"};
+                                                  "models/orrery.glb",     "models/bulb.glb",  "models/walker.glb",
+                                                  "models/reed.glb"};
+// The reeds: behind the orrery, each a third of the sway clip out of phase.
+constexpr vec3 kReeds[] = {{-1.1f, 0.0f, 4.4f}, {0.0f, 0.0f, 4.7f}, {1.1f, 0.0f, 4.4f}};
+constexpr u32 kReedCount = sizeof(kReeds) / sizeof(kReeds[0]);
 
 // M5b walk: World3D's default controller capsule, a 4 m/s walk, the boom 5 m behind the head.
 constexpr f32 kWalkSpeed = 4.0f;
@@ -153,6 +162,11 @@ public:
         pulse_clip_ = orrery->find_clip("pulse");
         orrery_pose_.resize(orrery->nodes.size());
         player_.play(spin_clip_);
+        const GpuMesh* reed = meshes_->get(keys_[Reed]);
+        if (!reed || !reed->skinned()) return Error(Errc::NotFound, "04_cubes: skinned reed mesh not resident");
+        sway_clip_ = reed->find_clip("sway");
+        reed_pose_.resize(reed->nodes.size() * kReedCount);
+        reed_skinning_ = cv_skin.get_bool();
 
         build_layout();
         build_physics();
@@ -495,6 +509,21 @@ private:
         o.pose = orrery_pose_.span();
         scene.add(o);
 
+        // The reeds: one pose per instance, the joints driven by the "sway" clip like any nodes.
+        const GpuMesh& reed = *meshes_->get(keys_[Reed]);
+        const usize nodes = reed.nodes.size();
+        for (u32 r = 0; r < kReedCount; ++r) {
+            const Span<mat4> pose = reed_pose_.span().subspan(r * nodes, nodes);
+            const f32 duration = sway_clip_ < reed.clips.size() ? reed.clips[sway_clip_].duration : 1.0f;
+            pose_nodes(reed, sway_clip_, t + duration * f32(r) / f32(kReedCount), pose);
+            MeshInstance m;
+            m.mesh = keys_[Reed];
+            m.world = translation(kReeds[r]);
+            m.pose = pose;
+            m.skinning = reed_skinning_;
+            scene.add(m);
+        }
+
         if (walking_) {
             MeshInstance w;
             w.mesh = keys_[Walker];
@@ -536,6 +565,7 @@ private:
         h = fnv1a64(cl.ranges().data(), cl.ranges().size_bytes(), h);
         h = fnv1a64(cl.indices().data(), cl.indices().size_bytes(), h);
         h = fnv1a64(orrery_pose_.data(), orrery_pose_.size() * sizeof(mat4), h);
+        h = fnv1a64(scene.joint_palette().data(), scene.joint_palette().size_bytes(), h);
         if (walking_) {  // M5b: World3D state + the swept boom (the camera itself is in the cascades)
             h = world_.hash_state(h);
             h = fnv1a64(&boom_, sizeof(boom_), h);
@@ -560,10 +590,11 @@ private:
                       "TRIS %u  DRAWS %u  SHADOW DRAWS %u  CASCADES %u  LIGHTS %u  LIGHT INDICES %u\n"
                       "CPU MS: SCENE %.2f  CLUSTERS %.3f  RECORD %.2f  SUBMIT %.2f\n"
                       "GPU MS: SHADOW %.2f  MAIN %.2f  POST %.2f  TOTAL %.2f\n"
-                      "L LIGHTS  B BLOOM %s  A FXAA %s  1-3 CASCADES  K SKY TEX  N NIGHT  P CLIP%s",
+                      "L LIGHTS  B BLOOM %s  A FXAA %s  1-3 CASCADES  K SKY TEX  N NIGHT  P CLIP  G SKELETONS %s (%u JOINTS)%s",
                       st.triangles, fs.main_draws, fs.shadow_draws, fs.cascades, fs.point_lights, fs.light_indices,
                       last_.scene, last_.clusters, last_.record, last_.submit, gpu_.shadow, gpu_.main, gpu_.post(), gpu_.total,
-                      cv_bloom.get_bool() ? "ON" : "OFF", cv_fxaa.get_bool() ? "ON" : "OFF", walk_line);
+                      cv_bloom.get_bool() ? "ON" : "OFF", cv_fxaa.get_bool() ? "ON" : "OFF", reed_skinning_ ? "ON" : "OFF",
+                      st.joints, walk_line);
         TextLayout layout(mem::frame());
         layout_text(font_.face, line, {}, layout);
         SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
@@ -625,6 +656,7 @@ private:
                     case Key::K: if (down) toggle(cv_sky_texture); break;
                     case Key::N: if (down) toggle(cv_night); break;
                     case Key::P: if (down) self->toggle_clip_ = true; break;
+                    case Key::G: if (down) self->reed_skinning_ = !self->reed_skinning_; break;
                     case Key::Num1: if (down) cv_cascades.set_int(1); break;
                     case Key::Num2: if (down) cv_cascades.set_int(2); break;
                     case Key::Num3: if (down) cv_cascades.set_int(3); break;
@@ -681,6 +713,9 @@ private:
     AnimationPlayer player_;
     bool toggle_clip_ = false;
     Array<mat4> orrery_pose_;
+    Array<mat4> reed_pose_;
+    u32 sway_clip_ = ~0u;
+    bool reed_skinning_ = true;
     Array<MeshInstance> statics_;
     Array<LightRig> rigs_;
     Font font_;
