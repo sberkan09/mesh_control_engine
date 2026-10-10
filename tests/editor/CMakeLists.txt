@@ -6,6 +6,7 @@ mce_add_test(test_editor UMBRELLA
         test_draw_clip.cpp
         test_hierarchy.cpp
         test_hot_reload.cpp
+        test_mod_project.cpp
         test_orbit_camera.cpp
         test_perf_monitor.cpp
         test_play_session.cpp

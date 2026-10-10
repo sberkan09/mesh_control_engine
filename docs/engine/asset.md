@@ -42,6 +42,11 @@ Runtime (`src/engine/asset/include/mce/asset/`)
   resident. Resident and pack assets are ready at once. `async_status`, `take_async` (the handle with one
   reference, or the load error), `cancel_async` (drops a pending read, releases a ready one), `wait_async`,
   `async_pending`. A reload that changes the content hash while a read is in flight falls back to a sync load.
+- `mods.h`: data mods (ADR-0034). `read_mod_pack` (a pack's manifest and `CHNK_MOD` identity), `resolve_mods`
+  (which `*.mce` packs of a mods folder load and in what order: file-name order, or `load_order.txt`; mods for
+  another game, duplicate ids and unreadable packs are skipped with a reason), `is_valid_mod_id`, and `ModList`,
+  which the player also publishes as a world resource. `formats.h` holds the `CHNK_MOD` reader and writer
+  (`ModInfoView`, `write_mod_info`).
 - `gpu_upload_sink.h`: `IGpuUploadSink`, the inverted seam to the renderer (fix F6): `upload_mesh`,
   `upload_texture`, `update_material`, `destroy_gpu_objects`. Defined here and implemented by `mce_render`, so
   the include direction stays render to asset.
@@ -58,6 +63,11 @@ Cook (`src/engine/asset/cook/include/mce/cook/`)
   Built-in importers: texture (PNG and JPEG via stb_image), WAV, font (TTF atlas via stb_truetype), material
   (`.mcmat`), scene (`.mcscene`), prefab (`.mcprefab`), glTF (meshoptimizer), tilemap (`.mctilemap`),
   particles (`.mcpart`), sequence (`.mcseq`), shader (`.vert/.frag/.comp.glsl`, glslang).
+- `mod_project.h`: mod projects (ADR-0034). `is_mod_project`, `read_mod_project` (`mod.json`), and
+  `read_base_assets` (GUID to type from the manifests of the game packs a mod builds on). `CookService::cook`
+  uses them: references into a base resolve by type without a dependency edge, an override (a base GUID in the
+  project) must keep its type, `CookOptions::base_packs` adds bases (`mce_cook --base`), and a mod's pack gets a
+  `CHNK_MOD` chunk after the manifest. `CookReport` gains `mod`, `base_assets` and `overrides`.
 - `json.h`: hand-written JSON/JSONC reader and canonical writer; every node keeps its line and column.
 - `diagnostics.h`: `Diagnostic`/`DiagList`, printed as `file:line:col: error: message [stage]`.
 - `scene_text.h`: the `.mcscene` component codec shared by the scene cook and the editor's `SceneDocument`.
@@ -99,6 +109,9 @@ errors, a module that fails to load among them) or 2 (usage).
   untrusted bytes; every reader bounds-checks before handing out views.
 - Dev mounts verify every container's payload CRC on load; a pack is verified once at mount and trusted
   afterwards.
+- Mounts overlay by GUID: an earlier root wins, but only with the same type. A later root whose GUID an earlier one
+  holds with another type keeps it (with a warning) while nothing has loaded that asset, so a mod cannot retype
+  a game asset (ADR-0034).
 - `AssetSystem` is main-thread only: the main thread is the sole mutator, so the read path takes no locks.
   `IGpuUploadSink` is called from the main thread only.
 - A release at refcount zero queues the asset; it is reaped `MCE_FRAMES_IN_FLIGHT` `end_frame()` calls later.
@@ -129,6 +142,10 @@ errors, a module that fails to load among them) or 2 (usage).
   `MeshView` rejecting corrupt payloads. `test_cook_json_audio.cpp`: JSON positions and nesting limits,
   canonical writer, WAV decode and resampling. `test_cook_shader.cpp`: variants, SPIR-V and reflection in
   `CHNK_SHD`, compile errors with source line and variant, binding-bank enforcement.
+- `test_mods.cpp` (in `test_asset`): `CHNK_MOD` round trip, negative cases and mutations, mod ids,
+  `resolve_mods` with and without `load_order.txt`, and the mount overlay. `test_cook_mod.cpp` (in `test_cook`):
+  a mod cooks against a game pack (override, addition, `CHNK_MOD`, byte-identical re-cook) and its error cases.
+  ctest `player_mods` (registered in `src/player`): a game and a mod cooked with `mce_cook`, played headless.
 - ctest `mce_cook_cli` (`cook_cli_test.cmake`): exit codes 0/1/2 and byte-identical re-cooks of the sample
   project in `tests/asset/data`.
 - ctest `test_shader_gl` (label `gpu`, only with `MCE_GPU_TESTS`): cooked shader variants compile on a real GL

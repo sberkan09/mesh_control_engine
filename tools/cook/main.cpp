@@ -1,6 +1,9 @@
 // mce_cook — command-line cook (assets.md §5.1, FR-AST-070).
 //
-//   mce_cook <project-dir> [--module <game module>] [--pack] [--force] [--adopt] [--quiet]
+//   mce_cook <project-dir> [--module <game module>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]
+//
+// A project with a mod.json is a mod (ADR-0034): its pack carries a ModInfo chunk and drops into a
+// game's mods folder as <id>.mce.
 //
 // Exit codes (CI contract): 0 = cooked cleanly, 1 = cook errors (listed as
 // "file:line:col: error: message [stage]"), 2 = usage error.
@@ -16,11 +19,13 @@ namespace {
 
 int usage(std::FILE* out = stderr, int rc = 2) {
     std::fputs(
-        "usage: mce_cook <project-dir> [--module <game module>] [--pack] [--force] [--adopt] [--quiet]\n"
+        "usage: mce_cook <project-dir> [--module <game module>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]\n"
         "  Cooks <project-dir>/assets into <project-dir>/cooked (incremental: the cook DB skips what is up to date).\n"
         "  --module <path>  load this game module (lib<game>.so / .dll) first, so scenes that use its\n"
         "                   components cook; without it only the engine's components are known\n"
-        "  --pack    also write <project-dir>/assets.mce (shipping pack)\n"
+        "  --base <pack>    a game pack (or cooked dir) this project builds on, on top of mod.json's \"base\":\n"
+        "                   references may name its assets, and same-GUID assets here override them\n"
+        "  --pack    also write <project-dir>/assets.mce (shipping pack; a mod's carries its mod.json identity)\n"
         "  --force   ignore the cook DB and re-cook every asset\n"
         "  --adopt   create .mceasset sidecars for unregistered sources\n"
         "  --quiet   print errors and the summary only\n"
@@ -50,6 +55,7 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         const StringView a(argv[i]);
         if (a == "--module" && i + 1 < argc) module_path = argv[++i];
+        else if (a == "--base" && i + 1 < argc) opt.base_packs.push_back(cook::String(argv[++i]));
         else if (a == "--pack") opt.pack = true;
         else if (a == "--force") opt.force = true;
         else if (a == "--adopt") opt.adopt = true;
@@ -99,6 +105,9 @@ int main(int argc, char** argv) {
                     static_cast<unsigned long long>(report.manifest_hash));
         if (opt.pack && report.pack_hash) std::printf("; pack %016llx", static_cast<unsigned long long>(report.pack_hash));
         std::printf("\n");
+        if (report.mod || report.base_assets)
+            std::printf("mce_cook: %s on %u base asset(s), %u override(s)\n", report.mod ? "mod" : "project", report.base_assets,
+                        report.overrides);
         rc = report.ok() ? 0 : 1;
     }
     log::shutdown();

@@ -24,6 +24,7 @@ inline constexpr u8 PARTICLE_VERSION = 1;  // CHNK_PART: one particle emitter pr
 inline constexpr u8 SEQUENCE_VERSION = 1;
 inline constexpr u8 SHADER_VERSION = 1;  // CHNK_SHD: one validated GLSL stage + variants + reflection (v0.5)  // CHNK_SEQ: one action-list sequence (v0.5, FR-ENT-100)
 inline constexpr u8 PREFAB_VERSION = 1;  // CHNK_Prefab: the scene layout below (v0.5, FR-ENT-070)
+inline constexpr u8 MOD_INFO_VERSION = 1;  // CHNK_MOD: a mod pack's identity (FR-RUN-090)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
 // GUID -> {logical path, content hash, primary chunk type}. Entries sorted by GUID (the sort is
@@ -655,5 +656,41 @@ struct SceneView {
     StringView entity_name(u32 entity) const;
     static Result<SceneView> read(Span<const byte> payload);
 };
+
+// ------------------------------------------------------------------ mod info (CHNK_MOD)
+// A mod pack's identity (FR-RUN-090, ADR-0034): written by the cook into a mod project's pack,
+// right after the manifest, with a zero GUID (it belongs to the pack, not to an asset). Five
+// strings in one blob; the reader checks bounds only, the meaning of each field (id charset,
+// game match) is mods.h's business.
+
+struct ModInfoString {
+    u32 offset;  // into the string blob that follows the header
+    u32 size;
+};
+
+struct ModInfoHeader {
+    ModInfoString id;           // [a-z0-9_.-], 1..64 bytes: names the mod in load_order.txt
+    ModInfoString name;         // display name
+    ModInfoString version;      // the mod's own version, free text ("1.2.0")
+    ModInfoString game;         // the game it targets (a PlayerDesc::mods_game_id); empty = any
+    ModInfoString description;
+    u32 strings_size;
+    u32 reserved[5];
+};
+static_assert(sizeof(ModInfoHeader) == 64);
+
+struct ModInfoData {
+    StringView id;
+    StringView name;
+    StringView version;
+    StringView game;
+    StringView description;
+};
+
+struct ModInfoView {
+    ModInfoData data;  // views into the payload
+    static Result<ModInfoView> read(Span<const byte> payload);
+};
+void write_mod_info(const ModInfoData& info, Array<byte>& out);
 
 }  // namespace mce::asset

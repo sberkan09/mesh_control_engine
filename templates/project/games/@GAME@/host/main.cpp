@@ -13,6 +13,10 @@ int main(int argc, char** argv) {
     desc.pack = "assets.mce";
     desc.pack_fallback = MCE_PROJECT_PACK;
     desc.start_scene = MCE_PROJECT_START_SCENE;  // the .mceproj's start_scene
+    // Data mods are off. To let players add content, uncomment these: mod packs in mods/ beside the
+    // executable then load over the game's pack (docs/user-guide/19-mods.md).
+    // desc.mods_dir = "mods";
+    // desc.mods_game_id = MCE_PROJECT_NAME;
 #if defined(MCE_PROJECT_STATIC_MODULE)
     desc.static_module = &mce_game_module;
 #else

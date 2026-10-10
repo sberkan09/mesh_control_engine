@@ -923,7 +923,7 @@ bool run_headless_tool(ToolCall& c) {
                                                progress(*p->server, p->token, done, total);
                                            } : static_cast<TickProgressFn>(nullptr),
                                            &rp, inspecting ? &inspect_run : nullptr, &inspect,
-                                           script.empty() ? nullptr : &script);
+                                           script.empty() ? nullptr : &script, c.server.session().project().base_roots());
     Array<log::ConsoleLine> lines;
     read_log(since, lines);
     if (!run) {
