@@ -169,6 +169,16 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 **Demo (running, the v1.0 gate):** UC-D passes the non-programmer double-click test; UC-C is formally measured — a new UC-A level from empty scene to cooked launchable content in < 30 minutes of editor-only actions, 0 crashes in a 2-hour session; all seven learning gates closed; budgets reconciled within 20% of the Tracy memory track.
 **Fallback:** if the v1.0 tier still does not close at M9's mid-point review, UC-D moves to a named **v1.1** milestone and v1.0 closes at M8's gate — pre-agreed, no re-negotiation.
 
+### M-MOBILE — iOS/Android port (optional, parked) · **size L–XL (rough guess, not estimated)** · tier: off-tier platform track, **not scheduled**
+
+*Added 2026-10-10 as an optional note by user request. **Parked:** no thread starts it, and milestone sequencing skips it, until the user explicitly un-parks it. Mobile is still Won't in REQUIREMENTS (FR-SHP-060, FR-INP-060); un-parking it means a REQUIREMENTS slip note first.*
+
+**Already portable:** window, events, audio and module loading go through SDL3, which supports iOS and Android · the game module can already be statically linked (`MCE_PROJECT_STATIC_MODULE`, `PlayerDesc::static_module`), which iOS requires · the Metal backend (M-MAC) is most of the iOS GPU work · ECS, physics, scene, UI and the cook are platform-neutral C++. The editor stays desktop-only; only the player is ported.
+
+**Would need:** (1) an Android RHI backend (Vulkan or GLES 3.x): `mce_rhi_gl` targets desktop GL 4.5 (DSA, persistent mapping, MDI), none of which exists on Android, so this is the biggest item · (2) `mce_rhi_metal` on iOS (UIKit / `CAMetalLayer`, tile-GPU storage modes) · (3) touch input: touch/gesture events in `mce_input`, a virtual stick, touch hit-testing in `mce_ui` · (4) app lifecycle: background/foreground pause, GPU surface loss, orientation, safe areas · (5) packaging: APK/AAB (Gradle + NDK) and IPA (Xcode, signing), mobile CMake presets and toolchains · (6) mobile frame/thermal/battery budgets: the NFR tables assume desktop GPUs, so shadows and post FX need mobile tiers.
+
+**Rough shape if un-parked:** iOS after M-MAC closes (≈ M-size, leaning on the Metal backend) · Android as its own L-size track (new RHI backend). Both inherit the M-MAC rules: GL stays the reference backend, determinism baselines are per-platform (ADR-0007).
+
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
 Skinned animation (only via Open Question 3 promotion), scene streaming (FR-ENT-120, trigger: a game outgrows one chunk), auto-parallel scheduling experiment (M3+ flag, gated by FR-RUN-040), engine-level live DLL reload (N13, measured trigger), Vulkan/D3D12 backend (N14, after both anchor games ship; the Metal backend is the sanctioned exception, M-MAC), mod support, networking, localization, **in-game AI (LLM-driven NPCs/dialogue, runtime content generation — latency, per-call cost and sim non-determinism vs FR-RUN-040; would also need the network stack N7 rules out)** — each with its recorded re-entry trigger from REQUIREMENTS §5/§6.3.
@@ -180,6 +190,7 @@ Skinned animation (only via Open Question 3 promotion), scene streaming (FR-ENT-
 | MVP | M0–M4 (+ M3.5 stretch) | months 0–14 | ≈ 500–790 h engineering (M0 70–110 + M1 70–110 + M2 110–170 + M3 130–190 + M3.5 30–70 + M4 90–140) + ≈ 50–70 h content |
 | Tooling (off-tier) | M4.5 editor MCP server | after the editor catch-up, before M5a | ≈ 35–60 h engineering (not summed into the tier bands; slips whole past M5b if needed) |
 | Platform (off-tier) | M-MAC macOS port | parallel, from now; built on the user's Mac | ≈ 100–160 h engineering (not summed into the tier bands; gates nothing) |
+| Platform (optional, parked) | M-MOBILE iOS/Android port | not scheduled; only if the user un-parks it | not estimated (not summed into the tier bands; gates nothing) |
 | v0.5 | M5a + M5b + M6 + M7 | months 14–24 | ≈ 390–620 h engineering + ≈ 140–220 h content |
 | v1.0 | M8–M9 (UC-D may slip to named v1.1) | months 24–36 | ≈ 180–310 h engineering + ≈ 30–50 h content |
 
