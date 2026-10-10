@@ -1,0 +1,90 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "5ce4e000-0000-4000-8000-000000000200",
+  "name": "world",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Traveler",
+      "components": {
+        "LocalTransform": {
+          "position": [0, 0, 0]
+        },
+        "Camera2DComponent": {
+          "pixels_per_meter": 24,
+          "clear_color": [0.07, 0.08, 0.11, 1]
+        },
+        "Sprite": {
+          "tint": [1, 0.85, 0.3, 1],
+          "size": [0.8, 0.8],
+          "layer": 10
+        },
+        "StreamingFocus": {},
+        "SequencePlayer": {
+          "sequence": "guid:5ce4e000-0000-4000-8000-000000000210"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Area 0",
+      "components": {
+        "LocalTransform": {
+          "position": [0, 0, 0]
+        },
+        "SceneChunk": {
+          "scene": "guid:5ce4e000-0000-4000-8000-000000000201",
+          "half_extents": [10, 10, 10],
+          "load_distance": 4,
+          "unload_distance": 8
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Area 1",
+      "components": {
+        "LocalTransform": {
+          "position": [20, 0, 0]
+        },
+        "SceneChunk": {
+          "scene": "guid:5ce4e000-0000-4000-8000-000000000202",
+          "half_extents": [10, 10, 10],
+          "load_distance": 4,
+          "unload_distance": 8
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Area 2",
+      "components": {
+        "LocalTransform": {
+          "position": [40, 0, 0]
+        },
+        "SceneChunk": {
+          "scene": "guid:5ce4e000-0000-4000-8000-000000000203",
+          "half_extents": [10, 10, 10],
+          "load_distance": 4,
+          "unload_distance": 8
+        }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Area 3",
+      "components": {
+        "LocalTransform": {
+          "position": [60, 0, 0]
+        },
+        "SceneChunk": {
+          "scene": "guid:5ce4e000-0000-4000-8000-000000000204",
+          "half_extents": [10, 10, 10],
+          "load_distance": 4,
+          "unload_distance": 8
+        }
+      }
+    }
+  ]
+}

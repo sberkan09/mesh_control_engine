@@ -116,7 +116,8 @@ game starts with; `-scene scenes/other.mcscene` (or its GUID) plays another. The
 scene switching at run time yet: a game that needs several levels either keeps them in one scene
 and moves the player between areas, or loads the next scene from code (`scene::load` with a GUID
 the game stores on a component) after destroying the old entities. The samples take the first
-route. The editor opens one document at a time.
+route. The editor opens one document at a time. A large world can instead stream its areas in
+and out around the player (section 4.8).
 
 ## 4.6 Prefabs
 
@@ -181,3 +182,38 @@ bullets or pickups it did not place in the scene (chapter 6).
   cook's determinism check is not disturbed by stale values.
 - **A scene without a camera** still cooks and plays; the player then renders nothing useful. Put
   exactly one `Camera2DComponent` with `primary: true` in every playable scene.
+
+## 4.8 Scene streaming (optional)
+
+Streaming is opt-in: a scene without `SceneChunk` components plays exactly as before. To stream a
+large world, split it into one small base scene (the player, the camera, anything that must always
+exist) and one scene per area, then add to the base scene
+
+- one entity per area with `LocalTransform` (the centre of the area's box) and `SceneChunk`:
+  `scene` names the area's `.mcscene`, `half_extents` is half the box size, `load_distance` and
+  `unload_distance` say how close a focus must come for the area to load and how far it must go for
+  it to unload (keep `unload_distance` larger, so walking along a border does not reload the area
+  every frame);
+- `StreamingFocus` on the player (or the camera; several are allowed).
+
+```json
+{ "name": "Forest", "components": {
+    "LocalTransform": { "position": [64, 0, 0] },
+    "SceneChunk": { "scene": "guid:5ce4e000-2222-4000-8000-00000000000b",
+                    "half_extents": [32, 32, 32], "load_distance": 16, "unload_distance": 24 } } }
+```
+
+Area scenes are authored in world coordinates; the chunk entity only places the box. When an area
+unloads, every entity it spawned is destroyed, so anything that must survive (score, inventory,
+opened doors) belongs on base-scene entities or in a resource. `pinned: true` keeps an area loaded
+wherever the player is, `disabled: true` keeps it out; game code can flip both at run time, and it
+reads `SceneChunkStatus` (`Unloaded`, `Loading`, `Loaded`, `Failed`) to know when an area is in.
+Save games do not track areas yet, so keep `SaveKey` entities in the base scene.
+
+`mce_player`, play-in-editor and the MCP headless run stream with no game code. The windowed
+player reads area files on a background thread and instantiates at most one area per tick; headless
+runs and play-in-editor load an area in the tick that wants it, so their state hashes stay
+deterministic. At start every area the player's start position needs is loaded before the first
+tick. A C++ host does the same with `scene::install_streaming`, `scene::pump_streaming(world,
+scene::PumpMode::Settle)` after the base scene, and `scene::pump_streaming(world)` before each
+`World::tick` (`mce/scene/streaming.h`).

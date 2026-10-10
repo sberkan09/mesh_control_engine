@@ -3,6 +3,7 @@
 mce_add_test(test_scene UMBRELLA
     SOURCES
         test_scene.cpp
+        test_streaming.cpp
     DEPS
         mce::mce_scene
         mce::mce_gameplay_kit
