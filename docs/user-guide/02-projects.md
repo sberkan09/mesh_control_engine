@@ -49,7 +49,7 @@ Rules that keep the layout working:
   "version": 1,
   "name": "MyGame",
   "title": "My Game",
-  "engine_version": "0.5.0",
+  "engine_version": "0.0.1",
   "games": ["my_game"],
   "start_scene": "0d4f...-...",
   "plugins": []
@@ -97,7 +97,7 @@ For a game id `my_game` the build defines:
 | Target | What it builds |
 |---|---|
 | `my_game` | the host executable. At run time it looks for `assets.mce` and `libmy_game.so` beside itself (the shipped layout) and falls back to the build tree's copies |
-| `my_game_game` | the game module `libmy_game.so` (`.dylib` on macOS). On Windows modules are not supported yet, so the game sources link into the host |
+| `my_game_game` | the game module `libmy_game.so` (`.so` on macOS too: a CMake `MODULE` library; only `libmce_engine` is a `.dylib` there). On Windows modules are not supported yet, so the game sources link into the host |
 | `my_game_cook` | `mce_cook` with your components. The build runs it over a copy of `assets/` into `build/<preset>/projects/MyGame/project/assets.mce` |
 | `my_game_editor` | `mce_editor` with your components and your `install()` |
 | `my_game_mcp` | `mce_mcp` with your components and systems |

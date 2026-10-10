@@ -17,11 +17,13 @@ your own, played it, and opened it in its editor.
 | Build tools | CMake ≥ 3.28, Ninja, gcc 13 or clang 18 | CMake ≥ 3.28, Ninja, Visual Studio 2022 (MSVC) | CMake ≥ 3.28, Ninja, Xcode toolchain (AppleClang 17) |
 | Graphics | OpenGL 4.5 core driver (Mesa llvmpipe works, slowly) | OpenGL 4.5 driver | Metal (built in) |
 | Python | 3.x for the helper scripts (`new_project.py`, `ship.py`) | same | same |
-| Presets | `linux-gcc-debug`, `linux-gcc-release`, `linux-clang-debug`, `linux-clang-release`, `linux-asan` | `msvc-debug`, `msvc-release`, `msvc-asan` | `macos-debug`, `macos-release`, `macos-asan` |
+| Presets | `linux-gcc-debug`, `linux-gcc-release`, `linux-clang-debug`, `linux-clang-release`, `linux-asan` | `msvc-debug`, `msvc-release`, `msvc-asan` | `macos-debug`, `macos-release`, `macos-asan` (UBSan only: ASan is off because its runtime hangs at start-up on macOS 26.6) |
+| OS | | | Apple silicon, macOS 26.0 or later (the presets' deployment target) |
 
-Third-party dependencies (SDL3, Jolt, ImGui, spdlog, Tracy, glslang, stb, meshoptimizer, Box2D for
-tests) are fetched at configure time; no package manager is needed for them. The first configure
-downloads them once into `build/_fetch/`.
+Third-party dependencies (SDL3, Jolt, ImGui, spdlog, Tracy, glslang, stb, meshoptimizer; doctest,
+DirectXMath and Box2D for the tests; SPIRV-Cross on macOS) are fetched at configure time; no package
+manager is needed for them. Each preset downloads them on its first configure into
+`build/<preset>/_deps/` (the local CI script shares one copy between presets under `build/_fetch/`).
 
 On Ubuntu 24.04, one script installs everything the Linux build needs (compilers, X11 and GL
 development headers, Xvfb for display-less test runs, ccache):
@@ -66,7 +68,7 @@ Useful configure options (pass them as `-D<name>=ON/OFF` after the preset):
 | `MCE_BUILD_SAMPLES` | ON | build the sample ladder |
 | `MCE_BUILD_EDITOR` | ON | build the editor and the MCP server |
 | `MCE_BUILD_TESTS` | ON | build the unit tests |
-| `MCE_GPU_TESTS` | OFF | also register tests that need a display and a GL 4.5 driver |
+| `MCE_GPU_TESTS` | OFF | also register tests that need a display and a GPU driver (GL 4.5, or Metal on macOS) |
 | `MCE_PHYSICS_ORACLE` | ON | download Box2D as the 2D physics test oracle (turn off to skip it) |
 | `MCE_TEMPLATE_PROBE` | ON | stamp and build a throwaway project from the template, as a self-test |
 
@@ -175,6 +177,7 @@ no hosted CI.
 ```sh
 scripts/ci/local_ci.sh --quick     # walls + gcc debug build with GPU tests under Xvfb
 scripts/ci/local_ci.sh             # every stage: walls, four Linux presets, clang-tidy, determinism
+scripts/ci/local_ci_macos.sh --quick   # on a Mac: walls + macos-debug with GPU tests (no flag: every stage)
 ```
 
 ## 1.9 The installed SDK
@@ -197,7 +200,7 @@ cmake --install build/linux-gcc-release --prefix ~/mce-sdk
 | Path | What |
 |---|---|
 | `bin/` | `mce` (the command below), `mce_editor`, `mce_mcp`, `mce_cook`, `mce_player`, `mce_devhost` |
-| `lib/` | `libmce_engine.so` (the engine; every tool and every game module shares it), `libmce_player_runtime.a` (what your host links) |
+| `lib/` | `libmce_engine.so` (`.dylib` on macOS; the engine; every tool and every game module shares it), `libmce_player_runtime.a` (what your host links) |
 | `include/` | the engine headers (`mce/gameplay.h` is the one a game module includes), `mce/engine_version.h` (this engine's id) |
 | `lib/cmake/MCE/` | `MCEConfig.cmake` for `find_package(MCE)`, and the `mce_add_project` / `mce_add_game_module` helpers |
 | `share/mce/` | the project template, `new_project.py`, `VERSION`, and `examples/Kindle` (chapter 18; `mce example Kindle` copies it out) |
@@ -218,7 +221,7 @@ mce headless MyGame --ticks 600   # no window; prints the state hash
 mce editor MyGame              # mce_editor -module MyGame/build/libmy_game.so -project MyGame
 mce mcp MyGame                 # mce_mcp --module ... --project MyGame, over stdio (chapter 14)
 mce cook MyGame --pack         # mce_cook --module ... MyGame --pack (the build cooks too)
-mce ship MyGame --version 1.0  # MyGame/dist/MyGame-1.0-linux.zip: host, module, libmce_engine, pack
+mce ship MyGame --version 1.0  # MyGame/dist/MyGame-1.0-linux-x64.zip: host, module, libmce_engine, pack
 ```
 
 The project is the same folder the checkout build uses (chapter 2); its `CMakeLists.txt` begins

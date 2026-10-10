@@ -10,16 +10,17 @@ formats, which is what keeps the shipped game small and safe.
 
 | You author | Extension | Cooked into | Used by |
 |---|---|---|---|
-| Image | `.png`, `.jpg` | texture (RGBA8, optional mips, sRGB flag) | `Sprite`, materials, tilesets, particles, LUTs, normal maps |
+| Image | `.png`, `.jpg`, `.jpeg` | texture (RGBA8, optional mips, sRGB flag) | `Sprite`, materials, tilesets, particles, LUTs, normal maps |
 | Sound | `.wav` | 48 kHz float clip with loop points | `AudioSource`, `PlaySfx`, sequences |
-| Font | `.ttf` | glyph atlas plus metrics | `TextLabel` |
-| Model | `.gltf`, `.glb` | mesh: quantized streams, node tree, inline materials, animation clips | 3D rendering (chapter 8) |
+| Font | `.ttf`, `.otf` | glyph atlas plus metrics | `TextLabel` |
+| Model | `.gltf`, `.glb` | mesh: quantized streams, node tree, inline materials, animation clips, optional skins | 3D rendering (chapter 8) |
 | Material | `.mcmat` | metallic-roughness parameters plus texture GUIDs | 3D rendering |
 | Scene | `.mcscene` | columnar entity rows | the game, the editor |
 | Prefab | `.mcprefab` | the same, entity 0 as root | instances in scenes, runtime spawns |
 | Tilemap | `.mctilemap` | one tile layer over a tileset | `TilemapLayer` |
 | Particle preset | `.mcpart` | emitter parameters | `ParticleEmitter` |
 | Sequence | `.mcseq` | an action list | `SequencePlayer` |
+| Input map | `.mcinput` | action maps and bindings | the player's input (chapter 11) |
 | Shader | `.vert.glsl`, `.frag.glsl`, `.comp.glsl` | validated GLSL, variants, SPIR-V reflection | custom shaders (not yet reachable from a project) |
 
 ## 5.2 Sidecars
@@ -47,7 +48,7 @@ Settings per importer (every key is optional; the defaults are shown):
 | `texture` | `"srgb": true` (colour data; set `false` for normal maps, LUTs and data textures), `"mips": true` |
 | `wav` | `"normalize": true` (peak to -1 dBFS), `"loop": false`, `"loop_start"`, `"loop_end"` (source-rate frames; default to the file's own loop markers) |
 | `font` | `"size": 32` (pixel height), `"ranges": [[32, 126]]` (inclusive codepoint ranges), `"padding": 1` |
-| `gltf` | `"scale": 1.0` (applied to every root node), `"max_triangles": 0` (0 = no budget; a budget makes an over-size mesh a cook error) |
+| `gltf` | `"scale": 1.0` (applied to every root node), `"max_triangles": 0` (0 = no budget; a budget makes an over-size mesh a cook error), `"skinning": true` (`false` imports skinned meshes as static ones; see Skinning in [chapter 8](08-3d.md#83-rendering-a-frame)) |
 
 Edit settings in the sidecar file, or through MCP's `asset_set_import_settings`. A settings change
 re-cooks the asset.
@@ -151,7 +152,9 @@ Tilemap panel writes it).
 
 **Shaders** are validated and compiled to SPIR-V at cook, with variants declared as
 `// @variant NAME` header lines, but the built-in 2D and 3D shaders are not cooked assets yet and a
-project cannot replace them. Treat the shader importer as groundwork.
+project cannot replace them. Treat the shader importer as groundwork. (On macOS the Metal backend
+translates the engine's GLSL to MSL with SPIRV-Cross when it creates a pipeline; nothing changes for
+a project.)
 
 ## 5.8 Hot reload
 

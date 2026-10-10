@@ -57,7 +57,7 @@ position), `AudioRef` (world resource), `install(world, device, clips, after)` a
 `audio_bridge` system.
 
 Internals in `src/`: `mixer.cpp` / `mixer.h` (the real-time mixer), `commands.h` (command and
-reply types), `dsp.h` (biquad and limiter), `stream.cpp` (page ring), `spatial.cpp`,
+reply types), `dsp.h` (biquad and limiter), `stream.cpp` / `stream.h` (page ring), `spatial.cpp`,
 `bridge.cpp`, `clip_bank.cpp`, `audio_device.cpp`.
 
 ## Rules and invariants

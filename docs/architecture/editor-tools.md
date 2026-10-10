@@ -1,7 +1,9 @@
 # Architecture: Editor & Tools (`editor-tools`)
 
 **Project:** Mesh Control Engine (MCE) · **Subsystem:** `editor-tools` · **Date:** 2026-10-06
-**Status:** Architecture design (design-only; no implementation)
+**Status:** Implemented (M2–M8); as built in `docs/engine/editor.md`. This file is the design-time record. *ImGuizmo was
+never taken: the gizmo is hand-rolled (ADR-0025, then ADR-0030 for rotate/scale), so every ImGuizmo mention below is
+superseded.*
 **Inputs:** `docs/REQUIREMENTS.md` (authoritative), `docs/ARCHITECTURE.md` (integration authority — fixes F7, F8, F10, F12 and ADR-0008/0015 applied here), `docs/research/existing-engines.md`, `docs/research/audio-input-ui.md` (§4 editor UI, §4.3 target wall), `docs/research/ecs-gameplay.md` (scene document, commands, events), `docs/research/platform-engineering.md` (threads, allocators, logging).
 **Binding context honored:** Dear ImGui (docking branch, multi-viewport **off**), ImGuizmo via one-page ADR, editor owns the canonical scene and the runtime never mutates it, all scene/inspector/editor serialization flows through the hand-rolled reflection system, ImGui is editor/debug-only and CI-walled out of the engine library set (`mce_engine.dll` — fix F8 naming), fixed 60 Hz sim, generational handles, zero heap in hot paths, `Result<T,Error>` for fallible I/O, no `#ifdef MCE_EDITOR` in runtime code.
 
@@ -59,6 +61,7 @@ mce_editor.exe  ->  mce_editor_layer ->  mce_editor_core ->  mce_engine.dll
                                                cook requests)
 game.exe        ->  mce_engine.dll + game.dll (module)             (no ImGui anywhere downstream)
 mce_devhost.exe ->  mce_devhost_layer -> mce_engine.dll + imgui    (dev-only debug harness)
+                    [as built: tests/devhost/mce_devhost links only mce_engine; no ImGui, no layer]
 ```
 
 The three-target split is ARCHITECTURE fix F7: `mce_editor_core` compiles headless in CI (no ImGui), `mce_editor_layer` is the only ImGui consumer, and `mce_editor.exe` is a ~20-line main. Cook requests go through `mce_asset`'s `CookService` (assets.md §7.6), reached from `mce_editor_core` — the editor drives cook, never implements it.
@@ -411,7 +414,7 @@ Each world instance (preview or play) owns an `EntityMap`: `EntityId -> ecs::Ent
 ### 3.5 Editor/runtime separation mechanism (recap with teeth)
 
 1. **CMake wall:** `mce_editor_layer` links `mce_engine.dll` + ImGui; nothing under `src/engine/` links UI. Leakage is a link error, not a review finding.
-2. **Include grep:** no `imgui.h` outside `src/editor/` and `src/devhost/` (CI).
+2. **Include grep:** no `imgui.h` outside `src/editor/` and `tests/devhost/` (CI). *As built, the ImGui wall in `check_walls.py` allows only `src/editor/layer/`.*
 3. **Symbol scan:** `dumpbin /symbols` on `mce_engine.dll` must contain no `ImGui*` (CI, `FR-UI-048`; scan target per ARCHITECTURE fix F8).
 4. **No `#ifdef MCE_EDITOR`:** separate mains; the editor registers *editor* systems into a `Phase::Editor`-shaped slot only when it runs its own preview loop, and registers **nothing** into a play world's phases.
 5. **ImGuizmo + (later) ImPlot** enter via the one-page ADR named in `audio-input-ui.md` §4.1 — single-purpose, ImGui-native, 2-file.

@@ -1,7 +1,7 @@
 # @PROJECT@: a project made from the MCE project template (scripts/new_project.py, assets.md §4.4).
 #
 #   assets/                 what you edit (the editor opens this project); cooked into assets.mce at build
-#   games/@GAME@/module/    the game module lib@GAME@: components (@GAME@.h), systems (@GAME@.cpp)
+#   games/@GAME@/module/    the game module lib@GAME@: components (components.h), systems (@GAME@.cpp)
 #   games/@GAME@/host/      the thin host executable @GAME@
 #
 # Two ways to build it:

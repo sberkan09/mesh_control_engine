@@ -3,8 +3,10 @@
 // (FR-R3D-060, v0.5).
 //
 // Scope is locked (assets.md §10 risk 2): triangle-list primitives with POSITION, optional NORMAL
-// (generated when absent) and TEXCOORD_0; materials' factors + base color texture; node TRS (or
-// a decomposable matrix); translation/rotation/scale animation channels; skins with JOINTS_0 /
+// (generated when absent) and TEXCOORD_0; materials' factors, alphaMode, doubleSided and base
+// color, normal, metallic-roughness (ORM), emissive and occlusion textures (all on TEXCOORD_0, one
+// KHR_texture_transform per material), plus KHR_materials_unlit and
+// KHR_materials_emissive_strength; node TRS (or a decomposable matrix); translation/rotation/scale animation channels; skins with JOINTS_0 /
 // WEIGHTS_0 (4 influences, up to 256 joints per skin) and inverse bind matrices. Morph targets,
 // JOINTS_1+, cameras and lights are ignored with a warning. Required extensions other than the supported
 // set are a cook error naming the extension; merely-used ones are a warning.

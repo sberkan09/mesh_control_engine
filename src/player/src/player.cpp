@@ -83,6 +83,9 @@ MCE_CVAR(cv_ticks, "ticks", 600, "Headless: ticks to simulate (windowed runs use
 MCE_CVAR(cv_input, "input", "",
          "Input script file: per-tick action states (\"10-70 Move=1,0 Jump\" per line) published to the game instead of the keyboard",
          CVarFlags::None);
+MCE_CVAR(cv_input_map, "input_map", "",
+         "Input map to load: GUID or source path of a cooked .mcinput (default: the first in the pack, else the built-in map)",
+         CVarFlags::None);
 MCE_CVAR(cv_post, "r.post2d", true, "Apply the camera's Post2DComponent effects (F7 toggles)", CVarFlags::None);
 MCE_CVAR(cv_pause_on_focus_loss, "pause_on_focus_loss", true, "Pause and mute when the window loses focus or minimizes",
          CVarFlags::None);
@@ -153,9 +156,7 @@ public:
             MCE_TRY(ui::create_builtin_skin(renderer_, skin_));
             console_.init(skin_.skin, 0.5f);
             if (cv_console.get_bool() && cv_console_open.get_bool()) set_console(true);
-            Array<byte> map;
-            input::default_map_chunk(map);
-            MCE_TRY(input_.load_map(map.span()));
+            MCE_TRY(load_input_map(cv_input_map.get_string()));
             window_->set_event_handler(&PlayerApp::on_event, this);
         }
         // Scene streaming (FR-ENT-120) is inert unless the scene places SceneChunks. Headless runs
@@ -375,6 +376,38 @@ private:
         if (best == asset::kInvalidAssetKey) return Error(Errc::NotFound, "mce_player: no such scene in the pack", want);
         scene_path_.assign(assets_.info(best).path);
         return assets_.info(best).guid;
+    }
+
+    // The project's action maps (FR-INP-020): a GUID or source path, else the first cooked
+    // .mcinput in the pack by path, else the built-in default map. A named map that is missing or
+    // does not load is an error, never a silent fallback.
+    Result<void> load_input_map(StringView want) {
+        asset::AssetKey best = asset::kInvalidAssetKey;
+        if (Result<asset::Guid> g = asset::parse_guid(want)) {
+            best = assets_.find(g.value());
+        } else {
+            for (asset::AssetKey k = 0; k < assets_.asset_count(); ++k) {
+                const asset::AssetInfo info = assets_.info(k);
+                if (info.type != asset::ChunkType::InputMap) continue;
+                if (!want.empty()) {
+                    if (info.path == want) best = k;
+                    continue;
+                }
+                if (best == asset::kInvalidAssetKey || info.path < assets_.info(best).path) best = k;
+            }
+        }
+        if (best == asset::kInvalidAssetKey) {
+            if (!want.empty()) return Error(Errc::NotFound, "mce_player: no such input map in the pack", want);
+            Array<byte> map;
+            input::default_map_chunk(map);
+            return input_.load_map(map.span());
+        }
+        MCE_TRY_ASSIGN(const asset::AssetHandle<asset::InputMap> h, assets_.load_sync<asset::InputMap>(best));
+        const Result<void> r = input_.load_map(assets_.resolve(h));
+        assets_.release(asset::AnyHandle(h));
+        MCE_TRY(r);
+        MCE_LOG_INFO("{}: input map {}", desc_.app_name, assets_.info(best).path);
+        return {};
     }
 
     // ---- the developer console (FR-UI-045) ----------------------------------------------------

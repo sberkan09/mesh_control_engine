@@ -40,11 +40,11 @@ and still identical across 3 runs and Debug vs Release.
 
 ## Open
 
-- Editor: prefab authoring, the hierarchy tree view and inspector change highlighting read this API; they are
-  editor-thread work (`src/editor/**`).
+- ~~Editor: prefab authoring, the hierarchy tree view and inspector change highlighting read this API; they are
+  editor-thread work (`src/editor/**`).~~ Prefab placement and the hierarchy tree shipped in `M6-editor.md`.
 - Render interpolation of only-moved entities consumes `changed<WorldTransform>()`; the renderer's extract does
   not use it yet.
-- No sample loads a cooked scene, writes a save or records a replay yet; Artifact A's "best time persists"
-  (FR-RUN-065 acceptance) needs the platformer to put its record on a `SaveKey` entity.
+- No sample records a replay yet. *(Done since: `scene_demo`, `extras_2d` and `stream_demo` load cooked scenes;
+  `extras_2d_save_write` writes a save; Ember Step's best times persist on a `SaveKey` entity, `M6-ember-step.md`.)*
 - Save file mechanics move from `mce_ecs_scene` to core when input rebinding persistence (FR-INP-040) needs them
   (ADR-0025 §11).

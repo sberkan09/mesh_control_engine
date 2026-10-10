@@ -332,7 +332,7 @@ def main():
     ap.add_argument("artifact", nargs="?", choices=[*ARTIFACTS, "all"])
     ap.add_argument("--project", help="ship a project directory made by scripts/new_project.py instead")
     ap.add_argument("--preset", default=default_preset())
-    ap.add_argument("--version", default=None, help="default: <project version>+<short commit>")
+    ap.add_argument("--version", default=None, help="default: <engine version>+<short commit> (the engine's CMake project VERSION)")
     ap.add_argument("--out", default=os.path.join(ROOT, "dist"))
     ap.add_argument("--no-build", action="store_true", help="package the existing build outputs")
     ap.add_argument("--keep-symbols", action="store_true", help="do not strip (Linux)")

@@ -49,3 +49,6 @@ v0.5 runner directly.
 - `mce_gameplay_kit` links `mce_audio`, `mce_physics2d` and `mce_ecs_scene` (all below it in the layer table).
 - `mce_player` and play-in-editor install the runner next to particles.
 - Not built: the editor sequence live view (with editor tooling) and TimelinePlayer (FR-ENT-110, v1.0).
+
+**Note (2026-10-11):** the component header in Decision 2 is `mce/kit/components.h`
+(`src/engine/kit/include/mce/kit/components.h`).

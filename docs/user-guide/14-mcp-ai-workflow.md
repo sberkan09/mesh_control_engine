@@ -55,15 +55,23 @@ each result's `content[0].text` is the tool's JSON).
 | Undo | `scene_undo`, `scene_redo` | | one `tools/call` is one step; shared with the editor's history |
 | Persist | `scene_new` | `name`, `force?` | fresh GUID, unsaved |
 | | `scene_open` | `path`, `force?` | path under `assets/` |
-| | `scene_save` | `path?`, `force?` | atomic; refuses to overwrite a file changed on disk unless `force` |
+| | `scene_save` | `path?`, `name?`, `force?` | atomic; `name` renames the scene; refuses to overwrite a file changed on disk, or another existing file, unless `force` |
 | Build | `cook_run` | `pack?`, `adopt?` | incremental; `adopt` writes sidecars for new source files |
 | | `cook_errors` | | last diagnostics with file, line, col |
-| Verify | `run_headless` | `ticks` (default 300), `log_lines`, `inspect?` | cooks, plays the **saved** scene with the engine systems and the game's `install()`, returns `state_hash`, metrics and the log tail |
+| | `asset_delete` | `path` | deletes a source file under `assets/` and its `.mceasset` sidecar (not the open scene) |
+| Verify | `run_headless` | `ticks` (default 300), `log_lines`, `scene?`, `input?`, `inspect?` | cooks, plays the **saved** scene (or another saved scene named by `scene`) with the engine systems and the game's `install()`, returns `state_hash`, metrics and the log tail |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
 
 Values use the `.mcscene` spelling (chapter 4): vectors as arrays, assets as `"guid:<uuid>"` (from
-`asset_list`), enums by name, nested structs as objects, entity references as `"$<id>"`.
+`asset_list`), enums by name, nested structs as objects, entity references as `"$<id>"`. Every `entity` argument
+(and `inspect.entities`) takes an id or, when it is unique, the entity's name.
+
+`input` scripts the actions the game reads from `InputState`, either as a string in the
+`mce_player -input` form (section 11.5), `"10-70 Move=1,0 Jump\n100 Fire"`, or as an array of
+segments, `[{"from": 10, "to": 70, "actions": {"Move": [1, 0], "Jump": true}}]`. The same scene,
+ticks and input give the same hash. A scene with `SceneChunk`s streams during the run, with chunk
+loads completed synchronously inside each pump so the hash stays a function of the ticks.
 
 `run_headless` with `inspect`:
 
@@ -91,31 +99,31 @@ agent checks "did the player reach the flag" without a window.
    hash between runs to confirm a change changed something (or nothing).
 6. **Iterate on code.** Edit the module, rebuild, restart the server (its component table is
    compiled in), repeat.
-7. **Look.** Build and run `my_game -frames 120 -capture shot.ppm` (an absolute path) to grab a
-   frame, or open the project editor; MCP has no `render_frame` yet.
+7. **Look.** Build and run `my_game -frames 120 -capture shots/a.ppm` (relative to the working
+   directory; missing folders are created) to grab a frame, or `-capture_tick N` to capture the
+   first frame after N sim ticks, together with `-input <file>` to reach a given moment. Or open
+   the project editor; MCP has no `render_frame` yet.
 
-Headless runs feed no input, so a game needs an **autoplay** switch to be verifiable headless: a
-flag on a component (or a second scene with a scripted pilot entity) that drives the character from
-code. Every MCP-authored game so far shipped one.
+To verify gameplay headless, pass `input` to `run_headless`. An **autoplay** switch (a flag on a
+component that drives the character from code), as the earlier MCP-authored games shipped, is
+still handy for long runs but no longer required.
 
 ## 14.4 Pitfalls
 
 | Pitfall | What happens | Do this |
 |---|---|---|
-| Entity ids are per session | ids restart from 1 after `scene_open`; a batch written against stale ids edits the wrong entities | re-list with `scene_list_entities` after every `scene_open`; prefer names in your own notes; `scene_undo` repairs a bad batch |
+| Entity ids are per scene | ids are saved in the file and survive `scene_open`, but a batch written against another scene's ids edits the wrong entities | re-list with `scene_list_entities` after opening a different scene; address entities by unique name; `scene_undo` repairs a bad batch |
 | `run_headless` plays the saved file | unsaved edits are refused | `scene_save` first |
 | The MCP cook writes `cooked/`, not the pack | the game executable still plays the old pack | `cook_run {"pack": true}`, or rebuild `my_game` (the build cooks the pack) |
 | Stock server without the module | "unknown component type" for your components | run `<game>_mcp` or `mce_mcp --module <lib<game>.so>`, and restart it after adding components |
 | `scene_new` makes a new GUID | a `.mceproj` that names the old scene points at nothing if you save over it | to re-author the start scene, `scene_open` it and `scene_clear` it |
-| `scene_save` with `force` over another file | that file gets the open scene's GUID | save as a new path, or clear and re-author the existing scene |
+| `scene_save` with `force` over another file | the file keeps its own GUID but its content is replaced by the open scene | save as a new path (a fresh GUID), or `scene_open` and `scene_clear` the existing scene |
 | Adopted textures default to sRGB | normal maps and LUTs come out wrong | `asset_set_import_settings {"settings": {"srgb": false}}` |
 | `-frames` is ignored headless | a headless run uses `-ticks` | `-headless 1 -ticks N` |
-| `-capture` with a relative path fails | "cannot write" | pass an absolute path |
 | No tilemap tool | the floor becomes one stretched PNG | one `Sprite` per tile via `entity_duplicate`, or write a `.mctilemap` (section 5.7) |
-| One scene per server | trying variants means save-as and reopen | keep variants as separate files and open the one to test |
+| One open scene per server | editing variants means save-as and reopen | keep variants as separate files; `run_headless {"scene": ...}` plays a saved one without opening it |
 
 ## 14.5 What an agent cannot do yet
 
-Paint tilemaps, render a frame, feed recorded input to a headless run, delete assets, attach to a
-running editor, or cancel a long tool call. The friction logs in `docs/research/` list these with
+Paint tilemaps, render a frame, attach to a running editor, or cancel a long tool call. The friction logs in `docs/research/` list these with
 their cost in practice.

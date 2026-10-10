@@ -37,8 +37,8 @@ root.panel("bg").fill().tint({0.05f, 0.05f, 0.08f, 1.0f});
 ui::Builder col = root.stack("menu", ui::StackLayout{ui::Axis::Vertical, 10.0f, 12.0f}).at({0.5f, 0.55f}, {280, 0});
 play_id    = col.button("play", "PLAY").default_focus().id();
 options_id = col.button("options", "OPTIONS").id();
-col.slider("volume", 0.0f, 1.0f, 0.1f).bind_convar("audio.music_db");
-col.toggle("shake", "SCREEN SHAKE").bind_convar("game.screen_shake");
+col.slider("music", -60.0f, 0.0f, 3.0f).bind_convar("audio.music_db");    // an engine convar, in dB
+col.toggle("shake", "SCREEN SHAKE").bind_convar("gallery.screen_shake");  // the host's own MCE_CVAR
 
 // each frame, in the host
 doc.update(ctx);                       // viewport, UI scale, the UI action snapshot, pointer, dt
@@ -47,8 +47,9 @@ for (const ui::UiEvent& e : doc.events())
 doc.submit(batch, sort_layer);
 ```
 
-- **Anchors** are parent-relative min/max plus pixel offsets at UI scale 1; `ui.scale` multiplies
-  them.
+- **Anchors** are parent-relative min/max plus pixel offsets at UI scale 1; the host's
+  `UpdateContext::ui_scale` multiplies them. The engine has no UI-scale convar: `ui_gallery`
+  declares its own `ui.scale` and passes it (times the display scale) in `ui_scale`.
 - **Navigation** is geometric when no edges are authored (a grid is navigable from any corner);
   `Confirm` fires once per press.
 - **Modal** documents take focus and block the pointer; a HUD document never takes focus.
@@ -74,7 +75,7 @@ console lines:
 
 | Line | Effect |
 |---|---|
-| `help` | list convars and functions with their help text |
+| `help` | list convars (except cheat convars) and functions with their help text |
 | `clear` | clear the view |
 | `r.vsync` | print a convar's value and help |
 | `r.vsync 0` | set it |

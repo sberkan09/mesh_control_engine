@@ -34,7 +34,7 @@ A sequence is an action list an entity plays step by step on the fixed tick. Aut
 |---|---|
 | `wait` | seconds |
 | `wait_event` | waits for a `SeqSignal` with that id |
-| `move_to` | moves the entity (its transform, or its kinematic body's velocity) at `speed`; `relative` to where the step started |
+| `move_to` | moves the entity (its transform, or its kinematic body's velocity) at `speed`; `relative` to where the step started; done within `tolerance` metres (default 0.01) |
 | `anim` | pushes a `SeqAnimRequest` for your animation system to act on |
 | `sound`, `stop_sound` | plays a one-shot, or stops the entity's `AudioSource` |
 | `emit` | pushes a `SeqSignal` other sequences or your systems can wait for or read |
@@ -47,8 +47,9 @@ loop of instant steps); timing is tick math, so a sequence that waits 0.5 s wait
 ticks and a save mid-step resumes on the same tick. `SequencePlayer`'s progress fields carry the
 `Save` flag; give the entity a `SaveKey` and the sequence survives a save and load.
 
-From code, `kit::SequenceRegistry::define(name, steps)` builds a sequence with the step factories
-(`wait`, `move_to`, `emit`, ...) and a `SequencePlayer` with that `name` and no asset plays it. Your
+From code, `kit::SequenceRegistry::define(name, steps, loops = false)` builds a sequence with the
+static step factories (`wait`, `move_to`, `emit`, ...; the code-hook step is `call_step(id)`) and a
+`SequencePlayer` with that `name` and no asset plays it. Your
 systems read signals with `f.events().read<kit::SeqSignal>()` and push them with
 `f.events().push(kit::SeqSignal{...})`.
 
@@ -96,7 +97,7 @@ The player runtime does the file work: `-save <slot>` loads the slot at start if
 writes it on a clean quit. From code (a custom host or a menu action):
 
 ```cpp
-save::SaveInfo info; info.scene = scene_guid; info.tick = ticks;
+save::SaveInfo info; info.scene = scene_guid; info.tick = ticks; info.module_version = module_version;
 MCE_TRY(save::save_game(world, "slot1", info));            // <root>/slot1.mcesave, atomic, .bak kept
 MCE_TRY_ASSIGN(const save::LoadStats st, save::load_game(world, "slot1", &info, module_version));
 ```
@@ -106,7 +107,9 @@ version are skipped and counted; a save from a newer format version fails with `
 and the path, never a crash. Entities whose key has no live entity are spawned.
 
 What a save is not: a snapshot of the whole World. Physics state, particles and anything without
-`Save` restart from the scene, so design saves around checkpoints, not mid-air frames.
+`Save` restart from the scene, so design saves around checkpoints, not mid-air frames. Saves do not
+track streamed chunks: a `SaveKey` on an entity inside a chunk scene is not supported yet (keep
+persistent entities in the base scene; section 4.8, `04-scenes-and-prefabs.md`).
 
 ## 13.4 Replays
 

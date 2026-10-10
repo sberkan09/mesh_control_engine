@@ -1,7 +1,7 @@
 # Architecture: macOS port (`mce_rhi_metal`) — design and collaboration note
 
 **Project:** Mesh Control Engine (MCE) · **Subsystem:** `rhi` (second backend) + `platform` (macOS) · **Date:** 2026-10-08
-**Status:** Plan (design-only; no implementation yet). **Build:** ROADMAP M-MAC. **Requirement:** FR-SHP-061 (Should).
+**Status:** Implemented (M-MAC, ADR-0028; `docs/milestones/M-MAC.md`); this note is the design and ownership record. **Build:** ROADMAP M-MAC. **Requirement:** FR-SHP-061 (Should).
 **Inputs:** `docs/REQUIREMENTS.md` §8 Q2 (the Mac migration note), ADR-0001 (two-layer RHI seam), ADR-0007
 (determinism scope), ADR-0023 (3D render path), `docs/architecture/rhi-renderer.md`.
 
@@ -25,7 +25,7 @@ anchored to it. Metal is a port, not a second source of truth.
 
 | Seam | Today | Needed for Metal |
 |---|---|---|
-| Backend selection | Every host calls `rhi::gl::create_device(window, desc)` directly (`samples/*/main.cpp`, `src/player`, `src/editor/app`) | One factory in `mce_rhi` (e.g. `rhi::create_default_device`) that picks GL or Metal by platform/CMake option; hosts call only that |
+| Backend selection | At writing, every host called `rhi::gl::create_device(window, desc)` directly. *As built: hosts call `rhi::create_default_device` (`mce_rhi_default`, `mce/rhi/default_device.h`), which picks the backend.* | One factory in `mce_rhi` (e.g. `rhi::create_default_device`) that picks GL or Metal by platform/CMake option; hosts call only that |
 | Window surface | `WindowDesc::opengl`, `SDL_WINDOW_OPENGL`, GL attributes in `window.cpp` | A Metal-capable window (`SDL_WINDOW_METAL` + `SDL_Metal_CreateView`/`CAMetalLayer`); the GL attribute block only on the GL path |
 | Shaders | `ShaderSource::glsl` (GLSL 4.50, separable programs, `gl_PerVertex`, binding banks, `gl_BaseInstanceARB`) | MSL for Metal. Default: GLSL stays the single source and is translated **at cook time** (glslang → SPIR-V → SPIRV-Cross → MSL), so no translator links into a runtime target (FR-AST-010). ADR-0028 records the pick: translation at pipeline creation inside `mce_rhi_metal` until shaders are cooked assets |
 | MDI + base instance | `glMultiDrawElementsIndirect`, `gl_BaseInstanceARB` object data | `drawIndexedPrimitives` per indirect record (or ICBs later), `[[base_instance]]` |
@@ -72,6 +72,10 @@ cloud milestone ever waits for Metal. Catching Metal up to a new RHI feature is 
 
 **New wall.** Seam PR #1 adds a "Metal wall" to `check_walls.py`: `\bMTL[A-Z]\w*|[<"]Metal/|[<"]QuartzCore/` legal
 only under `src/engine/rhi_metal/` and `src/engine/platform/src/macos/`, mirroring the GL wall.
+
+*As built (2026-10-11): `src/engine/platform/src/macos/` was never created. The little macOS-specific platform
+and core code there is sits under `#if defined(__APPLE__)` in the shared sources (`platform/src/window.cpp`,
+`core/src/crash.cpp`); the Metal wall still allows the unused path.*
 
 ## 4. Verification on the Mac (cannot run in the cloud)
 

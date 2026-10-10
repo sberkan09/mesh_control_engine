@@ -50,16 +50,56 @@ logs one error per name; `has_action` tells you whether a map defines it.
 
 ## 11.3 Maps
 
-The player (and every project host) loads the starter-kit map: a **Gameplay** map (Move, Look,
-Jump, Fire, Pause) and a **UI** map (Navigate, Confirm, Cancel) that, when pushed on top, blocks the
-gameplay map so menus do not move the player. Maps stack up to eight deep; the top map's actions
-shadow same-named actions below.
+Unless the project ships its own map, the player (and every project host) loads the starter-kit
+map: a **Gameplay** map (Move, Look, Jump, Fire, Pause) and a **UI** map (Navigate, Confirm,
+Cancel) that, when pushed on top, blocks the gameplay map so menus do not move the player. Maps
+stack up to eight deep; the top map's actions shadow same-named actions below.
 
-There is **no input-map asset** yet: a project cannot cook its own map into the pack, so actions
-beyond the default ones read as zero. A game needing more actions (Ember Step's `Dash`) reuses a
-default action (Kindle dashes on Fire) and keeps `has_action` checks in place so it works
-unchanged once a map asset exists. A custom host can build a map in code with `InputMapBuilder`
-(see `samples/03_platformer/main.cpp` and `05_ashen_court/main.cpp`).
+### Your own map: `.mcinput`
+
+Put an `.mcinput` file under `assets/` (for example `assets/input/controls.mcinput`) and the cook
+turns it into an input-map chunk. The player loads the first one in the pack by path; `-input_map
+<guid or path>` picks another. With none, the starter-kit map above is used.
+
+```json
+{ "format": "mce-input", "version": 1, "guid": "<uuid>",
+  "maps": [
+    { "name": "Gameplay", "actions": [
+      { "name": "Move", "type": "axis2d", "bindings": [
+        { "key": "D" }, { "key": "A", "scale": -1 },
+        { "key": "W", "axis": "y" }, { "key": "S", "axis": "y", "scale": -1 },
+        { "gamepad_axis": "LeftX" },
+        { "gamepad_axis": "LeftY", "axis": "y", "scale": -1, "deadzone": [0.2, 1], "curve": "linear" } ] },
+      { "name": "Jump", "bindings": [ { "key": "Space" }, { "gamepad_button": "South" } ] },
+      { "name": "Dash", "bindings": [ { "key": "LShift" }, { "gamepad_button": "RightShoulder" } ] },
+      { "name": "Look", "type": "axis2d", "bindings": [ { "mouse_delta": "x" }, { "mouse_delta": "y" } ] } ] },
+    { "name": "UI", "blocks_below": true, "actions": [
+      { "name": "Navigate", "type": "axis2d", "bindings": [ { "key": "Right" }, { "key": "Left", "scale": -1 } ] },
+      { "name": "Confirm", "bindings": [ { "key": "Enter" } ] },
+      { "name": "Cancel", "bindings": [ { "key": "Escape" } ] } ] } ] }
+```
+
+- An action's `type` is `button` (the default), `axis1d` or `axis2d`. A binding names exactly one
+  device: `key`, `mouse_button`, `mouse_delta` (`"x"`/`"y"`), `mouse_wheel` (`"x"`/`"y"`),
+  `gamepad_button` or `gamepad_axis`. `axis` (`"x"` default, `"y"` only on `axis2d`) says which
+  component it drives; `scale`, `invert`, `deadzone` `[inner, outer]` and `curve` (`linear`,
+  `smooth`, `quadratic`, `cubic`) are optional.
+- Key names are the `platform::Key` names: `A`..`Z`, `0`..`9` (or `Num0`..`Num9`), `F1`..`F12`,
+  `Space`, `Return` (or `Enter`), `Escape`, `Backspace`, `Tab`, `Grave`, `Left`/`Right`/`Up`/`Down`,
+  `LShift`, `LCtrl`, `LAlt`, `LGui` and the `R` versions. Gamepad names are the SDL standard layout
+  (`South`, `East`, `West`, `North`, `Start`, `Back`, `LeftShoulder`, `DpadUp`, ..., `LeftX`,
+  `LeftY`, `RightX`, `RightY`, `LeftTrigger`, `RightTrigger`). Mouse buttons: `Left`, `Middle`,
+  `Right`, `X1`, `X2`.
+- The first map is the one the stack starts with. Keep a map named **UI** with Navigate, Confirm
+  and Cancel if you use `mce::ui` menus, and use the action names behind the `InputState` fast
+  fields (Move, Look, Jump, Fire, Pause, Confirm, Cancel, TriggerL, TriggerR) where they fit:
+  those fields fill only from actions of those names. Any other action is read by name
+  (`in.pressed(MCE_SID("Dash"))`).
+- Unknown keys, a typo'd field, two devices in one binding or a `"y"` binding on a button are cook
+  errors with file and line.
+
+A custom host can also build a map in code with `InputMapBuilder` (see
+`samples/03_platformer/main.cpp` and `05_ashen_court/main.cpp`).
 
 ## 11.4 Rebinding
 
@@ -70,10 +110,23 @@ persist overrides yet; a custom host can.
 
 ## 11.5 Headless and in the editor
 
-- `-headless 1` publishes no input: the snapshot stays zeroed, so a headless hash depends only on
-  the scene and the tick count. Games that need input to progress in a headless test give
-  themselves an autoplay switch (a component flag that drives the character from code), as
-  Undertow, Prism Break and Lamplighter did.
+- `-headless 1` on its own publishes no input: the snapshot stays zeroed, so a headless hash
+  depends only on the scene and the tick count.
+- `-input <file>` feeds a scripted `InputScript` (`mce/input/script.h`) instead of the keyboard,
+  headless or windowed. One segment per line, `#` starts a comment:
+
+  ```
+  # <from>[-<to>] <Action>[=<value>] [<Action>[=<value>] ...]
+  10-70 Move=1,0 Jump      # ticks 10..70: Move (1, 0) and Jump held
+  100 Fire                 # tick 100 only (a press)
+  120- Move=-1,0           # from tick 120 to the end of the run
+  ```
+
+  Ticks are 1-based sim ticks. A value is a number, `x,y` for a 2D axis, or `true`/`false`; an
+  action with no value is held. Unnamed actions are released, and edges follow the normal rules.
+  A bad file is an error (exit 1). With scripted input, an autoplay switch in your game (a
+  component flag that drives the character from code, as Undertow, Prism Break and Lamplighter
+  used) is optional.
 - Play-in-editor feeds no input either: if the host has no `InputState`, install an idle one in
   your `install()` so your systems can still read it (section 6.8).
 
@@ -82,4 +135,5 @@ persist overrides yet; a custom host can.
 `InputRecorder` appends each tick's live snapshot; `InputReplayer` feeds it back. A replay file
 (`save::write_replay`) frames the stream with the scene GUID and the start and final state hashes,
 so replaying it checks itself. Wiring a recorder into the player is not done; the API is there
-for a custom host and for tests.
+for a custom host and for tests. To play a fixed sequence of inputs through the stock player, write
+an input script and pass `-input <file>` (section 11.5).

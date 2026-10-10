@@ -27,7 +27,7 @@ Dependencies, from the CMakeLists files:
   library is a configure error (it would link a second engine). On Windows the flag changes nothing.
 - `mce_player_runtime` (static): `mce_engine` where game modules are supported, otherwise the static
   libraries directly (`mce_scene`, `mce_gameplay_kit`, `mce_physics2d`, `mce_audio`, `mce_render`,
-  `mce_platform`, `mce_ui`, `mce_module_host`, `mce_rhi_default`).
+  `mce_platform`, `mce_ui`, `mce_input`, `mce_module_host`, `mce_rhi_default`).
 
 Linked by: `mce_player`, every project host made by `mce_add_project` (`cmake/MceProject.cmake`),
 `mce_devhost`, `test_module`, and samples that load modules (`03_platformer`).
@@ -48,7 +48,8 @@ Linked by: `mce_player`, every project host made by `mce_add_project` (`cmake/Mc
 
 - `open_game_module(path)`: copy-and-load (maps `<stem>_loaded_<pid>_<N><ext>`, so processes never
   share a copy) and checks the engine id,
-  without installing: the module's reflected components register with `mce_refl` as it maps. Errors:
+  without installing. When the module's folder is read-only (a translocated or `/Applications`
+  `.app`, a read-only install folder) the copy cannot be made, so it maps the module in place: the module's reflected components register with `mce_refl` as it maps. Errors:
   `ModuleNotFound`, `IoError`, `ModuleMissingEntry`, `EngineIdMismatch`.
 - `install_game_module(module, world)`: runs `install` on a World (`AlreadyExists`: one module per
   World; `ModuleInstallFailed`). A mapped module can be installed into any number of Worlds in turn:
@@ -68,16 +69,23 @@ not part of it.
 `src/player/include/mce/player/player.h`:
 
 - `PlayerDesc`: app name, window title, pack and module file names (looked up beside the
-  executable) with build-tree fallbacks, `static_module` for platforms without modules, and
+  executable) with build-tree fallbacks, `static_module` for platforms without modules,
   `start_scene` (a project host passes its `.mceproj` `start_scene`, which `mce_add_project` reads
-  at configure time into `MCE_PROJECT_START_SCENE`).
+  at configure time into `MCE_PROJECT_START_SCENE`), and for data mods (ADR-0034) `mods_dir` (the
+  mods folder, beside the executable unless absolute; null, the default, means the game takes no
+  mods) and `mods_game_id` (mods naming another game are skipped).
 - `run(argc, argv, desc)`: parses the command line into convars and runs headless or windowed.
   `src/player/main.cpp` is `return mce::player::run(argc, argv);`.
 
-What `run` does (`src/player/src/player.cpp`): mounts the pack, picks the scene (`-scene` GUID or
-source path, else `PlayerDesc::start_scene`, else the first scene by path), installs the `InputState` resource (`input::install`),
+What `run` does (`src/player/src/player.cpp`): for a game that takes mods, resolves the mods folder
+(`-mods_dir` overrides `PlayerDesc::mods_dir`; `-mods 0` turns mods off) with `asset::resolve_mods`
+and mounts the mods ahead of the pack; mounts the pack, picks the scene (`-scene` GUID or
+source path, else `PlayerDesc::start_scene`, else the first scene by path), publishes the mounted
+mods as an `asset::ModList` resource (games that take mods), installs the `InputState` resource (`input::install`),
 `physics2d`, the audio bridge, particles and sequences, installs the game (static module, or
-`-module` / `PlayerDesc::module`), then `scene::load`. It draws the kit components, offers the Esc
+`-module` / `PlayerDesc::module`), then installs scene streaming (`scene::install_streaming`: async
+when windowed, sync when headless so hashes stay deterministic), `scene::load`, and one `Settle`
+streaming pump; it pumps streaming before every `World::tick`. It draws the kit components, offers the Esc
 pause overlay and the developer console (backtick or F1), pauses and mutes on focus loss, loads and
 writes `-save` slots, and with `-headless 1 -ticks N` prints the World state hash.
 
@@ -98,8 +106,10 @@ focus loss always do. Headless runs publish nothing unless `-input <file>` names
 (`mce/input/script.h`: `"10-70 Move=1,0 Jump"` per line, one segment per action and tick range),
 which stands in for the keyboard in both modes, so `-headless` hashes depend on the scene, the tick
 count and the script. The editor MCP server's `run_headless` takes the same script as its `input`
-argument. A game cannot ship its own map through the
-pack yet (see Known gaps); actions the default map lacks read as zero (`has_action` is false).
+argument. A project ships its own map as a cooked `.mcinput` (`ChunkType::InputMap`): the runtime
+loads the convar `-input_map` (GUID or source path; a named map that is missing or fails to load is
+an error), else the first input map in the pack by path, else the starter-kit map. Actions the
+loaded map lacks read as zero (`has_action` is false).
 
 ## Rules and invariants
 
@@ -139,7 +149,8 @@ supported) lays out `bin/` (the tools and the `mce` command, `tools/mce_cli/mce.
 `VERSION`, `examples/Kindle` for `mce example`) and `share/doc/mce/` (the user guide, this
 directory, `docs/architecture/`, `ARCHITECTURE.md`, `REQUIREMENTS.md`). With `MCE_SDK` set by the config, `mce_add_project` builds only the module, the host
 and the content (cooked by the installed `mce_cook --module`), and the template's `CMakeLists.txt`
-calls `find_package(MCE)` when `mce_add_project` is not already defined. ctest `sdk_install`
+calls `find_package(MCE)` when `mce_add_project` is not already defined. The `mce` command's
+subcommands: `new`, `example`, `build`, `play`, `headless`, `editor`, `mcp`, `cook`, `ship`, `version`. ctest `sdk_install`
 (`tests/sdk/`) installs the build tree into a scratch prefix and runs `mce new`, `mce build`, `mce
 headless`, `mce cook` and `mce ship` against it, plays the shipped folder, then builds and plays
 the copied-out Kindle example.
@@ -157,7 +168,9 @@ the copied-out Kindle example.
   `test_module`). `devhost_headless_10k` runs the app loop with no module.
 - `abi_spike`: the M1 throwaway ABI spike in `tests/abi_spike/`.
 - `ui_no_imgui_symbols`: no `ImGui` symbol in `libmce_engine` or `mce_player` (Linux).
-- Player: `scene_demo_player_600` (headless state hash), `player_crash_report` (`-crash_test 1`
+- Player: `scene_demo_player_600` (headless state hash), `player_mods` (`mce_cook` builds a game
+  pack and a mod over it; `mce_player -headless` plays with the mod, with `-mods 0`, and with a
+  `load_order.txt` that disables it), `player_crash_report` (`-crash_test 1`
   then symbolication; Unix, not under ASan), and GPU runs `scene_demo_player_gpu` and
   `scene_demo_player_console_gpu`.
 - Project template: `template_probe_headless_300`, `template_probe_gpu`, `template_probe_editor_gpu`.
@@ -194,9 +207,7 @@ None of the non-GPU tests above need a display.
 - Windows has no stock-tool module loading either (no umbrella): there the per-project
   `<game>_editor`, `<game>_mcp` and `<game>_cook` executables of `mce_add_project`, which compile the
   game in, are the only way the tools know a game's components.
-- The player runtime's input map is the engine's default map. There is no input-map asset a project
-  can cook into its pack and no `PlayerDesc` field for one, so a game needing other actions (Ember
-  Step's `Dash`) falls back to the default ones (Kindle dashes on `Fire`). Rebinding persistence
-  (`InputSystem::save_bindings`) is not wired into the runtime either.
+- Rebinding persistence (`InputSystem::save_bindings`) is not wired into the player runtime, and
+  the runtime does not hot-reload a re-cooked input map.
 - Crash reporting gaps from packaging v2: the Windows path has not been run, Windows `abort()`
   leaves no report, POSIX unwinds only the crashing thread, and reports are not uploaded.

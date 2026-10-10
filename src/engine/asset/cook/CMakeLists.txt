@@ -17,6 +17,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/fs_util.cpp
         src/gltf_importer.cpp
         src/importer_registry.cpp
+        src/input_map_importer.cpp
         src/json.cpp
         src/material_importer.cpp
         src/mod_project.cpp
@@ -33,6 +34,7 @@ mce_add_library(mce_asset_cook UMBRELLA
     PUBLIC_DEPS
         mce::mce_asset
     PRIVATE_DEPS
+        mce::mce_input
         mce_stb
         mce_meshopt
         glslang::glslang

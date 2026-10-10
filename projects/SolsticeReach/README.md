@@ -16,7 +16,8 @@ Inside the engine tree:
     cmake --build --preset linux-gcc-debug --target solstice_reach
     build/linux-gcc-debug/projects/SolsticeReach/solstice_reach
 
-With the installed SDK (user guide chapter 1): `mce build SolsticeReach`, `mce play SolsticeReach`,
+With the installed SDK (user guide chapter 1), which ships only Kindle as an example: copy `projects/SolsticeReach`
+out of an engine checkout first, then `mce build SolsticeReach`, `mce play SolsticeReach`,
 `mce editor SolsticeReach`, `mce mcp SolsticeReach`, `mce ship SolsticeReach --version 1.0`.
 
 | Action | Keys | Gamepad |
@@ -82,7 +83,7 @@ Regenerate after changing the island's shape: `python3 tools/gen_assets.py`, upd
 | gameplay tick (ECS + World3D) | 0.095 |
 | scene build (scatter cells + cull + sort + cascades + clusters) | 0.891 |
 | command recording (3D + HUD) | 0.936 |
-| translate + submit (the table still labels it "GL") | 6.448 |
+| RHI translate + submit | 6.448 |
 
 Wall clock: 600 frames in 5.19 s, about 8.7 ms a frame (115 fps). Most of the submit time is probably the wait
 for the next drawable under vsync (not measured separately). The GPU column is empty because the Metal device does not record

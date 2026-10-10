@@ -36,7 +36,7 @@
 ## Not yet
 
 - **Entity lookup by name.** The runtime has no entity names, so `bind_property` takes the `Entity` and the host finds it (ui.md wrote `player/Health/hp` with a name in front).
-- **Cheat convars can still be set from the console.** `console::execute` does not check the `Cheat` flag; a shipped-build guard belongs with packaging v2.
+- ~~**Cheat convars can still be set from the console.** `console::execute` does not check the `Cheat` flag; a shipped-build guard belongs with packaging v2.~~ Done: `console::set_cheats_allowed(false)` (`M8-packaging.md`, cheat guard).
 - **Style transitions (`transition_ms`), 9-slice images and world-space UI** are not built. Images draw one region.
 - **Replay determinism of a recorded menu session** (ui.md §6, last row) is not tested yet. `update()` is a pure function of the context, so it should hold.
 

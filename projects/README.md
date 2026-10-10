@@ -16,4 +16,8 @@ The layout and the rules are in `docs/architecture/assets.md` §4.4; the record 
 
 `Undertow/` is the second MCP dogfood game: a lit-2D cave-diving drone with a rope, currents and hazards, authored through `undertow_mcp` (`docs/research/mcp-dogfood-undertow.md`).
 
+`SolsticeReach/` is the 3D graphics showcase: an island walked through eight lighting regimes, with procedural content and a scene authored through `solstice_reach_mcp` (`docs/design/solstice-reach.md`).
+
+`Undelivered/` is the narrative showcase: a light novel on the 2D kit, its script compiled to tables and its save game the whole run state (`docs/design/undelivered.md`).
+
 The third round, `docs/research/mcp-blind-test.md`, made a game without the engine source (an SDK-like setup); that project is kept in the project files, not here.

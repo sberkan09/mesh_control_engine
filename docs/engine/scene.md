@@ -5,7 +5,8 @@
 authored-scene path: `.mcscene` text is cooked to a `CHNK_SCENE` chunk, the pack is mounted, and
 `mce_scene` writes the rows into a `World` (assets.md §6, FR-ENT-060). It is linked by
 `mce_editor_core` (play-in-editor and the preview world), the `mce_engine` umbrella,
-`mce_player_runtime` on platforms without game modules, and `test_scene` / `test_kit`. Callers in
+`mce_player_runtime` on platforms without game modules, the `mce_cook` CLI (`tools/cook`, for the
+reflected streaming components) and `test_scene` / `test_kit`. Callers in
 the tree: `src/player/src/player.cpp`, `src/editor/core/src/play_session.cpp`,
 `src/editor/core/src/editor_scene.cpp` and `src/editor/mcp/src/headless_run.cpp`.
 
@@ -36,15 +37,20 @@ Streaming, `include/mce/scene/streaming.h` (FR-ENT-120, opt-in):
 
 - Components: `SceneChunk` (an `AssetRef<Scene>`, a box `half_extents` around the entity's position,
   `load_distance`, `unload_distance`, `pinned`, `disabled`), `StreamingFocus` (`enabled`) and the
-  pump-written `SceneChunkStatus` (`state`, `entity_count`). All three are registered in the cook,
+  pump-written `SceneChunkStatus` (`state`, a `ChunkState`: `Unloaded`, `Loading`, `Loaded`, `Failed`;
+  `entity_count`). All three are registered in the cook,
   the editor and the MCP server (`engine_components.cpp`).
 - `install_streaming(world, assets, StreamingConfig)` adds the `SceneStreaming` resource;
   `pump_streaming(world, PumpMode)` runs it, once per tick, outside phases (it spawns and destroys).
   `Budgeted` follows the config: `async` requests go through `AssetSystem::request_async` and at most
-  `max_instantiations_per_pump` chunks instantiate per pump; with `async` off a wanted chunk loads in
-  the same pump (still budgeted). `Settle` loads everything wanted now, synchronously.
+  `max_instantiations_per_pump` chunks instantiate per pump, with at most `max_loads_in_flight`
+  (default 4) async reads queued at once; with `async` off a wanted chunk loads in the same pump
+  (still budgeted). `Settle` loads everything wanted now, synchronously.
 - `SceneStreaming::entities(chunk)` lists what a loaded chunk spawned; `stats()` counts chunks,
-  states, streamed entities, loads and unloads. `distance_to_box` is the distance rule.
+  states, streamed entities, loads and unloads; `config()` returns the mutable `StreamingConfig`;
+  `unload_all(world)` destroys every streamed entity and drops pending loads (chunks go back to
+  `Unloaded`); `set_assets` repoints the resource at another `AssetSystem`, which must outlive the
+  World. `distance_to_box` is the distance rule.
 - Hosts: `mce_player` (async when windowed, sync when headless), `PlaySession` and the MCP headless
   run (sync) install it, settle after the base scene and pump before every `World::tick`.
 

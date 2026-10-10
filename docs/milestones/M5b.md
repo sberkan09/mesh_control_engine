@@ -45,7 +45,7 @@ hot-reload matrix, the editor orbit-camera collision gate) are merged into `dev_
 
 | Item | State |
 |---|---|
-| Play-in-editor (embedded host, pause/step/slow-mo, ≤ 1 s enter, Play→Stop→Play hash) | shipped, see *Editor half*; game modules do not load inside the editor process (ADR-0029 §1.7) |
+| Play-in-editor (embedded host, pause/step/slow-mo, ≤ 1 s enter, Play→Stop→Play hash) | shipped, see *Editor half*; game modules did not load inside the editor process at M5b (ADR-0029 §7); *since superseded: the stock editor loads a module with `-module` (ADR-0029 amendment)* |
 | Hot-reload matrix (textures/materials/scenes ≤ 1 s, game.dll ≤ 10 s) | shipped, see *Editor half* (ADR-0029 §2) |
 | Editor orbit camera collision gate | shipped, see *Editor half* (ADR-0029 §3) |
 | ECS bridge (`install_physics3d`, `RigidBody3D`/`Collider3D`/`CharacterController3D` components, contact events) | next physics step; the facade is shaped for it |

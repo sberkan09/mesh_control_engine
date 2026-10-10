@@ -12,4 +12,4 @@ container (4 cores), `scripts/ci/local_ci.sh`.
 | Focus loss / minimize pauses the sim (FR-RUN-060) | `mce_player`: `FocusOut`/`Minimized` raise the pause overlay and mute the master bus, `FocusIn`/`Restored` unmute (`-pause_on_focus_loss 0` turns it off); held input is already cleared on focus loss by `mce_input` | manual (needs a desktop session); the input side is covered by `test_input` focus-loss cases |
 | Clean quit flushes the save (FR-RUN-060) | `mce_player -save <slot> [-save_dir <dir>]`: the slot loads on top of the scene at start and is written in `on_shutdown` before teardown (atomic write + `.bak`, `ecs/save.h`) | `extras_2d_save_write` (120 ticks → "written (tick 120)") then `extras_2d_save_load` ("loaded … tick 120" → 60 more ticks → "written (tick 180)") |
 
-Not built: the crash handler / minidump half of FR-RUN-060 (not in the ROADMAP M6 line).
+Not built: the crash handler / minidump half of FR-RUN-060 (not in the ROADMAP M6 line). *(Built later in `M8-packaging.md`.)*

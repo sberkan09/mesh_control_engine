@@ -43,3 +43,8 @@ unorm16 UVs → `CHNK_MESH` with bounds, sub-mesh ranges and a material) and §2
 
 **Consequences.** The Kenney CC0 kit `.glb` files (UnityGLTF exports with an external `Textures/colormap.png`) cook
 unmodified: one sidecar per model and one for the shared colormap. Cook of the 17-model diorama kit takes ~0.3 s.
+
+## Amendment 2026-10-11
+
+§7 is superseded in part by [ADR-0036](0036-skeletal-skinning.md): skins are imported (glTF importer v3, the
+`CHNK_MESH` minor-1 skin section). Morph targets, cameras and lights are still ignored with a warning.

@@ -39,3 +39,7 @@ leaves open.
 **Consequences.** The 2D and 3D paths share the texture store, the sort-key radix sort and the uniform ring; the
 3D path is opt-in (`Renderer::init_3d`) so 2D games pay nothing. The v0.5 ladder (PBR, Forward+, cascades, MDI)
 replaces the shading and submission inside `Forward3D` without touching `Scene3D`'s callers.
+
+**Superseded in part by [ADR-0036](0036-skeletal-skinning.md) (2026-10-11 note):** "No skinning at MVP" no longer
+holds; skinned meshes draw through skinned forward and shadow pipelines with a joint palette at
+`rhi::bank::kJointPalette`.

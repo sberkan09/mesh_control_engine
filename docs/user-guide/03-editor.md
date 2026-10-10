@@ -29,7 +29,7 @@ SDK); without `-module` it knows engine components only.
 | **Viewport** | the scene, rendered the way the game renders it, plus gizmos, grid, selection and physics overlays. In play mode it shows the running play world |
 | **Hierarchy** | the entities as a parent/child tree, siblings in file order. Select, multi-select, create, rename, delete, drag to reparent |
 | **Inspector** | the selected entity's components, one widget per reflected field, with `Add Component` and per-component removal. Prefab instances show override marks with Revert and Apply to prefab |
-| **Assets** | the project catalog as a folder tree plus a filtered list. Drag assets into the viewport, the hierarchy or an inspector field; rename and move keep GUIDs; "Rescan assets" after adding files outside the editor |
+| **Assets** | the project catalog as a folder tree plus a filtered list. Drag assets into the viewport, the hierarchy or an inspector field; rename and move keep GUIDs; File > "Rescan assets" after adding files outside the editor |
 | **Cook** | the last cook's result and every diagnostic as `file:line:col`; Cook and Cook + Pack buttons |
 | **Play** | play-in-editor controls, the tick count and state hash, the live values of the selected entity, and the event-flow monitor |
 | **Tilemap** | gives the selected entity a tilemap layer, picks the brush from a tileset, toggles the paint tool |
@@ -49,7 +49,7 @@ Panels dock anywhere; View > Reset layout restores the default. The layout persi
 | Select | left click (Ctrl toggles, Shift adds) |
 | Marquee select | left drag on empty space |
 | Move the selection | left drag on an entity, or the move gizmo |
-| Move / rotate / scale tool | W / E / R, or View menu |
+| Move / rotate / scale tool | W / E / R, or the Edit menu |
 | Snap to grid | Edit > Snap to grid (Ctrl inverts while dragging) |
 | Cancel a drag | Esc or right click |
 | Frame the selection (or the scene) | F |
@@ -74,7 +74,7 @@ colliders extruded along Z, so it does not pass through walls.
 | F5 | play in editor / stop |
 | F6 | pause / resume |
 | F10 | single step (one fixed tick) |
-| Ctrl+F5 | run the scene in the external player (`mce_player`); "Stop player" in the File menu ends it |
+| Ctrl+F5 | run the scene in the external player (`mce_player`; File > "Run in player"); while it runs, a "Stop player" item in the menu bar ends it |
 | F7 | cook |
 | W / E / R | move / rotate / scale tool |
 | F | frame |
@@ -121,7 +121,7 @@ selection; the Inspector edits the first selected entity.
   every reference keeps resolving. Dropping an asset on a folder moves it.
 - **New files** you copy into `assets/` by hand need a sidecar before they cook. The editor's
   cook does not write sidecars; run the project's cook once with `--adopt` (section 5.3) or ask an
-  MCP agent for `cook_run {"adopt": true}`, then "Rescan assets".
+  MCP agent for `cook_run {"adopt": true}`, then File > "Rescan assets".
 - **Copy GUID** on an asset puts its GUID on the clipboard (prefix it with `guid:` in text edits and MCP calls).
 
 ## 3.7 Cook and hot reload
@@ -135,7 +135,7 @@ project.
 **Hot reload** polls `assets/` twice a second (`-editor.hot_reload_interval`, 0 turns it off).
 When a source file changes on disk, for example a PNG saved from an image editor or a `.mcscene`
 edited by an agent, the editor re-cooks only that asset and its dependents and swaps the result in.
-View > "Hot reload now" forces a pass. A failed re-cook keeps the previous output and reports in
+File > "Hot reload now" forces a pass. A failed re-cook keeps the previous output and reports in
 the Cook panel.
 
 ## 3.8 Play-in-editor

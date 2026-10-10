@@ -175,7 +175,8 @@ def cmd_ship(args):
         sys.exit(f"mce: {p.pack} is missing: run `mce build {p.dir}` first")
     version, stamp = sdk_version()
     version = args.version or p.meta.get("version") or version
-    os_tag = {"Linux": "linux", "Windows": "windows", "Darwin": "macos"}.get(platform.system(), platform.system().lower())
+    # The same OS tag as scripts/ship.py, so both tools name a project's zip alike.
+    os_tag = {"Linux": "linux-x64", "Windows": "win64", "Darwin": "macos"}.get(platform.system(), platform.system().lower())
     out_dir = pathlib.Path(args.out or (p.dir / "dist")).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     zip_path = out_dir / f"{p.name}-{version}-{os_tag}.zip"

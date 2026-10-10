@@ -18,6 +18,7 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-frames N` | 0 | windowed: quit after N rendered frames |
 | `-capture <path.ppm>` | | with `-frames` or `-capture_tick`: write the last frame as a PPM (the directory is created) |
 | `-capture_tick N` | 0 | windowed: quit after N simulation ticks (frame-rate independent, unlike `-frames`) |
+| `-input_map <guid or path>` | | the cooked `.mcinput` to load (default: the first in the pack, else the starter-kit map; chapter 11) |
 | `-input <file>` | | play a scripted input file instead of the keyboard (`<from>[-<to>] Action[=value]` per line; chapter 11) |
 | `-save <slot>` | off | load the slot at start if it exists; write it on a clean quit |
 | `-mods 0` | 1 | games that take mods (chapter 19): start without them |
@@ -98,12 +99,13 @@ python3 scripts/ship.py --project projects/<Name> [--preset p] [--version v] [--
 python3 scripts/ship.py platformer | diorama | all
 python3 scripts/symbolicate.py <report.crash> --symbols <dir>...
 scripts/ci/local_ci.sh [--quick] [stage ...]        # stages: walls linux-gcc-debug linux-clang-release linux-gcc-release linux-asan tidy determinism
+scripts/ci/local_ci_macos.sh [--quick] [stage ...]  # on a Mac; stages: walls macos-debug macos-release macos-asan validation samples determinism ship
 scripts/ci/setup_env.sh                               # Ubuntu 24.04 packages
 ```
 
 ## 16.6 Samples with their own flags
 
-`sample_03_platformer` (`-level N`, `-autoplay 1`), `sample_04_cubes` (`-walk 1`, `-r.msaa N`,
+`sample_03_platformer` (`-level N`, `-autoplay 1`), `sample_04_cubes` (`-walk 1`, `-skin 0`, `-r.bloom 0`, `-r.fxaa 0`, `-r.sky_texture 1`, `-r.msaa N`,
 `-lights N`, `-r.cascades N`, `-night 1`, `-cam.yaw`, `-cam.pitch`, `-cam.dist`, `-cam.auto 0`),
 `sample_05_ashen_court` (`-autoplay 1`), `sample_02_boids` (`-boids N`), `sprites_2d` (`-sprites N`),
 `ui_gallery` (`-page title|options|levels|console`). Each sample's `main.cpp` header lists them.

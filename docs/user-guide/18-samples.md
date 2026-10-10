@@ -13,6 +13,8 @@ checkout only.
 | `projects/Kindle` | a 2D platformer level with colour switches; the reference for "a game on the kit": player controller, coins, hazards, goal, crumbling blocks, moving platforms, follow camera, HUD labels, sounds, a gameplay ctest; the level was authored through MCP | `games/kindle/module/components.h`, `kindle.cpp`, `tools/author_level_mcp.py`, `tests/test_kindle.cpp` |
 | `projects/PrismBreak` | a brick breaker authored entirely through MCP: title and pause as scene state, ball physics via velocity, prefab-free spawning with `Commands` | `games/prism_break/module/` |
 | `projects/Undertow` | a lit-2D cave diver: `Light2D` with normal maps, particles, a rope, currents, hazards, energy; the second MCP dogfood game | `games/undertow/module/`, `assets/effects/*.mcpart` |
+| `projects/SolsticeReach` | the 3D showcase: a procedural island, eight times of day, PBR with cascaded shadows and Forward+ lights, scattered grass and trees, a 3D character on `World3D`, saves, photo mode, a bot that plays the route; the module declares its own small 3D kit and the host draws it | `games/solstice_reach/module/components.h`, `host/main.cpp`, `tools/gen_assets.py`, `tests/test_solstice_reach.cpp` |
+| `projects/Undelivered` | a light novel on the 2D kit: a script compiled to tables and run by a small VM over one saved component, lit paper-layer sprites, LUTs, music beds, five endings reached by a bot in tests | `story/*.story`, `tools/compile_story.py`, `games/undelivered/module/undelivered.cpp`, `tests/test_undelivered.cpp` |
 
 The research notes for the MCP-authored games (`docs/research/mcp-dogfood.md`,
 `mcp-dogfood-undertow.md`, `mcp-blind-test.md`) record the friction each hit; chapter 14's

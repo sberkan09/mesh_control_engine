@@ -4,8 +4,8 @@ The RHI is four L2 libraries (layer per the CMake comments):
 
 - `mce_rhi` (`src/engine/rhi/`): the interface. Handles, descriptors, the recorded `CommandBuffer`
   and the abstract `RenderDevice`. It has no GL and no SDL. Its only public dependency is
-  `mce_core`. It is linked by `mce_render`, `mce_editor_core`, `mce_editor_layer`, the three backend
-  libraries below and the `mce_engine` umbrella (`src/module/CMakeLists.txt`).
+  `mce_core`. It is linked by `mce_render`, `mce_editor_core` (publicly, which is how
+  `mce_editor_layer` reaches it), the three backend libraries below and the `mce_engine` umbrella (`src/module/CMakeLists.txt`).
 - `mce_rhi_gl` (`src/engine/rhi_gl/`): the OpenGL 4.5 core backend and the only GL code in the
   engine. Public dependencies `mce_rhi` and `mce_platform`; `mce_glad` and `SDL3::SDL3-static` are
   private, so GL symbols never leak past the target.
@@ -16,7 +16,7 @@ The RHI is four L2 libraries (layer per the CMake comments):
   the `mce_editor` executable, the `mce_engine` umbrella, `mce_player_runtime` (directly only where
   game modules are unsupported; otherwise through the umbrella), the samples (`01_triangle`, `sprites_2d`,
   `03_platformer`, `04_diorama`, `04_cubes`, `05_ashen_court`, `ui_gallery`), project editors made
-  by `cmake/MceProject.cmake`, and the GPU tests `test_render_gl` and `test_shader_gl`.
+  by `cmake/MceProject.cmake`, and the GPU tests `test_render_gl`, `test_shader_gl`, `test_ui_gl` and `test_kit_gl`.
 - `mce_rhi_metal` (`src/engine/rhi_metal/`): the Metal backend for macOS. It is owned by the macOS
   track (see `docs/milestones/M-MAC.md` and ADR-0028); only its header is summarized below.
 
@@ -40,7 +40,9 @@ The RHI is four L2 libraries (layer per the CMake comments):
 - `DrawIndexedIndirectCommand`: the 20-byte MDI argument record.
 - `namespace bank`: the fixed binding numbers (UBO 0 FrameU, 1 PassU, 2 MaterialU, 3 ObjectU;
   samplers from 6, e.g. `kAlbedo` 6, `kNormal` 7, `kOrm` 8, `kShadowMap` 9, `kSky` 10, `kFont` 11,
-  `kEmissive` 13; std430 storage `kClusters` 4, `kLightPool` 5, `kLightIndices` 6).
+  `kEmissive` 13; std430 storage `kClusters` 4, `kLightPool` 5, `kLightIndices` 6, `kJointPalette` 7, the
+  skinned meshes' joint matrices read by the vertex stage). `kObject` (the per-draw ObjectU block) and
+  `kObjects` (the Objects SSBO) share number 3.
 - `kUniformAlignment` (256) and `kMaxTimestamps` (32 GPU timestamp queries per frame slot).
 
 `include/mce/rhi/command_buffer.h`: `CommandBuffer`, a POD byte stream of commands (`CmdType`,
@@ -81,7 +83,10 @@ resources, rings, frames) and `src/gl_translate.cpp` (command stream to GL calls
 `include/mce/rhi_metal/metal_device.h`: `rhi::metal::create_device(window, desc)`. Per the header,
 it attaches a `CAMetalLayer` to the window through SDL's Metal view, needs a Metal-capable window
 (`WindowDesc::opengl` selects `SDL_WINDOW_METAL` on macOS), and translates the GLSL 450 pipeline
-sources to MSL when a pipeline is created.
+sources to MSL when a pipeline is created. Xcode GPU captures (`src/metal_device.mm`, `init_capture`
+/ `begin_capture` / `end_capture`): `MCE_METAL_CAPTURE=<frame>:<path>.gputrace` writes that frame
+(begin_frame to present) as a GPU trace through `MTLCaptureManager`; the process also needs
+`MTL_CAPTURE_ENABLED=1` in its environment, and logs a warning without it.
 
 ## Rules and invariants
 
@@ -161,6 +166,10 @@ sources to MSL when a pipeline is created.
 - Pipelines still take GLSL source text. The `ShaderSource` comment says so, and M6-shader-cook
   records that moving the renderer's built-in shaders to cooked assets is not built.
 - `barrier()` is a no-op ("a real barrier on a future explicit backend").
-- M-MAC backlog: shader translation moves to the cook once shaders are cooked assets (ADR-0028
-  §2); `.app` packaging, Xcode GPU captures and a deployment target below macOS 26 are open.
-- Real-GPU timings and RenderDoc captures are open in M5a: CI has only llvmpipe.
+- M-MAC backlog (`docs/milestones/M-MAC.md`, "Open"): shader translation moves to the cook once
+  shaders are cooked assets (ADR-0028 §2); Developer ID signing and notarization (bundles are signed
+  ad hoc); a deployment target below macOS 26; AddressSanitizer on macOS (`macos-asan` runs UBSan
+  only); indirect command buffers for MDI (measured, deferred until draw args are GPU-written); parity
+  with RHI features as they land on GL.
+- Linux CI has only llvmpipe; real-GPU numbers exist only from the Mac leg
+  (`scripts/ci/local_ci_macos.sh`). RenderDoc captures are open in M5a.

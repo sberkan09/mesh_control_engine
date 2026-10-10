@@ -12,9 +12,8 @@ Symptoms, what they mean, what to do.
 | "module install failed" | your `install()` returned an error | read the log line; a common one is a missing host resource (install order, section 6.8) |
 | Window never appears, "No available video device" | no display (a container, SSH) | run headless (`-headless 1`), or under `xvfb-run` with Mesa (`LIBGL_ALWAYS_SOFTWARE=1`) |
 | Two audio-device errors at start in a container | no sound card; the engine falls back to silence | harmless; `-audio.enabled 0` silences the log |
-| `-help` says "unknown convar" | there is no `-help`; flags are convars | chapter 16, or `help` in the console |
 | `-frames` has no effect | the run is headless | use `-ticks N` |
-| `-capture` fails with "cannot write" | relative path | pass an absolute path |
+| `-capture` fails with "cannot write" | the folder is not writable; a relative path is taken from the working directory, not the executable's folder | check the working directory, or pass an absolute path |
 
 ## Content and the cook
 
@@ -41,7 +40,7 @@ Symptoms, what they mean, what to do.
 | Inspector is greyed out | play mode | Stop (F5) |
 | HUD text is off-screen in play mode | the play view is the viewport's size, the label was authored for the window | ignore in the editor, or enlarge the viewport |
 | "Recover unsaved changes" on open | the previous session ended without saving | Recover or Discard |
-| Hot reload did not pick up a change | the watcher is off, or the file is outside `assets/` | View > Hot reload now; `-editor.hot_reload_interval 0.5` |
+| Hot reload did not pick up a change | the watcher is off, or the file is outside `assets/` | File > Hot reload now; `-editor.hot_reload_interval 0.5` |
 
 ## Physics
 

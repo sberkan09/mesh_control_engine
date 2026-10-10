@@ -290,7 +290,7 @@ Filled in as they are hit; each row says what was done about it in the game.
 |---|---|---|---|
 | No 3D kit (`MeshRenderer`, `Light3D`, `Camera3D` components) and the stock player draws only 2D | a 3D project needs its own host; the editor viewport shows nothing for it | the module declares its own `MeshRef` / `Light3D` / `Scatter`; the host draws them | a `mce_kit3d` with these components and a 3D extract in the player (ROADMAP post-v1.0) |
 | No 3D particles | no dust motes, waterfall, firefly sprites | fireflies are moving point lights with a tiny emissive mesh | a 3D billboard particle path in Forward3D |
-| No skinning | the Keeper is a rigid node proxy | node clips on body/staff/lantern | FR-R3D-060 |
+| No skinning | the Keeper is a rigid node proxy | node clips on body/staff/lantern | FR-R3D-060 — *built engine-side since (M-SKIN, ADR-0036); the Keeper still uses the rigid proxy (`tools/gen_assets.py` exports no skin)* |
 | No vertex colours in the glTF importer | terrain blending must be per-submesh | terrain split into material submeshes by slope and altitude | COLOR_0 → a vertex attribute the PBR shader multiplies |
 | No IBL | metals reflect the sky gradient only | `specular_ambient` per regime | prefiltered equirect |
 | `Sky` texture replaced the gradient entirely | a star field at night would black out the horizon glow | added `Sky::texture_additive` to the engine (this thread): gradient + texture | done; keep |
@@ -325,6 +325,6 @@ Filled in as they are hit; each row says what was done about it in the game.
 - **Saves** restore `Progress`, the mirrors, the shards and the Keeper (`SaveKey`s); NEW GAME on
   the title deletes the autosave and resets the run in place (`reset_run`).
 - **Not built**: plaques (`Plaque`), the sunshard-count-driven crystal glow, the Vault's inner glow
-  at 42 shards, gamepad testing, Windows/Metal captures (planned on a Mac through Remote Control).
+  at 42 shards, gamepad testing, Windows captures. (Metal captures were recorded on 2026-10-11, `docs/milestones/M-MAC.md`.)
 
 Screenshots (llvmpipe, 1280×720): `/mnt/project-files/showcase-games/solstice-reach/`.

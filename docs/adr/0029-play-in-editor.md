@@ -82,3 +82,9 @@ over 3 rounds (budget 10 s).
    depth, default 1 m). It rebuilds only when an entity it reads changed. Sensors never
    stop the camera. A 3D collider component joins it when the ECS physics3d bridge lands.
 4. **Off switch.** View → "Orbit camera collision" turns the gate off to look through geometry on purpose.
+
+## Amendment 2026-10-11
+
+§7 is superseded: the editor is now an `UMBRELLA` target that links the `mce_engine` umbrella where modules are
+supported, and the stock editor loads a game module with `-module <lib>` (`src/editor/app/main.cpp`), which
+registers its components for the inspector and the cook and runs its `install()` in play.

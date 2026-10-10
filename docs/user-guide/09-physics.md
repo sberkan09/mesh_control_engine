@@ -42,7 +42,7 @@ Shapes: `{"type": "Box", "half": [w, h], "offset": [x, y], "rotation": r}`,
 Rules that matter in play:
 
 - **Physics owns the pose of a bodied entity.** Write `LocalTransform` to place it in the scene;
-  during play, move it with `World2D::teleport(e, pos)` or by velocity, not by writing the
+  during play, move it with `World2D::teleport(e, pos, angle)` or by velocity, not by writing the
   transform, which physics overwrites each tick.
 - A body exists after the first physics step, so `has_body(e)` is false during the first tick's
   `FixedUpdate_Pre`. Guard first-tick logic on it.
@@ -59,9 +59,9 @@ Gameplay reaches the world through the resource:
 ```cpp
 physics::World2D& pw = f.resource<physics::World2D>();
 pw.set_linear_velocity(e, v);         // kinematic platforms: velocity that lands on the path
-pw.apply_impulse(e, impulse);
+pw.apply_impulse(e, impulse, world_point);   // at a world point (the centre of mass for no spin)
 pw.apply_force(e, force);
-pw.teleport(e, position);
+pw.teleport(e, position, angle);
 pw.set_enabled(e, false);             // switch a body off: no collisions, no sensor events
 physics::BodyState s; if (pw.body_state(e, s)) { s.position; s.angle; s.linear_velocity; }
 ```
@@ -138,14 +138,16 @@ if (auto hit = pw.raycast(origin, dir, max_dist, filter)) { hit->entity; hit->po
 pw.raycast_all(...);  pw.shape_cast(shape, from, to, filter);  pw.overlap_point(p, filter);  pw.overlap_aabb(box, out, filter);
 ```
 
-`QueryFilter` has a layer mask, an exclude list, a sensors on/off switch and an optional predicate.
+`QueryFilter` has a `layer_mask`, an `exclude` list, `include_sensors` (false by default, so
+queries skip sensors) and an optional `predicate`.
 Results are sorted, so queries are deterministic.
 
 ## 9.6 Joints
 
 From code: `DistanceJointDesc` (a rod, a rope with `min_length < max_length`, or a spring with
 `hertz > 0`) and `RevoluteJointDesc` (a hinge with an optional angle limit and motor), created on
-the world and addressed by a `JointId`. Prismatic, wheel, weld and mouse joints are not built.
+the world with `create_distance_joint(desc)` / `create_revolute_joint(desc)` and addressed by the
+returned `JointId` (`destroy_joint`, `set_motor_speed`, `set_joint_limits`). Prismatic, wheel, weld and mouse joints are not built.
 Joints are not scene-authored yet.
 
 ## 9.7 Configuration
