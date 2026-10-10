@@ -6,6 +6,7 @@ mce_add_test(test_ecs
         test_determinism.cpp
         test_change_detection.cpp
         test_hierarchy.cpp
+        test_parallel.cpp
     DEPS
         mce::mce_ecs)
 
