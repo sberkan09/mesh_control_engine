@@ -20,6 +20,8 @@ is open (below).
 | Presets | `CMakePresets.json` | `macos-debug`, `macos-release`, `macos-asan` |
 | Mac CI | `scripts/ci/local_ci_macos.sh` | walls, three presets, Metal validation, windowed samples with captures, determinism, ship |
 | `.app` packaging | `cmake/macos/macos_bundle.py`, darwin hooks in `scripts/ship.py` | `ship.py platformer` / `--project projects/SolsticeReach` write `<Name>.app` (executable + game module + `libmce_engine.dylib` in `Contents/MacOS`, pack/VERSION/CREDITS in `Contents/Resources`, where `SDL_GetBasePath` points; a module symlink there keeps the base-path lookup), dSYM symbol archive beside the zip (`symbolicate.py` finds it by LC_UUID), `strip -x`, ad-hoc signature, `codesign --verify --strict`. Zips keep the bundle symlink; `ditto -x -k` extraction verifies |
+| Read-only bundle | `module_host` maps the module in place when its folder is read-only (8647148, cloud) | 2026-10-11: the Ember Step `.app` made read-only (`chmod -R a-w`, as App Translocation does) starts, loads its module in place and exits 0 |
+| R11G11B10F readback | `rhi_metal/src/metal_device.mm` (`read_pixels`) | unpacked to RGBA8 like GL's `glGetTextureSubImage(GL_RGBA, GL_UNSIGNED_BYTE)`: channels clamped to [0, 1], alpha 255 (`test_rhi_metal`). Depth and multisampled targets stay `Unsupported`, which matches GL, where that call is an error for them |
 | 10-minute Finder soak | Ember Step `.app`, opened through LaunchServices (`open`, the Finder path) | 2026-10-10: 10 min alive, RSS flat at 138.6 MB after start-up, CPU steady 11.5 %, clean exit on SIGTERM, no crash report (title screen, no input; lid closed, so audio ran silent) |
 
 ## Tests on Metal
@@ -40,11 +42,9 @@ Filled per landing in the PR description; the first landing's table is in the PR
 | Item | State |
 |---|---|
 | Shader translation at cook time (ADR-0028 §2) | waits for cooked shaders (`ShaderKey`); then the translator moves into the cook and leaves `mce_rhi_metal` |
-| Shipped game module from a read-only bundle | `module_host` copies the module next to itself before mapping it; inside a read-only `.app` (App Translocation of a downloaded zip, `/Applications` without write access) the copy fails and start-up aborts (`IoError [module.copy]`). Needs a cloud-owned fix (copy to a temp directory when the folder is not writable); reported |
 | Developer ID signing + notarization | out of scope until FR-SHP-030; bundles are signed ad hoc |
 | Xcode GPU capture per backend feature | not yet recorded |
 | Deployment target below macOS 26 | needs a float `from_chars` fallback in the cook's JSON reader (cloud-owned) |
-| Readback of R11G11B10F / depth targets | unsupported (returns `Unsupported`); GL reads them |
 | AddressSanitizer on macOS | the ASan runtime (AppleClang 17 and Homebrew LLVM 21) hangs in shadow-memory init on macOS 26.6 even for a 3-line program; `macos-asan` runs UBSan only until a toolchain update fixes it |
 | Indirect command buffers for MDI | one direct draw per record today |
 | Parity with RHI features that land on GL after this (M5a PBR, CSM, post chain, …) | per feature, as they land |
