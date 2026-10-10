@@ -150,8 +150,9 @@ Built-in shaders are GLSL 450 strings in `src/renderer.cpp` (2D) and `src/shader
   opt-in feature: M-SKIN.)
 - Built-in shaders are not cooked assets yet (M6-shader-cook "Not built"), and the ≤ 1 s shader
   save-to-pixels loop is not built.
-- Real-GPU numbers, RenderDoc captures and golden images need hardware (M5a, M6-2d, M7): CI has
-  only llvmpipe. The lit-2D and 2D-post GPU budgets in M6-2d are open for that reason.
+- RenderDoc captures and golden images need hardware (M5a, M6-2d, M7). Linux CI has only
+  llvmpipe; real-GPU numbers exist only from the Mac leg (`scripts/ci/local_ci_macos.sh`). The
+  lit-2D and 2D-post GPU budgets in M6-2d are open for that reason.
 - M7: Ashen Court's characters are static node-transform proxies; skinning exists (M-SKIN) but
   the game does not use it. Skinning has no morph targets, dual quaternions or GPU palette
   compute, and the editor does not preview skeletons.

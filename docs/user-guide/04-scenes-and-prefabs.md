@@ -208,6 +208,8 @@ unloads, every entity it spawned is destroyed, so anything that must survive (sc
 opened doors) belongs on base-scene entities or in a resource. `pinned: true` keeps an area loaded
 wherever the player is, `disabled: true` keeps it out; game code can flip both at run time, and it
 reads `SceneChunkStatus` (`Unloaded`, `Loading`, `Loaded`, `Failed`) to know when an area is in.
+These components are not in `mce/gameplay.h`: a game module that touches them adds
+`#include <mce/scene/streaming.h>`.
 Save games do not track areas yet, so keep `SaveKey` entities in the base scene.
 
 `mce_player`, play-in-editor and the MCP headless run stream with no game code. The windowed

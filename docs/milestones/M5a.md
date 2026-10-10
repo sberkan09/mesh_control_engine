@@ -4,6 +4,8 @@
 need a real GPU or a desktop are listed under *Open*.
 **Measured on:** the Linux CI container (4 cores, Mesa llvmpipe software GL 4.5, Xvfb), release build, 1280×720.
 GPU numbers from a software rasterizer are the pessimistic floor, not the budget verdict (see *Budget table*).
+**Test names (2026-10-11):** `test_render3d_gl` is the file `test_render3d_gl.cpp` in the `test_render_gl` executable;
+`test_render3d` and `test_render3d_m5a` are files in `test_render`.
 
 ## What shipped
 
@@ -68,4 +70,4 @@ main pass dominates (fragment shading of clustered lights), shadows are ~5 % and
 2. **LRN-2 close-out** (frame allocator under GPU pressure) is the author's own written gate.
 3. **Not built, by design for this milestone:** depth prepass, MDI over a persistent object buffer, IBL
    prefiltering, skinning (FR-R3D-060, Should, deferred per the cut ladder), and a jobified cluster build. None
-   needs an interface change.
+   needs an interface change. *(2026-10-11: skinning was built later, `M-SKIN.md` / ADR-0036.)*

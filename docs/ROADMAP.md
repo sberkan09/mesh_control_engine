@@ -1,7 +1,7 @@
 # Mesh Control Engine — Roadmap
 
 **Project:** Mesh Control Engine (MCE) · **Document class:** Roadmap / plan
-**Date:** 2026-10-06 · **Status:** AUTHORITATIVE sequencing for the tiers defined in `REQUIREMENTS.md` §6. Dependency-ordered; **every milestone ends in a running, demonstrable build** (the invariant from REQUIREMENTS §7.4). Sizes are relative (S ≈ 2–4 wk, M ≈ 4–8 wk, L ≈ 8–14 wk, XL ≈ 14–22 wk at the 10–15 h/wk baseline; velocity re-checked per NFR-B-07 — **cut feature scope, never the gate, never the demo**). Every milestone also carries an **effort estimate in hours** (engineering + content production, published next to the size); the tier bands in §2's tier map are the *sums* of those estimates — if a milestone's actual hours exceed its estimate by > 50 %, the named overrun-absorber milestone cuts per the ladder (see the tier map note).
+**Date:** 2026-10-06 · **Last revised:** 2026-10-11 (status table in §2) · **Status:** AUTHORITATIVE sequencing for the tiers defined in `REQUIREMENTS.md` §6. Dependency-ordered; **every milestone ends in a running, demonstrable build** (the invariant from REQUIREMENTS §7.4). Sizes are relative (S ≈ 2–4 wk, M ≈ 4–8 wk, L ≈ 8–14 wk, XL ≈ 14–22 wk at the 10–15 h/wk baseline; velocity re-checked per NFR-B-07 — **cut feature scope, never the gate, never the demo**). Every milestone also carries an **effort estimate in hours** (engineering + content production, published next to the size); the tier bands in §2's tier map are the *sums* of those estimates — if a milestone's actual hours exceed its estimate by > 50 %, the named overrun-absorber milestone cuts per the ladder (see the tier map note).
 
 Milestone naming note: the FR tables in REQUIREMENTS carry indicative M0–M5 tags; this document is the sequencing authority and maps to *tiers* (MVP / v0.5 / v1.0), not to those tags.
 
@@ -30,6 +30,7 @@ flowchart LR
     M45 -.slip whole past.-> M5b
     M4 --> MMAC["M-MAC macOS port<br/>mce_rhi_metal + macOS platform<br/>(parallel track, built on the Mac)"]
     MMAC -.parity backlog.-> M5a
+    M9 -.opt-in, off-tier.-> POST["M-SKIN · M-NET · scene streaming · data mods<br/>(built 2026-10-10)"]
 ```
 
 Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because Artifact A is the earliest shippable artifact and the cut ladder's final rung reduces the MVE to Artifact A alone — Artifact B is structured as an **addition, not a dependency** (REQUIREMENTS cut-ladder rung 7). The cook pipeline precedes everything that loads content; the determinism harness precedes everything that could break it.
@@ -37,6 +38,29 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 ---
 
 ## 2. Milestones
+
+**Status (2026-10-11).** The milestone texts below are the plan as written; this table says where each one stands. "Engineering done" means the builds and tests merged; the gate column lists what the record says is still open. Evidence: the linked records and REQUIREMENTS §9.
+
+| Milestone | Record | Engineering | Gate still open |
+|---|---|---|---|
+| M0–M3 | none (predate the milestone docs; editor items in [editor-catch-up.md](milestones/editor-catch-up.md)) | done | Windows/MSVC-side gates (VS minidump, MSVC presets) never re-run since hosted CI was removed |
+| M3.5 | none (tests: `test_manifold_cases.cpp`, `oracle/test_box2d_oracle.cpp`) | done | — |
+| M4 (MVP gate) | [M4.md](milestones/M4.md) | done | Windows `mce_engine.dll` export ledger, clean-VM double-click test, Kenney art, LRN 1–5 |
+| Editor catch-up | [editor-catch-up.md](milestones/editor-catch-up.md) | done | — |
+| M4.5 | [M4.5.md](milestones/M4.5.md) | done | stretch items cut (attach, `render_frame`) |
+| M-MAC | [M-MAC.md](milestones/M-MAC.md) | mostly done | the backlog in that record |
+| M5a | [M5a.md](milestones/M5a.md) | done | real-GPU numbers, RenderDoc captures |
+| M5b | [M5b.md](milestones/M5b.md) | done | — |
+| M6 (v0.5 part 1) | M6-[ecs](milestones/M6-ecs.md), [editor](milestones/M6-editor.md), [2d](milestones/M6-2d.md), [subsystems](milestones/M6-subsystems.md), [gameplay](milestones/M6-gameplay.md), [shader-cook](milestones/M6-shader-cook.md), [ember-step](milestones/M6-ember-step.md) | done | CC0 art pass, the authoring-spike hours, reverb send (cut) |
+| M7 (v0.5 part 2) | [M7-ashen-court.md](milestones/M7-ashen-court.md), [M7-editor-perf.md](milestones/M7-editor-perf.md) | done (`samples/05_ashen_court`) | procedural content, no music, no RenderDoc/golden images, no real-GPU numbers |
+| M8 (v1.0 part 1) | M8-[ui](milestones/M8-ui.md), [editor](milestones/M8-editor.md), [packaging](milestones/M8-packaging.md), [project-template](milestones/M8-project-template.md) | done | timeline/curve editor, thumbnails, multi-scene tabs and IBL cut (rung 1) |
+| M9 (v1.0 gate) | [M9-ucd.md](milestones/M9-ucd.md) | done (`projects/Kindle`) | non-programmer double-click test, timed UC-C session, LRN gates, memory reconciliation, 60 fps on hardware |
+| M-SKIN | [M-SKIN.md](milestones/M-SKIN.md), ADR-0036 | done | — |
+| M-NET | ADR-0035 | done | — |
+| Scene streaming / data mods | [scene-streaming.md](milestones/scene-streaming.md), ADR-0037 / ADR-0034 | done | — |
+| M-MOBILE | — | parked | — |
+
+As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
 ### M0 — Skeleton that runs and is observed · **size M (≈ 70–110 h engineering)** · tier: MVP
 
@@ -107,7 +131,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 
 **Builds:** ADR-0028 (Metal over MoltenVK; GLSL → SPIR-V → MSL via glslang + SPIRV-Cross, at pipeline creation inside `mce_rhi_metal` until shaders are cooked assets, then in the cook) · **seam PRs first**, each small and merged before the backend work leans on it: (1) one backend factory in `mce_rhi` so hosts stop calling `rhi::gl::create_device` directly, plus the Metal wall in `check_walls.py`; (2) a Metal-capable `platform::Window` (`SDL_WINDOW_METAL`, GL attributes only on the GL path); (3) MSL in the shader cook + `ShaderSource` · `mce_rhi_metal` (`src/engine/rhi_metal`): buffers/textures/samplers/pipelines, recorded `CommandBuffer` → Metal encoders, 3 frame slots on shared-storage rings + completion-handler semaphore, indirect draws with `[[base_instance]]` · macOS platform bits (`.dylib` module loading, bundle paths) · `macos-debug` / `macos-release` / `macos-asan` presets · `scripts/ci/local_ci_macos.sh` · `.app` packaging for the player.
 
-**File ownership (binding while M-MAC is open):** the Mac session alone edits `src/engine/rhi_metal/**`, `tests/rhi_metal/**`, `src/engine/platform/src/macos/**`, `cmake/macos/**`, the `macos-*` presets, `scripts/ci/local_ci_macos.sh`, ADR-0028 and `docs/milestones/M-MAC.md`. Cloud threads never touch those. The Mac session never edits `rhi_gl`, the renderer or other engine modules; shared seams (`mce_rhi` headers, `platform/window.*`, host `main.cpp` device creation, CMake roots, `check_walls.py`) change only in dedicated seam PRs that pass the Linux `local_ci.sh` (verified and merged by a cloud thread) and keep `mce_rhi_gl` green. **Parity rule:** new RHI features land on GL first; Metal catch-up is M-MAC's backlog, never a reason for a cloud milestone to wait.
+**File ownership (binding while M-MAC is open):** the Mac session alone edits `src/engine/rhi_metal/**`, `tests/rhi_metal/**`, `src/engine/platform/src/macos/**` (never created: the macOS code sits under `__APPLE__` in shared platform files), `cmake/macos/**`, the `macos-*` presets, `scripts/ci/local_ci_macos.sh`, ADR-0028 and `docs/milestones/M-MAC.md`. Cloud threads never touch those. The Mac session never edits `rhi_gl`, the renderer or other engine modules; shared seams (`mce_rhi` headers, `platform/window.*`, host `main.cpp` device creation, CMake roots, `check_walls.py`) change only in dedicated seam PRs that pass the Linux `local_ci.sh` (verified and merged by a cloud thread) and keep `mce_rhi_gl` green. **Parity rule:** new RHI features land on GL first; Metal catch-up is M-MAC's backlog, never a reason for a cloud milestone to wait.
 
 **Demo (running, on the Mac):** `01_triangle`, `sprites_2d`, `03_platformer` and `04_diorama` run natively on Metal on the Mac with screenshots perceptually matching the GL goldens; the 3D diorama keeps its shadow, fog and spinning prop; the packaged `.app` launches from Finder and soaks 10 minutes clean.
 **Gates (run on the Mac, cannot run in the cloud):** `local_ci_macos.sh` green — the three macOS presets build and pass `ctest`, walls (GL/SDL/Metal) clean, Metal API + shader validation layers report zero errors, determinism ladder Debug = Release on the Mac (own baselines; never compared with Windows/Linux hashes, ADR-0007) — and an Xcode GPU capture per backend feature (the Metal side of FR-DBG-020). Seam PRs additionally pass the Linux `local_ci.sh`.
@@ -157,7 +181,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 **Builds:** **project template + one-command new-project generator (finding F17: directory scaffold, `<project>.mceproj` + `assets/` + `module/` + `host/` CMake skeleton per ARCHITECTURE CF17/assets.md §4.4, working empty game module — `new_project.bat <name>` produces a compiling, cooking, shipping project)** · `mce_ui` prototype → real (retained anchored-rect tree, focus navigation, reflection data binding, debug console on convars; **held to the pre-approved RmlUi fallback trigger from audio-input-ui R6 — one slip converts this build-out to an ADR'd RmlUi dependency rather than a slipped milestone**) · packaging v2 (symbolicated crash dumps for shipped builds, shipped debug console, version metadata) · editor maturity: prefab override UI, asset thumbnails, timeline/curve editor (FR-ENT-110), multi-scene tabs — **with the explicit cut order: timeline/curve editor first out the door, then asset thumbnails (cut-ladder rung 1, binding); IBL remains first on the v1.0 cut list if anything slips** · docs pass: `docs/engine/<subsystem>.md` written from memory for every subsystem, ADR index current.
 
 **Demo (running):** a menu/pause/options/HUD panel set rendering through `mce::ui` inside a shipped build with **zero ImGui symbols** (CI scan); running the generator produces a second project that cooks and ships through the one-command pipeline; thumbnails and prefab overrides round-trip.
-**Gates:** FR-UI-010/020/030/045, FR-EDT-080/130, FR-R3D-100 acceptance.
+**Gates:** FR-UI-010/020/030/045, FR-EDT-080/130, FR-R3D-100 acceptance. *(As built: FR-EDT-130 and FR-R3D-100 cut by rung 1.)*
 **Size note:** cut ladder rung 1 targets exactly this milestone's niceties list — timeline editor and thumbnails are its rungs 1a/1b.
 
 ### M9 — UC-D: the proof game · **size M (≈ 80–140 h engineering + ≈ 30–50 h content production)** · tier: v1.0 (part 2)
@@ -210,6 +234,7 @@ Auto-parallel scheduling (**experiment run 2026-10-10 and not merged**: determin
 | Tooling (off-tier) | M4.5 editor MCP server | after the editor catch-up, before M5a | ≈ 35–60 h engineering (not summed into the tier bands; slips whole past M5b if needed) |
 | Platform (off-tier) | M-MAC macOS port | parallel, from now; built on the user's Mac | ≈ 100–160 h engineering (not summed into the tier bands; gates nothing) |
 | Networking (optional, opt-in) | M-NET `mce_net` | built 2026-10-10 by user request | ≈ 30–50 h engineering (not summed into the tier bands; gates nothing) |
+| Opt-in features (off-tier) | M-SKIN skinning, scene streaming, data mods | built 2026-10-10 by user request | not summed into the tier bands; gate nothing |
 | Platform (optional, parked) | M-MOBILE iOS/Android port | not scheduled; only if the user un-parks it | not estimated (not summed into the tier bands; gates nothing) |
 | v0.5 | M5a + M5b + M6 + M7 | months 14–24 | ≈ 390–620 h engineering + ≈ 140–220 h content |
 | v1.0 | M8–M9 (UC-D may slip to named v1.1) | months 24–36 | ≈ 180–310 h engineering + ≈ 30–50 h content |
@@ -221,7 +246,7 @@ Estimated total ≈ 1,070–1,720 h engineering + ≈ 220–340 h content produc
 ## 3. Cross-milestone invariants (checked at every gate)
 
 1. **A running demo exists** — every milestone above names it; a milestone without a demo did not close.
-2. **Green CI**: include-grep walls (GL/SDL/ImGui/JPH), symbol scans, determinism hash (from M1), cook-determinism (from M2), ASan smoke, sample ladder compiles + cooks + runs 300 headless steps (from M1).
+2. **Green CI** (`scripts/ci/local_ci.sh`; `local_ci_macos.sh` for Mac changes): include-grep walls (GL/SDL/ImGui/JPH), symbol scans, determinism hash (from M1), cook-determinism (from M2), ASan smoke, sample ladder compiles + cooks + runs 300 headless steps (from M1).
 3. **Budget tables** filled: frame (per-stage), memory (per-subsystem, ±20% vs Tracy), velocity (devlog hours ±2 h).
 4. **RenderDoc capture per new render feature** merged before the feature is (FR-DBG-020).
 5. **Learning gate closed**: the milestone's LRN doc written from memory + self-exam recorded; a gate that cannot close in its timebox cuts feature scope, never the gate (FR-DX-080).
@@ -242,7 +267,7 @@ Estimated total ≈ 1,070–1,720 h engineering + ≈ 220–340 h content produc
 | 7 | **Jolt embed friction** (units, step semantics, memory hooks, determinism of poses) | Medium | Medium | ADR-0003 written before the first include; JPH confined to `mce_physics3d` by CI grep; `World3D` facade keeps the surface to move_character/queries/sweeps; 3D items stay sketch-tier until M5b | `World3D` facade redesign count > 2; JPH version bump required mid-milestone |
 | 8 | **Editor iteration budget overrun** (undo, browser, gizmos are deep water) | Medium | Medium | editor_core headless + CI-tested; cut rung 2 removes undo/browser/rotate-scale without touching the shell; A2/A4 keep MVP editor minimal | Editor work > 125% of its milestone budget (rung 2 trigger, binding) |
 | 9 | **Shader/hot-reload GL instability** — program swap, uniform caches, driver quirks | Low-Medium | Medium | Old-program-keeps-rendering fallback by construction; binding-bank convention validated at cook; RenderDoc capture as merge gate; stopwatch log (DX-H1) records every reload | Any crash or > 1 s reload in the DX-H1 log; golden-image drift after reload |
-| 10 | **Toolchain/CI drag** — SDL3 vcpkg port breakage, 15-min builds, ASan cost, unity-build collisions | Medium | Medium | Pinned ports + vendored-SDL fallback ADR (core R1); unity + PCH presets; ASan smoke per PR with weekly full job (R8 cut-line); unity batch-size escape hatch | PR CI > 30 min sustained; any unity collision needing > 1 h untangle |
+| 10 | **Toolchain/CI drag** — SDL3 vcpkg port breakage (as built: FetchContent tag drift; the CI is local), 15-min builds, ASan cost, unity-build collisions | Medium | Medium | Pinned ports + vendored-SDL fallback ADR (core R1); unity + PCH presets; ASan smoke per PR with weekly full job (R8 cut-line); unity batch-size escape hatch | PR CI > 30 min sustained; any unity collision needing > 1 h untangle |
 
 ---
 

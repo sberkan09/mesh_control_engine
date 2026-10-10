@@ -40,3 +40,15 @@ log, refl registry), so the umbrella is needed now.
 **Not in this change.** The `mce/gameplay.h` include wall (the module currently sees every engine include
 directory; the header is the convention), the MSVC export ledger, the editor's run-in-player button and
 play-in-editor (M5b).
+
+## Amendment 2026-10-11
+
+- **macOS.** `mce_engine` is also built on macOS, where `-Wl,-force_load,<lib>` replaces `--whole-archive`
+  (`src/module/CMakeLists.txt`). Windows still links the static libraries (no export ledger yet).
+- **Read-only installs.** When the copy cannot be written next to the module (a read-only folder, a translocated
+  `.app`), the host maps the module in place and logs it (`src/module/src/module_host.cpp`); only rebuilding a
+  mapped module needs the copy.
+- **More hosts load modules.** The editor, `mce_mcp` and `mce_cook` (and their libraries) are `UMBRELLA` targets
+  (`cmake/MceTarget.cmake`): where modules are supported they link `mce_engine` instead of the static engine
+  libraries, so they share one engine instance with the module they load. The editor loads one with `-module`
+  (ADR-0029 amendment).

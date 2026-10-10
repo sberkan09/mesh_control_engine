@@ -48,10 +48,10 @@ Keep the sound references as `AssetRef<Sfx>` fields on your components (`jump_so
 ## 10.3 3D sound
 
 - `AudioListener` on the camera entity (the first in ECS order is the ear; its transform gives
-  position and orientation).
+  position and orientation, and its `gain_db`, −60..12, scales everything it hears).
 - `AudioSpatial {"attenuation_id": 1}` next to an `AudioSource` makes it 3D: the bridge follows the
   entity's position every tick. Curve 1 is an inverse-distance curve by default; a custom host can
-  define up to 32 curves (`AudioDevice::set_attenuation`) with inverse, linear or exponential
+  define curves 1..31 (id 0 is reserved for plain 2D) (`AudioDevice::set_attenuation`) with inverse, linear or exponential
   falloff and min/max distances.
 - 2D games can ignore all of this; a source without `AudioSpatial` is plain stereo.
 
@@ -59,8 +59,9 @@ Keep the sound references as `AssetRef<Sfx>` fields on your components (`jump_so
 
 Four saved convars drive the named buses: `audio.master_db`, `audio.music_db`, `audio.sfx_db`,
 `audio.ui_db`. Set them from the console (`audio.music_db -12`), the command line, or bind them to
-sliders in a runtime options menu (chapter 12). `audio.enabled 0` runs silent. The player mutes the
-master bus while the window is unfocused (`-pause_on_focus_loss 0` turns that off).
+sliders in a runtime options menu (chapter 12). `audio.enabled 0` runs silent. When the window loses focus
+or minimizes, the player pauses the sim (the pause overlay waits for the player on return) and
+mutes the master bus until focus comes back (`-pause_on_focus_loss 0` turns both off).
 
 ## 10.5 How it behaves under pressure
 

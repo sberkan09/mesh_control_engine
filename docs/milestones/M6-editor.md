@@ -18,4 +18,4 @@ Design decisions: ADR-0030. **Measured on:** the Linux CI container (4 cores), g
 |---|---|
 | Asset thumbnails (FR-EDT-110 v1.0) | not in v0.5 |
 | Tilemap palette thumbnails, multiple layers per asset, auto-tiling | not yet (ADR-0030 §8.5) |
-| Prefab override display, apply/revert (FR-EDT-080 v1.0) | instances show their content (§6); editing overrides is v1.0 |
+| Prefab override display, apply/revert (FR-EDT-080 v1.0) | instances show their content (§6); editing overrides is v1.0 *(done in `M8-editor.md`)* |

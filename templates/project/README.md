@@ -35,5 +35,5 @@ them in scenes with the editor, which loads the game module to know its componen
 game in instead.) An MCP client (an AI agent) authors the same scenes through the MCP server,
 `mce_mcp --module <that lib@GAME@.so> --project projects/@PROJECT@` (docs/engine/editor.md), and
 `mce_cook --module <that lib@GAME@.so> projects/@PROJECT@ --pack` cooks them. In the windowed game the starter-kit input
-map is live (WASD / arrows move, Space jumps, J fires); `@GAME@.cpp` reads it as the `InputState`
-resource.
+map is live (WASD / arrows move, Space jumps, J fires), but the template's `@GAME@.cpp` does not
+read it yet: a system that wants it reads the `InputState` resource (user guide chapter 11).

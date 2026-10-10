@@ -21,10 +21,11 @@ inline constexpr u8 MESH_VERSION = 1;
 inline constexpr u8 MESH_MINOR_SKIN = 1;  // minor of a chunk with MeshFlags::Skinned
 inline constexpr u8 TILEMAP_VERSION = 1;  // CHNK_TILE: one tile layer (v0.5, FR-R2D-115)
 inline constexpr u8 PARTICLE_VERSION = 1;  // CHNK_PART: one particle emitter preset (v0.5, FR-R2D-070)
-inline constexpr u8 SEQUENCE_VERSION = 1;
-inline constexpr u8 SHADER_VERSION = 1;  // CHNK_SHD: one validated GLSL stage + variants + reflection (v0.5)  // CHNK_SEQ: one action-list sequence (v0.5, FR-ENT-100)
+inline constexpr u8 SEQUENCE_VERSION = 1;  // CHNK_SEQ: one action-list sequence (v0.5, FR-ENT-100)
+inline constexpr u8 SHADER_VERSION = 1;  // CHNK_SHD: one validated GLSL stage + variants + reflection (v0.5)
 inline constexpr u8 PREFAB_VERSION = 1;  // CHNK_Prefab: the scene layout below (v0.5, FR-ENT-070)
 inline constexpr u8 MOD_INFO_VERSION = 1;  // CHNK_MOD: a mod pack's identity (FR-RUN-090)
+inline constexpr u8 INPUT_MAP_VERSION = 1;  // CHNK_INPUT: a project's action maps (FR-INP-020; mce/input/input_map.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
 // GUID -> {logical path, content hash, primary chunk type}. Entries sorted by GUID (the sort is

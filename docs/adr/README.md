@@ -3,7 +3,8 @@
 ADR-0001 to ADR-0016 were decided with the architecture and are written up in
 [`docs/ARCHITECTURE.md` §9](../ARCHITECTURE.md). Only those that
 later needed a full record have a file here (0003, 0016). ADR-0017 onward are records of what was built,
-written as each milestone merged. All are **Accepted**.
+written as each milestone merged; where they differ from ARCHITECTURE.md or the subsystem design docs, the ADR
+describes the code. All are **Accepted**.
 
 Two numbers were issued twice by parallel tracks (0024, 0025). Both files of each pair stand; cite them by
 file name when the number alone is ambiguous.
@@ -54,3 +55,11 @@ file name when the number alone is ambiguous.
 | [0033](0033-shader-cook.md) | M6 | Shader cook: validation, variants, SPIR-V reflection |
 | [0034](0034-data-mods.md) | post-M9 | Data mods, opt-in per game: mod packs, load order, cooking against a game pack |
 | [0035](0035-optional-networking.md) | M-NET | Optional networking module `mce_net`: client-server over ENet, snapshot replication |
+| [0036](0036-skeletal-skinning.md) | M-SKIN | Optional skeletal skinning: `CHNK_MESH` skin section, glTF skins, joint palette bank |
+| [0037](0037-scene-streaming.md) | post-M9 | Optional scene streaming: `SceneChunk` components, host-driven pump, asset loader thread |
+
+Some records amend earlier ones in dated "Amendment" sections at the end
+of the file (0017, 0018, 0021, 0022, 0029, 0032) or are superseded in part by later ADRs (0022 §7 and 0023 by 0036).
+
+Experiments that were run and reverted get a research note, not an ADR: the auto-parallel system scheduler is
+[`docs/research/auto-parallel-scheduling.md`](../research/auto-parallel-scheduling.md) (REQUIREMENTS N17).

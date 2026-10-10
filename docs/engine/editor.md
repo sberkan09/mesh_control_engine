@@ -7,9 +7,9 @@ The editor lives in `src/editor/` and is built when `MCE_BUILD_EDITOR` is on. It
 |---|---|---|---|
 | `mce_editor_core` | L5 | `mce_core`, `mce_rhi`, `mce_render`, `mce_scene`, `mce_gameplay_kit`, `mce_asset_cook`, `mce_physics2d`, `mce_physics3d`, `mce_audio` | headless editor logic, no ImGui, no window; sees the RHI interface only |
 | `mce_editor_layer` | L5 | public `mce_editor_core`, `mce_platform`; private `imgui`, `SDL3-static` | the only ImGui consumer: backends, dock shell, panels |
-| `mce_editor` | L6 | `mce_editor_layer`, `mce_rhi_default` | the executable, a thin `main()` in `app/main.cpp` |
-| `mce_mcp_core` | L5 | `mce_editor_core` | MCP JSON-RPC protocol, tool table, value codec, headless run |
-| `mce_mcp` | L6 | `mce_mcp_core` | the MCP stdio transport executable |
+| `mce_editor` | L6 | `mce_editor_layer`, `mce_rhi_default`, `mce_module_host` | the executable, a thin `main()` in `app/main.cpp` |
+| `mce_mcp_core` | L5 | public `mce_editor_core`, `mce_input` | MCP JSON-RPC protocol, tool table, value codec, headless run |
+| `mce_mcp` | L6 | `mce_mcp_core`, `mce_module_host` | the MCP stdio transport executable |
 
 Where game modules are supported the editor, the MCP server, the cook and their libraries are
 `UMBRELLA` targets (modules.md): they link the `mce_engine` umbrella instead of the static engine
@@ -44,7 +44,9 @@ umbrella) that is the only way.
   save as, cook, autosave and recovery, `enter_play`, `tick_hot_reload`, `apply_to_prefab`,
   `rename_asset`.
 - `EditorProject` (`project.h`): project folder, GUID catalog, synchronous cook through
-  `CookService`, fresh mount of `cooked/` after every cook.
+  `CookService`, fresh mount of `cooked/` after every cook. For a mod project (ADR-0034),
+  `base_roots()` lists the game packs named by `mod.json` "base", mounted after the cooked tree so the
+  mod's scenes see the game's assets (empty for an ordinary project).
 - `PlaySession` (`play_session.h`): play-in-editor. `enter` cooks the document in memory
   (`cook::cook_document`) and `scene::instantiate`s it into a fresh World with physics2d and the
   audio bridge on a Silent device, as `mce_player -headless` does. `advance`, `pause`, `resume`,
@@ -67,7 +69,7 @@ scissor state). ImGui platform and renderer backends are in `layer/src/` and ren
 `mce_mcp_core` (`mcp/include/mce/mcp/`): `Server` (`server.h`: `open_project`, `handle(line)`,
 `notify`), `run_headless` (`headless_run.h`), `JsonWriter` (`json_writer.h`) and the value codec
 (`values.h`). Tools (`mcp/src/tools.cpp`): `refl_list_components`, `refl_describe_component`,
-`scene_info`, `scene_list_entities`, `scene_get_entity`, `asset_list`, `asset_set_import_settings`,
+`scene_info`, `scene_list_entities`, `scene_get_entity`, `asset_list`, `asset_set_import_settings`, `asset_delete`,
 `entity_create`, `entity_delete`, `entity_duplicate`, `scene_clear`, `component_add`, `component_remove`, `component_set`,
 `scene_new`, `scene_open`, `scene_save`, `scene_undo`, `scene_redo`, `cook_run`, `cook_errors`,
 `run_headless`, `console_list`, `console_exec`.
@@ -126,7 +128,9 @@ New source files under `assets/` (a PNG with no `.mceasset`) are a cook error un
   `console_exec` refuses `Cheat` and `RequiresRestart` convars unless `--allow-cheats`;
   `run_headless` plays the saved file and refuses unsaved changes.
 - `run_headless` installs what `mce_player` installs, in the same order (input, physics2d, audio,
-  particles, sequences, the game, then the scene): keep `headless_run.cpp` and `player.cpp` in step.
+  particles, sequences, the game through `editor::play_game_install`, then `scene::install_streaming`
+  with `async` off, `scene::load` of the scene, and one `Settle` pump): keep `headless_run.cpp` and
+  `player.cpp` in step.
 
 ## How it is tested
 
@@ -141,7 +145,8 @@ rehearsal: new scene -> author -> save -> cook --pack -> the player runs it"), `
 mce_player", "play: Play -> Stop -> Play gives the same first-tick state and the same run"),
 `test_hot_reload.cpp`, `test_transform_gizmo.cpp`, `test_asset_browser.cpp`, `test_tilemap.cpp`,
 `test_orbit_camera.cpp`, `test_perf_monitor.cpp`, `test_console_model.cpp`, `test_draw_clip.cpp`,
-`test_stub_world.cpp`. It depends on `mce_player` being built.
+`test_stub_world.cpp`, `test_mod_project.cpp` ("mod project: the editor mounts the game's pack behind
+the mod"). It depends on `mce_player` being built.
 
 MCP (`tests/mcp/`): ctest `test_mcp` (JSON-RPC framing, tools through the funnel, undo/redo,
 persistence rails, cheats refused, the game install and `inspect`, `cook_run` adopt, "FR-EDT-160 gate: MCP edit == SceneCommand edit (same .mcscene
@@ -175,12 +180,8 @@ GPU (label `gpu`, `MCE_GPU_TESTS`): `editor_smoke` (default layout over the stub
 - Prefab overrides target the instance root only; per-child overrides need a stable child id in the
   prefab format (M8 editor, "Model limits").
 - Tilemaps: no palette thumbnails, one layer per asset, no auto-tiling (ADR-0030 §8.5).
-- The stock `mce_editor` does not load game modules (ADR-0029 §1.7); projects use `<game>_editor`.
-- MCP (M4.5): no cancellation of a running tool, no recorded input for `run_headless`, no
-  attach-to-running-editor and no `render_frame`.
-- MCP `run_headless` installs physics2d and the audio bridge but not the project's game: in
-  `<game>_mcp` it plays the scene without the game's systems, so its `state_hash` is not the host's
-  (`<game> -headless 1`). Use the project's own headless test for gameplay (M9).
+- MCP (M4.5): no cancellation of a running tool, no attach-to-running-editor and no `render_frame`.
+  `run_headless` takes scripted input (`input`, an `InputScript`) but no recorded replay stream.
 - Play-in-editor runs the game's `install()` but feeds no input: the module sees an `InputState`
   only if it installs one itself, and it stays idle, so a player character cannot be driven in the
   editor viewport; play the game from the host (`<game>`) instead. The play view looks through the

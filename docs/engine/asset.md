@@ -24,8 +24,16 @@ Runtime (`src/engine/asset/include/mce/asset/`)
   offsets: manifest (GUID to path, content hash and type, sorted by GUID; the index is the `AssetKey`),
   texture, sfx, font, material, tilemap, particle preset, sequence, shader (GLSL source, variant table, SPIR-V
   and a resource reflection list per variant), mesh (quantized streams, submeshes, node tree, animation
-  clips), and scene/prefab (columnar component rows plus asset and entity fixup tables; `SceneView` reads
+  clips, and an optional skin section), and scene/prefab (columnar component rows plus asset and entity fixup tables; `SceneView` reads
   both). Schema majors are the `*_VERSION` constants.
+- Mesh skins (`formats.h`, FR-R3D-060): a mesh with `MeshFlags::Skinned` is chunk minor `MESH_MINOR_SKIN`
+  (1) and carries a `MeshSkinHeader` at `MeshHeader::skin_offset`: `MeshSkin` entries (a range of the joint
+  table, 1 to `kMaxSkinJoints` = 256 joints, since joint indices are u8), `MeshJoint` entries (driving node,
+  inverse bind matrix, bind-space AABB of the vertices the joint influences), one `MeshSkinVertex` per vertex
+  (4 u8 joint indices, 4 unorm8 weights summing to 255) and one skin index per submesh (-1 = rigid). Joints
+  are ordinary nodes, so the node clips animate skeletons. A mesh without the flag is exactly the static
+  layout (minor 0). `MeshView` exposes `skins`, `skin_vertices`, `submesh_skins` and `skinned()`, and
+  validates the skin section's indices.
 - `guid.h`: `Guid` (128-bit UUIDv4), `to_string`, `to_hex`, `parse_guid`.
 - `handle.h`: asset type tags (`Texture`, `Mesh`, `Material`, `Shader`, `Sfx`, `Font`, `Atlas`, `Scene`,
   `InputMap`, `Prefab`, `Tilemap`, `Sequence`, `ParticlePreset`), `AssetHandle<T>` (generational index),
@@ -54,7 +62,7 @@ Runtime (`src/engine/asset/include/mce/asset/`)
 - `xxhash.h`: `xxh64`, the pipeline's content hash.
 
 Cook (`src/engine/asset/cook/include/mce/cook/`)
-- `cook.h`: `CookService::cook(project_root, CookOptions{force, pack, adopt})` returning a `CookReport`
+- `cook.h`: `CookService::cook(project_root, CookOptions{force, pack, adopt, base_packs})` returning a `CookReport`
   (per-asset `Cooked`/`UpToDate`/`Failed`/`Blocked`, diagnostics, manifest and pack hashes); `AssetRegistry`
   (scan of `assets/` and `.mceasset` sidecars, `guid_for_path`, GUID-stable `move`); `cook_document` (cooks an
   unsaved native document from memory, used by play-in-editor); `generate_guid`; `kCookToolVersion`.
@@ -62,7 +70,10 @@ Cook (`src/engine/asset/cook/include/mce/cook/`)
   `scan_dependencies`, `cook`), `ImportInput`, `IAssetLookup`, `DepRef`, `ImporterRegistry::add_builtins`.
   Built-in importers: texture (PNG and JPEG via stb_image), WAV, font (TTF atlas via stb_truetype), material
   (`.mcmat`), scene (`.mcscene`), prefab (`.mcprefab`), glTF (meshoptimizer), tilemap (`.mctilemap`),
-  particles (`.mcpart`), sequence (`.mcseq`), shader (`.vert/.frag/.comp.glsl`, glslang).
+  particles (`.mcpart`), sequence (`.mcseq`), input map (`.mcinput` → `ChunkType::InputMap`, the
+  `mce/input/input_map.h` chunk, validated with `decode_input_map` at cook), shader (`.vert/.frag/.comp.glsl`, glslang). The glTF importer
+  also imports skins (`JOINTS_0` / `WEIGHTS_0`, 4 influences, up to 256 joints per skin, inverse bind
+  matrices); the sidecar setting `"skinning": false` imports a skinned mesh as a static one.
 - `mod_project.h`: mod projects (ADR-0034). `is_mod_project`, `read_mod_project` (`mod.json`), and
   `read_base_assets` (GUID to type from the manifests of the game packs a mod builds on). `CookService::cook`
   uses them: references into a base resolve by type without a dependency edge, an override (a base GUID in the
@@ -84,7 +95,7 @@ The cook pipeline (`src/cook.cpp`):
 6. With `--pack`, `<project>/assets.mce`: the manifest chunk first, then every live asset's chunks in GUID
    order.
 
-`mce_cook <project-dir> [--module <game module>] [--pack] [--force] [--adopt] [--quiet]` exits 0 (clean), 1 (cook
+`mce_cook <project-dir> [--module <game module>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]` exits 0 (clean), 1 (cook
 errors, a module that fails to load among them) or 2 (usage).
 
 ## Rules and invariants
@@ -133,21 +144,29 @@ errors, a module that fails to load among them) or 2 (usage).
   xxh64 reference vectors, texture/sfx/font/manifest formats. `test_asset_system.cpp`: "mount a dev tree,
   load, refcount, deferred unload", "re-acquire between release and reap keeps the asset resident", "corrupted
   cooked file fails the load, placeholder serves", "hot-reload commit bumps the generation; AssetRef
-  re-stamps", "pack mount serves chunks straight out of the pack".
+  re-stamps", "pack mount serves chunks straight out of the pack", "placeholders are valid payloads of their
+  type", "missing mount root is an error", and the async cases ("async load reads off the main thread,
+  commits on poll", "cancelled async loads leave nothing behind", "an async read of a corrupt file fails like
+  load_sync", "async loads from a pack are ready at once").
 - ctest `test_cook` (links `mce_asset_cook`). `test_cook_project.cpp`: "full project cooks, then everything is
   up to date", "determinism — deleting cooked/ and re-cooking is byte-identical (FR-AST-030)", "incremental —
   a changed texture re-cooks itself and its dependents only", "a corrupt cook DB is dropped and the cook still
   succeeds", "author -> cook -> mount -> load the scene (M2 pipeline)", missing sidecar and `--adopt`,
   duplicate GUIDs. `test_cook_gltf.cpp`: `.gltf`/`.glb` equivalence, `--force` byte identity, triangle budget,
-  `MeshView` rejecting corrupt payloads. `test_cook_json_audio.cpp`: JSON positions and nesting limits,
+  `MeshView` rejecting corrupt payloads, "skins import joints, inverse binds, 4 unorm8 influences and per-joint
+  bind bounds", "skinning is optional per asset; bad skins fail with the JSON pointer". `test_cook_json_audio.cpp`: JSON positions and nesting limits,
   canonical writer, WAV decode and resampling. `test_cook_shader.cpp`: variants, SPIR-V and reflection in
-  `CHNK_SHD`, compile errors with source line and variant, binding-bank enforcement.
+  `CHNK_SHD`, compile errors with source line and variant, binding-bank enforcement. `test_cook_input.cpp`:
+  ".mcinput cooks to CHNK_INPUT and loads into the input system", "authoring mistakes are cook errors".
 - `test_mods.cpp` (in `test_asset`): `CHNK_MOD` round trip, negative cases and mutations, mod ids,
   `resolve_mods` with and without `load_order.txt`, and the mount overlay. `test_cook_mod.cpp` (in `test_cook`):
   a mod cooks against a game pack (override, addition, `CHNK_MOD`, byte-identical re-cook) and its error cases.
   ctest `player_mods` (registered in `src/player`): a game and a mod cooked with `mce_cook`, played headless.
 - ctest `mce_cook_cli` (`cook_cli_test.cmake`): exit codes 0/1/2 and byte-identical re-cooks of the sample
   project in `tests/asset/data`.
+- ctest `mce_cook_module` (`cook_module_test.cmake`, only when `template_probe_game` is built): the stock
+  `mce_cook` with `--module` cooks the template probe's scene that uses the game's components; without it the
+  cook reports them unknown.
 - ctest `test_shader_gl` (label `gpu`, only with `MCE_GPU_TESTS`): cooked shader variants compile on a real GL
   4.5 driver.
 
@@ -172,11 +191,14 @@ Scene and prefab chunks are also exercised end to end by `tests/ecs/test_prefab.
 - `docs/adr/0030-m6-editor-authoring.md` §8 (tilemaps),
   `docs/adr/0031-m6-2d-extras.md` (particle presets),
   `docs/adr/0032-sequence-runner.md` (sequences).
+- `docs/adr/0034-data-mods.md`: data mods (mod packs, `CHNK_MOD`, the mount overlay, mod projects).
 - Milestones: `docs/milestones/M4.md`,
   `docs/milestones/M6-shader-cook.md`,
   `docs/milestones/M6-2d.md`,
   `docs/milestones/M8-project-template.md` (per-project `<game>_cook` that
-  links the game's component types).
+  links the game's component types),
+  `docs/milestones/M-SKIN.md` (skinned meshes),
+  `docs/milestones/scene-streaming.md` (async loads behind scene streaming).
 
 ## Known gaps
 

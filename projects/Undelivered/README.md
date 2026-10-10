@@ -19,7 +19,8 @@ Inside the engine tree:
     cmake --build --preset linux-gcc-debug --target undelivered
     build/linux-gcc-debug/projects/Undelivered/undelivered
 
-With the installed SDK (user guide chapter 1): `mce build Undelivered`, `mce play Undelivered`,
+With the installed SDK (user guide chapter 1), which ships only Kindle as an example: copy `projects/Undelivered`
+out of an engine checkout first, then `mce build Undelivered`, `mce play Undelivered`,
 `mce editor Undelivered`, `mce mcp Undelivered`, `mce ship Undelivered --version 1.0`.
 
 The stock player's default input map (the game adds no keys of its own):

@@ -42,8 +42,8 @@
 
 ## Gaps
 
-- **Projects build inside the engine checkout** (`projects/<name>`). An out-of-tree project needs an installed engine package (`find_package(MCE)`), which does not exist yet.
-- **The project editor is a per-project executable** (`<game>_editor`), not the stock `mce_editor` loading the module. Loading a module into the editor needs the editor itself on the `mce_engine` umbrella (one refl registry). That is a bigger move, and nothing in M9 needs it.
+- **Projects build inside the engine checkout** (`projects/<name>`). An out-of-tree project needs an installed engine package (`find_package(MCE)`), which does not exist yet. *(Since built: `cmake/MceInstall.cmake`, `cmake/MCEConfig.cmake.in`, `tools/mce_cli`.)*
+- **The project editor is a per-project executable** (`<game>_editor`), not the stock `mce_editor` loading the module. Loading a module into the editor needs the editor itself on the `mce_engine` umbrella (one refl registry). That is a bigger move, and nothing in M9 needs it. *(Since done: the stock `mce_editor` also loads a module with `-module`, ADR-0029 amendment.)*
 - **Windows** builds the static path (`PlayerDesc::static_module`), as the samples do until the export ledger. It has not been run on Windows in this container.
 
 ## Screenshots

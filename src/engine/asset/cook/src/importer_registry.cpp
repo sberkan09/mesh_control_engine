@@ -31,6 +31,7 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_particle_importer());
     reg.add(make_sequence_importer());
     reg.add(make_shader_importer());
+    reg.add(make_input_map_importer());
 }
 
 bool parse_guid_ref(StringView text, Guid& out) {

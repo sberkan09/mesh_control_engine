@@ -110,7 +110,8 @@ Rules:
 
 A system is a free function `void (*)(Frame&)`. `install()` registers it in a phase with a name;
 registration order within a phase is execution order, and `after` names a system already registered
-in that phase when you want to be explicit:
+in that phase when you want to be explicit. Systems run one after another on the main thread (an
+automatic parallel scheduler was measured and not merged: `docs/research/auto-parallel-scheduling.md`):
 
 ```cpp
 world.add_system(Phase::FixedUpdate_Pre, "my_game_movers", &movers);
@@ -297,8 +298,10 @@ tick if you must. Expected failures return `Result`/`ResultV` (`Error(Errc::Inva
 
 ## 6.13 Platform notes
 
-- **Linux and macOS** load the game as a shared module (`libmy_game.so`, `.dylib`). The host
-  copies the file before mapping it, so rebuilding the module while the game runs is safe.
+- **Linux and macOS** load the game as a shared module (`libmy_game.so` on both; only
+  `libmce_engine` is a `.dylib` on macOS). The host copies the file before mapping it, so
+  rebuilding the module while the game runs is safe. In a read-only folder (a shipped `.app`, a
+  read-only install) the copy fails and the module is mapped in place.
 - **Windows** has no game modules yet: `mce_add_project` links the game sources into the host and
   the host uses `PlayerDesc::static_module`. Your code does not change; only the build does.
 - The module and the host must come from the same build: the engine id stamped into the module

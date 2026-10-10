@@ -430,7 +430,7 @@ public:
         std::printf("  | gameplay tick (ECS + World3D) | %.3f | - |\n", sim_ms_ / f64(max<u64>(ticks_, 1)));
         std::printf("  | scene build (scatter cells + cull + sort + cascades + clusters) | %.3f | - |\n", budget_.scene / n);
         std::printf("  | command recording (3D + HUD) | %.3f | - |\n", budget_.record / n);
-        std::printf("  | GL translate + submit | %.3f | - |\n", budget_.submit / n);
+        std::printf("  | RHI translate + submit | %.3f | - |\n", budget_.submit / n);
         if (budget_.gpu_frames > 0) {
             const f64 g = f64(budget_.gpu_frames);
             std::printf("  | shadow cascades | - | %.3f |\n", budget_.gpu_shadow / g);

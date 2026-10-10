@@ -4,7 +4,8 @@
 and `mce_ecs`; it links `Jolt` privately, so Jolt's include paths, defines and `-msse4.2` stay inside
 the target (`src/engine/physics3d/CMakeLists.txt`). Jolt is `v5.6.0`, fetched by tag through
 FetchContent (ADR-0003 §1, ADR-0017). The library is linked by `mce_editor_core` (orbit camera
-collision), the samples `04_cubes`, `05_ashen_court` and `physics3d_headless`, and `test_physics3d`.
+collision), the samples `04_cubes`, `05_ashen_court` and `physics3d_headless`, `test_physics3d`, and
+projects: `projects/SolsticeReach` (its host `solstice_reach` and its test `solstice_reach_run`).
 It is in the `mce_engine` umbrella's `MCE_ENGINE_LIBS` list (the editor, an `UMBRELLA` target, needs it).
 
 There is one class, `World3D`, and no ECS bridge yet. Gameplay owns a `World3D` and calls it from its

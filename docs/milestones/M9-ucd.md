@@ -88,7 +88,7 @@ These are not closed. An agent cannot close them honestly.
 
 - **Ember Step's components are not reusable as they stand.** They live in the sample, unreflected and spawned from code. Kindle reuses them by porting about 250 lines into its module. A shared, reflected "platformer kit" (in `mce_gameplay_kit` or a shared game library) would turn the next game's reuse into plain authoring. It was not built, because it would have been a third engine change.
 - **No enemies in the level.** Ember Step's enemy FSM was not ported. The slice needed one new mechanic, not every old one.
-- **No project input map.** Kindle dashes on `Fire` (J / X) because the default map has no `Dash`, and bindings are not persisted in the runtime (`modules.md` Known gaps).
+- ~~**No project input map.**~~ Kindle dashes on `Fire` (J / X) because the default map had no `Dash`. Since 2026-10-11 a project can cook its own `.mcinput` map, which the player loads (docs/user-guide/11-input.md §11.3); Kindle has not moved to one. Bindings are still not persisted in the runtime (`modules.md` Known gaps).
 - **Play-in-editor cannot be played**, only watched, because it has no input (`editor.md`).
 - **The lift's two bonus coins** are not covered by the scripted run (7/9 coins). Their reachability rests on the lift's 4 → 7 m travel against a 2.5 m jump, not on a test.
 - **Ember Step's particles, screen shake and music** are host code in the sample, not components, so Kindle has none of them.

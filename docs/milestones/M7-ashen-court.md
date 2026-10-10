@@ -66,7 +66,7 @@ The engine's CPU share is about 2.2 ms per frame, which leaves wide headroom aga
 
 - **Content is procedural, not CC0 kits.** The ROADMAP plans the level kit-assembled from Kenney and Poly Haven CC0 kits with Blender kitbashing. The build container cannot reach those sites (kenney.nl returns HTTP 403, and Blender is not available), so every mesh and texture comes from `gen_assets.py`. The level is therefore far under its budget (64k of 300k), and the budget column is an allowance rather than a measured kitbash.
 - **Audio is synthesized,** not the freesound/JSFX pass the ROADMAP plans. There is no music.
-- **Characters are static proxies** (ROADMAP Open Question 3 default): node transforms, no skinning. The sword swing is a host-side transform from the swing tick.
+- **Characters are static proxies** (ROADMAP Open Question 3 default): node transforms, no skinning. The sword swing is a host-side transform from the swing tick. Engine skinning is available since M-SKIN (ADR-0036); it is not adopted here.
 - **Real-GPU numbers, RenderDoc captures and golden images** need hardware; this container has only llvmpipe.
 - **Mouse look** reads raw pointer deltas; there is no relative-mouse or pointer-lock mode in `mce_platform` yet. Q/E and the right stick turn the camera too.
 

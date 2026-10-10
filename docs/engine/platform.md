@@ -66,7 +66,7 @@ pulls interleaved float32 frames from an `AudioRenderFn` on SDL's audio thread. 
 `mce_audio` is its consumer.
 
 `library.h`: `load_library`, `library_symbol`, `unload_library` (used by the game-module loader),
-plus `file_exists` and `copy_file`. None needs `platform::init`.
+plus `file_exists`, `copy_file` and `create_directories(path)`. None needs `platform::init`.
 
 `process.h`: `Process` for child processes (`start`, `running`, `wait` with optional captured
 stdout, `kill`, `exit_code`). The editor's run-in-player button uses it.

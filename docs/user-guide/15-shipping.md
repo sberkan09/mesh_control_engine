@@ -8,7 +8,8 @@ python3 scripts/ship.py --project projects/MyGame --version 1.0.0 --preset linux
 python3 scripts/ship.py --project projects/MyGame --smoke --smoke-headless   # run it once after packaging
 ```
 
-Output: `dist/<Name>-<version>-<os>.zip` and, beside it, `<Name>-<version>-<os>-symbols.zip`.
+Output: `dist/<Name>-<version>-<os>.zip` and, beside it, `<Name>-<version>-<os>-symbols.zip`, where
+`<os>` is `linux-x64`, `win64` or `macos`.
 
 | Option | Meaning |
 |---|---|
@@ -16,20 +17,21 @@ Output: `dist/<Name>-<version>-<os>.zip` and, beside it, `<Name>-<version>-<os>-
 | `--version` | default `<engine version>+<short commit>` |
 | `--out` | output directory (default `dist/`) |
 | `--no-build` | package what is already built |
-| `--keep-symbols` | do not strip the Linux binaries |
+| `--keep-symbols` | do not strip the binaries (Linux, macOS) |
 | `--smoke`, `--smoke-headless` | run the packaged game once (headless needs no display) |
 
 The samples ship the same way: `python3 scripts/ship.py platformer` (Ember Step) or `diorama`.
 
 ## 15.1 What is in the zip
 
-One folder, double-click the executable:
+One folder, double-click the executable (on macOS the folder holds `<Name>.app` and `README.txt`;
+see section 15.4):
 
 | File | What |
 |---|---|
 | `<Name>` (`.exe` on Windows, with icon and version resource) | the host |
-| `lib<game>.so` / `.dylib` | the game module (not on Windows, where it is linked in) |
-| `libmce_engine.so` | the engine |
+| `lib<game>.so` | the game module, `.so` on macOS too (not on Windows, where it is linked in) |
+| `libmce_engine.so` | the engine (`libmce_engine.dylib` on macOS) |
 | `assets.mce` | the cooked pack, CRC-checked once at mount |
 | `VERSION.txt` | version, engine commit, preset, file hashes, one build id per binary |
 | `CREDITS.md` | copied from the project (content attribution) |
@@ -57,20 +59,31 @@ Shipped binaries are stripped; their debug info is in the symbols zip, which you
 distribute. To read a crash report from a player:
 
 ```sh
-unzip MyGame-1.0.0-linux-symbols.zip -d symbols/
+unzip MyGame-1.0.0-linux-x64-symbols.zip -d symbols/
 python3 scripts/symbolicate.py player-report.crash --symbols symbols/
 ```
 
-Each frame resolves to a function, file and line (inlined frames included) when the symbols match
+On Linux the symbols zip holds `objcopy --only-keep-debug` files under `.build-id/`, on Windows the
+PDBs, on macOS one `.dSYM` per binary. Each frame resolves to a function, file and line (inlined frames included) when the symbols match
 the build ids in the report. A dev-tree build can be symbolicated against `build/<preset>/`.
 
 ## 15.4 Platforms
 
 | | Linux | Windows | macOS |
 |---|---|---|---|
-| Ship script | yes, tested | packages with icon and version resource; the crash path has not been exercised yet | builds and runs on Metal; `.app` bundling is not done, the zip holds a plain folder |
-| Game module | shared object | linked into the host | dylib |
+| Ship script | yes, tested | packages with icon and version resource; the crash path has not been exercised yet | yes: the zip holds `<Name>.app`, see below |
+| Game module | shared object | linked into the host | shared object (`.so`) beside `libmce_engine.dylib` |
 | Renderer | OpenGL 4.5 | OpenGL 4.5 | Metal |
+
+**The macOS bundle** (`cmake/macos/macos_bundle.py`, called by `ship.py`): the executable, the
+game module and `libmce_engine.dylib` go to `<Name>.app/Contents/MacOS/`; `assets.mce`,
+`VERSION.txt` and `CREDITS.md` go to `Contents/Resources/`. Before bundling, every binary's debug
+info is archived as a `.dSYM` in the symbols zip and the binaries are stripped (`--keep-symbols`
+skips both). The bundle is signed ad hoc (`codesign -s -`), which Apple silicon requires; it is not
+Developer ID signed or notarized, so a player may have to right-click it and choose Open the first
+time. `Info.plist` asks for macOS 26.0 or later. When the `.app` runs from a read-only location
+(App Translocation, `/Applications` without write access), the host maps the game module in place
+instead of copying it (chapter 6, section 6.13).
 
 ## 15.5 Checklist before shipping
 

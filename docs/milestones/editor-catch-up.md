@@ -68,11 +68,12 @@ actions" (REQUIREMENTS UC-C, the v1.0 gate), needs a person at the keyboard and 
 
 ## Open
 
-- Undo/redo, multi-select editing in the inspector, rotate/scale gizmos, the asset browser and prefabs are M6
-  (v0.5) by the ROADMAP.
+- ~~Undo/redo, multi-select editing in the inspector, rotate/scale gizmos, the asset browser and prefabs are M6
+  (v0.5) by the ROADMAP.~~ Shipped in `M6-editor.md`.
 - Play-in-editor (embedded host, pause/step) is M5b: shipped (ADR-0029, `docs/milestones/M5b.md`).
-- Prefab instances and `ChildOf` round-trip through the editor (ADR-0025 §7). Expanding prefabs in the
-  viewport, a tree Hierarchy, and parent-relative placement are M6 editor work.
+- Prefab instances and `ChildOf` round-trip through the editor (ADR-0025 §7). ~~Expanding prefabs in the
+  viewport, a tree Hierarchy, and parent-relative placement are M6 editor work.~~ Shipped in `M6-editor.md`
+  (tree hierarchy, prefab content in the viewport).
 - Windows: `platform::Process` uses SDL3's process API, which is portable but has only run on Linux here.
 
 Run the editor on the sample with:

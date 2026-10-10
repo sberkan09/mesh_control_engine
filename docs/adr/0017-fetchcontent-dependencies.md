@@ -22,3 +22,12 @@ Pinned today: spdlog v1.17.0, Tracy v0.14.1 (on-demand client), doctest v2.5.3 (
 vendored in `third_party/glad` (the regenerate command is in `cmake/Dependencies.cmake`) and linked privately by
 `mce_rhi_gl`. On Linux, SDL3 needs the X11 development headers (`libx11-dev libxext-dev libxcursor-dev libxrandr-dev
 libxi-dev libxss-dev libxtst-dev libxfixes-dev libxkbcommon-dev`). stb @2c980bb is cook-time only (`mce_asset_cook`, ADR-0019), as is meshoptimizer v0.25 (ADR-0022).
+
+## Amendment 2026-10-11
+
+The "Pinned today" list above is a 2026-10-07 snapshot and is incomplete: Dear ImGui (docking), Box2D (test
+oracle, ADR-0016), Jolt (ADR-0003), glslang (shader cook, ADR-0033) and, on macOS, glslang + SPIRV-Cross
+(ADR-0028) were added later. The source of truth for what is fetched and at which tag is
+`cmake/Dependencies.cmake` plus `cmake/macos/MetalDependencies.cmake`. SDL3 is also linked by `mce_rhi_metal`
+(privately) and by `mce_editor_layer` (headers only where it links the `mce_engine` umbrella, linked on Windows),
+not only by `mce_platform` and `mce_rhi_gl`.
