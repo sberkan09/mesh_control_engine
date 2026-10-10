@@ -242,7 +242,9 @@ Result<void> AssetSystem::mount_one(StringView root, MountOptions opt) {
             // that changes it would break every reference the later root's content makes, so the
             // later root keeps that GUID instead, while nothing has loaded it yet.
             Row& prev = rows_[*k];
-            if (prev.type == e.type || prev.state != State::Unloaded || prev.refcount != 0) continue;
+            bool requested = false;  // an async read in flight already names this row's file
+            for (const AsyncRequest& a : async_) requested = requested || a.key == *k;
+            if (prev.type == e.type || prev.state != State::Unloaded || prev.refcount != 0 || requested) continue;
             MCE_LOG_WARN("asset {}: {} is a {} in {}, but {} here; the override is ignored", asset::to_string(e.guid()).view(),
                          StringView(strings_.data() + prev.path_offset, prev.path_size), chunk_type_name(prev.type),
                          mounts_[prev.mount].root.view(), chunk_type_name(e.type));
