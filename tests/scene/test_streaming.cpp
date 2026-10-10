@@ -183,23 +183,25 @@ TEST_CASE("streaming: a chunk whose scene is missing fails without touching the 
 TEST_CASE("streaming: async loads read off-thread and land on a later pump") {
     Fixture f("stream_async", true);
     const Entity A = f.base[1], C = f.base[3];
+    // The pump polls right after requesting, so a fast read may already land in the same pump;
+    // the budget still holds (one instantiation per pump).
     scene::pump_streaming(f.world);
-    CHECK(f.state(A) == scene::ChunkState::Loading);
-    CHECK(f.state(C) == scene::ChunkState::Loading);
-    CHECK(f.world.entity_count() == 4);
+    CHECK(f.state(A) != scene::ChunkState::Unloaded);
+    CHECK(f.state(C) != scene::ChunkState::Unloaded);
+    CHECK(f.streaming().stats().loaded <= 1);
     f.assets.wait_async();
-    scene::pump_streaming(f.world);  // both ready; one instantiation per pump
-    CHECK(f.streaming().stats().loaded == 1);
+    scene::pump_streaming(f.world);
     CHECK(f.state(A) == scene::ChunkState::Loaded);  // first requested, first in
+    CHECK(f.streaming().stats().loaded <= 2);
     scene::pump_streaming(f.world);
     CHECK(f.state(C) == scene::ChunkState::Loaded);
     CHECK(f.world.entity_count() == 4 + 2 + 1);
 
-    // Leaving while a load is in flight cancels it; nothing arrives later.
+    // Leaving while a load may still be in flight cancels it; nothing arrives later.
     f.move_focus(17.0f);
     scene::pump_streaming(f.world);
     CHECK(f.state(A) == scene::ChunkState::Unloaded);
-    CHECK(f.state(f.base[2]) == scene::ChunkState::Loading);
+    CHECK(f.state(f.base[2]) != scene::ChunkState::Unloaded);
     f.move_focus(-100.0f);
     scene::pump_streaming(f.world);
     CHECK(f.state(f.base[2]) == scene::ChunkState::Unloaded);
