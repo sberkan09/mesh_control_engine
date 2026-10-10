@@ -134,6 +134,7 @@ Above the walls sit three composition principles (P6 — one path, thin seams):
 | `mce_physics3d` (v0.5) | `src/engine/physics3d` | L2 | core, ecs | `World3D` facade over embedded Jolt 5 (ADR-0003 gate before first include) |
 | `mce_audio` | `src/engine/audio` | L2 | core, platform, ecs | 48 kHz float32 mixer on the SDL3 callback; SPSC command FIFO; voices/buses; streaming music |
 | `mce_input` | `src/engine/input` | L2 | core, platform, asset, ecs | Action maps (cooked chunk) → tick-quantized `InputState` snapshots; record/replay streams |
+| `mce_net` (optional) | `src/engine/net` | L2 | core, ecs (+ ENet, private) | Opt-in multiplayer: UDP `Host` (reliable/sequenced/unreliable channels), the byte codec, server-authoritative snapshot replication; **never part of `mce_engine`** — a game links it (ADR-0035) |
 | `mce_render` | `src/engine/render` | L3 | core, ecs, asset, rhi, rhi_gl | Extract/cull/sort/batch, 2D+3D passes, DebugDraw, editor views, picking, golden capture |
 | `mce_gameplay_kit` | `src/engine/kit` | L4 | L0–L3 | FR-ENT-080 starter components/systems; the 12-type gameplay surface consumers actually touch |
 | `mce_ui` (v1.0) | `src/engine/ui` | L4 | L0–L3 | Retained anchored-rect runtime UI rendered through the 2D MDI batch (FR-UI-020; design doc is an **M4 deliverable** — CF21: [architecture/ui.md](architecture/ui.md)) |

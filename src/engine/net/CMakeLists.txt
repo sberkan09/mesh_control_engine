@@ -1,0 +1,20 @@
+# mce_net (L3, optional — ADR-0035): client-server networking over UDP (ENet), a little-endian byte
+# codec, and snapshot replication of LocalTransform for entities tagged with NetId.
+#
+# Opt-in: not in MCE_ENGINE_LIBS, so libmce_engine never contains it. A game links it explicitly
+# (mce_add_project(... DEPS mce::mce_net), or mce::mce_net against the SDK). UMBRELLA: where game
+# modules are supported its engine dependencies resolve against libmce_engine, so the copy linked
+# into a game module shares the host's engine instead of making a second one. ENet's objects are
+# folded into this archive, so mce_net is the one library a game adds.
+mce_add_library(mce_net UMBRELLA
+    SOURCES
+        src/host.cpp
+        src/replication.cpp
+        $<TARGET_OBJECTS:mce_enet>
+    PUBLIC_DEPS
+        mce::mce_core
+        mce::mce_ecs)
+target_include_directories(mce_net SYSTEM PRIVATE $<TARGET_PROPERTY:mce_enet,INTERFACE_INCLUDE_DIRECTORIES>)
+if(WIN32)
+    target_link_libraries(mce_net PUBLIC ws2_32 winmm)
+endif()

@@ -245,5 +245,35 @@ foreach(t glslang glslang-default-resource-limits)
     endif()
 endforeach()
 
+# ---- ENet (optional networking; mce_net only — ADR-0035) ------------------------------------
+# Reliable/unreliable sequenced channels over UDP. Compiled straight into mce_net (an object
+# library folded into its archive), so the opt-in module is one static library in the tree and in
+# the SDK. Confined to src/engine/net/src/ by the ENet wall in scripts/ci/check_walls.py; never part
+# of mce_engine, so games that do not link mce_net carry no socket code.
+if(MCE_WITH_NET)
+    FetchContent_Declare(enet
+        GIT_REPOSITORY https://github.com/lsalzman/enet.git
+        GIT_TAG        v1.3.18
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  _no_cmake_)  # its sources are compiled below with our flags
+    FetchContent_MakeAvailable(enet)
+
+    add_library(mce_enet OBJECT
+        "${enet_SOURCE_DIR}/callbacks.c" "${enet_SOURCE_DIR}/compress.c" "${enet_SOURCE_DIR}/host.c"
+        "${enet_SOURCE_DIR}/list.c" "${enet_SOURCE_DIR}/packet.c" "${enet_SOURCE_DIR}/peer.c"
+        "${enet_SOURCE_DIR}/protocol.c" "${enet_SOURCE_DIR}/unix.c" "${enet_SOURCE_DIR}/win32.c")
+    target_include_directories(mce_enet SYSTEM PUBLIC "${enet_SOURCE_DIR}/include")
+    set_target_properties(mce_enet PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(MSVC)
+        target_compile_options(mce_enet PRIVATE /W0)
+        target_compile_definitions(mce_enet PRIVATE _WINSOCK_DEPRECATED_NO_WARNINGS _CRT_SECURE_NO_WARNINGS)
+    else()
+        target_compile_options(mce_enet PRIVATE -w)
+        # The configure checks ENet's own CMake would run; every platform we build has these.
+        target_compile_definitions(mce_enet PRIVATE HAS_FCNTL=1 HAS_POLL=1 HAS_GETADDRINFO=1 HAS_GETNAMEINFO=1
+            HAS_INET_PTON=1 HAS_INET_NTOP=1 HAS_MSGHDR_FLAGS=1 HAS_SOCKLEN_T=1)
+    endif()
+endif()
+
 # ---- SPIRV-Cross (macOS only) ---------------------------------------------------------------
 # Declared in cmake/macos/MetalDependencies.cmake and pulled in by src/engine/rhi_metal (ADR-0028).

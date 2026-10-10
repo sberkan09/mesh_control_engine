@@ -2,7 +2,8 @@
 #
 #   bin/        mce_player, mce_editor, mce_mcp, mce_cook, mce_devhost and the `mce` command
 #   lib/        libmce_engine (the umbrella every tool and game module shares),
-#               libmce_player_runtime (what a project's host links)
+#               libmce_player_runtime (what a project's host links), libmce_net (the opt-in
+#               networking module, when built with MCE_WITH_NET)
 #   include/    the engine headers (every src/**/include), the generated mce/engine_version.h
 #               (MCE_ENGINE_ID: modules built against this SDK match this engine) and spdlog's
 #               headers, which mce/log.h includes
@@ -33,6 +34,13 @@ set_target_properties(${_mce_sdk_tools} PROPERTIES INSTALL_RPATH "${CMAKE_BUILD_
 install(TARGETS ${_mce_sdk_tools} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(TARGETS mce_engine LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(TARGETS mce_player_runtime ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+if(TARGET mce_net)
+    # The opt-in networking module (ADR-0035): a static archive a game links on request.
+    install(TARGETS mce_net ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    set(MCE_SDK_NET_FILE "$<TARGET_FILE_NAME:mce_net>")
+else()
+    set(MCE_SDK_NET_FILE "")
+endif()
 
 # Headers: every engine, module and player include tree, then the generated one.
 file(GLOB _mce_include_dirs LIST_DIRECTORIES true

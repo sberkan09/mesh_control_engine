@@ -23,6 +23,7 @@ Ordered by layer, bottom up:
 | [scene](scene.md) | `mce_scene` | cooked scene chunk → entities |
 | [kit](kit.md) | `mce_kit` | starter-kit components, particles, sequences, FSM, 2D extract |
 | [ui](ui.md) | `mce_ui` | retained widget documents, the shipped developer console |
+| [net](net.md) | `mce_net` (optional) | opt-in multiplayer: UDP hosts, the message codec, snapshot replication |
 | [modules](modules.md) | `mce_engine` + module host | the shared engine library, game modules, the player runtime |
 | [editor](editor.md) | `mce_editor_*` | scene document, inspector, play-in-editor, hot reload, MCP server |
 

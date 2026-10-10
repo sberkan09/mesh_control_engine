@@ -1,0 +1,121 @@
+# 20. Multiplayer (optional)
+
+Networking is an **opt-in** module, `mce_net`. A game that does not ask for it is built exactly as
+before, with no socket code in it. A game that does gets three things: a UDP connection layer, a
+small message codec, and server-authoritative replication of entities. The reference page is
+[`docs/engine/net.md`](../engine/net.md); the decision record is ADR-0035.
+
+## 20.1 The model
+
+One process is the **server**: it runs the real simulation. Players run **clients**: they send their
+inputs to the server and show what the server sends back. Every tick the server sends a snapshot of the
+entities you marked as replicated; each client mirrors it. Clients can be on different operating
+systems, because they never simulate the shared state themselves.
+
+## 20.2 Turn it on
+
+In your project's `CMakeLists.txt`, add one line to the `mce_add_project` call:
+
+```cmake
+mce_add_project(my_game
+    ...
+    INCLUDE_DIRS games/my_game/module
+    DEPS mce::mce_net)
+```
+
+Then `#include "mce/net/net.h"` in your game code. This works in the engine checkout and against the
+installed SDK (`mce build`).
+
+## 20.3 Connect
+
+```cpp
+// Server
+net::Host server;
+net::HostDesc d;
+d.port = 27015;          // the port players connect to
+d.max_peers = 8;
+d.channels = 3;          // e.g. 0 = reliable messages, 1 = snapshots, 2 = inputs
+server.listen(d);
+
+// Client
+net::Host client;
+net::HostDesc c = net::Host::client_desc();
+c.channels = 3;
+client.open_client(c);
+net::PeerId to_server = client.connect("192.168.1.20", 27015);
+```
+
+Call `poll()` once per frame on each side and handle the events:
+
+```cpp
+for (net::Event ev; host.poll(ev);) {
+    switch (ev.kind) {
+        case net::EventKind::Connected:    /* a player joined / we reached the server */ break;
+        case net::EventKind::Disconnected: /* a player left / we lost the server */ break;
+        case net::EventKind::Received:     /* ev.channel, ev.data */ break;
+    }
+}
+```
+
+Send with `send(peer, channel, bytes, delivery)` or `broadcast(channel, bytes, delivery)`. Pick the
+delivery by what the message is:
+
+| Delivery | Use it for |
+|---|---|
+| `Reliable` | things that must arrive once, in order: join, chat, "door opened", "level won" |
+| `Sequenced` | state that is replaced every tick: snapshots, held-down inputs |
+| `Unreliable` | fire-and-forget effects where order does not matter |
+
+Write and read messages with `net::ByteWriter` and `net::ByteReader`. A reader that runs past the end
+of a message sets `ok()` to false instead of crashing, so check it before acting on what you read, and
+clamp numbers that come from the network.
+
+## 20.4 Replicate entities
+
+On the server, give each entity players should see a `NetId` with `ReplicationServer::assign`, and
+broadcast a snapshot every tick:
+
+```cpp
+net::ReplicationServer rep;
+rep.assign(world, enemy, kKindEnemy);   // kKindEnemy: your own number for "what this is"
+
+world.tick(dt, ++tick);
+writer.clear();
+rep.write_snapshot(world, u32(tick), writer);
+server.broadcast(1, writer.data(), net::Delivery::Sequenced);
+```
+
+On the client, apply the newest snapshot from a `FixedUpdate_Pre` system. New entities appear with
+`NetId` and `LocalTransform`; use `on_spawn` to add what the client draws:
+
+```cpp
+net::ReplicationHooks hooks;
+hooks.on_spawn = [](void*, Commands& cmd, Entity e, const net::NetId& id) {
+    if (id.kind == kKindEnemy) cmd.add(e, enemy_sprite());
+};
+client_rep.set_hooks(hooks);
+// in the system:
+client_rep.apply(f.commands(), f.world(), latest_snapshot);
+```
+
+To send more than position, rotation and scale (health, an animation state), set `write_extra` on the
+server and `read_extra` on the client. When the client disconnects, call `client_rep.reset(...)`.
+
+## 20.5 Try it
+
+`samples/net_headless` runs a server and a client in one process over loopback and checks that the
+client's copy matches the server exactly:
+
+```
+build/linux-gcc-debug/samples/net_headless/sample_net_headless -ticks 300
+```
+
+To test your own game on one machine, run a server host and a client host connecting to
+`127.0.0.1`. The editor's play mode runs a single world, so it does not play multiplayer sessions.
+
+## 20.6 What it does not do yet
+
+Clients show the newest snapshot without prediction or smoothing, every client receives every
+replicated entity, and traffic is not encrypted. There are no lobbies, matchmaking or NAT traversal:
+players connect to an address and port. If you ship a game that links `mce_net`, list ENet (MIT
+licence) in your `CREDITS.md`.
