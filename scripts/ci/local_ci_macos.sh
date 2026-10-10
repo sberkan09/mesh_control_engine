@@ -6,13 +6,15 @@
 #   scripts/ci/local_ci_macos.sh --quick      # walls + macos-debug (with GPU tests)
 #   scripts/ci/local_ci_macos.sh walls samples   # pick stages
 #
-# Stages: walls, macos-debug, macos-release, macos-asan, validation, samples, determinism.
+# Stages: walls, macos-debug, macos-release, macos-asan, validation, samples, determinism, ship.
 #   macos-debug/-release  build + ctest, GPU tests (test_rhi_metal, test_render_gl on Metal) included
 #   macos-asan            UBSan build + ctest, no GPU tests (ASan's runtime hangs on macOS 26.6: M-MAC.md)
 #   validation            the GPU tests again under MTL_DEBUG_LAYER + MTL_SHADER_VALIDATION
 #   samples               01_triangle, sprites_2d, 03_platformer, 04_diorama, 04_cubes: 120 frames each under
 #                         Metal validation, last frame captured to build/local-ci-logs/shots/*.png
 #   determinism           scripts/ci/determinism.py, Debug vs Release hashes on this Mac (ADR-0007)
+#   ship                  scripts/ship.py platformer on macos-release: the signed .app bundle
+#                         (cmake/macos/macos_bundle.py), codesign --verify, a 60-frame smoke run
 #
 # Deps: Xcode (Metal framework), cmake >= 3.28, ninja, python3. Bash 3.2 compatible (macOS /bin/bash).
 # Exit code 0 only if every selected stage passed. A summary table is printed at the end.
@@ -22,7 +24,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-ALL_STAGES="walls macos-debug macos-release macos-asan validation samples determinism"
+ALL_STAGES="walls macos-debug macos-release macos-asan validation samples determinism ship"
 
 stages=""
 for arg in "$@"; do
@@ -139,6 +141,15 @@ stage_determinism() {
     [[ "$hd" == "$hr" ]]
 }
 
+stage_ship() {
+    local out="$LOG_DIR/dist"
+    rm -rf "$out"
+    python3 scripts/ship.py platformer --preset macos-release --out "$out" --smoke || return 1
+    local app
+    app="$(ls -d "$out"/*/*.app | head -1)"
+    [[ -n "$app" ]] && codesign --verify --strict --deep --verbose=1 "$app"
+}
+
 run_stage() {
     case "$1" in
         walls) python3 scripts/ci/check_walls.py ;;
@@ -146,6 +157,7 @@ run_stage() {
         validation) stage_validation ;;
         samples) stage_samples ;;
         determinism) stage_determinism ;;
+        ship) stage_ship ;;
         *) echo "unknown stage: $1 (known: $ALL_STAGES)"; return 2 ;;
     esac
 }
