@@ -5,6 +5,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_metal.h>
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
@@ -148,6 +149,16 @@ f32 half_to_float(u16 h) {
     f32 f;
     std::memcpy(&f, &bits, 4);
     return f;
+}
+
+// One unsigned small float of R11G11B10F: 5-bit exponent (bias 15), `mbits`-bit mantissa, no sign.
+f32 small_float(u32 bits, u32 mbits) {
+    const u32 m = bits & ((1u << mbits) - 1u);
+    const u32 e = bits >> mbits;
+    const f32 frac = f32(m) / f32(1u << mbits);
+    if (e == 0) return std::ldexp(frac, -14);
+    if (e == 31) return m ? 0.0f : 65504.0f;  // NaN reads as 0, +inf saturates (unorm8 clamps both)
+    return std::ldexp(1.0f + frac, i32(e) - 15);
 }
 
 u8 unorm8(f32 v) {
@@ -925,8 +936,9 @@ ResultV MetalDevice::read_pixels(TextureHandle target, Rect2D rect, Span<u8> out
     } else {
         const MtlTexture* t = textures_.try_get(target);
         if (!t) return Error(Errc::NotFound, "rhi.read_pixels", "stale texture handle");
-        if (t->samples > 1 || is_depth_format(t->format) || is_compressed_format(t->format) ||
-            t->format == TextureFormat::R11G11B10F)
+        // The GL backend cannot read these as RGBA8 either (its texture readback rejects them)
+        // (multisampled and depth textures are GL errors there), so neither backend offers them.
+        if (t->samples > 1 || is_depth_format(t->format) || is_compressed_format(t->format))
             return Error(Errc::Unsupported, "rhi.read_pixels", "format not readable");
         tex = t->texture;
         fmt = t->format;
@@ -991,6 +1003,15 @@ ResultV MetalDevice::read_pixels(TextureHandle target, Rect2D rect, Span<u8> out
                         px[2] = 0;
                         px[3] = 255;
                         break;
+                    case TextureFormat::R11G11B10F: {  // GL: each channel clamped to [0, 1], alpha 1
+                        u32 v;
+                        std::memcpy(&v, s + x * 4, 4);
+                        px[0] = unorm8(small_float(v & 0x7FFu, 6));
+                        px[1] = unorm8(small_float((v >> 11) & 0x7FFu, 6));
+                        px[2] = unorm8(small_float(v >> 22, 5));
+                        px[3] = 255;
+                        break;
+                    }
                     default: std::memset(px, 0, 4); break;
                 }
             }
