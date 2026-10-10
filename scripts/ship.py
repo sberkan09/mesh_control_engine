@@ -6,7 +6,8 @@
     python3 scripts/ship.py all --version 0.1.0  # both
     python3 scripts/ship.py --project projects/MyGame   # a project from scripts/new_project.py
 
-What a zip holds (one folder, double-click the executable):
+What a zip holds (one folder, double-click the executable; macOS: <Name>.app, see
+cmake/macos/macos_bundle.py):
     <Name>[.exe]        the sample executable, renamed (Windows: icon + VERSIONINFO resource)
     <module>            the game module next to it, when the artifact has one
     assets.mce          the cooked shipping pack (mce_cook --pack; CRC-verified once at mount)
@@ -39,6 +40,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXE = ".exe" if os.name == "nt" else ""
 MODULE_PREFIX, MODULE_SUFFIX = ("", ".dll") if os.name == "nt" else ("lib", ".so")
 ENGINE_SUFFIX = ".dylib" if sys.platform == "darwin" else MODULE_SUFFIX  # SHARED, not MODULE
+MACOS = sys.platform == "darwin"
+if MACOS:
+    sys.path.insert(0, os.path.join(ROOT, "cmake", "macos"))
+    import macos_bundle  # dSYMs, strip + ad-hoc signing, the .app bundle (Mac-owned)
 
 ARTIFACTS = {
     "diorama": {
@@ -74,7 +79,7 @@ def git(*args):
 
 
 def default_preset():
-    return "msvc-release" if os.name == "nt" else "linux-gcc-release"
+    return "msvc-release" if os.name == "nt" else "macos-release" if MACOS else "linux-gcc-release"
 
 
 def os_tag():
@@ -165,7 +170,13 @@ def ship(art, args):
     symbols = os.path.join(args.out, stem + "-symbols")
     shutil.rmtree(symbols, ignore_errors=True)
     build_ids = {}
-    if os.name != "nt":
+    if MACOS:
+        for name in binaries:
+            bid = macos_bundle.macho_uuid(os.path.join(stage, name))
+            if bid:
+                build_ids[name] = bid
+        macos_bundle.archive_and_strip(stage, binaries, symbols, args.keep_symbols)
+    elif os.name != "nt":
         os.chmod(os.path.join(stage, art["name"] + EXE), 0o755)
         for name in binaries:
             bid = elf_build_id(os.path.join(stage, name))
@@ -185,7 +196,10 @@ def ship(art, args):
     dirty = bool(git("status", "--porcelain", "--untracked-files=no"))
     with open(os.path.join(stage, "README.txt"), "w", newline="\n") as f:
         f.write(f"{art['title']} {args.version}\nBuilt with Mesh Control Engine.\n\n")
-        f.write(f"Run: double-click {art['name'] + EXE} (it needs an OpenGL 4.5 driver).\n")
+        if MACOS:
+            f.write(macos_bundle.readme_run_line(art))
+        else:
+            f.write(f"Run: double-click {art['name'] + EXE} (it needs an OpenGL 4.5 driver).\n")
         f.write(f"Controls: {art['controls']}\n\n")
         f.write("Keep every file of this folder together: the executable loads assets.mce and its libraries from here.\n")
         if art["credits"]:
@@ -199,13 +213,25 @@ def ship(art, args):
         for name, bid in sorted(build_ids.items()):
             f.write(f"build_id {bid}  {name}\n")
 
+    if MACOS:
+        art = dict(art, exe_staged=macos_bundle.make_app(stage, art, args.version))
+
     zip_path = os.path.join(args.out, stem + ".zip")
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-        for name in sorted(os.listdir(stage)):
-            info = zipfile.ZipInfo.from_file(os.path.join(stage, name), arcname=f"{stem}/{name}")
-            info.compress_type = zipfile.ZIP_DEFLATED
-            with open(os.path.join(stage, name), "rb") as src:
-                z.writestr(info, src.read())
+        for root, dirs, names in os.walk(stage):
+            dirs.sort()
+            for name in sorted(names + [d for d in dirs if os.path.islink(os.path.join(root, d))]):
+                full = os.path.join(root, name)
+                arc = f"{stem}/{os.path.relpath(full, stage)}"
+                if os.path.islink(full):  # bundle symlinks stay links (unzip / Finder restore them)
+                    info = zipfile.ZipInfo(arc)
+                    info.external_attr = (0o120777 << 16)
+                    z.writestr(info, os.readlink(full))
+                    continue
+                info = zipfile.ZipInfo.from_file(full, arcname=arc)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                with open(full, "rb") as src:
+                    z.writestr(info, src.read())
     size = os.path.getsize(zip_path)
     print(f"ship: {zip_path} ({size / 1024:.0f} KiB, sha256 {sha256(zip_path)[:16]}...)")
     if os.path.isdir(symbols):
@@ -283,7 +309,7 @@ def check_self_contained(stage):
 
 def smoke(stage, art, args):
     """Runs the staged artifact from a copy outside the build tree: proves it finds its own pack."""
-    exe = os.path.join(stage, art["name"] + EXE)
+    exe = art.get("exe_staged") or os.path.join(stage, art["name"] + EXE)
     cmd = [exe, "-frames", "60", "-r.vsync", "0", "-platform.error_box", "0"]
     if art["autoplay"]:
         cmd += ["-autoplay", "1"]
