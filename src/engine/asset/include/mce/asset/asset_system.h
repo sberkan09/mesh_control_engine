@@ -3,8 +3,8 @@
 // generational handles, hot-reload commit, per-type placeholders.
 //
 // Main thread only: the main thread is the sole mutator of the tables, so the read path takes
-// no locks (assets.md §8.1). Async loading (v0.5) adds a loader thread that only builds
-// ready-to-commit entries.
+// no locks (assets.md §8.1). Async loading (FR-ENT-120, request_async) adds a loader thread that
+// only reads and hashes container files; the main thread commits them in poll_async().
 
 #include "mce/asset/formats.h"
 #include "mce/asset/gpu_upload_sink.h"
@@ -33,6 +33,20 @@ struct AssetInfo {
     ChunkType type = ChunkType::Manifest;
     u64 content_hash = 0;
     StringView path;  // source path relative to assets/ (diagnostics only)
+};
+
+// An async load request (request_async). Zero is never a live ticket.
+struct AsyncTicket {
+    u32 id = 0;
+    constexpr bool valid() const { return id != 0; }
+    friend constexpr bool operator==(AsyncTicket a, AsyncTicket b) { return a.id == b.id; }
+};
+
+enum class AsyncStatus : u8 {
+    Pending,  // queued or being read on the loader thread
+    Ready,    // committed: take_async hands back the handle
+    Failed,   // take_async returns the error
+    Unknown,  // not a live ticket (never issued, taken or cancelled)
 };
 
 struct MountOptions {
@@ -67,6 +81,30 @@ public:
     Result<AssetHandle<T>> load_sync(Guid guid) {
         return load_sync<T>(find(guid));
     }
+
+    // ---- async loading (FR-ENT-120) ----------------------------------------------------------
+    // Queues a load that does not block the main thread. A dev mount's container file is read and
+    // hashed on the loader thread; an asset already resident, or one in a pack (its bytes were read
+    // at mount), is ready at once. Finished reads are committed on the main thread by poll_async()
+    // (end_frame() calls it too); the commit makes the asset resident exactly as load_sync would.
+    // Pair every ticket with take_async or cancel_async.
+    AsyncTicket request_async(AssetKey key, ChunkType type);
+    template <class T>
+    AsyncTicket request_async(AssetKey key) {
+        return request_async(key, T::chunk);
+    }
+    AsyncStatus async_status(AsyncTicket t) const;
+    // Ready: the handle, holding one reference (pair it with a release). Failed: the load error.
+    // Either way the ticket is spent. Pending/Unknown: Errc::InvalidArgument, ticket untouched.
+    Result<AnyHandle> take_async(AsyncTicket t);
+    // Drops an unwanted request; a read in flight finishes and is discarded, a ready one releases
+    // the reference it held. Unknown tickets are ignored.
+    void cancel_async(AsyncTicket t);
+    // Commits the loader thread's finished reads (main thread).
+    void poll_async();
+    // Blocks until every queued read has finished, then commits them (tests, loading screens).
+    void wait_async();
+    u32 async_pending() const;
 
     void retain(AnyHandle h);
     // Decrements; at zero the asset is queued and reaped MCE_FRAMES_IN_FLIGHT end_frame()s later.
@@ -148,7 +186,24 @@ private:
         Array<byte> bytes;
     };
 
+    struct AsyncLoader;  // the loader thread and its queues (asset_system.cpp)
+    struct AsyncRequest {
+        u32 id = 0;
+        AssetKey key = kInvalidAssetKey;
+        ChunkType type = ChunkType::Manifest;
+        AsyncStatus status = AsyncStatus::Pending;
+        u64 content_hash = 0;  // of the file being read (a reload in between makes it stale)
+        AnyHandle handle;
+        Errc error = Errc::Ok;
+    };
+
     Result<void> mount_one(StringView root, MountOptions opt);
+    Result<void> bind_payload(Row& row, ContainerView view, StringView path);
+    void fail_load(Row& row, AssetKey key, Errc code);
+    void become_resident(Row& row, AssetKey key);
+    void commit_read(AsyncRequest& req, Array<byte>& bytes, Errc read_error);
+    AsyncRequest* find_async(AsyncTicket t);
+    const AsyncRequest* find_async(AsyncTicket t) const;
     Result<AnyHandle> load_any(AssetKey key, ChunkType type);
     Result<void> make_resident(Row& row, AssetKey key);
     Result<void> upload(const Row& row, AssetKey key);
@@ -170,6 +225,9 @@ private:
     u32 write_buf_ = 1;
     IGpuUploadSink* sink_ = nullptr;
     Array<byte> placeholders_[16];  // indexed by ChunkType
+    Array<AsyncRequest> async_;
+    u32 next_async_id_ = 1;
+    mem::UniquePtr<AsyncLoader> loader_;  // started by the first dev-mount request
 };
 
 }  // namespace mce::asset

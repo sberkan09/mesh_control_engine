@@ -94,7 +94,7 @@ Conventions: **Anchor** = A (UC-A), B (UC-B), D (UC-D), C (UC-C), ★ = shared c
 | FR-ENT-090 | FSM support: state-as-data components + per-state systems + small `fsm.h` helper (timed states, entry/exit actions); states inspectable and save-game-able. | Must | MVP | Enemy FSM in Artifact A is inspectable in the editor live; state time resets on transition (unit test). |
 | FR-ENT-100 | Scripted beats: data-driven action-list sequences (wait/move/play_anim/emit/call) advanced by a runner system. | Should | v0.5 | A scripted intro sequence in Ashen Court runs from data; serializes and resumes (round-trip). |
 | FR-ENT-110 | Timelines: cooked track/clip assets (transform keys, clips, audio, camera cuts, events) with an editor timeline view. | Should | v1.0 | A camera-cut timeline plays back deterministically; editor timeline view scrubs it. |
-| FR-ENT-120 | Sub-scene streaming (multiple scene chunks per world, async load). | Could | — | Trigger: a game exceeds one scene chunk comfortably. |
+| FR-ENT-120 | Sub-scene streaming (multiple scene chunks per world, async load), **opt-in**: a game that places no `SceneChunk` is unaffected. Promoted by the user on 2026-10-10. | Should | v1.0+ | Chunks load within `load_distance` of a `StreamingFocus` and their entities are destroyed past `unload_distance`; async reads land on a later tick with budgeted instantiation; sync mode is hash-deterministic; a world without chunks keeps its state hash (`test_scene` streaming cases). |
 | FR-ENT-130 | Observers/trigger cascades, runtime prefab inheritance (flecs `IsA`), behavior trees/GOAP, coroutines for gameplay scripting. | Won't | — | ecs-gameplay research §6/§9/§11 records re-entry triggers. |
 
 ### 3.3 FR-R2D — 2D rendering
@@ -368,7 +368,7 @@ Project skeleton (CMake presets, vcpkg, CI, target graph) · core runtime (frame
 
 IBL · cascaded shadow maps (if not already) · editor maturity (prefab instantiate + override UI, multi-scene, thumbnails, timeline/curve editor) · runtime UI `mce::ui` powering shipped menus/HUD (FR-UI-010; the pre-approved RmlUi fallback trigger of audio-input-ui R6 stands if `mce::ui` overruns) · packaging (versioned zip, symbolicated crash dumps, shipped debug console) · post FX (bloom, vignette) · Ashen Court complete · **UC-D: a vertical-slice proof game built exclusively through the editor + project template, as the v1.0 proof of engine.** If M8 overruns, the first cuts are thumbnails and the timeline/curve editor (cut-ladder rung 1) — UC-D does not depend on either.
 
-**Explicitly deferred beyond v1.0 (named so they cannot sneak in):** scripting VM (Lua/sol2), streaming/world-partition, job-parallel runtime scheduling, hot-reloadable game DLL (the platform/game split is designed *for* it now; building it is deferred), Vulkan/D3D12 backend, networking, GPU particles, terrain, navmesh/AI.
+**Explicitly deferred beyond v1.0 (named so they cannot sneak in):** scripting VM (Lua/sol2), world-partition editor tooling (opt-in scene streaming itself shipped, FR-ENT-120), job-parallel runtime scheduling, hot-reloadable game DLL (the platform/game split is designed *for* it now; building it is deferred), Vulkan/D3D12 backend, networking, GPU particles, terrain, navmesh/AI.
 
 ### 6.3 The cut ladder (decided now, executed without re-negotiation)
 

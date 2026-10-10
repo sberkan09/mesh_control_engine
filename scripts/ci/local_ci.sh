@@ -207,7 +207,7 @@ stage_physics3d_determinism() {
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
     configure linux-gcc-debug &&
-        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content &&
+        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content stream_demo_content &&
         configure linux-gcc-release &&
         cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1000 -boids 20000" \
@@ -224,6 +224,9 @@ stage_determinism() {
             build/linux-gcc-release/samples/04_diorama/sample_04_diorama &&
         python3 scripts/ci/determinism.py --runs 3 \
             --args="-headless 1 -ticks 600 -pack build/linux-gcc-debug/samples/scene_demo/project/assets.mce" \
+            build/linux-gcc-debug/src/player/mce_player build/linux-gcc-release/src/player/mce_player &&
+        python3 scripts/ci/determinism.py --runs 3 \
+            --args="-headless 1 -ticks 1500 -pack build/linux-gcc-debug/samples/stream_demo/project/assets.mce -scene scenes/world.mcscene" \
             build/linux-gcc-debug/src/player/mce_player build/linux-gcc-release/src/player/mce_player &&
         stage_module_determinism &&
         stage_physics3d_determinism &&

@@ -1,0 +1,25 @@
+{
+  "format": "mce-sequence",
+  "version": 1,
+  "guid": "5ce4e000-0000-4000-8000-000000000210",
+  "name": "patrol",
+  "loop": true,
+  "steps": [
+    {
+      "wait": 0.5
+    },
+    {
+      "move_to": [60, 0],
+      "speed": 6,
+      "relative": true
+    },
+    {
+      "wait": 0.5
+    },
+    {
+      "move_to": [-60, 0],
+      "speed": 6,
+      "relative": true
+    }
+  ]
+}

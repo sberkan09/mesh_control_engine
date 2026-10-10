@@ -27,6 +27,7 @@ pitfalls come from them.
 | `sprites_2d` | the 2D batch at 10k sprites, a tilemap arena, pixel-snapped camera, screen shake, HUD text | `sprites_2d -frames 300` |
 | `03_platformer` (Ember Step) | the full 2D game: five levels, menus, best times through the save system, a game module loaded by a host, particles, music; the content shipped as Artifact A | `sample_03_platformer`, `-level N`, `-autoplay 1` |
 | `scene_demo` | an editor-authored scene with no game code, played by the stock player | `mce_player -pack build/<preset>/samples/scene_demo/project/assets.mce` |
+| `stream_demo` | scene streaming with no game code: a traveler patrols four areas, each its own scene, loaded and unloaded around it (chapter 4.8) | `mce_player -pack build/<preset>/samples/stream_demo/project/assets.mce -scene scenes/world.mcscene` |
 | `extras_2d` | parallax layers, lit sprites, 2D post effects, particles, a save round trip; assets only, played by the stock player | `mce_player -pack build/<preset>/samples/extras_2d/project/assets.mce` |
 | `ui_gallery` | runtime UI: a title menu, options bound to convars, a level grid, the developer console | `ui_gallery -page options` |
 | `04_diorama` | glTF kit meshes, one directional light with a shadow map, fog, node animation; Artifact B | `sample_04_diorama` |
