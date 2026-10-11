@@ -206,6 +206,19 @@ come from `scripts/release_sdk.sh`, which builds the release preset and writes
 v<version> dist/mce-sdk-*.tar.gz`) and `./install.sh --release` finds it. An archive is built
 for one OS and CPU, so make the macOS one on a Mac.
 
+**Updating.** `mce update` repeats the install the way it was made: for a source install it runs
+`git pull --ff-only` in the checkout and `./install.sh` again (the build tree is kept, so only what
+changed recompiles); for a `--release` install it downloads the latest release (`--release <tag>`
+picks one). A game module only loads into the engine it was built against, so rebuild your
+projects afterwards; name them and `mce update` does it:
+
+```sh
+mce update ~/Projects/MyGame ~/Projects/OtherGame   # pull, reinstall, rebuild both projects
+```
+
+Close the editor and any running game first. An SDK unpacked from an archive file has nowhere to
+update from: run `./install.sh` with the newer archive.
+
 The same by hand, once (a release build is the one to install):
 
 ```sh

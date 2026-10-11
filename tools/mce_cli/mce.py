@@ -10,6 +10,8 @@
     mce mcp <project> [--allow-cheats]          the MCP server over stdio with the module loaded
     mce cook <project> [cook flags...]          cook assets/ with the module loaded (--pack, --force, --adopt)
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
+    mce update [<project>...] [--release [tag]]  reinstall this SDK from where it came from, then rebuild
+                                                the projects named (their modules must match the new engine)
     mce version                                 the SDK's version and engine build stamp
     mce --help
 
@@ -205,6 +207,58 @@ def cmd_ship(args):
     return 0
 
 
+def sdk_origin():
+    """How install.sh made this SDK: ("source", <checkout>), ("release", None) or (None, None)."""
+    origin = SHARE / "ORIGIN"
+    text = origin.read_text(encoding="utf-8").strip() if origin.is_file() else ""
+    kind, _, where = text.partition(" ")
+    if kind == "source" and where:
+        return "source", pathlib.Path(where)
+    if kind == "release":
+        return "release", None
+    return None, None
+
+
+def cmd_update(args):
+    if os.name == "nt":
+        sys.exit("mce: update needs install.sh (macOS and Linux)")
+    kind, checkout = sdk_origin()
+    if args.release is not None:
+        kind = "release"
+    projects = [Project(p) for p in args.projects]  # check them before replacing the SDK
+    before = sdk_version()[1].split(" ")[0] or "unknown"
+    if kind == "source":
+        if not (checkout / "install.sh").is_file():
+            sys.exit(f"mce: the checkout this SDK was built from ({checkout}) is gone; run install.sh from a checkout")
+        rc = run(["git", "-C", checkout, "pull", "--ff-only"])
+        if rc:
+            sys.exit(f"mce: git pull failed in {checkout} (local changes or a diverged branch); fix it and rerun")
+        rc = run(["sh", checkout / "install.sh", "--prefix", PREFIX, "--no-path"])
+    elif kind == "release":
+        # install.sh replaces this prefix, itself included, so run a copy from outside it.
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            script = pathlib.Path(tmp) / "install.sh"
+            shutil.copy2(SHARE / "install.sh", script)
+            rc = run(["sh", script, "--release"] + ([args.release] if args.release else []) +
+                     ["--prefix", PREFIX, "--no-path"])
+    else:
+        sys.exit("mce: this SDK was not installed by install.sh (or from an archive); reinstall it with install.sh")
+    if rc:
+        return rc
+    for p in projects:
+        print(f"mce: rebuilding {p.dir} against the new engine")
+        rc = run([sys.executable, PREFIX / "bin" / "mce", "build", p.dir])
+        if rc:
+            return rc
+    version, stamp = sdk_version()
+    after = stamp.split(" ")[0] or "unknown"
+    print(f"mce: engine {before} -> {after}" + (" (already current)" if before == after else "") + f": mce {version} ({stamp})")
+    if not projects:
+        print("mce: rebuild each project once (mce build <project>): a module only loads into the engine it was built for")
+    return 0
+
+
 def cmd_version(args):
     version, stamp = sdk_version()
     print(f"mce {version} ({stamp or 'engine stamp unknown'}) at {PREFIX}")
@@ -254,6 +308,12 @@ def main(argv):
     s.add_argument("--out")
     s.add_argument("--version")
     s.set_defaults(fn=cmd_ship)
+
+    s = sub.add_parser("update", help="reinstall this SDK from its checkout (git pull) or the latest release")
+    s.add_argument("projects", nargs="*", help="projects to rebuild afterwards")
+    s.add_argument("--release", nargs="?", const="", default=None, metavar="TAG",
+                   help="install from GitHub releases (default: the latest) instead of the checkout")
+    s.set_defaults(fn=cmd_update)
 
     s = sub.add_parser("version", help="the SDK version and engine build stamp")
     s.set_defaults(fn=cmd_version)
