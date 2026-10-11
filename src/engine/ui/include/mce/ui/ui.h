@@ -112,6 +112,12 @@ struct UpdateContext {
     f64 dt = 0.0;                                   // presentation time (caret blink)
 };
 
+// Touch as the pointer (M-MOBILE, FR-INP-070): the oldest touch in the snapshot becomes
+// ctx.pointer (scaled to ctx.viewport) with its press/hold/release, so widgets hit-test by finger
+// exactly as by mouse. Leaves the context untouched when the snapshot has no touch, so a host can
+// fill the mouse pointer first and call this after. Set ctx.viewport before calling.
+void apply_touch_pointer(UpdateContext& ctx, const input::InputState& state);
+
 struct UiEvent {
     enum Kind : u8 { Confirmed, ValueChanged, FocusChanged, Cancelled, Submitted } kind = Confirmed;
     WidgetId widget;

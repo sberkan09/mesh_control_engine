@@ -1,5 +1,6 @@
 #include "mce/input/input_system.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -31,6 +32,10 @@ bool is_input_event(EventType t) {
         case EventType::GamepadButtonDown:
         case EventType::GamepadButtonUp:
         case EventType::GamepadAxis:
+        case EventType::TouchDown:
+        case EventType::TouchMove:
+        case EventType::TouchUp:
+        case EventType::Resized:
             return true;
         default:
             return false;
@@ -41,7 +46,8 @@ bool is_input_event(EventType t) {
 // in-game and released over an ImGui field cannot stick (§4.6).
 bool is_press(EventType t) {
     return t == EventType::KeyDown || t == EventType::MouseButtonDown || t == EventType::TextInput ||
-           t == EventType::MouseWheel || t == EventType::MouseMove;
+           t == EventType::MouseWheel || t == EventType::MouseMove || t == EventType::TouchDown ||
+           t == EventType::TouchMove;
 }
 
 f32 apply_deadzone(f32 v, Deadzone dz) {
@@ -63,9 +69,7 @@ f32 apply_curve(f32 v, Curve c) {
     return v < 0.f ? -r : r;
 }
 
-bool bounded(Device d) {
-    return d == Device::Keyboard || d == Device::MouseButton || d == Device::GamepadButton || d == Device::GamepadAxis;
-}
+bool bounded(Device d) { return d != Device::MouseWheel && d != Device::MouseDelta; }
 
 constexpr f32 kCaptureAxisThreshold = 0.6f;  // a stick must be pushed this far to be captured
 
@@ -206,7 +210,7 @@ Result<void> InputSystem::deserialize_bindings(StringView text) {
     Array<BindingOverride> parsed(alloc_);
     MCE_TRY(read_bindings(text, parsed));
     for (const BindingOverride& o : parsed.span()) {
-        if (static_cast<u8>(o.device) > static_cast<u8>(Device::GamepadAxis) || o.axis > 1)
+        if (static_cast<u8>(o.device) > static_cast<u8>(Device::TouchSwipe) || o.axis > 1)
             return Error(Errc::InvalidArgument, "input.bindings.read", "binding out of range");
     }
     reset_bindings();
@@ -362,7 +366,54 @@ void InputSystem::push_event(const Event& e) {
     }
 }
 
+void InputSystem::set_view_size(f32 width_px, f32 height_px) {
+    if (width_px > 0.f && height_px > 0.f) view_px_ = vec2(width_px, height_px);
+}
+
+vec2 InputSystem::touch_units(vec2 d) const {
+    const f32 short_side = view_px_.x < view_px_.y ? view_px_.x : view_px_.y;
+    return vec2(d.x * view_px_.x / short_side, d.y * view_px_.y / short_side);
+}
+
+void InputSystem::end_touch(u32 slot, vec2 pos, u64 timestamp_us, bool canceled) {
+    TouchState& t = touches_[slot];
+    if (!t.down || t.release_pending) return;
+    t.pos = pos;
+    if (!canceled && tick_gesture_count_ < platform::kMaxTouches) {
+        const vec2 d = touch_units(vec2(pos.x - t.origin.x, pos.y - t.origin.y));
+        const f32 travel = std::sqrt(d.x * d.x + d.y * d.y);
+        const u64 dur = timestamp_us > t.start_us ? timestamp_us - t.start_us : 0;
+        Gesture g;
+        g.origin = t.origin;
+        bool add = false;
+        if (travel < kTapMaxTravel && dur <= kTapMaxUs) {
+            add = true;
+        } else if (travel >= kSwipeMinTravel && dur <= kSwipeMaxUs) {
+            add = true;
+            g.swipe = true;
+            if (std::fabs(d.x) >= std::fabs(d.y)) g.dir = vec2(d.x < 0.f ? -1.f : 1.f, 0.f);
+            else g.dir = vec2(0.f, d.y < 0.f ? -1.f : 1.f);
+        }
+        if (add) tick_gestures_[tick_gesture_count_++] = g;
+    }
+    // A touch that went down in this window still shows held for one tick (the visibility floor).
+    if (t.tapped) {
+        t.release_pending = true;
+    } else {
+        t.down = false;
+        t.released = true;
+    }
+}
+
 void InputSystem::reset_devices() {
+    for (u32 i = 0; i < platform::kMaxTouches; ++i) {
+        TouchState& t = touches_[i];
+        if (t.down) {
+            t.down = false;
+            t.released = true;
+        }
+        t.tapped = t.release_pending = false;
+    }
     for (PadState& p : pads_) {
         p.buttons.clear();
         p.tapped.clear();
@@ -452,6 +503,27 @@ void InputSystem::fold(const Event& e) {
         case EventType::TextInput:
             append_utf8(tick_text_, tick_text_len_, e.code);
             break;
+        case EventType::TouchDown:
+            if (e.code < platform::kMaxTouches) {
+                TouchState& t = touches_[e.code];
+                t = TouchState{};
+                t.down = t.tapped = true;
+                t.origin = t.pos = vec2(e.x, e.y);
+                t.start_us = e.timestamp_us;
+                t.seq = ++touch_seq_;
+            }
+            break;
+        case EventType::TouchMove:
+            if (e.code < platform::kMaxTouches && touches_[e.code].down && !touches_[e.code].release_pending)
+                touches_[e.code].pos = vec2(e.x, e.y);
+            break;
+        case EventType::TouchUp:
+            if (e.code < platform::kMaxTouches)
+                end_touch(e.code, vec2(e.x, e.y), e.timestamp_us, (e.flags & platform::EventFlag::TouchCanceled) != 0);
+            break;
+        case EventType::Resized:
+            set_view_size(e.x, e.y);
+            break;
         case EventType::FocusOut:
             // Stuck-key fix: everything reads released from here on; the release edges fire on
             // this tick (FR-RUN-060, §4.4).
@@ -485,6 +557,16 @@ const InputState* InputSystem::sample_for_tick(u64 tick, u64 close_us) {
         p.release_pending.clear();
         p.tapped.clear();
     }
+    for (TouchState& t : touches_) {
+        t.released = false;
+        if (t.release_pending) {
+            t.down = false;
+            t.released = true;
+        }
+        t.release_pending = false;
+        t.tapped = false;
+    }
+    tick_gesture_count_ = 0;
     tick_wheel_ = vec2();
     tick_delta_ = vec2();
     tick_text_len_ = 0;
@@ -544,6 +626,40 @@ f32 InputSystem::binding_value(const BindingDef& b) const {
                 }
             }
             break;
+        case Device::TouchZone: {
+            const TouchZoneRect z = unpack_touch_zone(b.code);
+            for (const TouchState& t : touches_)
+                if (t.down && z.contains(t.origin.x, t.origin.y)) v = 1.f;
+            break;
+        }
+        case Device::TouchStick: {
+            const TouchZoneRect z = unpack_touch_zone(b.code);
+            const TouchState* oldest = nullptr;
+            for (const TouchState& t : touches_)
+                if (t.down && z.contains(t.origin.x, t.origin.y) && (!oldest || t.seq < oldest->seq)) oldest = &t;
+            if (oldest) {
+                vec2 d = touch_units(vec2(oldest->pos.x - oldest->origin.x, oldest->pos.y - oldest->origin.y));
+                d = vec2(d.x / kTouchStickRadius, d.y / kTouchStickRadius);
+                const f32 len2 = d.x * d.x + d.y * d.y;
+                if (len2 > 1.f) {
+                    const f32 inv = 1.f / std::sqrt(len2);
+                    d = vec2(d.x * inv, d.y * inv);
+                }
+                v = (b.flags & BindingFlag::SourceY) ? d.y : d.x;
+            }
+            break;
+        }
+        case Device::TouchTap:
+        case Device::TouchSwipe: {
+            const TouchZoneRect z = unpack_touch_zone(b.code);
+            const bool swipe = b.device == Device::TouchSwipe;
+            for (u32 i = 0; i < tick_gesture_count_ && v == 0.f; ++i) {
+                const Gesture& g = tick_gestures_[i];
+                if (g.swipe != swipe || !z.contains(g.origin.x, g.origin.y)) continue;
+                v = !swipe ? 1.f : (b.flags & BindingFlag::SourceY) ? g.dir.y : g.dir.x;
+            }
+            break;
+        }
     }
     if (bounded(b.device)) v = apply_curve(apply_deadzone(v, b.dz), b.curve);
     if (b.flags & BindingFlag::Invert) v = -v;
@@ -636,6 +752,23 @@ void InputSystem::evaluate(InputState& out, const InputState& prev) const {
     if (const ActionState* a = find(MCE_SID("Pause"))) out.pause_pressed = a->pressed;
     if (const ActionState* a = find(MCE_SID("Confirm"))) out.confirm_pressed = a->pressed;
     if (const ActionState* a = find(MCE_SID("Cancel"))) out.cancel_pressed = a->pressed;
+
+    // Touches, oldest first: the ones down plus the ones that lifted this tick.
+    const TouchState* order[platform::kMaxTouches];
+    u32 n = 0;
+    for (const TouchState& t : touches_)
+        if (t.down || t.released) order[n++] = &t;
+    std::sort(order, order + n, [](const TouchState* a, const TouchState* b) { return a->seq < b->seq; });
+    for (u32 i = 0; i < n && out.touch_count < kMaxTouchPoints; ++i) {
+        const TouchState& t = *order[i];
+        TouchPoint& p = out.touches[out.touch_count++];
+        p.pos = t.pos;
+        p.origin = t.origin;
+        p.slot = static_cast<u8>(&t - touches_);
+        p.held = t.down;
+        p.released = t.released;
+        p.pressed = t.tapped;  // went down in this tick's window
+    }
 
     out.mouse_pos = mouse_pos_;
     out.wheel = tick_wheel_;

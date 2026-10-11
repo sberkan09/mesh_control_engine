@@ -29,6 +29,12 @@ enum class EventType : u8 {
     GamepadButtonDown,  // code = GamepadButton
     GamepadButtonUp,
     GamepadAxis,        // code = GamepadAxis, x = value (sticks -1..1, triggers 0..1)
+    // Touch (M-MOBILE, FR-INP-070): code = finger slot (0..kMaxTouches-1, reused once lifted),
+    // x, y = position normalized to the window, 0..1, y down. A finger the OS cancels (a system
+    // gesture took it) ends with TouchUp | EventFlag::TouchCanceled.
+    TouchDown,
+    TouchMove,
+    TouchUp,
 };
 
 // Key codes are USB HID keyboard usages (layout-independent physical keys); SDL scancodes use the
@@ -56,7 +62,8 @@ enum class GamepadButton : u32 {
 // Sticks: x right-positive, y DOWN-positive (SDL convention); triggers 0 (released) .. 1.
 enum class GamepadAxis : u32 { LeftX = 0, LeftY, RightX, RightY, LeftTrigger, RightTrigger, Count };
 
-inline constexpr u32 kMaxGamepads = 4;  // player slots (FR-INP-060: more is not a supported scenario)
+inline constexpr u32 kMaxGamepads = 4;
+inline constexpr u32 kMaxTouches = 10;  // fingers tracked at once; more are dropped until one lifts  // player slots (FR-INP-060: more is not a supported scenario)
 
 namespace EventFlag {
 enum : u32 {
@@ -68,6 +75,7 @@ enum : u32 {
     // Set by the editor's UI layer on events it captured (ImGui WantCaptureKeyboard/Mouse) before
     // they reach mce_input; input ignores captured presses but still honors releases (§4.6).
     ConsumedByEditor = 1u << 9,
+    TouchCanceled = 1u << 10,  // on TouchUp: the OS took the finger, not a lift (no tap, no swipe)
 };
 }
 

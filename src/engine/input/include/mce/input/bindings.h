@@ -11,7 +11,8 @@
 
 namespace mce::input {
 
-MCE_ENUM(Device, Keyboard, MouseButton, MouseWheel, MouseDelta, GamepadButton, GamepadAxis)
+MCE_ENUM(Device, Keyboard, MouseButton, MouseWheel, MouseDelta, GamepadButton, GamepadAxis, TouchZone, TouchStick,
+         TouchTap, TouchSwipe)
 MCE_ENUM(Curve, Linear, Smooth, Quadratic, Cubic)
 
 struct BindingOverride {

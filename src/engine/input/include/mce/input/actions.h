@@ -17,6 +17,7 @@ enum class ActionType : u8 { Button, Axis1D, Axis2D };
 
 inline constexpr u32 kMaxActions = 64;     // evaluated actions per tick, across the map stack
 inline constexpr u32 kMaxTextBytes = 64;   // UTF-8 text accumulated per tick
+inline constexpr u32 kMaxTouchPoints = 4;  // touches carried in a snapshot (oldest first)
 
 struct ActionState {  // one action's value this tick
     f32 x = 0.f;           // Button: 0|1 (held). Axis1D: x. Axis2D: x,y
@@ -25,6 +26,17 @@ struct ActionState {  // one action's value this tick
     bool held = false;     // Button: down. Axis: non-zero
     bool pressed = false;  // edge: became held THIS tick
     bool released = false; // edge: stopped being held THIS tick
+};
+
+// One finger as of the end of a tick window (M-MOBILE, FR-INP-070). Positions are normalized to
+// the window (0..1, y down), so a recording replays the same on any screen size.
+struct TouchPoint {
+    vec2 pos;
+    vec2 origin;          // where the touch started
+    u8 slot = 0;          // platform finger slot (reused once lifted)
+    bool held = false;    // down at the end of the window (a tap shorter than a tick holds one tick)
+    bool pressed = false;   // edge: went down THIS tick
+    bool released = false;  // edge: lifted (or was canceled) THIS tick; held is false then
 };
 
 struct InputState {
@@ -58,12 +70,18 @@ struct InputState {
     StringView text() const { return StringView(text_buf, text_len); }
     vec2 mouse_pos_px() const { return mouse_pos; }  // window space, end of tick window
     vec2 mouse_wheel() const { return wheel; }       // accumulated over the tick window
+    // Touches down this tick plus the ones lifted this tick, oldest first (at most kMaxTouchPoints).
+    // Gameplay that binds actions (TouchStick, TouchZone, ...) never needs these; they are for
+    // tap-to-point games and touch UI (ui::apply_touch_pointer).
+    Span<const TouchPoint> touch_points() const { return Span<const TouchPoint>(touches, touch_count); }
 
     // ---- storage (public so the recorder/replayer and tests can see it; treat as read-only) ----
     vec2 mouse_pos;
     vec2 wheel;
     u32 action_count = 0;
     u32 text_len = 0;
+    u32 touch_count = 0;
+    TouchPoint touches[kMaxTouchPoints] = {};
     char text_buf[kMaxTextBytes] = {};
     StringId action_names[kMaxActions] = {};
     ActionState actions[kMaxActions] = {};

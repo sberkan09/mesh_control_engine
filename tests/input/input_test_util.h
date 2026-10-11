@@ -32,6 +32,17 @@ inline platform::Event simple_event(platform::EventType t, u64 ts_us, u32 code =
     return e;
 }
 
+inline platform::Event touch_event(platform::EventType t, u32 slot, f32 x, f32 y, u64 ts_us, u32 flags = 0) {
+    platform::Event e;
+    e.type = t;
+    e.code = slot;
+    e.x = x;
+    e.y = y;
+    e.flags = flags;
+    e.timestamp_us = ts_us;
+    return e;
+}
+
 // An InputSystem on the default map with its tick grid starting at t = 0.
 inline void setup_default(input::InputSystem& in) {
     Array<byte> chunk;

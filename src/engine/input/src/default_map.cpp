@@ -6,6 +6,13 @@ using platform::GamepadAxis;
 using platform::GamepadButton;
 using platform::Key;
 
+namespace {
+// Touch layout: the top-right corner pauses; below it the right half looks and jumps (a still tap).
+constexpr TouchZoneRect kLeftHalf{0.f, 0.f, 0.5f, 1.f};
+constexpr TouchZoneRect kRightHalf{0.5f, 0.15f, 1.f, 1.f};
+constexpr TouchZoneRect kPauseCorner{0.85f, 0.f, 1.f, 0.15f};
+}  // namespace
+
 void build_default_map(InputMapBuilder& b) {
     b.map(MCE_SID("Gameplay"));
     b.action(MCE_SID("Move"), ActionType::Axis2D)
@@ -14,12 +21,15 @@ void build_default_map(InputMapBuilder& b) {
         // Gamepad (v0.5): left stick (SDL y is down-positive, so it is flipped) + d-pad.
         .gamepad_axis(GamepadAxis::LeftX, 0, +1.f).gamepad_axis(GamepadAxis::LeftY, 1, -1.f)
         .gamepad_button(GamepadButton::DpadRight, 0, +1.f).gamepad_button(GamepadButton::DpadLeft, 0, -1.f)
-        .gamepad_button(GamepadButton::DpadUp, 1, +1.f).gamepad_button(GamepadButton::DpadDown, 1, -1.f);
+        .gamepad_button(GamepadButton::DpadUp, 1, +1.f).gamepad_button(GamepadButton::DpadDown, 1, -1.f)
+        // Touch (M-MOBILE): a floating stick anywhere on the left half.
+        .touch_stick(kLeftHalf);
     b.action(MCE_SID("Look"), ActionType::Axis2D).mouse_delta(0).mouse_delta(1)
-        .gamepad_axis(GamepadAxis::RightX, 0, +1.f).gamepad_axis(GamepadAxis::RightY, 1, -1.f);
-    b.action(MCE_SID("Jump")).key(Key::Space).gamepad_button(GamepadButton::South);
+        .gamepad_axis(GamepadAxis::RightX, 0, +1.f).gamepad_axis(GamepadAxis::RightY, 1, -1.f)
+        .touch_stick(kRightHalf);
+    b.action(MCE_SID("Jump")).key(Key::Space).gamepad_button(GamepadButton::South).touch_tap(kRightHalf);
     b.action(MCE_SID("Fire")).key(Key::J).mouse_button(platform::MouseButton::Left).gamepad_button(GamepadButton::West);
-    b.action(MCE_SID("Pause")).key(Key::Escape).gamepad_button(GamepadButton::Start);
+    b.action(MCE_SID("Pause")).key(Key::Escape).gamepad_button(GamepadButton::Start).touch_tap(kPauseCorner);
 
 
     b.map(MCE_SID("UI"), MapFlag::BlocksBelow);

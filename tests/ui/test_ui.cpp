@@ -385,6 +385,34 @@ TEST_CASE("ui: a release off the pressed widget does not click; blocks_pointer s
     CHECK(d.hovered() == d.find("modal"));
 }
 
+TEST_CASE("ui: a finger taps a widget like a mouse click (apply_touch_pointer)") {
+    Grid3 g;
+    g.d.update(frame());
+    UpdateContext c = frame();
+    const vec2 p = g.d.rect(g.cells[4]).center();
+    input::InputState s;
+    s.touch_count = 1;
+    s.touches[0].pos = vec2(p.x / static_cast<f32>(c.viewport.width), p.y / static_cast<f32>(c.viewport.height));
+    s.touches[0].held = s.touches[0].pressed = true;
+    apply_touch_pointer(c, s);
+    CHECK(c.pointer.x == doctest::Approx(p.x));
+    CHECK(c.pointer.y == doctest::Approx(p.y));
+    g.d.update(c);
+    CHECK(g.focused_index() == 4);
+    s.touches[0].held = s.touches[0].pressed = false;
+    s.touches[0].released = true;
+    apply_touch_pointer(c, s);
+    CHECK_FALSE(c.pointer_down);
+    g.d.update(c);
+    CHECK(has_event(g.d, UiEvent::Confirmed, g.cells[4]));
+
+    // No touch: the host's mouse pointer stays.
+    UpdateContext m = frame();
+    m.pointer = {3, 4};
+    apply_touch_pointer(m, input::InputState{});
+    CHECK(m.pointer.x == 3.f);
+}
+
 TEST_CASE("ui: a non-modal document never takes focus") {
     Grid3 g;
     g.d.set_modal(false);

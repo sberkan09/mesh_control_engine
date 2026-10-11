@@ -65,7 +65,7 @@ Result<void> decode_input_map(Span<const byte> chunk, InputMapSet& out) {
     }
     for (usize i = 0; i < out.bindings.size(); ++i) {
         const BindingDef& b = out.bindings[i];
-        if (static_cast<u8>(b.device) > static_cast<u8>(Device::GamepadAxis) || b.axis > 1 ||
+        if (static_cast<u8>(b.device) > static_cast<u8>(Device::TouchSwipe) || b.axis > 1 ||
             static_cast<u8>(b.curve) > static_cast<u8>(Curve::Cubic) || !(b.dz.outer > b.dz.inner))
             return Error(Errc::InvalidArgument, kStage, "bad binding", static_cast<u32>(i));
     }
@@ -162,6 +162,64 @@ InputMapBuilder& InputMapBuilder::gamepad_axis(platform::GamepadAxis a, u8 axis,
     b.scale = scale;
     b.dz = dz;
     b.curve = curve;
+    return bind(b);
+}
+
+namespace {
+u32 zone_byte(f32 v) { return static_cast<u32>(math::clamp(v, 0.f, 1.f) * 255.f + 0.5f); }
+}  // namespace
+
+u32 pack_touch_zone(const TouchZoneRect& r) {
+    return zone_byte(r.x0) | zone_byte(r.y0) << 8 | zone_byte(r.x1) << 16 | zone_byte(r.y1) << 24;
+}
+
+TouchZoneRect unpack_touch_zone(u32 code) {
+    auto f = [&](u32 shift) { return static_cast<f32>((code >> shift) & 0xffu) / 255.f; };
+    return {f(0), f(8), f(16), f(24)};
+}
+
+InputMapBuilder& InputMapBuilder::touch_zone(const TouchZoneRect& zone, u8 axis, f32 scale) {
+    BindingDef b;
+    b.device = Device::TouchZone;
+    b.code = pack_touch_zone(zone);
+    b.axis = axis;
+    b.scale = scale;
+    return bind(b);
+}
+
+InputMapBuilder& InputMapBuilder::touch_tap(const TouchZoneRect& zone, u8 axis, f32 scale) {
+    BindingDef b;
+    b.device = Device::TouchTap;
+    b.code = pack_touch_zone(zone);
+    b.axis = axis;
+    b.scale = scale;
+    return bind(b);
+}
+
+InputMapBuilder& InputMapBuilder::touch_stick(const TouchZoneRect& zone, Deadzone dz, Curve curve) {
+    MCE_ASSERT_MSG(!set_.actions.empty(), "InputMapBuilder binding before action()");
+    BindingDef b;
+    b.device = Device::TouchStick;
+    b.code = pack_touch_zone(zone);
+    b.dz = dz;
+    b.curve = curve;
+    bind(b);
+    if (set_.actions.back().type == ActionType::Axis2D) {
+        b.axis = 1;
+        b.flags = BindingFlag::SourceY;
+        b.scale = -1.f;
+        bind(b);
+    }
+    return *this;
+}
+
+InputMapBuilder& InputMapBuilder::touch_swipe(const TouchZoneRect& zone, bool source_y, u8 axis, f32 scale) {
+    BindingDef b;
+    b.device = Device::TouchSwipe;
+    b.code = pack_touch_zone(zone);
+    b.flags = source_y ? u8(BindingFlag::SourceY) : u8(0);
+    b.axis = axis;
+    b.scale = scale;
     return bind(b);
 }
 

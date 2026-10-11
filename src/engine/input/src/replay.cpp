@@ -35,6 +35,10 @@ enum : u16 {
 
 enum : u8 { kHeld = 1u << 0, kPressed = 1u << 1, kReleased = 1u << 2 };
 
+// The action-count byte never exceeds kMaxActions (64); its top bit says a touch block follows the
+// actions, so streams recorded before touch existed decode unchanged.
+constexpr u8 kHasTouches = 0x80;
+
 }  // namespace
 
 void InputRecorder::record(const InputState& s) {
@@ -52,7 +56,7 @@ void InputRecorder::record(const InputState& s) {
     if (s.confirm_pressed) bits |= kConfirmPressed;
     if (s.cancel_pressed) bits |= kCancelPressed;
     put(bytes_, bits);
-    put(bytes_, static_cast<u8>(s.action_count));
+    put(bytes_, static_cast<u8>(s.action_count | (s.touch_count > 0 ? kHasTouches : 0)));
     put(bytes_, static_cast<u8>(s.text_len));
     for (u32 i = 0; i < s.text_len; ++i) put(bytes_, s.text_buf[i]);
     for (u32 i = 0; i < s.action_count; ++i) {
@@ -65,6 +69,20 @@ void InputRecorder::record(const InputState& s) {
         if (a.pressed) ab |= kPressed;
         if (a.released) ab |= kReleased;
         put(bytes_, ab);
+    }
+    if (s.touch_count > 0) {
+        put(bytes_, static_cast<u8>(s.touch_count));
+        for (u32 i = 0; i < s.touch_count; ++i) {
+            const TouchPoint& t = s.touches[i];
+            const f32 tf[4] = {t.pos.x, t.pos.y, t.origin.x, t.origin.y};
+            put(bytes_, tf);
+            u8 tb = 0;
+            if (t.held) tb |= kHeld;
+            if (t.pressed) tb |= kPressed;
+            if (t.released) tb |= kReleased;
+            put(bytes_, t.slot);
+            put(bytes_, tb);
+        }
     }
     ++ticks_;
 }
@@ -80,6 +98,8 @@ bool InputReplayer::next(InputState& out) {
     if (!get(stream_, pos, s.tick) || !get(stream_, pos, f) || !get(stream_, pos, bits) ||
         !get(stream_, pos, action_count) || !get(stream_, pos, text_len))
         return false;
+    const bool has_touches = (action_count & kHasTouches) != 0;
+    action_count = static_cast<u8>(action_count & ~kHasTouches);
     if (action_count > kMaxActions || text_len > kMaxTextBytes) return false;
     s.move = vec2(f[0], f[1]);
     s.look = vec2(f[2], f[3]);
@@ -110,6 +130,22 @@ bool InputReplayer::next(InputState& out) {
         a.held = (ab & kHeld) != 0;
         a.pressed = (ab & kPressed) != 0;
         a.released = (ab & kReleased) != 0;
+    }
+    if (has_touches) {
+        u8 touch_count = 0;
+        if (!get(stream_, pos, touch_count) || touch_count == 0 || touch_count > kMaxTouchPoints) return false;
+        s.touch_count = touch_count;
+        for (u32 i = 0; i < touch_count; ++i) {
+            f32 tf[4];
+            u8 tb = 0;
+            TouchPoint& t = s.touches[i];
+            if (!get(stream_, pos, tf) || !get(stream_, pos, t.slot) || !get(stream_, pos, tb)) return false;
+            t.pos = vec2(tf[0], tf[1]);
+            t.origin = vec2(tf[2], tf[3]);
+            t.held = (tb & kHeld) != 0;
+            t.pressed = (tb & kPressed) != 0;
+            t.released = (tb & kReleased) != 0;
+        }
     }
     out = s;
     pos_ = pos;

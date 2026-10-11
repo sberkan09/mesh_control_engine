@@ -1160,4 +1160,13 @@ void apply_default_style(Document& doc, WidgetId w) {
     doc.set_style(w, WidgetState::Disabled, disabled);
 }
 
+void apply_touch_pointer(UpdateContext& ctx, const input::InputState& state) {
+    if (state.touch_count == 0) return;
+    const input::TouchPoint& t = state.touches[0];
+    ctx.pointer = vec2(t.pos.x * static_cast<f32>(ctx.viewport.width), t.pos.y * static_cast<f32>(ctx.viewport.height));
+    ctx.pointer_down = t.held;
+    ctx.pointer_pressed = t.pressed;
+    ctx.pointer_released = t.released;
+}
+
 }  // namespace mce::ui

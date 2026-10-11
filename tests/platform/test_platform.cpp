@@ -158,6 +158,60 @@ TEST_CASE("platform: a virtual gamepad hot-plugs into slot 0 and streams standar
     w.value()->set_event_handler(nullptr, nullptr);
 }
 
+TEST_CASE("platform: fingers get small reusable slots and normalized positions") {
+    PlatformScope p;
+    MCE_REQUIRE_OR_RETURN(p.ok);
+    platform::WindowDesc wd;
+    wd.opengl = false;
+    auto w = platform::Window::create(wd);
+    MCE_REQUIRE_OR_RETURN(w.has_value());
+    Recorder rec;
+    w.value()->set_event_handler(&Recorder::on_event, &rec);
+    const u32 id = w.value()->id();
+    using platform::EventType;
+    using platform::TouchPhase;
+
+    platform::inject_touch(id, 0xdead'beef'0000ull, TouchPhase::Down, 0.25f, 0.75f);
+    platform::inject_touch(id, 77, TouchPhase::Down, 0.5f, 0.5f);
+    platform::inject_touch(id, 0xdead'beef'0000ull, TouchPhase::Move, 0.3f, 0.7f);
+    platform::inject_touch(id, 0xdead'beef'0000ull, TouchPhase::Up, 0.3f, 0.7f);
+    platform::inject_touch(id, 99, TouchPhase::Down, 0.1f, 0.1f);  // takes the freed slot 0
+    platform::inject_touch(id, 77, TouchPhase::Cancel, 0.5f, 0.5f);
+    platform::inject_touch(id, 12345, TouchPhase::Move, 0.5f, 0.5f);  // never went down: dropped
+    platform::pump_events();
+
+    struct Want {
+        EventType type;
+        u32 slot;
+        f32 x;
+        u32 flags;
+    };
+    const Want want[] = {
+        {EventType::TouchDown, 0, 0.25f, 0}, {EventType::TouchDown, 1, 0.5f, 0}, {EventType::TouchMove, 0, 0.3f, 0},
+        {EventType::TouchUp, 0, 0.3f, 0},    {EventType::TouchDown, 0, 0.1f, 0},
+        {EventType::TouchUp, 1, 0.5f, platform::EventFlag::TouchCanceled},
+    };
+    u32 n = 0;
+    for (u32 i = 0; i < rec.count; ++i) {
+        const platform::Event& e = rec.events[i];
+        if (e.type != EventType::TouchDown && e.type != EventType::TouchMove && e.type != EventType::TouchUp) continue;
+        CHECK(e.type != EventType::MouseMove);
+        REQUIRE(n < 6);
+        CHECK(e.type == want[n].type);
+        CHECK(e.code == want[n].slot);
+        CHECK(e.x == doctest::Approx(want[n].x));
+        CHECK(e.flags == want[n].flags);
+        ++n;
+    }
+    CHECK(n == 6);
+    for (u32 i = 0; i < rec.count; ++i)  // no mouse synthesized from fingers
+        CHECK(rec.events[i].type != EventType::MouseButtonDown);
+    CHECK(StringView(platform::event_type_name(EventType::TouchMove)) == "TouchMove");
+    platform::inject_touch(id, 99, TouchPhase::Up, 0.1f, 0.1f);
+    platform::pump_events();
+    w.value()->set_event_handler(nullptr, nullptr);
+}
+
 TEST_CASE("platform: list_files names the regular files of a folder, sorted; a missing folder is empty") {
     namespace fs = std::filesystem;
     const fs::path dir = fs::path(MCE_TEST_TMP_DIR) / "list_files";
