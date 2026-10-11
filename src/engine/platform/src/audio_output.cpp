@@ -3,8 +3,10 @@
 #include <SDL3/SDL.h>
 
 #include <atomic>
+#include <thread>
 
 #include "mce/log.h"
+#include "mce/fixed_string.h"
 
 namespace mce::platform {
 
@@ -20,6 +22,10 @@ struct AudioOutput::Impl {
     void* user = nullptr;
     u32 channels = 2;
     std::atomic<u64> callbacks{0};
+    std::atomic<u8> state{static_cast<u8>(AudioOutput::State::Opening)};
+    FixedString<256> error;  // written before state turns Failed
+    u32 sample_rate = 48000;
+    std::thread opener;
     f32 scratch[kMaxChunkFrames * kMaxChannels];  // preallocated: the callback never allocates
 };
 
@@ -38,9 +44,29 @@ void SDLCALL stream_callback(void* userdata, SDL_AudioStream* stream, int additi
     impl->callbacks.fetch_add(1, std::memory_order_relaxed);
 }
 
+// The slow part (any thread: SDL's device calls are thread-safe). Publishes the result in state.
+void open_stream(AudioOutput::Impl& impl) {
+    SDL_AudioSpec spec;
+    spec.format = SDL_AUDIO_F32;
+    spec.channels = static_cast<int>(impl.channels);
+    spec.freq = static_cast<int>(impl.sample_rate);
+    impl.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, &stream_callback, &impl);
+    const bool opened = impl.stream != nullptr;
+    if (!opened || !SDL_ResumeAudioStreamDevice(impl.stream)) {
+        impl.error = FixedString<256>(StringView(opened ? "resume: " : "open: "));
+        impl.error.append(StringView(SDL_GetError()));
+        impl.state.store(static_cast<u8>(AudioOutput::State::Failed), std::memory_order_release);
+        return;
+    }
+    const char* d = SDL_GetCurrentAudioDriver();
+    MCE_LOG_INFO("audio: device open ({} Hz, {} ch, driver '{}')", impl.sample_rate, impl.channels, d ? d : "");
+    impl.state.store(static_cast<u8>(AudioOutput::State::Open), std::memory_order_release);
+}
+
 }  // namespace
 
-Result<mem::UniquePtr<AudioOutput>> AudioOutput::open(const AudioOutputDesc& desc, AudioRenderFn fn, void* user) {
+// Main thread: SDL_InitSubSystem is not thread-safe.
+Result<mem::UniquePtr<AudioOutput>> AudioOutput::prepare(const AudioOutputDesc& desc, AudioRenderFn fn, void* user) {
     MCE_ASSERT_MSG(fn != nullptr, "AudioOutput::open needs a render callback");
     if (desc.channels == 0 || desc.channels > kMaxChannels)
         return Error(Errc::InvalidArgument, "platform.audio.open", "", desc.channels);
@@ -54,37 +80,46 @@ Result<mem::UniquePtr<AudioOutput>> AudioOutput::open(const AudioOutputDesc& des
         MCE_LOG_ERROR("audio: SDL audio init failed: {}", SDL_GetError());
         return Error(Errc::AudioDeviceOpen, "platform.audio.init", SDL_GetError());
     }
-
     mem::IAllocator& a = mem::heap();
     mem::UniquePtr<AudioOutput> out(a, mem::make<AudioOutput>(a));
-    out->impl_ = mem::make<Impl>(a);
-    Impl& impl = *out->impl_;
-    impl.fn = fn;
-    impl.user = user;
-    impl.channels = desc.channels;
+    out->impl_ = mem::make<Impl>(a);  // from here ~AudioOutput quits the subsystem
+    out->impl_->fn = fn;
+    out->impl_->user = user;
+    out->impl_->channels = desc.channels;
+    out->impl_->sample_rate = desc.sample_rate;
     out->sample_rate_ = desc.sample_rate;
     out->channels_ = desc.channels;
-
-    SDL_AudioSpec spec;
-    spec.format = SDL_AUDIO_F32;
-    spec.channels = static_cast<int>(desc.channels);
-    spec.freq = static_cast<int>(desc.sample_rate);
-    impl.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, &stream_callback, &impl);
-    if (!impl.stream) {
-        MCE_LOG_ERROR("audio: opening the default playback device failed: {}", SDL_GetError());
-        Error e(Errc::AudioDeviceOpen, "platform.audio.open", SDL_GetError());
-        return e;  // ~AudioOutput quits the subsystem
-    }
-    if (!SDL_ResumeAudioStreamDevice(impl.stream)) {
-        Error e(Errc::AudioDeviceOpen, "platform.audio.resume", SDL_GetError());
-        return e;
-    }
-    MCE_LOG_INFO("audio: device open ({} Hz, {} ch, driver '{}')", desc.sample_rate, desc.channels, out->driver());
     return out;
+}
+
+Result<mem::UniquePtr<AudioOutput>> AudioOutput::open(const AudioOutputDesc& desc, AudioRenderFn fn, void* user) {
+    MCE_TRY_ASSIGN(mem::UniquePtr<AudioOutput> out, prepare(desc, fn, user));
+    open_stream(*out->impl_);
+    if (out->state() == State::Failed) {
+        MCE_LOG_ERROR("audio: opening the default playback device failed: {}", out->error());
+        return Error(Errc::AudioDeviceOpen, "platform.audio.open", out->error());  // ~AudioOutput quits the subsystem
+    }
+    return out;
+}
+
+Result<mem::UniquePtr<AudioOutput>> AudioOutput::open_async(const AudioOutputDesc& desc, AudioRenderFn fn, void* user) {
+    MCE_TRY_ASSIGN(mem::UniquePtr<AudioOutput> out, prepare(desc, fn, user));
+    Impl* impl = out->impl_;
+    impl->opener = std::thread([impl] { open_stream(*impl); });
+    return out;
+}
+
+AudioOutput::State AudioOutput::state() const {
+    return impl_ ? static_cast<State>(impl_->state.load(std::memory_order_acquire)) : State::Failed;
+}
+
+const char* AudioOutput::error() const {
+    return state() == State::Failed && impl_ ? impl_->error.c_str() : "";
 }
 
 AudioOutput::~AudioOutput() {
     if (!impl_) return;
+    if (impl_->opener.joinable()) impl_->opener.join();
     // SDL guarantees the stream callback is not running once the stream is destroyed.
     if (impl_->stream) SDL_DestroyAudioStream(impl_->stream);
     mem::destroy(mem::heap(), impl_);
