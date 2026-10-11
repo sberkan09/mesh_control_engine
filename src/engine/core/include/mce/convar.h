@@ -82,7 +82,7 @@ private:
         i32 i;
         f32 f;
     } value_{}, default_{};
-    FixedString<128> str_;
+    FixedString<1024> str_;  // room for a file path (-module, -project); longer values are refused
     FixedString<128> default_str_;
     ChangeFn on_change_ = nullptr;
     ConVar* next_ = nullptr;

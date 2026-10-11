@@ -280,8 +280,9 @@ int main(int argc, char** argv) {
     if (!cv_module.get_string().empty()) {
         Result<LoadedModule> loaded = open_game_module(cv_module.get_string());
         if (!loaded) {
+            const int failed = fail("game module", loaded.error());  // logs, so before log::shutdown
             log::shutdown();
-            return fail("game module", loaded.error());
+            return failed;
         }
         game.module = loaded.value();
         editor::set_play_game_install(game.module.info->install);

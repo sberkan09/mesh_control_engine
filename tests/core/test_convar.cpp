@@ -55,6 +55,17 @@ TEST_CASE("typed get/set and parsing") {
     CHECK(cv_test_str.get_string() == "hello");
 }
 
+TEST_CASE("string convars hold long paths and refuse what does not fit") {
+    const std::string path = "/Users/someone/Projects/a/deeply/nested/folder/" + std::string(200, 'x') + "/libgame.so";
+    CHECK(cv_test_str.set_string(StringView(path.c_str()), false));
+    CHECK(cv_test_str.get_string() == StringView(path.c_str()));
+    const std::string too_long(2000, 'y');
+    CHECK_FALSE(cv_test_str.set_string(StringView(too_long.c_str()), false));
+    CHECK(cv_test_str.get_string() == StringView(path.c_str()));  // unchanged, never a cut-off value
+    cv_test_str.reset();
+    CHECK(cv_test_str.get_string() == "hello");
+}
+
 TEST_CASE("read-only convars reject sets unless forced") {
     CHECK_FALSE(cv_test_ro.set_int(5));
     CHECK(cv_test_ro.get_int() == 1);
