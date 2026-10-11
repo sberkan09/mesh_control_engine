@@ -200,7 +200,13 @@ void shutdown() {
     detail::close_gamepads();
     for (auto& f : g_state.fingers) f = {};
     SDL_RemoveEventWatch(&lifecycle_watch, nullptr);
-    SDL_Quit();
+    if (detail::audio_openers_pending()) {
+        // An audio device is still opening on its own thread and holds SDL's audio lock; SDL_Quit
+        // would wait for it. The process is on its way out: leave SDL to the exit.
+        MCE_LOG_WARN("platform: shutdown with an audio device still opening; SDL left to the process exit");
+    } else {
+        SDL_Quit();
+    }
     g_state.initialized = false;
 }
 

@@ -5,12 +5,14 @@
 #include <atomic>
 #include <thread>
 
+#include "internal.h"
 #include "mce/log.h"
 #include "mce/fixed_string.h"
 
 namespace mce::platform {
 
 namespace {
+std::atomic<int> g_abandoned_openers{0};
 // Largest chunk rendered per user-callback call; bigger device requests loop.
 constexpr u32 kMaxChunkFrames = 1024;
 constexpr u32 kMaxChannels = 8;
@@ -27,6 +29,11 @@ struct AudioOutput::Impl {
     FixedString<256> error;  // written before state turns Failed
     u32 sample_rate = 48000;
     std::thread opener;
+    // An owner that cannot wait for a stuck opener (below) abandons the Impl to it: whichever of
+    // the two finishes last frees it. `abandoned` stops the callback from touching fn/user.
+    std::atomic<bool> abandoned{false};
+    std::atomic<bool> other_done{false};
+    std::atomic<u32> in_callback{0};
     f32 scratch[kMaxChunkFrames * kMaxChannels];  // preallocated: the callback never allocates
 };
 
@@ -34,15 +41,19 @@ namespace {
 
 void SDLCALL stream_callback(void* userdata, SDL_AudioStream* stream, int additional_amount, int /*total*/) {
     auto* impl = static_cast<AudioOutput::Impl*>(userdata);
-    const u32 frame_bytes = static_cast<u32>(sizeof(f32)) * impl->channels;
-    u32 frames = additional_amount > 0 ? static_cast<u32>(additional_amount) / frame_bytes : 0;
-    while (frames > 0) {
-        const u32 n = frames < kMaxChunkFrames ? frames : kMaxChunkFrames;
-        impl->fn(impl->user, impl->scratch, n);
-        SDL_PutAudioStreamData(stream, impl->scratch, static_cast<int>(n * frame_bytes));
-        frames -= n;
+    impl->in_callback.fetch_add(1);
+    if (!impl->abandoned.load()) {
+        const u32 frame_bytes = static_cast<u32>(sizeof(f32)) * impl->channels;
+        u32 frames = additional_amount > 0 ? static_cast<u32>(additional_amount) / frame_bytes : 0;
+        while (frames > 0) {
+            const u32 n = frames < kMaxChunkFrames ? frames : kMaxChunkFrames;
+            impl->fn(impl->user, impl->scratch, n);
+            SDL_PutAudioStreamData(stream, impl->scratch, static_cast<int>(n * frame_bytes));
+            frames -= n;
+        }
+        impl->callbacks.fetch_add(1, std::memory_order_relaxed);
     }
-    impl->callbacks.fetch_add(1, std::memory_order_relaxed);
+    impl->in_callback.fetch_sub(1);
 }
 
 // The slow part (any thread: SDL's device calls are thread-safe). Publishes the result in state.
@@ -109,6 +120,13 @@ Result<mem::UniquePtr<AudioOutput>> AudioOutput::open_async(const AudioOutputDes
     Impl* impl = out->impl_;
     impl->opener = std::thread([impl] {
         open_stream(*impl);
+        if (impl->other_done.exchange(true)) {
+            // The owner gave up waiting (~AudioOutput): this thread frees what it left behind.
+            if (impl->stream) SDL_DestroyAudioStream(impl->stream);
+            mem::destroy(mem::heap(), impl);
+            SDL_QuitSubSystem(SDL_INIT_AUDIO);
+            detail::audio_opener_abandoned(-1);
+        }
         SDL_CleanupTLS();  // not an SDL thread: SDL frees its thread-local state only when told
     });
     return out;
@@ -124,7 +142,23 @@ const char* AudioOutput::error() const {
 
 AudioOutput::~AudioOutput() {
     if (!impl_) return;
-    if (impl_->opener.joinable()) impl_->opener.join();
+    if (impl_->opener.joinable()) {
+        // Opening the device can hang (a stuck coreaudiod times out for minutes, macOS and the Simulator): wait
+        // a moment, then leave the opener to clean up, so quitting the game never blocks on audio.
+        for (int i = 0; i < 100 && state() == State::Opening; ++i) SDL_Delay(10);
+        if (state() == State::Opening) {
+            impl_->abandoned.store(true);
+            while (impl_->in_callback.load() != 0) SDL_Delay(1);  // a render already running finishes
+            if (!impl_->other_done.exchange(true)) {
+                MCE_LOG_WARN("audio: the device is still opening; leaving it to close on its own");
+                detail::audio_opener_abandoned(+1);
+                impl_->opener.detach();
+                impl_ = nullptr;
+                return;
+            }
+        }
+        impl_->opener.join();
+    }
     // SDL guarantees the stream callback is not running once the stream is destroyed.
     if (impl_->stream) SDL_DestroyAudioStream(impl_->stream);
     mem::destroy(mem::heap(), impl_);
@@ -144,6 +178,9 @@ void AudioOutput::set_paused(bool paused) {
     if (paused) SDL_PauseAudioStreamDevice(impl_->stream);
     else SDL_ResumeAudioStreamDevice(impl_->stream);
 }
+
+void detail::audio_opener_abandoned(int delta) { g_abandoned_openers.fetch_add(delta); }
+bool detail::audio_openers_pending() { return g_abandoned_openers.load() > 0; }
 
 bool AudioOutput::paused() const { return impl_ && impl_->paused.load(std::memory_order_acquire); }
 
