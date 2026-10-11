@@ -134,7 +134,7 @@ case "$MODE" in
         bdir="$here/build/sdk-$preset"
         say "building the engine ($preset, in $bdir); the first configure downloads the dependencies"
         (cd "$here" && cmake --preset "$preset" -B "$bdir" \
-            -DMCE_BUILD_TESTS=OFF -DMCE_BUILD_SAMPLES=OFF -DMCE_TEMPLATE_PROBE=OFF -DMCE_PHYSICS_ORACLE=OFF)
+            -DMCE_BUILD_TESTS=OFF -DMCE_BUILD_SAMPLES=OFF -DMCE_TEMPLATE_PROBE=OFF -DMCE_PHYSICS_ORACLE=OFF -DMCE_BUILD_PROJECTS=OFF)
         cmake --build "$bdir"
         stage="$(mktemp -d)"
         cmake --install "$bdir" --prefix "$stage/mce-sdk" >/dev/null

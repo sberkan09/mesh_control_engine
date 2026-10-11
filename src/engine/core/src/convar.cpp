@@ -174,6 +174,7 @@ bool ConVar::set_float(f32 v, bool force) {
 bool ConVar::set_string(StringView v, bool force) {
     if (type_ != CVarType::String) return set_from_string(v, force);
     if ((flags_ & CVarFlags::ReadOnly) && !force) return false;
+    if (v.size() > str_.capacity()) return false;  // never keep a silently cut path
     str_.assign(v);
     changed();
     return true;
@@ -211,7 +212,7 @@ void ConVar::to_string(FixedString<128>& out) const {
 
 void ConVar::reset() {
     value_ = default_;
-    str_ = default_str_;
+    str_.assign(default_str_.view());
     changed();
 }
 
