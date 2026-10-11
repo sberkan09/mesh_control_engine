@@ -127,7 +127,7 @@ mce editor <project> [editor flags ...]
 mce mcp <project> [--scene <path>] [--allow-cheats]
 mce cook <project> [--pack] [--force] [--adopt] [--quiet]
 mce ship <project> [--out dir] [--version v]
-mce update [<project> ...] [--release [tag]]
+mce update [<project> ...] [--release [tag]] [--no-pull]
 mce version
 mce --help
 ```
