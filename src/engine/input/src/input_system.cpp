@@ -1,6 +1,5 @@
 #include "mce/input/input_system.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -758,7 +757,12 @@ void InputSystem::evaluate(InputState& out, const InputState& prev) const {
     u32 n = 0;
     for (const TouchState& t : touches_)
         if (t.down || t.released) order[n++] = &t;
-    std::sort(order, order + n, [](const TouchState* a, const TouchState* b) { return a->seq < b->seq; });
+    for (u32 i = 1; i < n; ++i)  // insertion sort by start order (std::sort trips GCC 13's -Warray-bounds at -O2)
+        for (u32 j = i; j > 0 && order[j]->seq < order[j - 1]->seq; --j) {
+            const TouchState* t = order[j];
+            order[j] = order[j - 1];
+            order[j - 1] = t;
+        }
     for (u32 i = 0; i < n && out.touch_count < kMaxTouchPoints; ++i) {
         const TouchState& t = *order[i];
         TouchPoint& p = out.touches[out.touch_count++];
