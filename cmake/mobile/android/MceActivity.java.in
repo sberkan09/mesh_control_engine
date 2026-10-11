@@ -1,0 +1,20 @@
+package @APP_ID@;
+
+import org.libsdl.app.SDLActivity;
+
+// The game's activity: SDL's, loading the game library (SDL3 is linked statically into it).
+public class MceActivity extends SDLActivity {
+    @Override
+    protected String[] getLibraries() {
+        return new String[] { "@LIBRARY@" };
+    }
+
+    // Command-line arguments for the game's main(), from the launch intent (smoke runs and tests):
+    //   adb shell "am start -n @APP_ID@/.MceActivity --es mce_args '-frames 300 -autoplay 1'"
+    @Override
+    protected String[] getArguments() {
+        String args = getIntent() != null ? getIntent().getStringExtra("mce_args") : null;
+        if (args == null || args.trim().isEmpty()) return new String[0];
+        return args.trim().split("\\s+");
+    }
+}

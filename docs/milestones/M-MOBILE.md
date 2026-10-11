@@ -16,7 +16,7 @@ a device or simulator run on the user's Mac.
 | 3 | `mce_rhi_sdlgpu` parity with GL: textures/arrays/MSAA/resolve, samplers incl. compare, MDI, storage data, readback; GPU tests run on both backends (`test_render_sdlgpu`, `MCE_RHI=sdlgpu`) | `local_ci.sh` + lavapipe | done (gaps below) |
 | 4 | Touch input (FR-INP-070): `Touch{Down,Move,Up}` platform events, touch state per tick in `mce_input`, touch bindings (virtual stick, buttons, tap/swipe), `mce_ui` hit-testing by touch, record/replay of touches | `local_ci.sh` (synthetic touch streams, determinism) | done |
 | 5 | App lifecycle (FR-RUN-100): background/foreground events, sim and audio pause, autosave on background, GPU surface loss and recreation, orientation and safe-area insets exposed to `mce_ui` | `local_ci.sh` (synthetic lifecycle events) | done (surface loss: device, step 6) |
-| 6 | Android: `android-arm64` presets (NDK toolchain), SDL's Java activity, Gradle wrapper project stamped by `scripts/ship.py --target android`, APK/AAB with the cooked pack in assets | emulator + a device, on the Mac | — |
+| 6 | Android: `android-arm64` presets (NDK toolchain), SDL's Java activity, Gradle wrapper project stamped by `scripts/ship.py --target android`, APK/AAB with the cooked pack in assets | emulator + a device, on the Mac | done on the emulator (no device attached) |
 | 7 | iOS: `ios-arm64` / `ios-sim-arm64` presets, Xcode project generation, the statically linked game module (`MCE_PROJECT_STATIC_MODULE`), signing, IPA from `scripts/ship.py --target ios` | simulator + a device, on the Mac | — |
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | — |
 | 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | — |
@@ -49,10 +49,28 @@ in the top-right corner pauses. GPU surface loss is SDL's: its Vulkan backend re
 after Android destroys them, and the backend skips a frame whose swapchain texture is missing. That path only runs
 on a device, so it is checked in step 6.
 
+## What shipped (step 6, Android)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Presets | `android-arm64-debug` / `-release` (`CMakePresets.json`), `cmake/MceMobile.cmake` | NDK r28 toolchain from `ANDROID_NDK_HOME`, API 29 (Android 10), `c++_static`; tests, editor, projects, net and Tracy off; `mce_rhi_sdlgpu` is the only backend (no GL, `MCE_RHI_SDLGPU_ONLY`) and game modules are linked in (`MCE_GAME_MODULES_SUPPORTED` off) |
+| App library | `cmake/MceMobile.cmake`, `cmake/mobile/mce_sdl_main.h` | on Android an engine `add_executable` becomes `lib<target>.so` and `main()` becomes the exported `SDL_main` (force-included header: no SDL include outside `mce_platform`) |
+| Cross cook | `MCE_HOST_COOK`, `samples/CMakeLists.txt` | the host preset's `mce_cook` cooks the packs; the phone build adds only the windowed samples (01_triangle, sprites_2d, 03_platformer, 04_diorama, 04_cubes, 05_ashen_court) |
+| Bundled files | `platform::base_path()` (`platform.cpp`) | the pack ships in the APK's assets with `mce_bundle.txt`; the first launch (and the first after an update) extracts it to the app's files dir, so `resolve_shipped_path` and the memory-mapped mount work unchanged |
+| Packaging | `scripts/ship.py --target android [--aab] [--smoke]`, `cmake/mobile/android_app.py`, `cmake/mobile/android/` | a Gradle project stamped per game (SDL's Java + wrapper from the same SDL checkout, `MceActivity` loading the game library, landscape, Vulkan 1.1 required); stripped library, symbols zip beside the APK; release signed with `MCE_ANDROID_KEYSTORE` or the debug keystore |
+| Phone glue | `log.cpp`, `crash.cpp`, `window.cpp`, `platform.cpp` | log to logcat (`adb logcat -s MCE`); crash reports under the app's files dir and a backtrace over the unwinder; fullscreen (immersive) windows; `platform.orientations` (default landscape) |
+| Local CI | `scripts/ci/local_ci_macos.sh android` | both APKs built and a 300-frame smoke run (activity finished, pack mounted from the bundle, no crash) on the Android 15 arm64 emulator |
+
+Emulator results (Android 15, arm64, `-gpu host`, Vulkan through MoltenVK on Apple M4): Ember Step (7.0 MB APK)
+and the 3D diorama (7.7 MB) both render correctly at 60 fps in landscape. Screenshots in the project files
+(`m-mobile/`). With `-gpu swiftshader_indirect` the emulator's SwiftShader Vulkan never signals the frame's fence,
+so the first present spins forever; that is the emulator, not the backend (SDL's own GPU clear loop runs fine on
+`-gpu host`). Not yet done: a physical Android device (none is attached to the Mac).
+
 ## Constraints found so far
 
 - The cloud cannot reach `dl.google.com`, so the Android SDK/NDK cannot be installed there. Steps 6–9 run on the
-  user's Mac (Android Studio for Android, Xcode for iOS). Steps 2–5 need no phone.
+  user's Mac (command-line SDK + NDK r28 + JDK 17 for Android, Xcode for iOS). Steps 2–5 need no phone.
 - `local_ci.sh` needs Mesa lavapipe (`mesa-vulkan-drivers`) for the `sdlgpu` GPU tests; `setup_env.sh` installs it.
 - SDL is built with `SDL_GPU` / `SDL_VULKAN` only when `MCE_RHI_SDLGPU=ON` (the Linux default; off on macOS until
   step 7). The backend is chosen at run time, so GL stays what every host uses unless `MCE_RHI=sdlgpu` is set.

@@ -39,6 +39,9 @@ Result<mem::UniquePtr<Window>> Window::create(const WindowDesc& desc) {
     if (desc.resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (desc.high_dpi) flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (desc.hidden) flags |= SDL_WINDOW_HIDDEN;
+#if defined(SDL_PLATFORM_ANDROID) || defined(SDL_PLATFORM_IOS)
+    flags |= SDL_WINDOW_FULLSCREEN;  // phones: the whole screen, system bars hidden (immersive)
+#endif
     const GpuApi api = gpu_api();
     if (desc.opengl && api == GpuApi::SdlGpu) {
         // mce_rhi_sdlgpu (ADR-0038) claims the window for SDL GPU: Vulkan, or Metal on Apple platforms.

@@ -23,6 +23,9 @@ mce_add_library(mce_core
 if(NOT WIN32)
     target_link_libraries(mce_core PRIVATE ${CMAKE_DL_LIBS})
 endif()
+if(ANDROID)
+    target_link_libraries(mce_core PUBLIC log)  # the logcat sink (log.cpp)
+endif()
 # mce/version.h reads the configure-time engine stamp (cmake/EngineId.cmake).
 target_include_directories(mce_core PRIVATE "${MCE_GENERATED_INCLUDE_DIR}")
 

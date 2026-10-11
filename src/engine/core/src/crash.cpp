@@ -19,7 +19,11 @@
 #include <dbghelp.h>
 #else
 #include <dlfcn.h>
+#if defined(__ANDROID__)
+#include <unwind.h>  // bionic declares backtrace() only from API 33; the unwinder is always there
+#else
 #include <execinfo.h>
+#endif
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/stat.h>
@@ -404,6 +408,31 @@ void put_modules(Out& o) { dl_iterate_phdr(&put_module, &o); }
 void put_modules(Out&) {}  // no portable module list on other POSIX systems
 #endif
 
+#if defined(__ANDROID__)
+struct UnwindState {
+    void** frames;
+    int max;
+    int n;
+};
+
+_Unwind_Reason_Code unwind_frame(_Unwind_Context* ctx, void* user) {
+    auto* st = static_cast<UnwindState*>(user);
+    const uintptr_t pc = _Unwind_GetIP(ctx);
+    if (pc != 0) {
+        if (st->n >= st->max) return _URC_END_OF_STACK;
+        st->frames[st->n++] = reinterpret_cast<void*>(pc);
+    }
+    return _URC_NO_REASON;
+}
+
+// execinfo's backtrace() over the unwinder: same contract (return addresses, innermost first).
+int backtrace(void** frames, int max) {
+    UnwindState st{frames, max, 0};
+    _Unwind_Backtrace(&unwind_frame, &st);
+    return st.n;
+}
+#endif
+
 void put_frame(Out& o, usize index, u64 pc) {
     o.put("#");
     o.dec(index);
@@ -532,6 +561,18 @@ FixedString<512> default_dump_dir(StringView app_name) {
 #if defined(_WIN32)
     const char* base = std::getenv("LOCALAPPDATA");
     r.assign(base ? base : ".");
+#elif defined(__ANDROID__)
+    // An app has no HOME: its private files directory, from the package name in /proc/self/cmdline.
+    char pkg[256] = {};
+    const int fd = ::open("/proc/self/cmdline", O_RDONLY | O_CLOEXEC);
+    if (fd >= 0) {
+        const ssize_t n = ::read(fd, pkg, sizeof(pkg) - 1);
+        pkg[n > 0 ? n : 0] = '\0';
+        ::close(fd);
+    }
+    r.assign("/data/data/");
+    r.append(pkg);
+    r.append("/files");
 #else
     const char* xdg = std::getenv("XDG_DATA_HOME");
     const char* home = std::getenv("HOME");

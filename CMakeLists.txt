@@ -31,14 +31,15 @@ option(MCE_PHYSICS_ORACLE  "Link Box2D v3 into test_physics2d as the solver orac
 option(MCE_WITH_NET        "Build the optional networking module mce_net (ENet; a game opts in, ADR-0035)" ON)
 # ADR-0038: the SDL3 GPU backend (Vulkan on Linux/Android, Metal on iOS). Built on Linux so every
 # local_ci.sh run exercises it through lavapipe; selected at run time with MCE_RHI=sdlgpu.
-if(APPLE)
-    set(_mce_sdlgpu_default OFF)  # macOS keeps mce_rhi_metal; the iOS MSL path is M-MOBILE step 7
+if(APPLE AND NOT IOS)
+    set(_mce_sdlgpu_default OFF)  # macOS keeps mce_rhi_metal
 else()
     set(_mce_sdlgpu_default ON)
 endif()
 option(MCE_RHI_SDLGPU      "Build the SDL3 GPU RHI backend mce_rhi_sdlgpu (ADR-0038)" ${_mce_sdlgpu_default})
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+include(MceMobile)  # MCE_MOBILE; on Android, executables become the activity's shared library
 include(MceTarget)
 include(MceShip)
 include(MceProject)
@@ -50,12 +51,18 @@ include(EngineId)
 # engine instance. On Windows the umbrella needs the M4 export decorations (MCE_API + the
 # explicit-instantiation ledger, finding F33), so modules are not supported there yet and every
 # tool links the static libraries instead (mce_engine_deps in cmake/MceTarget.cmake).
-if(WIN32)
+# Phones link the game in too: iOS forbids loading code, and an Android build ships one library.
+if(WIN32 OR MCE_MOBILE)
     set(MCE_GAME_MODULES_SUPPORTED OFF)
 else()
     set(MCE_GAME_MODULES_SUPPORTED ON)
 endif()
-if(APPLE)
+if(MCE_MOBILE)
+    if(NOT MCE_RHI_SDLGPU)
+        message(FATAL_ERROR "Android/iOS builds need MCE_RHI_SDLGPU=ON (ADR-0038)")
+    endif()
+    set(MCE_RHI_BACKEND mce_rhi_sdlgpu)  # the only backend on a phone
+elseif(APPLE)
     set(MCE_RHI_BACKEND mce_rhi_metal)  # ADR-0028: rhi::create_default_device picks the native backend
 else()
     set(MCE_RHI_BACKEND mce_rhi_gl)
@@ -64,7 +71,7 @@ set(MCE_ENGINE_LIBS
     mce_core mce_refl mce_asset mce_ecs mce_physics2d mce_physics3d mce_platform mce_input
     mce_rhi ${MCE_RHI_BACKEND} mce_rhi_default mce_render mce_ui mce_audio mce_scene mce_ecs_scene mce_gameplay_kit
     mce_module_host)
-if(MCE_RHI_SDLGPU)
+if(MCE_RHI_SDLGPU AND NOT MCE_MOBILE)
     list(APPEND MCE_ENGINE_LIBS mce_rhi_sdlgpu)
 endif()
 if(MCE_GAME_MODULES_SUPPORTED)
@@ -92,8 +99,10 @@ add_subdirectory(src/engine/physics3d)
 add_subdirectory(src/engine/platform)
 add_subdirectory(src/engine/input)
 add_subdirectory(src/engine/rhi)
-add_subdirectory(src/engine/rhi_gl)
-if(APPLE)
+if(NOT MCE_MOBILE)
+    add_subdirectory(src/engine/rhi_gl)
+endif()
+if(APPLE AND NOT MCE_MOBILE)
     add_subdirectory(src/engine/rhi_metal)  # ADR-0028: the macOS backend
 endif()
 if(MCE_RHI_SDLGPU)
@@ -110,7 +119,9 @@ if(MCE_WITH_NET)
     # mce::mce_net stay network-free.
     add_subdirectory(src/engine/net)
 endif()
-add_subdirectory(tools/cook)
+if(NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(tools/cook)  # a cross build cooks with the host's (MCE_HOST_COOK, cmake/MceMobile.cmake)
+endif()
 add_subdirectory(src/module)
 add_subdirectory(src/player)
 
@@ -156,5 +167,7 @@ if(MCE_BUILD_TESTS)
 endif()
 
 # `cmake --install`: the SDK (tools, libmce_engine, headers, find_package(MCE), the project
-# template and the mce command). Last, so every target it installs exists.
-include(MceInstall)
+# template and the mce command). Last, so every target it installs exists. Phones ship apps, not an SDK.
+if(NOT MCE_MOBILE)
+    include(MceInstall)
+endif()

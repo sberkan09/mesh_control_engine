@@ -5,6 +5,9 @@
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#if defined(__ANDROID__)
+#include <spdlog/sinks/android_sink.h>
+#endif
 
 namespace mce::log {
 namespace {
@@ -49,6 +52,10 @@ protected:
 void init(const LogDesc& desc) {
     std::vector<spdlog::sink_ptr> sinks;  // mce-allow: spdlog API takes std::vector
     if (desc.console) sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+#if defined(__ANDROID__)
+    // An app's stdout goes nowhere on Android: the log is read with `adb logcat -s MCE`.
+    sinks.push_back(std::make_shared<spdlog::sinks::android_sink_mt>("MCE"));
+#endif
     if (desc.file_path) {
         sinks.push_back(std::make_shared<spdlog::sinks::rotating_file_sink_mt>(desc.file_path, 4 * MiB, 3));
     }
