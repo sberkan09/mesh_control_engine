@@ -23,17 +23,31 @@ command line `mce mcp` prints before it starts the server. Use the **project's**
 without `--module`, `mce_mcp` knows only the engine's components and refuses scenes that use yours.
 After a rebuild that adds components, restart the server.
 
-Registering it with a client is the client's business. For Claude Code, a `.mcp.json` in the
-project root:
+With the SDK, `mce new` and `mce example` register the server for you: they write a `.mcp.json`
+into the project naming the server `mce_<game>` (`mce mcp <project>` with absolute paths, so a
+client can start it from anywhere). Claude Code, in a terminal or in Claude Desktop's Code tab,
+offers it when you open the project folder; approve it once, and `/mcp` shows it connected. Build
+the project first (`mce build`), since the server loads the game module.
+
+```sh
+mce mcp-config MyGame              # (re)write MyGame/.mcp.json, e.g. after moving the project or the SDK
+mce mcp-config MyGame --desktop    # also add mce_my_game to Claude Desktop's claude_desktop_config.json
+mce mcp-config MyGame --desktop --remove
+```
+
+Claude Desktop's chats (and chats in its Projects) do not read `.mcp.json`; their local servers
+come from `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on macOS), one entry
+per game. `--desktop` merges the entry into it, keeps the other servers and a `.bak` of the old
+file; quit and reopen Claude Desktop to load it. The `.mcp.json` holds absolute paths, so the
+template's `.gitignore` leaves it out of the project's repository.
+
+From a checkout (no SDK), write the `.mcp.json` yourself:
 
 ```json
 { "mcpServers": { "my_game": {
     "command": "build/linux-gcc-debug/projects/MyGame/my_game_mcp",
     "args": ["--project", "projects/MyGame"] } } }
 ```
-
-With the SDK, `"command": "mce", "args": ["mcp", "/path/to/MyGame"]` (or the full path to
-`<sdk>/bin/mce` when it is not on `PATH`).
 
 A script can drive it directly: `projects/Kindle/tools/author_level_mcp.py` is a complete
 client (initialize, `notifications/initialized`, then `tools/call` with `{"name", "arguments"}`;
