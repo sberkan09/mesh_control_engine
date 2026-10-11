@@ -9,6 +9,9 @@ your own, played it, and opened it in its editor.
 > and a CMake package; your project lives anywhere, builds with `find_package(MCE)` or the `mce`
 > command, and never sees the engine's source. The rest of the guide applies to both; where a
 > command differs, the SDK form is given beside the checkout form.
+>
+> **On a Mac?** The commands below use the Linux presets and paths; section 1.10 lists what changes
+> on macOS.
 
 ## 1.1 Requirements
 
@@ -221,7 +224,7 @@ mce headless MyGame --ticks 600   # no window; prints the state hash
 mce editor MyGame              # mce_editor -module MyGame/build/libmy_game.so -project MyGame
 mce mcp MyGame                 # mce_mcp --module ... --project MyGame, over stdio (chapter 14)
 mce cook MyGame --pack         # mce_cook --module ... MyGame --pack (the build cooks too)
-mce ship MyGame --version 1.0  # MyGame/dist/MyGame-1.0-linux-x64.zip: host, module, libmce_engine, pack
+mce ship MyGame --version 1.0  # MyGame/dist/MyGame-1.0-linux-x64.zip (-macos.zip on a Mac): host, module, libmce_engine, pack
 ```
 
 The project is the same folder the checkout build uses (chapter 2); its `CMakeLists.txt` begins
@@ -240,3 +243,58 @@ are no `my_game_cook`, `my_game_editor` or `my_game_mcp` targets.
 A module only loads into the engine it was built against: `include/mce/engine_version.h` stamps
 your module with the SDK's engine id, and a module from another SDK is refused with
 `EngineIdMismatch` (rebuild it). The same stamp is the second line of `share/mce/VERSION`.
+
+## 1.10 On a Mac
+
+The engine runs on Apple silicon Macs with macOS 26.0 or later, rendering through Metal (ADR-0028,
+`docs/milestones/M-MAC.md`). Only Apple silicon has been tested; older macOS versions are not supported (the presets' deployment
+target is 26.0).
+
+**Tools, once:**
+
+```sh
+xcode-select --install        # Apple's compilers and the Metal framework (the Command Line Tools are enough)
+brew install cmake ninja      # or any other source of CMake >= 3.28 and Ninja; python3 comes with the tools above
+```
+
+The full Xcode app is only needed to open GPU captures (`MCE_METAL_CAPTURE`, M-MAC.md).
+
+**From the checkout:** every command in sections 1.2 to 1.8 works with `macos-debug` (or
+`macos-release`) in place of `linux-gcc-debug`, and `build/macos-debug/` in place of
+`build/linux-gcc-debug/`:
+
+```sh
+cmake --preset macos-debug
+cmake --build --preset macos-debug
+build/macos-debug/samples/03_platformer/sample_03_platformer
+python3 scripts/new_project.py MyGame && cmake --preset macos-debug
+cmake --build --preset macos-debug --target my_game my_game_editor my_game_mcp
+build/macos-debug/projects/MyGame/my_game_editor -project projects/MyGame
+```
+
+Game modules keep the `.so` suffix on macOS (`libmy_game.so`); only the engine library is a
+`.dylib`. The local CI for engine changes is `scripts/ci/local_ci_macos.sh` (section 1.8).
+
+**The SDK:** install it from a `macos-release` build, then use `mce` exactly as in section 1.9:
+
+```sh
+cmake --preset macos-release && cmake --build --preset macos-release
+cmake --install build/macos-release --prefix ~/mce-sdk
+export PATH="$HOME/mce-sdk/bin:$PATH"     # add to ~/.zshrc to keep it
+mce new MyGame && mce build MyGame && mce editor MyGame
+```
+
+**Shipping:** `python3 scripts/ship.py --project projects/MyGame` (from the checkout) writes a zip
+holding `<Name>.app`, stripped and signed ad hoc (chapter 15, section 15.4). `mce ship` from the SDK
+writes a plain folder (host, module, `libmce_engine.dylib`, pack) instead of an `.app`; use
+`ship.py` for a build you hand to other people. Neither is Developer ID signed or notarized, so on
+another Mac the player right-clicks the app and chooses Open the first time (or removes the
+download flag with `xattr -dr com.apple.quarantine <Name>.app`).
+
+**Known limits on macOS:**
+
+- `macos-asan` runs UBSan only: the AddressSanitizer runtime hangs at start-up on macOS 26.6.
+- Sound: if the Mac has not granted audio access, every CoreAudio client, the game included, blocks
+  for about 15 s and then fails with `AudioQueueStart -66681`; the game keeps running silently.
+  Allow audio for the app that starts the game (Terminal, your IDE, or the `.app`) under System
+  Settings > Privacy & Security and start it again.
