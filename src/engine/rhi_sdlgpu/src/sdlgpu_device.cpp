@@ -110,7 +110,7 @@ f32 small_float(u32 bits, u32 mbits) {
 
 u8 unorm8(f32 v) {
     const f32 c = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
-    return static_cast<u8>(c * 255.0f + 0.5f);
+    return static_cast<u8>(std::lround(c * 255.0f));
 }
 
 constexpr SDL_GPUBufferUsageFlags kAllBufferUsage = SDL_GPU_BUFFERUSAGE_VERTEX | SDL_GPU_BUFFERUSAGE_INDEX |
