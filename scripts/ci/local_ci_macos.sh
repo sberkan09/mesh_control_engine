@@ -18,6 +18,8 @@
 #   android               (on request only, M-MOBILE) scripts/ship.py platformer + diorama --target android:
 #                         the APKs, and a 300-frame smoke run on the emulator/device adb sees, if any
 #                         (start the emulator with -gpu host: SwiftShader hangs in present)
+#   ios                   (on request only, M-MOBILE) scripts/ship.py platformer + diorama --target ios: the
+#                         Simulator apps, each played 300 frames in an iPhone Simulator (booted if none is)
 #
 # Deps: Xcode (Metal framework), cmake >= 3.28, ninja, python3 (android: the Android SDK + NDK, JDK 17).
 # Bash 3.2 compatible (macOS /bin/bash).
@@ -34,7 +36,7 @@ stages=""
 for arg in "$@"; do
     case "$arg" in
         --quick) stages="$stages walls macos-debug" ;;
-        -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,26p' "$0"; exit 0 ;;
         *) stages="$stages $arg" ;;
     esac
 done
@@ -157,6 +159,13 @@ stage_android() {
         python3 scripts/ship.py diorama --target android --out "$out" $smoke
 }
 
+stage_ios() {
+    local out="$LOG_DIR/ios"
+    rm -rf "$out"
+    python3 scripts/ship.py platformer --target ios --out "$out" --smoke &&
+        python3 scripts/ship.py diorama --target ios --out "$out" --smoke
+}
+
 stage_ship() {
     local out="$LOG_DIR/dist"
     rm -rf "$out"
@@ -175,7 +184,8 @@ run_stage() {
         determinism) stage_determinism ;;
         ship) stage_ship ;;
         android) stage_android ;;
-        *) echo "unknown stage: $1 (known: $ALL_STAGES android)"; return 2 ;;
+        ios) stage_ios ;;
+        *) echo "unknown stage: $1 (known: $ALL_STAGES android ios)"; return 2 ;;
     esac
 }
 

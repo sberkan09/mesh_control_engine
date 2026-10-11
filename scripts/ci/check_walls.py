@@ -36,11 +36,12 @@ WALLS = [
     ("SDL GPU wall", re.compile(r"\bSDL_\w*GPU\w*"), ["src/engine/rhi_sdlgpu/"], ["src/", "samples/", "games/", "tests/"]),
     # The GLSL -> MSL translator (glslang, SPIRV-Cross) is private to the Metal backend; glslang is
     # also the shader cook's validator, inside the cook library (ADR-0033), and the SDL GPU
-    # backend's GLSL -> SPIR-V translator (ADR-0038).
+    # backend's GLSL -> SPIR-V translator, SPIRV-Cross also its SPIR-V -> MSL pass on Apple (ADR-0038).
     (
         "shader-cross wall",
         re.compile(r"[<\"](glslang|SPIRV)/|[<\"]spirv_\w+\.hpp|\bspirv_cross::|\bglslang::"),
-        ["src/engine/rhi_metal/", "src/engine/rhi_sdlgpu/src/shader_spirv.cpp", "src/engine/asset/cook/src/shader_importer.cpp"],
+        ["src/engine/rhi_metal/", "src/engine/rhi_sdlgpu/src/shader_spirv.cpp", "src/engine/rhi_sdlgpu/src/shader_msl.cpp",
+         "src/engine/asset/cook/src/shader_importer.cpp"],
         ["src/", "samples/", "games/", "tests/", "tools/"],
     ),
     ("ImGui wall", re.compile(r"\bImGui(::|zmo)|[<\"]imgui"), ["src/editor/layer/"], ["src/", "samples/", "games/"]),

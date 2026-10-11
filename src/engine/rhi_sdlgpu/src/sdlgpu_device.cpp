@@ -7,6 +7,11 @@
 
 #include "mce/log.h"
 #include "mce/math/math.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+
+#include "shader_msl.h"
+#endif
 
 namespace mce::rhi::sdlgpu {
 namespace {
@@ -521,10 +526,30 @@ Result<PipelineHandle> SdlGpuDevice::create_pipeline(const GraphicsPipelineDesc&
     }
     auto make_shader = [&](const Array<u32>& spv, const StageResources& res, SDL_GPUShaderStage stage) {
         SDL_GPUShaderCreateInfo ci{};
+#if defined(__APPLE__)
+        // SDL GPU's Metal driver takes MSL (shader_msl.h).
+        Array<char> msl;
+        const ShaderStage st = stage == SDL_GPU_SHADERSTAGE_VERTEX ? ShaderStage::Vertex : ShaderStage::Fragment;
+#if TARGET_OS_IPHONE
+        constexpr MslPlatform kPlatform = MslPlatform::iOS;
+#else
+        constexpr MslPlatform kPlatform = MslPlatform::macOS;
+#endif
+        const char* stage_name = st == ShaderStage::Vertex ? desc.vertex_shader.debug_name : desc.fragment_shader.debug_name;
+        if (auto r = spirv_to_msl(st, spv, res, kPlatform, stage_name, msl, log); !r) {
+            MCE_LOG_ERROR("rhi.sdlgpu: MSL translation of '{}' failed:\n{}", stage_name, log.c_str());
+            return static_cast<SDL_GPUShader*>(nullptr);
+        }
+        ci.code_size = msl.size() - 1;
+        ci.code = reinterpret_cast<const Uint8*>(msl.data());
+        ci.entrypoint = kMslEntryPoint;
+        ci.format = SDL_GPU_SHADERFORMAT_MSL;
+#else
         ci.code_size = spv.size() * sizeof(u32);
         ci.code = reinterpret_cast<const Uint8*>(spv.data());
         ci.entrypoint = "main";
         ci.format = SDL_GPU_SHADERFORMAT_SPIRV;
+#endif
         ci.stage = stage;
         ci.num_samplers = res.sampler_count;
         ci.num_storage_buffers = res.storage_count;
