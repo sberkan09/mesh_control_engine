@@ -60,7 +60,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-NET | ADR-0035 | done | — |
 | Scene streaming / data mods | [scene-streaming.md](milestones/scene-streaming.md), ADR-0037 / ADR-0034 | done | — |
 | M-NOVEL | — (issue #115) | not started | everything; next in sequence |
-| M-MOBILE | — | parked | — |
+| M-MOBILE | [M-MOBILE.md](milestones/M-MOBILE.md), ADR-0038 | active (un-parked 2026-10-11) | steps 2–9 of the record |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -195,17 +195,17 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Demo (running, the v1.0 gate):** UC-D passes the non-programmer double-click test; UC-C is formally measured — a new UC-A level from empty scene to cooked launchable content in < 30 minutes of editor-only actions, 0 crashes in a 2-hour session; all seven learning gates closed; budgets reconciled within 20% of the Tracy memory track.
 **Fallback:** if the v1.0 tier still does not close at M9's mid-point review, UC-D moves to a named **v1.1** milestone and v1.0 closes at M8's gate — pre-agreed, no re-negotiation.
 
-### M-MOBILE — iOS/Android port (optional, parked) · **size L–XL (rough guess, not estimated)** · tier: off-tier platform track, **not scheduled**
+### M-MOBILE — iOS/Android port (optional, active) · **size L–XL (rough guess, not estimated)** · tier: off-tier platform track, gates nothing
 
-*Added 2026-10-10 as an optional note by user request. **Parked:** no thread starts it, and milestone sequencing skips it, until the user explicitly un-parks it. Mobile is still Won't in REQUIREMENTS (FR-SHP-060, FR-INP-060); un-parking it means a REQUIREMENTS slip note first.*
+*Added 2026-10-10 as an optional note by user request. **Un-parked 2026-10-11 by the user.** The REQUIREMENTS slip note of that day adds FR-SHP-062 (Android/iOS player), FR-INP-070 (touch) and FR-RUN-100 (mobile lifecycle), all Should; ADR-0038 settles the graphics layer (one SDL3 GPU backend, `mce_rhi_sdlgpu`); the step plan is `docs/milestones/M-MOBILE.md`.*
 
 **Already portable:** window, events, audio and module loading go through SDL3, which supports iOS and Android · the game module can already be statically linked (`MCE_PROJECT_STATIC_MODULE`, `PlayerDesc::static_module`), which iOS requires · the Metal backend (M-MAC) is most of the iOS GPU work · ECS, physics, scene, UI and the cook are platform-neutral C++. The editor stays desktop-only; only the player is ported.
 
 **Would need:** (1) an Android RHI backend (Vulkan or GLES 3.x): `mce_rhi_gl` targets desktop GL 4.5 (DSA, persistent mapping, MDI), none of which exists on Android, so this is the biggest item · (2) `mce_rhi_metal` on iOS (UIKit / `CAMetalLayer`, tile-GPU storage modes) · (3) touch input: touch/gesture events in `mce_input`, a virtual stick, touch hit-testing in `mce_ui` · (4) app lifecycle: background/foreground pause, GPU surface loss, orientation, safe areas · (5) packaging: APK/AAB (Gradle + NDK) and IPA (Xcode, signing), mobile CMake presets and toolchains · (6) mobile frame/thermal/battery budgets: the NFR tables assume desktop GPUs, so shadows and post FX need mobile tiers.
 
-**Rough shape if un-parked:** iOS after M-MAC closes (≈ M-size, leaning on the Metal backend) · Android as its own L-size track (new RHI backend). Both inherit the M-MAC rules: GL stays the reference backend, determinism baselines are per-platform (ADR-0007).
+**Rough shape if un-parked:** iOS after M-MAC closes (≈ M-size, leaning on the Metal backend) · Android as its own L-size track (new RHI backend). Both inherit the M-MAC rules: GL stays the reference backend, determinism baselines are per-platform (ADR-0007). *Superseded 2026-10-11 by ADR-0038: one `mce_rhi_sdlgpu` backend serves both phones, developed on Linux through lavapipe first; Android and iOS packaging and device runs happen on the user's Mac.*
 
-**Graphics-layer note (2026-10-11, user request):** before writing separate Android and iOS backends, evaluate one cross-platform layer for mobile: SDL3 GPU (preferred, since SDL3 is already the platform layer; it maps to Vulkan on Android and Metal on iOS) or WebGPU via Dawn. A single `mce_rhi_sdlgpu` (or `mce_rhi_webgpu`) backend would replace items (1) and most of (2) above, and it avoids the N14 conflict in M10+, where a hand-written Vulkan backend is deferred until both anchor games ship. Desktop keeps GL as the reference backend and Metal on macOS; the mobile backend is an extra RHI implementation, not a replacement. bgfx, MoltenVK and ANGLE were also named and are the fallbacks if neither fits. Settled by an ADR when the track is un-parked.
+**Graphics-layer note (2026-10-11, user request):** before writing separate Android and iOS backends, evaluate one cross-platform layer for mobile: SDL3 GPU (preferred, since SDL3 is already the platform layer; it maps to Vulkan on Android and Metal on iOS) or WebGPU via Dawn. A single `mce_rhi_sdlgpu` (or `mce_rhi_webgpu`) backend would replace items (1) and most of (2) above, and it avoids the N14 conflict in M10+, where a hand-written Vulkan backend is deferred until both anchor games ship. Desktop keeps GL as the reference backend and Metal on macOS; the mobile backend is an extra RHI implementation, not a replacement. bgfx, MoltenVK and ANGLE were also named and are the fallbacks if neither fits. **Settled 2026-10-11 by ADR-0038: SDL3 GPU.**
 
 ### M-SKIN — Optional skinned animation · **size M (≈ 30–50 h engineering)** · tier: v0.5 Should (FR-R3D-060), off the milestone sequence
 
@@ -248,7 +248,7 @@ Auto-parallel scheduling (**experiment run 2026-10-10 and not merged**: determin
 | Networking (optional, opt-in) | M-NET `mce_net` | built 2026-10-10 by user request | ≈ 30–50 h engineering (not summed into the tier bands; gates nothing) |
 | Opt-in features (off-tier) | M-SKIN skinning, scene streaming, data mods | built 2026-10-10 by user request | not summed into the tier bands; gate nothing |
 | Kits (off-tier, opt-in) | M-NOVEL visual-novel kit | added 2026-10-11 (issue #115), next in sequence | ≈ 50–90 h engineering (not summed into the tier bands; gates nothing) |
-| Platform (optional, parked) | M-MOBILE iOS/Android port | not scheduled; only if the user un-parks it | not estimated (not summed into the tier bands; gates nothing) |
+| Platform (optional, active) | M-MOBILE iOS/Android port | un-parked 2026-10-11; cloud steps on Linux, device steps on the user's Mac | not estimated (not summed into the tier bands; gates nothing) |
 | v0.5 | M5a + M5b + M6 + M7 | months 14–24 | ≈ 390–620 h engineering + ≈ 140–220 h content |
 | v1.0 | M8–M9 (UC-D may slip to named v1.1) | months 24–36 | ≈ 180–310 h engineering + ≈ 30–50 h content |
 
