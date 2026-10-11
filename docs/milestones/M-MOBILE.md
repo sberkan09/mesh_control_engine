@@ -14,8 +14,8 @@ a device or simulator run on the user's Mac.
 | 1 | ADR-0038, REQUIREMENTS slip note, this plan | read-through (docs only) | done |
 | 2 | `mce_rhi_sdlgpu` spike on Linux: window surface seam (`platform::gpu_api()`), device, clear + triangle, binding map, copy-pass split | `local_ci.sh` + lavapipe | done |
 | 3 | `mce_rhi_sdlgpu` parity with GL: textures/arrays/MSAA/resolve, samplers incl. compare, MDI, storage data, readback; GPU tests run on both backends (`test_render_sdlgpu`, `MCE_RHI=sdlgpu`) | `local_ci.sh` + lavapipe | done (gaps below) |
-| 4 | Touch input (FR-INP-070): `Touch{Down,Move,Up}` platform events, touch state per tick in `mce_input`, touch bindings (virtual stick, buttons, tap/swipe), `mce_ui` hit-testing by touch, record/replay of touches | `local_ci.sh` (synthetic touch streams, determinism) | — |
-| 5 | App lifecycle (FR-RUN-100): background/foreground events, sim and audio pause, autosave on background, GPU surface loss and recreation, orientation and safe-area insets exposed to `mce_ui` | `local_ci.sh` (synthetic lifecycle events) | — |
+| 4 | Touch input (FR-INP-070): `Touch{Down,Move,Up}` platform events, touch state per tick in `mce_input`, touch bindings (virtual stick, buttons, tap/swipe), `mce_ui` hit-testing by touch, record/replay of touches | `local_ci.sh` (synthetic touch streams, determinism) | done |
+| 5 | App lifecycle (FR-RUN-100): background/foreground events, sim and audio pause, autosave on background, GPU surface loss and recreation, orientation and safe-area insets exposed to `mce_ui` | `local_ci.sh` (synthetic lifecycle events) | done (surface loss: device, step 6) |
 | 6 | Android: `android-arm64` presets (NDK toolchain), SDL's Java activity, Gradle wrapper project stamped by `scripts/ship.py --target android`, APK/AAB with the cooked pack in assets | emulator + a device, on the Mac | — |
 | 7 | iOS: `ios-arm64` / `ios-sim-arm64` presets, Xcode project generation, the statically linked game module (`MCE_PROJECT_STATIC_MODULE`), signing, IPA from `scripts/ship.py --target ios` | simulator + a device, on the Mac | — |
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | — |
@@ -32,6 +32,22 @@ a device or simulator run on the user's Mac.
 | Samples | `04_diorama`, `05_ashen_court` with `MCE_RHI=sdlgpu` | 60/30-frame captures differ from GL's in 0.09 % / 0.13 % of pixels (edge rasterization), screenshots in the project files (`m-mobile/`) |
 
 **Gaps (reported, not faked):** no GPU timestamps (`caps().timestamp_queries == false`; the profiler's GPU column reads −1); `bind_storage_buffer` ignores a non-zero offset (no engine code uses one); `validation_error_count()` stays 0 because SDL exposes no validation callback; BC textures are rejected where the GPU lacks them (phones) until the ASTC cook profile (step 8); every frame ends with one full-screen blit from the offscreen backbuffer to the swapchain.
+
+## What shipped (steps 4–5)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Touch events | `platform` (`TouchDown/Move/Up`, finger slots, `inject_touch`) | SDL's touch/mouse emulation is off, so a finger never moves the mouse; `test_platform` drives synthetic fingers |
+| Touch bindings | `mce_input` (`TouchZone`, `TouchStick`, `TouchTap`, `TouchSwipe`), `.mcinput` keys, the default map | `test_input` "touch" cases: per-tick sampling, the one-tick floor, gestures from event timestamps, the same recording at 1 and 7 events per frame |
+| Touches in replay | `InputState::touch_points()`, `hash_state`, the replay stream | a touch session replays to the same hash; touch-free streams keep their bytes and hashes |
+| Touch UI | `ui::apply_touch_pointer`, `UpdateContext::safe_insets` | `test_ui`: a finger taps a widget; insets shrink the root |
+| Lifecycle | `platform` (`AppBackground/Foreground/LowMemory/Terminating`, `SafeAreaChanged`, `OrientationChanged`, `simulate_app_event`), `AudioDevice::set_paused`, the player | `scene_demo_player_lifecycle`: 600 app ticks with 60 in the background hash equal to a plain 540-tick run, and the save is written in the background callback; `scene_demo_player_lifecycle_gpu` rehearses it windowed |
+
+The player on a phone: the background pauses sim and audio, releases held input, writes the `-save` slot and stops
+drawing; back in the foreground the pause overlay waits, a tap resumes (the tap never reaches the game) and a touch
+in the top-right corner pauses. GPU surface loss is SDL's: its Vulkan backend recreates the surface and swapchain
+after Android destroys them, and the backend skips a frame whose swapchain texture is missing. That path only runs
+on a device, so it is checked in step 6.
 
 ## Constraints found so far
 

@@ -208,6 +208,10 @@ public:
     // ---- per frame (main thread) ---------------------------------------------------------------
     // Drains mixer replies (finished voices, released clips), refills stream pages, and — on the
     // Silent backend — mixes one block.
+    // Freezes the mix (device stops pulling, Silent stops rendering; voices keep their place)
+    // until resumed: the app went to the background on a phone (FR-RUN-100).
+    void set_paused(bool paused);
+    bool paused() const { return paused_; }
     void update();
 
     // Offline backend only: runs the exact callback body for `frames` stereo frames.
@@ -227,6 +231,7 @@ private:
     void respatialize(u32 handle_index);
 
     Backend backend_ = Backend::Silent;
+    bool paused_ = false;
     Impl* impl_ = nullptr;
     f32 bus_db_[kBusCount] = {};
     BusId bus_parent_[kBusCount] = {};

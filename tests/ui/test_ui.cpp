@@ -123,6 +123,33 @@ TEST_CASE("ui: anchors resolve to pixel-snapped rects at ui scale 1, 1.5 and 2")
     }
 }
 
+TEST_CASE("ui: safe insets shrink the root, so edge anchors clear a notch (M-MOBILE)") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    const WidgetId fill = b.panel("fill").fill().id();
+    Anchors top_bar;
+    top_bar.min = {0, 0};
+    top_bar.max = {1, 0};
+    top_bar.offset_max = {0, 40};
+    const WidgetId bar = b.panel("bar").anchors(top_bar).id();
+    d.update(frame(2532, 1170));
+    CHECK(d.rect(bar).min == vec2(0, 0));
+    const u64 passes = d.stats().layout_passes;
+
+    UpdateContext c = frame(2532, 1170);
+    c.safe_insets = SafeInsets{141, 0, 141, 63};  // a landscape phone: notch sides and home indicator
+    d.update(c);
+    CHECK(d.stats().layout_passes == passes + 1);  // insets changing re-lays out
+    CHECK(d.rect(fill).min == vec2(141, 0));
+    CHECK(d.rect(fill).max == vec2(2532 - 141, 1170 - 63));
+    CHECK(d.rect(bar).min.x == 141.f);
+    CHECK(d.rect(bar).max.x == 2532.f - 141.f);
+    d.update(c);
+    CHECK(d.stats().layout_passes == passes + 1);  // unchanged: no layout
+}
+
 TEST_CASE("ui: a point anchor with no size takes the preferred size around its pivot") {
     Fixture f;
     Document d;
@@ -383,6 +410,34 @@ TEST_CASE("ui: a release off the pressed widget does not click; blocks_pointer s
     c.pointer = d.rect(btn).center();
     d.update(c);
     CHECK(d.hovered() == d.find("modal"));
+}
+
+TEST_CASE("ui: a finger taps a widget like a mouse click (apply_touch_pointer)") {
+    Grid3 g;
+    g.d.update(frame());
+    UpdateContext c = frame();
+    const vec2 p = g.d.rect(g.cells[4]).center();
+    input::InputState s;
+    s.touch_count = 1;
+    s.touches[0].pos = vec2(p.x / static_cast<f32>(c.viewport.width), p.y / static_cast<f32>(c.viewport.height));
+    s.touches[0].held = s.touches[0].pressed = true;
+    apply_touch_pointer(c, s);
+    CHECK(c.pointer.x == doctest::Approx(p.x));
+    CHECK(c.pointer.y == doctest::Approx(p.y));
+    g.d.update(c);
+    CHECK(g.focused_index() == 4);
+    s.touches[0].held = s.touches[0].pressed = false;
+    s.touches[0].released = true;
+    apply_touch_pointer(c, s);
+    CHECK_FALSE(c.pointer_down);
+    g.d.update(c);
+    CHECK(has_event(g.d, UiEvent::Confirmed, g.cells[4]));
+
+    // No touch: the host's mouse pointer stays.
+    UpdateContext m = frame();
+    m.pointer = {3, 4};
+    apply_touch_pointer(m, input::InputState{});
+    CHECK(m.pointer.x == 3.f);
 }
 
 TEST_CASE("ui: a non-modal document never takes focus") {

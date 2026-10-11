@@ -43,6 +43,15 @@ public:
     static constexpr u32 kQueueCapacity = 1024;
     static constexpr u32 kMaxMapStack = 8;
 
+    // Touch gestures (FR-INP-070). Distances are in units of the window's shorter side, so a stick
+    // or a swipe feels the same in portrait and landscape; times come from event timestamps, so a
+    // gesture never depends on render pacing.
+    static constexpr f32 kTouchStickRadius = 0.12f;   // full deflection
+    static constexpr f32 kTapMaxTravel = 0.03f;       // a tap moves less than this...
+    static constexpr u64 kTapMaxUs = 250'000;          // ...and lifts within this
+    static constexpr f32 kSwipeMinTravel = 0.08f;     // a swipe moves at least this...
+    static constexpr u64 kSwipeMaxUs = 500'000;        // ...within this
+
     explicit InputSystem(mem::IAllocator& a = mem::heap());
     InputSystem(const InputSystem&) = delete;
     InputSystem& operator=(const InputSystem&) = delete;
@@ -88,6 +97,10 @@ public:
     u64 tick_origin_us() const { return origin_us_; }
     u64 tick_close_us(u64 tick) const;
 
+    // The window size in pixels, for the aspect of touch distances (normalized coordinates are
+    // stretched by it). A Resized event in the queue updates it at its timestamp too.
+    void set_view_size(f32 width_px, f32 height_px);
+
     // ---- per frame / per tick ----------------------------------------------------------
     // Queues one render frame's events (any order; kept sorted by timestamp).
     void begin_frame(Span<const platform::Event> events);
@@ -104,6 +117,8 @@ public:
     bool gamepad_connected(u32 slot) const { return slot < platform::kMaxGamepads && pads_[slot].connected; }
     bool gamepad_held(u32 slot, platform::GamepadButton b) const;
     f32 gamepad_axis(u32 slot, platform::GamepadAxis a) const;
+    bool touch_held(u32 slot) const { return slot < platform::kMaxTouches && touches_[slot].down; }
+    vec2 touch_pos(u32 slot) const { return slot < platform::kMaxTouches ? touches_[slot].pos : vec2(); }
 
     // ---- record / replay (FR-RUN-070) --------------------------------------------------------
     // While a recorder is set every sampled tick is appended to it. While a replayer is set,
@@ -125,6 +140,8 @@ private:
     void apply_overrides();
     void evaluate(InputState& out, const InputState& prev) const;
     f32 binding_value(const BindingDef& b) const;
+    void end_touch(u32 slot, vec2 pos, u64 timestamp_us, bool canceled);
+    vec2 touch_units(vec2 normalized_delta) const;  // to shorter-side units
 
     mem::IAllocator& alloc_;
     InputMapSet set_;
@@ -162,6 +179,26 @@ private:
         f32 axes[kPadAxes] = {};
     };
     PadState pads_[platform::kMaxGamepads];
+
+    struct TouchState {
+        bool down = false;
+        bool tapped = false;           // went down during the current tick window
+        bool release_pending = false;  // went down and up inside one window: lifts next tick
+        bool released = false;         // lifted this tick (reported once in the snapshot)
+        vec2 origin, pos;
+        u64 start_us = 0;
+        u64 seq = 0;  // start order: the oldest touch in a zone drives its stick
+    };
+    TouchState touches_[platform::kMaxTouches];
+    u64 touch_seq_ = 0;
+    struct Gesture {
+        vec2 origin;
+        vec2 dir;  // swipe: unit vector on its dominant axis; tap: zero
+        bool swipe = false;
+    };
+    Gesture tick_gestures_[platform::kMaxTouches];
+    u32 tick_gesture_count_ = 0;
+    vec2 view_px_{1.f, 1.f};
 
     struct Rebind {
         RebindState state = RebindState::Idle;

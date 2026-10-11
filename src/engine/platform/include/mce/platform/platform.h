@@ -58,6 +58,16 @@ void detach_virtual_gamepad(u32 id);
 void set_virtual_gamepad_button(u32 id, GamepadButton b, bool down);
 void set_virtual_gamepad_axis(u32 id, GamepadAxis a, f32 value);  // same ranges as GamepadAxis events
 
+// A synthetic finger (M-MOBILE): queues an OS-level touch event for `window_id` that the next
+// pump_events() turns into Touch{Down,Move,Up} with slot assignment, as for a real screen. Any
+// u64 names the finger; x, y are normalized (0..1, y down). Tests, bots, desktop touch demos.
+enum class TouchPhase : u8 { Down, Move, Up, Cancel };
+void inject_touch(u32 window_id, u64 finger, TouchPhase phase, f32 x, f32 y);
+// Delivers an app lifecycle event (AppBackground, AppForeground, AppLowMemory, AppTerminating) to
+// every window exactly as the OS callback would: synchronously, now. Tests and desktop rehearsal
+// of the mobile lifecycle; other event types are ignored.
+void simulate_app_event(EventType type);
+
 // Boot-failure report (core.md §2.1, FR-SHP-010): a modal message box, when allowed. Always also
 // logs. Suppressed when the `platform.error_box` convar is 0 (CI, tests) or no display exists.
 void show_error_box(const char* title, const char* message);

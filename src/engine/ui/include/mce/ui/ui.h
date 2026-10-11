@@ -101,8 +101,15 @@ Result<BuiltinSkin*> create_builtin_skin(render::Renderer& renderer, BuiltinSkin
 // The font tables alone (tests, headless measuring): the atlas is R8 coverage.
 void builtin_font(render::FontMetrics& metrics, Array<render::FontGlyph>& glyphs, Array<u8>& atlas);
 
+// Screen edges the OS covers (notch, home indicator; platform::Window::safe_insets()), in pixels.
+struct SafeInsets {
+    f32 left = 0, top = 0, right = 0, bottom = 0;
+    bool operator==(const SafeInsets&) const = default;
+};
+
 struct UpdateContext {
     rhi::Extent2D viewport;                         // pixels
+    SafeInsets safe_insets;                         // the root lays out inside them (M-MOBILE)
     f32 ui_scale = 1.0f;                            // display scale × user setting (FR-R2D-080)
     const input::InputState* actions = nullptr;     // the UI action map's snapshot (null: no input)
     vec2 pointer{-1, -1};                           // pixels; negative = no pointer this frame
@@ -111,6 +118,12 @@ struct UpdateContext {
     bool key_backspace = false, key_enter = false, key_up = false, key_down = false;  // console editing
     f64 dt = 0.0;                                   // presentation time (caret blink)
 };
+
+// Touch as the pointer (M-MOBILE, FR-INP-070): the oldest touch in the snapshot becomes
+// ctx.pointer (scaled to ctx.viewport) with its press/hold/release, so widgets hit-test by finger
+// exactly as by mouse. Leaves the context untouched when the snapshot has no touch, so a host can
+// fill the mouse pointer first and call this after. Set ctx.viewport before calling.
+void apply_touch_pointer(UpdateContext& ctx, const input::InputState& state);
 
 struct UiEvent {
     enum Kind : u8 { Confirmed, ValueChanged, FocusChanged, Cancelled, Submitted } kind = Confirmed;
@@ -275,6 +288,7 @@ private:
     WidgetId root_, focused_, hovered_, pressed_, default_focus_;
     Skin skin_;
     rhi::Extent2D viewport_{};
+    SafeInsets safe_{};
     f32 scale_ = 1.0f;
     bool layout_dirty_ = true, order_dirty_ = true, modal_ = true;
     vec2 prev_nav_;             // last frame's quantized direction (edges + key repeat)

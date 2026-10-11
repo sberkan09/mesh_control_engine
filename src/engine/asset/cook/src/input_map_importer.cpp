@@ -12,9 +12,15 @@
 //             { "key": "D", "axis": "x", "scale": 1 },              // axis: x (default) | y
 //             { "gamepad_axis": "LeftY", "axis": "y", "scale": -1, "deadzone": [0.2, 1], "curve": "linear" },
 //             { "gamepad_button": "South" }, { "mouse_button": "Left" },
-//             { "mouse_delta": "x" }, { "mouse_wheel": "y" }, { "key": "Space", "invert": true }
+//             { "mouse_delta": "x" }, { "mouse_wheel": "y" }, { "key": "Space", "invert": true },
+//             { "touch_stick": "x", "zone": [0, 0, 0.5, 1] }, { "touch_stick": "y", "scale": -1, "zone": [0, 0, 0.5, 1] },
+//             { "touch_zone": [0.8, 0.7, 1, 1] }, { "touch_tap": [0.5, 0, 1, 1] }, { "touch_swipe": "x" }
 //           ] } ] } ]
 // }
+//
+// Touch (M-MOBILE): zones are [x0, y0, x1, y1] over the window, 0..1, y down. touch_zone and
+// touch_tap name their zone; touch_stick and touch_swipe name the source axis (like mouse_delta)
+// and take an optional "zone" (default: the whole window).
 //
 // Exactly one device key per binding. Key names are the platform::Key enumerators ("A".."Z",
 // "Num0".."Num9" or "0".."9", "Space", "Return", "Escape", "Left", "LShift", "F1", ...); gamepad
@@ -124,6 +130,22 @@ void error(DiagList& diags, StringView file, JsonValue at, StringView msg) {
 }
 
 // "x" -> 0, "y" -> 1; anything else is an error.
+// [x0, y0, x1, y1], each in 0..1 with x0 < x1 and y0 < y1.
+bool read_zone(JsonValue v, u32& out, StringView file, DiagList& diags) {
+    bool ok = v.is_array() && v.size() == 4;
+    f32 c[4] = {};
+    for (u32 i = 0; ok && i < 4; ++i) {
+        ok = v.at(i).is_number() && v.at(i).as_number() >= 0.0 && v.at(i).as_number() <= 1.0;
+        if (ok) c[i] = static_cast<f32>(v.at(i).as_number());
+    }
+    if (!ok || !(c[0] < c[2]) || !(c[1] < c[3])) {
+        error(diags, file, v, "a touch zone must be [x0, y0, x1, y1] in 0..1 with x0 < x1 and y0 < y1");
+        return false;
+    }
+    out = input::pack_touch_zone({c[0], c[1], c[2], c[3]});
+    return true;
+}
+
 bool read_axis(JsonValue v, u8& out, StringView file, DiagList& diags) {
     const StringView s = v.is_string() ? v.as_string() : StringView();
     if (s == "x") out = 0;
@@ -140,8 +162,9 @@ void read_binding(JsonValue b, input::ActionType type, input::InputMapSet& set, 
         error(diags, file, b, "a binding must be an object");
         return;
     }
-    if (!detail::check_keys(b, {"key", "mouse_button", "mouse_delta", "mouse_wheel", "gamepad_button", "gamepad_axis", "axis",
-                                "scale", "deadzone", "curve", "invert"},
+    if (!detail::check_keys(b, {"key", "mouse_button", "mouse_delta", "mouse_wheel", "gamepad_button", "gamepad_axis",
+                                "touch_zone", "touch_tap", "touch_stick", "touch_swipe", "zone", "axis", "scale",
+                                "deadzone", "curve", "invert"},
                             file, kStage, diags))
         return;
     input::BindingDef def;
@@ -183,11 +206,37 @@ void read_binding(JsonValue b, input::ActionType type, input::InputMapSet& set, 
             def.axis = src;
         }
     }
+    for (const auto& [key, device] : {std::pair<StringView, input::Device>{"touch_zone", input::Device::TouchZone},
+                                      std::pair<StringView, input::Device>{"touch_tap", input::Device::TouchTap}}) {
+        const JsonValue v = b.get(key);
+        if (!v.valid()) continue;
+        ++devices;
+        def.device = device;
+        read_zone(v, def.code, file, diags);
+    }
+    bool zoned_axis = false;
+    for (const auto& [key, device] : {std::pair<StringView, input::Device>{"touch_stick", input::Device::TouchStick},
+                                      std::pair<StringView, input::Device>{"touch_swipe", input::Device::TouchSwipe}}) {
+        const JsonValue v = b.get(key);
+        if (!v.valid()) continue;
+        ++devices;
+        zoned_axis = true;
+        def.device = device;
+        def.code = input::pack_touch_zone({});
+        u8 src = 0;
+        if (read_axis(v, src, file, diags)) {
+            def.axis = src;
+            if (src == 1) def.flags |= input::BindingFlag::SourceY;
+        }
+        if (const JsonValue z = b.get("zone"); z.valid()) read_zone(z, def.code, file, diags);
+    }
     if (devices != 1) {
         error(diags, file, b,
-              "a binding names exactly one of key, mouse_button, mouse_delta, mouse_wheel, gamepad_button, gamepad_axis");
+              "a binding names exactly one of key, mouse_button, mouse_delta, mouse_wheel, gamepad_button, gamepad_axis, "
+              "touch_zone, touch_tap, touch_stick, touch_swipe");
         return;
     }
+    if (!zoned_axis && b.get("zone").valid()) error(diags, file, b.get("zone"), "\"zone\" goes with touch_stick or touch_swipe");
     if (const JsonValue v = b.get("axis"); v.valid()) read_axis(v, def.axis, file, diags);
     if (def.axis == 1 && type != input::ActionType::Axis2D)
         error(diags, file, b.get("axis").valid() ? b.get("axis") : b, "\"axis\": \"y\" needs an axis2d action");

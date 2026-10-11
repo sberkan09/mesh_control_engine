@@ -35,6 +35,10 @@ bool same(const ActionState& a, const ActionState& b) {
            a.released == b.released;
 }
 bool same(vec2 a, vec2 b) { return a.x == b.x && a.y == b.y; }
+bool same(const TouchPoint& a, const TouchPoint& b) {
+    return same(a.pos, b.pos) && same(a.origin, b.origin) && a.slot == b.slot && a.held == b.held &&
+           a.pressed == b.pressed && a.released == b.released;
+}
 }  // namespace
 
 bool operator==(const InputState& a, const InputState& b) {
@@ -43,8 +47,10 @@ bool operator==(const InputState& a, const InputState& b) {
         a.jump_released != b.jump_released || a.fire_pressed != b.fire_pressed || a.pause_pressed != b.pause_pressed ||
         a.confirm_pressed != b.confirm_pressed || a.cancel_pressed != b.cancel_pressed ||
         !same(a.mouse_pos, b.mouse_pos) || !same(a.wheel, b.wheel) || a.action_count != b.action_count ||
-        a.text() != b.text())
+        a.text() != b.text() || a.touch_count != b.touch_count)
         return false;
+    for (u32 i = 0; i < a.touch_count; ++i)
+        if (!same(a.touches[i], b.touches[i])) return false;
     for (u32 i = 0; i < a.action_count; ++i)
         if (a.action_names[i] != b.action_names[i] || !same(a.actions[i], b.actions[i])) return false;
     return true;
@@ -69,6 +75,16 @@ u64 hash_state(const InputState& s, u64 seed) {
         bit(a.held), bit(a.pressed), bit(a.released);
     }
     h.bytes(s.text_buf, s.text_len);
+    // Touches only when present, so snapshots without touch keep the hashes they always had.
+    if (s.touch_count > 0) {
+        h.bytes(&s.touch_count, sizeof(s.touch_count));
+        for (u32 i = 0; i < s.touch_count; ++i) {
+            const TouchPoint& t = s.touches[i];
+            f(t.pos.x), f(t.pos.y), f(t.origin.x), f(t.origin.y);
+            h.bytes(&t.slot, 1);
+            bit(t.held), bit(t.pressed), bit(t.released);
+        }
+    }
     return h.value();
 }
 

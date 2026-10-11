@@ -23,6 +23,15 @@ enum class Device : u8 {
     // a button is held if any pad holds it; an axis takes the pad with the largest deflection.
     GamepadButton,  // code = platform::GamepadButton
     GamepadAxis,    // code = platform::GamepadAxis; deadzone + curve apply (sticks -1..1, y down)
+    // M-MOBILE (FR-INP-070). code = a screen zone (pack_touch_zone, normalized, y down); a touch
+    // belongs to every zone it STARTED in, wherever it moves afterwards.
+    TouchZone,   // on-screen button: 1 while a touch that started in the zone is down
+    TouchStick,  // virtual stick: the oldest touch that started in the zone, its offset from where it
+                 // started over kTouchStickRadius (unit circle), x or y by BindingFlag::SourceY,
+                 // y down; deadzone + curve apply
+    TouchTap,    // 1 for the tick a short, still touch that started in the zone lifts
+    TouchSwipe,  // +/-1 for the tick a fast touch that started in the zone lifts, on the axis it
+                 // mostly moved along (BindingFlag::SourceY picks which axis this binding reads)
 };
 
 enum class Curve : u8 {
@@ -35,6 +44,7 @@ enum class Curve : u8 {
 namespace BindingFlag {
 enum : u8 {
     Invert = 1u << 0,
+    SourceY = 1u << 1,  // TouchStick / TouchSwipe: read the y component (default x)
 };
 }
 
@@ -42,6 +52,14 @@ struct Deadzone {
     f32 inner = 0.f;  // |v| below inner reads 0
     f32 outer = 1.f;  // |v| at/above outer reads 1; rescaled linearly in between
 };
+
+// A touch zone packed into BindingDef::code: x0, y0, x1, y1 as 0..255 over the window (0..1).
+struct TouchZoneRect {
+    f32 x0 = 0.f, y0 = 0.f, x1 = 1.f, y1 = 1.f;
+    bool contains(f32 x, f32 y) const { return x >= x0 && x <= x1 && y >= y0 && y <= y1; }
+};
+u32 pack_touch_zone(const TouchZoneRect& r);
+TouchZoneRect unpack_touch_zone(u32 code);
 
 struct BindingDef {
     Device device = Device::Keyboard;
@@ -121,6 +139,12 @@ public:
     InputMapBuilder& gamepad_button(platform::GamepadButton b, u8 axis = 0, f32 scale = 1.f);
     InputMapBuilder& gamepad_axis(platform::GamepadAxis a, u8 axis = 0, f32 scale = 1.f, Deadzone dz = {0.2f, 1.f},
                                   Curve curve = Curve::Linear);
+    // Touch (M-MOBILE). touch_stick adds two bindings on an axis2d action (x, and y flipped to
+    // +y up like the gamepad sticks); on an axis1d action it adds the x binding only.
+    InputMapBuilder& touch_zone(const TouchZoneRect& zone, u8 axis = 0, f32 scale = 1.f);
+    InputMapBuilder& touch_tap(const TouchZoneRect& zone, u8 axis = 0, f32 scale = 1.f);
+    InputMapBuilder& touch_stick(const TouchZoneRect& zone, Deadzone dz = {0.15f, 1.f}, Curve curve = Curve::Linear);
+    InputMapBuilder& touch_swipe(const TouchZoneRect& zone, bool source_y, u8 axis = 0, f32 scale = 1.f);
 
     const InputMapSet& set() const { return set_; }
     void encode(Array<byte>& out) const { encode_input_map(set_, out); }

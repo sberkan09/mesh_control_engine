@@ -95,8 +95,31 @@ turns it into an input-map chunk. The player loads the first one in the pack by 
   fields (Move, Look, Jump, Fire, Pause, Confirm, Cancel, TriggerL, TriggerR) where they fit:
   those fields fill only from actions of those names. Any other action is read by name
   (`in.pressed(MCE_SID("Dash"))`).
-- Unknown keys, a typo'd field, two devices in one binding or a `"y"` binding on a button are cook
-  errors with file and line.
+- Touch (phones, M-MOBILE). Zones are `[x0, y0, x1, y1]` over the window, 0..1 with y down, and a
+  finger belongs to every zone it **started** in, wherever it slides afterwards.
+  - `touch_zone`: an on-screen button, held while such a finger is down.
+  - `touch_tap`: one tick when a short, still touch lifts (under 0.25 s and 3 % of the screen's
+    shorter side).
+  - `touch_stick` (`"x"`/`"y"`, optional `"zone"`): a floating virtual stick centred where the
+    finger landed; full deflection at 12 % of the shorter side; `deadzone` and `curve` apply. The
+    oldest finger in the zone drives it. Screen y is down, so the y binding of a Move stick takes
+    `"scale": -1`, as for gamepad sticks.
+  - `touch_swipe` (`"x"`/`"y"`, optional `"zone"`): ±1 for one tick when a fast touch lifts
+    (at least 8 % of the shorter side within 0.5 s), on the axis it mostly moved along.
+
+  ```json
+  { "name": "Move", "type": "axis2d", "bindings": [
+      { "touch_stick": "x", "zone": [0, 0, 0.5, 1] },
+      { "touch_stick": "y", "scale": -1, "zone": [0, 0, 0.5, 1], "deadzone": [0.15, 1] } ] },
+  { "name": "Jump", "bindings": [ { "touch_tap": [0.5, 0.15, 1, 1] } ] }
+  ```
+
+  The default map already has this layout: a Move stick on the left half, Look and Jump (tap) on
+  the right half below a Pause corner at the top right. `InputState::touch_points()` gives the
+  raw fingers (oldest first, normalized) for tap-to-point games, and `ui::apply_touch_pointer`
+  makes the oldest finger the `mce::ui` pointer. Touches are part of the recorded stream.
+- Unknown keys, a typo'd field, two devices in one binding, a touch zone outside 0..1 or a `"y"`
+  binding on a button are cook errors with file and line.
 
 A custom host can also build a map in code with `InputMapBuilder` (see
 `samples/03_platformer/main.cpp` and `05_ashen_court/main.cpp`).

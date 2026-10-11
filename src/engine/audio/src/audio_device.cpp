@@ -459,6 +459,11 @@ void AudioDevice::set_limiter(const LimiterDesc& d) {
     else ++impl_->commands_dropped;
 }
 
+void AudioDevice::set_paused(bool paused) {
+    paused_ = paused;
+    if (impl_->output) impl_->output->set_paused(paused);
+}
+
 u64 AudioDevice::mix_clock() const { return impl_->mixer->stats().mix_sample.load(std::memory_order_acquire); }
 
 // ---------------------------------------------------------------------------- per frame
@@ -478,7 +483,7 @@ void AudioDevice::update() {
             impl.output.reset();
         }
     }
-    if (backend_ == Backend::Silent) impl.mixer->render(impl.scratch, kBlockFrames);
+    if (backend_ == Backend::Silent && !paused_) impl.mixer->render(impl.scratch, kBlockFrames);
 
     AudioReply r;
     while (impl.replies.pop(r)) {
