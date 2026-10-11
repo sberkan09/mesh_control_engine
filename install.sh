@@ -11,6 +11,7 @@
 #
 # Every mode checks the tools a project build needs (CMake >= 3.28, Ninja, a C++20 compiler, Python 3),
 # puts <prefix>/bin on PATH through ~/.zshrc or ~/.bashrc, and ends with `mce version`.
+# Later, `mce update` repeats the install the same way (pulls the checkout, or the latest release).
 
 set -eu
 
@@ -140,6 +141,7 @@ case "$MODE" in
         cmake --install "$bdir" --prefix "$stage/mce-sdk" >/dev/null
         (cd "$stage" && tar -czf sdk.tar.gz mce-sdk)
         unpack "$stage/sdk.tar.gz"
+        printf 'source %s\n' "$here" > "$PREFIX/share/mce/ORIGIN"  # for `mce update`
         rm -rf "$stage"
         ;;
     archive)
@@ -155,6 +157,7 @@ case "$MODE" in
         set -- "$dl"/mce-sdk-*.tar.gz
         unpack "$1"
         rm -rf "$dl"
+        printf 'release\n' > "$PREFIX/share/mce/ORIGIN"  # for `mce update`
         ;;
 esac
 
