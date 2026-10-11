@@ -125,6 +125,7 @@ mce play <project> [player flags ...]
 mce headless <project> [--ticks N] [player flags ...]
 mce editor <project> [editor flags ...]
 mce mcp <project> [--scene <path>] [--allow-cheats]
+mce mcp-config <project> [--desktop] [--remove]
 mce cook <project> [--pack] [--force] [--adopt] [--quiet]
 mce ship <project> [--out dir] [--version v]
 mce update [<project> ...] [--release [tag]] [--no-pull]
@@ -136,6 +137,9 @@ Each subcommand prints the command it runs (`mce mcp` on stderr, since its stdou
 protocol) and exits with that tool's code (2 for a usage error).
 `mce example` with no name lists the SDK's example projects (`share/mce/examples/`); with one it
 copies that project to `<dir>/<Name>`, ready for `mce build`.
+`mce new` and `mce example` also write `<project>/.mcp.json`, registering `mce mcp <project>` as
+the server `mce_<game>` for Claude Code; `mce mcp-config` rewrites it, and with `--desktop` merges the
+same entry into Claude Desktop's `claude_desktop_config.json` (chapter 14.1).
 `mce editor`, `mce mcp` and `mce cook` run the SDK's `mce_editor`, `mce_mcp` and `mce_cook` with
 `-module <project>/build/lib<game>.so`; `mce ship` writes `<project>/dist/<Name>-<version>-<os>.zip`
 holding the host, the module, `libmce_engine`, `assets.mce`, `VERSION.txt` and `README.txt`.
