@@ -58,7 +58,8 @@ public:
         const ImVec2 origin = ImGui::GetCursorScreenPos();
         ImGui::Image(ImGuiRhiRenderer::to_id(target_), avail, ImVec2(0, 1), ImVec2(1, 0));
         const bool hovered = ImGui::IsItemHovered();
-        shell.set_viewport(ViewportInfo{target_, size_, hovered});
+        const bool focused = ImGui::IsWindowFocused() && !ImGui::GetIO().WantTextInput;
+        shell.set_viewport(ViewportInfo{target_, size_, hovered, focused});
         // An asset dragged from the browser: a texture becomes a sprite, a prefab an instance,
         // where it is dropped; a scene opens.
         if (shell.scene_mode() && !shell.playing() && ImGui::BeginDragDropTarget()) {

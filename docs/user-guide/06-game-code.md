@@ -235,7 +235,8 @@ The engine's own components (`LocalTransform`, `Sprite`, `RigidBody2D`, ...) are
 the host; a scene that uses a type nobody registered fails to load with `NotFound` naming the
 column, never silently.
 
-When the host has no input (play-in-editor), install an idle snapshot yourself so your systems can
+Every host installs `InputState` (the player and play-in-editor). If your module can also run
+where nobody does (MCP `run_headless`), install an idle snapshot yourself so your systems can
 still read it:
 
 ```cpp

@@ -153,9 +153,11 @@ switches to the scene's primary game camera (View > "Game camera while playing" 
   many are readable this tick.
 - **Stop (F5)** destroys the play world. Nothing you did in play mode touches the document; the
   Inspector is read-only while playing.
-- **Input.** Play-in-editor feeds no input to the game (an open gap). A player character stands
-  still; drive gameplay that needs input from the real game (`my_game`, or Ctrl+F5 to launch the
-  player on the saved scene).
+- **Input.** Click the Viewport to give it focus: while it has focus your keys go to the game,
+  with the project's input map (`.mcinput`, chapter 11) or the built-in one. The mouse reaches the
+  game while the pointer is over the Viewport. Keys you press with another panel focused stay with
+  the editor; F5, F6 and F10 always work. Pointer position is measured in editor-window pixels,
+  so for mouse aiming use the real game (`my_game`, or Ctrl+F5 to launch the player).
 
 ## 3.9 Autosave and recovery
 

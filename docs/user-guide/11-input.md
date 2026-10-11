@@ -127,8 +127,9 @@ persist overrides yet; a custom host can.
   A bad file is an error (exit 1). With scripted input, an autoplay switch in your game (a
   component flag that drives the character from code, as Undertow, Prism Break and Lamplighter
   used) is optional.
-- Play-in-editor feeds no input either: if the host has no `InputState`, install an idle one in
-  your `install()` so your systems can still read it (section 6.8).
+- Play-in-editor uses the same map as the player and takes keys while the Viewport has focus
+  (section 3.8). Where no host installs `InputState`, install an idle one in your `install()` so
+  your systems can still read it (section 6.8).
 
 ## 11.6 Replays
 

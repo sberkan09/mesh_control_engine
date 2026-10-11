@@ -48,9 +48,12 @@ umbrella) that is the only way.
   `base_roots()` lists the game packs named by `mod.json` "base", mounted after the cooked tree so the
   mod's scenes see the game's assets (empty for an ordinary project).
 - `PlaySession` (`play_session.h`): play-in-editor. `enter` cooks the document in memory
-  (`cook::cook_document`) and `scene::instantiate`s it into a fresh World with physics2d and the
-  audio bridge on a Silent device, as `mce_player -headless` does. `advance`, `pause`, `resume`,
-  `step`, `set_time_scale`, `state_hash`, `enter_hash`.
+  (`cook::cook_document`) and `scene::instantiate`s it into a fresh World with the `InputState`
+  resource, physics2d and the audio bridge on a Silent device, as `mce_player -headless` does.
+  `advance`, `pause`, `resume`, `step`, `set_time_scale`, `state_hash`, `enter_hash`;
+  `push_event` feeds the session's `InputSystem` (the project's input map), sampled and published
+  before each tick. `EditorShell::on_event` forwards every event while playing and flags presses
+  outside the focused (keys) or hovered (mouse) Viewport `ConsumedByEditor`.
 - `AssetWatcher` and `HotReloadResult` (`hot_reload.h`): polls `assets/` for changes.
 - `AssetBrowserModel`, `drop_asset` (`asset_browser.h`); `TransformGizmo` (`gizmo.h`, move, rotate,
   scale, hand-rolled); `EditorCamera2D`, `pick_entity` (`viewport2d.h`, CPU picking);
@@ -182,9 +185,10 @@ GPU (label `gpu`, `MCE_GPU_TESTS`): `editor_smoke` (default layout over the stub
 - Tilemaps: no palette thumbnails, one layer per asset, no auto-tiling (ADR-0030 §8.5).
 - MCP (M4.5): no cancellation of a running tool, no attach-to-running-editor and no `render_frame`.
   `run_headless` takes scripted input (`input`, an `InputScript`) but no recorded replay stream.
-- Play-in-editor runs the game's `install()` but feeds no input: the module sees an `InputState`
-  only if it installs one itself, and it stays idle, so a player character cannot be driven in the
-  editor viewport; play the game from the host (`<game>`) instead. The play view looks through the
+- Play-in-editor runs the game's `install()` on a world with the project's input map: keys reach
+  the game while the Viewport panel has focus (click it first) and the mouse while it is hovered.
+  The mouse position is in editor-window pixels, not viewport pixels, so pointer aiming is off by
+  the panel's offset. The play view looks through the
   scene's primary camera (View > "Game camera while playing") at the viewport panel's size, so HUD
   text pinned to the screen (Parallax 0) for the 1280×720 window can sit outside a smaller
   viewport (M9).

@@ -94,7 +94,29 @@ void EditorShell::shutdown() {
 bool EditorShell::on_event(const platform::Event& e) {
     // Leaving the editor window is a natural checkpoint: autosave unsaved work (M4).
     if (e.type == platform::EventType::FocusOut && scene_mode()) session_.autosave();
-    return impl_ && impl_->platform.on_event(e);
+    const bool consumed = impl_ && impl_->platform.on_event(e);
+    if (playing()) session_.play().push_event(game_event(e));
+    return consumed;
+}
+
+platform::Event EditorShell::game_event(const platform::Event& e) const {
+    // Play-in-editor input (FR-EDT-060): the game gets the keyboard while the viewport has focus,
+    // the mouse while it is hovered, and gamepads always. Presses the editor
+    // keeps are flagged ConsumedByEditor: input drops them but still honors their releases, so
+    // nothing sticks when focus moves to a panel mid-press (audio-input-ui §4.6).
+    using platform::EventType;
+    bool to_game = true;
+    switch (e.type) {
+        case EventType::KeyDown:
+        case EventType::TextInput: to_game = viewport_.focused; break;
+        case EventType::MouseMove:
+        case EventType::MouseButtonDown:
+        case EventType::MouseWheel: to_game = viewport_.hovered; break;
+        default: break;
+    }
+    platform::Event out = e;
+    if (!to_game) out.flags |= platform::EventFlag::ConsumedByEditor;
+    return out;
 }
 
 void EditorShell::add_panel(mem::UniquePtr<IEditorPanel> panel) { panels_.push_back(std::move(panel)); }
@@ -129,7 +151,7 @@ void EditorShell::build_ui(f64 frame_dt) {
     handle_shortcuts();
     draw_menu_bar();
     draw_dockspace();
-    viewport_.target = {};  // the viewport panel republishes it when visible
+    viewport_ = ViewportInfo{};  // the viewport panel republishes it when visible
     for (auto& p : panels_) {
         if (!p->open) continue;
         if (focus_panel_ && StringView(focus_panel_) == p->name()) ImGui::SetNextWindowFocus();
