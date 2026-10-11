@@ -145,8 +145,8 @@ bool net_probe() {
 endif()
 # 4. The example project copies out of the SDK and builds against it the same way.
 expect_exit(0 ${MCE} example)
-if(NOT LAST_OUTPUT MATCHES "Kindle")
-    message(FATAL_ERROR "mce example lists no Kindle:\n${LAST_OUTPUT}")
+if(NOT LAST_OUTPUT MATCHES "Kindle" OR NOT LAST_OUTPUT MATCHES "Undelivered")
+    message(FATAL_ERROR "mce example lists no Kindle or no Undelivered:\n${LAST_OUTPUT}")
 endif()
 expect_exit(0 ${MCE} example Kindle --dest "${WORK_DIR}")
 set(example "${WORK_DIR}/Kindle")
