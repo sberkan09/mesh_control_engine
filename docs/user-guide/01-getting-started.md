@@ -190,7 +190,23 @@ side. It exists for Linux and macOS (the platforms with game modules; on Windows
 
 ### Install it
 
-From an engine checkout, once (a release build is the one to install):
+The short way, from an engine checkout (macOS or Linux):
+
+```sh
+./install.sh                 # checks the build tools, builds the release preset, installs to ~/mce-sdk, adds it to PATH
+./install.sh mce-sdk-<version>-macos-arm64.tar.gz   # or unpack a prebuilt SDK archive instead of building
+./install.sh --release       # or download the archive for this machine from the GitHub releases (needs `gh`, signed in)
+```
+
+`--prefix <dir>` installs elsewhere, `--no-path` leaves your shell profile alone, and `--yes`
+installs missing tools (CMake, Ninja) through Homebrew or apt without asking. On a Mac without the
+Command Line Tools it opens Apple's installer and asks you to run it again afterwards. The archives
+come from `scripts/release_sdk.sh`, which builds the release preset and writes
+`dist/mce-sdk-<version>-<os>-<arch>.tar.gz`; upload it to a GitHub release (`gh release create
+v<version> dist/mce-sdk-*.tar.gz`) and `./install.sh --release` finds it. An archive is built
+for one OS and CPU, so make the macOS one on a Mac.
+
+The same by hand, once (a release build is the one to install):
 
 ```sh
 cmake --preset linux-gcc-release
@@ -275,12 +291,12 @@ build/macos-debug/projects/MyGame/my_game_editor -project projects/MyGame
 Game modules keep the `.so` suffix on macOS (`libmy_game.so`); only the engine library is a
 `.dylib`. The local CI for engine changes is `scripts/ci/local_ci_macos.sh` (section 1.8).
 
-**The SDK:** install it from a `macos-release` build, then use `mce` exactly as in section 1.9:
+**The SDK:** `./install.sh` in the checkout builds `macos-release`, installs it to `~/mce-sdk` and
+adds it to PATH in `~/.zshrc` (section 1.9; given a prebuilt `mce-sdk-…-macos-arm64.tar.gz` it
+skips the build). Then use `mce` exactly as in section 1.9:
 
 ```sh
-cmake --preset macos-release && cmake --build --preset macos-release
-cmake --install build/macos-release --prefix ~/mce-sdk
-export PATH="$HOME/mce-sdk/bin:$PATH"     # add to ~/.zshrc to keep it
+./install.sh                  # open a new terminal afterwards so PATH picks up ~/mce-sdk/bin
 mce new MyGame && mce build MyGame && mce editor MyGame
 ```
 

@@ -98,6 +98,8 @@ python3 scripts/new_project.py <Name> [--game id] [--title "Title"] [--dest dir]
 python3 scripts/ship.py --project projects/<Name> [--preset p] [--version v] [--out dir] [--no-build] [--keep-symbols] [--smoke] [--smoke-headless]
 python3 scripts/ship.py platformer | diorama | all
 python3 scripts/symbolicate.py <report.crash> --symbols <dir>...
+./install.sh [archive.tar.gz | --release [tag]] [--prefix dir] [--no-path] [--yes]   # install the SDK (section 1.9)
+scripts/release_sdk.sh [preset]                     # dist/mce-sdk-<version>-<os>-<arch>.tar.gz for install.sh
 scripts/ci/local_ci.sh [--quick] [stage ...]        # stages: walls linux-gcc-debug linux-clang-release linux-gcc-release linux-asan tidy determinism
 scripts/ci/local_ci_macos.sh [--quick] [stage ...]  # on a Mac; stages: walls macos-debug macos-release macos-asan validation samples determinism ship
 scripts/ci/setup_env.sh                               # Ubuntu 24.04 packages
