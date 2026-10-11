@@ -1,3 +1,4 @@
+#include <atomic>
 #include <cmath>
 #include <cstring>
 
@@ -99,6 +100,11 @@ struct AudioDevice::Impl {
     StreamMain streams[kMaxStreams];
     Mixer* mixer = nullptr;
     mem::UniquePtr<platform::AudioOutput> output;
+    // The device callback mixes only once this is set. An output opened in the background
+    // (silent_on_failure) starts while update() still mixes on the main thread (Silent): the main
+    // thread hands the mixer over by setting it after its last block, so one thread mixes at a time.
+    std::atomic<bool> device_mixes{false};
+    bool device_opening = false;  // open_async in flight: update() polls it
 
     Array<ClipMain> clips;
     u32 free_clips[kMaxClips];
@@ -113,7 +119,11 @@ struct AudioDevice::Impl {
     u32 warned_this_frame = 0;
     f32 scratch[kBlockFrames * kChannels];
 
-    static void render_cb(void* user, f32* out, u32 frames) { static_cast<Impl*>(user)->mixer->render(out, frames); }
+    static void render_cb(void* user, f32* out, u32 frames) {
+        Impl* impl = static_cast<Impl*>(user);
+        if (impl->device_mixes.load(std::memory_order_acquire)) impl->mixer->render(out, frames);
+        else std::memset(out, 0, sizeof(f32) * frames * kChannels);
+    }
 };
 
 f32 db_to_linear(f32 db) { return db <= -96.f ? 0.f : std::pow(10.f, db / 20.f); }
@@ -145,16 +155,24 @@ Result<mem::UniquePtr<AudioDevice>> AudioDevice::create(const AudioDesc& desc) {
         od.channels = kChannels;
         od.period_frames = desc.period_frames;
         od.driver = desc.driver;
-        auto out = platform::AudioOutput::open(od, &Impl::render_cb, impl);
-        if (out) {
-            impl->output = std::move(out).value();
-        } else if (desc.silent_on_failure) {
-            FixedString<512> msg;
-            format_error(out.error(), msg);
-            MCE_LOG_ERROR("audio: no output device ({}); running silent", msg.c_str());
+        if (desc.silent_on_failure) {
+            // A game: never wait on the device (it can block for seconds when there is no output);
+            // run Silent until update() sees it open.
             dev->backend_ = Backend::Silent;
+            auto out = platform::AudioOutput::open_async(od, &Impl::render_cb, impl);
+            if (out) {
+                impl->output = std::move(out).value();
+                impl->device_opening = true;
+            } else {
+                FixedString<512> msg;
+                format_error(out.error(), msg);
+                MCE_LOG_ERROR("audio: no output device ({}); running silent", msg.c_str());
+            }
         } else {
-            return out.error();
+            impl->device_mixes.store(true, std::memory_order_release);
+            auto out = platform::AudioOutput::open(od, &Impl::render_cb, impl);
+            if (!out) return out.error();
+            impl->output = std::move(out).value();
         }
     }
 
@@ -173,11 +191,12 @@ AudioDevice::~AudioDevice() {
     if (g_convar_device == this) g_convar_device = nullptr;
     Impl* impl = impl_;
     if (impl->output) {
+        // Waits for an open still in flight (~AudioOutput joins it) only when the game quits first.
         // Graceful: fade everything, give the callback a few blocks, then close. Closing
         // guarantees the callback is no longer running before we free the mixer.
         AudioCommand c;
         c.type = CmdType::StopAll;
-        if (impl->commands.push(c)) platform::sleep_ms(30);
+        if (backend_ == Backend::Device && impl->commands.push(c)) platform::sleep_ms(30);
         impl->output.reset();
     }
     mem::IAllocator& a = impl->alloc;
@@ -447,6 +466,18 @@ u64 AudioDevice::mix_clock() const { return impl_->mixer->stats().mix_sample.loa
 void AudioDevice::update() {
     Impl& impl = *impl_;
     impl.warned_this_frame = 0;
+    if (impl.device_opening) {
+        const platform::AudioOutput::State st = impl.output->state();
+        if (st == platform::AudioOutput::State::Open) {
+            impl.device_opening = false;
+            impl.device_mixes.store(true, std::memory_order_release);  // after our last Silent block
+            backend_ = Backend::Device;
+        } else if (st == platform::AudioOutput::State::Failed) {
+            impl.device_opening = false;
+            MCE_LOG_ERROR("audio: no output device ({}); running silent", impl.output->error());
+            impl.output.reset();
+        }
+    }
     if (backend_ == Backend::Silent) impl.mixer->render(impl.scratch, kBlockFrames);
 
     AudioReply r;

@@ -36,6 +36,34 @@ TEST_CASE("Device backend pulls from the mixer on the platform audio thread") {
     CHECK_FALSE(dev->is_playing(v));
 }
 
+TEST_CASE("Device backend with silent_on_failure opens in the background and mixes meanwhile") {
+    Array<f32> clip = test::dc_clip(48000, 0.1f);  // outlives the device: the voice still plays at the end
+    AudioDesc d;
+    d.backend = Backend::Device;
+    d.driver = "dummy";
+    auto dev = AudioDevice::create(d).value();
+    CHECK(dev->backend() == Backend::Silent);  // create() never waits on the device
+
+    auto h = dev->register_clip(test::payload(clip)).value();
+    const AudioHandle v = dev->play(h);
+    REQUIRE_FALSE(v.is_null());
+    u64 clock = dev->mix_clock();
+    for (u32 i = 0; i < 400 && dev->backend() != Backend::Device; ++i) {
+        dev->update();  // Silent until the open lands: the clock keeps moving, one block per call
+        if (dev->backend() == Backend::Silent) CHECK(dev->mix_clock() > clock);
+        clock = dev->mix_clock();
+        platform::sleep_ms(5);
+    }
+    REQUIRE(dev->backend() == Backend::Device);
+    // The device thread took over the mixer: the same voice keeps playing past where Silent left it.
+    for (u32 i = 0; i < 400 && dev->mix_clock() < clock + 4800; ++i) {
+        platform::sleep_ms(5);
+        dev->update();
+    }
+    CHECK(dev->mix_clock() >= clock + 4800);
+    CHECK(dev->is_playing(v));
+}
+
 TEST_CASE("Silent backend: no device, commands still flow and voices still finish") {
     AudioDesc d;
     d.backend = Backend::Silent;

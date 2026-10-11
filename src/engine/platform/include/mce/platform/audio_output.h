@@ -24,7 +24,17 @@ public:
     // Opens the default playback device and starts pulling from `fn` immediately. Works without
     // platform::init (initializes SDL's audio subsystem on its own).
     static Result<mem::UniquePtr<AudioOutput>> open(const AudioOutputDesc& desc, AudioRenderFn fn, void* user);
+    // Like open(), but opening the device runs on a worker thread and this returns at once: with no
+    // usable output (a closed MacBook lid, a missing sound server) the platform can block there for
+    // seconds. The audio subsystem is initialized here, on the caller's (main) thread. Poll state();
+    // `fn` may be called as soon as the device opens, before state() reports it.
+    static Result<mem::UniquePtr<AudioOutput>> open_async(const AudioOutputDesc& desc, AudioRenderFn fn, void* user);
+    enum class State : u8 { Opening, Open, Failed };
+    State state() const;
+    // Why the open failed (state() == Failed), else empty.
+    const char* error() const;
     // Closes the device. When the destructor returns, the callback is not running and never will.
+    // An open still in flight is waited for first.
     ~AudioOutput();
     AudioOutput(const AudioOutput&) = delete;
     AudioOutput& operator=(const AudioOutput&) = delete;
@@ -39,6 +49,9 @@ public:
     AudioOutput() = default;  // use open()
 
 private:
+    // Validation, hints and the audio subsystem (main thread): the part open and open_async share.
+    static Result<mem::UniquePtr<AudioOutput>> prepare(const AudioOutputDesc& desc, AudioRenderFn fn, void* user);
+
     Impl* impl_ = nullptr;
     u32 sample_rate_ = 0;
     u32 channels_ = 0;
