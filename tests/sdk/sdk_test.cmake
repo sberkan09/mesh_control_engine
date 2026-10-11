@@ -1,4 +1,4 @@
-# SDK contract test (run with cmake -P, see CMakeLists.txt): install, new, build, headless, cook, ship.
+# SDK contract test (run with cmake -P, see CMakeLists.txt): install, new, build, headless, mcp, cook, ship.
 
 function(expect_exit expected)
     execute_process(COMMAND ${ARGN} RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
@@ -57,6 +57,14 @@ endif()
 expect_exit(0 ${MCE} headless "${project}" --ticks 300)
 if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
     message(FATAL_ERROR "mce headless:\n${LAST_OUTPUT}")
+endif()
+# `mce mcp` speaks the MCP stdio transport: stdout carries JSON-RPC lines only, from the first byte.
+file(WRITE "${WORK_DIR}/mcp_in.jsonl"
+     "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"sdk_test\",\"version\":\"0\"}}}\n")
+execute_process(COMMAND ${MCE} mcp "${project}" INPUT_FILE "${WORK_DIR}/mcp_in.jsonl"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT rc EQUAL 0 OR NOT out MATCHES "^{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":")
+    message(FATAL_ERROR "mce mcp: stdout is not the initialize response alone (rc ${rc}):\n${out}\n${err}")
 endif()
 expect_exit(0 ${MCE} cook "${project}" --pack --force)
 if(NOT LAST_OUTPUT MATCHES "0 failed")
@@ -129,4 +137,4 @@ expect_exit(0 ${MCE} headless "${example}" --ticks 300)
 if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
     message(FATAL_ERROR "mce headless (Kindle):\n${LAST_OUTPUT}")
 endif()
-message(STATUS "SDK contract holds: install, new, build, headless, cook, ship, net, example")
+message(STATUS "SDK contract holds: install, new, build, headless, mcp, cook, ship, net, example")

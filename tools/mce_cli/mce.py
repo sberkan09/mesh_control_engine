@@ -17,7 +17,7 @@
 
 A project is a folder with one <Name>.mceproj (mce new makes one). Its build lives in
 <project>/build (mce build), where <game> (the host), lib<game>.so (the module) and
-project/assets.mce (the cooked pack) land. Every subcommand prints the command it runs.
+project/assets.mce (the cooked pack) land. Every subcommand prints the command it runs (mce mcp on stderr: its stdout is the protocol).
 Exit code: the tool's, or 2 for a usage error.
 """
 
@@ -51,7 +51,8 @@ def tool(name):
 
 
 def run(cmd, cwd=None, exec_=False):
-    print("mce:", " ".join(str(c) for c in cmd), flush=True)
+    # The MCP server owns stdout (JSON-RPC lines), so its command line goes to stderr.
+    print("mce:", " ".join(str(c) for c in cmd), file=sys.stderr if exec_ else sys.stdout, flush=True)
     if exec_ and os.name != "nt":
         os.execv(cmd[0], [str(c) for c in cmd])  # stdio passthrough (the MCP server)
     return subprocess.call([str(c) for c in cmd], cwd=cwd)
