@@ -205,6 +205,8 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Rough shape if un-parked:** iOS after M-MAC closes (≈ M-size, leaning on the Metal backend) · Android as its own L-size track (new RHI backend). Both inherit the M-MAC rules: GL stays the reference backend, determinism baselines are per-platform (ADR-0007).
 
+**Graphics-layer note (2026-10-11, user request):** before writing separate Android and iOS backends, evaluate one cross-platform layer for mobile: SDL3 GPU (preferred, since SDL3 is already the platform layer; it maps to Vulkan on Android and Metal on iOS) or WebGPU via Dawn. A single `mce_rhi_sdlgpu` (or `mce_rhi_webgpu`) backend would replace items (1) and most of (2) above, and it avoids the N14 conflict in M10+, where a hand-written Vulkan backend is deferred until both anchor games ship. Desktop keeps GL as the reference backend and Metal on macOS; the mobile backend is an extra RHI implementation, not a replacement. bgfx, MoltenVK and ANGLE were also named and are the fallbacks if neither fits. Settled by an ADR when the track is un-parked.
+
 ### M-SKIN — Optional skinned animation · **size M (≈ 30–50 h engineering)** · tier: v0.5 Should (FR-R3D-060), off the milestone sequence
 
 *Added 2026-10-10 by user request (REQUIREMENTS §8 Open Question 3 update): skinning is supported but never required. A character may be a static mesh, a node-transform hierarchy or a skinned mesh; the developer chooses per asset (sidecar `"skinning"`) and per instance (`MeshInstance::skinning`). Not a promotion to Must: Ashen Court and the cut ladder are unchanged.*
