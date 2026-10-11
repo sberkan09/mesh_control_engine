@@ -131,7 +131,8 @@ mce version
 mce --help
 ```
 
-Each subcommand prints the command it runs and exits with that tool's code (2 for a usage error).
+Each subcommand prints the command it runs (`mce mcp` on stderr, since its stdout is the MCP
+protocol) and exits with that tool's code (2 for a usage error).
 `mce example` with no name lists the SDK's example projects (`share/mce/examples/`); with one it
 copies that project to `<dir>/<Name>`, ready for `mce build`.
 `mce editor`, `mce mcp` and `mce cook` run the SDK's `mce_editor`, `mce_mcp` and `mce_cook` with
