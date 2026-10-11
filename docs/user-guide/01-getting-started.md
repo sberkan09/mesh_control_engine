@@ -216,7 +216,9 @@ projects afterwards; name them and `mce update` does it:
 mce update ~/Projects/MyGame ~/Projects/OtherGame   # pull, reinstall, rebuild both projects
 ```
 
-Close the editor and any running game first. An SDK unpacked from an archive file has nowhere to
+Close the editor and any running game first. The pull runs without a terminal prompt, so the
+checkout's remote must sign in on its own (an SSH remote, or `gh auth setup-git`); `--no-pull`
+reinstalls the checkout as it is when you pulled yourself. An SDK unpacked from an archive file has nowhere to
 update from: run `./install.sh` with the newer archive.
 
 The same by hand, once (a release build is the one to install):

@@ -10,7 +10,7 @@
     mce mcp <project> [--allow-cheats]          the MCP server over stdio with the module loaded
     mce cook <project> [cook flags...]          cook assets/ with the module loaded (--pack, --force, --adopt)
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
-    mce update [<project>...] [--release [tag]]  reinstall this SDK from where it came from, then rebuild
+    mce update [<project>...] [--release [tag]] [--no-pull]  reinstall this SDK from where it came from, then rebuild
                                                 the projects named (their modules must match the new engine)
     mce version                                 the SDK's version and engine build stamp
     mce --help
@@ -230,9 +230,14 @@ def cmd_update(args):
     if kind == "source":
         if not (checkout / "install.sh").is_file():
             sys.exit(f"mce: the checkout this SDK was built from ({checkout}) is gone; run install.sh from a checkout")
-        rc = run(["git", "-C", checkout, "pull", "--ff-only"])
-        if rc:
-            sys.exit(f"mce: git pull failed in {checkout} (local changes or a diverged branch); fix it and rerun")
+        if not args.no_pull:
+            rc = run(["git", "-C", checkout, "pull", "--ff-only"])
+            if rc:
+                sys.exit(f"mce: git pull failed in {checkout} (git's message is above). If git could not sign in "
+                         "(\"could not read Username\", \"Authentication failed\"), use an SSH remote "
+                         "(git remote set-url origin git@github.com:<owner>/<repo>.git) or `gh auth login` + "
+                         "`gh auth setup-git`; otherwise fix the local changes or diverged branch. "
+                         "Or pull yourself and run `mce update --no-pull`.")
         rc = run(["sh", checkout / "install.sh", "--prefix", PREFIX, "--no-path"])
     elif kind == "release":
         # install.sh replaces this prefix, itself included, so run a copy from outside it.
@@ -313,6 +318,7 @@ def main(argv):
     s.add_argument("projects", nargs="*", help="projects to rebuild afterwards")
     s.add_argument("--release", nargs="?", const="", default=None, metavar="TAG",
                    help="install from GitHub releases (default: the latest) instead of the checkout")
+    s.add_argument("--no-pull", action="store_true", help="source installs: rebuild the checkout as it is, without git pull")
     s.set_defaults(fn=cmd_update)
 
     s = sub.add_parser("version", help="the SDK version and engine build stamp")
