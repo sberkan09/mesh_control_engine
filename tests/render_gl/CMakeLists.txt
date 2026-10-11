@@ -1,4 +1,5 @@
-# mce_render on a real GL 4.5 driver (CI: Xvfb + Mesa llvmpipe): pixel probes of the 2D and 3D paths.
+# mce_render on a real GL 4.5 driver (CI: Xvfb + Mesa llvmpipe): pixel probes of the 2D and 3D paths,
+# run again on mce_rhi_sdlgpu (Vulkan, lavapipe) as test_render_sdlgpu.
 # Always builds; registers only with MCE_GPU_TESTS.
 find_package(Threads REQUIRED)
 add_executable(test_render_gl test_render_gl.cpp test_render3d_gl.cpp)
@@ -7,4 +8,9 @@ mce_apply_compile_policy(test_render_gl)
 if(MCE_GPU_TESTS)
     add_test(NAME test_render_gl COMMAND test_render_gl)
     set_tests_properties(test_render_gl PROPERTIES LABELS gpu)
+endif()
+# The same probes on the SDL3 GPU backend (ADR-0038; CI: Vulkan through Mesa lavapipe).
+if(MCE_GPU_TESTS AND MCE_RHI_SDLGPU)
+    add_test(NAME test_render_sdlgpu COMMAND test_render_gl)
+    set_tests_properties(test_render_sdlgpu PROPERTIES LABELS gpu ENVIRONMENT "MCE_RHI=sdlgpu")
 endif()

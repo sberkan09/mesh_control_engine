@@ -15,13 +15,19 @@ struct PixelSize {
     u32 height = 0;
 };
 
+// The GPU API a window's surface is made for (ADR-0038). Resolved once per process: Android and iOS
+// always use SdlGpu; elsewhere MCE_RHI=sdlgpu selects it, else OpenGL (Metal on macOS).
+// rhi::create_default_device makes the matching device.
+enum class GpuApi : u8 { OpenGL, Metal, SdlGpu };
+GpuApi gpu_api();
+
 struct WindowDesc {
     const char* title = "Mesh Control Engine";
     u32 width = 1600;
     u32 height = 900;
     bool resizable = true;
     bool high_dpi = true;
-    bool opengl = true;   // create a GL-capable surface (mce_rhi_gl makes the context)
+    bool opengl = true;   // create a GPU-capable surface for gpu_api() (the device makes the context)
     bool hidden = false;  // tests, offscreen captures
 };
 

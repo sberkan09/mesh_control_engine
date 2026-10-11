@@ -39,10 +39,11 @@ set(SDL_TESTS OFF CACHE BOOL "" FORCE)
 set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
 set(SDL_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
-set(SDL_GPU OFF CACHE BOOL "" FORCE)
+# SDL GPU + Vulkan only for mce_rhi_sdlgpu (ADR-0038); SDL loads the Vulkan loader at run time.
+set(SDL_GPU ${MCE_RHI_SDLGPU} CACHE BOOL "" FORCE)
 set(SDL_RENDER OFF CACHE BOOL "" FORCE)
 set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
-set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
+set(SDL_VULKAN ${MCE_RHI_SDLGPU} CACHE BOOL "" FORCE)
 set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
 # M6 input (ADR-0026): gamepads for mce_input — joystick/gamepad API, HIDAPI drivers, rumble, and
 # the virtual-joystick driver the input tests and bots drive.

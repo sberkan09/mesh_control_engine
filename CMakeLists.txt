@@ -29,6 +29,14 @@ option(MCE_BUILD_PROJECTS  "Build every projects/<name>/ game (off for an SDK-on
 option(MCE_TEMPLATE_PROBE  "Stamp the project template into the build tree and build it (tests the generator)" ON)
 option(MCE_PHYSICS_ORACLE  "Link Box2D v3 into test_physics2d as the solver oracle (ADR-0016)" ON)
 option(MCE_WITH_NET        "Build the optional networking module mce_net (ENet; a game opts in, ADR-0035)" ON)
+# ADR-0038: the SDL3 GPU backend (Vulkan on Linux/Android, Metal on iOS). Built on Linux so every
+# local_ci.sh run exercises it through lavapipe; selected at run time with MCE_RHI=sdlgpu.
+if(APPLE)
+    set(_mce_sdlgpu_default OFF)  # macOS keeps mce_rhi_metal; the iOS MSL path is M-MOBILE step 7
+else()
+    set(_mce_sdlgpu_default ON)
+endif()
+option(MCE_RHI_SDLGPU      "Build the SDL3 GPU RHI backend mce_rhi_sdlgpu (ADR-0038)" ${_mce_sdlgpu_default})
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(MceTarget)
@@ -56,6 +64,9 @@ set(MCE_ENGINE_LIBS
     mce_core mce_refl mce_asset mce_ecs mce_physics2d mce_physics3d mce_platform mce_input
     mce_rhi ${MCE_RHI_BACKEND} mce_rhi_default mce_render mce_ui mce_audio mce_scene mce_ecs_scene mce_gameplay_kit
     mce_module_host)
+if(MCE_RHI_SDLGPU)
+    list(APPEND MCE_ENGINE_LIBS mce_rhi_sdlgpu)
+endif()
 if(MCE_GAME_MODULES_SUPPORTED)
     # Relocatable run paths (scripts/ship.py): every binary looks next to itself first, and the
     # build-tree path to libmce_engine is recorded relative to $ORIGIN, so a shipped folder never
@@ -84,6 +95,9 @@ add_subdirectory(src/engine/rhi)
 add_subdirectory(src/engine/rhi_gl)
 if(APPLE)
     add_subdirectory(src/engine/rhi_metal)  # ADR-0028: the macOS backend
+endif()
+if(MCE_RHI_SDLGPU)
+    add_subdirectory(src/engine/rhi_sdlgpu)  # ADR-0038: the mobile backend, opt-in on desktop
 endif()
 add_subdirectory(src/engine/rhi_default)
 add_subdirectory(src/engine/render)

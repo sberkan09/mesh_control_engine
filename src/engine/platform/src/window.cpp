@@ -2,6 +2,9 @@
 
 #include <SDL3/SDL.h>
 
+#include <cstdlib>
+#include <cstring>
+
 #include "internal.h"
 #include "mce/log.h"
 #include "mce/platform/platform.h"
@@ -11,6 +14,23 @@ namespace {
 SDL_Window* sdl(void* h) { return static_cast<SDL_Window*>(h); }
 }  // namespace
 
+GpuApi gpu_api() {
+    static const GpuApi api = [] {
+#if defined(SDL_PLATFORM_ANDROID) || defined(SDL_PLATFORM_IOS)
+        return GpuApi::SdlGpu;
+#else
+        const char* env = std::getenv("MCE_RHI");  // NOLINT(concurrency-mt-unsafe): read once, at first use
+        if (env && std::strcmp(env, "sdlgpu") == 0) return GpuApi::SdlGpu;
+#if defined(__APPLE__)
+        return GpuApi::Metal;
+#else
+        return GpuApi::OpenGL;
+#endif
+#endif
+    }();
+    return api;
+}
+
 Result<mem::UniquePtr<Window>> Window::create(const WindowDesc& desc) {
     if (!is_initialized()) return Error(Errc::PlatformInit, "platform.window.create", "platform::init not called");
 
@@ -18,11 +38,18 @@ Result<mem::UniquePtr<Window>> Window::create(const WindowDesc& desc) {
     if (desc.resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (desc.high_dpi) flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (desc.hidden) flags |= SDL_WINDOW_HIDDEN;
+    const GpuApi api = gpu_api();
+    if (desc.opengl && api == GpuApi::SdlGpu) {
+        // mce_rhi_sdlgpu (ADR-0038) claims the window for SDL GPU: Vulkan, or Metal on Apple platforms.
 #if defined(__APPLE__)
-    // macOS renders through mce_rhi_metal (ADR-0028): the GPU surface is a CAMetalLayer, no GL attributes.
-    if (desc.opengl) flags |= SDL_WINDOW_METAL;
+        flags |= SDL_WINDOW_METAL;
 #else
-    if (desc.opengl) {
+        flags |= SDL_WINDOW_VULKAN;
+#endif
+    } else if (desc.opengl && api == GpuApi::Metal) {
+        // macOS renders through mce_rhi_metal (ADR-0028): the GPU surface is a CAMetalLayer, no GL attributes.
+        flags |= SDL_WINDOW_METAL;
+    } else if (desc.opengl) {
         flags |= SDL_WINDOW_OPENGL;
         // Default framebuffer: RGBA8 + D24S8, double-buffered. Context version/profile attributes
         // are set by mce_rhi_gl right before it creates the context.
@@ -34,7 +61,6 @@ Result<mem::UniquePtr<Window>> Window::create(const WindowDesc& desc) {
         SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     }
-#endif
 
     SDL_Window* handle =
         SDL_CreateWindow(desc.title, static_cast<int>(desc.width), static_cast<int>(desc.height), flags);
