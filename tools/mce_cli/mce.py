@@ -226,7 +226,7 @@ def cmd_update(args):
     if args.release is not None:
         kind = "release"
     projects = [Project(p) for p in args.projects]  # check them before replacing the SDK
-    before, _ = sdk_version()
+    before = sdk_version()[1].split(" ")[0] or "unknown"
     if kind == "source":
         if not (checkout / "install.sh").is_file():
             sys.exit(f"mce: the checkout this SDK was built from ({checkout}) is gone; run install.sh from a checkout")
@@ -251,8 +251,9 @@ def cmd_update(args):
         rc = run([sys.executable, PREFIX / "bin" / "mce", "build", p.dir])
         if rc:
             return rc
-    after, stamp = sdk_version()
-    print(f"mce: updated {before} -> {after} ({stamp})")
+    version, stamp = sdk_version()
+    after = stamp.split(" ")[0] or "unknown"
+    print(f"mce: engine {before} -> {after}" + (" (already current)" if before == after else "") + f": mce {version} ({stamp})")
     if not projects:
         print("mce: rebuild each project once (mce build <project>): a module only loads into the engine it was built for")
     return 0
