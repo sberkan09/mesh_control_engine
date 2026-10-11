@@ -17,7 +17,7 @@ a device or simulator run on the user's Mac.
 | 4 | Touch input (FR-INP-070): `Touch{Down,Move,Up}` platform events, touch state per tick in `mce_input`, touch bindings (virtual stick, buttons, tap/swipe), `mce_ui` hit-testing by touch, record/replay of touches | `local_ci.sh` (synthetic touch streams, determinism) | done |
 | 5 | App lifecycle (FR-RUN-100): background/foreground events, sim and audio pause, autosave on background, GPU surface loss and recreation, orientation and safe-area insets exposed to `mce_ui` | `local_ci.sh` (synthetic lifecycle events) | done (surface loss: device, step 6) |
 | 6 | Android: `android-arm64` presets (NDK toolchain), SDL's Java activity, Gradle wrapper project stamped by `scripts/ship.py --target android`, APK/AAB with the cooked pack in assets | emulator + a device, on the Mac | done on the emulator (no device attached) |
-| 7 | iOS: `ios-arm64` / `ios-sim-arm64` presets, Xcode project generation, the statically linked game module (`MCE_PROJECT_STATIC_MODULE`), signing, IPA from `scripts/ship.py --target ios` | simulator + a device, on the Mac | — |
+| 7 | iOS: `ios-arm64` / `ios-sim-arm64` presets, Xcode project generation, the statically linked game module (`MCE_PROJECT_STATIC_MODULE`), signing, IPA from `scripts/ship.py --target ios` | simulator + a device, on the Mac | done in the Simulator (no device; Ninja app bundles instead of an Xcode project) |
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | — |
 | 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | — |
 
@@ -63,17 +63,34 @@ on a device, so it is checked in step 6.
 
 Emulator results (Android 15, arm64, `-gpu host`, Vulkan through MoltenVK on Apple M4): Ember Step (7.0 MB APK)
 and the 3D diorama (7.7 MB) both render correctly at 60 fps in landscape. Screenshots in the project files
-(`m-mobile/`). With `-gpu swiftshader_indirect` the emulator's SwiftShader Vulkan never signals the frame's fence,
+(`android-ember-step.png`, `android-diorama.png`). With `-gpu swiftshader_indirect` the emulator's SwiftShader Vulkan never signals the frame's fence,
 so the first present spins forever; that is the emulator, not the backend (SDL's own GPU clear loop runs fine on
 `-gpu host`). Not yet done: a physical Android device (none is attached to the Mac).
+
+## What shipped (step 7, iOS)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Presets | `ios-sim-arm64`, `ios-arm64` (`CMakePresets.json`) | iOS 16+, arm64, the same phone options as Android; `mce_rhi_sdlgpu` only, game code linked in (`MCE_GAME_MODULES_SUPPORTED` off: iOS loads no code, so samples and project hosts take the static path, `MCE_PROJECT_STATIC_MODULE`) |
+| App bundles | `cmake/MceMobile.cmake`, `cmake/mobile/ios/` | every engine executable is `<target>.app` (`Info.plist.in`: landscape, fullscreen, Metal required); `ios_main.c` runs SDL's UIKit entry point, calls the game's renamed `main()` and exits with its code when it returns |
+| Shaders | `rhi_sdlgpu/src/shader_msl.{h,cpp}` | the SPIR-V from `compile_glsl` goes through SPIRV-Cross to MSL with every resource pinned to the Metal index SDL binds (samplers → texture/sampler i, uniform bank b → buffer b, storage j → buffer uniform_count + j); same conventions as Vulkan, so the vertex epilogue is shared |
+| Packaging | `scripts/ship.py --target ios [--preset ios-arm64] [--smoke]`, `cmake/mobile/ios_app.py` | the pack and CREDITS in the bundle root (`SDL_GetBasePath` is the bundle), display name, dSYM archived and the binary stripped; Simulator: ad-hoc signed, zipped `.app`; device: signed with `MCE_IOS_SIGN_IDENTITY` + `MCE_IOS_PROVISIONING_PROFILE` (embedded, its entitlements signed in), `.ipa` |
+| Simulator | `cmake/mobile/ios/patch_sdl_simulator.cmake` (FetchContent `PATCH_COMMAND` on SDL) | the Simulator's virtual Metal device does not claim `MTLGPUFamilyApple3`, so SDL refuses it; the patch accepts it and skips the depth-clip call, both under `TARGET_OS_SIMULATOR` only. The smoke run turns the Simulator's Metal validation layer off (it rejects indirect draws the host GPU runs) |
+| Audio quit | `platform/src/audio_output.cpp`, `platform.cpp` | found here: a device that never finishes opening (the Simulator's audio server timed out for minutes on this Mac) made the game hang on quit in `~AudioOutput`; the owner now waits 1 s, then leaves the opener to free it, and `platform::shutdown` skips `SDL_Quit` while one is pending |
+| Local CI | `scripts/ci/local_ci_macos.sh ios` | both samples built, installed and played 300 frames in an iPhone 17 Pro Simulator (iOS 26), exit 0, pack mounted from the bundle |
+
+Simulator results: Ember Step (2.7 MB zipped app) and the 3D diorama render correctly (screenshots in the project
+files, `ios-sim-diorama-*.png`). Not done: a physical iPhone (none attached, and a device build needs Sami's signing identity
+and a provisioning profile), audio on the Simulator (its audio server never answered on this Mac; macOS audio is
+fine).
 
 ## Constraints found so far
 
 - The cloud cannot reach `dl.google.com`, so the Android SDK/NDK cannot be installed there. Steps 6–9 run on the
   user's Mac (command-line SDK + NDK r28 + JDK 17 for Android, Xcode for iOS). Steps 2–5 need no phone.
 - `local_ci.sh` needs Mesa lavapipe (`mesa-vulkan-drivers`) for the `sdlgpu` GPU tests; `setup_env.sh` installs it.
-- SDL is built with `SDL_GPU` / `SDL_VULKAN` only when `MCE_RHI_SDLGPU=ON` (the Linux default; off on macOS until
-  step 7). The backend is chosen at run time, so GL stays what every host uses unless `MCE_RHI=sdlgpu` is set.
+- SDL is built with `SDL_GPU` / `SDL_VULKAN` only when `MCE_RHI_SDLGPU=ON` (the Linux, Android and iOS default;
+  off on macOS, which keeps `mce_rhi_metal`). The backend is chosen at run time, so GL stays what every host uses unless `MCE_RHI=sdlgpu` is set.
 
 ## Rules (inherited from M-MAC)
 

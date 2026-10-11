@@ -55,6 +55,8 @@ FetchContent_Declare(SDL3
     GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
     GIT_TAG        release-3.4.18
     GIT_SHALLOW    TRUE
+    # iOS Simulator support for SDL GPU's Metal driver; a no-op outside the Simulator (M-MOBILE).
+    PATCH_COMMAND  ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_LIST_DIR}/mobile/ios/patch_sdl_simulator.cmake"
     SYSTEM)
 
 FetchContent_MakeAvailable(spdlog tracy SDL3)

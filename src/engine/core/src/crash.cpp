@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #if defined(__APPLE__)
+#include <TargetConditionals.h>
 #include <mach-o/dyld.h>
 #include <mach-o/loader.h>
 #include <sys/ucontext.h>  // <ucontext.h> needs _XOPEN_SOURCE on macOS
@@ -573,6 +574,11 @@ FixedString<512> default_dump_dir(StringView app_name) {
     r.assign("/data/data/");
     r.append(pkg);
     r.append("/files");
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+    // The app sandbox: only Documents, Library and tmp are writable.
+    const char* home = std::getenv("HOME");
+    r.assign(home ? home : ".");
+    r.append("/Library/Application Support");
 #else
     const char* xdg = std::getenv("XDG_DATA_HOME");
     const char* home = std::getenv("HOME");

@@ -7,6 +7,8 @@
     python3 scripts/ship.py --project projects/MyGame   # a project from scripts/new_project.py
     python3 scripts/ship.py platformer --target android # dist/Ember-Step-<version>-android.apk (M-MOBILE,
                                                         # cmake/mobile/android_app.py; --aab, --smoke)
+    python3 scripts/ship.py platformer --target ios     # dist/Ember-Step-<version>-ios-sim.zip; --preset ios-arm64
+                                                        # signs an .ipa (cmake/mobile/ios_app.py; --smoke)
 
 What a zip holds (one folder, double-click the executable; macOS: <Name>.app, see
 cmake/macos/macos_bundle.py):
@@ -107,6 +109,7 @@ def sample_outputs(key, args):
     art["module_file"] = os.path.join(sample_dir, MODULE_PREFIX + art["module"] + MODULE_SUFFIX) if art["module"] else None
     art["credits"] = os.path.join(ROOT, "samples", art["sample"], "CREDITS.md")
     art["android_lib"] = os.path.join(sample_dir, "lib" + art["target"] + ".so")
+    art["ios_app"] = os.path.join(sample_dir, art["target"] + ".app")
     art["autoplay"] = bool(art["module"])
     return art
 
@@ -140,23 +143,39 @@ def project_outputs(project, args):
     }
 
 
+def build_mobile(art, args, env=None):
+    """A phone build: the host's mce_cook first (it cooks the packs), then the game on the phone preset."""
+    run(["cmake", "--preset", args.host_preset])
+    run(["cmake", "--build", "--preset", args.host_preset, "--target", "mce_cook"])
+    cook = os.path.join(ROOT, "build", args.host_preset, "tools", "cook", "mce_cook" + EXE)
+    print(f"+ cmake --preset {args.preset} -DMCE_HOST_COOK={cook}", flush=True)
+    subprocess.run(["cmake", "--preset", args.preset, f"-DMCE_HOST_COOK={cook}"], cwd=ROOT, env=env, check=True)
+    run(["cmake", "--build", "--preset", args.preset, "--target", art["target"]])
+
+
 def ship_android(art, args):
-    """The APK: the host's mce_cook, the game's library from the android preset, then Gradle."""
+    """The APK: the game's library from the android preset, then Gradle."""
     import android_app
     if not args.no_build:
-        run(["cmake", "--preset", args.host_preset])
-        run(["cmake", "--build", "--preset", args.host_preset, "--target", "mce_cook"])
-        cook = os.path.join(ROOT, "build", args.host_preset, "tools", "cook", "mce_cook" + EXE)
-        env = dict(os.environ, ANDROID_NDK_HOME=android_app.ndk_root())
-        print(f"+ cmake --preset {args.preset} -DMCE_HOST_COOK={cook}", flush=True)
-        subprocess.run(["cmake", "--preset", args.preset, f"-DMCE_HOST_COOK={cook}"], cwd=ROOT, env=env, check=True)
-        run(["cmake", "--build", "--preset", args.preset, "--target", art["target"]])
+        build_mobile(art, args, dict(os.environ, ANDROID_NDK_HOME=android_app.ndk_root()))
     return android_app.package(art, args, ROOT)
+
+
+def ship_ios(art, args):
+    """The signed app bundle: zipped for the Simulator, an .ipa for devices."""
+    import ios_app
+    if not MACOS:
+        sys.exit("ship: --target ios builds on a Mac (Xcode)")
+    if not args.no_build:
+        build_mobile(art, args)
+    return ios_app.package(art, args, ROOT)
 
 
 def ship(art, args):
     if args.target == "android":
         return ship_android(art, args)
+    if args.target == "ios":
+        return ship_ios(art, args)
     build_dir = os.path.join(ROOT, "build", args.preset)
     if not args.no_build:
         run(["cmake", "--preset", args.preset])
@@ -351,10 +370,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("artifact", nargs="?", choices=[*ARTIFACTS, "all"])
     ap.add_argument("--project", help="ship a project directory made by scripts/new_project.py instead")
-    ap.add_argument("--target", choices=["desktop", "android"], default="desktop",
-                    help="android: an APK for arm64 phones (M-MOBILE; needs the Android SDK/NDK and JDK 17)")
-    ap.add_argument("--preset", default=None, help="default: the platform's release preset (android: android-arm64-release)")
-    ap.add_argument("--host-preset", default=default_preset(), help="--target android: the host build whose mce_cook cooks the pack")
+    ap.add_argument("--target", choices=["desktop", "android", "ios"], default="desktop",
+                    help="android: an APK for arm64 phones (M-MOBILE; needs the Android SDK/NDK and JDK 17); "
+                         "ios: an app for the Simulator, or with --preset ios-arm64 a signed .ipa (needs Xcode)")
+    ap.add_argument("--preset", default=None,
+                    help="default: the platform's release preset (android: android-arm64-release, ios: ios-sim-arm64)")
+    ap.add_argument("--host-preset", default=default_preset(), help="--target android/ios: the host build whose mce_cook cooks the pack")
     ap.add_argument("--aab", action="store_true", help="--target android: also build the Play Store bundle (.aab)")
     ap.add_argument("--version", default=None, help="default: <engine version>+<short commit> (the engine's CMake project VERSION)")
     ap.add_argument("--out", default=os.path.join(ROOT, "dist"))
@@ -364,9 +385,9 @@ def main():
     ap.add_argument("--smoke-headless", action="store_true", help="with --smoke: headless run (no display needed)")
     args = ap.parse_args()
     if args.preset is None:
-        args.preset = "android-arm64-release" if args.target == "android" else default_preset()
-    if args.target == "android" and args.project:
-        ap.error("--target android ships the samples for now (projects: M-MOBILE step 9)")
+        args.preset = {"android": "android-arm64-release", "ios": "ios-sim-arm64"}.get(args.target, default_preset())
+    if args.target != "desktop" and args.project:
+        ap.error(f"--target {args.target} ships the samples for now (projects: M-MOBILE step 9)")
     if args.version is None:
         base = "0.0.0"
         with open(os.path.join(ROOT, "CMakeLists.txt")) as f:
