@@ -27,6 +27,17 @@ else()
 endif()
 
 set(MCE_HOST_COOK "" CACHE FILEPATH "Host mce_cook used to cook packs in a cross build (Android/iOS)")
+# Texture storage of the packs this build cooks (mce_cook --textures): phones take ASTC 4x4.
+if(MCE_MOBILE)
+    set(_mce_textures_default astc)
+else()
+    set(_mce_textures_default rgba8)
+endif()
+set(MCE_COOK_TEXTURES "${_mce_textures_default}" CACHE STRING "Texture storage of cooked packs: rgba8 or astc")
+set(MCE_COOK_TEXTURE_ARGS)  # the build-time cooks' extra arguments (samples/CMakeLists.txt, MceProject.cmake)
+if(MCE_COOK_TEXTURES STREQUAL "astc")
+    set(MCE_COOK_TEXTURE_ARGS --textures astc)
+endif()
 
 if(ANDROID)
     set(MCE_SDL_MAIN_HEADER "${CMAKE_CURRENT_LIST_DIR}/mobile/mce_sdl_main.h")

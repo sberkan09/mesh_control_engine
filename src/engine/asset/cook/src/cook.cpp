@@ -88,10 +88,12 @@ struct StageJob {
     const Array<Node>* nodes;
     String cooked_root;
     bool force;
+    TextureCompression textures;
 };
 
-ImportInput input_for(const AssetRecord& rec, const String& disp, const IAssetLookup* lookup) {
+ImportInput input_for(const AssetRecord& rec, const String& disp, const IAssetLookup* lookup, TextureCompression textures) {
     ImportInput in;
+    in.texture_compression = textures;
     in.guid = rec.guid;
     in.display_path = disp;
     in.source_path = rec.source_path;
@@ -110,7 +112,7 @@ void run_stage(void* ctx) {
     // Cache check: source, settings, importer, tool version and every dependency's output hash.
     if (!job.force && prev && prev->source_hash == rec.source_hash && prev->settings_hash == rec.settings_hash &&
         prev->importer_id == fnv1a64(rec.importer->id()) && prev->importer_version == rec.importer->version() &&
-        prev->tool_version == kCookToolVersion && prev->deps.size() == n.deps.size() &&
+        prev->tool_version == cook_tool_version(job.textures) && prev->deps.size() == n.deps.size() &&
         fs::exists(path_join(job.cooked_root, output_rel_path(rec.guid, prev->output_hash)))) {
         bool deps_same = true;
         for (usize i = 0; i < n.deps.size() && deps_same; ++i) {
@@ -126,7 +128,7 @@ void run_stage(void* ctx) {
 
     const String disp = display(rec);
     asset::ContainerWriter writer;
-    if (!rec.importer->cook(input_for(rec, disp, job.lookup), writer, n.diags)) {
+    if (!rec.importer->cook(input_for(rec, disp, job.lookup, job.textures), writer, n.diags)) {
         if (n.diags.error_count() == 0) n.diags.error(Errc::ImportFailed, disp, 0, 0, "cook.stage", "importer failed");
         n.status = AssetStatus::Failed;
         return;
@@ -224,7 +226,7 @@ CookReport CookService::cook(StringView project_root, const CookOptions& opt) {
     for (u32 i = 0; i < nodes.size(); ++i) {
         AssetRecord& rec = *nodes[i].rec;
         const String disp = display(rec);
-        rec.importer->scan_dependencies(input_for(rec, disp, &lookup), rec.deps, report.diags);
+        rec.importer->scan_dependencies(input_for(rec, disp, &lookup, opt.textures), rec.deps, report.diags);
         for (const DepRef& d : rec.deps) {
             const u32* target = node_of.find(d.guid);
             if (const ChunkType* bt = target ? nullptr : base.find(d.guid)) {
@@ -319,7 +321,7 @@ CookReport CookService::cook(StringView project_root, const CookOptions& opt) {
                 node.status = AssetStatus::Blocked;
                 continue;
             }
-            jobs_storage.push_back(StageJob{&node, &registry, &lookup, &db, &nodes, cooked_root, opt.force});
+            jobs_storage.push_back(StageJob{&node, &registry, &lookup, &db, &nodes, cooked_root, opt.force, opt.textures});
         }
         for (usize j = first_job; j < jobs_storage.size(); ++j) jobs::run(&run_stage, &jobs_storage[j], &counter);
         jobs::wait_for(&counter);
@@ -360,7 +362,7 @@ CookReport CookService::cook(StringView project_root, const CookOptions& opt) {
                 r.settings_hash = rec.settings_hash;
                 r.importer_id = fnv1a64(rec.importer->id());
                 r.importer_version = rec.importer->version();
-                r.tool_version = kCookToolVersion;
+                r.tool_version = cook_tool_version(opt.textures);
                 r.output_hash = node.output_hash;
                 r.type = rec.importer->type();
                 r.source_path = rec.source_path;

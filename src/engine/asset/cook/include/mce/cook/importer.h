@@ -42,6 +42,10 @@ protected:
     ~IAssetLookup() = default;
 };
 
+// How texture importers store color data (CookOptions::textures; M-MOBILE step 8): RGBA8 for
+// desktops, ASTC 4x4 blocks for phones (a quarter of the memory and bandwidth).
+enum class TextureCompression : u8 { None, Astc4x4 };
+
 struct ImportInput {
     Guid guid;
     StringView display_path;   // "assets/textures/hero.png" — diagnostics only, never cooked
@@ -50,6 +54,7 @@ struct ImportInput {
     JsonValue settings;        // interchange: sidecar "settings" (may be invalid = none);
                                // native: the parsed document root
     const IAssetLookup* lookup = nullptr;
+    TextureCompression texture_compression = TextureCompression::None;
 };
 
 class IImporter {

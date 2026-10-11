@@ -44,6 +44,9 @@ WALLS = [
          "src/engine/asset/cook/src/shader_importer.cpp"],
         ["src/", "samples/", "games/", "tests/", "tools/"],
     ),
+    # astc-encoder (M-MOBILE step 8) is cook-time only: the texture importer writes ASTC blocks, runtimes upload them.
+    ("astcenc wall", re.compile(r"[<\"]astcenc\.h|\bastcenc_\w+\("), ["src/engine/asset/cook/src/texture_importer.cpp"],
+     ["src/", "samples/", "games/", "tests/", "tools/"]),
     ("ImGui wall", re.compile(r"\bImGui(::|zmo)|[<\"]imgui"), ["src/editor/layer/"], ["src/", "samples/", "games/"]),
     ("JPH wall", re.compile(r"\bJPH::|[<\"]Jolt/"), ["src/engine/physics3d/"], ["src/", "samples/", "games/", "tests/"]),
     ("Box2D wall", re.compile(r"\bb2[A-Z]\w*|[<\"]box2d/"), ["tests/physics2d/oracle/"], ["src/", "samples/", "games/", "tests/", "tools/"]),

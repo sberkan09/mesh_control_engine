@@ -302,8 +302,13 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     MCE_ASSERT_MSG(scene.built(), "Forward3D::record: scene not built");
     MCE_ASSERT_MSG(!cmd.in_pass(), "Forward3D::record inside a pass");
     stats_ = {};
-    const rhi::Extent2D size = scene.view().viewport;
-    if (size.width == 0 || size.height == 0) return;
+    const rhi::Extent2D view = scene.view().viewport;
+    if (view.width == 0 || view.height == 0) return;
+    // Render scale (quality.h): the 3D targets shrink; the tonemap/FXAA pass writes the full target.
+    const f32 scale = clamp(desc_.render_scale, 0.5f, 1.0f);
+    const rhi::Extent2D size = scale >= 1.0f ? view
+                                              : rhi::Extent2D{max(1u, static_cast<u32>(f32(view.width) * scale + 0.5f)),
+                                                              max(1u, static_cast<u32>(f32(view.height) * scale + 0.5f))};
     ensure_targets(size);
     // The joint palette stays bound for the shadow and main passes (one copy per frame).
     const Span<const mat4> palette = scene.joint_palette();
@@ -573,7 +578,8 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     fullscreen(fxaa ? ldr_ : target, rhi::LoadOp::DontCare, "tonemap");
     cmd.bind_pipeline(tonemap_);
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
-    cmd.bind_texture(rhi::bank::kAlbedo, hdr_, point_sampler_);
+    // 1:1 reads texel-exact; a scaled frame is upsampled bilinearly.
+    cmd.bind_texture(rhi::bank::kAlbedo, hdr_, desc_.render_scale >= 1.0f ? point_sampler_ : linear_clamp_);
     cmd.bind_texture(rhi::bank::kNormal, bloom ? bloom_[0] : hdr_, linear_clamp_);
     cmd.draw_non_indexed(3);
     cmd.end_pass();

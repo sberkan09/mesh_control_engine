@@ -18,7 +18,7 @@ a device or simulator run on the user's Mac.
 | 5 | App lifecycle (FR-RUN-100): background/foreground events, sim and audio pause, autosave on background, GPU surface loss and recreation, orientation and safe-area insets exposed to `mce_ui` | `local_ci.sh` (synthetic lifecycle events) | done (surface loss: device, step 6) |
 | 6 | Android: `android-arm64` presets (NDK toolchain), SDL's Java activity, Gradle wrapper project stamped by `scripts/ship.py --target android`, APK/AAB with the cooked pack in assets | emulator + a device, on the Mac | done on the emulator (no device attached) |
 | 7 | iOS: `ios-arm64` / `ios-sim-arm64` presets, Xcode project generation, the statically linked game module (`MCE_PROJECT_STATIC_MODULE`), signing, IPA from `scripts/ship.py --target ios` | simulator + a device, on the Mac | done in the Simulator (no device; Ninja app bundles instead of an Xcode project) |
-| 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | — |
+| 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | done except the per-tier device numbers (no device) |
 | 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | — |
 | 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | — |
 
@@ -32,7 +32,7 @@ a device or simulator run on the user's Mac.
 | Tests | `tests/rhi_sdlgpu`, `test_render_sdlgpu` | `test_rhi_sdlgpu` (the `test_rhi_gl` cases) and all 20 `test_render_gl` cases (2D batches, MDI, text, tilemaps, 3D forward+, cascaded shadows, MSAA resolve, tonemap, skinning) pass on lavapipe |
 | Samples | `04_diorama`, `05_ashen_court` with `MCE_RHI=sdlgpu` | 60/30-frame captures differ from GL's in 0.09 % / 0.13 % of pixels (edge rasterization), screenshots in the project files (`m-mobile/`) |
 
-**Gaps (reported, not faked):** no GPU timestamps (`caps().timestamp_queries == false`; the profiler's GPU column reads −1); `bind_storage_buffer` ignores a non-zero offset (no engine code uses one); `validation_error_count()` stays 0 because SDL exposes no validation callback; BC textures are rejected where the GPU lacks them (phones) until the ASTC cook profile (step 8); every frame ends with one full-screen blit from the offscreen backbuffer to the swapchain.
+**Gaps (reported, not faked):** no GPU timestamps (`caps().timestamp_queries == false`; the profiler's GPU column reads −1); `bind_storage_buffer` ignores a non-zero offset (no engine code uses one); `validation_error_count()` stays 0 because SDL exposes no validation callback; BC textures are rejected where the GPU lacks them (phones; the cook writes RGBA8 or, for phones, ASTC since step 8); every frame ends with one full-screen blit from the offscreen backbuffer to the swapchain.
 
 ## What shipped (steps 4–5)
 
@@ -84,6 +84,20 @@ Simulator results: Ember Step (2.7 MB zipped app) and the 3D diorama render corr
 files, `ios-sim-diorama-*.png`). Not done: a physical iPhone (none attached, and a device build needs Sami's signing identity
 and a provisioning profile), audio on the Simulator (its audio server never answered on this Mac; macOS audio is
 fine).
+
+## What shipped (step 8, mobile budgets)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Quality tiers | `render/quality.h` (`QualityTier`, `quality_settings`, `apply_quality`), `r.quality` | Low / Medium / High set MSAA (1/2/4x), shadow map size (1024/1024/2048), cascades (1/2/3), bloom, FXAA and render scale (0.67/0.85/1.0); `auto` is Medium on Android/iOS and High elsewhere, so desktop output is unchanged. `04_diorama` and `05_ashen_court` take it (`r.msaa 0` = the tier's) |
+| Render scale | `Forward3DDesc::render_scale`, `forward3d.cpp` | the 3D targets (HDR, depth, bloom chain) shrink; the tonemap/FXAA pass samples bilinearly into the full-size target, so 2D and UI drawn afterwards stay sharp |
+| MSAA fallback | `rhi_sdlgpu` `create_texture` | a sample count the GPU lacks (the iOS Simulator has no 2x) falls back to the nearest it has, with a warning; pipelines follow the target |
+| ASTC textures | `mce_cook --textures astc`, `texture_importer.cpp` (astc-encoder 5.6.0, no-SIMD build with FP invariance), `asset::TextureFormat::ASTC_4x4`, `rhi` `ASTC_4x4_UNorm/SRGB` | phone builds cook ASTC 4x4 by default (`MCE_COOK_TEXTURES`); the texture storage is part of the cook DB key, so switching re-cooks; `test_cook` checks block sizes, the re-cook and byte-identical re-cooks. The diorama pack drops from 1.53 MB to 0.50 MB and renders the same in the Simulator and the emulator |
+
+**Numbers per tier: not measured on hardware.** On the emulator (MoltenVK on Apple M4) and the Simulator every tier
+holds 60 fps because both present with vsync and the host GPU has headroom; `mce_rhi_sdlgpu` has no GPU timestamps
+(step 3 gap), and thermal and battery figures need a phone. The tier table above is the budget lever; filling in
+frame/thermal/battery numbers per tier waits for a device on the Mac (the one open item of this step).
 
 ## Constraints found so far
 

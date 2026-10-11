@@ -1,4 +1,6 @@
-// PNG/JPG -> CHNK_TEX, RGBA8 with a box-filtered mip chain (assets.md §5.2; BCn is v0.5).
+// PNG/JPG -> CHNK_TEX, RGBA8 with a box-filtered mip chain (assets.md §5.2; BCn is v0.5). Phone
+// cooks (ImportInput::texture_compression, mce_cook --textures astc) store every level as ASTC 4x4
+// blocks instead, encoded from the same RGBA8 chain (astc-encoder, medium quality, one thread).
 //
 // sidecar settings: { "srgb": true, "mips": true }
 //   srgb  color data is sRGB-encoded: mips are averaged in linear space and the chunk carries the
@@ -7,6 +9,8 @@
 
 #include <cmath>
 #include <cstring>
+
+#include <astcenc.h>
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
@@ -67,6 +71,17 @@ void downsample(const u8* src, u32 sw, u32 sh, u8* dst, u32 dw, u32 dh, bool is_
     }
 }
 
+// One RGBA8 level -> ASTC 4x4 blocks with an already configured context. False on an encoder error.
+bool encode_astc(astcenc_context* ctx, const u8* rgba, u32 w, u32 h, Array<u8>& out) {
+    out.resize_uninitialized(static_cast<usize>(asset::texture_level_bytes(asset::TextureFormat::ASTC_4x4, w, h)));
+    void* slices[1] = {const_cast<u8*>(rgba)};  // astcenc reads only
+    astcenc_image img{w, h, 1, ASTCENC_TYPE_U8, slices};
+    const astcenc_swizzle swz{ASTCENC_SWZ_R, ASTCENC_SWZ_G, ASTCENC_SWZ_B, ASTCENC_SWZ_A};
+    const astcenc_error e = astcenc_compress_image(ctx, &img, &swz, out.data(), out.size(), 0);
+    astcenc_compress_reset(ctx);
+    return e == ASTCENC_SUCCESS;
+}
+
 class TextureImporter final : public IImporter {
 public:
     StringView id() const override { return "texture"; }
@@ -125,7 +140,39 @@ public:
         }
         cw = static_cast<u32>(w);
         ch = static_cast<u32>(h);
+        const bool astc = in.texture_compression == TextureCompression::Astc4x4;
+        Array<Array<u8>> blocks;  // per level, when encoding ASTC
+        if (astc) {
+            astcenc_config cfg;
+            astcenc_context* ctx = nullptr;
+            if (astcenc_config_init(is_srgb ? ASTCENC_PRF_LDR_SRGB : ASTCENC_PRF_LDR, 4, 4, 1, ASTCENC_PRE_MEDIUM, 0, &cfg) !=
+                    ASTCENC_SUCCESS ||
+                astcenc_context_alloc(&cfg, 1, &ctx, nullptr) != ASTCENC_SUCCESS) {
+                diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, "ASTC encoder setup failed");
+                return false;
+            }
+            blocks.resize(offsets.size());
+            u32 lw = cw, lh = ch;
+            bool ok = true;
+            for (usize i = 0; i < offsets.size() && ok; ++i) {
+                ok = encode_astc(ctx, levels.data() + offsets[i], lw, lh, blocks[i]);
+                lw = lw > 1 ? lw / 2 : 1;
+                lh = lh > 1 ? lh / 2 : 1;
+            }
+            astcenc_context_free(ctx);
+            if (!ok) {
+                diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, "ASTC encoding failed");
+                return false;
+            }
+        }
         for (usize i = 0; i < offsets.size(); ++i) {
+            if (astc) {
+                const Span<const byte> bytes(reinterpret_cast<const byte*>(blocks[i].data()), blocks[i].size());
+                mip_data.push_back(asset::TextureMipData{cw, ch, bytes});
+                cw = cw > 1 ? cw / 2 : 1;
+                ch = ch > 1 ? ch / 2 : 1;
+                continue;
+            }
             const usize bytes = static_cast<usize>(cw) * ch * 4;
             mip_data.push_back(asset::TextureMipData{cw, ch, Span<const byte>(reinterpret_cast<const byte*>(levels.data() + offsets[i]), bytes)});
             cw = cw > 1 ? cw / 2 : 1;
@@ -133,11 +180,12 @@ public:
         }
 
         Array<byte> payload;
-        asset::write_texture(asset::TextureFormat::RGBA8, 1, is_srgb ? asset::TextureFlags::Srgb : 0u, mip_data.span(), payload);
+        const asset::TextureFormat format = astc ? asset::TextureFormat::ASTC_4x4 : asset::TextureFormat::RGBA8;
+        asset::write_texture(format, 1, is_srgb ? asset::TextureFlags::Srgb : 0u, mip_data.span(), payload);
         asset::ContainerWriter::ChunkDesc d;
         d.type = ChunkType::Texture;
         d.version = asset::chunk_version(asset::TEXTURE_VERSION, 0);
-        d.user_flags = static_cast<u32>(asset::TextureFormat::RGBA8);
+        d.user_flags = static_cast<u32>(format);
         d.guid = in.guid;
         out.add(d, payload.span());
         return true;

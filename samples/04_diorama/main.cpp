@@ -22,6 +22,7 @@
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
+#include "mce/render/quality.h"
 #include "mce/render/renderer.h"
 #include "mce/rhi/default_device.h"
 #include "ship_paths.h"
@@ -38,7 +39,7 @@ MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this
 MCE_CVAR(cv_ticks, "ticks", 300, "Headless: ticks to simulate", CVarFlags::None);
 MCE_CVAR(cv_pack, "pack", "", "Cooked pack to mount (default: assets.mce next to the executable)", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
-MCE_CVAR(cv_msaa, "r.msaa", 4, "3D MSAA samples (1 = off)", CVarFlags::RequiresRestart);
+MCE_CVAR(cv_msaa, "r.msaa", 0, "3D MSAA samples (1 = off, 0 = the r.quality tier's)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_yaw, "cam.yaw", 0.6f, "Initial orbit yaw (radians)", CVarFlags::None);
 MCE_CVAR(cv_pitch, "cam.pitch", 0.62f, "Initial orbit pitch (radians, down from the horizon)", CVarFlags::None);
 MCE_CVAR(cv_dist, "cam.dist", 17.0f, "Initial orbit distance (meters)", CVarFlags::None);
@@ -161,7 +162,10 @@ public:
         if (device_) {
             MCE_TRY(renderer_.init(*device_));
             Forward3DDesc fd;
-            fd.msaa = static_cast<u32>(math::clamp<i64>(cv_msaa.get_int(), 1, 8));
+            apply_quality(quality_, fd);
+            if (cv_msaa.get_int() > 0) fd.msaa = static_cast<u32>(math::clamp<i64>(cv_msaa.get_int(), 1, 8));
+            MCE_LOG_INFO("04_diorama: quality {} (MSAA {}x, shadows {} px, render scale {:.2f})", quality_tier_name(quality_tier()),
+                         fd.msaa, fd.shadow_size, static_cast<double>(fd.render_scale));
             MCE_TRY(renderer_.init_3d(fd));
             assets_.set_upload_sink(&sink_);
             meshes_ = &renderer_.meshes();
@@ -335,6 +339,11 @@ private:
     void fill_scene(Scene3D& scene, f32 alpha, rhi::Extent2D viewport) {
         const f32 t = math::lerp(prev_time_, time_, alpha);
         scene.begin(camera(alpha), viewport);
+        ShadowSettings shadows;
+        PostFx post;
+        apply_quality(quality_, shadows, post);
+        scene.set_shadows(shadows);
+        scene.set_post(post);
         DirectionalLight sun;
         sun.direction = normalize(vec3{-0.6f, -0.85f, -0.4f});
         sun.color = {1.0f, 0.96f, 0.88f};
@@ -485,6 +494,7 @@ private:
     platform::Window* window_;
     rhi::RenderDevice* device_;
     Renderer renderer_;
+    QualitySettings quality_ = quality_settings(quality_tier());  // r.quality (render/quality.h)
     asset::AssetSystem assets_;
     AssetUploadSink sink_;
     MeshStore cpu_meshes_;

@@ -102,7 +102,12 @@ struct CookOptions {
     // Packs (or cooked dirs) this project builds on, added to a mod.json's "base" (ADR-0034):
     // references may name their assets, and a project asset with one of their GUIDs overrides it.
     Array<String> base_packs;
+    // Texture storage (mce_cook --textures astc): the phone builds cook ASTC 4x4. Part of the re-cook key.
+    TextureCompression textures = TextureCompression::None;
 };
+
+// The cook DB's tool version for these options: a different texture compression re-cooks.
+inline u32 cook_tool_version(TextureCompression textures) { return kCookToolVersion | (u32(textures) << 16); }
 
 class CookService {
 public:

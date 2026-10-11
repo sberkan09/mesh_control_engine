@@ -21,7 +21,7 @@ function(mce_sample_pack target)
         OUTPUT "${pack}"
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${project_dir}/assets"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${project_dir}/assets"
-        COMMAND ${cook} "${project_dir}" --pack --quiet
+        COMMAND ${cook} "${project_dir}" --pack --quiet ${MCE_COOK_TEXTURE_ARGS}
         DEPENDS ${cook_dep} ${sources}
         COMMENT "Cooking ${target} content"
         VERBATIM)
