@@ -78,6 +78,7 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/scripts/new_project.py" DESTINATION ${CM
 file(WRITE "${PROJECT_BINARY_DIR}/sdk/VERSION" "${PROJECT_VERSION}\n${MCE_ENGINE_DESCRIBE}\n")
 install(FILES "${PROJECT_BINARY_DIR}/sdk/VERSION" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce.py" DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME mce)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/install.sh" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce)  # mce update (release installs)
 
 # The example project (`mce example Kindle` copies it out): sources and content, no build outputs.
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/projects/Kindle" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/examples
