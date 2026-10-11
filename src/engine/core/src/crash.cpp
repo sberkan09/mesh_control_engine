@@ -19,7 +19,11 @@
 #include <dbghelp.h>
 #else
 #include <dlfcn.h>
+#if defined(__ANDROID__)
+#include <unwind.h>  // bionic declares backtrace() only from API 33; the unwinder is always there
+#else
 #include <execinfo.h>
+#endif
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/stat.h>
@@ -402,6 +406,31 @@ int put_module(dl_phdr_info* info, size_t, void* user) {
 void put_modules(Out& o) { dl_iterate_phdr(&put_module, &o); }
 #else
 void put_modules(Out&) {}  // no portable module list on other POSIX systems
+#endif
+
+#if defined(__ANDROID__)
+struct UnwindState {
+    void** frames;
+    int max;
+    int n;
+};
+
+_Unwind_Reason_Code unwind_frame(_Unwind_Context* ctx, void* user) {
+    auto* st = static_cast<UnwindState*>(user);
+    const uintptr_t pc = _Unwind_GetIP(ctx);
+    if (pc != 0) {
+        if (st->n >= st->max) return _URC_END_OF_STACK;
+        st->frames[st->n++] = reinterpret_cast<void*>(pc);
+    }
+    return _URC_NO_REASON;
+}
+
+// execinfo's backtrace() over the unwinder: same contract (return addresses, innermost first).
+int backtrace(void** frames, int max) {
+    UnwindState st{frames, max, 0};
+    _Unwind_Backtrace(&unwind_frame, &st);
+    return st.n;
+}
 #endif
 
 void put_frame(Out& o, usize index, u64 pc) {
