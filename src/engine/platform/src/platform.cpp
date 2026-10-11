@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cstring>
 
 #include "internal.h"
 #include "mce/app.h"
@@ -15,6 +16,9 @@ namespace {
 MCE_CVAR(cv_video_driver, "platform.video_driver", "", "SDL video driver override (dummy, offscreen, x11, ...)",
          CVarFlags::RequiresRestart);
 MCE_CVAR(cv_error_box, "platform.error_box", true, "Show a message box on boot failure", CVarFlags::None);
+MCE_CVAR(cv_orientations, "platform.orientations", "LandscapeLeft LandscapeRight",
+         "Phones: allowed screen orientations (SDL_HINT_ORIENTATIONS: LandscapeLeft LandscapeRight Portrait PortraitUpsideDown)",
+         CVarFlags::RequiresRestart);
 
 constexpr u32 kMaxWindows = 8;
 
@@ -170,6 +174,11 @@ ResultV init(const PlatformDesc& desc) {
     // its pointer from either (ui::apply_touch_pointer).
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
     SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
+#if defined(SDL_PLATFORM_ANDROID) || defined(SDL_PLATFORM_IOS)
+    // Phones: games run landscape (either way up) unless the convar says otherwise. Without the
+    // hint SDL derives the orientation from the window's aspect and resizability.
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, cv_orientations.get_string().data());
+#endif
     // The engine owns its quit policy: closing the last window still quits (SDL default).
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         MCE_LOG_ERROR("platform: SDL_Init failed: {}", SDL_GetError());
@@ -197,9 +206,89 @@ void shutdown() {
 
 bool is_initialized() { return g_state.initialized; }
 
+#if defined(SDL_PLATFORM_ANDROID)
+namespace {
+
+// Copies the APK asset `name` to `dest` through SDL's asset-aware IO.
+bool extract_asset(const char* name, const char* dest) {
+    SDL_IOStream* in = SDL_IOFromFile(name, "rb");
+    if (!in) return false;
+    SDL_IOStream* out = SDL_IOFromFile(dest, "wb");
+    bool ok = out != nullptr;
+    static char buf[1 << 16];
+    while (ok) {
+        const size_t n = SDL_ReadIO(in, buf, sizeof(buf));
+        if (n == 0) break;
+        ok = SDL_WriteIO(out, buf, n) == n;
+    }
+    ok = ok && SDL_GetIOStatus(in) == SDL_IO_STATUS_EOF;
+    SDL_CloseIO(in);
+    if (out && !SDL_CloseIO(out)) ok = false;
+    return ok;
+}
+
+// The APK's assets are not files, but the pack is mounted (and memory-mapped) from a path.
+// scripts/ship.py --target android lists the bundled files in the asset mce_bundle.txt ("<name> <size>"
+// per line, '#' starts a comment); the first call copies each into the app's internal storage, again
+// whenever the list differs from the copy kept there (an app update), and returns that directory. The
+// shipped-file lookups (the pack beside the executable, FR-SHP-010) then work unchanged.
+const char* android_bundle_dir() {
+    static FixedString<1024> dir;
+    static bool done = false;
+    if (done) return dir.c_str();
+    done = true;
+    const char* internal = SDL_GetAndroidInternalStoragePath();
+    if (!internal) return "";
+    dir.append(internal);
+    dir.append("/bundle/");
+    size_t list_size = 0;
+    char* list = static_cast<char*>(SDL_LoadFile("mce_bundle.txt", &list_size));
+    if (!list) return dir.c_str();  // nothing bundled (a dev build pushed by hand)
+    FixedString<1100> stamp(dir);
+    stamp.append("mce_bundle.txt");
+    size_t old_size = 0;
+    char* old = static_cast<char*>(SDL_LoadFile(stamp.c_str(), &old_size));
+    const bool fresh = old && old_size == list_size && std::memcmp(old, list, list_size) == 0;
+    SDL_free(old);
+    if (!fresh) {
+        SDL_CreateDirectory(dir.c_str());
+        bool ok = true;
+        const char* line = list;
+        const char* end = list + list_size;
+        while (line < end) {
+            const char* eol = static_cast<const char*>(std::memchr(line, '\n', static_cast<size_t>(end - line)));
+            if (!eol) eol = end;
+            const char* sp = static_cast<const char*>(std::memchr(line, ' ', static_cast<size_t>(eol - line)));
+            if (sp && sp > line && *line != '#') {
+                const FixedString<256> name(StringView(line, static_cast<usize>(sp - line)));
+                FixedString<1300> dest(dir);
+                dest.append(name.view());
+                if (!extract_asset(name.c_str(), dest.c_str())) {
+                    MCE_LOG_ERROR("platform: cannot extract bundled '{}': {}", name.view(), SDL_GetError());
+                    ok = false;
+                }
+            }
+            line = eol + 1;
+        }
+        // The stamp last: an interrupted extraction is redone on the next launch.
+        if (ok && !SDL_SaveFile(stamp.c_str(), list, list_size))
+            MCE_LOG_WARN("platform: cannot write {}: {}", stamp.view(), SDL_GetError());
+        MCE_LOG_INFO("platform: extracted the bundled files to {}", dir.view());
+    }
+    SDL_free(list);
+    return dir.c_str();
+}
+
+}  // namespace
+#endif
+
 const char* base_path() {
+#if defined(SDL_PLATFORM_ANDROID)
+    return android_bundle_dir();
+#else
     const char* p = SDL_GetBasePath();  // owned and cached by SDL
     return p ? p : "";
+#endif
 }
 
 void list_files(StringView dir, Array<FixedString<256>>& out) {

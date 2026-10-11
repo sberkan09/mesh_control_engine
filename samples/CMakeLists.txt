@@ -8,12 +8,21 @@ function(mce_sample_pack target)
     set(project_dir "${CMAKE_CURRENT_BINARY_DIR}/project")
     set(pack "${project_dir}/assets.mce")
     file(GLOB_RECURSE sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/*")
+    if(TARGET mce_cook)
+        set(cook $<TARGET_FILE:mce_cook>)
+        set(cook_dep mce_cook)
+    elseif(MCE_HOST_COOK)
+        set(cook "${MCE_HOST_COOK}")  # cross build (cmake/MceMobile.cmake): the host's cook
+        set(cook_dep "${MCE_HOST_COOK}")
+    else()
+        message(FATAL_ERROR "${target}: a cross build needs -DMCE_HOST_COOK=<host mce_cook> to cook its pack")
+    endif()
     add_custom_command(
         OUTPUT "${pack}"
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${project_dir}/assets"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${project_dir}/assets"
-        COMMAND $<TARGET_FILE:mce_cook> "${project_dir}" --pack --quiet
-        DEPENDS mce_cook ${sources}
+        COMMAND ${cook} "${project_dir}" --pack --quiet
+        DEPENDS ${cook_dep} ${sources}
         COMMENT "Cooking ${target} content"
         VERBATIM)
     add_custom_target(${target}_content DEPENDS "${pack}")
@@ -21,6 +30,13 @@ function(mce_sample_pack target)
     target_compile_definitions(${target} PRIVATE MCE_SAMPLE_DEV_PACK="${pack}")
     set_target_properties(${target} PROPERTIES MCE_SAMPLE_PACK "${pack}")
 endfunction()
+if(MCE_MOBILE)
+    # Phones (M-MOBILE): the windowed samples that ship as apps; headless and tool demos stay desktop.
+    foreach(_sample 01_triangle sprites_2d 03_platformer 04_diorama 04_cubes 05_ashen_court)
+        add_subdirectory(${_sample})
+    endforeach()
+    return()
+endif()
 add_subdirectory(01_triangle)
 add_subdirectory(02_boids)
 add_subdirectory(physics2d_headless)

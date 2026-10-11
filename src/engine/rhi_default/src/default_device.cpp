@@ -1,6 +1,8 @@
 #include "mce/rhi/default_device.h"
 
-#if defined(__APPLE__)
+#if defined(MCE_RHI_SDLGPU_ONLY)
+// Android/iOS (ADR-0038): mce_rhi_sdlgpu is the only backend.
+#elif defined(__APPLE__)
 #include "mce/rhi_metal/metal_device.h"
 #else
 #include "mce/rhi_gl/gl_device.h"
@@ -19,7 +21,9 @@ Result<mem::UniquePtr<RenderDevice>> create_default_device(platform::Window& win
         return Error(Errc::Unsupported, "rhi.default", "MCE_RHI=sdlgpu, but this build has no mce_rhi_sdlgpu");
 #endif
     }
-#if defined(__APPLE__)
+#if defined(MCE_RHI_SDLGPU_ONLY)
+    return sdlgpu::create_device(window, desc);
+#elif defined(__APPLE__)
     return metal::create_device(window, desc);
 #else
     return gl::create_device(window, desc);

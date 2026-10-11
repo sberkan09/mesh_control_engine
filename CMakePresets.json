@@ -66,7 +66,21 @@
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=undefined",
         "CMAKE_MODULE_LINKER_FLAGS": "-fsanitize=undefined"
       }
-    }
+    },
+    {
+      "name": "android-base",
+      "hidden": true,
+      "inherits": "base",
+      "description": "M-MOBILE: Android arm64 (NDK r28+, ANDROID_NDK_HOME), Vulkan through mce_rhi_sdlgpu; packs cooked by the host's mce_cook (MCE_HOST_COOK, scripts/ship.py --target android)",
+      "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "ANDROID_ABI": "arm64-v8a", "ANDROID_PLATFORM": "android-29", "ANDROID_STL": "c++_static",
+        "MCE_BUILD_TESTS": "OFF", "MCE_BUILD_EDITOR": "OFF", "MCE_BUILD_PROJECTS": "OFF", "MCE_TEMPLATE_PROBE": "OFF",
+        "MCE_WITH_NET": "OFF", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "ON"
+      }
+    },
+    { "name": "android-arm64-debug", "displayName": "Android arm64 Debug (NDK, Vulkan)", "inherits": "android-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "android-arm64-release", "displayName": "Android arm64 Release (NDK, Vulkan)", "inherits": "android-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" } }
   ],
   "buildPresets": [
     { "name": "msvc-debug",          "configurePreset": "msvc-debug" },
@@ -80,7 +94,9 @@
     { "name": "linux-asan",          "configurePreset": "linux-asan" },
     { "name": "macos-debug",         "configurePreset": "macos-debug" },
     { "name": "macos-release",       "configurePreset": "macos-release" },
-    { "name": "macos-asan",          "configurePreset": "macos-asan" }
+    { "name": "macos-asan",          "configurePreset": "macos-asan" },
+    { "name": "android-arm64-debug",   "configurePreset": "android-arm64-debug" },
+    { "name": "android-arm64-release", "configurePreset": "android-arm64-release" }
   ],
   "testPresets": [
     { "name": "msvc-debug",          "configurePreset": "msvc-debug",          "output": { "outputOnFailure": true } },

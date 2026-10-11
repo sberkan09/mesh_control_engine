@@ -15,8 +15,12 @@
 #   determinism           scripts/ci/determinism.py, Debug vs Release hashes on this Mac (ADR-0007)
 #   ship                  scripts/ship.py platformer on macos-release: the signed .app bundle
 #                         (cmake/macos/macos_bundle.py), codesign --verify, a 60-frame smoke run
+#   android               (on request only, M-MOBILE) scripts/ship.py platformer + diorama --target android:
+#                         the APKs, and a 300-frame smoke run on the emulator/device adb sees, if any
+#                         (start the emulator with -gpu host: SwiftShader hangs in present)
 #
-# Deps: Xcode (Metal framework), cmake >= 3.28, ninja, python3. Bash 3.2 compatible (macOS /bin/bash).
+# Deps: Xcode (Metal framework), cmake >= 3.28, ninja, python3 (android: the Android SDK + NDK, JDK 17).
+# Bash 3.2 compatible (macOS /bin/bash).
 # Exit code 0 only if every selected stage passed. A summary table is printed at the end.
 
 set -uo pipefail
@@ -30,7 +34,7 @@ stages=""
 for arg in "$@"; do
     case "$arg" in
         --quick) stages="$stages walls macos-debug" ;;
-        -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
         *) stages="$stages $arg" ;;
     esac
 done
@@ -141,6 +145,18 @@ stage_determinism() {
     [[ "$hd" == "$hr" ]]
 }
 
+stage_android() {
+    local out="$LOG_DIR/android" smoke="" adb="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb"
+    rm -rf "$out"
+    if [[ -x "$adb" ]] && "$adb" devices | sed 1d | grep -q 'device$'; then
+        smoke="--smoke"
+    else
+        echo "android: no emulator or device attached, building the APKs only"
+    fi
+    python3 scripts/ship.py platformer --target android --out "$out" $smoke &&
+        python3 scripts/ship.py diorama --target android --out "$out" $smoke
+}
+
 stage_ship() {
     local out="$LOG_DIR/dist"
     rm -rf "$out"
@@ -158,7 +174,8 @@ run_stage() {
         samples) stage_samples ;;
         determinism) stage_determinism ;;
         ship) stage_ship ;;
-        *) echo "unknown stage: $1 (known: $ALL_STAGES)"; return 2 ;;
+        android) stage_android ;;
+        *) echo "unknown stage: $1 (known: $ALL_STAGES android)"; return 2 ;;
     esac
 }
 

@@ -561,6 +561,18 @@ FixedString<512> default_dump_dir(StringView app_name) {
 #if defined(_WIN32)
     const char* base = std::getenv("LOCALAPPDATA");
     r.assign(base ? base : ".");
+#elif defined(__ANDROID__)
+    // An app has no HOME: its private files directory, from the package name in /proc/self/cmdline.
+    char pkg[256] = {};
+    const int fd = ::open("/proc/self/cmdline", O_RDONLY | O_CLOEXEC);
+    if (fd >= 0) {
+        const ssize_t n = ::read(fd, pkg, sizeof(pkg) - 1);
+        pkg[n > 0 ? n : 0] = '\0';
+        ::close(fd);
+    }
+    r.assign("/data/data/");
+    r.append(pkg);
+    r.append("/files");
 #else
     const char* xdg = std::getenv("XDG_DATA_HOME");
     const char* home = std::getenv("HOME");
