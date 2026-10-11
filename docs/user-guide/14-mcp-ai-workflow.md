@@ -18,7 +18,8 @@ mce mcp MyGame                                      # the SDK: the line above wi
 ```
 
 The server speaks JSON-RPC 2.0 over stdin and stdout, one message per line (the MCP stdio
-transport); it opens no socket. Use the **project's** server or the stock one **with the module**:
+transport); it opens no socket. Stdout carries nothing else: logs go to stderr, and so does the
+command line `mce mcp` prints before it starts the server. Use the **project's** server or the stock one **with the module**:
 without `--module`, `mce_mcp` knows only the engine's components and refuses scenes that use yours.
 After a rebuild that adds components, restart the server.
 
@@ -30,6 +31,9 @@ project root:
     "command": "build/linux-gcc-debug/projects/MyGame/my_game_mcp",
     "args": ["--project", "projects/MyGame"] } } }
 ```
+
+With the SDK, `"command": "mce", "args": ["mcp", "/path/to/MyGame"]` (or the full path to
+`<sdk>/bin/mce` when it is not on `PATH`).
 
 A script can drive it directly: `projects/Kindle/tools/author_level_mcp.py` is a complete
 client (initialize, `notifications/initialized`, then `tools/call` with `{"name", "arguments"}`;
