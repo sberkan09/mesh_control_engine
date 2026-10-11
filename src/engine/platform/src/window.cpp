@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
@@ -102,7 +103,7 @@ SafeInsets Window::safe_insets() const {
         return {};
     // The safe area is in window coordinates; the insets are reported in pixels.
     const f32 density = SDL_GetWindowPixelDensity(sdl(handle_)) > 0.f ? SDL_GetWindowPixelDensity(sdl(handle_)) : 1.f;
-    auto px = [&](int v) { return static_cast<u32>(static_cast<f32>(v > 0 ? v : 0) * density + 0.5f); };
+    auto px = [&](int v) { return static_cast<u32>(std::lround(static_cast<f32>(v > 0 ? v : 0) * density)); };
     return SafeInsets{px(safe.x), px(safe.y), px(w - safe.x - safe.w), px(h - safe.y - safe.h)};
 }
 

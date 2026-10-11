@@ -1,5 +1,6 @@
 #include "mce/input/input_map.h"
 
+#include <cmath>
 #include <cstring>
 
 namespace mce::input {
@@ -166,7 +167,7 @@ InputMapBuilder& InputMapBuilder::gamepad_axis(platform::GamepadAxis a, u8 axis,
 }
 
 namespace {
-u32 zone_byte(f32 v) { return static_cast<u32>(math::clamp(v, 0.f, 1.f) * 255.f + 0.5f); }
+u32 zone_byte(f32 v) { return static_cast<u32>(std::lround(math::clamp(v, 0.f, 1.f) * 255.f)); }
 }  // namespace
 
 u32 pack_touch_zone(const TouchZoneRect& r) {
