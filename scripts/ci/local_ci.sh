@@ -6,7 +6,8 @@
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages
 #
 # Stages: walls, linux-gcc-debug, linux-clang-release, linux-gcc-release, linux-asan, tidy, determinism.
-# GPU tests run under Xvfb + Mesa llvmpipe. Windows/MSVC presets are not covered; build them on a Windows
+# GPU tests run under Xvfb + Mesa llvmpipe (GL) and lavapipe (Vulkan, for mce_rhi_sdlgpu, ADR-0038).
+# Windows/MSVC presets are not covered; build them on a Windows
 # machine when a change touches platform-specific code.
 #
 # Ubuntu 24.04 deps: scripts/ci/setup_env.sh installs them (and ccache).

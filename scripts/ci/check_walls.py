@@ -21,7 +21,7 @@ WALLS = [
     (
         "SDL include wall",
         re.compile(r"[<\"]SDL3/"),
-        ["src/engine/platform/", "src/engine/rhi_gl/", "src/engine/rhi_metal/", "src/editor/layer/"],
+        ["src/engine/platform/", "src/engine/rhi_gl/", "src/engine/rhi_metal/", "src/engine/rhi_sdlgpu/", "src/editor/layer/"],
         ["src/", "samples/", "games/"],
     ),
     ("glad wall", re.compile(r"[<\"]glad/"), ["src/engine/rhi_gl/"], ["src/", "samples/", "games/", "tests/"]),
@@ -32,12 +32,15 @@ WALLS = [
         ["src/engine/rhi_metal/"],
         ["src/", "samples/", "games/", "tests/"],
     ),
+    # SDL GPU (ADR-0038): the API lives in the SDL3 GPU backend alone, the mirror of the GL wall.
+    ("SDL GPU wall", re.compile(r"\bSDL_\w*GPU\w*"), ["src/engine/rhi_sdlgpu/"], ["src/", "samples/", "games/", "tests/"]),
     # The GLSL -> MSL translator (glslang, SPIRV-Cross) is private to the Metal backend; glslang is
-    # also the shader cook's validator, inside the cook library (ADR-0033).
+    # also the shader cook's validator, inside the cook library (ADR-0033), and the SDL GPU
+    # backend's GLSL -> SPIR-V translator (ADR-0038).
     (
         "shader-cross wall",
         re.compile(r"[<\"](glslang|SPIRV)/|[<\"]spirv_\w+\.hpp|\bspirv_cross::|\bglslang::"),
-        ["src/engine/rhi_metal/", "src/engine/asset/cook/src/shader_importer.cpp"],
+        ["src/engine/rhi_metal/", "src/engine/rhi_sdlgpu/src/shader_spirv.cpp", "src/engine/asset/cook/src/shader_importer.cpp"],
         ["src/", "samples/", "games/", "tests/", "tools/"],
     ),
     ("ImGui wall", re.compile(r"\bImGui(::|zmo)|[<\"]imgui"), ["src/editor/layer/"], ["src/", "samples/", "games/"]),

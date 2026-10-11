@@ -10,7 +10,7 @@ set -euo pipefail
 
 PKGS=(cmake ninja-build gcc g++ clang clang-tidy-18 python3 xvfb xauth ccache zstd libgl1-mesa-dri libgl-dev
     libegl-dev libx11-dev libxext-dev libxcursor-dev libxrandr-dev libxi-dev libxss-dev libxtst-dev
-    libxfixes-dev libxkbcommon-dev)
+    libxfixes-dev libxkbcommon-dev mesa-vulkan-drivers)
 
 missing=()
 for p in "${PKGS[@]}"; do

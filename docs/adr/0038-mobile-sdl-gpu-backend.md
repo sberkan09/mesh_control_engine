@@ -24,12 +24,14 @@ SPIR-V with glslang.
 
 1. **One new backend, `mce_rhi_sdlgpu` (`src/engine/rhi_sdlgpu`), behind the existing `mce_rhi` seam.** It is the
    mobile backend on Android (Vulkan) and iOS (Metal). GL stays the reference backend and the desktop default; Metal
-   stays the macOS default. On desktop the new backend is opt-in (`-rhi sdlgpu` on the player, `MCE_RHI_SDLGPU=ON` at
-   configure), which is how it is developed and tested before any phone is involved. This is not the N14 hand-written
+   stays the macOS default. On desktop the new backend is opt-in at run time (`MCE_RHI=sdlgpu` in the environment,
+   read by `platform::gpu_api()`; every host that calls `rhi::create_default_device` follows it), which is how it is
+   developed and tested before any phone is involved. It is compiled by default on Linux (`MCE_RHI_SDLGPU`, off on
+   macOS until the iOS step). This is not the N14 hand-written
    Vulkan/D3D12 backend: SDL owns the API code; N14 stays as written.
-2. **Developed and verified on Linux first.** Configure with `SDL_GPU=ON SDL_VULKAN=ON` only when
-   `MCE_RHI_SDLGPU=ON`; `local_ci.sh` gains Mesa lavapipe and runs the GPU tests a second time on `sdlgpu`
-   (`MCE_TEST_RHI=sdlgpu`), so every RHI feature is checked on Vulkan in the cloud. Phones and simulators are the last
+2. **Developed and verified on Linux first.** SDL is configured with `SDL_GPU` and `SDL_VULKAN` only when
+   `MCE_RHI_SDLGPU=ON`; `local_ci.sh` gains Mesa lavapipe and runs the renderer's GPU tests a second time on `sdlgpu`
+   (`test_render_sdlgpu`, `MCE_RHI=sdlgpu`), so every RHI feature is checked on Vulkan in the cloud. Phones and simulators are the last
    step, on the user's Mac.
 3. **Shaders: GLSL stays the single source.** glslang compiles each stage to SPIR-V with Vulkan semantics, the
    backend rewrites the GL binding numbers into SDL's fixed resource layout (below) by patching the
