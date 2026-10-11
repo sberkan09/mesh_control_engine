@@ -105,7 +105,10 @@ Result<mem::UniquePtr<AudioOutput>> AudioOutput::open(const AudioOutputDesc& des
 Result<mem::UniquePtr<AudioOutput>> AudioOutput::open_async(const AudioOutputDesc& desc, AudioRenderFn fn, void* user) {
     MCE_TRY_ASSIGN(mem::UniquePtr<AudioOutput> out, prepare(desc, fn, user));
     Impl* impl = out->impl_;
-    impl->opener = std::thread([impl] { open_stream(*impl); });
+    impl->opener = std::thread([impl] {
+        open_stream(*impl);
+        SDL_CleanupTLS();  // not an SDL thread: SDL frees its thread-local state only when told
+    });
     return out;
 }
 
