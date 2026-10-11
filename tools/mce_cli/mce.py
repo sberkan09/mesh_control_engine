@@ -8,6 +8,9 @@
     mce headless <project> [--ticks N] [flags]  run it without a window; prints the state hash
     mce editor <project> [editor flags...]      the editor with the game module loaded
     mce mcp <project> [--allow-cheats]          the MCP server over stdio with the module loaded
+    mce mcp-config <project> [--desktop] [--remove]   register that server with Claude: <project>/.mcp.json
+                                                (Claude Code, also Claude Desktop's Code tab); --desktop
+                                                also adds it to Claude Desktop's own config
     mce cook <project> [cook flags...]          cook assets/ with the module loaded (--pack, --force, --adopt)
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
     mce update [<project>...] [--release [tag]] [--no-pull]  reinstall this SDK from where it came from, then rebuild
@@ -15,7 +18,8 @@
     mce version                                 the SDK's version and engine build stamp
     mce --help
 
-A project is a folder with one <Name>.mceproj (mce new makes one). Its build lives in
+A project is a folder with one <Name>.mceproj (mce new makes one, and mce new and mce example
+write its .mcp.json). Its build lives in
 <project>/build (mce build), where <game> (the host), lib<game>.so (the module) and
 project/assets.mce (the cooked pack) land. Every subcommand prints the command it runs (mce mcp on stderr: its stdout is the protocol).
 Exit code: the tool's, or 2 for a usage error.
@@ -91,6 +95,73 @@ class Project:
                 sys.exit(f"mce: {f} is missing: run `mce build {self.dir}` first")
 
 
+def mcp_server_entry(p):
+    """The MCP client entry that starts `mce mcp` for project p (absolute paths: clients start it from anywhere)."""
+    mce = str(BIN / "mce")
+    if os.name == "nt":  # a Python script, not an executable, there
+        return f"mce_{p.game}", {"command": sys.executable, "args": [mce, "mcp", str(p.dir)]}
+    return f"mce_{p.game}", {"command": mce, "args": ["mcp", str(p.dir)]}
+
+
+def claude_desktop_config():
+    override = os.environ.get("MCE_CLAUDE_DESKTOP_CONFIG")
+    if override:
+        return pathlib.Path(override)
+    if sys.platform == "darwin":
+        base = pathlib.Path.home() / "Library" / "Application Support"
+    elif os.name == "nt":
+        base = pathlib.Path(os.environ.get("APPDATA", pathlib.Path.home() / "AppData" / "Roaming"))
+    else:
+        base = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".config"))
+    return base / "Claude" / "claude_desktop_config.json"
+
+
+def merge_mcp_server(path, name, entry, backup=False):
+    """Set (or with entry None remove) mcpServers[name] in the JSON file at path, keeping everything else."""
+    data = {}
+    if path.is_file():
+        text = path.read_text(encoding="utf-8")
+        try:
+            data = json.loads(text) if text.strip() else {}
+        except json.JSONDecodeError as e:
+            sys.exit(f"mce: {path} is not valid JSON ({e}); fix it or move it away first")
+        if not isinstance(data, dict):
+            sys.exit(f"mce: {path} does not hold a JSON object")
+        if backup:
+            shutil.copy2(path, path.with_name(path.name + ".bak"))
+    servers = data.setdefault("mcpServers", {})
+    if entry is None:
+        if servers.pop(name, None) is None:
+            print(f"mce: {path} has no {name} server")
+            return
+    else:
+        servers[name] = entry
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+    print(f"mce: {'removed' if entry is None else 'wrote'} {name} in {path}")
+
+
+def write_project_mcp_json(project_dir):
+    p = Project(project_dir)
+    name, entry = mcp_server_entry(p)
+    merge_mcp_server(p.dir / ".mcp.json", name, entry)
+
+
+def cmd_mcp_config(args):
+    p = Project(args.project)
+    name, entry = mcp_server_entry(p)
+    entry = None if args.remove else entry
+    merge_mcp_server(p.dir / ".mcp.json", name, entry)
+    if args.desktop:
+        merge_mcp_server(claude_desktop_config(), name, entry, backup=True)
+        print("mce: quit and reopen Claude Desktop to load the change")
+    if not args.remove and not p.module.is_file():
+        print(f"mce: build the project before using the server: mce build {p.dir}")
+    return 0
+
+
 def cmd_new(args):
     gen = SHARE / "scripts" / "new_project.py"
     cmd = [sys.executable, gen, args.name, "--dest", args.dest]
@@ -100,7 +171,10 @@ def cmd_new(args):
         cmd += ["--title", args.title]
     if args.force:
         cmd += ["--force"]
-    return run(cmd)
+    rc = run(cmd)
+    if rc == 0:
+        write_project_mcp_json(pathlib.Path(args.dest).resolve() / args.name)
+    return rc
 
 
 def cmd_example(args):
@@ -118,6 +192,7 @@ def cmd_example(args):
         sys.exit(f"mce: {dst} exists (use --force to overwrite)")
     shutil.copytree(examples / args.name, dst, dirs_exist_ok=True)
     print(f"mce: {args.name} -> {dst}")
+    write_project_mcp_json(dst)
     print(f"  build: mce build {dst}    play: mce play {dst}    edit: mce editor {dst}")
     return 0
 
@@ -302,6 +377,13 @@ def main(argv):
         s.add_argument("project")
         s.add_argument("rest", nargs=argparse.REMAINDER, help="flags passed through")
         s.set_defaults(fn=fn)
+
+    s = sub.add_parser("mcp-config", help="register the project's MCP server with Claude Code (.mcp.json) "
+                                          "and, with --desktop, Claude Desktop")
+    s.add_argument("project")
+    s.add_argument("--desktop", action="store_true", help="also add it to Claude Desktop's claude_desktop_config.json")
+    s.add_argument("--remove", action="store_true", help="remove the entry instead")
+    s.set_defaults(fn=cmd_mcp_config)
 
     s = sub.add_parser("headless", help="run the game without a window and print the state hash")
     s.add_argument("project")

@@ -31,6 +31,7 @@ flowchart LR
     M4 --> MMAC["M-MAC macOS port<br/>mce_rhi_metal + macOS platform<br/>(parallel track, built on the Mac)"]
     MMAC -.parity backlog.-> M5a
     M9 -.opt-in, off-tier.-> POST["M-SKIN · M-NET · scene streaming · data mods<br/>(built 2026-10-10)"]
+    M9 --> MNOVEL["M-NOVEL visual-novel kit<br/>mce_kit_novel + mce story compile<br/>(Undelivered ported onto it)"]
 ```
 
 Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because Artifact A is the earliest shippable artifact and the cut ladder's final rung reduces the MVE to Artifact A alone — Artifact B is structured as an **addition, not a dependency** (REQUIREMENTS cut-ladder rung 7). The cook pipeline precedes everything that loads content; the determinism harness precedes everything that could break it.
@@ -58,6 +59,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-SKIN | [M-SKIN.md](milestones/M-SKIN.md), ADR-0036 | done | — |
 | M-NET | ADR-0035 | done | — |
 | Scene streaming / data mods | [scene-streaming.md](milestones/scene-streaming.md), ADR-0037 / ADR-0034 | done | — |
+| M-NOVEL | — (issue #115) | not started | everything; next in sequence |
 | M-MOBILE | — | parked | — |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
@@ -203,6 +205,8 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Rough shape if un-parked:** iOS after M-MAC closes (≈ M-size, leaning on the Metal backend) · Android as its own L-size track (new RHI backend). Both inherit the M-MAC rules: GL stays the reference backend, determinism baselines are per-platform (ADR-0007).
 
+**Graphics-layer note (2026-10-11, user request):** before writing separate Android and iOS backends, evaluate one cross-platform layer for mobile: SDL3 GPU (preferred, since SDL3 is already the platform layer; it maps to Vulkan on Android and Metal on iOS) or WebGPU via Dawn. A single `mce_rhi_sdlgpu` (or `mce_rhi_webgpu`) backend would replace items (1) and most of (2) above, and it avoids the N14 conflict in M10+, where a hand-written Vulkan backend is deferred until both anchor games ship. Desktop keeps GL as the reference backend and Metal on macOS; the mobile backend is an extra RHI implementation, not a replacement. bgfx, MoltenVK and ANGLE were also named and are the fallbacks if neither fits. Settled by an ADR when the track is un-parked.
+
 ### M-SKIN — Optional skinned animation · **size M (≈ 30–50 h engineering)** · tier: v0.5 Should (FR-R3D-060), off the milestone sequence
 
 *Added 2026-10-10 by user request (REQUIREMENTS §8 Open Question 3 update): skinning is supported but never required. A character may be a static mesh, a node-transform hierarchy or a skinned mesh; the developer chooses per asset (sidecar `"skinning"`) and per instance (`MeshInstance::skinning`). Not a promotion to Must: Ashen Court and the cut ladder are unchanged.*
@@ -217,6 +221,14 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Builds:** `mce_net` (`src/engine/net`) — client-server over UDP with ENet (reliable / sequenced / unreliable channels, connect/disconnect events, timeouts, RTT), a fail-closed little-endian message codec, and server-authoritative snapshot replication (`NetId`, `ReplicationServer`/`ReplicationClient`, hooks for game state and client-only parts). **Opt-in at link level:** not in `MCE_ENGINE_LIBS`; a project adds `DEPS mce::mce_net` to `mce_add_project`, the SDK installs `libmce_net.a` + `mce::mce_net`; walls keep ENet inside the module and `mce_net` out of the engine, the tools and the editor. Lockstep was rejected because determinism is per platform (ADR-0007).
 **Demo:** `sample_net_headless` — a server and a client in one process over loopback for 300 ticks; the client's mirror equals the server's replicated state bit for bit and a client-driven player moves. **Tests:** `test_net` (codec, loopback session, replication incl. malformed/stale snapshots); the SDK contract test builds a template project with `DEPS mce::mce_net`.
 **Not in this milestone (FR-NET-050, each its own ADR when a game needs it):** prediction/reconciliation, interpolation, delta compression, interest management, encryption, NAT traversal, lobbies, multiplayer play-in-editor.
+
+### M-NOVEL — Visual-novel kit · **size M (≈ 50–90 h engineering)** · tier: off-tier, opt-in kit
+
+*Added 2026-10-11 by the user's decision on issue #115. A second light novel (`sberkan09/light_novel_ps`) had to copy ≈ 2,000 lines of Undelivered's game code (story VM, stage driver, script compiler, MCP stage authoring); every further novel would carry the same copy and miss its fixes.*
+
+**Builds:** `mce_kit_novel` (`mce/kit/novel.h`, opt-in like the other kits): the story VM (statements, labels, calls, flags and counters), typewriter reveal, choices with gates, backlog, autosave over one saved component, fades, music/ambience beds, cast slots and a playthrough bot, and the `UiPart`-style stage driver. A game supplies its id tables (characters, locations, music/sfx) through the asset path conventions Undelivered uses (`textures/bg/<loc>_<layer>.png`, `textures/cast/<who>_<expr>_<pose>.png`, `audio/music/<id>.wav`) and hooks for its own screens (Undelivered's drawer, a HUD line) · `mce story compile`: the script compiler generalised into the SDK tools, reading the id tables from a project manifest (`story/story.json`) instead of hard-coding them, with the gaps found writing a 10k-word script fixed: no fall-through between `.story` files (every file's last statement checked for `@end`/`@jump`), `@lettertext` blocks unreachable by fall-through and flagged by the reachability check, `Note: …` narration not parsed as a speaker line, `and`/`or` in conditions, and stage checks (cast count per slot set, one character in two slots) · `mce new <name> --template novel` stamping a minimal novel on the kit.
+**Demo:** Undelivered ported onto the kit and the compiler with its five-ending bot test unchanged and passing; a fresh `--template novel` project builds, plays its one-page script to `@end` headless, and ships through the SDK.
+**Gates:** the Undelivered game module shrinks to its tables, its hooks and its drawer; `tests/sdk` builds the novel template; compiler tests cover each fixed gap.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
@@ -235,6 +247,7 @@ Auto-parallel scheduling (**experiment run 2026-10-10 and not merged**: determin
 | Platform (off-tier) | M-MAC macOS port | parallel, from now; built on the user's Mac | ≈ 100–160 h engineering (not summed into the tier bands; gates nothing) |
 | Networking (optional, opt-in) | M-NET `mce_net` | built 2026-10-10 by user request | ≈ 30–50 h engineering (not summed into the tier bands; gates nothing) |
 | Opt-in features (off-tier) | M-SKIN skinning, scene streaming, data mods | built 2026-10-10 by user request | not summed into the tier bands; gate nothing |
+| Kits (off-tier, opt-in) | M-NOVEL visual-novel kit | added 2026-10-11 (issue #115), next in sequence | ≈ 50–90 h engineering (not summed into the tier bands; gates nothing) |
 | Platform (optional, parked) | M-MOBILE iOS/Android port | not scheduled; only if the user un-parks it | not estimated (not summed into the tier bands; gates nothing) |
 | v0.5 | M5a + M5b + M6 + M7 | months 14–24 | ≈ 390–620 h engineering + ≈ 140–220 h content |
 | v1.0 | M8–M9 (UC-D may slip to named v1.1) | months 24–36 | ≈ 180–310 h engineering + ≈ 30–50 h content |

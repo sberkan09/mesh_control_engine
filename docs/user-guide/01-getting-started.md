@@ -254,6 +254,7 @@ mce play MyGame                # the game; flags after the project pass through 
 mce headless MyGame --ticks 600   # no window; prints the state hash
 mce editor MyGame              # mce_editor -module MyGame/build/libmy_game.so -project MyGame
 mce mcp MyGame                 # mce_mcp --module ... --project MyGame, over stdio (chapter 14)
+mce mcp-config MyGame --desktop   # MyGame/.mcp.json is written by mce new; this adds it to Claude Desktop too
 mce cook MyGame --pack         # mce_cook --module ... MyGame --pack (the build cooks too)
 mce ship MyGame --version 1.0  # MyGame/dist/MyGame-1.0-linux-x64.zip (-macos.zip on a Mac): host, module, libmce_engine, pack
 ```
