@@ -74,6 +74,10 @@ in `build/local-ci-logs/`. On a Mac, `scripts/ci/local_ci_macos.sh` (or `--quick
 
 The per-subsystem reference for each engine library is in [`docs/engine/`](docs/engine/README.md).
 
+## Reporting bugs and requests
+
+Open a GitHub Issue; see [CONTRIBUTING.md](CONTRIBUTING.md) for the `gh issue create` recipe and how issues are triaged.
+
 ## Status
 
 Milestones M0–M9 are built, along with the M4.5 editor MCP server, the M-MAC macOS port (Metal backend),
