@@ -75,6 +75,41 @@ TEST_CASE("Silent backend: no device, commands still flow and voices still finis
     CHECK_FALSE(dev->is_playing(v));
 }
 
+TEST_CASE("set_paused freezes the mix on the device and on Silent; resuming picks up where it stopped") {
+    Array<f32> clip = test::dc_clip(480000, 0.1f);
+    for (const Backend b : {Backend::Device, Backend::Silent}) {
+        CAPTURE(static_cast<int>(b));
+        AudioDesc d;
+        d.backend = b;
+        d.driver = "dummy";
+        d.silent_on_failure = false;
+        auto dev = AudioDevice::create(d).value();
+        auto h = dev->register_clip(test::payload(clip)).value();
+        const AudioHandle v = dev->play(h);
+        for (u32 i = 0; i < 400 && dev->mix_clock() < 4800; ++i) {
+            platform::sleep_ms(5);
+            dev->update();
+        }
+        REQUIRE(dev->mix_clock() >= 4800);
+        dev->set_paused(true);
+        CHECK(dev->paused());
+        platform::sleep_ms(30);  // a callback already in flight may still land
+        const u64 frozen = dev->mix_clock();
+        for (u32 i = 0; i < 20; ++i) {
+            platform::sleep_ms(5);
+            dev->update();
+        }
+        CHECK(dev->mix_clock() == frozen);
+        CHECK(dev->is_playing(v));
+        dev->set_paused(false);
+        for (u32 i = 0; i < 400 && dev->mix_clock() < frozen + 4800; ++i) {
+            platform::sleep_ms(5);
+            dev->update();
+        }
+        CHECK(dev->mix_clock() >= frozen + 4800);
+    }
+}
+
 TEST_CASE("audio_bridge: AudioSource play_on_start, live edits, PlaySfx, and removal") {
     auto dev = test::offline_device();
     Array<f32> clip = test::dc_clip(48000, 0.1f);

@@ -575,7 +575,9 @@ vec2 Document::preferred_size(WidgetId w) const {
 }
 
 void Document::layout() {
-    const Rect screen{vec2(0, 0), vec2(static_cast<f32>(viewport_.width), static_cast<f32>(viewport_.height))};
+    // The root is the safe part of the screen: anchors to an edge stay clear of a notch.
+    const Rect screen{vec2(safe_.left, safe_.top), vec2(static_cast<f32>(viewport_.width) - safe_.right,
+                                                         static_cast<f32>(viewport_.height) - safe_.bottom)};
     nodes_[root_.index].rect = screen;
     layout_children(root_.index, scale_);
     layout_dirty_ = false;
@@ -787,8 +789,10 @@ void Document::update(const UpdateContext& ctx) {
     if (order_dirty_) rebuild_order();
 
     // 2. Layout, only when something changed.
-    if (ctx.viewport.width != viewport_.width || ctx.viewport.height != viewport_.height || ctx.ui_scale != scale_) {
+    if (ctx.viewport.width != viewport_.width || ctx.viewport.height != viewport_.height || ctx.ui_scale != scale_ ||
+        !(ctx.safe_insets == safe_)) {
         viewport_ = ctx.viewport;
+        safe_ = ctx.safe_insets;
         scale_ = ctx.ui_scale > 0.0f ? ctx.ui_scale : 1.0f;
         mark_layout();
     }

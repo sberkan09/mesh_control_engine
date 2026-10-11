@@ -23,6 +23,14 @@ if(MCE_BUILD_TESTS)
     add_test(NAME scene_demo_player_input COMMAND mce_player -headless 1 -ticks 120 -pack "${pack}"
                                                   -input "${CMAKE_CURRENT_BINARY_DIR}/input_script.txt")
     set_tests_properties(scene_demo_player_input PROPERTIES PASS_REGULAR_EXPRESSION "3 segments, last tick 100.*120 ticks, 6 entities, state_hash [0-9a-f]+")
+    # FR-RUN-100 (M-MOBILE): a trip to the background pauses and resumes with an unchanged state
+    # hash and writes the save inside the background callback.
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_FOUND)
+        add_test(NAME scene_demo_player_lifecycle
+                 COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/lifecycle_check.py $<TARGET_FILE:mce_player>
+                         "${pack}" "${CMAKE_CURRENT_BINARY_DIR}/lifecycle_check")
+    endif()
     if(MCE_GPU_TESTS)
         add_test(NAME scene_demo_player_gpu
                  COMMAND mce_player -pack "${pack}" -frames 90 -platform.error_box 0 -r.vsync 0)
@@ -31,6 +39,12 @@ if(MCE_BUILD_TESTS)
         add_test(NAME scene_demo_player_console_gpu
                  COMMAND mce_player -pack "${pack}" -frames 30 -console_open 1 -platform.error_box 0 -r.vsync 0)
         set_tests_properties(scene_demo_player_console_gpu PROPERTIES LABELS gpu)
+        # The phone lifecycle rehearsed windowed (FR-RUN-100): the platform delivers the events to
+        # the window, app ticks 30..59 draw nothing, then the scene runs to sim tick 120 and quits.
+        add_test(NAME scene_demo_player_lifecycle_gpu
+                 COMMAND mce_player -pack "${pack}" -capture_tick 120 -lifecycle_test 30,30 -platform.error_box 0 -r.vsync 0)
+        set_tests_properties(scene_demo_player_lifecycle_gpu PROPERTIES LABELS gpu
+                             PASS_REGULAR_EXPRESSION "in the background.*back in the foreground.*frames, 12[0-9] ticks, 0 GL errors")
         if(TARGET mce_editor)
             # The editor in scene mode over the cooked copy: preview world in sync, sprites drawn
             # in the viewport, picking hits (mce_editor's scene selftest).

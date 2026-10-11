@@ -35,6 +35,16 @@ enum class EventType : u8 {
     TouchDown,
     TouchMove,
     TouchUp,
+    // App lifecycle (M-MOBILE, FR-RUN-100), sent to every window. AppBackground and AppTerminating
+    // are delivered from inside the OS callback, before pump_events returns or the app is frozen:
+    // save there, synchronously. After AppBackground no GPU work may be submitted until
+    // AppForeground (iOS kills apps that do).
+    AppBackground,
+    AppForeground,
+    AppLowMemory,     // free caches you can rebuild
+    AppTerminating,   // the OS is ending the process (the last chance to save)
+    SafeAreaChanged,  // Window::safe_insets() changed
+    OrientationChanged,  // code = Orientation (window.h) of the window's display
 };
 
 // Key codes are USB HID keyboard usages (layout-independent physical keys); SDL scancodes use the

@@ -20,6 +20,11 @@
 // close, Q, -frames / -ticks reached) before anything shuts down; the write is atomic with a .bak, so a kill during
 // it keeps the last good save (ecs/save.h).
 //
+// Phones (FR-RUN-100, M-MOBILE): going to the background pauses the sim, pauses the audio device, releases every
+// held input, writes the -save slot inside the OS callback and stops drawing until the app is back; the OS ending
+// the process writes it too. Back in the foreground the pause overlay waits; a tap (or Esc) resumes, a touch in the
+// top-right corner pauses. -lifecycle_test N,M rehearses the round trip at app tick N for M ticks (headless too).
+//
 // Input: windowed, the starter-kit "Gameplay" map (mce/input/default_map.h: Move on WASD / arrows /
 // left stick, Jump on Space / A, Fire on J / left mouse / X, Pause) is sampled once per tick and
 // published as the InputState resource the game module reads. Headless runs publish an empty
@@ -92,6 +97,9 @@ MCE_CVAR(cv_pause_on_focus_loss, "pause_on_focus_loss", true, "Pause and mute wh
 MCE_CVAR(cv_save, "save", "", "Save slot: loaded at start when it exists, written on clean quit (empty = off)",
          CVarFlags::None);
 MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the per-user MCE save folder)", CVarFlags::None);
+MCE_CVAR(cv_lifecycle_test, "lifecycle_test", "",
+         "Rehearse the phone lifecycle: \"N,M\" goes to the background at app tick N and comes back and resumes M ticks later",
+         CVarFlags::None);
 MCE_CVAR(cv_console, "console", true, "Allow the developer console (` or F1)", CVarFlags::None);
 MCE_CVAR(cv_console_open, "console_open", false, "Start with the developer console open", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
@@ -157,6 +165,8 @@ public:
             console_.init(skin_.skin, 0.5f);
             if (cv_console.get_bool() && cv_console_open.get_bool()) set_console(true);
             MCE_TRY(load_input_map(cv_input_map.get_string()));
+            const platform::PixelSize fb = window_->framebuffer_size();
+            input_.set_view_size(static_cast<f32>(fb.width), static_cast<f32>(fb.height));  // touch distances
             window_->set_event_handler(&PlayerApp::on_event, this);
         }
         // Scene streaming (FR-ENT-120) is inert unless the scene places SceneChunks. Headless runs
@@ -169,6 +179,9 @@ public:
         MCE_LOG_INFO("{}: scene {} ({}) with {} entities", desc_.app_name, asset::to_string(scene).view(), scene_path_.view(),
                      entities_.size());
         scene_guid_ = scene;
+        if (!parse_lifecycle_test(cv_lifecycle_test.get_string()))
+            return Error(Errc::InvalidArgument, "player: -lifecycle_test wants \"N,M\" (app ticks, N >= 1)");
+        if (window_) safe_insets_ = window_->safe_insets();
         if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());
         if (const StringView slot = cv_save.get_string(); !slot.empty() && save::exists(slot)) {
             save::SaveInfo info;
@@ -181,6 +194,7 @@ public:
     }
 
     void on_tick(const app::TickContext& t) override {
+        if (lifecycle_from_ != 0) rehearse_lifecycle(t.tick_index);
         if (paused_) return;
         tick_dt_ = t.dt;
         if (t.actions) input::publish(world_, *t.actions);
@@ -193,7 +207,7 @@ public:
     void on_render(const app::RenderContext& rc) override {
         audio_.update();
         clips_.sync();
-        if (!device_) return;
+        if (!device_ || os_background_) return;  // no GPU work in the background (iOS ends apps that try)
         device_->begin_frame(rc.frame_index);
         const rhi::Extent2D bb = device_->backbuffer_size();
         render::Camera2D cam;
@@ -256,20 +270,7 @@ public:
 
     void on_shutdown() override {
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
-        if (const StringView slot = cv_save.get_string(); !slot.empty()) {
-            save::SaveInfo info;
-            info.scene = scene_guid_;
-            info.tick = sim_ticks_;
-            info.playtime = static_cast<f64>(sim_ticks_) * tick_dt_;
-            if (Result<void> r = save::save_game(world_, slot, info); !r) {
-                FixedString<512> why;
-                format_error(r.error(), why);
-                MCE_LOG_ERROR("mce_player: save '{}' failed: {}", slot, why.view());
-            } else {
-                std::printf("mce_player: save '%.*s' written (tick %llu)\n", static_cast<int>(slot.size()), slot.data(),
-                            static_cast<unsigned long long>(sim_ticks_));
-            }
-        }
+        write_save();
         set_muted(false);
         if (window_) window_->set_event_handler(nullptr, nullptr);
         if (device_ && !post_target_.is_null()) device_->destroy_texture(post_target_);
@@ -278,8 +279,14 @@ public:
         if (device_) renderer_.shutdown();
     }
 
-    bool pump_events() override { return platform::pump_events(); }
-    void present(bool vsync) override { device_->present(vsync); }
+    bool pump_events() override {
+        const bool quit_requested = platform::pump_events();
+        if (os_background_) platform::sleep_ms(50);  // nothing to draw: do not spin the battery down
+        return quit_requested;
+    }
+    void present(bool vsync) override {
+        if (!os_background_) device_->present(vsync);
+    }
 
     u64 state_hash() { return world_.state_hash(); }
     input::InputSystem& input() { return input_; }
@@ -420,6 +427,8 @@ private:
     void update_console(rhi::Extent2D bb) {
         ui::UpdateContext ctx;
         ctx.viewport = bb;
+        ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
+                                         static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
         ctx.ui_scale = window_->display_scale();
         input::InputState in;
         in.cancel_pressed = con_.cancel;
@@ -456,7 +465,7 @@ private:
         render::TextLayoutDesc desc;
         desc.size_px = 32;
         desc.align = render::TextAlign::Center;
-        render::layout_text(font_.face, "PAUSED\nESC RESUME   Q QUIT", desc, layout);
+        render::layout_text(font_.face, "PAUSED\nESC OR TAP RESUME   Q QUIT", desc, layout);
         render::TextPlacement p;
         p.origin = {0.5f * (static_cast<f32>(bb.width) - layout.width), 0.5f * (static_cast<f32>(bb.height) - layout.height)};
         p.sort_order = 1;
@@ -497,6 +506,97 @@ private:
         MCE_LOG_INFO("mce_player: wrote {}", path);
     }
 
+    void write_save() {
+        const StringView slot = cv_save.get_string();
+        if (slot.empty()) return;
+        save::SaveInfo info;
+        info.scene = scene_guid_;
+        info.tick = sim_ticks_;
+        info.playtime = static_cast<f64>(sim_ticks_) * tick_dt_;
+        if (Result<void> r = save::save_game(world_, slot, info); !r) {
+            FixedString<512> why;
+            format_error(r.error(), why);
+            MCE_LOG_ERROR("mce_player: save '{}' failed: {}", slot, why.view());
+        } else {
+            std::printf("mce_player: save '%.*s' written (tick %llu)\n", static_cast<int>(slot.size()), slot.data(),
+                        static_cast<unsigned long long>(sim_ticks_));
+        }
+    }
+
+    // FR-RUN-100: the phone lifecycle. Background and terminating arrive inside the OS callback, so
+    // the save is written before the app is frozen or killed.
+    void on_lifecycle(platform::EventType type) {
+        switch (type) {
+            case platform::EventType::AppBackground: {
+                if (os_background_) return;
+                os_background_ = true;
+                paused_ = true;
+                audio_.set_paused(true);
+                release_input();
+                write_save();
+                MCE_LOG_INFO("{}: in the background (sim and audio paused)", desc_.app_name);
+                break;
+            }
+            case platform::EventType::AppForeground:
+                if (!os_background_) return;
+                os_background_ = false;
+                audio_.set_paused(false);
+                MCE_LOG_INFO("{}: back in the foreground (paused until resumed)", desc_.app_name);
+                break;
+            case platform::EventType::AppTerminating: write_save(); break;
+            case platform::EventType::AppLowMemory: MCE_LOG_WARN("{}: the OS reports low memory", desc_.app_name); break;
+            default: break;
+        }
+    }
+
+    // Everything held reads released from the next tick (the input system's focus-loss rule).
+    void release_input() {
+        platform::Event e;
+        e.type = platform::EventType::FocusOut;
+        e.timestamp_us = platform::now_us();
+        input_.push_event(e);
+    }
+
+    // The pause overlay's resume. The resuming tap is swallowed: the game never sees it as a tap.
+    void resume() {
+        if (!paused_ || os_background_) return;
+        paused_ = false;
+        release_input();
+    }
+
+    bool parse_lifecycle_test(StringView v) {
+        lifecycle_from_ = lifecycle_ticks_ = 0;
+        if (v.empty()) return true;
+        u64* out = &lifecycle_from_;
+        bool digit = false;
+        for (const char c : v) {
+            if (c >= '0' && c <= '9') {
+                *out = *out * 10 + static_cast<u64>(c - '0');
+                digit = true;
+            } else if (c == ',' && out == &lifecycle_from_ && digit) {
+                out = &lifecycle_ticks_;
+                digit = false;
+            } else {
+                return false;
+            }
+        }
+        return digit && out == &lifecycle_ticks_ && lifecycle_from_ >= 1;
+    }
+
+    // -lifecycle_test: the round trip through the same path the OS takes (windowed: the platform's
+    // delivery to the window; headless: straight in), then the tap that resumes.
+    void rehearse_lifecycle(u64 app_tick) {
+        auto send = [&](platform::EventType type) {
+            if (window_) platform::simulate_app_event(type);
+            else on_lifecycle(type);
+        };
+        if (app_tick == lifecycle_from_) send(platform::EventType::AppBackground);
+        if (app_tick == lifecycle_from_ + lifecycle_ticks_) {
+            send(platform::EventType::AppForeground);
+            resume();
+        }
+    }
+
     // Unfocused / minimized: pause (the overlay waits for the player) and mute the master bus.
     void set_background(bool background) {
         if (!cv_pause_on_focus_loss.get_bool() || background == background_) return;
@@ -518,9 +618,38 @@ private:
 
     static void on_event(const platform::Event& e, void* user) {
         auto* self = static_cast<PlayerApp*>(user);
+        switch (e.type) {
+            case platform::EventType::AppBackground:
+            case platform::EventType::AppForeground:
+            case platform::EventType::AppTerminating:
+            case platform::EventType::AppLowMemory: self->on_lifecycle(e.type); return;
+            case platform::EventType::SafeAreaChanged:
+            case platform::EventType::OrientationChanged:
+            case platform::EventType::Resized: self->safe_insets_ = self->window_->safe_insets(); break;
+            case platform::EventType::TouchUp:
+                // A tap on the pause overlay (a finger that went down while paused) resumes; the game gets a
+                // focus-loss release instead of the tap.
+                if (e.code < 16 && (self->paused_touches_ & (1u << e.code))) {
+                    self->paused_touches_ &= ~(1u << e.code);
+                    if (!(e.flags & platform::EventFlag::TouchCanceled)) {
+                        self->resume();
+                        return;
+                    }
+                }
+                break;
+            case platform::EventType::TouchDown:
+                if (self->paused_ && !self->os_background_ && !self->console_.is_open() && e.code < 16) {
+                    self->paused_touches_ |= 1u << e.code;
+                } else if (!self->paused_ && !self->console_.is_open() && e.x >= 0.85f && e.y <= 0.15f) {
+                    self->paused_ = true;  // the top-right corner pauses (the default map's Pause tap zone)
+                }
+                break;
+            default: break;
+        }
         // The game's input: every event while the console is closed; releases and focus changes
         // always, so no key sticks behind the console or the pause overlay.
-        if (!self->console_.is_open() || e.type == platform::EventType::KeyUp || e.type == platform::EventType::FocusOut)
+        if (!self->console_.is_open() || e.type == platform::EventType::KeyUp || e.type == platform::EventType::TouchUp ||
+            e.type == platform::EventType::FocusOut)
             self->input_.push_event(e);
         switch (e.type) {
             case platform::EventType::FocusOut:
@@ -594,6 +723,10 @@ private:
     u64 sim_ticks_ = 0;
     bool paused_ = false;
     bool background_ = false;  // unfocused or minimized
+    bool os_background_ = false;  // the app itself is in the background (phones): no drawing at all
+    platform::SafeInsets safe_insets_;
+    u64 lifecycle_from_ = 0, lifecycle_ticks_ = 0;  // -lifecycle_test
+    u32 paused_touches_ = 0;  // finger slots that went down on the pause overlay
     bool muted_ = false;
     f32 master_db_ = 0.0f;     // the master gain to restore when focus returns
     f64 tick_dt_ = 1.0 / 60.0;

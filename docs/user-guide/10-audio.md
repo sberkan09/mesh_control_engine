@@ -61,7 +61,9 @@ Four saved convars drive the named buses: `audio.master_db`, `audio.music_db`, `
 `audio.ui_db`. Set them from the console (`audio.music_db -12`), the command line, or bind them to
 sliders in a runtime options menu (chapter 12). `audio.enabled 0` runs silent. When the window loses focus
 or minimizes, the player pauses the sim (the pause overlay waits for the player on return) and
-mutes the master bus until focus comes back (`-pause_on_focus_loss 0` turns both off).
+mutes the master bus until focus comes back (`-pause_on_focus_loss 0` turns both off). On a
+phone, the app going to the background pauses the audio device itself (`AudioDevice::set_paused`):
+voices keep their place and pick up where they stopped when the app comes back.
 
 ## 10.5 How it behaves under pressure
 

@@ -27,6 +27,7 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-console 0` | 1 | disable the developer console |
 | `-console_open 1` | 0 | start with the console open |
 | `-pause_on_focus_loss 0` | 1 | keep simulating when the window loses focus |
+| `-lifecycle_test N,M` | off | rehearse a phone going to the background at app tick N and coming back M ticks later (also headless; the save slot is written on the way out) |
 | `-r.post2d 0` | 1 | start with the camera's 2D post effects off (F7 toggles) |
 | `-r.vsync 0` | 1 (saved) | present without vsync |
 | `-r.gl_debug 0` | 1 | disable the GL validation callback (restart-only) |

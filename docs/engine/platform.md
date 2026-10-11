@@ -34,6 +34,8 @@ Headers live under `include/mce/platform/`.
   `detach_virtual_gamepad`, `set_virtual_gamepad_button`, `set_virtual_gamepad_axis`.
 - Touch (M-MOBILE): `inject_touch(window_id, finger, phase, x, y)` queues a synthetic finger that
   the next pump turns into touch events, for tests and bots.
+- App lifecycle (M-MOBILE): `simulate_app_event(type)` delivers `AppBackground`, `AppForeground`,
+  `AppLowMemory` or `AppTerminating` to every window, synchronously, as the OS callback does.
 - `show_error_box(title, message)`: boot-failure report. Always logs at critical level; shows a
   modal box unless the `platform.error_box` convar is 0 or the video driver is `dummy` or
   `offscreen`.
@@ -43,7 +45,9 @@ Headers live under `include/mce/platform/`.
 - `Window::create(desc)` requires `platform::init`. `WindowDesc::opengl` asks for a GPU-capable
   surface: on Linux and Windows an OpenGL window with an RGBA8 + D24S8 double-buffered default
   framebuffer (the context itself is made by `mce_rhi_gl`); on macOS an `SDL_WINDOW_METAL` window.
-- `native_handle()`, `id()`, `framebuffer_size()` (pixels, DPI-correct), `display_scale()`.
+- `native_handle()`, `id()`, `framebuffer_size()` (pixels, DPI-correct), `display_scale()`,
+  `safe_insets()` (pixels at each edge the OS covers: notch, home indicator; zero on desktop) and
+  `orientation()` (of the window's display).
 - `set_title`, `set_size`, `set_cursor_visible`, `set_icon(width, height, rgba)`.
 - `set_text_input(on)`: `TextInput` events flow only while this is on (an IME may show).
 - `request_close()` queues a `Close` event for the next pump; `close_requested()`.
@@ -56,7 +60,9 @@ Headers live under `include/mce/platform/`.
 - `EventType`: window events (`Close`, `FocusIn/Out`, `Minimized`, `Restored`, `Resized`,
   `ScaleChanged`), keyboard and mouse, `TextInput` (one event per Unicode code point), `Quit`, and
   gamepad events (`GamepadAdded/Removed`, `GamepadButtonDown/Up`, `GamepadAxis`; slot in `flags`),
-  and touch events (`TouchDown/Move/Up`; finger slot in `code`, `x`, `y` normalized 0..1, y down).
+  touch events (`TouchDown/Move/Up`; finger slot in `code`, `x`, `y` normalized 0..1, y down),
+  and the phone lifecycle (`AppBackground`, `AppForeground`, `AppLowMemory`, `AppTerminating`,
+  `SafeAreaChanged`, `OrientationChanged` with the `Orientation` in `code`).
 - `Key` (USB HID usages, layout-independent; SDL scancodes pass through), `MouseButton`,
   `GamepadButton` and `GamepadAxis` (SDL standard layout, values match SDL), `kMaxGamepads` (4),
   `kMaxTouches` (10).
@@ -85,6 +91,11 @@ stdout, `kill`, `exit_code`). The editor's run-in-player button uses it.
   finger is dropped until one lifts. SDL's touch-to-mouse and mouse-to-touch emulation is off, so
   a finger never moves the mouse (mce_ui takes its pointer from either, `ui::apply_touch_pointer`).
   Touch events go to the window they name, else the focused one.
+- **App lifecycle.** SDL hands the mobile lifecycle only to event watchers, from inside the OS
+  callback; platform installs one and delivers `AppBackground` (SDL's will-enter-background),
+  `AppForeground` (did-enter-foreground), `AppLowMemory` and `AppTerminating` to every window right
+  there, before `pump_events` returns or the app is frozen. A handler saves synchronously and
+  submits no GPU work until `AppForeground`. `OrientationChanged` goes to every window.
 - **Gamepads.** Pads open on hot-plug into the lowest free player slot (up to 4). `SDL_Gamepad`
   never leaves `src/gamepad.cpp`. A failed gamepad subsystem init only warns (ADR-0026 §2.1).
 - **Clock.** `now_seconds()` is the engine's wall clock. Simulation code uses the app clock and
@@ -104,7 +115,8 @@ stdout, `kill`, `exit_code`). The editor's run-in-player button uses it.
 - Cases: "platform: init, driver, shutdown", "platform: window create requires init",
   "platform: window lifecycle and close request", "platform: clock is monotonic",
   "platform: event names", "platform: a virtual gamepad hot-plugs into slot 0 and streams
-  standard-layout events", "platform: fingers get small reusable slots and normalized positions".
+  standard-layout events", "platform: fingers get small reusable slots and normalized positions",
+  "platform: app lifecycle events reach every window synchronously; desktop has no insets".
 - `AudioOutput` is exercised by `test_audio` ("Device backend pulls from the mixer on the platform
   audio thread", SDL `dummy` audio driver). Event quantization is tested in `test_input`.
 - GL window creation is covered by the GPU tests (`test_rhi_gl`, `test_render_gl`).

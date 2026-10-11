@@ -21,6 +21,16 @@ struct PixelSize {
 enum class GpuApi : u8 { OpenGL, Metal, SdlGpu };
 GpuApi gpu_api();
 
+// Pixels the OS keeps for itself at each edge of a window (notch, rounded corners, home
+// indicator): UI that must stay visible goes inside them (M-MOBILE, FR-RUN-100). Zero on desktop.
+struct SafeInsets {
+    u32 left = 0, top = 0, right = 0, bottom = 0;
+    bool operator==(const SafeInsets&) const = default;
+};
+
+// The display's orientation (values match SDL_DisplayOrientation).
+enum class Orientation : u8 { Unknown, Landscape, LandscapeFlipped, Portrait, PortraitFlipped };
+
 struct WindowDesc {
     const char* title = "Mesh Control Engine";
     u32 width = 1600;
@@ -46,6 +56,8 @@ public:
     // Drawable size in pixels, DPI-correct (FR-R2D-080). Can differ from the requested size.
     PixelSize framebuffer_size() const;
     f32 display_scale() const;
+    SafeInsets safe_insets() const;  // in pixels, like framebuffer_size()
+    Orientation orientation() const;  // of the display the window is on
 
     void set_title(const char* title);
     void set_size(u32 width, u32 height);

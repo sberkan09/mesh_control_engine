@@ -42,6 +42,10 @@ public:
     u32 sample_rate() const { return sample_rate_; }
     u32 channels() const { return channels_; }
     const char* driver() const;
+    // Stops pulling from the callback (the OS audio session goes quiet) until resumed; an app in the
+    // background on a phone (FR-RUN-100). Safe while an async open is in flight.
+    void set_paused(bool paused);
+    bool paused() const;
     // Number of render callbacks served so far (diagnostics, tests).
     u64 callbacks() const;
 

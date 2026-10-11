@@ -95,6 +95,23 @@ f32 Window::display_scale() const {
     return s > 0.0f ? s : 1.0f;
 }
 
+SafeInsets Window::safe_insets() const {
+    SDL_Rect safe{};
+    int w = 0, h = 0;
+    if (!SDL_GetWindowSafeArea(sdl(handle_), &safe) || !SDL_GetWindowSize(sdl(handle_), &w, &h) || w <= 0 || h <= 0)
+        return {};
+    // The safe area is in window coordinates; the insets are reported in pixels.
+    const f32 density = SDL_GetWindowPixelDensity(sdl(handle_)) > 0.f ? SDL_GetWindowPixelDensity(sdl(handle_)) : 1.f;
+    auto px = [&](int v) { return static_cast<u32>(static_cast<f32>(v > 0 ? v : 0) * density + 0.5f); };
+    return SafeInsets{px(safe.x), px(safe.y), px(w - safe.x - safe.w), px(h - safe.y - safe.h)};
+}
+
+Orientation Window::orientation() const {
+    const SDL_DisplayID d = SDL_GetDisplayForWindow(sdl(handle_));
+    const SDL_DisplayOrientation o = d ? SDL_GetCurrentDisplayOrientation(d) : SDL_ORIENTATION_UNKNOWN;
+    return o <= SDL_ORIENTATION_PORTRAIT_FLIPPED ? static_cast<Orientation>(o) : Orientation::Unknown;
+}
+
 void Window::set_title(const char* title) { SDL_SetWindowTitle(sdl(handle_), title); }
 
 void Window::set_size(u32 width, u32 height) {

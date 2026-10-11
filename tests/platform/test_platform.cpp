@@ -212,6 +212,38 @@ TEST_CASE("platform: fingers get small reusable slots and normalized positions")
     w.value()->set_event_handler(nullptr, nullptr);
 }
 
+TEST_CASE("platform: app lifecycle events reach every window synchronously; desktop has no insets") {
+    PlatformScope p;
+    MCE_REQUIRE_OR_RETURN(p.ok);
+    platform::WindowDesc wd;
+    wd.opengl = false;
+    auto a = platform::Window::create(wd);
+    auto b = platform::Window::create(wd);
+    MCE_REQUIRE_OR_RETURN(a.has_value() && b.has_value());
+    Recorder ra, rb;
+    a.value()->set_event_handler(&Recorder::on_event, &ra);
+    b.value()->set_event_handler(&Recorder::on_event, &rb);
+    using platform::EventType;
+
+    platform::simulate_app_event(EventType::AppBackground);
+    CHECK(ra.saw(EventType::AppBackground));  // before any pump: the OS callback's call stack
+    CHECK(rb.saw(EventType::AppBackground));
+    platform::simulate_app_event(EventType::AppForeground);
+    platform::simulate_app_event(EventType::AppLowMemory);
+    platform::simulate_app_event(EventType::AppTerminating);
+    platform::simulate_app_event(EventType::KeyDown);  // not a lifecycle event: ignored
+    CHECK(ra.count == 4);
+    CHECK(ra.events[1].type == EventType::AppForeground);
+    CHECK(ra.events[3].type == EventType::AppTerminating);
+    CHECK(StringView(platform::event_type_name(EventType::SafeAreaChanged)) == "SafeAreaChanged");
+
+    const platform::SafeInsets none;
+    CHECK(a.value()->safe_insets() == none);
+    CHECK(static_cast<u8>(a.value()->orientation()) <= static_cast<u8>(platform::Orientation::PortraitFlipped));
+    a.value()->set_event_handler(nullptr, nullptr);
+    b.value()->set_event_handler(nullptr, nullptr);
+}
+
 TEST_CASE("platform: list_files names the regular files of a folder, sorted; a missing folder is empty") {
     namespace fs = std::filesystem;
     const fs::path dir = fs::path(MCE_TEST_TMP_DIR) / "list_files";

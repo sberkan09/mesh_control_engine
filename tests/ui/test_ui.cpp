@@ -123,6 +123,33 @@ TEST_CASE("ui: anchors resolve to pixel-snapped rects at ui scale 1, 1.5 and 2")
     }
 }
 
+TEST_CASE("ui: safe insets shrink the root, so edge anchors clear a notch (M-MOBILE)") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    const WidgetId fill = b.panel("fill").fill().id();
+    Anchors top_bar;
+    top_bar.min = {0, 0};
+    top_bar.max = {1, 0};
+    top_bar.offset_max = {0, 40};
+    const WidgetId bar = b.panel("bar").anchors(top_bar).id();
+    d.update(frame(2532, 1170));
+    CHECK(d.rect(bar).min == vec2(0, 0));
+    const u64 passes = d.stats().layout_passes;
+
+    UpdateContext c = frame(2532, 1170);
+    c.safe_insets = SafeInsets{141, 0, 141, 63};  // a landscape phone: notch sides and home indicator
+    d.update(c);
+    CHECK(d.stats().layout_passes == passes + 1);  // insets changing re-lays out
+    CHECK(d.rect(fill).min == vec2(141, 0));
+    CHECK(d.rect(fill).max == vec2(2532 - 141, 1170 - 63));
+    CHECK(d.rect(bar).min.x == 141.f);
+    CHECK(d.rect(bar).max.x == 2532.f - 141.f);
+    d.update(c);
+    CHECK(d.stats().layout_passes == passes + 1);  // unchanged: no layout
+}
+
 TEST_CASE("ui: a point anchor with no size takes the preferred size around its pivot") {
     Fixture f;
     Document d;

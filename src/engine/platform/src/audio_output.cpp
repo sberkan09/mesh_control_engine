@@ -23,6 +23,7 @@ struct AudioOutput::Impl {
     u32 channels = 2;
     std::atomic<u64> callbacks{0};
     std::atomic<u8> state{static_cast<u8>(AudioOutput::State::Opening)};
+    std::atomic<bool> paused{false};
     FixedString<256> error;  // written before state turns Failed
     u32 sample_rate = 48000;
     std::thread opener;
@@ -58,6 +59,7 @@ void open_stream(AudioOutput::Impl& impl) {
         impl.state.store(static_cast<u8>(AudioOutput::State::Failed), std::memory_order_release);
         return;
     }
+    if (impl.paused.load(std::memory_order_acquire)) SDL_PauseAudioStreamDevice(impl.stream);
     const char* d = SDL_GetCurrentAudioDriver();
     MCE_LOG_INFO("audio: device open ({} Hz, {} ch, driver '{}')", impl.sample_rate, impl.channels, d ? d : "");
     impl.state.store(static_cast<u8>(AudioOutput::State::Open), std::memory_order_release);
@@ -134,6 +136,16 @@ const char* AudioOutput::driver() const {
     const char* d = SDL_GetCurrentAudioDriver();
     return d ? d : "";
 }
+
+void AudioOutput::set_paused(bool paused) {
+    if (!impl_ || impl_->paused.exchange(paused, std::memory_order_acq_rel) == paused) return;
+    // Before Open the opener applies the flag itself (open_stream reads it after resuming).
+    if (state() != State::Open || !impl_->stream) return;
+    if (paused) SDL_PauseAudioStreamDevice(impl_->stream);
+    else SDL_ResumeAudioStreamDevice(impl_->stream);
+}
+
+bool AudioOutput::paused() const { return impl_ && impl_->paused.load(std::memory_order_acquire); }
 
 u64 AudioOutput::callbacks() const { return impl_ ? impl_->callbacks.load(std::memory_order_relaxed) : 0; }
 

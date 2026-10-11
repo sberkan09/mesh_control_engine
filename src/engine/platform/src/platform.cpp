@@ -99,6 +99,26 @@ Window* input_window() {
     return nullptr;
 }
 
+void deliver_all(const Event& e) {
+    for (Window* w : g_state.windows) deliver(w, e);
+}
+
+// SDL hands mobile lifecycle events only to event watchers, from inside the OS callback (iOS app
+// delegate, Android's lifecycle pump), on the main thread. They never reach SDL_PollEvent.
+bool SDLCALL lifecycle_watch(void* /*user*/, SDL_Event* ev) {
+    Event e;
+    switch (ev->type) {
+        case SDL_EVENT_WILL_ENTER_BACKGROUND: e.type = EventType::AppBackground; break;
+        case SDL_EVENT_DID_ENTER_FOREGROUND: e.type = EventType::AppForeground; break;
+        case SDL_EVENT_LOW_MEMORY: e.type = EventType::AppLowMemory; break;
+        case SDL_EVENT_TERMINATING: e.type = EventType::AppTerminating; break;
+        default: return true;
+    }
+    e.timestamp_us = now_us();
+    deliver_all(e);
+    return true;
+}
+
 }  // namespace
 
 const char* event_type_name(EventType t) {
@@ -127,6 +147,12 @@ const char* event_type_name(EventType t) {
         case EventType::TouchDown: return "TouchDown";
         case EventType::TouchMove: return "TouchMove";
         case EventType::TouchUp: return "TouchUp";
+        case EventType::AppBackground: return "AppBackground";
+        case EventType::AppForeground: return "AppForeground";
+        case EventType::AppLowMemory: return "AppLowMemory";
+        case EventType::AppTerminating: return "AppTerminating";
+        case EventType::SafeAreaChanged: return "SafeAreaChanged";
+        case EventType::OrientationChanged: return "OrientationChanged";
     }
     return "?";
 }
@@ -151,6 +177,7 @@ ResultV init(const PlatformDesc& desc) {
     }
     // Gamepads are optional: a missing joystick backend leaves the game keyboard/mouse-only.
     if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) MCE_LOG_WARN("platform: no gamepad support: {}", SDL_GetError());
+    SDL_AddEventWatch(&lifecycle_watch, nullptr);
     g_state.initialized = true;
     g_state.sdl_to_engine_us = static_cast<i64>(now_us()) - static_cast<i64>(SDL_GetTicksNS() / 1000);
     MCE_LOG_INFO("platform: SDL {}.{}.{}, video driver '{}'", SDL_MAJOR_VERSION, SDL_MINOR_VERSION,
@@ -163,6 +190,7 @@ void shutdown() {
     for (Window* w : g_state.windows) MCE_ASSERT_MSG(w == nullptr, "platform::shutdown with a live window");
     detail::close_gamepads();
     for (auto& f : g_state.fingers) f = {};
+    SDL_RemoveEventWatch(&lifecycle_watch, nullptr);
     SDL_Quit();
     g_state.initialized = false;
 }
@@ -221,6 +249,7 @@ bool pump_events() {
             case SDL_EVENT_WINDOW_MINIMIZED:
             case SDL_EVENT_WINDOW_RESTORED:
             case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+            case SDL_EVENT_WINDOW_SAFE_AREA_CHANGED:
             case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED: {
                 Window* w = find_window(ev.window.windowID);
                 e.window_id = ev.window.windowID;
@@ -230,6 +259,7 @@ bool pump_events() {
                     case SDL_EVENT_WINDOW_FOCUS_LOST: e.type = EventType::FocusOut; break;
                     case SDL_EVENT_WINDOW_MINIMIZED: e.type = EventType::Minimized; break;
                     case SDL_EVENT_WINDOW_RESTORED: e.type = EventType::Restored; break;
+                    case SDL_EVENT_WINDOW_SAFE_AREA_CHANGED: e.type = EventType::SafeAreaChanged; break;
                     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
                         e.type = EventType::Resized;
                         e.x = static_cast<f32>(ev.window.data1);
@@ -246,6 +276,13 @@ bool pump_events() {
                 deliver(w, e);
                 break;
             }
+            case SDL_EVENT_DISPLAY_ORIENTATION:
+                e.type = EventType::OrientationChanged;
+                e.code = ev.display.data1 >= 0 && ev.display.data1 <= SDL_ORIENTATION_PORTRAIT_FLIPPED
+                             ? static_cast<u32>(ev.display.data1)
+                             : 0u;
+                deliver_all(e);
+                break;
             case SDL_EVENT_KEY_DOWN:
             case SDL_EVENT_KEY_UP:
                 e.type = ev.type == SDL_EVENT_KEY_DOWN ? EventType::KeyDown : EventType::KeyUp;
@@ -358,6 +395,16 @@ bool pump_events() {
         }
     }
     return quit;
+}
+
+void simulate_app_event(EventType type) {
+    if (type != EventType::AppBackground && type != EventType::AppForeground && type != EventType::AppLowMemory &&
+        type != EventType::AppTerminating)
+        return;
+    Event e;
+    e.type = type;
+    e.timestamp_us = now_us();
+    deliver_all(e);
 }
 
 void inject_touch(u32 window_id, u64 finger, TouchPhase phase, f32 x, f32 y) {
