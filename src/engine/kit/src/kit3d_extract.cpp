@@ -275,6 +275,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     // turned into spans once every MeshRef is in, as poses_ may grow meanwhile.
     poses_.clear();
     pending_.clear();
+    pending_entity_.clear();
     pose_first_.clear();
 
     world.query<const MeshRef&>().each([&](Entity e, const MeshRef& m) {
@@ -298,6 +299,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         render::MeshInstance inst;
         inst.mesh = key;
         inst.world = trs(pos, rot, scale);
+        if (mesh->lod_levels > 1 && lod_states_.size() <= e.index) lod_states_.resize(e.index + 1, 0);
         inst.tint = m.tint;
         inst.emissive_tint = m.emissive_tint;
         inst.cast_shadows = m.cast_shadows != 0;
@@ -323,11 +325,17 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             }
         }
         pending_.push_back(inst);
+        pending_entity_.push_back(e.index);
         ++stats_.meshes;
     });
     for (usize i = 0; i + 2 < pose_first_.size(); i += 3)
         pending_[pose_first_[i + 2]].pose = Span<const mat4>(poses_.data() + pose_first_[i], pose_first_[i + 1]);
-    for (const render::MeshInstance& inst : pending_) scene.add(inst);
+    for (usize i = 0; i < pending_.size(); ++i) {
+        // The level the scene picked last frame (hysteresis), now that lod_states_ no longer grows.
+        render::MeshInstance& inst = pending_[i];
+        if (meshes_->get(inst.mesh)->lod_levels > 1) inst.lod_state = &lod_states_[pending_entity_[i]];
+        scene.add(inst);
+    }
 
     world.query<const PointLight3D&>().each([&](Entity e, const PointLight3D& l) {
         if (!l.enabled || l.intensity <= 0.0f) return;
@@ -365,6 +373,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     // Static copies, cell by cell.
     if (const StaticInstances3D* si = world.try_resource<StaticInstances3D>(); si && !si->instances.empty()) {
         Array<u32>& keys = static_keys_;
+        if (static_lods_.size() != si->instances.size()) static_lods_.resize(si->instances.size(), 0);
         keys.resize(si->meshes.size());
         for (u32 i = 0; i < si->meshes.size(); ++i) keys[i] = mesh_key(si->meshes[i]);
         for (const StaticCell3D& c : si->cells) {
@@ -380,6 +389,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                 inst.mesh = keys[s.mesh];
                 inst.world = trs(s.position, s.rotation, {s.scale, s.scale, s.scale});
                 inst.cast_shadows = s.cast_shadows != 0;
+                inst.lod_state = &static_lods_[i];
                 scene.add(inst);
                 ++stats_.instances;
             }

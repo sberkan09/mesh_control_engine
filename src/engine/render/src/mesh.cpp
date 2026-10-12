@@ -73,11 +73,18 @@ ResultV MeshStore::upload(u32 key, u32 generation, Span<const byte> blob, Textur
     for (usize i = 0; i < m.nodes.size(); ++i)
         m.rest_pose[i] = m.nodes[i].parent < 0 ? node_local(m.nodes[i]) : m.rest_pose[static_cast<usize>(m.nodes[i].parent)] * node_local(m.nodes[i]);
 
-    for (const asset::MeshSubmesh& s : view.submeshes) {
+    for (u32 si = 0; si < view.submeshes.size(); ++si) {
+        const asset::MeshSubmesh& s = view.submeshes[si];
         GpuSubmesh g;
         g.first_index = s.first_index;
         g.index_count = s.index_count;
         g.base_vertex = s.base_vertex;
+        g.lods[0] = GpuLod{s.first_index, s.index_count, s.base_vertex, 0.0f};
+        for (const asset::MeshLod& l : view.submesh_lods(si))
+            g.lods[g.lod_count++] = GpuLod{l.first_index, l.index_count, l.base_vertex, l.error};
+        m.lod_levels = max(m.lod_levels, g.lod_count);
+        for (u32 level = 1; level < asset::kMaxMeshLods; ++level)
+            m.lod_error[level] = max(m.lod_error[level], g.lods[min(level, g.lod_count - 1)].error);
         g.node = s.node;
         const vec3 c{s.center[0], s.center[1], s.center[2]}, e{s.extent[0], s.extent[1], s.extent[2]};
         g.dequant = translation(c) * scaling(e);

@@ -395,6 +395,10 @@ def build_scene(g, font):
     return {"format": "mce-scene", "version": 1, "guid": SCENE_GUID, "name": "main", "entities": ents}
 
 
+# Sidecar LOD settings per model (#158): the rock field is the far view's triangle load.
+LOD_MODELS = {"rock.glb": {"lod_levels": 3, "lod_ratio": 0.3, "lod_error": 0.08}}
+
+
 def main():
     textures = ROOT / "textures"
     write_png(textures / "floor.png", 128, 128, checker(128, (196, 182, 160, 255), (160, 146, 126, 255), 4))
@@ -404,7 +408,10 @@ def main():
     guids = {}
     for name, g in build_models().items():
         g.write(ROOT / "models" / name)
-        guids[name] = sidecar(ROOT / "models" / name, "gltf", 2, {"max_triangles": max(64, tri_count(g) + 64)})
+        settings = {"max_triangles": max(64, tri_count(g) + 64)}
+        if name in LOD_MODELS:  # dense meshes seen far away: cooked LOD levels (meshopt simplify)
+            settings.update(LOD_MODELS[name])
+        guids[name] = sidecar(ROOT / "models" / name, "gltf", 2, settings)
     font = json.loads((ROOT / "fonts" / "ProggyClean.ttf.mceasset").read_text())["guid"]
     scene = build_scene(guids, font)
     (ROOT / "scenes" / "main.mcscene").write_text(json.dumps(scene, indent=2) + "\n")

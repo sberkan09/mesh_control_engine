@@ -3,6 +3,9 @@
   "importer": "gltf",
   "importer_version": 2,
   "settings": {
-    "max_triangles": 3040
+    "max_triangles": 3040,
+    "lod_levels": 3,
+    "lod_ratio": 0.3,
+    "lod_error": 0.08
   }
 }

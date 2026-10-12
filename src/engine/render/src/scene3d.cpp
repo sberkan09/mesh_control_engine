@@ -154,6 +154,34 @@ void Scene3D::add(const MeshInstance& instance) {
     instances_.push_back(instance);
 }
 
+u32 Scene3D::select_lod(const MeshInstance& inst, const GpuMesh& mesh) const {
+    const u32 levels = mesh.lod_levels;
+    if (levels <= 1) return 0;
+    if (lod_.force_level != ~0u) return math::min(lod_.force_level, levels - 1);
+    if (!lod_.enabled) return 0;
+    // World-space bounding sphere and the instance's largest axis scale.
+    const aabb3 wb = transform_aabb(inst.world, mesh.bounds);
+    const f32 radius = length(wb.extents());
+    const f32 sx = length(vec3{inst.world.c[0][0], inst.world.c[0][1], inst.world.c[0][2]});
+    const f32 sy = length(vec3{inst.world.c[1][0], inst.world.c[1][1], inst.world.c[1][2]});
+    const f32 sz = length(vec3{inst.world.c[2][0], inst.world.c[2][1], inst.world.c[2][2]});
+    const f32 scale = math::max(sx, math::max(sy, sz));
+    const f32 distance = math::max(length(wb.center() - view_.position) - radius, view_.near_z);
+    // Pixels per world unit at that distance: proj[1][1] = 1 / tan(fov_y / 2).
+    const f32 px_per_unit = view_.proj.c[1][1] * 0.5f * static_cast<f32>(view_.viewport.height) / distance;
+    auto coarsest = [&](f32 limit) {
+        u32 level = 0;
+        for (u32 l = 1; l < levels; ++l)
+            if (mesh.lod_error[l] * scale * px_per_unit <= limit) level = l;
+        return level;
+    };
+    const u32 loose = coarsest(lod_.pixel_error);
+    if (!inst.lod_state) return loose;
+    const u32 strict = coarsest(lod_.pixel_error * (1.0f - math::clamp(lod_.hysteresis, 0.0f, 0.9f)));
+    const u32 previous = *inst.lod_state;
+    return math::clamp(previous, strict, loose);  // stay put inside the band
+}
+
 void Scene3D::build() {
     MCE_ASSERT_MSG(!built_, "Scene3D::build twice");
     app::IClock& clock = app::steady_clock();
@@ -179,6 +207,10 @@ void Scene3D::build() {
             }
             ++stats_.skinned_instances;
         }
+        const u32 lod = select_lod(inst, mesh);
+        if (inst.lod_state) *inst.lod_state = static_cast<u8>(lod);
+        const u32 shadow_lod = math::min(lod + lod_.shadow_bias, mesh.lod_levels - 1);
+        if (mesh.lod_levels > 1) ++stats_.lod_instances[lod];
         for (u32 s = 0; s < mesh.submeshes.size(); ++s) {
             const GpuSubmesh& sm = mesh.submeshes[s];
             Draw d;
@@ -213,13 +245,25 @@ void Scene3D::build() {
             d.view_depth = dot(c - view_.position, forward);
             d.center = c;
             d.radius = length(wb.extents());
-            if (light_.shadows && inst.cast_shadows && !(sm.material.flags & asset::MaterialFlags::AlphaBlend))
+            if (light_.shadows && inst.cast_shadows && !(sm.material.flags & asset::MaterialFlags::AlphaBlend)) {
+                const GpuLod& sl = mesh.lod(s, shadow_lod);
+                d.lod = shadow_lod;
+                d.first_index = sl.first_index;
+                d.index_count = sl.index_count;
+                d.base_vertex = sl.base_vertex;
                 shadow_draws_.push_back(d);
+            }
             ++stats_.submeshes;
             if (!sphere_visible(view_, c, length(wb.extents()))) continue;
+            const GpuLod& ml = mesh.lod(s, lod);
+            d.lod = lod;
+            d.first_index = ml.first_index;
+            d.index_count = ml.index_count;
+            d.base_vertex = ml.base_vertex;
             draws_.push_back(d);
             ++stats_.visible;
-            stats_.triangles += sm.index_count / 3;
+            stats_.triangles += ml.index_count / 3;
+            stats_.lod_triangles[lod] += ml.index_count / 3;
         }
     }
     stats_.shadow_casters = static_cast<u32>(shadow_draws_.size());

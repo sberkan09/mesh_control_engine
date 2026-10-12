@@ -111,6 +111,9 @@ private:
     Array<render::MeshInstance> pending_;  // this frame's MeshRefs, added once their poses are final
     Array<u32> pose_first_;                // (first pose, node count, pending index) per animated MeshRef
     Array<u32> static_keys_;
+    Array<u32> pending_entity_;  // entity index of each pending_ instance
+    Array<u8> lod_states_;   // per entity index: the LOD level last drawn (Scene3D hysteresis)
+    Array<u8> static_lods_;  // per StaticInstances3D copy
     Kit3DStats stats_;
 };
 

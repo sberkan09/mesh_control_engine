@@ -110,6 +110,22 @@ struct MeshInstance {
     // Multiplies the material's emissive color: recolors glowing FX (tracers, flashes, team lights)
     // on one shared mesh; values above 1 push it into bloom.
     math::vec3 emissive_tint{1.0f, 1.0f, 1.0f};
+    // Meshes with LOD levels (#158): the level drawn last frame, held by the caller per instance so
+    // the choice has hysteresis (null: none, the level follows the screen size exactly). build()
+    // writes the new level back.
+    u8* lod_state = nullptr;
+};
+
+// Screen-size LOD selection (#158): an instance draws the coarsest level whose geometric error,
+// projected at its distance, stays under `pixel_error` pixels. Going coarser needs the error under
+// pixel_error * (1 - hysteresis), so an instance at the boundary does not flicker. Shadow passes
+// draw `shadow_bias` levels coarser than the main view.
+struct LodSettings {
+    bool enabled = true;
+    f32 pixel_error = 1.0f;
+    f32 hysteresis = 0.25f;
+    u32 shadow_bias = 1;
+    u32 force_level = ~0u;  // debugging (r.lod_force): every instance at this level, clamped
 };
 
 struct View3D {
@@ -138,6 +154,10 @@ public:
         math::mat4 normal;  // inverse-transpose of world * node (upper 3x3 used; skinned: of world)
         math::mat4 dequant; // skinned draws: quantized vertex -> bind space (identity otherwise)
         u32 palette;        // skinned draws: first joint matrix in joint_palette(); ~0u = rigid
+        u32 lod;            // the level drawn, and its index range (GpuMesh::lod)
+        u32 first_index;
+        u32 index_count;
+        u32 base_vertex;
         f32 view_depth;     // positive distance along the view axis
         math::vec3 center;  // world bounding sphere
         f32 radius;
@@ -152,6 +172,8 @@ public:
         u32 joints = 0;          // joint matrices in the palette
         u32 point_lights = 0;
         u32 cascade_casters[kMaxCascades] = {};
+        u32 lod_instances[asset::kMaxMeshLods] = {};  // instances at each level (meshes with levels)
+        u32 lod_triangles[asset::kMaxMeshLods] = {};  // visible main-pass triangles at each level
         f32 cluster_ms = 0.0f;   // CPU time of the Forward+ light assignment (not deterministic)
         f32 build_ms = 0.0f;     // CPU time of build() in total (not deterministic)
     };
@@ -166,6 +188,8 @@ public:
     void set_post(const PostFx& post) { post_ = post; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
+    void set_lod(const LodSettings& lod) { lod_ = lod; }
+    const LodSettings& lod() const { return lod_; }
     void add_point_light(const PointLight& light);
     // Instances whose mesh key is not resident are skipped (counted nowhere).
     void add(const MeshInstance& instance);
@@ -204,6 +228,7 @@ public:
 
 private:
     void build_cascades();
+    u32 select_lod(const MeshInstance& inst, const GpuMesh& mesh) const;
 
     const MeshStore* meshes_;
     mem::IAllocator* alloc_;
@@ -215,6 +240,7 @@ private:
     PostFx post_;
     ShadowSettings shadow_settings_;
     ClusterGridDesc cluster_grid_;
+    LodSettings lod_;
     Array<PointLight> point_lights_;
     ClusterLights clusters_;
     Cascade cascades_[kMaxCascades];

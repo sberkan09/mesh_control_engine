@@ -356,10 +356,9 @@ void Forward3D::record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene) {
                 cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
                 bound = d.mesh;
             }
-            const GpuSubmesh& sm = d.mesh->submeshes[d.submesh];
             const ShadowU su{c.view_proj * d.model, d.dequant, {palette_index(d.palette), 0.0f, 0.0f, 0.0f}};
             cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(su));
-            cmd.draw(sm.index_count, 1, sm.first_index, 0, static_cast<i32>(sm.base_vertex));
+            cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
             ++stats_.shadow_draws;
         }
         cmd.end_pass();
@@ -504,7 +503,7 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             ou.dequant = d.dequant;
             ou.skin = {palette_index(d.palette), 0.0f, 0.0f, 0.0f};
             cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
-            cmd.draw(sm.index_count, 1, sm.first_index, 0, static_cast<i32>(sm.base_vertex));
+            cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
             ++stats_.main_draws;
         }
     };

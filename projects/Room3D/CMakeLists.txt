@@ -46,6 +46,9 @@ if(MCE_BUILD_TESTS AND NOT MCE_SDK)
                          -platform.error_box 0 -r.vsync 0 -audio.enabled 0)
         set_tests_properties(room3d_walk_gpu PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "200 ticks, 0 GL errors"
                                                         RESOURCE_LOCK room3d_module)
+        # Mesh LOD (#158): the far view draws at least 5x fewer triangles with the rocks' LODs.
+        add_test(NAME room3d_lod_gpu COMMAND "${CMAKE_COMMAND}" -DGAME=$<TARGET_FILE:room3d> -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/lod_gate.cmake")
+        set_tests_properties(room3d_lod_gpu PROPERTIES LABELS gpu RESOURCE_LOCK room3d_module)
         # The editor shows the 3D scene: the orbit view through the scene's camera, then play-in-editor.
         if(TARGET room3d_editor)
             add_test(NAME room3d_editor_selftest

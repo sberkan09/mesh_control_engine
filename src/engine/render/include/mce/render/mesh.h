@@ -24,10 +24,20 @@
 
 namespace mce::render {
 
+// One level of a submesh's index ranges (level 0 = the submesh itself).
+struct GpuLod {
+    u32 first_index = 0;
+    u32 index_count = 0;
+    u32 base_vertex = 0;
+    f32 error = 0.0f;  // node-local deviation from level 0
+};
+
 struct GpuSubmesh {
     u32 first_index = 0;
     u32 index_count = 0;
     u32 base_vertex = 0;
+    GpuLod lods[asset::kMaxMeshLods];  // [0] mirrors the fields above
+    u32 lod_count = 1;
     u32 node = 0;
     math::mat4 dequant;     // quantized [-1, 1] -> node-local (translate(center) * scale(extent))
     math::aabb3 bounds;     // node-local
@@ -89,6 +99,16 @@ struct GpuMesh {
     Array<f32> keys;
     Array<GpuSkin> skins;     // empty = a static / node-animated mesh
     Array<GpuJoint> joints;
+    // LOD levels of the mesh as a whole: the most any submesh has, and per level the largest
+    // submesh error (a submesh with fewer levels draws its coarsest past them).
+    u32 lod_levels = 1;
+    f32 lod_error[asset::kMaxMeshLods] = {};
+
+    // The index range submesh `s` draws at mesh level `level`.
+    const GpuLod& lod(u32 s, u32 level) const {
+        const GpuSubmesh& sm = submeshes[s];
+        return sm.lods[level < sm.lod_count ? level : sm.lod_count - 1];
+    }
 
     // True when the vertex buffer holds SkinnedMeshVertex (every submesh then draws through the
     // skinned pipelines; rigid submeshes of such a mesh just skip the palette).

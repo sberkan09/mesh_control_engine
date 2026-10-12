@@ -115,6 +115,9 @@ MCE_CVAR(cv_lifecycle_test, "lifecycle_test", "",
 MCE_CVAR(cv_console, "console", true, "Allow the developer console (` or F1)", CVarFlags::None);
 MCE_CVAR(cv_console_open, "console_open", false, "Start with the developer console open", CVarFlags::None);
 MCE_CVAR(cv_msaa, "r.msaa", 4, "3D games: MSAA samples of the 3D frame (1 = off)", CVarFlags::RequiresRestart);
+MCE_CVAR(cv_lod, "r.lod", true, "3D games: draw coarser mesh levels with distance (meshes cooked with LODs)", CVarFlags::None);
+MCE_CVAR(cv_lod_pixels, "r.lod_pixels", 1.0f, "3D games: the largest LOD error allowed on screen, in pixels", CVarFlags::None);
+MCE_CVAR(cv_lod_force, "r.lod_force", -1, "3D games: draw every mesh at this LOD level (-1 = by screen size)", CVarFlags::None);
 MCE_CVAR(cv_preload3d, "r.preload3d", true, "3D games: upload every texture and mesh of the pack at start (0 = on first sight)",
          CVarFlags::None);
 MCE_CVAR(cv_stats, "r.stats", false, "Draw the render stats line (F3 toggles)", CVarFlags::None);
@@ -291,6 +294,11 @@ public:
         if (draw_3d) {
             render::Scene3D scene3(renderer_.meshes(), mem::frame());
             scene3.begin(cam3, bb);
+            render::LodSettings lod;
+            lod.enabled = cv_lod.get_bool();
+            lod.pixel_error = math::max(cv_lod_pixels.get_float(), 0.01f);
+            lod.force_level = cv_lod_force.get_int() < 0 ? ~0u : static_cast<u32>(cv_lod_force.get_int());
+            scene3.set_lod(lod);
             extract3d_.extract(world_, scene3, static_cast<f32>(rc.alpha));
             scene3.build();
             renderer_.record_3d(cmd, scene3);
@@ -352,6 +360,11 @@ public:
     void on_shutdown() override {
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
+        if (three_d_) {  // the last frame's 3D load (tests and LOD measurements read it)
+            const u32* lt = stats3d_.lod_triangles;
+            std::printf("%s: 3D last frame %u triangles (LOD %u/%u/%u/%u), %u draws\n", desc_.app_name, stats3d_.triangles,
+                        lt[0], lt[1], lt[2], lt[3], stats3d_.visible);
+        }
         set_muted(false);
         if (window_) window_->set_event_handler(nullptr, nullptr);
         if (device_ && !post_target_.is_null()) device_->destroy_texture(post_target_);
@@ -581,9 +594,11 @@ private:
         char line[256];
         if (three_d_) {
             const kit::Kit3DStats& k = extract3d_.stats();
-            std::snprintf(line, sizeof line, "3D  TRIS %u  DRAWS %u/%u  MESHES %u  INST %u  LIGHTS %u  ANIM %u  MISSING %u",
-                          stats3d_.triangles, stats3d_.visible, stats3d_.submeshes, k.meshes, k.instances,
-                          stats3d_.point_lights, k.animated, k.missing);
+            const u32* lt = stats3d_.lod_triangles;
+            std::snprintf(line, sizeof line,
+                          "3D  TRIS %u (LOD %u/%u/%u/%u)  DRAWS %u/%u  MESHES %u  INST %u  LIGHTS %u  ANIM %u  MISSING %u",
+                          stats3d_.triangles, lt[0], lt[1], lt[2], lt[3], stats3d_.visible, stats3d_.submeshes, k.meshes,
+                          k.instances, stats3d_.point_lights, k.animated, k.missing);
         } else {
             std::snprintf(line, sizeof line, "2D");
         }
