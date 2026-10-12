@@ -46,6 +46,18 @@ function(mce_add_project game)
     foreach(dir IN LISTS ARG_INCLUDE_DIRS)
         list(APPEND includes "${src}/${dir}")
     endforeach()
+    # The DEPS' headers, for the targets that include them without linking them (the cook's TYPES,
+    # a host's mce/kit/novel_host.h).
+    set(dep_includes)
+    foreach(dep IN LISTS ARG_DEPS)
+        if(TARGET ${dep})
+            get_target_property(dep_real ${dep} ALIASED_TARGET)
+            if(NOT dep_real)
+                set(dep_real ${dep})
+            endif()
+            list(APPEND dep_includes $<TARGET_PROPERTY:${dep_real},INTERFACE_INCLUDE_DIRECTORIES>)
+        endif()
+    endforeach()
 
     # The project's cook: the engine's component types plus the game's. Against the SDK the
     # installed mce_cook loads the game module instead (below).
@@ -53,6 +65,9 @@ function(mce_add_project game)
         add_executable(${game}_cook "${PROJECT_SOURCE_DIR}/tools/cook/main.cpp" "${PROJECT_SOURCE_DIR}/tools/cook/engine_components.cpp"
                                     ${ARG_TYPES})
         target_include_directories(${game}_cook PRIVATE ${includes})
+        # The game's TYPES may include an opt-in library's components (mce/kit/novel_components.h):
+        # its headers only, the cook does not link it.
+        target_include_directories(${game}_cook PRIVATE ${dep_includes})
         mce_engine_deps(cook_deps mce::mce_asset_cook mce::mce_gameplay_kit mce::mce_physics2d mce::mce_audio mce::mce_ecs_scene)
         target_link_libraries(${game}_cook PRIVATE ${cook_deps})
         mce_apply_compile_policy(${game}_cook)
@@ -79,6 +94,7 @@ function(mce_add_project game)
         target_include_directories(${game}_game PRIVATE ${includes})
         target_link_libraries(${game}_game PRIVATE ${ARG_DEPS})
         add_executable(${game} ${ARG_HOST})
+        target_include_directories(${game} PRIVATE ${dep_includes})
         target_compile_definitions(${game} PRIVATE MCE_PROJECT_MODULE="$<TARGET_FILE:${game}_game>"
                                                    MCE_PROJECT_MODULE_NAME="$<TARGET_FILE_NAME:${game}_game>")
         add_dependencies(${game} ${game}_game)

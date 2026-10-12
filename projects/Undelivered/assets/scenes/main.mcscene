@@ -11,7 +11,7 @@
         "Camera2DComponent": { "pixels_per_meter": 64, "clear_color": [0.05, 0.045, 0.04, 1], "pixel_snap": false },
         "LocalTransform": {},
         "Post2DComponent": { "vignette": true, "vignette_intensity": 0.38, "vignette_radius": 0.85, "vignette_softness": 0.7, "color_grade": true, "lut": "guid:2c84d534-a533-4689-a7d6-40d0455c52b9", "lut_strength": 0.85 },
-        "UiPart": { "role": "Camera" }
+        "StagePart": { "role": "Camera" }
       }
     },
     {
@@ -19,9 +19,8 @@
       "name": "Story",
       "components": {
         "LocalTransform": {},
-        "NovelSave": {},
-        "SaveKey": { "key": 1 },
-        "UiPart": { "role": "Save" }
+        "StoryState": {},
+        "SaveKey": { "key": 1 }
       }
     },
     {
@@ -30,7 +29,7 @@
       "components": {
         "LocalTransform": {},
         "Sprite": { "tint": [1, 1, 1, 0], "size": [20, 11.25] },
-        "UiPart": { "role": "Background" }
+        "StagePart": { "role": "Background" }
       }
     },
     {
@@ -39,7 +38,7 @@
       "components": {
         "LocalTransform": {},
         "Sprite": { "tint": [1, 1, 1, 0], "size": [20, 11.25], "order": 1 },
-        "UiPart": { "role": "Background", "index": 1 }
+        "StagePart": { "role": "Background", "index": 1 }
       }
     },
     {
@@ -48,7 +47,7 @@
       "components": {
         "LocalTransform": {},
         "Sprite": { "tint": [1, 1, 1, 0], "size": [20, 11.25], "order": 2 },
-        "UiPart": { "role": "Background", "index": 2 }
+        "StagePart": { "role": "Background", "index": 2 }
       }
     },
     {
@@ -57,7 +56,7 @@
       "components": {
         "LocalTransform": {},
         "Sprite": { "tint": [1, 1, 1, 0], "size": [20, 11.25], "order": 3 },
-        "UiPart": { "role": "Background", "index": 3 }
+        "StagePart": { "role": "Background", "index": 3 }
       }
     },
     {
@@ -66,7 +65,7 @@
       "components": {
         "LocalTransform": {},
         "Sprite": { "tint": [1, 1, 1, 0], "size": [20, 11.25], "order": 4 },
-        "UiPart": { "role": "Background", "index": 4 }
+        "StagePart": { "role": "Background", "index": 4 }
       }
     },
     {
@@ -75,7 +74,7 @@
       "components": {
         "Light2D": { "kind": "Ambient" },
         "LocalTransform": {},
-        "UiPart": { "role": "AmbientLight" }
+        "StagePart": { "role": "AmbientLight" }
       }
     },
     {
@@ -84,7 +83,7 @@
       "components": {
         "Light2D": { "color": [1, 0.95, 0.85, 1], "radius": 12, "height": 2.5 },
         "LocalTransform": { "position": [0, 5, 0] },
-        "UiPart": { "role": "Light" }
+        "StagePart": { "role": "Light" }
       }
     },
     {
@@ -93,7 +92,7 @@
       "components": {
         "LocalTransform": { "position": [-5.5, -1, 0] },
         "Sprite": { "tint": [1, 1, 1, 0], "size": [5.625, 11.25], "layer": 2 },
-        "UiPart": { "role": "Cast" }
+        "StagePart": { "role": "Cast" }
       }
     },
     {
@@ -102,7 +101,7 @@
       "components": {
         "LocalTransform": { "position": [0, -1, 0] },
         "Sprite": { "tint": [1, 1, 1, 0], "size": [5.625, 11.25], "layer": 2 },
-        "UiPart": { "role": "Cast", "index": 1 }
+        "StagePart": { "role": "Cast", "index": 1 }
       }
     },
     {
@@ -111,7 +110,7 @@
       "components": {
         "LocalTransform": { "position": [5.5, -1, 0] },
         "Sprite": { "tint": [1, 1, 1, 0], "size": [5.625, 11.25], "layer": 2 },
-        "UiPart": { "role": "Cast", "index": 2 }
+        "StagePart": { "role": "Cast", "index": 2 }
       }
     },
     {
@@ -120,7 +119,7 @@
       "components": {
         "LocalTransform": {},
         "Sprite": { "tint": [0.02, 0.015, 0.01, 0], "size": [22, 13.25], "layer": 5 },
-        "UiPart": { "role": "Dim" }
+        "StagePart": { "role": "Dim" }
       }
     },
     {
@@ -129,7 +128,7 @@
       "components": {
         "LocalTransform": {},
         "Sprite": { "tint": [0, 0, 0, 1], "size": [22, 13.25], "layer": 12 },
-        "UiPart": { "role": "Fade" }
+        "StagePart": { "role": "Fade" }
       }
     },
     {
@@ -138,7 +137,7 @@
       "components": {
         "LocalTransform": { "position": [0, 3, 0] },
         "Sprite": { "texture": "guid:a4dde353-36ab-484e-9fbb-26ea85bcb923", "tint": [1, 0.9, 0.7, 0], "size": [16, 2.4], "layer": 6 },
-        "UiPart": { "role": "Glow" }
+        "StagePart": { "role": "Glow" }
       }
     },
     {
@@ -147,7 +146,7 @@
       "components": {
         "LocalTransform": { "position": [0, -3.8281, 0] },
         "Sprite": { "texture": "guid:57dfde89-1efc-4cbd-98f2-9d70f8cc2d16", "tint": [1, 1, 1, 0], "size": [20, 3.5938], "layer": 6 },
-        "UiPart": { "role": "Box" }
+        "StagePart": { "role": "Box" }
       }
     },
     {
@@ -156,7 +155,7 @@
       "components": {
         "LocalTransform": { "position": [-6.3, -1.95, 0] },
         "Sprite": { "texture": "guid:7117d7e9-3784-4ad0-85fe-60383679fcf9", "tint": [1, 1, 1, 0], "size": [5, 0.9375], "layer": 7 },
-        "UiPart": { "role": "NameTag" }
+        "StagePart": { "role": "NameTag" }
       }
     },
     {
@@ -165,7 +164,7 @@
       "components": {
         "LocalTransform": { "position": [-6.3, -1.95, 0] },
         "TextLabel": { "font": "guid:5595d781-239a-4615-b610-eccdd66e323a", "color": [1, 0.93, 0.8, 1], "height": 0.42, "layer": 8 },
-        "UiPart": { "role": "NameText" }
+        "StagePart": { "role": "NameText" }
       }
     },
     {
@@ -174,7 +173,7 @@
       "components": {
         "LocalTransform": { "position": [-6.7, -2.85, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "Line" }
+        "StagePart": { "role": "Line" }
       }
     },
     {
@@ -183,7 +182,7 @@
       "components": {
         "LocalTransform": { "position": [-6.7, -3.47, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "Line", "index": 1 }
+        "StagePart": { "role": "Line", "index": 1 }
       }
     },
     {
@@ -192,7 +191,7 @@
       "components": {
         "LocalTransform": { "position": [-6.7, -4.09, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "Line", "index": 2 }
+        "StagePart": { "role": "Line", "index": 2 }
       }
     },
     {
@@ -201,7 +200,7 @@
       "components": {
         "LocalTransform": { "position": [-6.7, -4.71, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "Line", "index": 3 }
+        "StagePart": { "role": "Line", "index": 3 }
       }
     },
     {
@@ -210,7 +209,7 @@
       "components": {
         "LocalTransform": { "position": [0, 3, 0] },
         "Sprite": { "texture": "guid:4f489e5d-b9a1-48b0-95fb-63e3b1583cac", "tint": [1, 1, 1, 0], "size": [14.0625, 0.9688], "layer": 7 },
-        "UiPart": { "role": "ChoiceRow" }
+        "StagePart": { "role": "ChoiceRow" }
       }
     },
     {
@@ -219,7 +218,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, 3, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "ChoiceText" }
+        "StagePart": { "role": "ChoiceText" }
       }
     },
     {
@@ -228,7 +227,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, 2.63, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "ChoiceText2" }
+        "StagePart": { "role": "ChoiceText2" }
       }
     },
     {
@@ -237,7 +236,7 @@
       "components": {
         "LocalTransform": { "position": [0, 1.1, 0] },
         "Sprite": { "texture": "guid:4f489e5d-b9a1-48b0-95fb-63e3b1583cac", "tint": [1, 1, 1, 0], "size": [14.0625, 0.9688], "layer": 7 },
-        "UiPart": { "role": "ChoiceRow", "index": 1 }
+        "StagePart": { "role": "ChoiceRow", "index": 1 }
       }
     },
     {
@@ -246,7 +245,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, 1.1, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "ChoiceText", "index": 1 }
+        "StagePart": { "role": "ChoiceText", "index": 1 }
       }
     },
     {
@@ -255,7 +254,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, 0.73, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "ChoiceText2", "index": 1 }
+        "StagePart": { "role": "ChoiceText2", "index": 1 }
       }
     },
     {
@@ -264,7 +263,7 @@
       "components": {
         "LocalTransform": { "position": [0, -0.8, 0] },
         "Sprite": { "texture": "guid:4f489e5d-b9a1-48b0-95fb-63e3b1583cac", "tint": [1, 1, 1, 0], "size": [14.0625, 0.9688], "layer": 7 },
-        "UiPart": { "role": "ChoiceRow", "index": 2 }
+        "StagePart": { "role": "ChoiceRow", "index": 2 }
       }
     },
     {
@@ -273,7 +272,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, -0.8, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "ChoiceText", "index": 2 }
+        "StagePart": { "role": "ChoiceText", "index": 2 }
       }
     },
     {
@@ -282,7 +281,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, -1.17, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "ChoiceText2", "index": 2 }
+        "StagePart": { "role": "ChoiceText2", "index": 2 }
       }
     },
     {
@@ -291,7 +290,7 @@
       "components": {
         "LocalTransform": { "position": [0, -2.7, 0] },
         "Sprite": { "texture": "guid:4f489e5d-b9a1-48b0-95fb-63e3b1583cac", "tint": [1, 1, 1, 0], "size": [14.0625, 0.9688], "layer": 7 },
-        "UiPart": { "role": "ChoiceRow", "index": 3 }
+        "StagePart": { "role": "ChoiceRow", "index": 3 }
       }
     },
     {
@@ -300,7 +299,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, -2.7, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "ChoiceText", "index": 3 }
+        "StagePart": { "role": "ChoiceText", "index": 3 }
       }
     },
     {
@@ -309,7 +308,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, -3.07, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "layer": 8, "align": "Left" },
-        "UiPart": { "role": "ChoiceText2", "index": 3 }
+        "StagePart": { "role": "ChoiceText2", "index": 3 }
       }
     },
     {
@@ -318,7 +317,7 @@
       "components": {
         "LocalTransform": { "position": [0, 0.3, 0] },
         "Sprite": { "texture": "guid:8d1a8e12-90dc-4eb2-bb67-95bc163b956e", "tint": [1, 1, 1, 0], "size": [15.625, 10], "layer": 9 },
-        "UiPart": { "role": "LetterCard" }
+        "StagePart": { "role": "LetterCard" }
       }
     },
     {
@@ -327,7 +326,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, 4.4, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine" }
+        "StagePart": { "role": "LetterLine" }
       }
     },
     {
@@ -336,7 +335,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, 3.66, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine", "index": 1 }
+        "StagePart": { "role": "LetterLine", "index": 1 }
       }
     },
     {
@@ -345,7 +344,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, 2.92, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine", "index": 2 }
+        "StagePart": { "role": "LetterLine", "index": 2 }
       }
     },
     {
@@ -354,7 +353,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, 2.18, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine", "index": 3 }
+        "StagePart": { "role": "LetterLine", "index": 3 }
       }
     },
     {
@@ -363,7 +362,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, 1.44, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine", "index": 4 }
+        "StagePart": { "role": "LetterLine", "index": 4 }
       }
     },
     {
@@ -372,7 +371,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, 0.7, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine", "index": 5 }
+        "StagePart": { "role": "LetterLine", "index": 5 }
       }
     },
     {
@@ -381,7 +380,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, -0.04, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine", "index": 6 }
+        "StagePart": { "role": "LetterLine", "index": 6 }
       }
     },
     {
@@ -390,7 +389,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, -0.78, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine", "index": 7 }
+        "StagePart": { "role": "LetterLine", "index": 7 }
       }
     },
     {
@@ -399,7 +398,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, -1.52, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine", "index": 8 }
+        "StagePart": { "role": "LetterLine", "index": 8 }
       }
     },
     {
@@ -408,7 +407,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, -2.26, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine", "index": 9 }
+        "StagePart": { "role": "LetterLine", "index": 9 }
       }
     },
     {
@@ -417,7 +416,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, -3, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine", "index": 10 }
+        "StagePart": { "role": "LetterLine", "index": 10 }
       }
     },
     {
@@ -426,7 +425,7 @@
       "components": {
         "LocalTransform": { "position": [-6.6, -3.74, 0] },
         "TextLabel": { "font": "guid:dd04c9ce-d300-44fe-b60b-d1208935c861", "color": [0.17, 0.13, 0.1, 1], "height": 0.47, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "LetterLine", "index": 11 }
+        "StagePart": { "role": "LetterLine", "index": 11 }
       }
     },
     {
@@ -435,7 +434,7 @@
       "components": {
         "LocalTransform": { "position": [0, 0.2, 0] },
         "Sprite": { "texture": "guid:41ac7d38-dc7f-48d4-979d-04de793a9451", "tint": [1, 1, 1, 0], "size": [17.1875, 9.6875], "layer": 9 },
-        "UiPart": { "role": "Panel" }
+        "StagePart": { "role": "Panel" }
       }
     },
     {
@@ -444,7 +443,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, 4.3, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine" }
+        "StagePart": { "role": "PanelLine" }
       }
     },
     {
@@ -453,7 +452,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, 3.68, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 1 }
+        "StagePart": { "role": "PanelLine", "index": 1 }
       }
     },
     {
@@ -462,7 +461,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, 3.06, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 2 }
+        "StagePart": { "role": "PanelLine", "index": 2 }
       }
     },
     {
@@ -471,7 +470,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, 2.44, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 3 }
+        "StagePart": { "role": "PanelLine", "index": 3 }
       }
     },
     {
@@ -480,7 +479,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, 1.82, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 4 }
+        "StagePart": { "role": "PanelLine", "index": 4 }
       }
     },
     {
@@ -489,7 +488,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, 1.2, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 5 }
+        "StagePart": { "role": "PanelLine", "index": 5 }
       }
     },
     {
@@ -498,7 +497,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, 0.58, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 6 }
+        "StagePart": { "role": "PanelLine", "index": 6 }
       }
     },
     {
@@ -507,7 +506,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, -0.04, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 7 }
+        "StagePart": { "role": "PanelLine", "index": 7 }
       }
     },
     {
@@ -516,7 +515,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, -0.66, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 8 }
+        "StagePart": { "role": "PanelLine", "index": 8 }
       }
     },
     {
@@ -525,7 +524,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, -1.28, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 9 }
+        "StagePart": { "role": "PanelLine", "index": 9 }
       }
     },
     {
@@ -534,7 +533,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, -1.9, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 10 }
+        "StagePart": { "role": "PanelLine", "index": 10 }
       }
     },
     {
@@ -543,7 +542,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, -2.52, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 11 }
+        "StagePart": { "role": "PanelLine", "index": 11 }
       }
     },
     {
@@ -552,7 +551,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, -3.14, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 12 }
+        "StagePart": { "role": "PanelLine", "index": 12 }
       }
     },
     {
@@ -561,7 +560,7 @@
       "components": {
         "LocalTransform": { "position": [-7.6, -3.76, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.92, 0.88, 0.8, 1], "height": 0.46, "layer": 10, "align": "Left" },
-        "UiPart": { "role": "PanelLine", "index": 13 }
+        "StagePart": { "role": "PanelLine", "index": 13 }
       }
     },
     {
@@ -570,7 +569,7 @@
       "components": {
         "LocalTransform": { "position": [-6, 1.6, 0] },
         "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
-        "UiPart": { "role": "Envelope" }
+        "DrawerPart": { "role": "Envelope" }
       }
     },
     {
@@ -579,7 +578,7 @@
       "components": {
         "LocalTransform": { "position": [-2, 1.6, 0] },
         "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
-        "UiPart": { "role": "Envelope", "index": 1 }
+        "DrawerPart": { "role": "Envelope", "index": 1 }
       }
     },
     {
@@ -588,7 +587,7 @@
       "components": {
         "LocalTransform": { "position": [2, 1.6, 0] },
         "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
-        "UiPart": { "role": "Envelope", "index": 2 }
+        "DrawerPart": { "role": "Envelope", "index": 2 }
       }
     },
     {
@@ -597,7 +596,7 @@
       "components": {
         "LocalTransform": { "position": [6, 1.6, 0] },
         "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
-        "UiPart": { "role": "Envelope", "index": 3 }
+        "DrawerPart": { "role": "Envelope", "index": 3 }
       }
     },
     {
@@ -606,7 +605,7 @@
       "components": {
         "LocalTransform": { "position": [-4, -1.6, 0] },
         "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
-        "UiPart": { "role": "Envelope", "index": 4 }
+        "DrawerPart": { "role": "Envelope", "index": 4 }
       }
     },
     {
@@ -615,7 +614,7 @@
       "components": {
         "LocalTransform": { "position": [0, -1.6, 0] },
         "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
-        "UiPart": { "role": "Envelope", "index": 5 }
+        "DrawerPart": { "role": "Envelope", "index": 5 }
       }
     },
     {
@@ -624,7 +623,7 @@
       "components": {
         "LocalTransform": { "position": [4, -1.6, 0] },
         "Sprite": { "texture": "guid:8ab30d6c-2caf-4eff-a93b-05dd79c21271", "tint": [1, 1, 1, 0], "size": [3.4, 2.125], "layer": 3 },
-        "UiPart": { "role": "Envelope", "index": 6 }
+        "DrawerPart": { "role": "Envelope", "index": 6 }
       }
     },
     {
@@ -633,7 +632,7 @@
       "components": {
         "LocalTransform": { "position": [-5.4, 1.3, 0], "rotation": [0, 0, -0.1045, 0.9945] },
         "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
-        "UiPart": { "role": "Stamp" }
+        "DrawerPart": { "role": "Stamp" }
       }
     },
     {
@@ -642,7 +641,7 @@
       "components": {
         "LocalTransform": { "position": [-1.4, 1.3, 0], "rotation": [0, 0, -0.1045, 0.9945] },
         "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
-        "UiPart": { "role": "Stamp", "index": 1 }
+        "DrawerPart": { "role": "Stamp", "index": 1 }
       }
     },
     {
@@ -651,7 +650,7 @@
       "components": {
         "LocalTransform": { "position": [2.6, 1.3, 0], "rotation": [0, 0, -0.1045, 0.9945] },
         "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
-        "UiPart": { "role": "Stamp", "index": 2 }
+        "DrawerPart": { "role": "Stamp", "index": 2 }
       }
     },
     {
@@ -660,7 +659,7 @@
       "components": {
         "LocalTransform": { "position": [6.6, 1.3, 0], "rotation": [0, 0, -0.1045, 0.9945] },
         "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
-        "UiPart": { "role": "Stamp", "index": 3 }
+        "DrawerPart": { "role": "Stamp", "index": 3 }
       }
     },
     {
@@ -669,7 +668,7 @@
       "components": {
         "LocalTransform": { "position": [-3.4, -1.9, 0], "rotation": [0, 0, -0.1045, 0.9945] },
         "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
-        "UiPart": { "role": "Stamp", "index": 4 }
+        "DrawerPart": { "role": "Stamp", "index": 4 }
       }
     },
     {
@@ -678,7 +677,7 @@
       "components": {
         "LocalTransform": { "position": [0.6, -1.9, 0], "rotation": [0, 0, -0.1045, 0.9945] },
         "Sprite": { "texture": "guid:653046b5-7409-4225-b042-8b14d93fdea0", "tint": [0.75, 0.2, 0.15, 0], "size": [1.9, 0.86], "layer": 4 },
-        "UiPart": { "role": "Stamp", "index": 5 }
+        "DrawerPart": { "role": "Stamp", "index": 5 }
       }
     },
     {
@@ -687,7 +686,7 @@
       "components": {
         "LocalTransform": { "position": [9.6, 5.15, 0] },
         "TextLabel": { "font": "guid:33218a5e-c81d-450b-ae66-8de6aac93a05", "color": [0.3, 0.24, 0.19, 0.85], "height": 0.38, "layer": 11, "align": "Right" },
-        "UiPart": { "role": "Hud" }
+        "StagePart": { "role": "Hud" }
       }
     },
     {
@@ -696,7 +695,7 @@
       "components": {
         "LocalTransform": { "position": [0, 4.6, 0] },
         "TextLabel": { "font": "guid:5595d781-239a-4615-b610-eccdd66e323a", "color": [0.98, 0.94, 0.85, 1], "height": 1.25, "layer": 11 },
-        "UiPart": { "role": "Title" }
+        "StagePart": { "role": "Title" }
       }
     },
     {
@@ -705,7 +704,7 @@
       "components": {
         "AudioSource": { "gain_db": -8, "bus": 1, "loop": true },
         "LocalTransform": {},
-        "UiPart": { "role": "Music" }
+        "StagePart": { "role": "Music" }
       }
     },
     {
@@ -714,7 +713,7 @@
       "components": {
         "AudioSource": { "gain_db": -12, "loop": true },
         "LocalTransform": {},
-        "UiPart": { "role": "Ambience" }
+        "StagePart": { "role": "Ambience" }
       }
     }
   ]

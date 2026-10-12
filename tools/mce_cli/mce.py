@@ -12,6 +12,8 @@
                                                 (Claude Code, also Claude Desktop's Code tab); --desktop
                                                 also adds it to Claude Desktop's own config
     mce cook <project> [cook flags...]          cook assets/ with the module loaded (--pack, --force, --adopt)
+    mce story compile [<project>] [--check] [--werror]   compile story/*.story (story/story.json) into the
+                                                game's C++ header (mce/kit/novel.h) and story/REPORT.md
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
     mce update [<project>...] [--release [tag]] [--no-pull]  reinstall this SDK from where it came from, then rebuild
                                                 the projects named (their modules must match the new engine)
@@ -250,6 +252,18 @@ def cmd_cook(args):
     return run([tool("mce_cook"), "--module", p.module, p.dir] + args.rest)
 
 
+def story_compiler():
+    # The SDK's copy, or the engine tree's when mce runs from a checkout (tools/mce_cli/mce.py).
+    for path in (SHARE / "scripts" / "story_compile.py", HERE.parents[1] / "story" / "story_compile.py"):
+        if path.is_file():
+            return path
+    sys.exit("mce: story_compile.py is missing (expected share/mce/scripts/story_compile.py)")
+
+
+def cmd_story(args):
+    return run([sys.executable, story_compiler(), args.project] + args.rest)
+
+
 def sdk_version():
     version = SHARE / "VERSION"
     lines = version.read_text(encoding="utf-8").splitlines() if version.is_file() else []
@@ -387,6 +401,13 @@ def main(argv):
         s.add_argument("project")
         s.add_argument("rest", nargs=argparse.REMAINDER, help="flags passed through")
         s.set_defaults(fn=fn)
+
+    s = sub.add_parser("story", help="the visual-novel story compiler (mce story compile <project>)")
+    story = s.add_subparsers(dest="story_command", metavar="compile", required=True)
+    s = story.add_parser("compile", help="compile story/*.story into the game's header (--check: validate only)")
+    s.add_argument("project", nargs="?", default=".")
+    s.add_argument("rest", nargs=argparse.REMAINDER, help="--check, --werror, --out <header>, --report <md>")
+    s.set_defaults(fn=cmd_story)
 
     s = sub.add_parser("mcp-config", help="register the project's MCP server with Claude Code (.mcp.json) "
                                           "and, with --desktop, Claude Desktop")

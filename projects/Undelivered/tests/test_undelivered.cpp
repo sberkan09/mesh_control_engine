@@ -1,7 +1,7 @@
 // Undelivered: the compiled script, the authored scene, and the game played through its real
-// systems by the bot (five policies, five endings), a save reloaded mid-run, determinism. It loads
-// the cooked pack the build makes from assets/ (undelivered_content), so it tests the scene as the
-// editor MCP server saved it.
+// systems (the visual-novel kit and the game's hooks) by the bot (five policies, five endings), a
+// save reloaded mid-run, determinism. It loads the cooked pack the build makes from assets/
+// (undelivered_content), so it tests the scene as the editor MCP server saved it.
 #include <doctest/doctest.h>
 
 #include <cstdio>
@@ -21,6 +21,8 @@
 using namespace mce;
 using namespace undelivered;
 namespace st = story;
+namespace nv = mce::novel;
+using nv::StageRole;
 
 namespace {
 
@@ -55,11 +57,17 @@ struct Game {
         w.tick(1.0 / 60.0, tick++);
     }
     NovelState& n() { return w.resource<NovelState>(); }
-    NovelSave& s() { return *novel_save(w); }
+    nv::StoryState& s() { return *novel_save(w); }
+    i32 var(u16 v) { return nv::get_var(s(), v); }
     template <class C>
-    u32 count(UiRole role) {
+    u32 count(StageRole role) {
         u32 c = 0;
-        w.query<const UiPart&, const C&>().each([&](const UiPart& p, const C&) { c += p.role == role ? 1u : 0u; });
+        w.query<const nv::StagePart&, const C&>().each([&](const nv::StagePart& p, const C&) { c += p.role == role ? 1u : 0u; });
+        return c;
+    }
+    u32 count(DrawerRole role) {
+        u32 c = 0;
+        w.query<const DrawerPart&, const kit::Sprite&>().each([&](const DrawerPart& p, const kit::Sprite&) { c += p.role == role ? 1u : 0u; });
         return c;
     }
     // Ticks until an @end ran (or the budget is spent).
@@ -101,7 +109,7 @@ TEST_CASE("undelivered: the compiled script's tables are consistent") {
                 break;
             case st::OpKind::Jump:
             case st::OpKind::Call: CHECK(op.a < st::kOpCount); break;
-            case st::OpKind::If: CHECK(op.d < st::kOpCount); break;
+            case st::OpKind::If: CHECK(op.b < st::kOpCount); break;
             case st::OpKind::Letter: CHECK(op.b < st::kOpCount); CHECK(op.b == st::kLetterLabels[op.a]); break;
             case st::OpKind::LetterPage: CHECK(op.a + op.b <= st::kLetterLineCount); CHECK(op.b <= st::kLetterLinesPerPage); break;
             default: break;
@@ -117,22 +125,23 @@ TEST_CASE("undelivered: the compiled script's tables are consistent") {
 
 TEST_CASE("undelivered: the authored scene is a whole stage") {
     Game g(0);
-    CHECK(g.count<kit::Sprite>(UiRole::Background) == 5);
-    CHECK(g.count<kit::Sprite>(UiRole::Cast) == 3);
-    CHECK(g.count<kit::TextLabel>(UiRole::Line) == 4);
-    CHECK(g.count<kit::Sprite>(UiRole::ChoiceRow) == 4);
-    CHECK(g.count<kit::TextLabel>(UiRole::ChoiceText) == 4);
-    CHECK(g.count<kit::TextLabel>(UiRole::ChoiceText2) == 4);
-    CHECK(g.count<kit::TextLabel>(UiRole::LetterLine) == 12);
-    CHECK(g.count<kit::TextLabel>(UiRole::PanelLine) == 14);
-    CHECK(g.count<kit::Sprite>(UiRole::Envelope) == 7);
-    CHECK(g.count<kit::Sprite>(UiRole::Stamp) == 6);
-    CHECK(g.count<audio::AudioSource>(UiRole::Music) == 1);
-    CHECK(g.count<audio::AudioSource>(UiRole::Ambience) == 1);
-    CHECK(g.count<kit::Light2D>(UiRole::Light) == 1);
-    CHECK(g.count<kit::Post2DComponent>(UiRole::Camera) == 1);
-    CHECK(g.count<NovelSave>(UiRole::Save) == 1);
-    CHECK(g.count<SaveKey>(UiRole::Save) == 1);
+    CHECK(g.count<kit::Sprite>(StageRole::Background) == 5);
+    CHECK(g.count<kit::Sprite>(StageRole::Cast) == 3);
+    CHECK(g.count<kit::TextLabel>(StageRole::Line) == 4);
+    CHECK(g.count<kit::Sprite>(StageRole::ChoiceRow) == 4);
+    CHECK(g.count<kit::TextLabel>(StageRole::ChoiceText) == 4);
+    CHECK(g.count<kit::TextLabel>(StageRole::ChoiceText2) == 4);
+    CHECK(g.count<kit::TextLabel>(StageRole::LetterLine) == 12);
+    CHECK(g.count<kit::TextLabel>(StageRole::PanelLine) == 14);
+    CHECK(g.count(DrawerRole::Envelope) == 7);
+    CHECK(g.count(DrawerRole::Stamp) == 6);
+    CHECK(g.count<audio::AudioSource>(StageRole::Music) == 1);
+    CHECK(g.count<audio::AudioSource>(StageRole::Ambience) == 1);
+    CHECK(g.count<kit::Light2D>(StageRole::Light) == 1);
+    CHECK(g.count<kit::Post2DComponent>(StageRole::Camera) == 1);
+    u32 saves = 0;
+    g.w.query<const nv::StoryState&, const SaveKey&>().each([&](const nv::StoryState&, const SaveKey&) { ++saves; });
+    CHECK(saves == 1);
     g.step();
     CHECK(g.n().mode == Mode::Title);
     CHECK(g.n().assets != nullptr);
@@ -143,7 +152,7 @@ TEST_CASE("undelivered: the authored scene is a whole stage") {
     CHECK(!g.n().lut[static_cast<u32>(st::Lut::Night)].is_null());
     CHECK(!g.n().music[static_cast<u32>(st::Music::Harbour)].is_null());
     CHECK(!g.n().sfx[static_cast<u32>(st::Sfx::Page)].is_null());
-    CHECK(!g.n().paper_normal.is_null());
+    CHECK(!g.n().normal_map.is_null());
 }
 
 TEST_CASE("undelivered: a player's inputs start a run, read a page and take a choice") {
@@ -154,7 +163,7 @@ TEST_CASE("undelivered: a player's inputs start a run, read a page and take a ch
     confirm.confirm_pressed = true;
     g.step(confirm);  // New game
     CHECK(g.n().mode == Mode::Reading);
-    CHECK(g.s().day == 1);
+    CHECK(g.var(st::var::day) == 1);
     CHECK(g.n().revealed < static_cast<f32>(g.n().page_chars));
     for (u32 i = 0; i < 60; ++i) g.step();
     CHECK(g.n().revealed > 30.0f);  // 40 code points per second
@@ -213,13 +222,13 @@ TEST_CASE("undelivered: a save written at a journal reloads and finishes the sam
     u32 journals = 0;
     for (u32 i = 0; i < 30000 && journals < 3; ++i) {
         a.step();
-        if (a.n().mode == Mode::Journal) {
+        if (a.n().mode == Mode::Checkpoint) {
             ++journals;
             if (journals == 3) break;
         }
     }
     REQUIRE(journals == 3);
-    REQUIRE(a.s().day == 3);
+    REQUIRE(a.var(st::var::day) == 3);
     const u16 pc = a.s().pc;
     Array<byte> payload;
     save::SaveInfo info;
@@ -232,15 +241,14 @@ TEST_CASE("undelivered: a save written at a journal reloads and finishes the sam
     CHECK(st_.value().entities == 1);
     CHECK(st_.value().unknown_fields == 0);
     b.step();  // boot: the title with Continue; the bot continues the loaded run on this tick
-    CHECK(b.s().day >= 3);
-    CHECK(b.s().trust_mira == a.s().trust_mira);
-    CHECK(b.s().delivered == a.s().delivered);
+    CHECK(b.var(st::var::day) >= 3);
+    CHECK(b.var(st::var::trust_mira) == a.var(st::var::trust_mira));
+    CHECK(std::memcmp(b.s().flags, a.s().flags, sizeof(a.s().flags)) == 0);
     CHECK(pc != 0);
     REQUIRE(a.play());
     REQUIRE(b.play());
     CHECK(a.n().ending == b.n().ending);
-    CHECK(a.s().flags == b.s().flags);
-    CHECK(a.s().delivered == b.s().delivered);
+    CHECK(std::memcmp(a.s().flags, b.s().flags, sizeof(a.s().flags)) == 0);
     CHECK(a.s().endings_seen == b.s().endings_seen);
 }
 
