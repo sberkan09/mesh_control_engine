@@ -131,6 +131,7 @@ public:
     void duplicate_selection();
     // The viewport frames the whole scene (or the selection) on its next draw.
     void frame_scene() { frame_request_ = true; }
+    bool frame_requested() const { return frame_request_; }
     bool take_frame_request() {
         const bool r = frame_request_;
         frame_request_ = false;

@@ -5,6 +5,7 @@
 #include "mce/input/default_map.h"
 #include "mce/input/ecs.h"
 #include "mce/input/input_system.h"
+#include "mce/kit/kit3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/log.h"
@@ -92,6 +93,7 @@ Result<void> PlaySession::enter(EditorProject& project, const SceneDocument& doc
     audio::install(*world_, *audio_, clips_.get());
     kit::install_particles(*world_, assets);
     kit::install_sequences(*world_, assets);
+    kit::install_kit3d(*world_, assets);
     if (g_game_install) {
         if (Result<void> r = g_game_install(*world_); !r) {
             diags.error(r.error().code, rel.view(), 0, 0, kStage, "the game's install() failed");

@@ -46,6 +46,18 @@ if(MCE_BUILD_TESTS AND NOT MCE_SDK)
                          -platform.error_box 0 -r.vsync 0 -audio.enabled 0)
         set_tests_properties(room3d_walk_gpu PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "200 ticks, 0 GL errors"
                                                         RESOURCE_LOCK room3d_module)
+        # The editor shows the 3D scene: the orbit view through the scene's camera, then play-in-editor.
+        if(TARGET room3d_editor)
+            add_test(NAME room3d_editor_selftest
+                     COMMAND room3d_editor -project "${CMAKE_CURRENT_SOURCE_DIR}" -frames 90 -selftest -editor.ini ""
+                             -platform.error_box 0 -r.vsync 0)
+            add_test(NAME room3d_editor_play_selftest
+                     COMMAND room3d_editor -project "${CMAKE_CURRENT_SOURCE_DIR}" -frames 90 -editor.play 1 -selftest
+                             -editor.ini "" -platform.error_box 0 -r.vsync 0)
+            set_tests_properties(room3d_editor_selftest room3d_editor_play_selftest
+                                 PROPERTIES LABELS gpu RESOURCE_LOCK room3d_module PASS_REGULAR_EXPRESSION "0 GL errors")
+            set_tests_properties(room3d_editor_selftest PROPERTIES PASS_REGULAR_EXPRESSION "3D drawn")
+        endif()
     endif()
     # A save taken mid-walk loads and plays on (Physics3D is rebuilt from the scene and the hero).
     set(save_dir "${CMAKE_CURRENT_BINARY_DIR}/saves")

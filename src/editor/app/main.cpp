@@ -203,9 +203,13 @@ private:
             const math::vec2 c = (q[0] + q[2]) * 0.5f;
             if (editor::pick_entity(scene, c) == e.id) probe = e.id;
         }
-        MCE_LOG_INFO("selftest: scene {} entities; viewport {}x{}, {} non-clear px, {} colours; pick probe {}",
-                     scene.doc().size(), v.size.width, v.size.height, non_clear, distinct, probe);
-        return non_clear > v.size.width * v.size.height / 50 && distinct >= 6 && probe != editor::kNoEntity;
+        // A kit3d scene opens in the orbit view, drawn by the forward renderer.
+        const bool is_3d = editor::world_is_3d(scene.world());
+        const bool drawn_3d = !is_3d || (shell_.view().orbit_view && shell_.preview().last_stats_3d().triangles > 0);
+        MCE_LOG_INFO("selftest: scene {} entities; viewport {}x{}, {} non-clear px, {} colours; pick probe {}{}",
+                     scene.doc().size(), v.size.width, v.size.height, non_clear, distinct, probe,
+                     is_3d ? (drawn_3d ? "; 3D drawn" : "; 3D NOT drawn") : "");
+        return non_clear > v.size.width * v.size.height / 50 && distinct >= 6 && probe != editor::kNoEntity && drawn_3d;
     }
 
     // Play-in-editor: the play world ticked on wall time, the document never changed, and the
