@@ -1,6 +1,7 @@
 # mce_kit_novel (M-NOVEL): the story VM, a novel run played by its bot, NPC dialogue saved mid-
-# conversation, on a small story mce story compile builds from fixture/ (the build compiles it, so
-# the compiler is tested too); and the compiler's checks (test_story_compile.py).
+# conversation and its default dialogue box, on a small story mce story compile builds from
+# fixture/ (the build compiles it, so the compiler is tested too); and the compiler's checks
+# (test_story_compile.py).
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(_fixture "${CMAKE_CURRENT_SOURCE_DIR}/fixture")
 set(_header "${CMAKE_CURRENT_BINARY_DIR}/generated/novel_fixture.h")
@@ -20,5 +21,14 @@ mce_add_test(test_novel UMBRELLA
         mce::mce_kit_novel)
 add_dependencies(test_novel test_novel_story)
 target_include_directories(test_novel PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+
+# The default dialogue box (mce_kit_novel_ui), headless.
+mce_add_test(test_novel_ui UMBRELLA
+    SOURCES
+        test_dialogue_box.cpp
+    DEPS
+        mce::mce_kit_novel_ui)
+add_dependencies(test_novel_ui test_novel_story)
+target_include_directories(test_novel_ui PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 add_test(NAME story_compile COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_story_compile.py")

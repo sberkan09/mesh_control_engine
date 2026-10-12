@@ -18,8 +18,13 @@
 // A game that takes data mods adds `d.mods_dir = "mods";` (and usually `d.mods_game_id`): see
 // docs/user-guide/19-mods.md.
 
+#include "mce/types.h"
+
 namespace mce {
 struct ModuleInfo;
+}
+namespace mce::ui {
+struct Layer;
 }
 
 namespace mce::player {
@@ -48,6 +53,11 @@ struct PlayerDesc {
     // The game id a mod's mod.json names in "game" to load here; mods for other games are skipped.
     // Null or empty: no check.
     const char* mods_game_id = nullptr;
+    // Game UI layers (mce/ui/ui.h ui::Layer), drawn in order over the world and under the pause
+    // overlay and the console: views of the world the host adds, such as the NPC dialogue box
+    // (mce/kit/novel_ui.h). They must outlive run().
+    const ui::Layer* const* ui_layers = nullptr;
+    u32 ui_layer_count = 0;
 };
 
 // Parses the command line into convars, then runs headless (-headless 1) or windowed. Returns the

@@ -336,6 +336,20 @@ private:
     WidgetId id_;
 };
 
+// A game UI layer a host adds to the stock player (player::PlayerDesc::ui_layers): a view of the
+// world drawn in screen space over the game, under the pause overlay and the console. It reads the
+// world (FR-UI-030: gameplay never includes mce/ui) and does not change it; input reaches the game
+// through the sim's input as usual. The player calls init once the renderer and its built-in skin
+// exist, update every rendered frame and submit into the screen-space batch (sort layers from
+// `sort_layer`, two per document). Headless runs call none of them. Null functions are skipped.
+// The default NPC dialogue box is one (mce/kit/novel_ui.h).
+struct Layer {
+    void* user = nullptr;
+    bool (*init)(void* user, render::Renderer& renderer, const Skin& skin) = nullptr;
+    void (*update)(void* user, World& world, const UpdateContext& ctx) = nullptr;
+    void (*submit)(void* user, render::SpriteBatch& batch, i16 sort_layer) = nullptr;
+};
+
 // The shipped developer console (FR-UI-045): a modal document holding one console widget over the
 // top of the screen. It mirrors the log ring (mce::log::read_console), runs submitted lines through
 // console::execute (convars and confuncs; "help" lists them, "clear" empties the scrollback) and

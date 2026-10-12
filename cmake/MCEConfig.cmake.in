@@ -6,7 +6,8 @@
 # Targets:  mce::mce_engine (the engine, shared), mce::mce_player_runtime (static; a host links it),
 #           mce::mce_module_api (what a game module links; mce_add_game_module uses it),
 #           mce::mce_net (static, optional networking; mce_add_project(... DEPS mce::mce_net)),
-#           mce::mce_kit_novel (static, the opt-in visual-novel kit; DEPS mce::mce_kit_novel)
+#           mce::mce_kit_novel (static, the opt-in visual-novel kit; DEPS mce::mce_kit_novel),
+#           mce::mce_kit_novel_ui (static, its NPC dialogue box for a host; HOST_DEPS mce::mce_kit_novel_ui)
 # Helpers:  mce_add_project, mce_add_game_module, mce_add_executable, mce_add_library, mce_add_test,
 #           mce_apply_compile_policy (no exceptions, no RTTI, precise FP, warnings as errors)
 # Tools:    MCE_PLAYER_EXE, MCE_EDITOR_EXE, MCE_MCP_EXE, MCE_COOK_EXE, MCE_BIN_DIR, MCE_LIB_DIR,
@@ -82,6 +83,10 @@ if(NOT TARGET mce::mce_engine)
     set_target_properties(mce::mce_kit_novel PROPERTIES
         IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_NOVEL_FILE@"
         INTERFACE_LINK_LIBRARIES "mce::mce_engine")
+    add_library(mce::mce_kit_novel_ui STATIC IMPORTED)
+    set_target_properties(mce::mce_kit_novel_ui PROPERTIES
+        IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_NOVEL_UI_FILE@"
+        INTERFACE_LINK_LIBRARIES "mce::mce_kit_novel;mce::mce_engine")
 
     add_library(mce_module_api INTERFACE)
     add_library(mce::mce_module_api ALIAS mce_module_api)
