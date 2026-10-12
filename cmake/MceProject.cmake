@@ -17,11 +17,16 @@
 #   <game>_headless_300 (tests)  the host headless for 300 ticks: module loaded, scene played
 #
 #   mce_add_project(<game> TITLE "<window title>" GAME_SOURCES ... MODULE_ENTRY game/module.cpp
-#                   TYPES game/types.cpp HOST host/main.cpp [INCLUDE_DIRS ...] [DEPS ...])
+#                   TYPES game/types.cpp HOST host/main.cpp [INCLUDE_DIRS ...] [DEPS ...] [STORY])
 #
 # DEPS: optional engine libraries the game's sources use, linked wherever those sources are
 # compiled (the module, or the host where modules are not supported, and the project editor and
-# MCP server). Today that is mce::mce_net, the opt-in networking module (ADR-0035).
+# MCP server): mce::mce_net, the opt-in networking module (ADR-0035), and mce::mce_kit_novel, the
+# visual-novel kit.
+#
+# STORY: the project is a novel (mce new --template novel): the build compiles story/*.story with
+# story/story.json into the header story.json names ("output") before the game's sources, with
+# mce story compile (tools/story/story_compile.py; the SDK's MCE_STORY_COMPILE).
 #
 # The per-project tools above compile the game in; where game modules are supported the stock
 # tools load the module instead and need no project-specific build:
@@ -37,7 +42,7 @@
 # installed mce_cook cooks the content with the module loaded, and the installed mce_editor /
 # mce_mcp open the project the same way (`mce editor`, `mce mcp`, `mce cook` in the mce CLI).
 function(mce_add_project game)
-    cmake_parse_arguments(ARG "" "TITLE;MODULE_ENTRY;HOST" "GAME_SOURCES;TYPES;INCLUDE_DIRS;DEPS" ${ARGN})
+    cmake_parse_arguments(ARG "STORY" "TITLE;MODULE_ENTRY;HOST" "GAME_SOURCES;TYPES;INCLUDE_DIRS;DEPS" ${ARGN})
     if(NOT ARG_TITLE)
         set(ARG_TITLE "${game}")
     endif()
@@ -58,6 +63,32 @@ function(mce_add_project game)
             list(APPEND dep_includes $<TARGET_PROPERTY:${dep_real},INTERFACE_INCLUDE_DIRECTORIES>)
         endif()
     endforeach()
+
+    # The story: compiled into its header whenever a .story file or the manifest changes.
+    set(story_header "")
+    if(ARG_STORY)
+        if(MCE_SDK)
+            set(story_compiler "${MCE_STORY_COMPILE}")
+        else()
+            set(story_compiler "${PROJECT_SOURCE_DIR}/tools/story/story_compile.py")
+        endif()
+        find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        set(manifest "${src}/story/story.json")
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${manifest}")
+        file(READ "${manifest}" manifest_text)
+        string(JSON story_out ERROR_VARIABLE story_error GET "${manifest_text}" output)
+        if(story_error)
+            set(story_out "story_data.h")
+        endif()
+        set(story_header "${src}/${story_out}")
+        file(GLOB story_files CONFIGURE_DEPENDS "${src}/story/*.story")
+        add_custom_command(OUTPUT "${story_header}"
+            COMMAND "${Python3_EXECUTABLE}" "${story_compiler}" "${src}"
+            DEPENDS "${story_compiler}" "${manifest}" ${story_files}
+            COMMENT "mce story compile: ${game}"
+            VERBATIM)
+        add_custom_target(${game}_story DEPENDS "${story_header}")
+    endif()
 
     # The project's cook: the engine's component types plus the game's. Against the SDK the
     # installed mce_cook loads the game module instead (below).
@@ -178,6 +209,15 @@ const bool kRegistered = (mce::editor::set_play_game_install(&${game}::install),
         mce_engine_deps(mcp_deps mce::mce_mcp_core mce::mce_module_host ${ARG_DEPS})
         target_link_libraries(${game}_mcp PRIVATE ${mcp_deps})
         mce_apply_compile_policy(${game}_mcp)
+    endif()
+
+    # Every target that compiles the game's sources waits for the story's header.
+    if(ARG_STORY)
+        foreach(t ${game}_game ${game} ${game}_editor ${game}_mcp)
+            if(TARGET ${t})
+                add_dependencies(${t} ${game}_story)
+            endif()
+        endforeach()
     endif()
 
     if(MCE_BUILD_TESTS)

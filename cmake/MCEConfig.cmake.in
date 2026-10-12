@@ -10,7 +10,8 @@
 # Helpers:  mce_add_project, mce_add_game_module, mce_add_executable, mce_add_library, mce_add_test,
 #           mce_apply_compile_policy (no exceptions, no RTTI, precise FP, warnings as errors)
 # Tools:    MCE_PLAYER_EXE, MCE_EDITOR_EXE, MCE_MCP_EXE, MCE_COOK_EXE, MCE_BIN_DIR, MCE_LIB_DIR,
-#           MCE_INCLUDE_DIR, MCE_TEMPLATE_DIR
+#           MCE_INCLUDE_DIR, MCE_TEMPLATE_DIR, MCE_STORY_COMPILE (the story compiler mce_add_project's
+#           STORY runs)
 # Facts:    MCE_VERSION, MCE_ENGINE_DESCRIBE (this engine's build stamp), MCE_ENGINE_ID_HEX,
 #           MCE_ENGINE_LIBS (the libraries mce::mce_engine stands for; mce_engine_deps maps them)
 #
@@ -41,6 +42,7 @@ set(MCE_PLAYER_EXE "${MCE_BIN_DIR}/mce_player@MCE_SDK_EXE_SUFFIX@")
 set(MCE_EDITOR_EXE "${MCE_BIN_DIR}/mce_editor@MCE_SDK_EXE_SUFFIX@")
 set(MCE_MCP_EXE "${MCE_BIN_DIR}/mce_mcp@MCE_SDK_EXE_SUFFIX@")
 set(MCE_COOK_EXE "${MCE_BIN_DIR}/mce_cook@MCE_SDK_EXE_SUFFIX@")
+set(MCE_STORY_COMPILE "${_mce_prefix}/@CMAKE_INSTALL_DATADIR@/mce/scripts/story_compile.py")
 if(APPLE)
     set(MCE_ORIGIN_RPATH "@loader_path")
 else()

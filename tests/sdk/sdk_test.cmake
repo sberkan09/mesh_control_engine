@@ -18,6 +18,7 @@ expect_exit(0 ${CMAKE_COMMAND} --install "${BUILD_DIR}" --prefix "${PREFIX}")
 foreach(f bin/mce bin/mce_player bin/mce_editor bin/mce_mcp bin/mce_cook lib/cmake/MCE/MCEConfig.cmake
           include/mce/gameplay.h include/mce/engine_version.h include/spdlog/spdlog.h include/mce/net/net.h
           share/mce/templates/project/CMakeLists.txt share/mce/templates/project/assets/fonts/ProggyClean.ttf
+          share/mce/templates/novel/story/story.json share/mce/scripts/story_compile.py include/mce/kit/novel.h
           share/mce/scripts/new_project.py share/mce/VERSION share/mce/examples/Kindle/CMakeLists.txt
           share/doc/mce/user-guide/README.md share/doc/mce/engine/modules.md share/doc/mce/ARCHITECTURE.md)
     if(NOT EXISTS "${PREFIX}/${f}")
@@ -182,4 +183,19 @@ expect_exit(0 ${MCE} headless "${example}" --ticks 300)
 if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
     message(FATAL_ERROR "mce headless (Kindle):\n${LAST_OUTPUT}")
 endif()
-message(STATUS "SDK contract holds: install, new, build, headless, mcp, cook, ship, net, example")
+# 5. A visual novel from the novel template (mce_kit_novel): the build compiles its story, the bot
+# plays it to @end headless, and it ships.
+expect_exit(0 ${MCE} new NovelSdk --dest "${WORK_DIR}" --template novel)
+set(novel "${WORK_DIR}/NovelSdk")
+expect_exit(0 ${MCE} story compile "${novel}" --check --werror)
+expect_exit(0 ${MCE} build "${novel}" --config "${CONFIG}" ${defines})
+expect_exit(0 ${MCE} headless "${novel}" --ticks 2000 -- -novel.autoplay 1)
+if(NOT LAST_OUTPUT MATCHES "novel: @end" OR NOT LAST_OUTPUT MATCHES "2000 ticks, [0-9]+ entities, state_hash")
+    message(FATAL_ERROR "mce headless (novel template):\n${LAST_OUTPUT}")
+endif()
+expect_exit(0 ${MCE} ship "${novel}" --version 0.1.0)
+file(GLOB novel_zips "${novel}/dist/NovelSdk-0.1.0-*.zip")
+if(NOT novel_zips)
+    message(FATAL_ERROR "mce ship (novel template) wrote no zip:\n${LAST_OUTPUT}")
+endif()
+message(STATUS "SDK contract holds: install, new, build, headless, mcp, cook, ship, net, example, novel")

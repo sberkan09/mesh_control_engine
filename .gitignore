@@ -55,3 +55,4 @@ assets.mce
 # Editor session files
 *.autosave
 mce_editor.ini
+__pycache__/
