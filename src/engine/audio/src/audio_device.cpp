@@ -266,6 +266,26 @@ void AudioDevice::release_clip(ClipHandle h) {
     m.release_pending = !impl_->commands.push(c);  // retried by update()
 }
 
+bool AudioDevice::finish_releases(u32 timeout_ms) {
+    Impl& impl = *impl_;
+    auto pending = [&impl] {
+        for (const ClipMain& m : impl.clips)
+            if (m.state == ClipMain::State::Releasing) return true;
+        return false;
+    };
+    for (u32 waited = 0;; ++waited) {
+        // Until the device callback owns the mixer, this thread does: run its command step only.
+        if (!impl.device_mixes.load(std::memory_order_acquire)) impl.mixer->render(impl.scratch, 0);
+        update();
+        if (!pending()) return true;
+        if (waited >= timeout_ms) {
+            MCE_LOG_WARN("audio: clip releases still pending after {} ms", timeout_ms);
+            return false;
+        }
+        platform::sleep_ms(1);
+    }
+}
+
 // ---------------------------------------------------------------------------- playback
 
 AudioHandle AudioDevice::play(ClipHandle clip, const PlayParams& p) { return play_at(clip, 0, p); }

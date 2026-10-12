@@ -156,6 +156,28 @@ TEST_CASE("ClipBank: loads once, holds one retain, fails quietly, releases") {
     CHECK(bank.find(kHum).is_null());
 }
 
+TEST_CASE("ClipBank: release_all waits for the mixer before dropping the retains (#145)") {
+    asset::AssetSystem as;
+    mount(as, cooked_tree("bank_release_all"));
+    auto dev = test::offline_device();
+    ClipBank bank(as, *dev);
+    const ClipHandle a = bank.acquire(kHum);
+    REQUIRE_FALSE(a.is_null());
+    PlayParams pp;
+    pp.loop = true;
+    const AudioHandle h = dev->play(a, pp);
+    Array<f32> out;
+    test::render(*dev, out, 480);
+    REQUIRE(dev->is_playing(h));
+
+    // No render in between: release_all itself drains the mixer's acknowledgement.
+    bank.release_all();
+    CHECK_FALSE(dev->is_clip_registered(a));
+    CHECK(as.refcount(as.find(kHum)) == 0);
+    test::render(*dev, out, 480);
+    CHECK(dev->stats().voices_real == 0);
+}
+
 TEST_CASE("audio_bridge plays AudioSource and PlaySfx by asset GUID, and follows a hot reload") {
     asset::AssetSystem as;
     mount(as, cooked_tree("bank_bridge"));
