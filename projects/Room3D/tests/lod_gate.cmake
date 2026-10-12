@@ -2,7 +2,7 @@
 # LOD levels) draws at least 5x fewer triangles with LODs on than off, with no GL errors.
 #   cmake -DGAME=<room3d executable> -P lod_gate.cmake
 foreach(lod 0 1)
-    execute_process(COMMAND "${GAME}" -capture_tick 30 -r.lod ${lod} -platform.error_box 0 -r.vsync 0 -audio.enabled 0
+    execute_process(COMMAND "${GAME}" -capture_tick 30 -r.lod ${lod} -platform.error_box 0 -r.vsync 0 -audio.enabled 0 -pause_on_focus_loss 0
                     OUTPUT_VARIABLE out ERROR_VARIABLE err RESULT_VARIABLE rc)
     if(NOT rc EQUAL 0 OR NOT out MATCHES " 0 GL errors")
         message(FATAL_ERROR "room3d -r.lod ${lod} failed (${rc}):\n${out}\n${err}")

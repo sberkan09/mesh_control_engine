@@ -38,12 +38,14 @@ if(MCE_BUILD_TESTS AND NOT MCE_SDK)
     target_compile_definitions(room3d_play PRIVATE ROOM3D_PACK="${CMAKE_CURRENT_BINARY_DIR}/project/assets.mce")
     add_dependencies(room3d_play room3d_content)
 
+    # -pause_on_focus_loss 0: under ctest -j the GPU tests share one X display, and another test's
+    # window taking focus would pause the sim before the capture tick.
     # The stock player's 3D path end to end: scripted input to a tick, a capture, no GL errors.
     if(MCE_GPU_TESTS)
         add_test(NAME room3d_walk_gpu
                  COMMAND room3d -capture_tick 200 -input "${CMAKE_CURRENT_SOURCE_DIR}/tests/walk.input"
                          -capture "${CMAKE_CURRENT_BINARY_DIR}/room3d_walk.ppm" -r.stats 1
-                         -platform.error_box 0 -r.vsync 0 -audio.enabled 0)
+                         -platform.error_box 0 -r.vsync 0 -audio.enabled 0 -pause_on_focus_loss 0)
         set_tests_properties(room3d_walk_gpu PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "200 ticks, 0 GL errors"
                                                         RESOURCE_LOCK room3d_module)
         # Mesh LOD (#158): the far view draws at least 5x fewer triangles with the rocks' LODs.
