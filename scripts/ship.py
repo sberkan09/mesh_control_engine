@@ -9,6 +9,12 @@
                                                         # cmake/mobile/android_app.py; --aab, --smoke)
     python3 scripts/ship.py platformer --target ios     # dist/Ember-Step-<version>-ios-sim.zip; --preset ios-arm64
                                                         # signs an .ipa (cmake/mobile/ios_app.py; --smoke)
+    python3 scripts/ship.py platformer --target android --store [--dry-run]   # ... then the Play internal track,
+                                                        # or TestFlight for an .ipa (cmake/mobile/store.py)
+
+Phone builds take the app icon from <game>/ship/icon.png (1024x1024; cmake/mobile/app_icon.py) and, on
+iOS, privacy-manifest additions from <game>/ship/PrivacyInfo.xcprivacy. Their store build number
+(CFBundleVersion, versionCode) is --build-number, by default the commit count of HEAD.
 
 What a zip holds (one folder, double-click the executable; macOS: <Name>.app, see
 cmake/macos/macos_bundle.py):
@@ -111,6 +117,9 @@ def sample_outputs(key, args):
     art["android_lib"] = os.path.join(sample_dir, "lib" + art["target"] + ".so")
     art["ios_app"] = os.path.join(sample_dir, art["target"] + ".app")
     art["autoplay"] = bool(art["module"])
+    ship_dir = os.path.join(ROOT, "samples", art["sample"], "ship")
+    art["icon"] = os.path.join(ship_dir, "icon.png")
+    art["privacy"] = os.path.join(ship_dir, "PrivacyInfo.xcprivacy")
     return art
 
 
@@ -140,6 +149,8 @@ def project_outputs(project, args):
         "credits": credits if os.path.isfile(credits) else None,
         "controls": "Esc pauses, ` or F1 opens the developer console.",
         "autoplay": False,
+        "icon": os.path.join(proj_dir, "ship", "icon.png"),
+        "privacy": os.path.join(proj_dir, "ship", "PrivacyInfo.xcprivacy"),
     }
 
 
@@ -158,7 +169,11 @@ def ship_android(art, args):
     import android_app
     if not args.no_build:
         build_mobile(art, args, dict(os.environ, ANDROID_NDK_HOME=android_app.ndk_root()))
-    return android_app.package(art, args, ROOT)
+    apk = android_app.package(art, args, ROOT)
+    if args.store:
+        import store
+        store.android(apk[:-len(".apk")] + ".aab", android_app.app_id(art["name"]), args.build_number, args.dry_run)
+    return apk
 
 
 def ship_ios(art, args):
@@ -168,7 +183,11 @@ def ship_ios(art, args):
         sys.exit("ship: --target ios builds on a Mac (Xcode)")
     if not args.no_build:
         build_mobile(art, args)
-    return ios_app.package(art, args, ROOT)
+    out = ios_app.package(art, args, ROOT)
+    if args.store:
+        import store
+        store.ios(out, args.dry_run)
+    return out
 
 
 def ship(art, args):
@@ -378,6 +397,12 @@ def main():
     ap.add_argument("--host-preset", default=default_preset(), help="--target android/ios: the host build whose mce_cook cooks the pack")
     ap.add_argument("--aab", action="store_true", help="--target android: also build the Play Store bundle (.aab)")
     ap.add_argument("--version", default=None, help="default: <engine version>+<short commit> (the engine's CMake project VERSION)")
+    ap.add_argument("--build-number", type=int, default=None,
+                    help="android/ios: the store build number (versionCode, CFBundleVersion); default: the commit count of HEAD")
+    ap.add_argument("--store", action="store_true",
+                    help="android/ios: upload after packaging (Play internal track / TestFlight; credentials from the "
+                         "environment, see cmake/mobile/store.py)")
+    ap.add_argument("--dry-run", action="store_true", help="with --store: validate the package, upload nothing")
     ap.add_argument("--out", default=os.path.join(ROOT, "dist"))
     ap.add_argument("--no-build", action="store_true", help="package the existing build outputs")
     ap.add_argument("--keep-symbols", action="store_true", help="do not strip (Linux)")
@@ -386,6 +411,15 @@ def main():
     args = ap.parse_args()
     if args.preset is None:
         args.preset = {"android": "android-arm64-release", "ios": "ios-sim-arm64"}.get(args.target, default_preset())
+    if (args.store or args.dry_run) and args.target == "desktop":
+        ap.error("--store and --dry-run apply to --target android/ios")
+    if args.dry_run and not args.store:
+        ap.error("--dry-run goes with --store")
+    if args.store and args.target == "android":
+        args.aab = True
+    if args.build_number is None:
+        count = git("rev-list", "--count", "HEAD")
+        args.build_number = max(1, int(count)) if count.isdigit() else 1
     if args.target != "desktop" and args.project:
         ap.error(f"--target {args.target} ships the samples for now (projects: M-MOBILE step 9)")
     if args.version is None:

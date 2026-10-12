@@ -4,11 +4,11 @@ plugins {
 
 android {
     namespace = "@APP_ID@"
-    compileSdk 35
+    compileSdk @ANDROID_API@
     defaultConfig {
         applicationId "@APP_ID@"
         minSdk 29
-        targetSdk 35
+        targetSdk @ANDROID_API@
         versionCode @VERSION_CODE@
         versionName "@VERSION_NAME@"
         ndk {

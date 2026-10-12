@@ -85,7 +85,45 @@ time. `Info.plist` asks for macOS 26.0 or later. When the `.app` runs from a rea
 (App Translocation, `/Applications` without write access), the host maps the game module in place
 instead of copying it (chapter 6, section 6.13).
 
-## 15.5 Checklist before shipping
+## 15.5 Phones and the stores
+
+`ship.py --target android` builds an APK (`--aab` adds the Play bundle), `--target ios` a Simulator
+`.app` zip or, with `--preset ios-arm64`, a signed `.ipa`. What the stores need from the game:
+
+| File | Used for |
+|---|---|
+| `ship/icon.png` | the app icon: square PNG, 1024x1024. iOS gets an `AppIcon` asset catalog (transparency flattened onto the image's edge colour), Android an adaptive launcher icon (the image at 72 dp on that colour) and `<stem>-play-icon.png` (512x512) for the Play listing. Without it the game ships with a warning and no icon, and both stores refuse it |
+| `ship/PrivacyInfo.xcprivacy` | optional: what the game adds to the engine's iOS privacy manifest (`cmake/mobile/ios/PrivacyInfo.xcprivacy`: file timestamps, boot time and user defaults inside the app, no tracking, no collected data). An SDK for ads, analytics or purchases brings its own data types and reasons; list them here and they are merged in |
+
+**Build numbers.** Both stores want a whole number that grows with every upload: `CFBundleVersion`
+on iOS, `versionCode` on Android. `ship.py` uses `--build-number`, by default the commit count of
+`HEAD`. The version players see is `--version` without its `+commit` part.
+
+**Uploading.** `--store` uploads after packaging: an `.ipa` to App Store Connect (it appears in
+TestFlight after Apple processes it), an `.aab` to the Play internal testing track. `--store --dry-run`
+uploads nothing; it checks the package (icon, privacy manifest, integer build number, signature,
+Play's upload key instead of the debug key) and, with the credentials set, asks App Store Connect to
+validate the `.ipa`.
+
+    python3 scripts/ship.py platformer --target android --store --dry-run
+    python3 scripts/ship.py platformer --target ios --preset ios-arm64 --store
+
+Credentials come from environment variables only; keep the files outside the project and never
+commit them. `ship.py` does not print them.
+
+| Variable | What |
+|---|---|
+| `MCE_ASC_KEY_ID`, `MCE_ASC_ISSUER_ID`, `MCE_ASC_KEY_PATH` | an App Store Connect API key (Users and Access → Integrations, App Manager role) and the path of its `AuthKey_<id>.p8` |
+| `MCE_IOS_SIGN_IDENTITY`, `MCE_IOS_PROVISIONING_PROFILE` | an Apple Distribution certificate and an App Store profile for the bundle id |
+| `MCE_PLAY_SERVICE_ACCOUNT` | the JSON key of a Google Cloud service account invited in the Play Console with release rights for the app |
+| `MCE_PLAY_TRACK`, `MCE_PLAY_RELEASE_STATUS` | default `internal` and `completed`; use `draft` until the app's first release is published in the Console |
+| `MCE_ANDROID_KEYSTORE`, `MCE_ANDROID_STORE_PASSWORD`, `MCE_ANDROID_KEY_ALIAS`, `MCE_ANDROID_KEY_PASSWORD` | the upload key (Play App Signing keeps the app signing key) |
+
+The first Play upload of a new app has to be made by hand in the Play Console (the API cannot create
+the app); after that `--store` takes over. Android builds target the API level Google Play currently
+requires (API 36, `ANDROID_API` in `cmake/mobile/android_app.py`).
+
+## 15.6 Checklist before shipping
 
 1. Every scene cooks clean (`my_game_cook projects/MyGame --pack` exits 0).
 2. `my_game -headless 1 -ticks 3600` runs a minute without an error in the log.

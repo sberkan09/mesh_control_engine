@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Privacy manifest of every iOS build (M-MOBILE step 10, #138); cmake/mobile/ios_app.py copies it to the
+     bundle root and merges a game's ship/PrivacyInfo.xcprivacy into it. Audit (docs/milestones/M-MOBILE.md):
+     FileTimestamp: stat/fstat in SDL3 (SDL_GetPathInfo, SDL_iostream) and mce_core crash dirs, std::filesystem
+       in mce_ecs saves; all on files inside the app container. C617.1
+     SystemBootTime: mach_absolute_time / CLOCK_UPTIME_RAW behind SDL_GetTicksNS and std::chrono::steady_clock,
+       used only for elapsed time between in-app events. 35F9.1
+     UserDefaults: SDL3's UIKit event loop reads the app's own NSUserDefaults. CA92.1
+     DiskSpace, ActiveKeyboards: not used. No tracking, no collected data. -->
+<plist version="1.0">
+<dict>
+    <key>NSPrivacyTracking</key>
+    <false/>
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array/>
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>C617.1</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>35F9.1</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>CA92.1</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>
