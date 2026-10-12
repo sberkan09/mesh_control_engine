@@ -11,7 +11,7 @@
 #   lib/cmake/MCE/   MCEConfig.cmake (find_package(MCE)): imported targets mce::mce_engine,
 #               mce::mce_player_runtime, mce::mce_module_api, the tool paths, and the same
 #               MceTarget / MceProject / MceShip helpers the engine tree uses
-#   share/mce/  the project templates (project, novel), new_project.py, story_compile.py, VERSION and examples/Kindle, examples/Undelivered (projects/)
+#   share/mce/  the project templates (project, novel), new_project.py, story_compile.py, VERSION and examples/Kindle, examples/Undelivered, examples/Room3D (projects/)
 #   share/doc/mce/   the user guide, the engine and architecture pages, ARCHITECTURE.md, REQUIREMENTS.md
 #
 # A project made from the template builds against it with find_package(MCE) (its CMakeLists.txt),
@@ -88,8 +88,8 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce.py" DESTINATION ${CMAK
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/install.sh" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce)  # mce update (release installs)
 
 # The example projects (`mce example <Name>` copies one out): sources and content, no build outputs.
-# Kindle is the 2D platformer reference, Undelivered the light-novel one.
-foreach(_mce_example Kindle Undelivered)
+# Kindle is the 2D platformer reference, Undelivered the light-novel one, Room3D the 3D kit one.
+foreach(_mce_example Kindle Undelivered Room3D)
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/projects/${_mce_example}" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/examples
             PATTERN "cooked" EXCLUDE PATTERN "build" EXCLUDE PATTERN "dist" EXCLUDE
             PATTERN "assets.mce" EXCLUDE PATTERN "__pycache__" EXCLUDE)

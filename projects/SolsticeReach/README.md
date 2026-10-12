@@ -22,32 +22,30 @@ out of an engine checkout first, then `mce build SolsticeReach`, `mce play Solst
 
 | Action | Keys | Gamepad |
 |---|---|---|
-| Move (camera-relative), look | WASD / arrows, mouse | sticks |
-| Sprint, jump | Shift, Space | left trigger, A |
-| Interact: hold on a mirror's plate to align it | E / F / J / left mouse | X |
+| Move (camera-relative), look | WASD / arrows, mouse (Q / E turn) | sticks |
+| Sprint, jump | Shift, Space | left stick click, A |
+| Interact: hold on a mirror's plate to align it | F / J / left mouse | X |
 | Lantern on/off | L | Y |
-| Pause, confirm, new game (on the title) | Esc, Enter, N | Start, A |
-| Photo mode (from the pause menu; always after the finale) | P | Back |
+| Begin, new game (on the title) | Enter, N | A, Back |
+| Pause (Q quits while paused), console | Esc, ` or F1 | |
 
-Photo mode: WASD + R/F fly, Shift fast, `1`..`8` pick the hour, B bloom, G fog, T anti-aliasing,
-H the HUD, C captures a `.ppm` next to the save.
-
-Useful flags: `-autoplay 1` (the bot plays the whole route: attract mode), `-photo 1 -hour 22
--cam "@x,y,z,yaw,pitch"` (start in photo mode at a given hour and camera; the `@` keeps a negative
-`x` from reading as a flag), `-frames N -capture shot.ppm` (quit after N frames and write the last
-one), `-headless 1 -ticks N` (no window; prints `N ticks, E entities, state_hash H`), `-trace 600`
-(headless: print the Keeper and the bot every 600 ticks), `-newgame 1` (ignore the autosave),
-`-save name` (another save slot), `-r.scatter 0` (no grass).
+Left on the title for 30 seconds, the bot walks the whole route (attract mode); any key returns to
+the title. The host is the stock player, so its flags all work: `-capture_tick N -capture shot.ppm`
+(quit after sim tick N and write the frame), `-input tests/walk.input` (scripted input), `-save name`
+(a save slot, loaded at start and written at every clean quit), `-headless 1 -ticks N` (no window,
+the bot plays; prints `N ticks, E entities, state_hash H`), `-r.stats 1`, `-r.lod 0`, `-r.msaa 1`
+(user guide chapter 8).
 
 ## Layout
 
 | Path | What |
 |---|---|
 | `SolsticeReach.mceproj` | project identity: name, engine version, games, start scene |
-| `assets/scenes/main.mcscene` | the island, authored through the editor MCP server by `tools/author_island_mcp.py` (416 entities) |
+| `assets/scenes/main.mcscene` | the island, authored through the editor MCP server by `tools/author_island_mcp.py` (437 entities) |
 | `assets/models`, `assets/textures` | the procedural kit, written by `tools/gen_assets.py` (72 cooked assets, 92 k triangles) |
-| `games/solstice_reach/module/` | the game module: `components.h` (the game's own mini 3D kit: `MeshRef`, `Scatter`, `Light3D`, `BoxCollider3D`, `Animated`; and `Heliostat`, `Sunshard`, `KeeperSpawn`, `Keeper`, `Waypoint`, `GullPath`, `Progress`), `terrain.h` (the height field, the same formula as `tools/island.py`), `solstice_reach.cpp` (systems) |
-| `games/solstice_reach/host/` | the 3D host: renderer, time-of-day keys, scatter cells, beams, HUD, photo mode, capture, the budget table |
+| `assets/sfx`, `assets/input` | the three sounds (`tools/gen_sounds.py`) and the action map `controls.mcinput` |
+| `games/solstice_reach/module/` | the game module: `components.h` (`Scatter`, `Glow`, `KeeperModel`, `Beam`, `HudText`, `ReachSounds`, `Heliostat`, `Sunshard`, `KeeperSpawn`, `Keeper`, `Waypoint`, `GullPath`, `Progress`, next to the kit's `MeshRef`, `PointLight3D`, `Animator`, `BoxCollider3D`), `terrain.h` (the height field, the same formula as `tools/island.py`), `solstice_reach.cpp` (the sim), `present.cpp` (the sim's state as kit components) |
+| `games/solstice_reach/host/` | a `PlayerDesc`: the stock player with this game's module and pack |
 | `tools/island.py` | the island's shape: plateaus and ramps over fBm; `python3 tools/island.py` prints the steepest grade of every ramp |
 | `tools/gen_assets.py` | regenerates `assets/models` and `assets/textures` (about a minute; deterministic) |
 | `tools/author_island_mcp.py` | re-authors the scene through `solstice_reach_mcp` (`--mcp build/.../solstice_reach_mcp`) |
@@ -55,25 +53,33 @@ one), `-headless 1 -ticks N` (no window; prints `N ticks, E entities, state_hash
 
 ## How it is built
 
-- The engine has no 3D kit yet, so the module declares the handful of components a 3D scene needs
-  and the host draws them (the pattern of `samples/05_ashen_court`, as a project: editor, MCP, cook
-  and ship all work; the editor's viewport shows the 2D kit only).
+- The game runs on the engine's 3D kit (`mce/kit/kit3d.h`, user guide chapter 8): the scene places
+  kit `MeshRef`, `PointLight3D`, `Animator`, `BoxCollider3D` and `Camera3DComponent` entities, and the
+  stock player draws them. The module owns no renderer: `present.cpp` writes the camera (the boom,
+  the title and finale orbits), the `Environment3D` resource from the hour (eight sky keys, the
+  moon, the star map), the lantern / sconce / firefly glows, the beams, the Keeper's body and
+  lantern, the gulls, the HUD's `TextLabel`s and the sounds, every tick.
 - The terrain is a height field evaluated twice from the same formula: `tools/island.py` writes the
-  16 terrain chunks, `module/terrain.h` builds the collider (a 1 m mesh) and places scatter; the
-  test checks both agree to 1e-9 m on 400 points.
-- `Scatter` volumes place grass, flowers, trees and stones by a seeded hash (about 6.7 k instances
-  in 16 m cells, culled per cell and thinned with distance). They are a resource, not entities.
+  16 terrain chunks, `module/terrain.h` builds the collider (a 1 m mesh in the kit's `Physics3D`
+  world, next to the kit's box colliders) and places scatter; the test checks both agree to 1e-9 m
+  on 400 points.
+- `Scatter` volumes place grass, flowers, trees and stones by a seeded hash into the kit's
+  `StaticInstances3D` (about 6.7 k copies in 16 m cells, culled per cell; small ones thin out past
+  60 m and are gone past 120 m).
 - The seven heliostats form a chain (`Heliostat::next`); each alignment lerps the hour to the next
-  key and shows a journal line. The bot (`Waypoint` entities, `-autoplay 1`) walks the whole route
-  in about two minutes of sim time, which is what the tests and the attract mode run.
-- Saves: the autosave after every alignment restores `Progress`, the mirrors, the shards and the
-  Keeper (`SaveKey`s 9001, 9002, 9100+, 9200+).
+  key and shows a journal line. The bot (`Waypoint` entities) walks the whole route in about two
+  minutes of sim time, which is what the tests, headless runs and the attract mode run.
+- Saves: `-save <slot>` restores `Progress`, the mirrors, the shards and the Keeper (`SaveKey`s
+  9001, 9002, 9100+, 9200+); the title then offers CONTINUE.
 
 Regenerate after changing the island's shape: `python3 tools/gen_assets.py`, update
 `tools/terrain_ref.txt` (the test's reference heights; see the test), then re-author the scene with
 `tools/author_island_mcp.py` so every prop sits on the new ground.
 
-## Measured on Apple M4 (Metal)
+## Measured on Apple M4 (Metal), before the kit
+
+With the game's own host (replaced by the stock player in M-KIT3D; the frame-budget table and photo
+mode went with it).
 
 `solstice_reach -frames 600 -autoplay 1`, macOS release build, Metal backend (MSL 2.3 via SPIRV-Cross),
 1280x720 window, vsync on; averaged over 590 frames (129,992 triangles drawn, 3,220 instances).

@@ -114,6 +114,9 @@ MCE_CVAR(cv_lifecycle_test, "lifecycle_test", "",
          CVarFlags::None);
 MCE_CVAR(cv_console, "console", true, "Allow the developer console (` or F1)", CVarFlags::None);
 MCE_CVAR(cv_console_open, "console_open", false, "Start with the developer console open", CVarFlags::None);
+MCE_CVAR(cv_uniform_ring, "r.uniform_ring_mb", 4,
+         "Per-frame uniform memory in MiB (a 3D frame with thousands of draws and shadow cascades needs more than 1)",
+         CVarFlags::RequiresRestart);
 MCE_CVAR(cv_msaa, "r.msaa", 4, "3D games: MSAA samples of the 3D frame (1 = off)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_lod, "r.lod", true, "3D games: draw coarser mesh levels with distance (meshes cooked with LODs)", CVarFlags::None);
 MCE_CVAR(cv_lod_pixels, "r.lod_pixels", 1.0f, "3D games: the largest LOD error allowed on screen, in pixels", CVarFlags::None);
@@ -978,6 +981,7 @@ int run_windowed(const player::PlayerDesc& pd) {
     if (!window) return fail("window creation failed", window.error());
     rhi::DeviceDesc dd;
     dd.debug_layer = cv_gl_debug.get_bool();
+    dd.uniform_ring_bytes = static_cast<usize>(math::clamp<i64>(cv_uniform_ring.get_int(), 1, 64)) * MiB;
     auto device = rhi::create_default_device(*window.value(), dd);
     if (!device) return fail("render device creation failed", device.error());
     auto audio = audio::AudioDevice::create({});  // falls back to Silent when no output device opens

@@ -6,12 +6,17 @@
 
 #include "mce/ecs/save.h"
 #include "mce/hash.h"
+#include "mce/input/ecs.h"
+#include "mce/kit/components.h"
 #include "terrain.h"
 
 namespace solstice_reach {
 
 using namespace mce;
 using namespace mce::math;
+using kit::Physics3D;
+using kit::StaticInstance3D;
+using kit::StaticInstances3D;
 using physics::ControllerParams3D;
 using physics::MoveResult3D;
 using physics::World3D;
@@ -101,31 +106,15 @@ void build_terrain_collider(World3D& pw) {
     MCE_VERIFY(pw.create_body(static_id(1), sea));
 }
 
-void build_box_colliders(Frame& f, World3D& pw) {
-    f.query<const BoxCollider3D&, const LocalTransform&>().each([&](Entity e, const BoxCollider3D& c, const LocalTransform& t) {
-        physics::BodyDesc3D d;
-        d.shape = physics::Shape3D::box({c.half.x * t.scale.x, c.half.y * t.scale.y, c.half.z * t.scale.z});
-        d.rotation = t.rotation * quat_from_axis_angle({1.0f, 0.0f, 0.0f}, radians(c.pitch_deg));
-        d.position = t.position + rotate(t.rotation, {c.offset.x * t.scale.x, c.offset.y * t.scale.y, c.offset.z * t.scale.z});
-        d.layer = kLayerWorld;
-        if (!pw.create_body(e, d)) MCE_LOG_WARN("solstice_reach: box collider on entity {} not created", e.index);
-    });
-}
+// Small things (tufts, flowers) thin out past 60 m and are gone past 120 m; big ones cast shadows.
+constexpr f32 kSmallScatter = 1.6f;
 
-u32 mesh_slot(ScatterCache& cache, const asset::Guid& g) {
-    if (g.is_null()) return ~0u;
-    for (u32 i = 0; i < cache.meshes.size(); ++i)
-        if (cache.meshes[i] == g) return i;
-    cache.meshes.push_back(g);
-    return static_cast<u32>(cache.meshes.size() - 1);
-}
-
-void build_scatter(Frame& f, ScatterCache& cache) {
-    cache.meshes.clear();
-    cache.instances.clear();
-    cache.cells.clear();
+void build_scatter(Frame& f, StaticInstances3D& out) {
+    out.meshes.clear();
+    out.instances.clear();
+    out.cells.clear();
     f.query<Scatter&, const LocalTransform&>().each([&](Entity e, Scatter& s, const LocalTransform& t) {
-        const u32 slots[3] = {mesh_slot(cache, s.mesh.guid), mesh_slot(cache, s.mesh_b.guid), mesh_slot(cache, s.mesh_c.guid)};
+        const u32 slots[3] = {out.mesh_slot(s.mesh.guid), out.mesh_slot(s.mesh_b.guid), out.mesh_slot(s.mesh_c.guid)};
         u32 variants = 0;
         for (u32 k : slots) variants += k != ~0u ? 1u : 0u;
         s.count = 0;
@@ -144,12 +133,12 @@ void build_scatter(Frame& f, ScatterCache& cache) {
             f32 n[3];
             terrain::normal(x, z, n);
             if (n[1] < min_ny) continue;
-            ScatterInstance inst;
-            inst.pos = {x, y, z};
+            StaticInstance3D inst;
+            inst.position = {x, y, z};
             inst.scale = lerp(s.min_scale, s.max_scale, static_cast<f32>(terrain::h01(static_cast<std::int64_t>(k), 3, base_seed)));
             const f32 yaw = static_cast<f32>(terrain::h01(static_cast<std::int64_t>(k), 4, base_seed)) * kTau;
-            inst.rot = quat_from_axis_angle({0.0f, 1.0f, 0.0f}, yaw);
-            if (s.align_to_ground) inst.rot = rotation_up_to({n[0], n[1], n[2]}) * inst.rot;
+            inst.rotation = quat_from_axis_angle({0.0f, 1.0f, 0.0f}, yaw);
+            if (s.align_to_ground) inst.rotation = rotation_up_to({n[0], n[1], n[2]}) * inst.rotation;
             u32 pick = static_cast<u32>(static_cast<f32>(terrain::h01(static_cast<std::int64_t>(k), 5, base_seed)) * static_cast<f32>(variants));
             if (pick >= variants) pick = variants - 1;
             u32 slot = ~0u;
@@ -158,44 +147,27 @@ void build_scatter(Frame& f, ScatterCache& cache) {
                 if (seen++ == pick) slot = slots[c];
             }
             inst.mesh = slot;
-            cache.instances.push_back(inst);
+            const bool small = inst.scale < kSmallScatter;
+            inst.cast_shadows = small ? 0u : 1u;
+            inst.thin_distance = small ? 60.0f : 0.0f;
+            inst.max_distance = small ? 120.0f : 0.0f;
+            out.instances.push_back(inst);
             ++s.count;
         }
     });
-    // Cells of 16 m: sort instances by cell, then record ranges with a bounding sphere each.
-    constexpr f32 kCell = 16.0f;
-    auto cell_key = [&](const ScatterInstance& i) {
-        const i32 cx = static_cast<i32>(std::floor(i.pos.x / kCell)) + 64, cz = static_cast<i32>(std::floor(i.pos.z / kCell)) + 64;
-        return static_cast<u32>(cz * 128 + cx);
-    };
-    std::stable_sort(cache.instances.begin(), cache.instances.end(),
-                     [&](const ScatterInstance& a, const ScatterInstance& b) { return cell_key(a) < cell_key(b); });
-    for (u32 i = 0; i < cache.instances.size();) {
-        const u32 key = cell_key(cache.instances[i]);
-        u32 j = i;
-        vec3 lo = cache.instances[i].pos, hi = lo;
-        while (j < cache.instances.size() && cell_key(cache.instances[j]) == key) {
-            const vec3 p = cache.instances[j].pos;
-            lo = {std::min(lo.x, p.x), std::min(lo.y, p.y), std::min(lo.z, p.z)};
-            hi = {std::max(hi.x, p.x), std::max(hi.y, p.y), std::max(hi.z, p.z)};
-            ++j;
-        }
-        ScatterCell c;
-        c.center = (lo + hi) * 0.5f + vec3{0.0f, 2.0f, 0.0f};
-        c.radius = length(hi - lo) * 0.5f + 6.0f;  // instances are at most ~6 m tall/wide
-        c.first = i;
-        c.count = j - i;
-        cache.cells.push_back(c);
-        i = j;
-    }
+    out.build_cells(16.0f, 6.0f);  // instances are at most ~6 m tall/wide
 }
 
 void sr_startup(Frame& f) {
     ReachState& gs = f.resource<ReachState>();
-    World3D& pw = f.resource<Physics>().world;
-    build_terrain_collider(pw);
-    build_box_colliders(f, pw);
-    build_scatter(f, f.resource<ScatterCache>());
+    World3D& pw = f.resource<Physics3D>().world;
+    build_terrain_collider(pw);  // the box colliders are the kit's (kit3d_colliders)
+    build_scatter(f, f.resource<StaticInstances3D>());
+    // A headless player run (tests, CI) has nobody at the title: the bot plays.
+    if (const kit::ViewInfo* view = f.world().try_resource<kit::ViewInfo>(); view && view->headless && gs.mode == Mode::Title) {
+        gs.mode = Mode::Playing;
+        gs.autopilot = 1;
+    }
 
     // The Keeper: the character at the spawn, the Keeper component on the spawn entity.
     gs.keeper = Entity::null;
@@ -203,8 +175,10 @@ void sr_startup(Frame& f) {
         if (!gs.keeper.is_null()) return;
         gs.keeper = e;
         Keeper k;
-        if (const Keeper* saved = f.world().try_get<Keeper>(e)) k = *saved;  // a save restored it before the first tick
-        else {
+        if (const Keeper* saved = f.world().try_get<Keeper>(e)) {  // a save restored it before the first tick
+            k = *saved;
+            gs.continued = 1;
+        } else {
             k.pos = {t.position.x, terrain::height_f(t.position.x, t.position.z) + standing_height(), t.position.z};
             k.yaw = s.yaw;
         }
@@ -237,11 +211,27 @@ void sr_flow(Frame& f) {
 
     switch (gs.mode) {
         case Mode::Title:
+            if (in.has_action(MCE_SID("NewGame")) && in.pressed(MCE_SID("NewGame"))) {
+                reset_run(f.world());  // a fresh run over a continued one (the save is rewritten at quit)
+                gs.mode = Mode::Title;
+                gs.continued = 0;
+                return;
+            }
             if (in.confirm_pressed || in.fire_pressed) {
                 gs.mode = Mode::Playing;
                 gs.journal_line = p->mirrors;
                 gs.journal_timer = 6.0f;
+                gs.title_idle = 0.0f;
                 ++gs.serial;
+                return;
+            }
+            // Nobody at the title for a while: the bot walks the route (attract mode) until a key.
+            gs.title_idle += f.dt;
+            if (gs.title_idle >= kAttractSeconds) {
+                gs.mode = Mode::Playing;
+                gs.autopilot = 1;
+                gs.attract = 1;
+                gs.title_idle = 0.0f;
             }
             return;
         case Mode::Paused:
@@ -249,6 +239,13 @@ void sr_flow(Frame& f) {
             return;
         case Mode::Playing:
         case Mode::Dawn:
+            if (gs.attract && (in.confirm_pressed || in.fire_pressed || in.cancel_pressed)) {
+                reset_run(f.world());  // back to the title, the island as it was
+                gs.mode = Mode::Title;
+                gs.autopilot = 0;
+                gs.attract = 0;
+                return;
+            }
             if (in.pause_pressed && !gs.autopilot) {
                 gs.mode = Mode::Paused;
                 return;
@@ -319,7 +316,7 @@ void sr_keeper(Frame& f) {
     Keeper* k = f.world().try_get_mut<Keeper>(gs.keeper);
     Progress* p = progress(f, gs);
     if (!k || !p) return;
-    World3D& pw = f.resource<Physics>().world;
+    World3D& pw = f.resource<Physics3D>().world;
     const input::InputState& in = f.resource<input::InputState>();
     const f32 dt = f.dt;
 
@@ -432,7 +429,7 @@ void sr_keeper(Frame& f) {
 
 void sr_physics(Frame& f) {
     ReachState& gs = f.resource<ReachState>();
-    World3D& pw = f.resource<Physics>().world;
+    World3D& pw = f.resource<Physics3D>().world;
     if (gs.mode == Mode::Playing || gs.mode == Mode::Dawn || gs.mode == Mode::Finale) pw.step(f.dt);
     const Keeper* k = f.world().try_get<Keeper>(gs.keeper);
     if (!k) return;
@@ -468,19 +465,21 @@ void sr_mirrors(Frame& f) {
 
 ResultV install(World& world) {
     if (!world.try_resource<input::InputState>()) input::install(world);  // play-in-editor has no input
-    world.register_components<MeshRef, Scatter, Light3D, BoxCollider3D, Animated, Heliostat, Sunshard, KeeperSpawn, Keeper, Waypoint,
-                              GullPath, Progress>();
+    // The kit's physics world, stepped by sr_physics (only while the island plays), not the kit.
+    if (!world.try_resource<Physics3D>()) world.set_resource(Physics3D{});
+    world.resource<Physics3D>().auto_step = 0;
+    kit::install_kit3d(world, nullptr);  // the stock player installed it first (with its assets)
+    world.register_components<Scatter, Glow, KeeperModel, Beam, HudText, ReachSounds, Heliostat, Sunshard, KeeperSpawn, Keeper,
+                              Waypoint, GullPath, Progress>();
     world.add_system(Phase::Startup, "sr_startup", &sr_startup);
     world.add_system(Phase::FixedUpdate_Pre, "sr_flow", &sr_flow);
     world.add_system(Phase::FixedUpdate_Pre, "sr_keeper", &sr_keeper, "sr_flow");
     world.add_system(Phase::FixedUpdate_Physics, "sr_physics", &sr_physics);
     world.add_system(Phase::FixedUpdate_Post, "sr_mirrors", &sr_mirrors);
-    physics::PhysicsConfig3D cfg;
-    cfg.max_bodies = 2048;
-    world.set_resource(Physics{World3D(cfg)});
-    world.set_resource(ScatterCache{});
+    install_present(world);
     ReachState gs;
-    if (const ReachState* given = world.try_resource<ReachState>()) gs = *given;  // the host may preset autopilot / Title
+    gs.mode = Mode::Title;  // a player at the window starts on the title
+    if (const ReachState* given = world.try_resource<ReachState>()) gs = *given;  // tests preset autopilot / Playing
     world.set_resource(gs);
     return ok();
 }
@@ -488,7 +487,7 @@ ResultV install(World& world) {
 u64 hash_game(World& world, u64 seed) {
     const ReachState& gs = world.resource<ReachState>();
     Hasher64 h(world.state_hash(seed));
-    h.u64v(world.resource<Physics>().world.hash_state(seed));
+    h.u64v(world.resource<Physics3D>().world.hash_state(seed));
     h.u32v(static_cast<u32>(gs.mode));
     h.u64v(gs.ticks);
     h.u32v(gs.waypoint_cursor);
@@ -525,7 +524,7 @@ void reset_run(World& world) {
         k->vy = 0.0f;
         k->lantern_on = 0;
         k->anim_time = 0.0f;
-        world.resource<Physics>().world.teleport(gs.keeper, k->pos, quat::identity());
+        world.resource<Physics3D>().world.teleport(gs.keeper, k->pos, quat::identity());
         gs.cam_yaw = gs.prev_cam_yaw = wrap_angle(yaw + kPi);
     }
     gs.mode = Mode::Playing;
