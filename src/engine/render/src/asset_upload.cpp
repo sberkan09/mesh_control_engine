@@ -22,7 +22,11 @@ Result<rhi::TextureHandle> upload_cooked_texture(TextureStore& store, u32 key, u
         mips[m] = {mip.width, mip.height, view.payload.subspan(static_cast<usize>(mip.offset), static_cast<usize>(bytes))};
     }
     TextureUpload up;
-    up.format = (h.flags & asset::TextureFlags::Srgb) ? rhi::TextureFormat::RGBA8_SRGB : rhi::TextureFormat::RGBA8_UNorm;
+    const bool srgb = (h.flags & asset::TextureFlags::Srgb) != 0;
+    if (h.format == asset::TextureFormat::ASTC_4x4)
+        up.format = srgb ? rhi::TextureFormat::ASTC_4x4_SRGB : rhi::TextureFormat::ASTC_4x4_UNorm;
+    else
+        up.format = srgb ? rhi::TextureFormat::RGBA8_SRGB : rhi::TextureFormat::RGBA8_UNorm;
     up.layers = h.layers;
     up.array = true;  // the sprite path samples sampler2DArray; one-layer textures are 1-layer arrays
     up.mips = Span<const TextureMipUpload>(mips, view.mips.size());

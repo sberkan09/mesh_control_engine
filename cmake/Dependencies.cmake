@@ -182,6 +182,40 @@ else()
     target_compile_options(mce_meshopt PRIVATE -w)
 endif()
 
+# ---- astc-encoder (cook-time only: ASTC 4x4 textures for phones, mce_cook --textures astc) ----
+# Confined to the cook's texture importer by the "astcenc wall" in scripts/ci/check_walls.py. Built
+# from its sources (its own CMake project pulls in CTest and LTO): the portable no-SIMD path with
+# floating-point invariance, so a pack cooks to the same bytes on every host.
+if(NOT CMAKE_CROSSCOMPILING)
+    FetchContent_Declare(astcenc
+        GIT_REPOSITORY https://github.com/ARM-software/astc-encoder.git
+        GIT_TAG        5.6.0
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  _no_cmake_)
+    FetchContent_MakeAvailable(astcenc)
+    set(_astc "${astcenc_SOURCE_DIR}/Source")
+    add_library(mce_astcenc STATIC
+        ${_astc}/astcenc_averages_and_directions.cpp ${_astc}/astcenc_block_sizes.cpp
+        ${_astc}/astcenc_color_quantize.cpp ${_astc}/astcenc_color_unquantize.cpp
+        ${_astc}/astcenc_compress_symbolic.cpp ${_astc}/astcenc_compute_variance.cpp
+        ${_astc}/astcenc_decompress_symbolic.cpp ${_astc}/astcenc_diagnostic_trace.cpp ${_astc}/astcenc_entry.cpp
+        ${_astc}/astcenc_find_best_partitioning.cpp ${_astc}/astcenc_ideal_endpoints_and_weights.cpp
+        ${_astc}/astcenc_image.cpp ${_astc}/astcenc_integer_sequence.cpp ${_astc}/astcenc_mathlib.cpp
+        ${_astc}/astcenc_mathlib_softfloat.cpp ${_astc}/astcenc_partition_tables.cpp
+        ${_astc}/astcenc_percentile_tables.cpp ${_astc}/astcenc_pick_best_endpoint_format.cpp
+        ${_astc}/astcenc_quantization.cpp ${_astc}/astcenc_symbolic_physical.cpp ${_astc}/astcenc_weight_align.cpp
+        ${_astc}/astcenc_weight_quant_xfer_tables.cpp)
+    target_include_directories(mce_astcenc SYSTEM PUBLIC "${_astc}")
+    target_compile_definitions(mce_astcenc PRIVATE ASTCENC_NEON=0 ASTCENC_SVE=0 ASTCENC_SSE=0 ASTCENC_AVX=0
+                                                   ASTCENC_POPCNT=0 ASTCENC_F16C=0)
+    set_target_properties(mce_astcenc PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(MSVC)
+        target_compile_options(mce_astcenc PRIVATE /W0 /fp:precise)
+    else()
+        target_compile_options(mce_astcenc PRIVATE -w -ffp-contract=off)
+    endif()
+endif()
+
 # ---- Jolt Physics 5 (3D physics; mce_physics3d only — ADR-0003) ----------------------------------
 # The JPH wall in scripts/ci/check_walls.py confines Jolt includes and JPH:: symbols to
 # src/engine/physics3d/. Built through Jolt's own Build/CMakeLists.txt, which keeps its flag

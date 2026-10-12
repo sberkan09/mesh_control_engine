@@ -37,5 +37,6 @@ mce_add_library(mce_asset_cook UMBRELLA
         mce::mce_input
         mce_stb
         mce_meshopt
+        mce_astcenc
         glslang::glslang
         glslang::glslang-default-resource-limits)

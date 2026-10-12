@@ -104,7 +104,7 @@ function(mce_add_project game)
         OUTPUT "${pack}"
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${project_dir}/assets"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${src}/assets" "${project_dir}/assets"
-        COMMAND ${cook_command} "${project_dir}" --pack --quiet
+        COMMAND ${cook_command} "${project_dir}" --pack --quiet ${MCE_COOK_TEXTURE_ARGS}
         DEPENDS ${cook_depends} ${content}
         COMMENT "Cooking ${game} content"
         VERBATIM)

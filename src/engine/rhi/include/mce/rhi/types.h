@@ -37,6 +37,7 @@ enum class TextureFormat : u16 {
     R8_UNorm, RG8_UNorm, R11G11B10F,
     BC1_UNorm, BC3_UNorm, BC5_UNorm, BC7_UNorm, BC7_SRGB,  // cooked formats (FR-AST-050)
     D32_Float, D24_UNorm_S8, D16_UNorm,
+    ASTC_4x4_UNorm, ASTC_4x4_SRGB,  // cooked for phones (M-MOBILE step 8); 16-byte 4x4 blocks
 };
 
 bool is_depth_format(TextureFormat f);

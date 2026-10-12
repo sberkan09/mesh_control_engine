@@ -25,6 +25,7 @@ namespace mce::render {
 struct Forward3DDesc {
     u32 msaa = 4;            // 1 = no multisampling (the HDR target is rendered directly)
     u32 shadow_size = 2048;  // per cascade; keep ShadowSettings::resolution equal (texel snapping)
+    f32 render_scale = 1.0f; // 3D targets at viewport * scale (0.5..1); tonemap/FXAA upsample (quality.h)
     bool encode_srgb_output = true;  // the backbuffer/editor targets are plain RGBA8 (see RendererDesc)
     bool timestamps = true;          // write GPU timestamps [timestamp_base, timestamp_base + kStageCount]
     u32 timestamp_base = 0;

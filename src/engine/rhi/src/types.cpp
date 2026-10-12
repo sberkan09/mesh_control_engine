@@ -12,7 +12,9 @@ bool is_compressed_format(TextureFormat f) {
         case TextureFormat::BC3_UNorm:
         case TextureFormat::BC5_UNorm:
         case TextureFormat::BC7_UNorm:
-        case TextureFormat::BC7_SRGB: return true;
+        case TextureFormat::BC7_SRGB:
+        case TextureFormat::ASTC_4x4_UNorm:
+        case TextureFormat::ASTC_4x4_SRGB: return true;
         default: return false;
     }
 }

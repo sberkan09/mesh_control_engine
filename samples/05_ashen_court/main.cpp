@@ -36,6 +36,7 @@
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
+#include "mce/render/quality.h"
 #include "mce/render/renderer.h"
 #include "mce/rhi/default_device.h"
 #include "ship_paths.h"
@@ -53,7 +54,7 @@ MCE_CVAR(cv_ticks, "ticks", 1800, "Headless: ticks to simulate", CVarFlags::None
 MCE_CVAR(cv_autoplay, "autoplay", false, "The bot plays (attract mode)", CVarFlags::None);
 MCE_CVAR(cv_pack, "pack", "", "Cooked pack to mount (default: assets.mce next to the executable)", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
-MCE_CVAR(cv_msaa, "r.msaa", 4, "3D MSAA samples (1 = off)", CVarFlags::RequiresRestart);
+MCE_CVAR(cv_msaa, "r.msaa", 0, "3D MSAA samples (1 = off, 0 = the r.quality tier's)", CVarFlags::RequiresRestart);
 
 f64 now_ms() { return platform::now_seconds() * 1000.0; }
 
@@ -121,7 +122,10 @@ public:
         if (device_) {
             MCE_TRY(renderer_.init(*device_));
             Forward3DDesc fd;
-            fd.msaa = static_cast<u32>(math::clamp<i64>(cv_msaa.get_int(), 1, 8));
+            apply_quality(quality_, fd);
+            if (cv_msaa.get_int() > 0) fd.msaa = static_cast<u32>(math::clamp<i64>(cv_msaa.get_int(), 1, 8));
+            MCE_LOG_INFO("05_ashen_court: quality {} (MSAA {}x, shadows {} px, render scale {:.2f})", quality_tier_name(quality_tier()),
+                         fd.msaa, fd.shadow_size, static_cast<double>(fd.render_scale));
             MCE_TRY(renderer_.init_3d(fd));
             assets_.set_upload_sink(&sink_);
             meshes_ = &renderer_.meshes();
@@ -407,12 +411,12 @@ private:
         scene.set_fog(fog);
         PostFx post;
         post.bloom_intensity = 0.07f;
-        scene.set_post(post);
         ShadowSettings shadows;
-        shadows.cascades = 3;
         shadows.distance = 45.0f;
         shadows.splits[0] = 0.12f;
         shadows.splits[1] = 0.35f;
+        apply_quality(quality_, shadows, post);  // High: 3 cascades, 2048 px, bloom + FXAA
+        scene.set_post(post);
         scene.set_shadows(shadows);
 
         for (const Placement& p : layout_.statics)
@@ -590,6 +594,7 @@ private:
     bool autoplay_;
     bool interactive_ = false;
     Renderer renderer_;
+    QualitySettings quality_ = quality_settings(quality_tier());  // r.quality (render/quality.h)
     asset::AssetSystem assets_;
     AssetUploadSink sink_;
     MeshStore cpu_meshes_;
