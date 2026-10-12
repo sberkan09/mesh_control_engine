@@ -202,4 +202,37 @@ struct SequencePlayer {
 MCE_COMPONENT(SequencePlayer, sequence, name, (active, Save), (anchored, Save, ReadOnly), (step, Save, ReadOnly),
               (elapsed, Save, ReadOnly), (anchor, Save, ReadOnly))
 
+enum class PathStatus : u8 { Idle, Moving, Arrived, NoPath };
+MCE_ENUM(PathStatus, Idle, Moving, Arrived, NoPath)
+
+// Walks the entity to `target` over the world's kit::NavGrid resource (grid A*; the planner and
+// the "path_agents" system are in pathfinding.h). Moves a physics2d body through its velocity
+// when the entity has one, else its LocalTransform. The fields after `diagonal` are runtime
+// state written by the system: the current smoothed path (at most kMaxWaypoints corners; a
+// longer path is followed in pieces, re-planned when the stored piece runs out).
+struct PathAgent {
+    static constexpr u32 kMaxWaypoints = 16;
+
+    math::vec2 target;               // world metres
+    f32 speed = 3.0f;                // metres per second
+    f32 arrival_radius = 0.05f;      // metres from the target that count as arrived
+    u16 repath_interval = 30;        // ticks between re-plans while moving (0 = only on a target change)
+    u16 repath_countdown = 0;        // ticks to the next re-plan
+    bool active = true;              // cleared: the agent stops where it is
+    bool diagonal = true;            // 8-neighbour search (4-neighbour when cleared)
+    PathStatus status = PathStatus::Idle;
+    u8 waypoint = 0;                 // the waypoint being walked to
+    u8 waypoint_count = 0;
+    bool truncated = false;          // the path had more corners than kMaxWaypoints
+    u8 pad_[2] = {};
+    math::vec2 planned_target;       // the target the stored path leads to
+    math::vec2 waypoints[kMaxWaypoints];
+};
+MCE_COMPONENT(PathAgent, (target, Help{"world point to walk to"}), (speed, Range{0, 100}),
+              (arrival_radius, Range{0, 10}), (repath_interval, Help{"ticks between re-plans; 0 = on target change only"}),
+              active, (diagonal, Help{"8-neighbour paths (no corner cutting)"}), (status, ReadOnly, Transient),
+              (repath_countdown, ReadOnly, Transient), (waypoint, ReadOnly, Transient),
+              (waypoint_count, ReadOnly, Transient), (truncated, ReadOnly, Transient),
+              (planned_target, ReadOnly, Transient), (waypoints, ReadOnly, Transient))
+
 }  // namespace mce::kit
