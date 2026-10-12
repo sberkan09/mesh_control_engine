@@ -20,6 +20,7 @@ a device or simulator run on the user's Mac.
 | 7 | iOS: `ios-arm64` / `ios-sim-arm64` presets, Xcode project generation, the statically linked game module (`MCE_PROJECT_STATIC_MODULE`), signing, IPA from `scripts/ship.py --target ios` | simulator + a device, on the Mac | done in the Simulator (no device; Ninja app bundles instead of an Xcode project) |
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | — |
 | 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | — |
+| 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | — |
 
 ## What shipped (steps 2–3)
 
