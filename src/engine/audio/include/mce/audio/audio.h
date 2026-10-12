@@ -165,6 +165,10 @@ public:
     // Stops every voice on the clip and frees the slot once the mixer acknowledges (update()).
     void release_clip(ClipHandle clip);
     bool is_clip_registered(ClipHandle clip) const;
+    // Blocks until the mixer has acknowledged every release_clip so far (or `timeout_ms` passes;
+    // false then), so the callers can free clip memory, e.g. before a pack unmounts. Mixes no
+    // audio: on the Silent and Offline backends it only drains the command FIFO.
+    bool finish_releases(u32 timeout_ms = 500);
 
     // ---- playback ---------------------------------------------------------------------
     // Returns a null handle when the clip is stale, the FIFO is full, or no handle is free (one

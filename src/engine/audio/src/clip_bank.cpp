@@ -85,7 +85,16 @@ void ClipBank::release(asset::Guid guid) {
 }
 
 void ClipBank::release_all() {
-    for (auto& kv : entries_) drop(kv.value);
+    // The mixer may be inside a block reading these clips, and it takes a bounded number of
+    // commands per callback: wait for every release before dropping the retains, or a pack
+    // unmounted right after (a quitting player) is still read by the audio thread (#145).
+    for (auto& kv : entries_)
+        if (!kv.value.clip.is_null()) device_->release_clip(kv.value.clip);
+    device_->finish_releases();
+    for (auto& kv : entries_) {
+        kv.value.clip = {};
+        drop(kv.value);
+    }
     entries_.clear();
 }
 

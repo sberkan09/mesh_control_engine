@@ -33,6 +33,8 @@ public:
     ClipHandle find(asset::Guid guid) const;
     // Releases the clip and the asset retain.
     void release(asset::Guid guid);
+    // Releases every clip and waits for the mixer to drop them before the retains go, so the
+    // pack can unmount right after (AudioDevice::finish_releases).
     void release_all();
 
     // Picks up hot reloads: every clip whose asset generation moved is released and registered
