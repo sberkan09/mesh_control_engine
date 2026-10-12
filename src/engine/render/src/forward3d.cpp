@@ -489,7 +489,8 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             ou.uv_rect = sm.uv_rect;
             ou.base_color = {mat.base_color[0] * inst.tint.x, mat.base_color[1] * inst.tint.y,
                              mat.base_color[2] * inst.tint.z, mat.base_color[3] * inst.tint.w};
-            ou.emissive = {mat.emissive[0], mat.emissive[1], mat.emissive[2], sm.emissive_key != ~0u ? 1.0f : 0.0f};
+            ou.emissive = {mat.emissive[0] * inst.emissive_tint.x, mat.emissive[1] * inst.emissive_tint.y,
+                           mat.emissive[2] * inst.emissive_tint.z, sm.emissive_key != ~0u ? 1.0f : 0.0f};
             ou.params = {(mat.flags & asset::MaterialFlags::AlphaMask) ? mat.alpha_cutoff : 0.0f,
                          (mat.flags & asset::MaterialFlags::Unlit) ? 1.0f : 0.0f, mat.roughness, mat.metallic};
             ou.maps = {sm.normal_key != ~0u ? 1.0f : 0.0f, sm.orm_key != ~0u ? 1.0f : 0.0f,

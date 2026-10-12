@@ -486,6 +486,11 @@ void InputSystem::fold(const Event& e) {
             break;
         }
         case EventType::MouseMove: {
+            if (e.flags & platform::EventFlag::RelativeMouse) {  // x/y are a delta (Window::set_relative_mouse)
+                tick_delta_.x += e.x;
+                tick_delta_.y += e.y;
+                break;
+            }
             const vec2 p(e.x, e.y);
             if (have_mouse_pos_) {
                 tick_delta_.x += p.x - mouse_pos_.x;

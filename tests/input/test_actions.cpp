@@ -278,6 +278,21 @@ TEST_CASE("mouse delta and text accumulate over the tick window") {
     CHECK(s2.text().empty());
 }
 
+TEST_CASE("relative mouse moves add their deltas and leave the cursor position alone") {
+    InputSystem in;
+    test::setup_default(in);
+    in.push_event(test::mouse_move(100.f, 100.f, in_tick(1, 100)));
+    platform::Event rel = test::mouse_move(40.f, -5.f, in_tick(1, 200));  // Window::set_relative_mouse(true)
+    rel.flags = platform::EventFlag::RelativeMouse;
+    in.push_event(rel);
+    rel.timestamp_us = in_tick(1, 300);
+    in.push_event(rel);
+    const InputState s1 = in.sample_for_tick(1);
+    CHECK(s1.look.x == 80.f);  // unbounded: two deltas, no clamp at a window edge
+    CHECK(s1.look.y == -10.f);
+    CHECK(s1.mouse_pos_px().x == 100.f);
+}
+
 TEST_CASE("InputState is published as a world resource") {
     World w;
     install(w);

@@ -62,6 +62,12 @@ public:
     void set_title(const char* title);
     void set_size(u32 width, u32 height);
     void set_cursor_visible(bool visible);
+    // Relative mouse mode (3D mouse look): the cursor hides and stays put, and MouseMove carries
+    // unbounded deltas (EventFlag::RelativeMouse), so turning never stops at the window edge. The OS
+    // suspends it while the window is unfocused; turn it off while a console or menu needs the cursor.
+    // False when the platform refuses it.
+    bool set_relative_mouse(bool on);
+    bool relative_mouse() const;
     // TextInput events flow only while on (an IME may show); a console turns it on while open.
     void set_text_input(bool on);
     // Taskbar/title-bar icon from tightly packed RGBA8 rows (FR-SHP-010). False when the platform refuses it.

@@ -19,12 +19,12 @@ convars for the bus volumes.
 | `clip` | the `.wav` asset |
 | `gain_db`, `pan` | −60..12 dB, −1..1 |
 | `priority` | 0..255; louder and higher priority voices survive when voices run out |
-| `bus` | `Bus_Master`, `Bus_Music`, `Bus_SFX` (default), `Bus_UI`, or a user bus |
+| `bus` | an integer: `0` master, `1` music, `2` SFX (default), `3` UI, `4`+ user buses (`Bus_Master` … `Bus_User0` in code; scenes and MCP take the number, e.g. `"bus": 1`) |
 | `loop` | gapless; the clip's loop points come from the WAV's own markers or the sidecar's `loop_start` / `loop_end` |
 | `play_on_start` | start when the entity appears |
 
 Changing `gain_db` or `pan` from code ramps over 10 ms (no clicks). Removing the component stops
-the voice with a short fade. Music is an ordinary looping `AudioSource` on `Bus_Music`.
+the voice with a short fade. Music is an ordinary looping `AudioSource` on `Bus_Music` (`"bus": 1` in a scene).
 
 ## 10.2 One-shots from gameplay
 

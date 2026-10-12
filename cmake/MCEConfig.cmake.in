@@ -10,7 +10,8 @@
 #           mce_apply_compile_policy (no exceptions, no RTTI, precise FP, warnings as errors)
 # Tools:    MCE_PLAYER_EXE, MCE_EDITOR_EXE, MCE_MCP_EXE, MCE_COOK_EXE, MCE_BIN_DIR, MCE_LIB_DIR,
 #           MCE_INCLUDE_DIR, MCE_TEMPLATE_DIR
-# Facts:    MCE_VERSION, MCE_ENGINE_DESCRIBE (this engine's build stamp), MCE_ENGINE_ID_HEX
+# Facts:    MCE_VERSION, MCE_ENGINE_DESCRIBE (this engine's build stamp), MCE_ENGINE_ID_HEX,
+#           MCE_ENGINE_LIBS (the libraries mce::mce_engine stands for; mce_engine_deps maps them)
 #
 # A module built against this SDK carries this engine's MCE_ENGINE_ID (include/mce/engine_version.h);
 # the loader refuses modules from another build. The engine was built @CMAKE_BUILD_TYPE@ with
@@ -22,6 +23,9 @@ set(MCE_VERSION "@PROJECT_VERSION@")
 set(MCE_ENGINE_DESCRIBE "@MCE_ENGINE_DESCRIBE@")
 set(MCE_ENGINE_ID_HEX "@MCE_ENGINE_ID_HEX@")
 set(MCE_GAME_MODULES_SUPPORTED ON)
+# The engine libraries folded into libmce_engine: mce_engine_deps() maps each (with or without mce::)
+# to mce::mce_engine, so a custom host can name mce::mce_render & co. as it does in the engine tree.
+set(MCE_ENGINE_LIBS "@MCE_ENGINE_LIBS@")
 set(MCE_ASAN @MCE_ASAN@)
 set(MCE_FORCE_ASSERTS @MCE_FORCE_ASSERTS@)
 option(MCE_WARNINGS_AS_ERRORS "Treat warnings as errors (the engine's own policy)" ON)

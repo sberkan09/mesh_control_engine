@@ -17,7 +17,7 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-ticks N` | 600 | headless: fixed ticks to simulate |
 | `-frames N` | 0 | windowed: quit after N rendered frames |
 | `-capture <path.ppm>` | | with `-frames` or `-capture_tick`: write the last frame as a PPM (the directory is created) |
-| `-capture_tick N` | 0 | windowed: quit after N simulation ticks (frame-rate independent, unlike `-frames`) |
+| `-capture_tick N` | 0 | windowed: quit after N simulation ticks of this run (frame-rate independent, unlike `-frames`; with `-save`, the restored slot's tick does not count) |
 | `-input_map <guid or path>` | | the cooked `.mcinput` to load (default: the first in the pack, else the starter-kit map; chapter 11) |
 | `-input <file>` | | play a scripted input file instead of the keyboard (`<from>[-<to>] Action[=value]` per line; chapter 11) |
 | `-save <slot>` | off | load the slot at start if it exists; write it on a clean quit |

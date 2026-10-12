@@ -82,7 +82,8 @@ MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window 
 MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames or -capture_tick) to this .ppm path (relative to the working directory; parents are created)",
          CVarFlags::None);
 MCE_CVAR(cv_capture_tick, "capture_tick", 0,
-         "Windowed: quit (and -capture) on the first frame after this many sim ticks, whatever the frame rate (0 = off)",
+         "Windowed: quit (and -capture) on the first frame after this many sim ticks of this run, whatever the frame rate; "
+         "a tick restored by -save does not count (0 = off)",
          CVarFlags::None);
 MCE_CVAR(cv_ticks, "ticks", 600, "Headless: ticks to simulate (windowed runs use -frames)", CVarFlags::None);
 MCE_CVAR(cv_input, "input", "",
@@ -187,6 +188,7 @@ public:
             save::SaveInfo info;
             MCE_TRY_ASSIGN(const save::LoadStats st, save::load_game(world_, slot, &info));
             sim_ticks_ = info.tick;
+            run_start_tick_ = info.tick;  // -capture_tick counts this run's ticks, not the restored ones
             std::printf("mce_player: save '%.*s' loaded (%u entities, tick %llu)\n", static_cast<int>(slot.size()), slot.data(),
                         st.entities, static_cast<unsigned long long>(info.tick));
         }
@@ -261,7 +263,8 @@ public:
         // The run ends on the Nth frame (-frames) or on the first frame after sim tick N (-capture_tick):
         // the latter catches a moment of the simulation however fast or slow the frames come.
         const bool last = (cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int())) ||
-                          (cv_capture_tick.get_int() > 0 && sim_ticks_ >= static_cast<u64>(cv_capture_tick.get_int()));
+                          (cv_capture_tick.get_int() > 0 &&
+                           sim_ticks_ - run_start_tick_ >= static_cast<u64>(cv_capture_tick.get_int()));
         if (last && !cv_capture.get_string().empty()) capture(cv_capture.get_string().data(), bb);
         device_->end_frame();
         assets_.end_frame();
@@ -721,6 +724,7 @@ private:
     FixedString<256> scene_path_;
     asset::ModList mods_;  // mounted mods in load order (published as a resource when the game takes mods)
     u64 sim_ticks_ = 0;
+    u64 run_start_tick_ = 0;  // sim_ticks_ when this run began (a -save slot's tick), for -capture_tick
     bool paused_ = false;
     bool background_ = false;  // unfocused or minimized
     bool os_background_ = false;  // the app itself is in the background (phones): no drawing at all
