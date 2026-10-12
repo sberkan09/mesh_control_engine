@@ -1,0 +1,5 @@
+# Solstice Reach: begin from the title, walk up the landing toward the terraces (ticks at 60 Hz).
+5 Confirm
+20-200 Move=0,1
+120 Jump
+150-200 Look=6,0

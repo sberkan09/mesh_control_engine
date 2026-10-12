@@ -3,15 +3,16 @@
 // validates them, the editor inspects them and the systems in solstice_reach.cpp run on them.
 // Data-only header (core + refl + math + asset refs), so the cook compiles it without the game.
 //
-// The engine has no 3D kit yet (user guide ch. 8), so the first group below is this game's own
-// minimal one: a placed model, a scatter volume, a light. The host (games/solstice_reach/host)
-// draws them; headless, nothing does, and the sim does not care.
+// The game is built on the engine's 3D kit: scenes place kit3d MeshRef / PointLight3D / Animator /
+// BoxCollider3D / Camera3DComponent entities, and the stock player draws them. The components
+// below are the game's own; the systems in present.cpp turn its state into the kit's.
 //
 // Layouts are padding-free (World::state_hash hashes component bytes): asset refs (24 bytes) and
 // 8-byte fields first, then 4-byte fields, with explicit pad_ fields to a multiple of 8.
 
 #include "mce/asset/handle.h"
 #include "mce/ecs/entity.h"
+#include "mce/kit/kit3d.h"
 #include "mce/math/math.h"
 #include "mce/refl/macros.h"
 #include "mce/types.h"
@@ -26,20 +27,19 @@ using mce::math::vec2;
 using mce::math::vec3;
 using mce::math::vec4;
 
-// ---- the 3D kit this game carries ------------------------------------------------------------
+// ---- on the engine's 3D kit (mce/kit/kit3d.h) -------------------------------------------------
 
-// A placed model: the host draws `mesh` at the entity's LocalTransform.
-struct MeshRef {
-    mce::asset::AssetRef<mce::asset::Mesh> mesh;
-    vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
-    f32 cull_radius = 0.0f;  // 0: the renderer's bounds; else a sphere the host culls against first
-    u32 cast_shadows = 1;
-};
-MCE_COMPONENT(MeshRef, mesh, tint, (cull_radius, Help{"0 = mesh bounds"}), cast_shadows)
+// Placed models, lights, clips and static colliders are the kit's: MeshRef, PointLight3D,
+// Animator and BoxCollider3D. The stock player draws them; what follows is what this game adds.
+using mce::kit::Animator;
+using mce::kit::BoxCollider3D;
+using mce::kit::Camera3DComponent;
+using mce::kit::MeshRef;
+using mce::kit::PointLight3D;
 
-// A volume filled at Startup with instances of up to three meshes, placed on the terrain by a
-// seeded hash (no entities: the instances live in the ScatterCache resource; the host draws them
-// in 16 m cells). Positions are deterministic in the seed and the volume.
+// A volume filled at Startup with copies of up to three meshes, placed on the terrain by a
+// seeded hash into the kit's StaticInstances3D resource (no entities; drawn in 16 m cells).
+// Positions are deterministic in the seed and the volume.
 struct Scatter {
     mce::asset::AssetRef<mce::asset::Mesh> mesh;
     mce::asset::AssetRef<mce::asset::Mesh> mesh_b;
@@ -59,46 +59,58 @@ struct Scatter {
 MCE_COMPONENT(Scatter, mesh, mesh_b, mesh_c, half_extent, (density, Range{0, 20}), min_scale, max_scale, max_slope_deg,
               min_height, max_height, seed, align_to_ground, (count, ReadOnly, Transient))
 
-enum class LightKind : u32 { Lantern, Firefly, Sconce, Flare, Moonbeam };
-MCE_ENUM(LightKind, Lantern, Firefly, Sconce, Flare, Moonbeam)
+enum class GlowKind : u32 { Lantern, Firefly, Sconce, Steady };
+MCE_ENUM(GlowKind, Lantern, Firefly, Sconce, Steady)
 
-// A point light (a spot when spot_outer > 0) at the entity's position plus `offset`. Lanterns and
-// sconces follow the time of day's lantern gain and flicker; fireflies wander and glow at night.
-struct Light3D {
-    Color color{1.0f, 0.7f, 0.4f, 1.0f};
-    vec3 offset{0.0f, 2.0f, 0.4f};
-    f32 intensity = 3.0f;
-    vec3 direction{0.0f, -1.0f, 0.0f};
-    f32 radius = 7.0f;
-    f32 spot_outer = 0.0f;  // degrees; 0 = point light
-    f32 spot_inner = 0.0f;
+// Drives the entity's PointLight3D from the time of day: lanterns and sconces follow the hour's
+// lantern gain and flicker; fireflies glow at night and wander around where they were placed
+// (the entity moves, so a MeshRef on it is the firefly's body).
+struct Glow {
+    f32 intensity = 3.0f;  // the light's intensity at full gain
     f32 flicker = 0.25f;
-    LightKind kind = LightKind::Lantern;
-};
-MCE_COMPONENT(Light3D, color, offset, (intensity, Range{0, 50}), direction, (radius, Range{0.1f, 60}), spot_outer, spot_inner,
-              (flicker, Range{0, 1}), kind)
-
-// A box collider for the 3D physics world (static). `pitch_deg` tilts it about its local X, for
-// ramps; the entity's yaw and position place it.
-struct BoxCollider3D {
-    vec3 half{1.0f, 1.0f, 1.0f};
-    f32 pitch_deg = 0.0f;
-    vec3 offset;
-    f32 pad_ = 0.0f;
-};
-MCE_COMPONENT(BoxCollider3D, half, pitch_deg, offset)
-
-enum class ClipKind : u32 { None, Turn, Flutter, Gust, Glide, Walk, Idle };
-MCE_ENUM(ClipKind, None, Turn, Flutter, Gust, Glide, Walk, Idle)
-
-// Plays a node clip of the entity's MeshRef mesh.
-struct Animated {
-    f32 speed = 1.0f;
-    f32 phase = 0.0f;  // seconds added to the clip time (desynchronises a row of banners)
-    ClipKind clip = ClipKind::None;
+    GlowKind kind = GlowKind::Lantern;
+    u32 placed = 0;        // runtime: `home` is set
+    vec3 home;             // runtime: where a firefly wanders around
     u32 pad_ = 0;
 };
-MCE_COMPONENT(Animated, speed, phase, clip)
+MCE_COMPONENT(Glow, (intensity, Range{0, 50}), (flicker, Range{0, 1}), kind, (placed, ReadOnly, Transient),
+              (home, ReadOnly, Transient))
+
+// The Keeper's body: the entity carrying the Keeper's MeshRef, Animator (walk / idle) and the
+// lantern's PointLight3D. sr_present puts it on the character every tick.
+struct KeeperModel {
+    f32 lift = 0.95f;  // metres from the character's centre down to the model's feet
+    u32 pad_ = 0;
+};
+MCE_COMPONENT(KeeperModel, lift)
+
+// A light beam (its MeshRef stretched from a dish to the next): `mirror` 0..6 is the beam that
+// leaves heliostat `mirror` once aligned, 7 the finale's shaft from the Vault's oculus. The
+// entity's PointLight3D is the dish's glow.
+struct Beam {
+    u32 mirror = 0;
+    u32 pad_ = 0;
+};
+MCE_COMPONENT(Beam, (mirror, Range{0, 7}))
+
+enum class HudKind : u32 { Status, Journal, Prompt, Banner };
+MCE_ENUM(HudKind, Status, Journal, Prompt, Banner)
+
+// A line of the HUD: sr_hud writes the entity's TextLabel (text, position under the screen
+// camera, visibility). `line` picks a row of a multi-line kind (the journal's two, the title's three).
+struct HudText {
+    HudKind kind = HudKind::Status;
+    u32 line = 0;
+};
+MCE_COMPONENT(HudText, kind, line)
+
+// The game's sounds (one entity carries them): a shard taken, a mirror aligned, the finale.
+struct ReachSounds {
+    mce::asset::AssetRef<mce::asset::Sfx> chime;
+    mce::asset::AssetRef<mce::asset::Sfx> flare;
+    mce::asset::AssetRef<mce::asset::Sfx> organ;
+};
+MCE_COMPONENT(ReachSounds, chime, flare, organ)
 
 // ---- the game ----------------------------------------------------------------------------------
 
@@ -159,14 +171,17 @@ struct Waypoint {
 };
 MCE_COMPONENT(Waypoint, order, mirror)
 
-// A gull: circles the entity's position at `radius`, `height` above it.
+// A gull: circles where the entity was placed at `radius`, `height` above it.
+// The entity moves (carry the gull's MeshRef and Animator on it); `center` is where it was placed.
 struct GullPath {
     f32 radius = 12.0f;
     f32 height = 8.0f;
     f32 speed = 0.5f;  // radians per second
     f32 phase = 0.0f;
+    vec3 center;       // runtime: the authored position
+    u32 placed = 0;    // runtime: `center` is set
 };
-MCE_COMPONENT(GullPath, radius, height, speed, phase)
+MCE_COMPONENT(GullPath, radius, height, speed, phase, (center, ReadOnly, Transient), (placed, ReadOnly, Transient))
 
 // Run progress that survives a save (one entity with a SaveKey carries it).
 struct Progress {

@@ -3,7 +3,7 @@
 2D physics is scene-authored: a body is an entity with `RigidBody2D` and `Collider2D`, the engine
 steps the world every fixed tick in `FixedUpdate_Physics` and writes the resulting poses into
 `LocalTransform`. Game code reads events and controller state, moves kinematic bodies by velocity,
-and uses queries. 3D physics is code-driven (section 8.4).
+and uses queries. 3D physics is the kit's `Physics3D` world with static `BoxCollider3D` / `MeshCollider3D` (sections 8.2 and 8.7).
 
 ## 9.1 Bodies and colliders
 

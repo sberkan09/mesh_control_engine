@@ -10,7 +10,14 @@
 //   mce_player -pack p.mce -input moves.txt -capture_tick 300 -capture a.ppm   ... with the scripted input
 //   mce_player -help                                   every convar with its help (the whole command line)
 //
-// Without -scene the first Scene asset of the pack (by source path) plays. F7 toggles 2D post. Controls: Esc pauses
+// Without -scene the first Scene asset of the pack (by source path) plays. F7 toggles 2D post, F3 the
+// render stats line.
+//
+// 3D (M-KIT3D): a scene with a Camera3DComponent (mce/kit/kit3d.h) plays on the 3D path: the
+// forward renderer starts (-r.msaa), every texture and mesh of the pack is uploaded (-r.preload3d),
+// the kit3d components are drawn from the primary 3D camera every frame, and the 2D kit, the console
+// and the pause overlay draw on top. A camera with mouse_look gets relative mouse mode while the game
+// runs (-mouse_look 0 turns that off). Controls: Esc pauses
 // and resumes (the pause overlay), Q quits while paused, ` or F1 opens the developer console (FR-UI-045: the log,
 // convars and console functions; -console 0 removes it from a shipped build's command line).
 //
@@ -47,6 +54,8 @@
 #include "mce/input/ecs.h"
 #include "mce/input/input_system.h"
 #include "mce/input/script.h"
+#include "mce/kit/kit3d.h"
+#include "mce/kit/kit3d_extract.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
@@ -105,6 +114,17 @@ MCE_CVAR(cv_lifecycle_test, "lifecycle_test", "",
          CVarFlags::None);
 MCE_CVAR(cv_console, "console", true, "Allow the developer console (` or F1)", CVarFlags::None);
 MCE_CVAR(cv_console_open, "console_open", false, "Start with the developer console open", CVarFlags::None);
+MCE_CVAR(cv_uniform_ring, "r.uniform_ring_mb", 4,
+         "Per-frame uniform memory in MiB (a 3D frame with thousands of draws and shadow cascades needs more than 1)",
+         CVarFlags::RequiresRestart);
+MCE_CVAR(cv_msaa, "r.msaa", 4, "3D games: MSAA samples of the 3D frame (1 = off)", CVarFlags::RequiresRestart);
+MCE_CVAR(cv_lod, "r.lod", true, "3D games: draw coarser mesh levels with distance (meshes cooked with LODs)", CVarFlags::None);
+MCE_CVAR(cv_lod_pixels, "r.lod_pixels", 1.0f, "3D games: the largest LOD error allowed on screen, in pixels", CVarFlags::None);
+MCE_CVAR(cv_lod_force, "r.lod_force", -1, "3D games: draw every mesh at this LOD level (-1 = by screen size)", CVarFlags::None);
+MCE_CVAR(cv_preload3d, "r.preload3d", true, "3D games: upload every texture and mesh of the pack at start (0 = on first sight)",
+         CVarFlags::None);
+MCE_CVAR(cv_stats, "r.stats", false, "Draw the render stats line (F3 toggles)", CVarFlags::None);
+MCE_CVAR(cv_mouse_look, "mouse_look", true, "3D games: let a Camera3DComponent with mouse_look capture the mouse", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 int fail(const char* what, const Error& e) {
     FixedString<512> msg;
@@ -142,6 +162,7 @@ public:
         audio::install(world_, audio_, &clips_);
         kit::install_particles(world_, &assets_);
         kit::install_sequences(world_, &assets_);
+        kit::install_kit3d(world_, &assets_);
         // The game on top of the engine systems (the game-module contract), before the scene so
         // its systems see the first tick.
         if (cv_module.get_string().empty() && desc_.static_module) {
@@ -184,6 +205,7 @@ public:
         scene::install_streaming(world_, assets_, streaming);
         MCE_TRY(scene::load(world_, assets_, scene, &entities_));
         scene::pump_streaming(world_, scene::PumpMode::Settle);
+        if (device_ && kit::has_camera_3d(world_)) MCE_TRY(init_3d());
         MCE_LOG_INFO("{}: scene {} ({}) with {} entities", desc_.app_name, asset::to_string(scene).view(), scene_path_.view(),
                      entities_.size());
         scene_guid_ = scene;
@@ -256,20 +278,49 @@ public:
 
         update_console(bb);
         update_ui_layers(bb);
-        const bool overlay = paused_ || console_.is_open() || desc_.ui_layer_count > 0;
+        const bool overlay = paused_ || console_.is_open() || desc_.ui_layer_count > 0 || cv_stats.get_bool();
+
+        // 3D: the kit3d scene first (it ends in the backbuffer); the 2D kit draws over it.
+        if (!three_d_ && kit::has_camera_3d(world_)) {
+            if (Result<void> r = init_3d(); !r) {
+                FixedString<512> why;
+                format_error(r.error(), why);
+                MCE_LOG_ERROR("{}: the 3D path did not start: {}", desc_.app_name, why.view());
+                three_d_failed_ = true;
+            }
+        }
+        render::Camera3D cam3;
+        kit::Camera3DComponent cam3_info;
+        const bool draw_3d = three_d_ && extract3d_.camera(world_, static_cast<f32>(rc.alpha), cam3, &cam3_info);
+        update_mouse_look(draw_3d && cam3_info.mouse_look != 0);
+        rhi::CommandBuffer cmd(mem::frame());
+        if (draw_3d) {
+            render::Scene3D scene3(renderer_.meshes(), mem::frame());
+            scene3.begin(cam3, bb);
+            render::LodSettings lod;
+            lod.enabled = cv_lod.get_bool();
+            lod.pixel_error = math::max(cv_lod_pixels.get_float(), 0.01f);
+            lod.force_level = cv_lod_force.get_int() < 0 ? ~0u : static_cast<u32>(cv_lod_force.get_int());
+            scene3.set_lod(lod);
+            extract3d_.extract(world_, scene3, static_cast<f32>(rc.alpha));
+            scene3.build();
+            renderer_.record_3d(cmd, scene3);
+            stats3d_ = scene3.stats();
+        }
 
         render::SpriteBatch batch(renderer_.sprite_sets(), mem::frame());
         batch.begin(render::compute_view_2d(cam, bb, ppm));
         extract_.extract(world_, batch);
         batch.build();
 
-        // With 2D post on, the world renders offscreen and the post pass writes the backbuffer.
+        // With 2D post on, the world renders offscreen and the post pass writes the backbuffer (2D
+        // games only: a 3D frame has its own post chain).
         render::Post2D post;
-        const bool use_post = cv_post.get_bool() && extract_.post_2d(world_, post);
+        const bool use_post = !draw_3d && cv_post.get_bool() && extract_.post_2d(world_, post);
         if (use_post) ensure_post_target(bb);
-        rhi::CommandBuffer cmd(mem::frame());
         rhi::PassAttachment color;
         color.texture = use_post ? post_target_ : rhi::TextureHandle{};
+        if (draw_3d) color.load = rhi::LoadOp::Load;
         color.clear.color[0] = clear.r;
         color.clear.color[1] = clear.g;
         color.clear.color[2] = clear.b;
@@ -312,10 +363,17 @@ public:
     void on_shutdown() override {
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
+        if (three_d_) {  // the last frame's 3D load (tests and LOD measurements read it)
+            const u32* lt = stats3d_.lod_triangles;
+            std::printf("%s: 3D last frame %u triangles (LOD %u/%u/%u/%u), %u draws\n", desc_.app_name, stats3d_.triangles,
+                        lt[0], lt[1], lt[2], lt[3], stats3d_.visible);
+        }
         set_muted(false);
         if (window_) window_->set_event_handler(nullptr, nullptr);
         if (device_ && !post_target_.is_null()) device_->destroy_texture(post_target_);
+        if (window_) window_->set_relative_mouse(false);
         clips_.release_all();
+        extract3d_.shutdown();
         extract_.shutdown();
         if (device_) renderer_.shutdown();
     }
@@ -510,6 +568,7 @@ private:
             if (l && l->submit) l->submit(l->user, hud, static_cast<i16>(-40 + 4 * static_cast<i32>(i)));
         }
         if (paused_) add_pause_overlay(hud, bb);
+        if (cv_stats.get_bool()) add_stats_line(hud);
         console_.submit(hud, 200);
         hud.build();
         renderer_.record_2d(cmd, hud);
@@ -531,6 +590,54 @@ private:
         p.origin = {0.5f * (static_cast<f32>(bb.width) - layout.width), 0.5f * (static_cast<f32>(bb.height) - layout.height)};
         p.sort_order = 1;
         hud.add_text(font_, layout, p);
+    }
+
+    // F3 / -r.stats 1: what the frame drew (3D counts on the 3D path).
+    void add_stats_line(render::SpriteBatch& hud) {
+        char line[256];
+        if (three_d_) {
+            const kit::Kit3DStats& k = extract3d_.stats();
+            const u32* lt = stats3d_.lod_triangles;
+            std::snprintf(line, sizeof line,
+                          "3D  TRIS %u (LOD %u/%u/%u/%u)  DRAWS %u/%u  MESHES %u  INST %u  LIGHTS %u  ANIM %u  MISSING %u",
+                          stats3d_.triangles, lt[0], lt[1], lt[2], lt[3], stats3d_.visible, stats3d_.submeshes, k.meshes,
+                          k.instances, stats3d_.point_lights, k.animated, k.missing);
+        } else {
+            std::snprintf(line, sizeof line, "2D");
+        }
+        render::TextLayout layout(mem::frame());
+        render::TextLayoutDesc desc;
+        desc.size_px = 16;
+        render::layout_text(font_.face, line, desc, layout);
+        render::TextPlacement p;
+        p.origin = {8.0f + static_cast<f32>(safe_insets_.left), 8.0f + static_cast<f32>(safe_insets_.top)};
+        p.sort_order = 2;
+        hud.add_text(font_, layout, p);
+    }
+
+    // The 3D path (M-KIT3D): the forward renderer and the kit3d extract, started once a scene has a
+    // Camera3DComponent.
+    Result<void> init_3d() {
+        if (three_d_ || three_d_failed_) return {};
+        render::Forward3DDesc fd;
+        fd.msaa = static_cast<u32>(math::clamp<i64>(cv_msaa.get_int(), 1, 8));
+        MCE_TRY(renderer_.init_3d(fd));
+        extract3d_.init(renderer_.meshes(), &assets_);
+        if (cv_preload3d.get_bool()) MCE_TRY(extract3d_.preload());
+        three_d_ = true;
+        MCE_LOG_INFO("{}: 3D path on ({}x MSAA)", desc_.app_name, fd.msaa);
+        return {};
+    }
+
+    // Relative mouse while a mouse-look camera plays; the cursor comes back for the pause overlay,
+    // the console and an unfocused window.
+    void update_mouse_look(bool camera_wants) {
+        if (!window_) return;
+        const bool want = camera_wants && cv_mouse_look.get_bool() && !paused_ && !console_.is_open() && !background_ &&
+                          !os_background_;
+        if (want == relative_mouse_) return;
+        relative_mouse_ = want;
+        if (!window_->set_relative_mouse(want) && want) MCE_LOG_WARN("{}: relative mouse mode refused", desc_.app_name);
     }
 
     void ensure_post_target(rhi::Extent2D size) {
@@ -750,6 +857,7 @@ private:
                 if (self->paused_) self->quit(0);
                 break;
             case platform::Key::F7: cv_post.set_bool(!cv_post.get_bool()); break;
+            case platform::Key::F3: cv_stats.set_bool(!cv_stats.get_bool()); break;
             default: break;
         }
     }
@@ -763,6 +871,11 @@ private:
     render::AssetUploadSink sink_;
     audio::ClipBank clips_;
     kit::SpriteExtract extract_;
+    kit::Kit3DExtract extract3d_;
+    render::Scene3D::Stats stats3d_;
+    bool three_d_ = false;         // the 3D path is on (a scene with a Camera3DComponent)
+    bool three_d_failed_ = false;  // init_3d failed once: the game runs 2D-only
+    bool relative_mouse_ = false;
     render::Font font_;
     ui::BuiltinSkin skin_;
     ui::DevConsole console_;
@@ -868,6 +981,7 @@ int run_windowed(const player::PlayerDesc& pd) {
     if (!window) return fail("window creation failed", window.error());
     rhi::DeviceDesc dd;
     dd.debug_layer = cv_gl_debug.get_bool();
+    dd.uniform_ring_bytes = static_cast<usize>(math::clamp<i64>(cv_uniform_ring.get_int(), 1, 64)) * MiB;
     auto device = rhi::create_default_device(*window.value(), dd);
     if (!device) return fail("render device creation failed", device.error());
     auto audio = audio::AudioDevice::create({});  // falls back to Silent when no output device opens

@@ -11,5 +11,6 @@
 #include "mce/ecs/transform.h"        // LocalTransform
 #include "mce/kit/components.h"       // Sprite, TextLabel, Camera2DComponent, TilemapLayer, ParticleEmitter,
                                       // Light2D, Parallax, Post2DComponent, SequencePlayer, PathAgent
+#include "mce/kit/kit3d.h"            // MeshRef, PointLight3D, SpotLight3D, Camera3DComponent, Animator, Environment3D
 #include "mce/physics/components.h"   // RigidBody2D, Collider2D, CharacterController2D, ...
 #include "mce/scene/streaming.h"      // SceneChunk, StreamingFocus, SceneChunkStatus

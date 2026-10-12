@@ -1,16 +1,20 @@
 #pragma once
 // Solstice Reach gameplay (docs/design/solstice-reach.md): the Keeper walks the island and aligns
-// seven heliostats; each alignment moves the time of day. Everything that is "the game" and
-// nothing that is the host: the ECS world, World3D (the terrain collider, the authored box
-// colliders, the character, the swept camera boom), the InputState snapshot. No window, renderer
-// or device, so the same code runs windowed, headless and in play-in-editor.
+// seven heliostats; each alignment moves the time of day. The game is a module on the engine's 3D
+// kit: the stock player (games/solstice_reach/host is a PlayerDesc) installs kit3d, loads the
+// scene and draws the kit's components; this module runs the sim on the kit's Physics3D world
+// (the terrain collider, the kit's box colliders, the character, the swept camera boom) and turns
+// its state into kit components (present.cpp). No window, renderer or device, so the same code
+// runs windowed, headless and in play-in-editor.
 //
 // Systems (deterministic, tick-driven):
-//   Startup              sr_startup   terrain + box colliders, the character, the scatter cache, progress
+//   Startup              sr_startup   terrain collider, the character, the scatter instances, progress
 //   FixedUpdate_Pre      sr_flow      title / playing / paused / finale / dawn, the hour, journal timers
 //   FixedUpdate_Pre      sr_keeper    camera-relative walk, sprint, jump, interact, shards; or the bot
 //   FixedUpdate_Physics  sr_physics   World3D::step, then the camera boom (camera_sweep)
 //   FixedUpdate_Post     sr_mirrors   dish rotations follow the alignment progress
+//   FixedUpdate_Post     sr_present   the camera, the sky, lights, beams, the Keeper's body, gulls, sounds
+//   FixedUpdate_Post     sr_hud       the HUD's TextLabels
 
 #include "components.h"
 #include "mce/ecs/world.h"
@@ -32,6 +36,7 @@ inline constexpr f32 kHoursPerSecond = 1.0f / 8.0f;
 inline constexpr f32 kFinaleSeconds = 25.0f;
 inline constexpr f32 kAlignSeconds = 2.5f;
 inline constexpr f32 kInteractRange = 2.8f;
+inline constexpr f32 kAttractSeconds = 30.0f;  // title idle time before the bot plays
 inline constexpr u32 kMirrors = 7;
 inline constexpr const char* kJournal[9] = {
     "THE LAST LONG DAY. SEVEN MIRRORS, ONE EVENING. BEGIN AT THE WATER.",
@@ -46,29 +51,6 @@ inline constexpr const char* kJournal[9] = {
 };
 // Where the seventh beam ends: the Vault's oculus (the Vault sits on the summit plateau).
 inline constexpr vec3 kVaultOculus{-6.0f, 63.0f, -20.0f};
-
-// One scatter instance (the host draws these; ScatterCell groups them for culling).
-struct ScatterInstance {
-    vec3 pos;
-    f32 scale;
-    quat rot;
-    u32 mesh;  // index into ScatterCache::meshes
-    u32 pad_ = 0;
-};
-struct ScatterCell {
-    vec3 center;
-    f32 radius;
-    u32 first = 0, count = 0;
-};
-struct ScatterCache {
-    mce::Array<mce::asset::Guid> meshes;
-    mce::Array<ScatterInstance> instances;
-    mce::Array<ScatterCell> cells;
-};
-
-struct Physics {
-    mce::physics::World3D world;
-};
 
 struct ReachState {
     Mode mode = Mode::Playing;
@@ -95,11 +77,20 @@ struct ReachState {
     f32 bot_stuck = 0.0f;     // seconds the bot has stood still while wanting to move
     u32 serial = 0;
     u32 started = 0;          // sr_startup ran
+    u32 continued = 0;        // a save restored the Keeper before Startup (the title says CONTINUE)
+    u32 attract = 0;          // the bot took over an idle title; any key returns to it
+    f32 title_idle = 0.0f;    // seconds on the title without input
+    f32 time = 0.0f;          // seconds since the first tick, in every mode (orbits, flicker, gulls)
+    f32 prev_hour = -1.0f;    // sr_present: the hour the sky was last evaluated at
 };
 
-// Registers components, systems and the resources (ReachState, Physics, ScatterCache). The host
-// installs input (InputState) first.
+// Registers components, systems and the resources (ReachState, the kit's Physics3D with
+// auto_step off). Installs kit3d and input when the host has not. Without a ReachState preset the
+// run starts on the title (-autoplay 1: the bot plays); a headless player run lets the bot play.
 mce::ResultV install(mce::World& world);
+
+// The presentation systems (present.cpp), registered by install().
+void install_present(mce::World& world);
 
 // world.state_hash folded with the physics world and the run state.
 u64 hash_game(mce::World& world, u64 seed);

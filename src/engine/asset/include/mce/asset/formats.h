@@ -19,6 +19,7 @@ inline constexpr u8 MATERIAL_VERSION = 1;
 inline constexpr u8 SCENE_VERSION = 1;
 inline constexpr u8 MESH_VERSION = 1;
 inline constexpr u8 MESH_MINOR_SKIN = 1;  // minor of a chunk with MeshFlags::Skinned
+inline constexpr u8 MESH_MINOR_LODS = 2;  // minor of a chunk with MeshFlags::Lods (skinned or not)
 inline constexpr u8 TILEMAP_VERSION = 1;  // CHNK_TILE: one tile layer (v0.5, FR-R2D-115)
 inline constexpr u8 PARTICLE_VERSION = 1;  // CHNK_PART: one particle emitter preset (v0.5, FR-R2D-070)
 inline constexpr u8 SEQUENCE_VERSION = 1;  // CHNK_SEQ: one action-list sequence (v0.5, FR-ENT-100)
@@ -412,13 +413,25 @@ struct ShaderView {
 // bounds), one MeshSkinVertex per vertex (parallel to the vertex stream) and a skin index per
 // submesh (-1 = rigid, placed by its node as before). Joints are ordinary nodes, so the node clips
 // above animate skeletons too. A mesh without the flag is exactly the static layout (minor 0).
+//
+// LODs (M-KIT3D, #158, optional): with MeshFlags::Lods a submesh may carry up to
+// kMaxMeshLods - 1 coarser levels of itself, cooked by meshoptimizer's simplifier or imported from
+// `<node>_LOD<n>` nodes. Their index ranges sit in the same index stream; a generated level uses
+// the submesh's own vertices, an authored one a vertex range of its own quantized with the
+// submesh's center / extent / UV rectangle (one dequantization for every level).
+// MeshSubmesh::reserved[0] is the submesh's level count beyond the base, reserved[1] its first
+// entry in the MeshLod table, which follows the string pool (the next CHUNK_ALIGN boundary after
+// strings_offset + strings_size) and is as long as the largest first + count.
 
 namespace MeshFlags {
 enum : u32 {
     Index32 = 1u << 0,
     Skinned = 1u << 1,  // a MeshSkinHeader at MeshHeader::skin_offset (chunk minor 1)
+    Lods = 1u << 2,     // a MeshLod table after the strings (chunk minor 2)
 };
 }
+
+inline constexpr u32 kMaxMeshLods = 4;  // levels per submesh, the base included
 
 struct MeshVertex {
     i16 position[4];  // snorm16; [3] is zero padding
@@ -466,6 +479,22 @@ struct MeshSubmesh {
     u32 reserved2[2];
 };
 static_assert(sizeof(MeshSubmesh) == 192);
+
+// One coarser level of a submesh: indices relative to `base_vertex` (the submesh's own for a
+// generated level), drawn with the submesh's dequantization and material.
+struct MeshLod {
+    u32 first_index;
+    u32 index_count;
+    u32 base_vertex;
+    u32 vertex_count;
+    f32 error;         // geometric deviation from the base, node-local units (screen-size selection)
+    u32 reserved[3];
+};
+static_assert(sizeof(MeshLod) == 32);
+
+// The LOD fields of a submesh (MeshSubmesh::reserved, MeshFlags::Lods).
+inline u32 submesh_lod_count(const MeshSubmesh& s) { return s.reserved[0]; }
+inline u32 submesh_lod_first(const MeshSubmesh& s) { return s.reserved[1]; }
 
 struct MeshNode {  // parents precede children
     i32 parent;    // -1 = root
@@ -558,8 +587,16 @@ struct MeshView {
     Span<const MeshJoint> joints;
     Span<const MeshSkinVertex> skin_vertices;
     Span<const i32> submesh_skins;
+    // LOD table (empty unless MeshFlags::Lods).
+    Span<const MeshLod> lods;
 
     bool skinned() const { return header && (header->flags & MeshFlags::Skinned); }
+    // The coarser levels of submesh `s` (empty: none).
+    Span<const MeshLod> submesh_lods(u32 s) const {
+        const MeshSubmesh& sm = submeshes[s];
+        if (lods.empty() || submesh_lod_count(sm) == 0) return {};
+        return lods.subspan(submesh_lod_first(sm), submesh_lod_count(sm));
+    }
     bool index32() const { return header && (header->flags & MeshFlags::Index32); }
     u32 index(u32 i) const;
     StringView node_name(u32 node) const;
@@ -587,6 +624,9 @@ struct MeshData {
     Span<const MeshJoint> joints;
     Span<const MeshSkinVertex> skin_vertices;
     Span<const i32> submesh_skins;
+    // Optional LOD table: written (and MeshFlags::Lods set) when non-empty; submeshes name their
+    // range of it in reserved[0] (count) and reserved[1] (first).
+    Span<const MeshLod> lods;
     u32 flags = 0;
     f32 bounds_min[3] = {0, 0, 0};
     f32 bounds_max[3] = {0, 0, 0};

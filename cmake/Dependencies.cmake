@@ -172,6 +172,7 @@ FetchContent_MakeAvailable(meshoptimizer)
 
 add_library(mce_meshopt STATIC
     "${meshoptimizer_SOURCE_DIR}/src/indexgenerator.cpp"
+    "${meshoptimizer_SOURCE_DIR}/src/simplifier.cpp"
     "${meshoptimizer_SOURCE_DIR}/src/vcacheoptimizer.cpp"
     "${meshoptimizer_SOURCE_DIR}/src/vfetchoptimizer.cpp")
 target_include_directories(mce_meshopt SYSTEM PUBLIC "${meshoptimizer_SOURCE_DIR}/src")

@@ -33,6 +33,7 @@ struct Builder {
     Array<asset::MeshJoint> joints;
     Array<asset::MeshSkinVertex> skin_vertices;  // sized by build()
     Array<i32> submesh_skins;                    // sized by build(); -1 = rigid
+    Array<Array<asset::MeshLod>> lods;           // per submesh (add_lod), finest first
 
     // Rest-pose model translation of `node` (fixture nodes only translate).
     math::vec3 rest_position(u32 node) const {
@@ -149,6 +150,21 @@ struct Builder {
         submeshes.push_back(sm);
     }
 
+    // A coarser level of submesh `s`: its first `triangles` triangles again (same vertices), with
+    // geometric error `error`.
+    void add_lod(u32 s, u32 triangles, f32 error) {
+        lods.resize(submeshes.size());
+        const asset::MeshSubmesh& sm = submeshes[s];
+        asset::MeshLod l{};
+        l.first_index = static_cast<u32>(indices.size());
+        l.index_count = triangles * 3;
+        l.base_vertex = sm.base_vertex;
+        l.vertex_count = sm.vertex_count;
+        l.error = error;
+        for (u32 i = 0; i < l.index_count; ++i) indices.push_back(indices[sm.first_index + i]);
+        lods[s].push_back(l);
+    }
+
     // One clip rotating `node` a full turn about +Y over `duration` seconds (5 linear keys).
     void add_spin_clip(u32 node, f32 duration, const char* name = "spin") {
         asset::MeshClip c{};
@@ -181,7 +197,15 @@ struct Builder {
         asset::MeshData d;
         d.vertices = vertices.span();
         d.indices = std::as_bytes(indices.span());
-        d.submeshes = submeshes.span();
+        Array<asset::MeshSubmesh> subs = submeshes;
+        Array<asset::MeshLod> table;
+        for (usize s = 0; s < lods.size() && s < subs.size(); ++s) {
+            subs[s].reserved[0] = static_cast<u32>(lods[s].size());
+            subs[s].reserved[1] = lods[s].empty() ? 0u : static_cast<u32>(table.size());
+            for (const asset::MeshLod& l : lods[s]) table.push_back(l);
+        }
+        d.lods = table.span();
+        d.submeshes = subs.span();
         d.nodes = nodes.span();
         d.clips = clips.span();
         d.channels = channels.span();

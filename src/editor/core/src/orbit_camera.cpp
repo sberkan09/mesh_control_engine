@@ -4,6 +4,7 @@
 
 #include "mce/ecs/transform.h"
 #include "mce/editor/viewport2d.h"
+#include "mce/kit/kit3d.h"
 #include "mce/physics/components.h"
 
 namespace mce::editor {
@@ -50,6 +51,33 @@ bool collider_footprint(const EditorScene& scene, EntityId id, Footprint& out) {
     out.half = {std::fabs(half.x * t->scale.x), std::fabs(half.y * t->scale.y)};
     out.angle = angle + local_angle;
     return out.half.x > 0.0f && out.half.y > 0.0f;
+}
+
+// A kit3d BoxCollider3D placed as kit3d_colliders places it (kit3d.cpp).
+struct Box3D {
+    vec3 center, half;
+    quat rotation;
+};
+
+bool box_collider_3d(const EditorScene& scene, EntityId id, Box3D& out) {
+    const kit::BoxCollider3D* c = scene.get<kit::BoxCollider3D>(id);
+    if (!c || !scene.get<LocalTransform>(id)) return false;
+    const WorldTransform t = scene.world_transform(id);
+    out.half = {std::fabs(c->half.x * t.scale.x), std::fabs(c->half.y * t.scale.y), std::fabs(c->half.z * t.scale.z)};
+    out.rotation = normalize(t.rotation * quat_from_axis_angle({1.0f, 0.0f, 0.0f}, radians(c->pitch_deg)));
+    out.center = t.position + rotate(t.rotation, {c->offset.x * t.scale.x, c->offset.y * t.scale.y, c->offset.z * t.scale.z});
+    return out.half.x > 0.0f && out.half.y > 0.0f && out.half.z > 0.0f;
+}
+
+void box_edges(const Box3D& b, Color color, Array<Segment3D>& out) {
+    vec3 p[8];
+    for (int i = 0; i < 8; ++i) {
+        const vec3 l{(i & 1) ? b.half.x : -b.half.x, (i & 2) ? b.half.y : -b.half.y, (i & 4) ? b.half.z : -b.half.z};
+        p[i] = b.center + rotate(b.rotation, l);
+    }
+    static constexpr int kEdges[12][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3},
+                                          {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+    for (const auto& e : kEdges) out.push_back({p[e[0]], p[e[1]], color});
 }
 
 // The 12 edges of an oriented box.
@@ -128,19 +156,69 @@ void OrbitColliders::sync(const EditorScene& scene, f32 depth) {
         bounds_.min = min(bounds_.min, d.position - ext);
         bounds_.max = max(bounds_.max, d.position + ext);
     }
+    // kit3d boxes as the game builds them (static bodies), so the boom stops at walls and floors.
+    for (const DocEntity& e : scene.doc().entities()) {
+        Box3D b;
+        if (!box_collider_3d(scene, e.id, b)) continue;
+        physics::BodyDesc3D d;
+        d.type = physics::BodyType3D::Static;
+        d.shape = physics::Shape3D::box(b.half);
+        d.position = b.center;
+        d.rotation = b.rotation;
+        if (!world_.create_body(Entity{e.id, 1}, d)) continue;
+        ++bodies_;
+        const f32 r = length(b.half);
+        bounds_.min = min(bounds_.min, b.center - vec3{r, r, r});
+        bounds_.max = max(bounds_.max, b.center + vec3{r, r, r});
+    }
+}
+
+bool frame_3d(const EditorScene& scene, OrbitCamera& orbit) {
+    // Through the scene's camera when it has one: the orbit pivot ten metres ahead of it.
+    for (const DocEntity& e : scene.doc().entities()) {
+        const kit::Camera3DComponent* c = scene.get<kit::Camera3DComponent>(e.id);
+        if (!c || !c->primary || !scene.get<LocalTransform>(e.id)) continue;
+        const WorldTransform t = scene.world_transform(e.id);
+        const vec3 f = normalize(rotate(t.rotation, {0.0f, 0.0f, -1.0f}));
+        orbit.yaw = std::atan2(-f.x, -f.z);
+        orbit.pitch = clamp(-std::asin(clamp(f.y, -1.0f, 1.0f)), -kMaxPitch, kMaxPitch);
+        orbit.fov_y = radians(clamp(c->fov_deg, 5.0f, 170.0f));
+        orbit.distance = orbit.effective = 10.0f;
+        orbit.target = t.position + f * orbit.distance;
+        return true;
+    }
+    // Else every placed model's origin.
+    aabb3 box{{1e30f, 1e30f, 1e30f}, {-1e30f, -1e30f, -1e30f}};
+    for (const DocEntity& e : scene.doc().entities()) {
+        if (!scene.get<kit::MeshRef>(e.id) || !scene.get<LocalTransform>(e.id)) continue;
+        const vec3 p = scene.world_transform(e.id).position;
+        box.min = min(box.min, p - vec3{1, 1, 1});
+        box.max = max(box.max, p + vec3{1, 1, 1});
+    }
+    if (box.min.x > box.max.x) return false;
+    orbit.frame(box);
+    return true;
 }
 
 // ---------------------------------------------------------------- wireframe + projection
 
-void orbit_wireframe(const EditorScene& scene, f32 depth, Array<Segment3D>& out) {
+void orbit_wireframe(const EditorScene& scene, f32 depth, Array<Segment3D>& out, bool sprite_quads) {
     const Color collider{0.45f, 0.85f, 1.0f, 0.9f}, quad{1.0f, 1.0f, 1.0f, 0.45f}, selected{1.0f, 0.62f, 0.1f, 1.0f};
     for (const DocEntity& e : scene.doc().entities()) {
         const bool sel = scene.selection().contains(e.id);
         Footprint f;
         if (collider_footprint(scene, e.id, f))
             box_edges({f.center.x, f.center.y, 0.0f}, {f.half.x, f.half.y, depth * 0.5f}, f.angle, sel ? selected : collider, out);
+        Box3D b;
+        if (box_collider_3d(scene, e.id, b)) box_edges(b, sel ? selected : collider, out);
+        if (sel && scene.get<kit::MeshRef>(e.id) && scene.get<LocalTransform>(e.id)) {  // a cross at the model's origin
+            const vec3 p = scene.world_transform(e.id).position;
+            out.push_back({p - vec3{0.5f, 0, 0}, p + vec3{0.5f, 0, 0}, selected});
+            out.push_back({p - vec3{0, 0.5f, 0}, p + vec3{0, 0.5f, 0}, selected});
+            out.push_back({p - vec3{0, 0, 0.5f}, p + vec3{0, 0, 0.5f}, selected});
+        }
         vec2 q[4];
-        if (entity_quad(scene, e.id, q))
+        if (sprite_quads && entity_quad(scene, e.id, q))
             for (int i = 0; i < 4; ++i) out.push_back({{q[i].x, q[i].y, 0.0f}, {q[(i + 1) % 4].x, q[(i + 1) % 4].y, 0.0f}, sel ? selected : quad});
     }
     // The ground grid's axes: X red, Y green, Z blue.

@@ -1,6 +1,7 @@
 // The editor orbit camera and its collision gate (ROADMAP M5b, ADR-0029 §3), headless: orbit /
 // pan / dolly / frame math, the boom cut by World3D::camera_sweep against the scene's colliders
-// (extruded 2D shapes), the world following document edits, and the wireframe projection.
+// (extruded 2D shapes and kit3d boxes), the world following document edits, the wireframe
+// projection, and framing a kit3d scene through its camera.
 
 #include <doctest/doctest.h>
 
@@ -8,6 +9,7 @@
 
 #include "mce/ecs/transform.h"
 #include "mce/editor/orbit_camera.h"
+#include "mce/kit/kit3d.h"
 #include "mce/physics/components.h"
 
 using namespace mce;
@@ -153,4 +155,61 @@ TEST_CASE("orbit camera: wireframe segments project to viewport pixels, clipped 
     Array<Segment3D> segs;
     orbit_wireframe(s, 1.0f, segs);
     CHECK(segs.size() == 12 + 4 + 3);  // box edges, the collider's quad, the axes
+}
+
+TEST_CASE("orbit camera: kit3d boxes collide and a 3D scene frames through its camera") {
+    EditorScene s;
+    // A floor and a wall as Room3D authors them: the box offset up from the entity, a yawed wall.
+    const EntityId floor = s.create_entity("Floor");
+    s.set(floor, LocalTransform{});
+    s.add_component(floor, refl::type_of<kit::BoxCollider3D>());
+    kit::BoxCollider3D fb = *s.get<kit::BoxCollider3D>(floor);
+    fb.half = {10.0f, 0.25f, 10.0f};
+    fb.offset = {0.0f, -0.25f, 0.0f};
+    s.set(floor, fb);
+    const EntityId wall = s.create_entity("Wall");
+    LocalTransform wt;
+    wt.position = {0.0f, 0.0f, -6.0f};
+    s.set(wall, wt);
+    s.add_component(wall, refl::type_of<kit::BoxCollider3D>());
+    kit::BoxCollider3D wb = *s.get<kit::BoxCollider3D>(wall);
+    wb.half = {6.0f, 1.5f, 0.25f};
+    wb.offset = {0.0f, 1.5f, 0.0f};
+    s.set(wall, wb);
+
+    OrbitColliders colliders;
+    colliders.sync(s);
+    CHECK(colliders.body_count() == 2);
+    // The boom from in front of the wall to behind it stops at the wall's near face (z = -5.75).
+    OrbitCamera cam;
+    cam.target = {0.0f, 1.0f, 0.0f};
+    cam.yaw = kPi;  // looking down +Z: the eye goes towards -Z, through the wall
+    cam.pitch = 0.0f;
+    cam.distance = 10.0f;
+    CHECK(cam.resolve(colliders.world()));
+    CHECK(cam.effective < 5.75f);
+    CHECK(cam.effective > 5.0f);
+
+    Array<Segment3D> segs;
+    orbit_wireframe(s, 1.0f, segs, false);
+    CHECK(segs.size() == 12 * 2 + 3);  // both boxes and the axes; no sprite quads
+
+    // No camera and no model: nothing to frame through.
+    OrbitCamera framed;
+    CHECK_FALSE(frame_3d(s, framed));
+    // A camera at (0, 2, 9) looking down -Z, pitched 10 degrees down.
+    const EntityId camera = s.create_entity("Camera");
+    LocalTransform ct;
+    ct.position = {0.0f, 2.0f, 9.0f};
+    ct.rotation = quat_from_axis_angle({1, 0, 0}, -radians(10.0f));
+    s.set(camera, ct);
+    s.add_component(camera, refl::type_of<kit::Camera3DComponent>());
+    REQUIRE(frame_3d(s, framed));
+    CHECK(close(framed.yaw, 0.0f));
+    CHECK(close(framed.pitch, radians(10.0f)));
+    CHECK(close(framed.distance, 10.0f));
+    // The orbit eye lands where the scene's camera stands.
+    CHECK(close(framed.eye().x, 0.0f, 1e-2f));
+    CHECK(close(framed.eye().y, 2.0f, 1e-2f));
+    CHECK(close(framed.eye().z, 9.0f, 1e-2f));
 }

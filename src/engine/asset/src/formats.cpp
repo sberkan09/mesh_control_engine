@@ -401,7 +401,7 @@ Result<MeshView> MeshView::read(Span<const byte> payload) {
     constexpr const char* kStage = "asset.mesh.read";
     const auto* h = header_of<MeshHeader>(payload);
     if (!h) return Error(Errc::Truncated, kStage);
-    if (h->flags & ~u32(MeshFlags::Index32 | MeshFlags::Skinned)) return Error(Errc::ReservedNonZero, kStage);
+    if (h->flags & ~u32(MeshFlags::Index32 | MeshFlags::Skinned | MeshFlags::Lods)) return Error(Errc::ReservedNonZero, kStage);
     if (!(h->flags & MeshFlags::Skinned) && h->skin_offset != 0) return Error(Errc::ReservedNonZero, kStage);
     MeshView v;
     v.header = h;
@@ -421,6 +421,29 @@ Result<MeshView> MeshView::read(Span<const byte> payload) {
         const MeshNode& n = v.nodes[i];
         if (n.parent < -1 || n.parent >= static_cast<i32>(i)) return bad(kStage, 0x100 + i);
         if (!in_bounds(n.name_offset, n.name_size, h->strings_size)) return bad(kStage, 0x100 + i);
+    }
+    if (h->flags & MeshFlags::Lods) {
+        u32 table = 0;
+        for (const MeshSubmesh& sm : v.submeshes) {
+            if (submesh_lod_count(sm) >= kMaxMeshLods || submesh_lod_first(sm) > (1u << 24)) return bad(kStage, 14);
+            table = std::max(table, submesh_lod_first(sm) + submesh_lod_count(sm));
+        }
+        const u64 at = align_up(static_cast<usize>(h->strings_offset + h->strings_size), CHUNK_ALIGN);
+        if (!span_at(payload, at, table, v.lods)) return bad(kStage, 14);
+        for (u32 s = 0; s < h->submesh_count; ++s) {
+            const MeshSubmesh& sm = v.submeshes[s];
+            if (sm.reserved[2] != 0) return Error(Errc::ReservedNonZero, kStage);
+            for (const MeshLod& l : v.submesh_lods(s)) {
+                if (!in_bounds(l.first_index, l.index_count, h->index_count) || l.index_count % 3 != 0 ||
+                    !in_bounds(l.base_vertex, l.vertex_count, h->vertex_count))
+                    return bad(kStage, 0x70000 + s);
+                for (u32 i = 0; i < l.index_count; ++i)
+                    if (v.index(l.first_index + i) >= l.vertex_count) return bad(kStage, 0x70000 + s);
+            }
+        }
+    } else {
+        for (const MeshSubmesh& sm : v.submeshes)
+            if (sm.reserved[0] != 0 || sm.reserved[1] != 0) return Error(Errc::ReservedNonZero, kStage);
     }
     for (u32 s = 0; s < h->submesh_count; ++s) {
         const MeshSubmesh& sm = v.submeshes[s];
@@ -502,6 +525,12 @@ void write_mesh(const MeshData& d, Array<byte>& out) {
     h.channels_offset = b.append_span(d.channels);
     h.keys_offset = b.append_span(d.keys);
     h.strings_offset = b.append_span(d.strings);
+    if (!d.lods.empty()) {  // right after the strings: the reader finds it there
+        h.flags |= MeshFlags::Lods;
+        const usize lods_at = b.append_span(d.lods);
+        MCE_ASSERT_MSG(lods_at == align_up(static_cast<usize>(h.strings_offset + h.strings_size), CHUNK_ALIGN),
+                       "write_mesh: the LOD table must follow the strings");
+    }
     if (!d.skins.empty()) {
         MCE_ASSERT_MSG(d.skin_vertices.size() == d.vertices.size() && d.submesh_skins.size() == d.submeshes.size(),
                        "write_mesh: the skin section needs one entry per vertex and per submesh");

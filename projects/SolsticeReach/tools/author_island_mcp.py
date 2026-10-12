@@ -134,15 +134,19 @@ def main():
     m = Mcp(args.mcp, ROOT, args.transcript)
 
     names = {c["name"] for c in m.tool("refl_list_components")["components"]}
-    for need in ("MeshRef", "Scatter", "Light3D", "BoxCollider3D", "Animated", "Heliostat", "Sunshard", "KeeperSpawn",
-                 "Waypoint", "GullPath", "Progress", "SaveKey"):
+    for need in ("MeshRef", "PointLight3D", "Animator", "BoxCollider3D", "Camera3DComponent", "Environment3D", "Camera2DComponent",
+                 "TextLabel", "Scatter", "Glow", "KeeperModel", "Beam", "HudText", "ReachSounds", "Heliostat", "Sunshard",
+                 "KeeperSpawn", "Waypoint", "GullPath", "Progress", "SaveKey"):
         if need not in names:
             sys.exit(f"author_island_mcp: solstice_reach_mcp does not know component {need}")
     assets = {a["path"]: a["guid"] for a in m.tool("asset_list")["assets"]}
 
-    def mesh(name):
-        g = assets[f"models/{name}.glb"]
+    def ref(path):
+        g = assets[path]
         return g if g.startswith("guid:") else "guid:" + g
+
+    def mesh(name):
+        return ref(f"models/{name}.glb")
 
     # Re-authoring keeps the scene's GUID (SolsticeReach.mceproj names it): open it and clear it.
     if (ROOT / "assets" / args.scene).exists():
@@ -177,6 +181,12 @@ def main():
     def on_ground(x, z, lift=0.0):
         return (x, ground(x, z) + lift, z)
 
+    def gull(name, pos, radius, height, speed, phase):
+        """A gull circling `pos` (the game moves the entity; its model glides)."""
+        create(name, pos, MeshRef={"mesh": mesh("gull"), "interpolate": 1},
+               Animator={"clip": "glide", "phase": round(phase * 1.7, 3)},
+               GullPath={"radius": radius, "height": height, "speed": speed, "phase": phase})
+
     # ---- the terrain, the sea ------------------------------------------------------------------
     for k in range(16):
         model("Island chunk", f"island_{k:02d}", (0, 0, 0), shadows=1)
@@ -185,6 +195,38 @@ def main():
     # ---- the run: progress, the Keeper's spawn, the bot's route ---------------------------------
     create("Progress", (0, 0, 0), Progress={}, SaveKey={"key": KEY_PROGRESS})
     create("Keeper Spawn", on_ground(0.0, 72.0), KeeperSpawn={"yaw": round(math.pi, 5)}, SaveKey={"key": KEY_KEEPER})
+
+    # ---- on the 3D kit: the camera, the sky, the Keeper's body, the beams, the HUD, the sounds ----
+    # The game moves these every tick (present.cpp); the authored transforms are where they start.
+    create("Camera", on_ground(0.0, 76.0, 2.5), math.pi,
+           Camera3DComponent={"fov_deg": 62.0, "near_z": 0.08, "far_z": 600.0, "mouse_look": 1})
+    # The time of day writes the world light; the scene's Environment3D carries the star map (and
+    # the evening the editor viewport shows).
+    create("Sky", (0, 0, 0), Environment3D={
+        "sky_texture": ref("textures/stars_equirect.png"), "sun_direction": [0.89, -0.37, -0.24], "sun_intensity": 3.4,
+        "sun_color": [1.0, 0.92, 0.78], "ambient_sky": [0.42, 0.52, 0.72], "ambient_ground": [0.30, 0.28, 0.22],
+        "fog_density": 0.002, "fog_color": [0.74, 0.80, 0.92], "sky_zenith": [0.17, 0.36, 0.76],
+        "sky_horizon": [0.72, 0.80, 0.92], "sky_ground": [0.24, 0.23, 0.21], "sky_texture_intensity": 0.0,
+        "sky_texture_additive": 1, "shadow_cascades": 4, "shadow_distance": 140.0, "shadow_splits": [0.06, 0.18, 0.45, 1.0]})
+    create("Keeper", on_ground(0.0, 72.0), math.pi, KeeperModel={},
+           MeshRef={"mesh": mesh("keeper"), "interpolate": 1},
+           Animator={"clip": "idle"},
+           PointLight3D={"color": [1.0, 0.68, 0.35, 1.0], "offset": [0.36, 1.75, 0.25], "intensity": 3.5, "radius": 9.0})
+    for index in range(8):  # one beam per heliostat, then the finale's shaft
+        create("Beam" if index < 7 else "Finale shaft", (0, 0, 0), Beam={"mirror": index},
+               MeshRef={"mesh": mesh("beam"), "cast_shadows": 0, "visible": 0},
+               PointLight3D={"color": [1.0, 0.85, 0.55, 1.0], "intensity": 0.0, "radius": 9.0})
+    create("Sounds", (0, 0, 0), ReachSounds={"chime": ref("sfx/chime.wav"), "flare": ref("sfx/flare.wav"),
+                                             "organ": ref("sfx/organ.wav")})
+    # The HUD: a screen camera at one world unit per pixel, the lines sr_hud fills in.
+    create("Screen", (0, 0, 0), Camera2DComponent={"zoom": 1.0, "pixels_per_meter": 1.0, "pixel_snap": False})
+    font = ref("fonts/ProggyClean.ttf")
+    warm = [1.0, 0.9, 0.7, 1.0]
+    for kind, line, height, align in (("Status", 0, 20.0, "Left"), ("Status", 1, 20.0, "Left"), ("Journal", 0, 22.0, "Center"),
+                                      ("Journal", 1, 22.0, "Center"), ("Prompt", 0, 26.0, "Center"), ("Banner", 0, 56.0, "Center"),
+                                      ("Banner", 1, 26.0, "Center"), ("Banner", 2, 26.0, "Center")):
+        create(f"HUD {kind.lower()}", (0, 0, 0), HudText={"kind": kind, "line": line},
+               TextLabel={"font": font, "text": "", "color": warm, "height": height, "layer": 50, "align": align})
 
     waypoints = []
 
@@ -267,8 +309,8 @@ def main():
     shard(4.0, 80.0)
     shard(-8.0, 76.0)
     shard(0.0, 108.0, 1.8)  # the end of the pier
-    create("Gulls over the cove", (0.0, 4.0, 86.0), GullPath={"radius": 22.0, "height": 12.0, "speed": 0.35, "phase": 0.0})
-    create("Gulls over the cove", (10.0, 4.0, 80.0), GullPath={"radius": 16.0, "height": 17.0, "speed": -0.42, "phase": 2.0})
+    gull("Gulls over the cove", (0.0, 4.0, 86.0), 22.0, 12.0, 0.35, 0.0)
+    gull("Gulls over the cove", (10.0, 4.0, 80.0), 16.0, 17.0, -0.42, 2.0)
 
     # Landing -> lower terrace (ramp (0,65) -> (8,50)).
     lanterns_along(0.0, 65.0, 8.0, 50.0, 2, both=True)
@@ -288,7 +330,7 @@ def main():
     lanterns_along(4.0, 40.0, -20.0, 43.0, 3)
     waypoint(-8.0, 41.5)
     wall_ring(-28.0, 40.0, 10.6, 14, skip_near=[(-19.0, 43.0, 4.5), (-37.0, 35.0, 4.5), (-22.0, 31.0, 4.5)], phase=0.2)
-    model("Windmill", "windmill", on_ground(-33.0, 45.0, -0.1), 0.6, Animated={"speed": 0.55, "clip": "Turn"},
+    model("Windmill", "windmill", on_ground(-33.0, 45.0, -0.1), 0.6, Animator={"speed": 0.55, "clip": "turn"},
           BoxCollider3D={"half": [2.4, 5.0, 2.4], "offset": [0, 5.0, 0]})
     trees("olive", [(-26.0, 47.0), (-18.0, 37.0), (-34.0, 34.0), (-36.0, 42.0), (-30.0, 31.0), (-16.0, 47.0), (-40.0, 40.0)])
     lantern(-30.0, 44.0, 0.0)
@@ -318,9 +360,10 @@ def main():
           scale=(0.85, 1.15))
     trees("olive", [(48.0, -6.0), (60.0, -6.0), (62.0, 20.0)])
     for k, (x, z, _a) in enumerate(ring(54.0, 8.0, 7.5, 12, 0.3)):
-        create("Firefly", on_ground(x, z, 1.0 + 0.4 * (k % 3)),
-               Light3D={"color": [0.75, 1.0, 0.45, 1.0], "offset": [0, 0, 0], "intensity": 1.4, "radius": 3.0, "flicker": 0.6,
-                        "kind": "Firefly"})
+        create("Firefly", on_ground(x, z, 1.0 + 0.4 * (k % 3)), scale=0.06,
+               MeshRef={"mesh": mesh("sunshard"), "tint": [1.0, 1.0, 0.6, 1.0], "cast_shadows": 0, "interpolate": 1},
+               PointLight3D={"color": [0.75, 1.0, 0.45, 1.0], "intensity": 0.0, "radius": 2.5},
+               Glow={"intensity": 1.4, "flicker": 0.6, "kind": "Firefly"})
     lantern(49.0, 3.0, 0.0)
     lantern(59.0, 3.0, 0.0)
     lantern(49.0, 13.0, 0.0)
@@ -348,7 +391,7 @@ def main():
     lantern(50.0, -50.0, 0.0)
     mirror(2, 44.0, -40.0, yaw_to(44.0, -40.0, 0.0, -62.0))
     waypoint(44.0 + 1.5, -40.0 + 0.4, mirror=True)
-    create("Gulls over the quarry", (48.0, 30.0, -44.0), GullPath={"radius": 18.0, "height": 14.0, "speed": 0.3, "phase": 1.0})
+    gull("Gulls over the quarry", (48.0, 30.0, -44.0), 18.0, 14.0, 0.3, 1.0)
 
     # ---- the Colonnade (-4,-62) h42: the ramp (38,-49) -> (10,-62) ---------------------------------
     lanterns_along(38.0, -49.0, 10.0, -62.0, 3)
@@ -364,7 +407,7 @@ def main():
     for k, x in enumerate((-14.0, -6.0, 2.0, 10.0)):
         for row_z, phase in ((-68.5, 0.0), (-55.5, 1.3)):
             model("Banner", "banner", on_ground(x, row_z, -0.05), 0.0,
-                  Animated={"speed": 1.0, "phase": phase + 0.7 * k, "clip": "Flutter" if k % 2 == 0 else "Gust"})
+                  Animator={"phase": round(phase + 0.7 * k, 3), "clip": "flutter" if k % 2 == 0 else "gust"})
     lantern(-14.0, -62.0, 0.0)
     lantern(-6.0, -62.0, 0.0)
     lantern(6.0, -62.0, 0.0)
@@ -407,7 +450,7 @@ def main():
     shard(-52.0, 23.0)
     rocks([(-68.0, 26.0), (-64.0, 32.0), (-48.0, 20.0), (-72.0, -16.0), (-74.0, -4.0), (-60.0, -46.0)], scale=(1.8, 3.2))
     lantern(-54.0, 30.0, 0.0)
-    create("Gulls over the cliff", (-66.0, 32.0, -20.0), GullPath={"radius": 20.0, "height": 16.0, "speed": -0.28, "phase": 0.5})
+    gull("Gulls over the cliff", (-66.0, 32.0, -20.0), 20.0, 16.0, -0.28, 0.5)
 
     # ---- back east along the terraces (ramp (-52,28) -> (-36,35)) and up the goat path -----------
     lanterns_along(-52.0, 28.0, -36.0, 35.0, 2)
@@ -437,8 +480,8 @@ def main():
               BoxCollider3D={"half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0]})
         if k % 2 == 1:
             create("Sconce", (x - math.sin(a) * 0.9, vault_y + 0.7, z - math.cos(a) * 0.9),
-                   Light3D={"color": [1.0, 0.62, 0.3, 1.0], "offset": [0, 3.2, 0], "intensity": 2.4, "radius": 6.0,
-                            "flicker": 0.35, "kind": "Sconce"})
+                   PointLight3D={"color": [1.0, 0.62, 0.3, 1.0], "offset": [0, 3.2, 0], "intensity": 2.4, "radius": 6.0},
+                   Glow={"intensity": 2.4, "flicker": 0.35, "kind": "Sconce"})
     model("Dais", "dais", (-6.0, vault_y + 0.7, -20.0), 0.0)
     mirror(6, -6.0, -20.0, 0.0, )
     waypoint(-7.0, -12.0)
@@ -472,8 +515,8 @@ def main():
     # ---- lanterns, shards, waypoints -------------------------------------------------------------
     for (x, z, yaw, kind, intensity, radius, color) in lanterns:
         model("Lantern", "lantern", on_ground(x, z, -0.05), yaw, shadows=0,
-              Light3D={"color": list(color), "offset": [0, 2.05, 0.42], "intensity": intensity, "radius": radius,
-                       "flicker": 0.25, "kind": kind})
+              PointLight3D={"color": list(color), "offset": [0, 2.05, 0.42], "intensity": intensity, "radius": radius},
+              Glow={"intensity": intensity, "flicker": 0.25, "kind": kind})
     for k, (x, z, lift) in enumerate(shards):
         model("Sunshard", "sunshard", on_ground(x, z, lift), (k * 0.9) % (2 * math.pi), 1.0, shadows=0,
               Sunshard={}, SaveKey={"key": KEY_SHARD + k})

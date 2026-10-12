@@ -1,0 +1,840 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "0017e8b2-29ec-4fa2-9467-77f636830a19",
+  "name": "main",
+  "entities": [
+    {
+      "name": "Environment",
+      "components": {
+        "Environment3D": {
+          "sun_direction": [
+            -0.45,
+            -0.8,
+            -0.35
+          ],
+          "sun_intensity": 2.6,
+          "sun_color": [
+            1.0,
+            0.93,
+            0.82
+          ],
+          "ambient_sky": [
+            0.32,
+            0.38,
+            0.5
+          ],
+          "ambient_ground": [
+            0.18,
+            0.16,
+            0.12
+          ],
+          "exposure": 1.1,
+          "fog_density": 0.006,
+          "fog_color": [
+            0.62,
+            0.7,
+            0.82
+          ],
+          "shadow_cascades": 3,
+          "shadow_distance": 50,
+          "bloom_intensity": 0.06
+        }
+      },
+      "id": 1
+    },
+    {
+      "name": "Camera",
+      "components": {
+        "Camera3DComponent": {
+          "fov_deg": 60,
+          "near_z": 0.05,
+          "far_z": 400,
+          "mouse_look": 1
+        },
+        "LocalTransform": {
+          "position": [
+            0,
+            2.5,
+            9
+          ]
+        },
+        "FollowCamera": {
+          "distance": 5.0,
+          "height": 1.6,
+          "pitch": 0.3
+        }
+      },
+      "id": 2
+    },
+    {
+      "name": "Hud",
+      "components": {
+        "Camera2DComponent": {
+          "pixels_per_meter": 48
+        }
+      },
+      "id": 3
+    },
+    {
+      "name": "Title",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            6.6,
+            0
+          ]
+        },
+        "TextLabel": {
+          "font": "guid:bc504cbe-37e0-4bd1-9e68-73657bf72502",
+          "text": "ROOM 3D   WASD MOVE  MOUSE LOOK  SPACE JUMP",
+          "color": [
+            1,
+            0.95,
+            0.8,
+            1
+          ],
+          "height": 0.45
+        }
+      },
+      "id": 4
+    },
+    {
+      "name": "Hero",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            4
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:6b61b686-c017-51f7-ad98-820af7c4e983",
+          "interpolate": 1
+        },
+        "Animator": {
+          "clip": "idle",
+          "fade": 0.2
+        },
+        "Hero": {}
+      },
+      "id": 5
+    },
+    {
+      "name": "Floor",
+      "components": {
+        "LocalTransform": {},
+        "MeshRef": {
+          "mesh": "guid:292d58ee-2d67-59bc-a7ea-e3195335febe"
+        },
+        "BoxCollider3D": {
+          "half": [
+            12,
+            0.25,
+            12
+          ],
+          "offset": [
+            0,
+            -0.25,
+            0
+          ]
+        }
+      },
+      "id": 6
+    },
+    {
+      "name": "Meadow",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            -0.02,
+            0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:78f5f389-ad26-54b6-ac49-5b208dd5f8e4",
+          "cast_shadows": 0
+        },
+        "BoxCollider3D": {
+          "half": [
+            150,
+            0.5,
+            150
+          ],
+          "offset": [
+            0,
+            -0.5,
+            0
+          ]
+        }
+      },
+      "id": 7
+    },
+    {
+      "name": "Wall N",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            -12
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:a984dc99-37b2-51d0-ac6a-0b43a1cd7ed9"
+        },
+        "BoxCollider3D": {
+          "half": [
+            6,
+            1.5,
+            0.25
+          ],
+          "offset": [
+            0,
+            1.5,
+            0
+          ]
+        }
+      },
+      "id": 8
+    },
+    {
+      "name": "Wall N2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            6,
+            0,
+            -12
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:a984dc99-37b2-51d0-ac6a-0b43a1cd7ed9"
+        },
+        "BoxCollider3D": {
+          "half": [
+            6,
+            1.5,
+            0.25
+          ],
+          "offset": [
+            0,
+            1.5,
+            0
+          ]
+        }
+      },
+      "id": 9
+    },
+    {
+      "name": "Wall S",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -6,
+            0,
+            12
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:a984dc99-37b2-51d0-ac6a-0b43a1cd7ed9"
+        },
+        "BoxCollider3D": {
+          "half": [
+            6,
+            1.5,
+            0.25
+          ],
+          "offset": [
+            0,
+            1.5,
+            0
+          ]
+        }
+      },
+      "id": 10
+    },
+    {
+      "name": "Wall E",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            12,
+            0,
+            -6
+          ],
+          "rotation": [
+            0.0,
+            0.707107,
+            0.0,
+            0.707107
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:a984dc99-37b2-51d0-ac6a-0b43a1cd7ed9"
+        },
+        "BoxCollider3D": {
+          "half": [
+            6,
+            1.5,
+            0.25
+          ],
+          "offset": [
+            0,
+            1.5,
+            0
+          ]
+        }
+      },
+      "id": 11
+    },
+    {
+      "name": "Wall W",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -12,
+            0,
+            6
+          ],
+          "rotation": [
+            0.0,
+            0.707107,
+            0.0,
+            0.707107
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:a984dc99-37b2-51d0-ac6a-0b43a1cd7ed9"
+        },
+        "BoxCollider3D": {
+          "half": [
+            6,
+            1.5,
+            0.25
+          ],
+          "offset": [
+            0,
+            1.5,
+            0
+          ]
+        }
+      },
+      "id": 12
+    },
+    {
+      "name": "Crate 1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -4,
+            0,
+            -4
+          ],
+          "rotation": [
+            0.0,
+            0.087156,
+            0.0,
+            0.996195
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:35116feb-4dc2-56bf-a07c-9ef1199c92b0"
+        },
+        "BoxCollider3D": {
+          "half": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "offset": [
+            0,
+            0.5,
+            0
+          ]
+        }
+      },
+      "id": 13
+    },
+    {
+      "name": "Crate 2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -3,
+            0,
+            -4.2
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:35116feb-4dc2-56bf-a07c-9ef1199c92b0"
+        },
+        "BoxCollider3D": {
+          "half": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "offset": [
+            0,
+            0.5,
+            0
+          ]
+        }
+      },
+      "id": 14
+    },
+    {
+      "name": "Crate 3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -3.5,
+            0,
+            -3
+          ],
+          "rotation": [
+            0.0,
+            0.300706,
+            0.0,
+            0.953717
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:35116feb-4dc2-56bf-a07c-9ef1199c92b0"
+        },
+        "BoxCollider3D": {
+          "half": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "offset": [
+            0,
+            0.5,
+            0
+          ]
+        }
+      },
+      "id": 15
+    },
+    {
+      "name": "Crate 4",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            5,
+            0,
+            3
+          ],
+          "rotation": [
+            0.0,
+            0.173648,
+            0.0,
+            0.984808
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:35116feb-4dc2-56bf-a07c-9ef1199c92b0"
+        },
+        "BoxCollider3D": {
+          "half": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "offset": [
+            0,
+            0.5,
+            0
+          ]
+        }
+      },
+      "id": 16
+    },
+    {
+      "name": "Crate 5",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            6,
+            0,
+            -6
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:35116feb-4dc2-56bf-a07c-9ef1199c92b0"
+        },
+        "BoxCollider3D": {
+          "half": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "offset": [
+            0,
+            0.5,
+            0
+          ]
+        }
+      },
+      "id": 17
+    },
+    {
+      "name": "Crate 6",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            5.2,
+            0,
+            -6.4
+          ],
+          "rotation": [
+            0.0,
+            0.130526,
+            0.0,
+            0.991445
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:35116feb-4dc2-56bf-a07c-9ef1199c92b0"
+        },
+        "BoxCollider3D": {
+          "half": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "offset": [
+            0,
+            0.5,
+            0
+          ]
+        }
+      },
+      "id": 18
+    },
+    {
+      "name": "Crate stack",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -3.4,
+            1,
+            -4.1
+          ],
+          "rotation": [
+            0.0,
+            0.173648,
+            0.0,
+            0.984808
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:35116feb-4dc2-56bf-a07c-9ef1199c92b0"
+        },
+        "BoxCollider3D": {
+          "half": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "offset": [
+            0,
+            0.5,
+            0
+          ]
+        }
+      },
+      "id": 19
+    },
+    {
+      "name": "Pillar 1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -8,
+            0,
+            -8
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:2b29f903-1a3e-5581-8552-6b52e10a8af3"
+        },
+        "BoxCollider3D": {
+          "half": [
+            0.35,
+            1.5,
+            0.35
+          ],
+          "offset": [
+            0,
+            1.5,
+            0
+          ]
+        }
+      },
+      "id": 20
+    },
+    {
+      "name": "Pillar 2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            8,
+            0,
+            -8
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:2b29f903-1a3e-5581-8552-6b52e10a8af3"
+        },
+        "BoxCollider3D": {
+          "half": [
+            0.35,
+            1.5,
+            0.35
+          ],
+          "offset": [
+            0,
+            1.5,
+            0
+          ]
+        }
+      },
+      "id": 21
+    },
+    {
+      "name": "Pillar 3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -8,
+            0,
+            8
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:2b29f903-1a3e-5581-8552-6b52e10a8af3"
+        },
+        "BoxCollider3D": {
+          "half": [
+            0.35,
+            1.5,
+            0.35
+          ],
+          "offset": [
+            0,
+            1.5,
+            0
+          ]
+        }
+      },
+      "id": 22
+    },
+    {
+      "name": "Pillar 4",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            8,
+            0,
+            8
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:2b29f903-1a3e-5581-8552-6b52e10a8af3"
+        },
+        "BoxCollider3D": {
+          "half": [
+            0.35,
+            1.5,
+            0.35
+          ],
+          "offset": [
+            0,
+            1.5,
+            0
+          ]
+        }
+      },
+      "id": 23
+    },
+    {
+      "name": "Lamp 1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -6,
+            0,
+            0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:0db7a665-ddc1-52ea-b225-815d4bbead69"
+        },
+        "PointLight3D": {
+          "color": [
+            1,
+            0.7,
+            0.4,
+            1
+          ],
+          "offset": [
+            0,
+            2.1,
+            0
+          ],
+          "intensity": 4,
+          "radius": 9
+        }
+      },
+      "id": 24
+    },
+    {
+      "name": "Lamp 2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            6,
+            0,
+            0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:0db7a665-ddc1-52ea-b225-815d4bbead69"
+        },
+        "PointLight3D": {
+          "color": [
+            1,
+            0.7,
+            0.4,
+            1
+          ],
+          "offset": [
+            0,
+            2.1,
+            0
+          ],
+          "intensity": 4,
+          "radius": 9
+        }
+      },
+      "id": 25
+    },
+    {
+      "name": "Lamp 3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            -9
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:0db7a665-ddc1-52ea-b225-815d4bbead69"
+        },
+        "PointLight3D": {
+          "color": [
+            0.6,
+            0.8,
+            1,
+            1
+          ],
+          "offset": [
+            0,
+            2.1,
+            0
+          ],
+          "intensity": 4,
+          "radius": 9
+        }
+      },
+      "id": 26
+    },
+    {
+      "name": "Fan",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:3a084f2c-a756-540a-b519-17ce93e2b313"
+        },
+        "Animator": {
+          "clip": "spin",
+          "speed": 0.6
+        },
+        "SpotLight3D": {
+          "offset": [
+            0,
+            2.4,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "intensity": 8,
+          "radius": 6,
+          "outer_deg": 35,
+          "inner_deg": 22
+        }
+      },
+      "id": 27
+    },
+    {
+      "name": "Rocks",
+      "components": {
+        "LocalTransform": {},
+        "RockField": {
+          "count": 900,
+          "inner": 16,
+          "outer": 140,
+          "seed": 7,
+          "rock": "guid:b4e895e8-6994-5a77-957d-9dc6a0472f0b"
+        }
+      },
+      "id": 28
+    }
+  ]
+}

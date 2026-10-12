@@ -1,9 +1,11 @@
 # The gameplay starter kit's systems without a GPU: particles (FR-R2D-070) simulated, cooked from
 # .mcpart and drawn into a CPU-built sprite batch; action-list sequences (FR-ENT-100); the FSM
-# helper (FR-ENT-090); grid A* pathfinding and PathAgent (#152).
+# helper (FR-ENT-090); grid A* pathfinding and PathAgent (#152); the kit3d components, systems and
+# extract into a CPU-side Scene3D (M-KIT3D).
 mce_add_test(test_kit UMBRELLA
     SOURCES
         test_fsm.cpp
+        test_kit3d.cpp
         test_particles.cpp
         test_pathfinding.cpp
         test_sequence.cpp
@@ -12,7 +14,7 @@ mce_add_test(test_kit UMBRELLA
         mce::mce_gameplay_kit
         mce::mce_scene
         mce::mce_asset_cook)
-target_include_directories(test_kit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_include_directories(test_kit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset ${CMAKE_CURRENT_SOURCE_DIR}/../render)
 target_compile_definitions(test_kit PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp")
 
 # The kit extract on a real GL 4.5 driver (CI: Xvfb + Mesa llvmpipe). Always builds; registers only

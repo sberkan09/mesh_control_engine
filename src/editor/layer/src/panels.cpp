@@ -18,6 +18,8 @@
 namespace mce::editor {
 namespace {
 
+constexpr math::Color kClear3D{0.09f, 0.09f, 0.1f, 1.0f};
+
 // ---- Viewport ----------------------------------------------------------------------------------
 // Displays the stub world (no project) or the open scene's preview world (project open). The
 // target is sized to the panel in pixels (widget size x framebuffer scale, FR-R2D-080) and
@@ -89,7 +91,17 @@ public:
         lines_.clear();
         const ViewSettings& view = shell.view();
         if (PlaySession& play = shell.session().play(); play.active()) {
-            // Play-in-editor: the play world, through the game's camera (or the editor's).
+            // Play-in-editor: the play world, through the game's camera (or the editor's: the orbit
+            // camera for a 3D game).
+            if (world_is_3d(*play.world())) {
+                render::Camera3D cam3;
+                if (!view.play_camera || !shell.preview().game_camera_3d(*play.world(), cam3)) {
+                    shell.orbit().unresolved();
+                    cam3 = shell.orbit().camera();
+                }
+                shell.preview().record_3d(cmd, *play.world(), v.target, v.size, cam3, {}, kClear3D);
+                return;
+            }
             EditorCamera2D cam = shell.camera();
             render::Camera2D game;
             f32 ppm = cam.pixels_per_meter;
@@ -137,7 +149,9 @@ private:
     void interact(EditorShell& shell, ImVec2 origin, ImVec2 scale, bool hovered) {
         EditorScene& scene = shell.scene();
         EditorCamera2D& cam = shell.camera();
-        if (shell.take_frame_request()) frame(scene, cam);
+        // A kit3d scene opens in the orbit view, framed through its camera.
+        if (shell.frame_requested() && !shell.playing() && world_is_3d(scene.world())) shell.view().orbit_view = true;
+        if (!shell.view().orbit_view && shell.take_frame_request()) frame(scene, cam);
 
         const ImGuiIO& io = ImGui::GetIO();
         const math::vec2 mouse{(io.MousePos.x - origin.x) * scale.x, (io.MousePos.y - origin.y) * scale.y};
@@ -149,7 +163,9 @@ private:
                                                           : GizmoPart::None;
         hover_ = hovered && hot_ == GizmoPart::None ? pick_entity(scene, mouse_world) : kNoEntity;
 
-        if (shell.view().orbit_view && !shell.playing()) {
+        const bool orbit_play = shell.playing() && !shell.view().play_camera && shell.session().play().world() &&
+                                world_is_3d(*shell.session().play().world());
+        if ((shell.view().orbit_view && !shell.playing()) || orbit_play) {
             interact_orbit(shell, hovered, scale);
             return;
         }
@@ -240,7 +256,9 @@ private:
     }
 
     // 3D orbit view (M5b camera-collision gate): left drag orbits, right/middle drag pans, wheel
-    // dollies, F frames the colliders. Inspection only: picking and gizmos stay in the 2D view.
+    // dollies, F frames the colliders (a kit3d scene: through its camera). Inspection only:
+    // picking and gizmos stay in the 2D view. Also drives a 3D game's play view when the play
+    // camera is off.
     void interact_orbit(EditorShell& shell, bool hovered, ImVec2 scale) {
         OrbitCamera& orbit = shell.orbit();
         const ImGuiIO& io = ImGui::GetIO();
@@ -252,13 +270,15 @@ private:
         hot_ = GizmoPart::None;
         hover_ = kNoEntity;
         if (shell.take_frame_request() || (ImGui::IsWindowFocused() && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F, false))) {
-            shell.orbit_colliders().sync(shell.scene(), shell.view().orbit_depth);
-            math::aabb3 box = shell.orbit_colliders().bounds();
-            if (box.min.x > box.max.x) {
-                const math::aabb2 b2 = scene_bounds(shell.scene());
-                box = math::aabb3{{b2.min.x, b2.min.y, -0.5f}, {b2.max.x, b2.max.y, 0.5f}};
+            if (!world_is_3d(shell.scene().world()) || !frame_3d(shell.scene(), orbit)) {
+                shell.orbit_colliders().sync(shell.scene(), shell.view().orbit_depth);
+                math::aabb3 box = shell.orbit_colliders().bounds();
+                if (box.min.x > box.max.x) {
+                    const math::aabb2 b2 = scene_bounds(shell.scene());
+                    box = math::aabb3{{b2.min.x, b2.min.y, -0.5f}, {b2.max.x, b2.max.y, 0.5f}};
+                }
+                orbit.frame(box);
             }
-            orbit.frame(box);
         }
         if (hovered && io.MouseWheel != 0.0f) orbit.dolly(io.MouseWheel);
         if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) orbiting_ = true;
@@ -290,7 +310,8 @@ private:
         else orbit.unresolved();
         const render::View3D view3d = render::compute_view_3d(orbit.camera(), v.size);
         segments_.clear();
-        orbit_wireframe(shell.scene(), view.orbit_depth, segments_);
+        const bool scene_3d = world_is_3d(shell.scene().world());
+        orbit_wireframe(shell.scene(), view.orbit_depth, segments_, !scene_3d);
         // Pixels -> the 2D overlay path: a camera with one pixel per metre centred on the viewport.
         EditorCamera2D px_cam;
         px_cam.pixels_per_meter = 1.0f;
@@ -299,6 +320,11 @@ private:
             math::vec2 a, b;
             if (!project_segment(view3d, seg, a, b)) continue;
             lines_.push_back({{a.x - half.x, half.y - a.y}, {b.x - half.x, half.y - b.y}, seg.color, 1.5f});
+        }
+        // A kit3d scene: the scene itself, drawn as the player draws it, under the wireframe.
+        if (scene_3d) {
+            shell.preview().record_3d(cmd, shell.scene().world(), v.target, v.size, orbit.camera(), lines_.span(), kClear3D);
+            return;
         }
         shell.preview().record(cmd, empty_, v.target, v.size, px_cam, lines_.span(), math::Color{0.09f, 0.09f, 0.1f, 1.0f});
     }
