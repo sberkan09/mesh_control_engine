@@ -15,6 +15,11 @@ struct Camera2D {
     f32 zoom = 1.0f;         // 1 = one art texel per device pixel at the set's pixels-per-meter
     f32 rotation = 0.0f;     // radians, CCW
     bool pixel_snap = true;  // FR-R2D-040: snap the view to the device-pixel grid
+    // Fit mode: when either is > 0 the view shows at least this many world metres across / up
+    // (both set: the whole fit_width x fit_height rect, letterboxed by the longer axis), whatever
+    // the viewport's pixel count; zoom and its pixel-snap quantization are then ignored.
+    f32 fit_width = 0.0f;
+    f32 fit_height = 0.0f;
 };
 
 // The resolved view: everything extract/cull/record need.

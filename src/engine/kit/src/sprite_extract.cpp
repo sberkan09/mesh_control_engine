@@ -414,6 +414,8 @@ bool primary_camera(World& world, render::Camera2D& out, f32& pixels_per_meter, 
         out.zoom = c.zoom;
         out.rotation = angle_z(t.rotation);
         out.pixel_snap = c.pixel_snap;
+        out.fit_width = c.fit_width;
+        out.fit_height = c.fit_height;
         pixels_per_meter = c.pixels_per_meter;
         if (clear_color) *clear_color = c.clear_color;
     });

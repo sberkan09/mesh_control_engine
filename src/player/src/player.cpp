@@ -85,6 +85,8 @@ MCE_CVAR(cv_capture_tick, "capture_tick", 0,
          "Windowed: quit (and -capture) on the first frame after this many sim ticks of this run, whatever the frame rate; "
          "a tick restored by -save does not count (0 = off)",
          CVarFlags::None);
+MCE_CVAR(cv_window, "window", "", "Windowed: initial window size as WxH in points, e.g. 1080x2400 to check a phone layout (default 1280x720)",
+         CVarFlags::None);
 MCE_CVAR(cv_ticks, "ticks", 600, "Headless: ticks to simulate (windowed runs use -frames)", CVarFlags::None);
 MCE_CVAR(cv_input, "input", "",
          "Input script file: per-tick action states (\"10-70 Move=1,0 Jump\" per line) published to the game instead of the keyboard",
@@ -200,10 +202,40 @@ public:
         if (paused_) return;
         tick_dt_ = t.dt;
         if (t.actions) input::publish(world_, *t.actions);
+        publish_view_info();
         scene::pump_streaming(world_);
         world_.tick(t.dt, sim_ticks_);
         ++sim_ticks_;
         if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
+    }
+
+    // kit::ViewInfo for the game's systems: the screen and the primary camera's view as of this tick.
+    // Headless keeps the struct's fixed 1280 x 720 landscape defaults (deterministic hashes).
+    void publish_view_info() {
+        kit::ViewInfo v;
+        if (window_ && device_) {
+            const platform::PixelSize fb = window_->framebuffer_size();
+            const platform::PixelSize pt = window_->size();
+            v.framebuffer_width = fb.width;
+            v.framebuffer_height = fb.height;
+            v.window_width = pt.width;
+            v.window_height = pt.height;
+            v.display_scale = window_->display_scale();
+            v.safe_left = safe_insets_.left;
+            v.safe_top = safe_insets_.top;
+            v.safe_right = safe_insets_.right;
+            v.safe_bottom = safe_insets_.bottom;
+            v.orientation = static_cast<u8>(window_->orientation());
+            v.headless = false;
+        }
+        render::Camera2D cam;
+        f32 ppm = 48.0f;
+        kit::primary_camera(world_, cam, ppm);
+        const render::View2D view = render::compute_view_2d(cam, {v.framebuffer_width, v.framebuffer_height}, ppm);
+        v.view_center = view.center;
+        v.view_pixels_per_meter = view.pixels_per_meter;
+        v.view_rotation = cam.rotation;
+        world_.set_resource(v);
     }
 
     void on_render(const app::RenderContext& rc) override {
@@ -794,6 +826,18 @@ int run_windowed(const player::PlayerDesc& pd) {
     wd.title = pd.title;
     wd.width = 1280;
     wd.height = 720;
+    if (const StringView ws = cv_window.get_string(); !ws.empty()) {
+        unsigned w = 0, h = 0;
+        char extra = 0;
+        char spec[64] = {};
+        std::memcpy(spec, ws.data(), std::min<usize>(ws.size(), sizeof(spec) - 1));
+        if (std::sscanf(spec, "%ux%u%c", &w, &h, &extra) != 2 || w < 64 || h < 64 || w > 16384 || h > 16384) {
+            std::fprintf(stderr, "mce_player: -window wants WxH (64..16384 each), e.g. 1080x2400\n");  // usage, no dialog
+            return 2;
+        }
+        wd.width = w;
+        wd.height = h;
+    }
     auto window = platform::Window::create(wd);
     if (!window) return fail("window creation failed", window.error());
     rhi::DeviceDesc dd;

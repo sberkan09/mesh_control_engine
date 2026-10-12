@@ -116,7 +116,8 @@ turns it into an input-map chunk. The player loads the first one in the pack by 
 
   The default map already has this layout: a Move stick on the left half, Look and Jump (tap) on
   the right half below a Pause corner at the top right. `InputState::touch_points()` gives the
-  raw fingers (oldest first, normalized) for tap-to-point games, and `ui::apply_touch_pointer`
+  raw fingers (oldest first, normalized) for tap-to-point games (`kit::ViewInfo::touch_to_world`,
+  chapter 7.2, turns one into a world point), and `ui::apply_touch_pointer`
   makes the oldest finger the `mce::ui` pointer. Touches are part of the recorded stream.
 - Unknown keys, a typo'd field, two devices in one binding, a touch zone outside 0..1 or a `"y"`
   binding on a button are cook errors with file and line.

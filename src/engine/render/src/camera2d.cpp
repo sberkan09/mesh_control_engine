@@ -54,8 +54,17 @@ View2D compute_view_2d(const Camera2D& cam, rhi::Extent2D viewport, f32 pixels_p
     const f32 vw = static_cast<f32>(max(1u, viewport.width));
     const f32 vh = static_cast<f32>(max(1u, viewport.height));
     const f32 ppm = pixels_per_meter > 0.0f ? pixels_per_meter : 48.0f;
-    v.effective_zoom = cam.pixel_snap ? quantize_zoom(cam.zoom) : (cam.zoom > 0.0f ? cam.zoom : 1.0f);
-    v.pixels_per_meter = ppm * v.effective_zoom;
+    if (cam.fit_width > 0.0f || cam.fit_height > 0.0f) {
+        // Fit: device pixels per metre from the viewport, so every screen shows the same world area.
+        f32 fit_ppm = 0.0f;
+        if (cam.fit_width > 0.0f) fit_ppm = vw / cam.fit_width;
+        if (cam.fit_height > 0.0f) fit_ppm = fit_ppm > 0.0f ? min(fit_ppm, vh / cam.fit_height) : vh / cam.fit_height;
+        v.pixels_per_meter = fit_ppm;
+        v.effective_zoom = fit_ppm / ppm;
+    } else {
+        v.effective_zoom = cam.pixel_snap ? quantize_zoom(cam.zoom) : (cam.zoom > 0.0f ? cam.zoom : 1.0f);
+        v.pixels_per_meter = ppm * v.effective_zoom;
+    }
 
     vec2 center = cam.position;
     if (cam.pixel_snap) {

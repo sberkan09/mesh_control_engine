@@ -99,6 +99,24 @@ TEST_CASE("render: Camera2D view maps meters to pixels") {
     CHECK(screen_x(z, vec2(11, 5)) == doctest::Approx(960.0f + 96.0f));
 }
 
+TEST_CASE("render: fit mode shows the same world area on every screen (#136)") {
+    Camera2D cam;
+    cam.fit_height = 18.0f;  // metres up, whatever the pixel count
+    cam.zoom = 3.0f;         // ignored while fitting
+    for (rhi::Extent2D vp : {rhi::Extent2D{1280, 720}, rhi::Extent2D{2400, 1080}, rhi::Extent2D{1080, 2400}}) {
+        const View2D v = compute_view_2d(cam, vp, 48.0f);
+        CHECK(v.world_bounds.max.y - v.world_bounds.min.y == doctest::Approx(18.0f));
+        CHECK(v.pixels_per_meter == doctest::Approx(static_cast<f32>(vp.height) / 18.0f));
+    }
+    cam.fit_width = 32.0f;  // both: the whole 32 x 18 rect stays visible
+    const View2D tall = compute_view_2d(cam, {1080, 2400}, 48.0f);
+    CHECK(tall.world_bounds.max.x - tall.world_bounds.min.x == doctest::Approx(32.0f));
+    CHECK(tall.world_bounds.max.y - tall.world_bounds.min.y >= 18.0f);
+    const View2D wide = compute_view_2d(cam, {2400, 1080}, 48.0f);
+    CHECK(wide.world_bounds.max.y - wide.world_bounds.min.y == doctest::Approx(18.0f));
+    CHECK(wide.world_bounds.max.x - wide.world_bounds.min.x >= 32.0f);
+}
+
 TEST_CASE("render: pixel snap lands texel edges on pixel edges (FR-R2D-040)") {
     const f32 ppm = 16.0f;  // one texel = 1/16 m
     for (rhi::Extent2D vp : {rhi::Extent2D{640, 360}, rhi::Extent2D{641, 361}}) {
