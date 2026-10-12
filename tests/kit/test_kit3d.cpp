@@ -4,6 +4,13 @@
 
 #include <doctest/doctest.h>
 
+#include <cstdio>
+#include <filesystem>
+#include <string>
+
+#include "mce/asset/asset_system.h"
+#include "mce/asset/container.h"
+#include "mce/asset/xxhash.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/kit3d_extract.h"
@@ -71,10 +78,58 @@ struct Fixture {
     };
 };
 
+Array<byte> box_mesh_blob() {
+    mesh_fixture::Builder box;
+    box.add_node(-1, {0, 0.5f, 0});  // the node lifts the unit box onto y = 0
+    mesh_fixture::Box b;
+    b.half = {0.5f, 0.5f, 0.5f};
+    box.add_box(b);
+    return box.build();
+}
+
+// A dev cooked tree holding one mesh (manifest + content-addressed file), as the asset tests write.
+std::string write_mesh_tree(const char* name, asset::Guid guid, Span<const byte> blob) {
+    namespace fs = std::filesystem;
+    const fs::path root = fs::path(MCE_TEST_TMP_DIR) / name;
+    fs::remove_all(root);
+    auto write = [](const fs::path& p, Span<const byte> b) {
+        fs::create_directories(p.parent_path());
+        std::FILE* f = std::fopen(p.string().c_str(), "wb");
+        REQUIRE(f);
+        std::fwrite(b.data(), 1, b.size(), f);
+        std::fclose(f);
+    };
+    asset::ContainerWriter w;
+    asset::ContainerWriter::ChunkDesc d;
+    d.type = asset::ChunkType::Mesh;
+    d.version = asset::chunk_version(asset::MESH_VERSION, 0);
+    d.guid = guid;
+    w.add(d, blob);
+    Array<byte> mesh;
+    w.finish(mesh);
+    const u64 hash = asset::xxh64(mesh.data(), mesh.size());
+    const std::string hex = asset::to_hex(guid).c_str();
+    char file[64];
+    std::snprintf(file, sizeof file, "%016llx.mce", static_cast<unsigned long long>(hash));
+    write(root / hex.substr(0, 2) / hex / file, mesh.span());
+    asset::ManifestItem item{guid, hash, asset::ChunkType::Mesh, "models/box.glb"};
+    Array<byte> mp;
+    asset::write_manifest(Span<asset::ManifestItem>(&item, 1), mp);
+    asset::ContainerWriter mw;
+    asset::ContainerWriter::ChunkDesc md;
+    md.type = asset::ChunkType::Manifest;
+    mw.add(md, mp.span());
+    Array<byte> manifest;
+    mw.finish(manifest);
+    write(root / "manifest.mce", manifest.span());
+    return root.generic_string();
+}
+
 }  // namespace
 
 TEST_CASE("kit3d: the components are reflected and install is idempotent") {
-    for (const char* name : {"MeshRef", "PointLight3D", "SpotLight3D", "Camera3DComponent", "Animator", "Environment3D"}) {
+    for (const char* name : {"MeshRef", "PointLight3D", "SpotLight3D", "Camera3DComponent", "Animator", "Environment3D",
+                             "BoxCollider3D", "MeshCollider3D"}) {
         const refl::TypeRecord* t = refl::find_type(StringId(name));
         INFO(name);
         REQUIRE(t != nullptr);
@@ -275,4 +330,73 @@ TEST_CASE("kit3d: StaticInstances3D cells cull and thin by distance") {
     CHECK(f.extract.stats().instances > 12);
     CHECK(f.extract.stats().instances < 40);
     CHECK(f.extract.stats().cells_visible < si.cells.size());
+}
+
+TEST_CASE("kit3d: mesh_triangles places every submesh by its rest-pose node") {
+    const Array<byte> blob = box_mesh_blob();
+    Array<vec3> verts;
+    Array<u32> indices;
+    REQUIRE(kit::mesh_triangles(blob.span(), math::scaling({2, 2, 2}), verts, indices));
+    CHECK(indices.size() == 36);
+    f32 lo = 1e9f, hi = -1e9f;
+    for (const vec3& v : verts) {
+        lo = math::min(lo, v.y);
+        hi = math::max(hi, v.y);
+    }
+    CHECK(lo == doctest::Approx(0.0f).epsilon(1e-3));
+    CHECK(hi == doctest::Approx(2.0f).epsilon(1e-3));
+    for (u32 i : indices) CHECK(i < verts.size());
+    const byte junk[8] = {};
+    CHECK_FALSE(kit::mesh_triangles(Span<const byte>(junk, 8), math::mat4::identity(), verts, indices));
+}
+
+TEST_CASE("kit3d: box and mesh colliders become static bodies at Startup") {
+    const Array<byte> blob = box_mesh_blob();
+    const std::string root = write_mesh_tree("kit3d_colliders", kBox, blob.span());
+    asset::AssetSystem assets;
+    const StringView roots[1] = {StringView(root.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)).has_value());
+
+    World w;
+    kit::install_kit3d(w, &assets);
+    kit::BoxCollider3D box;
+    box.half = {1, 1, 1};
+    LocalTransform t = at({0, 0, 0});
+    t.scale = {2, 2, 2};
+    w.spawn_with(t, box);
+    kit::BoxCollider3D ramp;
+    ramp.offset = {0, 0, 0};
+    ramp.pitch_deg = 30.0f;
+    w.spawn_with(at({-20, 0, 0}), ramp);
+    kit::MeshCollider3D mc;
+    mc.mesh.guid = kBox;
+    LocalTransform mt = at({10, 1, 0});
+    mt.scale = {3, 3, 3};
+    w.spawn_with(mt, mc);
+    kit::MeshCollider3D missing;
+    missing.mesh.guid = asset::Guid{0x99, 0x99};
+    w.spawn_with(at({30, 0, 0}), missing);  // skipped with a warning
+    w.tick(kDt, 0);
+
+    kit::Physics3D& phys = w.resource<kit::Physics3D>();
+    CHECK(phys.colliders == 3);
+    const auto hit_box = phys.world.raycast({0, 10, 0}, {0, -1, 0}, 20.0f);
+    REQUIRE(hit_box.has_value());
+    CHECK(hit_box->point.y == doctest::Approx(2.0f).epsilon(1e-3));
+    const auto hit_mesh = phys.world.raycast({10, 10, 0}, {0, -1, 0}, 20.0f);
+    REQUIRE(hit_mesh.has_value());
+    CHECK(hit_mesh->point.y == doctest::Approx(4.0f).epsilon(1e-2));  // 1 + the 3 m tall box
+    // The kit steps the world (auto_step); a game can turn that off and step it itself.
+    phys.auto_step = 0;
+    w.tick(kDt, 1);
+}
+
+TEST_CASE("kit3d: a game's own Physics3D config survives install") {
+    World w;
+    physics::PhysicsConfig3D cfg;
+    cfg.max_bodies = 77;
+    w.set_resource(kit::Physics3D{physics::World3D(cfg), 0, 0});
+    kit::install_kit3d(w, nullptr);
+    CHECK(w.resource<kit::Physics3D>().world.config().max_bodies == 77);
+    CHECK(w.resource<kit::Physics3D>().auto_step == 0);
 }

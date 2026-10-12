@@ -73,15 +73,8 @@ struct Light3D {
 MCE_COMPONENT(Light3D, color, offset, (intensity, Range{0, 50}), direction, (radius, Range{0.1f, 60}), spot_outer, spot_inner,
               (flicker, Range{0, 1}), kind)
 
-// A box collider for the 3D physics world (static). `pitch_deg` tilts it about its local X, for
-// ramps; the entity's yaw and position place it.
-struct BoxCollider3D {
-    vec3 half{1.0f, 1.0f, 1.0f};
-    f32 pitch_deg = 0.0f;
-    vec3 offset;
-    f32 pad_ = 0.0f;
-};
-MCE_COMPONENT(BoxCollider3D, half, pitch_deg, offset)
+// A box collider for the 3D physics world: the engine's kit3d BoxCollider3D (sr_startup builds them).
+using mce::kit::BoxCollider3D;
 
 enum class ClipKind : u32 { None, Turn, Flutter, Gust, Glide, Walk, Idle };
 MCE_ENUM(ClipKind, None, Turn, Flutter, Gust, Glide, Walk, Idle)

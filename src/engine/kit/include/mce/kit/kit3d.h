@@ -17,6 +17,7 @@
 #include "mce/containers/array.h"
 #include "mce/fixed_string.h"
 #include "mce/math/math.h"
+#include "mce/physics3d/world3d.h"
 #include "mce/refl/macros.h"
 
 namespace mce {
@@ -139,6 +140,39 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (bloom_threshold, Range{0, 10}), fxaa, (shadow_cascades, Range{1, 4}), (shadow_distance, Range{1, 2000}),
               (shadow_blend, Range{0, 0.5f}))
 
+// ---- static colliders in the 3D physics world --------------------------------------------------
+
+// A static box in Physics3D's World3D, built at Startup from the entity's transform: `half`
+// (scaled by the entity's scale) around the entity's position plus `offset` (entity space),
+// tilted by `pitch_deg` about its local X (ramps) after the entity's rotation.
+struct BoxCollider3D {
+    math::vec3 half{0.5f, 0.5f, 0.5f};
+    f32 pitch_deg = 0.0f;
+    math::vec3 offset;
+    f32 friction = 0.6f;
+    u32 layer = 0;  // collision layer 0..15
+    u32 pad_ = 0;
+};
+MCE_COMPONENT(BoxCollider3D, half, (pitch_deg, Range{-90, 90}), offset, (friction, Range{0, 2}), (layer, Range{0, 15}))
+
+// A static triangle-mesh collider from a mesh asset (its rest pose), built at Startup under the
+// entity's transform. Use a simple collision mesh, not the drawn one, for large levels.
+struct MeshCollider3D {
+    asset::AssetRef<asset::Mesh> mesh;
+    f32 friction = 0.6f;
+    u32 layer = 0;
+};
+MCE_COMPONENT(MeshCollider3D, mesh, (friction, Range{0, 2}), (layer, Range{0, 15}))
+
+// World resource: the 3D physics world the colliders above live in. Games add their own bodies
+// and characters to `world` (Entity ids of their choosing) and query it. With `auto_step` the kit
+// steps it every FixedUpdate_Physics; a game that steps it itself (only while playing) sets 0.
+struct Physics3D {
+    physics::World3D world{physics::PhysicsConfig3D{}};
+    u32 auto_step = 1;
+    u32 colliders = 0;  // bodies the kit built at Startup
+};
+
 // ---- many static copies of a few meshes (grass, rocks, trees) -----------------------------------
 
 // One copy. `max_distance` > 0 hides it past that camera distance; past `thin_distance` (> 0) only
@@ -175,12 +209,20 @@ struct StaticInstances3D {
     void build_cells(f32 cell_size = 16.0f, f32 max_extent = 6.0f);
 };
 
-// Registers the kit3d components, sets the Environment3D and StaticInstances3D resources (kept if
-// already set) and adds the systems:
-//   Startup           "kit3d_environment"  the scene's Environment3D component, if any, into the resource
-//   FixedUpdate_Post  "kit3d_animators"    Animator time and cross-fades
-// Idempotent. `assets` may be null.
+// Registers the kit3d components, sets the Environment3D, StaticInstances3D and Physics3D
+// resources (each kept if already set: a game sets Physics3D first for its own PhysicsConfig3D)
+// and adds the systems:
+//   Startup              "kit3d_environment"  the scene's Environment3D component, if any, into the resource
+//   Startup              "kit3d_colliders"    BoxCollider3D / MeshCollider3D bodies (after the environment)
+//   FixedUpdate_Physics  "kit3d_physics"      Physics3D::world.step when auto_step
+//   FixedUpdate_Post     "kit3d_animators"    Animator time and cross-fades
+// Idempotent. `assets` (for MeshCollider3D) may be null: mesh colliders are then skipped.
 void install_kit3d(World& world, asset::AssetSystem* assets);
+
+// Model-space triangles of a cooked mesh payload (CHNK_MESH) in its rest pose, every submesh
+// dequantized and placed by its node; positions are multiplied by `transform` (scale, pose).
+// False when the payload does not read. For colliders and tools; skinned submeshes use the bind pose.
+bool mesh_triangles(Span<const byte> mesh_blob, const math::mat4& transform, Array<math::vec3>& vertices, Array<u32>& indices);
 
 // True when the world has an entity with a Camera3DComponent (the player then draws in 3D).
 bool has_camera_3d(World& world);
