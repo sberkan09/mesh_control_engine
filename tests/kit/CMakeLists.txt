@@ -6,6 +6,7 @@ mce_add_test(test_kit UMBRELLA
         test_fsm.cpp
         test_particles.cpp
         test_sequence.cpp
+        test_view_info.cpp
     DEPS
         mce::mce_gameplay_kit
         mce::mce_scene

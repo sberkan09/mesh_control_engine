@@ -55,6 +55,7 @@ public:
 
     // Drawable size in pixels, DPI-correct (FR-R2D-080). Can differ from the requested size.
     PixelSize framebuffer_size() const;
+    PixelSize size() const;  // in window points (mouse coordinates); framebuffer_size() / display scale on HiDPI
     f32 display_scale() const;
     SafeInsets safe_insets() const;  // in pixels, like framebuffer_size()
     Orientation orientation() const;  // of the display the window is on

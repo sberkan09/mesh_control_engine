@@ -94,6 +94,12 @@ PixelSize Window::framebuffer_size() const {
     return PixelSize{static_cast<u32>(w > 0 ? w : 0), static_cast<u32>(h > 0 ? h : 0)};
 }
 
+PixelSize Window::size() const {
+    int w = 0, h = 0;
+    SDL_GetWindowSize(sdl(handle_), &w, &h);
+    return PixelSize{static_cast<u32>(w > 0 ? w : 0), static_cast<u32>(h > 0 ? h : 0)};
+}
+
 f32 Window::display_scale() const {
     const f32 s = SDL_GetWindowDisplayScale(sdl(handle_));
     return s > 0.0f ? s : 1.0f;

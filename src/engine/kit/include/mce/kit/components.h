@@ -5,6 +5,8 @@
 // Conventions: metres, Y up; an entity's LocalTransform positions the pivot, its rotation about +Z
 // turns the quad and its scale.xy multiplies `size`.
 
+#include <cmath>
+
 #include "mce/asset/handle.h"
 #include "mce/fixed_string.h"
 #include "mce/math/math.h"
@@ -63,9 +65,51 @@ struct Camera2DComponent {
     bool primary = true;
     bool pixel_snap = true;
     u8 pad_[2] = {};
+    // Fit mode (resolution independence): > 0 shows at least this many metres across / up on any
+    // screen; both set fits the whole rect. Overrides zoom. 0 = off (zoom and pixels_per_meter rule).
+    f32 fit_width = 0.0f;
+    f32 fit_height = 0.0f;
 };
 MCE_COMPONENT(Camera2DComponent, (zoom, Range{0.05f, 32}), (pixels_per_meter, Range{1, 512}), clear_color, primary,
-              pixel_snap)
+              pixel_snap, (fit_width, Range{0, 10000}, Help{"metres visible across on every screen; 0 = use zoom"}),
+              (fit_height, Range{0, 10000}, Help{"metres visible up on every screen; 0 = use zoom"}))
+
+// World resource the player writes before every tick: the screen the game is drawn on and the
+// primary camera's resolved view (fit applied, no shake). Read it with world.try_resource<ViewInfo>();
+// headless runs write a fixed 1280 x 720 landscape screen so hashes stay deterministic; hosts that
+// do not run the stock player (the editor viewport) may not write it.
+struct ViewInfo {
+    u32 framebuffer_width = 1280, framebuffer_height = 720;  // device pixels
+    u32 window_width = 1280, window_height = 720;            // window points (InputState::mouse_pos_px)
+    f32 display_scale = 1.0f;
+    u32 safe_left = 0, safe_top = 0, safe_right = 0, safe_bottom = 0;  // safe-area insets in device pixels
+    u8 orientation = 1;  // platform::Orientation: 0 unknown, 1 landscape, 2 landscape flipped, 3 portrait, 4 flipped
+    bool headless = true;
+    u8 pad_[2] = {};
+    math::vec2 view_center;               // world point at the framebuffer's centre
+    f32 view_pixels_per_meter = 48.0f;    // device pixels per world metre
+    f32 view_rotation = 0.0f;             // radians, CCW
+
+    // Device pixel (origin top-left, y down) -> world metres under it.
+    math::vec2 screen_to_world(math::vec2 px) const {
+        const f32 ppm = view_pixels_per_meter > 0.0f ? view_pixels_per_meter : 1.0f;
+        const f32 lx = (px.x - 0.5f * static_cast<f32>(framebuffer_width)) / ppm;
+        const f32 ly = (0.5f * static_cast<f32>(framebuffer_height) - px.y) / ppm;
+        const f32 c = std::cos(view_rotation), s = std::sin(view_rotation);
+        return {view_center.x + c * lx - s * ly, view_center.y + s * lx + c * ly};
+    }
+    // InputState::touch_points() (0..1 of the window) -> world.
+    math::vec2 touch_to_world(math::vec2 normalized) const {
+        return screen_to_world({normalized.x * static_cast<f32>(framebuffer_width),
+                                normalized.y * static_cast<f32>(framebuffer_height)});
+    }
+    // InputState::mouse_pos_px() (window points) -> world.
+    math::vec2 mouse_to_world(math::vec2 window_pt) const {
+        const f32 sx = window_width ? static_cast<f32>(framebuffer_width) / static_cast<f32>(window_width) : 1.0f;
+        const f32 sy = window_height ? static_cast<f32>(framebuffer_height) / static_cast<f32>(window_height) : 1.0f;
+        return screen_to_world({window_pt.x * sx, window_pt.y * sy});
+    }
+};
 
 // 2D post effects (FR-R2D-100) for the view of the Camera2DComponent on the same entity. Each
 // effect toggles at runtime; the player renders the 2D frame offscreen only while one is on.
