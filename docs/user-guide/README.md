@@ -18,7 +18,7 @@ code as built and why; this guide links to them where you may want the full deta
 | 4 | [Scenes, entities and prefabs](04-scenes-and-prefabs.md) | Author a level, parent entities, make and override prefabs |
 | 5 | [Assets and the cook](05-assets.md) | Import textures, sounds, fonts and models; cook; pack |
 | 6 | [Game code](06-game-code.md) | Components, systems, phases, events, resources, the module contract |
-| 7 | [2D games](07-2d.md) | Sprites, cameras, text, parallax, lighting, post effects, tilemaps, particles |
+| 7 | [2D games](07-2d.md) | Sprites, cameras, text, parallax, lighting, post effects, tilemaps, particles, pathfinding |
 | 8 | [3D games](08-3d.md) | glTF models, materials, the forward renderer, the 3D physics world |
 | 9 | [Physics](09-physics.md) | Bodies, colliders, the character controller, triggers, queries, joints |
 | 10 | [Audio](10-audio.md) | Sound sources, one-shots, buses, 3D audio, music streams |

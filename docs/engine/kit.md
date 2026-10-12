@@ -30,6 +30,9 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
 - `Parallax`: per-axis scroll factor against the camera and `repeat_x` (FR-R2D-050).
 - `SequencePlayer`: plays a cooked `.mcseq` or a code-defined sequence by name; its progress fields
   carry the `Save` flag (FR-ENT-100).
+- `PathAgent`: walks to `target` over the world's `NavGrid` at `speed`, re-planning every
+  `repath_interval` ticks; `status` and the current smoothed path (16 waypoints) are runtime
+  fields (#152).
 
 `sprite_extract.h`:
 
@@ -52,6 +55,17 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   `stop_sound`, `emit`, `call_step`, `spawn`, `destroy`).
 - Events `SeqSignal` (emit / wait_event) and `SeqAnimRequest` (for the game's animator).
 - `install_sequences(world, assets)` and the system `sequence_runner` in `FixedUpdate_Post`.
+
+`pathfinding.h` (#152):
+
+- `NavGrid`: width x height cells of `cell_size` metres from `origin`, a `u8` cost per cell (0 =
+  blocked); `cell_at`, `cell_center`, `mark_aabb`, `hash`.
+- `nav_grid_from_tilemap(view, origin, solid_tiles)` and `mark_static_colliders(grid, world, inflate)`.
+- `Pathfinder`: integer A* (`find_cells`, `find_path`), 4/8-neighbour without corner cutting,
+  octile heuristic, total-order tie-break; `smooth` (string pulling) and `line_of_sight`.
+- `install_path_agents(world[, grid])`: `PathScratch` resource and `"path_agents"` in
+  `FixedUpdate_Pre`; moves a physics2d body by velocity or the `LocalTransform` directly.
+- `debug_draw_grid`, `debug_draw_agents` into a `physics::DebugDrawSink`.
 
 `fsm.h` (header-only, namespace `mce::fsm`):
 
@@ -119,6 +133,9 @@ ctest `test_kit` (no GPU), `tests/kit/`:
 - `test_sequence.cpp`: wait timing, `move_to` on plain entities and kinematic bodies, emit and
   wait_event, the call table, loops, "sequence: save mid-step, load into a fresh world, finish on the
   same tick in the same state", `.mcseq` cook and errors.
+- `test_pathfinding.cpp`: paths around walls, blocked and walled-in goals, no corner cutting,
+  smoothing, "pathfinding: same inputs, same path; 100 agents hash identically after N ticks", a
+  grid from a cooked `.mctilemap`, static colliders, agents on transforms and kinematic bodies.
 
 ctest `test_kit_gl` (label `gpu`, registered only with `MCE_GPU_TESTS`; CI uses Xvfb and Mesa
 llvmpipe): parallax factors and `repeat_x`, particles on screen, Light2D with a cooked normal map,
@@ -143,5 +160,8 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
 - Not built (ADR-0032): the editor sequence live view and TimelinePlayer (FR-ENT-110, v1.0).
 - The lit-2D GPU cost at 10k sprites and the 2D post cost at 1080p are open until measured on a
   hardware GPU (M6 2D budget table).
+- Pathfinding is grid A* only: no navmesh, no jump-point search, no agent avoidance; the grid and
+  path debug draw goes to a `physics::DebugDrawSink`, which nothing wires to the editor viewport
+  yet (#152).
 - No gameplay starter components (controller, pickups, follow camera); see "Building a 2D game on
   the kit" above (M9).

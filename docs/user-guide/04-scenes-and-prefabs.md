@@ -75,6 +75,7 @@ will use most:
 | `Sprite`, `TextLabel`, `Camera2DComponent`, `Parallax`, `Light2D`, `Post2DComponent`, `TilemapLayer`, `ParticleEmitter` | 7 | the 2D drawing kit |
 | `RigidBody2D`, `Collider2D`, `CharacterController2D` | 9 | 2D physics |
 | `AudioSource`, `AudioSpatial`, `AudioListener` | 10 | sound |
+| `PathAgent` | 7 | walks to a target around walls (grid pathfinding) |
 | `SequencePlayer` | 13 | scripted action lists |
 | `SaveKey` | 13 | stable identity for save games |
 

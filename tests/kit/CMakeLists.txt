@@ -1,10 +1,11 @@
 # The gameplay starter kit's systems without a GPU: particles (FR-R2D-070) simulated, cooked from
 # .mcpart and drawn into a CPU-built sprite batch; action-list sequences (FR-ENT-100); the FSM
-# helper (FR-ENT-090).
+# helper (FR-ENT-090); grid A* pathfinding and PathAgent (#152).
 mce_add_test(test_kit UMBRELLA
     SOURCES
         test_fsm.cpp
         test_particles.cpp
+        test_pathfinding.cpp
         test_sequence.cpp
         test_view_info.cpp
     DEPS
