@@ -161,3 +161,20 @@ TEST_CASE("audio_bridge: AudioSource play_on_start, live edits, PlaySfx, and rem
     test::render(*dev, out, 4800);
     CHECK_FALSE(dev->is_playing(looping));
 }
+
+TEST_CASE("AudioDevice: finish_releases drains more releases than one callback takes (#145)") {
+    auto dev = test::offline_device(1024);
+    const Array<f32> pcm = test::dc_clip(64, 0.1f);
+    Array<ClipHandle> clips;
+    for (u32 i = 0; i < 300; ++i) {
+        auto c = dev->register_clip(test::payload(pcm));
+        REQUIRE(c);
+        clips.push_back(c.value());
+    }
+    Array<f32> out;
+    test::render(*dev, out, 480);
+    for (ClipHandle c : clips) dev->release_clip(c);
+    CHECK(dev->finish_releases());
+    for (ClipHandle c : clips) CHECK_FALSE(dev->is_clip_registered(c));
+    CHECK(dev->stats().mix_sample == 480);  // drained without mixing
+}
