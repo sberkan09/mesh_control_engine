@@ -23,18 +23,20 @@ mce_add_project(undelivered
     MODULE_ENTRY games/undelivered/module/module.cpp
     TYPES games/undelivered/module/types.cpp
     HOST games/undelivered/host/main.cpp
-    INCLUDE_DIRS games/undelivered/module)
+    INCLUDE_DIRS games/undelivered/module
+    DEPS mce::mce_kit_novel)
 
 # The script compiler's output (games/undelivered/module/story_data.h) is checked in; regenerate it
-# with python3 tools/compile_story.py after editing story/*.story.
+# after editing story/*.story or story/story.json with `mce story compile .` (in the engine tree:
+# python3 tools/story/story_compile.py projects/Undelivered).
 
 # Undelivered's own test: the compiled script's tables, the authored scene, five bot policies
 # played to their endings through the game's systems, a save in the middle of a run reloaded and
 # finished. Engine tree only (the game sources link in statically, as Kindle's test does).
 if(MCE_BUILD_TESTS AND NOT MCE_SDK)
-    mce_add_test(undelivered_run SOURCES tests/test_undelivered.cpp games/undelivered/module/undelivered.cpp
-        DEPS mce::mce_ecs mce::mce_ecs_scene mce::mce_scene mce::mce_asset mce::mce_gameplay_kit mce::mce_physics2d
-             mce::mce_input mce::mce_audio mce::mce_module_host)
+    mce_add_test(undelivered_run UMBRELLA SOURCES tests/test_undelivered.cpp games/undelivered/module/undelivered.cpp
+        DEPS mce::mce_kit_novel mce::mce_ecs mce::mce_ecs_scene mce::mce_scene mce::mce_asset mce::mce_gameplay_kit
+             mce::mce_physics2d mce::mce_input mce::mce_audio mce::mce_module_host)
     target_include_directories(undelivered_run PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/games/undelivered/module")
     target_compile_definitions(undelivered_run PRIVATE UNDELIVERED_PACK="${CMAKE_CURRENT_BINARY_DIR}/project/assets.mce")
     add_dependencies(undelivered_run undelivered_content)

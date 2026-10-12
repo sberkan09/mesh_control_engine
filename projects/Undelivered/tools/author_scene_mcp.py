@@ -11,8 +11,9 @@ here writes the .mcscene file itself.
 
 A light novel's scene is a stage: every part of the screen (the paper layers of a location, the
 three cast slots, the box, the choice rows, the letter card, the panel, the envelopes, the lights,
-the two looping sound beds) is one entity tagged with a UiPart; the game writes into them at
-runtime (games/undelivered/module/undelivered.cpp). The view is 20 x 11.25 m (1280 x 720 at 64
+the two looping sound beds) is one entity tagged with the visual-novel kit's StagePart (the drawer's
+envelopes and stamps with the game's DrawerPart); the kit and the game write into them at runtime
+(mce/kit/novel.h, games/undelivered/module/undelivered.cpp). The view is 20 x 11.25 m (1280 x 720 at 64
 pixels per metre), the origin at the centre.
 """
 
@@ -101,7 +102,7 @@ def main():
 
     m = Mcp(args.mcp, ROOT, args.transcript)
     names = {c["name"] for c in m.tool("refl_list_components")["components"]}
-    for need in ("UiPart", "NovelSave", "SaveKey", "Sprite", "TextLabel", "Light2D", "AudioSource", "Post2DComponent"):
+    for need in ("StagePart", "DrawerPart", "StoryState", "SaveKey", "Sprite", "TextLabel", "Light2D", "AudioSource", "Post2DComponent"):
         if need not in names:
             sys.exit(f"author_scene_mcp: undelivered_mcp does not know component {need}")
 
@@ -134,7 +135,10 @@ def main():
             tr["scale"] = list(scale)
         if rot is not None:
             tr["rotation"] = rot
-        comps = {"LocalTransform": tr, "UiPart": {"role": role, "index": index}}
+        part = "DrawerPart" if role in ("Envelope", "Stamp") else "StagePart"
+        comps = {"LocalTransform": tr}
+        if role is not None:
+            comps[part] = {"role": role, "index": index}
         comps.update(components)
         created += 1
         return m.tool("entity_create", name=name, components=comps)["id"]
@@ -153,7 +157,7 @@ def main():
            Camera2DComponent={"pixels_per_meter": PPM, "clear_color": [0.05, 0.045, 0.04, 1], "pixel_snap": False},
            Post2DComponent={"vignette": True, "vignette_intensity": 0.38, "vignette_radius": 0.85, "vignette_softness": 0.7,
                             "color_grade": True, "lut": guid("textures/lut_neutral.png"), "lut_strength": 0.85})
-    create("Story", "Save", NovelSave={}, SaveKey={"key": 1})
+    create("Story", None, StoryState={}, SaveKey={"key": 1})
 
     # ---- the stage: five paper layers, lit by an ambient and a lamp that moves with the hour
     for k in range(5):

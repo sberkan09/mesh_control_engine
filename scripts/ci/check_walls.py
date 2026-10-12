@@ -102,18 +102,23 @@ LINK_WALLS = [
     # library, host, tool or the editor does, so the engine and every other game stay network-free.
     ("net opt-in wall", re.compile(r"\bmce_net\b"), ["src/engine/net/", "samples/", "games/", "projects/", "templates/", "tests/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
+    # The visual-novel kit is opt-in the same way (M-NOVEL): games, samples and tests link it.
+    ("novel kit opt-in wall", re.compile(r"\bmce_kit_novel\b"), ["src/engine/kit_novel/", "samples/", "games/", "projects/", "templates/", "tests/"]),
 ]
 
-# The umbrella's library list (root CMakeLists.txt): mce_net must never join it (ADR-0035).
+# The umbrella's library list (root CMakeLists.txt): the opt-in modules (mce_net, ADR-0035; mce_kit_novel)
+# must never join it.
 ENGINE_LIBS_RE = re.compile(r"set\(MCE_ENGINE_LIBS\b(.*?)\)", re.S)
 
 
 def umbrella_violations() -> list:
     text = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     m = ENGINE_LIBS_RE.search(text)
-    if m and re.search(r"\bmce_net\b", m.group(1)):
-        return ["CMakeLists.txt: net opt-in wall: mce_net is listed in MCE_ENGINE_LIBS"]
-    return []
+    out = []
+    for lib in ("mce_net", "mce_kit_novel"):
+        if m and re.search(r"\b%s\b" % lib, m.group(1)):
+            out.append(f"CMakeLists.txt: opt-in wall: {lib} is listed in MCE_ENGINE_LIBS")
+    return out
 
 
 def link_violations() -> list:

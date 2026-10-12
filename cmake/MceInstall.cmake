@@ -3,7 +3,8 @@
 #   bin/        mce_player, mce_editor, mce_mcp, mce_cook, mce_devhost and the `mce` command
 #   lib/        libmce_engine (the umbrella every tool and game module shares),
 #               libmce_player_runtime (what a project's host links), libmce_net (the opt-in
-#               networking module, when built with MCE_WITH_NET)
+#               networking module, when built with MCE_WITH_NET), libmce_kit_novel (the opt-in
+#               visual-novel kit and dialogue VM)
 #   include/    the engine headers (every src/**/include), the generated mce/engine_version.h
 #               (MCE_ENGINE_ID: modules built against this SDK match this engine) and spdlog's
 #               headers, which mce/log.h includes
@@ -41,6 +42,9 @@ if(TARGET mce_net)
 else()
     set(MCE_SDK_NET_FILE "")
 endif()
+# The opt-in visual-novel kit (M-NOVEL), the same way.
+install(TARGETS mce_kit_novel ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+set(MCE_SDK_NOVEL_FILE "$<TARGET_FILE_NAME:mce_kit_novel>")
 
 # Headers: every engine, module and player include tree, then the generated one.
 file(GLOB _mce_include_dirs LIST_DIRECTORIES true
@@ -74,7 +78,8 @@ install(FILES "${PROJECT_BINARY_DIR}/sdk/MCEConfig.cmake" "${PROJECT_BINARY_DIR}
 
 # The project template, its generator and the mce command.
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/templates/project" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/templates)
-install(PROGRAMS "${PROJECT_SOURCE_DIR}/scripts/new_project.py" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/scripts)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/scripts/new_project.py" "${PROJECT_SOURCE_DIR}/tools/story/story_compile.py"
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/scripts)
 file(WRITE "${PROJECT_BINARY_DIR}/sdk/VERSION" "${PROJECT_VERSION}\n${MCE_ENGINE_DESCRIBE}\n")
 install(FILES "${PROJECT_BINARY_DIR}/sdk/VERSION" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce.py" DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME mce)

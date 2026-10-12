@@ -114,6 +114,8 @@ add_subdirectory(src/engine/ui)
 add_subdirectory(src/engine/audio)
 add_subdirectory(src/engine/scene)
 add_subdirectory(src/engine/kit)
+# Opt-in (M-NOVEL): the visual-novel kit and dialogue VM; not in MCE_ENGINE_LIBS either.
+add_subdirectory(src/engine/kit_novel)
 if(MCE_WITH_NET)
     # Opt-in (ADR-0035): not in MCE_ENGINE_LIBS, so mce_engine and every game that does not link
     # mce::mce_net stay network-free.
