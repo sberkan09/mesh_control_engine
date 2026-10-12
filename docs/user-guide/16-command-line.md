@@ -120,7 +120,7 @@ scripts/ci/setup_env.sh                               # Ubuntu 24.04 packages
 `<project>/build`.
 
 ```
-mce new <Name> [--game id] [--title "Title"] [--dest dir] [--force]
+mce new <Name> [--game id] [--title "Title"] [--template project|novel] [--dest dir] [--force]
 mce example [<Name>] [--dest dir] [--force]
 mce build <project> [--config Debug|Release] [-D<var>=<value> ...]
 mce play <project> [player flags ...]
@@ -129,6 +129,7 @@ mce editor <project> [editor flags ...]
 mce mcp <project> [--scene <path>] [--allow-cheats]
 mce mcp-config <project> [--desktop] [--remove]
 mce cook <project> [--pack] [--force] [--adopt] [--quiet]
+mce story compile [<project>] [--check] [--werror] [--out header] [--report md]
 mce ship <project> [--out dir] [--version v]
 mce update [<project> ...] [--release [tag]] [--no-pull]
 mce version
@@ -139,6 +140,8 @@ Each subcommand prints the command it runs (`mce mcp` on stderr, since its stdou
 protocol) and exits with that tool's code (2 for a usage error).
 `mce example` with no name lists the SDK's example projects (`share/mce/examples/`); with one it
 copies that project to `<dir>/<Name>`, ready for `mce build`.
+`mce new --template novel` stamps a visual novel on the novel kit; `mce story compile` compiles
+its `story/*.story` (chapter 21; `mce build` also does when the project says `STORY`).
 `mce new` and `mce example` also write `<project>/.mcp.json`, registering `mce mcp <project>` as
 the server `mce_<game>` for Claude Code; `mce mcp-config` rewrites it, and with `--desktop` merges the
 same entry into Claude Desktop's `claude_desktop_config.json` (chapter 14.1).
