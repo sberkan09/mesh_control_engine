@@ -19,7 +19,7 @@ a device or simulator run on the user's Mac.
 | 6 | Android: `android-arm64` presets (NDK toolchain), SDL's Java activity, Gradle wrapper project stamped by `scripts/ship.py --target android`, APK/AAB with the cooked pack in assets | emulator + a device, on the Mac | done on the emulator (no device attached) |
 | 7 | iOS: `ios-arm64` / `ios-sim-arm64` presets, Xcode project generation, the statically linked game module (`MCE_PROJECT_STATIC_MODULE`), signing, IPA from `scripts/ship.py --target ios` | simulator + a device, on the Mac | done in the Simulator (no device; Ninja app bundles instead of an Xcode project) |
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | done except the per-tier device numbers (no device) |
-| 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | — |
+| 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | done on the emulator and the Simulator (no devices) |
 | 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | — |
 
 ## What shipped (steps 2–3)
@@ -98,6 +98,22 @@ fine).
 holds 60 fps because both present with vsync and the host GPU has headroom; `mce_rhi_sdlgpu` has no GPU timestamps
 (step 3 gap), and thermal and battery figures need a phone. The tier table above is the budget lever; filling in
 frame/thermal/battery numbers per tier waits for a device on the Mac (the one open item of this step).
+
+## What shipped (step 9, demo)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Ember Step by touch | `samples/03_platformer/main.cpp` | the input map gains a floating stick (left half, `TouchStick`), JUMP and DASH buttons bottom right (`TouchZone`, held), a pause tap in the top-right corner, a tap on the right half to confirm in menus and the top-left corner to go back; once a finger touches the screen the HUD draws the buttons, the stick's base and knob, and touch help. Played with `adb shell input` on the emulator: the stick runs, the buttons jump |
+| Diorama by touch | `samples/04_diorama/main.cpp` | one finger orbits, two fingers pinch to zoom (window-normalized `Touch*` events) |
+| Soak, Android | Android 15 emulator (`-gpu host`) | Ember Step (`-autoplay 1`) and the diorama, 10 minutes each: same process throughout, PSS flat after the first minute (Ember Step 61.8 → 62.7 MB, diorama 68.4 → 68.4 MB), no fatal log line |
+| Soak, iOS | iPhone 17 Pro Simulator (iOS 26) | Ember Step (`-autoplay 1`) and the diorama, 10 minutes each: same process throughout, no new crash report, resident memory falling after the first minutes (Ember Step 137 → 105 MB, diorama 196 → 161 MB) |
+
+Both games are playable by touch on the emulator and the Simulator. **Not done: the physical devices** the plan
+names (one Android phone, one iPhone): none is attached to this Mac, and an iPhone build also needs Sami's signing
+identity and provisioning profile (`MCE_IOS_SIGN_IDENTITY`, `MCE_IOS_PROVISIONING_PROFILE`). Running
+`scripts/ci/local_ci_macos.sh android ios` with a phone attached (Android) or the `.ipa` installed (iOS) is the
+remaining check; Solstice Reach (a project, not a sample) ships to phones after `ship.py --target` learns
+`--project`.
 
 ## Constraints found so far
 

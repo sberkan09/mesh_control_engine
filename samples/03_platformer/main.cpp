@@ -305,8 +305,18 @@ public:
 
     static SpriteSetId resolve_fx(void* user, asset::Guid) { return static_cast<PlatformerApp*>(user)->fx_set_; }
 
+    // Touch layout (M-MOBILE, window-normalized, y down): a floating stick on the left, JUMP and
+    // DASH buttons bottom right, pause in the top-right corner; in menus the stick moves the
+    // selection, a tap on the right half confirms and the top-left corner goes back.
+    static constexpr input::TouchZoneRect kTouchStick{0.0f, 0.15f, 0.5f, 1.0f};
+    static constexpr input::TouchZoneRect kTouchJump{0.78f, 0.55f, 1.0f, 1.0f};
+    static constexpr input::TouchZoneRect kTouchDash{0.56f, 0.65f, 0.76f, 1.0f};
+    static constexpr input::TouchZoneRect kTouchPause{0.85f, 0.0f, 1.0f, 0.15f};
+    static constexpr input::TouchZoneRect kTouchConfirm{0.5f, 0.15f, 1.0f, 1.0f};
+    static constexpr input::TouchZoneRect kTouchBack{0.0f, 0.0f, 0.15f, 0.15f};
+
     // The game's actions: Move / Jump / Dash / Pause for play, Confirm / Cancel for the menus, all
-    // on keyboard and gamepad (one map; menus read Move.y, so the stick and d-pad navigate too).
+    // on keyboard, gamepad and touch (one map; menus read Move.y, so the stick and d-pad navigate too).
     static void build_input_map(Array<byte>& out) {
         using platform::GamepadAxis;
         using platform::GamepadButton;
@@ -318,13 +328,15 @@ public:
             .key(Key::Right, 0, +1.f).key(Key::Left, 0, -1.f).key(Key::Up, 1, +1.f).key(Key::Down, 1, -1.f)
             .gamepad_axis(GamepadAxis::LeftX, 0, +1.f).gamepad_axis(GamepadAxis::LeftY, 1, -1.f)
             .gamepad_button(GamepadButton::DpadRight, 0, +1.f).gamepad_button(GamepadButton::DpadLeft, 0, -1.f)
-            .gamepad_button(GamepadButton::DpadUp, 1, +1.f).gamepad_button(GamepadButton::DpadDown, 1, -1.f);
-        b.action(MCE_SID("Jump")).key(Key::Space).key(Key::Z).gamepad_button(GamepadButton::South);
+            .gamepad_button(GamepadButton::DpadUp, 1, +1.f).gamepad_button(GamepadButton::DpadDown, 1, -1.f)
+            .touch_stick(kTouchStick);
+        b.action(MCE_SID("Jump")).key(Key::Space).key(Key::Z).gamepad_button(GamepadButton::South).touch_zone(kTouchJump);
         b.action(MCE_SID("Dash")).key(Key::LShift).key(Key::K).key(Key::X)
-            .gamepad_button(GamepadButton::West).gamepad_button(GamepadButton::RightShoulder);
-        b.action(MCE_SID("Pause")).key(Key::Escape).key(Key::P).gamepad_button(GamepadButton::Start);
-        b.action(MCE_SID("Confirm")).key(Key::Return).key(Key::Space).gamepad_button(GamepadButton::South);
-        b.action(MCE_SID("Cancel")).key(Key::Backspace).gamepad_button(GamepadButton::East);
+            .gamepad_button(GamepadButton::West).gamepad_button(GamepadButton::RightShoulder).touch_zone(kTouchDash);
+        b.action(MCE_SID("Pause")).key(Key::Escape).key(Key::P).gamepad_button(GamepadButton::Start).touch_tap(kTouchPause);
+        b.action(MCE_SID("Confirm")).key(Key::Return).key(Key::Space).gamepad_button(GamepadButton::South)
+            .touch_tap(kTouchConfirm);
+        b.action(MCE_SID("Cancel")).key(Key::Backspace).gamepad_button(GamepadButton::East).touch_tap(kTouchBack);
         b.encode(out);
     }
 
@@ -363,6 +375,14 @@ public:
 
     void on_tick(const app::TickContext& t) override {
         const input::InputState in = (autoplay_ || !t.actions) ? bot_.sample(world_, t.tick_index) : *t.actions;
+        // The on-screen controls appear once a finger has touched the screen (render-only state).
+        if (t.actions && t.actions->touch_count > 0) {
+            touch_seen_ = true;
+            touch_count_ = t.actions->touch_count;
+            for (u32 i = 0; i < touch_count_; ++i) touches_[i] = t.actions->touches[i];
+        } else if (t.actions) {
+            touch_count_ = 0;
+        }
         input_hash_ = hash_combine(input_hash_, input::hash_state(in));
         input::publish(world_, in);
         world_.tick(t.dt, t.tick_index);
@@ -771,8 +791,10 @@ private:
         std::snprintf(line, sizeof(line), "%u %s   COINS %u/%u   DEATHS %u   TIME %s   BEST %s", gs.level + 1,
                       kLevels[gs.level].name, gs.coins, gs.coins_total, gs.deaths, now, best);
         text(b, line, vec2{14, 12}, Color{1, 1, 1, 1});
-        const char* help = "MOVE ARROWS/WASD   JUMP SPACE   DASH SHIFT/K   PAUSE ESC   GAMEPAD: A JUMP X DASH";
+        const char* help = touch_seen_ ? "LEFT: MOVE   JUMP / DASH BUTTONS   TOP RIGHT: PAUSE"
+                                       : "MOVE ARROWS/WASD   JUMP SPACE   DASH SHIFT/K   PAUSE ESC   GAMEPAD: A JUMP X DASH";
         text(b, autoplay_ ? "AUTOPLAY" : help, vec2{14, h - 30}, Color{1, 1, 1, 0.75f});
+        if (touch_seen_ && gs.mode == Mode::Playing) add_touch_controls(b, w, h);
 
         if (gs.mode == Mode::Paused) {
             overlay(b, w, h, Color{0.05f, 0.03f, 0.08f, 0.6f});
@@ -796,6 +818,47 @@ private:
             text(b, gs.level + 1 == kLevelCount ? "THE SUMMIT IS YOURS!" : "LEVEL CLEAR!",
                  vec2{0.5f * w - 110, 0.5f * h - 10}, gold);
         }
+    }
+
+    // Translucent JUMP / DASH buttons, the pause corner and, while a finger holds it, the stick's
+    // base under where that finger started.
+    void add_touch_controls(SpriteBatch& b, f32 w, f32 h) {
+        auto panel = [&](const input::TouchZoneRect& z, const char* label, bool lit) {
+            SpriteInstance s;
+            s.set = sprites_;
+            s.region = art::White;
+            s.position = vec2{0.5f * (z.x0 + z.x1) * w, 0.5f * (z.y0 + z.y1) * h};
+            s.scale = vec2{(z.x1 - z.x0) * w - 8.0f, (z.y1 - z.y0) * h - 8.0f};
+            s.tint = lit ? Color{1, 0.85f, 0.4f, 0.28f} : Color{1, 1, 1, 0.12f};
+            s.sort_layer = 9;
+            b.add(s);
+            text(b, label, s.position - vec2{8.0f * static_cast<f32>(std::strlen(label)), 8.0f}, Color{1, 1, 1, 0.8f});
+        };
+        bool jump = false, dash = false;
+        for (u32 i = 0; i < touch_count_; ++i) {
+            if (!touches_[i].held) continue;
+            jump = jump || kTouchJump.contains(touches_[i].origin.x, touches_[i].origin.y);
+            dash = dash || kTouchDash.contains(touches_[i].origin.x, touches_[i].origin.y);
+            if (kTouchStick.contains(touches_[i].origin.x, touches_[i].origin.y)) {
+                const f32 r = input::InputSystem::kTouchStickRadius * h;
+                SpriteInstance base;
+                base.set = sprites_;
+                base.region = art::Dot;
+                base.position = vec2{touches_[i].origin.x * w, touches_[i].origin.y * h};
+                base.scale = vec2{2.0f * r, 2.0f * r};
+                base.tint = Color{1, 1, 1, 0.18f};
+                base.sort_layer = 9;
+                b.add(base);
+                SpriteInstance knob = base;
+                knob.position = vec2{touches_[i].pos.x * w, touches_[i].pos.y * h};
+                knob.scale = vec2{0.8f * r, 0.8f * r};
+                knob.tint = Color{1, 0.85f, 0.4f, 0.45f};
+                b.add(knob);
+            }
+        }
+        panel(kTouchJump, "JUMP", jump);
+        panel(kTouchDash, "DASH", dash);
+        panel(kTouchPause, "II", false);
     }
 
     void text(SpriteBatch& b, const char* s, vec2 at, Color tint) {
@@ -832,6 +895,9 @@ private:
 
 public:
     input::InputSystem input_;
+    bool touch_seen_ = false;  // a finger touched the screen: draw the on-screen controls
+    input::TouchPoint touches_[input::kMaxTouchPoints];
+    u32 touch_count_ = 0;
 
 private:
     platform::Window* window_;

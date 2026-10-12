@@ -402,7 +402,7 @@ private:
         char line[320];
         std::snprintf(line, sizeof(line),
                       "MCE 3D DIORAMA\nTRIS %u  DRAWS %u  SHADOW DRAWS %u  CULLED %u\nGPU DRAWS %u  SCENE BUILD %.2f MS  "
-                      "FIRST FRAME %.0f MS\nDRAG OR ARROWS ORBIT  WHEEL OR Z X ZOOM  SPACE AUTO  F FOG %s",
+                      "FIRST FRAME %.0f MS\nDRAG OR ARROWS ORBIT  WHEEL, PINCH OR Z X ZOOM  SPACE AUTO  F FOG %s",
                       st.triangles, fs.main_draws, fs.shadow_draws, st.submeshes - st.visible, gpu.draws,
                       static_cast<f64>(build_ms_), static_cast<f64>(first_frame_ms_), fog_ ? "ON" : "OFF");
         TextLayout layout(mem::frame());
@@ -485,11 +485,53 @@ private:
                 }
                 break;
             case EventType::MouseWheel: self->zoom(e.y); break;
+            // Touch (M-MOBILE): one finger orbits, two pinch to zoom; positions are window-normalized.
+            case EventType::TouchDown:
+            case EventType::TouchMove:
+            case EventType::TouchUp: self->on_touch(e); break;
             default: break;
         }
     }
 
+    void on_touch(const platform::Event& e) {
+        if (e.code >= platform::kMaxTouches) return;
+        Finger& f = fingers_[e.code];
+        const vec2 p(e.x, e.y);
+        if (e.type == platform::EventType::TouchUp) {
+            f.down = false;
+            pinch_ = 0.0f;
+            return;
+        }
+        if (e.type == platform::EventType::TouchDown) {
+            f = Finger{p, true};
+            pinch_ = 0.0f;
+            return;
+        }
+        u32 down = 0;
+        Finger* two[2] = {};
+        for (Finger& g : fingers_)
+            if (g.down && down < 2) two[down++] = &g;
+        if (down == 1) {
+            yaw_ -= (p.x - f.pos.x) * 4.0f;
+            prev_yaw_ = yaw_;
+            pitch_ = clamp(pitch_ + (p.y - f.pos.y) * 2.5f, 0.12f, 1.45f);
+        }
+        f.pos = p;
+        if (down == 2) {
+            const f32 d = length(two[0]->pos - two[1]->pos);
+            if (pinch_ > 0.0f && d > 0.0f) distance_ = clamp(distance_ * pinch_ / d, 5.0f, 32.0f);
+            pinch_ = d;
+        }
+    }
+
     void zoom(f32 steps) { distance_ = clamp(distance_ * std::pow(0.9f, steps), 5.0f, 32.0f); }
+
+    struct Finger {
+        vec2 pos{0.0f, 0.0f};
+        bool down = false;
+    };
+    Finger fingers_[platform::kMaxTouches];
+    f32 pinch_ = 0.0f;  // last two-finger distance (window units); 0 = no pinch in progress
 
     platform::Window* window_;
     rhi::RenderDevice* device_;
