@@ -305,7 +305,8 @@ TEST_CASE("kit3d: StaticInstances3D cells cull and thin by distance") {
     CHECK(si.mesh_slot(asset::Guid{}) == ~0u);
     for (u32 i = 0; i < 40; ++i) {
         kit::StaticInstance3D s;
-        s.position = {f32(i % 4) * 2.0f, 0.0f, -10.0f - f32(i / 4) * 20.0f};  // 10 rows going away
+        const u32 row = i / 4, column = i % 4;
+        s.position = {f32(column) * 2.0f, 0.0f, -10.0f - f32(row) * 20.0f};  // 10 rows going away
         s.mesh = slot;
         s.thin_distance = 60.0f;
         s.max_distance = 150.0f;
