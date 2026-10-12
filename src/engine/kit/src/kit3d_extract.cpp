@@ -188,7 +188,7 @@ void Kit3DExtract::interpolated(Entity e, f32 alpha, vec3& pos, quat& rot, vec3&
 
 // ---- camera and environment -----------------------------------------------------------------
 
-bool Kit3DExtract::camera(World& world, f32 alpha, render::Camera3D& out, f32 /*aspect_hint*/) {
+bool Kit3DExtract::camera(World& world, f32 alpha, render::Camera3D& out, Camera3DComponent* component) {
     out = render::Camera3D{};
     bool found = false;
     const u64 tick = world.current_tick();
@@ -198,6 +198,7 @@ bool Kit3DExtract::camera(World& world, f32 alpha, render::Camera3D& out, f32 /*
         quat rot;
         if (!pose_of(world, e, pos, rot, scale)) return;
         found = true;
+        if (component) *component = c;
         track(e, pos, rot, scale, tick);
         interpolated(e, alpha, pos, rot, scale);
         out.position = pos;

@@ -68,8 +68,9 @@ public:
     u32 texture_key(asset::Guid guid);
 
     // The primary Camera3DComponent's view (interpolated by `alpha`). False when the scene has none
-    // (`out` is then a default camera at the origin).
-    bool camera(World& world, f32 alpha, render::Camera3D& out, f32 aspect_hint = 0.0f);
+    // (`out` is then a default camera at the origin). `component` (optional) receives the camera's
+    // component (mouse_look).
+    bool camera(World& world, f32 alpha, render::Camera3D& out, Camera3DComponent* component = nullptr);
     // The environment, then every kit3d drawable, into a scene begun with scene.begin().
     void extract(World& world, render::Scene3D& scene, f32 alpha);
     // The environment alone (Environment3D resource, else the first component, else defaults).

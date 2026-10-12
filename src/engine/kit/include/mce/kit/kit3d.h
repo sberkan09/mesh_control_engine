@@ -72,13 +72,18 @@ MCE_COMPONENT(SpotLight3D, color, offset, (intensity, Range{0, 100}), direction,
 // The 3D view a player renders from: the first `primary` camera in ECS order, at its entity's
 // transform (looking down local -Z). Drawn between the last two ticks' transforms, so a camera the
 // game moves every tick is smooth at any frame rate. A scene with one plays on the 3D path.
+// `mouse_look` asks the player for relative mouse mode (InputState::look keeps turning past the
+// window edge); the player releases it while paused, while the console is open and when unfocused.
 struct Camera3DComponent {
     f32 fov_deg = 60.0f;  // vertical
     f32 near_z = 0.1f;
     f32 far_z = 1000.0f;
     u32 primary = 1;
+    u32 mouse_look = 0;
+    u32 pad_ = 0;
 };
-MCE_COMPONENT(Camera3DComponent, (fov_deg, Range{5, 170}), (near_z, Range{0.001f, 100}), (far_z, Range{1, 100000}), primary)
+MCE_COMPONENT(Camera3DComponent, (fov_deg, Range{5, 170}), (near_z, Range{0.001f, 100}), (far_z, Range{1, 100000}), primary,
+              (mouse_look, Help{"1: capture the mouse for look (released while paused or in the console)"}))
 
 // Plays a node / skeleton clip of the entity's MeshRef mesh by name, cross-fading over `fade`
 // seconds when `clip` changes. kit3d advances `time` every tick (deterministic); a game may also
