@@ -19,6 +19,7 @@ foreach(f bin/mce bin/mce_player bin/mce_editor bin/mce_mcp bin/mce_cook lib/cma
           include/mce/gameplay.h include/mce/engine_version.h include/spdlog/spdlog.h include/mce/net/net.h
           share/mce/templates/project/CMakeLists.txt share/mce/templates/project/assets/fonts/ProggyClean.ttf
           share/mce/templates/novel/story/story.json share/mce/scripts/story_compile.py include/mce/kit/novel.h
+          include/mce/kit/novel_ui.h
           share/mce/scripts/new_project.py share/mce/VERSION share/mce/examples/Kindle/CMakeLists.txt
           share/doc/mce/user-guide/README.md share/doc/mce/engine/modules.md share/doc/mce/ARCHITECTURE.md)
     if(NOT EXISTS "${PREFIX}/${f}")
@@ -197,5 +198,20 @@ expect_exit(0 ${MCE} ship "${novel}" --version 0.1.0)
 file(GLOB novel_zips "${novel}/dist/NovelSdk-0.1.0-*.zip")
 if(NOT novel_zips)
     message(FATAL_ERROR "mce ship (novel template) wrote no zip:\n${LAST_OUTPUT}")
+endif()
+# 5a. Its host adds the NPC dialogue box (mce_kit_novel_ui, HOST_DEPS) as a player UI layer.
+file(READ "${novel}/games/novel_sdk/host/main.cpp" host_src)
+string(REPLACE "#include \"mce/player/player.h\"" "#include \"mce/player/player.h\"\n#include \"mce/kit/novel_ui.h\""
+               host_src "${host_src}")
+string(REPLACE "    return mce::player::run(" "    mce::novel::DialogueBox box;\n    const mce::ui::Layer* layers[] = {box.layer()};\n    desc.ui_layers = layers;\n    desc.ui_layer_count = 1;\n    return mce::player::run("
+               host_src "${host_src}")
+file(WRITE "${novel}/games/novel_sdk/host/main.cpp" "${host_src}")
+file(READ "${novel}/CMakeLists.txt" novel_cmake)
+string(REPLACE "DEPS mce::mce_kit_novel)" "DEPS mce::mce_kit_novel\n    HOST_DEPS mce::mce_kit_novel_ui)" novel_cmake "${novel_cmake}")
+file(WRITE "${novel}/CMakeLists.txt" "${novel_cmake}")
+expect_exit(0 ${MCE} build "${novel}" --config "${CONFIG}" ${defines})
+expect_exit(0 ${MCE} headless "${novel}" --ticks 2000 -- -novel.autoplay 1)
+if(NOT LAST_OUTPUT MATCHES "novel: @end")
+    message(FATAL_ERROR "mce headless (novel with the dialogue box):\n${LAST_OUTPUT}")
 endif()
 message(STATUS "SDK contract holds: install, new, build, headless, mcp, cook, ship, net, example, novel")

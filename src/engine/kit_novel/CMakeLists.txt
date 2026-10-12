@@ -19,3 +19,13 @@ mce_add_library(mce_kit_novel UMBRELLA
         mce::mce_audio
         mce::mce_input
         mce::mce_gameplay_kit)
+
+# mce_kit_novel_ui: the default NPC dialogue box on mce_ui (mce/kit/novel_ui.h), a view a host adds
+# to the stock player (PlayerDesc::ui_layers). The host links it (mce_add_project HOST_DEPS); a
+# game module never does (mce_ui is not gameplay's, FR-UI-030).
+mce_add_library(mce_kit_novel_ui UMBRELLA
+    SOURCES
+        src/dialogue_box.cpp
+    PUBLIC_DEPS
+        mce::mce_kit_novel
+        mce::mce_ui)

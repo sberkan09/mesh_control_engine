@@ -4,7 +4,7 @@
 #   lib/        libmce_engine (the umbrella every tool and game module shares),
 #               libmce_player_runtime (what a project's host links), libmce_net (the opt-in
 #               networking module, when built with MCE_WITH_NET), libmce_kit_novel (the opt-in
-#               visual-novel kit and dialogue VM)
+#               visual-novel kit and dialogue VM) and libmce_kit_novel_ui (its NPC dialogue box)
 #   include/    the engine headers (every src/**/include), the generated mce/engine_version.h
 #               (MCE_ENGINE_ID: modules built against this SDK match this engine) and spdlog's
 #               headers, which mce/log.h includes
@@ -43,8 +43,9 @@ else()
     set(MCE_SDK_NET_FILE "")
 endif()
 # The opt-in visual-novel kit (M-NOVEL), the same way.
-install(TARGETS mce_kit_novel ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS mce_kit_novel mce_kit_novel_ui ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 set(MCE_SDK_NOVEL_FILE "$<TARGET_FILE_NAME:mce_kit_novel>")
+set(MCE_SDK_NOVEL_UI_FILE "$<TARGET_FILE_NAME:mce_kit_novel_ui>")
 
 # Headers: every engine, module and player include tree, then the generated one.
 file(GLOB _mce_include_dirs LIST_DIRECTORIES true

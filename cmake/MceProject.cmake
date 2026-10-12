@@ -17,12 +17,16 @@
 #   <game>_headless_300 (tests)  the host headless for 300 ticks: module loaded, scene played
 #
 #   mce_add_project(<game> TITLE "<window title>" GAME_SOURCES ... MODULE_ENTRY game/module.cpp
-#                   TYPES game/types.cpp HOST host/main.cpp [INCLUDE_DIRS ...] [DEPS ...] [STORY])
+#                   TYPES game/types.cpp HOST host/main.cpp [INCLUDE_DIRS ...] [DEPS ...] [HOST_DEPS ...]
+#                   [STORY])
 #
 # DEPS: optional engine libraries the game's sources use, linked wherever those sources are
 # compiled (the module, or the host where modules are not supported, and the project editor and
 # MCP server): mce::mce_net, the opt-in networking module (ADR-0035), and mce::mce_kit_novel, the
 # visual-novel kit.
+#
+# HOST_DEPS: optional libraries the host links (game UI layers it adds to the player, mce/ui/ui.h
+# ui::Layer): mce::mce_kit_novel_ui, the NPC dialogue box.
 #
 # STORY: the project is a novel (mce new --template novel): the build compiles story/*.story with
 # story/story.json into the header story.json names ("output") before the game's sources, with
@@ -42,7 +46,7 @@
 # installed mce_cook cooks the content with the module loaded, and the installed mce_editor /
 # mce_mcp open the project the same way (`mce editor`, `mce mcp`, `mce cook` in the mce CLI).
 function(mce_add_project game)
-    cmake_parse_arguments(ARG "STORY" "TITLE;MODULE_ENTRY;HOST" "GAME_SOURCES;TYPES;INCLUDE_DIRS;DEPS" ${ARGN})
+    cmake_parse_arguments(ARG "STORY" "TITLE;MODULE_ENTRY;HOST" "GAME_SOURCES;TYPES;INCLUDE_DIRS;DEPS;HOST_DEPS" ${ARGN})
     if(NOT ARG_TITLE)
         set(ARG_TITLE "${game}")
     endif()
@@ -157,7 +161,7 @@ function(mce_add_project game)
         VERBATIM)
     add_custom_target(${game}_content ALL DEPENDS "${pack}")
 
-    target_link_libraries(${game} PRIVATE mce::mce_player_runtime)
+    target_link_libraries(${game} PRIVATE mce::mce_player_runtime ${ARG_HOST_DEPS})
     target_compile_definitions(${game} PRIVATE MCE_PROJECT_NAME="${game}" MCE_PROJECT_TITLE="${ARG_TITLE}"
                                                MCE_PROJECT_PACK="${pack}" MCE_PROJECT_START_SCENE="${start_scene}")
     add_dependencies(${game} ${game}_content)

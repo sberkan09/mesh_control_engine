@@ -22,6 +22,7 @@ struct DialogueRuntime {
     bool booted = false;
     asset::Guid sfx[NovelState::kSounds];
     f32 prev_move_y = 0.0f;
+    f32 speed = 45.0f;  // typewriter points per second
 };
 
 void build_sfx(DialogueRuntime& rt, asset::AssetSystem& a) {
@@ -55,6 +56,7 @@ void clear_page(Dialogue& d) {
     d.speaker = 255;
     d.expression = 255;
     d.tag_count = 0;
+    d.reveal = 0;
     d.waiting_choice = false;
     d.option_count = 0;
     for (u16& l : d.line) l = 0;
@@ -181,6 +183,13 @@ void choose(Dialogue& d, StoryState& vars, const Program& p, u8 visible, const D
     run(d, vars, p, rt, events);
 }
 
+u32 revealed(const DialogueRuntime& rt, const Program& p, const Dialogue& d) {
+    const u32 all = dialogue_page_points(p, d);
+    if (d.reveal == kRevealAll || rt.speed <= 0.0f) return all;
+    const u32 shown = static_cast<u32>(static_cast<f32>(d.reveal) * rt.speed / 60.0f);
+    return shown < all ? shown : all;
+}
+
 void dialogue_run(Frame& f) {
     DialogueRuntime& rt = f.resource<DialogueRuntime>();
     World& w = f.world();
@@ -192,6 +201,10 @@ void dialogue_run(Frame& f) {
     StoryState* vars = dialogue_vars(w);
     if (!vars) return;  // spawned this tick; requests wait for it
     const Program& p = *rt.program;
+    // The typewriter runs on sim ticks, so a replay reveals the same text on the same tick.
+    f.query<Dialogue&>().each([&](Dialogue& d) {
+        if (d.active && !d.waiting_choice && d.reveal < kRevealAll - 1) ++d.reveal;
+    });
     EventAccess events = f.events();
     for (const DialogueStart& r : events.read<DialogueStart>())
         if (Dialogue* d = w.try_get_mut<Dialogue>(r.entity)) start(*d, *vars, p, r.label.view(), &rt, &events);
@@ -213,7 +226,8 @@ void dialogue_run(Frame& f) {
             if ((up || down) && d.option_count > 0) d.cursor = static_cast<u8>((d.cursor + (up ? d.option_count - 1 : 1)) % d.option_count);
             if (confirm) choose(d, *vars, p, d.cursor, &rt, &events);
         } else if (confirm) {
-            advance(d, *vars, p, &rt, &events);
+            if (revealed(rt, p, d) < dialogue_page_points(p, d)) d.reveal = kRevealAll;  // the rest of the page first
+            else advance(d, *vars, p, &rt, &events);
         }
     });
 }
@@ -266,6 +280,23 @@ void choose_dialogue(World& world, Entity e, u8 visible_option) {
     Dialogue* d = world.try_get_mut<Dialogue>(e);
     StoryState* vars = dialogue_vars(world);
     if (rt && d && vars) choose(*d, *vars, *rt->program, visible_option, rt, nullptr);
+}
+
+u32 dialogue_page_points(const Program& p, const Dialogue& d) {
+    if (d.waiting_choice) return 0;
+    u32 n = 0;
+    for (u16 id : d.line)
+        if (id != 0) n += utf8_points(StringView(text(p, id)));
+    return n;
+}
+
+u32 dialogue_revealed(World& world, const Dialogue& d) {
+    const DialogueRuntime* rt = world.try_resource<DialogueRuntime>();
+    return rt && rt->program ? revealed(*rt, *rt->program, d) : 0;
+}
+
+void set_dialogue_speed(World& world, f32 points_per_second) {
+    if (DialogueRuntime* rt = world.try_resource<DialogueRuntime>()) rt->speed = points_per_second < 0.0f ? 0.0f : points_per_second;
 }
 
 }  // namespace mce::novel

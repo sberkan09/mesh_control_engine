@@ -194,28 +194,43 @@ TEST_CASE("dialogue: a conversation runs from a label, a variable gates its opti
     CHECK(std::strcmp(g.option(2), "Tell her the truth") == 0);
 }
 
-TEST_CASE("dialogue: events and the stock input drive it") {
+TEST_CASE("dialogue: events and the stock input drive it, Enter first finishes the typewriter") {
     Npc g;
     g.w.add(g.mira, nv::DialogueInput{});
+    auto press = [&](bool confirm, f32 move_y = 0.0f) {
+        input::InputState in;
+        in.confirm_pressed = confirm;
+        in.move.y = move_y;
+        in.tick = g.tick;
+        input::publish(g.w, in);
+        g.w.tick(1.0 / 60.0, g.tick++);
+    };
     nv::DialogueStart start;
     start.entity = g.mira;
     start.label.assign(StringView("mira"));
     EventAccess(g.w).push(start);  // read on the tick after the push
-    g.w.tick(1.0 / 60.0, g.tick++);
-    g.w.tick(1.0 / 60.0, g.tick++);
+    press(false);
+    press(false);
     REQUIRE(g.d().active);
-    input::InputState in;
-    in.confirm_pressed = true;
-    in.tick = g.tick;
-    input::publish(g.w, in);
-    g.w.tick(1.0 / 60.0, g.tick++);
+    const u32 page = nv::dialogue_page_points(fx::kProgram, g.d());
+    CHECK(page == 12);  // "Hello there."
+    for (u32 i = 0; i < 6; ++i) press(false);
+    const u32 typed = nv::dialogue_revealed(g.w, g.d());
+    CHECK(typed > 0);
+    CHECK(typed < page);  // 45 points a second: still typing
+    press(true);          // the rest of the page
+    CHECK(nv::dialogue_revealed(g.w, g.d()) == page);
+    CHECK(!g.d().waiting_choice);
+    press(false);
+    press(true);  // now it advances
     CHECK(g.d().waiting_choice);
-    in.confirm_pressed = false;
-    in.move.y = -1.0f;  // down: to "Show the letter"
-    in.tick = g.tick;
-    input::publish(g.w, in);
-    g.w.tick(1.0 / 60.0, g.tick++);
+    press(false, -1.0f);  // down: to "Show the letter"
     CHECK(g.d().cursor == 1);
+
+    // speed 0 shows whole pages: Enter advances at once
+    nv::set_dialogue_speed(g.w, 0.0f);
+    nv::choose_dialogue(g.w, g.mira, 0);
+    CHECK(nv::dialogue_revealed(g.w, g.d()) == nv::dialogue_page_points(fx::kProgram, g.d()));
 }
 
 TEST_CASE("dialogue: a save mid-conversation restores the page, the choice and the variables") {

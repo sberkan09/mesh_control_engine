@@ -166,6 +166,11 @@ public:
                                                         "player.hud_font"));
             MCE_TRY(ui::create_builtin_skin(renderer_, skin_));
             console_.init(skin_.skin, 0.5f);
+            for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
+                const ui::Layer* l = desc_.ui_layers[i];
+                if (l && l->init && !l->init(l->user, renderer_, skin_.skin))
+                    MCE_LOG_ERROR("{}: game UI layer {} failed to initialize", desc_.app_name, i);
+            }
             if (cv_console.get_bool() && cv_console_open.get_bool()) set_console(true);
             MCE_TRY(load_input_map(cv_input_map.get_string()));
             const platform::PixelSize fb = window_->framebuffer_size();
@@ -250,7 +255,8 @@ public:
         kit::primary_camera(world_, cam, ppm, &clear);
 
         update_console(bb);
-        const bool overlay = paused_ || console_.is_open();
+        update_ui_layers(bb);
+        const bool overlay = paused_ || console_.is_open() || desc_.ui_layer_count > 0;
 
         render::SpriteBatch batch(renderer_.sprite_sets(), mem::frame());
         batch.begin(render::compute_view_2d(cam, bb, ppm));
@@ -480,9 +486,29 @@ private:
         con_ = ConsoleKeys{};
     }
 
+    // Game UI layers (PlayerDesc::ui_layers): views of the world, updated every rendered frame.
+    void update_ui_layers(rhi::Extent2D bb) {
+        if (desc_.ui_layer_count == 0) return;
+        ui::UpdateContext ctx;
+        ctx.viewport = bb;
+        ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
+                                         static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
+        ctx.ui_scale = window_->display_scale();
+        ctx.dt = 1.0 / 60.0;
+        for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
+            const ui::Layer* l = desc_.ui_layers[i];
+            if (l && l->update) l->update(l->user, world_, ctx);
+        }
+    }
+
     void record_overlay(rhi::CommandBuffer& cmd, rhi::Extent2D bb) {
         render::SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
         hud.begin(render::compute_screen_view(bb), render::PassId::Screen2D);
+        // Game UI under the pause veil (sort layer 0) and the console (200).
+        for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
+            const ui::Layer* l = desc_.ui_layers[i];
+            if (l && l->submit) l->submit(l->user, hud, static_cast<i16>(-40 + 4 * static_cast<i32>(i)));
+        }
         if (paused_) add_pause_overlay(hud, bb);
         console_.submit(hud, 200);
         hud.build();

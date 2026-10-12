@@ -393,11 +393,13 @@ struct Dialogue {
     u16 options[4] = {};      // option indices (into Program::options) shown, in order
     u16 tags[4] = {};         // text ids of the page's #tags
     u16 opt_first = 0;
-    u16 pad_ = 0;
+    u16 reveal = 0;           // the typewriter: ticks since the page came up (kRevealAll: the whole page)
 };
 MCE_COMPONENT(Dialogue, (pc, Save), (ret, Save), (depth, Save), (active, Save), (waiting_choice, Save),
               (option_count, Save), (speaker, Save), (expression, Save), (cursor, Save), (tag_count, Save), (line, Save),
-              (options, Save), (tags, Save), (opt_first, Save))
+              (options, Save), (tags, Save), (opt_first, Save), (reveal, Save))
+
+inline constexpr u16 kRevealAll = 0xFFFF;
 
 inline constexpr u32 kDialogueSaveKey = 0x4E564C31;  // "NVL1"
 
@@ -416,8 +418,9 @@ struct DialogueChoose {
     u8 option = 0;
 };
 
-// Marks the entity whose Dialogue the stock-map input drives (Enter advances or picks, up/down
-// move the highlight). One per world is typical: the conversation on screen.
+// Marks the entity whose Dialogue the stock-map input drives: Enter shows the rest of a page that
+// is still typing, then advances or picks; up/down move the highlight. One per world is typical:
+// the conversation on screen (the default dialogue box, mce/kit/novel_ui.h, shows that one).
 struct DialogueInput {
     u8 enabled = 1;
     u8 pad_[3] = {};
@@ -441,5 +444,11 @@ void choose_dialogue(World& world, Entity e, u8 visible_option);
 
 // The world's story variables (the StoryState dialogue reads and writes), or null.
 StoryState* dialogue_vars(World& world);
+
+// The typewriter: points (UTF-8 code points) a page has, and how many of them show now. The
+// speed is points per second of sim time (default 45; 0 shows whole pages).
+u32 dialogue_page_points(const Program& p, const Dialogue& d);
+u32 dialogue_revealed(World& world, const Dialogue& d);
+void set_dialogue_speed(World& world, f32 points_per_second);
 
 }  // namespace mce::novel
