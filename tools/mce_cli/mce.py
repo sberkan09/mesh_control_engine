@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """mce: the installed engine's command (installed as <sdk>/bin/mce by cmake/MceInstall.cmake).
 
-    mce new <Name> [--game id] [--title "Title"] [--dest dir]   stamp a project from the template
+    mce new <Name> [--game id] [--title "Title"] [--template project|novel] [--dest dir]
+                                                stamp a project from a template (novel: a visual novel)
     mce example [<Name>] [--dest dir]           copy an example project out of the SDK (no name: list them)
     mce build <project> [--config Debug|Release] [-D<var>=<v>...]  configure (find_package(MCE)) + build
     mce play <project> [player flags...]        run the game (its host) from the build
@@ -173,6 +174,8 @@ def cmd_new(args):
         cmd += ["--game", args.game]
     if args.title:
         cmd += ["--title", args.title]
+    if args.template:
+        cmd += ["--template", args.template]
     if args.force:
         cmd += ["--force"]
     rc = run(cmd)
@@ -378,6 +381,8 @@ def main(argv):
     s.add_argument("name")
     s.add_argument("--game")
     s.add_argument("--title")
+    s.add_argument("--template", choices=("project", "novel"),
+                   help="project: the 2D starter (default); novel: a visual novel on the novel kit")
     s.add_argument("--dest", default=os.getcwd())
     s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_new)

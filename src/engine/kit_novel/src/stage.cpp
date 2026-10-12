@@ -315,6 +315,7 @@ void resume(Context& c) {
                 n.fade = 1.0f;
                 return;
             case OpKind::End:
+                MCE_LOG_INFO("novel: @end (ending {}, {} pages, {} choices)", n.ending, n.pages, n.choices);
                 s.pc = 0;
                 s.depth = 0;
                 n.finished = true;

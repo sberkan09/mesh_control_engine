@@ -85,7 +85,7 @@ PATH_WALLS = [
     (
         "UI gameplay wall",
         re.compile(r"[<\"]mce/ui/"),
-        re.compile(r"^(samples/[^/]+/game/|(projects/[^/]+/|templates/project/)?games/[^/]+/module/)"),
+        re.compile(r"^(samples/[^/]+/game/|(projects/[^/]+/|templates/[^/]+/)?games/[^/]+/module/)"),
     ),
 ]
 

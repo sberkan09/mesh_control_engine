@@ -147,21 +147,33 @@ foreach(_dir IN LISTS _mce_projects)
 endforeach()
 
 # The generator's own test (ROADMAP M8 "the generator produces a compiling, cooking, shipping
-# project"): a fresh project stamped from templates/project at configure time and built like any
-# other, so a template change that stops compiling, cooking or running fails every CI preset.
+# project"): a fresh project stamped from each template (templates/project, and templates/novel
+# over it) at configure time and built like any other, so a template change that stops compiling,
+# cooking or running fails every CI preset. The novel probe also plays its story to @end.
 if(MCE_TEMPLATE_PROBE AND MCE_BUILD_TESTS)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     set(_probe_root "${CMAKE_BINARY_DIR}/template_probe")
-    file(GLOB_RECURSE _template_files CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/templates/project/*")
+    file(GLOB_RECURSE _template_files CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/templates/*")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/scripts/new_project.py")
-    execute_process(
-        COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/new_project.py" TemplateProbe --dest "${_probe_root}"
-                --seed 1 --force
-        RESULT_VARIABLE _probe_rc OUTPUT_QUIET)
-    if(NOT _probe_rc EQUAL 0)
-        message(FATAL_ERROR "scripts/new_project.py failed to stamp the template probe")
+    foreach(_probe TemplateProbe:project NovelProbe:novel)
+        string(REPLACE ":" ";" _probe "${_probe}")
+        list(GET _probe 0 _probe_name)
+        list(GET _probe 1 _probe_template)
+        execute_process(
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/new_project.py" ${_probe_name} --dest "${_probe_root}"
+                    --template ${_probe_template} --seed 1 --force
+            RESULT_VARIABLE _probe_rc OUTPUT_QUIET)
+        if(NOT _probe_rc EQUAL 0)
+            message(FATAL_ERROR "scripts/new_project.py failed to stamp the ${_probe_template} template probe")
+        endif()
+        string(TOLOWER "${_probe_name}" _probe_dir)
+        add_subdirectory("${_probe_root}/${_probe_name}" "${CMAKE_BINARY_DIR}/${_probe_dir}_build")
+    endforeach()
+    if(TARGET novel_probe)
+        add_test(NAME novel_probe_plays_to_end COMMAND novel_probe -headless 1 -ticks 2000 -novel.autoplay 1)
+        set_tests_properties(novel_probe_plays_to_end PROPERTIES PASS_REGULAR_EXPRESSION "novel: @end"
+                             RESOURCE_LOCK novel_probe_module)
     endif()
-    add_subdirectory("${_probe_root}/TemplateProbe" "${CMAKE_BINARY_DIR}/template_probe_build")
 endif()
 
 if(MCE_BUILD_TESTS)
