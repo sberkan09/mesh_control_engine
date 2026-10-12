@@ -10,7 +10,6 @@
 
 using namespace mce;
 using namespace mce::render;
-using math::vec3;
 
 namespace {
 
