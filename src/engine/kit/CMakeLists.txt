@@ -5,6 +5,8 @@
 # per-type code.
 mce_add_library(mce_gameplay_kit
     SOURCES
+        src/kit3d.cpp
+        src/kit3d_extract.cpp
         src/particles.cpp
         src/pathfinding.cpp
         src/sequence.cpp

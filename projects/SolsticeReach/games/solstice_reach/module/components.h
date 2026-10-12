@@ -4,7 +4,7 @@
 // Data-only header (core + refl + math + asset refs), so the cook compiles it without the game.
 //
 // The engine has no 3D kit yet (user guide ch. 8), so the first group below is this game's own
-// minimal one: a placed model, a scatter volume, a light. The host (games/solstice_reach/host)
+// minimal one (a scatter volume, a light, a box collider) next to the engine's MeshRef. The host (games/solstice_reach/host)
 // draws them; headless, nothing does, and the sim does not care.
 //
 // Layouts are padding-free (World::state_hash hashes component bytes): asset refs (24 bytes) and
@@ -12,6 +12,7 @@
 
 #include "mce/asset/handle.h"
 #include "mce/ecs/entity.h"
+#include "mce/kit/kit3d.h"
 #include "mce/math/math.h"
 #include "mce/refl/macros.h"
 #include "mce/types.h"
@@ -28,14 +29,8 @@ using mce::math::vec4;
 
 // ---- the 3D kit this game carries ------------------------------------------------------------
 
-// A placed model: the host draws `mesh` at the entity's LocalTransform.
-struct MeshRef {
-    mce::asset::AssetRef<mce::asset::Mesh> mesh;
-    vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
-    f32 cull_radius = 0.0f;  // 0: the renderer's bounds; else a sphere the host culls against first
-    u32 cast_shadows = 1;
-};
-MCE_COMPONENT(MeshRef, mesh, tint, (cull_radius, Help{"0 = mesh bounds"}), cast_shadows)
+// A placed model: the engine's kit3d MeshRef (mce/kit/kit3d.h); the host draws it.
+using mce::kit::MeshRef;
 
 // A volume filled at Startup with instances of up to three meshes, placed on the terrain by a
 // seeded hash (no entities: the instances live in the ScatterCache resource; the host draws them

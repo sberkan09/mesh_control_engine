@@ -12,6 +12,7 @@
 #include "mce/ecs/world.h"
 #include "mce/input/ecs.h"
 #include "mce/kit/components.h"
+#include "mce/kit/kit3d.h"
 #include "mce/module.h"
 #include "mce/physics/components.h"
 #include "mce/physics/module.h"
