@@ -390,8 +390,14 @@ bool pump_events() {
                 if (ev.motion.which == SDL_TOUCH_MOUSEID) break;  // belt and braces: the hint is off
                 e.type = EventType::MouseMove;
                 e.window_id = ev.motion.windowID;
-                e.x = ev.motion.x;
-                e.y = ev.motion.y;
+                if (SDL_Window* w = SDL_GetWindowFromID(ev.motion.windowID); w && SDL_GetWindowRelativeMouseMode(w)) {
+                    e.x = ev.motion.xrel;  // the position is pinned in relative mode; the delta is the signal
+                    e.y = ev.motion.yrel;
+                    e.flags = EventFlag::RelativeMouse;
+                } else {
+                    e.x = ev.motion.x;
+                    e.y = ev.motion.y;
+                }
                 deliver(find_window(ev.motion.windowID), e);
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:

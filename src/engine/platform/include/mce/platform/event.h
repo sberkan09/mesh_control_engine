@@ -86,6 +86,9 @@ enum : u32 {
     // they reach mce_input; input ignores captured presses but still honors releases (§4.6).
     ConsumedByEditor = 1u << 9,
     TouchCanceled = 1u << 10,  // on TouchUp: the OS took the finger, not a lift (no tap, no swipe)
+    // On MouseMove while the window is in relative mouse mode (Window::set_relative_mouse): x/y carry
+    // the motion delta in pixels, not a position (the cursor is hidden and held in place).
+    RelativeMouse = 1u << 11,
 };
 }
 

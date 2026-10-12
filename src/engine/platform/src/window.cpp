@@ -137,6 +137,10 @@ void Window::set_cursor_visible(bool visible) {
     else SDL_HideCursor();
 }
 
+bool Window::set_relative_mouse(bool on) { return SDL_SetWindowRelativeMouseMode(sdl(handle_), on); }
+
+bool Window::relative_mouse() const { return SDL_GetWindowRelativeMouseMode(sdl(handle_)); }
+
 void Window::set_text_input(bool on) {
     auto* w = static_cast<SDL_Window*>(handle_);
     if (on) SDL_StartTextInput(w);

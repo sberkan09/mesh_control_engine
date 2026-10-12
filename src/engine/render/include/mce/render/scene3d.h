@@ -100,13 +100,16 @@ struct MeshInstance {
     u32 mesh = ~0u;                          // MeshStore key
     math::mat4 world = math::mat4::identity();
     Span<const math::mat4> pose;             // model-space node matrices (pose_nodes); empty = rest pose
-    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f}; // multiplies the material's base color
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f}; // multiplies the material's base color (not its emissive)
     bool cast_shadows = true;
     // Skinned meshes only (FR-R3D-060): true deforms the skinned submeshes by `pose` (their
     // joints' node matrices); false draws them rigidly in their bind pose under `world` — the
     // game picks per instance whether a character uses its skeleton. Ignored for meshes without
     // skins.
     bool skinning = true;
+    // Multiplies the material's emissive color: recolors glowing FX (tracers, flashes, team lights)
+    // on one shared mesh; values above 1 push it into bloom.
+    math::vec3 emissive_tint{1.0f, 1.0f, 1.0f};
 };
 
 struct View3D {

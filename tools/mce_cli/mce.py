@@ -89,8 +89,10 @@ class Project:
     def pack(self):
         return self.build / "project" / "assets.mce"
 
-    def built(self):
-        for f in (self.host, self.module):
+    def built(self, host=True):
+        """Exit unless the build has what the command runs: the module always, the host unless host=False
+        (cook, mcp and editor load only the module, so they work while a cook error keeps the host unlinked)."""
+        for f in (self.host, self.module) if host else (self.module,):
             if not f.is_file():
                 sys.exit(f"mce: {f} is missing: run `mce build {self.dir}` first")
 
@@ -207,7 +209,15 @@ def cmd_build(args):
     rc = run(configure)
     if rc:
         return rc
-    return run(["cmake", "--build", p.build, "--config", args.config])
+    rc = run(["cmake", "--build", p.build, "--config", args.config])
+    if rc and not p.host.is_file():
+        # The pack step failed (an unregistered asset, a scene the module no longer loads) before the host
+        # linked. Build the module alone so `mce cook --adopt` / `mce mcp` can repair the content.
+        if run(["cmake", "--build", p.build, "--config", args.config, "--target", f"{p.game}_game"]) == 0:
+            print(f"mce: the game module built but the pack did not; for new assets without a .mceasset sidecar run\n"
+                  f"  mce cook {p.dir} --adopt\nthen mce build {p.dir} again (mce mcp / mce editor also work now)",
+                  file=sys.stderr)
+    return rc
 
 
 def cmd_play(args):
@@ -224,19 +234,19 @@ def cmd_headless(args):
 
 def cmd_editor(args):
     p = Project(args.project)
-    p.built()
+    p.built(host=False)
     return run([tool("mce_editor"), "-module", p.module, "-project", p.dir] + args.rest)
 
 
 def cmd_mcp(args):
     p = Project(args.project)
-    p.built()
+    p.built(host=False)
     return run([tool("mce_mcp"), "--module", p.module, "--project", p.dir] + args.rest, exec_=True)
 
 
 def cmd_cook(args):
     p = Project(args.project)
-    p.built()
+    p.built(host=False)
     return run([tool("mce_cook"), "--module", p.module, p.dir] + args.rest)
 
 

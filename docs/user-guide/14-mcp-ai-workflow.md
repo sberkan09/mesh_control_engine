@@ -64,7 +64,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `scene_get_entity` | `entity` | the entity in `.mcscene` form; defaults omitted |
 | | `asset_list` | `type?` | `guid:<uuid>`, path, type |
 | | `asset_set_import_settings` | `path` or `guid`, `settings` | rewrites a sidecar's settings |
-| Edit | `entity_create` | `name`, `components?`, `at?`, `transform?` | returns the id |
+| Edit | `entity_create` | `name`, `components?` (object: type name → fields), `transform?` (bool, default true: add a `LocalTransform`), `at?` (int: hierarchy index, default the end) | returns the id; place the entity with `components.LocalTransform`, e.g. `{"name": "Crate", "components": {"LocalTransform": {"position": [0, 1, 0]}}}` |
 | | `entity_delete`, `entity_duplicate` | `entity` | |
 | | `scene_clear` | | every entity, one undo step; keeps GUID and path |
 | | `component_add` | `entity`, `component`, `value?` | |
