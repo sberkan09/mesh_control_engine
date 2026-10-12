@@ -15,8 +15,8 @@ linux-clang-release, linux-gcc-release, linux-asan, tidy, determinism) before me
 |---|---|---|
 | 1 | `mce_kit_novel` (`mce/kit/novel.h`), `mce story compile` (`tools/story/story_compile.py`), Undelivered ported onto both, the dialogue VM | #169 |
 | 2 | `mce new <name> --template novel`, `mce_add_project(... STORY)`, the novel template probe and SDK test | #170 |
-| 3 | The NPC dialogue box on `mce_ui` (`mce_kit_novel_ui`), game UI layers in the stock player, the sim-side typewriter | step 3 PR |
-| 4 | Docs: user guide chapter 21, this record, ROADMAP status | docs PR |
+| 3 | The NPC dialogue box on `mce_ui` (`mce_kit_novel_ui`), game UI layers in the stock player, the sim-side typewriter | #171 |
+| 4 | Docs: user guide chapter 21, this record, ROADMAP status | #172 |
 
 ## What shipped
 
