@@ -307,8 +307,8 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     // Render scale (quality.h): the 3D targets shrink; the tonemap/FXAA pass writes the full target.
     const f32 scale = clamp(desc_.render_scale, 0.5f, 1.0f);
     const rhi::Extent2D size = scale >= 1.0f ? view
-                                              : rhi::Extent2D{max(1u, static_cast<u32>(f32(view.width) * scale + 0.5f)),
-                                                              max(1u, static_cast<u32>(f32(view.height) * scale + 0.5f))};
+                                              : rhi::Extent2D{max(1u, static_cast<u32>(std::lround(f32(view.width) * scale))),
+                                                              max(1u, static_cast<u32>(std::lround(f32(view.height) * scale)))};
     ensure_targets(size);
     // The joint palette stays bound for the shadow and main passes (one copy per frame).
     const Span<const mat4> palette = scene.joint_palette();
