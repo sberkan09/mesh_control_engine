@@ -34,6 +34,8 @@ MTLPixelFormat mtl_format(TextureFormat f, MTLPixelFormat depth_stencil) {
         case TextureFormat::D32_Float: return MTLPixelFormatDepth32Float;
         case TextureFormat::D24_UNorm_S8: return depth_stencil;  // Apple GPUs have no D24S8
         case TextureFormat::D16_UNorm: return MTLPixelFormatDepth16Unorm;
+        case TextureFormat::ASTC_4x4_UNorm: return MTLPixelFormatASTC_4x4_LDR;  // Apple silicon only
+        case TextureFormat::ASTC_4x4_SRGB: return MTLPixelFormatASTC_4x4_sRGB;
     }
     return MTLPixelFormatRGBA8Unorm;
 }

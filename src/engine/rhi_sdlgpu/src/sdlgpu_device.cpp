@@ -34,6 +34,8 @@ SDL_GPUTextureFormat sdl_format(TextureFormat f) {
         case TextureFormat::D32_Float: return SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
         case TextureFormat::D24_UNorm_S8: return SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT;
         case TextureFormat::D16_UNorm: return SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+        case TextureFormat::ASTC_4x4_UNorm: return SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM;
+        case TextureFormat::ASTC_4x4_SRGB: return SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM_SRGB;
     }
     return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
 }
@@ -432,6 +434,19 @@ TextureHandle SdlGpuDevice::create_texture(const TextureDesc& desc, Span<const b
             ++validation_errors_;
             return {};
         }
+    }
+    // Not every GPU takes every sample count (the iOS Simulator has no 2x): use the nearest one it
+    // does, higher first, so a quality tier never fails on a missing count. Pipelines follow the
+    // target's count.
+    if (t.samples > 1 && !SDL_GPUTextureSupportsSampleCount(device_, t.sdl_format, sample_count(t.samples))) {
+        const u8 wanted = t.samples;
+        t.samples = 1;
+        for (const u8 n : {u8(4), u8(8), u8(2)})
+            if (SDL_GPUTextureSupportsSampleCount(device_, t.sdl_format, sample_count(n))) {
+                t.samples = n;
+                break;
+            }
+        MCE_LOG_WARN("rhi.sdlgpu: texture '{}': {}x MSAA not supported, using {}x", desc.debug_name, wanted, t.samples);
     }
     SDL_GPUTextureCreateInfo ci{};
     ci.type = type;

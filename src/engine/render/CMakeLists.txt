@@ -10,6 +10,7 @@ mce_add_library(mce_render
         src/clusters.cpp
         src/forward3d.cpp
         src/mesh.cpp
+        src/quality.cpp
         src/renderer.cpp
         src/scene3d.cpp
         src/sort_key.cpp

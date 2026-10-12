@@ -434,6 +434,41 @@ TEST_CASE("cook: author -> cook -> mount -> load the scene (M2 pipeline)") {
         as.release(h);
 }
 
+TEST_CASE("cook: --textures astc stores ASTC 4x4 blocks, re-cooks on a switch, and is deterministic") {
+    const std::string root = make_project("cook_astc");
+    CookService svc;
+    REQUIRE(svc.cook(root.c_str(), CookOptions{}).ok());
+    CookOptions astc;
+    astc.textures = cook::TextureCompression::Astc4x4;
+    astc.pack = true;
+    const CookReport r1 = svc.cook(root.c_str(), astc);
+    INFO(diag_text(r1));
+    REQUIRE(r1.ok());
+    CHECK(r1.cooked == 5);  // a different texture storage is a different tool version: everything re-cooks
+
+    AssetSystem as;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {cooked};
+    REQUIRE(as.mount(Span<const StringView>(roots, 1)));
+    auto th = as.load_sync<Texture>(G(kTexGuid));
+    REQUIRE(th);
+    auto tv = TextureView::read(as.resolve(th.value()));
+    REQUIRE(tv);
+    CHECK(tv.value().header->format == TextureFormat::ASTC_4x4);
+    REQUIRE(tv.value().mips.size() == 3);  // 5x3, 2x1, 1x1
+    CHECK(tv.value().mips[0].layer_size == 2 * 1 * 16);  // ceil(5/4) x ceil(3/4) blocks of 16 bytes
+    CHECK(tv.value().mips[2].layer_size == 16);
+    as.release(AnyHandle(th.value()));
+
+    const std::string pack1 = read_file(root + "/assets.mce");
+    fs::remove_all(root + "/cooked");
+    fs::remove(root + "/assets.mce");
+    const CookReport r2 = svc.cook(root.c_str(), astc);
+    REQUIRE(r2.ok());
+    CHECK(r2.pack_hash == r1.pack_hash);
+    CHECK(read_file(root + "/assets.mce") == pack1);
+}
+
 TEST_CASE("cook: scene source hash is over the canonical form") {
     const std::string root = make_project("cook_canonical");
     CookService svc;

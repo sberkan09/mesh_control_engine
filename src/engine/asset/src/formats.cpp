@@ -124,6 +124,14 @@ void write_manifest(Span<ManifestItem> items, Array<byte>& out) {
 
 // ------------------------------------------------------------------ texture
 
+u64 texture_level_bytes(TextureFormat format, u32 width, u32 height) {
+    switch (format) {
+        case TextureFormat::RGBA8: return static_cast<u64>(width) * height * 4;
+        case TextureFormat::ASTC_4x4: return static_cast<u64>((width + 3) / 4) * ((height + 3) / 4) * 16;
+    }
+    return 0;
+}
+
 Span<const byte> TextureView::pixels(u32 mip, u32 layer) const {
     MCE_ASSERT_MSG(mip < mips.size() && layer < header->layers, "TextureView::pixels out of range");
     const TextureMip& m = mips[mip];
@@ -134,7 +142,8 @@ Result<TextureView> TextureView::read(Span<const byte> payload) {
     constexpr const char* kStage = "asset.texture.read";
     const auto* h = header_of<TextureHeader>(payload);
     if (!h) return Error(Errc::Truncated, kStage);
-    if (h->format != TextureFormat::RGBA8) return Error(Errc::Unsupported, kStage, {}, static_cast<u32>(h->format));
+    if (h->format != TextureFormat::RGBA8 && h->format != TextureFormat::ASTC_4x4)
+        return Error(Errc::Unsupported, kStage, {}, static_cast<u32>(h->format));
     if (h->width == 0 || h->height == 0 || h->layers == 0 || h->mip_count == 0 || h->mip_count > 32) return bad(kStage);
     TextureView v;
     v.header = h;
@@ -142,7 +151,7 @@ Result<TextureView> TextureView::read(Span<const byte> payload) {
     if (!span_at(payload, sizeof(TextureHeader), h->mip_count, v.mips)) return bad(kStage);
     for (u32 i = 0; i < h->mip_count; ++i) {
         const TextureMip& m = v.mips[i];
-        const u64 expect = static_cast<u64>(m.width) * m.height * 4;
+        const u64 expect = texture_level_bytes(h->format, m.width, m.height);
         if (m.layer_size != expect || m.width == 0 || m.height == 0) return bad(kStage, i);
         if (expect != 0 && h->layers > (~u64(0)) / expect) return bad(kStage, i);
         if (!in_bounds(m.offset, m.layer_size * h->layers, payload.size())) return bad(kStage, i);
@@ -165,7 +174,7 @@ void write_texture(TextureFormat format, u32 layers, u32 flags, Span<const Textu
     table.resize(mips.size());
     const usize table_at = b.append_span(Span<const TextureMip>(table.data(), table.size()));
     for (usize i = 0; i < mips.size(); ++i) {
-        const u64 layer_size = static_cast<u64>(mips[i].width) * mips[i].height * 4;
+        const u64 layer_size = texture_level_bytes(format, mips[i].width, mips[i].height);
         MCE_ASSERT_MSG(mips[i].pixels.size() == layer_size * layers, "write_texture: pixel size mismatch");
         table[i] = TextureMip{mips[i].width, mips[i].height, b.append(mips[i].pixels.data(), mips[i].pixels.size()), layer_size};
     }

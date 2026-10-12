@@ -41,8 +41,11 @@ if(MCE_BUILD_TESTS)
         set_tests_properties(scene_demo_player_console_gpu PROPERTIES LABELS gpu)
         # The phone lifecycle rehearsed windowed (FR-RUN-100): the platform delivers the events to
         # the window, app ticks 30..59 draw nothing, then the scene runs to sim tick 120 and quits.
+        # -pause_on_focus_loss 0: under ctest -j the GPU tests share one X display, and another test's
+        # window taking focus would pause this player for good (it then never reaches tick 120).
         add_test(NAME scene_demo_player_lifecycle_gpu
-                 COMMAND mce_player -pack "${pack}" -capture_tick 120 -lifecycle_test 30,30 -platform.error_box 0 -r.vsync 0)
+                 COMMAND mce_player -pack "${pack}" -capture_tick 120 -lifecycle_test 30,30 -pause_on_focus_loss 0
+                         -platform.error_box 0 -r.vsync 0)
         set_tests_properties(scene_demo_player_lifecycle_gpu PROPERTIES LABELS gpu
                              PASS_REGULAR_EXPRESSION "in the background.*back in the foreground.*frames, 12[0-9] ticks, 0 GL errors")
         if(TARGET mce_editor)

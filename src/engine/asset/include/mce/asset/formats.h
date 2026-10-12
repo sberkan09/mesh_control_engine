@@ -79,8 +79,12 @@ void write_manifest(Span<ManifestItem> items, Array<byte>& out);
 // ------------------------------------------------------------------ texture (CHNK_TEX)
 
 enum class TextureFormat : u32 {
-    RGBA8 = 1,  // MVP; BC1/BC5/BC7 at v0.5
+    RGBA8 = 1,     // MVP; BC1/BC5/BC7 at v0.5
+    ASTC_4x4 = 2,  // phones (M-MOBILE step 8, mce_cook --textures astc): 16-byte blocks of 4x4 texels
 };
+
+// Bytes of one layer of a w x h level in `format` (0 for an unknown format).
+u64 texture_level_bytes(TextureFormat format, u32 width, u32 height);
 
 namespace TextureFlags {
 enum : u32 {
@@ -116,11 +120,11 @@ struct TextureView {
     static Result<TextureView> read(Span<const byte> payload);
 };
 
-// One layer's mip chain, mip 0 first, tightly packed RGBA8 rows.
+// One layer's mip chain, mip 0 first: tightly packed RGBA8 rows, or ASTC blocks row by row.
 struct TextureMipData {
     u32 width;
     u32 height;
-    Span<const byte> pixels;  // width * height * 4 * layers bytes (layers contiguous)
+    Span<const byte> pixels;  // texture_level_bytes(format, width, height) * layers bytes (layers contiguous)
 };
 void write_texture(TextureFormat format, u32 layers, u32 flags, Span<const TextureMipData> mips, Array<byte>& out);
 

@@ -33,6 +33,7 @@ flowchart LR
     M9 -.opt-in, off-tier.-> POST["M-SKIN · M-NET · scene streaming · data mods<br/>(built 2026-10-10)"]
     M9 --> MNOVEL["M-NOVEL visual-novel kit<br/>mce_kit_novel + mce story compile<br/>(Undelivered ported onto it)"]
     MNOVEL --> MKIT3D["M-KIT3D 3D kit + player 3D path<br/>mce_kit3d components, stock player draws 3D<br/>(SolsticeReach ported onto it)"]
+    MMOB["M-MOBILE step 10<br/>store readiness"] --> MMON["M-MONETIZE purchases + ads<br/>one engine API, fake providers in CI<br/>StoreKit 2 / Play Billing, AdMob + UMP + ATT"]
 ```
 
 Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because Artifact A is the earliest shippable artifact and the cut ladder's final rung reduces the MVE to Artifact A alone — Artifact B is structured as an **addition, not a dependency** (REQUIREMENTS cut-ladder rung 7). The cook pipeline precedes everything that loads content; the determinism harness precedes everything that could break it.
@@ -62,6 +63,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | Scene streaming / data mods | [scene-streaming.md](milestones/scene-streaming.md), ADR-0037 / ADR-0034 | done | — |
 | M-NOVEL | — (issue #115) | not started | everything; next in sequence |
 | M-KIT3D | — (issue #129) | not started | everything; after M-NOVEL |
+| M-MONETIZE | — (issues #141, #142) | not started | everything; after M-MOBILE step 10 |
 | M-MOBILE | [M-MOBILE.md](milestones/M-MOBILE.md), ADR-0038 | active (un-parked 2026-10-11) | steps 4–9 of the record |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
@@ -240,6 +242,14 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Demo:** SolsticeReach ported onto the kit with its host reduced to the stock player (or a thin `PlayerDesc`), its terrain and determinism test unchanged and passing; `mce example SolsticeReach` (or a minimal "walk a 3D room" example) builds and plays from the SDK; `-capture_tick`, `-save` and `-input` work on a 3D game.
 **Gates:** a 3D SDK project needs only its module; `tests/sdk` builds and runs the 3D example headless; GL validation shows zero errors on the stock player's 3D path.
 
+### M-MONETIZE — In-app purchases and ads · **size L (≈ 100–160 h engineering)** · tier: off-tier, opt-in, mobile
+
+*Added 2026-10-12 by the user's decision on issues #141 and #142. Free-to-play mobile games need purchases and ads; every project should only decide where to use them, not integrate store SDKs.*
+
+**Builds, in order:** (1) platform-neutral services reachable from `mce/gameplay.h`, off by default per project: a purchase service (catalog in `<project>/ship/store.json`, `query_products`, `purchase`, `restore_purchases`, an entitlements resource persisted locally, consumables finished only after the game grants them) and an ad service (rewarded with a reward callback, interstitial, banner inside the safe-area insets); store and ad callbacks enter the sim as tick-quantized events recorded in replay; a fullscreen ad pauses sim and audio like the background path (FR-RUN-100) · (2) fake store and fake ad provider (config/convars: success, cancel, pending, failure, fill, no-fill, reward, close) so both flows run in `local_ci.sh` · (3) StoreKit 2 (iOS) and Play Billing (Android, stamped Gradle side + JNI), no store types outside `mce_platform` · (4) Google Mobile Ads with UMP consent and iOS ATT (non-personalized when declined), test unit ids in debug, real ids only from project config; enabling ads extends the privacy manifest (M-MOBILE step 10) · (5) a "remove ads" entitlement disables all ad requests.
+**Demo:** a sample (or Prism Break) with a non-consumable and a consumable plus a rewarded ad and an interstitial between levels, against the fakes in CI; the same build against StoreKit test configuration in the Simulator, Play test products and Google test ads on the emulator, with the UMP form and ATT prompt on first launch.
+**Gates:** purchase / cancel / restore / relaunch keeps the entitlement; no ad requests with "remove ads"; replay hashes hold with store and ad events; user guide chapter on catalog, ad units, consent and store declarations. Server-side receipt validation is out of scope (a docs note on where it plugs in).
+
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
 Auto-parallel scheduling (**experiment run 2026-10-10 and not merged**: deterministic under FR-RUN-040 but no win for any MCE game, whose fixed-step sims take microseconds per tick in `after`-chained phases; findings and re-entry trigger in `docs/research/auto-parallel-scheduling.md`), engine-level live DLL reload (N13, measured trigger), Vulkan/D3D12 backend (N14, after both anchor games ship; the Metal backend is the sanctioned exception, M-MAC), code mods (N10), localization, **in-game AI (LLM-driven NPCs/dialogue, runtime content generation — latency, per-call cost and sim non-determinism vs FR-RUN-040; would also need the online-service stack N7 still rules out; game networking is M-NET)** — each with its recorded re-entry trigger from REQUIREMENTS §5/§6.3.
@@ -257,6 +267,7 @@ Auto-parallel scheduling (**experiment run 2026-10-10 and not merged**: determin
 | Platform (off-tier) | M-MAC macOS port | parallel, from now; built on the user's Mac | ≈ 100–160 h engineering (not summed into the tier bands; gates nothing) |
 | Networking (optional, opt-in) | M-NET `mce_net` | built 2026-10-10 by user request | ≈ 30–50 h engineering (not summed into the tier bands; gates nothing) |
 | Opt-in features (off-tier) | M-SKIN skinning, scene streaming, data mods | built 2026-10-10 by user request | not summed into the tier bands; gate nothing |
+| Mobile services (off-tier, opt-in) | M-MONETIZE purchases + ads | added 2026-10-12 (#141, #142), after M-MOBILE step 10 | ≈ 100–160 h engineering (not summed into the tier bands; gates nothing) |
 | Kits (off-tier, opt-in) | M-NOVEL visual-novel kit, then M-KIT3D 3D kit + player 3D path | added 2026-10-11 (#115) and 2026-10-12 (#129), in that order | ≈ 50–90 h + ≈ 90–150 h engineering (not summed into the tier bands; gate nothing) |
 | Platform (optional, active) | M-MOBILE iOS/Android port | un-parked 2026-10-11; cloud steps on Linux, device steps on the user's Mac | not estimated (not summed into the tier bands; gates nothing) |
 | v0.5 | M5a + M5b + M6 + M7 | months 14–24 | ≈ 390–620 h engineering + ≈ 140–220 h content |
