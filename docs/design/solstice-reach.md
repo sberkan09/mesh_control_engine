@@ -5,6 +5,13 @@
 ten-minute sitting, built as a project (SDK workflow) with a custom 3D host ·
 **Status:** design baseline (2026-10-09); the "Built" column of §9 is updated as the game lands.
 
+**As built since M-KIT3D (2026-10-12):** the custom host of §7 is gone. The game is a module on the
+engine's 3D kit played by the stock player (`docs/milestones/M-KIT3D.md`, user guide chapter 8):
+the game's `MeshRef` / `Light3D` / `Animated` / `BoxCollider3D` became the kit's `MeshRef`,
+`PointLight3D` + `Glow`, `Animator` and `BoxCollider3D`; the sky keys, beams, HUD and sounds moved
+into the module's `present.cpp`. Photo mode, the frame-budget table and `-autoplay` went with the
+host (an idle title starts the bot instead). The sections below are the design as written.
+
 Related: [Undelivered](undelivered.md) (the light novel built in the same thread), `docs/engine/render.md`,
 `docs/engine/physics3d.md`, `samples/05_ashen_court` (the host and procedural-kit pattern this game extends).
 

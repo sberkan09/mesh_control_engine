@@ -2,8 +2,8 @@
 
 Each sample is one milestone's running demo and a worked example of a feature set. Projects under
 `projects/` are complete games made with the template. Use them as copy sources. With the
-installed SDK (chapter 1) Kindle (a 2D platformer) and Undelivered (a light novel) are in
-`share/mce/examples/`: `mce example Kindle` copies one out and `mce build Kindle` builds it against
+installed SDK (chapter 1) Kindle (a 2D platformer), Undelivered (a light novel) and Room3D (a 3D
+room on the kit) are in `share/mce/examples/`: `mce example Kindle` copies one out and `mce build Kindle` builds it against
 the SDK; the other projects and the samples are in the engine checkout only.
 
 ## 18.1 Projects (template-based games)
@@ -13,7 +13,8 @@ the SDK; the other projects and the samples are in the engine checkout only.
 | `projects/Kindle` | a 2D platformer level with colour switches; the reference for "a game on the kit": player controller, coins, hazards, goal, crumbling blocks, moving platforms, follow camera, HUD labels, sounds, a gameplay ctest; the level was authored through MCP | `games/kindle/module/components.h`, `kindle.cpp`, `tools/author_level_mcp.py`, `tests/test_kindle.cpp` |
 | `projects/PrismBreak` | a brick breaker authored entirely through MCP: title and pause as scene state, ball physics via velocity, prefab-free spawning with `Commands` | `games/prism_break/module/` |
 | `projects/Undertow` | a lit-2D cave diver: `Light2D` with normal maps, particles, a rope, currents, hazards, energy; the second MCP dogfood game | `games/undertow/module/`, `assets/effects/*.mcpart` |
-| `projects/SolsticeReach` | the 3D showcase: a procedural island, eight times of day, PBR with cascaded shadows and Forward+ lights, scattered grass and trees, a 3D character on `World3D`, saves, photo mode, a bot that plays the route; the module declares its own small 3D kit and the host draws it | `games/solstice_reach/module/components.h`, `host/main.cpp`, `tools/gen_assets.py`, `tests/test_solstice_reach.cpp` |
+| `projects/Room3D` | the small 3D reference on the kit: a room authored with kit3d components, a third-person hero on the kit's `Physics3D`, a follow camera with mouse look, rocks with cooked LODs in `StaticInstances3D`, saves, scripted-input GPU tests and the LOD gate | `games/room3d/module/room3d.cpp`, `tools/gen_assets.py`, `tests/test_room3d.cpp`, `tests/lod_gate.cmake` |
+| `projects/SolsticeReach` | the 3D showcase on the kit: a procedural island, eight times of day written into `Environment3D`, PBR with cascaded shadows and Forward+ lights, scattered grass and trees in `StaticInstances3D`, beams, gulls, a `TextLabel` HUD, sounds, a 3D character, saves, a bot that plays the route; the host is the stock player | `games/solstice_reach/module/components.h`, `present.cpp`, `tools/author_island_mcp.py`, `tests/test_solstice_reach.cpp` |
 | `projects/Undelivered` | a light novel on the novel kit (chapter 21): a script compiled by `mce story compile` and run over one saved component, lit paper-layer sprites, LUTs, music beds, its own drawer screen through the kit's hooks, five endings reached by a bot in tests | `story/story.json`, `story/*.story`, `games/undelivered/module/undelivered.cpp`, `tests/test_undelivered.cpp` |
 
 The research notes for the MCP-authored games (`docs/research/mcp-dogfood.md`,

@@ -237,7 +237,7 @@ cmake --install build/linux-gcc-release --prefix ~/mce-sdk
 | `lib/` | `libmce_engine.so` (`.dylib` on macOS; the engine; every tool and every game module shares it), `libmce_player_runtime.a` (what your host links) |
 | `include/` | the engine headers (`mce/gameplay.h` is the one a game module includes), `mce/engine_version.h` (this engine's id) |
 | `lib/cmake/MCE/` | `MCEConfig.cmake` for `find_package(MCE)`, and the `mce_add_project` / `mce_add_game_module` helpers |
-| `share/mce/` | the project template, `new_project.py`, `VERSION`, and `examples/` with Kindle and Undelivered (chapter 18; `mce example Kindle` copies one out) |
+| `share/mce/` | the project template, `new_project.py`, `VERSION`, and `examples/` with Kindle, Undelivered and Room3D (chapter 18; `mce example Kindle` copies one out) |
 | `share/doc/mce/` | this guide (`user-guide/`), the engine and architecture pages, `ARCHITECTURE.md`, `REQUIREMENTS.md` |
 
 Put `~/mce-sdk/bin` on your `PATH`, or call `~/mce-sdk/bin/mce` by path. The SDK needs the same
