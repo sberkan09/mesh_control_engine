@@ -32,6 +32,7 @@ flowchart LR
     MMAC -.parity backlog.-> M5a
     M9 -.opt-in, off-tier.-> POST["M-SKIN · M-NET · scene streaming · data mods<br/>(built 2026-10-10)"]
     M9 --> MNOVEL["M-NOVEL visual-novel kit<br/>mce_kit_novel + mce story compile<br/>(Undelivered ported onto it)"]
+    MNOVEL --> MKIT3D["M-KIT3D 3D kit + player 3D path<br/>mce_kit3d components, stock player draws 3D<br/>(SolsticeReach ported onto it)"]
 ```
 
 Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because Artifact A is the earliest shippable artifact and the cut ladder's final rung reduces the MVE to Artifact A alone — Artifact B is structured as an **addition, not a dependency** (REQUIREMENTS cut-ladder rung 7). The cook pipeline precedes everything that loads content; the determinism harness precedes everything that could break it.
@@ -60,6 +61,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-NET | ADR-0035 | done | — |
 | Scene streaming / data mods | [scene-streaming.md](milestones/scene-streaming.md), ADR-0037 / ADR-0034 | done | — |
 | M-NOVEL | — (issue #115) | not started | everything; next in sequence |
+| M-KIT3D | — (issue #129) | not started | everything; after M-NOVEL |
 | M-MOBILE | [M-MOBILE.md](milestones/M-MOBILE.md), ADR-0038 | active (un-parked 2026-10-11) | steps 4–9 of the record |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
@@ -230,6 +232,14 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Demo:** Undelivered ported onto the kit and the compiler with its five-ending bot test unchanged and passing; a fresh `--template novel` project builds, plays its one-page script to `@end` headless, and ships through the SDK.
 **Gates:** the Undelivered game module shrinks to its tables, its hooks and its drawer; `tests/sdk` builds the novel template; compiler tests cover each fixed gap.
 
+### M-KIT3D — 3D kit + a 3D path in the stock player · **size L (≈ 90–150 h engineering)** · tier: off-tier, opt-in kit
+
+*Added 2026-10-12 by the user's decision on issue #129. 3D in the SDK is code-driven (user guide ch. 8): with no 3D components and a stock player that draws only the 2D kit, every 3D project copies SolsticeReach's mini kit (`MeshRef`, `Light3D`, `BoxCollider3D`, `Scatter`, animation selection) and its ≈ 1,000-line host (pack mount, mesh/texture upload, `Scene3D` fill, sky/time-of-day, HUD layering, capture, headless), and loses the stock player's `-capture_tick`, `-save`, `-input` and `-pause_on_focus_loss`.*
+
+**Builds:** `mce_kit3d` (`mce/kit/kit3d.h`, registered by the player like the 2D kit) with the field layouts SolsticeReach validated: `MeshRef` (mesh, tint, emissive tint, cast_shadows, cull radius), `PointLight3D` / `SpotLight3D`, `BoxCollider3D` / `MeshCollider3D` backed by `World3D`, `Camera3DComponent`, `Animator` (clip by name) · a 3D path in the stock player: a scene with a `Camera3DComponent` runs `Renderer::init_3d`, uploads the pack's meshes and textures, extracts the kit components into `Scene3D` every frame and draws the 2D kit and `mce_ui` on top · `Sky` / `Fog` / `PostFx` / `DirectionalLight` as a world resource a game can drive (time of day) · the editor viewport draws kit3d scenes, so MCP-authored 3D scenes are visible · relative mouse (`Window::set_relative_mouse`, #126) exposed for 3D look, released while the console or a menu is open.
+**Demo:** SolsticeReach ported onto the kit with its host reduced to the stock player (or a thin `PlayerDesc`), its terrain and determinism test unchanged and passing; `mce example SolsticeReach` (or a minimal "walk a 3D room" example) builds and plays from the SDK; `-capture_tick`, `-save` and `-input` work on a 3D game.
+**Gates:** a 3D SDK project needs only its module; `tests/sdk` builds and runs the 3D example headless; GL validation shows zero errors on the stock player's 3D path.
+
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
 Auto-parallel scheduling (**experiment run 2026-10-10 and not merged**: deterministic under FR-RUN-040 but no win for any MCE game, whose fixed-step sims take microseconds per tick in `after`-chained phases; findings and re-entry trigger in `docs/research/auto-parallel-scheduling.md`), engine-level live DLL reload (N13, measured trigger), Vulkan/D3D12 backend (N14, after both anchor games ship; the Metal backend is the sanctioned exception, M-MAC), code mods (N10), localization, **in-game AI (LLM-driven NPCs/dialogue, runtime content generation — latency, per-call cost and sim non-determinism vs FR-RUN-040; would also need the online-service stack N7 still rules out; game networking is M-NET)** — each with its recorded re-entry trigger from REQUIREMENTS §5/§6.3.
@@ -247,7 +257,7 @@ Auto-parallel scheduling (**experiment run 2026-10-10 and not merged**: determin
 | Platform (off-tier) | M-MAC macOS port | parallel, from now; built on the user's Mac | ≈ 100–160 h engineering (not summed into the tier bands; gates nothing) |
 | Networking (optional, opt-in) | M-NET `mce_net` | built 2026-10-10 by user request | ≈ 30–50 h engineering (not summed into the tier bands; gates nothing) |
 | Opt-in features (off-tier) | M-SKIN skinning, scene streaming, data mods | built 2026-10-10 by user request | not summed into the tier bands; gate nothing |
-| Kits (off-tier, opt-in) | M-NOVEL visual-novel kit | added 2026-10-11 (issue #115), next in sequence | ≈ 50–90 h engineering (not summed into the tier bands; gates nothing) |
+| Kits (off-tier, opt-in) | M-NOVEL visual-novel kit, then M-KIT3D 3D kit + player 3D path | added 2026-10-11 (#115) and 2026-10-12 (#129), in that order | ≈ 50–90 h + ≈ 90–150 h engineering (not summed into the tier bands; gate nothing) |
 | Platform (optional, active) | M-MOBILE iOS/Android port | un-parked 2026-10-11; cloud steps on Linux, device steps on the user's Mac | not estimated (not summed into the tier bands; gates nothing) |
 | v0.5 | M5a + M5b + M6 + M7 | months 14–24 | ≈ 390–620 h engineering + ≈ 140–220 h content |
 | v1.0 | M8–M9 (UC-D may slip to named v1.1) | months 24–36 | ≈ 180–310 h engineering + ≈ 30–50 h content |
