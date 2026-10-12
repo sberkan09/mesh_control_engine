@@ -20,7 +20,7 @@ a device or simulator run on the user's Mac.
 | 7 | iOS: `ios-arm64` / `ios-sim-arm64` presets, Xcode project generation, the statically linked game module (`MCE_PROJECT_STATIC_MODULE`), signing, IPA from `scripts/ship.py --target ios` | simulator + a device, on the Mac | done in the Simulator (no device; Ninja app bundles instead of an Xcode project) |
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | done except the per-tier device numbers (no device) |
 | 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | done on the emulator and the Simulator (no devices) |
-| 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | — |
+| 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | done (store upload untested: no credentials) |
 | 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | — |
 
 ## What shipped (steps 2–3)
@@ -115,6 +115,27 @@ identity and provisioning profile (`MCE_IOS_SIGN_IDENTITY`, `MCE_IOS_PROVISIONIN
 `scripts/ci/local_ci_macos.sh android ios` with a phone attached (Android) or the `.ipa` installed (iOS) is the
 remaining check; Solstice Reach (a project, not a sample) ships to phones after `ship.py --target` learns
 `--project`.
+
+## What shipped (step 10, store readiness)
+
+| Item | Where | Evidence |
+|---|---|---|
+| App icon (#137) | `cmake/mobile/app_icon.py`, `samples/*/ship/icon.png` | one 1024x1024 `ship/icon.png` per game. iOS: an `AppIcon` asset catalog compiled by `actool` into `Assets.car` (alpha flattened onto the edge colour), `CFBundleIcons` merged into `Info.plist`; `xcrun assetutil --info` lists the AppIcon set and both samples show their icon on the Simulator home screen. Android: SDL's default `ic_launcher` replaced by an adaptive icon (foreground = the image at 72 dp in each mipmap density, background = its edge colour) and a 512x512 Play listing icon beside the APK; Ember Step's icon shows in the emulator's launcher. A game without the file ships with a warning. The Windows `.ico` input stays separate for now |
+| Privacy manifest (#138) | `cmake/mobile/ios/PrivacyInfo.xcprivacy`, `ios_app.py` | in every bundle root; a game's `ship/PrivacyInfo.xcprivacy` is merged in (tracking OR-ed, data types and domains appended, API reasons unioned per category) |
+| Target API (#139) | `ANDROID_API = 36` in `cmake/mobile/android_app.py`, AGP 8.10.1 in `cmake/mobile/android/build.gradle` | Play requires API 36 for new apps and updates since 2026-08-31; both samples build at 36 (SDK platform `android-36`, build-tools 36.0.0, SDL's Gradle 8.12 wrapper) and Ember Step renders landscape, full screen, on the Android 15 emulator. Edge-to-edge was already enforced at 35, so the inset path did not change |
+| Store step (#140) | `cmake/mobile/store.py`, `ship.py --store [--dry-run] [--build-number N]` | integer build numbers (`CFBundleVersion` and `versionCode`, default the commit count of `HEAD`; the iOS build number used to be `0.0.1.<commit>`, which App Store Connect refuses); `.ipa` → TestFlight with `xcrun altool` and an App Store Connect API key, `.aab` → the Play internal track through the Developer API (service-account JWT signed with `openssl`, no Google libraries); secrets from the environment only. `--dry-run` passes on both samples' Simulator bundles and on an AAB signed with a test upload key, and refuses a debug-signed AAB. No real upload yet: there are no store credentials |
+
+**Privacy audit (#138).** Required-reason APIs reached on iOS: *file timestamp* (`stat`/`fstat` in SDL3's
+`SDL_GetPathInfo` and `SDL_iostream`, `stat` in `mce_core`'s crash directory check, `std::filesystem` in `mce_ecs`
+saves; all inside the app container, `C617.1`), *system boot time* (`mach_absolute_time` / `CLOCK_UPTIME_RAW` behind
+`SDL_GetTicksNS` and `std::chrono::steady_clock`, elapsed time only, `35F9.1`) and *user defaults* (SDL3's UIKit event
+loop reads the app's own `NSUserDefaults`, `CA92.1`). Not reached: disk space, active keyboards. No tracking and no
+collected data. Re-check when SDL is updated or an SDK is added.
+
+**Yearly check (#139).** Google Play raises the minimum target API every August. Each July: read
+developer.android.com/google/play/requirements/target-sdk, bump `ANDROID_API` (and the Android Gradle plugin if the
+new level needs it), install the platform with `sdkmanager`, run `scripts/ci/local_ci_macos.sh android` and look at
+a game in landscape on the emulator.
 
 ## Constraints found so far
 

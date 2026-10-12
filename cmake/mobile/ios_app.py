@@ -15,6 +15,11 @@ bundle's resource directory) finds them, sets the display name, and signs it:
   org.meshcontrol.<target>, see MCE_IOS_BUNDLE_PREFIX) are required; the profile is embedded, its
   entitlements are signed in, and the bundle is zipped as Payload/<Name>.app into the .ipa. Install it
   with Xcode's Devices window or `xcrun devicectl device install app --device <id> <ipa>`.
+
+Store readiness (step 10): the game's ship/icon.png becomes the AppIcon catalog (app_icon.py),
+PrivacyInfo.xcprivacy (cmake/mobile/ios/, plus the game's ship/PrivacyInfo.xcprivacy merged in) goes to
+the bundle root, CFBundleVersion is the integer build number (ship.py --build-number) and
+CFBundleShortVersionString the release version without its +commit suffix.
 """
 
 import json
@@ -26,6 +31,11 @@ import sys
 import tempfile
 import time
 import zipfile
+
+import app_icon
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+MIN_OS = "16.0"  # MinimumOSVersion in ios/Info.plist.in
 
 
 def simulator(args):
@@ -42,6 +52,36 @@ def entitlements_from_profile(profile, out_path):
     plist = plistlib.loads(decoded)
     with open(out_path, "wb") as f:
         plistlib.dump(plist.get("Entitlements", {}), f)
+
+
+def merge_privacy(base, extra):
+    """The engine's privacy manifest with a game's additions (its SDKs' data and API reasons) merged in."""
+    out = dict(base)
+    out["NSPrivacyTracking"] = bool(base.get("NSPrivacyTracking")) or bool(extra.get("NSPrivacyTracking"))
+    for key in ("NSPrivacyTrackingDomains", "NSPrivacyCollectedDataTypes"):
+        items = list(base.get(key, []))
+        items += [i for i in extra.get(key, []) if i not in items]
+        out[key] = items
+    apis = {a["NSPrivacyAccessedAPIType"]: list(a.get("NSPrivacyAccessedAPITypeReasons", []))
+            for a in base.get("NSPrivacyAccessedAPITypes", [])}
+    for a in extra.get("NSPrivacyAccessedAPITypes", []):
+        reasons = apis.setdefault(a["NSPrivacyAccessedAPIType"], [])
+        reasons += [r for r in a.get("NSPrivacyAccessedAPITypeReasons", []) if r not in reasons]
+    out["NSPrivacyAccessedAPITypes"] = [{"NSPrivacyAccessedAPIType": k, "NSPrivacyAccessedAPITypeReasons": v}
+                                        for k, v in apis.items()]
+    return out
+
+
+def write_privacy(app, art):
+    with open(os.path.join(HERE, "ios", "PrivacyInfo.xcprivacy"), "rb") as f:
+        manifest = plistlib.load(f)
+    extra = art.get("privacy")
+    if extra and os.path.isfile(extra):
+        with open(extra, "rb") as f:
+            manifest = merge_privacy(manifest, plistlib.load(f))
+        print(f"ship: merged {extra} into the privacy manifest", flush=True)
+    with open(os.path.join(app, "PrivacyInfo.xcprivacy"), "wb") as f:
+        plistlib.dump(manifest, f, fmt=plistlib.FMT_XML)
 
 
 def package(art, args, root):
@@ -66,7 +106,11 @@ def package(art, args, root):
         info = plistlib.load(f)
     info["CFBundleDisplayName"] = art["title"]
     info["CFBundleShortVersionString"] = args.version.split("+")[0]
-    info["CFBundleVersion"] = args.version.replace("+", ".") if args.version[0].isdigit() else "1"
+    info["CFBundleVersion"] = str(args.build_number)
+    icon = app_icon.source(art)
+    if icon:
+        app_icon.ios(icon, app, sim, info.get("MinimumOSVersion", MIN_OS), info)
+    write_privacy(app, art)
     with open(info_path, "wb") as f:
         plistlib.dump(info, f)
     bundle_id = info["CFBundleIdentifier"]

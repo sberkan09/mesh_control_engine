@@ -16,6 +16,10 @@ and the pack cooked by the host's mce_cook:
    by MCE_ANDROID_KEYSTORE (passwords: MCE_ANDROID_STORE_PASSWORD / _KEY_ALIAS / _KEY_PASSWORD), else
    with the Android debug keystore, which is fine for testing and refused by the Play Store.
 
+Store readiness (step 10): the game's ship/icon.png becomes the adaptive launcher icon and
+<stem>-play-icon.png (app_icon.py); versionCode is the build number (ship.py --build-number);
+compileSdk/targetSdk are ANDROID_API below.
+
 Tooling: ANDROID_HOME (default ~/Library/Android/sdk), ANDROID_NDK_HOME (default: the newest NDK in
 the SDK), JAVA_HOME (default: /usr/libexec/java_home -v 17, then Homebrew's openjdk@17).
 """
@@ -29,6 +33,13 @@ import subprocess
 import sys
 import time
 import zipfile
+
+import app_icon
+
+# compileSdk and targetSdk. Google Play raises its minimum target API every August (new apps and updates:
+# API 36 since 2026-08-31); check it once a year (docs/milestones/M-MOBILE.md) and bump this with the
+# Android Gradle plugin in android/build.gradle when the new level needs it.
+ANDROID_API = 36
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "android")
@@ -90,14 +101,6 @@ def app_id(name):
     return "org.meshcontrol." + (re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "game")
 
 
-def version_code(root):
-    try:
-        out = subprocess.run(["git", "rev-list", "--count", "HEAD"], cwd=root, capture_output=True, text=True, check=True)
-        return max(1, int(out.stdout.strip()))
-    except (OSError, subprocess.CalledProcessError, ValueError):
-        return 1
-
-
 def fill(text, fields):
     for k, v in fields.items():
         text = text.replace(f"@{k}@", str(v))
@@ -129,7 +132,8 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
     fields = {
         "APP_ID": aid,
         "LIBRARY": os.path.basename(lib)[3:-3],  # lib<name>.so -> <name>
-        "VERSION_CODE": version_code(root),
+        "VERSION_CODE": args.build_number,
+        "ANDROID_API": ANDROID_API,
         "VERSION_NAME": args.version,
         "ORIENTATION": "sensorLandscape",
         "KEYSTORE": keystore.replace("\\", "/"),
@@ -153,6 +157,9 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
     title = art["title"].replace("&", "&amp;").replace("<", "&lt;")
     with open(os.path.join(values, "strings.xml"), "w") as f:
         f.write(f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="app_name">{title}</string>\n</resources>\n')
+    icon = app_icon.source(art)
+    if icon:
+        app_icon.android(icon, os.path.join(main, "res"), os.path.join(args.out, f"{art['name']}-{args.version}-android-play-icon.png"))
     return aid
 
 
