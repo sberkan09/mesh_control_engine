@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Languages, step 11a (M-MOBILE, #146): string tables in `assets/loc/<locale>.csv` cook to one `CHNK_STR` each,
+  and the player installs a `loc::Localization` resource (`mce/loc/loc.h`) that picks the language from the
+  player's saved choice, the device languages and `-default_language`, with plural rules, `{name}` placeholders
+  and Turkish-aware upper and lower case. `-language tr` plays in Turkish for one run; the cook warns about keys
+  a locale lacks.
 - Purchases and ads, step 1 (M-MONETIZE): `mce/monetize/monetize.h` gives games a Store (products, purchase, restore,
   entitlements kept across relaunches) and Ads (rewarded, interstitial, banner) over provider interfaces, with the
   catalog in a cooked `.mcstore`; off unless the host sets `PlayerDesc::monetize`. Real stores and ad networks come

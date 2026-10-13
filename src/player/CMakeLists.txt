@@ -17,7 +17,7 @@ if(MCE_GAME_MODULES_SUPPORTED)
 else()
     target_link_libraries(mce_player_runtime PUBLIC
         mce::mce_scene mce::mce_gameplay_kit mce::mce_physics2d mce::mce_audio mce::mce_render mce::mce_platform
-        mce::mce_ui mce::mce_input mce::mce_module_host mce::mce_rhi_default)
+        mce::mce_ui mce::mce_input mce::mce_module_host mce::mce_rhi_default mce::mce_loc)
 endif()
 mce_apply_compile_policy(mce_player_runtime)
 

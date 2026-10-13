@@ -25,10 +25,12 @@ mce_add_test(test_cook UMBRELLA
         test_cook_project.cpp
         test_cook_shader.cpp
         test_cook_store.cpp
+        test_cook_strings.cpp
     DEPS
         mce::mce_asset_cook
         mce::mce_input
-        mce::mce_monetize)
+        mce::mce_monetize
+        mce::mce_loc)
 target_include_directories(test_cook PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_compile_definitions(test_cook PRIVATE ${MCE_ASSET_TEST_DEFS})
 

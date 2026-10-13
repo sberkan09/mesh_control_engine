@@ -33,6 +33,7 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_shader_importer());
     reg.add(make_input_map_importer());
     reg.add(make_store_importer());
+    reg.add(make_string_importer());
 }
 
 bool parse_guid_ref(StringView text, Guid& out) {

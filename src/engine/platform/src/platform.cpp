@@ -297,6 +297,23 @@ const char* base_path() {
 #endif
 }
 
+void preferred_locales(Array<FixedString<16>>& out) {
+    out.clear();
+    int count = 0;
+    SDL_Locale** list = SDL_GetPreferredLocales(&count);
+    if (!list) return;
+    for (int i = 0; i < count; ++i) {
+        if (!list[i] || !list[i]->language) continue;
+        FixedString<16> tag(list[i]->language);
+        if (list[i]->country) {
+            tag.append("-");
+            tag.append(list[i]->country);
+        }
+        if (!tag.truncated()) out.push_back(tag);
+    }
+    SDL_free(list);
+}
+
 void list_files(StringView dir, Array<FixedString<256>>& out) {
     out.clear();
     FixedString<1024> root(dir);

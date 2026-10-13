@@ -65,6 +65,7 @@
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/loc/loc.h"
 #include "mce/monetize/monetize.h"
 #include "mce/physics/module.h"
 #include "mce/platform/library.h"
@@ -123,6 +124,12 @@ MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the pe
 MCE_CVAR(cv_store_catalog, "store_catalog", "",
          "Games with purchases and ads: the store catalog, GUID or source path of a cooked .mcstore (default: the first in the pack)",
          CVarFlags::None);
+MCE_CVAR(cv_language, "language", "",
+         "Play in this language (\"tr\", \"pt-BR\") for this run instead of the saved choice and the device languages",
+         CVarFlags::None);
+MCE_CVAR(cv_default_language, "default_language", "en",
+         "The project's base language: the last fallback when neither the choice nor the device languages have a string table",
+         CVarFlags::None);
 MCE_CVAR(cv_lifecycle_test, "lifecycle_test", "",
          "Rehearse the phone lifecycle: \"N,M\" goes to the background at app tick N and comes back and resumes M ticks later",
          CVarFlags::None);
@@ -179,6 +186,7 @@ public:
         kit::install_kit3d(world_, &assets_);
         if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());  // the entitlements live there too
         if (desc_.monetize) MCE_TRY(init_monetize(cv_store_catalog.get_string()));
+        MCE_TRY(init_localization());
         // The game on top of the engine systems (the game-module contract), before the scene so
         // its systems see the first tick.
         if (cv_module.get_string().empty() && desc_.static_module) {
@@ -531,6 +539,36 @@ private:
         MCE_TRY(r);
         MCE_LOG_INFO("{}: input map {}", desc_.app_name, assets_.info(best).path);
         return {};
+    }
+
+    // ---- languages (M-MOBILE step 11a) ----------------------------------------------------------
+
+    // Every string table in the pack (assets/loc/<locale>.csv) goes into one Localization resource:
+    // the saved choice first, then -language for this run, then the device languages, then
+    // -default_language. A choice the game makes later (Localization::set_locale) is saved at once.
+    Result<void> init_localization() {
+        loc::Localization l10n;
+        for (asset::AssetKey k = 0; k < assets_.asset_count(); ++k) {
+            if (assets_.info(k).type != asset::ChunkType::StringTable) continue;
+            MCE_TRY_ASSIGN(const asset::AssetHandle<asset::StringTable> h, assets_.load_sync<asset::StringTable>(k));
+            loc::StringTable table;
+            const Result<void> r = loc::decode_table(assets_.resolve(h), table);
+            assets_.release(asset::AnyHandle(h));
+            MCE_TRY(r);
+            l10n.add_table(std::move(table));
+        }
+        if (l10n.tables().empty()) return ok();
+        l10n.set_default_locale(cv_default_language.get_string());
+        Array<FixedString<16>> device;
+        platform::preferred_locales(device);
+        l10n.set_preferred(device.span());
+        if (Result<void> r = l10n.load_choice(); !r) MCE_LOG_WARN("{}: the saved language choice is unreadable", desc_.app_name);
+        if (const StringView lang = cv_language.get_string(); !lang.empty() && !l10n.set_locale(lang))
+            MCE_LOG_WARN("{}: no string table for -language {}", desc_.app_name, lang);
+        l10n.persist_choice();
+        MCE_LOG_INFO("{}: language {} ({} string tables)", desc_.app_name, l10n.locale(), l10n.tables().size());
+        world_.set_resource(std::move(l10n));
+        return ok();
     }
 
     // ---- purchases and ads (M-MONETIZE) ---------------------------------------------------------
