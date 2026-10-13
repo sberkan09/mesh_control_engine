@@ -82,4 +82,5 @@ Open a GitHub Issue; see [CONTRIBUTING.md](CONTRIBUTING.md) for the `gh issue cr
 
 Milestones M0–M9 are built, along with the M4.5 editor MCP server, the M-MAC macOS port (Metal backend),
 optional skinned animation, scene streaming and data mods. What each milestone delivered is recorded in
-[`docs/milestones/`](docs/milestones/); the plan and what remains deferred are in [ROADMAP](docs/ROADMAP.md).
+[`docs/milestones/`](docs/milestones/); the plan and what remains deferred are in [ROADMAP](docs/ROADMAP.md). The engine is at version 0.9.0;
+releases are listed in [CHANGELOG](CHANGELOG.md) and versioning rules are in [VERSIONING](docs/VERSIONING.md).
