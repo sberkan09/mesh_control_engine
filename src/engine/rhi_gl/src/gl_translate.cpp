@@ -110,6 +110,7 @@ void GlDevice::exec_bind_pipeline(PipelineHandle h) {
     ts_.pipeline = p;
     if (!p) return;
     glBindProgramPipeline(p->pipeline);
+    if (p->compute) return;  // no vertex input or fixed-function state
     glBindVertexArray(p->vao);
     ts_.topology = gl_topology(p->state.topology);
 
@@ -151,8 +152,8 @@ void GlDevice::exec_bind_pipeline(PipelineHandle h) {
 
 void GlDevice::exec_draw(const cmd::Draw* indexed, const cmd::DrawNonIndexed* plain) {
     const GlPipeline* p = ts_.pipeline;
-    if (!p) {
-        MCE_ASSERT_MSG(false, "draw without a bound pipeline");
+    if (!p || p->compute) {
+        MCE_ASSERT_MSG(false, "draw without a bound graphics pipeline");
         return;
     }
     if (!ts_.vb_valid && p->stride > 0) return;  // vertex data overflowed or never set: skip
@@ -177,8 +178,8 @@ void GlDevice::exec_draw(const cmd::Draw* indexed, const cmd::DrawNonIndexed* pl
 
 void GlDevice::exec_draw_indirect(const cmd::DrawIndirect& d) {
     const GlPipeline* p = ts_.pipeline;
-    if (!p) {
-        MCE_ASSERT_MSG(false, "draw_indirect without a bound pipeline");
+    if (!p || p->compute) {
+        MCE_ASSERT_MSG(false, "draw_indirect without a bound graphics pipeline");
         return;
     }
     MCE_ASSERT_MSG(ts_.draw_args && u64(d.first_command) + d.draw_count <= ts_.draw_arg_count,
@@ -228,6 +229,59 @@ void GlDevice::exec_resolve(const cmd::Resolve& r) {
     const GLuint fs = framebuffer_for(ks), fd = framebuffer_for(kd);
     const auto w = static_cast<GLint>(src->size.width), h = static_cast<GLint>(src->size.height);
     glBlitNamedFramebuffer(fs, fd, 0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+}
+
+void GlDevice::exec_bind_storage_image(const cmd::BindStorageImage& c) {
+    MCE_ASSERT_MSG(c.unit < caps_.max_storage_image_units, "bind_storage_image: unit out of range");
+    if (c.unit >= caps_.max_storage_image_units) return;
+    const GlTexture* t = textures_.try_get(c.texture);
+    if (!t) {
+        glBindImageTexture(c.unit, 0, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8);
+        return;
+    }
+    const bool ok = t->usage == TextureUsage::SampledStorage && c.mip < t->mips;
+    MCE_ASSERT_MSG(ok, "bind_storage_image: needs a SampledStorage texture and a mip in range");
+    if (!ok) return;
+    const GLenum access = c.access == StorageAccess::Read ? GL_READ_ONLY
+                          : c.access == StorageAccess::Write ? GL_WRITE_ONLY
+                                                              : GL_READ_WRITE;
+    const GLboolean layered = t->dimension == TextureDimension::Tex2DArray ? GL_TRUE : GL_FALSE;
+    glBindImageTexture(c.unit, t->id, static_cast<GLint>(c.mip), layered, 0, access, t->internal);
+}
+
+void GlDevice::exec_dispatch(const cmd::Dispatch* direct, const cmd::DispatchIndirect* indirect) {
+    const GlPipeline* p = ts_.pipeline;
+    if (!p || !p->compute) {
+        MCE_ASSERT_MSG(false, "dispatch without a bound compute pipeline");
+        return;
+    }
+    if (direct) {
+        if (direct->groups_x == 0 || direct->groups_y == 0 || direct->groups_z == 0) return;
+        glDispatchCompute(direct->groups_x, direct->groups_y, direct->groups_z);
+    } else {
+        const GlBuffer* b = buffers_.try_get(indirect->buffer);
+        const bool ok = b && indirect->offset + sizeof(DispatchIndirectCommand) <= b->size;
+        MCE_ASSERT_MSG(ok, "dispatch_indirect: stale buffer or arguments outside it");
+        if (!ok) return;
+        glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, b->id);
+        glDispatchComputeIndirect(static_cast<GLintptr>(indirect->offset));
+    }
+    ++stats_.dispatches;
+}
+
+void GlDevice::exec_barrier(u32 bits) {
+    if (bits == barrier::kAll) {
+        glMemoryBarrier(GL_ALL_BARRIER_BITS);
+        return;
+    }
+    GLbitfield gl = 0;
+    if (bits & barrier::kStorageBuffer) gl |= GL_SHADER_STORAGE_BARRIER_BIT;
+    if (bits & barrier::kStorageImage) gl |= GL_SHADER_IMAGE_ACCESS_BARRIER_BIT;
+    if (bits & barrier::kSampled) gl |= GL_TEXTURE_FETCH_BARRIER_BIT;
+    if (bits & barrier::kIndirect) gl |= GL_COMMAND_BARRIER_BIT;
+    if (bits & barrier::kVertexIndex) gl |= GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT;
+    if (bits & barrier::kUniform) gl |= GL_UNIFORM_BARRIER_BIT;
+    if (gl) glMemoryBarrier(gl);
 }
 
 void GlDevice::submit(const CommandBuffer& cb) {
@@ -360,6 +414,14 @@ void GlDevice::submit(const CommandBuffer& cb) {
             case CmdType::WriteTimestamp:
                 exec_write_timestamp(static_cast<const cmd::WriteTimestamp*>(payload)->index);
                 break;
+            case CmdType::BindStorageImage:
+                exec_bind_storage_image(*static_cast<const cmd::BindStorageImage*>(payload));
+                break;
+            case CmdType::Dispatch: exec_dispatch(static_cast<const cmd::Dispatch*>(payload), nullptr); break;
+            case CmdType::DispatchIndirect:
+                exec_dispatch(nullptr, static_cast<const cmd::DispatchIndirect*>(payload));
+                break;
+            case CmdType::Barrier: exec_barrier(static_cast<const cmd::Barrier*>(payload)->bits); break;
         }
     }
 }

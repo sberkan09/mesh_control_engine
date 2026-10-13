@@ -37,6 +37,13 @@ struct DeviceCaps {
     bool shader_draw_parameters = false;  // gl_BaseInstanceARB for MDI (§3.2)
     bool timestamp_queries = false;       // CommandBuffer::write_timestamp produces values
     u32 storage_buffer_alignment = 256;   // offset alignment of set_storage_data ranges
+    // Compute (M-VISUAL 1): create_compute_pipeline, dispatch, storage images. Backends without it
+    // leave this false and refuse compute pipelines; renderers keep their CPU path there.
+    bool compute = false;
+    u32 max_compute_invocations = 0;         // threads per work group
+    u32 max_compute_group_size[3] = {};      // local_size_x/y/z limits
+    u32 max_compute_group_count[3] = {};     // dispatch() limits
+    u32 max_storage_image_units = 0;         // bind_storage_image units
 };
 
 // GPU timestamps of one completed frame (CommandBuffer::write_timestamp). Values are nanoseconds
@@ -59,6 +66,7 @@ struct FrameStats {
     usize uniform_bytes = 0;
     usize indirect_bytes = 0;
     u32 indirect_draws = 0;  // MDI submits (each counts once in `draws` too)
+    u32 dispatches = 0;      // compute dispatches (direct and indirect)
     u32 ring_overflows = 0;
 };
 
@@ -79,6 +87,11 @@ public:
     virtual void update_texture(TextureHandle texture, const TextureRegion& region, Span<const byte> data) = 0;
     virtual SamplerHandle create_sampler(const SamplerDesc& desc) = 0;
     virtual Result<PipelineHandle> create_pipeline(const GraphicsPipelineDesc& desc) = 0;
+    // Compute pipelines are bound with CommandBuffer::bind_pipeline like graphics ones and destroyed
+    // with destroy_pipeline. Errc::Unsupported when caps().compute is false.
+    virtual Result<PipelineHandle> create_compute_pipeline(const ComputePipelineDesc& desc) {
+        return Error(Errc::Unsupported, "rhi.compute", desc.debug_name);
+    }
     virtual void destroy_buffer(BufferHandle) = 0;
     virtual void destroy_texture(TextureHandle) = 0;
     virtual void destroy_sampler(SamplerHandle) = 0;
@@ -102,6 +115,12 @@ public:
     // Reads back RGBA8 pixels of a color target (null = backbuffer, before present()). Rows are
     // returned top row first. Golden-image and test plumbing (FR-DBG-020); stalls the GPU.
     virtual ResultV read_pixels(TextureHandle target, Rect2D rect, Span<u8> out_rgba8) = 0;
+    // Reads back buffer bytes [offset, offset + out.size()) after every submitted command (compute
+    // results). Test and tooling plumbing; stalls the GPU.
+    virtual ResultV read_buffer(BufferHandle buffer, u64 offset, Span<byte> out) {
+        (void)buffer, (void)offset, (void)out;
+        return Error(Errc::Unsupported, "rhi.read_buffer", "backend has no buffer readback");
+    }
 
     virtual const DeviceCaps& caps() const = 0;
     virtual const FrameStats& last_frame_stats() const = 0;

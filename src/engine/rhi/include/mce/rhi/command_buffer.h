@@ -41,6 +41,10 @@ enum class CmdType : u16 {
     Resolve,
     SetStorageData,
     WriteTimestamp,
+    BindStorageImage,
+    Dispatch,
+    DispatchIndirect,
+    Barrier,
 };
 
 const char* cmd_type_name(CmdType t);
@@ -79,6 +83,10 @@ struct PushDebugScope { const char* name; };
 struct Resolve { TextureHandle src; TextureHandle dst; };
 struct SetStorageData { u32 binding; u32 size; };  // followed by `size` bytes
 struct WriteTimestamp { u32 index; };
+struct BindStorageImage { u32 unit; TextureHandle texture; u32 mip; StorageAccess access; };
+struct Dispatch { u32 groups_x; u32 groups_y; u32 groups_z; };
+struct DispatchIndirect { BufferHandle buffer; u64 offset; };
+struct Barrier { u32 bits; };
 }  // namespace cmd
 
 class CommandBuffer {
@@ -110,8 +118,24 @@ public:
     // `first_command`, as ONE MultiDrawElementsIndirect against the bound vertex/index data.
     void set_draw_args(Span<const DrawIndexedIndirectCommand> commands);
     void draw_indirect(u32 draw_count, u32 first_command = 0);
-    // No-op on GL; a real barrier on a future explicit backend.
-    void barrier() {}
+    // ---- compute (M-VISUAL 1; RenderDevice::caps().compute). Outside passes only. The compute
+    // pipeline is bound with bind_pipeline; uniform banks, SSBOs and sampled textures bind as for draws.
+    //
+    //   cmd.bind_pipeline(cull_pipe);
+    //   cmd.bind_storage_buffer(rhi::bank::kClusters, clusters, 0, 0);
+    //   cmd.bind_storage_image(0, light_grid, 0, rhi::StorageAccess::Write);
+    //   cmd.dispatch(groups_x, groups_y, groups_z);
+    //   cmd.barrier(rhi::barrier::kStorageBuffer | rhi::barrier::kSampled);
+    //
+    // Binds mip `mip` of a SampledStorage texture to image unit `unit` (all layers of an array).
+    void bind_storage_image(u32 unit, TextureHandle texture, u32 mip = 0, StorageAccess access = StorageAccess::ReadWrite);
+    void dispatch(u32 groups_x, u32 groups_y = 1, u32 groups_z = 1);
+    // Work-group counts read from `buffer` at `offset` (a DispatchIndirectCommand, 4-aligned),
+    // typically written by an earlier dispatch (barrier(barrier::kIndirect) in between).
+    void dispatch_indirect(BufferHandle buffer, u64 offset = 0);
+    // Makes earlier shader writes to storage buffers/images visible to the later uses named by
+    // `bits` (barrier::k*). glMemoryBarrier on GL; outside passes only.
+    void barrier(u32 bits = barrier::kAll);
     // Resolves a multisampled color target into a single-sample one of the same size and format
     // (outside a pass). The transient-RT pool's MSAA -> tonemap-source step (rhi-renderer.md §3.5).
     void resolve(TextureHandle src, TextureHandle dst);
