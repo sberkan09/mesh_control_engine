@@ -60,6 +60,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::Shader: return SHADER_VERSION;
         case ChunkType::Mesh: return MESH_VERSION;
         case ChunkType::ModInfo: return MOD_INFO_VERSION;
+        case ChunkType::StoreCatalog: return STORE_CATALOG_VERSION;
         default: return 0;
     }
 }

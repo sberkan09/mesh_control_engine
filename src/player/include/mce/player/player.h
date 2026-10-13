@@ -26,6 +26,10 @@ struct ModuleInfo;
 namespace mce::ui {
 struct Layer;
 }
+namespace mce::monetize {
+class IStoreProvider;
+class IAdProvider;
+}
 
 namespace mce::player {
 
@@ -58,6 +62,14 @@ struct PlayerDesc {
     // (mce/kit/novel_ui.h). They must outlive run().
     const ui::Layer* const* ui_layers = nullptr;
     u32 ui_layer_count = 0;
+    // In-app purchases and ads (M-MONETIZE, mce/monetize/monetize.h), off unless the game turns
+    // them on: the player then reads the pack's store catalog (a cooked .mcstore; -store_catalog
+    // picks one), installs the Store and Ads resources before the game module, keeps the
+    // entitlements in the save folder and pauses the sim and audio while a fullscreen ad shows.
+    // Null providers: no store and no ads on this platform (purchases fail, ads never fill).
+    bool monetize = false;
+    monetize::IStoreProvider* store_provider = nullptr;
+    monetize::IAdProvider* ad_provider = nullptr;
 };
 
 // Parses the command line into convars, then runs headless (-headless 1) or windowed. Returns the

@@ -30,6 +30,7 @@ struct Prefab   { static constexpr ChunkType chunk = ChunkType::Prefab;   static
 struct Tilemap  { static constexpr ChunkType chunk = ChunkType::Tilemap;  static constexpr const char* name = "Tilemap"; };
 struct Sequence { static constexpr ChunkType chunk = ChunkType::Sequence; static constexpr const char* name = "Sequence"; };
 struct ParticlePreset { static constexpr ChunkType chunk = ChunkType::ParticlePreset; static constexpr const char* name = "ParticlePreset"; };
+struct StoreCatalog { static constexpr ChunkType chunk = ChunkType::StoreCatalog; static constexpr const char* name = "StoreCatalog"; };
 // clang-format on
 
 // Asset type name ("Texture") -> chunk type; false when unknown. Used by the scene cook.
