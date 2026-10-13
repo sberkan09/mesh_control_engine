@@ -37,9 +37,8 @@ bool PlatformStore::available() const { return platform::store::backend() != pla
 StringView PlatformStore::store_id(u16 product) const {
     if (!catalog_ || product >= catalog_->products().size()) return {};
     const ProductInfo& p = catalog_->products()[product];
-    const FixedString<128>& own =
-        platform::store::backend() == platform::store::Backend::StoreKit ? p.ios_id : p.android_id;
-    return own.empty() ? p.id.view() : own.view();
+    // Empty: the product is not sold on this platform (store_importer.cpp).
+    return platform::store::backend() == platform::store::Backend::StoreKit ? p.ios_id.view() : p.android_id.view();
 }
 
 void PlatformStore::start(const Catalog& catalog, Sink& sink) {
@@ -62,12 +61,13 @@ void PlatformStore::stop() {
 void PlatformStore::query_products(u32 request) {
     const usize n = catalog_ ? catalog_->products().size() : 0;
     Array<StringView> ids(alloc_);
-    for (usize i = 0; i < n; ++i) ids.push_back(store_id(static_cast<u16>(i)));
+    for (usize i = 0; i < n; ++i)
+        if (!store_id(static_cast<u16>(i)).empty()) ids.push_back(store_id(static_cast<u16>(i)));
     platform::store::query_products(ids.data(), static_cast<u32>(ids.size()), request);
 }
 
 void PlatformStore::purchase(u16 product, u32 request) {
-    if (!catalog_ || product >= catalog_->products().size()) {
+    if (!catalog_ || product >= catalog_->products().size() || store_id(product).empty()) {
         StoreAnswer a;
         a.kind = StoreEventKind::Failed;
         a.product = product;

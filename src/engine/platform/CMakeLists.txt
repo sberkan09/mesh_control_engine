@@ -11,6 +11,7 @@ mce_add_library(mce_platform
         src/gamepad.cpp
         src/process.cpp
         src/store.cpp
+        src/ads.cpp
     PUBLIC_DEPS
         mce::mce_core
     PRIVATE_DEPS
@@ -25,4 +26,35 @@ if(IOS AND MCE_STOREKIT)
     target_sources(mce_platform PRIVATE src/store_storekit.swift)
     target_compile_definitions(mce_platform PRIVATE MCE_STOREKIT=1)
     target_link_libraries(mce_platform PRIVATE "-framework StoreKit")
+endif()
+
+# The phone's ad network (platform/ads.h). Android again needs nothing here (MceAds.java is stamped
+# into the Gradle project). iOS links Google's xcframeworks, which are not vendored: download the
+# Google Mobile Ads SDK (11 or newer, with UserMessagingPlatform) and point MCE_ADMOB_SDK_DIR at the
+# folder holding GoogleMobileAds.xcframework and UserMessagingPlatform.xcframework. Opt-in until it
+# has been run on a Mac.
+option(MCE_ADMOB "iOS: build Google Mobile Ads, UMP and ATT into mce_platform" OFF)
+set(MCE_ADMOB_SDK_DIR "" CACHE PATH "iOS: folder with GoogleMobileAds.xcframework and UserMessagingPlatform.xcframework")
+if(IOS AND MCE_ADMOB)
+    if(NOT EXISTS "${MCE_ADMOB_SDK_DIR}/GoogleMobileAds.xcframework")
+        message(FATAL_ERROR "MCE_ADMOB needs MCE_ADMOB_SDK_DIR with GoogleMobileAds.xcframework (got '${MCE_ADMOB_SDK_DIR}')")
+    endif()
+    enable_language(Swift)
+    if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+        set(_mce_slice "ios-arm64_x86_64-simulator")
+    else()
+        set(_mce_slice "ios-arm64")
+    endif()
+    set(_mce_fw_dirs)
+    foreach(fw GoogleMobileAds UserMessagingPlatform)
+        list(APPEND _mce_fw_dirs "${MCE_ADMOB_SDK_DIR}/${fw}.xcframework/${_mce_slice}")
+    endforeach()
+    target_sources(mce_platform PRIVATE src/ads_admob.swift)
+    target_compile_definitions(mce_platform PRIVATE MCE_ADMOB=1)
+    foreach(d ${_mce_fw_dirs})
+        target_compile_options(mce_platform PRIVATE "$<$<COMPILE_LANGUAGE:Swift>:-F${d}>")
+        target_link_options(mce_platform INTERFACE "-F${d}")
+    endforeach()
+    target_link_libraries(mce_platform PRIVATE "-framework GoogleMobileAds" "-framework UserMessagingPlatform"
+        "-framework AppTrackingTransparency" "-framework UIKit")
 endif()

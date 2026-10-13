@@ -20,10 +20,11 @@ Store readiness (step 10): the game's ship/icon.png becomes the adaptive launche
 <stem>-play-icon.png (app_icon.py); versionCode is the build number (ship.py --build-number);
 compileSdk/targetSdk are ANDROID_API below.
 
-In-app purchases (M-MONETIZE step 3): a game with a store catalog (a .mcstore under its source
-folder) also gets android/billing/MceBilling.java, the Play Billing library (PLAY_BILLING below) and
-MceActivity's mceBilling* methods, which mce_platform's store calls over JNI. Other games get none
-of it, and their store backend is "none".
+Purchases and ads (M-MONETIZE steps 3-4, monetize_info.py): a game whose .mcstore sells products
+also gets android/billing/MceBilling.java, the Play Billing library (PLAY_BILLING below) and
+MceActivity's mceBilling* methods; one with ad placements gets android/ads/MceAds.java, Google Mobile
+Ads and UMP (GMA, UMP), the mceAds* methods and its AdMob app id in the manifest. mce_platform calls
+both over JNI. Other games get none of it, and their store and ad backends are "none".
 
 Tooling: ANDROID_HOME (default ~/Library/Android/sdk), ANDROID_NDK_HOME (default: the newest NDK in
 the SDK), JAVA_HOME (default: /usr/libexec/java_home -v 17, then Homebrew's openjdk@17).
@@ -40,6 +41,7 @@ import time
 import zipfile
 
 import app_icon
+import monetize_info
 import app_names
 
 # compileSdk and targetSdk. Google Play raises its minimum target API every August (new apps and updates:
@@ -50,6 +52,8 @@ ANDROID_API = 36
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "android")
 PLAY_BILLING = "com.android.billingclient:billing:7.1.1"
+GMA = "com.google.android.gms:play-services-ads:23.6.0"
+UMP = "com.google.android.ump:user-messaging-platform:3.1.0"
 
 # MceActivity's bridge to MceBilling, for platform/store.h's JNI calls (src/engine/platform/src/store.cpp).
 BILLING_METHODS = '''
@@ -65,6 +69,24 @@ BILLING_METHODS = '''
     public void mceBillingPurchase(String id, boolean consumable, int request) { billing.purchase(id, consumable, request); }
     public void mceBillingRestore(int request) { billing.restore(request); }
     public void mceBillingFinish(String token, boolean consumable) { billing.finish(token, consumable); }
+'''
+
+# MceActivity's bridge to MceAds, for platform/ads.h's JNI calls (src/engine/platform/src/ads.cpp).
+ADS_METHODS = '''
+    // ---- ads and consent (mce_platform's ads over JNI, cmake/mobile/android/ads) ----
+    private org.meshcontrol.ads.MceAds ads;
+
+    public void mceAdsStart(boolean testDevice) {
+        if (ads == null) ads = new org.meshcontrol.ads.MceAds(this);
+        ads.start(testDevice);
+    }
+    public void mceAdsStop() { if (ads != null) ads.stop(); }
+    public boolean mceAdsPrivacyRequired() { return ads != null && ads.privacyRequired(); }
+    public void mceAdsShowPrivacy() { ads.showPrivacy(); }
+    public void mceAdsLoad(int format, String unit, int request) { ads.load(format, unit, request); }
+    public void mceAdsShow(int format, String unit, int request) { ads.show(format, unit, request); }
+    public void mceAdsBanner(String unit, int request, boolean top, int l, int t, int r, int b) { ads.banner(unit, request, top, l, t, r, b); }
+    public void mceAdsHideBanner() { if (ads != null) ads.hideBanner(); }
 '''
 
 
@@ -133,15 +155,11 @@ def fill(text, fields):
     return text
 
 
-def uses_store(art):
-    """True when the game has a store catalog (a .mcstore anywhere under its source folder)."""
-    src = art.get("source")
-    if not src or not os.path.isdir(src):
-        return False
-    for _, _, files in os.walk(src):
-        if any(f.endswith(".mcstore") for f in files):
-            return True
-    return False
+def copy_java(package, name, main):
+    """Copies android/<package>/<name> into the stamped sources as org.meshcontrol.<package>."""
+    dest = os.path.join(main, "java", "org", "meshcontrol", package)
+    os.makedirs(dest, exist_ok=True)
+    shutil.copy2(os.path.join(TEMPLATE, package, name), dest)
 
 
 def stamp(project, art, args, root, build_dir, lib, keystore):
@@ -150,7 +168,7 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
     if not os.path.isdir(sdl_project):
         sys.exit(f"ship: SDL's android-project not found under {build_dir}/_deps (configure the preset first)")
     shutil.rmtree(project, ignore_errors=True)
-    shutil.copytree(TEMPLATE, project, ignore=shutil.ignore_patterns("*.in", "README.md", "MceActivity.java*", "billing"))
+    shutil.copytree(TEMPLATE, project, ignore=shutil.ignore_patterns("*.in", "README.md", "MceActivity.java*", "billing", "ads"))
     for name in ("gradlew", "gradlew.bat", "gradle"):
         src = os.path.join(sdl_project, name)
         dst = os.path.join(project, name)
@@ -172,15 +190,28 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
         "ORIENTATION": "sensorLandscape",
         "KEYSTORE": keystore.replace("\\", "/"),
         "BILLING": "",
+        "ADS": "",
+        "ADS_META": "",
         "DEPENDENCIES": "",
     }
-    if uses_store(art):
+    shop = monetize_info.read(art)
+    deps = []
+    if shop["products"]:
         fields["BILLING"] = BILLING_METHODS
-        fields["DEPENDENCIES"] = f"\ndependencies {{\n    implementation '{PLAY_BILLING}'\n}}\n"
-        billing_dir = os.path.join(main, "java", "org", "meshcontrol", "billing")
-        os.makedirs(billing_dir, exist_ok=True)
-        shutil.copy2(os.path.join(TEMPLATE, "billing", "MceBilling.java"), billing_dir)
-        print(f"ship: {art['name']} has a store catalog: Play Billing ({PLAY_BILLING}) stamped in", flush=True)
+        deps.append(PLAY_BILLING)
+        copy_java("billing", "MceBilling.java", main)
+        print(f"ship: {art['name']} sells products: Play Billing ({PLAY_BILLING}) stamped in", flush=True)
+    if shop["ads"]:
+        admob_id = monetize_info.admob_app_id(shop, "android", art["name"])
+        fields["ADS"] = ADS_METHODS
+        fields["ADS_META"] = ('\n        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID"\n'
+                              f'            android:value="{admob_id}" />')
+        deps += [GMA, UMP]
+        copy_java("ads", "MceAds.java", main)
+        print(f"ship: {art['name']} shows ads: Google Mobile Ads ({GMA}) and UMP stamped in, app id {admob_id}", flush=True)
+    if deps:
+        lines = "".join(f"    implementation '{d}'\n" for d in deps)
+        fields["DEPENDENCIES"] = f"\ndependencies {{\n{lines}}}\n"
     with open(os.path.join(TEMPLATE, "app", "build.gradle.in")) as f:
         text = fill(f.read(), fields)
     with open(os.path.join(project, "app", "build.gradle"), "w") as f:

@@ -198,6 +198,14 @@ bool Ads::ready(StringView placement_id) const {
     return p != kNoIndex && s_->ad_ready_[p] != 0;
 }
 
+bool Ads::privacy_options_required() const {
+    return s_ && s_->ads_ && !s_->replaying() && s_->ads_->privacy_options_required();
+}
+
+void Ads::show_privacy_options() {
+    if (s_ && s_->ads_ && !s_->replaying()) s_->ads_->show_privacy_options();
+}
+
 // ---- null providers ----------------------------------------------------------------------------
 
 namespace {

@@ -6,7 +6,7 @@
 #include "mce/log.h"
 
 #if defined(SDL_PLATFORM_ANDROID)
-#include <jni.h>
+#include "android_jni.h"
 #endif
 
 namespace mce::platform::store {
@@ -50,47 +50,7 @@ const char* backend_name(Backend b) {
 #if defined(SDL_PLATFORM_ANDROID)
 namespace {
 
-// The activity's billing bridge (MceActivity.java.in, filled in when the game has a store catalog).
-// The game library is loaded by the activity's class loader, so its methods are looked up on the
-// activity object instead of by class name.
-struct Jni {
-    JNIEnv* env = nullptr;
-    jobject activity = nullptr;
-    jclass cls = nullptr;
-
-    Jni() {
-        env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
-        if (!env) return;
-        activity = static_cast<jobject>(SDL_GetAndroidActivity());
-        if (activity) cls = env->GetObjectClass(activity);
-    }
-    ~Jni() {
-        if (!env) return;
-        if (cls) env->DeleteLocalRef(cls);
-        if (activity) env->DeleteLocalRef(activity);
-    }
-    Jni(const Jni&) = delete;
-    Jni& operator=(const Jni&) = delete;
-
-    jmethodID method(const char* name, const char* sig) const {
-        if (!cls) return nullptr;
-        jmethodID m = env->GetMethodID(cls, name, sig);
-        if (!m && env->ExceptionCheck()) env->ExceptionClear();  // NoSuchMethodError: no billing bridge
-        return m;
-    }
-    jstring str(StringView s) const {
-        FixedString<512> z(s);  // Play purchase tokens run past 128 characters
-        return env->NewStringUTF(z.c_str());
-    }
-    // A Java exception from the bridge is logged and cleared; the call counts as failed.
-    bool ok(const char* what) const {
-        if (!env->ExceptionCheck()) return true;
-        env->ExceptionDescribe();
-        env->ExceptionClear();
-        MCE_LOG_ERROR("platform.store: {} threw", what);
-        return false;
-    }
-};
+using detail::Jni;
 
 bool play_available() {
     static const bool has = [] {
@@ -171,28 +131,12 @@ void finish(StringView transaction, bool consumable) {
 
 }  // namespace mce::platform::store
 
-namespace {
-// Copies a Java string for the duration of one answer.
-struct JStr {
-    JNIEnv* env;
-    jstring s;
-    const char* chars;
-    JStr(JNIEnv* e, jstring str) : env(e), s(str), chars(str ? e->GetStringUTFChars(str, nullptr) : nullptr) {}
-    ~JStr() {
-        if (chars) env->ReleaseStringUTFChars(s, chars);
-    }
-    JStr(const JStr&) = delete;
-    JStr& operator=(const JStr&) = delete;
-    mce::StringView view() const { return chars ? mce::StringView(chars) : mce::StringView(); }
-};
-}  // namespace
-
 // MceBilling.nativeAnswer: called on Play Billing's threads with one answer.
 extern "C" JNIEXPORT void JNICALL Java_org_meshcontrol_billing_MceBilling_nativeAnswer(
     JNIEnv* env, jclass, jint kind, jint request, jstring id, jstring price, jstring transaction) {
     using mce::platform::store::AnswerKind;
     if (kind < 0 || kind > static_cast<jint>(AnswerKind::RestoreFinished)) return;
-    const JStr i(env, id), p(env, price), t(env, transaction);
+    const mce::platform::detail::JStr i(env, id), p(env, price), t(env, transaction);
     mce::platform::store::answer(static_cast<AnswerKind>(kind), static_cast<mce::u32>(request), i.view(), p.view(),
                                  t.view());
 }

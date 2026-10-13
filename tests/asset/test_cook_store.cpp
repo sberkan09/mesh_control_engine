@@ -45,7 +45,8 @@ TEST_CASE("store catalog: .mcstore cooks to CHNK_STORE and decodes") {
         "ads": [
           { "id": "continue", "format": "rewarded" },
           { "id": "level_end", "format": "interstitial", "ios": "ca-app-pub-1/2", "android": "ca-app-pub-1/3" },
-          { "id": "menu", "format": "banner" } ] })");
+          { "id": "menu", "format": "banner" } ],
+        "admob": { "ios": "ca-app-pub-1111~2222", "android": "ca-app-pub-1111~3333" } })");
     cook::CookService svc;
     const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
     INFO(diags_of(r));
@@ -96,6 +97,12 @@ TEST_CASE("store catalog: authoring mistakes are cook errors") {
         // typo'd key
         R"({ "format": "mce-store", "version": 1, "guid": "5703e000-0000-4000-8000-000000000001",
             "products": [ { "id": "gems", "type": "consumable", "andriod": "gems" } ] })",
+        // an ad unit id where the AdMob app id goes
+        R"({ "format": "mce-store", "version": 1, "guid": "5703e000-0000-4000-8000-000000000001",
+            "admob": { "android": "ca-app-pub-1111/3333" } })",
+        // admob is not an object
+        R"({ "format": "mce-store", "version": 1, "guid": "5703e000-0000-4000-8000-000000000001",
+            "admob": "ca-app-pub-1111~3333" })",
         // a newer version
         R"({ "format": "mce-store", "version": 2, "guid": "5703e000-0000-4000-8000-000000000001" })",
     };

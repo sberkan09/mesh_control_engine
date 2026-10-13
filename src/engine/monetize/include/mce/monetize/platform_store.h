@@ -1,8 +1,8 @@
 #pragma once
 // The phone's own store as a provider (M-MONETIZE step 3): Play Billing on Android, StoreKit 2 on
 // iOS, through mce_platform's store (mce/platform/store.h), the only place those SDKs are seen.
-// Products go to the store by their ProductInfo::android_id or ios_id (the catalog id when that is
-// empty) and come back mapped to the catalog. Off a phone, or on one built without the store's Java
+// Products go to the store by their ProductInfo::android_id or ios_id and come back mapped to the
+// catalog; a product without one is not sold on that platform (its purchases fail). Off a phone, or on one built without the store's Java
 // or Swift side, available() is false and every request is refused, like the null store.
 //
 // Answers arrive on the store's own threads and go straight into the Service's inbox.
