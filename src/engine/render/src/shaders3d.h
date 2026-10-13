@@ -516,6 +516,56 @@ void main() {
 
 #undef MCE_GLSL_FRAME_U
 #undef MCE_GLSL_PASS_U
+// Forward+ light assignment on the GPU (M-VISUAL 1): the twin of ClusterLights::assign(). One
+// invocation per cluster tests every culled light against the cluster's view-space AABB, in light
+// order, so each cluster's list matches the CPU's order. The radius test is inflated by 1e-4 so the
+// lists are a superset of the CPU's: an extra light is one whose window is 0 at every pixel of the
+// cluster, and the fragment shader skips att <= 0, so the frame stays identical.
+constexpr const char* kClusterBuildCS = R"(#version 450 core
+layout(local_size_x = 64) in;
+layout(std140, binding = 1) uniform ClusterBuildU {
+    uvec4 u_grid;    // grid x, y, z, culled light count
+    uvec4 u_layout;  // x: index capacity, y: tile-y offset in b_bounds, z: slice-edge offset
+};
+struct CullLight { vec4 center_radius; uvec4 light; };
+layout(std430, binding = 4) writeonly buffer Clusters { uvec2 c_ranges[]; };
+layout(std430, binding = 6) writeonly buffer LightIndices { uint l_indices[]; };
+layout(std430, binding = 8) readonly buffer CullLights { CullLight c_lights[]; };
+layout(std430, binding = 9) readonly buffer Bounds { float b_bounds[]; };
+layout(std430, binding = 10) buffer Counter { uint n_total; uint n_dropped; };
+
+float dist_sq_range(float v, float lo, float hi) {
+    float d = v < lo ? lo - v : (v > hi ? v - hi : 0.0);
+    return d * d;
+}
+
+void main() {
+    uint gx = u_grid.x, gy = u_grid.y;
+    uint c = gl_GlobalInvocationID.x;
+    if (c >= gx * gy * u_grid.z) return;
+    uint tx = c % gx, ty = (c / gx) % gy, s = c / (gx * gy);
+    vec2 bx = vec2(b_bounds[(s * gx + tx) * 2u], b_bounds[(s * gx + tx) * 2u + 1u]);
+    vec2 by = vec2(b_bounds[u_layout.y + (s * gy + ty) * 2u], b_bounds[u_layout.y + (s * gy + ty) * 2u + 1u]);
+    vec2 bz = vec2(-b_bounds[u_layout.z + s + 1u], -b_bounds[u_layout.z + s]);
+    uint n = 0u;
+    for (uint i = 0u; i < u_grid.w; ++i) {
+        vec4 l = c_lights[i].center_radius;
+        float d2 = dist_sq_range(l.z, bz.x, bz.y) + dist_sq_range(l.y, by.x, by.y) + dist_sq_range(l.x, bx.x, bx.y);
+        if (d2 <= l.w * l.w * 1.0001) ++n;
+    }
+    uint offset = n > 0u ? atomicAdd(n_total, n) : 0u;
+    uint keep = offset >= u_layout.x ? 0u : min(n, u_layout.x - offset);
+    if (keep < n) atomicAdd(n_dropped, n - keep);
+    c_ranges[c] = uvec2(offset, keep);
+    uint k = 0u;
+    for (uint i = 0u; i < u_grid.w && k < keep; ++i) {
+        vec4 l = c_lights[i].center_radius;
+        float d2 = dist_sq_range(l.z, bz.x, bz.y) + dist_sq_range(l.y, by.x, by.y) + dist_sq_range(l.x, bx.x, bx.y);
+        if (d2 <= l.w * l.w * 1.0001) l_indices[offset + k++] = c_lights[i].light.x;
+    }
+}
+)";
+
 #undef MCE_GLSL_OBJECT_U
 #undef MCE_GLSL_POST_U
 #undef MCE_GLSL_SKIN

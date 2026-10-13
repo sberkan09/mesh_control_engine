@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "mce/convar.h"
 #include "mce/log.h"
 #include "shaders3d.h"
 
@@ -10,6 +11,10 @@ namespace mce::render {
 using namespace mce::math;
 
 namespace {
+
+MCE_CVAR(cv_gpu_light_clusters, "r.gpu_light_clusters", true,
+         "Assign Forward+ lights in a compute pass when the GPU has compute (off = the CPU assignment)",
+         CVarFlags::RequiresRestart);
 
 // std140 mirrors of the shader blocks (shaders3d.h): vec4/mat4 members only, so no padding rules.
 struct FrameU {
@@ -64,7 +69,7 @@ struct PostU {
     vec4 params;  // x: threshold, y: knee, z: first pass, w: exposure
 };
 
-enum Stage : u32 { kTsBegin, kTsShadow, kTsMain, kTsResolve, kTsBloom, kTsTonemap, kTsFxaa };
+enum Stage : u32 { kTsBegin, kTsClusters, kTsShadow, kTsMain, kTsResolve, kTsBloom, kTsTonemap, kTsFxaa };
 
 void destroy(rhi::RenderDevice& d, rhi::TextureHandle& t) {
     if (!t.is_null()) d.destroy_texture(t);
@@ -202,6 +207,14 @@ ResultV Forward3D::create_pipelines() {
     fs.fragment_shader = {kFxaaFS, "fxaa.frag"};
     fs.debug_name = "fxaa";
     MCE_TRY_ASSIGN(fxaa_, device_->create_pipeline(fs));
+    if (desc_.gpu_light_clusters && cv_gpu_light_clusters.get_bool() && device_->caps().compute) {
+        rhi::ComputePipelineDesc cd;
+        cd.compute_shader = {kClusterBuildCS, "mce.3d.cluster_build.comp"};
+        cd.debug_name = "mce.3d.cluster_build";
+        // A driver that refuses the shader keeps the CPU assignment rather than failing init.
+        if (auto p = device_->create_compute_pipeline(cd)) cluster_build_ = p.value();
+        else MCE_LOG_WARN("render3d: GPU light assignment unavailable, using the CPU path");
+    }
     return ok();
 }
 
@@ -265,7 +278,7 @@ void Forward3D::shutdown() {
     destroy_targets();
     for (rhi::PipelineHandle* p :
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &skinned_cull_,
-          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_}) {
+          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
@@ -274,6 +287,11 @@ void Forward3D::shutdown() {
         *s = {};
     }
     destroy(*device_, shadow_map_);
+    for (rhi::BufferHandle* b : {&cluster_ranges_, &cluster_indices_}) {
+        if (!b->is_null()) device_->destroy_buffer(*b);
+        *b = {};
+    }
+    cluster_ranges_cap_ = cluster_indices_cap_ = 0;
     device_ = nullptr;
     textures_ = nullptr;
 }
@@ -287,7 +305,8 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     if (!desc_.timestamps) return t;
     const u32 b = desc_.timestamp_base;
     t.frame_index = ts.frame_index;
-    t.shadow = ts.ms(b + kTsBegin, b + kTsShadow);
+    t.clusters = ts.ms(b + kTsBegin, b + kTsClusters);
+    t.shadow = ts.ms(b + kTsClusters, b + kTsShadow);
     t.main = ts.ms(b + kTsShadow, b + kTsMain);
     t.resolve = ts.ms(b + kTsMain, b + kTsResolve);
     t.bloom = ts.ms(b + kTsResolve, b + kTsBloom);
@@ -315,6 +334,8 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     if (!palette.empty()) cmd.set_storage_data(rhi::bank::kJointPalette, std::as_bytes(palette));
     stats_.joints = static_cast<u32>(palette.size());
     timestamp(cmd, kTsBegin);
+    record_clusters(cmd, scene);
+    timestamp(cmd, kTsClusters);
     record_shadows(cmd, scene);
     timestamp(cmd, kTsShadow);
     record_main(cmd, scene);
@@ -322,6 +343,43 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     if (desc_.msaa > 1) cmd.resolve(hdr_msaa_, hdr_);
     timestamp(cmd, kTsResolve);
     record_post(cmd, scene, target);
+}
+
+// ---- 0. Forward+ light assignment on the GPU (M-VISUAL 1): fills banks 4 and 6 for the main pass
+void Forward3D::record_clusters(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    if (cluster_build_.is_null()) return;
+    const ClusterLights& cl = scene.cluster_setup();
+    const u32 clusters = cl.cluster_count();
+    if (clusters > cluster_ranges_cap_) {
+        if (!cluster_ranges_.is_null()) device_->destroy_buffer(cluster_ranges_);
+        cluster_ranges_ = device_->create_buffer({rhi::BufferUsage::Storage, usize(clusters) * sizeof(ClusterRange), "mce.3d.cluster_ranges"});
+        cluster_ranges_cap_ = clusters;
+    }
+    const u32 capacity = max(cl.grid().max_indices, 1u);
+    if (capacity > cluster_indices_cap_) {
+        if (!cluster_indices_.is_null()) device_->destroy_buffer(cluster_indices_);
+        cluster_indices_ = device_->create_buffer({rhi::BufferUsage::Storage, usize(capacity) * sizeof(u32), "mce.3d.cluster_indices"});
+        cluster_indices_cap_ = capacity;
+    }
+    struct ClusterBuildU {
+        u32 grid[4];
+        u32 layout[4];
+    } u{{cl.grid().x, cl.grid().y, cl.grid().z, static_cast<u32>(cl.culled().size())},
+        {capacity, cl.tile_bounds_y_offset(), cl.edges_offset(), 0}};
+    static constexpr ClusterCullLight kNoLight{};
+    static constexpr u32 kZero[2] = {0, 0};
+    cmd.push_debug_scope("clusters");
+    cmd.bind_pipeline(cluster_build_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(u));
+    cmd.set_storage_data(rhi::bank::kClusterCull, cl.culled().empty() ? rhi::as_bytes(kNoLight) : std::as_bytes(cl.culled()));
+    cmd.set_storage_data(rhi::bank::kClusterBounds, std::as_bytes(cl.tile_bounds()));
+    cmd.set_storage_data(rhi::bank::kClusterCounter, rhi::as_bytes(kZero));
+    cmd.bind_storage_buffer(rhi::bank::kClusters, cluster_ranges_, 0, 0);
+    cmd.bind_storage_buffer(rhi::bank::kLightIndices, cluster_indices_, 0, 0);
+    cmd.dispatch((clusters + 63) / 64);
+    cmd.barrier(rhi::barrier::kStorageBuffer);
+    cmd.pop_debug_scope();
+    stats_.gpu_clusters = true;
 }
 
 // ---- 1. cascades: one depth-only pass per layer, each with its own caster list
@@ -389,7 +447,8 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     mp.debug_name = "forward";
     cmd.begin_pass(mp);
 
-    const ClusterLights& cl = scene.clusters();
+    // The GPU path never runs the CPU assignment: the setup (pool + grid) is all the frame reads.
+    const ClusterLights& cl = stats_.gpu_clusters ? scene.cluster_setup() : scene.clusters();
     const PostFx& post = scene.post();
     FrameU fu;
     fu.view_proj = view.view_proj;
@@ -443,9 +502,14 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     static constexpr ClusterRange kNoRange{0, 0};
     static constexpr GpuPointLight kNoLight{};
     static constexpr u32 kNoIndex = 0;
-    cmd.set_storage_data(rhi::bank::kClusters, cl.ranges().empty() ? rhi::as_bytes(kNoRange) : std::as_bytes(cl.ranges()));
+    if (stats_.gpu_clusters) {  // record_clusters() filled them
+        cmd.bind_storage_buffer(rhi::bank::kClusters, cluster_ranges_, 0, 0);
+        cmd.bind_storage_buffer(rhi::bank::kLightIndices, cluster_indices_, 0, 0);
+    } else {
+        cmd.set_storage_data(rhi::bank::kClusters, cl.ranges().empty() ? rhi::as_bytes(kNoRange) : std::as_bytes(cl.ranges()));
+        cmd.set_storage_data(rhi::bank::kLightIndices, cl.indices().empty() ? rhi::as_bytes(kNoIndex) : std::as_bytes(cl.indices()));
+    }
     cmd.set_storage_data(rhi::bank::kLightPool, cl.lights().empty() ? rhi::as_bytes(kNoLight) : std::as_bytes(cl.lights()));
-    cmd.set_storage_data(rhi::bank::kLightIndices, cl.indices().empty() ? rhi::as_bytes(kNoIndex) : std::as_bytes(cl.indices()));
     stats_.point_lights = static_cast<u32>(cl.lights().size());
     stats_.light_indices = static_cast<u32>(cl.indices().size());
 

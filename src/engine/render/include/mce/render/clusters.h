@@ -12,6 +12,12 @@
 //
 // The result is three std430 arrays for banks 4–6: per-cluster {offset, count}, the light pool,
 // and the flat light-index list. Deterministic: a pure function of (view, lights, grid).
+//
+// build() = prepare() + assign(). prepare() is the O(lights + tiles) part every path needs: the
+// light pool, the slice constants, the per-slice tile extents and the culled view-space light list.
+// assign() is the per-cluster work; Forward3D runs its GPU twin (cluster_build.comp, M-VISUAL 1)
+// over prepare()'s outputs instead when the device has compute, and Scene3D only calls assign()
+// when the CPU lists are actually read.
 
 #include "mce/containers/array.h"
 #include "mce/math/math.h"
@@ -46,6 +52,15 @@ struct GpuPointLight {
 };
 static_assert(sizeof(GpuPointLight) == 48);
 
+// std430 rows of the culled light list prepare() makes: lights that pass the frustum test and
+// have intensity > 0, in submission order. The GPU assignment reads these.
+struct ClusterCullLight {
+    math::vec4 center_radius;  // view-space centre (camera looks down -Z), w radius
+    u32 light;                 // index into lights()
+    u32 pad[3] = {};
+};
+static_assert(sizeof(ClusterCullLight) == 32);
+
 // std430 rows (bank 4 Clusters).
 struct ClusterRange {
     u32 offset;
@@ -65,6 +80,12 @@ public:
     explicit ClusterLights(mem::IAllocator& alloc = mem::heap());
 
     void build(const View3D& view, Span<const PointLight> lights, const ClusterGridDesc& grid = {});
+    // Light pool, grid constants, tile bounds and the culled list; ranges() and indices() stay
+    // empty until assign().
+    void prepare(const View3D& view, Span<const PointLight> lights, const ClusterGridDesc& grid = {});
+    // The CPU light assignment over prepare()'s outputs (no-op when already assigned).
+    void assign();
+    bool assigned() const { return assigned_; }
     void clear();
 
     const ClusterGridDesc& grid() const { return grid_; }
@@ -78,6 +99,12 @@ public:
     f32 slice_bias() const { return slice_bias_; }
 
     Span<const GpuPointLight> lights() const { return gpu_lights_.span(); }
+    Span<const ClusterCullLight> culled() const { return culled_.span(); }
+    // View-space cluster bounds, as floats: x extents [z][x][lo, hi], then y extents [z][y][lo, hi],
+    // then the z + 1 slice edge depths. tile_bounds_y_offset()/edges_offset() index the parts.
+    Span<const f32> tile_bounds() const { return bounds_.span(); }
+    u32 tile_bounds_y_offset() const { return grid_.z * grid_.x * 2; }
+    u32 edges_offset() const { return grid_.z * (grid_.x + grid_.y) * 2; }
     Span<const ClusterRange> ranges() const { return ranges_.span(); }
     Span<const u32> indices() const { return indices_.span(); }
     // The lights touching cluster `c`, as indices into lights().
@@ -91,8 +118,10 @@ private:
     Array<ClusterRange> ranges_;
     Array<u32> indices_;
     Array<u32> pairs_;  // scratch: (cluster, light) pairs as cluster, light, cluster, light, ...
-    Array<f32> tile_x_;  // scratch: per slice, per column view-space x extent (lo, hi)
-    Array<f32> tile_y_;  // scratch: per slice, per row view-space y extent (lo, hi)
+    Array<f32> bounds_;  // tile_bounds()
+    Array<ClusterCullLight> culled_;
+    f32 near_ = 0.0f, far_ = 0.0f, proj_x_ = 1.0f, proj_y_ = 1.0f;
+    bool assigned_ = false;
     Stats stats_;
 };
 

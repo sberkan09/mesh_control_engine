@@ -114,7 +114,7 @@ struct LightRig {
 // Means of the per-stage times over the measured frames (NFR-F-01 table shape).
 struct Budget {
     f64 scene = 0, clusters = 0, record = 0, submit = 0;
-    f64 gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
+    f64 gpu_clusters = 0, gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
     u64 frames = 0, gpu_frames = 0;
 };
 
@@ -236,6 +236,7 @@ public:
             budget_.submit += last_.submit;
             ++budget_.frames;
             if (gpu_.total >= 0.0) {
+                budget_.gpu_clusters += gpu_.clusters;
                 budget_.gpu_shadow += gpu_.shadow;
                 budget_.gpu_main += gpu_.main;
                 budget_.gpu_resolve += gpu_.resolve;
@@ -271,11 +272,12 @@ public:
                     static_cast<unsigned long long>(budget_.frames), stats_.point_lights, cascades_);
         std::printf("  | stage | CPU ms | GPU ms |\n  |---|---|---|\n");
         std::printf("  | scene build (anim + cull + sort + cascades + clusters) | %.3f | - |\n", budget_.scene / n);
-        std::printf("  | of which Forward+ cluster build | %.3f | - |\n", budget_.clusters / n);
+        std::printf("  | of which Forward+ cluster build (CPU path / setup) | %.3f | - |\n", budget_.clusters / n);
         std::printf("  | command recording (3D + HUD) | %.3f | - |\n", budget_.record / n);
         std::printf("  | GL translate + submit | %.3f | - |\n", budget_.submit / n);
         if (budget_.gpu_frames > 0) {
             const f64 g = f64(budget_.gpu_frames);
+            std::printf("  | Forward+ light assignment (compute) | - | %.3f |\n", budget_.gpu_clusters / g);
             std::printf("  | shadow cascades | - | %.3f |\n", budget_.gpu_shadow / g);
             std::printf("  | main pass (Forward+ PBR + sky) | - | %.3f |\n", budget_.gpu_main / g);
             std::printf("  | MSAA resolve | - | %.3f |\n", budget_.gpu_resolve / g);
