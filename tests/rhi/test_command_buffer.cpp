@@ -235,3 +235,63 @@ TEST_CASE("rhi: storage data and timestamps round-trip; layered attachments defa
         cb.write_timestamp(kMaxTimestamps);
     }
 }
+
+TEST_CASE("rhi: compute commands round-trip outside passes") {
+    CommandBuffer cb;
+    const BufferHandle args{3, 1};
+    const TextureHandle img{2, 1};
+    cb.bind_storage_image(1, img, 2, StorageAccess::Write);
+    cb.dispatch(8, 4);
+    cb.barrier(barrier::kIndirect | barrier::kStorageBuffer);
+    cb.dispatch_indirect(args, 12);
+    cb.barrier(0);  // nothing to wait for: not recorded
+    cb.barrier();
+
+    const CmdHeader* h = nullptr;
+    const void* p = nullptr;
+    auto r = cb.reader();
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::BindStorageImage);
+    const auto* si = static_cast<const cmd::BindStorageImage*>(p);
+    CHECK(si->unit == 1);
+    CHECK(si->texture == img);
+    CHECK(si->mip == 2);
+    CHECK(si->access == StorageAccess::Write);
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::Dispatch);
+    const auto* d = static_cast<const cmd::Dispatch*>(p);
+    CHECK(d->groups_x == 8);
+    CHECK(d->groups_y == 4);
+    CHECK(d->groups_z == 1);
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::Barrier);
+    CHECK(static_cast<const cmd::Barrier*>(p)->bits == (barrier::kIndirect | barrier::kStorageBuffer));
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::DispatchIndirect);
+    CHECK(static_cast<const cmd::DispatchIndirect*>(p)->buffer == args);
+    CHECK(static_cast<const cmd::DispatchIndirect*>(p)->offset == 12);
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::Barrier);
+    CHECK(static_cast<const cmd::Barrier*>(p)->bits == barrier::kAll);
+    CHECK_FALSE(r.next(h, p));
+    CHECK(cb.command_count() == 5);
+    CHECK(std::string_view(cmd_type_name(CmdType::DispatchIndirect)) == "DispatchIndirect");
+
+    PassAttachment color;
+    RenderPassDesc pass;
+    pass.colors = Span<const PassAttachment>(&color, 1);
+    cb.begin_pass(pass);
+    {
+        test::ExpectAssert expect;
+        cb.dispatch(1);
+    }
+    {
+        test::ExpectAssert expect;
+        cb.barrier();
+    }
+    cb.end_pass();
+    {
+        test::ExpectAssert expect;
+        cb.dispatch_indirect(args, 2);  // not 4-aligned
+    }
+}

@@ -25,6 +25,7 @@ struct GlTexture {
     u16 layers = 1;
     u8 samples = 1;
     TextureUsage usage = TextureUsage::Sampled;
+    GLenum internal = 0;  // sized internal format (glBindImageTexture needs it)
     usize bytes = 0;
 };
 
@@ -36,7 +37,9 @@ struct GlPipeline {
     GLuint pipeline = 0;
     GLuint vs = 0;
     GLuint fs = 0;
+    GLuint cs = 0;  // compute pipelines: the only stage (vs/fs/vao stay 0)
     GLuint vao = 0;
+    bool compute = false;
     u32 stride = 0;
     FixedState state;
 };
@@ -86,6 +89,7 @@ public:
     void update_texture(TextureHandle texture, const TextureRegion& region, Span<const byte> data) override;
     SamplerHandle create_sampler(const SamplerDesc& desc) override;
     Result<PipelineHandle> create_pipeline(const GraphicsPipelineDesc& desc) override;
+    Result<PipelineHandle> create_compute_pipeline(const ComputePipelineDesc& desc) override;
     void destroy_buffer(BufferHandle) override;
     void destroy_texture(TextureHandle) override;
     void destroy_sampler(SamplerHandle) override;
@@ -102,6 +106,7 @@ public:
     void present(bool vsync) override;
     Extent2D backbuffer_size() const override;
     ResultV read_pixels(TextureHandle target, Rect2D rect, Span<u8> out_rgba8) override;
+    ResultV read_buffer(BufferHandle buffer, u64 offset, Span<byte> out) override;
 
     const DeviceCaps& caps() const override { return caps_; }
     const FrameStats& last_frame_stats() const override { return last_stats_; }
@@ -142,6 +147,9 @@ private:
     void exec_draw(const cmd::Draw* indexed, const cmd::DrawNonIndexed* plain);
     void exec_draw_indirect(const cmd::DrawIndirect& d);
     void exec_resolve(const cmd::Resolve& r);
+    void exec_bind_storage_image(const cmd::BindStorageImage& c);
+    void exec_dispatch(const cmd::Dispatch* direct, const cmd::DispatchIndirect* indirect);
+    void exec_barrier(u32 bits);
     void exec_write_timestamp(u32 index);
     void collect_timestamps(u32 slot);
     void reset_translate_state();
