@@ -90,6 +90,9 @@ struct AdEvent {
     u32 reward_amount = 0;     // Rewarded: what the network says the ad is worth (often 1)
 };
 
+const char* store_event_name(StoreEventKind k);  // "Purchased"
+const char* ad_event_name(AdEventKind k);        // "Rewarded"
+
 // ---- the game's side: world resources -------------------------------------------------------
 
 class Store {
@@ -178,6 +181,8 @@ public:
     virtual bool available() const { return true; }
     virtual void start(const Catalog& catalog, Sink& sink) = 0;
     virtual void stop() {}
+    // Service::update, once per host tick, paused or not (providers that poll or time things out).
+    virtual void update() {}
     // One ProductInfo per product the store knows, then ProductsReady.
     virtual void query_products(u32 request) = 0;
     virtual void purchase(u16 product, u32 request) = 0;
@@ -198,6 +203,7 @@ public:
     virtual bool available() const { return true; }
     virtual void start(const Catalog& catalog, Sink& sink) = 0;
     virtual void stop() {}
+    virtual void update() {}  // as IStoreProvider::update
     virtual void load(u16 placement, u32 request) = 0;
     virtual void show(u16 placement, u32 request) = 0;
     virtual void show_banner(u16 placement, u32 request, BannerEdge edge, const SafeInsets& insets) = 0;
@@ -258,6 +264,10 @@ public:
     // Registers StoreEvent / AdEvent, sets the Store and Ads resources and adds the monetize_pump
     // system. Install before the game module so the pump runs first.
     void install(World& world);
+
+    // Main thread, once per host tick, also while the sim is paused (a fullscreen ad must be able to
+    // close): lets the providers poll and time things out. Not called while replaying.
+    void update();
 
     // Main thread; the host keeps it current (the window's safe-area insets).
     void set_safe_insets(const SafeInsets& s) { insets_ = s; }

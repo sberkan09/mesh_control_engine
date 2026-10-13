@@ -10,6 +10,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   player's saved choice, the device languages and `-default_language`, with plural rules, `{name}` placeholders
   and Turkish-aware upper and lower case. `-language tr` plays in Turkish for one run; the cook warns about keys
   a locale lacks.
+- Purchases and ads, step 2 (M-MONETIZE): a fake store and ad network (`mce/monetize/fake.h`, `-monetize.provider
+  fake`, outcomes set with `-monetize.fake.*`), `-monetize 1` and `-monetize_test` on `mce_player`, and a
+  `player_monetize` test running every outcome in `local_ci.sh`.
 - Purchases and ads, step 1 (M-MONETIZE): `mce/monetize/monetize.h` gives games a Store (products, purchase, restore,
   entitlements kept across relaunches) and Ads (rewarded, interstitial, banner) over provider interfaces, with the
   catalog in a cooked `.mcstore`; off unless the host sets `PlayerDesc::monetize`. Real stores and ad networks come

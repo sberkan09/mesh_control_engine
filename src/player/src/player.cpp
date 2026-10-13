@@ -34,9 +34,11 @@
 // the process writes it too. Back in the foreground the pause overlay waits; a tap (or Esc) resumes, a touch in the
 // top-right corner pauses. -lifecycle_test N,M rehearses the round trip at app tick N for M ticks (headless too).
 //
-// Purchases and ads (M-MONETIZE, PlayerDesc::monetize): off unless the host turns them on. Then the pack's store
-// catalog (-store_catalog) and the platform's providers feed the Store and Ads resources (mce/monetize/monetize.h),
-// and a fullscreen ad pauses the sim and audio until it closes, with no pause overlay.
+// Purchases and ads (M-MONETIZE, PlayerDesc::monetize): off unless the host turns them on (-monetize 1 forces them on
+// for testing). Then the pack's store catalog (-store_catalog) and the platform's providers (-monetize.provider fake:
+// the fake store and ad network, mce/monetize/fake.h) feed the Store and Ads resources (mce/monetize/monetize.h), and
+// a fullscreen ad pauses the sim and audio until it closes, with no pause overlay. -monetize_test "10:buy:gems 40:show:x"
+// makes requests at those sim ticks and prints every store and ad event (headless too), granting consumables.
 //
 // Input: windowed, the starter-kit "Gameplay" map (mce/input/default_map.h: Move on WASD / arrows /
 // left stick, Jump on Space / A, Fire on J / left mouse / X, Pause) is sampled once per tick and
@@ -66,6 +68,7 @@
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/loc/loc.h"
+#include "mce/monetize/fake.h"
 #include "mce/monetize/monetize.h"
 #include "mce/physics/module.h"
 #include "mce/platform/library.h"
@@ -130,6 +133,15 @@ MCE_CVAR(cv_language, "language", "",
 MCE_CVAR(cv_default_language, "default_language", "en",
          "The project's base language: the last fallback when neither the choice nor the device languages have a string table",
          CVarFlags::None);
+MCE_CVAR(cv_monetize, "monetize", false, "Turn purchases and ads on even when the game's host does not (testing)",
+         CVarFlags::None);
+MCE_CVAR(cv_monetize_provider, "monetize.provider", "",
+         "Purchases and ads: the store and ad network (empty: the platform's, fake: the fake ones, none: neither)",
+         CVarFlags::None);
+MCE_CVAR(cv_monetize_test, "monetize_test", "",
+         "Rehearse purchases and ads: \"tick:action[:id] ...\" with query, buy, restore, load, show, banner, hide; prints every "
+         "store and ad event",
+         CVarFlags::None);
 MCE_CVAR(cv_lifecycle_test, "lifecycle_test", "",
          "Rehearse the phone lifecycle: \"N,M\" goes to the background at app tick N and comes back and resumes M ticks later",
          CVarFlags::None);
@@ -185,7 +197,10 @@ public:
         kit::install_sequences(world_, &assets_);
         kit::install_kit3d(world_, &assets_);
         if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());  // the entitlements live there too
-        if (desc_.monetize) MCE_TRY(init_monetize(cv_store_catalog.get_string()));
+        monetize_on_ = desc_.monetize || cv_monetize.get_bool();
+        if (monetize_on_) MCE_TRY(init_monetize(cv_store_catalog.get_string()));
+        else if (!cv_monetize_test.get_string().empty())
+            return Error(Errc::InvalidArgument, "player: -monetize_test needs purchases and ads on (-monetize 1)");
         MCE_TRY(init_localization());
         // The game on top of the engine systems (the game-module contract), before the scene so
         // its systems see the first tick.
@@ -249,13 +264,18 @@ public:
 
     void on_tick(const app::TickContext& t) override {
         if (lifecycle_from_ != 0) rehearse_lifecycle(t.tick_index);
-        if (desc_.monetize) update_ad_pause();
+        if (monetize_on_) {
+            monetize_.update();  // also while paused: a fullscreen ad must be able to close
+            update_ad_pause();
+        }
         if (paused_ || ad_paused_) return;
         tick_dt_ = t.dt;
         if (t.actions) input::publish(world_, *t.actions);
         publish_view_info();
         scene::pump_streaming(world_);
+        if (!monetize_test_.empty()) monetize_test_requests();
         world_.tick(t.dt, sim_ticks_);
+        if (!monetize_test_.empty()) monetize_test_events();
         ++sim_ticks_;
         if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
     }
@@ -600,9 +620,122 @@ private:
         } else {
             MCE_LOG_WARN("{}: purchases and ads are on but the pack has no store catalog (.mcstore)", desc_.app_name);
         }
-        MCE_TRY(monetize_.init(catalog, desc_.store_provider, desc_.ad_provider));
+        monetize::IStoreProvider* store = desc_.store_provider;
+        monetize::IAdProvider* ads = desc_.ad_provider;
+        const StringView provider = cv_monetize_provider.get_string();
+        if (provider == "fake") {
+            monetize::FakeConfig cfg;
+            if (!monetize::fake_config_from_convars(cfg))
+                return Error(Errc::InvalidArgument, "player: a -monetize.fake.* value is not one it knows (see -help)");
+            fake_store_.set_config(cfg);
+            fake_ads_.set_config(cfg);
+            store = &fake_store_;
+            ads = &fake_ads_;
+        } else if (provider == "none") {
+            store = nullptr;
+            ads = nullptr;
+        } else if (!provider.empty()) {
+            return Error(Errc::InvalidArgument, "player: -monetize.provider wants fake or none", provider);
+        }
+        MCE_TRY(monetize_.init(catalog, store, ads));
         monetize_.install(world_);
+        if (!parse_monetize_test(cv_monetize_test.get_string()))
+            return Error(Errc::InvalidArgument, "player: -monetize_test wants \"tick:action[:id] ...\"", cv_monetize_test.get_string());
+        if (!monetize_test_.empty()) {
+            const monetize::Store& st = world_.resource<monetize::Store>();
+            for (const monetize::ProductInfo& p : st.products())
+                if (st.owns(p.id.view())) std::printf("mce_player: monetize: owns %s\n", p.id.c_str());
+        }
         return ok();
+    }
+
+    // -monetize_test: "tick:action[:id]" steps, sorted by tick as given.
+    struct MonetizeStep {
+        u64 tick = 0;
+        FixedString<16> action;
+        FixedString<64> id;
+    };
+
+    bool parse_monetize_test(StringView v) {
+        monetize_test_.clear();
+        usize i = 0;
+        while (i < v.size()) {
+            while (i < v.size() && v[i] == ' ') ++i;
+            usize end = i;
+            while (end < v.size() && v[end] != ' ') ++end;
+            if (end == i) break;
+            const StringView tok = v.substr(i, end - i);
+            i = end;
+            usize c1 = 0;
+            while (c1 < tok.size() && tok[c1] != ':') ++c1;
+            if (c1 == 0 || c1 == tok.size()) return false;
+            MonetizeStep step;
+            for (usize k = 0; k < c1; ++k) {
+                if (tok[k] < '0' || tok[k] > '9') return false;
+                step.tick = step.tick * 10 + static_cast<u64>(tok[k] - '0');
+            }
+            StringView rest = tok.substr(c1 + 1);
+            usize c2 = 0;
+            while (c2 < rest.size() && rest[c2] != ':') ++c2;
+            step.action = rest.substr(0, c2);
+            if (c2 < rest.size()) step.id = rest.substr(c2 + 1);
+            const StringView a = step.action.view();
+            const bool needs_id = a == "buy" || a == "load" || a == "show" || a == "banner";
+            const bool known = needs_id || a == "query" || a == "restore" || a == "hide";
+            if (!known || needs_id == step.id.empty()) return false;
+            monetize_test_.push_back(step);
+        }
+        return true;
+    }
+
+    void monetize_test_requests() {
+        monetize::Store& store = world_.resource<monetize::Store>();
+        monetize::Ads& ads = world_.resource<monetize::Ads>();
+        for (const MonetizeStep& s : monetize_test_) {
+            if (s.tick != sim_ticks_) continue;
+            const StringView a = s.action.view();
+            u32 req = 0;
+            if (a == "query") req = store.query_products();
+            else if (a == "buy") req = store.purchase(s.id.view());
+            else if (a == "restore") req = store.restore_purchases();
+            else if (a == "load") req = ads.load(s.id.view());
+            else if (a == "show") req = ads.show(s.id.view());
+            else if (a == "banner") req = ads.show_banner(s.id.view());
+            else if (a == "hide") ads.hide_banner();
+            std::printf("mce_player: monetize tick %llu: %s %s -> request %u\n", static_cast<unsigned long long>(sim_ticks_),
+                        s.action.c_str(), s.id.c_str(), req);
+        }
+    }
+
+    // What entered this tick, as a game would see it; consumables are granted (finished) at once.
+    void monetize_test_events() {
+        monetize::Store& store = world_.resource<monetize::Store>();
+        const monetize::Ads& ads = world_.resource<monetize::Ads>();
+        const unsigned long long tick = static_cast<unsigned long long>(sim_ticks_);
+        if (auto* q = world_.event_queue<monetize::StoreEvent>()) {
+            for (const monetize::StoreEvent& e : q->read()) {
+                const char* id = e.product < store.products().size() ? store.products()[e.product].id.c_str() : "-";
+                std::printf("mce_player: monetize tick %llu: store %s %s request %u", tick, monetize::store_event_name(e.kind), id,
+                            e.request);
+                if (e.kind == monetize::StoreEventKind::ProductInfo) {
+                    const StringView price = store.price(e.product);
+                    std::printf(" price %.*s", static_cast<int>(price.size()), price.data());
+                }
+                std::printf("\n");
+                if (e.kind == monetize::StoreEventKind::Purchased && e.product < store.products().size() &&
+                    store.products()[e.product].type == monetize::ProductType::Consumable)
+                    store.finish(e.transaction);
+            }
+        }
+        if (auto* q = world_.event_queue<monetize::AdEvent>()) {
+            for (const monetize::AdEvent& e : q->read()) {
+                const char* id = e.placement < ads.placements().size() ? ads.placements()[e.placement].id.c_str() : "-";
+                std::printf("mce_player: monetize tick %llu: ad %s %s request %u", tick, monetize::ad_event_name(e.kind), id,
+                            e.request);
+                if (e.kind == monetize::AdEventKind::Rewarded) std::printf(" reward %u", e.reward_amount);
+                std::printf("\n");
+            }
+        }
     }
 
     // A fullscreen ad pauses the sim and the audio like the phone background (FR-RUN-100) and
@@ -618,7 +751,7 @@ private:
 
     void set_safe_insets(const platform::SafeInsets& s) {
         safe_insets_ = s;
-        if (desc_.monetize) monetize_.set_safe_insets({s.left, s.top, s.right, s.bottom});
+        if (monetize_on_) monetize_.set_safe_insets({s.left, s.top, s.right, s.bottom});
     }
 
     // ---- the developer console (FR-UI-045) ----------------------------------------------------
@@ -1015,7 +1148,11 @@ private:
         LoadedModule module;
         ~ModuleGuard() { unload_game_module(module); }
     } module_;
+    monetize::FakeStore fake_store_;  // -monetize.provider fake
+    monetize::FakeAds fake_ads_;
     monetize::Service monetize_;  // before the World: its resources point here (PlayerDesc::monetize)
+    Array<MonetizeStep> monetize_test_;
+    bool monetize_on_ = false;
     World world_;
     Array<Entity> entities_;
     FixedString<256> scene_path_;
