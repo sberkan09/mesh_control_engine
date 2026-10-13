@@ -19,13 +19,15 @@
 // and the pause overlay draw on top. A camera with mouse_look gets relative mouse mode while the game
 // runs (-mouse_look 0 turns that off). Controls: Esc pauses
 // and resumes (the pause overlay), Q quits while paused, ` or F1 opens the developer console (FR-UI-045: the log,
-// convars and console functions; -console 0 removes it from a shipped build's command line).
+// convars and console functions; -console 0 removes it from a shipped build's command line), and F11, Alt+Enter or
+// Cmd+Ctrl+F toggle full screen on a desktop (-fullscreen, saved).
 //
 // Lifecycle (FR-RUN-060): losing focus or minimizing pauses the sim (the pause overlay is up when the player comes
 // back, so nothing moves before they choose to resume) and mutes the master bus until focus returns. With
 // -save <slot>, a save of that name is loaded on top of the scene at start and written on every clean quit (window
-// close, Q, -frames / -ticks reached) before anything shuts down; the write is atomic with a .bak, so a kill during
-// it keeps the last good save (ecs/save.h).
+// close, Q, -frames / -ticks reached) before anything shuts down, and once per focus loss or minimize
+// (-save_on_focus_loss 0 turns that off) so a desktop kill or sleep keeps the session; the write is atomic with a
+// .bak, so a kill during it keeps the last good save (ecs/save.h).
 //
 // Phones (FR-RUN-100, M-MOBILE): going to the background pauses the sim, pauses the audio device, releases every
 // held input, writes the -save slot inside the OS callback and stops drawing until the app is back; the OS ending
@@ -106,6 +108,10 @@ MCE_CVAR(cv_input_map, "input_map", "",
 MCE_CVAR(cv_post, "r.post2d", true, "Apply the camera's Post2DComponent effects (F7 toggles)", CVarFlags::None);
 MCE_CVAR(cv_pause_on_focus_loss, "pause_on_focus_loss", true, "Pause and mute when the window loses focus or minimizes",
          CVarFlags::None);
+MCE_CVAR(cv_save_on_focus_loss, "save_on_focus_loss", true,
+         "With -save: also write the slot when the window loses focus or minimizes (once per focus loss)", CVarFlags::None);
+MCE_CVAR(cv_fullscreen, "fullscreen", false, "Desktop: borderless full screen (F11, Alt+Enter or Cmd+Ctrl+F toggle it)",
+         CVarFlags::Saved);
 MCE_CVAR(cv_save, "save", "", "Save slot: loaded at start when it exists, written on clean quit (empty = off)",
          CVarFlags::None);
 MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the per-user MCE save folder)", CVarFlags::None);
@@ -268,6 +274,7 @@ public:
     void on_render(const app::RenderContext& rc) override {
         audio_.update();
         clips_.sync();
+        sync_fullscreen();
         if (!device_ || os_background_) return;  // no GPU work in the background (iOS ends apps that try)
         device_->begin_frame(rc.frame_index);
         const rhi::Extent2D bb = device_->backbuffer_size();
@@ -767,10 +774,20 @@ private:
 
     // Unfocused / minimized: pause (the overlay waits for the player) and mute the master bus.
     void set_background(bool background) {
+        // A desktop has no background event before a kill or a sleep: the focus loss saves (#177).
+        if (background && !unfocused_ && !os_background_ && cv_save_on_focus_loss.get_bool()) write_save();
+        unfocused_ = background;
         if (!cv_pause_on_focus_loss.get_bool() || background == background_) return;
         background_ = background;
         if (background) paused_ = true;
         set_muted(background);
+    }
+
+    // The fullscreen convar (command line, console, the toggle keys) applied to the window (#178).
+    void sync_fullscreen() {
+        if (!window_ || cv_fullscreen.get_bool() == fullscreen_) return;
+        fullscreen_ = cv_fullscreen.get_bool();
+        if (!window_->set_fullscreen(fullscreen_)) MCE_LOG_WARN("mce_player: the window cannot go full screen here");
     }
 
     void set_muted(bool muted) {
@@ -857,6 +874,16 @@ private:
                 if (self->paused_) self->quit(0);
                 break;
             case platform::Key::F7: cv_post.set_bool(!cv_post.get_bool()); break;
+            case platform::Key::F11: cv_fullscreen.set_bool(!cv_fullscreen.get_bool()); break;
+            case platform::Key::Return:
+                if ((e.flags & platform::EventFlag::Alt) && !(e.flags & platform::EventFlag::Repeat))
+                    cv_fullscreen.set_bool(!cv_fullscreen.get_bool());
+                break;
+            case platform::Key::F:
+                if ((e.flags & platform::EventFlag::Ctrl) && (e.flags & platform::EventFlag::Gui) &&
+                    !(e.flags & platform::EventFlag::Repeat))
+                    cv_fullscreen.set_bool(!cv_fullscreen.get_bool());
+                break;
             case platform::Key::F3: cv_stats.set_bool(!cv_stats.get_bool()); break;
             default: break;
         }
@@ -898,6 +925,8 @@ private:
     u64 run_start_tick_ = 0;  // sim_ticks_ when this run began (a -save slot's tick), for -capture_tick
     bool paused_ = false;
     bool background_ = false;  // unfocused or minimized
+    bool unfocused_ = false;   // the window lost focus (or minimized); the focus-loss save ran
+    bool fullscreen_ = false;  // what cv_fullscreen last applied
     bool os_background_ = false;  // the app itself is in the background (phones): no drawing at all
     platform::SafeInsets safe_insets_;
     u64 lifecycle_from_ = 0, lifecycle_ticks_ = 0;  // -lifecycle_test

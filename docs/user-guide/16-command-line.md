@@ -18,10 +18,12 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-frames N` | 0 | windowed: quit after N rendered frames |
 | `-capture <path.ppm>` | | with `-frames` or `-capture_tick`: write the last frame as a PPM (the directory is created) |
 | `-window WxH` | 1280x720 | windowed: the initial window size in points, e.g. `1080x2400` to check a phone layout |
+| `-fullscreen 1` | 0 (saved) | desktop: borderless full screen; F11, Alt+Enter or Cmd+Ctrl+F toggle it while playing |
 | `-capture_tick N` | 0 | windowed: quit after N simulation ticks of this run (frame-rate independent, unlike `-frames`; with `-save`, the restored slot's tick does not count) |
 | `-input_map <guid or path>` | | the cooked `.mcinput` to load (default: the first in the pack, else the starter-kit map; chapter 11) |
 | `-input <file>` | | play a scripted input file instead of the keyboard (`<from>[-<to>] Action[=value]` per line; chapter 11) |
-| `-save <slot>` | off | load the slot at start if it exists; write it on a clean quit |
+| `-save <slot>` | off | load the slot at start if it exists; write it on a clean quit, when a phone goes to the background, and when a desktop window loses focus or minimizes |
+| `-save_on_focus_loss 0` | 1 | with `-save`: do not write the slot on focus loss (once per focus loss otherwise) |
 | `-mods 0` | 1 | games that take mods (chapter 19): start without them |
 | `-mods_dir <dir>` | the game's `mods/` | games that take mods: read mods from this folder instead |
 | `-save_dir <dir>` | the per-user save folder | where slots live |

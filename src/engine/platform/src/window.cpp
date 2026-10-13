@@ -147,6 +147,17 @@ bool Window::set_relative_mouse(bool on) { return SDL_SetWindowRelativeMouseMode
 
 bool Window::relative_mouse() const { return SDL_GetWindowRelativeMouseMode(sdl(handle_)); }
 
+bool Window::set_fullscreen(bool on) {
+#if defined(SDL_PLATFORM_ANDROID) || defined(SDL_PLATFORM_IOS)
+    (void)on;
+    return true;  // phones stay full screen
+#else
+    return SDL_SetWindowFullscreen(sdl(handle_), on);
+#endif
+}
+
+bool Window::fullscreen() const { return (SDL_GetWindowFlags(sdl(handle_)) & SDL_WINDOW_FULLSCREEN) != 0; }
+
 void Window::set_text_input(bool on) {
     auto* w = static_cast<SDL_Window*>(handle_);
     if (on) SDL_StartTextInput(w);

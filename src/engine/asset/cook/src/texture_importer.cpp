@@ -2,10 +2,11 @@
 // cooks (ImportInput::texture_compression, mce_cook --textures astc) store every level as ASTC 4x4
 // blocks instead, encoded from the same RGBA8 chain (astc-encoder, medium quality, one thread).
 //
-// sidecar settings: { "srgb": true, "mips": true }
+// sidecar settings: { "srgb": true, "mips": true, "filter": "nearest" }
 //   srgb  color data is sRGB-encoded: mips are averaged in linear space and the chunk carries the
 //         Srgb flag so the renderer samples through an sRGB view (never double-corrects)
 //   mips  generate the full chain down to 1x1
+//   filter  "nearest" (pixel art, the default) or "linear": how kit sprites sample it (LinearFilter flag)
 
 #include <cmath>
 #include <cstring>
@@ -92,10 +93,18 @@ public:
 
     bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
         const JsonValue s = in.settings;
-        if (!detail::check_keys(s, {"srgb", "mips"}, in.display_path, kStage, diags)) return false;
-        bool is_srgb = true, mips = true;
+        if (!detail::check_keys(s, {"srgb", "mips", "filter"}, in.display_path, kStage, diags)) return false;
+        bool is_srgb = true, mips = true, linear = false;
         if (!detail::read_bool(s, "srgb", true, is_srgb, in.display_path, kStage, diags)) return false;
         if (!detail::read_bool(s, "mips", true, mips, in.display_path, kStage, diags)) return false;
+        if (const JsonValue f = s.get("filter"); f.valid()) {
+            const StringView v = f.is_string() ? f.as_string() : StringView();
+            if (v != "nearest" && v != "linear") {
+                detail::error_at(diags, Errc::ParseError, in.display_path, f, kStage, "'filter' must be \"nearest\" or \"linear\"");
+                return false;
+            }
+            linear = v == "linear";
+        }
 
         if (in.source.size() > 0x7FFFFFFF) {
             diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, "image file too large");
@@ -181,7 +190,8 @@ public:
 
         Array<byte> payload;
         const asset::TextureFormat format = astc ? asset::TextureFormat::ASTC_4x4 : asset::TextureFormat::RGBA8;
-        asset::write_texture(format, 1, is_srgb ? asset::TextureFlags::Srgb : 0u, mip_data.span(), payload);
+        const u32 flags = (is_srgb ? asset::TextureFlags::Srgb : 0u) | (linear ? asset::TextureFlags::LinearFilter : 0u);
+        asset::write_texture(format, 1, flags, mip_data.span(), payload);
         asset::ContainerWriter::ChunkDesc d;
         d.type = ChunkType::Texture;
         d.version = asset::chunk_version(asset::TEXTURE_VERSION, 0);
