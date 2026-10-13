@@ -9,7 +9,8 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   and the player installs a `loc::Localization` resource (`mce/loc/loc.h`) that picks the language from the
   player's saved choice, the device languages and `-default_language`, with plural rules, `{name}` placeholders
   and Turkish-aware upper and lower case. `-language tr` plays in Turkish for one run; the cook warns about keys
-  a locale lacks.
+  a locale lacks. A font sidecar's `"strings": true` bakes every glyph the tables use (with Turkish case forms),
+  and `ship.py` names the phone app per language from each table's `app.name`.
 - Purchases and ads, step 2 (M-MONETIZE): a fake store and ad network (`mce/monetize/fake.h`, `-monetize.provider
   fake`, outcomes set with `-monetize.fake.*`), `-monetize 1` and `-monetize_test` on `mce_player`, and a
   `player_monetize` test running every outcome in `local_ci.sh`.

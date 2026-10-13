@@ -12,8 +12,9 @@
     python3 scripts/ship.py platformer --target android --store [--dry-run]   # ... then the Play internal track,
                                                         # or TestFlight for an .ipa (cmake/mobile/store.py)
 
-Phone builds take the app icon from <game>/ship/icon.png (1024x1024; cmake/mobile/app_icon.py) and, on
-iOS, privacy-manifest additions from <game>/ship/PrivacyInfo.xcprivacy. Their store build number
+Phone builds take the app icon from <game>/ship/icon.png (1024x1024; cmake/mobile/app_icon.py), the name
+under it per language from the app.name key of <game>/assets/loc/<locale>.csv (cmake/mobile/app_names.py)
+and, on iOS, privacy-manifest additions from <game>/ship/PrivacyInfo.xcprivacy. Their store build number
 (CFBundleVersion, versionCode) is --build-number, by default the commit count of HEAD.
 
 What a zip holds (one folder, double-click the executable; macOS: <Name>.app, see
@@ -120,6 +121,7 @@ def sample_outputs(key, args):
     ship_dir = os.path.join(ROOT, "samples", art["sample"], "ship")
     art["icon"] = os.path.join(ship_dir, "icon.png")
     art["privacy"] = os.path.join(ship_dir, "PrivacyInfo.xcprivacy")
+    art["loc_dir"] = os.path.join(ROOT, "samples", art["sample"], "assets", "loc")
     return art
 
 
@@ -151,6 +153,7 @@ def project_outputs(project, args):
         "autoplay": False,
         "icon": os.path.join(proj_dir, "ship", "icon.png"),
         "privacy": os.path.join(proj_dir, "ship", "PrivacyInfo.xcprivacy"),
+        "loc_dir": os.path.join(proj_dir, "assets", "loc"),
     }
 
 

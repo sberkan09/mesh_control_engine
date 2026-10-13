@@ -35,6 +35,7 @@ import time
 import zipfile
 
 import app_icon
+import app_names
 
 # compileSdk and targetSdk. Google Play raises its minimum target API every August (new apps and updates:
 # API 36 since 2026-08-31); check it once a year (docs/milestones/M-MOBILE.md) and bump this with the
@@ -157,6 +158,7 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
     title = art["title"].replace("&", "&amp;").replace("<", "&lt;")
     with open(os.path.join(values, "strings.xml"), "w") as f:
         f.write(f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="app_name">{title}</string>\n</resources>\n')
+    app_names.android(app_names.read(art.get("loc_dir")), os.path.join(main, "res"))  # app.name per locale
     icon = app_icon.source(art)
     if icon:
         app_icon.android(icon, os.path.join(main, "res"), os.path.join(args.out, f"{art['name']}-{args.version}-android-play-icon.png"))

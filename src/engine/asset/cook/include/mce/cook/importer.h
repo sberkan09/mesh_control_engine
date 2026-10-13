@@ -37,6 +37,20 @@ public:
         (void)source_path;
         return false;
     }
+    // Every project asset of `type`, sorted by GUID: how a font finds the string tables whose
+    // glyphs it bakes (M-MOBILE 11a). Base-pack assets are not listed.
+    virtual void assets_of_type(ChunkType type, Array<Guid>& out) const {
+        (void)type;
+        out.clear();
+    }
+    // A project asset's source bytes and its path relative to assets/; false when unknown. An
+    // importer reads only assets it declared as dependencies, so a change re-cooks it.
+    virtual bool source_bytes(Guid g, Span<const byte>& out, StringView& source_path) const {
+        (void)g;
+        (void)out;
+        (void)source_path;
+        return false;
+    }
 
 protected:
     ~IAssetLookup() = default;
