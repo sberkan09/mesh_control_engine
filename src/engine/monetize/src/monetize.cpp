@@ -82,6 +82,32 @@ struct Service::Delivery {
     FixedString<128> native;        // Purchased consumable: the store's transaction id (never recorded)
 };
 
+const char* store_event_name(StoreEventKind k) {
+    switch (k) {
+        case StoreEventKind::ProductInfo: return "ProductInfo";
+        case StoreEventKind::ProductsReady: return "ProductsReady";
+        case StoreEventKind::Purchased: return "Purchased";
+        case StoreEventKind::Pending: return "Pending";
+        case StoreEventKind::Cancelled: return "Cancelled";
+        case StoreEventKind::Failed: return "Failed";
+        case StoreEventKind::Restored: return "Restored";
+        case StoreEventKind::RestoreFinished: return "RestoreFinished";
+    }
+    return "?";
+}
+
+const char* ad_event_name(AdEventKind k) {
+    switch (k) {
+        case AdEventKind::Loaded: return "Loaded";
+        case AdEventKind::NoFill: return "NoFill";
+        case AdEventKind::Shown: return "Shown";
+        case AdEventKind::Rewarded: return "Rewarded";
+        case AdEventKind::Closed: return "Closed";
+        case AdEventKind::Failed: return "Failed";
+    }
+    return "?";
+}
+
 // ---- Store -------------------------------------------------------------------------------------
 
 bool Store::available() const { return s_ && s_->store_ && s_->store_->available(); }
@@ -293,6 +319,12 @@ void Service::install(World& world) {
     world.set_resource(Ads(this));
     world.set_resource(PumpRef{this});
     world.add_system(Phase::FixedUpdate_Pre, "monetize_pump", &pump_system);
+}
+
+void Service::update() {
+    if (!started_ || replaying()) return;
+    store_->update();
+    ads_->update();
 }
 
 void Service::post(const StoreAnswer& a) {
