@@ -78,7 +78,9 @@ bool wrap_vertex_main(Text& s) {
 
 bool glsl_to_spirv(ShaderStage stage, const Text& text, std::vector<u32>& out, FixedString<1024>& log) {  // mce-allow
     init_glslang();
-    const EShLanguage lang = stage == ShaderStage::Vertex ? EShLangVertex : EShLangFragment;
+    const EShLanguage lang = stage == ShaderStage::Vertex     ? EShLangVertex
+                             : stage == ShaderStage::Fragment ? EShLangFragment
+                                                              : EShLangCompute;
     glslang::TShader shader(lang);
     const char* src = text.c_str();
     const int len = static_cast<int>(text.size());
@@ -105,6 +107,7 @@ bool glsl_to_spirv(ShaderStage stage, const Text& text, std::vector<u32>& out, F
 
 // ---- SPIR-V binding rewrite --------------------------------------------------------------------
 
+constexpr u32 kOpExecutionMode = 16;
 constexpr u32 kOpTypeImage = 25;
 constexpr u32 kOpTypeSampledImage = 27;
 constexpr u32 kOpTypeArray = 28;
@@ -112,6 +115,9 @@ constexpr u32 kOpTypeStruct = 30;
 constexpr u32 kOpTypePointer = 32;
 constexpr u32 kOpVariable = 59;
 constexpr u32 kOpDecorate = 71;
+constexpr u32 kOpMemberDecorate = 72;
+constexpr u32 kExecutionModeLocalSize = 17;
+constexpr u32 kDecorationNonWritable = 24;
 constexpr u32 kDecorationBlock = 2;
 constexpr u32 kDecorationBufferBlock = 3;
 constexpr u32 kDecorationBinding = 33;
@@ -121,14 +127,17 @@ constexpr u32 kStorageUniform = 2;
 constexpr u32 kStorageStorageBuffer = 12;
 constexpr u32 kDim2D = 1;
 
-enum class Kind : u8 { None, Sampler, Uniform, Storage };
+// Storage/RwStorage split read-only from read-write storage buffers (compute only).
+enum class Kind : u8 { None, Sampler, Uniform, Storage, RwStorage, Image };
 
 struct IdInfo {
     u32 op = 0;
-    u32 a = 0, b = 0, c = 0, d = 0;  // per-op operands (see collect)
-    u32 binding_word = 0;            // index of the Binding literal, 0 = none
-    u32 set_word = 0;                // index of the DescriptorSet literal, 0 = none
-    bool block = false, buffer_block = false;
+    u32 a = 0, b = 0, c = 0, d = 0, e = 0;  // per-op operands (see the parse loop)
+    u32 binding_word = 0;                   // index of the Binding literal, 0 = none
+    u32 set_word = 0;                       // index of the DescriptorSet literal, 0 = none
+    u32 members = 0;                        // OpTypeStruct member count
+    u32 nonwritable_members = 0;            // members decorated NonWritable
+    bool block = false, buffer_block = false, nonwritable = false;
 };
 
 struct Resource {
@@ -138,6 +147,8 @@ struct Resource {
     u32 set_word = 0;
     SamplerKind sampler = SamplerKind::Tex2D;
 };
+
+constexpr u32 kImageSampledStorage = 2;  // OpTypeImage "Sampled" operand: used without a sampler
 
 ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& res, FixedString<1024>& log,
                          const char* name) {
@@ -151,15 +162,32 @@ ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& r
         if (count == 0 || i + count > words.size()) return Error(Errc::ShaderCompile, "rhi.sdlgpu.spirv", name);
         auto id = [&](usize k) -> IdInfo* { return words[i + k] < bound ? &ids[words[i + k]] : nullptr; };
         switch (op) {
-            case kOpTypeImage:  // result, sampled type, dim, depth, arrayed -> a, b, c, d
-                if (IdInfo* r = id(1)) *r = IdInfo{op, words[i + 2], words[i + 3], words[i + 4], words[i + 5]};
+            case kOpTypeImage:  // result, sampled type, dim, depth, arrayed, ms, sampled -> a, b, c, d, e
+                if (IdInfo* r = id(1); r && count >= 8) {
+                    r->op = op;
+                    r->a = words[i + 2];
+                    r->b = words[i + 3];
+                    r->c = words[i + 4];
+                    r->d = words[i + 5];
+                    r->e = words[i + 7];
+                }
                 break;
             case kOpTypeSampledImage:  // result, image type
             case kOpTypeArray:         // result, element type, length
                 if (IdInfo* r = id(1)) { r->op = op; r->a = words[i + 2]; }
                 break;
-            case kOpTypeStruct:
-                if (IdInfo* r = id(1)) r->op = op;
+            case kOpTypeStruct:  // result, member types
+                if (IdInfo* r = id(1)) {
+                    r->op = op;
+                    r->members = count - 2;
+                }
+                break;
+            case kOpExecutionMode:  // entry point, mode, literals
+                if (count >= 6 && words[i + 2] == kExecutionModeLocalSize)
+                    for (u32 k = 0; k < 3; ++k) res.local_size[k] = words[i + 3 + k];
+                break;
+            case kOpMemberDecorate:  // struct, member, decoration
+                if (IdInfo* t = id(1); t && count >= 4 && words[i + 3] == kDecorationNonWritable) ++t->nonwritable_members;
                 break;
             case kOpTypePointer:  // result, storage class, type
                 if (IdInfo* r = id(1)) { r->op = op; r->a = words[i + 2]; r->b = words[i + 3]; }
@@ -179,6 +207,7 @@ ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& r
                     if (deco == kDecorationDescriptorSet && count >= 4) t->set_word = static_cast<u32>(i + 3);
                     if (deco == kDecorationBlock) t->block = true;
                     if (deco == kDecorationBufferBlock) t->buffer_block = true;
+                    if (deco == kDecorationNonWritable) t->nonwritable = true;
                 }
                 break;
             default: break;
@@ -209,8 +238,20 @@ ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& r
             r.kind = Kind::Sampler;
             r.sampler = depth ? (arrayed ? SamplerKind::Shadow2DArray : SamplerKind::Shadow2D)
                               : (arrayed ? SamplerKind::Tex2DArray : SamplerKind::Tex2D);
+        } else if (storage == kStorageUniformConstant && ids[type].op == kOpTypeImage && ids[type].e == kImageSampledStorage) {
+            if (stage != ShaderStage::Compute) {
+                log.append("storage images are supported in compute shaders only");
+                return Error(Errc::ShaderCompile, "rhi.sdlgpu.spirv", name);
+            }
+            if (ids[type].b != kDim2D || ids[type].d == 1) {
+                log.append("only 2D storage images are supported");  // SDL binds one layer read-write
+                return Error(Errc::ShaderCompile, "rhi.sdlgpu.spirv", name);
+            }
+            r.kind = Kind::Image;
         } else if (storage == kStorageStorageBuffer || (storage == kStorageUniform && ids[type].buffer_block)) {
-            r.kind = Kind::Storage;
+            const IdInfo& block = ids[type];
+            const bool readonly = var.nonwritable || (block.members > 0 && block.nonwritable_members >= block.members);
+            r.kind = stage == ShaderStage::Compute && !readonly ? Kind::RwStorage : Kind::Storage;
         } else if (storage == kStorageUniform && ids[type].block) {
             r.kind = Kind::Uniform;
         } else {
@@ -237,12 +278,22 @@ ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& r
         return true;
     };
     if (!sort_by_binding(Kind::Sampler, res.sampler_slot, kMaxStageSamplers, res.sampler_count) ||
-        !sort_by_binding(Kind::Storage, res.storage_binding, kMaxStageStorage, res.storage_count)) {
-        log.append("too many samplers or storage buffers in one stage");
+        !sort_by_binding(Kind::Storage, res.storage_binding, kMaxStageStorage, res.storage_count) ||
+        !sort_by_binding(Kind::RwStorage, res.rw_storage_binding, kMaxStageStorage, res.rw_storage_count) ||
+        !sort_by_binding(Kind::Image, res.rw_image_unit, kMaxStageImages, res.rw_image_count)) {
+        log.append("too many samplers, storage buffers or storage images in one stage");
         return Error(Errc::ShaderCompile, "rhi.sdlgpu.spirv", name);
     }
+    // Index of GL binding `gl` among `count` compacted entries of `list`.
+    auto index_of = [](const u8* list, u8 count, u32 gl) -> u32 {
+        for (u32 i = 0; i < count; ++i)
+            if (list[i] == gl) return i;
+        return 0;
+    };
+    const bool compute = stage == ShaderStage::Compute;
     const u32 resource_set = stage == ShaderStage::Vertex ? 0 : 2;
-    const u32 uniform_set = resource_set + 1;
+    const u32 uniform_set = compute ? 2 : resource_set + 1;
+    const u32 ro_set = compute ? 0 : resource_set;
     res.uniform_count = 0;
     for (const Resource& r : found) {
         switch (r.kind) {
@@ -252,12 +303,20 @@ ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& r
                         res.sampler_kind[i] = r.sampler;
                         words[r.binding_word] = i;
                     }
-                words[r.set_word] = resource_set;
+                words[r.set_word] = ro_set;
                 break;
             case Kind::Storage:
-                for (u32 i = 0; i < res.storage_count; ++i)
-                    if (res.storage_binding[i] == r.gl_binding) words[r.binding_word] = res.sampler_count + i;
-                words[r.set_word] = resource_set;
+                words[r.binding_word] = res.sampler_count + index_of(res.storage_binding, res.storage_count, r.gl_binding);
+                words[r.set_word] = ro_set;
+                break;
+            case Kind::Image:
+                words[r.binding_word] = index_of(res.rw_image_unit, res.rw_image_count, r.gl_binding);
+                words[r.set_word] = 1;
+                break;
+            case Kind::RwStorage:
+                words[r.binding_word] =
+                    res.rw_image_count + index_of(res.rw_storage_binding, res.rw_storage_count, r.gl_binding);
+                words[r.set_word] = 1;
                 break;
             case Kind::Uniform:
                 if (r.gl_binding >= kMaxUniformBanks) {

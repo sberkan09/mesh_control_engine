@@ -9,7 +9,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 
 | # | Step | Linear | State |
 |---|---|---|---|
-| 1 | Compute in the RHI; clustered light build on the GPU | SBA-6 | GL done; SDL GPU and Metal compute open |
+| 1 | Compute in the RHI; clustered light build on the GPU | SBA-6 | GL and SDL GPU (Vulkan) done; Metal compute open |
 | 2 | Image-based lighting + reflection probes | SBA-7 | — |
 | 3 | SSAO / GTAO | SBA-8 | — |
 | 4 | Local-light shadows | SBA-9 | — |
@@ -51,5 +51,18 @@ relative GPU cost mean anything; real-GPU numbers stay open like M5a's):**
 | GPU light assignment (ms) | 0 | 1.46 (llvmpipe) |
 | GPU 3D frame total (ms) | 249.3 | 266.7 (llvmpipe) |
 
-**Open in step 1:** compute on SDL GPU and Metal; the Metal translate change in #185 is only skipped `case`
-labels and has not been compiled on a Mac yet.
+**SDL GPU (Vulkan).** `compile_glsl` gains `ShaderStage::Compute` and SDL's compute sets: set 0 samplers then
+read-only storage buffers, set 1 storage images then read-write storage buffers, set 2 uniform banks; a buffer is
+read-only when every block member is `readonly`, and the work-group size comes from the module's `LocalSize`.
+Storage images always bind read-write (`StorageAccess::Read` too): SDL declares read-only storage textures as
+sampled images, which GLSL's `imageLoad` cannot read; only non-array 2D images are supported. Every dispatch is
+its own compute pass, because SDL binds read-write resources when a pass begins and does not order dispatches
+inside one; that makes `barrier()` a no-op there. Buffers carry the compute storage usages; `read_buffer` downloads
+through a transfer buffer. Caps report Vulkan's guaranteed minimums (128 invocations, 128×128×64, 65535 groups), as
+SDL exposes no limits. Gates: the four `rhi_gl` compute cases run again as `rhi_sdlgpu:` on lavapipe, the SPIR-V
+layout is checked without a GPU (`shader_spirv: compute resources follow SDL's compute layout`), and
+`test_render_sdlgpu` runs the 300-light GPU-vs-CPU frame comparison on Vulkan (0 pixels differ). On Apple the
+SDL GPU device keeps `compute = false` until the MSL path learns compute.
+
+**Open in step 1:** compute on Metal (and SDL GPU's Metal driver); the Metal translate change in #185 is only
+skipped `case` labels and has not been compiled on a Mac yet.

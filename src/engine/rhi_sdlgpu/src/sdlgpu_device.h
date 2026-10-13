@@ -67,6 +67,8 @@ struct GpuPipeline {
     SDL_GPUShader* fs = nullptr;
     StageResources vres;
     StageResources fres;
+    SDL_GPUComputePipeline* cs = nullptr;  // set for compute pipelines (vs/fs stay null)
+    StageResources cres;
     VertexAttribute attrs[16] = {};
     u32 attr_count = 0;
     u32 stride = 0;
@@ -116,6 +118,7 @@ public:
     void update_texture(TextureHandle texture, const TextureRegion& region, Span<const byte> data) override;
     SamplerHandle create_sampler(const SamplerDesc& desc) override;
     Result<PipelineHandle> create_pipeline(const GraphicsPipelineDesc& desc) override;
+    Result<PipelineHandle> create_compute_pipeline(const ComputePipelineDesc& desc) override;
     void destroy_buffer(BufferHandle) override;
     void destroy_texture(TextureHandle) override;
     void destroy_sampler(SamplerHandle) override;
@@ -132,6 +135,7 @@ public:
     void present(bool vsync) override;
     Extent2D backbuffer_size() const override;
     ResultV read_pixels(TextureHandle target, Rect2D rect, Span<u8> out_rgba8) override;
+    ResultV read_buffer(BufferHandle buffer, u64 offset, Span<byte> out) override;
 
     const DeviceCaps& caps() const override { return caps_; }
     const FrameStats& last_frame_stats() const override { return last_stats_; }
@@ -148,6 +152,10 @@ private:
     struct BoundTexture {
         TextureHandle texture;
         SamplerHandle sampler;
+    };
+    struct BoundImage {
+        TextureHandle texture;
+        u32 mip = 0;
     };
 
     // sdlgpu_device.cpp
@@ -167,6 +175,7 @@ private:
     bool flush_draw_state(SDL_GPUCommandBuffer* gcb);
     SDL_GPUGraphicsPipeline* pipeline_variant(GpuPipeline& p);
     void resolve(SDL_GPUCommandBuffer* gcb, const cmd::Resolve& r);
+    void dispatch(SDL_GPUCommandBuffer* gcb, const cmd::Dispatch* direct, const cmd::DispatchIndirect* indirect);
 
     platform::Window& window_;
     DeviceDesc desc_;
@@ -203,7 +212,8 @@ private:
     Array<byte> uniform_data_[kMaxUniformBanks];
     bool uniform_set_[kMaxUniformBanks] = {};
     BoundTexture textures_bound_[kMaxStageSamplers] = {};
-    SDL_GPUBuffer* storage_bound_[kMaxStageStorage] = {};
+    SDL_GPUBuffer* storage_bound_[kMaxStorageBindings] = {};
+    BoundImage images_bound_[kMaxImageUnits] = {};
 
     u64 frame_index_ = 0;
     u32 slot_ = 0;

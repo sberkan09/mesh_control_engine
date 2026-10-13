@@ -111,3 +111,102 @@ TEST_CASE("shader_spirv: compile errors come back as Results with the log") {
     CHECK(r.error().path == StringView("broken.vert"));
     CHECK(log.size() > 0);
 }
+
+namespace {
+
+// Every SDL compute binding class: samplers and read-only buffers (set 0), storage images (readonly
+// ones too) and read-write buffers (set 1), uniforms (set 2).
+constexpr const char* kCS = R"(#version 450 core
+layout(local_size_x = 8, local_size_y = 4, local_size_z = 2) in;
+layout(std140, binding = 1) uniform PassU { uvec4 grid; };
+layout(binding = 7) uniform sampler2D u_tex;
+layout(rgba8, binding = 3) uniform readonly image2D u_in;
+layout(rgba8, binding = 0) uniform writeonly image2D u_out;
+layout(std430, binding = 9) readonly buffer Lights { vec4 lights[]; };
+layout(std430, binding = 8) readonly buffer Bounds { float bounds[]; };
+layout(std430, binding = 4) writeonly buffer Ranges { uvec2 ranges[]; };
+layout(std430, binding = 10) buffer Counter { uint total; uint dropped; };
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    vec4 c = imageLoad(u_in, p) + texture(u_tex, vec2(p)) + lights[0] * bounds[0];
+    imageStore(u_out, p, c);
+    ranges[p.x] = uvec2(atomicAdd(total, grid.x), dropped);
+}
+)";
+
+// (set, binding) of every resource in the module, in decoration order.
+struct SetBinding {
+    u32 set = ~0u, binding = ~0u;
+};
+void set_bindings(const Array<u32>& w, Array<SetBinding>& out, Array<u32>& ids) {
+    for (usize i = 5; i < w.size();) {
+        const u32 count = w[i] >> 16, op = w[i] & 0xFFFFu;
+        if (op == 71 && count >= 4 && (w[i + 2] == 33 || w[i + 2] == 34)) {
+            usize k = 0;
+            while (k < ids.size() && ids[k] != w[i + 1]) ++k;
+            if (k == ids.size()) {
+                ids.push_back(w[i + 1]);
+                out.push_back({});
+            }
+            (w[i + 2] == 34 ? out[k].set : out[k].binding) = w[i + 3];
+        }
+        i += count ? count : 1;
+    }
+}
+
+}  // namespace
+
+TEST_CASE("shader_spirv: compute resources follow SDL's compute layout") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Compute, kCS, "t.comp", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    CHECK(res.local_size[0] == 8);
+    CHECK(res.local_size[1] == 4);
+    CHECK(res.local_size[2] == 2);
+    REQUIRE(res.sampler_count == 1);
+    CHECK(res.sampler_slot[0] == 7);
+    REQUIRE(res.rw_image_count == 2);
+    CHECK(res.rw_image_unit[0] == 0);
+    CHECK(res.rw_image_unit[1] == 3);
+    REQUIRE(res.storage_count == 2);  // read-only, GL-binding order
+    CHECK(res.storage_binding[0] == 8);
+    CHECK(res.storage_binding[1] == 9);
+    REQUIRE(res.rw_storage_count == 2);  // writeonly counts as read-write
+    CHECK(res.rw_storage_binding[0] == 4);
+    CHECK(res.rw_storage_binding[1] == 10);
+    CHECK(res.uniform_count == 2);
+
+    Array<SetBinding> sb;
+    Array<u32> ids;
+    set_bindings(spv, sb, ids);
+    REQUIRE(sb.size() == 8);
+    // Expected (set, binding) pairs, as a sorted multiset.
+    u32 found[3][8] = {};
+    for (const SetBinding& b : sb)
+        if (b.set < 3 && b.binding < 8) ++found[b.set][b.binding];
+    CHECK(found[0][0] == 1);  // sampler
+    CHECK(found[0][1] == 1);  // Bounds (binding 8)
+    CHECK(found[0][2] == 1);  // Lights (binding 9)
+    CHECK(found[1][0] == 1);  // u_out (unit 0)
+    CHECK(found[1][1] == 1);  // u_in (unit 3, readonly)
+    CHECK(found[1][2] == 1);  // Ranges (binding 4)
+    CHECK(found[1][3] == 1);  // Counter (binding 10)
+    CHECK(found[2][1] == 1);  // uniform bank 1
+}
+
+TEST_CASE("shader_spirv: storage images outside compute are compile errors") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment,
+                          "#version 450 core\nlayout(rgba8, binding = 0) uniform readonly image2D u_in;\n"
+                          "layout(location = 0) out vec4 o;\nvoid main() { o = imageLoad(u_in, ivec2(0)); }\n",
+                          "image.frag", spv, res, log);
+    REQUIRE_FALSE(r.has_value());
+    if (r) return;
+    CHECK(r.error().code == Errc::ShaderCompile);
+}

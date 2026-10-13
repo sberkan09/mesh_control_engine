@@ -122,7 +122,9 @@ u8 unorm8(f32 v) {
 
 constexpr SDL_GPUBufferUsageFlags kAllBufferUsage = SDL_GPU_BUFFERUSAGE_VERTEX | SDL_GPU_BUFFERUSAGE_INDEX |
                                                     SDL_GPU_BUFFERUSAGE_INDIRECT |
-                                                    SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
+                                                    SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ |
+                                                    SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ |
+                                                    SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE;
 
 SDL_GPUBuffer* make_buffer(SDL_GPUDevice* dev, usize size, const char* name) {
     SDL_GPUBufferCreateInfo ci{};
@@ -195,6 +197,16 @@ ResultV SdlGpuDevice::init() {
     caps_.shader_draw_parameters = true;
     caps_.timestamp_queries = false;        // SDL GPU has no timestamp queries (ADR-0038 §7)
     caps_.storage_buffer_alignment = 256;
+#if !defined(__APPLE__)
+    // Compute (M-VISUAL 1). SDL GPU reports no limits: these are Vulkan's guaranteed minimums. The
+    // Metal driver needs an MSL compute path first (shader_msl.h), so Apple keeps the CPU paths.
+    caps_.compute = true;
+    caps_.max_compute_invocations = 128;
+    caps_.max_compute_group_size[0] = caps_.max_compute_group_size[1] = 128;
+    caps_.max_compute_group_size[2] = 64;
+    for (u32& n : caps_.max_compute_group_count) n = 65535;
+    caps_.max_storage_image_units = kMaxImageUnits;
+#endif
     MCE_LOG_INFO("rhi.sdlgpu: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 
     default_depth_format_ =
@@ -275,6 +287,7 @@ void SdlGpuDevice::release_all() {
         for (const PipelineVariant& v : p.variants) SDL_ReleaseGPUGraphicsPipeline(device_, v.pipeline);
         SDL_ReleaseGPUShader(device_, p.vs);
         SDL_ReleaseGPUShader(device_, p.fs);
+        if (p.cs) SDL_ReleaseGPUComputePipeline(device_, p.cs);
     }
     for (SDL_GPUTexture* t : dummy_tex_) SDL_ReleaseGPUTexture(device_, t);
     SDL_ReleaseGPUSampler(device_, dummy_sampler_);
@@ -425,6 +438,13 @@ TextureHandle SdlGpuDevice::create_texture(const TextureDesc& desc, Span<const b
             usage = SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE;
             break;
     }
+    // StorageAccess::ReadWrite reads and writes one image in a dispatch, which SDL allows only for
+    // textures made with SIMULTANEOUS_READ_WRITE (format-dependent).
+    if (desc.usage == TextureUsage::SampledStorage &&
+        SDL_GPUTextureSupportsFormat(device_, t.sdl_format, array ? SDL_GPU_TEXTURETYPE_2D_ARRAY : SDL_GPU_TEXTURETYPE_2D,
+                                     usage | SDL_GPU_TEXTUREUSAGE_SAMPLER |
+                                         SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_SIMULTANEOUS_READ_WRITE))
+        usage |= SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_SIMULTANEOUS_READ_WRITE;
     // Render targets are sampled by later passes (shadow maps, post chains) unless multisampled.
     if (t.samples == 1) usage |= SDL_GPU_TEXTUREUSAGE_SAMPLER;
     const SDL_GPUTextureType type = array ? SDL_GPU_TEXTURETYPE_2D_ARRAY : SDL_GPU_TEXTURETYPE_2D;
@@ -591,6 +611,41 @@ Result<PipelineHandle> SdlGpuDevice::create_pipeline(const GraphicsPipelineDesc&
     return pipelines_.insert(std::move(p));
 }
 
+Result<PipelineHandle> SdlGpuDevice::create_compute_pipeline(const ComputePipelineDesc& desc) {
+    if (!caps_.compute) return Error(Errc::Unsupported, "rhi.compute", desc.debug_name);
+    GpuPipeline p;
+    FixedString<1024> log;
+    Array<u32> spv;
+    if (auto r = compile_glsl(ShaderStage::Compute, desc.compute_shader.glsl, desc.compute_shader.debug_name, spv, p.cres,
+                              log);
+        !r) {
+        MCE_LOG_ERROR("rhi.sdlgpu: compute shader '{}' failed:\n{}", desc.compute_shader.debug_name, log.c_str());
+        return Error(Errc::ShaderCompile, "rhi.pipeline.compute", desc.compute_shader.debug_name);
+    }
+    const StageResources& res = p.cres;
+    SDL_GPUComputePipelineCreateInfo ci{};
+    ci.code_size = spv.size() * sizeof(u32);
+    ci.code = reinterpret_cast<const Uint8*>(spv.data());
+    ci.entrypoint = "main";
+    ci.format = SDL_GPU_SHADERFORMAT_SPIRV;
+    ci.num_samplers = res.sampler_count;
+    ci.num_readonly_storage_textures = 0;  // storage images all bind read-write (shader_spirv.h)
+    ci.num_readonly_storage_buffers = res.storage_count;
+    ci.num_readwrite_storage_textures = res.rw_image_count;
+    ci.num_readwrite_storage_buffers = res.rw_storage_count;
+    ci.num_uniform_buffers = res.uniform_count;
+    ci.threadcount_x = res.local_size[0];
+    ci.threadcount_y = res.local_size[1];
+    ci.threadcount_z = res.local_size[2];
+    p.cs = SDL_CreateGPUComputePipeline(device_, &ci);
+    if (!p.cs) {
+        MCE_LOG_ERROR("rhi.sdlgpu: compute pipeline '{}' failed: {}", desc.debug_name, SDL_GetError());
+        return Error(Errc::PipelineCreate, "rhi.pipeline.compute", desc.debug_name);
+    }
+    p.name.append(desc.debug_name ? desc.debug_name : "");
+    return pipelines_.insert(std::move(p));
+}
+
 void SdlGpuDevice::destroy_buffer(BufferHandle h) {
     if (const GpuBuffer* b = buffers_.try_get(h)) {
         for (SDL_GPUBuffer*& s : storage_bound_)
@@ -621,6 +676,7 @@ void SdlGpuDevice::destroy_pipeline(PipelineHandle h) {
         for (const PipelineVariant& v : p->variants) SDL_ReleaseGPUGraphicsPipeline(device_, v.pipeline);
         SDL_ReleaseGPUShader(device_, p->vs);
         SDL_ReleaseGPUShader(device_, p->fs);
+        if (p->cs) SDL_ReleaseGPUComputePipeline(device_, p->cs);
         pipelines_.erase(h);
     }
 }
@@ -762,6 +818,40 @@ void SdlGpuDevice::present(bool vsync) {
 Extent2D SdlGpuDevice::backbuffer_size() const {
     const platform::PixelSize s = window_.framebuffer_size();
     return Extent2D{s.width, s.height};
+}
+
+ResultV SdlGpuDevice::read_buffer(BufferHandle h, u64 offset, Span<byte> out) {
+    const GpuBuffer* b = buffers_.try_get(h);
+    if (!b) return Error(Errc::NotFound, "rhi.read_buffer", "stale buffer handle");
+    if (offset + out.size() > b->size) return Error(Errc::InvalidArgument, "rhi.read_buffer", "range outside buffer");
+    if (out.empty()) return ok();
+    SDL_GPUTransferBufferCreateInfo ti{};
+    ti.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+    ti.size = static_cast<Uint32>(out.size());
+    SDL_GPUTransferBuffer* tb = SDL_CreateGPUTransferBuffer(device_, &ti);
+    if (!tb) return Error(Errc::OutOfMemory, "rhi.read_buffer", SDL_GetError());
+
+    flush_pending();
+    SDL_GPUCommandBuffer* gcb = SDL_AcquireGPUCommandBuffer(device_);
+    SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(gcb);
+    const SDL_GPUBufferRegion src{b->buffer, static_cast<Uint32>(offset), static_cast<Uint32>(out.size())};
+    const SDL_GPUTransferBufferLocation dst{tb, 0};
+    SDL_DownloadFromGPUBuffer(copy, &src, &dst);
+    SDL_EndGPUCopyPass(copy);
+    SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(gcb);
+    if (fence) {
+        SDL_WaitForGPUFences(device_, true, &fence, 1);
+        SDL_ReleaseGPUFence(device_, fence);
+    }
+    const void* bytes = SDL_MapGPUTransferBuffer(device_, tb, false);
+    if (!bytes) {
+        SDL_ReleaseGPUTransferBuffer(device_, tb);
+        return Error(Errc::Unsupported, "rhi.read_buffer", SDL_GetError());
+    }
+    std::memcpy(out.data(), bytes, out.size());
+    SDL_UnmapGPUTransferBuffer(device_, tb);
+    SDL_ReleaseGPUTransferBuffer(device_, tb);
+    return ok();
 }
 
 ResultV SdlGpuDevice::read_pixels(TextureHandle target, Rect2D rect, Span<u8> out) {

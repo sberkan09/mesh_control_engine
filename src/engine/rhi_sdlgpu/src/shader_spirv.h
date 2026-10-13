@@ -14,6 +14,13 @@
 //
 //       vertex   set 0: samplers (compacted, by GL binding), then storage buffers; set 1: uniform bank b
 //       fragment set 2: samplers, then storage buffers;                            set 3: uniform bank b
+//       compute  set 0: samplers, then read-only storage buffers;
+//                set 1: storage images, then read-write storage buffers;            set 2: uniform bank b
+//
+//     A storage buffer is read-only when every member of its block is `readonly` (NonWritable);
+//     `writeonly` and plain ones are read-write. Storage images are compute-only and always go to
+//     SDL's read-write set: SDL declares read-only storage textures as sampled images, which GLSL's
+//     imageLoad cannot read.
 //
 // The returned StageResources maps each SDL index back to its GL binding, so the device binds by
 // bank number. Pure C++ and API-free: the unit tests run it without a GPU.
@@ -24,22 +31,31 @@
 
 namespace mce::rhi::sdlgpu {
 
-enum class ShaderStage : u8 { Vertex, Fragment };
+enum class ShaderStage : u8 { Vertex, Fragment, Compute };
 
 // What a sampler binding expects, so an unbound slot can get a dummy of the right kind.
 enum class SamplerKind : u8 { Tex2D, Tex2DArray, Shadow2D, Shadow2DArray };
 
 inline constexpr u32 kMaxStageSamplers = 16;
 inline constexpr u32 kMaxStageStorage = 8;
+inline constexpr u32 kMaxStageImages = 8;
 inline constexpr u32 kMaxUniformBanks = 4;
+inline constexpr u32 kMaxStorageBindings = 16;  // GL storage binding numbers (rhi::bank) the device tracks
+inline constexpr u32 kMaxImageUnits = 8;        // GL image units (bind_storage_image) the device tracks
 
 struct StageResources {
     u8 sampler_slot[kMaxStageSamplers] = {};  // SDL sampler index i <- GL sampler binding
     SamplerKind sampler_kind[kMaxStageSamplers] = {};
     u8 sampler_count = 0;
-    u8 storage_binding[kMaxStageStorage] = {};  // SDL storage index i <- GL storage binding
+    u8 storage_binding[kMaxStageStorage] = {};  // SDL storage index i <- GL storage binding (compute: read-only)
     u8 storage_count = 0;
     u8 uniform_count = 0;  // highest uniform bank used + 1
+    // Compute only: storage images by GL image unit, read-write storage buffers, the work group size.
+    u8 rw_image_unit[kMaxStageImages] = {};
+    u8 rw_image_count = 0;
+    u8 rw_storage_binding[kMaxStageStorage] = {};
+    u8 rw_storage_count = 0;
+    u32 local_size[3] = {1, 1, 1};
 };
 
 // Translates one stage. On failure the compiler log lands in `log` and the Error carries
