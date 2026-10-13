@@ -40,13 +40,17 @@ bool sphere_ndc_bounds(f32 a, f32 d, f32 r, f32 n, f32 s, f32& lo, f32& hi) {
     return lo <= hi;
 }
 
-ClusterLights::ClusterLights(mem::IAllocator& alloc) : gpu_lights_(alloc), ranges_(alloc), indices_(alloc), pairs_(alloc), tile_x_(alloc), tile_y_(alloc) {}
+ClusterLights::ClusterLights(mem::IAllocator& alloc)
+    : gpu_lights_(alloc), ranges_(alloc), indices_(alloc), pairs_(alloc), bounds_(alloc), culled_(alloc) {}
 
 void ClusterLights::clear() {
     gpu_lights_.clear();
     ranges_.clear();
     indices_.clear();
     pairs_.clear();
+    bounds_.clear();
+    culled_.clear();
+    assigned_ = false;
     stats_ = {};
 }
 
@@ -84,36 +88,42 @@ void tile_extent(u32 t, u32 tiles, f32 scale, f32 dn, f32 df, f32& lo, f32& hi) 
 }  // namespace
 
 void ClusterLights::build(const View3D& view, Span<const PointLight> lights, const ClusterGridDesc& grid) {
+    prepare(view, lights, grid);
+    assign();
+}
+
+void ClusterLights::prepare(const View3D& view, Span<const PointLight> lights, const ClusterGridDesc& grid) {
     clear();
     grid_ = grid;
     grid_.x = max(grid_.x, 1u);
     grid_.y = max(grid_.y, 1u);
     grid_.z = clamp(grid_.z, 1u, 256u);
     const f32 zn = max(view.near_z, 1e-4f), zf = max(view.far_z, zn * 1.001f);
+    near_ = zn;
+    far_ = zf;
     const f32 log_ratio = std::log(zf / zn);
     slice_scale_ = f32(grid_.z) / log_ratio;
     slice_bias_ = -f32(grid_.z) * std::log(zn) / log_ratio;
     stats_.lights = static_cast<u32>(lights.size());
-    const u32 clusters = cluster_count();
-    ranges_.resize(clusters);
-    for (ClusterRange& r : ranges_) r = {0, 0};
 
-    // Depth at the start of each slice (slice k spans [edge[k], edge[k + 1]]).
-    f32 edge[257];
+    // Tile extents per slice, then the depth at the start of each slice (slice k spans
+    // [edge[k], edge[k + 1]]).
+    proj_x_ = view.proj.c[0][0];
+    proj_y_ = view.proj.c[1][1];
+    bounds_.resize(usize(edges_offset()) + grid_.z + 1);
+    f32* edge = bounds_.data() + edges_offset();
     for (u32 k = 0; k <= grid_.z; ++k) edge[k] = zn * std::pow(zf / zn, f32(k) / f32(grid_.z));
-    const f32 px = view.proj.c[0][0], py = view.proj.c[1][1];
-    tile_x_.resize(usize(grid_.z) * grid_.x * 2);
-    tile_y_.resize(usize(grid_.z) * grid_.y * 2);
+    f32* tile_x = bounds_.data();
+    f32* tile_y = bounds_.data() + tile_bounds_y_offset();
     for (u32 k = 0; k < grid_.z; ++k) {
-        for (u32 t = 0; t < grid_.x; ++t) tile_extent(t, grid_.x, px, edge[k], edge[k + 1], tile_x_[(usize(k) * grid_.x + t) * 2], tile_x_[(usize(k) * grid_.x + t) * 2 + 1]);
-        for (u32 t = 0; t < grid_.y; ++t) tile_extent(t, grid_.y, py, edge[k], edge[k + 1], tile_y_[(usize(k) * grid_.y + t) * 2], tile_y_[(usize(k) * grid_.y + t) * 2 + 1]);
+        for (u32 t = 0; t < grid_.x; ++t) tile_extent(t, grid_.x, proj_x_, edge[k], edge[k + 1], tile_x[(usize(k) * grid_.x + t) * 2], tile_x[(usize(k) * grid_.x + t) * 2 + 1]);
+        for (u32 t = 0; t < grid_.y; ++t) tile_extent(t, grid_.y, proj_y_, edge[k], edge[k + 1], tile_y[(usize(k) * grid_.y + t) * 2], tile_y[(usize(k) * grid_.y + t) * 2 + 1]);
     }
 
     gpu_lights_.reserve(lights.size());
-    // Scenes are usually rebuilt per frame on a frame allocator: size the scratch once up front
-    // (a light rarely touches more than ~128 clusters) instead of growing it pair by pair.
-    pairs_.reserve(min(usize(grid_.max_indices), lights.size() * 128) * 2);
-    for (const PointLight& l : lights) {
+    culled_.reserve(lights.size());
+    for (u32 li = 0; li < lights.size(); ++li) {
+        const PointLight& l = lights[li];
         GpuPointLight g;
         const f32 r = max(l.radius, 1e-3f);
         g.position_radius = vec4(l.position, r);
@@ -124,16 +134,34 @@ void ClusterLights::build(const View3D& view, Span<const PointLight> lights, con
             g.spot = vec4(normalize(l.direction) * scale, -co * scale);
         }
         gpu_lights_.push_back(g);
-    }
-
-    for (u32 li = 0; li < lights.size(); ++li) {
-        const PointLight& l = lights[li];
-        const f32 r = max(l.radius, 1e-3f);
         if (!(l.intensity > 0.0f) || !sphere_visible(view, l.position, r)) continue;
-        const vec3 c = transform_point(view.view, l.position);  // view space, camera looks down -Z
+        ClusterCullLight c;
+        c.center_radius = vec4(transform_point(view.view, l.position), r);  // view space, camera looks down -Z
+        c.light = li;
+        culled_.push_back(c);
+    }
+}
+
+void ClusterLights::assign() {
+    if (assigned_ || bounds_.empty()) return;
+    assigned_ = true;
+    const u32 clusters = cluster_count();
+    ranges_.resize(clusters);
+    for (ClusterRange& r : ranges_) r = {0, 0};
+    const f32 zn = near_, zf = far_;
+    const f32* edge = bounds_.data() + edges_offset();
+    const f32* tile_x = bounds_.data();
+    const f32* tile_y = bounds_.data() + tile_bounds_y_offset();
+
+    // Scenes are usually rebuilt per frame on a frame allocator: size the scratch once up front
+    // (a light rarely touches more than ~128 clusters) instead of growing it pair by pair.
+    pairs_.reserve(min(usize(grid_.max_indices), culled_.size() * 128) * 2);
+    for (const ClusterCullLight& cl : culled_) {
+        const vec3 c{cl.center_radius.x, cl.center_radius.y, cl.center_radius.z};
+        const f32 r = cl.center_radius.w;
         const f32 d = -c.z;
         f32 x0, x1, y0, y1;
-        if (!sphere_ndc_bounds(c.x, d, r, zn, px, x0, x1) || !sphere_ndc_bounds(c.y, d, r, zn, py, y0, y1)) continue;
+        if (!sphere_ndc_bounds(c.x, d, r, zn, proj_x_, x0, x1) || !sphere_ndc_bounds(c.y, d, r, zn, proj_y_, y0, y1)) continue;
         if (x1 < -1.0f || x0 > 1.0f || y1 < -1.0f || y0 > 1.0f) continue;
         const u32 tx0 = tile_floor(x0, grid_.x), tx1 = tile_floor(x1, grid_.x);
         const u32 ty0 = tile_floor(y0, grid_.y), ty1 = tile_floor(y1, grid_.y);
@@ -144,8 +172,8 @@ void ClusterLights::build(const View3D& view, Span<const PointLight> lights, con
         for (u32 s = s0; s <= s1; ++s) {
             const f32 dz2 = dist_sq_range(c.z, -edge[s + 1], -edge[s]);
             if (dz2 > r2) continue;
-            const f32* xb = &tile_x_[usize(s) * grid_.x * 2];
-            const f32* yb = &tile_y_[usize(s) * grid_.y * 2];
+            const f32* xb = &tile_x[usize(s) * grid_.x * 2];
+            const f32* yb = &tile_y[usize(s) * grid_.y * 2];
             for (u32 ty = ty0; ty <= ty1; ++ty) {
                 const f32 dyz2 = dz2 + dist_sq_range(c.y, yb[ty * 2], yb[ty * 2 + 1]);
                 if (dyz2 > r2) continue;
@@ -160,7 +188,7 @@ void ClusterLights::build(const View3D& view, Span<const PointLight> lights, con
                         continue;
                     }
                     pairs_.push_back(row + tx);
-                    pairs_.push_back(li);
+                    pairs_.push_back(cl.light);
                     ++ranges_[row + tx].count;
                     touched = true;
                 }

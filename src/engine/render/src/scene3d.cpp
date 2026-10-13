@@ -320,11 +320,20 @@ void Scene3D::build() {
 
     stats_.point_lights = static_cast<u32>(point_lights_.size());
     const f64 t_clusters = clock.now_seconds();
-    clusters_.build(view_, point_lights_.span(), cluster_grid_);
+    clusters_.prepare(view_, point_lights_.span(), cluster_grid_);
     const f64 t_end = clock.now_seconds();
     stats_.cluster_ms = static_cast<f32>((t_end - t_clusters) * 1000.0);
     stats_.build_ms = static_cast<f32>((t_end - t_begin) * 1000.0);
     built_ = true;
+}
+
+const ClusterLights& Scene3D::clusters() const {
+    if (!clusters_.assigned()) {
+        const f64 t0 = app::steady_clock().now_seconds();
+        clusters_.assign();
+        stats_.cluster_ms += static_cast<f32>((app::steady_clock().now_seconds() - t0) * 1000.0);
+    }
+    return clusters_;
 }
 
 // Cascade ranges: nominal [n_i, f_i] with f_i = distance * splits[i]. Cascade i+1 is fitted from
