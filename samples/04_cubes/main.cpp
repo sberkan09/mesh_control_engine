@@ -18,9 +18,10 @@
 //   04_cubes -headless 1 -ticks 300       determinism run: no GL, CPU mesh store, prints the hash
 //   04_cubes -headless 1 -walk 1          the same with the capsule walk (physics + camera in the hash)
 //   04_cubes -skin 0                      the reeds without their skeletons (rigid bind pose)
+//   04_cubes -r.sky_ibl 1                 M-VISUAL 2: image-based lighting from the sky
 //
 // Keys: drag (left mouse) or arrows orbit, wheel or Z/X zoom, Space auto orbit, L lights,
-// B bloom, A FXAA, 1/2/3 cascades, K sky texture, N night, P cross-fade the orrery clip, G reed
+// B bloom, A FXAA, 1/2/3 cascades, K sky texture, I image-based lighting, N night, P cross-fade the orrery clip, G reed
 // skeletons on/off, Esc quits.
 // Walk mode (C toggles): arrows move relative to the camera, Space jumps, drag orbits the boom.
 
@@ -56,6 +57,8 @@ MCE_CVAR(cv_cascades, "r.cascades", 3, "Sun shadow cascades (1-4)", CVarFlags::N
 MCE_CVAR(cv_bloom, "r.bloom", true, "Bloom", CVarFlags::None);
 MCE_CVAR(cv_fxaa, "r.fxaa", true, "FXAA", CVarFlags::None);
 MCE_CVAR(cv_sky_texture, "r.sky_texture", false, "Equirect sky texture instead of the gradient dome", CVarFlags::None);
+MCE_CVAR(cv_sky_ibl, "r.sky_ibl", false, "M-VISUAL 2: the sky lights the scene (SH9 irradiance + pre-filtered reflections)",
+         CVarFlags::None);
 MCE_CVAR(cv_night, "night", false, "Dim the sun so the point lights carry the scene", CVarFlags::None);
 MCE_CVAR(cv_yaw, "cam.yaw", 0.35f, "Initial orbit yaw (radians)", CVarFlags::None);
 MCE_CVAR(cv_pitch, "cam.pitch", 0.42f, "Initial orbit pitch (radians, down from the horizon)", CVarFlags::None);
@@ -488,6 +491,7 @@ private:
             sky.sun_intensity = 0.0f;
         }
         if (cv_sky_texture.get_bool() && sky_key_ != ~0u) sky.texture = sky_key_;
+        sky.ibl = cv_sky_ibl.get_bool();
         scene.set_sky(sky);
         PostFx post;
         post.bloom = cv_bloom.get_bool();
@@ -656,6 +660,7 @@ private:
                     case Key::B: if (down) toggle(cv_bloom); break;
                     case Key::A: if (down) toggle(cv_fxaa); break;
                     case Key::K: if (down) toggle(cv_sky_texture); break;
+                    case Key::I: if (down) toggle(cv_sky_ibl); break;
                     case Key::N: if (down) toggle(cv_night); break;
                     case Key::P: if (down) self->toggle_clip_ = true; break;
                     case Key::G: if (down) self->reed_skinning_ = !self->reed_skinning_; break;

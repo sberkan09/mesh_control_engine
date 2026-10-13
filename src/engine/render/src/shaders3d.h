@@ -2,7 +2,8 @@
 // GLSL 450 of the 3D frame (Forward3D, ADR-0024). Uniform blocks follow the fixed bank table
 // (rhi-renderer.md §3.3): FrameU 0, PassU 1, ObjectU 3; std430 Clusters 4, LightPool 5,
 // LightIndices 6, JointPalette 7 (skinned vertex shaders); samplers albedo 6, normal 7, ORM 8,
-// shadow cascades 9, sky 10, emissive 13.
+// shadow cascades 9, sky 10, emissive 13; image-based lighting (M-VISUAL 2): pre-filtered sky 12,
+// BRDF LUT 14, SH9 irradiance 15.
 // The C++ mirrors of the blocks live in forward3d.cpp and must match member for member.
 
 namespace mce::render::shaders3d {
@@ -36,6 +37,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_sky_horizon;    // rgb, w: specular ambient scale
     vec4 p_sky_ground;     // rgb, w: sky texture max lod (-1 = gradient)
     vec4 p_sun;            // x: cos of the disk radius, y: disk intensity, z: sky texture intensity, w: texture is additive
+    vec4 p_ibl;            // x: image-based lighting on, y: diffuse scale, z: pre-filtered layers, w: bake roughness
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -132,7 +134,35 @@ void main() {
 }
 )";
 
-constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U R"(
+// Image-based lighting (M-VISUAL 2): the sky pre-filtered for GGX into equirect layers of rising
+// roughness ((i + 1) / layers; roughness 0 reads the sky itself), the split-sum BRDF LUT and the SH9
+// irradiance, stored as 9 texels already convolved with the cosine lobe and divided by pi.
+#define MCE_GLSL_IBL R"(
+layout(binding = 12) uniform sampler2DArray u_env;
+layout(binding = 14) uniform sampler2D u_brdf_lut;
+layout(binding = 15) uniform sampler2D u_env_sh;
+vec3 sh_irradiance(vec3 n) {
+    vec3 e = texelFetch(u_env_sh, ivec2(0, 0), 0).rgb * 0.282095;
+    e += texelFetch(u_env_sh, ivec2(1, 0), 0).rgb * (0.488603 * n.y);
+    e += texelFetch(u_env_sh, ivec2(2, 0), 0).rgb * (0.488603 * n.z);
+    e += texelFetch(u_env_sh, ivec2(3, 0), 0).rgb * (0.488603 * n.x);
+    e += texelFetch(u_env_sh, ivec2(4, 0), 0).rgb * (1.092548 * n.x * n.y);
+    e += texelFetch(u_env_sh, ivec2(5, 0), 0).rgb * (1.092548 * n.y * n.z);
+    e += texelFetch(u_env_sh, ivec2(6, 0), 0).rgb * (0.315392 * (3.0 * n.z * n.z - 1.0));
+    e += texelFetch(u_env_sh, ivec2(7, 0), 0).rgb * (1.092548 * n.x * n.z);
+    e += texelFetch(u_env_sh, ivec2(8, 0), 0).rgb * (0.546274 * (n.x * n.x - n.y * n.y));
+    return max(e, vec3(0.0));
+}
+vec3 prefiltered_sky(vec3 r, float rough) {
+    float lv = rough * p_ibl.z - 1.0;
+    vec2 uv = equirect_uv(r);
+    if (lv < 0.0) return mix(sky_radiance(r, rough * 8.0), textureLod(u_env, vec3(uv, 0.0), 0.0).rgb, lv + 1.0);
+    float i0 = floor(lv), i1 = min(i0 + 1.0, p_ibl.z - 1.0);
+    return mix(textureLod(u_env, vec3(uv, i0), 0.0).rgb, textureLod(u_env, vec3(uv, i1), 0.0).rgb, lv - i0);
+}
+)"
+
+constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL R"(
 layout(binding = 6) uniform sampler2DArray u_albedo;
 layout(binding = 7) uniform sampler2DArray u_normal_map;
 layout(binding = 8) uniform sampler2DArray u_orm;
@@ -285,12 +315,20 @@ void main() {
             color += direct(n, v, ld, diffuse, f0, a, L.color.rgb * att);
         }
 
-        // Ambient: hemisphere diffuse + sky reflections through the analytic split-sum.
+        // Ambient: hemisphere diffuse + sky reflections through the analytic split-sum, or with
+        // image-based lighting the SH9 sky irradiance + the pre-filtered sky through the BRDF LUT.
         float NoV = max(dot(n, v), 1e-4);
-        vec3 amb_diffuse = mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
         vec3 r = reflect(-v, n);
         float horizon = clamp(1.0 + dot(r, normalize(v_normal)), 0.0, 1.0);
-        vec3 amb_spec = sky_radiance(r, rough * 8.0) * env_brdf(f0, rough, NoV) * p_sky_horizon.w * horizon * horizon;
+        vec3 amb_diffuse, amb_spec;
+        if (p_ibl.x > 0.5) {
+            amb_diffuse = sh_irradiance(n) * diffuse * p_ibl.y;
+            vec2 ab = textureLod(u_brdf_lut, vec2(NoV, rough), 0.0).rg;
+            amb_spec = prefiltered_sky(r, rough) * (f0 * ab.x + ab.y) * p_sky_horizon.w * horizon * horizon;
+        } else {
+            amb_diffuse = mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
+            amb_spec = sky_radiance(r, rough * 8.0) * env_brdf(f0, rough, NoV) * p_sky_horizon.w * horizon * horizon;
+        }
         color += (amb_diffuse * mix(0.55, 1.0, sh * clamp(dot(n, l), 0.0, 1.0)) + amb_spec) * ao;
     }
     vec3 emissive = o_emissive.rgb;
@@ -514,6 +552,115 @@ void main() {
 }
 )";
 
+// ---- image-based lighting bakes (M-VISUAL 2): full-screen passes, so every backend runs them -------
+
+#define MCE_GLSL_IBL_SAMPLING R"(
+vec2 hammersley(uint i, uint n) { return vec2(float(i) / float(n), float(bitfieldReverse(i)) * 2.3283064365386963e-10); }
+// A GGX half vector around n for roughness^2 `a`.
+vec3 importance_ggx(vec2 xi, vec3 n, float a) {
+    float phi = 2.0 * PI * xi.x;
+    float cos_t = sqrt((1.0 - xi.y) / (1.0 + (a * a - 1.0) * xi.y));
+    float sin_t = sqrt(1.0 - cos_t * cos_t);
+    vec3 up = abs(n.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 t = normalize(cross(up, n));
+    vec3 b = cross(n, t);
+    return normalize(t * (sin_t * cos(phi)) + b * (sin_t * sin(phi)) + n * cos_t);
+}
+vec3 equirect_dir(vec2 uv) {
+    float phi = (uv.x - 0.5) * 2.0 * PI, theta = uv.y * PI;
+    return vec3(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi));
+}
+)"
+
+// One layer of the pre-filtered sky: GGX-weighted sky radiance around each texel's direction
+// (N = V = R), with filtered importance sampling reading blurrier sky mips for sparser samples.
+constexpr const char* kIblPrefilterFS = "#version 450 core\n" MCE_GLSL_PASS_U MCE_GLSL_IBL_SAMPLING R"(
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+const uint kSamples = 64u;
+void main() {
+    vec3 n = equirect_dir(v_uv);
+    float a = p_ibl.w * p_ibl.w;
+    // Solid angle of one texel of the sky texture's top mip (2:1 equirect, p_sky_ground.w = max lod).
+    float texel_sa = 4.0 * PI / exp2(2.0 * max(p_sky_ground.w, 0.0) - 1.0);
+    vec3 sum = vec3(0.0);
+    float weight = 0.0;
+    for (uint i = 0u; i < kSamples; ++i) {
+        vec3 h = importance_ggx(hammersley(i, kSamples), n, a);
+        vec3 l = 2.0 * dot(n, h) * h - n;
+        float nol = dot(n, l);
+        if (nol <= 0.0) continue;
+        float noh = max(dot(n, h), 0.0);
+        float dd = noh * noh * (a * a - 1.0) + 1.0;
+        float pdf = a * a / (PI * dd * dd) * 0.25;  // D * NoH / (4 VoH) with V = N
+        float lod = 0.5 * log2(1.0 / (float(kSamples) * pdf + 1e-6) / texel_sa) + 1.0;
+        sum += sky_radiance(l, max(lod, 0.0)) * nol;
+        weight += nol;
+    }
+    o_color = vec4(sum / max(weight, 1e-4), 1.0);
+}
+)";
+
+// SH9 of the sky: texel k of a 9×1 target integrates radiance × Y_k over the sphere (64×32 grid),
+// then applies the cosine-lobe band factors (pi, 2pi/3, pi/4) and the 1/pi of a Lambert BRDF.
+constexpr const char* kIblShFS = "#version 450 core\n" MCE_GLSL_PASS_U MCE_GLSL_IBL_SAMPLING R"(
+layout(location = 0) in vec2 v_uv;  // unread; declared so the interface matches fullscreen.vert
+layout(location = 0) out vec4 o_color;
+float sh_basis(int k, vec3 d) {
+    if (k == 0) return 0.282095;
+    if (k == 1) return 0.488603 * d.y;
+    if (k == 2) return 0.488603 * d.z;
+    if (k == 3) return 0.488603 * d.x;
+    if (k == 4) return 1.092548 * d.x * d.y;
+    if (k == 5) return 1.092548 * d.y * d.z;
+    if (k == 6) return 0.315392 * (3.0 * d.z * d.z - 1.0);
+    if (k == 7) return 1.092548 * d.x * d.z;
+    return 0.546274 * (d.x * d.x - d.y * d.y);
+}
+void main() {
+    int k = int(gl_FragCoord.x);
+    float lod = max(p_sky_ground.w - 6.0, 0.0);  // the mip nearest the 64-wide grid
+    vec3 sum = vec3(0.0);
+    for (int j = 0; j < 32; ++j) {
+        for (int i = 0; i < 64; ++i) {
+            vec2 uv = vec2((float(i) + 0.5) / 64.0, (float(j) + 0.5) / 32.0);
+            vec3 d = equirect_dir(uv);
+            float d_omega = sin(uv.y * PI) * (PI / 32.0) * (2.0 * PI / 64.0);
+            sum += sky_radiance(d, lod) * sh_basis(k, d) * d_omega;
+        }
+    }
+    float band = k == 0 ? 1.0 : (k < 4 ? 2.0 / 3.0 : 0.25);
+    o_color = vec4(sum * band, 1.0);
+}
+)";
+
+// The split-sum BRDF LUT (Karis 2013): x = NoV, y = roughness; rg = scale and bias of F0.
+constexpr const char* kIblBrdfFS = "#version 450 core\nconst float PI = 3.14159265359;\n" MCE_GLSL_IBL_SAMPLING R"(
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+const uint kSamples = 256u;
+void main() {
+    float nov = max(v_uv.x, 1e-3), rough = v_uv.y;
+    float a = rough * rough;
+    float k = a * 0.5;  // Smith-Schlick k for image-based lighting
+    vec3 v = vec3(sqrt(1.0 - nov * nov), 0.0, nov);
+    vec2 ab = vec2(0.0);
+    for (uint i = 0u; i < kSamples; ++i) {
+        vec3 h = importance_ggx(hammersley(i, kSamples), vec3(0.0, 0.0, 1.0), a);
+        vec3 l = 2.0 * dot(v, h) * h - v;
+        float nol = clamp(l.z, 0.0, 1.0), noh = clamp(h.z, 0.0, 1.0), voh = clamp(dot(v, h), 0.0, 1.0);
+        if (nol <= 0.0) continue;
+        float g = (nol / (nol * (1.0 - k) + k)) * (nov / (nov * (1.0 - k) + k));
+        float g_vis = g * voh / max(noh * nov, 1e-6);
+        float fc = pow(1.0 - voh, 5.0);
+        ab += vec2((1.0 - fc) * g_vis, fc * g_vis);
+    }
+    o_color = vec4(ab / float(kSamples), 0.0, 1.0);
+}
+)";
+
+#undef MCE_GLSL_IBL
+#undef MCE_GLSL_IBL_SAMPLING
 #undef MCE_GLSL_FRAME_U
 #undef MCE_GLSL_PASS_U
 // Forward+ light assignment on the GPU (M-VISUAL 1): the twin of ClusterLights::assign(). One

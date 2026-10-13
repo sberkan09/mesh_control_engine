@@ -135,7 +135,7 @@ struct Environment3D {
     u32 shadow_cascades = 3;
     f32 shadow_distance = 60.0f;
     f32 shadow_blend = 0.1f;
-    u32 pad_ = 0;
+    u32 sky_ibl = 0;  // 1: the sky lights the scene (image-based lighting, M-VISUAL 2)
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -143,7 +143,7 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (sky_sun_intensity, Range{0, 100}), sky_ground, (sky_texture_intensity, Range{0, 10}), shadow_splits,
               sky_texture_additive, (sky_specular_ambient, Range{0, 2}), bloom, (bloom_intensity, Range{0, 1}),
               (bloom_threshold, Range{0, 10}), fxaa, (shadow_cascades, Range{1, 4}), (shadow_distance, Range{1, 2000}),
-              (shadow_blend, Range{0, 0.5f}))
+              (shadow_blend, Range{0, 0.5f}), (sky_ibl, Help{"1: SH9 sky irradiance + pre-filtered sky reflections"}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 

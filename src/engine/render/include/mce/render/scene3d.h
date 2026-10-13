@@ -64,6 +64,11 @@ struct Sky {
     bool texture_additive = false;             // true: gradient + texture * intensity (a star field over a dusk gradient)
     f32 specular_ambient = 0.5f;               // scale of sky reflections on surfaces
     bool enabled = true;                       // false: clear to the fog color (the M4 look)
+    // Image-based lighting (M-VISUAL 2): the sky lights the scene through an SH9 irradiance (in place
+    // of DirectionalLight's two-color hemisphere) and a GGX pre-filtered copy with a BRDF LUT (in
+    // place of the analytic split-sum). Re-baked when the sky changes; off = the frame without it.
+    bool ibl = false;
+    f32 diffuse_ambient = 1.0f;                // scale of the SH9 sky irradiance (ibl only)
 };
 
 // The post chain (FR-R3D-090): bloom -> ACES tonemap (exposure) -> FXAA. Toggleable per frame.

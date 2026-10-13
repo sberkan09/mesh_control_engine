@@ -15,6 +15,8 @@ namespace {
 MCE_CVAR(cv_gpu_light_clusters, "r.gpu_light_clusters", true,
          "Assign Forward+ lights in a compute pass when the GPU has compute (off = the CPU assignment)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_ibl, "r.ibl", true, "Image-based lighting for scenes that ask for it (Sky::ibl; off = the hemisphere ambient)",
+         CVarFlags::RequiresRestart);
 
 // std140 mirrors of the shader blocks (shaders3d.h): vec4/mat4 members only, so no padding rules.
 struct FrameU {
@@ -42,6 +44,7 @@ struct PassU {
     vec4 sky_horizon;  // w: specular ambient
     vec4 sky_ground;   // w: sky texture max lod, -1 = gradient
     vec4 sun;          // x: cos disk, y: disk intensity, z: texture intensity, w: texture additive
+    vec4 ibl;          // x: on, y: diffuse scale, z: pre-filtered layers, w: bake roughness
 };
 
 struct ObjectU {
@@ -70,6 +73,36 @@ struct PostU {
 };
 
 enum Stage : u32 { kTsBegin, kTsClusters, kTsShadow, kTsMain, kTsResolve, kTsBloom, kTsTonemap, kTsFxaa };
+
+// The sky's PassU members; returns the texture to bind at bank::kSky.
+rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& device, const Sky& sky, PassU& pu) {
+    rhi::TextureHandle sky_tex = textures.white();
+    f32 sky_lod = -1.0f;
+    if (sky.texture != ~0u && textures.contains(sky.texture)) {
+        sky_tex = textures.get(sky.texture);
+        sky_lod = f32(max<u32>(device.texture_desc(sky_tex).mip_levels, 1u) - 1u);
+    }
+    pu.sky_zenith = vec4(sky.zenith, sky.enabled ? 1.0f : 0.0f);
+    pu.sky_horizon = vec4(sky.horizon, sky.specular_ambient);
+    pu.sky_ground = vec4(sky.ground, sky_lod);
+    pu.sun = {sky.sun_size, sky.sun_intensity, sky.texture_intensity, sky.texture_additive ? 1.0f : 0.0f};
+    return sky_tex;
+}
+
+// What the IBL bake reads from the sky (the radiance function sky_radiance() evaluates).
+u64 sky_radiance_key(const Sky& sky, rhi::TextureHandle sky_tex, f32 sky_lod) {
+    u64 h = 1469598103934665603ull;
+    auto mix = [&h](const void* p, usize n) {
+        const auto* b = static_cast<const u8*>(p);
+        for (usize i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
+    };
+    const f32 f[11] = {sky.zenith.x,  sky.zenith.y,  sky.zenith.z,  sky.horizon.x,         sky.horizon.y, sky.horizon.z,
+                       sky.ground.x,  sky.ground.y,  sky.ground.z,  sky.texture_intensity, sky_lod};
+    const u32 u[3] = {sky.texture_additive ? 1u : 0u, sky_tex.index, sky_tex.generation};
+    mix(f, sizeof(f));
+    mix(u, sizeof(u));
+    return h | 1u;  // never 0 (= not baked)
+}
 
 void destroy(rhi::RenderDevice& d, rhi::TextureHandle& t) {
     if (!t.is_null()) d.destroy_texture(t);
@@ -108,6 +141,9 @@ ResultV Forward3D::init(rhi::RenderDevice& device, const TextureStore& textures,
     rhi::SamplerDesc lc;
     lc.min_filter = lc.mag_filter = rhi::Filter::Linear;
     linear_clamp_ = device.create_sampler(lc);
+    rhi::SamplerDesc es = lc;
+    es.wrap_s = rhi::AddressMode::Repeat;  // around the equirect seam; clamped at the poles
+    env_sampler_ = device.create_sampler(es);
 
     rhi::TextureDesc td;
     td.size = {desc_.shadow_size, desc_.shadow_size};
@@ -215,6 +251,17 @@ ResultV Forward3D::create_pipelines() {
         if (auto p = device_->create_compute_pipeline(cd)) cluster_build_ = p.value();
         else MCE_LOG_WARN("render3d: GPU light assignment unavailable, using the CPU path");
     }
+    if (desc_.ibl && cv_ibl.get_bool()) {
+        fs.fragment_shader = {kIblPrefilterFS, "ibl_prefilter.frag"};
+        fs.debug_name = "ibl.prefilter";
+        MCE_TRY_ASSIGN(ibl_prefilter_, device_->create_pipeline(fs));
+        fs.fragment_shader = {kIblShFS, "ibl_sh.frag"};
+        fs.debug_name = "ibl.sh9";
+        MCE_TRY_ASSIGN(ibl_sh_pipe_, device_->create_pipeline(fs));
+        fs.fragment_shader = {kIblBrdfFS, "ibl_brdf.frag"};
+        fs.debug_name = "ibl.brdf_lut";
+        MCE_TRY_ASSIGN(ibl_brdf_, device_->create_pipeline(fs));
+    }
     return ok();
 }
 
@@ -278,11 +325,14 @@ void Forward3D::shutdown() {
     destroy_targets();
     for (rhi::PipelineHandle* p :
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &skinned_cull_,
-          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_}) {
+          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_,
+          &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
-    for (rhi::SamplerHandle* s : {&material_sampler_, &shadow_sampler_, &point_sampler_, &linear_clamp_}) {
+    for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_}) destroy(*device_, *t);
+    ibl_key_ = 0;
+    for (rhi::SamplerHandle* s : {&material_sampler_, &shadow_sampler_, &point_sampler_, &linear_clamp_, &env_sampler_}) {
         if (!s->is_null()) device_->destroy_sampler(*s);
         *s = {};
     }
@@ -333,6 +383,7 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     const Span<const mat4> palette = scene.joint_palette();
     if (!palette.empty()) cmd.set_storage_data(rhi::bank::kJointPalette, std::as_bytes(palette));
     stats_.joints = static_cast<u32>(palette.size());
+    record_ibl(cmd, scene);  // rare (sky changes), so outside the per-stage budget
     timestamp(cmd, kTsBegin);
     record_clusters(cmd, scene);
     timestamp(cmd, kTsClusters);
@@ -380,6 +431,65 @@ void Forward3D::record_clusters(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     cmd.barrier(rhi::barrier::kStorageBuffer);
     cmd.pop_debug_scope();
     stats_.gpu_clusters = true;
+}
+
+// ---- image-based lighting (M-VISUAL 2): bakes the sky's IBL textures when the sky changed
+void Forward3D::record_ibl(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const Sky& sky = scene.sky();
+    if (!sky.ibl || ibl_prefilter_.is_null()) return;
+    stats_.ibl = true;
+    auto pass_into = [&](rhi::TextureHandle t, u16 layer, const char* name) {
+        rhi::PassAttachment out;
+        out.texture = t;
+        out.layer = layer;
+        out.load = rhi::LoadOp::DontCare;
+        rhi::RenderPassDesc p;
+        p.colors = Span<const rhi::PassAttachment>(&out, 1);
+        p.debug_name = name;
+        cmd.begin_pass(p);
+    };
+    cmd.push_debug_scope("ibl");
+    if (ibl_lut_.is_null()) {
+        rhi::TextureDesc d;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.size = {kIblLutSize, kIblLutSize};
+        d.debug_name = "mce.3d.ibl_brdf_lut";
+        ibl_lut_ = device_->create_texture(d);
+        d.size = {9, 1};
+        d.debug_name = "mce.3d.ibl_sh9";
+        ibl_sh_ = device_->create_texture(d);
+        d.size = {kIblEnvWidth, kIblEnvWidth / 2};
+        d.dimension = rhi::TextureDimension::Tex2DArray;
+        d.array_layers = kIblLayers;
+        d.debug_name = "mce.3d.ibl_env";
+        ibl_env_ = device_->create_texture(d);
+        pass_into(ibl_lut_, 0, "ibl.brdf_lut");  // depends on nothing: once
+        cmd.bind_pipeline(ibl_brdf_);
+        cmd.draw_non_indexed(3);
+        cmd.end_pass();
+    }
+    PassU pu{};
+    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu);
+    const u64 key = sky_radiance_key(sky, sky_tex, pu.sky_ground.w);
+    if (key != ibl_key_) {
+        cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
+        for (u32 i = 0; i < kIblLayers; ++i) {
+            pass_into(ibl_env_, static_cast<u16>(i), "ibl.prefilter");
+            cmd.bind_pipeline(ibl_prefilter_);
+            pu.ibl = {0.0f, 0.0f, f32(kIblLayers), f32(i + 1) / f32(kIblLayers)};
+            cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
+            cmd.draw_non_indexed(3);
+            cmd.end_pass();
+        }
+        pass_into(ibl_sh_, 0, "ibl.sh9");
+        cmd.bind_pipeline(ibl_sh_pipe_);
+        cmd.draw_non_indexed(3);
+        cmd.end_pass();
+        ibl_key_ = key;
+        stats_.ibl_baked = true;
+    }
+    cmd.pop_debug_scope();
 }
 
 // ---- 1. cascades: one depth-only pass per layer, each with its own caster list
@@ -483,17 +593,13 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             pu.cascade[i] = mat4::identity();
         }
     }
-    u32 sky_key = sky.texture;
-    rhi::TextureHandle sky_tex = textures_->white();
-    f32 sky_lod = -1.0f;
-    if (sky_key != ~0u && textures_->contains(sky_key)) {
-        sky_tex = textures_->get(sky_key);
-        sky_lod = f32(max<u32>(device_->texture_desc(sky_tex).mip_levels, 1u) - 1u);
+    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu);
+    if (stats_.ibl) {
+        pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), 0.0f};
+        cmd.bind_texture(rhi::bank::kIblEnv, ibl_env_, env_sampler_);
+        cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_lut_, linear_clamp_);
+        cmd.bind_texture(rhi::bank::kIblSh, ibl_sh_, point_sampler_);
     }
-    pu.sky_zenith = vec4(sky.zenith, sky.enabled ? 1.0f : 0.0f);
-    pu.sky_horizon = vec4(sky.horizon, sky.specular_ambient);
-    pu.sky_ground = vec4(sky.ground, sky_lod);
-    pu.sun = {sky.sun_size, sky.sun_intensity, sky.texture_intensity, sky.texture_additive ? 1.0f : 0.0f};
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);

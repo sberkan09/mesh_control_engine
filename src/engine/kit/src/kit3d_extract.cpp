@@ -241,6 +241,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     sky.texture_additive = env.sky_texture_additive != 0;
     sky.specular_ambient = env.sky_specular_ambient;
     sky.enabled = env.sky_enabled != 0;
+    sky.ibl = env.sky_ibl != 0;
     scene.set_sky(sky);
     render::Fog fog;
     fog.color = env.fog_color;
