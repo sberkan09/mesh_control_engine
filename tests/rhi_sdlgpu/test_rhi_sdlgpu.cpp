@@ -272,3 +272,191 @@ TEST_CASE("rhi_sdlgpu: frame fences gate core frame slots") {
         CHECK(fence->is_signaled());
     }
 }
+
+// ---- compute (M-VISUAL 1): the rhi_gl checks, on SDL GPU ---------------------------------------
+
+namespace {
+
+constexpr const char* kFillCS = R"(#version 450 core
+layout(local_size_x = 64) in;
+layout(std430, binding = 4) buffer Out { uint v[]; };
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    v[i] = i * 3u + 1u;
+}
+)";
+
+// Writes the dispatch arguments for the next pass: 3 groups.
+constexpr const char* kArgsCS = R"(#version 450 core
+layout(local_size_x = 1) in;
+layout(std430, binding = 5) buffer Args { uint groups[3]; };
+void main() { groups[0] = 3u; groups[1] = 1u; groups[2] = 1u; }
+)";
+
+constexpr const char* kMarkCS = R"(#version 450 core
+layout(local_size_x = 1) in;
+layout(std430, binding = 4) buffer Out { uint v[]; };
+void main() { v[gl_WorkGroupID.x] = 7u; }
+)";
+
+constexpr const char* kImageWriteCS = R"(#version 450 core
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba8, binding = 0) uniform writeonly image2D u_out;
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    imageStore(u_out, p, vec4(float(p.x) / 255.0, p.y == 0 ? 1.0 : 0.0, 0.5, 1.0));
+}
+)";
+
+// Reads the image back through imageLoad (the storage-image barrier path) into an SSBO.
+constexpr const char* kImageReadCS = R"(#version 450 core
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba8, binding = 1) uniform readonly image2D u_in;
+layout(std430, binding = 4) buffer Out { uint v[]; };
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    v[p.y * 64 + p.x] = uint(imageLoad(u_in, p).r * 255.0 + 0.5);
+}
+)";
+
+rhi::PipelineHandle make_compute(rhi::RenderDevice& device, const char* src, const char* name) {
+    rhi::ComputePipelineDesc desc;
+    desc.compute_shader = {src, name};
+    desc.debug_name = name;
+    auto p = device.create_compute_pipeline(desc);
+    REQUIRE(p.has_value());
+    return p.has_value() ? p.value() : rhi::PipelineHandle{};
+}
+
+}  // namespace
+
+TEST_CASE("rhi_sdlgpu: compute caps") {
+    Fixture f;
+    if (!f.ok) return;
+    const rhi::DeviceCaps& caps = f.device->caps();
+    CHECK(caps.compute);
+    CHECK(caps.max_compute_invocations >= 128);  // Vulkan minimums (SDL GPU reports no limits)
+    CHECK(caps.max_compute_group_size[0] >= 128);
+    CHECK(caps.max_compute_group_size[2] >= 64);
+    CHECK(caps.max_compute_group_count[0] >= 65535);
+    CHECK(caps.max_storage_image_units >= 8);
+}
+
+TEST_CASE("rhi_sdlgpu: compute dispatch writes a storage buffer") {
+    Fixture f;
+    if (!f.ok) return;
+    const rhi::PipelineHandle fill = make_compute(*f.device, kFillCS, "fill.comp");
+    if (fill.is_null()) return;
+    const rhi::BufferHandle out = f.device->create_buffer({rhi::BufferUsage::Storage, 256 * sizeof(u32), "fill.out"});
+
+    f.device->begin_frame(0);
+    rhi::CommandBuffer cmd;
+    cmd.bind_pipeline(fill);
+    cmd.bind_storage_buffer(rhi::bank::kClusters, out, 0, 0);
+    cmd.dispatch(4);
+    cmd.barrier(rhi::barrier::kStorageBuffer);
+    f.device->submit(cmd);
+    f.device->end_frame();
+    CHECK(f.device->last_frame_stats().dispatches == 1);
+
+    u32 v[256] = {};
+    MCE_REQUIRE_OR_RETURN(f.device->read_buffer(out, 0, std::as_writable_bytes(std::span(v))).has_value());
+    bool all = true;
+    for (u32 i = 0; i < 256; ++i) all = all && v[i] == i * 3 + 1;
+    CHECK(all);
+    CHECK_FALSE(f.device->read_buffer(out, 1020, std::as_writable_bytes(std::span(v, 2))).has_value());
+    CHECK(f.device->validation_error_count() == 0);
+    f.device->destroy_pipeline(fill);
+    CHECK_FALSE(f.device->is_alive(fill));
+}
+
+TEST_CASE("rhi_sdlgpu: dispatch_indirect reads arguments a dispatch wrote") {
+    Fixture f;
+    if (!f.ok) return;
+    const rhi::PipelineHandle args_pipe = make_compute(*f.device, kArgsCS, "args.comp");
+    const rhi::PipelineHandle mark = make_compute(*f.device, kMarkCS, "mark.comp");
+    if (args_pipe.is_null() || mark.is_null()) return;
+    const rhi::BufferHandle args =
+        f.device->create_buffer({rhi::BufferUsage::IndirectArgs, sizeof(rhi::DispatchIndirectCommand), "args"});
+    const u32 zeros[8] = {};
+    const rhi::BufferHandle out =
+        f.device->create_buffer({rhi::BufferUsage::Storage, sizeof(zeros), "mark.out"}, rhi::as_bytes(zeros));
+
+    f.device->begin_frame(0);
+    rhi::CommandBuffer cmd;
+    cmd.bind_pipeline(args_pipe);
+    cmd.bind_storage_buffer(rhi::bank::kLightPool, args, 0, 0);
+    cmd.dispatch(1);
+    cmd.barrier(rhi::barrier::kIndirect);
+    cmd.bind_pipeline(mark);
+    cmd.bind_storage_buffer(rhi::bank::kClusters, out, 0, 0);
+    cmd.dispatch_indirect(args);
+    cmd.barrier(rhi::barrier::kStorageBuffer);
+    f.device->submit(cmd);
+    f.device->end_frame();
+    CHECK(f.device->last_frame_stats().dispatches == 2);
+
+    u32 v[8] = {};
+    MCE_REQUIRE_OR_RETURN(f.device->read_buffer(out, 0, std::as_writable_bytes(std::span(v))).has_value());
+    CHECK(v[0] == 7);
+    CHECK(v[2] == 7);
+    CHECK(v[3] == 0);  // three groups, not four
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("rhi_sdlgpu: storage image written by compute, read by readback and imageLoad") {
+    Fixture f;
+    if (!f.ok) return;
+    const rhi::PipelineHandle write = make_compute(*f.device, kImageWriteCS, "image_write.comp");
+    const rhi::PipelineHandle read = make_compute(*f.device, kImageReadCS, "image_read.comp");
+    if (write.is_null() || read.is_null()) return;
+    rhi::TextureDesc td;
+    td.size = {64, 32};
+    td.format = rhi::TextureFormat::RGBA8_UNorm;
+    td.usage = rhi::TextureUsage::SampledStorage;
+    td.debug_name = "storage";
+    const rhi::TextureHandle img = f.device->create_texture(td);
+    MCE_REQUIRE_OR_RETURN(f.device->is_alive(img));
+    const rhi::BufferHandle out = f.device->create_buffer({rhi::BufferUsage::Storage, 64 * 32 * sizeof(u32), "read.out"});
+
+    f.device->begin_frame(0);
+    rhi::CommandBuffer cmd;
+    cmd.bind_pipeline(write);
+    cmd.bind_storage_image(0, img, 0, rhi::StorageAccess::Write);
+    cmd.dispatch(8, 4);
+    cmd.barrier(rhi::barrier::kStorageImage | rhi::barrier::kSampled);
+    cmd.bind_pipeline(read);
+    cmd.bind_storage_image(1, img, 0, rhi::StorageAccess::Read);
+    cmd.bind_storage_buffer(rhi::bank::kClusters, out, 0, 0);
+    cmd.dispatch(8, 4);
+    cmd.barrier(rhi::barrier::kStorageBuffer);
+    f.device->submit(cmd);
+
+    Array<u8> px;
+    px.resize(64 * 32 * 4);
+    MCE_REQUIRE_OR_RETURN(f.device->read_pixels(img, rhi::Rect2D{0, 0, 64, 32}, px.span()).has_value());
+    f.device->end_frame();
+    // Image row 0 is the bottom row of a top-row-first readback (the render-target convention).
+    CHECK(pixel(px, 64, 10, 31).r == 10);
+    CHECK(pixel(px, 64, 10, 31).g == 255);
+    CHECK(pixel(px, 64, 40, 0).r == 40);
+    CHECK(pixel(px, 64, 40, 0).g == 0);
+    CHECK(pixel(px, 64, 40, 0).b == 128);
+
+    Array<u32> v;
+    v.resize(64 * 32);
+    MCE_REQUIRE_OR_RETURN(f.device->read_buffer(out, 0, std::as_writable_bytes(v.span())).has_value());
+    CHECK(v[5 * 64 + 33] == 33);
+    CHECK(v[31 * 64 + 63] == 63);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("rhi_sdlgpu: compute compile errors are Results") {
+    Fixture f;
+    if (!f.ok) return;
+    rhi::ComputePipelineDesc desc;
+    desc.compute_shader = {"#version 450 core\nlayout(local_size_x = 1) in;\nvoid main() { oops; }\n", "broken.comp"};
+    auto p = f.device->create_compute_pipeline(desc);
+    MCE_REQUIRE_OR_RETURN(!p.has_value());
+    CHECK(p.error().code == Errc::ShaderCompile);
+}

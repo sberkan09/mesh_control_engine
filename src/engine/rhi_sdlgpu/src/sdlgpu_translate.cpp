@@ -344,8 +344,8 @@ void SdlGpuDevice::end_pass() {
 // Binds the pipeline variant for the current pass and every resource its stages declare.
 bool SdlGpuDevice::flush_draw_state(SDL_GPUCommandBuffer* /*gcb*/) {
     GpuPipeline* p = ts_.pipeline;
-    if (!p || !ts_.pass) {
-        MCE_ASSERT_MSG(p, "draw without a bound pipeline");
+    if (!p || !ts_.pass || p->cs) {
+        MCE_ASSERT_MSG(p && !p->cs, "draw without a bound graphics pipeline");
         return false;
     }
     SDL_GPUGraphicsPipeline* gp = pipeline_variant(*p);
@@ -417,6 +417,78 @@ void SdlGpuDevice::resolve(SDL_GPUCommandBuffer* gcb, const cmd::Resolve& r) {
     if (pass) SDL_EndGPURenderPass(pass);
 }
 
+// SDL binds read-write storage when a compute pass begins and does not order dispatches inside one
+// pass, so every dispatch gets its own pass: that is also what makes CommandBuffer::barrier a no-op.
+void SdlGpuDevice::dispatch(SDL_GPUCommandBuffer* gcb, const cmd::Dispatch* direct, const cmd::DispatchIndirect* indirect) {
+    GpuPipeline* p = ts_.pipeline;
+    if (!p || !p->cs) {
+        MCE_ASSERT_MSG(false, "dispatch without a bound compute pipeline");
+        return;
+    }
+    const GpuBuffer* args = nullptr;
+    if (direct) {
+        if (direct->groups_x == 0 || direct->groups_y == 0 || direct->groups_z == 0) return;
+    } else {
+        args = buffers_.try_get(indirect->buffer);
+        const bool ok = args && indirect->offset + sizeof(DispatchIndirectCommand) <= args->size;
+        MCE_ASSERT_MSG(ok, "dispatch_indirect: stale buffer or arguments outside it");
+        if (!ok) return;
+    }
+    const StageResources& res = p->cres;
+    auto image = [&](u32 unit) -> const GpuTexture* {
+        const GpuTexture* t = textures_.try_get(images_bound_[unit].texture);
+        const bool ok = t && t->usage == TextureUsage::SampledStorage && images_bound_[unit].mip < t->mips;
+        MCE_ASSERT_MSG(ok, "dispatch: storage image unit without a SampledStorage texture");
+        return ok ? t : nullptr;
+    };
+    // Every storage image binds read-write, StorageAccess::Read included (shader_spirv.h).
+    SDL_GPUStorageTextureReadWriteBinding rw_images[kMaxStageImages] = {};
+    for (u32 i = 0; i < res.rw_image_count; ++i) {
+        const GpuTexture* t = image(res.rw_image_unit[i]);
+        if (!t) return;
+        rw_images[i].texture = t->texture;
+        rw_images[i].mip_level = images_bound_[res.rw_image_unit[i]].mip;
+    }
+    SDL_GPUStorageBufferReadWriteBinding rw_buffers[kMaxStageStorage] = {};
+    for (u32 i = 0; i < res.rw_storage_count; ++i) {
+        SDL_GPUBuffer* b = storage_bound_[res.rw_storage_binding[i]];
+        MCE_ASSERT_MSG(b, "dispatch: read-write storage buffer binding is unbound");
+        if (!b) return;
+        rw_buffers[i].buffer = b;  // cycle = false: later passes read what this one writes
+    }
+    SDL_GPUComputePass* pass = SDL_BeginGPUComputePass(gcb, rw_images, res.rw_image_count, rw_buffers, res.rw_storage_count);
+    if (!pass) {
+        MCE_LOG_ERROR("rhi.sdlgpu: compute pass '{}' failed: {}", p->name.c_str(), SDL_GetError());
+        ++validation_errors_;
+        return;
+    }
+    SDL_BindGPUComputePipeline(pass, p->cs);
+    if (res.sampler_count) {
+        SDL_GPUTextureSamplerBinding binds[kMaxStageSamplers];
+        for (u32 i = 0; i < res.sampler_count; ++i) {
+            const BoundTexture& b = textures_bound_[res.sampler_slot[i]];
+            const GpuTexture* t = textures_.try_get(b.texture);
+            const GpuSampler* s = samplers_.try_get(b.sampler);
+            const bool shadow = res.sampler_kind[i] == SamplerKind::Shadow2D || res.sampler_kind[i] == SamplerKind::Shadow2DArray;
+            binds[i].texture = t ? t->texture : dummy_tex_[static_cast<u32>(res.sampler_kind[i])];
+            binds[i].sampler = s ? s->sampler : (shadow ? dummy_compare_sampler_ : dummy_sampler_);
+        }
+        SDL_BindGPUComputeSamplers(pass, 0, binds, res.sampler_count);
+    }
+    if (res.storage_count) {
+        SDL_GPUBuffer* bufs[kMaxStageStorage];
+        for (u32 i = 0; i < res.storage_count; ++i) {
+            SDL_GPUBuffer* b = storage_bound_[res.storage_binding[i]];
+            bufs[i] = b ? b : dummy_storage_;
+        }
+        SDL_BindGPUComputeStorageBuffers(pass, 0, bufs, res.storage_count);
+    }
+    if (direct) SDL_DispatchGPUCompute(pass, direct->groups_x, direct->groups_y, direct->groups_z);
+    else SDL_DispatchGPUComputeIndirect(pass, args->buffer, static_cast<Uint32>(indirect->offset));
+    SDL_EndGPUComputePass(pass);
+    ++stats_.dispatches;
+}
+
 void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* gcb) {
     ts_.pipeline = nullptr;
     ts_.bound = nullptr;
@@ -431,6 +503,7 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
         const auto size = static_cast<Uint32>(uniform_data_[b].size());
         SDL_PushGPUVertexUniformData(gcb, b, uniform_data_[b].data(), size);
         SDL_PushGPUFragmentUniformData(gcb, b, uniform_data_[b].data(), size);
+        if (caps_.compute) SDL_PushGPUComputeUniformData(gcb, b, uniform_data_[b].data(), size);
     }
 
     usize next_prepared = 0;
@@ -462,6 +535,7 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
                 uniform_set_[c->bank] = true;
                 SDL_PushGPUVertexUniformData(gcb, c->bank, data.data(), c->size);
                 SDL_PushGPUFragmentUniformData(gcb, c->bank, data.data(), c->size);
+                if (caps_.compute) SDL_PushGPUComputeUniformData(gcb, c->bank, data.data(), c->size);
                 stats_.uniform_bytes += c->size;
                 break;
             }
@@ -473,7 +547,7 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
             case CmdType::BindStorageBuffer: {
                 const auto* c = static_cast<const cmd::BindStorageBuffer*>(payload);
                 const GpuBuffer* b = buffers_.try_get(c->buffer);
-                if (!b || c->binding >= kMaxStageStorage) break;
+                if (!b || c->binding >= kMaxStorageBindings) break;
                 if (c->offset != 0 && !warned_storage_offset_) {
                     MCE_LOG_WARN("rhi.sdlgpu: bind_storage_buffer offsets are not supported; binding the whole buffer");
                     warned_storage_offset_ = true;
@@ -483,7 +557,7 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
             }
             case CmdType::SetStorageData: {
                 const auto* c = static_cast<const cmd::SetStorageData*>(payload);
-                if (prep.ok && c->binding < kMaxStageStorage) storage_bound_[c->binding] = prep.buffer;
+                if (prep.ok && c->binding < kMaxStorageBindings) storage_bound_[c->binding] = prep.buffer;
                 break;
             }
             case CmdType::SetVertexData:
@@ -569,11 +643,17 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
                 break;
             case CmdType::Resolve: resolve(gcb, *static_cast<const cmd::Resolve*>(payload)); break;
             case CmdType::WriteTimestamp: break;  // no timestamp queries in SDL GPU (caps)
-            // Compute is GL-only so far (caps().compute stays false here; M-VISUAL 1 parity backlog).
-            case CmdType::BindStorageImage:
-            case CmdType::Dispatch:
+            case CmdType::BindStorageImage: {
+                const auto* c = static_cast<const cmd::BindStorageImage*>(payload);
+                MCE_ASSERT_MSG(c->unit < kMaxImageUnits, "bind_storage_image: unit out of range");
+                if (c->unit < kMaxImageUnits) images_bound_[c->unit] = BoundImage{c->texture, c->mip};
+                break;
+            }
+            case CmdType::Dispatch: dispatch(gcb, static_cast<const cmd::Dispatch*>(payload), nullptr); break;
             case CmdType::DispatchIndirect:
-            case CmdType::Barrier: break;
+                dispatch(gcb, nullptr, static_cast<const cmd::DispatchIndirect*>(payload));
+                break;
+            case CmdType::Barrier: break;  // each dispatch is its own compute pass; SDL orders passes
         }
     }
     if (ts_.pass) end_pass();
