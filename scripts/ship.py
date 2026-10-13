@@ -114,6 +114,7 @@ def sample_outputs(key, args):
     art["pack"] = os.path.join(sample_dir, "project", "assets.mce")
     art["module_file"] = os.path.join(sample_dir, MODULE_PREFIX + art["module"] + MODULE_SUFFIX) if art["module"] else None
     art["credits"] = os.path.join(ROOT, "samples", art["sample"], "CREDITS.md")
+    art["source"] = os.path.join(ROOT, "samples", art["sample"])
     art["android_lib"] = os.path.join(sample_dir, "lib" + art["target"] + ".so")
     art["ios_app"] = os.path.join(sample_dir, art["target"] + ".app")
     art["autoplay"] = bool(art["module"])
@@ -141,6 +142,7 @@ def project_outputs(project, args):
     return {
         "name": re.sub(r"[^A-Za-z0-9_.-]+", "-", title).strip("-") or meta["name"],
         "title": title,
+        "source": proj_dir,
         "targets": [game] + ([game + "_game"] if os.name != "nt" else []),
         "exe": os.path.join(out_dir, game + EXE),
         "pack": os.path.join(out_dir, "project", "assets.mce"),

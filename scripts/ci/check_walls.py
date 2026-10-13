@@ -11,7 +11,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCAN_DIRS = ["src", "samples", "games", "projects", "templates", "tests", "tools"]
-EXTS = {".h", ".hpp", ".inl", ".c", ".cc", ".cpp", ".mm"}
+EXTS = {".h", ".hpp", ".inl", ".c", ".cc", ".cpp", ".mm", ".swift", ".java"}
 
 # (name, pattern, allowed path prefixes, scanned path prefixes)
 WALLS = [
@@ -47,6 +47,13 @@ WALLS = [
     # astc-encoder (M-MOBILE step 8) is cook-time only: the texture importer writes ASTC blocks, runtimes upload them.
     ("astcenc wall", re.compile(r"[<\"]astcenc\.h|\bastcenc_\w+\("), ["src/engine/asset/cook/src/texture_importer.cpp"],
      ["src/", "samples/", "games/", "tests/", "tools/"]),
+    # The store wall (M-MONETIZE step 3): StoreKit, Play Billing and JNI only behind mce/platform/store.h.
+    (
+        "store wall",
+        re.compile(r"[<\"](StoreKit|jni)[/.]|^\s*import\s+StoreKit|\bJNIEnv\b|\bSK(Payment|Product|Store)\w*|com\.android\.billingclient"),
+        ["src/engine/platform/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
     ("ImGui wall", re.compile(r"\bImGui(::|zmo)|[<\"]imgui"), ["src/editor/layer/"], ["src/", "samples/", "games/"]),
     ("JPH wall", re.compile(r"\bJPH::|[<\"]Jolt/"), ["src/engine/physics3d/"], ["src/", "samples/", "games/", "tests/"]),
     ("Box2D wall", re.compile(r"\bb2[A-Z]\w*|[<\"]box2d/"), ["tests/physics2d/oracle/"], ["src/", "samples/", "games/", "tests/", "tools/"]),
