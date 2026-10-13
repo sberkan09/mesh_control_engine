@@ -44,6 +44,8 @@ struct ProductInfo {
     FixedString<128> ios_id;
     FixedString<128> android_id;
     ProductType type = ProductType::Consumable;
+    // Owning it turns every ad off (M-MONETIZE step 5): a non-consumable such as "remove_ads".
+    bool removes_ads = false;
 };
 
 struct AdPlacementInfo {

@@ -36,6 +36,12 @@
 // the ad closes. fullscreen_ad_showing() flips the moment the provider reports Shown / Closed, not
 // at a tick, because the sim is not running in between.
 //
+// "Remove ads" (step 5): a non-consumable marked removes_ads in the catalog ("removes_ads": true in
+// the .mcstore) turns every ad off from the tick it is owned. Ads::load / show / show_banner then
+// return 0 without asking the network, ready() is false and a banner on screen is hidden; when it is
+// already owned at init the ad network is not even started (no consent form, no SDK). Rewarded ads
+// go too: a game that wants to keep them offers a rewarded alternative of its own.
+//
 // Banners sit along the top or bottom edge inside the safe-area insets the host passes in
 // (set_safe_insets), so a notch or home indicator never covers them.
 //
@@ -129,6 +135,8 @@ class Ads {
 public:
     explicit Ads(Service* s = nullptr) : s_(s) {}
     bool available() const;  // false: every request ends in NoFill
+    // A removes_ads product is owned: every request below returns 0 and reaches no network.
+    bool removed() const;
     Span<const AdPlacementInfo> placements() const;
     u16 find(StringView placement_id) const;
     // Preload a rewarded or interstitial ad (Loaded / NoFill). show() loads on demand too, slower.
@@ -296,6 +304,8 @@ public:
 
     const Catalog& catalog() const { return catalog_; }
     bool owns(u16 product) const { return product < owned_.size() && owned_[product] != 0; }
+    // An owned product removes ads (Ads::removed).
+    bool ads_removed() const;
 
 private:
     friend class Store;
@@ -315,6 +325,7 @@ private:
     ServiceOptions opt_;
     SafeInsets insets_;
     bool started_ = false;
+    bool ads_started_ = false;  // not when ads were already removed at init
 
     // Inbox (any thread -> main).
     std::mutex inbox_mutex_;

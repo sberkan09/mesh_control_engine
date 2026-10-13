@@ -21,12 +21,15 @@ struct StrRef {
     u32 size;
 };
 
+constexpr u8 kFlagRemovesAds = 1;
+
 struct StoreCatalogEntry {
     StrRef id;
     StrRef ios;
     StrRef android;
-    u8 kind;  // ProductType or AdFormat
-    u8 reserved[7];
+    u8 kind;   // ProductType or AdFormat
+    u8 flags;  // products: kFlagRemovesAds; ads: 0
+    u8 reserved[6];
 };
 static_assert(sizeof(StoreCatalogEntry) == 32);
 
@@ -111,6 +114,7 @@ void encode_catalog(const Catalog& c, Array<byte>& out) {
         e.ios = add_string(blob, p.ios_id.view());
         e.android = add_string(blob, p.android_id.view());
         e.kind = static_cast<u8>(p.type);
+        e.flags = p.removes_ads ? kFlagRemovesAds : 0;
         entries.push_back(e);
     }
     for (const AdPlacementInfo& a : c.ads()) {
@@ -155,14 +159,20 @@ Result<void> decode_catalog(Span<const byte> payload, Catalog& out) {
         bool added = false;
         if (i < h.product_count) {
             if (e.kind > static_cast<u8>(ProductType::NonConsumable)) return Error(Errc::InvalidArgument, kStage, id);
+            // Only a non-consumable can remove ads (a consumable is never owned).
+            if ((e.flags & ~kFlagRemovesAds) != 0 ||
+                ((e.flags & kFlagRemovesAds) && e.kind != static_cast<u8>(ProductType::NonConsumable)))
+                return Error(Errc::InvalidArgument, kStage, id, static_cast<u32>(i));
             ProductInfo p;
             p.id = id;
             p.ios_id = ios;
             p.android_id = android;
             p.type = static_cast<ProductType>(e.kind);
+            p.removes_ads = (e.flags & kFlagRemovesAds) != 0;
             added = !p.id.truncated() && !p.ios_id.truncated() && !p.android_id.truncated() && out.add_product(p);
         } else {
-            if (e.kind > static_cast<u8>(AdFormat::Banner)) return Error(Errc::InvalidArgument, kStage, id);
+            if (e.kind > static_cast<u8>(AdFormat::Banner) || e.flags != 0)
+                return Error(Errc::InvalidArgument, kStage, id, static_cast<u32>(i));
             AdPlacementInfo a;
             a.id = id;
             a.ios_unit = ios;

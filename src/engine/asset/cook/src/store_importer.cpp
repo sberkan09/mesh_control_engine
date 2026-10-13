@@ -4,13 +4,14 @@
 //
 // {
 //   "format": "mce-store", "version": 1, "guid": "<uuid>",
-//   "products": [ { "id": "remove_ads", "type": "non_consumable", "ios": "...", "android": "..." } ],
+//   "products": [ { "id": "remove_ads", "type": "non_consumable", "ios": "...", "android": "...",
+//                   "removes_ads": true } ],
 //   "ads": [ { "id": "level_end", "format": "interstitial", "ios": "...", "android": "..." } ],
 //   "admob": { "ios": "ca-app-pub-...~...", "android": "ca-app-pub-...~..." }
 // }
 //
-// "type" is consumable or non_consumable; "format" is rewarded, interstitial or banner; "ios" and
-// "android" are optional (a product without one is not sold there; a placement without one shows
+// "type" is consumable or non_consumable; "removes_ads" (non_consumable only) turns every ad off once
+// owned; "format" is rewarded, interstitial or banner; "ios" and "android" are optional (a product without one is not sold there; a placement without one shows
 // the ad network's test unit there). "admob" holds the AdMob app ids the packaging scripts put in the
 // Android manifest and the iOS Info.plist (cmake/mobile/monetize_info.py); the chunk does not carry them.
 
@@ -122,7 +123,7 @@ public:
         else if (products.valid())
             for (u32 i = 0; i < products.size(); ++i) {
                 const JsonValue p = products.at(i);
-                if (!detail::check_keys(p, {"id", "type", "ios", "android"}, file, kStage, diags)) continue;
+                if (!detail::check_keys(p, {"id", "type", "ios", "android", "removes_ads"}, file, kStage, diags)) continue;
                 monetize::ProductInfo info;
                 if (!read_id(p, info.id, file, diags)) continue;
                 const JsonValue t = p.get("type");
@@ -132,6 +133,18 @@ public:
                 }
                 if (!read_text(p, "ios", info.ios_id, file, diags) || !read_text(p, "android", info.android_id, file, diags))
                     continue;
+                const JsonValue removes = p.get("removes_ads");
+                if (removes.valid()) {
+                    if (!removes.is_bool()) {
+                        error(diags, file, removes, "'removes_ads' must be true or false");
+                        continue;
+                    }
+                    info.removes_ads = removes.as_bool();
+                    if (info.removes_ads && info.type != monetize::ProductType::NonConsumable) {
+                        error(diags, file, removes, "only a non_consumable product can have \"removes_ads\"");
+                        continue;
+                    }
+                }
                 if (!catalog.add_product(info)) error(diags, file, p, "two products share this \"id\"");
             }
         const JsonValue ads = doc.get("ads");
