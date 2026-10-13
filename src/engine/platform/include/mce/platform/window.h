@@ -69,6 +69,10 @@ public:
     // False when the platform refuses it.
     bool set_relative_mouse(bool on);
     bool relative_mouse() const;
+    // Desktop: borderless full screen at the desktop resolution, or back to the window. Phones are
+    // always full screen. False when the platform refuses it.
+    bool set_fullscreen(bool on);
+    bool fullscreen() const;
     // TextInput events flow only while on (an IME may show); a console turns it on while open.
     void set_text_input(bool on);
     // Taskbar/title-bar icon from tightly packed RGBA8 rows (FR-SHP-010). False when the platform refuses it.

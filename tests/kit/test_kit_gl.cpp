@@ -2,6 +2,8 @@
 // components -> SpriteExtract -> SpriteBatch -> pixels. Parallax layers (FR-R2D-050) at their
 // authored factors, endless backgrounds, and particles drawn through the batch.
 
+#include <cstdio>
+
 #include <doctest/doctest.h>
 
 #include "cook_test_util.h"
@@ -245,6 +247,48 @@ TEST_CASE("FR-R2D-090: Light2D entities and a cooked normal map light a kit spri
     f.render();
     const u8 lit_left = f.at_view({0, 0}).r;
     CHECK(lit_right > lit_left + 60);  // the normal faces +X
+    f.extract.reset(nullptr);
+}
+
+TEST_CASE("#176: a texture imported with \"filter\": \"linear\" draws its kit sprite bilinearly") {
+    using namespace cook_test;
+    const std::string root = fresh_dir("kit_filter");
+    const std::vector<u8> black_white = {0, 0, 0, 255, 255, 255, 255, 255};  // 2x1: black | white
+    write_file(root + "/assets/soft.png", make_png(2, 1, black_white));
+    write_file(root + "/assets/soft.png.mceasset",
+               sidecar("1176000a-0000-4000-8000-000000000001", "texture", R"({ "mips": false, "filter": "linear" })"));
+    write_file(root + "/assets/hard.png", make_png(2, 1, black_white));
+    write_file(root + "/assets/hard.png.mceasset", sidecar("1176000a-0000-4000-8000-000000000002", "texture", R"({ "mips": false })"));
+    write_file(root + "/assets/bad.png", make_png(2, 1, black_white));
+    write_file(root + "/assets/bad.png.mceasset", sidecar("1176000a-0000-4000-8000-000000000003", "texture", R"({ "filter": "bilinear" })"));
+    cook::CookService svc;
+    CHECK_FALSE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());  // "bilinear" is rejected
+    std::remove((root + "/assets/bad.png.mceasset").c_str());
+    std::remove((root + "/assets/bad.png").c_str());
+    REQUIRE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+
+    Fixture f;
+    asset::AssetSystem assets;
+    render::AssetUploadSink sink(f.renderer, assets);
+    assets.set_upload_sink(&sink);
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    f.extract.reset(&assets);
+
+    f.camera({0, 0});
+    kit::Sprite soft;
+    soft.texture.guid = asset::parse_guid("1176000a-0000-4000-8000-000000000001").value();
+    soft.size = {4, 1};
+    f.world.spawn_with(LocalTransform{{0, 1, 0}, math::quat::identity(), {1, 1, 1}}, soft);
+    kit::Sprite hard = soft;
+    hard.texture.guid = asset::parse_guid("1176000a-0000-4000-8000-000000000002").value();
+    f.world.spawn_with(LocalTransform{{0, -1, 0}, math::quat::identity(), {1, 1, 1}}, hard);
+
+    f.render();
+    // A quarter of the way in, linear sampling is between the two texels; point sampling is black.
+    CHECK(f.at_view({-0.5f, 1}).r > 60);
+    CHECK(f.at_view({-0.5f, -1}).r < 10);
     f.extract.reset(nullptr);
 }
 

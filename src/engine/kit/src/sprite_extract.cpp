@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/particles.h"
@@ -115,6 +116,10 @@ render::SpriteSetId SpriteExtract::sprite_set(asset::Guid guid, asset::Guid norm
             d.texture_key = color_key;
             d.regions = Span<const render::SpriteRegion>(&kWholeTexture, 1);
             d.debug_name = "kit.sprite";
+            if (guid != asset::Guid{}) {
+                auto tv = asset::TextureView::read(assets_->resolve(asset::AssetHandle<asset::Texture>{e.handle.index, e.handle.generation}));
+                if (tv && (tv.value().header->flags & asset::TextureFlags::LinearFilter) != 0) d.filter = rhi::Filter::Linear;
+            }
             if (normal != asset::Guid{}) {
                 const asset::AssetKey nkey = load(normal, e.normal_handle);
                 if (nkey != asset::kInvalidAssetKey) {

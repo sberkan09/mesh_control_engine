@@ -90,6 +90,7 @@ u64 texture_level_bytes(TextureFormat format, u32 width, u32 height);
 namespace TextureFlags {
 enum : u32 {
     Srgb = 1u << 0,  // color data is sRGB-encoded; the renderer samples through an sRGB view
+    LinearFilter = 1u << 1,  // kit sprites sample it bilinearly (import setting "filter": "linear"); else point
 };
 }
 
