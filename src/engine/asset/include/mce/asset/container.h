@@ -44,7 +44,7 @@ enum class ChunkType : u16 {  // closed set, appended only
     InputMap,
     Manifest,
     ParticlePreset,  // v0.5
-    StringTable,     // v0.5
+    StringTable,     // CHNK_STR: one locale's string table (M-MOBILE 11a; mce/loc/string_table.h)
     Tilemap,         // v0.5: CHNK_TILE, one tile layer (FR-R2D-115)
     Sequence,        // v0.5: CHNK_SEQ, one action-list sequence (FR-ENT-100)
     ModInfo,         // CHNK_MOD: a mod pack's identity (FR-RUN-090, ADR-0034); pack-level, GUID zero

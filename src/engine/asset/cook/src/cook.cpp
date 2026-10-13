@@ -15,6 +15,8 @@
 #include "mce/asset/xxhash.h"
 #include "mce/cook/cook.h"
 #include "mce/jobs.h"
+#include "mce/loc/loc.h"
+#include "strings_csv.h"
 
 namespace mce::cook {
 
@@ -172,6 +174,69 @@ void report_cycle(Array<Node>& nodes, u32 start, Array<u8>& reported, DiagList& 
     diags.error(Errc::DependencyCycle, display(*nodes[cur].rec), 0, 0, kStageGraph, msg);
 }
 
+
+// String tables (M-MOBILE step 11a): every locale should carry every key of the base table (the
+// "en" one, else the first by path); a key a locale lacks shows the base text in play, so it is a
+// warning, as is a key the base table does not know (usually a typo). Parse errors are the
+// importer's to report.
+void check_string_tables(const AssetRegistry& registry, DiagList& diags) {
+    struct Table {
+        const AssetRecord* rec;
+        loc::StringTable table;
+    };
+    Array<Table> tables;
+    for (usize i = 0; i < registry.size(); ++i) {
+        const AssetRecord& rec = registry.at(i);
+        if (rec.importer->type() != ChunkType::StringTable) continue;
+        loc::LocaleTag tag;
+        const JsonValue s = rec.settings();
+        const JsonValue want = s.valid() ? s.get("locale") : JsonValue();
+        if (want.valid() ? !(want.is_string() && loc::normalize_locale(want.as_string(), tag))
+                         : !detail::locale_from_path(rec.source_path.view(), tag))
+            continue;
+        Table t{&rec, loc::StringTable()};
+        t.table.set_locale(tag.view());
+        DiagList ignored;
+        detail::parse_string_csv(StringView(reinterpret_cast<const char*>(rec.source.data()), rec.source.size()),
+                                 display(rec), t.table, ignored);
+        tables.push_back(std::move(t));
+    }
+    if (tables.size() < 2) return;
+    usize base = 0;
+    for (usize i = 0; i < tables.size(); ++i) {
+        if (tables[i].table.locale() == "en") {
+            base = i;
+            break;
+        }
+        if (tables[i].rec->source_path < tables[base].rec->source_path) base = i;
+    }
+    const loc::StringTable& bt = tables[base].table;
+    auto report = [&](const Table& t, const loc::StringTable& have, const loc::StringTable& lack, const char* what) {
+        String keys;
+        u32 count = 0;
+        StringView prev;
+        for (usize k = 0; k < have.size(); ++k) {
+            const StringView key = have.entry(k).key;
+            if (key == prev || lack.has_key(key)) continue;
+            prev = key;
+            if (count < 8) {
+                if (count) keys += ", ";
+                keys += key;
+            }
+            ++count;
+        }
+        if (count == 0) return;
+        String msg;
+        appendf(msg, "%u key%s %s the base table (%.*s): %s%s", count, count == 1 ? "" : "s", what, static_cast<int>(bt.locale().size()),
+                bt.locale().data(), keys.c_str(), count > 8 ? ", ..." : "");
+        diags.warning(display(*t.rec), 0, 0, "cook.strings", msg);
+    };
+    for (usize i = 0; i < tables.size(); ++i) {
+        if (i == base) continue;
+        report(tables[i], bt, tables[i].table, "missing here, shown from");
+        report(tables[i], tables[i].table, bt, "not in");
+    }
+}
 }  // namespace
 
 CookService::CookService() { ImporterRegistry::add_builtins(importers_); }
@@ -212,6 +277,7 @@ CookReport CookService::cook(StringView project_root, const CookOptions& opt) {
         }
         ++report.overrides;
     }
+    check_string_tables(registry, report.diags);
     RegistryLookup lookup(registry, &base);
 
     // 2. Graph build: importers declare references; missing and mistyped refs are reported as a

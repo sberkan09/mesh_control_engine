@@ -74,7 +74,7 @@ Interchange formats are closed: glTF 2.0 (`.gltf`/`.glb`), PNG/JPG, WAV. MCE-nat
 | Input action map | `.mcinput` | `CHNK_INPUT` | named actions, bindings, curves (FR-INP-020) | MVP |
 | Animation clips | glTF node-transform tracks | `CHNK_ANIM` | sampled or keyframed node tracks (MVP: single-node TRS; per-node tracks sampled at runtime by the ECS `AnimationPlayer` — see `ecs-gameplay` §3.8) | MVP (diorama prop) |
 | Particle preset | `.mcpart` (MCE-native) | `CHNK_PART` | emitter parameters + sprite GUID + spawn curves (FR-R2D-050) | v0.5 |
-| String table | `.mcstr` (MCE-native) | `CHNK_STR` | key → localized string rows, one per locale (N12 groundwork) | v0.5 |
+| String table | `assets/loc/<locale>.csv` (`key,text`, `key#one` plural forms; sidecar importer `strings`) | `CHNK_STR` | one locale's sorted key → UTF-8 text rows (`mce/loc/string_table.h`); the cook warns about keys a locale lacks against the base (`en`) table | M-MOBILE 11a |
 
 **Rules for cooked chunks** (binding + FR-AST-020):
 

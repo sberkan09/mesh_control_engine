@@ -38,6 +38,10 @@ const char* base_path();
 // before init(). Used for folders a player fills by hand (the mods folder, ADR-0034).
 void list_files(StringView dir, Array<FixedString<256>>& out);
 
+// The device's languages, best first, as "language" or "language-COUNTRY" tags ("tr-TR", "en"),
+// for mce/loc's language choice. Empty when the OS does not say. Works before init().
+void preferred_locales(Array<FixedString<16>>& out);
+
 // The engine wall clock (std::chrono::steady_clock; same source as app::steady_clock()).
 f64 now_seconds();
 u64 now_us();

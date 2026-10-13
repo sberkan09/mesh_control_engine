@@ -28,6 +28,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/sequence_importer.cpp
         src/shader_importer.cpp
         src/store_importer.cpp
+        src/string_importer.cpp
         src/string.cpp
         src/texture_importer.cpp
         src/tilemap_importer.cpp
@@ -37,6 +38,7 @@ mce_add_library(mce_asset_cook UMBRELLA
     PRIVATE_DEPS
         mce::mce_input
         mce::mce_monetize
+        mce::mce_loc
         mce_stb
         mce_meshopt
         mce_astcenc
