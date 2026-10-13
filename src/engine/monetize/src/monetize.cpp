@@ -79,7 +79,7 @@ struct Service::Delivery {
     StoreEvent store;
     AdEvent ad;
     FixedString<32> price;          // ProductInfo
-    FixedString<128> native;        // Purchased consumable: the store's transaction id (never recorded)
+    FixedString<512> native;        // Purchased consumable: the store's transaction id (never recorded)
 };
 
 const char* store_event_name(StoreEventKind k) {

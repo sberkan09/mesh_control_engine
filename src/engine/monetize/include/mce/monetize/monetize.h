@@ -152,7 +152,7 @@ struct StoreAnswer {
     StoreEventKind kind = StoreEventKind::Failed;
     u16 product = kNoIndex;
     u32 request = 0;
-    FixedString<128> transaction;  // the store's own transaction id (Purchased / Restored)
+    FixedString<512> transaction;  // the store's own transaction id (Purchased / Restored; Play tokens are long)
     FixedString<32> price;         // ProductInfo
 };
 
@@ -322,7 +322,7 @@ private:
     Array<u8> ad_ready_;                 // per placement
     struct Unfinished {
         u64 id;
-        FixedString<128> native;
+        FixedString<512> native;
     };
     Array<Unfinished> unfinished_;
     u64 last_transaction_ = 0;

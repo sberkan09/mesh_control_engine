@@ -4,8 +4,10 @@ mce_add_test(test_monetize
     SOURCES
         test_fake.cpp
         test_monetize.cpp
+        test_platform_store.cpp
     DEPS
         mce::mce_monetize
-        mce::mce_ecs_scene)
+        mce::mce_ecs_scene
+        mce::mce_platform)
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tmp")
 target_compile_definitions(test_monetize PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp")

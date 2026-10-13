@@ -69,7 +69,7 @@ private:
     Sink* sink_ = nullptr;
     Array<Pending> queue_;
     Array<u8> owned_;                    // per product: the fake account owns it
-    Array<FixedString<128>> open_;       // transactions not finished yet
+    Array<FixedString<512>> open_;       // transactions not finished yet
     u32 now_ = 0;
     u32 next_transaction_ = 0;
 };
