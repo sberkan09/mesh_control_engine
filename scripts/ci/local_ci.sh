@@ -260,7 +260,7 @@ stage_court_determinism() {
 
 run_stage() {
     case "$1" in
-        walls) python3 scripts/ci/check_walls.py ;;
+        walls) python3 scripts/ci/check_walls.py && python3 scripts/bump_version.py --check ;;
         linux-*) [[ -n "${GPU_TESTS[$1]:-}" ]] || { echo "unknown preset stage: $1"; return 2; }; stage_preset "$1" ;;
         tidy) stage_tidy ;;
         determinism) stage_determinism ;;
