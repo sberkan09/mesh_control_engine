@@ -1,6 +1,7 @@
 #pragma once
 // mce/gameplay.h — the engine surface a game module includes (scripting.md §2.3): core types,
-// the ECS, the gameplay-facing components/resources of input, physics and audio, and the module
+// the ECS, the gameplay-facing components/resources of input, physics and audio, the purchase and
+// ad services (mce/monetize/monetize.h, present only when the project turns them on), and the module
 // contract. Renderer, RHI, platform, asset internals and the cook library are not part of it.
 //
 // M3 note: the include-path starvation that makes this a hard wall (a module target that can
@@ -14,5 +15,6 @@
 #include "mce/kit/components.h"
 #include "mce/kit/kit3d.h"
 #include "mce/module.h"
+#include "mce/monetize/monetize.h"
 #include "mce/physics/components.h"
 #include "mce/physics/module.h"
