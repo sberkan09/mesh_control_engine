@@ -33,6 +33,7 @@ import time
 import zipfile
 
 import app_icon
+import app_names
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIN_OS = "16.0"  # MinimumOSVersion in ios/Info.plist.in
@@ -105,6 +106,7 @@ def package(art, args, root):
     with open(info_path, "rb") as f:
         info = plistlib.load(f)
     info["CFBundleDisplayName"] = art["title"]
+    app_names.ios(app_names.read(art.get("loc_dir")), app, info)  # app.name per locale (<locale>.lproj)
     info["CFBundleShortVersionString"] = args.version.split("+")[0]
     info["CFBundleVersion"] = str(args.build_number)
     icon = app_icon.source(art)

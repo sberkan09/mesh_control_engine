@@ -150,3 +150,52 @@ TEST_CASE("strings: authoring mistakes are cook errors with a line") {
         CHECK(diags.find(b.says) != std::string::npos);
     }
 }
+
+TEST_CASE("strings: a font with \"strings\": true bakes every glyph the tables use") {
+    constexpr const char* kFontGuid = "10c00000-0000-4000-8000-0000000000f0";
+    const std::string root = fresh_dir("strings_font");
+    const std::string a = root + "/assets";
+    write_file(a + "/loc/en.csv", "key,text\nmenu.play,play\ntitle,\xE6\x97\xA5\n");  // 日: not in the font
+    write_file(a + "/loc/en.csv.mceasset", sidecar(kEnGuid, "strings"));
+    write_file(a + "/loc/tr.csv", "key,text\nmenu.play,oyna\nback,geri\n");
+    write_file(a + "/loc/tr.csv.mceasset", sidecar(kTrGuid, "strings"));
+    write_file(a + "/fonts/proggy.ttf", read_file(std::string(MCE_TEST_DATA_DIR) + "/fonts/ProggyClean.ttf"));
+    write_file(a + "/fonts/proggy.ttf.mceasset", sidecar(kFontGuid, "font", R"({ "size": 13, "ranges": [[48, 57]], "strings": true })"));
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+    const std::string diags = diags_of(r);
+    INFO(diags);
+    REQUIRE(r.ok());
+    CHECK(diags.find("proggy.ttf") != std::string::npos);
+    CHECK(diags.find("U+65E5") != std::string::npos);  // the missing glyph is a warning
+
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    const asset::AssetKey key = assets.find(asset::parse_guid(kFontGuid).value());
+    REQUIRE(key != asset::kInvalidAssetKey);
+    auto h = assets.load_sync<asset::Font>(key);
+    REQUIRE(h);
+    auto view = asset::FontView::read(assets.resolve(h.value()));
+    REQUIRE(view);
+    const asset::FontView& f = view.value();
+    for (const char c : std::string("0123456789playoynageri" "PLAYOYNAGER")) {  // the ranges, the texts and their upper case
+        CAPTURE(c);
+        CHECK(f.find(static_cast<u32>(c)) != nullptr);
+    }
+    CHECK(f.find('b') == nullptr);  // nothing else
+    CHECK(f.find(0x65E5) == nullptr);
+    // Turkish upper case of "i" is İ: asked for, and only baked when the font has it.
+    const bool has_dotted_capital_i = f.find(0x130) != nullptr;
+    CHECK((has_dotted_capital_i || diags.find("U+0130") != std::string::npos));
+
+    // Editing a table re-cooks the font (the tables are its dependencies).
+    write_file(a + "/loc/tr.csv", "key,text\nmenu.play,oyna\nback,geri\nnext,ileri\n");
+    const cook::CookReport r2 = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+    REQUIRE(r2.ok());
+    bool font_recooked = false;
+    for (const auto& ar : r2.assets)
+        if (ar.guid == asset::parse_guid(kFontGuid).value()) font_recooked = ar.status == cook::AssetStatus::Cooked;
+    CHECK(font_recooked);
+}

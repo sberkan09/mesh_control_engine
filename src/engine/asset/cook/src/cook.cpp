@@ -63,6 +63,19 @@ public:
         source_path = rec->source_path.view();
         return out.valid();
     }
+    void assets_of_type(ChunkType type, Array<Guid>& out) const override {
+        out.clear();
+        for (usize i = 0; i < reg_.size(); ++i)
+            if (reg_.at(i).importer->type() == type) out.push_back(reg_.at(i).guid);
+        std::sort(out.begin(), out.end(), [](const Guid& a, const Guid& b) { return a < b; });
+    }
+    bool source_bytes(Guid g, Span<const byte>& out, StringView& source_path) const override {
+        const AssetRecord* rec = reg_.by_guid(g);
+        if (!rec) return false;
+        out = rec->source.span();
+        source_path = rec->source_path.view();
+        return true;
+    }
 
 private:
     const AssetRegistry& reg_;
