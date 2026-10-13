@@ -2,9 +2,12 @@
 // metrics and the kern-table pairs (assets.md §5.2; "atlas built at cook, not runtime" is the
 // FR-R2D-060 acceptance test). MSDF via msdf-atlas-gen is the v0.5 upgrade, same chunk type.
 //
-// sidecar settings: { "size": 32, "ranges": [[32, 126]], "padding": 1 }
+// sidecar settings: { "size": 32, "ranges": [[32, 126]], "padding": 1, "strings": true }
 //   size     pixel height (ascent - descent)
 //   ranges   inclusive codepoint ranges; codepoints the font lacks are skipped
+//   strings  also every codepoint the project's string tables use (assets/loc/*.csv, M-MOBILE 11a),
+//            with their upper- and lower-case forms in each table's locale (Turkish İ and ı), so a
+//            translation never shows a missing glyph; the tables become dependencies of the font
 // Kerning comes from the legacy 'kern' table only (GPOS kerning is not read).
 // stb_truetype trusts its input: fonts are cooked from the project's own tree, never at runtime.
 
@@ -12,6 +15,8 @@
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
+#include "mce/loc/loc.h"
+#include "strings_csv.h"
 #include "stb_rect_pack.h"
 #include "stb_truetype.h"
 
@@ -27,6 +32,58 @@ struct Range {
     u32 last;
 };
 
+bool wants_strings(JsonValue s) {
+    const JsonValue v = s.valid() ? s.get("strings") : JsonValue();
+    return v.valid() && v.is_bool() && v.as_bool();
+}
+
+// Appends every codepoint of UTF-8 `text` (already validated by the string importer).
+void add_codepoints(StringView text, Array<u32>& out) {
+    const auto* p = reinterpret_cast<const u8*>(text.data());
+    for (usize i = 0; i < text.size();) {
+        const u8 c = p[i];
+        u32 len = 1, cp = c;
+        if ((c & 0xE0) == 0xC0) len = 2, cp = c & 0x1F;
+        else if ((c & 0xF0) == 0xE0) len = 3, cp = c & 0x0F;
+        else if ((c & 0xF8) == 0xF0) len = 4, cp = c & 0x07;
+        if (i + len > text.size()) break;
+        for (u32 k = 1; k < len; ++k) cp = (cp << 6) | (p[i + k] & 0x3F);
+        i += len;
+        if (cp >= 32) out.push_back(cp);
+    }
+}
+
+// The codepoints of every string table the font depends on, in its own and both case forms.
+// Tables that do not parse are skipped: the string importer reports them.
+void string_table_codepoints(const ImportInput& in, Array<u32>& cps) {
+    if (!in.lookup) return;
+    Array<Guid> tables;
+    in.lookup->assets_of_type(ChunkType::StringTable, tables);
+    for (const Guid& g : tables) {
+        Span<const byte> bytes;
+        StringView path;
+        if (!in.lookup->source_bytes(g, bytes, path)) continue;
+        loc::LocaleTag locale;
+        detail::locale_from_path(path, locale);
+        loc::StringTable table;
+        DiagList ignored;
+        detail::parse_string_csv(StringView(reinterpret_cast<const char*>(bytes.data()), bytes.size()), path, table, ignored);
+        for (usize i = 0; i < table.size(); ++i) {
+            const StringView text = table.entry(i).text;
+            add_codepoints(text, cps);
+            Array<char> cased;
+            loc::to_upper(locale.view(), text, cased);
+            loc::to_lower(locale.view(), text, cased);
+            add_codepoints(StringView(cased.data(), cased.size()), cps);
+        }
+    }
+    std::sort(cps.begin(), cps.end());
+    usize uniq = 0;
+    for (usize i = 0; i < cps.size(); ++i)
+        if (i == 0 || cps[i] != cps[i - 1]) cps[uniq++] = cps[i];
+    cps.resize(uniq);
+}
+
 class FontImporter final : public IImporter {
 public:
     StringView id() const override { return "font"; }
@@ -35,10 +92,28 @@ public:
     bool native() const override { return false; }
     bool handles_extension(StringView ext) const override { return ext == ".ttf" || ext == ".otf"; }
 
+    void scan_dependencies(const ImportInput& in, Array<DepRef>& out, DiagList& diags) const override {
+        (void)diags;
+        if (!wants_strings(in.settings) || !in.lookup) return;
+        Array<Guid> tables;
+        in.lookup->assets_of_type(ChunkType::StringTable, tables);
+        for (const Guid& g : tables) {
+            DepRef d;
+            d.guid = g;
+            d.expected = ChunkType::StringTable;
+            d.where = "strings";
+            out.push_back(d);
+        }
+    }
+
     bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
         const JsonValue s = in.settings;
         const StringView file = in.display_path;
-        if (!detail::check_keys(s, {"size", "ranges", "padding"}, file, kStage, diags)) return false;
+        if (!detail::check_keys(s, {"size", "ranges", "padding", "strings"}, file, kStage, diags)) return false;
+        if (const JsonValue v = s.valid() ? s.get("strings") : JsonValue(); v.valid() && !v.is_bool()) {
+            detail::error_at(diags, Errc::ImportFailed, file, v, kStage, "'strings' must be true or false");
+            return false;
+        }
         f64 size = 32, padding = 1;
         if (!detail::read_number(s, "size", 32, size, file, kStage, diags)) return false;
         if (!detail::read_number(s, "padding", 1, padding, file, kStage, diags)) return false;
@@ -76,6 +151,28 @@ public:
         if (offset < 0 || !stbtt_InitFont(&info, data, offset)) {
             diags.error(Errc::ImportFailed, file, 0, 0, kStage, "not a TrueType/OpenType font");
             return false;
+        }
+
+        // The string tables' codepoints; ones the font lacks would show as missing glyphs in play.
+        if (wants_strings(s)) {
+            Array<u32> used;
+            string_table_codepoints(in, used);
+            String missing;
+            u32 missing_count = 0;
+            for (const u32 cp : used) {
+                if (stbtt_FindGlyphIndex(&info, static_cast<int>(cp)) != 0 || cp == 32) {
+                    ranges.push_back(Range{cp, cp});
+                } else if (cp != 0x307) {  // the combining dot of lower("İ") outside Turkish draws on the i anyway
+                    if (missing_count < 8) appendf(missing, "%sU+%04X", missing_count ? ", " : "", cp);
+                    ++missing_count;
+                }
+            }
+            if (missing_count) {
+                String msg;
+                appendf(msg, "the font has no glyph for %u character%s the string tables use: %s%s", missing_count,
+                        missing_count == 1 ? "" : "s", missing.c_str(), missing_count > 8 ? ", ..." : "");
+                diags.warning(file, 0, 0, kStage, msg);
+            }
         }
 
         // Codepoints present in the font, sorted and unique.
