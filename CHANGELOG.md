@@ -5,8 +5,6 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
-- `scripts/bump_version.py` sets the version everywhere; `local_ci.sh`'s walls stage checks the copies agree.
-
 ## 0.9.0 (2026-10-13)
 
 The first version bump since M0 (0.0.1, 2026-10-07). Everything the ROADMAP lists up to the v1.0 tier is built;
@@ -17,4 +15,6 @@ the v1.0 gate's human-only checks (non-programmer double-click test, 2-hour edit
 - v0.5 (M5a–M7): the 3D renderer, 3D physics, play-in-editor, Ember Step and Ashen Court.
 - v1.0 (M8–M9): runtime UI, project template and generator, packaging v2, editor maturity, Kindle (UC-D).
 - Off-tier: editor MCP server (M4.5), macOS/Metal, iOS/Android (SDL GPU backend), skinned animation,
-  networking, visual-novel kit, 3D kit.
+  networking, visual-novel kit, 3D kit, scene streaming, data mods.
+- Versioning: `scripts/bump_version.py` sets the version everywhere, `local_ci.sh`'s walls stage checks the
+  copies agree, and this changelog starts here (docs/VERSIONING.md).
