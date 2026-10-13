@@ -54,7 +54,24 @@ enum class VertexFormat : u8 {
 u32 vertex_format_size(VertexFormat f);
 
 enum class BufferUsage : u16 { Vertex, Index, Uniform, Storage, Indirect, Staging, IndirectArgs };
-enum class TextureUsage : u16 { Sampled, ColorTarget, DepthTarget, SampledColorTarget };
+enum class TextureUsage : u16 {
+    Sampled, ColorTarget, DepthTarget, SampledColorTarget,
+    SampledStorage,  // read/write storage image for compute (bind_storage_image), also sampled (M-VISUAL 1)
+};
+
+// How a compute shader accesses a storage image (bind_storage_image).
+enum class StorageAccess : u8 { Read, Write, ReadWrite };
+
+// CommandBuffer::barrier bits: which later reads must see earlier compute (storage) writes.
+namespace barrier {
+inline constexpr u32 kStorageBuffer = 1u << 0;  // SSBO reads/writes in later shaders
+inline constexpr u32 kStorageImage = 1u << 1;   // storage image reads/writes in later shaders
+inline constexpr u32 kSampled = 1u << 2;        // texture() sampling of an image written as storage
+inline constexpr u32 kIndirect = 1u << 3;       // draw/dispatch arguments written by a shader
+inline constexpr u32 kVertexIndex = 1u << 4;    // vertex/index data written by a shader
+inline constexpr u32 kUniform = 1u << 5;        // uniform data written by a shader
+inline constexpr u32 kAll = 0xFFFFFFFFu;
+}  // namespace barrier
 
 enum class Filter : u8 { Nearest, Linear };
 enum class MipFilter : u8 { None, Nearest, Linear };
@@ -174,6 +191,13 @@ struct GraphicsPipelineDesc {
     const char* debug_name = "";
 };
 
+// One compute stage (GLSL 450 core, `layout(local_size_x = ...) in;`). Storage images use the image
+// units of bind_storage_image; SSBOs and uniform banks use the same bindings as graphics pipelines.
+struct ComputePipelineDesc {
+    ShaderSource compute_shader;
+    const char* debug_name = "";
+};
+
 // ---- passes ------------------------------------------------------------------------------------
 
 struct PassAttachment {
@@ -200,6 +224,14 @@ struct DrawIndexedIndirectCommand {
     u32 base_instance;
 };
 static_assert(sizeof(DrawIndexedIndirectCommand) == 20);
+
+// glDispatchComputeIndirect / vkCmdDispatchIndirect argument layout (work-group counts).
+struct DispatchIndirectCommand {
+    u32 groups_x;
+    u32 groups_y;
+    u32 groups_z;
+};
+static_assert(sizeof(DispatchIndirectCommand) == 12);
 
 // Fixed binding banks (rhi-renderer.md §3.3).
 namespace bank {

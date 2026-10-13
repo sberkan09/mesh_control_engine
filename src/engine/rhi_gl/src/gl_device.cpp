@@ -207,6 +207,18 @@ ResultV GlDevice::init() {
     GLint timer_bits = 0;
     glGetQueryiv(GL_TIMESTAMP, GL_QUERY_COUNTER_BITS, &timer_bits);
     caps_.timestamp_queries = timer_bits > 0;
+    // Compute is core in GL 4.3, so every GL 4.5 context has it (M-VISUAL 1).
+    caps_.compute = true;
+    glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &v);
+    caps_.max_compute_invocations = static_cast<u32>(v);
+    for (GLuint i = 0; i < 3; ++i) {
+        glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, i, &v);
+        caps_.max_compute_group_size[i] = static_cast<u32>(v);
+        glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, i, &v);
+        caps_.max_compute_group_count[i] = static_cast<u32>(v);
+    }
+    glGetIntegerv(GL_MAX_IMAGE_UNITS, &v);
+    caps_.max_storage_image_units = static_cast<u32>(v);
     MCE_LOG_INFO("rhi.gl: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 
     if (desc_.debug_layer) {
@@ -269,6 +281,7 @@ void GlDevice::release_gl_objects() {
         glDeleteProgramPipelines(1, &p.pipeline);
         glDeleteProgram(p.vs);
         glDeleteProgram(p.fs);
+        glDeleteProgram(p.cs);
         glDeleteVertexArrays(1, &p.vao);
     }
     for (const FramebufferEntry& f : framebuffers_) glDeleteFramebuffers(1, &f.fbo);
@@ -323,7 +336,12 @@ TextureHandle GlDevice::create_texture(const TextureDesc& desc, Span<const byte>
     const bool array = desc.dimension == TextureDimension::Tex2DArray;
     MCE_ASSERT_MSG(array || desc.array_layers <= 1, "create_texture: layers > 1 need TextureDimension::Tex2DArray");
     const GlFormat fmt = gl_format(desc.format);
+    MCE_ASSERT_MSG(desc.usage != TextureUsage::SampledStorage ||
+                       (desc.samples <= 1 && !is_depth_format(desc.format) && !is_compressed_format(desc.format) &&
+                        desc.format != TextureFormat::RGBA8_SRGB && desc.format != TextureFormat::BGRA8_UNorm),
+                   "create_texture: storage images need a single-sample, linear, uncompressed color format");
     GlTexture t;
+    t.internal = fmt.internal;
     t.size = desc.size;
     t.format = desc.format;
     t.dimension = desc.dimension;
@@ -491,6 +509,22 @@ void GlDevice::defer_delete(DeadKind kind, GLuint id) {
     if (id) dead_[slot_].push_back(DeadObject{kind, id});
 }
 
+Result<PipelineHandle> GlDevice::create_compute_pipeline(const ComputePipelineDesc& desc) {
+    FixedString<1024> log;
+    const GLuint cs = compile_stage(GL_COMPUTE_SHADER, desc.compute_shader, log);
+    if (!cs) {
+        MCE_LOG_ERROR("rhi.gl: compute shader '{}' failed:\n{}", desc.compute_shader.debug_name, log.c_str());
+        return Error(Errc::ShaderCompile, "rhi.pipeline.compute", desc.compute_shader.debug_name);
+    }
+    GlPipeline p;
+    p.cs = cs;
+    p.compute = true;
+    glCreateProgramPipelines(1, &p.pipeline);
+    glUseProgramStages(p.pipeline, GL_COMPUTE_SHADER_BIT, cs);
+    label(GL_PROGRAM_PIPELINE, p.pipeline, desc.debug_name);
+    return pipelines_.insert(p);
+}
+
 void GlDevice::delete_now(const DeadObject& d) {
     switch (d.kind) {
         case DeadKind::Buffer: glDeleteBuffers(1, &d.id); break;
@@ -545,6 +579,11 @@ void GlDevice::destroy_sampler(SamplerHandle h) {
 void GlDevice::destroy_pipeline(PipelineHandle h) {
     if (const GlPipeline* p = pipelines_.try_get(h)) {
         defer_delete(DeadKind::Pipeline, p->pipeline);
+        if (p->compute) {
+            defer_delete(DeadKind::Program, p->cs);
+            pipelines_.erase(h);
+            return;
+        }
         defer_delete(DeadKind::Program, p->vs);
         defer_delete(DeadKind::Program, p->fs);
         defer_delete(DeadKind::VertexArray, p->vao);
@@ -697,6 +736,17 @@ void GlDevice::present(bool vsync) {
 Extent2D GlDevice::backbuffer_size() const {
     const platform::PixelSize s = window_.framebuffer_size();
     return Extent2D{s.width, s.height};
+}
+
+ResultV GlDevice::read_buffer(BufferHandle h, u64 offset, Span<byte> out) {
+    const GlBuffer* b = buffers_.try_get(h);
+    if (!b) return Error(Errc::NotFound, "rhi.read_buffer", "stale buffer handle");
+    if (offset + out.size() > b->size) return Error(Errc::InvalidArgument, "rhi.read_buffer", "range outside buffer");
+    if (out.empty()) return ok();
+    // Shader writes reach buffer reads only behind this barrier; the read itself synchronizes.
+    glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+    glGetNamedBufferSubData(b->id, static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(out.size()), out.data());
+    return ok();
 }
 
 ResultV GlDevice::read_pixels(TextureHandle target, Rect2D rect, Span<u8> out) {

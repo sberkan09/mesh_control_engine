@@ -399,6 +399,11 @@ void MetalDevice::submit(const CommandBuffer& cb) {
                 case CmdType::WriteTimestamp:
                     exec_write_timestamp(static_cast<const cmd::WriteTimestamp*>(payload)->index);
                     break;
+                // Compute is GL-only so far (caps().compute stays false here; M-VISUAL 1 parity backlog).
+                case CmdType::BindStorageImage:
+                case CmdType::Dispatch:
+                case CmdType::DispatchIndirect:
+                case CmdType::Barrier: break;
                 case CmdType::SetVertexData: {
                     const auto* c = static_cast<const cmd::SetVertexData*>(payload);
                     const usize at = geometry_ring_.alloc(c->size, 16);

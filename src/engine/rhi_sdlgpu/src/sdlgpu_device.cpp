@@ -421,6 +421,9 @@ TextureHandle SdlGpuDevice::create_texture(const TextureDesc& desc, Span<const b
         case TextureUsage::ColorTarget:
         case TextureUsage::SampledColorTarget: usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET; break;
         case TextureUsage::DepthTarget: usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET; break;
+        case TextureUsage::SampledStorage:
+            usage = SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE;
+            break;
     }
     // Render targets are sampled by later passes (shadow maps, post chains) unless multisampled.
     if (t.samples == 1) usage |= SDL_GPU_TEXTUREUSAGE_SAMPLER;

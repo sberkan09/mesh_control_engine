@@ -569,6 +569,11 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
                 break;
             case CmdType::Resolve: resolve(gcb, *static_cast<const cmd::Resolve*>(payload)); break;
             case CmdType::WriteTimestamp: break;  // no timestamp queries in SDL GPU (caps)
+            // Compute is GL-only so far (caps().compute stays false here; M-VISUAL 1 parity backlog).
+            case CmdType::BindStorageImage:
+            case CmdType::Dispatch:
+            case CmdType::DispatchIndirect:
+            case CmdType::Barrier: break;
         }
     }
     if (ts_.pass) end_pass();

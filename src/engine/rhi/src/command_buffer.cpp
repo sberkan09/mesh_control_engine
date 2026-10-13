@@ -25,6 +25,10 @@ const char* cmd_type_name(CmdType t) {
         case CmdType::Resolve: return "Resolve";
         case CmdType::SetStorageData: return "SetStorageData";
         case CmdType::WriteTimestamp: return "WriteTimestamp";
+        case CmdType::BindStorageImage: return "BindStorageImage";
+        case CmdType::Dispatch: return "Dispatch";
+        case CmdType::DispatchIndirect: return "DispatchIndirect";
+        case CmdType::Barrier: return "Barrier";
     }
     return "?";
 }
@@ -140,6 +144,27 @@ void CommandBuffer::draw_indirect(u32 draw_count, u32 first_command) {
 void CommandBuffer::resolve(TextureHandle src, TextureHandle dst) {
     MCE_ASSERT_MSG(!in_pass_, "resolve inside a pass");
     push(CmdType::Resolve, cmd::Resolve{src, dst});
+}
+
+void CommandBuffer::bind_storage_image(u32 unit, TextureHandle texture, u32 mip, StorageAccess access) {
+    push(CmdType::BindStorageImage, cmd::BindStorageImage{unit, texture, mip, access});
+}
+
+void CommandBuffer::dispatch(u32 groups_x, u32 groups_y, u32 groups_z) {
+    MCE_ASSERT_MSG(!in_pass_, "dispatch inside a pass");
+    push(CmdType::Dispatch, cmd::Dispatch{groups_x, groups_y, groups_z});
+}
+
+void CommandBuffer::dispatch_indirect(BufferHandle buffer, u64 offset) {
+    MCE_ASSERT_MSG(!in_pass_, "dispatch_indirect inside a pass");
+    MCE_ASSERT_MSG(offset % 4 == 0, "dispatch_indirect: offset must be 4-aligned");
+    push(CmdType::DispatchIndirect, cmd::DispatchIndirect{buffer, offset});
+}
+
+void CommandBuffer::barrier(u32 bits) {
+    MCE_ASSERT_MSG(!in_pass_, "barrier inside a pass");
+    if (bits == 0) return;
+    push(CmdType::Barrier, cmd::Barrier{bits});
 }
 
 void CommandBuffer::push_debug_scope(const char* name) {
