@@ -23,7 +23,9 @@ needs changes to compile.
 1. Every PR that changes what a user of the engine sees adds a line under `## Unreleased` in `CHANGELOG.md`.
 2. The bumping PR runs `python3 scripts/bump_version.py x.y.z`. It updates `CMakeLists.txt`, the projects'
    `engine_version`, the user-guide example, and turns `## Unreleased` into `## x.y.z (date)`.
-3. After that PR merges: `git tag vx.y.z origin/dev_claude && git push origin vx.y.z`.
+3. After that PR merges, tag the merge commit `vx.y.z`: `git tag -a vx.y.z origin/dev_claude && git push origin vx.y.z`,
+   or on GitHub, Releases → Draft a new release → tag `vx.y.z`, target `dev_claude`. Cloud Claude sessions can
+   push only their own branch, so they leave this step to the owner.
 
 `scripts/ci/local_ci.sh` runs `bump_version.py --check` in its walls stage, so a copy that disagrees with
 `CMakeLists.txt` fails CI.
