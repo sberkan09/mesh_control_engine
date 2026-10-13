@@ -11,6 +11,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   and Turkish-aware upper and lower case. `-language tr` plays in Turkish for one run; the cook warns about keys
   a locale lacks. A font sidecar's `"strings": true` bakes every glyph the tables use (with Turkish case forms),
   and `ship.py` names the phone app per language from each table's `app.name`.
+- Purchases and ads, step 3 (M-MONETIZE): the phone's own store, Play Billing on Android and StoreKit 2 on iOS,
+  behind `mce/platform/store.h`; `monetize::PlatformStore` is the player's default store. `ship.py --target
+  android` stamps Play Billing in for games with a `.mcstore`; StoreKit 2 is built with `-DMCE_STOREKIT=ON`. Both
+  still wait on a check on a real device or emulator.
 - Purchases and ads, step 2 (M-MONETIZE): a fake store and ad network (`mce/monetize/fake.h`, `-monetize.provider
   fake`, outcomes set with `-monetize.fake.*`), `-monetize 1` and `-monetize_test` on `mce_player`, and a
   `player_monetize` test running every outcome in `local_ci.sh`.

@@ -35,9 +35,10 @@
 // top-right corner pauses. -lifecycle_test N,M rehearses the round trip at app tick N for M ticks (headless too).
 //
 // Purchases and ads (M-MONETIZE, PlayerDesc::monetize): off unless the host turns them on (-monetize 1 forces them on
-// for testing). Then the pack's store catalog (-store_catalog) and the platform's providers (-monetize.provider fake:
-// the fake store and ad network, mce/monetize/fake.h) feed the Store and Ads resources (mce/monetize/monetize.h), and
-// a fullscreen ad pauses the sim and audio until it closes, with no pause overlay. -monetize_test "10:buy:gems 40:show:x"
+// for testing). Then the pack's store catalog (-store_catalog) and the providers (by default the phone's own store,
+// mce/monetize/platform_store.h; -monetize.provider fake: the fake store and ad network, mce/monetize/fake.h) feed the
+// Store and Ads resources (mce/monetize/monetize.h), and a fullscreen ad pauses the sim and audio until it closes,
+// with no pause overlay. -monetize_test "10:buy:gems 40:show:x"
 // makes requests at those sim ticks and prints every store and ad event (headless too), granting consumables.
 //
 // Input: windowed, the starter-kit "Gameplay" map (mce/input/default_map.h: Move on WASD / arrows /
@@ -69,6 +70,7 @@
 #include "mce/kit/sprite_extract.h"
 #include "mce/loc/loc.h"
 #include "mce/monetize/fake.h"
+#include "mce/monetize/platform_store.h"
 #include "mce/monetize/monetize.h"
 #include "mce/physics/module.h"
 #include "mce/platform/library.h"
@@ -636,6 +638,8 @@ private:
             ads = nullptr;
         } else if (!provider.empty()) {
             return Error(Errc::InvalidArgument, "player: -monetize.provider wants fake or none", provider);
+        } else if (!store && platform_store_.available()) {
+            store = &platform_store_;  // Play Billing / StoreKit 2
         }
         MCE_TRY(monetize_.init(catalog, store, ads));
         monetize_.install(world_);
@@ -1149,6 +1153,7 @@ private:
         ~ModuleGuard() { unload_game_module(module); }
     } module_;
     monetize::FakeStore fake_store_;  // -monetize.provider fake
+    monetize::PlatformStore platform_store_;  // the phone's store, the default when the host gives none
     monetize::FakeAds fake_ads_;
     monetize::Service monetize_;  // before the World: its resources point here (PlayerDesc::monetize)
     Array<MonetizeStep> monetize_test_;
