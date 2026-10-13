@@ -32,6 +32,9 @@ struct Forward3DDesc {
     // Forward+ light assignment in a compute pass when the device has compute (M-VISUAL 1); the
     // CPU ClusterLights::assign() otherwise or when false. Both give the same frame.
     bool gpu_light_clusters = true;
+    // Image-based lighting resources (M-VISUAL 2); a scene turns it on with Sky::ibl. False (or
+    // -r.ibl 0) keeps every scene on the hemisphere ambient.
+    bool ibl = true;
 };
 
 struct Forward3DStats {
@@ -43,6 +46,8 @@ struct Forward3DStats {
     u32 point_lights = 0;
     u32 light_indices = 0;   // CPU assignment only (the GPU count stays on the GPU)
     bool gpu_clusters = false;  // this frame's lights were assigned by the compute pass
+    bool ibl = false;           // this frame's ambient came from image-based lighting
+    bool ibl_baked = false;     // the sky changed and its IBL textures were re-baked this frame
     u32 joints = 0;          // joint matrices uploaded for skinned meshes
     u32 bloom_levels = 0;
     bool fxaa = false;
@@ -83,6 +88,13 @@ public:
     rhi::TextureHandle hdr_target() const { return hdr_; }
     // True when record() assigns Forward+ lights on the GPU (desc + device compute).
     bool gpu_light_clusters() const { return !cluster_build_.is_null(); }
+    // Image-based lighting textures (M-VISUAL 2); null until the first frame with Sky::ibl.
+    static constexpr u32 kIblLayers = 5;      // pre-filtered roughness 0.2, 0.4, ... 1.0
+    static constexpr u32 kIblEnvWidth = 128;  // equirect, 2:1
+    static constexpr u32 kIblLutSize = 64;
+    rhi::TextureHandle ibl_env() const { return ibl_env_; }      // RGBA16F 2D array, kIblLayers layers
+    rhi::TextureHandle ibl_brdf_lut() const { return ibl_lut_; } // RGBA16F, rg = F0 scale, bias
+    rhi::TextureHandle ibl_sh() const { return ibl_sh_; }        // RGBA16F 9×1, irradiance / pi
 
 private:
     ResultV create_pipelines();
@@ -90,6 +102,7 @@ private:
     void destroy_targets();
     void timestamp(rhi::CommandBuffer& cmd, u32 stage);
     void record_clusters(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_ibl(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_main(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target);
@@ -111,6 +124,14 @@ private:
     rhi::PipelineHandle tonemap_;
     rhi::PipelineHandle fxaa_;
     rhi::PipelineHandle cluster_build_;  // compute; null = CPU assignment
+    rhi::PipelineHandle ibl_prefilter_;  // null when Forward3DDesc::ibl is off
+    rhi::PipelineHandle ibl_sh_pipe_;
+    rhi::PipelineHandle ibl_brdf_;
+    rhi::TextureHandle ibl_env_;
+    rhi::TextureHandle ibl_lut_;
+    rhi::TextureHandle ibl_sh_;
+    rhi::SamplerHandle env_sampler_;     // linear, wraps around the equirect seam
+    u64 ibl_key_ = 0;                    // the sky the IBL textures were baked from; 0 = none
     rhi::BufferHandle cluster_ranges_;   // GPU assignment outputs (banks 4 and 6)
     rhi::BufferHandle cluster_indices_;
     u32 cluster_ranges_cap_ = 0;         // clusters

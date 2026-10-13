@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
+#include <utility>
 
 #include "../render/mesh_fixture.h"
 #include "mce/core.h"
@@ -33,7 +34,7 @@ struct Rgb {
 };
 
 struct Fixture3D {
-    explicit Fixture3D(u32 msaa = 4, bool gpu_clusters = true) {
+    explicit Fixture3D(u32 msaa = 4, bool gpu_clusters = true, bool ibl = true) {
         REQUIRE(platform::init().has_value());
         platform::WindowDesc wd;
         wd.title = "test_render3d_gl";
@@ -52,6 +53,7 @@ struct Fixture3D {
         fd.msaa = msaa;
         fd.shadow_size = 1024;
         fd.gpu_light_clusters = gpu_clusters;
+        fd.ibl = ibl;
         REQUIRE(renderer.init_3d(fd).has_value());
         rhi::TextureDesc td;
         td.size = {kW, kH};
@@ -537,3 +539,131 @@ TEST_CASE("render3d_gl: the GPU light assignment draws the CPU assignment's fram
     CHECK(differing == 0);
     CHECK(gpu.device->validation_error_count() == 0);
 }
+
+// ---- image-based lighting (M-VISUAL 2) ----------------------------------------------------------
+
+namespace {
+
+// A failed REQUIRE records but does not leave the test case here (no exceptions): bail out.
+#define MCE_REQUIRE_OR_RETURN(...)                  \
+    do {                                            \
+        const bool mce_req_ok_ = (__VA_ARGS__);     \
+        REQUIRE_MESSAGE(mce_req_ok_, #__VA_ARGS__); \
+        if (!mce_req_ok_) return;                   \
+    } while (0)
+
+// Sun off: the ambient is all that lights the frame.
+void no_sun(Scene3D& s) {
+    DirectionalLight sun;
+    sun.intensity = 0.0f;
+    sun.shadows = false;
+    s.set_light(sun);
+}
+
+Sky constant_sky(f32 c, bool ibl) {
+    Sky sky;
+    sky.zenith = sky.horizon = sky.ground = {c, c, c};
+    sky.ibl = ibl;
+    return sky;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: image-based lighting off draws the frame without it") {
+    Array<u8> without;
+    {
+        Fixture3D f(4, true, false);
+        f.render();
+        CHECK_FALSE(f.renderer.forward_3d().last_stats().ibl);
+        without = f.pixels;
+    }
+    Fixture3D f;
+    f.render();  // the resources exist, the scene does not ask for them
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().ibl);
+    CHECK(f.renderer.forward_3d().ibl_env().is_null());
+    usize differing = 0;
+    for (usize i = 0; i < without.size(); ++i) differing += f.pixels[i] != without[i];
+    CHECK(differing == 0);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: IBL bakes the sky once per change: SH9, BRDF LUT and pre-filtered layers") {
+    Fixture3D f;
+    f.render(0.0f, true, [](Scene3D& s) { s.set_sky(constant_sky(0.2f, true)); });
+    const Forward3D& fw = f.renderer.forward_3d();
+    CHECK(fw.last_stats().ibl);
+    CHECK(fw.last_stats().ibl_baked);
+    MCE_REQUIRE_OR_RETURN(!fw.ibl_sh().is_null());
+
+    // A constant sky c: SH coefficient 0 = c · 0.282095 · 4pi (= 0.709 for c = 0.2), the rest 0.
+    u8 sh[9 * 4] = {};
+    MCE_REQUIRE_OR_RETURN(f.device->read_pixels(fw.ibl_sh(), rhi::Rect2D{0, 0, 9, 1}, Span<u8>(sh, sizeof(sh))).has_value());
+    INFO("sh0 " << int(sh[0]) << " sh1 " << int(sh[4]) << " sh6 " << int(sh[24]));
+    CHECK(std::abs(int(sh[0]) - 181) <= 3);
+    for (u32 k = 1; k < 9; ++k) CHECK(sh[k * 4] <= 3);
+
+    // BRDF LUT (top row first = roughness 1): smooth and head-on reflects all of F0; rougher less.
+    constexpr u32 n = Forward3D::kIblLutSize;
+    Array<u8> lut;
+    lut.resize(usize(n) * n * 4);
+    MCE_REQUIRE_OR_RETURN(f.device->read_pixels(fw.ibl_brdf_lut(), rhi::Rect2D{0, 0, n, n}, lut.span()).has_value());
+    const auto ab = [&](u32 nov_x, u32 rough_y) {  // rough_y 0 = smooth
+        const usize i = (usize(n - 1 - rough_y) * n + nov_x) * 4;
+        return std::pair<int, int>{lut[i], lut[i + 1]};
+    };
+    CHECK(ab(n - 1, 0).first >= 245);
+    CHECK(ab(n - 1, 0).second <= 6);
+    CHECK(ab(n - 1, n - 1).first < ab(n - 1, 0).first - 40);
+    CHECK(ab(n - 1, n - 1).first + ab(n - 1, n - 1).second <= 255);
+    CHECK(ab(2, 0).second > ab(n - 1, 0).second);  // grazing: Fresnel brightens F0's bias
+
+    f.render(0.0f, true, [](Scene3D& s) { s.set_sky(constant_sky(0.2f, true)); });
+    CHECK_FALSE(fw.last_stats().ibl_baked);  // same sky: nothing re-baked
+    f.render(0.0f, true, [](Scene3D& s) { s.set_sky(constant_sky(0.3f, true)); });
+    CHECK(fw.last_stats().ibl_baked);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: under a constant sky IBL matches the hemisphere ambient of the same color") {
+    Fixture3D f;
+    const auto scene = [](bool ibl) {
+        return [ibl](Scene3D& s) {
+            no_sun(s);
+            DirectionalLight sun = s.light();
+            sun.ambient_sky = sun.ambient_ground = {0.5f, 0.5f, 0.5f};
+            s.set_light(sun);
+            s.set_sky(constant_sky(0.5f, ibl));
+        };
+    };
+    f.render(0.0f, false, scene(false));
+    const Rgb box_off = f.at_world({0, 1.0f, 0}), ground_off = f.at_world({2.0f, 0, 2.0f});
+    f.render(0.0f, false, scene(true));
+    const Rgb box_on = f.at_world({0, 1.0f, 0}), ground_on = f.at_world({2.0f, 0, 2.0f});
+    INFO("box " << box_off.luma() << " -> " << box_on.luma() << ", ground " << ground_off.luma() << " -> " << ground_on.luma());
+    CHECK(std::abs(box_off.luma() - box_on.luma()) <= 8);
+    CHECK(std::abs(ground_off.luma() - ground_on.luma()) <= 8);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: IBL takes the ambient's color from where the sky is") {
+    Fixture3D f;
+    f.pitch_deg = 50.0f;
+    // Blue overhead, red below the horizon: the box's top and the ground face the blue.
+    const auto scene = [](Scene3D& s) {
+        no_sun(s);
+        Sky sky;
+        sky.zenith = {0.05f, 0.1f, 1.2f};
+        sky.horizon = {0.3f, 0.3f, 0.3f};
+        sky.ground = {1.2f, 0.1f, 0.05f};
+        sky.ibl = true;
+        s.set_sky(sky);
+    };
+    f.render(0.0f, false, scene);
+    const Rgb top = f.at_world({0, 1.0f, 0.2f}), ground = f.at_world({2.5f, 0, 2.5f});
+    INFO("top " << top.r << "," << top.g << "," << top.b << " ground " << ground.r << "," << ground.g << "," << ground.b);
+    // The box is red-tinted albedo (0.9, 0.3, 0.2) yet lit blue from above; the grey ground reads blue.
+    CHECK(ground.b > ground.r + 30);
+    CHECK(top.b * 9 > top.r * 2);  // albedo 0.9 r vs 0.2 b: blue light keeps b well above a red-lit share
+    CHECK(f.device->validation_error_count() == 0);
+}
+

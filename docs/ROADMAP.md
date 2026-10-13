@@ -68,7 +68,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-KIT3D | [M-KIT3D.md](milestones/M-KIT3D.md) (issues #129, #158, #126) | done | — (follow-ups listed in the record) |
 | M-MONETIZE | — (issues #141, #142) | steps 1–4 done (`mce/monetize/monetize.h`, `.mcstore` catalog, fake providers, `PlatformStore` over Play Billing / StoreKit 2, `PlatformAds` over Google Mobile Ads + UMP + ATT); steps 3–4 not yet run on a device (SBA-26) | the Mac/emulator check, step 5 and the demo |
 | M-LIVEOPS | — (issues #148, #149, #153) | not started | everything; after M-MONETIZE |
-| M-VISUAL | [M-VISUAL.md](milestones/M-VISUAL.md) (Linear SBA-6 … SBA-15) | active (step 1: GL + SDL GPU compute, GPU light assignment) | steps 2–9, the demo, Metal compute |
+| M-VISUAL | [M-VISUAL.md](milestones/M-VISUAL.md) (Linear SBA-6 … SBA-15) | active (step 1 done but Metal compute; step 2: sky IBL done) | reflection probes, steps 3–9, the demo, Metal compute |
 | M-MOBILE | [M-MOBILE.md](milestones/M-MOBILE.md), ADR-0038 | active (un-parked 2026-10-11) | steps 4–9 of the record |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
