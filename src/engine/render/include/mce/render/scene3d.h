@@ -174,7 +174,7 @@ public:
         u32 cascade_casters[kMaxCascades] = {};
         u32 lod_instances[asset::kMaxMeshLods] = {};  // instances at each level (meshes with levels)
         u32 lod_triangles[asset::kMaxMeshLods] = {};  // visible main-pass triangles at each level
-        f32 cluster_ms = 0.0f;   // CPU time of the Forward+ light assignment (not deterministic)
+        f32 cluster_ms = 0.0f;   // CPU time of the Forward+ light setup + CPU assignment, if it ran (not deterministic)
         f32 build_ms = 0.0f;     // CPU time of build() in total (not deterministic)
     };
 
@@ -205,7 +205,10 @@ public:
     const PostFx& post() const { return post_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
-    const ClusterLights& clusters() const { return clusters_; }
+    // The Forward+ lists, assigned on the CPU on first use (Forward3D's GPU path never asks).
+    const ClusterLights& clusters() const;
+    // The light pool, grid constants and culled light list only: what the GPU assignment reads.
+    const ClusterLights& cluster_setup() const { return clusters_; }
     // Sun cascades (M5a): empty when the light casts no shadows or the scene is empty.
     Span<const Cascade> cascades() const { return Span<const Cascade>(cascades_, cascade_count_); }
     // Per-cascade caster lists: indices into shadow_draws(), cascade by cascade.
@@ -227,6 +230,7 @@ public:
     const Stats& stats() const { return stats_; }
 
 private:
+    mutable Stats stats_;
     void build_cascades();
     u32 select_lod(const MeshInstance& inst, const GpuMesh& mesh) const;
 
@@ -242,7 +246,7 @@ private:
     ClusterGridDesc cluster_grid_;
     LodSettings lod_;
     Array<PointLight> point_lights_;
-    ClusterLights clusters_;
+    mutable ClusterLights clusters_;  // assigned lazily by clusters()
     Cascade cascades_[kMaxCascades];
     u32 cascade_count_ = 0;
     Array<u32> cascade_casters_;
@@ -253,7 +257,6 @@ private:
     u32 opaque_count_ = 0;
     math::aabb3 scene_bounds_{};
     math::mat4 light_view_proj_ = math::mat4::identity();
-    Stats stats_;
     bool built_ = false;
 };
 

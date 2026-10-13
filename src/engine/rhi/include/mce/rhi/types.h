@@ -254,6 +254,9 @@ inline constexpr u32 kClusters = 4;     // Forward+ per-cluster {offset, count}
 inline constexpr u32 kLightPool = 5;    // point lights
 inline constexpr u32 kLightIndices = 6; // the clusters' light index list
 inline constexpr u32 kJointPalette = 7; // skinned meshes' joint matrices (vertex stage, FR-R3D-060)
+inline constexpr u32 kClusterCull = 8;    // GPU light assignment input: culled view-space lights (compute)
+inline constexpr u32 kClusterBounds = 9;  // GPU light assignment input: tile extents + slice edges (compute)
+inline constexpr u32 kClusterCounter = 10; // GPU light assignment: index-list bump counter + drops (compute)
 inline constexpr u32 kUniformBanks = 4;  // FrameU, PassU, MaterialU, ObjectU
 }  // namespace bank
 

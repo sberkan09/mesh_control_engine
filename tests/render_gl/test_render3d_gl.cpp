@@ -2,7 +2,7 @@
 // slab rendered through cascaded shadows -> Forward+ PBR HDR (MSAA) + sky -> resolve -> bloom ->
 // tonemap -> FXAA into an offscreen target, read back and probed: lit faces, the box's shadow on
 // the ground, fog, MSAA on/off agreement, metal vs dielectric, clustered point lights, the sky,
-// the post toggles, GPU timestamps, the RHI additions (multisample resolve, layered depth targets,
+// the post toggles, GPU timestamps, the GPU light assignment against the CPU one, the RHI additions (multisample resolve, layered depth targets,
 // depth-compare array sampling, storage data, snorm/unorm16 vertex streams) and zero GL
 // validation errors.
 
@@ -33,7 +33,7 @@ struct Rgb {
 };
 
 struct Fixture3D {
-    explicit Fixture3D(u32 msaa = 4) {
+    explicit Fixture3D(u32 msaa = 4, bool gpu_clusters = true) {
         REQUIRE(platform::init().has_value());
         platform::WindowDesc wd;
         wd.title = "test_render3d_gl";
@@ -51,6 +51,7 @@ struct Fixture3D {
         Forward3DDesc fd;
         fd.msaa = msaa;
         fd.shadow_size = 1024;
+        fd.gpu_light_clusters = gpu_clusters;
         REQUIRE(renderer.init_3d(fd).has_value());
         rhi::TextureDesc td;
         td.size = {kW, kH};
@@ -114,6 +115,7 @@ struct Fixture3D {
         view = scene.view();
         rhi::CommandBuffer cmd;
         renderer.record_3d(cmd, scene, target);
+        cpu_assigned = scene.cluster_setup().assigned();
         device->submit(cmd);
         REQUIRE(device->read_pixels(target, rhi::Rect2D{0, 0, kW, kH}, pixels.span()).has_value());
         device->end_frame();
@@ -148,6 +150,7 @@ struct Fixture3D {
     Camera3D camera;
     View3D view;
     rhi::FrameStats gpu;
+    bool cpu_assigned = false;  // the CPU light assignment ran for the last frame
     u64 frame = 0;
 };
 
@@ -303,7 +306,7 @@ TEST_CASE("render3d_gl: clustered point and spot lights light only their neighbo
     CHECK(outside.luma() < 10);
     const Forward3DStats& st = f.renderer.forward_3d().last_stats();
     CHECK(st.point_lights == 257);
-    CHECK(st.light_indices > 0);
+    CHECK((st.gpu_clusters || st.light_indices > 0));  // the GPU path keeps its index count on the GPU
 
     // A spot light straight down with a 20° cone: the spot under it is lit, ground 45° off its
     // axis (well inside the radius) is not.
@@ -333,6 +336,7 @@ TEST_CASE("render3d_gl: GPU timestamps time every stage") {
     for (int i = 0; i < 6; ++i) f.render();  // timestamps are read back once their frame's fence passes
     const Forward3DGpuTimes t = f.renderer.forward_3d().gpu_times(f.device->last_gpu_timestamps());
     CHECK(t.frame_index != ~u64(0));
+    CHECK(t.clusters >= 0.0);
     CHECK(t.shadow >= 0.0);
     CHECK(t.main >= 0.0);
     CHECK(t.resolve >= 0.0);
@@ -478,4 +482,58 @@ TEST_CASE("render3d_gl: a skinned bone bends with its joint; skinning off draws 
     CHECK(green_at(true, false, upper));  // skeleton off: the bind pose, whatever the pose says
     CHECK_FALSE(green_at(true, false, side));
     CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: the GPU light assignment draws the CPU assignment's frame") {
+    // Many overlapping point and spot lights across the view, some off-screen, one at zero
+    // intensity and one behind the camera, at dusk so they dominate the frame.
+    const auto lights = [](Scene3D& s) {
+        DirectionalLight sun;
+        sun.intensity = 0.2f;
+        sun.shadows = true;
+        sun.direction = {-0.5f, -1.0f, -0.3f};
+        s.set_light(sun);
+        u32 seed = 12345u;
+        auto rnd = [&seed] {
+            seed = seed * 1664525u + 1013904223u;
+            return f32(seed >> 8) / f32(1u << 24);
+        };
+        for (u32 i = 0; i < 300; ++i) {
+            PointLight l;
+            l.position = {rnd() * 14.0f - 7.0f, rnd() * 2.0f, rnd() * 14.0f - 7.0f};
+            l.radius = 0.3f + rnd() * 2.5f;
+            l.color = {rnd(), rnd(), rnd()};
+            l.intensity = 0.05f + rnd() * 0.3f;
+            if (i % 7 == 0) {
+                l.direction = {rnd() - 0.5f, -1.0f, rnd() - 0.5f};
+                l.spot_outer = 0.3f + rnd() * 0.6f;
+                l.spot_inner = l.spot_outer * 0.5f;
+            }
+            if (i == 11) l.intensity = 0.0f;
+            if (i == 12) l.position = {0, 2, 20};  // behind the orbit camera
+            s.add_point_light(l);
+        }
+    };
+    Array<u8> cpu_px;
+    {
+        Fixture3D cpu(4, false);
+        CHECK_FALSE(cpu.renderer.forward_3d().gpu_light_clusters());
+        cpu.render(0.0f, true, lights);
+        CHECK(cpu.cpu_assigned);
+        CHECK_FALSE(cpu.renderer.forward_3d().last_stats().gpu_clusters);
+        CHECK(cpu.gpu.dispatches == 0);
+        cpu_px = cpu.pixels;
+    }
+    Fixture3D gpu(4, true);
+    if (!gpu.device->caps().compute) return;
+    CHECK(gpu.renderer.forward_3d().gpu_light_clusters());
+    gpu.render(0.0f, true, lights);
+    CHECK_FALSE(gpu.cpu_assigned);  // the frame never ran ClusterLights::assign()
+    CHECK(gpu.renderer.forward_3d().last_stats().gpu_clusters);
+    CHECK(gpu.gpu.dispatches == 1);
+    REQUIRE(gpu.pixels.size() == cpu_px.size());
+    usize differing = 0;
+    for (usize i = 0; i < cpu_px.size(); ++i) differing += gpu.pixels[i] != cpu_px[i];
+    CHECK(differing == 0);
+    CHECK(gpu.device->validation_error_count() == 0);
 }

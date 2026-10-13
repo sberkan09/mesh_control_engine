@@ -473,3 +473,79 @@ TEST_CASE("anim: blended poses and AnimationPlayer cross-fades have no pop") {
     pose_nodes(m, 1, 0.75f, Span<math::mat4>(single, 2));
     CHECK(math::length(math::transform_point(single[child], {}) - math::transform_point(after[child], {})) < 1e-4f);
 }
+
+TEST_CASE("forward+: prepare + assign is build; the culled list and tile bounds feed the GPU twin") {
+    const View3D v = test_view(0.7f);
+    Array<PointLight> lights = random_lights(200, 33);
+    lights[5].intensity = 0.0f;           // never assigned
+    lights[6].position = {0, 2, 60};      // behind the camera
+    ClusterLights built, staged;
+    built.build(v, lights.span());
+    staged.prepare(v, lights.span());
+    CHECK_FALSE(staged.assigned());
+    CHECK(staged.ranges().empty());
+    CHECK(staged.indices().empty());
+    REQUIRE(staged.lights().size() == lights.size());
+    const ClusterGridDesc& g = staged.grid();
+    REQUIRE(staged.tile_bounds().size() == usize(g.z) * (g.x + g.y) * 2 + g.z + 1);
+    CHECK(staged.tile_bounds()[staged.edges_offset()] == doctest::Approx(v.near_z));
+    CHECK(staged.tile_bounds()[staged.edges_offset() + g.z] == doctest::Approx(v.far_z));
+    u32 prev = 0;
+    bool ordered = true, has5 = false, has6 = false;
+    for (const ClusterCullLight& c : staged.culled()) {
+        ordered = ordered && (c.light >= prev);
+        prev = c.light;
+        has5 = has5 || c.light == 5;
+        has6 = has6 || c.light == 6;
+    }
+    CHECK(ordered);
+    CHECK_FALSE(has5);
+    CHECK_FALSE(has6);
+    staged.assign();
+    CHECK(staged.assigned());
+    REQUIRE(staged.indices().size() == built.indices().size());
+    for (usize i = 0; i < built.indices().size(); ++i) REQUIRE(staged.indices()[i] == built.indices()[i]);
+    for (usize i = 0; i < built.ranges().size(); ++i) REQUIRE(staged.ranges()[i].count == built.ranges()[i].count);
+
+    // The compute shader's per-cluster test (cluster_build.comp), mirrored here: every CPU pair is
+    // found, in the same order within the cluster.
+    const Span<const f32> b = staged.tile_bounds();
+    auto dist = [](f32 x, f32 lo, f32 hi) {
+        const f32 d = x < lo ? lo - x : (x > hi ? x - hi : 0.0f);
+        return d * d;
+    };
+    bool superset = true;
+    for (u32 c = 0; c < staged.cluster_count() && superset; ++c) {
+        const u32 tx = c % g.x, ty = (c / g.x) % g.y, s = c / (g.x * g.y);
+        Array<u32> gpu;
+        for (const ClusterCullLight& l : staged.culled()) {
+            const vec4 cr = l.center_radius;
+            const f32 d2 = dist(cr.z, -b[staged.edges_offset() + s + 1], -b[staged.edges_offset() + s]) +
+                           dist(cr.y, b[staged.tile_bounds_y_offset() + (s * g.y + ty) * 2], b[staged.tile_bounds_y_offset() + (s * g.y + ty) * 2 + 1]) +
+                           dist(cr.x, b[(s * g.x + tx) * 2], b[(s * g.x + tx) * 2 + 1]);
+            if (d2 <= cr.w * cr.w * 1.0001f) gpu.push_back(l.light);
+        }
+        usize k = 0;
+        for (u32 li : staged.lights_in(c)) {
+            while (k < gpu.size() && gpu[k] != li) ++k;
+            superset = superset && k < gpu.size();
+            ++k;
+        }
+    }
+    CHECK(superset);
+}
+
+TEST_CASE("forward+: Scene3D assigns lights on first use only") {
+    MeshStore meshes;
+    Scene3D scene(meshes, mem::heap());
+    Camera3D cam = orbit_camera({0, 0, 0}, 0.3f, math::radians(25.0f), 12.0f);
+    scene.begin(cam, {320, 180});
+    for (const PointLight& l : random_lights(32, 4)) scene.add_point_light(l);
+    scene.build();
+    CHECK_FALSE(scene.cluster_setup().assigned());
+    CHECK(scene.cluster_setup().lights().size() == 32);
+    const ClusterLights& cl = scene.clusters();
+    CHECK(cl.assigned());
+    CHECK(cl.indices().size() > 0);
+    CHECK(&cl == &scene.cluster_setup());
+}
