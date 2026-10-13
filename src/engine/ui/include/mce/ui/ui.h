@@ -19,7 +19,13 @@
 //   pause.submit(batch);  // a batch begun with compute_screen_view(viewport), PassId::Screen2D
 //
 // Coordinates are pixels, +y down, origin at the viewport's top-left. Offsets are authored at UI
-// scale 1 and multiplied by UpdateContext::ui_scale.
+// scale 1 and multiplied by UpdateContext::ui_scale (compute_ui_scale picks it from the display).
+//
+// Phones (M-MOBILE step 11b): the root is the safe area, and a widget can anchor to the whole
+// screen instead (a backdrop under the notch). A scroll view moves its children by finger drag
+// with inertia (or the wheel), clipped to its rect; modals take focus and the pointer while open;
+// tabs switch pages; images can be 9-sliced. The authoring values (anchors, styles, layouts) are in
+// mce/ui/types.h, reflected so the editor and the MCP server can describe them.
 
 #include "mce/containers/array.h"
 #include "mce/ecs/world.h"
@@ -28,6 +34,7 @@
 #include "mce/input/actions.h"
 #include "mce/memory/handle.h"
 #include "mce/render/sprite_batch.h"
+#include "mce/ui/types.h"
 
 namespace mce::render {
 class Renderer;
@@ -41,15 +48,6 @@ using math::vec2;
 struct WidgetTag;
 using WidgetId = Handle<WidgetTag>;  // generational: a removed widget's id resolves to nothing
 
-enum class WidgetKind : u8 { Panel, Image, Text, Button, Toggle, Slider, Stack, Grid, Console };
-enum class WidgetState : u8 { Normal, Hover, Pressed, Focused, Disabled, Count };
-
-struct Anchors {                                    // uGUI RectTransform, parent-relative
-    vec2 min{0, 0}, max{0, 0};                      // 0..1 of the parent rect
-    vec2 offset_min{0, 0}, offset_max{0, 0};        // pixels at UI scale 1
-    vec2 pivot{0.5f, 0.5f};                         // size-change origin (point anchors)
-};
-
 struct Rect {
     vec2 min, max;
     vec2 size() const { return max - min; }
@@ -57,31 +55,8 @@ struct Rect {
     bool contains(vec2 p) const { return p.x >= min.x && p.y >= min.y && p.x < max.x && p.y < max.y; }
 };
 
-struct Style {  // one per WidgetState; colors are sRGB (as a design tool shows them), alpha linear
-    Color tint{1, 1, 1, 1};                         // the widget's quad (Panel / Button / track)
-    Color text_color{1, 1, 1, 1};
-    Color accent{0.95f, 0.75f, 0.35f, 1};           // slider fill + handle, toggle check, console caret
-    u32 sprite_region = ~0u;                        // into the skin's sprite set; ~0 = the white region (flat)
-    f32 text_size = 0.0f;                           // pixels; 0 = the font's baked height
-    bool draw_quad = true;                          // false: text only (labels)
-};
-
 struct NavEdges {  // explicit navigation; a null edge falls back to the geometric rule
     WidgetId up, down, left, right;
-};
-
-enum class Axis : u8 { Vertical, Horizontal };
-enum class Align : u8 { Start, Center, End, Stretch };
-struct StackLayout {
-    Axis axis = Axis::Vertical;
-    f32 spacing = 8.0f;
-    f32 padding = 0.0f;
-    Align align = Align::Stretch;  // cross axis
-};
-struct GridLayout {
-    u32 columns = 3;
-    vec2 cell{64, 64};
-    vec2 spacing{8, 8};
 };
 
 // What a document draws with: a sprite set holding a white region (flat quads) and a font.
@@ -110,14 +85,21 @@ struct SafeInsets {
 struct UpdateContext {
     rhi::Extent2D viewport;                         // pixels
     SafeInsets safe_insets;                         // the root lays out inside them (M-MOBILE)
-    f32 ui_scale = 1.0f;                            // display scale × user setting (FR-R2D-080)
+    f32 ui_scale = 1.0f;                            // compute_ui_scale(); display scale × user setting (FR-R2D-080)
     const input::InputState* actions = nullptr;     // the UI action map's snapshot (null: no input)
     vec2 pointer{-1, -1};                           // pixels; negative = no pointer this frame
     bool pointer_down = false, pointer_pressed = false, pointer_released = false;
+    f32 wheel = 0.0f;                               // notches this frame, + = away from the user (scrolls up)
     StringView text_input;                          // typed text this frame (the console only)
     bool key_backspace = false, key_enter = false, key_up = false, key_down = false;  // console editing
     f64 dt = 0.0;                                   // presentation time (caret blink)
 };
+
+// The UI scale for a screen (FR-R2D-080, M-MOBILE 11b): the display's scale (the OS's DPI over
+// its baseline: 96 on desktops, 160 on Android, points on iOS) times the user's setting, lowered
+// when the screen would be smaller than `min_logical` (short side × long side, at scale 1) so a
+// layout authored for that size still fits, and rounded down to 1/8 so pixel snapping stays even.
+f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale = 1.0f, vec2 min_logical = {360, 640});
 
 // Touch as the pointer (M-MOBILE, FR-INP-070): the oldest touch in the snapshot becomes
 // ctx.pointer (scaled to ctx.viewport) with its press/hold/release, so widgets hit-test by finger
@@ -170,7 +152,25 @@ public:
     void set_interactable(WidgetId w, bool v);
     void set_nav(WidgetId w, const NavEdges& edges);
     void set_stack(WidgetId w, const StackLayout& s);
-    void set_grid(WidgetId w, const GridLayout& g);
+    void set_grid(WidgetId w, const GridLayout& g);  // a Grid
+    // Scroll views (WidgetKind::Scroll lays out its children with its StackLayout, set_stack): the
+    // offset along the axis in pixels, 0 .. scroll_max. A drag past a few pixels scrolls instead of
+    // pressing the widget under the finger, and a release keeps the drag's speed and slows down.
+    void set_scroll(WidgetId w, f32 offset);
+    f32 scroll(WidgetId w) const;
+    f32 scroll_max(WidgetId w) const;
+    // Brings `w` fully into view inside every scroll view around it (gamepad focus does this itself).
+    void scroll_into_view(WidgetId w);
+    // Modals: an open modal is drawn above the rest of the document, and focus, navigation and the
+    // pointer stay inside it until it closes; Cancel then names the modal instead of the root.
+    // Opening shows the widget and focuses into it; closing hides it and gives focus back.
+    void open_modal(WidgetId w);
+    void close_modal(WidgetId w);
+    WidgetId top_modal() const { return modals_.empty() ? WidgetId{} : modals_.back().widget; }
+    // Tabs (Builder::tabs / tab): the selected page is visible, the others hidden. Confirming a
+    // tab's button selects it and sends ValueChanged on the Tabs widget with the page index.
+    void select_tab(WidgetId tabs, u32 index);
+    u32 selected_tab(WidgetId tabs) const;
     void set_default_focus(WidgetId w) { default_focus_ = w; }
     void set_blocks_pointer(WidgetId w, bool v);      // a full-screen modal panel shields the game
     // Two-way convar binding (options screens): the widget shows the convar's value; a change goes
@@ -188,6 +188,8 @@ public:
     // Quads + text in document order into a batch begun with compute_screen_view, Screen2D.
     // Quads go on `sort_layer`, text on `sort_layer + 1` (one sprite set + one font: two MDI
     // groups), so text sits above every quad of its document; stack documents 2 layers apart.
+    // Each open modal takes the next two layers (sort_layer + 2, + 3 for the first), so it covers
+    // the text below it: leave 2 + 2 × (modals open at once) layers to the next document.
     void submit(render::SpriteBatch& batch, i16 sort_layer = 100) const;
 
     Span<const UiEvent> events() const { return events_.span(); }  // the last update()'s events
@@ -221,6 +223,10 @@ public:
 
 private:
     struct ConsoleData;
+    struct ModalEntry {
+        WidgetId widget;
+        WidgetId restore_focus;
+    };
     struct Node {
         u32 generation = 1;
         bool alive = false;
@@ -231,7 +237,10 @@ private:
         Anchors anchors;
         Style styles[static_cast<u32>(WidgetState::Count)];
         Rect rect;
+        Rect clip;              // the part of the screen the widget may draw in (scroll views cut it)
+        bool clipped = false;   // under a scroll view: draw through `clip`
         f32 value = 0.0f, lo = 0.0f, hi = 1.0f, step = 0.1f;
+        f32 scroll = 0.0f, scroll_max = 0.0f, scroll_velocity = 0.0f;
         bool visible = true, interactable = true, blocks_pointer = false;
         NavEdges nav;
         StackLayout stack;
@@ -250,6 +259,14 @@ private:
     void layout();
     void layout_node(u32 index, const Rect& parent, f32 scale);
     void layout_children(u32 index, f32 scale);
+    void layout_stack(u32 index, f32 scale);
+    vec2 measure(u32 index, f32 avail_width) const;  // preferred size; avail_width (scale 1) <= 0: unknown
+    Rect anchor_space(const Node& n, const Rect& parent) const;
+    bool in_modal_scope(u32 index) const;
+    void activate(u32 index);
+    void update_scroll(const UpdateContext& ctx, bool has_pointer);
+    void relayout_scroll(u32 index);
+    u32 scroll_at(vec2 p) const;
     void rebuild_order();
     bool focusable(u32 index) const;
     bool effectively_visible(u32 index) const;
@@ -272,18 +289,22 @@ private:
     };
     void update_console(u32 index, const UpdateContext& ctx);
     void draw_quad(render::SpriteBatch& batch, const Rect& r, Color c, i16 layer, i32 order) const;
-    void draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u32 region, i16 layer, i32 order) const;
+    void draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u32 region, i16 layer, i32 order,
+                     const Slice& slice = {}) const;
     void draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 size, Color c, i16 layer, i32 order,
                    f32 max_width = 0.0f) const;
+    mutable const Rect* draw_clip_ = nullptr;  // set by submit() while drawing a clipped widget
 
     mem::IAllocator& alloc_;
     Array<Node> nodes_;
     Array<u32> free_;
-    Array<u32> order_;          // visible-or-not, document order (depth-first)
+    Array<u32> order_;          // visible-or-not, document order (depth-first), open modals last
+    Array<u32> modal_starts_;   // where each open modal's subtree starts in order_
     Array<WidgetId> pending_remove_;
     Array<UiEvent> events_;
     Array<ConsoleData*> consoles_;
     Array<PropertyBinding> properties_;
+    Array<ModalEntry> modals_;
     FixedString<256> submitted_;
     WidgetId root_, focused_, hovered_, pressed_, default_focus_;
     Skin skin_;
@@ -295,6 +316,11 @@ private:
     f64 nav_repeat_at_ = 0.0;
     f64 time_ = 0.0;
     bool pointer_held_ = false;
+    // A finger or mouse drag on a scroll view: armed by a press, scrolling past the slop.
+    u32 drag_scroll_ = ~0u;
+    vec2 drag_start_;
+    f32 drag_origin_ = 0.0f;
+    bool dragging_ = false;
     mutable DocumentStats stats_;
     mutable render::TextLayout scratch_;
 
@@ -316,6 +342,12 @@ public:
     Builder stack(StringView name, const StackLayout& s = {});
     Builder grid(StringView name, const GridLayout& g = {});
     Builder console(StringView name);
+    Builder scroll(StringView name, const StackLayout& s = {});  // a vertical list that scrolls
+    // A modal: a full-screen veil (dim, blocks the pointer, hidden until Document::open_modal);
+    // put its box inside it.
+    Builder modal(StringView name);
+    Builder tabs(StringView name);                     // then .tab(...) per page
+    Builder tab(StringView name, StringView label);    // on a tabs builder: the page to fill
 
     Builder& fill();                                  // anchors 0..1, zero offsets
     Builder& at(vec2 anchor, vec2 size);              // point anchor + size (0 on an axis = preferred)
@@ -323,6 +355,8 @@ public:
     Builder& style(const Style& s);                   // every state
     Builder& style(WidgetState state, const Style& s);
     Builder& tint(Color c);                           // every state's tint
+    Builder& slice(const Slice& s);                   // every state's 9-slice insets
+    Builder& to(AnchorTo space);                      // what the anchors are fractions of
     Builder& text_size(f32 px);
     Builder& nav(const NavEdges& e);
     Builder& bind_convar(StringView convar);

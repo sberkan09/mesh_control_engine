@@ -252,7 +252,7 @@ operations or gameplay events. Gameplay code never includes `mce/ui`.
 | Flat panel | one `SpriteInstance` with the white region of the UI sprite set, tinted |
 | Image / 9-slice | one quad, or nine quads for a 9-slice (corners fixed, edges stretched on one axis, centre on both) |
 | Text | `layout_text` + `SpriteBatch::add_text` with the document's font (coverage path, rendering-2d D9) |
-| Clip regions | none at v1.0. Scroll views (FR-UI-040, Could) would add a scissor rect per batch group |
+| Clip regions | scroll views cut their content on the CPU: `SpriteBatch::add_rect` and `TextPlacement::clip` trim each quad and glyph (and its uvs) to the view, so clipping adds no scissor and no batch group (M-MOBILE 11b) |
 
 `sort_order` is the widget's document-order index, so equal-layer widgets draw in tree order and the radix sort's
 stability keeps text above its own panel. The whole document is one sprite set (UI atlas) plus one font, so a typical
@@ -264,6 +264,20 @@ everything (ADR-0020), which is the point of the decision.
 Nameplates and damage numbers are *not* documents. They are sprites and text placed by a presentation system with
 `compute_view_2d` or a 3D-to-screen projection. A widget may follow an `owner` entity's projected position
 (`Anchors` offset recomputed per frame), which covers "health bar over the boss" without a world-space canvas.
+
+### 4.7 Phones and many aspect ratios (M-MOBILE step 11b)
+
+- **Anchor spaces.** `Anchors::to` picks what the fractions are of: the parent (default; the root is the safe
+  area), the safe area, or the whole screen (a backdrop under the notch).
+- **Scale.** `compute_ui_scale(viewport, display_scale, user)`: the display's DPI scale times the user setting,
+  lowered so a 360 × 640 layout still fits, in 1/8 steps.
+- **Scroll views** are stacks that may overflow: drag past an 8 px slop (the press is let go), inertia with
+  friction, the wheel, and focus scrolled into view. Moving one re-lays its subtree only.
+- **Modals** are a stack on the document: the top one owns focus, navigation, the pointer and Cancel, and draws
+  two sort layers up so the page's text never shows through it.
+- **Tabs** are a bar of buttons over a set of pages, one visible.
+- **9-slice** insets live in `Style::slice` (texels of the region; corners scale with the UI scale).
+- The authoring values (`mce/ui/types.h`) are reflected as `UiAnchors`, `UiStyle`, ... for the editor and MCP.
 
 ---
 

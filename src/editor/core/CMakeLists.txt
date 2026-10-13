@@ -34,4 +34,5 @@ mce_add_library(mce_editor_core UMBRELLA
         mce::mce_asset_cook
         mce::mce_physics2d
         mce::mce_physics3d
-        mce::mce_audio)
+        mce::mce_audio
+        mce::mce_ui)

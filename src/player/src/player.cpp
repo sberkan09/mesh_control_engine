@@ -133,6 +133,9 @@ MCE_CVAR(cv_store_catalog, "store_catalog", "",
 MCE_CVAR(cv_language, "language", "",
          "Play in this language (\"tr\", \"pt-BR\") for this run instead of the saved choice and the device languages",
          CVarFlags::None);
+MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
+         "UI size on top of the display's own scale (1 = as the display asks; lowered when the screen is too small)",
+         CVarFlags::Saved);
 MCE_CVAR(cv_default_language, "default_language", "en",
          "The project's base language: the last fallback when neither the choice nor the device languages have a string table",
          CVarFlags::None);
@@ -762,6 +765,9 @@ private:
 
     // ---- the developer console (FR-UI-045) ----------------------------------------------------
 
+    // The UI scale for this framebuffer: the display's scale times -ui_scale, fitted (M-MOBILE 11b).
+    f32 ui_scale(rhi::Extent2D bb) const { return ui::compute_ui_scale(bb, window_->display_scale(), cv_ui_scale.get_float()); }
+
     void set_console(bool open) {
         console_.set_open(open);
         window_->set_text_input(open);
@@ -772,7 +778,7 @@ private:
         ctx.viewport = bb;
         ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
                                          static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
-        ctx.ui_scale = window_->display_scale();
+        ctx.ui_scale = ui_scale(bb);
         input::InputState in;
         in.cancel_pressed = con_.cancel;
         ctx.actions = &in;
@@ -795,7 +801,7 @@ private:
         ctx.viewport = bb;
         ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
                                          static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
-        ctx.ui_scale = window_->display_scale();
+        ctx.ui_scale = ui_scale(bb);
         ctx.dt = 1.0 / 60.0;
         for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
             const ui::Layer* l = desc_.ui_layers[i];

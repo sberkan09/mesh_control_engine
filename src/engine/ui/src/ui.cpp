@@ -16,11 +16,23 @@ constexpr u32 kNone = ~0u;
 constexpr u32 kConsoleScrollback = 256;
 constexpr u32 kConsoleHistory = 32;
 constexpr f64 kRepeatDelay = 0.4, kRepeatInterval = 0.12;
+// Scroll views: a press turns into a drag after this many pixels (at UI scale 1); a released drag
+// keeps its speed and loses kScrollFriction of it per second (e^-k); a wheel notch moves kWheelStep.
+constexpr f32 kDragSlop = 8.0f, kScrollFriction = 4.0f, kWheelStep = 48.0f, kMinScrollSpeed = 8.0f;
 
 constexpr u32 S(WidgetState s) { return static_cast<u32>(s); }
 
 f32 snap(f32 v) { return std::floor(v + 0.5f); }
 Rect snap(const Rect& r) { return Rect{vec2(snap(r.min.x), snap(r.min.y)), vec2(snap(r.max.x), snap(r.max.y))}; }
+Rect intersect(const Rect& a, const Rect& b) {
+    Rect r{vec2(a.min.x > b.min.x ? a.min.x : b.min.x, a.min.y > b.min.y ? a.min.y : b.min.y),
+           vec2(a.max.x < b.max.x ? a.max.x : b.max.x, a.max.y < b.max.y ? a.max.y : b.max.y)};
+    if (r.max.x < r.min.x) r.max.x = r.min.x;
+    if (r.max.y < r.min.y) r.max.y = r.min.y;
+    return r;
+}
+bool overlaps(const Rect& a, const Rect& b) { return a.min.x < b.max.x && b.min.x < a.max.x && a.min.y < b.max.y && b.min.y < a.max.y; }
+f32 clampf(f32 v, f32 lo, f32 hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 // Styles are authored in sRGB (what a design tool or a CSS color shows); the batch takes linear.
 f32 to_linear(f32 c) { return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f); }
@@ -135,10 +147,24 @@ Result<BuiltinSkin*> create_builtin_skin(render::Renderer& renderer, BuiltinSkin
     return &out;
 }
 
+// ---- UI scale ----------------------------------------------------------------------------------
+
+f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale, vec2 min_logical) {
+    f32 s = (display_scale > 0.0f ? display_scale : 1.0f) * (user_scale > 0.0f ? user_scale : 1.0f);
+    const f32 w = static_cast<f32>(viewport.width), h = static_cast<f32>(viewport.height);
+    const f32 short_px = w < h ? w : h, long_px = w < h ? h : w;
+    const f32 short_min = min_logical.x < min_logical.y ? min_logical.x : min_logical.y;
+    const f32 long_min = min_logical.x < min_logical.y ? min_logical.y : min_logical.x;
+    if (short_min > 0.0f && short_px > 0.0f && short_px / short_min < s) s = short_px / short_min;
+    if (long_min > 0.0f && long_px > 0.0f && long_px / long_min < s) s = long_px / long_min;
+    s = std::floor(s * 8.0f) / 8.0f;
+    return s < 0.25f ? 0.25f : s;
+}
+
 // ---- Document: structure -----------------------------------------------------------------------
 
 Document::Document(mem::IAllocator& a)
-    : alloc_(a), nodes_(a), free_(a), order_(a), pending_remove_(a), events_(a), consoles_(a), scratch_(a) {
+    : alloc_(a), nodes_(a), free_(a), order_(a), modal_starts_(a), pending_remove_(a), events_(a), consoles_(a), scratch_(a) {
     nodes_.emplace_back();
     Node& r = nodes_[0];
     r.alive = true;
@@ -187,7 +213,8 @@ WidgetId Document::add(WidgetId parent, WidgetKind kind, StringView name) {
     n.alive = true;
     n.kind = kind;
     n.name.assign(name);
-    if (kind == WidgetKind::Stack || kind == WidgetKind::Grid || kind == WidgetKind::Text)
+    if (kind == WidgetKind::Stack || kind == WidgetKind::Grid || kind == WidgetKind::Text || kind == WidgetKind::Scroll ||
+        kind == WidgetKind::Tabs)
         for (Style& s : n.styles) s.draw_quad = false;
     if (kind == WidgetKind::Console) {
         ConsoleData* c = mem::make_unique<ConsoleData>(alloc_).release();
@@ -249,15 +276,31 @@ void Document::destroy_subtree(u32 index) {
 
 void Document::rebuild_order() {
     order_.clear();
-    // Iterative depth-first walk: a node, then its children in sibling order.
+    auto open_modal_at = [&](u32 i) {
+        for (const ModalEntry& m : modals_)
+            if (m.widget.index == i) return true;
+        return false;
+    };
+    // Iterative depth-first walk: a node, then its children in sibling order. Open modals are left
+    // out and walked last, in the order they opened, so they draw and hit-test above the rest.
     Array<u32> stack(alloc_);
-    stack.push_back(root_.index);
-    while (!stack.empty()) {
-        const u32 i = stack.back();
-        stack.pop_back();
-        order_.push_back(i);
-        for (u32 c = nodes_[i].last_child; c != kNone; c = nodes_[c].prev_sibling) stack.push_back(c);
-    }
+    auto walk = [&](u32 start) {
+        stack.push_back(start);
+        while (!stack.empty()) {
+            const u32 i = stack.back();
+            stack.pop_back();
+            order_.push_back(i);
+            for (u32 c = nodes_[i].last_child; c != kNone; c = nodes_[c].prev_sibling)
+                if (!open_modal_at(c)) stack.push_back(c);
+        }
+    };
+    walk(root_.index);
+    modal_starts_.clear();
+    for (const ModalEntry& m : modals_)
+        if (node(m.widget)) {
+            modal_starts_.push_back(static_cast<u32>(order_.size()));
+            walk(m.widget.index);
+        }
     order_dirty_ = false;
 }
 
@@ -320,6 +363,136 @@ void Document::set_grid(WidgetId w, const GridLayout& g) {
 }
 void Document::set_blocks_pointer(WidgetId w, bool v) {
     if (Node* n = node(w)) n->blocks_pointer = v;
+}
+
+// ---- scroll views, modals, tabs ----------------------------------------------------------------
+
+void Document::set_scroll(WidgetId w, f32 offset) {
+    Node* n = node(w);
+    if (!n || n->kind != WidgetKind::Scroll) return;
+    n->scroll_velocity = 0.0f;
+    if (layout_dirty_) {  // clamped by the coming layout
+        n->scroll = offset > 0.0f ? offset : 0.0f;
+        return;
+    }
+    const f32 v = clampf(offset, 0.0f, n->scroll_max);
+    if (v == n->scroll) return;
+    n->scroll = v;
+    relayout_scroll(w.index);
+}
+f32 Document::scroll(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->scroll : 0.0f;
+}
+f32 Document::scroll_max(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->scroll_max : 0.0f;
+}
+
+void Document::relayout_scroll(u32 index) { layout_children(index, scale_); }
+
+void Document::scroll_into_view(WidgetId w) {
+    if (!node(w)) return;
+    if (layout_dirty_) layout();
+    for (u32 a = nodes_[w.index].parent; a != kNone; a = nodes_[a].parent) {
+        Node& s = nodes_[a];
+        if (s.kind != WidgetKind::Scroll) continue;
+        const bool vert = s.stack.axis == Axis::Vertical;
+        const Rect& r = nodes_[w.index].rect;
+        const f32 lo = vert ? r.min.y : r.min.x, hi = vert ? r.max.y : r.max.x;
+        const f32 pad = s.stack.padding * scale_;
+        const f32 view_lo = (vert ? s.rect.min.y : s.rect.min.x) + pad, view_hi = (vert ? s.rect.max.y : s.rect.max.x) - pad;
+        f32 delta = 0.0f;
+        if (lo < view_lo) delta = lo - view_lo;
+        else if (hi > view_hi) delta = (hi - view_hi) < (lo - view_lo) ? hi - view_hi : lo - view_lo;
+        const f32 v = clampf(s.scroll + delta, 0.0f, s.scroll_max);
+        s.scroll_velocity = 0.0f;
+        if (v == s.scroll) continue;
+        s.scroll = v;
+        relayout_scroll(a);
+    }
+}
+
+u32 Document::scroll_at(vec2 p) const {
+    for (usize k = order_.size(); k-- > 1;) {
+        const u32 i = order_[k];
+        const Node& n = nodes_[i];
+        if (n.kind != WidgetKind::Scroll || !n.rect.contains(p) || (n.clipped && !n.clip.contains(p))) continue;
+        if (effectively_visible(i) && in_modal_scope(i)) return i;
+    }
+    return kNone;
+}
+
+bool Document::in_modal_scope(u32 index) const {
+    if (modals_.empty()) return true;
+    const u32 top = modals_.back().widget.index;
+    for (u32 i = index; i != kNone; i = nodes_[i].parent)
+        if (i == top) return true;
+    return false;
+}
+
+void Document::open_modal(WidgetId w) {
+    Node* n = node(w);
+    if (!n || w == root_) return;
+    for (const ModalEntry& m : modals_)
+        if (m.widget == w) return;
+    modals_.push_back(ModalEntry{w, focused_});
+    if (!n->visible) {
+        n->visible = true;
+        mark_layout();
+    }
+    order_dirty_ = true;
+    focused_ = {};  // update() focuses into the modal (its default focus, else its first widget)
+}
+
+void Document::close_modal(WidgetId w) {
+    for (usize i = 0; i < modals_.size(); ++i) {
+        if (modals_[i].widget != w) continue;
+        const bool top = i + 1 == modals_.size();
+        const WidgetId restore = modals_[i].restore_focus;
+        modals_.erase(i);
+        if (Node* n = node(w); n && n->visible) {
+            n->visible = false;
+            mark_layout();
+        }
+        order_dirty_ = true;
+        if (top) focused_ = restore;  // checked by the next update()
+        return;
+    }
+}
+
+void Document::select_tab(WidgetId tabs, u32 index) {
+    Node* n = node(tabs);
+    if (!n || n->kind != WidgetKind::Tabs || n->first_child == kNone) return;
+    const u32 pages = nodes_[n->first_child].next_sibling;
+    if (pages == kNone) return;
+    u32 count = 0;
+    for (u32 c = nodes_[pages].first_child; c != kNone; c = nodes_[c].next_sibling) ++count;
+    if (count == 0) return;
+    if (index >= count) index = count - 1;
+    n->value = static_cast<f32>(index);
+    u32 i = 0;
+    for (u32 c = nodes_[pages].first_child; c != kNone; c = nodes_[c].next_sibling, ++i) nodes_[c].visible = i == index;
+    mark_layout();
+}
+
+u32 Document::selected_tab(WidgetId tabs) const {
+    const Node* n = node(tabs);
+    return n && n->kind == WidgetKind::Tabs ? static_cast<u32>(n->value) : 0u;
+}
+
+// A button fired (pointer release on it, or confirm while focused). A tab's button selects its page.
+void Document::activate(u32 index) {
+    const WidgetId id = id_of(index);
+    emit(UiEvent::Confirmed, id);
+    const u32 bar = nodes_[index].parent;
+    const u32 tabs = bar != kNone ? nodes_[bar].parent : kNone;
+    if (tabs == kNone || nodes_[tabs].kind != WidgetKind::Tabs || nodes_[tabs].first_child != bar) return;
+    u32 i = 0;
+    for (u32 c = nodes_[bar].first_child; c != kNone && c != index; c = nodes_[c].next_sibling) ++i;
+    if (static_cast<u32>(nodes_[tabs].value) == i) return;
+    select_tab(id_of(tabs), i);
+    emit(UiEvent::ValueChanged, id_of(tabs), static_cast<f32>(i));
 }
 
 bool Document::bind_convar(WidgetId w, StringView convar) {
@@ -499,7 +672,7 @@ bool Document::effectively_visible(u32 index) const {
 
 bool Document::focusable(u32 index) const {
     const Node& n = nodes_[index];
-    return n.alive && interactive_kind(n.kind) && n.interactable && effectively_visible(index);
+    return n.alive && interactive_kind(n.kind) && n.interactable && effectively_visible(index) && in_modal_scope(index);
 }
 
 // ---- layout ------------------------------------------------------------------------------------
@@ -511,11 +684,23 @@ f32 text_px(const Style& s, const render::Font* font) {
 }
 }  // namespace
 
-vec2 Document::preferred_size(WidgetId w) const {
-    const Node* n = node(w);
-    if (!n) return {};
+vec2 Document::preferred_size(WidgetId w) const { return node(w) ? measure(w.index, 0.0f) : vec2(); }
+
+namespace {
+// Columns of a grid `width` pixels wide (UI scale 1): the authored count, or as many as fit.
+u32 grid_columns(const GridLayout& g, f32 width, u32 count) {
+    if (g.columns) return g.columns;
+    if (width <= 0.0f) return count ? count : 1;
+    const f32 step = g.cell.x + g.spacing.x;
+    const u32 fit = step > 0.0f ? static_cast<u32>((width + g.spacing.x) / step) : 1;
+    return fit ? fit : 1;
+}
+}  // namespace
+
+vec2 Document::measure(u32 index, f32 avail_width) const {
+    const Node* n = &nodes_[index];
     const Style& st = n->styles[S(WidgetState::Normal)];
-    auto measure = [&](StringView s) -> vec2 {
+    auto measure_text = [&](StringView s) -> vec2 {
         if (!skin_.font || s.empty()) return vec2(0, s.empty() ? 0.0f : text_px(st, skin_.font));
         render::TextLayoutDesc d;
         d.size_px = text_px(st, skin_.font);
@@ -523,27 +708,30 @@ vec2 Document::preferred_size(WidgetId w) const {
     };
     const StringView label(n->text.data(), n->text.size());
     switch (n->kind) {
-        case WidgetKind::Text: return measure(label);
+        case WidgetKind::Text: return measure_text(label);
         case WidgetKind::Button: {
-            const vec2 t = measure(label);
+            const vec2 t = measure_text(label);
             return vec2(t.x + 32.0f, t.y + 14.0f);
         }
         case WidgetKind::Toggle: {
-            const vec2 t = measure(label);
+            const vec2 t = measure_text(label);
             const f32 box = text_px(st, skin_.font) + 4.0f;
             return vec2(box + 10.0f + t.x + 16.0f, (t.y > box ? t.y : box) + 10.0f);
         }
         case WidgetKind::Slider: return vec2(200.0f, 24.0f);
         case WidgetKind::Console: return vec2(640.0f, 300.0f);
-        case WidgetKind::Stack: {
+        case WidgetKind::Stack:
+        case WidgetKind::Scroll: {
             const StackLayout& s = n->stack;
             const bool vert = s.axis == Axis::Vertical;
+            // A vertical stretch stack hands its width down (a fit-width grid inside sizes by it).
+            const f32 child_avail = vert && s.align == Align::Stretch && avail_width > 0.0f ? avail_width - 2.0f * s.padding : 0.0f;
             f32 main = 0.0f, cross = 0.0f;
             u32 count = 0;
             for (u32 c = n->first_child; c != kNone; c = nodes_[c].next_sibling) {
                 if (!nodes_[c].visible) continue;
                 const Anchors& a = nodes_[c].anchors;
-                vec2 sz = preferred_size(id_of(c));
+                vec2 sz = measure(c, child_avail);
                 const vec2 off = a.offset_max - a.offset_min;
                 if (off.x > 0.0f) sz.x = off.x;
                 if (off.y > 0.0f) sz.y = off.y;
@@ -561,13 +749,14 @@ vec2 Document::preferred_size(WidgetId w) const {
             const GridLayout& g = n->grid;
             u32 count = 0;
             for (u32 c = n->first_child; c != kNone; c = nodes_[c].next_sibling) count += nodes_[c].visible ? 1u : 0u;
-            const u32 cols = g.columns ? g.columns : 1;
+            if (count == 0) return {};
+            const u32 cols = grid_columns(g, avail_width, count);
             const u32 used_cols = count < cols ? count : cols;
             const u32 rows = (count + cols - 1) / cols;
-            if (count == 0) return {};
             return vec2(g.cell.x * static_cast<f32>(used_cols) + g.spacing.x * static_cast<f32>(used_cols - 1),
                         g.cell.y * static_cast<f32>(rows) + g.spacing.y * static_cast<f32>(rows - 1));
         }
+        case WidgetKind::Tabs: return n->first_child != kNone ? measure(n->first_child, avail_width) : vec2();
         case WidgetKind::Panel:
         case WidgetKind::Image: break;
     }
@@ -576,25 +765,37 @@ vec2 Document::preferred_size(WidgetId w) const {
 
 void Document::layout() {
     // The root is the safe part of the screen: anchors to an edge stay clear of a notch.
-    const Rect screen{vec2(safe_.left, safe_.top), vec2(static_cast<f32>(viewport_.width) - safe_.right,
-                                                         static_cast<f32>(viewport_.height) - safe_.bottom)};
-    nodes_[root_.index].rect = screen;
+    Node& root = nodes_[root_.index];
+    root.rect = Rect{vec2(safe_.left, safe_.top), vec2(static_cast<f32>(viewport_.width) - safe_.right,
+                                                       static_cast<f32>(viewport_.height) - safe_.bottom)};
+    root.clip = Rect{vec2(0, 0), vec2(static_cast<f32>(viewport_.width), static_cast<f32>(viewport_.height))};
+    root.clipped = false;
     layout_children(root_.index, scale_);
     layout_dirty_ = false;
     ++stats_.layout_passes;
+}
+
+Rect Document::anchor_space(const Node& n, const Rect& parent) const {
+    switch (n.anchors.to) {
+        case AnchorTo::Parent: break;
+        case AnchorTo::SafeArea: return nodes_[root_.index].rect;
+        case AnchorTo::Screen: return nodes_[root_.index].clip;
+    }
+    return parent;
 }
 
 // Places `index` inside `parent` by its anchors (uGUI rule), then its children.
 void Document::layout_node(u32 index, const Rect& parent, f32 scale) {
     Node& n = nodes_[index];
     const Anchors& a = n.anchors;
-    vec2 lo = parent.min + parent.size() * a.min + a.offset_min * scale;
-    vec2 hi = parent.min + parent.size() * a.max + a.offset_max * scale;
+    const Rect space = anchor_space(n, parent);
+    vec2 lo = space.min + space.size() * a.min + a.offset_min * scale;
+    vec2 hi = space.min + space.size() * a.max + a.offset_max * scale;
     // A point anchor with no authored size on an axis takes the preferred size, around the pivot.
     const bool auto_x = a.min.x == a.max.x && a.offset_min.x == a.offset_max.x;
     const bool auto_y = a.min.y == a.max.y && a.offset_min.y == a.offset_max.y;
     if (auto_x || auto_y) {
-        const vec2 pref = preferred_size(id_of(index)) * scale;
+        const vec2 pref = measure(index, auto_x ? 0.0f : (hi.x - lo.x) / scale) * scale;
         if (auto_x) {
             lo.x -= a.pivot.x * pref.x;
             hi.x = lo.x + pref.x;
@@ -608,45 +809,76 @@ void Document::layout_node(u32 index, const Rect& parent, f32 scale) {
     layout_children(index, scale);
 }
 
+// A stack, or a scroll view's content: children one after another along the axis. A scroll view
+// starts them `scroll` pixels back and learns how far it can scroll.
+void Document::layout_stack(u32 index, f32 scale) {
+    Node& n = nodes_[index];
+    const Rect r = n.rect;
+    const StackLayout s = n.stack;
+    const bool vert = s.axis == Axis::Vertical;
+    const bool scrolls = n.kind == WidgetKind::Scroll;
+    const f32 pad = s.padding * scale;
+    const f32 cross_size = (vert ? r.size().x : r.size().y) - 2.0f * pad;
+    const f32 origin = vert ? r.min.y : r.min.x;
+    f32 cursor = origin + pad - (scrolls ? n.scroll : 0.0f);
+    bool any = false;
+    for (u32 c = n.first_child; c != kNone; c = nodes_[c].next_sibling) {
+        Node& ch = nodes_[c];
+        if (!ch.visible) {
+            ch.rect = Rect{r.min, r.min};
+            continue;
+        }
+        vec2 sz = measure(c, vert ? cross_size / scale : 0.0f);
+        const vec2 off = ch.anchors.offset_max - ch.anchors.offset_min;
+        if (off.x > 0.0f) sz.x = off.x;
+        if (off.y > 0.0f) sz.y = off.y;
+        sz = sz * scale;
+        f32& main = vert ? sz.y : sz.x;
+        f32& cross = vert ? sz.x : sz.y;
+        f32 cross_at = (vert ? r.min.x : r.min.y) + pad;
+        switch (s.align) {
+            case Align::Stretch: cross = cross_size; break;
+            case Align::Center: cross_at += (cross_size - cross) * 0.5f; break;
+            case Align::End: cross_at += cross_size - cross; break;
+            case Align::Start: break;
+        }
+        const vec2 lo = vert ? vec2(cross_at, cursor) : vec2(cursor, cross_at);
+        nodes_[c].rect = snap(Rect{lo, lo + sz});
+        cursor += main + s.spacing * scale;
+        any = true;
+        layout_children(c, scale);
+    }
+    if (!scrolls) return;
+    Node& sn = nodes_[index];
+    const f32 content = (cursor - (any ? s.spacing * scale : 0.0f) + pad) - (origin - sn.scroll);
+    const f32 view = vert ? r.size().y : r.size().x;
+    sn.scroll_max = content > view ? content - view : 0.0f;
+    if (sn.scroll > sn.scroll_max) {  // the content shrank: settle at the end
+        sn.scroll = sn.scroll_max;
+        sn.scroll_velocity = 0.0f;
+        layout_stack(index, scale);
+    }
+}
+
 void Document::layout_children(u32 index, f32 scale) {
     Node& n = nodes_[index];
     const Rect r = n.rect;
-    if (n.kind == WidgetKind::Stack) {
-        const StackLayout s = n.stack;
-        const bool vert = s.axis == Axis::Vertical;
-        const f32 pad = s.padding * scale;
-        const f32 cross_size = (vert ? r.size().x : r.size().y) - 2.0f * pad;
-        f32 cursor = (vert ? r.min.y : r.min.x) + pad;
-        for (u32 c = nodes_[index].first_child; c != kNone; c = nodes_[c].next_sibling) {
-            Node& ch = nodes_[c];
-            if (!ch.visible) {
-                ch.rect = Rect{r.min, r.min};
-                continue;
-            }
-            vec2 sz = preferred_size(id_of(c));
-            const vec2 off = ch.anchors.offset_max - ch.anchors.offset_min;
-            if (off.x > 0.0f) sz.x = off.x;
-            if (off.y > 0.0f) sz.y = off.y;
-            sz = sz * scale;
-            f32& main = vert ? sz.y : sz.x;
-            f32& cross = vert ? sz.x : sz.y;
-            f32 cross_at = (vert ? r.min.x : r.min.y) + pad;
-            switch (s.align) {
-                case Align::Stretch: cross = cross_size; break;
-                case Align::Center: cross_at += (cross_size - cross) * 0.5f; break;
-                case Align::End: cross_at += cross_size - cross; break;
-                case Align::Start: break;
-            }
-            const vec2 lo = vert ? vec2(cross_at, cursor) : vec2(cursor, cross_at);
-            nodes_[c].rect = snap(Rect{lo, lo + sz});
-            cursor += main + s.spacing * scale;
-            layout_children(c, scale);
-        }
+    // Children draw inside their parent's clip; a scroll view cuts it down to its own rect.
+    const bool clipped = n.clipped || n.kind == WidgetKind::Scroll;
+    const Rect clip = n.kind == WidgetKind::Scroll ? intersect(n.clip, r) : n.clip;
+    for (u32 c = n.first_child; c != kNone; c = nodes_[c].next_sibling) {
+        nodes_[c].clip = clip;
+        nodes_[c].clipped = clipped;
+    }
+    if (n.kind == WidgetKind::Stack || n.kind == WidgetKind::Scroll) {
+        layout_stack(index, scale);
         return;
     }
     if (n.kind == WidgetKind::Grid) {
         const GridLayout g = n.grid;
-        const u32 cols = g.columns ? g.columns : 1;
+        u32 count = 0;
+        for (u32 c = n.first_child; c != kNone; c = nodes_[c].next_sibling) count += nodes_[c].visible ? 1u : 0u;
+        const u32 cols = grid_columns(g, r.size().x / scale, count);
         u32 i = 0;
         for (u32 c = nodes_[index].first_child; c != kNone; c = nodes_[c].next_sibling) {
             Node& ch = nodes_[c];
@@ -663,6 +895,25 @@ void Document::layout_children(u32 index, f32 scale) {
         }
         return;
     }
+    if (n.kind == WidgetKind::Tabs) {
+        // The bar (first child) across the top at its preferred height; the pages (second) below.
+        const u32 bar = n.first_child;
+        const u32 pages = bar != kNone ? nodes_[bar].next_sibling : kNone;
+        f32 top = r.min.y;
+        if (bar != kNone) {
+            const f32 h = measure(bar, r.size().x / scale).y * scale;
+            nodes_[bar].rect = snap(Rect{r.min, vec2(r.max.x, r.min.y + h)});
+            top = nodes_[bar].rect.max.y;
+            layout_children(bar, scale);
+        }
+        if (pages != kNone) {
+            nodes_[pages].rect = snap(Rect{vec2(r.min.x, top), r.max});
+            layout_children(pages, scale);
+        }
+        for (u32 c = pages != kNone ? nodes_[pages].next_sibling : kNone; c != kNone; c = nodes_[c].next_sibling)
+            layout_node(c, r, scale);
+        return;
+    }
     for (u32 c = n.first_child; c != kNone; c = nodes_[c].next_sibling) layout_node(c, r, scale);
 }
 
@@ -672,7 +923,7 @@ u32 Document::hit_test(vec2 p) const {
     for (usize k = order_.size(); k-- > 1;) {
         const u32 i = order_[k];
         const Node& n = nodes_[i];
-        if (!n.rect.contains(p) || !effectively_visible(i)) continue;
+        if (!n.rect.contains(p) || (n.clipped && !n.clip.contains(p)) || !effectively_visible(i) || !in_modal_scope(i)) continue;
         if (focusable(i) || n.blocks_pointer) return i;
     }
     return kNone;
@@ -773,6 +1024,73 @@ void Document::update_console(u32 index, const UpdateContext& ctx) {
     }
 }
 
+// Scroll views: a press arms a drag on the scroll view under it; past the slop the drag scrolls
+// (and the pressed widget is let go), a release keeps the speed and friction slows it; the wheel
+// scrolls the view under the pointer.
+void Document::update_scroll(const UpdateContext& ctx, bool has_pointer) {
+    const f32 dt = static_cast<f32>(ctx.dt);
+    if (ctx.pointer_pressed && has_pointer) {
+        drag_scroll_ = scroll_at(ctx.pointer);
+        dragging_ = false;
+        if (drag_scroll_ != kNone) {
+            drag_start_ = ctx.pointer;
+            drag_origin_ = nodes_[drag_scroll_].scroll;
+            nodes_[drag_scroll_].scroll_velocity = 0.0f;  // a touch catches a fling
+        }
+    }
+    if (drag_scroll_ != kNone && (!nodes_[drag_scroll_].alive || nodes_[drag_scroll_].kind != WidgetKind::Scroll)) drag_scroll_ = kNone;
+    if (drag_scroll_ != kNone && ctx.pointer_down && has_pointer) {
+        Node& s = nodes_[drag_scroll_];
+        const bool vert = s.stack.axis == Axis::Vertical;
+        const f32 moved = vert ? ctx.pointer.y - drag_start_.y : ctx.pointer.x - drag_start_.x;
+        if (!dragging_ && std::fabs(moved) > kDragSlop * scale_) {
+            dragging_ = true;
+            pressed_ = {};
+            drag_start_ = ctx.pointer;  // no jump by the slop
+            drag_origin_ = s.scroll;
+        }
+        if (dragging_) {
+            const f32 now = vert ? ctx.pointer.y - drag_start_.y : ctx.pointer.x - drag_start_.x;
+            const f32 v = clampf(drag_origin_ - now, 0.0f, s.scroll_max);
+            const f32 speed = dt > 0.0f ? (v - s.scroll) / dt : 0.0f;
+            s.scroll_velocity = 0.5f * s.scroll_velocity + 0.5f * speed;  // smoothed over the last frames
+            if (v != s.scroll) {
+                s.scroll = v;
+                relayout_scroll(drag_scroll_);
+            }
+        }
+    }
+    if (ctx.pointer_released || !ctx.pointer_down) {
+        if (drag_scroll_ != kNone && !dragging_) nodes_[drag_scroll_].scroll_velocity = 0.0f;
+        drag_scroll_ = kNone;
+        dragging_ = false;
+    }
+    if (ctx.wheel != 0.0f && has_pointer)
+        if (const u32 w = scroll_at(ctx.pointer); w != kNone) {
+            Node& s = nodes_[w];
+            s.scroll_velocity = 0.0f;
+            const f32 v = clampf(s.scroll - ctx.wheel * kWheelStep * scale_, 0.0f, s.scroll_max);
+            if (v != s.scroll) {
+                s.scroll = v;
+                relayout_scroll(w);
+            }
+        }
+    // Inertia: every released scroll view coasts and slows down; an end stops it.
+    if (dt <= 0.0f) return;
+    const f32 keep = std::exp(-kScrollFriction * dt);
+    for (const u32 i : order_) {
+        Node& s = nodes_[i];
+        if (s.kind != WidgetKind::Scroll || s.scroll_velocity == 0.0f || (i == drag_scroll_ && dragging_)) continue;
+        const f32 v = clampf(s.scroll + s.scroll_velocity * dt, 0.0f, s.scroll_max);
+        s.scroll_velocity = (v <= 0.0f || v >= s.scroll_max) ? 0.0f : s.scroll_velocity * keep;
+        if (std::fabs(s.scroll_velocity) < kMinScrollSpeed * scale_) s.scroll_velocity = 0.0f;
+        if (v != s.scroll) {
+            s.scroll = v;
+            relayout_scroll(i);
+        }
+    }
+}
+
 void Document::update(const UpdateContext& ctx) {
     events_.clear();
     submitted_.clear();
@@ -783,6 +1101,8 @@ void Document::update(const UpdateContext& ctx) {
         for (const WidgetId w : pending_remove_)
             if (node(w)) destroy_subtree(w.index);
         pending_remove_.clear();
+        for (usize i = modals_.size(); i-- > 0;)
+            if (!node(modals_[i].widget)) modals_.erase(i);
         order_dirty_ = true;
         mark_layout();
     }
@@ -829,10 +1149,11 @@ void Document::update(const UpdateContext& ctx) {
         const f32 t = w > 0.0f ? (ctx.pointer.x - p->rect.min.x) / w : 0.0f;
         change_value(pressed_.index, p->lo + (t < 0 ? 0 : (t > 1 ? 1 : t)) * (p->hi - p->lo));
     }
+    update_scroll(ctx, has_pointer);  // a drag past the slop takes the press back
     if (ctx.pointer_released && !pressed_.is_null()) {
         if (pressed_ == hovered_) {
             Node& p = nodes_[pressed_.index];
-            if (p.kind == WidgetKind::Button) emit(UiEvent::Confirmed, pressed_);
+            if (p.kind == WidgetKind::Button) activate(pressed_.index);
             else if (p.kind == WidgetKind::Toggle) change_value(pressed_.index, p.value > 0.5f ? 0.0f : 1.0f);
         }
         pressed_ = {};
@@ -861,14 +1182,15 @@ void Document::update(const UpdateContext& ctx) {
                 change_value(focused_.index, f.value + st * dir.x);
             } else if (const WidgetId to = navigate(dir); !to.is_null()) {
                 focus(to);
+                scroll_into_view(to);
             }
         }
         if (in.confirm_pressed && node(focused_)) {
             Node& f = nodes_[focused_.index];
-            if (f.kind == WidgetKind::Button) emit(UiEvent::Confirmed, focused_);
+            if (f.kind == WidgetKind::Button) activate(focused_.index);
             else if (f.kind == WidgetKind::Toggle) change_value(focused_.index, f.value > 0.5f ? 0.0f : 1.0f);
         }
-        if (in.cancel_pressed) emit(UiEvent::Cancelled, root_);
+        if (in.cancel_pressed) emit(UiEvent::Cancelled, modals_.empty() ? root_ : modals_.back().widget);
     }
 
     // 6. The focused console edits its line.
@@ -907,20 +1229,51 @@ void Document::draw_quad(render::SpriteBatch& batch, const Rect& r, Color c, i16
     draw_region(batch, r, c, skin_.white_region, layer, order);
 }
 
-void Document::draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u32 region, i16 layer, i32 order) const {
+void Document::draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u32 region, i16 layer, i32 order,
+                           const Slice& slice) const {
+    math::aabb2 clip;
+    if (draw_clip_) clip = math::aabb2{draw_clip_->min, draw_clip_->max};
+    render::RectQuad q;
+    q.set = skin_.set;
+    q.region = region;
+    q.tint = linear(c);
+    q.sort_layer = layer;
+    q.sort_order = order;
+    q.clip = draw_clip_ ? &clip : nullptr;
+    if (slice.empty()) {
+        q.rect = math::aabb2{r.min, r.max};
+        batch.add_rect(q);
+        ++stats_.quads;
+        return;
+    }
+    // 9-slice: the insets in texels of the region become uv cuts; on screen they keep their size
+    // times the UI scale, shrunk together when the rect is smaller than two insets.
     const render::SpriteRegion& reg = batch.sets().region(skin_.set, region);
-    render::SpriteInstance s;
-    s.position = r.min;
-    s.pivot = vec2(0, 0);
-    s.scale = vec2(r.size().x / (reg.width_m > 0 ? reg.width_m : 1.0f), r.size().y / (reg.height_m > 0 ? reg.height_m : 1.0f));
-    s.tint = linear(c);
-    s.set = skin_.set;
-    s.region = region;
-    s.sort_layer = layer;
-    s.sort_order = order;
-    s.flip_y = true;  // the screen view is y-down; regions are authored top-row-first
-    batch.add(s);
-    ++stats_.quads;
+    const f32 ppm = batch.sets().pixels_per_meter(skin_.set);
+    const f32 tw = reg.width_m * ppm, th = reg.height_m * ppm;
+    if (tw <= 0.0f || th <= 0.0f) return;
+    const vec2 size = r.size();
+    f32 l = slice.left * scale_, t = slice.top * scale_, rr = slice.right * scale_, b = slice.bottom * scale_;
+    if (l + rr > size.x && l + rr > 0.0f) {
+        const f32 k = size.x / (l + rr);
+        l *= k, rr *= k;
+    }
+    if (t + b > size.y && t + b > 0.0f) {
+        const f32 k = size.y / (t + b);
+        t *= k, b *= k;
+    }
+    const f32 xs[4] = {r.min.x, r.min.x + l, r.max.x - rr, r.max.x};
+    const f32 ys[4] = {r.min.y, r.min.y + t, r.max.y - b, r.max.y};
+    const f32 us[4] = {0.0f, slice.left / tw, 1.0f - slice.right / tw, 1.0f};
+    const f32 vs[4] = {0.0f, slice.top / th, 1.0f - slice.bottom / th, 1.0f};
+    for (u32 y = 0; y < 3; ++y)
+        for (u32 x = 0; x < 3; ++x) {
+            if (xs[x + 1] <= xs[x] || ys[y + 1] <= ys[y]) continue;
+            q.rect = math::aabb2{vec2(xs[x], ys[y]), vec2(xs[x + 1], ys[y + 1])};
+            q.uv = math::aabb2{vec2(us[x], vs[y]), vec2(us[x + 1], vs[y + 1])};
+            batch.add_rect(q);
+            ++stats_.quads;
+        }
 }
 
 void Document::draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 size, Color c, i16 layer, i32 order,
@@ -930,11 +1283,14 @@ void Document::draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 
     d.size_px = size;
     d.max_width = max_width;
     render::layout_text(skin_.font->face, s, d, scratch_);
+    math::aabb2 clip;
+    if (draw_clip_) clip = math::aabb2{draw_clip_->min, draw_clip_->max};
     render::TextPlacement p;
     p.origin = vec2(snap(at.x), snap(at.y));
     p.tint = linear(c);
     p.sort_layer = layer;
     p.sort_order = order;
+    p.clip = draw_clip_ ? &clip : nullptr;
     batch.add_text(*skin_.font, scratch_, p);
     stats_.quads += static_cast<u32>(scratch_.quads.size());
 }
@@ -942,11 +1298,20 @@ void Document::draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 
 void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
     stats_.quads = 0;
     if (!skin_.set.valid()) return;
-    const i16 quad_layer = sort_layer, text_layer = static_cast<i16>(sort_layer + 1);
+    i16 quad_layer = sort_layer, text_layer = static_cast<i16>(sort_layer + 1);
+    usize next_modal = 0;
     for (usize k = 0; k < order_.size(); ++k) {
+        // Each open modal draws two layers up, so its quads cover the text below it too.
+        if (next_modal < modal_starts_.size() && k == modal_starts_[next_modal]) {
+            ++next_modal;
+            quad_layer = static_cast<i16>(sort_layer + 2 * next_modal);
+            text_layer = static_cast<i16>(quad_layer + 1);
+        }
         const u32 i = order_[k];
         const Node& n = nodes_[i];
         if (!n.alive || !effectively_visible(i)) continue;
+        if (n.clipped && !overlaps(n.rect, n.clip)) continue;  // scrolled out of view
+        draw_clip_ = n.clipped ? &n.clip : nullptr;
         const WidgetId id = id_of(i);
         const Style& st = n.styles[S(state(id))];
         const i32 order = static_cast<i32>(k) * 4;
@@ -955,7 +1320,7 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
         const Rect& r = n.rect;
         const u32 region = st.sprite_region == ~0u ? skin_.white_region : st.sprite_region;
         if (st.draw_quad && st.tint.a > 0.0f && r.max.x > r.min.x && r.max.y > r.min.y && n.kind != WidgetKind::Slider)
-            draw_region(batch, r, st.tint, region, quad_layer, order);
+            draw_region(batch, r, st.tint, region, quad_layer, order, st.slice);
         const f32 line_h = skin_.font ? skin_.font->face.line_height() * (px / skin_.font->face.metrics().pixel_height) : px;
         switch (n.kind) {
             case WidgetKind::Text: draw_text(batch, label, r.min, px, st.text_color, text_layer, order, r.size().x); break;
@@ -965,6 +1330,14 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
                 d.size_px = px;
                 const vec2 t = render::measure_text(skin_.font->face, label, d);
                 draw_text(batch, label, r.center() - t * 0.5f, px, st.text_color, text_layer, order);
+                // A tab's button: the selected one is underlined in the accent color.
+                const u32 tabs = n.parent != kNone ? nodes_[n.parent].parent : kNone;
+                if (tabs != kNone && nodes_[tabs].kind == WidgetKind::Tabs && nodes_[tabs].first_child == n.parent) {
+                    u32 at = 0;
+                    for (u32 c = nodes_[n.parent].first_child; c != kNone && c != i; c = nodes_[c].next_sibling) ++at;
+                    if (at == static_cast<u32>(nodes_[tabs].value))
+                        draw_quad(batch, Rect{vec2(r.min.x, r.max.y - 3.0f * scale_), r.max}, st.accent, quad_layer, order + 1);
+                }
                 break;
             }
             case WidgetKind::Toggle: {
@@ -1013,9 +1386,12 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
             case WidgetKind::Panel:
             case WidgetKind::Image:
             case WidgetKind::Stack:
-            case WidgetKind::Grid: break;
+            case WidgetKind::Grid:
+            case WidgetKind::Scroll:
+            case WidgetKind::Tabs: break;
         }
     }
+    draw_clip_ = nullptr;
 }
 
 // ---- Builder -----------------------------------------------------------------------------------
@@ -1081,8 +1457,52 @@ Builder Builder::console(StringView name) {
     return b;
 }
 
+Builder Builder::scroll(StringView name, const StackLayout& s) {
+    Builder b = child(WidgetKind::Scroll, name);
+    doc_->set_stack(b.id_, s);
+    return b;
+}
+Builder Builder::modal(StringView name) {
+    Builder b = child(WidgetKind::Panel, name);
+    Style s;
+    s.tint = Color{0.0f, 0.0f, 0.0f, 0.55f};
+    doc_->set_style_all(b.id_, s);
+    b.fill().to(AnchorTo::Screen);
+    doc_->set_blocks_pointer(b.id_, true);
+    doc_->set_visible(b.id_, false);
+    return b;
+}
+Builder Builder::tabs(StringView name) {
+    Builder b = child(WidgetKind::Tabs, name);
+    StackLayout bar;
+    bar.axis = Axis::Horizontal;
+    bar.spacing = 4.0f;
+    b.stack("bar", bar);
+    Builder pages = b.child(WidgetKind::Panel, "pages");
+    Style none;
+    none.draw_quad = false;
+    doc_->set_style_all(pages.id_, none);
+    return b;
+}
+Builder Builder::tab(StringView name, StringView label) {
+    if (doc_->kind(id_) != WidgetKind::Tabs) {
+        MCE_LOG_ERROR("ui: tab '{}' outside a tabs widget", name);
+        return Builder(*doc_, WidgetId{});
+    }
+    const WidgetId bar = doc_->find_child(id_, "bar"), pages = doc_->find_child(id_, "pages");
+    Builder(*doc_, bar).button(name, label);
+    Builder page = Builder(*doc_, pages).child(WidgetKind::Panel, name);
+    Style none;
+    none.draw_quad = false;
+    doc_->set_style_all(page.id_, none);
+    page.fill();
+    doc_->select_tab(id_, doc_->selected_tab(id_));  // a new page starts hidden unless it is the selected one
+    return page;
+}
+
 Builder& Builder::fill() {
     Anchors a;
+    a.to = doc_->anchors(id_).to;
     a.min = vec2(0, 0);
     a.max = vec2(1, 1);
     doc_->set_anchors(id_, a);
@@ -1090,6 +1510,7 @@ Builder& Builder::fill() {
 }
 Builder& Builder::at(vec2 anchor, vec2 size) {
     Anchors a;
+    a.to = doc_->anchors(id_).to;
     a.min = a.max = anchor;
     a.pivot = vec2(0.5f, 0.5f);
     a.offset_min = vec2(-size.x * 0.5f, -size.y * 0.5f);
@@ -1115,6 +1536,20 @@ Builder& Builder::tint(Color c) {
         s.tint = c;
         doc_->set_style(id_, static_cast<WidgetState>(i), s);
     }
+    return *this;
+}
+Builder& Builder::slice(const Slice& sl) {
+    for (u32 i = 0; i < S(WidgetState::Count); ++i) {
+        Style s = doc_->style(id_, static_cast<WidgetState>(i));
+        s.slice = sl;
+        doc_->set_style(id_, static_cast<WidgetState>(i), s);
+    }
+    return *this;
+}
+Builder& Builder::to(AnchorTo space) {
+    Anchors a = doc_->anchors(id_);
+    a.to = space;
+    doc_->set_anchors(id_, a);
     return *this;
 }
 Builder& Builder::text_size(f32 px) {

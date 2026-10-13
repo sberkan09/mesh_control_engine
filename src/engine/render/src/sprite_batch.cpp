@@ -219,6 +219,60 @@ void SpriteBatch::add(const SpriteInstance& s) {
     quads_.push_back(q);
 }
 
+namespace {
+
+// Cuts the span [a0, a1] (any order) to [lo, hi], moving its texture coordinates t0 / t1 with it.
+// False when nothing is left.
+bool clip_span(f32& a0, f32& a1, f32& t0, f32& t1, f32 lo, f32 hi) {
+    const bool flip = a1 < a0;
+    f32 x0 = flip ? a1 : a0, x1 = flip ? a0 : a1;
+    f32 u0 = flip ? t1 : t0, u1 = flip ? t0 : t1;
+    if (x1 <= lo || x0 >= hi) return false;
+    const f32 len = x1 - x0;
+    if (len > 0.0f) {
+        const f32 c0 = x0 < lo ? lo : x0, c1 = x1 > hi ? hi : x1;
+        const f32 du = u1 - u0;
+        const f32 n0 = u0 + du * (c0 - x0) / len, n1 = u0 + du * (c1 - x0) / len;
+        x0 = c0, x1 = c1, u0 = n0, u1 = n1;
+    }
+    a0 = flip ? x1 : x0, a1 = flip ? x0 : x1;
+    t0 = flip ? u1 : u0, t1 = flip ? u0 : u1;
+    return true;
+}
+
+}  // namespace
+
+void SpriteBatch::add_rect(const RectQuad& q) {
+    ++stats_.submitted;
+    if (!sets_.valid(q.set)) {
+        ++stats_.culled;
+        return;
+    }
+    const SpriteRegion& r = sets_.region(q.set, q.region);
+    f32 x0 = q.rect.min.x, x1 = q.rect.max.x, y0 = q.rect.min.y, y1 = q.rect.max.y;
+    f32 u0 = r.u0 + (r.u1 - r.u0) * q.uv.min.x, u1 = r.u0 + (r.u1 - r.u0) * q.uv.max.x;
+    f32 v0 = r.v0 + (r.v1 - r.v0) * q.uv.min.y, v1 = r.v0 + (r.v1 - r.v0) * q.uv.max.y;
+    if (q.clip && (!clip_span(x0, x1, u0, u1, q.clip->min.x, q.clip->max.x) ||
+                   !clip_span(y0, y1, v0, v1, q.clip->min.y, q.clip->max.y))) {
+        ++stats_.culled;
+        return;
+    }
+    const u32 color = pack_color_srgb(q.tint);
+    const u32 packed = pack_layer_flags(r.layer, 0u);
+    RawQuad raw;
+    raw.v[0] = {x0, y1, u0, v1, color, packed};
+    raw.v[1] = {x1, y1, u1, v1, color, packed};
+    raw.v[2] = {x1, y0, u1, v0, color, packed};
+    raw.v[3] = {x0, y0, u0, v0, color, packed};
+    if (!visible(raw.v)) {
+        ++stats_.culled;
+        return;
+    }
+    push_item(sort_key_2d(pass_, q.sort_layer, material(q.blend, q.set), q.sort_order), ItemKind::Quad,
+              static_cast<u32>(quads_.size()));
+    quads_.push_back(raw);
+}
+
 void SpriteBatch::add_text(const Font& font, const TextLayout& layout, const TextPlacement& p) {
     if (!sets_.valid(font.set)) return;
     const u64 key = sort_key_2d(pass_, p.sort_layer, material(p.blend, font.set), p.sort_order);
@@ -227,13 +281,19 @@ void SpriteBatch::add_text(const Font& font, const TextLayout& layout, const Tex
     const f32 sy = p.y_down ? p.units_per_pixel : -p.units_per_pixel;
     for (const GlyphQuad& g : layout.quads) {
         ++stats_.submitted;
-        const f32 x0 = p.origin.x + g.x0 * p.units_per_pixel, x1 = p.origin.x + g.x1 * p.units_per_pixel;
-        const f32 yt = p.origin.y + g.y0 * sy, yb = p.origin.y + g.y1 * sy;
+        f32 x0 = p.origin.x + g.x0 * p.units_per_pixel, x1 = p.origin.x + g.x1 * p.units_per_pixel;
+        f32 yt = p.origin.y + g.y0 * sy, yb = p.origin.y + g.y1 * sy;
+        f32 u0 = g.u0, u1 = g.u1, v0 = g.v0, v1 = g.v1;
+        if (p.clip && (!clip_span(x0, x1, u0, u1, p.clip->min.x, p.clip->max.x) ||
+                       !clip_span(yt, yb, v0, v1, p.clip->min.y, p.clip->max.y))) {
+            ++stats_.culled;
+            continue;
+        }
         RawQuad q;
-        q.v[0] = {x0, yb, g.u0, g.v1, color, packed};
-        q.v[1] = {x1, yb, g.u1, g.v1, color, packed};
-        q.v[2] = {x1, yt, g.u1, g.v0, color, packed};
-        q.v[3] = {x0, yt, g.u0, g.v0, color, packed};
+        q.v[0] = {x0, yb, u0, v1, color, packed};
+        q.v[1] = {x1, yb, u1, v1, color, packed};
+        q.v[2] = {x1, yt, u1, v0, color, packed};
+        q.v[3] = {x0, yt, u0, v0, color, packed};
         if (!visible(q.v)) {
             ++stats_.culled;
             continue;
