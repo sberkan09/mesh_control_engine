@@ -24,6 +24,7 @@ const char* chunk_type_name(ChunkType t) {
         case ChunkType::Tilemap: return "Tilemap";
         case ChunkType::Sequence: return "Sequence";
         case ChunkType::ModInfo: return "ModInfo";
+        case ChunkType::StoreCatalog: return "StoreCatalog";
     }
     return "ChunkType(?)";
 }

@@ -34,6 +34,10 @@
 // the process writes it too. Back in the foreground the pause overlay waits; a tap (or Esc) resumes, a touch in the
 // top-right corner pauses. -lifecycle_test N,M rehearses the round trip at app tick N for M ticks (headless too).
 //
+// Purchases and ads (M-MONETIZE, PlayerDesc::monetize): off unless the host turns them on. Then the pack's store
+// catalog (-store_catalog) and the platform's providers feed the Store and Ads resources (mce/monetize/monetize.h),
+// and a fullscreen ad pauses the sim and audio until it closes, with no pause overlay.
+//
 // Input: windowed, the starter-kit "Gameplay" map (mce/input/default_map.h: Move on WASD / arrows /
 // left stick, Jump on Space / A, Fire on J / left mouse / X, Pause) is sampled once per tick and
 // published as the InputState resource the game module reads. Headless runs publish an empty
@@ -61,6 +65,7 @@
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/monetize/monetize.h"
 #include "mce/physics/module.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -115,6 +120,9 @@ MCE_CVAR(cv_fullscreen, "fullscreen", false, "Desktop: borderless full screen (F
 MCE_CVAR(cv_save, "save", "", "Save slot: loaded at start when it exists, written on clean quit (empty = off)",
          CVarFlags::None);
 MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the per-user MCE save folder)", CVarFlags::None);
+MCE_CVAR(cv_store_catalog, "store_catalog", "",
+         "Games with purchases and ads: the store catalog, GUID or source path of a cooked .mcstore (default: the first in the pack)",
+         CVarFlags::None);
 MCE_CVAR(cv_lifecycle_test, "lifecycle_test", "",
          "Rehearse the phone lifecycle: \"N,M\" goes to the background at app tick N and comes back and resumes M ticks later",
          CVarFlags::None);
@@ -169,6 +177,8 @@ public:
         kit::install_particles(world_, &assets_);
         kit::install_sequences(world_, &assets_);
         kit::install_kit3d(world_, &assets_);
+        if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());  // the entitlements live there too
+        if (desc_.monetize) MCE_TRY(init_monetize(cv_store_catalog.get_string()));
         // The game on top of the engine systems (the game-module contract), before the scene so
         // its systems see the first tick.
         if (cv_module.get_string().empty() && desc_.static_module) {
@@ -217,8 +227,7 @@ public:
         scene_guid_ = scene;
         if (!parse_lifecycle_test(cv_lifecycle_test.get_string()))
             return Error(Errc::InvalidArgument, "player: -lifecycle_test wants \"N,M\" (app ticks, N >= 1)");
-        if (window_) safe_insets_ = window_->safe_insets();
-        if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());
+        if (window_) set_safe_insets(window_->safe_insets());
         if (const StringView slot = cv_save.get_string(); !slot.empty() && save::exists(slot)) {
             save::SaveInfo info;
             MCE_TRY_ASSIGN(const save::LoadStats st, save::load_game(world_, slot, &info));
@@ -232,7 +241,8 @@ public:
 
     void on_tick(const app::TickContext& t) override {
         if (lifecycle_from_ != 0) rehearse_lifecycle(t.tick_index);
-        if (paused_) return;
+        if (desc_.monetize) update_ad_pause();
+        if (paused_ || ad_paused_) return;
         tick_dt_ = t.dt;
         if (t.actions) input::publish(world_, *t.actions);
         publish_view_info();
@@ -523,6 +533,56 @@ private:
         return {};
     }
 
+    // ---- purchases and ads (M-MONETIZE) ---------------------------------------------------------
+
+    Result<void> init_monetize(StringView want) {
+        monetize::Catalog catalog;
+        asset::AssetKey best = asset::kInvalidAssetKey;
+        if (Result<asset::Guid> g = asset::parse_guid(want)) {
+            best = assets_.find(g.value());
+        } else {
+            for (asset::AssetKey k = 0; k < assets_.asset_count(); ++k) {
+                const asset::AssetInfo info = assets_.info(k);
+                if (info.type != asset::ChunkType::StoreCatalog) continue;
+                if (!want.empty()) {
+                    if (info.path == want) best = k;
+                    continue;
+                }
+                if (best == asset::kInvalidAssetKey || info.path < assets_.info(best).path) best = k;
+            }
+        }
+        if (best != asset::kInvalidAssetKey) {
+            MCE_TRY_ASSIGN(const asset::AssetHandle<asset::StoreCatalog> h, assets_.load_sync<asset::StoreCatalog>(best));
+            const Result<void> r = monetize::decode_catalog(assets_.resolve(h), catalog);
+            assets_.release(asset::AnyHandle(h));
+            MCE_TRY(r);
+            MCE_LOG_INFO("{}: store catalog {}", desc_.app_name, assets_.info(best).path);
+        } else if (!want.empty()) {
+            return Error(Errc::NotFound, "mce_player: no such store catalog in the pack", want);
+        } else {
+            MCE_LOG_WARN("{}: purchases and ads are on but the pack has no store catalog (.mcstore)", desc_.app_name);
+        }
+        MCE_TRY(monetize_.init(catalog, desc_.store_provider, desc_.ad_provider));
+        monetize_.install(world_);
+        return ok();
+    }
+
+    // A fullscreen ad pauses the sim and the audio like the phone background (FR-RUN-100) and
+    // resumes them when it closes; the pause overlay is not involved.
+    void update_ad_pause() {
+        const bool showing = monetize_.fullscreen_ad_showing();
+        if (showing == ad_paused_) return;
+        ad_paused_ = showing;
+        if (showing) release_input();
+        audio_.set_paused(showing || os_background_);
+        MCE_LOG_INFO("{}: {}", desc_.app_name, showing ? "a fullscreen ad is up (sim and audio paused)" : "the ad closed (resumed)");
+    }
+
+    void set_safe_insets(const platform::SafeInsets& s) {
+        safe_insets_ = s;
+        if (desc_.monetize) monetize_.set_safe_insets({s.left, s.top, s.right, s.bottom});
+    }
+
     // ---- the developer console (FR-UI-045) ----------------------------------------------------
 
     void set_console(bool open) {
@@ -715,7 +775,7 @@ private:
             case platform::EventType::AppForeground:
                 if (!os_background_) return;
                 os_background_ = false;
-                audio_.set_paused(false);
+                audio_.set_paused(ad_paused_);
                 MCE_LOG_INFO("{}: back in the foreground (paused until resumed)", desc_.app_name);
                 break;
             case platform::EventType::AppTerminating: write_save(); break;
@@ -810,7 +870,7 @@ private:
             case platform::EventType::AppLowMemory: self->on_lifecycle(e.type); return;
             case platform::EventType::SafeAreaChanged:
             case platform::EventType::OrientationChanged:
-            case platform::EventType::Resized: self->safe_insets_ = self->window_->safe_insets(); break;
+            case platform::EventType::Resized: self->set_safe_insets(self->window_->safe_insets()); break;
             case platform::EventType::TouchUp:
                 // A tap on the pause overlay (a finger that went down while paused) resumes; the game gets a
                 // focus-loss release instead of the tap.
@@ -917,6 +977,7 @@ private:
         LoadedModule module;
         ~ModuleGuard() { unload_game_module(module); }
     } module_;
+    monetize::Service monetize_;  // before the World: its resources point here (PlayerDesc::monetize)
     World world_;
     Array<Entity> entities_;
     FixedString<256> scene_path_;
@@ -928,6 +989,7 @@ private:
     bool unfocused_ = false;   // the window lost focus (or minimized); the focus-loss save ran
     bool fullscreen_ = false;  // what cv_fullscreen last applied
     bool os_background_ = false;  // the app itself is in the background (phones): no drawing at all
+    bool ad_paused_ = false;      // a fullscreen ad covers the game (PlayerDesc::monetize)
     platform::SafeInsets safe_insets_;
     u64 lifecycle_from_ = 0, lifecycle_ticks_ = 0;  // -lifecycle_test
     u32 paused_touches_ = 0;  // finger slots that went down on the pause overlay

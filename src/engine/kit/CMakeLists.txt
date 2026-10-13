@@ -19,4 +19,5 @@ mce_add_library(mce_gameplay_kit
         mce::mce_ecs_scene
         mce::mce_audio
         mce::mce_physics2d
-        mce::mce_physics3d)
+        mce::mce_physics3d
+        mce::mce_monetize)  # mce/gameplay.h reaches the purchase and ad services through the kit

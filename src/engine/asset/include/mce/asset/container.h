@@ -48,6 +48,7 @@ enum class ChunkType : u16 {  // closed set, appended only
     Tilemap,         // v0.5: CHNK_TILE, one tile layer (FR-R2D-115)
     Sequence,        // v0.5: CHNK_SEQ, one action-list sequence (FR-ENT-100)
     ModInfo,         // CHNK_MOD: a mod pack's identity (FR-RUN-090, ADR-0034); pack-level, GUID zero
+    StoreCatalog,    // CHNK_STORE: a project's products and ad placements (M-MONETIZE; mce/monetize/catalog.h)
 };
 
 const char* chunk_type_name(ChunkType t);
