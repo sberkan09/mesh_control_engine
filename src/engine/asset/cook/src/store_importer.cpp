@@ -5,12 +5,14 @@
 // {
 //   "format": "mce-store", "version": 1, "guid": "<uuid>",
 //   "products": [ { "id": "remove_ads", "type": "non_consumable", "ios": "...", "android": "..." } ],
-//   "ads": [ { "id": "level_end", "format": "interstitial", "ios": "...", "android": "..." } ]
+//   "ads": [ { "id": "level_end", "format": "interstitial", "ios": "...", "android": "..." } ],
+//   "admob": { "ios": "ca-app-pub-...~...", "android": "ca-app-pub-...~..." }
 // }
 //
 // "type" is consumable or non_consumable; "format" is rewarded, interstitial or banner; "ios" and
 // "android" are optional (a product without one is not sold there; a placement without one shows
-// the ad network's test unit there).
+// the ad network's test unit there). "admob" holds the AdMob app ids the packaging scripts put in the
+// Android manifest and the iOS Info.plist (cmake/mobile/monetize_info.py); the chunk does not carry them.
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
@@ -80,7 +82,8 @@ public:
         const JsonValue doc = in.settings;
         const StringView file = in.display_path;
         const u32 errors_before = diags.error_count();
-        if (!detail::check_keys(doc, {"format", "version", "guid", "products", "ads"}, file, kStage, diags)) return false;
+        if (!detail::check_keys(doc, {"format", "version", "guid", "products", "ads", "admob"}, file, kStage, diags))
+            return false;
         const JsonValue fmt = doc.get("format");
         if (!fmt.is_string() || fmt.as_string() != "mce-store") {
             error(diags, file, fmt.valid() ? fmt : doc, "\"format\" must be \"mce-store\"");
@@ -92,6 +95,25 @@ public:
             appendf(msg, "unsupported store catalog version (this cook reads version %u)", kStoreFormatVersion);
             detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
             return false;
+        }
+
+        const JsonValue admob = doc.get("admob");
+        if (admob.valid()) {
+            if (!admob.is_object()) {
+                error(diags, file, admob, "'admob' must be an object of app ids: {\"ios\": ..., \"android\": ...}");
+            } else if (detail::check_keys(admob, {"ios", "android"}, file, kStage, diags)) {
+                for (const char* key : {"ios", "android"}) {
+                    FixedString<128> app_id;
+                    if (!read_text(admob, key, app_id, file, diags)) continue;
+                    // An AdMob app id is "ca-app-pub-<publisher>~<app>"; a unit id ("/") here is the usual mix-up.
+                    const StringView v = app_id.view();
+                    if (!v.empty() && (v.substr(0, 11) != "ca-app-pub-" || v.find('~') == StringView::npos)) {
+                        String msg;
+                        appendf(msg, "'admob.%s' must be an AdMob app id (ca-app-pub-...~...), not an ad unit id", key);
+                        error(diags, file, admob.get(key), msg);
+                    }
+                }
+            }
         }
 
         monetize::Catalog catalog;

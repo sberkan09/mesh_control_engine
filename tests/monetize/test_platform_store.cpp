@@ -21,8 +21,14 @@ Catalog catalog() {
     p.type = ProductType::NonConsumable;
     CHECK(c.add_product(p));
     p = ProductInfo{};
-    p.id = "gems";  // no store ids: the catalog id is used
+    p.id = "gems";
+    p.android_id = "gems_100";
     p.type = ProductType::Consumable;
+    CHECK(c.add_product(p));
+    p = ProductInfo{};
+    p.id = "ios_only";  // no android id: not sold on Android (nor off a phone, which uses those ids)
+    p.ios_id = "com.example.ios.only";
+    p.type = ProductType::NonConsumable;
     CHECK(c.add_product(p));
     return c;
 }
@@ -55,7 +61,8 @@ TEST_CASE("platform store: off a phone there is no store and every request gets 
     store.query_products(1);
     store.purchase(0, 2);
     store.restore(3);
-    REQUIRE(sink.store.size() == 3);
+    store.purchase(2, 4);  // not sold here: refused without asking the store
+    REQUIRE(sink.store.size() == 4);
     CHECK(sink.store[0].kind == StoreEventKind::ProductsReady);
     CHECK(sink.store[0].request == 1);
     CHECK(sink.store[1].kind == StoreEventKind::Failed);
@@ -63,6 +70,8 @@ TEST_CASE("platform store: off a phone there is no store and every request gets 
     CHECK(sink.store[1].request == 2);
     CHECK(sink.store[2].kind == StoreEventKind::RestoreFinished);
     CHECK(sink.store[2].request == 3);
+    CHECK(sink.store[3].kind == StoreEventKind::Failed);
+    CHECK(sink.store[3].product == 2);
     store.stop();
 }
 
@@ -74,13 +83,14 @@ TEST_CASE("platform store: answers map to the catalog by the store's product id"
     using K = platform::store::AnswerKind;
     // Off a phone the backend is none, which uses the Android ids (the same rule as Play's).
     CHECK(store.store_id(0) == "com.example.remove_ads");
-    CHECK(store.store_id(1) == "gems");
+    CHECK(store.store_id(1) == "gems_100");
+    CHECK(store.store_id(2).empty());
     CHECK(store.store_id(7).empty());
 
     platform::store::Answer info = answer(K::ProductInfo, 4, "com.example.remove_ads");
     info.price = "₺49,99";
     store.answer(info);
-    store.answer(answer(K::ProductInfo, 4, "gems"));
+    store.answer(answer(K::ProductInfo, 4, "gems_100"));
     store.answer(answer(K::ProductInfo, 4, "remove_ads"));  // the game's id is not the store's: ignored
     store.answer(answer(K::ProductsReady, 4, {}));
     REQUIRE(sink.store.size() == 3);
@@ -108,9 +118,9 @@ TEST_CASE("platform store: long Play purchase tokens survive, consumables are ne
     using K = platform::store::AnswerKind;
     FixedString<512> token;
     for (int i = 0; i < 30; ++i) token.append("abcdefghi.");  // 300 bytes, like a real token
-    store.answer(answer(K::Purchased, 6, "gems", token.view()));
-    store.answer(answer(K::Purchased, 0, "gems", token.view()));  // the start-up query sees it again: dropped
-    store.answer(answer(K::Restored, 7, "gems", "other"));       // a consumable is not restorable
+    store.answer(answer(K::Purchased, 6, "gems_100", token.view()));
+    store.answer(answer(K::Purchased, 0, "gems_100", token.view()));  // the start-up query sees it again: dropped
+    store.answer(answer(K::Restored, 7, "gems_100", "other"));       // a consumable is not restorable
     store.answer(answer(K::Restored, 7, "com.example.remove_ads", "owned-1"));
     REQUIRE(sink.store.size() == 2);
     CHECK(sink.store[0].kind == StoreEventKind::Purchased);
@@ -122,7 +132,7 @@ TEST_CASE("platform store: long Play purchase tokens survive, consumables are ne
 
     FixedString<600> too_long;
     for (int i = 0; i < 60; ++i) too_long.append("0123456789");
-    store.answer(answer(K::Purchased, 8, "gems", too_long.view()));  // cannot be finished later: refused
+    store.answer(answer(K::Purchased, 8, "gems_100", too_long.view()));  // cannot be finished later: refused
     CHECK(sink.store.size() == 2);
 
     // Finishing a reported transaction and an unknown one: neither reaches a store here, neither crashes.

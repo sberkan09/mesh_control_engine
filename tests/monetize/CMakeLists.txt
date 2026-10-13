@@ -4,6 +4,7 @@ mce_add_test(test_monetize
     SOURCES
         test_fake.cpp
         test_monetize.cpp
+        test_platform_ads.cpp
         test_platform_store.cpp
     DEPS
         mce::mce_monetize

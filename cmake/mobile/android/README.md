@@ -9,9 +9,11 @@ Gradle project around the game's shared library:
   library comes prebuilt from the `android-arm64-*` CMake preset, under `app/src/main/jniLibs`).
 - `app/src/main/AndroidManifest.xml.in`: one fullscreen landscape activity, Vulkan 1.1 required.
 - `MceActivity.java.in`: SDL's `SDLActivity` loading `lib<target>.so` (SDL3 is linked into it).
-- `billing/MceBilling.java`: Play Billing for `mce/platform/store.h` (M-MONETIZE step 3). Only a game with a
-  `.mcstore` gets it, with the billing library in `app/build.gradle` and `mceBilling*` methods on its activity,
+- `billing/MceBilling.java`: Play Billing for `mce/platform/store.h` (M-MONETIZE step 3). Only a game whose
+  `.mcstore` sells products gets it, with the billing library in `app/build.gradle` and `mceBilling*` methods on its activity,
   which `src/engine/platform/src/store.cpp` calls over JNI.
+- `ads/MceAds.java`: Google Mobile Ads and UMP consent for `mce/platform/ads.h` (step 4), for a game whose
+  `.mcstore` has ad placements, with its AdMob app id in the manifest (`cmake/mobile/monetize_info.py`).
 
 SDL's Java sources (`org.libsdl.app`) are copied from the SDL checkout of the same build, so the
 Java side always matches the native SDL; SDL's default launcher icon is replaced by the game's

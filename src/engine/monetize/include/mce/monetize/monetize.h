@@ -140,6 +140,10 @@ public:
     void hide_banner();
     // Advisory: a fullscreen placement reported Loaded and has not been shown since.
     bool ready(StringView placement_id) const;
+    // Where the consent law applies (UMP: EEA, UK, some US states) the game must offer a way back to
+    // the consent form, e.g. a "Privacy options" button in its settings, shown while this is true.
+    bool privacy_options_required() const;
+    void show_privacy_options();
 
 private:
     Service* s_;
@@ -208,6 +212,9 @@ public:
     virtual void show(u16 placement, u32 request) = 0;
     virtual void show_banner(u16 placement, u32 request, BannerEdge edge, const SafeInsets& insets) = 0;
     virtual void hide_banner() = 0;
+    // Ads::privacy_options_required / show_privacy_options (consent forms; none by default).
+    virtual bool privacy_options_required() const { return false; }
+    virtual void show_privacy_options() {}
 };
 
 // No store and no ads (the default where the platform has none): purchases fail, restore finds

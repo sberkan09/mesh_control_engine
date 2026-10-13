@@ -20,6 +20,11 @@ Store readiness (step 10): the game's ship/icon.png becomes the AppIcon catalog 
 PrivacyInfo.xcprivacy (cmake/mobile/ios/, plus the game's ship/PrivacyInfo.xcprivacy merged in) goes to
 the bundle root, CFBundleVersion is the integer build number (ship.py --build-number) and
 CFBundleShortVersionString the release version without its +commit suffix.
+
+Ads (M-MONETIZE step 4, monetize_info.py): for a game whose .mcstore has ad placements,
+ios/PrivacyInfo.ads.xcprivacy is merged into the privacy manifest and Info.plist gets the AdMob app id,
+the ATT prompt text and Google's SKAdNetwork id. The SDKs themselves are linked by the build
+(-DMCE_ADMOB=ON, src/engine/platform/CMakeLists.txt).
 """
 
 import json
@@ -33,6 +38,7 @@ import time
 import zipfile
 
 import app_icon
+import monetize_info
 import app_names
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -73,9 +79,30 @@ def merge_privacy(base, extra):
     return out
 
 
-def write_privacy(app, art):
+# Showing ads (M-MONETIZE step 4): the ATT prompt's text, and Google's own SKAdNetwork id (its ad partners'
+# ids belong in the game's ship/PrivacyInfo.xcprivacy-style additions when it mediates other networks).
+ATT_TEXT = "Your data will be used to show you ads that are more relevant to you."
+GOOGLE_SKADNETWORK = "cstr6suwn9.skadnetwork"
+
+
+def add_ads(info, art, shop):
+    """Info.plist keys Google Mobile Ads and ATT need, for a game with ad placements."""
+    info["GADApplicationIdentifier"] = monetize_info.admob_app_id(shop, "ios", art["name"])
+    info.setdefault("NSUserTrackingUsageDescription", ATT_TEXT)
+    items = info.setdefault("SKAdNetworkItems", [])
+    if not any(i.get("SKAdNetworkIdentifier") == GOOGLE_SKADNETWORK for i in items):
+        items.append({"SKAdNetworkIdentifier": GOOGLE_SKADNETWORK})
+    print(f"ship: {art['name']} shows ads: AdMob app id {info['GADApplicationIdentifier']}, ATT text, SKAdNetwork",
+          flush=True)
+
+
+def write_privacy(app, art, ads=False):
     with open(os.path.join(HERE, "ios", "PrivacyInfo.xcprivacy"), "rb") as f:
         manifest = plistlib.load(f)
+    if ads:
+        with open(os.path.join(HERE, "ios", "PrivacyInfo.ads.xcprivacy"), "rb") as f:
+            manifest = merge_privacy(manifest, plistlib.load(f))
+        print("ship: merged the ads declarations into the privacy manifest", flush=True)
     extra = art.get("privacy")
     if extra and os.path.isfile(extra):
         with open(extra, "rb") as f:
@@ -112,7 +139,10 @@ def package(art, args, root):
     icon = app_icon.source(art)
     if icon:
         app_icon.ios(icon, app, sim, info.get("MinimumOSVersion", MIN_OS), info)
-    write_privacy(app, art)
+    shop = monetize_info.read(art)
+    if shop["ads"]:
+        add_ads(info, art, shop)
+    write_privacy(app, art, ads=shop["ads"])
     with open(info_path, "wb") as f:
         plistlib.dump(info, f)
     bundle_id = info["CFBundleIdentifier"]

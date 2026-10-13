@@ -6,6 +6,7 @@ mce_add_library(mce_monetize
         src/catalog.cpp
         src/fake.cpp
         src/monetize.cpp
+        src/platform_ads.cpp
         src/platform_store.cpp
     PUBLIC_DEPS
         mce::mce_core
