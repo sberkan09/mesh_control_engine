@@ -21,7 +21,7 @@ a device or simulator run on the user's Mac.
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | done except the per-tier device numbers (no device) |
 | 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | done on the emulator and the Simulator (no devices) |
 | 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | done (store upload untested: no credentials) |
-| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | — |
+| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a in progress (tables, language choice, plurals, case mapping: done; font glyphs, app names: next) |
 
 ## What shipped (steps 2–3)
 
@@ -136,6 +136,28 @@ collected data. Re-check when SDL is updated or an SDK is added.
 developer.android.com/google/play/requirements/target-sdk, bump `ANDROID_API` (and the Android Gradle plugin if the
 new level needs it), install the platform with `sdkmanager`, run `scripts/ci/local_ci_macos.sh android` and look at
 a game in landscape on the emulator.
+
+## What shipped (step 11a, first part: string tables and the language choice)
+
+- **String tables.** `assets/loc/<locale>.csv` (`key,text` header, RFC 4180 quoting, UTF-8 with or without a BOM,
+  `key#one` / `key#other` plural forms, `#` comment rows) cooks with the `strings` importer to one `CHNK_STR` per
+  locale (`mce/loc/string_table.h`). The file stem is the locale; a sidecar `"locale"` overrides it. Tables live
+  under `assets/` rather than `<project>/loc/` so they get GUIDs, the cook DB and packs like every other asset.
+- **Missing keys.** The cook compares every table with the base table (`en`, else the first by path) and warns,
+  per file, about keys a locale lacks (they show the base text in play) and keys the base does not know.
+- **Language choice.** The player loads every table into one `loc::Localization` world resource
+  (`mce/loc/loc.h`, also through `mce/gameplay.h`): the player's saved choice (the `language` save, written the
+  moment the game calls `set_locale`), then `-language` for one run, then the device languages
+  (`platform::preferred_locales`, SDL), then `-default_language` (default `en`). Each step tries the exact tag,
+  the bare language and any region of it; lookups walk the chain, so an untranslated key falls back to the base
+  text and an unknown key shows itself.
+- **Text helpers.** CLDR integer plural rules for the common language families, `{name}` placeholders with
+  `{count}` filled by `plural()`, and upper/lower case that maps `i`/`İ` and `ı`/`I` the Turkish and Azeri way.
+- Tests: `test_loc` (chunk round trip and damage, chain, EN ↔ TR switch, plurals, case mapping, the choice across
+  a relaunch) and `test_cook` (`strings: …`, CSV cooking, errors with lines, the missing-key warning).
+
+Still open in 11a: font atlases built from the glyphs the tables use, localized app names stamped by `ship.py`,
+and the simulator/emulator check on the Mac.
 
 ## Constraints found so far
 

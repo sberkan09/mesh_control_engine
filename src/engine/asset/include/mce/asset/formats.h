@@ -27,6 +27,7 @@ inline constexpr u8 SHADER_VERSION = 1;  // CHNK_SHD: one validated GLSL stage +
 inline constexpr u8 PREFAB_VERSION = 1;  // CHNK_Prefab: the scene layout below (v0.5, FR-ENT-070)
 inline constexpr u8 MOD_INFO_VERSION = 1;  // CHNK_MOD: a mod pack's identity (FR-RUN-090)
 inline constexpr u8 INPUT_MAP_VERSION = 1;  // CHNK_INPUT: a project's action maps (FR-INP-020; mce/input/input_map.h)
+inline constexpr u8 STRING_TABLE_VERSION = 1;  // CHNK_STR: one locale's string table (M-MOBILE 11a; mce/loc/string_table.h)
 inline constexpr u8 STORE_CATALOG_VERSION = 1;  // CHNK_STORE: products and ad placements (M-MONETIZE; mce/monetize/catalog.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
