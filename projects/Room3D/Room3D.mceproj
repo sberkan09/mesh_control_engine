@@ -3,7 +3,7 @@
   "version": 1,
   "name": "Room3D",
   "title": "Room 3D",
-  "engine_version": "0.0.1",
+  "engine_version": "0.9.0",
   "games": ["room3d"],
   "start_scene": "0017e8b2-29ec-4fa2-9467-77f636830a19",
   "plugins": []

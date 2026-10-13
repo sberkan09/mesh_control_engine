@@ -49,7 +49,7 @@ Rules that keep the layout working:
   "version": 1,
   "name": "MyGame",
   "title": "My Game",
-  "engine_version": "0.0.1",
+  "engine_version": "0.9.0",
   "games": ["my_game"],
   "start_scene": "0d4f...-...",
   "plugins": []

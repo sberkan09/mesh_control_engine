@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 
 project(MeshControlEngine
-    VERSION 0.0.1
+    VERSION 0.9.0
     DESCRIPTION "Mesh Control Engine (MCE)"
     LANGUAGES C CXX)
 
