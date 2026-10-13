@@ -3,7 +3,7 @@
   "version": 1,
   "name": "SolsticeReach",
   "title": "Solstice Reach",
-  "engine_version": "0.0.1",
+  "engine_version": "0.9.0",
   "games": ["solstice_reach"],
   "start_scene": "c327eea1-da5f-4b61-8834-7daa3d7ba4b7",
   "plugins": []
