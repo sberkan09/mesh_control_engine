@@ -4,6 +4,7 @@
 mce_add_library(mce_monetize
     SOURCES
         src/catalog.cpp
+        src/fake.cpp
         src/monetize.cpp
     PUBLIC_DEPS
         mce::mce_core

@@ -2,6 +2,7 @@
 # provider, entitlements across a relaunch, and record/replay of store and ad events.
 mce_add_test(test_monetize
     SOURCES
+        test_fake.cpp
         test_monetize.cpp
     DEPS
         mce::mce_monetize

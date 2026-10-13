@@ -66,7 +66,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | Scene streaming / data mods | [scene-streaming.md](milestones/scene-streaming.md), ADR-0037 / ADR-0034 | done | — |
 | M-NOVEL | [M-NOVEL.md](milestones/M-NOVEL.md) (issues #115, #154) | done | dialogue localization waits on M-MOBILE step 11 |
 | M-KIT3D | [M-KIT3D.md](milestones/M-KIT3D.md) (issues #129, #158, #126) | done | — (follow-ups listed in the record) |
-| M-MONETIZE | — (issues #141, #142) | step 1 done (`mce/monetize/monetize.h`, `.mcstore` catalog) | steps 2–5 and the demo |
+| M-MONETIZE | — (issues #141, #142) | steps 1–2 done (`mce/monetize/monetize.h`, `.mcstore` catalog, fake providers) | steps 3–5 and the demo |
 | M-LIVEOPS | — (issues #148, #149, #153) | not started | everything; after M-MONETIZE |
 | M-VISUAL | — (this section; assessment 2026-10-13) | not started | everything |
 | M-MOBILE | [M-MOBILE.md](milestones/M-MOBILE.md), ADR-0038 | active (un-parked 2026-10-11) | steps 4–9 of the record |

@@ -49,3 +49,12 @@ if(MCE_BUILD_TESTS AND UNIX AND NOT MCE_ASAN)
                          $<TARGET_FILE:mce_player> ${PROJECT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/crash_report_check)
     endif()
 endif()
+
+# Purchases and ads end to end (M-MONETIZE): mce_player -headless with the fake store and ad network
+# through every outcome they cover, and the entitlement across a relaunch.
+if(MCE_BUILD_TESTS AND TARGET mce_cook)
+    add_test(NAME player_monetize
+             COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/monetize_test
+                     -P ${PROJECT_SOURCE_DIR}/tests/monetize/player_monetize_test.cmake)
+endif()
