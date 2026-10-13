@@ -69,7 +69,7 @@ public:
         in.cancel_pressed = cancel_;
         ui::UpdateContext ctx;
         ctx.viewport = bb;
-        ctx.ui_scale = cv_ui_scale.get_float() * window_.display_scale();
+        ctx.ui_scale = ui::compute_ui_scale(bb, window_.display_scale(), cv_ui_scale.get_float());
         ctx.actions = &in;
         ctx.pointer = pointer_;
         ctx.pointer_down = pointer_down_;

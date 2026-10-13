@@ -21,7 +21,7 @@ a device or simulator run on the user's Mac.
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | done except the per-tier device numbers (no device) |
 | 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | done on the emulator and the Simulator (no devices) |
 | 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | done (store upload untested: no credentials) |
-| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a done in the cloud (Mac simulator/emulator check open); 11b–11d next |
+| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a, 11b done in the cloud (Mac simulator/emulator checks open); 11c–11d next |
 
 ## What shipped (steps 2–3)
 
@@ -171,6 +171,36 @@ a game in landscape on the emulator.
 
 Still open in 11a: the simulator/emulator check on the Mac (`local_ci_macos.sh android ios` with a Turkish
 device language).
+
+## What shipped (step 11b: `mce_ui` on many screens)
+
+- **Anchors to the parent, the safe area or the screen.** `Anchors::to` (`AnchorTo::Parent` by default; the root
+  is the safe area) lets a backdrop bleed under the notch (`Screen`) or a bar inside a card hug the safe area
+  (`SafeArea`). `Builder::to(...)`; `fill()` and `at()` keep it.
+- **UI scale from the display.** `ui::compute_ui_scale(viewport, display_scale, user)` is the display's DPI scale
+  times the user's `-ui_scale` (a saved convar of the player), lowered when the screen is smaller than 360 × 640
+  at that scale, in 1/8 steps. The player's console and game UI layers use it.
+- **Containers.** A grid with `columns = 0` fits as many cells as its width holds (a level grid on 16:9, 20:9 and
+  4:3); a vertical stack hands its width down so such a grid sizes its height by it.
+- **Scroll views.** `Builder::scroll` (a stack that may overflow): a finger or mouse drag past 8 px scrolls and lets
+  go of the button under it, a release coasts and slows down (friction e^-4t), the wheel scrolls by 48 px a
+  notch, gamepad focus scrolls the focused widget into view. Content is cut to the view: `SpriteBatch::add_rect`
+  and `TextPlacement::clip` trim quads and glyphs with their uvs, so it stays in the same MDI groups.
+- **9-slice images.** `Style::slice` (insets in texels of the region) draws nine quads: corners at their size
+  times the UI scale, edges and middle stretched, shrunk together on a rect thinner than two corners.
+- **Modals and tabs.** `Builder::modal` + `Document::open_modal` / `close_modal`: the modal draws two layers up,
+  owns focus, navigation and the pointer, Cancel names it, closing gives focus back. `Builder::tabs` / `tab`:
+  a bar of buttons and one visible page; confirming a tab sends `ValueChanged` on the tabs with the page index.
+  Toggles and sliders were already there.
+- **Reflected for the editor and MCP.** The authoring values moved to `mce/ui/types.h` and are reflected as
+  `UiAnchors`, `UiStyle`, `UiSlice`, `UiStackLayout`, `UiGridLayout` and their enums; the editor and `mce_mcp`
+  register them, and `refl_describe_component` describes them.
+- Tests: `test_ui_layout` (scale, anchor spaces, fit grid, scroll drag / inertia / wheel / clip / focus,
+  9-slice, modal, tabs, reflection), `test_mcp` (`UiAnchors`), and `test_ui_gl`'s layout screenshots: one
+  layout at 1280×720, 2400×1080 (notch and home indicator) and 2048×1536, checked by rect and pixel and written
+  to `build/<preset>/tests/ui/tmp/ui_layout_<w>x<h>.ppm`.
+
+Still open in 11b: the same layout on the Mac simulator and Android emulator (`local_ci_macos.sh android ios`).
 
 ## Constraints found so far
 

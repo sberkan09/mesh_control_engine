@@ -281,9 +281,18 @@ bool refl_list_components(ToolCall& c) {
     return true;
 }
 
+// A component, or a reflected value type a component or a document nests (ColliderShape,
+// UiAnchors, UiStyle): the same description either way.
 bool refl_describe_component(ToolCall& c) {
-    const refl::TypeRecord* t = nullptr;
-    if (!arg_component(c, "name", t)) return false;
+    StringView type_name;
+    if (!arg_string(c, "name", type_name, true)) return false;
+    const refl::TypeRecord* t = refl::find_type(StringId(type_name));
+    if (!t) {
+        c.error += "unknown component type '";
+        c.error += type_name;
+        c.error += "' (refl_list_components lists them)";
+        return false;
+    }
     describe_type(c.out, *t);
     return true;
 }
@@ -1062,8 +1071,8 @@ constexpr const char* kEntityArg = R"({"type":"object","properties":{"entity":{"
 const ToolDef kTools[] = {
     {"refl_list_components", "List every reflected component type (name and field count).", kNoArgs, refl_list_components},
     {"refl_describe_component",
-     "Describe a component type: fields with kind, array count, nested struct fields, enum values, editor range, "
-     "read-only/transient flags and help text.",
+     "Describe a component type, or a reflected value type such as UiAnchors or UiStyle (runtime UI): fields with kind, "
+     "array count, nested struct fields, enum values, editor range, read-only/transient flags and help text.",
      R"({"type":"object","properties":{"name":{"type":"string","description":"Component type name, e.g. Sprite"}},"required":["name"]})",
      refl_describe_component},
     {"scene_info", "The open scene: name, GUID, path under assets/, unsaved changes, entity count.", kNoArgs, scene_info},

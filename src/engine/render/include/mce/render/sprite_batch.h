@@ -127,6 +127,23 @@ struct TextPlacement {
     i16 sort_layer = 0;
     i32 sort_order = 0;
     SpriteBlend blend = SpriteBlend::Alpha;
+    // Glyph parts outside this box (view units) are cut off, their uvs cut to match (scroll views).
+    const math::aabb2* clip = nullptr;
+};
+
+// An axis-aligned quad showing part of a region (UI panels, 9-slice pieces). `uv` is the part of
+// the region, 0..1 on each axis with (0, 0) at the region's top-left texel; uv.min lands on
+// rect.min (the top-left corner in the y-down screen view). Parts outside `clip` are cut off.
+struct RectQuad {
+    SpriteSetId set;
+    u32 region = 0;
+    math::aabb2 rect;
+    math::aabb2 uv{{0, 0}, {1, 1}};
+    math::Color tint = math::Color::white();
+    i16 sort_layer = 0;
+    i32 sort_order = 0;
+    SpriteBlend blend = SpriteBlend::Alpha;
+    const math::aabb2* clip = nullptr;
 };
 
 struct BatchStats {
@@ -167,6 +184,7 @@ public:
     // Pre-sizes the per-frame arrays for `quads` sprites/glyphs (avoids regrowth on the arena).
     void reserve(usize quads);
     void add(const SpriteInstance& sprite);
+    void add_rect(const RectQuad& quad);
     void add_text(const Font& font, const TextLayout& layout, const TextPlacement& placement);
     // Culls the layer's chunks against the view and queues the visible ones as one item. `offset`
     // translates the baked layer at draw time (parallax) without re-baking it.

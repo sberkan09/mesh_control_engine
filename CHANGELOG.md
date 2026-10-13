@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Runtime UI on phones, step 11b (M-MOBILE, #151): `mce_ui` anchors to the parent, the safe area or the whole
+  screen; `ui::compute_ui_scale` and the player's `-ui_scale` size the UI from the display's DPI; scroll views
+  (drag with inertia, wheel, clipping, focus into view), 9-slice images, modals, tabs and fit-width grids. The
+  authoring values (`mce/ui/types.h`) are reflected, and the MCP server's `refl_describe_component` describes them.
 - Languages, step 11a (M-MOBILE, #146): string tables in `assets/loc/<locale>.csv` cook to one `CHNK_STR` each,
   and the player installs a `loc::Localization` resource (`mce/loc/loc.h`) that picks the language from the
   player's saved choice, the device languages and `-default_language`, with plural rules, `{name}` placeholders

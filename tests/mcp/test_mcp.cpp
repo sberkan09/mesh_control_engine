@@ -257,6 +257,12 @@ TEST_CASE("mcp tools: discover components from mce_refl") {
     CHECK(probe.v().get("fields").at(1).get("read_only").as_bool());
     CHECK(probe.v().get("fields").at(4).get("count").as_number() == 3);
 
+    // Reflected value types describe the same way: the runtime UI's anchors (M-MOBILE 11b).
+    auto anchors = c.ok("refl_describe_component", R"({"name":"UiAnchors"})");
+    const cook::JsonValue af = anchors.v().get("fields");
+    REQUIRE(af.size() == 6);
+    CHECK(str(af.at(5).get("type")) == "UiAnchorTo");
+    CHECK(compact(af.at(5).get("values")).find("\"SafeArea\"") != std::string::npos);
     CHECK(c.fails("refl_describe_component", R"({"name":"Nope"})").find("unknown component type") != std::string::npos);
     CHECK(c.fails("refl_describe_component").find("'name' must be a string") != std::string::npos);
     // Project-bound tools say what is missing.
