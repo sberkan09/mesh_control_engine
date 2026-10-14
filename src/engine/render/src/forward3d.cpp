@@ -382,7 +382,7 @@ void Forward3D::shutdown() {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
-    for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_})
+    for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_})
         destroy(*device_, *t);
     ibl_key_ = 0;
     ibl_env_layers_ = 0;
@@ -880,6 +880,25 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
                 pu.probe_max[i] = vec4(p.bounds.max, f32(probe_base_layer(i)));
             }
         }
+    } else {
+        // IBL off: the shader branches around these samplers, but Metal's validation layer still wants
+        // every declared one bound (and of the declared type), so stand-ins fill the slots unread.
+        if (ibl_off_env_.is_null()) {
+            rhi::TextureDesc d;
+            d.format = rhi::TextureFormat::RGBA16F;
+            d.usage = rhi::TextureUsage::SampledColorTarget;
+            d.size = {1, 1};
+            d.dimension = rhi::TextureDimension::Tex2DArray;
+            d.array_layers = 1;
+            d.debug_name = "mce.3d.ibl_off_env";
+            ibl_off_env_ = device_->create_texture(d);
+            d.dimension = rhi::TextureDimension::Tex2D;
+            d.debug_name = "mce.3d.ibl_off_2d";
+            ibl_off_2d_ = device_->create_texture(d);
+        }
+        cmd.bind_texture(rhi::bank::kIblEnv, ibl_off_env_, linear_clamp_);
+        cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_off_2d_, linear_clamp_);
+        cmd.bind_texture(rhi::bank::kIblSh, ibl_off_2d_, point_sampler_);
     }
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);

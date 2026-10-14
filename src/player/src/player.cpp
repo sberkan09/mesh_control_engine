@@ -323,6 +323,10 @@ public:
         }
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
         if (paused_ || ad_paused_) return;
+        // -capture_tick N: the sim holds on tick N for the capture frame, however many ticks a slow
+        // frame (Metal validation, a cold start) would otherwise catch up past it.
+        if (cv_capture_tick.get_int() > 0 && sim_ticks_ - run_start_tick_ >= static_cast<u64>(cv_capture_tick.get_int()))
+            return;
         tick_dt_ = t.dt;
         if (t.actions) input::publish(world_, *t.actions);
         publish_view_info();

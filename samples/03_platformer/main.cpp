@@ -39,7 +39,9 @@
 #include "mce/input/input_system.h"
 #include "mce/kit/particles.h"
 #include "mce/physics/module.h"
+#include "mce/platform/haptics.h"
 #include "mce/platform/platform.h"
+#include "mce/platform/review.h"
 #include "mce/platform/window.h"
 #include "mce/render/renderer.h"
 #include "mce/render/sprite_animation.h"
@@ -185,6 +187,7 @@ public:
         music.frames = clips_.music.data();
         music.frame_count = static_cast<u32>(clips_.music.size());
         if (auto h = audio_.register_stream(music)) {
+            owned_clips_.push_back(h.value());
             audio::AudioSource src;
             src.clip_handle = h.value();
             src.loop = true;
@@ -294,11 +297,26 @@ public:
                     burst(Ember, r.pos, 8);
                     burst(Dust, r.pos - vec2{0.35f * static_cast<f32>(r.dir), 0.0f}, 6);
                     break;
-                case Fx::Coin: burst(Spark, r.pos, 14); break;
-                case Fx::Stomp: burst(Debris, r.pos, 10); break;
-                case Fx::Hurt: burst(Ember, r.pos, 24); break;
+                case Fx::Coin:
+                    burst(Spark, r.pos, 14);
+                    platform::haptics::play(platform::haptics::Preset::Light);
+                    break;
+                case Fx::Stomp:
+                    burst(Debris, r.pos, 10);
+                    platform::haptics::play(platform::haptics::Preset::Medium);
+                    break;
+                case Fx::Hurt:
+                    burst(Ember, r.pos, 24);
+                    platform::haptics::play(platform::haptics::Preset::Error);
+                    break;
                 case Fx::Crumble: burst(Debris, r.pos - vec2{0.0f, 0.3f}, 6); break;
-                case Fx::Win: burst(Spark, r.pos + vec2{0.0f, 0.5f}, 40); break;
+                case Fx::Win:
+                    burst(Spark, r.pos + vec2{0.0f, 0.5f}, 40);
+                    platform::haptics::play(platform::haptics::Preset::Success);
+                    // A won level is the moment platform/review.h asks for; the OS rate-limits the prompt,
+                    // and one ask per run is enough.
+                    if (platform::review_requests() == 0) platform::request_review();
+                    break;
             }
         }
     }
@@ -407,6 +425,11 @@ public:
 
     void on_shutdown() override {
         save_records();
+        // The mixer reads clips_ and the pack's payloads in place, and the audio device outlives this
+        // app: stop and release every clip before they go (the audio thread read freed music after
+        // the app was gone, a crash on quit in the iOS Simulator).
+        for (const audio::ClipHandle h : owned_clips_) audio_.release_clip(h);
+        audio_.finish_releases();
         if (device_) renderer_.shutdown();
     }
 
@@ -470,8 +493,10 @@ private:
                 sfx_handles_.push_back(asset::AnyHandle(h.value()));  // keeps the payload the mixer reads
                 auto clip = audio::clip_payload_from_sfx(assets_.resolve(h.value()));
                 if (!clip) break;
-                if (auto c = audio_.register_clip(clip.value())) return c.value();
-                break;
+                auto c = audio_.register_clip(clip.value());
+                if (!c) break;
+                owned_clips_.push_back(c.value());
+                return c.value();
             }
             MCE_LOG_WARN("03_platformer: {} missing from the pack (synthesized stand-in)", path);
         }
@@ -483,7 +508,9 @@ private:
         p.frames = pcm.data();
         p.frame_count = static_cast<u32>(pcm.size());
         auto h = audio_.register_clip(p);
-        return h ? h.value() : audio::ClipHandle{};
+        if (!h) return {};
+        owned_clips_.push_back(h.value());
+        return h.value();
     }
 
     // ---- rendering --------------------------------------------------------------------------------
@@ -917,6 +944,7 @@ private:
     World world_;
     Bot bot_;
     art::Clips clips_;
+    Array<audio::ClipHandle> owned_clips_;  // registered with audio_ over clips_ or the pack
     u64 input_hash_ = kFnv64Offset;
     u64 ticks_ = 0;
 
