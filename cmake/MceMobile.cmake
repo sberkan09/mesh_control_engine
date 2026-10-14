@@ -18,7 +18,9 @@
 #
 # A cross build cannot run the target's mce_cook, so the packs come from a host build:
 # MCE_HOST_COOK names that mce_cook (scripts/ship.py builds it on the host preset first and passes
-# it), and mce_sample_pack runs it in place of the target's.
+# it), and mce_sample_pack runs it in place of the target's. A project's cook carries the game's
+# component types, so a project cooks with the host build's <game>_cook instead: MCE_HOST_BUILD_DIR
+# names that host build tree (scripts/ship.py --project builds <game>_cook there first).
 
 if(ANDROID OR IOS)
     set(MCE_MOBILE ON)
@@ -27,6 +29,7 @@ else()
 endif()
 
 set(MCE_HOST_COOK "" CACHE FILEPATH "Host mce_cook used to cook packs in a cross build (Android/iOS)")
+set(MCE_HOST_BUILD_DIR "" CACHE PATH "Host build tree whose projects/<name>/<game>_cook cook the projects in a cross build")
 # Texture storage of the packs this build cooks (mce_cook --textures): phones take ASTC 4x4.
 if(MCE_MOBILE)
     set(_mce_textures_default astc)

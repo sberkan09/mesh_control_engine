@@ -95,8 +95,9 @@ function(mce_add_project game)
     endif()
 
     # The project's cook: the engine's component types plus the game's. Against the SDK the
-    # installed mce_cook loads the game module instead (below).
-    if(NOT MCE_SDK)
+    # installed mce_cook loads the game module instead (below). A cross build (Android/iOS) cannot
+    # run it, so it cooks with the host build's <game>_cook (MCE_HOST_BUILD_DIR, cmake/MceMobile.cmake).
+    if(NOT MCE_SDK AND NOT CMAKE_CROSSCOMPILING)
         add_executable(${game}_cook "${PROJECT_SOURCE_DIR}/tools/cook/main.cpp" "${PROJECT_SOURCE_DIR}/tools/cook/engine_components.cpp"
                                     ${ARG_TYPES})
         target_include_directories(${game}_cook PRIVATE ${includes})
@@ -147,6 +148,20 @@ function(mce_add_project game)
     if(MCE_SDK)
         set(cook_command "${MCE_COOK_EXE}" --module "$<TARGET_FILE:${game}_game>")
         set(cook_depends ${game}_game)
+    elseif(CMAKE_CROSSCOMPILING)
+        # The host build mirrors this tree: <host build>/projects/<name>/<game>_cook (scripts/ship.py
+        # --target android/ios --project builds it on the host preset first).
+        file(RELATIVE_PATH rel "${PROJECT_BINARY_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
+        if(MCE_HOST_BUILD_DIR)
+            set(host_cook "${MCE_HOST_BUILD_DIR}/${rel}/${game}_cook${CMAKE_HOST_EXECUTABLE_SUFFIX}")
+            set(cook_command "${host_cook}")
+            set(cook_depends "${host_cook}")
+        else()
+            set(cook_command ${CMAKE_COMMAND} -E echo
+                "${game}: a cross build cooks with the host's ${game}_cook: pass -DMCE_HOST_BUILD_DIR=<host build dir>"
+                COMMAND ${CMAKE_COMMAND} -E false)
+            set(cook_depends)
+        endif()
     else()
         set(cook_command "$<TARGET_FILE:${game}_cook>")
         set(cook_depends ${game}_cook)

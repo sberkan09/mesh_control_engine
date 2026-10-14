@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Projects on phones (M-MOBILE, SBA-30): `scripts/ship.py --project <dir> --target android|ios` builds a project
+  made from the templates for phones. Its pack is cooked by the host build's `<game>_cook`
+  (`MCE_HOST_BUILD_DIR`, which `ship.py` passes after building it on `--host-preset`); a cross build no longer
+  defines a project cook it cannot run.
 - Live services vendor, Firebase (M-LIVEOPS step 1): `mce/platform/firebase.h` with Crashlytics for native crashes
   and Analytics for `analytics::event`. `ship` stamps it into a phone build only when `MCE_FIREBASE_ANDROID_CONFIG` or
   `MCE_FIREBASE_IOS_CONFIG` names the project's config file (never committed), uploads symbols to Crashlytics, starts
