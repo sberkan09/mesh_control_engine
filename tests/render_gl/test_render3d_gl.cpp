@@ -765,3 +765,204 @@ TEST_CASE("render3d_gl: SSAO leaves direct light alone and off draws the frame w
     CHECK(lo < 200);
     CHECK(f.device->validation_error_count() == 0);
 }
+
+// ---- local-light shadows (M-VISUAL 4) -----------------------------------------------------------------
+
+namespace {
+
+// No sun, a dim ambient, 256-texel tiles (16 per 1024² layer), and `lights` added after.
+void local_lit(Scene3D& s, bool shadows, Span<const PointLight> lights) {
+    no_sun(s);
+    DirectionalLight sun = s.light();
+    sun.ambient_sky = sun.ambient_ground = {0.05f, 0.05f, 0.05f};
+    s.set_light(sun);
+    Sky sky;
+    sky.specular_ambient = 0.0f;
+    s.set_sky(sky);
+    LocalShadowSettings ls;
+    ls.tile = 256;
+    s.set_local_shadows(ls);
+    for (PointLight l : lights) {
+        l.cast_shadows = shadows;
+        s.add_point_light(l);
+    }
+}
+
+PointLight spot_light() {
+    PointLight l;
+    l.position = {-3.0f, 3.0f, 0.0f};
+    l.direction = {1.0f, -1.0f, 0.0f};
+    l.radius = 12.0f;
+    l.intensity = 25.0f;
+    l.spot_inner = math::radians(30.0f);
+    l.spot_outer = math::radians(40.0f);
+    return l;
+}
+
+PointLight point_light() {
+    PointLight l;
+    l.position = {-1.5f, 1.2f, 0.0f};
+    l.radius = 8.0f;
+    l.intensity = 8.0f;
+    return l;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: a shadowed spot light leaves the floor behind the box dark, the rest as lit") {
+    Fixture3D f;
+    bool shadows = false;
+    const PointLight light = spot_light();
+    const auto scene = [&](Scene3D& s) { local_lit(s, shadows, Span<const PointLight>(&light, 1)); };
+    const vec3 behind{1.4f, 0.0f, 0.0f}, lit{0.0f, 0.0f, 1.5f}, face{-0.5f, 0.5f, 0.0f};
+    f.render(0.0f, false, scene);
+    const Forward3D& fw = f.renderer.forward_3d();
+    CHECK(fw.last_stats().local_shadow_tiles == 0);
+    const Rgb behind_off = f.at_world(behind), lit_off = f.at_world(lit), face_off = f.at_world(face);
+    shadows = true;
+    f.render(0.0f, false, scene);
+    CHECK(fw.last_stats().local_shadow_tiles == 1);
+    const Rgb behind_on = f.at_world(behind), lit_on = f.at_world(lit), face_on = f.at_world(face);
+    INFO("behind " << behind_off.luma() << " -> " << behind_on.luma() << ", lit " << lit_off.luma() << " -> "
+                   << lit_on.luma() << ", face " << face_off.luma() << " -> " << face_on.luma());
+    CHECK(behind_off.luma() > 40);                          // the cone reaches it
+    CHECK(behind_on.luma() < behind_off.luma() / 3);       // the box's shadow
+    CHECK(std::abs(lit_on.luma() - lit_off.luma()) <= 2);  // open floor: no acne
+    CHECK(std::abs(face_on.luma() - face_off.luma()) <= 2);  // the box's lit face
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a shadowed point light casts through its cube faces without acne at the seams") {
+    Fixture3D f;
+    bool shadows = false;
+    const PointLight light = point_light();
+    const auto scene = [&](Scene3D& s) { local_lit(s, shadows, Span<const PointLight>(&light, 1)); };
+    // Floor points seen through the -Y face (under the light), the -X and +Z faces and their seams.
+    const vec3 lit[] = {{-1.5f, 0.0f, 0.3f}, {-3.0f, 0.0f, 0.0f}, {-1.5f, 0.0f, 1.6f}, {-2.7f, 0.0f, 1.2f}, {-0.3f, 0.0f, 1.2f}};
+    const vec3 behind{1.5f, 0.0f, 0.0f};
+    f.render(0.0f, false, scene);
+    Rgb lit_off[5];
+    for (int i = 0; i < 5; ++i) lit_off[i] = f.at_world(lit[i]);
+    const Rgb behind_off = f.at_world(behind);
+    shadows = true;
+    f.render(0.0f, false, scene);
+    const Forward3D& fw = f.renderer.forward_3d();
+    CHECK(fw.last_stats().local_shadow_tiles == 6);
+    for (int i = 0; i < 5; ++i) {
+        const Rgb on = f.at_world(lit[i]);
+        INFO("lit " << i << ": " << lit_off[i].luma() << " -> " << on.luma());
+        CHECK(lit_off[i].luma() > 20);
+        CHECK(std::abs(on.luma() - lit_off[i].luma()) <= 2);
+    }
+    const Rgb behind_on = f.at_world(behind);
+    INFO("behind " << behind_off.luma() << " -> " << behind_on.luma());
+    CHECK(behind_off.luma() > 20);
+    CHECK(behind_on.luma() < behind_off.luma() / 3);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: local shadows turned off draw the unshadowed frame") {
+    Fixture3D f;
+    const PointLight lights[2] = {spot_light(), point_light()};
+    f.render(0.0f, false, [&](Scene3D& s) { local_lit(s, false, Span<const PointLight>(lights, 2)); });
+    const Array<u8> off = f.pixels;
+    f.render(0.0f, false, [&](Scene3D& s) {
+        local_lit(s, true, Span<const PointLight>(lights, 2));
+        LocalShadowSettings ls = s.local_shadow_settings();
+        ls.enabled = false;
+        s.set_local_shadows(ls);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().local_shadow_tiles == 0);
+    usize differing = 0;
+    for (usize i = 0; i < off.size(); ++i) differing += f.pixels[i] != off[i];
+    CHECK(differing == 0);
+    // A settings/renderer mismatch falls back to unshadowed rather than reading the wrong layers.
+    f.render(0.0f, false, [&](Scene3D& s) {
+        local_lit(s, true, Span<const PointLight>(lights, 2));
+        LocalShadowSettings ls = s.local_shadow_settings();
+        ls.layers = 2;
+        s.set_local_shadows(ls);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().local_shadow_tiles == 0);
+    differing = 0;
+    for (usize i = 0; i < off.size(); ++i) differing += f.pixels[i] != off[i];
+    CHECK(differing == 0);
+}
+
+TEST_CASE("render3d_gl: local shadow tiles go to the most important lights first") {
+    Fixture3D f;
+    Scene3D s(f.renderer.meshes(), mem::heap());
+    s.begin(orbit_camera({0, 0.5f, 0}, 0.0f, math::radians(35.0f), 7.0f), {kW, kH});
+    ShadowSettings ss;
+    ss.resolution = 1024;
+    s.set_shadows(ss);
+    LocalShadowSettings ls;
+    ls.tile = 256;  // 16 tiles
+    s.set_local_shadows(ls);
+    MeshInstance box;
+    box.mesh = 1;
+    s.add(box);
+    const auto add = [&](vec3 p, f32 intensity, bool spot, bool cast = true) {
+        PointLight l;
+        l.position = p;
+        l.radius = 4.0f;
+        l.intensity = intensity;
+        l.cast_shadows = cast;
+        if (spot) l.spot_outer = math::radians(30.0f);
+        s.add_point_light(l);
+    };
+    add({0, 2, 0}, 50.0f, false);          // 0: point, 6 tiles
+    add({1, 2, 0}, 1.0f, true);            // 1: spot, the dimmest
+    add({-1, 2, 0}, 100.0f, false);        // 2: point, the brightest
+    add({0, 2, -1}, 40.0f, false);         // 3: point, ranked after spot 4 (farther, dimmer): 4 tiles left, dropped
+    add({0, 2, 1}, 30.0f, true);           // 4: spot
+    add({0, 2, 2}, 500.0f, false, false);  // 5: no shadows asked
+    add({0, 2, 40}, 500.0f, true);         // 6: behind the camera: nothing on screen to shadow
+    s.build();
+    const Scene3D::Stats& st = s.stats();
+    CHECK(st.local_shadow_lights == 4);
+    CHECK(st.local_shadow_tiles == 14);
+    CHECK(st.local_shadows_dropped == 1);
+    const Span<const LocalShadowTile> tiles = s.local_shadow_tiles();
+    MCE_REQUIRE_OR_RETURN(tiles.size() == 14);
+    // By importance: light 2 (6 faces), light 0 (6), spot 4, light 3 (needs 6 of 3: dropped), spot 1.
+    for (u32 i = 0; i < 6; ++i) CHECK(tiles[i].light == 2);
+    for (u32 i = 6; i < 12; ++i) CHECK(tiles[i].light == 0);
+    CHECK(tiles[12].light == 4);
+    CHECK(tiles[13].light == 1);
+    for (u32 i = 0; i < 14; ++i) {
+        CHECK(tiles[i].layer == 0);
+        CHECK(tiles[i].rect.width == 256);
+        for (u32 j = 0; j < i; ++j) CHECK_FALSE((tiles[i].rect.x == tiles[j].rect.x && tiles[i].rect.y == tiles[j].rect.y));
+    }
+    const Span<const GpuPointLight> pool = s.cluster_setup().lights();
+    CHECK(pool[2].shadow.x == 0.0f);
+    CHECK(pool[2].shadow.y == 6.0f);
+    CHECK(pool[0].shadow.x == 6.0f);
+    CHECK(pool[3].shadow.x == -1.0f);
+    CHECK(pool[4].shadow.x == 12.0f);
+    CHECK(pool[4].shadow.y == 1.0f);
+    CHECK(pool[5].shadow.x == -1.0f);
+    CHECK(pool[6].shadow.x == -1.0f);
+    // The box sits under every light: each spot tile and the -Y faces list it as a caster.
+    CHECK(tiles[12].caster_count == 1);
+    CHECK(tiles[0 + 3].caster_count == 1);  // light 2's -Y face
+
+    // max_lights caps the count whatever room is left.
+    Scene3D s2(f.renderer.meshes(), mem::heap());
+    s2.begin(orbit_camera({0, 0.5f, 0}, 0.0f, math::radians(35.0f), 7.0f), {kW, kH});
+    s2.set_shadows(ss);
+    ls.max_lights = 1;
+    s2.set_local_shadows(ls);
+    PointLight a;
+    a.position = {0, 2, 0};
+    a.cast_shadows = true;
+    a.spot_outer = 0.5f;
+    s2.add_point_light(a);
+    a.intensity = 2.0f;
+    s2.add_point_light(a);
+    s2.build();
+    CHECK(s2.stats().local_shadow_lights == 1);
+    CHECK(s2.stats().local_shadows_dropped == 1);
+    CHECK(s2.local_shadow_tiles()[0].light == 1);
+}

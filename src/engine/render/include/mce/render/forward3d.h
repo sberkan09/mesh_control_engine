@@ -40,11 +40,15 @@ struct Forward3DDesc {
     // Screen-space ambient occlusion resources (M-VISUAL 3); a scene turns it on with
     // AmbientOcclusion::enabled. False (or -r.ssao 0) draws every scene without it.
     bool ssao = true;
+    // Local-light shadow atlas layers after the cascades (M-VISUAL 4); keep
+    // LocalShadowSettings::layers equal. 0 (or -r.local_shadows 0) draws every light unshadowed.
+    u32 local_shadow_layers = 1;
 };
 
 struct Forward3DStats {
-    u32 shadow_draws = 0;    // over all cascades
+    u32 shadow_draws = 0;    // over all cascades and local shadow tiles
     u32 cascades = 0;
+    u32 local_shadow_tiles = 0;  // atlas tiles rendered for spot and point lights (M-VISUAL 4)
     u32 main_draws = 0;
     u32 pipeline_binds = 0;
     u32 texture_binds = 0;
@@ -96,7 +100,8 @@ public:
 
     const Forward3DStats& last_stats() const { return stats_; }
     const Forward3DDesc& desc() const { return desc_; }
-    rhi::TextureHandle shadow_map() const { return shadow_map_; }  // D32 2D array, one layer per cascade
+    // D32 2D array: kMaxCascades cascade layers, then the local-light atlas layers.
+    rhi::TextureHandle shadow_map() const { return shadow_map_; }
     rhi::TextureHandle hdr_target() const { return hdr_; }
     // True when record() assigns Forward+ lights on the GPU (desc + device compute).
     bool gpu_light_clusters() const { return !cluster_build_.is_null(); }
@@ -141,6 +146,9 @@ private:
     void record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void shadow_draw(rhi::CommandBuffer& cmd, const math::mat4& view_proj, const Scene3D::Draw& d, rhi::PipelineHandle& bound_pipe,
+                     const GpuMesh*& bound);
     void record_main(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target);
     // What the current pass has bound, so consecutive draws skip redundant binds.
@@ -190,6 +198,8 @@ private:
     rhi::TextureHandle ibl_off_2d_;      // the env array, and the LUT and SH slots
     rhi::SamplerHandle env_sampler_;     // linear, wraps around the equirect seam
     u64 ibl_key_ = 0;                    // the sky the IBL textures were baked from; 0 = none
+    bool local_shadows_ = false;         // the atlas layers exist and r.local_shadows is on (this frame)
+    bool local_mismatch_logged_ = false;
     bool ibl_own_source_ = false;        // baked from Sky::ibl_texture rather than the visible sky
     rhi::PipelineHandle probe_reproject_;  // six faces -> equirect
     rhi::PipelineHandle probe_prefilter_;  // equirect -> GGX layers

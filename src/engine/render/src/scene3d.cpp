@@ -123,6 +123,8 @@ Scene3D::Scene3D(const MeshStore& meshes, mem::IAllocator& alloc)
       point_lights_(alloc),
       clusters_(alloc),
       cascade_casters_(alloc),
+      local_tiles_(alloc),
+      local_casters_(alloc),
       instances_(alloc),
       draws_(alloc),
       shadow_draws_(alloc),
@@ -139,6 +141,8 @@ void Scene3D::begin(const Camera3D& camera, rhi::Extent2D viewport) {
     point_lights_.clear();
     clusters_.clear();
     cascade_casters_.clear();
+    local_tiles_.clear();
+    local_casters_.clear();
     cascade_count_ = 0;
     opaque_count_ = 0;
     stats_ = {};
@@ -200,6 +204,10 @@ void Scene3D::build() {
     stats_.instances = static_cast<u32>(instances_.size());
     const vec3 forward = view_.forward;
     bool any = false;
+    bool local_wanted = false;  // a light asks for a local shadow: casters are collected without the sun's
+    if (local_shadows_.enabled)
+        for (const PointLight& l : point_lights_) local_wanted = local_wanted || l.cast_shadows;
+    const bool collect_casters = light_.shadows || local_wanted;
     Array<u32> skin_first(*alloc_);   // per skin of the current instance: palette offset
     Array<aabb3> skin_box(*alloc_);   // and its model-space bounds
     for (u32 i = 0; i < instances_.size(); ++i) {
@@ -256,7 +264,7 @@ void Scene3D::build() {
             d.view_depth = dot(c - view_.position, forward);
             d.center = c;
             d.radius = length(wb.extents());
-            if (light_.shadows && inst.cast_shadows && !(material_of(inst, sm).flags & asset::MaterialFlags::AlphaBlend)) {
+            if (collect_casters && inst.cast_shadows && !(material_of(inst, sm).flags & asset::MaterialFlags::AlphaBlend)) {
                 const GpuLod& sl = mesh.lod(s, shadow_lod);
                 d.lod = shadow_lod;
                 d.first_index = sl.first_index;
@@ -344,6 +352,7 @@ void Scene3D::build() {
     stats_.point_lights = static_cast<u32>(point_lights_.size());
     const f64 t_clusters = clock.now_seconds();
     clusters_.prepare(view_, point_lights_.span(), cluster_grid_);
+    if (local_wanted) build_local_shadows();
     const f64 t_end = clock.now_seconds();
     stats_.cluster_ms = static_cast<f32>((t_end - t_clusters) * 1000.0);
     stats_.build_ms = static_cast<f32>((t_end - t_begin) * 1000.0);
@@ -392,6 +401,101 @@ void Scene3D::build_cascades() {
         prev = far;
     }
     cascade_count_ = n;
+}
+
+// Local-light shadows (M-VISUAL 4). Importance = luminance × (radius / distance)², the light's
+// brightness times its projected size (capped once the camera is inside the sphere); ties keep
+// submission order. Tiles go out greedily in that order (6 for a point light, 1 for a spot) until
+// the atlas or `max_lights` runs out: a point light that no longer fits leaves room for later spots.
+void Scene3D::build_local_shadows() {
+    const LocalShadowSettings& ls = local_shadows_;
+    const u32 res = max(shadow_settings_.resolution, 1u);
+    const u32 tile = clamp(ls.tile, 16u, res);
+    const u32 per_row = res / tile;
+    const u32 capacity = per_row * per_row * ls.layers;
+    struct Candidate {
+        f32 score;
+        u32 light;
+    };
+    Array<Candidate> cand(*alloc_);
+    for (u32 i = 0; i < point_lights_.size(); ++i) {
+        const PointLight& l = point_lights_[i];
+        if (!l.cast_shadows || !(l.intensity > 0.0f) || l.radius <= 0.0f) continue;
+        if (!sphere_visible(view_, l.position, l.radius)) continue;  // lights nothing on screen
+        const vec3 c = l.color * l.intensity;
+        const f32 luma = 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z;
+        const f32 size = min(l.radius / max(length(l.position - view_.position), 1e-3f), 2.0f);
+        cand.push_back({luma * size * size, i});
+    }
+    // Stable insertion sort by descending score (a handful of shadowed lights per frame).
+    for (u32 i = 1; i < cand.size(); ++i) {
+        const Candidate c = cand[i];
+        u32 j = i;
+        for (; j > 0 && cand[j - 1].score < c.score; --j) cand[j] = cand[j - 1];
+        cand[j] = c;
+    }
+    const f32 texel_ndc = 2.0f / f32(tile);
+    // Cube faces see a little past 90° so a PCF footprint at a face edge stays inside the face's tile.
+    const f32 face_tan = 1.0f / max(1.0f - 5.0f / f32(tile), 0.5f);
+    static const vec3 kFaceDir[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    static const vec3 kFaceUp[6] = {{0, -1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0}};
+    u32 used = 0;
+    for (const Candidate& c : cand) {
+        const PointLight& l = point_lights_[c.light];
+        const bool spot = l.spot_outer > 0.0f;
+        const u32 need = spot ? 1u : 6u;
+        if (stats_.local_shadow_lights >= ls.max_lights || used + need > capacity) {
+            ++stats_.local_shadows_dropped;
+            continue;
+        }
+        const f32 zn = clamp(l.radius * 0.01f, 0.02f, 0.5f);
+        const u32 first_record = static_cast<u32>(local_tiles_.size());
+        for (u32 f = 0; f < need; ++f) {
+            LocalShadowTile t;
+            vec3 dir, up;
+            f32 tan_half;
+            if (spot) {
+                dir = normalize(l.direction);
+                if (!(length_sq(dir) > 0.0f)) dir = {0, -1, 0};
+                up = std::fabs(dir.y) > 0.99f ? vec3{0, 0, 1} : vec3{0, 1, 0};
+                tan_half = std::tan(min(l.spot_outer, 1.45f));
+            } else {
+                dir = kFaceDir[f];
+                up = kFaceUp[f];
+                tan_half = face_tan;
+            }
+            t.view_proj = perspective_rh_no(2.0f * std::atan(tan_half), 1.0f, zn, l.radius) * look_at_rh(l.position, l.position + dir, up);
+            const u32 slot = used + f;
+            const u32 in_layer = slot % (per_row * per_row);
+            t.layer = slot / (per_row * per_row);
+            t.rect = rhi::Rect2D{i32((in_layer % per_row) * tile), i32((in_layer / per_row) * tile), tile, tile};
+            t.light = c.light;
+            t.texel_scale = tan_half * texel_ndc;
+            // Casters: bounding sphere vs the tile's frustum (Gribb-Hartmann planes, unnormalized
+            // distance scaled by the plane normal's length).
+            const mat4& m = t.view_proj;
+            const vec4 r0 = m.row(0), r1 = m.row(1), r2 = m.row(2), r3 = m.row(3);
+            const vec4 planes[6] = {r3 + r0, r3 - r0, r3 + r1, r3 - r1, r3 + r2, r3 - r2};
+            t.first_caster = static_cast<u32>(local_casters_.size());
+            for (u32 di = 0; di < shadow_draws_.size(); ++di) {
+                const Draw& d = shadow_draws_[di];
+                bool inside = true;
+                for (const vec4& p : planes)
+                    if (dot(p.xyz(), d.center) + p.w < -d.radius * length(p.xyz())) {
+                        inside = false;
+                        break;
+                    }
+                if (inside) local_casters_.push_back(di);
+            }
+            t.caster_count = static_cast<u32>(local_casters_.size()) - t.first_caster;
+            local_tiles_.push_back(t);
+        }
+        used += need;
+        clusters_.set_shadow(c.light, first_record, need);
+        ++stats_.local_shadow_lights;
+    }
+    stats_.local_shadow_tiles = static_cast<u32>(local_tiles_.size());
+    stats_.local_shadow_casters = static_cast<u32>(local_casters_.size());
 }
 
 }  // namespace mce::render
