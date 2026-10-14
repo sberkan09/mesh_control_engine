@@ -16,6 +16,8 @@
     mce story compile [<project>] [--check] [--werror]   compile story/*.story (story/story.json) into the
                                                 game's C++ header (mce/kit/novel.h) and story/REPORT.md
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
+    mce friction [<project>...] [--out file] [--json]   collect the agents' friction notes (friction.jsonl,
+                                                written by the MCP tool report_friction) into one backlog
     mce update [<project>...] [--release [tag]] [--no-pull]  reinstall this SDK from where it came from, then rebuild
                                                 the projects named (their modules must match the new engine)
     mce version                                 the SDK's version and engine build stamp
@@ -294,6 +296,8 @@ def cmd_ship(args):
     for name, src in files.items():
         if not src.is_file():
             sys.exit(f"mce: {src} is missing")
+    if (p.dir / "CREDITS.md").is_file():  # content attribution travels with the game
+        files["CREDITS.md"] = p.dir / "CREDITS.md"
     version_txt = (f"version {version}\nengine {stamp}\nname {p.title}\n" +
                    "".join(f"file {n}\n" for n in files))
     readme = (f"{p.title}\n\nRun {p.name}{EXE}. The game module, the engine library and the cooked pack\n"
@@ -301,12 +305,87 @@ def cmd_ship(args):
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
         for name, src in files.items():
             info = zipfile.ZipInfo.from_file(src, f"{p.name}/{name}")
-            info.external_attr = (0o755 << 16) if name != "assets.mce" else (0o644 << 16)
+            info.external_attr = (0o644 << 16) if name in ("assets.mce", "CREDITS.md") else (0o755 << 16)
             with open(src, "rb") as f:
                 z.writestr(info, f.read(), compress_type=zipfile.ZIP_DEFLATED)
         z.writestr(f"{p.name}/VERSION.txt", version_txt)
         z.writestr(f"{p.name}/README.txt", readme)
     print(f"mce: wrote {zip_path} ({zip_path.stat().st_size // 1024} KiB)")
+    return 0
+
+
+SEVERITIES = ("blocking", "major", "minor")
+
+
+def read_friction(project_dir):
+    """The notes in <project>/friction.jsonl; lines that do not parse are skipped (and counted)."""
+    path = pathlib.Path(project_dir) / "friction.jsonl"
+    notes, bad = [], 0
+    if not path.is_file():
+        return notes, bad
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            n = json.loads(line)
+        except ValueError:
+            bad += 1
+            continue
+        if isinstance(n, dict) and n.get("summary") and n.get("area"):
+            notes.append(n)
+        else:
+            bad += 1
+    return notes, bad
+
+
+def friction_backlog(groups, version):
+    """Markdown: blocking first, then by how many notes an area has."""
+    out = [f"# Friction backlog\n", f"Collected by mce {version} from {len(groups)} project(s).\n"]
+    notes = [(proj, n) for proj, ns in groups for n in ns]
+    if not notes:
+        out.append("No friction notes.\n")
+        return "\n".join(out)
+    for sev in SEVERITIES:
+        of_sev = [(proj, n) for proj, n in notes if n.get("severity", "major") == sev]
+        if not of_sev:
+            continue
+        out.append(f"## {sev} ({len(of_sev)})\n")
+        areas = {}
+        for proj, n in of_sev:
+            areas.setdefault(n["area"], []).append((proj, n))
+        for area, items in sorted(areas.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+            out.append(f"### {area} ({len(items)})\n")
+            for proj, n in items:
+                line = f"- {n['summary']} ({proj}, {n.get('agent', '?')}"
+                line += f", {n['tool']})" if n.get("tool") else ")"
+                out.append(line)
+                for key in ("expected", "actual", "workaround", "details"):
+                    if n.get(key):
+                        out.append(f"  - {key}: {n[key]}")
+            out.append("")
+    return "\n".join(out)
+
+
+def cmd_friction(args):
+    groups, bad_total = [], 0
+    for d in args.projects or ["."]:
+        if not pathlib.Path(d).is_dir():
+            sys.exit(f"mce: {d} is not a folder")
+        notes, bad = read_friction(d)
+        bad_total += bad
+        groups.append((pathlib.Path(d).resolve().name, notes))
+    if bad_total:
+        print(f"mce: skipped {bad_total} line(s) that are not friction notes", file=sys.stderr)
+    if args.json:
+        text = json.dumps([dict(n, project=proj) for proj, ns in groups for n in ns], indent=2) + "\n"
+    else:
+        text = friction_backlog(groups, sdk_version()[0])
+    if args.out:
+        pathlib.Path(args.out).write_text(text, encoding="utf-8")
+        count = sum(len(ns) for _, ns in groups)
+        print(f"mce: wrote {args.out} ({count} note(s))")
+    else:
+        sys.stdout.write(text)
     return 0
 
 
@@ -432,6 +511,12 @@ def main(argv):
     s.add_argument("--out")
     s.add_argument("--version")
     s.set_defaults(fn=cmd_ship)
+
+    s = sub.add_parser("friction", help="collect the friction notes agents wrote (report_friction) into a backlog")
+    s.add_argument("projects", nargs="*", help="project folders (default: the current folder)")
+    s.add_argument("--out", help="write the backlog to this file instead of stdout")
+    s.add_argument("--json", action="store_true", help="the notes as one JSON array, each with its project")
+    s.set_defaults(fn=cmd_friction)
 
     s = sub.add_parser("update", help="reinstall this SDK from its checkout (git pull) or the latest release")
     s.add_argument("projects", nargs="*", help="projects to rebuild afterwards")

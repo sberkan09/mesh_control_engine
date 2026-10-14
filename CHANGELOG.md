@@ -5,6 +5,18 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Friction notes, M-AGENT step 8 (SBA-55): `report_friction` lets an agent write down what the engine made hard
+  (summary, area, severity, expected, actual, workaround) as a line in the project's `friction.jsonl`, and
+  `mce friction <projects...>` collects the notes into one Markdown backlog (or JSON), blocking ones first.
+- Several agents on one project, M-AGENT step 7 (SBA-54): each agent runs its own MCP server (`--agent <name>`)
+  on the same folder. `project_watch` reads the event feed (`.mce/events.jsonl`), `asset_lock` refuses other
+  agents' writes to a file, `task_add` / `task_claim` / `task_update` share `tasks.mctasks`, and `scene_switch`
+  keeps several scenes open. `scene_save` merges another agent's save of the same scene by entity and refuses
+  with the conflicts (or settles them with `resolve`) instead of overwriting.
+- Quality gates for agents, M-AGENT step 6 (SBA-53): `project_check` returns findings with a fix for cook
+  errors, broken and unused references, missing credits, sRGB on data textures, each scene's sim time per tick
+  against a budget, and 2D text size and contrast; `ship_build` runs the full build, a headless smoke run of the
+  host and `mce ship`, and returns the zip's path. `mce ship` now puts the project's `CREDITS.md` in the zip.
 - Projects on phones (M-MOBILE, SBA-30): `scripts/ship.py --project <dir> --target android|ios` builds a project
   made from the templates for phones. Its pack is cooked by the host build's `<game>_cook`
   (`MCE_HOST_BUILD_DIR`, which `ship.py` passes after building it on `--host-preset`); a cross build no longer

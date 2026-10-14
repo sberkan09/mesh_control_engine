@@ -18,6 +18,9 @@ mce_add_library(mce_mcp_core UMBRELLA
         src/server.cpp
         src/tools.cpp
         src/tools_agent.cpp
+        src/tools_check.cpp
+        src/tools_team.cpp
+        src/tools_friction.cpp
         src/tools_code.cpp
         src/tools_content.cpp
         src/tools_docs.cpp

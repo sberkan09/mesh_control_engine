@@ -96,3 +96,26 @@ mce_add_test(test_mcp_content UMBRELLA
 target_include_directories(test_mcp_content PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
 target_compile_definitions(test_mcp_content PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_content"
     MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
+# project_check against planted problems; ship_build's refusals (its zip is checked in tests/sdk).
+mce_add_test(test_mcp_check UMBRELLA
+    SOURCES
+        test_mcp_check.cpp
+    DEPS
+        mce::mce_mcp_core
+        mce::mce_platform)
+target_include_directories(test_mcp_check PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_compile_definitions(test_mcp_check PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_check"
+    MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
+# Several agents on one project: scene merge, locks, tasks, the event feed, scene_switch. The
+# merge's unit cases include the server's private tools_team.h.
+mce_add_test(test_mcp_team UMBRELLA
+    SOURCES
+        test_mcp_team.cpp
+    DEPS
+        mce::mce_mcp_core
+        mce::mce_platform)
+target_include_directories(test_mcp_team PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset ${PROJECT_SOURCE_DIR}/src/editor/mcp/src)
+target_compile_definitions(test_mcp_team PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_team"
+    MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")

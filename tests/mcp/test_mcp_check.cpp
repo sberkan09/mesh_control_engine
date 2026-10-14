@@ -1,0 +1,126 @@
+// project_check and ship_build's refusals (ROADMAP M-AGENT step 6) in process against a copy of the
+// scene_demo project with problems planted in it. ship_build's happy path needs an installed SDK and
+// runs in tests/sdk/sdk_test.cmake.
+
+#include <doctest/doctest.h>
+
+#include <filesystem>
+#include <string>
+
+#include "mcp_client.h"
+
+using namespace mce;
+using namespace mcp_client;
+using namespace cook_test;
+
+namespace {
+
+const std::string kDemoAssets = std::string(MCE_SOURCE_DIR) + "/samples/scene_demo/assets";
+
+std::string demo_project(const char* name) {
+    const std::string root = fresh_dir(name);
+    std::filesystem::copy(kDemoAssets, root + "/assets", std::filesystem::copy_options::recursive);
+    return root;
+}
+
+// The findings of one check, as "severity file: message" lines.
+std::string findings(const Client::Tool& t, const std::string& check) {
+    std::string s;
+    const cook::JsonValue f = t.v().get("findings");
+    for (u32 i = 0; i < f.size(); ++i)
+        if (str(f.at(i).get("check")) == check)
+            s += str(f.at(i).get("severity")) + " " + str(f.at(i).get("file")) + ": " + str(f.at(i).get("message")) + "\n";
+    return s;
+}
+
+}  // namespace
+
+TEST_CASE("project_check: a clean project passes; credits, unused and the per-tick budget are reported") {
+    const std::string root = demo_project("mcp_check_clean");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    auto t = c.ok("project_check", R"({"ticks":30})");
+    CHECK(t.v().get("pass").as_bool());
+    CHECK(t.v().get("errors").as_number() == 0);
+    // No CREDITS.md: every media file is named.
+    const std::string credits = findings(t, "credits");
+    CHECK(credits.find("warning assets/textures/ball.png: the project has no CREDITS.md") != std::string::npos);
+    CHECK(credits.find("assets/fonts/ProggyClean.ttf") != std::string::npos);
+    CHECK(findings(t, "accessibility").empty());  // the title is 32 px, light on dark
+    const cook::JsonValue perf = t.v().get("performance");
+    REQUIRE(perf.size() == 1);
+    CHECK(str(perf.at(0).get("scene")) == "scenes/demo.mcscene");
+    CHECK(perf.at(0).get("ok").as_bool());
+    CHECK(perf.at(0).get("ticks").as_number() == 30);
+    CHECK(perf.at(0).get("entities").as_number() >= 6);
+
+    // A CREDITS.md that covers the textures by a pattern and the font by name.
+    write_file(root + "/CREDITS.md",
+               "# credits\n\n| Files | Source | License |\n|---|---|---|\n| `assets/textures/*.png` | drawn | CC0 |\n"
+               "| `assets/fonts/ProggyClean.ttf` | Tristan Grimmer | MIT |\n");
+    auto t2 = c.ok("project_check", R"({"checks":["credits","unused"]})");
+    CHECK(findings(t2, "credits").empty());
+    CHECK_FALSE(t2.v().get("performance").valid());
+    CHECK(t2.v().get("checks").get("cook").valid() == false);
+
+    // An asset nothing references.
+    write_file(root + "/assets/textures/spare.png", make_png(2, 2, std::vector<u8>(16, 255)));
+    c.ok("cook_run", R"({"adopt":true})");
+    auto t3 = c.ok("project_check", R"({"checks":["unused","credits"]})");
+    CHECK(findings(t3, "unused") == "info assets/textures/spare.png: no scene, prefab, material, model or project source references this asset\n");
+    CHECK(findings(t3, "credits").empty());  // covered by the *.png row
+
+    // A budget nothing meets.
+    auto slow = c.ok("project_check", R"({"checks":["performance"],"ticks":5,"budget_ms":0.000001})");
+    CHECK(findings(slow, "performance").find("warning assets/scenes/demo.mcscene: the sim takes") == 0);
+    CHECK(slow.v().get("pass").as_bool());  // warnings do not fail it
+
+    CHECK(c.fails("project_check", R"({"checks":["speling"]})").find("'checks'") != std::string::npos);
+    CHECK(c.fails("project_check", R"({"budget_ms":0})").find("'budget_ms'") != std::string::npos);
+}
+
+TEST_CASE("project_check: broken references fail it; sRGB data textures and unreadable text are flagged with a fix") {
+    const std::string root = demo_project("mcp_check_problems");
+    // A scene whose sprite names a texture that does not exist, small low-contrast text, a normal map imported as sRGB.
+    write_file(root + "/assets/scenes/hud.mcscene", R"({
+  "format": "mce-scene", "version": 1, "guid": "5ce4e000-0000-4000-8000-0000000000a1", "name": "hud",
+  "entities": [
+    { "id": 1, "name": "Camera", "components": { "Camera2DComponent": { "pixels_per_meter": 40, "clear_color": [0.1, 0.1, 0.1, 1] } } },
+    { "id": 2, "name": "Hint", "components": { "LocalTransform": {}, "TextLabel": { "font": "guid:5ce4e000-0000-4000-8000-000000000010", "text": "hi", "color": [0.2, 0.2, 0.2, 1], "height": 0.2 } } },
+    { "id": 3, "name": "Ghost", "components": { "LocalTransform": {}, "Sprite": { "texture": "guid:5ce4e000-0000-4000-8000-0000000000ff" } } }
+  ]
+}
+)");
+    write_file(root + "/assets/textures/rock_normal.png", make_png(2, 2, std::vector<u8>(16, 128)));
+    write_file(root + "/assets/textures/rock_normal.png.mceasset", sidecar("5ce4e000-0000-4000-8000-0000000000a3", "texture"));
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    auto t = c.ok("project_check", R"({"ticks":10})");
+    CHECK_FALSE(t.v().get("pass").as_bool());
+    CHECK(t.v().get("errors").as_number() >= 1);
+    // The broken GUID is an error, from the cook or the reference scan, naming the scene.
+    const cook::JsonValue first = t.v().get("findings").at(0);
+    CHECK(str(first.get("severity")) == "error");
+    CHECK(str(first.get("file")) == "assets/scenes/hud.mcscene");
+
+    const std::string srgb = findings(t, "srgb");
+    CHECK(srgb.find("warning assets/textures/rock_normal.png: the name says data") != std::string::npos);
+    const std::string a11y = findings(t, "accessibility");
+    CHECK(a11y.find("Hint: text is 8.0 px high") != std::string::npos);
+    CHECK(a11y.find("Hint: text contrast against the background colour is 1.") != std::string::npos);
+    // The fix it names works.
+    c.ok("asset_set_import_settings", R"({"path":"textures/rock_normal.png","settings":{"srgb":false}})");
+    CHECK(findings(c.ok("project_check", R"({"checks":["srgb"]})"), "srgb").empty());
+}
+
+TEST_CASE("ship_build: refused without a game module or outside an SDK") {
+    const std::string root = demo_project("mcp_check_ship");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    CHECK(c.fails("ship_build").find("no game module is loaded") != std::string::npos);
+    CHECK(c.fails("ship_build", R"({"version":"1 0"})").find("'version'") != std::string::npos);
+    CHECK(c.fails("ship_build", R"({"out":"../x"})").find("'out'") != std::string::npos);
+}

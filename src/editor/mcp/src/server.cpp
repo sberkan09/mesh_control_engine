@@ -1,10 +1,12 @@
 #include "mce/mcp/server.h"
 
 #include "mce/asset/xxhash.h"
+#include "mce/cook/cook.h"
 #include "mce/cook/fs.h"
 #include "mce/editor/play_session.h"
 #include "tools.h"
 #include "tools_docs.h"
+#include "tools_team.h"
 
 namespace mce::mcp {
 
@@ -24,7 +26,8 @@ constexpr const char* kInstructions =
     "\"guid:<uuid>\", entity references as \"$<entity id>\", enums by name). Edits stay in memory until "
     "scene_save. Verify with cook_run, cook_errors and run_headless (deterministic: same scene + ticks = same "
     "state_hash). Docs, samples and examples: mce://docs/index, docs_search; what is data and what needs code: "
-    "engine_capabilities; prompts start_game, add_level, polish_pass.";
+    "engine_capabilities; prompts start_game, add_level, polish_pass. Something the engine made hard: "
+    "report_friction.";
 
 bool valid_id(cook::JsonValue id) { return id.is_string() || (id.is_number() && id.is_integer()); }
 
@@ -183,6 +186,15 @@ void Server::request(cook::JsonValue id, StringView method, cook::JsonValue para
         for (const char* v : kSupportedVersions)
             if (want.is_string() && want.as_string() == v) version = v;
         initialize_seen_ = true;
+        if (opt_.agent && *opt_.agent) {
+            agent_ = cook::String(opt_.agent);
+        } else {
+            // The client's name and a short id: two sessions of one client stay apart.
+            const cook::JsonValue info = params.valid() ? params.get("clientInfo") : cook::JsonValue();
+            const cook::JsonValue cname = info.is_object() ? info.get("name") : cook::JsonValue();
+            agent_ = cook::String(cname.is_string() && !cname.as_string().empty() ? cname.as_string().substr(0, 40) : StringView("agent"));
+            cook::appendf(agent_, "-%04x", static_cast<unsigned>(cook::generate_guid().lo & 0xFFFF));
+        }
         w.begin_object();
         w.key("protocolVersion").str(version);
         w.key("capabilities").begin_object();
@@ -273,7 +285,11 @@ void Server::call_tool(cook::JsonValue id, cook::JsonValue params) {
     const StringView tool_name(tool->name);
     const bool group = tool_name != "scene_undo" && tool_name != "scene_redo";
     if (group) session_.scene().begin_edit(tool_name);
-    const bool ok = tool->fn(call);
+    // Several agents on one project: a file another agent locked is refused, and every write is
+    // told to the project's event feed (tools_team.cpp).
+    bool ok = team_before_tool(call, tool_name);
+    if (ok) ok = tool->fn(call);
+    if (ok) team_after_tool(call, tool_name);
     if (group) session_.scene().end_edit();
     MCE_ASSERT_MSG(!ok || (out.depth() == 0 && !structured.empty()), "tool wrote an incomplete result");
 

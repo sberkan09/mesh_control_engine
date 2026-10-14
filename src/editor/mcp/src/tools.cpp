@@ -7,6 +7,7 @@
 #include "agent_sim.h"
 #include "tools_docs.h"
 #include "tool_args.h"
+#include "tools_team.h"
 
 #include <algorithm>
 #include <cstring>
@@ -653,8 +654,9 @@ bool scene_save(ToolCall& c) {
         if (file.rel.empty()) return fail(c, "the scene was never saved: pass 'path' (under assets/)");
         abs = session.project().asset_path(file.rel.view());
         const u64 on_disk = file_content_hash(abs.view());
-        if (file.disk_hash != 0 && on_disk != file.disk_hash && !force)
-            return fail(c, "the file changed on disk since it was opened or saved: scene_open it again, or pass force: true to overwrite");
+        // Another agent saved it meanwhile: merge their edits into ours by entity (tools_team.cpp),
+        // or refuse with the conflicts; force overwrites theirs.
+        if (file.disk_hash != 0 && on_disk != file.disk_hash && !force && !merge_scene_from_disk(c, abs.view())) return false;
         if (Result<void> r = session.save_scene(); !r) {
             FixedString<512> msg;
             format_error(r.error(), msg);
@@ -662,6 +664,8 @@ bool scene_save(ToolCall& c) {
         }
     }
     file.disk_hash = file_content_hash(abs.view());
+    file.base.clear();
+    (void)cook::fs::read_text(abs.view(), file.base);
     write_scene_summary(c);
     return true;
 }
@@ -1173,10 +1177,13 @@ const ToolDef kTools[] = {
      scene_open},
     {"scene_save",
      "Save the scene (atomic write; entity ids are saved with it). With 'path' (under assets/): save as, with a "
-     "fresh GUID for a new file. 'name' renames the scene. Refuses to overwrite a file that changed on disk since "
-     "it was opened, or another existing file, unless force (an overwritten file keeps its GUID). A path ending in "
-     ".mcprefab saves the document as a prefab (entity 0 is the root; prefab_create_from makes one from an entity).",
-     R"({"type":"object","properties":{"path":{"type":"string"},"name":{"type":"string","description":"New scene name"},"force":{"type":"boolean"}}})", scene_save},
+     "fresh GUID for a new file. 'name' renames the scene. When another agent saved the file since it was opened, "
+     "their edits are merged in entity by entity; edits to the same component of an entity conflict and nothing is "
+     "written unless resolve picks a side. Refuses to overwrite another existing file unless force (an overwritten "
+     "file keeps its GUID; force skips the merge). A path ending in .mcprefab saves the document as a prefab "
+     "(entity 0 is the root; prefab_create_from makes one from an entity).",
+     R"({"type":"object","properties":{"path":{"type":"string"},"name":{"type":"string","description":"New scene name"},"force":{"type":"boolean"},)"
+     R"("resolve":{"type":"string","enum":["ours","theirs"],"description":"How merge conflicts are settled"}}})", scene_save},
     {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
      scene_undo},
     {"scene_redo", "Redo the last undone scene edit.", kNoArgs, scene_redo},
@@ -1251,7 +1258,9 @@ bool open_scene_file(Server& server, StringView rel, cook::String& err) {
         append_diags(err, session.scene_diags(), 10);
         return false;
     }
-    server.scene_file() = Server::SceneFile{cook::String(rel), file_content_hash(abs.view())};
+    cook::String base;
+    (void)cook::fs::read_text(abs.view(), base);
+    server.scene_file() = Server::SceneFile{cook::String(rel), file_content_hash(abs.view()), static_cast<cook::String&&>(base)};
     return true;
 }
 

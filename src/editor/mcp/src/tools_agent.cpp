@@ -161,6 +161,81 @@ const ToolDef kAgentTools[] = {
      R"j({"type":"object","properties":{"id":{"type":"string"},"path":{"type":"string","description":"A folder under assets/ ending in '/', or the main file's new path"},)j"
      R"j("overwrite":{"type":"boolean","default":false}},"required":["id"]})j",
      library_add},
+    {"project_check",
+     "Check the project before shipping and get findings to act on, each with severity, file, line, message and a fix: "
+     "cook (assets and scenes that fail to import), references (GUIDs no asset has), unused (assets nothing references), "
+     "credits (media files with no CREDITS.md row), srgb (data textures imported as sRGB, colour textures as linear), "
+     "performance (each scene run headless: ms per tick against budget_ms) and accessibility (2D text height in pixels "
+     "on a 1280x720 screen and its contrast against the background). pass is true when there is no error.",
+     R"j({"type":"object","properties":{"checks":{"type":"array","items":{"type":"string","enum":["cook","references","unused","credits","srgb","performance","accessibility"]},"description":"Run only these (default all)"},)j"
+     R"j("ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300,"description":"Ticks per scene for the performance check"},)j"
+     R"j("budget_ms":{"type":"number","exclusiveMinimum":0,"maximum":1000,"default":4,"description":"Average sim milliseconds per tick allowed"},)j"
+     R"j("max_findings":{"type":"integer","minimum":1,"maximum":2000,"default":200}}})j",
+     project_check},
+    {"ship_build",
+     "Make the release zip: the project's full CMake build (host, game module and the cooked pack; the module is mapped "
+     "again), a smoke run of the host headless for 'ticks' ticks, then the SDK's `mce ship` (host, module, engine "
+     "library, assets.mce, CREDITS.md). Returns each stage and the zip's path; ok is false with the stage that failed "
+     "and the end of its output. Needs the server of an installed SDK (mce mcp <project>).",
+     R"j({"type":"object","properties":{"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"build":{"type":"boolean","default":true,"description":"Run the full build first (false: ship what is built)"},)j"
+     R"j("version":{"type":"string","description":"Version in the zip's name (default: the .mceproj's, else the SDK's)"},"out":{"type":"string","description":"Folder inside the project for the zip (default dist/)"}}})j",
+     ship_build},
+    {"project_watch",
+     "What the other agents on this project did: the event feed (.mce/events.jsonl), one event per write with agent, "
+     "tool, path and time, numbered by seq. Pass the last call's next as since to get only new events; others: true "
+     "leaves out your own. agent is your name (--agent, else the client's name and a suffix).",
+     R"j({"type":"object","properties":{"since":{"type":"integer","minimum":0,"default":0},"limit":{"type":"integer","minimum":1,"maximum":500,"default":50},)j"
+     R"j("others":{"type":"boolean","default":false}}})j",
+     project_watch},
+    {"asset_lock",
+     "Lock a file under assets/ (a scene, prefab, material, texture...) so other agents' writes to it are refused "
+     "until you unlock it or the lock's ttl runs out. Locking a file you hold refreshes it; an expired lock is taken over.",
+     R"j({"type":"object","properties":{"path":{"type":"string","description":"Path under assets/, e.g. scenes/level1.mcscene"},"note":{"type":"string","description":"What you are doing, shown to the others"},)j"
+     R"j("ttl":{"type":"integer","minimum":10,"maximum":604800,"default":1800,"description":"Seconds until the lock expires"}},"required":["path"]})j",
+     asset_lock},
+    {"asset_unlock",
+     "Release a lock you hold. force: true breaks another agent's lock (the feed records it).",
+     R"j({"type":"object","properties":{"path":{"type":"string"},"force":{"type":"boolean","default":false}},"required":["path"]})j",
+     asset_unlock},
+    {"asset_locks", "List the project's asset locks: path, agent, since, ttl, note and whether each expired.",
+     R"j({"type":"object","properties":{}})j", asset_locks},
+    {"task_list",
+     "The project's shared task list (tasks.mctasks): id, title, status (open, claimed, done, blocked), owner, notes, "
+     "depends and files, with counts per status.",
+     R"j({"type":"object","properties":{"status":{"type":"string","enum":["open","claimed","done","blocked"]}}})j",
+     task_list},
+    {"task_add",
+     "Add a task to the shared list. depends: ids of tasks that must be done before it can be claimed; files: the "
+     "assets it will touch, so others know.",
+     R"j({"type":"object","properties":{"title":{"type":"string"},"notes":{"type":"string"},"depends":{"type":"array","items":{"type":"integer"}},)j"
+     R"j("files":{"type":"array","items":{"type":"string"}}},"required":["title"]})j",
+     task_add},
+    {"task_claim",
+     "Claim a task: it becomes yours (status claimed). Without id, the first open task whose dependencies are done. Two "
+     "agents never get the same task.",
+     R"j({"type":"object","properties":{"id":{"type":"integer","minimum":1}}})j", task_claim},
+    {"task_update",
+     "Change a task's status (done, blocked, or open to give it back) and append a note signed with your name. Only "
+     "the owner changes a claimed task's status.",
+     R"j({"type":"object","properties":{"id":{"type":"integer","minimum":1},"status":{"type":"string","enum":["open","claimed","done","blocked"]},)j"
+     R"j("notes":{"type":"string"}},"required":["id"]})j",
+     task_update},
+    {"scene_switch",
+     "Make another scene the open one, keeping the current one open in the background with its unsaved edits; "
+     "switching back restores them. scene_save saves the current scene.",
+     R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/"}},"required":["path"]})j",
+     scene_switch},
+    {"scene_documents", "The scenes this server has open: the current one and the ones scene_switch parked, each with dirty.",
+     R"j({"type":"object","properties":{}})j", scene_documents},
+    {"report_friction",
+     "Write down something the engine made hard (a missing tool, a confusing error, a doc that was wrong, a "
+     "workaround you had to invent) as a note in the project's friction.jsonl, so the engine's developers fix it. "
+     "Call it when it happens, before working around it. blocking: you could not finish without a workaround.",
+     R"j({"type":"object","properties":{"summary":{"type":"string","description":"One line: what was hard"},"area":{"type":"string","description":"The tool or engine area, e.g. render_frame, physics2d, docs"},)j"
+     R"j("severity":{"type":"string","enum":["blocking","major","minor"],"default":"major"},"tool":{"type":"string","description":"The tool call that hit it"},)j"
+     R"j("expected":{"type":"string"},"actual":{"type":"string"},"workaround":{"type":"string","description":"What you did instead"},"details":{"type":"string"}},)j"
+     R"j("required":["summary","area"]})j",
+     report_friction},
 };
 
 #undef MCE_SAVE_PROPS

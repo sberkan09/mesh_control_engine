@@ -82,7 +82,7 @@ each result's `content[0].text` is the tool's JSON).
 | Undo | `scene_undo`, `scene_redo` | | one `tools/call` is one step; shared with the editor's history |
 | Persist | `scene_new` | `name`, `force?` | fresh GUID, unsaved |
 | | `scene_open` | `path`, `force?` | path under `assets/`; a `.mcprefab` opens the prefab itself (entity 0 is its root) |
-| | `scene_save` | `path?`, `name?`, `force?` | atomic; a `.mcprefab` path saves a prefab; `name` renames the scene; refuses to overwrite a file changed on disk, or another existing file, unless `force` |
+| | `scene_save` | `path?`, `name?`, `force?`, `resolve?` | atomic; a `.mcprefab` path saves a prefab; `name` renames the scene; a file another agent saved meanwhile is merged by entity (conflicts refuse unless `resolve` is `ours` or `theirs`); refuses to overwrite another existing file unless `force` |
 | Build | `cook_run` | `pack?`, `adopt?` | incremental; `adopt` writes sidecars for new source files |
 | | `cook_errors` | | last diagnostics with file, line, col |
 | | `asset_delete` | `path` | deletes a source file under `assets/` and its `.mceasset` sidecar (not the open scene) |
@@ -104,6 +104,12 @@ each result's `content[0].text` is the tool's JSON).
 | | `gen_music` | `seed?`, `bpm?` (120), `bars?` (8), `root?` (0 = C), `scale?` (major, minor, dorian, pentatonic, blues), `drums?`, `save?` (.wav) | a seamless loop of exactly `bars` bars (bass, chords, melody, drums), at most 60 s |
 | | `library_search` | `query?`, `kind?` (model, sound, music, font, texture, sprite, recipe), `license?`, `limit?` (20) | entries of the bundled content library with id, license, author and tags |
 | | `library_add` | `id`, `path?`, `overwrite?` | copies the entry into `assets/` (with the files it needs and a font's license text), or runs a recipe's generator (see "Content: generators and the library" below) |
+| Ship | `project_check` | `checks?`, `ticks?` (300), `budget_ms?` (4), `max_findings?` (200) | findings with severity, file, line, message and a fix: cook errors, broken and unused references, missing credits, sRGB on data textures, each scene's ms per tick against the budget, 2D text size and contrast; `pass` when there is no error |
+| | `ship_build` | `build?` (true), `ticks?` (300), `version?`, `out?` | full build, a headless smoke run of the host, then `mce ship`: each stage's result and the zip's path (needs the SDK's server, `mce mcp`) |
+| Team | `project_watch` | `since?`, `limit?` (50), `others?` | the other agents' writes from `.mce/events.jsonl`: seq, time, agent, tool, path; `next` for the next call |
+| | `asset_lock` / `asset_unlock` / `asset_locks` | `path`, `note?`, `ttl?` (1800 s) / `path`, `force?` / — | while you hold a lock, other agents' writes to that file are refused |
+| | `task_list` / `task_add` / `task_claim` / `task_update` | `status?` / `title`, `notes?`, `depends?`, `files?` / `id?` / `id`, `status?`, `notes?` | the shared `tasks.mctasks`; a claim is never granted twice, and waits for its dependencies |
+| | `scene_switch` / `scene_documents` | `path` / — | several scenes open at once, each keeping its unsaved edits |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
 
@@ -185,6 +191,28 @@ skies; rock, grass, sand, water and lava textures; tile sets; sprite sets; retro
 a generator. `library_add` copies an entry into `assets/` (models into `models/` with their shared
 `Textures/colormap.png`, fonts into `fonts/` with their license file), writes fresh sidecars and adds a
 `CREDITS.md` row with the author, the source and the license, so `mce ship` carries the credits.
+
+### Before shipping
+
+`project_check` is the review a person would do before a release, as data. Errors (an asset or scene that
+does not cook, a GUID no asset has, a scene that does not run) make `pass` false; warnings (a media file
+with no `CREDITS.md` row, a normal map or mask imported as sRGB, a scene over the per-tick budget, text under
+16 px on a 1280x720 screen or under 4.5:1 contrast against the camera's clear colour) and infos (an asset
+nothing references) do not. Each finding names the file and, where it can, the call that fixes it. Timing
+comes from the machine the server runs on, so treat the budget as a trend, not a gate. `ship_build` then
+makes the zip a player gets; `mce ship` puts `CREDITS.md` in it.
+
+### Several agents on one project
+
+Several agents can build one game at once, each with its own server on the same project folder (`mce mcp
+<project> --agent level-designer`; without `--agent` the name is the client's plus a short id). They meet in
+the folder: `project_watch` reads the event feed every write appends to, `task_add` and `task_claim` share
+the work through `tasks.mctasks`, and `asset_lock` keeps the others off a file while you rework it. No edit
+is silently lost: when two agents save the same scene, the second save merges the first one's changes in,
+entity by entity and component by component, gives a new entity whose id the other side also used a free
+id, and refuses with the list of conflicts when both changed the same component, until `resolve` picks a
+side. A prefab saved with `scene_save` merges the same way; a material or other file two agents both write is
+last-write-wins, so lock it first.
 
 ## 14.3 A workflow that works
 
@@ -296,7 +324,7 @@ that leaves it stuck at the same spot, is the first thing to look at with `rende
 | Adopted textures default to sRGB | normal maps and LUTs come out wrong | `asset_set_import_settings {"settings": {"srgb": false}}` |
 | `-frames` is ignored headless | a headless run uses `-ticks` | `-headless 1 -ticks N` |
 | `.mctest` entity by name after a prefab instance | refused: the cook expands a prefab into several entities, so later file positions shift | put prefab instances after the entities tests name, or give the scenario's checks entities that come first |
-| One open scene per server | editing variants means save-as and reopen | keep variants as separate files; `run_headless {"scene": ...}` plays a saved one without opening it |
+| One current scene per server | the edit tools work on the current scene only | `scene_switch` to the other one (its unsaved edits wait); `run_headless {"scene": ...}` plays a saved one without opening it |
 
 ## 14.5 What an agent cannot do yet
 
