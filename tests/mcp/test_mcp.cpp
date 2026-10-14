@@ -972,10 +972,11 @@ TEST_CASE("M-DATA-REACH demo: a 3D game made over MCP alone (a character control
     const cook::JsonValue ents = run.v().get("inspect").get("entities");
     REQUIRE(ents.size() == 9);  // in entity order: floor, six crates, hero, camera
     // The pile holds: every crate rests where it was stacked.
-    for (u32 i = 1; i <= 6; ++i) {
-        const cook::JsonValue body = ents.at(i).get("components");
+    const double rest_y[] = {0.5, 0.5, 0.5, 1.5, 1.5, 2.5};
+    for (u32 i = 0; i < 6; ++i) {
+        const cook::JsonValue body = ents.at(i + 1).get("components");
         CHECK(str(body.get("RigidBody3D").get("type")) == "Dynamic");
-        CHECK(body.get("LocalTransform").get("position").at(1).as_number() == doctest::Approx(0.5 + ((i - 1) / 3 + ((i - 1) >= 5 ? 1 : 0))).epsilon(0.01));
+        CHECK(body.get("LocalTransform").get("position").at(1).as_number() == doctest::Approx(rest_y[i]).epsilon(0.01));
     }
     // The hero fell onto the top crate and stands on it (capsule centre 0.9 m above its top at 3 m).
     const cook::JsonValue hero_c = ents.at(7).get("components");
