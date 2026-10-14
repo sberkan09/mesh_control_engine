@@ -16,10 +16,10 @@ a device or simulator run on the user's Mac.
 | 3 | `mce_rhi_sdlgpu` parity with GL: textures/arrays/MSAA/resolve, samplers incl. compare, MDI, storage data, readback; GPU tests run on both backends (`test_render_sdlgpu`, `MCE_RHI=sdlgpu`) | `local_ci.sh` + lavapipe | done (gaps below) |
 | 4 | Touch input (FR-INP-070): `Touch{Down,Move,Up}` platform events, touch state per tick in `mce_input`, touch bindings (virtual stick, buttons, tap/swipe), `mce_ui` hit-testing by touch, record/replay of touches | `local_ci.sh` (synthetic touch streams, determinism) | done |
 | 5 | App lifecycle (FR-RUN-100): background/foreground events, sim and audio pause, autosave on background, GPU surface loss and recreation, orientation and safe-area insets exposed to `mce_ui` | `local_ci.sh` (synthetic lifecycle events) | done (surface loss: device, step 6) |
-| 6 | Android: `android-arm64` presets (NDK toolchain), SDL's Java activity, Gradle wrapper project stamped by `scripts/ship.py --target android`, APK/AAB with the cooked pack in assets | emulator + a device, on the Mac | done on the emulator (no device attached) |
-| 7 | iOS: `ios-arm64` / `ios-sim-arm64` presets, Xcode project generation, the statically linked game module (`MCE_PROJECT_STATIC_MODULE`), signing, IPA from `scripts/ship.py --target ios` | simulator + a device, on the Mac | done in the Simulator (no device; Ninja app bundles instead of an Xcode project) |
-| 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | done except the per-tier device numbers (no device) |
-| 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | done on the emulator and the Simulator (no devices) |
+| 6 | Android: `android-arm64` presets (NDK toolchain), SDL's Java activity, Gradle wrapper project stamped by `scripts/ship.py --target android`, APK/AAB with the cooked pack in assets | emulator + a device, on the Mac | done on the emulator (no Android phone attached yet) |
+| 7 | iOS: `ios-arm64` / `ios-sim-arm64` presets, Xcode project generation, the statically linked game module (`MCE_PROJECT_STATIC_MODULE`), signing, IPA from `scripts/ship.py --target ios` | simulator + a device, on the Mac | done: Simulator, and a signed `.ipa` on an iPhone 11 (2026-10-14; Ninja app bundles instead of an Xcode project) |
+| 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | done; iPhone 11 numbers below (battery drain and an Android phone still open) |
+| 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | done on the emulator, the Simulator and an iPhone 11 (Android phone open) |
 | 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | done (store upload untested: no credentials) |
 | 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a–11f done in the cloud; 11c and 11d checked in the Simulator and the emulator (2026-10-14); 11a, 11b, 11e, 11f wait for a player game on phones (below) |
 
@@ -95,7 +95,23 @@ fine).
 | MSAA fallback | `rhi_sdlgpu` `create_texture` | a sample count the GPU lacks (the iOS Simulator has no 2x) falls back to the nearest it has, with a warning; pipelines follow the target |
 | ASTC textures | `mce_cook --textures astc`, `texture_importer.cpp` (astc-encoder 5.6.0, no-SIMD build with FP invariance), `asset::TextureFormat::ASTC_4x4`, `rhi` `ASTC_4x4_UNorm/SRGB` | phone builds cook ASTC 4x4 by default (`MCE_COOK_TEXTURES`); the texture storage is part of the cook DB key, so switching re-cooks; `test_cook` checks block sizes, the re-cook and byte-identical re-cooks. The diorama pack drops from 1.53 MB to 0.50 MB and renders the same in the Simulator and the emulator |
 
-**Numbers per tier: not measured on hardware.** On the emulator (MoltenVK on Apple M4) and the Simulator every tier
+**Numbers per tier on an iPhone 11** (A13, iOS 27.0.1, 2026-10-14, SBA-5; `04_diorama` with its slow orbit,
+5 minutes per tier, vsync on, `-platform.power_log 30`):
+
+| Tier | Frame rate | Thermal state (`NSProcessInfo`) |
+|---|---|---|
+| Low (MSAA 1x, 1024 shadows, 1 cascade, scale 0.67) | 60.0 fps (18000 frames / 300.0 s) | nominal → fair after 1 min → serious after 3 min |
+| Medium (MSAA 2x, scale 0.85) | 60.0 fps (300.0 s) | serious throughout (the phone was still hot) |
+| High (MSAA 4x, 2048 shadows, 3 cascades, scale 1.0) | 60.0 fps (300.2 s) | serious throughout |
+
+Every tier holds 60 fps with no dropped frames, so `auto` = Medium leaves headroom on a 2019 phone. The thermal
+column is dominated by charging: the phone was on the Mac's USB cable at 95% the whole time (the battery
+stayed at 95%, so no drain figure), and it reached "serious" on the Low tier already. A drain and
+cool-phone thermal run needs the phone unplugged (Wi-Fi debugging) and stays open, as does an Android phone.
+`platform::power_info()` (`mce/platform/power.h`, new here) reads the battery through SDL and the thermal
+state on iOS and macOS; `-platform.power_log <s>` logs both during a run.
+
+Before the device (2026-10-12): On the emulator (MoltenVK on Apple M4) and the Simulator every tier
 holds 60 fps because both present with vsync and the host GPU has headroom; `mce_rhi_sdlgpu` has no GPU timestamps
 (step 3 gap), and thermal and battery figures need a phone. The tier table above is the budget lever; filling in
 frame/thermal/battery numbers per tier waits for a device on the Mac (the one open item of this step).
@@ -107,6 +123,7 @@ frame/thermal/battery numbers per tier waits for a device on the Mac (the one op
 | Ember Step by touch | `samples/03_platformer/main.cpp` | the input map gains a floating stick (left half, `TouchStick`), JUMP and DASH buttons bottom right (`TouchZone`, held), a pause tap in the top-right corner, a tap on the right half to confirm in menus and the top-left corner to go back; once a finger touches the screen the HUD draws the buttons, the stick's base and knob, and touch help. Played with `adb shell input` on the emulator: the stick runs, the buttons jump |
 | Diorama by touch | `samples/04_diorama/main.cpp` | one finger orbits, two fingers pinch to zoom (window-normalized `Touch*` events) |
 | Soak, Android | Android 15 emulator (`-gpu host`) | Ember Step (`-autoplay 1`) and the diorama, 10 minutes each: same process throughout, PSS flat after the first minute (Ember Step 61.8 → 62.7 MB, diorama 68.4 → 68.4 MB), no fatal log line |
+| Soak, iPhone | iPhone 11 (iOS 27.0.1), signed `.ipa` (2026-10-14) | Ember Step (`-autoplay 1`, won the first level, review asked once) and the diorama, 10 minutes each (36000 frames / 600.0 s, 60.0 fps both), exit 0, no crash report; on the USB cable, thermal "serious" throughout |
 | Soak, iOS | iPhone 17 Pro Simulator (iOS 26) | Ember Step (`-autoplay 1`) and the diorama, 10 minutes each: same process throughout, no new crash report, resident memory falling after the first minutes (Ember Step 137 → 105 MB, diorama 196 → 161 MB) |
 
 Both games are playable by touch on the emulator and the Simulator. **Not done: the physical devices** the plan
@@ -319,16 +336,27 @@ player game, as 11a does.
 |---|---|
 | `local_ci_macos.sh android ios` on `dev_claude` | iOS passed; Android failed in Gradle since 11c (AndroidX, fixed above) |
 | Review prompt, haptics (11c, 11d) | checked in the Simulator and on the emulator (above) |
-| `ios-arm64` device build | every phone sample builds and links with the Swift bridges; no `.ipa` yet (no provisioning profile) |
-| Physical iPhone | an iPhone 11 is paired with this Mac but was not connected (`devicectl`: unavailable); the Mac has an Apple Development identity but no provisioning profile, so `ship.py --preset ios-arm64` cannot sign |
+| `ios-arm64` device build | every phone sample builds and links with the Swift bridges |
+| Physical iPhone | iPhone 11 (iOS 27.0.1) over USB, Xcode 27.0. Profiles: Xcode's automatic signing made "iOS Team Provisioning Profile" for `org.meshcontrol.sample-03-platformer` and `-04-diorama` (Sami's personal team, valid 7 days), through a throwaway Xcode project built with `-allowProvisioningUpdates`; `ship.py --target ios --preset ios-arm64` then signs the `.ipa` with `MCE_IOS_SIGN_IDENTITY` / `MCE_IOS_PROVISIONING_PROFILE`, and `xcrun devicectl device install app` installs it. The first launch needs the developer certificate trusted on the phone (Settings → General → VPN & Device Management). Both games run on the A13 GPU through Metal; numbers in step 8, soaks in step 9. Arguments go after `--` with `devicectl device process launch` (otherwise `-r.quality` is read as a devicectl flag) |
 | Physical Android phone | none attached (`adb devices` lists only the emulator) |
 | 11a, 11b, 11e, 11f on phones | blocked: these live in the player and the novel kit, and `ship.py --target android/ios` ships only the samples (`--project` refused); a phone build of a player game is the missing piece |
 | Store upload (step 10) | not run: a real TestFlight or Play internal-track upload is irreversible and waits for Sami's go-ahead and credentials |
 
-Still needed from Sami for the device rows: the iPhone connected and unlocked (developer mode on), a
-provisioning profile for the sample bundle ids (Xcode's automatic signing makes one), an Android phone with
-USB debugging, and, for the store step, the App Store Connect API key and the Play service account in the
-environment (`cmake/mobile/store.py`).
+Found and fixed on the way (Xcode 27 arrived mid-session):
+
+- **Ember Step crashed on quit in the Simulator** (`Mixer::mix_voice`, SIGSEGV, about one run in two): the
+  app's synthesized clips and music were freed while the audio device, which outlives the app, still mixed
+  them. `on_shutdown` now releases every clip it registered and waits for the mixer (`finish_releases`).
+  It shows now because the Simulator's audio opens on this Mac since Xcode 27.
+- **Metal validation failed every 3D sample** after M-VISUAL 2's IBL: with IBL off, `u_env`, `u_brdf_lut`
+  and `u_env_sh` were declared but unbound. `Forward3D` binds 1×1 stand-ins (a 2D array and a 2D) then.
+- **`solstice_reach_walk_gpu` ran past `-capture_tick 200`** under validation (slow frames caught up 202
+  ticks); the player now holds the sim on the capture tick until the capture frame.
+
+Still needed from Sami: an Android phone with USB debugging; the iPhone unplugged on Wi-Fi debugging for a
+battery-drain run; and, for the store step, the go-ahead plus the App Store Connect API key and the Play
+service account in the environment (`cmake/mobile/store.py`). The development profiles expire on
+2026-10-21; Xcode renews them the same way.
 
 ## Constraints found so far
 

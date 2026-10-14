@@ -12,6 +12,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 - Battery and thermal probe (M-MOBILE step 8): `platform::power_info()` (`mce/platform/power.h`) reports the
   battery (SDL, every platform) and the thermal state (iOS and macOS); `-platform.power_log <seconds>` logs it
   during a run, which is how device soaks record drain and heat.
+- Fixes found on Xcode 27 (SBA-5): Ember Step no longer crashes on quit when audio is playing (its clips are released
+  before the app goes), 3D scenes with IBL off pass Metal validation again, and `mce_player -capture_tick N`
+  holds the sim on tick N for the capture instead of running past it on slow frames.
 - Taps and clicks on dialogue, step 11f (M-MOBILE): a tap or click on a choice row picks it on the novel stage
   and the dialogue box, and a tap elsewhere reads on, through the input snapshot (replays and headless runs see
   it) with a `Selection` haptic. The stock map gains `Point` (left mouse), input scripts take `Touch=x,y` and
