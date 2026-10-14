@@ -43,6 +43,9 @@ struct Forward3DDesc {
     // Local-light shadow atlas layers after the cascades (M-VISUAL 4); keep
     // LocalShadowSettings::layers equal. 0 (or -r.local_shadows 0) draws every light unshadowed.
     u32 local_shadow_layers = 1;
+    // Temporal anti-aliasing resources (M-VISUAL 5); a scene turns it on with PostFx::taa. False
+    // (or -r.taa 0) keeps FXAA as the only anti-aliasing.
+    bool taa = true;
 };
 
 struct Forward3DStats {
@@ -63,6 +66,9 @@ struct Forward3DStats {
     u32 probe_draws = 0;        // draws of those captures, over all six faces
     bool ssao = false;          // this frame's ambient was darkened by screen-space ambient occlusion
     u32 ssao_draws = 0;         // the SSAO prepass's draws
+    bool taa = false;           // this frame went through the TAA resolve
+    bool taa_history = false;   // ... blending a valid history (false on the first frame or after a reset)
+    u32 velocity_draws = 0;     // the velocity prepass's draws
     u32 joints = 0;          // joint matrices uploaded for skinned meshes
     u32 bloom_levels = 0;
     bool fxaa = false;
@@ -73,13 +79,15 @@ struct Forward3DGpuTimes {
     u64 frame_index = ~u64(0);
     f64 clusters = -1;  // the GPU light assignment (0 when it ran on the CPU)
     f64 ssao = -1;      // prepass + occlusion + blur (0 when the scene has no SSAO)
-    f64 shadow = -1, main = -1, resolve = -1, bloom = -1, tonemap = -1, fxaa = -1, total = -1;
+    f64 shadow = -1, main = -1, resolve = -1;
+    f64 taa = -1;       // velocity prepass + TAA resolve (0 when the scene has no TAA)
+    f64 bloom = -1, tonemap = -1, fxaa = -1, total = -1;
     f64 post() const { return bloom < 0 ? -1 : bloom + tonemap + (fxaa < 0 ? 0 : fxaa); }
 };
 
 class Forward3D {
 public:
-    static constexpr u32 kStageCount = 8;     // timestamps written: kStageCount + 1
+    static constexpr u32 kStageCount = 9;     // timestamps written: kStageCount + 1
     static constexpr u32 kMaxBloomLevels = 6;
 
     Forward3D() = default;
@@ -135,6 +143,12 @@ public:
     // SSAO (M-VISUAL 3): the blurred ambient visibility (r) at half the 3D target's size; null until
     // the first frame with AmbientOcclusion::enabled.
     rhi::TextureHandle ssao() const { return ao_a_; }
+    // TAA (M-VISUAL 5): the velocity target (RGBA16F at the 3D size: rg = uv motion, b = covered) and
+    // the newest history (RGBA16F at the output size); null until the first frame with PostFx::taa.
+    rhi::TextureHandle velocity() const { return velocity_; }
+    rhi::TextureHandle taa_history() const { return history_[history_index_]; }
+    // Drops the history: call on a camera cut so the next frame does not blend the old view.
+    void reset_history() { history_valid_ = false; }
 
 private:
     ResultV create_pipelines();
@@ -150,6 +164,7 @@ private:
     void shadow_draw(rhi::CommandBuffer& cmd, const math::mat4& view_proj, const Scene3D::Draw& d, rhi::PipelineHandle& bound_pipe,
                      const GpuMesh*& bound);
     void record_main(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target);
     // What the current pass has bound, so consecutive draws skip redundant binds.
     struct DrawCache {
@@ -228,6 +243,23 @@ private:
     rhi::Extent2D bloom_size_[kMaxBloomLevels];
     u32 bloom_levels_ = 0;
     rhi::Extent2D size_;
+    // TAA (M-VISUAL 5)
+    rhi::PipelineHandle velocity_pipe_;  // null when Forward3DDesc::taa is off
+    rhi::PipelineHandle velocity_skinned_;
+    rhi::PipelineHandle taa_pipe_;
+    rhi::TextureHandle velocity_;        // RGBA16F, 3D size
+    rhi::TextureHandle velocity_depth_;  // D32, 3D size
+    rhi::TextureHandle history_[2];      // RGBA16F, output size
+    rhi::Extent2D history_size_;
+    u32 history_index_ = 0;              // the newest history
+    bool history_valid_ = false;
+    bool taa_on_ = false;                // this frame: jittered and resolved
+    u32 taa_frame_ = 0;                  // Halton(2, 3) index
+    math::mat4 jitter_ = math::mat4::identity();  // clip-space shift of this frame's projection
+    math::vec2 jitter_uv_{0.0f, 0.0f};
+    math::mat4 prev_view_proj_ = math::mat4::identity();  // last TAA frame's, unjittered
+    rhi::TextureHandle post_source_;     // what bloom and tonemap read: hdr_, or the TAA output
+    rhi::Extent2D post_size_;
     Forward3DStats stats_;
 };
 
