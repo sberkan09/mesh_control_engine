@@ -129,6 +129,7 @@ mem::UniquePtr<IImporter> make_input_map_importer(); // .mcinput -> CHNK_INPUT (
 mem::UniquePtr<IImporter> make_store_importer();     // .mcstore -> CHNK_STORE (M-MONETIZE)
 mem::UniquePtr<IImporter> make_config_importer();    // .mcconfig -> CHNK_RCFG (M-LIVEOPS remote config)
 mem::UniquePtr<IImporter> make_string_importer();    // assets/loc/<locale>.csv -> CHNK_STR (M-MOBILE 11a)
+mem::UniquePtr<IImporter> make_envmap_importer();  // .mcenv -> CHNK_TEX (M-VISUAL 2: baked reflection probes)
 mem::UniquePtr<IImporter> make_shader_importer();  // .vert/.frag/.comp.glsl -> CHNK_SHD (v0.5)
 
 // Parses "guid:<canonical>" (the typed asset-reference spelling in native text assets).

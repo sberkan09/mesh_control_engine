@@ -13,6 +13,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/cook.cpp
         src/cook_db.cpp
         src/diagnostics.cpp
+        src/envmap_importer.cpp
         src/font_importer.cpp
         src/fs_util.cpp
         src/gltf_importer.cpp

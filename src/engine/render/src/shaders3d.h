@@ -727,6 +727,39 @@ void main() {
 }
 )";
 
+// A probe's environment slot as one RGBM RGBA8 strip (the editor's bake reads it back): the slot's
+// layers stacked along v, layer l at v in [l, l + 1) / layers.
+constexpr const char* kProbeEncodeFS = R"(#version 450 core
+layout(std140, binding = 1) uniform ExportU {
+    vec4 e_params;  // x: first layer, y: layers, z: RGBM range
+};
+layout(binding = 6) uniform sampler2DArray u_env_src;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+void main() {
+    float lv = v_uv.y * e_params.y;
+    float layer = min(floor(lv), e_params.y - 1.0);
+    vec3 c = max(textureLod(u_env_src, vec3(v_uv.x, lv - layer, e_params.x + layer), 0.0).rgb, vec3(0.0));
+    float m = clamp(max(max(c.r, c.g), max(c.b, 1e-6)) / e_params.z, 1.0 / 255.0, 1.0);
+    m = ceil(m * 255.0) / 255.0;
+    o_color = vec4(min(c / (m * e_params.z), vec3(1.0)), m);
+}
+)";
+
+// One layer of a baked probe (RGBM RGBA8 array, cooked from .mcenv) back into its IBL slot.
+constexpr const char* kProbeDecodeFS = R"(#version 450 core
+layout(std140, binding = 1) uniform DecodeU {
+    vec4 d_params;  // x: source layer, z: RGBM range
+};
+layout(binding = 6) uniform sampler2DArray u_baked;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+void main() {
+    vec4 t = textureLod(u_baked, vec3(v_uv, d_params.x), 0.0);
+    o_color = vec4(t.rgb * t.a * d_params.z, 1.0);
+}
+)";
+
 // The split-sum BRDF LUT (Karis 2013): x = NoV, y = roughness; rg = scale and bias of F0.
 constexpr const char* kIblBrdfFS = "#version 450 core\nconst float PI = 3.14159265359;\n" MCE_GLSL_IBL_SAMPLING R"(
 layout(location = 0) in vec2 v_uv;
