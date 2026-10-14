@@ -70,12 +70,17 @@ DocsRoots find_roots(const Server& server) {
     return r;
 }
 
+// Cached per server and --docs value (a later server can live at the same address as an earlier
+// one, as consecutive test cases' servers do in a release build).
 const DocsRoots& roots(const Server& server) {
     static DocsRoots r;
     static const Server* for_server = nullptr;
-    if (for_server != &server) {
+    static cook::String for_docs;
+    const StringView docs = server.options().docs ? StringView(server.options().docs) : StringView();
+    if (for_server != &server || for_docs.view() != docs) {
         r = find_roots(server);
         for_server = &server;
+        for_docs = cook::String(docs);
     }
     return r;
 }

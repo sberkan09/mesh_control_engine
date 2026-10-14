@@ -417,13 +417,15 @@ void json_strs(cook::JsonValue o, StringView key, Array<cook::String>& out) {
         if (v.at(i).is_string()) out.push_back(cook::String(v.at(i).as_string()));
 }
 
+// Loaded once per library folder.
 const Library& library(const Server& server) {
     static Library lib;
-    static const Server* for_server = nullptr;
-    if (for_server == &server) return lib;
-    for_server = &server;
+    static bool loaded = false;
+    const cook::String root = content_root(server, "library");
+    if (loaded && lib.root.view() == root.view()) return lib;
+    loaded = true;
     lib = Library();
-    lib.root = content_root(server, "library");
+    lib.root = root;
     const cook::String path = cook::path_join(lib.root.view(), "library.json");
     cook::String text;
     cook::JsonDoc doc;
