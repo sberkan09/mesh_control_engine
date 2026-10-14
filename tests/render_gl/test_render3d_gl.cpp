@@ -10,6 +10,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <utility>
 
@@ -668,10 +669,11 @@ TEST_CASE("render3d_gl: IBL takes the ambient's color from where the sky is") {
 }
 
 
-TEST_CASE("render3d_gl: a reflection probe puts the room into a mirror floor; captures only on change") {
-    Fixture3D f;
-    // A smooth metal floor just above the ground slab and a red emissive wall behind the box: the
-    // dim sky's reflection shows no wall, the probe's box-projected capture does.
+namespace {
+
+// Meshes 7 and 8: a smooth metal floor just above the ground slab and a red emissive wall behind
+// the box. The dim sky's reflection shows no wall, a probe's box-projected capture does.
+void upload_probe_room(Fixture3D& f) {
     mesh_fixture::Builder floor;
     floor.add_node(-1);
     mesh_fixture::Box fb;
@@ -690,6 +692,21 @@ TEST_CASE("render3d_gl: a reflection probe puts the room into a mirror floor; ca
     wall.add_box(wb);
     wall.submeshes.back().material.emissive[0] = 3.0f;
     REQUIRE(f.renderer.meshes().upload(8, 1, wall.build().span()).has_value());
+}
+
+ReflectionProbe room_probe() {
+    ReflectionProbe p;
+    p.position = {1.5f, 0.6f, 1.0f};
+    p.bounds = {{-3, -0.5f, -1.1f}, {3, 3, 3}};  // floor inside by more than the blend distance
+    p.blend_distance = 0.5f;
+    return p;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: a reflection probe puts the room into a mirror floor; captures only on change") {
+    Fixture3D f;
+    upload_probe_room(f);
     u32 version = 0;
     bool probe = false, ibl = true;
     const auto scene = [&](Scene3D& s) {
@@ -701,10 +718,7 @@ TEST_CASE("render3d_gl: a reflection probe puts the room into a mirror floor; ca
         m.mesh = 8;
         s.add(m);
         if (probe) {
-            ReflectionProbe p;
-            p.position = {1.5f, 0.6f, 1.0f};
-            p.bounds = {{-3, -0.5f, -1.1f}, {3, 3, 3}};  // floor inside by more than the blend distance
-            p.blend_distance = 0.5f;
+            ReflectionProbe p = room_probe();
             p.version = version;
             s.add_reflection_probe(p);
         }
@@ -779,5 +793,73 @@ TEST_CASE("render3d_gl: an IBL texture lights the scene while the dome keeps the
     CHECK(std::abs(dome_own.r - dome_sky.r) <= 2);
     f.render(0.0f, false, scene);
     CHECK_FALSE(fw.last_stats().ibl_baked);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a probe exported as RGBM and loaded back reflects what was captured") {
+    Fixture3D f;
+    upload_probe_room(f);
+    bool wall = true;
+    u32 baked = ~0u;
+    const auto scene = [&](Scene3D& s) {
+        no_sun(s);
+        s.set_sky(constant_sky(0.05f, true));
+        MeshInstance m;
+        m.mesh = 7;
+        s.add(m);
+        if (wall) {
+            m.mesh = 8;
+            s.add(m);
+        }
+        ReflectionProbe p = room_probe();
+        p.baked = baked;
+        s.add_reflection_probe(p);
+    };
+    Forward3D& fw = f.renderer.forward_3d();
+    const vec3 spot{1.5f, 0.05f, 1.0f};
+    f.render(0.0f, false, scene);
+    const Rgb captured = f.at_world(spot);
+    CHECK(fw.last_stats().probes_captured == 1);
+
+    // The editor's bake: the slot as one RGBM strip, read back and stored the way .mcenv is
+    // (rows in texture order: read_pixels is top row first).
+    const rhi::Extent2D es = Forward3D::probe_export_size();
+    Array<u8> strip;
+    strip.resize(usize(es.width) * es.height * 4);
+    f.device->begin_frame(f.frame++);
+    {
+        rhi::CommandBuffer cmd;
+        CHECK_FALSE(fw.record_probe_export(cmd, 1));  // slot 1 holds nothing
+        REQUIRE(fw.record_probe_export(cmd, 0));
+        f.device->submit(cmd);
+    }
+    REQUIRE(f.device->read_pixels(fw.probe_export_target(), rhi::Rect2D{0, 0, es.width, es.height}, strip.span()).has_value());
+    f.device->end_frame();
+    Array<u8> layers;
+    layers.resize(strip.size());
+    const usize row = usize(es.width) * 4;
+    for (u32 y = 0; y < es.height; ++y) std::memcpy(&layers[y * row], &strip[(es.height - 1 - y) * row], row);
+    const TextureMipUpload mip{Forward3D::kIblEnvWidth, Forward3D::kIblEnvWidth / 2, std::as_bytes(layers.span())};
+    TextureUpload up;
+    up.layers = Forward3D::kProbeLayers;
+    up.mips = Span<const TextureMipUpload>(&mip, 1);
+    baked = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(baked, 1, up).has_value());
+
+    wall = false;  // gone from the scene, still in the bake
+    f.render(0.0f, false, scene);
+    CHECK(fw.last_stats().probes_loaded == 1);
+    CHECK(fw.last_stats().probes_captured == 0);
+    const Rgb loaded = f.at_world(spot);
+    INFO("captured " << captured.r << "," << captured.g << " loaded " << loaded.r << "," << loaded.g);
+    CHECK(std::abs(loaded.r - captured.r) <= 6);
+    CHECK(std::abs(loaded.g - captured.g) <= 6);
+    f.render(0.0f, false, scene);
+    CHECK(fw.last_stats().probes_loaded == 0);  // decoded once
+
+    baked = ~0u;  // without the bake the probe captures the wall-less room
+    f.render(0.0f, false, scene);
+    CHECK(fw.last_stats().probes_captured == 1);
+    CHECK(f.at_world(spot).r + 60 < loaded.r);
     CHECK(f.device->validation_error_count() == 0);
 }

@@ -384,6 +384,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         rp.blend_distance = p.blend_distance;
         rp.intensity = p.intensity;
         rp.version = p.version;
+        rp.baked = texture_key(p.baked.guid);
         scene.add_reflection_probe(rp);
         ++stats_.reflection_probes;
     });

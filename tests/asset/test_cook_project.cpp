@@ -11,6 +11,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/asset/xxhash.h"
 #include "mce/cook/cook.h"
+#include "mce/cook/envmap.h"
 #include "mce/refl/refl.h"
 
 using namespace mce;
@@ -467,6 +468,50 @@ TEST_CASE("cook: --textures astc stores ASTC 4x4 blocks, re-cooks on a switch, a
     REQUIRE(r2.ok());
     CHECK(r2.pack_hash == r1.pack_hash);
     CHECK(read_file(root + "/assets.mce") == pack1);
+}
+
+TEST_CASE("cook: a baked environment (.mcenv) cooks to a linear RGBA8 array, never ASTC") {
+    const std::string root = make_project("cook_envmap");
+    constexpr const char* kEnvGuid = "a1a1a1a1-0000-4000-8000-0000000000e1";
+    Array<u8> px;
+    for (u32 i = 0; i < 4 * 2 * 3; ++i)
+        for (u8 c : {u8(i), u8(2 * i), u8(255 - i), u8(17)}) px.push_back(c);
+    Array<byte> file;
+    cook::write_envmap(4, 2, 3, px.span(), file);
+    write_file(root + "/assets/probes/hall.mcenv", std::string(reinterpret_cast<const char*>(file.data()), file.size()));
+    write_file(root + "/assets/probes/hall.mcenv.mceasset", sidecar(kEnvGuid, "envmap"));
+    CookService svc;
+    CookOptions astc;
+    astc.textures = cook::TextureCompression::Astc4x4;
+    const CookReport r = svc.cook(root.c_str(), astc);
+    INFO(diag_text(r));
+    REQUIRE(r.ok());
+
+    AssetSystem as;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {cooked};
+    REQUIRE(as.mount(Span<const StringView>(roots, 1)));
+    auto th = as.load_sync<Texture>(G(kEnvGuid));
+    REQUIRE(th);
+    auto tv = TextureView::read(as.resolve(th.value()));
+    REQUIRE(tv);
+    const TextureHeader& h = *tv.value().header;
+    CHECK(h.format == TextureFormat::RGBA8);
+    CHECK(h.width == 4);
+    CHECK(h.height == 2);
+    CHECK(h.layers == 3);
+    CHECK(h.mip_count == 1);
+    CHECK(h.flags == 0);  // linear: RGBM is not color data
+    const Span<const byte> layer2 = tv.value().pixels(0, 2);
+    REQUIRE(layer2.size() == 4 * 2 * 4);
+    CHECK(std::memcmp(layer2.data(), px.data() + 2 * 4 * 2 * 4, layer2.size()) == 0);
+    as.release(AnyHandle(th.value()));
+
+    file.resize(file.size() - 1);  // truncated
+    write_file(root + "/assets/probes/hall.mcenv", std::string(reinterpret_cast<const char*>(file.data()), file.size()));
+    const CookReport bad = svc.cook(root.c_str(), CookOptions{});
+    CHECK(!bad.ok());
+    CHECK(diag_text(bad).find("does not match its header") != std::string::npos);
 }
 
 TEST_CASE("cook: scene source hash is over the canonical form") {
