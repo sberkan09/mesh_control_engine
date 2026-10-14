@@ -7,6 +7,7 @@
 
 mce_add_library(mce_mcp_core UMBRELLA
     SOURCES
+        src/asset_tools.cpp
         src/headless_run.cpp
         src/json_writer.cpp
         src/server.cpp

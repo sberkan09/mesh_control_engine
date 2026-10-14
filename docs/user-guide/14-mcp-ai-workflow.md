@@ -64,6 +64,11 @@ each result's `content[0].text` is the tool's JSON).
 | | `scene_get_entity` | `entity` | the entity in `.mcscene` form; defaults omitted |
 | | `asset_list` | `type?` | `guid:<uuid>`, path, type |
 | | `asset_set_import_settings` | `path` or `guid`, `settings` | rewrites a sidecar's settings |
+| Assets | `asset_schema` | `type?` | without `type`: the JSON source types below; with one (`ParticlePreset` or `.mcpart`, ...): its fields with type, default and help, and the template `asset_create` starts from |
+| | `asset_create` | `path`, `content?` | a new `.mcpart`, `.mcseq`, `.mctilemap`, `.mcmat`, `.mcinput`, `.mcstore`, `.mcservices` or `.mcconfig` (the extension picks the type) with a fresh GUID: the template with `content`'s fields over it. Returns `guid:<uuid>` |
+| | `asset_write` | `path` or `guid`, `content`, `mode?` | `merge` (default) replaces the named fields and keeps the rest, `replace` writes exactly `content`; the GUID stays |
+| | `asset_read` | `path` or `guid` | the parsed document of a JSON source asset (scenes and prefabs too) |
+| | `tilemap_paint` | `path` or `guid`, `clear?`, `cells?`, `rects?`, `fills?`, `preview?` | `[x, y, tile]` cells, `[x0, y0, x1, y1, tile]` rectangles and `[x, y, tile]` flood fills, applied in that order; (0, 0) is bottom-left, tile 0 erases, n draws tileset cell n-1. `preview` returns the map as text rows |
 | Edit | `entity_create` | `name`, `components?` (object: type name → fields), `transform?` (bool, default true: add a `LocalTransform`), `at?` (int: hierarchy index, default the end) | returns the id; place the entity with `components.LocalTransform`, e.g. `{"name": "Crate", "components": {"LocalTransform": {"position": [0, 1, 0]}}}` |
 | | `entity_delete`, `entity_duplicate` | `entity` | |
 | | `scene_clear` | | every entity, one undo step; keeps GUID and path |
@@ -80,6 +85,11 @@ each result's `content[0].text` is the tool's JSON).
 | Verify | `run_headless` | `ticks` (default 300), `log_lines`, `scene?`, `input?`, `inspect?` | cooks, plays the **saved** scene (or another saved scene named by `scene`) with the engine systems and the game's `install()`, returns `state_hash`, metrics and the log tail |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
+
+`asset_create`, `asset_write` and `tilemap_paint` cook the document in memory before they write it, with
+the same checks `cook_run` makes (field values, unknown keys, references to missing or wrongly typed
+assets): a refused call leaves the file as it was and the error names the field. The
+`mce://assets/schema` resource holds every type's description at once.
 
 Values use the `.mcscene` spelling (chapter 4): vectors as arrays, assets as `"guid:<uuid>"` (from
 `asset_list`), enums by name, nested structs as objects, entity references as `"$<id>"`. Every `entity` argument
@@ -110,6 +120,9 @@ agent checks "did the player reach the flag" without a window.
    author (your own and `Sprite`, `RigidBody2D`, `Collider2D`, `TextLabel`, `Camera2DComponent`).
 3. **Content.** Copy art and sounds under `assets/`, `cook_run {"adopt": true}` to give them
    sidecars, `asset_list` to get their GUIDs, `asset_set_import_settings` for normal maps and LUTs.
+   Particle presets, sequences, tilemaps, materials, input maps and the store, services and config
+   catalogs are made with `asset_create` (`asset_schema` shows their fields), never written by hand;
+   lay a level out with `asset_create` on a `.mctilemap` and `tilemap_paint`.
 4. **Author.** `scene_open`, then `entity_create` with a components object per entity;
    `entity_duplicate` plus `component_set LocalTransform position` to lay out repeated tiles;
    `component_set` to tune. Name entities.
