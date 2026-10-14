@@ -16,10 +16,15 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-headless 1` | off | run without a window, renderer or audio device; prints the state hash at the end |
 | `-ticks N` | 600 | headless: fixed ticks to simulate |
 | `-frames N` | 0 | windowed: quit after N rendered frames |
-| `-capture <path.ppm>` | | with `-frames` or `-capture_tick`: write the last frame as a PPM (the directory is created) |
+| `-capture <path.ppm>` | | with `-frames`, `-capture_tick` or `-capture_ticks`: write the last frame as a PPM (the directory is created) |
 | `-window WxH` | 1280x720 | windowed: the initial window size in points, e.g. `1080x2400` to check a phone layout |
 | `-fullscreen 1` | 0 (saved) | desktop: borderless full screen; F11, Alt+Enter or Cmd+Ctrl+F toggle it while playing |
 | `-capture_tick N` | 0 | windowed: quit after N simulation ticks of this run (frame-rate independent, unlike `-frames`; with `-save`, the restored slot's tick does not count) |
+| `-capture_ticks a,b,c` | | windowed: capture the first frame after each listed sim tick (ascending) and quit after the last; `-capture`'s path takes `{tick}` (else `_<tick>` goes before the extension) |
+| `-view.entity N` | -1 | render from scene entity N's camera (file order, prefab instances flattened) instead of the primary one; render only, the state hash is unchanged |
+| `-view.free x,y[,zoom]` or `x,y,z,tx,ty,tz[,fov]` | | render from a free 2D or 3D camera (eye, target, vertical degrees); render only |
+| `-safe_area l,t,r,b` | | windowed: pretend the screen has these safe-area insets in pixels (UI and `ViewInfo` lay out inside them) |
+| `-platform.video_driver offscreen` | | no window: SDL's offscreen driver (with `LIBGL_ALWAYS_SOFTWARE=1`, Mesa's software GL), for captures on a box without a display |
 | `-input_map <guid or path>` | | the cooked `.mcinput` to load (default: the first in the pack, else the starter-kit map; chapter 11) |
 | `-input <file>` | | play a scripted input file instead of the keyboard (`<from>[-<to>] Action[=value]` per line; chapter 11) |
 | `-save <slot>` | off | load the slot at start if it exists; write it on a clean quit, when a phone goes to the background, and when a desktop window loses focus or minimizes |

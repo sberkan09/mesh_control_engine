@@ -8,6 +8,8 @@
 //   mce_player -pack p.mce -frames 120 -capture a.ppm  CI smoke: write the last frame
 //   mce_player -pack p.mce -capture_tick 300 -capture a.ppm   the frame after sim tick 300, then quit
 //   mce_player -pack p.mce -input moves.txt -capture_tick 300 -capture a.ppm   ... with the scripted input
+//   mce_player -pack p.mce -capture_ticks 60,120 -capture shot_{tick}.ppm   one frame per listed tick, then quit
+//   ... -view.entity 3 | -view.free 0,4,10,0,0,0   render from scene entity 3's camera, or a free one (render only)
 //   mce_player -help                                   every convar with its help (the whole command line)
 //
 // Without -scene the first Scene asset of the pack (by source path) plays. F7 toggles 2D post, F3 the
@@ -59,7 +61,9 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <optional>
 
@@ -124,6 +128,22 @@ MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames or -capt
 MCE_CVAR(cv_capture_tick, "capture_tick", 0,
          "Windowed: quit (and -capture) on the first frame after this many sim ticks of this run, whatever the frame rate; "
          "a tick restored by -save does not count (0 = off)",
+         CVarFlags::None);
+MCE_CVAR(cv_capture_ticks, "capture_ticks", "",
+         "Windowed: capture the first frame after each of these sim ticks (\"60,120,300\", ascending) and quit after the last; "
+         "-capture's path takes {tick} (else _<tick> goes before the extension)",
+         CVarFlags::None);
+MCE_CVAR(cv_view_entity, "view.entity", -1,
+         "Render from this scene entity's camera (index in file order, prefab instances flattened) instead of the primary one; "
+         "render only, the sim and its hash are unchanged (-1 = off)",
+         CVarFlags::None);
+MCE_CVAR(cv_view_free, "view.free", "",
+         "Render from a free camera instead of the primary one: \"x,y[,zoom]\" (2D) or \"x,y,z,tx,ty,tz[,fov]\" (3D: eye, "
+         "target, vertical degrees); render only",
+         CVarFlags::None);
+MCE_CVAR(cv_safe_area, "safe_area", "",
+         "Windowed: pretend the screen has these safe-area insets in pixels, \"left,top,right,bottom\" (a phone notch on a "
+         "desktop); UI and ViewInfo lay out inside them",
          CVarFlags::None);
 MCE_CVAR(cv_window, "window", "", "Windowed: initial window size as WxH in points, e.g. 1080x2400 to check a phone layout (default 1280x720)",
          CVarFlags::None);
@@ -233,6 +253,7 @@ public:
             samples::resolve_shipped_path(cv_pack.get_string(), desc_.pack ? desc_.pack : "", desc_.pack_fallback ? desc_.pack_fallback : "",
                                           pack);
         if (pack.empty()) return Error(Errc::InvalidArgument, "mce_player: -pack <path> is required");
+        MCE_TRY(parse_capture_and_view());
         mount_mods();
         const StringView roots[1] = {pack.view()};
         MCE_TRY(assets_.mount(Span<const StringView>(roots, 1)));
@@ -307,7 +328,7 @@ public:
         scene_guid_ = scene;
         if (!parse_lifecycle_test(cv_lifecycle_test.get_string()))
             return Error(Errc::InvalidArgument, "player: -lifecycle_test wants \"N,M\" (app ticks, N >= 1)");
-        if (window_) set_safe_insets(window_->safe_insets());
+        if (window_) set_safe_insets(window_insets());
         if (const StringView slot = cv_save.get_string(); !slot.empty() && save::exists(slot)) {
             save::SaveInfo info;
             MCE_TRY_ASSIGN(const save::LoadStats st, save::load_game(world_, slot, &info));
@@ -327,10 +348,9 @@ public:
         }
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
         if (paused_ || ad_paused_) return;
-        // -capture_tick N: the sim holds on tick N for the capture frame, however many ticks a slow
+        // -capture_tick(s): the sim holds on the tick for the capture frame, however many ticks a slow
         // frame (Metal validation, a cold start) would otherwise catch up past it.
-        if (cv_capture_tick.get_int() > 0 && sim_ticks_ - run_start_tick_ >= static_cast<u64>(cv_capture_tick.get_int()))
-            return;
+        if (capture_due()) return;
         tick_dt_ = t.dt;
         if (t.actions) input::publish(world_, *t.actions);
         publish_view_info();
@@ -389,6 +409,7 @@ public:
         f32 ppm = 48.0f;
         Color clear{0.08f, 0.09f, 0.12f, 1.0f};
         kit::primary_camera(world_, cam, ppm, &clear);
+        view_override_2d(cam, ppm, clear);
 
         update_console(bb);
         update_ui_layers(bb);
@@ -405,7 +426,10 @@ public:
         }
         render::Camera3D cam3;
         kit::Camera3DComponent cam3_info;
-        const bool draw_3d = three_d_ && extract3d_.camera(world_, static_cast<f32>(rc.alpha), cam3, &cam3_info);
+        // A capture frame shows the held tick itself (no interpolation), so captures repeat exactly.
+        const f32 alpha = capture_due() ? 1.0f : static_cast<f32>(rc.alpha);
+        bool draw_3d = three_d_ && extract3d_.camera(world_, alpha, cam3, &cam3_info);
+        if (three_d_) draw_3d = view_override_3d(alpha, cam3) || draw_3d;
         update_mouse_look(draw_3d && cam3_info.mouse_look != 0);
         rhi::CommandBuffer cmd(mem::frame());
         if (draw_3d) {
@@ -416,7 +440,7 @@ public:
             lod.pixel_error = math::max(cv_lod_pixels.get_float(), 0.01f);
             lod.force_level = cv_lod_force.get_int() < 0 ? ~0u : static_cast<u32>(cv_lod_force.get_int());
             scene3.set_lod(lod);
-            extract3d_.extract(world_, scene3, static_cast<f32>(rc.alpha));
+            extract3d_.extract(world_, scene3, alpha);
             scene3.build();
             renderer_.record_3d(cmd, scene3);
             stats3d_ = scene3.stats();
@@ -463,12 +487,18 @@ public:
         }
         device_->submit(cmd);
 
-        // The run ends on the Nth frame (-frames) or on the first frame after sim tick N (-capture_tick):
-        // the latter catches a moment of the simulation however fast or slow the frames come.
-        const bool last = (cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int())) ||
-                          (cv_capture_tick.get_int() > 0 &&
-                           sim_ticks_ - run_start_tick_ >= static_cast<u64>(cv_capture_tick.get_int()));
-        if (last && !cv_capture.get_string().empty()) capture(cv_capture.get_string().data(), bb);
+        // The run ends on the Nth frame (-frames) or on the first frame after the last capture tick
+        // (-capture_tick / -capture_ticks): those catch moments of the simulation however fast or slow
+        // the frames come.
+        const bool frames_done = cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
+        bool last = frames_done;
+        if (capture_due()) {
+            const u64 tick = capture_ticks_[capture_next_++];
+            if (!cv_capture.get_string().empty()) capture(capture_path(tick).c_str(), bb);
+            last = last || capture_next_ == capture_ticks_.size();
+        } else if (frames_done && capture_ticks_.empty() && !cv_capture.get_string().empty()) {
+            capture(cv_capture.get_string().data(), bb);
+        }
         device_->end_frame();
         assets_.end_frame();
         if (last) quit(0);
@@ -1219,6 +1249,127 @@ private:
         post_size_ = size;
     }
 
+    // -capture_tick / -capture_ticks and -view.* / -safe_area, read once at start.
+    ResultV parse_capture_and_view() {
+        capture_ticks_.clear();
+        if (const StringView list = cv_capture_ticks.get_string(); !list.empty()) {
+            if (!parse_numbers(list, ticks_tmp_, 1, 64))
+                return Error(Errc::InvalidArgument, "player: -capture_ticks wants ascending ticks \"60,120,300\" (1-64 of them)");
+            for (usize i = 0; i < ticks_tmp_.size(); ++i) {
+                const f64 t = ticks_tmp_[i];
+                if (t < 1 || t != static_cast<f64>(static_cast<u64>(t)) || (i > 0 && t <= ticks_tmp_[i - 1]))
+                    return Error(Errc::InvalidArgument, "player: -capture_ticks wants ascending whole ticks >= 1");
+                capture_ticks_.push_back(static_cast<u64>(t));
+            }
+        } else if (cv_capture_tick.get_int() > 0) {
+            capture_ticks_.push_back(static_cast<u64>(cv_capture_tick.get_int()));
+        }
+        view_free_.clear();
+        if (const StringView v = cv_view_free.get_string(); !v.empty()) {
+            if (!parse_numbers(v, view_free_, 2, 7) || view_free_.size() == 4 || view_free_.size() == 5)
+                return Error(Errc::InvalidArgument,
+                             "player: -view.free wants \"x,y[,zoom]\" (2D) or \"x,y,z,tx,ty,tz[,fov]\" (3D)");
+        }
+        safe_override_.clear();
+        if (const StringView v = cv_safe_area.get_string(); !v.empty()) {
+            if (!parse_numbers(v, safe_override_, 4, 4) || safe_override_[0] < 0 || safe_override_[1] < 0 ||
+                safe_override_[2] < 0 || safe_override_[3] < 0)
+                return Error(Errc::InvalidArgument, "player: -safe_area wants \"left,top,right,bottom\" in pixels (>= 0)");
+        }
+        return ok();
+    }
+
+    // Comma-separated numbers, between `min` and `max` of them.
+    static bool parse_numbers(StringView text, Array<f64>& out, usize min, usize max) {
+        out.clear();
+        usize start = 0;
+        while (start <= text.size()) {
+            usize end = text.find(',', start);
+            if (end == StringView::npos) end = text.size();
+            char buf[48] = {};
+            const StringView item = text.substr(start, end - start);
+            if (item.empty() || item.size() >= sizeof(buf)) return false;
+            std::memcpy(buf, item.data(), item.size());
+            char* stop = nullptr;
+            const f64 v = std::strtod(buf, &stop);
+            if (stop == buf || *stop != 0) return false;
+            out.push_back(v);
+            start = end + 1;
+        }
+        return out.size() >= min && out.size() <= max;
+    }
+
+    bool capture_due() const {
+        return capture_next_ < capture_ticks_.size() && sim_ticks_ - run_start_tick_ >= capture_ticks_[capture_next_];
+    }
+
+    // -capture's path for `tick`: {tick} replaced, else _<tick> before the extension when there are several ticks.
+    FixedString<1024> capture_path(u64 tick) const {
+        const StringView p = cv_capture.get_string();
+        char num[24];
+        std::snprintf(num, sizeof(num), "%llu", static_cast<unsigned long long>(tick));
+        FixedString<1024> out;
+        const usize at = p.find("{tick}");
+        if (at != StringView::npos) {
+            out.append(p.substr(0, at));
+            out.append(num);
+            out.append(p.substr(at + 6));
+        } else if (capture_ticks_.size() > 1) {
+            usize dot = p.rfind('.');
+            const usize slash = p.find_last_of("/\\");
+            if (dot == StringView::npos || (slash != StringView::npos && dot < slash)) dot = p.size();
+            out.append(p.substr(0, dot));
+            out.append("_");
+            out.append(num);
+            out.append(p.substr(dot));
+        } else {
+            out.append(p);
+        }
+        return out;
+    }
+
+    platform::SafeInsets window_insets() const {
+        if (safe_override_.size() != 4) return window_->safe_insets();
+        return {static_cast<u32>(safe_override_[0]), static_cast<u32>(safe_override_[1]), static_cast<u32>(safe_override_[2]),
+                static_cast<u32>(safe_override_[3])};
+    }
+
+    // The scene entity -view.entity names, or null.
+    Entity view_entity() const {
+        const i64 i = cv_view_entity.get_int();
+        return i >= 0 && static_cast<usize>(i) < entities_.size() ? entities_[static_cast<usize>(i)] : Entity{};
+    }
+
+    // -view.entity / -view.free on the 2D camera (render only).
+    void view_override_2d(render::Camera2D& cam, f32& ppm, Color& clear) {
+        if (const Entity e = view_entity(); !e.is_null()) kit::camera_2d_of(world_, e, cam, ppm, &clear);
+        if (view_free_.size() == 2 || view_free_.size() == 3) {
+            cam.position = {static_cast<f32>(view_free_[0]), static_cast<f32>(view_free_[1])};
+            if (view_free_.size() == 3) {
+                cam.zoom = math::max(static_cast<f32>(view_free_[2]), 0.01f);
+                cam.fit_width = cam.fit_height = 0.0f;
+            }
+        }
+    }
+
+    // The same on the 3D camera; true when an override set `cam`.
+    bool view_override_3d(f32 alpha, render::Camera3D& cam) {
+        bool set = false;
+        if (const Entity e = view_entity(); !e.is_null()) set = extract3d_.camera_of(world_, e, alpha, cam);
+        if (view_free_.size() >= 6) {
+            const vec3 eye{static_cast<f32>(view_free_[0]), static_cast<f32>(view_free_[1]), static_cast<f32>(view_free_[2])};
+            const vec3 at{static_cast<f32>(view_free_[3]), static_cast<f32>(view_free_[4]), static_cast<f32>(view_free_[5])};
+            const vec3 d = at - eye;
+            const f32 dist = math::max(length(d), 1e-3f);
+            const vec3 n = d * (1.0f / dist);
+            const f32 fov = view_free_.size() == 7 ? static_cast<f32>(view_free_[6]) : 60.0f;
+            cam = render::orbit_camera(at, std::atan2(-n.x, -n.z), std::asin(math::clamp(-n.y, -1.0f, 1.0f)), dist,
+                                       math::radians(math::clamp(fov, 5.0f, 170.0f)));
+            set = true;
+        }
+        return set;
+    }
+
     // `path` is taken as given (relative: against the working directory); a missing directory
     // in it is created, so "-capture shots/title.ppm" works from a fresh project folder.
     void capture(const char* path, rhi::Extent2D size) {
@@ -1408,7 +1559,7 @@ private:
             case platform::EventType::AppLowMemory: self->on_lifecycle(e.type); return;
             case platform::EventType::SafeAreaChanged:
             case platform::EventType::OrientationChanged:
-            case platform::EventType::Resized: self->set_safe_insets(self->window_->safe_insets()); break;
+            case platform::EventType::Resized: self->set_safe_insets(self->window_insets()); break;
             case platform::EventType::TouchUp:
                 // A tap on the pause overlay (a finger that went down while paused) resumes; the game gets a
                 // focus-loss release instead of the tap.
@@ -1541,6 +1692,11 @@ private:
     asset::ModList mods_;  // mounted mods in load order (published as a resource when the game takes mods)
     u64 sim_ticks_ = 0;
     u64 run_start_tick_ = 0;  // sim_ticks_ when this run began (a -save slot's tick), for -capture_tick
+    Array<u64> capture_ticks_;  // -capture_tick / -capture_ticks, ascending
+    usize capture_next_ = 0;    // the next of them to capture
+    Array<f64> ticks_tmp_;
+    Array<f64> view_free_;      // -view.free
+    Array<f64> safe_override_;  // -safe_area
     bool paused_ = false;
     bool background_ = false;  // unfocused or minimized
     bool unfocused_ = false;   // the window lost focus (or minimized); the focus-loss save ran
@@ -1588,8 +1744,8 @@ int run_headless(const player::PlayerDesc& pd) {
     if (cv_frames.get_int() > 0)
         MCE_LOG_WARN("{}: -frames applies to windowed runs; headless runs -ticks N (running {} ticks)", pd.app_name,
                      cv_ticks.get_int() > 0 ? cv_ticks.get_int() : 600);
-    if (!cv_capture.get_string().empty() || cv_capture_tick.get_int() > 0)
-        MCE_LOG_WARN("{}: -capture / -capture_tick need a window; nothing is drawn headless", pd.app_name);
+    if (!cv_capture.get_string().empty() || cv_capture_tick.get_int() > 0 || !cv_capture_ticks.get_string().empty())
+        MCE_LOG_WARN("{}: -capture / -capture_tick(s) need a window; nothing is drawn headless", pd.app_name);
     audio::AudioDesc ad;
     ad.backend = audio::Backend::Silent;
     auto audio = audio::AudioDevice::create(ad);

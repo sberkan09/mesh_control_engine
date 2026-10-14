@@ -408,6 +408,22 @@ bool SpriteExtract::post_2d(World& world, render::Post2D& out) {
     return found && out.any();
 }
 
+namespace {
+
+void camera_from(const LocalTransform& t, const Camera2DComponent& c, render::Camera2D& out, f32& pixels_per_meter,
+                 math::Color* clear_color) {
+    out.position = {t.position.x, t.position.y};
+    out.zoom = c.zoom;
+    out.rotation = angle_z(t.rotation);
+    out.pixel_snap = c.pixel_snap;
+    out.fit_width = c.fit_width;
+    out.fit_height = c.fit_height;
+    pixels_per_meter = c.pixels_per_meter;
+    if (clear_color) *clear_color = c.clear_color;
+}
+
+}  // namespace
+
 bool primary_camera(World& world, render::Camera2D& out, f32& pixels_per_meter, math::Color* clear_color) {
     out = render::Camera2D{};
     pixels_per_meter = 48.0f;
@@ -415,16 +431,18 @@ bool primary_camera(World& world, render::Camera2D& out, f32& pixels_per_meter, 
     world.query<const LocalTransform, const Camera2DComponent>().each([&](const LocalTransform& t, const Camera2DComponent& c) {
         if (found || !c.primary) return;
         found = true;
-        out.position = {t.position.x, t.position.y};
-        out.zoom = c.zoom;
-        out.rotation = angle_z(t.rotation);
-        out.pixel_snap = c.pixel_snap;
-        out.fit_width = c.fit_width;
-        out.fit_height = c.fit_height;
-        pixels_per_meter = c.pixels_per_meter;
-        if (clear_color) *clear_color = c.clear_color;
+        camera_from(t, c, out, pixels_per_meter, clear_color);
     });
     return found;
+}
+
+bool camera_2d_of(World& world, Entity e, render::Camera2D& out, f32& pixels_per_meter, math::Color* clear_color) {
+    if (!world.alive(e)) return false;
+    const LocalTransform* t = world.try_get<LocalTransform>(e);
+    const Camera2DComponent* c = world.try_get<Camera2DComponent>(e);
+    if (!t || !c) return false;
+    camera_from(*t, *c, out, pixels_per_meter, clear_color);
+    return true;
 }
 
 }  // namespace mce::kit

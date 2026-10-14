@@ -115,3 +115,52 @@ TEST_CASE("golden: a reflection probe mirrors the room in the metal floor") {
     CHECK(f.renderer.forward_3d().last_stats().probes_captured == 1);
     check_golden("probe_room", f);
 }
+
+// ---- M-VISUAL 3: screen-space ambient occlusion ----------------------------------------------
+
+TEST_CASE("golden: SSAO alone: the box's crease under a flat grey ambient") {
+    Fixture3D f;
+    f.render(0.0f, false, [](Scene3D& s) {
+        no_sun(s);
+        DirectionalLight sun = s.light();
+        sun.ambient_sky = sun.ambient_ground = {0.6f, 0.6f, 0.6f};
+        s.set_light(sun);
+        Sky sky;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        AmbientOcclusion ao;
+        ao.enabled = true;
+        s.set_ambient_occlusion(ao);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().ssao);
+    check_golden("ssao_crease", f);
+}
+
+TEST_CASE("golden: SSAO over the sun, IBL and a row of boxes") {
+    Fixture3D f;
+    f.pitch_deg = 25.0f;
+    for (u32 i = 0; i < 4; ++i) {
+        mesh_fixture::Builder b;
+        b.add_node(-1);
+        mesh_fixture::Box box;
+        box.center = {-2.4f + 1.6f * f32(i), 0.4f + 0.2f * f32(i), 1.2f};
+        box.half = {0.4f, 0.4f + 0.2f * f32(i), 0.4f};
+        box.color[0] = 0.8f;
+        box.color[1] = 0.75f;
+        box.color[2] = 0.7f;
+        b.add_box(box);
+        REQUIRE(f.renderer.meshes().upload(30 + i, 1, b.build().span()).has_value());
+    }
+    f.render(0.0f, true, [](Scene3D& s) {
+        s.set_sky(gradient_sky());
+        for (u32 i = 0; i < 4; ++i) {
+            MeshInstance m;
+            m.mesh = 30 + i;
+            s.add(m);
+        }
+        AmbientOcclusion ao;
+        ao.enabled = true;
+        s.set_ambient_occlusion(ao);
+    });
+    check_golden("ssao_scene", f);
+}
