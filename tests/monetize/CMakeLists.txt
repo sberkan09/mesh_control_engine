@@ -6,6 +6,7 @@ mce_add_test(test_monetize
         test_monetize.cpp
         test_platform_ads.cpp
         test_platform_store.cpp
+        test_remove_ads.cpp
     DEPS
         mce::mce_monetize
         mce::mce_ecs_scene

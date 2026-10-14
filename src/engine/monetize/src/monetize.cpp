@@ -161,12 +161,13 @@ u32 Store::unfinished_count() const { return s_ ? static_cast<u32>(s_->unfinishe
 // ---- Ads ---------------------------------------------------------------------------------------
 
 bool Ads::available() const { return s_ && s_->ads_ && s_->ads_->available(); }
+bool Ads::removed() const { return s_ && s_->ads_removed(); }
 Span<const AdPlacementInfo> Ads::placements() const { return s_ ? s_->catalog_.ads() : Span<const AdPlacementInfo>(); }
 u16 Ads::find(StringView placement_id) const { return s_ ? s_->catalog_.find_ad(placement_id) : kNoIndex; }
 
 u32 Ads::load(StringView placement_id) {
     const u16 p = find(placement_id);
-    if (p == kNoIndex || !is_fullscreen(s_->catalog_.ads()[p].format)) return 0;
+    if (p == kNoIndex || !is_fullscreen(s_->catalog_.ads()[p].format) || s_->ads_removed()) return 0;
     const u32 id = s_->next_request();
     if (!s_->replaying()) s_->ads_->load(p, id);
     return id;
@@ -174,7 +175,7 @@ u32 Ads::load(StringView placement_id) {
 
 u32 Ads::show(StringView placement_id) {
     const u16 p = find(placement_id);
-    if (p == kNoIndex || !is_fullscreen(s_->catalog_.ads()[p].format)) return 0;
+    if (p == kNoIndex || !is_fullscreen(s_->catalog_.ads()[p].format) || s_->ads_removed()) return 0;
     const u32 id = s_->next_request();
     s_->ad_ready_[p] = 0;
     if (!s_->replaying()) s_->ads_->show(p, id);
@@ -183,7 +184,7 @@ u32 Ads::show(StringView placement_id) {
 
 u32 Ads::show_banner(StringView placement_id, BannerEdge edge) {
     const u16 p = find(placement_id);
-    if (p == kNoIndex || s_->catalog_.ads()[p].format != AdFormat::Banner) return 0;
+    if (p == kNoIndex || s_->catalog_.ads()[p].format != AdFormat::Banner || s_->ads_removed()) return 0;
     const u32 id = s_->next_request();
     if (!s_->replaying()) s_->ads_->show_banner(p, id, edge, s_->insets_);
     return id;
@@ -195,7 +196,7 @@ void Ads::hide_banner() {
 
 bool Ads::ready(StringView placement_id) const {
     const u16 p = find(placement_id);
-    return p != kNoIndex && s_->ad_ready_[p] != 0;
+    return p != kNoIndex && s_->ad_ready_[p] != 0 && !s_->ads_removed();
 }
 
 bool Ads::privacy_options_required() const {
@@ -302,18 +303,20 @@ Result<void> Service::init(const Catalog& catalog, IStoreProvider* store, IAdPro
         MCE_LOG_WARN("monetize: the entitlements save was not read ({}); starting with none", why.view());
     }
     store_->start(catalog_, *this);
-    ads_->start(catalog_, *this);
+    ads_started_ = !ads_removed();  // "remove ads" owned: no consent form, no SDK, no requests
+    if (ads_started_) ads_->start(catalog_, *this);
     started_ = true;
-    MCE_LOG_INFO("monetize: store '{}', ads '{}', {} products, {} ad placements", store_->name(), ads_->name(),
-                 catalog_.products().size(), catalog_.ads().size());
+    MCE_LOG_INFO("monetize: store '{}', ads '{}'{}, {} products, {} ad placements", store_->name(), ads_->name(),
+                 ads_started_ ? "" : " (removed: not started)", catalog_.products().size(), catalog_.ads().size());
     return ok();
 }
 
 void Service::shutdown() {
     if (!started_) return;
     store_->stop();
-    ads_->stop();
+    if (ads_started_) ads_->stop();
     started_ = false;
+    ads_started_ = false;
     std::lock_guard<std::mutex> lock(inbox_mutex_);
     store_inbox_.clear();
     ad_inbox_.clear();
@@ -332,7 +335,14 @@ void Service::install(World& world) {
 void Service::update() {
     if (!started_ || replaying()) return;
     store_->update();
-    ads_->update();
+    if (ads_started_) ads_->update();
+}
+
+bool Service::ads_removed() const {
+    const Span<const ProductInfo> products = catalog_.products();
+    for (usize i = 0; i < products.size() && i < owned_.size(); ++i)
+        if (owned_[i] && products[i].removes_ads) return true;
+    return false;
 }
 
 void Service::post(const StoreAnswer& a) {
@@ -494,6 +504,10 @@ void Service::deliver(World& world, const Delivery& d) {
                     if (!owned_[p]) {
                         owned_[p] = 1;
                         if (!replaying()) persist_entitlements();
+                        if (catalog_.products()[p].removes_ads) {
+                            for (u8& r : ad_ready_) r = 0;
+                            if (!replaying() && ads_started_) ads_->hide_banner();
+                        }
                     }
                 } else {
                     unfinished_.push_back(Unfinished{d.store.transaction, d.native});

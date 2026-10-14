@@ -40,7 +40,8 @@ TEST_CASE("store catalog: .mcstore cooks to CHNK_STORE and decodes") {
     write_file(root + "/assets/store.mcstore", R"({ "format": "mce-store", "version": 1,
         "guid": "5703e000-0000-4000-8000-000000000001",
         "products": [
-          { "id": "remove_ads", "type": "non_consumable", "ios": "com.studio.game.remove_ads", "android": "remove_ads" },
+          { "id": "remove_ads", "type": "non_consumable", "ios": "com.studio.game.remove_ads", "android": "remove_ads",
+            "removes_ads": true },
           { "id": "gems_100", "type": "consumable", "android": "gems_100" } ],
         "ads": [
           { "id": "continue", "format": "rewarded" },
@@ -68,7 +69,9 @@ TEST_CASE("store catalog: .mcstore cooks to CHNK_STORE and decodes") {
     CHECK(c.products()[0].id.view() == "remove_ads");
     CHECK(c.products()[0].type == monetize::ProductType::NonConsumable);
     CHECK(c.products()[0].ios_id.view() == "com.studio.game.remove_ads");
+    CHECK(c.products()[0].removes_ads);
     CHECK(c.products()[1].type == monetize::ProductType::Consumable);
+    CHECK_FALSE(c.products()[1].removes_ads);
     CHECK(c.products()[1].ios_id.empty());
     REQUIRE(c.ads().size() == 3);
     CHECK(c.find_ad("level_end") == 1);
@@ -97,6 +100,12 @@ TEST_CASE("store catalog: authoring mistakes are cook errors") {
         // typo'd key
         R"({ "format": "mce-store", "version": 1, "guid": "5703e000-0000-4000-8000-000000000001",
             "products": [ { "id": "gems", "type": "consumable", "andriod": "gems" } ] })",
+        // a consumable cannot remove ads
+        R"({ "format": "mce-store", "version": 1, "guid": "5703e000-0000-4000-8000-000000000001",
+            "products": [ { "id": "gems", "type": "consumable", "removes_ads": true } ] })",
+        // removes_ads is not a bool
+        R"({ "format": "mce-store", "version": 1, "guid": "5703e000-0000-4000-8000-000000000001",
+            "products": [ { "id": "no_ads", "type": "non_consumable", "removes_ads": "yes" } ] })",
         // an ad unit id where the AdMob app id goes
         R"({ "format": "mce-store", "version": 1, "guid": "5703e000-0000-4000-8000-000000000001",
             "admob": { "android": "ca-app-pub-1111/3333" } })",

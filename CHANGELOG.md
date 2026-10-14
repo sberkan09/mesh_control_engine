@@ -15,6 +15,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   and Turkish-aware upper and lower case. `-language tr` plays in Turkish for one run; the cook warns about keys
   a locale lacks. A font sidecar's `"strings": true` bakes every glyph the tables use (with Turkish case forms),
   and `ship.py` names the phone app per language from each table's `app.name`.
+- Purchases and ads, step 5 (M-MONETIZE): a non-consumable marked `"removes_ads": true` in the `.mcstore` turns every
+  ad off once owned: `Ads::load` / `show` / `show_banner` return 0 without reaching the network, `Ads::removed()`
+  says so, a banner on screen is hidden, and a relaunch with it owned never starts the ad network (no consent form).
 - Purchases and ads, step 4 (M-MONETIZE): Google Mobile Ads with Google's consent form (UMP) and, on iOS, the
   App Tracking Transparency prompt, behind `mce/platform/ads.h`; `monetize::PlatformAds` is the player's default ad
   network, with Google's test units in debug builds (`-monetize.ads.test`) and real units only from the `.mcstore`,
