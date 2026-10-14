@@ -12,10 +12,13 @@
 #include "mce/asset/container.h"
 #include "mce/asset/xxhash.h"
 #include "mce/ecs/transform.h"
+#include "mce/cook/cook.h"
+#include "mce/kit/anim3d.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/kit3d_extract.h"
 #include "mce/memory/frame_slots.h"
 #include "mce/refl/type.h"
+#include "cook_test_util.h"
 #include "mesh_fixture.h"
 
 using namespace mce;
@@ -415,4 +418,123 @@ TEST_CASE("kit3d: a game's own Physics3D config survives install") {
     kit::install_kit3d(w, nullptr);
     CHECK(w.resource<kit::Physics3D>().world.config().max_bodies == 77);
     CHECK(w.resource<kit::Physics3D>().auto_step == 0);
+}
+
+TEST_CASE("kit3d: an AnimGraph drives the Animator: blend by parameter, transitions, events, one-shots; AttachToBone follows") {
+    // The spinner, with a named child, in a cooked tree next to the cooked graph.
+    mesh_fixture::Builder spin;
+    const u32 root = spin.add_node(-1);
+    const u32 tip = spin.add_node(static_cast<i32>(root), {2, 0, 0}, "tip");
+    mesh_fixture::Box cb;
+    cb.half = {0.1f, 0.1f, 0.1f};
+    cb.node = tip;
+    spin.add_box(cb);
+    spin.add_spin_clip(root, 4.0f, "spin");
+    spin.add_spin_clip(root, 2.0f, "fast");
+    const Array<byte> blob = spin.build();
+    const std::string mesh_root = write_mesh_tree("kit3d_animgraph_mesh", kSpinner, blob.span());
+
+    const std::string src = cook_test::fresh_dir("kit3d_animgraph");
+    cook_test::write_file(src + "/assets/spinner.mcanim", R"({ "format": "mce-animgraph", "version": 1,
+        "guid": "9a270000-0000-4000-8000-000000000051", "name": "spinner", "params": ["speed", "attack"],
+        "states": [
+            { "name": "move", "blend": { "param": "speed", "points": [ { "clip": "spin", "at": 0 }, { "clip": "fast", "at": 1 } ] },
+              "events": [ { "time": 1.0, "name": "tick" } ] },
+            { "name": "attack", "clip": "fast", "loop": false, "events": [ { "time": 0.5, "name": "hit" } ] } ],
+        "transitions": [
+            { "from": "*", "to": "attack", "when": [ { "param": "attack", "op": ">", "value": 0.5 } ], "fade": 0.25 },
+            { "from": "attack", "to": "move", "on_finish": true, "fade": 0 } ] })");
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(src.c_str()), cook::CookOptions{});
+    REQUIRE(r.ok());
+    asset::AssetSystem assets;
+    const std::string cooked = src + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str()), StringView(mesh_root.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 2)));
+
+    Fixture f;
+    kit::install_kit3d(f.world, &assets);
+    f.camera();
+    const Entity e = f.mesh(kSpinner, {0, 0, -5});
+    kit::Animator a;
+    a.graph.guid = asset::parse_guid("9a270000-0000-4000-8000-000000000051").value();
+    f.world.add(e, a);
+    kit::AttachToBone at;
+    at.target = e;
+    at.bone = "tip";
+    at.offset = {0, 1, 0};
+    const Entity sword = f.world.spawn_with(LocalTransform{}, at);
+    const auto anim = [&]() -> const kit::Animator& { return *f.world.try_get<kit::Animator>(e); };
+
+    f.step();  // enters the start state
+    CHECK(anim().state.view() == StringView("move"));
+    CHECK(anim().playing == StringId("spin").value);
+    CHECK(anim().blend_clip == 0);
+    // AttachToBone: the tip at rest is 2 m along +X of the spinner, the offset 1 m above it.
+    CHECK(f.world.try_get<kit::AttachToBone>(sword)->found == 1);
+    CHECK(f.world.try_get<LocalTransform>(sword)->position.x == doctest::Approx(2.0f).epsilon(1e-3));
+    CHECK(f.world.try_get<LocalTransform>(sword)->position.y == doctest::Approx(1.0f).epsilon(1e-3));
+    CHECK(f.world.try_get<LocalTransform>(sword)->position.z == doctest::Approx(-5.0f).epsilon(1e-3));
+
+    // 1 s into "spin" (a quarter turn): the "tick" event fires and the tip has swung to -Z.
+    u32 ticks = 0;
+    for (u32 i = 0; i < 61; ++i) {
+        f.step();
+        ticks += static_cast<u32>(EventAccess(f.world).read<kit::AnimEvent3D>().size());
+    }
+    CHECK(ticks == 1);
+    CHECK(anim().events_fired == 1);
+    CHECK(anim().last_event.view() == StringView("tick"));
+    const LocalTransform& st = *f.world.try_get<LocalTransform>(sword);
+    CHECK(st.position.x == doctest::Approx(0.0f).epsilon(0.05));
+    CHECK(st.position.z == doctest::Approx(-7.0f).epsilon(0.05));
+
+    // A parameter between the points blends the two clips.
+    f.world.try_get_mut<kit::Animator>(e)->params.x = 0.25f;
+    f.step();
+    CHECK(anim().blend_clip == StringId("fast").value);
+    CHECK(anim().blend_weight == doctest::Approx(0.25f));
+    {
+        render::Camera3D cam;
+        REQUIRE(f.extract.camera(f.world, 1.0f, cam));
+        render::Scene3D scene(f.store, mem::heap());
+        scene.begin(cam, {64, 64});
+        f.extract.extract(f.world, scene, 1.0f);
+        CHECK(f.extract.stats().animated == 1);
+    }
+
+    // The attack parameter fires the any-state transition, cross-fading over its own fade.
+    f.world.try_get_mut<kit::Animator>(e)->params.y = 1.0f;
+    f.step();
+    CHECK(anim().state.view() == StringView("attack"));
+    CHECK(anim().clip.view() == StringView("fast"));
+    CHECK(anim().previous == StringId("spin").value);
+    CHECK(anim().blend == 0.0f);
+    CHECK(anim().fade == doctest::Approx(0.25f));
+    f.world.try_get_mut<kit::Animator>(e)->params.y = 0.0f;
+    f.step(31);
+    CHECK(anim().last_event.view() == StringView("hit"));
+    CHECK(anim().blend == 1.0f);
+
+    // The one-shot reaches its end (2 s) and the on_finish transition returns to "move".
+    bool finished = false;
+    for (u32 i = 0; i < 120 && !finished; ++i) {
+        f.step();
+        finished = anim().state.view() == StringView("move");
+    }
+    CHECK(finished);
+    CHECK(anim().time == 0.0f);
+
+    // restart returns to the start state; without a graph a one-shot clip holds and finishes.
+    f.world.try_get_mut<kit::Animator>(e)->graph.guid = asset::Guid{};
+    f.world.try_get_mut<kit::Animator>(e)->clip = "fast";
+    f.world.try_get_mut<kit::Animator>(e)->loop = false;
+    f.step(1 + 150);
+    CHECK(anim().finished);
+    CHECK(anim().time < 2.0f);
+    CHECK(anim().time > 1.99f);
+    f.world.try_get_mut<kit::Animator>(e)->restart = true;
+    f.step();
+    CHECK_FALSE(anim().finished);
+    CHECK(anim().time == 0.0f);
 }

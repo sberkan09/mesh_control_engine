@@ -60,6 +60,14 @@ Rules that keep the layout working:
 at configure time, so after changing it, reconfigure. `games` lists the game ids the project
 builds (one today). `plugins` is reserved.
 
+The editor's **Project Settings** panel edits the title and the start scene (a combo of the
+project's scenes) and saves the file; over MCP, `project_get` / `project_set` do the same and check
+the values before writing (chapter 14). The same panel edits the open scene's **World Settings**:
+the `WorldSettings` component (2D and 3D gravity, `gravity_2d` and `gravity_3d`) on an entity named
+"World Settings". The stock player, play-in-editor and MCP `run_headless` apply the first
+`WorldSettings` in the scene to the physics worlds at the first tick, so a zero-gravity space game
+or a heavy platformer needs no game code.
+
 ## 2.3 The CMake call
 
 `CMakeLists.txt` is one call:

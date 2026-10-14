@@ -105,7 +105,8 @@ public:
     bool move_entity(EntityId id, usize index);
     bool add_component(EntityId id, const refl::TypeRecord& type);
     bool remove_component(EntityId id, const refl::TypeRecord& type);
-    // Replaces the whole component value (inspector / gizmo commit). No-op when unchanged.
+    // Replaces the whole component value (inspector / gizmo commit). No-op when unchanged. On a
+    // prefab instance that inherits `type` without overriding it, adds the override.
     bool set_component(EntityId id, const refl::TypeRecord& type, const void* value);
     // ---- prefab overrides (FR-EDT-080) ----
     // An instance's component overrides the prefab root field by field: set_component marks the

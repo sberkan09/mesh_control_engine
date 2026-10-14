@@ -48,6 +48,10 @@ View2D compute_view_2d(const Camera2D& cam, rhi::Extent2D viewport, f32 pixels_p
 // A pixel-space view for HUD/debug text: origin top-left, +y down, one unit per device pixel.
 View2D compute_screen_view(rhi::Extent2D viewport);
 
+// The trauma shake's offset at `time` seconds (ScreenShake::offset; kit's CameraShake2D component
+// keeps the same state in plain fields): magnitude = trauma² × max_*, noise from (seed, time × hz).
+ShakeOffset shake_offset(u32 seed, f32 time, f32 trauma, f32 max_translation, f32 max_rotation, f32 frequency_hz);
+
 // Trauma-style screen shake (FR-R2D-040 "screen-shake helper"). Deterministic: the noise is a
 // hash of (seed, tick), never wall-clock, so replays shake identically. Advance it on the fixed
 // tick; read offset() when building the view.

@@ -110,14 +110,18 @@ void ScreenShake::tick(f32 dt) {
     trauma_ = max(0.0f, trauma_ - decay_per_second * dt);
 }
 
-ShakeOffset ScreenShake::offset() const {
+ShakeOffset shake_offset(u32 seed, f32 time, f32 trauma, f32 max_translation, f32 max_rotation, f32 frequency_hz) {
     ShakeOffset o;
-    if (trauma_ <= 0.0f) return o;
-    const f32 k = trauma_ * trauma_;
-    const f32 t = time_ * frequency_hz;
-    o.translation = vec2(value_noise(seed_, 0, t), value_noise(seed_, 1, t)) * (k * max_translation);
-    o.rotation = value_noise(seed_, 2, t) * k * max_rotation;
+    if (trauma <= 0.0f) return o;
+    const f32 k = trauma * trauma;
+    const f32 t = time * frequency_hz;
+    o.translation = vec2(value_noise(seed, 0, t), value_noise(seed, 1, t)) * (k * max_translation);
+    o.rotation = value_noise(seed, 2, t) * k * max_rotation;
     return o;
+}
+
+ShakeOffset ScreenShake::offset() const {
+    return shake_offset(seed_, time_, trauma_, max_translation, max_rotation, frequency_hz);
 }
 
 }  // namespace mce::render

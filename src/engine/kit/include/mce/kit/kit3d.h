@@ -108,20 +108,47 @@ MCE_COMPONENT(Camera3DComponent, (fov_deg, Range{5, 170}), (near_z, Range{0.001f
 
 // Plays a node / skeleton clip of the entity's MeshRef mesh by name, cross-fading over `fade`
 // seconds when `clip` changes. kit3d advances `time` every tick (deterministic); a game may also
-// write `time` itself. An empty or unknown clip shows the rest pose.
+// write `time` itself. An empty or unknown clip shows the rest pose. With `loop` off the clip plays
+// once, holds its last pose and sets `finished`; `restart` plays it again from the start.
+//
+// With `graph` (an .mcanim AnimGraph, M-DATA-REACH 7) the graph drives the Animator: `state` is the
+// state playing, `params` hold the graph's parameters in the order it lists them (the game, a
+// sequence or MCP writes them), transitions fire on parameter conditions or when a one-shot state
+// finishes and cross-fade over their own fade, a blend state mixes two neighbouring clips by a
+// parameter (`clip` and `blend_clip`, sampled at the same phase, weight `blend_weight`), and the
+// state's events raise AnimEvent3D (anim3d.h) as the playhead crosses them; `restart` returns to
+// the start state. Clip lengths come from the mesh, read through install_kit3d's asset system;
+// without it clips loop forever and one-shots never finish.
 struct Animator {
     FixedString<32> clip;
-    u64 playing = 0;     // runtime: StringId of the clip `time` belongs to
-    u64 previous = 0;    // runtime: the clip fading out
+    FixedString<32> state;                    // runtime: the graph state playing
+    asset::AssetRef<asset::AnimGraph> graph;  // optional state graph (.mcanim)
+    u64 playing = 0;                          // runtime: StringId of the clip `time` belongs to
+    u64 previous = 0;                         // runtime: the clip fading out
+    u64 blend_clip = 0;                       // runtime: a blend state's second clip
+    math::vec4 params;                        // the graph's parameters, in its order
+    FixedString<24> last_event;               // runtime: the last AnimEvent3D's name
     f32 speed = 1.0f;
-    f32 phase = 0.0f;    // seconds added when posing (desynchronises a row of banners)
-    f32 fade = 0.2f;     // cross-fade seconds (0 = cut)
-    f32 time = 0.0f;     // seconds into `clip` (loops)
+    f32 phase = 0.0f;                         // seconds added when posing (desynchronises a row of banners)
+    f32 fade = 0.2f;                          // cross-fade seconds (0 = cut); a graph transition sets its own
+    f32 time = 0.0f;                          // seconds into `clip`
     f32 previous_time = 0.0f;
-    f32 blend = 1.0f;    // runtime: 0..1 weight of `clip` against `previous`
+    f32 blend = 1.0f;                         // runtime: 0..1 weight of `clip` against `previous`
+    f32 blend_weight = 0.0f;                  // runtime: 0..1 weight of `blend_clip` against `clip`
+    u32 events_fired = 0;                     // runtime
+    bool loop = true;                         // without a graph: false plays `clip` once
+    bool finished = false;                    // runtime: a one-shot clip or state reached its end
+    bool restart = false;                     // set to replay from the start (the engine clears it)
+    u8 pad_ = 0;
+    u32 pad2_ = 0;
 };
-MCE_COMPONENT(Animator, clip, (playing, ReadOnly, Transient), (previous, ReadOnly, Transient), (speed, Range{-8, 8}),
-              phase, (fade, Range{0, 5}), time, (previous_time, ReadOnly, Transient), (blend, ReadOnly, Transient))
+MCE_COMPONENT(Animator, clip, (graph, Help{"an AnimGraph (.mcanim) that drives clip, fades and events"}),
+              (params, Help{"the graph's parameters, in the order it lists them"}), (state, ReadOnly, Transient),
+              (playing, ReadOnly, Transient), (previous, ReadOnly, Transient), (blend_clip, ReadOnly, Transient),
+              (last_event, ReadOnly, Transient), (speed, Range{-8, 8}), phase, (fade, Range{0, 5}), time,
+              (previous_time, ReadOnly, Transient), (blend, ReadOnly, Transient), (blend_weight, ReadOnly, Transient),
+              (events_fired, ReadOnly, Transient), (loop, Help{"without a graph: off plays the clip once"}),
+              (finished, ReadOnly, Transient), (restart, Help{"replay from the start (the engine clears it)"}))
 
 // The world's light, sky, fog, post chain and shadows (the renderer's DirectionalLight, Sky, Fog,
 // PostFx and ShadowSettings, flattened for reflection). It lives in two places:
@@ -245,8 +272,10 @@ struct StaticInstances3D {
 //   Startup              "kit3d_environment"  the scene's Environment3D component, if any, into the resource
 //   Startup              "kit3d_colliders"    BoxCollider3D / MeshCollider3D bodies (after the environment)
 //   FixedUpdate_Physics  "kit3d_physics"      Physics3D::world.step when auto_step
-//   FixedUpdate_Post     "kit3d_animators"    Animator time and cross-fades
-// Idempotent. `assets` (for MeshCollider3D) may be null: mesh colliders are then skipped.
+//   FixedUpdate_Post     "kit3d_animators"    Animator time, cross-fades, graphs and events (anim3d.h)
+//   FixedUpdate_Post     "kit3d_attach"       AttachToBone poses (after the animators)
+// Idempotent. `assets` (for MeshCollider3D, Animator graphs and clip lengths, AttachToBone) may be
+// null: mesh colliders are then skipped, graphs do not run and clips loop.
 void install_kit3d(World& world, asset::AssetSystem* assets);
 
 // Model-space triangles of a cooked mesh payload (CHNK_MESH) in its rest pose, every submesh

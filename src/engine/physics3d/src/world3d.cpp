@@ -345,6 +345,11 @@ World3D& World3D::operator=(World3D&& o) noexcept {
 
 const PhysicsConfig3D& World3D::config() const { return impl_->config; }
 
+void World3D::set_gravity(vec3 gravity) {
+    impl_->config.gravity = gravity;
+    impl_->system.SetGravity(to_jph(gravity));
+}
+
 bool World3D::create_body(Entity e, const BodyDesc3D& desc) {
     Impl& w = *impl_;
     if (e.is_null() || has_body(e)) return false;

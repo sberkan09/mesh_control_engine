@@ -100,6 +100,10 @@ NavGrid nav_grid_from_tilemap(const asset::TilemapView& map, math::vec2 origin =
 // before physics has created the bodies. Returns the cells covered.
 u32 mark_static_colliders(NavGrid& grid, World& world, f32 inflate = 0.0f);
 
+// The union of the static colliders' world AABBs that mark_static_colliders would block (min > max
+// when there are none).
+math::aabb2 static_collider_bounds(World& world);
+
 struct PathOptions {
     bool diagonal = true;  // 8-neighbour; false = 4-neighbour
     bool smooth = true;    // string-pull the cell path

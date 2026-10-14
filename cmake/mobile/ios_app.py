@@ -25,6 +25,13 @@ Ads (M-MONETIZE step 4, monetize_info.py): for a game whose .mcstore has ad plac
 ios/PrivacyInfo.ads.xcprivacy is merged into the privacy manifest and Info.plist gets the AdMob app id,
 the ATT prompt text and Google's SKAdNetwork id. The SDKs themselves are linked by the build
 (-DMCE_ADMOB=ON, src/engine/platform/CMakeLists.txt).
+
+Live services vendor (M-LIVEOPS step 1): with MCE_FIREBASE_IOS_CONFIG pointing at the project's
+GoogleService-Info.plist (from the Firebase console; kept out of the repository and handed to the build
+through the environment), the plist goes into the bundle, Info.plist starts Analytics and Crashlytics
+with collection off until the player consents, and ios/PrivacyInfo.firebase.xcprivacy is merged into
+the privacy manifest. With MCE_FIREBASE_SDK_DIR (the unzipped Firebase.zip the build linked,
+-DMCE_FIREBASE=ON) the dSYM is uploaded with Crashlytics' upload-symbols.
 """
 
 import json
@@ -96,13 +103,47 @@ def add_ads(info, art, shop):
           flush=True)
 
 
-def write_privacy(app, art, ads=False):
+def firebase_config():
+    """The project's GoogleService-Info.plist from MCE_FIREBASE_IOS_CONFIG, or None."""
+    path = os.environ.get("MCE_FIREBASE_IOS_CONFIG")
+    if not path:
+        return None
+    if not os.path.isfile(path):
+        sys.exit(f"ship: MCE_FIREBASE_IOS_CONFIG={path} does not exist")
+    return path
+
+
+def add_firebase(info, app, art, config):
+    """The Firebase config in the bundle and both SDKs' collection off until the player consents."""
+    shutil.copy2(config, os.path.join(app, "GoogleService-Info.plist"))
+    info["FIREBASE_ANALYTICS_COLLECTION_ENABLED"] = False
+    info["FirebaseCrashlyticsCollectionEnabled"] = False
+    print(f"ship: {art['name']} reports to Firebase: GoogleService-Info.plist bundled, collection off until consent",
+          flush=True)
+
+
+def upload_firebase_symbols(dsym, config):
+    """Crashlytics' upload-symbols from MCE_FIREBASE_SDK_DIR, when it is set."""
+    sdk = os.environ.get("MCE_FIREBASE_SDK_DIR")
+    tool = os.path.join(sdk, "FirebaseCrashlytics", "upload-symbols") if sdk else ""
+    if not tool or not os.path.isfile(tool):
+        print("ship: warning: MCE_FIREBASE_SDK_DIR has no FirebaseCrashlytics/upload-symbols; upload the dSYM "
+              "from the symbols zip yourself or Crashlytics shows unsymbolicated crashes", flush=True)
+        return
+    run([tool, "-gsp", config, "-p", "ios", dsym])
+
+
+def write_privacy(app, art, ads=False, firebase=False):
     with open(os.path.join(HERE, "ios", "PrivacyInfo.xcprivacy"), "rb") as f:
         manifest = plistlib.load(f)
     if ads:
         with open(os.path.join(HERE, "ios", "PrivacyInfo.ads.xcprivacy"), "rb") as f:
             manifest = merge_privacy(manifest, plistlib.load(f))
         print("ship: merged the ads declarations into the privacy manifest", flush=True)
+    if firebase:
+        with open(os.path.join(HERE, "ios", "PrivacyInfo.firebase.xcprivacy"), "rb") as f:
+            manifest = merge_privacy(manifest, plistlib.load(f))
+        print("ship: merged the Firebase declarations into the privacy manifest", flush=True)
     extra = art.get("privacy")
     if extra and os.path.isfile(extra):
         with open(extra, "rb") as f:
@@ -142,7 +183,10 @@ def package(art, args, root):
     shop = monetize_info.read(art)
     if shop["ads"]:
         add_ads(info, art, shop)
-    write_privacy(app, art, ads=shop["ads"])
+    firebase = firebase_config()
+    if firebase:
+        add_firebase(info, app, art, firebase)
+    write_privacy(app, art, ads=shop["ads"], firebase=bool(firebase))
     with open(info_path, "wb") as f:
         plistlib.dump(info, f)
     bundle_id = info["CFBundleIdentifier"]
@@ -153,8 +197,11 @@ def package(art, args, root):
     shutil.rmtree(symbols, ignore_errors=True)
     if not args.keep_symbols:
         os.makedirs(symbols)
-        run(["dsymutil", exe, "-o", os.path.join(symbols, info["CFBundleExecutable"] + ".dSYM")], capture_output=True)
+        dsym = os.path.join(symbols, info["CFBundleExecutable"] + ".dSYM")
+        run(["dsymutil", exe, "-o", dsym], capture_output=True)
         run(["strip", "-x", exe])
+        if firebase:
+            upload_firebase_symbols(dsym, firebase)
 
     if sim:
         run(["codesign", "--force", "--sign", "-", "--timestamp=none", app])

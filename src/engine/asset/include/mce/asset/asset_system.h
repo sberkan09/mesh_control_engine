@@ -57,6 +57,9 @@ struct MountOptions {
 
 class AssetSystem {
 public:
+    // Placeholder payloads, one per ChunkType value (room for the appended types).
+    static constexpr usize kPlaceholderSlots = 32;
+
     explicit AssetSystem(mem::IAllocator& a = mem::heap());
     ~AssetSystem();
     AssetSystem(const AssetSystem&) = delete;
@@ -224,7 +227,7 @@ private:
     u32 read_buf_ = 0;
     u32 write_buf_ = 1;
     IGpuUploadSink* sink_ = nullptr;
-    Array<byte> placeholders_[16];  // indexed by ChunkType
+    Array<byte> placeholders_[kPlaceholderSlots];  // indexed by ChunkType
     Array<AsyncRequest> async_;
     u32 next_async_id_ = 1;
     mem::UniquePtr<AsyncLoader> loader_;  // started by the first dev-mount request

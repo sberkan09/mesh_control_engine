@@ -10,6 +10,7 @@
 #include <memory>
 #include <random>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "cook_test_util.h"
@@ -64,6 +65,13 @@ std::string demo_project(const char* name) {
 }
 
 StringView sv(const std::string& s) { return StringView(s.data(), s.size()); }
+
+// Joins pieces into one string (tool arguments built from variables).
+std::string cat(std::initializer_list<std::string_view> parts) {
+    std::string out;
+    for (std::string_view p : parts) out += p;
+    return out;
+}
 
 struct Parsed {
     cook::JsonDoc doc;
@@ -205,7 +213,7 @@ TEST_CASE("mcp protocol: JSON-RPC framing, initialize handshake, errors, lists")
     auto tools = c.request("tools/list");
     const cook::JsonValue list = tools->root().get("result").get("tools");
     REQUIRE(list.is_array());
-    CHECK(list.size() >= 25);  // the MVP tools; later tracks add theirs (tools_agent.cpp)
+    CHECK(list.size() >= 37);  // a lower bound: tool groups land in parallel (tools.h)
     for (u32 i = 0; i < list.size(); ++i) {
         CHECK(list.at(i).get("name").is_string());
         CHECK(str(list.at(i).get("inputSchema").get("type")) == "object");
@@ -217,7 +225,9 @@ TEST_CASE("mcp protocol: JSON-RPC framing, initialize handshake, errors, lists")
     CHECK(error_code(*c.request("tools/call", "[]")) == kInvalidParams);
 
     auto res = c.request("resources/list");
-    CHECK(res->root().get("result").get("resources").size() == 3);
+    CHECK(res->root().get("result").get("resources").size() >= 4);
+    auto asset_schema = c.request("resources/read", R"({"uri":"mce://assets/schema"})");
+    CHECK(str(asset_schema->root().get("result").get("contents").at(0).get("text")).find("mce-particles") != std::string::npos);
     auto schema = c.request("resources/read", R"({"uri":"mce://refl/schema"})");
     const std::string schema_text = str(schema->root().get("result").get("contents").at(0).get("text"));
     CHECK(schema_text.find("\"Collider2D\"") != std::string::npos);
@@ -646,6 +656,216 @@ TEST_CASE("mcp tools: asset_set_import_settings rewrites a sidecar's settings") 
     auto cook = c.ok("cook_run");
     CHECK_FALSE(cook.v().get("ok").as_bool());
     CHECK(compact(cook.v().get("diagnostics")).find("bogus") != std::string::npos);
+}
+
+TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON source type (M-DATA-REACH 1)") {
+    const std::string root = demo_project("mcp_assets");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+
+    // Every type asset_schema lists is created from its template and cooks clean.
+    auto listed = c.ok("asset_schema");
+    const cook::JsonValue types = listed.v().get("types");
+    REQUIRE(types.size() == 10);
+    for (u32 i = 0; i < types.size(); ++i) {
+        const std::string type = str(types.at(i).get("type")), ext = str(types.at(i).get("extension"));
+        auto schema = c.ok("asset_schema", R"({"type":")" + type + R"("})");
+        CHECK(schema.v().get("fields").is_array());
+        CHECK(schema.v().get("template").is_object());
+        std::string content = "{}";
+        if (ext == ".mctilemap") content = std::string(R"({"tileset":")") + kBallGuid + R"(","columns":2,"rows":2,"width":8,"height":4})";
+        auto made = c.ok("asset_create", cat({R"({"path":"made/a)", ext, R"(","content":)", content, "}"}));
+        CHECK(str(made.v().get("type")) == type);
+        CHECK(str(made.v().get("guid")).rfind("guid:", 0) == 0);
+        CHECK(std::filesystem::exists(cat({root, "/assets/made/a", ext})));
+        CHECK_FALSE(std::filesystem::exists(cat({root, "/assets/made/a", ext, ".mceasset"})));  // native: GUID inline
+        CHECK(compact(c.ok("asset_list", R"({"type":")" + type + R"("})").v()).find("made/a" + ext) != std::string::npos);
+    }
+    auto cook = c.ok("cook_run");
+    CHECK_MESSAGE(cook.v().get("ok").as_bool(), compact(cook.v().get("diagnostics")));
+
+    // Refusals change nothing: an existing file, a bad value, a missing reference, an unknown key,
+    // reserved keys, a type asset_create does not make.
+    CHECK(c.fails("asset_create", R"({"path":"made/a.mcpart"})").find("already exists") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"lifetime":[2,1]}})").find("lifetime") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(root + "/assets/made/b.mcpart"));
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"texture":"guid:5ce4e000-0000-4000-8000-0000000000ff"}})")
+              .find("missing reference") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"colour":[1,1,1,1]}})").find("colour") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"guid":"x"}})").find("set by the tool") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcscene"})").find("scene_new") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"../b.mcpart"})").find("under assets/") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(root + "/assets/made/b.mcpart"));
+
+    // asset_write merges by default and keeps the GUID; replace drops the rest; a refused write
+    // leaves the file as it was.
+    const std::string guid = str(c.ok("asset_read", R"({"path":"made/a.mcpart"})").v().get("guid"));
+    auto w = c.ok("asset_write", std::string(R"({"path":"made/a.mcpart","content":{"rate":55,"texture":")") + kBallGuid + R"("}})");
+    CHECK(str(w.v().get("guid")) == guid);
+    auto r = c.ok("asset_read", R"({"guid":")" + guid + R"("})");
+    CHECK(r.v().get("content").get("rate").as_number() == 55);
+    CHECK(str(r.v().get("content").get("blend")) == "alpha");  // merged: the template's other fields stay
+    CHECK(str(r.v().get("type")) == "ParticlePreset");
+    const std::string before = read_file(root + "/assets/made/a.mcpart");
+    CHECK(c.fails("asset_write", R"({"path":"made/a.mcpart","content":{"max_particles":0}})").find("max_particles") != std::string::npos);
+    CHECK(read_file(root + "/assets/made/a.mcpart") == before);
+    c.ok("asset_write", R"({"path":"made/a.mcpart","mode":"replace","content":{"name":"bare"}})");
+    r = c.ok("asset_read", R"({"path":"made/a.mcpart"})");
+    CHECK_FALSE(r.v().get("content").get("rate").valid());
+    CHECK(str(r.v().get("content").get("guid")) == guid.substr(5));
+    CHECK(c.fails("asset_write", R"({"path":"textures/ball.png","content":{}})").find("asset_set_import_settings") != std::string::npos);
+    CHECK(c.fails("asset_read", R"({"path":"textures/ball.png"})").find("not a JSON source asset") != std::string::npos);
+    CHECK(str(c.ok("asset_read", R"({"path":"scenes/demo.mcscene"})").v().get("content").get("format")) == "mce-scene");
+
+    // The written asset plays: a ParticleEmitter in the scene names it, and run_headless cooks it.
+    c.ok("entity_create", R"({"name":"fx","components":{"ParticleEmitter":{"preset":")" + guid + R"("}}})");
+    c.ok("scene_save");
+    c.ok("run_headless", R"({"ticks":10})");
+}
+
+TEST_CASE("mcp tools: tilemap_paint paints cells, rects and flood fills in one checked call") {
+    const std::string root = demo_project("mcp_tilemap_paint");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    c.ok("asset_create", std::string(R"({"path":"maps/level.mctilemap","content":{"tileset":")") + kBallGuid +
+                             R"(","columns":2,"rows":2,"width":6,"height":3}})");
+    auto p = c.ok("tilemap_paint", R"({"path":"maps/level.mctilemap","rects":[[0,0,5,0,1]],"cells":[[2,2,3],[9,9,1]],"preview":true})");
+    CHECK(p.v().get("changed").as_number() == 7);
+    CHECK(p.v().get("outside").as_number() == 1);
+    CHECK(compact(p.v().get("preview")) == R"(["..3...","......","111111"])");
+    // Flood fill: the empty region above the floor, not the floor or the 3 inside it.
+    p = c.ok("tilemap_paint", R"({"path":"maps/level.mctilemap","fills":[[0,1,2]],"preview":true})");
+    CHECK(p.v().get("changed").as_number() == 11);
+    CHECK(compact(p.v().get("preview")) == R"(["223222","222222","111111"])");
+    // A tile past the tileset (4 cells) refuses the whole call.
+    const std::string before = read_file(root + "/assets/maps/level.mctilemap");
+    CHECK(c.fails("tilemap_paint", R"({"path":"maps/level.mctilemap","cells":[[0,0,0]],"rects":[[0,0,1,1,5]]})").find("outside the tileset") != std::string::npos);
+    CHECK(read_file(root + "/assets/maps/level.mctilemap") == before);
+    CHECK(c.fails("tilemap_paint", R"({"path":"maps/level.mctilemap","cells":[[0,0]]})").find("[x, y, tile]") != std::string::npos);
+    CHECK(c.fails("tilemap_paint", R"({"path":"textures/ball.png","clear":0})").find("not a tilemap") != std::string::npos);
+    p = c.ok("tilemap_paint", R"({"path":"maps/level.mctilemap","clear":0,"preview":true})");
+    CHECK(compact(p.v().get("preview")) == R"(["......","......","......"])");
+    CHECK(c.ok("cook_run").v().get("ok").as_bool());
+}
+
+TEST_CASE("mcp tools: prefabs over MCP: create from an entity, place instances, apply, revert, edit (M-DATA-REACH 2)") {
+    const std::string root = demo_project("mcp_prefabs");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const auto count = [&] { return c.ok("scene_info").v().get("entities").as_number(); };
+    // A child under Crate A goes into the prefab with it.
+    c.ok("entity_create", std::string(R"({"name":"Lid","components":{"ChildOf":{"parent":"$3"},"Sprite":{"texture":")") + kBallGuid + R"("}}})");
+    const double before = count();
+
+    auto made = c.ok("prefab_create_from", R"({"entity":"Crate A","path":"prefabs/crate.mcprefab"})");
+    const std::string guid = str(made.v().get("guid"));
+    const double inst = made.v().get("instance").as_number();
+    CHECK(count() == before - 1);  // Crate A + Lid -> one instance
+    auto prefab_file = parse(read_file(root + "/assets/prefabs/crate.mcprefab"));
+    CHECK(str(prefab_file->root().get("format")) == "mce-prefab");
+    REQUIRE(prefab_file->root().get("entities").size() == 2);
+    CHECK(str(prefab_file->root().get("entities").at(0).get("name")) == "Crate A");
+    auto placed = c.ok("scene_get_entity", R"({"entity":"Crate A"})");
+    CHECK(placed.v().get("id").as_number() == inst);
+    CHECK(str(placed.v().get("prefab")) == guid);
+    CHECK(compact(placed.v().get("components").get("LocalTransform")).find("[-2,2,0]") != std::string::npos);
+    CHECK(c.fails("prefab_create_from", R"({"entity":"Crate B","path":"prefabs/crate.mcprefab"})").find("crate.mcprefab") != std::string::npos);
+    CHECK(c.fails("prefab_create_from", R"({"entity":"Crate B","path":"prefabs/crate.txt"})").find(".mcprefab") != std::string::npos);
+
+    // One undo step brings the entities back; redo makes the instance again.
+    CHECK(str(c.ok("scene_undo").v().get("undone")) == "prefab_create_from");
+    CHECK(count() == before);
+    c.ok("scene_redo");
+    CHECK(count() == before - 1);
+
+    // Four more instances placed by MCP; one overrides the root's Sprite.
+    for (int i = 0; i < 4; ++i) {
+        const std::string x = std::to_string(3 + i), n = std::to_string(i);
+        const std::string_view sprite = i == 0 ? R"(,"Sprite":{"size":[2,2]})" : "";
+        auto r = c.ok("entity_create", cat({R"({"name":"Crate )", n, R"(","prefab":")", guid,
+                                            R"(","components":{"LocalTransform":{"position":[)", x, R"(,2,0]})", sprite, "}}"}));
+        CHECK(str(r.v().get("prefab")) == guid);
+    }
+    CHECK(c.fails("entity_create", std::string(R"({"name":"x","prefab":")") + kBallGuid + R"("})").find(".mcprefab") != std::string::npos);
+    c.ok("scene_save");
+    // Five crates of two entities each, Crate B, the ball and the ground: 13 Sprites.
+    auto run = c.ok("run_headless", R"({"ticks":5,"inspect":{"component":"Sprite"}})");
+    CHECK(run.v().get("inspect").get("count").as_number() == 13);
+
+    // prefab_apply writes the override into the prefab; prefab_revert drops one.
+    auto applied = c.ok("prefab_apply", R"({"entity":"Crate 0"})");
+    CHECK(compact(applied.v().get("applied")) == R"(["Sprite"])");
+    prefab_file = parse(read_file(root + "/assets/prefabs/crate.mcprefab"));
+    CHECK(compact(prefab_file->root().get("entities").at(0).get("components").get("Sprite")).find("[2,2]") != std::string::npos);
+    CHECK(c.ok("scene_get_entity", R"({"entity":"Crate 0"})").v().get("components").get("Sprite").valid() == false);
+    c.ok("component_set", R"({"entity":"Crate 1","component":"Sprite","path":"size","value":[3,3]})");
+    CHECK(compact(c.ok("prefab_revert", R"({"entity":"Crate 1"})").v().get("reverted")) == R"(["Sprite"])");
+    CHECK(c.fails("prefab_apply", R"({"entity":"Crate B"})").find("not a prefab instance") != std::string::npos);
+    CHECK(c.fails("prefab_apply", R"({"entity":"Crate 1","component":"LocalTransform"})").find("placement") != std::string::npos);
+    c.ok("scene_save");
+
+    // The prefab itself opens and saves like a scene, and stays a prefab.
+    c.ok("scene_open", R"({"path":"prefabs/crate.mcprefab"})");
+    CHECK(count() == 2);
+    c.ok("component_set", R"({"entity":"Lid","component":"Sprite","path":"size","value":[0.5,0.5]})");
+    c.ok("scene_save");
+    prefab_file = parse(read_file(root + "/assets/prefabs/crate.mcprefab"));
+    CHECK(str(prefab_file->root().get("format")) == "mce-prefab");
+    CHECK(c.ok("cook_run").v().get("ok").as_bool());
+}
+
+TEST_CASE("mcp tools: project_get / project_set and the scene's WorldSettings (M-DATA-REACH 3)") {
+    const std::string root = demo_project("mcp_project_settings");
+    write_file(root + "/Demo.mceproj", std::string(R"({
+  "format": "mce-project",
+  "version": 1,
+  "name": "Demo",
+  "title": "Demo",
+  "games": [],
+  "start_scene": ")") + kDemoGuid + R"(",
+  "plugins": []
+}
+)");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    auto p = c.ok("project_get");
+    CHECK(str(p.v().get("file")) == "Demo.mceproj");
+    CHECK(str(p.v().get("start_scene_path")) == "scenes/demo.mcscene");
+    CHECK(p.v().get("world_settings").is_null());
+
+    // A copy of the scene becomes the start scene, by path; the title changes; the rest stays.
+    c.ok("scene_save", R"({"path":"scenes/other.mcscene"})");
+    p = c.ok("project_set", R"({"values":{"title":"Other Demo","start_scene":"scenes/other.mcscene"}})");
+    CHECK(str(p.v().get("start_scene_path")) == "scenes/other.mcscene");
+    CHECK(str(p.v().get("project").get("title")) == "Other Demo");
+    auto file = parse(read_file(root + "/Demo.mceproj"));
+    CHECK(str(file->root().get("format")) == "mce-project");
+    CHECK(str(file->root().get("start_scene")) == str(c.ok("scene_info").v().get("guid")));
+    CHECK(file->root().get("plugins").is_array());
+    const std::string before = read_file(root + "/Demo.mceproj");
+    CHECK(c.fails("project_set", R"({"values":{"start_scene":"textures/ball.png"}})").find("start_scene") != std::string::npos);
+    CHECK(c.fails("project_set", R"({"values":{"gravity":[0,1]}})").find("not a project setting") != std::string::npos);
+    CHECK(c.fails("project_set", R"({"values":{"title":"x","games":[1]}})").find("games") != std::string::npos);
+    CHECK(read_file(root + "/Demo.mceproj") == before);
+
+    // WorldSettings: a bad value creates nothing; zero 2D gravity keeps the ball where it starts.
+    CHECK(c.fails("scene_settings_set", R"({"values":{"gravity_2d":"down"}})").find("gravity_2d") != std::string::npos);
+    CHECK(c.ok("scene_settings_get").v().get("world_settings").is_null());
+    auto ws = c.ok("scene_settings_set", R"({"values":{"gravity_2d":[0,0]}})");
+    CHECK(compact(ws.v().get("world_settings").get("value")).find("[0,0]") != std::string::npos);
+    CHECK(str(c.ok("scene_get_entity", R"({"entity":"World Settings"})").v().get("name")) == "World Settings");
+    c.ok("scene_save");
+    auto run = c.ok("run_headless", R"({"ticks":60,"inspect":{"entities":["Ball"],"show":["LocalTransform"]}})");
+    const cook::JsonValue pos = run.v().get("inspect").get("entities").at(0).get("components").get("LocalTransform").get("position");
+    CHECK(pos.at(1).as_number() == doctest::Approx(6.0));
+    c.ok("scene_settings_set", R"({"values":{"gravity_2d":[0,-9.81]}})");
+    c.ok("scene_save");
+    run = c.ok("run_headless", R"({"ticks":60,"inspect":{"entities":["Ball"],"show":["LocalTransform"]}})");
+    CHECK(run.v().get("inspect").get("entities").at(0).get("components").get("LocalTransform").get("position").at(1).as_number() < 5.0);
 }
 
 TEST_CASE("mcp tools: a relative --project path saves where it says") {

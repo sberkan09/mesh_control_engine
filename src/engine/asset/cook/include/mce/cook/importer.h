@@ -107,7 +107,7 @@ public:
     Span<const mem::UniquePtr<IImporter>> all() const { return importers_.span(); }
 
     // Registry with every built-in importer (texture, wav, font, material, scene, glTF, prefab,
-    // tilemap, particles).
+    // tilemap, sprite sheet, particles, ...).
     static void add_builtins(ImporterRegistry& reg);
 
 private:
@@ -123,6 +123,8 @@ mem::UniquePtr<IImporter> make_scene_importer();
 mem::UniquePtr<IImporter> make_prefab_importer();  // .mcprefab -> CHNK_PREFAB (v0.5)
 mem::UniquePtr<IImporter> make_gltf_importer();
 mem::UniquePtr<IImporter> make_tilemap_importer();  // .mctilemap -> CHNK_TILE (v0.5)
+mem::UniquePtr<IImporter> make_spritesheet_importer();  // .mcsheet -> CHNK_SHEET (M-DATA-REACH 5)
+mem::UniquePtr<IImporter> make_animgraph_importer();    // .mcanim -> CHNK_ANIMG (M-DATA-REACH 7)
 mem::UniquePtr<IImporter> make_particle_importer();  // .mcpart -> CHNK_PART (v0.5)
 mem::UniquePtr<IImporter> make_sequence_importer();  // .mcseq -> CHNK_SEQ (v0.5)
 mem::UniquePtr<IImporter> make_input_map_importer(); // .mcinput -> CHNK_INPUT (FR-INP-020)

@@ -26,6 +26,15 @@ MceActivity's mceBilling* methods; one with ad placements gets android/ads/MceAd
 Ads and UMP (GMA, UMP), the mceAds* methods and its AdMob app id in the manifest. mce_platform calls
 both over JNI. Other games get none of it, and their store and ad backends are "none".
 
+Live services vendor (M-LIVEOPS step 1): with MCE_FIREBASE_ANDROID_CONFIG pointing at the project's
+google-services.json (from the Firebase console; it is kept out of the repository and handed to the
+build through the environment), the game gets android/firebase/MceFirebase.java, the Firebase BoM with
+Analytics and Crashlytics NDK (FIREBASE_* below), the google-services and Crashlytics Gradle plugins,
+MceActivity's mceFirebase* methods and manifest flags that start both SDKs with collection off until
+the player consents. The release build uploads the unstripped library's symbols to Crashlytics
+(uploadCrashlyticsSymbolFileRelease). Without the variable nothing of Firebase is stamped in and
+platform::firebase::backend() is "none".
+
 Review prompt (M-MOBILE step 11c): every game gets android/review/MceReview.java, Play In-App Review
 (PLAY_REVIEW) and MceActivity's mceReviewRequest, which platform::request_review() calls over JNI.
 
@@ -61,6 +70,39 @@ PLAY_BILLING = "com.android.billingclient:billing:7.1.1"
 GMA = "com.google.android.gms:play-services-ads:23.6.0"
 UMP = "com.google.android.ump:user-messaging-platform:3.1.0"
 PLAY_REVIEW = "com.google.android.play:review:2.0.2"
+FIREBASE_BOM = "com.google.firebase:firebase-bom:33.7.0"
+FIREBASE_LIBS = ["com.google.firebase:firebase-analytics", "com.google.firebase:firebase-crashlytics-ndk"]
+GOOGLE_SERVICES_PLUGIN = "com.google.gms:google-services:4.4.2"
+CRASHLYTICS_PLUGIN = "com.google.firebase:firebase-crashlytics-gradle:3.0.2"
+
+# MceActivity's bridge to MceFirebase, for platform/firebase.h's JNI calls (src/engine/platform/src/firebase.cpp).
+FIREBASE_METHODS = '''
+    // ---- live services vendor (mce_platform's firebase over JNI, cmake/mobile/android/firebase) ----
+    private org.meshcontrol.firebase.MceFirebase firebase;
+
+    public void mceFirebaseStart() {
+        if (firebase == null) firebase = new org.meshcontrol.firebase.MceFirebase(this);
+    }
+    public void mceFirebaseCollection(int collection) { if (firebase != null) firebase.setCollection(collection); }
+    public void mceFirebaseEvent(String name, String[] keys, int[] kinds, long[] ints, double[] floats, String[] strings) {
+        if (firebase != null) firebase.logEvent(name, keys, kinds, ints, floats, strings);
+    }
+'''
+
+# Both SDKs start with collection off: nothing leaves the device before the player consents.
+FIREBASE_META = ('''
+        <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+        <meta-data android:name="firebase_crashlytics_collection_enabled" android:value="false" />''')
+
+
+def firebase_config():
+    """The project's google-services.json from MCE_FIREBASE_ANDROID_CONFIG, or None."""
+    path = os.environ.get("MCE_FIREBASE_ANDROID_CONFIG")
+    if not path:
+        return None
+    if not os.path.isfile(path):
+        sys.exit(f"ship: MCE_FIREBASE_ANDROID_CONFIG={path} does not exist")
+    return path
 
 # MceActivity's bridge to MceBilling, for platform/store.h's JNI calls (src/engine/platform/src/store.cpp).
 BILLING_METHODS = '''
@@ -197,7 +239,8 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
     if not os.path.isdir(sdl_project):
         sys.exit(f"ship: SDL's android-project not found under {build_dir}/_deps (configure the preset first)")
     shutil.rmtree(project, ignore_errors=True)
-    shutil.copytree(TEMPLATE, project, ignore=shutil.ignore_patterns("*.in", "README.md", "MceActivity.java*", "billing", "ads", "review", "haptics"))
+    shutil.copytree(TEMPLATE, project, ignore=shutil.ignore_patterns("*.in", "README.md", "MceActivity.java*", "billing", "ads", "review", "haptics",
+                                                                   "firebase"))
     for name in ("gradlew", "gradlew.bat", "gradle"):
         src = os.path.join(sdl_project, name)
         dst = os.path.join(project, name)
@@ -221,6 +264,10 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
         "BILLING": "",
         "ADS": "",
         "ADS_META": "",
+        "FIREBASE": "",
+        "FIREBASE_META": "",
+        "PLUGINS": "",
+        "CRASHLYTICS": "",
         "REVIEW": REVIEW_METHODS,
         "HAPTICS": HAPTICS_METHODS,
         "DEPENDENCIES": "",
@@ -242,8 +289,32 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
         deps += [GMA, UMP]
         copy_java("ads", "MceAds.java", main)
         print(f"ship: {art['name']} shows ads: Google Mobile Ads ({GMA}) and UMP stamped in, app id {admob_id}", flush=True)
+    firebase = firebase_config()
+    if firebase:
+        fields["FIREBASE"] = FIREBASE_METHODS
+        fields["FIREBASE_META"] = FIREBASE_META
+        fields["PLUGINS"] = "\n    id 'com.google.gms.google-services'\n    id 'com.google.firebase.crashlytics'"
+        # The library is stripped before Gradle runs; Crashlytics reads the unstripped copy from here.
+        fields["CRASHLYTICS"] = ("\n            firebaseCrashlytics {\n                nativeSymbolUploadEnabled true\n"
+                                 "                unstrippedNativeLibsDir file('crashlytics-symbols')\n            }")
+        deps.append(f"platform('{FIREBASE_BOM}')")
+        deps += FIREBASE_LIBS
+        shutil.copy2(firebase, os.path.join(project, "app", "google-services.json"))
+        with open(os.path.join(project, "build.gradle")) as f:
+            root_gradle = f.read()
+        classpath = "        classpath 'com.android.tools.build:"
+        if classpath not in root_gradle:
+            sys.exit("ship: android/build.gradle no longer has the Android Gradle plugin classpath line")
+        root_gradle = root_gradle.replace(classpath, f"        classpath '{GOOGLE_SERVICES_PLUGIN}'\n"
+                                          f"        classpath '{CRASHLYTICS_PLUGIN}'\n" + classpath, 1)
+        with open(os.path.join(project, "build.gradle"), "w") as f:
+            f.write(root_gradle)
+        copy_java("firebase", "MceFirebase.java", main)
+        print(f"ship: {art['name']} reports to Firebase: Crashlytics NDK and Analytics ({FIREBASE_BOM}) stamped in",
+              flush=True)
     if deps:
-        lines = "".join(f"    implementation '{d}'\n" for d in deps)
+        lines = "".join(f"    implementation {d}\n" if d.startswith("platform(") else f"    implementation '{d}'\n"
+                        for d in deps)
         fields["DEPENDENCIES"] = f"\ndependencies {{\n{lines}}}\n"
     with open(os.path.join(TEMPLATE, "app", "build.gradle.in")) as f:
         text = fill(f.read(), fields)
@@ -294,6 +365,7 @@ def package(art, args, root):
     if not os.environ.get("MCE_ANDROID_KEYSTORE"):
         print("ship: signing with the Android debug keystore (set MCE_ANDROID_KEYSTORE for a store upload)", flush=True)
     aid = stamp(project, art, args, root, build_dir, lib, keystore)
+    firebase = firebase_config()
 
     main = os.path.join(project, "app", "src", "main")
     jni = os.path.join(main, "jniLibs", "arm64-v8a")
@@ -324,7 +396,14 @@ def package(art, args, root):
     with open(os.path.join(assets, "mce_bundle.txt"), "w", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
 
+    if firebase:
+        # Crashlytics' symbol upload reads <dir>/<abi>/lib*.so, the unstripped library.
+        unstripped = os.path.join(project, "app", "crashlytics-symbols", "arm64-v8a")
+        os.makedirs(unstripped)
+        shutil.copy2(lib, unstripped)
     tasks = ["assembleRelease"] + (["bundleRelease"] if args.aab else [])
+    if firebase:
+        tasks.append("uploadCrashlyticsSymbolFileRelease")
     gradlew = os.path.join(project, "gradlew")
     os.chmod(gradlew, 0o755)
     print(f"+ gradlew {' '.join(tasks)}  ({project})", flush=True)

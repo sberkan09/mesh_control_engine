@@ -97,6 +97,7 @@ the player and the editor define. Flags you will meet:
 | `RequiresRestart` | read at start-up only (`headless`, `r.gl_debug`) |
 | `ReadOnly` | reported, never set |
 
-Every convar can be set on the command line as `-name value`. Game modules may not declare
-convars of their own (a module keeps its state in the World); a custom host may, with `MCE_CVAR`.
+Every convar can be set on the command line as `-name value`, including a game module's own
+boot-time switches (`MCE_CVAR` in the module: the player applies them once the module loads and
+only then warns about names nobody declared). Game state still belongs in the World (chapter 6.7).
 Shipped folders lock cheats before parsing the command line (chapter 15).
