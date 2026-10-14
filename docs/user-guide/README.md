@@ -34,7 +34,7 @@ code as built and why; this guide links to them where you may want the full deta
 | 20 | [Multiplayer (optional)](20-multiplayer.md) | Opt a game into networking, run a server and clients, replicate entities |
 | 21 | [Novels and dialogue (optional)](21-novels-and-dialogue.md) | A visual novel from a template, the story script, NPC dialogue in any game and its dialogue box |
 | 22 | [Purchases and ads (optional)](22-purchases-and-ads.md) | Sell products and show ads: the store catalog, game code, consent, fakes for testing, store declarations |
-| 23 | [Live services (optional)](23-live-services.md) | Analytics events, crash reports sent on the next launch, remote config and game services (achievements, leaderboards, cloud saves) |
+| 23 | [Live services (optional)](23-live-services.md) | Analytics events, crash reports sent on the next launch, remote config, game services (achievements, leaderboards, cloud saves), the demo and vendor setup |
 
 ## Conventions used in this guide
 

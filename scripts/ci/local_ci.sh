@@ -208,9 +208,9 @@ stage_physics3d_determinism() {
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
     configure linux-gcc-debug &&
-        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content stream_demo_content sample_shop_demo &&
+        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content stream_demo_content sample_shop_demo sample_liveops_demo &&
         configure linux-gcc-release &&
-        cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player sample_shop_demo &&
+        cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player sample_shop_demo sample_liveops_demo &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1000 -boids 20000" \
             build/linux-gcc-debug/samples/02_boids/sample_02_boids \
             build/linux-gcc-release/samples/02_boids/sample_02_boids &&
@@ -232,6 +232,9 @@ stage_determinism() {
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1850" \
             build/linux-gcc-debug/samples/shop_demo/sample_shop_demo \
             build/linux-gcc-release/samples/shop_demo/sample_shop_demo &&
+        python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1850" \
+            build/linux-gcc-debug/samples/liveops_demo/sample_liveops_demo \
+            build/linux-gcc-release/samples/liveops_demo/sample_liveops_demo &&
         stage_module_determinism &&
         stage_physics3d_determinism &&
         stage_cubes_determinism &&
