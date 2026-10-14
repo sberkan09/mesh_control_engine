@@ -5,6 +5,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Live services vendor, Firebase (M-LIVEOPS step 1): `mce/platform/firebase.h` with Crashlytics for native crashes
+  and Analytics for `analytics::event`. `ship` stamps it into a phone build only when `MCE_FIREBASE_ANDROID_CONFIG` or
+  `MCE_FIREBASE_IOS_CONFIG` names the project's config file (never committed), uploads symbols to Crashlytics, starts
+  both SDKs with collection off and adds the privacy manifest entries; the player turns collection on with consent.
+  iOS builds it with `-DMCE_FIREBASE=ON -DMCE_FIREBASE_SDK_DIR=...`. The engine's crash handler now hands each crash on
+  to a handler installed before it (Crashlytics' NDK handler) after writing its own report. `-liveops.provider
+  firebase` picks it explicitly. Not yet run on a device.
 - Compute on Metal, M-VISUAL step 1 (SBA-6): `mce_rhi_metal` and SDL GPU's Metal driver (iOS, `MCE_RHI=sdlgpu` on
   macOS) report `DeviceCaps::compute` and run compute pipelines, `dispatch`/`dispatch_indirect`, storage images and
   `read_buffer`, so `Forward3D` assigns Forward+ lights on the GPU on Macs and iPhones too (`-r.gpu_light_clusters 0`
