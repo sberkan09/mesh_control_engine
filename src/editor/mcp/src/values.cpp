@@ -115,9 +115,94 @@ bool read_only_changed(const refl::TypeRecord& type, const u8* before, const u8*
     return false;
 }
 
+// An entity reference may name the entity ("Player") as well as "$<id>": names are respelled as
+// ids before the scene reader sees the value. `changed` says whether anything was respelled.
+bool names_to_ids(const refl::FieldRecord* fields, usize nfields, cook::JsonValue v, const SceneDocument& doc, JsonWriter& w,
+                  bool& changed, cook::String& err);
+
+bool ref_to_id(cook::JsonValue v, const SceneDocument& doc, JsonWriter& w, bool& changed, cook::String& err) {
+    if (!v.is_string() || v.as_string().empty() || v.as_string()[0] == '$') {
+        w.copy(v);
+        return true;
+    }
+    const editor::DocEntity* found = nullptr;
+    for (const editor::DocEntity& e : doc.entities()) {
+        if (e.name.view() != v.as_string()) continue;
+        if (found) {
+            err += "entity reference \"";
+            err += v.as_string();
+            err += "\": two entities have that name; give \"$<id>\"";
+            return false;
+        }
+        found = &e;
+    }
+    if (!found) {
+        err += "entity reference \"";
+        err += v.as_string();
+        err += "\": no entity with that name in the scene (an entity reference is \"$<id>\", a name, or null)";
+        return false;
+    }
+    cook::String id;
+    cook::appendf(id, "$%u", found->id);
+    w.str(id.view());
+    changed = true;
+    return true;
+}
+
+bool field_to_ids(const refl::FieldRecord& f, cook::JsonValue v, const SceneDocument& doc, JsonWriter& w, bool& changed,
+                  cook::String& err) {
+    const refl::TypeRecord* nested = f.kind == refl::FieldKind::Struct ? refl::find_type(f.type_id) : nullptr;
+    auto one = [&](cook::JsonValue x) {
+        if (f.kind == refl::FieldKind::EntityRef) return ref_to_id(x, doc, w, changed, err);
+        if (nested && x.is_object()) return names_to_ids(nested->fields.data(), nested->fields.size(), x, doc, w, changed, err);
+        w.copy(x);
+        return true;
+    };
+    if (f.count > 1 && v.is_array() && (f.kind == refl::FieldKind::EntityRef || nested)) {
+        w.begin_array();
+        for (u32 i = 0; i < v.size(); ++i)
+            if (!one(v.at(i))) return false;
+        w.end_array();
+        return true;
+    }
+    return one(v);
+}
+
+bool names_to_ids(const refl::FieldRecord* fields, usize nfields, cook::JsonValue v, const SceneDocument& doc, JsonWriter& w,
+                  bool& changed, cook::String& err) {
+    w.begin_object();
+    for (u32 i = 0; i < v.size(); ++i) {
+        const StringView key = v.key_at(i);
+        w.key(key);
+        const refl::FieldRecord* f = nullptr;
+        for (usize k = 0; k < nfields && !f; ++k)
+            if (StringView(fields[k].name_str) == key) f = &fields[k];
+        if (!f) {
+            w.copy(v.at(i));  // the reader reports the unknown field
+            continue;
+        }
+        if (!field_to_ids(*f, v.at(i), doc, w, changed, err)) return false;
+    }
+    w.end_object();
+    return true;
+}
+
 // `at`: the property path of a single-leaf read ("" for an object of fields).
 bool read_into(const refl::TypeRecord& type, cook::JsonValue obj, void* value, const SceneDocument& doc, StringView at,
                cook::String& err) {
+    cook::String respelled;
+    JsonWriter w(respelled);
+    bool changed = false;
+    if (obj.is_object() && !names_to_ids(type.fields.data(), type.fields.size(), obj, doc, w, changed, err)) return false;
+    cook::JsonDoc named;
+    if (changed) {
+        cook::JsonError jerr;
+        if (!named.parse(respelled.view(), jerr)) {
+            err += "value is not valid JSON";
+            return false;
+        }
+        obj = named.root();
+    }
     encode_nulls(type, value);
     cook::DiagList diags;
     const bool ok = cook::read_scene_component(type, obj, value, id_bound(doc), "value", "value", diags);

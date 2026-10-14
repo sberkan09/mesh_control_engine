@@ -281,6 +281,13 @@ TEST_CASE("audio_bridge: a Music source streams its clip and fades in; removing 
     w.destroy(e);
     test::render(*dev, out, 4800);  // 0.1 s
     CHECK(dev->stats().voices_real == 1);
+    // The next scene's source of the same music waits for the fade (one reader per stream), then plays.
+    const Entity next = w.spawn_with(src);
+    w.tick(dt, tick++);
+    CHECK_FALSE(w.try_get<AudioSource>(next)->started);
     test::render(*dev, out, 48000);
     CHECK(dev->stats().voices_real == 0);
+    w.tick(dt, tick++);
+    CHECK(w.try_get<AudioSource>(next)->started);
+    CHECK(dev->is_playing(w.try_get<AudioSource>(next)->handle));
 }

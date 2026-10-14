@@ -75,7 +75,7 @@ const ToolDef kAgentTools[] = {
      "when stuck), explore (seeded random wandering, coverage) or masher (random button chords, crash and soft-lock "
      "hunting). Returns the feel report: time to finish, deaths, stuck spots with positions, idle time, distance, cells "
      "visited. Needs no game code: the bot drives the game's input actions (Move, Jump, ...).",
-     R"j({"type":"object","properties":{"bot":{"type":"object","description":"{kind: walk_to|explore|masher, actor: entity, target: [x,y(,z)] or entity (walk_to), plane: xy|x|xz (default xy; x = side view with Jump, xz = 3D ground), reach: m (0.5), seed, move: action (Move), jump: action (Jump), actions: [names] (masher), period: ticks (8)}"},)j"
+     R"j({"type":"object","properties":{"bot":{"type":"object","description":"{kind: walk_to|explore|masher, actor: entity, target: [x,y(,z)] or entity (walk_to), through: [waypoints, points or entities, reached in order before target] (walk_to), air_jumps: 0-4 extra Jump presses in the air (walk_to, side view), plane: xy|x|xz (default xy; x = side view with Jump, xz = 3D ground), reach: m (0.5), seed, move: action (Move), jump: action (Jump), actions: [names] (masher), period: ticks (8)}"},)j"
      R"j("scene":{"type":"string","description":"A saved scene under assets/ (default: the open scene)"},)j"
      R"j("ticks":{"type":"integer","minimum":1,"maximum":36000,"default":1800},)j"
      R"j("until":{"type":"object","description":"Stop early when this check holds (a field, alive or event check)"},)j"
@@ -155,7 +155,7 @@ const ToolDef kAgentTools[] = {
      "random) varied by the seed, with any sfxr parameter overridden in 'params'. Returns the parameters used (tweak and "
      "call again), the length and level, and a waveform image. 'save' writes a 16-bit WAV under assets/.",
      R"j({"type":"object","properties":{"seed":{"type":"integer","minimum":0,"default":1},"preset":{"type":"string","enum":["pickup","laser","explosion","powerup","hit","jump","blip","random"],"default":"pickup"},)j"
-     R"j("params":{"type":"object","description":"sfxr parameters to override, e.g. {\"wave\": \"sine\", \"base_freq\": 0.4, \"env_decay\": 0.3}"},)j" MCE_SAVE_PROPS "}}",
+     R"j("params":{"type":"object","description":"sfxr parameters to override, e.g. {\"wave\": \"sine\", \"base_freq\": 0.4, \"env_decay\": 0.3}; wave is square, saw, sine or noise; the result lists every parameter with its value"},)j" MCE_SAVE_PROPS "}}",
      gen_sfx},
     {"gen_music",
      "Generate a seamless music loop (bass, chords, melody and optional drums) in a scale on a root note, exactly 'bars' "

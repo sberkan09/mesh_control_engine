@@ -423,6 +423,15 @@ StringView arg_name(StringView tok) {
     if (name == "h" || name == "?") name = "help";  // the usual spellings of -help
     return name;
 }
+
+// A value, not the next -name / +command: a token that starts with neither, or a negative
+// number ("-3", "-0.5,4,10": a free camera left of the origin).
+bool is_value(const char* a) {
+    if (a[0] == '+') return false;
+    if (a[0] != '-') return true;
+    const char c = a[1] == '.' ? a[2] : a[1];
+    return c >= '0' && c <= '9';
+}
 }  // namespace
 
 u32 parse_command_line(int argc, const char* const* argv, bool defer_unknown) {
@@ -432,7 +441,7 @@ u32 parse_command_line(int argc, const char* const* argv, bool defer_unknown) {
         const StringView tok(argv[i]);
         if (tok.size() > 1 && tok[0] == '-') {
             ConVar* v = ConVar::find(StringId(arg_name(tok)));
-            const bool has_value = i + 1 < argc && argv[i + 1][0] != '-' && argv[i + 1][0] != '+';
+            const bool has_value = i + 1 < argc && is_value(argv[i + 1]);
             if (!v) {
                 if (defer_unknown && g_deferred_count < kMaxDeferredArgs) {
                     g_deferred[g_deferred_count++] = {argv[i], has_value ? argv[i + 1] : nullptr};
@@ -450,7 +459,7 @@ u32 parse_command_line(int argc, const char* const* argv, bool defer_unknown) {
             StringView args[kMaxArgs];
             usize n = 0;
             int j = i + 1;
-            while (j < argc && argv[j][0] != '-' && argv[j][0] != '+') {
+            while (j < argc && is_value(argv[j])) {
                 if (n < kMaxArgs) args[n++] = argv[j];
                 ++j;
             }

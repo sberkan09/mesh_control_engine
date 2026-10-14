@@ -124,8 +124,9 @@ assets): a refused call leaves the file as it was and the error names the field.
 `mce://assets/schema` resource holds every type's description at once.
 
 Values use the `.mcscene` spelling (chapter 4): vectors as arrays, assets as `"guid:<uuid>"` (from
-`asset_list`), enums by name, nested structs as objects, entity references as `"$<id>"`. Every `entity` argument
-(and `inspect.entities`) takes an id or, when it is unique, the entity's name.
+`asset_list`), enums by name, nested structs as objects, entity references as `"$<id>"` (a value you write
+may also give the entity's unique name). Every `entity` argument (and `inspect.entities`) takes an id or,
+when it is unique, the entity's name.
 
 `input` scripts the actions the game reads from `InputState`, either as a string in the
 `mce_player -input` form (section 11.5), `"10-70 Move=1,0 Jump\n100 Fire"`, or as an array of
@@ -152,13 +153,14 @@ server draws with `mce_player` beside it (with its `--module`), or with the proj
 ```
 
 reports, after the last tick, the live values (`Transient` fields included) of the listed scene
-entities and of every entity carrying `GameState`, spawned ones included, up to 64. This is how an
+entities (of the played scene: with `scene`, ids and names name that file's entities) and of every
+entity carrying `GameState`, spawned ones included, up to 64. This is how an
 agent checks "did the player reach the flag" without a window.
 
 `trace` samples fields while the run goes, as series: `{"trace": {"every": 10, "fields":
 [{"entity": "Player", "field": "LocalTransform.position"}, {"entity": "Player", "field":
 "Health.hp"}]}}` returns `trace.ticks` and one `values` array per field (at most 16 fields and
-1000 rows). A field is `Component.path`, a property path (as `component_set` takes it) ending at a number, bool,
+1000 rows; past that `trace.truncated` is true, so raise `every` for a long run). A field is `Component.path`, a property path (as `component_set` takes it) ending at a number, bool,
 string, enum or vector (or one lane of it, `position.x`).
 
 ### Docs, samples and prompts
@@ -201,9 +203,10 @@ a generator. `library_add` copies an entry into `assets/` (models into `models/`
 
 `project_check` is the review a person would do before a release, as data. Errors (an asset or scene that
 does not cook, a GUID no asset has, a scene that does not run) make `pass` false; warnings (a media file
-with no `CREDITS.md` row, a normal map or mask imported as sRGB, a scene over the per-tick budget, text under
-16 px on a 1280x720 screen or under 4.5:1 contrast against the camera's clear colour) and infos (an asset
-nothing references) do not. Each finding names the file and, where it can, the call that fixes it. Timing
+with no `CREDITS.md` row, a `CREDITS.md` row for a file the project no longer has, a normal map or mask
+imported as sRGB, a scene over the per-tick budget, text under 16 px on a 1280x720 screen or under 4.5:1
+contrast against what is behind it: the backing `Sprite` panel under the label, else the camera's clear
+colour) and infos (an asset nothing references; scenes and input maps are entry points) do not. Each finding names the file and, where it can, the call that fixes it. Timing
 comes from the machine the server runs on, so treat the budget as a trend, not a gate. `ship_build` then
 makes the zip a player gets; `mce ship` puts `CREDITS.md` in it.
 
@@ -291,11 +294,13 @@ A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag
 | `input` or `bot` | scripted input (as `run_headless` takes it) or a built-in bot, not both |
 | `actor` | the entity the feel report follows (default: the bot's actor) |
 | `until` | ends the run as soon as it holds (a field, `alive`, `event` or `scene` check) |
-| `death` | counts a death each time it becomes true; deaths also count when the actor's entity goes away or it jumps more than `teleport` metres (default 3) in one tick (a respawn) |
+| `death` | counts a death each time it becomes true; deaths also count when the actor's entity goes away or it jumps more than `teleport` metres (default 3) in one tick (a respawn). Leaving the starting scene by a scene change is not a death: it ends the level (`finished`) |
 | `assert` | the checks: at the end of the run, or after tick `tick` |
 
 A check names one thing and compares it: `{"entity", "field"}` (a component field), `alive`
-(an entity, default `true`), `event` (events of that type pushed so far, default `>= 1`),
+(an entity, default `true`), `event` (events of that type pushed so far, default `>= 1`; the C++
+name `my_game::CoinCollected`, or `CoinCollected` when one event type has that name; an unknown
+name fails the check with a note listing the game's events),
 `scene` (the scene the run is in, by source path, after the game's `scene::request_change`),
 `log_contains`, `log_errors` / `log_warnings` (the most allowed) or `feel` (`deaths`,
 `idle_ticks`, `stuck_ticks`, `stuck_spots`, `distance`, `cells`, `finished_tick`). The comparison
@@ -309,7 +314,7 @@ them) from the actor's position, so they need no game code:
 
 | Bot | Plays | Arguments |
 |---|---|---|
-| `walk_to` | heads for `target` (a point `[x, y(, z)]` or an entity; done within `reach`, default 0.5 m, or when the target entity is gone); when it stops getting closer it jumps (side view) or sidesteps (top-down) | `actor`, `target`, `plane`, `reach` |
+| `walk_to` | heads for `target` (a point `[x, y(, z)]` or an entity; done within `reach`, default 0.5 m, or when the target entity is gone), through the `through` waypoints first, in order (points or entities: around a pond, past each pickup); when it stops getting closer it jumps (side view) or sidesteps (top-down); `air_jumps` (0-4) presses Jump again in the air for a double jump or a flap. The run goes on half a second after the arrival, so the game can react (a door, a pickup, a scene change) | `actor`, `target`, `through`, `plane`, `reach`, `air_jumps` |
 | `explore` | wanders in seeded random directions, turning when blocked (and jumping, side view); coverage shows in `cells_visited` | `actor`, `plane`, `seed` |
 | `masher` | holds a seeded random chord of `actions` (default Move, Jump, Fire, Confirm, Cancel), a new one every `period` ticks (8): crash and soft-lock hunting | `actions`, `period`, `seed`, `actor?` |
 
@@ -331,7 +336,7 @@ that leaves it stuck at the same spot, is the first thing to look at with `rende
 | Entity ids are per scene | ids are saved in the file and survive `scene_open`, but a batch written against another scene's ids edits the wrong entities | re-list with `scene_list_entities` after opening a different scene; address entities by unique name; `scene_undo` repairs a bad batch |
 | `run_headless` plays the saved file | unsaved edits are refused | `scene_save` first |
 | The MCP cook writes `cooked/`, not the pack | the game executable still plays the old pack | `cook_run {"pack": true}`, or rebuild `my_game` (the build cooks the pack) |
-| Stock server without the module | "unknown component type" for your components | run `<game>_mcp` or `mce_mcp --module <lib<game>.so>`, and restart it after adding components |
+| Stock server without the module | "unknown component type" for your components | run `<game>_mcp` or `mce_mcp --module <lib<game>.so>`; `module_build` reloads new and changed components without a restart |
 | `scene_new` makes a new GUID | a `.mceproj` that names the old scene points at nothing if you save over it | to re-author the start scene, `scene_open` it and `scene_clear` it |
 | `scene_save` with `force` over another file | the file keeps its own GUID but its content is replaced by the open scene | save as a new path (a fresh GUID), or `scene_open` and `scene_clear` the existing scene |
 | Adopted textures default to sRGB | normal maps and LUTs come out wrong | `asset_set_import_settings {"settings": {"srgb": false}}` |

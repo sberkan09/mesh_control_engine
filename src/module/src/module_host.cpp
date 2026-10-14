@@ -10,6 +10,7 @@
 
 #include "mce/log.h"
 #include "mce/platform/library.h"
+#include "mce/refl/type.h"
 
 namespace mce {
 namespace {
@@ -22,8 +23,33 @@ struct Slot {
     u32 worlds_alive = 0;  // Worlds the module was installed into that still exist
     bool owns_copy = false;  // loaded_path is our copy (deleted on release), not the source mapped in place
     FixedString<512> loaded_path;
+    // The reflection records the module's static registrars added. unload_game_module drops them
+    // itself: the loader may keep a C++ module mapped after dlclose (STB_GNU_UNIQUE symbols), and
+    // then its registrars never run their destructors, so the old field lists would shadow the
+    // rebuilt module's (a component that gained a field would refuse it).
+    u32 type_count = 0;
+    u32 enum_count = 0;
+    const refl::TypeRecord* types[256] = {};
+    const refl::EnumRecord* enums[64] = {};
 };
 Slot g_slots[kSlotCount];
+
+template <class Rec>
+bool contains(Span<const Rec* const> list, const Rec* r) {
+    for (const Rec* x : list)
+        if (x == r) return true;
+    return false;
+}
+
+// Remembers what appeared in `now` but not in `before` (the module's own records).
+template <class Rec, usize N>
+void remember_new(Span<const Rec* const> now, const Rec* const* before, u32 before_count, const Rec* (&out)[N], u32& count) {
+    for (const Rec* r : now) {
+        if (contains(Span<const Rec* const>(before, before_count), r)) continue;
+        MCE_ASSERT_MSG(count < N, "game module registers too many reflected records");
+        if (count < N) out[count++] = r;
+    }
+}
 
 // Lives in the World as a resource: its destructor tells the loader the World is gone, so
 // unload_game_module() can assert the teardown order (World first, then the library).
@@ -133,12 +159,23 @@ Result<LoadedModule> open_game_module(StringView path) {
     g_slots[slot].owns_copy = copied;
     g_slots[slot].loaded_path = m.loaded_path;
 
+    // Snapshot the registry: whatever the module's static initialisers add is the module's.
+    static const refl::TypeRecord* types_before[1024];
+    static const refl::EnumRecord* enums_before[256];
+    const Span<const refl::TypeRecord* const> t0 = refl::all();
+    const Span<const refl::EnumRecord* const> e0 = refl::all_enums();
+    const u32 nt = static_cast<u32>(t0.size() < 1024 ? t0.size() : 1024);
+    const u32 ne = static_cast<u32>(e0.size() < 256 ? e0.size() : 256);
+    for (u32 i = 0; i < nt; ++i) types_before[i] = t0[i];
+    for (u32 i = 0; i < ne; ++i) enums_before[i] = e0[i];
     const Result<void*> lib = platform::load_library(m.loaded_path);
     if (!lib) {
         release_slot(slot);
         return Error(Errc::ModuleNotFound, "module.open", path);
     }
     m.handle = lib.value();
+    remember_new(refl::all(), types_before, nt, g_slots[slot].types, g_slots[slot].type_count);
+    remember_new(refl::all_enums(), enums_before, ne, g_slots[slot].enums, g_slots[slot].enum_count);
 
     const auto entry = reinterpret_cast<ModuleEntryFn>(platform::library_symbol(m.handle, kModuleEntrySymbol));
     m.info = entry ? entry() : nullptr;
@@ -191,6 +228,9 @@ void unload_game_module(LoadedModule& module) {
     MCE_ASSERT_MSG(module.slot < kSlotCount && g_slots[module.slot].used, "unknown module slot");
     MCE_ASSERT_MSG(g_slots[module.slot].worlds_alive == 0,
                    "destroy the World before unloading its game module (it holds module code pointers)");
+    Slot& s = g_slots[module.slot];
+    for (u32 i = 0; i < s.type_count; ++i) refl::unregister_type(s.types[i]);
+    for (u32 i = 0; i < s.enum_count; ++i) refl::unregister_enum(s.enums[i]);
     platform::unload_library(module.handle);
     release_slot(module.slot);
     module = LoadedModule{};

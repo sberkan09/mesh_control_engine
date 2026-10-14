@@ -111,6 +111,17 @@ TEST_CASE("command line parsing") {
     cv_test_ro.reset();
 }
 
+TEST_CASE("command line: a negative number is a value, not the next flag") {
+    const char* argv[] = {"exe", "-test.int", "-12", "-test.str", "-3.5,4,-.5", "-test.bool"};
+    CHECK(console::parse_command_line(6, argv) == 0);
+    CHECK(cv_test_int.get_int() == -12);
+    CHECK(cv_test_str.get_string() == "-3.5,4,-.5");
+    CHECK(cv_test_bool.get_bool());
+    cv_test_int.reset();
+    cv_test_str.reset();
+    cv_test_bool.reset();
+}
+
 TEST_CASE("command line: unknown convars can wait for a late registration (#213)") {
     const char* argv[] = {"exe", "-test.int", "3", "-test.late", "9", "-test.late_flag", "-test.never", "1"};
     CHECK(console::parse_command_line(8, argv, /*defer_unknown=*/true) == 0);  // nothing reported yet

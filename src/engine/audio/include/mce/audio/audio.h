@@ -189,6 +189,8 @@ public:
     // True until the mixer reports the voice finished (one-shot end, stop, steal); updated by
     // update(). A stolen handle fails cleanly — handles are generational and never alias.
     bool is_playing(AudioHandle voice) const;
+    // A streamed clip has one reader: true while a voice (one fading out, too) still plays it.
+    bool stream_busy(ClipHandle clip) const;
 
     // ---- mixer surface --------------------------------------------------------------------
     void set_bus_gain(BusId bus, f32 gain_db);  // smooth-ramped

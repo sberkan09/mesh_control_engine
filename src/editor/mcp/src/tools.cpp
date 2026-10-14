@@ -752,7 +752,6 @@ struct Inspect {
     Array<const refl::TypeRecord*> show;         // components to print (empty: the scene entity's own)
     cook::String json;                           // the "inspect" array
     Span<const Entity> spawned;                  // during the callback
-    bool other_scene = false;                    // the run played another file: no scene ids
 };
 
 const refl::TypeRecord* component_named(StringView name) {
@@ -768,9 +767,22 @@ bool arg_inspect(ToolCall& c, Inspect& in) {
     if (ids.valid()) {
         if (!ids.is_array()) return arg_missing(c, "inspect.entities", "an array of entity ids or names");
         for (u32 i = 0; i < ids.size(); ++i) {
-            EntityId id = editor::kNoEntity;
-            if (!resolve_entity(c, "inspect.entities", ids.at(i), id)) return false;
-            in.ids.push_back(id);
+            // In the played scene (in.doc): the open one, or the file named by 'scene'.
+            const cook::JsonValue e = ids.at(i);
+            i32 found = -1;
+            if (e.is_integer() && e.as_number() >= 1) {
+                found = in.doc->index_of(static_cast<EntityId>(e.as_number()));
+            } else if (e.is_string()) {
+                for (usize k = 0; k < in.doc->size(); ++k) {
+                    if (in.doc->at(k).name.view() != e.as_string()) continue;
+                    if (found >= 0) return fail(c, "inspect.entities: two entities have that name in the played scene; give its id");
+                    found = static_cast<i32>(k);
+                }
+            } else {
+                return arg_missing(c, "inspect.entities", "entity ids or names");
+            }
+            if (found < 0) return fail(c, "inspect.entities: no entity with that id or name in the played scene");
+            in.ids.push_back(in.doc->at(static_cast<usize>(found)).id);
         }
     }
     const cook::JsonValue comp = v.get("component");
@@ -794,7 +806,7 @@ bool arg_inspect(ToolCall& c, Inspect& in) {
 // The scene id of a run entity (spawned[i] is scene entity i when the cooked scene has exactly the
 // document's entities, i.e. no prefab instance expanded); kNoEntity for entities the run created.
 EntityId scene_id_of(const Inspect& in, Entity e) {
-    if (e.is_null() || in.other_scene || in.spawned.size() != in.doc->size()) return editor::kNoEntity;
+    if (e.is_null() || in.spawned.size() != in.doc->size()) return editor::kNoEntity;
     for (usize i = 0; i < in.spawned.size(); ++i)
         if (in.spawned[i] == e) return in.doc->entities()[i].id;
     return editor::kNoEntity;
@@ -952,20 +964,21 @@ bool run_headless_tool(ToolCall& c) {
         if (scene(c).dirty()) return fail(c, "the scene has unsaved changes: scene_save first (run_headless plays the cooked file)");
     }
     const bool other_scene = played != file.rel.view();
+    // Entity names and ids in inspect and trace name the played scene's entities.
+    editor::SceneDocument played_doc;
+    if (other_scene) {
+        cook::String derr("scene: ");
+        if (!load_scene_doc(c.server, played, played_doc, derr)) return fail(c, derr.view());
+    }
+    const editor::SceneDocument& doc = other_scene ? played_doc : scene(c).doc();
     Inspect inspect;
-    inspect.doc = &scene(c).doc();
+    inspect.doc = &doc;
     if (!arg_inspect(c, inspect)) return false;
-    if (other_scene && !inspect.ids.empty())
-        return fail(c, "inspect.entities names entities of the open scene; with 'scene' use inspect.component");
-    inspect.other_scene = other_scene;
     const bool inspecting = !inspect.ids.empty() || inspect.filter;
     Trace trace;
-    editor::SceneDocument trace_doc;
     if (const cook::JsonValue tv = arg(c, "trace"); tv.valid()) {
         cook::String terr("trace: ");
-        if ((other_scene && !load_scene_doc(c.server, played, trace_doc, terr)) ||
-            !parse_trace(other_scene ? trace_doc : scene(c).doc(), tv, trace, terr))
-            return fail(c, terr.view());
+        if (!parse_trace(doc, tv, trace, terr)) return fail(c, terr.view());
     }
     SimRun sim;
     sim.trace = &trace;
@@ -1140,7 +1153,7 @@ const ToolDef kTools[] = {
      scene_list_entities},
     {"scene_get_entity",
      "One entity (by id, or by name when unique) with its component values in .mcscene form (fields at their "
-     "default are omitted; entity references are \"$<id>\"). Ids are saved in the file and survive scene_open.",
+     "default are omitted; entity references are \"$<id>\"; a value you write may also name the entity). Ids are saved in the file and survive scene_open.",
      kEntityArg, scene_get_entity},
     {"asset_list", "Assets of the project (GUID registry): guid as \"guid:<uuid>\", path under assets/, type.",
      R"({"type":"object","properties":{"type":{"type":"string","description":"Texture, Font, Sfx, Scene, Mesh, Material, ..."}}})",
@@ -1152,7 +1165,8 @@ const ToolDef kTools[] = {
     {"entity_create",
      "Create an entity (with a LocalTransform unless transform is false) and optionally components, e.g. "
      "{\"Sprite\": {\"texture\": \"guid:...\", \"size\": [1, 1]}}. With 'prefab', an instance of that .mcprefab whose "
-     "'components' override the prefab root's fields (LocalTransform places it). Returns its id.",
+     "'components' override the prefab root's fields (LocalTransform places it). An entity reference field takes "
+     "\"$<id>\", the entity's unique name, or null. Returns its id.",
      R"({"type":"object","properties":{"name":{"type":"string"},"prefab":{"type":"string","description":"\"guid:<uuid>\" of a .mcprefab: place an instance; components then override the prefab root's fields"},"transform":{"type":"boolean","default":true},"at":{"type":"integer","description":"Index in the hierarchy; default: the end"},"components":{"type":"object","description":"Type name -> object of fields"}},"required":["name"]})",
      entity_create},
     {"entity_delete", "Delete an entity (references to it become null).", kEntityArg, entity_delete},
@@ -1166,8 +1180,8 @@ const ToolDef kTools[] = {
      component_remove},
     {"component_set",
      "Change a component. Without 'path', 'value' is an object of fields to change. With a property path "
-     "(\"position\", \"position.x\", \"shape.half\", \"items[2]\"), 'value' is that property's value. Type errors "
-     "name the expected type.",
+     "(\"position\", \"position.x\", \"shape.half\", \"items[2]\"), 'value' is that property's value. An entity "
+     "reference takes \"$<id>\", the entity's unique name, or null. Type errors name the expected type.",
      R"({"type":"object","properties":{"entity":{"type":["integer","string"],"description":"Entity id, or its name when unique"},"component":{"type":"string"},"path":{"type":"string"},"value":{}},"required":["entity","component","value"]})",
      component_set},
     {"scene_new", "Start a new, empty, unsaved scene (refuses to drop unsaved changes unless force).",

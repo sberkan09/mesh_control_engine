@@ -17,6 +17,17 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   and says when the performance check could not run; `project_set` keeps
   `start_scene` when the patch does not name it; `engine_capabilities` lists the components that already do
   what it called code; an SDK project's `ctest` runs its 300-tick smoke test.
+- From the M-AGENT demo's second round (SBA-56): `module_build` reloads a component whose fields changed (the
+  host drops the old module's reflection even when the loader keeps its image mapped); `render_sheet` and
+  `render_frame` play a long input script exactly as `run_headless` does (the player reads `-input` by sim tick);
+  a free camera left of the origin renders (a negative number on the command line is a value); `walk_to` takes
+  `through` waypoints and `air_jumps`, and runs half a second past the arrival; a scene change ends a bot's level
+  instead of counting a death; `.mctest` event checks accept the name without its namespace and fail on an
+  unknown one; entity references in values take the entity's name; `run_headless` `inspect` names the played
+  scene's entities; `project_check` measures text contrast against the sprite panel behind it, flags
+  `CREDITS.md` rows for files that are gone and treats input maps as entry points; `RigidBody3D.stop_spin`
+  zeroes a body's spin; a music source of the next scene waits for the same streamed clip to fade out instead
+  of staying silent; `MCE_LOG_*` with a printf format does not compile.
 - Friction notes, M-AGENT step 8 (SBA-55): `report_friction` lets an agent write down what the engine made hard
   (summary, area, severity, expected, actual, workaround) as a line in the project's `friction.jsonl`, and
   `mce friction <projects...>` collects the notes into one Markdown backlog (or JSON), blocking ones first.

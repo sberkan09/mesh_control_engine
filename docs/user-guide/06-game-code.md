@@ -236,7 +236,22 @@ bridge, particles and sequences. Your `install()` then:
 
 The engine's own components (`LocalTransform`, `Sprite`, `RigidBody2D`, ...) are registered by
 the host; a scene that uses a type nobody registered fails to load with `NotFound` naming the
-column, never silently.
+column, never silently. Where they are declared, for code that names them:
+
+| Types | Namespace | Header |
+|---|---|---|
+| `LocalTransform` | `mce` | `mce/ecs/transform.h` (in `mce/gameplay.h`) |
+| `WorldTransform`, `ChildOf` | `mce` | `mce/ecs/hierarchy.h` |
+| `Sprite`, `AnimatedSprite`, `TextLabel`, `Camera2DComponent`, `TilemapLayer`, `ParticleEmitter`, `ViewInfo` | `mce::kit` | `mce/kit/components.h` (in `mce/gameplay.h`) |
+| `MeshRef`, `Camera3DComponent`, `Environment3D`, `PointLight3D`, `BoxCollider3D` | `mce::kit` | `mce/kit/kit3d.h` (in `mce/gameplay.h`) |
+| `RigidBody3D`, `CharacterController3D`, `Trigger3D` and its events | `mce::kit` | `mce/kit/bodies3d.h` |
+| `SfxTrigger`, `CameraFollow2D`, `CameraFollow3D`, `CameraShake2D` | `mce::kit` | `mce/kit/effects.h` |
+| `RigidBody2D`, `Collider2D`, `CharacterController2D` | `mce::physics` | `mce/physics/components.h` (in `mce/gameplay.h`) |
+| `AudioSource`, `AudioListener` | `mce::audio` | `mce/audio/components.h` (in `mce/gameplay.h`) |
+| `InputState` | `mce::input` | `mce/input/ecs.h` (in `mce/gameplay.h`) |
+
+A respawned `RigidBody3D` keeps its spin unless you clear it: set `velocity` to zero with
+`set_velocity` and `stop_spin` to `true` together with the new position.
 
 Every host installs `InputState` (the player and play-in-editor). If your module can also run
 where nobody does (MCP `run_headless`), install an idle snapshot yourself so your systems can
@@ -315,7 +330,9 @@ until the next structural change, so do not keep them across ticks.
 ## 6.13 Logging and errors
 
 `MCE_LOG_INFO("...")`, `MCE_LOG_WARN`, `MCE_LOG_ERROR` write to the engine log, which the editor's
-Console panel and the in-game console show. Do not log inside per-entity loops; log a summary per
+Console panel and the in-game console show. The format is fmt's, with `{}` placeholders:
+`MCE_LOG_INFO("gem {} of {}, {:.1f} s left", n, total, t)`. A printf format (`%u`, `%s`) does not
+compile, since it would log the codes as they are. Do not log inside per-entity loops; log a summary per
 tick if you must. Expected failures return `Result`/`ResultV` (`Error(Errc::InvalidArgument,
 "stage", "detail")`); programmer errors assert with `MCE_ASSERT`. There are no exceptions.
 

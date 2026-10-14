@@ -19,9 +19,9 @@ reach all of its non-transient fields.
 | `SaveKey` | `mce/ecs/save.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `LocalTransform` | `mce/ecs/transform.h` | yes | yes | yes | docs/user-guide/03-editor.md |
 | `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
-| `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
-| `CharacterController3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
-| `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
+| `CharacterController3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
+| `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `Sprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/03-editor.md |
 | `AnimatedSprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `TextLabel` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
@@ -34,22 +34,22 @@ reach all of its non-transient fields.
 | `SequencePlayer` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `PathAgent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `WorldSettings` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/02-projects.md |
-| `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
-| `CameraShake2D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
-| `CameraFollow2D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
-| `CameraFollow3D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `CameraShake2D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
+| `CameraFollow2D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
+| `CameraFollow3D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
-| `MeshRef` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
-| `PointLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `MeshRef` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
+| `PointLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `SpotLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `ReflectionProbe3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
-| `Camera3DComponent` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `Camera3DComponent` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `Animator` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md |
-| `Environment3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
-| `BoxCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `Environment3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
+| `BoxCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `MeshCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
@@ -93,7 +93,7 @@ reach all of its non-transient fields.
 | `asset_create` | `asset_tools.cpp` | docs/user-guide/07-2d.md |
 | `asset_write` | `asset_tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `asset_read` | `asset_tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `tilemap_paint` | `asset_tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `tilemap_paint` | `asset_tools.cpp` | docs/user-guide/07-2d.md |
 | `prefab_create_from` | `prefab_tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `prefab_apply` | `prefab_tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
 | `prefab_revert` | `prefab_tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
@@ -138,7 +138,7 @@ reach all of its non-transient fields.
 | `gen_palette` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `gen_sprite` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `gen_pixels` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `gen_mesh` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `gen_mesh` | `tools_agent.cpp` | docs/user-guide/08-3d.md |
 | `gen_tileset` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `gen_texture` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `gen_sfx` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |

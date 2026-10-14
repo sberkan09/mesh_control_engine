@@ -2,6 +2,7 @@
 
 #include "mce/app.h"
 #include "mce/convar.h"
+#include "mce/log.h"
 
 using namespace mce;
 using namespace mce::app;
@@ -229,4 +230,15 @@ TEST_CASE("failing on_init returns a nonzero exit code") {
     desc.frame_arena_size = 64 * 1024;
     CHECK(run(app, desc) == 1);
     mem::set_frame_arena(nullptr);
+}
+
+// MCE_LOG_* refuses a printf format at compile time (its % codes would be logged as they are).
+static_assert(mce::log::detail::printf_conversion("gem %u of %u") == 4);
+static_assert(mce::log::detail::printf_conversion("%-8.3lf") == 0);
+static_assert(mce::log::detail::printf_conversion("{} at 50% done, 100%% sure, {:.1f}%") < 0);
+
+TEST_CASE("log: fmt formats pass the printf check") {
+    MCE_LOG_INFO("app test: {} of {} ({:.0f}%)", 1, 2, 50.0);
+    MCE_LOG_INFO("app test: no arguments");
+    CHECK(true);
 }

@@ -345,6 +345,13 @@ AudioHandle AudioDevice::play_at(ClipHandle clip, u64 mix_sample, const PlayPara
     return h;
 }
 
+bool AudioDevice::stream_busy(ClipHandle clip) const {
+    const Impl& impl = *impl_;
+    if (!is_clip_registered(clip)) return false;
+    const ClipMain& m = impl.clips[clip.index];
+    return m.stream >= 0 && !impl.streams[m.stream].playing.is_null();
+}
+
 bool AudioDevice::is_playing(AudioHandle h) const {
     return !h.is_null() && h.index < kMaxHandles && impl_->handles[h.index].live &&
            impl_->handles[h.index].generation == h.generation;

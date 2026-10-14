@@ -76,6 +76,17 @@ TEST_CASE("project_check: a clean project passes; credits, unused and the per-ti
                R"({"format":"mce-tilemap","version":1,"guid":"5ce4e000-0000-4000-8000-0000000000b2","name":"meadow","tileset":"guid:5ce4e000-0000-4000-8000-0000000000b1","columns":1,"rows":1,"width":1,"height":1,"tile_size":1,"tiles":[0]})");
     CHECK(findings(c.ok("project_check", R"({"checks":["unused"]})"), "unused").find("tiles.png") == std::string::npos);
     CHECK(findings(t3, "credits").empty());  // covered by the *.png row
+    // An input map is an entry point (the player loads the pack's first .mcinput itself).
+    write_file(root + "/assets/input/controls.mcinput",
+               R"({"format":"mce-input","version":1,"guid":"5ce4e000-0000-4000-8000-0000000000b3",)"
+               R"("maps":[{"name":"probe","actions":[{"name":"Jump","bindings":[{"key":"Space"}]}]}]})");
+    CHECK(findings(c.ok("project_check", R"({"checks":["unused"]})"), "unused").find("controls.mcinput") == std::string::npos);
+    // A row for a file the project no longer has.
+    write_file(root + "/CREDITS.md",
+               "# credits\n\n| Files | Source | License |\n|---|---|---|\n| `assets/textures/*.png` | drawn | CC0 |\n"
+               "| `assets/fonts/ProggyClean.ttf` | Tristan Grimmer | MIT |\n| `assets/sfx/gone.wav` | made | CC0 |\n");
+    CHECK(findings(c.ok("project_check", R"({"checks":["credits"]})"), "credits") ==
+          "warning CREDITS.md: CREDITS.md names assets/sfx/gone.wav, which the project no longer has\n");
 
     // A budget nothing meets.
     auto slow = c.ok("project_check", R"({"checks":["performance"],"ticks":5,"budget_ms":0.000001})");
@@ -96,7 +107,9 @@ TEST_CASE("project_check: broken references fail it; sRGB data textures and unre
     { "id": 2, "name": "Hint", "components": { "LocalTransform": {}, "TextLabel": { "font": "guid:5ce4e000-0000-4000-8000-000000000010", "text": "hi", "color": [0.2, 0.2, 0.2, 1], "height": 0.2 } } },
     { "id": 3, "name": "Ghost", "components": { "LocalTransform": {}, "Sprite": { "texture": "guid:5ce4e000-0000-4000-8000-0000000000ff" } } },
     { "id": 4, "name": "TitleShadow", "components": { "LocalTransform": {}, "TextLabel": { "font": "guid:5ce4e000-0000-4000-8000-000000000010", "text": "Glow", "color": [0, 0, 0, 1], "height": 1 } } },
-    { "id": 5, "name": "Title", "components": { "LocalTransform": {}, "TextLabel": { "font": "guid:5ce4e000-0000-4000-8000-000000000010", "text": "Glow", "color": [1, 0.9, 0.5, 1], "height": 1 } } }
+    { "id": 5, "name": "Title", "components": { "LocalTransform": {}, "TextLabel": { "font": "guid:5ce4e000-0000-4000-8000-000000000010", "text": "Glow", "color": [1, 0.9, 0.5, 1], "height": 1 } } },
+    { "id": 6, "name": "Panel", "components": { "LocalTransform": { "position": [5, 3, 0] }, "Sprite": { "tint": [0.95, 0.9, 0.8, 1], "size": [4, 1.5] } } },
+    { "id": 7, "name": "Score", "components": { "LocalTransform": { "position": [5.5, 3, 0] }, "TextLabel": { "font": "guid:5ce4e000-0000-4000-8000-000000000010", "text": "Gems 0 / 5", "color": [0.15, 0.1, 0.05, 1], "height": 0.6 } } }
   ]
 }
 )");
@@ -117,7 +130,8 @@ TEST_CASE("project_check: broken references fail it; sRGB data textures and unre
     CHECK(srgb.find("warning assets/textures/rock_normal.png: the name says data") != std::string::npos);
     const std::string a11y = findings(t, "accessibility");
     CHECK(a11y.find("Hint: text is 8.0 px high") != std::string::npos);
-    CHECK(a11y.find("Hint: text contrast against the background colour is 1.") != std::string::npos);
+    CHECK(a11y.find("Hint: text contrast against what is behind it (a backing sprite, else the clear colour) is 1.") != std::string::npos);
+    CHECK(a11y.find("Score") == std::string::npos);  // dark text on its light backing panel reads well
     CHECK(a11y.find("TitleShadow") == std::string::npos);  // a drop shadow behind a readable copy of its text
     // The fix it names works.
     c.ok("asset_set_import_settings", R"({"path":"textures/rock_normal.png","settings":{"srgb":false}})");
