@@ -1,6 +1,8 @@
 #pragma once
 // Forward3D — the 3D frame (rhi-renderer.md §3.5 "[v0.5] Ashen Court frame", §3.6; ADR-0024):
 //
+//   0. SSAO          (AmbientOcclusion::enabled, M-VISUAL 3) half-resolution normal + depth prepass of
+//                    the opaques, obscurance, depth-aware blur; read by the main pass's ambient terms
 //   1. cascades      up to 4 sun cascades into one D32 2D-array (shadow_size² per layer), depth only
 //   2. main pass     Forward+ PBR (Cook-Torrance GGX, ORM + normal + emissive maps) lit by the sun
 //                    (cascaded PCF 3×3 shadows, cross-faded) and the clustered point lights, then
@@ -35,6 +37,9 @@ struct Forward3DDesc {
     // Image-based lighting resources (M-VISUAL 2); a scene turns it on with Sky::ibl. False (or
     // -r.ibl 0) keeps every scene on the hemisphere ambient.
     bool ibl = true;
+    // Screen-space ambient occlusion resources (M-VISUAL 3); a scene turns it on with
+    // AmbientOcclusion::enabled. False (or -r.ssao 0) draws every scene without it.
+    bool ssao = true;
 };
 
 struct Forward3DStats {
@@ -52,6 +57,8 @@ struct Forward3DStats {
     u32 probes_captured = 0;    // probes (re)captured this frame (placed, moved or version bumped)
     u32 probes_loaded = 0;      // baked probes decoded into their slots this frame
     u32 probe_draws = 0;        // draws of those captures, over all six faces
+    bool ssao = false;          // this frame's ambient was darkened by screen-space ambient occlusion
+    u32 ssao_draws = 0;         // the SSAO prepass's draws
     u32 joints = 0;          // joint matrices uploaded for skinned meshes
     u32 bloom_levels = 0;
     bool fxaa = false;
@@ -61,13 +68,14 @@ struct Forward3DStats {
 struct Forward3DGpuTimes {
     u64 frame_index = ~u64(0);
     f64 clusters = -1;  // the GPU light assignment (0 when it ran on the CPU)
+    f64 ssao = -1;      // prepass + occlusion + blur (0 when the scene has no SSAO)
     f64 shadow = -1, main = -1, resolve = -1, bloom = -1, tonemap = -1, fxaa = -1, total = -1;
     f64 post() const { return bloom < 0 ? -1 : bloom + tonemap + (fxaa < 0 ? 0 : fxaa); }
 };
 
 class Forward3D {
 public:
-    static constexpr u32 kStageCount = 7;     // timestamps written: kStageCount + 1
+    static constexpr u32 kStageCount = 8;     // timestamps written: kStageCount + 1
     static constexpr u32 kMaxBloomLevels = 6;
 
     Forward3D() = default;
@@ -119,6 +127,9 @@ public:
     rhi::TextureHandle probe_capture() const { return probe_capture_; }
     rhi::TextureHandle ibl_brdf_lut() const { return ibl_lut_; } // RGBA16F, rg = F0 scale, bias
     rhi::TextureHandle ibl_sh() const { return ibl_sh_; }        // RGBA16F 9×1, irradiance / pi
+    // SSAO (M-VISUAL 3): the blurred ambient visibility (r) at half the 3D target's size; null until
+    // the first frame with AmbientOcclusion::enabled.
+    rhi::TextureHandle ssao() const { return ao_a_; }
 
 private:
     ResultV create_pipelines();
@@ -128,6 +139,7 @@ private:
     void record_clusters(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_ibl(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_main(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target);
@@ -138,9 +150,9 @@ private:
         u32 tex[4] = {~0u - 1, ~0u - 1, ~0u - 1, ~0u - 1};
     };
     // draws[begin, end) of the bound frame/pass state; indices >= opaque_end take the blend
-    // pipelines. `main` counts them in the stats.
+    // pipelines. `main` counts them in the stats; `prepass` draws them all with the SSAO prepass.
     void draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin, u32 end,
-                     u32 opaque_end, DrawCache& cache, bool main);
+                     u32 opaque_end, DrawCache& cache, bool main, bool prepass = false);
 
     rhi::RenderDevice* device_ = nullptr;
     const TextureStore* textures_ = nullptr;
@@ -159,6 +171,15 @@ private:
     rhi::PipelineHandle tonemap_;
     rhi::PipelineHandle fxaa_;
     rhi::PipelineHandle cluster_build_;  // compute; null = CPU assignment
+    rhi::PipelineHandle ao_prepass_;     // null when Forward3DDesc::ssao is off
+    rhi::PipelineHandle ao_prepass_skinned_;
+    rhi::PipelineHandle ao_pipe_;
+    rhi::PipelineHandle ao_blur_;
+    rhi::TextureHandle ao_gbuf_;         // RGBA16F half size: view normal, view depth
+    rhi::TextureHandle ao_depth_;        // D32 half size (prepass visibility only)
+    rhi::TextureHandle ao_a_;            // RGBA8 half size: occlusion, then the blurred result
+    rhi::TextureHandle ao_b_;            // RGBA8 half size: the horizontal blur
+    rhi::TextureHandle ao_off_;          // 1×1 stand-in bound at bank::kAo while SSAO is off
     rhi::PipelineHandle ibl_prefilter_;  // null when Forward3DDesc::ibl is off
     rhi::PipelineHandle ibl_sh_pipe_;
     rhi::PipelineHandle ibl_brdf_;

@@ -83,6 +83,18 @@ struct PostFx {
     bool fxaa = true;
 };
 
+// Screen-space ambient occlusion (M-VISUAL 3): a half-resolution view-normal + depth prepass of the
+// opaques, Alchemy SSAO over it, a depth-aware separable blur; the result darkens the ambient terms
+// only (hemisphere or image-based, diffuse and specular), never the sun or point lights. Off draws
+// the frame without it.
+struct AmbientOcclusion {
+    bool enabled = false;
+    f32 radius = 0.6f;     // world meters the samples reach
+    f32 intensity = 1.0f;  // scales the occlusion before the power
+    f32 power = 1.5f;      // contrast of the result
+    f32 bias = 0.02f;      // ignores occluders this close to the tangent plane (cosine threshold)
+};
+
 // Cascaded shadow maps for the sun (FR-R3D-040).
 struct ShadowSettings {
     u32 cascades = 3;                          // 1..kMaxCascades
@@ -215,6 +227,7 @@ public:
     void set_exposure(f32 exposure) { exposure_ = exposure; }
     void set_sky(const Sky& sky) { sky_ = sky; }
     void set_post(const PostFx& post) { post_ = post; }
+    void set_ambient_occlusion(const AmbientOcclusion& ao) { ao_ = ao; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
     void set_lod(const LodSettings& lod) { lod_ = lod; }
@@ -234,6 +247,7 @@ public:
     f32 exposure() const { return exposure_; }
     const Sky& sky() const { return sky_; }
     const PostFx& post() const { return post_; }
+    const AmbientOcclusion& ambient_occlusion() const { return ao_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
     Span<const ReflectionProbe> reflection_probes() const { return probes_.span(); }
@@ -277,6 +291,7 @@ private:
     f32 exposure_ = 1.0f;
     Sky sky_;
     PostFx post_;
+    AmbientOcclusion ao_;
     ShadowSettings shadow_settings_;
     ClusterGridDesc cluster_grid_;
     LodSettings lod_;
