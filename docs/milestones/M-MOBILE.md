@@ -113,8 +113,7 @@ state on iOS and macOS; `-platform.power_log <s>` logs both during a run.
 
 Before the device (2026-10-12): On the emulator (MoltenVK on Apple M4) and the Simulator every tier
 holds 60 fps because both present with vsync and the host GPU has headroom; `mce_rhi_sdlgpu` has no GPU timestamps
-(step 3 gap), and thermal and battery figures need a phone. The tier table above is the budget lever; filling in
-frame/thermal/battery numbers per tier waits for a device on the Mac (the one open item of this step).
+(step 3 gap), and thermal and battery figures need a phone.
 
 ## What shipped (step 9, demo)
 
