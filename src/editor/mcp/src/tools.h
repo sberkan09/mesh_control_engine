@@ -30,10 +30,17 @@ struct ToolDef {
     ToolFn fn;
 };
 
-// Every tool: the MVP table (tools.cpp) followed by the M-AGENT tools (tools_agent.cpp).
+// Every tool: the core table (tools.cpp) followed by each group's table. A group lives in its own
+// file and adds one line to tool_table(), so groups never edit each other's tables.
 Span<const ToolDef> tool_table();
+// tools_agent.cpp: the M-AGENT tools (render_frame, render_sheet, image_diff, ...).
 Span<const ToolDef> agent_tool_table();
 const ToolDef* find_tool(StringView name);
+
+// asset_tools.cpp: asset_schema / asset_create / asset_write / asset_read / tilemap_paint.
+Span<const ToolDef> asset_tool_table();
+// The mce://assets/schema resource: every type asset_schema describes.
+void write_asset_schemas(JsonWriter& w);
 
 void list_resources(JsonWriter& w);
 // Writes the resources/read result; false when `uri` names no resource.

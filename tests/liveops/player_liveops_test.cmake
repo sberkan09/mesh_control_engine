@@ -75,4 +75,10 @@ endif()
 run(1 ${PLAY} -liveops 1 -liveops.consent maybe)
 run(1 ${PLAY} -liveops 1 -liveops.provider vendor)
 
+# Firebase (M-LIVEOPS step 1) lives only in phone builds shipped with a Firebase config: asked for on the
+# desktop, the player says so and plays on with events dropped.
+run(0 ${PLAY} -liveops 1 -liveops.provider firebase)
+expect("-liveops.provider firebase, but this build has no Firebase" "firebase on a build without it")
+expect("analytics 'none'" "firebase without the SDK still installed a backend")
+
 message(STATUS "live services hold: denied, unknown, granted, sent once, off by default")

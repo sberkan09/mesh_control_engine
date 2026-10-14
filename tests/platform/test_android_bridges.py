@@ -87,6 +87,47 @@ def main():
                           os.path.join(tmp, "debug.keystore"))
         gradle = read(os.path.join(project, "app", "build.gradle"))
         assert android_app.PLAY_REVIEW in gradle and android_app.PLAY_BILLING in gradle, gradle
+        assert "firebase" not in gradle and "mceFirebase" not in read(
+            os.path.join(main_dir, "java", "org", "meshcontrol", "review_probe", "MceActivity.java"))
+
+        # MCE_FIREBASE_ANDROID_CONFIG (M-LIVEOPS step 1): Crashlytics NDK and Analytics, collection off by default.
+        config = os.path.join(tmp, "google-services.json")
+        write(config, '{"project_info": {"project_id": "probe"}}')
+        os.environ["MCE_FIREBASE_ANDROID_CONFIG"] = config
+        try:
+            android_app.stamp(project, art, args, tmp, build_dir, os.path.join(tmp, "libreview_probe.so"),
+                              os.path.join(tmp, "debug.keystore"))
+        finally:
+            del os.environ["MCE_FIREBASE_ANDROID_CONFIG"]
+        gradle = read(os.path.join(project, "app", "build.gradle"))
+        assert f"implementation platform('{android_app.FIREBASE_BOM}')" in gradle, gradle
+        for lib in android_app.FIREBASE_LIBS:
+            assert f"implementation '{lib}'" in gradle, gradle
+        assert "id 'com.google.gms.google-services'" in gradle and "id 'com.google.firebase.crashlytics'" in gradle
+        assert "nativeSymbolUploadEnabled true" in gradle and "crashlytics-symbols" in gradle, gradle
+        root_gradle = read(os.path.join(project, "build.gradle"))
+        assert android_app.GOOGLE_SERVICES_PLUGIN in root_gradle and android_app.CRASHLYTICS_PLUGIN in root_gradle
+        assert read(os.path.join(project, "app", "google-services.json")) == read(config)
+        manifest = read(os.path.join(main_dir, "AndroidManifest.xml"))
+        assert 'firebase_analytics_collection_enabled" android:value="false"' in manifest, manifest
+        assert 'firebase_crashlytics_collection_enabled" android:value="false"' in manifest, manifest
+        activity = read(os.path.join(main_dir, "java", "org", "meshcontrol", "review_probe", "MceActivity.java"))
+        assert "public void mceFirebaseStart()" in activity and "public void mceFirebaseCollection(int" in activity
+        bridge = read(os.path.join(main_dir, "java", "org", "meshcontrol", "firebase", "MceFirebase.java"))
+        assert "setCrashlyticsCollectionEnabled" in bridge and "deleteUnsentReports" in bridge
+        assert not os.path.exists(os.path.join(project, "firebase")), os.listdir(project)
+        firebase_cpp = read(os.path.join(src, "firebase.cpp"))
+        assert 'method("mceFirebaseStart", "()V")' in firebase_cpp
+        assert 'method("mceFirebaseCollection", "(I)V")' in firebase_cpp
+        assert ('"(Ljava/lang/String;[Ljava/lang/String;[I[J[D[Ljava/lang/String;)V"' in firebase_cpp and
+                "String name, String[] keys, int[] kinds, long[] ints, double[] floats, String[] strings" in activity)
+        # Collection's values, as MceFirebase and firebase_ios.swift number them.
+        header = read(os.path.join(src, "..", "include", "mce", "platform", "firebase.h"))
+        order = [header.index(f"    {n},") for n in ("Undecided", "Granted", "Denied")]
+        assert order == sorted(order), "firebase.h Collection order changed: update MceFirebase.java and firebase_ios.swift"
+        assert "case 1:  // Granted" in bridge and "case 2:  // Denied" in bridge
+        swift = read(os.path.join(src, "firebase_ios.swift"))
+        assert "case 1:  // Granted" in swift and "case 2:  // Denied" in swift
     print("android bridges stamping OK")
 
 

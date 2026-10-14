@@ -111,6 +111,21 @@ TEST_CASE("command line parsing") {
     cv_test_ro.reset();
 }
 
+TEST_CASE("command line: unknown convars can wait for a late registration (#213)") {
+    const char* argv[] = {"exe", "-test.int", "3", "-test.late", "9", "-test.late_flag", "-test.never", "1"};
+    CHECK(console::parse_command_line(8, argv, /*defer_unknown=*/true) == 0);  // nothing reported yet
+    CHECK(cv_test_int.get_int() == 3);
+    {
+        ConVar late("test.late", 0, "registered after the parse, like a game module's");
+        ConVar late_flag("test.late_flag", false, "a bare flag");
+        CHECK(console::apply_deferred_command_line() == 1);  // test.never is still unknown
+        CHECK(late.get_int() == 9);
+        CHECK(late_flag.get_bool());
+    }
+    CHECK(console::apply_deferred_command_line() == 0);  // applied once, then forgotten
+    cv_test_int.reset();
+}
+
 TEST_CASE("command line -help") {
     CHECK_FALSE(console::help_requested());
     const char* argv[] = {"exe", "--help"};

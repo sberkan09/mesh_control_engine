@@ -296,6 +296,10 @@ LONG WINAPI on_exception(EXCEPTION_POINTERS* ep) {
 // ============================================================================ POSIX
 
 constexpr int kSignals[] = {SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGABRT};
+constexpr usize kSignalCount = sizeof(kSignals) / sizeof(kSignals[0]);
+// The handlers install() replaced (a crash vendor's, such as Crashlytics' NDK handler, installed
+// before the engine's): after the report is written the crash is handed on to them.
+struct sigaction g_prev[kSignalCount];
 alignas(16) char g_alt_stack[64 * 1024];
 
 const char* signal_name(int sig) {
@@ -526,11 +530,19 @@ void on_signal(int sig, siginfo_t* info, void* uctx) {
     o.flush();
     if (o.fd >= 0) ::close(o.fd);
 
-    // Die of the same signal with the default action (core dump, the parent sees the signal).
-    struct sigaction dfl {};
-    dfl.sa_handler = SIG_DFL;
-    sigemptyset(&dfl.sa_mask);
-    sigaction(sig, &dfl, nullptr);
+    // Hand the signal to the handler that was there before install() (a crash vendor's), or die of it
+    // with the default action (core dump, the parent sees the signal). It is raised again: blocked
+    // while this handler runs, it is delivered to that handler as soon as this one returns.
+    struct sigaction next {};
+    next.sa_handler = SIG_DFL;
+    sigemptyset(&next.sa_mask);
+    for (usize i = 0; i < kSignalCount; ++i) {
+        const bool has_handler = (g_prev[i].sa_flags & SA_SIGINFO) != 0 ? g_prev[i].sa_sigaction != nullptr
+                                                                        : (g_prev[i].sa_handler != SIG_DFL &&
+                                                                           g_prev[i].sa_handler != SIG_IGN);
+        if (kSignals[i] == sig && has_handler) next = g_prev[i];
+    }
+    sigaction(sig, &next, nullptr);
     raise(sig);
 }
 
@@ -550,7 +562,10 @@ void on_signal(int sig, siginfo_t* info, void* uctx) {
     sa.sa_sigaction = &on_signal;
     sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigemptyset(&sa.sa_mask);
-    for (int sig : kSignals) sigaction(sig, &sa, nullptr);
+    for (usize i = 0; i < kSignalCount; ++i) {
+        struct sigaction prev {};
+        if (sigaction(kSignals[i], &sa, &prev) == 0 && prev.sa_sigaction != &on_signal) g_prev[i] = prev;
+    }
     return true;
 }
 #endif
