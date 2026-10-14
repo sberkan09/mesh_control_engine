@@ -25,6 +25,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   and Turkish-aware upper and lower case. `-language tr` plays in Turkish for one run; the cook warns about keys
   a locale lacks. A font sidecar's `"strings": true` bakes every glyph the tables use (with Turkish case forms),
   and `ship.py` names the phone app per language from each table's `app.name`.
+- Remote config (M-LIVEOPS step 3, vendor-neutral part): a `.mcconfig` file cooks to `CHNK_RCFG`, the project's
+  defaults and schema. Game code reads `liveops::RemoteConfig` (`get<i64>`, `get<f64>`, `get<bool>`, strings) as a
+  world resource. Fetched values are saved and used from the next launch, or at the start of a tick after
+  `apply_fetched()`, never mid-tick; replays record every apply. `-remote_config.file <pack>` fetches from a cooked
+  pack and `-remote_config.dump 1` prints the values in force. A server fetcher waits for the vendor choice.
 - Live services, step 1 (M-LIVEOPS, vendor-neutral part): `mce_liveops`, off unless the host sets
   `PlayerDesc::liveops` (or `-liveops 1`). Crash reports that earlier runs left are sent on the next launch through an
   uploader, `analytics::event(name, params)` (from `mce/gameplay.h`) goes to a backend, and both wait for the

@@ -32,6 +32,7 @@ struct Sequence { static constexpr ChunkType chunk = ChunkType::Sequence; static
 struct ParticlePreset { static constexpr ChunkType chunk = ChunkType::ParticlePreset; static constexpr const char* name = "ParticlePreset"; };
 struct StringTable { static constexpr ChunkType chunk = ChunkType::StringTable; static constexpr const char* name = "StringTable"; };
 struct StoreCatalog { static constexpr ChunkType chunk = ChunkType::StoreCatalog; static constexpr const char* name = "StoreCatalog"; };
+struct RemoteConfigChunk { static constexpr ChunkType chunk = ChunkType::RemoteConfig; static constexpr const char* name = "RemoteConfig"; };
 // clang-format on
 
 // Asset type name ("Texture") -> chunk type; false when unknown. Used by the scene cook.

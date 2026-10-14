@@ -61,6 +61,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::Mesh: return MESH_VERSION;
         case ChunkType::ModInfo: return MOD_INFO_VERSION;
         case ChunkType::StoreCatalog: return STORE_CATALOG_VERSION;
+        case ChunkType::RemoteConfig: return REMOTE_CONFIG_VERSION;
         case ChunkType::StringTable: return STRING_TABLE_VERSION;
         default: return 0;
     }

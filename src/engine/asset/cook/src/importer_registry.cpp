@@ -33,6 +33,7 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_shader_importer());
     reg.add(make_input_map_importer());
     reg.add(make_store_importer());
+    reg.add(make_config_importer());
     reg.add(make_string_importer());
     reg.add(make_envmap_importer());
 }
