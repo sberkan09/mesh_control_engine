@@ -88,7 +88,14 @@ instead of copying it (chapter 6, section 6.13).
 ## 15.5 Phones and the stores
 
 `ship.py --target android` builds an APK (`--aab` adds the Play bundle), `--target ios` a Simulator
-`.app` zip or, with `--preset ios-arm64`, a signed `.ipa`. What the stores need from the game:
+`.app` zip or, with `--preset ios-arm64`, a signed `.ipa`. Projects ship to phones the same way:
+
+    python3 scripts/ship.py --project projects/MyGame --target android
+    python3 scripts/ship.py --project projects/MyGame --target ios
+
+The game is linked into the app (phones load no game modules), and the pack is cooked on your computer:
+`ship.py` first builds the project's `<game>_cook` on the host preset (`--host-preset`), and the phone build
+cooks with it (`MCE_HOST_BUILD_DIR`). What the stores need from the game:
 
 | File | Used for |
 |---|---|

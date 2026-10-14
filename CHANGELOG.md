@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Projects on phones (M-MOBILE, SBA-30): `scripts/ship.py --project <dir> --target android|ios` builds a project
+  made from the templates for phones. Its pack is cooked by the host build's `<game>_cook`
+  (`MCE_HOST_BUILD_DIR`, which `ship.py` passes after building it on `--host-preset`); a cross build no longer
+  defines a project cook it cannot run.
 - Eyes for agents, M-AGENT step 1 (SBA-48): the MCP server gains `render_frame` (the saved scene drawn by the
   real player at sim tick N, with scripted input, from its own camera, another camera entity or a free 2D/3D camera,
   at a chosen size and safe area, returned as an MCP image), `render_sheet` (several ticks and cameras in one

@@ -188,7 +188,8 @@ if(MCE_BUILD_TESTS)
 endif()
 
 # `cmake --install`: the SDK (tools, libmce_engine, headers, find_package(MCE), the project
-# template and the mce command). Last, so every target it installs exists. Phones ship apps, not an SDK.
-if(NOT MCE_MOBILE)
+# template and the mce command). Last, so every target it installs exists. Phones ship apps, not an
+# SDK, and a cross build has no mce_cook of its own to install.
+if(NOT MCE_MOBILE AND NOT CMAKE_CROSSCOMPILING)
     include(MceInstall)
 endif()

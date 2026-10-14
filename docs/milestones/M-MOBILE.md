@@ -186,9 +186,10 @@ a game in landscape on the emulator.
   `app_names` (the Python helper).
 
 Still open in 11a: the simulator/emulator check with a Turkish device language. The language choice, the
-string tables and the app names live in the player (`mce_player_runtime`) and in projects, and
-`ship.py --target android|ios` still ships only the samples, which have no tables; the check waits for a
-player game on phones (see "Phone checks on the Mac" below). The Simulator already runs in Turkish, and
+string tables and the app names live in the player (`mce_player_runtime`) and in projects. Since SBA-30,
+`ship.py --project <dir> --target android|ios` builds a project for phones (its pack cooked by the host
+build's `<game>_cook`, `MCE_HOST_BUILD_DIR`); the phone check itself waits for a Mac run (see "Phone checks
+on the Mac" below). The Simulator already runs in Turkish, and
 StoreKit's system prompt follows it (11c).
 
 ## What shipped (step 11b: `mce_ui` on many screens)
@@ -338,7 +339,7 @@ player game, as 11a does.
 | `ios-arm64` device build | every phone sample builds and links with the Swift bridges |
 | Physical iPhone | iPhone 11 (iOS 27.0.1) over USB, Xcode 27.0. Profiles: Xcode's automatic signing made "iOS Team Provisioning Profile" for `org.meshcontrol.sample-03-platformer` and `-04-diorama` (Sami's personal team, valid 7 days), through a throwaway Xcode project built with `-allowProvisioningUpdates`; `ship.py --target ios --preset ios-arm64` then signs the `.ipa` with `MCE_IOS_SIGN_IDENTITY` / `MCE_IOS_PROVISIONING_PROFILE`, and `xcrun devicectl device install app` installs it. The first launch needs the developer certificate trusted on the phone (Settings → General → VPN & Device Management). Both games run on the A13 GPU through Metal; numbers in step 8, soaks in step 9. Arguments go after `--` with `devicectl device process launch` (otherwise `-r.quality` is read as a devicectl flag) |
 | Physical Android phone | none attached (`adb devices` lists only the emulator) |
-| 11a, 11b, 11e, 11f on phones | blocked: these live in the player and the novel kit, and `ship.py --target android/ios` ships only the samples (`--project` refused); a phone build of a player game is the missing piece |
+| 11a, 11b, 11e, 11f on phones | not run yet: these live in the player and the novel kit. `ship.py --project <dir> --target android/ios` now builds a project for phones (SBA-30; its cook path checked in a Linux cross build); the Simulator, emulator and iPhone runs of Undelivered and Solstice Reach wait for the Mac |
 | Store upload (step 10) | not run: a real TestFlight or Play internal-track upload is irreversible and waits for Sami's go-ahead and credentials |
 
 Found and fixed on the way (Xcode 27 arrived mid-session):
