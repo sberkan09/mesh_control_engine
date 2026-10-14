@@ -187,6 +187,7 @@ public:
         music.frames = clips_.music.data();
         music.frame_count = static_cast<u32>(clips_.music.size());
         if (auto h = audio_.register_stream(music)) {
+            owned_clips_.push_back(h.value());
             audio::AudioSource src;
             src.clip_handle = h.value();
             src.loop = true;
@@ -424,6 +425,11 @@ public:
 
     void on_shutdown() override {
         save_records();
+        // The mixer reads clips_ and the pack's payloads in place, and the audio device outlives this
+        // app: stop and release every clip before they go (the audio thread read freed music after
+        // the app was gone, a crash on quit in the iOS Simulator).
+        for (const audio::ClipHandle h : owned_clips_) audio_.release_clip(h);
+        audio_.finish_releases();
         if (device_) renderer_.shutdown();
     }
 
@@ -487,8 +493,10 @@ private:
                 sfx_handles_.push_back(asset::AnyHandle(h.value()));  // keeps the payload the mixer reads
                 auto clip = audio::clip_payload_from_sfx(assets_.resolve(h.value()));
                 if (!clip) break;
-                if (auto c = audio_.register_clip(clip.value())) return c.value();
-                break;
+                auto c = audio_.register_clip(clip.value());
+                if (!c) break;
+                owned_clips_.push_back(c.value());
+                return c.value();
             }
             MCE_LOG_WARN("03_platformer: {} missing from the pack (synthesized stand-in)", path);
         }
@@ -500,7 +508,9 @@ private:
         p.frames = pcm.data();
         p.frame_count = static_cast<u32>(pcm.size());
         auto h = audio_.register_clip(p);
-        return h ? h.value() : audio::ClipHandle{};
+        if (!h) return {};
+        owned_clips_.push_back(h.value());
+        return h.value();
     }
 
     // ---- rendering --------------------------------------------------------------------------------
@@ -934,6 +944,7 @@ private:
     World world_;
     Bot bot_;
     art::Clips clips_;
+    Array<audio::ClipHandle> owned_clips_;  // registered with audio_ over clips_ or the pack
     u64 input_hash_ = kFnv64Offset;
     u64 ticks_ = 0;
 

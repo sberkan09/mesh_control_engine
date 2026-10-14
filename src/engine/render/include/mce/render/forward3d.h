@@ -165,6 +165,8 @@ private:
     rhi::TextureHandle ibl_env_;
     rhi::TextureHandle ibl_lut_;
     rhi::TextureHandle ibl_sh_;
+    rhi::TextureHandle ibl_off_env_;     // 1×1 stand-ins bound while IBL is off (Metal validation):
+    rhi::TextureHandle ibl_off_2d_;      // the env array, and the LUT and SH slots
     rhi::SamplerHandle env_sampler_;     // linear, wraps around the equirect seam
     u64 ibl_key_ = 0;                    // the sky the IBL textures were baked from; 0 = none
     bool ibl_own_source_ = false;        // baked from Sky::ibl_texture rather than the visible sky
