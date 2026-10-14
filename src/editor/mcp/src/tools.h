@@ -5,12 +5,19 @@
 
 namespace mce::mcp {
 
+// A content item a tool returns besides its JSON text (MCP "image" content: base64 data + MIME type).
+struct ToolContent {
+    cook::String mime;    // "image/png"
+    cook::String base64;  // the encoded bytes
+};
+
 struct ToolCall {
     Server& server;
     cook::JsonValue args;            // the "arguments" object (invalid when absent)
     cook::JsonValue progress_token;  // params._meta.progressToken (invalid when absent)
     JsonWriter& out;                 // the structured result: one object
     cook::String& error;             // set when the tool fails
+    Array<ToolContent>* content = nullptr;  // extra content items after the text (images); null: none taken
 };
 
 // Returns false (with c.error set) when the call failed: the client sees isError.
@@ -26,6 +33,8 @@ struct ToolDef {
 // Every tool: the core table (tools.cpp) followed by each group's table. A group lives in its own
 // file and adds one line to tool_table(), so groups never edit each other's tables.
 Span<const ToolDef> tool_table();
+// tools_agent.cpp: the M-AGENT tools (render_frame, render_sheet, image_diff, ...).
+Span<const ToolDef> agent_tool_table();
 const ToolDef* find_tool(StringView name);
 
 // asset_tools.cpp: asset_schema / asset_create / asset_write / asset_read / tilemap_paint.

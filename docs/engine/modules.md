@@ -92,7 +92,8 @@ writes `-save` slots, and with `-headless 1 -ticks N` prints the World state has
 The command line is the convar set: `-help` prints it (usage line, then every convar with its
 type, default and help; `console::print_help`), `-frames N` ends a windowed run on frame N and
 `-capture_tick N` on the first frame after sim tick N (so a moment of the simulation can be
-captured whatever the frame rate), `-capture <file.ppm>` writes that last frame (a relative path
+captured whatever the frame rate; the sim holds on that tick and the frame is drawn without
+interpolation, so a capture repeats exactly), `-capture_ticks a,b,c` captures several moments in one run, `-capture <file.ppm>` writes that last frame (a relative path
 is taken from the working directory; missing directories are created). Headless runs take
 `-ticks N`; `-frames` and `-capture` are windowed-only and headless runs warn when they are set.
 

@@ -92,5 +92,8 @@ private:
 // The first primary Camera2DComponent with a LocalTransform, in ECS order. False (and a default
 // camera at the origin) when the scene has none.
 bool primary_camera(World& world, render::Camera2D& out, f32& pixels_per_meter, math::Color* clear_color = nullptr);
+// The same for one entity's Camera2DComponent, primary or not (a preview from another camera). False
+// (nothing written) when `e` has no LocalTransform + Camera2DComponent.
+bool camera_2d_of(World& world, Entity e, render::Camera2D& out, f32& pixels_per_meter, math::Color* clear_color = nullptr);
 
 }  // namespace mce::kit

@@ -202,7 +202,8 @@ void Server::call_tool(cook::JsonValue id, cook::JsonValue params) {
     cook::String structured;
     JsonWriter out(structured);
     cook::String err;
-    ToolCall call{*this, args, valid_id(token) ? token : cook::JsonValue(), out, err};
+    Array<ToolContent> extra;
+    ToolCall call{*this, args, valid_id(token) ? token : cook::JsonValue(), out, err, &extra};
     // Each call that can edit is one undo entry named after the tool (undo/redo move the history).
     const StringView tool_name(tool->name);
     const bool group = tool_name != "scene_undo" && tool_name != "scene_redo";
@@ -215,7 +216,11 @@ void Server::call_tool(cook::JsonValue id, cook::JsonValue params) {
     JsonWriter w(result);
     w.begin_object().key("content").begin_array().begin_object().key("type").str("text").key("text");
     w.str(ok ? structured.view() : err.view());
-    w.end_object().end_array();
+    w.end_object();
+    if (ok)
+        for (const ToolContent& item : extra)
+            w.begin_object().key("type").str("image").key("data").str(item.base64.view()).key("mimeType").str(item.mime.view()).end_object();
+    w.end_array();
     if (ok) w.key("structuredContent").raw(structured.view());
     w.key("isError").boolean(!ok);
     w.end_object();

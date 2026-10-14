@@ -73,6 +73,8 @@ public:
     // (`out` is then a default camera at the origin). `component` (optional) receives the camera's
     // component (mouse_look).
     bool camera(World& world, f32 alpha, render::Camera3D& out, Camera3DComponent* component = nullptr);
+    // The view of one entity's Camera3DComponent, primary or not (a preview from another camera).
+    bool camera_of(World& world, Entity e, f32 alpha, render::Camera3D& out);
     // The environment, then every kit3d drawable, into a scene begun with scene.begin().
     void extract(World& world, render::Scene3D& scene, f32 alpha);
     // The environment alone (Environment3D resource, else the first component, else defaults).
@@ -88,6 +90,7 @@ public:
     Span<const Entity> probe_entities() const { return probe_entities_.span(); }
 
 private:
+    bool view_of(World& world, Entity e, const Camera3DComponent& c, f32 alpha, render::Camera3D& out);
     struct MeshEntry {
         asset::Guid guid;
         asset::AnyHandle handle;

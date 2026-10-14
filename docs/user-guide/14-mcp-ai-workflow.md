@@ -83,6 +83,9 @@ each result's `content[0].text` is the tool's JSON).
 | | `cook_errors` | | last diagnostics with file, line, col |
 | | `asset_delete` | `path` | deletes a source file under `assets/` and its `.mceasset` sidecar (not the open scene) |
 | Verify | `run_headless` | `ticks` (default 300), `log_lines`, `scene?`, `input?`, `inspect?` | cooks, plays the **saved** scene (or another saved scene named by `scene`) with the engine systems and the game's `install()`, returns `state_hash`, metrics and the log tail |
+| See | `render_frame` | `tick?` (default 1), `width?`, `height?` (default 960 × 540), `scene?`, `input?`, `camera?`, `safe_area?`, `software?`, `save?` | cooks, draws the **saved** scene with the real player at the first frame after sim tick N and returns the frame as an MCP **image**; `save` also writes the PNG under the project folder |
+| | `render_sheet` | `ticks` (1-16), `cameras?` (1-4), `cell_width?`, `cell_height?`, and `render_frame`'s `scene`, `input`, `safe_area`, `software` | one image: ticks in columns, cameras in rows, each cell labelled |
+| | `image_diff` | `golden`, `image` or `render`, `threshold?` (8), `max_score?` (0.01), `update?` | compares with a golden PNG in the project: `score` (mean channel difference, 0..1), `changed_fraction`, `pass`, and a heat map image; a missing golden is written |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
 
@@ -100,6 +103,17 @@ Values use the `.mcscene` spelling (chapter 4): vectors as arrays, assets as `"g
 segments, `[{"from": 10, "to": 70, "actions": {"Move": [1, 0], "Jump": true}}]`. The same scene,
 ticks and input give the same hash. A scene with `SceneChunk`s streams during the run, with chunk
 loads completed synchronously inside each pump so the hash stays a function of the ticks.
+
+`render_frame`'s `camera` draws from another camera without changing the simulation:
+`{"entity": "Boss Cam"}` (a camera entity of the open scene, by id or name), `{"index": n}` (an
+entity's index in the file, for a scene that is not open), `{"position": [x, y, z], "target": [x,
+y, z], "fov": 50}` (a free 3D camera) or `{"center": [x, y], "zoom": 0.5}` (a free 2D camera).
+`safe_area` (`{"top": 48, "bottom": 34}`, pixels) makes the player lay its UI out as on a phone with
+a notch and outlines the area on the returned image. The capture frame shows the held tick itself,
+so the same arguments give the same pixels. Without a display (a cloud box, SSH) the player runs
+on SDL's offscreen driver with Mesa's software rasterizer; `software: true` forces that path. The
+server draws with `mce_player` beside it (with its `--module`), or with the project's host for a
+`<game>_mcp` build; `--player <exe>` picks another.
 
 `run_headless` with `inspect`:
 
@@ -130,10 +144,11 @@ agent checks "did the player reach the flag" without a window.
    hash between runs to confirm a change changed something (or nothing).
 6. **Iterate on code.** Edit the module, rebuild, restart the server (its component table is
    compiled in), repeat.
-7. **Look.** Build and run `my_game -frames 120 -capture shots/a.ppm` (relative to the working
-   directory; missing folders are created) to grab a frame, or `-capture_tick N` to capture the
-   first frame after N sim ticks, together with `-input <file>` to reach a given moment. Or open
-   the project editor; MCP has no `render_frame` yet.
+7. **Look.** `render_frame` after every visible change (`tick` and `input` reach a given moment;
+   `camera` frames a spot the game camera does not show), `render_sheet` to see a run unfold, and
+   `image_diff` with `update: true` once a screen looks right, so a later change that breaks it
+   shows up as a failing score. Outside MCP the same frames come from `my_game -capture_ticks
+   60,300 -capture shots/a_{tick}.ppm` (`-view.free`, `-view.entity`, `-safe_area` as above).
 
 To verify gameplay headless, pass `input` to `run_headless`. An **autoplay** switch (a flag on a
 component that drives the character from code), as the earlier MCP-authored games shipped, is
@@ -156,5 +171,5 @@ still handy for long runs but no longer required.
 
 ## 14.5 What an agent cannot do yet
 
-Paint tilemaps, render a frame, attach to a running editor, or cancel a long tool call. The friction logs in `docs/research/` list these with
+Paint tilemaps, attach to a running editor, or cancel a long tool call. The friction logs in `docs/research/` list these with
 their cost in practice.
