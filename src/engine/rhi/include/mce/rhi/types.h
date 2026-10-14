@@ -252,6 +252,7 @@ inline constexpr u32 kEmissive = 13;   // 3D emissive map (the spare slot of the
 inline constexpr u32 kIblEnv = 12;     // 3D image-based lighting: GGX pre-filtered sky (2D array, M-VISUAL 2)
 inline constexpr u32 kIblBrdfLut = 14; // 3D image-based lighting: split-sum BRDF LUT
 inline constexpr u32 kIblSh = 15;      // 3D image-based lighting: SH9 irradiance (9×1)
+inline constexpr u32 kAo = 11;         // 3D screen-space ambient occlusion (M-VISUAL 3); shares the slot with the font
 // std430 storage bindings (their own namespace in GL, independent of the sampler units above).
 inline constexpr u32 kClusters = 4;     // Forward+ per-cluster {offset, count}
 inline constexpr u32 kLightPool = 5;    // point lights

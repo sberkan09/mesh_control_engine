@@ -17,6 +17,9 @@ MCE_CVAR(cv_gpu_light_clusters, "r.gpu_light_clusters", true,
          CVarFlags::RequiresRestart);
 MCE_CVAR(cv_ibl, "r.ibl", true, "Image-based lighting for scenes that ask for it (Sky::ibl; off = the hemisphere ambient)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_ssao, "r.ssao", true,
+         "Screen-space ambient occlusion for scenes that ask for it (AmbientOcclusion::enabled; off = no occlusion pass)",
+         CVarFlags::RequiresRestart);
 
 // std140 mirrors of the shader blocks (shaders3d.h): vec4/mat4 members only, so no padding rules.
 struct FrameU {
@@ -49,6 +52,13 @@ struct PassU {
     vec4 probe_pos[kMaxReflectionProbes];  // w: intensity
     vec4 probe_min[kMaxReflectionProbes];  // w: blend distance
     vec4 probe_max[kMaxReflectionProbes];  // w: first ibl_env layer
+    vec4 ao;           // x: SSAO on
+};
+
+struct AoU {  // kAoFS / kAoBlurFS
+    mat4 proj;
+    vec4 params;  // x: radius, y: intensity, z: power, w: bias
+    vec4 step;    // xy: blur step in uv
 };
 
 struct ProbeU {  // kProbeReprojectFS
@@ -85,7 +95,7 @@ struct PostU {
     vec4 params;  // x: threshold, y: knee, z: first pass, w: exposure
 };
 
-enum Stage : u32 { kTsBegin, kTsClusters, kTsShadow, kTsMain, kTsResolve, kTsBloom, kTsTonemap, kTsFxaa };
+enum Stage : u32 { kTsBegin, kTsClusters, kTsSsao, kTsShadow, kTsMain, kTsResolve, kTsBloom, kTsTonemap, kTsFxaa };
 
 // The sky's PassU members; returns the texture to bind at bank::kSky.
 rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& device, const Sky& sky, PassU& pu) {
@@ -192,6 +202,11 @@ ResultV Forward3D::init(rhi::RenderDevice& device, const TextureStore& textures,
     td.array_layers = kMaxCascades;
     td.debug_name = "mce.3d.shadow_cascades";
     shadow_map_ = device.create_texture(td);
+    rhi::TextureDesc od;
+    od.size = {1, 1};
+    od.usage = rhi::TextureUsage::SampledColorTarget;
+    od.debug_name = "mce.3d.ssao_off";
+    ao_off_ = device.create_texture(od);
     return ok();
 }
 
@@ -290,6 +305,26 @@ ResultV Forward3D::create_pipelines() {
         if (auto p = device_->create_compute_pipeline(cd)) cluster_build_ = p.value();
         else MCE_LOG_WARN("render3d: GPU light assignment unavailable, using the CPU path");
     }
+    if (desc_.ssao && cv_ssao.get_bool()) {
+        rhi::GraphicsPipelineDesc ap = pd;  // the mesh vertex stage, depth-tested, both faces
+        ap.fragment_shader = {kAoPrepassFS, "ssao_prepass.frag"};
+        ap.state = {};
+        ap.state.depth = {true, true, rhi::CompareOp::LessEqual};
+        ap.state.raster.cull = rhi::CullMode::None;
+        ap.debug_name = "ssao.prepass";
+        MCE_TRY_ASSIGN(ao_prepass_, device_->create_pipeline(ap));
+        ap.vertex_shader = kd.vertex_shader;
+        ap.vertex = skinned_layout;
+        ap.debug_name = "ssao.prepass.skinned";
+        MCE_TRY_ASSIGN(ao_prepass_skinned_, device_->create_pipeline(ap));
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kAoFS, "ssao.frag"};
+        fs.debug_name = "ssao";
+        MCE_TRY_ASSIGN(ao_pipe_, device_->create_pipeline(fs));
+        fs.fragment_shader = {kAoBlurFS, "ssao_blur.frag"};
+        fs.debug_name = "ssao.blur";
+        MCE_TRY_ASSIGN(ao_blur_, device_->create_pipeline(fs));
+    }
     if (desc_.ibl && cv_ibl.get_bool()) {
         fs.fragment_shader = {kIblPrefilterFS, "ibl_prefilter.frag"};
         fs.debug_name = "ibl.prefilter";
@@ -318,7 +353,7 @@ ResultV Forward3D::create_pipelines() {
 
 void Forward3D::destroy_targets() {
     if (!device_) return;
-    for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_}) destroy(*device_, *t);
+    for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_, &ao_gbuf_, &ao_depth_, &ao_a_, &ao_b_}) destroy(*device_, *t);
     for (rhi::TextureHandle& t : bloom_) destroy(*device_, t);
     bloom_levels_ = 0;
     size_ = {};
@@ -378,11 +413,11 @@ void Forward3D::shutdown() {
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &skinned_cull_,
           &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
-          &probe_decode_}) {
+          &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
-    for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_})
+    for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_, &ao_off_})
         destroy(*device_, *t);
     ibl_key_ = 0;
     ibl_env_layers_ = 0;
@@ -411,7 +446,8 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     const u32 b = desc_.timestamp_base;
     t.frame_index = ts.frame_index;
     t.clusters = ts.ms(b + kTsBegin, b + kTsClusters);
-    t.shadow = ts.ms(b + kTsClusters, b + kTsShadow);
+    t.ssao = ts.ms(b + kTsClusters, b + kTsSsao);
+    t.shadow = ts.ms(b + kTsSsao, b + kTsShadow);
     t.main = ts.ms(b + kTsShadow, b + kTsMain);
     t.resolve = ts.ms(b + kTsMain, b + kTsResolve);
     t.bloom = ts.ms(b + kTsResolve, b + kTsBloom);
@@ -443,6 +479,8 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     timestamp(cmd, kTsBegin);
     record_clusters(cmd, scene);
     timestamp(cmd, kTsClusters);
+    record_ssao(cmd, scene);
+    timestamp(cmd, kTsSsao);
     record_shadows(cmd, scene);
     timestamp(cmd, kTsShadow);
     record_main(cmd, scene);
@@ -698,6 +736,7 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.bind_texture(rhi::bank::kIblEnv, ibl_env_, env_sampler_);
             cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_lut_, linear_clamp_);
             cmd.bind_texture(rhi::bank::kIblSh, ibl_sh_, point_sampler_);
+            cmd.bind_texture(rhi::bank::kAo, ao_off_, linear_clamp_);  // captures take no SSAO (PassU::ao.x = 0)
             cmd.set_storage_data(rhi::bank::kClusters, rhi::as_bytes(kNoRange));
             cmd.set_storage_data(rhi::bank::kLightIndices, rhi::as_bytes(kNoIndex));
             cmd.set_storage_data(rhi::bank::kLightPool, rhi::as_bytes(kNoLight));
@@ -761,6 +800,87 @@ bool Forward3D::record_probe_export(rhi::CommandBuffer& cmd, u32 probe) {
     cmd.draw_non_indexed(3);
     cmd.end_pass();
     return true;
+}
+
+// ---- 0. screen-space ambient occlusion (M-VISUAL 3): prepass -> occlusion -> blur H -> blur V, half size
+void Forward3D::record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const AmbientOcclusion& ao = scene.ambient_occlusion();
+    if (!ao.enabled || ao_pipe_.is_null()) return;
+    const rhi::Extent2D half{max(1u, size_.width / 2), max(1u, size_.height / 2)};
+    if (ao_gbuf_.is_null()) {
+        rhi::TextureDesc d;
+        d.size = half;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.debug_name = "mce.3d.ssao_gbuf";
+        ao_gbuf_ = device_->create_texture(d);
+        d.format = rhi::TextureFormat::RGBA8_UNorm;
+        d.debug_name = "mce.3d.ssao_a";
+        ao_a_ = device_->create_texture(d);
+        d.debug_name = "mce.3d.ssao_b";
+        ao_b_ = device_->create_texture(d);
+        rhi::TextureDesc z;
+        z.size = half;
+        z.format = rhi::TextureFormat::D32_Float;
+        z.usage = rhi::TextureUsage::DepthTarget;
+        z.debug_name = "mce.3d.ssao_depth";
+        ao_depth_ = device_->create_texture(z);
+    }
+    cmd.push_debug_scope("ssao");
+    const View3D& view = scene.view();
+    rhi::PassAttachment color;
+    color.texture = ao_gbuf_;
+    color.clear.color[3] = 0.0f;  // view depth 0: nothing drawn
+    rhi::PassAttachment depth;
+    depth.texture = ao_depth_;
+    depth.clear.depth = 1.0f;
+    depth.store = rhi::StoreOp::DontCare;
+    rhi::RenderPassDesc pp;
+    pp.colors = Span<const rhi::PassAttachment>(&color, 1);
+    pp.depth = depth;
+    pp.debug_name = "ssao.prepass";
+    cmd.begin_pass(pp);
+    FrameU fu{};
+    fu.view_proj = view.view_proj;
+    fu.view = view.view;
+    fu.inv_view_proj = inverse(view.view_proj);
+    fu.camera_pos = vec4(view.position, 0.0f);
+    fu.viewport = {f32(half.width), f32(half.height), 1.0f / f32(half.width), 1.0f / f32(half.height)};
+    cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
+    DrawCache cache;
+    const Span<const Scene3D::Draw> draws = scene.draws();
+    draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, false, true);
+    stats_.ssao_draws = scene.opaque_count();
+    cmd.end_pass();
+
+    auto fullscreen = [&](rhi::TextureHandle dst, const char* name) {
+        rhi::PassAttachment out;
+        out.texture = dst;
+        out.load = rhi::LoadOp::DontCare;
+        rhi::RenderPassDesc p;
+        p.colors = Span<const rhi::PassAttachment>(&out, 1);
+        p.debug_name = name;
+        cmd.begin_pass(p);
+    };
+    AoU au{view.proj, {max(ao.radius, 1e-3f), max(ao.intensity, 0.0f), max(ao.power, 1e-3f), clamp(ao.bias, 0.0f, 0.99f)}, {}};
+    fullscreen(ao_a_, "ssao.occlusion");
+    cmd.bind_pipeline(ao_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(au));
+    cmd.bind_texture(rhi::bank::kFirstSampler, ao_gbuf_, point_sampler_);
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    for (u32 axis = 0; axis < 2; ++axis) {  // horizontal into b, vertical back into a
+        fullscreen(axis == 0 ? ao_b_ : ao_a_, "ssao.blur");
+        cmd.bind_pipeline(ao_blur_);
+        au.step = axis == 0 ? vec4(1.0f / f32(half.width), 0.0f, 0.0f, 0.0f) : vec4(0.0f, 1.0f / f32(half.height), 0.0f, 0.0f);
+        cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(au));
+        cmd.bind_texture(rhi::bank::kFirstSampler, axis == 0 ? ao_a_ : ao_b_, point_sampler_);
+        cmd.bind_texture(rhi::bank::kFirstSampler + 1, ao_gbuf_, point_sampler_);
+        cmd.draw_non_indexed(3);
+        cmd.end_pass();
+    }
+    cmd.pop_debug_scope();
+    stats_.ssao = true;
 }
 
 // ---- 1. cascades: one depth-only pass per layer, each with its own caster list
@@ -900,6 +1020,9 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_off_2d_, linear_clamp_);
         cmd.bind_texture(rhi::bank::kIblSh, ibl_off_2d_, point_sampler_);
     }
+    // SSAO: the blurred half-size visibility, upsampled bilinearly; a stand-in fills the slot when off.
+    pu.ao = {stats_.ssao ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+    cmd.bind_texture(rhi::bank::kAo, stats_.ssao ? ao_a_ : ao_off_, linear_clamp_);
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
@@ -934,7 +1057,7 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
 }
 
 void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin,
-                            u32 end, u32 opaque_end, DrawCache& cache, bool main) {
+                            u32 end, u32 opaque_end, DrawCache& cache, bool main, bool prepass) {
     const rhi::TextureHandle white = textures_->white();
     static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
     auto bind_map = [&](DrawCache& c, u32 i, u32 key) {
@@ -950,7 +1073,8 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
         const GpuSubmesh& sm = d.mesh->submeshes[d.submesh];
         const asset::MaterialChunk& mat = sm.material;
         const bool skinned = d.mesh->skinned();
-        const rhi::PipelineHandle pipe = i >= opaque_end                         ? (skinned ? skinned_blend_ : mesh_blend_)
+        const rhi::PipelineHandle pipe = prepass                                   ? (skinned ? ao_prepass_skinned_ : ao_prepass_)
+                                         : i >= opaque_end                         ? (skinned ? skinned_blend_ : mesh_blend_)
                                          : (mat.flags & asset::MaterialFlags::DoubleSided) ? (skinned ? skinned_two_sided_ : mesh_two_sided_)
                                                                                            : (skinned ? skinned_cull_ : mesh_cull_);
         if (!(pipe == cache.pipe)) {

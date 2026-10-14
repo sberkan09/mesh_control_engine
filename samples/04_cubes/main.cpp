@@ -59,6 +59,7 @@ MCE_CVAR(cv_fxaa, "r.fxaa", true, "FXAA", CVarFlags::None);
 MCE_CVAR(cv_sky_texture, "r.sky_texture", false, "Equirect sky texture instead of the gradient dome", CVarFlags::None);
 MCE_CVAR(cv_sky_ibl, "r.sky_ibl", false, "M-VISUAL 2: the sky lights the scene (SH9 irradiance + pre-filtered reflections)",
          CVarFlags::None);
+MCE_CVAR(cv_ao, "ao", false, "M-VISUAL 3: screen-space ambient occlusion", CVarFlags::None);
 MCE_CVAR(cv_night, "night", false, "Dim the sun so the point lights carry the scene", CVarFlags::None);
 MCE_CVAR(cv_yaw, "cam.yaw", 0.35f, "Initial orbit yaw (radians)", CVarFlags::None);
 MCE_CVAR(cv_pitch, "cam.pitch", 0.42f, "Initial orbit pitch (radians, down from the horizon)", CVarFlags::None);
@@ -117,7 +118,7 @@ struct LightRig {
 // Means of the per-stage times over the measured frames (NFR-F-01 table shape).
 struct Budget {
     f64 scene = 0, clusters = 0, record = 0, submit = 0;
-    f64 gpu_clusters = 0, gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
+    f64 gpu_clusters = 0, gpu_ssao = 0, gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
     u64 frames = 0, gpu_frames = 0;
 };
 
@@ -240,6 +241,7 @@ public:
             ++budget_.frames;
             if (gpu_.total >= 0.0) {
                 budget_.gpu_clusters += gpu_.clusters;
+                budget_.gpu_ssao += gpu_.ssao;
                 budget_.gpu_shadow += gpu_.shadow;
                 budget_.gpu_main += gpu_.main;
                 budget_.gpu_resolve += gpu_.resolve;
@@ -281,6 +283,7 @@ public:
         if (budget_.gpu_frames > 0) {
             const f64 g = f64(budget_.gpu_frames);
             std::printf("  | Forward+ light assignment (compute) | - | %.3f |\n", budget_.gpu_clusters / g);
+            std::printf("  | SSAO (prepass + occlusion + blur) | - | %.3f |\n", budget_.gpu_ssao / g);
             std::printf("  | shadow cascades | - | %.3f |\n", budget_.gpu_shadow / g);
             std::printf("  | main pass (Forward+ PBR + sky) | - | %.3f |\n", budget_.gpu_main / g);
             std::printf("  | MSAA resolve | - | %.3f |\n", budget_.gpu_resolve / g);
@@ -493,6 +496,9 @@ private:
         if (cv_sky_texture.get_bool() && sky_key_ != ~0u) sky.texture = sky_key_;
         sky.ibl = cv_sky_ibl.get_bool();
         scene.set_sky(sky);
+        AmbientOcclusion ao;
+        ao.enabled = cv_ao.get_bool();
+        scene.set_ambient_occlusion(ao);
         PostFx post;
         post.bloom = cv_bloom.get_bool();
         post.fxaa = cv_fxaa.get_bool();
