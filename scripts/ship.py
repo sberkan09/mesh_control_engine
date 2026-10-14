@@ -11,6 +11,8 @@
                                                         # signs an .ipa (cmake/mobile/ios_app.py; --smoke)
     python3 scripts/ship.py platformer --target android --store [--dry-run]   # ... then the Play internal track,
                                                         # or TestFlight for an .ipa (cmake/mobile/store.py)
+    python3 scripts/ship.py --project projects/Undelivered --target android   # a project on phones too: the
+                                                        # host build's <game>_cook cooks its pack
 
 Phone builds take the app icon from <game>/ship/icon.png (1024x1024; cmake/mobile/app_icon.py), the name
 under it per language from the app.name key of <game>/assets/loc/<locale>.csv (cmake/mobile/app_names.py)
@@ -145,6 +147,10 @@ def project_outputs(project, args):
         "name": re.sub(r"[^A-Za-z0-9_.-]+", "-", title).strip("-") or meta["name"],
         "title": title,
         "source": proj_dir,
+        "target": game,
+        "host_targets": [game + "_cook"],  # --target android/ios: the project's cook runs on the host
+        "android_lib": os.path.join(out_dir, "lib" + game + ".so"),
+        "ios_app": os.path.join(out_dir, game + ".app"),
         "targets": [game] + ([game + "_game"] if os.name != "nt" else []),
         "exe": os.path.join(out_dir, game + EXE),
         "pack": os.path.join(out_dir, "project", "assets.mce"),
@@ -160,12 +166,15 @@ def project_outputs(project, args):
 
 
 def build_mobile(art, args, env=None):
-    """A phone build: the host's mce_cook first (it cooks the packs), then the game on the phone preset."""
+    """A phone build: the host's mce_cook (and a project's <game>_cook) first, they cook the packs;
+    then the game on the phone preset."""
     run(["cmake", "--preset", args.host_preset])
-    run(["cmake", "--build", "--preset", args.host_preset, "--target", "mce_cook"])
-    cook = os.path.join(ROOT, "build", args.host_preset, "tools", "cook", "mce_cook" + EXE)
-    print(f"+ cmake --preset {args.preset} -DMCE_HOST_COOK={cook}", flush=True)
-    subprocess.run(["cmake", "--preset", args.preset, f"-DMCE_HOST_COOK={cook}"], cwd=ROOT, env=env, check=True)
+    run(["cmake", "--build", "--preset", args.host_preset, "--target", "mce_cook", *art.get("host_targets", [])])
+    host_dir = os.path.join(ROOT, "build", args.host_preset)
+    cook = os.path.join(host_dir, "tools", "cook", "mce_cook" + EXE)
+    configure = ["cmake", "--preset", args.preset, f"-DMCE_HOST_COOK={cook}", f"-DMCE_HOST_BUILD_DIR={host_dir}"]
+    print("+ " + " ".join(configure), flush=True)
+    subprocess.run(configure, cwd=ROOT, env=env, check=True)
     run(["cmake", "--build", "--preset", args.preset, "--target", art["target"]])
 
 
@@ -425,8 +434,6 @@ def main():
     if args.build_number is None:
         count = git("rev-list", "--count", "HEAD")
         args.build_number = max(1, int(count)) if count.isdigit() else 1
-    if args.target != "desktop" and args.project:
-        ap.error(f"--target {args.target} ships the samples for now (projects: M-MOBILE step 9)")
     if args.version is None:
         base = "0.0.0"
         with open(os.path.join(ROOT, "CMakeLists.txt")) as f:
