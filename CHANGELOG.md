@@ -5,6 +5,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Live services vendor, Firebase (M-LIVEOPS step 1): `mce/platform/firebase.h` with Crashlytics for native crashes
+  and Analytics for `analytics::event`. `ship` stamps it into a phone build only when `MCE_FIREBASE_ANDROID_CONFIG` or
+  `MCE_FIREBASE_IOS_CONFIG` names the project's config file (never committed), uploads symbols to Crashlytics, starts
+  both SDKs with collection off and adds the privacy manifest entries; the player turns collection on with consent.
+  iOS builds it with `-DMCE_FIREBASE=ON -DMCE_FIREBASE_SDK_DIR=...`. The engine's crash handler now hands each crash on
+  to a handler installed before it (Crashlytics' NDK handler) after writing its own report. `-liveops.provider
+  firebase` picks it explicitly. Not yet run on a device.
 - Eyes for agents, M-AGENT step 1 (SBA-48): the MCP server gains `render_frame` (the saved scene drawn by the
   real player at sim tick N, with scripted input, from its own camera, another camera entity or a free 2D/3D camera,
   at a chosen size and safe area, returned as an MCP image), `render_sheet` (several ticks and cameras in one

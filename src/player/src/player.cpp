@@ -94,6 +94,7 @@
 #include "mce/monetize/monetize.h"
 #include "mce/physics/module.h"
 #include "mce/platform/ads.h"
+#include "mce/platform/firebase.h"
 #include "mce/platform/haptics.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -170,7 +171,8 @@ MCE_CVAR(cv_store_catalog, "store_catalog", "",
 MCE_CVAR(cv_liveops, "liveops", false, "Turn live services (analytics, crash reports) on even when the game's host does not",
          CVarFlags::None);
 MCE_CVAR(cv_liveops_provider, "liveops.provider", "",
-         "Live services: empty = the host's, local = analytics.jsonl and crash_outbox/ in the save folder, none = neither",
+         "Live services: empty = the host's (else Firebase where the build has it), firebase, local = analytics.jsonl "
+         "and crash_outbox/ in the save folder, none = neither",
          CVarFlags::None);
 MCE_CVAR(cv_liveops_consent, "liveops.consent", "auto",
          "Live services: auto (the ad network's consent form, or the game), granted or denied", CVarFlags::None);
@@ -228,6 +230,28 @@ MCE_CVAR(cv_preload3d, "r.preload3d", true, "3D games: upload every texture and 
 MCE_CVAR(cv_stats, "r.stats", false, "Draw the render stats line (F3 toggles)", CVarFlags::None);
 MCE_CVAR(cv_mouse_look, "mouse_look", true, "3D games: let a Camera3DComponent with mouse_look capture the mouse", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
+// Analytics events to Firebase (platform/firebase.h): the vendor backend on phones shipped with a
+// Firebase config. Consent reaches the SDK through platform::firebase::set_collection.
+class FirebaseAnalytics final : public liveops::analytics::IBackend {
+public:
+    const char* name() const override { return "firebase"; }
+    void send(const liveops::analytics::Event& e) override {
+        platform::firebase::Param params[liveops::analytics::kMaxParams];
+        u32 n = 0;
+        for (const liveops::analytics::Param& p : e.params.params()) {
+            platform::firebase::Param& q = params[n++];
+            q.key = p.key.view();
+            q.i = p.i;
+            q.f = p.f;
+            q.s = p.s.view();
+            q.kind = p.kind == liveops::analytics::Param::Kind::Int     ? platform::firebase::Param::Kind::Int
+                     : p.kind == liveops::analytics::Param::Kind::Float ? platform::firebase::Param::Kind::Float
+                                                                         : platform::firebase::Param::Kind::String;
+        }
+        platform::firebase::log_event(e.name.view(), Span<const platform::firebase::Param>(params, n));
+    }
+};
+
 int fail(const char* what, const Error& e) {
     FixedString<512> msg;
     format_error(e, msg);
@@ -699,7 +723,25 @@ private:
         d.analytics = desc_.analytics_backend;
         d.crash_uploader = desc_.crash_uploader;
         const StringView provider = cv_liveops_provider.get_string();
-        if (provider == "local") {
+        // Firebase: asked for, or the default on a phone build that has it and a host that brought
+        // no backend of its own. Crashlytics catches native crashes itself (the engine's handler
+        // hands them on), so the engine's own reports stay on the device.
+        const bool firebase = provider == "firebase" || (provider.empty() && !d.analytics && !d.crash_uploader &&
+                                                         platform::firebase::backend() ==
+                                                             platform::firebase::Backend::Firebase);
+        if (firebase) {
+            if (platform::firebase::start()) {
+                d.analytics = &firebase_analytics_;
+                d.crash_uploader = nullptr;
+                firebase_on_ = true;
+                firebase_collection_ = ~0u;
+                MCE_LOG_INFO("{}: live services vendor firebase (Crashlytics, Analytics)", desc_.app_name);
+            } else {
+                MCE_LOG_WARN("{}: -liveops.provider firebase, but this build has no Firebase; events are dropped",
+                             desc_.app_name);
+                d.analytics = nullptr;
+            }
+        } else if (provider == "local") {
             FixedString<512> events(save::root());
             events.append("/analytics.jsonl");
             FixedString<512> outbox(save::root());
@@ -712,7 +754,7 @@ private:
             d.analytics = nullptr;
             d.crash_uploader = nullptr;
         } else if (!provider.empty()) {
-            return Error(Errc::InvalidArgument, "player: -liveops.provider wants local or none", provider);
+            return Error(Errc::InvalidArgument, "player: -liveops.provider wants firebase, local or none", provider);
         }
         // Where the crash handler writes (-crash_dir, or the per-user folder), also when it is off this
         // run (-crash_reports 0, or a sanitizer build): reports from earlier runs still wait there.
@@ -930,6 +972,17 @@ private:
             const platform::ads::Consent ads = platform::ads::consent();
             if (ads == platform::ads::Consent::Personalized) liveops::set_consent(liveops::Consent::Granted);
             else if (ads == platform::ads::Consent::NonPersonalized) liveops::set_consent(liveops::Consent::Denied);
+        }
+        if (firebase_on_) {
+            const liveops::Consent c = liveops::consent();
+            const platform::firebase::Collection col = c == liveops::Consent::Granted ? platform::firebase::Collection::Granted
+                                                       : c == liveops::Consent::Denied
+                                                           ? platform::firebase::Collection::Denied
+                                                           : platform::firebase::Collection::Undecided;
+            if (static_cast<u32>(col) != firebase_collection_) {
+                firebase_collection_ = static_cast<u32>(col);
+                platform::firebase::set_collection(col);
+            }
         }
         liveops_.update();
         remote_config_.update();
@@ -1628,6 +1681,9 @@ private:
     monetize::Service monetize_;  // before the World: its resources point here (PlayerDesc::monetize)
     liveops::Service liveops_;  // PlayerDesc::liveops
     std::optional<liveops::analytics::FileBackend> local_analytics_;  // -liveops.provider local
+    FirebaseAnalytics firebase_analytics_;                             // -liveops.provider firebase
+    bool firebase_on_ = false;
+    u32 firebase_collection_ = ~0u;  // the Collection last handed to the SDK
     std::optional<liveops::OutboxUploader> local_outbox_;
     std::optional<liveops::FileConfigFetcher> file_fetcher_;  // -remote_config.file
     liveops::RemoteConfigService remote_config_;  // before the World: its resource points here
