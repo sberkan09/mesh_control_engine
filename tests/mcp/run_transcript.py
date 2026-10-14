@@ -55,7 +55,8 @@ def run_one(exe, transcript, work, update):
     if project.exists():
         shutil.rmtree(project)
     shutil.copytree(DEMO_ASSETS, project / "assets")
-    proc = subprocess.run([str(exe), "--project", str(project)], stdin=transcript.open("rb"), capture_output=True,
+    # An empty docs folder: resources/list stays the same as the shipped docs grow.
+    proc = subprocess.run([str(exe), "--project", str(project), "--docs", str(work / "no_docs")], stdin=transcript.open("rb"), capture_output=True,
                           timeout=300)
     if proc.returncode != 0:
         print(proc.stderr.decode(errors="replace")[-4000:])

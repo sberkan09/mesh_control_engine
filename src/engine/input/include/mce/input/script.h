@@ -46,6 +46,9 @@ public:
     // line and what was expected in the error message.
     Result<void> parse(StringView text);
     void clear();
+    // Drops the segments but keeps the last evaluated tick, so a source that re-plans every tick
+    // (the MCP server's bots: clear_segments, add for this tick, evaluate) keeps the edge rules.
+    void clear_segments() { segments_.clear(); }
 
     Span<const ScriptSegment> segments() const { return segments_.span(); }
     bool empty() const { return segments_.empty(); }

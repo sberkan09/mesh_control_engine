@@ -21,7 +21,9 @@ foreach(f bin/mce bin/mce_player bin/mce_editor bin/mce_mcp bin/mce_cook lib/cma
           share/mce/templates/novel/story/story.json share/mce/scripts/story_compile.py include/mce/kit/novel.h
           include/mce/kit/novel_ui.h
           share/mce/scripts/new_project.py share/mce/VERSION share/mce/examples/Kindle/CMakeLists.txt
-          share/doc/mce/user-guide/README.md share/doc/mce/engine/modules.md share/doc/mce/ARCHITECTURE.md)
+          share/doc/mce/user-guide/README.md share/doc/mce/engine/modules.md share/doc/mce/ARCHITECTURE.md
+          share/mce/samples/03_platformer/main.cpp share/mce/samples/scene_demo/assets/scenes/demo.mcscene
+          share/mce/library/library.json)
     if(NOT EXISTS "${PREFIX}/${f}")
         message(FATAL_ERROR "the SDK lacks ${f}")
     endif()
@@ -76,6 +78,20 @@ execute_process(COMMAND ${MCE} mcp "${project}" INPUT_FILE "${WORK_DIR}/mcp_in.j
 if(NOT rc EQUAL 0 OR NOT out MATCHES "^{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":")
     message(FATAL_ERROR "mce mcp: stdout is not the initialize response alone (rc ${rc}):\n${out}\n${err}")
 endif()
+# The SDK's server serves the SDK's own docs and samples (mce://docs/..., docs_search), not the
+# engine source tree's.
+file(WRITE "${WORK_DIR}/mcp_docs.jsonl"
+     "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"sdk_test\",\"version\":\"0\"}}}\n"
+     "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n"
+     "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/read\",\"params\":{\"uri\":\"mce://docs/guide/14-mcp-ai-workflow.md\"}}\n"
+     "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"docs_search\",\"arguments\":{\"query\":\"platformer jump\",\"group\":\"samples\"}}}\n"
+     "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"library_search\",\"arguments\":{\"query\":\"handwriting\"}}}\n")
+execute_process(COMMAND "${PREFIX}/bin/mce_mcp" INPUT_FILE "${WORK_DIR}/mcp_docs.jsonl"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT rc EQUAL 0 OR NOT out MATCHES "Working with an AI agent" OR NOT out MATCHES "mce://docs/samples/03_platformer/"
+   OR NOT out MATCHES "font-nothing-you-could-do")
+    message(FATAL_ERROR "the SDK's mce_mcp does not serve its docs and content library (rc ${rc}):\n${out}\n${err}")
+endif()
 # `mce new` registered that server for Claude Code in <project>/.mcp.json; the entry starts it from anywhere.
 file(READ "${project}/.mcp.json" mcp_json)
 string(JSON mcp_cmd GET "${mcp_json}" mcpServers mce_sdk_probe command)
@@ -114,6 +130,28 @@ list(GET shipped_host 0 shipped_host)
 expect_exit(0 "${shipped_host}" -headless 1 -ticks 300)
 if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
     message(FATAL_ERROR "the shipped host:\n${LAST_OUTPUT}")
+endif()
+if(NOT EXISTS "${WORK_DIR}/shipped/SdkProbe/CREDITS.md")
+    message(FATAL_ERROR "mce ship left out CREDITS.md")
+endif()
+# The agent's path to the same zip (M-AGENT step 6): project_check, then ship_build (build already done).
+file(WRITE "${WORK_DIR}/mcp_ship.jsonl"
+     "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"sdk_test\",\"version\":\"0\"}}}\n"
+     "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n"
+     "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"project_check\",\"arguments\":{\"ticks\":30}}}\n"
+     "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ship_build\",\"arguments\":{\"build\":false,\"ticks\":30,\"version\":\"9.9.9\"}}}\n"
+     "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"report_friction\",\"arguments\":{\"summary\":\"sdk probe note\",\"area\":\"ship_build\",\"severity\":\"minor\"}}}\n")
+execute_process(COMMAND ${MCE} mcp "${project}" INPUT_FILE "${WORK_DIR}/mcp_ship.jsonl"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+file(GLOB agent_zips "${project}/dist/SdkProbe-9.9.9-*.zip")
+if(NOT rc EQUAL 0 OR NOT out MATCHES "pass[^a-z]+true" OR NOT agent_zips)
+    message(FATAL_ERROR "project_check / ship_build over MCP (rc ${rc}):\n${out}\n${err}")
+endif()
+# The note report_friction wrote, collected for the engine's backlog (M-AGENT step 8).
+expect_exit(0 ${MCE} friction "${project}" --out "${WORK_DIR}/friction.md")
+file(READ "${WORK_DIR}/friction.md" backlog)
+if(NOT backlog MATCHES "### ship_build \\(1\\)\n\n- sdk probe note \\(SdkProbe, sdk_test-")
+    message(FATAL_ERROR "mce friction:\n${backlog}")
 endif()
 # 3a. A new asset without a sidecar stops the pack before the host links; `mce cook --adopt` still runs
 # (it needs only the module) and the next build succeeds (#117).

@@ -1,9 +1,12 @@
 #include "mce/mcp/server.h"
 
 #include "mce/asset/xxhash.h"
+#include "mce/cook/cook.h"
 #include "mce/cook/fs.h"
 #include "mce/editor/play_session.h"
 #include "tools.h"
+#include "tools_docs.h"
+#include "tools_team.h"
 
 namespace mce::mcp {
 
@@ -22,7 +25,9 @@ constexpr const char* kInstructions =
     "with entity_* and component_* (values use the .mcscene spelling: vectors as arrays, assets as "
     "\"guid:<uuid>\", entity references as \"$<entity id>\", enums by name). Edits stay in memory until "
     "scene_save. Verify with cook_run, cook_errors and run_headless (deterministic: same scene + ticks = same "
-    "state_hash).";
+    "state_hash). Docs, samples and examples: mce://docs/index, docs_search; what is data and what needs code: "
+    "engine_capabilities; prompts start_game, add_level, polish_pass. Something the engine made hard: "
+    "report_friction.";
 
 bool valid_id(cook::JsonValue id) { return id.is_string() || (id.is_number() && id.is_integer()); }
 
@@ -47,6 +52,51 @@ Result<void> Server::load_module(StringView path) {
     if (module_.module.loaded()) return Error(Errc::AlreadyExists, "mcp.load_module", module_.module.source_path.view());
     MCE_TRY_ASSIGN(module_.module, open_game_module(path));
     editor::set_play_game_install(module_.module.info->install);
+    return ok();
+}
+
+Result<void> Server::reload_module(cook::String& note) {
+    if (!module_.module.loaded()) return Error(Errc::InvalidArgument, "mcp.reload_module", "no game module is loaded");
+    editor::EditorScene& sc = session_.scene();
+    cook::String text;
+    sc.serialize(text);
+    const cook::String path(sc.path());
+    const bool was_dirty = sc.dirty();
+    const FixedString<512> source = module_.module.source_path;
+    // Nothing may hold the old module's component records or code when it unmaps.
+    sc.new_scene("module reload");
+    editor::set_play_game_install(nullptr);
+    unload_game_module(module_.module);
+    module_.module = LoadedModule{};
+    Result<LoadedModule> fresh = open_game_module(source.view());
+    if (!fresh) {
+        // Keep the work: the scene text goes where the note says, as when it fails to parse below.
+        note += "the rebuilt module did not load; ";
+    } else {
+        module_.module = fresh.value();
+        editor::set_play_game_install(module_.module.info->install);
+    }
+    cook::DiagList diags;
+    if (fresh && sc.recover(text.view(), diags)) {
+        sc.set_path(path.view());
+        if (!was_dirty) sc.mark_clean();
+        return ok();
+    }
+    const cook::String dir = cook::path_join(session_.project().root(), ".mce/module_reload");
+    cook::String backup = cook::path_join(dir.view(), "scene.mcscene");
+    (void)cook::fs::create_directories(dir.view());
+    (void)cook::fs::write_file_atomic(backup.view(), Span<const byte>(reinterpret_cast<const byte*>(text.c_str()), text.size()));
+    sc.set_path(path.view());
+    note += "the open scene was kept in ";
+    note += backup.view();
+    if (fresh) {
+        note += " because it no longer parses with the new components:";
+        for (const cook::Diagnostic& d : diags.all()) {
+            note += ' ';
+            note += d.message.view();
+        }
+    }
+    if (!fresh) return fresh.error();
     return ok();
 }
 
@@ -136,11 +186,21 @@ void Server::request(cook::JsonValue id, StringView method, cook::JsonValue para
         for (const char* v : kSupportedVersions)
             if (want.is_string() && want.as_string() == v) version = v;
         initialize_seen_ = true;
+        if (opt_.agent && *opt_.agent) {
+            agent_ = cook::String(opt_.agent);
+        } else {
+            // The client's name and a short id: two sessions of one client stay apart.
+            const cook::JsonValue info = params.valid() ? params.get("clientInfo") : cook::JsonValue();
+            const cook::JsonValue cname = info.is_object() ? info.get("name") : cook::JsonValue();
+            agent_ = cook::String(cname.is_string() && !cname.as_string().empty() ? cname.as_string().substr(0, 40) : StringView("agent"));
+            cook::appendf(agent_, "-%04x", static_cast<unsigned>(cook::generate_guid().lo & 0xFFFF));
+        }
         w.begin_object();
         w.key("protocolVersion").str(version);
         w.key("capabilities").begin_object();
         w.key("tools").begin_object().key("listChanged").boolean(false).end_object();
         w.key("resources").begin_object().key("subscribe").boolean(false).key("listChanged").boolean(false).end_object();
+        w.key("prompts").begin_object().key("listChanged").boolean(false).end_object();
         w.end_object();
         w.key("serverInfo").begin_object().key("name").str(kServerName).key("version").str(kServerVersion).end_object();
         w.key("instructions").str(kInstructions);
@@ -166,10 +226,27 @@ void Server::request(cook::JsonValue id, StringView method, cook::JsonValue para
     if (method == "resources/list") {
         w.begin_object().key("resources").begin_array();
         list_resources(w);
+        docs_list_resources(*this, w);
         w.end_array().end_object();
         return respond(id, result.view());
     }
-    if (method == "resources/templates/list") return respond(id, "{\"resourceTemplates\":[]}");
+    if (method == "resources/templates/list") {
+        w.begin_object().key("resourceTemplates").begin_array();
+        docs_list_templates(w);
+        w.end_array().end_object();
+        return respond(id, result.view());
+    }
+    if (method == "prompts/list") {
+        prompts_list(w);
+        return respond(id, result.view());
+    }
+    if (method == "prompts/get") {
+        const cook::JsonValue name = params.valid() ? params.get("name") : cook::JsonValue();
+        if (!name.is_string()) return respond_error(id, kInvalidParams, "\"name\" must be a string");
+        cook::String err;
+        if (!prompts_get(name.as_string(), params.get("arguments"), w, err)) return respond_error(id, kInvalidParams, err.view());
+        return respond(id, result.view());
+    }
     if (method == "resources/read") {
         const cook::JsonValue uri = params.valid() ? params.get("uri") : cook::JsonValue();
         if (!uri.is_string()) return respond_error(id, kInvalidParams, "\"uri\" must be a string");
@@ -208,7 +285,11 @@ void Server::call_tool(cook::JsonValue id, cook::JsonValue params) {
     const StringView tool_name(tool->name);
     const bool group = tool_name != "scene_undo" && tool_name != "scene_redo";
     if (group) session_.scene().begin_edit(tool_name);
-    const bool ok = tool->fn(call);
+    // Several agents on one project: a file another agent locked is refused, and every write is
+    // told to the project's event feed (tools_team.cpp).
+    bool ok = team_before_tool(call, tool_name);
+    if (ok) ok = tool->fn(call);
+    if (ok) team_after_tool(call, tool_name);
     if (group) session_.scene().end_edit();
     MCE_ASSERT_MSG(!ok || (out.depth() == 0 && !structured.empty()), "tool wrote an incomplete result");
 
