@@ -16,6 +16,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/envmap_importer.cpp
         src/font_importer.cpp
         src/fs_util.cpp
+        src/image.cpp
         src/gltf_importer.cpp
         src/importer_registry.cpp
         src/input_map_importer.cpp
