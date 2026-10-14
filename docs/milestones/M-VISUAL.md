@@ -10,7 +10,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | # | Step | Linear | State |
 |---|---|---|---|
 | 1 | Compute in the RHI; clustered light build on the GPU | SBA-6 | GL and SDL GPU (Vulkan) done; Metal compute open |
-| 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL, IBL texture source and runtime reflection probes and the editor bake done (all backends, fragment passes); goldens open |
+| 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL, IBL texture source and runtime reflection probes, the editor bake and goldens done (all backends, fragment passes); real-GPU numbers on the Mac/device session |
 | 3 | SSAO / GTAO | SBA-8 | — |
 | 4 | Local-light shadows | SBA-9 | — |
 | 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | — |
@@ -156,6 +156,15 @@ scene without probes or without `Environment3D.sky_ibl`. Gate: `test_editor_gl` 
 the file and sidecar, the bake mounted and not black, undo, the GUID kept on re-bake, and the preview then loading
 the bake instead of capturing (0 validation errors).
 
-**Open in step 2:** golden captures once the image-diff tooling exists (today's gates are pixel probes); real-GPU
-numbers.
+**Golden images (part 5, FR-DBG-020).** `tests/render_gl/test_golden_gl` renders each step's scenes through the
+shared 3D fixture (`tests/render_gl/fixture3d.h`) and compares them with `tests/render_gl/golden/<os>-<backend>/*.png`
+(`golden.h`): 8×8 blocks, every block's mean luminance within 0.5% of full scale. Dev-machine-only and never a CI
+gate (not registered with ctest): a missing golden is written and passes, `MCE_UPDATE_GOLDENS=1` rebaselines, and a
+mismatch leaves `<name>.actual.png` and `<name>.diff.png` under the build's `golden_out/`. `scripts/golden.sh` runs
+it three times per backend (0 flakes over 3 runs). PNG in and out is `mce/cook/image.h` (stb stays behind the
+cook wall). Step 2's goldens: `ibl_off`, `ibl_sky`, `ibl_roughness` (four metal boxes, roughness 0.05 to 0.95),
+`ibl_texture` and `probe_room`, baselined on Mesa llvmpipe (GL) and lavapipe (SDL GPU); later steps add theirs.
+
+**Open in step 2:** real-GPU numbers (the budgets above are llvmpipe, relative cost only); they need a device and
+go with the Mac session.
 
