@@ -10,7 +10,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | # | Step | Linear | State |
 |---|---|---|---|
 | 1 | Compute in the RHI; clustered light build on the GPU | SBA-6 | GL and SDL GPU (Vulkan) done; Metal compute open |
-| 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL and runtime reflection probes done (all backends, fragment passes); editor bake open |
+| 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL, IBL texture source and runtime reflection probes done (all backends, fragment passes); editor bake open |
 | 3 | SSAO / GTAO | SBA-8 | — |
 | 4 | Local-light shadows | SBA-9 | — |
 | 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | — |
@@ -129,7 +129,15 @@ dropped), `test_kit` (`ReflectionProbe3D` extracts to the entity's box; disabled
 reflects the sky, with one it reflects the wall (red > sky + 60); a second frame captures nothing, a version
 bump captures again; with `Sky::ibl` off probes are ignored.
 
+**IBL source (part 3).** `Sky::ibl_texture` (kit: `Environment3D::ibl_texture` + `ibl_texture_intensity`) is an
+equirect the bakes read in place of the visible sky, so the lighting can come from an HDR-ish environment while
+the dome shows something else; the dome still draws the sky. The sky's slot of `ibl_env()` is now laid out like a
+probe's: layer 0 the sharp source, then roughness 0.2 … 1.0 (probe slots start at layer 6). Below roughness 0.2
+the visible sky is still read directly for full texture detail; with an IBL texture the sharp layer is read
+instead. Gate (`test_render_gl` / `test_render_sdlgpu`): a red IBL texture under a blue sky turns the ground red
+while the dome pixels stay within 2 of the blue sky's, and an unchanged texture re-bakes nothing.
+
 **Open in step 2:** probes baked in the editor and cooked (today's captures see only the instances the frame
-submits, e.g. after kit culling); an equirect asset as the IBL source independent of the visible sky; golden
-captures once the image-diff tooling exists (today's gates are pixel probes); real-GPU numbers.
+submits, e.g. after kit culling); golden captures once the image-diff tooling exists (today's gates are pixel
+probes); real-GPU numbers.
 
