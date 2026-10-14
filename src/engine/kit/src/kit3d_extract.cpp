@@ -7,6 +7,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/log.h"
 #include "mce/string_id.h"
+#include "kit3d_internal.h"
 
 namespace mce::kit {
 
@@ -317,19 +318,12 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         inst.cast_shadows = m.cast_shadows != 0;
         inst.skinning = m.skinning != 0;
         if (const Animator* a = world.try_get<Animator>(e); a && a->playing != 0 && !mesh->nodes.empty()) {
-            const u32 clip = find_clip_id(*mesh, a->playing);
-            if (clip != ~0u) {
+            render::ClipSample samples[3];
+            const usize n = anim_samples(*a, *mesh, [&](u64 id) { return find_clip_id(*mesh, id); }, samples);
+            if (n > 0) {
                 const usize first = poses_.size();
                 poses_.resize(first + mesh->nodes.size());
-                const Span<mat4> out(poses_.data() + first, mesh->nodes.size());
-                const u32 from = a->previous != 0 && a->blend < 1.0f ? find_clip_id(*mesh, a->previous) : ~0u;
-                if (from != ~0u) {
-                    const render::ClipSample samples[2] = {{from, a->previous_time + a->phase, 1.0f - a->blend},
-                                                           {clip, a->time + a->phase, a->blend}};
-                    render::pose_nodes_blend(*mesh, Span<const render::ClipSample>(samples, 2), out);
-                } else {
-                    render::pose_nodes(*mesh, clip, a->time + a->phase, out);
-                }
+                pose_samples(*mesh, samples, n, Span<mat4>(poses_.data() + first, mesh->nodes.size()));
                 pose_first_.push_back(static_cast<u32>(first));
                 pose_first_.push_back(static_cast<u32>(mesh->nodes.size()));
                 pose_first_.push_back(static_cast<u32>(pending_.size()));

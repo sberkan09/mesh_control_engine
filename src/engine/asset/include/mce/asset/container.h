@@ -51,6 +51,8 @@ enum class ChunkType : u16 {  // closed set, appended only
     StoreCatalog,    // CHNK_STORE: a project's products and ad placements (M-MONETIZE; mce/monetize/catalog.h)
     RemoteConfig,    // CHNK_RCFG: a project's remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
     GameServicesCatalog,  // CHNK_GSVC: achievements, leaderboards, cloud saves (M-LIVEOPS; mce/liveops/game_services.h)
+    SpriteSheet,     // CHNK_SHEET: texture regions + named flipbook clips (M-DATA-REACH 5)
+    AnimGraph,       // CHNK_ANIMG: a 3D animation state graph (M-DATA-REACH 7)
 };
 
 const char* chunk_type_name(ChunkType t);

@@ -18,6 +18,8 @@ formats, which is what keeps the shipped game small and safe.
 | Scene | `.mcscene` | columnar entity rows | the game, the editor |
 | Prefab | `.mcprefab` | the same, entity 0 as root | instances in scenes, runtime spawns |
 | Tilemap | `.mctilemap` | one tile layer over a tileset | `TilemapLayer` |
+| Sprite sheet | `.mcsheet` | texture regions and named flipbook clips with frame events | `AnimatedSprite`, `Sprite.region` |
+| Animation graph | `.mcanim` | states over a mesh's clips, 1D blends, transitions, events | `Animator.graph` |
 | Particle preset | `.mcpart` | emitter parameters | `ParticleEmitter` |
 | Sequence | `.mcseq` | an action list | `SequencePlayer` |
 | Input map | `.mcinput` | action maps and bindings | the player's input (chapter 11) |
@@ -147,8 +149,8 @@ Besides scenes and prefabs (chapter 4), these text assets are JSON with a `forma
   "color_start": [1, 0.7, 0.25, 1], "color_end": [1, 0.2, 0.05, 0], "blend": "additive" }
 ```
 
-**Sequence** (`.mcseq`, chapter 13) and **tilemap** (`.mctilemap`, chapter 7; the editor's
-Tilemap panel writes it).
+**Sequence** (`.mcseq`, chapter 13), **tilemap** (`.mctilemap`, chapter 7; the editor's
+Tilemap panel writes it) **sprite sheet** (`.mcsheet`, chapter 7.3) and **animation graph** (`.mcanim`, chapter 8.9).
 
 **Shaders** are validated and compiled to SPIR-V at cook, with variants declared as
 `// @variant NAME` header lines, but the built-in 2D and 3D shaders are not cooked assets yet and a

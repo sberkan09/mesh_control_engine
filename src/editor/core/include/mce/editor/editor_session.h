@@ -84,6 +84,13 @@ public:
     // EditorScene::apply_override's hook: writes `fields` of `value` into the root of the prefab
     // asset `prefab` (its .mcprefab under assets/) and hot-reloads.
     Result<void> apply_to_prefab(asset::Guid prefab, const DocComponent& value, u64 fields);
+    // Save as prefab (M-DATA-REACH 2): writes `root` and its ChildOf subtree as a new .mcprefab
+    // at `rel_path` (under assets/; the root first and without its parent link, references that
+    // leave the subtree nulled) with a fresh GUID, and hot-reloads it. With `replace`, the subtree
+    // becomes an instance of the new prefab at the same index, parent and transform (one undo
+    // step). Refuses an existing file and a prefab instance's subtree that the prefab could not
+    // hold. Returns the prefab's GUID.
+    Result<asset::Guid> create_prefab_from(EntityId root, StringView rel_path, bool replace = true);
 
     // Reflection probe bake (M-VISUAL 2): captures every ReflectionProbe3D of the open scene through
     // the preview with all of the scene's meshes, writes assets/probes/<scene>/probe_<entity id>.mcenv

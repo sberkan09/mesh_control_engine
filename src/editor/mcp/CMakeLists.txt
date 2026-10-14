@@ -11,6 +11,8 @@ mce_add_library(mce_mcp_core UMBRELLA
         src/asset_tools.cpp
         src/headless_run.cpp
         src/json_writer.cpp
+        src/prefab_tools.cpp
+        src/project_tools.cpp
         src/server.cpp
         src/tools.cpp
         src/tools_agent.cpp

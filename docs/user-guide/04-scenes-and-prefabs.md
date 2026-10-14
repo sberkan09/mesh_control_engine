@@ -164,9 +164,16 @@ runtime never sees a prefab, only rows. Editing a prefab asset re-cooks every sc
   every instance (entity references are not applied, since they name this scene's entities).
 - Open a prefab asset (double-click or "Open prefab") to edit it like a scene; Save re-cooks its
   users and the instances in your scene follow on hot reload.
-- To make a **new** prefab, write the `.mcprefab` file (copy the entities out of a scene and set
-  the format and a fresh GUID, or ask an MCP agent to do it with `scene_new` and `scene_save`),
-  then "Rescan assets". The editor has no "save selection as prefab" command yet.
+- To make a **new** prefab, right-click an entity in the Hierarchy and pick **Save as Prefab**: the
+  entity and its children are written to `prefabs/<name>.mcprefab` (the root first, with an
+  identity transform; references that leave the subtree are cleared), cooked, and replaced in the
+  scene by an instance at the same place. One undo step brings the entities back (the file stays).
+
+**Over MCP** (chapter 14): `prefab_create_from {"entity": "Grunt", "path": "prefabs/grunt.mcprefab"}`
+does the same; `entity_create {"name": "Grunt B", "prefab": "guid:...", "components":
+{"LocalTransform": {"position": [4, 0, 0]}, "Health": {"hp": 5}}}` places an instance whose
+components override the prefab root; `prefab_apply` and `prefab_revert` are the Inspector's two
+buttons; and `scene_open` / `scene_save` take a `.mcprefab` path to edit the prefab itself.
 
 **At run time.** `ecs::instantiate` spawns a cooked prefab from code with a replica count, a parent
 and typed overrides (`PrefabOverride::of("Health.hp", 99.0f)`), which is how a game spawns enemies,

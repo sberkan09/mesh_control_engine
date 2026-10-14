@@ -170,6 +170,8 @@ public:
     World3D& operator=(const World3D&) = delete;
 
     const PhysicsConfig3D& config() const;
+    // Changes config().gravity from the next step on (a scene's WorldSettings, M-DATA-REACH 3).
+    void set_gravity(vec3 gravity);
 
     // ---- body lifecycle ----------------------------------------------------------------------------
     // False when the entity already has a body/character or the shape is malformed (non-positive
