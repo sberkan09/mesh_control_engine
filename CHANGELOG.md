@@ -5,6 +5,15 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Several agents on one project, M-AGENT step 7 (SBA-54): each agent runs its own MCP server (`--agent <name>`)
+  on the same folder. `project_watch` reads the event feed (`.mce/events.jsonl`), `asset_lock` refuses other
+  agents' writes to a file, `task_add` / `task_claim` / `task_update` share `tasks.mctasks`, and `scene_switch`
+  keeps several scenes open. `scene_save` merges another agent's save of the same scene by entity and refuses
+  with the conflicts (or settles them with `resolve`) instead of overwriting.
+- Quality gates for agents, M-AGENT step 6 (SBA-53): `project_check` returns findings with a fix for cook
+  errors, broken and unused references, missing credits, sRGB on data textures, each scene's sim time per tick
+  against a budget, and 2D text size and contrast; `ship_build` runs the full build, a headless smoke run of the
+  host and `mce ship`, and returns the zip's path. `mce ship` now puts the project's `CREDITS.md` in the zip.
 - Content without a human, M-AGENT step 5 (SBA-52): the MCP server generates palettes, pixel sprites, tile sets,
   noise textures and skies, sfxr sound effects and music loops (`gen_palette`, `gen_sprite`, `gen_tileset`,
   `gen_texture`, `gen_sfx`, `gen_music`), each with a preview image and a `save` that writes the asset, its sidecar

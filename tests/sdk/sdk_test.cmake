@@ -131,6 +131,28 @@ expect_exit(0 "${shipped_host}" -headless 1 -ticks 300)
 if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
     message(FATAL_ERROR "the shipped host:\n${LAST_OUTPUT}")
 endif()
+if(NOT EXISTS "${WORK_DIR}/shipped/SdkProbe/CREDITS.md")
+    message(FATAL_ERROR "mce ship left out CREDITS.md")
+endif()
+# The agent's path to the same zip (M-AGENT step 6): project_check, then ship_build (build already done).
+file(WRITE "${WORK_DIR}/mcp_ship.jsonl"
+     "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"sdk_test\",\"version\":\"0\"}}}\n"
+     "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n"
+     "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"project_check\",\"arguments\":{\"ticks\":30}}}\n"
+     "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ship_build\",\"arguments\":{\"build\":false,\"ticks\":30,\"version\":\"9.9.9\"}}}\n"
+     "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"report_friction\",\"arguments\":{\"summary\":\"sdk probe note\",\"area\":\"ship_build\",\"severity\":\"minor\"}}}\n")
+execute_process(COMMAND ${MCE} mcp "${project}" INPUT_FILE "${WORK_DIR}/mcp_ship.jsonl"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+file(GLOB agent_zips "${project}/dist/SdkProbe-9.9.9-*.zip")
+if(NOT rc EQUAL 0 OR NOT out MATCHES "pass[^a-z]+true" OR NOT agent_zips)
+    message(FATAL_ERROR "project_check / ship_build over MCP (rc ${rc}):\n${out}\n${err}")
+endif()
+# The note report_friction wrote, collected for the engine's backlog (M-AGENT step 8).
+expect_exit(0 ${MCE} friction "${project}" --out "${WORK_DIR}/friction.md")
+file(READ "${WORK_DIR}/friction.md" backlog)
+if(NOT backlog MATCHES "### ship_build \\(1\\)\n\n- sdk probe note \\(SdkProbe, sdk_test-")
+    message(FATAL_ERROR "mce friction:\n${backlog}")
+endif()
 # 3a. A new asset without a sidecar stops the pack before the host links; `mce cook --adopt` still runs
 # (it needs only the module) and the next build succeeds (#117).
 file(REMOVE "${project}/build/sdk_probe" "${project}/build/sdk_probe.exe")

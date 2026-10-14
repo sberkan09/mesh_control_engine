@@ -8,6 +8,7 @@
 
 #include "mce/cook/fs.h"
 #include "mce/platform/library.h"
+#include "mce/platform/platform.h"
 #include "mce/platform/process.h"
 #include "tool_args.h"
 #include "tools_agent.h"
@@ -311,6 +312,114 @@ bool module_test(ToolCall& c) {
     if (code != 0) {
         c.out.key("output_tail");
         write_tail(c.out, out);
+    }
+    c.out.end_object();
+    return true;
+}
+
+// The release a player gets (SBA-53): the whole build (host, module and the cooked pack, which the
+// project's CMake build makes), the module mapped again, a smoke run of the host headless, then the
+// SDK's `mce ship` zips host, module, engine library, pack and CREDITS.md. Returns the zip's path.
+bool ship_build(ToolCall& c) {
+    BuildTree t;
+    u64 ticks = 300;
+    bool build = true;
+    StringView version, out_rel;
+    if (!arg_uint(c, "ticks", ticks, 1, 36000, false) || !arg_bool(c, "build", build) || !arg_string(c, "version", version, false) ||
+        !arg_string(c, "out", out_rel, false) || !need_project(c) || !find_build_tree(c, t))
+        return false;
+    for (const char ch : version)
+        if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '.' || ch == '-' || ch == '_'))
+            return arg_missing(c, "version", "a version such as 1.0.2 (letters, digits, '.', '-', '_')");
+    if (!out_rel.empty() && (out_rel[0] == '/' || out_rel.find("..") != StringView::npos || out_rel.find(':') != StringView::npos ||
+                             out_rel.find('\\') != StringView::npos))
+        return arg_missing(c, "out", "a folder inside the project, e.g. dist/beta");
+    cook::String mce(platform::base_path());
+    mce += "mce";
+    if (!platform::file_exists(mce.view()))
+        return fail(c, "ship_build zips with the SDK's `mce ship`, and there is no mce beside this server: run the server from an installed SDK "
+                       "(mce mcp <project>)");
+    const StringView root = c.server.session().project().root();
+
+    c.out.begin_object();
+    // 1. The whole build: the pack is cooked by it, so content edits since the last build ship.
+    if (build) {
+        const StringView args[] = {t.cmake.view(), "--build", t.dir.view()};
+        Array<char> out;
+        i32 code = -1;
+        if (!run_captured(c, Span<const StringView>(args, 3), out, code)) return false;
+        c.out.key("build").begin_object().key("ok").boolean(code == 0).key("build_dir").str(t.dir.view());
+        if (code != 0) {
+            c.out.key("output_tail");
+            write_tail(c.out, out);
+            c.out.end_object().key("ok").boolean(false).key("stage").str("build").end_object();
+            return true;
+        }
+        cook::String note;
+        const bool reloaded = static_cast<bool>(c.server.reload_module(note));
+        c.out.key("reloaded").boolean(reloaded).end_object();
+    }
+    // 2. The smoke run: the shipped host plays the start scene headless.
+    cook::String host = cook::path_join(t.dir.view(), t.game.view());
+#if defined(_WIN32)
+    host += ".exe";
+#endif
+    if (!platform::file_exists(host.view())) {
+        c.out.key("ok").boolean(false).key("stage").str("smoke");
+        c.out.key("message").str("no host executable beside the module in the build tree: ship_build ships an SDK project (mce new / mce example)");
+        c.out.end_object();
+        return true;
+    }
+    {
+        cook::String n;
+        cook::appendf(n, "%llu", static_cast<unsigned long long>(ticks));
+        const StringView args[] = {host.view(), "-headless", "1", "-ticks", n.view()};
+        Array<char> out;
+        i32 code = -1;
+        if (!run_captured(c, Span<const StringView>(args, 5), out, code)) return false;
+        c.out.key("smoke").begin_object().key("ticks").num_u(ticks).key("exit_code").num_i(code);
+        if (code != 0) {
+            c.out.key("output_tail");
+            write_tail(c.out, out);
+            c.out.end_object().key("ok").boolean(false).key("stage").str("smoke").end_object();
+            return true;
+        }
+        c.out.end_object();
+    }
+    // 3. The zip.
+    {
+        cook::String out_dir;
+        Array<StringView> args;
+        args.push_back(mce.view());
+        args.push_back("ship");
+        args.push_back(root);
+        if (!version.empty()) {
+            args.push_back("--version");
+            args.push_back(version);
+        }
+        if (!out_rel.empty()) {
+            out_dir = cook::path_join(root, out_rel);
+            args.push_back("--out");
+            args.push_back(out_dir.view());
+        }
+        Array<char> out;
+        i32 code = -1;
+        if (!run_captured(c, args.span(), out, code)) return false;
+        const StringView text(out.data(), out.size());
+        const usize at = text.find("mce: wrote ");
+        if (code != 0 || at == StringView::npos) {
+            c.out.key("ok").boolean(false).key("stage").str("zip").key("output_tail");
+            write_tail(c.out, out);
+            c.out.end_object();
+            return true;
+        }
+        StringView zip = text.substr(at + 11);
+        const usize paren = zip.find(" (");
+        zip = zip.substr(0, paren == StringView::npos ? zip.find('\n') : paren);
+        u64 size = 0;
+        i64 mtime = 0;
+        (void)cook::fs::stat(zip, size, mtime);
+        c.out.key("ok").boolean(true).key("zip").str(zip).key("bytes").num_u(size);
     }
     c.out.end_object();
     return true;

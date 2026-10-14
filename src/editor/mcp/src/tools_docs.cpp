@@ -341,9 +341,11 @@ const Prompt kPrompts[] = {
      "5. Write .mctest scenarios under tests/ (a walk_to bot that must finish each level, no log errors) and run them "
      "with test_run; use playtest's feel report (stuck spots, deaths, idle time) to fix levels.\n"
      "6. Keep goldens of the title and each level with image_diff, so later changes that break a screen show up.\n"
-     "7. Finish: a title, win and lose, credits for every asset (CREDITS.md), then the shipping steps in "
-     "mce://docs/guide/15-shipping.md.\n"
-     "Prefer data over code, name every entity, save often, and never edit cooked/ by hand."},
+     "7. Finish: a title, win and lose, credits for every asset (CREDITS.md; gen_* and library_add write the rows), "
+     "project_check until pass is true, then ship_build (mce://docs/guide/15-shipping.md has the rest).\n"
+     "Prefer data over code, name every entity, save often, and never edit cooked/ by hand. Working with other agents: "
+     "task_claim your work, asset_lock what you rework, project_watch what they did. When the engine makes something "
+     "hard, call report_friction before you work around it."},
     {"add_level",
      "Add one level to the open project: author it, prove it can be finished, and keep a test for it",
      {{"name", "The level's name (its scene file is scenes/<name>.mcscene)", true},
@@ -425,6 +427,10 @@ constexpr Feature kFeatures[] = {
     {"agent", "read the docs and samples", "mcp", "mce://docs/... resources, docs_search, prompts"},
     {"agent", "make art, sound and music without a person", "mcp", "gen_palette, gen_sprite, gen_tileset, gen_texture, gen_sfx, gen_music"},
     {"agent", "use CC0/OFL starter content with credits", "mcp", "library_search, library_add"},
+    {"agent", "check the project and make the release zip", "mcp", "project_check, ship_build"},
+    {"agent", "work with other agents on one project: who did what, locks, shared tasks, merged scene saves", "mcp",
+     "project_watch, asset_lock, task_claim, scene_save resolve, scene_switch"},
+    {"agent", "report what the engine made hard, for its backlog", "mcp", "report_friction (friction.jsonl; mce friction collects)"},
     {"debug", "console variables and commands", "console", "console_list, console_exec"},
 };
 
