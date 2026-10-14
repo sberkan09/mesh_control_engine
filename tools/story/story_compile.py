@@ -33,7 +33,8 @@ The manifest names everything the script may use, so a typo fails here and not a
       "text": {"font": "assets/fonts/X.ttf", "px": 32, "line_px": 860, "lines_per_page": 4},
       "letters": {"font": "assets/fonts/Y.ttf", "px": 30, "line_px": 820, "lines_per_page": 12},
       "ink": {"speech": [r,g,b,a], "narration": [...], "row": [...], "row_selected": [...],
-              "row_disabled": [...], "row_tint": [...]}
+              "row_disabled": [...], "row_tint": [...]},
+      "localize": {"base": "en"}                      translate the story (below; default: off)
     }
 
 The script, one statement per line:
@@ -65,10 +66,27 @@ that fit (TextLabel holds 63 bytes).
 
 Text is wrapped and paginated here with the cooked font's metrics (Pillow measures the TTF at the
 baked size; without Pillow an average glyph width), so the runtime never measures text.
+
+Translation (M-MOBILE step 11e), on with "localize": every text statement, option and speaker name
+gets a key in the project's string tables (assets/loc/<locale>.csv, mce/loc/string_table.h):
+
+    story.name.<character>        a speaker's name tag
+    story.<8 hex digits>          a statement or an option: FNV-1a of its text, so an edited line gets
+                                  a new key and its stale translations stop showing
+
+The compile writes those rows into the base table (assets/loc/<base>.csv, keeping the rows the game
+wrote itself; --check fails while it is out of date) and reads them back from every other table,
+wrapped and paginated like the base text. A translated statement keeps its page count (the run is
+the same in every language; only what the box shows changes): one that cannot fill as many pages,
+or overflows them, is a warning and shows in the base language. The header carries a table per
+language (Program::locales); the kit picks the one the player's language chain names
+(novel::story_locale). Letters are not translated yet.
 """
 
 import argparse
+import csv
 import difflib
+import io
 import glob
 import json
 import pathlib
@@ -89,8 +107,40 @@ BUILTIN = {"scene", "label", "bg", "music", "ambience", "sfx", "show", "hide", "
            "wait", "ending", "end"}
 
 
+LOCALE_RE = re.compile(r"[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*")
+
+
 class CompileError(Exception):
     pass
+
+
+def loc_key(text):
+    """story.<FNV-1a 32 of the UTF-8 text, 8 hex digits>: the key of a statement or an option."""
+    h = 0x811C9DC5
+    for b in text.encode("utf-8"):
+        h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
+    return f"story.{h:08x}"
+
+
+def read_table(path):
+    """[(key, text)] of a string table CSV (header 'key,text'), in file order."""
+    rows = []
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        for i, row in enumerate(csv.reader(f)):
+            if i == 0 and row[:2] == ["key", "text"]:
+                continue
+            if len(row) >= 2 and row[0].strip():
+                rows.append((row[0].strip(), row[1]))
+    return rows
+
+
+def table_text(rows):
+    out = io.StringIO()
+    w = csv.writer(out, lineterminator="\n")
+    w.writerow(["key", "text"])
+    for k, t in rows:
+        w.writerow([k, t])
+    return out.getvalue()
 
 
 # ---- text measuring ----------------------------------------------------------------------------
@@ -264,6 +314,14 @@ class Manifest:
         self.letter_lines_per_page = int(lt.get("lines_per_page", 12))
         if not 1 <= self.lines_per_page <= 4:
             raise CompileError("story.json: text.lines_per_page is 1 to 4 (the box has four lines)")
+        loc = m.get("localize")
+        self.loc_base = None
+        if loc:
+            loc = loc if isinstance(loc, dict) else {}
+            self.loc_base = loc.get("base", "en")
+            if not LOCALE_RE.fullmatch(self.loc_base):
+                raise CompileError(f"story.json: localize.base '{self.loc_base}' is not a language tag")
+            self.loc_dir = project / loc.get("dir", "assets/loc")
         ink = m.get("ink", {})
         self.ink = {
             "speech": color(ink.get("speech"), [0.16, 0.12, 0.1, 1.0]),
@@ -313,6 +371,10 @@ class Compiler:
         self.src = ""
         self.stage = None      # slot -> character along straight-line flow (None: unknown)
         self.pending_tags = []
+        self.loc_says = []     # (text, [page id tuples]) of every statement, for translation
+        self.loc_options = []  # (text, text id, text2 id) of every option
+        self.loc_tables = []   # (locale, pages {base tuple: tuple}, options {(t, t2): (t, t2)}, names [text id])
+        self.loc_stats = []    # (locale, statements, of, options, of)
 
     # -- tables
     def sid(self, s):
@@ -409,11 +471,14 @@ class Compiler:
         for tag in tags:
             self.emit("Tag", self.sid(tag))
         lines = wrap(text, self.measure, self.m.line_px, MAX_LINE_BYTES)
+        pages = []
         for i in range(0, len(lines), self.m.lines_per_page):
             page = lines[i:i + self.m.lines_per_page]
             ids = [self.sid(line) for line in page] + [0] * (4 - len(page))
             self.emit("Say", speaker_id, expr_id, ids[0], ids[1], ids[2], ids[3])
+            pages.append(tuple(ids))
             self.pages += 1
+        self.loc_says.append((text, pages))
         self.count_words(text)
 
     def choice(self, options):
@@ -429,6 +494,7 @@ class Compiler:
                 raise CompileError(f"{src}: option text wraps to {len(lines)} lines (at most 2): {text}")
             self.options.append({"text": self.sid(lines[0]), "text2": self.sid(lines[1]) if len(lines) > 1 else 0,
                                  "target": 0, "cond": cond, "tag": tag_id, "hidden": 1 if hidden else 0})
+            self.loc_options.append((re.sub(r"\s+", " ", text).strip(), self.options[-1]["text"], self.options[-1]["text2"]))
             self.option_fixups.append((len(self.options) - 1, target, src))
             self.count_words(text)
         self.emit("Choice", first, len(options))
@@ -759,6 +825,93 @@ class Compiler:
             self.warnings.append(f"ending '{e}' is not reachable from '{self.m.start}'")
         return unreachable, missing
 
+    # -- translation
+    def base_rows(self):
+        """The story's rows of the base string table, in script order (names first)."""
+        rows, seen = [], set()
+
+        def add(key, text):
+            if key in seen:
+                return
+            seen.add(key)
+            rows.append((key, text))
+        for cid, name in zip(self.m.characters, self.m.display):
+            add(f"story.name.{cid}", name)
+        keys = {}
+        for text, _ in self.loc_says:
+            add(loc_key(text), text)
+            keys.setdefault(loc_key(text), text)
+        for text, _, _ in self.loc_options:
+            add(loc_key(text), text)
+            keys.setdefault(loc_key(text), text)
+        for text in [t for t, _ in self.loc_says] + [t for t, _, _ in self.loc_options]:
+            if keys[loc_key(text)] != text:
+                raise CompileError(f"two lines share the key {loc_key(text)}: '{keys[loc_key(text)]}' and '{text}' (reword one)")
+        return rows
+
+    def base_table_path(self):
+        return self.m.loc_dir / f"{self.m.loc_base}.csv"
+
+    def base_table(self):
+        """The base CSV with its story rows replaced by this script's ((text, changed))."""
+        path = self.base_table_path()
+        old = path.read_text(encoding="utf-8-sig") if path.is_file() else ""
+        game = [(k, t) for k, t in (read_table(path) if path.is_file() else []) if not k.startswith("story.")]
+        new = table_text(game + self.base_rows())
+        return new, new != old.replace("\r\n", "\n")
+
+    def localize(self):
+        """Reads every other table's story rows into per-language page and option tables."""
+        if not self.m.loc_base:
+            return
+        lpp = self.m.lines_per_page
+        tables = sorted(self.m.loc_dir.glob("*.csv")) if self.m.loc_dir.is_dir() else []
+        for path in tables:
+            tag = path.stem.replace("_", "-")
+            if not LOCALE_RE.fullmatch(tag) or tag.lower() == self.m.loc_base.lower():
+                continue
+            rows = {k: t for k, t in read_table(path) if k.startswith("story.")}
+            if not rows:
+                continue
+            pages, options = {}, {}
+            done_says = done_opts = 0
+            for text, base_pages in self.loc_says:
+                tr = rows.get(loc_key(text))
+                if not tr or not tr.strip():
+                    continue
+                tr = re.sub(r"\s+", " ", tr).strip()
+                lines = wrap(tr, self.measure, self.m.line_px, MAX_LINE_BYTES)
+                n = len(base_pages)
+                if len(lines) > n * lpp or len(lines) < n:
+                    self.warnings.append(f"{path.name}: '{text[:40]}' wraps to {len(lines)} lines in {tag}, its "
+                                         f"{n} page(s) hold {n}..{n * lpp}; it shows in {self.m.loc_base}")
+                    continue
+                q, r = divmod(len(lines), n)
+                at = 0
+                for k, base in enumerate(base_pages):
+                    take = q + (1 if k < r else 0)
+                    ids = [self.sid(line) for line in lines[at:at + take]] + [0] * (4 - take)
+                    at += take
+                    pages.setdefault(base, tuple(ids))
+                done_says += 1
+            for text, t1, t2 in self.loc_options:
+                tr = rows.get(loc_key(text))
+                if not tr or not tr.strip():
+                    continue
+                lines = wrap(re.sub(r"\s+", " ", tr).strip(), self.measure, self.m.line_px, MAX_LINE_BYTES)
+                if len(lines) > 2:
+                    self.warnings.append(f"{path.name}: option '{text[:40]}' wraps to {len(lines)} lines in {tag} "
+                                         f"(at most 2); it shows in {self.m.loc_base}")
+                    continue
+                options.setdefault((t1, t2), (self.sid(lines[0]), self.sid(lines[1]) if len(lines) > 1 else 0))
+                done_opts += 1
+            names = []
+            for cid in self.m.characters:
+                tr = rows.get(f"story.name.{cid}", "").strip()
+                names.append(self.sid(tr) if tr else 0)
+            self.loc_tables.append((tag, pages, options, names))
+            self.loc_stats.append((tag, done_says, len(self.loc_says), done_opts, len(self.loc_options)))
+
     # -- output
     @staticmethod
     def cstr(s):
@@ -901,6 +1054,27 @@ class Compiler:
             L.append('    {"", 0xFFFF, 0, 0},\n')
         L.append("};\n\n")
 
+        if m.loc_base:
+            L.append("// Translations (story.json \"localize\"): per language, the lines a page or an option shows instead.\n")
+            for i, (tag, pages, options, names) in enumerate(self.loc_tables):
+                L.append(f"inline constexpr mce::novel::PageText kPages{i}[] = {{\n")
+                for base in sorted(pages) or [(0, 0, 0, 0)]:
+                    tr = pages.get(base, (0, 0, 0, 0))
+                    L.append("    {{%s}, {%s}},\n" % (", ".join(map(str, base)), ", ".join(map(str, tr))))
+                L.append("};\n")
+                L.append(f"inline constexpr mce::novel::OptionText kOptionTexts{i}[] = {{\n")
+                for base in sorted(options) or [(0, 0)]:
+                    tr = options.get(base, (0, 0))
+                    L.append("    {%d, %d, %d, %d},\n" % (base[0], base[1], tr[0], tr[1]))
+                L.append("};\n")
+                L.append(f"inline constexpr u16 kNames{i}[] = {{" + ", ".join(str(x) for x in names or [0]) + "};\n")
+            L.append("inline constexpr mce::novel::LocaleText kLocales[] = {\n")
+            for i, (tag, pages, options, _) in enumerate(self.loc_tables):
+                L.append(f"    {{{self.cstr(tag)}, kPages{i}, {len(pages)}, kOptionTexts{i}, {len(options)}, kNames{i}}},\n")
+            if not self.loc_tables:
+                L.append('    {"", nullptr, 0, nullptr, 0, nullptr},\n')
+            L.append("};\n\n")
+
         ts = m.title_screen
         nvars = len(m.flags) + len(m.counters)
         fields = [
@@ -929,6 +1103,9 @@ class Compiler:
             ("ink_row_selected", col(m.ink["row_selected"])), ("ink_row_disabled", col(m.ink["row_disabled"])),
             ("row_tint", col(m.ink["row_tint"])),
         ]
+        if m.loc_base:
+            fields += [("locales", "kLocales"), ("locale_count", str(len(self.loc_tables))),
+                       ("base_locale", self.cstr(m.loc_base))]
         L.append("// The program the kit runs: novel::install(world, kProgram, hooks) / install_dialogue(world, kProgram).\n")
         L.append("inline constexpr mce::novel::Program kProgram = {\n")
         for k, v in fields:
@@ -952,11 +1129,14 @@ class Compiler:
                 f"- endings reached from start: {', '.join(e for e in self.m.endings[1:] if e not in missing) or 'none'}\n"
                 f"- endings NOT reachable: {', '.join(missing) or 'none'}\n"
                 f"- unreachable labels: {', '.join(n for n, _ in unreachable) or 'none'}\n")
+        if self.m.loc_base:
+            text += f"- translations (base {self.m.loc_base}): " + (", ".join(
+                f"{tag} {s}/{ns} statements, {o}/{no} options" for tag, s, ns, o, no in self.loc_stats) or "none") + "\n"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8", newline="\n")
 
 
-def compile_project(project, check=False, out=None, report=None):
+def compile_project(project, check=False, out=None, report=None, write_loc=True):
     """Compiles a project's story; returns (compiler, changed). Raises CompileError."""
     m = Manifest(project)
     c = Compiler(m)
@@ -967,6 +1147,14 @@ def compile_project(project, check=False, out=None, report=None):
         c.compile_file(f)
     c.link()
     unreachable, missing = c.check()
+    c.localize()
+    if m.loc_base:
+        table, stale = c.base_table()
+        if check and stale:
+            raise CompileError(f"{c.base_table_path()} is out of date with the script (run mce story compile)")
+        if stale and not check and write_loc:
+            c.base_table_path().parent.mkdir(parents=True, exist_ok=True)
+            c.base_table_path().write_text(table, encoding="utf-8", newline="\n")
     changed = False
     if not check:
         changed = c.write_header(pathlib.Path(out) if out else m.output)
@@ -982,10 +1170,11 @@ def main(argv=None):
     ap.add_argument("--out", help="write the header here instead of the manifest's output")
     ap.add_argument("--report", help="write the report here instead of the manifest's report")
     ap.add_argument("--werror", action="store_true", help="warnings fail the compile")
+    ap.add_argument("--no-write-loc", action="store_true", help="do not update the base string table (\"localize\")")
     args = ap.parse_args(argv)
     project = pathlib.Path(args.project).resolve()
     try:
-        c, changed = compile_project(project, args.check, args.out, args.report)
+        c, changed = compile_project(project, args.check, args.out, args.report, not args.no_write_loc)
     except CompileError as e:
         print(f"story compile: error: {e}", file=sys.stderr)
         return 1

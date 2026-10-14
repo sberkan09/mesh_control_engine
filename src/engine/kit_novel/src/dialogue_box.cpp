@@ -96,6 +96,7 @@ void DialogueBox::show(bool on) {
     if (!on) {
         doc_.set_visible(choices_, false);
         options_ = 0;
+        for (u16& l : page_) l = 0;
     }
 }
 
@@ -105,15 +106,23 @@ void DialogueBox::update(World& world, const ui::UpdateContext& ctx) {
     const Dialogue* d = p ? on_screen(world) : nullptr;
     show(d != nullptr);
     if (d) {
-        const char* who = d->speaker == 255 ? "" : speaker_name(*p, d->speaker);
+        const LocaleText* lt = story_locale(*p, world);  // the player's language (presentation only)
+        const char* who = d->speaker == 255 ? "" : localized_speaker(*p, lt, d->speaker);
         doc_.set_text(name_, StringView(who));
         doc_.set_visible(name_tag_, who[0] != '\0');
         // The page typed out as far as the sim has revealed it. A choice with no prompt of its own
         // keeps the page before it up.
         const bool prompt = d->line[0] || d->line[1] || d->line[2] || d->line[3];
-        u32 left = d->waiting_choice ? ~0u : dialogue_revealed(world, *d);
-        for (u32 i = 0; i < 4 && (prompt || !d->waiting_choice); ++i) {
-            const StringView full(d->line[i] ? text(*p, d->line[i]) : "");
+        if (prompt || !d->waiting_choice)
+            for (u32 i = 0; i < 4; ++i) page_[i] = d->line[i];
+        u16 page[4];
+        localized_page(*p, lt, page_, page);  // in the player's language, re-read each update
+        u32 shown_points = 0;
+        for (u32 i = 0; i < 4; ++i) shown_points += page[i] ? utf8_points(StringView(text(*p, page[i]))) : 0;
+        // The sim types the base page; a translation keeps pace with it.
+        u32 left = d->waiting_choice ? ~0u : scale_reveal(dialogue_revealed(world, *d), dialogue_page_points(*p, *d), shown_points);
+        for (u32 i = 0; i < 4; ++i) {
+            const StringView full(page[i] ? text(*p, page[i]) : "");
             const u32 n = utf8_points(full);
             const u32 shown = left < n ? left : n;
             doc_.set_text(lines_[i], utf8_prefix(full, shown));
@@ -127,7 +136,9 @@ void DialogueBox::update(World& world, const ui::UpdateContext& ctx) {
             doc_.set_visible(rows_[i], on);
             if (!on) continue;
             const Option& o = p->options[d->options[i]];
-            doc_.set_text(row_text_[i], StringView(text(*p, o.text)));
+            u16 t = 0, t2 = 0;
+            localized_option(*p, lt, o, t, t2);
+            doc_.set_text(row_text_[i], StringView(text(*p, t)));
             const bool open = !vars || test(*vars, *p, o.cond);
             const u8 look = !open ? 2 : i == d->cursor ? 1 : 0;
             if (row_look_[i] != look) {

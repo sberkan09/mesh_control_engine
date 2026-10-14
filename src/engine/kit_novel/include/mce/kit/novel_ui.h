@@ -63,6 +63,7 @@ private:
     u8 row_look_[4] = {255, 255, 255, 255};  // 0 normal, 1 selected, 2 disabled
     bool built_ = false, visible_ = false;
     u32 options_ = 0;
+    u16 page_[4] = {};  // the base lines on the box (kept up under a choice with no prompt)
 };
 
 }  // namespace mce::novel

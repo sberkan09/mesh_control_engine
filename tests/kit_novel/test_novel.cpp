@@ -12,6 +12,7 @@
 #include "mce/input/ecs.h"
 #include "mce/kit/components.h"
 #include "mce/kit/novel.h"
+#include "mce/loc/loc.h"
 #include "novel_fixture.h"
 
 using namespace mce;
@@ -65,6 +66,20 @@ struct Novel {
         return false;
     }
 };
+
+// The player's language as the player sets it up: one string table per locale (the story's rows
+// live there too, but the kit reads the compiled translations; the tables only name the languages).
+loc::Localization languages(StringView pick) {
+    loc::Localization l;
+    for (const char* tag : {"en", "tr"}) {
+        loc::StringTable t;
+        t.set_locale(tag);
+        REQUIRE(t.add("menu.play", tag[0] == 'e' ? "Play" : "Oyna"));
+        l.add_table(std::move(t));
+    }
+    REQUIRE(l.set_locale(pick));
+    return l;
+}
 
 struct Npc {
     World w;
@@ -254,4 +269,72 @@ TEST_CASE("dialogue: a save mid-conversation restores the page, the choice and t
     nv::advance_dialogue(b.w, b.mira);
     CHECK(!b.d().active);
     CHECK((b.vars().endings_seen & (1u << static_cast<u32>(fx::Ending::Letter))) != 0);
+}
+
+TEST_CASE("translations (M-MOBILE 11e): the language chain picks a table; pages, options and names map, gaps keep the base") {
+    const nv::Program& p = fx::kProgram;
+    REQUIRE(p.locale_count == 1);
+    CHECK(std::strcmp(p.base_locale, "en") == 0);
+    CHECK(nv::story_locale(p, static_cast<const loc::Localization*>(nullptr)) == nullptr);
+    const loc::Localization en = languages("en");
+    CHECK(nv::story_locale(p, &en) == nullptr);  // the base language: the script's own text
+    const loc::Localization tr = languages("tr");
+    const nv::LocaleText* lt = nv::story_locale(p, &tr);
+    REQUIRE(lt != nullptr);
+    CHECK(std::strcmp(lt->locale, "tr") == 0);
+
+    Npc g;
+    REQUIRE(nv::start_dialogue(g.w, g.mira, "mira"));
+    u16 shown[4];
+    nv::localized_page(p, lt, g.d().line, shown);
+    CHECK(std::strcmp(nv::text(p, shown[0]), "Merhaba.") == 0);
+    CHECK(shown[1] == 0);
+    nv::localized_page(p, nullptr, g.d().line, shown);
+    CHECK(std::strcmp(nv::text(p, shown[0]), "Hello there.") == 0);
+    nv::advance_dialogue(g.w, g.mira);
+    REQUIRE(g.d().waiting_choice);
+    u16 t = 0, t2 = 0;
+    nv::localized_option(p, lt, p.options[g.d().options[0]], t, t2);
+    CHECK(std::strcmp(nv::text(p, t), "Tekneyi sor") == 0);
+    CHECK(t2 == 0);
+    CHECK(std::strcmp(nv::localized_speaker(p, lt, static_cast<u8>(fx::Character::HarbourMaster)), "Yusuf Reis") == 0);
+    CHECK(std::strcmp(nv::localized_speaker(p, lt, static_cast<u8>(fx::Character::Mira)), "Mira") == 0);  // no row: the base
+
+    // tr.csv has no row for "Then you know.": that page shows in English
+    nv::set_var(g.vars(), p, fx::var::has_letter, 1);
+    nv::set_var(g.vars(), p, fx::var::trust, 3);
+    REQUIRE(nv::start_dialogue(g.w, g.mira, "mira"));
+    nv::advance_dialogue(g.w, g.mira);
+    nv::choose_dialogue(g.w, g.mira, 2);
+    nv::localized_page(p, lt, g.d().line, shown);
+    CHECK(std::strcmp(nv::text(p, shown[0]), "Then you know.") == 0);
+
+    // the typewriter: the base page's clock mapped onto the shown page
+    CHECK(nv::scale_reveal(0, 12, 8) == 0);
+    CHECK(nv::scale_reveal(6, 12, 8) == 4);
+    CHECK(nv::scale_reveal(12, 12, 8) == 8);
+    CHECK(nv::scale_reveal(nv::kRevealAll, 12, 8) == 8);
+}
+
+TEST_CASE("translations (M-MOBILE 11e): the run, its saves and its hash are the same in every language") {
+    Npc a, b;
+    a.w.set_resource(languages("en"));
+    b.w.set_resource(languages("tr"));
+    for (Npc* g : {&a, &b}) {
+        g->w.add(g->mira, nv::DialogueInput{});
+        REQUIRE(nv::start_dialogue(g->w, g->mira, "mira"));
+    }
+    for (u32 i = 0; i < 120; ++i) {
+        for (Npc* g : {&a, &b}) {
+            input::InputState in;
+            in.confirm_pressed = i % 20 == 19;
+            in.move.y = i == 70 ? -1.0f : 0.0f;
+            in.tick = g->tick;
+            input::publish(g->w, in);
+            g->w.tick(1.0 / 60.0, g->tick++);
+        }
+        CHECK(nv::dialogue_revealed(a.w, a.d()) == nv::dialogue_revealed(b.w, b.d()));
+    }
+    CHECK(std::memcmp(&a.d(), &b.d(), sizeof(nv::Dialogue)) == 0);
+    CHECK(a.w.state_hash() == b.w.state_hash());
 }

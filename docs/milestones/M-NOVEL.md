@@ -64,8 +64,8 @@ linux-clang-release, linux-gcc-release, linux-asan, tidy, determinism) before me
 
 ## Not done
 
-- **Localization.** Dialogue and novel lines are not routed through localization tables yet; that waits on
-  M-MOBILE step 11.
+- **Letters are not translated.** Statements, options and speaker names go through the string tables
+  (M-MOBILE step 11e); `@lettertext` pages still show in the base language.
 - **No GPU run of the dialogue box.** The box's GPU path (the player's screen-space pass) builds and links in
   every preset, but this environment has no display. It is checked headless through the `ui::Document` it
   drives; a windowed capture is the first thing to look at on a machine with a GPU.

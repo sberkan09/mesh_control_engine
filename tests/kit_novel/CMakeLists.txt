@@ -8,8 +8,9 @@ set(_header "${CMAKE_CURRENT_BINARY_DIR}/generated/novel_fixture.h")
 add_custom_command(
     OUTPUT "${_header}"
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/story/story_compile.py" "${_fixture}"
-            --out "${_header}" --report "${CMAKE_CURRENT_BINARY_DIR}/generated/REPORT.md"
+            --out "${_header}" --report "${CMAKE_CURRENT_BINARY_DIR}/generated/REPORT.md" --no-write-loc
     DEPENDS "${PROJECT_SOURCE_DIR}/tools/story/story_compile.py" "${_fixture}/story/story.json" "${_fixture}/story/main.story"
+            "${_fixture}/assets/loc/en.csv" "${_fixture}/assets/loc/tr.csv"
     COMMENT "mce story compile: the novel kit's test story"
     VERBATIM)
 add_custom_target(test_novel_story DEPENDS "${_header}")
