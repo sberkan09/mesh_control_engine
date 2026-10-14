@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Compute on Metal, M-VISUAL step 1 (SBA-6): `mce_rhi_metal` and SDL GPU's Metal driver (iOS, `MCE_RHI=sdlgpu` on
+  macOS) report `DeviceCaps::compute` and run compute pipelines, `dispatch`/`dispatch_indirect`, storage images and
+  `read_buffer`, so `Forward3D` assigns Forward+ lights on the GPU on Macs and iPhones too (`-r.gpu_light_clusters 0`
+  keeps the CPU path).
 - Phones on the Mac (M-MOBILE, SBA-5): StoreKit's review prompt and UIKit haptics are now built into iOS by
   default (`MCE_STORE_REVIEW`, `MCE_UIKIT_HAPTICS` ON; the iOS presets set the Swift target), Android games build
   again with Play In-App Review (`android.useAndroidX=true`), and Ember Step taps the phone on coins, stomps, hurts

@@ -90,3 +90,38 @@ TEST_CASE("shader_cross: GLSL errors are Results carrying the compiler log") {
     CHECK(r.error().path == StringView("bad.vert"));
     CHECK(log.c_str()[0] != '\0');
 }
+
+TEST_CASE("shader_cross: compute stage keeps the binding map and reports its work-group size") {
+    constexpr const char* kCS = R"(#version 450 core
+layout(local_size_x = 8, local_size_y = 4) in;
+layout(std140, binding = 1) uniform PassU { uvec4 n; };
+layout(std430, binding = 10) buffer Counter { uint total; };
+layout(std430, binding = 8) readonly buffer In { uint src[]; };
+layout(binding = 7) uniform sampler2D u_tex;
+layout(rgba8, binding = 2) uniform writeonly image2D u_out;
+layout(rgba8, binding = 3) uniform readonly image2D u_in;
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    atomicAdd(total, src[p.x] + n.x);
+    imageStore(u_out, p, imageLoad(u_in, p) + textureLod(u_tex, vec2(0.5), 0.0));
+}
+)";
+    FixedString<1024> log;
+    auto r = translate_glsl(ShaderStage::Compute, kCS, "t.comp", log);
+    REQUIRE_MESSAGE(r.has_value(), log.c_str());
+    if (!r) return;
+    const MslSource& msl = r.value();
+    CHECK(msl.local_size[0] == 8);
+    CHECK(msl.local_size[1] == 4);
+    CHECK(msl.local_size[2] == 1);
+    CHECK(contains(msl, "kernel void main0("));
+    CHECK(contains(msl, "[[buffer(1)]]"));   // PassU at bank 1
+    CHECK(contains(msl, "[[buffer(18)]]"));  // Counter SSBO binding 10 -> kStorageBufferBase + 10
+    CHECK(contains(msl, "[[buffer(16)]]"));  // In SSBO binding 8
+    CHECK(contains(msl, "[[texture(7)]]"));
+    CHECK(contains(msl, "[[sampler(7)]]"));
+    CHECK(contains(msl, "access::write> u_out [[texture(18)]]"));  // image unit 2 -> kStorageImageBase + 2
+    CHECK(contains(msl, "u_in [[texture(19)]]"));
+    CHECK(contains(msl, "atomic_fetch_add_explicit"));
+    CHECK_FALSE(contains(msl, "mce_flip_y"));
+}

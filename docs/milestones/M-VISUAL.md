@@ -9,7 +9,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 
 | # | Step | Linear | State |
 |---|---|---|---|
-| 1 | Compute in the RHI; clustered light build on the GPU | SBA-6 | GL and SDL GPU (Vulkan) done; Metal compute open |
+| 1 | Compute in the RHI; clustered light build on the GPU | SBA-6 | done: GL, SDL GPU (Vulkan and Metal) and Metal |
 | 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL, IBL texture source and runtime reflection probes, the editor bake and goldens done (all backends, fragment passes); real-GPU numbers on the Mac/device session |
 | 3 | SSAO / GTAO | SBA-8 | — |
 | 4 | Local-light shadows | SBA-9 | — |
@@ -64,8 +64,56 @@ layout is checked without a GPU (`shader_spirv: compute resources follow SDL's c
 `test_render_sdlgpu` runs the 300-light GPU-vs-CPU frame comparison on Vulkan (0 pixels differ). On Apple the
 SDL GPU device keeps `compute = false` until the MSL path learns compute.
 
-**Open in step 1:** compute on Metal (and SDL GPU's Metal driver); the Metal translate change in #185 is only
-skipped `case` labels and has not been compiled on a Mac yet.
+**Metal (SBA-6, the Mac session).** `translate_glsl` gains `ShaderStage::Compute`: the same binding map as the
+graphics stages (uniform bank b at `[[buffer(b)]]`, SSBO binding b at `[[buffer(8 + b)]]`, sampler s at
+`[[texture(s)]]`/`[[sampler(s)]]`) plus storage images, image unit u at `[[texture(16 + u)]]`; Metal takes the
+work-group size at dispatch time, so the translation reports the shader's `local_size` (`MslSource::local_size`).
+The device tracks 16 SSBO bindings (the cluster build uses 4 … 10). Dispatches go into a compute encoder on the
+frame's command buffer (serial dispatch type, so dispatches inside it see each other's writes), one encoder per run
+of dispatches; `barrier()` ends the run, and so does a render pass, a blit or a `write_timestamp`, which keeps
+compute timed like any other encoder. Buffers and textures are hazard-tracked (Metal's default), so the next
+encoder sees every write of the previous one: that is GL's `glMemoryBarrier` for every bit. Bindings are GL-style
+persistent state and the whole table goes on before each dispatch. `SampledStorage` textures get `ShaderWrite`
+usage; a mip other than 0 binds through a texture view of that level (all layers of an array). `read_buffer`
+waits for an empty command buffer (the queue completes in commit order) and copies from the shared buffer. Caps:
+`compute = true`, the device's `maxThreadsPerThreadgroup` per dimension (1024 × 1024 × 1024 on Apple silicon),
+1024 invocations, 2³² − 1 groups per dimension, 8 image units; a pipeline whose local size exceeds its
+`maxTotalThreadsPerThreadgroup` is refused.
+
+**SDL GPU on Metal.** `spirv_to_msl` learns the compute stage with SDL's Metal compute layout: `[[texture]]` sampled
+textures, then storage images (all read-write, as on Vulkan), `[[sampler]]` matching the sampled ones,
+`[[buffer]]` uniform banks, then read-only storage buffers, then read-write ones. SDL GPU now reports
+`compute = true` on Apple too (iOS and `MCE_RHI=sdlgpu` on macOS), with the same Vulkan minimums as caps.
+
+Gates: `rhi_gl`'s four compute cases run as `rhi_metal:` (caps, a dispatch writing an SSBO, `dispatch_indirect`
+reading arguments a dispatch wrote, a storage image written by one dispatch and read by readback and `imageLoad`
+in the next, compile errors as Results), plus `rhi_metal: storage image at mip 1, then sampled by a compute
+shader` (the view path) and `rhi_metal: a run of dispatches is timed like a pass`; `shader_cross: compute stage
+keeps the binding map and reports its work-group size` checks the MSL without a GPU. `test_render_gl` on Metal
+runs the 300-light GPU-vs-CPU frame comparison (0 pixels differ), and so does `MCE_RHI=sdlgpu test_render_gl` on
+SDL GPU's Metal driver, whose `test_rhi_sdlgpu` compute cases pass there too (a macOS build with
+`-DMCE_RHI_SDLGPU=ON`; the default macOS build does not compile SDL GPU). The validation stage
+(`MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1`) reports 0 errors. The #185 translate change is now compiled and run
+on a Mac.
+
+**Budget on a real GPU (04_cubes, 256 point lights, 200 frames, Release, Metal on an Apple M4; two runs, the
+first shown, the second within 0.2 ms):**
+
+| stage | CPU path | GPU path |
+|---|---|---|
+| CPU Forward+ cluster work (ms) | 0.094 | 0.004 (setup only) |
+| CPU command recording (ms) | 0.246 | 0.097 |
+| GPU light assignment (ms) | 0 | 0.114 |
+| GPU main pass (ms) | 3.10 | 2.93 |
+| GPU 3D frame total (ms) | 4.16 | 4.02 |
+
+The compute pass costs about 0.11 ms of GPU time and saves about 0.09 ms of CPU cluster work and 0.15 ms of
+command recording (the CPU path records the light lists every frame). The GPU frame total does not grow. "GL
+translate + submit" is about 6.6 ms on both paths, so this step does not change it; it is left for a later look at
+the Metal submit path.
+
+**Open in step 1:** nothing. SDL GPU compute on an iOS device builds (`ios-arm64`) but has not run on the phone
+yet; it goes with the next device session.
 
 ## Step 2 — image-based lighting
 

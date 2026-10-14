@@ -11,6 +11,10 @@
 //   storage buffer j (set 0/2, binding n + j)     -> [[buffer(uniform_count + j)]]
 //   vertex attributes                             -> [[attribute(location)]] (SDL's vertex descriptor)
 //
+// Compute stages follow SDL's Metal compute layout instead: [[texture]] sampled textures then storage
+// images (all read-write), [[sampler]] matching the sampled textures, [[buffer]] uniform banks, then
+// read-only storage buffers, then read-write ones (M-VISUAL 1).
+//
 // The entry point is kMslEntryPoint. Pure C++ and API-free: the unit tests run it without a GPU.
 
 #include "mce/containers/array.h"

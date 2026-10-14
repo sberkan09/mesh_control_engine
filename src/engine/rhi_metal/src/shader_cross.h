@@ -8,7 +8,11 @@
 //   uniform block `binding = b`        -> [[buffer(b)]]                 (b < kStorageBufferBase)
 //   storage buffer `binding = b`       -> [[buffer(kStorageBufferBase + b)]]
 //   sampler `binding = s`              -> [[texture(s)]], [[sampler(s)]]
+//   storage image `binding = u`        -> [[texture(kStorageImageBase + u)]]  (compute, image unit u)
 //   vertex attributes (location = n)   -> [[attribute(n)]] fed from [[buffer(kVertexBufferIndex)]]
+//
+// Compute stages (M-VISUAL 1) keep the same map; Metal takes the work-group size at dispatch time, so
+// the translation reports the shader's `local_size` alongside the MSL (MslSource::local_size).
 //
 // Clip space is fixed up to Metal's z in [0, 1]. Vertex stages carry a function constant
 // (kFlipYConstant) that negates gl_Position.y: the device sets it when rendering into a texture, so
@@ -21,9 +25,10 @@
 
 namespace mce::rhi::metal {
 
-enum class ShaderStage : u8 { Vertex, Fragment };
+enum class ShaderStage : u8 { Vertex, Fragment, Compute };
 
 inline constexpr u32 kStorageBufferBase = 8;
+inline constexpr u32 kStorageImageBase = 16;  // image unit u -> [[texture(16 + u)]], after the 16 sampler slots
 inline constexpr u32 kVertexBufferIndex = 30;
 inline constexpr u32 kFlipYConstant = 0;  // [[function_constant(0)]] bool, vertex stages only
 inline constexpr const char* kEntryPoint = "main0";
@@ -35,6 +40,7 @@ public:
     MslSource(const MslSource&) = delete;
     MslSource& operator=(const MslSource&) = delete;
     MslSource(MslSource&& o) noexcept : text_(o.text_), size_(o.size_) {
+        for (u32 i = 0; i < 3; ++i) local_size[i] = o.local_size[i];
         o.text_ = nullptr;
         o.size_ = 0;
     }
@@ -46,6 +52,8 @@ public:
     StringView view() const { return {c_str(), size_}; }
 
     static MslSource copy_of(StringView s);
+
+    u32 local_size[3] = {1, 1, 1};  // compute stages: the shader's work-group size
 
 private:
     char* text_ = nullptr;
