@@ -17,6 +17,7 @@
 #include "mce/kit/novel.h"
 #include "mce/kit/sequence.h"
 #include "mce/log.h"
+#include "mce/platform/haptics.h"
 
 namespace mce::novel {
 
@@ -422,11 +423,41 @@ void bot_step(Context& c) {
 
 // ---- input ---------------------------------------------------------------------------------------
 
+// A tap or click (pointer_pressed, M-MOBILE 11f) replaces the keys on its tick: while rows are up
+// (a choice, the title menu) a tap on a row moves the cursor there and picks it, and a tap beside
+// them does nothing; otherwise a tap reads on (the rest of the page first, like Enter).
+void apply_pointer(Context& c, Keys& k) {
+    NovelState& n = c.n;
+    const kit::ViewInfo* view_res = c.f.try_resource<kit::ViewInfo>();
+    const kit::ViewInfo view = view_res ? *view_res : kit::ViewInfo{};
+    math::vec2 px;
+    if (!pointer_pressed(c.f.resource<input::InputState>(), view, px)) return;
+    k.skip = k.up = k.down = k.left = k.right = false;
+    k.advance = true;
+    const bool rows = (n.mode == Mode::Title || n.mode == Mode::Choice) && n.vis_count > 0;
+    if (!rows) return;
+    const math::vec2 at = view.screen_to_world(px);
+    i32 hit = -1;
+    c.f.query<const StagePart&, const LocalTransform&, const kit::Sprite&>().each(
+        [&](const StagePart& sp, const LocalTransform& lt, const kit::Sprite& spr) {
+            if (sp.role != StageRole::ChoiceRow || sp.index >= n.vis_count) return;
+            const f32 w = spr.size.x * lt.scale.x, h = spr.size.y * lt.scale.y;
+            const f32 x0 = lt.position.x - spr.pivot.x * w, y0 = lt.position.y - spr.pivot.y * h;
+            if (at.x >= x0 && at.x < x0 + w && at.y >= y0 && at.y < y0 + h) hit = sp.index;
+        });
+    k.advance = hit >= 0;
+    if (hit < 0) return;
+    n.cursor = static_cast<u8>(hit);
+    if (n.mode == Mode::Title || option_open(c, c.p.options[n.opt_first + n.vis[hit]]))
+        platform::haptics::play(platform::haptics::Preset::Selection);  // output only
+}
+
 void player_step(Context& c) {
     NovelState& n = c.n;
     StoryState& s = c.s;
     const Program& p = c.p;
-    const Keys k = read_keys(c.f, n);
+    Keys k = read_keys(c.f, n);
+    apply_pointer(c, k);
     switch (n.mode) {
         case Mode::Title:
             if ((k.up || k.down) && n.vis_count > 0) {

@@ -336,6 +336,7 @@ public:
             v.safe_bottom = safe_insets_.bottom;
             v.orientation = static_cast<u8>(window_->orientation());
             v.headless = false;
+            v.ui_scale = ui_scale({fb.width, fb.height});
         }
         render::Camera2D cam;
         f32 ppm = 48.0f;

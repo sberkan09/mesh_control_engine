@@ -89,6 +89,7 @@ struct ViewInfo {
     math::vec2 view_center;               // world point at the framebuffer's centre
     f32 view_pixels_per_meter = 48.0f;    // device pixels per world metre
     f32 view_rotation = 0.0f;             // radians, CCW
+    f32 ui_scale = 1.0f;                  // the UI scale the player's mce_ui layers use (ui::compute_ui_scale)
 
     // Device pixel (origin top-left, y down) -> world metres under it.
     math::vec2 screen_to_world(math::vec2 px) const {

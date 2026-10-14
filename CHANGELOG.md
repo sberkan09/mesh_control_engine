@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Taps and clicks on dialogue, step 11f (M-MOBILE): a tap or click on a choice row picks it on the novel stage
+  and the dialogue box, and a tap elsewhere reads on, through the input snapshot (replays and headless runs see
+  it) with a `Selection` haptic. The stock map gains `Point` (left mouse), input scripts take `Touch=x,y` and
+  `Mouse=x,y`, and `kit::ViewInfo` carries the UI scale. The box's text size and height moved from
+  `DialogueBoxStyle` to `novel::DialogueLayout` (`set_dialogue_layout`).
 - Story translation, step 11e (M-MOBILE): with `"localize"` in `story/story.json`, `mce story compile` writes the
   story's lines, options and speaker names into `assets/loc/<base>.csv` and reads translations from the other
   tables; the novel stage, backlog and dialogue box show the player's language and switch with it, with the same

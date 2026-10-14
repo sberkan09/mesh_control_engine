@@ -144,10 +144,14 @@ persist overrides yet; a custom host can.
   10-70 Move=1,0 Jump      # ticks 10..70: Move (1, 0) and Jump held
   100 Fire                 # tick 100 only (a press)
   120- Move=-1,0           # from tick 120 to the end of the run
+  130 Touch=0.5,0.9        # a finger down at (0.5, 0.9) of the window, lifted on tick 131
+  140 Mouse=640,360 Point  # the mouse at window point (640, 360), clicked
   ```
 
   Ticks are 1-based sim ticks. A value is a number, `x,y` for a 2D axis, or `true`/`false`; an
   action with no value is held. Unnamed actions are released, and edges follow the normal rules.
+  `Touch` and `Mouse` are not actions: they place one finger (`touch_points()`) or the mouse.
+  The stock map's `Point` action is the left mouse button, for a click where the mouse is.
   A bad file is an error (exit 1). With scripted input, an autoplay switch in your game (a
   component flag that drives the character from code, as Undertow, Prism Break and Lamplighter
   used) is optional.

@@ -4,7 +4,10 @@
 // built-in font on a CPU-only sprite set, no renderer.
 #include <doctest/doctest.h>
 
+#include <cmath>
+
 #include "mce/input/ecs.h"
+#include "mce/kit/components.h"
 #include "mce/kit/novel.h"
 #include "mce/kit/novel_ui.h"
 #include "mce/loc/loc.h"
@@ -168,4 +171,63 @@ TEST_CASE("dialogue box: the page, the choices and the name tag in the player's 
     box.update(g.w, frame());
     CHECK(str(box.option(0)) == "Ask about the boat");
     CHECK(str(box.line(0)) == "Hello there.");  // the page kept up under the choice follows too
+}
+
+TEST_CASE("dialogue box (M-MOBILE 11f): the sim hit-tests the rows the box draws, on a phone's safe area and UI scale") {
+    Skin skin;
+    Game g;
+    kit::ViewInfo view;  // a landscape phone: a notch on the left, the home bar below, UI at 2x
+    view.framebuffer_width = view.window_width = 2400;
+    view.framebuffer_height = view.window_height = 1080;
+    view.safe_left = 120;
+    view.safe_bottom = 60;
+    view.ui_scale = 2.0f;
+    g.w.set_resource(view);
+    nv::DialogueBox box;
+    box.init(skin.skin);
+    ui::UpdateContext ctx = frame();
+    ctx.viewport = rhi::Extent2D{2400, 1080};
+    ctx.safe_insets = ui::SafeInsets{120, 0, 0, 60};
+    ctx.ui_scale = 2.0f;
+
+    REQUIRE(nv::start_dialogue(g.w, g.mira, "mira"));
+    nv::advance_dialogue(g.w, g.mira);
+    box.update(g.w, ctx);
+    REQUIRE(box.option_count() == 3);
+    const nv::DialogueRects rects = nv::dialogue_rects(nv::dialogue_layout(g.w), view);
+    auto same = [](const ui::Rect& drawn, const nv::DialogueRect& hit) {
+        CHECK(std::fabs(drawn.min.x - hit.x0) <= 1.0f);
+        CHECK(std::fabs(drawn.min.y - hit.y0) <= 1.0f);
+        CHECK(std::fabs(drawn.max.x - hit.x1) <= 1.0f);
+        CHECK(std::fabs(drawn.max.y - hit.y1) <= 1.0f);
+    };
+    ui::Document& doc = box.document();
+    same(doc.rect(doc.find("box")), rects.box);
+    for (u32 i = 0; i < 3; ++i) {
+        const char path[4][13] = {"choices/row0", "choices/row1", "choices/row2", "choices/row3"};
+        same(doc.rect(doc.find(StringView(path[i]))), rects.rows[i]);
+    }
+
+    // A finger on the first row as drawn: the sim picks it.
+    const ui::Rect row0 = doc.rect(doc.find("choices/row0"));
+    input::InputState in;
+    in.touch_count = 1;
+    in.touches[0].pos = {row0.center().x / 2400.0f, row0.center().y / 1080.0f};
+    in.touches[0].origin = in.touches[0].pos;
+    in.touches[0].held = in.touches[0].pressed = true;
+    in.tick = g.tick;
+    input::publish(g.w, in);
+    g.w.tick(1.0 / 60.0, g.tick++);
+    g.step();
+    box.update(g.w, ctx);
+    CHECK(box.option_count() == 0);
+    CHECK(str(box.line(0)) != "Hello there.");  // "It sails at dawn." is typing
+
+    // A game that sizes the box differently: the box and the hit test follow the world's layout.
+    nv::DialogueLayout big;
+    big.text_px = 40.0f;
+    big.box_height = 260.0f;
+    nv::set_dialogue_layout(g.w, big);
+    box.update(g.w, ctx);
+    same(doc.rect(doc.find("box")), nv::dialogue_rects(big, view).box);
 }

@@ -151,8 +151,20 @@ const InputState& InputScript::evaluate(u64 tick) {
     const f32 dt = 1.f / static_cast<f32>(kTickHz);
 
     // Active segments, in order: a later segment for the same action replaces the earlier value.
+    // "Touch" and "Mouse" are not actions: a finger down at (x, y) of the window, and the mouse there.
+    bool touch = false;
+    vec2 touch_at;
     for (const ScriptSegment& s : segments_) {
         if (tick < s.from || tick > s.to) continue;
+        if (s.action == MCE_SID("Touch")) {
+            touch = true;
+            touch_at = vec2(s.x, s.y);
+            continue;
+        }
+        if (s.action == MCE_SID("Mouse")) {
+            out.mouse_pos = vec2(s.x, s.y);
+            continue;
+        }
         u32 slot = out.action_count;
         for (u32 i = 0; i < out.action_count; ++i)
             if (out.action_names[i] == s.action) slot = i;
@@ -186,6 +198,18 @@ const InputState& InputScript::evaluate(u64 tick) {
         st.pressed = st.held && !was_held;
         st.released = !st.held && was_held;
         st.held_time = st.held ? (was_held ? before->held_time + dt : dt) : 0.f;
+    }
+
+    // One scripted finger (slot 0): down while a Touch segment runs, lifted the tick after.
+    const TouchPoint* before = prev_.touch_count > 0 && prev_.touches[0].held ? &prev_.touches[0] : nullptr;
+    if (touch || before) {
+        TouchPoint& t = out.touches[0];
+        t.pos = touch ? touch_at : before->pos;
+        t.origin = before ? before->origin : touch_at;
+        t.held = touch;
+        t.pressed = touch && !before;
+        t.released = !touch;
+        out.touch_count = 1;
     }
 
     // The starter kit's fast-path fields, by name (InputSystem::evaluate does the same).

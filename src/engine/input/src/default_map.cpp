@@ -30,6 +30,8 @@ void build_default_map(InputMapBuilder& b) {
     b.action(MCE_SID("Jump")).key(Key::Space).gamepad_button(GamepadButton::South).touch_tap(kRightHalf);
     b.action(MCE_SID("Fire")).key(Key::J).mouse_button(platform::MouseButton::Left).gamepad_button(GamepadButton::West);
     b.action(MCE_SID("Pause")).key(Key::Escape).gamepad_button(GamepadButton::Start).touch_tap(kPauseCorner);
+    // The mouse as a pointer (M-MOBILE 11f): a click at InputState::mouse_pos_px(), for tap-to-pick UI in the sim.
+    b.action(MCE_SID("Point")).mouse_button(platform::MouseButton::Left);
 
 
     b.map(MCE_SID("UI"), MapFlag::BlocksBelow);
