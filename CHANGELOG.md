@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Text with a look (M-UI-DATA step 4, SBA-34): `TextLabel` gains `letter_spacing`, `line_height`,
+  `outline_width`/`outline_color` and `shadow_offset`/`shadow_color` (fractions of the label's height, editable
+  through MCP `component_set`), and `ui::Style` gains `letter_spacing`, `text_outline`/`text_outline_color` and
+  `text_shadow`/`text_shadow_color`. `render::TextLayoutDesc::letter_spacing` and the outline and shadow fields of
+  `render::TextPlacement` do the work for both.
 - Friction notes, M-AGENT step 8 (SBA-55): `report_friction` lets an agent write down what the engine made hard
   (summary, area, severity, expected, actual, workaround) as a line in the project's `friction.jsonl`, and
   `mce friction <projects...>` collects the notes into one Markdown backlog (or JSON), blocking ones first.

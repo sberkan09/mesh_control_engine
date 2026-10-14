@@ -67,6 +67,7 @@ struct TextLayoutDesc {
     f32 max_width = 0;        // wrap at whitespace past this width (pixels); 0 = no wrapping
     TextAlign align = TextAlign::Left;
     f32 line_spacing = 1.0f;  // multiplier on the font's line height
+    f32 letter_spacing = 0;   // extra pixels between neighbouring glyphs (target size; may be negative)
     u32 fallback = '?';       // drawn for codepoints the font lacks (0 = skip them)
 };
 

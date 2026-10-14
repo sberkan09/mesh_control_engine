@@ -1042,7 +1042,7 @@ TEST_CASE("FR-EDT-160 gate: MCP edit == SceneCommand edit (same .mcscene bytes, 
         auto dup = c.ok("entity_duplicate", R"({"entity":3})");
         const std::string id = std::to_string(static_cast<int>(dup.v().get("ids").at(0).as_number()));
         c.ok("component_set", "{\"entity\":" + id + R"(,"component":"LocalTransform","path":"position.x","value":-1})");
-        c.ok("component_set", R"({"entity":6,"component":"TextLabel","value":{"text":"EDITED BY MCP"}})");
+        c.ok("component_set", R"({"entity":6,"component":"TextLabel","value":{"text":"EDITED BY MCP","outline_width":0.125,"shadow_offset":[0.0625,-0.0625]}})");
         c.ok("scene_save");
         auto run = c.ok("run_headless", R"({"ticks":300})");
         CHECK(run.v().get("ticks").as_number() == 300);
@@ -1084,6 +1084,8 @@ TEST_CASE("FR-EDT-160 gate: MCP edit == SceneCommand edit (same .mcscene bytes, 
     s.set(dup[0], dt);
     kit::TextLabel tl = *s.get<kit::TextLabel>(6);
     tl.text.assign("EDITED BY MCP");
+    tl.outline_width = 0.125f;  // the text's look (M-UI-DATA 4) saves like any field
+    tl.shadow_offset = {0.0625f, -0.0625f};
     s.set(6, tl);
     REQUIRE(session.save_scene());
 

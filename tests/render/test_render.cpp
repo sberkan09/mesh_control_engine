@@ -529,6 +529,74 @@ TEST_CASE("render: text goes through the batch as coverage quads") {
     CHECK(v[0].y == doctest::Approx(32.0f));  // bottom: + glyph height (y down)
 }
 
+TEST_CASE("render: letter spacing widens the gaps between glyphs, not the ends (M-UI-DATA 4)") {
+    TestFont tf;
+    const FontFace face = tf.face();
+    TextLayout out;
+    TextLayoutDesc d;
+    d.letter_spacing = 3.0f;
+    layout_text(face, "AVA", d, out);
+    REQUIRE(out.quads.size() == 3);
+    CHECK(out.quads[0].x0 == doctest::Approx(1.0f));
+    CHECK(out.quads[1].x0 == doctest::Approx(1.0f + 10.0f - 2.0f + 3.0f));  // kerned, then spaced
+    CHECK(out.quads[2].x0 == doctest::Approx(1.0f + 20.0f - 2.0f + 6.0f));
+    CHECK(out.width == doctest::Approx(30.0f - 2.0f + 6.0f));  // two gaps, no space after the last glyph
+    CHECK(measure_text(face, "AVA", d).x == doctest::Approx(out.width));
+
+    // Wrapping counts the spacing: "aaa aaa" is 70 px wide without it (one line in 75 px) and
+    // 88 px with it (two lines).
+    d.max_width = 75.0f;
+    layout_text(face, "aaa aaa", d, out);
+    CHECK(out.lines == 2);
+    d.letter_spacing = 0.0f;
+    layout_text(face, "aaa aaa", d, out);
+    CHECK(out.lines == 1);
+}
+
+TEST_CASE("render: a text shadow and outline draw under the fill in order (M-UI-DATA 4)") {
+    BatchFixture f;
+    TestFont tf;
+    SpriteSetDesc fd;
+    fd.texture_key = 9;
+    fd.coverage = true;
+    Font font{tf.face(), f.sets.create(fd)};
+    TextLayout layout;
+    layout_text(font.face, "Hi", {}, layout);
+
+    SpriteBatch batch(f.sets, mem::heap());
+    batch.begin(compute_screen_view({800, 600}), PassId::Screen2D);
+    TextPlacement p;
+    p.origin = vec2(10, 20);
+    p.tint = math::Color::white();
+    p.shadow_px = vec2(2, 3);
+    p.shadow_color = math::Color{0, 0, 0, 0.5f};
+    p.outline_px = 1.0f;
+    p.outline_color = math::Color{1, 0, 0, 1};
+    batch.add_text(font, layout, p);
+    batch.build();
+    REQUIRE(batch.stats().quads == 2 * (1 + 8 + 1));  // shadow, 8 outline taps, fill
+    REQUIRE(batch.groups().size() == 1);
+    const SpriteVertex* v = batch.vertices().data();
+    // The shadow comes first, moved by (2, 3) pixels (y down); the fill is last, unmoved.
+    CHECK(v[3].x == doctest::Approx(11.0f + 2.0f));
+    CHECK(v[3].y == doctest::Approx(20.0f + 3.0f));
+    const SpriteVertex* fill = v + 4 * 2 * 9;
+    CHECK(fill[3].x == doctest::Approx(11.0f));
+    CHECK(fill[3].y == doctest::Approx(20.0f));
+    CHECK(fill[0].color == v[4 * 2 * 9].color);
+    CHECK(v[0].color != fill[0].color);  // the shadow's color
+    const SpriteVertex* ring = v + 4 * 2;  // first outline tap: one pixel left
+    CHECK(ring[3].x == doctest::Approx(10.0f));
+    CHECK(ring[0].color != fill[0].color);
+
+    // Without a look the text is one copy, as before.
+    batch.begin(compute_screen_view({800, 600}), PassId::Screen2D);
+    TextPlacement plain;
+    batch.add_text(font, layout, plain);
+    batch.build();
+    CHECK(batch.stats().quads == 2);
+}
+
 TEST_CASE("render: batch build is deterministic") {
     BatchFixture f;
     auto run = [&](Array<SpriteVertex>& out) {
