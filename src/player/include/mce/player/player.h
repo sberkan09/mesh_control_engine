@@ -32,6 +32,7 @@ class IAdProvider;
 }
 namespace mce::liveops {
 class ICrashUploader;
+class IConfigFetcher;
 namespace analytics {
 class IBackend;
 }
@@ -83,6 +84,9 @@ struct PlayerDesc {
     bool liveops = false;
     liveops::analytics::IBackend* analytics_backend = nullptr;
     liveops::ICrashUploader* crash_uploader = nullptr;
+    // Remote config (mce/liveops/remote_config.h), with live services on: the pack's .mcconfig
+    // defaults, the values the last fetch saved, and this fetcher (null: -remote_config.file or none).
+    liveops::IConfigFetcher* config_fetcher = nullptr;
 };
 
 // Parses the command line into convars, then runs headless (-headless 1) or windowed. Returns the
