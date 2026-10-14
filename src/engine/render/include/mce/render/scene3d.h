@@ -106,6 +106,29 @@ struct ShadowSettings {
 
 inline constexpr u32 kMaxCascades = 4;
 
+// Local-light shadows (M-VISUAL 4): spot lights get one atlas tile, point lights six (the faces of a
+// cube, each a 90°+ perspective view). The atlas is `layers` extra layers of the cascade array (same
+// size, same PCF), cut into `tile`-sized squares. Lights asking for shadows (PointLight::cast_shadows)
+// are ranked by screen importance (brightness × projected size) and granted tiles in that order up
+// to `max_lights`; the rest stay unshadowed that frame (Scene3D::Stats::local_shadows_dropped).
+struct LocalShadowSettings {
+    bool enabled = true;
+    u32 tile = 512;       // texels per tile side: divides ShadowSettings::resolution
+    u32 layers = 1;       // atlas layers: must match Forward3DDesc::local_shadow_layers
+    u32 max_lights = 16;
+};
+
+// One rendered view of the atlas: a spot light, or one cube face of a point light (+X -X +Y -Y +Z -Z).
+struct LocalShadowTile {
+    math::mat4 view_proj;  // world -> light clip space (GL convention, perspective)
+    rhi::Rect2D rect;      // texels in the layer, top-left origin (RenderPassDesc::viewport)
+    u32 layer = 0;         // atlas layer (0 = the first one after the cascades)
+    u32 light = 0;         // into Scene3D::point_lights()
+    f32 texel_scale = 0.0f;  // world size of one texel per meter of distance from the light
+    u32 first_caster = 0;  // into Scene3D::local_shadow_casters()
+    u32 caster_count = 0;
+};
+
 // A placed reflection probe (M-VISUAL 2): the scene seen from `position`, captured into a GGX
 // pre-filtered environment and box-projected onto the surfaces inside `bounds` (parallax-correct
 // reflections in rooms and corridors). Specular only; needs Sky::ibl. Captured when it first
@@ -213,6 +236,10 @@ public:
         u32 point_lights = 0;
         u32 probes_dropped = 0;  // add_reflection_probe beyond kMaxReflectionProbes
         u32 cascade_casters[kMaxCascades] = {};
+        u32 local_shadow_lights = 0;    // lights granted shadows this frame
+        u32 local_shadow_tiles = 0;
+        u32 local_shadow_casters = 0;   // caster draws over all tiles
+        u32 local_shadows_dropped = 0;  // lights that asked but did not fit the budget
         u32 lod_instances[asset::kMaxMeshLods] = {};  // instances at each level (meshes with levels)
         u32 lod_triangles[asset::kMaxMeshLods] = {};  // visible main-pass triangles at each level
         f32 cluster_ms = 0.0f;   // CPU time of the Forward+ light setup + CPU assignment, if it ran (not deterministic)
@@ -229,6 +256,7 @@ public:
     void set_post(const PostFx& post) { post_ = post; }
     void set_ambient_occlusion(const AmbientOcclusion& ao) { ao_ = ao; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
+    void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
     void set_lod(const LodSettings& lod) { lod_ = lod; }
     const LodSettings& lod() const { return lod_; }
@@ -249,6 +277,7 @@ public:
     const PostFx& post() const { return post_; }
     const AmbientOcclusion& ambient_occlusion() const { return ao_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
+    const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
     Span<const ReflectionProbe> reflection_probes() const { return probes_.span(); }
     // Every opaque submesh of every instance at its base level, unculled: what probe captures draw.
@@ -262,6 +291,10 @@ public:
     Span<const Cascade> cascades() const { return Span<const Cascade>(cascades_, cascade_count_); }
     // Per-cascade caster lists: indices into shadow_draws(), cascade by cascade.
     Span<const u32> cascade_casters() const { return cascade_casters_.span(); }
+    // Local-light shadow tiles granted this frame, light by light (a point light's six faces in a
+    // row), and their caster lists (indices into shadow_draws()).
+    Span<const LocalShadowTile> local_shadow_tiles() const { return local_tiles_.span(); }
+    Span<const u32> local_shadow_casters() const { return local_casters_.span(); }
     Span<const MeshInstance> instances() const { return instances_.span(); }
     // Main-pass draws: opaque front-to-back (by material within equal depth bands is not
     // attempted: the key's material field groups texture binds), then blended back-to-front.
@@ -281,6 +314,7 @@ public:
 private:
     mutable Stats stats_;
     void build_cascades();
+    void build_local_shadows();
     u32 select_lod(const MeshInstance& inst, const GpuMesh& mesh) const;
 
     const MeshStore* meshes_;
@@ -293,6 +327,7 @@ private:
     PostFx post_;
     AmbientOcclusion ao_;
     ShadowSettings shadow_settings_;
+    LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;
     LodSettings lod_;
     Array<PointLight> point_lights_;
@@ -300,6 +335,8 @@ private:
     Cascade cascades_[kMaxCascades];
     u32 cascade_count_ = 0;
     Array<u32> cascade_casters_;
+    Array<LocalShadowTile> local_tiles_;
+    Array<u32> local_casters_;
     Array<MeshInstance> instances_;
     Array<Draw> draws_;
     Array<Draw> shadow_draws_;

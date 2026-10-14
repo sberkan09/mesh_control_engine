@@ -20,6 +20,9 @@ MCE_CVAR(cv_ibl, "r.ibl", true, "Image-based lighting for scenes that ask for it
 MCE_CVAR(cv_ssao, "r.ssao", true,
          "Screen-space ambient occlusion for scenes that ask for it (AmbientOcclusion::enabled; off = no occlusion pass)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_local_shadows, "r.local_shadows", true,
+         "Shadow maps for spot and point lights that ask for them (PointLight::cast_shadows; off = unshadowed)",
+         CVarFlags::None);
 
 // std140 mirrors of the shader blocks (shaders3d.h): vec4/mat4 members only, so no padding rules.
 struct FrameU {
@@ -53,7 +56,15 @@ struct PassU {
     vec4 probe_min[kMaxReflectionProbes];  // w: blend distance
     vec4 probe_max[kMaxReflectionProbes];  // w: first ibl_env layer
     vec4 ao;           // x: SSAO on
+    vec4 local;        // x: local-light shadows on (M-VISUAL 4)
 };
+
+struct LocalShadowRecord {  // std430 row of bank kLocalShadows (kMeshFS LocalShadow)
+    mat4 view_proj;
+    vec4 rect;  // xy: uv origin of the tile, zw: uv size
+    vec4 info;  // x: shadow-map layer, y: world texel per meter of distance
+};
+static_assert(sizeof(LocalShadowRecord) == 96);
 
 struct AoU {  // kAoFS / kAoBlurFS
     mat4 proj;
@@ -199,7 +210,7 @@ ResultV Forward3D::init(rhi::RenderDevice& device, const TextureStore& textures,
     td.format = rhi::TextureFormat::D32_Float;
     td.usage = rhi::TextureUsage::DepthTarget;
     td.dimension = rhi::TextureDimension::Tex2DArray;
-    td.array_layers = kMaxCascades;
+    td.array_layers = static_cast<u16>(kMaxCascades + desc_.local_shadow_layers);
     td.debug_name = "mce.3d.shadow_cascades";
     shadow_map_ = device.create_texture(td);
     rhi::TextureDesc od;
@@ -482,6 +493,7 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     record_ssao(cmd, scene);
     timestamp(cmd, kTsSsao);
     record_shadows(cmd, scene);
+    record_local_shadows(cmd, scene);
     timestamp(cmd, kTsShadow);
     record_main(cmd, scene);
     timestamp(cmd, kTsMain);
@@ -740,6 +752,8 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.set_storage_data(rhi::bank::kClusters, rhi::as_bytes(kNoRange));
             cmd.set_storage_data(rhi::bank::kLightIndices, rhi::as_bytes(kNoIndex));
             cmd.set_storage_data(rhi::bank::kLightPool, rhi::as_bytes(kNoLight));
+            static constexpr LocalShadowRecord kNoShadow{};
+            cmd.set_storage_data(rhi::bank::kLocalShadows, rhi::as_bytes(kNoShadow));
             DrawCache cache;
             draw_meshes(cmd, scene, draws, 0, static_cast<u32>(draws.size()), static_cast<u32>(draws.size()), cache, false);
             stats_.probe_draws += static_cast<u32>(draws.size());
@@ -902,27 +916,70 @@ void Forward3D::record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         cmd.begin_pass(sp);
         rhi::PipelineHandle bound_pipe;
         const GpuMesh* bound = nullptr;
-        for (u32 k = 0; k < c.caster_count; ++k) {
-            const Scene3D::Draw& d = casters[lists[c.first_caster + k]];
-            if (d.mesh->vertices.is_null()) continue;
-            const rhi::PipelineHandle pipe = d.mesh->skinned() ? skinned_shadow_pipe_ : shadow_pipe_;
-            if (!(pipe == bound_pipe)) {
-                cmd.bind_pipeline(pipe);
-                bound_pipe = pipe;
-            }
-            if (d.mesh != bound) {
-                cmd.bind_vertex_buffer(d.mesh->vertices);
-                cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
-                bound = d.mesh;
-            }
-            const ShadowU su{c.view_proj * d.model, d.dequant, {palette_index(d.palette), 0.0f, 0.0f, 0.0f}};
-            cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(su));
-            cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
-            ++stats_.shadow_draws;
-        }
+        for (u32 k = 0; k < c.caster_count; ++k) shadow_draw(cmd, c.view_proj, casters[lists[c.first_caster + k]], bound_pipe, bound);
         cmd.end_pass();
     }
     stats_.cascades = static_cast<u32>(cascades.size());
+    cmd.pop_debug_scope();
+}
+
+void Forward3D::shadow_draw(rhi::CommandBuffer& cmd, const mat4& view_proj, const Scene3D::Draw& d, rhi::PipelineHandle& bound_pipe,
+                            const GpuMesh*& bound) {
+    if (d.mesh->vertices.is_null()) return;
+    const rhi::PipelineHandle pipe = d.mesh->skinned() ? skinned_shadow_pipe_ : shadow_pipe_;
+    if (!(pipe == bound_pipe)) {
+        cmd.bind_pipeline(pipe);
+        bound_pipe = pipe;
+    }
+    if (d.mesh != bound) {
+        cmd.bind_vertex_buffer(d.mesh->vertices);
+        cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
+        bound = d.mesh;
+    }
+    const ShadowU su{view_proj * d.model, d.dequant, {palette_index(d.palette), 0.0f, 0.0f, 0.0f}};
+    cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(su));
+    cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
+    ++stats_.shadow_draws;
+}
+
+// ---- 1b. local-light shadows (M-VISUAL 4): one depth pass per atlas tile, its viewport the tile.
+// The first pass on a layer clears the whole layer; the rest load it.
+void Forward3D::record_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    local_shadows_ = false;
+    const Span<const LocalShadowTile> tiles = scene.local_shadow_tiles();
+    if (tiles.empty() || desc_.local_shadow_layers == 0 || !cv_local_shadows.get_bool()) return;
+    const LocalShadowSettings& ls = scene.local_shadow_settings();
+    if (ls.layers != desc_.local_shadow_layers || scene.shadow_settings().resolution != desc_.shadow_size) {
+        if (!local_mismatch_logged_)
+            MCE_LOG_WARN("render3d: local shadows need LocalShadowSettings::layers = {} and ShadowSettings::resolution = {} "
+                         "(got {} and {}): drawn unshadowed",
+                         desc_.local_shadow_layers, desc_.shadow_size, ls.layers, scene.shadow_settings().resolution);
+        local_mismatch_logged_ = true;
+        return;
+    }
+    cmd.push_debug_scope("shadow.local");
+    const Span<const Scene3D::Draw> casters = scene.shadow_draws();
+    const Span<const u32> lists = scene.local_shadow_casters();
+    u32 cleared = 0;  // layers cleared so far (tiles fill the layers in order)
+    for (const LocalShadowTile& t : tiles) {
+        rhi::RenderPassDesc sp;
+        rhi::PassAttachment depth;
+        depth.texture = shadow_map_;
+        depth.layer = static_cast<u16>(kMaxCascades + t.layer);
+        depth.clear.depth = 1.0f;
+        depth.load = t.layer < cleared ? rhi::LoadOp::Load : rhi::LoadOp::Clear;
+        cleared = max(cleared, t.layer + 1);
+        sp.depth = depth;
+        sp.viewport = t.rect;
+        sp.debug_name = "shadow.local";
+        cmd.begin_pass(sp);
+        rhi::PipelineHandle bound_pipe;
+        const GpuMesh* bound = nullptr;
+        for (u32 k = 0; k < t.caster_count; ++k) shadow_draw(cmd, t.view_proj, casters[lists[t.first_caster + k]], bound_pipe, bound);
+        cmd.end_pass();
+    }
+    stats_.local_shadow_tiles = static_cast<u32>(tiles.size());
+    local_shadows_ = true;
     cmd.pop_debug_scope();
 }
 
@@ -1023,6 +1080,25 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     // SSAO: the blurred half-size visibility, upsampled bilinearly; a stand-in fills the slot when off.
     pu.ao = {stats_.ssao ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
     cmd.bind_texture(rhi::bank::kAo, stats_.ssao ? ao_a_ : ao_off_, linear_clamp_);
+    // Local-light shadow records, one per atlas tile (GpuPointLight::shadow points into them).
+    static constexpr LocalShadowRecord kNoShadow{};
+    if (local_shadows_) {
+        const Span<const LocalShadowTile> tiles = scene.local_shadow_tiles();
+        Array<LocalShadowRecord> records(mem::heap());
+        records.resize(tiles.size());
+        const f32 inv = 1.0f / f32(desc_.shadow_size);
+        for (u32 i = 0; i < tiles.size(); ++i) {
+            const LocalShadowTile& t = tiles[i];
+            // Rect2D is top-left based; the layer holds GL's layout, whose row 0 is the bottom.
+            const f32 v0 = f32(i32(desc_.shadow_size) - t.rect.y - i32(t.rect.height)) * inv;
+            records[i] = {t.view_proj, vec4(f32(t.rect.x) * inv, v0, f32(t.rect.width) * inv, f32(t.rect.height) * inv),
+                          vec4(f32(kMaxCascades + t.layer), t.texel_scale, 0.0f, 0.0f)};
+        }
+        cmd.set_storage_data(rhi::bank::kLocalShadows, std::as_bytes(records.span()));
+        pu.local.x = 1.0f;
+    } else {
+        cmd.set_storage_data(rhi::bank::kLocalShadows, rhi::as_bytes(kNoShadow));
+    }
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);

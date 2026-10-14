@@ -59,6 +59,7 @@ MCE_CVAR(cv_fxaa, "r.fxaa", true, "FXAA", CVarFlags::None);
 MCE_CVAR(cv_sky_texture, "r.sky_texture", false, "Equirect sky texture instead of the gradient dome", CVarFlags::None);
 MCE_CVAR(cv_sky_ibl, "r.sky_ibl", false, "M-VISUAL 2: the sky lights the scene (SH9 irradiance + pre-filtered reflections)",
          CVarFlags::None);
+MCE_CVAR(cv_shadow_lights, "shadow_lights", 0, "M-VISUAL 4: the first N point lights ask for cube shadows", CVarFlags::None);
 MCE_CVAR(cv_ao, "ao", false, "M-VISUAL 3: screen-space ambient occlusion", CVarFlags::None);
 MCE_CVAR(cv_night, "night", false, "Dim the sun so the point lights carry the scene", CVarFlags::None);
 MCE_CVAR(cv_yaw, "cam.yaw", 0.35f, "Initial orbit yaw (radians)", CVarFlags::None);
@@ -284,7 +285,8 @@ public:
             const f64 g = f64(budget_.gpu_frames);
             std::printf("  | Forward+ light assignment (compute) | - | %.3f |\n", budget_.gpu_clusters / g);
             std::printf("  | SSAO (prepass + occlusion + blur) | - | %.3f |\n", budget_.gpu_ssao / g);
-            std::printf("  | shadow cascades | - | %.3f |\n", budget_.gpu_shadow / g);
+            std::printf("  | shadows (cascades + %u local lights, %u tiles) | - | %.3f |\n", stats_.local_shadow_lights,
+                        stats_.local_shadow_tiles, budget_.gpu_shadow / g);
             std::printf("  | main pass (Forward+ PBR + sky) | - | %.3f |\n", budget_.gpu_main / g);
             std::printf("  | MSAA resolve | - | %.3f |\n", budget_.gpu_resolve / g);
             std::printf("  | post: bloom | - | %.3f |\n", budget_.gpu_bloom / g);
@@ -553,6 +555,7 @@ private:
                 l.color = r.color;
                 l.intensity = night ? 1.6f : 0.5f;
                 l.radius = 2.6f;
+                l.cast_shadows = i < static_cast<u32>(max(cv_shadow_lights.get_int(), 0));
                 scene.add_point_light(l);
                 MeshInstance b;
                 b.mesh = keys_[Bulb];

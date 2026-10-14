@@ -1,6 +1,6 @@
 # M-VISUAL — High-end 3D rendering (milestone record)
 
-**Status:** active (steps 1–3 done, 2026-10-14). Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
+**Status:** active (steps 1–4 done, 2026-10-14). Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
 **Why:** `Forward3D` suits stylized and low-poly 3D but has no compute path, GI, pre-filtered IBL,
 screen-space effects, local-light shadows or temporal pipeline. Each step below is opt-in, keeps GL as the
 reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leaves today's frame unchanged when off.
@@ -12,7 +12,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | 1 | Compute in the RHI; clustered light build on the GPU | SBA-6 | done: GL, SDL GPU (Vulkan and Metal) and Metal |
 | 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL, IBL texture source and runtime reflection probes, the editor bake and goldens done (all backends, fragment passes); real-GPU numbers on the Mac/device session |
 | 3 | SSAO / GTAO | SBA-8 | done: GL and SDL GPU (gated + goldens), Metal binds the stand-in; real-GPU budget on the Mac/device session |
-| 4 | Local-light shadows | SBA-9 | — |
+| 4 | Local-light shadows | SBA-9 | done: GL and SDL GPU (gated + golden), Metal untested; real-GPU budget on the Mac/device session |
 | 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | — |
 | 6 | Global illumination (irradiance-probe volume) | SBA-11 | — |
 | 7 | Atmosphere and volumetrics | SBA-12 | — |
@@ -246,3 +246,49 @@ only the relative cost means anything; real-GPU numbers on the Mac/device sessio
 |---|---|---|
 | SSAO pass (prepass + occlusion + blur, ms) | 0 | 36.5 |
 | GPU 3D frame total (ms) | 384.4 | 432.2 |
+
+## Step 4 — local-light shadows
+
+**Scene API.** `PointLight::cast_shadows` (off by default) asks for a shadow; `Scene3D::set_local_shadows(LocalShadowSettings)`
+sets the budget: `tile` (texels per side, default 512), `layers` (atlas layers, must match
+`Forward3DDesc::local_shadow_layers`, default 1) and `max_lights` (16). Off switches: `enabled = false`,
+`Forward3DDesc::local_shadow_layers = 0` (no memory) and `-r.local_shadows 0`. A mismatch between the scene's settings
+and the renderer logs once and draws the lights unshadowed.
+
+**Atlas.** The local shadows live in extra layers of the sun's cascade array (bank 9, the same `sampler2DArrayShadow`
+and PCF 3×3 as the sun, no new sampler slot). Each layer is cut into `tile`-sized squares: a spot light takes one (a
+perspective view down its cone, capped at 83° half-angle), a point light six (the cube faces +X −X +Y −Y +Z −Z, each
+a little wider than 90° so a PCF footprint at a face edge stays inside its tile). Each tile is a depth pass with its
+viewport on the tile; the first pass on a layer clears it, the rest load it. Casters are the shadow draws whose
+bounding sphere touches the tile's frustum. Give a lamp's own bulb mesh `cast_shadows = false`, or it shadows its
+light.
+
+**Budget.** `Scene3D::build` ranks the lights that ask by screen importance: luminance × (radius / distance)²,
+capped when the camera is inside the light. Lights whose sphere is off screen are skipped. Tiles go out in that
+order; a point light that no longer fits leaves its room to later spot lights. The remaining lights are drawn
+unshadowed that frame and counted in `Stats::local_shadows_dropped`.
+
+**Shading.** `GpuPointLight` grows a `shadow` row (first record, record count; 64 bytes). The main pass reads the
+records from std430 bank 11 (`rhi::bank::kLocalShadows`: tile view-projection, uv rect, layer and texel scale).
+Point lights pick the face by the major axis of the light-to-fragment vector. The receiver gets the sun's normal
+offset, scaled by the texel size at its distance, and the PCF taps are clamped inside the tile.
+
+**Gates.** The `render3d_gl` tests:
+- A shadowed spot leaves the floor behind the box at 26 against 153 lit. Open floor and the box's lit face don't change.
+- A shadowed point light darkens the floor behind the box. Five floor points across the −Y, −X and +Z faces and their seams don't change, so there is no acne.
+- With local shadows off, or with mismatched settings, 0 pixels differ.
+- The budget test checks the importance order, the six tiles per point light, a point light dropped for a later spot, `max_lights`, and that unrequested or off-screen lights get no tiles.
+
+Golden `local_shadows` (a warm spot and a cool point light at night) on linux-gl and linux-sdlgpu; the earlier
+goldens are unchanged.
+
+**Budget (04_cubes `-shadow_lights N`, 256 point lights, 2048² layer of 512 tiles, 1280×1024, 110 frames, Mesa
+llvmpipe; relative only):**
+
+| | no local shadows | 2 shadowed point lights (12 tiles) |
+|---|---|---|
+| shadow stage (cascades + local, ms) | 20.9 | 26.2 |
+| GPU 3D frame total (ms) | 379.4 | 399.5 |
+
+Asking 8 lights for shadows grants the 2 most important (16 tiles hold 2 cube lights) at the same cost. Metal pixels
+and real-GPU numbers belong to the Mac/device session.
