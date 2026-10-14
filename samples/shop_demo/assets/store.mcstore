@@ -8,6 +8,7 @@
   ],
   "ads": [
     { "id": "continue", "format": "rewarded" },
-    { "id": "level_end", "format": "interstitial" }
+    { "id": "level_end", "format": "interstitial" },
+    { "id": "menu", "format": "banner" }
   ]
 }

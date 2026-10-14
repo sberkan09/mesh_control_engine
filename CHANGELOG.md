@@ -5,6 +5,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Purchases and ads checked on the phones (M-MONETIZE, SBA-26): StoreKit 2 is now built into iOS by default
+  (`-DMCE_STOREKIT=OFF` leaves it out); `scripts/ship.py shop --target ios|android` packages the shop demo for
+  the Simulator and the emulator; `cmake/mobile/ios/storekit_test/run.py` runs a Simulator app under a
+  `.storekit` configuration. Fixes from the run: iOS Swift backends build with the Ninja presets, a StoreKit
+  purchase is no longer reported twice, a purchase sheet, ad, consent form or ATT prompt no longer leaves the
+  game on the pause overlay (new `AppEnteredBackground` platform event), and Android `mce_args` keep quoted
+  arguments together.
 - Taps and clicks on dialogue, step 11f (M-MOBILE): a tap or click on a choice row picks it on the novel stage
   and the dialogue box, and a tap elsewhere reads on, through the input snapshot (replays and headless runs see
   it) with a `Selection` haptic. The stock map gains `Point` (left mouse), input scripts take `Touch=x,y` and

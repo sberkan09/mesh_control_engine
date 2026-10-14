@@ -126,7 +126,9 @@ private final class MceStoreKit {
             let seen = open[key] != nil
             open[key] = t
             lock.unlock()
-            if !seen || request != 0 { send(.purchased, request, id: t.productID, transaction: key) }
+            // Once per transaction: when Transaction.updates delivered it before purchase() returned,
+            // a second Purchased would grant a consumable twice (the first one went out as request 0).
+            if !seen { send(.purchased, request, id: t.productID, transaction: key) }
         case .unverified(let t, let error):
             NSLog("platform.store: unverified StoreKit transaction for %@: %@", t.productID, String(describing: error))
             send(.failed, request, id: t.productID)

@@ -11,10 +11,30 @@ public class MceActivity extends SDLActivity {
 
     // Command-line arguments for the game's main(), from the launch intent (smoke runs and tests):
     //   adb shell "am start -n @APP_ID@/.MceActivity --es mce_args '-frames 300 -autoplay 1'"
+    // Split at whitespace; double quotes keep one argument with spaces together:
+    //   --es mce_args '-monetize_test \"30:query 60:buy:gems_100\"'
     @Override
     protected String[] getArguments() {
         String args = getIntent() != null ? getIntent().getStringExtra("mce_args") : null;
-        if (args == null || args.trim().isEmpty()) return new String[0];
-        return args.trim().split("\\s+");
+        java.util.ArrayList<String> out = new java.util.ArrayList<>();
+        if (args == null) return new String[0];
+        StringBuilder cur = new StringBuilder();
+        boolean quoted = false, any = false;
+        for (int i = 0; i < args.length(); i++) {
+            char c = args.charAt(i);
+            if (c == '"') {
+                quoted = !quoted;
+                any = true;
+            } else if (Character.isWhitespace(c) && !quoted) {
+                if (any) out.add(cur.toString());
+                cur.setLength(0);
+                any = false;
+            } else {
+                cur.append(c);
+                any = true;
+            }
+        }
+        if (any) out.add(cur.toString());
+        return out.toArray(new String[0]);
     }
 @BILLING@@ADS@@REVIEW@@HAPTICS@}

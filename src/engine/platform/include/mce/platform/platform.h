@@ -75,9 +75,9 @@ VirtualRumble virtual_gamepad_rumble(u32 id);
 // u64 names the finger; x, y are normalized (0..1, y down). Tests, bots, desktop touch demos.
 enum class TouchPhase : u8 { Down, Move, Up, Cancel };
 void inject_touch(u32 window_id, u64 finger, TouchPhase phase, f32 x, f32 y);
-// Delivers an app lifecycle event (AppBackground, AppForeground, AppLowMemory, AppTerminating) to
-// every window exactly as the OS callback would: synchronously, now. Tests and desktop rehearsal
-// of the mobile lifecycle; other event types are ignored.
+// Delivers an app lifecycle event (AppBackground, AppForeground, AppEnteredBackground, AppLowMemory,
+// AppTerminating) to every window exactly as the OS callback would: synchronously, now. Tests and
+// desktop rehearsal of the mobile lifecycle; other event types are ignored.
 void simulate_app_event(EventType type);
 
 // Boot-failure report (core.md §2.1, FR-SHP-010): a modal message box, when allowed. Always also

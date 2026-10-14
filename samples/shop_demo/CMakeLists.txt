@@ -1,5 +1,11 @@
 # M-MONETIZE's running demo (SBA-21): a headless runner with a shop against the fake store and ad
-# network. Not a ladder rung; desktop only (the phone build is the stock player with a .mcstore).
+# network. Not a ladder rung. On the phones the same pack plays in the stock player with purchases
+# and ads on (phone.cpp; scripts/ship.py shop --target ios|android), against the real store and ads.
+if(MCE_MOBILE)
+    mce_add_executable(sample_shop_demo SOURCES phone.cpp DEPS mce::mce_player_runtime)
+    mce_sample_pack(sample_shop_demo)
+    return()
+endif()
 mce_add_executable(sample_shop_demo SOURCES main.cpp DEPS mce::mce_monetize mce::mce_asset mce::mce_ecs_scene)
 mce_sample_pack(sample_shop_demo)  # assets/store.mcstore: the store catalog
 

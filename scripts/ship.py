@@ -9,6 +9,7 @@
                                                         # cmake/mobile/android_app.py; --aab, --smoke)
     python3 scripts/ship.py platformer --target ios     # dist/Ember-Step-<version>-ios-sim.zip; --preset ios-arm64
                                                         # signs an .ipa (cmake/mobile/ios_app.py; --smoke)
+    python3 scripts/ship.py shop --target ios           # M-MONETIZE's shop demo (stock player + .mcstore), phones only
     python3 scripts/ship.py platformer --target android --store [--dry-run]   # ... then the Play internal track,
                                                         # or TestFlight for an .ipa (cmake/mobile/store.py)
 
@@ -74,6 +75,17 @@ ARTIFACTS = {
         "target": "sample_03_platformer",
         "module": "platformer",
         "controls": "Arrows or A/D run, Space jumps, Esc pauses. Collect the coins and reach the flag.",
+    },
+    # M-MONETIZE's demo on the phones (samples/shop_demo/phone.cpp): the stock player with purchases and
+    # ads on and the sample's .mcstore, so packaging stamps Play Billing and Google Mobile Ads into it.
+    "shop": {
+        "name": "Shop-Demo",
+        "title": "MCE Shop Demo",
+        "sample": "shop_demo",
+        "target": "sample_shop_demo",
+        "module": None,
+        "phone_only": True,
+        "controls": "No controls: launch it with a -monetize_test script (user guide 22.6).",
     },
 }
 
@@ -444,7 +456,10 @@ def main():
         return
     if not args.artifact:
         ap.error("name an artifact or pass --project <dir>")
-    for key in (list(ARTIFACTS) if args.artifact == "all" else [args.artifact]):
+    if args.target == "desktop" and ARTIFACTS.get(args.artifact, {}).get("phone_only"):
+        ap.error(f"{args.artifact} ships to the phones only (--target android or ios)")
+    keys = [k for k in ARTIFACTS if args.target != "desktop" or not ARTIFACTS[k].get("phone_only")]
+    for key in (keys if args.artifact == "all" else [args.artifact]):
         ship(sample_outputs(key, args), args)
 
 

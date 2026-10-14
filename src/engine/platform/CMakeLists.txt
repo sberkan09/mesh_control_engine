@@ -20,9 +20,9 @@ mce_add_library(mce_platform
         SDL3::SDL3-static)
 
 # The phone's purchase store (platform/store.h). Android needs nothing here: the Play Billing side is
-# Java, stamped into the game's Gradle project. iOS StoreKit 2 is Swift and stays opt-in until it has
-# been verified on a Mac (Simulator StoreKit configuration); without it the iOS store is "none".
-option(MCE_STOREKIT "iOS: build the StoreKit 2 store (Swift) into mce_platform" OFF)
+# Java, stamped into the game's Gradle project. iOS StoreKit 2 is Swift, on by default since its
+# Simulator run with a StoreKit configuration (SBA-26); without it the iOS store is "none".
+option(MCE_STOREKIT "iOS: build the StoreKit 2 store (Swift) into mce_platform" ON)
 if(IOS AND MCE_STOREKIT)
     enable_language(Swift)
     target_sources(mce_platform PRIVATE src/store_storekit.swift)
@@ -55,8 +55,8 @@ endif()
 # The phone's ad network (platform/ads.h). Android again needs nothing here (MceAds.java is stamped
 # into the Gradle project). iOS links Google's xcframeworks, which are not vendored: download the
 # Google Mobile Ads SDK (11 or newer, with UserMessagingPlatform) and point MCE_ADMOB_SDK_DIR at the
-# folder holding GoogleMobileAds.xcframework and UserMessagingPlatform.xcframework. Opt-in until it
-# has been run on a Mac.
+# folder holding GoogleMobileAds.xcframework and UserMessagingPlatform.xcframework. Opt-in because the
+# SDK is not vendored (run in the Simulator with GMA 13.11 / UMP, SBA-26).
 option(MCE_ADMOB "iOS: build Google Mobile Ads, UMP and ATT into mce_platform" OFF)
 set(MCE_ADMOB_SDK_DIR "" CACHE PATH "iOS: folder with GoogleMobileAds.xcframework and UserMessagingPlatform.xcframework")
 if(IOS AND MCE_ADMOB)
@@ -81,4 +81,19 @@ if(IOS AND MCE_ADMOB)
     endforeach()
     target_link_libraries(mce_platform PRIVATE "-framework GoogleMobileAds" "-framework UserMessagingPlatform"
         "-framework AppTrackingTransparency" "-framework UIKit")
+endif()
+
+# The app links mce_platform's Swift objects with clang++, which does not look where the Swift
+# toolchain keeps its back-deployment libraries (libswiftCompatibility*.a). Our own objects only
+# warn; Google Mobile Ads force-loads them, so without this folder the app fails to link.
+get_property(_mce_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
+if(IOS AND "Swift" IN_LIST _mce_languages)
+    execute_process(COMMAND xcrun --find swiftc OUTPUT_VARIABLE _mce_swiftc OUTPUT_STRIP_TRAILING_WHITESPACE)
+    get_filename_component(_mce_swift_bin "${_mce_swiftc}" DIRECTORY)
+    if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+        set(_mce_swift_platform iphonesimulator)
+    else()
+        set(_mce_swift_platform iphoneos)
+    endif()
+    target_link_options(mce_platform INTERFACE "-L${_mce_swift_bin}/../lib/swift/${_mce_swift_platform}")
 endif()
