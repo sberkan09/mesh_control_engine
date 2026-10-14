@@ -13,6 +13,7 @@
 #include "mce/kit/components.h"
 #include "mce/kit/novel.h"
 #include "mce/loc/loc.h"
+#include "mce/platform/haptics.h"
 #include "novel_fixture.h"
 
 using namespace mce;
@@ -337,4 +338,131 @@ TEST_CASE("translations (M-MOBILE 11e): the run, its saves and its hash are the 
     }
     CHECK(std::memcmp(&a.d(), &b.d(), sizeof(nv::Dialogue)) == 0);
     CHECK(a.w.state_hash() == b.w.state_hash());
+}
+
+namespace {
+
+// M-MOBILE 11f: a finger at (x, y) of a 1280 x 720 window, the default stage's 20 x 11.25 m view.
+input::InputState tap(f32 x, f32 y) {
+    input::InputState in;
+    in.touch_count = 1;
+    in.touches[0].pos = in.touches[0].origin = {x, y};
+    in.touches[0].held = in.touches[0].pressed = true;
+    in.jump_pressed = x >= 0.5f;  // the stock map reads a still tap on the right half as Jump too
+    return in;
+}
+
+kit::ViewInfo stage_view() {
+    kit::ViewInfo v;
+    v.view_pixels_per_meter = 64.0f;
+    return v;
+}
+
+// The window point over a stage row's centre (rows at y = 3.0 - 1.9 i metres).
+f32 row_y(u32 i) { return (360.0f - (3.0f - 1.9f * static_cast<f32>(i)) * 64.0f) / 720.0f; }
+
+}  // namespace
+
+TEST_CASE("pointer (M-MOBILE 11f): taps alone play the novel to its end, a tap on a row picks that row") {
+    Novel g(0);
+    g.n().instant_text = false;
+    g.w.set_resource(stage_view());
+    const u32 played = platform::haptics::stats().played;
+    g.step();
+    REQUIRE(g.n().mode == nv::Mode::Title);
+    bool missed_once = false;
+    for (u32 i = 0; i < 4000 && !g.n().finished; ++i) {
+        if (i % 2 == 1) {
+            g.step();
+            continue;
+        }
+        if (g.n().mode == nv::Mode::Choice && !missed_once) {
+            g.step(tap(0.9f, 0.97f));  // beside the rows (and read as Jump): nothing is picked
+            CHECK(g.n().mode == nv::Mode::Choice);
+            CHECK(g.n().choices == 0);
+            missed_once = true;
+            continue;
+        }
+        if (g.n().mode == nv::Mode::Title) g.step(tap(0.5f, row_y(0)));             // New game
+        else if (g.n().mode == nv::Mode::Choice) g.step(tap(0.5f, row_y(1)));       // "Walk on", the second row
+        else g.step(tap(0.25f, 0.9f));                                              // reads on
+    }
+    REQUIRE(g.n().finished);
+    CHECK(missed_once);
+    CHECK(g.n().choices == 1);
+    CHECK(g.n().ending == static_cast<u8>(fx::Ending::Quiet));  // the row tapped, not the highlighted one
+    CHECK(platform::haptics::stats().played >= played + 2);     // a Selection per pick (title and choice)
+}
+
+TEST_CASE("pointer (M-MOBILE 11f): a mouse click is the Point action at the mouse; a run without taps keeps its hash") {
+    auto click = [](f32 x_px, f32 y_px) {
+        input::InputState in;
+        in.mouse_pos = {x_px, y_px};
+        in.action_names[0] = MCE_SID("Point");
+        in.actions[0].held = in.actions[0].pressed = true;
+        in.action_count = 1;
+        in.fire_pressed = true;  // the stock map's left button is Fire too
+        return in;
+    };
+    Novel g(0);
+    g.n().instant_text = true;
+    g.w.set_resource(stage_view());
+    g.step();
+    for (u32 i = 0; i < 4000 && !g.n().finished; ++i) {
+        if (i % 2 == 1) g.step();
+        else if (g.n().mode == nv::Mode::Choice || g.n().mode == nv::Mode::Title) g.step(click(640.0f, row_y(0) * 720.0f));
+        else g.step(click(100.0f, 650.0f));
+    }
+    REQUIRE(g.n().finished);
+    CHECK(g.n().ending == static_cast<u8>(fx::Ending::Letter));  // "Wave back", the first row
+
+    // The keyboard run is the same with or without a ViewInfo (taps are the only readers).
+    auto keyboard = [](bool view) {
+        Novel k(0);
+        k.n().instant_text = true;
+        if (view) k.w.set_resource(stage_view());
+        input::InputState enter;
+        enter.confirm_pressed = true;
+        for (u32 i = 0; i < 400 && !k.n().finished; ++i) k.step(i % 2 == 0 ? enter : input::InputState{});
+        return k.w.state_hash();
+    };
+    CHECK(keyboard(false) == keyboard(true));
+}
+
+TEST_CASE("pointer (M-MOBILE 11f): NPC dialogue: the box finishes the typewriter then advances, a row picks, a gated row and a miss do nothing") {
+    Npc g;
+    g.w.add(g.mira, nv::DialogueInput{});
+    kit::ViewInfo view;
+    g.w.set_resource(view);
+    const nv::DialogueRects r = nv::dialogue_rects(nv::dialogue_layout(g.w), view);
+    auto at = [&](const nv::DialogueRect& rect) {
+        return tap((rect.x0 + rect.x1) * 0.5f / 1280.0f, (rect.y0 + rect.y1) * 0.5f / 720.0f);
+    };
+    auto step = [&](input::InputState in = {}) {
+        in.tick = g.tick;
+        input::publish(g.w, in);
+        g.w.tick(1.0 / 60.0, g.tick++);
+    };
+    REQUIRE(nv::start_dialogue(g.w, g.mira, "mira"));
+    step();
+    step();
+    const u32 page = nv::dialogue_page_points(fx::kProgram, g.d());
+    REQUIRE(nv::dialogue_revealed(g.w, g.d()) < page);
+    step(tap(0.5f, 0.1f));  // above the box: nothing
+    CHECK(nv::dialogue_revealed(g.w, g.d()) < page);
+    step(at(r.box));  // the rest of the page
+    CHECK(nv::dialogue_revealed(g.w, g.d()) == page);
+    CHECK(!g.d().waiting_choice);
+    step();
+    step(at(r.box));  // on to the choice
+    REQUIRE(g.d().waiting_choice);
+    REQUIRE(g.d().option_count == 3);
+
+    const u32 played = platform::haptics::stats().played;
+    step(at(r.rows[1]));  // "Show the letter": gated; the Jump the tap also is picks nothing either
+    CHECK(g.d().waiting_choice);
+    CHECK(g.d().cursor == 0);
+    step(at(r.rows[2]));  // "Leave"
+    CHECK(!g.d().active);
+    CHECK(platform::haptics::stats().played == played + 1);
 }

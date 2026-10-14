@@ -8,9 +8,11 @@
 #include "mce/ecs/save.h"
 #include "mce/input/actions.h"
 #include "mce/input/ecs.h"
+#include "mce/kit/components.h"
 #include "mce/kit/novel.h"
 #include "mce/kit/sequence.h"
 #include "mce/log.h"
+#include "mce/platform/haptics.h"
 
 namespace mce::novel {
 
@@ -23,6 +25,7 @@ struct DialogueRuntime {
     asset::Guid sfx[NovelState::kSounds];
     f32 prev_move_y = 0.0f;
     f32 speed = 45.0f;  // typewriter points per second
+    DialogueLayout layout;  // where the default box draws, for taps
 };
 
 void build_sfx(DialogueRuntime& rt, asset::AssetSystem& a) {
@@ -216,12 +219,34 @@ void dialogue_run(Frame& f) {
     // The stock map drives the marked conversation: Enter advances or picks, up/down move.
     const input::InputState* in = f.try_resource<input::InputState>();
     if (!in) return;
-    const bool confirm = in->confirm_pressed || in->jump_pressed;
+    // A tap or click (pointer_pressed) hits the box's rows and the box itself; on its tick the
+    // keys' confirm is ignored (a touch the stock map also reads as Jump must not pick twice).
+    const kit::ViewInfo* view_res = f.try_resource<kit::ViewInfo>();
+    const kit::ViewInfo view = view_res ? *view_res : kit::ViewInfo{};
+    math::vec2 at;
+    const bool tap = pointer_pressed(*in, view, at);
+    const DialogueRects rects = dialogue_rects(rt.layout, view);
+    const bool confirm = !tap && (in->confirm_pressed || in->jump_pressed);
     const f32 y = in->move.y;
     const bool up = y > 0.5f && rt.prev_move_y <= 0.5f, down = y < -0.5f && rt.prev_move_y >= -0.5f;
     rt.prev_move_y = y;
     f.query<const DialogueInput&, Dialogue&>().each([&](const DialogueInput& di, Dialogue& d) {
         if (!di.enabled || !d.active) return;
+        if (tap) {
+            if (d.waiting_choice) {
+                for (u32 v = 0; v < d.option_count && v < 4; ++v)
+                    if (rects.rows[v].contains(at) && test(*vars, p, p.options[d.options[v]].cond)) {
+                        d.cursor = static_cast<u8>(v);
+                        platform::haptics::play(platform::haptics::Preset::Selection);  // output only
+                        choose(d, *vars, p, d.cursor, &rt, &events);
+                        break;
+                    }
+            } else if (rects.box.contains(at)) {
+                if (revealed(rt, p, d) < dialogue_page_points(p, d)) d.reveal = kRevealAll;
+                else advance(d, *vars, p, &rt, &events);
+            }
+            return;
+        }
         if (d.waiting_choice) {
             if ((up || down) && d.option_count > 0) d.cursor = static_cast<u8>((d.cursor + (up ? d.option_count - 1 : 1)) % d.option_count);
             if (confirm) choose(d, *vars, p, d.cursor, &rt, &events);
@@ -293,6 +318,15 @@ u32 dialogue_page_points(const Program& p, const Dialogue& d) {
 u32 dialogue_revealed(World& world, const Dialogue& d) {
     const DialogueRuntime* rt = world.try_resource<DialogueRuntime>();
     return rt && rt->program ? revealed(*rt, *rt->program, d) : 0;
+}
+
+void set_dialogue_layout(World& world, const DialogueLayout& layout) {
+    if (DialogueRuntime* rt = world.try_resource<DialogueRuntime>()) rt->layout = layout;
+}
+
+DialogueLayout dialogue_layout(World& world) {
+    const DialogueRuntime* rt = world.try_resource<DialogueRuntime>();
+    return rt ? rt->layout : DialogueLayout{};
 }
 
 void set_dialogue_speed(World& world, f32 points_per_second) {

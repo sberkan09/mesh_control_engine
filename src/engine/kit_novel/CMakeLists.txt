@@ -10,6 +10,7 @@ mce_add_library(mce_kit_novel UMBRELLA
     SOURCES
         src/dialogue.cpp
         src/localize.cpp
+        src/pointer.cpp
         src/program.cpp
         src/stage.cpp
     PUBLIC_DEPS
@@ -20,6 +21,7 @@ mce_add_library(mce_kit_novel UMBRELLA
         mce::mce_audio
         mce::mce_input
         mce::mce_loc
+        mce::mce_platform
         mce::mce_gameplay_kit)
 
 # mce_kit_novel_ui: the default NPC dialogue box on mce_ui (mce/kit/novel_ui.h), a view a host adds

@@ -11,9 +11,12 @@
 //   10-70 Move=1,0 Jump          ticks 10..70: Move (1, 0) and Jump held
 //   100 Fire                     tick 100 only (a press)
 //   120- Move=-1,0               from tick 120 to the end of the run
+//   130 Touch=0.5,0.9            a finger down at (0.5, 0.9) of the window, lifted on tick 131
+//   140 Mouse=640,360 Point      the mouse at window point (640, 360), clicked
 // Ticks are the 1-based sim ticks of app::TickContext. A value is a number (an axis, or a button
 // when non-zero), two numbers "x,y" (a 2D axis) or true/false. A named action with no value is
-// held. Segments may overlap: later lines win for the same action.
+// held. Segments may overlap: later lines win for the same action. "Touch" and "Mouse" are not
+// actions: they put one finger (InputState::touch_points) or the mouse (mouse_pos_px) there.
 //
 // The script implements app::IInputSource, so AppDesc::input_source = &script feeds every tick.
 

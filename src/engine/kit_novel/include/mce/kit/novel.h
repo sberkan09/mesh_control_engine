@@ -36,6 +36,12 @@ class AssetSystem;
 namespace mce::loc {
 class Localization;
 }
+namespace mce::input {
+struct InputState;
+}
+namespace mce::kit {
+struct ViewInfo;
+}
 
 namespace mce::novel {
 
@@ -492,5 +498,42 @@ StoryState* dialogue_vars(World& world);
 u32 dialogue_page_points(const Program& p, const Dialogue& d);
 u32 dialogue_revealed(World& world, const Dialogue& d);
 void set_dialogue_speed(World& world, f32 points_per_second);
+
+// ---- pointer input (M-MOBILE 11f) -----------------------------------------------------------------
+
+// Taps and clicks go through the input snapshot, so a replay and a headless run see them: the
+// first touch that went down this tick, else the "Point" action (the stock map's left mouse
+// button) at the mouse. On the novel stage a tap on a choice row (or a title menu row) picks it
+// and a tap anywhere else reads on; on a DialogueInput conversation a tap on an option row picks
+// it and a tap on the box finishes the typewriter, then advances. A pick by pointer plays the
+// Selection haptic (mce/platform/haptics.h). A tick with a tap ignores the keys' confirm, so a
+// touch the stock map also reads as Jump does not pick twice.
+
+// Where the pointer pressed this tick, in device pixels (origin top-left); false: no press.
+bool pointer_pressed(const input::InputState& in, const kit::ViewInfo& view, math::vec2& px);
+
+// The default dialogue box's geometry, in UI points at scale 1 (the box scales them by
+// ViewInfo::ui_scale and lays out inside the safe area). The sim hit-tests the same rectangles
+// the box draws (mce/kit/novel_ui.h), so a tap lands where the player sees the row.
+struct DialogueLayout {
+    f32 text_px = 26.0f;
+    f32 box_height = 190.0f;
+};
+
+struct DialogueRect {
+    f32 x0 = 0, y0 = 0, x1 = 0, y1 = 0;  // device pixels, y down
+    bool contains(math::vec2 p) const { return p.x >= x0 && p.y >= y0 && p.x < x1 && p.y < y1; }
+};
+
+// The box and its four option rows on `view`'s screen.
+struct DialogueRects {
+    DialogueRect box;
+    DialogueRect rows[4];
+};
+DialogueRects dialogue_rects(const DialogueLayout& layout, const kit::ViewInfo& view);
+
+// The layout dialogue hit-tests with (install_dialogue's default until set).
+void set_dialogue_layout(World& world, const DialogueLayout& layout);
+DialogueLayout dialogue_layout(World& world);
 
 }  // namespace mce::novel

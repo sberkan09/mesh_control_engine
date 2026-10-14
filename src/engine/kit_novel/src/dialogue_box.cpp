@@ -55,39 +55,51 @@ void DialogueBox::init(const ui::Skin& skin) {
     doc_.set_skin(skin);
     doc_.set_modal(false);  // a view: it never takes focus or input
     const DialogueBoxStyle& st = style_;
-    const f32 px = st.text_px, row_h = px + 18.0f;
     box_ = doc_.add(doc_.root(), ui::WidgetKind::Panel, "box");
-    doc_.set_anchors(box_, band({0, 1}, {1, 1}, {24, -st.box_height - 24}, {-24, -24}));
-    doc_.set_style_all(box_, flat(st.box, st.text, px, true));
     name_tag_ = doc_.add(box_, ui::WidgetKind::Panel, "name_tag");
-    doc_.set_anchors(name_tag_, band({0, 0}, {0, 0}, {16, -px - 10}, {16 + 12 * px, 6}));
-    doc_.set_style_all(name_tag_, flat(st.name_tag, st.text, px, true));
     name_ = doc_.add(name_tag_, ui::WidgetKind::Text, "name");
-    doc_.set_anchors(name_, band({0, 0}, {1, 1}, {12, 4}, {-12, -2}));
-    doc_.set_style_all(name_, flat(st.text, st.text, px, false));
     for (u32 i = 0; i < 4; ++i) {
         const char names[4][6] = {"line0", "line1", "line2", "line3"};
         lines_[i] = doc_.add(box_, ui::WidgetKind::Text, StringView(names[i]));
+    }
+    // The choices: four rows stacked above the box.
+    choices_ = doc_.add(doc_.root(), ui::WidgetKind::Panel, "choices");
+    doc_.set_style_all(choices_, flat({0, 0, 0, 0}, st.text, layout_.text_px, false));
+    for (u32 i = 0; i < 4; ++i) {
+        const char rows[4][5] = {"row0", "row1", "row2", "row3"};
+        rows_[i] = doc_.add(choices_, ui::WidgetKind::Panel, StringView(rows[i]));
+        row_text_[i] = doc_.add(rows_[i], ui::WidgetKind::Text, "text");
+    }
+    built_ = true;
+    place(layout_);
+    show(false);
+}
+
+// The geometry novel::dialogue_rects mirrors: change one, change the other.
+void DialogueBox::place(const DialogueLayout& layout) {
+    layout_ = layout;
+    const DialogueBoxStyle& st = style_;
+    const f32 px = layout.text_px, row_h = px + 18.0f;
+    doc_.set_anchors(box_, band({0, 1}, {1, 1}, {24, -layout.box_height - 24}, {-24, -24}));
+    doc_.set_style_all(box_, flat(st.box, st.text, px, true));
+    doc_.set_anchors(name_tag_, band({0, 0}, {0, 0}, {16, -px - 10}, {16 + 12 * px, 6}));
+    doc_.set_style_all(name_tag_, flat(st.name_tag, st.text, px, true));
+    doc_.set_anchors(name_, band({0, 0}, {1, 1}, {12, 4}, {-12, -2}));
+    doc_.set_style_all(name_, flat(st.text, st.text, px, false));
+    for (u32 i = 0; i < 4; ++i) {
         const f32 y = 20.0f + static_cast<f32>(i) * (px + 12.0f);
         doc_.set_anchors(lines_[i], band({0, 0}, {1, 0}, {28, y}, {-28, y + px + 4}));
         doc_.set_style_all(lines_[i], flat(st.text, st.text, px, false));
     }
-    // The choices: four rows stacked above the box.
-    choices_ = doc_.add(doc_.root(), ui::WidgetKind::Panel, "choices");
     const f32 list_h = 4 * row_h + 3 * 10.0f;
-    doc_.set_anchors(choices_, band({0.5f, 1}, {0.5f, 1}, {-360, -st.box_height - 48 - list_h}, {360, -st.box_height - 48}));
-    doc_.set_style_all(choices_, flat({0, 0, 0, 0}, st.text, px, false));
+    doc_.set_anchors(choices_, band({0.5f, 1}, {0.5f, 1}, {-360, -layout.box_height - 48 - list_h}, {360, -layout.box_height - 48}));
     for (u32 i = 0; i < 4; ++i) {
-        const char rows[4][5] = {"row0", "row1", "row2", "row3"};
-        rows_[i] = doc_.add(choices_, ui::WidgetKind::Panel, StringView(rows[i]));
         const f32 y = static_cast<f32>(i) * (row_h + 10.0f);
         doc_.set_anchors(rows_[i], band({0, 0}, {1, 0}, {0, y}, {0, y + row_h}));
-        row_text_[i] = doc_.add(rows_[i], ui::WidgetKind::Text, "text");
         doc_.set_anchors(row_text_[i], band({0, 0}, {1, 1}, {18, 8}, {-18, -6}));
         doc_.set_style_all(row_text_[i], flat(st.text, st.text, px, false));
+        row_look_[i] = 255;  // restyled on the next update
     }
-    built_ = true;
-    show(false);
 }
 
 void DialogueBox::show(bool on) {
@@ -103,6 +115,7 @@ void DialogueBox::show(bool on) {
 void DialogueBox::update(World& world, const ui::UpdateContext& ctx) {
     if (!built_) return;
     const Program* p = dialogue_program(world);
+    if (const DialogueLayout l = dialogue_layout(world); l.text_px != layout_.text_px || l.box_height != layout_.box_height) place(l);
     const Dialogue* d = p ? on_screen(world) : nullptr;
     show(d != nullptr);
     if (d) {
@@ -144,8 +157,8 @@ void DialogueBox::update(World& world, const ui::UpdateContext& ctx) {
             if (row_look_[i] != look) {
                 row_look_[i] = look;
                 const math::Color tint = look == 1 ? style_.row_selected : style_.row;
-                doc_.set_style_all(rows_[i], flat(tint, style_.text, style_.text_px, true));
-                doc_.set_style_all(row_text_[i], flat(tint, look == 2 ? style_.row_disabled_text : style_.text, style_.text_px, false));
+                doc_.set_style_all(rows_[i], flat(tint, style_.text, layout_.text_px, true));
+                doc_.set_style_all(row_text_[i], flat(tint, look == 2 ? style_.row_disabled_text : style_.text, layout_.text_px, false));
             }
         }
     }
