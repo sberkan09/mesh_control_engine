@@ -106,9 +106,14 @@ Result<LoadedModule> open_game_module(StringView path) {
     }
     if (slot == kSlotCount) return Error(Errc::Unsupported, "module.copy", path, kSlotCount);
 
-    // Lowest copy index not mapped right now: a rebuilt module never lands on a mapped image.
-    u32 n = 0;
+    // A copy name this process has never used: a rebuilt module never lands on a mapped image, and
+    // the dynamic loader never hands back an image it kept for a name it saw before (dlclose may
+    // leave a C++ module mapped, e.g. for its STB_GNU_UNIQUE symbols, and then dlopen of the same
+    // path returns the old code).
+    static u32 next_copy = 0;
+    u32 n = next_copy;
     while (copy_in_use(copy_path(path, n).view())) ++n;
+    next_copy = n + 1;
     LoadedModule m;
     m.slot = slot;
     m.source_path = path;

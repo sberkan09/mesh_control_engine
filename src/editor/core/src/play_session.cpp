@@ -111,6 +111,10 @@ Result<void> PlaySession::enter(EditorProject& project, const SceneDocument& doc
         return r;
     }
     scene::pump_streaming(*world_, scene::PumpMode::Settle);
+    assets_ = assets;
+    scene::SceneChange& change = world_->set_resource(scene::SceneChange{});
+    change.current.assign(rel.view());
+    change.current_guid = doc.guid();
     if (!scratch_) scratch_ = mem::make_unique<mem::LinearArena>(mem::heap(), mem::heap(), 16 * MiB, "editor.play");
     state_ = State::Playing;
     accumulator_ = 0.0;
@@ -134,6 +138,7 @@ void PlaySession::stop() {
     audio_.reset();
     input_.reset();
     entities_.clear();
+    assets_ = nullptr;
     if (state_ != State::Stopped) MCE_LOG_INFO("editor: play stopped after {} ticks", ticks_);
     state_ = State::Stopped;
     accumulator_ = 0.0;
@@ -161,6 +166,12 @@ void PlaySession::tick_once(u64 close_us) {
     scene::pump_streaming(*world_);
     world_->tick(kTickDt, ticks_);
     ++ticks_;
+    // A scene change the game asked for this tick (scene::request_change), as mce_player applies it.
+    if (Result<bool> changed = scene::apply_change(*world_, *assets_, &entities_); !changed) {
+        FixedString<512> why;
+        format_error(changed.error(), why);
+        MCE_LOG_ERROR("editor: play: the scene change failed: {}", why.view());
+    }
     audio_->update();  // the Silent backend mixes one block per call (mce_player -headless)
     if (own_arena) mem::set_frame_arena(prev);
 }

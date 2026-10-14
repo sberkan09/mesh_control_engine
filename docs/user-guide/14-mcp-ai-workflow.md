@@ -100,6 +100,8 @@ each result's `content[0].text` is the tool's JSON).
 | | `engine_capabilities` | `area?` | each feature and how it is reached today (`data`, `asset`, `mcp`, `console`, `code`), every component, importable asset type and tool |
 | Content | `gen_palette` | `seed?`, `count?` (6), `scheme?` (analogous, complementary, triad, pastel, earth, neon, mono), `save?` | hex colors dark to light and a swatch image |
 | | `gen_sprite` | `seed?`, `kind?` (creature, character, ship, item, blob), `width?`, `height?` (16), `variants?`, `colors?` or `scheme?`, `save?` | mirrored, outlined, shaded pixel sprites in one row, their rects and an enlarged preview |
+| | `gen_pixels` | `rows` (equal-length strings, one character per pixel), `palette` (character to `#rrggbb[aa]`; `.` and space are clear), `save?`, `overwrite?` | exactly the sprite you drew, as a PNG, with an enlarged preview: a moth, a lantern, two animation frames side by side |
+| | `gen_mesh` | `shape?` (box, plane, sphere, cylinder, cone, disc, ramp), `size?` ([x, y, z] m), `segments?`, `color?`, `roughness?`, `save?` (.glb) | a centred, Y-up mesh with its material inline, its vertex and triangle counts and a shaded preview, for blocking out a 3D level |
 | | `gen_tileset` | `seed?`, `style?` (grass, stone, brick, dirt, sand, snow, water, wood, metal), `tile?` (16), `colors?`, `save?` | eight tiles in one row (fill, fill_2, fill_3, top, top_left, top_right, platform, decoration) with their rects |
 | | `gen_texture` | `seed?`, `kind?` (value, perlin, fbm, ridged, worley, sky), `width?`, `height?`, `scale?`, `octaves?`, `tileable?`, `colors?`, `clouds?`, `stars?`, `save?` | a tileable noise texture through gradient stops, or an equirect sky (width twice the height) |
 | | `gen_sfx` | `seed?`, `preset?` (pickup, laser, explosion, powerup, hit, jump, blip, random), `params?`, `save?` (.wav) | an sfxr sound: the parameters used (change any and call again), length, peak and a waveform image |
@@ -288,16 +290,19 @@ A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag
 | `ticks` | the most the run may take (1-36000, default 1800) |
 | `input` or `bot` | scripted input (as `run_headless` takes it) or a built-in bot, not both |
 | `actor` | the entity the feel report follows (default: the bot's actor) |
-| `until` | ends the run as soon as it holds (a field, `alive` or `event` check) |
+| `until` | ends the run as soon as it holds (a field, `alive`, `event` or `scene` check) |
 | `death` | counts a death each time it becomes true; deaths also count when the actor's entity goes away or it jumps more than `teleport` metres (default 3) in one tick (a respawn) |
 | `assert` | the checks: at the end of the run, or after tick `tick` |
 
 A check names one thing and compares it: `{"entity", "field"}` (a component field), `alive`
 (an entity, default `true`), `event` (events of that type pushed so far, default `>= 1`),
+`scene` (the scene the run is in, by source path, after the game's `scene::request_change`),
 `log_contains`, `log_errors` / `log_warnings` (the most allowed) or `feel` (`deaths`,
 `idle_ticks`, `stuck_ticks`, `stuck_spots`, `distance`, `cells`, `finished_tick`). The comparison
 is `"value": x` (equal), an operator key (`"<=": 3`, `">": 0`, `"!=": "Idle"`) or `"op"` with
 `"value"`; numbers and vectors compare within `tolerance` (default 0.0001). Enums compare by name.
+Entity checks name entities of the scene the test starts in, so after a scene change they read
+nothing until the run is back in that scene; check the new scene with `scene`.
 
 The bots drive the game's input actions (by default `Move` and `Jump`; `move` and `jump` rename
 them) from the actor's position, so they need no game code:

@@ -21,6 +21,8 @@ namespace {
 
 MCE_CVAR(cv_time_scale, "time_scale", 1.0f, "Sim speed multiplier (scales accumulator inflow, not dt)", CVarFlags::Cheat);
 MCE_CVAR(cv_max_catchup, "sim.max_catchup", 5, "Max fixed ticks per frame (spiral-of-death clamp)", CVarFlags::None);
+MCE_CVAR(cv_fast_forward, "sim.fast_forward", false,
+         "Every frame runs sim.max_catchup ticks whatever the wall clock (captures of late ticks; never for play)", CVarFlags::None);
 MCE_CVAR(cv_headless, "headless", false, "Run without window, renderer or audio device", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_vsync, "r.vsync", true, "Present with vsync", CVarFlags::Saved);
 
@@ -92,7 +94,10 @@ int run(Application& app, const AppDesc& desc, RunStats* stats_out) {
         const f64 now = clock.now_seconds();
         f64 frame_time = now - previous;
         previous = now;
-        if (frame_time > max_frame_time) {
+        if (cv_fast_forward.get_bool()) {
+            skipped += frame_time - max_frame_time;  // negative: the sim runs ahead of the wall
+            frame_time = max_frame_time;
+        } else if (frame_time > max_frame_time) {
             skipped += frame_time - max_frame_time;
             frame_time = max_frame_time;
             ++stats.clamped_frames;

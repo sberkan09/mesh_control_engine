@@ -241,6 +241,16 @@ void World::destroy(Entity e) {
     destroy_now(e);
 }
 
+void World::destroy_all() {
+    assert_not_in_phase("destroy_all");
+    Array<Entity> all(alloc_);
+    all.reserve(alive_count_);
+    for (u32 i = 0; i < generations_.size(); ++i)
+        if (locations_[i].table != kNoTable) all.push_back(Entity{i, generations_[i]});
+    // Children go with their parents (the hierarchy's destroy hook): destroy_now skips the dead.
+    for (Entity e : all) destroy_now(e);
+}
+
 void World::destroy_now(Entity e) {
     if (!alive(e)) return;
     // Destroy hooks may destroy other entities (hierarchy children) — never `e` itself, which

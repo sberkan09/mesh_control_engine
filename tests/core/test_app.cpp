@@ -166,6 +166,29 @@ TEST_CASE("spiral-of-death clamp limits catch-up ticks per frame") {
     mem::set_frame_arena(nullptr);
 }
 
+TEST_CASE("sim.fast_forward runs sim.max_catchup ticks every frame, however short the frame") {
+    ConVar* ff = ConVar::find("sim.fast_forward");
+    ConVar* mc = ConVar::find("sim.max_catchup");
+    REQUIRE(ff);
+    REQUIRE(mc);
+    ff->set_bool(true);
+    mc->set_int(32);
+    CountingApp app;
+    FakeClock clock(0.001);  // a 1 ms frame would run no tick at 60 Hz
+    AppDesc desc;
+    desc.headless = true;
+    desc.clock = &clock;
+    desc.max_frames = 10;
+    desc.frame_arena_size = 64 * 1024;
+    run(app, desc);
+    ff->reset();
+    mc->reset();
+    CHECK(app.ticks >= 9 * 32);
+    CHECK(app.ticks <= 10 * 32);
+    CHECK(app.dt_constant);
+    mem::set_frame_arena(nullptr);
+}
+
 TEST_CASE("time_scale scales accumulator inflow, never dt (FR-RUN-050)") {
     ConVar* ts = ConVar::find("time_scale");
     REQUIRE(ts);

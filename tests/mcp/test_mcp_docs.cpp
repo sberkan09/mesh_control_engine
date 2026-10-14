@@ -119,3 +119,25 @@ TEST_CASE("--docs: another folder is served, and a folder without docs serves no
     REQUIRE(t.v().get("results").size() == 1);
     CHECK(str(t.v().get("results").at(0).get("section")) == "Section one");
 }
+
+TEST_CASE("docs_search: a snippet never cuts a multi-byte character") {
+    const std::string root = fresh_dir("mcp_docs_utf8");
+    std::string body;
+    for (int i = 0; i < 200; ++i) body += "\xe2\x82\xac";  // the euro sign: 3 bytes, so the cuts land inside
+    write_file(root + "/user-guide/README.md", "# Guide\n\n## Prices\n\n" + body + " zebra " + body + "\n");
+    mcp::ServerOptions opt;
+    opt.docs = root.c_str();
+    Client c(opt);
+    c.init();
+    for (const char* q : {R"({"query":"zebra"})", R"({"query":"prices"})"}) {
+        auto t = c.ok("docs_search", q);
+        REQUIRE(t.v().get("results").size() == 1);
+        const std::string snip = str(t.v().get("results").at(0).get("snippet"));
+        std::string euros = snip;
+        for (const std::string cut : {"...", "## Prices", " zebra ", " "}) {
+            for (usize p = euros.find(cut); p != std::string::npos; p = euros.find(cut)) euros.erase(p, cut.size());
+        }
+        CHECK(euros.size() % 3 == 0);  // whole characters only
+        CHECK(euros.size() > 0);
+    }
+}

@@ -69,6 +69,8 @@ struct Client {
         server.handle(sv(R"({"jsonrpc":"2.0","id":)" + std::to_string(next_id++) + R"(,"method":")" + method + R"(","params":)" +
                          params + "}"));
         REQUIRE(!out.empty());
+        // stdio framing: one message per line, whatever a tool puts in it.
+        CHECK(out.back().find_first_of("\r\n") == std::string::npos);
         return parse(out.back());
     }
     void init() {

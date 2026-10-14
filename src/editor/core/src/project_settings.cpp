@@ -95,7 +95,8 @@ bool patch_project_file(const EditorProject& project, cook::JsonValue patch, coo
     }
     // Rewritten in the file's own layout: two-space indent, one member per line, arrays inline.
     const auto write_value = [&](cook::String& out, StringView key, cook::JsonValue v) {
-        if (key == "start_scene") return cook::append_json_string(out, start.view());
+        // Only a patched start_scene is the resolved GUID; an untouched one keeps the file's value.
+        if (key == "start_scene" && patch.get("start_scene").valid()) return cook::append_json_string(out, start.view());
         cook::write_json(v, out, true);
     };
     const cook::JsonValue root = doc.root();

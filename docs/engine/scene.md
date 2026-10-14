@@ -31,6 +31,14 @@ Loading, `include/mce/scene/scene.h`, namespace `mce::scene`:
   instantiation (`find_component_by_refl`) works in a world that only loaded a scene. An empty
   reflected struct registers as a tag.
 
+- Scene changes: `request_change(world, target)` (inline; a source path, `"guid:<uuid>"` or a
+  `Guid`) records the target in the `SceneChange` world resource (`next`, `current` source path,
+  `current_guid`, `changes`), which `load` creates and keeps current. `apply_change(world, assets,
+  spawned)` is the host's call between ticks: with nothing pending it returns false; otherwise it
+  resolves the target (`find_scene`), unloads every streamed chunk, `World::destroy_all()`, loads the
+  target and `World::rerun_startup()`. `find_scene(assets, want)` resolves GUID text or a source path
+  (a leading `assets/` is ignored) to a Scene GUID.
+
 The input type `asset::SceneView` and the chunk layout live in `mce_asset` (`mce/asset/formats.h`).
 
 Streaming, `include/mce/scene/streaming.h` (FR-ENT-120, opt-in):
@@ -52,7 +60,9 @@ Streaming, `include/mce/scene/streaming.h` (FR-ENT-120, opt-in):
   `Unloaded`); `set_assets` repoints the resource at another `AssetSystem`, which must outlive the
   World. `distance_to_box` is the distance rule.
 - Hosts: `mce_player` (async when windowed, sync when headless), `PlaySession` and the MCP headless
-  run (sync) install it, settle after the base scene and pump before every `World::tick`.
+  run (sync) install it, settle after the base scene and pump before every `World::tick`. The same
+  three hosts call `apply_change` after every `World::tick` (the player settles streaming after a
+  change); a failed change ends a headless run with the error and `mce_player` with exit code 1.
 
 ## Rules and invariants
 
@@ -68,6 +78,10 @@ Streaming, `include/mce/scene/streaming.h` (FR-ENT-120, opt-in):
 - Fields omitted in the `.mcscene` keep their C++ defaults.
 - Instantiating the same scene twice spawns a second, independent copy.
 - A missing scene GUID returns an error, never crashes.
+- A scene change keeps resources and systems; every entity goes, including ones spawned at run
+  time, and Startup runs again on the next tick. An unknown target is an error that leaves the world
+  untouched. The cook treats a scene's `AssetRef<Scene>` as a link (`DepRef::link`): type checked,
+  but no ordering edge, so scenes may reference each other in a loop.
 - Streaming: a chunk loads when any enabled focus is within `load_distance` of its box and unloads
   when every focus is beyond `max(unload_distance, load_distance)`; `disabled` wins over `pinned`.
   Unloading destroys only the entities the chunk spawned (those still alive). A destroyed chunk
@@ -98,6 +112,10 @@ ctest `test_scene` (no GPU), `tests/scene/test_scene.cpp`. It cooks a temporary 
 - "streaming: a chunk whose scene is missing fails without touching the world".
 - "streaming: async loads read off-thread and land on a later pump", including a cancel in flight.
 - "streaming: synchronous streaming is deterministic" and "a world without chunks is untouched".
+- "scene change: request_change swaps every entity for the target scene and reruns Startup" (by path
+  and by GUID text, an unknown target, a run-time entity, a kept resource) and "scenes that name each
+  other in a loop cook". `test_mcp_playtest` checks a game's change in an MCP run, with the `.mctest`
+  `scene` check and a target the pack lacks.
 
 `test_asset_system` covers `request_async` / `take_async` / `cancel_async` on dev and pack mounts and
 a corrupt file read on the loader thread.

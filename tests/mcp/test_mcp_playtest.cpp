@@ -4,11 +4,13 @@
 
 #include <doctest/doctest.h>
 
+#include <filesystem>
 #include <string>
 
 #include "mce/editor/play_session.h"
 #include "mce/gameplay.h"
 #include "mce/input/actions.h"
+#include "mce/scene/scene.h"
 #include "mcp_client.h"
 
 namespace playtest_game {
@@ -22,8 +24,9 @@ struct Walker {
     f32 wall_h = 0.0f;       // ...this high (jump over it)
     f32 hazard_x = 1000.0f;  // crossing this x respawns at the origin
     f32 vy = 0.0f;
+    f32 door_x = 1000.0f;    // crossing this x changes to scenes/win.mcscene
 };
-MCE_COMPONENT(Walker, speed, side, wall_x, wall_h, hazard_x, vy)
+MCE_COMPONENT(Walker, speed, side, wall_x, wall_h, hazard_x, vy, door_x)
 
 }  // namespace playtest_game
 
@@ -53,6 +56,7 @@ void walk(Frame& f) {
             t.position.y += in.move.y * w.speed * f.dt;
         }
         if (t.position.x > w.hazard_x) t.position = math::vec3(0, 0, 0);
+        if (t.position.x > w.door_x) scene::request_change(f.world(), "scenes/win.mcscene");
     });
 }
 
@@ -257,6 +261,38 @@ TEST_CASE("test_run: .mctest files under tests/ with field, tick, alive, event, 
     CHECK(c.fails("test_run", R"({"path":"../x"})").find("inside the project") != std::string::npos);
     CHECK(c.fails("test_run", R"({"test":{"input":"1 Jump","bot":{"kind":"masher"}}})").find("not both") != std::string::npos);
     CHECK(c.fails("test_run", R"({"test":{"assert":[{"feel":"fun","==":1}]}})").find("'feel' is") != std::string::npos);
+}
+
+TEST_CASE("test_run: a scene check follows the game's scene changes (scene::request_change)") {
+    GameGuard game;
+    const std::string root = project("mcp_test_scene_change", R"({"door_x": 2})");
+    write_file(root + "/assets/scenes/win.mcscene", R"({ "format": "mce-scene", "version": 1,
+  "guid": "5ce4e000-0000-4000-8000-0000000007a2", "name": "win",
+  "entities": [{ "name": "Banner", "components": { "LocalTransform": {} } }] })");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/play.mcscene"));
+    c.init();
+    // Walking right crosses the door at x = 2 (0.5 s at 4 m/s): the run moves to the win scene.
+    auto r = c.ok("test_run", R"({"test":{"input":"1- Move=1,0","ticks":120,"assert":[)"
+                              R"({"scene":"scenes/play.mcscene","tick":10},{"scene":"assets/scenes/win.mcscene"},)"
+                              R"({"entity":"Player","field":"LocalTransform.position.x",">":0}]}})");
+    const cook::JsonValue checks = r.v().get("results").at(0).get("checks");
+    REQUIRE(checks.size() == 3);
+    CHECK(checks.at(0).get("ok").as_bool());
+    CHECK(checks.at(1).get("ok").as_bool());
+    CHECK(str(checks.at(1).get("actual")) == "scenes/win.mcscene");
+    CHECK_FALSE(checks.at(2).get("ok").as_bool());  // the Player is in the scene the run left
+    CHECK(str(checks.at(2).get("note")).find("another scene") != std::string::npos);
+    // Until the win scene: the run stops on the tick after the door.
+    auto until = c.ok("test_run", R"({"test":{"input":"1- Move=1,0","ticks":600,"until":{"scene":"scenes/win.mcscene"}}})");
+    CHECK(until.v().get("results").at(0).get("stopped_early").as_bool());
+    CHECK(num(until.v().get("results").at(0).get("ticks")) < 40);
+    CHECK(c.fails("test_run", R"({"test":{"assert":[{"scene":"scenes/win.mcscene","==":1}]}})").find("no comparison") != std::string::npos);
+    // A change to a scene the pack lacks fails the run.
+    std::filesystem::remove(root + "/assets/scenes/win.mcscene");
+    auto broken = c.ok("test_run", R"({"test":{"input":"1- Move=1,0","ticks":120}})");
+    CHECK_FALSE(broken.v().get("ok").as_bool());
+    CHECK(str(broken.v().get("results").at(0).get("error")).find("scene.change") != std::string::npos);
 }
 
 TEST_CASE("run_headless trace: fields sampled every N ticks") {

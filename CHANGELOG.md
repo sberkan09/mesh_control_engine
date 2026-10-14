@@ -5,6 +5,18 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Scene changes at run time (SBA-56, from the M-AGENT demo's friction notes): a game system calls
+  `scene::request_change(world, "scenes/level2.mcscene")` and `mce_player`, the editor's play mode and every
+  MCP run swap every entity for the target scene after the tick, keeping resources and running Startup again.
+  Scenes may now reference each other in a loop (a scene's `AssetRef<Scene>` is a link, not a cook dependency),
+  and a `.mctest` checks `{"scene": "scenes/win.mcscene"}`. Also from the demo: `module_build` really loads the
+  rebuilt module (each load maps a fresh copy); `asset_schema` and `docs_search` no longer break the MCP stream
+  with raw newlines; `gen_pixels` draws exactly the sprite an agent describes and `gen_mesh` makes a box, plane, sphere, cylinder,
+  cone, disc or ramp as a `.glb`; `docs_search` cuts snippets on character boundaries; `project_check` counts every
+  `.mc*` document as a referrer, skips a drop shadow behind a readable copy of its text in the contrast check
+  and says when the performance check could not run; `project_set` keeps
+  `start_scene` when the patch does not name it; `engine_capabilities` lists the components that already do
+  what it called code; an SDK project's `ctest` runs its 300-tick smoke test.
 - Friction notes, M-AGENT step 8 (SBA-55): `report_friction` lets an agent write down what the engine made hard
   (summary, area, severity, expected, actual, workaround) as a line in the project's `friction.jsonl`, and
   `mce friction <projects...>` collects the notes into one Markdown backlog (or JSON), blocking ones first.

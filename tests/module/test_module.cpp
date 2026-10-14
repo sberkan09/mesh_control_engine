@@ -86,19 +86,24 @@ TEST_CASE("module: load, install, tick, unload") {
 
 TEST_CASE("module: reload at the play boundary reproduces the state hash") {
     u64 hashes[2] = {};
-    for (u64& h : hashes) {
+    FixedString<512> copies[2];
+    for (u32 i = 0; i < 2; ++i) {
         LoadedModule mod;
         {
             World w;
             Result<LoadedModule> r = load_game_module(MODTEST_GOOD, w);
             REQUIRE(r.has_value());
             mod = r.value();
+            copies[i] = mod.loaded_path;
             run_ticks(w, 600);
-            h = w.state_hash();
+            hashes[i] = w.state_hash();
         }
         unload_game_module(mod);
     }
     CHECK(hashes[0] == hashes[1]);
+    // A reload maps a copy under a new name: the loader may keep the old image mapped after
+    // unload, and the same name would hand it back instead of the rebuilt module.
+    CHECK(copies[0] != copies[1]);
 }
 
 TEST_CASE("module: two live copies of one module map distinct images") {

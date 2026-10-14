@@ -6,6 +6,7 @@
 #include "mce/cook/fs.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
+#include "mce/scene/scene.h"
 #include "tool_args.h"
 
 namespace mce::mcp {
@@ -429,7 +430,8 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
         have_value = true;
     }
     const cook::JsonValue field = v.get("field"), alive = v.get("alive"), event = v.get("event"), log_has = v.get("log_contains"),
-                          log_err = v.get("log_errors"), log_warn = v.get("log_warnings"), feel = v.get("feel");
+                          log_err = v.get("log_errors"), log_warn = v.get("log_warnings"), feel = v.get("feel"),
+                          scene = v.get("scene");
     if (field.valid()) {
         out.what = Condition::What::Field;
         if (!field.is_string()) return err_out(err, "'field' is 'Component.path'");
@@ -448,6 +450,17 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
             out.op = CompareOp::Ge;
             number(out.expected, 1);
         }
+    } else if (scene.valid()) {
+        // The scene the run is in (scene::request_change moves it), by source path.
+        out.what = Condition::What::Scene;
+        if (!scene.is_string() || scene.as_string().empty()) return err_out(err, "'scene' is a scene's source path, e.g. \"scenes/win.mcscene\"");
+        if (have_value) return err_out(err, "a scene check takes no comparison: {\"scene\": \"scenes/win.mcscene\"}");
+        StringView want = scene.as_string();
+        if (want.starts_with("assets/")) want.remove_prefix(7);
+        out.text = cook::String(want);
+        out.expected = Value{};
+        out.expected.kind = Value::Kind::String;
+        out.expected.s.assign(want);
     } else if (log_has.valid()) {
         out.what = Condition::What::LogContains;
         if (!log_has.is_string() || log_has.as_string().empty()) return err_out(err, "'log_contains' is the text to find");
@@ -468,7 +481,7 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
         out.text = cook::String(feel.as_string());
         if (!have_value) return err_out(err, "a feel check needs a comparison, e.g. {\"feel\": \"deaths\", \"<=\": 0}");
     } else {
-        return err_out(err, "a check names one of: field (+ entity), alive, event, log_contains, log_errors, log_warnings, feel");
+        return err_out(err, "a check names one of: field (+ entity), alive, event, scene, log_contains, log_errors, log_warnings, feel");
     }
     return true;
 }
@@ -492,6 +505,14 @@ bool eval_world(Condition& c, const World& world, Span<const Entity> spawned) {
             }
             c.actual = Value{};
             number(c.actual, known ? static_cast<f64>(pushed) : 0.0);
+            break;
+        }
+        case Condition::What::Scene: {
+            // The World is const here; the resource is only read.
+            const scene::SceneChange* sc = const_cast<World&>(world).try_resource<scene::SceneChange>();  // NOLINT(cppcoreguidelines-pro-type-const-cast)
+            c.actual = Value{};
+            c.actual.kind = Value::Kind::String;
+            if (sc) c.actual.s.assign(sc->current.view());
             break;
         }
         default: return false;
@@ -551,6 +572,7 @@ void write_condition(JsonWriter& w, const Condition& c) {
             what += "event ";
             what += c.text.view();
             break;
+        case Condition::What::Scene: what += "scene"; break;
         case Condition::What::LogContains:
             what += "log contains \"";
             what += c.text.view();
@@ -573,7 +595,7 @@ void write_condition(JsonWriter& w, const Condition& c) {
     w.key("ok").boolean(c.ok);
     if (!c.checked) w.key("note").str(c.tick ? "the run ended before this tick" : "not evaluated");
     else if (c.what == Condition::What::Field && c.actual.kind == Value::Kind::None)
-        w.key("note").str("the entity is gone or has no such component");
+        w.key("note").str("the entity is gone or has no such component (or the run is in another scene)");
     w.end_object();
 }
 

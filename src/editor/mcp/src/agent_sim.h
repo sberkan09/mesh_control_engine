@@ -104,21 +104,25 @@ enum class CompareOp : u8 { Eq, Ne, Lt, Le, Gt, Ge };
 // One check of a test: a component field, whether an entity is alive, how many events of a type
 // were pushed, the log, or a feel metric; at the end of the run or after tick `tick`.
 struct Condition {
-    enum class What : u8 { Field, Alive, Event, LogContains, LogErrors, LogWarnings, Feel };
+    enum class What : u8 { Field, Alive, Event, Scene, LogContains, LogErrors, LogWarnings, Feel };
     What what = What::Field;
     FieldProbe probe;          // Field, Alive (index only)
     CompareOp op = CompareOp::Eq;
     Value expected;
     f64 tolerance = 1e-4;      // numbers compare equal within this
-    cook::String text;         // event type, log text, feel metric
+    cook::String text;         // event type, scene path, log text, feel metric
     u64 tick = 0;              // 0: at the end
     // Result.
     bool checked = false;
     bool ok = false;
     Value actual;
 };
+// Field, Alive, Event and Scene: read from the world during the run (the rest after it).
+inline bool is_world_check(Condition::What w) {
+    return w == Condition::What::Field || w == Condition::What::Alive || w == Condition::What::Event || w == Condition::What::Scene;
+}
 bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v, Condition& out, cook::String& err);
-// Field, Alive and Event conditions (false for the others: they need the log or the feel report).
+// The world checks (false for the others: they need the log or the feel report).
 bool eval_world(Condition& c, const World& world, Span<const Entity> spawned);
 void eval_after(Condition& c, Span<const log::ConsoleLine> lines, const FeelTracker* feel);
 void write_condition(JsonWriter& w, const Condition& c);

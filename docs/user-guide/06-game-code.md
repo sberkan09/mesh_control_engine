@@ -262,7 +262,26 @@ Keep it that way in game code:
 - float math is fine as long as it is the same code on the same machine; cross-machine identical
   hashes are not claimed.
 
-## 6.10 Spawning prefabs from code
+## 6.10 Changing scenes
+
+```cpp
+#include "mce/scene/scene.h"
+
+void on_goal(Frame& f) {
+    if (reached) scene::request_change(f.world(), "scenes/level2.mcscene");
+}
+```
+
+`request_change` only records the target (the last request in a tick wins), so it is safe in any
+phase. Between ticks the host applies it: every entity goes, the target scene is loaded, and your
+Startup systems run again for the new scene. Resources are kept, so keep what must survive a
+change (score, lives, the level reached) in a resource, not on an entity. A target the pack lacks
+is an error: `mce_player` logs it and exits with code 1, and a test run fails with `scene.change`.
+`world.try_resource<scene::SceneChange>()->current` is the source path of the scene that is
+loaded. Store the next scene's path in a string field, or its GUID in an `AssetRef<asset::Scene>`
+field (`scene::request_change(world, ref.guid)`); either can point back at the title.
+
+## 6.11 Spawning prefabs from code
 
 To spawn entities you did not place in the scene, instantiate a cooked prefab:
 
@@ -282,7 +301,7 @@ The template host does not hand the asset system to the module today; sequences 
 are the authored way to spawn prefabs from a project, and the samples that spawn from code own
 their host. For many games `Commands::spawn` with components built in code is simpler.
 
-## 6.11 Reading other components safely
+## 6.12 Reading other components safely
 
 ```cpp
 if (const Coin* c = f.world().try_get<Coin>(other)) { ... }        // null when absent
@@ -293,14 +312,14 @@ if (f.world().has<Hazard>(other)) { ... }
 `try_get_mut` is allowed inside a system (it changes a value, not structure). Pointers are valid
 until the next structural change, so do not keep them across ticks.
 
-## 6.12 Logging and errors
+## 6.13 Logging and errors
 
 `MCE_LOG_INFO("...")`, `MCE_LOG_WARN`, `MCE_LOG_ERROR` write to the engine log, which the editor's
 Console panel and the in-game console show. Do not log inside per-entity loops; log a summary per
 tick if you must. Expected failures return `Result`/`ResultV` (`Error(Errc::InvalidArgument,
 "stage", "detail")`); programmer errors assert with `MCE_ASSERT`. There are no exceptions.
 
-## 6.13 Platform notes
+## 6.14 Platform notes
 
 - **Linux and macOS** load the game as a shared module (`libmy_game.so` on both; only
   `libmce_engine` is a `.dylib` on macOS). The host copies the file before mapping it, so
@@ -315,7 +334,7 @@ tick if you must. Expected failures return `Result`/`ResultV` (`Error(Errc::Inva
   `mce/gameplay.h` is the supported surface, and a module that draws cannot run headless or in
   the editor.
 
-## 6.14 Testing gameplay
+## 6.15 Testing gameplay
 
 Three levels, cheapest first:
 

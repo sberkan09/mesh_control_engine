@@ -385,6 +385,7 @@ public:
         if (!monetize_test_.empty()) monetize_test_events();
         if (game_services_print_) game_services_test_events();
         ++sim_ticks_;
+        apply_scene_change();
         if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
     }
 
@@ -630,6 +631,27 @@ private:
         for (const asset::ModEntry& m : mods_.mods)
             MCE_LOG_INFO("{}: mod '{}' {} ({} assets) from {}", desc_.app_name, m.name.view(), m.version.view(), m.asset_count, m.path.view());
         if (!mods_.mods.empty()) std::printf("%s: %zu mod(s) loaded\n", desc_.app_name, mods_.mods.size());
+    }
+
+    // A scene change the game asked for this tick (scene::request_change): the new scene replaces
+    // every entity and runs Startup again. A target the pack lacks ends the run (exit 1).
+    void apply_scene_change() {
+        Result<bool> changed = scene::apply_change(world_, assets_, &entities_);
+        if (!changed) {
+            FixedString<512> why;
+            format_error(changed.error(), why);
+            MCE_LOG_ERROR("{}: the scene change failed: {}", desc_.app_name, why.view());
+            std::fprintf(stderr, "%s: the scene change failed: %s\n", desc_.app_name, why.c_str());
+            quit(1);
+            return;
+        }
+        if (!changed.value()) return;
+        const scene::SceneChange& c = world_.resource<scene::SceneChange>();
+        scene_guid_ = c.current_guid;
+        scene_path_.assign(c.current.view());
+        scene::pump_streaming(world_, scene::PumpMode::Settle);
+        if (device_ && kit::has_camera_3d(world_))
+            if (Result<void> r = init_3d(); !r) MCE_LOG_ERROR("{}: 3D rendering did not start after the scene change", desc_.app_name);
     }
 
     // A GUID, a source path ("scenes/level.mcscene"), or empty for the first scene by path.

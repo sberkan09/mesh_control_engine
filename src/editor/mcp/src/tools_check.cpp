@@ -68,10 +68,12 @@ u32 line_of(StringView text, usize at) {
     return line;
 }
 
-// Files under assets/ that hold references to other assets by GUID.
+// Files under assets/ that hold references to other assets by GUID: the engine's JSON documents
+// (.mcscene, .mcprefab, .mcmat, .mctilemap, .mcsheet, ... every ".mc*" but the sidecars) and .json.
 bool is_text_asset(StringView rel) {
-    return ends_with(rel, ".mcscene") || ends_with(rel, ".mcprefab") || ends_with(rel, ".mcmat") || ends_with(rel, ".mcpart") ||
-           ends_with(rel, ".mcseq") || ends_with(rel, ".json") || ends_with(rel, ".mcanim") || ends_with(rel, ".mctile");
+    const cook::String ext = cook::lower_extension(rel);
+    if (ext.view() == ".mceasset") return false;
+    return ext.view() == ".json" || (ext.size() > 3 && ext.view().substr(0, 3) == ".mc");
 }
 
 // Media that needs a credits row (code-made data files do not).
@@ -437,10 +439,21 @@ bool project_check(ToolCall& c) {
                     cook::appendf(fix, "raise TextLabel.height to %.2f m or more", static_cast<f64>(opt.min_text_px / px_per_m));
                     rep.add(Sev::Warning, "accessibility", file.view(), line, msg.view(), fix.view());
                 }
-                f32 fg[3] = {1, 1, 1};
-                (void)read_color(label.get("color"), fg);
-                const f32 ratio = contrast(luminance(fg[0], fg[1], fg[2]), bg_l);
-                if (ratio < 4.5f) {
+                const auto label_contrast = [&](const cook::JsonValue& l) {
+                    f32 fg[3] = {1, 1, 1};
+                    (void)read_color(l.get("color"), fg);
+                    return contrast(luminance(fg[0], fg[1], fg[2]), bg_l);
+                };
+                const f32 ratio = label_contrast(label);
+                // A drop shadow: another label with the same text reads well, and this one only sits behind it.
+                bool shadow = false;
+                const cook::JsonValue text = label.get("text");
+                for (u32 o = 0; ratio < 4.5f && text.is_string() && o < ents.size() && !shadow; ++o) {
+                    const cook::JsonValue other = ents.at(o).get("components").get("TextLabel");
+                    shadow = o != e && other.is_object() && other.get("text").is_string() && other.get("text").as_string() == text.as_string() &&
+                             label_contrast(other) >= 4.5f;
+                }
+                if (ratio < 4.5f && !shadow) {
                     cook::String msg;
                     cook::appendf(msg, "%.*s: text contrast against the background colour is %.1f:1 (WCAG AA asks 4.5:1)",
                                   static_cast<int>(who.size()), who.data(), static_cast<f64>(ratio));
@@ -452,6 +465,8 @@ bool project_check(ToolCall& c) {
 
     // ---- performance: each scene headless, the sim's time per tick against the budget
     Array<PerfRow> perf;
+    if (opt.enabled("performance") && !cooked.ok())
+        rep.add(Sev::Error, "performance", "", 0, "no scene was measured: the project does not cook", "project_check with the cook check lists why");
     if (opt.enabled("performance") && cooked.ok()) {
         const cook::String cooked_dir = cook::path_join(project.root(), "cooked");
         for (const editor::ProjectAsset& a : project.assets()) {

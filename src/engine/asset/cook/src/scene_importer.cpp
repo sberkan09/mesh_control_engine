@@ -230,6 +230,7 @@ private:
                 d.line = v.line();
                 d.col = v.col();
                 d.where.assign(path.view().substr(0, 127));
+                d.link = expected == ChunkType::Scene;  // the GUID is all a scene keeps of another scene
                 deps.push_back(d);
                 return;
             }

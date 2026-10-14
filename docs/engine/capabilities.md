@@ -137,6 +137,8 @@ reach all of its non-transient fields.
 | `engine_capabilities` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `gen_palette` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `gen_sprite` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `gen_pixels` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `gen_mesh` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `gen_tileset` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `gen_texture` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `gen_sfx` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |

@@ -862,6 +862,10 @@ TEST_CASE("mcp tools: project_get / project_set and the scene's WorldSettings (M
     CHECK(c.fails("project_set", R"({"values":{"gravity":[0,1]}})").find("not a project setting") != std::string::npos);
     CHECK(c.fails("project_set", R"({"values":{"title":"x","games":[1]}})").find("games") != std::string::npos);
     CHECK(read_file(root + "/Demo.mceproj") == before);
+    // A patch without start_scene keeps it.
+    p = c.ok("project_set", R"({"values":{"title":"Third Demo"}})");
+    CHECK(str(p.v().get("start_scene_path")) == "scenes/other.mcscene");
+    CHECK(str(parse(read_file(root + "/Demo.mceproj"))->root().get("start_scene")) == str(c.ok("scene_info").v().get("guid")));
 
     // WorldSettings: a bad value creates nothing; zero 2D gravity keeps the ball where it starts.
     CHECK(c.fails("scene_settings_set", R"({"values":{"gravity_2d":"down"}})").find("gravity_2d") != std::string::npos);

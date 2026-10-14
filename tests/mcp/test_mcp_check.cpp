@@ -69,6 +69,12 @@ TEST_CASE("project_check: a clean project passes; credits, unused and the per-ti
     c.ok("cook_run", R"({"adopt":true})");
     auto t3 = c.ok("project_check", R"({"checks":["unused","credits"]})");
     CHECK(findings(t3, "unused") == "info assets/textures/spare.png: no scene, prefab, material, model or project source references this asset\n");
+    // A tile set a .mctilemap names is used (every .mc* document counts as a referrer).
+    write_file(root + "/assets/textures/tiles.png", make_png(2, 2, std::vector<u8>(16, 200)));
+    write_file(root + "/assets/textures/tiles.png.mceasset", sidecar("5ce4e000-0000-4000-8000-0000000000b1", "texture"));
+    write_file(root + "/assets/maps/meadow.mctilemap",
+               R"({"format":"mce-tilemap","version":1,"guid":"5ce4e000-0000-4000-8000-0000000000b2","name":"meadow","tileset":"guid:5ce4e000-0000-4000-8000-0000000000b1","columns":1,"rows":1,"width":1,"height":1,"tile_size":1,"tiles":[0]})");
+    CHECK(findings(c.ok("project_check", R"({"checks":["unused"]})"), "unused").find("tiles.png") == std::string::npos);
     CHECK(findings(t3, "credits").empty());  // covered by the *.png row
 
     // A budget nothing meets.
@@ -88,7 +94,9 @@ TEST_CASE("project_check: broken references fail it; sRGB data textures and unre
   "entities": [
     { "id": 1, "name": "Camera", "components": { "Camera2DComponent": { "pixels_per_meter": 40, "clear_color": [0.1, 0.1, 0.1, 1] } } },
     { "id": 2, "name": "Hint", "components": { "LocalTransform": {}, "TextLabel": { "font": "guid:5ce4e000-0000-4000-8000-000000000010", "text": "hi", "color": [0.2, 0.2, 0.2, 1], "height": 0.2 } } },
-    { "id": 3, "name": "Ghost", "components": { "LocalTransform": {}, "Sprite": { "texture": "guid:5ce4e000-0000-4000-8000-0000000000ff" } } }
+    { "id": 3, "name": "Ghost", "components": { "LocalTransform": {}, "Sprite": { "texture": "guid:5ce4e000-0000-4000-8000-0000000000ff" } } },
+    { "id": 4, "name": "TitleShadow", "components": { "LocalTransform": {}, "TextLabel": { "font": "guid:5ce4e000-0000-4000-8000-000000000010", "text": "Glow", "color": [0, 0, 0, 1], "height": 1 } } },
+    { "id": 5, "name": "Title", "components": { "LocalTransform": {}, "TextLabel": { "font": "guid:5ce4e000-0000-4000-8000-000000000010", "text": "Glow", "color": [1, 0.9, 0.5, 1], "height": 1 } } }
   ]
 }
 )");
@@ -110,6 +118,7 @@ TEST_CASE("project_check: broken references fail it; sRGB data textures and unre
     const std::string a11y = findings(t, "accessibility");
     CHECK(a11y.find("Hint: text is 8.0 px high") != std::string::npos);
     CHECK(a11y.find("Hint: text contrast against the background colour is 1.") != std::string::npos);
+    CHECK(a11y.find("TitleShadow") == std::string::npos);  // a drop shadow behind a readable copy of its text
     // The fix it names works.
     c.ok("asset_set_import_settings", R"({"path":"textures/rock_normal.png","settings":{"srgb":false}})");
     CHECK(findings(c.ok("project_check", R"({"checks":["srgb"]})"), "srgb").empty());

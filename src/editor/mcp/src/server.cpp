@@ -116,7 +116,17 @@ Result<void> Server::open_project(StringView root, StringView scene) {
 }
 
 void Server::send(StringView message) {
-    if (send_) send_(message, send_user_);
+    if (!send_) return;
+    // One message per line on stdio: a tool's raw JSON (structuredContent) may be pretty-printed,
+    // and a newline there would end the message early. In valid JSON a raw line break can only be
+    // whitespace between tokens (inside strings it is escaped), so a space stands in for it.
+    if (message.find('\n') == StringView::npos && message.find('\r') == StringView::npos) {
+        send_(message, send_user_);
+        return;
+    }
+    cook::String flat;
+    for (const char ch : message) flat += (ch == '\n' || ch == '\r') ? ' ' : ch;
+    send_(flat.view(), send_user_);
 }
 
 void Server::notify(StringView method, StringView params) {

@@ -113,6 +113,26 @@ const ToolDef kAgentTools[] = {
      R"j("variants":{"type":"integer","minimum":1,"maximum":16,"default":1},"colors":{"type":"array","items":{"type":"string"},"description":"Hex colors, dark to light"},)j"
      R"j("scheme":{"type":"string","description":"Palette scheme when 'colors' is not given (gen_palette's)"},)j" MCE_SAVE_PROPS "}}",
      gen_sprite},
+    {"gen_pixels",
+     "Draw a pixel-art image from text: 'rows' is one string per pixel row (all the same length), 'palette' maps each "
+     "character to a hex color ('.' and ' ' are transparent). For a specific shape (a moth, a lantern, a door) that "
+     "gen_sprite's seeds will not give. Returns an enlarged preview; 'save' writes the PNG with its sidecar (nearest "
+     "filtering) and a CREDITS.md row.",
+     R"j({"type":"object","properties":{"rows":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":256},)j"
+     R"j("palette":{"type":"object","additionalProperties":{"type":"string"},"description":"One-character keys to \"#rrggbb\" or \"#rrggbbaa\""},)j" MCE_SAVE_PROPS "},"
+     R"j("required":["rows","palette"]})j",
+     gen_pixels},
+    {"gen_mesh",
+     "Make a simple 3D mesh for blocking out a level or a toy-like game: a box, plane, sphere, cylinder, cone, disc or "
+     "ramp (a wedge rising towards +X), centred on the origin with Y up, 'size' its full extent in metres, in one "
+     "'color' with 'roughness'. Returns its vertex and triangle counts and a shaded preview; 'save' writes it as a .glb "
+     "(with its material inline) and a CREDITS.md row. Place it with the 3D kit's MeshRef (and MeshCollider3D).",
+     R"j({"type":"object","properties":{"shape":{"type":"string","enum":["box","plane","sphere","cylinder","cone","disc","ramp"],"default":"box"},)j"
+     R"j("size":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3,"description":"[x, y, z] in metres (default [1, 1, 1])"},)j"
+     R"j("segments":{"type":"integer","minimum":3,"maximum":128,"default":24,"description":"Around a round shape"},)j"
+     R"j("color":{"type":"string","description":"\"#rrggbb\" or \"#rrggbbaa\" (default light grey)"},)j"
+     R"j("roughness":{"type":"number","minimum":0,"maximum":1,"default":0.8},)j" MCE_SAVE_PROPS "}}",
+     gen_mesh},
     {"gen_tileset",
      "Generate a pixel-art tile set in one row: fill, fill_2, fill_3 (variations), top, top_left, top_right (surface "
      "edges), platform and decoration. Styles: grass, stone, brick, dirt, sand, snow, water, wood, metal. Returns each "
