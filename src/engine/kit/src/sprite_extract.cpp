@@ -14,6 +14,9 @@
 
 namespace mce::kit {
 
+// World::state_hash hashes component bytes: no padding.
+static_assert(sizeof(TextLabel) == 168);
+
 namespace {
 
 // One region covering the whole texture, one metre square: Sprite::size is the world size.
@@ -301,7 +304,7 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         if (!l.loc_key.empty() && l10n) text = l10n->text(l.loc_key.view());
         if (!f || text.empty() || f->face.metrics().pixel_height <= 0.0f) return;
         const f32 upp = l.height * t.scale.y / f->face.metrics().pixel_height;
-        render::TextLayout layout(mem::frame());
+        render::TextLayout layout(mem::has_frame_arena() ? mem::frame() : mem::heap());
         render::TextLayoutDesc desc;
         desc.align = static_cast<render::TextAlign>(l.align);
         if (l.wrap_width > 0.0f && upp > 0.0f) desc.max_width = l.wrap_width * t.scale.x / upp;

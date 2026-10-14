@@ -112,8 +112,11 @@ LINK_WALLS = [
     ("net opt-in wall", re.compile(r"\bmce_net\b"), ["src/engine/net/", "samples/", "games/", "projects/", "templates/", "tests/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
     # The visual-novel kit is opt-in the same way (M-NOVEL): games, samples and tests link it (its
-    # dialogue box, mce_kit_novel_ui, a game's host).
-    ("novel kit opt-in wall", re.compile(r"\bmce_kit_novel(_ui)?\b"), ["src/engine/kit_novel/", "samples/", "games/", "projects/", "templates/", "tests/"]),
+    # dialogue box, mce_kit_novel_ui, a game's host). The authoring tools (editor, mce_mcp, mce_cook)
+    # link its components so a novel scene opens and cooks anywhere (M-DATA-REACH 8); the player and
+    # the engine libraries never do.
+    ("novel kit opt-in wall", re.compile(r"\bmce_kit_novel(_ui)?\b"),
+     ["src/engine/kit_novel/", "src/editor/core/", "src/editor/mcp/", "tools/cook/", "samples/", "games/", "projects/", "templates/", "tests/"]),
 ]
 
 # The umbrella's library list (root CMakeLists.txt): the opt-in modules (mce_net, ADR-0035; mce_kit_novel)

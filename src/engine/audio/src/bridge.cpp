@@ -2,6 +2,9 @@
 
 namespace mce::audio {
 
+// World::state_hash hashes component bytes: no padding.
+static_assert(sizeof(AudioSource) == 80);
+
 namespace {
 
 // A fading voice starts this far below its gain and ramps up in dB, one step per tick.

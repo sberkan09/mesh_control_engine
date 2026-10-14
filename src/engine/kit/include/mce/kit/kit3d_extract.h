@@ -88,7 +88,7 @@ public:
 
     // The quality tier's caps on the scene's look (r.quality, render/quality.h): at most its shadow
     // cascades, its shadow-map resolution, bloom and FXAA only when the tier keeps them. Default:
-    // High, which caps nothing an Environment3D asks for.
+    // no caps (High's knobs, with up to kMaxCascades), which is what the player passes on High.
     void set_quality(const render::QualitySettings& q) { quality_ = q; }
 
     // Reflection probe bakes (M-VISUAL 2, the editor's bake): every MeshRef and static instance is
@@ -127,7 +127,7 @@ private:
     void interpolated(Entity e, f32 alpha, math::vec3& pos, math::quat& rot, math::vec3& scale) const;
     void release_handles();
 
-    render::QualitySettings quality_;
+    render::QualitySettings quality_{.shadow_cascades = render::kMaxCascades};
     const render::MeshStore* meshes_ = nullptr;
     asset::AssetSystem* assets_ = nullptr;
     Array<MeshEntry> mesh_entries_;

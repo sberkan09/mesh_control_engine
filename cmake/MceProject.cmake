@@ -100,10 +100,10 @@ function(mce_add_project game)
         add_executable(${game}_cook "${PROJECT_SOURCE_DIR}/tools/cook/main.cpp" "${PROJECT_SOURCE_DIR}/tools/cook/engine_components.cpp"
                                     ${ARG_TYPES})
         target_include_directories(${game}_cook PRIVATE ${includes})
-        # The game's TYPES may include an opt-in library's components (mce/kit/novel_components.h):
-        # its headers only, the cook does not link it.
+        # The engine's components include the opt-in kit_novel's (engine_components.cpp), so the
+        # cook links it.
         target_include_directories(${game}_cook PRIVATE ${dep_includes})
-        mce_engine_deps(cook_deps mce::mce_asset_cook mce::mce_gameplay_kit mce::mce_physics2d mce::mce_audio mce::mce_ecs_scene)
+        mce_engine_deps(cook_deps mce::mce_asset_cook mce::mce_gameplay_kit mce::mce_kit_novel mce::mce_physics2d mce::mce_audio mce::mce_ecs_scene)
         target_link_libraries(${game}_cook PRIVATE ${cook_deps})
         mce_apply_compile_policy(${game}_cook)
     endif()
@@ -210,7 +210,7 @@ const bool kRegistered = (mce::editor::set_play_game_install(&${game}::install),
                                    "${PROJECT_SOURCE_DIR}/src/editor/mcp/app/engine_components.cpp" ${ARG_TYPES}
                                    ${ARG_GAME_SOURCES} "${mcp_hook}")
         target_include_directories(${game}_mcp PRIVATE ${includes})
-        mce_engine_deps(mcp_deps mce::mce_mcp_core mce::mce_module_host ${ARG_DEPS})
+        mce_engine_deps(mcp_deps mce::mce_mcp_core mce::mce_module_host mce::mce_kit_novel ${ARG_DEPS})
         target_link_libraries(${game}_mcp PRIVATE ${mcp_deps})
         # render_frame draws with the project's host (the game is compiled into this server, not a module).
         target_compile_definitions(${game}_mcp PRIVATE MCE_MCP_DEFAULT_PLAYER="$<TARGET_FILE:${game}>")
