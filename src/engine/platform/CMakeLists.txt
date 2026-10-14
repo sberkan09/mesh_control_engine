@@ -12,6 +12,7 @@ mce_add_library(mce_platform
         src/process.cpp
         src/store.cpp
         src/ads.cpp
+        src/review.cpp
     PUBLIC_DEPS
         mce::mce_core
     PRIVATE_DEPS
@@ -26,6 +27,17 @@ if(IOS AND MCE_STOREKIT)
     target_sources(mce_platform PRIVATE src/store_storekit.swift)
     target_compile_definitions(mce_platform PRIVATE MCE_STOREKIT=1)
     target_link_libraries(mce_platform PRIVATE "-framework StoreKit")
+endif()
+
+# The phone's review prompt (platform/review.h). Android: MceReview.java and Play In-App Review are
+# stamped into every game's Gradle project. iOS: StoreKit's AppStore.requestReview (Swift), opt-in
+# until it has been run on a Mac like the store above; without it the iOS review backend is "none".
+option(MCE_STORE_REVIEW "iOS: build StoreKit's review prompt (Swift) into mce_platform" OFF)
+if(IOS AND MCE_STORE_REVIEW)
+    enable_language(Swift)
+    target_sources(mce_platform PRIVATE src/review_storekit.swift)
+    target_compile_definitions(mce_platform PRIVATE MCE_STORE_REVIEW=1)
+    target_link_libraries(mce_platform PRIVATE "-framework StoreKit" "-framework UIKit")
 endif()
 
 # The phone's ad network (platform/ads.h). Android again needs nothing here (MceAds.java is stamped

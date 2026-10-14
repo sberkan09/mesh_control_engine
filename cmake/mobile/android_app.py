@@ -26,6 +26,9 @@ MceActivity's mceBilling* methods; one with ad placements gets android/ads/MceAd
 Ads and UMP (GMA, UMP), the mceAds* methods and its AdMob app id in the manifest. mce_platform calls
 both over JNI. Other games get none of it, and their store and ad backends are "none".
 
+Review prompt (M-MOBILE step 11c): every game gets android/review/MceReview.java, Play In-App Review
+(PLAY_REVIEW) and MceActivity's mceReviewRequest, which platform::request_review() calls over JNI.
+
 Tooling: ANDROID_HOME (default ~/Library/Android/sdk), ANDROID_NDK_HOME (default: the newest NDK in
 the SDK), JAVA_HOME (default: /usr/libexec/java_home -v 17, then Homebrew's openjdk@17).
 """
@@ -54,6 +57,7 @@ TEMPLATE = os.path.join(HERE, "android")
 PLAY_BILLING = "com.android.billingclient:billing:7.1.1"
 GMA = "com.google.android.gms:play-services-ads:23.6.0"
 UMP = "com.google.android.ump:user-messaging-platform:3.1.0"
+PLAY_REVIEW = "com.google.android.play:review:2.0.2"
 
 # MceActivity's bridge to MceBilling, for platform/store.h's JNI calls (src/engine/platform/src/store.cpp).
 BILLING_METHODS = '''
@@ -87,6 +91,17 @@ ADS_METHODS = '''
     public void mceAdsShow(int format, String unit, int request) { ads.show(format, unit, request); }
     public void mceAdsBanner(String unit, int request, boolean top, int l, int t, int r, int b) { ads.banner(unit, request, top, l, t, r, b); }
     public void mceAdsHideBanner() { if (ads != null) ads.hideBanner(); }
+'''
+
+# MceActivity's bridge to MceReview, for platform/review.h's JNI call (src/engine/platform/src/review.cpp).
+REVIEW_METHODS = '''
+    // ---- the store's review prompt (mce_platform's request_review over JNI, cmake/mobile/android/review) ----
+    private org.meshcontrol.review.MceReview review;
+
+    public void mceReviewRequest() {
+        if (review == null) review = new org.meshcontrol.review.MceReview(this);
+        review.request();
+    }
 '''
 
 
@@ -168,7 +183,7 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
     if not os.path.isdir(sdl_project):
         sys.exit(f"ship: SDL's android-project not found under {build_dir}/_deps (configure the preset first)")
     shutil.rmtree(project, ignore_errors=True)
-    shutil.copytree(TEMPLATE, project, ignore=shutil.ignore_patterns("*.in", "README.md", "MceActivity.java*", "billing", "ads"))
+    shutil.copytree(TEMPLATE, project, ignore=shutil.ignore_patterns("*.in", "README.md", "MceActivity.java*", "billing", "ads", "review"))
     for name in ("gradlew", "gradlew.bat", "gradle"):
         src = os.path.join(sdl_project, name)
         dst = os.path.join(project, name)
@@ -192,10 +207,12 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
         "BILLING": "",
         "ADS": "",
         "ADS_META": "",
+        "REVIEW": REVIEW_METHODS,
         "DEPENDENCIES": "",
     }
     shop = monetize_info.read(art)
-    deps = []
+    deps = [PLAY_REVIEW]
+    copy_java("review", "MceReview.java", main)
     if shop["products"]:
         fields["BILLING"] = BILLING_METHODS
         deps.append(PLAY_BILLING)
