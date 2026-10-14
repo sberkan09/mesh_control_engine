@@ -30,6 +30,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/shader_importer.cpp
         src/store_importer.cpp
         src/config_importer.cpp
+        src/services_importer.cpp
         src/string_importer.cpp
         src/string.cpp
         src/texture_importer.cpp

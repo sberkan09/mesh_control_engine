@@ -1,6 +1,6 @@
 #pragma once
-// mce_liveops (L2, M-LIVEOPS): services for shipped games (crash reports, analytics events; later
-// game services and remote config). Off unless the project's host turns it on
+// mce_liveops (L2, M-LIVEOPS): services for shipped games (crash reports, analytics events; game
+// services in game_services.h and remote config in remote_config.h). Off unless the project's host turns it on
 // (player::PlayerDesc::liveops), never in the sim or the determinism hash, and the game stays
 // fully playable offline: a service that cannot reach its vendor only waits.
 //

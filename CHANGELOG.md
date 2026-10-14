@@ -30,6 +30,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   and Turkish-aware upper and lower case. `-language tr` plays in Turkish for one run; the cook warns about keys
   a locale lacks. A font sidecar's `"strings": true` bakes every glyph the tables use (with Turkish case forms),
   and `ship.py` names the phone app per language from each table's `app.name`.
+- Game services (M-LIVEOPS step 2, vendor-neutral part): a `.mcservices` file cooks to `CHNK_GSVC` with the
+  project's achievements (one-shot or incremental), leaderboards and cloud saves. Game code uses the
+  `liveops::GameServices` resource. Unlocks and scores count on the device at once and wait in a saved outbox until
+  the platform takes them. Cloud saves are versioned, and a two-device conflict goes to the game (`CloudConflict`,
+  `resolve_conflict`) or to a policy. Events enter at a tick start and replays record them.
+  `-liveops.provider local` plays the platform with a folder, and `-game_services_test` rehearses it. Game Center
+  and Play Games need the Mac and test accounts.
 - Remote config (M-LIVEOPS step 3, vendor-neutral part): a `.mcconfig` file cooks to `CHNK_RCFG`, the project's
   defaults and schema. Game code reads `liveops::RemoteConfig` (`get<i64>`, `get<f64>`, `get<bool>`, strings) as a
   world resource. Fetched values are saved and used from the next launch, or at the start of a tick after

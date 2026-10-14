@@ -26,6 +26,7 @@ const char* chunk_type_name(ChunkType t) {
         case ChunkType::ModInfo: return "ModInfo";
         case ChunkType::StoreCatalog: return "StoreCatalog";
         case ChunkType::RemoteConfig: return "RemoteConfig";
+        case ChunkType::GameServicesCatalog: return "GameServicesCatalog";
     }
     return "ChunkType(?)";
 }
