@@ -10,6 +10,7 @@
 #include <memory>
 #include <random>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "cook_test_util.h"
@@ -64,6 +65,13 @@ std::string demo_project(const char* name) {
 }
 
 StringView sv(const std::string& s) { return StringView(s.data(), s.size()); }
+
+// Joins pieces into one string (tool arguments built from variables).
+std::string cat(std::initializer_list<std::string_view> parts) {
+    std::string out;
+    for (std::string_view p : parts) out += p;
+    return out;
+}
 
 struct Parsed {
     cook::JsonDoc doc;
@@ -667,11 +675,11 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
         CHECK(schema.v().get("template").is_object());
         std::string content = "{}";
         if (ext == ".mctilemap") content = std::string(R"({"tileset":")") + kBallGuid + R"(","columns":2,"rows":2,"width":8,"height":4})";
-        auto made = c.ok("asset_create", R"({"path":"made/a)" + ext + R"(","content":)" + content + "}");
+        auto made = c.ok("asset_create", cat({R"({"path":"made/a)", ext, R"(","content":)", content, "}"}));
         CHECK(str(made.v().get("type")) == type);
         CHECK(str(made.v().get("guid")).rfind("guid:", 0) == 0);
-        CHECK(std::filesystem::exists(root + "/assets/made/a" + ext));
-        CHECK_FALSE(std::filesystem::exists(root + "/assets/made/a" + ext + ".mceasset"));  // native: GUID inline
+        CHECK(std::filesystem::exists(cat({root, "/assets/made/a", ext})));
+        CHECK_FALSE(std::filesystem::exists(cat({root, "/assets/made/a", ext, ".mceasset"})));  // native: GUID inline
         CHECK(compact(c.ok("asset_list", R"({"type":")" + type + R"("})").v()).find("made/a" + ext) != std::string::npos);
     }
     auto cook = c.ok("cook_run");
