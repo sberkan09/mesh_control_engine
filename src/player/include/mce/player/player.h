@@ -30,6 +30,12 @@ namespace mce::monetize {
 class IStoreProvider;
 class IAdProvider;
 }
+namespace mce::liveops {
+class ICrashUploader;
+namespace analytics {
+class IBackend;
+}
+}  // namespace mce::liveops
 
 namespace mce::player {
 
@@ -70,6 +76,13 @@ struct PlayerDesc {
     bool monetize = false;
     monetize::IStoreProvider* store_provider = nullptr;
     monetize::IAdProvider* ad_provider = nullptr;
+    // Live services (M-LIVEOPS, mce/liveops/liveops.h), off unless the game turns them on: the
+    // player then installs the analytics backend and sends the crash reports earlier runs left, as
+    // far as the player's consent allows (the ad network's consent form, the game's own
+    // liveops::set_consent or -liveops.consent). Null: events are dropped, reports stay on disk.
+    bool liveops = false;
+    liveops::analytics::IBackend* analytics_backend = nullptr;
+    liveops::ICrashUploader* crash_uploader = nullptr;
 };
 
 // Parses the command line into convars, then runs headless (-headless 1) or windowed. Returns the

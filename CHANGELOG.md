@@ -25,6 +25,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   and Turkish-aware upper and lower case. `-language tr` plays in Turkish for one run; the cook warns about keys
   a locale lacks. A font sidecar's `"strings": true` bakes every glyph the tables use (with Turkish case forms),
   and `ship.py` names the phone app per language from each table's `app.name`.
+- Live services, step 1 (M-LIVEOPS, vendor-neutral part): `mce_liveops`, off unless the host sets
+  `PlayerDesc::liveops` (or `-liveops 1`). Crash reports that earlier runs left are sent on the next launch through an
+  uploader, `analytics::event(name, params)` (from `mce/gameplay.h`) goes to a backend, and both wait for the
+  player's consent (`liveops::set_consent`, the ad network's consent form, or `-liveops.consent`). `-liveops.provider
+  local` writes `analytics.jsonl` and `crash_outbox/` in the save folder. New user guide chapter 23, *Live services*.
+  The vendor SDK is not wired in yet.
 - Purchases and ads, the demo (M-MONETIZE): `samples/shop_demo`, a headless runner with a shop against the fake
   store and ad network (gems and "remove ads" bought, a rewarded continue, interstitials between levels), whose ctest
   covers purchase, cancel, restore, a relaunch that keeps the entitlement and requests no ad, and a recorded run
