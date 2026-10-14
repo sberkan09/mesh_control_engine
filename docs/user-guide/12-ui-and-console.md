@@ -57,7 +57,9 @@ doc.submit(batch, sort_layer);
   `bind_property(widget, world, entity, "Health/hp")` reads a component field for a health bar
   and touches the widget only when the value changes.
 - **Styles** per widget state (normal, hover, pressed, focused, disabled); a built-in skin ships a
-  white region and a 13 px pixel font.
+  white region and a 13 px pixel font. A style's text look is in pixels at UI scale 1, like
+  `text_size`: `letter_spacing`, `text_outline` with `text_outline_color`, and `text_shadow` (offset,
+  +y down) with `text_shadow_color`.
 
 The rule that keeps gameplay deterministic: UI never writes gameplay state directly. Menus raise
 events the host turns into state changes; HUD values are read by binding. Gameplay modules may not

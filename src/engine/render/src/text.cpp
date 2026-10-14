@@ -23,7 +23,7 @@ struct Glyphs {
     }
     f32 advance(u32 prev, const FontGlyph* g) const {
         if (!g) return 0.0f;
-        return (g->xadvance + (prev ? font.kern(prev, g->codepoint) : 0.0f)) * scale;
+        return (g->xadvance + (prev ? font.kern(prev, g->codepoint) : 0.0f)) * scale + (prev ? desc.letter_spacing : 0.0f);
     }
 };
 
@@ -184,7 +184,7 @@ void layout_text(const FontFace& font, StringView text, const TextLayoutDesc& de
             if (cp == '\t') cp = ' ';
             const FontGlyph* g = gl.resolve(cp);
             if (!g) continue;
-            pen += prev ? font.kern(prev, g->codepoint) * s : 0.0f;
+            pen += prev ? font.kern(prev, g->codepoint) * s + desc.letter_spacing : 0.0f;
             if (g->x1 > g->x0 && g->y1 > g->y0) {
                 GlyphQuad q;
                 q.x0 = pen + g->xoff * s;

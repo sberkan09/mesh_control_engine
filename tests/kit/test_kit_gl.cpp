@@ -313,7 +313,7 @@ TEST_CASE("FR-R2D-100: the primary camera's Post2DComponent becomes renderer pos
     CHECK_FALSE(post.color_grade);
 }
 
-TEST_CASE("M-DATA-REACH 8: a TextLabel wraps at wrap_width and shows its loc_key's string") {
+TEST_CASE("M-DATA-REACH 8, M-UI-DATA 4: a TextLabel wraps, shows its loc_key's string and draws its look") {
     using namespace cook_test;
     const std::string root = fresh_dir("kit_text");
     std::FILE* ttf = std::fopen(MCE_TEST_FONT, "rb");
@@ -383,5 +383,59 @@ TEST_CASE("M-DATA-REACH 8: a TextLabel wraps at wrap_width and shows its loc_key
     u32 rows_key = 0, cols_key = 0;
     extent(rows_key, cols_key);
     CHECK(cols_key * 3 < cols_one);
+
+    // The look (M-UI-DATA 4): letter spacing widens the line, a red outline rings the glyphs, a
+    // shadow down-right reaches rows and columns the text alone does not.
+    kit::TextLabel& tl = *f.world.try_get_mut<kit::TextLabel>(e);
+    tl.loc_key = "";
+    tl.text = "MMMM";
+    f.render();
+    u32 rows_plain = 0, cols_plain = 0;
+    extent(rows_plain, cols_plain);
+    const auto reddish = [&] {
+        u32 n = 0;
+        for (usize i = 0; i < usize(kW) * kH; ++i)
+            n += f.pixels[i * 4] > 128 && f.pixels[i * 4 + 1] < 64 ? 1 : 0;
+        return n;
+    };
+    CHECK(reddish() == 0);
+
+    // Leftmost to rightmost lit column (letter spacing adds gaps, not lit columns).
+    const auto span_x = [&] {
+        u32 lo = kW, hi = 0;
+        for (u32 x = 0; x < kW; ++x)
+            for (u32 y = 0; y < kH; ++y)
+                if (f.pixels[(usize(y) * kW + x) * 4] > 128) {
+                    lo = x < lo ? x : lo;
+                    hi = x > hi ? x : hi;
+                }
+        return hi >= lo ? hi - lo + 1 : 0u;
+    };
+    const u32 span_plain = span_x();
+    f.world.try_get_mut<kit::TextLabel>(e)->letter_spacing = 0.5f;
+    f.render();
+    u32 rows_spaced = 0, cols_spaced = 0;
+    extent(rows_spaced, cols_spaced);
+    CHECK(span_x() > span_plain);
+    CHECK(rows_spaced == rows_plain);
+
+    f.world.try_get_mut<kit::TextLabel>(e)->letter_spacing = 0.0f;
+    f.world.try_get_mut<kit::TextLabel>(e)->outline_width = 0.08f;
+    f.world.try_get_mut<kit::TextLabel>(e)->outline_color = math::Color{1, 0, 0, 1};
+    f.render();
+    CHECK(reddish() > 0);
+    u32 rows_ring = 0, cols_ring = 0;
+    extent(rows_ring, cols_ring);
+    CHECK(rows_ring > rows_plain);
+    CHECK(cols_ring > cols_plain);
+
+    f.world.try_get_mut<kit::TextLabel>(e)->outline_width = 0.0f;
+    f.world.try_get_mut<kit::TextLabel>(e)->shadow_offset = math::vec2{0.2f, -0.2f};
+    f.world.try_get_mut<kit::TextLabel>(e)->shadow_color = math::Color{1, 1, 1, 1};  // bright, so `extent` sees it
+    f.render();
+    u32 rows_shadow = 0, cols_shadow = 0;
+    extent(rows_shadow, cols_shadow);
+    CHECK(rows_shadow > rows_plain);
+    CHECK(cols_shadow > cols_plain);
     f.extract.reset(nullptr);
 }

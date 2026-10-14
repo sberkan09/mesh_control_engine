@@ -53,10 +53,19 @@ struct Style {  // one per WidgetState; colors are sRGB (as a design tool shows 
     f32 text_size = 0.0f;                           // pixels; 0 = the font's baked height
     bool draw_quad = true;                          // false: text only (labels)
     Slice slice;                                    // 9-slice insets of sprite_region
+    // The text's look (M-UI-DATA step 4), in pixels at UI scale 1 like text_size.
+    f32 letter_spacing = 0.0f;                      // extra space between letters (may be negative)
+    Color text_outline_color{0, 0, 0, 1};
+    f32 text_outline = 0.0f;                        // outline thickness; 0 = none
+    Color text_shadow_color{0, 0, 0, 0.6f};
+    vec2 text_shadow{};                             // drop shadow offset, +y down; (0, 0) = none
 };
 using UiStyle = Style;
 MCE_REFL_STRUCT(UiStyle, tint, text_color, accent, (sprite_region, Help{"into the skin's sprite set; 4294967295 = flat"}),
-                (text_size, Range{0, 256}, Help{"pixels; 0 = the font's baked height"}), draw_quad, slice)
+                (text_size, Range{0, 256}, Help{"pixels; 0 = the font's baked height"}), draw_quad, slice,
+                (letter_spacing, Range{-16, 64}, Help{"extra pixels between letters"}), text_outline_color,
+                (text_outline, Range{0, 16}, Help{"outline thickness in pixels; 0 = none"}), text_shadow_color,
+                (text_shadow, Help{"drop shadow offset in pixels, +y down; [0, 0] = none"}))
 
 enum class Axis : u8 { Vertical, Horizontal };
 using UiAxis = Axis;
