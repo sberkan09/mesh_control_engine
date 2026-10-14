@@ -5,6 +5,17 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Playtesting without a person, M-AGENT step 3 (SBA-50): `test_run` runs `.mctest` scenarios (JSON under the
+  project's `tests/`: a saved scene, scripted input or a built-in bot, `until`, `death`, and checks on component
+  fields at the end or at a tick, entities alive, event counts, the log and feel metrics) and `playtest` lets a
+  kit bot play: `walk_to` (heads for a point or entity, jumps or sidesteps when stuck), `explore` (seeded wandering)
+  and `masher` (random chords), all through the game's input actions with no game code. Bot runs return a feel
+  report: time to finish, deaths, stuck spots, idle time, distance and coverage. `run_headless` gains `trace`
+  (chosen fields every N ticks) and `InputScript::clear_segments` lets a per-tick planner keep the edge rules.
+- Code loop for agents, M-AGENT step 2 (SBA-49): `module_build` rebuilds the game module with the project's CMake
+  tree and maps the new build into the running MCP server (new components and systems live on the next call, the
+  open scene kept), returning compiler errors as file, line, column JSON; `module_test` runs the project's ctest
+  tests and reports each result.
 - Eyes for agents, M-AGENT step 1 (SBA-48): the MCP server gains `render_frame` (the saved scene drawn by the
   real player at sim tick N, with scripted input, from its own camera, another camera entity or a free 2D/3D camera,
   at a chosen size and safe area, returned as an MCP image), `render_sheet` (several ticks and cameras in one

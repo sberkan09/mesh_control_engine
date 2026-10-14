@@ -4,6 +4,7 @@
 
 #include "tools.h"
 
+#include "agent_sim.h"
 #include "tool_args.h"
 
 #include <algorithm>
@@ -854,8 +855,9 @@ void inspect_run(const World& world, Span<const Entity> spawned, void* user) {
 
 // run_headless's `input`: the text form of an input script (mce/input/script.h), or an array of
 // segments {"from": tick, "to": tick, "actions": {"Move": [1, 0], "Jump": true, "Fire": 1}}.
-bool arg_input(ToolCall& c, input::InputScript& script) {
-    const cook::JsonValue v = arg(c, "input");
+bool arg_input(ToolCall& c, input::InputScript& script) { return input_from(c, arg(c, "input"), script); }
+
+bool input_from(ToolCall& c, const cook::JsonValue& v, input::InputScript& script) {
     if (!v.valid()) return true;
     if (v.is_string()) {
         if (Result<void> r = script.parse(v.as_string()); !r) {
@@ -934,6 +936,17 @@ bool run_headless_tool(ToolCall& c) {
         return fail(c, "inspect.entities names entities of the open scene; with 'scene' use inspect.component");
     inspect.other_scene = other_scene;
     const bool inspecting = !inspect.ids.empty() || inspect.filter;
+    Trace trace;
+    editor::SceneDocument trace_doc;
+    if (const cook::JsonValue tv = arg(c, "trace"); tv.valid()) {
+        cook::String terr("trace: ");
+        if ((other_scene && !load_scene_doc(c.server, played, trace_doc, terr)) ||
+            !parse_trace(other_scene ? trace_doc : scene(c).doc(), tv, trace, terr))
+            return fail(c, terr.view());
+    }
+    SimRun sim;
+    sim.trace = &trace;
+    const RunHooks hooks = sim.hooks();
 
     const u64 since = log::console_last_seq();
     const cook::CookReport& r = c.server.session().cook(false);
@@ -950,7 +963,8 @@ bool run_headless_tool(ToolCall& c) {
                                                progress(*p->server, p->token, done, total);
                                            } : static_cast<TickProgressFn>(nullptr),
                                            &rp, inspecting ? &inspect_run : nullptr, &inspect,
-                                           script.empty() ? nullptr : &script, c.server.session().project().base_roots());
+                                           script.empty() ? nullptr : &script, c.server.session().project().base_roots(),
+                                           trace.active() ? &hooks : nullptr);
     Array<log::ConsoleLine> lines;
     read_log(since, lines);
     if (!run) {
@@ -985,6 +999,10 @@ bool run_headless_tool(ToolCall& c) {
     write_log_lines(c.out, lines.span(), static_cast<usize>(log_lines));
     c.out.end_object();
     if (inspecting) c.out.key("inspect").raw(inspect.json.view());
+    if (trace.active()) {
+        c.out.key("trace");
+        trace.write(c.out);
+    }
     c.out.end_object();
     return true;
 }
@@ -1161,8 +1179,9 @@ const ToolDef kTools[] = {
      "them from InputState (\"Move\" [x,y], \"Jump\", \"Fire\", \"Pause\", \"Confirm\", \"Cancel\" and any "
      "game-defined action name); a press is a one-tick segment, a hold a range. inspect: after the last tick, report the "
      "live component values (Transient runtime fields included) of scene entities by id and/or of every entity with a "
-     "component (at most 64); show picks the components to print.",
-     R"json({"type":"object","properties":{"scene":{"type":"string","description":"Play this saved scene (path under assets/) instead of the open one; inspect then takes 'component' only"},"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20},"input":{"description":"Either a script string, one segment per line: \"<from>[-<to>] Action[=value] ...\" (e.g. \"10-70 Move=1,0 Jump\\n100 Fire\"), or an array of segments","type":["string","array"],"items":{"type":"object","properties":{"from":{"type":"integer","minimum":1,"description":"First tick (1-based)"},"to":{"type":"integer","description":"Last tick, inclusive (default: from)"},"actions":{"type":"object","description":"Action name -> true, a number, or [x, y]","additionalProperties":{"type":["boolean","number","array"]}}},"required":["from","actions"]}},"inspect":{"type":"object","properties":{"entities":{"type":"array","items":{"type":["integer","string"]},"description":"Scene entity ids or names"},"component":{"type":"string","description":"Every live entity with this component (also ones the run spawned)"},"show":{"type":"array","items":{"type":"string"},"description":"Components to print (default: the entity's scene components, or the filter component + LocalTransform)"}}}}})json",
+     "component (at most 64); show picks the components to print. trace: component fields of scene entities every N ticks, "
+     "as series (how a value moved over the run, not only where it ended).",
+     R"json({"type":"object","properties":{"scene":{"type":"string","description":"Play this saved scene (path under assets/) instead of the open one; inspect then takes 'component' only"},"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20},"input":{"description":"Either a script string, one segment per line: \"<from>[-<to>] Action[=value] ...\" (e.g. \"10-70 Move=1,0 Jump\\n100 Fire\"), or an array of segments","type":["string","array"],"items":{"type":"object","properties":{"from":{"type":"integer","minimum":1,"description":"First tick (1-based)"},"to":{"type":"integer","description":"Last tick, inclusive (default: from)"},"actions":{"type":"object","description":"Action name -> true, a number, or [x, y]","additionalProperties":{"type":["boolean","number","array"]}}},"required":["from","actions"]}},"inspect":{"type":"object","properties":{"entities":{"type":"array","items":{"type":["integer","string"]},"description":"Scene entity ids or names"},"component":{"type":"string","description":"Every live entity with this component (also ones the run spawned)"},"show":{"type":"array","items":{"type":"string"},"description":"Components to print (default: the entity's scene components, or the filter component + LocalTransform)"}}},"trace":{"type":"object","description":"Sample fields during the run: {\"every\": ticks (10), \"fields\": [{\"entity\": id or name, \"field\": \"LocalTransform.position.x\"}]} (at most 16 fields, 1000 rows)"}}})json",
      run_headless_tool},
     {"console_list", "List console variables (type, value, flags, help) and console functions. Optional name prefix.",
      R"({"type":"object","properties":{"prefix":{"type":"string"}}})", console_list},

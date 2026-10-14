@@ -50,6 +50,51 @@ Result<void> Server::load_module(StringView path) {
     return ok();
 }
 
+Result<void> Server::reload_module(cook::String& note) {
+    if (!module_.module.loaded()) return Error(Errc::InvalidArgument, "mcp.reload_module", "no game module is loaded");
+    editor::EditorScene& sc = session_.scene();
+    cook::String text;
+    sc.serialize(text);
+    const cook::String path(sc.path());
+    const bool was_dirty = sc.dirty();
+    const FixedString<512> source = module_.module.source_path;
+    // Nothing may hold the old module's component records or code when it unmaps.
+    sc.new_scene("module reload");
+    editor::set_play_game_install(nullptr);
+    unload_game_module(module_.module);
+    module_.module = LoadedModule{};
+    Result<LoadedModule> fresh = open_game_module(source.view());
+    if (!fresh) {
+        // Keep the work: the scene text goes where the note says, as when it fails to parse below.
+        note += "the rebuilt module did not load; ";
+    } else {
+        module_.module = fresh.value();
+        editor::set_play_game_install(module_.module.info->install);
+    }
+    cook::DiagList diags;
+    if (fresh && sc.recover(text.view(), diags)) {
+        sc.set_path(path.view());
+        if (!was_dirty) sc.mark_clean();
+        return ok();
+    }
+    const cook::String dir = cook::path_join(session_.project().root(), ".mce/module_reload");
+    cook::String backup = cook::path_join(dir.view(), "scene.mcscene");
+    (void)cook::fs::create_directories(dir.view());
+    (void)cook::fs::write_file_atomic(backup.view(), Span<const byte>(reinterpret_cast<const byte*>(text.c_str()), text.size()));
+    sc.set_path(path.view());
+    note += "the open scene was kept in ";
+    note += backup.view();
+    if (fresh) {
+        note += " because it no longer parses with the new components:";
+        for (const cook::Diagnostic& d : diags.all()) {
+            note += ' ';
+            note += d.message.view();
+        }
+    }
+    if (!fresh) return fresh.error();
+    return ok();
+}
+
 void Server::set_sink(SendFn fn, void* user) {
     send_ = fn;
     send_user_ = user;

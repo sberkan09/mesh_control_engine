@@ -11,4 +11,12 @@ bool render_frame(ToolCall& c);
 bool render_sheet(ToolCall& c);
 bool image_diff(ToolCall& c);
 
+// tools_code.cpp (SBA-49): rebuild + hot reload of the game module, its ctest tests.
+bool module_build(ToolCall& c);
+bool module_test(ToolCall& c);
+
+// tools_test.cpp (SBA-50): .mctest scenarios, bot playtests with a feel report.
+bool test_run(ToolCall& c);
+bool playtest(ToolCall& c);
+
 }  // namespace mce::mcp

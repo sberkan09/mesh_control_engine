@@ -77,10 +77,14 @@ each result's `content[0].text` is the tool's JSON).
 | Build | `cook_run` | `pack?`, `adopt?` | incremental; `adopt` writes sidecars for new source files |
 | | `cook_errors` | | last diagnostics with file, line, col |
 | | `asset_delete` | `path` | deletes a source file under `assets/` and its `.mceasset` sidecar (not the open scene) |
-| Verify | `run_headless` | `ticks` (default 300), `log_lines`, `scene?`, `input?`, `inspect?` | cooks, plays the **saved** scene (or another saved scene named by `scene`) with the engine systems and the game's `install()`, returns `state_hash`, metrics and the log tail |
+| Verify | `run_headless` | `ticks` (default 300), `log_lines`, `scene?`, `input?`, `inspect?`, `trace?` | cooks, plays the **saved** scene (or another saved scene named by `scene`) with the engine systems and the game's `install()`, returns `state_hash`, metrics and the log tail |
 | See | `render_frame` | `tick?` (default 1), `width?`, `height?` (default 960 × 540), `scene?`, `input?`, `camera?`, `safe_area?`, `software?`, `save?` | cooks, draws the **saved** scene with the real player at the first frame after sim tick N and returns the frame as an MCP **image**; `save` also writes the PNG under the project folder |
 | | `render_sheet` | `ticks` (1-16), `cameras?` (1-4), `cell_width?`, `cell_height?`, and `render_frame`'s `scene`, `input`, `safe_area`, `software` | one image: ticks in columns, cameras in rows, each cell labelled |
 | | `image_diff` | `golden`, `image` or `render`, `threshold?` (8), `max_score?` (0.01), `update?` | compares with a golden PNG in the project: `score` (mean channel difference, 0..1), `changed_fraction`, `pass`, and a heat map image; a missing golden is written |
+| Code | `module_build` | `reload?` (true), `warnings?`, `target?` | rebuilds the game module with the project's CMake tree (the one the loaded module came from) and maps the new build into the server: new components and systems are live for the next call, no restart; compiler errors come back as `{severity, file, line, col, message}` |
+| | `module_test` | `filter?` (default `^<game>_`) | `ctest` in the module's build tree: each test's result, the output's end when one failed |
+| Playtest | `test_run` | `path?` (a `.mctest` file or folder, default `tests/`), `test?` (one inline) | plays each scenario headless with scripted input or a bot and evaluates its checks (section 14.3.1) |
+| | `playtest` | `bot`, `scene?`, `ticks?` (1800), `until?`, `death?`, `assert?`, `trace?` | a built-in bot plays the scene; returns the **feel report**: time to finish, deaths, stuck spots, idle time, distance, cells visited |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
 
@@ -116,6 +120,12 @@ reports, after the last tick, the live values (`Transient` fields included) of t
 entities and of every entity carrying `GameState`, spawned ones included, up to 64. This is how an
 agent checks "did the player reach the flag" without a window.
 
+`trace` samples fields while the run goes, as series: `{"trace": {"every": 10, "fields":
+[{"entity": "Player", "field": "LocalTransform.position"}, {"entity": "Player", "field":
+"Health.hp"}]}}` returns `trace.ticks` and one `values` array per field (at most 16 fields and
+1000 rows). A field is `Component.path`, a property path (as `component_set` takes it) ending at a number, bool,
+string, enum or vector (or one lane of it, `position.x`).
+
 ## 14.3 A workflow that works
 
 1. **Build first.** `cmake --build --preset <preset> --target my_game my_game_mcp` (`mce build
@@ -129,17 +139,85 @@ agent checks "did the player reach the flag" without a window.
    `component_set` to tune. Name entities.
 5. **Save and check.** `scene_save`, `cook_run`, `run_headless` with `inspect`. Compare the state
    hash between runs to confirm a change changed something (or nothing).
-6. **Iterate on code.** Edit the module, rebuild, restart the server (its component table is
-   compiled in), repeat.
+6. **Iterate on code.** Edit the module, then `module_build`: the server rebuilds it with the
+   project's CMake tree and maps the new build in place, keeping the open scene (re-read with the
+   new component layouts; the undo history restarts). Errors come back as file, line and column.
+   `module_test` runs the project's ctest tests (the `<game>_headless_300` smoke test and your own).
+   A server with the game compiled in (`<game>_mcp`) still needs a rebuild and a restart.
 7. **Look.** `render_frame` after every visible change (`tick` and `input` reach a given moment;
    `camera` frames a spot the game camera does not show), `render_sheet` to see a run unfold, and
    `image_diff` with `update: true` once a screen looks right, so a later change that breaks it
    shows up as a failing score. Outside MCP the same frames come from `my_game -capture_ticks
    60,300 -capture shots/a_{tick}.ppm` (`-view.free`, `-view.entity`, `-safe_area` as above).
 
-To verify gameplay headless, pass `input` to `run_headless`. An **autoplay** switch (a flag on a
-component that drives the character from code), as the earlier MCP-authored games shipped, is
-still handy for long runs but no longer required.
+8. **Playtest.** `playtest` with a bot to see whether a level can be finished and how it feels;
+   keep what must stay true as `.mctest` files under `tests/` and run them with `test_run` after
+   every change.
+
+No game needs its own **autoplay** flag any more: scripted `input` reaches a given moment, and the
+bots play from the actor's position through the game's input actions.
+
+### 14.3.1 Scenarios (.mctest) and bots
+
+A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag.mctest`):
+
+```json
+{
+  "name": "reach the flag",
+  "scene": "scenes/level1.mcscene",
+  "ticks": 1800,
+  "bot": { "kind": "walk_to", "actor": "Player", "target": "Flag", "plane": "x" },
+  "until": { "alive": "Flag", "value": false },
+  "death": { "entity": "Player", "field": "Health.hp", "<=": 0 },
+  "assert": [
+    { "feel": "finished_tick", ">": 0 },
+    { "feel": "deaths", "<=": 1 },
+    { "entity": "Player", "field": "LocalTransform.position.x", ">": 10, "tick": 600 },
+    { "entity": "Score", "field": "ScoreBoard.coins", "value": 3 },
+    { "event": "CoinCollected", ">=": 3 },
+    { "log_errors": 0 },
+    { "log_contains": "level complete" }
+  ],
+  "trace": { "every": 30, "fields": [{ "entity": "Player", "field": "LocalTransform.position" }] }
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `scene` | a saved scene under `assets/` (default: the open scene, which must be saved) |
+| `ticks` | the most the run may take (1-36000, default 1800) |
+| `input` or `bot` | scripted input (as `run_headless` takes it) or a built-in bot, not both |
+| `actor` | the entity the feel report follows (default: the bot's actor) |
+| `until` | ends the run as soon as it holds (a field, `alive` or `event` check) |
+| `death` | counts a death each time it becomes true; deaths also count when the actor's entity goes away or it jumps more than `teleport` metres (default 3) in one tick (a respawn) |
+| `assert` | the checks: at the end of the run, or after tick `tick` |
+
+A check names one thing and compares it: `{"entity", "field"}` (a component field), `alive`
+(an entity, default `true`), `event` (events of that type pushed so far, default `>= 1`),
+`log_contains`, `log_errors` / `log_warnings` (the most allowed) or `feel` (`deaths`,
+`idle_ticks`, `stuck_ticks`, `stuck_spots`, `distance`, `cells`, `finished_tick`). The comparison
+is `"value": x` (equal), an operator key (`"<=": 3`, `">": 0`, `"!=": "Idle"`) or `"op"` with
+`"value"`; numbers and vectors compare within `tolerance` (default 0.0001). Enums compare by name.
+
+The bots drive the game's input actions (by default `Move` and `Jump`; `move` and `jump` rename
+them) from the actor's position, so they need no game code:
+
+| Bot | Plays | Arguments |
+|---|---|---|
+| `walk_to` | heads for `target` (a point `[x, y(, z)]` or an entity; done within `reach`, default 0.5 m, or when the target entity is gone); when it stops getting closer it jumps (side view) or sidesteps (top-down) | `actor`, `target`, `plane`, `reach` |
+| `explore` | wanders in seeded random directions, turning when blocked (and jumping, side view); coverage shows in `cells_visited` | `actor`, `plane`, `seed` |
+| `masher` | holds a seeded random chord of `actions` (default Move, Jump, Fire, Confirm, Cancel), a new one every `period` ticks (8): crash and soft-lock hunting | `actions`, `period`, `seed`, `actor?` |
+
+`plane` is `xy` (top-down 2D or flying: `Move` is the direction), `x` (side view: `Move.x` and
+`Jump`) or `xz` (3D on the ground: `Move` is `(x, -z)`, forward is -Z). Bots are deterministic:
+the same scenario gives the same `state_hash`.
+
+The **feel report** (`feel` in each result, when there is an actor): `finished` and
+`time_to_finish_s` (a `walk_to` bot arrived, or `until` held), `deaths`, `idle_s` and
+`idle_fraction` (the actor did not move), `stuck_s` and `stuck_spots` (asked to move but within
+0.25 m of where it was a second earlier, with where and when), `distance_m`, `cells_visited` (1 m
+cells), `alive_at_end` and the `bounds` it reached. A level that a `walk_to` bot cannot finish, or
+that leaves it stuck at the same spot, is the first thing to look at with `render_frame`.
 
 ## 14.4 Pitfalls
 
@@ -154,6 +232,7 @@ still handy for long runs but no longer required.
 | Adopted textures default to sRGB | normal maps and LUTs come out wrong | `asset_set_import_settings {"settings": {"srgb": false}}` |
 | `-frames` is ignored headless | a headless run uses `-ticks` | `-headless 1 -ticks N` |
 | No tilemap tool | the floor becomes one stretched PNG | one `Sprite` per tile via `entity_duplicate`, or write a `.mctilemap` (section 5.7) |
+| `.mctest` entity by name after a prefab instance | refused: the cook expands a prefab into several entities, so later file positions shift | put prefab instances after the entities tests name, or give the scenario's checks entities that come first |
 | One open scene per server | editing variants means save-as and reopen | keep variants as separate files; `run_headless {"scene": ...}` plays a saved one without opening it |
 
 ## 14.5 What an agent cannot do yet

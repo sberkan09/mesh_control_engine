@@ -51,8 +51,27 @@ target_include_directories(test_mcp_agent PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
 target_compile_definitions(test_mcp_agent PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_agent"
     MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}" MCE_PLAYER_EXE="$<TARGET_FILE:mce_player>")
 add_dependencies(test_mcp_agent mce_player)
+if(TARGET template_probe_game)
+    target_compile_definitions(test_mcp_agent PRIVATE MCE_PROBE_MODULE="$<TARGET_FILE:template_probe_game>"
+        MCE_PROBE_PROJECT="${CMAKE_BINARY_DIR}/template_probe/TemplateProbe")
+    add_dependencies(test_mcp_agent template_probe_game)
+endif()
 add_test(NAME test_mcp_agent COMMAND test_mcp_agent -tse=gpu)
+if(TARGET template_probe_game)
+    set_tests_properties(test_mcp_agent PROPERTIES RESOURCE_LOCK template_probe_module)
+endif()
 if(MCE_GPU_TESTS)
     add_test(NAME test_mcp_agent_gpu COMMAND test_mcp_agent -ts=gpu)
     set_tests_properties(test_mcp_agent_gpu PROPERTIES LABELS gpu)
 endif()
+
+# test_run, playtest and run_headless's trace against a tiny game defined in the test.
+mce_add_test(test_mcp_playtest UMBRELLA
+    SOURCES
+        test_mcp_playtest.cpp
+    DEPS
+        mce::mce_mcp_core
+        mce::mce_module_host
+        mce::mce_platform)
+target_include_directories(test_mcp_playtest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_compile_definitions(test_mcp_playtest PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_playtest")

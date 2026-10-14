@@ -52,6 +52,12 @@ public:
     // first cook already knows the game's components. One module per server.
     Result<void> load_module(StringView path);
     const LoadedModule& module() const { return module_.module; }
+    // Maps the module file again (module_build, after a rebuild): the open scene is kept as text,
+    // the module unmapped (its components leave mce_refl) and the new build mapped, then the scene is
+    // re-read with the new component layouts (dirty state kept; the undo history starts fresh). When
+    // the scene no longer parses (a component it uses was removed), it is written to
+    // <root>/.mce/module_reload/ and an empty scene with the same path stays open; `note` says so.
+    Result<void> reload_module(cook::String& note);
 
     // The project every tool works in (`root` holds assets/); cooks it when nothing is cooked yet.
     // `scene` (relative to assets/) is opened too when given.
