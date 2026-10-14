@@ -110,6 +110,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `asset_lock` / `asset_unlock` / `asset_locks` | `path`, `note?`, `ttl?` (1800 s) / `path`, `force?` / — | while you hold a lock, other agents' writes to that file are refused |
 | | `task_list` / `task_add` / `task_claim` / `task_update` | `status?` / `title`, `notes?`, `depends?`, `files?` / `id?` / `id`, `status?`, `notes?` | the shared `tasks.mctasks`; a claim is never granted twice, and waits for its dependencies |
 | | `scene_switch` / `scene_documents` | `path` / — | several scenes open at once, each keeping its unsaved edits |
+| | `report_friction` | `summary`, `area`, `severity?` (major), `tool?`, `expected?`, `actual?`, `workaround?`, `details?` | appends a note on what the engine made hard to the project's `friction.jsonl`; `mce friction` collects them |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
 
@@ -213,6 +214,11 @@ entity by entity and component by component, gives a new entity whose id the oth
 id, and refuses with the list of conflicts when both changed the same component, until `resolve` picks a
 side. A prefab saved with `scene_save` merges the same way; a material or other file two agents both write is
 last-write-wins, so lock it first.
+
+When the engine makes something hard (a tool that is missing, an error that does not say what to do, a doc
+that was wrong), the agent calls `report_friction` before it works around it. The notes collect in the
+project's `friction.jsonl`; `mce friction <project>...` turns the notes of one or many projects into a
+Markdown backlog, blocking notes first and each area by how often it came up, for the engine's developers.
 
 ## 14.3 A workflow that works
 

@@ -137,11 +137,12 @@ mce build <project> [--config Debug|Release] [-D<var>=<value> ...]
 mce play <project> [player flags ...]
 mce headless <project> [--ticks N] [player flags ...]
 mce editor <project> [editor flags ...]
-mce mcp <project> [--scene <path>] [--allow-cheats]
+mce mcp <project> [--scene <path>] [--allow-cheats] [--agent <name>]
 mce mcp-config <project> [--desktop] [--remove]
 mce cook <project> [--pack] [--force] [--adopt] [--quiet]
 mce story compile [<project>] [--check] [--werror] [--out header] [--report md]
 mce ship <project> [--out dir] [--version v]
+mce friction [<project> ...] [--out file] [--json]
 mce update [<project> ...] [--release [tag]] [--no-pull]
 mce version
 mce --help
@@ -158,4 +159,6 @@ the server `mce_<game>` for Claude Code; `mce mcp-config` rewrites it, and with 
 same entry into Claude Desktop's `claude_desktop_config.json` (chapter 14.1).
 `mce editor`, `mce mcp` and `mce cook` run the SDK's `mce_editor`, `mce_mcp` and `mce_cook` with
 `-module <project>/build/lib<game>.so`; `mce ship` writes `<project>/dist/<Name>-<version>-<os>.zip`
-holding the host, the module, `libmce_engine`, `assets.mce`, `VERSION.txt` and `README.txt`.
+holding the host, the module, `libmce_engine`, `assets.mce`, `CREDITS.md` (when the project has one),
+`VERSION.txt` and `README.txt`. `mce friction` gathers the agents' notes from each project's `friction.jsonl`
+(written by the MCP tool `report_friction`, chapter 14) into one Markdown backlog, or JSON with `--json`.
