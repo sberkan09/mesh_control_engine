@@ -244,3 +244,43 @@ TEST_CASE("audio_bridge plays AudioSource and PlaySfx by asset GUID, and follows
     test::render(*dev, out, 4800);
     CHECK(dev->stats().voices_real == 0);
 }
+
+TEST_CASE("audio_bridge: a Music source streams its clip and fades in; removing it fades out (M-DATA-REACH 8)") {
+    asset::AssetSystem as;
+    mount(as, cooked_tree("bank_music"));
+    auto dev = test::offline_device();
+    ClipBank bank(as, *dev);
+
+    World w;
+    install(w, *dev, &bank);
+    AudioSource src;
+    src.clip.guid = kHum;
+    src.bus = AudioBus::Music;
+    src.loop = true;
+    src.play_on_start = true;
+    src.gain_db = -6.f;
+    src.fade_s = 0.5f;
+    const Entity e = w.spawn_with(src);
+
+    const f64 dt = 1.0 / 60.0;
+    u64 tick = 1;
+    w.tick(dt, tick++);
+    const AudioSource* s = w.try_get<AudioSource>(e);
+    REQUIRE(s != nullptr);
+    CHECK(dev->is_playing(s->handle));
+    CHECK(dev->is_stream(bank.find(kHum)));
+    CHECK(s->applied_gain_db == doctest::Approx(-66.f));  // the fade starts 60 dB down
+    for (u32 i = 0; i < 15; ++i) w.tick(dt, tick++);
+    CHECK(s->applied_gain_db == doctest::Approx(-36.f).epsilon(0.02));
+    for (u32 i = 0; i < 16; ++i) w.tick(dt, tick++);
+    CHECK(s->fade_t == 1.f);
+    CHECK(s->applied_gain_db == -6.f);
+
+    // Removing the source fades it out over fade_s rather than cutting it.
+    Array<f32> out;
+    w.destroy(e);
+    test::render(*dev, out, 4800);  // 0.1 s
+    CHECK(dev->stats().voices_real == 1);
+    test::render(*dev, out, 48000);
+    CHECK(dev->stats().voices_real == 0);
+}

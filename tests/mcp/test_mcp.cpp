@@ -721,7 +721,9 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
     // The written asset plays: a ParticleEmitter in the scene names it, and run_headless cooks it.
     c.ok("entity_create", R"({"name":"fx","components":{"ParticleEmitter":{"preset":")" + guid + R"("}}})");
     c.ok("scene_save");
-    c.ok("run_headless", R"({"ticks":10})");
+    // It also runs the store catalog, remote config and game services the pack now has (the fake
+    // store, the cooked defaults, services on this device; M-DATA-REACH 8).
+    CHECK(c.ok("run_headless", R"({"ticks":10})").v().get("ticks").as_number() == 10);
 }
 
 TEST_CASE("mcp tools: tilemap_paint paints cells, rects and flood fills in one checked call") {

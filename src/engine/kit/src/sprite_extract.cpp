@@ -7,6 +7,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/particles.h"
+#include "mce/loc/loc.h"
 #include "mce/log.h"
 #include "mce/memory/frame_slots.h"
 #include "mce/render/asset_upload.h"
@@ -293,22 +294,28 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         }
     });
 
+    const loc::Localization* l10n = world.try_resource<loc::Localization>();
     each_placed<TextLabel>(world, cam, [&](const Placement& t, const TextLabel& l, const Parallax*) {
         const render::Font* f = font(l.font.guid);
-        if (!f || l.text.view().empty() || f->face.metrics().pixel_height <= 0.0f) return;
+        StringView text = l.text.view();
+        if (!l.loc_key.empty() && l10n) text = l10n->text(l.loc_key.view());
+        if (!f || text.empty() || f->face.metrics().pixel_height <= 0.0f) return;
+        const f32 upp = l.height * t.scale.y / f->face.metrics().pixel_height;
         render::TextLayout layout(mem::frame());
         render::TextLayoutDesc desc;
-        render::layout_text(f->face, l.text.view(), desc, layout);
-        const f32 upp = l.height * t.scale.y / f->face.metrics().pixel_height;
+        desc.align = static_cast<render::TextAlign>(l.align);
+        if (l.wrap_width > 0.0f && upp > 0.0f) desc.max_width = l.wrap_width * t.scale.x / upp;
+        render::layout_text(f->face, text, desc, layout);
         render::TextPlacement p;
         p.units_per_pixel = upp;
         p.y_down = false;
         p.tint = l.color;
         p.sort_layer = l.layer;
         p.sort_order = l.order;
+        const f32 box = desc.max_width > 0.0f ? desc.max_width : layout.width;  // the lines align inside it
         f32 x = t.position.x;
-        if (l.align == TextAlign::Center) x -= 0.5f * layout.width * upp;
-        else if (l.align == TextAlign::Right) x -= layout.width * upp;
+        if (l.align == TextAlign::Center) x -= 0.5f * box * upp;
+        else if (l.align == TextAlign::Right) x -= box * upp;
         p.origin = {x, t.position.y + 0.5f * layout.height * upp};
         batch.add_text(*f, layout, p);
     });

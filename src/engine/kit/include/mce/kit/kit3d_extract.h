@@ -30,6 +30,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/kit3d.h"
+#include "mce/render/quality.h"
 #include "mce/render/scene3d.h"
 
 namespace mce::kit {
@@ -68,6 +69,9 @@ public:
     u32 mesh_key(asset::Guid guid);
     // The texture-store key for a texture GUID (loaded on first sight), or ~0u.
     u32 texture_key(asset::Guid guid);
+    // A MeshRef.material (.mcmat) as a render override (loaded on first sight, its maps too), or
+    // null when it cannot be read. Stable until reset() / shutdown().
+    const render::MaterialOverride* material(asset::Guid guid);
 
     // The primary Camera3DComponent's view (interpolated by `alpha`). False when the scene has none
     // (`out` is then a default camera at the origin). `component` (optional) receives the camera's
@@ -81,6 +85,11 @@ public:
     void apply_environment(World& world, render::Scene3D& scene);
 
     const Kit3DStats& stats() const { return stats_; }
+
+    // The quality tier's caps on the scene's look (r.quality, render/quality.h): at most its shadow
+    // cascades, its shadow-map resolution, bloom and FXAA only when the tier keeps them. Default:
+    // High, which caps nothing an Environment3D asks for.
+    void set_quality(const render::QualitySettings& q) { quality_ = q; }
 
     // Reflection probe bakes (M-VISUAL 2, the editor's bake): every MeshRef and static instance is
     // submitted whatever the view (no culling, no distance thinning) and probes ignore their
@@ -102,6 +111,11 @@ private:
         asset::AnyHandle handle;
         u32 key = ~0u;
     };
+    struct MaterialEntry {
+        asset::Guid guid;
+        asset::AnyHandle handle;
+        mem::UniquePtr<render::MaterialOverride> value;  // null: failed
+    };
     struct Tracked {  // per entity index: the transforms at the last two ticks seen
         u32 generation = 0;
         u64 tick = ~u64(0);
@@ -113,10 +127,12 @@ private:
     void interpolated(Entity e, f32 alpha, math::vec3& pos, math::quat& rot, math::vec3& scale) const;
     void release_handles();
 
+    render::QualitySettings quality_;
     const render::MeshStore* meshes_ = nullptr;
     asset::AssetSystem* assets_ = nullptr;
     Array<MeshEntry> mesh_entries_;
     Array<TextureEntry> texture_entries_;
+    Array<MaterialEntry> material_entries_;
     Array<asset::AnyHandle> preloaded_;
     Array<Tracked> tracked_;
     Array<math::mat4> poses_;              // this frame's Animator poses (Scene3D holds spans into it)

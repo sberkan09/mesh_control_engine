@@ -20,7 +20,7 @@ mce mcp MyGame                                      # the SDK: the line above wi
 The server speaks JSON-RPC 2.0 over stdin and stdout, one message per line (the MCP stdio
 transport); it opens no socket. Stdout carries nothing else: logs go to stderr, and so does the
 command line `mce mcp` prints before it starts the server. Use the **project's** server or the stock one **with the module**:
-without `--module`, `mce_mcp` knows only the engine's components and refuses scenes that use yours.
+without `--module`, `mce_mcp` knows only the engine's components (the visual-novel kit's included) and refuses scenes that use yours.
 After a rebuild that adds components, restart the server.
 
 With the SDK, `mce new` and `mce example` register the server for you: they write a `.mcp.json`
@@ -79,6 +79,8 @@ each result's `content[0].text` is the tool's JSON).
 | Prefabs | `prefab_create_from` | `entity`, `path`, `replace?` | the entity and its `ChildOf` subtree as a new `.mcprefab`; by default the subtree becomes an instance of it (one undo step) |
 | | `prefab_apply` | `entity`, `component?` | writes an instance's overrides into its prefab (every instance sees them) |
 | | `prefab_revert` | `entity`, `component?` | drops an instance's overrides |
+| Project | `project_get`, `project_set` | `values` (set) | the `.mceproj` members (title, start scene, games), checked before the file is written (chapter 2) |
+| | `scene_settings_get`, `scene_settings_set` | `values` (set) | the open scene's `WorldSettings` (2D and 3D gravity); set creates the "World Settings" entity when the scene has none |
 | Undo | `scene_undo`, `scene_redo` | | one `tools/call` is one step; shared with the editor's history |
 | Persist | `scene_new` | `name`, `force?` | fresh GUID, unsaved |
 | | `scene_open` | `path`, `force?` | path under `assets/`; a `.mcprefab` opens the prefab itself (entity 0 is its root) |
@@ -86,7 +88,7 @@ each result's `content[0].text` is the tool's JSON).
 | Build | `cook_run` | `pack?`, `adopt?` | incremental; `adopt` writes sidecars for new source files |
 | | `cook_errors` | | last diagnostics with file, line, col |
 | | `asset_delete` | `path` | deletes a source file under `assets/` and its `.mceasset` sidecar (not the open scene) |
-| Verify | `run_headless` | `ticks` (default 300), `log_lines`, `scene?`, `input?`, `inspect?` | cooks, plays the **saved** scene (or another saved scene named by `scene`) with the engine systems and the game's `install()`, returns `state_hash`, metrics and the log tail |
+| Verify | `run_headless` | `ticks` (default 300), `log_lines`, `scene?`, `input?`, `inspect?` | cooks, plays the **saved** scene (or another saved scene named by `scene`) with the engine systems and the game's `install()`, returns `state_hash`, metrics and the log tail. A pack with a `.mcstore` gets the fake store and ad network, one with a `.mcconfig` its cooked defaults, one with a `.mcservices` game services on this device; nothing is saved or sent |
 | See | `render_frame` | `tick?` (default 1), `width?`, `height?` (default 960 × 540), `scene?`, `input?`, `camera?`, `safe_area?`, `software?`, `save?` | cooks, draws the **saved** scene with the real player at the first frame after sim tick N and returns the frame as an MCP **image**; `save` also writes the PNG under the project folder |
 | | `render_sheet` | `ticks` (1-16), `cameras?` (1-4), `cell_width?`, `cell_height?`, and `render_frame`'s `scene`, `input`, `safe_area`, `software` | one image: ticks in columns, cameras in rows, each cell labelled |
 | | `image_diff` | `golden`, `image` or `render`, `threshold?` (8), `max_score?` (0.01), `update?` | compares with a golden PNG in the project: `score` (mean channel difference, 0..1), `changed_fraction`, `pass`, and a heat map image; a missing golden is written |

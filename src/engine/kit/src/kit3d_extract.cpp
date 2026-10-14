@@ -51,10 +51,13 @@ void Kit3DExtract::release_handles() {
             if (m.handle.generation != 0) assets_->release(m.handle);
         for (const TextureEntry& t : texture_entries_)
             if (t.handle.generation != 0) assets_->release(t.handle);
+        for (const MaterialEntry& m : material_entries_)
+            if (m.handle.generation != 0) assets_->release(m.handle);
         for (const asset::AnyHandle& h : preloaded_) assets_->release(h);
     }
     mesh_entries_.clear();
     texture_entries_.clear();
+    material_entries_.clear();
     preloaded_.clear();
     tracked_.clear();
 }
@@ -115,6 +118,32 @@ u32 Kit3DExtract::texture_key(asset::Guid guid) {
     }
     texture_entries_.push_back(e);
     return e.key;
+}
+
+const render::MaterialOverride* Kit3DExtract::material(asset::Guid guid) {
+    if (guid == asset::Guid{} || !assets_) return nullptr;
+    for (const MaterialEntry& m : material_entries_)
+        if (m.guid == guid) return m.value.get();
+    MaterialEntry e;
+    e.guid = guid;
+    if (Result<asset::AssetHandle<asset::Material>> h = assets_->load_sync<asset::Material>(guid)) {
+        e.handle = asset::AnyHandle(h.value());
+        if (const Result<const asset::MaterialChunk*> chunk = asset::MaterialChunk::read(assets_->resolve(h.value()))) {
+            e.value = mem::make_unique<render::MaterialOverride>(mem::heap());
+            render::MaterialOverride& m = *e.value;
+            m.params = *chunk.value();
+            m.albedo_key = texture_key(m.params.texture(asset::MaterialSlot::BaseColor));
+            m.normal_key = texture_key(m.params.texture(asset::MaterialSlot::Normal));
+            m.orm_key = texture_key(m.params.texture(asset::MaterialSlot::MetallicRoughness));
+            m.emissive_key = texture_key(m.params.texture(asset::MaterialSlot::Emissive));
+        } else {
+            MCE_LOG_WARN("kit3d: material {} does not read", asset::to_string(guid).view());
+        }
+    } else {
+        MCE_LOG_WARN("kit3d: material {} failed to load", asset::to_string(guid).view());
+    }
+    material_entries_.push_back(static_cast<MaterialEntry&&>(e));
+    return material_entries_.back().value.get();
 }
 
 u32 Kit3DExtract::mesh_key(asset::Guid guid) {
@@ -260,13 +289,14 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     scene.set_fog(fog);
     scene.set_exposure(env.exposure);
     render::PostFx post;
-    post.bloom = env.bloom != 0;
+    post.bloom = env.bloom != 0 && quality_.bloom;
     post.bloom_intensity = env.bloom_intensity;
     post.bloom_threshold = env.bloom_threshold;
-    post.fxaa = env.fxaa != 0;
+    post.fxaa = env.fxaa != 0 && quality_.fxaa;
     scene.set_post(post);
     render::ShadowSettings shadows;
-    shadows.cascades = clamp(env.shadow_cascades, 1u, render::kMaxCascades);
+    shadows.cascades = clamp(env.shadow_cascades, 1u, min(render::kMaxCascades, quality_.shadow_cascades));
+    shadows.resolution = quality_.shadow_size;
     shadows.distance = env.shadow_distance;
     shadows.splits[0] = env.shadow_splits.x;
     shadows.splits[1] = env.shadow_splits.y;
@@ -317,6 +347,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         inst.emissive_tint = m.emissive_tint;
         inst.cast_shadows = m.cast_shadows != 0;
         inst.skinning = m.skinning != 0;
+        inst.material = material(m.material.guid);
         if (const Animator* a = world.try_get<Animator>(e); a && a->playing != 0 && !mesh->nodes.empty()) {
             render::ClipSample samples[3];
             const usize n = anim_samples(*a, *mesh, [&](u64 id) { return find_clip_id(*mesh, id); }, samples);

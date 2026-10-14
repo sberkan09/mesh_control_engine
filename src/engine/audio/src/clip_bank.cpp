@@ -41,7 +41,11 @@ ClipHandle ClipBank::register_entry(Entry& e) {
         MCE_LOG_ERROR("audio: bad Sfx asset {} ({})", asset::to_string(e.ref.guid).c_str(), errc_name(payload.error().code));
         return {};
     }
-    auto clip = device_->register_clip(payload.value());
+    Result<ClipHandle> clip = e.stream ? device_->register_stream(payload.value()) : device_->register_clip(payload.value());
+    if (!clip && e.stream) {
+        MCE_LOG_WARN("audio: no free stream for {}; it plays from memory", asset::to_string(e.ref.guid).c_str());
+        clip = device_->register_clip(payload.value());
+    }
     if (!clip) {
         MCE_LOG_ERROR("audio: cannot register clip {} ({})", asset::to_string(e.ref.guid).c_str(), errc_name(clip.error().code));
         return {};
@@ -49,12 +53,13 @@ ClipHandle ClipBank::register_entry(Entry& e) {
     return clip.value();
 }
 
-ClipHandle ClipBank::acquire(asset::Guid guid) {
+ClipHandle ClipBank::acquire(asset::Guid guid, bool stream) {
     if (guid.is_null()) return {};
     if (const Entry* e = entries_.find(guid)) return e->clip;
 
     Entry& e = entries_.insert_or_assign(guid, Entry{});
     e.ref.guid = guid;
+    e.stream = stream;
     auto h = assets_->load_sync<asset::Sfx>(guid);
     if (!h) {
         MCE_LOG_ERROR("audio: cannot load Sfx asset {} ({})", asset::to_string(guid).c_str(), errc_name(h.error().code));
