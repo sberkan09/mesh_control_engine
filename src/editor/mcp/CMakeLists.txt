@@ -7,10 +7,13 @@
 
 mce_add_library(mce_mcp_core UMBRELLA
     SOURCES
+        src/agent_image.cpp
         src/headless_run.cpp
         src/json_writer.cpp
         src/server.cpp
         src/tools.cpp
+        src/tools_agent.cpp
+        src/tools_render.cpp
         src/values.cpp
     PUBLIC_DEPS
         mce::mce_editor_core

@@ -37,3 +37,22 @@ if(Python3_FOUND)
                          --no-imgui $<TARGET_FILE:mce_mcp_core> $<TARGET_FILE:mce_mcp>)
     endif()
 endif()
+
+# The M-AGENT tools (render_frame, render_sheet, image_diff, ...). The "gpu" suite draws with the
+# real player and registers only with MCE_GPU_TESTS (CI: Xvfb + Mesa llvmpipe).
+mce_add_test(test_mcp_agent UMBRELLA NO_CTEST
+    SOURCES
+        test_mcp_agent.cpp
+    DEPS
+        mce::mce_mcp_core
+        mce::mce_module_host
+        mce::mce_platform)
+target_include_directories(test_mcp_agent PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_compile_definitions(test_mcp_agent PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_agent"
+    MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}" MCE_PLAYER_EXE="$<TARGET_FILE:mce_player>")
+add_dependencies(test_mcp_agent mce_player)
+add_test(NAME test_mcp_agent COMMAND test_mcp_agent -tse=gpu)
+if(MCE_GPU_TESTS)
+    add_test(NAME test_mcp_agent_gpu COMMAND test_mcp_agent -ts=gpu)
+    set_tests_properties(test_mcp_agent_gpu PROPERTIES LABELS gpu)
+endif()

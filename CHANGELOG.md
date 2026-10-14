@@ -12,6 +12,14 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   iOS builds it with `-DMCE_FIREBASE=ON -DMCE_FIREBASE_SDK_DIR=...`. The engine's crash handler now hands each crash on
   to a handler installed before it (Crashlytics' NDK handler) after writing its own report. `-liveops.provider
   firebase` picks it explicitly. Not yet run on a device.
+- Eyes for agents, M-AGENT step 1 (SBA-48): the MCP server gains `render_frame` (the saved scene drawn by the
+  real player at sim tick N, with scripted input, from its own camera, another camera entity or a free 2D/3D camera,
+  at a chosen size and safe area, returned as an MCP image), `render_sheet` (several ticks and cameras in one
+  labelled contact sheet) and `image_diff` (score, changed fraction and a heat map against a golden PNG; a missing
+  golden is written). Without a display the player draws on SDL's offscreen driver with Mesa's software GL, so a
+  GPU-less cloud box works. The player gains `-capture_ticks`, `-view.entity`, `-view.free` and `-safe_area`, and a
+  capture frame is drawn without interpolation so captures repeat exactly. The GL backend now clears the default
+  framebuffer with `glClear` (Mesa ignored the DSA clear on an offscreen surface, so frames piled up).
 - Compute on Metal, M-VISUAL step 1 (SBA-6): `mce_rhi_metal` and SDL GPU's Metal driver (iOS, `MCE_RHI=sdlgpu` on
   macOS) report `DeviceCaps::compute` and run compute pipelines, `dispatch`/`dispatch_indirect`, storage images and
   `read_buffer`, so `Forward3D` assigns Forward+ lights on the GPU on Macs and iPhones too (`-r.gpu_light_clusters 0`

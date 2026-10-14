@@ -208,6 +208,7 @@ TEST_CASE("render3d_gl: GPU timestamps time every stage") {
     const Forward3DGpuTimes t = f.renderer.forward_3d().gpu_times(f.device->last_gpu_timestamps());
     CHECK(t.frame_index != ~u64(0));
     CHECK(t.clusters >= 0.0);
+    CHECK(t.ssao >= 0.0);
     CHECK(t.shadow >= 0.0);
     CHECK(t.main >= 0.0);
     CHECK(t.resolve >= 0.0);
@@ -674,5 +675,93 @@ TEST_CASE("render3d_gl: a probe exported as RGBM and loaded back reflects what w
     f.render(0.0f, false, scene);
     CHECK(fw.last_stats().probes_captured == 1);
     CHECK(f.at_world(spot).r + 60 < loaded.r);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+// ---- screen-space ambient occlusion (M-VISUAL 3) ------------------------------------------------
+
+namespace {
+
+// Sun off, a grey hemisphere ambient and no sky reflections: the ambient is the whole frame.
+void ambient_only(Scene3D& s) {
+    no_sun(s);
+    DirectionalLight sun = s.light();
+    sun.ambient_sky = sun.ambient_ground = {0.6f, 0.6f, 0.6f};
+    s.set_light(sun);
+    Sky sky;
+    sky.specular_ambient = 0.0f;
+    s.set_sky(sky);
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: SSAO darkens the ground at the box's foot, not open ground") {
+    Fixture3D f;
+    bool on = false;
+    const auto scene = [&](Scene3D& s) {
+        ambient_only(s);
+        AmbientOcclusion ao;
+        ao.enabled = on;
+        s.set_ambient_occlusion(ao);
+    };
+    const Forward3D& fw = f.renderer.forward_3d();
+    const vec3 foot{0.0f, 0.0f, 0.58f}, open{2.5f, 0.0f, 2.5f}, top{0.0f, 1.0f, 0.0f};
+    f.render(0.0f, false, scene);
+    CHECK_FALSE(fw.last_stats().ssao);
+    const Rgb foot_off = f.at_world(foot), open_off = f.at_world(open), top_off = f.at_world(top);
+    on = true;
+    f.render(0.0f, false, scene);
+    CHECK(fw.last_stats().ssao);
+    CHECK(fw.last_stats().ssao_draws == 2);  // the ground and the box
+    const Rgb foot_on = f.at_world(foot), open_on = f.at_world(open), top_on = f.at_world(top);
+    INFO("foot " << foot_off.luma() << " -> " << foot_on.luma() << ", open " << open_off.luma() << " -> " << open_on.luma()
+                 << ", top " << top_off.luma() << " -> " << top_on.luma());
+    CHECK(foot_on.luma() < foot_off.luma() - 15);         // the crease between the box and the ground
+    CHECK(std::abs(open_on.luma() - open_off.luma()) <= 2);  // nothing near: nothing occluded
+    CHECK(std::abs(top_on.luma() - top_off.luma()) <= 3);    // the box's open top
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: SSAO leaves direct light alone and off draws the frame without it") {
+    Fixture3D f;
+    bool on = false;
+    const auto scene = [&](Scene3D& s) {  // the sun alone: no ambient for the occlusion to darken
+        DirectionalLight sun = s.light();
+        sun.ambient_sky = sun.ambient_ground = {0.0f, 0.0f, 0.0f};
+        s.set_light(sun);
+        Sky sky;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        AmbientOcclusion ao;
+        ao.enabled = on;
+        s.set_ambient_occlusion(ao);
+    };
+    f.render(0.0f, true, scene);
+    const Array<u8> off = f.pixels;
+    on = true;
+    f.render(0.0f, true, scene);
+    CHECK(f.renderer.forward_3d().last_stats().ssao);
+    usize differing = 0;
+    for (usize i = 0; i < off.size(); ++i) differing += f.pixels[i] != off[i];
+    CHECK(differing == 0);
+    on = false;
+    f.render(0.0f, true, scene);
+    differing = 0;
+    for (usize i = 0; i < off.size(); ++i) differing += f.pixels[i] != off[i];
+    CHECK(differing == 0);
+
+    // The visibility texture: open (1) where nothing was drawn, darker in the box's crease.
+    const rhi::TextureHandle ao = f.renderer.forward_3d().ssao();
+    MCE_REQUIRE_OR_RETURN(!ao.is_null());
+    const rhi::Extent2D size = f.device->texture_desc(ao).size;
+    CHECK(size.width == kW / 2);
+    CHECK(size.height == kH / 2);
+    Array<u8> vis;
+    vis.resize(usize(size.width) * size.height * 4);
+    MCE_REQUIRE_OR_RETURN(f.device->read_pixels(ao, rhi::Rect2D{0, 0, size.width, size.height}, vis.span()).has_value());
+    u8 lo = 255;
+    for (usize i = 0; i < vis.size(); i += 4) lo = vis[i] < lo ? vis[i] : lo;
+    CHECK(vis[0] == 255);  // a corner of open ground or sky
+    CHECK(lo < 200);
     CHECK(f.device->validation_error_count() == 0);
 }

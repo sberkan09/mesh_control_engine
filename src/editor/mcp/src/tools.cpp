@@ -4,6 +4,8 @@
 
 #include "tools.h"
 
+#include "tool_args.h"
+
 #include <algorithm>
 #include <cstring>
 
@@ -30,7 +32,9 @@ constexpr u64 kMaxTicks = 36000;  // ten minutes of sim at 60 Hz
 constexpr u64 kMaxLogLines = 200;
 constexpr usize kMaxDiagnostics = 200;
 
-// ---------------------------------------------------------------- helpers
+}  // namespace
+
+// ---------------------------------------------------------------- helpers (tool_args.h)
 
 bool fail(ToolCall& c, StringView msg) {
     c.error += msg;
@@ -170,6 +174,8 @@ bool scene_path(Server& server, StringView rel, cook::String& abs, cook::String&
     return true;
 }
 
+namespace {
+
 cook::String guid_ref(asset::Guid g) {
     cook::String s("guid:");
     s += asset::to_string(g).view();
@@ -186,6 +192,8 @@ void write_diag(JsonWriter& w, const cook::Diagnostic& d) {
     w.key("message").str(d.message.view());
     w.end_object();
 }
+
+}  // namespace
 
 void append_diags(cook::String& out, const cook::DiagList& diags, usize max) {
     usize n = 0;
@@ -226,6 +234,8 @@ void write_log_lines(JsonWriter& w, Span<const log::ConsoleLine> lines, usize ma
     w.end_array();
 }
 
+namespace {
+
 void write_component_object(JsonWriter& w, const DocComponent& c) {
     cook::String text;
     write_component(*c.type, c.data(), text);
@@ -251,6 +261,8 @@ void prefix_error(ToolCall& c, const refl::TypeRecord& t, cook::String& err) {
     c.error += err.view();
 }
 
+}  // namespace
+
 void progress(Server& server, cook::JsonValue token, u64 done, u64 total) {
     if (!token.valid()) return;
     cook::String params;
@@ -258,6 +270,8 @@ void progress(Server& server, cook::JsonValue token, u64 done, u64 total) {
     w.begin_object().key("progressToken").copy(token).key("progress").num_u(done).key("total").num_u(total).end_object();
     server.notify("notifications/progress", params.view());
 }
+
+namespace {
 
 bool refuse_unsaved(ToolCall& c, const char* what) {
     bool force = false;
@@ -836,6 +850,8 @@ void inspect_run(const World& world, Span<const Entity> spawned, void* user) {
     w.end_array().end_object();
 }
 
+}  // namespace
+
 // run_headless's `input`: the text form of an input script (mce/input/script.h), or an array of
 // segments {"from": tick, "to": tick, "actions": {"Move": [1, 0], "Jump": true, "Fire": 1}}.
 bool arg_input(ToolCall& c, input::InputScript& script) {
@@ -878,6 +894,8 @@ bool arg_input(ToolCall& c, input::InputScript& script) {
     }
     return true;
 }
+
+namespace {
 
 bool run_headless_tool(ToolCall& c) {
     u64 ticks = kDefaultTicks;
@@ -1156,10 +1174,18 @@ const ToolDef kTools[] = {
 
 }  // namespace
 
-Span<const ToolDef> tool_table() { return Span<const ToolDef>(kTools, sizeof(kTools) / sizeof(kTools[0])); }
+Span<const ToolDef> tool_table() {
+    static const Array<ToolDef> all = [] {
+        Array<ToolDef> a;
+        for (const ToolDef& t : kTools) a.push_back(t);
+        for (const ToolDef& t : agent_tool_table()) a.push_back(t);
+        return a;
+    }();
+    return all.span();
+}
 
 const ToolDef* find_tool(StringView name) {
-    for (const ToolDef& t : kTools)
+    for (const ToolDef& t : tool_table())
         if (name == t.name) return &t;
     return nullptr;
 }
