@@ -6,6 +6,8 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 
 #include "mcp_client.h"
@@ -128,6 +130,109 @@ TEST_CASE("mcp agent tools: image_diff scores PNGs, writes a missing golden, and
     CHECK(upd.v().get("written").as_bool());
     CHECK(c.ok("image_diff", R"({"golden":"goldens/a.png","image":"shots/b.png"})").v().get("score").as_number() == 0);
 }
+
+#if defined(MCE_PROBE_MODULE) && !defined(_WIN32)
+namespace {
+
+// A stand-in build tree: the probe module copied under <dir>/out/, a CMakeCache.txt whose
+// CMAKE_COMMAND is a script printing `cmake_output` (exit `cmake_rc`), and a ctest beside it.
+std::string fake_build_tree(const char* name, const std::string& cmake_output, int cmake_rc, const std::string& ctest_output, int ctest_rc) {
+    const std::string dir = fresh_dir(name);
+    std::filesystem::create_directories(dir + "/out");
+    std::filesystem::copy_file(MCE_PROBE_MODULE, dir + "/out/libtemplate_probe.so");
+    auto script = [&](const std::string& path, const std::string& text, int rc) {
+        write_file(path + ".txt", text);
+        write_file(path, "#!/bin/sh\necho \"$@\" > " + path + ".args\ncat " + path + ".txt\nexit " + std::to_string(rc) + "\n");
+        std::filesystem::permissions(path, std::filesystem::perms::owner_all);
+    };
+    script(dir + "/bin/cmake", cmake_output, cmake_rc);
+    script(dir + "/bin/ctest", ctest_output, ctest_rc);
+    write_file(dir + "/CMakeCache.txt", "# fake\nCMAKE_COMMAND:INTERNAL=" + dir + "/bin/cmake\n");
+    return dir;
+}
+
+std::string read_all(const std::string& path) {
+    std::ifstream f(path);
+    return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+}
+
+}  // namespace
+
+TEST_CASE("module_build: compiler errors as file:line:col JSON; a good build maps the module again and keeps the scene") {
+    const std::string root = fresh_dir("mcp_agent_build_project");
+    std::filesystem::copy(std::string(MCE_PROBE_PROJECT) + "/assets", root + "/assets", std::filesystem::copy_options::recursive);
+    const std::string bad = fake_build_tree("mcp_agent_build_bad",
+                                            "[1/2] Building CXX object game.cpp.o\n"
+                                            "FAILED: game.cpp.o\n"
+                                            "/p/games/x/module/x.cpp:12:5: error: 'Spinn' was not declared in this scope\n"
+                                            "/p/games/x/module/x.cpp:12:5: note: suggested alternative: 'Spin'\n"
+                                            "/p/games/x/module/x.h:3:1: warning: unused variable 'k' [-Wunused-variable]\n"
+                                            "/p/games/x/module/x.cpp:12:5: error: 'Spinn' was not declared in this scope\n"
+                                            "C:\\p\\x.cpp(40,7): error C2065: 'q': undeclared identifier\n"
+                                            "ninja: build stopped: subcommand failed.\n",
+                                            1, "", 0);
+    {
+        Client c;
+        REQUIRE(c.server.load_module(sv(bad + "/out/libtemplate_probe.so")));
+        REQUIRE(c.server.open_project(sv(root), "scenes/main.mcscene"));
+        c.init();
+        auto r = c.ok("module_build", R"({"warnings":true})");
+        CHECK_FALSE(r.v().get("ok").as_bool());
+        CHECK_FALSE(r.v().get("reloaded").as_bool());
+        CHECK(str(r.v().get("target")) == "template_probe_game");
+        CHECK(r.v().get("errors").as_number() == 2);  // the repeated one once
+        CHECK(r.v().get("warnings").as_number() == 1);
+        const cook::JsonValue d = r.v().get("diagnostics");
+        REQUIRE(d.size() == 4);
+        CHECK(str(d.at(0).get("file")) == "/p/games/x/module/x.cpp");
+        CHECK(d.at(0).get("line").as_number() == 12);
+        CHECK(d.at(0).get("col").as_number() == 5);
+        CHECK(str(d.at(0).get("severity")) == "error");
+        CHECK(str(d.at(1).get("severity")) == "note");
+        CHECK(str(d.at(3).get("file")) == "C:\\p\\x.cpp");
+        CHECK(d.at(3).get("line").as_number() == 40);
+        CHECK(str(r.v().get("output_tail")).find("subcommand failed") != std::string::npos);
+        CHECK(read_all(bad + "/bin/cmake.args").find("--build " + bad + " --target template_probe_game") != std::string::npos);
+    }
+
+    const std::string good = fake_build_tree("mcp_agent_build_good", "[1/1] Linking CXX shared module libtemplate_probe.so\n", 0,
+                                             "Test project /x\n"
+                                             "    Start 1: template_probe_headless_300\n"
+                                             "1/2 Test  #1: template_probe_headless_300 ...   Passed    0.30 sec\n"
+                                             "2/2 Test  #2: template_probe_gpu .............***Failed    0.10 sec\n",
+                                             8);
+    Client c;
+    REQUIRE(c.server.load_module(sv(good + "/out/libtemplate_probe.so")));
+    REQUIRE(c.server.open_project(sv(root), "scenes/main.mcscene"));
+    c.init();
+    auto before = c.ok("run_headless", R"({"ticks":60,"log_lines":0})");
+    c.ok("entity_create", R"({"name":"Added","components":{"Spin":{}}})");  // unsaved work survives the reload
+    auto r = c.ok("module_build");
+    CHECK(r.v().get("ok").as_bool());
+    CHECK(r.v().get("reloaded").as_bool());
+    CHECK(r.v().get("diagnostics").size() == 0);
+    CHECK(c.server.module().loaded());
+    auto info = c.ok("scene_info");
+    CHECK(info.v().get("dirty").as_bool());
+    CHECK(c.ok("scene_get_entity", R"({"entity":"Added"})").text.find("Spin") != std::string::npos);
+    CHECK(c.fails("scene_undo").find("nothing to undo") != std::string::npos);  // a fresh history
+    c.ok("scene_open", R"({"path":"scenes/main.mcscene","force":true})");
+    auto after = c.ok("run_headless", R"({"ticks":60,"log_lines":0})");
+    CHECK(str(after.v().get("state_hash")) == str(before.v().get("state_hash")));  // the module's systems still run
+
+    auto t = c.ok("module_test");
+    CHECK_FALSE(t.v().get("ok").as_bool());
+    CHECK(t.v().get("passed").as_number() == 1);
+    CHECK(t.v().get("failed").as_number() == 1);
+    CHECK(str(t.v().get("tests").at(1).get("name")) == "template_probe_gpu");
+    CHECK(read_all(good + "/bin/ctest.args").find("-R ^template_probe_") != std::string::npos);
+
+    Client none;  // no module: nothing to rebuild
+    REQUIRE(none.server.open_project(sv(root)));
+    none.init();
+    CHECK(none.fails("module_build").find("no game module") != std::string::npos);
+}
+#endif
 
 TEST_SUITE("gpu") {
 

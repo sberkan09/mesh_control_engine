@@ -250,6 +250,8 @@ Result<ClipHandle> AudioDevice::register_stream(const ClipPayload& clip) {
     return Error(Errc::OutOfMemory, "audio.stream.register", "all stream rings in use", kMaxStreams);
 }
 
+bool AudioDevice::is_stream(ClipHandle h) const { return is_clip_registered(h) && impl_->clips[h.index].stream >= 0; }
+
 bool AudioDevice::is_clip_registered(ClipHandle h) const {
     return h.index < kMaxClips && !h.is_null() && impl_->clips[h.index].generation == h.generation &&
            impl_->clips[h.index].state != ClipMain::State::Free;

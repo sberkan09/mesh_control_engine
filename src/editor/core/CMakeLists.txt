@@ -32,6 +32,7 @@ mce_add_library(mce_editor_core UMBRELLA
         mce::mce_render
         mce::mce_scene
         mce::mce_gameplay_kit
+        mce::mce_kit_novel  # its components (engine_components.cpp)
         mce::mce_asset_cook
         mce::mce_physics2d
         mce::mce_physics3d

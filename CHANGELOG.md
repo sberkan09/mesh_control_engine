@@ -5,6 +5,22 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Friction notes, M-AGENT step 8 (SBA-55): `report_friction` lets an agent write down what the engine made hard
+  (summary, area, severity, expected, actual, workaround) as a line in the project's `friction.jsonl`, and
+  `mce friction <projects...>` collects the notes into one Markdown backlog (or JSON), blocking ones first.
+- Several agents on one project, M-AGENT step 7 (SBA-54): each agent runs its own MCP server (`--agent <name>`)
+  on the same folder. `project_watch` reads the event feed (`.mce/events.jsonl`), `asset_lock` refuses other
+  agents' writes to a file, `task_add` / `task_claim` / `task_update` share `tasks.mctasks`, and `scene_switch`
+  keeps several scenes open. `scene_save` merges another agent's save of the same scene by entity and refuses
+  with the conflicts (or settles them with `resolve`) instead of overwriting.
+- Quality gates for agents, M-AGENT step 6 (SBA-53): `project_check` returns findings with a fix for cook
+  errors, broken and unused references, missing credits, sRGB on data textures, each scene's sim time per tick
+  against a budget, and 2D text size and contrast; `ship_build` runs the full build, a headless smoke run of the
+  host and `mce ship`, and returns the zip's path. `mce ship` now puts the project's `CREDITS.md` in the zip.
+- Projects on phones (M-MOBILE, SBA-30): `scripts/ship.py --project <dir> --target android|ios` builds a project
+  made from the templates for phones. Its pack is cooked by the host build's `<game>_cook`
+  (`MCE_HOST_BUILD_DIR`, which `ship.py` passes after building it on `--host-preset`); a cross build no longer
+  defines a project cook it cannot run.
 - Live services vendor, Firebase (M-LIVEOPS step 1): `mce/platform/firebase.h` with Crashlytics for native crashes
   and Analytics for `analytics::event`. `ship` stamps it into a phone build only when `MCE_FIREBASE_ANDROID_CONFIG` or
   `MCE_FIREBASE_IOS_CONFIG` names the project's config file (never committed), uploads symbols to Crashlytics, starts
@@ -12,6 +28,28 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   iOS builds it with `-DMCE_FIREBASE=ON -DMCE_FIREBASE_SDK_DIR=...`. The engine's crash handler now hands each crash on
   to a handler installed before it (Crashlytics' NDK handler) after writing its own report. `-liveops.provider
   firebase` picks it explicitly. Not yet run on a device.
+- Content without a human, M-AGENT step 5 (SBA-52): the MCP server generates palettes, pixel sprites, tile sets,
+  noise textures and skies, sfxr sound effects and music loops (`gen_palette`, `gen_sprite`, `gen_tileset`,
+  `gen_texture`, `gen_sfx`, `gen_music`), each with a preview image and a `save` that writes the asset, its sidecar
+  and a `CREDITS.md` row; `library_search` and `library_add` serve a bundled CC0/OFL/MIT library (Kenney models
+  and sounds, three fonts, generator recipes) installed at `share/mce/library`, with credits written on copy.
+- Self-contained knowledge, M-AGENT step 4 (SBA-51): the MCP server serves the shipped user guide, engine and
+  architecture docs, the worked samples and the example projects as `mce://docs/...` resources (index, folders,
+  `mce://docs/components/<Type>` schemas), searches them with `docs_search`, offers the prompts `start_game`,
+  `add_level` and `polish_pass`, and `engine_capabilities` lists how each feature is reached (data, asset, MCP,
+  console or code). The SDK now installs the samples' sources (`share/mce/samples`); `mce_mcp --docs <dir>` picks
+  another docs folder. New user-guide recipes: a level a bot can finish, screens that stay right, a component live.
+- Playtesting without a person, M-AGENT step 3 (SBA-50): `test_run` runs `.mctest` scenarios (JSON under the
+  project's `tests/`: a saved scene, scripted input or a built-in bot, `until`, `death`, and checks on component
+  fields at the end or at a tick, entities alive, event counts, the log and feel metrics) and `playtest` lets a
+  kit bot play: `walk_to` (heads for a point or entity, jumps or sidesteps when stuck), `explore` (seeded wandering)
+  and `masher` (random chords), all through the game's input actions with no game code. Bot runs return a feel
+  report: time to finish, deaths, stuck spots, idle time, distance and coverage. `run_headless` gains `trace`
+  (chosen fields every N ticks) and `InputScript::clear_segments` lets a per-tick planner keep the edge rules.
+- Code loop for agents, M-AGENT step 2 (SBA-49): `module_build` rebuilds the game module with the project's CMake
+  tree and maps the new build into the running MCP server (new components and systems live on the next call, the
+  open scene kept), returning compiler errors as file, line, column JSON; `module_test` runs the project's ctest
+  tests and reports each result.
 - Eyes for agents, M-AGENT step 1 (SBA-48): the MCP server gains `render_frame` (the saved scene drawn by the
   real player at sim tick N, with scripted input, from its own camera, another camera entity or a free 2D/3D camera,
   at a chosen size and safe area, returned as an MCP image), `render_sheet` (several ticks and cameras in one

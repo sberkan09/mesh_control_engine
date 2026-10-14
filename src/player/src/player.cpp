@@ -101,6 +101,7 @@
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
+#include "mce/render/quality.h"
 #include "mce/render/renderer.h"
 #include "mce/rhi/default_device.h"
 #include "mce/module_host.h"
@@ -1269,13 +1270,20 @@ private:
     // Camera3DComponent.
     Result<void> init_3d() {
         if (three_d_ || three_d_failed_) return {};
+        // r.quality's tier sets the cost knobs; r.msaa caps its MSAA.
+        const render::QualityTier tier = render::quality_tier();
+        render::QualitySettings quality = render::quality_settings(tier);
         render::Forward3DDesc fd;
-        fd.msaa = static_cast<u32>(math::clamp<i64>(cv_msaa.get_int(), 1, 8));
+        render::apply_quality(quality, fd);
+        fd.msaa = math::min(fd.msaa, static_cast<u32>(math::clamp<i64>(cv_msaa.get_int(), 1, 8)));
         MCE_TRY(renderer_.init_3d(fd));
         extract3d_.init(renderer_.meshes(), &assets_);
+        // High caps no Environment3D cascade count (its 3 is only the scene default).
+        if (tier == render::QualityTier::High) quality.shadow_cascades = render::kMaxCascades;
+        extract3d_.set_quality(quality);
         if (cv_preload3d.get_bool()) MCE_TRY(extract3d_.preload());
         three_d_ = true;
-        MCE_LOG_INFO("{}: 3D path on ({}x MSAA)", desc_.app_name, fd.msaa);
+        MCE_LOG_INFO("{}: 3D path on ({} quality, {}x MSAA)", desc_.app_name, render::quality_tier_name(tier), fd.msaa);
         return {};
     }
 

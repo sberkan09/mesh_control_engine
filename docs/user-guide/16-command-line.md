@@ -83,12 +83,15 @@ type, default, help and flags, and every console function. The list below is the
 `mce_mcp`, `my_game_mcp`. Plain arguments, not convars:
 
 ```
-my_game_mcp --project <dir> [--scene <path under assets/>] [--allow-cheats]
-mce_mcp --project <dir> --module <lib<game>.so> [--scene <path under assets/>] [--allow-cheats]
+my_game_mcp --project <dir> [--scene <path under assets/>] [--player <exe>] [--docs <dir>] [--allow-cheats]
+mce_mcp --project <dir> --module <lib<game>.so> [--scene <path under assets/>] [--player <exe>] [--docs <dir>] [--allow-cheats]
 ```
 
 `--module` loads the game module (the SDK's way; `my_game_mcp` has the game compiled in): its
-components become known to the tools and its systems run in `run_headless`.
+components become known to the tools and its systems run in `run_headless`. `--player` is the
+executable `render_frame` draws with (default: `mce_player` beside the server, or the project's host
+for `my_game_mcp`). `--docs` is the folder served as `mce://docs/...` (default: the SDK's
+`share/doc/mce` beside the server, or the source tree of a build).
 
 ## 16.4 The cook
 
@@ -134,11 +137,12 @@ mce build <project> [--config Debug|Release] [-D<var>=<value> ...]
 mce play <project> [player flags ...]
 mce headless <project> [--ticks N] [player flags ...]
 mce editor <project> [editor flags ...]
-mce mcp <project> [--scene <path>] [--allow-cheats]
+mce mcp <project> [--scene <path>] [--allow-cheats] [--agent <name>]
 mce mcp-config <project> [--desktop] [--remove]
 mce cook <project> [--pack] [--force] [--adopt] [--quiet]
 mce story compile [<project>] [--check] [--werror] [--out header] [--report md]
 mce ship <project> [--out dir] [--version v]
+mce friction [<project> ...] [--out file] [--json]
 mce update [<project> ...] [--release [tag]] [--no-pull]
 mce version
 mce --help
@@ -155,4 +159,6 @@ the server `mce_<game>` for Claude Code; `mce mcp-config` rewrites it, and with 
 same entry into Claude Desktop's `claude_desktop_config.json` (chapter 14.1).
 `mce editor`, `mce mcp` and `mce cook` run the SDK's `mce_editor`, `mce_mcp` and `mce_cook` with
 `-module <project>/build/lib<game>.so`; `mce ship` writes `<project>/dist/<Name>-<version>-<os>.zip`
-holding the host, the module, `libmce_engine`, `assets.mce`, `VERSION.txt` and `README.txt`.
+holding the host, the module, `libmce_engine`, `assets.mce`, `CREDITS.md` (when the project has one),
+`VERSION.txt` and `README.txt`. `mce friction` gathers the agents' notes from each project's `friction.jsonl`
+(written by the MCP tool `report_friction`, chapter 14) into one Markdown backlog, or JSON with `--json`.

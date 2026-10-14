@@ -159,6 +159,16 @@ struct Cascade {
     u32 caster_count = 0;
 };
 
+// A material that replaces every submesh's own (a .mcmat on a MeshRef): its parameters and the
+// texture-store keys of its maps (~0u = none).
+struct MaterialOverride {
+    asset::MaterialChunk params{};
+    u32 albedo_key = ~0u;
+    u32 normal_key = ~0u;
+    u32 orm_key = ~0u;
+    u32 emissive_key = ~0u;
+};
+
 struct MeshInstance {
     u32 mesh = ~0u;                          // MeshStore key
     math::mat4 world = math::mat4::identity();
@@ -177,7 +187,21 @@ struct MeshInstance {
     // the choice has hysteresis (null: none, the level follows the screen size exactly). build()
     // writes the new level back.
     u8* lod_state = nullptr;
+    // Replaces the material of every submesh (null: each submesh draws its own). The caller keeps
+    // it alive until the scene is drawn.
+    const MaterialOverride* material = nullptr;
 };
+
+// The material a submesh of `inst` draws with, and its map keys (the override's when it has one).
+inline const asset::MaterialChunk& material_of(const MeshInstance& inst, const GpuSubmesh& sm) {
+    return inst.material ? inst.material->params : sm.material;
+}
+inline u32 albedo_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->albedo_key : sm.albedo_key; }
+inline u32 normal_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->normal_key : sm.normal_key; }
+inline u32 orm_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->orm_key : sm.orm_key; }
+inline u32 emissive_key_of(const MeshInstance& inst, const GpuSubmesh& sm) {
+    return inst.material ? inst.material->emissive_key : sm.emissive_key;
+}
 
 // Screen-size LOD selection (#158): an instance draws the coarsest level whose geometric error,
 // projected at its distance, stays under `pixel_error` pixels. Going coarser needs the error under

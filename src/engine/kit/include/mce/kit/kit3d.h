@@ -40,9 +40,11 @@ struct MeshRef {
     u32 interpolate = 0;  // 1: drawn between the last two ticks' transforms (things the game moves)
     u32 skinning = 1;     // skinned meshes: 0 draws the bind pose rigidly
     u32 visible = 1;
+    asset::AssetRef<asset::Material> material;     // a .mcmat drawn on every submesh instead of the mesh's own
 };
 MCE_COMPONENT(MeshRef, mesh, tint, emissive_tint, (cull_radius, Range{0, 1000}, Help{"0 = mesh bounds"}), cast_shadows,
-              (interpolate, Help{"1: smooth between ticks (moving objects)"}), skinning, visible)
+              (interpolate, Help{"1: smooth between ticks (moving objects)"}), skinning, visible,
+              (material, Help{"a .mcmat replacing every submesh's material; null = the mesh's own"}))
 
 // A point light at the entity's position plus `offset` (in the entity's space).
 struct PointLight3D {
