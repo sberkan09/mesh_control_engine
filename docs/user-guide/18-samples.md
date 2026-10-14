@@ -39,6 +39,7 @@ pitfalls come from them.
 | `physics2d_headless`, `physics3d_headless` | physics-only determinism scenes | `-ticks 1200` |
 | `net_headless` | the optional networking module: a server and a client in one process over loopback, snapshot replication, a client-driven player ([Multiplayer](20-multiplayer.md)) | `sample_net_headless -ticks 300` |
 | `shop_demo` | purchases and ads against the fake store and ad network: gems and "remove ads" bought, a rewarded continue, interstitials between levels, restore, a relaunch that keeps the entitlement, record and replay ([Purchases and ads](22-purchases-and-ads.md)) | `sample_shop_demo -ticks 1850` |
+| `liveops_demo` | live services against local stand-ins: achievements and a leaderboard on a folder "platform", a cloud restore after reinstall, a remote config value that changes the game after relaunch (and survives airplane mode), analytics that consent gates, record and replay ([Live services](23-live-services.md)) | `sample_liveops_demo -ticks 1850` |
 
 Windowed samples accept `-frames N` and `-capture out.ppm`; most accept `-headless 1 -ticks N` and
 print a state hash.
@@ -60,4 +61,5 @@ print a state hash.
 | author a level from a script through MCP | `projects/Kindle/tools/author_level_mcp.py` |
 | build a custom input map | `samples/03_platformer/main.cpp` |
 | sell a product or show an ad | `samples/shop_demo/main.cpp` (`shop_game`), [Purchases and ads](22-purchases-and-ads.md) |
+| unlock an achievement, sync a cloud save or read remote config | `samples/liveops_demo/main.cpp` (`liveops_game`), [Live services](23-live-services.md) |
 | save best times or progress | `samples/03_platformer/main.cpp` (the save system) and section 13.3 |

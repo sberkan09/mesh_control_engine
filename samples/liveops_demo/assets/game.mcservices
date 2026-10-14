@@ -1,0 +1,12 @@
+{
+  "format": "mce-services", "version": 1, "guid": "5d000000-0000-4000-8000-0000000000b1",
+  "achievements": [
+    { "id": "first_win", "ios": "org.meshcontrol.liveopsdemo.first_win", "android": "CgkIdemo_first_win" },
+    { "id": "win_5", "steps": 5, "ios": "org.meshcontrol.liveopsdemo.win_5", "android": "CgkIdemo_win_5" }
+  ],
+  "leaderboards": [
+    { "id": "best_time", "order": "lower_is_better",
+      "ios": "org.meshcontrol.liveopsdemo.best_time", "android": "CgkIdemo_best_time" }
+  ],
+  "cloud_saves": [ "progress" ]
+}
