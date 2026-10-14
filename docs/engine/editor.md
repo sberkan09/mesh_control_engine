@@ -75,7 +75,9 @@ scissor state). ImGui platform and renderer backends are in `layer/src/` and ren
 `scene_info`, `scene_list_entities`, `scene_get_entity`, `asset_list`, `asset_set_import_settings`, `asset_delete`,
 `entity_create`, `entity_delete`, `entity_duplicate`, `scene_clear`, `component_add`, `component_remove`, `component_set`,
 `scene_new`, `scene_open`, `scene_save`, `scene_undo`, `scene_redo`, `cook_run`, `cook_errors`,
-`run_headless`, `console_list`, `console_exec`.
+`run_headless`, `console_list`, `console_exec`. Asset authoring (`mcp/src/asset_tools.cpp`, M-DATA-REACH 1): `asset_schema`,
+`asset_create`, `asset_write`, `asset_read`, `tilemap_paint`; each document is cooked in memory with `cook::cook_document`
+before it is written. A tool group lives in its own file and adds its table to `tool_table()` (`tools.h`).
 
 Project MCP server (M9): a scene that uses a game's components cannot be opened or edited without
 them (`unknown component type`). `mce_mcp --module <lib<game>.so> --project projects/<Name>

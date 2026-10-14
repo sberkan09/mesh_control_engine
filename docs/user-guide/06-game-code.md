@@ -127,7 +127,7 @@ The phases, in tick order:
 | `FixedUpdate_Pre` | every tick | input handling, timers, AI, moving kinematic bodies, applying forces |
 | `FixedUpdate_Physics` | every tick | owned by the engine (the 2D physics step) |
 | `FixedUpdate_Post` | every tick | reacting to contacts and triggers, cameras, HUD text, anything that reads `WorldTransform` |
-| `Render_Pre`, `Render_Submit` | every rendered frame | engine only: extract and draw |
+| `Render_Pre`, `Render_Submit` | every rendered frame (also headless), after the first tick | presentation only: frame meters, interpolation, debug draws; never sim state |
 | `Editor` | editor only | not for games |
 
 The fixed tick is 1/60 s and `f.dt` is always exactly that. Time scale, pause and catch-up change
@@ -216,9 +216,12 @@ world.set_resource(GameState{});          // in install()
 GameState& gs = f.resource<GameState>();  // in a system
 ```
 
-Keep all mutable game state in components and resources. Modules may not keep mutable statics or
-declare convars; the World is the state, which is what makes saves, replays and the determinism
-hash cover everything.
+Keep all mutable game state in components and resources. Modules may not keep mutable statics;
+the World is the state, which is what makes saves, replays and the determinism hash cover
+everything. A module may declare boot-time switches with `MCE_CVAR` (an `-autoplay` bot, a debug
+view): the player applies their command-line values once the module has loaded, before the
+scene. Read such a switch once (in a `Startup` system) and copy what the sim needs into a
+resource, so the World still holds the state.
 
 ## 6.8 Install order and what the host gives you
 

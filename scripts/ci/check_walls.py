@@ -48,10 +48,11 @@ WALLS = [
     ("astcenc wall", re.compile(r"[<\"]astcenc\.h|\bastcenc_\w+\("), ["src/engine/asset/cook/src/texture_importer.cpp"],
      ["src/", "samples/", "games/", "tests/", "tools/"]),
     # The store wall (M-MONETIZE steps 3-4, M-MOBILE 11c): StoreKit, Play Billing, Play In-App Review,
-    # Google Mobile Ads, UMP, ATT and JNI only behind mce/platform/store.h, ads.h and review.h.
+    # Google Mobile Ads, UMP, ATT, Firebase (M-LIVEOPS step 1) and JNI only behind mce/platform/store.h, ads.h,
+    # review.h and firebase.h.
     (
         "store wall",
-        re.compile(r"[<\"](StoreKit|jni)[/.]|^\s*import\s+StoreKit|\bJNIEnv\b|\bSK(Payment|Product|Store)\w*|com\.android\.billingclient|com\.google\.android\.play\.core\.review|\bAppStore\.requestReview\b|com\.google\.android\.(gms\.ads|ump)|^\s*import\s+(GoogleMobileAds|UserMessagingPlatform|AppTrackingTransparency)\b"),
+        re.compile(r"[<\"](StoreKit|jni)[/.]|^\s*import\s+StoreKit|\bJNIEnv\b|\bSK(Payment|Product|Store)\w*|com\.android\.billingclient|com\.google\.android\.play\.core\.review|\bAppStore\.requestReview\b|com\.google\.android\.(gms\.ads|ump)|^\s*import\s+(GoogleMobileAds|UserMessagingPlatform|AppTrackingTransparency|Firebase\w*)\b|com\.google\.firebase"),
         ["src/engine/platform/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),

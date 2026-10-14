@@ -10,6 +10,7 @@
 #include <memory>
 #include <random>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "cook_test_util.h"
@@ -64,6 +65,13 @@ std::string demo_project(const char* name) {
 }
 
 StringView sv(const std::string& s) { return StringView(s.data(), s.size()); }
+
+// Joins pieces into one string (tool arguments built from variables).
+std::string cat(std::initializer_list<std::string_view> parts) {
+    std::string out;
+    for (std::string_view p : parts) out += p;
+    return out;
+}
 
 struct Parsed {
     cook::JsonDoc doc;
@@ -205,7 +213,7 @@ TEST_CASE("mcp protocol: JSON-RPC framing, initialize handshake, errors, lists")
     auto tools = c.request("tools/list");
     const cook::JsonValue list = tools->root().get("result").get("tools");
     REQUIRE(list.is_array());
-    CHECK(list.size() >= 25);  // the MVP tools; later tracks add theirs (tools_agent.cpp)
+    CHECK(list.size() >= 30);  // a lower bound: tool groups land in parallel (tools.h)
     for (u32 i = 0; i < list.size(); ++i) {
         CHECK(list.at(i).get("name").is_string());
         CHECK(str(list.at(i).get("inputSchema").get("type")) == "object");
@@ -217,7 +225,9 @@ TEST_CASE("mcp protocol: JSON-RPC framing, initialize handshake, errors, lists")
     CHECK(error_code(*c.request("tools/call", "[]")) == kInvalidParams);
 
     auto res = c.request("resources/list");
-    CHECK(res->root().get("result").get("resources").size() > 3);  // the server's own three, then mce://docs/...
+    CHECK(res->root().get("result").get("resources").size() >= 4);
+    auto asset_schema = c.request("resources/read", R"({"uri":"mce://assets/schema"})");
+    CHECK(str(asset_schema->root().get("result").get("contents").at(0).get("text")).find("mce-particles") != std::string::npos);
     auto schema = c.request("resources/read", R"({"uri":"mce://refl/schema"})");
     const std::string schema_text = str(schema->root().get("result").get("contents").at(0).get("text"));
     CHECK(schema_text.find("\"Collider2D\"") != std::string::npos);
@@ -646,6 +656,98 @@ TEST_CASE("mcp tools: asset_set_import_settings rewrites a sidecar's settings") 
     auto cook = c.ok("cook_run");
     CHECK_FALSE(cook.v().get("ok").as_bool());
     CHECK(compact(cook.v().get("diagnostics")).find("bogus") != std::string::npos);
+}
+
+TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON source type (M-DATA-REACH 1)") {
+    const std::string root = demo_project("mcp_assets");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+
+    // Every type asset_schema lists is created from its template and cooks clean.
+    auto listed = c.ok("asset_schema");
+    const cook::JsonValue types = listed.v().get("types");
+    REQUIRE(types.size() == 8);
+    for (u32 i = 0; i < types.size(); ++i) {
+        const std::string type = str(types.at(i).get("type")), ext = str(types.at(i).get("extension"));
+        auto schema = c.ok("asset_schema", R"({"type":")" + type + R"("})");
+        CHECK(schema.v().get("fields").is_array());
+        CHECK(schema.v().get("template").is_object());
+        std::string content = "{}";
+        if (ext == ".mctilemap") content = std::string(R"({"tileset":")") + kBallGuid + R"(","columns":2,"rows":2,"width":8,"height":4})";
+        auto made = c.ok("asset_create", cat({R"({"path":"made/a)", ext, R"(","content":)", content, "}"}));
+        CHECK(str(made.v().get("type")) == type);
+        CHECK(str(made.v().get("guid")).rfind("guid:", 0) == 0);
+        CHECK(std::filesystem::exists(cat({root, "/assets/made/a", ext})));
+        CHECK_FALSE(std::filesystem::exists(cat({root, "/assets/made/a", ext, ".mceasset"})));  // native: GUID inline
+        CHECK(compact(c.ok("asset_list", R"({"type":")" + type + R"("})").v()).find("made/a" + ext) != std::string::npos);
+    }
+    auto cook = c.ok("cook_run");
+    CHECK_MESSAGE(cook.v().get("ok").as_bool(), compact(cook.v().get("diagnostics")));
+
+    // Refusals change nothing: an existing file, a bad value, a missing reference, an unknown key,
+    // reserved keys, a type asset_create does not make.
+    CHECK(c.fails("asset_create", R"({"path":"made/a.mcpart"})").find("already exists") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"lifetime":[2,1]}})").find("lifetime") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(root + "/assets/made/b.mcpart"));
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"texture":"guid:5ce4e000-0000-4000-8000-0000000000ff"}})")
+              .find("missing reference") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"colour":[1,1,1,1]}})").find("colour") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"guid":"x"}})").find("set by the tool") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcscene"})").find("scene_new") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"../b.mcpart"})").find("under assets/") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(root + "/assets/made/b.mcpart"));
+
+    // asset_write merges by default and keeps the GUID; replace drops the rest; a refused write
+    // leaves the file as it was.
+    const std::string guid = str(c.ok("asset_read", R"({"path":"made/a.mcpart"})").v().get("guid"));
+    auto w = c.ok("asset_write", std::string(R"({"path":"made/a.mcpart","content":{"rate":55,"texture":")") + kBallGuid + R"("}})");
+    CHECK(str(w.v().get("guid")) == guid);
+    auto r = c.ok("asset_read", R"({"guid":")" + guid + R"("})");
+    CHECK(r.v().get("content").get("rate").as_number() == 55);
+    CHECK(str(r.v().get("content").get("blend")) == "alpha");  // merged: the template's other fields stay
+    CHECK(str(r.v().get("type")) == "ParticlePreset");
+    const std::string before = read_file(root + "/assets/made/a.mcpart");
+    CHECK(c.fails("asset_write", R"({"path":"made/a.mcpart","content":{"max_particles":0}})").find("max_particles") != std::string::npos);
+    CHECK(read_file(root + "/assets/made/a.mcpart") == before);
+    c.ok("asset_write", R"({"path":"made/a.mcpart","mode":"replace","content":{"name":"bare"}})");
+    r = c.ok("asset_read", R"({"path":"made/a.mcpart"})");
+    CHECK_FALSE(r.v().get("content").get("rate").valid());
+    CHECK(str(r.v().get("content").get("guid")) == guid.substr(5));
+    CHECK(c.fails("asset_write", R"({"path":"textures/ball.png","content":{}})").find("asset_set_import_settings") != std::string::npos);
+    CHECK(c.fails("asset_read", R"({"path":"textures/ball.png"})").find("not a JSON source asset") != std::string::npos);
+    CHECK(str(c.ok("asset_read", R"({"path":"scenes/demo.mcscene"})").v().get("content").get("format")) == "mce-scene");
+
+    // The written asset plays: a ParticleEmitter in the scene names it, and run_headless cooks it.
+    c.ok("entity_create", R"({"name":"fx","components":{"ParticleEmitter":{"preset":")" + guid + R"("}}})");
+    c.ok("scene_save");
+    c.ok("run_headless", R"({"ticks":10})");
+}
+
+TEST_CASE("mcp tools: tilemap_paint paints cells, rects and flood fills in one checked call") {
+    const std::string root = demo_project("mcp_tilemap_paint");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    c.ok("asset_create", std::string(R"({"path":"maps/level.mctilemap","content":{"tileset":")") + kBallGuid +
+                             R"(","columns":2,"rows":2,"width":6,"height":3}})");
+    auto p = c.ok("tilemap_paint", R"({"path":"maps/level.mctilemap","rects":[[0,0,5,0,1]],"cells":[[2,2,3],[9,9,1]],"preview":true})");
+    CHECK(p.v().get("changed").as_number() == 7);
+    CHECK(p.v().get("outside").as_number() == 1);
+    CHECK(compact(p.v().get("preview")) == R"(["..3...","......","111111"])");
+    // Flood fill: the empty region above the floor, not the floor or the 3 inside it.
+    p = c.ok("tilemap_paint", R"({"path":"maps/level.mctilemap","fills":[[0,1,2]],"preview":true})");
+    CHECK(p.v().get("changed").as_number() == 11);
+    CHECK(compact(p.v().get("preview")) == R"(["223222","222222","111111"])");
+    // A tile past the tileset (4 cells) refuses the whole call.
+    const std::string before = read_file(root + "/assets/maps/level.mctilemap");
+    CHECK(c.fails("tilemap_paint", R"({"path":"maps/level.mctilemap","cells":[[0,0,0]],"rects":[[0,0,1,1,5]]})").find("outside the tileset") != std::string::npos);
+    CHECK(read_file(root + "/assets/maps/level.mctilemap") == before);
+    CHECK(c.fails("tilemap_paint", R"({"path":"maps/level.mctilemap","cells":[[0,0]]})").find("[x, y, tile]") != std::string::npos);
+    CHECK(c.fails("tilemap_paint", R"({"path":"textures/ball.png","clear":0})").find("not a tilemap") != std::string::npos);
+    p = c.ok("tilemap_paint", R"({"path":"maps/level.mctilemap","clear":0,"preview":true})");
+    CHECK(compact(p.v().get("preview")) == R"(["......","......","......"])");
+    CHECK(c.ok("cook_run").v().get("ok").as_bool());
 }
 
 TEST_CASE("mcp tools: a relative --project path saves where it says") {

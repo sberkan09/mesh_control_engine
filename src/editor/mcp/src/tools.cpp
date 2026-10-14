@@ -1205,7 +1205,8 @@ Span<const ToolDef> tool_table() {
     static const Array<ToolDef> all = [] {
         Array<ToolDef> a;
         for (const ToolDef& t : kTools) a.push_back(t);
-        for (const ToolDef& t : agent_tool_table()) a.push_back(t);
+        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table()})
+            for (const ToolDef& t : group) a.push_back(t);
         return a;
     }();
     return all.span();
@@ -1252,6 +1253,7 @@ void list_resources(JsonWriter& w) {
         {"mce://scene/current", "scene", "The open scene as .mcscene text (the in-memory document, saved or not)", "application/json"},
         {"mce://log", "log", "The last console/log lines", "text/plain"},
         {"mce://refl/schema", "schema", "Every reflected component type, described as refl_describe_component does", "application/json"},
+        {"mce://assets/schema", "asset-schema", "Every JSON source asset type, described as asset_schema does", "application/json"},
     };
     for (const Res& r : kResources)
         w.begin_object().key("uri").str(r.uri).key("name").str(r.name).key("description").str(r.description).key("mimeType").str(r.mime).end_object();
@@ -1273,6 +1275,9 @@ bool read_resource(Server& server, StringView uri, JsonWriter& w) {
             text += lines[i].text.view();
             text += '\n';
         }
+    } else if (uri == "mce://assets/schema") {
+        JsonWriter s(text);
+        write_asset_schemas(s);
     } else if (uri == "mce://refl/schema") {
         JsonWriter s(text);
         s.begin_object().key("components").begin_array();

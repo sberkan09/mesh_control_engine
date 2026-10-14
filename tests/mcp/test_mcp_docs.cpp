@@ -111,8 +111,7 @@ TEST_CASE("--docs: another folder is served, and a folder without docs serves no
     const std::string root = fresh_dir("mcp_docs_other");
     write_file(root + "/user-guide/README.md", "# Other guide\n\n## Section one\n\nzebra stripes everywhere\n");
     mcp::ServerOptions opt;
-    const std::string docs = root;
-    opt.docs = docs.c_str();
+    opt.docs = root.c_str();
     Client c(opt);
     c.init();
     CHECK(read(c, "mce://docs/guide/README.md").find("# Other guide") == 0);

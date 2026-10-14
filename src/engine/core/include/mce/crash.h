@@ -9,6 +9,9 @@
 // are stripped; scripts/symbolicate.py resolves a report against the symbol archive ship.py keeps
 // beside the zip (debug files keyed by build id), so no symbols ever leave the studio.
 //
+// A handler that was installed before install() (a crash vendor's, such as Firebase Crashlytics'
+// NDK handler) still sees the crash: once the report is written the signal goes on to it.
+//
 // The handler itself only uses what install() prepared: the paths and header text are formatted up
 // front, the report is written with raw file calls, and the breadcrumb ring is read with a try-lock.
 

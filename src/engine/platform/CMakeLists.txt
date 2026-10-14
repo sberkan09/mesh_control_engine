@@ -12,6 +12,7 @@ mce_add_library(mce_platform
         src/process.cpp
         src/store.cpp
         src/ads.cpp
+        src/firebase.cpp
         src/review.cpp
         src/haptics.cpp
         src/power.cpp
@@ -90,4 +91,44 @@ if(IOS AND MCE_ADMOB)
     endforeach()
     target_link_libraries(mce_platform PRIVATE "-framework GoogleMobileAds" "-framework UserMessagingPlatform"
         "-framework AppTrackingTransparency" "-framework UIKit")
+endif()
+
+# The live services vendor (platform/firebase.h): Crashlytics and Analytics. Android needs nothing
+# here (MceFirebase.java and the Firebase Gradle plugins are stamped in by ship.py when
+# MCE_FIREBASE_ANDROID_CONFIG names the project's google-services.json). iOS links Google's
+# xcframeworks, which are not vendored: unzip Firebase's iOS distribution (Firebase.zip from the
+# firebase-ios-sdk releases) and point MCE_FIREBASE_SDK_DIR at its folder holding FirebaseAnalytics/
+# and FirebaseCrashlytics/. Opt-in until it has been run on a Mac.
+option(MCE_FIREBASE "iOS: build Firebase Crashlytics and Analytics into mce_platform" OFF)
+set(MCE_FIREBASE_SDK_DIR "" CACHE PATH "iOS: the unzipped Firebase.zip (FirebaseAnalytics/, FirebaseCrashlytics/)")
+if(IOS AND MCE_FIREBASE)
+    if(NOT EXISTS "${MCE_FIREBASE_SDK_DIR}/FirebaseCrashlytics/FirebaseCrashlytics.xcframework")
+        message(FATAL_ERROR "MCE_FIREBASE needs MCE_FIREBASE_SDK_DIR with FirebaseCrashlytics/ and FirebaseAnalytics/ (got '${MCE_FIREBASE_SDK_DIR}')")
+    endif()
+    enable_language(Swift)
+    if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+        set(_mce_slice "ios-arm64_x86_64-simulator")
+    else()
+        set(_mce_slice "ios-arm64")
+    endif()
+    file(GLOB _mce_firebase_fws "${MCE_FIREBASE_SDK_DIR}/FirebaseAnalytics/*.xcframework"
+         "${MCE_FIREBASE_SDK_DIR}/FirebaseCrashlytics/*.xcframework")
+    list(REMOVE_DUPLICATES _mce_firebase_fws)
+    target_sources(mce_platform PRIVATE src/firebase_ios.swift)
+    target_compile_definitions(mce_platform PRIVATE MCE_FIREBASE=1)
+    set(_mce_firebase_seen)
+    foreach(fw ${_mce_firebase_fws})
+        get_filename_component(name "${fw}" NAME_WE)
+        if(name IN_LIST _mce_firebase_seen)
+            continue()  # both folders ship the shared ones (FirebaseCore, GoogleUtilities, ...)
+        endif()
+        list(APPEND _mce_firebase_seen ${name})
+        target_compile_options(mce_platform PRIVATE "$<$<COMPILE_LANGUAGE:Swift>:-F${fw}/${_mce_slice}>")
+        target_link_options(mce_platform INTERFACE "-F${fw}/${_mce_slice}")
+        target_link_libraries(mce_platform PRIVATE "-framework ${name}")
+    endforeach()
+    # Firebase's static frameworks register Objective-C categories: -ObjC keeps them.
+    target_link_options(mce_platform INTERFACE "-ObjC")
+    target_link_libraries(mce_platform PRIVATE sqlite3 z "-framework StoreKit" "-framework SystemConfiguration"
+        "-framework UIKit")
 endif()

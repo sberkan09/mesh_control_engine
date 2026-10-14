@@ -5,6 +5,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Friction notes, M-AGENT step 8 (SBA-55): `report_friction` lets an agent write down what the engine made hard
+  (summary, area, severity, expected, actual, workaround) as a line in the project's `friction.jsonl`, and
+  `mce friction <projects...>` collects the notes into one Markdown backlog (or JSON), blocking ones first.
 - Several agents on one project, M-AGENT step 7 (SBA-54): each agent runs its own MCP server (`--agent <name>`)
   on the same folder. `project_watch` reads the event feed (`.mce/events.jsonl`), `asset_lock` refuses other
   agents' writes to a file, `task_add` / `task_claim` / `task_update` share `tasks.mctasks`, and `scene_switch`
@@ -14,6 +17,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   errors, broken and unused references, missing credits, sRGB on data textures, each scene's sim time per tick
   against a budget, and 2D text size and contrast; `ship_build` runs the full build, a headless smoke run of the
   host and `mce ship`, and returns the zip's path. `mce ship` now puts the project's `CREDITS.md` in the zip.
+- Live services vendor, Firebase (M-LIVEOPS step 1): `mce/platform/firebase.h` with Crashlytics for native crashes
+  and Analytics for `analytics::event`. `ship` stamps it into a phone build only when `MCE_FIREBASE_ANDROID_CONFIG` or
+  `MCE_FIREBASE_IOS_CONFIG` names the project's config file (never committed), uploads symbols to Crashlytics, starts
+  both SDKs with collection off and adds the privacy manifest entries; the player turns collection on with consent.
+  iOS builds it with `-DMCE_FIREBASE=ON -DMCE_FIREBASE_SDK_DIR=...`. The engine's crash handler now hands each crash on
+  to a handler installed before it (Crashlytics' NDK handler) after writing its own report. `-liveops.provider
+  firebase` picks it explicitly. Not yet run on a device.
 - Content without a human, M-AGENT step 5 (SBA-52): the MCP server generates palettes, pixel sprites, tile sets,
   noise textures and skies, sfxr sound effects and music loops (`gen_palette`, `gen_sprite`, `gen_tileset`,
   `gen_texture`, `gen_sfx`, `gen_music`), each with a preview image and a `save` that writes the asset, its sidecar

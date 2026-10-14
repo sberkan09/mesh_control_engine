@@ -16,8 +16,9 @@ Built so far (the vendor-neutral parts of M-LIVEOPS):
 - **game services** (M-LIVEOPS step 2): achievements, leaderboards and cloud saves through one API,
   with a local stand-in for Game Center and Play Games (23.6).
 
-The vendor side (the SDK that receives reports and events on the phones) is the next part of
-the step. Until it lands, the `local` provider below writes everything to files.
+The vendor is **Firebase**: Crashlytics catches native crashes on the phones and Analytics receives
+the events (23.7). It is stamped into a phone build only when the project hands `ship` its Firebase
+config; elsewhere the `local` provider below writes everything to files.
 
 ## 23.1 Turn it on
 
@@ -38,7 +39,7 @@ device. To try it on any game: `-liveops 1 -liveops.provider local`. That writes
 | Flag | Values | Default |
 |---|---|---|
 | `-liveops` | `1`: on even when the host does not turn it on | `0` |
-| `-liveops.provider` | empty: the host's; `local`: the files above; `none`: neither | empty |
+| `-liveops.provider` | empty: the host's, else Firebase where the build has it; `firebase`; `local`: the files above; `none`: neither | empty |
 | `-liveops.consent` | `auto`, `granted`, `denied` (23.2) | `auto` |
 
 ## 23.2 Consent
@@ -225,9 +226,28 @@ sample_liveops_demo -record run.rec / -replay run.rec        # the same hash, no
 Its ctest (`sample_liveops_demo_flows`) checks each of those, and `local_ci.sh` checks its hash
 across runs and Debug/Release.
 
-**Setting up a vendor.** When a vendor provider lands, it follows the M-MONETIZE pattern: the SDK
-lives in the platform layer, the game code above does not change, and a project picks the vendor
-in its own config. Two rules hold for every vendor:
+**Setting up Firebase.** The SDKs live in the platform layer (`mce/platform/firebase.h`); game code
+does not change. Nothing of Firebase is in the repository: the project's config files come from the
+Firebase console and reach `ship` through the environment.
+
+1. In the Firebase console, add an Android app (package `org.meshcontrol.<target>`, or your own) and
+   an iOS app (the bundle id), and download `google-services.json` and `GoogleService-Info.plist`.
+   Keep them outside the repository (a secrets folder, or the CI's secret store).
+2. Android: `MCE_FIREBASE_ANDROID_CONFIG=/secrets/google-services.json python3 scripts/ship.py <game>
+   --target android`. The build gets Crashlytics NDK and Analytics, the Google services and
+   Crashlytics Gradle plugins, and uploads the library's symbols to Crashlytics.
+3. iOS: unzip Firebase's iOS distribution (`Firebase.zip`) and build with `-DMCE_FIREBASE=ON
+   -DMCE_FIREBASE_SDK_DIR=<that folder>`, then ship with `MCE_FIREBASE_IOS_CONFIG=/secrets/
+   GoogleService-Info.plist` (and `MCE_FIREBASE_SDK_DIR`, so the dSYM is uploaded with Crashlytics'
+   `upload-symbols`).
+4. Both SDKs start with collection **off**. The player turns it on when consent is Granted (23.2),
+   keeps crash reports on the device while it is Unknown, and deletes them when it is Denied.
+
+The engine's own crash handler still writes its `.crash` report and then hands the crash on to
+Crashlytics' handler. With Firebase on, those reports stay on the device for your own support
+requests; Crashlytics is what sends.
+
+Two rules hold for every vendor:
 
 - **Keys come from the environment, never from the repository.** A vendor's DSN, API key or config
   project id is read at build or ship time from an environment variable or the CI's secret store
@@ -254,8 +274,9 @@ With the `local` provider nothing leaves the device and there is nothing to decl
 
 ## 23.9 Known gaps
 
-- No vendor yet: the SDK side on iOS and Android, symbol upload from `ship`, and the vendor's own
-  privacy manifest entries are the next part of M-LIVEOPS step 1.
+- Firebase has not been run on a device yet: the Android and iOS sides are built and stamped, and
+  the forced-crash check (a crash on the Simulator and the emulator shown symbolicated in the
+  Crashlytics console after relaunch) needs a Mac, a Firebase project and its config files.
 - Remote config has no server fetcher yet: a vendor's config service (or an HTTP download of a
   cooked pack) comes with the vendor choice. The static-file fetcher and the cache work today.
 - Game services have no native provider yet: Game Center / iCloud and Play Games Services v2 need a
