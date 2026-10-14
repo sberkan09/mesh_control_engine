@@ -74,6 +74,7 @@
 #include "mce/monetize/platform_store.h"
 #include "mce/monetize/monetize.h"
 #include "mce/physics/module.h"
+#include "mce/platform/haptics.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
@@ -135,6 +136,9 @@ MCE_CVAR(cv_language, "language", "",
          CVarFlags::None);
 MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
          "UI size on top of the display's own scale (1 = as the display asks; lowered when the screen is too small)",
+         CVarFlags::Saved);
+MCE_CVAR(cv_haptics, "haptics", true,
+         "Haptic feedback: phone taps and gamepad rumble from platform::haptics::play (off: none; never in the state hash)",
          CVarFlags::Saved);
 MCE_CVAR(cv_default_language, "default_language", "en",
          "The project's base language: the last fallback when neither the choice nor the device languages have a string table",
@@ -319,6 +323,7 @@ public:
         audio_.update();
         clips_.sync();
         sync_fullscreen();
+        if (device_) platform::haptics::set_enabled(cv_haptics.get_bool());  // the console or a settings menu may flip it
         if (!device_ || os_background_) return;  // no GPU work in the background (iOS ends apps that try)
         device_->begin_frame(rc.frame_index);
         const rhi::Extent2D bb = device_->backbuffer_size();
@@ -1307,6 +1312,7 @@ int mce::player::run(int argc, char** argv, const PlayerDesc& pd) {
 
     const ConVar* headless = ConVar::find(StringId("headless"));
     const bool is_headless = headless && headless->get_bool();
+    platform::haptics::set_enabled(!is_headless && cv_haptics.get_bool());  // output only: a headless run plays none
     int rc = 1;
     if (is_headless) {
         rc = run_headless(pd);

@@ -13,6 +13,7 @@ mce_add_library(mce_platform
         src/store.cpp
         src/ads.cpp
         src/review.cpp
+        src/haptics.cpp
     PUBLIC_DEPS
         mce::mce_core
     PRIVATE_DEPS
@@ -38,6 +39,17 @@ if(IOS AND MCE_STORE_REVIEW)
     target_sources(mce_platform PRIVATE src/review_storekit.swift)
     target_compile_definitions(mce_platform PRIVATE MCE_STORE_REVIEW=1)
     target_link_libraries(mce_platform PRIVATE "-framework StoreKit" "-framework UIKit")
+endif()
+
+# Haptics (platform/haptics.h). Android: MceHaptics.java is stamped into every game's Gradle project.
+# iOS: UIKit's feedback generators (Swift), opt-in until run on a Mac; without them the iOS device
+# haptics are "none" (gamepads still rumble).
+option(MCE_UIKIT_HAPTICS "iOS: build UIKit's feedback generators (Swift) into mce_platform" OFF)
+if(IOS AND MCE_UIKIT_HAPTICS)
+    enable_language(Swift)
+    target_sources(mce_platform PRIVATE src/haptics_uikit.swift)
+    target_compile_definitions(mce_platform PRIVATE MCE_UIKIT_HAPTICS=1)
+    target_link_libraries(mce_platform PRIVATE "-framework UIKit")
 endif()
 
 # The phone's ad network (platform/ads.h). Android again needs nothing here (MceAds.java is stamped

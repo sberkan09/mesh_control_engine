@@ -5,6 +5,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Haptics, step 11d (M-MOBILE, #150): `platform::haptics::play(preset)` (`mce/platform/haptics.h`) taps the phone
+  (UIKit feedback generators on iOS with `-DMCE_UIKIT_HAPTICS=ON`, the vibrator's effects on Android) and rumbles
+  every connected gamepad; the player's saved `haptics` convar turns it off, and it never enters the state hash.
 - Review prompt, step 11c (M-MOBILE, #147): `platform::request_review()` (`mce/platform/review.h`) asks for the
   store's rating prompt: Play In-App Review on Android (stamped into every game), StoreKit's `AppStore.requestReview`
   on iOS (`-DMCE_STORE_REVIEW=ON`), a logged no-op on desktop.

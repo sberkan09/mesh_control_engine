@@ -29,6 +29,9 @@ both over JNI. Other games get none of it, and their store and ad backends are "
 Review prompt (M-MOBILE step 11c): every game gets android/review/MceReview.java, Play In-App Review
 (PLAY_REVIEW) and MceActivity's mceReviewRequest, which platform::request_review() calls over JNI.
 
+Haptics (M-MOBILE step 11d): every game gets android/haptics/MceHaptics.java (the vibrator's predefined
+effects; the manifest's VIBRATE permission) and MceActivity's mceHaptic, which platform::haptics::play() calls.
+
 Tooling: ANDROID_HOME (default ~/Library/Android/sdk), ANDROID_NDK_HOME (default: the newest NDK in
 the SDK), JAVA_HOME (default: /usr/libexec/java_home -v 17, then Homebrew's openjdk@17).
 """
@@ -101,6 +104,17 @@ REVIEW_METHODS = '''
     public void mceReviewRequest() {
         if (review == null) review = new org.meshcontrol.review.MceReview(this);
         review.request();
+    }
+'''
+
+# MceActivity's bridge to MceHaptics, for platform/haptics.h's JNI call (src/engine/platform/src/haptics.cpp).
+HAPTICS_METHODS = '''
+    // ---- haptics (mce_platform's haptics::play over JNI, cmake/mobile/android/haptics) ----
+    private org.meshcontrol.haptics.MceHaptics haptics;
+
+    public void mceHaptic(int preset) {
+        if (haptics == null) haptics = new org.meshcontrol.haptics.MceHaptics(this);
+        haptics.play(preset);
     }
 '''
 
@@ -183,7 +197,7 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
     if not os.path.isdir(sdl_project):
         sys.exit(f"ship: SDL's android-project not found under {build_dir}/_deps (configure the preset first)")
     shutil.rmtree(project, ignore_errors=True)
-    shutil.copytree(TEMPLATE, project, ignore=shutil.ignore_patterns("*.in", "README.md", "MceActivity.java*", "billing", "ads", "review"))
+    shutil.copytree(TEMPLATE, project, ignore=shutil.ignore_patterns("*.in", "README.md", "MceActivity.java*", "billing", "ads", "review", "haptics"))
     for name in ("gradlew", "gradlew.bat", "gradle"):
         src = os.path.join(sdl_project, name)
         dst = os.path.join(project, name)
@@ -208,11 +222,13 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
         "ADS": "",
         "ADS_META": "",
         "REVIEW": REVIEW_METHODS,
+        "HAPTICS": HAPTICS_METHODS,
         "DEPENDENCIES": "",
     }
     shop = monetize_info.read(art)
     deps = [PLAY_REVIEW]
     copy_java("review", "MceReview.java", main)
+    copy_java("haptics", "MceHaptics.java", main)
     if shop["products"]:
         fields["BILLING"] = BILLING_METHODS
         deps.append(PLAY_BILLING)

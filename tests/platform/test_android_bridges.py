@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""cmake/mobile/android_app.py (M-MOBILE step 11c): every stamped Gradle project carries Play In-App Review,
-MceReview.java and MceActivity.mceReviewRequest, the method platform::request_review() calls over JNI
-(src/engine/platform/src/review.cpp). A fake SDL android-project stands in for the real one; no Gradle runs."""
+"""cmake/mobile/android_app.py (M-MOBILE steps 11c-11d): every stamped Gradle project carries the Java bridges
+mce_platform calls over JNI for every game: Play In-App Review (MceReview.java, MceActivity.mceReviewRequest,
+src/engine/platform/src/review.cpp) and haptics (MceHaptics.java, MceActivity.mceHaptic, haptics.cpp). A fake SDL
+android-project stands in for the real one; no Gradle runs."""
 
 import os
 import sys
@@ -57,13 +58,28 @@ def main():
         review = read(os.path.join(main_dir, "java", "org", "meshcontrol", "review", "MceReview.java"))
         assert "package org.meshcontrol.review;" in review
         assert "requestReviewFlow" in review and "launchReviewFlow" in review
-        # The template folder itself is not copied as a stray top-level directory.
-        assert not os.path.exists(os.path.join(project, "review")), os.listdir(project)
+        assert "public void mceHaptic(int preset)" in activity, activity
+        haptics = read(os.path.join(main_dir, "java", "org", "meshcontrol", "haptics", "MceHaptics.java"))
+        assert "package org.meshcontrol.haptics;" in haptics
+        assert "VibrationEffect.createPredefined" in haptics
+        manifest = read(os.path.join(main_dir, "AndroidManifest.xml"))
+        assert "android.permission.VIBRATE" in manifest
+        # The template folders themselves are not copied as stray top-level directories.
+        for folder in ("review", "haptics"):
+            assert not os.path.exists(os.path.join(project, folder)), os.listdir(project)
 
-        # The JNI side looks the bridge up by this name and signature.
-        native = read(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src", "engine", "platform",
-                                   "src", "review.cpp"))
-        assert 'method("mceReviewRequest", "()V")' in native
+        # The JNI side looks each bridge up by this name and signature.
+        src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src", "engine", "platform", "src")
+        assert 'method("mceReviewRequest", "()V")' in read(os.path.join(src, "review.cpp"))
+        assert 'method("mceHaptic", "(I)V")' in read(os.path.join(src, "haptics.cpp"))
+        # MceHaptics numbers its presets as platform::haptics::Preset does.
+        header = read(os.path.join(src, "..", "include", "mce", "platform", "haptics.h"))
+        names = ["Selection", "Light", "Medium", "Heavy", "Success", "Warning", "Error"]
+        order = [header.index(f"    {n},") for n in names]
+        assert order == sorted(order), "haptics.h Preset order changed: update MceHaptics.java and haptics_uikit.swift"
+        assert "SELECTION = 0, LIGHT = 1, MEDIUM = 2, HEAVY = 3, SUCCESS = 4, WARNING = 5, ERROR = 6" in haptics
+        assert "case selection = 0, light, medium, heavy, success, warning, error" in read(
+            os.path.join(src, "haptics_uikit.swift"))
 
         # A game with products still gets the review library next to Play Billing.
         write(os.path.join(game, "shop.mcstore"), '{"products": [{"id": "coins"}]}')
@@ -71,7 +87,7 @@ def main():
                           os.path.join(tmp, "debug.keystore"))
         gradle = read(os.path.join(project, "app", "build.gradle"))
         assert android_app.PLAY_REVIEW in gradle and android_app.PLAY_BILLING in gradle, gradle
-    print("android review stamping OK")
+    print("android bridges stamping OK")
 
 
 if __name__ == "__main__":

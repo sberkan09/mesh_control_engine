@@ -21,7 +21,7 @@ a device or simulator run on the user's Mac.
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | done except the per-tier device numbers (no device) |
 | 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | done on the emulator and the Simulator (no devices) |
 | 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | done (store upload untested: no credentials) |
-| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a, 11b, 11c done in the cloud (Mac simulator/emulator checks open); 11d next |
+| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a–11d done in the cloud (Mac simulator/emulator checks open) |
 
 ## What shipped (steps 2–3)
 
@@ -218,11 +218,34 @@ Still open in 11b: the same layout on the Mac simulator and Android emulator (`l
 - **Desktop:** `None`; each call logs `review: request_review() #n is a no-op here` and returns false.
 - The store wall (`check_walls.py`) now also keeps Play In-App Review and `AppStore.requestReview` inside
   `mce_platform`.
-- Tests: `test_platform` (the desktop no-op: backend, count, log line) and `android_review` (stamps a project
+- Tests: `test_platform` (the desktop no-op: backend, count, log line) and `android_bridges` (stamps a project
   over a fake SDL android-project and checks the dependency, `MceReview.java` and the JNI method's name).
 
 Still open in 11c: the prompt in the iOS Simulator (StoreKit shows it in debug builds every time) and on an
 Android emulator with the Play Store (internal test track or `FakeReviewManager`), on the Mac.
+
+## What shipped (step 11d: haptics)
+
+- **`platform::haptics::play(preset)`** (`mce/platform/haptics.h`): seven presets (Selection, Light, Medium,
+  Heavy, Success, Warning, Error) played on the device's own haptics and on every connected gamepad in one call.
+- **iOS:** `haptics_uikit.swift` maps them to UIKit's feedback generators (selection, impact light / medium /
+  heavy, notification success / warning / error), kept prepared. Opt-in with `-DMCE_UIKIT_HAPTICS=ON` until it
+  has been run on a Mac; without it the device side is `none` and pads still rumble.
+- **Android:** `cmake/mobile/android/haptics/MceHaptics.java`, stamped into every game with
+  `MceActivity.mceHaptic`, plays the vibrator's predefined effects (tick, click, heavy click, double click) and
+  two short waveforms for Warning and Error; the manifest already asked for `VIBRATE`.
+- **Gamepads:** each preset has a rumble (`gamepad_rumble_of`: motor intensities and 25–220 ms) sent through
+  SDL to every connected pad, on every platform. Virtual pads now take rumble too
+  (`platform::virtual_gamepad_rumble`), which is how tests see it.
+- **The setting:** `haptics::set_enabled`; the player keeps it in the saved convar `haptics` (on by default) and
+  applies it every frame, so a settings menu or the console can flip it. Haptics are output only: nothing
+  touches World state, so they never enter the state hash, and a headless run plays none.
+- Tests: `test_platform` (names and ranges, the count without a pad, a virtual pad's rumble per preset, the
+  setting suppressing it) and `android_bridges` (MceHaptics stamped, the JNI name, the preset numbering shared
+  by the header, Java and Swift).
+
+Still open in 11d: the taps in the iOS Simulator (Xcode logs them; a real iPhone feels them) and on an Android
+emulator or device, on the Mac.
 
 ## Constraints found so far
 

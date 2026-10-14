@@ -16,6 +16,8 @@ Gradle project around the game's shared library:
   `.mcstore` has ad placements, with its AdMob app id in the manifest (`cmake/mobile/monetize_info.py`).
 - `review/MceReview.java`: Play In-App Review for `mce/platform/review.h` (M-MOBILE step 11c). Every game gets it,
   with the review library in `app/build.gradle` and `mceReviewRequest` on its activity (`src/engine/platform/src/review.cpp`).
+- `haptics/MceHaptics.java`: the vibrator's predefined effects for `mce/platform/haptics.h` (step 11d). Every game gets it,
+  with `mceHaptic` on its activity (`src/engine/platform/src/haptics.cpp`); the manifest already asks for `VIBRATE`.
 
 SDL's Java sources (`org.libsdl.app`) are copied from the SDL checkout of the same build, so the
 Java side always matches the native SDL; SDL's default launcher icon is replaced by the game's
