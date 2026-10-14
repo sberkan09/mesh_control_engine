@@ -93,8 +93,8 @@
       },
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
     },
-    { "name": "ios-sim-arm64", "displayName": "iOS Simulator arm64 (Metal)", "inherits": "ios-base", "cacheVariables": { "CMAKE_OSX_SYSROOT": "iphonesimulator", "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
-    { "name": "ios-arm64", "displayName": "iOS device arm64 (Metal)", "inherits": "ios-base", "cacheVariables": { "CMAKE_OSX_SYSROOT": "iphoneos", "CMAKE_BUILD_TYPE": "RelWithDebInfo" } }
+    { "name": "ios-sim-arm64", "displayName": "iOS Simulator arm64 (Metal)", "inherits": "ios-base", "cacheVariables": { "CMAKE_OSX_SYSROOT": "iphonesimulator", "CMAKE_Swift_COMPILER_TARGET": "arm64-apple-ios16.0-simulator", "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+    { "name": "ios-arm64", "displayName": "iOS device arm64 (Metal)", "inherits": "ios-base", "cacheVariables": { "CMAKE_OSX_SYSROOT": "iphoneos", "CMAKE_Swift_COMPILER_TARGET": "arm64-apple-ios16.0", "CMAKE_BUILD_TYPE": "RelWithDebInfo" } }
   ],
   "buildPresets": [
     { "name": "msvc-debug",          "configurePreset": "msvc-debug" },

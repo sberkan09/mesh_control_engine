@@ -39,7 +39,9 @@
 #include "mce/input/input_system.h"
 #include "mce/kit/particles.h"
 #include "mce/physics/module.h"
+#include "mce/platform/haptics.h"
 #include "mce/platform/platform.h"
+#include "mce/platform/review.h"
 #include "mce/platform/window.h"
 #include "mce/render/renderer.h"
 #include "mce/render/sprite_animation.h"
@@ -294,11 +296,26 @@ public:
                     burst(Ember, r.pos, 8);
                     burst(Dust, r.pos - vec2{0.35f * static_cast<f32>(r.dir), 0.0f}, 6);
                     break;
-                case Fx::Coin: burst(Spark, r.pos, 14); break;
-                case Fx::Stomp: burst(Debris, r.pos, 10); break;
-                case Fx::Hurt: burst(Ember, r.pos, 24); break;
+                case Fx::Coin:
+                    burst(Spark, r.pos, 14);
+                    platform::haptics::play(platform::haptics::Preset::Light);
+                    break;
+                case Fx::Stomp:
+                    burst(Debris, r.pos, 10);
+                    platform::haptics::play(platform::haptics::Preset::Medium);
+                    break;
+                case Fx::Hurt:
+                    burst(Ember, r.pos, 24);
+                    platform::haptics::play(platform::haptics::Preset::Error);
+                    break;
                 case Fx::Crumble: burst(Debris, r.pos - vec2{0.0f, 0.3f}, 6); break;
-                case Fx::Win: burst(Spark, r.pos + vec2{0.0f, 0.5f}, 40); break;
+                case Fx::Win:
+                    burst(Spark, r.pos + vec2{0.0f, 0.5f}, 40);
+                    platform::haptics::play(platform::haptics::Preset::Success);
+                    // A won level is the moment platform/review.h asks for; the OS rate-limits the prompt,
+                    // and one ask per run is enough.
+                    if (platform::review_requests() == 0) platform::request_review();
+                    break;
             }
         }
     }

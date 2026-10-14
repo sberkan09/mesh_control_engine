@@ -31,9 +31,9 @@ if(IOS AND MCE_STOREKIT)
 endif()
 
 # The phone's review prompt (platform/review.h). Android: MceReview.java and Play In-App Review are
-# stamped into every game's Gradle project. iOS: StoreKit's AppStore.requestReview (Swift), opt-in
-# until it has been run on a Mac like the store above; without it the iOS review backend is "none".
-option(MCE_STORE_REVIEW "iOS: build StoreKit's review prompt (Swift) into mce_platform" OFF)
+# stamped into every game's Gradle project. iOS: StoreKit's AppStore.requestReview (Swift), on by
+# default since its Simulator run (M-MOBILE 11c); without it the iOS review backend is "none".
+option(MCE_STORE_REVIEW "iOS: build StoreKit's review prompt (Swift) into mce_platform" ON)
 if(IOS AND MCE_STORE_REVIEW)
     enable_language(Swift)
     target_sources(mce_platform PRIVATE src/review_storekit.swift)
@@ -42,9 +42,9 @@ if(IOS AND MCE_STORE_REVIEW)
 endif()
 
 # Haptics (platform/haptics.h). Android: MceHaptics.java is stamped into every game's Gradle project.
-# iOS: UIKit's feedback generators (Swift), opt-in until run on a Mac; without them the iOS device
-# haptics are "none" (gamepads still rumble).
-option(MCE_UIKIT_HAPTICS "iOS: build UIKit's feedback generators (Swift) into mce_platform" OFF)
+# iOS: UIKit's feedback generators (Swift), on by default since their Simulator run (M-MOBILE 11d);
+# without them the iOS device haptics are "none" (gamepads still rumble).
+option(MCE_UIKIT_HAPTICS "iOS: build UIKit's feedback generators (Swift) into mce_platform" ON)
 if(IOS AND MCE_UIKIT_HAPTICS)
     enable_language(Swift)
     target_sources(mce_platform PRIVATE src/haptics_uikit.swift)

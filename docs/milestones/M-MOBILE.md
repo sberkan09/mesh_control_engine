@@ -21,7 +21,7 @@ a device or simulator run on the user's Mac.
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | done except the per-tier device numbers (no device) |
 | 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | done on the emulator and the Simulator (no devices) |
 | 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | done (store upload untested: no credentials) |
-| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a–11f done in the cloud (Mac simulator/emulator checks open) |
+| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a–11f done in the cloud; 11c and 11d checked in the Simulator and the emulator (2026-10-14); 11a, 11b, 11e, 11f wait for a player game on phones (below) |
 
 ## What shipped (steps 2–3)
 
@@ -169,8 +169,11 @@ a game in landscape on the emulator.
 - Tests: `test_cook` (`strings: a font with "strings": true …`, glyphs, warning, re-cook on a table edit) and
   `app_names` (the Python helper).
 
-Still open in 11a: the simulator/emulator check on the Mac (`local_ci_macos.sh android ios` with a Turkish
-device language).
+Still open in 11a: the simulator/emulator check with a Turkish device language. The language choice, the
+string tables and the app names live in the player (`mce_player_runtime`) and in projects, and
+`ship.py --target android|ios` still ships only the samples, which have no tables; the check waits for a
+player game on phones (see "Phone checks on the Mac" below). The Simulator already runs in Turkish, and
+StoreKit's system prompt follows it (11c).
 
 ## What shipped (step 11b: `mce_ui` on many screens)
 
@@ -200,7 +203,8 @@ device language).
   layout at 1280×720, 2400×1080 (notch and home indicator) and 2048×1536, checked by rect and pixel and written
   to `build/<preset>/tests/ui/tmp/ui_layout_<w>x<h>.ppm`.
 
-Still open in 11b: the same layout on the Mac simulator and Android emulator (`local_ci_macos.sh android ios`).
+Still open in 11b: the same layout on the Mac simulator and Android emulator; it waits for a player game on
+phones, as 11a does.
 
 ## What shipped (step 11c: the review prompt)
 
@@ -221,8 +225,20 @@ Still open in 11b: the same layout on the Mac simulator and Android emulator (`l
 - Tests: `test_platform` (the desktop no-op: backend, count, log line) and `android_bridges` (stamps a project
   over a fake SDL android-project and checks the dependency, `MceReview.java` and the JNI method's name).
 
-Still open in 11c: the prompt in the iOS Simulator (StoreKit shows it in debug builds every time) and on an
-Android emulator with the Play Store (internal test track or `FakeReviewManager`), on the Mac.
+Checked on the Mac (2026-10-14, SBA-5), with Ember Step asking once per run after a won level:
+
+- **iOS Simulator** (iPhone 17, iOS 26.3, Turkish device language): the first real build of the Swift side
+  failed twice and was fixed. CMake's Swift check targeted macOS (the iOS presets now set
+  `CMAKE_Swift_COMPILER_TARGET`), and `mce_apply_compile_policy` handed `-Wall`, `-fno-rtti` and friends to
+  `swiftc` (now C-family sources only). After that StoreKit's prompt shows over the game after the first level
+  ("Ember Step (Artifact A) hoşunuza gidiyor mu?", five stars, "Şimdi Değil"; screenshot
+  `ios-sim-review-prompt.png` in the project files). `MCE_STORE_REVIEW` is now ON by default; the `ios-arm64`
+  device preset builds with it too.
+- **Android emulator** (Android 15 with the Play Store, not signed in): every game failed to build since 11c,
+  because Play In-App Review pulls AndroidX and the stamped `gradle.properties` said `android.useAndroidX=false`;
+  it is `true` now. The call reaches Play Core (`ReviewService : requestInAppReview`), which cannot bind to the
+  Play Store's review service for a sideloaded app; `MceReview` logs `requestReviewFlow failed` and the game
+  plays on. Seeing the prompt itself needs an install from the internal test track.
 
 ## What shipped (step 11d: haptics)
 
@@ -244,8 +260,14 @@ Android emulator with the Play Store (internal test track or `FakeReviewManager`
   setting suppressing it) and `android_bridges` (MceHaptics stamped, the JNI name, the preset numbering shared
   by the header, Java and Swift).
 
-Still open in 11d: the taps in the iOS Simulator (Xcode logs them; a real iPhone feels them) and on an Android
-emulator or device, on the Mac.
+Checked on the Mac (2026-10-14, SBA-5), with Ember Step tapping on coins (Light), stomps (Medium), hurts (Error)
+and wins (Success):
+
+- **Android emulator:** `dumpsys vibrator_manager` lists the game's effects with usage TOUCH: `TICK` per coin,
+  `CLICK` per stomp, `DOUBLE_CLICK` on the won level, as the preset table says.
+- **iOS Simulator:** the Swift side builds and runs (the same two fixes as 11c) and a full autoplay run calls it
+  with no error; the Simulator has no Taptic Engine, so feeling the taps waits for an iPhone. `MCE_UIKIT_HAPTICS`
+  is now ON by default.
 
 ## What shipped (step 11e: story lines in the string tables)
 
@@ -288,7 +310,25 @@ Still open in 11e: letters (`@lettertext`) show in the base language.
   2400×1080 screen with a notch at UI scale 2; a finger on a drawn row picks it), `test_input` (scripted
   Touch and Mouse).
 
-Still open in 11f: taps in the iOS Simulator and an Android emulator, on the Mac.
+Still open in 11f: taps in the iOS Simulator and an Android emulator; the novel kit reaches phones with a
+player game, as 11a does.
+
+## Phone checks on the Mac (2026-10-14, SBA-5)
+
+| Check | Result |
+|---|---|
+| `local_ci_macos.sh android ios` on `dev_claude` | iOS passed; Android failed in Gradle since 11c (AndroidX, fixed above) |
+| Review prompt, haptics (11c, 11d) | checked in the Simulator and on the emulator (above) |
+| `ios-arm64` device build | every phone sample builds and links with the Swift bridges; no `.ipa` yet (no provisioning profile) |
+| Physical iPhone | an iPhone 11 is paired with this Mac but was not connected (`devicectl`: unavailable); the Mac has an Apple Development identity but no provisioning profile, so `ship.py --preset ios-arm64` cannot sign |
+| Physical Android phone | none attached (`adb devices` lists only the emulator) |
+| 11a, 11b, 11e, 11f on phones | blocked: these live in the player and the novel kit, and `ship.py --target android/ios` ships only the samples (`--project` refused); a phone build of a player game is the missing piece |
+| Store upload (step 10) | not run: a real TestFlight or Play internal-track upload is irreversible and waits for Sami's go-ahead and credentials |
+
+Still needed from Sami for the device rows: the iPhone connected and unlocked (developer mode on), a
+provisioning profile for the sample bundle ids (Xcode's automatic signing makes one), an Android phone with
+USB debugging, and, for the store step, the App Store Connect API key and the Play service account in the
+environment (`cmake/mobile/store.py`).
 
 ## Constraints found so far
 

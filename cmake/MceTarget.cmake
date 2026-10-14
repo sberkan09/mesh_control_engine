@@ -37,14 +37,15 @@ function(mce_apply_compile_policy target)
             target_compile_options(${target} PRIVATE /fsanitize=address)
         endif()
     else()
-        target_compile_options(${target} PRIVATE
-            -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion
-            -fno-exceptions -fno-rtti -ffp-contract=off)
+        # C-family sources only: a target with Swift sources (the iOS StoreKit / UIKit bridges in
+        # mce_platform) hands its compile options to swiftc too, which knows none of these.
+        set(c_family "$<COMPILE_LANGUAGE:C,CXX,OBJC,OBJCXX>")
+        target_compile_options(${target} PRIVATE "$<${c_family}:-Wall;-Wextra;-Wpedantic;-Wshadow;-Wconversion;-Wno-sign-conversion;-fno-exceptions;-fno-rtti;-ffp-contract=off>")
         if(MCE_WARNINGS_AS_ERRORS)
-            target_compile_options(${target} PRIVATE -Werror)
+            target_compile_options(${target} PRIVATE "$<${c_family}:-Werror>")
         endif()
         if(MCE_ASAN)
-            target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+            target_compile_options(${target} PRIVATE "$<${c_family}:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
             target_link_options(${target} PRIVATE -fsanitize=address,undefined)
         endif()
     endif()
