@@ -4,7 +4,10 @@
 
 #include "tools.h"
 
+#include "agent_sim.h"
+#include "tools_docs.h"
 #include "tool_args.h"
+#include "tools_team.h"
 
 #include <algorithm>
 #include <cstring>
@@ -651,8 +654,9 @@ bool scene_save(ToolCall& c) {
         if (file.rel.empty()) return fail(c, "the scene was never saved: pass 'path' (under assets/)");
         abs = session.project().asset_path(file.rel.view());
         const u64 on_disk = file_content_hash(abs.view());
-        if (file.disk_hash != 0 && on_disk != file.disk_hash && !force)
-            return fail(c, "the file changed on disk since it was opened or saved: scene_open it again, or pass force: true to overwrite");
+        // Another agent saved it meanwhile: merge their edits into ours by entity (tools_team.cpp),
+        // or refuse with the conflicts; force overwrites theirs.
+        if (file.disk_hash != 0 && on_disk != file.disk_hash && !force && !merge_scene_from_disk(c, abs.view())) return false;
         if (Result<void> r = session.save_scene(); !r) {
             FixedString<512> msg;
             format_error(r.error(), msg);
@@ -660,6 +664,8 @@ bool scene_save(ToolCall& c) {
         }
     }
     file.disk_hash = file_content_hash(abs.view());
+    file.base.clear();
+    (void)cook::fs::read_text(abs.view(), file.base);
     write_scene_summary(c);
     return true;
 }
@@ -872,8 +878,9 @@ void inspect_run(const World& world, Span<const Entity> spawned, void* user) {
 
 // run_headless's `input`: the text form of an input script (mce/input/script.h), or an array of
 // segments {"from": tick, "to": tick, "actions": {"Move": [1, 0], "Jump": true, "Fire": 1}}.
-bool arg_input(ToolCall& c, input::InputScript& script) {
-    const cook::JsonValue v = arg(c, "input");
+bool arg_input(ToolCall& c, input::InputScript& script) { return input_from(c, arg(c, "input"), script); }
+
+bool input_from(ToolCall& c, const cook::JsonValue& v, input::InputScript& script) {
     if (!v.valid()) return true;
     if (v.is_string()) {
         if (Result<void> r = script.parse(v.as_string()); !r) {
@@ -952,6 +959,17 @@ bool run_headless_tool(ToolCall& c) {
         return fail(c, "inspect.entities names entities of the open scene; with 'scene' use inspect.component");
     inspect.other_scene = other_scene;
     const bool inspecting = !inspect.ids.empty() || inspect.filter;
+    Trace trace;
+    editor::SceneDocument trace_doc;
+    if (const cook::JsonValue tv = arg(c, "trace"); tv.valid()) {
+        cook::String terr("trace: ");
+        if ((other_scene && !load_scene_doc(c.server, played, trace_doc, terr)) ||
+            !parse_trace(other_scene ? trace_doc : scene(c).doc(), tv, trace, terr))
+            return fail(c, terr.view());
+    }
+    SimRun sim;
+    sim.trace = &trace;
+    const RunHooks hooks = sim.hooks();
 
     const u64 since = log::console_last_seq();
     const cook::CookReport& r = c.server.session().cook(false);
@@ -968,7 +986,8 @@ bool run_headless_tool(ToolCall& c) {
                                                progress(*p->server, p->token, done, total);
                                            } : static_cast<TickProgressFn>(nullptr),
                                            &rp, inspecting ? &inspect_run : nullptr, &inspect,
-                                           script.empty() ? nullptr : &script, c.server.session().project().base_roots());
+                                           script.empty() ? nullptr : &script, c.server.session().project().base_roots(),
+                                           trace.active() ? &hooks : nullptr);
     Array<log::ConsoleLine> lines;
     read_log(since, lines);
     if (!run) {
@@ -1003,6 +1022,10 @@ bool run_headless_tool(ToolCall& c) {
     write_log_lines(c.out, lines.span(), static_cast<usize>(log_lines));
     c.out.end_object();
     if (inspecting) c.out.key("inspect").raw(inspect.json.view());
+    if (trace.active()) {
+        c.out.key("trace");
+        trace.write(c.out);
+    }
     c.out.end_object();
     return true;
 }
@@ -1154,10 +1177,13 @@ const ToolDef kTools[] = {
      scene_open},
     {"scene_save",
      "Save the scene (atomic write; entity ids are saved with it). With 'path' (under assets/): save as, with a "
-     "fresh GUID for a new file. 'name' renames the scene. Refuses to overwrite a file that changed on disk since "
-     "it was opened, or another existing file, unless force (an overwritten file keeps its GUID). A path ending in "
-     ".mcprefab saves the document as a prefab (entity 0 is the root; prefab_create_from makes one from an entity).",
-     R"({"type":"object","properties":{"path":{"type":"string"},"name":{"type":"string","description":"New scene name"},"force":{"type":"boolean"}}})", scene_save},
+     "fresh GUID for a new file. 'name' renames the scene. When another agent saved the file since it was opened, "
+     "their edits are merged in entity by entity; edits to the same component of an entity conflict and nothing is "
+     "written unless resolve picks a side. Refuses to overwrite another existing file unless force (an overwritten "
+     "file keeps its GUID; force skips the merge). A path ending in .mcprefab saves the document as a prefab "
+     "(entity 0 is the root; prefab_create_from makes one from an entity).",
+     R"({"type":"object","properties":{"path":{"type":"string"},"name":{"type":"string","description":"New scene name"},"force":{"type":"boolean"},)"
+     R"("resolve":{"type":"string","enum":["ours","theirs"],"description":"How merge conflicts are settled"}}})", scene_save},
     {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
      scene_undo},
     {"scene_redo", "Redo the last undone scene edit.", kNoArgs, scene_redo},
@@ -1181,8 +1207,9 @@ const ToolDef kTools[] = {
      "them from InputState (\"Move\" [x,y], \"Jump\", \"Fire\", \"Pause\", \"Confirm\", \"Cancel\" and any "
      "game-defined action name); a press is a one-tick segment, a hold a range. inspect: after the last tick, report the "
      "live component values (Transient runtime fields included) of scene entities by id and/or of every entity with a "
-     "component (at most 64); show picks the components to print.",
-     R"json({"type":"object","properties":{"scene":{"type":"string","description":"Play this saved scene (path under assets/) instead of the open one; inspect then takes 'component' only"},"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20},"input":{"description":"Either a script string, one segment per line: \"<from>[-<to>] Action[=value] ...\" (e.g. \"10-70 Move=1,0 Jump\\n100 Fire\"), or an array of segments","type":["string","array"],"items":{"type":"object","properties":{"from":{"type":"integer","minimum":1,"description":"First tick (1-based)"},"to":{"type":"integer","description":"Last tick, inclusive (default: from)"},"actions":{"type":"object","description":"Action name -> true, a number, or [x, y]","additionalProperties":{"type":["boolean","number","array"]}}},"required":["from","actions"]}},"inspect":{"type":"object","properties":{"entities":{"type":"array","items":{"type":["integer","string"]},"description":"Scene entity ids or names"},"component":{"type":"string","description":"Every live entity with this component (also ones the run spawned)"},"show":{"type":"array","items":{"type":"string"},"description":"Components to print (default: the entity's scene components, or the filter component + LocalTransform)"}}}}})json",
+     "component (at most 64); show picks the components to print. trace: component fields of scene entities every N ticks, "
+     "as series (how a value moved over the run, not only where it ended).",
+     R"json({"type":"object","properties":{"scene":{"type":"string","description":"Play this saved scene (path under assets/) instead of the open one; inspect then takes 'component' only"},"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20},"input":{"description":"Either a script string, one segment per line: \"<from>[-<to>] Action[=value] ...\" (e.g. \"10-70 Move=1,0 Jump\\n100 Fire\"), or an array of segments","type":["string","array"],"items":{"type":"object","properties":{"from":{"type":"integer","minimum":1,"description":"First tick (1-based)"},"to":{"type":"integer","description":"Last tick, inclusive (default: from)"},"actions":{"type":"object","description":"Action name -> true, a number, or [x, y]","additionalProperties":{"type":["boolean","number","array"]}}},"required":["from","actions"]}},"inspect":{"type":"object","properties":{"entities":{"type":"array","items":{"type":["integer","string"]},"description":"Scene entity ids or names"},"component":{"type":"string","description":"Every live entity with this component (also ones the run spawned)"},"show":{"type":"array","items":{"type":"string"},"description":"Components to print (default: the entity's scene components, or the filter component + LocalTransform)"}}},"trace":{"type":"object","description":"Sample fields during the run: {\"every\": ticks (10), \"fields\": [{\"entity\": id or name, \"field\": \"LocalTransform.position.x\"}]} (at most 16 fields, 1000 rows)"}}})json",
      run_headless_tool},
     {"console_list", "List console variables (type, value, flags, help) and console functions. Optional name prefix.",
      R"({"type":"object","properties":{"prefix":{"type":"string"}}})", console_list},
@@ -1231,7 +1258,9 @@ bool open_scene_file(Server& server, StringView rel, cook::String& err) {
         append_diags(err, session.scene_diags(), 10);
         return false;
     }
-    server.scene_file() = Server::SceneFile{cook::String(rel), file_content_hash(abs.view())};
+    cook::String base;
+    (void)cook::fs::read_text(abs.view(), base);
+    server.scene_file() = Server::SceneFile{cook::String(rel), file_content_hash(abs.view()), static_cast<cook::String&&>(base)};
     return true;
 }
 
@@ -1279,7 +1308,7 @@ bool read_resource(Server& server, StringView uri, JsonWriter& w) {
         for (const refl::TypeRecord* t : refl::all())
             if (t->is_component()) describe_type(s, *t);
         s.end_array().end_object();
-    } else {
+    } else if (!docs_read_resource(server, uri, text, mime)) {
         return false;
     }
     w.begin_object().key("contents").begin_array();

@@ -95,6 +95,16 @@ foreach(_mce_example Kindle Undelivered Room3D)
             PATTERN "assets.mce" EXCLUDE PATTERN "__pycache__" EXCLUDE)
 endforeach()
 
+# The worked samples, as source to read (the MCP server serves them as mce://docs/samples/...):
+# code, scenes and content, no build outputs. They build inside the engine tree, not from the SDK.
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/samples/" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/samples
+        PATTERN "cooked" EXCLUDE PATTERN "build" EXCLUDE PATTERN "dist" EXCLUDE
+        PATTERN "assets.mce" EXCLUDE PATTERN "__pycache__" EXCLUDE)
+
+# The content library (library_search / library_add): library.json and its own files. Its entries
+# name files under share/mce/samples and share/mce/examples, installed above.
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/library/" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/library)
+
 # The documentation a project author reads (docs/user-guide/README.md is its table of contents).
 set(_mce_doc_dir "${CMAKE_INSTALL_DATADIR}/doc/mce")
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/docs/user-guide" "${PROJECT_SOURCE_DIR}/docs/engine"

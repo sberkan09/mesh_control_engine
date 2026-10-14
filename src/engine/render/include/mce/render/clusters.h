@@ -35,6 +35,9 @@ struct PointLight {
     math::vec3 direction{0.0f, -1.0f, 0.0f};  // spot only: the way the cone points
     f32 spot_inner = 0.0f;          // spot only: half-angle (radians) of full intensity
     f32 spot_outer = 0.0f;          // spot half-angle (radians) where it reaches 0; 0 = point light
+    // M-VISUAL 4: asks for a shadow map (one atlas tile for a spot, six cube faces for a point).
+    // Granted per frame by screen importance within LocalShadowSettings' budget.
+    bool cast_shadows = false;
 };
 
 struct ClusterGridDesc {
@@ -49,8 +52,9 @@ struct GpuPointLight {
     math::vec4 position_radius;  // xyz world position, w radius
     math::vec4 color;            // rgb = color * intensity, w = 1 / radius²
     math::vec4 spot{0.0f, 0.0f, 0.0f, 1.0f};  // cone = saturate(dot(-L, xyz) + w): xyz = dir * scale, w = offset
+    math::vec4 shadow{-1.0f, 0.0f, 0.0f, 0.0f};  // x: first local shadow record (-1 = unshadowed), y: records (1 spot, 6 point)
 };
-static_assert(sizeof(GpuPointLight) == 48);
+static_assert(sizeof(GpuPointLight) == 64);
 
 // std430 rows of the culled light list prepare() makes: lights that pass the frustum test and
 // have intensity > 0, in submission order. The GPU assignment reads these.
@@ -86,6 +90,10 @@ public:
     // The CPU light assignment over prepare()'s outputs (no-op when already assigned).
     void assign();
     bool assigned() const { return assigned_; }
+    // Points light `light` at its local shadow records (Scene3D, after prepare()).
+    void set_shadow(u32 light, u32 first_record, u32 records) {
+        gpu_lights_[light].shadow = math::vec4(f32(first_record), f32(records), 0.0f, 0.0f);
+    }
     void clear();
 
     const ClusterGridDesc& grid() const { return grid_; }

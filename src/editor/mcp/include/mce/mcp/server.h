@@ -32,6 +32,12 @@ struct ServerOptions {
     // render_frame's player (mce_player, or the game's host); null: mce_player beside the server or in
     // the build tree, with the server's --module passed on.
     const char* player = nullptr;
+    // The docs served as mce://docs/... (a share/doc/mce folder); null: the installed SDK's beside the
+    // server, else the source tree the build came from.
+    const char* docs = nullptr;
+    // This agent's name in the project's event feed, locks and tasks (several agents on one project,
+    // each with its own server); null: the client's name from initialize plus a short id.
+    const char* agent = nullptr;
 };
 
 // Receives one outgoing message (a response or a notification) without the newline.
@@ -52,6 +58,12 @@ public:
     // first cook already knows the game's components. One module per server.
     Result<void> load_module(StringView path);
     const LoadedModule& module() const { return module_.module; }
+    // Maps the module file again (module_build, after a rebuild): the open scene is kept as text,
+    // the module unmapped (its components leave mce_refl) and the new build mapped, then the scene is
+    // re-read with the new component layouts (dirty state kept; the undo history starts fresh). When
+    // the scene no longer parses (a component it uses was removed), it is written to
+    // <root>/.mce/module_reload/ and an empty scene with the same path stays open; `note` says so.
+    Result<void> reload_module(cook::String& note);
 
     // The project every tool works in (`root` holds assets/); cooks it when nothing is cooked yet.
     // `scene` (relative to assets/) is opened too when given.
@@ -69,11 +81,25 @@ public:
 
     // The open scene's file as the tools see it: path under assets/ and a hash of the bytes last
     // read or written, so scene_save can refuse to overwrite a file changed behind its back.
+    // `base` is the file's text as last read or written: the common ancestor scene_save merges
+    // against when another agent saved the file in the meantime.
     struct SceneFile {
         cook::String rel;
         u64 disk_hash = 0;
+        cook::String base;
     };
     SceneFile& scene_file() { return scene_file_; }
+
+    // Scenes open besides the current one (scene_switch): their text, unsaved edits included.
+    struct ParkedScene {
+        SceneFile file;
+        cook::String text;
+        bool dirty = false;
+    };
+    Array<ParkedScene>& parked_scenes() { return parked_; }
+
+    // The agent this server speaks for (ServerOptions::agent, else set at initialize).
+    StringView agent() const { return agent_.view(); }
 
 private:
     void send(StringView message);
@@ -91,6 +117,8 @@ private:
     } module_;
     editor::EditorSession session_;
     SceneFile scene_file_;
+    Array<ParkedScene> parked_;
+    cook::String agent_;
     SendFn send_ = nullptr;
     void* send_user_ = nullptr;
     bool initialize_seen_ = false;

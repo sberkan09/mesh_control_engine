@@ -28,9 +28,9 @@ namespace {
 class HeadlessApp final : public app::Application {
 public:
     HeadlessApp(asset::AssetSystem& assets, audio::AudioDevice& audio, asset::Guid scene, u64 total,
-                TickProgressFn progress, void* user)
+                TickProgressFn progress, void* user, const RunHooks* hooks)
         : assets_(assets), audio_(audio), clips_(assets, audio), scene_(scene), total_(total), progress_(progress),
-          user_(user) {}
+          user_(user), hooks_(hooks) {}
 
     ResultV on_init(app::Context&) override {
         input::install(world_);
@@ -53,6 +53,7 @@ public:
         ResultV r = scene::load(world_, assets_, scene_, &entities_);
         if (!r) error_ = r.error();
         else scene::pump_streaming(world_, scene::PumpMode::Settle);
+        if (r && hooks_ && hooks_->start) hooks_->start(world_, entities_.span(), hooks_->user);
         return r;
     }
 
@@ -66,6 +67,7 @@ public:
         if (services_on_) game_services_.update();
         audio_.update();  // the Silent backend mixes one block per call
         if (progress_ && (sim_ticks_ % kProgressTicks == 0 || sim_ticks_ == total_)) progress_(sim_ticks_, total_, user_);
+        if (hooks_ && hooks_->tick && !hooks_->tick(world_, entities_.span(), sim_ticks_, hooks_->user)) quit();
     }
 
     void on_render(const app::RenderContext&) override {
@@ -149,6 +151,7 @@ private:
     u64 total_;
     TickProgressFn progress_;
     void* user_;
+    const RunHooks* hooks_;
     monetize::FakeStore fake_store_;
     monetize::FakeAds fake_ads_;
     monetize::Service monetize_;  // before the World: their resources point here
@@ -166,7 +169,8 @@ private:
 }  // namespace
 
 Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, TickProgressFn progress, void* user,
-                                 InspectFn inspect, void* inspect_user, app::IInputSource* input, Span<const StringView> base) {
+                                 InspectFn inspect, void* inspect_user, app::IInputSource* input, Span<const StringView> base,
+                                 const RunHooks* hooks) {
     if (ticks == 0) return Error(Errc::InvalidArgument, "mcp.run_headless", "ticks must be > 0");
     asset::AssetSystem assets;
     const StringView roots[1] = {pack};
@@ -178,7 +182,7 @@ Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, 
 
     HeadlessRun out;
     {
-        HeadlessApp app(assets, *device, scene, ticks, progress, user);
+        HeadlessApp app(assets, *device, scene, ticks, progress, user, hooks);
         app::AppDesc desc;
         desc.name = "mce_mcp.run_headless";
         desc.headless = true;

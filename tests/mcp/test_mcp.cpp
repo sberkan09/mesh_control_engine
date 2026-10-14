@@ -443,12 +443,21 @@ TEST_CASE("mcp tools: persistence stays inside the project and never clobbers si
     CHECK(c.fails("scene_new", R"({"name":"x"})").find("unsaved changes") != std::string::npos);
     CHECK(c.fails("run_headless").find("unsaved changes") != std::string::npos);
 
-    // Changed on disk behind the server's back: refused until forced.
+    // Changed on disk behind the server's back: merged entity by entity (an added newline changes no
+    // entity), and a change to a component we changed too is refused until forced or resolved.
     const std::string file = root + "/assets/scenes/demo.mcscene";
     write_file(file, read_file(file) + "\n");
-    CHECK(c.fails("scene_save").find("changed on disk") != std::string::npos);
-    c.ok("scene_save", R"({"force":true})");
+    c.ok("scene_save");
     CHECK(read_file(file).find("\"Marker\"") != std::string::npos);
+    c.ok("component_set", R"({"entity":"Ball","component":"Collider2D","path":"restitution","value":0.37})");
+    std::string theirs = read_file(file);
+    const usize at = theirs.find_first_of("0123456789", theirs.find("restitution"));
+    theirs.replace(at, theirs.find_first_not_of("0123456789.", at) - at, "0.12");
+    write_file(file, theirs);
+    CHECK(c.fails("scene_save").find("conflict") != std::string::npos);
+    CHECK(read_file(file) == theirs);  // nothing written
+    c.ok("scene_save", R"({"force":true})");
+    CHECK(read_file(file).find("0.37") != std::string::npos);
     c.ok("component_set", R"({"entity":7,"component":"LocalTransform","path":"position.x","value":2})");
     c.ok("scene_save");  // our own last write is not a conflict
 

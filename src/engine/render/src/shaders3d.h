@@ -44,6 +44,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_probe_min[4];   // box, w: blend distance
     vec4 p_probe_max[4];   // box, w: first u_env layer (sharp capture, then the pre-filtered layers)
     vec4 p_ao;             // x: screen-space ambient occlusion on (M-VISUAL 3)
+    vec4 p_local;          // x: local-light shadows on (M-VISUAL 4)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -202,8 +203,12 @@ layout(binding = 9) uniform sampler2DArrayShadow u_shadow;
 layout(binding = 13) uniform sampler2DArray u_emissive;
 layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility
 layout(std430, binding = 4) readonly buffer Clusters { uvec2 c_ranges[]; };
-struct Light { vec4 pos_radius; vec4 color; vec4 spot; };
+struct Light { vec4 pos_radius; vec4 color; vec4 spot; vec4 shadow; };  // shadow: x first record (-1 = none), y records
 layout(std430, binding = 5) readonly buffer LightPool { Light l_lights[]; };
+// Local-light shadow records (M-VISUAL 4): one per atlas tile; rect = uv origin (xy) and size (zw) of
+// the tile, info.x = u_shadow layer, info.y = world texel size per meter of distance.
+struct LocalShadow { mat4 vp; vec4 rect; vec4 info; };
+layout(std430, binding = 11) readonly buffer LocalShadows { LocalShadow l_shadows[]; };
 layout(std430, binding = 6) readonly buffer LightIndices { uint l_indices[]; };
 layout(location = 0) in vec3 v_world;
 layout(location = 1) in vec3 v_normal;
@@ -236,6 +241,32 @@ float shadow_term(vec3 world, vec3 n, vec3 l, float depth) {
         return s;
     }
     return 1.0;
+}
+
+// ---- local-light shadows: a spot's tile, or the point light's cube face along the major axis
+// (+X -X +Y -Y +Z -Z), with the sun's normal offset and PCF 3x3 clamped inside the tile.
+float local_shadow(vec4 shadow, vec3 light_pos, vec3 world, vec3 n, vec3 l) {
+    vec3 d = world - light_pos;
+    int idx = int(shadow.x);
+    if (shadow.y > 1.5) {
+        vec3 a = abs(d);
+        idx += a.x >= a.y && a.x >= a.z ? (d.x > 0.0 ? 0 : 1) : (a.y >= a.z ? (d.y > 0.0 ? 2 : 3) : (d.z > 0.0 ? 4 : 5));
+    }
+    LocalShadow s = l_shadows[idx];
+    float texel = length(d) * s.info.y;
+    float NoL = clamp(dot(n, l), 0.0, 1.0);
+    vec3 p = world + n * (texel * (1.0 + 2.0 * sqrt(1.0 - NoL * NoL))) + l * texel;
+    vec4 c = s.vp * vec4(p, 1.0);
+    if (c.w <= 0.0) return 1.0;
+    vec3 q = c.xyz / c.w * 0.5 + 0.5;
+    if (any(lessThan(q.xy, vec2(0.0))) || any(greaterThan(q.xy, vec2(1.0)))) return 1.0;
+    vec2 ts = 1.0 / vec2(textureSize(u_shadow, 0).xy);
+    vec2 uv = s.rect.xy + q.xy * s.rect.zw;
+    vec2 lo = s.rect.xy + ts, hi = s.rect.xy + s.rect.zw - ts;  // the bilinear 2x2 footprint stays in the tile
+    float sum = 0.0;
+    for (int y = -1; y <= 1; ++y)
+        for (int x = -1; x <= 1; ++x) sum += texture(u_shadow, vec4(clamp(uv + vec2(x, y) * ts, lo, hi), s.info.x, min(q.z, 1.0)));
+    return sum * (1.0 / 9.0);
 }
 
 // ---- Cook-Torrance GGX (Karis 2013 / Filament): D_GGX, V_SmithGGXCorrelated, F_Schlick
@@ -345,6 +376,10 @@ void main() {
             float cone = clamp(dot(-ld, L.spot.xyz) + L.spot.w, 0.0, 1.0);  // point lights: 0·x + 1
             att *= cone * cone;
             if (att <= 0.0) continue;
+            if (L.shadow.x >= 0.0 && p_local.x > 0.5) {
+                att *= local_shadow(L.shadow, L.pos_radius.xyz, v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), ld);
+                if (att <= 0.0) continue;
+            }
             color += direct(n, v, ld, diffuse, f0, a, L.color.rgb * att);
         }
 
