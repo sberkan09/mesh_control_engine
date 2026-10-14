@@ -1,5 +1,5 @@
 // Asset authoring tools (ROADMAP M-DATA-REACH step 1): every JSON source asset the cook reads
-// (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, .mcinput, .mcstore, .mcservices, .mcconfig) can be
+// (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, .mcinput, .mcstore, .mcservices, .mcui, .mcconfig) can be
 // created, read, rewritten and described over MCP, and a tilemap painted, without the client
 // writing files itself. A document is cooked in memory with the project's importer before
 // anything is written (cook_document: the same reference and value checks as cook_run), so a
@@ -157,6 +157,22 @@ constexpr AssetKind kKinds[] = {
 {"name":"leaderboards","type":"array","help":"[{\"id\", \"order\": \"higher_is_better\" | \"lower_is_better\", \"ios\", \"android\"}]"},
 {"name":"cloud_saves","type":"array of strings","help":"save::write names synced to the cloud"}])json",
      R"json({"achievements":[],"leaderboards":[],"cloud_saves":[]})json"},
+    {"UiDocument", ".mcui", "mce-ui", 1,
+     "A UI document: a widget tree with anchors, per-state styles (UiStyle), stack and grid layouts, the skin's font "
+     "and sprite sheet by reference (M-UI-DATA). A widget starts from the look the C++ ui::Builder gives its kind; "
+     "\"style\" and \"styles\" change only the UiStyle fields they list. Names are unique among siblings; \"nav\" "
+     "edges and lookups take paths of names from the root (\"menu/play\").",
+     R"json([
+{"name":"font","type":"guid ref | null","default":null,"help":"A Font asset; null: the built-in 13 px font"},
+{"name":"sprites","type":"guid ref | null","default":null,"help":"A SpriteSheet whose region white_region is white (flat quads); null: built-in"},
+{"name":"white_region","type":"integer","default":0},
+{"name":"modal","type":"boolean","default":true,"help":"false: a HUD, never takes focus"},
+{"name":"widgets","type":"array","help":"[{\"name\": 1-31 chars, no '/', \"kind\": Panel | Image | Text | Button | Toggle | Slider | Stack | Grid | Console | Scroll | Tabs, \"children\": [...]}]"},
+{"name":"widgets[] anchors","type":"one of","help":"\"fill\": true | \"at\": [anchor x, anchor y, width, height] (0 = preferred) | \"anchors\": UiAnchors {min, max, offset_min, offset_max, pivot, to: Parent | SafeArea | Screen}"},
+{"name":"widgets[] look","type":"object","help":"\"style\": UiStyle fields over every state {tint, text_color, accent, sprite_region, text_size, draw_quad, slice}; \"styles\": {\"Hover\": {...}} per state (Normal, Hover, Pressed, Focused, Disabled)"},
+{"name":"widgets[] values","type":"object","help":"\"text\", \"value\", \"range\": [lo, hi, step], \"visible\", \"interactable\", \"blocks_pointer\", \"default_focus\": true, \"convar\": name (two-way), \"nav\": {\"up\" | \"down\" | \"left\" | \"right\": path}, \"stack\": UiStackLayout {axis, spacing, padding, align}, \"grid\": UiGridLayout {columns, cell, spacing}"},
+{"name":"widgets[] special","type":"object","help":"A Panel with \"modal\": true is a hidden, dimmed veil for Document::open_modal; a Tabs widget lists \"tabs\": [{\"name\", \"label\", \"children\"}] and its \"value\" is the page shown; \"kind_defaults\": false starts from the C++ defaults"}])json",
+     R"json({"widgets":[{"name":"menu","kind":"Stack","at":[0.5,0.5,320,0],"children":[{"name":"play","kind":"Button","text":"PLAY","default_focus":true}]}]})json"},
     {"RemoteConfig", ".mcconfig", "mce-config", 1,
      "The project's remote config defaults (M-LIVEOPS). A value's type is its JSON's unless {\"type\": "
      "\"int|float|bool|string\", \"value\": ...} names it; keys are 1-63 letters, digits, '_', '-', '.'.",
@@ -588,8 +604,8 @@ const ToolDef kAssetTools[] = {
     {"asset_schema",
      "Describe a JSON source asset type: its fields (type, default, help) and the template asset_create starts from. "
      "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, "
-     ".mcinput, .mcstore, .mcservices, .mcconfig).",
-     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, RemoteConfig, or the extension"}}})json",
+     ".mcinput, .mcstore, .mcservices, .mcui, .mcconfig).",
+     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, RemoteConfig, or the extension"}}})json",
      asset_schema},
     {"asset_create",
      "Create a JSON source asset at 'path' (its extension picks the type) with a fresh GUID: the type's template with "

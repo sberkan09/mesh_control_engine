@@ -84,6 +84,7 @@ reach all of its non-transient fields.
 | GameServicesCatalog | `.mcservices` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/14-mcp-ai-workflow.md |
 | SpriteSheet | `.mcsheet` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | AnimGraph | `.mcanim` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
+| UiDocument | `.mcui` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/05-assets.md |
 
 ## MCP tools
 

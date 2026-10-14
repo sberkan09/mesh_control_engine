@@ -210,6 +210,18 @@ public:
     bool visible(WidgetId w) const;
     WidgetId parent(WidgetId w) const;
     vec2 preferred_size(WidgetId w) const;    // text measured with the skin's font
+    // The rest of a widget's authoring values (M-UI-DATA: extract_document reads them).
+    bool visible_self(WidgetId w) const;      // its own flag; visible() also needs every ancestor's
+    bool interactable(WidgetId w) const;
+    bool blocks_pointer(WidgetId w) const;
+    NavEdges nav(WidgetId w) const;
+    StackLayout stack(WidgetId w) const;
+    GridLayout grid(WidgetId w) const;
+    void range(WidgetId w, f32& lo, f32& hi, f32& step) const;
+    StringView convar(WidgetId w) const;      // the bound convar, or empty
+    WidgetId default_focus() const { return default_focus_; }
+    WidgetId first_child(WidgetId w) const;   // children in sibling (document) order
+    WidgetId next_sibling(WidgetId w) const;
     const DocumentStats& stats() const { return stats_; }
 
     // The console widget's scrollback and command history (FR-UI-045). Lines are pushed by the
@@ -328,7 +340,7 @@ public:
     ~Document();
 };
 
-// Builder sugar over Document (C++ is the authoring format at v1.0, ui.md §5.4).
+// Builder sugar over Document (ui.md §5.4; .mcui assets are the data form, mce/ui/document_data.h).
 class Builder {
 public:
     Builder(Document& doc, WidgetId parent) : doc_(&doc), id_(parent) {}

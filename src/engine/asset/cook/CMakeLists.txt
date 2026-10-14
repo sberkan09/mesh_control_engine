@@ -38,6 +38,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/string.cpp
         src/texture_importer.cpp
         src/tilemap_importer.cpp
+        src/ui_importer.cpp
         src/wav_importer.cpp
     PUBLIC_DEPS
         mce::mce_asset
@@ -46,6 +47,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         mce::mce_monetize
         mce::mce_liveops
         mce::mce_loc
+        mce::mce_ui
         mce_stb
         mce_meshopt
         mce_astcenc

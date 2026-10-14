@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- UI documents as data, M-UI-DATA step 1 (SBA-31): a `.mcui` asset (JSON) describes a `mce_ui` widget tree
+  (anchors, per-state styles, stack and grid layouts, tabs, modals, nav edges, convar bindings, the skin's font and
+  sprite sheet by reference) and cooks to a `UiDocument` chunk; `ui::build_document` builds it and
+  `ui::extract_document` / `cook::write_ui_document` write a document back, byte-identical after a re-cook. A widget
+  starts from the look `ui::Builder` gives its kind. Mistakes fail the cook with `file:line:col`. MCP's
+  `asset_create` / `asset_write` handle `.mcui`; the stock player does not load documents yet (step 2).
 - Projects on phones (M-MOBILE, SBA-30): `scripts/ship.py --project <dir> --target android|ios` builds a project
   made from the templates for phones. Its pack is cooked by the host build's `<game>_cook`
   (`MCE_HOST_BUILD_DIR`, which `ship.py` passes after building it on `--host-preset`); a cross build no longer

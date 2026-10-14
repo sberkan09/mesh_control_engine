@@ -4,6 +4,8 @@
 mce_add_library(mce_ui
     SOURCES
         src/dev_console.cpp
+        src/document_build.cpp
+        src/document_data.cpp
         src/ui.cpp
     PUBLIC_DEPS
         mce::mce_render
