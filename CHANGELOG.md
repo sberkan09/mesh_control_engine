@@ -15,6 +15,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 - Fixes found on Xcode 27 (SBA-5): Ember Step no longer crashes on quit when audio is playing (its clips are released
   before the app goes), 3D scenes with IBL off pass Metal validation again, and `mce_player -capture_tick N`
   holds the sim on tick N for the capture instead of running past it on slow frames.
+- Live services, the demo (M-LIVEOPS): `samples/liveops_demo`, a headless level runner wired to game services,
+  remote config and analytics against local stand-ins. Its ctest covers achievements and scores reaching the
+  platform, a reinstall restoring progress from the cloud save, an offline outbox that drains on the next launch, a
+  fetched value that changes the game after relaunch and survives airplane mode, no analytics written with consent
+  denied, and a recorded run replayed to the same hash; its hash is checked across runs and Debug/Release in
+  `local_ci.sh`. User guide 23.7 covers the demo and vendor setup (keys from the environment, test accounts).
 - Taps and clicks on dialogue, step 11f (M-MOBILE): a tap or click on a choice row picks it on the novel stage
   and the dialogue box, and a tap elsewhere reads on, through the input snapshot (replays and headless runs see
   it) with a `Selection` haptic. The stock map gains `Point` (left mouse), input scripts take `Touch=x,y` and

@@ -206,7 +206,40 @@ and scores go to `game_services.jsonl` in it, and cloud saves to `cloud/<name>.b
 | `-game_services.offline` | `1`: sign-in and every call fail | `0` |
 | `-game_services_test` | `"tick:action[:id[:value]] ..."` with `sign_in`, `unlock`, `progress`, `score`, `write`, `cloud_save`, `cloud_load`, `keep_local`, `keep_cloud`; prints every event | empty |
 
-## 23.7 Store declarations
+## 23.7 The demo and vendor setup
+
+`samples/liveops_demo` is every service in one headless game: a level runner that unlocks
+`first_win`, progresses `win_5`, posts each level's time to `best_time`, sends a `level_end` event,
+writes its `progress` save after every win and uploads it. Its assets are a `.mcservices` catalog
+and a `.mcconfig` with `level_ticks` (how long a level lasts). Nothing in it needs an account:
+
+```sh
+sample_liveops_demo -save_dir A -platform_dir P              # wins reach the "platform" folder P
+sample_liveops_demo -save_dir B -platform_dir P -restore 1   # a reinstall: progress comes back from P
+sample_liveops_demo -save_dir A -server server.mce           # fetches level_ticks; the next launch uses it
+sample_liveops_demo -save_dir A -offline 1                   # airplane mode: the cached value
+sample_liveops_demo -save_dir C -consent denied              # no analytics event is written
+sample_liveops_demo -record run.rec / -replay run.rec        # the same hash, no provider
+```
+
+Its ctest (`sample_liveops_demo_flows`) checks each of those, and `local_ci.sh` checks its hash
+across runs and Debug/Release.
+
+**Setting up a vendor.** When a vendor provider lands, it follows the M-MONETIZE pattern: the SDK
+lives in the platform layer, the game code above does not change, and a project picks the vendor
+in its own config. Two rules hold for every vendor:
+
+- **Keys come from the environment, never from the repository.** A vendor's DSN, API key or config
+  project id is read at build or ship time from an environment variable or the CI's secret store
+  and stamped into the build; the project's files name the variable, not the value. An app id that
+  the store shows publicly (an AdMob app id, a Play Games project number) may live in the project's
+  assets, like the `.mcstore`'s `"admob"` object; anything that grants access to the vendor's
+  dashboard or upload API may not.
+- **Test accounts first.** Game Center sandbox players and Play Games testers see unpublished
+  achievements and leaderboards; a release build talks to the live ones. Check a build against the
+  test accounts before submitting it.
+
+## 23.8 Store declarations
 
 Turning on a vendor changes what you declare (chapter 22.8 lists where):
 
@@ -219,7 +252,7 @@ Turning on a vendor changes what you declare (chapter 22.8 lists where):
 
 With the `local` provider nothing leaves the device and there is nothing to declare.
 
-## 23.8 Known gaps
+## 23.9 Known gaps
 
 - No vendor yet: the SDK side on iOS and Android, symbol upload from `ship`, and the vendor's own
   privacy manifest entries are the next part of M-LIVEOPS step 1.
@@ -227,3 +260,6 @@ With the `local` provider nothing leaves the device and there is nothing to decl
   cooked pack) comes with the vendor choice. The static-file fetcher and the cache work today.
 - Game services have no native provider yet: Game Center / iCloud and Play Games Services v2 need a
   Mac, devices and test accounts. The API, the outbox, cloud versions and the local fake work today.
+- The demo's device half (a forced crash shown symbolicated after relaunch on the Simulator and the
+  emulator, achievements and a cloud restore on test accounts) waits on the vendor and the native
+  providers; `samples/liveops_demo` covers the rest in CI.
