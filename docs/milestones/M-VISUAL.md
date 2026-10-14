@@ -10,7 +10,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | # | Step | Linear | State |
 |---|---|---|---|
 | 1 | Compute in the RHI; clustered light build on the GPU | SBA-6 | GL and SDL GPU (Vulkan) done; Metal compute open |
-| 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL done (all backends, fragment passes); reflection probes open |
+| 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL and runtime reflection probes done (all backends, fragment passes); editor bake open |
 | 3 | SSAO / GTAO | SBA-8 | — |
 | 4 | Local-light shadows | SBA-9 | — |
 | 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | — |
@@ -104,7 +104,32 @@ zenith over a red ground the floor and the box top are lit blue. 04_cubes takes 
 
 The main pass pays for 9 SH fetches and 2–3 equirect taps per lit pixel; the bakes run once per sky change.
 
-**Open in step 2:** placed reflection probes with box projection, baked in the editor and cooked; an equirect
-asset as the IBL source independent of the visible sky; golden captures once the image-diff tooling exists
-(today's gates are pixel probes); real-GPU numbers.
+**Reflection probes (part 2).** `Scene3D::add_reflection_probe` (up to `kMaxReflectionProbes` = 4; the kit
+component `ReflectionProbe3D`: a world-axis box of `half_extents` around the entity, the capture point at
+`offset`) replaces the sky's pre-filtered specular inside its box. Runtime capture, again fragment passes only:
+
+- **Capture:** six 90° views of the scene from the probe into a 128×128 RGBA16F 2D array (own D32 array for
+  depth), drawn with the main PBR pipelines over `Scene3D::probe_draws()` (every opaque submesh at LOD 0, culled
+  or not), then the sky. Captures see the sun and the sky IBL but no shadows and no point lights.
+- **Reproject:** the six faces into one 128×64 equirect through the same view-projection matrices.
+- **Pre-filter:** into the probe's slot of the IBL array (`ibl_env()` grows to 5 + 4·6 layers once a scene has
+  probes): the sharp capture at roughness 0, then GGX layers at 0.2 … 1.0 (256 samples, no mips to read).
+- **Sampling:** the probe whose box contains the pixel deepest wins (fade over `blend_distance` from the box
+  faces back to the sky); the reflected ray is intersected with the box and the hit seen from the capture point
+  (box projection), so a room's walls line up in a mirror floor. Keep floors and walls inside the box by more
+  than the blend distance.
+
+A probe re-captures only when its position, box, `version` or the sky changes (`Forward3DStats::probes_captured`,
+`probe_draws`), before the frame's first timestamp. Moving objects do not re-capture on their own: bump `version`.
+The main pass pays one box test per probe and two equirect taps inside a box.
+
+Gates: `test_render` (probe draws ignore the view frustum and skip blended submeshes; the fifth probe is
+dropped), `test_kit` (`ReflectionProbe3D` extracts to the entity's box; disabled ones do not), `test_render_gl` /
+`test_render_sdlgpu`: a red emissive wall behind a mirror floor under a dim sky; without a probe the floor
+reflects the sky, with one it reflects the wall (red > sky + 60); a second frame captures nothing, a version
+bump captures again; with `Sky::ibl` off probes are ignored.
+
+**Open in step 2:** probes baked in the editor and cooked (today's captures see only the instances the frame
+submits, e.g. after kit culling); an equirect asset as the IBL source independent of the visible sky; golden
+captures once the image-diff tooling exists (today's gates are pixel probes); real-GPU numbers.
 

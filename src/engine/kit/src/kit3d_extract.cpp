@@ -370,6 +370,21 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         scene.add_point_light(pl);
         ++stats_.spot_lights;
     });
+    world.query<const ReflectionProbe3D&>().each([&](Entity e, const ReflectionProbe3D& p) {
+        if (!p.enabled) return;
+        vec3 pos, scale;
+        quat rot;
+        if (!pose_of(world, e, pos, rot, scale)) return;
+        render::ReflectionProbe rp;
+        rp.position = pos + rotate(rot, p.offset);
+        const vec3 h = max(p.half_extents, vec3{0.01f, 0.01f, 0.01f});
+        rp.bounds = {pos - h, pos + h};
+        rp.blend_distance = p.blend_distance;
+        rp.intensity = p.intensity;
+        rp.version = p.version;
+        scene.add_reflection_probe(rp);
+        ++stats_.reflection_probes;
+    });
 
     // Static copies, cell by cell.
     if (const StaticInstances3D* si = world.try_resource<StaticInstances3D>(); si && !si->instances.empty()) {

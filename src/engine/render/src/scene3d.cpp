@@ -133,6 +133,8 @@ void Scene3D::begin(const Camera3D& camera, rhi::Extent2D viewport) {
     instances_.clear();
     draws_.clear();
     shadow_draws_.clear();
+    probe_draws_.clear();
+    probes_.clear();
     joint_palette_.clear();
     point_lights_.clear();
     clusters_.clear();
@@ -146,6 +148,15 @@ void Scene3D::begin(const Camera3D& camera, rhi::Extent2D viewport) {
 void Scene3D::add_point_light(const PointLight& light) {
     MCE_ASSERT_MSG(!built_, "Scene3D::add_point_light after build");
     point_lights_.push_back(light);
+}
+
+void Scene3D::add_reflection_probe(const ReflectionProbe& probe) {
+    MCE_ASSERT_MSG(!built_, "Scene3D::add_reflection_probe after build");
+    if (probes_.size() >= kMaxReflectionProbes) {
+        ++stats_.probes_dropped;
+        return;
+    }
+    probes_.push_back(probe);
 }
 
 void Scene3D::add(const MeshInstance& instance) {
@@ -252,6 +263,14 @@ void Scene3D::build() {
                 d.index_count = sl.index_count;
                 d.base_vertex = sl.base_vertex;
                 shadow_draws_.push_back(d);
+            }
+            if (!probes_.empty() && !(sm.material.flags & asset::MaterialFlags::AlphaBlend)) {
+                const GpuLod& pl = mesh.lod(s, 0);
+                d.lod = 0;
+                d.first_index = pl.first_index;
+                d.index_count = pl.index_count;
+                d.base_vertex = pl.base_vertex;
+                probe_draws_.push_back(d);
             }
             ++stats_.submeshes;
             if (!sphere_visible(view_, c, length(wb.extents()))) continue;

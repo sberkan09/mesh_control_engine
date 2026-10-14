@@ -90,6 +90,21 @@ struct ShadowSettings {
 
 inline constexpr u32 kMaxCascades = 4;
 
+// A placed reflection probe (M-VISUAL 2): the scene seen from `position`, captured into a GGX
+// pre-filtered environment and box-projected onto the surfaces inside `bounds` (parallax-correct
+// reflections in rooms and corridors). Specular only; needs Sky::ibl. Captured when it first
+// appears and again when its position, bounds or version (or the sky) change: bump `version`
+// after the scene around it changed.
+struct ReflectionProbe {
+    math::vec3 position{0.0f, 0.0f, 0.0f};
+    math::aabb3 bounds{{-5.0f, -5.0f, -5.0f}, {5.0f, 5.0f, 5.0f}};  // world space
+    f32 blend_distance = 1.0f;  // fade in from the box faces (meters)
+    f32 intensity = 1.0f;
+    u32 version = 0;
+};
+
+inline constexpr u32 kMaxReflectionProbes = 4;
+
 struct Cascade {
     math::mat4 view_proj;   // world -> light clip space
     f32 near_depth = 0.0f;  // view-depth range this cascade covers
@@ -176,6 +191,7 @@ public:
         u32 skinned_instances = 0;
         u32 joints = 0;          // joint matrices in the palette
         u32 point_lights = 0;
+        u32 probes_dropped = 0;  // add_reflection_probe beyond kMaxReflectionProbes
         u32 cascade_casters[kMaxCascades] = {};
         u32 lod_instances[asset::kMaxMeshLods] = {};  // instances at each level (meshes with levels)
         u32 lod_triangles[asset::kMaxMeshLods] = {};  // visible main-pass triangles at each level
@@ -196,6 +212,8 @@ public:
     void set_lod(const LodSettings& lod) { lod_ = lod; }
     const LodSettings& lod() const { return lod_; }
     void add_point_light(const PointLight& light);
+    // Up to kMaxReflectionProbes; later ones are dropped (counted in stats().probes_dropped).
+    void add_reflection_probe(const ReflectionProbe& probe);
     // Instances whose mesh key is not resident are skipped (counted nowhere).
     void add(const MeshInstance& instance);
     // Culls, builds the shadow fit and sorts. After build() the accessors below are valid.
@@ -210,6 +228,10 @@ public:
     const PostFx& post() const { return post_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
+    Span<const ReflectionProbe> reflection_probes() const { return probes_.span(); }
+    // Every opaque submesh of every instance at its base level, unculled: what probe captures draw.
+    // Empty when the scene has no reflection probes.
+    Span<const Draw> probe_draws() const { return probe_draws_.span(); }
     // The Forward+ lists, assigned on the CPU on first use (Forward3D's GPU path never asks).
     const ClusterLights& clusters() const;
     // The light pool, grid constants and culled light list only: what the GPU assignment reads.
@@ -258,6 +280,8 @@ private:
     Array<MeshInstance> instances_;
     Array<Draw> draws_;
     Array<Draw> shadow_draws_;
+    Array<Draw> probe_draws_;
+    Array<ReflectionProbe> probes_;
     Array<math::mat4> joint_palette_;
     u32 opaque_count_ = 0;
     math::aabb3 scene_bounds_{};

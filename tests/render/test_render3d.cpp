@@ -138,6 +138,30 @@ TEST_CASE("render3d: opaque draws sort front-to-back, blended back-to-front afte
     for (u32 i = 0; i < 5; ++i) CHECK(again.draws()[i].instance == scene.draws()[i].instance);
 }
 
+TEST_CASE("render3d: reflection probes draw every opaque submesh, culled or not; at most four") {
+    MeshStore store;
+    REQUIRE(store.upload(1, 1, one_box_mesh().span()).has_value());
+    REQUIRE(store.upload(2, 1, one_box_mesh(asset::MaterialFlags::AlphaBlend).span()).has_value());
+    Scene3D scene(store, mem::heap());
+    scene.begin(looking_down_minus_z(), {256, 256});
+    scene.add(at(1, {0, 0, -5}));
+    scene.add(at(1, {0, 0, 5}));   // behind the camera: no main draw, still in the captures
+    scene.add(at(2, {0, 0, -6}));  // blended: not captured
+    scene.build();
+    CHECK(scene.probe_draws().empty());  // no probes, no capture list
+
+    scene.begin(looking_down_minus_z(), {256, 256});
+    scene.add(at(1, {0, 0, -5}));
+    scene.add(at(1, {0, 0, 5}));
+    scene.add(at(2, {0, 0, -6}));
+    for (u32 i = 0; i < kMaxReflectionProbes + 2; ++i) scene.add_reflection_probe({});
+    scene.build();
+    CHECK(scene.draws().size() == 2);
+    CHECK(scene.probe_draws().size() == 2);
+    CHECK(scene.reflection_probes().size() == kMaxReflectionProbes);
+    CHECK(scene.stats().probes_dropped == 2);
+}
+
 TEST_CASE("render3d: equal keys keep submission order") {
     MeshStore store;
     REQUIRE(store.upload(1, 1, one_box_mesh().span()).has_value());
