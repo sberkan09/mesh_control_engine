@@ -126,6 +126,13 @@ destroyed). `ContactBegin2D` / `ContactEnd2D` report solid contacts with the poi
 `a` to `b`) and the approach speed, for landing sounds and damage from impacts. The number of
 events per tick is capped (`max_contact_events_per_tick`).
 
+Without code, `PhysicsEvents` on an entity records the events that name it: `last_trigger` and
+`last_contact` (the other entity), the last contact's `contact_point`, `contact_normal` (from this
+entity towards the other) and `contact_speed`, counts of each event, and `overlapping` / `touching`
+now. It is engine-written, so data, sequences and `run_headless inspect` read it. The effect
+components (`SfxTrigger`, `ParticleBurst`, `ShakeTrigger`, chapters 7 and 10) fire on the same
+events with `on: TriggerEnter` or `ContactBegin`.
+
 Sensors see what their `mask` allows: a pickup that should react only to the player on layer 1 has
 `"mask": 2`, so enemies walking through it raise nothing.
 
@@ -153,7 +160,8 @@ Joints are not scene-authored yet.
 ## 9.7 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3
-position iterations, warm starting on. Two v0.5 switches, `enable_sleep` and `block_solver`, are
+position iterations, warm starting on. A scene changes gravity with a `WorldSettings` component (`gravity_2d`; chapter 2,
+Project Settings), applied at the first tick. Two v0.5 switches, `enable_sleep` and `block_solver`, are
 off by default to keep older replays bit-identical; a new game that stacks many bodies benefits from
 `block_solver = true` with 16 velocity iterations. Changing the config means a custom host today
 (the player uses the defaults).

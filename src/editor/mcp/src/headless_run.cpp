@@ -6,6 +6,7 @@
 #include "mce/audio/components.h"
 #include "mce/editor/play_session.h"
 #include "mce/input/ecs.h"
+#include "mce/kit/stock.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/physics/module.h"
@@ -30,8 +31,7 @@ public:
         input::install(world_);
         physics::install_physics2d(world_);
         audio::install(world_, audio_, &clips_);
-        kit::install_particles(world_, &assets_);
-        kit::install_sequences(world_, &assets_);
+        kit::install_stock(world_, &assets_);
         if (const editor::GameInstallFn game = editor::play_game_install()) {
             if (ResultV g = game(world_); !g) {
                 error_ = g.error();

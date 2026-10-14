@@ -154,6 +154,8 @@ public:
     World2D& operator=(const World2D&) = delete;
 
     const PhysicsConfig& config() const;
+    // Changes config().gravity from the next step on (a scene's WorldSettings, M-DATA-REACH 3).
+    void set_gravity(vec2 gravity);
 
     // ---- body lifecycle (the ECS bridge drives these from components) -------------------------
     // False when the entity already has a body or the shape is malformed (degenerate box,

@@ -55,6 +55,7 @@ private:
         asset::AnyHandle handle;
         asset::AnyHandle normal_handle;
         render::SpriteSetId set;
+        Array<render::SpriteRegion> regions;  // [0] = the whole texture; Sprite.region rects after it
     };
     struct FontEntry {
         asset::Guid guid;
@@ -73,6 +74,9 @@ private:
         i16 layer = 0;
         bool used = false;
     };
+    // The region index of the texture rect `uv` (u0, v0, u1, v1) in `set`, added on first use;
+    // 0 (the whole texture) for the default rect or a set with no texture of its own.
+    u32 region_index(render::SpriteSetId set, const math::vec4& uv);
     void collect_lights(World& world, render::SpriteBatch& batch);
     void draw_tilemap(const TilemapLayer& layer, math::vec2 origin, math::vec2 offset, render::SpriteBatch& batch);
     void destroy_tilemap(TilemapEntry& e);
@@ -91,6 +95,7 @@ private:
 
 // The first primary Camera2DComponent with a LocalTransform, in ECS order. False (and a default
 // camera at the origin) when the scene has none.
+// Both add a CameraShake2D on the camera entity (effects.h) to the view.
 bool primary_camera(World& world, render::Camera2D& out, f32& pixels_per_meter, math::Color* clear_color = nullptr);
 // The same for one entity's Camera2DComponent, primary or not (a preview from another camera). False
 // (nothing written) when `e` has no LocalTransform + Camera2DComponent.

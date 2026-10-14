@@ -1,0 +1,54 @@
+#pragma once
+// kit3d's collider builders, shared by the Startup system (kit3d.cpp) and the runtime sync of
+// bodies3d.cpp (colliders on runtime-spawned entities), and the Animator pose samples shared by
+// the extract (kit3d_extract.cpp) and AttachToBone (anim3d.cpp).
+
+#include "mce/ecs/transform.h"
+#include "mce/ecs/world.h"
+#include "mce/kit/kit3d.h"
+#include "mce/render/mesh.h"
+
+namespace mce::kit {
+
+// The entity's world pose: WorldTransform when the hierarchy wrote one, else LocalTransform.
+void world_pose(World& w, Entity e, const LocalTransform& local, math::vec3& pos, math::quat& rot, math::vec3& scale);
+bool create_box_collider(World& w, Physics3D& phys, Entity e, const BoxCollider3D& c, const LocalTransform& t);
+bool create_mesh_collider(World& w, Physics3D& phys, asset::AssetSystem* assets, Entity e, const MeshCollider3D& c,
+                          const LocalTransform& t);
+// install_kit3d's asset system (null when none).
+asset::AssetSystem* kit3d_assets(World& w);
+
+// anim3d.cpp: registers AttachToBone, AnimEvent3D and the animation asset cache; adds
+// "kit3d_animators" and "kit3d_attach".
+void install_anim3d(World& world);
+void add_anim3d_systems(World& world);
+
+// The weighted clip samples posing `mesh` under Animator `a`: the playing clip, a blend state's
+// second clip (at the same phase) and the clip fading out. `find` maps a clip StringId to the
+// mesh's clip index (~0u when absent). 0 samples = the rest pose.
+template <typename Find>
+usize anim_samples(const Animator& a, const render::GpuMesh& mesh, Find find, render::ClipSample (&out)[3]) {
+    const u32 clip = a.playing != 0 ? find(a.playing) : ~0u;
+    if (clip == ~0u) return 0;
+    usize n = 0;
+    const f32 t = a.time + a.phase;
+    const u32 second = a.blend_clip != 0 && a.blend_weight > 0.0f ? find(a.blend_clip) : ~0u;
+    if (second != ~0u) {
+        const f32 from = mesh.clips[clip].duration, to = mesh.clips[second].duration;
+        out[n++] = {clip, t, a.blend * (1.0f - a.blend_weight)};
+        out[n++] = {second, from > 0.0f ? t / from * to : t, a.blend * a.blend_weight};
+    } else {
+        out[n++] = {clip, t, a.blend};
+    }
+    const u32 prev = a.previous != 0 && a.blend < 1.0f ? find(a.previous) : ~0u;
+    if (prev != ~0u) out[n++] = {prev, a.previous_time + a.phase, 1.0f - a.blend};
+    return n;
+}
+
+// pose_nodes for one sample (bit-identical to the single-clip path), pose_nodes_blend otherwise.
+inline void pose_samples(const render::GpuMesh& mesh, const render::ClipSample* samples, usize n, Span<math::mat4> out) {
+    if (n == 1) render::pose_nodes(mesh, samples[0].clip, samples[0].time, out);
+    else render::pose_nodes_blend(mesh, Span<const render::ClipSample>(samples, n), out);
+}
+
+}  // namespace mce::kit

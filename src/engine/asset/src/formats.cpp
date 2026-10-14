@@ -276,6 +276,104 @@ Result<TilemapView> TilemapView::read(Span<const byte> payload) {
     return v;
 }
 
+// ------------------------------------------------------------------ sprite sheet
+
+namespace {
+StringView padded(const char* s, usize cap) {
+    usize n = 0;
+    while (n < cap && s[n] != '\0') ++n;
+    return StringView(s, n);
+}
+}  // namespace
+
+Result<SpriteSheetView> SpriteSheetView::read(Span<const byte> payload) {
+    SpriteSheetView v;
+    v.header = header_of<SpriteSheetHeader>(payload);
+    if (!v.header) return Error(Errc::Truncated, "asset.spritesheet.read");
+    const SpriteSheetHeader& h = *v.header;
+    const u64 bytes = sizeof(SpriteSheetHeader) + u64(h.region_count) * sizeof(SpriteSheetRegion) +
+                      u64(h.clip_count) * sizeof(SpriteSheetClip) + u64(h.frame_count) * sizeof(u32) +
+                      u64(h.event_count) * sizeof(SpriteSheetEvent);
+    if (h.region_count > (1u << 20) || h.clip_count > (1u << 16) || h.frame_count > (1u << 20) || h.event_count > (1u << 20) ||
+        bytes > payload.size())
+        return Error(Errc::Truncated, "asset.spritesheet.read");
+    const byte* p = payload.data() + sizeof(SpriteSheetHeader);
+    v.regions = Span<const SpriteSheetRegion>(reinterpret_cast<const SpriteSheetRegion*>(p), h.region_count);
+    p += usize(h.region_count) * sizeof(SpriteSheetRegion);
+    v.clips = Span<const SpriteSheetClip>(reinterpret_cast<const SpriteSheetClip*>(p), h.clip_count);
+    p += usize(h.clip_count) * sizeof(SpriteSheetClip);
+    v.frames = Span<const u32>(reinterpret_cast<const u32*>(p), h.frame_count);
+    p += usize(h.frame_count) * sizeof(u32);
+    v.events = Span<const SpriteSheetEvent>(reinterpret_cast<const SpriteSheetEvent*>(p), h.event_count);
+    for (const u32 f : v.frames)
+        if (f >= h.region_count) return Error(Errc::InvalidArgument, "asset.spritesheet.frame");
+    for (const SpriteSheetClip& c : v.clips) {
+        if (u64(c.first_frame) + c.frame_count > h.frame_count || u64(c.first_event) + c.event_count > h.event_count || c.mode > 2)
+            return Error(Errc::InvalidArgument, "asset.spritesheet.clip");
+        for (u32 i = 0; i < c.event_count; ++i)
+            if (v.events[c.first_event + i].frame >= c.frame_count) return Error(Errc::InvalidArgument, "asset.spritesheet.event");
+    }
+    return v;
+}
+
+const SpriteSheetClip* SpriteSheetView::find_clip(StringView name) const {
+    if (clips.empty()) return nullptr;
+    if (name.empty()) return &clips[0];
+    for (const SpriteSheetClip& c : clips)
+        if (name_of(c) == name) return &c;
+    return nullptr;
+}
+
+StringView SpriteSheetView::name_of(const SpriteSheetClip& c) { return padded(c.name, sizeof(c.name)); }
+StringView SpriteSheetView::name_of(const SpriteSheetEvent& e) { return padded(e.name, sizeof(e.name)); }
+
+// ------------------------------------------------------------------ animation graph
+
+Result<AnimGraphView> AnimGraphView::read(Span<const byte> payload) {
+    AnimGraphView v;
+    v.header = header_of<AnimGraphHeader>(payload);
+    if (!v.header) return Error(Errc::Truncated, "asset.animgraph.read");
+    const AnimGraphHeader& h = *v.header;
+    constexpr u32 kMax = 1u << 16;
+    if (h.param_count > kAnimGraphMaxParams || h.state_count == 0 || h.state_count > kMax || h.transition_count > kMax ||
+        h.condition_count > kMax || h.blend_point_count > kMax || h.event_count > kMax || h.start_state >= h.state_count)
+        return Error(Errc::InvalidArgument, "asset.animgraph.read");
+    const u64 bytes = sizeof(AnimGraphHeader) + u64(h.state_count) * sizeof(AnimGraphState) +
+                      u64(h.transition_count) * sizeof(AnimGraphTransition) + u64(h.condition_count) * sizeof(AnimGraphCondition) +
+                      u64(h.blend_point_count) * sizeof(AnimGraphBlendPoint) + u64(h.event_count) * sizeof(AnimGraphEvent);
+    if (bytes > payload.size()) return Error(Errc::Truncated, "asset.animgraph.read");
+    const byte* p = payload.data() + sizeof(AnimGraphHeader);
+    v.states = Span<const AnimGraphState>(reinterpret_cast<const AnimGraphState*>(p), h.state_count);
+    p += usize(h.state_count) * sizeof(AnimGraphState);
+    v.transitions = Span<const AnimGraphTransition>(reinterpret_cast<const AnimGraphTransition*>(p), h.transition_count);
+    p += usize(h.transition_count) * sizeof(AnimGraphTransition);
+    v.conditions = Span<const AnimGraphCondition>(reinterpret_cast<const AnimGraphCondition*>(p), h.condition_count);
+    p += usize(h.condition_count) * sizeof(AnimGraphCondition);
+    v.blend_points = Span<const AnimGraphBlendPoint>(reinterpret_cast<const AnimGraphBlendPoint*>(p), h.blend_point_count);
+    p += usize(h.blend_point_count) * sizeof(AnimGraphBlendPoint);
+    v.events = Span<const AnimGraphEvent>(reinterpret_cast<const AnimGraphEvent*>(p), h.event_count);
+    for (const AnimGraphState& s : v.states)
+        if (u64(s.first_blend) + s.blend_count > h.blend_point_count || u64(s.first_event) + s.event_count > h.event_count ||
+            (s.blend_count > 0 && s.blend_param >= h.param_count))
+            return Error(Errc::InvalidArgument, "asset.animgraph.state");
+    for (const AnimGraphTransition& t : v.transitions)
+        if ((t.from != kAnimAnyState && t.from >= h.state_count) || t.to >= h.state_count ||
+            u64(t.first_condition) + t.condition_count > h.condition_count)
+            return Error(Errc::InvalidArgument, "asset.animgraph.transition");
+    for (const AnimGraphCondition& c : v.conditions)
+        if (c.param >= h.param_count || static_cast<u8>(c.op) > static_cast<u8>(AnimCompare::NotEqual))
+            return Error(Errc::InvalidArgument, "asset.animgraph.condition");
+    return v;
+}
+
+u32 AnimGraphView::find_state(StringView name) const {
+    for (u32 i = 0; i < states.size(); ++i)
+        if (text(states[i].name, sizeof(states[i].name)) == name) return i;
+    return static_cast<u32>(states.size());
+}
+
+StringView AnimGraphView::text(const char* s, usize cap) { return padded(s, cap); }
+
 // ------------------------------------------------------------------ particle preset
 
 Result<const ParticlePresetChunk*> ParticlePresetChunk::read(Span<const byte> payload) {

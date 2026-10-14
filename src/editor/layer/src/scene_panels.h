@@ -13,6 +13,7 @@ void add_play_panel(EditorShell& shell);
 void add_asset_panel(EditorShell& shell);
 void add_profiler_panel(EditorShell& shell);
 void add_tilemap_panel(EditorShell& shell);
+void add_project_settings_panel(EditorShell& shell);
 // Drag-drop payload of the asset browser: the asset's Guid.
 inline constexpr const char* kAssetPayload = "MCE_ASSET";
 // Destroys every selected entity (Del in the Hierarchy and the Viewport).

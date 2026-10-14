@@ -10,6 +10,7 @@
 #include "mce/ecs/world.h"
 #include "mce/log.h"
 #include "mce/string_id.h"
+#include "kit3d_internal.h"
 
 namespace mce::kit {
 
@@ -19,23 +20,20 @@ static_assert(sizeof(PointLight3D) == 40);
 static_assert(sizeof(SpotLight3D) == 60);
 static_assert(sizeof(ReflectionProbe3D) == 64);
 static_assert(sizeof(Camera3DComponent) == 24);
-static_assert(sizeof(Animator) == 80);
 static_assert(sizeof(Environment3D) == 240);
 static_assert(sizeof(BoxCollider3D) == 40);
 static_assert(sizeof(MeshCollider3D) == 32);
-
-namespace {
 
 // The asset system mesh colliders read their meshes from (install_kit3d's argument).
 struct Kit3DAssets {
     asset::AssetSystem* assets = nullptr;
 };
 
-void pose_of(Frame& f, Entity e, const LocalTransform& local, math::vec3& pos, math::quat& rot, math::vec3& scale) {
-    if (const WorldTransform* w = f.world().try_get<WorldTransform>(e)) {
-        pos = w->position;
-        rot = w->rotation;
-        scale = w->scale;
+void world_pose(World& w, Entity e, const LocalTransform& local, math::vec3& pos, math::quat& rot, math::vec3& scale) {
+    if (const WorldTransform* wt = w.try_get<WorldTransform>(e)) {
+        pos = wt->position;
+        rot = wt->rotation;
+        scale = wt->scale;
     } else {
         pos = local.position;
         rot = local.rotation;
@@ -43,53 +41,71 @@ void pose_of(Frame& f, Entity e, const LocalTransform& local, math::vec3& pos, m
     }
 }
 
-void kit3d_colliders(Frame& f) {
-    Physics3D& phys = f.resource<Physics3D>();
-    f.query<const BoxCollider3D&, const LocalTransform&>().each([&](Entity e, const BoxCollider3D& c, const LocalTransform& t) {
-        math::vec3 pos, scale;
-        math::quat rot;
-        pose_of(f, e, t, pos, rot, scale);
-        physics::BodyDesc3D d;
-        d.shape = physics::Shape3D::box({c.half.x * scale.x, c.half.y * scale.y, c.half.z * scale.z});
-        d.rotation = rot * math::quat_from_axis_angle({1.0f, 0.0f, 0.0f}, math::radians(c.pitch_deg));
-        d.position = pos + math::rotate(rot, {c.offset.x * scale.x, c.offset.y * scale.y, c.offset.z * scale.z});
-        d.friction = c.friction;
-        d.layer = static_cast<u8>(c.layer & 15u);
-        if (phys.world.create_body(e, d)) ++phys.colliders;
-        else MCE_LOG_WARN("kit3d: box collider on entity {} not created", e.index);
-    });
-    asset::AssetSystem* assets = f.resource<Kit3DAssets>().assets;
+bool create_box_collider(World& w, Physics3D& phys, Entity e, const BoxCollider3D& c, const LocalTransform& t) {
+    math::vec3 pos, scale;
+    math::quat rot;
+    world_pose(w, e, t, pos, rot, scale);
+    physics::BodyDesc3D d;
+    d.shape = physics::Shape3D::box({c.half.x * scale.x, c.half.y * scale.y, c.half.z * scale.z});
+    d.rotation = rot * math::quat_from_axis_angle({1.0f, 0.0f, 0.0f}, math::radians(c.pitch_deg));
+    d.position = pos + math::rotate(rot, {c.offset.x * scale.x, c.offset.y * scale.y, c.offset.z * scale.z});
+    d.friction = c.friction;
+    d.layer = static_cast<u8>(c.layer & 15u);
+    if (phys.world.create_body(e, d)) return true;
+    MCE_LOG_WARN("kit3d: box collider on entity {} not created", e.index);
+    return false;
+}
+
+bool create_mesh_collider(World& w, Physics3D& phys, asset::AssetSystem* assets, Entity e, const MeshCollider3D& c,
+                          const LocalTransform& t) {
+    if (!assets) {
+        MCE_LOG_WARN("kit3d: mesh collider on entity {} skipped (no asset system)", e.index);
+        return false;
+    }
+    Result<asset::AssetHandle<asset::Mesh>> h = assets->load_sync<asset::Mesh>(c.mesh.guid);
+    if (!h) {
+        MCE_LOG_WARN("kit3d: mesh collider on entity {}: mesh {} does not load", e.index, asset::to_string(c.mesh.guid).view());
+        return false;
+    }
+    math::vec3 pos, scale;
+    math::quat rot;
+    world_pose(w, e, t, pos, rot, scale);
     Array<math::vec3> verts;
     Array<u32> indices;
+    const bool read = mesh_triangles(assets->resolve(h.value()), math::scaling(scale), verts, indices);
+    assets->release(asset::AnyHandle(h.value()));
+    if (!read || indices.empty()) {
+        MCE_LOG_WARN("kit3d: mesh collider on entity {}: no triangles", e.index);
+        return false;
+    }
+    physics::BodyDesc3D d;
+    d.shape = physics::Shape3D::mesh(verts.span(), indices.span());
+    d.position = pos;
+    d.rotation = rot;
+    d.friction = c.friction;
+    d.layer = static_cast<u8>(c.layer & 15u);
+    if (phys.world.create_body(e, d)) return true;
+    MCE_LOG_WARN("kit3d: mesh collider on entity {} not created", e.index);
+    return false;
+}
+
+asset::AssetSystem* kit3d_assets(World& w) {
+    const Kit3DAssets* a = w.try_resource<Kit3DAssets>();
+    return a ? a->assets : nullptr;
+}
+
+namespace {
+
+
+
+void kit3d_colliders(Frame& f) {
+    Physics3D& phys = f.resource<Physics3D>();
+    asset::AssetSystem* assets = f.resource<Kit3DAssets>().assets;
+    f.query<const BoxCollider3D&, const LocalTransform&>().each([&](Entity e, const BoxCollider3D& c, const LocalTransform& t) {
+        if (create_box_collider(f.world(), phys, e, c, t)) ++phys.colliders;
+    });
     f.query<const MeshCollider3D&, const LocalTransform&>().each([&](Entity e, const MeshCollider3D& c, const LocalTransform& t) {
-        if (!assets) {
-            MCE_LOG_WARN("kit3d: mesh collider on entity {} skipped (no asset system)", e.index);
-            return;
-        }
-        Result<asset::AssetHandle<asset::Mesh>> h = assets->load_sync<asset::Mesh>(c.mesh.guid);
-        if (!h) {
-            MCE_LOG_WARN("kit3d: mesh collider on entity {}: mesh {} does not load", e.index, asset::to_string(c.mesh.guid).view());
-            return;
-        }
-        math::vec3 pos, scale;
-        math::quat rot;
-        pose_of(f, e, t, pos, rot, scale);
-        verts.clear();
-        indices.clear();
-        const bool read = mesh_triangles(assets->resolve(h.value()), math::scaling(scale), verts, indices);
-        assets->release(asset::AnyHandle(h.value()));
-        if (!read || indices.empty()) {
-            MCE_LOG_WARN("kit3d: mesh collider on entity {}: no triangles", e.index);
-            return;
-        }
-        physics::BodyDesc3D d;
-        d.shape = physics::Shape3D::mesh(verts.span(), indices.span());
-        d.position = pos;
-        d.rotation = rot;
-        d.friction = c.friction;
-        d.layer = static_cast<u8>(c.layer & 15u);
-        if (phys.world.create_body(e, d)) ++phys.colliders;
-        else MCE_LOG_WARN("kit3d: mesh collider on entity {} not created", e.index);
+        if (create_mesh_collider(f.world(), phys, assets, e, c, t)) ++phys.colliders;
     });
 }
 
@@ -105,29 +121,6 @@ void kit3d_environment(Frame& f) {
         if (found) return;
         found = true;
         f.resource<Environment3D>() = env;
-    });
-}
-
-// Animator: time advances by dt * speed; a new clip name starts at 0 and cross-fades from the old.
-void kit3d_animators(Frame& f) {
-    const f32 dt = f.dt;
-    f.query<Animator&>().each([&](Animator& a) {
-        const u64 want = a.clip.empty() ? 0 : StringId(a.clip.view()).value;
-        if (want != a.playing) {
-            a.previous = a.playing;
-            a.previous_time = a.time;
-            a.playing = want;
-            a.time = 0.0f;
-            a.blend = (a.fade > 0.0f && a.previous != 0) ? 0.0f : 1.0f;
-            if (a.blend >= 1.0f) a.previous = 0;
-            return;  // the switching tick shows the clips as they were: both at their start
-        }
-        a.time += dt * a.speed;
-        if (a.blend < 1.0f) {
-            a.previous_time += dt * a.speed;
-            a.blend = a.fade > 0.0f ? std::min(1.0f, a.blend + dt / a.fade) : 1.0f;
-        }
-        if (a.blend >= 1.0f) a.previous = 0;
     });
 }
 
@@ -219,7 +212,8 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
     world.add_system(Phase::Startup, "kit3d_environment", &kit3d_environment);
     world.add_system(Phase::Startup, "kit3d_colliders", &kit3d_colliders, "kit3d_environment");
     world.add_system(Phase::FixedUpdate_Physics, "kit3d_physics", &kit3d_physics);
-    world.add_system(Phase::FixedUpdate_Post, "kit3d_animators", &kit3d_animators);
+    install_anim3d(world);
+    add_anim3d_systems(world);
 }
 
 bool has_camera_3d(World& world) { return world.query<const Camera3DComponent&>().count() > 0; }

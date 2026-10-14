@@ -156,7 +156,8 @@ bool scene_path(Server& server, StringView rel, cook::String& abs, cook::String&
         return false;
     }
     bool ok = !rel.empty() && rel.size() < 400 && rel[0] != '/' && rel.find('\\') == StringView::npos &&
-              rel.find(':') == StringView::npos && rel.size() > 8 && rel.substr(rel.size() - 8) == ".mcscene";
+              rel.find(':') == StringView::npos &&
+              ((rel.size() > 8 && rel.substr(rel.size() - 8) == ".mcscene") || (rel.size() > 9 && rel.substr(rel.size() - 9) == ".mcprefab"));
     for (usize start = 0; ok && start <= rel.size();) {
         usize end = rel.find('/', start);
         if (end == StringView::npos) end = rel.size();
@@ -167,7 +168,7 @@ bool scene_path(Server& server, StringView rel, cook::String& abs, cook::String&
     if (!ok) {
         err += "invalid scene path '";
         err += rel;
-        err += "': use a path under assets/ like \"scenes/level.mcscene\" (forward slashes, no '..')";
+        err += "': use a path under assets/ like \"scenes/level.mcscene\" or \"prefabs/enemy.mcprefab\" (forward slashes, no '..')";
         return false;
     }
     abs = server.session().project().asset_path(rel);
@@ -441,6 +442,19 @@ bool entity_create(ToolCall& c) {
     if (name.size() >= 64) return fail(c, "argument 'name' must be shorter than 64 bytes");
     const cook::JsonValue comps = arg(c, "components");
     if (comps.valid() && !comps.is_object()) return arg_missing(c, "components", "an object of {\"Type\": {fields}}");
+    // A prefab instance: the prefab must be a registered .mcprefab; components override its root.
+    asset::Guid prefab;
+    if (const cook::JsonValue p = arg(c, "prefab"); p.valid()) {
+        const editor::ProjectAsset* a = nullptr;
+        StringView ref = p.is_string() ? p.as_string() : StringView();
+        if (ref.size() > 5 && ref.substr(0, 5) == "guid:") ref = ref.substr(5);
+        if (const Result<asset::Guid> g = asset::parse_guid(ref); g && c.server.session().project().is_open())
+            a = c.server.session().project().find(g.value());
+        if (!a || a->type != asset::ChunkType::Prefab)
+            return fail(c, "argument 'prefab' must name a .mcprefab of the project as \"guid:<uuid>\" (asset_list with type Prefab lists them)");
+        prefab = a->guid;
+        if (!transform) return fail(c, "a prefab instance always has its own LocalTransform: drop 'transform': false");
+    }
 
     // Validate every value before the entity exists: a failed call changes nothing.
     Array<Value> values;
@@ -461,12 +475,15 @@ bool entity_create(ToolCall& c) {
         }
     }
     EditorScene& s = scene(c);
-    const EntityId id = s.create_entity(name, transform, has_at ? static_cast<i32>(at) : -1);
+    const i32 where = has_at ? static_cast<i32>(at) : -1;
+    const EntityId id = prefab.is_null() ? s.create_entity(name, transform, where) : s.create_prefab_instance(name, prefab, where);
     for (Value& v : values) {
         s.add_component(id, *v.type);
         s.set_component(id, *v.type, v.data());
     }
-    c.out.begin_object().key("id").num_u(id).key("index").num_i(s.doc().index_of(id)).end_object();
+    c.out.begin_object().key("id").num_u(id).key("index").num_i(s.doc().index_of(id));
+    if (!prefab.is_null()) c.out.key("prefab").str(guid_ref(prefab).view());
+    c.out.end_object();
     return true;
 }
 
@@ -542,6 +559,7 @@ bool component_set(ToolCall& c) {
     const cook::JsonValue value = arg(c, "value");
     if (!value.valid()) return arg_missing(c, "value", "given (an object of fields, or the value at 'path')");
     const DocComponent* current = scene(c).doc().find(id)->find(*t);
+    if (!current) current = scene(c).prefab_base(id, *t);  // inherited from the prefab: becomes an override
     if (!current) return fail(c, "the entity does not have that component: use component_add");
     Value v;
     init_value(v, *t, current->data());
@@ -1110,8 +1128,9 @@ const ToolDef kTools[] = {
      asset_set_import_settings},
     {"entity_create",
      "Create an entity (with a LocalTransform unless transform is false) and optionally components, e.g. "
-     "{\"Sprite\": {\"texture\": \"guid:...\", \"size\": [1, 1]}}. Returns its id.",
-     R"({"type":"object","properties":{"name":{"type":"string"},"transform":{"type":"boolean","default":true},"at":{"type":"integer","description":"Index in the hierarchy; default: the end"},"components":{"type":"object","description":"Type name -> object of fields"}},"required":["name"]})",
+     "{\"Sprite\": {\"texture\": \"guid:...\", \"size\": [1, 1]}}. With 'prefab', an instance of that .mcprefab whose "
+     "'components' override the prefab root's fields (LocalTransform places it). Returns its id.",
+     R"({"type":"object","properties":{"name":{"type":"string"},"prefab":{"type":"string","description":"\"guid:<uuid>\" of a .mcprefab: place an instance; components then override the prefab root's fields"},"transform":{"type":"boolean","default":true},"at":{"type":"integer","description":"Index in the hierarchy; default: the end"},"components":{"type":"object","description":"Type name -> object of fields"}},"required":["name"]})",
      entity_create},
     {"entity_delete", "Delete an entity (references to it become null).", kEntityArg, entity_delete},
     {"scene_clear", "Delete every entity of the open scene (one undo step): re-author a scene keeping its GUID and path.", kNoArgs, scene_clear},
@@ -1130,13 +1149,14 @@ const ToolDef kTools[] = {
      component_set},
     {"scene_new", "Start a new, empty, unsaved scene (refuses to drop unsaved changes unless force).",
      R"({"type":"object","properties":{"name":{"type":"string"},"force":{"type":"boolean"}},"required":["name"]})", scene_new},
-    {"scene_open", "Open a .mcscene by its path under assets/ (refuses to drop unsaved changes unless force).",
+    {"scene_open", "Open a .mcscene, or a .mcprefab to edit the prefab itself (entity 0 is its root), by its path under assets/ (refuses to drop unsaved changes unless force).",
      R"({"type":"object","properties":{"path":{"type":"string","description":"e.g. scenes/demo.mcscene"},"force":{"type":"boolean"}},"required":["path"]})",
      scene_open},
     {"scene_save",
      "Save the scene (atomic write; entity ids are saved with it). With 'path' (under assets/): save as, with a "
      "fresh GUID for a new file. 'name' renames the scene. Refuses to overwrite a file that changed on disk since "
-     "it was opened, or another existing file, unless force (an overwritten file keeps its GUID).",
+     "it was opened, or another existing file, unless force (an overwritten file keeps its GUID). A path ending in "
+     ".mcprefab saves the document as a prefab (entity 0 is the root; prefab_create_from makes one from an entity).",
      R"({"type":"object","properties":{"path":{"type":"string"},"name":{"type":"string","description":"New scene name"},"force":{"type":"boolean"}}})", scene_save},
     {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
      scene_undo},
@@ -1178,7 +1198,7 @@ Span<const ToolDef> tool_table() {
     static const Array<ToolDef> all = [] {
         Array<ToolDef> a;
         for (const ToolDef& t : kTools) a.push_back(t);
-        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table()})
+        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table(), prefab_tool_table(), project_tool_table()})
             for (const ToolDef& t : group) a.push_back(t);
         return a;
     }();
@@ -1190,6 +1210,10 @@ const ToolDef* find_tool(StringView name) {
         if (name == t.name) return &t;
     return nullptr;
 }
+
+bool tool_arg_entity(ToolCall& c, const char* name, editor::EntityId& out) { return arg_entity(c, name, out); }
+
+bool tool_arg_component(ToolCall& c, const char* name, const refl::TypeRecord*& out) { return arg_component(c, name, out); }
 
 bool open_scene_file(Server& server, StringView rel, cook::String& err) {
     cook::String abs;

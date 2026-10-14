@@ -86,9 +86,12 @@ struct Builder {
         skins.push_back(skin);
     }
 
-    u32 add_node(i32 parent, math::vec3 t = {}) {
+    u32 add_node(i32 parent, math::vec3 t = {}, const char* name = nullptr) {
         asset::MeshNode n{};
         n.parent = parent;
+        n.name_offset = static_cast<u32>(strings.size());
+        for (const char* p = name; p && *p; ++p) strings.push_back(*p);
+        n.name_size = static_cast<u32>(strings.size()) - n.name_offset;
         n.translation[0] = t.x;
         n.translation[1] = t.y;
         n.translation[2] = t.z;

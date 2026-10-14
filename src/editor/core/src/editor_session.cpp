@@ -1,10 +1,14 @@
 #include "mce/editor/editor_session.h"
 
 #include <cstdio>
+#include <cstring>
 
+#include "mce/cook/cook.h"
 #include "mce/cook/envmap.h"
 #include "mce/cook/fs.h"
 #include "mce/cook/json.h"
+#include "mce/ecs/hierarchy.h"
+#include "mce/ecs/transform.h"
 #include "mce/kit/kit3d.h"
 #include "mce/editor/preview_renderer.h"
 #include "mce/log.h"
@@ -137,6 +141,67 @@ Result<void> EditorSession::apply_to_prefab(asset::Guid prefab, const DocCompone
     MCE_TRY(write_asset(rel.view(), out.view()));  // re-cooks the prefab and refreshes the ghosts
     MCE_LOG_INFO("editor: applied {} to prefab {}", value.type->name, rel.view());
     return ok();
+}
+
+Result<asset::Guid> EditorSession::create_prefab_from(EntityId root, StringView rel_path, bool replace) {
+    constexpr const char* kWhere = "editor.prefab_create";
+    if (!project_.is_open()) return Error(Errc::InvalidArgument, kWhere, "no project is open");
+    const DocEntity* top = scene_.doc().find(root);
+    if (!top) return Error(Errc::NotFound, kWhere, "no such entity");
+    if (rel_path.size() < 10 || rel_path.substr(rel_path.size() - 9) != ".mcprefab")
+        return Error(Errc::InvalidArgument, kWhere, "a prefab path ends in .mcprefab");
+    if (cook::fs::exists(project_.asset_path(rel_path).view())) return Error(Errc::AlreadyExists, kWhere, rel_path);
+
+    // The subtree in document order, root first.
+    Array<EntityId> ids;
+    ids.push_back(root);
+    for (const DocEntity& e : scene_.doc().entities())
+        if (e.id != root && scene_.is_ancestor(root, e.id)) ids.push_back(e.id);
+    SceneDocument prefab;
+    const cook::String name(top->name.view());
+    prefab.reset(name.view());
+    prefab.set_kind(DocKind::Prefab);
+    prefab.set_guid(cook::generate_guid());
+    for (EntityId id : ids) {
+        const DocEntity& e = *scene_.doc().find(id);
+        prefab.insert(e.name.view(), -1, e.id);  // same ids: internal references keep resolving
+        prefab.find(e.id)->prefab = e.prefab;
+        for (const DocComponent& c : e.components) {
+            if (id == root && c.type == &refl::type_of<ChildOf>()) continue;  // the instance keeps the parent
+            DocComponent* dst = prefab.add_component(e.id, *c.type);
+            std::memcpy(dst->data(), c.data(), c.type->size);
+            dst->overrides = c.overrides;
+            visit_entity_refs(*c.type, dst->data(), [](Entity* f, void* user) {
+                const Array<EntityId>& inside = *static_cast<const Array<EntityId>*>(user);
+                bool keep = false;
+                for (EntityId i : inside) keep |= i == doc_entity_id(*f);
+                if (!keep) *f = Entity::null;
+            }, &ids);
+        }
+    }
+    // The root's placement is the instance's own: the prefab keeps an identity transform there.
+    if (DocComponent* t = prefab.find(root)->find(refl::type_of<LocalTransform>())) {
+        const LocalTransform identity{};
+        std::memcpy(t->data(), &identity, sizeof(identity));
+    }
+    cook::String text;
+    prefab.serialize(text);
+    MCE_TRY(write_asset(rel_path, text.view()));
+    const asset::Guid guid = prefab.guid();
+    if (!project_.find(guid)) return Error(Errc::ImportFailed, kWhere, "the new prefab did not cook (see the log)");
+    MCE_LOG_INFO("editor: saved {} entities as prefab {}", ids.size(), rel_path);
+    if (!replace) return guid;
+
+    const LocalTransform placement = scene_.get<LocalTransform>(root) ? *scene_.get<LocalTransform>(root) : LocalTransform{};
+    const EntityId parent = scene_.parent_of(root);
+    const i32 index = scene_.doc().index_of(root);
+    scene_.begin_edit("Replace with prefab");
+    scene_.destroy_entity(root);
+    const EntityId inst = scene_.create_prefab_instance(name.view(), guid, index);
+    scene_.set(inst, placement);
+    if (parent != kNoEntity) scene_.set_parent(inst, parent);
+    scene_.end_edit();
+    return guid;
 }
 
 Result<void> EditorSession::open_project(StringView root) {

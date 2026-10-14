@@ -30,6 +30,8 @@ inline constexpr u8 INPUT_MAP_VERSION = 1;  // CHNK_INPUT: a project's action ma
 inline constexpr u8 STRING_TABLE_VERSION = 1;  // CHNK_STR: one locale's string table (M-MOBILE 11a; mce/loc/string_table.h)
 inline constexpr u8 STORE_CATALOG_VERSION = 1;  // CHNK_STORE: products and ad placements (M-MONETIZE; mce/monetize/catalog.h)
 inline constexpr u8 GAME_SERVICES_CATALOG_VERSION = 1;  // CHNK_GSVC: game services catalog (M-LIVEOPS; mce/liveops/game_services.h)
+inline constexpr u8 ANIMGRAPH_VERSION = 1;  // CHNK_ANIMG: a 3D animation state graph (M-DATA-REACH 7)
+inline constexpr u8 SPRITESHEET_VERSION = 1;  // CHNK_SHEET: texture regions + flipbook clips (M-DATA-REACH 5)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -263,6 +265,144 @@ struct TilemapView {
     const TilemapHeader* header = nullptr;
     Span<const u32> tiles;
     static Result<TilemapView> read(Span<const byte> payload);
+};
+
+// ------------------------------------------------------------------ sprite sheet (CHNK_SHEET)
+// Regions of one texture and named flipbook clips over them (M-DATA-REACH 5; played by the kit's
+// AnimatedSprite through render/sprite_animation.h). Layout: the header, then region_count
+// regions, clip_count clips, frame_count u32 frames (region indices; each clip owns a run of
+// them) and event_count events (each clip owns a run; frame is within the clip).
+struct SpriteSheetHeader {
+    u64 texture[2];  // texture GUID {hi, lo}; zero = none
+    u32 region_count;
+    u32 clip_count;
+    u32 frame_count;
+    u32 event_count;
+    u32 reserved[4];
+    Guid texture_guid() const { return Guid{texture[0], texture[1]}; }
+};
+static_assert(sizeof(SpriteSheetHeader) == 48);
+
+struct SpriteSheetRegion {  // normalized texture coordinates, v0 = top edge
+    f32 u0, v0, u1, v1;
+};
+static_assert(sizeof(SpriteSheetRegion) == 16);
+
+struct SpriteSheetClip {
+    char name[32];  // NUL-padded
+    u32 first_frame;
+    u32 frame_count;
+    u32 first_event;
+    u32 event_count;
+    f32 fps;
+    u8 mode;  // render::PlayMode: 0 Loop, 1 PingPong, 2 Once
+    u8 reserved[3];
+};
+static_assert(sizeof(SpriteSheetClip) == 56);
+
+struct SpriteSheetEvent {
+    u16 frame;     // frame index within its clip
+    u16 reserved;
+    u32 id;        // low 32 bits of fnv1a64(name): render::AnimEvent::id
+    char name[24]; // NUL-padded
+};
+static_assert(sizeof(SpriteSheetEvent) == 32);
+
+struct SpriteSheetView {
+    const SpriteSheetHeader* header = nullptr;
+    Span<const SpriteSheetRegion> regions;
+    Span<const SpriteSheetClip> clips;
+    Span<const u32> frames;
+    Span<const SpriteSheetEvent> events;
+    static Result<SpriteSheetView> read(Span<const byte> payload);  // checks every index
+    // The clip named `name` (the first clip for an empty name), or null.
+    const SpriteSheetClip* find_clip(StringView name) const;
+    static StringView name_of(const SpriteSheetClip& c);
+    static StringView name_of(const SpriteSheetEvent& e);
+};
+
+// ------------------------------------------------------------------ animation graph (CHNK_ANIMG)
+// A 3D animation state graph (M-DATA-REACH 7) the kit's Animator runs over its MeshRef's clips:
+// states (one clip, or a 1D blend of clips along a parameter), transitions on parameter
+// conditions or a one-shot's end, and timed events per state. Layout: the header, then
+// state_count states, transition_count transitions, condition_count conditions,
+// blend_point_count blend points and event_count events; every index is checked by read().
+inline constexpr u32 kAnimGraphMaxParams = 4;
+inline constexpr u32 kAnimAnyState = 0xFFFFFFFFu;
+
+struct AnimGraphHeader {
+    u32 param_count;
+    u32 state_count;
+    u32 transition_count;
+    u32 condition_count;
+    u32 blend_point_count;
+    u32 event_count;
+    u32 start_state;
+    u32 reserved;
+    char params[kAnimGraphMaxParams][24];  // NUL-padded names; Animator.params holds their values in this order
+};
+static_assert(sizeof(AnimGraphHeader) == 128);
+
+struct AnimGraphState {
+    char name[32];
+    char clip[32];      // the mesh clip; empty for a blend state
+    u32 first_blend;    // blend points (sorted by `at`), when blend_count > 0
+    u32 blend_count;
+    u32 first_event;
+    u32 event_count;
+    f32 speed;
+    u8 loop;            // 0: plays once and holds its last pose (Animator.finished)
+    u8 blend_param;     // parameter index of the 1D blend
+    u8 reserved[2];
+};
+static_assert(sizeof(AnimGraphState) == 88);
+
+struct AnimGraphBlendPoint {
+    char clip[32];
+    f32 at;  // parameter value where this clip has full weight
+    u32 reserved;
+};
+static_assert(sizeof(AnimGraphBlendPoint) == 40);
+
+enum class AnimCompare : u8 { Greater, Less, GreaterEqual, LessEqual, Equal, NotEqual };
+
+struct AnimGraphCondition {
+    u8 param;
+    AnimCompare op;
+    u8 reserved[2];
+    f32 value;
+};
+static_assert(sizeof(AnimGraphCondition) == 8);
+
+struct AnimGraphTransition {
+    u32 from;  // state index, or kAnimAnyState
+    u32 to;
+    u32 first_condition;
+    u32 condition_count;  // all must hold
+    f32 fade;             // cross-fade seconds
+    u8 on_finish;         // also requires the `from` state's one-shot to have finished
+    u8 reserved[3];
+};
+static_assert(sizeof(AnimGraphTransition) == 24);
+
+struct AnimGraphEvent {
+    f32 time;  // seconds into the state's clip
+    u32 reserved;
+    u64 id;    // StringId (fnv1a64) of the name
+    char name[24];
+};
+static_assert(sizeof(AnimGraphEvent) == 40);
+
+struct AnimGraphView {
+    const AnimGraphHeader* header = nullptr;
+    Span<const AnimGraphState> states;
+    Span<const AnimGraphTransition> transitions;
+    Span<const AnimGraphCondition> conditions;
+    Span<const AnimGraphBlendPoint> blend_points;
+    Span<const AnimGraphEvent> events;
+    static Result<AnimGraphView> read(Span<const byte> payload);
+    u32 find_state(StringView name) const;  // states.size() when absent
+    static StringView text(const char* s, usize cap);  // a NUL-padded name
 };
 
 // ------------------------------------------------------------------ particle preset (CHNK_PART)
