@@ -21,7 +21,7 @@ a device or simulator run on the user's Mac.
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | done except the per-tier device numbers (no device) |
 | 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | done on the emulator and the Simulator (no devices) |
 | 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | done (store upload untested: no credentials) |
-| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a–11e done in the cloud (Mac simulator/emulator checks open); 11f (taps on the dialogue box) next |
+| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a–11f done in the cloud (Mac simulator/emulator checks open) |
 
 ## What shipped (steps 2–3)
 
@@ -266,6 +266,29 @@ emulator or device, on the Mac.
   table beside game rows, `--check` on a stale table, the page-count fallback).
 
 Still open in 11e: letters (`@lettertext`) show in the base language.
+
+## What shipped (step 11f: taps and clicks on dialogue and novel choices)
+
+- **In the sim:** `novel::pointer_pressed` reads a tap from the input snapshot: the first touch that went
+  down this tick, else the stock map's new `Point` action (left mouse) at the mouse. Replays and headless
+  runs see it like any other input; a keyboard run never reads it, so its hash is unchanged.
+- **Novel stage:** a tap on a choice row or a title menu row moves the cursor there and picks it (the
+  rows' sprites, through `ViewInfo::screen_to_world`); a tap beside the rows does nothing; elsewhere a
+  tap reads on, showing the rest of a page first. A tap's tick ignores the keys, so a touch the stock map
+  also reads as Jump does not pick twice.
+- **Dialogue box:** `novel::DialogueLayout` (text size, box height) moved from `DialogueBoxStyle` into the
+  world (`set_dialogue_layout`), and `dialogue_rects` gives the box and its rows in device pixels on the
+  safe area at `ViewInfo::ui_scale` (new; the player writes `ui::compute_ui_scale`). The sim hit-tests
+  those rows and the box; the box draws by the same numbers.
+- **Haptics:** a pick by pointer plays `Selection` (step 11d).
+- **Scripts:** `InputScript` takes `Touch=x,y` (a finger) and `Mouse=x,y`; `novel_probe_plays_by_touch`
+  plays the novel template to `@end` by taps alone (`tests/kit_novel/novel_taps.input`).
+- Tests: `test_novel` (taps play to the ending of the tapped row, a miss picks nothing, a click, the
+  keyboard hash with and without a view), `test_novel_ui` (the hit rectangles equal the drawn ones on a
+  2400×1080 screen with a notch at UI scale 2; a finger on a drawn row picks it), `test_input` (scripted
+  Touch and Mouse).
+
+Still open in 11f: taps in the iOS Simulator and an Android emulator, on the Mac.
 
 ## Constraints found so far
 

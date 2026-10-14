@@ -187,8 +187,19 @@ return mce::player::run(argc, argv, desc);
 ```
 
 It shows the conversation on the `DialogueInput` entity: the speaker's name, the page as far as it
-has been typed, and the options with the highlighted one marked and gated ones greyed. Colours and
-sizes are a `DialogueBoxStyle`. Any `ui::Layer` you write is added the same way.
+has been typed, and the options with the highlighted one marked and gated ones greyed. Colours are
+a `DialogueBoxStyle`; the text size and box height are the world's `novel::DialogueLayout`
+(`set_dialogue_layout`), because the sim hit-tests the same rectangles. Any `ui::Layer` you write
+is added the same way.
+
+### Taps and clicks
+
+A phone plays both the novel stage and the dialogue box by touch, and a desktop by mouse. A tap on
+a choice row (or a title menu row) picks that row; a tap anywhere else reads on, and while a
+choice waits it does nothing. On the dialogue box a tap on the box first shows the rest of the
+page, then advances. Taps reach the sim through the input snapshot (the first finger down, or the
+stock map's `Point` action at the mouse), so replays and headless runs see them, and a pick plays
+the `Selection` haptic. Your own maps add a `Point` action to get mouse clicks.
 
 ### Translating the story
 

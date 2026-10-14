@@ -176,6 +176,10 @@ if(MCE_TEMPLATE_PROBE AND MCE_BUILD_TESTS)
         add_test(NAME novel_probe_plays_to_end COMMAND novel_probe -headless 1 -ticks 2000 -novel.autoplay 1)
         set_tests_properties(novel_probe_plays_to_end PROPERTIES PASS_REGULAR_EXPRESSION "novel: @end"
                              RESOURCE_LOCK novel_probe_module)
+        add_test(NAME novel_probe_plays_by_touch
+                 COMMAND novel_probe -headless 1 -ticks 1500 -input "${PROJECT_SOURCE_DIR}/tests/kit_novel/novel_taps.input")
+        set_tests_properties(novel_probe_plays_by_touch PROPERTIES PASS_REGULAR_EXPRESSION "novel: @end"
+                             RESOURCE_LOCK novel_probe_module)
     endif()
 endif()
 

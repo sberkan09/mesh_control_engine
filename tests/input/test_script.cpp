@@ -99,3 +99,24 @@ TEST_CASE("input script: a later segment wins for the same action") {
     CHECK_FALSE(s.evaluate(5).action(MCE_SID("Move")).pressed);
     CHECK(s.evaluate(7).move.x == 1.f);
 }
+
+TEST_CASE("input script: Touch puts a finger down and lifts it, Mouse moves the pointer (M-MOBILE 11f)") {
+    InputScript s;
+    REQUIRE(static_cast<bool>(s.parse("3 Touch=0.25,0.75\n5-6 Mouse=640,360 Point\n")));
+    CHECK(s.evaluate(2).touch_points().size() == 0);
+    const InputState& down = s.evaluate(3);
+    REQUIRE(down.touch_points().size() == 1);
+    CHECK(down.touch_points()[0].pressed);
+    CHECK(down.touch_points()[0].held);
+    CHECK(down.touch_points()[0].pos.x == doctest::Approx(0.25f));
+    CHECK(down.touch_points()[0].pos.y == doctest::Approx(0.75f));
+    CHECK(!down.has_action(MCE_SID("Touch")));  // not an action
+    const InputState& up = s.evaluate(4);
+    REQUIRE(up.touch_points().size() == 1);
+    CHECK(up.touch_points()[0].released);
+    CHECK(!up.touch_points()[0].held);
+    CHECK(s.evaluate(5).mouse_pos_px().x == doctest::Approx(640.0f));
+    CHECK(s.state().pressed(MCE_SID("Point")));
+    CHECK(s.evaluate(6).touch_points().size() == 0);
+    CHECK(!s.state().pressed(MCE_SID("Point")));
+}

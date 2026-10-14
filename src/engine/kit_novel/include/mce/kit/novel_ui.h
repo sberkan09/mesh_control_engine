@@ -12,10 +12,13 @@
 // It shows the Dialogue whose entity carries DialogueInput (else the first active one): the
 // speaker's name, the page typed out as the sim reveals it (dialogue_revealed), and while a
 // choice waits the options with the highlighted one marked and gated ones greyed. It reads the
-// world and never writes it; Enter and up/down reach the conversation through DialogueInput in
-// the sim, so a replay or a headless run plays the same.
+// world and never writes it; Enter and up/down, and taps and clicks on its rows and on the box
+// (M-MOBILE 11f), reach the conversation through DialogueInput in the sim, so a replay or a
+// headless run plays the same. Its size is the world's DialogueLayout (novel::set_dialogue_layout),
+// the rectangles the sim hit-tests.
 
 #include "mce/ecs/world.h"
+#include "mce/kit/novel.h"
 #include "mce/ui/ui.h"
 
 namespace mce::novel {
@@ -27,8 +30,6 @@ struct DialogueBoxStyle {
     math::Color row{0.16f, 0.14f, 0.15f, 0.92f};
     math::Color row_selected{0.62f, 0.44f, 0.22f, 1.0f};
     math::Color row_disabled_text{0.55f, 0.52f, 0.5f, 1.0f};
-    f32 text_px = 26.0f;
-    f32 box_height = 190.0f;  // pixels at UI scale 1
 };
 
 class DialogueBox {
@@ -56,6 +57,7 @@ public:
 
 private:
     void show(bool on);
+    void place(const DialogueLayout& layout);  // anchors and text sizes for a layout
     DialogueBoxStyle style_;
     ui::Document doc_;
     ui::Layer layer_;
@@ -64,6 +66,7 @@ private:
     bool built_ = false, visible_ = false;
     u32 options_ = 0;
     u16 page_[4] = {};  // the base lines on the box (kept up under a choice with no prompt)
+    DialogueLayout layout_;
 };
 
 }  // namespace mce::novel
