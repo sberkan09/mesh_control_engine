@@ -217,7 +217,7 @@ TEST_CASE("mcp protocol: JSON-RPC framing, initialize handshake, errors, lists")
     CHECK(error_code(*c.request("tools/call", "[]")) == kInvalidParams);
 
     auto res = c.request("resources/list");
-    CHECK(res->root().get("result").get("resources").size() == 3);
+    CHECK(res->root().get("result").get("resources").size() > 3);  // the server's own three, then mce://docs/...
     auto schema = c.request("resources/read", R"({"uri":"mce://refl/schema"})");
     const std::string schema_text = str(schema->root().get("result").get("contents").at(0).get("text"));
     CHECK(schema_text.find("\"Collider2D\"") != std::string::npos);

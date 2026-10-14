@@ -85,6 +85,8 @@ each result's `content[0].text` is the tool's JSON).
 | | `module_test` | `filter?` (default `^<game>_`) | `ctest` in the module's build tree: each test's result, the output's end when one failed |
 | Playtest | `test_run` | `path?` (a `.mctest` file or folder, default `tests/`), `test?` (one inline) | plays each scenario headless with scripted input or a bot and evaluates its checks (section 14.3.1) |
 | | `playtest` | `bot`, `scene?`, `ticks?` (1800), `until?`, `death?`, `assert?`, `trace?` | a built-in bot plays the scene; returns the **feel report**: time to finish, deaths, stuck spots, idle time, distance, cells visited |
+| Know | `docs_search` | `query`, `group?` (guide, engine, architecture, samples, examples), `limit?` (8) | ranked sections of the shipped docs, samples and example games, each with its `mce://docs/...` URI, heading, line and snippet |
+| | `engine_capabilities` | `area?` | each feature and how it is reached today (`data`, `asset`, `mcp`, `console`, `code`), every component, importable asset type and tool |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
 
@@ -126,11 +128,31 @@ agent checks "did the player reach the flag" without a window.
 1000 rows). A field is `Component.path`, a property path (as `component_set` takes it) ending at a number, bool,
 string, enum or vector (or one lane of it, `position.x`).
 
+### Docs, samples and prompts
+
+The server carries the engine's knowledge, read from the files the SDK installs (`share/doc/mce`,
+`share/mce/samples`, `share/mce/examples`; in a build tree, the source tree; `--docs <dir>` picks
+another folder):
+
+| Resource | What |
+|---|---|
+| `mce://docs/index` | every doc, sample and example served, by group: start here |
+| `mce://docs/guide/<file>` | this user guide (`mce://docs/guide/14-mcp-ai-workflow.md` is this chapter), recipes under `recipes/` |
+| `mce://docs/engine/<file>`, `mce://docs/architecture/<file>` | the engine reference and architecture notes |
+| `mce://docs/samples/<sample>/<path>` | the worked samples' code, scenes and data (a folder URI lists its files) |
+| `mce://docs/examples/<Name>/<path>` | the example projects (Kindle, Undelivered, Room3D) |
+| `mce://docs/components/<Type>` | one component's schema, as `refl_describe_component` returns it |
+
+Three **prompts** (`prompts/list`, `prompts/get`) start whole jobs: `start_game` (argument `brief`:
+the game from a one-paragraph brief, with no human in the loop), `add_level` (`name`, `focus?`) and
+`polish_pass` (`focus?`).
+
 ## 14.3 A workflow that works
 
 1. **Build first.** `cmake --build --preset <preset> --target my_game my_game_mcp` (`mce build
    MyGame` with the SDK); the server needs the module's components, compiled in or loaded.
-2. **Discover.** `refl_list_components`, then `refl_describe_component` for the ones you will
+2. **Discover.** `engine_capabilities` for what is data and what needs code, `docs_search` for the
+   closest sample, `refl_list_components`, then `refl_describe_component` for the ones you will
    author (your own and `Sprite`, `RigidBody2D`, `Collider2D`, `TextLabel`, `Camera2DComponent`).
 3. **Content.** Copy art and sounds under `assets/`, `cook_run {"adopt": true}` to give them
    sidecars, `asset_list` to get their GUIDs, `asset_set_import_settings` for normal maps and LUTs.

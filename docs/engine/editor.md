@@ -183,7 +183,7 @@ GPU (label `gpu`, `MCE_GPU_TESTS`): `editor_smoke` (default layout over the stub
 - Prefab overrides target the instance root only; per-child overrides need a stable child id in the
   prefab format (M8 editor, "Model limits").
 - Tilemaps: no palette thumbnails, one layer per asset, no auto-tiling (ADR-0030 §8.5).
-- MCP (M4.5): no cancellation of a running tool and no attach-to-running-editor. `render_frame`, `render_sheet` and `image_diff` arrived with M-AGENT step 1 (`tools_render.cpp`), `module_build` / `module_test` (hot reload of the game module, `Server::reload_module`) with step 2 (`tools_code.cpp`), `test_run`, `playtest` and `run_headless`'s `trace` with step 3 (`tools_test.cpp`, `agent_sim.cpp`; `RunHooks` in `headless_run.h`).
+- MCP (M4.5): no cancellation of a running tool and no attach-to-running-editor. `render_frame`, `render_sheet` and `image_diff` arrived with M-AGENT step 1 (`tools_render.cpp`), `module_build` / `module_test` (hot reload of the game module, `Server::reload_module`) with step 2 (`tools_code.cpp`), `test_run`, `playtest` and `run_headless`'s `trace` with step 3 (`tools_test.cpp`, `agent_sim.cpp`; `RunHooks` in `headless_run.h`), `mce://docs/...`, `docs_search`, the prompts and `engine_capabilities` with step 4 (`tools_docs.cpp`).
   `run_headless` takes scripted input (`input`, an `InputScript`) but no recorded replay stream.
 - Play-in-editor runs the game's `install()` on a world with the project's input map: keys reach
   the game while the Viewport panel has focus (click it first) and the mouse while it is hovered.

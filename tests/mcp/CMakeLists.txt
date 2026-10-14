@@ -75,3 +75,13 @@ mce_add_test(test_mcp_playtest UMBRELLA
         mce::mce_platform)
 target_include_directories(test_mcp_playtest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
 target_compile_definitions(test_mcp_playtest PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_playtest")
+
+# mce://docs resources, docs_search, prompts and engine_capabilities (served from the source tree).
+mce_add_test(test_mcp_docs UMBRELLA
+    SOURCES
+        test_mcp_docs.cpp
+    DEPS
+        mce::mce_mcp_core
+        mce::mce_platform)
+target_include_directories(test_mcp_docs PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_compile_definitions(test_mcp_docs PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_docs")

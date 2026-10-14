@@ -21,7 +21,8 @@ foreach(f bin/mce bin/mce_player bin/mce_editor bin/mce_mcp bin/mce_cook lib/cma
           share/mce/templates/novel/story/story.json share/mce/scripts/story_compile.py include/mce/kit/novel.h
           include/mce/kit/novel_ui.h
           share/mce/scripts/new_project.py share/mce/VERSION share/mce/examples/Kindle/CMakeLists.txt
-          share/doc/mce/user-guide/README.md share/doc/mce/engine/modules.md share/doc/mce/ARCHITECTURE.md)
+          share/doc/mce/user-guide/README.md share/doc/mce/engine/modules.md share/doc/mce/ARCHITECTURE.md
+          share/mce/samples/03_platformer/main.cpp share/mce/samples/scene_demo/assets/scenes/demo.mcscene)
     if(NOT EXISTS "${PREFIX}/${f}")
         message(FATAL_ERROR "the SDK lacks ${f}")
     endif()
@@ -75,6 +76,18 @@ execute_process(COMMAND ${MCE} mcp "${project}" INPUT_FILE "${WORK_DIR}/mcp_in.j
                 RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 if(NOT rc EQUAL 0 OR NOT out MATCHES "^{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":")
     message(FATAL_ERROR "mce mcp: stdout is not the initialize response alone (rc ${rc}):\n${out}\n${err}")
+endif()
+# The SDK's server serves the SDK's own docs and samples (mce://docs/..., docs_search), not the
+# engine source tree's.
+file(WRITE "${WORK_DIR}/mcp_docs.jsonl"
+     "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"sdk_test\",\"version\":\"0\"}}}\n"
+     "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n"
+     "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/read\",\"params\":{\"uri\":\"mce://docs/guide/14-mcp-ai-workflow.md\"}}\n"
+     "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"docs_search\",\"arguments\":{\"query\":\"platformer jump\",\"group\":\"samples\"}}}\n")
+execute_process(COMMAND "${PREFIX}/bin/mce_mcp" INPUT_FILE "${WORK_DIR}/mcp_docs.jsonl"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT rc EQUAL 0 OR NOT out MATCHES "Working with an AI agent" OR NOT out MATCHES "mce://docs/samples/03_platformer/")
+    message(FATAL_ERROR "the SDK's mce_mcp does not serve its docs (rc ${rc}):\n${out}\n${err}")
 endif()
 # `mce new` registered that server for Claude Code in <project>/.mcp.json; the entry starts it from anywhere.
 file(READ "${project}/.mcp.json" mcp_json)

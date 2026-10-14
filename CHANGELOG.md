@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Self-contained knowledge, M-AGENT step 4 (SBA-51): the MCP server serves the shipped user guide, engine and
+  architecture docs, the worked samples and the example projects as `mce://docs/...` resources (index, folders,
+  `mce://docs/components/<Type>` schemas), searches them with `docs_search`, offers the prompts `start_game`,
+  `add_level` and `polish_pass`, and `engine_capabilities` lists how each feature is reached (data, asset, MCP,
+  console or code). The SDK now installs the samples' sources (`share/mce/samples`); `mce_mcp --docs <dir>` picks
+  another docs folder. New user-guide recipes: a level a bot can finish, screens that stay right, a component live.
 - Playtesting without a person, M-AGENT step 3 (SBA-50): `test_run` runs `.mctest` scenarios (JSON under the
   project's `tests/`: a saved scene, scripted input or a built-in bot, `until`, `death`, and checks on component
   fields at the end or at a tick, entities alive, event counts, the log and feel metrics) and `playtest` lets a

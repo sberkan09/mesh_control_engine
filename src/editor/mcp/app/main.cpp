@@ -1,7 +1,7 @@
 // mce_mcp — the editor's MCP server over stdio (editor-mcp.md §2): the MCP host spawns it and
 // speaks newline-delimited JSON-RPC on its stdin/stdout. No socket, no listener, no port (N7).
 //
-//   mce_mcp --project <dir> [--module <game module>] [--scene <path under assets/>] [--player <exe>] [--allow-cheats]
+//   mce_mcp --project <dir> [--module <game module>] [--scene <path under assets/>] [--player <exe>] [--docs <dir>] [--allow-cheats]
 //
 // stdout carries protocol messages only: at startup the real stdout is moved to a private
 // descriptor and fd 1 becomes a copy of stderr, so the engine's log (and any stray print) lands on
@@ -48,7 +48,7 @@ void send_line(StringView message, void* user) {
 
 int usage(std::FILE* out = stderr, int rc = 2) {
     std::fprintf(out,
-                 "usage: mce_mcp --project <dir> [--module <game module>] [--scene <path under assets/>] [--player <exe>] [--allow-cheats]\n"
+                 "usage: mce_mcp --project <dir> [--module <game module>] [--scene <path under assets/>] [--player <exe>] [--docs <dir>] [--allow-cheats]\n"
                  "  Model Context Protocol server for the MCE editor (JSON-RPC 2.0 over stdio): an MCP host\n"
                  "  spawns it and authors the project's scenes through its tools (tools/list describes them).\n"
                  "  --project <dir>   the project folder (holds <name>.mceproj and assets/)\n"
@@ -57,6 +57,8 @@ int usage(std::FILE* out = stderr, int rc = 2) {
                  "  --scene <path>    open this scene (under assets/) at start; default: the project's first scene\n"
                  "  --player <exe>    the player render_frame draws with (default: mce_player beside this server,\n"
                  "                    or the project's host for a project build)\n"
+                 "  --docs <dir>      the docs served as mce://docs/... (an SDK's share/doc/mce; default: the\n"
+                 "                    SDK's beside this server, or the source tree of a build)\n"
                  "  --allow-cheats    let console_exec set Cheat and RequiresRestart convars\n"
                  "  --help            this text\n");
     return rc;
@@ -76,6 +78,7 @@ int main(int argc, char** argv) {
         else if (a == "--module" && i + 1 < argc) module = argv[++i];
         else if (a == "--scene" && i + 1 < argc) scene = argv[++i];
         else if (a == "--player" && i + 1 < argc) opt.player = argv[++i];
+        else if (a == "--docs" && i + 1 < argc) opt.docs = argv[++i];
         else if (a == "--allow-cheats") opt.allow_cheats = true;
         else if (a == "--help" || a == "-h" || a == "-help") return usage(stdout, 0);
         else return usage();

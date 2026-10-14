@@ -4,6 +4,7 @@
 #include "mce/cook/fs.h"
 #include "mce/editor/play_session.h"
 #include "tools.h"
+#include "tools_docs.h"
 
 namespace mce::mcp {
 
@@ -22,7 +23,8 @@ constexpr const char* kInstructions =
     "with entity_* and component_* (values use the .mcscene spelling: vectors as arrays, assets as "
     "\"guid:<uuid>\", entity references as \"$<entity id>\", enums by name). Edits stay in memory until "
     "scene_save. Verify with cook_run, cook_errors and run_headless (deterministic: same scene + ticks = same "
-    "state_hash).";
+    "state_hash). Docs, samples and examples: mce://docs/index, docs_search; what is data and what needs code: "
+    "engine_capabilities; prompts start_game, add_level, polish_pass.";
 
 bool valid_id(cook::JsonValue id) { return id.is_string() || (id.is_number() && id.is_integer()); }
 
@@ -186,6 +188,7 @@ void Server::request(cook::JsonValue id, StringView method, cook::JsonValue para
         w.key("capabilities").begin_object();
         w.key("tools").begin_object().key("listChanged").boolean(false).end_object();
         w.key("resources").begin_object().key("subscribe").boolean(false).key("listChanged").boolean(false).end_object();
+        w.key("prompts").begin_object().key("listChanged").boolean(false).end_object();
         w.end_object();
         w.key("serverInfo").begin_object().key("name").str(kServerName).key("version").str(kServerVersion).end_object();
         w.key("instructions").str(kInstructions);
@@ -211,10 +214,27 @@ void Server::request(cook::JsonValue id, StringView method, cook::JsonValue para
     if (method == "resources/list") {
         w.begin_object().key("resources").begin_array();
         list_resources(w);
+        docs_list_resources(*this, w);
         w.end_array().end_object();
         return respond(id, result.view());
     }
-    if (method == "resources/templates/list") return respond(id, "{\"resourceTemplates\":[]}");
+    if (method == "resources/templates/list") {
+        w.begin_object().key("resourceTemplates").begin_array();
+        docs_list_templates(w);
+        w.end_array().end_object();
+        return respond(id, result.view());
+    }
+    if (method == "prompts/list") {
+        prompts_list(w);
+        return respond(id, result.view());
+    }
+    if (method == "prompts/get") {
+        const cook::JsonValue name = params.valid() ? params.get("name") : cook::JsonValue();
+        if (!name.is_string()) return respond_error(id, kInvalidParams, "\"name\" must be a string");
+        cook::String err;
+        if (!prompts_get(name.as_string(), params.get("arguments"), w, err)) return respond_error(id, kInvalidParams, err.view());
+        return respond(id, result.view());
+    }
     if (method == "resources/read") {
         const cook::JsonValue uri = params.valid() ? params.get("uri") : cook::JsonValue();
         if (!uri.is_string()) return respond_error(id, kInvalidParams, "\"uri\" must be a string");

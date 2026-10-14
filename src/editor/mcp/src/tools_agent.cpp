@@ -80,6 +80,20 @@ const ToolDef kAgentTools[] = {
      R"j("assert":{"type":"array","items":{"type":"object"},"description":"Checks as in .mctest files"},)j"
      R"j("trace":{"type":"object","description":"{every: ticks, fields: [{entity, field}]}: sample fields during the run"}},"required":["bot"]})j",
      playtest},
+    {"docs_search",
+     "Search the engine's shipped docs (user guide, engine reference), the worked samples and the example games. Returns "
+     "the best sections with their mce://docs/... resource URI, heading, line and a snippet; read the whole file with "
+     "resources/read. Start with mce://docs/index.",
+     R"j({"type":"object","properties":{"query":{"type":"string","description":"Words to look for, e.g. \"camera shake\" or \"RigidBody2D\""},)j"
+     R"j("group":{"type":"string","enum":["guide","engine","architecture","samples","examples"],"description":"Search one group only"},)j"
+     R"j("limit":{"type":"integer","minimum":1,"maximum":20,"default":8}},"required":["query"]})j",
+     docs_search},
+    {"engine_capabilities",
+     "What a game reaches through what: each engine feature with how it is reached today (data: a component; asset: a "
+     "source file type; mcp: a tool; console; code: needs game C++), plus every component, importable asset type, tool "
+     "and the convar count. Read this before planning a game, to keep game code to the rules.",
+     R"j({"type":"object","properties":{"area":{"type":"string","description":"Only this area's features (2D, 3D, physics, audio, input, ui, gameplay, scenes, agent, ...)"}}})j",
+     engine_capabilities},
 };
 
 #undef MCE_RENDER_FRAME_PROPS

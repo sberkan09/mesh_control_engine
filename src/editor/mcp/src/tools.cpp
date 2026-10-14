@@ -5,6 +5,7 @@
 #include "tools.h"
 
 #include "agent_sim.h"
+#include "tools_docs.h"
 #include "tool_args.h"
 
 #include <algorithm>
@@ -1269,7 +1270,7 @@ bool read_resource(Server& server, StringView uri, JsonWriter& w) {
         for (const refl::TypeRecord* t : refl::all())
             if (t->is_component()) describe_type(s, *t);
         s.end_array().end_object();
-    } else {
+    } else if (!docs_read_resource(server, uri, text, mime)) {
         return false;
     }
     w.begin_object().key("contents").begin_array();

@@ -19,4 +19,8 @@ bool module_test(ToolCall& c);
 bool test_run(ToolCall& c);
 bool playtest(ToolCall& c);
 
+// tools_docs.cpp (SBA-51): searching the shipped docs, what the engine reaches through what.
+bool docs_search(ToolCall& c);
+bool engine_capabilities(ToolCall& c);
+
 }  // namespace mce::mcp

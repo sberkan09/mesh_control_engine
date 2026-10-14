@@ -32,6 +32,9 @@ struct ServerOptions {
     // render_frame's player (mce_player, or the game's host); null: mce_player beside the server or in
     // the build tree, with the server's --module passed on.
     const char* player = nullptr;
+    // The docs served as mce://docs/... (a share/doc/mce folder); null: the installed SDK's beside the
+    // server, else the source tree the build came from.
+    const char* docs = nullptr;
 };
 
 // Receives one outgoing message (a response or a notification) without the newline.

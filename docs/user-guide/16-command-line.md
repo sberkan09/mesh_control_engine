@@ -82,12 +82,15 @@ type, default, help and flags, and every console function. The list below is the
 `mce_mcp`, `my_game_mcp`. Plain arguments, not convars:
 
 ```
-my_game_mcp --project <dir> [--scene <path under assets/>] [--allow-cheats]
-mce_mcp --project <dir> --module <lib<game>.so> [--scene <path under assets/>] [--allow-cheats]
+my_game_mcp --project <dir> [--scene <path under assets/>] [--player <exe>] [--docs <dir>] [--allow-cheats]
+mce_mcp --project <dir> --module <lib<game>.so> [--scene <path under assets/>] [--player <exe>] [--docs <dir>] [--allow-cheats]
 ```
 
 `--module` loads the game module (the SDK's way; `my_game_mcp` has the game compiled in): its
-components become known to the tools and its systems run in `run_headless`.
+components become known to the tools and its systems run in `run_headless`. `--player` is the
+executable `render_frame` draws with (default: `mce_player` beside the server, or the project's host
+for `my_game_mcp`). `--docs` is the folder served as `mce://docs/...` (default: the SDK's
+`share/doc/mce` beside the server, or the source tree of a build).
 
 ## 16.4 The cook
 
