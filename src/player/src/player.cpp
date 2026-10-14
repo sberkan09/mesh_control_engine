@@ -228,6 +228,9 @@ MCE_CVAR(cv_lod_force, "r.lod_force", -1, "3D games: draw every mesh at this LOD
 MCE_CVAR(cv_preload3d, "r.preload3d", true, "3D games: upload every texture and mesh of the pack at start (0 = on first sight)",
          CVarFlags::None);
 MCE_CVAR(cv_stats, "r.stats", false, "Draw the render stats line (F3 toggles)", CVarFlags::None);
+MCE_CVAR(cv_frame_report, "r.frame_report", 0,
+         "Windowed: log the average, p95 and worst frame time every N frames, and for the whole run at exit (0 = off)",
+         CVarFlags::None);
 MCE_CVAR(cv_mouse_look, "mouse_look", true, "3D games: let a Camera3DComponent with mouse_look capture the mouse", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 // Analytics events to Firebase (platform/firebase.h): the vendor backend on phones shipped with a
@@ -315,6 +318,7 @@ public:
             MCE_LOG_INFO("{}: game module '{}' v{} from {}", desc_.app_name, module_.module.info->name,
                          module_.module.info->module_version, module_.module.loaded_path.c_str());
         }
+        console::apply_deferred_command_line();  // the module's convars exist now; the rest are typos
         if (device_) {
             MCE_TRY(renderer_.init(*device_));
             assets_.set_upload_sink(&sink_);
@@ -418,6 +422,9 @@ public:
         audio_.update();
         clips_.sync();
         sync_fullscreen();
+        // The game's Render_Pre / Render_Submit systems (#215), once the first tick has run Startup.
+        if (!os_background_ && sim_ticks_ > 0) world_.render(rc.alpha);
+        meter_frame();
         if (device_) platform::haptics::set_enabled(cv_haptics.get_bool());  // the console or a settings menu may flip it
         if (!device_ || os_background_) return;  // no GPU work in the background (iOS ends apps that try)
         device_->begin_frame(rc.frame_index);
@@ -524,6 +531,7 @@ public:
     void on_shutdown() override {
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
+        if (cv_frame_report.get_int() > 0) report_run_frames();
         if (liveops_on_) liveops_.shutdown();
         if (game_services_on_) game_services_.shutdown();
         if (three_d_) {  // the last frame's 3D load (tests and LOD measurements read it)
@@ -1540,6 +1548,43 @@ private:
         set_muted(background);
     }
 
+    // -r.frame_report N (#214): wall time between rendered frames, logged as average / p95 / worst
+    // every N frames and for the whole run at exit. Windowed only (headless frames are not paced).
+    void meter_frame() {
+        const i64 every = cv_frame_report.get_int();
+        if (!device_ || every <= 0) return;
+        const u64 now = platform::now_us();
+        if (last_frame_us_ != 0) {
+            const f32 ms = static_cast<f32>(now - last_frame_us_) * 0.001f;
+            frame_ms_.push_back(ms);
+            run_sum_ms_ += ms;
+            run_worst_ms_ = std::max(run_worst_ms_, ms);
+            ++run_frames_;
+            if (frame_ms_.size() >= static_cast<usize>(every)) {
+                report_frames("frame times", frame_ms_);
+                frame_ms_.clear();
+            }
+        }
+        last_frame_us_ = now;
+    }
+
+    void report_frames(const char* what, Array<f32>& ms) const {
+        if (ms.empty()) return;
+        f64 sum = 0;
+        for (f32 v : ms) sum += v;
+        std::sort(ms.begin(), ms.end());
+        const usize p95 = std::min(ms.size() - 1, (ms.size() * 95) / 100);
+        std::printf("%s: %s over %zu frames: avg %.2f ms, p95 %.2f ms, worst %.2f ms\n", desc_.app_name, what, ms.size(),
+                    sum / static_cast<f64>(ms.size()), static_cast<f64>(ms[p95]), static_cast<f64>(ms.back()));
+    }
+
+    void report_run_frames() const {
+        if (run_frames_ == 0) return;
+        std::printf("%s: frame times over the run (%llu frames): avg %.2f ms, worst %.2f ms\n", desc_.app_name,
+                    static_cast<unsigned long long>(run_frames_), run_sum_ms_ / static_cast<f64>(run_frames_),
+                    static_cast<f64>(run_worst_ms_));
+    }
+
     // The fullscreen convar (command line, console, the toggle keys) applied to the window (#178).
     void sync_fullscreen() {
         if (!window_ || cv_fullscreen.get_bool() == fullscreen_) return;
@@ -1712,6 +1757,11 @@ private:
     bool background_ = false;  // unfocused or minimized
     bool unfocused_ = false;   // the window lost focus (or minimized); the focus-loss save ran
     bool fullscreen_ = false;  // what cv_fullscreen last applied
+    u64 last_frame_us_ = 0;    // -r.frame_report: the previous rendered frame
+    Array<f32> frame_ms_;      // this report window's frame times
+    f64 run_sum_ms_ = 0;
+    f32 run_worst_ms_ = 0;
+    u64 run_frames_ = 0;
     bool os_background_ = false;  // the app itself is in the background (phones): no drawing at all
     bool ad_paused_ = false;      // a fullscreen ad covers the game (PlayerDesc::monetize)
     platform::SafeInsets safe_insets_;
@@ -1826,7 +1876,8 @@ int mce::player::run(int argc, char** argv, const PlayerDesc& pd) {
     log_desc.app_name = pd.app_name;
     log::init(log_desc);
     const samples::BuildInfo build = samples::begin_build();
-    console::parse_command_line(argc, argv);
+    // A game module's own MCE_CVARs register only when it loads: their switches wait for it (#213).
+    console::parse_command_line(argc, argv, /*defer_unknown=*/true);
     FixedString<1024> usage;
     usage.append("usage: ");
     usage.append(pd.app_name);

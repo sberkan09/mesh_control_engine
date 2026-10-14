@@ -395,37 +395,56 @@ void print_help(const char* app_name, const char* usage, std::FILE* out) {
     std::fflush(out);
 }
 
-u32 parse_command_line(int argc, const char* const* argv) {
+namespace {
+struct DeferredArg {
+    const char* tok;
+    const char* value;  // null: a bare flag
+};
+// Fixed storage: convar.cpp runs before any allocator policy and keeps no heap state.
+constexpr u32 kMaxDeferredArgs = 64;
+DeferredArg g_deferred[kMaxDeferredArgs];
+u32 g_deferred_count = 0;
+
+// One `-name [value]` entry for a known convar. False when it is refused or the value is bad.
+bool apply_arg(ConVar& v, const char* value) {
+    if (cheat_locked(v, "command line")) return false;
+    if (value) {
+        if (!v.set_from_string(value, /*force=*/true)) {
+            MCE_LOG_WARN("command line: bad value '{}' for '{}'", value, v.name());
+            return false;
+        }
+        return true;
+    }
+    return v.type() == CVarType::Bool && v.set_bool(true, /*force=*/true);
+}
+
+StringView arg_name(StringView tok) {
+    StringView name = tok.substr(tok[1] == '-' ? 2 : 1);
+    if (name == "h" || name == "?") name = "help";  // the usual spellings of -help
+    return name;
+}
+}  // namespace
+
+u32 parse_command_line(int argc, const char* const* argv, bool defer_unknown) {
     u32 unknown = 0;
     int i = 1;
     while (i < argc) {
         const StringView tok(argv[i]);
         if (tok.size() > 1 && tok[0] == '-') {
-            StringView name = tok.substr(tok[1] == '-' ? 2 : 1);
-            if (name == "h" || name == "?") name = "help";  // the usual spellings of -help
-            ConVar* v = ConVar::find(StringId(name));
+            ConVar* v = ConVar::find(StringId(arg_name(tok)));
             const bool has_value = i + 1 < argc && argv[i + 1][0] != '-' && argv[i + 1][0] != '+';
             if (!v) {
-                ++unknown;
-                MCE_LOG_WARN("command line: unknown convar '{}'", tok);
-                i += has_value ? 2 : 1;
-                continue;
-            }
-            if (cheat_locked(*v, "command line")) {
-                ++unknown;
-                i += has_value ? 2 : 1;
-                continue;
-            }
-            if (has_value) {
-                if (!v->set_from_string(argv[i + 1], /*force=*/true)) {
-                    MCE_LOG_WARN("command line: bad value '{}' for '{}'", argv[i + 1], v->name());
+                if (defer_unknown && g_deferred_count < kMaxDeferredArgs) {
+                    g_deferred[g_deferred_count++] = {argv[i], has_value ? argv[i + 1] : nullptr};
+                } else {
                     ++unknown;
+                    MCE_LOG_WARN("command line: unknown convar '{}'", tok);
                 }
-                i += 2;
-            } else {
-                if (v->type() != CVarType::Bool || !v->set_bool(true, /*force=*/true)) ++unknown;
-                i += 1;
+                i += has_value ? 2 : 1;
+                continue;
             }
+            if (!apply_arg(*v, has_value ? argv[i + 1] : nullptr)) ++unknown;
+            i += has_value ? 2 : 1;
         } else if (tok.size() > 1 && tok[0] == '+') {
             constexpr usize kMaxArgs = 15;
             StringView args[kMaxArgs];
@@ -448,6 +467,22 @@ u32 parse_command_line(int argc, const char* const* argv) {
             ++i;
         }
     }
+    return unknown;
+}
+
+u32 apply_deferred_command_line() {
+    u32 unknown = 0;
+    for (u32 i = 0; i < g_deferred_count; ++i) {
+        const DeferredArg& a = g_deferred[i];
+        const StringView tok(a.tok);
+        if (ConVar* v = ConVar::find(StringId(arg_name(tok)))) {
+            if (!apply_arg(*v, a.value)) ++unknown;
+        } else {
+            ++unknown;
+            MCE_LOG_WARN("command line: unknown convar '{}'", tok);
+        }
+    }
+    g_deferred_count = 0;
     return unknown;
 }
 

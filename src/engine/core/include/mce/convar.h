@@ -118,7 +118,12 @@ namespace console {
 // Returns false when the name is unknown or the value fails to parse.
 bool execute(StringView line);
 // Applies argv per the command-line rules above. Returns the number of unknown entries.
-u32 parse_command_line(int argc, const char* const* argv);
+// With `defer_unknown`, unknown `-name [value]` entries are kept quietly instead of warned about,
+// for apply_deferred_command_line() once later code (a game module's MCE_CVARs) has registered.
+u32 parse_command_line(int argc, const char* const* argv, bool defer_unknown = false);
+// Applies the entries a defer_unknown parse kept, warning about the ones still unknown, and
+// forgets them. Returns the number still unknown or rejected. argv must still be alive.
+u32 apply_deferred_command_line();
 // True after parse_command_line saw -help (the `help` convar): the app prints print_help and
 // exits 0 instead of running.
 bool help_requested();
