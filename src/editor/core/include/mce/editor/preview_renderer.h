@@ -19,6 +19,14 @@ struct OverlayLine {
     f32 width_px = 1.0f;
 };
 
+// One reflection probe's bake (PreviewRenderer::bake_probes): the probe's slot as the layers of a
+// .mcenv file (Forward3D::kProbeLayers layers of kIblEnvWidth x kIblEnvWidth/2 RGBM texels, rows
+// in texture order).
+struct ProbeBake {
+    Entity entity;
+    Array<u8> rgba;
+};
+
 class PreviewRenderer {
 public:
     PreviewRenderer() = default;
@@ -43,6 +51,11 @@ public:
     // does not start (the target is then cleared to `clear`).
     bool record_3d(rhi::CommandBuffer& cmd, World& world, rhi::TextureHandle target, rhi::Extent2D size,
                    const render::Camera3D& cam, Span<const OverlayLine> lines_px, math::Color clear);
+    // Captures every ReflectionProbe3D of `world` (up to four, ignoring their current bakes) with
+    // every mesh of the world, whatever the view, and reads each probe's slot back into `out`.
+    // Records, submits and reads back by itself: call it outside any command recording. Fails
+    // without a 3D path, without probes, or when the environment does not turn sky_ibl on.
+    Result<void> bake_probes(World& world, Array<ProbeBake>& out);
     // The primary Camera3DComponent's view of `world` (false: none, or no 3D path).
     bool game_camera_3d(World& world, render::Camera3D& out);
 

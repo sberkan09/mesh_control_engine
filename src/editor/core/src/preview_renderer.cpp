@@ -1,6 +1,7 @@
 #include "mce/editor/preview_renderer.h"
 
 #include <cmath>
+#include <cstring>
 
 #include "mce/log.h"
 #include "mce/memory/frame_slots.h"
@@ -139,6 +140,60 @@ bool PreviewRenderer::record_3d(rhi::CommandBuffer& cmd, World& world, rhi::Text
     stats3d_ = scene.stats();
     record_batch(cmd, batch, target, clear, true);
     return true;
+}
+
+Result<void> PreviewRenderer::bake_probes(World& world, Array<ProbeBake>& out) {
+    out.clear();
+    constexpr const char* kWhere = "editor.bake_probes";
+    if (!ensure_3d()) return Error(Errc::InvalidArgument, kWhere, "the 3D preview is not running");
+    rhi::RenderDevice& device = renderer_.device();
+    render::Forward3D& fw = renderer_.forward_3d();
+    // Any view: in bake mode the extract submits every mesh, and the captures ignore the camera.
+    constexpr rhi::Extent2D kSize{16, 16};
+    render::Scene3D scene(renderer_.meshes(), mem::heap());
+    scene.begin(render::Camera3D{}, kSize);
+    extract3d_.set_bake_mode(true);
+    extract3d_.extract(world, scene, 1.0f);
+    extract3d_.set_bake_mode(false);
+    scene.build();
+    Array<Entity> entities;
+    for (Entity e : extract3d_.probe_entities()) entities.push_back(e);
+    if (entities.empty()) return Error(Errc::InvalidArgument, kWhere, "the scene has no enabled ReflectionProbe3D");
+    if (!scene.sky().ibl) return Error(Errc::InvalidArgument, kWhere, "reflection probes need Environment3D.sky_ibl = 1");
+
+    rhi::TextureDesc td;
+    td.size = kSize;
+    td.usage = rhi::TextureUsage::SampledColorTarget;
+    td.debug_name = "mce.editor.probe_bake";
+    const rhi::TextureHandle target = device.create_texture(td);
+    fw.invalidate_probes();  // the preview's captures saw only its view's meshes
+    {
+        rhi::CommandBuffer cmd;
+        renderer_.record_3d(cmd, scene, target);
+        device.submit(cmd);
+    }
+    device.destroy_texture(target);
+    if (fw.last_stats().probes_captured != entities.size())
+        return Error(Errc::Unsupported, kWhere, "the renderer did not capture the probes (IBL off: -r.ibl 0?)");
+
+    const rhi::Extent2D es = render::Forward3D::probe_export_size();
+    const usize row = usize(es.width) * 4;
+    Array<u8> strip;
+    strip.resize(row * es.height);
+    for (u32 i = 0; i < entities.size(); ++i) {
+        {
+            rhi::CommandBuffer cmd;
+            if (!fw.record_probe_export(cmd, i)) return Error(Errc::Unsupported, kWhere, "probe slot is empty");
+            device.submit(cmd);
+        }
+        MCE_TRY(device.read_pixels(fw.probe_export_target(), rhi::Rect2D{0, 0, es.width, es.height}, strip.span()));
+        ProbeBake& b = out.emplace_back();
+        b.entity = entities[i];
+        b.rgba.resize(strip.size());
+        for (u32 y = 0; y < es.height; ++y)  // read_pixels is top row first; .mcenv rows are v order
+            std::memcpy(&b.rgba[y * row], &strip[(es.height - 1 - y) * row], row);
+    }
+    return ok();
 }
 
 bool world_is_3d(World& world) {

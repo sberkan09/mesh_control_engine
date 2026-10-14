@@ -588,6 +588,14 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Cook + Pack", nullptr, false, proj)) cook(true);
         if (ImGui::MenuItem("Rescan assets", nullptr, false, proj)) session_.project().rescan();
         if (ImGui::MenuItem("Hot reload now", nullptr, false, proj)) session_.hot_reload();
+        if (ImGui::MenuItem("Bake reflection probes", nullptr, false, proj && !playing())) {
+            if (Result<u32> r = session_.bake_reflection_probes(); !r) {
+                FixedString<512> why;
+                format_error(r.error(), why);
+                MCE_LOG_ERROR("editor: reflection probe bake failed: {}", why.view());
+                focus_panel("Console");
+            }
+        }
         if (ImGui::MenuItem("Play in editor", "F5", false, proj && !playing())) play_in_editor();
         if (ImGui::MenuItem("Run in player", "Ctrl+F5", false, proj && !player_running())) play();
         ImGui::Separator();

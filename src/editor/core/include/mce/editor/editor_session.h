@@ -85,6 +85,12 @@ public:
     // asset `prefab` (its .mcprefab under assets/) and hot-reloads.
     Result<void> apply_to_prefab(asset::Guid prefab, const DocComponent& value, u64 fields);
 
+    // Reflection probe bake (M-VISUAL 2): captures every ReflectionProbe3D of the open scene through
+    // the preview with all of the scene's meshes, writes assets/probes/<scene>/probe_<entity id>.mcenv
+    // (+ sidecar; a re-bake keeps the file's GUID), hot-reloads them and points each component's
+    // `baked` at its file (one undo step). Returns how many probes were baked.
+    Result<u32> bake_reflection_probes();
+
     // Every scene in the catalog, by path.
     void list_scenes(Array<const ProjectAsset*>& out) const;
     // Absolute path of a scene path given relative to assets/ (or `path` unchanged).
