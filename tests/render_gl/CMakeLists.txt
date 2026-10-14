@@ -14,3 +14,12 @@ if(MCE_GPU_TESTS AND MCE_RHI_SDLGPU)
     add_test(NAME test_render_sdlgpu COMMAND test_render_gl)
     set_tests_properties(test_render_sdlgpu PROPERTIES LABELS gpu ENVIRONMENT "MCE_RHI=sdlgpu")
 endif()
+
+# Golden images (FR-DBG-020): dev-machine-only, so built but never registered with ctest.
+# scripts/golden.sh runs it; goldens live in golden/<os>-<backend>/.
+# UMBRELLA: the cook (PNG in and out) shares the engine library.
+mce_add_test(test_golden_gl UMBRELLA NO_CTEST
+    SOURCES test_golden.cpp
+    DEPS mce::mce_render mce::mce_rhi_default mce::mce_asset_cook)
+target_compile_definitions(test_golden_gl PRIVATE MCE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden"
+                                                  MCE_GOLDEN_OUT="${CMAKE_CURRENT_BINARY_DIR}/golden_out")
