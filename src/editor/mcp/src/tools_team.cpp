@@ -663,6 +663,10 @@ bool asset_lock(ToolCall& c) {
             return false;
         }
         took_over = held.agent.view() != c.server.agent();
+        if (!took_over && note.empty() && !held.note.empty()) {  // a refresh keeps what the lock was for
+            text.clear();
+            lock_text(c.server, rel, held.note.view(), ttl, text);
+        }
         if (!write_text(file.view(), text.view())) return fail(c, "cannot write the lock file");  // ours (refresh) or expired
     }
     append_event(c.server, "asset_lock", rel, took_over ? StringView("took over an expired lock") : note);

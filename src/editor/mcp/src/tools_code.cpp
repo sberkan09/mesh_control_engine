@@ -326,7 +326,7 @@ bool ship_build(ToolCall& c) {
     bool build = true;
     StringView version, out_rel;
     if (!arg_uint(c, "ticks", ticks, 1, 36000, false) || !arg_bool(c, "build", build) || !arg_string(c, "version", version, false) ||
-        !arg_string(c, "out", out_rel, false) || !need_project(c) || !find_build_tree(c, t))
+        !arg_string(c, "out", out_rel, false))
         return false;
     for (const char ch : version)
         if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '.' || ch == '-' || ch == '_'))
@@ -334,6 +334,7 @@ bool ship_build(ToolCall& c) {
     if (!out_rel.empty() && (out_rel[0] == '/' || out_rel.find("..") != StringView::npos || out_rel.find(':') != StringView::npos ||
                              out_rel.find('\\') != StringView::npos))
         return arg_missing(c, "out", "a folder inside the project, e.g. dist/beta");
+    if (!need_project(c) || !find_build_tree(c, t)) return false;
     cook::String mce(platform::base_path());
     mce += "mce";
     if (!platform::file_exists(mce.view()))

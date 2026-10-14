@@ -90,7 +90,7 @@ TEST_CASE("scene_save: another agent's save is merged in by entity; new ids that
     CHECK(entity(root, "Coin").find("\"id\":8") != std::string::npos);  // bob's moved off it
 
     // Bob's open scene is the merge: alice sees bob's edits after a reload, bob sees alice's now.
-    CHECK(bob.ok("scene_get_entity", R"({"entity":"Crate A"})").text.find("5") != std::string::npos);
+    CHECK(bob.ok("scene_get_entity", R"({"entity":"Crate A"})").text.find("\"position\": [5, 5, 0]") != std::string::npos);
     CHECK(feed(alice, R"({"others":true})").find("bob scene_merge scenes/demo.mcscene") != std::string::npos);
     CHECK(feed(alice).find("alice scene_save scenes/demo.mcscene") != std::string::npos);
 
