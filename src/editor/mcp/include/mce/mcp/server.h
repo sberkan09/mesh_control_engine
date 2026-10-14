@@ -29,6 +29,9 @@ inline constexpr i32 kResourceNotFound = -32002;
 
 struct ServerOptions {
     bool allow_cheats = false;  // console_exec may touch Cheat / RequiresRestart convars
+    // render_frame's player (mce_player, or the game's host); null: mce_player beside the server or in
+    // the build tree, with the server's --module passed on.
+    const char* player = nullptr;
 };
 
 // Receives one outgoing message (a response or a notification) without the newline.

@@ -86,15 +86,27 @@ void GlDevice::exec_begin_pass(const cmd::BeginPass& p) {
     ts_.depth_write = true;
     for (u32 i = 0; i < p.color_count; ++i) {
         if (p.colors[i].load != LoadOp::Clear) continue;
-        // The default framebuffer's color buffer is draw buffer 0.
-        glClearNamedFramebufferfv(fbo, GL_COLOR, backbuffer ? 0 : static_cast<GLint>(i), p.colors[i].clear.color);
+        // The default framebuffer is cleared with glClear: Mesa ignores glClearBuffer* / the DSA clear
+        // on an EGL pbuffer surface (SDL's offscreen driver, render_frame on a GPU-less box), and the
+        // frames then pile up on each other.
+        if (backbuffer) {
+            const f32* c = p.colors[i].clear.color;
+            glClearColor(c[0], c[1], c[2], c[3]);
+            glClear(GL_COLOR_BUFFER_BIT);
+        } else {
+            glClearNamedFramebufferfv(fbo, GL_COLOR, static_cast<GLint>(i), p.colors[i].clear.color);
+        }
     }
     if (p.has_depth && p.depth.load == LoadOp::Clear) {
         const TextureFormat df = backbuffer ? TextureFormat::D24_UNorm_S8 : [&] {
             const GlTexture* t = textures_.try_get(p.depth.texture);
             return t ? t->format : TextureFormat::D32_Float;
         }();
-        if (df == TextureFormat::D24_UNorm_S8) {
+        if (backbuffer) {
+            glClearDepth(static_cast<GLdouble>(p.depth.clear.depth));
+            glClearStencil(static_cast<GLint>(p.depth.clear.stencil));
+            glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        } else if (df == TextureFormat::D24_UNorm_S8) {
             glClearNamedFramebufferfi(fbo, GL_DEPTH_STENCIL, 0, p.depth.clear.depth, p.depth.clear.stencil);
         } else {
             glClearNamedFramebufferfv(fbo, GL_DEPTH, 0, &p.depth.clear.depth);

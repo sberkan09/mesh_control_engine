@@ -212,6 +212,9 @@ const bool kRegistered = (mce::editor::set_play_game_install(&${game}::install),
         target_include_directories(${game}_mcp PRIVATE ${includes})
         mce_engine_deps(mcp_deps mce::mce_mcp_core mce::mce_module_host ${ARG_DEPS})
         target_link_libraries(${game}_mcp PRIVATE ${mcp_deps})
+        # render_frame draws with the project's host (the game is compiled into this server, not a module).
+        target_compile_definitions(${game}_mcp PRIVATE MCE_MCP_DEFAULT_PLAYER="$<TARGET_FILE:${game}>")
+        add_dependencies(${game}_mcp ${game})
         mce_apply_compile_policy(${game}_mcp)
     endif()
 

@@ -191,23 +191,31 @@ void Kit3DExtract::interpolated(Entity e, f32 alpha, vec3& pos, quat& rot, vec3&
 bool Kit3DExtract::camera(World& world, f32 alpha, render::Camera3D& out, Camera3DComponent* component) {
     out = render::Camera3D{};
     bool found = false;
-    const u64 tick = world.current_tick();
     world.query<const Camera3DComponent&>().each([&](Entity e, const Camera3DComponent& c) {
         if (found || !c.primary) return;
-        vec3 pos, scale;
-        quat rot;
-        if (!pose_of(world, e, pos, rot, scale)) return;
-        found = true;
-        if (component) *component = c;
-        track(e, pos, rot, scale, tick);
-        interpolated(e, alpha, pos, rot, scale);
-        out.position = pos;
-        out.orientation = normalize(rot);
-        out.fov_y = radians(clamp(c.fov_deg, 1.0f, 179.0f));
-        out.near_z = max(c.near_z, 1e-4f);
-        out.far_z = max(c.far_z, out.near_z * 2.0f);
+        found = view_of(world, e, c, alpha, out);
+        if (found && component) *component = c;
     });
     return found;
+}
+
+bool Kit3DExtract::camera_of(World& world, Entity e, f32 alpha, render::Camera3D& out) {
+    const Camera3DComponent* c = world.alive(e) ? world.try_get<Camera3DComponent>(e) : nullptr;
+    return c && view_of(world, e, *c, alpha, out);
+}
+
+bool Kit3DExtract::view_of(World& world, Entity e, const Camera3DComponent& c, f32 alpha, render::Camera3D& out) {
+    vec3 pos, scale;
+    quat rot;
+    if (!pose_of(world, e, pos, rot, scale)) return false;
+    track(e, pos, rot, scale, world.current_tick());
+    interpolated(e, alpha, pos, rot, scale);
+    out.position = pos;
+    out.orientation = normalize(rot);
+    out.fov_y = radians(clamp(c.fov_deg, 1.0f, 179.0f));
+    out.near_z = max(c.near_z, 1e-4f);
+    out.far_z = max(out.near_z * 2.0f, c.far_z);
+    return true;
 }
 
 void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
