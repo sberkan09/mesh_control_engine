@@ -1,0 +1,13 @@
+{
+  "format": "mce-store", "version": 1, "guid": "5d000000-0000-4000-8000-0000000000a1",
+  "products": [
+    { "id": "remove_ads", "type": "non_consumable", "removes_ads": true,
+      "ios": "org.meshcontrol.shopdemo.remove_ads", "android": "remove_ads" },
+    { "id": "gems_100", "type": "consumable",
+      "ios": "org.meshcontrol.shopdemo.gems_100", "android": "gems_100" }
+  ],
+  "ads": [
+    { "id": "continue", "format": "rewarded" },
+    { "id": "level_end", "format": "interstitial" }
+  ]
+}
