@@ -14,6 +14,8 @@ Gradle project around the game's shared library:
   which `src/engine/platform/src/store.cpp` calls over JNI.
 - `ads/MceAds.java`: Google Mobile Ads and UMP consent for `mce/platform/ads.h` (step 4), for a game whose
   `.mcstore` has ad placements, with its AdMob app id in the manifest (`cmake/mobile/monetize_info.py`).
+- `review/MceReview.java`: Play In-App Review for `mce/platform/review.h` (M-MOBILE step 11c). Every game gets it,
+  with the review library in `app/build.gradle` and `mceReviewRequest` on its activity (`src/engine/platform/src/review.cpp`).
 
 SDL's Java sources (`org.libsdl.app`) are copied from the SDL checkout of the same build, so the
 Java side always matches the native SDL; SDL's default launcher icon is replaced by the game's

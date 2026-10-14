@@ -5,6 +5,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Review prompt, step 11c (M-MOBILE, #147): `platform::request_review()` (`mce/platform/review.h`) asks for the
+  store's rating prompt: Play In-App Review on Android (stamped into every game), StoreKit's `AppStore.requestReview`
+  on iOS (`-DMCE_STORE_REVIEW=ON`), a logged no-op on desktop.
 - Runtime UI on phones, step 11b (M-MOBILE, #151): `mce_ui` anchors to the parent, the safe area or the whole
   screen; `ui::compute_ui_scale` and the player's `-ui_scale` size the UI from the display's DPI; scroll views
   (drag with inertia, wheel, clipping, focus into view), 9-slice images, modals, tabs and fit-width grids. The
