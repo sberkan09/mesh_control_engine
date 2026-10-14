@@ -9,6 +9,7 @@
 #include "mce/app.h"
 #include "mce/convar.h"
 #include "mce/log.h"
+#include "mce/platform/power.h"
 
 namespace mce::platform {
 namespace {
@@ -19,6 +20,9 @@ MCE_CVAR(cv_error_box, "platform.error_box", true, "Show a message box on boot f
 MCE_CVAR(cv_orientations, "platform.orientations", "LandscapeLeft LandscapeRight",
          "Phones: allowed screen orientations (SDL_HINT_ORIENTATIONS: LandscapeLeft LandscapeRight Portrait PortraitUpsideDown)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_power_log, "platform.power_log", 0.0f,
+         "Log the battery and thermal state every N seconds from pump_events (0 = off; device soak runs)",
+         CVarFlags::None);
 
 constexpr u32 kMaxWindows = 8;
 
@@ -342,6 +346,23 @@ const char* video_driver() {
     return d ? d : "";
 }
 
+namespace {
+
+// -platform.power_log: one line per interval, the first on the first pump.
+void log_power() {
+    const f64 interval = static_cast<f64>(cv_power_log.get_float());
+    if (interval <= 0.0) return;
+    static f64 next = 0.0;
+    const f64 now = now_seconds();
+    if (now < next) return;
+    next = now + interval;
+    const PowerInfo p = power_info();
+    MCE_LOG_INFO("power: battery {}% ({}), thermal {}", p.battery_percent, power_state_name(p.state),
+                 thermal_state_name(p.thermal));
+}
+
+}  // namespace
+
 bool pump_events() {
     MCE_ASSERT_MSG(g_state.initialized, "platform::pump_events before platform::init");
     bool quit = false;
@@ -512,6 +533,7 @@ bool pump_events() {
             default: break;
         }
     }
+    log_power();
     return quit;
 }
 

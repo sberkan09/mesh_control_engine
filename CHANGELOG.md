@@ -5,6 +5,16 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Phones on the Mac (M-MOBILE, SBA-5): StoreKit's review prompt and UIKit haptics are now built into iOS by
+  default (`MCE_STORE_REVIEW`, `MCE_UIKIT_HAPTICS` ON; the iOS presets set the Swift target), Android games build
+  again with Play In-App Review (`android.useAndroidX=true`), and Ember Step taps the phone on coins, stomps, hurts
+  and wins and asks for a review once per run after a won level.
+- Battery and thermal probe (M-MOBILE step 8): `platform::power_info()` (`mce/platform/power.h`) reports the
+  battery (SDL, every platform) and the thermal state (iOS and macOS); `-platform.power_log <seconds>` logs it
+  during a run, which is how device soaks record drain and heat.
+- Fixes found on Xcode 27 (SBA-5): Ember Step no longer crashes on quit when audio is playing (its clips are released
+  before the app goes), 3D scenes with IBL off pass Metal validation again, and `mce_player -capture_tick N`
+  holds the sim on tick N for the capture instead of running past it on slow frames.
 - Live services, the demo (M-LIVEOPS): `samples/liveops_demo`, a headless level runner wired to game services,
   remote config and analytics against local stand-ins. Its ctest covers achievements and scores reaching the
   platform, a reinstall restoring progress from the cloud save, an offline outbox that drains on the next launch, a

@@ -14,10 +14,19 @@ mce_add_library(mce_platform
         src/ads.cpp
         src/review.cpp
         src/haptics.cpp
+        src/power.cpp
     PUBLIC_DEPS
         mce::mce_core
     PRIVATE_DEPS
         SDL3::SDL3-static)
+
+# The thermal state (platform/power.h) on iOS and macOS: Objective-C++ through the CXX language, as in
+# mce_rhi_metal, so it gets the same compile policy.
+if(APPLE)
+    target_sources(mce_platform PRIVATE src/power_apple.mm)
+    set_source_files_properties(src/power_apple.mm PROPERTIES LANGUAGE CXX COMPILE_OPTIONS "-xobjective-c++;-fno-objc-arc")
+    target_link_libraries(mce_platform PRIVATE "-framework Foundation")
+endif()
 
 # The phone's purchase store (platform/store.h). Android needs nothing here: the Play Billing side is
 # Java, stamped into the game's Gradle project. iOS StoreKit 2 is Swift and stays opt-in until it has
@@ -31,9 +40,9 @@ if(IOS AND MCE_STOREKIT)
 endif()
 
 # The phone's review prompt (platform/review.h). Android: MceReview.java and Play In-App Review are
-# stamped into every game's Gradle project. iOS: StoreKit's AppStore.requestReview (Swift), opt-in
-# until it has been run on a Mac like the store above; without it the iOS review backend is "none".
-option(MCE_STORE_REVIEW "iOS: build StoreKit's review prompt (Swift) into mce_platform" OFF)
+# stamped into every game's Gradle project. iOS: StoreKit's AppStore.requestReview (Swift), on by
+# default since its Simulator run (M-MOBILE 11c); without it the iOS review backend is "none".
+option(MCE_STORE_REVIEW "iOS: build StoreKit's review prompt (Swift) into mce_platform" ON)
 if(IOS AND MCE_STORE_REVIEW)
     enable_language(Swift)
     target_sources(mce_platform PRIVATE src/review_storekit.swift)
@@ -42,9 +51,9 @@ if(IOS AND MCE_STORE_REVIEW)
 endif()
 
 # Haptics (platform/haptics.h). Android: MceHaptics.java is stamped into every game's Gradle project.
-# iOS: UIKit's feedback generators (Swift), opt-in until run on a Mac; without them the iOS device
-# haptics are "none" (gamepads still rumble).
-option(MCE_UIKIT_HAPTICS "iOS: build UIKit's feedback generators (Swift) into mce_platform" OFF)
+# iOS: UIKit's feedback generators (Swift), on by default since their Simulator run (M-MOBILE 11d);
+# without them the iOS device haptics are "none" (gamepads still rumble).
+option(MCE_UIKIT_HAPTICS "iOS: build UIKit's feedback generators (Swift) into mce_platform" ON)
 if(IOS AND MCE_UIKIT_HAPTICS)
     enable_language(Swift)
     target_sources(mce_platform PRIVATE src/haptics_uikit.swift)
