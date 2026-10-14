@@ -57,7 +57,7 @@ void MetalDevice::attach_samples(MTLRenderPassDescriptor* rp) {
 
 void MetalDevice::exec_begin_pass(const cmd::BeginPass& p) {
     ++stats_.passes;
-    end_blit();
+    end_encoders();
     ts_.skip_pass = false;
     ts_.pipeline = nullptr;
     ts_.pipeline_ok = false;
@@ -203,6 +203,8 @@ void MetalDevice::exec_bind_pipeline(PipelineHandle h) {
     ts_.pipeline = p;
     ts_.pipeline_ok = false;
     if (!p || !ts_.enc) return;
+    MCE_ASSERT_MSG(!p->cs, "bind_pipeline: a compute pipeline inside a render pass");
+    if (p->cs) return;
     id<MTLRenderPipelineState> pso = pso_for(h, *p, ts_.formats);
     if (!pso) return;
     ts_.pipeline_ok = true;
@@ -291,7 +293,7 @@ void MetalDevice::exec_resolve(const cmd::Resolve& r) {
     const bool ok = src && dst && src->size == dst->size && src->format == dst->format && !is_depth_format(src->format);
     MCE_ASSERT_MSG(ok, "resolve: needs two live color targets of the same size and format");
     if (!ok) return;
-    end_blit();
+    end_encoders();
     if (src->samples <= 1) {
         [blit_encoder() copyFromTexture:src->texture toTexture:dst->texture];
         return;
@@ -306,6 +308,69 @@ void MetalDevice::exec_resolve(const cmd::Resolve& r) {
     id<MTLRenderCommandEncoder> e = [command_buffer() renderCommandEncoderWithDescriptor:rp];
     [e setLabel:@"mce.resolve"];
     [e endEncoding];
+}
+
+void MetalDevice::release_image(ImageBinding& b) {
+    [b.view release];
+    b = ImageBinding{};
+}
+
+void MetalDevice::exec_bind_storage_image(const cmd::BindStorageImage& c) {
+    MCE_ASSERT_MSG(c.unit < kMaxImageUnits, "bind_storage_image: unit out of range");
+    if (c.unit >= kMaxImageUnits) return;
+    ImageBinding& b = images_[c.unit];
+    release_image(b);
+    const MtlTexture* t = textures_.try_get(c.texture);
+    if (!t) return;
+    const bool ok = t->usage == TextureUsage::SampledStorage && c.mip < t->mips;
+    MCE_ASSERT_MSG(ok, "bind_storage_image: needs a SampledStorage texture and a mip in range");
+    if (!ok) return;
+    b.base = t->texture;
+    // Every layer of an array, like GL's layered glBindImageTexture.
+    if (c.mip > 0)
+        b.view = [t->texture newTextureViewWithPixelFormat:[t->texture pixelFormat]
+                                               textureType:[t->texture textureType]
+                                                    levels:NSMakeRange(c.mip, 1)
+                                                    slices:NSMakeRange(0, t->layers)];
+}
+
+void MetalDevice::exec_dispatch(const cmd::Dispatch* direct, const cmd::DispatchIndirect* indirect) {
+    const MtlPipeline* p = ts_.pipeline;
+    if (!p || !p->cs) {
+        MCE_ASSERT_MSG(false, "dispatch without a bound compute pipeline");
+        return;
+    }
+    const MtlBuffer* args = nullptr;
+    if (direct) {
+        if (direct->groups_x == 0 || direct->groups_y == 0 || direct->groups_z == 0) return;
+    } else {
+        args = buffers_.try_get(indirect->buffer);
+        const bool ok = args && indirect->offset % 4 == 0 && indirect->offset + sizeof(DispatchIndirectCommand) <= args->size;
+        MCE_ASSERT_MSG(ok, "dispatch_indirect: stale buffer or arguments outside it");
+        if (!ok) return;
+    }
+    // Bindings are GL-style persistent state, so the whole table goes on before every dispatch.
+    id<MTLComputeCommandEncoder> e = compute_encoder();
+    [e setComputePipelineState:p->cs];
+    for (u32 i = 0; i < kMaxBufferBanks; ++i)
+        if (uniforms_[i].buffer) [e setBuffer:uniforms_[i].buffer offset:uniforms_[i].offset atIndex:i];
+    for (u32 i = 0; i < kMaxStorageBindings; ++i)
+        if (storage_[i].buffer) [e setBuffer:storage_[i].buffer offset:storage_[i].offset atIndex:kStorageBufferBase + i];
+    for (u32 i = 0; i < kMaxTextureSlots; ++i) {
+        if (textures_bound_[i].texture) [e setTexture:textures_bound_[i].texture atIndex:i];
+        if (textures_bound_[i].sampler) [e setSamplerState:textures_bound_[i].sampler atIndex:i];
+    }
+    for (u32 i = 0; i < kMaxImageUnits; ++i)
+        if (images_[i].base) [e setTexture:images_[i].get() atIndex:kStorageImageBase + i];
+    if (direct) {
+        [e dispatchThreadgroups:MTLSizeMake(direct->groups_x, direct->groups_y, direct->groups_z)
+            threadsPerThreadgroup:p->threads];
+    } else {
+        [e dispatchThreadgroupsWithIndirectBuffer:args->buffer
+                             indirectBufferOffset:indirect->offset
+                            threadsPerThreadgroup:p->threads];
+    }
+    ++stats_.dispatches;
 }
 
 void MetalDevice::submit(const CommandBuffer& cb) {
@@ -399,11 +464,16 @@ void MetalDevice::submit(const CommandBuffer& cb) {
                 case CmdType::WriteTimestamp:
                     exec_write_timestamp(static_cast<const cmd::WriteTimestamp*>(payload)->index);
                     break;
-                // Compute is GL-only so far (caps().compute stays false here; M-VISUAL 1 parity backlog).
                 case CmdType::BindStorageImage:
-                case CmdType::Dispatch:
+                    exec_bind_storage_image(*static_cast<const cmd::BindStorageImage*>(payload));
+                    break;
+                case CmdType::Dispatch: exec_dispatch(static_cast<const cmd::Dispatch*>(payload), nullptr); break;
                 case CmdType::DispatchIndirect:
-                case CmdType::Barrier: break;
+                    exec_dispatch(nullptr, static_cast<const cmd::DispatchIndirect*>(payload));
+                    break;
+                // The next encoder sees every write of this one (hazard tracking): ending the run of
+                // dispatches is GL's glMemoryBarrier for every bit.
+                case CmdType::Barrier: end_compute(); break;
                 case CmdType::SetVertexData: {
                     const auto* c = static_cast<const cmd::SetVertexData*>(payload);
                     const usize at = geometry_ring_.alloc(c->size, 16);
@@ -480,6 +550,7 @@ void MetalDevice::submit(const CommandBuffer& cb) {
             }
         }
         exec_end_pass();
+        end_compute();
     }
 }
 

@@ -197,16 +197,14 @@ ResultV SdlGpuDevice::init() {
     caps_.shader_draw_parameters = true;
     caps_.timestamp_queries = false;        // SDL GPU has no timestamp queries (ADR-0038 §7)
     caps_.storage_buffer_alignment = 256;
-#if !defined(__APPLE__)
-    // Compute (M-VISUAL 1). SDL GPU reports no limits: these are Vulkan's guaranteed minimums. The
-    // Metal driver needs an MSL compute path first (shader_msl.h), so Apple keeps the CPU paths.
+    // Compute (M-VISUAL 1). SDL GPU reports no limits: these are Vulkan's guaranteed minimums (Metal's
+    // are higher). On Apple the compute stage goes through the MSL path like the graphics ones.
     caps_.compute = true;
     caps_.max_compute_invocations = 128;
     caps_.max_compute_group_size[0] = caps_.max_compute_group_size[1] = 128;
     caps_.max_compute_group_size[2] = 64;
     for (u32& n : caps_.max_compute_group_count) n = 65535;
     caps_.max_storage_image_units = kMaxImageUnits;
-#endif
     MCE_LOG_INFO("rhi.sdlgpu: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 
     default_depth_format_ =
@@ -624,10 +622,27 @@ Result<PipelineHandle> SdlGpuDevice::create_compute_pipeline(const ComputePipeli
     }
     const StageResources& res = p.cres;
     SDL_GPUComputePipelineCreateInfo ci{};
+#if defined(__APPLE__)
+    Array<char> msl;
+#if TARGET_OS_IPHONE
+    constexpr MslPlatform kPlatform = MslPlatform::iOS;
+#else
+    constexpr MslPlatform kPlatform = MslPlatform::macOS;
+#endif
+    if (auto r = spirv_to_msl(ShaderStage::Compute, spv, res, kPlatform, desc.compute_shader.debug_name, msl, log); !r) {
+        MCE_LOG_ERROR("rhi.sdlgpu: MSL translation of '{}' failed:\n{}", desc.compute_shader.debug_name, log.c_str());
+        return Error(Errc::ShaderCompile, "rhi.pipeline.compute", desc.compute_shader.debug_name);
+    }
+    ci.code_size = msl.size() - 1;
+    ci.code = reinterpret_cast<const Uint8*>(msl.data());
+    ci.entrypoint = kMslEntryPoint;
+    ci.format = SDL_GPU_SHADERFORMAT_MSL;
+#else
     ci.code_size = spv.size() * sizeof(u32);
     ci.code = reinterpret_cast<const Uint8*>(spv.data());
     ci.entrypoint = "main";
     ci.format = SDL_GPU_SHADERFORMAT_SPIRV;
+#endif
     ci.num_samplers = res.sampler_count;
     ci.num_readonly_storage_textures = 0;  // storage images all bind read-write (shader_spirv.h)
     ci.num_readonly_storage_buffers = res.storage_count;

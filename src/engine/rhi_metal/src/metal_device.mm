@@ -237,6 +237,17 @@ ResultV MetalDevice::init() {
         caps_.max_uniform_block_size = 64 * 1024;
         caps_.shader_draw_parameters = true;  // [[base_instance]] is native
         caps_.storage_buffer_alignment = 256;
+        // Compute (M-VISUAL 1): every Metal device has it. Apple GPUs cap a threadgroup at
+        // maxThreadsPerThreadgroup per dimension and 1024 threads in total; the grid has no limit
+        // below 2^32 - 1 threadgroups per dimension.
+        const MTLSize tg = [device_ maxThreadsPerThreadgroup];
+        caps_.compute = true;
+        caps_.max_compute_invocations = static_cast<u32>(math::min<usize>(tg.width, 1024));
+        caps_.max_compute_group_size[0] = static_cast<u32>(tg.width);
+        caps_.max_compute_group_size[1] = static_cast<u32>(tg.height);
+        caps_.max_compute_group_size[2] = static_cast<u32>(tg.depth);
+        for (u32& n : caps_.max_compute_group_count) n = 0xFFFFFFFFu;
+        caps_.max_storage_image_units = kMaxImageUnits;
         init_timestamps();
         MCE_LOG_INFO("rhi.metal: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 
@@ -266,7 +277,7 @@ MetalDevice::~MetalDevice() {
 
 void MetalDevice::release_all() {
     if (!device_) return;
-    end_blit();
+    end_encoders();
     commit_open(true);
     for (u32 s = 0; s < MCE_FRAMES_IN_FLIGHT; ++s) {
         if (slot_cb_[s]) [slot_cb_[s] waitUntilCompleted];
@@ -276,7 +287,9 @@ void MetalDevice::release_all() {
     for (MtlBuffer& b : buffers_.dense()) [b.buffer release];
     for (MtlTexture& t : textures_.dense()) [t.texture release];
     for (MtlSampler& s : samplers_.dense()) [s.sampler release];
+    for (ImageBinding& b : images_) release_image(b);
     for (MtlPipeline& p : pipelines_.dense()) {
+        [p.cs release];
         [p.vs release];
         [p.vs_flip release];
         [p.fs release];
@@ -309,6 +322,7 @@ id<MTLCommandBuffer> MetalDevice::command_buffer() {
 
 id<MTLBlitCommandEncoder> MetalDevice::blit_encoder() {
     if (blit_) return blit_;
+    end_compute();
     u32 start = 0, end = 0;
     if (next_encoder_samples(start, end)) {
         MTLBlitPassDescriptor* bp = [MTLBlitPassDescriptor blitPassDescriptor];
@@ -329,8 +343,32 @@ void MetalDevice::end_blit() {
     blit_ = nil;
 }
 
-void MetalDevice::commit_open(bool wait) {
+id<MTLComputeCommandEncoder> MetalDevice::compute_encoder() {
+    if (compute_) return compute_;
     end_blit();
+    // Serial dispatch: each dispatch of the encoder sees the writes of the ones before it.
+    MTLComputePassDescriptor* cp = [MTLComputePassDescriptor computePassDescriptor];
+    cp.dispatchType = MTLDispatchTypeSerial;
+    u32 start = 0, end = 0;
+    if (next_encoder_samples(start, end)) {
+        cp.sampleBufferAttachments[0].sampleBuffer = ts_slots_[slot_].samples;
+        cp.sampleBufferAttachments[0].startOfEncoderSampleIndex = start;
+        cp.sampleBufferAttachments[0].endOfEncoderSampleIndex = end;
+    }
+    compute_ = [[command_buffer() computeCommandEncoderWithDescriptor:cp] retain];
+    [compute_ setLabel:@"mce.compute"];
+    return compute_;
+}
+
+void MetalDevice::end_compute() {
+    if (!compute_) return;
+    [compute_ endEncoding];
+    [compute_ release];
+    compute_ = nil;
+}
+
+void MetalDevice::commit_open(bool wait) {
+    end_encoders();
     if (!open_cb_) return;
     id<MTLCommandBuffer> cb = open_cb_;
     open_cb_ = nil;
@@ -417,6 +455,10 @@ TextureHandle MetalDevice::create_texture(const TextureDesc& desc, Span<const by
     t.samples = desc.samples > 1 ? desc.samples : 1;
     MCE_ASSERT_MSG(t.samples == 1 || (!array && t.mips == 1 && initial_data.empty()),
                    "create_texture: multisampled textures are single-mip 2D render targets");
+    MCE_ASSERT_MSG(desc.usage != TextureUsage::SampledStorage ||
+                       (t.samples == 1 && !is_depth_format(desc.format) && !is_compressed_format(desc.format) &&
+                        desc.format != TextureFormat::RGBA8_SRGB && desc.format != TextureFormat::BGRA8_UNorm),
+                   "create_texture: storage images need a single-sample, linear, uncompressed color format");
     @autoreleasepool {
         MTLTextureDescriptor* td = [[[MTLTextureDescriptor alloc] init] autorelease];
         td.textureType = t.samples > 1 ? MTLTextureType2DMultisample
@@ -430,6 +472,8 @@ TextureHandle MetalDevice::create_texture(const TextureDesc& desc, Span<const by
         td.storageMode = MTLStorageModePrivate;
         MTLTextureUsage usage = MTLTextureUsageShaderRead;
         if (desc.usage != TextureUsage::Sampled) usage |= MTLTextureUsageRenderTarget;
+        // Storage images (compute); a mip other than 0 binds through a view of that level.
+        if (desc.usage == TextureUsage::SampledStorage) usage |= MTLTextureUsageShaderWrite;
         td.usage = usage;
         t.texture = [device_ newTextureWithDescriptor:td];
         set_label(t.texture, desc.debug_name);
@@ -545,6 +589,46 @@ Result<PipelineHandle> MetalDevice::create_pipeline(const GraphicsPipelineDesc& 
     return pipelines_.insert(p);
 }
 
+Result<PipelineHandle> MetalDevice::create_compute_pipeline(const ComputePipelineDesc& desc) {
+    FixedString<1024> log;
+    const char* name = desc.compute_shader.debug_name;
+    auto cs_msl = translate_glsl(ShaderStage::Compute, desc.compute_shader.glsl, name, log);
+    if (!cs_msl) {
+        MCE_LOG_ERROR("rhi.metal: compute shader '{}' failed:\n{}", name, log.c_str());
+        return Error(Errc::ShaderCompile, "rhi.pipeline.compute", name);
+    }
+    const MslSource& msl = cs_msl.value();
+    MtlPipeline p;
+    p.name.append(desc.debug_name ? desc.debug_name : "");
+    p.threads = MTLSizeMake(msl.local_size[0], msl.local_size[1], msl.local_size[2]);
+    @autoreleasepool {
+        id<MTLFunction> fn = make_function(device_, msl, false, false, name, log);
+        if (!fn) {
+            MCE_LOG_ERROR("rhi.metal: compute shader '{}' MSL failed:\n{}\n{}", name, log.c_str(), msl.c_str());
+            return Error(Errc::ShaderCompile, "rhi.pipeline.compute", name);
+        }
+        MTLComputePipelineDescriptor* d = [[[MTLComputePipelineDescriptor alloc] init] autorelease];
+        d.computeFunction = fn;
+        set_label(d, p.name.c_str());
+        NSError* err = nil;
+        p.cs = [device_ newComputePipelineStateWithDescriptor:d options:MTLPipelineOptionNone reflection:nil error:&err];
+        [fn release];
+        if (!p.cs) {
+            MCE_LOG_ERROR("rhi.metal: compute pipeline '{}' failed: {}", p.name.c_str(),
+                          err ? [[err localizedDescription] UTF8String] : "unknown");
+            return Error(Errc::PipelineCreate, "rhi.pipeline.compute", desc.debug_name);
+        }
+        const usize total = usize(msl.local_size[0]) * msl.local_size[1] * msl.local_size[2];
+        if (total > [p.cs maxTotalThreadsPerThreadgroup]) {
+            MCE_LOG_ERROR("rhi.metal: compute pipeline '{}': local size {} exceeds the pipeline's {} threads",
+                          p.name.c_str(), total, usize([p.cs maxTotalThreadsPerThreadgroup]));
+            [p.cs release];
+            return Error(Errc::PipelineCreate, "rhi.pipeline.compute", desc.debug_name);
+        }
+    }
+    return pipelines_.insert(p);
+}
+
 id<MTLRenderPipelineState> MetalDevice::pso_for(PipelineHandle h, const MtlPipeline& p, const PassFormats& f) {
     for (const PsoEntry& e : psos_)
         if (e.pipeline == h && e.formats == f) return e.pso;
@@ -630,6 +714,8 @@ void MetalDevice::destroy_texture(TextureHandle h) {
     if (!t) return;
     for (TextureBinding& b : textures_bound_)
         if (b.texture == t->texture) b = TextureBinding{};
+    for (ImageBinding& b : images_)
+        if (b.base == t->texture) release_image(b);
     texture_bytes_ -= t->bytes;
     [t->texture release];
     textures_.erase(h);
@@ -656,6 +742,7 @@ void MetalDevice::destroy_pipeline(PipelineHandle h) {
             ++i;
         }
     }
+    [p->cs release];
     [p->vs release];
     [p->vs_flip release];
     [p->fs release];
@@ -841,6 +928,7 @@ void MetalDevice::exec_write_timestamp(u32 index) {
     if (!caps_.timestamp_queries || index >= kMaxTimestamps) return;
     timestamps_active_ = true;
     end_blit();  // the open blit encoder (uploads) is work that comes before this timestamp
+    end_compute();  // so is a run of dispatches
     TimestampSlot& t = ts_slots_[slot_];
     t.position[index] = t.encoders;
     t.written |= 1u << index;
@@ -1019,6 +1107,20 @@ ResultV MetalDevice::read_pixels(TextureHandle target, Rect2D rect, Span<u8> out
             }
         }
     }
+    return ok();
+}
+
+ResultV MetalDevice::read_buffer(BufferHandle h, u64 offset, Span<byte> out) {
+    const MtlBuffer* b = buffers_.try_get(h);
+    if (!b) return Error(Errc::NotFound, "rhi.read_buffer", "stale buffer handle");
+    if (offset + out.size() > b->size) return Error(Errc::InvalidArgument, "rhi.read_buffer", "range outside buffer");
+    // Buffers are shared storage: once every committed command buffer has completed (the queue runs
+    // them in order, so waiting on an empty one is enough), the GPU's writes are in `contents`.
+    @autoreleasepool {
+        command_buffer();
+        commit_open(true);
+    }
+    if (!out.empty()) std::memcpy(out.data(), static_cast<const byte*>([b->buffer contents]) + offset, out.size());
     return ok();
 }
 

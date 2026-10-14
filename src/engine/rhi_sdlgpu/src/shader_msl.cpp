@@ -20,8 +20,9 @@ ResultV spirv_to_msl(ShaderStage stage, const Array<u32>& spirv, const StageReso
     try {
         std::vector<u32> words(spirv.begin(), spirv.end());  // mce-allow: SPIRV-Cross API type
         spirv_cross::CompilerMSL compiler(std::move(words));
-        const spv::ExecutionModel model =
-            stage == ShaderStage::Vertex ? spv::ExecutionModelVertex : spv::ExecutionModelFragment;
+        const spv::ExecutionModel model = stage == ShaderStage::Vertex     ? spv::ExecutionModelVertex
+                                          : stage == ShaderStage::Fragment ? spv::ExecutionModelFragment
+                                                                           : spv::ExecutionModelGLCompute;
         spirv_cross::CompilerMSL::Options mo;
         mo.platform = platform == MslPlatform::iOS ? spirv_cross::CompilerMSL::Options::iOS
                                                    : spirv_cross::CompilerMSL::Options::macOS;
@@ -34,7 +35,6 @@ ResultV spirv_to_msl(ShaderStage stage, const Array<u32>& spirv, const StageReso
         go.vertex.flip_vert_y = false;
         compiler.set_common_options(go);
 
-        const u32 resource_set = stage == ShaderStage::Vertex ? 0 : 2;
         auto bind = [&](u32 set, u32 binding, u32 buffer, u32 texture, u32 sampler) {
             spirv_cross::MSLResourceBinding mb;
             mb.stage = model;
@@ -46,10 +46,24 @@ ResultV spirv_to_msl(ShaderStage stage, const Array<u32>& spirv, const StageReso
             mb.msl_sampler = sampler;
             compiler.add_msl_resource_binding(mb);
         };
-        for (u32 i = 0; i < resources.sampler_count; ++i) bind(resource_set, i, 0, i, i);
-        for (u32 j = 0; j < resources.storage_count; ++j)
-            bind(resource_set, resources.sampler_count + j, resources.uniform_count + j, 0, 0);
-        for (u32 b = 0; b < resources.uniform_count; ++b) bind(resource_set + 1, b, b, 0, 0);
+        if (stage == ShaderStage::Compute) {
+            // SDL's Metal compute layout: [[texture]] sampled textures, then read-only storage textures
+            // (none: storage images all bind read-write, shader_spirv.h), then read-write ones;
+            // [[buffer]] uniform banks, then read-only storage buffers, then read-write ones.
+            const u32 sc = resources.sampler_count, ic = resources.rw_image_count;
+            const u32 uc = resources.uniform_count, rc = resources.storage_count;
+            for (u32 i = 0; i < sc; ++i) bind(0, i, 0, i, i);
+            for (u32 j = 0; j < rc; ++j) bind(0, sc + j, uc + j, 0, 0);
+            for (u32 k = 0; k < ic; ++k) bind(1, k, 0, sc + k, 0);
+            for (u32 j = 0; j < resources.rw_storage_count; ++j) bind(1, ic + j, uc + rc + j, 0, 0);
+            for (u32 b = 0; b < uc; ++b) bind(2, b, b, 0, 0);
+        } else {
+            const u32 resource_set = stage == ShaderStage::Vertex ? 0 : 2;
+            for (u32 i = 0; i < resources.sampler_count; ++i) bind(resource_set, i, 0, i, i);
+            for (u32 j = 0; j < resources.storage_count; ++j)
+                bind(resource_set, resources.sampler_count + j, resources.uniform_count + j, 0, 0);
+            for (u32 b = 0; b < resources.uniform_count; ++b) bind(resource_set + 1, b, b, 0, 0);
+        }
         compiler.rename_entry_point("main", kMslEntryPoint, model);
         text = compiler.compile();
     } catch (const spirv_cross::CompilerError& e) {

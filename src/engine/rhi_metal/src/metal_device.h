@@ -14,6 +14,12 @@
 //  - Metal command buffers retain the resources they reference, so destroy_* releases immediately.
 //  - Frame captures: MTL_CAPTURE_ENABLED=1 MCE_METAL_CAPTURE="<frame>:<path>.gputrace" records that
 //    frame (begin_frame to present) into an Xcode GPU trace document through MTLCaptureManager.
+//  - Compute (M-VISUAL 1): dispatches go into compute encoders on the frame's command buffer, one
+//    encoder per run of dispatches; barrier() ends the run. Buffers and textures are hazard-tracked
+//    (Metal's default), so the next encoder (compute, render or blit) sees every write the previous
+//    one made: GL's glMemoryBarrier is implied at encoder boundaries, and within one encoder the
+//    serial dispatch type orders the dispatches. Storage images are textures with ShaderWrite usage
+//    at [[texture(kStorageImageBase + unit)]]; a mip other than 0 binds through a texture view.
 //  - GPU timestamps: Apple GPUs sample counters only at encoder (stage) boundaries, so every encoder
 //    of a frame records its start and end into the slot's MTLCounterSampleBuffer and
 //    write_timestamp(i) resolves to the end of the last encoder before it, the moment a GL
@@ -51,8 +57,10 @@ struct MtlSampler {
 };
 
 struct MtlPipeline {
-    id<MTLFunction> vs = nil;       // gl_Position.y as written (backbuffer)
-    id<MTLFunction> vs_flip = nil;  // y negated (texture targets)
+    id<MTLComputePipelineState> cs = nil;  // compute pipelines only (no vs/fs)
+    MTLSize threads = {1, 1, 1};           // compute: the shader's local_size
+    id<MTLFunction> vs = nil;              // gl_Position.y as written (backbuffer)
+    id<MTLFunction> vs_flip = nil;         // y negated (texture targets)
     id<MTLFunction> fs = nil;
     MTLVertexDescriptor* vertex = nil;  // nil when the pipeline has no vertex input
     FixedState state;
@@ -99,9 +107,10 @@ public:
     void wait_blocking() override;
 };
 
-inline constexpr u32 kMaxBufferBanks = 8;    // uniform banks 0..7 -> [[buffer(0..7)]]
-inline constexpr u32 kMaxStorageBindings = 8;  // SSBO binding b -> [[buffer(8 + b)]]
+inline constexpr u32 kMaxBufferBanks = 8;       // uniform banks 0..7 -> [[buffer(0..7)]]
+inline constexpr u32 kMaxStorageBindings = 16;  // SSBO binding b -> [[buffer(8 + b)]]
 inline constexpr u32 kMaxTextureSlots = 16;
+inline constexpr u32 kMaxImageUnits = 8;         // storage image unit u -> [[texture(16 + u)]]
 inline constexpr u32 kMaxSampledEncoders = 256;  // per frame; later encoders are not timed
 
 // One frame slot's GPU timestamp state (see the header comment).
@@ -126,6 +135,7 @@ public:
     void update_texture(TextureHandle texture, const TextureRegion& region, Span<const byte> data) override;
     SamplerHandle create_sampler(const SamplerDesc& desc) override;
     Result<PipelineHandle> create_pipeline(const GraphicsPipelineDesc& desc) override;
+    Result<PipelineHandle> create_compute_pipeline(const ComputePipelineDesc& desc) override;
     void destroy_buffer(BufferHandle) override;
     void destroy_texture(TextureHandle) override;
     void destroy_sampler(SamplerHandle) override;
@@ -142,6 +152,7 @@ public:
     void present(bool vsync) override;
     Extent2D backbuffer_size() const override;
     ResultV read_pixels(TextureHandle target, Rect2D rect, Span<u8> out_rgba8) override;
+    ResultV read_buffer(BufferHandle buffer, u64 offset, Span<byte> out) override;
 
     const DeviceCaps& caps() const override { return caps_; }
     const FrameStats& last_frame_stats() const override { return last_stats_; }
@@ -163,6 +174,11 @@ private:
         id<MTLTexture> texture = nil;  // not owned
         id<MTLSamplerState> sampler = nil;
     };
+    struct ImageBinding {
+        id<MTLTexture> base = nil;  // not owned: the bound texture
+        id<MTLTexture> view = nil;  // owned: the mip view, or nil when mip 0 binds `base` itself
+        id<MTLTexture> get() const { return view ? view : base; }
+    };
     struct DepthKey {
         bool test = false;
         bool write = false;
@@ -174,8 +190,11 @@ private:
     };
 
     id<MTLCommandBuffer> command_buffer();  // the open command buffer (created on demand)
-    id<MTLBlitCommandEncoder> blit_encoder();
+    id<MTLBlitCommandEncoder> blit_encoder();  // ends an open compute encoder first
     void end_blit();
+    id<MTLComputeCommandEncoder> compute_encoder();  // ends an open blit encoder first
+    void end_compute();
+    void end_encoders() { end_blit(), end_compute(); }
     void commit_open(bool wait);  // commits the open command buffer, if any
     void upload_to_buffer(id<MTLBuffer> dst, usize offset, Span<const byte> data);
     void upload_to_texture(const MtlTexture& t, const TextureRegion& region, Span<const byte> data);
@@ -201,6 +220,9 @@ private:
     void exec_draw(const cmd::Draw* indexed, const cmd::DrawNonIndexed* plain);
     void exec_draw_indirect(const cmd::DrawIndirect& d);
     void exec_resolve(const cmd::Resolve& r);
+    void exec_bind_storage_image(const cmd::BindStorageImage& c);
+    void exec_dispatch(const cmd::Dispatch* direct, const cmd::DispatchIndirect* indirect);
+    void release_image(ImageBinding& b);
     void apply_bindings();
     void attach_samples(MTLRenderPassDescriptor* rp);  // times the pass (GPU timestamps)
     void reset_translate_state();
@@ -227,6 +249,7 @@ private:
 
     id<MTLCommandBuffer> open_cb_ = nil;  // owned
     id<MTLBlitCommandEncoder> blit_ = nil;  // owned, on open_cb_
+    id<MTLComputeCommandEncoder> compute_ = nil;  // owned, on open_cb_
     id<MTLCommandBuffer> slot_cb_[MCE_FRAMES_IN_FLIGHT] = {};  // owned: the slot's last commit
     MetalFence fence_objs_[MCE_FRAMES_IN_FLIGHT];
     id<CAMetalDrawable> drawable_ = nil;  // owned, this frame's
@@ -253,6 +276,7 @@ private:
     BufferBinding uniforms_[kMaxBufferBanks];
     BufferBinding storage_[kMaxStorageBindings];
     TextureBinding textures_bound_[kMaxTextureSlots];
+    ImageBinding images_[kMaxImageUnits];
 
     // Translate state (valid within one submit()).
     struct {

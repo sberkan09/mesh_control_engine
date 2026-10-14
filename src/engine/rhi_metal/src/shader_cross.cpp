@@ -25,6 +25,7 @@ MslSource& MslSource::operator=(MslSource&& o) noexcept {
         std::free(text_);
         text_ = o.text_;
         size_ = o.size_;
+        for (u32 i = 0; i < 3; ++i) local_size[i] = o.local_size[i];
         o.text_ = nullptr;
         o.size_ = 0;
     }
@@ -86,7 +87,9 @@ std::string fix_instance_id(StringView glsl) {  // mce-allow: glslang input text
 
 bool glsl_to_spirv(ShaderStage stage, StringView glsl, SpirV& out, FixedString<1024>& log) {
     init_glslang();
-    const EShLanguage lang = stage == ShaderStage::Vertex ? EShLangVertex : EShLangFragment;
+    const EShLanguage lang = stage == ShaderStage::Vertex     ? EShLangVertex
+                             : stage == ShaderStage::Fragment ? EShLangFragment
+                                                              : EShLangCompute;
     glslang::TShader shader(lang);
     std::string fixed;  // mce-allow: glslang input text
     if (stage == ShaderStage::Vertex && glsl.find("gl_InstanceID") != StringView::npos) {
@@ -118,8 +121,8 @@ bool glsl_to_spirv(ShaderStage stage, StringView glsl, SpirV& out, FixedString<1
     return !out.empty();
 }
 
-// GL keeps uniform blocks, storage blocks and samplers in separate binding namespaces; SPIR-V for
-// GL has no descriptor sets. Give each namespace its own set so the remap below is unambiguous,
+// GL keeps uniform blocks, storage blocks, samplers and image units in separate binding namespaces;
+// SPIR-V for GL has no descriptor sets. Give each namespace its own set so the remap below is unambiguous,
 // then pin every resource to the fixed Metal index (shader_cross.h).
 void remap_resources(spirv_cross::CompilerMSL& msl, spv::ExecutionModel model) {
     const spirv_cross::ShaderResources res = msl.get_shader_resources();
@@ -139,6 +142,16 @@ void remap_resources(spirv_cross::CompilerMSL& msl, spv::ExecutionModel model) {
     for (const auto& r : res.uniform_buffers) bind(r, 0, 0, 0, 0);
     for (const auto& r : res.storage_buffers) bind(r, 1, kStorageBufferBase, 0, 0);
     for (const auto& r : res.sampled_images) bind(r, 2, 0, 0, 0);
+    for (const auto& r : res.storage_images) bind(r, 3, 0, kStorageImageBase, 0);
+}
+
+spv::ExecutionModel execution_model(ShaderStage stage) {
+    switch (stage) {
+        case ShaderStage::Vertex: return spv::ExecutionModelVertex;
+        case ShaderStage::Fragment: return spv::ExecutionModelFragment;
+        case ShaderStage::Compute: return spv::ExecutionModelGLCompute;
+    }
+    return spv::ExecutionModelVertex;
 }
 
 // SPIRV-Cross bakes the Y flip in; make it a function constant so one library serves both the
@@ -170,10 +183,10 @@ Result<MslSource> translate_glsl(ShaderStage stage, StringView glsl, const char*
     if (!glsl_to_spirv(stage, glsl, spirv, log)) return Error(Errc::ShaderCompile, "rhi.metal.glslang", name);
 
     std::string text;  // mce-allow: SPIRV-Cross output
+    u32 local_size[3] = {1, 1, 1};
     try {
         spirv_cross::CompilerMSL msl(std::move(spirv));
-        const spv::ExecutionModel model =
-            stage == ShaderStage::Vertex ? spv::ExecutionModelVertex : spv::ExecutionModelFragment;
+        const spv::ExecutionModel model = execution_model(stage);
         spirv_cross::CompilerMSL::Options mo;
         mo.platform = spirv_cross::CompilerMSL::Options::macOS;
         mo.set_msl_version(2, 3);
@@ -185,6 +198,9 @@ Result<MslSource> translate_glsl(ShaderStage stage, StringView glsl, const char*
         msl.set_common_options(go);
         remap_resources(msl, model);
         text = msl.compile();
+        if (stage == ShaderStage::Compute)
+            for (u32 i = 0; i < 3; ++i)
+                local_size[i] = msl.get_execution_mode_argument(spv::ExecutionModeLocalSize, i);
     } catch (const spirv_cross::CompilerError& e) {
         log.append(e.what());
         return Error(Errc::ShaderCompile, "rhi.metal.spirv_cross", name);
@@ -193,7 +209,9 @@ Result<MslSource> translate_glsl(ShaderStage stage, StringView glsl, const char*
         log.append("vertex shader writes no gl_Position");
         return Error(Errc::ShaderCompile, "rhi.metal.flip", name);
     }
-    return MslSource::copy_of(StringView(text.data(), text.size()));
+    MslSource out = MslSource::copy_of(StringView(text.data(), text.size()));
+    for (u32 i = 0; i < 3; ++i) out.local_size[i] = local_size[i] ? local_size[i] : 1;
+    return out;
 }
 
 }  // namespace mce::rhi::metal
