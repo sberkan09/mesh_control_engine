@@ -15,7 +15,7 @@
 namespace mce::kit {
 
 // World::state_hash hashes component bytes: these layouts have no implicit padding.
-static_assert(sizeof(MeshRef) == 72);
+static_assert(sizeof(MeshRef) == 96);
 static_assert(sizeof(PointLight3D) == 40);
 static_assert(sizeof(SpotLight3D) == 60);
 static_assert(sizeof(ReflectionProbe3D) == 64);

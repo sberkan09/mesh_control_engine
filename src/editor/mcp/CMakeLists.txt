@@ -28,4 +28,5 @@ mce_add_executable(mce_mcp UMBRELLA
         app/engine_components.cpp
     DEPS
         mce::mce_mcp_core
+        mce::mce_kit_novel  # its components, so a novel project's scenes open without --module
         mce::mce_module_host)

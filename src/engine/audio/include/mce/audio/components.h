@@ -17,13 +17,17 @@
 
 namespace mce::audio {
 
+// The mixer's stock buses as an enum (the BusId values), for components a scene authors.
+enum class AudioBus : u8 { Master = Bus_Master, Music = Bus_Music, SFX = Bus_SFX, UI = Bus_UI };
+MCE_ENUM(AudioBus, Master, Music, SFX, UI)
+
 struct AudioSource {
     // The cooked Sfx asset; the bridge resolves it through the ClipBank when the source starts.
     asset::AssetRef<asset::Sfx> clip;
     f32 gain_db = 0.f;
     f32 pan = 0.f;
     u8 priority = 128;
-    BusId bus = Bus_SFX;
+    AudioBus bus = AudioBus::SFX;  // Music streams the clip (two music streams at a time)
     bool loop = false;
     bool play_on_start = false;
     // A clip registered from code (procedural, tests). Used when `clip` has no GUID.
@@ -35,15 +39,18 @@ struct AudioSource {
     ClipHandle playing_clip;  // what `handle` plays; a hot reload swaps it and restarts loops
     f32 applied_gain_db = 0.f;
     f32 applied_pan = 0.f;
+    f32 fade_s = 0.f;  // seconds the voice fades in on start and out on stop (music crossfades)
+    f32 fade_t = 0.f;  // engine-written: 0..1 through the fade-in
 };
 MCE_COMPONENT(AudioSource,
     clip,
     (gain_db, Range{-60, 12}, Help{"source gain in dB"}),
     (pan, Range{-1, 1}),
     priority,
-    bus,
+    (bus, Help{"Music streams the clip from its asset instead of holding it decoded"}),
     loop,
-    play_on_start)
+    play_on_start,
+    (fade_s, Range{0, 30}, Help{"fade in on start and out when stopped or removed (crossfade two music sources)"}))
 
 // Makes the AudioSource on the same entity 3D (FR-AUD-050).
 struct AudioSpatial {

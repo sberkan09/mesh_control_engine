@@ -26,7 +26,8 @@ target_compile_definitions(test_kit PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BI
 mce_add_test(test_kit_gl UMBRELLA NO_CTEST SOURCES test_kit_gl.cpp
              DEPS mce::mce_gameplay_kit mce::mce_asset_cook mce::mce_rhi_default)
 target_include_directories(test_kit_gl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
-target_compile_definitions(test_kit_gl PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp")
+target_compile_definitions(test_kit_gl PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp"
+                           MCE_TEST_FONT="${PROJECT_SOURCE_DIR}/projects/Kindle/assets/fonts/ProggyClean.ttf")
 if(MCE_GPU_TESTS)
     add_test(NAME test_kit_gl COMMAND test_kit_gl)
     set_tests_properties(test_kit_gl PROPERTIES LABELS gpu)

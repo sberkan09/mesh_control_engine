@@ -13,6 +13,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/loc/loc.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
@@ -310,4 +311,77 @@ TEST_CASE("FR-R2D-100: the primary camera's Post2DComponent becomes renderer pos
     CHECK(post.vignette_intensity == 0.7f);
     CHECK(post.chromatic_aberration);
     CHECK_FALSE(post.color_grade);
+}
+
+TEST_CASE("M-DATA-REACH 8: a TextLabel wraps at wrap_width and shows its loc_key's string") {
+    using namespace cook_test;
+    const std::string root = fresh_dir("kit_text");
+    std::FILE* ttf = std::fopen(MCE_TEST_FONT, "rb");
+    REQUIRE(ttf);
+    std::string font_bytes;
+    char buf[4096];
+    for (usize n; (n = std::fread(buf, 1, sizeof buf, ttf)) > 0;) font_bytes.append(buf, n);
+    std::fclose(ttf);
+    write_file(root + "/assets/ui.ttf", font_bytes);
+    write_file(root + "/assets/ui.ttf.mceasset",
+               sidecar("1176000a-0000-4000-8000-000000000011", "font", R"({ "size": 26, "ranges": [[32, 126]], "padding": 1 })"));
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+
+    Fixture f;
+    asset::AssetSystem assets;
+    render::AssetUploadSink sink(f.renderer, assets);
+    assets.set_upload_sink(&sink);
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    f.extract.reset(&assets);
+    f.camera({0, 0});
+
+    // The lit rows and columns of the frame.
+    const auto extent = [&](u32& rows, u32& cols) {
+        rows = cols = 0;
+        for (u32 y = 0; y < kH; ++y) {
+            bool lit = false;
+            for (u32 x = 0; x < kW && !lit; ++x) lit = f.pixels[(usize(y) * kW + x) * 4] > 128;
+            rows += lit ? 1 : 0;
+        }
+        for (u32 x = 0; x < kW; ++x) {
+            bool lit = false;
+            for (u32 y = 0; y < kH && !lit; ++y) lit = f.pixels[(usize(y) * kW + x) * 4] > 128;
+            cols += lit ? 1 : 0;
+        }
+    };
+    kit::TextLabel l;
+    l.font.guid = asset::parse_guid("1176000a-0000-4000-8000-000000000011").value();
+    l.text = "MMMM MMMM";
+    l.color = kWhite;
+    l.height = 1.0f;
+    const Entity e = f.world.spawn_with(LocalTransform{}, l);
+    f.render();
+    u32 rows_one = 0, cols_one = 0;
+    extent(rows_one, cols_one);
+    REQUIRE(rows_one > 0);
+
+    f.world.try_get_mut<kit::TextLabel>(e)->wrap_width = 3.0f;  // narrower than the line: two lines
+    f.render();
+    u32 rows_two = 0, cols_two = 0;
+    extent(rows_two, cols_two);
+    CHECK(rows_two > rows_one * 3 / 2);
+    CHECK(cols_two < cols_one);
+
+    // A loc_key with a string table: the table's text; without one, `text`.
+    f.world.try_get_mut<kit::TextLabel>(e)->wrap_width = 0.0f;
+    f.world.try_get_mut<kit::TextLabel>(e)->loc_key = "title";
+    loc::StringTable table;
+    table.set_locale("en");
+    REQUIRE(table.add("title", "MM"));
+    loc::Localization l10n;
+    l10n.add_table(static_cast<loc::StringTable&&>(table));
+    f.world.set_resource(static_cast<loc::Localization&&>(l10n));
+    f.render();
+    u32 rows_key = 0, cols_key = 0;
+    extent(rows_key, cols_key);
+    CHECK(cols_key * 3 < cols_one);
+    f.extract.reset(nullptr);
 }

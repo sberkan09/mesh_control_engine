@@ -69,7 +69,10 @@ enum class TextAlign : u8 { Left, Center, Right };
 MCE_ENUM(TextAlign, Left, Center, Right)
 
 // World-space text from a cooked font. `height` is the baked glyph height in metres; the layout
-// box is anchored at the entity's position (horizontally by `align`, vertically centered).
+// box is anchored at the entity's position (horizontally by `align`, vertically centered). With
+// `loc_key` the text is that key's string in the player's language (loc::Localization; `text`
+// when the project has no string tables). `wrap_width` > 0 breaks lines at whitespace past that
+// many metres, each line aligned by `align`.
 struct TextLabel {
     asset::AssetRef<asset::Font> font;
     FixedString<64> text;
@@ -79,9 +82,12 @@ struct TextLabel {
     i16 layer = 0;
     TextAlign align = TextAlign::Center;
     u8 pad_ = 0;
+    f32 wrap_width = 0.0f;
+    FixedString<32> loc_key;
 };
 MCE_COMPONENT(TextLabel, font, text, color, (height, Range{0.05f, 10}, Help{"glyph height in metres"}), order,
-              (layer, Range{-100, 100}), align)
+              (layer, Range{-100, 100}), align, (wrap_width, Range{0, 1000}, Help{"metres; 0 = one line"}),
+              (loc_key, Help{"string table key; the text in the player's language replaces 'text'"}))
 
 // The view a player renders from: the first `primary` camera in ECS order, at its entity's
 // position (rotation about +Z included).
