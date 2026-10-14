@@ -1,0 +1,461 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "0c5b255e-286f-4293-a352-48dcb9c80653",
+  "name": "level2",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Camera",
+      "components": {
+        "Camera2DComponent": { "clear_color": [0.03, 0.035, 0.11, 1], "fit_height": 15 },
+        "CameraFollow2D": { "target": "$49", "smoothing": 6, "look_ahead": 0.2, "bounds_min": [13.333, 7.5], "bounds_max": [66.667, 7.5], "use_bounds": true },
+        "LocalTransform": { "position": [13.333, 7.5, 0] },
+        "Post2DComponent": { "vignette": true }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Sky",
+      "components": {
+        "LocalTransform": {},
+        "Parallax": { "factor": [0, 0] },
+        "Sprite": { "texture": "guid:31a249a2-4969-40db-b27b-67b4b81581ed", "size": [28, 15.75], "layer": -50 }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Moon",
+      "components": {
+        "LocalTransform": { "position": [8.5, 4.2, 0] },
+        "Parallax": { "factor": [0.04, 0] },
+        "Sprite": { "texture": "guid:db0fc8ce-114b-4529-b445-d2d3f8e3c422", "size": [4, 4], "layer": -45 }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Hills",
+      "components": {
+        "LocalTransform": { "position": [0, -4.2, 0] },
+        "Parallax": { "factor": [0.3, 0], "repeat_x": true },
+        "Sprite": { "texture": "guid:bcf83536-9d79-4245-8762-36d483fa9573", "size": [32, 6], "layer": -40 }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Music",
+      "components": {
+        "AudioSource": { "clip": "guid:c5c66fb8-65d4-4f3a-a752-d17ee8bd70e3", "gain_db": -8, "bus": "Music", "loop": true, "play_on_start": true, "fade_s": 0.5 },
+        "LocalTransform": {}
+      }
+    },
+    {
+      "id": 6,
+      "name": "HUD Status",
+      "components": {
+        "HudText": {},
+        "LocalTransform": { "position": [-12.8, 6.7, 0] },
+        "Parallax": { "factor": [0, 0] },
+        "TextLabel": { "font": "guid:b8c076e2-21ea-42c5-9df1-effea26b7f23", "text": "LANTERNS 0/3   LIVES 3", "color": [1, 0.95, 0.8, 1], "height": 0.55, "layer": 60, "align": "Left" }
+      }
+    },
+    {
+      "id": 7,
+      "name": "HUD Banner",
+      "components": {
+        "HudText": { "kind": "Banner" },
+        "LocalTransform": { "position": [0, 5.9, 0] },
+        "Parallax": { "factor": [0, 0] },
+        "TextLabel": { "font": "guid:b8c076e2-21ea-42c5-9df1-effea26b7f23", "text": "LEVEL 2 - THE BATS ARE RESTLESS", "color": [1, 0.8, 0.45, 1], "layer": 60 }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Ground Tiles",
+      "components": {
+        "LocalTransform": {},
+        "TilemapLayer": { "map": "guid:27f07534-5f6c-4f9a-849c-17470d83e260" }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Ground 0-9",
+      "components": {
+        "Collider2D": { "shape": { "half": [5, 1] }, "density": 0 },
+        "LocalTransform": { "position": [5, 1, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 10,
+      "name": "Ground 10-13",
+      "components": {
+        "Collider2D": { "shape": { "half": [2, 2] }, "density": 0 },
+        "LocalTransform": { "position": [12, 2, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 11,
+      "name": "Ground 14-19",
+      "components": {
+        "Collider2D": { "shape": { "half": [3, 1] }, "density": 0 },
+        "LocalTransform": { "position": [17, 1, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 12,
+      "name": "Ground 20-22",
+      "components": {
+        "Collider2D": { "shape": { "half": [1.5, 2] }, "density": 0 },
+        "LocalTransform": { "position": [21.5, 2, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 13,
+      "name": "Ground 23-27",
+      "components": {
+        "Collider2D": { "shape": { "half": [2.5, 1.5] }, "density": 0 },
+        "LocalTransform": { "position": [25.5, 1.5, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 14,
+      "name": "Ground 28-33",
+      "components": {
+        "Collider2D": { "shape": { "half": [3, 0.5] }, "density": 0 },
+        "LocalTransform": { "position": [31, 0.5, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 15,
+      "name": "Ground 34-39",
+      "components": {
+        "Collider2D": { "shape": { "half": [3, 1.5] }, "density": 0 },
+        "LocalTransform": { "position": [37, 1.5, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 16,
+      "name": "Ground 40-46",
+      "components": {
+        "Collider2D": { "shape": { "half": [3.5, 1] }, "density": 0 },
+        "LocalTransform": { "position": [43.5, 1, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 17,
+      "name": "Ground 47-50",
+      "components": {
+        "Collider2D": { "shape": { "half": [2, 2] }, "density": 0 },
+        "LocalTransform": { "position": [49, 2, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 18,
+      "name": "Ground 51-55",
+      "components": {
+        "Collider2D": { "shape": { "half": [2.5, 2.5] }, "density": 0 },
+        "LocalTransform": { "position": [53.5, 2.5, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 19,
+      "name": "Ground 56-60",
+      "components": {
+        "Collider2D": { "shape": { "half": [2.5, 1.5] }, "density": 0 },
+        "LocalTransform": { "position": [58.5, 1.5, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 20,
+      "name": "Ground 61-66",
+      "components": {
+        "Collider2D": { "shape": { "half": [3, 1] }, "density": 0 },
+        "LocalTransform": { "position": [64, 1, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 21,
+      "name": "Ground 67-79",
+      "components": {
+        "Collider2D": { "shape": { "half": [6.5, 2] }, "density": 0 },
+        "LocalTransform": { "position": [73.5, 2, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 22,
+      "name": "Wall Left",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.5, 10] }, "density": 0 },
+        "LocalTransform": { "position": [-0.5, 10, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 23,
+      "name": "Wall Right",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.5, 10] }, "density": 0 },
+        "LocalTransform": { "position": [80.5, 10, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "id": 24,
+      "name": "Flower 1",
+      "components": {
+        "LocalTransform": { "position": [4.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:a64caeaa-9a39-4af2-ac2a-a6825e7ab3e8", "layer": 3 }
+      }
+    },
+    {
+      "id": 25,
+      "name": "Flower 2",
+      "components": {
+        "LocalTransform": { "position": [8.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:6e07ac6c-f8e3-44f9-9b8f-da1b4f10411a", "layer": 3 }
+      }
+    },
+    {
+      "id": 26,
+      "name": "Flower 3",
+      "components": {
+        "LocalTransform": { "position": [14.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:a64caeaa-9a39-4af2-ac2a-a6825e7ab3e8", "layer": 3 }
+      }
+    },
+    {
+      "id": 27,
+      "name": "Flower 4",
+      "components": {
+        "LocalTransform": { "position": [19.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:6e07ac6c-f8e3-44f9-9b8f-da1b4f10411a", "layer": 3 }
+      }
+    },
+    {
+      "id": 28,
+      "name": "Flower 5",
+      "components": {
+        "LocalTransform": { "position": [25.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:a64caeaa-9a39-4af2-ac2a-a6825e7ab3e8", "layer": 3 }
+      }
+    },
+    {
+      "id": 29,
+      "name": "Flower 6",
+      "components": {
+        "LocalTransform": { "position": [28.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:6e07ac6c-f8e3-44f9-9b8f-da1b4f10411a", "layer": 3 }
+      }
+    },
+    {
+      "id": 30,
+      "name": "Flower 7",
+      "components": {
+        "LocalTransform": { "position": [33.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:a64caeaa-9a39-4af2-ac2a-a6825e7ab3e8", "layer": 3 }
+      }
+    },
+    {
+      "id": 31,
+      "name": "Flower 8",
+      "components": {
+        "LocalTransform": { "position": [36.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:6e07ac6c-f8e3-44f9-9b8f-da1b4f10411a", "layer": 3 }
+      }
+    },
+    {
+      "id": 32,
+      "name": "Flower 9",
+      "components": {
+        "LocalTransform": { "position": [40.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:a64caeaa-9a39-4af2-ac2a-a6825e7ab3e8", "layer": 3 }
+      }
+    },
+    {
+      "id": 33,
+      "name": "Flower 10",
+      "components": {
+        "LocalTransform": { "position": [45.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:6e07ac6c-f8e3-44f9-9b8f-da1b4f10411a", "layer": 3 }
+      }
+    },
+    {
+      "id": 34,
+      "name": "Flower 11",
+      "components": {
+        "LocalTransform": { "position": [56.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:a64caeaa-9a39-4af2-ac2a-a6825e7ab3e8", "layer": 3 }
+      }
+    },
+    {
+      "id": 35,
+      "name": "Flower 12",
+      "components": {
+        "LocalTransform": { "position": [60.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:6e07ac6c-f8e3-44f9-9b8f-da1b4f10411a", "layer": 3 }
+      }
+    },
+    {
+      "id": 36,
+      "name": "Flower 13",
+      "components": {
+        "LocalTransform": { "position": [61.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:a64caeaa-9a39-4af2-ac2a-a6825e7ab3e8", "layer": 3 }
+      }
+    },
+    {
+      "id": 37,
+      "name": "Flower 14",
+      "components": {
+        "LocalTransform": { "position": [66.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:6e07ac6c-f8e3-44f9-9b8f-da1b4f10411a", "layer": 3 }
+      }
+    },
+    {
+      "id": 38,
+      "name": "Flower 15",
+      "components": {
+        "LocalTransform": { "position": [69.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:a64caeaa-9a39-4af2-ac2a-a6825e7ab3e8", "layer": 3 }
+      }
+    },
+    {
+      "id": 39,
+      "name": "Flower 16",
+      "components": {
+        "LocalTransform": { "position": [75.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:6e07ac6c-f8e3-44f9-9b8f-da1b4f10411a", "layer": 3 }
+      }
+    },
+    {
+      "id": 40,
+      "name": "Lantern 1",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.45, 1] }, "density": 0, "is_sensor": true },
+        "Lantern": { "lit_texture": "guid:669f8dff-c16f-4233-a5fe-824b99c60314", "sound": "guid:1187edff-76e7-482b-9ec8-9e3eb9ecdb91" },
+        "LocalTransform": { "position": [12, 4.85, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:732250bd-772f-44c1-84b4-90353ed8fa35", "size": [1.6, 1.75], "layer": 2 }
+      }
+    },
+    {
+      "id": 41,
+      "name": "Lantern 2",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.45, 1] }, "density": 0, "is_sensor": true },
+        "Lantern": { "lit_texture": "guid:669f8dff-c16f-4233-a5fe-824b99c60314", "sound": "guid:1187edff-76e7-482b-9ec8-9e3eb9ecdb91" },
+        "LocalTransform": { "position": [31, 1.85, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:732250bd-772f-44c1-84b4-90353ed8fa35", "size": [1.6, 1.75], "layer": 2 }
+      }
+    },
+    {
+      "id": 42,
+      "name": "Lantern 3",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.45, 1] }, "density": 0, "is_sensor": true },
+        "Lantern": { "lit_texture": "guid:669f8dff-c16f-4233-a5fe-824b99c60314", "sound": "guid:1187edff-76e7-482b-9ec8-9e3eb9ecdb91" },
+        "LocalTransform": { "position": [53, 5.85, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:732250bd-772f-44c1-84b4-90353ed8fa35", "size": [1.6, 1.75], "layer": 2 }
+      }
+    },
+    {
+      "id": 43,
+      "name": "Gate",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.7, 1.2] }, "density": 0, "is_sensor": true },
+        "LocalTransform": { "position": [77.5, 5.25, 0] },
+        "MoonGate": { "open_texture": "guid:9e036a58-f6df-4a55-8238-12936e09b6fd", "open_sound": "guid:ebd0f271-ed0e-4c82-8dc9-20664ea8b8c2", "enter_sound": "guid:596cafcb-5ccd-4150-abf1-4b42878bdc3e", "next_scene": "scenes/win.mcscene" },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:752be1cb-74c0-4d55-9368-648e888b0f44", "size": [2, 2.5], "layer": 1 }
+      }
+    },
+    {
+      "id": 44,
+      "name": "Bat 1",
+      "components": {
+        "AnimatedSprite": { "sheet": "guid:eed3502e-2313-4df5-b283-b244498af442", "clip": "fly" },
+        "Bat": { "extent": [2.5, 1.5], "half": [0.45, 0.3], "period": 2.4, "phase": 5.26 },
+        "LocalTransform": { "position": [17, 4, 0] },
+        "Sprite": { "texture": "guid:8efd1be0-2ee2-4ba2-be8c-0df9e3e9f141", "size": [1.25, 0.95], "layer": 8 }
+      }
+    },
+    {
+      "id": 45,
+      "name": "Bat 2",
+      "components": {
+        "AnimatedSprite": { "sheet": "guid:eed3502e-2313-4df5-b283-b244498af442", "clip": "fly" },
+        "Bat": { "extent": [2.5, 1.5], "half": [0.45, 0.3], "period": 2.2, "phase": 3.49 },
+        "LocalTransform": { "position": [30.5, 3, 0] },
+        "Sprite": { "texture": "guid:8efd1be0-2ee2-4ba2-be8c-0df9e3e9f141", "size": [1.25, 0.95], "layer": 8 }
+      }
+    },
+    {
+      "id": 46,
+      "name": "Bat 3",
+      "components": {
+        "AnimatedSprite": { "sheet": "guid:eed3502e-2313-4df5-b283-b244498af442", "clip": "fly" },
+        "Bat": { "extent": [3, 1.5], "half": [0.45, 0.3], "period": 2, "phase": 4.03 },
+        "LocalTransform": { "position": [43, 4, 0] },
+        "Sprite": { "texture": "guid:8efd1be0-2ee2-4ba2-be8c-0df9e3e9f141", "size": [1.25, 0.95], "layer": 8 }
+      }
+    },
+    {
+      "id": 47,
+      "name": "Bat 4",
+      "components": {
+        "AnimatedSprite": { "sheet": "guid:eed3502e-2313-4df5-b283-b244498af442", "clip": "fly" },
+        "Bat": { "extent": [2, 1.5], "half": [0.45, 0.3], "period": 1.8, "phase": 1.17 },
+        "LocalTransform": { "position": [58, 5, 0] },
+        "Sprite": { "texture": "guid:8efd1be0-2ee2-4ba2-be8c-0df9e3e9f141", "size": [1.25, 0.95], "layer": 8 }
+      }
+    },
+    {
+      "id": 48,
+      "name": "Bat 5",
+      "components": {
+        "AnimatedSprite": { "sheet": "guid:eed3502e-2313-4df5-b283-b244498af442", "clip": "fly" },
+        "Bat": { "extent": [2.5, 1.5], "half": [0.45, 0.3], "period": 2.2, "phase": 6.23 },
+        "LocalTransform": { "position": [64, 4, 0] },
+        "Sprite": { "texture": "guid:8efd1be0-2ee2-4ba2-be8c-0df9e3e9f141", "size": [1.25, 0.95], "layer": 8 }
+      }
+    },
+    {
+      "id": 49,
+      "name": "Bat 6",
+      "components": {
+        "AnimatedSprite": { "sheet": "guid:eed3502e-2313-4df5-b283-b244498af442", "clip": "fly" },
+        "Bat": { "extent": [3, 1.4], "half": [0.45, 0.3], "period": 2.5, "phase": 5.4 },
+        "LocalTransform": { "position": [72.5, 6.2, 0] },
+        "Sprite": { "texture": "guid:8efd1be0-2ee2-4ba2-be8c-0df9e3e9f141", "size": [1.25, 0.95], "layer": 8 }
+      }
+    },
+    {
+      "id": 50,
+      "name": "Moth",
+      "components": {
+        "AnimatedSprite": { "sheet": "guid:229d194d-191b-4c1c-97e8-3f6128607894", "clip": "flutter" },
+        "CharacterController2D": {},
+        "Collider2D": { "shape": { "half": [0.35, 0.35] }, "density": 0 },
+        "LocalTransform": { "position": [2.5, 2.36, 0] },
+        "MothController": { "jump_sound": "guid:d6b19652-70bc-42f7-bc6f-16cd881f2489", "flap_sound": "guid:dfc97d14-6113-46eb-b597-123f628d23ca", "hurt_sound": "guid:e810cd40-9a69-4d28-8ed1-7306fe081a75", "jump_speed": 12, "flap_speed": 9 },
+        "RigidBody2D": { "type": "Kinematic", "fixed_rotation": true, "layer": 1, "mask": 9, "gravity_scale": 0 },
+        "Sprite": { "texture": "guid:9f70e863-b39c-4caa-9efe-6d09c3e19af5", "layer": 10 }
+      }
+    }
+  ]
+}

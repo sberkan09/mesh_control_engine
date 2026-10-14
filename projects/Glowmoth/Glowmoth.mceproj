@@ -1,0 +1,10 @@
+{
+  "format": "mce-project",
+  "version": 1,
+  "name": "Glowmoth",
+  "title": "Glowmoth",
+  "engine_version": "0.9.0",
+  "games": ["glowmoth"],
+  "start_scene": "44439102-8289-4ff2-87da-f0d2b0666183",
+  "plugins": []
+}

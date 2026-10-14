@@ -1,0 +1,22 @@
+{
+ "name": "doing nothing for 90 s loses",
+ "scene": "scenes/garden.mcscene",
+ "ticks": 5700,
+ "until": {
+  "scene": "scenes/lose.mcscene"
+ },
+ "assert": [
+  {
+   "scene": "scenes/lose.mcscene"
+  },
+  {
+   "entity": "Game",
+   "field": "GardenGame.time_left",
+   "<=": 0.01,
+   "tick": 5450
+  },
+  {
+   "log_errors": 0
+  }
+ ]
+}

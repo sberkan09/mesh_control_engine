@@ -1,0 +1,43 @@
+{
+  "name": "a walk_to bot gets through level 2's bats to the win screen",
+  "scene": "scenes/level2.mcscene",
+  "ticks": 3600,
+  "bot": {
+    "kind": "walk_to",
+    "actor": "Moth",
+    "target": [
+      85,
+      5
+    ],
+    "plane": "x"
+  },
+  "until": {
+    "scene": "scenes/win.mcscene"
+  },
+  "assert": [
+    {
+      "scene": "scenes/win.mcscene"
+    },
+    {
+      "feel": "finished_tick",
+      ">": 0
+    },
+    {
+      "feel": "finished_tick",
+      "<=": 2400
+    },
+    {
+      "log_contains": "lantern lit (3/3)"
+    },
+    {
+      "log_contains": "level complete"
+    },
+    {
+      "feel": "deaths",
+      "<=": 1
+    },
+    {
+      "log_errors": 0
+    }
+  ]
+}

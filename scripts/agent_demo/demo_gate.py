@@ -4,6 +4,8 @@
     demo_gate.py --mcp <game>_mcp --project projects/<Name> --tests      every .mctest under tests/ passes
     demo_gate.py --mcp <game>_mcp --project projects/<Name> --goldens    each goldens/goldens.json frame matches
 
+--work <dir> plays a fresh copy of the project there (the source folder gets no cooked/ or .mce/).
+
 goldens/goldens.json lists the frames the agents kept as goldens, with the render_frame arguments
 that make each one: [{"golden": "goldens/title.png", "render": {"scene": "scenes/title.mcscene",
 "tick": 30}, "max_score": 0.02}]. A missing golden fails the gate (image_diff would adopt it).
@@ -13,8 +15,12 @@ Exit code 0 when every selected gate holds.
 import argparse
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
+
+# What a copy leaves out: build outputs and the server's own state.
+SKIP = {"build", "cooked", "dist", ".mce", "assets.mce", ".mcp.json"}
 
 
 class Server:
@@ -86,9 +92,14 @@ def main():
     ap.add_argument("--project", required=True, type=pathlib.Path)
     ap.add_argument("--tests", action="store_true")
     ap.add_argument("--goldens", action="store_true")
+    ap.add_argument("--work", type=pathlib.Path, help="copy the project here first and play the copy")
     a = ap.parse_args()
     if not (a.tests or a.goldens):
         ap.error("pick --tests and/or --goldens")
+    if a.work:
+        shutil.rmtree(a.work, ignore_errors=True)
+        shutil.copytree(a.project, a.work, ignore=lambda d, names: [n for n in names if n in SKIP])
+        a.project = a.work
     problems = []
     s = Server(a.mcp, a.project.resolve())
     try:

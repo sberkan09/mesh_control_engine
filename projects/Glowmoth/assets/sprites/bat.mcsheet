@@ -1,0 +1,17 @@
+{
+  "format": "mce-spritesheet",
+  "version": 1,
+  "guid": "eed3502e-2313-4df5-b283-b244498af442",
+  "name": "bat",
+  "texture": "guid:8efd1be0-2ee2-4ba2-be8c-0df9e3e9f141",
+  "grid": {
+    "columns": 2,
+    "rows": 1
+  },
+  "clips": [{
+      "fps": 6,
+      "frames": [0, 1],
+      "mode": "Loop",
+      "name": "fly"
+    }]
+}

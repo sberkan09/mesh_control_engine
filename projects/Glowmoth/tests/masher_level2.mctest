@@ -1,0 +1,22 @@
+{
+  "name": "random chords on level 2 log no errors",
+  "scene": "scenes/level2.mcscene",
+  "ticks": 4000,
+  "bot": {
+    "kind": "masher",
+    "actor": "Moth",
+    "actions": [
+      "Move",
+      "Jump",
+      "Fire",
+      "Confirm",
+      "Cancel"
+    ],
+    "seed": 7
+  },
+  "assert": [
+    {
+      "log_errors": 0
+    }
+  ]
+}

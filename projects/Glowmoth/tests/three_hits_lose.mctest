@@ -1,0 +1,1282 @@
+{
+  "name": "hopping blindly into level 2's bats loses after three hits",
+  "scene": "scenes/level2.mcscene",
+  "ticks": 3000,
+  "input": [
+    {
+      "from": 1,
+      "to": 18,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 19,
+      "to": 50,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 51,
+      "to": 68,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 69,
+      "to": 100,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 101,
+      "to": 118,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 119,
+      "to": 150,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 151,
+      "to": 168,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 169,
+      "to": 200,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 201,
+      "to": 218,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 219,
+      "to": 250,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 251,
+      "to": 268,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 269,
+      "to": 300,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 301,
+      "to": 318,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 319,
+      "to": 350,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 351,
+      "to": 368,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 369,
+      "to": 400,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 401,
+      "to": 418,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 419,
+      "to": 450,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 451,
+      "to": 468,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 469,
+      "to": 500,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 501,
+      "to": 518,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 519,
+      "to": 550,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 551,
+      "to": 568,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 569,
+      "to": 600,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 601,
+      "to": 618,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 619,
+      "to": 650,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 651,
+      "to": 668,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 669,
+      "to": 700,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 701,
+      "to": 718,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 719,
+      "to": 750,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 751,
+      "to": 768,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 769,
+      "to": 800,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 801,
+      "to": 818,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 819,
+      "to": 850,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 851,
+      "to": 868,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 869,
+      "to": 900,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 901,
+      "to": 918,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 919,
+      "to": 950,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 951,
+      "to": 968,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 969,
+      "to": 1000,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1001,
+      "to": 1018,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1019,
+      "to": 1050,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1051,
+      "to": 1068,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1069,
+      "to": 1100,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1101,
+      "to": 1118,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1119,
+      "to": 1150,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1151,
+      "to": 1168,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1169,
+      "to": 1200,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1201,
+      "to": 1218,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1219,
+      "to": 1250,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1251,
+      "to": 1268,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1269,
+      "to": 1300,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1301,
+      "to": 1318,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1319,
+      "to": 1350,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1351,
+      "to": 1368,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1369,
+      "to": 1400,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1401,
+      "to": 1418,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1419,
+      "to": 1450,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1451,
+      "to": 1468,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1469,
+      "to": 1500,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1501,
+      "to": 1518,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1519,
+      "to": 1550,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1551,
+      "to": 1568,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1569,
+      "to": 1600,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1601,
+      "to": 1618,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1619,
+      "to": 1650,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1651,
+      "to": 1668,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1669,
+      "to": 1700,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1701,
+      "to": 1718,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1719,
+      "to": 1750,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1751,
+      "to": 1768,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1769,
+      "to": 1800,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1801,
+      "to": 1818,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1819,
+      "to": 1850,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1851,
+      "to": 1868,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1869,
+      "to": 1900,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1901,
+      "to": 1918,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1919,
+      "to": 1950,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1951,
+      "to": 1968,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1969,
+      "to": 2000,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2001,
+      "to": 2018,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2019,
+      "to": 2050,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2051,
+      "to": 2068,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2069,
+      "to": 2100,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2101,
+      "to": 2118,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2119,
+      "to": 2150,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2151,
+      "to": 2168,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2169,
+      "to": 2200,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2201,
+      "to": 2218,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2219,
+      "to": 2250,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2251,
+      "to": 2268,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2269,
+      "to": 2300,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2301,
+      "to": 2318,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2319,
+      "to": 2350,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2351,
+      "to": 2368,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2369,
+      "to": 2400,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2401,
+      "to": 2418,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2419,
+      "to": 2450,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2451,
+      "to": 2468,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2469,
+      "to": 2500,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2501,
+      "to": 2518,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2519,
+      "to": 2550,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2551,
+      "to": 2568,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2569,
+      "to": 2600,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2601,
+      "to": 2618,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2619,
+      "to": 2650,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2651,
+      "to": 2668,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2669,
+      "to": 2700,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2701,
+      "to": 2718,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2719,
+      "to": 2750,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2751,
+      "to": 2768,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2769,
+      "to": 2800,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2801,
+      "to": 2818,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2819,
+      "to": 2850,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2851,
+      "to": 2868,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2869,
+      "to": 2900,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2901,
+      "to": 2918,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2919,
+      "to": 2950,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 2951,
+      "to": 2968,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 2969,
+      "to": 3000,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    }
+  ],
+  "actor": "Moth",
+  "until": {
+    "scene": "scenes/lose.mcscene"
+  },
+  "assert": [
+    {
+      "scene": "scenes/lose.mcscene"
+    },
+    {
+      "log_contains": "hit by a bat (3/3)"
+    },
+    {
+      "log_errors": 0
+    }
+  ]
+}
