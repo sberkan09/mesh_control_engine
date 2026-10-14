@@ -61,6 +61,14 @@ u32 attach_virtual_gamepad(const char* name = "MCE Virtual Gamepad");
 void detach_virtual_gamepad(u32 id);
 void set_virtual_gamepad_button(u32 id, GamepadButton b, bool down);
 void set_virtual_gamepad_axis(u32 id, GamepadAxis a, f32 value);  // same ranges as GamepadAxis events
+// What rumble did to a virtual pad: its motors now (0..1; SDL zeroes them when the duration ends)
+// and how many rumbles started on it.
+struct VirtualRumble {
+    f32 low = 0.f;
+    f32 high = 0.f;
+    u32 count = 0;
+};
+VirtualRumble virtual_gamepad_rumble(u32 id);
 
 // A synthetic finger (M-MOBILE): queues an OS-level touch event for `window_id` that the next
 // pump_events() turns into Touch{Down,Move,Up} with slot assignment, as for a real screen. Any

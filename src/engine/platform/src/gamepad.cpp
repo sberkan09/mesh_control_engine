@@ -25,8 +25,20 @@ constexpr u32 kMaxVirtualPads = 8;
 struct VirtualPad {
     SDL_JoystickID id = 0;
     SDL_Joystick* joy = nullptr;
+    bool reserved = false;
+    VirtualRumble rumble;  // the motors as the last rumble set them
 };
 VirtualPad g_virtual[kMaxVirtualPads];
+
+// SDL's rumble callback for a virtual pad: SDL_RumbleGamepad starts it, and SDL sets 0, 0 when the
+// duration runs out.
+bool SDLCALL virtual_rumble(void* user, Uint16 low, Uint16 high) {
+    auto* v = static_cast<VirtualPad*>(user);
+    v->rumble.low = static_cast<f32>(low) / 65535.f;
+    v->rumble.high = static_cast<f32>(high) / 65535.f;
+    if (low || high) ++v->rumble.count;
+    return true;
+}
 
 }  // namespace
 
@@ -111,28 +123,47 @@ u32 attach_virtual_gamepad(const char* name) {
     d.button_mask = (1u << SDL_GAMEPAD_BUTTON_COUNT) - 1u;
     d.axis_mask = (1u << SDL_GAMEPAD_AXIS_COUNT) - 1u;
     d.name = name;
+    VirtualPad* slot = nullptr;
+    for (VirtualPad& v : g_virtual)
+        if (!v.reserved) {
+            slot = &v;
+            break;
+        }
+    if (!slot) {
+        MCE_LOG_ERROR("platform: virtual gamepad: all {} in use", kMaxVirtualPads);
+        return 0;
+    }
+    *slot = VirtualPad{};
+    slot->reserved = true;
+    d.userdata = slot;
+    d.Rumble = &virtual_rumble;
     const SDL_JoystickID id = SDL_AttachVirtualJoystick(&d);
     if (id == 0) {
         MCE_LOG_ERROR("platform: virtual gamepad: {}", SDL_GetError());
+        slot->reserved = false;
         return 0;
     }
     // Open the joystick side once so the setters have a device to write into.
-    for (VirtualPad& v : g_virtual)
-        if (!v.joy) {
-            v.id = id;
-            v.joy = SDL_OpenJoystick(id);
-            break;
-        }
+    slot->id = id;
+    slot->joy = SDL_OpenJoystick(id);
     return id;
 }
 
 void detach_virtual_gamepad(u32 id) {
     for (VirtualPad& v : g_virtual)
-        if (v.id == id && v.joy) {
-            SDL_CloseJoystick(v.joy);
+        if (v.id == id && v.reserved) {
+            if (v.joy) SDL_CloseJoystick(v.joy);
+            SDL_DetachVirtualJoystick(id);
             v = VirtualPad{};
+            return;
         }
     SDL_DetachVirtualJoystick(id);
+}
+
+VirtualRumble virtual_gamepad_rumble(u32 id) {
+    for (const VirtualPad& v : g_virtual)
+        if (v.id == id && v.reserved) return v.rumble;
+    return {};
 }
 
 void set_virtual_gamepad_button(u32 id, GamepadButton b, bool down) {
