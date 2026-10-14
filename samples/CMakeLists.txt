@@ -32,7 +32,7 @@ function(mce_sample_pack target)
 endfunction()
 if(MCE_MOBILE)
     # Phones (M-MOBILE): the windowed samples that ship as apps; headless and tool demos stay desktop.
-    foreach(_sample 01_triangle sprites_2d 03_platformer 04_diorama 04_cubes 05_ashen_court)
+    foreach(_sample 01_triangle sprites_2d 03_platformer 04_diorama 04_cubes 05_ashen_court shop_demo)
         add_subdirectory(${_sample})
     endforeach()
     return()

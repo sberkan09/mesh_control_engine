@@ -9,7 +9,7 @@ engine executable is <target>.app with SDL's UIKit entry point). This module cop
 pack (assets.mce) and CREDITS.md in the bundle root, where platform::base_path() (SDL_GetBasePath, the
 bundle's resource directory) finds them, sets the display name, and signs it:
 
-- Simulator builds: ad-hoc (codesign -s -); the result is a zipped .app for `xcrun simctl install`.
+- Simulator builds: ad-hoc (codesign -s -) as development installs (get-task-allow); the result is a zipped .app for `xcrun simctl install`.
 - Device builds: MCE_IOS_SIGN_IDENTITY (e.g. "Apple Development: Name (TEAMID)") and
   MCE_IOS_PROVISIONING_PROFILE (a .mobileprovision whose app id matches the bundle id, default
   org.meshcontrol.<target>, see MCE_IOS_BUNDLE_PREFIX) are required; the profile is embedded, its
@@ -157,7 +157,13 @@ def package(art, args, root):
         run(["strip", "-x", exe])
 
     if sim:
-        run(["codesign", "--force", "--sign", "-", "--timestamp=none", app])
+        # A development install, as Xcode signs it: the macOS-side key here, the iOS one in the binary's
+        # __entitlements section (cmake/MceMobile.cmake). StoreKit testing needs both.
+        with tempfile.TemporaryDirectory() as tmp:
+            ent = os.path.join(tmp, "entitlements.plist")
+            with open(ent, "wb") as f:
+                plistlib.dump({"com.apple.security.get-task-allow": True}, f)
+            run(["codesign", "--force", "--sign", "-", "--entitlements", ent, "--timestamp=none", app])
         out = os.path.join(args.out, stem + ".zip")
         shutil.rmtree(out, ignore_errors=True)
         run(["ditto", "-c", "-k", "--keepParent", app, out])

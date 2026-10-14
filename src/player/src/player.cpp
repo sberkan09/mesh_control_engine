@@ -59,8 +59,12 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 #include <optional>
 
 #include "hud_font.h"
@@ -105,6 +109,29 @@
 #include "ship_paths.h"
 
 namespace {
+
+// One -monetize_test line on stdout. An Android app's stdout goes nowhere, so there it also goes to
+// the log (logcat), where a device check reads it.
+#if defined(__GNUC__)
+__attribute__((format(printf, 1, 2)))
+#endif
+void monetize_say(const char* fmt, ...) {
+    char line[512];
+    va_list args;
+    va_start(args, fmt);
+    std::vsnprintf(line, sizeof(line), fmt, args);
+    va_end(args);
+    std::printf("%s\n", line);
+#if defined(__ANDROID__)
+    MCE_LOG_INFO("{}", line);
+#endif
+}
+
+#if defined(__ANDROID__) || (defined(__APPLE__) && TARGET_OS_IPHONE)
+constexpr bool kPhone = true;
+#else
+constexpr bool kPhone = false;
+#endif
 
 using namespace mce;
 using namespace mce::math;
@@ -322,7 +349,7 @@ public:
             update_ad_pause();
         }
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
-        if (paused_ || ad_paused_) return;
+        if (paused_ || ad_paused_ || overlay_paused_) return;
         tick_dt_ = t.dt;
         if (t.actions) input::publish(world_, *t.actions);
         publish_view_info();
@@ -959,7 +986,7 @@ private:
         if (!monetize_test_.empty()) {
             const monetize::Store& st = world_.resource<monetize::Store>();
             for (const monetize::ProductInfo& p : st.products())
-                if (st.owns(p.id.view())) std::printf("mce_player: monetize: owns %s\n", p.id.c_str());
+                if (st.owns(p.id.view())) monetize_say("mce_player: monetize: owns %s", p.id.c_str());
         }
         return ok();
     }
@@ -1017,7 +1044,7 @@ private:
             else if (a == "show") req = ads.show(s.id.view());
             else if (a == "banner") req = ads.show_banner(s.id.view());
             else if (a == "hide") ads.hide_banner();
-            std::printf("mce_player: monetize tick %llu: %s %s -> request %u\n", static_cast<unsigned long long>(sim_ticks_),
+            monetize_say("mce_player: monetize tick %llu: %s %s -> request %u", static_cast<unsigned long long>(sim_ticks_),
                         s.action.c_str(), s.id.c_str(), req);
         }
     }
@@ -1030,13 +1057,9 @@ private:
         if (auto* q = world_.event_queue<monetize::StoreEvent>()) {
             for (const monetize::StoreEvent& e : q->read()) {
                 const char* id = e.product < store.products().size() ? store.products()[e.product].id.c_str() : "-";
-                std::printf("mce_player: monetize tick %llu: store %s %s request %u", tick, monetize::store_event_name(e.kind), id,
-                            e.request);
-                if (e.kind == monetize::StoreEventKind::ProductInfo) {
-                    const StringView price = store.price(e.product);
-                    std::printf(" price %.*s", static_cast<int>(price.size()), price.data());
-                }
-                std::printf("\n");
+                const StringView price = e.kind == monetize::StoreEventKind::ProductInfo ? store.price(e.product) : StringView();
+                monetize_say("mce_player: monetize tick %llu: store %s %s request %u%s%.*s", tick, monetize::store_event_name(e.kind),
+                             id, e.request, price.empty() ? "" : " price ", static_cast<int>(price.size()), price.data());
                 if (e.kind == monetize::StoreEventKind::Purchased && e.product < store.products().size() &&
                     store.products()[e.product].type == monetize::ProductType::Consumable)
                     store.finish(e.transaction);
@@ -1045,10 +1068,10 @@ private:
         if (auto* q = world_.event_queue<monetize::AdEvent>()) {
             for (const monetize::AdEvent& e : q->read()) {
                 const char* id = e.placement < ads.placements().size() ? ads.placements()[e.placement].id.c_str() : "-";
-                std::printf("mce_player: monetize tick %llu: ad %s %s request %u", tick, monetize::ad_event_name(e.kind), id,
-                            e.request);
-                if (e.kind == monetize::AdEventKind::Rewarded) std::printf(" reward %u", e.reward_amount);
-                std::printf("\n");
+                char reward[32] = "";
+                if (e.kind == monetize::AdEventKind::Rewarded) std::snprintf(reward, sizeof(reward), " reward %u", e.reward_amount);
+                monetize_say("mce_player: monetize tick %llu: ad %s %s request %u%s", tick, monetize::ad_event_name(e.kind), id,
+                             e.request, reward);
             }
         }
     }
@@ -1328,7 +1351,12 @@ private:
         unfocused_ = background;
         if (!cv_pause_on_focus_loss.get_bool() || background == background_) return;
         background_ = background;
-        if (background) paused_ = true;
+        // On a phone the app keeps the foreground when the store's or the ad network's own screen takes
+        // the focus (a purchase sheet, a fullscreen ad, the consent form, the ATT prompt): the sim waits
+        // like under an ad and goes on when the focus comes back, with no pause overlay to tap away.
+        // Leaving the app is AppBackground (on_lifecycle), which pauses with the overlay.
+        if (kPhone && monetize_on_) overlay_paused_ = background;
+        else if (background) paused_ = true;
         set_muted(background);
     }
 
@@ -1498,6 +1526,7 @@ private:
     bool fullscreen_ = false;  // what cv_fullscreen last applied
     bool os_background_ = false;  // the app itself is in the background (phones): no drawing at all
     bool ad_paused_ = false;      // a fullscreen ad covers the game (PlayerDesc::monetize)
+    bool overlay_paused_ = false;  // phones: a store / ad / consent screen has the focus (set_background)
     platform::SafeInsets safe_insets_;
     u64 lifecycle_from_ = 0, lifecycle_ticks_ = 0;  // -lifecycle_test
     u32 paused_touches_ = 0;  // finger slots that went down on the pause overlay

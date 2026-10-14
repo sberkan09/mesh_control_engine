@@ -84,5 +84,13 @@ if(IOS)
             MACOSX_BUNDLE_BUNDLE_NAME "${name}"
             MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
             MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+        # Simulator builds are development installs, as Xcode makes them: the iOS entitlements a
+        # Simulator app has live in this section (get-task-allow; StoreKit testing refuses apps
+        # without it, M-MONETIZE). Device builds take theirs from the provisioning profile instead.
+        if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+            target_link_options(${name} PRIVATE
+                "SHELL:-Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker \"${MCE_IOS_DIR}/Simulator.entitlements\"")
+            set_property(TARGET ${name} APPEND PROPERTY LINK_DEPENDS "${MCE_IOS_DIR}/Simulator.entitlements")
+        endif()
     endfunction()
 endif()

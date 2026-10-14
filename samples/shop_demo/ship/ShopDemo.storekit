@@ -1,0 +1,32 @@
+{
+  "identifier" : "5D000000-0000-4000-8000-0000000000A3",
+  "nonRenewingSubscriptions" : [ ],
+  "products" : [
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "5D0000A4",
+      "localizations" : [ { "description" : "100 gems", "displayName" : "Gems 100", "locale" : "en_US" } ],
+      "productID" : "org.meshcontrol.shopdemo.gems_100",
+      "referenceName" : "Gems 100",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "2.99",
+      "familyShareable" : false,
+      "internalID" : "5D0000A5",
+      "localizations" : [ { "description" : "No more ads", "displayName" : "Remove Ads", "locale" : "en_US" } ],
+      "productID" : "org.meshcontrol.shopdemo.remove_ads",
+      "referenceName" : "Remove Ads",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [ ]
+  },
+  "subscriptionGroups" : [ ],
+  "version" : { "major" : 4, "minor" : 0 }
+}

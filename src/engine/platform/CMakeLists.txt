@@ -82,3 +82,18 @@ if(IOS AND MCE_ADMOB)
     target_link_libraries(mce_platform PRIVATE "-framework GoogleMobileAds" "-framework UserMessagingPlatform"
         "-framework AppTrackingTransparency" "-framework UIKit")
 endif()
+
+# The app links mce_platform's Swift objects with clang++, which does not look where the Swift
+# toolchain keeps its back-deployment libraries (libswiftCompatibility*.a). Our own objects only
+# warn; Google Mobile Ads force-loads them, so without this folder the app fails to link.
+get_property(_mce_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
+if(IOS AND "Swift" IN_LIST _mce_languages)
+    execute_process(COMMAND xcrun --find swiftc OUTPUT_VARIABLE _mce_swiftc OUTPUT_STRIP_TRAILING_WHITESPACE)
+    get_filename_component(_mce_swift_bin "${_mce_swiftc}" DIRECTORY)
+    if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+        set(_mce_swift_platform iphonesimulator)
+    else()
+        set(_mce_swift_platform iphoneos)
+    endif()
+    target_link_options(mce_platform INTERFACE "-L${_mce_swift_bin}/../lib/swift/${_mce_swift_platform}")
+endif()
