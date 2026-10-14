@@ -3,7 +3,7 @@
 // (rhi-renderer.md §3.3): FrameU 0, PassU 1, ObjectU 3; std430 Clusters 4, LightPool 5,
 // LightIndices 6, JointPalette 7 (skinned vertex shaders); samplers albedo 6, normal 7, ORM 8,
 // shadow cascades 9, sky 10, emissive 13; image-based lighting (M-VISUAL 2): pre-filtered sky 12,
-// BRDF LUT 14, SH9 irradiance 15.
+// BRDF LUT 14, SH9 irradiance 15; screen-space ambient occlusion (M-VISUAL 3) 11.
 // The C++ mirrors of the blocks live in forward3d.cpp and must match member for member.
 
 namespace mce::render::shaders3d {
@@ -43,6 +43,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_probe_pos[4];   // capture position, w: intensity
     vec4 p_probe_min[4];   // box, w: blend distance
     vec4 p_probe_max[4];   // box, w: first u_env layer (sharp capture, then the pre-filtered layers)
+    vec4 p_ao;             // x: screen-space ambient occlusion on (M-VISUAL 3)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -199,6 +200,7 @@ layout(binding = 7) uniform sampler2DArray u_normal_map;
 layout(binding = 8) uniform sampler2DArray u_orm;
 layout(binding = 9) uniform sampler2DArrayShadow u_shadow;
 layout(binding = 13) uniform sampler2DArray u_emissive;
+layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility
 layout(std430, binding = 4) readonly buffer Clusters { uvec2 c_ranges[]; };
 struct Light { vec4 pos_radius; vec4 color; vec4 spot; };
 layout(std430, binding = 5) readonly buffer LightPool { Light l_lights[]; };
@@ -362,6 +364,10 @@ void main() {
             amb_diffuse = mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
             amb_spec = sky_radiance(r, rough * 8.0) * env_brdf(f0, rough, NoV) * p_sky_horizon.w * horizon * horizon;
         }
+        if (p_ao.x > 0.5) {  // SSAO darkens the ambient only; the screen position as the full-screen passes see it
+            vec4 c = u_view_proj * vec4(v_world, 1.0);
+            ao *= textureLod(u_ao, c.xy / c.w * 0.5 + 0.5, 0.0).r;
+        }
         color += (amb_diffuse * mix(0.55, 1.0, sh * clamp(dot(n, l), 0.0, 1.0)) + amb_spec) * ao;
     }
     vec3 emissive = o_emissive.rgb;
@@ -391,6 +397,105 @@ void main() { gl_Position = s_mvp * (skin_matrix(s_skin.x) * (s_dequant * vec4(a
 
 constexpr const char* kShadowFS = R"(#version 450 core
 void main() {}
+)";
+
+// ---- screen-space ambient occlusion (M-VISUAL 3), all at half resolution --------------------------
+// Prepass: the opaques' view-space normal (xyz) and view depth (w; 0 = nothing drawn), over kMeshVS
+// or kSkinnedMeshVS, honouring alpha masks.
+constexpr const char* kAoPrepassFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_OBJECT_U R"(
+layout(binding = 6) uniform sampler2DArray u_albedo;
+layout(location = 0) in vec3 v_world;
+layout(location = 1) in vec3 v_normal;
+layout(location = 2) in vec2 v_uv;
+layout(location = 0) out vec4 o_gbuf;
+void main() {
+    if (o_params.x > 0.0 && texture(u_albedo, vec3(v_uv, 0.0)).a * o_base_color.a < o_params.x) discard;
+    vec3 n = normalize(v_normal);
+    if (!gl_FrontFacing) n = -n;
+    o_gbuf = vec4(normalize(mat3(u_view) * n), -(u_view * vec4(v_world, 1.0)).z);
+}
+)";
+
+#define MCE_GLSL_AO_U R"(
+layout(std140, binding = 1) uniform AoU {
+    mat4 a_proj;
+    vec4 a_params;  // x: radius (m), y: intensity, z: power, w: bias (cosine)
+    vec4 a_step;    // xy: blur step in uv (0 for the occlusion pass)
+};
+)"
+
+// Alchemy-style obscurance (McGuire et al. 2011) in a cosine form: 12 samples on a 3-turn spiral of
+// the projected radius, rotated per pixel by a 4x4 Bayer pattern the blur then removes. Each
+// sample in reach occludes by the cosine between the normal and the direction to it.
+constexpr const char* kAoFS = "#version 450 core\n" MCE_GLSL_AO_U R"(
+layout(binding = 6) uniform sampler2D u_gbuf;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_ao;
+vec3 view_pos(vec2 uv, float z) {
+    vec2 ndc = uv * 2.0 - 1.0;
+    return vec3((ndc.x + a_proj[2][0]) * z / a_proj[0][0], (ndc.y + a_proj[2][1]) * z / a_proj[1][1], -z);
+}
+void main() {
+    vec4 g = textureLod(u_gbuf, v_uv, 0.0);
+    if (g.w <= 0.0) {
+        o_ao = vec4(1.0);
+        return;
+    }
+    vec3 p = view_pos(v_uv, g.w);
+    vec3 n = normalize(g.xyz);
+    float r = a_params.x;
+    vec2 ruv = 0.5 * abs(vec2(a_proj[0][0], a_proj[1][1])) * r / g.w;
+    const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+    ivec2 q = ivec2(gl_FragCoord.xy) & 3;
+    float rot = bayer[q.x * 4 + q.y] * (6.2831853 / 16.0);
+    vec2 size = vec2(textureSize(u_gbuf, 0));
+    const int N = 12;
+    float sum = 0.0;
+    for (int i = 0; i < N; ++i) {
+        float t = (float(i) + 0.5) / float(N);
+        float ang = t * (6.2831853 * 3.0) + rot;
+        // Snapped to the texel centre the depth belongs to: off-centre, a tilted plane occludes itself.
+        vec2 uv = (floor((v_uv + vec2(cos(ang), sin(ang)) * ruv * t) * size) + 0.5) / size;
+        vec4 s = textureLod(u_gbuf, uv, 0.0);
+        if (s.w <= 0.0) continue;
+        vec3 v = view_pos(uv, s.w) - p;
+        float vv = dot(v, v);
+        if (vv >= r * r || vv <= 1e-8) continue;
+        float cosine = dot(v, n) * inversesqrt(vv);
+        sum += max(cosine - a_params.w, 0.0) * (1.0 - vv / (r * r));
+    }
+    float vis = clamp(1.0 - a_params.y * 2.0 * sum / float(N), 0.0, 1.0);
+    o_ao = vec4(pow(vis, a_params.z));
+}
+)";
+
+// Depth-aware separable blur: 9 Gaussian taps along a_step, each weighted down by its view-depth
+// difference from the centre, so occlusion does not bleed across silhouettes.
+constexpr const char* kAoBlurFS = "#version 450 core\n" MCE_GLSL_AO_U R"(
+layout(binding = 6) uniform sampler2D u_ao_src;
+layout(binding = 7) uniform sampler2D u_gbuf;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_ao;
+void main() {
+    float z = textureLod(u_gbuf, v_uv, 0.0).w;
+    float c = textureLod(u_ao_src, v_uv, 0.0).r;
+    if (z <= 0.0) {
+        o_ao = vec4(c);
+        return;
+    }
+    const float w[5] = float[5](0.2270270, 0.1945946, 0.1216216, 0.0540541, 0.0162162);
+    float sum = c * w[0], wsum = w[0];
+    for (int i = 1; i <= 4; ++i) {
+        for (int sgn = -1; sgn <= 1; sgn += 2) {
+            vec2 uv = v_uv + a_step.xy * float(i * sgn);
+            float zi = textureLod(u_gbuf, uv, 0.0).w;
+            float wd = w[i] * max(0.0, 1.0 - abs(zi - z) / (0.05 * z));
+            sum += textureLod(u_ao_src, uv, 0.0).r * wd;
+            wsum += wd;
+        }
+    }
+    o_ao = vec4(sum / wsum);
+}
 )";
 
 constexpr const char* kFullscreenVS = R"(#version 450 core

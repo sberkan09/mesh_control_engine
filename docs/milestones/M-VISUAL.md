@@ -1,6 +1,6 @@
 # M-VISUAL — High-end 3D rendering (milestone record)
 
-**Status:** active (step 1 in progress, 2026-10-13). Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
+**Status:** active (steps 1–3 done, 2026-10-14). Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
 **Why:** `Forward3D` suits stylized and low-poly 3D but has no compute path, GI, pre-filtered IBL,
 screen-space effects, local-light shadows or temporal pipeline. Each step below is opt-in, keeps GL as the
 reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leaves today's frame unchanged when off.
@@ -11,7 +11,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 |---|---|---|---|
 | 1 | Compute in the RHI; clustered light build on the GPU | SBA-6 | done: GL, SDL GPU (Vulkan and Metal) and Metal |
 | 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL, IBL texture source and runtime reflection probes, the editor bake and goldens done (all backends, fragment passes); real-GPU numbers on the Mac/device session |
-| 3 | SSAO / GTAO | SBA-8 | — |
+| 3 | SSAO / GTAO | SBA-8 | done: GL and SDL GPU (gated + goldens), Metal binds the stand-in; real-GPU budget on the Mac/device session |
 | 4 | Local-light shadows | SBA-9 | — |
 | 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | — |
 | 6 | Global illumination (irradiance-probe volume) | SBA-11 | — |
@@ -216,3 +216,33 @@ cook wall). Step 2's goldens: `ibl_off`, `ibl_sky`, `ibl_roughness` (four metal 
 **Open in step 2:** real-GPU numbers (the budgets above are llvmpipe, relative cost only); they need a device and
 go with the Mac session.
 
+
+## Step 3 — SSAO
+
+**Scene API.** `Scene3D::set_ambient_occlusion(AmbientOcclusion)`: `enabled` (off by default), `radius` (world
+units), `intensity`, `power` and `bias` (a cosine threshold that ignores occluders near the tangent plane).
+Off switches: `Forward3DDesc::ssao` (no pipelines or targets) and `-r.ssao 0`.
+
+**Passes (half resolution, after the light clusters, timestamp `ssao`).** A prepass draws every mesh (static and
+skinned, alpha masks honoured, no culling) into an RGBA16F target holding the view normal and view depth. The
+occlusion pass takes 12 samples on a 3-turn spiral rotated by a 4×4 Bayer pattern; each sample is snapped to a
+texel centre (otherwise flat ground self-occluded by ~4%), and an occluder in reach adds its cosine minus `bias`
+times a `1 - d²/r²` falloff. Visibility is `clamp(1 - 2·intensity·sum/N)^power`. A separable 9-tap Gaussian
+with a depth weight (`1 - |Δz| / 0.05z`) removes the noise without bleeding across edges. The main pass samples
+bank 11 (`rhi::bank::kAo`) at the fragment's screen uv and multiplies the ambient term only: sun, local lights
+and emissive are untouched. With AO off, bank 11 binds a 1×1 white stand-in (Metal needs every declared sampler
+bound), so the main pass and the reflection-probe capture are unchanged.
+
+**Gates.** `render3d_gl: SSAO darkens the ground at the box's foot, not open ground` (ambient only: foot
+158→141, open ground and box top unchanged, two prepass draws) and `SSAO leaves direct light alone and off draws
+the frame without it` (0 pixels differ in a direct-only scene; the AO target is half size, white on open ground,
+dark in the crease). Goldens `ssao_crease` and `ssao_scene` on linux-gl and linux-sdlgpu; the earlier goldens are
+unchanged. Real-GPU cost, and Metal pixels, belong to the Mac/device session.
+
+**Budget (04_cubes `-ao 1`, 256 point lights, 1280×1024, 110 measured frames, Mesa llvmpipe — software, so
+only the relative cost means anything; real-GPU numbers on the Mac/device session):**
+
+| | AO off | AO on |
+|---|---|---|
+| SSAO pass (prepass + occlusion + blur, ms) | 0 | 36.5 |
+| GPU 3D frame total (ms) | 384.4 | 432.2 |
