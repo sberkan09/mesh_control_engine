@@ -29,6 +29,7 @@ inline constexpr u8 MOD_INFO_VERSION = 1;  // CHNK_MOD: a mod pack's identity (F
 inline constexpr u8 INPUT_MAP_VERSION = 1;  // CHNK_INPUT: a project's action maps (FR-INP-020; mce/input/input_map.h)
 inline constexpr u8 STRING_TABLE_VERSION = 1;  // CHNK_STR: one locale's string table (M-MOBILE 11a; mce/loc/string_table.h)
 inline constexpr u8 STORE_CATALOG_VERSION = 1;  // CHNK_STORE: products and ad placements (M-MONETIZE; mce/monetize/catalog.h)
+inline constexpr u8 GAME_SERVICES_CATALOG_VERSION = 1;  // CHNK_GSVC: game services catalog (M-LIVEOPS; mce/liveops/game_services.h)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)

@@ -48,7 +48,9 @@
 // comes from the ad network's form (M-MONETIZE: personalized = granted, otherwise denied) unless the game sets it,
 // or from -liveops.consent granted|denied. Remote config (mce/liveops/remote_config.h) comes with them: the pack's
 // .mcconfig defaults, the values the last fetch saved, and a fetch at start (the host's fetcher, or
-// -remote_config.file <cooked pack>); the game applies fetched values with RemoteConfig::apply_fetched.
+// -remote_config.file <cooked pack>); the game applies fetched values with RemoteConfig::apply_fetched. Game
+// services (mce/liveops/game_services.h) too, when the pack has a .mcservices: -liveops.provider local plays the
+// platform with a folder (-game_services.dir, -game_services.offline 1), and -game_services_test rehearses them.
 //
 // Input: windowed, the starter-kit "Gameplay" map (mce/input/default_map.h: Move on WASD / arrows /
 // left stick, Jump on Space / A, Fire on J / left mouse / X, Pause) is sampled once per tick and
@@ -78,6 +80,7 @@
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/liveops/game_services.h"
 #include "mce/liveops/liveops.h"
 #include "mce/liveops/remote_config.h"
 #include "mce/loc/loc.h"
@@ -177,6 +180,17 @@ MCE_CVAR(cv_monetize_test, "monetize_test", "",
          "Rehearse purchases and ads: \"tick:action[:id] ...\" with query, buy, restore, load, show, banner, hide; prints every "
          "store and ad event",
          CVarFlags::None);
+MCE_CVAR(cv_game_services_dir, "game_services.dir", "",
+         "Game services with -liveops.provider local: the folder playing the platform (default: <save folder>/"
+         "game_services_platform; share it between save folders to play two devices)",
+         CVarFlags::None);
+MCE_CVAR(cv_game_services_offline, "game_services.offline", false,
+         "Game services with -liveops.provider local: the platform cannot be reached (sign-in and every call fail)",
+         CVarFlags::None);
+MCE_CVAR(cv_game_services_test, "game_services_test", "",
+         "Rehearse game services: \"tick:action[:id[:value]] ...\" with sign_in, unlock, progress, score, write (a local "
+         "save's text), cloud_save, cloud_load, keep_local, keep_cloud; prints every game services event",
+         CVarFlags::None);
 MCE_CVAR(cv_lifecycle_test, "lifecycle_test", "",
          "Rehearse the phone lifecycle: \"N,M\" goes to the background at app tick N and comes back and resumes M ticks later",
          CVarFlags::None);
@@ -238,6 +252,8 @@ public:
             return Error(Errc::InvalidArgument, "player: -monetize_test needs purchases and ads on (-monetize 1)");
         liveops_on_ = desc_.liveops || cv_liveops.get_bool();
         if (liveops_on_) MCE_TRY(init_liveops());
+        else if (!cv_game_services_test.get_string().empty())
+            return Error(Errc::InvalidArgument, "player: -game_services_test needs live services on (-liveops 1)");
         MCE_TRY(init_localization());
         // The game on top of the engine systems (the game-module contract), before the scene so
         // its systems see the first tick.
@@ -312,8 +328,10 @@ public:
         publish_view_info();
         scene::pump_streaming(world_);
         if (!monetize_test_.empty()) monetize_test_requests();
+        if (!game_services_test_.empty()) game_services_test_requests();
         world_.tick(t.dt, sim_ticks_);
         if (!monetize_test_.empty()) monetize_test_events();
+        if (game_services_print_) game_services_test_events();
         ++sim_ticks_;
         if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
     }
@@ -449,6 +467,7 @@ public:
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
         if (liveops_on_) liveops_.shutdown();
+        if (game_services_on_) game_services_.shutdown();
         if (three_d_) {  // the last frame's 3D load (tests and LOD measurements read it)
             const u32* lt = stats3d_.lod_triangles;
             std::printf("%s: 3D last frame %u triangles (LOD %u/%u/%u/%u), %u draws\n", desc_.app_name, stats3d_.triangles,
@@ -667,7 +686,160 @@ private:
         else if (!samples::g_cv_crash_dir.get_string().empty()) d.crash_dir.assign(samples::g_cv_crash_dir.get_string());
         else d.crash_dir.assign(crash::default_dump_dir(desc_.app_name).view());
         liveops_.init(d);
-        return init_remote_config();
+        MCE_TRY(init_remote_config());
+        return init_game_services();
+    }
+
+    Result<void> init_game_services() {
+        liveops::ServicesCatalog catalog;
+        bool found = false;
+        for (asset::AssetKey k = 0; k < assets_.asset_count() && !found; ++k) {
+            const asset::AssetInfo info = assets_.info(k);
+            if (info.type != asset::ChunkType::GameServicesCatalog) continue;
+            MCE_TRY_ASSIGN(const asset::AssetHandle<asset::GameServicesCatalogChunk> h,
+                           assets_.load_sync<asset::GameServicesCatalogChunk>(k));
+            const Result<void> r = liveops::decode_services_catalog(assets_.resolve(h), catalog);
+            assets_.release(asset::AnyHandle(h));
+            MCE_TRY(r);
+            found = true;
+        }
+        if (!parse_game_services_test(cv_game_services_test.get_string()))
+            return Error(Errc::InvalidArgument, "player: -game_services_test wants \"tick:action[:id[:value]] ...\"",
+                         cv_game_services_test.get_string());
+        if (!found) {
+            if (!game_services_test_.empty())
+                return Error(Errc::InvalidArgument, "player: -game_services_test needs a .mcservices in the pack");
+            return ok();
+        }
+        liveops::IGameServicesProvider* provider = desc_.game_services_provider;
+        const StringView mode = cv_liveops_provider.get_string();
+        if (mode == "local") {
+            FixedString<512> dir(cv_game_services_dir.get_string());
+            if (dir.empty()) {
+                dir.assign(save::root().view());
+                dir.append("/game_services_platform");
+            }
+            local_services_.emplace(dir.view());
+            local_services_->set_offline(cv_game_services_offline.get_bool());
+            provider = &*local_services_;
+        } else if (mode == "none") {
+            provider = nullptr;
+        }
+        game_services_.init(catalog, provider);
+        game_services_.install(world_);
+        game_services_on_ = true;
+        game_services_print_ = !game_services_test_.empty() || mode == "local";
+        return ok();
+    }
+
+    // -game_services_test: "tick:action[:id[:value]]" steps.
+    struct ServicesStep {
+        u64 tick = 0;
+        FixedString<16> action;
+        FixedString<64> id;
+        FixedString<64> value;
+    };
+
+    bool parse_game_services_test(StringView v) {
+        game_services_test_.clear();
+        usize i = 0;
+        while (i < v.size()) {
+            while (i < v.size() && v[i] == ' ') ++i;
+            usize end = i;
+            while (end < v.size() && v[end] != ' ') ++end;
+            if (end == i) break;
+            StringView tok = v.substr(i, end - i);
+            i = end;
+            StringView parts[4];
+            u32 n = 0;
+            while (n < 4) {
+                usize c = 0;
+                while (c < tok.size() && tok[c] != ':') ++c;
+                parts[n++] = tok.substr(0, c);
+                if (c == tok.size()) break;
+                tok = tok.substr(c + 1);
+            }
+            ServicesStep step;
+            if (n < 2 || parts[0].empty()) return false;
+            for (const char c : parts[0]) {
+                if (c < '0' || c > '9') return false;
+                step.tick = step.tick * 10 + static_cast<u64>(c - '0');
+            }
+            step.action = parts[1];
+            if (n > 2) step.id = parts[2];
+            if (n > 3) step.value = parts[3];
+            const StringView a = step.action.view();
+            const bool needs_value = a == "progress" || a == "score" || a == "write";
+            const bool needs_id = needs_value || a == "unlock" || a == "cloud_save" || a == "cloud_load" ||
+                                  a == "keep_local" || a == "keep_cloud";
+            if (!needs_id && a != "sign_in") return false;
+            if (needs_id == step.id.empty() || needs_value == step.value.empty()) return false;
+            game_services_test_.push_back(step);
+        }
+        return true;
+    }
+
+    static i64 parse_i64(StringView s) {
+        i64 v = 0;
+        const bool neg = !s.empty() && s[0] == '-';
+        for (usize k = neg ? 1 : 0; k < s.size(); ++k) v = v * 10 + (s[k] - '0');
+        return neg ? -v : v;
+    }
+
+    void game_services_test_requests() {
+        liveops::GameServices& gs = world_.resource<liveops::GameServices>();
+        for (const ServicesStep& s : game_services_test_) {
+            if (s.tick != sim_ticks_) continue;
+            const StringView a = s.action.view();
+            i64 r = 0;
+            if (a == "sign_in") r = gs.sign_in();
+            else if (a == "unlock") r = gs.unlock(s.id.view());
+            else if (a == "progress") r = gs.add_progress(s.id.view(), static_cast<u32>(parse_i64(s.value.view())));
+            else if (a == "score") r = gs.submit_score(s.id.view(), parse_i64(s.value.view()));
+            else if (a == "cloud_save") r = gs.cloud_save(s.id.view());
+            else if (a == "cloud_load") r = gs.cloud_load(s.id.view());
+            else if (a == "keep_local") r = gs.resolve_conflict(s.id.view(), true);
+            else if (a == "keep_cloud") r = gs.resolve_conflict(s.id.view(), false);
+            else if (a == "write")
+                r = save::write(s.id.view(), Span<const byte>(reinterpret_cast<const byte*>(s.value.c_str()), s.value.size()))
+                        ? 1
+                        : 0;
+            std::printf("mce_player: game_services tick %llu: %s %s %s -> %lld\n", static_cast<unsigned long long>(sim_ticks_),
+                        s.action.c_str(), s.id.c_str(), s.value.c_str(), static_cast<long long>(r));
+        }
+    }
+
+    // What entered this tick, as a game would see it (-game_services_test, or the local provider); a CloudLoaded
+    // save is printed as text.
+    void game_services_test_events() {
+        const liveops::GameServices& gs = world_.resource<liveops::GameServices>();
+        const liveops::ServicesCatalog& c = gs.catalog();
+        auto* q = world_.event_queue<liveops::GameServicesEvent>();
+        if (!q) return;
+        for (const liveops::GameServicesEvent& e : q->read()) {
+            const char* id = "-";
+            switch (e.kind) {
+                case liveops::GameServicesEventKind::AchievementSent:
+                    if (e.index < c.achievements().size()) id = c.achievements()[e.index].id.c_str();
+                    break;
+                case liveops::GameServicesEventKind::ScoreSent:
+                    if (e.index < c.leaderboards().size()) id = c.leaderboards()[e.index].id.c_str();
+                    break;
+                case liveops::GameServicesEventKind::SignedIn:
+                case liveops::GameServicesEventKind::SignedOut: break;
+                default:
+                    if (e.index < c.cloud_saves().size()) id = c.cloud_saves()[e.index].c_str();
+                    break;
+            }
+            std::printf("mce_player: game_services tick %llu: %s %s value %lld\n", static_cast<unsigned long long>(sim_ticks_),
+                        liveops::game_services_event_name(e.kind), id, static_cast<long long>(e.value));
+            if (e.kind == liveops::GameServicesEventKind::CloudLoaded) {
+                Array<byte> b;
+                if (save::read(id, b))
+                    std::printf("mce_player: game_services: %s is now \"%.*s\"\n", id, static_cast<int>(b.size()),
+                                reinterpret_cast<const char*>(b.data()));
+            }
+        }
     }
 
     Result<void> init_remote_config() {
@@ -727,6 +899,7 @@ private:
         }
         liveops_.update();
         remote_config_.update();
+        if (game_services_on_) game_services_.update();
         dump_remote_config();
     }
 
@@ -1304,6 +1477,11 @@ private:
     std::optional<liveops::FileConfigFetcher> file_fetcher_;  // -remote_config.file
     liveops::RemoteConfigService remote_config_;  // before the World: its resource points here
     u32 dumped_config_version_ = ~0u;
+    std::optional<liveops::LocalGameServices> local_services_;  // -liveops.provider local
+    liveops::GameServicesService game_services_;  // before the World: its resource points here
+    Array<ServicesStep> game_services_test_;
+    bool game_services_on_ = false;
+    bool game_services_print_ = false;  // -game_services_test, or the local provider
     bool liveops_on_ = false;
     bool liveops_consent_auto_ = true;
     Array<MonetizeStep> monetize_test_;
