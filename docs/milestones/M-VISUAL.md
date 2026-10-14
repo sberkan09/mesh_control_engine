@@ -137,7 +137,17 @@ the visible sky is still read directly for full texture detail; with an IBL text
 instead. Gate (`test_render_gl` / `test_render_sdlgpu`): a red IBL texture under a blue sky turns the ground red
 while the dome pixels stay within 2 of the blue sky's, and an unchanged texture re-bakes nothing.
 
-**Open in step 2:** probes baked in the editor and cooked (today's captures see only the instances the frame
-submits, e.g. after kit culling); golden captures once the image-diff tooling exists (today's gates are pixel
-probes); real-GPU numbers.
+**Baked probes (part 4a: format, cook, load).** A probe slot leaves the GPU as one RGBM RGBA8 strip
+(`Forward3D::record_probe_export`, 128×384: the six layers stacked, range 16) and is stored as a `.mcenv` file
+(`mce/cook/envmap.h`: a 24-byte header, then the layers in texture row order). The `envmap` importer cooks it to
+a linear RGBA8 2D array of six layers, never ASTC (the alpha exponent would not survive block compression).
+`ReflectionProbe::baked` / `ReflectionProbe3D::baked` name it; a resident bake of the right shape is decoded into
+the probe's slot once (`Forward3DStats::probes_loaded`) and nothing is captured at runtime. Gates: `test_cook`
+(the cooked header, layer bytes and a truncated file's error), `test_render_gl` / `test_render_sdlgpu` (a capture
+exported, uploaded the way the cook stores it and loaded back reflects within 6 of the capture, still showing a
+wall since removed from the scene; decoded once; without the bake the probe captures again).
+
+**Open in step 2:** the editor's bake command (capture every `ReflectionProbe3D` of the open scene with all its
+instances, write the `.mcenv` + sidecar, set `baked`); golden captures once the image-diff tooling exists (today's
+gates are pixel probes); real-GPU numbers.
 

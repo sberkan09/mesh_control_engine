@@ -50,6 +50,7 @@ struct Forward3DStats {
     bool ibl_baked = false;     // the sky changed and its IBL textures were re-baked this frame
     u32 probes = 0;             // reflection probes the main pass sampled
     u32 probes_captured = 0;    // probes (re)captured this frame (placed, moved or version bumped)
+    u32 probes_loaded = 0;      // baked probes decoded into their slots this frame
     u32 probe_draws = 0;        // draws of those captures, over all six faces
     u32 joints = 0;          // joint matrices uploaded for skinned meshes
     u32 bloom_levels = 0;
@@ -102,6 +103,13 @@ public:
     // RGBA16F 2D array: the sky's slot (kProbeLayers layers), then one per probe once a scene has
     // reflection probes.
     rhi::TextureHandle ibl_env() const { return ibl_env_; }
+    // Baking (M-VISUAL 2): record_probe_export() draws probe slot `probe` as one RGBM RGBA8 strip
+    // of probe_export_size() (layer l at rows [l, l + 1) * kIblEnvWidth/2 from v 0) into
+    // probe_export_target(); read it back after submit. False when the slot holds nothing yet.
+    static constexpr f32 kProbeRgbmRange = 16.0f;
+    static constexpr rhi::Extent2D probe_export_size() { return {kIblEnvWidth, kIblEnvWidth / 2 * kProbeLayers}; }
+    bool record_probe_export(rhi::CommandBuffer& cmd, u32 probe);
+    rhi::TextureHandle probe_export_target() const { return probe_export_; }
     // The sharp equirect of the last probe captured (RGBA16F, kIblEnvWidth × kIblEnvWidth/2).
     rhi::TextureHandle probe_capture() const { return probe_capture_; }
     rhi::TextureHandle ibl_brdf_lut() const { return ibl_lut_; } // RGBA16F, rg = F0 scale, bias
@@ -157,6 +165,9 @@ private:
     bool ibl_own_source_ = false;        // baked from Sky::ibl_texture rather than the visible sky
     rhi::PipelineHandle probe_reproject_;  // six faces -> equirect
     rhi::PipelineHandle probe_prefilter_;  // equirect -> GGX layers
+    rhi::PipelineHandle probe_encode_;     // slot -> RGBM strip (bake export)
+    rhi::PipelineHandle probe_decode_;     // baked RGBM layer -> slot layer
+    rhi::TextureHandle probe_export_;    // RGBA8 probe_export_size()
     rhi::TextureHandle probe_faces_;     // RGBA16F 2D array, 6 layers of kProbeFaceSize²
     rhi::TextureHandle probe_depth_;     // D32 2D array, 6 layers
     rhi::TextureHandle probe_capture_;   // RGBA16F equirect: the sharp capture the layers filter

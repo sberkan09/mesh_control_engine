@@ -224,6 +224,7 @@ TEST_CASE("kit3d: MeshRefs, lights and visibility fill the scene") {
     CHECK(rp.bounds.min.x == doctest::Approx(-3.0f));
     CHECK(rp.bounds.max.z == doctest::Approx(-2.0f));
     CHECK(rp.version == 7);
+    CHECK(rp.baked == ~0u);  // no bake: captured at runtime
 }
 
 TEST_CASE("kit3d: the camera and interpolated meshes draw between the last two ticks") {

@@ -306,6 +306,12 @@ ResultV Forward3D::create_pipelines() {
         fs.fragment_shader = {kProbePrefilterFS, "probe_prefilter.frag"};
         fs.debug_name = "probe.prefilter";
         MCE_TRY_ASSIGN(probe_prefilter_, device_->create_pipeline(fs));
+        fs.fragment_shader = {kProbeEncodeFS, "probe_encode.frag"};
+        fs.debug_name = "probe.encode";
+        MCE_TRY_ASSIGN(probe_encode_, device_->create_pipeline(fs));
+        fs.fragment_shader = {kProbeDecodeFS, "probe_decode.frag"};
+        fs.debug_name = "probe.decode";
+        MCE_TRY_ASSIGN(probe_decode_, device_->create_pipeline(fs));
     }
     return ok();
 }
@@ -371,11 +377,12 @@ void Forward3D::shutdown() {
     for (rhi::PipelineHandle* p :
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &skinned_cull_,
           &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_,
-          &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_}) {
+          &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
+          &probe_decode_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
-    for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &probe_faces_, &probe_depth_, &probe_capture_})
+    for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_})
         destroy(*device_, *t);
     ibl_key_ = 0;
     ibl_env_layers_ = 0;
@@ -568,8 +575,20 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     stats_.probes = static_cast<u32>(probes.size());
     u64 keys[kMaxReflectionProbes] = {};
     bool any = false;
+    rhi::TextureHandle baked[kMaxReflectionProbes] = {};
     for (u32 i = 0; i < probes.size(); ++i) {
-        keys[i] = probe_key(probes[i], ibl_key_);
+        if (probes[i].baked != ~0u && textures_->contains(probes[i].baked)) {
+            const rhi::TextureHandle t = textures_->get(probes[i].baked);
+            const rhi::TextureDesc& d = device_->texture_desc(t);
+            if (d.size.width == kIblEnvWidth && d.size.height == kIblEnvWidth / 2 && d.array_layers == kProbeLayers)
+                baked[i] = t;
+            else
+                MCE_LOG_WARN("render3d: reflection probe {} bake is {}x{}x{}, not {}x{}x{}: captured instead", i,
+                             d.size.width, d.size.height, d.array_layers, kIblEnvWidth, kIblEnvWidth / 2, kProbeLayers);
+        }
+        // A bake depends on nothing but its texture.
+        keys[i] = baked[i].is_null() ? probe_key(probes[i], ibl_key_)
+                                     : ((u64(baked[i].index) << 32 | baked[i].generation) * 1099511628211ull) | 1u;
         any |= keys[i] != probe_keys_[i];
     }
     if (!any) return;
@@ -627,6 +646,20 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     cmd.push_debug_scope("probes");
     for (u32 i = 0; i < probes.size(); ++i) {
         if (keys[i] == probe_keys_[i]) continue;
+        if (!baked[i].is_null()) {  // the editor's bake: decode its layers into the slot
+            cmd.bind_texture(rhi::bank::kFirstSampler, baked[i], point_sampler_);
+            for (u32 l = 0; l < kProbeLayers; ++l) {
+                pass_into(ibl_env_, static_cast<u16>(probe_base_layer(i) + l), "probe.decode");
+                cmd.bind_pipeline(probe_decode_);
+                const vec4 du{f32(l), 0.0f, kProbeRgbmRange, 0.0f};
+                cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(du));
+                cmd.draw_non_indexed(3);
+                cmd.end_pass();
+            }
+            probe_keys_[i] = keys[i];
+            ++stats_.probes_loaded;
+            continue;
+        }
         const ReflectionProbe& probe = probes[i];
         mat4 face_view[6], face_vp[6];
         probe_face_views(probe.position, view.near_z, view.far_z, face_view, face_vp);
@@ -701,6 +734,33 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         ++stats_.probes_captured;
     }
     cmd.pop_debug_scope();
+}
+
+bool Forward3D::record_probe_export(rhi::CommandBuffer& cmd, u32 probe) {
+    MCE_ASSERT_MSG(!cmd.in_pass(), "Forward3D::record_probe_export inside a pass");
+    if (probe >= kMaxReflectionProbes || probe_keys_[probe] == 0 || probe_encode_.is_null()) return false;
+    if (probe_export_.is_null()) {
+        rhi::TextureDesc d;
+        d.format = rhi::TextureFormat::RGBA8_UNorm;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.size = probe_export_size();
+        d.debug_name = "mce.3d.probe_export";
+        probe_export_ = device_->create_texture(d);
+    }
+    rhi::PassAttachment out;
+    out.texture = probe_export_;
+    out.load = rhi::LoadOp::DontCare;
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&out, 1);
+    p.debug_name = "probe.export";
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(probe_encode_);
+    const vec4 eu{f32(probe_base_layer(probe)), f32(kProbeLayers), kProbeRgbmRange, 0.0f};
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(eu));
+    cmd.bind_texture(rhi::bank::kFirstSampler, ibl_env_, point_sampler_);
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    return true;
 }
 
 // ---- 1. cascades: one depth-only pass per layer, each with its own caster list

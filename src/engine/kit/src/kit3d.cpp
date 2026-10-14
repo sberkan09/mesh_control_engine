@@ -17,7 +17,7 @@ namespace mce::kit {
 static_assert(sizeof(MeshRef) == 72);
 static_assert(sizeof(PointLight3D) == 40);
 static_assert(sizeof(SpotLight3D) == 60);
-static_assert(sizeof(ReflectionProbe3D) == 40);
+static_assert(sizeof(ReflectionProbe3D) == 64);
 static_assert(sizeof(Camera3DComponent) == 24);
 static_assert(sizeof(Animator) == 80);
 static_assert(sizeof(Environment3D) == 240);

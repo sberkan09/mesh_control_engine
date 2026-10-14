@@ -105,6 +105,10 @@ struct ReflectionProbe {
     f32 blend_distance = 1.0f;  // fade in from the box faces (meters)
     f32 intensity = 1.0f;
     u32 version = 0;
+    // TextureStore key of the probe's editor bake (an RGBM RGBA8 array of Forward3D::kProbeLayers
+    // layers, kIblEnvWidth x kIblEnvWidth/2, cooked from .mcenv): loaded in place of a runtime
+    // capture. ~0u (or not resident) = captured at runtime.
+    u32 baked = ~0u;
 };
 
 inline constexpr u32 kMaxReflectionProbes = 4;
