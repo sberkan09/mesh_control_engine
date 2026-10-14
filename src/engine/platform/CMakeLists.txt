@@ -20,9 +20,9 @@ mce_add_library(mce_platform
         SDL3::SDL3-static)
 
 # The phone's purchase store (platform/store.h). Android needs nothing here: the Play Billing side is
-# Java, stamped into the game's Gradle project. iOS StoreKit 2 is Swift and stays opt-in until it has
-# been verified on a Mac (Simulator StoreKit configuration); without it the iOS store is "none".
-option(MCE_STOREKIT "iOS: build the StoreKit 2 store (Swift) into mce_platform" OFF)
+# Java, stamped into the game's Gradle project. iOS StoreKit 2 is Swift, on by default since its
+# Simulator run with a StoreKit configuration (SBA-26); without it the iOS store is "none".
+option(MCE_STOREKIT "iOS: build the StoreKit 2 store (Swift) into mce_platform" ON)
 if(IOS AND MCE_STOREKIT)
     enable_language(Swift)
     target_sources(mce_platform PRIVATE src/store_storekit.swift)
@@ -55,8 +55,8 @@ endif()
 # The phone's ad network (platform/ads.h). Android again needs nothing here (MceAds.java is stamped
 # into the Gradle project). iOS links Google's xcframeworks, which are not vendored: download the
 # Google Mobile Ads SDK (11 or newer, with UserMessagingPlatform) and point MCE_ADMOB_SDK_DIR at the
-# folder holding GoogleMobileAds.xcframework and UserMessagingPlatform.xcframework. Opt-in until it
-# has been run on a Mac.
+# folder holding GoogleMobileAds.xcframework and UserMessagingPlatform.xcframework. Opt-in because the
+# SDK is not vendored (run in the Simulator with GMA 13.11 / UMP, SBA-26).
 option(MCE_ADMOB "iOS: build Google Mobile Ads, UMP and ATT into mce_platform" OFF)
 set(MCE_ADMOB_SDK_DIR "" CACHE PATH "iOS: folder with GoogleMobileAds.xcframework and UserMessagingPlatform.xcframework")
 if(IOS AND MCE_ADMOB)

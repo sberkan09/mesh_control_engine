@@ -41,6 +41,9 @@ enum class EventType : u8 {
     // AppForeground (iOS kills apps that do).
     AppBackground,
     AppForeground,
+    // The app really left the screen (after AppBackground). iOS also sends AppBackground and
+    // AppForeground around a system alert or a purchase sheet that covers the app, without this.
+    AppEnteredBackground,
     AppLowMemory,     // free caches you can rebuild
     AppTerminating,   // the OS is ending the process (the last chance to save)
     SafeAreaChanged,  // Window::safe_insets() changed

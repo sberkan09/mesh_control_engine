@@ -1277,6 +1277,8 @@ private:
             case platform::EventType::AppBackground: {
                 if (os_background_) return;
                 os_background_ = true;
+                left_app_ = false;
+                paused_before_background_ = paused_;
                 paused_ = true;
                 audio_.set_paused(true);
                 release_input();
@@ -1288,8 +1290,18 @@ private:
                 if (!os_background_) return;
                 os_background_ = false;
                 audio_.set_paused(ad_paused_);
+                // iOS: a system alert or a purchase sheet covered the app, which never left the screen
+                // (no AppEnteredBackground). With purchases and ads on these are the store's and the ad
+                // network's own screens: carry on as after a fullscreen ad, without the pause overlay.
+                if (kPhone && monetize_on_ && !left_app_ && !paused_before_background_) {
+                    paused_ = false;
+                    release_input();
+                    MCE_LOG_INFO("{}: a system screen closed (resumed)", desc_.app_name);
+                    break;
+                }
                 MCE_LOG_INFO("{}: back in the foreground (paused until resumed)", desc_.app_name);
                 break;
+            case platform::EventType::AppEnteredBackground: left_app_ = true; break;
             case platform::EventType::AppTerminating: write_save(); break;
             case platform::EventType::AppLowMemory: MCE_LOG_WARN("{}: the OS reports low memory", desc_.app_name); break;
             default: break;
@@ -1337,7 +1349,10 @@ private:
             if (window_) platform::simulate_app_event(type);
             else on_lifecycle(type);
         };
-        if (app_tick == lifecycle_from_) send(platform::EventType::AppBackground);
+        if (app_tick == lifecycle_from_) {
+            send(platform::EventType::AppBackground);
+            send(platform::EventType::AppEnteredBackground);
+        }
         if (app_tick == lifecycle_from_ + lifecycle_ticks_) {
             send(platform::EventType::AppForeground);
             resume();
@@ -1383,6 +1398,7 @@ private:
         switch (e.type) {
             case platform::EventType::AppBackground:
             case platform::EventType::AppForeground:
+            case platform::EventType::AppEnteredBackground:
             case platform::EventType::AppTerminating:
             case platform::EventType::AppLowMemory: self->on_lifecycle(e.type); return;
             case platform::EventType::SafeAreaChanged:
@@ -1526,6 +1542,8 @@ private:
     bool fullscreen_ = false;  // what cv_fullscreen last applied
     bool os_background_ = false;  // the app itself is in the background (phones): no drawing at all
     bool ad_paused_ = false;      // a fullscreen ad covers the game (PlayerDesc::monetize)
+    bool left_app_ = false;                 // AppEnteredBackground since the last AppBackground
+    bool paused_before_background_ = false;  // the player had paused before AppBackground
     bool overlay_paused_ = false;  // phones: a store / ad / consent screen has the focus (set_background)
     platform::SafeInsets safe_insets_;
     u64 lifecycle_from_ = 0, lifecycle_ticks_ = 0;  // -lifecycle_test

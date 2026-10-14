@@ -190,13 +190,26 @@ build/<preset>/samples/shop_demo/sample_shop_demo -ticks 1850 -replay run.rec   
 - **Android:** packaging (chapter 15) adds Play Billing to a game whose catalog sells products, and
   Google Mobile Ads with UMP plus the AdMob app id to a game with ad placements. A game without a
   `.mcstore` gets neither.
-- **iOS:** StoreKit 2 builds with `-DMCE_STOREKIT=ON`, Google Mobile Ads with UMP and ATT with
-  `-DMCE_ADMOB=ON -DMCE_ADMOB_SDK_DIR=<folder with GoogleMobileAds.xcframework and
-  UserMessagingPlatform.xcframework>`. Both are off by default until they have been run on a device.
+- **iOS:** StoreKit 2 is built in (`-DMCE_STOREKIT=OFF` leaves it out). Google Mobile Ads with UMP
+  and ATT needs Google's SDK, which the engine does not ship: download the Google Mobile Ads SDK for
+  iOS (11 or newer) and build with `-DMCE_ADMOB=ON -DMCE_ADMOB_SDK_DIR=<folder with
+  GoogleMobileAds.xcframework and UserMessagingPlatform.xcframework>`.
 - **Test purchases:** in the iOS Simulator, a StoreKit configuration file (`.storekit`) with the
-  catalog's product ids, selected in the Xcode scheme; on a device, a Sandbox account. On Android, the
-  products set up in the Play Console, the app on an internal testing track and your Google account
-  added as a license tester.
+  catalog's product ids, selected in the Xcode scheme or applied with
+  `cmake/mobile/ios/storekit_test/run.py <bundle id> <file.storekit>` (no Xcode project needed); on a
+  device, a Sandbox account. On Android, the products set up in the Play Console, the app on an
+  internal testing track, your Google account added as a license tester, and a device or emulator
+  image with the Play Store (a `google_apis` emulator image has no billing service: every purchase
+  ends `Failed`).
+- **The shop demo on a phone:** `python3 scripts/ship.py shop --target ios` (or `android`) packages
+  `samples/shop_demo` as an app: the stock player with purchases and ads on. It has no shop screen;
+  pass a `-monetize_test` script at launch. In the Simulator:
+  `run.py org.meshcontrol.sample-shop-demo samples/shop_demo/ship/ShopDemo.storekit --reset -- -monetize_test "30:query 60:buy:gems_100"`;
+  on Android: `adb shell "am start -n org.meshcontrol.shop_demo/.MceActivity --es mce_args '-monetize_test \"30:query 90:load:continue 600:show:continue\"'"`
+  (the lines appear in logcat under `MCE`).
+- **System screens do not pause the game for good.** While a purchase sheet, a fullscreen ad, the
+  consent form or the ATT prompt has the focus, the sim waits and goes on by itself when it closes;
+  only leaving the app shows the pause overlay.
 
 No real store or ad account is needed to build, test or ship a debug build. You need them for
 release: the products in App Store Connect and the Play Console with the ids the catalog names, and an
@@ -229,8 +242,8 @@ validation call are yours to build. The engine has no backend.
 
 ## 22.10 Known gaps
 
-- The StoreKit 2 and iOS Google Mobile Ads sides have not been run on a device yet; that is why
-  they sit behind `MCE_STOREKIT` and `MCE_ADMOB`. The Android side has not been run on a device
-  either.
+- Checked in the iOS Simulator (StoreKit configuration, Google test ads with GMA 13.11) and on an
+  Android emulator (Google test ads), not yet on a real phone. Play Billing has not been run against
+  Play test products: that needs a Play Console app on a testing track and a license tester.
 - One ad network (AdMob). Mediation adapters for other networks are not set up by the engine.
 - Subscriptions are not supported; products are consumable or non-consumable only.

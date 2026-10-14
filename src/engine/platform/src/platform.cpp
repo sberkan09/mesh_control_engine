@@ -113,6 +113,7 @@ bool SDLCALL lifecycle_watch(void* /*user*/, SDL_Event* ev) {
     Event e;
     switch (ev->type) {
         case SDL_EVENT_WILL_ENTER_BACKGROUND: e.type = EventType::AppBackground; break;
+        case SDL_EVENT_DID_ENTER_BACKGROUND: e.type = EventType::AppEnteredBackground; break;
         case SDL_EVENT_DID_ENTER_FOREGROUND: e.type = EventType::AppForeground; break;
         case SDL_EVENT_LOW_MEMORY: e.type = EventType::AppLowMemory; break;
         case SDL_EVENT_TERMINATING: e.type = EventType::AppTerminating; break;
@@ -153,6 +154,7 @@ const char* event_type_name(EventType t) {
         case EventType::TouchUp: return "TouchUp";
         case EventType::AppBackground: return "AppBackground";
         case EventType::AppForeground: return "AppForeground";
+        case EventType::AppEnteredBackground: return "AppEnteredBackground";
         case EventType::AppLowMemory: return "AppLowMemory";
         case EventType::AppTerminating: return "AppTerminating";
         case EventType::SafeAreaChanged: return "SafeAreaChanged";
@@ -516,8 +518,8 @@ bool pump_events() {
 }
 
 void simulate_app_event(EventType type) {
-    if (type != EventType::AppBackground && type != EventType::AppForeground && type != EventType::AppLowMemory &&
-        type != EventType::AppTerminating)
+    if (type != EventType::AppBackground && type != EventType::AppForeground && type != EventType::AppEnteredBackground &&
+        type != EventType::AppLowMemory && type != EventType::AppTerminating)
         return;
     Event e;
     e.type = type;
