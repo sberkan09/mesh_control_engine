@@ -32,6 +32,7 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-pause_on_focus_loss 0` | 1 | keep simulating when the window loses focus |
 | `-lifecycle_test N,M` | off | rehearse a phone going to the background at app tick N and coming back M ticks later (also headless; the save slot is written on the way out) |
 | `-r.post2d 0` | 1 | start with the camera's 2D post effects off (F7 toggles) |
+| `-r.frame_report N` | 0 | windowed: print the average, p95 and worst frame time every N frames, and the run's average and worst at exit |
 | `-r.vsync 0` | 1 (saved) | present without vsync |
 | `-r.gl_debug 0` | 1 | disable the GL validation callback (restart-only) |
 | `-time_scale x` | 1 | sim speed (a cheat; scales how many ticks run, never `dt`) |
