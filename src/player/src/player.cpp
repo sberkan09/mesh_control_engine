@@ -79,6 +79,7 @@
 #include "mce/input/ecs.h"
 #include "mce/input/input_system.h"
 #include "mce/input/script.h"
+#include "mce/kit/stock.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/kit3d_extract.h"
 #include "mce/kit/particles.h"
@@ -290,9 +291,7 @@ public:
         input::install(world_);
         physics::install_physics2d(world_);
         audio::install(world_, audio_, &clips_);
-        kit::install_particles(world_, &assets_);
-        kit::install_sequences(world_, &assets_);
-        kit::install_kit3d(world_, &assets_);
+        kit::install_stock(world_, &assets_);
         if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());  // the entitlements live there too
         monetize_on_ = desc_.monetize || cv_monetize.get_bool();
         if (monetize_on_) MCE_TRY(init_monetize(cv_store_catalog.get_string()));

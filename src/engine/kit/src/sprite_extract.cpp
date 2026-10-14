@@ -5,6 +5,7 @@
 #include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/effects.h"
 #include "mce/kit/particles.h"
 #include "mce/log.h"
 #include "mce/memory/frame_slots.h"
@@ -129,10 +130,43 @@ render::SpriteSetId SpriteExtract::sprite_set(asset::Guid guid, asset::Guid norm
                 }
             }
             e.set = renderer_->create_sprite_set(d);
+            e.regions.push_back(kWholeTexture);
         }
     }
-    textures_.push_back(e);
-    return e.set;
+    const render::SpriteSetId set = e.set;
+    textures_.push_back(static_cast<TextureEntry&&>(e));
+    return set;
+}
+
+u32 SpriteExtract::region_index(render::SpriteSetId set, const math::vec4& uv) {
+    if (uv.x == 0.0f && uv.y == 0.0f && uv.z == 1.0f && uv.w == 1.0f) return 0;
+    if (!renderer_ || set == white_set_ || set == missing_set_) return 0;
+    for (TextureEntry& t : textures_) {
+        if (!(t.set == set) || t.regions.empty()) continue;
+        for (u32 i = 1; i < t.regions.size(); ++i) {
+            const render::SpriteRegion& r = t.regions[i];
+            if (r.u0 == uv.x && r.v0 == uv.y && r.u1 == uv.z && r.v1 == uv.w) return i;
+        }
+        constexpr u32 kMaxRegions = 4096;
+        if (t.regions.size() >= kMaxRegions) return 0;
+        render::SpriteRegion r = kWholeTexture;
+        r.u0 = uv.x;
+        r.v0 = uv.y;
+        r.u1 = uv.z;
+        r.v1 = uv.w;
+        t.regions.push_back(r);
+        render::SpriteSets& sets = renderer_->sprite_sets();
+        render::SpriteSetDesc d;
+        d.texture_key = sets.texture_key(set);
+        d.filter = sets.filter(set);
+        d.lit = sets.lit(set);
+        d.normal_key = sets.normal_key(set);
+        d.regions = t.regions.span();
+        d.debug_name = d.lit ? "kit.sprite.lit" : "kit.sprite";
+        sets.update(set, d);
+        return static_cast<u32>(t.regions.size() - 1);
+    }
+    return 0;
 }
 
 const render::Font* SpriteExtract::font(asset::Guid guid) {
@@ -236,7 +270,7 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         inst.pivot = s.pivot;
         inst.tint = s.tint;
         inst.set = sprite_set(s.texture.guid, s.normal_map.guid);
-        inst.region = 0;
+        inst.region = region_index(inst.set, s.region);
         inst.sort_layer = s.layer;
         inst.sort_order = s.order;
         inst.flip_x = s.flip_x;
@@ -410,11 +444,16 @@ bool SpriteExtract::post_2d(World& world, render::Post2D& out) {
 
 namespace {
 
-void camera_from(const LocalTransform& t, const Camera2DComponent& c, render::Camera2D& out, f32& pixels_per_meter,
-                 math::Color* clear_color) {
+// `shake` (may be null): the camera's CameraShake2D offset this tick.
+void camera_from(const LocalTransform& t, const Camera2DComponent& c, const CameraShake2D* shake, render::Camera2D& out,
+                 f32& pixels_per_meter, math::Color* clear_color) {
     out.position = {t.position.x, t.position.y};
     out.zoom = c.zoom;
     out.rotation = angle_z(t.rotation);
+    if (shake) {
+        out.position = out.position + shake->offset;
+        out.rotation += shake->offset_rotation;
+    }
     out.pixel_snap = c.pixel_snap;
     out.fit_width = c.fit_width;
     out.fit_height = c.fit_height;
@@ -428,10 +467,10 @@ bool primary_camera(World& world, render::Camera2D& out, f32& pixels_per_meter, 
     out = render::Camera2D{};
     pixels_per_meter = 48.0f;
     bool found = false;
-    world.query<const LocalTransform, const Camera2DComponent>().each([&](const LocalTransform& t, const Camera2DComponent& c) {
+    world.query<const LocalTransform, const Camera2DComponent>().each([&](Entity e, const LocalTransform& t, const Camera2DComponent& c) {
         if (found || !c.primary) return;
         found = true;
-        camera_from(t, c, out, pixels_per_meter, clear_color);
+        camera_from(t, c, world.try_get<CameraShake2D>(e), out, pixels_per_meter, clear_color);
     });
     return found;
 }
@@ -441,7 +480,7 @@ bool camera_2d_of(World& world, Entity e, render::Camera2D& out, f32& pixels_per
     const LocalTransform* t = world.try_get<LocalTransform>(e);
     const Camera2DComponent* c = world.try_get<Camera2DComponent>(e);
     if (!t || !c) return false;
-    camera_from(*t, *c, out, pixels_per_meter, clear_color);
+    camera_from(*t, *c, world.try_get<CameraShake2D>(e), out, pixels_per_meter, clear_color);
     return true;
 }
 

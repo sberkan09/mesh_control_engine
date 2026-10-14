@@ -30,6 +30,17 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
 - `Parallax`: per-axis scroll factor against the camera and `repeat_x` (FR-R2D-050).
 - `SequencePlayer`: plays a cooked `.mcseq` or a code-defined sequence by name; its progress fields
   carry the `Save` flag (FR-ENT-100).
+- `Sprite.region`: the texture rect drawn (`[u0, v0, u1, v1]`, v0 top); `SpriteExtract` adds each
+  distinct rect to the texture's sprite set once.
+- `AnimatedSprite`: plays a `.mcsheet` clip onto the `Sprite` beside it (`sprite_anim.h`:
+  `install_sprite_animation`, `"kit_sprite_animation"` in `FixedUpdate_Post`, `SpriteAnimEvent`
+  for frame events) over `render/sprite_animation.h` (M-DATA-REACH 5).
+- `Animator` graphs and `AttachToBone` (`anim3d.h`, M-DATA-REACH 7): an `.mcanim` AnimGraph
+  (`ChunkType::AnimGraph`, `AnimGraphView`) drives the Animator's clip, 1D blends (`blend_clip`,
+  `blend_weight`), transitions and `AnimEvent3D` events; one-shots finish (`loop`, `finished`,
+  `restart`). Clip lengths and bone poses come from a device-less `render::MeshStore` copy of the
+  mesh loaded through `install_kit3d`'s asset system. `kit3d_extract` poses up to three weighted
+  samples (the playing clip, the blend's second clip, the clip fading out).
 - `PathAgent`: walks to `target` over the world's `NavGrid` at `speed`, re-planning every
   `repath_interval` ticks; `status` and the current smoothed path (16 waypoints) are runtime
   fields (#152).
@@ -66,6 +77,27 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
 - `install_path_agents(world[, grid])`: `PathScratch` resource and `"path_agents"` in
   `FixedUpdate_Pre`; moves a physics2d body by velocity or the `LocalTransform` directly.
 - `debug_draw_grid`, `debug_draw_agents` into a `physics::DebugDrawSink`.
+
+`stock.h` (M-DATA-REACH): `install_stock(world, assets)` installs everything below that the stock
+player runs (particles, sequences, kit3d, `WorldSettings`, effects), one call shared by `mce_player`,
+play-in-editor and MCP `run_headless`; `install_world_settings` applies the first `WorldSettings`
+(`gravity_2d`, `gravity_3d`, in `components.h`) at Startup.
+
+`bodies3d.h` (M-DATA-REACH 6): `RigidBody3D` (dynamic/kinematic; box, sphere, capsule, convex hull
+of a mesh), `CharacterController3D` (capsule walk by `move` or the Move/Jump input), `Trigger3D`
+(box/sphere overlap with `TriggerEnter3D` / `TriggerExit3D`); `install_bodies3d`: `"kit3d_bodies"`
+(`FixedUpdate_Pre`: create, teleport on outside moves, velocities, characters, runtime and moved
+static colliders), `"kit3d_writeback"` and `"kit3d_triggers"` after `"kit3d_physics"`; remove hooks
+destroy the bodies.
+
+`effects.h` (M-DATA-REACH 4): `FireOn` (`Manual` via the `fire` flag, `Start`, `TriggerEnter`,
+`ContactBegin`); `SfxTrigger` (a `PlaySfx` with dB jitter, `SfxBus`), `ParticleBurst`,
+`ShakeTrigger`, `CameraShake2D` (added to the view by `primary_camera`), `CameraFollow2D` (offset,
+dead zone, smoothing, look-ahead, bounds), `CameraFollow3D` (orbit with yaw/pitch, Look-input
+orbit), `PhysicsEvents` (engine-written last 2D trigger/contact pairs and counts), `NavGridSource`
+(the `NavGrid` from a tilemap layer and/or static colliders; automatic from colliders when absent).
+`install_effects(world, assets)`: `"kit_nav_grid"` (`FixedUpdate_Pre`, before `"path_agents"`,
+which it installs), `"kit_effects"` and `"kit_camera_follow"` (`FixedUpdate_Post`).
 
 `fsm.h` (header-only, namespace `mce::fsm`):
 
@@ -163,5 +195,5 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
 - Pathfinding is grid A* only: no navmesh, no jump-point search, no agent avoidance; the grid and
   path debug draw goes to a `physics::DebugDrawSink`, which nothing wires to the editor viewport
   yet (#152).
-- No gameplay starter components (controller, pickups, follow camera); see "Building a 2D game on
+- No gameplay starter components (controller, pickups; the follow camera and effects are in `effects.h`); see "Building a 2D game on
   the kit" above (M9).

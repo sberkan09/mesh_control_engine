@@ -21,6 +21,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/play_session.cpp
         src/preview_renderer.cpp
         src/project.cpp
+        src/project_settings.cpp
         src/scene_document.cpp
         src/stub_world.cpp
         src/tilemap_editor.cpp

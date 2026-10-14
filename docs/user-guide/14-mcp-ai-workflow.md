@@ -65,20 +65,24 @@ each result's `content[0].text` is the tool's JSON).
 | | `asset_list` | `type?` | `guid:<uuid>`, path, type |
 | | `asset_set_import_settings` | `path` or `guid`, `settings` | rewrites a sidecar's settings |
 | Assets | `asset_schema` | `type?` | without `type`: the JSON source types below; with one (`ParticlePreset` or `.mcpart`, ...): its fields with type, default and help, and the template `asset_create` starts from |
-| | `asset_create` | `path`, `content?` | a new `.mcpart`, `.mcseq`, `.mctilemap`, `.mcmat`, `.mcinput`, `.mcstore`, `.mcservices` or `.mcconfig` (the extension picks the type) with a fresh GUID: the template with `content`'s fields over it. Returns `guid:<uuid>` |
+| | `asset_create` | `path`, `content?` | a new `.mcpart`, `.mcseq`, `.mctilemap`, `.mcsheet`, `.mcanim`, `.mcmat`, `.mcinput`, `.mcstore`, `.mcservices` or `.mcconfig` (the extension picks the type) with a fresh GUID: the template with `content`'s fields over it. Returns `guid:<uuid>` |
 | | `asset_write` | `path` or `guid`, `content`, `mode?` | `merge` (default) replaces the named fields and keeps the rest, `replace` writes exactly `content`; the GUID stays |
 | | `asset_read` | `path` or `guid` | the parsed document of a JSON source asset (scenes and prefabs too) |
 | | `tilemap_paint` | `path` or `guid`, `clear?`, `cells?`, `rects?`, `fills?`, `preview?` | `[x, y, tile]` cells, `[x0, y0, x1, y1, tile]` rectangles and `[x, y, tile]` flood fills, applied in that order; (0, 0) is bottom-left, tile 0 erases, n draws tileset cell n-1. `preview` returns the map as text rows |
 | Edit | `entity_create` | `name`, `components?` (object: type name → fields), `transform?` (bool, default true: add a `LocalTransform`), `at?` (int: hierarchy index, default the end) | returns the id; place the entity with `components.LocalTransform`, e.g. `{"name": "Crate", "components": {"LocalTransform": {"position": [0, 1, 0]}}}` |
+| | `entity_create` with `prefab` | `name`, `prefab` (`"guid:<uuid>"` of a `.mcprefab`), `components?` | an instance; `components` override the prefab root's fields, `LocalTransform` places it |
 | | `entity_delete`, `entity_duplicate` | `entity` | |
 | | `scene_clear` | | every entity, one undo step; keeps GUID and path |
 | | `component_add` | `entity`, `component`, `value?` | |
 | | `component_remove` | `entity`, `component` | |
 | | `component_set` | `entity`, `component`, `value`, `path?` | without `path`, `value` is an object of fields; with a property path (`position.x`, `shape.half`, `items[2]`) it is that property |
+| Prefabs | `prefab_create_from` | `entity`, `path`, `replace?` | the entity and its `ChildOf` subtree as a new `.mcprefab`; by default the subtree becomes an instance of it (one undo step) |
+| | `prefab_apply` | `entity`, `component?` | writes an instance's overrides into its prefab (every instance sees them) |
+| | `prefab_revert` | `entity`, `component?` | drops an instance's overrides |
 | Undo | `scene_undo`, `scene_redo` | | one `tools/call` is one step; shared with the editor's history |
 | Persist | `scene_new` | `name`, `force?` | fresh GUID, unsaved |
-| | `scene_open` | `path`, `force?` | path under `assets/` |
-| | `scene_save` | `path?`, `name?`, `force?` | atomic; `name` renames the scene; refuses to overwrite a file changed on disk, or another existing file, unless `force` |
+| | `scene_open` | `path`, `force?` | path under `assets/`; a `.mcprefab` opens the prefab itself (entity 0 is its root) |
+| | `scene_save` | `path?`, `name?`, `force?` | atomic; a `.mcprefab` path saves a prefab; `name` renames the scene; refuses to overwrite a file changed on disk, or another existing file, unless `force` |
 | Build | `cook_run` | `pack?`, `adopt?` | incremental; `adopt` writes sidecars for new source files |
 | | `cook_errors` | | last diagnostics with file, line, col |
 | | `asset_delete` | `path` | deletes a source file under `assets/` and its `.mceasset` sidecar (not the open scene) |
@@ -291,11 +295,10 @@ that leaves it stuck at the same spot, is the first thing to look at with `rende
 | `scene_save` with `force` over another file | the file keeps its own GUID but its content is replaced by the open scene | save as a new path (a fresh GUID), or `scene_open` and `scene_clear` the existing scene |
 | Adopted textures default to sRGB | normal maps and LUTs come out wrong | `asset_set_import_settings {"settings": {"srgb": false}}` |
 | `-frames` is ignored headless | a headless run uses `-ticks` | `-headless 1 -ticks N` |
-| No tilemap tool | the floor becomes one stretched PNG | one `Sprite` per tile via `entity_duplicate`, or write a `.mctilemap` (section 5.7) |
 | `.mctest` entity by name after a prefab instance | refused: the cook expands a prefab into several entities, so later file positions shift | put prefab instances after the entities tests name, or give the scenario's checks entities that come first |
 | One open scene per server | editing variants means save-as and reopen | keep variants as separate files; `run_headless {"scene": ...}` plays a saved one without opening it |
 
 ## 14.5 What an agent cannot do yet
 
-Paint tilemaps, attach to a running editor, or cancel a long tool call. The friction logs in `docs/research/` list these with
+Attach to a running editor, or cancel a long tool call. The friction logs in `docs/research/` list these with
 their cost in practice.

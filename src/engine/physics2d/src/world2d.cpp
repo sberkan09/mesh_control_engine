@@ -1387,6 +1387,8 @@ World2D& World2D::operator=(World2D&&) noexcept = default;
 
 const PhysicsConfig& World2D::config() const { return impl_->cfg; }
 
+void World2D::set_gravity(vec2 gravity) { impl_->cfg.gravity = gravity; }
+
 bool World2D::create_body(Entity e, const BodyDesc& d) {
     Impl& w = *impl_;
     if (e.is_null() || w.slot(e) != kNoSlot) return false;

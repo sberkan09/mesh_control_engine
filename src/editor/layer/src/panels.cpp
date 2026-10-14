@@ -618,6 +618,7 @@ void add_default_panels(EditorShell& shell) {
     add_play_panel(shell);
     add_asset_panel(shell);
     add_tilemap_panel(shell);
+    add_project_settings_panel(shell);
 }
 
 }  // namespace mce::editor

@@ -91,6 +91,10 @@ bool EditorScene::recover(StringView text, cook::DiagList& diags) {
 }
 
 Result<void> EditorScene::save(StringView path) {
+    // The file's extension says what the document is: a scene saved as .mcprefab becomes a prefab
+    // (entity 0 its root, no settings) and a prefab saved as .mcscene a scene.
+    const bool prefab = path.size() > 9 && path.substr(path.size() - 9) == ".mcprefab";
+    doc_.set_kind(prefab ? DocKind::Prefab : DocKind::Scene);
     cook::String text;
     doc_.serialize(text);
     MCE_TRY(cook::fs::write_file_atomic(path, Span<const byte>(reinterpret_cast<const byte*>(text.c_str()), text.size())));
@@ -621,7 +625,21 @@ bool EditorScene::duplicate_entities(Span<const EntityId> ids, Array<EntityId>* 
 bool EditorScene::set_component(EntityId id, const refl::TypeRecord& type, const void* value) {
     DocEntity* e = doc_.find(id);
     DocComponent* c = e ? e->find(type) : nullptr;
-    if (!c) return false;
+    if (!c) {
+        // A prefab instance inheriting `type` from its root: the edit makes it an override.
+        const DocComponent* base = e && !e->prefab.is_null() ? prefab_base(id, type) : nullptr;
+        if (!base || std::memcmp(base->data(), value, type.size) == 0) return false;
+        Edit edit(*this, "Edit component");
+        record(id);
+        doc_.add_component(id, type);
+        c = e->find(type);
+        std::memcpy(c->data(), base->data(), type.size);
+        c->overrides = changed_fields_mask(type, base->data(), value);
+        std::memcpy(c->data(), value, type.size);
+        mirror(id, *c);
+        touch();
+        return true;
+    }
     if (std::memcmp(c->data(), value, type.size) == 0) return false;
     // One continuous drag of one component is one entry (coalescing until seal_undo()).
     Edit edit(*this, "Edit component", (type.type_hash ^ (u64(id) * 0x9E3779B97F4A7C15ull)) | 1u);

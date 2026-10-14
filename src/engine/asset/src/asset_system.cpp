@@ -23,6 +23,7 @@ bool chunk_type_for_asset_name(StringView name, ChunkType& out) {
         {Atlas::name, Atlas::chunk},     {Scene::name, Scene::chunk}, {InputMap::name, InputMap::chunk},
         {Prefab::name, Prefab::chunk},   {Tilemap::name, Tilemap::chunk},
         {ParticlePreset::name, ParticlePreset::chunk}, {Sequence::name, Sequence::chunk},
+        {SpriteSheet::name, SpriteSheet::chunk}, {AnimGraph::name, AnimGraph::chunk},
     };
     for (const Pair& p : kTable) {
         if (name == p.name) {
@@ -35,7 +36,7 @@ bool chunk_type_for_asset_name(StringView name, ChunkType& out) {
 
 namespace {
 
-constexpr usize kTypeSlots = 16;
+constexpr usize kTypeSlots = AssetSystem::kPlaceholderSlots;
 
 usize slot(ChunkType t) {
     const usize i = static_cast<usize>(t);
@@ -64,6 +65,8 @@ u8 supported_major(ChunkType t) {
         case ChunkType::RemoteConfig: return REMOTE_CONFIG_VERSION;
         case ChunkType::GameServicesCatalog: return GAME_SERVICES_CATALOG_VERSION;
         case ChunkType::StringTable: return STRING_TABLE_VERSION;
+        case ChunkType::SpriteSheet: return SPRITESHEET_VERSION;
+        case ChunkType::AnimGraph: return ANIMGRAPH_VERSION;
         default: return 0;
     }
 }

@@ -7,9 +7,11 @@
 #include <cstring>
 
 #include "imgui_draw_ctx.h"
+#include "mce/cook/fs.h"
 #include "mce/ecs/transform.h"
 #include "mce/editor/asset_browser.h"
 #include "mce/editor/editor_shell.h"
+#include "mce/log.h"
 #include "scene_panels.h"
 
 namespace mce::editor {
@@ -169,6 +171,8 @@ private:
                 ImGui::Separator();
                 if (ImGui::MenuItem("Create Child")) create(shell, scene.doc().index_of(e.id) + 1, e.id);
                 if (ImGui::MenuItem("Create Entity Below")) create(shell, scene.doc().index_of(e.id) + 1);
+                ImGui::Separator();
+                if (ImGui::MenuItem("Save as Prefab", nullptr, false, shell.session().project().is_open())) save_as_prefab(shell, e.id);
                 ImGui::EndPopup();
             }
             if (expanded && !kids.empty()) {
@@ -177,6 +181,29 @@ private:
             }
         }
         ImGui::PopID();
+    }
+
+    // prefabs/<entity name>.mcprefab (a free name: _2, _3, ... when taken); the subtree becomes an
+    // instance of it (EditorSession::create_prefab_from).
+    static void save_as_prefab(EditorShell& shell, EntityId id) {
+        EditorSession& session = shell.session();
+        cook::String stem;
+        for (char ch : session.scene().doc().find(id)->name.view())
+            stem += (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' ? ch : '_';
+        if (stem.empty()) stem = "prefab";
+        cook::String rel;
+        for (u32 n = 1; n < 1000; ++n) {
+            rel = "prefabs/";
+            rel += stem.view();
+            if (n > 1) cook::appendf(rel, "_%u", n);
+            rel += ".mcprefab";
+            if (!cook::fs::exists(session.project().asset_path(rel.view()).view())) break;
+        }
+        if (Result<asset::Guid> r = session.create_prefab_from(id, rel.view()); !r) {
+            FixedString<512> msg;
+            format_error(r.error(), msg);
+            MCE_LOG_ERROR("editor: save as prefab failed: {}", msg.view());
+        }
     }
 
     void create(EditorShell& shell, i32 at, EntityId parent = kNoEntity) {

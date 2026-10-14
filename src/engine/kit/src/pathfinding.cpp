@@ -155,6 +155,18 @@ u32 mark_static_colliders(NavGrid& grid, World& world, f32 inflate) {
     return n;
 }
 
+math::aabb2 static_collider_bounds(World& world) {
+    math::aabb2 all{{1e30f, 1e30f}, {-1e30f, -1e30f}};
+    world.query<const physics::RigidBody2D, const physics::Collider2D, const LocalTransform>().each(
+        [&](const physics::RigidBody2D& rb, const physics::Collider2D& c, const LocalTransform& t) {
+            if (rb.type != physics::BodyType::Static || c.is_sensor || c.one_way) return;
+            const math::aabb2 box = shape_aabb(c.shape, t.position.xy(), angle_z(t.rotation));
+            grow(all, box.min);
+            grow(all, box.max);
+        });
+    return all;
+}
+
 // ------------------------------------------------------------------ search
 
 void Pathfinder::heap_push(Node n) {

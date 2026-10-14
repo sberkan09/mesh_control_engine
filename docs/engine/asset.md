@@ -36,7 +36,7 @@ Runtime (`src/engine/asset/include/mce/asset/`)
   validates the skin section's indices.
 - `guid.h`: `Guid` (128-bit UUIDv4), `to_string`, `to_hex`, `parse_guid`.
 - `handle.h`: asset type tags (`Texture`, `Mesh`, `Material`, `Shader`, `Sfx`, `Font`, `Atlas`, `Scene`,
-  `InputMap`, `Prefab`, `Tilemap`, `Sequence`, `ParticlePreset`), `AssetHandle<T>` (generational index),
+  `InputMap`, `Prefab`, `Tilemap`, `Sequence`, `ParticlePreset`, `SpriteSheet`), `AssetHandle<T>` (generational index),
   `AnyHandle`, and `AssetRef<T>` (GUID + handle, what components store). Specializes `refl::FieldTraits` so an
   `AssetRef<T>` field is `FieldKind::AssetRef`.
 - `asset_system.h`: `AssetSystem`. `mount` (dev cooked directories holding `manifest.mce`, or a pack
@@ -70,7 +70,8 @@ Cook (`src/engine/asset/cook/include/mce/cook/`)
   `scan_dependencies`, `cook`), `ImportInput`, `IAssetLookup`, `DepRef`, `ImporterRegistry::add_builtins`.
   Built-in importers: texture (PNG and JPEG via stb_image), WAV, font (TTF atlas via stb_truetype), material
   (`.mcmat`), scene (`.mcscene`), prefab (`.mcprefab`), glTF (meshoptimizer), tilemap (`.mctilemap`),
-  particles (`.mcpart`), sequence (`.mcseq`), input map (`.mcinput` → `ChunkType::InputMap`, the
+  sprite sheet (`.mcsheet` → `ChunkType::SpriteSheet`, `SpriteSheetView`), animation graph (`.mcanim` →
+  `ChunkType::AnimGraph`, `AnimGraphView`), particles (`.mcpart`), sequence (`.mcseq`), input map (`.mcinput` → `ChunkType::InputMap`, the
   `mce/input/input_map.h` chunk, validated with `decode_input_map` at cook), shader (`.vert/.frag/.comp.glsl`, glslang). The glTF importer
   also imports skins (`JOINTS_0` / `WEIGHTS_0`, 4 influences, up to 256 joints per skin, inverse bind
   matrices); the sidecar setting `"skinning": false` imports a skinned mesh as a static one.

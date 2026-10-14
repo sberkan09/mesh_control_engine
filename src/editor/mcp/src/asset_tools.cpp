@@ -1,5 +1,5 @@
 // Asset authoring tools (ROADMAP M-DATA-REACH step 1): every JSON source asset the cook reads
-// (.mcpart, .mcseq, .mctilemap, .mcmat, .mcinput, .mcstore, .mcservices, .mcconfig) can be
+// (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, .mcinput, .mcstore, .mcservices, .mcconfig) can be
 // created, read, rewritten and described over MCP, and a tilemap painted, without the client
 // writing files itself. A document is cooked in memory with the project's importer before
 // anything is written (cook_document: the same reference and value checks as cook_run), so a
@@ -102,6 +102,29 @@ constexpr AssetKind kKinds[] = {
 {"name":"tile_size","type":"number","default":1,"help":"Metres per tile"},
 {"name":"tiles","type":"array of integers","help":"width x height; omitted on asset_create: all empty"}])json",
      R"json({"name":"tilemap","tileset":null,"columns":1,"rows":1,"width":16,"height":9,"tile_size":1})json"},
+    {"SpriteSheet", ".mcsheet", "mce-spritesheet", 1,
+     "Regions of one texture and named flipbook clips over them. An AnimatedSprite component (sheet: \"guid:...\", "
+     "clip: name) plays a clip on the Sprite next to it; Sprite.region shows one region by hand. Regions are numbered: "
+     "the grid's cells first (left to right, top row first), then the named pixel rects.",
+     R"json([
+{"name":"name","type":"string"},
+{"name":"texture","type":"guid ref | null","default":null,"help":"A Texture asset (\"guid:<uuid>\")"},
+{"name":"grid","type":"object","help":"{\"columns\": 1-1024, \"rows\": 1-1024, \"count\": cells used (default columns x rows)}"},
+{"name":"image_size","type":"[w, h]","help":"Texture size in pixels; required with regions"},
+{"name":"regions","type":"array","help":"[{\"name\": \"hurt\", \"rect\": [x, y, w, h]}] in pixels, y down from the top"},
+{"name":"clips","type":"array","help":"[{\"name\": 1-31 chars, \"frames\": [index | region name, ...] | {\"from\": a, \"to\": b}, \"fps\": 12, \"mode\": \"Loop\" | \"PingPong\" | \"Once\", \"events\": [{\"frame\": index within the clip, \"name\": 1-23 chars}]}]"}])json",
+     R"json({"name":"sheet","texture":null,"grid":{"columns":1,"rows":1},"clips":[{"name":"idle","frames":[0],"fps":12,"mode":"Loop"}]})json"},
+    {"AnimGraph", ".mcanim", "mce-animgraph", 1,
+     "A 3D animation state graph: states play a mesh clip or a 1D blend of clips, transitions fire on parameter "
+     "conditions or when a one-shot state finishes. An Animator component (graph: \"guid:...\") runs it on its "
+     "MeshRef; Animator.params holds the parameter values in the order 'params' lists them.",
+     R"json([
+{"name":"name","type":"string"},
+{"name":"params","type":"array of strings","help":"Up to 4 parameter names (1-23 chars)"},
+{"name":"start","type":"string","help":"The first state (default: the first listed)"},
+{"name":"states","type":"array","help":"[{\"name\": 1-31 chars, \"clip\": mesh clip name | \"blend\": {\"param\": name, \"points\": [{\"clip\": name, \"at\": value}, ...]}, \"loop\": true, \"speed\": 1, \"events\": [{\"time\": seconds, \"name\": 1-23 chars}]}]"},
+{"name":"transitions","type":"array","help":"[{\"from\": state | \"*\", \"to\": state, \"when\": [{\"param\": name, \"op\": \">\" | \">=\" | \"<\" | \"<=\" | \"==\" | \"!=\", \"value\": n}], \"on_finish\": false, \"fade\": 0.2}]"}])json",
+     R"json({"name":"graph","states":[{"name":"idle","clip":"Idle"}]})json"},
     {"Material", ".mcmat", "mce-material", 1, "A metallic-roughness material; texture references are Texture assets.",
      R"json([
 {"name":"name","type":"string"},
@@ -564,9 +587,9 @@ bool tilemap_paint(ToolCall& c) {
 const ToolDef kAssetTools[] = {
     {"asset_schema",
      "Describe a JSON source asset type: its fields (type, default, help) and the template asset_create starts from. "
-     "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcseq, .mctilemap, .mcmat, .mcinput, "
-     ".mcstore, .mcservices, .mcconfig).",
-     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Tilemap, Material, InputMap, StoreCatalog, GameServicesCatalog, RemoteConfig, or the extension"}}})json",
+     "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, "
+     ".mcinput, .mcstore, .mcservices, .mcconfig).",
+     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, RemoteConfig, or the extension"}}})json",
      asset_schema},
     {"asset_create",
      "Create a JSON source asset at 'path' (its extension picks the type) with a fresh GUID: the type's template with "

@@ -14,8 +14,9 @@
 
 namespace mce::kit {
 
-// A textured (or, without a texture, solid) quad. The texture is shown whole, stretched to
-// `size`; atlas regions and animation arrive with the sprite-sheet importer.
+// A textured (or, without a texture, solid) quad: `region` of the texture (the whole texture by
+// default) stretched to `size`. An AnimatedSprite on the same entity writes texture and region
+// from a sprite sheet every tick.
 struct Sprite {
     asset::AssetRef<asset::Texture> texture;  // null GUID: a solid quad in `tint`
     asset::AssetRef<asset::Texture> normal_map;  // set: lit by Light2D (FR-R2D-090); import it with srgb off
@@ -26,6 +27,7 @@ struct Sprite {
     i16 layer = 0;                  // authoritative stacking (rendering-2d D11)
     bool flip_x = false;
     bool flip_y = false;
+    math::vec4 region{0.0f, 0.0f, 1.0f, 1.0f};  // u0, v0, u1, v1 of the texture; v0 = top edge
 };
 MCE_COMPONENT(Sprite,
     texture,
@@ -36,7 +38,32 @@ MCE_COMPONENT(Sprite,
     order,
     (layer, Range{-100, 100}),
     flip_x,
-    flip_y)
+    flip_y,
+    (region, Help{"texture rect [u0, v0, u1, v1], 0..1, v0 = top; [0, 0, 1, 1] = whole"}))
+
+// Plays a clip of a sprite sheet (.mcsheet) on the Sprite of the same entity: every tick it
+// writes the sheet's texture and the current frame's region into the Sprite. Frames step on the
+// fixed tick (render/sprite_animation.h); a clip's frame events fire as SpriteAnimEvent events
+// (kit/sprite_anim.h) and show in `last_event`. Change `clip` to switch (the new clip starts from
+// its first frame); set `restart` to play the current one again.
+struct AnimatedSprite {
+    asset::AssetRef<asset::SpriteSheet> sheet;
+    FixedString<32> clip;           // empty: the sheet's first clip
+    f32 speed = 1.0f;               // playback rate; 0 holds the frame
+    bool playing = true;
+    bool restart = false;
+    bool finished = false;          // engine-written: a Once clip reached its end
+    u8 pad_ = 0;
+    f64 time = 0.0;                 // engine-written: seconds into the clip
+    u32 frame = 0;                  // engine-written: frame index within the clip
+    u32 events_fired = 0;           // engine-written
+    FixedString<24> last_event;     // engine-written
+    FixedString<32> playing_clip;   // engine-written: the clip `time` belongs to
+};
+MCE_COMPONENT(AnimatedSprite, (sheet, Help{"a .mcsheet sprite sheet"}), (clip, Help{"clip name; empty = the first clip"}),
+              (speed, Range{0, 10}), playing, (restart, Help{"set to play the clip again from its start (the engine clears it)"}),
+              (finished, ReadOnly, Transient), (time, ReadOnly, Transient), (frame, ReadOnly, Transient),
+              (events_fired, ReadOnly, Transient), (last_event, ReadOnly, Transient), (playing_clip, ReadOnly, Transient))
 
 enum class TextAlign : u8 { Left, Center, Right };
 MCE_ENUM(TextAlign, Left, Center, Right)
@@ -235,5 +262,16 @@ MCE_COMPONENT(PathAgent, (target, Help{"world point to walk to"}), (speed, Range
               (repath_countdown, ReadOnly, Transient), (waypoint, ReadOnly, Transient),
               (waypoint_count, ReadOnly, Transient), (truncated, ReadOnly, Transient),
               (planned_target, ReadOnly, Transient), (waypoints, ReadOnly, Transient))
+
+// Scene-wide settings (M-DATA-REACH 3): the first WorldSettings in ECS order is applied at
+// Startup by kit::install_stock (stock.h) to the 2D and 3D physics worlds. One per scene; the
+// MCP project_* tools and the editor's Project Settings panel put it on an entity named
+// "World Settings".
+struct WorldSettings {
+    math::vec2 gravity_2d{0.0f, -9.81f};     // m/s^2 of physics2d's World2D
+    math::vec3 gravity_3d{0.0f, -9.81f, 0.0f};  // m/s^2 of kit3d's Physics3D world
+    u32 pad_ = 0;
+};
+MCE_COMPONENT(WorldSettings, (gravity_2d, Help{"2D physics gravity, m/s^2"}), (gravity_3d, Help{"3D physics gravity, m/s^2"}))
 
 }  // namespace mce::kit
