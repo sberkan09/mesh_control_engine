@@ -41,6 +41,13 @@
 // and audio until it closes, with no pause overlay. -monetize_test "10:buy:gems 40:show:x"
 // makes requests at those sim ticks and prints every store and ad event (headless too), granting consumables.
 //
+// Live services (M-LIVEOPS, PlayerDesc::liveops): off unless the host turns them on (-liveops 1 forces them on).
+// Then the host's analytics backend and crash uploader (mce/liveops/liveops.h) get what consent allows: analytics
+// events and the crash reports earlier runs left in the crash folder. -liveops.provider local writes the events to
+// <save folder>/analytics.jsonl and copies the reports to <save folder>/crash_outbox/; none drops them. Consent
+// comes from the ad network's form (M-MONETIZE: personalized = granted, otherwise denied) unless the game sets it,
+// or from -liveops.consent granted|denied.
+//
 // Input: windowed, the starter-kit "Gameplay" map (mce/input/default_map.h: Move on WASD / arrows /
 // left stick, Jump on Space / A, Fire on J / left mouse / X, Pause) is sampled once per tick and
 // published as the InputState resource the game module reads. Headless runs publish an empty
@@ -50,6 +57,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <optional>
 
 #include "hud_font.h"
 #include "mce/asset/asset_system.h"
@@ -68,12 +76,14 @@
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/liveops/liveops.h"
 #include "mce/loc/loc.h"
 #include "mce/monetize/fake.h"
 #include "mce/monetize/platform_ads.h"
 #include "mce/monetize/platform_store.h"
 #include "mce/monetize/monetize.h"
 #include "mce/physics/module.h"
+#include "mce/platform/ads.h"
 #include "mce/platform/haptics.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -131,6 +141,13 @@ MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the pe
 MCE_CVAR(cv_store_catalog, "store_catalog", "",
          "Games with purchases and ads: the store catalog, GUID or source path of a cooked .mcstore (default: the first in the pack)",
          CVarFlags::None);
+MCE_CVAR(cv_liveops, "liveops", false, "Turn live services (analytics, crash reports) on even when the game's host does not",
+         CVarFlags::None);
+MCE_CVAR(cv_liveops_provider, "liveops.provider", "",
+         "Live services: empty = the host's, local = analytics.jsonl and crash_outbox/ in the save folder, none = neither",
+         CVarFlags::None);
+MCE_CVAR(cv_liveops_consent, "liveops.consent", "auto",
+         "Live services: auto (the ad network's consent form, or the game), granted or denied", CVarFlags::None);
 MCE_CVAR(cv_language, "language", "",
          "Play in this language (\"tr\", \"pt-BR\") for this run instead of the saved choice and the device languages",
          CVarFlags::None);
@@ -211,6 +228,8 @@ public:
         if (monetize_on_) MCE_TRY(init_monetize(cv_store_catalog.get_string()));
         else if (!cv_monetize_test.get_string().empty())
             return Error(Errc::InvalidArgument, "player: -monetize_test needs purchases and ads on (-monetize 1)");
+        liveops_on_ = desc_.liveops || cv_liveops.get_bool();
+        if (liveops_on_) MCE_TRY(init_liveops());
         MCE_TRY(init_localization());
         // The game on top of the engine systems (the game-module contract), before the scene so
         // its systems see the first tick.
@@ -278,6 +297,7 @@ public:
             monetize_.update();  // also while paused: a fullscreen ad must be able to close
             update_ad_pause();
         }
+        if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
         if (paused_ || ad_paused_) return;
         tick_dt_ = t.dt;
         if (t.actions) input::publish(world_, *t.actions);
@@ -419,6 +439,7 @@ public:
     void on_shutdown() override {
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
+        if (liveops_on_) liveops_.shutdown();
         if (three_d_) {  // the last frame's 3D load (tests and LOD measurements read it)
             const u32* lt = stats3d_.lod_triangles;
             std::printf("%s: 3D last frame %u triangles (LOD %u/%u/%u/%u), %u draws\n", desc_.app_name, stats3d_.triangles,
@@ -600,6 +621,54 @@ private:
         MCE_LOG_INFO("{}: language {} ({} string tables)", desc_.app_name, l10n.locale(), l10n.tables().size());
         world_.set_resource(std::move(l10n));
         return ok();
+    }
+
+    // ---- live services (M-LIVEOPS) ----------------------------------------------------------------
+
+    Result<void> init_liveops() {
+        const StringView mode = cv_liveops_consent.get_string();
+        if (mode == "granted") liveops::set_consent(liveops::Consent::Granted);
+        else if (mode == "denied") liveops::set_consent(liveops::Consent::Denied);
+        else if (mode != "auto")
+            return Error(Errc::InvalidArgument, "player: -liveops.consent wants auto, granted or denied", mode);
+        liveops_consent_auto_ = mode == "auto";
+
+        liveops::ServiceDesc d;
+        d.analytics = desc_.analytics_backend;
+        d.crash_uploader = desc_.crash_uploader;
+        const StringView provider = cv_liveops_provider.get_string();
+        if (provider == "local") {
+            FixedString<512> events(save::root());
+            events.append("/analytics.jsonl");
+            FixedString<512> outbox(save::root());
+            outbox.append("/crash_outbox");
+            local_analytics_.emplace(events.view());
+            local_outbox_.emplace(outbox.view());
+            d.analytics = &*local_analytics_;
+            d.crash_uploader = &*local_outbox_;
+        } else if (provider == "none") {
+            d.analytics = nullptr;
+            d.crash_uploader = nullptr;
+        } else if (!provider.empty()) {
+            return Error(Errc::InvalidArgument, "player: -liveops.provider wants local or none", provider);
+        }
+        // Where the crash handler writes (-crash_dir, or the per-user folder), also when it is off this
+        // run (-crash_reports 0, or a sanitizer build): reports from earlier runs still wait there.
+        if (crash::installed()) d.crash_dir.assign(crash::dump_dir());
+        else if (!samples::g_cv_crash_dir.get_string().empty()) d.crash_dir.assign(samples::g_cv_crash_dir.get_string());
+        else d.crash_dir.assign(crash::default_dump_dir(desc_.app_name).view());
+        liveops_.init(d);
+        return ok();
+    }
+
+    void update_liveops() {
+        // The ad network's consent form decides for every service unless the game or -liveops.consent did.
+        if (liveops_consent_auto_ && liveops::consent() == liveops::Consent::Unknown) {
+            const platform::ads::Consent ads = platform::ads::consent();
+            if (ads == platform::ads::Consent::Personalized) liveops::set_consent(liveops::Consent::Granted);
+            else if (ads == platform::ads::Consent::NonPersonalized) liveops::set_consent(liveops::Consent::Denied);
+        }
+        liveops_.update();
     }
 
     // ---- purchases and ads (M-MONETIZE) ---------------------------------------------------------
@@ -1170,6 +1239,11 @@ private:
     monetize::PlatformAds platform_ads_;      // the phone's ad network, likewise
     monetize::FakeAds fake_ads_;
     monetize::Service monetize_;  // before the World: its resources point here (PlayerDesc::monetize)
+    liveops::Service liveops_;  // PlayerDesc::liveops
+    std::optional<liveops::analytics::FileBackend> local_analytics_;  // -liveops.provider local
+    std::optional<liveops::OutboxUploader> local_outbox_;
+    bool liveops_on_ = false;
+    bool liveops_consent_auto_ = true;
     Array<MonetizeStep> monetize_test_;
     bool monetize_on_ = false;
     World world_;
