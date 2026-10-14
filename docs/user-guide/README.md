@@ -33,6 +33,7 @@ code as built and why; this guide links to them where you may want the full deta
 | 19 | [Mods](19-mods.md) | Letting players add data mods: turning them on, making a mod, load order |
 | 20 | [Multiplayer (optional)](20-multiplayer.md) | Opt a game into networking, run a server and clients, replicate entities |
 | 21 | [Novels and dialogue (optional)](21-novels-and-dialogue.md) | A visual novel from a template, the story script, NPC dialogue in any game and its dialogue box |
+| 22 | [Purchases and ads (optional)](22-purchases-and-ads.md) | Sell products and show ads: the store catalog, game code, consent, fakes for testing, store declarations |
 
 ## Conventions used in this guide
 
