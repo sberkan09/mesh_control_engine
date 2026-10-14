@@ -96,7 +96,21 @@ SDL GPU's Metal driver, whose `test_rhi_sdlgpu` compute cases pass there too (a 
 (`MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1`) reports 0 errors. The #185 translate change is now compiled and run
 on a Mac.
 
-BUDGET_PLACEHOLDER
+**Budget on a real GPU (04_cubes, 256 point lights, 200 frames, Release, Metal on an Apple M4; two runs, the
+first shown, the second within 0.2 ms):**
+
+| stage | CPU path | GPU path |
+|---|---|---|
+| CPU Forward+ cluster work (ms) | 0.094 | 0.004 (setup only) |
+| CPU command recording (ms) | 0.246 | 0.097 |
+| GPU light assignment (ms) | 0 | 0.114 |
+| GPU main pass (ms) | 3.10 | 2.93 |
+| GPU 3D frame total (ms) | 4.16 | 4.02 |
+
+The compute pass costs about 0.11 ms of GPU time and saves about 0.09 ms of CPU cluster work and 0.15 ms of
+command recording (the CPU path records the light lists every frame). The GPU frame total does not grow. "GL
+translate + submit" is about 6.6 ms on both paths, so this step does not change it; it is left for a later look at
+the Metal submit path.
 
 **Open in step 1:** nothing. SDL GPU compute on an iOS device builds (`ios-arm64`) but has not run on the phone
 yet; it goes with the next device session.
