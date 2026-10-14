@@ -573,6 +573,32 @@ TEST_CASE("ui: a menu draws through SpriteBatch in two groups, text above its pa
     CHECK(batch.groups()[1].set == f.font.set);  // ... then text, whatever the set ids
 }
 
+TEST_CASE("ui: a style's text outline and shadow add copies of the glyphs (M-UI-DATA 4)") {
+    Fixture f;
+    const auto glyph_quads = [&](const Style* look) {
+        Document d;
+        d.set_skin(f.skin);
+        Builder b(d, d.root());
+        b.text("t", "HELLO").at({0.5f, 0.5f}, {200, 40});
+        if (look) d.set_style(d.find("t"), WidgetState::Normal, *look);
+        d.update(frame());
+        render::SpriteBatch batch(f.sets, mem::heap());
+        batch.begin(render::compute_screen_view(rhi::Extent2D{1280, 720}), render::PassId::Screen2D);
+        d.submit(batch);
+        batch.build();
+        return batch.stats().quads;
+    };
+    const u32 plain = glyph_quads(nullptr);
+    REQUIRE(plain > 0);
+    Style look;
+    look.draw_quad = false;
+    look.text_outline = 2.0f;
+    look.text_shadow = {2, 2};
+    CHECK(glyph_quads(&look) == plain * 10);  // shadow + 8 outline taps + fill
+    look.text_outline_color.a = 0.0f;         // an invisible outline is skipped
+    CHECK(glyph_quads(&look) == plain * 2);
+}
+
 TEST_CASE("ui: a health bar bound to UiHealth/hp updates on change and is untouched otherwise") {
     Fixture f;
     World world;

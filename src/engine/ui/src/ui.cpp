@@ -748,6 +748,7 @@ vec2 Document::measure(u32 index, f32 avail_width) const {
         if (!skin_.font || s.empty()) return vec2(0, s.empty() ? 0.0f : text_px(st, skin_.font));
         render::TextLayoutDesc d;
         d.size_px = text_px(st, skin_.font);
+        d.letter_spacing = st.letter_spacing;
         return render::measure_text(skin_.font->face, s, d);
     };
     const StringView label(n->text.data(), n->text.size());
@@ -1320,12 +1321,13 @@ void Document::draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u
         }
 }
 
-void Document::draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 size, Color c, i16 layer, i32 order,
-                         f32 max_width) const {
+void Document::draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 size, Color c, const Style& look,
+                         i16 layer, i32 order, f32 max_width) const {
     if (!skin_.font || s.empty() || c.a <= 0.0f) return;
     render::TextLayoutDesc d;
     d.size_px = size;
     d.max_width = max_width;
+    d.letter_spacing = look.letter_spacing * scale_;
     render::layout_text(skin_.font->face, s, d, scratch_);
     math::aabb2 clip;
     if (draw_clip_) clip = math::aabb2{draw_clip_->min, draw_clip_->max};
@@ -1335,8 +1337,15 @@ void Document::draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 
     p.sort_layer = layer;
     p.sort_order = order;
     p.clip = draw_clip_ ? &clip : nullptr;
+    p.outline_px = look.text_outline * scale_;
+    p.outline_color = linear(look.text_outline_color);
+    p.shadow_px = look.text_shadow * scale_;
+    p.shadow_color = linear(look.text_shadow_color);
     batch.add_text(*skin_.font, scratch_, p);
-    stats_.quads += static_cast<u32>(scratch_.quads.size());
+    u32 copies = 1;
+    if (p.outline_px > 0.0f && p.outline_color.a > 0.0f) copies += 8;
+    if ((p.shadow_px.x != 0.0f || p.shadow_px.y != 0.0f) && p.shadow_color.a > 0.0f) copies += 1;
+    stats_.quads += static_cast<u32>(scratch_.quads.size()) * copies;
 }
 
 void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
@@ -1367,13 +1376,14 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
             draw_region(batch, r, st.tint, region, quad_layer, order, st.slice);
         const f32 line_h = skin_.font ? skin_.font->face.line_height() * (px / skin_.font->face.metrics().pixel_height) : px;
         switch (n.kind) {
-            case WidgetKind::Text: draw_text(batch, label, r.min, px, st.text_color, text_layer, order, r.size().x); break;
+            case WidgetKind::Text: draw_text(batch, label, r.min, px, st.text_color, st, text_layer, order, r.size().x); break;
             case WidgetKind::Button: {
                 if (label.empty() || !skin_.font) break;
                 render::TextLayoutDesc d;
                 d.size_px = px;
+                d.letter_spacing = st.letter_spacing * scale_;
                 const vec2 t = render::measure_text(skin_.font->face, label, d);
-                draw_text(batch, label, r.center() - t * 0.5f, px, st.text_color, text_layer, order);
+                draw_text(batch, label, r.center() - t * 0.5f, px, st.text_color, st, text_layer, order);
                 // A tab's button: the selected one is underlined in the accent color.
                 const u32 tabs = n.parent != kNone ? nodes_[n.parent].parent : kNone;
                 if (tabs != kNone && nodes_[tabs].kind == WidgetKind::Tabs && nodes_[tabs].first_child == n.parent) {
@@ -1394,7 +1404,7 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
                     const f32 in = 3.0f * scale_;
                     draw_quad(batch, Rect{b.min + vec2(in, in), b.max - vec2(in, in)}, st.accent, quad_layer, order + 2);
                 }
-                draw_text(batch, label, vec2(b.max.x + pad, r.center().y - line_h * 0.5f), px, st.text_color, text_layer, order);
+                draw_text(batch, label, vec2(b.max.x + pad, r.center().y - line_h * 0.5f), px, st.text_color, st, text_layer, order);
                 break;
             }
             case WidgetKind::Slider: {
@@ -1418,12 +1428,12 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
                 in.append(c.input.view());
                 const bool caret = focused_ == id && std::fmod(time_, 1.0) < 0.5;
                 if (caret) in.append("_");
-                draw_text(batch, in.view(), vec2(r.min.x + pad, y), px, st.text_color, text_layer, order);
+                draw_text(batch, in.view(), vec2(r.min.x + pad, y), px, st.text_color, st, text_layer, order);
                 for (u32 l = c.count(); l-- > 0;) {
                     y -= line_h;
                     if (y < r.min.y + pad) break;
                     const ConsoleData::Line& line = c.at(l);
-                    draw_text(batch, line.text.view(), vec2(r.min.x + pad, y), px, line.color, text_layer, order + 1);
+                    draw_text(batch, line.text.view(), vec2(r.min.x + pad, y), px, line.color, st, text_layer, order + 1);
                 }
                 break;
             }

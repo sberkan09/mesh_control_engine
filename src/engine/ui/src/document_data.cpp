@@ -35,10 +35,15 @@ struct StyleRecord {
     u32 sprite_region;
     f32 text_size;
     f32 slice[4];
+    f32 letter_spacing;
+    f32 text_outline_color[4];
+    f32 text_outline;
+    f32 text_shadow_color[4];
+    f32 text_shadow[2];
     u8 draw_quad;
     u8 pad[3];
 };
-static_assert(sizeof(StyleRecord) == 76);
+static_assert(sizeof(StyleRecord) == 124);
 
 namespace WidgetFlag {
 enum : u8 { Visible = 1u << 0, Interactable = 1u << 1, BlocksPointer = 1u << 2 };
@@ -61,7 +66,7 @@ struct UiWidgetRecord {
     f32 grid_cell[2], grid_spacing[2];
     u32 nav[NavEdgeCount];
 };
-static_assert(sizeof(UiWidgetRecord) == 24 + 4 + 8 + 40 + 76 * 5 + 16 + 8 + 4 + 16 + 16);
+static_assert(sizeof(UiWidgetRecord) == 24 + 4 + 8 + 40 + 124 * 5 + 16 + 8 + 4 + 16 + 16);
 
 void put_color(f32 (&o)[4], const Color& c) {
     o[0] = c.r;
@@ -219,6 +224,11 @@ void encode_ui_document(const DocumentData& d, Array<byte>& out) {
             o.slice[1] = st.slice.top;
             o.slice[2] = st.slice.right;
             o.slice[3] = st.slice.bottom;
+            o.letter_spacing = st.letter_spacing;
+            put_color(o.text_outline_color, st.text_outline_color);
+            o.text_outline = st.text_outline;
+            put_color(o.text_shadow_color, st.text_shadow_color);
+            put_vec(o.text_shadow, st.text_shadow);
             o.draw_quad = st.draw_quad ? 1 : 0;
         }
         r.value = w.value;
@@ -325,6 +335,11 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
             st.sprite_region = o.sprite_region;
             st.text_size = o.text_size;
             st.slice = Slice{o.slice[0], o.slice[1], o.slice[2], o.slice[3]};
+            st.letter_spacing = o.letter_spacing;
+            st.text_outline_color = get_color(o.text_outline_color);
+            st.text_outline = o.text_outline;
+            st.text_shadow_color = get_color(o.text_shadow_color);
+            st.text_shadow = get_vec(o.text_shadow);
             st.draw_quad = o.draw_quad == 1;
         }
         w.value = r.value;

@@ -59,7 +59,7 @@ const char* const kMenu = R"({ "format": "mce-ui", "version": 1, "guid": "5703e0
     { "name": "bg", "fill": true, "style": { "tint": [0, 0, 0, 0.6] } },
     { "name": "menu", "kind": "Stack", "at": [0.5, 0.45, 320, 0], "stack": { "spacing": 12, "align": "Center" },
       "children": [
-        { "name": "title", "kind": "Text", "text": "UNDERTOW", "style": { "text_size": 32, "text_color": [1, 0.8, 0.4, 1] } },
+        { "name": "title", "kind": "Text", "text": "UNDERTOW", "style": { "text_size": 32, "text_color": [1, 0.8, 0.4, 1], "text_outline": 2, "text_shadow": [2, 3] } },
         { "name": "play", "kind": "Button", "text": "PLAY", "default_focus": true,
           "styles": { "Hover": { "tint": [0.3, 0.3, 0.4, 1], "slice": { "left": 4, "right": 4 } } },
           "nav": { "down": "menu/volume" } },
@@ -89,6 +89,8 @@ TEST_CASE("ui: .mcui cooks to CHNK_UIDOC, decodes and builds a Document") {
     CHECK(d.widgets[play].styles[u32(ui::WidgetState::Hover)].slice.left == 4.0f);
     CHECK(d.widgets[d.find("menu/volume")].step == 0.05f);
     CHECK(d.widgets[d.find("menu/levels/l1")].styles[0].sprite_region == 7);
+    CHECK(d.widgets[d.find("menu/title")].styles[0].text_outline == 2.0f);
+    CHECK(d.widgets[d.find("menu/title")].styles[4].text_shadow.y == 3.0f);
     CHECK(d.find("menu/options/bar/video") != ui::kNoWidgetIndex);
     CHECK_FALSE(d.widgets[d.find("menu/options/pages/audio")].visible);
     CHECK(d.widgets[d.find("menu/options/pages/video")].visible);

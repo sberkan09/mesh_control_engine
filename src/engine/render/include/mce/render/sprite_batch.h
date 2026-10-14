@@ -119,6 +119,11 @@ ResultV bake_tilemap(const TilemapDesc& desc, const SpriteSets& sets, TilemapBak
 
 // Where a text layout lands: pixel space is scaled by `units_per_pixel` and, unless y_down,
 // flipped into the Y-up world. `origin` is the top-left of the layout box.
+//
+// A look for the text (M-UI-DATA step 4): `shadow_px` != 0 draws the glyphs once more in
+// `shadow_color` at that offset (layout pixels, +y down) under the text; `outline_px` > 0 draws
+// them eight more times in `outline_color`, `outline_px` away in each compass direction, between
+// the shadow and the fill. All copies share the text's sort key, so they stay in submission order.
 struct TextPlacement {
     math::vec2 origin;
     f32 units_per_pixel = 1.0f;  // 1 for the screen view; 1/ppm for world-space labels
@@ -129,6 +134,10 @@ struct TextPlacement {
     SpriteBlend blend = SpriteBlend::Alpha;
     // Glyph parts outside this box (view units) are cut off, their uvs cut to match (scroll views).
     const math::aabb2* clip = nullptr;
+    math::Color outline_color = math::Color::black();
+    f32 outline_px = 0.0f;
+    math::Color shadow_color{0.0f, 0.0f, 0.0f, 0.6f};
+    math::vec2 shadow_px{};
 };
 
 // An axis-aligned quad showing part of a region (UI panels, 9-slice pieces). `uv` is the part of

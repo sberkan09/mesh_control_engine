@@ -303,8 +303,8 @@ private:
     void draw_quad(render::SpriteBatch& batch, const Rect& r, Color c, i16 layer, i32 order) const;
     void draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u32 region, i16 layer, i32 order,
                      const Slice& slice = {}) const;
-    void draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 size, Color c, i16 layer, i32 order,
-                   f32 max_width = 0.0f) const;
+    void draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 size, Color c, const Style& look, i16 layer,
+                   i32 order, f32 max_width = 0.0f) const;
     mutable const Rect* draw_clip_ = nullptr;  // set by submit() while drawing a clipped widget
 
     mem::IAllocator& alloc_;
