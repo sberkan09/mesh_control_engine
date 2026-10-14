@@ -205,7 +205,7 @@ TEST_CASE("mcp protocol: JSON-RPC framing, initialize handshake, errors, lists")
     auto tools = c.request("tools/list");
     const cook::JsonValue list = tools->root().get("result").get("tools");
     REQUIRE(list.is_array());
-    CHECK(list.size() == 25);
+    CHECK(list.size() >= 25);  // the MVP tools; later tracks add theirs (tools_agent.cpp)
     for (u32 i = 0; i < list.size(); ++i) {
         CHECK(list.at(i).get("name").is_string());
         CHECK(str(list.at(i).get("inputSchema").get("type")) == "object");
