@@ -5,7 +5,7 @@ Three kinds of UI exist, and which you use depends on how much of the host you o
 | Need | Use | Available to |
 |---|---|---|
 | In-world and HUD text | `TextLabel` entities (with `Parallax {0, 0}` for a HUD) | every project, authored in scenes |
-| Menus, options, health bars with widgets | `mce_ui` documents built in C++ | programs that own their host (the samples); not yet the project template |
+| Menus, options, health bars with widgets | `mce_ui` documents, built in C++ or cooked from `.mcui` assets | programs that own their host (the samples); not yet the project template |
 | A debugging command line in the shipped game | the developer console (`DevConsole`) | every player-based program, out of the box |
 
 ## 12.1 HUD through scene text
@@ -68,6 +68,46 @@ The template host is the stock player runtime and does not build documents, so a
 wants menus today either authors them as scene entities (sprites and labels driven by a small state
 machine in the module, the way the MCP-authored games handle their title, pause and win screens) or writes its own host from the
 samples.
+
+### UI documents as data (`.mcui`)
+
+A document can also be written as a `.mcui` asset (JSON source, cooked to a `UiDocument` chunk) and
+built at run time with `ui::build_document` (`mce/ui/document_data.h`). The stock player does not
+load them yet (ROADMAP M-UI-DATA step 2); a host that owns its loop can:
+
+```json
+{ "format": "mce-ui", "version": 1, "guid": "<uuid>",
+  "font": "guid:<Font>", "sprites": "guid:<SpriteSheet>", "white_region": 0,
+  "widgets": [
+    { "name": "bg", "fill": true, "style": { "tint": [0, 0, 0, 0.6] } },
+    { "name": "menu", "kind": "Stack", "at": [0.5, 0.45, 320, 0], "stack": { "spacing": 12 },
+      "children": [
+        { "name": "play", "kind": "Button", "text": "PLAY", "default_focus": true,
+          "styles": { "Hover": { "tint": [0.3, 0.3, 0.4, 1], "slice": { "left": 4, "right": 4 } } },
+          "nav": { "down": "menu/volume" } },
+        { "name": "volume", "kind": "Slider", "range": [-60, 0, 3], "convar": "audio.music_db" },
+        { "name": "tabs", "kind": "Tabs", "tabs": [ { "name": "audio", "label": "AUDIO", "children": [] } ] } ] },
+    { "name": "confirm", "modal": true, "children": [ { "name": "yes", "kind": "Button", "text": "YES" } ] } ] }
+```
+
+```cpp
+ui::DocumentData data;
+ui::decode_ui_document(assets.resolve(handle), data);   // the UiDocument chunk
+ui::build_document(data, doc);                          // the skin (data.font, data.sprites) is the host's
+```
+
+- A widget starts from the look the C++ `Builder` gives its kind, so the JSON above and the builder
+  code earlier in this section make the same document. `"style"` changes the `UiStyle` fields it
+  lists in every state, `"styles"` in one state; `"anchors"`, `"stack"` and `"grid"` take the
+  `UiAnchors`, `UiStackLayout` and `UiGridLayout` fields, by the names the editor shows.
+- `"fill": true` and `"at": [x, y, width, height]` are `Builder::fill` and `Builder::at`. A Panel
+  with `"modal": true` is `Builder::modal`'s veil; a Tabs widget's `"tabs"` are `Builder::tab`
+  pages and its `"value"` is the page shown.
+- Names are unique among siblings; `"nav"` edges and `Document::find` take paths of names.
+- The cook rejects a document the runtime would misread (an unknown kind or field, a duplicate
+  name, a nav path that leads nowhere, a value outside its range) with `file:line:col`.
+- `ui::extract_document` turns a live document back into data and `cook::write_ui_document`
+  writes it as `.mcui` text; cooking that text gives the same chunk byte for byte.
 
 ## 12.3 The developer console
 

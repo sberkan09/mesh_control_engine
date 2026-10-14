@@ -303,10 +303,14 @@ snapshot, a replay produces the same events. Hover, transitions and pointer posi
 
 ### 5.4 Authoring
 
-C++ builders at v1.0 (§2). A cooked `CHNK_UI` document format is deferred until an artist needs to author screens in
-the editor; when it comes, it is a serialization of the SoA pool (names, anchors, styles, kinds, nav edges), and
-`Builder` becomes one producer of it. The editor would preview documents in its viewport through the same `submit`
-path (no ImGui reimplementation of widgets).
+C++ builders at v1.0 (§2). Since M-UI-DATA step 1 a document is also data: a `.mcui` JSON source cooks to a
+`CHNK_UIDOC` chunk (`mce/ui/document_data.h`), a flat serialization of the widget pool in document order (names,
+kinds, anchors, the five per-state styles, values, layouts, nav edges, convar bindings) plus the skin's font and
+sprite sheet by GUID. `build_document` turns it into a `Document` and `extract_document` turns a `Document` back into
+it, and a `.mcui` widget starts from the same per-kind defaults `Builder` applies (`builder_defaults`), so code and
+data make the same documents. The cook reads anchors, styles and layouts through the reflected `Ui*` types. The
+editor would preview documents in its viewport through the same `submit` path (no ImGui reimplementation of
+widgets).
 
 ### 5.5 Hot reload
 
@@ -362,5 +366,5 @@ Styles reference sprite regions and fonts by asset handle. A reloaded atlas or f
 3. Action-driven focus on a pushed "UI" action map; pointer is hover + focus-on-press (§4.2).
 4. Drawing exclusively through `render::SpriteBatch` in `PassId::Screen2D`; no UI-specific renderer (§4.5).
 5. Bindings: read-only property paths via `mce_refl`, two-way only for convars on options screens (§4.4).
-6. C++ builders are the authoring format at v1.0; a cooked format waits for an editor-authoring need (§5.4).
+6. C++ builders were the authoring format at v1.0; `.mcui` documents (M-UI-DATA) are the cooked one (§5.4).
 7. RmlUi is the pre-approved fallback, triggered by the M8 mid-point prototype check (§8).
