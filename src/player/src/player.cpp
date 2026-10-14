@@ -46,7 +46,9 @@
 // events and the crash reports earlier runs left in the crash folder. -liveops.provider local writes the events to
 // <save folder>/analytics.jsonl and copies the reports to <save folder>/crash_outbox/; none drops them. Consent
 // comes from the ad network's form (M-MONETIZE: personalized = granted, otherwise denied) unless the game sets it,
-// or from -liveops.consent granted|denied.
+// or from -liveops.consent granted|denied. Remote config (mce/liveops/remote_config.h) comes with them: the pack's
+// .mcconfig defaults, the values the last fetch saved, and a fetch at start (the host's fetcher, or
+// -remote_config.file <cooked pack>); the game applies fetched values with RemoteConfig::apply_fetched.
 //
 // Input: windowed, the starter-kit "Gameplay" map (mce/input/default_map.h: Move on WASD / arrows /
 // left stick, Jump on Space / A, Fire on J / left mouse / X, Pause) is sampled once per tick and
@@ -77,6 +79,7 @@
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/liveops/liveops.h"
+#include "mce/liveops/remote_config.h"
 #include "mce/loc/loc.h"
 #include "mce/monetize/fake.h"
 #include "mce/monetize/platform_ads.h"
@@ -148,6 +151,11 @@ MCE_CVAR(cv_liveops_provider, "liveops.provider", "",
          CVarFlags::None);
 MCE_CVAR(cv_liveops_consent, "liveops.consent", "auto",
          "Live services: auto (the ad network's consent form, or the game), granted or denied", CVarFlags::None);
+MCE_CVAR(cv_remote_config_file, "remote_config.file", "",
+         "Remote config: fetch newer values from this cooked pack holding a .mcconfig (the static-file backend)",
+         CVarFlags::None);
+MCE_CVAR(cv_remote_config_dump, "remote_config.dump", false,
+         "Remote config: print every value at start and after each apply", CVarFlags::None);
 MCE_CVAR(cv_language, "language", "",
          "Play in this language (\"tr\", \"pt-BR\") for this run instead of the saved choice and the device languages",
          CVarFlags::None);
@@ -658,7 +666,55 @@ private:
         else if (!samples::g_cv_crash_dir.get_string().empty()) d.crash_dir.assign(samples::g_cv_crash_dir.get_string());
         else d.crash_dir.assign(crash::default_dump_dir(desc_.app_name).view());
         liveops_.init(d);
+        return init_remote_config();
+    }
+
+    Result<void> init_remote_config() {
+        liveops::ConfigValues defaults;
+        for (asset::AssetKey k = 0; k < assets_.asset_count(); ++k) {
+            const asset::AssetInfo info = assets_.info(k);
+            if (info.type != asset::ChunkType::RemoteConfig) continue;
+            MCE_TRY_ASSIGN(const asset::AssetHandle<asset::RemoteConfigChunk> h,
+                           assets_.load_sync<asset::RemoteConfigChunk>(k));
+            const Result<void> r = liveops::decode_config(assets_.resolve(h), defaults);
+            assets_.release(asset::AnyHandle(h));
+            MCE_TRY(r);
+            MCE_LOG_INFO("{}: remote config defaults {}", desc_.app_name, info.path);
+            break;
+        }
+        liveops::IConfigFetcher* fetcher = desc_.config_fetcher;
+        if (!cv_remote_config_file.get_string().empty()) {
+            file_fetcher_.emplace(cv_remote_config_file.get_string());
+            fetcher = &*file_fetcher_;
+        }
+        if (cv_liveops_provider.get_string() == "none") fetcher = nullptr;
+        remote_config_.init(defaults, fetcher);
+        remote_config_.install(world_);
+        dumped_config_version_ = ~0u;
         return ok();
+    }
+
+    void dump_remote_config() {
+        if (!cv_remote_config_dump.get_bool() || remote_config_.version() == dumped_config_version_) return;
+        dumped_config_version_ = remote_config_.version();
+        for (const liveops::ConfigValue& v : remote_config_.active().values()) {
+            switch (v.type) {
+                case liveops::ConfigType::Int:
+                    std::printf("remote_config v%u: %s = %lld\n", dumped_config_version_, v.key.c_str(),
+                                static_cast<long long>(v.i));
+                    break;
+                case liveops::ConfigType::Float:
+                    std::printf("remote_config v%u: %s = %g\n", dumped_config_version_, v.key.c_str(), v.f);
+                    break;
+                case liveops::ConfigType::Bool:
+                    std::printf("remote_config v%u: %s = %s\n", dumped_config_version_, v.key.c_str(),
+                                v.i ? "true" : "false");
+                    break;
+                case liveops::ConfigType::String:
+                    std::printf("remote_config v%u: %s = \"%s\"\n", dumped_config_version_, v.key.c_str(), v.s.c_str());
+                    break;
+            }
+        }
     }
 
     void update_liveops() {
@@ -669,6 +725,8 @@ private:
             else if (ads == platform::ads::Consent::NonPersonalized) liveops::set_consent(liveops::Consent::Denied);
         }
         liveops_.update();
+        remote_config_.update();
+        dump_remote_config();
     }
 
     // ---- purchases and ads (M-MONETIZE) ---------------------------------------------------------
@@ -1242,6 +1300,9 @@ private:
     liveops::Service liveops_;  // PlayerDesc::liveops
     std::optional<liveops::analytics::FileBackend> local_analytics_;  // -liveops.provider local
     std::optional<liveops::OutboxUploader> local_outbox_;
+    std::optional<liveops::FileConfigFetcher> file_fetcher_;  // -remote_config.file
+    liveops::RemoteConfigService remote_config_;  // before the World: its resource points here
+    u32 dumped_config_version_ = ~0u;
     bool liveops_on_ = false;
     bool liveops_consent_auto_ = true;
     Array<MonetizeStep> monetize_test_;

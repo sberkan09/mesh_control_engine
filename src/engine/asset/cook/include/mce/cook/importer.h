@@ -127,6 +127,7 @@ mem::UniquePtr<IImporter> make_particle_importer();  // .mcpart -> CHNK_PART (v0
 mem::UniquePtr<IImporter> make_sequence_importer();  // .mcseq -> CHNK_SEQ (v0.5)
 mem::UniquePtr<IImporter> make_input_map_importer(); // .mcinput -> CHNK_INPUT (FR-INP-020)
 mem::UniquePtr<IImporter> make_store_importer();     // .mcstore -> CHNK_STORE (M-MONETIZE)
+mem::UniquePtr<IImporter> make_config_importer();    // .mcconfig -> CHNK_RCFG (M-LIVEOPS remote config)
 mem::UniquePtr<IImporter> make_string_importer();    // assets/loc/<locale>.csv -> CHNK_STR (M-MOBILE 11a)
 mem::UniquePtr<IImporter> make_shader_importer();  // .vert/.frag/.comp.glsl -> CHNK_SHD (v0.5)
 
