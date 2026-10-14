@@ -1,6 +1,11 @@
 #include "mce/editor/editor_session.h"
 
+#include <cstdio>
+
+#include "mce/cook/envmap.h"
 #include "mce/cook/fs.h"
+#include "mce/cook/json.h"
+#include "mce/kit/kit3d.h"
 #include "mce/editor/preview_renderer.h"
 #include "mce/log.h"
 
@@ -35,6 +40,78 @@ void EditorSession::attach_preview() {
     scene_.set_prefab_apply([](void* user, asset::Guid prefab, const DocComponent& value, u64 fields) {
         return static_cast<EditorSession*>(user)->apply_to_prefab(prefab, value, fields);
     }, this);
+}
+
+Result<u32> EditorSession::bake_reflection_probes() {
+    constexpr const char* kWhere = "editor.bake_probes";
+    static_assert(render::Forward3D::kProbeRgbmRange == cook::kEnvRgbmRange, "the renderer and .mcenv agree on RGBM");
+    if (!project_.is_open()) return Error(Errc::InvalidArgument, kWhere, "no project is open");
+    if (!preview_) return Error(Errc::InvalidArgument, kWhere, "no preview renderer");
+    Array<ProbeBake> bakes;
+    MCE_TRY(preview_->bake_probes(scene_.world(), bakes));
+
+    // assets/probes/<scene file stem>/probe_<id>.mcenv: stable per probe, so re-bakes overwrite.
+    StringView stem = scene_.path().empty() ? StringView("untitled") : scene_.path();
+    if (const usize slash = stem.find_last_of("/\\"); slash != StringView::npos) stem = stem.substr(slash + 1);
+    if (const usize dot = stem.find('.'); dot != StringView::npos) stem = stem.substr(0, dot);
+    struct Written {
+        EntityId id;
+        asset::Guid guid;
+    };
+    Array<Written> written;
+    Array<cook::String> changed;
+    const rhi::Extent2D es = render::Forward3D::probe_export_size();
+    for (const ProbeBake& b : bakes) {
+        const EntityId id = scene_.entity_for(b.entity);
+        if (id == kNoEntity || !scene_.get<kit::ReflectionProbe3D>(id)) continue;  // a prefab ghost
+        cook::String rel("probes/");
+        rel += stem;
+        rel += "/probe_";
+        char num[16];
+        std::snprintf(num, sizeof(num), "%u", id);
+        rel += StringView(num);
+        rel += ".mcenv";
+        const cook::String abs = project_.asset_path(rel.view());
+        cook::String sidecar_abs = abs;
+        sidecar_abs += ".mceasset";
+        asset::Guid guid;
+        cook::String sidecar;
+        if (cook::fs::read_text(sidecar_abs.view(), sidecar)) {  // a re-bake keeps the GUID
+            cook::JsonDoc doc;
+            cook::JsonError err;
+            if (doc.parse(sidecar.view(), err)) {
+                if (auto g = asset::parse_guid(doc.root().get("guid").as_string())) guid = g.value();
+            }
+        }
+        const usize slash = abs.view().rfind('/');
+        if (slash != StringView::npos) MCE_TRY(cook::fs::create_directories(abs.view().substr(0, slash)));
+        if (guid == asset::Guid{}) {
+            guid = cook::generate_guid();
+            cook::String text("{ \"guid\": \"");
+            text += asset::to_string(guid).view();
+            text += "\", \"importer\": \"envmap\", \"importer_version\": 1, \"settings\": {} }\n";
+            MCE_TRY(cook::fs::write_file_atomic(sidecar_abs.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.size())));
+        }
+        Array<byte> file;
+        cook::write_envmap(es.width, es.height / render::Forward3D::kProbeLayers, render::Forward3D::kProbeLayers, b.rgba.span(), file);
+        MCE_TRY(cook::fs::write_file_atomic(abs.view(), file.span()));
+        changed.push_back(rel);
+        written.push_back({id, guid});
+    }
+    if (written.empty()) return u32(0);
+    watcher_.poll(0.0, 0.0);  // the writes are ours: re-baseline the watcher
+    const HotReloadResult r = hot_reload(changed.span());
+    if (r.failed > 0) return Error(Errc::ImportFailed, kWhere, "a baked probe did not cook (see the log)");
+
+    scene_.begin_edit("Bake reflection probes");
+    for (const Written& w : written) {
+        kit::ReflectionProbe3D p = *scene_.get<kit::ReflectionProbe3D>(w.id);
+        p.baked.guid = w.guid;
+        scene_.set(w.id, p);
+    }
+    scene_.end_edit();
+    MCE_LOG_INFO("editor: baked {} reflection probe(s) into assets/probes/{}/", written.size(), stem);
+    return static_cast<u32>(written.size());
 }
 
 Result<void> EditorSession::apply_to_prefab(asset::Guid prefab, const DocComponent& value, u64 fields) {

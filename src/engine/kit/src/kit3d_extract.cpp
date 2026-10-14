@@ -271,6 +271,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
 
 void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     stats_ = {};
+    probe_entities_.clear();
     apply_environment(world, scene);
     const render::View3D& view = scene.view();
     const u64 tick = world.current_tick();
@@ -290,7 +291,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             track(e, pos, rot, scale, tick);
             interpolated(e, alpha, pos, rot, scale);
         }
-        if (m.cull_radius > 0.0f &&
+        if (!bake_mode_ && m.cull_radius > 0.0f &&
             !render::sphere_visible(view, pos, m.cull_radius * max(scale.x, max(scale.y, scale.z))))
             return;
         const u32 key = mesh_key(m.mesh.guid);
@@ -384,8 +385,10 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         rp.blend_distance = p.blend_distance;
         rp.intensity = p.intensity;
         rp.version = p.version;
-        rp.baked = texture_key(p.baked.guid);
+        rp.baked = bake_mode_ ? ~0u : texture_key(p.baked.guid);
+        const usize before = scene.reflection_probes().size();
         scene.add_reflection_probe(rp);
+        if (scene.reflection_probes().size() > before) probe_entities_.push_back(e);
         ++stats_.reflection_probes;
     });
 
@@ -396,14 +399,14 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         keys.resize(si->meshes.size());
         for (u32 i = 0; i < si->meshes.size(); ++i) keys[i] = mesh_key(si->meshes[i]);
         for (const StaticCell3D& c : si->cells) {
-            if (!render::sphere_visible(view, c.center, c.radius)) continue;
+            if (!bake_mode_ && !render::sphere_visible(view, c.center, c.radius)) continue;
             ++stats_.cells_visible;
             const f32 dist = length(c.center - view.position);
             for (u32 i = c.first; i < c.first + c.count && i < si->instances.size(); ++i) {
                 const StaticInstance3D& s = si->instances[i];
                 if (s.mesh >= si->meshes.size() || keys[s.mesh] == ~0u) continue;
-                if (s.max_distance > 0.0f && dist > s.max_distance) continue;
-                if (s.thin_distance > 0.0f && dist > s.thin_distance && (i & 1u)) continue;
+                if (!bake_mode_ && s.max_distance > 0.0f && dist > s.max_distance) continue;
+                if (!bake_mode_ && s.thin_distance > 0.0f && dist > s.thin_distance && (i & 1u)) continue;
                 render::MeshInstance inst;
                 inst.mesh = keys[s.mesh];
                 inst.world = trs(s.position, s.rotation, {s.scale, s.scale, s.scale});

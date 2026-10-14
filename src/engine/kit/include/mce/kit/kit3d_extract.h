@@ -80,6 +80,13 @@ public:
 
     const Kit3DStats& stats() const { return stats_; }
 
+    // Reflection probe bakes (M-VISUAL 2, the editor's bake): every MeshRef and static instance is
+    // submitted whatever the view (no culling, no distance thinning) and probes ignore their
+    // existing bakes, so the scene captures what it holds.
+    void set_bake_mode(bool on) { bake_mode_ = on; }
+    // The entities of the probes the last extract() added to the scene, in slot order.
+    Span<const Entity> probe_entities() const { return probe_entities_.span(); }
+
 private:
     struct MeshEntry {
         asset::Guid guid;
@@ -117,6 +124,8 @@ private:
     Array<u8> lod_states_;   // per entity index: the LOD level last drawn (Scene3D hysteresis)
     Array<u8> static_lods_;  // per StaticInstances3D copy
     Kit3DStats stats_;
+    bool bake_mode_ = false;
+    Array<Entity> probe_entities_;
 };
 
 }  // namespace mce::kit
