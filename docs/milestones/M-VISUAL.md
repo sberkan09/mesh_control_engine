@@ -10,7 +10,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | # | Step | Linear | State |
 |---|---|---|---|
 | 1 | Compute in the RHI; clustered light build on the GPU | SBA-6 | GL and SDL GPU (Vulkan) done; Metal compute open |
-| 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL, IBL texture source and runtime reflection probes done (all backends, fragment passes); editor bake open |
+| 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL, IBL texture source and runtime reflection probes and the editor bake done (all backends, fragment passes); goldens open |
 | 3 | SSAO / GTAO | SBA-8 | — |
 | 4 | Local-light shadows | SBA-9 | — |
 | 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | — |
@@ -147,7 +147,15 @@ the probe's slot once (`Forward3DStats::probes_loaded`) and nothing is captured 
 exported, uploaded the way the cook stores it and loaded back reflects within 6 of the capture, still showing a
 wall since removed from the scene; decoded once; without the bake the probe captures again).
 
-**Open in step 2:** the editor's bake command (capture every `ReflectionProbe3D` of the open scene with all its
-instances, write the `.mcenv` + sidecar, set `baked`); golden captures once the image-diff tooling exists (today's
-gates are pixel probes); real-GPU numbers.
+**Editor bake (part 4b).** File ▸ *Bake reflection probes* (`EditorSession::bake_reflection_probes`) captures
+every enabled `ReflectionProbe3D` of the open scene through the preview (`PreviewRenderer::bake_probes`: the
+extract in bake mode, so every mesh is drawn whatever its cull distance or static-cell visibility, and existing
+bakes are ignored), writes `assets/probes/<scene>/probe_<entity id>.mcenv` with its sidecar (a re-bake keeps the
+file's GUID), hot-reloads them and points each component's `baked` at its file in one undo step. It refuses a
+scene without probes or without `Environment3D.sky_ibl`. Gate: `test_editor_gl` (GL and SDL GPU): the refusal,
+the file and sidecar, the bake mounted and not black, undo, the GUID kept on re-bake, and the preview then loading
+the bake instead of capturing (0 validation errors).
+
+**Open in step 2:** golden captures once the image-diff tooling exists (today's gates are pixel probes); real-GPU
+numbers.
 

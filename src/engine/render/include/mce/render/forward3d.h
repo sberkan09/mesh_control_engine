@@ -109,6 +109,11 @@ public:
     static constexpr f32 kProbeRgbmRange = 16.0f;
     static constexpr rhi::Extent2D probe_export_size() { return {kIblEnvWidth, kIblEnvWidth / 2 * kProbeLayers}; }
     bool record_probe_export(rhi::CommandBuffer& cmd, u32 probe);
+    // Forgets every probe slot, so the next record() captures (or loads) each probe again: a bake
+    // must not reuse a capture of another draw set.
+    void invalidate_probes() {
+        for (u64& k : probe_keys_) k = 0;
+    }
     rhi::TextureHandle probe_export_target() const { return probe_export_; }
     // The sharp equirect of the last probe captured (RGBA16F, kIblEnvWidth × kIblEnvWidth/2).
     rhi::TextureHandle probe_capture() const { return probe_capture_; }
