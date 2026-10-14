@@ -1,6 +1,7 @@
 #pragma once
 // Kit3DExtract — the render extract for the kit3d components (kit3d.h), the 3D twin of
-// SpriteExtract: reads MeshRef / Animator / PointLight3D / SpotLight3D / Camera3DComponent +
+// SpriteExtract: reads MeshRef / Animator / PointLight3D / SpotLight3D / ReflectionProbe3D /
+// Camera3DComponent +
 // LocalTransform (WorldTransform when the hierarchy wrote one), the Environment3D resource (or
 // component) and StaticInstances3D, and fills a Scene3D in ECS iteration order.
 //
@@ -39,6 +40,7 @@ struct Kit3DStats {
     u32 cells_visible = 0;
     u32 point_lights = 0;
     u32 spot_lights = 0;
+    u32 reflection_probes = 0;
     u32 animated = 0;
     u32 missing = 0;         // MeshRefs whose mesh is not resident
 };

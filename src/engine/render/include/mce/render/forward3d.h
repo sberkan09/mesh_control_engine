@@ -48,6 +48,9 @@ struct Forward3DStats {
     bool gpu_clusters = false;  // this frame's lights were assigned by the compute pass
     bool ibl = false;           // this frame's ambient came from image-based lighting
     bool ibl_baked = false;     // the sky changed and its IBL textures were re-baked this frame
+    u32 probes = 0;             // reflection probes the main pass sampled
+    u32 probes_captured = 0;    // probes (re)captured this frame (placed, moved or version bumped)
+    u32 probe_draws = 0;        // draws of those captures, over all six faces
     u32 joints = 0;          // joint matrices uploaded for skinned meshes
     u32 bloom_levels = 0;
     bool fxaa = false;
@@ -92,7 +95,15 @@ public:
     static constexpr u32 kIblLayers = 5;      // pre-filtered roughness 0.2, 0.4, ... 1.0
     static constexpr u32 kIblEnvWidth = 128;  // equirect, 2:1
     static constexpr u32 kIblLutSize = 64;
-    rhi::TextureHandle ibl_env() const { return ibl_env_; }      // RGBA16F 2D array, kIblLayers layers
+    static constexpr u32 kProbeFaceSize = 128;
+    // Layers per reflection probe in ibl_env(): the sharp capture, then the pre-filtered ones.
+    static constexpr u32 kProbeLayers = kIblLayers + 1;
+    static constexpr u32 probe_base_layer(u32 probe) { return kIblLayers + probe * kProbeLayers; }
+    // RGBA16F 2D array: the sky's kIblLayers layers, then kProbeLayers per probe slot once a scene
+    // has reflection probes.
+    rhi::TextureHandle ibl_env() const { return ibl_env_; }
+    // The sharp equirect of the last probe captured (RGBA16F, kIblEnvWidth × kIblEnvWidth/2).
+    rhi::TextureHandle probe_capture() const { return probe_capture_; }
     rhi::TextureHandle ibl_brdf_lut() const { return ibl_lut_; } // RGBA16F, rg = F0 scale, bias
     rhi::TextureHandle ibl_sh() const { return ibl_sh_; }        // RGBA16F 9×1, irradiance / pi
 
@@ -103,9 +114,20 @@ private:
     void timestamp(rhi::CommandBuffer& cmd, u32 stage);
     void record_clusters(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_ibl(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_main(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target);
+    // What the current pass has bound, so consecutive draws skip redundant binds.
+    struct DrawCache {
+        rhi::PipelineHandle pipe;
+        const GpuMesh* mesh = nullptr;
+        u32 tex[4] = {~0u - 1, ~0u - 1, ~0u - 1, ~0u - 1};
+    };
+    // draws[begin, end) of the bound frame/pass state; indices >= opaque_end take the blend
+    // pipelines. `main` counts them in the stats.
+    void draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin, u32 end,
+                     u32 opaque_end, DrawCache& cache, bool main);
 
     rhi::RenderDevice* device_ = nullptr;
     const TextureStore* textures_ = nullptr;
@@ -132,6 +154,13 @@ private:
     rhi::TextureHandle ibl_sh_;
     rhi::SamplerHandle env_sampler_;     // linear, wraps around the equirect seam
     u64 ibl_key_ = 0;                    // the sky the IBL textures were baked from; 0 = none
+    rhi::PipelineHandle probe_reproject_;  // six faces -> equirect
+    rhi::PipelineHandle probe_prefilter_;  // equirect -> GGX layers
+    rhi::TextureHandle probe_faces_;     // RGBA16F 2D array, 6 layers of kProbeFaceSize²
+    rhi::TextureHandle probe_depth_;     // D32 2D array, 6 layers
+    rhi::TextureHandle probe_capture_;   // RGBA16F equirect: the sharp capture the layers filter
+    u32 ibl_env_layers_ = 0;
+    u64 probe_keys_[kMaxReflectionProbes] = {};  // what each slot was captured from; 0 = none
     rhi::BufferHandle cluster_ranges_;   // GPU assignment outputs (banks 4 and 6)
     rhi::BufferHandle cluster_indices_;
     u32 cluster_ranges_cap_ = 0;         // clusters

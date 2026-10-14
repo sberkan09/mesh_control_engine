@@ -128,7 +128,7 @@ std::string write_mesh_tree(const char* name, asset::Guid guid, Span<const byte>
 }  // namespace
 
 TEST_CASE("kit3d: the components are reflected and install is idempotent") {
-    for (const char* name : {"MeshRef", "PointLight3D", "SpotLight3D", "Camera3DComponent", "Animator", "Environment3D",
+    for (const char* name : {"MeshRef", "PointLight3D", "SpotLight3D", "ReflectionProbe3D", "Camera3DComponent", "Animator", "Environment3D",
                              "BoxCollider3D", "MeshCollider3D"}) {
         const refl::TypeRecord* t = refl::find_type(StringId(name));
         INFO(name);
@@ -192,6 +192,13 @@ TEST_CASE("kit3d: MeshRefs, lights and visibility fill the scene") {
     spot.outer_deg = 40.0f;
     spot.inner_deg = 60.0f;  // clamped to outer
     f.world.spawn_with(at({0, 2, -6}), spot);
+    kit::ReflectionProbe3D probe;
+    probe.offset = {0, 1, 0};
+    probe.half_extents = {4, 2, 3};
+    probe.version = 7;
+    f.world.spawn_with(at({1, 0, -5}), probe);
+    probe.enabled = 0;
+    f.world.spawn_with(at({1, 0, -5}), probe);
     f.step();
 
     render::Camera3D cam;
@@ -210,6 +217,13 @@ TEST_CASE("kit3d: MeshRefs, lights and visibility fill the scene") {
     CHECK(scene.point_lights()[0].spot_outer == 0.0f);
     CHECK(scene.point_lights()[1].spot_outer == doctest::Approx(math::radians(40.0f)));
     CHECK(scene.point_lights()[1].spot_inner == doctest::Approx(math::radians(40.0f)));
+    CHECK(f.extract.stats().reflection_probes == 1);
+    REQUIRE(scene.reflection_probes().size() == 1);
+    const render::ReflectionProbe& rp = scene.reflection_probes()[0];
+    CHECK(rp.position.y == doctest::Approx(1.0f));
+    CHECK(rp.bounds.min.x == doctest::Approx(-3.0f));
+    CHECK(rp.bounds.max.z == doctest::Approx(-2.0f));
+    CHECK(rp.version == 7);
 }
 
 TEST_CASE("kit3d: the camera and interpolated meshes draw between the last two ticks") {

@@ -69,6 +69,24 @@ struct SpotLight3D {
 MCE_COMPONENT(SpotLight3D, color, offset, (intensity, Range{0, 100}), direction, (radius, Range{0.1f, 200}),
               (outer_deg, Range{1, 89}), (inner_deg, Range{0, 89}), enabled)
 
+// A reflection probe (M-VISUAL 2): the scene seen from the entity's position plus `offset`, used
+// for the specular reflections of surfaces inside the world-axis box of `half_extents` around the
+// entity (box-projected, so a room's walls line up in its reflections). Keep the room's floor and
+// walls inside the box by more than `blend_distance`, over which the probe fades to the sky.
+// Needs Environment3D::sky_ibl. Captured when placed or moved; bump `version` to re-capture after
+// the room itself changed. At most four per scene.
+struct ReflectionProbe3D {
+    math::vec3 half_extents{5.0f, 3.0f, 5.0f};
+    math::vec3 offset;
+    f32 blend_distance = 1.0f;
+    f32 intensity = 1.0f;
+    u32 version = 0;
+    u32 enabled = 1;
+};
+MCE_COMPONENT(ReflectionProbe3D, half_extents, (offset, Help{"capture point, entity space"}),
+              (blend_distance, Range{0, 20}), (intensity, Range{0, 4}),
+              (version, Help{"bump to re-capture"}), enabled)
+
 // The 3D view a player renders from: the first `primary` camera in ECS order, at its entity's
 // transform (looking down local -Z). Drawn between the last two ticks' transforms, so a camera the
 // game moves every tick is smooth at any frame rate. A scene with one plays on the 3D path.

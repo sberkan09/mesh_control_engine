@@ -45,6 +45,19 @@ struct PassU {
     vec4 sky_ground;   // w: sky texture max lod, -1 = gradient
     vec4 sun;          // x: cos disk, y: disk intensity, z: texture intensity, w: texture additive
     vec4 ibl;          // x: on, y: diffuse scale, z: pre-filtered layers, w: bake roughness
+    vec4 probes;       // x: reflection probe count
+    vec4 probe_pos[kMaxReflectionProbes];  // w: intensity
+    vec4 probe_min[kMaxReflectionProbes];  // w: blend distance
+    vec4 probe_max[kMaxReflectionProbes];  // w: first ibl_env layer
+};
+
+struct ProbeU {  // kProbeReprojectFS
+    mat4 face_vp[6];
+    vec4 pos;
+};
+
+struct PrefilterU {  // kProbePrefilterFS
+    vec4 params;  // y: samples, w: roughness
 };
 
 struct ObjectU {
@@ -102,6 +115,32 @@ u64 sky_radiance_key(const Sky& sky, rhi::TextureHandle sky_tex, f32 sky_lod) {
     mix(f, sizeof(f));
     mix(u, sizeof(u));
     return h | 1u;  // never 0 (= not baked)
+}
+
+// What a probe's capture depends on: its placement, its version and the sky lighting it.
+u64 probe_key(const ReflectionProbe& p, u64 sky_key) {
+    u64 h = sky_key;
+    auto mix = [&h](const void* q, usize n) {
+        const auto* b = static_cast<const u8*>(q);
+        for (usize i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
+    };
+    const f32 f[9] = {p.position.x, p.position.y, p.position.z, p.bounds.min.x, p.bounds.min.y,
+                      p.bounds.min.z, p.bounds.max.x, p.bounds.max.y, p.bounds.max.z};
+    mix(f, sizeof(f));
+    mix(&p.version, sizeof(p.version));
+    return h | 1u;
+}
+
+// The six 90° views of a capture (+x, -x, +y, -y, +z, -z); any set works, the reprojection
+// reads the faces through the same matrices.
+void probe_face_views(vec3 pos, f32 near_z, f32 far_z, mat4 (&view)[6], mat4 (&view_proj)[6]) {
+    static constexpr vec3 kDirs[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    static constexpr vec3 kUps[6] = {{0, 1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}, {0, 1, 0}, {0, 1, 0}};
+    const mat4 proj = perspective_rh_no(1.57079633f, 1.0f, near_z, far_z);
+    for (u32 f = 0; f < 6; ++f) {
+        view[f] = look_at_rh(pos, pos + kDirs[f], kUps[f]);
+        view_proj[f] = proj * view[f];
+    }
 }
 
 void destroy(rhi::RenderDevice& d, rhi::TextureHandle& t) {
@@ -261,6 +300,12 @@ ResultV Forward3D::create_pipelines() {
         fs.fragment_shader = {kIblBrdfFS, "ibl_brdf.frag"};
         fs.debug_name = "ibl.brdf_lut";
         MCE_TRY_ASSIGN(ibl_brdf_, device_->create_pipeline(fs));
+        fs.fragment_shader = {kProbeReprojectFS, "probe_reproject.frag"};
+        fs.debug_name = "probe.reproject";
+        MCE_TRY_ASSIGN(probe_reproject_, device_->create_pipeline(fs));
+        fs.fragment_shader = {kProbePrefilterFS, "probe_prefilter.frag"};
+        fs.debug_name = "probe.prefilter";
+        MCE_TRY_ASSIGN(probe_prefilter_, device_->create_pipeline(fs));
     }
     return ok();
 }
@@ -326,12 +371,15 @@ void Forward3D::shutdown() {
     for (rhi::PipelineHandle* p :
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &skinned_cull_,
           &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_,
-          &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_}) {
+          &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
-    for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_}) destroy(*device_, *t);
+    for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &probe_faces_, &probe_depth_, &probe_capture_})
+        destroy(*device_, *t);
     ibl_key_ = 0;
+    ibl_env_layers_ = 0;
+    for (u64& k : probe_keys_) k = 0;
     for (rhi::SamplerHandle* s : {&material_sampler_, &shadow_sampler_, &point_sampler_, &linear_clamp_, &env_sampler_}) {
         if (!s->is_null()) device_->destroy_sampler(*s);
         *s = {};
@@ -383,7 +431,8 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     const Span<const mat4> palette = scene.joint_palette();
     if (!palette.empty()) cmd.set_storage_data(rhi::bank::kJointPalette, std::as_bytes(palette));
     stats_.joints = static_cast<u32>(palette.size());
-    record_ibl(cmd, scene);  // rare (sky changes), so outside the per-stage budget
+    record_ibl(cmd, scene);     // rare (sky changes), so outside the per-stage budget
+    record_probes(cmd, scene);  // rare too (probe placed, moved or version bumped)
     timestamp(cmd, kTsBegin);
     record_clusters(cmd, scene);
     timestamp(cmd, kTsClusters);
@@ -459,15 +508,26 @@ void Forward3D::record_ibl(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         d.size = {9, 1};
         d.debug_name = "mce.3d.ibl_sh9";
         ibl_sh_ = device_->create_texture(d);
-        d.size = {kIblEnvWidth, kIblEnvWidth / 2};
-        d.dimension = rhi::TextureDimension::Tex2DArray;
-        d.array_layers = kIblLayers;
-        d.debug_name = "mce.3d.ibl_env";
-        ibl_env_ = device_->create_texture(d);
         pass_into(ibl_lut_, 0, "ibl.brdf_lut");  // depends on nothing: once
         cmd.bind_pipeline(ibl_brdf_);
         cmd.draw_non_indexed(3);
         cmd.end_pass();
+    }
+    // The sky's layers, then the probe slots once a scene has probes (grown once, never shrunk).
+    const u32 layers = kIblLayers + (scene.reflection_probes().empty() ? 0u : kMaxReflectionProbes * kProbeLayers);
+    if (layers > ibl_env_layers_) {
+        destroy(*device_, ibl_env_);
+        rhi::TextureDesc d;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.size = {kIblEnvWidth, kIblEnvWidth / 2};
+        d.dimension = rhi::TextureDimension::Tex2DArray;
+        d.array_layers = static_cast<u16>(layers);
+        d.debug_name = "mce.3d.ibl_env";
+        ibl_env_ = device_->create_texture(d);
+        ibl_env_layers_ = layers;
+        ibl_key_ = 0;
+        for (u64& k : probe_keys_) k = 0;
     }
     PassU pu{};
     const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu);
@@ -488,6 +548,149 @@ void Forward3D::record_ibl(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         cmd.end_pass();
         ibl_key_ = key;
         stats_.ibl_baked = true;
+    }
+    cmd.pop_debug_scope();
+}
+
+// ---- reflection probes (M-VISUAL 2): the scene from each changed probe, into its ibl_env layers.
+// Captures see the sun and the sky IBL but no shadows and no point lights.
+void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const Span<const ReflectionProbe> probes = scene.reflection_probes();
+    if (!stats_.ibl || probes.empty() || probe_reproject_.is_null()) return;
+    stats_.probes = static_cast<u32>(probes.size());
+    u64 keys[kMaxReflectionProbes] = {};
+    bool any = false;
+    for (u32 i = 0; i < probes.size(); ++i) {
+        keys[i] = probe_key(probes[i], ibl_key_);
+        any |= keys[i] != probe_keys_[i];
+    }
+    if (!any) return;
+    if (probe_faces_.is_null()) {
+        rhi::TextureDesc d;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.size = {kProbeFaceSize, kProbeFaceSize};
+        d.dimension = rhi::TextureDimension::Tex2DArray;
+        d.array_layers = 6;
+        d.debug_name = "mce.3d.probe_faces";
+        probe_faces_ = device_->create_texture(d);
+        d.format = rhi::TextureFormat::D32_Float;
+        d.usage = rhi::TextureUsage::DepthTarget;
+        d.debug_name = "mce.3d.probe_depth";
+        probe_depth_ = device_->create_texture(d);
+        rhi::TextureDesc c;
+        c.format = rhi::TextureFormat::RGBA16F;
+        c.usage = rhi::TextureUsage::SampledColorTarget;
+        c.size = {kIblEnvWidth, kIblEnvWidth / 2};
+        c.debug_name = "mce.3d.probe_capture";
+        probe_capture_ = device_->create_texture(c);
+    }
+    auto pass_into = [&](rhi::TextureHandle t, u16 layer, const char* name) {
+        rhi::PassAttachment out;
+        out.texture = t;
+        out.layer = layer;
+        out.load = rhi::LoadOp::DontCare;
+        rhi::RenderPassDesc p;
+        p.colors = Span<const rhi::PassAttachment>(&out, 1);
+        p.debug_name = name;
+        cmd.begin_pass(p);
+    };
+
+    const Fog& fog = scene.fog();
+    const Sky& sky = scene.sky();
+    const View3D& view = scene.view();
+    const DirectionalLight& light = scene.light();
+    PassU pu{};
+    vec3 dir = normalize(light.direction);
+    if (!(length_sq(dir) > 0.0f)) dir = {0, -1, 0};
+    pu.light_dir = vec4(dir, 0.0f);  // no cascades
+    pu.light_color = vec4(light.color * light.intensity, 0.0f);
+    pu.amb_sky = vec4(light.ambient_sky, 0.0f);
+    pu.amb_ground = vec4(light.ambient_ground, 0.0f);
+    pu.fog = vec4(fog.color, fog.density);
+    for (mat4& c : pu.cascade) c = mat4::identity();
+    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu);
+    pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), 0.0f};  // the sky's IBL, no probes
+    static constexpr ClusterRange kNoRange{0, 0};
+    static constexpr GpuPointLight kNoLight{};
+    static constexpr u32 kNoIndex = 0;
+    const Span<const Scene3D::Draw> draws = scene.probe_draws();
+
+    cmd.push_debug_scope("probes");
+    for (u32 i = 0; i < probes.size(); ++i) {
+        if (keys[i] == probe_keys_[i]) continue;
+        const ReflectionProbe& probe = probes[i];
+        mat4 face_view[6], face_vp[6];
+        probe_face_views(probe.position, view.near_z, view.far_z, face_view, face_vp);
+        for (u32 f = 0; f < 6; ++f) {
+            rhi::PassAttachment color;
+            color.texture = probe_faces_;
+            color.layer = static_cast<u16>(f);
+            color.clear.color[0] = fog.color.x;
+            color.clear.color[1] = fog.color.y;
+            color.clear.color[2] = fog.color.z;
+            color.clear.color[3] = 1.0f;
+            rhi::PassAttachment depth;
+            depth.texture = probe_depth_;
+            depth.layer = static_cast<u16>(f);
+            depth.clear.depth = 1.0f;
+            depth.store = rhi::StoreOp::DontCare;
+            rhi::RenderPassDesc fp;
+            fp.colors = Span<const rhi::PassAttachment>(&color, 1);
+            fp.depth = depth;
+            fp.debug_name = "probe.face";
+            cmd.begin_pass(fp);
+            FrameU fu{};
+            fu.view_proj = face_vp[f];
+            fu.view = face_view[f];
+            fu.inv_view_proj = inverse(face_vp[f]);
+            fu.camera_pos = vec4(probe.position, 0.0f);
+            fu.params = {scene.exposure(), 0.0f, 0.0f, 0.0f};
+            const f32 px = f32(kProbeFaceSize);
+            fu.viewport = {px, px, 1.0f / px, 1.0f / px};
+            fu.cluster = {1.0f, 1.0f, 1.0f, 0.0f};
+            fu.cluster_z = {0.0f, 0.0f, view.near_z, view.far_z};
+            cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
+            cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
+            cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
+            cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
+            cmd.bind_texture(rhi::bank::kIblEnv, ibl_env_, env_sampler_);
+            cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_lut_, linear_clamp_);
+            cmd.bind_texture(rhi::bank::kIblSh, ibl_sh_, point_sampler_);
+            cmd.set_storage_data(rhi::bank::kClusters, rhi::as_bytes(kNoRange));
+            cmd.set_storage_data(rhi::bank::kLightIndices, rhi::as_bytes(kNoIndex));
+            cmd.set_storage_data(rhi::bank::kLightPool, rhi::as_bytes(kNoLight));
+            DrawCache cache;
+            draw_meshes(cmd, scene, draws, 0, static_cast<u32>(draws.size()), static_cast<u32>(draws.size()), cache, false);
+            stats_.probe_draws += static_cast<u32>(draws.size());
+            if (sky.enabled) {
+                cmd.bind_pipeline(sky_);
+                cmd.draw_non_indexed(3);
+            }
+            cmd.end_pass();
+        }
+        // Faces -> the sharp equirect, then the GGX layers into this probe's ibl_env slot.
+        ProbeU qu;
+        for (u32 f = 0; f < 6; ++f) qu.face_vp[f] = face_vp[f];
+        qu.pos = vec4(probe.position, 0.0f);
+        pass_into(probe_capture_, 0, "probe.reproject");
+        cmd.bind_pipeline(probe_reproject_);
+        cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(qu));
+        cmd.bind_texture(rhi::bank::kFirstSampler, probe_faces_, linear_clamp_);
+        cmd.draw_non_indexed(3);
+        cmd.end_pass();
+        const u32 base = probe_base_layer(i);
+        cmd.bind_texture(rhi::bank::kFirstSampler, probe_capture_, env_sampler_);
+        for (u32 l = 0; l < kProbeLayers; ++l) {
+            pass_into(ibl_env_, static_cast<u16>(base + l), "probe.prefilter");
+            cmd.bind_pipeline(probe_prefilter_);
+            const PrefilterU fu{{0.0f, l == 0 ? 1.0f : 256.0f, 0.0f, f32(l) / f32(kIblLayers)}};
+            cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(fu));
+            cmd.draw_non_indexed(3);
+            cmd.end_pass();
+        }
+        probe_keys_[i] = keys[i];
+        ++stats_.probes_captured;
     }
     cmd.pop_debug_scope();
 }
@@ -599,6 +802,16 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         cmd.bind_texture(rhi::bank::kIblEnv, ibl_env_, env_sampler_);
         cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_lut_, linear_clamp_);
         cmd.bind_texture(rhi::bank::kIblSh, ibl_sh_, point_sampler_);
+        const Span<const ReflectionProbe> probes = scene.reflection_probes();
+        if (stats_.probes > 0) {
+            pu.probes.x = f32(probes.size());
+            for (u32 i = 0; i < probes.size(); ++i) {
+                const ReflectionProbe& p = probes[i];
+                pu.probe_pos[i] = vec4(p.position, p.intensity);
+                pu.probe_min[i] = vec4(p.bounds.min, max(p.blend_distance, 1e-3f));
+                pu.probe_max[i] = vec4(p.bounds.max, f32(probe_base_layer(i)));
+            }
+        }
     }
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
@@ -619,74 +832,74 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     stats_.point_lights = static_cast<u32>(cl.lights().size());
     stats_.light_indices = static_cast<u32>(cl.indices().size());
 
-    const rhi::TextureHandle white = textures_->white();
-    rhi::PipelineHandle bound_pipe;
-    const GpuMesh* bound_mesh = nullptr;
-    u32 bound_tex[4] = {~0u - 1, ~0u - 1, ~0u - 1, ~0u - 1};
-    static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
-    auto bind_map = [&](u32 i, u32 key) {
-        if (key == bound_tex[i]) return;
-        const rhi::TextureHandle tex = key == ~0u ? white : textures_->get(key);
-        cmd.bind_texture(kSlots[i], tex, material_sampler_);
-        bound_tex[i] = key;
-        ++stats_.texture_binds;
-    };
+    DrawCache cache;
     const Span<const Scene3D::Draw> draws = scene.draws();
-    auto draw_range = [&](u32 begin, u32 end) {
-        for (u32 i = begin; i < end; ++i) {
-            const Scene3D::Draw& d = draws[i];
-            if (d.mesh->vertices.is_null()) continue;
-            const GpuSubmesh& sm = d.mesh->submeshes[d.submesh];
-            const asset::MaterialChunk& mat = sm.material;
-            const bool skinned = d.mesh->skinned();
-            const rhi::PipelineHandle pipe = i >= scene.opaque_count()                         ? (skinned ? skinned_blend_ : mesh_blend_)
-                                             : (mat.flags & asset::MaterialFlags::DoubleSided) ? (skinned ? skinned_two_sided_ : mesh_two_sided_)
-                                                                                               : (skinned ? skinned_cull_ : mesh_cull_);
-            if (!(pipe == bound_pipe)) {
-                cmd.bind_pipeline(pipe);
-                bound_pipe = pipe;
-                ++stats_.pipeline_binds;
-            }
-            if (d.mesh != bound_mesh) {
-                cmd.bind_vertex_buffer(d.mesh->vertices);
-                cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
-                bound_mesh = d.mesh;
-            }
-            bind_map(0, sm.albedo_key);
-            bind_map(1, sm.normal_key);
-            bind_map(2, sm.orm_key);
-            bind_map(3, sm.emissive_key);
-            const MeshInstance& inst = scene.instances()[d.instance];
-            ObjectU ou;
-            ou.model = d.model;
-            ou.normal = d.normal;
-            ou.uv_rect = sm.uv_rect;
-            ou.base_color = {mat.base_color[0] * inst.tint.x, mat.base_color[1] * inst.tint.y,
-                             mat.base_color[2] * inst.tint.z, mat.base_color[3] * inst.tint.w};
-            ou.emissive = {mat.emissive[0] * inst.emissive_tint.x, mat.emissive[1] * inst.emissive_tint.y,
-                           mat.emissive[2] * inst.emissive_tint.z, sm.emissive_key != ~0u ? 1.0f : 0.0f};
-            ou.params = {(mat.flags & asset::MaterialFlags::AlphaMask) ? mat.alpha_cutoff : 0.0f,
-                         (mat.flags & asset::MaterialFlags::Unlit) ? 1.0f : 0.0f, mat.roughness, mat.metallic};
-            ou.maps = {sm.normal_key != ~0u ? 1.0f : 0.0f, sm.orm_key != ~0u ? 1.0f : 0.0f,
-                       (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
-                       (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
-            ou.dequant = d.dequant;
-            ou.skin = {palette_index(d.palette), 0.0f, 0.0f, 0.0f};
-            cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
-            cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
-            ++stats_.main_draws;
-        }
-    };
-    draw_range(0, scene.opaque_count());
+    draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, true);
     if (sky.enabled) {  // behind the opaques, before the blended draws composite over it
         cmd.bind_pipeline(sky_);
-        bound_pipe = sky_;
+        cache.pipe = sky_;
         ++stats_.pipeline_binds;
         cmd.draw_non_indexed(3);
     }
-    draw_range(scene.opaque_count(), static_cast<u32>(draws.size()));
+    draw_meshes(cmd, scene, draws, scene.opaque_count(), static_cast<u32>(draws.size()), scene.opaque_count(), cache, true);
     cmd.end_pass();
     cmd.pop_debug_scope();
+}
+
+void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin,
+                            u32 end, u32 opaque_end, DrawCache& cache, bool main) {
+    const rhi::TextureHandle white = textures_->white();
+    static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
+    auto bind_map = [&](DrawCache& c, u32 i, u32 key) {
+        if (key == c.tex[i]) return;
+        const rhi::TextureHandle tex = key == ~0u ? white : textures_->get(key);
+        cmd.bind_texture(kSlots[i], tex, material_sampler_);
+        c.tex[i] = key;
+        if (main) ++stats_.texture_binds;
+    };
+    for (u32 i = begin; i < end; ++i) {
+        const Scene3D::Draw& d = draws[i];
+        if (d.mesh->vertices.is_null()) continue;
+        const GpuSubmesh& sm = d.mesh->submeshes[d.submesh];
+        const asset::MaterialChunk& mat = sm.material;
+        const bool skinned = d.mesh->skinned();
+        const rhi::PipelineHandle pipe = i >= opaque_end                         ? (skinned ? skinned_blend_ : mesh_blend_)
+                                         : (mat.flags & asset::MaterialFlags::DoubleSided) ? (skinned ? skinned_two_sided_ : mesh_two_sided_)
+                                                                                           : (skinned ? skinned_cull_ : mesh_cull_);
+        if (!(pipe == cache.pipe)) {
+            cmd.bind_pipeline(pipe);
+            cache.pipe = pipe;
+            if (main) ++stats_.pipeline_binds;
+        }
+        if (d.mesh != cache.mesh) {
+            cmd.bind_vertex_buffer(d.mesh->vertices);
+            cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
+            cache.mesh = d.mesh;
+        }
+        bind_map(cache, 0, sm.albedo_key);
+        bind_map(cache, 1, sm.normal_key);
+        bind_map(cache, 2, sm.orm_key);
+        bind_map(cache, 3, sm.emissive_key);
+        const MeshInstance& inst = scene.instances()[d.instance];
+        ObjectU ou;
+        ou.model = d.model;
+        ou.normal = d.normal;
+        ou.uv_rect = sm.uv_rect;
+        ou.base_color = {mat.base_color[0] * inst.tint.x, mat.base_color[1] * inst.tint.y,
+                         mat.base_color[2] * inst.tint.z, mat.base_color[3] * inst.tint.w};
+        ou.emissive = {mat.emissive[0] * inst.emissive_tint.x, mat.emissive[1] * inst.emissive_tint.y,
+                       mat.emissive[2] * inst.emissive_tint.z, sm.emissive_key != ~0u ? 1.0f : 0.0f};
+        ou.params = {(mat.flags & asset::MaterialFlags::AlphaMask) ? mat.alpha_cutoff : 0.0f,
+                     (mat.flags & asset::MaterialFlags::Unlit) ? 1.0f : 0.0f, mat.roughness, mat.metallic};
+        ou.maps = {sm.normal_key != ~0u ? 1.0f : 0.0f, sm.orm_key != ~0u ? 1.0f : 0.0f,
+                   (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
+                   (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
+        ou.dequant = d.dequant;
+        ou.skin = {palette_index(d.palette), 0.0f, 0.0f, 0.0f};
+        cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
+        cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
+        if (main) ++stats_.main_draws;
+    }
 }
 
 // ---- 4-6. bloom, tonemap, FXAA

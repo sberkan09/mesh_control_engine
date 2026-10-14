@@ -667,3 +667,74 @@ TEST_CASE("render3d_gl: IBL takes the ambient's color from where the sky is") {
     CHECK(f.device->validation_error_count() == 0);
 }
 
+
+TEST_CASE("render3d_gl: a reflection probe puts the room into a mirror floor; captures only on change") {
+    Fixture3D f;
+    // A smooth metal floor just above the ground slab and a red emissive wall behind the box: the
+    // dim sky's reflection shows no wall, the probe's box-projected capture does.
+    mesh_fixture::Builder floor;
+    floor.add_node(-1);
+    mesh_fixture::Box fb;
+    fb.center = {0, 0.02f, 0};
+    fb.half = {6, 0.03f, 6};
+    floor.add_box(fb);
+    floor.submeshes.back().material.metallic = 1.0f;
+    floor.submeshes.back().material.roughness = 0.1f;
+    REQUIRE(f.renderer.meshes().upload(7, 1, floor.build().span()).has_value());
+    mesh_fixture::Builder wall;
+    wall.add_node(-1);
+    mesh_fixture::Box wb;
+    wb.center = {0, 1.5f, -1.2f};
+    wb.half = {3, 1.5f, 0.1f};
+    wb.color[0] = wb.color[1] = wb.color[2] = 0.0f;
+    wall.add_box(wb);
+    wall.submeshes.back().material.emissive[0] = 3.0f;
+    REQUIRE(f.renderer.meshes().upload(8, 1, wall.build().span()).has_value());
+    u32 version = 0;
+    bool probe = false, ibl = true;
+    const auto scene = [&](Scene3D& s) {
+        no_sun(s);
+        s.set_sky(constant_sky(0.05f, ibl));
+        MeshInstance m;
+        m.mesh = 7;
+        s.add(m);
+        m.mesh = 8;
+        s.add(m);
+        if (probe) {
+            ReflectionProbe p;
+            p.position = {1.5f, 0.6f, 1.0f};
+            p.bounds = {{-3, -0.5f, -1.1f}, {3, 3, 3}};  // floor inside by more than the blend distance
+            p.blend_distance = 0.5f;
+            p.version = version;
+            s.add_reflection_probe(p);
+        }
+    };
+    const Forward3D& fw = f.renderer.forward_3d();
+    const vec3 spot{1.5f, 0.05f, 1.0f};
+    f.render(0.0f, false, scene);
+    const Rgb sky_only = f.at_world(spot);
+    CHECK(fw.last_stats().probes == 0);
+
+    probe = true;
+    f.render(0.0f, false, scene);
+    const Rgb with_probe = f.at_world(spot);
+    INFO("sky " << sky_only.r << "," << sky_only.g << " probe " << with_probe.r << "," << with_probe.g);
+    CHECK(fw.last_stats().probes == 1);
+    CHECK(fw.last_stats().probes_captured == 1);
+    CHECK(fw.last_stats().probe_draws > 0);
+    CHECK(with_probe.r > sky_only.r + 60);  // the wall, mirrored
+    CHECK(with_probe.r > with_probe.g + 60);
+
+    f.render(0.0f, false, scene);
+    CHECK(fw.last_stats().probes_captured == 0);  // nothing moved: the capture is reused
+    const Rgb again = f.at_world(spot);
+    CHECK(std::abs(again.r - with_probe.r) <= 2);
+    version = 1;
+    f.render(0.0f, false, scene);
+    CHECK(fw.last_stats().probes_captured == 1);
+
+    ibl = false;  // probes are an IBL feature: the hemisphere ambient ignores them
+    f.render(0.0f, false, scene);
+    CHECK(fw.last_stats().probes == 0);
+    CHECK(f.device->validation_error_count() == 0);
+}

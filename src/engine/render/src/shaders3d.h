@@ -38,6 +38,10 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_sky_ground;     // rgb, w: sky texture max lod (-1 = gradient)
     vec4 p_sun;            // x: cos of the disk radius, y: disk intensity, z: sky texture intensity, w: texture is additive
     vec4 p_ibl;            // x: image-based lighting on, y: diffuse scale, z: pre-filtered layers, w: bake roughness
+    vec4 p_probes;         // x: reflection probe count (image-based lighting only)
+    vec4 p_probe_pos[4];   // capture position, w: intensity
+    vec4 p_probe_min[4];   // box, w: blend distance
+    vec4 p_probe_max[4];   // box, w: first u_env layer (sharp capture, then the pre-filtered layers)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -152,6 +156,32 @@ vec3 sh_irradiance(vec3 n) {
     e += texelFetch(u_env_sh, ivec2(7, 0), 0).rgb * (1.092548 * n.x * n.z);
     e += texelFetch(u_env_sh, ivec2(8, 0), 0).rgb * (0.546274 * (n.x * n.x - n.y * n.y));
     return max(e, vec3(0.0));
+}
+// A probe's environment along d: its sharp capture at roughness 0, then layers (i + 1) / layers.
+vec3 probe_env(float base, vec3 d, float rough) {
+    vec2 uv = equirect_uv(d);
+    float lv = rough * p_ibl.z;
+    float i0 = floor(lv), i1 = min(i0 + 1.0, p_ibl.z);
+    return mix(textureLod(u_env, vec3(uv, base + i0), 0.0).rgb, textureLod(u_env, vec3(uv, base + i1), 0.0).rgb, lv - i0);
+}
+// The sky's pre-filtered specular replaced, inside a probe's box, by the probe's box-projected one.
+vec3 probe_specular(vec3 p, vec3 r, float rough, vec3 sky) {
+    float best = 0.0;
+    vec3 chosen = sky;
+    for (int i = 0; i < int(p_probes.x); ++i) {
+        vec3 bmin = p_probe_min[i].xyz, bmax = p_probe_max[i].xyz;
+        vec3 inside = min(p - bmin, bmax - p);
+        float edge = min(min(inside.x, inside.y), inside.z);
+        if (edge <= 0.0) continue;
+        float fade = clamp(edge / max(p_probe_min[i].w, 1e-3), 0.0, 1.0);
+        if (fade <= best) continue;
+        vec3 tf = max((bmax - p) / r, (bmin - p) / r);  // exit distances along r per slab
+        float t = min(min(tf.x, tf.y), tf.z);
+        vec3 d = normalize(p + r * t - p_probe_pos[i].xyz);  // parallax: the box hit as seen from the capture point
+        chosen = probe_env(p_probe_max[i].w, d, rough) * p_probe_pos[i].w;
+        best = fade;
+    }
+    return mix(sky, chosen, best);
 }
 vec3 prefiltered_sky(vec3 r, float rough) {
     float lv = rough * p_ibl.z - 1.0;
@@ -324,7 +354,9 @@ void main() {
         if (p_ibl.x > 0.5) {
             amb_diffuse = sh_irradiance(n) * diffuse * p_ibl.y;
             vec2 ab = textureLod(u_brdf_lut, vec2(NoV, rough), 0.0).rg;
-            amb_spec = prefiltered_sky(r, rough) * (f0 * ab.x + ab.y) * p_sky_horizon.w * horizon * horizon;
+            vec3 env = prefiltered_sky(r, rough);
+            if (p_probes.x > 0.5) env = probe_specular(v_world, r, rough, env);
+            amb_spec = env * (f0 * ab.x + ab.y) * p_sky_horizon.w * horizon * horizon;
         } else {
             amb_diffuse = mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
             amb_spec = sky_radiance(r, rough * 8.0) * env_brdf(f0, rough, NoV) * p_sky_horizon.w * horizon * horizon;
@@ -631,6 +663,62 @@ void main() {
     }
     float band = k == 0 ? 1.0 : (k < 4 ? 2.0 / 3.0 : 0.25);
     o_color = vec4(sum * band, 1.0);
+}
+)";
+
+// A probe's sharp capture: the six faces (90° views of a 2D array, `q_face_vp` as rendered) into
+// one equirect layer.
+constexpr const char* kProbeReprojectFS = R"(#version 450 core
+layout(std140, binding = 1) uniform ProbeU {
+    mat4 q_face_vp[6];
+    vec4 q_pos;  // xyz: capture position
+};
+layout(binding = 6) uniform sampler2DArray u_faces;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+const float PI = 3.14159265359;
+)" MCE_GLSL_IBL_SAMPLING R"(
+void main() {
+    vec3 d = equirect_dir(v_uv);
+    vec3 c = vec3(0.0);
+    for (int f = 0; f < 6; ++f) {
+        vec4 clip = q_face_vp[f] * vec4(q_pos.xyz + d, 1.0);
+        if (clip.w <= 0.0) continue;
+        vec2 ndc = clip.xy / clip.w;
+        if (abs(ndc.x) > 1.0 || abs(ndc.y) > 1.0) continue;
+        c = textureLod(u_faces, vec3(ndc * 0.5 + 0.5, float(f)), 0.0).rgb;
+        break;
+    }
+    o_color = vec4(c, 1.0);
+}
+)";
+
+// A probe's pre-filtered layers, GGX-convolved from its sharp capture (no mips to read: many samples).
+constexpr const char* kProbePrefilterFS = R"(#version 450 core
+layout(std140, binding = 1) uniform PrefilterU {
+    vec4 f_params;  // y: samples, w: roughness
+};
+layout(binding = 6) uniform sampler2D u_src;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+const float PI = 3.14159265359;
+vec2 equirect_uv(vec3 d) { return vec2(atan(d.z, d.x) * 0.15915494 + 0.5, acos(clamp(d.y, -1.0, 1.0)) * 0.31830989); }
+)" MCE_GLSL_IBL_SAMPLING R"(
+void main() {
+    vec3 n = equirect_dir(v_uv);
+    float a = f_params.w * f_params.w;
+    uint count = uint(f_params.y);
+    vec3 sum = vec3(0.0);
+    float weight = 0.0;
+    for (uint i = 0u; i < count; ++i) {
+        vec3 h = importance_ggx(hammersley(i, count), n, a);
+        vec3 l = 2.0 * dot(n, h) * h - n;
+        float nol = dot(n, l);
+        if (nol <= 0.0) continue;
+        sum += textureLod(u_src, equirect_uv(l), 0.0).rgb * nol;
+        weight += nol;
+    }
+    o_color = vec4(sum / max(weight, 1e-4), 1.0);
 }
 )";
 
