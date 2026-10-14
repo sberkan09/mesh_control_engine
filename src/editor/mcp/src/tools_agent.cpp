@@ -18,6 +18,9 @@ namespace {
 #define MCE_RF1 "\"width\":{\"type\":\"integer\",\"minimum\":64,\"maximum\":3840,\"default\":960},\"height\":{\"type\":\"integer\",\"minimum\":64,\"maximum\":3840,\"default\":540},"
 #define MCE_RENDER_FRAME_PROPS MCE_RF0 MCE_RF1 MCE_RENDER_COMMON_PROPS
 
+// The generators' `save` and `overwrite` (tools_content.cpp).
+#define MCE_SAVE_PROPS R"j("save":{"type":"string","description":"Also write the result under assets/ at this path (with its .mceasset sidecar and a CREDITS.md row), e.g. sprites/slime.png"},"overwrite":{"type":"boolean","default":false,"description":"Replace an existing file (its GUID is kept)"})j"
+
 const ToolDef kAgentTools[] = {
     {"render_frame",
      "See the game: draw the open (saved) or another saved scene with the real player at sim tick N, with scripted input, "
@@ -94,8 +97,73 @@ const ToolDef kAgentTools[] = {
      "and the convar count. Read this before planning a game, to keep game code to the rules.",
      R"j({"type":"object","properties":{"area":{"type":"string","description":"Only this area's features (2D, 3D, physics, audio, input, ui, gameplay, scenes, agent, ...)"}}})j",
      engine_capabilities},
+    {"gen_palette",
+     "Generate a color palette (dark to light) from a seed and a scheme: analogous, complementary, triad, pastel, earth, neon "
+     "or mono. Returns the colors as hex with a swatch image. 'save' writes it as a 1-pixel-high PNG strip under assets/.",
+     R"j({"type":"object","properties":{"seed":{"type":"integer","minimum":0,"default":1},"count":{"type":"integer","minimum":2,"maximum":32,"default":6},)j"
+     R"j("scheme":{"type":"string","enum":["analogous","complementary","triad","pastel","earth","neon","mono"],"default":"analogous"},)j" MCE_SAVE_PROPS "}}",
+     gen_palette},
+    {"gen_sprite",
+     "Generate pixel-art sprites: a mirrored, outlined, shaded creature, character, ship, item or blob from a seed, in "
+     "'colors' (hex, dark to light, at least 3; the darkest outlines) or a palette 'scheme'. 'variants' puts that many "
+     "(seeds seed, seed+1, ...) in one row. Returns the frames' rects and an enlarged preview. 'save' writes the PNG under "
+     "assets/ (nearest filtering, no mips) with its sidecar and a CREDITS.md row.",
+     R"j({"type":"object","properties":{"seed":{"type":"integer","minimum":0,"default":1},"kind":{"type":"string","enum":["creature","character","ship","item","blob"],"default":"creature"},)j"
+     R"j("width":{"type":"integer","minimum":4,"maximum":128,"default":16},"height":{"type":"integer","minimum":4,"maximum":128,"default":16},)j"
+     R"j("variants":{"type":"integer","minimum":1,"maximum":16,"default":1},"colors":{"type":"array","items":{"type":"string"},"description":"Hex colors, dark to light"},)j"
+     R"j("scheme":{"type":"string","description":"Palette scheme when 'colors' is not given (gen_palette's)"},)j" MCE_SAVE_PROPS "}}",
+     gen_sprite},
+    {"gen_tileset",
+     "Generate a pixel-art tile set in one row: fill, fill_2, fill_3 (variations), top, top_left, top_right (surface "
+     "edges), platform and decoration. Styles: grass, stone, brick, dirt, sand, snow, water, wood, metal. Returns each "
+     "tile's rect and a preview; 'save' writes the PNG under assets/ for a TileMap's tile set.",
+     R"j({"type":"object","properties":{"seed":{"type":"integer","minimum":0,"default":1},"style":{"type":"string","enum":["grass","stone","brick","dirt","sand","snow","water","wood","metal"],"default":"grass"},)j"
+     R"j("tile":{"type":"integer","minimum":8,"maximum":64,"default":16},"colors":{"type":"array","items":{"type":"string"},"description":"4 fill colors dark to light, or 4 fill + 3 surface colors (default: the style's)"},)j" MCE_SAVE_PROPS "}}",
+     gen_tileset},
+    {"gen_texture",
+     "Generate a noise texture (value, perlin, fbm, ridged, worley; tileable by default) mapped through 'colors' gradient "
+     "stops, or an equirect sky (kind sky: horizon, zenith and cloud colors, 'clouds' cover, 'stars' density; width = 2 x "
+     "height) for a skybox or a backdrop. 'save' writes the PNG under assets/ (linear filtering, mips).",
+     R"j({"type":"object","properties":{"seed":{"type":"integer","minimum":0,"default":1},"kind":{"type":"string","enum":["value","perlin","fbm","ridged","worley","sky"],"default":"fbm"},)j"
+     R"j("width":{"type":"integer","minimum":16,"maximum":2048,"default":256},"height":{"type":"integer","minimum":16,"maximum":2048,"default":256},)j"
+     R"j("scale":{"type":"number","minimum":0.5,"maximum":64,"default":4,"description":"Features across the image"},"octaves":{"type":"integer","minimum":1,"maximum":8,"default":5},)j"
+     R"j("tileable":{"type":"boolean","default":true},"colors":{"type":"array","items":{"type":"string"},"description":"Gradient stops low to high (sky: horizon, zenith, clouds)"},)j"
+     R"j("clouds":{"type":"number","minimum":0,"maximum":1,"default":0.5},"stars":{"type":"number","minimum":0,"maximum":1,"default":0},)j" MCE_SAVE_PROPS "}}",
+     gen_texture},
+    {"gen_sfx",
+     "Generate a retro sound effect with an sfxr synthesizer: a preset (pickup, laser, explosion, powerup, hit, jump, blip, "
+     "random) varied by the seed, with any sfxr parameter overridden in 'params'. Returns the parameters used (tweak and "
+     "call again), the length and level, and a waveform image. 'save' writes a 16-bit WAV under assets/.",
+     R"j({"type":"object","properties":{"seed":{"type":"integer","minimum":0,"default":1},"preset":{"type":"string","enum":["pickup","laser","explosion","powerup","hit","jump","blip","random"],"default":"pickup"},)j"
+     R"j("params":{"type":"object","description":"sfxr parameters to override, e.g. {\"wave\": \"sine\", \"base_freq\": 0.4, \"env_decay\": 0.3}"},)j" MCE_SAVE_PROPS "}}",
+     gen_sfx},
+    {"gen_music",
+     "Generate a seamless music loop (bass, chords, melody and optional drums) in a scale on a root note, exactly 'bars' "
+     "bars of 4 beats at 'bpm', at most 60 seconds. Returns its length and a waveform image; 'save' writes a 16-bit WAV "
+     "under assets/ (set the AudioSource to loop).",
+     R"j({"type":"object","properties":{"seed":{"type":"integer","minimum":0,"default":1},"bpm":{"type":"integer","minimum":60,"maximum":200,"default":120},)j"
+     R"j("bars":{"type":"integer","minimum":1,"maximum":32,"default":8},"root":{"type":"integer","minimum":0,"maximum":11,"default":0,"description":"0 = C ... 11 = B"},)j"
+     R"j("scale":{"type":"string","enum":["major","minor","dorian","pentatonic","blues"],"default":"major"},"drums":{"type":"boolean","default":true},)j"
+     R"j("volume":{"type":"number","minimum":0,"maximum":1,"default":0.6},)j" MCE_SAVE_PROPS "}}",
+     gen_music},
+    {"library_search",
+     "Search the engine's bundled content library: CC0 models and sounds (Kenney), OFL and MIT fonts, and generator "
+     "recipes (skies, textures, sprites, sounds, music). Every word must match an entry's id, title or tags. Returns ids "
+     "for library_add, with license and author.",
+     R"j({"type":"object","properties":{"query":{"type":"string","description":"Words, e.g. \"road corner\" or \"coin\"; empty lists everything"},)j"
+     R"j("kind":{"type":"string","enum":["model","sound","music","font","texture","sprite","recipe"]},"license":{"type":"string","description":"e.g. CC0, OFL, MIT"},)j"
+     R"j("limit":{"type":"integer","minimum":1,"maximum":100,"default":20}}})j",
+     library_search},
+    {"library_add",
+     "Copy a library entry into the project's assets/ (its files, the files they need such as a model's texture, and a "
+     "font's license text) with fresh .mceasset sidecars and a CREDITS.md row naming the author and license; a recipe "
+     "runs its generator and saves the result. Default folder by kind: models/, sfx/, music/, fonts/, textures/.",
+     R"j({"type":"object","properties":{"id":{"type":"string"},"path":{"type":"string","description":"A folder under assets/ ending in '/', or the main file's new path"},)j"
+     R"j("overwrite":{"type":"boolean","default":false}},"required":["id"]})j",
+     library_add},
 };
 
+#undef MCE_SAVE_PROPS
 #undef MCE_RENDER_FRAME_PROPS
 #undef MCE_RENDER_COMMON_PROPS
 #undef MCE_RF0

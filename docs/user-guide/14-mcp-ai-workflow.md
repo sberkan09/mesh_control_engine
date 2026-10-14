@@ -87,6 +87,14 @@ each result's `content[0].text` is the tool's JSON).
 | | `playtest` | `bot`, `scene?`, `ticks?` (1800), `until?`, `death?`, `assert?`, `trace?` | a built-in bot plays the scene; returns the **feel report**: time to finish, deaths, stuck spots, idle time, distance, cells visited |
 | Know | `docs_search` | `query`, `group?` (guide, engine, architecture, samples, examples), `limit?` (8) | ranked sections of the shipped docs, samples and example games, each with its `mce://docs/...` URI, heading, line and snippet |
 | | `engine_capabilities` | `area?` | each feature and how it is reached today (`data`, `asset`, `mcp`, `console`, `code`), every component, importable asset type and tool |
+| Content | `gen_palette` | `seed?`, `count?` (6), `scheme?` (analogous, complementary, triad, pastel, earth, neon, mono), `save?` | hex colors dark to light and a swatch image |
+| | `gen_sprite` | `seed?`, `kind?` (creature, character, ship, item, blob), `width?`, `height?` (16), `variants?`, `colors?` or `scheme?`, `save?` | mirrored, outlined, shaded pixel sprites in one row, their rects and an enlarged preview |
+| | `gen_tileset` | `seed?`, `style?` (grass, stone, brick, dirt, sand, snow, water, wood, metal), `tile?` (16), `colors?`, `save?` | eight tiles in one row (fill, fill_2, fill_3, top, top_left, top_right, platform, decoration) with their rects |
+| | `gen_texture` | `seed?`, `kind?` (value, perlin, fbm, ridged, worley, sky), `width?`, `height?`, `scale?`, `octaves?`, `tileable?`, `colors?`, `clouds?`, `stars?`, `save?` | a tileable noise texture through gradient stops, or an equirect sky (width twice the height) |
+| | `gen_sfx` | `seed?`, `preset?` (pickup, laser, explosion, powerup, hit, jump, blip, random), `params?`, `save?` (.wav) | an sfxr sound: the parameters used (change any and call again), length, peak and a waveform image |
+| | `gen_music` | `seed?`, `bpm?` (120), `bars?` (8), `root?` (0 = C), `scale?` (major, minor, dorian, pentatonic, blues), `drums?`, `save?` (.wav) | a seamless loop of exactly `bars` bars (bass, chords, melody, drums), at most 60 s |
+| | `library_search` | `query?`, `kind?` (model, sound, music, font, texture, sprite, recipe), `license?`, `limit?` (20) | entries of the bundled content library with id, license, author and tags |
+| | `library_add` | `id`, `path?`, `overwrite?` | copies the entry into `assets/` (with the files it needs and a font's license text), or runs a recipe's generator (see "Content: generators and the library" below) |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
 
@@ -146,6 +154,23 @@ another folder):
 Three **prompts** (`prompts/list`, `prompts/get`) start whole jobs: `start_game` (argument `brief`:
 the game from a one-paragraph brief, with no human in the loop), `add_level` (`name`, `focus?`) and
 `polish_pass` (`focus?`).
+
+### Content: generators and the library
+
+Every `gen_*` tool returns a preview image (a sound's waveform) and is a pure function of its seed and
+arguments, so an agent can try seeds until one looks right and then call again with `save`. `save` is a path
+under `assets/` (`.png` or `.wav`); the tool writes the file, its `.mceasset` sidecar (pixel art: nearest
+filtering, no mips; textures and skies: linear with mips) and a `CREDITS.md` row naming the generator and
+seed, so the next `cook_run` takes it without `adopt`. Saving over an existing file needs `overwrite: true`
+and keeps its GUID, so scenes that use it still find it.
+
+The **content library** ships with the SDK (`share/mce/library/library.json`): Kenney's CC0 low-poly models
+(city kit and platformer: buildings, roads, grass, trees, a character, coin, flag, cloud) and sound effects,
+the OFL fonts Crimson Pro and Nothing You Could Do and the MIT ProggyClean, plus recipes (day, dusk and night
+skies; rock, grass, sand, water and lava textures; tile sets; sprite sets; retro sounds; music loops) that run
+a generator. `library_add` copies an entry into `assets/` (models into `models/` with their shared
+`Textures/colormap.png`, fonts into `fonts/` with their license file), writes fresh sidecars and adds a
+`CREDITS.md` row with the author, the source and the license, so `mce ship` carries the credits.
 
 ## 14.3 A workflow that works
 

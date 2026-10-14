@@ -101,6 +101,10 @@ install(DIRECTORY "${PROJECT_SOURCE_DIR}/samples/" DESTINATION ${CMAKE_INSTALL_D
         PATTERN "cooked" EXCLUDE PATTERN "build" EXCLUDE PATTERN "dist" EXCLUDE
         PATTERN "assets.mce" EXCLUDE PATTERN "__pycache__" EXCLUDE)
 
+# The content library (library_search / library_add): library.json and its own files. Its entries
+# name files under share/mce/samples and share/mce/examples, installed above.
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/library/" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/library)
+
 # The documentation a project author reads (docs/user-guide/README.md is its table of contents).
 set(_mce_doc_dir "${CMAKE_INSTALL_DATADIR}/doc/mce")
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/docs/user-guide" "${PROJECT_SOURCE_DIR}/docs/engine"

@@ -7,6 +7,7 @@
 
 mce_add_library(mce_mcp_core UMBRELLA
     SOURCES
+        src/agent_gen.cpp
         src/agent_image.cpp
         src/agent_sim.cpp
         src/headless_run.cpp
@@ -15,6 +16,7 @@ mce_add_library(mce_mcp_core UMBRELLA
         src/tools.cpp
         src/tools_agent.cpp
         src/tools_code.cpp
+        src/tools_content.cpp
         src/tools_docs.cpp
         src/tools_render.cpp
         src/tools_test.cpp

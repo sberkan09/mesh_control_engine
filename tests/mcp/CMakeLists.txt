@@ -85,3 +85,14 @@ mce_add_test(test_mcp_docs UMBRELLA
         mce::mce_platform)
 target_include_directories(test_mcp_docs PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
 target_compile_definitions(test_mcp_docs PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_docs")
+
+# The content generators and the bundled library (served from the source tree's library/).
+mce_add_test(test_mcp_content UMBRELLA
+    SOURCES
+        test_mcp_content.cpp
+    DEPS
+        mce::mce_mcp_core
+        mce::mce_platform)
+target_include_directories(test_mcp_content PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_compile_definitions(test_mcp_content PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_content"
+    MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")

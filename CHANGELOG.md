@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Content without a human, M-AGENT step 5 (SBA-52): the MCP server generates palettes, pixel sprites, tile sets,
+  noise textures and skies, sfxr sound effects and music loops (`gen_palette`, `gen_sprite`, `gen_tileset`,
+  `gen_texture`, `gen_sfx`, `gen_music`), each with a preview image and a `save` that writes the asset, its sidecar
+  and a `CREDITS.md` row; `library_search` and `library_add` serve a bundled CC0/OFL/MIT library (Kenney models
+  and sounds, three fonts, generator recipes) installed at `share/mce/library`, with credits written on copy.
 - Self-contained knowledge, M-AGENT step 4 (SBA-51): the MCP server serves the shipped user guide, engine and
   architecture docs, the worked samples and the example projects as `mce://docs/...` resources (index, folders,
   `mce://docs/components/<Type>` schemas), searches them with `docs_search`, offers the prompts `start_game`,

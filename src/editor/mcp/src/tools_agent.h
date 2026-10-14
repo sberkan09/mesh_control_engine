@@ -23,4 +23,14 @@ bool playtest(ToolCall& c);
 bool docs_search(ToolCall& c);
 bool engine_capabilities(ToolCall& c);
 
+// tools_content.cpp (SBA-52): procedural generators and the bundled CC0/OFL content library.
+bool gen_palette(ToolCall& c);
+bool gen_sprite(ToolCall& c);
+bool gen_tileset(ToolCall& c);
+bool gen_texture(ToolCall& c);
+bool gen_sfx(ToolCall& c);
+bool gen_music(ToolCall& c);
+bool library_search(ToolCall& c);
+bool library_add(ToolCall& c);
+
 }  // namespace mce::mcp

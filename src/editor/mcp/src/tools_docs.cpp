@@ -27,6 +27,7 @@ struct DocsRoots {
     cook::String docs;      // has user-guide/, engine/, architecture/
     cook::String samples;   // samples/<name>/...
     cook::String examples;  // <Name>/... (the SDK's example projects)
+    cook::String library;   // library.json and the library's own files (tools_content.cpp)
     bool source_tree = false;
 };
 
@@ -44,6 +45,7 @@ DocsRoots find_roots(const Server& server) {
         r.docs = cook::fs::absolute(server.options().docs);
         r.samples = join(r.docs.view(), "../../mce/samples");
         r.examples = join(r.docs.view(), "../../mce/examples");
+        r.library = join(r.docs.view(), "../../mce/library");
         return r;
     }
     // An installed SDK: <prefix>/bin/mce_mcp next to <prefix>/share/doc/mce.
@@ -54,6 +56,7 @@ DocsRoots find_roots(const Server& server) {
         r.docs = d;
         r.samples = cook::fs::absolute(join(d.view(), "../../mce/samples").view());
         r.examples = cook::fs::absolute(join(d.view(), "../../mce/examples").view());
+        r.library = cook::fs::absolute(join(d.view(), "../../mce/library").view());
         return r;
     }
 #if defined(MCE_MCP_SOURCE_ROOT)
@@ -61,6 +64,7 @@ DocsRoots find_roots(const Server& server) {
     r.docs = join(MCE_MCP_SOURCE_ROOT, "docs");
     r.samples = join(MCE_MCP_SOURCE_ROOT, "samples");
     r.examples = join(MCE_MCP_SOURCE_ROOT, "projects");
+    r.library = join(MCE_MCP_SOURCE_ROOT, "library");
     r.source_tree = true;
 #endif
     return r;
@@ -75,6 +79,19 @@ const DocsRoots& roots(const Server& server) {
     }
     return r;
 }
+
+}  // namespace
+
+cook::String content_root(const Server& server, StringView group) {
+    const DocsRoots& r = roots(server);
+    if (group == "docs") return r.docs;
+    if (group == "samples") return r.samples;
+    if (group == "examples") return r.examples;
+    if (group == "library") return r.library;
+    return {};
+}
+
+namespace {
 
 // The example projects the SDK ships (cmake/MceInstall.cmake); in a source tree projects/ holds more.
 constexpr const char* kExamples[] = {"Kindle", "Undelivered", "Room3D"};
@@ -401,6 +418,8 @@ constexpr Feature kFeatures[] = {
     {"agent", "rebuild and reload game code", "mcp", "module_build, module_test"},
     {"agent", "playtest without a person", "mcp", "test_run (.mctest), playtest bots, run_headless trace"},
     {"agent", "read the docs and samples", "mcp", "mce://docs/... resources, docs_search, prompts"},
+    {"agent", "make art, sound and music without a person", "mcp", "gen_palette, gen_sprite, gen_tileset, gen_texture, gen_sfx, gen_music"},
+    {"agent", "use CC0/OFL starter content with credits", "mcp", "library_search, library_add"},
     {"debug", "console variables and commands", "console", "console_list, console_exec"},
 };
 
