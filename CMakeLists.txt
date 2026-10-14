@@ -70,7 +70,7 @@ endif()
 set(MCE_ENGINE_LIBS
     mce_core mce_refl mce_asset mce_ecs mce_physics2d mce_physics3d mce_platform mce_input
     mce_rhi ${MCE_RHI_BACKEND} mce_rhi_default mce_render mce_ui mce_audio mce_scene mce_ecs_scene mce_gameplay_kit
-    mce_monetize mce_loc mce_module_host)
+    mce_monetize mce_liveops mce_loc mce_module_host)
 if(MCE_RHI_SDLGPU AND NOT MCE_MOBILE)
     list(APPEND MCE_ENGINE_LIBS mce_rhi_sdlgpu)
 endif()
@@ -113,6 +113,7 @@ add_subdirectory(src/engine/render)
 add_subdirectory(src/engine/ui)
 add_subdirectory(src/engine/audio)
 add_subdirectory(src/engine/monetize)
+add_subdirectory(src/engine/liveops)
 add_subdirectory(src/engine/loc)
 add_subdirectory(src/engine/scene)
 add_subdirectory(src/engine/kit)

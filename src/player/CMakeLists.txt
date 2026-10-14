@@ -58,3 +58,17 @@ if(MCE_BUILD_TESTS AND TARGET mce_cook)
                      -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/monetize_test
                      -P ${PROJECT_SOURCE_DIR}/tests/monetize/player_monetize_test.cmake)
 endif()
+
+# Live services end to end (M-LIVEOPS step 1): crash reports sent on the next launch only with consent,
+# through -liveops.provider local. A real -crash_test report where the crash handler runs (as above).
+if(MCE_BUILD_TESTS AND TARGET mce_cook)
+    if(UNIX AND NOT MCE_ASAN)
+        set(_mce_real_crash 1)
+    else()
+        set(_mce_real_crash 0)
+    endif()
+    add_test(NAME player_liveops
+             COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/liveops_test -DREAL_CRASH=${_mce_real_crash}
+                     -P ${PROJECT_SOURCE_DIR}/tests/liveops/player_liveops_test.cmake)
+endif()
