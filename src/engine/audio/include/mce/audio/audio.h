@@ -165,6 +165,8 @@ public:
     // Stops every voice on the clip and frees the slot once the mixer acknowledges (update()).
     void release_clip(ClipHandle clip);
     bool is_clip_registered(ClipHandle clip) const;
+    // True for a live clip registered with register_stream.
+    bool is_stream(ClipHandle clip) const;
     // Blocks until the mixer has acknowledged every release_clip so far (or `timeout_ms` passes;
     // false then), so the callers can free clip memory, e.g. before a pack unmounts. Mixes no
     // audio: on the Silent and Offline backends it only drains the command FIFO.

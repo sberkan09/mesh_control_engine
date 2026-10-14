@@ -192,7 +192,7 @@ public:
             src.clip_handle = h.value();
             src.loop = true;
             src.play_on_start = true;
-            src.bus = audio::Bus_Music;
+            src.bus = audio::AudioBus::Music;
             src.gain_db = -8.0f;
             src.priority = 0;
             world_.spawn_with(src);

@@ -91,7 +91,7 @@ static colliders), `"kit3d_writeback"` and `"kit3d_triggers"` after `"kit3d_phys
 destroy the bodies.
 
 `effects.h` (M-DATA-REACH 4): `FireOn` (`Manual` via the `fire` flag, `Start`, `TriggerEnter`,
-`ContactBegin`); `SfxTrigger` (a `PlaySfx` with dB jitter, `SfxBus`), `ParticleBurst`,
+`ContactBegin`); `SfxTrigger` (a `PlaySfx` with dB jitter, `audio::AudioBus`), `ParticleBurst`,
 `ShakeTrigger`, `CameraShake2D` (added to the view by `primary_camera`), `CameraFollow2D` (offset,
 dead zone, smoothing, look-ahead, bounds), `CameraFollow3D` (orbit with yaw/pitch, Look-input
 orbit), `PhysicsEvents` (engine-written last 2D trigger/contact pairs and counts), `NavGridSource`

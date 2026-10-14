@@ -730,7 +730,9 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
     // The written asset plays: a ParticleEmitter in the scene names it, and run_headless cooks it.
     c.ok("entity_create", R"({"name":"fx","components":{"ParticleEmitter":{"preset":")" + guid + R"("}}})");
     c.ok("scene_save");
-    c.ok("run_headless", R"({"ticks":10})");
+    // It also runs the store catalog, remote config and game services the pack now has (the fake
+    // store, the cooked defaults, services on this device; M-DATA-REACH 8).
+    CHECK(c.ok("run_headless", R"({"ticks":10})").v().get("ticks").as_number() == 10);
 }
 
 TEST_CASE("mcp tools: tilemap_paint paints cells, rects and flood fills in one checked call") {
@@ -875,6 +877,125 @@ TEST_CASE("mcp tools: project_get / project_set and the scene's WorldSettings (M
     c.ok("scene_save");
     run = c.ok("run_headless", R"({"ticks":60,"inspect":{"entities":["Ball"],"show":["LocalTransform"]}})");
     CHECK(run.v().get("inspect").get("entities").at(0).get("components").get("LocalTransform").get("position").at(1).as_number() < 5.0);
+}
+
+// The M-DATA-REACH demo (SBA-47): a 2D and a 3D game authored entirely through MCP tools, with no
+// game C++: every behaviour below is a stock component the scene names. run_headless plays each
+// twice; the state hashes match (the replay gate).
+TEST_CASE("M-DATA-REACH demo: a 2D game made over MCP alone (sheet animation, follow + shake camera, pickup sound and burst, five prefab enemies, a painted tilemap)") {
+    const std::string root = demo_project("mcp_demo2d");
+    write_file(root + "/assets/audio/pickup.wav", make_wav(22050, 1, 2205, 880.0));
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    // The sound has no sidecar yet: cook_run adopt registers it, and asset_list names its GUID.
+    REQUIRE(c.ok("cook_run", R"({"adopt":true})").v().get("ok").as_bool());
+    auto listed = c.ok("asset_list", R"({"type":"Sfx"})");
+    const cook::JsonValue sfx_list = listed.v().get("assets");
+    REQUIRE(sfx_list.size() == 1);
+    const std::string sfx = str(sfx_list.at(0).get("guid"));
+    constexpr const char* kCrateGuid = "guid:5ce4e000-0000-4000-8000-000000000001";
+
+    // Assets: a 2x2 sprite sheet over the crate texture, a particle preset, a tilemap the agent paints.
+    const std::string sheet = str(c.ok("asset_create", std::string(R"({"path":"sprites/hero.mcsheet","content":{"texture":")") + kCrateGuid +
+                                                           R"(","grid":{"columns":2,"rows":2},"clips":[{"name":"run","frames":{"from":0,"to":3},"fps":10}]}})")
+                                      .v().get("guid"));
+    const std::string sparks = str(c.ok("asset_create", R"({"path":"effects/sparks.mcpart","content":{"rate":0,"lifetime":[0.3,0.6]}})").v().get("guid"));
+    const std::string level = str(c.ok("asset_create", std::string(R"({"path":"maps/level.mctilemap","content":{"tileset":")") + kCrateGuid +
+                                                           R"(","columns":1,"rows":1,"width":24,"height":3}})")
+                                      .v().get("guid"));
+    auto painted = c.ok("tilemap_paint", R"({"path":"maps/level.mctilemap","rects":[[0,0,23,0,1],[4,1,6,1,1]],"cells":[[12,2,1]],"preview":true})");
+    CHECK(painted.v().get("changed").as_number() == 28);
+
+    const auto make = [&](const std::string& args) { return static_cast<int>(c.ok("entity_create", args).v().get("id").as_number()); };
+    const int hero = make(cat({R"({"name":"Hero","components":{"LocalTransform":{"position":[-6,3,0]},"RigidBody2D":{"type":"Dynamic"},)",
+                               R"("Collider2D":{"shape":{"type":"Circle","radius":0.4}},"Sprite":{"texture":")", kCrateGuid, R"("},)",
+                               R"("AnimatedSprite":{"sheet":")", sheet, R"(","clip":"run"}}})"}));
+    make(cat({R"({"name":"Coin","components":{"LocalTransform":{"position":[-6,0,0]},"RigidBody2D":{},)",
+              R"("Collider2D":{"shape":{"half":[1,0.5]},"is_sensor":true},"PhysicsEvents":{},)",
+              R"("SfxTrigger":{"clip":")", sfx, R"(","on":"TriggerEnter"},)",
+              R"("ParticleEmitter":{"preset":")", sparks, R"(","playing":false},"ParticleBurst":{"count":30,"on":"TriggerEnter"},)",
+              R"("ShakeTrigger":{"trauma":0.8,"on":"TriggerEnter"}}})"}));
+    c.ok("component_add", cat({R"({"entity":"Camera","component":"CameraFollow2D","value":{"target":"$)", std::to_string(hero), R"(","smoothing":0}})"}));
+    c.ok("component_add", R"({"entity":"Camera","component":"CameraShake2D","value":{"decay_per_second":0.2}})");
+    make(cat({R"({"name":"Level","components":{"LocalTransform":{"position":[-12,-6,0]},"TilemapLayer":{"map":")", level, R"("}}})"}));
+
+    // One enemy, made a prefab, placed four more times.
+    make(cat({R"({"name":"Enemy","components":{"LocalTransform":{"position":[4,0,0]},"RigidBody2D":{"type":"Dynamic"},)",
+              R"("Collider2D":{"shape":{"type":"Circle","radius":0.4}},"Sprite":{"texture":")", kBallGuid, R"("},)",
+              R"("AnimatedSprite":{"sheet":")", sheet, R"("}}})"}));
+    const std::string enemy = str(c.ok("prefab_create_from", R"({"entity":"Enemy","path":"prefabs/enemy.mcprefab"})").v().get("guid"));
+    for (int i = 1; i < 5; ++i)
+        make(cat({R"({"name":"Enemy )", std::to_string(i), R"(","prefab":")", enemy, R"(","components":{"LocalTransform":{"position":[)",
+                  std::to_string(4 + i), R"(,)", std::to_string(i), R"(,0]}}})"}));
+    c.ok("scene_save");
+    REQUIRE(c.ok("cook_run").v().get("ok").as_bool());
+
+    // Six animated sprites (the hero, five enemies), every one stepping through its clip.
+    const std::string args = R"({"ticks":120,"log_lines":0,"inspect":{"component":"AnimatedSprite","show":["AnimatedSprite"]}})";
+    auto run = c.ok("run_headless", args);
+    const cook::JsonValue animated = run.v().get("inspect").get("entities");
+    REQUIRE(animated.size() == 6);
+    for (u32 i = 0; i < animated.size(); ++i) {
+        CHECK(str(animated.at(i).get("components").get("AnimatedSprite").get("playing_clip")) == "run");
+        CHECK(animated.at(i).get("components").get("AnimatedSprite").get("time").as_number() > 1.5);
+    }
+    CHECK(str(animated.at(5).get("name")) == "Enemy 4");
+    // The hero fell through the coin: one sound, one burst, one shake; the camera sits on the hero.
+    auto world = c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"entities":["Hero","Coin","Camera"]}})");
+    CHECK(str(world.v().get("state_hash")) == str(run.v().get("state_hash")));  // replays match
+    const cook::JsonValue ents = world.v().get("inspect").get("entities");
+    REQUIRE(ents.size() == 3);  // in entity order
+    const cook::JsonValue cam = ents.at(0).get("components"), hero_c = ents.at(1).get("components"), coin = ents.at(2).get("components");
+    CHECK(str(ents.at(2).get("name")) == "Coin");
+    CHECK(coin.get("SfxTrigger").get("fired").as_number() == 1);
+    CHECK(coin.get("ParticleBurst").get("fired").as_number() == 1);
+    CHECK(coin.get("ShakeTrigger").get("fired").as_number() == 1);
+    CHECK(str(coin.get("PhysicsEvents").get("last_trigger")) == "$" + std::to_string(hero));
+    CHECK(hero_c.get("LocalTransform").get("position").at(1).as_number() < -1.0);  // landed on the ground
+    CHECK(compact(cam.get("LocalTransform").get("position").at(0)) == compact(hero_c.get("LocalTransform").get("position").at(0)));
+    CHECK(cam.get("CameraShake2D").get("trauma").as_number() > 0.5);
+    CHECK(world.v().get("log").get("errors").as_number() == 0);
+}
+
+TEST_CASE("M-DATA-REACH demo: a 3D game made over MCP alone (a character controller dropped onto a dynamic crate pile, an orbit camera)") {
+    const std::string root = demo_project("mcp_demo3d");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    c.ok("scene_new", R"({"name":"crates"})");
+    const auto make = [&](const std::string& args) { return static_cast<int>(c.ok("entity_create", args).v().get("id").as_number()); };
+    make(R"({"name":"Floor","components":{"LocalTransform":{"position":[0,-0.5,0]},"BoxCollider3D":{"half":[20,0.5,20]}}})");
+    // A pyramid of six 1 m crates: three, two, one.
+    const char* pile[] = {"[0,0.5,-1.05]", "[0,0.5,0]", "[0,0.5,1.05]", "[0,1.5,-0.525]", "[0,1.5,0.525]", "[0,2.5,0]"};
+    for (int i = 0; i < 6; ++i)
+        make(cat({R"({"name":"Crate )", std::to_string(i), R"(","components":{"LocalTransform":{"position":)", pile[i],
+                  R"(},"RigidBody3D":{"half":[0.5,0.5,0.5]}}})"}));
+    const int hero = make(R"({"name":"Hero","components":{"LocalTransform":{"position":[0,6,0]},"CharacterController3D":{}}})");
+    make(cat({R"({"name":"Camera","components":{"LocalTransform":{},"Camera3DComponent":{},"CameraFollow3D":{"target":"$)",
+              std::to_string(hero), R"(","distance":8}}})"}));
+    c.ok("scene_save", R"({"path":"scenes/crates.mcscene"})");
+    const std::string args = R"({"ticks":240,"log_lines":0,"inspect":{"component":"LocalTransform","show":["LocalTransform","CharacterController3D","RigidBody3D"]}})";
+    auto run = c.ok("run_headless", args);
+    CHECK(str(c.ok("run_headless", args).v().get("state_hash")) == str(run.v().get("state_hash")));  // replays match
+    const cook::JsonValue ents = run.v().get("inspect").get("entities");
+    REQUIRE(ents.size() == 9);  // in entity order: floor, six crates, hero, camera
+    // The pile holds: every crate rests where it was stacked.
+    const double rest_y[] = {0.5, 0.5, 0.5, 1.5, 1.5, 2.5};
+    for (u32 i = 0; i < 6; ++i) {
+        const cook::JsonValue body = ents.at(i + 1).get("components");
+        CHECK(str(body.get("RigidBody3D").get("type")) == "Dynamic");
+        CHECK(body.get("LocalTransform").get("position").at(1).as_number() == doctest::Approx(rest_y[i]).epsilon(0.01));
+    }
+    // The hero fell onto the top crate and stands on it (capsule centre 0.9 m above its top at 3 m).
+    const cook::JsonValue hero_c = ents.at(7).get("components");
+    CHECK(hero_c.get("CharacterController3D").get("grounded").as_bool());
+    CHECK(hero_c.get("LocalTransform").get("position").at(1).as_number() == doctest::Approx(3.9).epsilon(0.01));
+    // The camera follows it down: behind it and above it.
+    const cook::JsonValue cam = ents.at(8).get("components").get("LocalTransform").get("position");
+    CHECK(cam.at(2).as_number() > 5.0);
+    CHECK(cam.at(1).as_number() > 3.9);
+    CHECK(run.v().get("log").get("errors").as_number() == 0);
 }
 
 TEST_CASE("mcp tools: a relative --project path saves where it says") {

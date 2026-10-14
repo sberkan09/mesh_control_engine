@@ -1071,7 +1071,10 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
         const Scene3D::Draw& d = draws[i];
         if (d.mesh->vertices.is_null()) continue;
         const GpuSubmesh& sm = d.mesh->submeshes[d.submesh];
-        const asset::MaterialChunk& mat = sm.material;
+        const MeshInstance& inst = scene.instances()[d.instance];
+        const asset::MaterialChunk& mat = material_of(inst, sm);
+        const u32 albedo = albedo_key_of(inst, sm), normal = normal_key_of(inst, sm), orm = orm_key_of(inst, sm),
+                  emissive = emissive_key_of(inst, sm);
         const bool skinned = d.mesh->skinned();
         const rhi::PipelineHandle pipe = prepass                                   ? (skinned ? ao_prepass_skinned_ : ao_prepass_)
                                          : i >= opaque_end                         ? (skinned ? skinned_blend_ : mesh_blend_)
@@ -1087,11 +1090,10 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
             cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
             cache.mesh = d.mesh;
         }
-        bind_map(cache, 0, sm.albedo_key);
-        bind_map(cache, 1, sm.normal_key);
-        bind_map(cache, 2, sm.orm_key);
-        bind_map(cache, 3, sm.emissive_key);
-        const MeshInstance& inst = scene.instances()[d.instance];
+        bind_map(cache, 0, albedo);
+        bind_map(cache, 1, normal);
+        bind_map(cache, 2, orm);
+        bind_map(cache, 3, emissive);
         ObjectU ou;
         ou.model = d.model;
         ou.normal = d.normal;
@@ -1099,10 +1101,10 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
         ou.base_color = {mat.base_color[0] * inst.tint.x, mat.base_color[1] * inst.tint.y,
                          mat.base_color[2] * inst.tint.z, mat.base_color[3] * inst.tint.w};
         ou.emissive = {mat.emissive[0] * inst.emissive_tint.x, mat.emissive[1] * inst.emissive_tint.y,
-                       mat.emissive[2] * inst.emissive_tint.z, sm.emissive_key != ~0u ? 1.0f : 0.0f};
+                       mat.emissive[2] * inst.emissive_tint.z, emissive != ~0u ? 1.0f : 0.0f};
         ou.params = {(mat.flags & asset::MaterialFlags::AlphaMask) ? mat.alpha_cutoff : 0.0f,
                      (mat.flags & asset::MaterialFlags::Unlit) ? 1.0f : 0.0f, mat.roughness, mat.metallic};
-        ou.maps = {sm.normal_key != ~0u ? 1.0f : 0.0f, sm.orm_key != ~0u ? 1.0f : 0.0f,
+        ou.maps = {normal != ~0u ? 1.0f : 0.0f, orm != ~0u ? 1.0f : 0.0f,
                    (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
                    (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
         ou.dequant = d.dequant;

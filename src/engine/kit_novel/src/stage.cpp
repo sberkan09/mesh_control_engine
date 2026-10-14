@@ -609,9 +609,9 @@ void spawn_default_stage(Frame& f, const NovelState& n) {
     cmd.spawn(at(0, 4.6f), part(StageRole::Title), label(1.25f, kit::TextAlign::Center, {0.98f, 0.94f, 0.85f, 1}, 11));
     audio::AudioSource music, ambience;
     music.loop = ambience.loop = true;
-    music.bus = audio::Bus_Music;
+    music.bus = audio::AudioBus::Music;
     music.gain_db = -8.0f;
-    ambience.bus = audio::Bus_SFX;
+    ambience.bus = audio::AudioBus::SFX;
     ambience.gain_db = -12.0f;
     cmd.spawn(at(0, 0), part(StageRole::Music), music);
     cmd.spawn(at(0, 0), part(StageRole::Ambience), ambience);

@@ -142,6 +142,11 @@ A test installs the game, sets `NovelState::autopilot` and ticks until `NovelSta
 
 Undelivered's drawer (envelopes to sort, stamps to read) is one `@drawer` command and these hooks.
 
+The stage finds its parts in the scene by a `StagePart` component: a `role` (`Background`, `Cast`,
+`Box`, `NameText`, `Line`, `ChoiceRow`, `Music`, ... in `novel_components.h`) and an `index` for
+roles with several parts. Moving, restyling or replacing a part in the editor or over MCP changes
+the look without code; the stock editor and `mce_mcp` know these components.
+
 ## 21.6 NPC dialogue in any game
 
 A game with no novel stage installs only the dialogue VM:

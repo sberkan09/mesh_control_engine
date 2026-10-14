@@ -27,8 +27,10 @@ public:
 
     // Loads and registers the clip on first use; later calls are a table lookup. A GUID that is
     // not mounted, not an Sfx, or fails to register yields a null handle and one error, and is
-    // not retried until release() (FR-DX-050: silence, never a crash).
-    ClipHandle acquire(asset::Guid guid);
+    // not retried until release() (FR-DX-050: silence, never a crash). `stream` registers it as a
+    // streamed clip (AudioDevice::register_stream: music, long ambiences), falling back to an
+    // in-memory clip when every stream ring is taken; it applies when the GUID is first acquired.
+    ClipHandle acquire(asset::Guid guid, bool stream = false);
     // The registered clip, or null when the GUID was never acquired (no load).
     ClipHandle find(asset::Guid guid) const;
     // Releases the clip and the asset retain.
@@ -49,6 +51,7 @@ private:
         asset::AssetRef<asset::Sfx> ref;  // null handle = failed (not retried)
         u32 generation = 0;
         ClipHandle clip;
+        bool stream = false;
     };
     ClipHandle register_entry(Entry& e);
     void drop(Entry& e);

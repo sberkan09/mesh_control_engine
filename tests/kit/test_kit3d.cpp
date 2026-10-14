@@ -538,3 +538,49 @@ TEST_CASE("kit3d: an AnimGraph drives the Animator: blend by parameter, transiti
     CHECK_FALSE(anim().finished);
     CHECK(anim().time == 0.0f);
 }
+
+TEST_CASE("kit3d: MeshRef.material replaces the mesh's material; the quality tier caps shadows and post (M-DATA-REACH 8)") {
+    const std::string src = cook_test::fresh_dir("kit3d_material");
+    cook_test::write_file(src + "/assets/red.mcmat", R"({ "format": "mce-material", "version": 1,
+        "guid": "9a270000-0000-4000-8000-000000000061", "base_color": [1, 0, 0, 1], "roughness": 0.3 })");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(src.c_str()), cook::CookOptions{}).ok());
+    asset::AssetSystem assets;
+    const std::string cooked = src + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+
+    Fixture f;
+    f.extract.reset(&assets);
+    f.extract.bind_mesh(kBox, 1);
+    f.camera();
+    const Entity red = f.mesh(kBox, {0, 0, -5});
+    f.world.try_get_mut<kit::MeshRef>(red)->material.guid = asset::parse_guid("9a270000-0000-4000-8000-000000000061").value();
+    f.mesh(kBox, {2, 0, -5});
+    f.step();
+
+    render::Camera3D cam;
+    REQUIRE(f.extract.camera(f.world, 1.0f, cam));
+    {
+        render::Scene3D scene(f.store, mem::heap());
+        scene.begin(cam, {64, 64});
+        f.extract.extract(f.world, scene, 1.0f);
+        REQUIRE(scene.instances().size() == 2);
+        const render::MaterialOverride* m = scene.instances()[0].material;
+        REQUIRE(m != nullptr);
+        CHECK(m->params.base_color[0] == 1.0f);
+        CHECK(m->params.base_color[1] == 0.0f);
+        CHECK(m->params.roughness == doctest::Approx(0.3f));
+        CHECK(m->albedo_key == ~0u);
+        CHECK(scene.instances()[1].material == nullptr);
+    }
+
+    // r.quality low: one cascade at 1024, no bloom.
+    f.extract.set_quality(render::quality_settings(render::QualityTier::Low));
+    render::Scene3D scene(f.store, mem::heap());
+    scene.begin(cam, {64, 64});
+    f.extract.extract(f.world, scene, 1.0f);
+    CHECK(scene.shadow_settings().cascades == 1);
+    CHECK(scene.shadow_settings().resolution == 1024);
+    CHECK_FALSE(scene.post().bloom);
+}

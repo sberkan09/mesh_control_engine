@@ -256,7 +256,7 @@ void Scene3D::build() {
             d.view_depth = dot(c - view_.position, forward);
             d.center = c;
             d.radius = length(wb.extents());
-            if (light_.shadows && inst.cast_shadows && !(sm.material.flags & asset::MaterialFlags::AlphaBlend)) {
+            if (light_.shadows && inst.cast_shadows && !(material_of(inst, sm).flags & asset::MaterialFlags::AlphaBlend)) {
                 const GpuLod& sl = mesh.lod(s, shadow_lod);
                 d.lod = shadow_lod;
                 d.first_index = sl.first_index;
@@ -264,7 +264,7 @@ void Scene3D::build() {
                 d.base_vertex = sl.base_vertex;
                 shadow_draws_.push_back(d);
             }
-            if (!probes_.empty() && !(sm.material.flags & asset::MaterialFlags::AlphaBlend)) {
+            if (!probes_.empty() && !(material_of(inst, sm).flags & asset::MaterialFlags::AlphaBlend)) {
                 const GpuLod& pl = mesh.lod(s, 0);
                 d.lod = 0;
                 d.first_index = pl.first_index;
@@ -302,9 +302,11 @@ void Scene3D::build() {
             const GpuSubmesh& sm = d.mesh->submeshes[d.submesh];
             const f32 dn = math::clamp(d.view_depth / far_z, 0.0f, 1.0f);
             const auto q = static_cast<u32>(dn * f32(0xFFFFFF));
-            const bool blend = (sm.material.flags & asset::MaterialFlags::AlphaBlend) != 0;
-            const auto material = static_cast<u16>(((sm.albedo_key & 0x7FFF) << 1) |
-                                                   ((sm.material.flags & asset::MaterialFlags::DoubleSided) ? 1u : 0u));
+            const MeshInstance& inst = instances_[d.instance];
+            const asset::MaterialChunk& mat = material_of(inst, sm);
+            const bool blend = (mat.flags & asset::MaterialFlags::AlphaBlend) != 0;
+            const auto material = static_cast<u16>(((albedo_key_of(inst, sm) & 0x7FFF) << 1) |
+                                                   ((mat.flags & asset::MaterialFlags::DoubleSided) ? 1u : 0u));
             keys[i] = blend ? sort_key_3d(PassId::Transparent, 0, 0xFFFFFFu - q) : sort_key_3d(PassId::Opaque, material, q);
             order[i] = static_cast<u32>(i);
         }
@@ -316,7 +318,9 @@ void Scene3D::build() {
     }
     opaque_count_ = 0;
     while (opaque_count_ < draws_.size() &&
-           !(draws_[opaque_count_].mesh->submeshes[draws_[opaque_count_].submesh].material.flags & asset::MaterialFlags::AlphaBlend))
+           !(material_of(instances_[draws_[opaque_count_].instance], draws_[opaque_count_].mesh->submeshes[draws_[opaque_count_].submesh])
+                 .flags &
+             asset::MaterialFlags::AlphaBlend))
         ++opaque_count_;
 
     // Shadow fit (rhi-renderer.md §3.5): an orthographic box around the scene's bounding sphere,

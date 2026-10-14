@@ -24,6 +24,7 @@
 // from (seed, time), so replays and determinism hashes match.
 
 #include "mce/asset/handle.h"
+#include "mce/audio/components.h"
 #include "mce/ecs/entity.h"
 #include "mce/math/math.h"
 #include "mce/refl/macros.h"
@@ -41,17 +42,13 @@ namespace mce::kit {
 enum class FireOn : u8 { Manual, Start, TriggerEnter, ContactBegin };
 MCE_ENUM(FireOn, Manual, Start, TriggerEnter, ContactBegin)
 
-// The audio mixer's buses (audio::Bus_*).
-enum class SfxBus : u8 { Master, Music, SFX, UI };
-MCE_ENUM(SfxBus, Master, Music, SFX, UI)
-
 // A one-shot sound. 2D (centred, `pan`); the mixer has no resampling, so there is no pitch.
 struct SfxTrigger {
     asset::AssetRef<asset::Sfx> clip;
     f32 gain_db = 0.0f;
     f32 gain_jitter_db = 0.0f;  // each play adds a value in [-jitter, +jitter] dB
     f32 pan = 0.0f;
-    SfxBus bus = SfxBus::SFX;
+    audio::AudioBus bus = audio::AudioBus::SFX;
     FireOn on = FireOn::Manual;
     bool fire = false;
     u8 pad_ = 0;
