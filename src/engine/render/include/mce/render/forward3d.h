@@ -92,15 +92,15 @@ public:
     // True when record() assigns Forward+ lights on the GPU (desc + device compute).
     bool gpu_light_clusters() const { return !cluster_build_.is_null(); }
     // Image-based lighting textures (M-VISUAL 2); null until the first frame with Sky::ibl.
-    static constexpr u32 kIblLayers = 5;      // pre-filtered roughness 0.2, 0.4, ... 1.0
+    static constexpr u32 kIblLayers = 5;      // pre-filtered roughness 0.2, 0.4, ... 1.0 (after a sharp layer)
     static constexpr u32 kIblEnvWidth = 128;  // equirect, 2:1
     static constexpr u32 kIblLutSize = 64;
     static constexpr u32 kProbeFaceSize = 128;
-    // Layers per reflection probe in ibl_env(): the sharp capture, then the pre-filtered ones.
+    // Layers per environment slot in ibl_env(): the sharp source, then the pre-filtered ones.
     static constexpr u32 kProbeLayers = kIblLayers + 1;
-    static constexpr u32 probe_base_layer(u32 probe) { return kIblLayers + probe * kProbeLayers; }
-    // RGBA16F 2D array: the sky's kIblLayers layers, then kProbeLayers per probe slot once a scene
-    // has reflection probes.
+    static constexpr u32 probe_base_layer(u32 probe) { return (probe + 1) * kProbeLayers; }
+    // RGBA16F 2D array: the sky's slot (kProbeLayers layers), then one per probe once a scene has
+    // reflection probes.
     rhi::TextureHandle ibl_env() const { return ibl_env_; }
     // The sharp equirect of the last probe captured (RGBA16F, kIblEnvWidth × kIblEnvWidth/2).
     rhi::TextureHandle probe_capture() const { return probe_capture_; }
@@ -154,6 +154,7 @@ private:
     rhi::TextureHandle ibl_sh_;
     rhi::SamplerHandle env_sampler_;     // linear, wraps around the equirect seam
     u64 ibl_key_ = 0;                    // the sky the IBL textures were baked from; 0 = none
+    bool ibl_own_source_ = false;        // baked from Sky::ibl_texture rather than the visible sky
     rhi::PipelineHandle probe_reproject_;  // six faces -> equirect
     rhi::PipelineHandle probe_prefilter_;  // equirect -> GGX layers
     rhi::TextureHandle probe_faces_;     // RGBA16F 2D array, 6 layers of kProbeFaceSize²

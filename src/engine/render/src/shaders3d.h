@@ -37,7 +37,8 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_sky_horizon;    // rgb, w: specular ambient scale
     vec4 p_sky_ground;     // rgb, w: sky texture max lod (-1 = gradient)
     vec4 p_sun;            // x: cos of the disk radius, y: disk intensity, z: sky texture intensity, w: texture is additive
-    vec4 p_ibl;            // x: image-based lighting on, y: diffuse scale, z: pre-filtered layers, w: bake roughness
+    vec4 p_ibl;            // x: image-based lighting on, y: diffuse scale, z: pre-filtered layers,
+                           // w: bake roughness (bake passes) / 1 = an IBL source other than the visible sky (lit passes)
     vec4 p_probes;         // x: reflection probe count (image-based lighting only)
     vec4 p_probe_pos[4];   // capture position, w: intensity
     vec4 p_probe_min[4];   // box, w: blend distance
@@ -183,12 +184,12 @@ vec3 probe_specular(vec3 p, vec3 r, float rough, vec3 sky) {
     }
     return mix(sky, chosen, best);
 }
+// The sky slot is laid out like a probe's (layer 0 sharp, then 0.2 ... 1.0). Below roughness 0.2 the
+// visible sky is read itself (full texture detail) unless the IBL has its own source.
 vec3 prefiltered_sky(vec3 r, float rough) {
-    float lv = rough * p_ibl.z - 1.0;
-    vec2 uv = equirect_uv(r);
-    if (lv < 0.0) return mix(sky_radiance(r, rough * 8.0), textureLod(u_env, vec3(uv, 0.0), 0.0).rgb, lv + 1.0);
-    float i0 = floor(lv), i1 = min(i0 + 1.0, p_ibl.z - 1.0);
-    return mix(textureLod(u_env, vec3(uv, i0), 0.0).rgb, textureLod(u_env, vec3(uv, i1), 0.0).rgb, lv - i0);
+    float lv = rough * p_ibl.z;
+    if (lv >= 1.0 || p_ibl.w > 0.5) return probe_env(0.0, r, rough);
+    return mix(sky_radiance(r, rough * 8.0), textureLod(u_env, vec3(equirect_uv(r), 1.0), 0.0).rgb, lv);
 }
 )"
 
@@ -612,6 +613,10 @@ layout(location = 0) out vec4 o_color;
 const uint kSamples = 64u;
 void main() {
     vec3 n = equirect_dir(v_uv);
+    if (p_ibl.w <= 0.0) {  // the sharp layer: the source itself
+        o_color = vec4(sky_radiance(n, 0.0), 1.0);
+        return;
+    }
     float a = p_ibl.w * p_ibl.w;
     // Solid angle of one texel of the sky texture's top mip (2:1 equirect, p_sky_ground.w = max lod).
     float texel_sa = 4.0 * PI / exp2(2.0 * max(p_sky_ground.w, 0.0) - 1.0);

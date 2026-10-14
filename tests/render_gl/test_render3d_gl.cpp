@@ -738,3 +738,46 @@ TEST_CASE("render3d_gl: a reflection probe puts the room into a mirror floor; ca
     CHECK(fw.last_stats().probes == 0);
     CHECK(f.device->validation_error_count() == 0);
 }
+
+TEST_CASE("render3d_gl: an IBL texture lights the scene while the dome keeps the visible sky") {
+    Fixture3D f;
+    f.pitch_deg = 20.0f;
+    // A uniform red equirect as the IBL source under a blue gradient sky.
+    Array<u8> px;
+    for (u32 i = 0; i < 16; ++i) {
+        px.push_back(255);
+        px.push_back(20);
+        px.push_back(20);
+        px.push_back(255);
+    }
+    const TextureMipUpload mip{4, 4, std::as_bytes(px.span())};
+    TextureUpload up;
+    up.mips = Span<const TextureMipUpload>(&mip, 1);
+    const u32 red = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(red, 1, up).has_value());
+    bool own = false;
+    const auto scene = [&](Scene3D& s) {
+        no_sun(s);
+        Sky sky = constant_sky(0.0f, true);
+        sky.zenith = sky.horizon = {0.1f, 0.2f, 1.0f};
+        if (own) sky.ibl_texture = red;
+        s.set_sky(sky);
+    };
+    const Forward3D& fw = f.renderer.forward_3d();
+    const vec3 ground{2.0f, 0.0f, 2.0f}, above{0.0f, 4.0f, -20.0f};
+    f.render(0.0f, false, scene);
+    const Rgb ground_sky = f.at_world(ground), dome_sky = f.at_world(above);
+    own = true;
+    f.render(0.0f, false, scene);
+    CHECK(fw.last_stats().ibl_baked);
+    const Rgb ground_own = f.at_world(ground), dome_own = f.at_world(above);
+    INFO("ground " << ground_sky.r << "," << ground_sky.b << " -> " << ground_own.r << "," << ground_own.b << "; dome "
+                   << dome_sky.b << " -> " << dome_own.b);
+    CHECK(ground_sky.b > ground_sky.r + 20);  // lit by the blue sky
+    CHECK(ground_own.r > ground_own.b + 20);  // lit by the red IBL texture
+    CHECK(std::abs(dome_own.b - dome_sky.b) <= 2);  // the dome still draws the visible sky
+    CHECK(std::abs(dome_own.r - dome_sky.r) <= 2);
+    f.render(0.0f, false, scene);
+    CHECK_FALSE(fw.last_stats().ibl_baked);
+    CHECK(f.device->validation_error_count() == 0);
+}

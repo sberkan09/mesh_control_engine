@@ -513,8 +513,8 @@ void Forward3D::record_ibl(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         cmd.draw_non_indexed(3);
         cmd.end_pass();
     }
-    // The sky's layers, then the probe slots once a scene has probes (grown once, never shrunk).
-    const u32 layers = kIblLayers + (scene.reflection_probes().empty() ? 0u : kMaxReflectionProbes * kProbeLayers);
+    // The sky's slot, then the probe slots once a scene has probes (grown once, never shrunk).
+    const u32 layers = kProbeLayers + (scene.reflection_probes().empty() ? 0u : kMaxReflectionProbes * kProbeLayers);
     if (layers > ibl_env_layers_) {
         destroy(*device_, ibl_env_);
         rhi::TextureDesc d;
@@ -529,15 +529,23 @@ void Forward3D::record_ibl(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         ibl_key_ = 0;
         for (u64& k : probe_keys_) k = 0;
     }
+    // The bake reads sky_radiance(): the visible sky, or Sky::ibl_texture alone in its place.
+    Sky source = sky;
+    ibl_own_source_ = sky.ibl_texture != ~0u && textures_->contains(sky.ibl_texture);
+    if (ibl_own_source_) {
+        source.texture = sky.ibl_texture;
+        source.texture_intensity = sky.ibl_texture_intensity;
+        source.texture_additive = false;
+    }
     PassU pu{};
-    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu);
-    const u64 key = sky_radiance_key(sky, sky_tex, pu.sky_ground.w);
+    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, source, pu);
+    const u64 key = sky_radiance_key(source, sky_tex, pu.sky_ground.w);
     if (key != ibl_key_) {
         cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
-        for (u32 i = 0; i < kIblLayers; ++i) {
+        for (u32 i = 0; i < kProbeLayers; ++i) {  // sharp, then roughness 0.2 ... 1.0
             pass_into(ibl_env_, static_cast<u16>(i), "ibl.prefilter");
             cmd.bind_pipeline(ibl_prefilter_);
-            pu.ibl = {0.0f, 0.0f, f32(kIblLayers), f32(i + 1) / f32(kIblLayers)};
+            pu.ibl = {0.0f, 0.0f, f32(kIblLayers), f32(i) / f32(kIblLayers)};
             cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
             cmd.draw_non_indexed(3);
             cmd.end_pass();
@@ -610,7 +618,7 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     pu.fog = vec4(fog.color, fog.density);
     for (mat4& c : pu.cascade) c = mat4::identity();
     const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu);
-    pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), 0.0f};  // the sky's IBL, no probes
+    pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), ibl_own_source_ ? 1.0f : 0.0f};  // the sky's IBL, no probes
     static constexpr ClusterRange kNoRange{0, 0};
     static constexpr GpuPointLight kNoLight{};
     static constexpr u32 kNoIndex = 0;
@@ -798,7 +806,7 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     }
     const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu);
     if (stats_.ibl) {
-        pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), 0.0f};
+        pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), ibl_own_source_ ? 1.0f : 0.0f};
         cmd.bind_texture(rhi::bank::kIblEnv, ibl_env_, env_sampler_);
         cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_lut_, linear_clamp_);
         cmd.bind_texture(rhi::bank::kIblSh, ibl_sh_, point_sampler_);

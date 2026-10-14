@@ -20,7 +20,7 @@ static_assert(sizeof(SpotLight3D) == 60);
 static_assert(sizeof(ReflectionProbe3D) == 40);
 static_assert(sizeof(Camera3DComponent) == 24);
 static_assert(sizeof(Animator) == 80);
-static_assert(sizeof(Environment3D) == 208);
+static_assert(sizeof(Environment3D) == 240);
 static_assert(sizeof(BoxCollider3D) == 40);
 static_assert(sizeof(MeshCollider3D) == 32);
 

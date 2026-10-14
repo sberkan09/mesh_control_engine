@@ -69,6 +69,10 @@ struct Sky {
     // place of the analytic split-sum). Re-baked when the sky changes; off = the frame without it.
     bool ibl = false;
     f32 diffuse_ambient = 1.0f;                // scale of the SH9 sky irradiance (ibl only)
+    // TextureStore key of an equirect map the IBL bakes from instead of the visible sky (an HDR-ish
+    // environment for the lighting while the dome shows something else); ~0u = the sky itself.
+    u32 ibl_texture = ~0u;
+    f32 ibl_texture_intensity = 1.0f;
 };
 
 // The post chain (FR-R3D-090): bloom -> ACES tonemap (exposure) -> FXAA. Toggleable per frame.
