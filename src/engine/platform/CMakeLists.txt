@@ -14,10 +14,19 @@ mce_add_library(mce_platform
         src/ads.cpp
         src/review.cpp
         src/haptics.cpp
+        src/power.cpp
     PUBLIC_DEPS
         mce::mce_core
     PRIVATE_DEPS
         SDL3::SDL3-static)
+
+# The thermal state (platform/power.h) on iOS and macOS: Objective-C++ through the CXX language, as in
+# mce_rhi_metal, so it gets the same compile policy.
+if(APPLE)
+    target_sources(mce_platform PRIVATE src/power_apple.mm)
+    set_source_files_properties(src/power_apple.mm PROPERTIES LANGUAGE CXX COMPILE_OPTIONS "-xobjective-c++;-fno-objc-arc")
+    target_link_libraries(mce_platform PRIVATE "-framework Foundation")
+endif()
 
 # The phone's purchase store (platform/store.h). Android needs nothing here: the Play Billing side is
 # Java, stamped into the game's Gradle project. iOS StoreKit 2 is Swift and stays opt-in until it has
