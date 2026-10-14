@@ -190,5 +190,23 @@ It shows the conversation on the `DialogueInput` entity: the speaker's name, the
 has been typed, and the options with the highlighted one marked and gated ones greyed. Colours and
 sizes are a `DialogueBoxStyle`. Any `ui::Layer` you write is added the same way.
 
-Translations of the lines will go through the localization tables once those land (ROADMAP
-M-MOBILE step 11).
+### Translating the story
+
+Add `"localize": {"base": "en"}` to the manifest. Each compile then writes the story's rows into
+`assets/loc/en.csv`, keeping the rows your game wrote there:
+
+| Key | Row |
+|---|---|
+| `story.name.<character>` | a speaker's name tag |
+| `story.<8 hex digits>` | a statement or an option, keyed by its text |
+
+Copy them into `assets/loc/tr.csv` (or any locale) and translate the text column. Rewording a base
+line gives it a new key, so its old translation stops showing until it is redone; the cook's
+missing-key warning lists what is left. `mce story compile --check` fails while `en.csv` is out of
+date with the script.
+
+The novel stage, the backlog and the dialogue box show the language the player chose (chapter
+on languages, `loc::Localization`), and switch with it at once. A translated statement keeps the
+page count of its base line, so a playthrough is the same in every language and saves stay valid
+across a switch: a translation that cannot fill those pages or overflows them is a compile warning
+and shows in the base language. An option takes at most two lines. Letters are not translated yet.

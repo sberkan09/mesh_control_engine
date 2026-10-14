@@ -689,8 +689,10 @@ RowText row_text(Context& c, u32 row, bool game_rows) {
     if (n.mode == Mode::Choice) {
         if (row >= n.vis_count) return {nullptr, nullptr, false};
         const Option& o = c.p.options[n.opt_first + n.vis[row]];
-        r.a = text(c.p, o.text);
-        r.b = text(c.p, o.text2);
+        u16 t = 0, t2 = 0;
+        localized_option(c.p, story_locale(c.p, c.f.world()), o, t, t2);
+        r.a = text(c.p, t);
+        r.b = text(c.p, t2);
         r.enabled = option_open(c, o);
         return r;
     }
@@ -733,16 +735,19 @@ void panel_line(Context& c, Panel panel, u32 line, char* buf, u32 cap) {
         case Panel::Backlog: {
             // the last 14 lines before the scroll point, newest at the bottom
             i32 want = 13 - static_cast<i32>(line) + static_cast<i32>(n.log_scroll);  // lines back from the newest
+            const LocaleText* lt = story_locale(p, c.f.world());
             for (u32 e = 0; e < n.log_count && want >= 0; ++e) {
                 const LogEntry& le = n.log[(n.log_head + 63 - e) % 64];
+                u16 shown[4];
+                localized_page(p, lt, le.line, shown);
                 u32 lines = 0;
-                for (u32 i = 0; i < 4; ++i) lines += le.line[i] ? 1u : 0u;
+                for (u32 i = 0; i < 4; ++i) lines += shown[i] ? 1u : 0u;
                 if (want < static_cast<i32>(lines)) {
                     const u32 li = lines - 1 - static_cast<u32>(want);
                     if (li == 0 && le.speaker < p.character_count)
-                        std::snprintf(buf, cap, "%s: %s", speaker_name(p, le.speaker), text(p, le.line[li]));
+                        std::snprintf(buf, cap, "%s: %s", localized_speaker(p, lt, le.speaker), text(p, shown[li]));
                     else
-                        std::snprintf(buf, cap, "%s", text(p, le.line[li]));
+                        std::snprintf(buf, cap, "%s", text(p, shown[li]));
                     break;
                 }
                 want -= static_cast<i32>(lines);
@@ -779,6 +784,14 @@ void novel_present(Frame& f) {
     const f32 t = static_cast<f32>(n.ticks) / 60.0f;
     const bool panel_up = n.mode == Mode::Checkpoint || n.mode == Mode::Backlog || n.mode == Mode::Ending || n.mode == Mode::Extras;
     const bool complete = n.revealed >= static_cast<f32>(n.page_chars);
+    // The page and the name tag in the player's language; the sim types the base page, the shown
+    // one keeps pace with it.
+    const LocaleText* tr = story_locale(p, f.world());
+    u16 page[4];
+    localized_page(p, tr, n.page_line, page);
+    u32 page_points = 0;
+    for (u32 i = 0; i < 4; ++i) page_points += page[i] ? utf8_points(StringView(text(p, page[i]))) : 0;
+    const u32 shown_budget = scale_reveal(static_cast<u32>(n.revealed), n.page_chars, page_points);
     const u32 loc = look.location < NovelState::kLocations ? look.location : 0;
     char buf[128];
 
@@ -843,7 +856,7 @@ void novel_present(Frame& f) {
     f.query<const StagePart&, kit::TextLabel&, LocalTransform&>().each([&](const StagePart& part, kit::TextLabel& tl, LocalTransform& lt) {
         switch (part.role) {
             case StageRole::NameText:
-                set_text(tl, n.mode == Mode::Reading && n.page_speaker < p.character_count ? StringView(speaker_name(p, n.page_speaker))
+                set_text(tl, n.mode == Mode::Reading && n.page_speaker < p.character_count ? StringView(localized_speaker(p, tr, n.page_speaker))
                                                                                             : StringView());
                 break;
             case StageRole::Line: {
@@ -858,10 +871,10 @@ void novel_present(Frame& f) {
                     break;
                 }
                 // reveal: code points up to `revealed`, spent line by line
-                u32 budget = static_cast<u32>(n.revealed);
+                u32 budget = shown_budget;
                 StringView shown;
                 for (u32 i = 0; i <= part.index; ++i) {
-                    const StringView line(text(p, n.page_line[i]));
+                    const StringView line(text(p, page[i]));
                     const u32 pts = utf8_points(line);
                     if (i == part.index) shown = complete ? line : utf8_prefix(line, math::min(budget, pts));
                     budget = budget > pts ? budget - pts : 0;

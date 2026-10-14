@@ -7,6 +7,7 @@
 #include "mce/input/ecs.h"
 #include "mce/kit/novel.h"
 #include "mce/kit/novel_ui.h"
+#include "mce/loc/loc.h"
 #include "mce/render/sprite_batch.h"
 #include "novel_fixture.h"
 
@@ -120,4 +121,51 @@ TEST_CASE("dialogue box: hidden without a conversation, then the page typed out,
     g.step(true);
     box.update(g.w, frame());
     CHECK(!box.visible());  // the conversation ended
+}
+
+TEST_CASE("dialogue box: the page, the choices and the name tag in the player's language, switched at run time") {
+    Skin skin;
+    Game g;
+    loc::Localization l10n;
+    for (const char* tag : {"en", "tr"}) {
+        loc::StringTable t;
+        t.set_locale(tag);
+        REQUIRE(t.add("menu.play", "-"));
+        l10n.add_table(std::move(t));
+    }
+    REQUIRE(l10n.set_locale("tr"));
+    g.w.set_resource(std::move(l10n));
+    nv::DialogueBox box;
+    box.init(skin.skin);
+
+    REQUIRE(nv::start_dialogue(g.w, g.mira, "mira"));
+    g.step();
+    g.step();
+    box.update(g.w, frame());
+    const std::string typing = str(box.line(0));
+    CHECK(std::string("Merhaba.").rfind(typing, 0) == 0);  // typing the Turkish line, at the base page's pace
+    CHECK(typing.size() < std::string("Merhaba.").size());
+    g.step(true);
+    box.update(g.w, frame());
+    CHECK(str(box.line(0)) == "Merhaba.");
+    CHECK(str(box.speaker()) == "Mira");  // tr.csv has no row for her name: the base one
+
+    // a language menu switches: the same page, in English on the next update, and back
+    REQUIRE(g.w.resource<loc::Localization>().set_locale("en"));
+    box.update(g.w, frame());
+    CHECK(str(box.line(0)) == "Hello there.");
+    REQUIRE(g.w.resource<loc::Localization>().set_locale("tr"));
+    box.update(g.w, frame());
+    CHECK(str(box.line(0)) == "Merhaba.");
+
+    g.step();
+    g.step(true);
+    box.update(g.w, frame());
+    REQUIRE(box.option_count() == 3);
+    CHECK(str(box.option(0)) == "Tekneyi sor");
+    CHECK(str(box.option(2)) == "Ayr\xC4\xB1l");
+    REQUIRE(g.w.resource<loc::Localization>().set_locale("en"));
+    box.update(g.w, frame());
+    CHECK(str(box.option(0)) == "Ask about the boat");
+    CHECK(str(box.line(0)) == "Hello there.");  // the page kept up under the choice follows too
 }

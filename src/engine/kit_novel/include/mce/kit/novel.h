@@ -33,6 +33,9 @@
 namespace mce::asset {
 class AssetSystem;
 }
+namespace mce::loc {
+class Localization;
+}
 
 namespace mce::novel {
 
@@ -124,6 +127,26 @@ struct LabelInfo {
     u16 op;
 };
 
+// Translations (M-MOBILE step 11e; story.json "localize"). The compiler wraps each language's text
+// like the base text and appends it to Program::text; these map what the run shows (base text ids,
+// the same in every language, so the run and its hash are too) to what the box shows instead.
+struct PageText {
+    u16 base[4];  // a page's base line ids (a Say op's c..f); sorted
+    u16 line[4];  // the translated lines
+};
+struct OptionText {
+    u16 base, base2;  // an option's base text ids; sorted
+    u16 text, text2;
+};
+struct LocaleText {
+    const char* locale;  // a string table's tag ("tr", "pt-BR")
+    const PageText* pages;
+    u16 page_count;
+    const OptionText* options;
+    u16 option_count;
+    const u16* names;  // a translated name per character (text ids; 0 = the base name)
+};
+
 struct Program {
     const Op* ops = nullptr;
     u16 op_count = 0;
@@ -180,12 +203,31 @@ struct Program {
     math::Color ink_speech{0.16f, 0.12f, 0.1f, 1}, ink_narration{0.36f, 0.29f, 0.23f, 1};
     math::Color ink_row{0.3f, 0.255f, 0.225f, 1}, ink_row_selected{0.12f, 0.102f, 0.09f, 1}, ink_row_disabled{0.55f, 0.4675f, 0.4125f, 1};
     math::Color row_tint{1, 1, 1, 1};
+    const LocaleText* locales = nullptr;  // the translations (none without "localize")
+    u16 locale_count = 0;
+    const char* base_locale = "en";       // the language the script is written in
 };
 
 // The label's op, or kNone.
 u16 find_label(const Program& p, StringView name);
 // A variable's reference by its script name ("trust.mira", "day"), or kNone.
 u16 find_var(const Program& p, StringView name);
+
+// ---- translations (presentation only: the run never reads them) --------------------------------
+
+// The translation the player's language chain picks (loc::Localization::chain(): the first locale
+// that is the base language or has a table), or null for the base text: no Localization, no
+// translations, or a chain that reaches the base language first.
+const LocaleText* story_locale(const Program& p, const loc::Localization* l10n);
+const LocaleText* story_locale(const Program& p, World& world);  // the world's Localization resource
+
+// What to show for a page's base lines / an option / a speaker in `lt` (null: the base text).
+void localized_page(const Program& p, const LocaleText* lt, const u16 base[4], u16 out[4]);
+void localized_option(const Program& p, const LocaleText* lt, const Option& o, u16& text, u16& text2);
+const char* localized_speaker(const Program& p, const LocaleText* lt, u8 character);
+// The typewriter runs on the base page (the sim's clock): `revealed` of its `base_points` mapped
+// onto a shown page of `shown_points`, so both finish together.
+u32 scale_reveal(u32 revealed, u32 base_points, u32 shown_points);
 
 // ---- variables and conditions ----------------------------------------------------------------
 
