@@ -238,3 +238,11 @@ bound), so the main pass and the reflection-probe capture are unchanged.
 the frame without it` (0 pixels differ in a direct-only scene; the AO target is half size, white on open ground,
 dark in the crease). Goldens `ssao_crease` and `ssao_scene` on linux-gl and linux-sdlgpu; the earlier goldens are
 unchanged. Real-GPU cost, and Metal pixels, belong to the Mac/device session.
+
+**Budget (04_cubes `-ao 1`, 256 point lights, 1280×1024, 110 measured frames, Mesa llvmpipe — software, so
+only the relative cost means anything; real-GPU numbers on the Mac/device session):**
+
+| | AO off | AO on |
+|---|---|---|
+| SSAO pass (prepass + occlusion + blur, ms) | 0 | 36.5 |
+| GPU 3D frame total (ms) | 384.4 | 432.2 |
