@@ -75,4 +75,8 @@ if(MCE_BUILD_TESTS AND TARGET mce_cook)
              COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
                      -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/remote_config_test
                      -P ${PROJECT_SOURCE_DIR}/tests/liveops/player_remote_config_test.cmake)
+    add_test(NAME player_game_services
+             COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/game_services_test
+                     -P ${PROJECT_SOURCE_DIR}/tests/liveops/player_game_services_test.cmake)
 endif()

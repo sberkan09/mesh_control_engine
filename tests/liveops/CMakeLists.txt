@@ -1,7 +1,9 @@
 # mce_liveops (M-LIVEOPS step 1): the consent gate, analytics events and their file backend, crash
-# reports sent on the next launch, remote config (fetch, apply point, cache, replay).
+# reports sent on the next launch, game services (outbox, cloud saves, replay), remote config (fetch,
+# apply point, cache, replay).
 mce_add_test(test_liveops
     SOURCES
+        test_game_services.cpp
         test_liveops.cpp
         test_remote_config.cpp
     DEPS

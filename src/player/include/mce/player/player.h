@@ -33,6 +33,7 @@ class IAdProvider;
 namespace mce::liveops {
 class ICrashUploader;
 class IConfigFetcher;
+class IGameServicesProvider;
 namespace analytics {
 class IBackend;
 }
@@ -87,6 +88,10 @@ struct PlayerDesc {
     // Remote config (mce/liveops/remote_config.h), with live services on: the pack's .mcconfig
     // defaults, the values the last fetch saved, and this fetcher (null: -remote_config.file or none).
     liveops::IConfigFetcher* config_fetcher = nullptr;
+    // Game services (mce/liveops/game_services.h), with live services on and a .mcservices in the
+    // pack: achievements, leaderboards and cloud saves through this provider (Game Center / Play Games;
+    // null: -liveops.provider local's folder, or none: everything stays on this device).
+    liveops::IGameServicesProvider* game_services_provider = nullptr;
 };
 
 // Parses the command line into convars, then runs headless (-headless 1) or windowed. Returns the

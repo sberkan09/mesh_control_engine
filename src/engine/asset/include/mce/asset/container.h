@@ -50,6 +50,7 @@ enum class ChunkType : u16 {  // closed set, appended only
     ModInfo,         // CHNK_MOD: a mod pack's identity (FR-RUN-090, ADR-0034); pack-level, GUID zero
     StoreCatalog,    // CHNK_STORE: a project's products and ad placements (M-MONETIZE; mce/monetize/catalog.h)
     RemoteConfig,    // CHNK_RCFG: a project's remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
+    GameServicesCatalog,  // CHNK_GSVC: achievements, leaderboards, cloud saves (M-LIVEOPS; mce/liveops/game_services.h)
 };
 
 const char* chunk_type_name(ChunkType t);
