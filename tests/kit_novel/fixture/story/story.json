@@ -10,5 +10,6 @@
   "bot": {"kind": ["kind", "first"]},
   "flags": ["has_letter", "asked_boat"],
   "counters": [{"name": "trust", "min": 0, "max": 3}],
-  "commands": ["wave"]
+  "commands": ["wave"],
+  "localize": {"base": "en"}
 }

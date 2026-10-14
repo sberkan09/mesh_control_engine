@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Story translation, step 11e (M-MOBILE): with `"localize"` in `story/story.json`, `mce story compile` writes the
+  story's lines, options and speaker names into `assets/loc/<base>.csv` and reads translations from the other
+  tables; the novel stage, backlog and dialogue box show the player's language and switch with it, with the same
+  run and state hash in every language. A translation that does not fit its line's pages falls back to the base.
 - Haptics, step 11d (M-MOBILE, #150): `platform::haptics::play(preset)` (`mce/platform/haptics.h`) taps the phone
   (UIKit feedback generators on iOS with `-DMCE_UIKIT_HAPTICS=ON`, the vibrator's effects on Android) and rumbles
   every connected gamepad; the player's saved `haptics` convar turns it off, and it never enters the state hash.
