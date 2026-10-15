@@ -4,6 +4,8 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
+
 #include "mce/core.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
@@ -497,6 +499,68 @@ TEST_CASE("render_gl: coverage text renders through the batch") {
     CHECK(f.at_px(29, 36).g == 0);    // the gap between the glyphs
     CHECK(f.at_px(31, 36).g == 255);  // second glyph at x 30..38
     CHECK(f.at_px(24, 44).g == 0);    // below the line
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render_gl: a distance-field font keeps a hard edge when magnified; coverage blurs (M-UI-DATA 4)") {
+    Fixture f;
+    // One 12×12 glyph 'X' holding an 8×8 box at (2, 2): as coverage, and as a distance field with
+    // a 2-pixel spread (128 on the edge, 64 per pixel). Both are drawn 8× their baked size.
+    auto make = [&](bool sdf) {
+        FontMetrics m;
+        m.pixel_height = 16;
+        m.ascent = 12;
+        m.descent = -4;
+        m.atlas_width = 16;
+        m.atlas_height = 16;
+        m.sdf_spread = sdf ? 2.0f : 0.0f;
+        Array<u8> atlas;
+        atlas.resize(16 * 16);
+        for (u32 y = 0; y < 12; ++y)
+            for (u32 x = 0; x < 12; ++x) {
+                const f32 cx = static_cast<f32>(x) + 0.5f, cy = static_cast<f32>(y) + 0.5f;
+                const f32 d = std::min(std::min(cx - 2.0f, 10.0f - cx), std::min(cy - 2.0f, 10.0f - cy));  // + inside
+                atlas[y * 16 + x] = sdf ? static_cast<u8>(std::clamp(128.0f + d * 64.0f, 0.0f, 255.0f)) : (d > 0 ? 255 : 0);
+            }
+        FontGlyph g{};
+        g.codepoint = 'X';
+        g.x1 = 12;
+        g.y1 = 12;
+        g.yoff = -12;
+        g.xoff2 = 12;
+        g.xadvance = 12;
+        auto font = f.renderer.create_font(m, Span<const FontGlyph>(&g, 1), {}, std::as_bytes(atlas.span()));
+        REQUIRE(font.has_value());
+        return font.value();
+    };
+    const Font coverage = make(false), field = make(true);
+    // The box spans x 26..90 on screen; count the half-lit pixels across its left edge on the middle row.
+    auto ramp = [&](const Font& font) {
+        TextLayout layout;
+        TextLayoutDesc ld;
+        ld.size_px = 128;
+        ld.fallback = 0;
+        layout_text(font.face, "X", ld, layout);
+        REQUIRE(layout.quads.size() == 1);
+        f.render(
+            [&](SpriteBatch& b) {
+                TextPlacement p;
+                p.origin = vec2(10, 10);
+                p.tint = math::Color{0, 1, 0, 1};
+                b.add_text(font, layout, p);
+            },
+            compute_screen_view({kSize, kSize}));
+        CHECK(f.at_px(58, 58).g == 255);
+        CHECK(f.at_px(14, 58).g == 0);
+        u32 partial = 0;
+        for (u32 x = 14; x < 42; ++x) partial += f.at_px(x, 58).g > 16 && f.at_px(x, 58).g < 239;
+        return partial;
+    };
+    const u32 soft = ramp(coverage), sharp = ramp(field);
+    CAPTURE(soft);
+    CAPTURE(sharp);
+    CHECK(soft >= 4);   // bilinear coverage smears the edge over about one baked pixel (8 screen pixels)
+    CHECK(sharp <= 2);  // the field is thresholded over one screen pixel
     CHECK(f.device->validation_error_count() == 0);
 }
 

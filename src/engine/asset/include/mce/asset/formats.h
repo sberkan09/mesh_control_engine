@@ -177,10 +177,15 @@ struct FontHeader {
     u32 kern_count;
     u64 glyph_offset;
     u64 kern_offset;
-    u64 atlas_offset;  // R8 coverage, atlas_width * atlas_height
-    u64 reserved;
+    u64 atlas_offset;  // R8, atlas_width * atlas_height: coverage, or a distance field (FontFlags::Sdf)
+    u32 flags;         // FontFlags
+    f32 sdf_spread;    // Sdf: pixels at pixel_height from the edge (128) to 0 or 255
 };
 static_assert(sizeof(FontHeader) == 64);
+
+namespace FontFlags {
+inline constexpr u32 Sdf = 1u << 0;  // single-channel signed distance field: 128 is the glyph edge
+}
 
 struct FontGlyph {  // sorted by codepoint
     u32 codepoint;

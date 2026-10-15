@@ -1,5 +1,6 @@
 #include "mce/render/asset_upload.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "mce/log.h"
@@ -70,6 +71,7 @@ Result<Font> load_cooked_font(Renderer& renderer, Span<const byte> blob, const c
     m.line_gap = h.line_gap;
     m.atlas_width = h.atlas_width;
     m.atlas_height = h.atlas_height;
+    m.sdf_spread = (h.flags & asset::FontFlags::Sdf) != 0 ? std::max(h.sdf_spread, 1.0f) : 0.0f;
     Array<FontGlyph> glyphs;
     glyphs.resize(view.glyphs.size());
     if (!glyphs.empty()) std::memcpy(glyphs.data(), view.glyphs.data(), glyphs.size() * sizeof(FontGlyph));

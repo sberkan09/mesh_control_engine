@@ -28,6 +28,7 @@ struct SpriteSetDesc {
     f32 pixels_per_meter = 48.0f;       // art density (rendering-2d §9)
     rhi::Filter filter = rhi::Filter::Nearest;  // pixel art default: point sampling, no mips
     bool coverage = false;              // font atlas: R8 coverage sampled as alpha
+    bool sdf = false;                   // coverage set whose R8 is a distance field (128 = edge)
     // Lit sets (FR-R2D-090): `normal_key` is the TextureStore key of a tangent-space normal map laid
     // out like the atlas (same layers, same regions). +X right, +Y up, +Z out of the screen.
     bool lit = false;
@@ -50,6 +51,7 @@ public:
     u32 texture_key(SpriteSetId id) const { return sets_[id.value].texture_key; }
     rhi::Filter filter(SpriteSetId id) const { return sets_[id.value].filter; }
     bool coverage(SpriteSetId id) const { return sets_[id.value].coverage; }
+    bool sdf(SpriteSetId id) const { return sets_[id.value].sdf; }
     u32 normal_key(SpriteSetId id) const { return sets_[id.value].normal_key; }
     bool lit(SpriteSetId id) const { return sets_[id.value].lit; }
     f32 pixels_per_meter(SpriteSetId id) const { return sets_[id.value].pixels_per_meter; }
@@ -64,6 +66,7 @@ private:
         f32 pixels_per_meter = 48.0f;
         rhi::Filter filter = rhi::Filter::Nearest;
         bool coverage = false;
+        bool sdf = false;
         bool alive = false;
         bool lit = false;
         u32 normal_key = 0;

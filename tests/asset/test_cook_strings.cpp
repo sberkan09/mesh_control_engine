@@ -199,3 +199,62 @@ TEST_CASE("strings: a font with \"strings\": true bakes every glyph the tables u
         if (ar.guid == asset::parse_guid(kFontGuid).value()) font_recooked = ar.status == cook::AssetStatus::Cooked;
     CHECK(font_recooked);
 }
+
+TEST_CASE("font: \"sdf\": true bakes a distance field the shader thresholds (M-UI-DATA 4)") {
+    constexpr const char* kFontGuid = "10c00000-0000-4000-8000-0000000000f1";
+    const std::string root = fresh_dir("font_sdf");
+    const std::string a = root + "/assets";
+    write_file(a + "/fonts/proggy.ttf", read_file(std::string(MCE_TEST_DATA_DIR) + "/fonts/ProggyClean.ttf"));
+    write_file(a + "/fonts/proggy.ttf.mceasset", sidecar(kFontGuid, "font", R"({ "size": 26, "ranges": [[32, 126]], "sdf": true, "spread": 3 })"));
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+    INFO(diags_of(r));
+    REQUIRE(r.ok());
+
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    auto h = assets.load_sync<asset::Font>(assets.find(asset::parse_guid(kFontGuid).value()));
+    REQUIRE(h);
+    auto view = asset::FontView::read(assets.resolve(h.value()));
+    REQUIRE(view);
+    const asset::FontView& f = view.value();
+    CHECK((f.header->flags & asset::FontFlags::Sdf) != 0);
+    CHECK(f.header->sdf_spread == 3.0f);
+    CHECK(f.glyphs.size() == 95);
+    const asset::FontGlyph* g = f.find('H');
+    REQUIRE(g);
+    // The quad carries the field's margin: the rect matches the quad and reaches past the ink.
+    CHECK(g->x1 - g->x0 == static_cast<u16>(g->xoff2 - g->xoff));
+    CHECK(g->y1 - g->y0 == static_cast<u16>(g->yoff2 - g->yoff));
+    CHECK(g->x1 - g->x0 > 6);
+    CHECK(g->xadvance > 0);
+    auto at = [&](u32 x, u32 y) { return static_cast<u8>(f.atlas[usize(y) * f.header->atlas_width + x]); };
+    u32 inside = 0, outside = 0;
+    for (u32 y = g->y0; y < g->y1; ++y)
+        for (u32 x = g->x0; x < g->x1; ++x) {
+            inside += at(x, y) > 128;
+            outside += at(x, y) < 128;
+        }
+    CHECK(inside > 10);
+    CHECK(outside > inside);
+    for (u32 x = g->x0; x < g->x1; ++x) CHECK(at(x, g->y0) < 128);  // the top row is margin, outside the ink
+    const asset::FontGlyph* space = f.find(' ');
+    REQUIRE(space);
+    CHECK(space->xadvance > 0);
+
+    // A coverage font says so; "spread" needs "sdf"; "sdf" is a bool.
+    struct Bad {
+        const char* settings;
+        const char* says;
+    };
+    for (const Bad& b : {Bad{R"({ "spread": 3 })", "'spread' needs"}, Bad{R"({ "sdf": 1 })", "'sdf' must be true or false"},
+                         Bad{R"({ "sdf": true, "spread": 40 })", "'spread' must be an integer in [1, 32]"}}) {
+        CAPTURE(b.settings);
+        write_file(a + "/fonts/proggy.ttf.mceasset", sidecar(kFontGuid, "font", b.settings));
+        const cook::CookReport bad = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+        CHECK_FALSE(bad.ok());
+        CHECK(diags_of(bad).find(b.says) != std::string::npos);
+    }
+}
