@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 
 #include <cstdlib>
+#include <cstring>
 
 #include "mce/log.h"
 #include "mce/platform/library.h"
@@ -29,6 +30,22 @@ using VoidFn = void (*)();
 using PipeFn = i32 (*)();
 using PipeVoidFn = void (*)(i32 pipe);
 using NextCallbackFn = bool (*)(i32 pipe, CallbackMsg* msg);
+using CallResultGetFn = bool (*)(i32 pipe, u64 call, void* out, i32 size, i32 expected, bool* failed);
+
+// SteamAPICallCompleted_t: an asynchronous call answered; its result is fetched by handle.
+constexpr i32 kCallCompleted = 703;
+struct CallCompleted {
+    u64 call;
+    i32 callback;
+    u32 size;
+};
+
+struct Waiting {
+    u64 call = 0;  // 0: a free slot
+    i32 expected = 0;
+    CallResultFn fn = nullptr;
+    void* user = nullptr;
+};
 using U32ObjFn = u32 (*)(void* self);
 using BoolObjFn = bool (*)(void* self);
 using U64ObjFn = u64 (*)(void* self);
@@ -42,6 +59,8 @@ struct State {
     PipeVoidFn run_frame = nullptr;
     NextCallbackFn next = nullptr;
     PipeVoidFn free_last = nullptr;
+    CallResultGetFn call_result = nullptr;
+    Waiting waiting[kMaxCalls];
     void* utils = nullptr;
     void* user = nullptr;
     void* friends = nullptr;
@@ -125,6 +144,7 @@ InitResult init(const Config& cfg, FixedString<256>* message) {
     g.run_frame = find<PipeVoidFn>("SteamAPI_ManualDispatch_RunFrame");
     g.next = find<NextCallbackFn>("SteamAPI_ManualDispatch_GetNextCallback");
     g.free_last = find<PipeVoidFn>("SteamAPI_ManualDispatch_FreeLastCallback");
+    g.call_result = find<CallResultGetFn>("SteamAPI_ManualDispatch_GetAPICallResult");
     if ((!init_flat && !init_old) || !restart || !dispatch_init || !get_pipe || !g.shutdown || !g.run_frame || !g.next ||
         !g.free_last) {
         close_library();
@@ -184,6 +204,22 @@ u32 run_callbacks(CallbackFn fn, void* user) {
     CallbackMsg msg{};
     while (g.next(g.pipe, &msg)) {
         ++n;
+        if (msg.callback == kCallCompleted && msg.param_size >= i32(sizeof(CallCompleted))) {
+            CallCompleted done;
+            std::memcpy(&done, msg.param, sizeof(done));
+            for (Waiting& w : g.waiting) {
+                if (w.call != done.call || done.call == 0) continue;
+                const Waiting got = w;
+                w = Waiting{};
+                // The result is fetched before the callback is freed (manual dispatch's rule).
+                alignas(8) byte result[4096];
+                bool failed = true;
+                const bool fetched = got.expected == done.callback && done.size <= sizeof(result) && g.call_result &&
+                                     g.call_result(g.pipe, done.call, result, i32(done.size), got.expected, &failed);
+                got.fn(got.user, Span<const byte>(result, fetched && !failed ? done.size : 0), !fetched || failed);
+                break;
+            }
+        }
         if (fn) {
             Callback cb;
             cb.id = msg.callback;
@@ -193,6 +229,16 @@ u32 run_callbacks(CallbackFn fn, void* user) {
         g.free_last(g.pipe);
     }
     return n;
+}
+
+bool await_call(u64 call, i32 expected_id, CallResultFn fn, void* user) {
+    if (!g.running || call == 0 || !fn || !g.call_result) return false;
+    for (Waiting& w : g.waiting) {
+        if (w.call != 0) continue;
+        w = Waiting{call, expected_id, fn, user};
+        return true;
+    }
+    return false;
 }
 
 u32 app_id() {

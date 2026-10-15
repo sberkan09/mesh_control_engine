@@ -11,7 +11,7 @@
 // }
 //
 // "steps" is a whole number from 1 (the default) to 1000000; "order" is higher_is_better (the
-// default) or lower_is_better; "ios" and "android" are optional. A cloud save is a save::write name.
+// default) or lower_is_better; "ios", "android" and "steam" (M-STEAM step 2) are optional. A cloud save is a save::write name.
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
@@ -73,7 +73,7 @@ bool read_id(JsonValue obj, FixedString<64>& out, StringView file, DiagList& dia
 class ServicesImporter final : public IImporter {
 public:
     StringView id() const override { return "services"; }
-    u32 version() const override { return 1; }
+    u32 version() const override { return 2; }
     ChunkType type() const override { return ChunkType::GameServicesCatalog; }
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ".mcservices"; }
@@ -105,11 +105,11 @@ public:
         else if (achievements.valid())
             for (u32 i = 0; i < achievements.size(); ++i) {
                 const JsonValue a = achievements.at(i);
-                if (!detail::check_keys(a, {"id", "steps", "ios", "android"}, file, kStage, diags)) continue;
+                if (!detail::check_keys(a, {"id", "steps", "ios", "android", "steam"}, file, kStage, diags)) continue;
                 liveops::AchievementInfo info;
                 if (!read_id(a, info.id, file, diags)) continue;
                 if (!read_text(a, "ios", info.ios_id, file, diags) ||
-                    !read_text(a, "android", info.android_id, file, diags))
+                    !read_text(a, "android", info.android_id, file, diags) || !read_text(a, "steam", info.steam_id, file, diags))
                     continue;
                 const JsonValue steps = a.get("steps");
                 if (steps.valid()) {
@@ -128,11 +128,11 @@ public:
         else if (leaderboards.valid())
             for (u32 i = 0; i < leaderboards.size(); ++i) {
                 const JsonValue l = leaderboards.at(i);
-                if (!detail::check_keys(l, {"id", "order", "ios", "android"}, file, kStage, diags)) continue;
+                if (!detail::check_keys(l, {"id", "order", "ios", "android", "steam"}, file, kStage, diags)) continue;
                 liveops::LeaderboardInfo info;
                 if (!read_id(l, info.id, file, diags)) continue;
                 if (!read_text(l, "ios", info.ios_id, file, diags) ||
-                    !read_text(l, "android", info.android_id, file, diags))
+                    !read_text(l, "android", info.android_id, file, diags) || !read_text(l, "steam", info.steam_id, file, diags))
                     continue;
                 const JsonValue order = l.get("order");
                 if (order.valid()) {

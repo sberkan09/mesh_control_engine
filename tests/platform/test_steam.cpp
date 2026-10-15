@@ -1,10 +1,15 @@
-// M-STEAM step 1: the Steamworks loader against a stub steam_api (steam_stub.cpp), so the open, the
-// init answers, the callback pump and the shutdown run in CI without Steam.
+// M-STEAM steps 1-2: the Steamworks loader and Steam as the game services backend against a stub
+// steam_api (steam_stub.cpp), so the open, the init answers, the callback pump, asynchronous call
+// results, achievements, leaderboards, Steam Cloud and the shutdown run in CI without Steam.
 
 #include <doctest/doctest.h>
 
+#include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <string>
 
+#include "mce/platform/game_services.h"
 #include "mce/platform/library.h"
 #include "mce/platform/steam.h"
 
@@ -35,6 +40,12 @@ struct StubControls {
         REQUIRE(reset);
         REQUIRE(push);
         reset();
+    }
+    template <typename F>
+    F get(const char* name) {
+        F f = reinterpret_cast<F>(platform::library_symbol(lib, name));
+        REQUIRE(f);
+        return f;
     }
     ~StubControls() { platform::unload_library(lib); }
 };
@@ -144,4 +155,142 @@ TEST_CASE("steam: a library without the flat API's manual dispatch is refused") 
     c.library_path = MCE_STEAM_STUB_OLD;
     CHECK(steam::init(c) == steam::InitResult::MissingEntry);
     CHECK_FALSE(steam::running());
+}
+
+namespace {
+
+namespace gs = mce::platform::game_services;
+
+struct Answers {
+    gs::AnswerKind kind[16] = {};
+    bool ok[16] = {};
+    bool missing[16] = {};
+    u16 tag[16] = {};
+    std::string bytes[16];
+    u32 n = 0;
+};
+void collect(void* user, const gs::Answer& a) {
+    Answers& s = *static_cast<Answers*>(user);
+    REQUIRE(s.n < 16);
+    s.kind[s.n] = a.kind;
+    s.ok[s.n] = a.ok;
+    s.missing[s.n] = a.missing;
+    s.tag[s.n] = a.tag;
+    s.bytes[s.n].assign(reinterpret_cast<const char*>(a.bytes.data()), a.bytes.size());
+    ++s.n;
+}
+
+}  // namespace
+
+TEST_CASE("steam: an asynchronous call's result reaches the one waiting for it") {
+    StubControls stub;
+    REQUIRE(steam::init(stub_config()) == steam::InitResult::Ok);
+    CHECK_FALSE(steam::await_call(0, 1104, [](void*, Span<const byte>, bool) {}, nullptr));  // the invalid handle
+    stub.get<void (*)(const char*)>("MceSteamStub_AddBoard")("best_time");
+    const auto find = reinterpret_cast<u64 (*)(void*, const char*)>(steam::entry("SteamAPI_ISteamUserStats_FindLeaderboard"));
+    const char* stats_names[] = {"SteamAPI_SteamUserStats_v013"};
+    void* stats = steam::interface(Span<const char* const>(stats_names, 1));
+    REQUIRE(find);
+    REQUIRE(stats);
+    struct Got {
+        int calls = 0;
+        bool failed = true;
+        u64 board = 0;
+    } got;
+    REQUIRE(steam::await_call(find(stats, "best_time"), 1104,
+                              [](void* u, Span<const byte> r, bool failed) {
+                                  Got& g = *static_cast<Got*>(u);
+                                  ++g.calls;
+                                  g.failed = failed;
+                                  if (r.size() >= 8) std::memcpy(&g.board, r.data(), 8);
+                              },
+                              &got));
+    CHECK(got.calls == 0);  // answered on a later frame
+    CHECK(steam::run_callbacks(nullptr, nullptr) == 1);
+    CHECK(got.calls == 1);
+    CHECK_FALSE(got.failed);
+    CHECK(got.board == 1);
+    CHECK(steam::run_callbacks(nullptr, nullptr) == 0);
+    CHECK(got.calls == 1);  // once
+    steam::shutdown();
+    CHECK_FALSE(steam::await_call(5, 1104, [](void*, Span<const byte>, bool) {}, nullptr));  // Steam is off
+}
+
+TEST_CASE("steam: game services on Steam: sign-in, achievements, leaderboards, Steam Cloud, the overlay") {
+    StubControls stub;
+    CHECK(gs::backend() == gs::Backend::None);  // no Steam yet
+    REQUIRE(steam::init(stub_config(480)) == steam::InitResult::Ok);
+    CHECK(gs::backend() == gs::Backend::Steam);
+    CHECK(StringView(gs::backend_name(gs::Backend::Steam)) == "steam");
+    stub.get<void (*)(const char*)>("MceSteamStub_AddBoard")("BEST_TIME");
+    const auto achieved = stub.get<bool (*)(const char*)>("MceSteamStub_Achieved");
+    const auto best = stub.get<int32_t (*)(const char*)>("MceSteamStub_Best");
+
+    Answers seen;
+    REQUIRE(gs::start(&collect, &seen));
+    gs::sign_in(false);
+    REQUIRE(seen.n == 1);
+    CHECK(seen.kind[0] == gs::AnswerKind::SignedIn);
+    CHECK(seen.ok[0]);
+
+    // A one-shot achievement unlocks and is stored; progress below the total only shows.
+    gs::report_achievement("ACH_FIRST_WIN", 1, 1, 3);
+    gs::report_achievement("win_10", 4, 10, 4);
+    REQUIRE(seen.n == 3);
+    CHECK((seen.kind[1] == gs::AnswerKind::Achievement && seen.ok[1] && seen.tag[1] == 3));
+    CHECK((seen.ok[2] && seen.tag[2] == 4));
+    CHECK(achieved("ACH_FIRST_WIN"));
+    CHECK_FALSE(achieved("win_10"));
+    CHECK(stub.calls("SteamAPI_ISteamUserStats_StoreStats") == 1);
+
+    // A score: the board is found on one frame, the upload answers on the next; the handle is kept.
+    gs::submit_score("BEST_TIME", 4200, 7);
+    gs::submit_score("NO_SUCH_BOARD", 1, 8);
+    CHECK(seen.n == 3);
+    steam::run_callbacks(nullptr, nullptr);
+    REQUIRE(seen.n == 4);
+    CHECK((seen.kind[3] == gs::AnswerKind::Score && !seen.ok[3] && seen.tag[3] == 8));  // not on the Steamworks page
+    steam::run_callbacks(nullptr, nullptr);
+    REQUIRE(seen.n == 5);
+    CHECK((seen.kind[4] == gs::AnswerKind::Score && seen.ok[4] && seen.tag[4] == 7));
+    CHECK(best("BEST_TIME") == 4200);
+    gs::submit_score("BEST_TIME", i64(1) << 40, 9);  // clamped to Steam's 32 bits
+    steam::run_callbacks(nullptr, nullptr);
+    REQUIRE(seen.n == 6);
+    CHECK(seen.ok[5]);
+    CHECK(best("BEST_TIME") == INT32_MAX);
+    CHECK(stub.calls("SteamAPI_ISteamUserStats_FindLeaderboard") == 2);  // BEST_TIME once, the missing one once
+
+    // Steam Cloud: nothing saved, then a write read back.
+    gs::read_blob("progress", 0);
+    REQUIRE(seen.n == 7);
+    CHECK((seen.kind[6] == gs::AnswerKind::BlobRead && seen.ok[6] && seen.missing[6]));
+    const char blob[] = "MCGS level=3";
+    gs::write_blob("progress", Span<const byte>(reinterpret_cast<const byte*>(blob), sizeof(blob) - 1), 0);
+    gs::read_blob("progress", 0);
+    REQUIRE(seen.n == 9);
+    CHECK((seen.kind[7] == gs::AnswerKind::BlobWritten && seen.ok[7]));
+    CHECK((seen.kind[8] == gs::AnswerKind::BlobRead && seen.ok[8] && !seen.missing[8]));
+    CHECK(seen.bytes[8] == "MCGS level=3");
+
+    gs::show_achievements();
+    CHECK(StringView(stub.get<const char* (*)()>("MceSteamStub_Overlay")()) == "achievements");
+    gs::show_leaderboard("BEST_TIME");
+    CHECK(StringView(stub.get<const char* (*)()>("MceSteamStub_Overlay")()) == "stats");
+
+    // Signed out of the client: sign-in says so.
+    stub.get<void (*)(bool)>("MceSteamStub_SetLoggedOn")(false);
+    gs::sign_in(true);
+    REQUIRE(seen.n == 10);
+    CHECK_FALSE(seen.ok[9]);
+
+    gs::stop();
+    steam::shutdown();
+    CHECK(gs::backend() == gs::Backend::None);
+    Answers after;
+    CHECK_FALSE(gs::start(&collect, &after));
+    gs::report_achievement("ACH_FIRST_WIN", 1, 1, 1);
+    REQUIRE(after.n == 1);
+    CHECK_FALSE(after.ok[0]);
+    gs::stop();
 }

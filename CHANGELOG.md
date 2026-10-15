@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Steam game services, M-STEAM step 2 (SBA-107): while Steam runs, it is the desktop game services backend, so
+  `GameServices` unlocks, progress, scores and cloud saves reach Steam achievements, leaderboards (found once,
+  uploaded keep-best) and Steam Cloud files. `.mcservices` entries take an optional `steam` name (the catalog id
+  otherwise); the catalog chunk is v2, so packs re-cook. `steam::await_call` waits for Steam's asynchronous call
+  results. The stand-in `steam_api` covers it all in CI (`test_platform`, `player_game_services_steam`).
 - Steam, M-STEAM step 1 (SBA-106, ADR-0042): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
   talks to it through the Steamworks flat API, so neither the repository nor the build needs the SDK and a game
   without Steam loads nothing. The stock player signs in with `-steam.app_id <id>` (`-steam.library`,
