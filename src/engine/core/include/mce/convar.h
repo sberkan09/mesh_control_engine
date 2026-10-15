@@ -146,6 +146,8 @@ bool cheats_allowed();
 // module's) are kept and applied by a later load_settings. A missing file is no error.
 Result<void> load_settings(StringView path);
 Result<void> save_settings(StringView path);
+// Bumped whenever a Saved convar changes: a host writes the settings file when it moves.
+u64 saved_generation();
 }  // namespace console
 
 }  // namespace mce
