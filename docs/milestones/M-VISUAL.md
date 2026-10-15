@@ -1,6 +1,6 @@
 # M-VISUAL — High-end 3D rendering (milestone record)
 
-**Status:** active (steps 1–9 done, 2026-10-15). Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
+**Status:** done in the cloud (steps 1–9 and the demo, 2026-10-15); real-GPU and mobile budgets and Metal pixels wait on the Mac/device session. Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
 **Why:** `Forward3D` suits stylized and low-poly 3D but has no compute path, GI, pre-filtered IBL,
 screen-space effects, local-light shadows or temporal pipeline. Each step below is opt-in, keeps GL as the
 reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leaves today's frame unchanged when off.
@@ -18,7 +18,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | 7 | Atmosphere and volumetrics | SBA-12 | done: GL and SDL GPU (gated + goldens), Low tier without the volumetric fog; Metal untested; real-GPU budget on the Mac/device session |
 | 8 | Post completion | SBA-13 | done: GL and SDL GPU (gated + goldens), Low tier without depth of field and motion blur; SSR not taken (optional); Metal untested; real-GPU budget on the Mac/device session |
 | 9 | Scale (GPU culling, foliage, decals, GPU particles) | SBA-14 | done: GL and SDL GPU (gated + goldens), CPU culling fallback without compute; Metal untested; real-GPU budget on the Mac/device session |
-| demo | High-profile sample side by side | SBA-15 | — |
+| demo | High-profile sample side by side | SBA-15 | done: `samples/06_showcase`, sheet and llvmpipe budget below; mid-range GPU 1080p and mobile tier numbers on the Mac/device session |
 
 ## Step 1 — compute in the RHI
 
@@ -611,3 +611,54 @@ reflection probes or the GI volume; LOD has no hysteresis per copy. Decals have 
 textures a frame, and also cover the copies of batches inside them. Particles are unsorted and unlit, take no
 collision but a ground plane and no shadows. Metal is untested; Metal pixels and real-GPU numbers belong to the
 Mac/device session.
+
+## Demo — `samples/06_showcase`
+
+One scene, a pavilion on a tiled courtyard with lanterns, a brazier, a chrome statue and 6000 grass tufts,
+drawn at the same cameras and times of day under four profiles:
+
+- **current**: the M5a frame (`Forward3D` with none of the steps above, FXAA). The grass is plain mesh
+  instances; past about 3000 draws the GL uniform ring overflows and drops commands, so this profile keeps an
+  even 2500 of the tufts.
+- **high**, **medium**, **low**: every M-VISUAL feature, with `apply_quality` setting each tier's knobs (High:
+  4× MSAA, three 2048 cascades, TAA, the live GI volume; Medium: 2× MSAA, two 1024 cascades, 0.85 render
+  scale, coarser volumetric fog, no FXAA; Low: no MSAA, one cascade, 0.67 render scale, the baked GI volume, no
+  volumetric fog, no bloom, FXAA).
+
+`06_showcase -sheet sheet.ppm` renders every shot under every profile into one image and prints the per-stage
+GPU table. Rows are dusk, interior and noon; columns are current, high, medium and low:
+
+![06_showcase sheet](img/m-visual-showcase.jpg)
+
+What changes from the first column: the dusk sky colors the sun and the fog takes the lantern glow; the
+lanterns cast shadows; inside, the red back wall bleeds onto the floor and the sphere reflects the room; SSAO
+grounds the crates; the grass is a wind-swept GPU-culled batch at full density; the puddle and sigil are decals
+and the brazier throws embers.
+
+**Budget (480×270 cells, 24 frames per shot, means over the settled half, debug build, Mesa llvmpipe;
+relative only):**
+
+| stage (ms) | current | high | medium | low |
+|---|---|---|---|---|
+| Forward+ light assignment | 1.2 | 0.7 | 0.5 | 0.5 |
+| scale: occluders, culling, particles | 0 | 5.7 | 5.8 | 3.8 |
+| SSAO | 0 | 64.8 | 45.5 | 45.6 |
+| shadows: cascades + local lights | 21.2 | 230.2 | 116.6 | 113.0 |
+| GI volume update | 0 | 84.6 | 67.5 | 0 |
+| volumetric fog | 0 | 3.9 | 1.7 | 0 |
+| main pass | 92.5 | 226.9 | 186.7 | 56.8 |
+| MSAA resolve | 3.0 | 3.8 | 2.2 | 0 |
+| velocity + TAA | 0 | 52.3 | 0 | 0 |
+| post (exposure histogram) | 0 | 1.8 | 1.4 | 1.6 |
+| bloom | 8.6 | 7.6 | 6.2 | 0 |
+| tonemap | 2.0 | 3.1 | 4.0 | 1.3 |
+| FXAA | 5.2 | 0 | 0 | 4.6 |
+| 3D frame total | 133.7 | 685.5 | 438.1 | 227.1 |
+
+On a software rasterizer the local-light shadow atlas, SSAO and the GI update dominate; Low lands near the M5a
+frame while drawing more than twice the grass. These numbers only rank the stages. The acceptance budget (High
+at 1080p on a mid-range GPU, Low and Medium on the mobile tiers) needs real hardware and is the Mac/device
+session's to measure with the same `-sheet` run (`-sheet.w 1920 -sheet.h 1080`).
+
+`sample_06_showcase_300` folds the scene of every frame into a hash (300 headless ticks, CPU mesh store);
+`sample_06_showcase_gpu` runs 60 windowed frames under the gpu label.
