@@ -7,6 +7,7 @@ mce_add_test(test_core
         test_hash.cpp
         test_math.cpp
         test_memory.cpp
+        test_perf_capture.cpp
         test_result.cpp
         test_state_stack.cpp
     DEPS

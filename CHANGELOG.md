@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Performance captures, M-PERF step 1 (SBA-113): `mce_player -perf_capture <file>` writes a `.mcperf` JSON capture
+  of the run. Each frame gets its wall, sim, render CPU and GPU time, its GPU stages (3D), sim time per ECS phase and
+  its draws, passes, triangles, sprites, upload bytes and live heap allocations. The run adds per-system totals, p50/p95/p99/max
+  and the spike frames with their likely cause ("sim: FixedUpdate_Post", "gpu: shadow"). `-perf_warmup N` skips
+  loading frames. A capture never changes the state hash. User guide 16.
 - Accessibility checks and guide, M-ACCESS step 5 (SBA-99). `project_check` now flags small and low-contrast
   `.mcui` text, timelines with sound but no subtitles, and uncaptioned sounds. The novel stage speaks its pages and
   rows through the screen reader, and a control in a labelled row says the label first ("Move Right, D, button").
