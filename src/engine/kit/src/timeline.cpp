@@ -23,7 +23,10 @@ namespace {
 // A key within a thousandth of a tick of the playhead has been reached (float sums of dt).
 f32 tolerance(f32 dt) { return dt > 0.0f ? dt * 1e-3f : 1e-6f; }
 
-f32 eased(TimelineEase e, f32 u) {
+// The track's value at `t`: held before the first key and after the last.
+}  // namespace
+
+f32 timeline_eased(TimelineEase e, f32 u) {
     switch (e) {
         case TimelineEase::Linear: return u;
         case TimelineEase::Step: return 0.0f;
@@ -34,7 +37,8 @@ f32 eased(TimelineEase e, f32 u) {
     return u;
 }
 
-// The track's value at `t`: held before the first key and after the last.
+namespace {
+
 void sample(Span<const TimelineKey> keys, bool quat, u32 count, f32 t, f32 out[4]) {
     const TimelineKey* a = &keys[0];
     const TimelineKey* b = nullptr;
@@ -53,7 +57,7 @@ void sample(Span<const TimelineKey> keys, bool quat, u32 count, f32 t, f32 out[4
         std::memcpy(out, a->v, sizeof(f32) * 4);
         return;
     }
-    const f32 u = eased(a->ease, (t - a->t) / (b->t - a->t));
+    const f32 u = timeline_eased(a->ease, (t - a->t) / (b->t - a->t));
     if (quat) {
         math::quat qa{a->v[0], a->v[1], a->v[2], a->v[3]};
         math::quat qb{b->v[0], b->v[1], b->v[2], b->v[3]};
