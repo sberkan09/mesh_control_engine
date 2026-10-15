@@ -10,7 +10,8 @@
 //   terrain LOD error (M-TERRAIN): 4 px on Low, 2 px on Medium, 1 px on High; splat layers: weight blend on
 //   Low, height blend on Medium, height blend and triplanar on High
 //   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High; M-VISUAL 8: Low drops depth of field and
-//   motion blur, every tier keeps auto exposure and the color grade)
+//   motion blur, every tier keeps auto exposure and the color grade; M-VISUAL2 1: Low drops
+//   screen-space reflections)
 //
 // Render scale shrinks the 3D targets (HDR, depth, bloom chain); the tonemap/FXAA pass upsamples
 // into the full-size output, so 2D and UI drawn afterwards stay sharp.
@@ -35,6 +36,7 @@ struct QualitySettings {
     u32 volumetric_tile = 8;     // Volumetrics::tile, at least
     u32 volumetric_slices = 64;  // Volumetrics::slices, at most
     bool dof_motion_blur = true; // PostFx::dof and PostFx::motion_blur are honored
+    bool ssr = true;             // ScreenSpaceReflections::enabled is honored (M-VISUAL2 1)
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
@@ -58,5 +60,7 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
 void apply_quality(const QualitySettings& q, GiVolume& gi);
 // Volumetric fog: off on Low; the froxel grid no finer than the tier's (a scene's coarser grid stays).
 void apply_quality(const QualitySettings& q, Volumetrics& v);
+// Screen-space reflections: off on Low (the probes and the sky remain).
+void apply_quality(const QualitySettings& q, ScreenSpaceReflections& ssr);
 
 }  // namespace mce::render

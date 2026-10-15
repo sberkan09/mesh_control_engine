@@ -58,6 +58,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_vol_albedo;     // rgb: scattering albedo, w: sun scale
     vec4 p_vol_scale;      // x: local light scale, y: ambient scale
     vec4 p_decals;         // x: decals to apply (M-VISUAL 9)
+    vec4 p_ssr;            // x: screen-space reflections on (M-VISUAL2 1), y: max roughness, z: roughness fade, w: intensity
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -310,6 +311,7 @@ layout(binding = 7) uniform sampler2DArray u_normal_map;
 layout(binding = 8) uniform sampler2DArray u_orm;
 layout(binding = 13) uniform sampler2DArray u_emissive;
 layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility
+layout(binding = 3) uniform sampler2D u_ssr;  // half-resolution SSR: rgb reflected light, a confidence
 layout(location = 0) in vec3 v_world;
 layout(location = 1) in vec3 v_normal;
 layout(location = 2) in vec2 v_uv;
@@ -649,7 +651,7 @@ void main() {
         vec3 r = reflect(-v, n);
         float horizon = clamp(1.0 + dot(r, normalize(v_normal)), 0.0, 1.0);
         vec3 amb_diffuse = p_ibl.x > 0.5 ? sh_irradiance(n) * diffuse * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
-        vec3 amb_spec;
+        vec3 amb_spec, spec_brdf;
         // The irradiance volume: its light in place of the sky's, and the sky's reflections dimmed by how
         // much of the sky's irradiance reaches this point (rooms do not mirror the open sky).
         float gi_w = 0.0, sky_vis = 1.0;
@@ -666,9 +668,17 @@ void main() {
             vec2 ab = textureLod(u_brdf_lut, vec2(NoV, rough), 0.0).rg;
             vec3 env = prefiltered_sky(r, rough) * sky_vis;
             if (p_probes.x > 0.5) env = probe_specular(v_world, r, rough, env);
-            amb_spec = env * (f0 * ab.x + ab.y) * p_sky_horizon.w * horizon * horizon;
+            spec_brdf = f0 * ab.x + ab.y;
+            amb_spec = env * spec_brdf * p_sky_horizon.w * horizon * horizon;
         } else {
-            amb_spec = sky_radiance(r, rough * 8.0) * sky_vis * env_brdf(f0, rough, NoV) * p_sky_horizon.w * horizon * horizon;
+            spec_brdf = env_brdf(f0, rough, NoV);
+            amb_spec = sky_radiance(r, rough * 8.0) * sky_vis * spec_brdf * p_sky_horizon.w * horizon * horizon;
+        }
+        if (p_ssr.x > 0.5) {  // what the screen saw along r, over the probes, by confidence and roughness
+            vec4 c = u_view_proj * vec4(v_world, 1.0);
+            vec4 s = textureLod(u_ssr, c.xy / c.w * 0.5 + 0.5, 0.0);
+            float w = s.a * clamp((p_ssr.y - rough) / p_ssr.z, 0.0, 1.0);
+            amb_spec = mix(amb_spec, s.rgb * spec_brdf * p_ssr.w, w);
         }
         if (p_ao.x > 0.5) {  // SSAO darkens the ambient only; the screen position as the full-screen passes see it
             vec4 c = u_view_proj * vec4(v_world, 1.0);
@@ -936,6 +946,95 @@ void main() {
         }
     }
     o_ao = vec4(sum / wsum);
+}
+)";
+
+// ---- screen-space reflections (M-VISUAL2 1), at half resolution ----------------------------------
+// Each pixel of the SSAO prepass marches its mirror ray in screen space (uv and 1/z interpolated, so
+// the steps are perspective-correct), jittered per pixel by a 4x4 Bayer pattern, until it passes less
+// than `thickness` (plus the step's own depth travel) behind the depth buffer; 4 bisections refine the hit. The hit's view position is
+// reprojected into last frame, whose lit HDR color is read there. a = confidence: 0 for a miss, the
+// sky or a point last frame did not see, fading toward the screen's edges, the ray's
+// end and rays that turn toward the camera.
+constexpr const char* kSsrFS = R"(#version 450 core
+layout(std140, binding = 1) uniform SsrU {
+    mat4 r_proj;       // this frame's projection, unjittered
+    mat4 r_reproject;  // view space -> last frame's clip space
+    vec4 r_params;     // x: max distance (m), y: thickness (m), z: steps, w: edge fade (uv)
+    vec4 r_misc;       // x: last frame valid
+};
+layout(binding = 6) uniform sampler2D u_gbuf;  // view normal (xyz), view depth (w; 0 = nothing drawn)
+layout(binding = 7) uniform sampler2D u_prev;  // last frame's HDR color
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_ssr;
+vec3 view_pos(vec2 uv, float z) {
+    vec2 ndc = uv * 2.0 - 1.0;
+    return vec3((ndc.x + r_proj[2][0]) * z / r_proj[0][0], (ndc.y + r_proj[2][1]) * z / r_proj[1][1], -z);
+}
+vec2 project(vec3 p) {
+    vec4 c = r_proj * vec4(p, 1.0);
+    return c.xy / c.w * 0.5 + 0.5;
+}
+void main() {
+    o_ssr = vec4(0.0);
+    vec4 g = textureLod(u_gbuf, v_uv, 0.0);
+    if (r_misc.x < 0.5 || g.w <= 0.0) return;
+    vec3 p = view_pos(v_uv, g.w);
+    vec3 n = normalize(g.xyz);
+    vec3 d = reflect(normalize(p), n);
+    float facing = 1.0 - smoothstep(0.0, 0.6, d.z);  // toward the camera: what it hits is mostly unseen
+    if (facing <= 0.0) return;
+    float len = r_params.x;
+    const float kNear = 0.05;
+    if (d.z > 0.0 && p.z + d.z * len > -kNear) len = (-kNear - p.z) / d.z;  // stop before the camera
+    vec3 e = p + d * len;
+    vec2 uv0 = v_uv, uv1 = project(e);
+    float iz0 = 1.0 / g.w, iz1 = 1.0 / -e.z;
+    vec2 du = uv1 - uv0;
+    float tmax = 1.0;  // where the segment leaves the screen
+    if (du.x > 0.0) tmax = min(tmax, (1.0 - uv0.x) / du.x);
+    else if (du.x < 0.0) tmax = min(tmax, -uv0.x / du.x);
+    if (du.y > 0.0) tmax = min(tmax, (1.0 - uv0.y) / du.y);
+    else if (du.y < 0.0) tmax = min(tmax, -uv0.y / du.y);
+    const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+    ivec2 q = ivec2(gl_FragCoord.xy) & 3;
+    float jitter = (bayer[q.x * 4 + q.y] + 0.5) / 16.0;
+    int steps = int(r_params.z);
+    float lo = 0.0, t = 0.0, prev_rz = g.w;
+    bool hit = false;
+    for (int i = 0; i < 128 && i < steps; ++i) {
+        t = tmax * (float(i) + jitter) / float(steps);
+        float rz = 1.0 / mix(iz0, iz1, t);
+        vec4 sg = textureLod(u_gbuf, mix(uv0, uv1, t), 0.0);
+        float sz = sg.w, dz = rz - sz;
+        // Behind the depth buffer by less than the thickness plus this step's own depth travel, at a
+        // surface facing the ray (one the ray leaves, such as its own start at a grazing angle, is not a hit).
+        if (sz > 0.0 && dz > 0.0 && dz < r_params.y + abs(rz - prev_rz) && dot(sg.xyz, d) < 0.0) {
+            hit = true;
+            break;
+        }
+        lo = t;
+        prev_rz = rz;
+    }
+    if (!hit) return;
+    float hi = t;
+    for (int k = 0; k < 4; ++k) {
+        float m = 0.5 * (lo + hi);
+        float sz = textureLod(u_gbuf, mix(uv0, uv1, m), 0.0).w;
+        if (sz > 0.0 && 1.0 / mix(iz0, iz1, m) > sz) hi = m;
+        else lo = m;
+    }
+    vec2 huv = mix(uv0, uv1, hi);
+    vec4 hg = textureLod(u_gbuf, huv, 0.0);
+    if (hg.w <= 0.0 || dot(hg.xyz, d) >= 0.0) return;  // refined onto a surface the ray leaves
+    vec4 c = r_reproject * vec4(view_pos(huv, hg.w), 1.0);
+    if (c.w <= 1e-4) return;
+    vec2 puv = c.xy / c.w * 0.5 + 0.5;
+    if (any(lessThan(puv, vec2(0.0))) || any(greaterThan(puv, vec2(1.0)))) return;
+    vec2 edge = min(min(huv, 1.0 - huv), min(puv, 1.0 - puv));
+    float fade = r_params.w > 0.0 ? clamp(min(edge.x, edge.y) / r_params.w, 0.0, 1.0) : 1.0;
+    fade *= facing * (1.0 - smoothstep(0.75, 1.0, hi));
+    o_ssr = vec4(max(textureLod(u_prev, puv, 0.0).rgb, vec3(0.0)), fade);
 }
 )";
 
