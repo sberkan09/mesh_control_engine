@@ -29,10 +29,21 @@ function(mce_sample_pack target)
     add_dependencies(${target} ${target}_content)
     target_compile_definitions(${target} PRIVATE MCE_SAMPLE_DEV_PACK="${pack}")
     set_target_properties(${target} PROPERTIES MCE_SAMPLE_PACK "${pack}")
+    if(MCE_WEB)
+        # Until packs stream over HTTP (M-WEB step 3) the browser build embeds the pack in its virtual
+        # file system at the same path, so MCE_SAMPLE_DEV_PACK resolves there too.
+        target_link_options(${target} PRIVATE "SHELL:--preload-file ${pack}@${pack}")
+        set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS "${pack}")
+    endif()
 endfunction()
 if(MCE_WEB)
-    # Browsers (M-WEB): the samples that run on WebGPU so far.
-    foreach(_sample 01_triangle)
+    # Browsers (M-WEB): the windowed samples that ship to the web. All but 01_triangle cook a pack,
+    # which needs the host's mce_cook (MCE_HOST_COOK).
+    set(_web_samples 01_triangle)
+    if(MCE_HOST_COOK)
+        list(APPEND _web_samples sprites_2d 03_platformer 04_diorama 04_cubes 05_ashen_court)
+    endif()
+    foreach(_sample IN LISTS _web_samples)
         add_subdirectory(${_sample})
     endforeach()
     return()

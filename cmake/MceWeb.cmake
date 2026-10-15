@@ -28,6 +28,9 @@ if(MCE_WEB)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         list(APPEND MCE_WEB_LINK_OPTIONS -sASSERTIONS=2)
     endif()
+    # Linking runs wasm-opt's ASYNCIFY pass, about 6 GB per executable: one link at a time (Ninja).
+    set_property(GLOBAL APPEND PROPERTY JOB_POOLS mce_web_link=1)
+    set(CMAKE_JOB_POOL_LINK mce_web_link)
 
     # Every engine executable gets the web link options (wrapping add_executable like MceMobile).
     function(add_executable name)

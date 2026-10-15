@@ -167,6 +167,12 @@ struct AssetSystem::AsyncLoader {
     bool stop = false;
     std::thread thread;
 
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+    // A browser build without pthreads (ADR-0039) has no loader thread: a job is read when it is
+    // queued, and the next pump hands it over as usual.
+    AsyncLoader() = default;
+    void push(const Job& job) { done.push_back(load(job)); }
+#else
     AsyncLoader() : thread([this] { run(); }) {}
     ~AsyncLoader() {
         {
@@ -184,6 +190,21 @@ struct AssetSystem::AsyncLoader {
         }
         wake.notify_one();
     }
+#endif
+
+    static Done load(const Job& job) {
+        Done d;
+        d.id = job.id;
+        if (Result<void> r = read_file(job.file.view(), d.bytes); !r) {
+            d.error = r.error().code;
+        } else if (xxh64(d.bytes.data(), d.bytes.size()) != job.content_hash) {
+            d.error = Errc::CrcMismatch;
+        } else if (auto v = ContainerView::open(d.bytes.span(), job.file.view(), OpenOptions{job.verify}); !v) {
+            d.error = v.error().code;
+        }
+        if (d.error != Errc::Ok) d.bytes = Array<byte>();
+        return d;
+    }
 
     void run() {
         for (;;) {
@@ -199,16 +220,7 @@ struct AssetSystem::AsyncLoader {
                 }
                 ++busy;
             }
-            Done d;
-            d.id = job.id;
-            if (Result<void> r = read_file(job.file.view(), d.bytes); !r) {
-                d.error = r.error().code;
-            } else if (xxh64(d.bytes.data(), d.bytes.size()) != job.content_hash) {
-                d.error = Errc::CrcMismatch;
-            } else if (auto v = ContainerView::open(d.bytes.span(), job.file.view(), OpenOptions{job.verify}); !v) {
-                d.error = v.error().code;
-            }
-            if (d.error != Errc::Ok) d.bytes = Array<byte>();
+            Done d = load(job);
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 done.push_back(std::move(d));
