@@ -46,8 +46,9 @@ public:
 
 private:
     struct Screen;
-    Result<void> add(Entity e, asset::AssetSystem& assets, asset::Guid guid, i32 order, bool visible, const ui::Skin* skin,
-                     kit::SpriteExtract* extract, Screen*& out);
+    // `theme`: the scene's theme for the document (UiScreen::theme); null: the document's own.
+    Result<void> add(Entity e, asset::AssetSystem& assets, asset::Guid guid, asset::Guid theme, i32 order, bool visible,
+                     const ui::Skin* skin, kit::SpriteExtract* extract, Screen*& out);
     struct Screen {
         Entity entity;
         i32 order = 0;

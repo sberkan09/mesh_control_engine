@@ -30,6 +30,7 @@ const char* chunk_type_name(ChunkType t) {
         case ChunkType::SpriteSheet: return "SpriteSheet";
         case ChunkType::AnimGraph: return "AnimGraph";
         case ChunkType::UiDocument: return "UiDocument";
+        case ChunkType::UiTheme: return "UiTheme";
     }
     return "ChunkType(?)";
 }

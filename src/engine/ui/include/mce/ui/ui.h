@@ -63,7 +63,15 @@ struct NavEdges {  // explicit navigation; a null edge falls back to the geometr
 struct Skin {
     render::SpriteSetId set;
     u32 white_region = 0;
-    const render::Font* font = nullptr;
+    const render::Font* font = nullptr;        // body text, and every role without a font of its own
+    const render::Font* title_font = nullptr;  // FontRole::Title; null: `font` (a theme's, M-UI-DATA 3)
+    const render::Font* button_font = nullptr; // FontRole::Button (buttons, toggles, sliders); null: `font`
+
+    const render::Font* font_for(FontRole role) const {
+        if (role == FontRole::Title && title_font) return title_font;
+        if (role == FontRole::Button && button_font) return button_font;
+        return font;
+    }
 };
 
 // The engine's built-in skin: a white texture region and ProggyClean (MIT) at 13 px, printable
@@ -185,6 +193,8 @@ public:
     // Data a host acts on (M-UI-DATA step 2; the document itself does nothing with it): the gameplay
     // action the widget's events raise, and the property path (+ format) the host binds it to.
     void set_action(WidgetId w, StringView action);
+    // Which of the skin's fonts the widget's text uses (Auto: by kind; see ui::resolve_font_role).
+    void set_font_role(WidgetId w, FontRole role);
     void set_binding(WidgetId w, StringView path, StringView format);
     // Whether a host has dealt with the widget's binding (bound it, or given up on a bad path):
     // ui::bind_document's bookkeeping. set_binding clears it.
@@ -228,6 +238,7 @@ public:
     void range(WidgetId w, f32& lo, f32& hi, f32& step) const;
     StringView convar(WidgetId w) const;      // the bound convar, or empty
     StringView action(WidgetId w) const;      // set_action, or empty
+    FontRole font_role(WidgetId w) const;      // set_font_role, or Auto
     StringView binding(WidgetId w) const;     // set_binding's path, or empty
     StringView binding_format(WidgetId w) const;
     WidgetId default_focus() const { return default_focus_; }
@@ -273,6 +284,7 @@ private:
         FixedString<64> binding;
         FixedString<32> binding_format;
         bool binding_done = false;
+        FontRole font_role = FontRole::Auto;
         u32 console = ~0u;  // index into consoles_
         bool pressed = false;
     };
@@ -318,8 +330,9 @@ private:
     void draw_quad(render::SpriteBatch& batch, const Rect& r, Color c, i16 layer, i32 order) const;
     void draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u32 region, i16 layer, i32 order,
                      const Slice& slice = {}) const;
-    void draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 size, Color c, const Style& look, i16 layer,
-                   i32 order, f32 max_width = 0.0f) const;
+    void draw_text(render::SpriteBatch& batch, const render::Font* font, StringView s, vec2 at, f32 size, Color c,
+                   const Style& look, i16 layer, i32 order, f32 max_width = 0.0f) const;
+    const render::Font* node_font(const Node& n) const;
     mutable const Rect* draw_clip_ = nullptr;  // set by submit() while drawing a clipped widget
 
     mem::IAllocator& alloc_;
