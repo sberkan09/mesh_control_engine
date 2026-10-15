@@ -36,7 +36,7 @@ public:
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 12.0f);
         if (ImGui::InputTextWithHint("##filter", "search all folders", filter_, sizeof(filter_))) model_.set_filter(filter_);
         ImGui::SameLine();
-        static constexpr const char* kTypes[] = {"All", "Texture", "Prefab", "Scene", "Material", "Sfx", "Font", "Mesh", "Tilemap", "ParticlePreset", "Sequence", "Timeline", "SpriteSheet", "AnimGraph", "UiDocument", "UiTheme"};
+        static constexpr const char* kTypes[] = {"All", "Texture", "Prefab", "Scene", "Material", "Sfx", "Font", "Mesh", "Tilemap", "ParticlePreset", "Sequence", "Timeline", "SpriteSheet", "AnimGraph", "UiDocument", "UiTheme", "Terrain", "NavMesh"};
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
         if (ImGui::Combo("##type", &type_, kTypes, IM_ARRAYSIZE(kTypes))) model_.set_type(type_ == 0 ? StringView() : StringView(kTypes[type_]));
 
@@ -115,6 +115,8 @@ private:
                         open_scene = a->guid;
                     // A UI document opens in the UI Document panel.
                     if (a->type == asset::ChunkType::UiDocument) shell.open_ui_document(a->guid);
+                    // A timeline opens in the Timeline panel.
+                    if (a->type == asset::ChunkType::Timeline) shell.open_timeline(a->guid);
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s  %s\n%s", type, a->path.c_str(), asset::to_string(a->guid).c_str());
                 if (ImGui::BeginDragDropSource()) {

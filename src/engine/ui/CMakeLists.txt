@@ -6,6 +6,7 @@ mce_add_library(mce_ui
         src/dev_console.cpp
         src/document_build.cpp
         src/document_data.cpp
+        src/options_panel.cpp
         src/screen_link.cpp
         src/ui.cpp
     PUBLIC_DEPS

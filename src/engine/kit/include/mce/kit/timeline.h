@@ -119,6 +119,9 @@ void timeline_player(Frame& f);
 // TimelinePlayer.
 bool timeline_scrub(World& world, Entity e, f32 seconds);
 
+// The eased fraction for `u` in [0, 1] between two keys (Step holds the first key: 0).
+f32 timeline_eased(asset::TimelineEase e, f32 u);
+
 // The subtitle line `e`'s player shows: false when none.
 bool timeline_subtitle(World& world, Entity e, StringView& speaker, StringView& text);
 

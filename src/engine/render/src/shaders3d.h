@@ -303,7 +303,9 @@ vec4 vol_fog(vec2 uv, float depth) {
 }
 )"
 
-constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME R"(
+// The forward material shader. kTerrainFS is the same with MCE_TERRAIN: the surface comes from the
+// splat layers (terrain_surface) instead of the material's maps.
+#define MCE_GLSL_MESH_FS R"(
 layout(binding = 6) uniform sampler2DArray u_albedo;
 layout(binding = 7) uniform sampler2DArray u_normal_map;
 layout(binding = 8) uniform sampler2DArray u_orm;
@@ -464,11 +466,117 @@ void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout f
     }
 }
 
+#ifdef MCE_TERRAIN
+// ---- splat-layered terrain (M-TERRAIN 2): the layers' maps are layers of u_albedo / u_normal_map /
+// u_orm, the weights two RGBA layers of u_emissive (no emissive on a terrain), the parameters TerrainU.
+layout(std140, binding = 2) uniform TerrainU {
+    mat4 t_to_local;     // world -> terrain space (the layers tile in its xz metres)
+    vec4 t_size;         // xy: size along x and z, z: splat samples per side, w: layer count
+    vec4 t_flags;        // x: triplanar allowed, y: height blend allowed, z: height blend depth
+    vec4 t_color[8];     // rgb: base color, a: albedo map
+    vec4 t_params[8];    // x: 1 / tile, y: roughness, z: metallic, w: height strength
+    vec4 t_maps[8];      // x: normal map, y: ORM map, z: triplanar, w: occlusion in ORM.r
+};
+// One layer's map: projected along y, or along x, y and z blended by `bw` (zero weights skip their fetch).
+// Explicit gradients: the layer loop branches per fragment.
+vec4 terrain_fetch(sampler2DArray t, vec3 p, vec3 dx, vec3 dy, float layer, float s, vec3 bw) {
+    vec4 c = vec4(0.0);
+    if (bw.y > 0.0) c += textureGrad(t, vec3(p.xz * s, layer), dx.xz * s, dy.xz * s) * bw.y;
+    if (bw.x > 0.0) c += textureGrad(t, vec3(p.zy * s, layer), dx.zy * s, dy.zy * s) * bw.x;
+    if (bw.z > 0.0) c += textureGrad(t, vec3(p.xy * s, layer), dx.xy * s, dy.xy * s) * bw.z;
+    return c;
+}
+// A layer's normal map through each projection, reoriented onto the surface normal ("whiteout" blend).
+vec3 terrain_normal(vec3 p, vec3 dx, vec3 dy, float layer, float s, vec3 bw, vec3 n) {
+    vec3 r = vec3(0.0);
+    if (bw.y > 0.0) {
+        vec3 t = textureGrad(u_normal_map, vec3(p.xz * s, layer), dx.xz * s, dy.xz * s).xyz * 2.0 - 1.0;
+        r += vec3(t.x + n.x, abs(t.z) * n.y, n.z - t.y) * bw.y;
+    }
+    if (bw.x > 0.0) {
+        vec3 t = textureGrad(u_normal_map, vec3(p.zy * s, layer), dx.zy * s, dy.zy * s).xyz * 2.0 - 1.0;
+        r += vec3(abs(t.z) * n.x, n.y - t.y, t.x + n.z) * bw.x;
+    }
+    if (bw.z > 0.0) {
+        vec3 t = textureGrad(u_normal_map, vec3(p.xy * s, layer), dx.xy * s, dy.xy * s).xyz * 2.0 - 1.0;
+        r += vec3(t.x + n.x, n.y - t.y, abs(t.z) * n.z) * bw.z;
+    }
+    return r;
+}
+void terrain_surface(vec3 world, vec3 n, out vec3 albedo, out vec3 nrm, out float rough, out float metallic, out float ao) {
+    vec3 p = (t_to_local * vec4(world, 1.0)).xyz;
+    vec3 dx = dFdx(p), dy = dFdy(p);
+    float res = t_size.z;
+    vec2 suv = (p.xz / t_size.xy + 0.5) * ((res - 1.0) / res) + 0.5 / res;  // sample centres span the extent
+    vec4 s0 = textureLod(u_emissive, vec3(suv, 0.0), 0.0), s1 = textureLod(u_emissive, vec3(suv, 1.0), 0.0);
+    float w[8] = float[8](s0.x, s0.y, s0.z, s0.w, s1.x, s1.y, s1.z, s1.w);
+    int count = int(t_size.w);
+    vec3 tri = pow(abs(n), vec3(4.0));
+    tri /= max(tri.x + tri.y + tri.z, 1e-5);
+    tri = mix(vec3(0.0, 1.0, 0.0), tri, step(0.02, 1.0 - tri.y));  // nearly flat: the top projection alone
+    vec3 bws[8];
+    vec4 col[8];
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) {
+        sum += w[i];
+        bws[i] = (t_flags.x > 0.5 && t_maps[i].z > 0.5) ? tri : vec3(0.0, 1.0, 0.0);
+        col[i] = vec4(1.0);
+        if (w[i] > 0.002 && t_color[i].a > 0.5) col[i] = terrain_fetch(u_albedo, p, dx, dy, float(i), t_params[i].x, bws[i]);
+        col[i].rgb *= t_color[i].rgb;
+    }
+    for (int i = 0; i < count; ++i) w[i] /= max(sum, 1e-5);
+    if (t_flags.y > 0.5) {  // height blend: the layer that rises highest above its weight wins at the seam
+        float top = -1e9;
+        float h[8];
+        for (int i = 0; i < count; ++i) {
+            h[i] = w[i] > 0.002 ? w[i] + dot(col[i].rgb, vec3(0.2126, 0.7152, 0.0722)) * t_params[i].w * t_flags.z : -1e9;
+            top = max(top, h[i]);
+        }
+        sum = 0.0;
+        for (int i = 0; i < count; ++i) {
+            w[i] = max(h[i] - (top - t_flags.z), 0.0);
+            sum += w[i];
+        }
+        for (int i = 0; i < count; ++i) w[i] /= max(sum, 1e-5);
+    }
+    albedo = vec3(0.0);
+    nrm = vec3(0.0);
+    rough = 0.0;
+    metallic = 0.0;
+    ao = 0.0;
+    for (int i = 0; i < count; ++i) {
+        if (w[i] <= 0.002) continue;
+        float wi = w[i];
+        albedo += col[i].rgb * wi;
+        float r = t_params[i].y, m = t_params[i].z, o = 1.0;
+        if (t_maps[i].y > 0.5) {
+            vec3 orm = terrain_fetch(u_orm, p, dx, dy, float(i), t_params[i].x, bws[i]).rgb;
+            if (t_maps[i].w > 0.5) o = orm.r;
+            r *= orm.g;
+            m *= orm.b;
+        }
+        rough += r * wi;
+        metallic += m * wi;
+        ao += o * wi;
+        nrm += (t_maps[i].x > 0.5 ? normalize(terrain_normal(p, dx, dy, float(i), t_params[i].x, bws[i], n)) : n) * wi;
+    }
+    nrm = dot(nrm, nrm) > 1e-8 ? normalize(nrm) : n;
+}
+#endif
+
 void main() {
-    vec4 base = texture(u_albedo, vec3(v_uv, 0.0)) * o_base_color;
-    if (o_params.x > 0.0 && base.a < o_params.x) discard;  // alpha mask
     vec3 n = normalize(v_normal);
     if (!gl_FrontFacing) n = -n;
+#ifdef MCE_TERRAIN
+    vec4 base = vec4(1.0);
+    vec3 t_n;
+    float t_rough, t_metallic, t_ao;
+    terrain_surface(v_world, n, base.rgb, t_n, t_rough, t_metallic, t_ao);
+    base *= o_base_color;
+#else
+    vec4 base = texture(u_albedo, vec3(v_uv, 0.0)) * o_base_color;
+    if (o_params.x > 0.0 && base.a < o_params.x) discard;  // alpha mask
+#endif
     vec3 color;
     vec3 decal_emit = vec3(0.0);
     if (o_params.y > 0.5) {
@@ -478,7 +586,11 @@ void main() {
         }
         color = base.rgb;  // unlit
     } else {
+#ifdef MCE_TERRAIN
+        float rough = t_rough, metallic = t_metallic, ao = t_ao;
+#else
         float rough = o_params.z, metallic = o_params.w, ao = 1.0;
+#endif
         if (o_maps.y > 0.5) {
             vec3 orm = texture(u_orm, vec3(v_uv, 0.0)).rgb;
             if (o_maps.z > 0.5) ao = orm.r;
@@ -488,7 +600,11 @@ void main() {
             }
         }
         if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit);
+#ifdef MCE_TERRAIN
+        n = t_n;
+#else
         if (o_maps.x > 0.5) n = perturb_normal(n, v_world, v_uv, texture(u_normal_map, vec3(v_uv, 0.0)).xyz * 2.0 - 1.0);
+#endif
         rough = clamp(rough, 0.045, 1.0);
         metallic = clamp(metallic, 0.0, 1.0);
         float a = rough * rough;
@@ -579,7 +695,9 @@ void main() {
     }
     o_color = vec4(color, base.a);
 }
-)";
+)"
+constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_MESH_FS;
+constexpr const char* kTerrainFS = "#version 450 core\n#define MCE_TERRAIN 1\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_MESH_FS;
 
 constexpr const char* kShadowVS = R"(#version 450 core
 layout(std140, binding = 3) uniform ShadowU { mat4 s_mvp; };

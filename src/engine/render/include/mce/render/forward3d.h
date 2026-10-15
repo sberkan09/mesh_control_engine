@@ -318,6 +318,7 @@ private:
     rhi::PipelineHandle mesh_cull_;      // back-face culled
     rhi::PipelineHandle mesh_two_sided_;
     rhi::PipelineHandle mesh_blend_;
+    rhi::PipelineHandle terrain_pipe_;  // splat-layered terrain nodes (M-TERRAIN 2), back-face culled
     rhi::PipelineHandle skinned_shadow_pipe_;  // FR-R3D-060: SkinnedMeshVertex twins of the above
     rhi::PipelineHandle skinned_cull_;
     rhi::PipelineHandle skinned_two_sided_;

@@ -8,6 +8,7 @@
 //   InputMapHeader | ActionMapDef[map_count] | ActionDef[action_count] | BindingDef[binding_count]
 
 #include "mce/containers/array.h"
+#include "mce/fixed_string.h"
 #include "mce/input/actions.h"
 #include "mce/platform/event.h"
 #include "mce/result.h"
@@ -93,7 +94,10 @@ struct ActionMapDef {
 };
 
 inline constexpr u32 kInputMapMagic = 0x4D49434Du;  // "MCIM"
-inline constexpr u16 kInputMapVersion = 1;
+// v2 (M-ACCESS): an optional label table after the bindings, one u8 length + UTF-8 bytes per action
+// (the authored name, for options screens). v1 chunks decode with empty labels.
+inline constexpr u16 kInputMapVersion = 2;
+inline constexpr u32 kMaxActionLabel = 47;
 
 struct InputMapHeader {
     u32 magic = kInputMapMagic;
@@ -105,13 +109,18 @@ struct InputMapHeader {
 };
 
 // Parsed, validated map set (owned copy; the chunk can be unmapped after load).
+using ActionLabel = FixedString<kMaxActionLabel + 1>;
+
 struct InputMapSet {
-    explicit InputMapSet(mem::IAllocator& a = mem::heap()) : maps(a), actions(a), bindings(a) {}
+    explicit InputMapSet(mem::IAllocator& a = mem::heap()) : maps(a), actions(a), bindings(a), labels(a) {}
     Array<ActionMapDef> maps;
     Array<ActionDef> actions;
     Array<BindingDef> bindings;
+    Array<ActionLabel> labels;  // per action, its authored name; empty (or all blank) when unknown
 
     const ActionMapDef* find_map(StringId name) const;
+    // The action's authored name, or "" (a v1 chunk, a map built from ids only).
+    StringView label(usize action) const { return action < labels.size() ? labels[action].view() : StringView(); }
 };
 
 // Validates and copies a chunk. Errors: BadMagic, VersionTooNew, Truncated, InvalidArgument
@@ -131,6 +140,9 @@ public:
 
     InputMapBuilder& map(StringId name, u32 flags = 0);
     InputMapBuilder& action(StringId name, ActionType type = ActionType::Button);
+    // By name: also kept as the action's label (InputMapSet::label).
+    InputMapBuilder& action(const char* name, ActionType type = ActionType::Button) { return action(StringView(name), type); }
+    InputMapBuilder& action(StringView name, ActionType type = ActionType::Button);
     InputMapBuilder& bind(const BindingDef& b);
     InputMapBuilder& key(platform::Key k, u8 axis = 0, f32 scale = 1.f);
     InputMapBuilder& mouse_button(platform::MouseButton b);

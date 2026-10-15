@@ -14,6 +14,7 @@
 #include "mce/net/bytes.h"
 #include "mce/net/host.h"
 #include "mce/net/net_stats.h"
+#include "mce/net/prediction.h"
 #include "mce/net/replication.h"
 #include "mce/net/sim_network.h"
 #include "mce/net/transport.h"

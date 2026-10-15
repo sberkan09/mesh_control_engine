@@ -26,6 +26,10 @@ public:
         buf_.push_back('\0');
         return *this;
     }
+    String& assign(StringView s) {
+        clear();
+        return append(s);
+    }
     String& operator+=(StringView s) { return append(s); }
     String& operator+=(char c) { return append(c); }
     void clear() {

@@ -11,6 +11,7 @@ mce_add_library(mce_net UMBRELLA
     SOURCES
         src/host.cpp
         src/net_stats.cpp
+        src/prediction.cpp
         src/replication.cpp
         src/sim_network.cpp
         $<TARGET_OBJECTS:mce_enet>

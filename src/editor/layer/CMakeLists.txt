@@ -24,6 +24,7 @@ mce_add_library(mce_editor_layer UMBRELLA
         src/project_settings_panel.cpp
         src/scene_panels.cpp
         src/tilemap_panel.cpp
+        src/timeline_panel.cpp
         src/ui_panel.cpp
     PUBLIC_DEPS
         mce::mce_editor_core

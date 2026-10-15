@@ -23,11 +23,16 @@ QualitySettings quality_settings(QualityTier tier) {
             q.volumetrics = false;
             q.dof_motion_blur = false;
             q.ssr = false;
+            q.terrain_pixel_error = 4.0f;
+            q.terrain_triplanar = false;
+            q.terrain_height_blend = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
             q.volumetric_tile = 16;
             q.volumetric_slices = 48;
+            q.terrain_pixel_error = 2.0f;
+            q.terrain_triplanar = false;
             break;
         case QualityTier::High:
             q.fxaa = false;

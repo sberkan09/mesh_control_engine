@@ -7,6 +7,8 @@
 //   Low      1x    1024        1         off    FXAA  0.67          the bake only (none without one)     off (exp² fog)
 //   Medium   2x    1024        2         on     -     0.85          runtime updates                      16 px, 48 slices
 //   High     4x    2048        3         on     TAA   1.0           runtime updates                      8 px, 64 slices
+//   terrain LOD error (M-TERRAIN): 4 px on Low, 2 px on Medium, 1 px on High; splat layers: weight blend on
+//   Low, height blend on Medium, height blend and triplanar on High
 //   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High; M-VISUAL 8: Low drops depth of field and
 //   motion blur, every tier keeps auto exposure and the color grade; M-VISUAL2 1: Low drops
 //   screen-space reflections)
@@ -35,6 +37,13 @@ struct QualitySettings {
     u32 volumetric_slices = 64;  // Volumetrics::slices, at most
     bool dof_motion_blur = true; // PostFx::dof and PostFx::motion_blur are honored
     bool ssr = true;             // ScreenSpaceReflections::enabled is honored (M-VISUAL2 1)
+    // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
+    // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
+    f32 terrain_pixel_error = 1.0f;
+    // M-TERRAIN 2: triplanar terrain layers also project along x and z on steep ground (three fetches
+    // per map), and splat layers meet by height rather than by weight alone.
+    bool terrain_triplanar = true;
+    bool terrain_height_blend = true;
 };
 
 QualitySettings quality_settings(QualityTier tier);

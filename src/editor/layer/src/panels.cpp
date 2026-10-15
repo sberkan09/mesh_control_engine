@@ -312,6 +312,8 @@ private:
         segments_.clear();
         const bool scene_3d = world_is_3d(shell.scene().world());
         orbit_wireframe(shell.scene(), view.orbit_depth, segments_, !scene_3d);
+        shell.nav_preview().sync(shell.scene(), shell.session().project().mounted());
+        shell.nav_preview().segments(segments_);
         // Pixels -> the 2D overlay path: a camera with one pixel per metre centred on the viewport.
         EditorCamera2D px_cam;
         px_cam.pixels_per_meter = 1.0f;
@@ -619,6 +621,7 @@ void add_default_panels(EditorShell& shell) {
     add_asset_panel(shell);
     add_tilemap_panel(shell);
     add_ui_document_panel(shell);
+    add_timeline_panel(shell);
     add_project_settings_panel(shell);
 }
 

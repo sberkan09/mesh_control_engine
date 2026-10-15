@@ -82,7 +82,12 @@ void ConVar::link() {
     g_cvar_head = this;
 }
 
+namespace {
+u64 g_saved_generation = 0;
+}
+
 void ConVar::changed() {
+    if (flags_ & CVarFlags::Saved) ++g_saved_generation;
     if (on_change_) on_change_(*this);
 }
 
@@ -605,6 +610,8 @@ Result<void> save_settings(StringView path) {
     if (std::rename(tmp.c_str(), p.c_str()) != 0) return Error(Errc::IoError, kStageSettings, path);
     return ok();
 }
+
+u64 saved_generation() { return g_saved_generation; }
 
 }  // namespace console
 }  // namespace mce
