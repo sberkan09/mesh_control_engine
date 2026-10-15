@@ -5,14 +5,14 @@ the real Steam client, which needs the user's Steamworks account).
 **Why:** Steam is the desktop distribution channel; the engine comparison (the project's
 `assessments/motor-kiyaslama-eksikler.md`, item 2) lists it right after the web. Added 2026-10-15 under the
 user's standing instruction to extend the roadmap when it runs out.
-**Design:** ADR-0041 (the Steamworks flat API opened at run time; no SDK in the repo or the build).
+**Design:** ADR-0042 (the Steamworks flat API opened at run time; no SDK in the repo or the build).
 **Measured on:** the Linux CI container, against a stand-in `steam_api`.
 
 ## Steps
 
 | Step | Linear | State |
 |---|---|---|
-| 1. ADR-0041 and the run-time loader: `mce/platform/steam.h`, init and its refusals, manual-dispatch callbacks, the player's `-steam.app_id`, a stand-in library for tests, the Steam wall | SBA-106 | in review |
+| 1. ADR-0042 and the run-time loader: `mce/platform/steam.h`, init and its refusals, manual-dispatch callbacks, the player's `-steam.app_id`, a stand-in library for tests, the Steam wall | SBA-106 | in review |
 | 2. Achievements, stats, leaderboards and cloud saves as `platform::game_services` `Backend::Steam` under `liveops::PlatformGameServices` | SBA-107 | — |
 | 3. Overlay (holds the world like a lost focus) and rich presence as data | SBA-108 | — |
 | 4. Steam Input: an action manifest from the cooked input map, glyphs, Steam Deck defaults | SBA-109 | — |

@@ -955,7 +955,7 @@ private:
     // Every string table in the pack (assets/loc/<locale>.csv) goes into one Localization resource:
     // the saved choice first, then -language for this run, then the device languages, then
     // -default_language. A choice the game makes later (Localization::set_locale) is saved at once.
-    // Steam (M-STEAM step 1, ADR-0041): an app id opens steam_api; anything but a relaunch leaves the
+    // Steam (M-STEAM step 1, ADR-0042): an app id opens steam_api; anything but a relaunch leaves the
     // game running without Steam. False: Steam relaunches the game, so this run quits at once.
     bool init_steam() {
         platform::steam::Config sc;

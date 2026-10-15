@@ -10,6 +10,10 @@
 // node's nearest point to the camera, stays under `pixel_error` pixels, dropping nodes outside the view
 // that are also farther than the shadow reach (a hill behind the camera still casts its shadow).
 //
+// Holes (M-TERRAIN 3): a triangle with a hole sample at a corner is not drawn, as Jolt's height field
+// does not collide with it; a node holding a hole always splits down to level 0, so holes keep their
+// shape at any distance.
+//
 // Neighbours of different levels meet with skirts: a strip hanging down from each edge a node shares
 // with another node, deeper than the error of the coarser neighbours it can meet, so the gap between
 // two grids never shows what is behind the terrain. Edges on the terrain's border get none.
@@ -42,6 +46,7 @@ struct TerrainNode {
     f32 skirt = 0.0f;    // metres the skirts hang below the surface
     u32 level = 0;       // 0 = finest
     u32 x = 0, z = 0;    // node coordinates within its level
+    bool holed = false;  // holds a hole sample: drawn only at level 0 (M-TERRAIN 3)
 };
 
 struct TerrainSelectParams {
@@ -67,12 +72,19 @@ public:
     // Index of the node at (level, x, z) (x, z < 2^(levels - 1 - level)).
     u32 node_index(u32 level, u32 x, u32 z) const { return level_first_[level] + z * level_side_[level] + x; }
     u32 root() const { return node_index(levels_ - 1, 0, 0); }
-    // Triangles one node draws: its grid and its skirts.
+    // Triangles one node draws: its grid and its skirts, less what its holes cut.
     u32 node_triangles(u32 index) const;
 
     // The height in metres of sample (x, z), and the bilinear height at (x, z) metres in terrain space.
     f32 sample(u32 x, u32 z) const { return height_min_ + static_cast<f32>(heights_[usize(z) * resolution_ + x]) * height_scale_; }
     f32 height_at(f32 x, f32 z) const;
+    // The height of the drawn (level 0) and collided surface at (x, z) metres: asset::TerrainView::surface_at.
+    f32 surface_at(f32 x, f32 z) const;
+    bool hole(u32 x, u32 z) const {
+        if (holes_.empty()) return false;
+        const usize i = usize(z) * resolution_ + x;
+        return (holes_[i / 8] >> (i % 8)) & 1u;
+    }
     // The surface normal at sample (x, z) (central differences of the full-resolution heights).
     math::vec3 normal_at(u32 x, u32 z) const;
 
@@ -88,6 +100,7 @@ private:
     u32 stride(u32 level) const { return 1u << level; }
 
     Array<u16> heights_;
+    Array<u8> holes_;  // the asset's hole bits, empty without holes
     Array<TerrainNode> nodes_;
     u32 level_first_[kMaxLevels] = {};
     u32 level_side_[kMaxLevels] = {};

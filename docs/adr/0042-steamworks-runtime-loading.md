@@ -1,4 +1,4 @@
-# ADR-0041 — Steam through the Steamworks flat API, loaded at run time
+# ADR-0042 — Steam through the Steamworks flat API, loaded at run time
 
 **Status:** Accepted (2026-10-15). **Milestone:** M-STEAM step 1 (off-tier, opt-in). **Plan:**
 `docs/milestones/M-STEAM.md`. **Reference:** `src/engine/platform/include/mce/platform/steam.h`.

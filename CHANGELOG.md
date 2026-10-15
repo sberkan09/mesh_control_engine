@@ -5,7 +5,7 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
-- Steam, M-STEAM step 1 (SBA-106, ADR-0041): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
+- Steam, M-STEAM step 1 (SBA-106, ADR-0042): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
   talks to it through the Steamworks flat API, so neither the repository nor the build needs the SDK and a game
   without Steam loads nothing. The stock player signs in with `-steam.app_id <id>` (`-steam.library`,
   `-steam.restart` for release builds Steam relaunches) and pumps Steam's callbacks every frame; the sim hash is

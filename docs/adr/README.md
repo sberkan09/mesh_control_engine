@@ -60,7 +60,8 @@ file name when the number alone is ambiguous.
 | [0038](0038-mobile-sdl-gpu-backend.md) | M-MOBILE | Mobile graphics through one SDL3 GPU backend (`mce_rhi_sdlgpu`) |
 | [0039](0039-web-webgpu-backend.md) | M-WEB | Web graphics through WebGPU (`mce_rhi_webgpu`, GLSL → WGSL with Tint) |
 | [0040](0040-navigation-recast-detour.md) | M-GAMEPLAY3D | 3D navigation over embedded Recast & Detour: tiled navmesh bake, carved obstacles, crowds |
-| [0041](0041-steamworks-runtime-loading.md) | M-STEAM | Steam through the Steamworks flat API loaded at run time; no SDK in the repo or the build |
+| [0041](0041-luau-scripting-spike.md) | spike (off-tier) | Luau scripting spike: sandboxed scripts as systems over reflected components (Proposed) |
+| [0042](0042-steamworks-runtime-loading.md) | M-STEAM | Steam through the Steamworks flat API loaded at run time; no SDK in the repo or the build |
 
 Some records amend earlier ones in dated "Amendment" sections at the end
 of the file (0017, 0018, 0021, 0022, 0029, 0032) or are superseded in part by later ADRs (0022 §7 and 0023 by 0036).

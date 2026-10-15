@@ -1,6 +1,6 @@
 #pragma once
 // mce_platform (L1): Steam through the Steamworks flat API, loaded at run time (M-STEAM step 1,
-// ADR-0041). Neither the repository nor the build carries the Steamworks SDK: the library Valve ships
+// ADR-0042). Neither the repository nor the build carries the Steamworks SDK: the library Valve ships
 // with a game (libsteam_api.so, steam_api64.dll, libsteam_api.dylib) is opened when a game asks for
 // Steam, and the few flat entry points used here are looked up by name. A game that never calls
 // init() never loads it, and a missing library is an ordinary "no Steam" result.

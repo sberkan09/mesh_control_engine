@@ -320,7 +320,7 @@ With the `local` provider nothing leaves the device and there is nothing to decl
 ## 23.10 Steam
 
 Desktop games reach Steam through Valve's `steam_api` library, which the engine opens at run time
-(ADR-0041): the Steamworks SDK is not part of the engine or its build, and a game that never asks for
+(ADR-0042): the Steamworks SDK is not part of the engine or its build, and a game that never asks for
 Steam loads nothing. Put the library for your platform (`libsteam_api.so`, `steam_api64.dll`,
 `libsteam_api.dylib`, from the Steamworks SDK's `redistributable_bin`) next to the game's executable
 and start the player with your app id:

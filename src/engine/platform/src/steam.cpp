@@ -1,4 +1,4 @@
-// Steam through the Steamworks flat API, opened at run time (M-STEAM step 1, ADR-0041). The entry points
+// Steam through the Steamworks flat API, opened at run time (M-STEAM step 1, ADR-0042). The entry points
 // below are declared here from the flat API's published C signatures; the SDK is not part of the build.
 
 #include "mce/platform/steam.h"
