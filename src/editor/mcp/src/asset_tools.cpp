@@ -132,6 +132,7 @@ constexpr AssetKind kKinds[] = {
 {"name":"metallic","type":"number","default":0},
 {"name":"roughness","type":"number","default":1},
 {"name":"emissive","type":"[r, g, b]","default":[0,0,0]},
+{"name":"uv_scale","type":"[u, v]","default":[1,1],"help":"how often the textures repeat across the mesh's UVs ([8, 8] tiles a floor 8 times each way)"},
 {"name":"alpha_mode","type":"\"opaque\" | \"mask\" | \"blend\"","default":"opaque"},
 {"name":"alpha_cutoff","type":"number","default":0.5},
 {"name":"double_sided","type":"boolean","default":false},

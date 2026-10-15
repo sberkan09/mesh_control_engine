@@ -67,6 +67,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <optional>
 
 #include "hud_font.h"
@@ -170,6 +171,10 @@ MCE_CVAR(cv_save_on_focus_loss, "save_on_focus_loss", true,
 MCE_CVAR(cv_fullscreen, "fullscreen", false, "Desktop: borderless full screen (F11, Alt+Enter or Cmd+Ctrl+F toggle it)",
          CVarFlags::Saved);
 MCE_CVAR(cv_save, "save", "", "Save slot: loaded at start when it exists, written on clean quit (empty = off)",
+         CVarFlags::None);
+MCE_CVAR(cv_settings, "settings", true,
+         "Keep the saved options (volumes, quality, full screen...) in <save folder>/settings.cfg between runs "
+         "(windowed runs without -capture; 0 = this run neither reads nor writes it)",
          CVarFlags::None);
 MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the per-user MCE save folder)", CVarFlags::None);
 MCE_CVAR(cv_store_catalog, "store_catalog", "",
@@ -421,6 +426,17 @@ public:
                          module_.module.info->module_version, module_.module.loaded_path.c_str());
         }
         console::apply_deferred_command_line();  // the module's convars exist now; the rest are typos
+        // The saved options before anything reads them (the renderer reads r.quality). Captures
+        // (goldens, render_frame) stay on the defaults.
+        settings_on_ = device_ && cv_settings.get_bool() && cv_capture.get_string().empty() && cv_capture_tick.get_int() == 0 &&
+                       cv_capture_ticks.get_string().empty();
+        if (settings_on_) {
+            if (Result<void> r = console::load_settings(settings_path().view()); !r) {
+                FixedString<512> why;
+                format_error(r.error(), why);
+                MCE_LOG_WARN("{}: settings unreadable: {}", desc_.app_name, why.view());
+            }
+        }
         if (device_) {
             MCE_TRY(renderer_.init(*device_));
             assets_.set_upload_sink(&sink_);
@@ -1686,7 +1702,25 @@ private:
         MCE_LOG_INFO("mce_player: wrote {}", path);
     }
 
+    FixedString<512> settings_path() const {
+        FixedString<512> p(save::root());
+        p.append("/settings.cfg");
+        return p;
+    }
+
+    void write_settings() {
+        if (!settings_on_) return;
+        std::error_code ec;
+        std::filesystem::create_directories(std::filesystem::path(save::root().c_str()), ec);
+        if (Result<void> r = console::save_settings(settings_path().view()); !r) {
+            FixedString<512> why;
+            format_error(r.error(), why);
+            MCE_LOG_WARN("{}: settings not written: {}", desc_.app_name, why.view());
+        }
+    }
+
     void write_save() {
+        write_settings();
         const StringView slot = cv_save.get_string();
         if (slot.empty()) return;
         save::SaveInfo info;
@@ -2035,6 +2069,7 @@ private:
     Array<f64> view_free_;      // -view.free
     Array<f64> safe_override_;  // -safe_area
     bool paused_ = false;
+    bool settings_on_ = false;  // this run reads and writes <save folder>/settings.cfg
     player::UiScreens screens_;
     input::InputState ui_actions_;  // the newest tick snapshot, for the UI screens' navigation
     bool ui_fresh_ = false;         // ui_actions_ arrived since the last rendered frame

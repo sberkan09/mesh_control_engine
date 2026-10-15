@@ -84,6 +84,37 @@ Still open, all minor:
 - `render_frame` cooks the whole project before each frame.
 - `asset_delete` does not remove the file's `CREDITS.md` row (`project_check` now flags it).
 
+## Round 3: the newer features (2026-10-15)
+
+Rounds 1 and 2 ran before M-VISUAL (high-end 3D) and M-UI-DATA (`.mcui` documents and themes)
+existed. Round 3 gave one fresh agent a brief that needs both without naming them:
+[Lantern Court](briefs/3d_r3.md), a lamplighter lighting seven lanterns in a temple courtyard at
+dusk, with lantern light and shadows, ground fog, swaying grass, puddles, sparks, a shrine lit by
+bounced light, a reflecting bell, a quality option and one paper-and-ink theme across every screen.
+
+| Run | Game | Agents | Tool calls | project_check | Tests | Zip | Friction (blocking / major / minor) |
+|---|---|---|---|---|---|---|---|
+| [round3/solo-3d](round3/solo-3d) | Lantern Court | solo | 415 | pass, 0 warnings | 4 `.mctest` + the smoke test | yes | 0 / 4 / 9 |
+
+The agent found the volumetric fog, image-based lighting, the GI volume and reflection probe,
+`Foliage3D`, `Decal3D`, `ParticleEmitter3D` and a `.mcuitheme` shared by six `.mcui` screens on its
+own. Its notes were fixed in the same change as this record (SBA-60):
+
+- `PointLight3D` / `SpotLight3D` have `cast_shadows` (the renderer had local-light shadows; the kit
+  could not ask for them).
+- Saved convars are kept: `<save folder>/settings.cfg` holds the options a player changes, so an
+  options screen bound to `r.quality` (now saved) applies on the next start. Before this the
+  `Saved` flag was only a label.
+- `.mcmat` has `uv_scale`, so one plane can tile a floor texture.
+- `module_test` builds the host and the cooked pack before running the tests (it played a stale
+  pack after `module_build`).
+- `Environment3D.ssao` (and radius, intensity, power): screen-space ambient occlusion from a scene.
+
+Still open, all minor: a reloaded module's convars stay registered twice; an input script cannot
+press an action with the value 0; a `Text` in a horizontal stack wraps early below UI scale 1;
+game code cannot quit the app; `render_frame` / `run_headless` take no convars; `walk_to` cannot
+wait at a waypoint; decals show no gloss; `asset_delete` leaves its `CREDITS.md` row.
+
 ## A harness incident
 
 In round 2 the team's **level** agent first kept its helper scripts in a scratchpad shared with

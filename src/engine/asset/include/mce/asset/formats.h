@@ -242,10 +242,12 @@ struct MaterialChunk {  // the whole payload: fixed-width param block + texture 
     f32 roughness;
     f32 alpha_cutoff;
     u32 flags;  // MaterialFlags
-    u32 reserved;
+    u32 uv_scale_half;  // texture repeats across the mesh's UVs (.mcmat uv_scale): two IEEE halves, u low, v high; 0 = [1, 1]
     u64 textures[static_cast<u32>(MaterialSlot::Count)][2];  // {hi, lo}; null = no texture
 
     Guid texture(MaterialSlot s) const { return Guid{textures[static_cast<u32>(s)][0], textures[static_cast<u32>(s)][1]}; }
+    void uv_scale(f32 out[2]) const;
+    static u32 pack_uv_scale(f32 u, f32 v);
     static Result<const MaterialChunk*> read(Span<const byte> payload);
 };
 static_assert(sizeof(MaterialChunk) == 112);
