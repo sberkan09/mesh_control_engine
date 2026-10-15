@@ -11,8 +11,8 @@
 //
 // File mechanics (save::write/read): <root>/<name>.mcesave written atomically — temp file, then
 // the previous save rotated to .bak, then rename — so a crash mid-save keeps the old save. The
-// root defaults to %LOCALAPPDATA%/MCE/<game>/saves (Windows) or $XDG_DATA_HOME|~/.local/share
-// /MCE/<game>/saves elsewhere. core.md §2.9 places these mechanics in core; they live here until
+// root defaults to crash::user_data_root()/MCE/<game>/saves (mce/crash.h: %LOCALAPPDATA% on Windows, the
+// app's sandbox on Android and iOS, $XDG_DATA_HOME|~/.local/share elsewhere). core.md §2.9 places these mechanics in core; they live here until
 // a second consumer needs them below L2 (ADR-0025).
 //
 // Replays: the per-tick input stream (input::InputRecorder bytes, opaque here) framed with the

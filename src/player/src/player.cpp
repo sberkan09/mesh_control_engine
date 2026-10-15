@@ -75,6 +75,7 @@
 #include "mce/asset/mods.h"
 #include "mce/audio/components.h"
 #include "mce/core.h"
+#include "mce/ecs/dev_stats.h"
 #include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
 #include "mce/input/default_map.h"
@@ -385,6 +386,7 @@ public:
         mount_mods();
         const StringView roots[1] = {pack.view()};
         MCE_TRY(assets_.mount(Span<const StringView>(roots, 1)));
+        MCE_LOG_INFO("{}: pack mounted from {}", desc_.app_name, pack.view());  // the phone smoke runs look for it
         const StringView want_scene = !cv_scene.get_string().empty() ? cv_scene.get_string()
                                       : desc_.start_scene                ? StringView(desc_.start_scene)
                                                                          : StringView();
@@ -1498,12 +1500,21 @@ private:
         } else {
             std::snprintf(line, sizeof line, "2D");
         }
+        add_stats_text(hud, line, 0);
+        // Lines other modules publish (DevStatsLines: mce_net's NetStatsMeter, ...).
+        if (const DevStatsLines* extra = world_.try_resource<DevStatsLines>()) {
+            for (u32 i = 0; i < extra->count; ++i) add_stats_text(hud, extra->lines[i].text.c_str(), i + 1);
+        }
+    }
+
+    void add_stats_text(render::SpriteBatch& hud, const char* text, u32 row) {
         render::TextLayout layout(mem::frame());
         render::TextLayoutDesc desc;
         desc.size_px = 16;
-        render::layout_text(font_.face, line, desc, layout);
+        render::layout_text(font_.face, text, desc, layout);
         render::TextPlacement p;
-        p.origin = {8.0f + static_cast<f32>(safe_insets_.left), 8.0f + static_cast<f32>(safe_insets_.top)};
+        p.origin = {8.0f + static_cast<f32>(safe_insets_.left),
+                    8.0f + static_cast<f32>(safe_insets_.top) + 20.0f * static_cast<f32>(row)};
         p.sort_order = 2;
         hud.add_text(font_, layout, p);
     }

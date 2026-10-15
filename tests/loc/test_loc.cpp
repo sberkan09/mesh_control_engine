@@ -44,6 +44,7 @@ Localization en_tr() {
     l.add_table(table("tr", {{"menu.play", "Oyna"},
                              {"menu.greeting", "Merhaba, {name}!"},
                              {"coins#other", "{count} alt\xC4\xB1n"},
+                             {"menu.credits", "Yap\xC4\xB1mc\xC4\xB1lar"},
                              {"title", "ada"}}));
     return l;
 }
@@ -165,6 +166,7 @@ TEST_CASE("loc: EN <-> TR with the device, the choice and the base language") {
     CHECK(l.text("menu.play") == "Oyna");
     CHECK(l.text("menu.quit") == "Quit");      // not translated: the English text
     CHECK(l.text("menu.missing") == "menu.missing");  // nowhere: the key itself
+    CHECK(l.text("menu.credits") == "Yap\xC4\xB1mc\xC4\xB1lar");
 
     Array<char> buf;
     const Arg name[] = {{"name", "Ada"}};
@@ -177,6 +179,7 @@ TEST_CASE("loc: EN <-> TR with the device, the choice and the base language") {
     buf.clear();
     l.format("menu.greeting", name, buf);
     CHECK(str(buf) == "Hello, Ada!");
+    CHECK(l.text("menu.credits") == "menu.credits");  // a chosen English never shows the device's Turkish
     CHECK_FALSE(l.set_locale("de"));  // no German table: nothing changes
     CHECK(l.locale() == "en");
     REQUIRE(l.set_locale(""));        // back to the device
