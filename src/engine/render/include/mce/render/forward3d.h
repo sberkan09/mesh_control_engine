@@ -3,7 +3,10 @@
 //
 //   0. SSAO          (AmbientOcclusion::enabled, M-VISUAL 3) half-resolution normal + depth prepass of
 //                    the opaques, obscurance, depth-aware blur; read by the main pass's ambient terms
-//   1. cascades      up to 4 sun cascades into one D32 2D-array (shadow_size² per layer), depth only
+//   1. cascades      up to 4 sun cascades into one D32 2D-array (shadow_size² per layer), depth only,
+//                    then the spot / point light atlas tiles (M-VISUAL 4)
+//   1b. GI           (GiVolume::enabled, M-VISUAL 6) the irradiance volume's rolling update: a sun
+//                    shadow fitted to the volume, cube captures of a few probes, their projection
 //   2. main pass     Forward+ PBR (Cook-Torrance GGX, ORM + normal + emissive maps) lit by the sun
 //                    (cascaded PCF 3×3 shadows, cross-faded) and the clustered point lights, then
 //                    the sky dome behind everything, then blended draws back-to-front; R11G11B10F
@@ -23,6 +26,8 @@
 #include "mce/rhi/render_device.h"
 
 namespace mce::render {
+
+struct Forward3DPassU;  // forward3d.cpp: the lit passes' PassU block
 
 struct Forward3DDesc {
     u32 msaa = 4;            // 1 = no multisampling (the HDR target is rendered directly)
@@ -46,6 +51,9 @@ struct Forward3DDesc {
     // Temporal anti-aliasing resources (M-VISUAL 5); a scene turns it on with PostFx::taa. False
     // (or -r.taa 0) keeps FXAA as the only anti-aliasing.
     bool taa = true;
+    // Irradiance-volume resources (M-VISUAL 6); a scene turns it on with GiVolume::enabled. False (or
+    // -r.gi 0) draws every scene with the sky's ambient.
+    bool gi = true;
 };
 
 struct Forward3DStats {
@@ -69,6 +77,12 @@ struct Forward3DStats {
     bool taa = false;           // this frame went through the TAA resolve
     bool taa_history = false;   // ... blending a valid history (false on the first frame or after a reset)
     u32 velocity_draws = 0;     // the velocity prepass's draws
+    bool gi = false;            // this frame's diffuse ambient came from the irradiance volume
+    bool gi_filled = false;     // ... which was filled from scratch this frame (new volume, version or bounds)
+    bool gi_loaded = false;     // ... which was loaded from its bake this frame
+    u32 gi_probes = 0;          // probes captured this frame (the fill's or the rolling update's)
+    u32 gi_draws = 0;           // draws of those captures, over all faces
+    u32 gi_lights = 0;          // the most point / spot lights one probe's captures saw
     u32 joints = 0;          // joint matrices uploaded for skinned meshes
     u32 bloom_levels = 0;
     bool fxaa = false;
@@ -81,13 +95,14 @@ struct Forward3DGpuTimes {
     f64 ssao = -1;      // prepass + occlusion + blur (0 when the scene has no SSAO)
     f64 shadow = -1, main = -1, resolve = -1;
     f64 taa = -1;       // velocity prepass + TAA resolve (0 when the scene has no TAA)
+    f64 gi = -1;        // irradiance-volume update (0 when the scene has no volume)
     f64 bloom = -1, tonemap = -1, fxaa = -1, total = -1;
     f64 post() const { return bloom < 0 ? -1 : bloom + tonemap + (fxaa < 0 ? 0 : fxaa); }
 };
 
 class Forward3D {
 public:
-    static constexpr u32 kStageCount = 9;     // timestamps written: kStageCount + 1
+    static constexpr u32 kStageCount = 10;    // timestamps written: kStageCount + 1
     static constexpr u32 kMaxBloomLevels = 6;
 
     Forward3D() = default;
@@ -149,6 +164,26 @@ public:
     rhi::TextureHandle taa_history() const { return history_[history_index_]; }
     // Drops the history: call on a camera cut so the next frame does not blend the old view.
     void reset_history() { history_valid_ = false; }
+    // The irradiance volume (M-VISUAL 6): RGBA16F gi_volume_size() (4 texels per probe, x-major,
+    // row y + counts[1] * z), null until the first frame with GiVolume::enabled. Captures are 6
+    // kGiFaceSize² faces per probe, at most kGiMaxBatchProbes probes per frame. A new volume fills
+    // over as many frames as that takes and lights the scene from the frame it is full.
+    static constexpr u32 kGiFaceSize = 16;
+    static constexpr u32 kGiMaxBatchProbes = 32;
+    static constexpr u32 kGiMaxCaptureLights = 32;  // point / spot lights a probe's captures see (the strongest for it)
+    // A frame's captures also stop at the probe that spends this many uniform uploads (a draw is one, a
+    // face three; the first probe always goes): the per-frame uniform ring (1 MiB by default) also
+    // carries the frame's own passes. A face draws at most kGiMaxFaceDraws meshes, the widest it sees.
+    static constexpr u32 kGiCaptureBudget = 1024;
+    static constexpr u32 kGiMaxFaceDraws = 96;
+    static constexpr f32 kGiRgbmRange = 16.0f;
+    rhi::TextureHandle gi_volume() const { return gi_volume_; }
+    // Baking: record_gi_export() draws the volume as RGBM RGBA8 of gi_volume_size() (row 0 = v 0)
+    // into gi_export_target(); read it back after submit. False when the volume holds nothing yet.
+    bool record_gi_export(rhi::CommandBuffer& cmd);
+    rhi::TextureHandle gi_export_target() const { return gi_export_; }
+    // Forgets the volume, so the next record() fills (or loads) it again.
+    void invalidate_gi() { gi_key_ = 0; }
 
 private:
     ResultV create_pipelines();
@@ -165,6 +200,12 @@ private:
                      const GpuMesh*& bound);
     void record_main(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    u32 gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 first, u32 count, f32 weight);
+    // The sky-and-IBL members of a lit pass's PassU and their textures (stand-ins when IBL is off).
+    rhi::TextureHandle bind_ambient(rhi::CommandBuffer& cmd, const Scene3D& scene, bool probes, bool gi, Forward3DPassU& pu);
+    // The local-light shadow records of this frame (bank kLocalShadows) and PassU::local.x.
+    void bind_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene, Forward3DPassU& pu);
     void record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target);
     // What the current pass has bound, so consecutive draws skip redundant binds.
     struct DrawCache {
@@ -260,6 +301,23 @@ private:
     math::mat4 prev_view_proj_ = math::mat4::identity();  // last TAA frame's, unjittered
     rhi::TextureHandle post_source_;     // what bloom and tonemap read: hdr_, or the TAA output
     rhi::Extent2D post_size_;
+    // Irradiance volume (M-VISUAL 6)
+    rhi::PipelineHandle gi_project_;     // null when Forward3DDesc::gi is off
+    rhi::PipelineHandle gi_encode_;
+    rhi::PipelineHandle gi_decode_;
+    rhi::TextureHandle gi_volume_;       // RGBA16F gi_volume_size()
+    rhi::TextureHandle gi_faces_;        // RGBA16F 2D array, 6 layers per probe of a batch
+    rhi::TextureHandle gi_faces_depth_;  // D32, the same layers
+    rhi::TextureHandle gi_export_;       // RGBA8 gi_volume_size()
+    rhi::Extent2D gi_size_;
+    u32 gi_face_layers_ = 0;
+    u32 gi_shadow_layer_ = 0;            // shadow_map_ layer of the volume's sun fit; 0 = none yet
+    u32 gi_cursor_ = 0;                  // the next probe the rolling update captures
+    u32 gi_filled_ = 0;                  // probes the current fill has captured
+    u64 gi_key_ = 0;                     // what the volume was filled from; 0 = nothing
+    bool gi_shadowed_ = false;           // this frame's volume sun fit was rendered
+    math::mat4 gi_shadow_vp_ = math::mat4::identity();
+    f32 gi_shadow_texel_ = 0.0f;
     Forward3DStats stats_;
 };
 

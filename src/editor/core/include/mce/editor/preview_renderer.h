@@ -27,6 +27,14 @@ struct ProbeBake {
     Array<u8> rgba;
 };
 
+// The irradiance volume's bake (PreviewRenderer::bake_gi): the GiVolume3D's entity and its volume as
+// one RGBM layer of render::gi_volume_size() texels, rows in texture order.
+struct GiBake {
+    Entity entity;
+    u32 width = 0, height = 0;
+    Array<u8> rgba;
+};
+
 class PreviewRenderer {
 public:
     PreviewRenderer() = default;
@@ -56,6 +64,11 @@ public:
     // Records, submits and reads back by itself: call it outside any command recording. Fails
     // without a 3D path, without probes, or when the environment does not turn sky_ibl on.
     Result<void> bake_probes(World& world, Array<ProbeBake>& out);
+    // Fills the first enabled GiVolume3D of `world` (ignoring its current bake) with every mesh of the
+    // world, then re-captures every probe twice more (two more bounces), and reads the volume back
+    // into `out`. Records, submits and reads back by itself: call it outside any command recording.
+    // Fails without a 3D path or without a volume.
+    Result<void> bake_gi(World& world, GiBake& out);
     // The primary Camera3DComponent's view of `world` (false: none, or no 3D path).
     bool game_camera_3d(World& world, render::Camera3D& out);
 

@@ -19,6 +19,7 @@
 //   04_cubes -headless 1 -walk 1          the same with the capsule walk (physics + camera in the hash)
 //   04_cubes -skin 0                      the reeds without their skeletons (rigid bind pose)
 //   04_cubes -r.sky_ibl 1                 M-VISUAL 2: image-based lighting from the sky
+//   04_cubes -gi 1                        M-VISUAL 6: an irradiance-probe volume (global illumination)
 //
 // Keys: drag (left mouse) or arrows orbit, wheel or Z/X zoom, Space auto orbit, L lights,
 // B bloom, A FXAA, 1/2/3 cascades, K sky texture, I image-based lighting, N night, P cross-fade the orrery clip, G reed
@@ -62,6 +63,7 @@ MCE_CVAR(cv_sky_ibl, "r.sky_ibl", false, "M-VISUAL 2: the sky lights the scene (
 MCE_CVAR(cv_shadow_lights, "shadow_lights", 0, "M-VISUAL 4: the first N point lights ask for cube shadows", CVarFlags::None);
 MCE_CVAR(cv_taa, "taa", false, "M-VISUAL 5: temporal anti-aliasing (replaces FXAA)", CVarFlags::None);
 MCE_CVAR(cv_ao, "ao", false, "M-VISUAL 3: screen-space ambient occlusion", CVarFlags::None);
+MCE_CVAR(cv_gi, "gi", false, "M-VISUAL 6: an irradiance-probe volume over the cubes", CVarFlags::None);
 MCE_CVAR(cv_night, "night", false, "Dim the sun so the point lights carry the scene", CVarFlags::None);
 MCE_CVAR(cv_yaw, "cam.yaw", 0.35f, "Initial orbit yaw (radians)", CVarFlags::None);
 MCE_CVAR(cv_pitch, "cam.pitch", 0.42f, "Initial orbit pitch (radians, down from the horizon)", CVarFlags::None);
@@ -120,7 +122,7 @@ struct LightRig {
 // Means of the per-stage times over the measured frames (NFR-F-01 table shape).
 struct Budget {
     f64 scene = 0, clusters = 0, record = 0, submit = 0;
-    f64 gpu_clusters = 0, gpu_ssao = 0, gpu_taa = 0, gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
+    f64 gpu_clusters = 0, gpu_ssao = 0, gpu_gi = 0, gpu_taa = 0, gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
     u64 frames = 0, gpu_frames = 0;
 };
 
@@ -245,6 +247,7 @@ public:
                 budget_.gpu_clusters += gpu_.clusters;
                 budget_.gpu_ssao += gpu_.ssao;
                 budget_.gpu_taa += gpu_.taa;
+                budget_.gpu_gi += gpu_.gi;
                 budget_.gpu_shadow += gpu_.shadow;
                 budget_.gpu_main += gpu_.main;
                 budget_.gpu_resolve += gpu_.resolve;
@@ -289,6 +292,7 @@ public:
             std::printf("  | SSAO (prepass + occlusion + blur) | - | %.3f |\n", budget_.gpu_ssao / g);
             std::printf("  | shadows (cascades + %u local lights, %u tiles) | - | %.3f |\n", stats_.local_shadow_lights,
                         stats_.local_shadow_tiles, budget_.gpu_shadow / g);
+            std::printf("  | GI volume update (sun fit + captures + projection) | - | %.3f |\n", budget_.gpu_gi / g);
             std::printf("  | main pass (Forward+ PBR + sky) | - | %.3f |\n", budget_.gpu_main / g);
             std::printf("  | MSAA resolve | - | %.3f |\n", budget_.gpu_resolve / g);
             std::printf("  | TAA (velocity prepass + resolve) | - | %.3f |\n", budget_.gpu_taa / g);
@@ -504,6 +508,17 @@ private:
         AmbientOcclusion ao;
         ao.enabled = cv_ao.get_bool();
         scene.set_ambient_occlusion(ao);
+        if (cv_gi.get_bool()) {
+            // 7 × 3 × 7 probes between the panel cubes (their centers sit on a 3.2 m grid offset by 1.6).
+            GiVolume gi;
+            gi.enabled = true;
+            gi.bounds = {{-9.6f, 0.3f, -9.6f}, {9.6f, 3.3f, 9.6f}};
+            gi.counts[0] = 7;
+            gi.counts[1] = 3;
+            gi.counts[2] = 7;
+            gi.probes_per_frame = 7;  // a sweep of the 147 probes every 21 frames
+            scene.set_gi_volume(gi);
+        }
         PostFx post;
         post.bloom = cv_bloom.get_bool();
         post.fxaa = cv_fxaa.get_bool();

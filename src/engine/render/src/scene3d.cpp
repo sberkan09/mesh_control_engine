@@ -137,6 +137,7 @@ void Scene3D::begin(const Camera3D& camera, rhi::Extent2D viewport) {
     shadow_draws_.clear();
     probe_draws_.clear();
     probes_.clear();
+    gi_ = {};
     joint_palette_.clear();
     point_lights_.clear();
     clusters_.clear();
@@ -161,6 +162,12 @@ void Scene3D::add_reflection_probe(const ReflectionProbe& probe) {
         return;
     }
     probes_.push_back(probe);
+}
+
+void Scene3D::set_gi_volume(const GiVolume& gi) {
+    MCE_ASSERT_MSG(!built_, "Scene3D::set_gi_volume after build");
+    gi_ = gi;
+    for (u32& c : gi_.counts) c = clamp(c, 2u, kMaxGiProbesPerAxis);
 }
 
 void Scene3D::add(const MeshInstance& instance) {
@@ -293,7 +300,7 @@ void Scene3D::build() {
                 d.base_vertex = sl.base_vertex;
                 shadow_draws_.push_back(d);
             }
-            if (!probes_.empty() && !(material_of(inst, sm).flags & asset::MaterialFlags::AlphaBlend)) {
+            if ((!probes_.empty() || gi_.enabled) && !(material_of(inst, sm).flags & asset::MaterialFlags::AlphaBlend)) {
                 const GpuLod& pl = mesh.lod(s, 0);
                 d.lod = 0;
                 d.first_index = pl.first_index;

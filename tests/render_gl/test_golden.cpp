@@ -243,3 +243,34 @@ TEST_CASE("golden: temporal upscaling of a half-scale frame after 24 frames") {
     for (int i = 0; i < 24; ++i) f.render(0.0f, true, taa_only);
     check_golden("taa_upscale", f);
 }
+
+// ---- M-VISUAL 6: global illumination (the irradiance volume) -----------------------------------
+
+TEST_CASE("golden: a red emissive wall bleeds onto the ground through the irradiance volume") {
+    Fixture3D f;
+    upload_probe_room(f);
+    for (int i = 0; i < 2; ++i) f.render(0.0f, true, [](Scene3D& s) { gi_wall_scene(s, true); });  // the fill
+    CHECK(f.renderer.forward_3d().last_stats().gi);
+    check_golden("gi_bleed", f);
+}
+
+TEST_CASE("golden: sunlight bounced off the ground lights the box's unlit face") {
+    Fixture3D f;
+    const auto scene = [](Scene3D& s) {
+        DirectionalLight sun;
+        sun.direction = {0.3f, -1.0f, 0.9f};
+        sun.intensity = 3.0f;
+        sun.ambient_sky = sun.ambient_ground = {0, 0, 0};
+        s.set_light(sun);
+        Sky sky;
+        sky.enabled = false;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        Fog fog;
+        fog.color = {0, 0, 0};
+        s.set_fog(fog);
+        s.set_gi_volume(room_gi());
+    };
+    for (int i = 0; i < 8; ++i) f.render(0.0f, true, scene);
+    check_golden("gi_bounce", f);
+}

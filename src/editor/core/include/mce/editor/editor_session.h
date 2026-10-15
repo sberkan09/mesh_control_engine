@@ -97,6 +97,11 @@ public:
     // (+ sidecar; a re-bake keeps the file's GUID), hot-reloads them and points each component's
     // `baked` at its file (one undo step). Returns how many probes were baked.
     Result<u32> bake_reflection_probes();
+    // GI volume bake (M-VISUAL 6): fills the open scene's first enabled GiVolume3D through the preview
+    // with all of the scene's meshes (three bounces), writes assets/gi/<scene>/gi_<entity id>.mcenv
+    // (+ sidecar; a re-bake keeps the file's GUID), hot-reloads it and points the component's `baked`
+    // at it (one undo step). The Low quality tier draws the volume from this bake only.
+    Result<void> bake_gi_volume();
 
     // Every scene in the catalog, by path.
     void list_scenes(Array<const ProjectAsset*>& out) const;

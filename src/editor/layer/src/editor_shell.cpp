@@ -596,6 +596,14 @@ void EditorShell::draw_menu_bar() {
                 focus_panel("Console");
             }
         }
+        if (ImGui::MenuItem("Bake GI volume", nullptr, false, proj && !playing())) {
+            if (Result<void> r = session_.bake_gi_volume(); !r) {
+                FixedString<512> why;
+                format_error(r.error(), why);
+                MCE_LOG_ERROR("editor: GI volume bake failed: {}", why.view());
+                focus_panel("Console");
+            }
+        }
         if (ImGui::MenuItem("Play in editor", "F5", false, proj && !playing())) play_in_editor();
         if (ImGui::MenuItem("Run in player", "Ctrl+F5", false, proj && !player_running())) play();
         ImGui::Separator();

@@ -1,6 +1,7 @@
 // The editor's reflection probe bake (M-VISUAL 2) on a real GL driver: capture through the preview,
 // .mcenv + sidecar under assets/probes/, the component pointed at the cooked bake (undoable), the
-// GUID kept on re-bake, and the preview loading the bake instead of capturing.
+// GUID kept on re-bake, and the preview loading the bake instead of capturing. The GI volume bake
+// (M-VISUAL 6) the same way under assets/gi/.
 
 #include <doctest/doctest.h>
 
@@ -151,6 +152,107 @@ TEST_CASE("editor probe bake: .mcenv + sidecar, component pointed at the cooked 
         CHECK(st.probes == 1);
         CHECK(st.probes_loaded == 1);
         CHECK(st.probes_captured == 0);
+        device->destroy_texture(target);
+        CHECK(device->validation_error_count() == 0);
+        session.set_preview(nullptr);
+    }
+    device.reset();
+    window.reset();
+    platform::shutdown();
+}
+
+TEST_CASE("editor GI bake: .mcenv + sidecar, component pointed at the cooked bake, preview loads it") {
+    REQUIRE(platform::init().has_value());
+    platform::WindowDesc wd;
+    wd.title = "test_gi_bake_gl";
+    wd.width = 64;
+    wd.height = 64;
+    wd.resizable = false;
+    auto w = platform::Window::create(wd);
+    REQUIRE(w.has_value());
+    mem::UniquePtr<platform::Window> window = std::move(w).value();
+    auto d = rhi::create_default_device(*window);
+    REQUIRE(d.has_value());
+    mem::UniquePtr<rhi::RenderDevice> device = std::move(d).value();
+    u64 frame = 0;
+    mem::FrameSlots slots(mem::heap());
+    {
+        PreviewRenderer preview;
+        REQUIRE(preview.init(*device).has_value());
+        EditorSession session;
+        session.set_preview(&preview);
+        const std::string root = probe_project();
+        REQUIRE(session.open_project(root).has_value());
+        EditorScene& s = session.scene();
+        mesh_entity(s, "Floor", kFloorGuid, {0, 0, 0});
+        mesh_entity(s, "Wall", kWallGuid, {0, 0, -4});
+        const auto bake = [&]() {
+            slots.begin_frame(frame);
+            device->begin_frame(frame++);
+            Result<void> r = session.bake_gi_volume();
+            device->end_frame();
+            slots.end_frame(nullptr);
+            return r;
+        };
+
+        // Without a volume the bake refuses.
+        Result<void> none = bake();
+        REQUIRE_FALSE(none);
+        CHECK(std::string(none.error().path.c_str()).find("GiVolume3D") != std::string::npos);
+
+        const EntityId vol = s.create_entity("GI");
+        LocalTransform vt;
+        vt.position = {0, 1.2f, 0};
+        s.set(vol, vt);
+        s.add_component(vol, refl::type_of<kit::GiVolume3D>());
+        kit::GiVolume3D g = *s.get<kit::GiVolume3D>(vol);
+        g.half_extents = {3, 1, 3};
+        g.probes_x = 4;
+        g.probes_y = 2;
+        g.probes_z = 4;
+        s.set(vol, g);
+        Result<void> baked = bake();
+        if (!baked) MESSAGE(baked.error().stage, " ", baked.error().path.c_str());
+        REQUIRE(baked);
+        const asset::Guid guid = s.get<kit::GiVolume3D>(vol)->baked.guid;
+        REQUIRE(guid != asset::Guid{});
+        const std::string file = root + "/assets/gi/untitled/gi_" + std::to_string(vol) + ".mcenv";
+        REQUIRE(fs::exists(file));
+        REQUIRE(fs::exists(file + ".mceasset"));
+        CHECK(fs::file_size(file) == 24 + usize(16) * 8 * 4);  // 4 texels per probe x 4, rows y + 2 z
+        CHECK(session.project().mounted()->find(guid) != asset::kInvalidAssetKey);
+        // Lit: the default sky and sun reach every probe of an open room.
+        const std::string bytes = read_file(file);
+        usize lit = 0;
+        for (usize i = 24; i + 3 < bytes.size(); i += 4) lit += (u8(bytes[i]) | u8(bytes[i + 1]) | u8(bytes[i + 2])) != 0;
+        CHECK(lit == (bytes.size() - 24) / 4);
+
+        // One undo step; a re-bake keeps the file's GUID.
+        CHECK(s.undo());
+        CHECK(s.get<kit::GiVolume3D>(vol)->baked.guid == asset::Guid{});
+        REQUIRE(bake());
+        CHECK(s.get<kit::GiVolume3D>(vol)->baked.guid == guid);
+
+        // The preview now starts from the bake instead of filling.
+        rhi::TextureDesc td;
+        td.size = {64, 64};
+        td.usage = rhi::TextureUsage::SampledColorTarget;
+        const rhi::TextureHandle target = device->create_texture(td);
+        render::Camera3D cam;
+        cam.position = {0, 2, 6};
+        slots.begin_frame(frame);
+        device->begin_frame(frame++);
+        {
+            rhi::CommandBuffer cmd;
+            CHECK(preview.record_3d(cmd, s.world(), target, td.size, cam, {}, math::Color{0, 0, 0, 1}));
+            device->submit(cmd);
+        }
+        device->end_frame();
+        slots.end_frame(nullptr);
+        const render::Forward3DStats& st = preview.renderer().forward_3d().last_stats();
+        CHECK(st.gi);
+        CHECK(st.gi_loaded);
+        CHECK_FALSE(st.gi_filled);
         device->destroy_texture(target);
         CHECK(device->validation_error_count() == 0);
         session.set_preview(nullptr);

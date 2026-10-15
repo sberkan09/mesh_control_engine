@@ -30,6 +30,42 @@ void log_diags(const cook::DiagList& diags) {
     }
 }
 
+// The scene file's stem ("untitled" before its first save): the folder of its bakes.
+StringView scene_stem(StringView path) {
+    StringView stem = path.empty() ? StringView("untitled") : path;
+    if (const usize slash = stem.find_last_of("/\\"); slash != StringView::npos) stem = stem.substr(slash + 1);
+    if (const usize dot = stem.find('.'); dot != StringView::npos) stem = stem.substr(0, dot);
+    return stem;
+}
+
+// Writes a baked environment (.mcenv, envmap.h) at `abs` and its "envmap" sidecar, keeping the
+// sidecar's GUID when the file was baked before. `guid` receives it.
+Result<void> write_bake(const cook::String& abs, u32 width, u32 height, u32 layers, Span<const u8> rgba, asset::Guid& guid) {
+    cook::String sidecar_abs = abs;
+    sidecar_abs += ".mceasset";
+    guid = {};
+    cook::String sidecar;
+    if (cook::fs::read_text(sidecar_abs.view(), sidecar)) {  // a re-bake keeps the GUID
+        cook::JsonDoc doc;
+        cook::JsonError err;
+        if (doc.parse(sidecar.view(), err)) {
+            if (auto g = asset::parse_guid(doc.root().get("guid").as_string())) guid = g.value();
+        }
+    }
+    const usize slash = abs.view().rfind('/');
+    if (slash != StringView::npos) MCE_TRY(cook::fs::create_directories(abs.view().substr(0, slash)));
+    if (guid == asset::Guid{}) {
+        guid = cook::generate_guid();
+        cook::String text("{ \"guid\": \"");
+        text += asset::to_string(guid).view();
+        text += "\", \"importer\": \"envmap\", \"importer_version\": 1, \"settings\": {} }\n";
+        MCE_TRY(cook::fs::write_file_atomic(sidecar_abs.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.size())));
+    }
+    Array<byte> file;
+    cook::write_envmap(width, height, layers, rgba, file);
+    return cook::fs::write_file_atomic(abs.view(), file.span());
+}
+
 }  // namespace
 
 void EditorSession::set_preview(PreviewRenderer* preview) {
@@ -55,9 +91,7 @@ Result<u32> EditorSession::bake_reflection_probes() {
     MCE_TRY(preview_->bake_probes(scene_.world(), bakes));
 
     // assets/probes/<scene file stem>/probe_<id>.mcenv: stable per probe, so re-bakes overwrite.
-    StringView stem = scene_.path().empty() ? StringView("untitled") : scene_.path();
-    if (const usize slash = stem.find_last_of("/\\"); slash != StringView::npos) stem = stem.substr(slash + 1);
-    if (const usize dot = stem.find('.'); dot != StringView::npos) stem = stem.substr(0, dot);
+    const StringView stem = scene_stem(scene_.path());
     struct Written {
         EntityId id;
         asset::Guid guid;
@@ -75,30 +109,9 @@ Result<u32> EditorSession::bake_reflection_probes() {
         std::snprintf(num, sizeof(num), "%u", id);
         rel += StringView(num);
         rel += ".mcenv";
-        const cook::String abs = project_.asset_path(rel.view());
-        cook::String sidecar_abs = abs;
-        sidecar_abs += ".mceasset";
         asset::Guid guid;
-        cook::String sidecar;
-        if (cook::fs::read_text(sidecar_abs.view(), sidecar)) {  // a re-bake keeps the GUID
-            cook::JsonDoc doc;
-            cook::JsonError err;
-            if (doc.parse(sidecar.view(), err)) {
-                if (auto g = asset::parse_guid(doc.root().get("guid").as_string())) guid = g.value();
-            }
-        }
-        const usize slash = abs.view().rfind('/');
-        if (slash != StringView::npos) MCE_TRY(cook::fs::create_directories(abs.view().substr(0, slash)));
-        if (guid == asset::Guid{}) {
-            guid = cook::generate_guid();
-            cook::String text("{ \"guid\": \"");
-            text += asset::to_string(guid).view();
-            text += "\", \"importer\": \"envmap\", \"importer_version\": 1, \"settings\": {} }\n";
-            MCE_TRY(cook::fs::write_file_atomic(sidecar_abs.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.size())));
-        }
-        Array<byte> file;
-        cook::write_envmap(es.width, es.height / render::Forward3D::kProbeLayers, render::Forward3D::kProbeLayers, b.rgba.span(), file);
-        MCE_TRY(cook::fs::write_file_atomic(abs.view(), file.span()));
+        MCE_TRY(write_bake(project_.asset_path(rel.view()), es.width, es.height / render::Forward3D::kProbeLayers,
+                           render::Forward3D::kProbeLayers, b.rgba.span(), guid));
         changed.push_back(rel);
         written.push_back({id, guid});
     }
@@ -116,6 +129,40 @@ Result<u32> EditorSession::bake_reflection_probes() {
     scene_.end_edit();
     MCE_LOG_INFO("editor: baked {} reflection probe(s) into assets/probes/{}/", written.size(), stem);
     return static_cast<u32>(written.size());
+}
+
+Result<void> EditorSession::bake_gi_volume() {
+    constexpr const char* kWhere = "editor.bake_gi";
+    static_assert(render::Forward3D::kGiRgbmRange == cook::kEnvRgbmRange, "the renderer and .mcenv agree on RGBM");
+    if (!project_.is_open()) return Error(Errc::InvalidArgument, kWhere, "no project is open");
+    if (!preview_) return Error(Errc::InvalidArgument, kWhere, "no preview renderer");
+    GiBake bake;
+    MCE_TRY(preview_->bake_gi(scene_.world(), bake));
+    const EntityId id = scene_.entity_for(bake.entity);
+    if (id == kNoEntity || !scene_.get<kit::GiVolume3D>(id))
+        return Error(Errc::Unsupported, kWhere, "the volume belongs to a prefab instance: bake it in its prefab");
+
+    // assets/gi/<scene file stem>/gi_<id>.mcenv: one RGBM layer of the volume's texels.
+    cook::String rel("gi/");
+    rel += scene_stem(scene_.path());
+    rel += "/gi_";
+    char num[16];
+    std::snprintf(num, sizeof(num), "%u", id);
+    rel += StringView(num);
+    rel += ".mcenv";
+    asset::Guid guid;
+    MCE_TRY(write_bake(project_.asset_path(rel.view()), bake.width, bake.height, 1, bake.rgba.span(), guid));
+    watcher_.poll(0.0, 0.0);  // the write is ours: re-baseline the watcher
+    const HotReloadResult r = hot_reload(Span<const cook::String>(&rel, 1));
+    if (r.failed > 0) return Error(Errc::ImportFailed, kWhere, "the baked volume did not cook (see the log)");
+
+    scene_.begin_edit("Bake GI volume");
+    kit::GiVolume3D g = *scene_.get<kit::GiVolume3D>(id);
+    g.baked.guid = guid;
+    scene_.set(id, g);
+    scene_.end_edit();
+    MCE_LOG_INFO("editor: baked the GI volume into assets/{}", rel.view());
+    return ok();
 }
 
 Result<void> EditorSession::apply_to_prefab(asset::Guid prefab, const DocComponent& value, u64 fields) {
