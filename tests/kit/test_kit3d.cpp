@@ -16,6 +16,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/cook/cook.h"
 #include "mce/kit/anim3d.h"
+#include "mce/kit/bodies3d.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/kit3d_extract.h"
 #include "mce/memory/frame_slots.h"
@@ -141,7 +142,8 @@ std::string write_mesh_tree(const char* name, asset::Guid guid, Span<const byte>
 
 TEST_CASE("kit3d: the components are reflected and install is idempotent") {
     for (const char* name : {"MeshRef", "PointLight3D", "SpotLight3D", "ReflectionProbe3D", "Camera3DComponent", "Animator", "Environment3D",
-                             "BoxCollider3D", "MeshCollider3D", "Foliage3D", "Decal3D", "ParticleEmitter3D", "Terrain3D"}) {
+                             "BoxCollider3D", "MeshCollider3D", "Foliage3D", "Decal3D", "ParticleEmitter3D", "Terrain3D",
+                             "TerrainCollider3D"}) {
         const refl::TypeRecord* t = refl::find_type(StringId(name));
         INFO(name);
         REQUIRE(t != nullptr);
@@ -809,4 +811,102 @@ TEST_CASE("kit3d: Terrain3D draws its LOD nodes, uploads them once and drops the
     read_only.extract(f.world, scene, 1.0f);
     CHECK(read_only.stats().terrain_nodes == 0);
     CHECK(read_only.stats().missing > 0);
+}
+
+TEST_CASE("kit3d: TerrainCollider3D collides with the drawn surface and falls through its holes (M-TERRAIN 3)") {
+    const std::string src = cook_test::fresh_dir("kit3d_terrain_collider");
+    // A 65-sample, 64 x 48 m terrain of hills between 0 and 16 m, with a 3 x 3 hole at samples (40..42, 20..22).
+    constexpr u32 kRes = 65;
+    std::string bytes;
+    for (u32 z = 0; z < kRes; ++z)
+        for (u32 x = 0; x < kRes; ++x) {
+            const f32 h = 0.5f + 0.4f * std::sin(static_cast<f32>(x) * 0.31f) * std::cos(static_cast<f32>(z) * 0.23f);
+            cook_test::put16le(bytes, static_cast<u16>(h * 65535.0f));
+        }
+    std::string mask((kRes * kRes + 7) / 8, '\0');
+    for (u32 z = 20; z <= 22; ++z)
+        for (u32 x = 40; x <= 42; ++x) {
+            const u32 i = z * kRes + x;
+            mask[i / 8] = static_cast<char>(u8(mask[i / 8]) | (1u << (i % 8)));
+        }
+    auto base64 = [](const std::string& in) {
+        static const char* k = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        std::string out;
+        size_t i = 0;
+        for (; i + 2 < in.size(); i += 3) {
+            const u32 v = (u32(u8(in[i])) << 16) | (u32(u8(in[i + 1])) << 8) | u8(in[i + 2]);
+            for (int s = 18; s >= 0; s -= 6) out.push_back(k[(v >> s) & 63]);
+        }
+        if (i < in.size()) {
+            u32 v = u32(u8(in[i])) << 16;
+            if (i + 1 < in.size()) v |= u32(u8(in[i + 1])) << 8;
+            out += {k[(v >> 18) & 63], k[(v >> 12) & 63], i + 1 < in.size() ? k[(v >> 6) & 63] : '=', '='};
+        }
+        return out;
+    };
+    cook_test::write_file(src + "/assets/hills.mcterrain", R"({ "format": "mce-terrain", "version": 1,
+        "guid": "7e7a0000-0000-4000-8000-0000000000c1", "resolution": 65, "chunk": 16, "size": [64, 48],
+        "height_range": [0, 16], "heights": ")" + base64(bytes) + R"(", "holes": ")" + base64(mask) + "\" }");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(src.c_str()), cook::CookOptions{}).ok());
+    asset::AssetSystem assets;
+    const std::string cooked = src + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    const asset::Guid guid = asset::parse_guid("7e7a0000-0000-4000-8000-0000000000c1").value();
+    auto th = assets.load_sync<asset::Terrain>(guid);
+    REQUIRE(th);
+    auto tv = asset::TerrainView::read(assets.resolve(th.value()));
+    REQUIRE(tv);
+    const asset::TerrainView& view = tv.value();
+    render::TerrainLod lod;
+    REQUIRE(lod.init(view).has_value());
+
+    World w;
+    kit::install_bodies3d(w, &assets);
+    kit::Terrain3D terrain;
+    terrain.terrain.guid = guid;
+    // Moved, turned a quarter about +Y and stretched 1.5x vertically.
+    const math::quat rot = math::quat_from_axis_angle({0, 1, 0}, math::radians(90.0f));
+    LocalTransform t = at({5.0f, 2.0f, -3.0f}, rot);
+    t.scale = {1.0f, 1.5f, 1.0f};
+    const Entity ground = w.spawn_with(t, terrain, kit::TerrainCollider3D{});
+    w.spawn_with(at({100, 0, 0}), kit::TerrainCollider3D{});  // no Terrain3D: skipped with a warning
+    w.tick(kDt, 0);
+    kit::Physics3D& phys = w.resource<kit::Physics3D>();
+    CHECK(phys.colliders == 1);
+    REQUIRE(phys.world.has_body(ground));
+
+    // A ray straight down anywhere off the holes lands on the surface the terrain draws.
+    u32 checked = 0;
+    for (f32 lz = -22.0f; lz <= 22.0f; lz += 3.7f)
+        for (f32 lx = -30.0f; lx <= 30.0f; lx += 4.3f) {
+            const f32 fx = (lx / 64.0f + 0.5f) * 64.0f, fz = (lz / 48.0f + 0.5f) * 64.0f;
+            if (fx > 38.0f && fx < 44.0f && fz > 18.0f && fz < 24.0f) continue;  // near the hole
+            const math::vec3 top = math::vec3{5.0f, 2.0f, -3.0f} + math::rotate(rot, math::vec3{lx, 40.0f, lz});
+            const auto hit = phys.world.raycast(top, {0, -1, 0}, 100.0f);
+            INFO(lx, " ", lz);
+            REQUIRE(hit.has_value());
+            CHECK(hit->entity == ground);
+            const f32 expected = 2.0f + 1.5f * view.surface_at(lx, lz);
+            CHECK(std::fabs(hit->point.y - expected) < 0.02f);
+            CHECK(lod.surface_at(lx, lz) == doctest::Approx(view.surface_at(lx, lz)));
+            ++checked;
+        }
+    CHECK(checked > 100);
+
+    // Through the hole's centre the ray finds nothing; a step outside it, the ground.
+    const f32 hx = 41.0f - 32.0f, hz = 21.0f * 0.75f - 24.0f;  // sample (41, 21) in metres
+    const math::vec3 over_hole = math::vec3{5.0f, 2.0f, -3.0f} + math::rotate(rot, math::vec3{hx, 40.0f, hz});
+    CHECK_FALSE(phys.world.raycast(over_hole, {0, -1, 0}, 100.0f).has_value());
+    const math::vec3 beside = math::vec3{5.0f, 2.0f, -3.0f} + math::rotate(rot, math::vec3{hx - 4.0f, 40.0f, hz});
+    CHECK(phys.world.raycast(beside, {0, -1, 0}, 100.0f).has_value());
+
+    // A terrain spawned while running gets its collider too, and loses it with the component.
+    const Entity late = w.spawn_with(at({0.0f, -50.0f, 0.0f}), terrain, kit::TerrainCollider3D{});
+    w.tick(kDt, 1);
+    CHECK(phys.world.has_body(late));
+    w.remove<kit::TerrainCollider3D>(late);
+    CHECK_FALSE(phys.world.has_body(late));
+    assets.release(asset::AnyHandle(th.value()));
 }

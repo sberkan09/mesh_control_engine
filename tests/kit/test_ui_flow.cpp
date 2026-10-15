@@ -110,3 +110,21 @@ TEST_CASE("ui flow: one action never shows and hides a screen in the same tick; 
     tick(w, t, "Map");
     CHECK_FALSE(screen(w, map).visible);
 }
+
+TEST_CASE("ui flow: quit_on asks the host to end the run, once (SBA-61)") {
+    World w;
+    input::install(w);
+    kit::install_ui_flow(w);
+    kit::UiFlow title;
+    title.hide_on = "Play";
+    title.quit_on = "Quit";
+    const Entity e = w.spawn();
+    w.add(e, kit::UiScreen{});
+    w.add(e, title);
+    u64 t = 0;
+    tick(w, t);
+    CHECK_FALSE(scene::take_quit_request(w));
+    tick(w, t, "Quit");
+    CHECK(scene::take_quit_request(w));
+    CHECK_FALSE(scene::take_quit_request(w));  // taken: the host acts on it once
+}

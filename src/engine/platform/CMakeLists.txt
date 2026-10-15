@@ -17,6 +17,7 @@ mce_add_library(mce_platform
         src/review.cpp
         src/haptics.cpp
         src/power.cpp
+        src/screen_reader.cpp
     PUBLIC_DEPS
         mce::mce_core
     PRIVATE_DEPS
@@ -61,6 +62,30 @@ if(IOS AND MCE_UIKIT_HAPTICS)
     target_sources(mce_platform PRIVATE src/haptics_uikit.swift)
     target_compile_definitions(mce_platform PRIVATE MCE_UIKIT_HAPTICS=1)
     target_link_libraries(mce_platform PRIVATE "-framework UIKit")
+endif()
+
+# The screen reader (platform/screen_reader.h, M-ACCESS step 4). Android: MceActivity's mceAnnounce
+# (TalkBack) is stamped into every game's Gradle project. The others stay opt-in until they have been
+# run on their device: Windows (UI Automation notifications for Narrator, NVDA, JAWS), macOS
+# (AppKit announcement requests) and iOS (UIAccessibility announcements, Swift); without them the
+# backend is "none" and announcements reach only the sink.
+option(MCE_SCREEN_READER_NATIVE "Windows, macOS and iOS: build the screen reader bridges into mce_platform" OFF)
+if(MCE_SCREEN_READER_NATIVE)
+    if(WIN32)
+        target_sources(mce_platform PRIVATE src/screen_reader_win32.cpp)
+        target_compile_definitions(mce_platform PRIVATE MCE_WIN32_ACCESS=1)
+        target_link_libraries(mce_platform PRIVATE uiautomationcore oleaut32)
+    elseif(IOS)
+        enable_language(Swift)
+        target_sources(mce_platform PRIVATE src/screen_reader_uikit.swift)
+        target_compile_definitions(mce_platform PRIVATE MCE_UIKIT_ACCESS=1)
+        target_link_libraries(mce_platform PRIVATE "-framework UIKit")
+    elseif(APPLE)
+        target_sources(mce_platform PRIVATE src/screen_reader_apple.mm)
+        set_source_files_properties(src/screen_reader_apple.mm PROPERTIES LANGUAGE CXX COMPILE_OPTIONS "-xobjective-c++;-fno-objc-arc")
+        target_compile_definitions(mce_platform PRIVATE MCE_APPKIT_ACCESS=1)
+        target_link_libraries(mce_platform PRIVATE "-framework AppKit")
+    endif()
 endif()
 
 # The phone's ad network (platform/ads.h). Android again needs nothing here (MceAds.java is stamped

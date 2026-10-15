@@ -54,6 +54,7 @@ void kit_ui_flow(Frame& f) {
         if (screen.visible && pressed(in, flow.hide_on)) screen.visible = false;
         else if (!screen.visible && pressed(in, flow.show_on)) screen.visible = true;
         if (!flow.scene.guid.is_null() && pressed(in, flow.load_on) && load.is_null()) load = flow.scene.guid;
+        if (pressed(in, flow.quit_on)) scene::request_quit(f.world());
         hold = hold || (screen.visible && flow.pause);
     });
     if (!load.is_null()) {

@@ -45,6 +45,8 @@ ResultV TerrainLod::init(const asset::TerrainView& terrain) {
     height_scale_ = (h.height_max - h.height_min) / 65535.0f;
     heights_.resize(terrain.heights.size());
     std::memcpy(heights_.data(), terrain.heights.data(), terrain.heights.size_bytes());
+    holes_.clear();
+    for (u8 b : terrain.holes) holes_.push_back(b);
 
     const u32 leaves = (resolution_ - 1) / chunk_;  // finest nodes per side, a power of two
     levels_ = 1;
@@ -74,9 +76,11 @@ void TerrainLod::compute_errors() {
         const u32 x0 = n.x * span, z0 = n.z * span;
         f32 lo = sample(x0, z0), hi = lo, err = 0.0f;
         const u32 s = stride(n.level);
+        n.holed = false;
         for (u32 z = z0; z <= z0 + span; ++z)
             for (u32 x = x0; x <= x0 + span; ++x) {
                 const f32 v = sample(x, z);
+                n.holed |= hole(x, z);
                 lo = min(lo, v);
                 hi = max(hi, v);
                 if (s == 1) continue;
@@ -113,7 +117,36 @@ u32 TerrainLod::node_triangles(u32 index) const {
     const TerrainNode& n = nodes_[index];
     const u32 side = level_side_[n.level];
     const u32 inner_edges = (n.x > 0) + (n.x + 1 < side) + (n.z > 0) + (n.z + 1 < side);
-    return chunk_ * chunk_ * 2 + inner_edges * chunk_ * 2;
+    if (!n.holed) return chunk_ * chunk_ * 2 + inner_edges * chunk_ * 2;
+    // Level 0 with holes: count what build_mesh() keeps.
+    const u32 x0 = n.x * chunk_, z0 = n.z * chunk_;
+    u32 count = 0;
+    for (u32 j = 0; j < chunk_; ++j)
+        for (u32 i = 0; i < chunk_; ++i) {
+            const bool h00 = hole(x0 + i, z0 + j), h10 = hole(x0 + i + 1, z0 + j), h01 = hole(x0 + i, z0 + j + 1),
+                       h11 = hole(x0 + i + 1, z0 + j + 1);
+            count += !(h00 || h01 || h11);
+            count += !(h00 || h11 || h10);
+        }
+    auto edge = [&](bool present, u32 sx, u32 sz, u32 dx, u32 dz) {
+        if (!present) return;
+        for (u32 e = 0; e < chunk_; ++e)
+            if (!hole(sx + e * dx, sz + e * dz) && !hole(sx + (e + 1) * dx, sz + (e + 1) * dz)) count += 2;
+    };
+    edge(n.z > 0, x0, z0, 1, 0);
+    edge(n.z + 1 < side, x0, z0 + chunk_, 1, 0);
+    edge(n.x > 0, x0, z0, 0, 1);
+    edge(n.x + 1 < side, x0 + chunk_, z0, 0, 1);
+    return count;
+}
+
+f32 TerrainLod::surface_at(f32 x, f32 z) const {
+    const f32 fx = clamp((x / size_.x + 0.5f) * static_cast<f32>(resolution_ - 1), 0.0f, static_cast<f32>(resolution_ - 1));
+    const f32 fz = clamp((z / size_.y + 0.5f) * static_cast<f32>(resolution_ - 1), 0.0f, static_cast<f32>(resolution_ - 1));
+    const u32 x0 = min(static_cast<u32>(fx), resolution_ - 2), z0 = min(static_cast<u32>(fz), resolution_ - 2);
+    const f32 u = fx - static_cast<f32>(x0), w = fz - static_cast<f32>(z0);
+    const f32 h00 = sample(x0, z0), h10 = sample(x0 + 1, z0), h01 = sample(x0, z0 + 1), h11 = sample(x0 + 1, z0 + 1);
+    return u >= w ? h00 + u * (h10 - h00) + w * (h11 - h10) : h00 + w * (h01 - h00) + u * (h11 - h01);
 }
 
 f32 TerrainLod::height_at(f32 x, f32 z) const {
@@ -158,7 +191,7 @@ void TerrainLod::select(const View3D& view, const TerrainSelectParams& p, Array<
         const f32 r = length(b.max - b.min) * 0.5f * scale;
         if (!sphere_visible(view, c, r) && length(c - view.position) - r > p.shadow_reach) continue;
         const f32 d = box_distance(n.bounds, eye);
-        if (n.level == 0 || (d > 0.0f && n.error * k <= limit * d)) {
+        if (n.level == 0 || (!n.holed && d > 0.0f && n.error * k <= limit * d)) {
             out.push_back(index);
             continue;
         }
@@ -199,6 +232,15 @@ void TerrainLod::build_mesh(u32 index, f32 uv_tile, Array<byte>& out) const {
             const u32 v00 = j * grid + i, v10 = v00 + 1, v01 = v00 + grid, v11 = v01 + 1;
             // Counter-clockwise seen from above, split along v00-v11 (compute_errors() measures this split).
             const u32 tri[6] = {v00, v01, v11, v00, v11, v10};
+            if (n.holed) {  // level 0: a triangle with a hole corner is left out, as Jolt leaves it out
+                const u32 sx = x0 + i, sz = z0 + j;
+                const bool h00 = hole(sx, sz), h10 = hole(sx + 1, sz), h01 = hole(sx, sz + 1), h11 = hole(sx + 1, sz + 1);
+                if (!(h00 || h01 || h11))
+                    for (u32 t = 0; t < 3; ++t) idx.push_back(tri[t]);
+                if (!(h00 || h11 || h10))
+                    for (u32 t = 3; t < 6; ++t) idx.push_back(tri[t]);
+                continue;
+            }
             for (u32 t : tri) idx.push_back(t);
         }
     // Skirts on the edges shared with another node, each quad wound to face away from the node.
@@ -213,6 +255,7 @@ void TerrainLod::build_mesh(u32 index, f32 uv_tile, Array<byte>& out) const {
         }
         for (u32 e = 0; e < q; ++e) {
             const u32 a = first + e * step, b = first + (e + 1) * step, as = base + e, bs = base + e + 1;
+            if (n.holed && (hole(x0 + (a % grid) * s, z0 + (a / grid) * s) || hole(x0 + (b % grid) * s, z0 + (b / grid) * s))) continue;
             const vec3 face = cross(verts[b].p - verts[a].p, verts[as].p - verts[a].p);
             const vec3 outward = verts[a].p - node_center;
             const bool keep = dot(vec3{face.x, 0.0f, face.z}, vec3{outward.x, 0.0f, outward.z}) >= 0.0f;

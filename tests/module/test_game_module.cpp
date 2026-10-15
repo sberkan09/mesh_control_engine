@@ -4,6 +4,7 @@
 //   MODTEST_VARIANT_NO_ENTRY     exports nothing
 //   MODTEST_VARIANT_INSTALL_FAIL install() returns an error
 //   (stale engine id: the GOOD variant compiled with MCE_ENGINE_ID predefined)
+#include "mce/convar.h"
 #include "mce/gameplay.h"
 #include "module_types.h"
 
@@ -21,6 +22,9 @@ namespace {
 
 using namespace mce;
 using namespace mce::modtest;
+
+// The module's own setting: unload_game_module drops it from the console even when the image stays mapped.
+MCE_CVAR(cv_module_only, "test.module_only_cvar", 7, "a game module's own convar", CVarFlags::None);
 
 void spawn_units(Frame& f) {
     for (u32 i = 0; i < kSpawned; ++i) f.commands().spawn(Health{kStartHp}, Velocity{1.0f, 0.0f});
