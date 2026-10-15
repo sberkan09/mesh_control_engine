@@ -16,7 +16,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | done: GL and SDL GPU (gated + goldens), High tier on TAA; Metal untested; real-GPU budget on the Mac/device session |
 | 6 | Global illumination (irradiance-probe volume) | SBA-11 | done: GL and SDL GPU (gated + goldens), editor bake, Low tier on the bake; Metal untested; real-GPU budget on the Mac/device session |
 | 7 | Atmosphere and volumetrics | SBA-12 | done: GL and SDL GPU (gated + goldens), Low tier without the volumetric fog; Metal untested; real-GPU budget on the Mac/device session |
-| 8 | Post completion | SBA-13 | — |
+| 8 | Post completion | SBA-13 | done: GL and SDL GPU (gated + goldens), Low tier without depth of field and motion blur; SSR not taken (optional); Metal untested; real-GPU budget on the Mac/device session |
 | 9 | Scale (GPU culling, foliage, decals, GPU particles) | SBA-14 | — |
 | demo | High-profile sample side by side | SBA-15 | — |
 
@@ -457,3 +457,72 @@ texture (the gradient is arithmetic). The fog's grid is 80 × 64 × 64 froxels a
 ground and the viewer near it (`altitude`; world y is not used). The fog is a height fog without noise or local
 volumes, and has no temporal reprojection, so thin shafts alias at coarse tiles. Metal is untested; Metal pixels and
 real-GPU numbers belong to the Mac/device session.
+
+## Step 8 — post completion (auto exposure, color grade, depth of field, motion blur)
+
+**API.** Four more `PostFx` members, all off by default; with them off the frame is bit-identical to before.
+`auto_exposure` (`key`, `compensation` in EV, `min_exposure` / `max_exposure`, `low_percent` / `high_percent`,
+`speed_up` / `speed_down` in EV per second, `dt`), `lut_key` + `lut_strength` (the 2D path's 256 × 16 strip LUT, see
+`make_identity_lut`), `dof` (`focus_distance`, `focus_range`, `blur_range`, `max_radius` as a fraction of the view
+height) and `motion_blur` (`intensity` as a shutter fraction, `max_length`, `samples`). Off switches:
+`Forward3DDesc::post_fx = false` (no pipelines) and `-r.post_fx 0`; the Low quality tier drops depth of field and
+motion blur (`QualitySettings::dof_motion_blur`). Kit: `Environment3D.auto_exposure` (`exposure_compensation`,
+`auto_exposure_speed_up/down`), `color_grade` (a texture imported with `"srgb": false, "mips": false`) and
+`color_grade_strength`, `depth_of_field` (`dof_focus_distance`, `dof_focus_range`, `dof_blur_range`,
+`dof_max_radius`) and `motion_blur` (`motion_blur_intensity`); the player passes the frame's wall time as the
+adaptation step (a capture frame a fixed 1/60 s). 04_cubes: `-autoexp 1`, `-dof <meters>`, `-mblur 1`.
+
+**Order.** The velocity prepass (M-VISUAL 5) now runs for TAA, motion blur or depth of field, and also writes the
+view depth (alpha). After TAA: depth of field, then motion blur, each into an RGBA16F ping-pong target at the post
+size, then the exposure histogram of the result; bloom and tonemap follow. The `post_fx` timestamp covers the
+three.
+
+**Auto exposure.** A compute pass bins the log2 luminance of every other texel each way into 64 bins (bin 0 below
+2⁻¹², 63 bins up to 2¹², shared-memory histograms per 16 × 16 group, then global atomics); a single 64-thread
+group drops the darkest `low_percent` and the brightest above `high_percent`, averages the rest and moves the
+exposure toward key / average (clamped) by 1 − e^(−rate·dt) in EV, faster when the frame brightens. It empties the
+bins for the next frame. The result stays on the GPU (bank `kExposure`, `Forward3D::exposure_buffer()`): the
+bloom bright-pass and the tonemap multiply `Scene3D::exposure()` by it. The first frame, and the first after a frame
+without it or `reset_exposure()`, snaps.
+
+**Color grade.** In the tonemap pass, on the display-space (sRGB) values after ACES, as the 2D post pass does:
+mixed by `lut_strength`, encoded back to linear when the target is an sRGB format.
+
+**Depth of field.** One full-resolution pass: a 32-tap Vogel disk out to the largest circle of confusion
+(`max_radius`), the circle growing from 0 within `focus_range` of `focus_distance` to the largest over
+`blur_range`. A tap counts as far as its own circle reaches; a tap behind this pixel counts only as far as this
+pixel's own circle reaches, so a blurred background does not spill over a sharp foreground (a blurred
+foreground does spill over the background). A sharp pixel passes through exactly.
+
+**Motion blur.** The velocity prepass's motion (objects with their previous transforms, skinned poses included),
+the camera's reprojection for the sky; scaled by `intensity`, capped at `max_length`. Each pixel takes the longest
+velocity of 16 neighbors on two rings out to `max_length` and samples along it; a tap counts where its own blur
+or this pixel's reaches the other (McGuire et al. 2012 without the depth test), so a moving object smears over
+the still background beside it. Under half a pixel of motion a pixel passes through exactly.
+
+**Gates.** The `render3d_gl` tests, on GL and SDL GPU:
+- Post effects off draw today's frame; frames after a run with all four match it again, and the Low tier's depth of field and motion blur leave no trace (0 pixels differ).
+- Auto exposure: a sun 10 × dimmer gives luma 111 against 236 with the fixed exposure, 102 against 97 with auto exposure (×0.88 and ×0.08, measured averages 0.21 and 2.21); one 60 Hz frame after the switch it has moved from ×0.88 to ×0.78 only; the bins are empty after each frame.
+- The identity LUT keeps the frame (box 190,117,91 both ways); the inverted LUT flips it (65,138,164; ground 227 → 27), half strength gives 128.
+- Depth of field focused on the box keeps its center pixel and most of its edges while the far ground edge loses 78% of its edge energy; focused far, the box loses 83%.
+- Motion blur of a box moved 0.6 m in a frame softens the edges in its band by 21%; with motion blur on but nothing moving, the frame is bit-identical to motion blur off.
+
+Goldens `dof_focus` and `motion_blur_grade` (with auto exposure and a warm grade) on linux-gl and linux-sdlgpu; the
+earlier goldens are unchanged.
+
+**Budget (04_cubes, 256 point lights, 1280×1024, 110 frames, two runs each, Mesa llvmpipe; relative only):**
+
+| | off | `-autoexp 1` | `-dof 12` | `-mblur 1` | all three |
+|---|---|---|---|---|---|
+| velocity prepass (ms) | 0 | 0 | 8.9 | 8.6 | 8.4 |
+| post effects (ms) | 0 | 4.8 | 154.9 | 104.2 | 255.4 |
+| GPU 3D frame total (ms) | 395.1 | 405.1 | 570.0 | 516.7 | 661.1 |
+
+Depth of field is the most expensive (33 color and 33 depth taps a pixel at full resolution); motion blur's
+neighborhood search reads 17 velocities a pixel before its taps. A half-resolution depth of field is the obvious next
+step if a real GPU puts it over budget.
+
+**Limits.** SSR (optional in the plan) is not part of this step. The depth of field is a single gather (no
+separate near and far layers or bokeh shapes), and the motion blur has no depth test, so a moving object behind a
+still one can smear over its edge. Metal is untested; Metal pixels and real-GPU numbers belong to the Mac/device
+session.

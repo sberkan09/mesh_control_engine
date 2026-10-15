@@ -264,6 +264,7 @@ inline constexpr u32 kClusterCull = 8;    // GPU light assignment input: culled 
 inline constexpr u32 kClusterBounds = 9;  // GPU light assignment input: tile extents + slice edges (compute)
 inline constexpr u32 kClusterCounter = 10; // GPU light assignment: index-list bump counter + drops (compute)
 inline constexpr u32 kLocalShadows = 11;   // 3D local-light shadow records (M-VISUAL 4)
+inline constexpr u32 kExposure = 12;       // 3D auto exposure: histogram + adapted exposure (M-VISUAL 8)
 inline constexpr u32 kUniformBanks = 4;  // FrameU, PassU, MaterialU, ObjectU
 }  // namespace bank
 

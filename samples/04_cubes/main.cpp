@@ -22,6 +22,7 @@
 //   04_cubes -gi 1                        M-VISUAL 6: an irradiance-probe volume (global illumination)
 //   04_cubes -atmos 1 -hour 17.5          M-VISUAL 7: the physically based sky, the sun at 17:30
 //   04_cubes -volfog 1                    M-VISUAL 7: froxel volumetric fog (sun shafts, the lights' glow)
+//   04_cubes -autoexp 1 -dof 12 -mblur 1  M-VISUAL 8: auto exposure, depth of field at 12 m, motion blur
 //
 // Keys: drag (left mouse) or arrows orbit, wheel or Z/X zoom, Space auto orbit, L lights,
 // B bloom, A FXAA, 1/2/3 cascades, K sky texture, I image-based lighting, N night, P cross-fade the orrery clip, G reed
@@ -70,6 +71,9 @@ MCE_CVAR(cv_atmosphere, "atmos", false, "M-VISUAL 7: physically based sky (the s
          CVarFlags::None);
 MCE_CVAR(cv_hour, "hour", -1.0f, "M-VISUAL 7: the sun at this hour of a simple day (-1 = the fixed evening sun)", CVarFlags::None);
 MCE_CVAR(cv_volfog, "volfog", false, "M-VISUAL 7: froxel volumetric fog lit by the sun and the point lights", CVarFlags::None);
+MCE_CVAR(cv_autoexp, "autoexp", false, "M-VISUAL 8: auto exposure from the frame's luminance histogram", CVarFlags::None);
+MCE_CVAR(cv_dof, "dof", 0.0f, "M-VISUAL 8: depth of field focused this many meters away (0 = off)", CVarFlags::None);
+MCE_CVAR(cv_mblur, "mblur", false, "M-VISUAL 8: per-object motion blur (and the camera's)", CVarFlags::None);
 MCE_CVAR(cv_night, "night", false, "Dim the sun so the point lights carry the scene", CVarFlags::None);
 MCE_CVAR(cv_yaw, "cam.yaw", 0.35f, "Initial orbit yaw (radians)", CVarFlags::None);
 MCE_CVAR(cv_pitch, "cam.pitch", 0.42f, "Initial orbit pitch (radians, down from the horizon)", CVarFlags::None);
@@ -128,7 +132,7 @@ struct LightRig {
 // Means of the per-stage times over the measured frames (NFR-F-01 table shape).
 struct Budget {
     f64 scene = 0, clusters = 0, record = 0, submit = 0;
-    f64 gpu_clusters = 0, gpu_ssao = 0, gpu_gi = 0, gpu_vol = 0, gpu_taa = 0, gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
+    f64 gpu_clusters = 0, gpu_ssao = 0, gpu_gi = 0, gpu_vol = 0, gpu_fx = 0, gpu_taa = 0, gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
     u64 frames = 0, gpu_frames = 0;
 };
 
@@ -255,6 +259,7 @@ public:
                 budget_.gpu_taa += gpu_.taa;
                 budget_.gpu_gi += gpu_.gi;
                 budget_.gpu_vol += gpu_.volumetrics;
+                budget_.gpu_fx += gpu_.post_fx;
                 budget_.gpu_shadow += gpu_.shadow;
                 budget_.gpu_main += gpu_.main;
                 budget_.gpu_resolve += gpu_.resolve;
@@ -303,7 +308,8 @@ public:
             std::printf("  | volumetric fog (froxel injection + integration) | - | %.3f |\n", budget_.gpu_vol / g);
             std::printf("  | main pass (Forward+ PBR + sky) | - | %.3f |\n", budget_.gpu_main / g);
             std::printf("  | MSAA resolve | - | %.3f |\n", budget_.gpu_resolve / g);
-            std::printf("  | TAA (velocity prepass + resolve) | - | %.3f |\n", budget_.gpu_taa / g);
+            std::printf("  | velocity prepass + TAA resolve | - | %.3f |\n", budget_.gpu_taa / g);
+            std::printf("  | post effects (depth of field + motion blur + exposure histogram) | - | %.3f |\n", budget_.gpu_fx / g);
             std::printf("  | post: bloom | - | %.3f |\n", budget_.gpu_bloom / g);
             std::printf("  | post: tonemap | - | %.3f |\n", budget_.gpu_tonemap / g);
             std::printf("  | post: FXAA | - | %.3f |\n", budget_.gpu_fxaa / g);
@@ -539,6 +545,11 @@ private:
         post.bloom = cv_bloom.get_bool();
         post.fxaa = cv_fxaa.get_bool();
         post.taa = cv_taa.get_bool();
+        post.auto_exposure.enabled = cv_autoexp.get_bool();
+        post.auto_exposure.dt = 1.0f / 60.0f;
+        post.dof.enabled = cv_dof.get_float() > 0.0f;
+        post.dof.focus_distance = cv_dof.get_float();
+        post.motion_blur.enabled = cv_mblur.get_bool();
         scene.set_post(post);
         ShadowSettings shadows;
         cascades_ = static_cast<u32>(clamp<i64>(cv_cascades.get_int(), 1, 4));

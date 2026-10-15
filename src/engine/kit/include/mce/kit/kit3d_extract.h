@@ -90,6 +90,8 @@ public:
     // cascades, its shadow-map resolution, bloom and FXAA only when the tier keeps them. Default:
     // no caps (High's knobs, with up to kMaxCascades), which is what the player passes on High.
     void set_quality(const render::QualitySettings& q) { quality_ = q; }
+    // Seconds since the last extracted frame: how far Environment3D::auto_exposure adapts per frame.
+    void set_frame_dt(f32 dt) { frame_dt_ = dt; }
 
     // Reflection probe and GI volume bakes (M-VISUAL 2 and 6, the editor's bakes): every MeshRef and
     // static instance is submitted whatever the view (no culling, no distance thinning), probes and
@@ -131,6 +133,7 @@ private:
     void release_handles();
 
     render::QualitySettings quality_{.shadow_cascades = render::kMaxCascades};
+    f32 frame_dt_ = 1.0f / 60.0f;
     const render::MeshStore* meshes_ = nullptr;
     asset::AssetSystem* assets_ = nullptr;
     Array<MeshEntry> mesh_entries_;

@@ -308,6 +308,21 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.bloom_threshold = env.bloom_threshold;
     post.fxaa = env.fxaa != 0 && quality_.fxaa;
     post.taa = env.fxaa != 0 && quality_.taa;  // the environment's anti-aliasing switch covers both
+    post.auto_exposure.enabled = env.auto_exposure != 0;
+    post.auto_exposure.compensation = env.exposure_compensation;
+    post.auto_exposure.speed_up = env.auto_exposure_speed_up;
+    post.auto_exposure.speed_down = env.auto_exposure_speed_down;
+    post.auto_exposure.dt = frame_dt_;
+    const u32 lut = texture_key(env.color_grade.guid);
+    post.lut_key = lut == ~0u ? 0u : lut;  // texture_key's "none" is ~0u, PostFx's is 0
+    post.lut_strength = env.color_grade_strength;
+    post.dof.enabled = env.depth_of_field != 0 && quality_.dof_motion_blur;
+    post.dof.focus_distance = env.dof_focus_distance;
+    post.dof.focus_range = env.dof_focus_range;
+    post.dof.blur_range = env.dof_blur_range;
+    post.dof.max_radius = env.dof_max_radius;
+    post.motion_blur.enabled = env.motion_blur != 0 && quality_.dof_motion_blur;
+    post.motion_blur.intensity = env.motion_blur_intensity;
     scene.set_post(post);
     render::ShadowSettings shadows;
     shadows.cascades = clamp(env.shadow_cascades, 1u, min(render::kMaxCascades, quality_.shadow_cascades));

@@ -234,6 +234,22 @@ struct Environment3D {
     f32 volumetric_anisotropy = 0.5f;        // > 0 glows toward the lights
     math::vec3 volumetric_albedo{0.9f, 0.9f, 0.9f};
     f32 volumetric_distance = 48.0f;         // meters the froxel grid covers
+    // M-VISUAL 8. Auto exposure (a luminance histogram) on top of `exposure`, a color-grade LUT (a
+    // 256 × 16 strip of 16³, imported with "srgb": false and "mips": false), depth of field and motion
+    // blur (both off on the Low quality tier).
+    u32 auto_exposure = 0;
+    f32 exposure_compensation = 0.0f;        // EV added to the auto target
+    f32 auto_exposure_speed_up = 3.0f;       // adaptation per second (EV) when the frame brightens
+    f32 auto_exposure_speed_down = 1.0f;     // ... and when it darkens
+    f32 color_grade_strength = 1.0f;
+    u32 depth_of_field = 0;
+    f32 dof_focus_distance = 8.0f;           // meters to the sharpest plane
+    f32 dof_focus_range = 1.0f;              // meters either side that stay sharp
+    f32 dof_blur_range = 6.0f;               // meters beyond that over which the blur grows to its largest
+    f32 dof_max_radius = 0.012f;             // the largest blur radius, a fraction of the view height
+    u32 motion_blur = 0;
+    f32 motion_blur_intensity = 0.5f;        // the share of a frame's motion smeared (a shutter fraction)
+    asset::AssetRef<asset::Texture> color_grade;  // the LUT; empty = ungraded
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -248,7 +264,15 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (atmosphere_haze, Range{0, 10}), (time_of_day, Range{-1, 24}, Help{"hours placing the sun; -1 = sun_direction"}),
               (volumetric_fog, Help{"1: froxel volumetric fog lit by the sun and lights (replaces the exp² fog)"}),
               (volumetric_density, Range{0, 1}), (volumetric_height_falloff, Range{0, 2}), (volumetric_anisotropy, Range{-0.9f, 0.9f}),
-              volumetric_albedo, (volumetric_distance, Range{4, 500}))
+              volumetric_albedo, (volumetric_distance, Range{4, 500}),
+              (auto_exposure, Help{"1: the exposure follows the frame's brightness (histogram)"}),
+              (exposure_compensation, Range{-8, 8}), (auto_exposure_speed_up, Range{0, 20}),
+              (auto_exposure_speed_down, Range{0, 20}), (color_grade_strength, Range{0, 1}),
+              (depth_of_field, Help{"1: blur away from dof_focus_distance"}), (dof_focus_distance, Range{0.1f, 1000}),
+              (dof_focus_range, Range{0, 100}), (dof_blur_range, Range{0.1f, 1000}), (dof_max_radius, Range{0, 0.05f}),
+              (motion_blur, Help{"1: smear moving objects (and the camera's motion) along their velocity"}),
+              (motion_blur_intensity, Range{0, 2}),
+              (color_grade, Help{"256x16 strip LUT (16^3), imported srgb false; empty = ungraded"}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 

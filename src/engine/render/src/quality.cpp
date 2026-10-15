@@ -21,6 +21,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q = QualitySettings{1, 1024, 1, false, true, 0.67f};
             q.gi_updates = false;
             q.volumetrics = false;
+            q.dof_motion_blur = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -68,6 +69,8 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
     post.bloom = q.bloom;
     post.fxaa = q.fxaa;
     post.taa = q.taa;
+    post.dof.enabled = post.dof.enabled && q.dof_motion_blur;
+    post.motion_blur.enabled = post.motion_blur.enabled && q.dof_motion_blur;
 }
 
 void apply_quality(const QualitySettings& q, GiVolume& gi) { gi.updates = gi.updates && q.gi_updates; }
