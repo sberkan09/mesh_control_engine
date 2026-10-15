@@ -13,6 +13,7 @@
 #include "mce/editor/editor_session.h"
 #include "mce/editor/gizmo.h"
 #include "mce/editor/animgraph_editor.h"
+#include "mce/editor/terrain_editor.h"
 #include "mce/editor/tilemap_editor.h"
 #include "mce/editor/timeline_editor.h"
 #include "mce/editor/ui_document_editor.h"
@@ -69,6 +70,7 @@ struct ViewSettings {
     f32 orbit_depth = OrbitColliders::kDefaultDepth;  // extrusion of 2D colliders along Z (metres)
     GizmoMode gizmo = GizmoMode::Move;  // W / E / R
     bool tile_paint = false;  // the viewport paints the selected TilemapLayer (Tilemap panel, T)
+    bool terrain_sculpt = false;  // the orbit view sculpts the selected Terrain3D (Terrain panel)
 };
 
 class EditorShell {
@@ -110,6 +112,7 @@ public:
     NavMeshPreview& nav_preview() { return nav_preview_; }
     ViewSettings& view() { return view_; }
     TilemapEditor& tilemap() { return tilemap_; }
+    TerrainEditor& terrain() { return terrain_; }
     // The UI document the UI Document panel edits (open_ui_document: a double click in Assets).
     UiDocumentEditor& ui_document() { return ui_document_; }
     void open_ui_document(asset::Guid guid);
@@ -190,6 +193,7 @@ private:
     NavMeshPreview nav_preview_;
     ViewSettings view_;
     TilemapEditor tilemap_;
+    TerrainEditor terrain_;
     UiDocumentEditor ui_document_;
     TimelineEditor timeline_;
     TimelinePreview timeline_preview_;

@@ -128,6 +128,7 @@ public:
 
 private:
     bool view_of(World& world, Entity e, const Camera3DComponent& c, f32 alpha, render::Camera3D& out);
+    bool base_view_of(World& world, Entity e, const Camera3DComponent& c, f32 alpha, render::Camera3D& out);  // no blend or shake
     struct MeshEntry {
         asset::Guid guid;
         asset::AnyHandle handle;

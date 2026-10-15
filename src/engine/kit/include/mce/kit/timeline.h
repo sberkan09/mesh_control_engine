@@ -15,7 +15,8 @@
 //     wait_event on a timeline beat);
 //   - samples the state tracks at `time`: property (writes the reflected field, interpolated by
 //     each key's ease), activation (1 inside a range, else 0), camera (the cut's camera is the
-//     primary Camera3DComponent / Camera2DComponent, the track's other cameras are not) and
+//     primary Camera3DComponent / Camera2DComponent, the track's other cameras are not; a cut
+//     with a blend writes a kit::CameraBlend3D from the previous cut's camera, cinematic.h) and
 //     subtitle (`subtitle` names the line showing; timeline_subtitle reads its text).
 // A key at time t fires on the first tick whose time reaches t (within a thousandth of a tick, the
 // tolerance sequences use), so timing is tick math: a key at 0.5 s fires on the 30th tick at 60 Hz.
@@ -118,6 +119,13 @@ void timeline_player(Frame& f);
 // without firing keys; the keys after it fire when it plays on. False when `e` has no resolvable
 // TimelinePlayer.
 bool timeline_scrub(World& world, Entity e, f32 seconds);
+
+// Skips `e`'s timeline to its end (a skipped cutscene, kit::Cutscene): the event keys after the
+// playhead fire (their TimelineSignal / SeqSignal, so gameplay that waits on a beat still hears
+// it), each animation track's last key after the playhead starts its clip, audio keys stay
+// silent, the state tracks apply at the end and the player finishes. False when `e` has no
+// resolvable TimelinePlayer.
+bool timeline_skip(Frame& f, Entity e);
 
 // The eased fraction for `u` in [0, 1] between two keys (Step holds the first key: 0).
 f32 timeline_eased(asset::TimelineEase e, f32 u);

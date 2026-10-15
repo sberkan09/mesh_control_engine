@@ -7,7 +7,7 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
 |---|---|---|
 | 1. Navigation (navmesh, agents, obstacles, debug draw) | SBA-69 | done |
 | 2. Joints over Jolt | SBA-70 | done |
-| 3. Ragdolls | SBA-71 | not started |
+| 3. Ragdolls | SBA-71 | done |
 | 4. Vehicles | SBA-72 | not started |
 | 5. Animation (blend spaces, layers, IK, root motion) | SBA-73 | not started |
 | 6. Sensor queries as data | SBA-74 | not started |
@@ -72,4 +72,34 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
 
 - Six-DOF motors, cone twist limits, gear, pulley and path joints.
 - The editor draws no joint gizmo yet (anchor and axis are edited as numbers).
+
+## Step 3 — ragdolls (SBA-71)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Ragdolls over Jolt's `Ragdoll`: capsule, sphere and box parts in a tree, swing-twist joints, neighbours and overlapping parts filtered, one collision group per ragdoll | `World3D::create_ragdoll(RagdollDesc3D, parts)`, `ragdoll_state`, `ragdoll_impulse`, `ragdoll_active` (`mce/physics3d/world3d.h`) | `test_physics3d` ragdolls cases: refused descriptions, ids not reused, a shoved figure falls, holds its pivots within 2 cm and sleeps, the swing limit at 0.3 and 1.0 rad, an impulse spread by mass, queries report the owner, ragdolls collide with each other |
+| Per-bone overrides in the glTF sidecar | `"ragdoll": { "<bone>": { exclude, include, radius, swing, twist, mass } }`; `MeshFlags::Ragdoll`, `MeshRagdoll`, chunk minor 3 in reserved `MeshJoint` fields; `GpuJoint` carries them | `test_cook` gltf ragdoll case (values land on the named joints, unknown bones and bad values fail); `test_render` skin case (overrides need the flag, unknown bits refused) |
+| `Ragdoll3D` component: parts from skin 0, animation to physics with the animation's velocities, physics to animation over `blend_time`, impulses on a bone, `root_position` and `settled` | `mce/kit/ragdolls3d.h`, systems `kit3d_ragdolls` and `kit3d_ragdoll_pose`, installed by `install_stock`; registered in the editor, MCP and cook | `test_kit` ragdolls3d cases: a 7-part stick figure (its socket rides the head) falls forward and lies on the floor, a hit on the head, the blend back to the rest pose in 15 steps, sidecar overrides, a mesh without a skeleton refused, removal, replay hash |
+| The mesh follows the bodies | `Ragdoll3DPoses` blended over the Animator's pose in the extract (skinning) and `AttachToBone` | the kit cases read bone positions through `AttachToBone` |
+| Docs | user guide 9.8, 5 (sidecar key), `docs/engine/asset.md`, `docs/engine/capabilities.md` | `capabilities.py --check` |
+
+### Design notes
+
+- **Jolt's ragdoll, our parts.** `World3D` takes parts in world space and builds Jolt's
+  `RagdollSettings` (skeleton, `Stabilize`, `DisableParentChildCollisions` with the creation pose), so
+  the physics layer never sees a mesh. The kit turns the skeleton into parts.
+- **Shapes from the skin.** Each bone's part is sized from the bind-space bounds of the vertices it
+  moves, so no authoring is needed for a typical humanoid; the sidecar only corrects outliers. Bones
+  that move no vertex (sockets) and very short bones ride their parent.
+- **The entity stays put.** The ragdoll poses the mesh in model space relative to the entity, whose
+  transform is not touched; games read `root_position` to move it before getting up. This keeps
+  controllers, triggers and cameras that follow the entity predictable.
+- **Hashes.** As with joints, `World3D::hash_state` folds ragdolls only once a world has had one.
+
+### Not built (step 3)
+
+- Powered ragdolls (motors driving toward the animation, active ragdolls) and partial ragdolls
+  (one limb limp while the rest animates).
+- Skins other than skin 0, and per-part collision layers.
+- An editor gizmo for the parts (the editor sees `Ragdoll3D` as numbers).
 
