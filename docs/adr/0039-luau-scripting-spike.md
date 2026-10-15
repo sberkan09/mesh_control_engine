@@ -60,7 +60,7 @@ embedding that can answer it.
 
 Release timing (linux-gcc-release, 1,200 ticks): 0.82 ms/tick (Luau) vs 0.028 ms (C++), about 29×, with the VM at
 392 KiB. A 60 Hz tick has 16.7 ms, so rules over a few thousand entities fit; hot loops (particles, physics)
-stay in C++. Most of the cost is the per-call name lookup in `get`/`set` (open question 5).
+stay in C++. The per-call name lookup in `get`/`set` is the likely first cost to cut (open question 5, not profiled).
 
 ## Open questions (for a M-SCRIPT milestone, if the user wants one)
 
