@@ -408,6 +408,10 @@ struct NovelState {
     // menu's rows in the player's language
     bool touch = false;
     char title_rows[3][64] = {};
+
+    // the screen reader (M-ACCESS): a hash of what the stage last spoke (a finished page, the
+    // selected row, a letter, a panel), so each is said once
+    u32 spoken = 0;
 };
 
 // Registers the kit's components and systems and the NovelState resource (an existing one keeps

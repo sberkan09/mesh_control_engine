@@ -288,9 +288,15 @@ selected"), and a focused slider or switch says its new value as it changes.
 `access.screen_reader` (Saved, on the options screen's Display tab): 0 never, 1 while the OS
 reports a reader on (the default), 2 always. What a reader calls a widget is its text; a slider or
 switch with no text takes the label just before it in its parent, so the usual "label, then
-control" layout reads well. Labels written in capitals are read in sentence case. Code that wants
+control" layout reads well. Labels written in capitals are read in sentence case. A control in a horizontal row that starts with a label says
+the label first ("Move Right, D, button" in the remap list). Code that wants
 the same lines (a custom host, a test) uses `ui::build_access_tree`, `ui::access_line` and
 `ui::AccessAnnouncer` (`mce/ui/access.h`) and `platform::screen_reader::announce`.
+
+A novel made with the novel kit also speaks its stage: each page once it is shown, the selected
+row of a menu or choice, letters and panels (24.4). Custom code asks
+`platform::screen_reader::wanted()` first. On a desktop, `-access_log <file>` writes every
+announcement to a file.
 
 The reader hears announcements, not an explorable tree: touch exploration (dragging a finger over
 the screen to hear what is under it) is not built.

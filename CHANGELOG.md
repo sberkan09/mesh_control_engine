@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Accessibility checks and guide, M-ACCESS step 5 (SBA-99). `project_check` now flags small and low-contrast
+  `.mcui` text, timelines with sound but no subtitles, and uncaptioned sounds. The novel stage speaks its pages and
+  rows through the screen reader, and a control in a labelled row says the label first ("Move Right, D, button").
+  The player takes `-access_log <file>` and no longer drops menu presses when it draws fewer frames than it runs
+  ticks. Kindle and Undelivered get the stock options screen, and Kindle captions its sounds. User guide chapter 24.
 - Screen reader support, M-ACCESS step 4 (SBA-98): the stock player speaks the focused menu item and a
   focused slider's new value through TalkBack on Android (and, built with `MCE_SCREEN_READER_NATIVE`, VoiceOver on
   iOS and macOS and Narrator, NVDA or JAWS on Windows), while the OS reports a reader on (`access.screen_reader`).

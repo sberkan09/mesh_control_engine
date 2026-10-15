@@ -19,6 +19,7 @@
 #include "mce/loc/loc.h"
 #include "mce/log.h"
 #include "mce/platform/haptics.h"
+#include "mce/platform/screen_reader.h"
 
 namespace mce::novel {
 
@@ -828,6 +829,63 @@ void panel_line(Context& c, Panel panel, u32 line, char* buf, u32 cap) {
     }
 }
 
+// The screen reader (M-ACCESS): the stage draws its own text, so it says what a reader would find
+// on it: a page once it is all shown (the speaker first), the selected row with its place among
+// the rows, a letter, a panel. Each once (NovelState::spoken); output only.
+void say_part(FixedString<512>& out, StringView part, const char* sep = " ") {
+    if (part.empty()) return;
+    if (!out.empty()) out.append(StringView(sep));
+    out.append(part);
+}
+
+void novel_speak(Context& c, const ScreenLook& look, const u16 page[4], bool complete, const LocaleText* tr) {
+    NovelState& n = c.n;
+    const Program& p = c.p;
+    if (!platform::screen_reader::wanted()) {
+        n.spoken = 0;
+        return;
+    }
+    FixedString<512> say;
+    char buf[128];
+    if (look.rows) {
+        const bool game_rows = n.mode == Mode::Game;
+        u32 count = 0;
+        while (count < 4 && row_text(c, count, game_rows).a) ++count;
+        const RowText r = row_text(c, n.cursor, game_rows);
+        if (r.a) {
+            say_part(say, StringView(r.a));
+            if (r.b) say_part(say, StringView(r.b));
+            if (!r.enabled) say_part(say, "dimmed", ", ");
+            std::snprintf(buf, sizeof(buf), "%u of %u", static_cast<unsigned>(n.cursor) + 1, static_cast<unsigned>(count));
+            say_part(say, StringView(buf), ", ");
+        }
+    } else if (n.mode == Mode::Reading && complete) {
+        if (n.page_speaker < p.character_count) {
+            say_part(say, StringView(localized_speaker(p, tr, n.page_speaker)));
+            say.append(StringView(":"));
+        }
+        for (u32 i = 0; i < 4; ++i)
+            if (page[i]) say_part(say, StringView(text(p, page[i])));
+    } else if (n.mode == Mode::Letter) {
+        for (u32 i = 0; i < n.letter_count && n.letter_first + i < p.letter_line_count; ++i)
+            say_part(say, StringView(text(p, p.letter_lines[n.letter_first + i])));
+    } else if (n.mode == Mode::Checkpoint || n.mode == Mode::Ending || n.mode == Mode::Extras) {
+        const Panel panel = n.mode == Mode::Checkpoint ? Panel::Checkpoint : n.mode == Mode::Ending ? Panel::Ending : Panel::Extras;
+        for (u32 i = 0; i < 14; ++i) {  // the panel's PanelLine rows
+            buf[0] = 0;
+            panel_line(c, panel, i, buf, sizeof(buf));
+            say_part(say, StringView(buf), ". ");
+        }
+    }
+    if (say.empty()) return;
+    u32 h = 2166136261u ^ static_cast<u32>(n.mode);
+    for (const char ch : say.view()) h = (h ^ static_cast<u8>(ch)) * 16777619u;
+    h ^= n.pages * 2654435761u;  // the same words on a new page are said again
+    if (h == n.spoken) return;
+    n.spoken = h;
+    platform::screen_reader::announce(say.view());
+}
+
 void novel_present(Frame& f) {
     NovelState& n = f.resource<NovelState>();
     if (n.mode == Mode::Boot || n.mode == Mode::Done) return;
@@ -1031,6 +1089,7 @@ void novel_present(Frame& f) {
         post.vignette = true;
     });
 
+    novel_speak(c, look, page, complete, tr);
     if (n.hooks.present) n.hooks.present(c, look);
 }
 
