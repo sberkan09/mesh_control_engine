@@ -16,6 +16,13 @@
 #define MCE_ZONE(name) ((void)0)
 #endif
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+// A browser only paints and delivers input between tasks, so the loop gives the page back once a
+// frame and resumes on the next animation frame (ASYNCIFY, cmake/MceWeb.cmake; ADR-0039).
+EM_ASYNC_JS(void, mce_web_next_frame, (), { await new Promise((resolve) => requestAnimationFrame(resolve)); });
+#endif
+
 namespace mce::app {
 namespace {
 
@@ -142,6 +149,9 @@ int run(Application& app, const AppDesc& desc, RunStats* stats_out) {
 
         frame_slots.end_frame(desc.fences ? desc.fences->fence_for_frame(frame) : nullptr);
         if (desc.platform) desc.platform->present(cv_vsync.get_bool());
+#if defined(__EMSCRIPTEN__)
+        mce_web_next_frame();
+#endif
 
         ++frame;
         if (desc.max_frames && frame >= desc.max_frames) app.quit(0);

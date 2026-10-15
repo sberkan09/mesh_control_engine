@@ -19,6 +19,8 @@ GpuApi gpu_api() {
     static const GpuApi api = [] {
 #if defined(SDL_PLATFORM_ANDROID) || defined(SDL_PLATFORM_IOS)
         return GpuApi::SdlGpu;
+#elif defined(__EMSCRIPTEN__)
+        return GpuApi::WebGpu;  // ADR-0039: the canvas is claimed by mce_rhi_webgpu
 #else
         const char* env = std::getenv("MCE_RHI");  // NOLINT(concurrency-mt-unsafe): read once, at first use
         if (env && std::strcmp(env, "sdlgpu") == 0) return GpuApi::SdlGpu;
@@ -50,6 +52,8 @@ Result<mem::UniquePtr<Window>> Window::create(const WindowDesc& desc) {
 #else
         flags |= SDL_WINDOW_VULKAN;
 #endif
+    } else if (desc.opengl && api == GpuApi::WebGpu) {
+        // mce_rhi_webgpu (ADR-0039) configures the window's canvas itself: a plain SDL window.
     } else if (desc.opengl && api == GpuApi::Metal) {
         // macOS renders through mce_rhi_metal (ADR-0028): the GPU surface is a CAMetalLayer, no GL attributes.
         flags |= SDL_WINDOW_METAL;
