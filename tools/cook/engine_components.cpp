@@ -24,5 +24,6 @@
 #include "mce/kit/novel_components.h"  // StagePart, StoryState, ...
 #include "mce/kit/ragdolls3d.h"        // Ragdoll3D
 #include "mce/kit/timeline.h"          // TimelinePlayer (M-CINEMA)
+#include "mce/kit/vehicles3d.h"        // Vehicle3D
 #include "mce/physics/components.h"   // RigidBody2D, Collider2D, CharacterController2D, ...
 #include "mce/scene/streaming.h"      // SceneChunk, StreamingFocus, SceneChunkStatus

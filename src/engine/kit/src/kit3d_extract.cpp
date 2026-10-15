@@ -170,6 +170,7 @@ void Kit3DExtract::reset(asset::AssetSystem* assets) {
     release_terrains();
     release_handles();
     foliage_.clear();
+    terrain_foliage_.clear();
     bursts_.clear();
     assets_ = assets;
 }
@@ -567,6 +568,8 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.dof.max_radius = env.dof_max_radius;
     post.motion_blur.enabled = env.motion_blur != 0 && quality_.dof_motion_blur;
     post.motion_blur.intensity = env.motion_blur_intensity;
+    post.upscaler = env.upscaler != 0 ? render::Upscaler::Spatial : render::Upscaler::Bilinear;
+    post.sharpen = env.sharpen;
     render::apply_accessibility(render::accessibility_settings(), post);  // M-ACCESS: never in the state
     scene.set_post(post);
     render::AmbientOcclusion ao;
@@ -847,6 +850,97 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         ++stats_.foliage;
         stats_.foliage_instances += static_cast<u32>(entry->transforms.size());
     });
+    // Foliage on a terrain (M-TERRAIN 5): re-scattered when the terrain's pose, its cooked generation
+    // (a brush stroke re-bakes it) or the scatter's inputs change.
+    world.query<const TerrainFoliage3D&>().each([&](Entity e, const TerrainFoliage3D& f) {
+        if (!f.enabled || !assets_ || f.density <= 0.0f || f.max_count == 0) return;
+        Entity host = e;
+        const Terrain3D* terrain = world.try_get<Terrain3D>(e);
+        if (!terrain) {
+            const ChildOf* parent = world.try_get<ChildOf>(e);
+            host = parent ? parent->parent : Entity{};
+            terrain = parent && world.alive(host) ? world.try_get<Terrain3D>(host) : nullptr;
+        }
+        if (!terrain || !terrain->enabled) return;
+        const asset::AssetKey tkey = assets_->find(terrain->terrain.guid);
+        if (tkey == asset::kInvalidAssetKey) return;
+        vec3 pos, scale;
+        quat rot;
+        if (!pose_of(world, host, pos, rot, scale)) return;
+        const u32 key = mesh_key(f.mesh.guid);
+        const render::GpuMesh* mesh = key != ~0u && meshes_ ? meshes_->get(key) : nullptr;
+        if (!mesh) {
+            ++stats_.missing;
+            return;
+        }
+        u64 h = 1469598103934665603ull;
+        auto mix = [&h](const void* p, usize n) {
+            for (usize i = 0; i < n; ++i) h = (h ^ static_cast<const u8*>(p)[i]) * 1099511628211ull;
+        };
+        const u32 generation = assets_->generation(tkey);
+        mix(&pos, sizeof(pos));
+        mix(&rot, sizeof(rot));
+        mix(&scale, sizeof(scale));
+        mix(&terrain->terrain.guid, sizeof(terrain->terrain.guid));
+        mix(&generation, sizeof(generation));
+        mix(&f.layer, sizeof(f.layer));
+        mix(&f.density, sizeof(f.density));
+        mix(&f.max_count, sizeof(f.max_count));
+        mix(&f.seed, sizeof(f.seed));
+        mix(&f.scale_min, sizeof(f.scale_min));
+        mix(&f.scale_max, sizeof(f.scale_max));
+        mix(&f.max_slope_deg, sizeof(f.max_slope_deg));
+        mix(&f.random_yaw, sizeof(f.random_yaw));
+        FoliageEntry* entry = nullptr;
+        for (FoliageEntry& fe : terrain_foliage_)
+            if (fe.entity == e) entry = &fe;
+        if (!entry) {
+            terrain_foliage_.push_back({});
+            entry = &terrain_foliage_.back();
+            entry->entity = e;
+            entry->key = ~h;
+        }
+        if (entry->key != h) {
+            entry->transforms.clear();
+            if (Result<asset::AssetHandle<asset::Terrain>> th = assets_->load_sync<asset::Terrain>(tkey)) {
+                if (const Result<asset::TerrainView> tview = asset::TerrainView::read(assets_->resolve(th.value()))) {
+                    render::TerrainScatter sc;
+                    sc.layer = f.layer;
+                    sc.density = f.density;
+                    sc.max_count = f.max_count;
+                    sc.seed = f.seed;
+                    sc.scale_min = f.scale_min;
+                    sc.scale_max = f.scale_max;
+                    sc.max_slope_deg = f.max_slope_deg;
+                    sc.random_yaw = f.random_yaw != 0;
+                    sc.position = pos;
+                    sc.rotation = rot;
+                    sc.scale = scale;
+                    render::scatter_on_terrain(tview.value(), sc, entry->transforms);
+                }
+                assets_->release(asset::AnyHandle(th.value()));
+            }
+            entry->key = h;
+            ++entry->version;
+        }
+        entry->stamp = frame_stamp_;
+        if (entry->transforms.empty()) return;
+        render::InstanceBatch b;
+        b.id = (e.index + 1) | 0x80000000u;  // apart from the entity's Foliage3D batch
+        b.version = entry->version;
+        b.mesh = key;
+        b.transforms = entry->transforms.span();
+        b.cast_shadows = f.cast_shadows != 0;
+        b.cull_distance = bake_mode_ ? 0.0f : f.cull_distance;
+        b.tint = f.tint;
+        b.material = material(f.material.guid);
+        b.wind_amplitude = f.wind_amplitude;
+        b.wind_frequency = f.wind_frequency;
+        b.wind_direction = f.wind_direction;
+        scene.add_batch(b);
+        ++stats_.foliage;
+        stats_.foliage_instances += static_cast<u32>(entry->transforms.size());
+    });
     for (usize i = 0; i < foliage_.size();) {  // gone, disabled or destroyed: its scatter is dropped
         if (foliage_[i].stamp == frame_stamp_) {
             ++i;
@@ -854,6 +948,14 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         }
         foliage_[i] = std::move(foliage_.back());
         foliage_.pop_back();
+    }
+    for (usize i = 0; i < terrain_foliage_.size();) {
+        if (terrain_foliage_[i].stamp == frame_stamp_) {
+            ++i;
+            continue;
+        }
+        terrain_foliage_[i] = std::move(terrain_foliage_.back());
+        terrain_foliage_.pop_back();
     }
     world.query<const Decal3D&>().each([&](Entity e, const Decal3D& d) {
         if (!d.enabled) return;

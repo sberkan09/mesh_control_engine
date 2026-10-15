@@ -268,6 +268,11 @@ struct Environment3D {
     f32 ssr_max_roughness = 0.5f;  // rougher surfaces keep the probes only
     f32 ssr_roughness_fade = 0.2f; // roughness range below the maximum over which reflections fade
     f32 ssr_intensity = 1.0f;
+    // M-VISUAL2 2. When the quality tier draws below the output size (Low, Medium) without TAA: 1 =
+    // the edge-adaptive spatial upsample, 0 = bilinear. `sharpen` (0..1) sharpens the final frame.
+    // r.upscaler and r.sharpen override both per player.
+    u32 upscaler = 1;
+    f32 sharpen = 0.0f;
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -295,7 +300,9 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (ssao_intensity, Range{0, 4}), (ssao_power, Range{0.25f, 8}),
               (ssr, Help{"1: screen-space reflections on smooth surfaces (over the probes and the sky)"}),
               (ssr_max_distance, Range{0.1f, 200}), (ssr_thickness, Range{0.01f, 5}), (ssr_max_roughness, Range{0, 1}),
-              (ssr_roughness_fade, Range{0.01f, 1}), (ssr_intensity, Range{0, 4}))
+              (ssr_roughness_fade, Range{0.01f, 1}), (ssr_intensity, Range{0, 4}),
+              (upscaler, Range{0, 1}, Help{"below output size: 1 = edge-adaptive spatial upsample, 0 = bilinear"}),
+              (sharpen, Range{0, 1}, Help{"contrast-adaptive sharpening of the final frame (0 = off)"}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 
@@ -391,6 +398,41 @@ struct TerrainCollider3D {
     u32 layer = 0;
 };
 MCE_COMPONENT(TerrainCollider3D, (friction, Range{0, 2}), (layer, Range{0, 15}))
+
+// Grass, flowers or rocks growing on a terrain (M-TERRAIN 5): copies of `mesh` standing on the surface of
+// the Terrain3D on this entity (or on its parent), `density` per square metre where splat layer `layer`
+// has full weight and thinner where it has less (layer 8: everywhere), none in holes or on ground steeper
+// than `max_slope_deg`, at most `max_count`. Painting the layer in the editor paints the foliage. Drawn
+// like Foliage3D (render::scatter_on_terrain): one instanced batch, culled per copy, LOD, shadows, wind.
+// One kind per entity: put more kinds on child entities of the terrain.
+struct TerrainFoliage3D {
+    asset::AssetRef<asset::Mesh> mesh;
+    asset::AssetRef<asset::Material> material;  // a .mcmat on every copy instead of the mesh's own
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+    u32 layer = 0;
+    f32 density = 1.0f;
+    u32 max_count = 50000;
+    u32 seed = 1;
+    f32 scale_min = 0.8f;
+    f32 scale_max = 1.2f;
+    f32 max_slope_deg = 40.0f;
+    f32 wind_amplitude = 0.05f;
+    f32 wind_frequency = 0.5f;
+    math::vec2 wind_direction{1.0f, 0.0f};
+    f32 cull_distance = 60.0f;  // metres from the camera past which a copy is culled; 0 = the far plane
+    u32 cast_shadows = 0;
+    u32 random_yaw = 1;
+    u32 enabled = 1;
+    u32 pad_ = 0;
+};
+MCE_COMPONENT(TerrainFoliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's materials; null = the mesh's own"}), tint,
+              (layer, Range{0, 8}, Help{"the splat layer whose weight sets the density; 8 = everywhere"}),
+              (density, Range{0, 1000}, Help{"copies per square metre at full weight"}), (max_count, Range{0, 1000000}), seed,
+              (scale_min, Range{0.01f, 100}), (scale_max, Range{0.01f, 100}),
+              (max_slope_deg, Range{0, 90}, Help{"no copies on steeper ground"}),
+              (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
+              (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
+              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled)
 
 // A projected decal: `texture` (rgb color, a coverage; empty = plain `color`) projected down the
 // entity's local -Y onto every opaque surface inside the box of `size` metres (x, projection depth y, z)

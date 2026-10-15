@@ -12,6 +12,7 @@ mce_add_library(mce_core
         src/log.cpp
         src/math.cpp
         src/memory.cpp
+        src/perf_capture.cpp
         src/result.cpp
         src/version.cpp
         src/web.cpp

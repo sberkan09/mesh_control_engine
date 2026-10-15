@@ -1260,6 +1260,78 @@ void main() {
     o_color = vec4(textureLod(u_ldr, fuv, 0.0).rgb, 1.0);
 }
 )";
+// ---- spatial upsample and sharpening (M-VISUAL2 2), on the display-space frame -------------------
+// Edge-adaptive upsample: the 4x4 source texels around the output pixel weighted by a Lanczos-2
+// approximation, (25/16 (2/5 d² - 1)² - 9/16) (w d² - 1)², over offsets rotated into the local edge's
+// frame (the luma gradient of the four nearest texels, bilinearly weighted) and squeezed across the
+// edge and stretched along it by how strong the edge is; the window tightens with it too. The result
+// is clamped to the four nearest texels, so the negative lobes cannot ring. q_texel: xy 1 / source size,
+// zw source size.
+constexpr const char* kUpscaleFS = "#version 450 core\n" MCE_GLSL_POST_U R"(
+float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+void main() {
+    vec2 pp = v_uv * q_texel.zw - 0.5;
+    vec2 fp = floor(pp), f = pp - fp;
+    ivec2 base = ivec2(fp), hi = ivec2(q_texel.zw) - 1;
+    vec3 c[16];
+    float l[16];
+    for (int j = 0; j < 4; ++j)
+        for (int i = 0; i < 4; ++i) {
+            vec3 t = texelFetch(u_src, clamp(base + ivec2(i - 1, j - 1), ivec2(0), hi), 0).rgb;
+            c[j * 4 + i] = t;
+            l[j * 4 + i] = luma(t);
+        }
+    // The edge: central-difference luma gradients at the four nearest texels, bilinearly weighted.
+    vec2 dir = vec2(0.0);
+    float len = 0.0;
+    for (int b = 1; b <= 2; ++b)
+        for (int a = 1; a <= 2; ++a) {
+            float w = (a == 1 ? 1.0 - f.x : f.x) * (b == 1 ? 1.0 - f.y : f.y);
+            vec2 g = vec2(l[b * 4 + a + 1] - l[b * 4 + a - 1], l[(b + 1) * 4 + a] - l[(b - 1) * 4 + a]);
+            float span = max(max(abs(l[b * 4 + a + 1] - l[b * 4 + a]), abs(l[b * 4 + a] - l[b * 4 + a - 1])),
+                             max(abs(l[(b + 1) * 4 + a] - l[b * 4 + a]), abs(l[b * 4 + a] - l[(b - 1) * 4 + a])));
+            dir += g * w;
+            len += w * clamp(length(g) * 0.5 / max(span, 1e-4), 0.0, 1.0);  // 1 on a clean step, 0 on noise
+        }
+    float dl = length(dir);
+    dir = dl > 1e-5 ? dir / dl : vec2(1.0, 0.0);
+    len *= len;
+    float stretch = 1.0 / max(abs(dir.x), abs(dir.y));  // 1 on an axis, sqrt(2) on a diagonal
+    vec2 scale = vec2(1.0 - 0.5 * len, 1.0 + (stretch - 1.0) * len);  // across, along the edge
+    float lobe = 0.5 - 0.29 * len;
+    float clip = 1.0 / lobe;
+    vec3 sum = vec3(0.0);
+    float wsum = 0.0;
+    for (int j = 0; j < 4; ++j)
+        for (int i = 0; i < 4; ++i) {
+            vec2 o = vec2(i - 1, j - 1) - f;
+            vec2 v = vec2(dot(o, dir), dot(o, vec2(-dir.y, dir.x))) * scale;
+            float d2 = min(dot(v, v), clip);
+            float a = 0.4 * d2 - 1.0;
+            float wb = 25.0 / 16.0 * a * a - 9.0 / 16.0;
+            float wl = lobe * d2 - 1.0;
+            float w = wb * wl * wl;
+            sum += c[j * 4 + i] * w;
+            wsum += w;
+        }
+    vec3 lo = min(min(c[5], c[6]), min(c[9], c[10])), hiC = max(max(c[5], c[6]), max(c[9], c[10]));
+    o_color = vec4(clamp(sum / wsum, lo, hiC), 1.0);
+}
+)";
+
+// Contrast-adaptive sharpening (AMD CAS's filter): the pixel minus a share of its four neighbors, the
+// share largest where the neighborhood's contrast is low and falling to none where it would clip.
+// q_texel: xy the source's texel size, q_params.x sharpness (0..1).
+constexpr const char* kSharpenFS = "#version 450 core\n" MCE_GLSL_POST_U R"(
+void main() {
+    vec3 e = tap(vec2(0.0));
+    vec3 b = tap(vec2(0.0, -1.0)), d = tap(vec2(-1.0, 0.0)), fr = tap(vec2(1.0, 0.0)), h = tap(vec2(0.0, 1.0));
+    vec3 mn = min(e, min(min(b, d), min(fr, h))), mx = max(e, max(max(b, d), max(fr, h)));
+    vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(1e-4)), 0.0, 1.0));
+    vec3 w = amp * (-1.0 / mix(8.0, 5.0, clamp(q_params.x, 0.0, 1.0)));
+    o_color = vec4(clamp((e + (b + d + fr + h) * w) / (1.0 + 4.0 * w), 0.0, 1.0), 1.0);
+}
+)";
 
 // ---- image-based lighting bakes (M-VISUAL 2): full-screen passes, so every backend runs them -------
 

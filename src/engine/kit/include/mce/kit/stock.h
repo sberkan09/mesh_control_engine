@@ -1,7 +1,7 @@
 #pragma once
 // The kit systems the stock player runs on top of the engine modules (input, physics2d, audio),
 // installed in one call so mce_player, play-in-editor and MCP run_headless run the same set
-// (M-DATA-REACH): particles, sequences, timelines (timeline.h), kit3d, 3D navigation (nav3d.h), 3D joints (joints3d.h), ragdolls (ragdolls3d.h), WorldSettings and the effects (effects.h: sound,
+// (M-DATA-REACH): particles, sequences, timelines (timeline.h), kit3d, 3D navigation (nav3d.h), 3D joints (joints3d.h), ragdolls (ragdolls3d.h), vehicles (vehicles3d.h), WorldSettings and the effects (effects.h: sound,
 // burst and shake triggers, 3D bodies (bodies3d.h), camera shake and follow, PhysicsEvents, the NavGrid and path agents) and
 // sprite-sheet animation (sprite_anim.h), subtitles and sound captions (captions.h), and cutscenes and cinematic
 // cameras (cinematic.h). A component the stock player
