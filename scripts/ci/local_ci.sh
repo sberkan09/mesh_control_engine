@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 # Local CI: the checks the old GitHub Actions workflow ran, for running on a Linux box before merging.
 #
-#   scripts/ci/local_ci.sh            # everything: walls, 4 Linux presets, clang-tidy, determinism
+#   scripts/ci/local_ci.sh            # everything: walls, 3 Linux presets, clang-tidy, determinism
 #   scripts/ci/local_ci.sh --quick    # walls + linux-gcc-debug (with GPU tests)
+#   scripts/ci/local_ci.sh --tidy-all # everything, with clang-tidy over the whole tree
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages
 #
-# Stages: walls, linux-gcc-debug, linux-clang-release, linux-gcc-release, linux-asan, tidy, determinism.
-# GPU tests run under Xvfb + Mesa llvmpipe (GL) and lavapipe (Vulkan, for mce_rhi_sdlgpu, ADR-0038).
+# Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism. linux-gcc-release
+# runs only when named: determinism already builds and runs the gcc Release tree, and linux-clang-release
+# runs the tests in Release.
+# GPU tests run under Xvfb + Mesa llvmpipe (GL) and lavapipe (Vulkan, for mce_rhi_sdlgpu, ADR-0038), in
+# linux-gcc-debug only; the other presets build them without running them.
+#
+# tidy checks the translation units changed since the merge base with $MCE_TIDY_BASE (default
+# origin/dev_claude), committed or not, plus the ones that include a changed header. It covers the whole
+# tree with --tidy-all, when .clang-tidy changed, or when the base ref is missing.
 # Windows/MSVC presets are not covered; build them on a Windows
 # machine when a change touches platform-specific code.
 #
@@ -30,16 +38,18 @@ cd "$ROOT"
 
 export LIBGL_ALWAYS_SOFTWARE=1  # Mesa llvmpipe: GL 4.5 core without a GPU
 
-ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-gcc-release linux-asan tidy determinism)
-declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=ON [linux-gcc-release]=OFF [linux-asan]=OFF)
+ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism)
+declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=OFF [linux-gcc-release]=OFF [linux-asan]=OFF)
 
 stages=()
 save_cache=0
+tidy_all=0
 for arg in "$@"; do
     case "$arg" in
         --quick) stages+=(walls linux-gcc-debug) ;;
         --save-cache) save_cache=1 ;;
-        -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+        --tidy-all) tidy_all=1 ;;
+        -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
         *) stages+=("$arg") ;;
     esac
 done
@@ -173,10 +183,40 @@ stage_preset() {
         run_tests "$preset"
 }
 
+# Prints the run-clang-tidy file regexes: one per changed translation unit, or the whole tree.
+tidy_targets() {
+    local base="${MCE_TIDY_BASE:-origin/dev_claude}" mb f h
+    local -A tus=()
+    if [[ $tidy_all -eq 1 ]] || ! mb="$(git merge-base HEAD "$base" 2>/dev/null)"; then
+        echo "^$ROOT/(src|samples|tests)/"; return
+    fi
+    local changed
+    changed="$({ git diff --name-only "$mb"; git ls-files --others --exclude-standard; } | sort -u)"
+    if grep -qx '.clang-tidy' <<< "$changed"; then echo "^$ROOT/(src|samples|tests)/"; return; fi
+    while IFS= read -r f; do
+        [[ -f "$f" ]] || continue
+        case "$f" in
+            src/*.cpp|samples/*.cpp|tests/*.cpp|src/*.cc|samples/*.cc|tests/*.cc) tus[$f]=1 ;;
+            src/*.h|samples/*.h|tests/*.h|src/*.hpp|samples/*.hpp|tests/*.hpp)
+                h="$(basename "$f")"
+                while IFS= read -r t; do tus[$t]=1; done < <(
+                    grep -rlE --include='*.cpp' --include='*.cc' "#include [<\"]([^<>\"]*/)?${h//./\\.}[>\"]" src samples tests) ;;
+        esac
+    done <<< "$changed"
+    for f in "${!tus[@]}"; do echo "^$ROOT/${f//./\\.}\$"; done
+}
+
 stage_tidy() {
+    local targets
+    mapfile -t targets < <(tidy_targets)
+    if [[ ${#targets[@]} -eq 0 ]]; then
+        echo "tidy: no C++ translation unit changed since the merge base, nothing to check"
+        return 0
+    fi
+    echo "tidy: ${#targets[@]} target(s): ${targets[*]}"
     configure linux-clang-debug &&
         cmake --build --preset linux-clang-debug &&
-        run-clang-tidy-18 -p build/linux-clang-debug -quiet "^$ROOT/(src|samples|tests)/"
+        run-clang-tidy-18 -p build/linux-clang-debug -quiet "${targets[@]}"
 }
 
 # A game module ticked by the devhost: same World state hash across runs and Debug/Release.

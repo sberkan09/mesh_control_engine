@@ -138,8 +138,8 @@ sources to MSL when a pipeline is created. Xcode GPU captures (`src/metal_device
 - `test_render_gl` (see [render.md](render.md)) and `test_shader_gl` (`tests/asset/`) exercise the
   device through `create_default_device`.
 - GPU tests always build but register only with `-DMCE_GPU_TESTS=ON`. `scripts/ci/local_ci.sh`
-  turns it on for `linux-gcc-debug` and `linux-clang-release` and runs ctest under Xvfb with Mesa
-  llvmpipe (`LIBGL_ALWAYS_SOFTWARE=1`).
+  turns it on for `linux-gcc-debug` and runs ctest under Xvfb with Mesa llvmpipe
+  (`LIBGL_ALWAYS_SOFTWARE=1`).
 
 ## Design records
 
