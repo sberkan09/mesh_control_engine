@@ -115,6 +115,8 @@ private:
                         open_scene = a->guid;
                     // A UI document opens in the UI Document panel.
                     if (a->type == asset::ChunkType::UiDocument) shell.open_ui_document(a->guid);
+                    // A timeline opens in the Timeline panel.
+                    if (a->type == asset::ChunkType::Timeline) shell.open_timeline(a->guid);
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s  %s\n%s", type, a->path.c_str(), asset::to_string(a->guid).c_str());
                 if (ImGui::BeginDragDropSource()) {

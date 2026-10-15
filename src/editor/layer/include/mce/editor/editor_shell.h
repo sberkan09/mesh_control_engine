@@ -13,6 +13,7 @@
 #include "mce/editor/editor_session.h"
 #include "mce/editor/gizmo.h"
 #include "mce/editor/tilemap_editor.h"
+#include "mce/editor/timeline_editor.h"
 #include "mce/editor/ui_document_editor.h"
 #include "mce/editor/orbit_camera.h"
 #include "mce/editor/perf_monitor.h"
@@ -110,6 +111,11 @@ public:
     // The UI document the UI Document panel edits (open_ui_document: a double click in Assets).
     UiDocumentEditor& ui_document() { return ui_document_; }
     void open_ui_document(asset::Guid guid);
+    // The timeline the Timeline panel edits (open_timeline: a double click in Assets), and its
+    // viewport preview. Record mode keys the scene's inspector and gizmo edits into it.
+    TimelineEditor& timeline() { return timeline_; }
+    TimelinePreview& timeline_preview() { return timeline_preview_; }
+    void open_timeline(asset::Guid guid);
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
@@ -179,6 +185,8 @@ private:
     ViewSettings view_;
     TilemapEditor tilemap_;
     UiDocumentEditor ui_document_;
+    TimelineEditor timeline_;
+    TimelinePreview timeline_preview_;
     PerfMonitor perf_;
     FrameSample perf_pending_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;
