@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Timelines, M-CINEMA step 1 (SBA-76, FR-ENT-110): a `.mctimeline` asset of keyed tracks (transform, property by
+  reflected path, activation, animation clip, audio, camera cut, event, subtitle) and a `TimelinePlayer` component
+  that plays one on its entity and up to eight bound entities, with play, pause, speed, loop, restart and a
+  finished flag. Keys fire on tick math, the state lives in the component (state hash, replays, saves), and
+  `kit::timeline_scrub` moves the playhead without firing cues. Event keys also push `SeqSignal`, so sequences
+  can wait on a timeline beat. MCP `asset_create` makes `.mctimeline` files; user guide 13.5.
 - Multiplayer test harness (SBA-82, M-NET2 step 1): `net::SimNetwork` is an in-memory network on a virtual clock
   with per-link latency, jitter and loss from a seed, so a server and several clients in one process give the same
   hash on every run and build. `net::Transport` is the interface both it and `net::Host` implement, so game code

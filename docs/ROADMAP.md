@@ -88,7 +88,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-AGENT | — (added 2026-10-14) | in progress: steps 1-8 (eyes, code loop, playtests, docs, content, quality gates, multi-agent, friction notes) done | demo and gates |
 | M-WEB | — (added 2026-10-15) | not started | all steps |
 | M-GAMEPLAY3D | — (added 2026-10-15) | not started | all steps |
-| M-CINEMA | — (added 2026-10-15) | not started | all steps |
+| M-CINEMA | [M-CINEMA.md](milestones/M-CINEMA.md) (Linear SBA-76 … SBA-81) | active (step 1 done: `.mctimeline` and `TimelinePlayer`, `mce/kit/timeline.h`) | steps 2–6, the demo and the gates |
 | M-NET2 | — (added 2026-10-15) | not started | all steps |
 | M-TERRAIN | — (added 2026-10-15) | not started | all steps |
 | M-ACCESS | — (added 2026-10-15) | not started | all steps |

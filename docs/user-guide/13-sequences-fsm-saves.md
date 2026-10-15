@@ -1,8 +1,8 @@
 # 13. Sequences, state machines and saves
 
-Three engine facilities that save you from writing the same gameplay plumbing: scripted action
-lists for cutscenes and timed events, a validated finite-state-machine helper for AI, and save
-games and replays built on reflection.
+Engine facilities that save you from writing the same gameplay plumbing: scripted action lists for
+timed events, keyed timelines for cutscenes (13.5), a validated finite-state-machine helper for AI,
+and save games and replays built on reflection.
 
 ## 13.1 Sequences
 
@@ -117,3 +117,62 @@ A replay is the per-tick input stream framed with the scene GUID, the tick count
 and final state hashes. Replaying it through `InputReplayer` must reproduce the final hash, which is
 how the engine's own tests prove determinism. The player does not record replays yet; the pieces
 (`InputRecorder`, `save::write_replay`, `read_replay`) are for custom hosts and tests.
+
+## 13.5 Timelines
+
+A timeline is a set of keyed tracks played against the fixed tick: camera moves, doors, lights,
+music cues, subtitles. Where a sequence is a list of steps one after another, a timeline lays
+everything out on one clock. Author it as a `.mctimeline` asset and play it with `TimelinePlayer`:
+
+```json
+{ "format": "mce-timeline", "version": 1, "guid": "<uuid>", "name": "intro", "duration": 6,
+  "tracks": [
+    {"type": "transform", "target": 0, "keys": [
+      {"t": 0, "position": [0, 1, 4]},
+      {"t": 3, "position": [0, 1, 0], "rotation": [0, 0.38, 0, 0.92], "ease": "smooth"}]},
+    {"type": "property", "target": 1, "path": "PointLight3D.intensity",
+     "keys": [{"t": 0, "value": 0}, {"t": 2, "value": 4}]},
+    {"type": "activation", "target": 2, "path": "MeshRef.visible", "ranges": [{"from": 1, "to": 3}]},
+    {"type": "animation", "target": 3, "keys": [{"t": 0.5, "clip": "walk", "loop": true}]},
+    {"type": "audio", "keys": [{"t": 0, "sound": "guid:<music uuid>", "gain_db": -6}]},
+    {"type": "camera", "cuts": [{"t": 0, "camera": 4}, {"t": 3, "camera": 5}]},
+    {"type": "event", "keys": [{"t": 2.5, "emit": "door_open"}]},
+    {"type": "subtitle", "lines": [{"t": 1, "duration": 2, "text": "Who's there?", "speaker": "Mira"}]}
+  ] }
+```
+
+```json
+"Director": { "TimelinePlayer": { "timeline": "guid:<intro>",
+                                  "bindings": ["$1", "$2", "$3", "$4", "$5", "$6", null, null] } }
+```
+
+A track drives its `target`: `"self"` (the default, the entity with the `TimelinePlayer`) or a
+binding index 0 to 7, which names an entity in the player's `bindings`. So one timeline asset can
+drive the same moves on different entities.
+
+| Track | Keys | Does |
+|---|---|---|
+| `transform` | `t`, any of `position`, `rotation` (quaternion `[x, y, z, w]`), `scale`, `ease` | the target's `LocalTransform`, interpolated (rotations slerp) |
+| `property` | `t`, `value`, `ease` | any reflected float, vector, color or quaternion field, by path `Component.field` |
+| `activation` | `from`, `to` | a bool or integer field: 1 inside a range, 0 outside (`MeshRef.visible`, a light's `enabled`) |
+| `animation` | `t`, `clip`, `loop`, `fade` | sets the target's `Animator` clip and restarts it |
+| `audio` | `t`, `sound`, `gain_db` | plays a one-shot sound |
+| `camera` | `t`, `camera` | camera cuts: that camera is `primary` until the next cut, the track's other cameras are not |
+| `event` | `t`, `emit` | pushes a `kit::TimelineSignal`, and a `SeqSignal` so a sequence's `wait_event` can follow the timeline |
+| `subtitle` | `t`, `duration`, `text`, `speaker` | the line shown in that range; read it with `kit::timeline_subtitle` |
+
+`ease` shapes the curve from a key to the next one: `linear` (default), `step` (hold, then jump),
+`smooth`, `ease_in`, `ease_out`. Values hold before the first key and after the last. The cook
+checks property paths against the reflected components, so a typo is a cook error with the file
+position. `duration` defaults to the end of the last key.
+
+Playback: `playing` (default on), `speed`, `loop`, and `restart` (set it to play again from the
+start; the engine clears it). A non-looping timeline stops at its end with `finished` set; a looping
+one wraps and fires its keys again. Timing is tick math, like sequences: a key at 0.5 s fires on
+tick 30 at 60 Hz. The player's state is its own component fields, so a timeline is in the state hash,
+replays reproduce it, and with a `SaveKey` a save mid-timeline resumes on the same tick.
+
+`kit::timeline_scrub(world, entity, seconds)` moves the playhead and applies the transform,
+property, activation, camera and subtitle tracks at that time without firing the cues it passes
+(animation, audio, event); playing on from there fires the keys after it. Animate entities without
+a dynamic physics body: physics owns a moving body's transform.

@@ -14,6 +14,7 @@ mce_add_test(test_kit UMBRELLA
         test_pathfinding.cpp
         test_sequence.cpp
         test_sprite_anim.cpp
+        test_timeline.cpp
         test_view_info.cpp
     DEPS
         mce::mce_gameplay_kit
