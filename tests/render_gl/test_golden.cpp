@@ -116,6 +116,28 @@ TEST_CASE("golden: a reflection probe mirrors the room in the metal floor") {
     check_golden("probe_room", f);
 }
 
+// ---- M-VISUAL2 1: screen-space reflections -------------------------------------------------------
+
+TEST_CASE("golden: SSR mirrors the wall and the box in the metal floor") {
+    Fixture3D f;
+    upload_probe_room(f);
+    const auto scene = [](Scene3D& s) {
+        no_sun(s);
+        s.set_sky(constant_sky(0.05f, true));
+        MeshInstance m;
+        m.mesh = 7;
+        s.add(m);
+        m.mesh = 8;
+        s.add(m);
+        ScreenSpaceReflections ssr;
+        ssr.enabled = true;
+        s.set_reflections(ssr);
+    };
+    for (int i = 0; i < 2; ++i) f.render(0.0f, false, scene);  // the second frame reflects the first
+    CHECK(f.renderer.forward_3d().last_stats().ssr_history);
+    check_golden("ssr_room", f);
+}
+
 // ---- M-VISUAL 3: screen-space ambient occlusion ----------------------------------------------
 
 TEST_CASE("golden: SSAO alone: the box's crease under a flat grey ambient") {

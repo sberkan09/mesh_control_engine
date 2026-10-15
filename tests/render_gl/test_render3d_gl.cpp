@@ -769,6 +769,103 @@ TEST_CASE("render3d_gl: SSAO leaves direct light alone and off draws the frame w
     CHECK(f.device->validation_error_count() == 0);
 }
 
+// ---- screen-space reflections (M-VISUAL2 1) -------------------------------------------------------
+
+namespace {
+
+// The probe room (a mirror floor before an emissive wall) under a dim IBL sky, no sun, no probe:
+// without SSR the floor reflects only the sky. `rough_floor` swaps in a roughness-0.8 floor.
+void ssr_room(Scene3D& s, bool on, bool rough_floor = false) {
+    no_sun(s);
+    s.set_sky(constant_sky(0.05f, true));
+    MeshInstance m;
+    m.mesh = rough_floor ? 9 : 7;
+    s.add(m);
+    m.mesh = 8;
+    s.add(m);
+    ScreenSpaceReflections ssr;
+    ssr.enabled = on;
+    s.set_reflections(ssr);
+}
+
+usize differing_bytes(const Array<u8>& a, const Array<u8>& b) {
+    usize n = 0;
+    for (usize i = 0; i < a.size(); ++i) n += a[i] != b[i];
+    return n;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: SSR mirrors the emissive wall in the floor from the second frame") {
+    Fixture3D f;
+    upload_probe_room(f);
+    const Forward3D& fw = f.renderer.forward_3d();
+    const vec3 floor{2.0f, 0.05f, 0.5f};  // beside the box, in front of the wall: the wall's mirror image
+    const vec3 sky_side{2.0f, 0.05f, 2.5f};  // nearer the camera: the mirror ray passes over the wall
+    f.render(0.0f, false, [](Scene3D& s) { ssr_room(s, true); });  // the first frame: nothing to read yet
+    CHECK(fw.last_stats().ssr);
+    CHECK_FALSE(fw.last_stats().ssr_history);
+    const Array<u8> first = f.pixels;
+    f.render(0.0f, false, [](Scene3D& s) { ssr_room(s, false); });
+    CHECK_FALSE(fw.last_stats().ssr);
+    CHECK(differing_bytes(first, f.pixels) == 0);
+    const Rgb floor_off = f.at_world(floor), near_off = f.at_world(sky_side);
+
+    f.render(0.0f, false, [](Scene3D& s) { ssr_room(s, true); });
+    CHECK(fw.last_stats().ssr_history);
+    const Rgb floor_on = f.at_world(floor), near_on = f.at_world(sky_side);
+    INFO("floor red " << floor_off.r << " -> " << floor_on.r << ", near " << near_off.luma() << " -> " << near_on.luma());
+    CHECK(floor_on.r > floor_off.r + 100);  // the wall glows red
+    CHECK(std::abs(near_on.luma() - near_off.luma()) <= 3);
+
+    // The trace target: half size, some confident hits.
+    const rhi::TextureHandle ssr = fw.ssr();
+    MCE_REQUIRE_OR_RETURN(!ssr.is_null());
+    const rhi::Extent2D size = f.device->texture_desc(ssr).size;
+    CHECK(size.width == kW / 2);
+    CHECK(size.height == kH / 2);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: SSR leaves rough surfaces and the frame with it off alone") {
+    Fixture3D f;
+    upload_probe_room(f);
+    mesh_fixture::Builder floor;
+    floor.add_node(-1);
+    mesh_fixture::Box fb;
+    fb.center = {0, 0.02f, 0};
+    fb.half = {6, 0.03f, 6};
+    floor.add_box(fb);
+    floor.submeshes.back().material.metallic = 1.0f;
+    floor.submeshes.back().material.roughness = 0.8f;  // above ScreenSpaceReflections::max_roughness
+    REQUIRE(f.renderer.meshes().upload(9, 1, floor.build().span()).has_value());
+    f.render(0.0f, false, [](Scene3D& s) { ssr_room(s, false, true); });
+    const Array<u8> off = f.pixels;
+    for (int i = 0; i < 2; ++i) f.render(0.0f, false, [](Scene3D& s) { ssr_room(s, true, true); });
+    CHECK(f.renderer.forward_3d().last_stats().ssr_history);
+    CHECK(differing_bytes(off, f.pixels) == 0);
+    f.render(0.0f, false, [](Scene3D& s) { ssr_room(s, false, true); });
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().ssr);
+    CHECK(differing_bytes(off, f.pixels) == 0);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: SSR shares the prepass with SSAO") {
+    Fixture3D f;
+    upload_probe_room(f);
+    f.render(0.0f, false, [](Scene3D& s) {
+        ssr_room(s, true);
+        AmbientOcclusion ao;
+        ao.enabled = true;
+        s.set_ambient_occlusion(ao);
+    });
+    const Forward3DStats& st = f.renderer.forward_3d().last_stats();
+    CHECK(st.ssr);
+    CHECK(st.ssao);
+    CHECK(st.ssao_draws == 4);  // ground, box, floor, wall: drawn once for both
+    CHECK(f.device->validation_error_count() == 0);
+}
+
 // ---- local-light shadows (M-VISUAL 4) -----------------------------------------------------------------
 
 namespace {
@@ -1160,16 +1257,6 @@ TEST_CASE("render3d_gl: temporal upscaling keeps a half-scale frame closer to fu
 }
 
 // ---- global illumination: the irradiance volume (M-VISUAL 6) -------------------------------------
-
-namespace {
-
-usize differing_bytes(const Array<u8>& a, const Array<u8>& b) {
-    usize n = 0;
-    for (usize i = 0; i < a.size(); ++i) n += a[i] != b[i];
-    return n;
-}
-
-}  // namespace
 
 TEST_CASE("render3d_gl: GI off draws today's frame; a GI run in between and the Low tier leave no trace") {
     Fixture3D f;

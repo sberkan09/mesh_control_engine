@@ -6,7 +6,7 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
 | Step | Linear | State |
 |---|---|---|
 | 1. Navigation (navmesh, agents, obstacles, debug draw) | SBA-69 | done |
-| 2. Joints over Jolt | SBA-70 | not started |
+| 2. Joints over Jolt | SBA-70 | done |
 | 3. Ragdolls | SBA-71 | not started |
 | 4. Vehicles | SBA-72 | not started |
 | 5. Animation (blend spaces, layers, IK, root motion) | SBA-73 | not started |
@@ -45,3 +45,31 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
 
 - Sliced path queries, per-agent filters, cylinder obstacles, tile streaming (ADR-0040 §7).
 - Terrain as bake input waits on M-TERRAIN.
+
+## Step 2 — joints (SBA-70)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Six joint types over Jolt constraints: fixed, hinge, slider, distance, cone, six-DOF; to another body or the world | `World3D::create_joint(JointDesc3D)` (`mce/physics3d/world3d.h`) | `test_physics3d` joints cases: refused descriptions, joints destroyed with a body, ids not reused |
+| Limits (hard and spring), friction, velocity and position motors with a force cap | `JointDesc3D`, `set_joint_motor` | hinge stops at its limit; a velocity motor spins a wheel at 2 rad/s; position motors reach and hold their targets; a slider stays on its rail |
+| Break force and torque; switching a joint off and on | `World3D::step` checks every joint after the solve, in creation order; `set_joint_enabled` | a 200 kg bar breaks a 1 kN fixed joint and falls; a 10 kN one reports 1962 N and 981 N·m; a leash switched off lets go and catches again |
+| Joined bodies do not collide unless asked | a group filter over body pairs (`collide_connected`) | two overlapping glued boxes fall as one; with `collide_connected` they push apart |
+| `Joint3D` component and `JointBreak3D` event; systems `kit3d_joints`, `kit3d_joint_state` | `mce/kit/joints3d.h`, installed by `install_stock`; registered in the editor, MCP and cook | `test_kit` joints3d cases: a door within its limits, a drawbridge raised and lowered by its motor, rebuild on a settings change, removal with a body or the component, one break event, replay hash |
+| Editable in the inspector | reflected fields with units in their help text | the inspector and MCP `component_set` see `Joint3D` like any reflected component |
+| Docs | user guide 9.6, `docs/engine/capabilities.md` | `capabilities.py --check` |
+
+### Design notes
+
+- **Angles belong to the joint's own body.** Jolt measures body 2 against body 1, so `connected` (or the
+  world) is Jolt's body 1: a hinge's angle and a slider's position are how far the `Joint3D`'s body has
+  turned or slid, and a positive motor target turns it the right-handed way about `axis`.
+- **Breaking is ours.** Jolt has no breakable constraints; after each step the world reads each joint's
+  solved impulses (motors excluded), divides by the step, and switches the joint off past its rating.
+- **Hashes.** `World3D::hash_state` folds joints only once a world has had one, so every existing golden
+  hash stays as it was.
+
+### Not built (step 2)
+
+- Six-DOF motors, cone twist limits, gear, pulley and path joints.
+- The editor draws no joint gizmo yet (anchor and axis are edited as numbers).
+

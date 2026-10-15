@@ -252,6 +252,7 @@ inline constexpr u32 kEmissive = 13;   // 3D emissive map (the spare slot of the
 inline constexpr u32 kIblEnv = 12;     // 3D image-based lighting: GGX pre-filtered sky (2D array, M-VISUAL 2)
 inline constexpr u32 kIblBrdfLut = 14; // 3D image-based lighting: split-sum BRDF LUT
 inline constexpr u32 kIblSh = 15;      // 3D image-based lighting: SH9 irradiance (9×1)
+inline constexpr u32 kSsr = 3;         // 3D screen-space reflections (M-VISUAL2 1): rgb last frame's light at the hit, a confidence
 inline constexpr u32 kAo = 11;         // 3D screen-space ambient occlusion (M-VISUAL 3); shares the slot with the font
 inline constexpr u32 kGiVolume = 5;    // 3D irradiance volume (M-VISUAL 6): 4 texels per probe
 inline constexpr u32 kVolumetrics = 4; // 3D volumetric fog (M-VISUAL 7): the integrated froxel atlas

@@ -9,6 +9,17 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   exchanges only inputs. It guesses late remote inputs, rolls back and replays when a guess was wrong, waits only
   past `max_prediction` (0 is lockstep), and compares state hashes of confirmed frames so a desync is reported at
   the frame it happened. `samples/net_rollback` keeps four peers in sync at 100 ms with 5% loss. User guide 20.7.
+- Subtitles and sound captions, M-ACCESS step 1 (SBA-95): the stock player draws timeline subtitle lines,
+  `kit::SoundCaption` tags on sounds and `kit::ShowCaption` lines at the bottom of the screen
+  (`ui::SubtitleView`), with `access.subtitles`, `access.captions`, `access.subtitle_speaker`, `access.subtitle_size`
+  and `access.subtitle_background` on the stock options screen. The NPC dialogue box follows the speaker and
+  background settings. User guide 10.7.
+- The editor's Animation panel, M-CINEMA step 3 (SBA-78): an `.mcanim` animation graph drawn as boxes and arrows
+  (drag states, add transitions from a right-click, any-state transitions, the start state), an inspector for
+  parameters, states (clip or 1D blend points, loop, speed, events) and transitions (conditions, fade, on finish),
+  and a viewport preview that poses any clip of an entity's mesh at a scrubbed time or runs its graph with typed
+  parameter values, without touching the scene. A state may carry `pos` (where the editor draws it; the cook ignores
+  it). Double-click an `.mcanim` in Assets, or `mce_editor -editor.open <file>`. User guide 8.9.
 - Fair hits over lag (SBA-85, M-NET2 step 4): `net::LagCompensator` keeps a short history of `net::HitBox`es on
   the server and checks a shot against the tick its client was drawing (`ReplicationClient::drawn_tick`), within
   `max_rewind_s`. Over a 100 ms link every shot at the drawn target hits when rewound and none at the server's
