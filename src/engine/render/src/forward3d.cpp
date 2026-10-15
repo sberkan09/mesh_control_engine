@@ -128,6 +128,29 @@ struct ObjectU {
     vec4 inst;      // instanced (M-VISUAL 9): wind amplitude, frequency, direction xz
 };
 
+struct TerrainU {  // kTerrainFS (M-TERRAIN 2), bank kMaterial
+    mat4 to_local;
+    vec4 size;     // xy: extent, z: splat samples per side, w: layer count
+    vec4 flags;    // x: triplanar, y: height blend, z: blend depth
+    vec4 color[TerrainShading::kMaxLayers];   // rgb: base color, a: albedo map
+    vec4 params[TerrainShading::kMaxLayers];  // x: 1 / tile, y: roughness, z: metallic, w: height strength
+    vec4 maps[TerrainShading::kMaxLayers];    // x: normal map, y: ORM map, z: triplanar, w: occlusion in ORM.r
+};
+
+TerrainU terrain_uniforms(const TerrainShading& t, const mat4& world) {
+    TerrainU u{};
+    u.to_local = inverse(world);
+    u.size = {t.size.x, t.size.y, f32(max(t.splat_resolution, 2u)), f32(min(t.layer_count, TerrainShading::kMaxLayers))};
+    u.flags = {t.triplanar ? 1.0f : 0.0f, t.height_blend ? 1.0f : 0.0f, 0.25f, 0.0f};
+    for (u32 i = 0; i < TerrainShading::kMaxLayers && i < t.layer_count; ++i) {
+        const TerrainShading::Layer& l = t.layers[i];
+        u.color[i] = {l.base_color.x, l.base_color.y, l.base_color.z, l.albedo_map ? 1.0f : 0.0f};
+        u.params[i] = {1.0f / max(l.tile, 1e-3f), l.roughness, l.metallic, l.height_strength};
+        u.maps[i] = {l.normal_map ? 1.0f : 0.0f, l.orm_map ? 1.0f : 0.0f, l.triplanar ? 1.0f : 0.0f, l.occlusion_in_orm ? 1.0f : 0.0f};
+    }
+    return u;
+}
+
 struct ShadowU {  // the rigid shadow shader reads only `mvp`
     mat4 mvp;
     mat4 dequant;
@@ -384,6 +407,10 @@ ResultV Forward3D::create_pipelines() {
     pd.state.raster.cull = rhi::CullMode::Back;
     pd.debug_name = "pbr.opaque";
     MCE_TRY_ASSIGN(mesh_cull_, device_->create_pipeline(pd));
+    pd.fragment_shader = {kTerrainFS, "terrain.frag"};
+    pd.debug_name = "pbr.terrain";
+    MCE_TRY_ASSIGN(terrain_pipe_, device_->create_pipeline(pd));
+    pd.fragment_shader = {kMeshFS, "pbr.frag"};
     pd.state.raster.cull = rhi::CullMode::None;
     pd.debug_name = "pbr.two_sided";
     MCE_TRY_ASSIGN(mesh_two_sided_, device_->create_pipeline(pd));
@@ -632,7 +659,7 @@ void Forward3D::shutdown() {
     if (!device_) return;
     destroy_targets();
     for (rhi::PipelineHandle* p :
-         {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &skinned_cull_,
+         {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &terrain_pipe_, &skinned_cull_,
           &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
           &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &velocity_pipe_, &velocity_skinned_,
@@ -1901,7 +1928,9 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
         const u32 albedo = albedo_key_of(inst, sm), normal = normal_key_of(inst, sm), orm = orm_key_of(inst, sm),
                   emissive = emissive_key_of(inst, sm);
         const bool skinned = d.mesh->skinned();
+        const TerrainShading* terrain = !prepass && i < opaque_end ? inst.terrain : nullptr;
         const rhi::PipelineHandle pipe = prepass                                   ? (skinned ? ao_prepass_skinned_ : ao_prepass_)
+                                         : terrain                                 ? terrain_pipe_
                                          : i >= opaque_end                         ? (skinned ? skinned_blend_ : mesh_blend_)
                                          : (mat.flags & asset::MaterialFlags::DoubleSided) ? (skinned ? skinned_two_sided_ : mesh_two_sided_)
                                                                                            : (skinned ? skinned_cull_ : mesh_cull_);
@@ -1915,10 +1944,19 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
             cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
             cache.mesh = d.mesh;
         }
-        bind_map(cache, 0, albedo);
-        bind_map(cache, 1, normal);
-        bind_map(cache, 2, orm);
-        bind_map(cache, 3, emissive);
+        if (terrain) {  // the layer arrays and the weights in the material slots (kTerrainFS)
+            bind_map(cache, 0, terrain->albedo_key);
+            bind_map(cache, 1, terrain->normal_key);
+            bind_map(cache, 2, terrain->orm_key);
+            bind_map(cache, 3, terrain->splat_key);
+            const TerrainU tu = terrain_uniforms(*terrain, inst.world);
+            cmd.set_uniforms(rhi::bank::kMaterial, rhi::as_bytes(tu));
+        } else {
+            bind_map(cache, 0, albedo);
+            bind_map(cache, 1, normal);
+            bind_map(cache, 2, orm);
+            bind_map(cache, 3, emissive);
+        }
         ObjectU ou;
         ou.model = d.model;
         ou.normal = d.normal;
@@ -1934,6 +1972,12 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
                    (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
         ou.dequant = d.dequant;
         ou.skin = {palette_index(d.palette), 0.0f, 0.0f, 0.0f};
+        if (terrain) {  // lit, no maps of its own: the layers are the surface
+            ou.base_color = inst.tint;
+            ou.emissive = {0.0f, 0.0f, 0.0f, 0.0f};
+            ou.params = {0.0f, 0.0f, 1.0f, 0.0f};
+            ou.maps = {0.0f, 0.0f, 0.0f, 0.0f};
+        }
         cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
         cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
         if (main) ++stats_.main_draws;
