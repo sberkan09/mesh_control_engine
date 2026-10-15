@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Game services run on Game Center and Play Games Services v2 (SBA-23): `liveops::PlatformGameServices` sends
+  achievements and scores under the catalog's `"ios"` / `"android"` ids and keeps cloud-save versions inside
+  Game Center saved games and Play Games snapshots, so a second device gets a conflict as on the local stand-in;
+  a saved game the engine did not write is never overwritten. iOS builds it with `-DMCE_GAMEKIT=ON`; `ship`
+  stamps Play Games into a game with a `.mcservices` when `MCE_PLAY_GAMES_APP_ID` is set. Not yet run on a device.
 - Remote config fetches from Firebase Remote Config on phone builds shipped with Firebase (SBA-24): each
   console value is read as the type of its `.mcconfig` default (`liveops::parse_config_value`), and one the
   defaults lack or that does not read as its type is skipped. `ship` adds `firebase-config` on Android, and

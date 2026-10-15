@@ -1,7 +1,7 @@
 # mce_liveops (L2, M-LIVEOPS): services for shipped games, off unless a project's host turns them on
 # (player::PlayerDesc::liveops): the consent gate (mce/liveops/consent.h), analytics events
 # (mce/liveops/analytics.h), crash reports sent on the next launch (mce/liveops/crash_upload.h),
-# game services (mce/liveops/game_services.h) and remote config (mce/liveops/remote_config.h).
+# game services (mce/liveops/game_services.h, platform_games.h for Game Center / Play Games) and remote config (mce/liveops/remote_config.h).
 # Never in the sim or the determinism hash.
 mce_add_library(mce_liveops
     SOURCES
@@ -10,6 +10,7 @@ mce_add_library(mce_liveops
         src/game_services.cpp
         src/game_services_catalog.cpp
         src/local_game_services.cpp
+        src/platform_games.cpp
         src/liveops.cpp
         src/remote_config.cpp
     PUBLIC_DEPS
