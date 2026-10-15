@@ -41,6 +41,18 @@ const ToolDef* find_tool(StringView name);
 Span<const ToolDef> asset_tool_table();
 // The mce://assets/schema resource: every type asset_schema describes.
 void write_asset_schemas(JsonWriter& w);
+// The shared pieces of asset_tools.cpp: the asset named by 'path' or 'guid', a path under assets/
+// as the tools accept it, "guid:<uuid>", and cook-validate-then-write of a JSON source asset.
+bool asset_tool_arg(ToolCall& c, const editor::ProjectAsset*& out);
+bool asset_rel_valid(StringView rel);
+cook::String asset_guid_ref(asset::Guid g);
+bool asset_validate_and_write(ToolCall& c, StringView rel, asset::Guid guid, StringView text);
+// tools_ui.cpp (M-UI-DATA step 5): ui_list, ui_create, ui_widget_add / set / remove, ui_preview.
+Span<const ToolDef> ui_tool_table();
+// The UI document named by 'document' (a .mcui path or "guid:<uuid>"), read and checked.
+bool ui_document_arg(ToolCall& c, const editor::ProjectAsset*& out);
+// tools_render.cpp: ui_preview's capture (a player run with -ui_preview).
+bool ui_preview(ToolCall& c);
 // prefab_tools.cpp: prefab_create_from / prefab_apply / prefab_revert.
 Span<const ToolDef> prefab_tool_table();
 // project_tools.cpp: project_get / project_set / scene_settings_get / scene_settings_set.

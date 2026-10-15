@@ -69,6 +69,12 @@ each result's `content[0].text` is the tool's JSON).
 | | `asset_write` | `path` or `guid`, `content`, `mode?` | `merge` (default) replaces the named fields and keeps the rest, `replace` writes exactly `content`; the GUID stays |
 | | `asset_read` | `path` or `guid` | the parsed document of a JSON source asset (scenes and prefabs too) |
 | | `tilemap_paint` | `path` or `guid`, `clear?`, `cells?`, `rects?`, `fills?`, `preview?` | `[x, y, tile]` cells, `[x0, y0, x1, y1, tile]` rectangles and `[x, y, tile]` flood fills, applied in that order; (0, 0) is bottom-left, tile 0 erases, n draws tileset cell n-1. `preview` returns the map as text rows |
+| UI | `ui_list` | `document?` | without `document`: every `.mcui` with its widget count and the input actions it raises; with one (path or `guid:<uuid>`): its widgets as paths (`menu/play`) with kind, text, action, bind, convar |
+| | `ui_create` | `path`, `modal?` (true), `font?`, `widgets?` | a new `.mcui` with a fresh GUID; `widgets` in the `.mcui` widget format (`asset_schema` type `UiDocument`) |
+| | `ui_widget_add` | `document`, `widget`, `parent?` (root), `index?` (last) | adds a `.mcui` widget object (with its children) |
+| | `ui_widget_set` | `document`, `widget` (path), `fields` | `.mcui` keys replace the widget's (`null` removes one); `style` changes the listed fields in every state, `styles` in one, `nav` the listed edges |
+| | `ui_widget_remove` | `document`, `widget` | the widget and its children; refused while a nav edge names it |
+| | `ui_preview` | `document`, `width?`, `height?` (960 × 540), `safe_area?`, `ui_scale?`, `save?`, `software?` | the real player draws the document alone and returns the frame as an MCP **image**; `save` writes the PNG for `image_diff` |
 | Edit | `entity_create` | `name`, `components?` (object: type name → fields), `transform?` (bool, default true: add a `LocalTransform`), `at?` (int: hierarchy index, default the end) | returns the id; place the entity with `components.LocalTransform`, e.g. `{"name": "Crate", "components": {"LocalTransform": {"position": [0, 1, 0]}}}` |
 | | `entity_create` with `prefab` | `name`, `prefab` (`"guid:<uuid>"` of a `.mcprefab`), `components?` | an instance; `components` override the prefab root's fields, `LocalTransform` places it |
 | | `entity_delete`, `entity_duplicate` | `entity` | |
@@ -117,6 +123,13 @@ each result's `content[0].text` is the tool's JSON).
 | | `report_friction` | `summary`, `area`, `severity?` (major), `tool?`, `expected?`, `actual?`, `workaround?`, `details?` | appends a note on what the engine made hard to the project's `friction.jsonl`; `mce friction` collects them |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
+
+The `ui_*` tools edit a document through the cook's own reader and writer: each edit is read back
+as a whole document (so a duplicate name or a nav path to a removed widget fails with the cook's
+`file:line` message and nothing is written), then saved in the canonical `.mcui` form (every widget
+explicit, a Tabs widget's bar and pages spelled out). Reading a saved document gives the same data,
+so documents round-trip through the tools unchanged. A scene shows a document with a `UiScreen`
+component (chapter 12.2).
 
 `asset_create`, `asset_write` and `tilemap_paint` cook the document in memory before they write it, with
 the same checks `cook_run` makes (field values, unknown keys, references to missing or wrongly typed

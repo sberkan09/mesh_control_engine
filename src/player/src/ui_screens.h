@@ -28,6 +28,10 @@ public:
     // are built; `extract` resolves a document's font.
     Result<void> load(World& world, asset::AssetSystem& assets, Span<const Entity> entities, const ui::Skin* skin,
                       kit::SpriteExtract* extract);
+    // -ui_preview: the one document `guid`, always visible, over no world (the MCP server's
+    // ui_preview captures it). Its bindings still read the scene's entities.
+    Result<void> load_preview(World& world, asset::AssetSystem& assets, Span<const Entity> entities, asset::Guid guid,
+                              const ui::Skin* skin, kit::SpriteExtract* extract);
     void clear();
     bool active() const { return !screens_.empty(); }
 
@@ -41,12 +45,16 @@ public:
     void submit(render::SpriteBatch& batch, i16 base) const;
 
 private:
+    struct Screen;
+    Result<void> add(Entity e, asset::AssetSystem& assets, asset::Guid guid, i32 order, bool visible, const ui::Skin* skin,
+                     kit::SpriteExtract* extract, Screen*& out);
     struct Screen {
         Entity entity;
         i32 order = 0;
         bool visible = true;
         bool modal = false;
         bool bindings_pending = true;
+        bool always_visible = false;  // a preview: no UiScreen component behind it
         ui::Document* doc = nullptr;  // null headless
     };
     Array<Screen> screens_;

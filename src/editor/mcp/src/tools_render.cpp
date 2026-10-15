@@ -69,6 +69,8 @@ struct RenderRequest {
     const char* view_flag = nullptr;
     i64 safe[4] = {-1, -1, -1, -1};
     bool software = false;
+    cook::String ui_preview;  // -ui_preview: a UiDocument GUID drawn alone
+    cook::String ui_scale;    // -ui_scale, when set
 };
 
 bool arg_size(ToolCall& c, const char* wname, const char* hname, u32& w, u32& h) {
@@ -246,6 +248,14 @@ bool render_ticks(ToolCall& c, RenderRequest& rq, Array<cook::Image>& frames, bo
         args.push_back("-input");
         args.push_back(input_path.view());
     }
+    if (!rq.ui_preview.empty()) {
+        args.push_back("-ui_preview");
+        args.push_back(rq.ui_preview.view());
+    }
+    if (!rq.ui_scale.empty()) {
+        args.push_back("-ui_scale");
+        args.push_back(rq.ui_scale.view());
+    }
     if (rq.view_flag) {
         args.push_back(rq.view_flag);
         args.push_back(rq.view_args.view());
@@ -371,6 +381,67 @@ bool render_frame(ToolCall& c) {
     write_result_head(c, rq, software);
     c.out.key("tick").num_u(tick);
     if (!save.empty()) c.out.key("saved").str(save);
+    c.out.end_object();
+    return attach_image(c, img);
+}
+
+// A UI document alone (M-UI-DATA step 5): the player's -ui_preview over the camera's clear color,
+// at a viewport, safe area and UI scale. Bindings read the scene the player starts (the open one
+// when it is saved, else the project's first scene).
+bool ui_preview(ToolCall& c) {
+    RenderRequest rq;
+    rq.width = 960;
+    rq.height = 540;
+    if (!need_project(c) || !arg_size(c, "width", "height", rq.width, rq.height)) return false;
+    const editor::ProjectAsset* doc = nullptr;
+    if (!ui_document_arg(c, doc)) return false;
+    rq.ui_preview = cook::String(asset::to_string(doc->guid).view());
+    const Server::SceneFile& file = c.server.scene_file();
+    if (!file.rel.empty() && !scene(c).dirty()) {
+        rq.scene_rel = file.rel.view();
+        rq.scene_guid = scene(c).doc().guid();
+    } else {
+        for (const editor::ProjectAsset& a : c.server.session().project().assets())
+            if (a.type == asset::ChunkType::Scene && (rq.scene_rel.empty() || a.path.view() < rq.scene_rel)) {
+                rq.scene_rel = a.path.view();
+                rq.scene_guid = a.guid;
+            }
+        if (rq.scene_rel.empty()) return fail(c, "the project has no saved scene for the player to start (scene_save one)");
+    }
+    if (const cook::JsonValue sa = arg(c, "safe_area"); sa.valid()) {
+        static constexpr const char* kKeys[4] = {"left", "top", "right", "bottom"};
+        if (!sa.is_object()) return arg_missing(c, "safe_area", "an object {left, top, right, bottom} in pixels");
+        for (u32 i = 0; i < 4; ++i) {
+            const cook::JsonValue v = sa.get(kKeys[i]);
+            rq.safe[i] = 0;
+            if (!v.valid()) continue;
+            if (!v.is_integer() || v.as_number() < 0 || v.as_number() > 2000)
+                return arg_missing(c, "safe_area values", "whole pixels in [0, 2000]");
+            rq.safe[i] = static_cast<i64>(v.as_number());
+        }
+    }
+    if (const cook::JsonValue s = arg(c, "ui_scale"); s.valid()) {
+        if (!s.is_number() || s.as_number() < 0.25 || s.as_number() > 4) return arg_missing(c, "ui_scale", "a number in [0.25, 4]");
+        cook::appendf(rq.ui_scale, "%g", s.as_number());
+    }
+    if (!arg_bool(c, "software", rq.software)) return false;
+    StringView save;
+    if (!arg_string(c, "save", save, false)) return false;
+    cook::String save_abs;
+    if (!save.empty() && !project_png_path(c, "save", save, save_abs)) return false;
+    rq.ticks.push_back(2);  // the second frame: the first lays the document out
+    Array<cook::Image> frames;
+    bool software = false;
+    if (!render_ticks(c, rq, frames, software)) return false;
+    cook::Image& img = frames[0];
+    if (!save.empty()) {
+        if (Result<void> w = write_png_file(save_abs.view(), img); !w) return fail(c, "cannot write the 'save' PNG");
+    }
+    draw_safe_area(img, rq);
+    c.out.begin_object();
+    if (!save.empty()) c.out.key("saved").str(save);
+    c.out.key("document").str(doc->path.view()).key("guid").str(asset_guid_ref(doc->guid).view());
+    write_result_head(c, rq, software);
     c.out.end_object();
     return attach_image(c, img);
 }
