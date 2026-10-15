@@ -789,10 +789,11 @@ vec2 Document::measure(u32 index, f32 avail_width) const {
     const Node* n = &nodes_[index];
     const Style& st = n->styles[S(WidgetState::Normal)];
     const render::Font* font = node_font(*n);
+    const f32 text_size = text_px(st, font) * text_scale_;
     auto measure_text = [&](StringView s) -> vec2 {
-        if (!font || s.empty()) return vec2(0, s.empty() ? 0.0f : text_px(st, font));
+        if (!font || s.empty()) return vec2(0, s.empty() ? 0.0f : text_size);
         render::TextLayoutDesc d;
-        d.size_px = text_px(st, font);
+        d.size_px = text_size;
         d.letter_spacing = st.letter_spacing;
         return render::measure_text(font->face, s, d);
     };
@@ -805,7 +806,7 @@ vec2 Document::measure(u32 index, f32 avail_width) const {
         }
         case WidgetKind::Toggle: {
             const vec2 t = measure_text(label);
-            const f32 box = text_px(st, font) + 4.0f;
+            const f32 box = text_size + 4.0f;
             return vec2(box + 10.0f + t.x + 16.0f, (t.y > box ? t.y : box) + 10.0f);
         }
         case WidgetKind::Slider: return vec2(200.0f, 24.0f);
@@ -1199,13 +1200,16 @@ void Document::update(const UpdateContext& ctx) {
     if (order_dirty_) rebuild_order();
 
     // 2. Layout, only when something changed.
+    const f32 text_scale = ctx.text_scale > 0.0f ? ctx.text_scale : 1.0f;
     if (ctx.viewport.width != viewport_.width || ctx.viewport.height != viewport_.height || ctx.ui_scale != scale_ ||
-        !(ctx.safe_insets == safe_)) {
+        !(ctx.safe_insets == safe_) || text_scale != text_scale_) {
         viewport_ = ctx.viewport;
         safe_ = ctx.safe_insets;
         scale_ = ctx.ui_scale > 0.0f ? ctx.ui_scale : 1.0f;
+        text_scale_ = text_scale;
         mark_layout();
     }
+    high_contrast_ = ctx.high_contrast;
     if (layout_dirty_) layout();
 
     // 3. Focus: a modal document always has one (default, else the first interactable).
@@ -1411,10 +1415,13 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
         if (n.clipped && !overlaps(n.rect, n.clip)) continue;  // scrolled out of view
         draw_clip_ = n.clipped ? &n.clip : nullptr;
         const WidgetId id = id_of(i);
-        const Style& st = n.styles[S(state(id))];
+        const WidgetState ws = state(id);
+        Style contrast;
+        if (high_contrast_ && n.kind != WidgetKind::Image) contrast = high_contrast_style(n.kind, ws, n.styles[S(ws)]);
+        const Style& st = high_contrast_ && n.kind != WidgetKind::Image ? contrast : n.styles[S(ws)];
         const render::Font* font = node_font(n);
         const i32 order = static_cast<i32>(k) * 4;
-        const f32 px = text_px(st, font) * scale_;
+        const f32 px = text_px(st, font) * text_scale_ * scale_;
         const StringView label(n.text.data(), n.text.size());
         const Rect& r = n.rect;
         const u32 region = st.sprite_region == ~0u ? skin_.white_region : st.sprite_region;

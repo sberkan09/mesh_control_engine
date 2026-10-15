@@ -8,6 +8,7 @@
 
 #include <doctest/doctest.h>
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -1803,6 +1804,48 @@ TEST_CASE("render3d_gl: a color-grade LUT maps the tonemapped frame: identity ke
     f.render(0.0f, true, graded(~0u, 1.0f));
     CHECK_FALSE(f.renderer.forward_3d().last_stats().color_grade);
     CHECK(f.at_world(ground).luma() == ground0.luma());
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("M-ACCESS: the tonemap pass applies the color-vision correction after the grade") {
+    Fixture3D f;
+    ColorVision cv = ColorVision::None;
+    f32 strength = 1.0f;
+    const auto scene = [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.color_vision = cv;
+        p.color_vision_strength = strength;
+        s.set_post(p);
+    };
+    const auto decode = [](int v) {
+        const f32 c = static_cast<f32>(v) / 255.0f;
+        return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    };
+    const auto encode = [](f32 l) {
+        const f32 c = l <= 0.0031308f ? l * 12.92f : 1.055f * std::pow(l, 1.0f / 2.4f) - 0.055f;
+        return static_cast<int>(c * 255.0f + 0.5f);
+    };
+    const vec3 box_face{0.0f, 0.5f, 0.5f};
+    f.render(0.0f, true, scene);
+    const Rgb box0 = f.at_world(box_face);
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().color_vision);
+    for (ColorVision mode : {ColorVision::Protanopia, ColorVision::Deuteranopia, ColorVision::Tritanopia}) {
+        cv = mode;
+        f.render(0.0f, true, scene);
+        const Rgb got = f.at_world(box_face);
+        const vec3 want = correct_color_vision(mode, 1.0f, {decode(box0.r), decode(box0.g), decode(box0.b)});
+        INFO(color_vision_name(mode) << ": box " << box0.r << "," << box0.g << "," << box0.b << " -> " << got.r << "," << got.g
+                                     << "," << got.b << " want " << encode(want.x) << "," << encode(want.y) << "," << encode(want.z));
+        CHECK(std::abs(got.r - encode(want.x)) <= 4);
+        CHECK(std::abs(got.g - encode(want.y)) <= 4);
+        CHECK(std::abs(got.b - encode(want.z)) <= 4);
+        CHECK(f.renderer.forward_3d().last_stats().color_vision);
+    }
+    strength = 0.0f;  // strength 0: off
+    f.render(0.0f, true, scene);
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().color_vision);
+    CHECK(std::abs(f.at_world(box_face).r - box0.r) <= 1);
     CHECK(f.device->validation_error_count() == 0);
 }
 

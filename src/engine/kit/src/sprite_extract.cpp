@@ -456,7 +456,10 @@ bool SpriteExtract::post_2d(World& world, render::Post2D& out) {
             }
         }
     });
-    return found && out.any();
+    // The player's accessibility settings (M-ACCESS): the color-vision correction runs with or
+    // without the camera's own effects; motion_scale tones the aberration down.
+    render::apply_accessibility(render::accessibility_settings(), out);
+    return out.any();
 }
 
 namespace {
@@ -467,9 +470,10 @@ void camera_from(const LocalTransform& t, const Camera2DComponent& c, const Came
     out.position = {t.position.x, t.position.y};
     out.zoom = c.zoom;
     out.rotation = angle_z(t.rotation);
-    if (shake) {
-        out.position = out.position + shake->offset;
-        out.rotation += shake->offset_rotation;
+    if (shake) {  // reduced motion (M-ACCESS) scales the view's shake, never the component
+        const f32 motion = render::accessibility_settings().motion_scale;
+        out.position = out.position + shake->offset * motion;
+        out.rotation += shake->offset_rotation * motion;
     }
     out.pixel_snap = c.pixel_snap;
     out.fit_width = c.fit_width;

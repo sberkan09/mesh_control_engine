@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Accessibility options, M-ACCESS step 2 (SBA-96): `access.colorblind` (protanopia, deuteranopia, tritanopia
+  correction in the 2D post and 3D tonemap passes) with `access.colorblind_strength`, `access.text_scale` for UI
+  text, `access.high_contrast` (a high-contrast palette over every UI document) and `access.motion_scale` (camera
+  shake, chromatic aberration, motion blur). All are saved convars outside the state hash.
 - Screens that open and close themselves, M-UI-DATA demo (SBA-38): `kit::UiFlow` shows, hides and holds a
   `UiScreen` on input actions (`show_on`, `hide_on`, `load_on` a scene, `pause`), and a paused screen holds the
   world (`World::set_held`: fixed-step systems stop, the tick count goes on, the hash replays). Undertow gets a

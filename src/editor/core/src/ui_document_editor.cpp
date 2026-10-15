@@ -12,6 +12,7 @@
 #include "mce/editor/preview_renderer.h"
 #include "mce/log.h"
 #include "mce/memory/allocator.h"
+#include "mce/render/accessibility.h"
 #include "mce/render/camera2d.h"
 
 namespace mce::editor {
@@ -568,6 +569,10 @@ void UiDocumentPreview::record(rhi::CommandBuffer& cmd, PreviewRenderer& preview
         ui::UpdateContext ctx;
         ctx.viewport = size;
         ctx.ui_scale = ui_scale;
+        // The player's accessibility settings (M-ACCESS): the preview shows what such a player sees.
+        const render::AccessibilitySettings access = render::accessibility_settings();
+        ctx.text_scale = access.text_scale;
+        ctx.high_contrast = access.high_contrast;
         ctx.pointer = pointer;
         ctx.pointer_down = pointer_down;
         ctx.pointer_pressed = pointer_down && !was_down_;

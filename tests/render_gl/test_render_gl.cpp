@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <cmath>
 
 #include "mce/core.h"
 #include "mce/platform/platform.h"
@@ -15,6 +16,7 @@
 using namespace mce;
 using namespace mce::render;
 using math::vec2;
+using math::vec3;
 
 namespace {
 
@@ -454,6 +456,34 @@ TEST_CASE("FR-R2D-100: 2D post — copy, vignette, LUT grade and chromatic aberr
     }
     CHECK(red_fringe);
     CHECK(blue_fringe);
+
+    // M-ACCESS: the color-vision correction matches the CPU reference on the decoded color.
+    const auto decode = [](u8 byte_value) {
+        const f32 c = static_cast<f32>(byte_value) / 255.0f;
+        return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    };
+    const auto encode = [](f32 l) {
+        const f32 c = l <= 0.0031308f ? l * 12.92f : 1.055f * std::pow(l, 1.0f / 2.4f) - 0.055f;
+        return static_cast<int>(c * 255.0f + 0.5f);
+    };
+    for (ColorVision cv : {ColorVision::Protanopia, ColorVision::Deuteranopia, ColorVision::Tritanopia}) {
+        Post2D c;
+        c.color_vision = cv;
+        CHECK(c.any());
+        run(c);
+        const Rgba src = f.at_px(100, 64), got = px(100, 64);
+        const vec3 want = correct_color_vision(cv, 1.0f, {decode(src.r), decode(src.g), decode(src.b)});
+        INFO(color_vision_name(cv) << ": " << int(got.r) << "," << int(got.g) << "," << int(got.b) << " want " << encode(want.x)
+                                   << "," << encode(want.y) << "," << encode(want.z));
+        CHECK(std::abs(got.r - encode(want.x)) <= 3);
+        CHECK(std::abs(got.g - encode(want.y)) <= 3);
+        CHECK(std::abs(got.b - encode(want.z)) <= 3);
+        CHECK((got.r != src.r || got.g != src.g || got.b != src.b));  // the orange actually moves
+        c.color_vision_strength = 0.0f;  // strength 0: a copy
+        run(c);
+        CHECK(near(px(100, 64).r, src.r, 1));
+        CHECK(near(px(100, 64).g, src.g, 1));
+    }
     f.device->destroy_texture(out);
     CHECK(f.device->validation_error_count() == 0);
 }

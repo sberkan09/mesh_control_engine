@@ -209,6 +209,44 @@ const ThemeData& default_theme() {
     return t;
 }
 
+const ThemeData& high_contrast_theme() {
+    static const ThemeData t = [] {
+        Palette p;
+        p.panel = {0, 0, 0, 1};
+        p.button = {0, 0, 0, 1};
+        p.button_hover = {0.2f, 0.2f, 0.2f, 1};
+        p.button_pressed = {0.3f, 0.3f, 0.3f, 1};
+        p.button_focused = {1, 0.9f, 0, 1};
+        p.button_disabled = {0, 0, 0, 1};
+        p.label = {1, 1, 1, 1};
+        p.text = {1, 1, 1, 1};
+        p.text_focused = {0, 0, 0, 1};
+        p.text_disabled = {0.6f, 0.6f, 0.6f, 1};
+        p.accent = {1, 0.9f, 0, 1};
+        p.console = {0, 0, 0, 1};
+        p.console_text = {1, 1, 1, 1};
+        ThemeData d;
+        theme_from_palette(p, d);
+        return d;
+    }();
+    return t;
+}
+
+Style high_contrast_style(WidgetKind kind, WidgetState state, const Style& st) {
+    const Style& hc = high_contrast_theme().styles[static_cast<u32>(kind)][static_cast<u32>(state)];
+    Style out = st;
+    out.tint = hc.tint;
+    out.text_color = hc.text_color;
+    out.accent = hc.accent;
+    // Text over game art (labels without a quad) keeps its contrast with an outline; text on a
+    // high-contrast quad already has it.
+    if (!st.draw_quad || kind == WidgetKind::Text) {
+        out.text_outline = st.text_outline > 1.0f ? st.text_outline : 1.0f;
+        out.text_outline_color = {0, 0, 0, 1};
+    }
+    return out;
+}
+
 namespace {
 
 bool same(const Color& a, const Color& b) { return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a; }
