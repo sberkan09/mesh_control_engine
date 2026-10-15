@@ -291,7 +291,23 @@ stage_determinism() {
         stage_physics3d_determinism &&
         stage_cubes_determinism &&
         stage_court_determinism &&
-        stage_demo_games_determinism
+        stage_demo_games_determinism &&
+        stage_script_determinism
+}
+
+# ADR-0039 spike: the Luau system hashes the same across runs and Debug/Release, and the same as
+# its C++ twin (`-mode cpp`), so the VM adds no float drift of its own.
+stage_script_determinism() {
+    cmake --build --preset linux-gcc-debug --target sample_script_headless &&
+        cmake --build --preset linux-gcc-release --target sample_script_headless &&
+        python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1200" \
+            build/linux-gcc-debug/samples/script_headless/sample_script_headless \
+            build/linux-gcc-release/samples/script_headless/sample_script_headless &&
+        python3 scripts/ci/determinism.py --runs 1 --args "-ticks 1200 -mode cpp" \
+            build/linux-gcc-debug/samples/script_headless/sample_script_headless \
+            build/linux-gcc-release/samples/script_headless/sample_script_headless &&
+        [[ "$(build/linux-gcc-release/samples/script_headless/sample_script_headless -ticks 1200 | grep -o 'hash [0-9a-f]*')" == \
+           "$(build/linux-gcc-release/samples/script_headless/sample_script_headless -ticks 1200 -mode cpp | grep -o 'hash [0-9a-f]*')" ]]
 }
 
 # M5a: 04_cubes (cascade fit, Forward+ clustering, node animation) across runs and Debug/Release;

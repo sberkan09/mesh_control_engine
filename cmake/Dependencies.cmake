@@ -313,5 +313,32 @@ if(MCE_WITH_NET)
     endif()
 endif()
 
+# ---- Luau (scripting spike; mce_script only — ADR-0039) ------------------------------------
+# A sandboxed Luau VM for the M-SCRIPT spike. Only the VM, the compiler and their parts are built
+# (EXCLUDE_FROM_ALL keeps the CLI, analysis and codegen targets out of `all`). Determinism
+# (FR-RUN-040, ADR-0007): the VM and the compiler, whose constant folding runs on doubles, build
+# with the engine's precise floating point; codegen (JIT) is never linked. LUA_USE_LONGJMP makes VM
+# errors unwind with longjmp instead of C++ exceptions, so the -fno-exceptions engine can call it.
+# The compiler throws internally (luau_compile catches); it is meant for the cook, not the player.
+if(MCE_WITH_SCRIPT)
+    set(LUAU_BUILD_CLI OFF CACHE BOOL "" FORCE)
+    set(LUAU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(luau
+        GIT_REPOSITORY https://github.com/luau-lang/luau.git
+        GIT_TAG        0.742
+        GIT_SHALLOW    TRUE
+        SYSTEM
+        EXCLUDE_FROM_ALL)
+    FetchContent_MakeAvailable(luau)
+    target_compile_definitions(Luau.VM PUBLIC LUA_USE_LONGJMP=1)
+    foreach(_luau_target Luau.VM Luau.Compiler Luau.Ast)
+        if(MSVC)
+            target_compile_options(${_luau_target} PRIVATE /fp:precise /W0)
+        else()
+            target_compile_options(${_luau_target} PRIVATE -ffp-contract=off -w)
+        endif()
+    endforeach()
+endif()
+
 # ---- SPIRV-Cross (macOS only) ---------------------------------------------------------------
 # Declared in cmake/macos/MetalDependencies.cmake and pulled in by src/engine/rhi_metal (ADR-0028).
