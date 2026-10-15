@@ -208,6 +208,34 @@ void write_sfx(const SfxHeader& header, Span<const f32> samples, Array<byte>& ou
     b.finish();
 }
 
+// ------------------------------------------------------------------ video
+
+Result<VideoView> VideoView::read(Span<const byte> payload) {
+    constexpr const char* kStage = "asset.video.read";
+    const auto* h = header_of<VideoHeader>(payload);
+    if (!h) return Error(Errc::Truncated, kStage);
+    if (h->width == 0 || h->height == 0 || h->width > 4096 || h->height > 4096) return bad(kStage);
+    if (!(h->frame_rate > 0.0f) || !(h->duration >= 0.0f) || h->mpeg_size == 0) return bad(kStage);
+    if (h->audio_channels != 0 && h->audio_channels != 2) return bad(kStage);
+    VideoView v;
+    v.header = h;
+    if (!span_at(payload, h->mpeg_offset, h->mpeg_size, v.mpeg)) return bad(kStage);
+    if (!span_at(payload, h->audio_offset, u64(h->audio_frames) * h->audio_channels, v.audio)) return bad(kStage);
+    return v;
+}
+
+void write_video(const VideoHeader& header, Span<const byte> mpeg, Span<const f32> audio, Array<byte>& out) {
+    MCE_ASSERT(audio.size() == u64(header.audio_frames) * header.audio_channels);
+    PayloadBuilder b(out);
+    VideoHeader h = header;
+    const usize at = b.append(&h, sizeof(h));
+    h.mpeg_offset = b.append(mpeg.data(), mpeg.size());
+    h.mpeg_size = mpeg.size();
+    h.audio_offset = b.append_span(audio);
+    b.patch(at, h);
+    b.finish();
+}
+
 // ------------------------------------------------------------------ font
 
 const FontGlyph* FontView::find(u32 codepoint) const {
@@ -506,7 +534,7 @@ Result<TimelineView> TimelineView::read(Span<const byte> payload) {
     v.strings = Span<const char>(reinterpret_cast<const char*>(p), h.string_bytes);
     if (h.string_bytes > 0 && v.strings[h.string_bytes - 1] != '\0') return Error(Errc::InvalidArgument, "asset.timeline.strings");
     for (const TimelineTrack& t : v.tracks) {
-        if (t.kind > TimelineTrackKind::Subtitle || u64(t.first_key) + t.key_count > h.key_count ||
+        if (t.kind > TimelineTrackKind::Video || u64(t.first_key) + t.key_count > h.key_count ||
             (t.target != kTimelineSelf && t.target >= kTimelineBindings))
             return Error(Errc::InvalidArgument, "asset.timeline.track");
         const bool pathed = t.kind == TimelineTrackKind::Property || t.kind == TimelineTrackKind::Activation;

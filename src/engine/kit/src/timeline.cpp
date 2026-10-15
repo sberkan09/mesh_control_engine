@@ -9,6 +9,7 @@
 #include "mce/kit/components.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/sequence.h"
+#include "mce/kit/video.h"
 #include "mce/log.h"
 #include "mce/refl/property_path.h"
 #include "mce/refl/refl.h"
@@ -167,6 +168,38 @@ void apply_state(World& w, TimelineRegistry& reg, const TimelineRegistry::Def& d
                 } else if (CameraBlend3D* had = w.alive(live) ? w.try_get_mut<CameraBlend3D>(live) : nullptr) {
                     had->elapsed = had->duration;  // a hard cut: no blend left
                     had->weight = 1.0f;
+                }
+                break;
+            }
+            case TimelineTrackKind::Video: {
+                // The latest key whose range holds the playhead plays on the target's VideoPlayer;
+                // past its range (or its video's end) the player stops on its last frame.
+                const Entity e = target_of(p, self, ct.desc.target);
+                VideoPlayer* vp = w.alive(e) ? w.try_get_mut<VideoPlayer>(e) : nullptr;
+                if (!vp) break;
+                const TimelineKey* live = nullptr;
+                const TimelineKey* ended = nullptr;
+                for (const TimelineKey& k : keys) {
+                    if (k.t > time + eps) break;
+                    const bool same = vp->video.guid == k.asset();
+                    const f32 len = k.duration > 0.0f ? k.duration : (same && vp->duration > 0.0f ? vp->duration : 0.0f);
+                    if (len > 0.0f && time + eps >= k.t + len) {
+                        ended = &k;
+                        live = nullptr;
+                    } else {
+                        live = &k;
+                    }
+                }
+                if (live) {
+                    if (!(vp->video.guid == live->asset())) vp->video = asset::AssetRef<asset::Video>{live->asset(), {}};
+                    vp->time = math::max(0.0f, time - live->t);
+                    vp->gain_db = live->v[0];
+                    vp->playing = true;
+                    vp->finished = false;
+                    vp->loop = false;
+                } else if (ended && vp->video.guid == ended->asset() && vp->playing) {
+                    vp->playing = false;
+                    vp->finished = true;
                 }
                 break;
             }

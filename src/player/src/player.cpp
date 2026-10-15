@@ -92,6 +92,7 @@
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/kit/video.h"
 #include "mce/liveops/game_services.h"
 #include "mce/liveops/liveops.h"
 #include "mce/liveops/platform_games.h"
@@ -101,10 +102,12 @@
 #include "mce/monetize/platform_ads.h"
 #include "mce/monetize/platform_store.h"
 #include "mce/monetize/monetize.h"
+#include "mce/perf_capture.h"
 #include "mce/physics/module.h"
 #include "mce/platform/ads.h"
 #include "mce/platform/firebase.h"
 #include "mce/platform/game_services.h"
+#include "mce/platform/steam.h"
 #include "mce/platform/haptics.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -204,6 +207,14 @@ MCE_CVAR(cv_remote_config_file, "remote_config.file", "",
          CVarFlags::None);
 MCE_CVAR(cv_remote_config_dump, "remote_config.dump", false,
          "Remote config: print every value at start and after each apply", CVarFlags::None);
+MCE_CVAR(cv_steam_app_id, "steam.app_id", 0,
+         "Steam (M-STEAM): open steam_api and sign in for this app id (0 = no Steam); a run outside Steam names it "
+         "to the client the way steam_appid.txt does",
+         CVarFlags::None);
+MCE_CVAR(cv_steam_library, "steam.library", "", "Steam: the steam_api library to open (empty: next to the executable)",
+         CVarFlags::None);
+MCE_CVAR(cv_steam_restart, "steam.restart", false,
+         "Steam: a run started outside Steam asks Steam to relaunch it and quits (release builds on Steam)", CVarFlags::None);
 MCE_CVAR(cv_language, "language", "",
          "Play in this language (\"tr\", \"pt-BR\") for this run instead of the saved choice and the device languages",
          CVarFlags::None);
@@ -257,6 +268,12 @@ MCE_CVAR(cv_stats, "r.stats", false, "Draw the render stats line (F3 toggles)", 
 MCE_CVAR(cv_frame_report, "r.frame_report", 0,
          "Windowed: log the average, p95 and worst frame time every N frames, and for the whole run at exit (0 = off)",
          CVarFlags::None);
+MCE_CVAR(cv_perf_capture, "perf_capture", "",
+         "Write a .mcperf capture of the run to this file at exit: frame, sim, render and GPU times, sim time per phase "
+         "and system, render counters (M-PERF; never changes the state hash)",
+         CVarFlags::RequiresRestart);
+MCE_CVAR(cv_perf_warmup, "perf_warmup", 0, "-perf_capture: leave the run's first N frames out (loading, first uploads)",
+         CVarFlags::RequiresRestart);
 MCE_CVAR(cv_mouse_look, "mouse_look", true, "3D games: let a Camera3DComponent with mouse_look capture the mouse", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 // Analytics events to Firebase (platform/firebase.h): the vendor backend on phones shipped with a
@@ -392,6 +409,11 @@ public:
         : desc_(desc), window_(window), device_(device), audio_(audio), sink_(renderer_, assets_), clips_(assets_, audio) {}
 
     ResultV on_init(app::Context&) override {
+        // Steam first: when it relaunches the game through itself, this run loads and saves nothing.
+        if (cv_steam_app_id.get_int() > 0 && !init_steam()) {
+            relaunching_ = true;
+            return ok();
+        }
         FixedString<1024> pack;
         if (!cv_pack.get_string().empty() || desc_.pack)
             samples::resolve_shipped_path(cv_pack.get_string(), desc_.pack ? desc_.pack : "", desc_.pack_fallback ? desc_.pack_fallback : "",
@@ -453,6 +475,8 @@ public:
             MCE_TRY(renderer_.init(*device_));
             assets_.set_upload_sink(&sink_);
             MCE_TRY(extract_.init(renderer_, &assets_));
+            MCE_TRY(videos_.init(renderer_, &assets_));
+            extract_.set_videos(&videos_);
             samples::HudFont hud;
             MCE_TRY_ASSIGN(font_, renderer_.create_font(hud.metrics, hud.glyphs.span(), {}, std::as_bytes(hud.atlas.span()),
                                                         "player.hud_font"));
@@ -495,6 +519,7 @@ public:
         MCE_LOG_INFO("{}: scene {} ({}) with {} entities", desc_.app_name, asset::to_string(scene).view(), scene_path_.view(),
                      entities_.size());
         scene_guid_ = scene;
+        start_perf_capture();
         if (!parse_lifecycle_test(cv_lifecycle_test.get_string()))
             return Error(Errc::InvalidArgument, "player: -lifecycle_test wants \"N,M\" (app ticks, N >= 1)");
         if (window_) set_safe_insets(window_insets());
@@ -516,6 +541,7 @@ public:
             update_ad_pause();
         }
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
+        if (platform::steam::running()) platform::steam::run_callbacks(nullptr, nullptr);  // M-STEAM step 2 routes them
         if (t.actions) {  // the UI screens navigate with the newest snapshot (edges once: ui_fresh_)
             const input::InputState pending = ui_actions_;
             ui_actions_ = *t.actions;
@@ -539,7 +565,13 @@ public:
         scene::pump_streaming(world_);
         if (!monetize_test_.empty()) monetize_test_requests();
         if (!game_services_test_.empty()) game_services_test_requests();
+        const u64 perf_t0 = perf_on_ ? platform::now_us() : 0;
         world_.tick(t.dt, sim_ticks_);
+        if (perf_on_) {
+            perf_frame_.sim_ms += static_cast<f32>(platform::now_us() - perf_t0) * 0.001f;
+            ++perf_frame_.ticks;
+            if (perf_.sim_hz == 0 && t.dt > 0) perf_.sim_hz = static_cast<u32>(std::lround(1.0 / t.dt));
+        }
         if (!monetize_test_.empty()) monetize_test_events();
         if (game_services_print_) game_services_test_events();
         ++sim_ticks_;
@@ -582,6 +614,12 @@ public:
     }
 
     void on_render(const app::RenderContext& rc) override {
+        const u64 perf_t0 = perf_on_ ? platform::now_us() : 0;
+        render_frame(rc);
+        if (perf_on_) end_perf_frame(rc.frame_index, perf_t0);
+    }
+
+    void render_frame(const app::RenderContext& rc) {
         audio_.update();
         clips_.sync();
         sync_fullscreen();
@@ -607,8 +645,11 @@ public:
         update_subtitles(bb);
         speak_focus();
         update_ui_screens(bb);
-        const bool overlay =
-            paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() || cv_stats.get_bool() || cutscene;
+        // Video pictures step to their players' playheads before the extracts draw them.
+        if (!ui_preview_) videos_.update(world_);
+        film_ = !ui_preview_ && videos_.fullscreen(film_set_, film_aspect_);
+        const bool overlay = paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() ||
+                             cv_stats.get_bool() || cutscene || film_;
 
         // 3D: the kit3d scene first (it ends in the backbuffer); the 2D kit draws over it.
         if (!three_d_ && kit::has_camera_3d(world_)) {
@@ -641,12 +682,14 @@ public:
             scene3.build();
             renderer_.record_3d(cmd, scene3);
             stats3d_ = scene3.stats();
+            drew_3d_ = true;
         }
 
         render::SpriteBatch batch(renderer_.sprite_sets(), mem::frame());
         batch.begin(render::compute_view_2d(cam, bb, ppm));
         if (!ui_preview_) extract_.extract(world_, batch);  // -ui_preview: the document alone
         batch.build();
+        batch_stats_ = batch.stats();
 
         // With 2D post on, the world renders offscreen and the post pass writes the backbuffer (2D
         // games only: a 3D frame has its own post chain).
@@ -702,12 +745,15 @@ public:
     }
 
     void on_shutdown() override {
+        if (relaunching_) return;  // nothing was loaded (Steam relaunches the game)
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
         save_options(true);
         if (cv_frame_report.get_int() > 0) report_run_frames();
+        if (perf_on_) write_perf_capture();
         if (liveops_on_) liveops_.shutdown();
         if (game_services_on_) game_services_.shutdown();
+        platform::steam::shutdown();
         if (three_d_) {  // the last frame's 3D load (tests and LOD measurements read it)
             const u32* lt = stats3d_.lod_triangles;
             std::printf("%s: 3D last frame %u triangles (LOD %u/%u/%u/%u), %u draws\n", desc_.app_name, stats3d_.triangles,
@@ -719,6 +765,7 @@ public:
         if (window_) window_->set_relative_mouse(false);
         clips_.release_all();
         extract3d_.shutdown();
+        videos_.shutdown();
         extract_.shutdown();
         if (device_) renderer_.shutdown();
     }
@@ -954,6 +1001,28 @@ private:
     // Every string table in the pack (assets/loc/<locale>.csv) goes into one Localization resource:
     // the saved choice first, then -language for this run, then the device languages, then
     // -default_language. A choice the game makes later (Localization::set_locale) is saved at once.
+    // Steam (M-STEAM step 1, ADR-0042): an app id opens steam_api; anything but a relaunch leaves the
+    // game running without Steam. False: Steam relaunches the game, so this run quits at once.
+    bool init_steam() {
+        platform::steam::Config sc;
+        sc.app_id = static_cast<u32>(cv_steam_app_id.get_int());
+        sc.library_path = cv_steam_library.get_string();
+        sc.restart_if_necessary = cv_steam_restart.get_bool();
+        FixedString<256> why;
+        const platform::steam::InitResult r = platform::steam::init(sc, &why);
+        if (r == platform::steam::InitResult::Restarting) {
+            MCE_LOG_INFO("{}: Steam relaunches the game; quitting", desc_.app_name);
+            quit(0);
+            return false;
+        }
+        if (r == platform::steam::InitResult::Ok)
+            MCE_LOG_INFO("{}: Steam on (app {}, {}{})", desc_.app_name, platform::steam::app_id(), platform::steam::persona_name(),
+                         platform::steam::on_steam_deck() ? ", Steam Deck" : "");
+        else
+            MCE_LOG_INFO("{}: no Steam ({}: {})", desc_.app_name, platform::steam::init_result_name(r), why.c_str());
+        return true;
+    }
+
     Result<void> init_localization() {
         loc::Localization l10n;
         for (asset::AssetKey k = 0; k < assets_.asset_count(); ++k) {
@@ -1595,6 +1664,7 @@ private:
     void record_overlay(rhi::CommandBuffer& cmd, rhi::Extent2D bb) {
         render::SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
         hud.begin(render::compute_screen_view(bb), render::PassId::Screen2D);
+        if (film_) add_fullscreen_video(hud, bb);
         subtitles_.submit(hud, -124);  // under the scene's UI screens: a menu covers them
         screens_.submit(hud, -120);  // the scene's UI screens, under the game's UI layers
         // Game UI under the pause veil (sort layer 0) and the console (200).
@@ -1659,6 +1729,29 @@ private:
             s.sort_order = 1 + static_cast<i32>(i);
             hud.add(s);
         }
+    }
+
+    // A fullscreen kit::VideoPlayer: black over the frame, the film fitted inside it (bars on the
+    // sides that do not match its aspect), under the letterbox (-130), subtitles and UI.
+    void add_fullscreen_video(render::SpriteBatch& hud, rhi::Extent2D bb) {
+        const f32 w = static_cast<f32>(bb.width), h = static_cast<f32>(bb.height);
+        if (w <= 0.0f || h <= 0.0f || film_aspect_ <= 0.0f) return;
+        constexpr i16 kLayer = -134;
+        render::SpriteInstance back;
+        back.set = extract_.sprite_set(asset::Guid{});
+        back.position = {0.5f * w, 0.5f * h};
+        back.scale = {w, h};
+        back.tint = Color{0.0f, 0.0f, 0.0f, 1.0f};
+        back.sort_layer = kLayer;
+        hud.add(back);
+        render::SpriteInstance film;
+        film.set = film_set_;
+        film.position = {0.5f * w, 0.5f * h};
+        film.scale = w / h > film_aspect_ ? math::vec2{h * film_aspect_, h} : math::vec2{w, w / film_aspect_};
+        film.flip_y = true;  // the HUD's y runs down the screen; the film's first row is its top
+        film.sort_layer = kLayer;
+        film.sort_order = 1;
+        hud.add(film);
     }
 
     void add_pause_overlay(render::SpriteBatch& hud, rhi::Extent2D bb) {
@@ -2024,6 +2117,133 @@ private:
         set_muted(background);
     }
 
+    // -perf_capture <file> (M-PERF step 1): every frame's times and counters, written as .mcperf at
+    // exit. Profiling only times systems, so the run and its state hash are what they would be without.
+    void start_perf_capture() {
+        if (cv_perf_capture.get_string().empty()) return;
+        perf_on_ = true;
+        world_.set_profiling(true);
+        world_.reset_system_timings();
+        perf_.app.assign(StringView(desc_.app_name));
+        perf_.backend.assign(device_ ? device_->caps().api_name.view() : StringView("headless"));
+        perf_.scene.assign(asset::to_string(scene_guid_).view());
+        static_assert(kPhaseCount <= perf::kMaxPhases, "perf::Frame::phase_ms holds every ECS phase");
+        for (usize p = 0; p < kPhaseCount; ++p)
+            perf_.phases.push_back(FixedString<32>(phase_name(static_cast<Phase>(p))));
+        perf_.render_phases = (1u << static_cast<u32>(Phase::Render_Pre)) | (1u << static_cast<u32>(Phase::Render_Submit));
+        static constexpr const char* kStages[] = {"clusters", "scale", "ssao", "ssr", "shadow", "gi", "volumetrics",
+                                                  "main", "resolve", "taa", "post_fx", "bloom", "tonemap", "fxaa"};
+        for (const char* name : kStages) perf_.gpu_stages.push_back(FixedString<32>(name));
+        perf_.frames.reserve(4096);
+    }
+
+    void end_perf_frame(u64 frame_index, u64 start_us) {
+        const u64 now = platform::now_us();
+        perf::Frame& f = perf_frame_;
+        f.index = frame_index;
+        f.tick = sim_ticks_;
+        f.frame_ms = perf_last_start_us_ ? static_cast<f32>(start_us - perf_last_start_us_) * 0.001f : -1.0f;
+        f.render_ms = static_cast<f32>(now - start_us) * 0.001f;
+        perf_last_start_us_ = start_us;
+
+        // Sim and render system time this frame: each system's total minus its total at the last frame.
+        world_.system_timings(perf_timings_);
+        for (const SystemTiming& t : perf_timings_) {
+            const u8 phase = static_cast<u8>(t.phase);
+            usize i = 0;
+            while (i < perf_.systems.size() && !(perf_.systems[i].phase == phase && perf_.systems[i].name == StringView(t.name)))
+                ++i;
+            if (i == perf_.systems.size()) {
+                perf::SystemStats st;
+                st.name.assign(StringView(t.name ? t.name : "?"));
+                st.phase = phase;
+                perf_.systems.push_back(st);
+                perf_prev_total_.push_back(0.0);
+                perf_prev_runs_.push_back(0);
+            }
+            const f64 ms = math::max(t.total_ms - perf_prev_total_[i], 0.0);
+            const u64 runs = t.runs >= perf_prev_runs_[i] ? t.runs - perf_prev_runs_[i] : 0;
+            perf_prev_total_[i] = t.total_ms;
+            perf_prev_runs_[i] = t.runs;
+            if (perf_seen_ < static_cast<u64>(math::max<i64>(cv_perf_warmup.get_int(), 0))) continue;
+            perf::SystemStats& st = perf_.systems[i];
+            st.total_ms += ms;
+            st.runs += runs;
+            st.max_frame_ms = math::max(st.max_frame_ms, static_cast<f32>(ms));
+            if (phase < perf::kMaxPhases) f.phase_ms[phase] += static_cast<f32>(ms);
+        }
+
+        if (device_) {
+            const rhi::FrameStats& rs = device_->last_frame_stats();
+            f.counters.draws = rs.draws;
+            f.counters.passes = rs.passes;
+            f.counters.dispatches = rs.dispatches;
+            f.counters.ring_overflows = rs.ring_overflows;
+            f.counters.upload_bytes = rs.geometry_bytes + rs.uniform_bytes + rs.indirect_bytes;
+            attach_gpu_times();
+        }
+        if (drew_3d_) {
+            f.counters.triangles = stats3d_.triangles;
+            f.counters.meshes = stats3d_.visible;
+        }
+        f.counters.sprites = batch_stats_.quads + batch_stats_.tile_quads;
+        f.counters.sprite_batches = batch_stats_.groups;
+        f.counters.heap_allocations = mem::heap_live_allocations();
+
+        if (perf_seen_++ >= static_cast<u64>(math::max<i64>(cv_perf_warmup.get_int(), 0))) perf_.frames.push_back(f);
+        perf_frame_ = perf::Frame{};
+        drew_3d_ = false;
+        batch_stats_ = {};
+    }
+
+    // GPU timestamps arrive frames late: the newest completed set goes to the captured frame it was
+    // written in. The 3D path names its stages; a 2D frame has its first-to-last timestamp span.
+    void attach_gpu_times() {
+        const rhi::GpuTimestamps& ts = device_->last_gpu_timestamps();
+        if (ts.written == 0 || ts.frame_index == ~u64(0)) return;
+        perf::Frame* target = nullptr;
+        for (usize i = perf_.frames.size(); i-- > 0;) {
+            if (perf_.frames[i].index == ts.frame_index) target = &perf_.frames[i];
+            if (perf_.frames[i].index <= ts.frame_index) break;
+        }
+        if (!target && perf_frame_.index == ts.frame_index) target = &perf_frame_;
+        if (!target || target->gpu_ms >= 0.0f) return;
+        if (three_d_) {
+            const render::Forward3DGpuTimes g = renderer_.forward_3d().gpu_times(ts);
+            const f64 stages[] = {g.clusters, g.scale, g.ssao, g.ssr, g.shadow, g.gi, g.volumetrics,
+                                  g.main, g.resolve, g.taa, g.post_fx, g.bloom, g.tonemap, g.fxaa};
+            static_assert(sizeof(stages) / sizeof(stages[0]) <= perf::kMaxGpuStages, "perf::Frame::gpu_stage_ms holds every stage");
+            for (usize i = 0; i < std::size(stages); ++i)
+                target->gpu_stage_ms[i] = static_cast<f32>(stages[i]);
+            if (g.total >= 0) target->gpu_ms = static_cast<f32>(g.total);
+            if (g.total >= 0) return;
+        }
+        u32 first = ~0u, last = 0;
+        for (u32 i = 0; i < rhi::kMaxTimestamps; ++i)
+            if (ts.has(i)) {
+                if (first == ~0u) first = i;
+                last = i;
+            }
+        if (first != ~0u && last > first) target->gpu_ms = static_cast<f32>(ts.ms(first, last));
+    }
+
+    void write_perf_capture() {
+        const StringView path = cv_perf_capture.get_string();
+        if (Result<void> r = perf::save_mcperf(perf_, FixedString<1024>(path).c_str()); !r) {
+            FixedString<512> why;
+            format_error(r.error(), why);
+            MCE_LOG_ERROR("{}: -perf_capture not written: {}", desc_.app_name, why.view());
+            return;
+        }
+        const perf::Summary s = perf::summarize(perf_);
+        std::printf("%s: perf capture %.*s: %u frames, frame p50 %.2f / p95 %.2f / p99 %.2f / max %.2f ms, sim p95 %.2f ms, "
+                    "render p95 %.2f ms, %zu spikes, max %u draws / %u triangles\n",
+                    desc_.app_name, static_cast<int>(path.size()), path.data(), s.frames, static_cast<f64>(s.frame.p50),
+                    static_cast<f64>(s.frame.p95), static_cast<f64>(s.frame.p99), static_cast<f64>(s.frame.max),
+                    static_cast<f64>(s.sim.p95), static_cast<f64>(s.render.p95), s.spikes.size(), s.counters_max.draws,
+                    s.counters_max.triangles);
+    }
+
     // -r.frame_report N (#214): wall time between rendered frames, logged as average / p95 / worst
     // every N frames and for the whole run at exit. Windowed only (headless frames are not paced).
     void meter_frame() {
@@ -2214,6 +2434,10 @@ private:
     render::AssetUploadSink sink_;
     audio::ClipBank clips_;
     kit::SpriteExtract extract_;
+    kit::VideoTextures videos_;  // kit::VideoPlayer pictures (M-CINEMA 5)
+    render::SpriteSetId film_set_;  // this frame's fullscreen video, when film_
+    f32 film_aspect_ = 0.0f;
+    bool film_ = false;
     kit::Kit3DExtract extract3d_;
     render::Scene3D::Stats stats3d_;
     bool three_d_ = false;         // the 3D path is on (a scene with a Camera3DComponent)
@@ -2300,6 +2524,7 @@ private:
     bool ui_map_pushed_ = false;
     bool ui_map_missing_ = false;
     bool ui_preview_ = false;  // -ui_preview: one document over the clear color
+    bool relaunching_ = false;  // Steam relaunches the game: this run quits before loading anything
     struct UiPointer {
         math::vec2 pos{-1, -1};
         u32 slot = 0;
@@ -2309,6 +2534,18 @@ private:
     bool unfocused_ = false;   // the window lost focus (or minimized); the focus-loss save ran
     bool fullscreen_ = false;  // what cv_fullscreen last applied
     u64 last_frame_us_ = 0;    // -r.frame_report: the previous rendered frame
+    // -perf_capture (M-PERF step 1): the capture, the frame being measured (its ticks run before it
+    // draws) and each captured system's total at the last frame, to take per-frame differences.
+    bool perf_on_ = false;
+    perf::Capture perf_;
+    perf::Frame perf_frame_;
+    u64 perf_seen_ = 0;          // frames measured, the warm-up included
+    u64 perf_last_start_us_ = 0;
+    Array<SystemTiming> perf_timings_;
+    Array<f64> perf_prev_total_;  // parallel to perf_.systems
+    Array<u64> perf_prev_runs_;
+    bool drew_3d_ = false;        // this frame recorded the 3D scene (stats3d_ is its)
+    render::BatchStats batch_stats_;
     Array<f32> frame_ms_;      // this report window's frame times
     f64 run_sum_ms_ = 0;
     f32 run_worst_ms_ = 0;

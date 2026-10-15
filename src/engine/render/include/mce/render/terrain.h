@@ -130,4 +130,28 @@ bool compose_layer_array(Span<const asset::TextureView* const> layers, LayerArra
 // The weight map of a terrain with splat layers as a 2-layer RGBA8 array upload (pointing into the view).
 TextureUpload splat_upload(const asset::TerrainView& terrain, TextureMipUpload& mip);
 
+// Foliage on a terrain (M-TERRAIN 5): world matrices of copies standing on the surface, `density` per
+// square metre (terrain space) where splat layer `layer` has full weight, thinned in proportion to the
+// weight elsewhere (kAnyLayer: everywhere). One candidate per cell of a 1 / sqrt(density) grid, jittered
+// inside its cell, kept with probability weight / 255; none on a quad with a hole corner or steeper than
+// `max_slope_deg`. Each copy gets a random yaw (`random_yaw`) and a uniform scale in [scale_min,
+// scale_max]. A cell's draw depends only on `seed` and the cell, so repainting one area leaves the copies
+// elsewhere where they were. The terrain stands at `position` / `rotation` / `scale` (the entity's pose);
+// copies take its rotation and stay upright in it. At most `max_count` copies (the grid coarsens past
+// four candidates per copy allowed).
+struct TerrainScatter {
+    static constexpr u32 kAnyLayer = 8;
+    u32 layer = 0;
+    f32 density = 1.0f;
+    u32 max_count = 100000;
+    u32 seed = 1;
+    f32 scale_min = 0.8f, scale_max = 1.2f;
+    f32 max_slope_deg = 90.0f;
+    bool random_yaw = true;
+    math::vec3 position{0.0f, 0.0f, 0.0f};
+    math::quat rotation;
+    math::vec3 scale{1.0f, 1.0f, 1.0f};
+};
+void scatter_on_terrain(const asset::TerrainView& terrain, const TerrainScatter& scatter, Array<math::mat4>& out);
+
 }  // namespace mce::render

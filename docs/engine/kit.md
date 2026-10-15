@@ -114,6 +114,15 @@ timelines and follow cameras), both `run_during_cutscenes`. A cutscene hold (`Wo
 runs only the systems so marked: timelines, sequences, animators, attach, sprite animation, particles,
 effects, captions, follow cameras, transforms and the audio bridge.
 
+`video.h` (M-CINEMA 5, ADR-0043): `VideoPlayer` (an `AssetRef<Video>`, the playhead `time`, `speed`,
+`playing`, `loop`, `restart`, `finished`, `fullscreen`, `sound`, `gain_db`) and `VideoRegistry` (the cooked
+videos' lengths and sound clips, the sound voices). `install_video(world, assets)`: `"kit_video"`
+(`FixedUpdate_Post`, before `"timeline_player"` so a video track's playhead wins the tick,
+`run_during_cutscenes`) advances the playhead and keeps one mixer voice per playing player in step with it.
+Render side, `VideoTextures`: one `render::VideoDecoder` and one RGBA8 texture per shown player, stepped to
+its `time` each frame; `SpriteExtract::set_videos` draws a `VideoPlayer`'s `Sprite` with its film, and
+`fullscreen()` gives the stock player the splash to draw.
+
 `fsm.h` (header-only, namespace `mce::fsm`):
 
 - `Trans<S>` rows (`from`, `to`, guard `when` or timed `after`, `entry`, `exit` actions),
