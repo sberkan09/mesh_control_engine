@@ -170,7 +170,7 @@ public:
 
         const f64 t0 = now_ms();
         SpriteBatch world(renderer_.sprite_sets(), mem::frame());
-        world.begin(compute_view_2d(camera_, bb, kPpm, shake_.offset()));
+        world.begin(compute_view_2d(camera_, bb, kPpm, scale_shake(shake_.offset(), accessibility_settings().motion_scale)));
         world.reserve(critters_.size());
         renderer_.add_tilemap(world, tilemap_);
         for (const Critter& c : critters_) {

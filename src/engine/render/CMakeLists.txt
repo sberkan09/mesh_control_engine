@@ -5,6 +5,7 @@
 
 mce_add_library(mce_render
     SOURCES
+        src/accessibility.cpp
         src/asset_upload.cpp
         src/atmosphere.cpp
         src/camera2d.cpp

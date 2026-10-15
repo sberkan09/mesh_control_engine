@@ -19,6 +19,7 @@
 
 #include "mce/containers/array.h"
 #include "mce/math/math.h"
+#include "mce/render/accessibility.h"
 #include "mce/render/atmosphere.h"
 #include "mce/render/clusters.h"
 #include "mce/render/mesh.h"
@@ -129,6 +130,10 @@ struct PostFx {
     // does not hold) = off.
     u32 lut_key = 0;
     f32 lut_strength = 1.0f;  // 0 = ungraded, 1 = fully graded
+    // Color-vision correction (M-ACCESS) in the tonemap pass, after the grade; set from the
+    // player's settings by apply_accessibility, never by the game.
+    ColorVision color_vision = ColorVision::None;
+    f32 color_vision_strength = 1.0f;
     // Depth of field: a gather over a disk whose radius follows each pixel's circle of confusion: 0
     // within `focus_range` meters of `focus_distance`, growing to `max_radius` (a fraction of the view
     // height) over `blur_range` meters on either side. Reads the velocity prepass's depth.
