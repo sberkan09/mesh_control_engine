@@ -32,3 +32,18 @@ Limits: the correction filters the game frame, not the UI drawn over it (the UI 
 on a 3D frame the 2D sprites drawn over it are not corrected. Games that write shake or flashes into their own
 components scale them by reading `render::accessibility_settings()` in their render code; the engine scales only
 the effects it owns. Undertow (`CameraRig`, `ScreenFlash`, written in its simulation) does not yet.
+
+## Step 3 — Options and remap screen (SBA-97)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Action labels in the cooked input map (chunk v2: one length-prefixed name per action; v1 still read; id-only maps keep v1 bytes) | `InputMapSet::labels` / `label()`, `InputMapBuilder::action(StringView)`, the `.mcinput` cook (importer v2) | `test_input` "the cooked map keeps action labels (v2) and still reads v1 chunks" |
+| Binding names for the UI ("W", "Mouse Right", "Pad South", "Left Stick Up") | `mce/input/binding_names.h` | `test_input` "binding names read the way a player says them" |
+| Look sensitivity, hold-to-toggle, one-hand keyboard presets, a bindings generation | `InputSystem::set_look_sensitivity`, `set_toggle`, `apply_hand_preset(Hand)`, `bindings_generation` | `test_input` "look sensitivity scales Look only ...", "one-hand presets move the keyboard to one side ..." |
+| The remap list: rows per action (per direction for axis actions), capture on confirm, Toggle switches, preset and reset buttons | `ui::OptionsPanel` (widgets found by name: `remap_list`, `preset_*`, `reset_bindings`), driven by the player's `UiScreens` | `test_ui` "the options panel lists the remappable actions and rebinds by capture", "the Toggle switch sets hold-to-toggle ..." |
+| Saved convars persist | `console::write_saved` / `apply_saved` / `saved_generation`, `ConVar::is_default` | `test_core` "Saved convars write to text and read back; the command line wins over the file" |
+| Settings and bindings files | the player: `<app>.settings` and `<app>.bindings` in the save folder, loaded after the input map, written once a change settles for 30 frames and on quit; `-settings 0`, and capture runs skip them | user guide 11.4 |
+| The stock screen | `templates/project/assets/ui/options.mcui` (Display, Audio and Controls tabs), on the template's main scene behind `UiFlow` show_on Pause / hide_on Back | the template probe cooks it |
+
+Limits: the one-hand presets move keyboard bindings only (mouse, gamepad and touch stay); the gamepad is
+rebound per binding. Look sensitivity applies to the action named `Look`.

@@ -188,3 +188,43 @@ TEST_CASE("cheat lock (shipped builds)") {
     cv_test_int.reset();
     cv_test_bool.reset();
 }
+
+namespace {
+MCE_CVAR(cv_test_saved_f, "test.saved.f", 1.0f, "saved float", CVarFlags::Saved);
+MCE_CVAR(cv_test_saved_s, "test.saved.s", "a", "saved string", CVarFlags::Saved);
+MCE_CVAR(cv_test_saved_cli, "test.saved.cli", 0, "saved int the command line sets", CVarFlags::Saved);
+}  // namespace
+
+TEST_CASE("M-ACCESS: Saved convars write to text and read back; the command line wins over the file") {
+    cv_test_saved_f.set_float(0.25f);
+    cv_test_saved_s.set_string("two words");
+    const u64 gen = console::saved_generation();
+    cv_test_saved_f.set_float(0.5f);
+    CHECK(console::saved_generation() > gen);  // a Saved change moves the generation
+    const u64 gen2 = console::saved_generation();
+    cv_test_int.set_int(7);  // not Saved: never written, never moves it
+    CHECK(console::saved_generation() == gen2);
+    cv_test_int.reset();
+
+    Array<char> text;
+    console::write_saved(text);
+    const std::string s(text.data(), text.size());
+    CHECK(s.find("test.saved.f 0.5\n") != std::string::npos);
+    CHECK(s.find("test.saved.s \"two words\"\n") != std::string::npos);
+    CHECK(s.find("test.int") == std::string::npos);
+
+    cv_test_saved_f.reset();
+    cv_test_saved_s.reset();
+    cv_test_saved_cli.set_int(4);  // as if -test.saved.cli 4 came first
+    const char* file = "# settings\ntest.saved.f 0.5\ntest.saved.s \"two words\"\r\ntest.saved.cli 9\ntest.int 99\nnope 1\n"
+                       "test.saved.f\n";
+    CHECK(console::apply_saved(file) == 2);
+    CHECK(cv_test_saved_f.get_float() == 0.5f);
+    CHECK(cv_test_saved_s.get_string() == StringView("two words"));
+    CHECK(cv_test_saved_cli.get_int() == 4);
+    CHECK(cv_test_int.get_int() == 3);  // not Saved: the file cannot set it
+    cv_test_saved_f.reset();
+    cv_test_saved_s.reset();
+    cv_test_saved_cli.reset();
+    CHECK(cv_test_saved_f.is_default());
+}

@@ -64,6 +64,9 @@ public:
     CVarType type() const { return type_; }
     void set_on_change(ChangeFn fn) { on_change_ = fn; }
 
+    // True while the value differs from the default (the command line, the console or code set it).
+    bool is_default() const;
+
     static ConVar* find(StringId id);
     // All registered convars sorted by name (console listing, settings save).
     static void collect(Array<ConVar*>& out);
@@ -136,6 +139,15 @@ void print_help(const char* app_name, const char* usage, std::FILE* out = nullpt
 // still set them (a game's own slow-motion). Allowed by default (development builds).
 void set_cheats_allowed(bool allowed);
 bool cheats_allowed();
+
+// Player settings (M-ACCESS): every Saved convar as "name value" lines, sorted by name (string
+// values quoted), for a settings file. apply_saved reads such text back: unknown names and values
+// that fail to parse are skipped, and a convar that is not at its default (the command line set it)
+// keeps its value, so -flags win over the file. Returns the number applied.
+void write_saved(Array<char>& out);
+u32 apply_saved(StringView text);
+// Bumped whenever a Saved convar changes: a host writes the settings file when it moves.
+u64 saved_generation();
 }  // namespace console
 
 }  // namespace mce

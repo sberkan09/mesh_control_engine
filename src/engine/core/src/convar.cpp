@@ -82,8 +82,23 @@ void ConVar::link() {
     g_cvar_head = this;
 }
 
+namespace {
+u64 g_saved_generation = 0;
+}
+
 void ConVar::changed() {
+    if (flags_ & CVarFlags::Saved) ++g_saved_generation;
     if (on_change_) on_change_(*this);
+}
+
+bool ConVar::is_default() const {
+    switch (type_) {
+        case CVarType::Bool: return value_.b == default_.b;
+        case CVarType::Int: return value_.i == default_.i;
+        case CVarType::Float: return value_.f == default_.f;
+        case CVarType::String: return str_.view() == default_str_.view();
+    }
+    return true;
 }
 
 bool ConVar::get_bool() const {
@@ -494,6 +509,51 @@ u32 apply_deferred_command_line() {
     g_deferred_count = 0;
     return unknown;
 }
+
+void write_saved(Array<char>& out) {
+    out.clear();
+    Array<ConVar*> vars;
+    ConVar::collect(vars);
+    FixedString<128> value;
+    for (const ConVar* v : vars) {
+        if (!(v->flags() & CVarFlags::Saved)) continue;
+        v->to_string(value);
+        const StringView name(v->name());
+        const bool quote = v->type() == CVarType::String;
+        for (char c : name) out.push_back(c);
+        out.push_back(' ');
+        if (quote) out.push_back('"');
+        for (char c : value.view())
+            if (c != '"' && c != '\n') out.push_back(c);
+        if (quote) out.push_back('"');
+        out.push_back('\n');
+    }
+}
+
+u32 apply_saved(StringView text) {
+    u32 applied = 0;
+    usize at = 0;
+    while (at < text.size()) {
+        usize end = text.find('\n', at);
+        if (end == StringView::npos) end = text.size();
+        StringView line = text.substr(at, end - at);
+        at = end + 1;
+        while (!line.empty() && (is_space(line.back()) || line.back() == '\r')) line.remove_suffix(1);
+        usize i = 0;
+        while (i < line.size() && is_space(line[i])) ++i;
+        line = line.substr(i);
+        const usize sp = line.find(' ');
+        if (line.empty() || line[0] == '#' || sp == StringView::npos) continue;
+        ConVar* v = ConVar::find(StringId(line.substr(0, sp)));
+        if (!v || !(v->flags() & CVarFlags::Saved) || !v->is_default()) continue;
+        StringView value = line.substr(sp + 1);
+        if (value.size() >= 2 && value.front() == '"' && value.back() == '"') value = value.substr(1, value.size() - 2);
+        if (v->set_from_string(value)) ++applied;
+    }
+    return applied;
+}
+
+u64 saved_generation() { return g_saved_generation; }
 
 }  // namespace console
 }  // namespace mce

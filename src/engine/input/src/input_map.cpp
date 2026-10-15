@@ -46,6 +46,18 @@ Result<void> decode_input_map(Span<const byte> chunk, InputMapSet& out) {
     if (!read_pod(chunk, pos, h.map_count, out.maps) || !read_pod(chunk, pos, h.action_count, out.actions) ||
         !read_pod(chunk, pos, h.binding_count, out.bindings))
         return Error(Errc::Truncated, kStage);
+    out.labels.clear();
+    if (h.version >= 2) {  // v2 is only written with labels
+        out.labels.resize(h.action_count);
+        for (u32 i = 0; i < h.action_count; ++i) {
+            if (pos >= chunk.size()) return Error(Errc::Truncated, kStage, "action labels");
+            const u32 len = static_cast<u8>(chunk[pos++]);
+            if (len > kMaxActionLabel) return Error(Errc::InvalidArgument, kStage, "bad action label", i);
+            if (chunk.size() - pos < len) return Error(Errc::Truncated, kStage, "action labels");
+            out.labels[i].assign(StringView(reinterpret_cast<const char*>(chunk.data() + pos), len));
+            pos += len;
+        }
+    }
 
     for (usize i = 0; i < out.maps.size(); ++i) {
         const ActionMapDef& m = out.maps[i];
@@ -74,7 +86,10 @@ Result<void> decode_input_map(Span<const byte> chunk, InputMapSet& out) {
 }
 
 void encode_input_map(const InputMapSet& set, Array<byte>& out) {
+    bool labelled = false;
+    for (const ActionLabel& l : set.labels) labelled = labelled || !l.empty();
     InputMapHeader h;
+    h.version = labelled ? kInputMapVersion : 1;  // unlabelled maps keep their v1 bytes
     h.map_count = static_cast<u32>(set.maps.size());
     h.action_count = static_cast<u32>(set.actions.size());
     h.binding_count = static_cast<u32>(set.bindings.size());
@@ -83,6 +98,15 @@ void encode_input_map(const InputMapSet& set, Array<byte>& out) {
     append_pod(out, set.maps.data(), set.maps.size());
     append_pod(out, set.actions.data(), set.actions.size());
     append_pod(out, set.bindings.data(), set.bindings.size());
+    if (!labelled) return;
+    for (usize i = 0; i < set.actions.size(); ++i) {
+        const StringView l = set.label(i);
+        const usize len = l.size() < kMaxActionLabel ? l.size() : kMaxActionLabel;
+        out.push_back(static_cast<byte>(len));
+        const usize at = out.size();
+        out.resize(at + len);
+        if (len) std::memcpy(out.data() + at, l.data(), len);
+    }
 }
 
 // ---------------------------------------------------------------------------- builder
@@ -104,6 +128,13 @@ InputMapBuilder& InputMapBuilder::action(StringId name, ActionType type) {
     a.first_binding = static_cast<u16>(set_.bindings.size());
     set_.actions.push_back(a);
     ++set_.maps.back().action_count;
+    return *this;
+}
+
+InputMapBuilder& InputMapBuilder::action(StringView name, ActionType type) {
+    action(StringId(name), type);
+    set_.labels.resize(set_.actions.size());
+    set_.labels.back().assign(name.substr(0, kMaxActionLabel));
     return *this;
 }
 

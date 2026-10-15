@@ -208,7 +208,7 @@ None of the non-GPU tests above need a display.
 - Windows has no stock-tool module loading either (no umbrella): there the per-project
   `<game>_editor`, `<game>_mcp` and `<game>_cook` executables of `mce_add_project`, which compile the
   game in, are the only way the tools know a game's components.
-- Rebinding persistence (`InputSystem::save_bindings`) is not wired into the player runtime, and
-  the runtime does not hot-reload a re-cooked input map.
+- The runtime does not hot-reload a re-cooked input map. (Rebinding persistence is wired: the player
+  keeps `<app>.bindings` and `<app>.settings` in the save folder, M-ACCESS.)
 - Crash reporting gaps from packaging v2: the Windows path has not been run, Windows `abort()`
   leaves no report, POSIX unwinds only the crashing thread, and reports are not uploaded.

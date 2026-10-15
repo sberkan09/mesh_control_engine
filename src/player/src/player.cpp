@@ -198,6 +198,10 @@ MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
          CVarFlags::None);
+MCE_CVAR(cv_settings, "settings", true,
+         "Windowed runs: load the player's settings (Saved convars) and key bindings from the save folder and write "
+         "them back when they change (off with -capture / -frames, so captures never read a player's settings)",
+         CVarFlags::None);
 MCE_CVAR(cv_haptics, "haptics", true,
          "Haptic feedback: phone taps and gamepad rumble from platform::haptics::play (off: none; never in the state hash)",
          CVarFlags::Saved);
@@ -439,6 +443,7 @@ public:
             }
             if (cv_console.get_bool() && cv_console_open.get_bool()) set_console(true);
             MCE_TRY(load_input_map(cv_input_map.get_string()));
+            load_settings();
             const platform::PixelSize fb = window_->framebuffer_size();
             input_.set_view_size(static_cast<f32>(fb.width), static_cast<f32>(fb.height));  // touch distances
             window_->set_event_handler(&PlayerApp::on_event, this);
@@ -543,6 +548,8 @@ public:
         if (!os_background_ && sim_ticks_ > 0) world_.render(rc.alpha);
         meter_frame();
         if (device_) platform::haptics::set_enabled(cv_haptics.get_bool());  // the console or a settings menu may flip it
+        ui::apply_input_options(input_);  // look sensitivity, hold-to-toggle (M-ACCESS)
+        save_settings(false);
         if (!device_ || os_background_) return;  // no GPU work in the background (iOS ends apps that try)
         device_->begin_frame(rc.frame_index);
         const rhi::Extent2D bb = device_->backbuffer_size();
@@ -652,6 +659,7 @@ public:
     void on_shutdown() override {
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
+        save_settings(true);
         if (cv_frame_report.get_int() > 0) report_run_frames();
         if (liveops_on_) liveops_.shutdown();
         if (game_services_on_) game_services_.shutdown();
@@ -819,6 +827,63 @@ private:
         scene_path_.assign(assets_.info(best).path);
         return assets_.info(best).guid;
     }
+
+    // Player settings (M-ACCESS): every Saved convar (accessibility, ui_scale, volumes, sensitivity,
+    // hold-to-toggle) and the key bindings, as <app>.settings / <app>.bindings in the save folder.
+    // The command line still wins over the file (console::apply_saved).
+    bool settings_on() const {
+        return device_ && cv_settings.get_bool() && cv_frames.get_int() == 0 && cv_capture.get_string().empty() &&
+               cv_capture_tick.get_int() == 0 && cv_capture_ticks.get_string().empty();
+    }
+    FixedString<128> settings_name(const char* what) const {
+        FixedString<128> n(desc_.app_name ? desc_.app_name : "mce_player");
+        n.append(".");
+        n.append(what);
+        return n;
+    }
+    void load_settings() {
+        if (!settings_on()) return;
+        Array<byte> bytes;
+        if (save::read(settings_name("settings").view(), bytes)) {
+            const u32 n = console::apply_saved(StringView(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+            MCE_LOG_INFO("{}: {} saved setting(s)", desc_.app_name, n);
+        }
+        bytes.clear();
+        if (save::read(settings_name("bindings").view(), bytes)) {
+            if (Result<void> r = input_.deserialize_bindings(StringView(reinterpret_cast<const char*>(bytes.data()), bytes.size())); !r)
+                MCE_LOG_WARN("{}: the saved key bindings do not load; using the game's", desc_.app_name);
+        }
+        settings_gen_ = console::saved_generation();
+        bindings_gen_ = input_.bindings_generation();
+    }
+    // Writes what changed, once it has stopped changing for half a second (a slider drag writes once).
+    void save_settings(bool now) {
+        if (!settings_on()) return;
+        const u64 sg = console::saved_generation(), bg = input_.bindings_generation();
+        if (sg == settings_gen_ && bg == bindings_gen_) return;
+        if (sg != settings_seen_ || bg != bindings_seen_) {
+            settings_seen_ = sg;
+            bindings_seen_ = bg;
+            settings_quiet_frames_ = 0;
+        }
+        if (!now && ++settings_quiet_frames_ < 30) return;
+        if (sg != settings_gen_) {
+            Array<char> text;
+            console::write_saved(text);
+            if (!save::write(settings_name("settings").view(), std::as_bytes(text.span())))
+                MCE_LOG_WARN("{}: could not write the settings file", desc_.app_name);
+            settings_gen_ = sg;
+        }
+        if (bg != bindings_gen_) {
+            Array<char> text;
+            input_.serialize_bindings(text);
+            if (!save::write(settings_name("bindings").view(), std::as_bytes(text.span())))
+                MCE_LOG_WARN("{}: could not write the key bindings file", desc_.app_name);
+            bindings_gen_ = bg;
+        }
+    }
+    u64 settings_gen_ = 0, bindings_gen_ = 0, settings_seen_ = 0, bindings_seen_ = 0;
+    u32 settings_quiet_frames_ = 0;
 
     // The project's action maps (FR-INP-020): a GUID or source path, else the first cooked
     // .mcinput in the pack by path, else the built-in default map. A named map that is missing or
@@ -1403,6 +1468,7 @@ private:
             ui_preview_ = true;
             return screens_.load_preview(world_, assets_, entities_.span(), g.value(), skin, extract);
         }
+        screens_.set_input(&input_);  // a stock options screen's remap list (M-ACCESS)
         MCE_TRY(screens_.load(world_, assets_, entities_.span(), skin, extract));
         return {};
     }
@@ -1743,7 +1809,10 @@ private:
                 audio_.set_paused(ad_paused_);
                 MCE_LOG_INFO("{}: back in the foreground (paused until resumed)", desc_.app_name);
                 break;
-            case platform::EventType::AppTerminating: write_save(); break;
+            case platform::EventType::AppTerminating:
+                write_save();
+                save_settings(true);
+                break;
             case platform::EventType::AppLowMemory: MCE_LOG_WARN("{}: the OS reports low memory", desc_.app_name); break;
             default: break;
         }
