@@ -4,6 +4,8 @@
 #   scripts/ci/local_ci.sh            # everything: walls, 3 Linux presets, clang-tidy, determinism
 #   scripts/ci/local_ci.sh --quick    # walls + linux-gcc-debug (with GPU tests)
 #   scripts/ci/local_ci.sh --tidy-all # everything, with clang-tidy over the whole tree
+#   scripts/ci/local_ci.sh --task     # after each task: walls + linux-gcc-debug + tidy (+ determinism, below)
+#   scripts/ci/local_ci.sh --batch    # every 3rd task and at a milestone's end: everything (same as no stage)
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages
 #
 # Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism. linux-gcc-release
@@ -11,6 +13,9 @@
 # runs the tests in Release.
 # GPU tests run under Xvfb + Mesa llvmpipe (GL) and lavapipe (Vulkan, for mce_rhi_sdlgpu, ADR-0038), in
 # linux-gcc-debug only; the other presets build them without running them.
+#
+# --task adds determinism when the change touches simulation code: src/engine/{core,ecs,refl,scene,kit,
+# kit_novel,physics2d,physics3d,audio,input,net,monetize}, or a changed file with MCE_COMPONENT or state_hash.
 #
 # tidy checks the translation units changed since the merge base with $MCE_TIDY_BASE (default
 # origin/dev_claude), committed or not, plus the ones that include a changed header. It covers the whole
@@ -44,17 +49,46 @@ declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=OFF [linux-gcc-
 stages=()
 save_cache=0
 tidy_all=0
+task_run=0
 for arg in "$@"; do
     case "$arg" in
         --quick) stages+=(walls linux-gcc-debug) ;;
+        --task) stages+=(walls linux-gcc-debug tidy); task_run=1 ;;
+        --batch) ;;
         --save-cache) save_cache=1 ;;
         --tidy-all) tidy_all=1 ;;
-        -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,38p' "$0"; exit 0 ;;
         *) stages+=("$arg") ;;
     esac
 done
 full_run=0
 [[ ${#stages[@]} -eq 0 ]] && { stages=("${ALL_STAGES[@]}"); full_run=1; }
+
+# Files changed since the merge base with $MCE_TIDY_BASE (default origin/dev_claude), committed or
+# not; prints nothing when the base ref is missing.
+changed_files() {
+    local mb
+    mb="$(git merge-base HEAD "${MCE_TIDY_BASE:-origin/dev_claude}" 2>/dev/null)" || return 0
+    { git diff --name-only "$mb"; git ls-files --others --exclude-standard; } | sort -u
+}
+
+# --task: a change to simulation code (anything that can reach World::state_hash) also runs determinism.
+touches_sim() {
+    local f
+    while IFS= read -r f; do
+        case "$f" in
+            src/engine/core/*|src/engine/ecs/*|src/engine/refl/*|src/engine/scene/*|src/engine/kit/*|\
+                src/engine/kit_novel/*|src/engine/physics2d/*|src/engine/physics3d/*|src/engine/audio/*|\
+                src/engine/input/*|src/engine/net/*|src/engine/monetize/*) return 0 ;;
+        esac
+        [[ -f "$f" && "$f" =~ \.(h|hpp|cpp|cc)$ ]] && grep -qE 'MCE_COMPONENT|state_hash' "$f" && return 0
+    done < <(changed_files)
+    return 1
+}
+if [[ $task_run -eq 1 ]] && touches_sim; then
+    echo "=== --task: the change touches simulation code, determinism runs too"
+    stages+=(determinism)
+fi
 
 LOG_DIR="$ROOT/build/local-ci-logs"
 mkdir -p "$LOG_DIR"
@@ -185,13 +219,13 @@ stage_preset() {
 
 # Prints the run-clang-tidy file regexes: one per changed translation unit, or the whole tree.
 tidy_targets() {
-    local base="${MCE_TIDY_BASE:-origin/dev_claude}" mb f h
+    local f h
     local -A tus=()
-    if [[ $tidy_all -eq 1 ]] || ! mb="$(git merge-base HEAD "$base" 2>/dev/null)"; then
+    if [[ $tidy_all -eq 1 ]] || ! git merge-base HEAD "${MCE_TIDY_BASE:-origin/dev_claude}" > /dev/null 2>&1; then
         echo "^$ROOT/(src|samples|tests)/"; return
     fi
     local changed
-    changed="$({ git diff --name-only "$mb"; git ls-files --others --exclude-standard; } | sort -u)"
+    changed="$(changed_files)"
     if grep -qx '.clang-tidy' <<< "$changed"; then echo "^$ROOT/(src|samples|tests)/"; return; fi
     while IFS= read -r f; do
         [[ -f "$f" ]] || continue
