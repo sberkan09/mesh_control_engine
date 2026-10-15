@@ -17,4 +17,4 @@ public class MceActivity extends SDLActivity {
         if (args == null || args.trim().isEmpty()) return new String[0];
         return args.trim().split("\\s+");
     }
-@BILLING@@ADS@@FIREBASE@@GAMES@@REVIEW@@HAPTICS@}
+@BILLING@@ADS@@FIREBASE@@GAMES@@REVIEW@@HAPTICS@@ACCESS@}

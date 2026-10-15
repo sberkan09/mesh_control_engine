@@ -62,3 +62,20 @@ the effects it owns. Undertow (`CameraRig`, `ScreenFlash`, written in its simula
 
 Limits: the one-hand presets move keyboard bindings only (mouse, gamepad and touch stay); the gamepad is
 rebound per binding. Look sensitivity applies to the action named `Look`.
+
+## Step 4 — Screen reader bridge (SBA-98)
+
+| Item | Where | Evidence |
+|---|---|---|
+| The UI tree for readers: roles (button, switch, slider, tab, list, text field, text, image; panels and stacks are groups), names (own text, else the label just before; all-caps read in sentence case), values ("40%" on a 0..1 slider, the number otherwise, on/off, a tab's "selected"), rects, focus and enabled; hidden subtrees left out | `ui::build_access_tree`, `ui::access_node`, `ui::access_line` (`mce/ui/access.h`) | `test_ui` "the access tree gives each widget a role, a name and a value" |
+| Focus announcements: a focus move speaks the item, a focused value change speaks the value, a new document speaks its focus | `ui::AccessAnnouncer` | `test_ui` "the announcer speaks focus moves, then a focused value's changes" |
+| The platform bridge: `announce`, `running`, a sink for tests and logs | `platform::screen_reader` (`mce/platform/screen_reader.h`) | `test_platform` "screen reader announcements reach the sink ..." |
+| Android TalkBack: `MceActivity.mceScreenReaderOn` (touch exploration on) and `mceAnnounce` (`View.announceForAccessibility` on the UI thread), stamped by `android_app.py`, looked up over JNI | `cmake/mobile/android_app.py` `ACCESS_METHODS`, `screen_reader.cpp` | `android_bridges` checks the stamped methods and the JNI names and signatures |
+| iOS VoiceOver (`UIAccessibility.post(.announcement)`, `isVoiceOverRunning`), macOS VoiceOver (`NSAccessibilityAnnouncementRequestedNotification`, `isVoiceOverEnabled`), Windows (a minimal UI Automation provider hosted by the game's HWND, `UiaRaiseNotificationEvent`; `SPI_GETSCREENREADER`) | `screen_reader_uikit.swift`, `screen_reader_apple.mm`, `screen_reader_win32.cpp`, behind `MCE_SCREEN_READER_NATIVE` (OFF) | not compiled or run here: they need the Mac, a phone and a Windows machine |
+| The player speaks the focus of the topmost modal screen (or the open console), checking the OS once a second in mode 1 | `access.screen_reader` (0 never, 1 while a reader is on, 2 always), `PlayerApp::speak_focus`, `UiScreens::focus_document` | user guide 12.5 |
+
+Device verification is open: TalkBack on an Android device or emulator, VoiceOver on iOS and macOS, and
+Narrator or NVDA on Windows, each with `MCE_SCREEN_READER_NATIVE=ON` where it applies. Until then the iOS, macOS
+and Windows bridges stay off by default (the StoreKit precedent). Limits: announcements only, no explorable tree
+(touch exploration, a reader's own list of the screen's items); the HUD is not read (it never takes focus);
+the editor's play-in-editor does not announce.

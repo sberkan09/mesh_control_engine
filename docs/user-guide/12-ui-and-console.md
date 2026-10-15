@@ -269,3 +269,28 @@ Every convar can be set on the command line as `-name value`, including a game m
 boot-time switches (`MCE_CVAR` in the module: the player applies them once the module loads and
 only then warns about names nobody declared). Game state still belongs in the World (chapter 6.7).
 Shipped folders lock cheats before parsing the command line (chapter 15).
+
+## 12.5 Screen readers
+
+The engine draws its own UI, so to a screen reader a game is one picture. The stock player speaks
+for it: when focus moves in the menu that owns it (the topmost modal screen, or the console), the
+device's reader says the item ("Music, slider, 40%", "Subtitles, switch, on", "Display, tab,
+selected"), and a focused slider or switch says its new value as it changes.
+
+| Platform | Reader | Bridge |
+|---|---|---|
+| Android | TalkBack | `View.announceForAccessibility`, stamped into every game's activity |
+| iOS | VoiceOver | `UIAccessibility` announcements (build with `-DMCE_SCREEN_READER_NATIVE=ON`) |
+| macOS | VoiceOver | AppKit announcement requests (same option) |
+| Windows | Narrator, NVDA, JAWS | UI Automation notifications on the game's window (same option) |
+| Linux, web | — | none |
+
+`access.screen_reader` (Saved, on the options screen's Display tab): 0 never, 1 while the OS
+reports a reader on (the default), 2 always. What a reader calls a widget is its text; a slider or
+switch with no text takes the label just before it in its parent, so the usual "label, then
+control" layout reads well. Labels written in capitals are read in sentence case. Code that wants
+the same lines (a custom host, a test) uses `ui::build_access_tree`, `ui::access_line` and
+`ui::AccessAnnouncer` (`mce/ui/access.h`) and `platform::screen_reader::announce`.
+
+The reader hears announcements, not an explorable tree: touch exploration (dragging a finger over
+the screen to hear what is under it) is not built.
