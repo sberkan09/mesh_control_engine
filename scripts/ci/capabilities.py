@@ -48,6 +48,7 @@ IMPORTED = {
     "Scene": ".mcscene (scene_* tools)",
     "Prefab": ".mcprefab (prefab_* tools)",
     "StringTable": "assets/loc/<locale>.csv",
+    "NavMesh": ".mcnav (the editor's Bake navmesh)",
 }
 
 

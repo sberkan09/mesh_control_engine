@@ -32,6 +32,7 @@
 #include "mce/containers/array.h"
 #include "mce/math/math.h"
 #include "mce/render/scene3d.h"
+#include "mce/render/texture_store.h"
 
 namespace mce::render {
 
@@ -98,5 +99,22 @@ private:
     f32 height_min_ = 0.0f;
     f32 height_scale_ = 0.0f;  // metres per sample unit
 };
+
+// One map kind (albedo, normal or ORM) of a terrain's splat layers as one texture array (M-TERRAIN 2):
+// array layer i holds the cooked texture of terrain layer i. The textures must agree on format, color
+// space, size and mip count; the first one present sets them and any other is left out with a warning
+// (its bit stays clear in `present`, so the shader keeps that layer's flat values). Missing layers stay
+// zero-filled. `upload` points into `pixels` and `mips`: keep the struct alive until it is uploaded.
+struct LayerArray {
+    Array<byte> pixels;
+    Array<TextureMipUpload> mips;
+    TextureUpload upload;
+    u32 present = 0;  // bit i: layer i's texture is in the array
+};
+// False (and `out.present` 0) when no layer has a usable texture.
+bool compose_layer_array(Span<const asset::TextureView* const> layers, LayerArray& out, const char* debug_name = "terrain.layers");
+
+// The weight map of a terrain with splat layers as a 2-layer RGBA8 array upload (pointing into the view).
+TextureUpload splat_upload(const asset::TerrainView& terrain, TextureMipUpload& mip);
 
 }  // namespace mce::render

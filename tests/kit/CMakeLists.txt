@@ -2,7 +2,7 @@
 # .mcpart and drawn into a CPU-built sprite batch; action-list sequences (FR-ENT-100); the FSM
 # helper (FR-ENT-090); grid A* pathfinding and PathAgent (#152); the kit3d components, systems and
 # extract into a CPU-side Scene3D (M-KIT3D); the effect components, sprite-sheet animation and
-# 3D bodies (M-DATA-REACH 4-6).
+# 3D bodies (M-DATA-REACH 4-6); 3D navigation components (M-GAMEPLAY3D 1).
 mce_add_test(test_kit UMBRELLA
     SOURCES
         test_bodies3d.cpp
@@ -11,6 +11,7 @@ mce_add_test(test_kit UMBRELLA
         test_ui_flow.cpp
         test_fsm.cpp
         test_kit3d.cpp
+        test_nav3d.cpp
         test_particles.cpp
         test_pathfinding.cpp
         test_sequence.cpp

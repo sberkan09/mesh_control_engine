@@ -106,6 +106,7 @@ public:
     EditorCamera2D& camera() { return camera_; }
     OrbitCamera& orbit() { return orbit_; }
     OrbitColliders& orbit_colliders() { return orbit_colliders_; }
+    NavMeshPreview& nav_preview() { return nav_preview_; }
     ViewSettings& view() { return view_; }
     TilemapEditor& tilemap() { return tilemap_; }
     // The UI document the UI Document panel edits (open_ui_document: a double click in Assets).
@@ -182,6 +183,7 @@ private:
     EditorCamera2D camera_;
     OrbitCamera orbit_;
     OrbitColliders orbit_colliders_;
+    NavMeshPreview nav_preview_;
     ViewSettings view_;
     TilemapEditor tilemap_;
     UiDocumentEditor ui_document_;
