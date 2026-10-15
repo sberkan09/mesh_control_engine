@@ -63,7 +63,7 @@ WALLS = [
         ["src/engine/platform/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
-    # Steamworks (ADR-0042): the flat API is opened at run time by mce_platform's steam*.cpp only; the
+    # Steamworks (ADR-0043): the flat API is opened at run time by mce_platform's steam*.cpp only; the
     # test stand-ins for steam_api live under tests/platform/.
     (
         "Steam wall",
@@ -78,6 +78,14 @@ WALLS = [
         "Recast wall",
         re.compile(r"[<\"](Recast|Detour)\w*\.h|\b(rc|dt)[A-Z]\w*\s*[(<*&]|\bdt(Nav|Crowd|Tile|Poly|Query)\w*"),
         ["src/engine/physics3d/src/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
+    # pl_mpeg (ADR-0043): the video decoder, private to mce_render's two video sources; everything
+    # else goes through render::VideoDecoder.
+    (
+        "pl_mpeg wall",
+        re.compile(r"[<\"]pl_mpeg\.h|\bplm_[a-z_]+\s*\(|\bplm_\w+_t\b"),
+        ["src/engine/render/src/video.cpp", "src/engine/render/src/plmpeg_impl.c"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
     ("Box2D wall", re.compile(r"\bb2[A-Z]\w*|[<\"]box2d/"), ["tests/physics2d/oracle/"], ["src/", "samples/", "games/", "tests/", "tools/"]),

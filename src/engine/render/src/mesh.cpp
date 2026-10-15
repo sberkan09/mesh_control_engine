@@ -239,12 +239,15 @@ void hermite(const f32* v0, const f32* v1, u32 width, f32 a, f32 dt, f32* out) {
 }
 
 // Overwrites the animated components of `local` with clip `clip` sampled at `time` (looping).
-// `touched`, when given, gets bit 0/1/2 (T/R/S) set per animated node component.
-void sample_clip(const GpuMesh& mesh, u32 clip, f32 time, LocalPose& local, u8* touched) {
+// `touched`, when given, gets bit 0/1/2 (T/R/S) set per animated node component. `only`, when a
+// node index, samples that node's channels alone.
+template <typename Local>
+void sample_clip(const GpuMesh& mesh, u32 clip, f32 time, Local& local, u8* touched, u32 only = ~0u) {
     const GpuMeshClip& c = mesh.clips[clip];
     const f32 t = c.duration > 0.0f ? std::fmod(math::max(time, 0.0f), c.duration) : 0.0f;
     for (u32 ci = 0; ci < c.channel_count; ++ci) {
         const asset::MeshChannel& ch = mesh.channels[c.first_channel + ci];
+        if (only != ~0u && ch.node != only) continue;
         const f32* times = mesh.keys.data() + ch.times_offset;
         const f32* values = mesh.keys.data() + ch.values_offset;
         const u32 width = ch.path == asset::AnimPath::Rotation ? 4 : 3;
@@ -280,10 +283,61 @@ void sample_clip(const GpuMesh& mesh, u32 clip, f32 time, LocalPose& local, u8* 
     }
 }
 
-void compose(const LocalPose& local, Span<mat4> out) {
+template <typename Local>
+void compose(const Local& local, Span<mat4> out) {
     for (usize i = 0; i < local.size(); ++i)
         out[i] = local[i].parent < 0 ? node_local(local[i]) : out[static_cast<usize>(local[i].parent)] * node_local(local[i]);
 }
+
+// Normalized weighted blend of `samples` into `acc` (the rest pose when every weight is 0).
+template <typename Local>
+void blend_local(const GpuMesh& mesh, Span<const ClipSample> samples, Local& acc) {
+    const usize n = mesh.nodes.size();
+    f32 total = 0.0f;
+    for (const ClipSample& s : samples) total += math::max(s.weight, 0.0f);
+    if (!(total > 0.0f)) {
+        for (usize i = 0; i < n; ++i) acc[i] = mesh.nodes[i];
+        return;
+    }
+    LocalPose one(n);
+    for (usize i = 0; i < n; ++i) {
+        acc[i] = mesh.nodes[i];
+        acc[i].translation = {};
+        acc[i].scale = {};
+        acc[i].rotation = {0, 0, 0, 0};
+    }
+    for (const ClipSample& s : samples) {
+        const f32 w = math::max(s.weight, 0.0f) / total;
+        if (w <= 0.0f) continue;
+        for (usize i = 0; i < n; ++i) one[i] = mesh.nodes[i];
+        if (s.clip < mesh.clips.size()) sample_clip(mesh, s.clip, s.time, one, nullptr);
+        for (usize i = 0; i < n; ++i) {
+            acc[i].translation += one[i].translation * w;
+            acc[i].scale += one[i].scale * w;
+            quat q = one[i].rotation;
+            if (dot(q, mesh.nodes[i].rotation) < 0.0f) q = {-q.x, -q.y, -q.z, -q.w};  // one hemisphere
+            acc[i].rotation = {acc[i].rotation.x + q.x * w, acc[i].rotation.y + q.y * w, acc[i].rotation.z + q.z * w,
+                               acc[i].rotation.w + q.w * w};
+        }
+    }
+    for (usize i = 0; i < n; ++i) {
+        const quat q = normalize(acc[i].rotation);
+        acc[i].rotation = dot(q, q) > 0.0f ? q : mesh.nodes[i].rotation;
+    }
+}
+
+// A span of nodes with the LocalPose interface the templates above use.
+struct SpanPose {
+    Span<GpuMeshNode> nodes;
+    GpuMeshNode& operator[](usize i) { return nodes[i]; }
+    const GpuMeshNode& operator[](usize i) const { return nodes[i]; }
+    usize size() const { return nodes.size(); }
+};
+struct ConstSpanPose {
+    Span<const GpuMeshNode> nodes;
+    const GpuMeshNode& operator[](usize i) const { return nodes[i]; }
+    usize size() const { return nodes.size(); }
+};
 
 }  // namespace
 
@@ -310,32 +364,43 @@ void pose_nodes_blend(const GpuMesh& mesh, Span<const ClipSample> samples, Span<
         for (usize i = 0; i < n; ++i) out[i] = mesh.rest_pose[i];
         return;
     }
-    LocalPose acc(n), one(n);
-    for (usize i = 0; i < n; ++i) {
-        acc[i] = mesh.nodes[i];
-        acc[i].translation = {};
-        acc[i].scale = {};
-        acc[i].rotation = {0, 0, 0, 0};
-    }
-    for (const ClipSample& s : samples) {
-        const f32 w = math::max(s.weight, 0.0f) / total;
-        if (w <= 0.0f) continue;
-        for (usize i = 0; i < n; ++i) one[i] = mesh.nodes[i];
-        if (s.clip < mesh.clips.size()) sample_clip(mesh, s.clip, s.time, one, nullptr);
-        for (usize i = 0; i < n; ++i) {
-            acc[i].translation += one[i].translation * w;
-            acc[i].scale += one[i].scale * w;
-            quat q = one[i].rotation;
-            if (dot(q, mesh.nodes[i].rotation) < 0.0f) q = {-q.x, -q.y, -q.z, -q.w};  // one hemisphere
-            acc[i].rotation = {acc[i].rotation.x + q.x * w, acc[i].rotation.y + q.y * w, acc[i].rotation.z + q.z * w,
-                               acc[i].rotation.w + q.w * w};
-        }
-    }
-    for (usize i = 0; i < n; ++i) {
-        const quat q = normalize(acc[i].rotation);
-        acc[i].rotation = dot(q, q) > 0.0f ? q : mesh.nodes[i].rotation;
-    }
+    LocalPose acc(n);
+    blend_local(mesh, samples, acc);
     compose(acc, out);
+}
+
+void sample_local(const GpuMesh& mesh, Span<const ClipSample> samples, Span<GpuMeshNode> out) {
+    const usize n = mesh.nodes.size();
+    MCE_ASSERT_MSG(out.size() >= n, "sample_local: output too small");
+    SpanPose pose{out.subspan(0, n)};
+    if (samples.size() == 1 && samples[0].weight > 0.0f) {  // the single-clip path pose_nodes takes
+        for (usize i = 0; i < n; ++i) pose[i] = mesh.nodes[i];
+        if (samples[0].clip < mesh.clips.size()) sample_clip(mesh, samples[0].clip, samples[0].time, pose, nullptr);
+        return;
+    }
+    blend_local(mesh, samples, pose);
+}
+
+GpuMeshNode sample_node(const GpuMesh& mesh, u32 clip, f32 time, u32 node) {
+    MCE_ASSERT_MSG(node < mesh.nodes.size(), "sample_node: node out of range");
+    GpuMeshNode out[1] = {mesh.nodes[node]};
+    if (clip >= mesh.clips.size()) return out[0];
+    // sample_clip indexes by node: offset a one-node view so `node` lands on out[0].
+    struct One {
+        GpuMeshNode* n;
+        u32 node;
+        GpuMeshNode& operator[](usize i) {
+            MCE_ASSERT(i == node);
+            return *n;
+        }
+    } one{out, node};
+    sample_clip(mesh, clip, time, one, nullptr, node);
+    return out[0];
+}
+
+void compose_local(Span<const GpuMeshNode> local, Span<mat4> out) {
+    MCE_ASSERT_MSG(out.size() >= local.size(), "compose_local: output too small");
+    compose(ConstSpanPose{local}, out);
 }
 
 void skin_palette(const GpuMesh& mesh, u32 skin, Span<const mat4> pose, Span<mat4> out) {

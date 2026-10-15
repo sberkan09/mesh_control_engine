@@ -199,6 +199,16 @@ struct ClipSample {
 // TRS with that clip's weight. Weights are normalized; all-zero weights give the rest pose.
 void pose_nodes_blend(const GpuMesh& mesh, Span<const ClipSample> samples, Span<math::mat4> out);
 
+// The same blend left in local TRS (M-GAMEPLAY3D 5: layers, masks and IK work on it before
+// compose_local): `out` holds mesh.nodes.size() nodes. One sample with a positive weight samples
+// exactly as pose_nodes does.
+void sample_local(const GpuMesh& mesh, Span<const ClipSample> samples, Span<GpuMeshNode> out);
+// One node's local TRS in clip `clip` at `time`, looping (its rest TRS where the clip does not
+// animate it, or for an out-of-range clip).
+GpuMeshNode sample_node(const GpuMesh& mesh, u32 clip, f32 time, u32 node);
+// Model-space matrices of local TRS nodes (parents before children, as GpuMesh::nodes orders them).
+void compose_local(Span<const GpuMeshNode> local, Span<math::mat4> out);
+
 // A marker on a clip's timeline (FR-R3D-060 playback events: footsteps, hit frames). The game
 // owns the list; `id` is whatever it dispatches on (a StringId, an enum).
 struct ClipEvent {

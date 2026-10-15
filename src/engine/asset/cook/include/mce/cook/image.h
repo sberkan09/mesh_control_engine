@@ -13,6 +13,8 @@ struct Image {
 };
 
 Result<Image> decode_png(Span<const byte> bytes);
+// Width and height from an image file's header (PNG, JPEG, ...) without decoding it. False when unreadable.
+bool image_size(Span<const byte> bytes, u32& width, u32& height);
 
 // A grey image at 16 bits (heightmaps, M-TERRAIN 6): 16-bit PNGs keep their precision, 8-bit ones are
 // widened (v * 257); colour images give their luminance. Rows top first.

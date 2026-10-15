@@ -9,7 +9,7 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
 | 2. Joints over Jolt | SBA-70 | done |
 | 3. Ragdolls | SBA-71 | done |
 | 4. Vehicles | SBA-72 | done |
-| 5. Animation (blend spaces, layers, IK, root motion) | SBA-73 | not started |
+| 5. Animation (blend spaces, layers, IK, root motion) | SBA-73 | done |
 | 6. Sensor queries as data | SBA-74 | not started |
 | 7. MCP and docs | SBA-75 | not started |
 | Demo `samples/07_gameplay3d` | — | not started |
@@ -126,3 +126,36 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
   engine torque curves as data.
 - Vehicles with other than four wheels from the component (the physics layer takes any number).
 
+## Step 5 — animation (SBA-73)
+
+| Item | Where | Evidence |
+|---|---|---|
+| `.mcanim` version 2: `blend2d` states, `root_motion`, `layers` (mask, weight, param, additive, loop, speed), `ik` chains (`two_bone`, `look_at`, `foot`); version 1 files read and write as before | `mce/cook/animgraph_text.h`, `animgraph_importer.cpp` (importer version 2) | `test_kit` "version 2 graphs round-trip": text and chunk identical after a write and read, eight refusals; a plain graph stays version 1 with no extension |
+| CHNK_ANIMG extension (minor 1): `AnimGraphExtension`, 2D points, layers, mask bones, IK chains; every index checked | `mce/asset/formats.h`, `AnimGraphView::read` | the same case: the view's spans, a cut chunk refused |
+| Local-pose sampling for the pose stack | `render::sample_local`, `sample_node`, `compose_local` (`mce/render/mesh.h`) | single-clip sampling matches `pose_nodes`; `test_render3d` unchanged |
+| 2D blend spaces (gradient-band weights, same phase) | `extended_pose`, `run_graph` (`kit/src/anim3d.cpp`) | "a 2D blend space": on a point, between two, between three (a third each) |
+| Layers: override and additive, bone masks with subtrees, only the bones the clip animates, weight by parameter, own playheads (`Animator.layer_time`) | `extended_pose` | "layers": the head pitches under a spine mask while the hips stay, half weight gives half the pitch, the additive bob adds its motion; the extract poses through the same path |
+| Root motion: the bone's ground motion and turn move the entity, a `CharacterController3D`'s `move`, or are only reported (`root_motion`, `root_velocity`, `root_turn`); the pose keeps the clip's first position and heading | `apply_root_motion`, the root lock in `extended_pose` | "root motion": 2 m/s across a loop, a turned entity walks its forward, report-only and off, a controller carried, a 45 degree turn in half a second |
+| IK: two-bone (law of cosines, swing, pole twist, weight), look-at (axis, limit), foot placement (rays down, ground tilt, pelvis drop); `IKTarget3D` goals; system `kit3d_ik` before `kit3d_attach` | `mce/kit/anim3d.h`, `solve_two_bone`, `solve_look_at`, `kit3d_ik` | "two-bone IK": the hand on its goal with 0.4 m bones kept, the elbow on the pole's side, out of reach straight, half weight halfway, an unknown chain; look-at inside and past its 60 degree limit; "foot IK": a 0.2 m step up and down (pelvis 0.2 m lower) |
+| Determinism | goals rebuilt every tick in query order | "replay": root motion, a controller, foot and hand IK, same state hash twice |
+| Editor | the Animation panel shows 2D blend states and the graph's layers and chains (read-only), and parameter removal keeps their indices | `test_editor` animgraph cases unchanged |
+| Docs | user guide 8.9 "Blend spaces, layers, root motion and IK", `docs/engine/kit.md`, `docs/engine/asset.md`, `docs/engine/capabilities.md` | `capabilities.py --check` |
+
+### Design notes
+
+- **Old graphs, old bytes.** A graph without the extras writes version 1 text and the same
+  CHNK_ANIMG bytes as before, and an Animator on it takes the old pose path, so existing scenes
+  and hashes do not move.
+- **One pose for everyone.** `animated_pose` (AttachToBone, ragdolls) and the extract both go
+  through `extended_pose`, so a prop attached to a hand follows the IK the renderer draws.
+- **Goals are model space, once per tick.** `kit3d_ik` turns IKTarget3D positions and foot rays
+  into model-space goals after the animators; the extract's interpolated entity pose reuses them.
+- **Feet against the entity's origin.** A foot chain's goal is the animated foot moved by the
+  ground's height under it relative to the entity's origin (a character stands on its origin).
+
+### Not built (step 5)
+
+- Editing 2D blend points, layers and IK chains in the Animation panel (they are edited in the
+  file; the panel shows them).
+- Layers with their own state machines, sync groups, IK chains longer than two bones (FABRIK),
+  foot locking during the stance phase, root motion on the vertical axis.

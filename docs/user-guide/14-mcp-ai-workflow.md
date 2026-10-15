@@ -90,7 +90,7 @@ each result's `content[0].text` is the tool's JSON).
 | Prefabs | `prefab_create_from` | `entity`, `path`, `replace?` | the entity and its `ChildOf` subtree as a new `.mcprefab`; by default the subtree becomes an instance of it (one undo step) |
 | | `prefab_apply` | `entity`, `component?` | writes an instance's overrides into its prefab (every instance sees them) |
 | | `prefab_revert` | `entity`, `component?` | drops an instance's overrides |
-| Project | `project_get`, `project_set` | `values` (set) | the `.mceproj` members (title, start scene, games), checked before the file is written (chapter 2) |
+| Project | `project_get`, `project_set` | `values` (set) | the `.mceproj` members (title, start scene, games, performance `budgets` per target), checked before the file is written, and each target's budget in force (chapter 2) |
 | | `scene_settings_get`, `scene_settings_set` | `values` (set) | the open scene's `WorldSettings` (2D and 3D gravity); set creates the "World Settings" entity when the scene has none |
 | Undo | `scene_undo`, `scene_redo` | | one `tools/call` is one step; shared with the editor's history |
 | Persist | `scene_new` | `name`, `force?` | fresh GUID, unsaved |
@@ -119,7 +119,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `gen_music` | `seed?`, `bpm?` (120), `bars?` (8), `root?` (0 = C), `scale?` (major, minor, dorian, pentatonic, blues), `drums?`, `save?` (.wav) | a seamless loop of exactly `bars` bars (bass, chords, melody, drums), at most 60 s |
 | | `library_search` | `query?`, `kind?` (model, sound, music, font, texture, sprite, recipe), `license?`, `limit?` (20) | entries of the bundled content library with id, license, author and tags |
 | | `library_add` | `id`, `path?`, `overwrite?` | copies the entry into `assets/` (with the files it needs and a font's license text), or runs a recipe's generator (see "Content: generators and the library" below) |
-| Ship | `project_check` | `checks?`, `ticks?` (300), `budget_ms?` (4), `max_findings?` (200) | findings with severity, file, line, message and a fix: cook errors, broken and unused references, missing credits, sRGB on data textures, each scene's ms per tick against the budget, 2D text size and contrast; `pass` when there is no error |
+| Ship | `project_check` | `checks?`, `ticks?` (300), `target?` (desktop), `budget_ms?` (the target's `sim_ms`), `max_findings?` (200) | findings with severity, file, line, message and a fix: cook errors, broken and unused references, missing credits, sRGB on data textures, each scene's ms per tick, images over the target's `texture_size` and scenes over its `sprite_textures`, 2D text size and contrast; `pass` when there is no error |
 | | `ship_build` | `build?` (true), `ticks?` (300), `version?`, `out?` | full build, a headless smoke run of the host, then `mce ship`: each stage's result and the zip's path (needs the SDK's server, `mce mcp`) |
 | Team | `project_watch` | `since?`, `limit?` (50), `others?` | the other agents' writes from `.mce/events.jsonl`: seq, time, agent, tool, path; `next` for the next call |
 | | `asset_lock` / `asset_unlock` / `asset_locks` | `path`, `note?`, `ttl?` (1800 s) / `path`, `force?` / — | while you hold a lock, other agents' writes to that file are refused |
@@ -241,7 +241,8 @@ lists them as assets nothing references).
 `project_check` is the review a person would do before a release, as data. Errors (an asset or scene that
 does not cook, a GUID no asset has, a scene that does not run) make `pass` false; warnings (a media file
 with no `CREDITS.md` row, a `CREDITS.md` row for a file the project no longer has, a normal map or mask
-imported as sRGB, a scene over the per-tick budget, text under 16 px on a 1280x720 screen or under 4.5:1
+imported as sRGB, a scene over the per-tick budget, an image larger than the target's `texture_size` or a
+scene whose sprites use more textures than its `sprite_textures`, text under 16 px on a 1280x720 screen or under 4.5:1
 contrast against what is behind it: the backing `Sprite` panel under the label, else the camera's clear
 colour) and infos (an asset nothing references; scenes and input maps are entry points) do not. Each finding names the file and, where it can, the call that fixes it. Timing
 comes from the machine the server runs on, so treat the budget as a trend, not a gate. `ship_build` then

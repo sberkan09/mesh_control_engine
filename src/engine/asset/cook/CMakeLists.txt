@@ -42,6 +42,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/texture_importer.cpp
         src/tilemap_importer.cpp
         src/ui_importer.cpp
+        src/video_importer.cpp
         src/wav_importer.cpp
     PUBLIC_DEPS
         mce::mce_asset

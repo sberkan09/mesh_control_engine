@@ -49,6 +49,7 @@ IMPORTED = {
     "Prefab": ".mcprefab (prefab_* tools)",
     "StringTable": "assets/loc/<locale>.csv",
     "NavMesh": ".mcnav (the editor's Bake navmesh)",
+    "Video": ".mpg / .mpeg (MPEG-1 + MP2)",
 }
 
 

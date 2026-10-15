@@ -695,16 +695,21 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         inst.material = material(m.material.guid);
         if (!mesh->nodes.empty()) {
             const Animator* a = world.try_get<Animator>(e);
-            render::ClipSample samples[3];
-            const usize n =
-                a && a->playing != 0 ? anim_samples(*a, *mesh, [&](u64 id) { return find_clip_id(*mesh, id); }, samples) : 0;
-            const bool ragdoll = ragdolls && ragdolls->poses.find(e);
-            if (n > 0 || ragdoll) {
-                const usize first = poses_.size();
-                poses_.resize(first + mesh->nodes.size());
-                const Span<mat4> pose(poses_.data() + first, mesh->nodes.size());
+            const usize first = poses_.size();
+            poses_.resize(first + mesh->nodes.size());
+            const Span<mat4> pose(poses_.data() + first, mesh->nodes.size());
+            bool posed = a && extended_pose(world, e, *mesh, *a, pose);
+            if (!posed && a && a->playing != 0) {
+                render::ClipSample samples[3];
+                const usize n = anim_samples(*a, *mesh, [&](u64 id) { return find_clip_id(*mesh, id); }, samples);
                 if (n > 0) pose_samples(*mesh, samples, n, pose);
-                else
+                posed = n > 0;
+            }
+            const bool ragdoll = ragdolls && ragdolls->poses.find(e);
+            if (!posed && !ragdoll) {
+                poses_.resize(first);
+            } else {
+                if (!posed)
                     for (usize i = 0; i < pose.size(); ++i) pose[i] = mesh->rest_pose[i];
                 if (ragdoll) apply_ragdoll_pose(world, e, pose);
                 pose_first_.push_back(static_cast<u32>(first));
