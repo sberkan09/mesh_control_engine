@@ -17,6 +17,9 @@
 //   4. bloom         soft bright-pass, 13-tap downsample chain, tent upsample (additive)
 //   5. tonemap       exposure + bloom composite, ACES fit, sRGB encode (+ luma for FXAA)
 //   6. FXAA          Lottes-style edge search into the final target
+//   7. upscale       (PostFx::upscaler / sharpen, M-VISUAL2 2) an edge-adaptive upsample of a frame drawn
+//                    below the output size, then a contrast-adaptive sharpen; FXAA and the tonemap
+//                    then write an intermediate at the frame's own size
 //
 // Owned by the Renderer (Renderer::init_3d); the 2D path never pays for it. Targets follow the
 // scene's viewport size and are recreated on resize. Each stage boundary writes a GPU timestamp
@@ -119,6 +122,8 @@ struct Forward3DStats {
     u32 joints = 0;          // joint matrices uploaded for skinned meshes
     u32 bloom_levels = 0;
     bool fxaa = false;
+    bool upscaled = false;           // the spatial upsample drew the output (M-VISUAL2 2)
+    bool sharpened = false;          // the contrast-adaptive sharpen drew the output
 };
 
 // Milliseconds per stage of one completed frame; -1 = not measured.
@@ -388,6 +393,14 @@ private:
     rhi::TextureHandle depth_;
     rhi::TextureHandle hdr_;
     rhi::TextureHandle ldr_;
+    // M-VISUAL2 2: the display-space frame before the spatial upsample / sharpen (at the post size),
+    // and the upsampled frame before the sharpen (at the output size); created on first use.
+    rhi::TextureHandle fin_src_;
+    rhi::TextureHandle fin_up_;
+    rhi::Extent2D fin_src_size_{};
+    rhi::Extent2D fin_up_size_{};
+    rhi::PipelineHandle upscale_pipe_;
+    rhi::PipelineHandle sharpen_pipe_;
     rhi::TextureHandle bloom_[kMaxBloomLevels];
     rhi::Extent2D bloom_size_[kMaxBloomLevels];
     u32 bloom_levels_ = 0;

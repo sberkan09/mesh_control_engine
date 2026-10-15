@@ -25,6 +25,12 @@ MCE_CVAR(cv_ssao, "r.ssao", true,
 MCE_CVAR(cv_ssr, "r.ssr", true,
          "Screen-space reflections for scenes that ask for them (ScreenSpaceReflections::enabled; off = the probes only)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_upscaler, "r.upscaler", "scene",
+         "How a frame drawn below the output size reaches it: scene (what the scene asks), bilinear, spatial",
+         CVarFlags::Saved);
+MCE_CVAR(cv_sharpen, "r.sharpen", -1.0f,
+         "Contrast-adaptive sharpening of the 3D frame, 0..1 (0 = off); -1 = what the scene asks (PostFx::sharpen)",
+         CVarFlags::Saved);
 MCE_CVAR(cv_taa, "r.taa", true,
          "Temporal anti-aliasing for scenes that ask for it (PostFx::taa; off = FXAA only)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_gi, "r.gi", true,
@@ -484,6 +490,12 @@ ResultV Forward3D::create_pipelines() {
     fs.fragment_shader = {kFxaaFS, "fxaa.frag"};
     fs.debug_name = "fxaa";
     MCE_TRY_ASSIGN(fxaa_, device_->create_pipeline(fs));
+    fs.fragment_shader = {kUpscaleFS, "upscale.frag"};
+    fs.debug_name = "upscale";
+    MCE_TRY_ASSIGN(upscale_pipe_, device_->create_pipeline(fs));
+    fs.fragment_shader = {kSharpenFS, "sharpen.frag"};
+    fs.debug_name = "sharpen";
+    MCE_TRY_ASSIGN(sharpen_pipe_, device_->create_pipeline(fs));
     if (desc_.gpu_light_clusters && cv_gpu_light_clusters.get_bool() && device_->caps().compute) {
         rhi::ComputePipelineDesc cd;
         cd.compute_shader = {kClusterBuildCS, "mce.3d.cluster_build.comp"};
@@ -618,11 +630,12 @@ ResultV Forward3D::create_pipelines() {
 
 void Forward3D::destroy_targets() {
     if (!device_) return;
-    for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_, &ao_gbuf_, &ao_depth_, &ao_a_, &ao_b_, &ssr_,
+    for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_, &ao_gbuf_, &ao_depth_, &ao_a_, &ao_b_, &ssr_, &fin_src_, &fin_up_,
                                   &velocity_, &velocity_depth_, &history_[0], &history_[1]})
         destroy(*device_, *t);
     ssr_prev_valid_ = false;  // the new HDR target holds no frame yet
     history_size_ = {};
+    fin_src_size_ = fin_up_size_ = {};
     history_valid_ = false;
     for (rhi::TextureHandle& t : bloom_) destroy(*device_, t);
     bloom_levels_ = 0;
@@ -681,7 +694,7 @@ void Forward3D::shutdown() {
     destroy_targets();
     for (rhi::PipelineHandle* p :
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &terrain_pipe_, &skinned_cull_,
-          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_,
+          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &upscale_pipe_, &sharpen_pipe_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
           &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &velocity_pipe_, &velocity_skinned_,
           &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_, &exposure_hist_,
@@ -2406,12 +2419,32 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     fu.cluster = {stats_.auto_exposure ? 1.0f : 0.0f, grade, cvd, cvd_strength};
     stats_.color_grade = grade > 0.0f;
     stats_.color_vision = cvd > 0.0f;
-    fullscreen(fxaa ? ldr_ : target, rhi::LoadOp::DontCare, "tonemap");
+    // M-VISUAL2 2: the spatial upsample and the sharpen run after the tonemap (and FXAA) on the
+    // display-space frame, which then stays at the post size in fin_src_.
     const rhi::Extent2D out = scene.view().viewport;
+    const StringView upscaler = cv_upscaler.get_string();
+    const Upscaler mode = upscaler == "spatial" ? Upscaler::Spatial : upscaler == "bilinear" ? Upscaler::Bilinear : post.upscaler;
+    const f32 sharpen_cv = cv_sharpen.get_float();
+    const f32 sharpen = clamp(sharpen_cv >= 0.0f ? sharpen_cv : post.sharpen, 0.0f, 1.0f);
+    const bool spatial = mode == Upscaler::Spatial && post_size_ != out;
+    const bool finish = spatial || sharpen > 0.0f;
+    auto ensure = [&](rhi::TextureHandle& t, rhi::Extent2D& have, rhi::Extent2D want, const char* name) {
+        if (!t.is_null() && have == want) return;
+        destroy(*device_, t);
+        rhi::TextureDesc d;
+        d.size = want;
+        d.format = rhi::TextureFormat::RGBA8_UNorm;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.debug_name = name;
+        t = device_->create_texture(d);
+        have = want;
+    };
+    if (finish) ensure(fin_src_, fin_src_size_, post_size_, "mce.3d.fin_src");
+    fullscreen(fxaa ? ldr_ : finish ? fin_src_ : target, rhi::LoadOp::DontCare, "tonemap");
     cmd.bind_pipeline(tonemap_);
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
     // 1:1 reads texel-exact; a scaled frame is upsampled bilinearly (TAA upsamples it itself).
-    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, post_size_ == out ? point_sampler_ : linear_clamp_);
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, post_size_ == out || finish ? point_sampler_ : linear_clamp_);
     cmd.bind_texture(rhi::bank::kNormal, bloom ? bloom_[0] : post_source_, linear_clamp_);
     cmd.bind_texture(rhi::bank::kOrm, lut.is_null() || grade <= 0.0f ? textures_->white() : lut, linear_clamp_);
     cmd.bind_storage_buffer(rhi::bank::kExposure, exposure_buf_, 0, 0);
@@ -2420,13 +2453,44 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     timestamp(cmd, kTsTonemap);
 
     if (fxaa) {
-        fullscreen(target, rhi::LoadOp::DontCare, "fxaa");
+        fullscreen(finish ? fin_src_ : target, rhi::LoadOp::DontCare, "fxaa");
         cmd.bind_pipeline(fxaa_);
         cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
         cmd.bind_texture(rhi::bank::kAlbedo, ldr_, linear_clamp_);
         cmd.draw_non_indexed(3);
         cmd.end_pass();
         stats_.fxaa = true;
+    }
+    if (finish) {
+        rhi::TextureHandle src = fin_src_;
+        rhi::Extent2D src_size = post_size_;
+        PostU pu;
+        if (spatial) {
+            if (sharpen > 0.0f) ensure(fin_up_, fin_up_size_, out, "mce.3d.fin_up");
+            fullscreen(sharpen > 0.0f ? fin_up_ : target, rhi::LoadOp::DontCare, "upscale");
+            cmd.bind_pipeline(upscale_pipe_);
+            pu.texel = {1.0f / f32(src_size.width), 1.0f / f32(src_size.height), f32(src_size.width), f32(src_size.height)};
+            pu.params = {};
+            cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
+            cmd.bind_texture(rhi::bank::kAlbedo, src, point_sampler_);
+            cmd.draw_non_indexed(3);
+            cmd.end_pass();
+            stats_.upscaled = true;
+            src = fin_up_;
+            src_size = out;
+        }
+        if (sharpen > 0.0f) {
+            fullscreen(target, rhi::LoadOp::DontCare, "sharpen");
+            cmd.bind_pipeline(sharpen_pipe_);
+            pu.texel = {1.0f / f32(src_size.width), 1.0f / f32(src_size.height), f32(src_size.width), f32(src_size.height)};
+            pu.params = {sharpen, 0.0f, 0.0f, 0.0f};
+            cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
+            // A smaller source (bilinear mode) is upsampled by the taps themselves.
+            cmd.bind_texture(rhi::bank::kAlbedo, src, src_size == out ? point_sampler_ : linear_clamp_);
+            cmd.draw_non_indexed(3);
+            cmd.end_pass();
+            stats_.sharpened = true;
+        }
     }
     timestamp(cmd, kTsFxaa);
 }
