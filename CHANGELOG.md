@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Accessibility options, M-ACCESS step 2 (SBA-96): `access.colorblind` (protanopia, deuteranopia, tritanopia
+  correction in the 2D post and 3D tonemap passes) with `access.colorblind_strength`, `access.text_scale` for UI
+  text, `access.high_contrast` (a high-contrast palette over every UI document) and `access.motion_scale` (camera
+  shake, chromatic aberration, motion blur). All are saved convars outside the state hash.
 - Smooth remote entities (SBA-83, M-NET2 step 2): `ReplicationClient::set_interpolation` draws replicated entities a
   little in the past through a jitter buffer that adapts to the measured snapshot interval and arrival jitter,
   blending the snapshots around the render time. Past the newest snapshot an entity moves on for at most 0.1 s, then

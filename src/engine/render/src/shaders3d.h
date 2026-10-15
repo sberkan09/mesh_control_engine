@@ -7,6 +7,8 @@
 // volume (M-VISUAL 6) 5.
 // The C++ mirrors of the blocks live in forward3d.cpp and must match member for member.
 
+#include "shaders_cvd.h"
+
 namespace mce::render::shaders3d {
 
 // clang-format off
@@ -913,8 +915,10 @@ void main() {
 // Exposure + bloom, ACES filmic fit (Narkowicz 2015, with its 0.6 input pre-scale so exposure 1
 // maps scene-referred albedo-range values to mid tones), then sRGB encode. Alpha carries the
 // encoded luma for FXAA.
-// u_cluster here: x > 0.5 = auto exposure (times e_exposure), y = color-grade strength (0 = off).
-constexpr const char* kTonemapFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_EXPOSURE("readonly") R"(
+// Then the color-vision correction (M-ACCESS) on the graded frame.
+// u_cluster here: x > 0.5 = auto exposure (times e_exposure), y = color-grade strength (0 = off),
+// z = color-vision mode (0 = off), w = its strength.
+constexpr const char* kTonemapFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_EXPOSURE("readonly") MCE_GLSL_CVD R"(
 layout(binding = 6) uniform sampler2D u_hdr;
 layout(binding = 7) uniform sampler2D u_bloom;
 layout(binding = 8) uniform sampler2DArray u_lut;  // 256 × 16 strip (16³), display space
@@ -940,6 +944,11 @@ void main() {
         vec3 d = u_params.y > 0.5 ? c : linear_to_srgb(c);
         d = mix(d, grade(d), u_cluster.y);
         c = u_params.y > 0.5 ? d : srgb_to_linear(d);
+    }
+    if (u_cluster.z > 0.5) {  // on linear values
+        vec3 l = u_params.y > 0.5 ? srgb_to_linear(c) : c;
+        l = cvd_correct(int(u_cluster.z + 0.5), u_cluster.w, l);
+        c = u_params.y > 0.5 ? linear_to_srgb(l) : l;
     }
     o_color = vec4(c, dot(c, vec3(0.299, 0.587, 0.114)));
 }
