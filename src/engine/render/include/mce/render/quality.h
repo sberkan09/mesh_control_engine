@@ -7,7 +7,8 @@
 //   Low      1x    1024        1         off    FXAA  0.67          the bake only (none without one)     off (exp² fog)
 //   Medium   2x    1024        2         on     -     0.85          runtime updates                      16 px, 48 slices
 //   High     4x    2048        3         on     TAA   1.0           runtime updates                      8 px, 64 slices
-//   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High)
+//   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High; M-VISUAL 8: Low drops depth of field and
+//   motion blur, every tier keeps auto exposure and the color grade)
 //
 // Render scale shrinks the 3D targets (HDR, depth, bloom chain); the tonemap/FXAA pass upsamples
 // into the full-size output, so 2D and UI drawn afterwards stay sharp.
@@ -31,6 +32,7 @@ struct QualitySettings {
     bool volumetrics = true;     // Volumetrics::enabled is honored (off: the exp² fog)
     u32 volumetric_tile = 8;     // Volumetrics::tile, at least
     u32 volumetric_slices = 64;  // Volumetrics::slices, at most
+    bool dof_motion_blur = true; // PostFx::dof and PostFx::motion_blur are honored
 };
 
 QualitySettings quality_settings(QualityTier tier);
@@ -40,7 +42,8 @@ QualityTier quality_tier();
 
 // Forward3D creation knobs: msaa, shadow_size, render_scale.
 void apply_quality(const QualitySettings& q, Forward3DDesc& desc);
-// Per-scene knobs: cascade count and resolution, bloom, FXAA, TAA. Distances and splits stay the scene's.
+// Per-scene knobs: cascade count and resolution, bloom, FXAA, TAA, depth of field and motion blur (off
+// on Low). Distances and splits stay the scene's.
 void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& post);
 // The irradiance volume's runtime updates (a scene that turned them off keeps them off).
 void apply_quality(const QualitySettings& q, GiVolume& gi);

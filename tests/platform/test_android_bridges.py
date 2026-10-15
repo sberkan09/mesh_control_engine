@@ -128,6 +128,18 @@ def main():
         assert "case 1:  // Granted" in bridge and "case 2:  // Denied" in bridge
         swift = read(os.path.join(src, "firebase_ios.swift"))
         assert "case 1:  // Granted" in swift and "case 2:  // Denied" in swift
+
+        # Remote Config (M-LIVEOPS step 3): the bridge method, and the natives firebase.cpp exports for its answer.
+        assert "com.google.firebase:firebase-config" in android_app.FIREBASE_LIBS
+        assert "public void mceFirebaseRemoteConfig()" in activity, activity
+        assert 'method("mceFirebaseRemoteConfig", "()V")' in firebase_cpp
+        assert "static native void nativeConfigValue(String key, String value);" in bridge
+        assert "static native void nativeConfigDone(boolean ok);" in bridge
+        assert "fetchAndActivate" in bridge and "VALUE_SOURCE_REMOTE" in bridge
+        assert "Java_org_meshcontrol_firebase_MceFirebase_nativeConfigValue" in firebase_cpp
+        assert "Java_org_meshcontrol_firebase_MceFirebase_nativeConfigDone" in firebase_cpp
+        for name in ("mce_firebase_config_value", "mce_firebase_config_done", "mce_firebase_remote_config_fetch"):
+            assert name in swift and name in firebase_cpp, name
     print("android bridges stamping OK")
 
 

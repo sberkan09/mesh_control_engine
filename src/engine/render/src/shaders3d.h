@@ -571,8 +571,9 @@ layout(location = 1) in vec4 v_previous;
 layout(location = 0) out vec4 o_velocity;
 void main() {
     // Behind last frame's camera: no history to reuse (a motion that throws the lookup off screen).
-    if (v_previous.w <= 1e-4) { o_velocity = vec4(16.0, 16.0, 1.0, 1.0); return; }
-    o_velocity = vec4((v_current.xy / v_current.w - v_previous.xy / v_previous.w) * 0.5, 1.0, 1.0);
+    // a: view depth, for depth of field (M-VISUAL 8).
+    if (v_previous.w <= 1e-4) { o_velocity = vec4(16.0, 16.0, 1.0, v_current.w); return; }
+    o_velocity = vec4((v_current.xy / v_current.w - v_previous.xy / v_previous.w) * 0.5, 1.0, v_current.w);
 }
 )";
 
@@ -800,6 +801,9 @@ void main() {
 )";
 
 // ---- post chain. PostU rides bank 1 for the post passes.
+// Auto exposure (M-VISUAL 8): Forward3D::exposure_buffer(), bank kExposure.
+#define MCE_GLSL_EXPOSURE(qual) "layout(std430, binding = 12) " qual " buffer Exposure { uint e_bins[64]; float e_exposure; float e_average; uint e_frames; uint e_pad; };\n"
+
 #define MCE_GLSL_POST_U R"(
 layout(std140, binding = 1) uniform PostU {
     vec4 q_texel;   // xy: 1 / source size
@@ -813,7 +817,7 @@ vec3 tap(vec2 o) { return textureLod(u_src, v_uv + o * q_texel.xy, 0.0).rgb; }
 
 // 13-tap downsample (Jimenez, "Next Generation Post Processing in Call of Duty: AW"). The first
 // pass exposes, soft-thresholds and Karis-averages each 2x2 group so single hot pixels can't flicker.
-constexpr const char* kBloomDownFS = "#version 450 core\n" MCE_GLSL_POST_U R"(
+constexpr const char* kBloomDownFS = "#version 450 core\n" MCE_GLSL_POST_U MCE_GLSL_EXPOSURE("readonly") R"(
 float karis(vec3 c) { return 1.0 / (1.0 + dot(c, vec3(0.2126, 0.7152, 0.0722))); }
 void main() {
     vec3 a = tap(vec2(-2, 2)), b = tap(vec2(0, 2)), c = tap(vec2(2, 2));
@@ -826,7 +830,7 @@ void main() {
     if (q_params.z > 0.5) {
         float w0 = 0.5 * karis(g0), w1 = 0.125 * karis(g1), w2 = 0.125 * karis(g2), w3 = 0.125 * karis(g3), w4 = 0.125 * karis(g4);
         col = (g0 * w0 + g1 * w1 + g2 * w2 + g3 * w3 + g4 * w4) / (w0 + w1 + w2 + w3 + w4);
-        col *= q_params.w;  // exposure: the bloom chain works in exposed units
+        col *= q_params.w * (q_texel.z > 0.5 ? e_exposure : 1.0);  // exposure: the bloom chain works in exposed units
         if (q_params.x > 0.0) {
             float br = max(col.r, max(col.g, col.b));
             float knee = q_params.y;
@@ -854,18 +858,34 @@ void main() {
 // Exposure + bloom, ACES filmic fit (Narkowicz 2015, with its 0.6 input pre-scale so exposure 1
 // maps scene-referred albedo-range values to mid tones), then sRGB encode. Alpha carries the
 // encoded luma for FXAA.
-constexpr const char* kTonemapFS = "#version 450 core\n" MCE_GLSL_FRAME_U R"(
+// u_cluster here: x > 0.5 = auto exposure (times e_exposure), y = color-grade strength (0 = off).
+constexpr const char* kTonemapFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_EXPOSURE("readonly") R"(
 layout(binding = 6) uniform sampler2D u_hdr;
 layout(binding = 7) uniform sampler2D u_bloom;
+layout(binding = 8) uniform sampler2DArray u_lut;  // 256 × 16 strip (16³), display space
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_color;
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 vec3 linear_to_srgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+vec3 srgb_to_linear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
+vec3 grade(vec3 c) {  // as the 2D post pass (renderer.cpp)
+    c = clamp(c, 0.0, 1.0) * 15.0;
+    float b0 = floor(c.b), b1 = min(b0 + 1.0, 15.0);
+    vec2 rg = vec2((c.r + 0.5) / 256.0, (c.g + 0.5) / 16.0);
+    vec3 s0 = textureLod(u_lut, vec3(rg + vec2(b0 / 16.0, 0.0), 0.0), 0.0).rgb;
+    vec3 s1 = textureLod(u_lut, vec3(rg + vec2(b1 / 16.0, 0.0), 0.0), 0.0).rgb;
+    return mix(s0, s1, c.b - b0);
+}
 void main() {
-    vec3 c = texture(u_hdr, v_uv).rgb * u_params.x;
+    vec3 c = texture(u_hdr, v_uv).rgb * (u_params.x * (u_cluster.x > 0.5 ? e_exposure : 1.0));
     if (u_params.w > 0.5) c += textureLod(u_bloom, v_uv, 0.0).rgb * u_params.z;
     c = aces(c * 0.6);
     c = u_params.y > 0.5 ? linear_to_srgb(c) : c;
+    if (u_cluster.y > 0.0) {  // the LUT is authored on display (sRGB) values
+        vec3 d = u_params.y > 0.5 ? c : linear_to_srgb(c);
+        d = mix(d, grade(d), u_cluster.y);
+        c = u_params.y > 0.5 ? d : srgb_to_linear(d);
+    }
     o_color = vec4(c, dot(c, vec3(0.299, 0.587, 0.114)));
 }
 )";
@@ -1365,5 +1385,159 @@ void main() {
 #undef MCE_GLSL_OBJECT_U
 #undef MCE_GLSL_POST_U
 #undef MCE_GLSL_SKIN
+
+// ---- post effects (M-VISUAL 8) --------------------------------------------------------------------
+
+// Auto exposure: a 64-bin log2-luminance histogram of every e_src.z-th texel (bin 0 = darker than the
+// range), then a single-group reduction to the adapted exposure. Both read ExpU.
+#define MCE_GLSL_EXPOSURE_U R"(
+layout(std140, binding = 1) uniform ExpU {
+    vec4 e_src;     // source width, height, texel step, -
+    vec4 e_range;   // min log2 luminance, bins per log2 unit, adaptation rate brightening, darkening (per s)
+    vec4 e_target;  // key, compensation (EV), low share, high share
+    vec4 e_adapt;   // dt, snap (> 0.5), min exposure, max exposure
+};
+)"
+constexpr const char* kExposureHistCS = "#version 450 core\n" MCE_GLSL_EXPOSURE_U MCE_GLSL_EXPOSURE("") R"(
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(binding = 6) uniform sampler2D u_src;
+shared uint s_bins[64];
+void main() {
+    uint li = gl_LocalInvocationIndex;
+    if (li < 64u) s_bins[li] = 0u;
+    barrier();
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy) * int(e_src.z);
+    if (p.x < int(e_src.x) && p.y < int(e_src.y)) {
+        float l = dot(texelFetch(u_src, p, 0).rgb, vec3(0.2126, 0.7152, 0.0722));
+        uint bin = 0u;
+        if (l > exp2(e_range.x)) bin = uint(clamp((log2(l) - e_range.x) * e_range.y, 0.0, 62.0)) + 1u;
+        atomicAdd(s_bins[bin], 1u);
+    }
+    barrier();
+    if (li < 64u && s_bins[li] > 0u) atomicAdd(e_bins[li], s_bins[li]);
+}
+)";
+constexpr const char* kExposureReduceCS = "#version 450 core\n" MCE_GLSL_EXPOSURE_U MCE_GLSL_EXPOSURE("") R"(
+layout(local_size_x = 64) in;
+shared uint s_bins[64];
+void main() {
+    uint i = gl_LocalInvocationIndex;
+    s_bins[i] = e_bins[i];
+    e_bins[i] = 0u;  // empty for the next frame's histogram
+    barrier();
+    if (i != 0u) return;
+    float total = 0.0;
+    for (int k = 0; k < 64; ++k) total += float(s_bins[k]);
+    // The mean log2 luminance of the share between low and high (the extremes dropped).
+    float lo = total * e_target.z, hi = total * e_target.w, acc = 0.0, sum = 0.0, w = 0.0;
+    for (int k = 0; k < 64; ++k) {
+        float n = float(s_bins[k]);
+        float a = max(min(acc + n, hi) - max(acc, lo), 0.0);
+        acc += n;
+        float lg = k == 0 ? e_range.x - 1.0 : e_range.x + (float(k) - 0.5) / e_range.y;
+        sum += a * lg;
+        w += a;
+    }
+    float avg = w > 0.0 ? sum / w : log2(e_target.x);
+    float target = log2(clamp(e_target.x * exp2(e_target.y - avg), e_adapt.z, e_adapt.w));
+    float cur = (e_frames == 0u || e_adapt.y > 0.5) ? target : log2(max(e_exposure, 1e-6));
+    float d = target - cur;
+    float rate = d < 0.0 ? e_range.z : e_range.w;  // falling exposure = a brighter scene
+    e_exposure = exp2(cur + d * (1.0 - exp(-e_adapt.x * rate)));
+    e_average = exp2(avg);
+    e_frames += 1u;
+}
+)";
+#undef MCE_GLSL_EXPOSURE_U
+#undef MCE_GLSL_EXPOSURE
+
+// Depth of field: a 32-tap disk gather (Vogel spiral) out to the largest circle of confusion. Each tap
+// counts where its own circle reaches this pixel; a tap behind this pixel counts only as far as this
+// pixel's own circle, so a blurred background does not spill over a sharp foreground.
+constexpr const char* kDofFS = R"(#version 450 core
+layout(std140, binding = 1) uniform DofU {
+    vec4 d_texel;  // output texel size (xy), size (zw)
+    vec4 d_focus;  // focus distance, in-focus half range, blur range (m), max radius (output px)
+};
+layout(binding = 6) uniform sampler2D u_src;
+layout(binding = 7) uniform sampler2D u_vel;  // b: covered, a: view depth
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+float depth_at(vec2 uv) { vec4 v = textureLod(u_vel, uv, 0.0); return v.b > 0.5 ? v.a : 1e5; }
+float coc_of(float z) { return clamp((abs(z - d_focus.x) - d_focus.y) / max(d_focus.z, 1e-3), 0.0, 1.0) * d_focus.w; }
+void main() {
+    float z0 = depth_at(v_uv), c0 = coc_of(z0);
+    vec3 sum = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0).rgb;  // exact: a sharp pixel passes through
+    float wsum = 1.0;
+    const int N = 32;
+    for (int i = 0; i < N; ++i) {
+        float r = sqrt((float(i) + 0.5) / float(N)) * d_focus.w;
+        float a = float(i) * 2.39996323;
+        vec2 uv = v_uv + vec2(cos(a), sin(a)) * r * d_texel.xy;
+        float z = depth_at(uv), c = coc_of(z);
+        if (z > z0) c = min(c, c0);
+        float w = clamp(c - r, 0.0, 1.0);
+        sum += textureLod(u_src, uv, 0.0).rgb * w;
+        wsum += w;
+    }
+    o_color = vec4(sum / wsum, 1.0);
+}
+)";
+
+// Motion blur: m_params.z taps along the longest velocity in this pixel's neighborhood (the velocity
+// prepass's for the objects, the camera's reprojection for the sky), centered on it. A tap counts where
+// its own blur or this pixel's reaches the other, so a moving object smears over the still background
+// beside it and the background shows through its trailing edge (after McGuire et al. 2012, no depth).
+constexpr const char* kMotionBlurFS = R"(#version 450 core
+layout(std140, binding = 1) uniform MbU {
+    mat4 m_reproject;  // last frame's view-proj * inverse(this frame's), both unjittered
+    vec4 m_texel;      // output texel size (xy), size (zw)
+    vec4 m_params;     // intensity, max length (uv of the height), taps, -
+};
+layout(binding = 6) uniform sampler2D u_src;
+layout(binding = 7) uniform sampler2D u_vel;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+vec2 velocity(vec2 uv) {  // in output pixels, scaled and clamped
+    vec4 v = textureLod(u_vel, uv, 0.0);
+    vec2 vel;
+    if (v.b > 0.5) {
+        vel = v.x > 8.0 ? vec2(0.0) : v.xy;
+    } else {
+        vec4 p = m_reproject * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+        vel = uv - (p.xy / p.w * 0.5 + 0.5);
+    }
+    vel *= m_params.x * m_texel.zw;
+    float len = length(vel), cap = m_params.y * m_texel.w;
+    return len > cap ? vel * (cap / len) : vel;
+}
+void main() {
+    vec3 c = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0).rgb;  // exact: a still pixel passes through
+    vec2 vc = velocity(v_uv), vmax = vc;
+    float r = m_params.y * m_texel.w;  // the neighborhood: as far as the longest blur reaches
+    for (int i = 0; i < 8; ++i) {
+        float a = float(i) * 0.785398;
+        for (int k = 1; k <= 2; ++k) {
+            vec2 v = velocity(v_uv + vec2(cos(a), sin(a)) * (r * 0.5 * float(k)) * m_texel.xy);
+            if (dot(v, v) > dot(vmax, vmax)) vmax = v;
+        }
+    }
+    float lmax = length(vmax), lc = length(vc);
+    if (lmax < 0.5) { o_color = vec4(c, 1.0); return; }  // under half a pixel: untouched
+    int n = int(m_params.z);
+    vec3 sum = c;
+    float wsum = 1.0;
+    for (int i = 0; i < n; ++i) {
+        float t = (float(i) + 0.5) / float(n) - 0.5;
+        vec2 uv = v_uv + vmax * t * m_texel.xy;
+        float dist = abs(t) * lmax;
+        float li = length(velocity(uv));
+        float w = max(clamp(0.5 * li - dist + 1.0, 0.0, 1.0), clamp(0.5 * lc - dist + 1.0, 0.0, 1.0));
+        sum += textureLod(u_src, uv, 0.0).rgb * w;
+        wsum += w;
+    }
+    o_color = vec4(sum / wsum, 1.0);
+}
+)";
 
 }  // namespace mce::render::shaders3d

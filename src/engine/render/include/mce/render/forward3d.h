@@ -57,6 +57,10 @@ struct Forward3DDesc {
     // Volumetric fog pipelines (M-VISUAL 7); a scene turns it on with Volumetrics::enabled. False (or
     // -r.volumetrics 0) draws every scene with the exp² fog.
     bool volumetrics = true;
+    // Post-effect pipelines of M-VISUAL 8 (auto exposure, depth of field, motion blur; the color
+    // grade needs none); a scene turns each on in PostFx. False (or -r.post_fx 0) draws every scene
+    // without them. Auto exposure also needs compute.
+    bool post_fx = true;
 };
 
 struct Forward3DStats {
@@ -90,6 +94,10 @@ struct Forward3DStats {
     bool atmosphere_baked = false;   // ... re-baked this frame (the sun or the air changed)
     bool volumetrics = false;        // volumetric fog lit this frame (M-VISUAL 7)
     u32 froxels = 0;                 // its grid: columns × rows × slices
+    bool auto_exposure = false;      // the histogram set this frame's exposure (M-VISUAL 8)
+    bool color_grade = false;        // the LUT graded this frame
+    bool dof = false;                // depth of field blurred this frame
+    bool motion_blur = false;        // motion blur smeared this frame
     u32 joints = 0;          // joint matrices uploaded for skinned meshes
     u32 bloom_levels = 0;
     bool fxaa = false;
@@ -104,13 +112,14 @@ struct Forward3DGpuTimes {
     f64 taa = -1;       // velocity prepass + TAA resolve (0 when the scene has no TAA)
     f64 gi = -1;        // irradiance-volume update (0 when the scene has no volume)
     f64 volumetrics = -1;  // froxel injection + integration (0 when the scene has no volumetric fog)
+    f64 post_fx = -1;      // exposure histogram + depth of field + motion blur (0 when the scene has none)
     f64 bloom = -1, tonemap = -1, fxaa = -1, total = -1;
     f64 post() const { return bloom < 0 ? -1 : bloom + tonemap + (fxaa < 0 ? 0 : fxaa); }
 };
 
 class Forward3D {
 public:
-    static constexpr u32 kStageCount = 11;    // timestamps written: kStageCount + 1
+    static constexpr u32 kStageCount = 12;    // timestamps written: kStageCount + 1
     static constexpr u32 kMaxBloomLevels = 6;
 
     Forward3D() = default;
@@ -166,8 +175,9 @@ public:
     // SSAO (M-VISUAL 3): the blurred ambient visibility (r) at half the 3D target's size; null until
     // the first frame with AmbientOcclusion::enabled.
     rhi::TextureHandle ssao() const { return ao_a_; }
-    // TAA (M-VISUAL 5): the velocity target (RGBA16F at the 3D size: rg = uv motion, b = covered) and
-    // the newest history (RGBA16F at the output size); null until the first frame with PostFx::taa.
+    // TAA (M-VISUAL 5): the velocity target (RGBA16F at the 3D size: rg = uv motion, b = covered, a =
+    // view depth) and the newest history (RGBA16F at the output size); null until the first frame
+    // with PostFx::taa (or motion blur / depth of field for the velocity).
     rhi::TextureHandle velocity() const { return velocity_; }
     rhi::TextureHandle taa_history() const { return history_[history_index_]; }
     // Drops the history: call on a camera cut so the next frame does not blend the old view.
@@ -192,6 +202,14 @@ public:
     rhi::TextureHandle gi_export_target() const { return gi_export_; }
     // Forgets the volume, so the next record() fills (or loads) it again.
     void invalidate_gi() { gi_key_ = 0; }
+    // Auto exposure (M-VISUAL 8): the storage buffer of kExposureBins u32 histogram bins (zeroed
+    // after each frame's reduction), then f32 exposure (the auto factor applied), f32 average
+    // luminance and u32 frames adapted. Null when Forward3DDesc::post_fx is off or there is no compute.
+    static constexpr u32 kExposureBins = 64;
+    static constexpr f32 kExposureMinLog2 = -12.0f, kExposureMaxLog2 = 12.0f;  // the bins' log2 luminance range
+    rhi::BufferHandle exposure_buffer() const { return exposure_buf_; }
+    // Forgets the adapted exposure: the next auto-exposure frame snaps to its target (a camera cut).
+    void reset_exposure() { exposure_reset_ = true; }
 
 private:
     ResultV create_pipelines();
@@ -212,7 +230,10 @@ private:
     void shadow_draw(rhi::CommandBuffer& cmd, const math::mat4& view_proj, const Scene3D::Draw& d, rhi::PipelineHandle& bound_pipe,
                      const GpuMesh*& bound);
     void record_main(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_velocity(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_post_fx(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    rhi::TextureHandle post_fx_target(rhi::Extent2D size);
     void record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene);
     u32 gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 first, u32 count, f32 weight);
     // The sky-and-IBL members of a lit pass's PassU and their textures (stand-ins when IBL is off).
@@ -320,9 +341,22 @@ private:
     u32 taa_frame_ = 0;                  // Halton(2, 3) index
     math::mat4 jitter_ = math::mat4::identity();  // clip-space shift of this frame's projection
     math::vec2 jitter_uv_{0.0f, 0.0f};
-    math::mat4 prev_view_proj_ = math::mat4::identity();  // last TAA frame's, unjittered
+    math::mat4 prev_view_proj_ = math::mat4::identity();  // last velocity frame's, unjittered
     rhi::TextureHandle post_source_;     // what bloom and tonemap read: hdr_, or the TAA output
     rhi::Extent2D post_size_;
+    bool velocity_on_ = false;           // this frame ran the velocity prepass
+    bool velocity_prev_valid_ = false;   // prev_view_proj_ is last frame's (a velocity frame came before)
+    math::mat4 velocity_prev_vp_used_ = math::mat4::identity();  // the previous view-proj this frame's prepass used
+    // Post effects (M-VISUAL 8)
+    rhi::PipelineHandle exposure_hist_;  // compute; null when Forward3DDesc::post_fx is off or no compute
+    rhi::PipelineHandle exposure_reduce_;
+    rhi::PipelineHandle dof_pipe_;
+    rhi::PipelineHandle motion_blur_pipe_;
+    rhi::BufferHandle exposure_buf_;     // histogram + adapted exposure (see exposure_buffer())
+    bool exposure_reset_ = true;
+    rhi::TextureHandle fx_[2];           // RGBA16F ping-pong at fx_size_ (depth of field, motion blur)
+    rhi::Extent2D fx_size_;
+    u32 fx_next_ = 0;
     // Irradiance volume (M-VISUAL 6)
     rhi::PipelineHandle gi_project_;     // null when Forward3DDesc::gi is off
     rhi::PipelineHandle gi_encode_;

@@ -29,6 +29,9 @@ MCE_CVAR(cv_gi, "r.gi", true,
          CVarFlags::RequiresRestart);
 MCE_CVAR(cv_volumetrics, "r.volumetrics", true,
          "Volumetric fog for scenes that ask for it (Volumetrics::enabled; off = the exp² fog)", CVarFlags::RequiresRestart);
+MCE_CVAR(cv_post_fx, "r.post_fx", true,
+         "Auto exposure, depth of field and motion blur for scenes that ask for them (PostFx; off = none of them)",
+         CVarFlags::RequiresRestart);
 MCE_CVAR(cv_local_shadows, "r.local_shadows", true,
          "Shadow maps for spot and point lights that ask for them (PointLight::cast_shadows; off = unshadowed)",
          CVarFlags::None);
@@ -136,7 +139,35 @@ struct PostU {
     vec4 params;  // x: threshold, y: knee, z: first pass, w: exposure
 };
 
-enum Stage : u32 { kTsBegin, kTsClusters, kTsSsao, kTsShadow, kTsGi, kTsVol, kTsMain, kTsResolve, kTsTaa, kTsBloom, kTsTonemap, kTsFxaa };
+enum Stage : u32 {
+    kTsBegin, kTsClusters, kTsSsao, kTsShadow, kTsGi, kTsVol, kTsMain, kTsResolve, kTsTaa, kTsPostFx, kTsBloom, kTsTonemap, kTsFxaa
+};
+
+struct ExpU {  // kExposureHistCS / kExposureReduceCS
+    vec4 src;     // width, height, texel step
+    vec4 range;   // min log2, bins per log2, rate brightening, rate darkening
+    vec4 target;  // key, compensation, low share, high share
+    vec4 adapt;   // dt, snap, min, max
+};
+
+struct ExposureData {  // std430 Exposure (shaders3d.h MCE_GLSL_EXPOSURE)
+    u32 bins[Forward3D::kExposureBins];
+    f32 exposure;
+    f32 average;
+    u32 frames;
+    u32 pad;
+};
+
+struct DofU {
+    vec4 texel;
+    vec4 focus;  // distance, in-focus half range, blur range, max radius px
+};
+
+struct MbU {
+    mat4 reproject;
+    vec4 texel;
+    vec4 params;  // intensity, max length, taps
+};
 
 struct VelPassU {  // kVelocityVS
     mat4 jittered;
@@ -449,7 +480,8 @@ ResultV Forward3D::create_pipelines() {
         fs.debug_name = "ssao.blur";
         MCE_TRY_ASSIGN(ao_blur_, device_->create_pipeline(fs));
     }
-    if (desc_.taa && cv_taa.get_bool()) {
+    const bool taa = desc_.taa && cv_taa.get_bool(), post_fx = desc_.post_fx && cv_post_fx.get_bool();
+    if (taa || post_fx) {  // the velocity prepass: TAA, motion blur and depth of field
         rhi::GraphicsPipelineDesc vp = sp;  // the shadow vertex streams, depth-tested, both faces
         vp.vertex_shader = {kVelocityVS, "velocity.vert"};
         vp.fragment_shader = {kVelocityFS, "velocity.frag"};
@@ -460,10 +492,40 @@ ResultV Forward3D::create_pipelines() {
         vp.vertex = skinned_layout;
         vp.debug_name = "taa.velocity.skinned";
         MCE_TRY_ASSIGN(velocity_skinned_, device_->create_pipeline(vp));
+    }
+    if (taa) {
         fs.state.blend.mode = rhi::BlendMode::Opaque;
         fs.fragment_shader = {kTaaFS, "taa.frag"};
         fs.debug_name = "taa";
         MCE_TRY_ASSIGN(taa_pipe_, device_->create_pipeline(fs));
+    }
+    // The exposure buffer is bound by the bloom and tonemap passes whether or not auto exposure runs.
+    {
+        ExposureData init{};
+        init.exposure = 1.0f;
+        exposure_buf_ = device_->create_buffer({rhi::BufferUsage::Storage, sizeof(ExposureData), "mce.3d.exposure"},
+                                               std::as_bytes(Span<const ExposureData>(&init, 1)));
+        exposure_reset_ = true;
+    }
+    if (post_fx) {
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kDofFS, "dof.frag"};
+        fs.debug_name = "dof";
+        MCE_TRY_ASSIGN(dof_pipe_, device_->create_pipeline(fs));
+        fs.fragment_shader = {kMotionBlurFS, "motion_blur.frag"};
+        fs.debug_name = "motion_blur";
+        MCE_TRY_ASSIGN(motion_blur_pipe_, device_->create_pipeline(fs));
+        if (device_->caps().compute) {
+            rhi::ComputePipelineDesc cd;
+            cd.compute_shader = {kExposureHistCS, "mce.3d.exposure_hist.comp"};
+            cd.debug_name = "mce.3d.exposure_hist";
+            if (auto p = device_->create_compute_pipeline(cd)) exposure_hist_ = p.value();
+            cd.compute_shader = {kExposureReduceCS, "mce.3d.exposure_reduce.comp"};
+            cd.debug_name = "mce.3d.exposure_reduce";
+            if (auto p = device_->create_compute_pipeline(cd)) exposure_reduce_ = p.value();
+            if (exposure_hist_.is_null() || exposure_reduce_.is_null())
+                MCE_LOG_WARN("render3d: auto exposure unavailable (its compute shaders failed)");
+        }
     }
     if (desc_.gi && cv_gi.get_bool()) {
         fs.fragment_shader = {kGiProjectFS, "gi_project.frag"};
@@ -579,12 +641,14 @@ void Forward3D::shutdown() {
           &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
           &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &velocity_pipe_, &velocity_skinned_,
-          &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_}) {
+          &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_, &exposure_hist_,
+          &exposure_reduce_, &dof_pipe_, &motion_blur_pipe_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
     for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_, &ao_off_,
-                                  &gi_volume_, &gi_faces_, &gi_faces_depth_, &gi_export_, &atmo_tex_, &vol_media_, &vol_light_})
+                                  &gi_volume_, &gi_faces_, &gi_faces_depth_, &gi_export_, &atmo_tex_, &vol_media_, &vol_light_,
+                                  &fx_[0], &fx_[1]})
         destroy(*device_, *t);
     atmo_key_ = 0;
     gi_size_ = {};
@@ -598,7 +662,8 @@ void Forward3D::shutdown() {
         *s = {};
     }
     destroy(*device_, shadow_map_);
-    for (rhi::BufferHandle* b : {&cluster_ranges_, &cluster_indices_}) {
+    fx_size_ = {};
+    for (rhi::BufferHandle* b : {&cluster_ranges_, &cluster_indices_, &exposure_buf_}) {
         if (!b->is_null()) device_->destroy_buffer(*b);
         *b = {};
     }
@@ -624,7 +689,8 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     t.main = ts.ms(b + kTsVol, b + kTsMain);
     t.resolve = ts.ms(b + kTsMain, b + kTsResolve);
     t.taa = ts.ms(b + kTsResolve, b + kTsTaa);
-    t.bloom = ts.ms(b + kTsTaa, b + kTsBloom);
+    t.post_fx = ts.ms(b + kTsTaa, b + kTsPostFx);
+    t.bloom = ts.ms(b + kTsPostFx, b + kTsBloom);
     t.tonemap = ts.ms(b + kTsBloom, b + kTsTonemap);
     t.fxaa = ts.ms(b + kTsTonemap, b + kTsFxaa);
     t.total = ts.ms(b + kTsBegin, b + kTsFxaa);
@@ -695,8 +761,13 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     timestamp(cmd, kTsMain);
     if (desc_.msaa > 1) cmd.resolve(hdr_msaa_, hdr_);
     timestamp(cmd, kTsResolve);
+    velocity_on_ = scene.post().needs_velocity() && !velocity_pipe_.is_null();
+    if (velocity_on_) record_velocity(cmd, scene);
+    else velocity_prev_valid_ = false;  // a frame without the prepass breaks the previous transforms
     if (taa_on_) record_taa(cmd, scene);
     timestamp(cmd, kTsTaa);
+    record_post_fx(cmd, scene);
+    timestamp(cmd, kTsPostFx);
     record_post(cmd, scene, target);
 }
 
@@ -1865,9 +1936,8 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
 // ---- 4-6. bloom, tonemap, FXAA
 // ---- 3. TAA (M-VISUAL 5): the velocity prepass, then the history resolve into the next history slot.
 // The output is the full viewport, so a render_scale < 1 frame comes out upsampled.
-void Forward3D::record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+void Forward3D::record_velocity(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const View3D& view = scene.view();
-    const rhi::Extent2D out = view.viewport;
     if (velocity_.is_null()) {
         rhi::TextureDesc d;
         d.size = size_;
@@ -1882,22 +1952,8 @@ void Forward3D::record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         z.debug_name = "mce.3d.velocity_depth";
         velocity_depth_ = device_->create_texture(z);
     }
-    if (!(history_size_ == out)) {
-        for (rhi::TextureHandle& h : history_) destroy(*device_, h);
-        rhi::TextureDesc d;
-        d.size = out;
-        d.format = rhi::TextureFormat::RGBA16F;
-        d.usage = rhi::TextureUsage::SampledColorTarget;
-        d.debug_name = "mce.3d.taa_history0";
-        history_[0] = device_->create_texture(d);
-        d.debug_name = "mce.3d.taa_history1";
-        history_[1] = device_->create_texture(d);
-        history_size_ = out;
-        history_valid_ = false;
-    }
-
-    cmd.push_debug_scope("taa");
-    // Velocity: the opaques, unjittered positions now and last frame, rasterized with the jitter.
+    cmd.push_debug_scope("velocity");
+    // The opaques, unjittered positions now and last frame, rasterized with the jitter (if any).
     rhi::PassAttachment color;
     color.texture = velocity_;
     rhi::PassAttachment depth;
@@ -1909,7 +1965,7 @@ void Forward3D::record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     vp.depth = depth;
     vp.debug_name = "taa.velocity";
     cmd.begin_pass(vp);
-    const mat4 previous = history_valid_ ? prev_view_proj_ : view.view_proj;
+    const mat4 previous = velocity_prev_valid_ ? prev_view_proj_ : view.view_proj;
     const VelPassU pu{jitter_ * view.view_proj, view.view_proj, previous};
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     rhi::PipelineHandle bound_pipe;
@@ -1934,7 +1990,32 @@ void Forward3D::record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         ++stats_.velocity_draws;
     }
     cmd.end_pass();
+    cmd.pop_debug_scope();
+    // The camera reprojection of this frame (TAA's sky, motion blur's) uses the previous matrix.
+    velocity_prev_vp_used_ = previous;
+    prev_view_proj_ = view.view_proj;
+    velocity_prev_valid_ = true;
+}
 
+void Forward3D::record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const View3D& view = scene.view();
+    const rhi::Extent2D out = view.viewport;
+    if (!(history_size_ == out)) {
+        for (rhi::TextureHandle& h : history_) destroy(*device_, h);
+        rhi::TextureDesc d;
+        d.size = out;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.debug_name = "mce.3d.taa_history0";
+        history_[0] = device_->create_texture(d);
+        d.debug_name = "mce.3d.taa_history1";
+        history_[1] = device_->create_texture(d);
+        history_size_ = out;
+        history_valid_ = false;
+    }
+
+    cmd.push_debug_scope("taa");
+    const mat4 previous = velocity_prev_vp_used_;
     // Resolve: history_[next] = clip(history_[current] reprojected) blended with this frame.
     const u32 next = history_index_ ^ 1u;
     rhi::PassAttachment o;
@@ -1962,9 +2043,106 @@ void Forward3D::record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     stats_.taa_history = history_valid_;
     history_index_ = next;
     history_valid_ = true;
-    prev_view_proj_ = view.view_proj;
     post_source_ = history_[next];
     post_size_ = out;
+}
+
+rhi::TextureHandle Forward3D::post_fx_target(rhi::Extent2D size) {
+    if (!(fx_size_ == size)) {
+        for (rhi::TextureHandle& t : fx_) destroy(*device_, t);
+        rhi::TextureDesc d;
+        d.size = size;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.debug_name = "mce.3d.post_fx0";
+        fx_[0] = device_->create_texture(d);
+        d.debug_name = "mce.3d.post_fx1";
+        fx_[1] = device_->create_texture(d);
+        fx_size_ = size;
+    }
+    const rhi::TextureHandle t = fx_[fx_next_];
+    fx_next_ ^= 1u;
+    return t;
+}
+
+// ---- post effects (M-VISUAL 8): depth of field, motion blur (on post_source_, the HDR frame after TAA),
+// then the auto-exposure histogram of the result
+void Forward3D::record_post_fx(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const PostFx& post = scene.post();
+    const View3D& view = scene.view();
+    const rhi::Extent2D out = post_size_;
+    const vec4 texel{1.0f / f32(out.width), 1.0f / f32(out.height), f32(out.width), f32(out.height)};
+    auto fullscreen = [&](rhi::TextureHandle dst, const char* name) {
+        rhi::PassAttachment o;
+        o.texture = dst;
+        o.load = rhi::LoadOp::DontCare;
+        rhi::RenderPassDesc p;
+        p.colors = Span<const rhi::PassAttachment>(&o, 1);
+        p.debug_name = name;
+        cmd.begin_pass(p);
+    };
+    if (post.dof.enabled && velocity_on_ && !dof_pipe_.is_null() && post.dof.max_radius > 0.0f) {
+        const rhi::TextureHandle dst = post_fx_target(out);
+        cmd.push_debug_scope("dof");
+        fullscreen(dst, "dof");
+        cmd.bind_pipeline(dof_pipe_);
+        const f32 radius = min(post.dof.max_radius, 0.05f) * f32(out.height);  // a fraction of the view height, in px
+        const DofU du{texel, {max(post.dof.focus_distance, 0.0f), max(post.dof.focus_range, 0.0f), post.dof.blur_range, radius}};
+        cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(du));
+        cmd.bind_texture(rhi::bank::kAlbedo, post_source_, linear_clamp_);
+        cmd.bind_texture(rhi::bank::kNormal, velocity_, point_sampler_);
+        cmd.draw_non_indexed(3);
+        cmd.end_pass();
+        cmd.pop_debug_scope();
+        post_source_ = dst;
+        stats_.dof = true;
+    }
+    if (post.motion_blur.enabled && velocity_on_ && !motion_blur_pipe_.is_null() && post.motion_blur.intensity > 0.0f) {
+        const rhi::TextureHandle dst = post_fx_target(out);
+        cmd.push_debug_scope("motion_blur");
+        fullscreen(dst, "motion_blur");
+        cmd.bind_pipeline(motion_blur_pipe_);
+        MbU mu;
+        mu.reproject = velocity_prev_vp_used_ * inverse(view.view_proj);
+        mu.texel = texel;
+        mu.params = {post.motion_blur.intensity, max(post.motion_blur.max_length, 0.0f),
+                     f32(clamp(post.motion_blur.samples, 4u, 32u)), 0.0f};
+        cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(mu));
+        cmd.bind_texture(rhi::bank::kAlbedo, post_source_, linear_clamp_);
+        cmd.bind_texture(rhi::bank::kNormal, velocity_, point_sampler_);
+        cmd.draw_non_indexed(3);
+        cmd.end_pass();
+        cmd.pop_debug_scope();
+        post_source_ = dst;
+        stats_.motion_blur = true;
+    }
+    const PostFx::AutoExposure& ae = post.auto_exposure;
+    if (ae.enabled && !exposure_hist_.is_null() && !exposure_reduce_.is_null()) {
+        cmd.push_debug_scope("exposure");
+        constexpr u32 kStep = 2;  // every other texel each way
+        ExpU eu;
+        eu.src = {f32(out.width), f32(out.height), f32(kStep), 0.0f};
+        eu.range = {kExposureMinLog2, f32(kExposureBins - 1) / (kExposureMaxLog2 - kExposureMinLog2), max(ae.speed_up, 0.0f),
+                    max(ae.speed_down, 0.0f)};
+        eu.target = {max(ae.key, 1e-4f), ae.compensation, clamp(ae.low_percent, 0.0f, 1.0f), clamp(ae.high_percent, 0.0f, 1.0f)};
+        eu.adapt = {max(ae.dt, 0.0f), exposure_reset_ ? 1.0f : 0.0f, max(ae.min_exposure, 1e-4f),
+                    max(ae.max_exposure, max(ae.min_exposure, 1e-4f))};
+        cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(eu));
+        cmd.bind_storage_buffer(rhi::bank::kExposure, exposure_buf_, 0, 0);
+        cmd.bind_pipeline(exposure_hist_);
+        cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);
+        const u32 gx = (out.width + 16 * kStep - 1) / (16 * kStep), gy = (out.height + 16 * kStep - 1) / (16 * kStep);
+        cmd.dispatch(gx, gy, 1);
+        cmd.barrier(rhi::barrier::kStorageBuffer);
+        cmd.bind_pipeline(exposure_reduce_);
+        cmd.dispatch(1, 1, 1);
+        cmd.barrier(rhi::barrier::kStorageBuffer);
+        cmd.pop_debug_scope();
+        exposure_reset_ = false;
+        stats_.auto_exposure = true;
+    } else {
+        exposure_reset_ = true;  // the next auto-exposure frame snaps
+    }
 }
 
 void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target) {
@@ -1988,10 +2166,11 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
             const rhi::Extent2D ss = i == 0 ? post_size_ : bloom_size_[i - 1];
             fullscreen(bloom_[i], rhi::LoadOp::DontCare, "bloom.down");
             cmd.bind_pipeline(bloom_down_);
-            pu.texel = {1.0f / f32(ss.width), 1.0f / f32(ss.height), 0.0f, 0.0f};
+            pu.texel = {1.0f / f32(ss.width), 1.0f / f32(ss.height), stats_.auto_exposure ? 1.0f : 0.0f, 0.0f};
             pu.params = {max(post.bloom_threshold, 0.0f), max(post.bloom_threshold, 0.0f) * 0.5f, i == 0 ? 1.0f : 0.0f,
                          scene.exposure()};
             cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
+            cmd.bind_storage_buffer(rhi::bank::kExposure, exposure_buf_, 0, 0);
             cmd.bind_texture(rhi::bank::kAlbedo, src, linear_clamp_);
             cmd.draw_non_indexed(3);
             cmd.end_pass();
@@ -2021,6 +2200,11 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     fu.params = {scene.exposure(), desc_.encode_srgb_output ? 1.0f : 0.0f,
                  post.bloom_intensity / f32(max(bloom_levels_, 1u)), bloom ? 1.0f : 0.0f};
     fu.viewport = {f32(size_.width), f32(size_.height), 1.0f / f32(size_.width), 1.0f / f32(size_.height)};
+    // The tonemap pass's u_cluster: x auto exposure, y color-grade strength (0 = off).
+    const rhi::TextureHandle lut = post.lut_key != 0 && textures_->contains(post.lut_key) ? textures_->get(post.lut_key) : rhi::TextureHandle{};
+    const f32 grade = lut.is_null() ? 0.0f : clamp(post.lut_strength, 0.0f, 1.0f);
+    fu.cluster = {stats_.auto_exposure ? 1.0f : 0.0f, grade, 0.0f, 0.0f};
+    stats_.color_grade = grade > 0.0f;
     fullscreen(fxaa ? ldr_ : target, rhi::LoadOp::DontCare, "tonemap");
     const rhi::Extent2D out = scene.view().viewport;
     cmd.bind_pipeline(tonemap_);
@@ -2028,6 +2212,8 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     // 1:1 reads texel-exact; a scaled frame is upsampled bilinearly (TAA upsamples it itself).
     cmd.bind_texture(rhi::bank::kAlbedo, post_source_, post_size_ == out ? point_sampler_ : linear_clamp_);
     cmd.bind_texture(rhi::bank::kNormal, bloom ? bloom_[0] : post_source_, linear_clamp_);
+    cmd.bind_texture(rhi::bank::kOrm, lut.is_null() || grade <= 0.0f ? textures_->white() : lut, linear_clamp_);
+    cmd.bind_storage_buffer(rhi::bank::kExposure, exposure_buf_, 0, 0);
     cmd.draw_non_indexed(3);
     cmd.end_pass();
     timestamp(cmd, kTsTonemap);
