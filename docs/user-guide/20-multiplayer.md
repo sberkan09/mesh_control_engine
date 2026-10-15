@@ -173,6 +173,42 @@ pushes players back every two seconds. At 75 ms with 20 ms of jitter, the player
 behind its input with `-predict 0` and about 10 ms with prediction (what remains is the gusts being
 smoothed in).
 
+**Fair hits.** Interpolation draws other entities in the past, so a player who fires at what they see
+is aiming at where the target was. Checked against the server's present, a shot that looked dead on
+misses. Lag compensation (`mce/net/lag_compensation.h`) keeps a short history of hit boxes on the
+server and checks each shot against the moment its client was drawing:
+
+```cpp
+// server
+net::LagCompensator lag;
+lag.init({60.0, 0.25});                               // tick rate, longest rewind in seconds
+world.add(target, net::HitBox{{0.5f, 1.0f, 0.5f}, {0, 1, 0}});  // half extents, offset (local)
+lag.record(world, tick);                              // after each tick, the snapshot's tick number
+// on a shot from a client:
+net::RewindHit hit;
+if (lag.raycast(shot.view_tick, shot.origin, shot.direction, range, hit, shooter_net_id)) {
+    // hit.net_id, hit.entity, hit.distance, hit.point
+}
+
+// client, when firing at a target:
+shot.view_tick = client_rep.drawn_tick(target_net_id);  // the server tick it shows
+```
+
+Entities take part when they have `NetId`, `LocalTransform` and `HitBox`, a box in the entity's own
+space that turns and scales with it. The history is blended the same way the client draws it, so a
+shot at the drawn centre of a target hits it. `transform_at` gives the rewound transform for other
+checks (a melee swing, an area).
+
+The rewind is limited by `max_rewind_s`. A view older than that (a very slow link, or a cheat) is
+checked at the oldest moment allowed, and a view in the future is checked at the present. Keep the
+limit near your worst expected round trip plus the jitter buffer: a long rewind lets a laggy player
+hit someone who already ducked behind a wall.
+
+`sample_net_headless -sim 1` fires at a moving drifter every half second from each client. At 75 ms
+with 20 ms of jitter, every rewound shot hits and about 30% would hit at the server's present. At
+150 ms none would. A reliable shot that is lost and resent can arrive after the rewind window; the
+sample counts those separately.
+
 ## 20.5 Try it
 
 `samples/net_headless` runs a server and a client in one process over loopback and checks that the
@@ -242,7 +278,7 @@ line there the same way.
 
 ## 20.7 What it does not do yet
 
-Lag compensation for hit checks and rollback come next (M-NET2). Every client receives every
+Rollback and lockstep come next (M-NET2). Every client receives every
 replicated entity, and traffic is not encrypted. There are no lobbies, matchmaking or NAT traversal:
 players connect to an address and port. If you ship a game that links `mce_net`, list ENet (MIT
 licence) in your `CREDITS.md`.
