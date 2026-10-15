@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Subtitles and sound captions, M-ACCESS step 1 (SBA-95): the stock player draws timeline subtitle lines,
+  `kit::SoundCaption` tags on sounds and `kit::ShowCaption` lines at the bottom of the screen
+  (`ui::SubtitleView`), with `access.subtitles`, `access.captions`, `access.subtitle_speaker`, `access.subtitle_size`
+  and `access.subtitle_background` on the stock options screen. The NPC dialogue box follows the speaker and
+  background settings. User guide 10.7.
 - The editor's Animation panel, M-CINEMA step 3 (SBA-78): an `.mcanim` animation graph drawn as boxes and arrows
   (drag states, add transitions from a right-click, any-state transitions, the start state), an inspector for
   parameters, states (clip or 1D blend points, loop, speed, events) and transitions (conditions, fade, on finish),

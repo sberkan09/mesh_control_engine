@@ -3,7 +3,7 @@
 // installed in one call so mce_player, play-in-editor and MCP run_headless run the same set
 // (M-DATA-REACH): particles, sequences, timelines (timeline.h), kit3d, 3D navigation (nav3d.h), WorldSettings and the effects (effects.h: sound,
 // burst and shake triggers, 3D bodies (bodies3d.h), camera shake and follow, PhysicsEvents, the NavGrid and path agents) and
-// sprite-sheet animation (sprite_anim.h). A component the stock player
+// sprite-sheet animation (sprite_anim.h) and subtitles and sound captions (captions.h). A component the stock player
 // should act on gets its system installed here, never in only one of the three hosts.
 
 namespace mce {
