@@ -313,8 +313,9 @@ void scatter_foliage(const FoliageScatter& sc, Array<mat4>& out) {
     const f32 cw = 2.0f * hx / f32(gx), cd = 2.0f * hz / f32(gz);
     for (u32 i = 0; i < sc.count; ++i) {
         const u32 cell = cells[i];
-        const f32 x = -hx + (f32(cell % gx) + rng.unit()) * cw;
-        const f32 z = -hz + (f32(cell / gx) + rng.unit()) * cd;
+        const u32 column = cell % gx, row = cell / gx;
+        const f32 x = -hx + (f32(column) + rng.unit()) * cw;
+        const f32 z = -hz + (f32(row) + rng.unit()) * cd;
         const f32 yaw = sc.random_yaw ? rng.unit() * 2.0f * kPi : 0.0f;
         const f32 s = sc.scale_min + (sc.scale_max - sc.scale_min) * rng.unit();
         out[i] = trs(sc.origin + vec3{x, 0.0f, z}, quat_from_axis_angle({0, 1, 0}, yaw), {s, s, s});

@@ -5,7 +5,6 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
-#include <cstring>
 
 #include <cstdio>
 #include <filesystem>
@@ -29,6 +28,13 @@ using math::quat;
 using math::vec3;
 
 namespace {
+
+bool same_matrix(const math::mat4& a, const math::mat4& b) {
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r)
+            if (a.c[c][r] != b.c[c][r]) return false;
+    return true;
+}
 
 constexpr f64 kDt = 1.0 / 60.0;
 const asset::Guid kBox{0x3d00000000000001ull, 0x8000000000000001ull};
@@ -658,7 +664,7 @@ TEST_CASE("kit3d: Foliage3D, Decal3D and ParticleEmitter3D become a batch, decal
     render::Scene3D again(f.store, mem::heap());
     frame(again);
     CHECK(again.batches()[0].version == version);
-    CHECK(std::memcmp(&again.batches()[0].transforms[0], &first, sizeof(first)) == 0);
+    CHECK(same_matrix(again.batches()[0].transforms[0], first));
     CHECK(again.particle_emitters()[0].burst == 0);
     CHECK(again.time() == doctest::Approx(0.5f));
     // A new seed re-scatters under a new version; a bumped burst_version bursts again.
@@ -667,6 +673,6 @@ TEST_CASE("kit3d: Foliage3D, Decal3D and ParticleEmitter3D become a batch, decal
     render::Scene3D third(f.store, mem::heap());
     frame(third);
     CHECK(third.batches()[0].version != version);
-    CHECK(std::memcmp(&third.batches()[0].transforms[0], &first, sizeof(first)) != 0);
+    CHECK(!same_matrix(third.batches()[0].transforms[0], first));
     CHECK(third.particle_emitters()[0].burst == 30);
 }

@@ -5,7 +5,6 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
-#include <cstring>
 
 #include "mce/render/mesh.h"
 #include "mce/render/scene3d.h"
@@ -16,6 +15,13 @@ using namespace mce::render;
 using math::vec3;
 
 namespace {
+
+bool same_matrix(const math::mat4& a, const math::mat4& b) {
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r)
+            if (a.c[c][r] != b.c[c][r]) return false;
+    return true;
+}
 
 Array<byte> box_with_lods() {
     mesh_fixture::Builder b;
@@ -53,8 +59,8 @@ TEST_CASE("render3d scale: scatter_foliage is deterministic, inside its rectangl
     REQUIRE(c.size() == 200);
     usize same = 0;
     for (usize i = 0; i < a.size(); ++i) {
-        CHECK(std::memcmp(&a[i], &b[i], sizeof(math::mat4)) == 0);
-        same += std::memcmp(&a[i], &c[i], sizeof(math::mat4)) == 0;
+        CHECK(same_matrix(a[i], b[i]));
+        same += same_matrix(a[i], c[i]);
         const vec3 p{a[i].c[3][0], a[i].c[3][1], a[i].c[3][2]};
         CHECK(p.x >= 4.0f);
         CHECK(p.x <= 16.0f);
