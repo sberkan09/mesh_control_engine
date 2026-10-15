@@ -389,3 +389,105 @@ TEST_CASE("terrain: holes split their nodes to level 0 and cut the triangles aro
         CHECK_FALSE(lod.hole(static_cast<u32>(std::lround(x + 64.0f)), static_cast<u32>(std::lround(z + 64.0f))));
     }
 }
+
+TEST_CASE("terrain: foliage stands on the surface where its layer is painted, thinned by weight (M-TERRAIN 5)") {
+    // 129 samples over 128 m of hills; layer 1 painted fully on x > 0, half on -32 < x < 0 (weight 128),
+    // nothing further west; a 3 x 3 hole block at samples (100..102, 60..62), on the painted side.
+    asset::TerrainHeader h{};
+    h.resolution = 129;
+    h.chunk = 16;
+    h.size[0] = h.size[1] = 128.0f;
+    h.height_min = 0.0f;
+    h.height_max = 40.0f;
+    h.layer_count = 2;
+    h.splat_resolution = 129;
+    h.flags = asset::TerrainFlags::kHoles;
+    Array<u16> heights;
+    heights.resize(129u * 129u);
+    for (u32 z = 0; z < 129; ++z)
+        for (u32 x = 0; x < 129; ++x)
+            heights[z * 129 + x] = static_cast<u16>(std::lround(hills(static_cast<f32>(x) - 64.0f, static_cast<f32>(z) - 64.0f) / 40.0f * 65535.0f));
+    Array<asset::TerrainLayer> layers;
+    layers.resize(2);
+    layers[0].tile = layers[1].tile = 4.0f;
+    Array<u8> splat;
+    const usize n = 129u * 129u;
+    splat.resize(n * 8, u8{0});
+    for (u32 z = 0; z < 129; ++z)
+        for (u32 x = 0; x < 129; ++x) {
+            const u8 w1 = x >= 64 ? 255 : (x >= 32 ? 128 : 0);
+            splat[(usize(z) * 129 + x) * 4 + 1] = w1;
+            splat[(usize(z) * 129 + x) * 4 + 0] = static_cast<u8>(255 - w1);
+        }
+    Array<u8> holes;
+    holes.resize((n + 7) / 8, u8{0});
+    for (u32 z = 60; z <= 62; ++z)
+        for (u32 x = 100; x <= 102; ++x) holes[(z * 129 + x) / 8] |= static_cast<u8>(1u << ((z * 129 + x) % 8));
+    Array<byte> payload;
+    asset::write_terrain(h, heights.span(), payload, layers.span(), splat.span(), holes.span());
+    auto v = asset::TerrainView::read(payload.span());
+    REQUIRE(v);
+    const asset::TerrainView& t = v.value();
+
+    TerrainScatter sc;
+    sc.layer = 1;
+    sc.density = 0.5f;
+    sc.max_slope_deg = 90.0f;
+    sc.seed = 7;
+    Array<math::mat4> out;
+    scatter_on_terrain(t, sc, out);
+    // Full weight over 64 x 128 m and half over 32 x 128 m: 0.5 * (8192 + 0.5 * 4096) = 5120 expected.
+    CHECK(out.size() > 4800);
+    CHECK(out.size() < 5450);
+    u32 east = 0, middle = 0;
+    for (const math::mat4& m : out) {
+        const vec3 p{m.c[3][0], m.c[3][1], m.c[3][2]};
+        CHECK(p.x >= -33.0f);  // none where the layer has no weight (it fades in from sample 31)
+        east += p.x > 0.0f;
+        middle += p.x < 0.0f;
+        CHECK(std::fabs(p.y - t.surface_at(p.x, p.z)) < 1e-3f);  // standing on the drawn surface
+        // Not on a quad touching the hole block (samples 99..102, 59..62 as quad corners).
+        const bool in_hole = p.x > 99.0f - 64.0f && p.x < 103.0f - 64.0f && p.z > 59.0f - 64.0f && p.z < 63.0f - 64.0f;
+        CHECK_FALSE(in_hole);
+        const f32 s = math::length(vec3{m.c[0][0], m.c[0][1], m.c[0][2]});
+        CHECK(s >= 0.8f - 1e-4f);
+        CHECK(s <= 1.2f + 1e-4f);
+    }
+    CHECK(static_cast<f32>(middle) == doctest::Approx(0.25f * static_cast<f32>(east)).epsilon(0.2));
+
+    // Deterministic.
+    Array<math::mat4> again;
+    scatter_on_terrain(t, sc, again);
+    REQUIRE(again.size() == out.size());
+    CHECK(std::memcmp(again.data(), out.data(), out.size() * sizeof(math::mat4)) == 0);
+    // Everywhere, capped, and under a moved, turned and stretched entity.
+    sc.layer = TerrainScatter::kAnyLayer;
+    sc.max_count = 300;
+    sc.position = {10.0f, 5.0f, -2.0f};
+    sc.rotation = math::quat_from_axis_angle({0, 1, 0}, math::radians(90.0f));
+    sc.scale = {1.0f, 2.0f, 1.0f};
+    scatter_on_terrain(t, sc, out);
+    CHECK(out.size() == 300);
+    for (const math::mat4& m : out) {
+        const vec3 p{m.c[3][0], m.c[3][1], m.c[3][2]};
+        const vec3 local = math::rotate(math::conjugate(sc.rotation), p - sc.position);
+        CHECK(std::fabs(p.y - (5.0f + 2.0f * t.surface_at(local.x, local.z))) < 2e-3f);
+        CHECK(std::fabs(m.c[1][1]) > 0.7f);  // upright (the entity's up is +Y)
+    }
+    // Steep ground is left bare with a slope limit.
+    sc.max_count = 100000;
+    sc.position = {};
+    sc.rotation = math::quat::identity();
+    sc.scale = {1.0f, 1.0f, 1.0f};
+    sc.max_slope_deg = 25.0f;
+    scatter_on_terrain(t, sc, out);
+    for (const math::mat4& m : out) {
+        const f32 x = m.c[3][0], z = m.c[3][2];
+        const f32 gx = (t.surface_at(x + 0.5f, z) - t.surface_at(x - 0.5f, z)), gz = (t.surface_at(x, z + 0.5f) - t.surface_at(x, z - 0.5f));
+        CHECK(std::sqrt(gx * gx + gz * gz) <= std::tan(math::radians(25.0f)) + 1e-3f);
+    }
+    // No density, no copies.
+    sc.density = 0.0f;
+    scatter_on_terrain(t, sc, out);
+    CHECK(out.empty());
+}

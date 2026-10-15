@@ -1,6 +1,6 @@
 # M-TERRAIN — Heightmap terrain (milestone record)
 
-**Status:** in progress (steps 1–4 done, 2026-10-15). Plan: ROADMAP §M-TERRAIN; Linear SBA-89 … SBA-94.
+**Status:** in progress (steps 1–5 done, 2026-10-15). Plan: ROADMAP §M-TERRAIN; Linear SBA-89 … SBA-94.
 **Why:** SolsticeReach's island is a script-generated mesh in 16 chunks; there is no terrain an editor or an
 agent can shape. Each step is opt-in: a scene without a `Terrain3D` draws exactly as before.
 
@@ -12,7 +12,7 @@ agent can shape. Each step is opt-in: a scene without a `Terrain3D` draws exactl
 | 2 | Splat layers (8), triplanar, height blend | SBA-90 | done: GL and SDL GPU (gated), tier knobs below; Metal untested |
 | 3 | Jolt height-field collision, holes | SBA-91 | done: collision matches the drawn surface; holes in both |
 | 4 | Editor brushes with undo, cook round-trip | SBA-92 | done: eight brushes, stroke undo, the source round-trips |
-| 5 | Foliage and grass painting | SBA-93 | not started |
+| 5 | Foliage and grass painting | SBA-93 | done: density per layer, painted with the layer brush |
 | 6 | MCP sculpt/paint, import, generator, navmesh bake; demo | SBA-94 | not started (SBA-69, the navmesh, is done) |
 
 ## Step 1 — terrain asset, LOD and drawing
@@ -138,3 +138,28 @@ land on the surface; a raise stroke (with a mid-stroke flush), a paint stroke an
 re-bake the live mount; the saved source keeps its name and layers and drops `fill`; a fresh bind
 reads back the same document; three undos restore the original and three redos the edits; the project
 cooks clean. `pixel_ray` is checked against `project_segment` at four pixels.
+
+## Step 5 — foliage on the terrain
+
+**Placement.** `render::scatter_on_terrain` lays a jittered grid over the terrain with cells of
+`1/sqrt(density)` metres (coarsened when the grid would exceed four times `max_count` cells). Each
+cell draws its own random numbers from a hash of the seed and the cell, so repainting one spot leaves
+every other copy where it was. A candidate survives with probability equal to the bilinear weight of
+its splat layer (a terrain with no layers counts as all layer 0, and layer 8 means everywhere), is
+dropped in hole quads and where the slope from `surface_at` differences is steeper than
+`max_slope_deg`, then stands on `surface_at` with a random yaw and a uniform scale, under the
+terrain's transform.
+
+**Component.** `TerrainFoliage3D` (128 bytes): `mesh`, `material`, `tint`, `layer`, `density`,
+`max_count`, `seed`, `scale_min`/`scale_max`, `max_slope_deg`, wind amplitude, frequency and
+direction, `cull_distance`, `cast_shadows`, `random_yaw`, `enabled`. It uses the `Terrain3D` on its
+own entity or its `ChildOf` parent. The kit extract caches the instance list keyed on the pose, the
+terrain asset and its generation (so a re-bake from the brushes re-scatters) and the scatter inputs;
+batches are drawn as instanced foliage with ids tagged `0x80000000` so they never clash with
+`Foliage3D`.
+
+**Tests.** Render: counts within 6 % of density × painted area, a quarter of the copies in the
+half-weight strip, none on unpainted ground or in holes, every copy on `surface_at`, the same seed
+gives the same copies, a transformed terrain moves them, the slope limit clears a steep ramp, zero
+density gives none. Kit: a child entity scatters 32×32 copies at the fill height, moving the terrain
+re-scatters, disabling drops the batch.
