@@ -173,7 +173,7 @@ void write_sfx(const SfxHeader& header, Span<const f32> samples, Array<byte>& ou
 // ------------------------------------------------------------------ video (CHNK_VID)
 // The .mpg's bytes as imported (an MPEG-1 program stream; the runtime decodes its video with
 // render::VideoDecoder) and its audio decoded once at cook time to 48 kHz f32, so the mixer plays
-// it like any clip (ADR-0042). VideoHeader | mpeg bytes | f32 samples (audio_frames * audio_channels).
+// it like any clip (ADR-0043). VideoHeader | mpeg bytes | f32 samples (audio_frames * audio_channels).
 
 struct VideoHeader {
     u32 width;           // display size in pixels

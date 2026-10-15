@@ -64,6 +64,7 @@ reach all of its non-transient fields.
 | `Foliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Terrain3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/03-editor.md |
 | `TerrainCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md |
+| `TerrainFoliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `NavMeshSurface3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
@@ -73,6 +74,7 @@ reach all of its non-transient fields.
 | `NavAgent3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md |
+| `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `VideoPlayer` | `mce/kit/video.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |

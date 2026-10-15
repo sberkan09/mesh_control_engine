@@ -540,7 +540,7 @@ nlohmann/json and GitHub Actions; none of them was adopted.*
 | 2D physics | `mce_physics2d` (sequential impulse) | Box2D v3.1.1 as test-time oracle only (ADR-0016, Box2D wall) | **hand-written** |
 | 3D physics | Jolt (ADR-0003), behind `mce_physics3d` | v5.6.0 via FetchContent (JPH and Jolt link walls) | embedded |
 | Audio | `mce_audio` mixer on the SDL3 callback | — | **hand-written** |
-| Video | `render::VideoDecoder` over pl_mpeg (ADR-0042), `kit::VideoPlayer` | pl_mpeg @c871f2b (MIT, MPEG-1 + MP2), in `mce_render` only (pl_mpeg wall) | embedded |
+| Video | `render::VideoDecoder` over pl_mpeg (ADR-0043), `kit::VideoPlayer` | pl_mpeg @c871f2b (MIT, MPEG-1 + MP2), in `mce_render` only (pl_mpeg wall) | embedded |
 | Reflection | `mce_refl` | — | **hand-written** |
 | Asset pipeline | `mce_asset` + `mce_asset_cook` + `mce_cook` | cook-only: stb @2c980bb (images, stb_truetype fonts), meshoptimizer v0.25, glslang; JSON is the hand-written codec `mce/cook/json.h` (errors carry line and column) | **hand-written** |
 | Editor UI | Dear ImGui (docking) | v1.92.9b-docking; editor-only (ImGui wall); the gizmo is hand-rolled (ADR-0025, ADR-0030), no ImGuizmo | editor-only |

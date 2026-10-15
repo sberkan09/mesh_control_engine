@@ -31,6 +31,9 @@
 #include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Ragdoll/Ragdoll.h>
+#include <Jolt/Physics/Vehicle/VehicleCollisionTester.h>
+#include <Jolt/Physics/Vehicle/VehicleConstraint.h>
+#include <Jolt/Physics/Vehicle/WheeledVehicleController.h>
 #include <Jolt/RegisterTypes.h>
 
 #include <cfloat>
@@ -308,6 +311,36 @@ struct World3D::Impl {
     }
     const RagdollSlot* find_ragdoll(u32 id) const { return const_cast<Impl*>(this)->find_ragdoll(id); }
 
+    struct Vehicle {
+        JPH::Ref<JPH::VehicleConstraint> constraint;
+        JPH::Ref<JPH::VehicleCollisionTester> tester;
+        u32 slot = 0;  // the body
+        u32 generation = 0;
+        bool alive = false;
+    };
+    Array<Vehicle> vehicles;
+    Array<u32> free_vehicles;
+    u32 live_vehicles = 0;
+    bool had_vehicles = false;  // hash_state folds vehicles only once a world has had one
+
+    Vehicle* find_vehicle(u32 id) {
+        const u32 i = (id & 0xFFFFFu) - 1u;
+        if ((id & 0xFFFFFu) == 0 || i >= vehicles.size()) return nullptr;
+        Vehicle& v = vehicles[i];
+        return v.alive && v.generation == (id >> 20) ? &v : nullptr;
+    }
+    const Vehicle* find_vehicle(u32 id) const { return const_cast<Impl*>(this)->find_vehicle(id); }
+
+    void remove_vehicle(Vehicle& v) {
+        system.RemoveStepListener(v.constraint);
+        system.RemoveConstraint(v.constraint);
+        const u32 gen = v.generation;
+        v = Vehicle{};
+        v.generation = (gen + 1) & 0xFFFu;
+        free_vehicles.push_back(static_cast<u32>(&v - vehicles.data()));
+        --live_vehicles;
+    }
+
     explicit Impl(const PhysicsConfig3D& c) : config(c), temp(static_cast<JPH::uint>(c.temp_allocator_bytes)) {
         system.Init(c.max_bodies, 0, c.max_body_pairs, c.max_contact_constraints, bp_layers, object_vs_bp,
                     object_pairs);
@@ -318,6 +351,12 @@ struct World3D::Impl {
         for (Joint& j : joints)
             if (j.alive) system.RemoveConstraint(j.constraint);
         joints.clear();
+        for (Vehicle& v : vehicles)
+            if (v.alive) {
+                system.RemoveStepListener(v.constraint);
+                system.RemoveConstraint(v.constraint);
+            }
+        vehicles.clear();
         for (RagdollSlot& r : ragdolls)
             if (r.alive) r.ragdoll->RemoveFromPhysicsSystem();
         ragdolls.clear();  // destroys the parts' bodies
@@ -572,6 +611,8 @@ void World3D::destroy_body(Entity e) {
     const u32 slot = static_cast<u32>(s - w.slots.data());
     for (Impl::Joint& j : w.joints)
         if (j.alive && (j.slot_a == slot || j.slot_b == slot)) w.remove_joint(j);
+    for (Impl::Vehicle& v : w.vehicles)
+        if (v.alive && v.slot == slot) w.remove_vehicle(v);
     if (s->character) {
         w.char_vs_char.Remove(s->character);
         s->character = nullptr;
@@ -1118,6 +1159,158 @@ bool World3D::ragdoll_active(u32 ragdoll) const {
     return r && r->ragdoll->IsActive(false);
 }
 
+// ---- vehicles ----------------------------------------------------------------------------------------
+
+u32 World3D::create_vehicle(const VehicleDesc3D& d) {
+    Impl& w = *impl_;
+    Impl::Slot* s = w.find(d.body);
+    if (!s || s->character || s->type != BodyType3D::Dynamic || d.wheels.empty()) return 0;
+    const u32 slot = static_cast<u32>(s - w.slots.data());
+    for (const Impl::Vehicle& v : w.vehicles)
+        if (v.alive && v.slot == slot) return 0;
+    const JPH::Vec3 up = to_jph(d.up), forward = to_jph(d.forward);
+    if (up.LengthSq() < 1e-8f || forward.LengthSq() < 1e-8f || std::fabs(up.Normalized().Dot(forward.Normalized())) > 0.01f) return 0;
+    if (!positive(d.engine_torque) || !positive(d.max_rpm) || d.min_rpm < 0.0f || d.min_rpm >= d.max_rpm) return 0;
+
+    JPH::VehicleConstraintSettings vs;
+    vs.mUp = up.Normalized();
+    vs.mForward = forward.Normalized();
+    vs.mMaxPitchRollAngle = math::clamp(d.max_tilt, 0.0f, JPH::JPH_PI);
+    for (const WheelDesc3D& wd : d.wheels) {
+        if (!positive(wd.radius) || !positive(wd.width) || wd.suspension_min < 0.0f || wd.suspension_max <= wd.suspension_min ||
+            !positive(wd.suspension_frequency) || wd.grip < 0.0f)
+            return 0;
+        auto* ws = new JPH::WheelSettingsWV();
+        ws->mPosition = to_jph(wd.position);
+        ws->mSuspensionDirection = -vs.mUp;
+        ws->mSteeringAxis = vs.mUp;
+        ws->mWheelUp = vs.mUp;
+        ws->mWheelForward = vs.mForward;
+        ws->mSuspensionMinLength = wd.suspension_min;
+        ws->mSuspensionMaxLength = wd.suspension_max;
+        ws->mSuspensionSpring.mFrequency = wd.suspension_frequency;
+        ws->mSuspensionSpring.mDamping = math::clamp(wd.suspension_damping, 0.0f, 1.0f);
+        ws->mRadius = wd.radius;
+        ws->mWidth = wd.width;
+        ws->mMaxSteerAngle = math::clamp(wd.max_steer, 0.0f, 1.5f);
+        ws->mMaxBrakeTorque = math::max(wd.max_brake_torque, 0.0f);
+        ws->mMaxHandBrakeTorque = math::max(wd.max_handbrake_torque, 0.0f);
+        for (JPH::LinearCurve::Point& p : ws->mLongitudinalFriction.mPoints) p.mY *= wd.grip;
+        for (JPH::LinearCurve::Point& p : ws->mLateralFriction.mPoints) p.mY *= wd.grip;
+        vs.mWheels.push_back(ws);
+    }
+    auto* cs = new JPH::WheeledVehicleControllerSettings();
+    cs->mEngine.mMaxTorque = d.engine_torque;
+    cs->mEngine.mMinRPM = d.min_rpm;
+    cs->mEngine.mMaxRPM = d.max_rpm;
+    if (!d.gears.empty()) {
+        cs->mTransmission.mGearRatios.clear();
+        for (const f32 g : d.gears) {
+            if (!positive(g)) return 0;
+            cs->mTransmission.mGearRatios.push_back(g);
+        }
+    }
+    if (!(d.reverse_gear < 0.0f)) return 0;
+    cs->mTransmission.mReverseGearRatios = {d.reverse_gear};
+    const i32 wheel_count = static_cast<i32>(d.wheels.size());
+    for (const AxleDesc3D& a : d.axles) {
+        if (a.left < -1 || a.left >= wheel_count || a.right < -1 || a.right >= wheel_count || (a.left < 0 && a.right < 0) ||
+            !positive(a.ratio) || a.torque_share < 0.0f)
+            return 0;
+        JPH::VehicleDifferentialSettings ds;
+        ds.mLeftWheel = a.left;
+        ds.mRightWheel = a.right;
+        ds.mDifferentialRatio = a.ratio;
+        ds.mEngineTorqueRatio = a.torque_share;
+        cs->mDifferentials.push_back(ds);
+    }
+    vs.mController = cs;
+
+    JPH::Ref<JPH::VehicleConstraint> c;
+    JPH::ObjectLayer layer = 0;
+    {
+        JPH::BodyLockWrite lock(w.system.GetBodyLockInterfaceNoLock(), s->body);
+        if (!lock.Succeeded()) return 0;
+        c = new JPH::VehicleConstraint(lock.GetBody(), vs);
+        layer = lock.GetBody().GetObjectLayer();
+    }
+    JPH::Ref<JPH::VehicleCollisionTester> tester = new JPH::VehicleCollisionTesterCastCylinder(layer);
+    c->SetVehicleCollisionTester(tester);
+    w.system.AddConstraint(c);
+    w.system.AddStepListener(c);
+
+    u32 i;
+    if (!w.free_vehicles.empty()) {
+        i = w.free_vehicles.back();
+        w.free_vehicles.pop_back();
+    } else {
+        i = static_cast<u32>(w.vehicles.size());
+        w.vehicles.emplace_back();
+    }
+    Impl::Vehicle& v = w.vehicles[i];
+    v.constraint = c;
+    v.tester = tester;
+    v.slot = slot;
+    v.alive = true;
+    ++w.live_vehicles;
+    w.had_vehicles = true;
+    return (v.generation << 20) | (i + 1);
+}
+
+void World3D::destroy_vehicle(u32 vehicle) {
+    Impl& w = *impl_;
+    if (Impl::Vehicle* v = w.find_vehicle(vehicle)) w.remove_vehicle(*v);
+}
+
+bool World3D::has_vehicle(u32 vehicle) const { return impl_->find_vehicle(vehicle) != nullptr; }
+
+void World3D::set_vehicle_input(u32 vehicle, f32 forward, f32 right, f32 brake, f32 handbrake) {
+    Impl& w = *impl_;
+    Impl::Vehicle* v = w.find_vehicle(vehicle);
+    if (!v) return;
+    auto* ctl = static_cast<JPH::WheeledVehicleController*>(v->constraint->GetController());
+    forward = math::clamp(forward, -1.0f, 1.0f);
+    right = math::clamp(right, -1.0f, 1.0f);
+    brake = math::clamp(brake, 0.0f, 1.0f);
+    handbrake = math::clamp(handbrake, 0.0f, 1.0f);
+    ctl->SetDriverInput(forward, right, brake, handbrake);
+    if (forward != 0.0f || right != 0.0f || brake != 0.0f || handbrake != 0.0f)
+        w.system.GetBodyInterfaceNoLock().ActivateBody(w.slots[v->slot].body);
+}
+
+bool World3D::vehicle_state(u32 vehicle, VehicleState3D& out, Span<WheelState3D> wheels) const {
+    const Impl& w = *impl_;
+    const Impl::Vehicle* v = w.find_vehicle(vehicle);
+    if (!v) return false;
+    const JPH::VehicleConstraint& c = *v->constraint;
+    const auto* ctl = static_cast<const JPH::WheeledVehicleController*>(c.GetController());
+    const JPH::Body& body = *c.GetVehicleBody();
+    out = VehicleState3D{};
+    out.speed = body.GetLinearVelocity().Dot(body.GetRotation() * c.GetLocalForward());
+    out.rpm = ctl->GetEngine().GetCurrentRPM();
+    out.gear = ctl->GetTransmission().GetCurrentGear();
+    const usize n = c.GetWheels().size();
+    for (usize i = 0; i < n; ++i) {
+        const JPH::Wheel* wheel = c.GetWheel(static_cast<JPH::uint>(i));
+        if (wheel->HasContact()) ++out.wheels_on_ground;
+        if (i >= wheels.size()) continue;
+        WheelState3D& ws = wheels[i];
+        ws = WheelState3D{};
+        ws.contact = wheel->HasContact();
+        if (ws.contact) {
+            JPH::BodyLockRead lock(w.system.GetBodyLockInterfaceNoLock(), wheel->GetContactBodyID());
+            if (lock.Succeeded() && lock.GetBody().GetUserData() != 0) ws.ground = unpack(lock.GetBody().GetUserData());
+        }
+        ws.suspension = wheel->GetSuspensionLength();
+        ws.spin = wheel->GetAngularVelocity();
+        ws.steer = wheel->GetSteerAngle();
+        const JPH::RMat44 m = c.GetWheelWorldTransform(static_cast<JPH::uint>(i), JPH::Vec3::sAxisX(), JPH::Vec3::sAxisY());
+        ws.position = to_mce(m.GetTranslation());
+        ws.rotation = to_mce(m.GetQuaternion());
+    }
+    return true;
+}
+
 std::optional<ShapeHit3D> World3D::camera_sweep(vec3 from, vec3 to, f32 sphere_radius) const {
     QueryFilter3D f;
     f.include_dynamic = false;
@@ -1233,6 +1426,24 @@ u64 World3D::hash_state(u64 seed) const {
         for (const Impl::Joint& j : w.joints)
             h.u32v((j.alive ? 1u : 0u) | (j.enabled ? 2u : 0u) | (j.broken ? 4u : 0u) | (j.slot_a << 3));
     }
+    if (w.had_vehicles) {  // likewise for vehicles: the drivetrain and each wheel
+        h.u32v(static_cast<u32>(w.vehicles.size()));
+        for (const Impl::Vehicle& v : w.vehicles) {
+            h.u32v(v.alive ? 1u : 0u);
+            if (!v.alive) continue;
+            h.u32v(v.slot);
+            const auto* ctl = static_cast<const JPH::WheeledVehicleController*>(v.constraint->GetController());
+            h.f32v(ctl->GetEngine().GetCurrentRPM());
+            h.u32v(static_cast<u32>(ctl->GetTransmission().GetCurrentGear()));
+            h.f32v(ctl->GetTransmission().GetClutchFriction());
+            for (const JPH::Wheel* wheel : v.constraint->GetWheels()) {
+                h.f32v(wheel->GetAngularVelocity());
+                h.f32v(wheel->GetRotationAngle());
+                h.f32v(wheel->GetSteerAngle());
+                h.f32v(wheel->GetSuspensionLength());
+            }
+        }
+    }
     if (w.had_ragdolls) {  // likewise for ragdolls
         h.u32v(static_cast<u32>(w.ragdolls.size()));
         for (const Impl::RagdollSlot& r : w.ragdolls) {
@@ -1263,6 +1474,7 @@ World3D::Stats World3D::stats() const {
     st.characters = w.characters;
     st.joints = w.live_joints;
     st.ragdolls = w.live_ragdolls;
+    st.vehicles = w.live_vehicles;
     return st;
 }
 

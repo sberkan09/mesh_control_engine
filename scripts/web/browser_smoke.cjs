@@ -2,7 +2,10 @@
 // headless Chromium with WebGPU on SwiftShader (no GPU needed), waits for the app's "running" log
 // line, lets it draw for a while, saves a screenshot and fails when the canvas is one flat colour.
 //
-//   NODE_PATH=$(npm root -g) node scripts/web/browser_smoke.cjs <dir> <page> [out.png] [ms]
+//   NODE_PATH=$(npm root -g) node scripts/web/browser_smoke.cjs <dir> <page> [out.png] [ms] [--persist]
+//
+// --persist also checks saves survive a reload: it writes a probe file under /persistent, asks the
+// page to store it in IndexedDB, reloads, and expects the file back once the app runs again.
 //
 // Needs Playwright (npm -g) and a Chromium; PLAYWRIGHT_BROWSERS_PATH or /opt/pw-browsers/chromium.
 const http = require('http');
@@ -10,7 +13,8 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
-const [dir, page, out = 'smoke.png', ms = '3000'] = process.argv.slice(2);
+const persist = process.argv.includes('--persist');
+const [dir, page, out = 'smoke.png', ms = '3000'] = process.argv.slice(2).filter((a) => a !== '--persist');
 if (!dir || !page) {
   console.error('usage: browser_smoke.cjs <dir> <page> [out.png] [ms]');
   process.exit(2);
@@ -45,9 +49,26 @@ const server = http.createServer((req, res) => {
       if (/\[(error|critical)\]/.test(m.text())) failed = true;
     });
     tab.on('pageerror', (e) => { console.log(`pageerror: ${e.message}`); failed = true; });
-    await tab.goto(`http://127.0.0.1:${server.address().port}/${page}.html`);
+    const url = `http://127.0.0.1:${server.address().port}/${page}.html`;
+    await tab.goto(url);
     for (let t = 0; !running && !failed && t < 60000; t += 100) await tab.waitForTimeout(100);
     if (!running) { console.log('smoke: the app never reported running'); failed = true; }
+    if (persist && running) {
+      const probe = `probe ${Date.now()}`;
+      await tab.evaluate((text) => {
+        Module.FS.writeFile('/persistent/smoke_probe.txt', text);
+        Module.mcePersist();
+      }, probe);
+      await tab.waitForTimeout(1000);
+      running = false;
+      await tab.reload();
+      for (let t = 0; !running && !failed && t < 60000; t += 100) await tab.waitForTimeout(100);
+      const back = await tab.evaluate(() => {
+        try { return Module.FS.readFile('/persistent/smoke_probe.txt', { encoding: 'utf8' }); } catch (e) { return null; }
+      });
+      console.log(`smoke: persistent probe after reload: ${back === probe ? 'kept' : 'LOST'}`);
+      if (back !== probe) failed = true;
+    }
     await tab.waitForTimeout(Number(ms));
     const canvas = tab.locator('#canvas');
     const png = await canvas.screenshot({ path: out });

@@ -109,7 +109,7 @@ timelines and follow cameras), both `run_during_cutscenes`. A cutscene hold (`Wo
 runs only the systems so marked: timelines, sequences, animators, attach, sprite animation, particles,
 effects, captions, follow cameras, transforms and the audio bridge.
 
-`video.h` (M-CINEMA 5, ADR-0042): `VideoPlayer` (an `AssetRef<Video>`, the playhead `time`, `speed`,
+`video.h` (M-CINEMA 5, ADR-0043): `VideoPlayer` (an `AssetRef<Video>`, the playhead `time`, `speed`,
 `playing`, `loop`, `restart`, `finished`, `fullscreen`, `sound`, `gain_db`) and `VideoRegistry` (the cooked
 videos' lengths and sound clips, the sound voices). `install_video(world, assets)`: `"kit_video"`
 (`FixedUpdate_Post`, before `"timeline_player"` so a video track's playhead wins the tick,

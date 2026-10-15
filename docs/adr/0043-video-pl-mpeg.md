@@ -1,4 +1,4 @@
-# ADR-0042 — Video playback over pl_mpeg (MPEG-1)
+# ADR-0043 — Video playback over pl_mpeg (MPEG-1)
 
 **Status:** Accepted (2026-10-15). **Milestone:** M-CINEMA step 5 (off-tier, opt-in). **Plan:**
 `docs/milestones/M-CINEMA.md`. **Reference:** `src/engine/render/include/mce/render/video.h`,

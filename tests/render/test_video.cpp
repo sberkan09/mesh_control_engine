@@ -1,4 +1,4 @@
-// M-CINEMA 5 (ADR-0042): render::VideoDecoder on a committed 2 s MPEG-1 clip (64x48, 25 fps, red for
+// M-CINEMA 5 (ADR-0043): render::VideoDecoder on a committed 2 s MPEG-1 clip (64x48, 25 fps, red for
 // the first second and blue for the second, a 440 Hz MP2 sine): its header, the picture at a time
 // forward and back, the frames a forward step decodes, and the audio decode the cook uses.
 

@@ -1,4 +1,4 @@
-// M-CINEMA 5 (ADR-0042): an .mpg cooks to CHNK_VID (asset::VideoView): the stream as imported plus
+// M-CINEMA 5 (ADR-0043): an .mpg cooks to CHNK_VID (asset::VideoView): the stream as imported plus
 // its sound as 48 kHz PCM; "audio": false drops the sound; a file that is not MPEG-1 is an error
 // naming it.
 

@@ -1,5 +1,5 @@
 #pragma once
-// VideoDecoder (M-CINEMA 5, ADR-0042): MPEG-1 video (and its MP2 audio) decoded from memory with
+// VideoDecoder (M-CINEMA 5, ADR-0043): MPEG-1 video (and its MP2 audio) decoded from memory with
 // pl_mpeg. The player's video textures step one decoder per playing VideoPlayer to the sim's
 // playhead; the cook's .mpg importer reads the header and decodes the audio once (the runtime plays
 // that PCM through the mixer, so a decoder here only ever decodes pictures at run time).

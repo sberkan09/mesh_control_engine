@@ -317,7 +317,7 @@ if(MCE_WEB)
     include("${CMAKE_CURRENT_LIST_DIR}/web/TintDependencies.cmake")
 endif()
 
-# ---- pl_mpeg (video: MPEG-1 video + MP2 audio; mce_render only — ADR-0042) -------------------
+# ---- pl_mpeg (video: MPEG-1 video + MP2 audio; mce_render only — ADR-0043) -------------------
 # One MIT-licensed C header, no release tags upstream: pinned by commit. Its implementation is
 # compiled into mce_render (src/plmpeg_impl.c, warnings off), which wraps it as render::VideoDecoder
 # for the player's VideoPlayer textures and the cook's .mpg importer. Confined to

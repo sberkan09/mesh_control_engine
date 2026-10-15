@@ -273,7 +273,36 @@ From code, `physics::World3D` builds ragdolls from parts described in world spac
 (`create_ragdoll(RagdollDesc3D, parts)`, `ragdoll_state`, `ragdoll_impulse`, `ragdoll_active`). The
 replay hash covers them.
 
-## 9.9 Configuration
+## 9.9 Vehicles
+
+A car is a dynamic `RigidBody3D` (its body) with a `Vehicle3D` (`mce/kit/vehicles3d.h`, Jolt's
+wheeled vehicle). The body's local −Z is forward. Four wheels hang from suspension points at
+`±track` across, `wheel_y` up and `front_axle` / `rear_axle` along the body, in metres in its own
+space; the front pair steers up to `max_steer` degrees, and `drive` picks the driven wheels (Rear,
+Front, All).
+
+- **Driving.** Write `throttle` (−1..1; negative reverses), `steer` (−1..1, positive turns right),
+  `brake` and `handbrake` (0..1) from a game module, a sequence or MCP; or set `use_input = 1` and
+  the player's Move action drives it (y throttle, x steer), Jump pulls the handbrake and TriggerL
+  brakes. Throttle against the way the car is rolling brakes it first, then reverses.
+- **Feel.** `engine_torque` (N·m) and `max_rpm` set the power; the gearbox is automatic. Suspension:
+  `suspension_min` / `suspension_max` (travel), `suspension_frequency` (Hz, stiffer higher) and
+  `suspension_damping`. `grip` scales the tyres' friction, which also depends on the ground's own
+  `friction` (a `BoxCollider3D` at 1.0 is dry asphalt, 0.2 ice). `brake_torque` and
+  `handbrake_torque` set the brakes; `max_tilt` (degrees) keeps an arcade car from rolling over
+  (180 lets it).
+- **Wheel models.** Put each wheel's model on its own root entity (a `MeshRef` whose axle is local
+  X) and name it in `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr`: it is placed on the wheel every
+  tick, steering, spinning and following the suspension.
+- **What it reports.** `speed` (m/s forward, negative reversing), `rpm`, `gear` (negative in
+  reverse) and `wheels_on_ground`: enough for a speedometer, an engine sound's pitch or "airborne".
+
+Changing a setting other than the driver's inputs and the wheel entities rebuilds the vehicle. The
+wheels find the ground with cylinder casts against whatever the body's layer collides with. From
+code, `physics::World3D` has the same vehicles with any number of wheels and axles
+(`create_vehicle(VehicleDesc3D)`, `set_vehicle_input`, `vehicle_state`); the replay hash covers them.
+
+## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3
 position iterations, warm starting on. A scene changes gravity with a `WorldSettings` component (`gravity_2d`; chapter 2,
@@ -284,7 +313,7 @@ off by default to keep older replays bit-identical; a new game that stacks many 
 
 Budget: 2,000 bodies is the tested ceiling; a 20-body stack settles within a second.
 
-## 9.10 Debugging
+## 9.11 Debugging
 
 The editor viewport overlays colliders. In code, `World2D::debug_draw(sink, flags)` fills line and
 circle primitives for a renderer you provide; `stats()` reports body and contact counts;

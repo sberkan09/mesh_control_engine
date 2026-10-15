@@ -265,7 +265,7 @@ A `VideoPlayer` plays a film: on its entity's `Sprite` (a screen in the world), 
 screen as a splash (`mce/kit/video.h`, installed by the stock player, play-in-editor and
 `run_headless`).
 
-**Import.** The engine plays MPEG-1 with MP2 sound (ADR-0042). Convert any film with ffmpeg and drop
+**Import.** The engine plays MPEG-1 with MP2 sound (ADR-0043). Convert any film with ffmpeg and drop
 it in `assets/`:
 
 ```sh

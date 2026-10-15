@@ -1,5 +1,5 @@
 #pragma once
-// Video (M-CINEMA 5, ADR-0042): a VideoPlayer plays a cooked .mpg (asset::Video) on its entity's
+// Video (M-CINEMA 5, ADR-0043): a VideoPlayer plays a cooked .mpg (asset::Video) on its entity's
 // Sprite, or over the whole screen, with its sound through the mixer.
 //
 //   kit::install_video(world, &assets);   // registry + "kit_video" (install_stock does it)

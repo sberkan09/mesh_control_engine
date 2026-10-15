@@ -98,6 +98,8 @@ struct Volumetrics {
 };
 
 // The post chain (FR-R3D-090): bloom -> ACES tonemap (exposure) -> FXAA. Toggleable per frame.
+enum class Upscaler : u8 { Bilinear, Spatial };
+
 struct PostFx {
     bool bloom = true;
     f32 bloom_intensity = 0.05f;   // fraction of the blurred image added back
@@ -108,6 +110,14 @@ struct PostFx {
     // Forward3DDesc::render_scale < 1 it also upsamples to the full output (temporal upscaling).
     bool taa = false;
     f32 taa_blend = 0.1f;  // weight of the new frame in the history
+    // M-VISUAL2 2. How a frame drawn below the output size (Forward3DDesc::render_scale < 1, without
+    // TAA, which upsamples it itself) reaches the output: Bilinear in the tonemap pass, or Spatial, an
+    // edge-adaptive 4x4 upsample (anisotropic Lanczos-2 along the local edge, clamped to the nearest
+    // texels) after it. `sharpen` (0..1, 0 = off) runs a contrast-adaptive sharpen last, at the output
+    // size: after TAA, the spatial upsample or a full-size frame alike. r.upscaler and r.sharpen
+    // override both per player.
+    Upscaler upscaler = Upscaler::Bilinear;
+    f32 sharpen = 0.0f;
 
     // M-VISUAL 8. Auto exposure: a log-luminance histogram of the frame (compute) drops the darkest
     // `low_percent` and brightest 1 - `high_percent`, averages the rest and moves the exposure toward

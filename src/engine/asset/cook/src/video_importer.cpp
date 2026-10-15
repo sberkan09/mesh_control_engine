@@ -1,4 +1,4 @@
-// MPEG-1 (.mpg) -> CHNK_VID (M-CINEMA 5, ADR-0042): the program stream's bytes as they are, checked
+// MPEG-1 (.mpg) -> CHNK_VID (M-CINEMA 5, ADR-0043): the program stream's bytes as they are, checked
 // by opening them with render::VideoDecoder, and its MP2 audio decoded once to 48 kHz f32 so the
 // mixer plays it like any clip. Encode a source with:
 //   ffmpeg -i in.mp4 -c:v mpeg1video -q:v 4 -c:a mp2 -f mpeg out.mpg
@@ -19,7 +19,7 @@ namespace {
 constexpr const char* kStage = "cook.video";
 constexpr u32 kMaxSide = 1920;           // the decoder's frame stays a texture every backend takes
 // Above this a Low-tier phone may miss its frame budget: decode + RGBA convert measured 1.1 ms a frame
-// at 640x360 and 4.0 ms at 1280x720 on one desktop core (ADR-0042); a phone core is 3-5x slower.
+// at 640x360 and 4.0 ms at 1280x720 on one desktop core (ADR-0043); a phone core is 3-5x slower.
 constexpr u32 kLowTierPixels = 854 * 480;
 
 class VideoImporter final : public IImporter {

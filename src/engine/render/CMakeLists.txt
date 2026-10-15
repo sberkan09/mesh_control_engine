@@ -30,7 +30,7 @@ mce_add_library(mce_render
         mce::mce_asset
         mce::mce_core)
 target_compile_definitions(mce_render PUBLIC MCE_RENDER_HAS_ASSET=1)
-# pl_mpeg (ADR-0042): its one header, private to src/video.cpp and src/plmpeg_impl.c (the pl_mpeg
+# pl_mpeg (ADR-0043): its one header, private to src/video.cpp and src/plmpeg_impl.c (the pl_mpeg
 # wall); the implementation compiles with warnings off, as third-party code does here.
 target_include_directories(mce_render SYSTEM PRIVATE "${pl_mpeg_SOURCE_DIR}")
 target_compile_definitions(mce_render PRIVATE PLM_NO_STDIO)  # memory sources only

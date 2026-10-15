@@ -5,6 +5,24 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Steam, M-STEAM step 1 (SBA-106, ADR-0043): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
+  talks to it through the Steamworks flat API, so neither the repository nor the build needs the SDK and a game
+  without Steam loads nothing. The stock player signs in with `-steam.app_id <id>` (`-steam.library`,
+  `-steam.restart` for release builds Steam relaunches) and pumps Steam's callbacks every frame; the sim hash is
+  unchanged. User guide 23.10.
+- Performance captures, M-PERF step 1 (SBA-113): `mce_player -perf_capture <file>` writes a `.mcperf` JSON capture
+  of the run. Each frame gets its wall, sim, render CPU and GPU time, its GPU stages (3D), sim time per ECS phase and
+  its draws, passes, triangles, sprites, upload bytes and live heap allocations. The run adds per-system totals, p50/p95/p99/max
+  and the spike frames with their likely cause ("sim: FixedUpdate_Post", "gpu: shadow"). `-perf_warmup N` skips
+  loading frames. A capture never changes the state hash. User guide 16.
+- A spatial upscaler and sharpening, M-VISUAL2 step 2 (SBA-102): frames drawn below the output size (Low and
+  Medium tiers without TAA) now reach it through an edge-adaptive upsample by default in kit games
+  (`Environment3D.upscaler`), and `Environment3D.sharpen` sharpens the final frame. Players override both with the
+  saved `r.upscaler` (`scene`, `bilinear`, `spatial`) and `r.sharpen`. User guide 8.
+- Screen-space reflections, M-VISUAL2 step 1 (SBA-101): `Environment3D.ssr` (or `Scene3D::set_reflections`) makes
+  smooth surfaces mirror what is on screen over the probes and the sky (`ssr_max_distance`, `ssr_thickness`,
+  `ssr_max_roughness`, `ssr_roughness_fade`, `ssr_intensity`). It reads the previous frame, so it shows from the
+  second frame; off on the Low quality tier, `r.ssr 0` turns it off. User guide 8.
 - Rooms through a relay, and WebSocket (SBA-87, M-NET2 step 6): `mce_relay` serves rooms with six-letter codes
   over UDP and WebSocket at once, so players behind home routers and browsers can play together without opening
   a port. `net::RelayClient` is a Transport whose peers are the room's members, so replication, prediction and
@@ -15,7 +33,7 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   rows through the screen reader, and a control in a labelled row says the label first ("Move Right, D, button").
   The player takes `-access_log <file>` and no longer drops menu presses when it draws fewer frames than it runs
   ticks. Kindle and Undelivered get the stock options screen, and Kindle captions its sounds. User guide chapter 24.
-- Video, M-CINEMA step 5 (SBA-80, ADR-0042): `.mpg` files (MPEG-1 with MP2 sound; ffmpeg converts anything)
+- Video, M-CINEMA step 5 (SBA-80, ADR-0043): `.mpg` files (MPEG-1 with MP2 sound; ffmpeg converts anything)
   import as videos, and a `VideoPlayer` plays one on its entity's `Sprite` or over the whole screen as a splash,
   with its sound in step (play, pause, loop, restart, seek, `finished` at the end). A timeline `video` track plays
   a film as a cutscene beat. User guide 13.7.
