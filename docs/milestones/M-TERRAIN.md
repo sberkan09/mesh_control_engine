@@ -1,6 +1,6 @@
 # M-TERRAIN — Heightmap terrain (milestone record)
 
-**Status:** in progress (steps 1–3 done, 2026-10-15). Plan: ROADMAP §M-TERRAIN; Linear SBA-89 … SBA-94.
+**Status:** in progress (steps 1–4 done, 2026-10-15). Plan: ROADMAP §M-TERRAIN; Linear SBA-89 … SBA-94.
 **Why:** SolsticeReach's island is a script-generated mesh in 16 chunks; there is no terrain an editor or an
 agent can shape. Each step is opt-in: a scene without a `Terrain3D` draws exactly as before.
 
@@ -11,7 +11,7 @@ agent can shape. Each step is opt-in: a scene without a `Terrain3D` draws exactl
 | 1 | `Terrain3D` + `.mcterrain`, CDLOD-style LOD, normals, skirts | SBA-89 | done: GL and SDL GPU (gated), tier budgets below; Metal untested |
 | 2 | Splat layers (8), triplanar, height blend | SBA-90 | done: GL and SDL GPU (gated), tier knobs below; Metal untested |
 | 3 | Jolt height-field collision, holes | SBA-91 | done: collision matches the drawn surface; holes in both |
-| 4 | Editor brushes with undo, cook round-trip | SBA-92 | not started |
+| 4 | Editor brushes with undo, cook round-trip | SBA-92 | done: eight brushes, stroke undo, the source round-trips |
 | 5 | Foliage and grass painting | SBA-93 | not started |
 | 6 | MCP sculpt/paint, import, generator, navmesh bake; demo | SBA-94 | not started (SBA-69, the navmesh, is done) |
 
@@ -112,3 +112,29 @@ dynamic shapes refused), `test_render` (a holed node selected at level 0 on a fl
 missing exactly the 48 triangles around a 4 × 4 hole block, no grid corner on a hole), and `test_kit`
 (a moved, turned, 1.5× stretched terrain: over 100 rays straight down land within 2 cm of `surface_at`,
 the ray through the hole hits nothing, a terrain spawned later gets a body and loses it with the component).
+
+## Step 4 — editor brushes
+
+**Core (`mce/editor/terrain_editor.h`, headless).** `TerrainDocument` loads a terrain from its source
+text and its cooked payload, so heights, weights and holes are exactly what the cook made (the `auto`
+rules already applied), and keeps every other source key as written. `apply(brush, centre, scale)` runs
+one dab: Raise / Lower (metres), Smooth (toward the 3×3 mean), Flatten (toward a target height), Noise
+(value noise fixed per position and seed), Paint (raises one layer, scales the others down, every sample
+still summing to 255), Hole / Fill. The falloff is flat to `hardness × radius`, then a smoothstep to 0.
+Heights clamp to `height_range`. `serialize()` writes explicit `heights`, `splat` once painted and
+`holes` when any is set, dropping `fill`.
+
+**Editor.** `TerrainEditor` binds to the selected entity's `Terrain3D`, groups dabs into strokes, saves
+and hot-reloads through `EditorSession::write_asset` (mid-stroke via `flush()`, about every 0.2 s from the
+viewport, and at the end), and keeps whole-terrain snapshots for stroke undo and redo (64 MB cap).
+`raycast()` marches the bilinear surface under the entity's transform; `pixel_ray()` (orbit_camera.h)
+gives the viewport's ray. The Terrain panel picks the brush; the orbit view's sculpt tool draws the
+brush rim draped on the ground and applies dabs scaled by the frame time (Ctrl inverts, Alt orbits).
+
+**Tests.** `test_editor`: each op on a document (falloff, clamping, smoothing a spike, flatten, noise
+determinism, paint sums, hole and fill counts, a brush off the terrain), and a project round trip:
+a terrain with an `auto` rule bound under a moved, stretched entity; rays straight down and slanted
+land on the surface; a raise stroke (with a mid-stroke flush), a paint stroke and a hole stroke each
+re-bake the live mount; the saved source keeps its name and layers and drops `fill`; a fresh bind
+reads back the same document; three undos restore the original and three redos the edits; the project
+cooks clean. `pixel_ray` is checked against `project_segment` at four pixels.

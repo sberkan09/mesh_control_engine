@@ -1,5 +1,5 @@
 // .mcterrain -> CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1). The editor's brushes and the MCP
-// terrain tools rewrite `heights`; everything else is set when the terrain is made.
+// terrain tools rewrite `heights`, `splat` and `holes`; everything else is set when the terrain is made.
 //
 // {
 //   "format": "mce-terrain", "version": 1, "guid": "<uuid>", "name": "island",

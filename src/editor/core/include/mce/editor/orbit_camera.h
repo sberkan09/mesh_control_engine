@@ -112,5 +112,8 @@ private:
 // Projects `seg` through `view` to viewport pixels (origin top-left, +y down), clipped against
 // the near plane. False when the whole segment is behind the camera.
 bool project_segment(const render::View3D& view, const Segment3D& seg, math::vec2& a_px, math::vec2& b_px);
+// The world-space ray through viewport pixel `px` (origin top-left, +y down) of `cam`: from the
+// camera's position, `dir` normalized. The inverse of project_segment for picking.
+void pixel_ray(const render::Camera3D& cam, rhi::Extent2D viewport, math::vec2 px, math::vec3& origin, math::vec3& dir);
 
 }  // namespace mce::editor

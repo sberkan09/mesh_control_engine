@@ -118,6 +118,7 @@ constexpr u32 kOpMemberDecorate = 72;
 constexpr u32 kExecutionModeLocalSize = 17;
 constexpr u32 kDecorationNonWritable = 24;
 constexpr u32 kDecorationNonReadable = 25;
+constexpr u32 kDecorationRestrict = 19;
 constexpr u32 kDecorationBlock = 2;
 constexpr u32 kDecorationBufferBlock = 3;
 constexpr u32 kDecorationBinding = 33;
@@ -133,6 +134,7 @@ struct IdInfo {
     u32 a = 0, b = 0, c = 0, d = 0, e = 0;  // per-op operands (see the parse loop)
     u32 binding_word = 0;                   // index of the Binding literal, 0 = none
     u32 set_word = 0;                       // index of the DescriptorSet literal, 0 = none
+    u32 nonreadable_word = 0;               // index of a NonReadable decoration's literal, 0 = none
     u32 members = 0;                        // OpTypeStruct member count
     u32 nonwritable_members = 0;            // members decorated NonWritable
     bool block = false, buffer_block = false, nonwritable = false, nonreadable = false;
@@ -141,6 +143,21 @@ struct IdInfo {
 ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& res, FixedString<1024>& log,
                          const char* name) {
     if (words.size() < 5) return Error(Errc::ShaderCompile, "rhi.webgpu.spirv", name);
+    // WGSL storage buffers are `read` or `read_write`, never write-only: drop the NonReadable that
+    // glslang can put on the members of a `writeonly` buffer block (the variable's own is turned into
+    // Restrict below), so Tint makes it read_write. Storage images keep theirs.
+    {
+        usize out = 5;
+        for (usize i = 5; i < words.size();) {
+            const u32 count = words[i] >> 16, op = words[i] & 0xFFFFu;
+            if (count == 0 || i + count > words.size()) return Error(Errc::ShaderCompile, "rhi.webgpu.spirv", name);
+            const bool drop = op == kOpMemberDecorate && count >= 4 && words[i + 3] == kDecorationNonReadable;
+            if (!drop)
+                for (u32 k = 0; k < count; ++k) words[out++] = words[i + k];
+            i += count;
+        }
+        words.resize(out);
+    }
     const u32 bound = words[3];
     Array<IdInfo> ids;
     ids.resize(bound);
@@ -203,7 +220,10 @@ ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& r
                     if (deco == kDecorationBlock) t->block = true;
                     if (deco == kDecorationBufferBlock) t->buffer_block = true;
                     if (deco == kDecorationNonWritable) t->nonwritable = true;
-                    if (deco == kDecorationNonReadable) t->nonreadable = true;
+                    if (deco == kDecorationNonReadable) {
+                        t->nonreadable = true;
+                        t->nonreadable_word = static_cast<u32>(i + 2);
+                    }
                 }
                 break;
             default: break;
@@ -260,6 +280,7 @@ ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& r
                 log.append("writable storage buffers are supported in compute shaders only");
                 return Error(Errc::ShaderCompile, "rhi.webgpu.spirv", name);
             }
+            if (var.nonreadable_word) words[var.nonreadable_word] = kDecorationRestrict;  // see above
             res.storage_mask |= 1u << gl;
             if (!readonly) res.storage_rw_mask |= 1u << gl;
             group = kGroupStorage;
@@ -295,6 +316,11 @@ bool spirv_to_wgsl(const Array<u32>& words, const StageResources& res, Array<cha
         return false;
     }
     tint::wgsl::writer::Options wopts;
+    // GLSL samples with implicit derivatives inside branches on varyings (sprite.frag's packed
+    // flags), which WGSL rejects unless told otherwise; GL leaves such derivatives undefined only where
+    // a branch really diverges inside a quad, so the WGSL keeps GL's behaviour
+    // (diagnostic(off, derivative_uniformity)).
+    wopts.allow_non_uniform_derivatives = true;
     auto result = tint::wgsl::writer::WgslFromIR(ir.Get(), wopts);
     if (result != tint::Success) {
         log.append(result.Failure().reason.c_str());
