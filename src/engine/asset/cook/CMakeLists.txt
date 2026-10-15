@@ -27,6 +27,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/particle_importer.cpp
         src/spritesheet_importer.cpp
         src/animgraph_importer.cpp
+        src/terrain_importer.cpp
         src/registry.cpp
         src/scene_importer.cpp
         src/scene_writer.cpp

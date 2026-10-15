@@ -32,6 +32,7 @@ struct SpriteSheet { static constexpr ChunkType chunk = ChunkType::SpriteSheet; 
 struct AnimGraph { static constexpr ChunkType chunk = ChunkType::AnimGraph; static constexpr const char* name = "AnimGraph"; };
 struct UiDocument { static constexpr ChunkType chunk = ChunkType::UiDocument; static constexpr const char* name = "UiDocument"; };
 struct UiTheme { static constexpr ChunkType chunk = ChunkType::UiTheme; static constexpr const char* name = "UiTheme"; };
+struct Terrain { static constexpr ChunkType chunk = ChunkType::Terrain; static constexpr const char* name = "Terrain"; };
 struct NavMesh { static constexpr ChunkType chunk = ChunkType::NavMesh; static constexpr const char* name = "NavMesh"; };
 struct Sequence { static constexpr ChunkType chunk = ChunkType::Sequence; static constexpr const char* name = "Sequence"; };
 struct Timeline { static constexpr ChunkType chunk = ChunkType::Timeline; static constexpr const char* name = "Timeline"; };

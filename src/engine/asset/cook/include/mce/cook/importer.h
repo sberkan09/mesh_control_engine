@@ -140,6 +140,7 @@ mem::UniquePtr<IImporter> make_ui_theme_importer();  // .mcuitheme -> CHNK_UITHE
 mem::UniquePtr<IImporter> make_config_importer();    // .mcconfig -> CHNK_RCFG (M-LIVEOPS remote config)
 mem::UniquePtr<IImporter> make_string_importer();    // assets/loc/<locale>.csv -> CHNK_STR (M-MOBILE 11a)
 mem::UniquePtr<IImporter> make_envmap_importer();  // .mcenv -> CHNK_TEX (M-VISUAL 2: baked reflection probes)
+mem::UniquePtr<IImporter> make_terrain_importer();  // .mcterrain -> CHNK_TERRAIN (M-TERRAIN 1)
 mem::UniquePtr<IImporter> make_navmesh_importer();  // .mcnav -> CHNK_NAV (M-GAMEPLAY3D 1: a baked navmesh)
 mem::UniquePtr<IImporter> make_shader_importer();  // .vert/.frag/.comp.glsl -> CHNK_SHD (v0.5)
 

@@ -742,6 +742,45 @@ void write_mesh(const MeshData& d, Array<byte>& out) {
     b.finish();
 }
 
+// ------------------------------------------------------------------ terrain
+
+f32 TerrainView::height_at(f32 x, f32 z) const {
+    const u32 n = header->resolution;
+    const f32 fx = (x / header->size[0] + 0.5f) * static_cast<f32>(n - 1);
+    const f32 fz = (z / header->size[1] + 0.5f) * static_cast<f32>(n - 1);
+    const f32 cx = std::clamp(fx, 0.0f, static_cast<f32>(n - 1)), cz = std::clamp(fz, 0.0f, static_cast<f32>(n - 1));
+    const u32 x0 = std::min(static_cast<u32>(cx), n - 2), z0 = std::min(static_cast<u32>(cz), n - 2);
+    const f32 tx = cx - static_cast<f32>(x0), tz = cz - static_cast<f32>(z0);
+    const f32 a = sample(x0, z0) + (sample(x0 + 1, z0) - sample(x0, z0)) * tx;
+    const f32 b = sample(x0, z0 + 1) + (sample(x0 + 1, z0 + 1) - sample(x0, z0 + 1)) * tx;
+    return a + (b - a) * tz;
+}
+
+Result<TerrainView> TerrainView::read(Span<const byte> payload) {
+    TerrainView v;
+    v.header = header_of<TerrainHeader>(payload);
+    if (!v.header) return bad("asset.terrain.header");
+    const TerrainHeader& h = *v.header;
+    const u32 n = h.resolution;
+    if (n < kTerrainMinResolution || n > kTerrainMaxResolution || ((n - 1) & (n - 2)) != 0) return bad("asset.terrain.resolution", n);
+    if (h.chunk < 8 || h.chunk > 256 || (h.chunk & (h.chunk - 1)) != 0 || h.chunk > n - 1) return bad("asset.terrain.chunk", h.chunk);
+    const bool sizes_ok = h.size[0] > 0.0f && h.size[1] > 0.0f && h.size[0] < 1e7f && h.size[1] < 1e7f;
+    const bool heights_ok = h.height_min > -1e6f && h.height_max < 1e6f && h.height_max > h.height_min;
+    if (!sizes_ok || !heights_ok) return bad("asset.terrain.extent");
+    if (!span_at(payload, h.heights_offset, u64(n) * n, v.heights)) return bad("asset.terrain.heights");
+    return v;
+}
+
+void write_terrain(const TerrainHeader& header, Span<const u16> heights, Array<byte>& out) {
+    PayloadBuilder b(out);
+    TerrainHeader h = header;
+    h.heights_offset = 0;
+    const usize at = b.append(&h, sizeof(h));
+    h.heights_offset = b.append_span(heights);
+    b.patch(at, h);
+    b.finish();
+}
+
 // ------------------------------------------------------------------ scene
 
 Span<const u32> SceneView::rows(u32 column) const {
