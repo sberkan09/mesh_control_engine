@@ -190,6 +190,9 @@ MCE_CVAR(cv_language, "language", "",
 MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
          "UI size on top of the display's own scale (1 = as the display asks; lowered when the screen is too small)",
          CVarFlags::Saved);
+MCE_CVAR(cv_ui_preview, "ui_preview", "",
+         "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
+         CVarFlags::None);
 MCE_CVAR(cv_haptics, "haptics", true,
          "Haptic feedback: phone taps and gamepad rumble from platform::haptics::play (off: none; never in the state hash)",
          CVarFlags::Saved);
@@ -468,8 +471,8 @@ public:
         kit::Camera3DComponent cam3_info;
         // A capture frame shows the held tick itself (no interpolation), so captures repeat exactly.
         const f32 alpha = capture_due() ? 1.0f : static_cast<f32>(rc.alpha);
-        bool draw_3d = three_d_ && extract3d_.camera(world_, alpha, cam3, &cam3_info);
-        if (three_d_) draw_3d = view_override_3d(alpha, cam3) || draw_3d;
+        bool draw_3d = three_d_ && !ui_preview_ && extract3d_.camera(world_, alpha, cam3, &cam3_info);
+        if (three_d_ && !ui_preview_) draw_3d = view_override_3d(alpha, cam3) || draw_3d;
         update_mouse_look(draw_3d && cam3_info.mouse_look != 0);
         rhi::CommandBuffer cmd(mem::frame());
         if (draw_3d) {
@@ -488,13 +491,13 @@ public:
 
         render::SpriteBatch batch(renderer_.sprite_sets(), mem::frame());
         batch.begin(render::compute_view_2d(cam, bb, ppm));
-        extract_.extract(world_, batch);
+        if (!ui_preview_) extract_.extract(world_, batch);  // -ui_preview: the document alone
         batch.build();
 
         // With 2D post on, the world renders offscreen and the post pass writes the backbuffer (2D
         // games only: a 3D frame has its own post chain).
         render::Post2D post;
-        const bool use_post = !draw_3d && cv_post.get_bool() && extract_.post_2d(world_, post);
+        const bool use_post = !draw_3d && !ui_preview_ && cv_post.get_bool() && extract_.post_2d(world_, post);
         if (use_post) ensure_post_target(bb);
         rhi::PassAttachment color;
         color.texture = use_post ? post_target_ : rhi::TextureHandle{};
@@ -1272,7 +1275,15 @@ private:
 
     // The scene's UI screens (kit::UiScreen, M-UI-DATA step 2).
     Result<void> load_ui_screens() {
-        MCE_TRY(screens_.load(world_, assets_, entities_.span(), device_ ? &skin_.skin : nullptr, device_ ? &extract_ : nullptr));
+        const ui::Skin* skin = device_ ? &skin_.skin : nullptr;
+        kit::SpriteExtract* extract = device_ ? &extract_ : nullptr;
+        if (const StringView preview = cv_ui_preview.get_string(); !preview.empty()) {
+            const Result<asset::Guid> g = asset::parse_guid(preview);
+            if (!g) return Error(Errc::InvalidArgument, "player: -ui_preview wants a UI document GUID", preview);
+            ui_preview_ = true;
+            return screens_.load_preview(world_, assets_, entities_.span(), g.value(), skin, extract);
+        }
+        MCE_TRY(screens_.load(world_, assets_, entities_.span(), skin, extract));
         return {};
     }
 
@@ -1916,6 +1927,7 @@ private:
     bool ui_fresh_ = false;         // ui_actions_ arrived since the last rendered frame
     bool ui_map_pushed_ = false;
     bool ui_map_missing_ = false;
+    bool ui_preview_ = false;  // -ui_preview: one document over the clear color
     struct UiPointer {
         math::vec2 pos{-1, -1};
         u32 slot = 0;

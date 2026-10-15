@@ -161,3 +161,9 @@ reach all of its non-transient fields.
 | `scene_switch` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_documents` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `report_friction` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `ui_list` | `tools_ui.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `ui_create` | `tools_ui.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `ui_widget_add` | `tools_ui.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `ui_widget_set` | `tools_ui.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `ui_widget_remove` | `tools_ui.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `ui_preview` | `tools_ui.cpp` | docs/user-guide/14-mcp-ai-workflow.md |

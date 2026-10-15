@@ -34,6 +34,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `ui::extract_document` / `cook::write_ui_document` write a document back, byte-identical after a re-cook. A widget
   starts from the look `ui::Builder` gives its kind. Mistakes fail the cook with `file:line:col`. MCP's
   `asset_create` / `asset_write` handle `.mcui`; the stock player does not load documents yet (step 2).
+- UI tools over MCP, M-UI-DATA step 5 (SBA-35): `ui_list`, `ui_create`, `ui_widget_add`, `ui_widget_set` and
+  `ui_widget_remove` edit `.mcui` documents by widget path through the cook's reader and writer (a bad edit fails with
+  the cook's message and writes nothing; documents are saved canonically and round-trip unchanged), and `ui_preview`
+  returns the real player's frame of one document at a viewport, safe area and UI scale (`mce_player -ui_preview
+  <guid>`: the document alone over the clear color). `ui_theme_set` follows the themes (SBA-33).
 - UI screens in the stock player, M-UI-DATA step 2 (SBA-32): a `UiScreen` component names a `.mcui` document a scene
   shows (HUD, title, pause, win); `mce_player` builds it, draws it over the game, feeds it the pointer and, while a
   modal screen is up, the `"UI"` action map. Gameplay stays behind the UI wall: it toggles `UiScreen::visible`,

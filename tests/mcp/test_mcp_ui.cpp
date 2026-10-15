@@ -1,0 +1,177 @@
+// The UI document tools (ROADMAP M-UI-DATA step 5) in process against a copy of the scene_demo
+// project: ui_create / ui_list / ui_widget_add / set / remove keep a document the cook reads the
+// same way, and (the "gpu" suite) ui_preview captures are compared with a golden.
+
+#include <doctest/doctest.h>
+
+#include <cstdlib>
+#include <filesystem>
+#include <string>
+
+#include "mce/cook/ui_text.h"
+#include "mce/ui/document_data.h"
+#include "mcp_client.h"
+
+using namespace mce;
+using namespace mcp_client;
+using namespace cook_test;
+
+namespace {
+
+std::string ui_project(const char* name) {
+    const std::string root = fresh_dir(name);
+    std::filesystem::copy(std::string(MCE_SOURCE_DIR) + "/samples/scene_demo/assets", root + "/assets",
+                          std::filesystem::copy_options::recursive);
+    return root;
+}
+
+// The document as the cook reads it, encoded: equal bytes = the same document.
+std::vector<byte> chunk_of(const std::string& path) {
+    const std::string text = read_file(path);
+    cook::JsonDoc doc;
+    cook::JsonError err;
+    REQUIRE(doc.parse(sv(text), err));
+    ui::DocumentData d;
+    cook::DiagList diags;
+    REQUIRE(cook::read_ui_document(doc.root(), "menu.mcui", d, diags));
+    Array<byte> out;
+    ui::encode_ui_document(d, out);
+    return std::vector<byte>(out.begin(), out.end());
+}
+
+ui::DocumentData data_of(const std::string& path) {
+    const std::string text = read_file(path);
+    cook::JsonDoc doc;
+    cook::JsonError err;
+    REQUIRE(doc.parse(sv(text), err));
+    ui::DocumentData d;
+    cook::DiagList diags;
+    REQUIRE(cook::read_ui_document(doc.root(), "menu.mcui", d, diags));
+    return d;
+}
+
+const char* const kMenuWidgets = R"([
+  { "name": "menu", "kind": "Stack", "at": [0.5, 0.5, 320, 0], "stack": { "spacing": 12 },
+    "children": [
+      { "name": "title", "kind": "Text", "text": "UNDERTOW", "style": { "text_size": 32 } },
+      { "name": "play", "kind": "Button", "text": "PLAY", "default_focus": true, "action": "Play",
+        "nav": { "down": "menu/quit" } },
+      { "name": "quit", "kind": "Button", "text": "QUIT", "action": "Quit", "nav": { "up": "menu/play" } },
+      { "name": "options", "kind": "Tabs", "tabs": [ { "name": "audio", "label": "AUDIO" } ] } ] } ])";
+
+}  // namespace
+
+TEST_CASE("ui tools: create, list, add, set and remove widgets; the document reads back unchanged") {
+    const std::string root = ui_project("mcp_ui_edit");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    auto made = c.ok("ui_create", std::string(R"({"path":"ui/menu.mcui","widgets":)") + kMenuWidgets + "}");
+    CHECK(str(made.v().get("guid")).rfind("guid:", 0) == 0);
+    const std::string file = root + "/assets/ui/menu.mcui";
+    REQUIRE(std::filesystem::exists(file));
+    CHECK(c.fails("ui_create", R"({"path":"ui/menu.mcui"})").find("already exists") != std::string::npos);
+    CHECK(c.fails("ui_create", R"({"path":"ui/bad.mcui","widgets":[{"name":"a","kind":"Buton"}]})").find("UiWidgetKind") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(root + "/assets/ui/bad.mcui"));
+
+    auto all = c.ok("ui_list");
+    REQUIRE(all.v().get("documents").size() == 1);
+    CHECK(str(all.v().get("documents").at(0).get("path")) == "ui/menu.mcui");
+    CHECK(all.v().get("documents").at(0).get("actions").size() == 2);
+    auto one = c.ok("ui_list", R"({"document":"ui/menu.mcui"})");
+    const cook::JsonValue ws = one.v().get("widgets");
+    REQUIRE(ws.size() == 9);  // menu, title, play, quit, options + its bar, button, pages, page
+    CHECK(str(ws.at(2).get("path")) == "menu/play");
+    CHECK(str(ws.at(2).get("action")) == "Play");
+    CHECK(ws.at(2).get("default_focus").as_bool());
+    CHECK(str(ws.at(5).get("path")) == "menu/options/bar");
+
+    // Setting a field to what it is changes nothing: the file is already canonical.
+    const std::string before = read_file(file);
+    const std::vector<byte> chunk = chunk_of(file);
+    c.ok("ui_widget_set", R"({"document":"ui/menu.mcui","widget":"menu/play","fields":{"text":"PLAY"}})");
+    CHECK(read_file(file) == before);
+    CHECK(chunk_of(file) == chunk);
+
+    // Add at a position, restyle one state, drop an action, move the focus.
+    c.ok("ui_widget_add", R"({"document":"ui/menu.mcui","parent":"menu","index":1,"widget":{"name":"score","kind":"Text","bind":"Score/points","format":"BEST %.0f"}})");
+    c.ok("ui_widget_set", R"({"document":"ui/menu.mcui","widget":"menu/quit","fields":{"styles":{"Hover":{"tint":[1,0,0,1]}},"action":null,"default_focus":true}})");
+    ui::DocumentData d = data_of(file);
+    const u32 score = d.find("menu/score"), quit = d.find("menu/quit"), play = d.find("menu/play");
+    REQUIRE(score != ui::kNoWidgetIndex);
+    CHECK(score == d.find("menu") + 2);  // after title, before play
+    CHECK(d.widgets[score].bind.view() == "Score/points");
+    CHECK(d.widgets[quit].styles[1].tint.r == 1.0f);
+    CHECK(d.widgets[quit].styles[1].tint.g == 0.0f);
+    CHECK(d.widgets[quit].styles[0].tint.r != 1.0f);  // Normal untouched
+    CHECK(d.widgets[quit].action.empty());
+    CHECK(d.default_focus == quit);
+    CHECK(d.widgets[quit].nav[ui::NavUp] == play);
+    // Every state at once, and an anchor change.
+    c.ok("ui_widget_set", R"({"document":"ui/menu.mcui","widget":"menu/title","fields":{"style":{"text_size":40},"fill":true}})");
+    d = data_of(file);
+    const u32 title = d.find("menu/title");
+    for (u32 s = 0; s < ui::kWidgetStateCount; ++s) CHECK(d.widgets[title].styles[s].text_size == 40.0f);
+    CHECK(d.widgets[title].anchors.max.x == 1.0f);
+
+    // Mistakes fail with the cook's message and leave the file as it was.
+    const std::string good = read_file(file);
+    CHECK(c.fails("ui_widget_remove", R"({"document":"ui/menu.mcui","widget":"menu/play"})").find("no widget at 'menu/play'") != std::string::npos);
+    CHECK(c.fails("ui_widget_set", R"({"document":"ui/menu.mcui","widget":"menu/nope","fields":{"text":"x"}})").find("no widget at") != std::string::npos);
+    CHECK(c.fails("ui_widget_set", R"({"document":"ui/menu.mcui","widget":"menu/play","fields":{"format":"%s"}})").find("format") != std::string::npos);
+    CHECK(c.fails("ui_widget_add", R"({"document":"ui/menu.mcui","parent":"menu","widget":{"name":"play"}})").find("already named") != std::string::npos);
+    CHECK(c.fails("ui_widget_set", R"({"document":"ui/menu.mcui","widget":"menu","fields":{"children":[]}})").find("children") != std::string::npos);
+    CHECK(read_file(file) == good);
+
+    // Remove what nothing names; the cook still reads the project.
+    c.ok("ui_widget_remove", R"({"document":"ui/menu.mcui","widget":"menu/options"})");
+    CHECK(data_of(file).find("menu/options") == ui::kNoWidgetIndex);
+    CHECK(c.ok("cook_run").v().get("failed").as_number() == 0);
+}
+
+TEST_SUITE("gpu") {
+
+TEST_CASE("ui_preview: a document alone at a viewport, safe area and scale, checked against a golden") {
+    const std::string root = ui_project("mcp_ui_preview");
+    Client c([] {
+        mcp::ServerOptions opt;
+        opt.player = MCE_PLAYER_EXE;
+        return opt;
+    }());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    c.ok("ui_create", std::string(R"({"path":"ui/menu.mcui","widgets":)") + kMenuWidgets + "}");
+    CHECK(c.fails("ui_preview", R"({"document":"scenes/demo.mcscene"})").find("not a UI document") != std::string::npos);
+
+    auto a = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":320,"height":240,"save":"shots/menu.png"})");
+    REQUIRE(a.images.size() == 1);
+    CHECK(a.images[0].width == 320);
+    auto again = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":320,"height":240})");
+    CHECK(a.images[0].rgba.size() == again.images[0].rgba.size());
+    CHECK(std::equal(a.images[0].rgba.begin(), a.images[0].rgba.end(), again.images[0].rgba.begin()));
+    // The UI scale (on a screen big enough for it: a small one lowers the scale to fit) and the safe area.
+    auto one = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":1280,"height":960})");
+    auto two = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":1280,"height":960,"ui_scale":2})");
+    CHECK_FALSE(std::equal(one.images[0].rgba.begin(), one.images[0].rgba.end(), two.images[0].rgba.begin()));
+    auto inset = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":320,"height":240,"safe_area":{"left":100}})");
+    CHECK_FALSE(std::equal(a.images[0].rgba.begin(), a.images[0].rgba.end(), inset.images[0].rgba.begin()));
+    c.ok("ui_widget_set", R"({"document":"ui/menu.mcui","widget":"menu/play","fields":{"text":"START"}})");
+    auto edited = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":320,"height":240})");
+    CHECK_FALSE(std::equal(a.images[0].rgba.begin(), a.images[0].rgba.end(), edited.images[0].rgba.begin()));
+
+    // The golden (tests/mcp/goldens, Mesa llvmpipe): within 0.5 % mean difference. A missing golden
+    // is written and passes; MCE_UPDATE_GOLDENS=1 rewrites it.
+    const std::string goldens = std::string(MCE_SOURCE_DIR) + "/tests/mcp/goldens";
+    const std::string golden = goldens + "/ui_preview_menu.png";
+    const char* upd = std::getenv("MCE_UPDATE_GOLDENS");
+    if (!std::filesystem::exists(golden) || (upd && *upd == '1')) {
+        std::filesystem::copy_file(root + "/shots/menu.png", golden, std::filesystem::copy_options::overwrite_existing);
+        MESSAGE("wrote the golden " << golden);
+    }
+    std::filesystem::create_directories(root + "/goldens");
+    std::filesystem::copy_file(golden, root + "/goldens/ui_preview_menu.png", std::filesystem::copy_options::overwrite_existing);
+    auto d = c.ok("image_diff", R"({"golden":"goldens/ui_preview_menu.png","image":"shots/menu.png","max_score":0.005})");
+    CHECK_MESSAGE(d.v().get("pass").as_bool(), "ui_preview drifted from tests/mcp/goldens/ui_preview_menu.png: " << d.text);
+}
+
+}  // TEST_SUITE("gpu")
