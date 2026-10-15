@@ -107,6 +107,49 @@ struct PostFx {
     // Forward3DDesc::render_scale < 1 it also upsamples to the full output (temporal upscaling).
     bool taa = false;
     f32 taa_blend = 0.1f;  // weight of the new frame in the history
+
+    // M-VISUAL 8. Auto exposure: a log-luminance histogram of the frame (compute) drops the darkest
+    // `low_percent` and brightest 1 - `high_percent`, averages the rest and moves the exposure toward
+    // key / average over `dt` (fast when brightening, slower when darkening). It multiplies
+    // Scene3D::exposure(); the first frame snaps. Needs compute.
+    struct AutoExposure {
+        bool enabled = false;
+        f32 key = 0.18f;            // the average luminance the exposure aims for (middle grey)
+        f32 compensation = 0.0f;    // EV added to the target (+1 = twice as bright)
+        f32 min_exposure = 0.03f;   // clamps of the auto factor
+        f32 max_exposure = 32.0f;
+        f32 low_percent = 0.5f;     // histogram share ignored at the dark end (0..1)
+        f32 high_percent = 0.95f;   // ... and above this share at the bright end
+        f32 speed_up = 3.0f;        // adaptation rates per second (exponential, in EV)
+        f32 speed_down = 1.0f;
+        f32 dt = 1.0f / 60.0f;      // seconds since the last frame; set it every frame
+    } auto_exposure;
+    // Color grading on the tonemapped (display-space) frame: a 256 × 16 strip LUT (16³; see
+    // make_identity_lut), as Post2D's. The TextureStore key; 0 = off.
+    u32 lut_key = 0;
+    f32 lut_strength = 1.0f;  // 0 = ungraded, 1 = fully graded
+    // Depth of field: a gather over a disk whose radius follows each pixel's circle of confusion: 0
+    // within `focus_range` meters of `focus_distance`, growing to `max_radius` (a fraction of the view
+    // height) over `blur_range` meters on either side. Reads the velocity prepass's depth.
+    struct DepthOfField {
+        bool enabled = false;
+        f32 focus_distance = 8.0f;
+        f32 focus_range = 1.0f;
+        f32 blur_range = 6.0f;
+        f32 max_radius = 0.012f;
+    } dof;
+    // Per-object motion blur: each pixel smears along its velocity from the velocity prepass (the
+    // objects' own motion and the camera's), `intensity` of a frame's motion (a shutter fraction),
+    // at most `max_length` of the view height.
+    struct MotionBlur {
+        bool enabled = false;
+        f32 intensity = 0.5f;
+        f32 max_length = 0.05f;
+        u32 samples = 12;  // 4..32 taps along the velocity
+    } motion_blur;
+    // The velocity prepass runs for TAA and motion blur (both need the previous transforms) and for
+    // depth of field (its depth).
+    bool needs_velocity() const { return taa || motion_blur.enabled || dof.enabled; }
 };
 
 // Screen-space ambient occlusion (M-VISUAL 3): a half-resolution view-normal + depth prepass of the
@@ -253,7 +296,7 @@ struct MeshInstance {
     const MaterialOverride* material = nullptr;
     // TAA velocity (M-VISUAL 5): last frame's world matrix and node pose of a moving or animated
     // instance (null / empty = the same as this frame's: only the camera moved it). Read only when
-    // PostFx::taa is on.
+    // PostFx::taa or PostFx::motion_blur is on.
     const math::mat4* prev_world = nullptr;
     Span<const math::mat4> prev_pose;
 };

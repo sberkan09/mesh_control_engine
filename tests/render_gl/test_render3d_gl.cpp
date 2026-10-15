@@ -1611,3 +1611,271 @@ TEST_CASE("render3d_gl: a point light glows in the volumetric fog around it") {
     CHECK(glow.r > glow.b);
     CHECK(f.device->validation_error_count() == 0);
 }
+
+// ---- post effects: auto exposure, color grading, depth of field, motion blur (M-VISUAL 8) --------
+
+namespace {
+
+struct ExposureReadback {
+    u32 bins[Forward3D::kExposureBins];
+    f32 exposure;
+    f32 average;
+    u32 frames;
+    u32 pad;
+};
+
+ExposureReadback read_exposure(Fixture3D& f) {
+    ExposureReadback e{};
+    const rhi::BufferHandle b = f.renderer.forward_3d().exposure_buffer();
+    REQUIRE(!b.is_null());
+    REQUIRE(f.device->read_buffer(b, 0, Span<byte>(reinterpret_cast<byte*>(&e), sizeof(e))).has_value());
+    return e;
+}
+
+// Sum of squared steps in luma to the left and above over the region: how much sharp edge it shows
+// (a blur spreads a step over several smaller ones, which square to less).
+u64 edge_energy(const Array<u8>& px, u32 y0, u32 y1, u32 x0 = 0, u32 x1 = kW) {
+    u64 sum = 0;
+    for (u32 y = y0; y < y1; ++y)
+        for (u32 x = x0 + 1; x < x1; ++x) {
+            const usize a = (usize(y) * kW + x) * 4, b = a - 4;
+            const int la = (px[a] * 2 + px[a + 1] * 5 + px[a + 2]) / 8;
+            const int lb = (px[b] * 2 + px[b + 1] * 5 + px[b + 2]) / 8;
+            sum += u64((la - lb) * (la - lb));
+            if (y > y0) {
+                const usize c = a - usize(kW) * 4;
+                const int lc = (px[c] * 2 + px[c + 1] * 5 + px[c + 2]) / 8;
+                sum += u64((la - lc) * (la - lc));
+            }
+        }
+    return sum;
+}
+
+u32 upload_lut(Fixture3D& f, bool invert) {
+    Array<u8> lut;
+    make_identity_lut(lut);
+    if (invert)
+        for (usize i = 0; i < lut.size(); i += 4)
+            for (u32 c = 0; c < 3; ++c) lut[i + c] = static_cast<u8>(255 - lut[i + c]);
+    const u32 key = f.renderer.textures().allocate_key();
+    const TextureMipUpload mip{kLutSize * kLutSize, kLutSize, std::as_bytes(lut.span())};
+    TextureUpload up;
+    up.format = rhi::TextureFormat::RGBA8_UNorm;
+    up.mips = Span<const TextureMipUpload>(&mip, 1);
+    REQUIRE(f.renderer.textures().upload(key, 1, up).has_value());
+    return key;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: post effects off draw today's frame; a run with all of them in between leaves no trace") {
+    Fixture3D f;
+    const u32 lut = upload_lut(f, true);
+    const Forward3D& fw = f.renderer.forward_3d();
+    f.render();
+    const Array<u8> off = f.pixels;
+    math::mat4 prev = math::translation({0.3f, 0.0f, 0.0f});
+    for (int i = 0; i < 2; ++i)
+        f.render(0.0f, true, [&](Scene3D& s) {
+            PostFx p;
+            p.auto_exposure.enabled = true;
+            p.lut_key = lut;
+            p.dof.enabled = true;
+            p.motion_blur.enabled = true;
+            s.set_post(p);
+            MeshInstance m;
+            m.mesh = 1;
+            m.world = math::translation({1.5f, 0.0f, 1.0f});
+            m.prev_world = &prev;
+            s.add(m);
+        });
+    CHECK(fw.last_stats().auto_exposure);
+    CHECK(fw.last_stats().color_grade);
+    CHECK(fw.last_stats().dof);
+    CHECK(fw.last_stats().motion_blur);
+    CHECK(differing_bytes(f.pixels, off) > 0);
+    f.render();
+    CHECK_FALSE(fw.last_stats().auto_exposure);
+    CHECK_FALSE(fw.last_stats().dof);
+    CHECK(differing_bytes(f.pixels, off) == 0);
+    // The Low tier drops depth of field and motion blur.
+    f.render(0.0f, true, [](Scene3D& s) {
+        PostFx p;
+        p.dof.enabled = true;
+        p.motion_blur.enabled = true;
+        ShadowSettings ss = s.shadow_settings();
+        apply_quality(quality_settings(QualityTier::Low), ss, p);
+        p.bloom = p.fxaa = true;  // the fixture's defaults: only the dropped effects differ
+        s.set_post(p);
+    });
+    CHECK_FALSE(fw.last_stats().dof);
+    CHECK_FALSE(fw.last_stats().motion_blur);
+    CHECK(differing_bytes(f.pixels, off) == 0);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: auto exposure brings a dim and a bright sun to the same brightness, adapting over time") {
+    Fixture3D f;
+    f32 sun_scale = 0.1f, dt = 1.0f / 60.0f;
+    bool on = true;
+    const auto scene = [&](Scene3D& s) {
+        DirectionalLight sun;
+        sun.direction = {-0.5f, -1.0f, -0.3f};
+        sun.intensity = 3.0f * sun_scale;
+        sun.ambient_sky = vec3{0.35f, 0.42f, 0.55f} * sun_scale;
+        sun.ambient_ground = vec3{0.20f, 0.18f, 0.16f} * sun_scale;
+        s.set_light(sun);
+        Sky sky;
+        sky.zenith *= sun_scale;
+        sky.horizon *= sun_scale;
+        sky.ground *= sun_scale;
+        s.set_sky(sky);
+        PostFx p;
+        p.auto_exposure.enabled = on;
+        p.auto_exposure.dt = dt;
+        s.set_post(p);
+    };
+    const vec3 ground{-2.0f, 0.0f, 1.0f};
+    on = false;
+    f.render(0.0f, true, scene);
+    const int dim_fixed = f.at_world(ground).luma();
+    sun_scale = 1.0f;
+    f.render(0.0f, true, scene);
+    const int bright_fixed = f.at_world(ground).luma();
+    on = true;
+    sun_scale = 0.1f;
+    f.render(0.0f, true, scene);  // the first frame snaps
+    const ExposureReadback dim = read_exposure(f);
+    const int dim_auto = f.at_world(ground).luma();
+    sun_scale = 1.0f;
+    f.render(0.0f, true, scene);  // one 60 Hz frame toward the bright target
+    const ExposureReadback step = read_exposure(f);
+    dt = 1.0f;
+    for (int i = 0; i < 4; ++i) f.render(0.0f, true, scene);
+    const ExposureReadback bright = read_exposure(f);
+    const int bright_auto = f.at_world(ground).luma();
+    INFO("fixed: dim " << dim_fixed << " bright " << bright_fixed << "; auto: dim " << dim_auto << " (x" << dim.exposure
+                       << ", avg " << dim.average << ") bright " << bright_auto << " (x" << bright.exposure << ", avg "
+                       << bright.average << "), one frame after the switch x" << step.exposure);
+    CHECK(bright_fixed > dim_fixed + 60);
+    CHECK(std::abs(bright_auto - dim_auto) <= 6);
+    CHECK(dim.exposure > 4.0f * bright.exposure);
+    CHECK(bright.average > 5.0f * dim.average);
+    // Adaptation: a frame later the exposure has moved only part of the way.
+    CHECK(step.exposure < dim.exposure);
+    CHECK(step.exposure > 2.0f * bright.exposure);
+    for (u32 i = 0; i < Forward3D::kExposureBins; ++i) CHECK(bright.bins[i] == 0);  // emptied for the next frame
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a color-grade LUT maps the tonemapped frame: identity keeps it, an inverted one flips it") {
+    Fixture3D f;
+    const u32 ident = upload_lut(f, false), inverted = upload_lut(f, true);
+    const auto graded = [&](u32 key, f32 strength) {
+        return [=](Scene3D& s) {
+            PostFx p;
+            p.lut_key = key;
+            p.lut_strength = strength;
+            s.set_post(p);
+        };
+    };
+    const vec3 box_face{0.0f, 0.5f, 0.5f}, ground{-2.0f, 0.0f, 1.0f};
+    f.render();
+    const Rgb box0 = f.at_world(box_face), ground0 = f.at_world(ground);
+    f.render(0.0f, true, graded(ident, 1.0f));
+    const Rgb box1 = f.at_world(box_face), ground1 = f.at_world(ground);
+    f.render(0.0f, true, graded(inverted, 1.0f));
+    const Rgb box2 = f.at_world(box_face), ground2 = f.at_world(ground);
+    f.render(0.0f, true, graded(inverted, 0.5f));
+    const Rgb ground_half = f.at_world(ground);
+    INFO("box " << box0.r << "," << box0.g << "," << box0.b << " identity " << box1.r << "," << box1.g << "," << box1.b
+                << " inverted " << box2.r << "," << box2.g << "," << box2.b << "; ground " << ground0.luma() << " / "
+                << ground1.luma() << " / " << ground2.luma() << ", half " << ground_half.luma());
+    CHECK(std::abs(box1.r - box0.r) <= 3);
+    CHECK(std::abs(box1.g - box0.g) <= 3);
+    CHECK(std::abs(ground1.luma() - ground0.luma()) <= 3);
+    CHECK(std::abs(box2.r - (255 - box0.r)) <= 6);
+    CHECK(std::abs(box2.b - (255 - box0.b)) <= 6);
+    CHECK(std::abs(ground2.luma() - (255 - ground0.luma())) <= 6);
+    CHECK(std::abs(ground_half.luma() - 128) <= 8);
+    CHECK(f.renderer.forward_3d().last_stats().color_grade);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: depth of field blurs what lies away from the focus and keeps the focus sharp") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;  // the box in front of the ground's far edge against the sky
+    f32 focus = 7.0f;
+    bool on = false;
+    const auto scene = [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.bloom = false;
+        p.dof.enabled = on;
+        p.dof.focus_distance = focus;
+        p.dof.focus_range = 0.8f;
+        p.dof.blur_range = 4.0f;
+        p.dof.max_radius = 0.03f;
+        s.set_post(p);
+    };
+    const auto box_edges = [&] { return edge_energy(f.pixels, kH / 3, kH * 2 / 3, kW / 3, kW * 2 / 3); };
+    const auto far_edges = [&] { return edge_energy(f.pixels, kH / 3, kH / 2, 0, kW / 3); };  // the ground's far edge
+    f.render(0.0f, true, scene);
+    const u64 box_sharp = box_edges(), far_sharp = far_edges();
+    const Rgb centre_sharp = f.at_world({0.0f, 0.5f, 0.5f});
+    on = true;
+    f.render(0.0f, true, scene);  // focused on the box: the far edge blurs
+    const u64 box_near = box_edges(), far_near = far_edges();
+    const Rgb centre_near = f.at_world({0.0f, 0.5f, 0.5f});
+    focus = 30.0f;  // focused far: the box blurs
+    f.render(0.0f, true, scene);
+    const u64 box_far = box_edges();
+    INFO("box edges: sharp " << box_sharp << ", focus on it " << box_near << ", focus far " << box_far << "; far edges: sharp "
+                             << far_sharp << ", focus on the box " << far_near);
+    CHECK(far_near * 10 < far_sharp * 8);
+    CHECK(box_near * 10 > box_sharp * 8);
+    CHECK(box_far * 10 < box_sharp * 7);
+    CHECK(std::abs(centre_near.luma() - centre_sharp.luma()) <= 2);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: motion blur smears a moving box along its motion and leaves a still frame alone") {
+    Fixture3D f(1);
+    upload_slider(f);
+    bool blur = false, moving = true;
+    math::mat4 prev = math::translation({-0.6f, 0.0f, 1.5f});
+    const math::mat4 world = math::translation({0.0f, 0.0f, 1.5f});
+    const auto scene = [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.bloom = false;
+        p.motion_blur.enabled = blur;
+        p.motion_blur.intensity = 1.0f;
+        s.set_post(p);
+        MeshInstance m;
+        m.mesh = 50;
+        m.world = world;
+        if (moving) m.prev_world = &prev;
+        s.add(m);
+    };
+    f.render(0.0f, true, scene);
+    const Array<u8> still = f.pixels;
+    blur = true;
+    f.render(0.0f, true, scene);
+    CHECK(f.renderer.forward_3d().last_stats().motion_blur);
+    // Along the motion (x) the box's edges soften.
+    const u64 sharp = edge_energy(still, kH / 3, kH * 2 / 3), blurred = edge_energy(f.pixels, kH / 3, kH * 2 / 3);
+    const f64 changed = mean_abs_diff(f.pixels, still);
+    // A still box (no previous transform) with a still camera: nothing moves, nothing blurs.
+    moving = false;
+    f.render(0.0f, true, scene);  // the previous view-proj is now this one
+    f.render(0.0f, true, scene);
+    blur = false;
+    const Array<u8> blurred_still = f.pixels;
+    f.render(0.0f, true, scene);
+    INFO("horizontal edges: sharp " << sharp << ", blurred " << blurred << "; mean |diff| " << changed);
+    CHECK(blurred * 10 < sharp * 9);
+    CHECK(changed > 0.2);
+    CHECK(differing_bytes(f.pixels, blurred_still) == 0);
+    CHECK(f.device->validation_error_count() == 0);
+}

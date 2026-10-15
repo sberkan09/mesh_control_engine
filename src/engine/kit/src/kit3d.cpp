@@ -21,7 +21,7 @@ static_assert(sizeof(SpotLight3D) == 60);
 static_assert(sizeof(ReflectionProbe3D) == 64);
 static_assert(sizeof(GiVolume3D) == 88);
 static_assert(sizeof(Camera3DComponent) == 24);
-static_assert(sizeof(Environment3D) == 288);
+static_assert(sizeof(Environment3D) == 360);
 static_assert(sizeof(BoxCollider3D) == 40);
 static_assert(sizeof(MeshCollider3D) == 32);
 

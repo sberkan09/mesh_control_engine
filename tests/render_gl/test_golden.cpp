@@ -327,3 +327,55 @@ TEST_CASE("golden: volumetric fog: sun shafts past a box and a point light's glo
     CHECK(f.renderer.forward_3d().last_stats().volumetrics);
     check_golden("volumetric_shafts", f);
 }
+
+// ---- M-VISUAL 8: post effects ---------------------------------------------------------------------
+
+TEST_CASE("golden: depth of field focused on the box, the far ground and sky blurred") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [](Scene3D& s) {
+        PostFx p;
+        p.dof.enabled = true;
+        p.dof.focus_distance = 7.0f;
+        p.dof.focus_range = 0.8f;
+        p.dof.blur_range = 4.0f;
+        p.dof.max_radius = 0.03f;
+        s.set_post(p);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().dof);
+    check_golden("dof_focus", f);
+}
+
+TEST_CASE("golden: motion blur of a box sliding sideways, auto exposure and a warm grade") {
+    Fixture3D f;
+    Array<u8> lut;
+    make_identity_lut(lut);
+    for (usize i = 0; i < lut.size(); i += 4) {  // warm: red up, blue down
+        lut[i] = static_cast<u8>(math::min(255, lut[i] + 24));
+        lut[i + 2] = static_cast<u8>(math::max(0, lut[i + 2] - 24));
+    }
+    const u32 key = f.renderer.textures().allocate_key();
+    const TextureMipUpload mip{kLutSize * kLutSize, kLutSize, std::as_bytes(lut.span())};
+    TextureUpload up;
+    up.format = rhi::TextureFormat::RGBA8_UNorm;
+    up.mips = Span<const TextureMipUpload>(&mip, 1);
+    REQUIRE(f.renderer.textures().upload(key, 1, up).has_value());
+    const math::mat4 prev = math::translation({1.4f, 0.0f, 1.2f});  // a second box, 0.8 m to the left last frame
+    for (int i = 0; i < 2; ++i)
+        f.render(0.0f, true, [&](Scene3D& s) {
+            PostFx p;
+            p.auto_exposure.enabled = true;
+            p.auto_exposure.compensation = 1.5f;  // the bright ground pulls the average up
+            p.lut_key = key;
+            p.motion_blur.enabled = true;
+            p.motion_blur.intensity = 1.0f;
+            s.set_post(p);
+            MeshInstance m;
+            m.mesh = 1;
+            m.world = math::translation({2.2f, 0.0f, 1.2f});
+            m.prev_world = &prev;
+            s.add(m);
+        });
+    CHECK(f.renderer.forward_3d().last_stats().motion_blur);
+    check_golden("motion_blur_grade", f);
+}

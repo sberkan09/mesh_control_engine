@@ -483,6 +483,8 @@ public:
             lod.pixel_error = math::max(cv_lod_pixels.get_float(), 0.01f);
             lod.force_level = cv_lod_force.get_int() < 0 ? ~0u : static_cast<u32>(cv_lod_force.get_int());
             scene3.set_lod(lod);
+            // Auto exposure adapts by the frame's wall time (a capture frame by a fixed step, to repeat).
+            extract3d_.set_frame_dt(capture_due() ? 1.0f / 60.0f : static_cast<f32>(rc.frame_dt));
             extract3d_.extract(world_, scene3, alpha);
             scene3.build();
             renderer_.record_3d(cmd, scene3);

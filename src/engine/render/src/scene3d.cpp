@@ -231,7 +231,7 @@ void Scene3D::build() {
     if (local_shadows_.enabled)
         for (const PointLight& l : point_lights_) local_wanted = local_wanted || l.cast_shadows;
     const bool collect_casters = light_.shadows || local_wanted;
-    const bool taa = post_.taa;  // previous transforms for the velocity prepass
+    const bool taa = post_.taa || post_.motion_blur.enabled;  // previous transforms for the velocity prepass
     Array<u32> skin_first(*alloc_);   // per skin of the current instance: palette offset
     Array<u32> skin_prev(*alloc_);    // and its previous pose's palette offset (TAA)
     Array<aabb3> skin_box(*alloc_);   // and its model-space bounds
