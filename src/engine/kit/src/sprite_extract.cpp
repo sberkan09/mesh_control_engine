@@ -15,7 +15,7 @@
 namespace mce::kit {
 
 // World::state_hash hashes component bytes: no padding.
-static_assert(sizeof(TextLabel) == 168);
+static_assert(sizeof(TextLabel) == 224);
 
 namespace {
 
@@ -303,10 +303,13 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         StringView text = l.text.view();
         if (!l.loc_key.empty() && l10n) text = l10n->text(l.loc_key.view());
         if (!f || text.empty() || f->face.metrics().pixel_height <= 0.0f) return;
-        const f32 upp = l.height * t.scale.y / f->face.metrics().pixel_height;
+        const f32 baked = f->face.metrics().pixel_height;  // the layout's pixels: `height` is `baked` of them
+        const f32 upp = l.height * t.scale.y / baked;
         render::TextLayout layout(mem::has_frame_arena() ? mem::frame() : mem::heap());
         render::TextLayoutDesc desc;
         desc.align = static_cast<render::TextAlign>(l.align);
+        desc.letter_spacing = l.letter_spacing * baked;
+        desc.line_spacing = l.line_height > 0.0f ? l.line_height : 1.0f;
         if (l.wrap_width > 0.0f && upp > 0.0f) desc.max_width = l.wrap_width * t.scale.x / upp;
         render::layout_text(f->face, text, desc, layout);
         render::TextPlacement p;
@@ -315,6 +318,10 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         p.tint = l.color;
         p.sort_layer = l.layer;
         p.sort_order = l.order;
+        p.outline_px = l.outline_width * baked;
+        p.outline_color = l.outline_color;
+        p.shadow_px = {l.shadow_offset.x * baked, -l.shadow_offset.y * baked};  // layout pixels are +y down
+        p.shadow_color = l.shadow_color;
         const f32 box = desc.max_width > 0.0f ? desc.max_width : layout.width;  // the lines align inside it
         f32 x = t.position.x;
         if (l.align == TextAlign::Center) x -= 0.5f * box * upp;

@@ -65,7 +65,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `asset_list` | `type?` | `guid:<uuid>`, path, type |
 | | `asset_set_import_settings` | `path` or `guid`, `settings` | rewrites a sidecar's settings |
 | Assets | `asset_schema` | `type?` | without `type`: the JSON source types below; with one (`ParticlePreset` or `.mcpart`, ...): its fields with type, default and help, and the template `asset_create` starts from |
-| | `asset_create` | `path`, `content?` | a new `.mcpart`, `.mcseq`, `.mctilemap`, `.mcsheet`, `.mcanim`, `.mcmat`, `.mcinput`, `.mcstore`, `.mcservices` or `.mcconfig` (the extension picks the type) with a fresh GUID: the template with `content`'s fields over it. Returns `guid:<uuid>` |
+| | `asset_create` | `path`, `content?` | a new `.mcpart`, `.mcseq`, `.mctilemap`, `.mcsheet`, `.mcanim`, `.mcmat`, `.mcinput`, `.mcstore`, `.mcservices`, `.mcui` or `.mcconfig` (the extension picks the type) with a fresh GUID: the template with `content`'s fields over it. Returns `guid:<uuid>` |
 | | `asset_write` | `path` or `guid`, `content`, `mode?` | `merge` (default) replaces the named fields and keeps the rest, `replace` writes exactly `content`; the GUID stays |
 | | `asset_read` | `path` or `guid` | the parsed document of a JSON source asset (scenes and prefabs too) |
 | | `tilemap_paint` | `path` or `guid`, `clear?`, `cells?`, `rects?`, `fills?`, `preview?` | `[x, y, tile]` cells, `[x0, y0, x1, y1, tile]` rectangles and `[x, y, tile]` flood fills, applied in that order; (0, 0) is bottom-left, tile 0 erases, n draws tileset cell n-1. `preview` returns the map as text rows |

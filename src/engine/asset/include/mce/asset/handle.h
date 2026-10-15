@@ -30,6 +30,7 @@ struct Prefab   { static constexpr ChunkType chunk = ChunkType::Prefab;   static
 struct Tilemap  { static constexpr ChunkType chunk = ChunkType::Tilemap;  static constexpr const char* name = "Tilemap"; };
 struct SpriteSheet { static constexpr ChunkType chunk = ChunkType::SpriteSheet; static constexpr const char* name = "SpriteSheet"; };
 struct AnimGraph { static constexpr ChunkType chunk = ChunkType::AnimGraph; static constexpr const char* name = "AnimGraph"; };
+struct UiDocument { static constexpr ChunkType chunk = ChunkType::UiDocument; static constexpr const char* name = "UiDocument"; };
 struct Sequence { static constexpr ChunkType chunk = ChunkType::Sequence; static constexpr const char* name = "Sequence"; };
 struct ParticlePreset { static constexpr ChunkType chunk = ChunkType::ParticlePreset; static constexpr const char* name = "ParticlePreset"; };
 struct StringTable { static constexpr ChunkType chunk = ChunkType::StringTable; static constexpr const char* name = "StringTable"; };

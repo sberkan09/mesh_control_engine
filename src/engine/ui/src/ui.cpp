@@ -6,6 +6,7 @@
 #include "mce/convar.h"
 #include "mce/log.h"
 #include "mce/render/renderer.h"
+#include "mce/ui/document_data.h"
 
 namespace mce::ui {
 namespace {
@@ -635,6 +636,49 @@ WidgetId Document::parent(WidgetId w) const {
     return n && n->parent != kNone ? id_of(n->parent) : WidgetId{};
 }
 
+bool Document::visible_self(WidgetId w) const {
+    const Node* n = node(w);
+    return n && n->visible;
+}
+bool Document::interactable(WidgetId w) const {
+    const Node* n = node(w);
+    return n && n->interactable;
+}
+bool Document::blocks_pointer(WidgetId w) const {
+    const Node* n = node(w);
+    return n && n->blocks_pointer;
+}
+NavEdges Document::nav(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->nav : NavEdges{};
+}
+StackLayout Document::stack(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->stack : StackLayout{};
+}
+GridLayout Document::grid(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->grid : GridLayout{};
+}
+void Document::range(WidgetId w, f32& lo, f32& hi, f32& step) const {
+    const Node* n = node(w);
+    lo = n ? n->lo : 0.0f;
+    hi = n ? n->hi : 1.0f;
+    step = n ? n->step : 0.1f;
+}
+StringView Document::convar(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->convar.view() : StringView();
+}
+WidgetId Document::first_child(WidgetId w) const {
+    const Node* n = node(w);
+    return n && n->first_child != kNone ? id_of(n->first_child) : WidgetId{};
+}
+WidgetId Document::next_sibling(WidgetId w) const {
+    const Node* n = node(w);
+    return n && n->next_sibling != kNone ? id_of(n->next_sibling) : WidgetId{};
+}
+
 WidgetState Document::state(WidgetId w) const {
     const Node* n = node(w);
     if (!n) return WidgetState::Normal;
@@ -704,6 +748,7 @@ vec2 Document::measure(u32 index, f32 avail_width) const {
         if (!skin_.font || s.empty()) return vec2(0, s.empty() ? 0.0f : text_px(st, skin_.font));
         render::TextLayoutDesc d;
         d.size_px = text_px(st, skin_.font);
+        d.letter_spacing = st.letter_spacing;
         return render::measure_text(skin_.font->face, s, d);
     };
     const StringView label(n->text.data(), n->text.size());
@@ -1276,12 +1321,13 @@ void Document::draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u
         }
 }
 
-void Document::draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 size, Color c, i16 layer, i32 order,
-                         f32 max_width) const {
+void Document::draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 size, Color c, const Style& look,
+                         i16 layer, i32 order, f32 max_width) const {
     if (!skin_.font || s.empty() || c.a <= 0.0f) return;
     render::TextLayoutDesc d;
     d.size_px = size;
     d.max_width = max_width;
+    d.letter_spacing = look.letter_spacing * scale_;
     render::layout_text(skin_.font->face, s, d, scratch_);
     math::aabb2 clip;
     if (draw_clip_) clip = math::aabb2{draw_clip_->min, draw_clip_->max};
@@ -1291,8 +1337,15 @@ void Document::draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 
     p.sort_layer = layer;
     p.sort_order = order;
     p.clip = draw_clip_ ? &clip : nullptr;
+    p.outline_px = look.text_outline * scale_;
+    p.outline_color = linear(look.text_outline_color);
+    p.shadow_px = look.text_shadow * scale_;
+    p.shadow_color = linear(look.text_shadow_color);
     batch.add_text(*skin_.font, scratch_, p);
-    stats_.quads += static_cast<u32>(scratch_.quads.size());
+    u32 copies = 1;
+    if (p.outline_px > 0.0f && p.outline_color.a > 0.0f) copies += 8;
+    if ((p.shadow_px.x != 0.0f || p.shadow_px.y != 0.0f) && p.shadow_color.a > 0.0f) copies += 1;
+    stats_.quads += static_cast<u32>(scratch_.quads.size()) * copies;
 }
 
 void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
@@ -1323,13 +1376,14 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
             draw_region(batch, r, st.tint, region, quad_layer, order, st.slice);
         const f32 line_h = skin_.font ? skin_.font->face.line_height() * (px / skin_.font->face.metrics().pixel_height) : px;
         switch (n.kind) {
-            case WidgetKind::Text: draw_text(batch, label, r.min, px, st.text_color, text_layer, order, r.size().x); break;
+            case WidgetKind::Text: draw_text(batch, label, r.min, px, st.text_color, st, text_layer, order, r.size().x); break;
             case WidgetKind::Button: {
                 if (label.empty() || !skin_.font) break;
                 render::TextLayoutDesc d;
                 d.size_px = px;
+                d.letter_spacing = st.letter_spacing * scale_;
                 const vec2 t = render::measure_text(skin_.font->face, label, d);
-                draw_text(batch, label, r.center() - t * 0.5f, px, st.text_color, text_layer, order);
+                draw_text(batch, label, r.center() - t * 0.5f, px, st.text_color, st, text_layer, order);
                 // A tab's button: the selected one is underlined in the accent color.
                 const u32 tabs = n.parent != kNone ? nodes_[n.parent].parent : kNone;
                 if (tabs != kNone && nodes_[tabs].kind == WidgetKind::Tabs && nodes_[tabs].first_child == n.parent) {
@@ -1350,7 +1404,7 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
                     const f32 in = 3.0f * scale_;
                     draw_quad(batch, Rect{b.min + vec2(in, in), b.max - vec2(in, in)}, st.accent, quad_layer, order + 2);
                 }
-                draw_text(batch, label, vec2(b.max.x + pad, r.center().y - line_h * 0.5f), px, st.text_color, text_layer, order);
+                draw_text(batch, label, vec2(b.max.x + pad, r.center().y - line_h * 0.5f), px, st.text_color, st, text_layer, order);
                 break;
             }
             case WidgetKind::Slider: {
@@ -1374,12 +1428,12 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
                 in.append(c.input.view());
                 const bool caret = focused_ == id && std::fmod(time_, 1.0) < 0.5;
                 if (caret) in.append("_");
-                draw_text(batch, in.view(), vec2(r.min.x + pad, y), px, st.text_color, text_layer, order);
+                draw_text(batch, in.view(), vec2(r.min.x + pad, y), px, st.text_color, st, text_layer, order);
                 for (u32 l = c.count(); l-- > 0;) {
                     y -= line_h;
                     if (y < r.min.y + pad) break;
                     const ConsoleData::Line& line = c.at(l);
-                    draw_text(batch, line.text.view(), vec2(r.min.x + pad, y), px, line.color, text_layer, order + 1);
+                    draw_text(batch, line.text.view(), vec2(r.min.x + pad, y), px, line.color, st, text_layer, order + 1);
                 }
                 break;
             }
@@ -1398,17 +1452,13 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
 
 Builder Builder::child(WidgetKind kind, StringView name) {
     const WidgetId id = doc_->add(id_, kind, name);
-    if (interactive_kind(kind)) apply_default_style(*doc_, id);
+    WidgetData d;
+    builder_defaults(kind, d);  // the same look a .mcui widget starts from
+    for (u32 i = 0; i < S(WidgetState::Count); ++i) doc_->set_style(id, static_cast<WidgetState>(i), d.styles[i]);
     return Builder(*doc_, id);
 }
 
-Builder Builder::panel(StringView name) {
-    Builder b = child(WidgetKind::Panel, name);
-    Style s;
-    s.tint = Color{0.06f, 0.06f, 0.08f, 0.85f};
-    doc_->set_style_all(b.id_, s);
-    return b;
-}
+Builder Builder::panel(StringView name) { return child(WidgetKind::Panel, name); }
 Builder Builder::image(StringView name, u32 sprite_region) {
     Builder b = child(WidgetKind::Image, name);
     Style s;
@@ -1448,14 +1498,7 @@ Builder Builder::grid(StringView name, const GridLayout& g) {
     doc_->set_grid(b.id_, g);
     return b;
 }
-Builder Builder::console(StringView name) {
-    Builder b = child(WidgetKind::Console, name);
-    Style s;
-    s.tint = Color{0.02f, 0.02f, 0.03f, 0.88f};
-    s.text_color = Color{0.9f, 0.9f, 0.9f, 1};
-    doc_->set_style_all(b.id_, s);
-    return b;
-}
+Builder Builder::console(StringView name) { return child(WidgetKind::Console, name); }
 
 Builder Builder::scroll(StringView name, const StackLayout& s) {
     Builder b = child(WidgetKind::Scroll, name);
@@ -1464,12 +1507,12 @@ Builder Builder::scroll(StringView name, const StackLayout& s) {
 }
 Builder Builder::modal(StringView name) {
     Builder b = child(WidgetKind::Panel, name);
-    Style s;
-    s.tint = Color{0.0f, 0.0f, 0.0f, 0.55f};
-    doc_->set_style_all(b.id_, s);
-    b.fill().to(AnchorTo::Screen);
-    doc_->set_blocks_pointer(b.id_, true);
-    doc_->set_visible(b.id_, false);
+    WidgetData d;
+    modal_defaults(d);
+    doc_->set_style_all(b.id_, d.styles[0]);
+    doc_->set_anchors(b.id_, d.anchors);
+    doc_->set_blocks_pointer(b.id_, d.blocks_pointer);
+    doc_->set_visible(b.id_, d.visible);
     return b;
 }
 Builder Builder::tabs(StringView name) {
@@ -1513,7 +1556,7 @@ Builder& Builder::at(vec2 anchor, vec2 size) {
     a.to = doc_->anchors(id_).to;
     a.min = a.max = anchor;
     a.pivot = vec2(0.5f, 0.5f);
-    a.offset_min = vec2(-size.x * 0.5f, -size.y * 0.5f);
+    a.offset_min = vec2(0.0f - size.x * 0.5f, 0.0f - size.y * 0.5f);  // +0 for a 0 size: data round-trips exactly
     a.offset_max = vec2(size.x * 0.5f, size.y * 0.5f);
     doc_->set_anchors(id_, a);
     return *this;
@@ -1579,24 +1622,9 @@ Builder& Builder::blocks_pointer() {
 }
 
 void apply_default_style(Document& doc, WidgetId w) {
-    Style normal;
-    normal.tint = Color{0.16f, 0.17f, 0.21f, 0.94f};
-    normal.text_color = Color{0.88f, 0.88f, 0.9f, 1};
-    Style hover = normal;
-    hover.tint = Color{0.24f, 0.25f, 0.31f, 0.96f};
-    Style pressed = normal;
-    pressed.tint = Color{0.1f, 0.1f, 0.13f, 0.96f};
-    Style focused = normal;
-    focused.tint = Color{0.34f, 0.25f, 0.12f, 0.96f};
-    focused.text_color = Color{1.0f, 0.88f, 0.55f, 1};
-    Style disabled = normal;
-    disabled.tint = Color{0.12f, 0.12f, 0.14f, 0.6f};
-    disabled.text_color = Color{0.5f, 0.5f, 0.52f, 1};
-    doc.set_style(w, WidgetState::Normal, normal);
-    doc.set_style(w, WidgetState::Hover, hover);
-    doc.set_style(w, WidgetState::Pressed, pressed);
-    doc.set_style(w, WidgetState::Focused, focused);
-    doc.set_style(w, WidgetState::Disabled, disabled);
+    WidgetData d;
+    builder_defaults(WidgetKind::Button, d);
+    for (u32 i = 0; i < S(WidgetState::Count); ++i) doc.set_style(w, static_cast<WidgetState>(i), d.styles[i]);
 }
 
 void apply_touch_pointer(UpdateContext& ctx, const input::InputState& state) {

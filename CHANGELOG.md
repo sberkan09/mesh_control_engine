@@ -28,6 +28,17 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `CREDITS.md` rows for files that are gone and treats input maps as entry points; `RigidBody3D.stop_spin`
   zeroes a body's spin; a music source of the next scene waits for the same streamed clip to fade out instead
   of staying silent; `MCE_LOG_*` with a printf format does not compile.
+- UI documents as data, M-UI-DATA step 1 (SBA-31): a `.mcui` asset (JSON) describes a `mce_ui` widget tree
+  (anchors, per-state styles, stack and grid layouts, tabs, modals, nav edges, convar bindings, the skin's font and
+  sprite sheet by reference) and cooks to a `UiDocument` chunk; `ui::build_document` builds it and
+  `ui::extract_document` / `cook::write_ui_document` write a document back, byte-identical after a re-cook. A widget
+  starts from the look `ui::Builder` gives its kind. Mistakes fail the cook with `file:line:col`. MCP's
+  `asset_create` / `asset_write` handle `.mcui`; the stock player does not load documents yet (step 2).
+- Text with a look (M-UI-DATA step 4, SBA-34): `TextLabel` gains `letter_spacing`, `line_height`,
+  `outline_width`/`outline_color` and `shadow_offset`/`shadow_color` (fractions of the label's height, editable
+  through MCP `component_set`), and `ui::Style` gains `letter_spacing`, `text_outline`/`text_outline_color` and
+  `text_shadow`/`text_shadow_color`. `render::TextLayoutDesc::letter_spacing` and the outline and shadow fields of
+  `render::TextPlacement` do the work for both.
 - Friction notes, M-AGENT step 8 (SBA-55): `report_friction` lets an agent write down what the engine made hard
   (summary, area, severity, expected, actual, workaround) as a line in the project's `friction.jsonl`, and
   `mce friction <projects...>` collects the notes into one Markdown backlog (or JSON), blocking ones first.

@@ -164,3 +164,60 @@ TEST_CASE("golden: SSAO over the sun, IBL and a row of boxes") {
     });
     check_golden("ssao_scene", f);
 }
+
+TEST_CASE("golden: a spot light and a point light shadow a row of boxes at night") {
+    Fixture3D f;
+    f.pitch_deg = 30.0f;
+    for (u32 i = 0; i < 3; ++i) {
+        mesh_fixture::Builder b;
+        b.add_node(-1);
+        mesh_fixture::Box box;
+        box.center = {-2.2f + 2.2f * f32(i), 0.35f + 0.15f * f32(i), 1.4f};
+        box.half = {0.35f, 0.35f + 0.15f * f32(i), 0.35f};
+        box.color[0] = 0.8f;
+        box.color[1] = 0.8f;
+        box.color[2] = 0.75f;
+        b.add_box(box);
+        REQUIRE(f.renderer.meshes().upload(40 + i, 1, b.build().span()).has_value());
+    }
+    f.render(0.0f, false, [](Scene3D& s) {
+        no_sun(s);
+        DirectionalLight sun = s.light();
+        sun.ambient_sky = sun.ambient_ground = {0.03f, 0.03f, 0.05f};
+        s.set_light(sun);
+        Sky sky;
+        sky.enabled = false;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        Fog fog;
+        fog.color = {0.01f, 0.01f, 0.02f};
+        s.set_fog(fog);
+        LocalShadowSettings ls;
+        ls.tile = 256;
+        s.set_local_shadows(ls);
+        for (u32 i = 0; i < 3; ++i) {
+            MeshInstance m;
+            m.mesh = 40 + i;
+            s.add(m);
+        }
+        PointLight spot;  // warm, from the back left
+        spot.position = {-3.5f, 3.5f, -1.5f};
+        spot.direction = {1.0f, -1.1f, 0.6f};
+        spot.radius = 14.0f;
+        spot.intensity = 40.0f;
+        spot.color = {1.0f, 0.75f, 0.45f};
+        spot.spot_inner = math::radians(25.0f);
+        spot.spot_outer = math::radians(38.0f);
+        spot.cast_shadows = true;
+        s.add_point_light(spot);
+        PointLight lamp;  // cool, low between the boxes
+        lamp.position = {1.1f, 0.9f, 2.4f};
+        lamp.radius = 7.0f;
+        lamp.intensity = 6.0f;
+        lamp.color = {0.5f, 0.7f, 1.0f};
+        lamp.cast_shadows = true;
+        s.add_point_light(lamp);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().local_shadow_tiles == 7);
+    check_golden("local_shadows", f);
+}

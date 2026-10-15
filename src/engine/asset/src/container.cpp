@@ -29,6 +29,7 @@ const char* chunk_type_name(ChunkType t) {
         case ChunkType::GameServicesCatalog: return "GameServicesCatalog";
         case ChunkType::SpriteSheet: return "SpriteSheet";
         case ChunkType::AnimGraph: return "AnimGraph";
+        case ChunkType::UiDocument: return "UiDocument";
     }
     return "ChunkType(?)";
 }

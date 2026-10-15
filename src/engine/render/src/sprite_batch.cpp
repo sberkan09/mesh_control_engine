@@ -276,31 +276,44 @@ void SpriteBatch::add_rect(const RectQuad& q) {
 void SpriteBatch::add_text(const Font& font, const TextLayout& layout, const TextPlacement& p) {
     if (!sets_.valid(font.set)) return;
     const u64 key = sort_key_2d(pass_, p.sort_layer, material(p.blend, font.set), p.sort_order);
-    const u32 color = pack_color_srgb(p.tint);
     const u32 packed = pack_layer_flags(0, sets_.coverage(font.set) ? vertex_flags::kCoverage : 0u);
     const f32 sy = p.y_down ? p.units_per_pixel : -p.units_per_pixel;
-    for (const GlyphQuad& g : layout.quads) {
-        ++stats_.submitted;
-        f32 x0 = p.origin.x + g.x0 * p.units_per_pixel, x1 = p.origin.x + g.x1 * p.units_per_pixel;
-        f32 yt = p.origin.y + g.y0 * sy, yb = p.origin.y + g.y1 * sy;
-        f32 u0 = g.u0, u1 = g.u1, v0 = g.v0, v1 = g.v1;
-        if (p.clip && (!clip_span(x0, x1, u0, u1, p.clip->min.x, p.clip->max.x) ||
-                       !clip_span(yt, yb, v0, v1, p.clip->min.y, p.clip->max.y))) {
-            ++stats_.culled;
-            continue;
+    // One copy of the glyphs, moved by (dx, dy) layout pixels (+y down).
+    auto emit = [&](f32 dx, f32 dy, const math::Color& tint) {
+        const u32 color = pack_color_srgb(tint);
+        const f32 ox = p.origin.x + dx * p.units_per_pixel, oy = p.origin.y + dy * sy;
+        for (const GlyphQuad& g : layout.quads) {
+            ++stats_.submitted;
+            f32 x0 = ox + g.x0 * p.units_per_pixel, x1 = ox + g.x1 * p.units_per_pixel;
+            f32 yt = oy + g.y0 * sy, yb = oy + g.y1 * sy;
+            f32 u0 = g.u0, u1 = g.u1, v0 = g.v0, v1 = g.v1;
+            if (p.clip && (!clip_span(x0, x1, u0, u1, p.clip->min.x, p.clip->max.x) ||
+                           !clip_span(yt, yb, v0, v1, p.clip->min.y, p.clip->max.y))) {
+                ++stats_.culled;
+                continue;
+            }
+            RawQuad q;
+            q.v[0] = {x0, yb, u0, v1, color, packed};
+            q.v[1] = {x1, yb, u1, v1, color, packed};
+            q.v[2] = {x1, yt, u1, v0, color, packed};
+            q.v[3] = {x0, yt, u0, v0, color, packed};
+            if (!visible(q.v)) {
+                ++stats_.culled;
+                continue;
+            }
+            push_item(key, ItemKind::Quad, static_cast<u32>(quads_.size()));
+            quads_.push_back(q);
         }
-        RawQuad q;
-        q.v[0] = {x0, yb, u0, v1, color, packed};
-        q.v[1] = {x1, yb, u1, v1, color, packed};
-        q.v[2] = {x1, yt, u1, v0, color, packed};
-        q.v[3] = {x0, yt, u0, v0, color, packed};
-        if (!visible(q.v)) {
-            ++stats_.culled;
-            continue;
-        }
-        push_item(key, ItemKind::Quad, static_cast<u32>(quads_.size()));
-        quads_.push_back(q);
+    };
+    // Shadow, outline, fill: the radix sort is stable, so equal keys draw in this order.
+    if ((p.shadow_px.x != 0.0f || p.shadow_px.y != 0.0f) && p.shadow_color.a > 0.0f)
+        emit(p.shadow_px.x, p.shadow_px.y, p.shadow_color);
+    if (p.outline_px > 0.0f && p.outline_color.a > 0.0f) {
+        const f32 w = p.outline_px, d = 0.70710678f * p.outline_px;
+        const f32 taps[8][2] = {{-w, 0}, {w, 0}, {0, -w}, {0, w}, {-d, -d}, {d, -d}, {-d, d}, {d, d}};
+        for (const auto& t : taps) emit(t[0], t[1], p.outline_color);
     }
+    emit(0.0f, 0.0f, p.tint);
 }
 
 void SpriteBatch::add_tilemap(u32 id, const TilemapBake& bake, vec2 offset) {

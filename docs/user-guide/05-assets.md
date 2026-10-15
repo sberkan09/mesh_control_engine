@@ -24,6 +24,7 @@ formats, which is what keeps the shipped game small and safe.
 | Particle preset | `.mcpart` | emitter parameters | `ParticleEmitter` |
 | Sequence | `.mcseq` | an action list | `SequencePlayer` |
 | Input map | `.mcinput` | action maps and bindings | the player's input (chapter 11) |
+| UI document | `.mcui` | a widget tree: anchors, per-state styles, layouts, the skin by reference | `ui::build_document` (chapter 12.2) |
 | Shader | `.vert.glsl`, `.frag.glsl`, `.comp.glsl` | validated GLSL, variants, SPIR-V reflection | custom shaders (not yet reachable from a project) |
 
 ## 5.2 Sidecars

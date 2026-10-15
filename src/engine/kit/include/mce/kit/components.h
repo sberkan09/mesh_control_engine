@@ -73,6 +73,11 @@ MCE_ENUM(TextAlign, Left, Center, Right)
 // `loc_key` the text is that key's string in the player's language (loc::Localization; `text`
 // when the project has no string tables). `wrap_width` > 0 breaks lines at whitespace past that
 // many metres, each line aligned by `align`.
+//
+// The look (M-UI-DATA step 4) is in fractions of `height`, so it scales with the text:
+// `letter_spacing` adds space between letters, `line_height` multiplies the font's line height,
+// `outline_width` > 0 rings every glyph in `outline_color`, and a non-zero `shadow_offset`
+// (+y up) drops a copy in `shadow_color` under the text.
 struct TextLabel {
     asset::AssetRef<asset::Font> font;
     FixedString<64> text;
@@ -84,10 +89,21 @@ struct TextLabel {
     u8 pad_ = 0;
     f32 wrap_width = 0.0f;
     FixedString<32> loc_key;
+    f32 letter_spacing = 0.0f;
+    f32 line_height = 1.0f;
+    math::Color outline_color = math::Color::black();
+    f32 outline_width = 0.0f;
+    math::Color shadow_color{0.0f, 0.0f, 0.0f, 0.6f};
+    u32 pad2_ = 0;  // keeps shadow_offset 8-aligned without hidden padding (state_hash hashes the bytes)
+    math::vec2 shadow_offset{};
 };
 MCE_COMPONENT(TextLabel, font, text, color, (height, Range{0.05f, 10}, Help{"glyph height in metres"}), order,
               (layer, Range{-100, 100}), align, (wrap_width, Range{0, 1000}, Help{"metres; 0 = one line"}),
-              (loc_key, Help{"string table key; the text in the player's language replaces 'text'"}))
+              (loc_key, Help{"string table key; the text in the player's language replaces 'text'"}),
+              (letter_spacing, Range{-0.5f, 2}, Help{"extra space between letters, a fraction of the height"}),
+              (line_height, Range{0.5f, 4}, Help{"multiplies the font's line height (wrapped and multi-line text)"}),
+              outline_color, (outline_width, Range{0, 0.5f}, Help{"outline thickness, a fraction of the height; 0 = none"}),
+              shadow_color, (shadow_offset, Help{"drop shadow offset, a fraction of the height (+y up); [0, 0] = none"}))
 
 // The view a player renders from: the first `primary` camera in ECS order, at its entity's
 // position (rotation about +Z included).
