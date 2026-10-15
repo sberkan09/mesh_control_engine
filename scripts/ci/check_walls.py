@@ -92,6 +92,14 @@ WALLS = [
         ["src/engine/net/src/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
+    # Sockets (M-NET2 step 6): the WebSocket transport's TCP layer is private to mce_net's sources,
+    # like ENet. Everything else reaches the network through net::Transport.
+    (
+        "socket wall",
+        re.compile(r"[<\"](sys/socket\.h|netinet/|arpa/inet\.h|netdb\.h|winsock2?\.h|ws2tcpip\.h|emscripten/websocket\.h)"),
+        ["src/engine/net/src/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
     # Editor MCP server (ADR-0027, N7): stdio is its only transport, no socket API in its code.
     (
         "MCP socket wall",

@@ -333,11 +333,15 @@ stage_determinism() {
 # virtual clock): every client mirrors the server, and the hash is the same across runs and builds.
 # M-NET2 step 5: rollback peers (and lockstep) over SimNetwork agree on every confirmed frame, and
 # rollbacks, stalls and the confirmed state hash are the same across runs and builds.
+# M-NET2 step 6: the same session through a relay room (net::RelayServer / RelayClient).
 stage_net_determinism() {
     python3 scripts/ci/determinism.py --runs 3 --args "-sim 1 -clients 4 -latency 75 -jitter 20 -loss 0.05 -ticks 600" \
         build/linux-gcc-debug/samples/net_headless/sample_net_headless \
         build/linux-gcc-release/samples/net_headless/sample_net_headless &&
         python3 scripts/ci/determinism.py --runs 3 --args "-sim 1 -clients 8 -latency 150 -jitter 40 -loss 0.15 -seed 3 -ticks 900" \
+            build/linux-gcc-debug/samples/net_headless/sample_net_headless \
+            build/linux-gcc-release/samples/net_headless/sample_net_headless &&
+        python3 scripts/ci/determinism.py --runs 3 --args "-sim 1 -relay 1 -clients 3 -latency 40 -jitter 10 -loss 0.05 -ticks 600" \
             build/linux-gcc-debug/samples/net_headless/sample_net_headless \
             build/linux-gcc-release/samples/net_headless/sample_net_headless &&
         python3 scripts/ci/determinism.py --runs 3 --args "-peers 4 -latency 100 -jitter 20 -loss 0.05 -frames 900" \

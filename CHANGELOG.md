@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Rooms through a relay, and WebSocket (SBA-87, M-NET2 step 6): `mce_relay` serves rooms with six-letter codes
+  over UDP and WebSocket at once, so players behind home routers and browsers can play together without opening
+  a port. `net::RelayClient` is a Transport whose peers are the room's members, so replication, prediction and
+  rollback run through it unchanged; `net::WebSocketHost` is a Transport over WebSocket (native TCP, or the
+  browser's in a web build). `sample_net_headless -sim 1 -relay 1` plays a session through a room. User guide 20.8.
 - Rollback netcode (SBA-86, M-NET2 step 5): `net::RollbackSession` runs the whole game on every peer and
   exchanges only inputs. It guesses late remote inputs, rolls back and replays when a guess was wrong, waits only
   past `max_prediction` (0 is lockstep), and compares state hashes of confirmed frames so a desync is reported at

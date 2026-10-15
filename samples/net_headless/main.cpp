@@ -19,12 +19,17 @@
 //                  1/60 s per tick, -latency/-jitter/-loss on every link, -seed for the rolls.
 //                  Nothing depends on the wall clock, so the printed hash is the same on every run
 //                  and in every build (scripts/ci/determinism.py, local_ci.sh's determinism stage).
+//   -sim 1 -relay 1  the same through a relay (M-NET2 step 6): the server hosts a room on a
+//                  net::RelayServer and the clients join it by its code, so every message takes two
+//                  hops (-latency applies to each). The game code is the same; only its Transport
+//                  is a net::RelayClient.
 //
 // After -ticks N it lets the last snapshot land and checks that every client's mirror equals the
 // server's replicated state bit for bit and that each player moved. Exit code 0 on success.
 //
 //   sample_net_headless -ticks 300
 //   sample_net_headless -sim 1 -clients 4 -latency 75 -jitter 20 -loss 0.05 -ticks 600
+//   sample_net_headless -sim 1 -relay 1 -clients 3 -latency 40 -jitter 10 -loss 0.05 -ticks 600
 
 #include <algorithm>
 #include <chrono>
@@ -53,6 +58,8 @@ MCE_CVAR(cv_seed, "seed", 1, "Seed of the latency, jitter and loss rolls", CVarF
 MCE_CVAR(cv_interp, "interp", true, "Clients draw snapshots interpolated through a jitter buffer (M-NET2 step 2)",
          CVarFlags::None);
 MCE_CVAR(cv_predict, "predict", true, "Clients predict their own player and reconcile it (M-NET2 step 3)",
+         CVarFlags::None);
+MCE_CVAR(cv_relay, "relay", false, "-sim: everybody meets in a room on a relay instead of connecting to the server (M-NET2 step 6)",
          CVarFlags::None);
 
 constexpr f64 kDt = 1.0 / 60.0;
@@ -333,6 +340,7 @@ struct Client {
 
     void receive() {
         for (net::Event ev; net->poll(ev);) {
+            if (ev.peer != server) continue;  // through a relay the other clients are peers too
             if (ev.kind == net::EventKind::Connected) {
                 connected = true;
                 const u8 join[1] = {kMsgJoin};
@@ -473,19 +481,51 @@ net::LinkConditions conditions_from_cvars() {
 // ---- over SimNetwork (deterministic) ------------------------------------------------------------
 
 int run_sim() {
-    const u32 count = static_cast<u32>(std::min(std::max(cv_clients.get_int(), 1), static_cast<i32>(kMaxClients)));
+    const bool relayed = cv_relay.get_bool();
+    // A room holds the host and up to 7 others.
+    const i32 most = relayed ? static_cast<i32>(net::kRelayMaxMembers - 1) : static_cast<i32>(kMaxClients);
+    const u32 count = static_cast<u32>(std::min(std::max(cv_clients.get_int(), 1), most));
     const net::LinkConditions link = conditions_from_cvars();
     net::SimNetwork network(static_cast<u64>(cv_seed.get_int()));
     network.set_default_conditions(link);
-    net::SimEndpoint& server_end = network.add_endpoint(kMaxClients, kChannels);
 
+    // Direct: the clients connect to the server's endpoint. Relayed: everybody connects to the
+    // relay's, the server makes a room and the clients join it once its code is known.
+    net::SimEndpoint* relay_end = relayed ? &network.add_endpoint(kMaxClients + 1, 2) : nullptr;
+    net::RelayServer relay;
+    relay.init();
+    if (relay_end) relay.add_transport(*relay_end);
+    net::RelayClient rooms[kMaxClients + 1];
+    net::RelayClientDesc room_desc;
+    room_desc.channels = kChannels;
+
+    net::SimEndpoint& server_end = network.add_endpoint(relayed ? 1 : kMaxClients, relayed ? 2 : kChannels);
     Server server;
-    server.start(server_end);
+    if (relayed) {
+        rooms[kMaxClients].start(server_end, server_end.connect(*relay_end), room_desc);
+        rooms[kMaxClients].create_room(count + 1);
+        server.start(rooms[kMaxClients]);
+    } else {
+        server.start(server_end);
+    }
     Client clients[kMaxClients];
     for (u32 c = 0; c < count; ++c) {
-        net::SimEndpoint& end = network.add_endpoint(1, kChannels);
-        clients[c].start(end, end.connect(server_end), hold_for(c));
+        net::SimEndpoint& end = network.add_endpoint(1, relayed ? 2 : kChannels);
+        if (relayed) {
+            rooms[c].start(end, end.connect(*relay_end), room_desc);
+            clients[c].start(rooms[c], 0, hold_for(c));  // the host is member 0
+        } else {
+            clients[c].start(end, end.connect(server_end), hold_for(c));
+        }
     }
+    auto run_relay = [&] {
+        if (!relayed) return;
+        relay.update();
+        const net::RelayClient& host = rooms[kMaxClients];
+        if (host.state() != net::RelayClient::State::InRoom) return;
+        for (u32 c = 0; c < count; ++c)
+            if (rooms[c].state() == net::RelayClient::State::Idle) rooms[c].join_room(host.room_code());
+    };
 
     net::NetStatsMeter meter;
     u64 clock_ms = 0;
@@ -493,12 +533,13 @@ int run_sim() {
     auto advance = [&](u64 tick) {
         const u64 next_ms = tick * 1000 / 60;
         network.advance(static_cast<u32>(next_ms - clock_ms));
-        meter.update(server_end, static_cast<f64>(next_ms - clock_ms) / 1000.0);
+        meter.update(*server.net, static_cast<f64>(next_ms - clock_ms) / 1000.0);
         clock_ms = next_ms;
     };
     const u64 ticks = static_cast<u64>(std::max(cv_ticks.get_int(), 1));
     u64 session_tick = 0;
     for (u64 i = 0; i < ticks; ++i) {
+        run_relay();
         server.step();
         for (u32 c = 0; c < count; ++c) clients[c].step();
         advance(++session_tick);
@@ -514,14 +555,23 @@ int run_sim() {
         return true;
     };
     for (u32 i = 0; i < 600 && !all_caught_up(); ++i) {
+        run_relay();
         server.receive();
         server.broadcast_snapshot();
         for (u32 c = 0; c < count; ++c) clients[c].step(false);  // resend unacknowledged inputs
         advance(++session_tick);
     }
 
-    std::printf("net_headless (sim): %u clients, latency %u ms, jitter %u ms, loss %.3f, seed %d, %u ticks\n", count,
-                link.latency_ms, link.jitter_ms, static_cast<double>(link.loss), cv_seed.get_int(), final_tick);
+    std::printf("net_headless (sim%s): %u clients, latency %u ms, jitter %u ms, loss %.3f, seed %d, %u ticks\n",
+                relayed ? ", through a relay" : "", count, link.latency_ms, link.jitter_ms, static_cast<double>(link.loss),
+                cv_seed.get_int(), final_tick);
+    if (relayed) {
+        const net::RelayStats& rs = relay.stats();
+        std::printf("  relay: room %.*s, %u members, %llu messages forwarded (%llu bytes), %llu dropped\n",
+                    static_cast<int>(rooms[kMaxClients].room_code().size()), rooms[kMaxClients].room_code().data(),
+                    rooms[kMaxClients].connected_count() + 1, static_cast<unsigned long long>(rs.forwarded),
+                    static_cast<unsigned long long>(rs.forwarded_bytes), static_cast<unsigned long long>(rs.dropped));
+    }
     const bool ok = check(server, clients, count);
     FixedString<160> stats;
     meter.format(stats);
@@ -556,6 +606,7 @@ int run_sim() {
     h.u64v(server.too_old);
     h.u64v(server_end.counters().messages_received);
     h.u64v(server_end.counters().messages_dropped);
+    if (relayed) h.u64v(relay.stats().forwarded);
     std::printf("net_headless: %s, hash %016llx\n", ok ? "OK" : "FAILED", static_cast<unsigned long long>(h.value()));
     return ok ? 0 : 1;
 }
