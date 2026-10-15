@@ -19,6 +19,7 @@
 
 #include "mce/containers/array.h"
 #include "mce/math/math.h"
+#include "mce/render/atmosphere.h"
 #include "mce/render/clusters.h"
 #include "mce/render/mesh.h"
 #include "mce/rhi/types.h"
@@ -73,6 +74,26 @@ struct Sky {
     // environment for the lighting while the dome shows something else); ~0u = the sky itself.
     u32 ibl_texture = ~0u;
     f32 ibl_texture_intensity = 1.0f;
+};
+
+// Volumetric fog (M-VISUAL 7): a froxel grid over the view (screen tiles × depth slices to
+// `max_distance`) of a height fog medium, lit by the sun through its shadow cascades (light shafts),
+// by the point and spot lights of the Forward+ clusters (with their local shadows) and by the
+// ambient, integrated front to back and applied to every surface and the sky in place of the exp²
+// Fog. Beyond `max_distance` the medium adds nothing more. Off draws the frame without it.
+struct Volumetrics {
+    bool enabled = false;
+    f32 density = 0.03f;                 // extinction per meter at `base_height` and below
+    f32 height_falloff = 0.15f;          // density × exp(-falloff · (y - base_height)) above it; 0 = uniform
+    f32 base_height = 0.0f;
+    math::vec3 albedo{0.9f, 0.9f, 0.9f}; // scattering / extinction (the fog's color under white light)
+    f32 anisotropy = 0.5f;               // Henyey-Greenstein g: > 0 glows toward the lights
+    f32 sun_intensity = 1.0f;            // scales of the light the fog scatters
+    f32 local_intensity = 1.0f;
+    f32 ambient_intensity = 1.0f;
+    f32 max_distance = 48.0f;            // meters of view depth the grid covers
+    u32 tile = 16;                       // screen pixels per froxel column (4..64)
+    u32 slices = 64;                     // depth slices (8..128)
 };
 
 // The post chain (FR-R3D-090): bloom -> ACES tonemap (exposure) -> FXAA. Toggleable per frame.
@@ -330,6 +351,17 @@ public:
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
     void set_lod(const LodSettings& lod) { lod_ = lod; }
+    // The physically based sky (M-VISUAL 7): with Atmosphere::enabled, build() tints the light and
+    // sets its ambient from it (see Atmosphere) and Forward3D draws its sky in place of Sky's.
+    void set_atmosphere(const Atmosphere& atmosphere) { atmosphere_ = atmosphere; }
+    const Atmosphere& atmosphere() const { return atmosphere_; }
+    // The unit vector toward the sun the atmosphere is computed for (quantized by
+    // Atmosphere::rebake_degrees) and the sun's irradiance above the air (π · color · intensity as
+    // set, before the tint). Valid after build() with the atmosphere enabled.
+    math::vec3 atmosphere_sun() const { return atmosphere_sun_; }
+    math::vec3 sun_irradiance() const { return sun_irradiance_; }
+    void set_volumetrics(const Volumetrics& volumetrics) { volumetrics_ = volumetrics; }
+    const Volumetrics& volumetrics() const { return volumetrics_; }
     const LodSettings& lod() const { return lod_; }
     void add_point_light(const PointLight& light);
     // Up to kMaxReflectionProbes; later ones are dropped (counted in stats().probes_dropped).
@@ -405,6 +437,10 @@ private:
     ClusterGridDesc cluster_grid_;
     LodSettings lod_;
     GiVolume gi_;
+    Atmosphere atmosphere_;
+    math::vec3 atmosphere_sun_{0.0f, 1.0f, 0.0f};
+    math::vec3 sun_irradiance_;
+    Volumetrics volumetrics_;
     Array<PointLight> point_lights_;
     mutable ClusterLights clusters_;  // assigned lazily by clusters()
     Cascade cascades_[kMaxCascades];

@@ -19,6 +19,7 @@
 #include "mce/core.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
+#include "mce/render/quality.h"
 #include "mce/render/renderer.h"
 #include "mce/rhi/default_device.h"
 
@@ -1395,5 +1396,218 @@ TEST_CASE("render3d_gl: a volume exported as RGBM and loaded back lights like th
     updates = true;  // the higher tiers start from the bake and keep rolling
     f.render(0.0f, true, scene);
     CHECK(fw.last_stats().gi_probes == 8);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+// ---- atmosphere and volumetric fog (M-VISUAL 7) --------------------------------------------------
+
+namespace {
+
+Rgb pixel_at(const Fixture3D& f, u32 x, u32 y) {
+    const usize i = (usize(y) * kW + x) * 4;
+    return {f.pixels[i], f.pixels[i + 1], f.pixels[i + 2]};
+}
+
+void atmosphere_scene(Scene3D& s, f32 hours) {
+    DirectionalLight sun;
+    sun.direction = sun_direction_at(hours, 60.0f, 20.0f);
+    sun.color = {1, 1, 1};
+    sun.intensity = 3.0f;
+    s.set_light(sun);
+    Atmosphere a;
+    a.enabled = true;
+    s.set_atmosphere(a);
+}
+
+// Night: no sun, ambient or sky, so whatever the fog shows is light it scattered.
+void night_scene(Scene3D& s) {
+    DirectionalLight sun;
+    sun.intensity = 0.0f;
+    sun.ambient_sky = sun.ambient_ground = {0, 0, 0};
+    sun.shadows = false;
+    s.set_light(sun);
+    Sky sky;
+    sky.enabled = false;
+    s.set_sky(sky);
+    Fog fog;
+    fog.color = {0, 0, 0};
+    s.set_fog(fog);
+}
+
+Volumetrics dense_fog(f32 density = 0.12f) {
+    Volumetrics v;
+    v.enabled = true;
+    v.density = density;
+    v.height_falloff = 0.0f;
+    v.max_distance = 24.0f;
+    return v;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: atmosphere and volumetrics off draw today's frame; a run in between and Low leave no trace") {
+    Fixture3D f;
+    const Forward3D& fw = f.renderer.forward_3d();
+    f.render(0.02f);
+    const Array<u8> off = f.pixels;
+    CHECK_FALSE(fw.last_stats().atmosphere);
+    CHECK_FALSE(fw.last_stats().volumetrics);
+    f.render(0.02f, true, [](Scene3D& s) {
+        Atmosphere a;
+        a.enabled = true;
+        s.set_atmosphere(a);
+        s.set_volumetrics(dense_fog());
+    });
+    CHECK(fw.last_stats().atmosphere);
+    CHECK(fw.last_stats().volumetrics);
+    CHECK(fw.last_stats().froxels > 0);
+    CHECK(differing_bytes(f.pixels, off) > 0);
+    f.render(0.02f);
+    CHECK(differing_bytes(f.pixels, off) == 0);
+    // The Low tier turns the volumetric fog off: the exp² fog of the same scene.
+    f.render(0.02f, true, [](Scene3D& s) {
+        Volumetrics v = dense_fog();
+        apply_quality(quality_settings(QualityTier::Low), v);
+        s.set_volumetrics(v);
+    });
+    CHECK_FALSE(fw.last_stats().volumetrics);
+    CHECK(differing_bytes(f.pixels, off) == 0);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: the atmosphere's sun goes orange at sunset; its sky is blue at noon") {
+    Fixture3D f;
+    f.pitch_deg = 5.0f;  // the top rows are sky
+    f.render(0.0f, true, [](Scene3D& s) { atmosphere_scene(s, 12.0f); });
+    const Rgb noon_ground = f.at_world({-2.0f, 0, 1.0f});
+    const Rgb noon_sky = pixel_at(f, kW / 2, 2);
+    f.render(0.0f, true, [](Scene3D& s) { atmosphere_scene(s, 17.6f); });
+    const Rgb dusk_ground = f.at_world({-2.0f, 0, 1.0f});
+    INFO("noon ground " << noon_ground.r << "," << noon_ground.g << "," << noon_ground.b << " sky " << noon_sky.r
+                        << "," << noon_sky.g << "," << noon_sky.b << "; dusk ground " << dusk_ground.r << ","
+                        << dusk_ground.g << "," << dusk_ground.b);
+    CHECK(noon_sky.b > noon_sky.r + 10);
+    CHECK(noon_ground.luma() > dusk_ground.luma());
+    const f32 noon_warmth = f32(noon_ground.r + 1) / f32(noon_ground.b + 1);
+    const f32 dusk_warmth = f32(dusk_ground.r + 1) / f32(dusk_ground.b + 1);
+    CHECK(dusk_warmth > noon_warmth * 1.3f);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: the atmosphere bakes once per sun position, and its IBL with it") {
+    Fixture3D f;
+    const Forward3D& fw = f.renderer.forward_3d();
+    f32 hours = 10.0f;
+    const auto scene = [&](Scene3D& s) {
+        atmosphere_scene(s, hours);
+        Sky sky;
+        sky.ibl = true;  // the atmosphere is the IBL's source
+        s.set_sky(sky);
+    };
+    f.render(0.0f, true, scene);
+    CHECK(fw.last_stats().atmosphere_baked);
+    CHECK(fw.last_stats().ibl_baked);
+    f.render(0.0f, true, scene);
+    CHECK(fw.last_stats().atmosphere);
+    CHECK_FALSE(fw.last_stats().atmosphere_baked);
+    CHECK_FALSE(fw.last_stats().ibl_baked);
+    hours = 10.001f;  // well under rebake_degrees: the same quantized sun
+    f.render(0.0f, true, scene);
+    CHECK_FALSE(fw.last_stats().atmosphere_baked);
+    hours = 11.0f;
+    f.render(0.0f, true, scene);
+    CHECK(fw.last_stats().atmosphere_baked);
+    CHECK(fw.last_stats().ibl_baked);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: volumetric fog scatters forward: brighter looking into a low sun") {
+    Fixture3D f;
+    // The camera looks toward -z; a low sun in front of it (its light travels +z) or behind it.
+    const auto scene = [](f32 g, f32 travel_z) {
+        return [=](Scene3D& s) {
+            DirectionalLight sun;
+            sun.direction = math::normalize(vec3{0.0f, -0.25f, travel_z});
+            sun.ambient_sky = sun.ambient_ground = {0.02f, 0.02f, 0.02f};
+            s.set_light(sun);
+            Volumetrics v = dense_fog(0.08f);
+            v.anisotropy = g;
+            s.set_volumetrics(v);
+        };
+    };
+    f.render(0.0f, true, scene(0.7f, 1.0f));
+    const int toward_forward = f.at_world({0, 0, -4.0f}).luma();
+    f.render(0.0f, true, scene(-0.7f, 1.0f));
+    const int toward_back = f.at_world({0, 0, -4.0f}).luma();
+    f.render(0.0f, true, scene(0.7f, -1.0f));
+    const int behind_forward = f.at_world({0, 0, -4.0f}).luma();
+    f.render(0.0f, true, scene(-0.7f, -1.0f));
+    const int behind_back = f.at_world({0, 0, -4.0f}).luma();
+    INFO("toward sun g+ " << toward_forward << " g- " << toward_back << "; sun behind g+ " << behind_forward
+                          << " g- " << behind_back);
+    CHECK(toward_forward > toward_back + 8);
+    CHECK(behind_back > behind_forward + 8);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a roof's shadow cuts a dark shaft out of the sunlit fog") {
+    Fixture3D f;
+    f.pitch_deg = 5.0f;  // the top rows see past the ground: nothing but fog in front of the clear
+    // A slab high above the +x half, out of view: its shadow is a slanted column through the fog
+    // the right half of the screen looks through. Without its shadow the fog there is sunlit.
+    bool roof_shadow = true;
+    const auto scene = [&](Scene3D& s) {
+        night_scene(s);
+        DirectionalLight sun;
+        sun.direction = {-0.5f, -1.0f, -0.3f};
+        sun.ambient_sky = sun.ambient_ground = {0, 0, 0};
+        s.set_light(sun);
+        Sky sky = constant_sky(0.0f, false);  // a black dome: the fog is applied over the sky pass
+        sky.sun_intensity = 0.0f;
+        s.set_sky(sky);
+        MeshInstance roof;
+        roof.mesh = 2;
+        roof.world = math::translation(vec3{5.0f, 6.0f, 1.0f}) * math::scaling(vec3{0.5f, 1.0f, 0.6f});
+        roof.cast_shadows = roof_shadow;
+        s.add(roof);
+        s.set_volumetrics(dense_fog(0.1f));
+    };
+    f.render(0.0f, true, scene);
+    const Rgb shaft = pixel_at(f, kW * 3 / 4, 4), open = pixel_at(f, kW / 8, 4);
+    roof_shadow = false;
+    f.render(0.0f, true, scene);
+    const Rgb shaft_lit = pixel_at(f, kW * 3 / 4, 4), open_lit = pixel_at(f, kW / 8, 4);
+    INFO("under the roof " << shaft.luma() << " (" << shaft_lit.luma() << " unshadowed), open " << open.luma() << " ("
+                           << open_lit.luma() << ")");
+    CHECK(shaft_lit.luma() > shaft.luma() + 10);
+    CHECK(std::abs(open_lit.luma() - open.luma()) <= 2);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a point light glows in the volumetric fog around it") {
+    Fixture3D f;
+    bool light = true;
+    const auto scene = [&](Scene3D& s) {
+        night_scene(s);
+        if (light) {
+            PointLight l;
+            l.position = {2.0f, 1.3f, 2.0f};
+            l.radius = 1.2f;  // short of the ground
+            l.color = {1.0f, 0.5f, 0.2f};
+            l.intensity = 2.0f;
+            s.add_point_light(l);
+        }
+        s.set_volumetrics(dense_fog(0.15f));
+    };
+    f.render(0.0f, false, scene);
+    const Rgb glow = f.at_world({2.0f, 1.3f, 2.0f});
+    const Rgb away = f.at_world({-2.0f, 1.3f, 2.0f});
+    light = false;
+    f.render(0.0f, false, scene);
+    const Rgb dark = f.at_world({2.0f, 1.3f, 2.0f});
+    INFO("glow " << glow.r << "," << glow.g << "," << glow.b << " away " << away.luma() << " dark " << dark.luma());
+    CHECK(glow.luma() > dark.luma() + 20);
+    CHECK(glow.luma() > away.luma() + 15);
+    CHECK(glow.r > glow.b);
     CHECK(f.device->validation_error_count() == 0);
 }

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "mce/convar.h"
 #include "mce/log.h"
@@ -26,6 +27,8 @@ MCE_CVAR(cv_taa, "r.taa", true,
 MCE_CVAR(cv_gi, "r.gi", true,
          "Irradiance-volume global illumination for scenes that ask for it (GiVolume::enabled; off = the sky's ambient)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_volumetrics, "r.volumetrics", true,
+         "Volumetric fog for scenes that ask for it (Volumetrics::enabled; off = the exp² fog)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_local_shadows, "r.local_shadows", true,
          "Shadow maps for spot and point lights that ask for them (PointLight::cast_shadows; off = unshadowed)",
          CVarFlags::None);
@@ -58,6 +61,11 @@ struct Forward3DPassU {
     vec4 gi_min;
     vec4 gi_max;
     vec4 gi_counts;
+    vec4 vol;         // volumetric fog (M-VISUAL 7): on, slices, max distance, log2(1 + max distance / kVolD0)
+    vec4 vol_grid;    // columns, rows, atlas tiles across, down
+    vec4 vol_medium;  // density, height falloff, base height, anisotropy
+    vec4 vol_albedo;  // rgb, w: sun scale
+    vec4 vol_scale;   // x: local light scale, y: ambient scale
 };
 
 namespace {
@@ -128,7 +136,7 @@ struct PostU {
     vec4 params;  // x: threshold, y: knee, z: first pass, w: exposure
 };
 
-enum Stage : u32 { kTsBegin, kTsClusters, kTsSsao, kTsShadow, kTsGi, kTsMain, kTsResolve, kTsTaa, kTsBloom, kTsTonemap, kTsFxaa };
+enum Stage : u32 { kTsBegin, kTsClusters, kTsSsao, kTsShadow, kTsGi, kTsVol, kTsMain, kTsResolve, kTsTaa, kTsBloom, kTsTonemap, kTsFxaa };
 
 struct VelPassU {  // kVelocityVS
     mat4 jittered;
@@ -158,19 +166,45 @@ f32 halton(u32 i, u32 base) {
     return r;
 }
 
-// The sky's PassU members; returns the texture to bind at bank::kSky.
-rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& device, const Sky& sky, PassU& pu) {
+// The sky's PassU members; returns the texture to bind at bank::kSky. A non-null `atmosphere` (the
+// atmosphere's baked sky, M-VISUAL 7) stands in for the gradient and the sky texture.
+rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& device, const Sky& sky, PassU& pu,
+                              rhi::TextureHandle atmosphere = {}) {
     rhi::TextureHandle sky_tex = textures.white();
     f32 sky_lod = -1.0f;
-    if (sky.texture != ~0u && textures.contains(sky.texture)) {
+    if (!atmosphere.is_null()) {
+        sky_tex = atmosphere;
+        sky_lod = f32(max<u32>(device.texture_desc(sky_tex).mip_levels, 1u) - 1u);
+    } else if (sky.texture != ~0u && textures.contains(sky.texture)) {
         sky_tex = textures.get(sky.texture);
         sky_lod = f32(max<u32>(device.texture_desc(sky_tex).mip_levels, 1u) - 1u);
     }
     pu.sky_zenith = vec4(sky.zenith, sky.enabled ? 1.0f : 0.0f);
     pu.sky_horizon = vec4(sky.horizon, sky.specular_ambient);
     pu.sky_ground = vec4(sky.ground, sky_lod);
-    pu.sun = {sky.sun_size, sky.sun_intensity, sky.texture_intensity, sky.texture_additive ? 1.0f : 0.0f};
+    if (atmosphere.is_null())
+        pu.sun = {sky.sun_size, sky.sun_intensity, sky.texture_intensity, sky.texture_additive ? 1.0f : 0.0f};
+    else
+        pu.sun = {sky.sun_size, sky.sun_intensity, 1.0f, 0.0f};
     return sky_tex;
+}
+
+// IEEE half from a finite float, round to nearest (the atmosphere's RGBA16F upload).
+u16 to_half(f32 f) {
+    u32 x;
+    std::memcpy(&x, &f, 4);
+    const u32 sign = (x >> 16) & 0x8000u;
+    const i32 e = i32((x >> 23) & 0xFFu) - 127 + 15;
+    u32 m = x & 0x7FFFFFu;
+    if (e >= 31) return u16(sign | 0x7BFFu);  // clamp to the largest finite half
+    if (e <= 0) {
+        if (e < -10) return u16(sign);
+        m |= 0x800000u;
+        const u32 shift = u32(14 - e);
+        return u16(sign | ((m + (1u << (shift - 1))) >> shift));
+    }
+    const u32 h = sign | (u32(e) << 10) | (m >> 13);
+    return u16(h + ((m >> 12) & 1u));  // rounding may carry into the exponent: still correct
 }
 
 // What the IBL bake reads from the sky (the radiance function sky_radiance() evaluates).
@@ -444,6 +478,14 @@ ResultV Forward3D::create_pipelines() {
         fs.debug_name = "gi.decode";
         MCE_TRY_ASSIGN(gi_decode_, device_->create_pipeline(fs));
     }
+    if (desc_.volumetrics && cv_volumetrics.get_bool()) {
+        fs.fragment_shader = {kVolInjectFS, "vol_inject.frag"};
+        fs.debug_name = "vol.inject";
+        MCE_TRY_ASSIGN(vol_inject_, device_->create_pipeline(fs));
+        fs.fragment_shader = {kVolIntegrateFS, "vol_integrate.frag"};
+        fs.debug_name = "vol.integrate";
+        MCE_TRY_ASSIGN(vol_integrate_, device_->create_pipeline(fs));
+    }
     if (desc_.ibl && cv_ibl.get_bool()) {
         fs.fragment_shader = {kIblPrefilterFS, "ibl_prefilter.frag"};
         fs.debug_name = "ibl.prefilter";
@@ -537,13 +579,14 @@ void Forward3D::shutdown() {
           &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
           &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &velocity_pipe_, &velocity_skinned_,
-          &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_}) {
+          &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
     for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_, &ao_off_,
-                                  &gi_volume_, &gi_faces_, &gi_faces_depth_, &gi_export_})
+                                  &gi_volume_, &gi_faces_, &gi_faces_depth_, &gi_export_, &atmo_tex_, &vol_media_, &vol_light_})
         destroy(*device_, *t);
+    atmo_key_ = 0;
     gi_size_ = {};
     gi_face_layers_ = gi_shadow_layer_ = gi_cursor_ = gi_filled_ = 0;
     gi_key_ = 0;
@@ -577,7 +620,8 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     t.ssao = ts.ms(b + kTsClusters, b + kTsSsao);
     t.shadow = ts.ms(b + kTsSsao, b + kTsShadow);
     t.gi = ts.ms(b + kTsShadow, b + kTsGi);
-    t.main = ts.ms(b + kTsGi, b + kTsMain);
+    t.volumetrics = ts.ms(b + kTsGi, b + kTsVol);
+    t.main = ts.ms(b + kTsVol, b + kTsMain);
     t.resolve = ts.ms(b + kTsMain, b + kTsResolve);
     t.taa = ts.ms(b + kTsResolve, b + kTsTaa);
     t.bloom = ts.ms(b + kTsTaa, b + kTsBloom);
@@ -619,6 +663,7 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     const Span<const mat4> palette = scene.joint_palette();
     if (!palette.empty()) cmd.set_storage_data(rhi::bank::kJointPalette, std::as_bytes(palette));
     stats_.joints = static_cast<u32>(palette.size());
+    update_atmosphere(scene);   // CPU: re-bakes the sky texture when the sun or the air changed
     record_ibl(cmd, scene);     // rare (sky changes), so outside the per-stage budget
     record_probes(cmd, scene);  // rare too (probe placed, moved or version bumped)
     // The volume's sun fit takes one more shadow-map layer, added once a scene has a volume.
@@ -644,6 +689,8 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     timestamp(cmd, kTsShadow);
     record_gi(cmd, scene);
     timestamp(cmd, kTsGi);
+    record_volumetrics(cmd, scene);
+    timestamp(cmd, kTsVol);
     record_main(cmd, scene);
     timestamp(cmd, kTsMain);
     if (desc_.msaa > 1) cmd.resolve(hdr_msaa_, hdr_);
@@ -691,6 +738,64 @@ void Forward3D::record_clusters(rhi::CommandBuffer& cmd, const Scene3D& scene) {
 }
 
 // ---- image-based lighting (M-VISUAL 2): bakes the sky's IBL textures when the sky changed
+void Forward3D::update_atmosphere(const Scene3D& scene) {
+    const Atmosphere& a = scene.atmosphere();
+    atmo_on_ = a.enabled;
+    if (!a.enabled) return;
+    stats_.atmosphere = true;
+    // What the bake depends on: the air, the (quantized) sun and its irradiance above the air.
+    const vec3 sun = scene.atmosphere_sun(), e = scene.sun_irradiance();
+    const f32 key_f[16] = {a.intensity, a.rayleigh, a.mie, a.mie_anisotropy, a.ozone, a.ground_albedo.x, a.ground_albedo.y,
+                           a.ground_albedo.z, a.altitude, sun.x, sun.y, sun.z, e.x, e.y, e.z, 0.0f};
+    u64 key = 1469598103934665603ull;
+    const auto* b = reinterpret_cast<const u8*>(key_f);
+    for (usize i = 0; i < sizeof(key_f); ++i) key = (key ^ b[i]) * 1099511628211ull;
+    key |= 1u;
+    if (key == atmo_key_ && !atmo_tex_.is_null()) return;
+    constexpr u32 kW = 256, kH = 128, kMips = 8;  // 256×128 down to 2×1
+    Array<f32> img(mem::heap());
+    img.resize(usize(kW) * kH * 4);
+    bake_atmosphere_sky(a, sun, kW, kH, img.span());
+    for (usize i = 0; i < img.size(); i += 4) {  // radiance per unit irradiance -> radiance
+        img[i] *= e.x;
+        img[i + 1] *= e.y;
+        img[i + 2] *= e.z;
+    }
+    // A new texture per bake: the IBL key follows the handle, so the sky's lighting re-bakes too.
+    destroy(*device_, atmo_tex_);
+    rhi::TextureDesc d;
+    d.format = rhi::TextureFormat::RGBA16F;
+    d.usage = rhi::TextureUsage::Sampled;
+    d.size = {kW, kH};
+    d.mip_levels = kMips;
+    d.dimension = rhi::TextureDimension::Tex2DArray;
+    d.array_layers = 1;
+    d.debug_name = "mce.3d.atmosphere_sky";
+    atmo_tex_ = device_->create_texture(d);
+    Array<u16> half(mem::heap());
+    u32 w = kW, h = kH;
+    for (u32 mip = 0; mip < kMips; ++mip) {
+        if (mip > 0) {  // 2×2 box down from the level above, in place
+            const u32 pw = w;
+            w = max(w / 2, 1u);
+            h = max(h / 2, 1u);
+            for (u32 y = 0; y < h; ++y)
+                for (u32 x = 0; x < w; ++x)
+                    for (u32 c = 0; c < 4; ++c)
+                        img[(usize(y) * w + x) * 4 + c] =
+                            0.25f * (img[(usize(2 * y) * pw + 2 * x) * 4 + c] + img[(usize(2 * y) * pw + 2 * x + 1) * 4 + c] +
+                                     img[(usize(2 * y + 1) * pw + 2 * x) * 4 + c] + img[(usize(2 * y + 1) * pw + 2 * x + 1) * 4 + c]);
+        }
+        half.resize(usize(w) * h * 4);
+        for (usize i = 0; i < half.size(); ++i) half[i] = to_half(img[i]);
+        rhi::TextureRegion r;
+        r.mip = mip;
+        device_->update_texture(atmo_tex_, r, std::as_bytes(half.span()));
+    }
+    atmo_key_ = key;
+    stats_.atmosphere_baked = true;
+}
+
 void Forward3D::record_ibl(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const Sky& sky = scene.sky();
     if (!sky.ibl || ibl_prefilter_.is_null()) return;
@@ -746,7 +851,7 @@ void Forward3D::record_ibl(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         source.texture_additive = false;
     }
     PassU pu{};
-    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, source, pu);
+    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, source, pu, ibl_own_source_ ? rhi::TextureHandle{} : sky_texture_override());
     const u64 key = sky_radiance_key(source, sky_tex, pu.sky_ground.w);
     if (key != ibl_key_) {
         cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
@@ -837,7 +942,7 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     pu.amb_ground = vec4(light.ambient_ground, 0.0f);
     pu.fog = vec4(fog.color, fog.density);
     for (mat4& c : pu.cascade) c = mat4::identity();
-    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu);
+    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu, sky_texture_override());
     pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), ibl_own_source_ ? 1.0f : 0.0f};  // the sky's IBL, no probes
     static constexpr ClusterRange kNoRange{0, 0};
     static constexpr GpuPointLight kNoLight{};
@@ -1136,27 +1241,77 @@ void Forward3D::record_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& sce
 }
 
 // ---- 2. Forward+ PBR, sky, blended
-void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
-    cmd.push_debug_scope("forward");
-    const Fog& fog = scene.fog();
-    const Sky& sky = scene.sky();
-    const View3D& view = scene.view();
-    rhi::PassAttachment color;
-    color.texture = desc_.msaa > 1 ? hdr_msaa_ : hdr_;
-    color.clear.color[0] = fog.color.x;
-    color.clear.color[1] = fog.color.y;
-    color.clear.color[2] = fog.color.z;
-    color.clear.color[3] = 1.0f;
-    rhi::PassAttachment depth;
-    depth.texture = depth_;
-    depth.clear.depth = 1.0f;
-    depth.store = rhi::StoreOp::DontCare;
-    rhi::RenderPassDesc mp;
-    mp.colors = Span<const rhi::PassAttachment>(&color, 1);
-    mp.depth = depth;
-    mp.debug_name = "forward";
-    cmd.begin_pass(mp);
+// The froxel grid of this frame's 3D size (columns × rows of `tile` pixels, `slices` deep) in an
+// atlas of a tile per slice, kVolAtlasCols across.
+void Forward3D::vol_params(const Scene3D& scene, PassU& pu) const {
+    const Volumetrics& v = scene.volumetrics();
+    const f32 far = max(v.max_distance, 1.0f);
+    pu.vol = {1.0f, f32(vol_slices_), far, std::log2(1.0f + far / 1.0f)};  // kVolD0 = 1 m (shaders3d.h)
+    pu.vol_grid = {f32(vol_grid_.width), f32(vol_grid_.height), f32(kVolAtlasCols), f32((vol_slices_ + kVolAtlasCols - 1) / kVolAtlasCols)};
+    pu.vol_medium = {max(v.density, 0.0f), max(v.height_falloff, 0.0f), v.base_height, clamp(v.anisotropy, -0.95f, 0.95f)};
+    pu.vol_albedo = vec4(v.albedo, max(v.sun_intensity, 0.0f));
+    pu.vol_scale = {max(v.local_intensity, 0.0f), max(v.ambient_intensity, 0.0f), 0.0f, 0.0f};
+}
 
+// ---- 1c. volumetric fog (M-VISUAL 7): the medium and its light at every froxel (the sun through
+// its cascades, the clusters' lights, the ambient), then integrated front to back per column.
+void Forward3D::record_volumetrics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const Volumetrics& v = scene.volumetrics();
+    if (!v.enabled || vol_inject_.is_null()) return;
+    const u32 tile = clamp(v.tile, 4u, 64u);
+    vol_slices_ = clamp(v.slices, 8u, 128u);
+    vol_grid_ = {(size_.width + tile - 1) / tile, (size_.height + tile - 1) / tile};
+    const rhi::Extent2D atlas{vol_grid_.width * kVolAtlasCols, vol_grid_.height * ((vol_slices_ + kVolAtlasCols - 1) / kVolAtlasCols)};
+    if (vol_media_.is_null() || !(device_->texture_size(vol_media_) == atlas)) {
+        destroy(*device_, vol_media_);
+        destroy(*device_, vol_light_);
+        rhi::TextureDesc d;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.size = atlas;
+        d.debug_name = "mce.3d.vol_media";
+        vol_media_ = device_->create_texture(d);
+        d.debug_name = "mce.3d.vol_light";
+        vol_light_ = device_->create_texture(d);
+    }
+    stats_.volumetrics = true;
+    stats_.froxels = vol_grid_.width * vol_grid_.height * vol_slices_;
+    cmd.push_debug_scope("volumetrics");
+    rhi::PassAttachment out;
+    out.texture = vol_media_;
+    out.load = rhi::LoadOp::DontCare;
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&out, 1);
+    p.debug_name = "vol.inject";
+    cmd.begin_pass(p);
+    bind_main_state(cmd, scene, false);  // the main pass's view, light, cascades and lists
+    cmd.bind_pipeline(vol_inject_);
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    out.texture = vol_light_;
+    p.debug_name = "vol.integrate";
+    cmd.begin_pass(p);
+    FrameU fu{};  // the view's rays (the integration reads nothing else of the main pass's state)
+    fu.view_proj = jitter_ * scene.view().view_proj;
+    fu.view = scene.view().view;
+    fu.inv_view_proj = inverse(fu.view_proj);
+    fu.camera_pos = vec4(scene.view().position, 0.0f);
+    PassU pu{};
+    vol_params(scene, pu);
+    cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
+    cmd.bind_pipeline(vol_integrate_);
+    cmd.bind_texture(rhi::bank::kFirstSampler, vol_media_, point_sampler_);
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+}
+
+// The main pass's FrameU, PassU, textures and Forward+ lists (the volumetric fog's injection reads the
+// same, `apply_fog` = false while the fog is still being made).
+void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, bool apply_fog) {
+    const Fog& fog = scene.fog();
+    const View3D& view = scene.view();
     // The GPU path never runs the CPU assignment: the setup (pool + grid) is all the frame reads.
     const ClusterLights& cl = stats_.gpu_clusters ? scene.cluster_setup() : scene.clusters();
     const PostFx& post = scene.post();
@@ -1194,6 +1349,12 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         }
     }
     const rhi::TextureHandle sky_tex = bind_ambient(cmd, scene, true, stats_.gi, pu);
+    // Volumetric fog: the integrated froxels (record_volumetrics() filled them), or a stand-in.
+    if (stats_.volumetrics) {
+        vol_params(scene, pu);
+        pu.vol.x = apply_fog ? 1.0f : 0.0f;  // the injection reads the grid, not the fog it is making
+    }
+    cmd.bind_texture(rhi::bank::kVolumetrics, stats_.volumetrics && apply_fog ? vol_light_ : ao_off_, linear_clamp_);
     // SSAO: the blurred half-size visibility, upsampled bilinearly; a stand-in fills the slot when off.
     pu.ao = {stats_.ssao ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
     cmd.bind_texture(rhi::bank::kAo, stats_.ssao ? ao_a_ : ao_off_, linear_clamp_);
@@ -1216,6 +1377,30 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     cmd.set_storage_data(rhi::bank::kLightPool, cl.lights().empty() ? rhi::as_bytes(kNoLight) : std::as_bytes(cl.lights()));
     stats_.point_lights = static_cast<u32>(cl.lights().size());
     stats_.light_indices = static_cast<u32>(cl.indices().size());
+
+}
+
+void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    cmd.push_debug_scope("forward");
+    const Fog& fog = scene.fog();
+    const Sky& sky = scene.sky();
+    rhi::PassAttachment color;
+    color.texture = desc_.msaa > 1 ? hdr_msaa_ : hdr_;
+    color.clear.color[0] = fog.color.x;
+    color.clear.color[1] = fog.color.y;
+    color.clear.color[2] = fog.color.z;
+    color.clear.color[3] = 1.0f;
+    rhi::PassAttachment depth;
+    depth.texture = depth_;
+    depth.clear.depth = 1.0f;
+    depth.store = rhi::StoreOp::DontCare;
+    rhi::RenderPassDesc mp;
+    mp.colors = Span<const rhi::PassAttachment>(&color, 1);
+    mp.depth = depth;
+    mp.debug_name = "forward";
+    cmd.begin_pass(mp);
+
+    bind_main_state(cmd, scene, true);
 
     DrawCache cache;
     const Span<const Scene3D::Draw> draws = scene.draws();
@@ -1544,7 +1729,7 @@ bool Forward3D::record_gi_export(rhi::CommandBuffer& cmd) {
 
 rhi::TextureHandle Forward3D::bind_ambient(rhi::CommandBuffer& cmd, const Scene3D& scene, bool probes, bool gi_on, PassU& pu) {
     const Sky& sky = scene.sky();
-    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu);
+    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu, sky_texture_override());
     if (stats_.ibl) {
         pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), ibl_own_source_ ? 1.0f : 0.0f};
         cmd.bind_texture(rhi::bank::kIblEnv, ibl_env_, env_sampler_);
@@ -1580,6 +1765,7 @@ rhi::TextureHandle Forward3D::bind_ambient(rhi::CommandBuffer& cmd, const Scene3
         cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_off_2d_, linear_clamp_);
         cmd.bind_texture(rhi::bank::kIblSh, ibl_off_2d_, point_sampler_);
     }
+    cmd.bind_texture(rhi::bank::kVolumetrics, ao_off_, linear_clamp_);  // the main pass binds the fog over it
     // The irradiance volume (record_gi() filled it this frame or before), or a stand-in.
     if (gi_on) {
         const GiVolume& gi = scene.gi_volume();

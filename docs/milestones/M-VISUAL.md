@@ -15,7 +15,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | 4 | Local-light shadows | SBA-9 | done: GL and SDL GPU (gated + golden), Metal untested; real-GPU budget on the Mac/device session |
 | 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | done: GL and SDL GPU (gated + goldens), High tier on TAA; Metal untested; real-GPU budget on the Mac/device session |
 | 6 | Global illumination (irradiance-probe volume) | SBA-11 | done: GL and SDL GPU (gated + goldens), editor bake, Low tier on the bake; Metal untested; real-GPU budget on the Mac/device session |
-| 7 | Atmosphere and volumetrics | SBA-12 | — |
+| 7 | Atmosphere and volumetrics | SBA-12 | done: GL and SDL GPU (gated + goldens), Low tier without the volumetric fog; Metal untested; real-GPU budget on the Mac/device session |
 | 8 | Post completion | SBA-13 | — |
 | 9 | Scale (GPU culling, foliage, decals, GPU particles) | SBA-14 | — |
 | demo | High-profile sample side by side | SBA-15 | — |
@@ -402,3 +402,58 @@ volume). Capture frames stay at about 450 KiB of the 1 MiB uniform ring (the fra
 them (no probe relocation or visibility term yet): keep the grid's planes off walls. Diffuse only; reflections stay
 with the sky and the reflection probes. Lightmaps were not needed for the step's gates. Metal is untested; Metal
 pixels and real-GPU numbers belong to the Mac/device session.
+
+## Step 7 — atmosphere and volumetric fog
+
+**API.** `Scene3D::set_atmosphere(Atmosphere)` and `Scene3D::set_volumetrics(Volumetrics)`, both off by default.
+With both off the frame is bit-identical to before. Off switches: `enabled = false`; for the fog also
+`Forward3DDesc::volumetrics = false` (no pipelines), `-r.volumetrics 0` and the Low quality tier
+(`apply_quality(q, Volumetrics&)`: Low turns it off, Medium coarsens the grid to 16 px tiles × 48 slices, High
+allows 8 px × 64). Kit: `Environment3D.atmosphere` (`atmosphere_intensity`, `atmosphere_haze`), `time_of_day`
+(hours on a simple day's arc, `sun_direction_at`; -1 keeps `sun_direction`) and `volumetric_fog`
+(`volumetric_density`, `volumetric_height_falloff`, `volumetric_anisotropy`, `volumetric_albedo`,
+`volumetric_distance`). 04_cubes: `-atmos 1`, `-hour H`, `-volfog 1`.
+
+**Atmosphere.** Single scattering through an Earth-like atmosphere (Rayleigh air, Mie aerosols, ozone absorption;
+Hillaire 2020's constants), computed on the CPU in double precision: a transmittance table (32 × 256) and a
+sky-view table (64 elevations × 25 azimuths, 24 steps a ray). `Scene3D::build` tints the sun's color by the air
+between the ground and the sun (orange at dusk, black below the horizon) and sets the ambient from the sky's
+irradiance and the lit ground (`Atmosphere::sun_transmittance`, `ambient`). Forward3D bakes the sky into a 256 × 128
+equirect RGBA16F texture with mips that replaces the gradient and the sky texture, for the dome, the reflections and
+the IBL (which re-bakes with it). The sun direction is quantized to `rebake_degrees` (0.25°), so a moving sun
+re-bakes in steps (about 9 ms of CPU a bake) and a still one never (`Forward3DStats::atmosphere_baked`).
+
+**Volumetric fog.** A froxel grid over the view: `tile` px columns × `slices` depth slices, log-spaced out to
+`max_distance`, stored as an RGBA16F atlas (8 slices a row). The inject pass evaluates a height fog
+(`density` × exp(−`height_falloff` · (y − `base_height`))), lit by the sun through the shadow cascades with a
+Henyey-Greenstein phase (`anisotropy`), the clustered point and spot lights with their local shadows, and the
+ambient; it stores scattered light and extinction. The integrate pass walks the slices front to back
+(energy-conserving) into in-scattered light and transmittance. The main and sky passes apply it per pixel (bank 4,
+`rhi::bank::kVolumetrics`) in place of the exp² fog. The sky pass carries the fog, so a scene with the sky off
+clears to the fog color without it. The `volumetrics` timestamp covers both passes.
+
+**Gates.** The `render3d_gl` tests, on GL and SDL GPU:
+- Atmosphere and volumetrics off draw today's frame, frames after a run with them match it again, and the Low tier's fog leaves no trace (0 pixels differ).
+- The noon sky is blue (81,124,164); the lit ground goes from 234,232,230 at noon to 83,56,37 at 17:36 (red/blue 1.0 → 2.2).
+- The sky bakes once per sun position, its IBL with it; a sun moved by less than `rebake_degrees` keeps the bake.
+- Looking into a low sun, forward scattering (g = 0.7) is brighter than backward (g = −0.7), and the other way round with the sun behind.
+- A roof's shadow cuts a shaft out of the sunlit fog: luma 90 under it against 124 with the roof casting no shadow; the open side does not change.
+- A point light short of the ground glows orange in the fog around it.
+
+Goldens `atmosphere_sunset` and `volumetric_shafts` on linux-gl and linux-sdlgpu; the earlier goldens are unchanged.
+
+**Budget (04_cubes, 256 point lights, 1280×1024, 110 frames, two runs each, Mesa llvmpipe; relative only):**
+
+| | off | `-atmos 1` | `-volfog 1` | both |
+|---|---|---|---|---|
+| volumetric fog: injection + integration (ms) | 0 | 0 | 47.0 | 47.0 |
+| main pass (ms) | 300.1 | 362.4 | 311.8 | 380.0 |
+| GPU 3D frame total (ms) | 388.5 | 451.3 | 443.8 | 513.1 |
+
+The atmosphere's main-pass cost is the sky texture's: the reflections sample the baked sky as they would a sky
+texture (the gradient is arithmetic). The fog's grid is 80 × 64 × 64 froxels at 16 px tiles.
+
+**Limits.** Single scattering only (no multiple scattering: twilight skies are darker than real ones), a flat
+ground and the viewer near it (`altitude`; world y is not used). The fog is a height fog without noise or local
+volumes, and has no temporal reprojection, so thin shafts alias at coarse tiles. Metal is untested; Metal pixels and
+real-GPU numbers belong to the Mac/device session.
