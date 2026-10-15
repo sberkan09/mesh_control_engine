@@ -22,6 +22,9 @@ MCE_CVAR(cv_ibl, "r.ibl", true, "Image-based lighting for scenes that ask for it
 MCE_CVAR(cv_ssao, "r.ssao", true,
          "Screen-space ambient occlusion for scenes that ask for it (AmbientOcclusion::enabled; off = no occlusion pass)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_ssr, "r.ssr", true,
+         "Screen-space reflections for scenes that ask for them (ScreenSpaceReflections::enabled; off = the probes only)",
+         CVarFlags::RequiresRestart);
 MCE_CVAR(cv_taa, "r.taa", true,
          "Temporal anti-aliasing for scenes that ask for it (PostFx::taa; off = FXAA only)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_gi, "r.gi", true,
@@ -70,6 +73,7 @@ struct Forward3DPassU {
     vec4 vol_albedo;  // rgb, w: sun scale
     vec4 vol_scale;   // x: local light scale, y: ambient scale
     vec4 decals;      // x: decals to apply (M-VISUAL 9)
+    vec4 ssr;         // x: screen-space reflections on (M-VISUAL2 1), y: max roughness, z: roughness fade, w: intensity
 };
 
 namespace {
@@ -99,6 +103,13 @@ struct AoU {  // kAoFS / kAoBlurFS
     mat4 proj;
     vec4 params;  // x: radius, y: intensity, z: power, w: bias
     vec4 step;    // xy: blur step in uv
+};
+
+struct SsrU {  // kSsrFS
+    mat4 proj;
+    mat4 reproject;  // this frame's view space -> last frame's (jittered) clip space
+    vec4 params;     // x: max distance, y: thickness, z: steps, w: edge fade
+    vec4 misc;       // x: last frame's color is valid
 };
 
 struct ProbeU {  // kProbeReprojectFS
@@ -165,7 +176,7 @@ struct PostU {
 };
 
 enum Stage : u32 {
-    kTsBegin, kTsClusters, kTsScale, kTsSsao, kTsShadow, kTsGi, kTsVol, kTsMain, kTsResolve, kTsTaa, kTsPostFx, kTsBloom, kTsTonemap, kTsFxaa
+    kTsBegin, kTsClusters, kTsScale, kTsSsao, kTsSsr, kTsShadow, kTsGi, kTsVol, kTsMain, kTsResolve, kTsTaa, kTsPostFx, kTsBloom, kTsTonemap, kTsFxaa
 };
 
 struct ExpU {  // kExposureHistCS / kExposureReduceCS
@@ -481,7 +492,8 @@ ResultV Forward3D::create_pipelines() {
         if (auto p = device_->create_compute_pipeline(cd)) cluster_build_ = p.value();
         else MCE_LOG_WARN("render3d: GPU light assignment unavailable, using the CPU path");
     }
-    if (desc_.ssao && cv_ssao.get_bool()) {
+    const bool ssao = desc_.ssao && cv_ssao.get_bool(), ssr = desc_.ssr && cv_ssr.get_bool();
+    if (ssao || ssr) {  // the half-resolution prepass both read
         rhi::GraphicsPipelineDesc ap = pd;  // the mesh vertex stage, depth-tested, both faces
         ap.fragment_shader = {kAoPrepassFS, "ssao_prepass.frag"};
         ap.state = {};
@@ -493,6 +505,14 @@ ResultV Forward3D::create_pipelines() {
         ap.vertex = skinned_layout;
         ap.debug_name = "ssao.prepass.skinned";
         MCE_TRY_ASSIGN(ao_prepass_skinned_, device_->create_pipeline(ap));
+    }
+    if (ssr) {
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kSsrFS, "ssr.frag"};
+        fs.debug_name = "ssr";
+        MCE_TRY_ASSIGN(ssr_pipe_, device_->create_pipeline(fs));
+    }
+    if (ssao) {
         fs.state.blend.mode = rhi::BlendMode::Opaque;
         fs.fragment_shader = {kAoFS, "ssao.frag"};
         fs.debug_name = "ssao";
@@ -598,9 +618,10 @@ ResultV Forward3D::create_pipelines() {
 
 void Forward3D::destroy_targets() {
     if (!device_) return;
-    for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_, &ao_gbuf_, &ao_depth_, &ao_a_, &ao_b_, &velocity_,
-                                  &velocity_depth_, &history_[0], &history_[1]})
+    for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_, &ao_gbuf_, &ao_depth_, &ao_a_, &ao_b_, &ssr_,
+                                  &velocity_, &velocity_depth_, &history_[0], &history_[1]})
         destroy(*device_, *t);
+    ssr_prev_valid_ = false;  // the new HDR target holds no frame yet
     history_size_ = {};
     history_valid_ = false;
     for (rhi::TextureHandle& t : bloom_) destroy(*device_, t);
@@ -662,7 +683,7 @@ void Forward3D::shutdown() {
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &terrain_pipe_, &skinned_cull_,
           &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
-          &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &velocity_pipe_, &velocity_skinned_,
+          &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &velocity_pipe_, &velocity_skinned_,
           &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_, &exposure_hist_,
           &exposure_reduce_, &dof_pipe_, &motion_blur_pipe_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
@@ -707,7 +728,8 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     t.clusters = ts.ms(b + kTsBegin, b + kTsClusters);
     t.scale = ts.ms(b + kTsClusters, b + kTsScale);
     t.ssao = ts.ms(b + kTsScale, b + kTsSsao);
-    t.shadow = ts.ms(b + kTsSsao, b + kTsShadow);
+    t.ssr = ts.ms(b + kTsSsao, b + kTsSsr);
+    t.shadow = ts.ms(b + kTsSsr, b + kTsShadow);
     t.gi = ts.ms(b + kTsShadow, b + kTsGi);
     t.volumetrics = ts.ms(b + kTsGi, b + kTsVol);
     t.main = ts.ms(b + kTsVol, b + kTsMain);
@@ -776,6 +798,8 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     timestamp(cmd, kTsScale);
     record_ssao(cmd, scene);
     timestamp(cmd, kTsSsao);
+    record_ssr(cmd, scene);
+    timestamp(cmd, kTsSsr);
     record_shadows(cmd, scene);
     record_local_shadows(cmd, scene);
     timestamp(cmd, kTsShadow);
@@ -795,6 +819,9 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     record_post_fx(cmd, scene);
     timestamp(cmd, kTsPostFx);
     record_post(cmd, scene, target);
+    // What the next frame's reflections read: this frame's HDR color and the projection it was drawn with.
+    ssr_prev_vp_ = jitter_ * scene.view().view_proj;
+    ssr_prev_valid_ = true;
 }
 
 // ---- 0. Forward+ light assignment on the GPU (M-VISUAL 1): fills banks 4 and 6 for the main pass
@@ -1102,6 +1129,7 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_lut_, linear_clamp_);
             cmd.bind_texture(rhi::bank::kIblSh, ibl_sh_, point_sampler_);
             cmd.bind_texture(rhi::bank::kAo, ao_off_, linear_clamp_);  // captures take no SSAO (PassU::ao.x = 0)
+            cmd.bind_texture(rhi::bank::kSsr, ao_off_, linear_clamp_);  // nor reflections (PassU::ssr.x = 0)
             cmd.bind_texture(rhi::bank::kGiVolume, ao_off_, point_sampler_);  // nor the volume (PassU::gi.x = 0)
             cmd.set_storage_data(rhi::bank::kClusters, rhi::as_bytes(kNoRange));
             cmd.set_storage_data(rhi::bank::kLightIndices, rhi::as_bytes(kNoIndex));
@@ -1172,9 +1200,10 @@ bool Forward3D::record_probe_export(rhi::CommandBuffer& cmd, u32 probe) {
 }
 
 // ---- 0. screen-space ambient occlusion (M-VISUAL 3): prepass -> occlusion -> blur H -> blur V, half size
-void Forward3D::record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene) {
-    const AmbientOcclusion& ao = scene.ambient_occlusion();
-    if (!ao.enabled || ao_pipe_.is_null()) return;
+// The half-resolution view normal + depth prepass of the opaques that SSAO and SSR read; once a frame.
+void Forward3D::record_prepass(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    if (prepass_done_) return;
+    prepass_done_ = true;
     const rhi::Extent2D half{max(1u, size_.width / 2), max(1u, size_.height / 2)};
     if (ao_gbuf_.is_null()) {
         rhi::TextureDesc d;
@@ -1195,7 +1224,7 @@ void Forward3D::record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         z.debug_name = "mce.3d.ssao_depth";
         ao_depth_ = device_->create_texture(z);
     }
-    cmd.push_debug_scope("ssao");
+    cmd.push_debug_scope("prepass");
     const View3D& view = scene.view();
     rhi::PassAttachment color;
     color.texture = ao_gbuf_;
@@ -1222,7 +1251,17 @@ void Forward3D::record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     stats_.ssao_draws = scene.opaque_count();
     draw_batches(cmd, scene, cache, true);
     cmd.end_pass();
+    cmd.pop_debug_scope();
+}
 
+void Forward3D::record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    prepass_done_ = false;  // the first screen-space pass of the frame
+    const AmbientOcclusion& ao = scene.ambient_occlusion();
+    if (!ao.enabled || ao_pipe_.is_null()) return;
+    record_prepass(cmd, scene);
+    const View3D& view = scene.view();
+    const rhi::Extent2D half{max(1u, size_.width / 2), max(1u, size_.height / 2)};
+    cmd.push_debug_scope("ssao");
     auto fullscreen = [&](rhi::TextureHandle dst, const char* name) {
         rhi::PassAttachment out;
         out.texture = dst;
@@ -1251,6 +1290,47 @@ void Forward3D::record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     }
     cmd.pop_debug_scope();
     stats_.ssao = true;
+}
+
+// ---- screen-space reflections (M-VISUAL2 1): a ray march through the prepass's depth, at half size,
+// reading last frame's HDR color at the hit; the main pass blends it over the specular ambient.
+void Forward3D::record_ssr(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const ScreenSpaceReflections& ssr = scene.reflections();
+    if (!ssr.enabled || ssr_pipe_.is_null()) return;
+    record_prepass(cmd, scene);
+    const rhi::Extent2D half{max(1u, size_.width / 2), max(1u, size_.height / 2)};
+    if (ssr_.is_null()) {
+        rhi::TextureDesc d;
+        d.size = half;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.debug_name = "mce.3d.ssr";
+        ssr_ = device_->create_texture(d);
+    }
+    const View3D& view = scene.view();
+    cmd.push_debug_scope("ssr");
+    rhi::PassAttachment out;
+    out.texture = ssr_;
+    out.load = rhi::LoadOp::DontCare;
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&out, 1);
+    p.debug_name = "ssr.trace";
+    cmd.begin_pass(p);
+    SsrU u{};
+    u.proj = view.proj;
+    u.reproject = ssr_prev_vp_ * inverse(view.view);
+    u.params = {max(ssr.max_distance, 0.01f), max(ssr.thickness, 1e-3f), f32(clamp(ssr.steps, 4u, 128u)),
+                clamp(ssr.edge_fade, 0.0f, 0.5f)};
+    u.misc = {ssr_prev_valid_ ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+    cmd.bind_pipeline(ssr_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(u));
+    cmd.bind_texture(rhi::bank::kFirstSampler, ao_gbuf_, point_sampler_);
+    cmd.bind_texture(rhi::bank::kFirstSampler + 1, hdr_, linear_clamp_);
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    stats_.ssr = true;
+    stats_.ssr_history = ssr_prev_valid_;
 }
 
 // ---- 1. cascades: one depth-only pass per layer, each with its own caster list
@@ -1459,6 +1539,12 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     // SSAO: the blurred half-size visibility, upsampled bilinearly; a stand-in fills the slot when off.
     pu.ao = {stats_.ssao ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
     cmd.bind_texture(rhi::bank::kAo, stats_.ssao ? ao_a_ : ao_off_, linear_clamp_);
+    // Screen-space reflections: the half-size trace, upsampled bilinearly; a stand-in when off.
+    if (stats_.ssr) {
+        const ScreenSpaceReflections& ssr = scene.reflections();
+        pu.ssr = {1.0f, clamp(ssr.max_roughness, 0.0f, 1.0f), max(ssr.roughness_fade, 1e-3f), max(ssr.intensity, 0.0f)};
+    }
+    cmd.bind_texture(rhi::bank::kSsr, stats_.ssr ? ssr_ : ao_off_, linear_clamp_);
     bind_local_shadows(cmd, scene, pu);
     // Decals (M-VISUAL 9): the main pass only; the fog injection takes the stand-ins.
     pu.decals.x = f32(bind_decals(cmd, scene, apply_fog));
@@ -1665,6 +1751,7 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     bind_local_shadows(cmd, scene, pu);
     pu.local.y = f32(gi_shadow_layer_);  // cascade 0 is the volume's fit
     cmd.bind_texture(rhi::bank::kAo, ao_off_, linear_clamp_);
+    cmd.bind_texture(rhi::bank::kSsr, ao_off_, linear_clamp_);
     // Every light in the pool; each probe's single cluster lists the kGiMaxCaptureLights that matter
     // most to it (brightness × how much of its range the probe sits in). Storage bindings outlive passes.
     const ClusterLights& cl = scene.cluster_setup();
