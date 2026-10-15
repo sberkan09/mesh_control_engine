@@ -469,6 +469,12 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.motion_blur.intensity = env.motion_blur_intensity;
     render::apply_accessibility(render::accessibility_settings(), post);  // M-ACCESS: never in the state
     scene.set_post(post);
+    render::AmbientOcclusion ao;
+    ao.enabled = env.ssao != 0;
+    ao.radius = env.ssao_radius;
+    ao.intensity = env.ssao_intensity;
+    ao.power = env.ssao_power;
+    scene.set_ambient_occlusion(ao);
     render::ShadowSettings shadows;
     shadows.cascades = clamp(env.shadow_cascades, 1u, min(render::kMaxCascades, quality_.shadow_cascades));
     shadows.resolution = quality_.shadow_size;
@@ -618,6 +624,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         pl.color = {l.color.r, l.color.g, l.color.b};
         pl.intensity = l.intensity;
         pl.radius = l.radius;
+        pl.cast_shadows = l.cast_shadows != 0;
         scene.add_point_light(pl);
         ++stats_.point_lights;
     });
@@ -636,6 +643,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         pl.direction = length_sq(d) > 0.0f ? normalize(d) : vec3{0.0f, -1.0f, 0.0f};
         pl.spot_outer = radians(clamp(l.outer_deg, 0.5f, 89.0f));
         pl.spot_inner = radians(clamp(l.inner_deg, 0.0f, l.outer_deg));
+        pl.cast_shadows = l.cast_shadows != 0;
         scene.add_point_light(pl);
         ++stats_.spot_lights;
     });

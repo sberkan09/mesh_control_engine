@@ -10,7 +10,7 @@ namespace mce::render {
 namespace {
 
 MCE_CVAR(cv_quality, "r.quality", "auto", "3D quality tier: auto, low, medium, high (auto = medium on phones)",
-         CVarFlags::RequiresRestart);
+         CVarFlags::RequiresRestart | CVarFlags::Saved);
 
 }  // namespace
 

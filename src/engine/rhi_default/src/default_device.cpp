@@ -2,6 +2,8 @@
 
 #if defined(MCE_RHI_SDLGPU_ONLY)
 // Android/iOS (ADR-0038): mce_rhi_sdlgpu is the only backend.
+#elif defined(MCE_RHI_WEBGPU_ONLY)
+#include "mce/rhi_webgpu/webgpu_device.h"  // the browser (ADR-0039): mce_rhi_webgpu is the only backend
 #elif defined(__APPLE__)
 #include "mce/rhi_metal/metal_device.h"
 #else
@@ -23,6 +25,8 @@ Result<mem::UniquePtr<RenderDevice>> create_default_device(platform::Window& win
     }
 #if defined(MCE_RHI_SDLGPU_ONLY)
     return sdlgpu::create_device(window, desc);
+#elif defined(MCE_RHI_WEBGPU_ONLY)
+    return webgpu::create_device(window, desc);
 #elif defined(__APPLE__)
     return metal::create_device(window, desc);
 #else

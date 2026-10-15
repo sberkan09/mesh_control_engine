@@ -171,6 +171,8 @@ TEST_CASE("kit3d: the scene's Environment3D becomes the resource at Startup") {
     // The game drives the resource; the extract hands it to the scene.
     f.world.resource<kit::Environment3D>().sun_intensity = 0.5f;
     f.world.resource<kit::Environment3D>().shadow_cascades = 9;  // clamped
+    f.world.resource<kit::Environment3D>().ssao = 1;
+    f.world.resource<kit::Environment3D>().ssao_radius = 0.9f;
     f.camera();
     render::Camera3D cam;
     REQUIRE(f.extract.camera(f.world, 1.0f, cam));
@@ -181,6 +183,8 @@ TEST_CASE("kit3d: the scene's Environment3D becomes the resource at Startup") {
     CHECK(scene.fog().density == doctest::Approx(0.01f));
     CHECK(scene.exposure() == doctest::Approx(1.7f));
     CHECK(scene.shadow_settings().cascades == render::kMaxCascades);
+    CHECK(scene.ambient_occlusion().enabled);
+    CHECK(scene.ambient_occlusion().radius == doctest::Approx(0.9f));
 }
 
 TEST_CASE("kit3d: MeshRefs, lights and visibility fill the scene") {
@@ -203,6 +207,7 @@ TEST_CASE("kit3d: MeshRefs, lights and visibility fill the scene") {
     kit::SpotLight3D spot;
     spot.outer_deg = 40.0f;
     spot.inner_deg = 60.0f;  // clamped to outer
+    spot.cast_shadows = 1;
     f.world.spawn_with(at({0, 2, -6}), spot);
     kit::ReflectionProbe3D probe;
     probe.offset = {0, 1, 0};
@@ -229,6 +234,8 @@ TEST_CASE("kit3d: MeshRefs, lights and visibility fill the scene") {
     CHECK(scene.point_lights()[0].spot_outer == 0.0f);
     CHECK(scene.point_lights()[1].spot_outer == doctest::Approx(math::radians(40.0f)));
     CHECK(scene.point_lights()[1].spot_inner == doctest::Approx(math::radians(40.0f)));
+    CHECK_FALSE(scene.point_lights()[0].cast_shadows);  // a light casts shadows only when it asks
+    CHECK(scene.point_lights()[1].cast_shadows);
     CHECK(f.extract.stats().reflection_probes == 1);
     REQUIRE(scene.reflection_probes().size() == 1);
     const render::ReflectionProbe& rp = scene.reflection_probes()[0];

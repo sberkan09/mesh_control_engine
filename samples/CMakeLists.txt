@@ -30,6 +30,13 @@ function(mce_sample_pack target)
     target_compile_definitions(${target} PRIVATE MCE_SAMPLE_DEV_PACK="${pack}")
     set_target_properties(${target} PROPERTIES MCE_SAMPLE_PACK "${pack}")
 endfunction()
+if(MCE_WEB)
+    # Browsers (M-WEB): the samples that run on WebGPU so far.
+    foreach(_sample 01_triangle)
+        add_subdirectory(${_sample})
+    endforeach()
+    return()
+endif()
 if(MCE_MOBILE)
     # Phones (M-MOBILE): the windowed samples that ship as apps; headless and tool demos stay desktop.
     foreach(_sample 01_triangle sprites_2d 03_platformer 04_diorama 04_cubes 05_ashen_court)

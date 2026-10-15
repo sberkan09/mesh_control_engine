@@ -138,10 +138,14 @@ Besides scenes and prefabs (chapter 4), these text assets are JSON with a `forma
 ```json
 { "format": "mce-material", "version": 1, "guid": "<uuid>",
   "base_color": [1, 1, 1, 1], "metallic": 0, "roughness": 1, "emissive": [0, 0, 0],
+  "uv_scale": [1, 1],
   "alpha_mode": "opaque", "alpha_cutoff": 0.5, "double_sided": false, "unlit": false,
   "textures": { "base_color": "guid:<uuid>", "normal": "guid:<uuid>",
                 "metallic_roughness": "guid:<uuid>", "emissive": "guid:<uuid>" } }
 ```
+
+`uv_scale` repeats the textures across the mesh's UVs: `[8, 8]` on a plane tiles a stone texture
+eight times each way (the samplers repeat), so a 30 m courtyard floor is one mesh, not many slabs.
 
 **Terrain** (`.mcterrain`, chapter 8): `resolution` samples per side (2^n+1, 33 to 4097), `chunk` quads
 per LOD node (a power of two, default 32), `size` in metres along x and z, `height_range` mapping sample
