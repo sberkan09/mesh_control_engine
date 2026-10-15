@@ -71,6 +71,7 @@ struct RenderRequest {
     bool software = false;
     cook::String ui_preview;  // -ui_preview: a UiDocument GUID drawn alone
     cook::String ui_scale;    // -ui_scale, when set
+    ConvarArgs convars;       // -<name> <value> for the player
 };
 
 bool arg_size(ToolCall& c, const char* wname, const char* hname, u32& w, u32& h) {
@@ -168,7 +169,7 @@ bool parse_common(ToolCall& c, RenderRequest& rq) {
         if (file.rel.empty()) return fail(c, "the scene was never saved: scene_save it (with a path under assets/) first");
         if (scene(c).dirty()) return fail(c, "the scene has unsaved changes: scene_save first (the frame is drawn from the cooked file)");
     }
-    if (!arg_input(c, rq.script)) return false;
+    if (!arg_input(c, rq.script) || !arg_convars(c, rq.convars)) return false;
     if (!parse_camera(c, arg(c, "camera"), rq.scene_rel == file.rel.view(), rq)) return false;
     if (const cook::JsonValue sa = arg(c, "safe_area"); sa.valid()) {
         static constexpr const char* kKeys[4] = {"left", "top", "right", "bottom"};
@@ -194,7 +195,8 @@ void script_text(const input::InputScript& s, cook::String& out) {
         else if (seg.to != seg.from) cook::appendf(out, "-%llu", static_cast<unsigned long long>(seg.to));
         out += ' ';
         out += seg.name.view();
-        cook::appendf(out, "=%g,%g\n", static_cast<f64>(seg.x), static_cast<f64>(seg.y));
+        if (seg.held) cook::appendf(out, "=%g,%g\n", static_cast<f64>(seg.x), static_cast<f64>(seg.y));
+        else out += "=false\n";  // named, not held ("=0" would press it with value 0)
     }
 }
 
@@ -265,6 +267,16 @@ bool render_ticks(ToolCall& c, RenderRequest& rq, Array<cook::Image>& frames, bo
                       static_cast<long long>(rq.safe[2]), static_cast<long long>(rq.safe[3]));
         args.push_back("-safe_area");
         args.push_back(safe.view());
+    }
+    Array<cook::String> flags;  // "-<name>": the player reads convars as command-line flags
+    for (const cook::String& n : rq.convars.names) {
+        cook::String f("-");
+        f += n.view();
+        flags.push_back(std::move(f));
+    }
+    for (usize i = 0; i < flags.size(); ++i) {
+        args.push_back(flags[i].view());
+        args.push_back(rq.convars.values[i].view());
     }
     used_software = rq.software || headless_display();
     if (used_software) {
@@ -480,7 +492,11 @@ bool render_sheet(ToolCall& c) {
         rq.ticks = base.ticks;
         rq.software = base.software;
         for (u32 i = 0; i < 4; ++i) rq.safe[i] = base.safe[i];
-        for (const input::ScriptSegment& s : base.script.segments()) rq.script.add(s.name.view(), s.from, s.to, s.x, s.y);
+        for (const input::ScriptSegment& s : base.script.segments()) rq.script.add(s);
+        for (usize i = 0; i < base.convars.names.size(); ++i) {
+            rq.convars.names.push_back(cook::String(base.convars.names[i].view()));
+            rq.convars.values.push_back(cook::String(base.convars.values[i].view()));
+        }
         if (cams.valid() && !parse_camera(c, cams.at(row), base.scene_rel == c.server.scene_file().rel.view(), rq)) return false;
         Array<cook::Image> frames;
         if (!render_ticks(c, rq, frames, software)) return false;

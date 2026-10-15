@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Round-3 friction fixes (SBA-61): reloading a game module drops its old convars; an input script's `=0`
+  presses an action with value 0; a Text in a horizontal Stack no longer wraps below UI scale 1; game code can
+  quit the app (`scene::request_quit`, `UiFlow::quit_on` for a Quit button); `render_frame`, `render_sheet` and
+  `run_headless` take `convars` for one run; a `walk_to` waypoint `{at, wait}` stands still there; a smooth
+  `Decal3D` fills the normal map's bumps under it (puddles no longer light every bump as a dotted pattern);
+  `asset_delete` removes the file's `CREDITS.md` row and a font's license text with the family's last font.
 - Phone fixes from the Simulator and emulator checks (SBA-30): a language the player chooses no longer falls back
   to the device's other languages (English chosen on a Turkish phone showed the kit's words in Turkish); SDL GPU's
   debug mode is off in the iOS Simulator, whose Metal validation aborted on the first indirect draw; MSL for iOS

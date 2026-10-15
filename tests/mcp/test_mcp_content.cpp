@@ -188,9 +188,34 @@ TEST_CASE("library_search and library_add: CC0 models with their texture, OFL fo
     CHECK(credits.find("| `assets/models/coin.glb` | Coin by Kenney (kenney.nl, Starter Kit: 3D Platformer") != std::string::npos);
     CHECK(credits.find("| CC0 1.0 |") != std::string::npos);
     CHECK(credits.find("Crimson Pro Regular (serif) by Jacques Le Bailly") != std::string::npos);
-    CHECK(credits.find("| SIL OFL 1.1 |") != std::string::npos);
+    CHECK(credits.find("| SIL OFL 1.1 (`CrimsonPro-OFL.txt`) |") != std::string::npos);
     CHECK(c.ok("cook_run").v().get("ok").as_bool());
     CHECK(listed(c, "models/coin.glb"));
+
+    // asset_delete takes the row with the file, and the license text with the family's last font (SBA-61).
+    c.ok("library_add", R"({"id":"font-crimson-pro","path":"fonts/title.ttf"})");
+    auto body = c.ok("asset_delete", R"({"path":"fonts/body.ttf"})");
+    CHECK(body.v().get("credit_removed").as_bool());
+    CHECK_FALSE(body.v().get("license_removed").valid());  // title.ttf's row still names it
+    CHECK(std::filesystem::exists(root + "/assets/fonts/CrimsonPro-OFL.txt"));
+    auto title = c.ok("asset_delete", R"({"path":"fonts/title.ttf"})");
+    CHECK(str(title.v().get("license_removed")) == "fonts/CrimsonPro-OFL.txt");
+    CHECK_FALSE(std::filesystem::exists(root + "/assets/fonts/CrimsonPro-OFL.txt"));
+    CHECK(c.ok("asset_delete", R"({"path":"textures/sky-dusk.png"})").v().get("credit_removed").as_bool());
+    const std::string after = read_file(root + "/CREDITS.md");
+    CHECK(after.find("fonts/body.ttf") == std::string::npos);
+    CHECK(after.find("fonts/title.ttf") == std::string::npos);
+    CHECK(after.find("sky-dusk") == std::string::npos);
+    CHECK(after.find("| `assets/models/coin.glb` |") != std::string::npos);  // the other rows stay
+    // A row naming two weights loses one name; the folder moves to the name left.
+    write_file(root + "/assets/fonts/Serif-Regular.ttf", "x");
+    write_file(root + "/assets/fonts/Serif-Bold.ttf", "x");
+    write_file(root + "/assets/fonts/Serif-OFL.txt", "x");
+    write_file(root + "/CREDITS.md", after + "| `assets/fonts/Serif-Regular.ttf`, `Serif-Bold.ttf` | Serif | SIL OFL 1.1 (`Serif-OFL.txt`) |\n");
+    CHECK_FALSE(c.ok("asset_delete", R"({"path":"fonts/Serif-Regular.ttf"})").v().get("license_removed").valid());
+    CHECK(read_file(root + "/CREDITS.md").find("| `assets/fonts/Serif-Bold.ttf` | Serif | SIL OFL 1.1 (`Serif-OFL.txt`) |") != std::string::npos);
+    CHECK(str(c.ok("asset_delete", R"({"path":"fonts/Serif-Bold.ttf"})").v().get("license_removed")) == "fonts/Serif-OFL.txt");
+    CHECK(read_file(root + "/CREDITS.md").find("Serif") == std::string::npos);
 
     CHECK(c.fails("library_add", R"({"id":"kenney-coin"})").find("already exists") != std::string::npos);
     CHECK(c.fails("library_add", R"({"id":"nope"})").find("library_search") != std::string::npos);

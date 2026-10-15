@@ -40,6 +40,19 @@ TEST_CASE("input script: text form parses into segments") {
     CHECK(bad.segments()[2].y == 0.25f);
 }
 
+TEST_CASE("input script: '=0' presses the action with value 0, '=false' does not (SBA-61)") {
+    InputScript s;
+    REQUIRE(s.parse("2 Quality=0\n3 Quality=2\n4 Quality=false\n").has_value());
+    CHECK_FALSE(s.evaluate(1).has_action(MCE_SID("Quality")));
+    const InputState& t2 = s.evaluate(2);  // a slider set to 0 raises the same press
+    CHECK(t2.pressed(MCE_SID("Quality")));
+    CHECK(t2.action(MCE_SID("Quality")).x == 0.f);
+    const InputState& t3 = s.evaluate(3);
+    CHECK(t3.held(MCE_SID("Quality")));
+    CHECK(t3.action(MCE_SID("Quality")).x == 2.f);
+    CHECK(s.evaluate(4).released(MCE_SID("Quality")));
+}
+
 TEST_CASE("input script: edges, hold time and the fast-path fields") {
     InputScript s;
     REQUIRE(s.add("Jump", 3, 5));

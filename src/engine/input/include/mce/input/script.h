@@ -33,6 +33,9 @@ struct ScriptSegment {
     StringId action;
     FixedString<32> name;     // the action's spelling, for logs
     f32 x = 1.f, y = 0.f;     // the action's value while the segment is active
+    // Held while active. add() holds a non-zero value; a script line's "=<number>" holds any value
+    // ("Quality=0" presses Quality with x = 0, as a UI slider set to 0 does), "=false" / "=off" does not.
+    bool held = true;
 };
 
 class InputScript final : public app::IInputSource {
@@ -42,6 +45,8 @@ public:
     // Holds `action` at (x, y) over ticks from..to (inclusive). Returns false for an empty name
     // or an inverted range.
     bool add(StringView action, u64 from, u64 to, f32 x = 1.f, f32 y = 0.f);
+    // A segment as segments() returns it (its `held` kept): copying a script into another.
+    bool add(const ScriptSegment& seg);
     // Parses the text form above (replaces nothing: segments append). Errc::ParseError names the
     // line and what was expected in the error message.
     Result<void> parse(StringView text);

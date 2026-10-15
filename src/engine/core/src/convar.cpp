@@ -15,6 +15,15 @@ namespace {
 constinit ConVar* g_cvar_head = nullptr;
 constinit ConFunc* g_cfunc_head = nullptr;
 
+// After a stable sort by name of a newest-first list: keeps the first (newest) of each name.
+template <class T>
+void drop_shadowed(Array<T*>& out) {
+    usize w = 0;
+    for (usize i = 0; i < out.size(); ++i)
+        if (w == 0 || StringView(out[w - 1]->name()) != StringView(out[i]->name())) out[w++] = out[i];
+    while (out.size() > w) out.pop_back();
+}
+
 bool parse_bool(StringView s, bool& out) {
     if (s == "1" || s == "true" || s == "on" || s == "yes") {
         out = true;
@@ -67,17 +76,21 @@ ConVar::ConVar(const char* name, const char* def, const char* help, u32 flags)
     link();
 }
 
-ConVar::~ConVar() {
+ConVar::~ConVar() { unlink(); }
+
+void ConVar::unlink() {
     for (ConVar** p = &g_cvar_head; *p; p = &(*p)->next_) {
         if (*p == this) {
             *p = next_;
             break;
         }
     }
+    next_ = nullptr;
 }
 
 void ConVar::link() {
-    MCE_ASSERT_MSG(find(id_) == nullptr, "duplicate convar name");
+    // A name already taken is shadowed, not refused: two copies of one game module are live at a
+    // rebuild (the old one until its World is gone), and find() and collect() see the newest.
     next_ = g_cvar_head;
     g_cvar_head = this;
 }
@@ -235,23 +248,27 @@ void ConVar::collect(Array<ConVar*>& out) {
         }
         out[j] = key;
     }
+    drop_shadowed(out);
 }
 
 // ------------------------------------------------------------------ ConFunc
 
 ConFunc::ConFunc(const char* name, Fn fn, const char* help) : name_(name), help_(help), id_(name), fn_(fn) {
-    MCE_ASSERT_MSG(find(id_) == nullptr, "duplicate confunc name");
-    next_ = g_cfunc_head;
+    next_ = g_cfunc_head;  // a taken name is shadowed, as ConVar::link
+
     g_cfunc_head = this;
 }
 
-ConFunc::~ConFunc() {
+ConFunc::~ConFunc() { unlink(); }
+
+void ConFunc::unlink() {
     for (ConFunc** p = &g_cfunc_head; *p; p = &(*p)->next_) {
         if (*p == this) {
             *p = next_;
             break;
         }
     }
+    next_ = nullptr;
 }
 
 ConFunc* ConFunc::find(StringId id) {
@@ -272,6 +289,7 @@ void ConFunc::collect(Array<ConFunc*>& out) {
         }
         out[j] = key;
     }
+    drop_shadowed(out);
 }
 
 // ------------------------------------------------------------------ console

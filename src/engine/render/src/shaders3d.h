@@ -415,6 +415,8 @@ uint cluster_of(float depth) {
 
 // ---- projected decals (M-VISUAL 9): up to p_decals.x boxes in submission order, each blending its
 // color over the surface's base color and its roughness / metallic over the surface's, before lighting.
+// A smooth decal also fills the surface's normal-map bumps (`fill`: a puddle over paving is a flat
+// mirror; without it a low roughness lights each bump's rim as a dotted pattern).
 struct DecalRec {
     mat4 inv_world;  // world -> the unit box
     vec4 uv_rect;
@@ -433,7 +435,7 @@ vec4 decal_texture(int slot, vec2 uv, vec2 gx, vec2 gy) {
     return textureGrad(u_decal2, vec3(uv, 0.0), gx, gy);
 }
 // `ng`: the geometric normal; derivatives come from outside the loop (its branches diverge).
-void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout vec3 emit) {
+void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout vec3 emit, inout float fill) {
     vec3 dpx = dFdx(p), dpy = dFdy(p);
     int count = int(p_decals.x);
     for (int i = 0; i < count; ++i) {
@@ -456,6 +458,7 @@ void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout f
         albedo = mix(albedo, c, a);
         rough = mix(rough, q.x, a * q.z);
         metallic = mix(metallic, q.y, a * q.z);
+        fill = mix(fill, 1.0, a * q.z * (1.0 - q.x));
         emit += c * (q.w * a);
     }
 }
@@ -469,8 +472,8 @@ void main() {
     vec3 decal_emit = vec3(0.0);
     if (o_params.y > 0.5) {
         if (p_decals.x > 0.5) {
-            float r0 = 1.0, m0 = 0.0;
-            apply_decals(v_world, n, base.rgb, r0, m0, decal_emit);
+            float r0 = 1.0, m0 = 0.0, f0 = 0.0;
+            apply_decals(v_world, n, base.rgb, r0, m0, decal_emit, f0);
         }
         color = base.rgb;  // unlit
     } else {
@@ -483,8 +486,12 @@ void main() {
                 metallic *= orm.b;
             }
         }
-        if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit);
-        if (o_maps.x > 0.5) n = perturb_normal(n, v_world, v_uv, texture(u_normal_map, vec3(v_uv, 0.0)).xyz * 2.0 - 1.0);
+        float fill = 0.0;
+        if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit, fill);
+        if (o_maps.x > 0.5) {  // uniform branch: perturb_normal takes derivatives
+            vec3 nb = perturb_normal(n, v_world, v_uv, texture(u_normal_map, vec3(v_uv, 0.0)).xyz * 2.0 - 1.0);
+            n = normalize(mix(nb, n, fill));
+        }
         rough = clamp(rough, 0.045, 1.0);
         metallic = clamp(metallic, 0.0, 1.0);
         float a = rough * rough;

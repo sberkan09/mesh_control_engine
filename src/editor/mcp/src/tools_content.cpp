@@ -888,6 +888,15 @@ bool library_add(ToolCall& c) {
     source += e->id.view();
     source += ')';
 
+    // The license cell names a license text that comes along (asset_delete removes it with the last font).
+    cook::String license(e->license.view());
+    for (const cook::String& f : e->deps) {
+        const StringView n = f.view().substr(f.view().rfind('/') + 1);
+        if (cook::lower_extension(n).view() != ".txt") continue;
+        license += " (`";
+        license += n;
+        license += "`)";
+    }
     c.out.begin_object().key("id").str(e->id.view()).key("license").str(e->license.view()).key("files").begin_array();
     usize index = 0;
     auto copy_one = [&](StringView from, bool is_dep) -> bool {
@@ -925,7 +934,7 @@ bool library_add(ToolCall& c) {
         cook::String src_sidecar(src.view());
         src_sidecar += ".mceasset";
         Saved saved;
-        if (!save_asset(c, rel.view(), data, "{}", source.view(), e->license.view(), saved,
+        if (!save_asset(c, rel.view(), data, "{}", source.view(), license.view(), saved,
                         cook::fs::exists(src_sidecar.view()) ? src_sidecar.c_str() : nullptr))
             return false;
         c.out.begin_object().key("path").str(rel.view()).key("guid").str(saved.guid.view()).end_object();
