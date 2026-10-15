@@ -14,6 +14,7 @@ mce_add_library(mce_net UMBRELLA
         src/net_stats.cpp
         src/prediction.cpp
         src/replication.cpp
+        src/rollback.cpp
         src/sim_network.cpp
         $<TARGET_OBJECTS:mce_enet>
     PUBLIC_DEPS

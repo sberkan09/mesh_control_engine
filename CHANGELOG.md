@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Rollback netcode (SBA-86, M-NET2 step 5): `net::RollbackSession` runs the whole game on every peer and
+  exchanges only inputs. It guesses late remote inputs, rolls back and replays when a guess was wrong, waits only
+  past `max_prediction` (0 is lockstep), and compares state hashes of confirmed frames so a desync is reported at
+  the frame it happened. `samples/net_rollback` keeps four peers in sync at 100 ms with 5% loss. User guide 20.7.
 - Fair hits over lag (SBA-85, M-NET2 step 4): `net::LagCompensator` keeps a short history of `net::HitBox`es on
   the server and checks a shot against the tick its client was drawing (`ReplicationClient::drawn_tick`), within
   `max_rewind_s`. Over a 100 ms link every shot at the drawn target hits when rewound and none at the server's

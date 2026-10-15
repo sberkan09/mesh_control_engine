@@ -276,9 +276,60 @@ NET 1 peer  RTT 152 ms +-30  LOSS 5.0%  UP 3.2 KB/s  DOWN 41.0 KB/s  DROP 12
 `publish` writes the world's `DevStatsLines` resource (`mce/ecs/dev_stats.h`). Any module can add a
 line there the same way.
 
-## 20.7 What it does not do yet
+## 20.7 Rollback for small games
 
-Rollback and lockstep come next (M-NET2). Every client receives every
+Everything above is server-authoritative: one machine runs the game and the others mirror it. A
+fighting game or a two-to-four player arena often works better the other way round. Every peer
+runs the whole game, and only inputs travel. `net::RollbackSession` (`mce/net/rollback.h`) makes
+that feel immediate on a slow link:
+
+- Your own input is used after a short delay (`input_delay`, 2 frames).
+- Other players' inputs that have not arrived yet are guessed (their last known input), so the
+  game never waits for them.
+- When a real input arrives that differs from the guess, the session loads the state saved before
+  that frame and plays the frames since again with the real input. This is a rollback.
+- It waits only when a peer falls more than `max_prediction` frames behind (8 by default). With
+  `max_prediction` 0 it is lockstep: it never guesses and waits for every input.
+
+```cpp
+net::RollbackSession session;
+session.init({.players = 2, .local_player = me, .input_size = sizeof(Input)},
+             {&game, save_state, load_state, advance_frame});
+// every tick:
+session.add_local_input(Span<const u8>(reinterpret_cast<const u8*>(&input), sizeof input));
+session.advance();                                   // false: waiting for a slow peer
+for (u32 p = 0; p < players; ++p)
+    if (p != me && session.write_packet(p, w)) host.send(peer_of[p], 0, w.data(), net::Delivery::Unreliable);
+// on a packet from any peer:
+session.receive(event.data);
+```
+
+You write three functions. `save_state` writes everything the simulation reads, `load_state` puts it
+back, and `advance_frame` runs one frame with every player's input. `advance_frame` also runs again
+during a rollback, so play sounds and spawn effects from the newest state after `advance()` returns,
+not from inside it. The simulation must be deterministic: the engine's fixed timestep, no wall
+clock, randomness from a seed in the state.
+
+**Desyncs are caught.** Once every input up to a frame is known, each peer hashes its saved state
+after that frame and sends the hash with its inputs. If two peers computed different states,
+`desynced()` turns true on both and `desync_frame()` names the first frame that differed. That is
+where to start looking for the non-deterministic code.
+
+`samples/net_rollback` runs four peers over a simulated 100 ms link with 20 ms of jitter and 5% loss:
+
+```
+build/linux-gcc-debug/samples/net_rollback/sample_net_rollback
+```
+
+Each peer rolls back about 230 times in 900 frames (8 frames at most) and waits for 11 frames, and
+every peer ends with the same hash. `-prediction 0` shows lockstep at the same latency: it plays only
+about a third of the frames, waiting the rest of the time. `-desync_at 300` makes one peer compute
+something else at frame 300, and every peer reports a desync at frame 300.
+
+## 20.8 What it does not do yet
+
+Rollback sessions do not adjust for a peer whose clock runs ahead (it simply waits more), and
+spectators are not supported. Every client receives every
 replicated entity, and traffic is not encrypted. There are no lobbies, matchmaking or NAT traversal:
 players connect to an address and port. If you ship a game that links `mce_net`, list ENet (MIT
 licence) in your `CREDITS.md`.
