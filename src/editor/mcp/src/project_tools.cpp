@@ -2,6 +2,8 @@
 // scene, games, plugins) and the open scene's WorldSettings (gravity), through the same editor
 // core calls as the Project Settings panel (mce/editor/project_settings.h).
 
+#include <cmath>
+
 #include "mce/cook/fs.h"
 #include "mce/editor/project_settings.h"
 #include "mce/kit/components.h"
@@ -56,6 +58,20 @@ bool project_get(ToolCall& c) {
         if (a) c.out.str(a->path.view());
         else c.out.null();
     }
+    // Each target's budget in force: the defaults with the file's "budgets" over them (M-PERF).
+    c.out.key("budgets_in_force").begin_object();
+    for (usize t = 0; t < perf::kTargetCount; ++t) {
+        perf::Budget b;
+        cook::String err;
+        if (!editor::project_budget(project, static_cast<perf::Target>(t), b, err)) return fail(c, err.view());
+        c.out.key(perf::target_name(static_cast<perf::Target>(t))).begin_object();
+        for (const perf::BudgetField& f : perf::budget_fields()) {
+            if (f.integer) c.out.key(f.name).num_u(static_cast<u64>(f.get(b)));
+            else c.out.key(f.name).num_f(std::round(f.get(b) * 1000.0) / 1000.0);
+        }
+        c.out.end_object();
+    }
+    c.out.end_object();
     write_world_settings(c);
     c.out.end_object();
     return true;
@@ -102,12 +118,15 @@ bool scene_settings_set(ToolCall& c) {
 const ToolDef kProjectTools[] = {
     {"project_get",
      "The project's .mceproj (name, title, engine_version, games, plugins, start_scene as a GUID, with "
-     "start_scene_path) and the open scene's WorldSettings (null when the scene has none).",
+     "start_scene_path, budgets), each target's performance budget in force (budgets_in_force: the defaults with "
+     "the file's budgets over them) and the open scene's WorldSettings (null when the scene has none).",
      R"json({"type":"object","properties":{}})json", project_get},
     {"project_set",
      "Change .mceproj members: name, title, engine_version (strings), games, plugins (arrays of strings), "
-     "start_scene (a scene's path under assets/ or \"guid:<uuid>\"). Checked before the file is written; other "
-     "members are kept. A game's host reads start_scene when its build is configured: rebuild it to play the new one.",
+     "start_scene (a scene's path under assets/ or \"guid:<uuid>\"), budgets (performance limits per target, "
+     "replacing the file's: {\"mobile\": {\"draws\": 300, \"frame_ms\": 33.3}}; fields frame_ms, sim_ms, render_ms, "
+     "gpu_ms, draws, triangles, sprites, upload_bytes, heap_allocations, sprite_textures, texture_size; 0 = no limit). "
+     "Checked before the file is written; other members are kept. A game's host reads start_scene when its build is configured: rebuild it to play the new one.",
      R"json({"type":"object","properties":{"values":{"type":"object","description":"e.g. {\"start_scene\": \"scenes/title.mcscene\", \"title\": \"My Game\"}"}},"required":["values"]})json",
      project_set},
     {"scene_settings_get", "The open scene's WorldSettings (2D and 3D physics gravity), or null when it has none.",

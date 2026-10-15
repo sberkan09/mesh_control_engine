@@ -13,6 +13,8 @@ struct Image {
 };
 
 Result<Image> decode_png(Span<const byte> bytes);
+// Width and height from an image file's header (PNG, JPEG, ...) without decoding it. False when unreadable.
+bool image_size(Span<const byte> bytes, u32& width, u32& height);
 // Appends the PNG of `rgba` (width * height * 4 bytes) to `out`.
 Result<void> encode_png(u32 width, u32 height, Span<const u8> rgba, Array<byte>& out);
 

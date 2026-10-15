@@ -176,7 +176,7 @@ reach all of its non-transient fields.
 | `gen_music` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `library_search` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `library_add` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `project_check` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `project_check` | `tools_agent.cpp` | docs/user-guide/02-projects.md |
 | `ship_build` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `project_watch` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `asset_lock` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |

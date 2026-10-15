@@ -187,11 +187,13 @@ const ToolDef kAgentTools[] = {
      "Check the project before shipping and get findings to act on, each with severity, file, line, message and a fix: "
      "cook (assets and scenes that fail to import), references (GUIDs no asset has), unused (assets nothing references), "
      "credits (media files with no CREDITS.md row), srgb (data textures imported as sRGB, colour textures as linear), "
-     "performance (each scene run headless: ms per tick against budget_ms) and accessibility (2D text height in pixels "
+     "performance (against the target's budget: each scene run headless for ms per tick, images larger than "
+     "texture_size, scenes whose sprites use more textures than sprite_textures) and accessibility (2D text height in pixels "
      "on a 1280x720 screen and its contrast against the background). pass is true when there is no error.",
      R"j({"type":"object","properties":{"checks":{"type":"array","items":{"type":"string","enum":["cook","references","unused","credits","srgb","performance","accessibility"]},"description":"Run only these (default all)"},)j"
      R"j("ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300,"description":"Ticks per scene for the performance check"},)j"
-     R"j("budget_ms":{"type":"number","exclusiveMinimum":0,"maximum":1000,"default":4,"description":"Average sim milliseconds per tick allowed"},)j"
+     R"j("budget_ms":{"type":"number","exclusiveMinimum":0,"maximum":1000,"description":"Average sim milliseconds per tick allowed (default: the target budget's sim_ms)"},)j"
+     R"j("target":{"type":"string","enum":["desktop","mobile","web"],"default":"desktop","description":"Whose performance budget (project_get budgets_in_force)"},)j"
      R"j("max_findings":{"type":"integer","minimum":1,"maximum":2000,"default":200}}})j",
      project_check},
     {"ship_build",

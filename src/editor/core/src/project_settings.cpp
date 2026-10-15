@@ -41,6 +41,78 @@ bool scene_guid(const EditorProject& project, cook::JsonValue v, cook::String& o
 
 }  // namespace
 
+bool check_budgets(cook::JsonValue budgets, cook::String& err) {
+    if (!budgets.is_object()) {
+        err += "budgets must be an object of targets (desktop, mobile, web), e.g. {\"mobile\": {\"draws\": 300}}";
+        return false;
+    }
+    for (u32 i = 0; i < budgets.size(); ++i) {
+        perf::Target t;
+        if (!perf::parse_target(budgets.key_at(i), t)) {
+            err += "budgets: '";
+            err += budgets.key_at(i);
+            err += "' is not a target (desktop, mobile, web)";
+            return false;
+        }
+        const cook::JsonValue b = budgets.at(i);
+        if (!b.is_object()) {
+            err += "budgets.";
+            err += budgets.key_at(i);
+            err += " must be an object of limits, e.g. {\"draws\": 300, \"frame_ms\": 33.3}";
+            return false;
+        }
+        for (u32 k = 0; k < b.size(); ++k) {
+            const perf::BudgetField* f = perf::find_budget_field(b.key_at(k));
+            const cook::JsonValue v = b.at(k);
+            if (!f) {
+                err += "budgets.";
+                err += budgets.key_at(i);
+                err += ": '";
+                err += b.key_at(k);
+                err += "' is not a budget (";
+                bool first = true;
+                for (const perf::BudgetField& bf : perf::budget_fields()) {
+                    err += first ? "" : ", ";
+                    err += bf.name;
+                    first = false;
+                }
+                err += ")";
+                return false;
+            }
+            const bool ok = v.is_number() && v.as_number() >= 0 && v.as_number() <= (f->integer ? 4e9 : 10000.0) &&
+                            (!f->integer || v.is_integer());
+            if (!ok) {
+                err += "budgets.";
+                err += budgets.key_at(i);
+                err += ".";
+                err += f->name;
+                err += f->integer ? " must be a whole number from 0 (no limit)" : " must be milliseconds from 0 (no limit) to 10000";
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool project_budget(const EditorProject& project, perf::Target target, perf::Budget& out, cook::String& err) {
+    out = perf::default_budget(target);
+    const cook::String path = project_file_path(project);
+    if (path.empty()) return true;
+    cook::String text;
+    cook::JsonDoc doc;
+    cook::JsonError je;
+    if (!cook::fs::read_text(path.view(), text) || !doc.parse(text.view(), je) || !doc.root().is_object()) {
+        err += "the .mceproj file is not a JSON object";
+        return false;
+    }
+    const cook::JsonValue budgets = doc.root().get("budgets");
+    if (!budgets.valid()) return true;
+    if (!check_budgets(budgets, err)) return false;
+    const cook::JsonValue mine = budgets.get(perf::target_name(target));
+    for (u32 k = 0; mine.valid() && k < mine.size(); ++k) perf::find_budget_field(mine.key_at(k))->set(out, mine.at(k).as_number());
+    return true;
+}
+
 cook::String project_file_path(const EditorProject& project) {
     if (!project.is_open()) return {};
     // The root folder only, sorted: the first .mceproj by name.
@@ -73,10 +145,12 @@ bool patch_project_file(const EditorProject& project, cook::JsonValue patch, coo
         else if (key == "games" || key == "plugins") ok = is_string_array(v);
         else if (key == "start_scene") {
             if (!scene_guid(project, v, start, err)) return false;
+        } else if (key == "budgets") {
+            if (!check_budgets(v, err)) return false;
         } else {
             err += "'";
             err += key;
-            err += "' is not a project setting (name, title, engine_version, games, plugins, start_scene)";
+            err += "' is not a project setting (name, title, engine_version, games, plugins, start_scene, budgets)";
             return false;
         }
         if (!ok) {
