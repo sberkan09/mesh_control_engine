@@ -1,6 +1,6 @@
 # M-NET2 — Multiplayer that games can ship (milestone record)
 
-**Status:** active. Steps 1–3 merged into `dev_claude`; steps 4–7 to come (Linear SBA-82 … SBA-88).
+**Status:** active. Steps 1–4 merged into `dev_claude`; steps 5–7 to come (Linear SBA-82 … SBA-88).
 **Why:** M-NET gives server-authoritative snapshots over ENet with no prediction or interpolation, so a moving player
 feels the round trip (ROADMAP "Engine gap tracks"; comparison in the project's `assessments/motor-kiyaslama-eksikler.md`).
 **Measured on:** the Linux CI container.
@@ -12,7 +12,7 @@ feels the round trip (ROADMAP "Engine gap tracks"; comparison in the project's `
 | 1. Network test harness: simulated latency, jitter and loss; headless multi-client runner in `local_ci.sh`; net stats in the dev overlay | SBA-82 | done |
 | 2. Snapshot interpolation for remote entities, jitter buffer, extrapolation limits | SBA-83 | done |
 | 3. Client-side prediction and server reconciliation, misprediction smoothing | SBA-84 | done |
-| 4. Lag compensation for hit checks (rewound colliders) | SBA-85 | — |
+| 4. Lag compensation for hit checks (rewound colliders) | SBA-85 | done |
 | 5. Deterministic rollback/lockstep mode with desync detection by hash | SBA-86 | — |
 | 6. Sessions: `mce_relay` relay/lobby server, room codes; WebSocket/WebRTC transport | SBA-87 | — |
 | 7. Replication as data: `NetReplicated` / `NetOwner`, per-field flags, MCP, user guide | SBA-88 | — |
@@ -68,3 +68,19 @@ Notes:
   the step function validates them; the server trusts no client.
 - The server runs inputs as they arrive, one step each, the Quake usercmd model: a client that sends
   more inputs than ticks moves faster. Capping inputs per server tick is left to the game for now.
+
+## Step 4 — lag compensation for hit checks
+
+| Item | Where | Evidence |
+|---|---|---|
+| `net::LagCompensator`: `record(world, tick)` keeps every `NetId` + `LocalTransform` + `HitBox` entity per tick in a ring sized by `max_rewind_s`; `raycast(view_tick, origin, dir, range, hit, ignore)` finds the nearest box at that moment, blended between ticks the way `ReplicationClient` draws; `transform_at` gives the rewound transform for other checks | `mce/net/lag_compensation.h`, `lag_compensation.cpp` | `test_net` "a shot at where the client saw the target hits when rewound, misses at present", "transforms between ticks, and entities that came or went" |
+| `HitBox`: an oriented box in the entity's local space (half extents, offset), turned and scaled with it; `ray_hits_box` is the slab test | same | `test_net` "rays against oriented, scaled boxes" |
+| Rewind limit: a view older than `max_rewind_s` is checked at the oldest allowed moment, a future view (or NaN) at the present | same | `test_net` "the rewind is limited, and a view from the future is the present" |
+| `ReplicationClient::drawn_tick(net_id)`: the server tick an entity shows (the render tick while interpolated or extrapolated, the snapshot's tick while held), sent with a shot; `render_tick()` for the whole view | `mce/net/replication.h`, `replication.cpp` | `test_net` "over a 100 ms link, shots at the drawn target hit only when rewound" (24 of 24 rewound, 0 at present) |
+| The sample: every client fires at drifter 1 from the origin every half second with its drawn tick; the server counts hits rewound and at its present. The end-of-run check also waits for the clients to hold the server's newest snapshot bytes, not just its tick (a late input can change the state after the last tick) | `samples/net_headless/main.cpp` | 4 clients at 75 ms ± 20, 5% loss: 64 of 64 rewound, 19 at present; 8 clients at 150 ms ± 40, 15% loss: every shot inside the 1 s rewind hits, 0 at present; 16 seeds checked |
+
+Notes:
+- A reliable shot lost several times at 15% loss can reach the server after the rewind window; it is
+  then checked at the oldest allowed moment and usually misses. The sample counts those.
+- Rewinding trusts the client's view tick within the limit. A cheater can claim the oldest allowed
+  view; the limit is the bound on what that buys.
