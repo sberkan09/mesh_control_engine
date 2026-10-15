@@ -85,6 +85,8 @@
 #include "mce/input/script.h"
 #include "mce/kit/captions.h"
 #include "mce/kit/stock.h"
+#include "mce/kit/cinematic.h"
+#include "mce/kit/timeline.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/kit3d_extract.h"
 #include "mce/kit/particles.h"
@@ -588,11 +590,13 @@ public:
 
         update_console(bb);
         update_ui_layers(bb);
+        const bool cutscene = kit::cutscene_view(world_, cutscene_) && !ui_preview_;
+        update_ui_map(cutscene && cutscene_.active);
         update_subtitles(bb);
         speak_focus();
         update_ui_screens(bb);
         const bool overlay =
-            paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() || cv_stats.get_bool();
+            paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() || cv_stats.get_bool() || cutscene;
 
         // 3D: the kit3d scene first (it ends in the backbuffer); the 2D kit draws over it.
         if (!three_d_ && kit::has_camera_3d(world_)) {
@@ -1536,19 +1540,22 @@ private:
         return {};
     }
 
-    void update_ui_screens(rhi::Extent2D bb) {
-        if (!screens_.active()) return;
-        // A visible modal screen owns the controls: the "UI" action map (Navigate / Confirm / Cancel)
-        // blocks the game's map below it until the screen hides.
-        const bool modal = screens_.modal_visible() && !console_.is_open();
+    // A visible modal screen or a playing cutscene owns the controls: the "UI" action map (Navigate /
+    // Confirm / Cancel; Cancel skips a cutscene) blocks the game's map below it until it ends.
+    void update_ui_map(bool cutscene) {
+        const bool modal = ((screens_.active() && screens_.modal_visible()) || cutscene) && !console_.is_open();
         if (modal && !ui_map_pushed_ && !ui_map_missing_) {
             ui_map_pushed_ = input_.push_map(MCE_SID("UI"));
             ui_map_missing_ = !ui_map_pushed_;
-            if (ui_map_missing_) MCE_LOG_WARN("{}: the input map has no \"UI\" map for the UI screens", desc_.app_name);
+            if (ui_map_missing_) MCE_LOG_WARN("{}: the input map has no \"UI\" map for UI screens and cutscenes", desc_.app_name);
         } else if (!modal && ui_map_pushed_) {
             input_.pop_map();
             ui_map_pushed_ = false;
         }
+    }
+
+    void update_ui_screens(rhi::Extent2D bb) {
+        if (!screens_.active()) return;
         ui::UpdateContext ctx;
         ctx.viewport = bb;
         ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
@@ -1592,11 +1599,63 @@ private:
             const ui::Layer* l = desc_.ui_layers[i];
             if (l && l->submit) l->submit(l->user, hud, static_cast<i16>(-40 + 4 * static_cast<i32>(i)));
         }
+        if (cutscene_.bars > 0.0f || cutscene_.active) add_cutscene_overlay(hud, bb);
         if (paused_) add_pause_overlay(hud, bb);
         if (cv_stats.get_bool()) add_stats_line(hud);
         console_.submit(hud, 200);
         hud.build();
         renderer_.record_2d(cmd, hud);
+    }
+
+    // A cutscene (kit::Cutscene, M-CINEMA): letterbox bars over the frame, under the subtitles
+    // (update_subtitles shows the timeline's lines) and the UI screens, and the hold-to-skip prompt.
+    void add_cutscene_overlay(render::SpriteBatch& hud, rhi::Extent2D bb) {
+        const f32 w = static_cast<f32>(bb.width), h = static_cast<f32>(bb.height);
+        const f32 bar = std::floor(h * cutscene_.letterbox * cutscene_.bars + 0.5f);
+        const render::SpriteSetId solid = extract_.sprite_set(asset::Guid{});
+        constexpr i16 kLayer = -130;  // over the world, under the subtitles (-124) and the UI screens (-120)
+        if (bar > 0.0f) {
+            for (u32 i = 0; i < 2; ++i) {
+                render::SpriteInstance s;
+                s.set = solid;
+                s.position = {0.5f * w, i == 0 ? 0.5f * bar : h - 0.5f * bar};
+                s.scale = {w, bar};
+                s.tint = Color{0.0f, 0.0f, 0.0f, 1.0f};
+                s.sort_layer = kLayer;
+                hud.add(s);
+            }
+        }
+        const kit::Cutscene* c = world_.alive(cutscene_.entity) ? world_.try_get<kit::Cutscene>(cutscene_.entity) : nullptr;
+        if (!c || !cutscene_.active) return;
+        const f32 scale = math::max(1.0f, std::floor(h / 360.0f));
+        const f32 margin = 12.0f * scale;
+        if (!cutscene_.show_skip) return;
+        render::TextLayout layout(mem::frame());
+        render::TextLayoutDesc desc;
+        desc.size_px = 14.0f * scale;
+        render::layout_text(skin_.font.face, c->skip_prompt.view(), desc, layout);
+        const f32 track = 64.0f * scale, thick = 3.0f * scale;
+        const f32 right = w - margin - static_cast<f32>(safe_insets_.right);
+        const f32 top = margin + static_cast<f32>(safe_insets_.top);
+        render::TextPlacement p;
+        p.origin = {right - track - margin - layout.width, top};
+        p.sort_layer = kLayer;
+        p.sort_order = 2;
+        p.tint = Color{1.0f, 1.0f, 1.0f, 0.8f};
+        hud.add_text(skin_.font, layout, p);
+        const f32 y = top + 0.5f * layout.height;
+        for (u32 i = 0; i < 2; ++i) {  // the track, then the fill
+            const f32 len = i == 0 ? track : track * cutscene_.skip_progress;
+            if (len <= 0.0f) continue;
+            render::SpriteInstance s;
+            s.set = solid;
+            s.position = {right - track + 0.5f * len, y};
+            s.scale = {len, thick};
+            s.tint = i == 0 ? Color{1.0f, 1.0f, 1.0f, 0.25f} : Color{1.0f, 1.0f, 1.0f, 0.9f};
+            s.sort_layer = kLayer;
+            s.sort_order = 1 + static_cast<i32>(i);
+            hud.add(s);
+        }
     }
 
     void add_pause_overlay(render::SpriteBatch& hud, rhi::Extent2D bb) {
@@ -2213,6 +2272,7 @@ private:
     player::UiScreens screens_;
     input::InputState ui_actions_;  // the newest tick snapshot, for the UI screens' navigation
     bool ui_fresh_ = false;         // ui_actions_ arrived since the last rendered frame
+    kit::CutsceneView cutscene_;  // this frame's cutscene (letterbox, skip prompt)
     bool ui_map_pushed_ = false;
     bool ui_map_missing_ = false;
     bool ui_preview_ = false;  // -ui_preview: one document over the clear color

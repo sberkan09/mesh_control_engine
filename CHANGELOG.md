@@ -24,6 +24,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   (`ui::SubtitleView`), with `access.subtitles`, `access.captions`, `access.subtitle_speaker`, `access.subtitle_size`
   and `access.subtitle_background` on the stock options screen. The NPC dialogue box follows the speaker and
   background settings. User guide 10.7.
+- Cutscenes, M-CINEMA step 4 (SBA-79): a `Cutscene` next to a `TimelinePlayer` holds gameplay while the timeline
+  plays (timelines, animators, cameras, particles and audio play on; `World::run_during_cutscenes` adds your own
+  systems), and the player draws letterbox bars under the timeline's subtitles and a hold-to-skip prompt (Esc / B);
+  skipping still fires the remaining event keys. Cinematic cameras: `CameraRail3D` (a dolly on a curve through up
+  to 8 points), `CameraLookAt3D`, `CameraShake3D` (`ShakeTrigger` shakes it; Reduce motion tones it down) and
+  `CameraBlend3D`; a timeline camera cut with `"blend": seconds` eases between cameras. Novels: `"timelines"` in
+  story.json and `@cutscene <id>`. User guide 13.6.
 - The editor's Animation panel, M-CINEMA step 3 (SBA-78): an `.mcanim` animation graph drawn as boxes and arrows
   (drag states, add transitions from a right-click, any-state transitions, the start state), an inspector for
   parameters, states (clip or 1D blend points, loop, speed, events) and transitions (conditions, fade, on finish),

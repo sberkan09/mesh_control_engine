@@ -243,6 +243,7 @@ void install_hierarchy(World& w) {
     w.set_hooks<ChildOf>(&on_child_of_added, &on_child_of_removed);
     w.add_destroy_hook(&on_destroy);
     w.add_system(Phase::FixedUpdate_Post, "transform_propagate", &propagate_system);
+    w.run_during_cutscenes(Phase::FixedUpdate_Post, "transform_propagate");
 }
 
 void propagate_transforms(World& w) {

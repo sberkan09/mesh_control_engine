@@ -19,7 +19,8 @@ mce_add_test(test_novel UMBRELLA
     SOURCES
         test_novel.cpp
     DEPS
-        mce::mce_kit_novel)
+        mce::mce_kit_novel
+        mce::mce_asset_cook)
 add_dependencies(test_novel test_novel_story)
 target_include_directories(test_novel PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 

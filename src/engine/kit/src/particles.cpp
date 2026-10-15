@@ -264,6 +264,7 @@ void install_particles(World& world, asset::AssetSystem* assets) {
     world.register_components<ParticleEmitter>();
     world.set_resource(ParticleSystem(assets));
     world.add_system(Phase::FixedUpdate_Post, "particles_advance", &particles_advance);
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "particles_advance");
 }
 
 }  // namespace mce::kit

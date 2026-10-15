@@ -5,7 +5,9 @@
 #include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/cinematic.h"
 #include "mce/log.h"
+#include "mce/render/accessibility.h"
 #include "mce/string_id.h"
 #include "kit3d_internal.h"
 
@@ -453,6 +455,30 @@ bool Kit3DExtract::camera_of(World& world, Entity e, f32 alpha, render::Camera3D
 }
 
 bool Kit3DExtract::view_of(World& world, Entity e, const Camera3DComponent& c, f32 alpha, render::Camera3D& out) {
+    if (!base_view_of(world, e, c, alpha, out)) return false;
+    // M-CINEMA: a blend from another camera's view, then this camera's shake.
+    if (const CameraBlend3D* b = world.try_get<CameraBlend3D>(e); b && !(b->from == e) && world.alive(b->from)) {
+        const f32 w = camera_blend_weight(*b);
+        const Camera3DComponent* fc = world.try_get<Camera3DComponent>(b->from);
+        render::Camera3D from;
+        if (w < 1.0f && fc && base_view_of(world, b->from, *fc, alpha, from)) {
+            out.position = lerp(from.position, out.position, w);
+            out.orientation = normalize(slerp(from.orientation, out.orientation, w));
+            out.fov_y = lerp(from.fov_y, out.fov_y, w);
+        }
+    }
+    if (const CameraShake3D* s = world.try_get<CameraShake3D>(e); s && s->trauma > 0.0f) {
+        // Reduced motion (M-ACCESS) scales the view's shake, never the component.
+        const f32 motion = render::accessibility_settings().motion_scale;
+        const vec3 r = s->offset_rotation * motion;
+        out.position = out.position + rotate(out.orientation, s->offset * motion);
+        out.orientation = normalize(out.orientation * quat_from_axis_angle({0.0f, 1.0f, 0.0f}, r.y) *
+                                    quat_from_axis_angle({1.0f, 0.0f, 0.0f}, r.x) * quat_from_axis_angle({0.0f, 0.0f, 1.0f}, r.z));
+    }
+    return true;
+}
+
+bool Kit3DExtract::base_view_of(World& world, Entity e, const Camera3DComponent& c, f32 alpha, render::Camera3D& out) {
     vec3 pos, scale;
     quat rot;
     if (!pose_of(world, e, pos, rot, scale)) return false;

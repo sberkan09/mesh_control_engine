@@ -13,9 +13,11 @@
 #include "mce/ecs/transform.h"
 #include "mce/input/actions.h"
 #include "mce/input/ecs.h"
+#include "mce/kit/cinematic.h"
 #include "mce/kit/components.h"
 #include "mce/kit/novel.h"
 #include "mce/kit/sequence.h"
+#include "mce/kit/timeline.h"
 #include "mce/loc/loc.h"
 #include "mce/log.h"
 #include "mce/platform/haptics.h"
@@ -110,6 +112,9 @@ void build_tables(NovelState& n, const Program& p) {
                 const i32 l = index_in(p.luts, p.lut_count, strip_ext(after(path, 13)));
                 if (l >= 0 && l < static_cast<i32>(NovelState::kLuts)) n.lut[l] = info.guid;
             }
+        } else if (info.type == asset::ChunkType::Timeline && starts_with(path, "timelines/")) {
+            const i32 t = index_in(p.timelines, p.timeline_count, strip_ext(after(path, 10)));
+            if (t > 0 && t < static_cast<i32>(NovelState::kTimelines)) n.timelines[t] = info.guid;
         } else if (info.type == asset::ChunkType::Sfx) {
             struct Dir {
                 const char* prefix;
@@ -225,6 +230,13 @@ void play_sfx(Context& c, u16 id, f32 gain_db) {
     c.f.events().push(ev);
 }
 
+// The @cutscene is over (played out, skipped, or the bot's turn): its entity goes, the story goes on.
+static void end_cutscene(Context& c) {
+    if (c.f.world().alive(c.n.cutscene)) c.f.commands().destroy(c.n.cutscene);
+    c.n.cutscene = Entity{};
+    resume(c);
+}
+
 void resume(Context& c) {
     NovelState& n = c.n;
     StoryState& s = c.s;
@@ -338,6 +350,24 @@ void resume(Context& c) {
                 n.hold_ticks = n.autopilot ? 0 : op.a;
                 n.mode = Mode::Wait;
                 return;
+            case OpKind::Cutscene: {
+                ++s.pc;
+                const asset::Guid guid = op.a < NovelState::kTimelines ? n.timelines[op.a] : asset::Guid{};
+                if (guid.is_null()) {
+                    MCE_LOG_ERROR("novel: @cutscene {} has no cooked timelines/<id>.mctimeline; skipped",
+                                  op.a < p.timeline_count ? p.timelines[op.a] : "?");
+                    break;
+                }
+                if (n.autopilot) break;  // the bot never waits
+                // Not a gameplay hold: the novel's own systems watch it end.
+                kit::TimelinePlayer player;
+                player.timeline.guid = guid;
+                kit::Cutscene cut;
+                cut.hold_gameplay = false;
+                n.cutscene = c.f.commands().spawn(player, cut);
+                n.mode = Mode::Cutscene;
+                return;
+            }
             case OpKind::Command:
                 ++s.pc;
                 n.command = op.a;
@@ -400,6 +430,7 @@ void bot_step(Context& c) {
         case Mode::Ending:
         case Mode::Fade:
         case Mode::Wait: resume(c); break;
+        case Mode::Cutscene: end_cutscene(c); break;
         case Mode::Game:
             if (n.hooks.game_bot) n.hooks.game_bot(c);
             else resume(c);
@@ -549,6 +580,13 @@ void player_step(Context& c) {
             if (n.hold_ticks > 0) --n.hold_ticks;
             else resume(c);
             break;
+        case Mode::Cutscene: {
+            // Spawned by a command buffer: it shows up at the end of the tick that played it.
+            World& w = c.f.world();
+            const kit::TimelinePlayer* tp = w.alive(n.cutscene) ? w.try_get<kit::TimelinePlayer>(n.cutscene) : nullptr;
+            if (tp && tp->finished) end_cutscene(c);
+            break;
+        }
         default: break;
     }
 }

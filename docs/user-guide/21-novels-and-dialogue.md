@@ -49,7 +49,7 @@ runs the compiler by hand; `--check` only validates, `--werror` fails on warning
   "cast": ["mira"],
   "expressions": ["neutral", "warm"], "poses": ["stand"], "slots": ["left", "center", "right"],
   "locations": ["pier"], "times": ["day", "evening"], "luts": ["neutral"],
-  "music": ["harbour"], "ambience": ["sea"], "sfx": ["page"],
+  "music": ["harbour"], "ambience": ["sea"], "sfx": ["page"], "timelines": ["harbour_intro"],
   "endings": [{"id": "open_water", "title": "Open Water"}],
   "tags": ["first", "kind"], "bot": {"kind": ["kind", "first"]},
   "flags": ["met_mira"], "counters": [{"name": "trust.mira", "min": -3, "max": 6}],
@@ -68,6 +68,7 @@ key. Art and sound are found by path, so the names here are the file names:
 | sprite | `textures/cast/<character>_<expression>_<pose>.png` |
 | colour grade | `textures/lut_<lut>.png` |
 | music / ambience / sound | `audio/music/<id>.wav`, `audio/ambience/<id>.wav`, `audio/sfx/<id>.wav` |
+| cutscene | `timelines/<id>.mctimeline` (13.5) |
 
 ## 21.3 The script
 
@@ -105,6 +106,7 @@ Mira:
 | `@checkpoint` (or `@journal`) | autosave and the checkpoint panel |
 | `@ending <id>` | marks an ending reached |
 | `@fade`, `@wait <seconds>` | pacing |
+| `@cutscene <timeline>` | plays a timeline from `"timelines"` as a cutscene (13.6: letterbox, its subtitles, hold Esc to skip), then goes on; the bot skips it. Its tracks drive the playing entity (`"self"`): sounds, events, subtitles |
 | `@<command> [args]` | a game command declared in `"commands"` (21.5) |
 
 Conditions are `flag`, `!flag`, `var >= n` (also `<= == != > <`), joined by `and` and `or`; `and`

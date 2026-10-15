@@ -21,6 +21,7 @@ The manifest names everything the script may use, so a typo fails here and not a
                  "lamp_pos": [0, 5.5], "lamp_intensity": 1.0}],     or plain names (a white look)
       "luts": ["neutral"],                            textures/lut_<name>.png
       "music": ["harbour"], "ambience": ["sea"], "sfx": ["page"],     audio/<kind>/<id>.wav ("none" is added)
+      "timelines": ["harbour_intro"],                 timelines/<id>.mctimeline, played by @cutscene
       "ui_sfx": {"page": "page", "move": "move", "confirm": "confirm", "letter": "envelope"},
       "endings": [{"id": "open_water", "title": "Open Water"}],
       "tags": ["first", "leave"],                     option tags; an option without one carries the first
@@ -51,7 +52,7 @@ The script, one statement per line:
       >? "hidden unless the condition holds" [condition] -> label
     @set <var> <+n|-n|=n>     @flag <var>     @unflag <var>     @if <condition> -> label
     @letter <n>     @lettertext <n> ... @endletter     @checkpoint (or @journal)     @ending <id>
-    @fade     @wait <seconds>     @<command> [args...]
+    @fade     @wait <seconds>     @cutscene <timeline>     @<command> [args...]
 
 Conditions: `flag`, `!flag`, `var >= n` (also <=, ==, !=, >, <), joined by `and` / `or` (and
 binds tighter). A `Name:` prefix is a speaker only when Name is a declared character; anything
@@ -99,7 +100,7 @@ import sys
 MAX_LINE_BYTES = 62  # TextLabel.text is a FixedString<64>
 
 OPS = ["Nop", "Say", "Choice", "Jump", "Call", "Return", "If", "Add", "Set", "Bg", "Music", "Ambience", "Sfx", "Show",
-       "Hide", "Expr", "Pose", "Letter", "LetterPage", "Checkpoint", "Ending", "End", "Fade", "Wait", "Command", "Tag"]
+       "Hide", "Expr", "Pose", "Letter", "LetterPage", "Checkpoint", "Ending", "End", "Fade", "Wait", "Command", "Tag", "Cutscene"]
 TESTS = ["Always", "Set", "Clear", "Ge", "Le", "Eq", "Ne", "Gt", "Lt"]
 JOINS = ["End", "And", "Or"]
 NONE = 0xFFFF
@@ -107,7 +108,7 @@ COUNTER_BIT = 0x8000
 TERMINATORS = ("End", "Jump", "Return")
 BUILTIN = {"scene", "label", "bg", "music", "ambience", "sfx", "show", "hide", "expr", "pose", "set", "flag", "unflag",
            "if", "jump", "call", "return", "letter", "lettertext", "endletter", "checkpoint", "journal", "fade",
-           "wait", "ending", "end"}
+           "wait", "cutscene", "ending", "end"}
 
 
 LOCALE_RE = re.compile(r"[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*")
@@ -265,6 +266,7 @@ class Manifest:
         self.music = names(m, "music", none=True)
         self.ambience = names(m, "ambience", none=True)
         self.sfx = names(m, "sfx", none=True)
+        self.timelines = names(m, "timelines", none=True)
         self.endings, self.ending_titles = ["none"], [""]
         for e in m.get("endings", []):
             eid, title = (e, e.replace("_", " ").title()) if isinstance(e, str) else (e["id"], e.get("title", e["id"]))
@@ -690,6 +692,11 @@ class Compiler:
             self.need(args, 1, f"@{cmd} <id>")
             table = {"music": m.music, "ambience": m.ambience, "sfx": m.sfx}[cmd]
             self.emit(cmd.title(), self.idx(table, args[0], cmd))
+        elif cmd == "cutscene":
+            self.need(args, 1, "@cutscene <timeline>")
+            if args[0] == "none":
+                raise CompileError(f"{self.src}: @cutscene names a timeline from story.json \"timelines\"")
+            self.emit("Cutscene", self.idx(m.timelines, args[0], "timeline"))
         elif cmd == "show":
             self.need(args, 2, "@show <character> <slot> [expression] [pose]")
             who = self.character(args[0])
@@ -1041,6 +1048,8 @@ class Compiler:
         L.append(self.strings("kLocationNames", m.locations))
         L.append(self.strings("kLutNames", m.luts))
         L.append(self.strings("kMusicNames", m.music))
+        if len(m.timelines) > 1:
+            L.append(self.strings("kTimelineNames", m.timelines))
         L.append(self.strings("kAmbienceNames", m.ambience))
         L.append(self.strings("kSfxNames", m.sfx))
         L.append(self.strings("kTagNames", m.tags))
@@ -1119,6 +1128,8 @@ class Compiler:
         if m.loc_base:
             fields += [("locales", "kLocales"), ("locale_count", str(len(self.loc_tables))),
                        ("base_locale", self.cstr(m.loc_base))]
+        if len(m.timelines) > 1:
+            fields += [("timelines", "kTimelineNames"), ("timeline_count", str(len(m.timelines)))]
         L.append("// The program the kit runs: novel::install(world, kProgram, hooks) / install_dialogue(world, kProgram).\n")
         L.append("inline constexpr mce::novel::Program kProgram = {\n")
         for k, v in fields:
