@@ -8,7 +8,8 @@ Made with the MCE project template (`scripts/new_project.py`). Layout (assets.md
 | `assets/` | the content you edit; the editor opens this directory. `cooked/` and `assets.mce` are build outputs |
 | `games/@GAME@/module/` | the game module: `components.h` components, `@GAME@.cpp` systems + `install`, `module.cpp` entry, `types.cpp` for the cook |
 | `games/@GAME@/host/` | the thin host executable (the engine's player runtime + this game) |
-| `CREDITS.md` | third-party content (the template's ProggyClean font, MIT); `mce ship` / `ship.py` copy it into the shipped folder |
+| `assets/ui/themes/` | starter UI themes, `pixel`, `clean` and `story` (user guide 12, "Themes"): name one as a `.mcui` document's `"theme"`, and delete the ones (and their fonts) the game does not use |
+| `CREDITS.md` | third-party content (the template's fonts: ProggyClean, MIT, and the themes' OFL fonts); `mce ship` / `ship.py` copy it into the shipped folder |
 
 With the installed SDK (`mce` on your PATH; chapter 1 of the user guide):
 

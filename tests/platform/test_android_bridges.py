@@ -140,6 +140,56 @@ def main():
         assert "Java_org_meshcontrol_firebase_MceFirebase_nativeConfigDone" in firebase_cpp
         for name in ("mce_firebase_config_value", "mce_firebase_config_done", "mce_firebase_remote_config_fetch"):
             assert name in swift and name in firebase_cpp, name
+
+        # Game services (M-LIVEOPS step 2): Play Games only for a game with a .mcservices and MCE_PLAY_GAMES_APP_ID.
+        android_app.stamp(project, art, args, tmp, build_dir, os.path.join(tmp, "libreview_probe.so"),
+                          os.path.join(tmp, "debug.keystore"))
+        assert android_app.PLAY_GAMES not in read(os.path.join(project, "app", "build.gradle"))
+        write(os.path.join(game, "services.mcservices"), '{"achievements": [{"id": "first_win"}]}')
+        os.environ["MCE_PLAY_GAMES_APP_ID"] = "123456789012"
+        try:
+            android_app.stamp(project, art, args, tmp, build_dir, os.path.join(tmp, "libreview_probe.so"),
+                              os.path.join(tmp, "debug.keystore"))
+        finally:
+            del os.environ["MCE_PLAY_GAMES_APP_ID"]
+        gradle = read(os.path.join(project, "app", "build.gradle"))
+        assert f"implementation '{android_app.PLAY_GAMES}'" in gradle, gradle
+        manifest = read(os.path.join(main_dir, "AndroidManifest.xml"))
+        assert 'com.google.android.gms.games.APP_ID" android:value="@string/mce_play_games_app_id"' in manifest
+        ids = read(os.path.join(main_dir, "res", "values", "mce_games.xml"))
+        assert '<string name="mce_play_games_app_id" translatable="false">123456789012</string>' in ids, ids
+        activity = read(os.path.join(main_dir, "java", "org", "meshcontrol", "review_probe", "MceActivity.java"))
+        games = read(os.path.join(main_dir, "java", "org", "meshcontrol", "games", "MceGames.java"))
+        assert "package org.meshcontrol.games;" in games
+        assert "static native void nativeAnswer(int kind, boolean ok, boolean missing, int tag, byte[] bytes);" in games
+        assert not os.path.exists(os.path.join(project, "games")), os.listdir(project)
+        games_cpp = read(os.path.join(src, "game_services.cpp"))
+        assert "Java_org_meshcontrol_games_MceGames_nativeAnswer" in games_cpp
+        # Every bridge method firebase-style: the activity declares it with the signature the JNI side looks up.
+        for method, sig, decl in [
+                ("mceGamesStart", "()V", "public void mceGamesStart()"),
+                ("mceGamesSignIn", "(Z)V", "public void mceGamesSignIn(boolean interactive)"),
+                ("mceGamesAchievement", "(Ljava/lang/String;III)V",
+                 "public void mceGamesAchievement(String id, int steps, int total, int tag)"),
+                ("mceGamesScore", "(Ljava/lang/String;JI)V", "public void mceGamesScore(String id, long score, int tag)"),
+                ("mceGamesWrite", "(Ljava/lang/String;[BI)V", "public void mceGamesWrite(String name, byte[] bytes, int tag)"),
+                ("mceGamesShowAchievements", "()V", "public void mceGamesShowAchievements()"),
+                ("mceGamesShowLeaderboard", "(Ljava/lang/String;)V", "public void mceGamesShowLeaderboard(String id)")]:
+            assert f'method("{method}", "{sig}")' in games_cpp, method
+            assert decl in activity, decl
+        assert 'call_tagged("mceGamesRead"' in games_cpp and "public void mceGamesRead(String name, int tag)" in activity
+        # MceGames and game_services_gamekit.swift number their answers as AnswerKind does.
+        header = read(os.path.join(src, "..", "include", "mce", "platform", "game_services.h"))
+        names = ["SignedIn", "Achievement", "Score", "BlobRead", "BlobWritten"]
+        order = [header.index(f"    {n},") for n in names]
+        assert order == sorted(order), "game_services.h AnswerKind order changed: update MceGames.java and the Swift side"
+        assert "SIGNED_IN = 0" in games and "BLOB_WRITTEN = 4" in games
+        swift = read(os.path.join(src, "game_services_gamekit.swift"))
+        assert "case signedIn = 0, achievement, score, blobRead, blobWritten" in swift
+        for name in ("mce_gamekit_start", "mce_gamekit_sign_in", "mce_gamekit_achievement", "mce_gamekit_score",
+                     "mce_gamekit_read", "mce_gamekit_write", "mce_gamekit_show_achievements",
+                     "mce_gamekit_show_leaderboard", "mce_gamekit_answer"):
+            assert name in swift and name in games_cpp, name
     print("android bridges stamping OK")
 
 

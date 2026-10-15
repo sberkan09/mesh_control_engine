@@ -35,6 +35,12 @@ the player consents. The release build uploads the unstripped library's symbols 
 (uploadCrashlyticsSymbolFileRelease). Without the variable nothing of Firebase is stamped in and
 platform::firebase::backend() is "none".
 
+Game services (M-LIVEOPS step 2): a game with a .mcservices, shipped with MCE_PLAY_GAMES_APP_ID set to
+its Play Games project id (the number in the Play Console's Play Games Services setup; public, so it may
+also sit in a CI variable), gets android/games/MceGames.java, Play Games Services v2 (PLAY_GAMES), the
+mceGames* methods and the project id in the manifest; platform::game_services then speaks to Play Games
+over JNI. Without the variable nothing is stamped and game services stay on the device.
+
 Review prompt (M-MOBILE step 11c): every game gets android/review/MceReview.java, Play In-App Review
 (PLAY_REVIEW) and MceActivity's mceReviewRequest, which platform::request_review() calls over JNI.
 
@@ -74,6 +80,7 @@ FIREBASE_BOM = "com.google.firebase:firebase-bom:33.7.0"
 FIREBASE_LIBS = ["com.google.firebase:firebase-analytics", "com.google.firebase:firebase-crashlytics-ndk",
                  "com.google.firebase:firebase-config"]
 GOOGLE_SERVICES_PLUGIN = "com.google.gms:google-services:4.4.2"
+PLAY_GAMES = "com.google.android.gms:play-services-games-v2:20.1.2"
 CRASHLYTICS_PLUGIN = "com.google.firebase:firebase-crashlytics-gradle:3.0.2"
 
 # MceActivity's bridge to MceFirebase, for platform/firebase.h's JNI calls (src/engine/platform/src/firebase.cpp).
@@ -93,6 +100,51 @@ FIREBASE_METHODS = '''
         else org.meshcontrol.firebase.MceFirebase.nativeConfigDone(false);
     }
 '''
+
+# MceActivity's bridge to MceGames, for platform/game_services.h's JNI calls (src/engine/platform/src/game_services.cpp).
+GAMES_METHODS = '''
+    // ---- game services (mce_platform's game_services over JNI, cmake/mobile/android/games) ----
+    private org.meshcontrol.games.MceGames games;
+
+    public void mceGamesStart() {
+        if (games == null) games = new org.meshcontrol.games.MceGames(this);
+    }
+    public void mceGamesSignIn(boolean interactive) { games.signIn(interactive); }
+    public void mceGamesAchievement(String id, int steps, int total, int tag) { games.achievement(id, steps, total, tag); }
+    public void mceGamesScore(String id, long score, int tag) { games.score(id, score, tag); }
+    public void mceGamesRead(String name, int tag) { games.read(name, tag); }
+    public void mceGamesWrite(String name, byte[] bytes, int tag) { games.write(name, bytes, tag); }
+    public void mceGamesShowAchievements() { games.showAchievements(); }
+    public void mceGamesShowLeaderboard(String id) { games.showLeaderboard(id); }
+'''
+
+GAMES_META = ('''
+        <meta-data android:name="com.google.android.gms.games.APP_ID" android:value="@string/mce_play_games_app_id" />''')
+
+
+def game_services_catalogs(art):
+    """Paths of the game's .mcservices files."""
+    out = []
+    src = art.get("source")
+    if src and os.path.isdir(src):
+        for root, _, files in os.walk(src):
+            out += [os.path.join(root, f) for f in sorted(files) if f.endswith(".mcservices")]
+    return out
+
+
+def play_games_app_id(art):
+    """MCE_PLAY_GAMES_APP_ID for a game with a .mcservices, or None (game services stay on the device)."""
+    app = os.environ.get("MCE_PLAY_GAMES_APP_ID", "").strip()
+    if not game_services_catalogs(art):
+        return None
+    if not app:
+        print(f"ship: {art['name']} has a .mcservices but MCE_PLAY_GAMES_APP_ID is not set; "
+              "its game services stay on the device", flush=True)
+        return None
+    if not app.isdigit():
+        sys.exit(f"ship: MCE_PLAY_GAMES_APP_ID={app} is not a Play Games project id (digits only)")
+    return app
+
 
 # Both SDKs start with collection off: nothing leaves the device before the player consents.
 FIREBASE_META = ('''
@@ -245,7 +297,7 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
         sys.exit(f"ship: SDL's android-project not found under {build_dir}/_deps (configure the preset first)")
     shutil.rmtree(project, ignore_errors=True)
     shutil.copytree(TEMPLATE, project, ignore=shutil.ignore_patterns("*.in", "README.md", "MceActivity.java*", "billing", "ads", "review", "haptics",
-                                                                   "firebase"))
+                                                                   "firebase", "games"))
     for name in ("gradlew", "gradlew.bat", "gradle"):
         src = os.path.join(sdl_project, name)
         dst = os.path.join(project, name)
@@ -271,6 +323,8 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
         "ADS_META": "",
         "FIREBASE": "",
         "FIREBASE_META": "",
+        "GAMES": "",
+        "GAMES_META": "",
         "PLUGINS": "",
         "CRASHLYTICS": "",
         "REVIEW": REVIEW_METHODS,
@@ -317,6 +371,19 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
         copy_java("firebase", "MceFirebase.java", main)
         print(f"ship: {art['name']} reports to Firebase: Crashlytics NDK, Analytics and Remote Config ({FIREBASE_BOM}) stamped in",
               flush=True)
+    games_app = play_games_app_id(art)
+    if games_app:
+        fields["GAMES"] = GAMES_METHODS
+        fields["GAMES_META"] = GAMES_META
+        deps.append(PLAY_GAMES)
+        values = os.path.join(main, "res", "values")
+        os.makedirs(values, exist_ok=True)
+        with open(os.path.join(values, "mce_games.xml"), "w") as f:
+            f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
+                    f'    <string name="mce_play_games_app_id" translatable="false">{games_app}</string>\n'
+                    '</resources>\n')
+        copy_java("games", "MceGames.java", main)
+        print(f"ship: {art['name']} uses Play Games Services v2 ({PLAY_GAMES}), project {games_app}", flush=True)
     if deps:
         lines = "".join(f"    implementation {d}\n" if d.startswith("platform(") else f"    implementation '{d}'\n"
                         for d in deps)

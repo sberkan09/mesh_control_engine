@@ -13,6 +13,7 @@ mce_add_library(mce_platform
         src/store.cpp
         src/ads.cpp
         src/firebase.cpp
+        src/game_services.cpp
         src/review.cpp
         src/haptics.cpp
         src/power.cpp
@@ -91,6 +92,18 @@ if(IOS AND MCE_ADMOB)
     endforeach()
     target_link_libraries(mce_platform PRIVATE "-framework GoogleMobileAds" "-framework UserMessagingPlatform"
         "-framework AppTrackingTransparency" "-framework UIKit")
+endif()
+
+# The phone's game services (platform/game_services.h). Android needs nothing here: MceGames.java and
+# Play Games Services v2 are stamped by ship.py for a game with a .mcservices when
+# MCE_PLAY_GAMES_APP_ID is set. iOS: GameKit (Swift, a system framework), opt-in until it has been run
+# on a Mac; without it the iOS game services backend is "none" and everything stays on the device.
+option(MCE_GAMEKIT "iOS: build Game Center (GameKit, Swift) into mce_platform" OFF)
+if(IOS AND MCE_GAMEKIT)
+    enable_language(Swift)
+    target_sources(mce_platform PRIVATE src/game_services_gamekit.swift)
+    target_compile_definitions(mce_platform PRIVATE MCE_GAMEKIT=1)
+    target_link_libraries(mce_platform PRIVATE "-framework GameKit" "-framework UIKit")
 endif()
 
 # The live services vendor (platform/firebase.h): Crashlytics, Analytics and Remote Config. Android needs nothing

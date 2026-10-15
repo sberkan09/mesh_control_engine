@@ -109,7 +109,7 @@ ui::build_document(data, doc);                          // the skin (data.font, 
 - `ui::extract_document` turns a live document back into data and `cook::write_ui_document`
   writes it as `.mcui` text; cooking that text gives the same chunk byte for byte.
 - Over MCP, `ui_create`, `ui_widget_add`, `ui_widget_set` and `ui_widget_remove` edit a document by
-  widget path and `ui_preview` shows it at a screen size, safe area and UI scale (chapter 14).
+  widget path, `ui_theme_set` picks its theme and `ui_preview` shows it at a screen size, safe area and UI scale (chapter 14).
 
 ### Screens in a scene (`UiScreen`)
 
@@ -178,6 +178,11 @@ what the document leaves to it: each style field that is still at its widget kin
 takes the theme's value, and a field the document sets (a `"style"` tint, a text size) stays.
 `samples/ui_screens` shows its HUD and pause menu under a day theme (`scenes/main.mcscene`) and a
 night theme (`scenes/night.mcscene`) with the same two documents.
+
+A project from `mce new` starts with three themes in `assets/ui/themes/`: `pixel` (Pixelify Sans and
+Press Start 2P), `clean` (Atkinson Hyperlegible Next and Karla) and `story` (Crimson Pro). Their fonts
+are OFL, bake Latin-1 and Latin Extended-A (Turkish included), and are listed in the project's
+`CREDITS.md`; chapter 14 says which fits which game.
 
 ## 12.3 The developer console
 

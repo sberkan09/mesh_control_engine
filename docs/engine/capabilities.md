@@ -170,4 +170,5 @@ reach all of its non-transient fields.
 | `ui_widget_add` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |
 | `ui_widget_set` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |
 | `ui_widget_remove` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |
+| `ui_theme_set` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |
 | `ui_preview` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |

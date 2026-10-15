@@ -115,6 +115,9 @@ class StoryTest(unittest.TestCase):
         self.assertEqual(rows["menu.play"], "Play")           # the game's own rows stay
         self.assertNotIn("story.dead", rows)                 # a story row the script dropped goes
         self.assertEqual(rows["story.name.mira"], "Mira")
+        self.assertEqual(rows["story.ending.done"], "Done")   # the titles the kit reads from the tables (SBA-59)
+        self.assertNotIn("story.title", rows)                # no "title": the folder's name is not translated
+        self.assertNotIn("story.extras", rows)               # no extras row: no key
         self.assertEqual(rows[sc.loc_key("Hello there.")], "Hello there.")
         self.assertEqual(rows[sc.loc_key("Go")], "Go")
         # --check fails while the table is stale, and passes once it is written
