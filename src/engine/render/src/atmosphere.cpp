@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 namespace mce::render {
 namespace {
@@ -28,6 +27,11 @@ D3 d3(math::vec3 v) { return {v.x, v.y, v.z}; }
 
 struct Medium {
     double rayleigh[3], mie_scatter, mie_extinction, ozone[3];
+    bool operator==(const Medium& o) const {
+        for (int c = 0; c < 3; ++c)
+            if (rayleigh[c] != o.rayleigh[c] || ozone[c] != o.ozone[c]) return false;
+        return mie_scatter == o.mie_scatter && mie_extinction == o.mie_extinction;
+    }
 };
 Medium medium(const Atmosphere& a) {
     Medium m{};
@@ -113,7 +117,7 @@ struct TransmittanceLut {
 
 const TransmittanceLut& lut_for(const Medium& m) {
     thread_local TransmittanceLut lut;
-    if (!lut.valid || std::memcmp(&lut.medium, &m, sizeof(Medium)) != 0) lut.build(m);
+    if (!lut.valid || !(lut.medium == m)) lut.build(m);
     return lut;
 }
 
@@ -232,13 +236,18 @@ math::vec3 atmosphere_sky_ambient(const Atmosphere& a, math::vec3 sun_dir) {
     // Scene3D::build asks every frame: the last answer is kept per thread.
     struct Key {
         f32 v[13];
+        bool operator==(const Key& o) const {
+            for (int i = 0; i < 13; ++i)
+                if (v[i] != o.v[i]) return false;
+            return true;
+        }
     };
     const Key key{{a.intensity, a.rayleigh, a.mie, a.mie_anisotropy, a.ozone, a.ground_albedo.x, a.ground_albedo.y,
                    a.ground_albedo.z, a.altitude, sun_dir.x, sun_dir.y, sun_dir.z, 0.0f}};
     thread_local Key last{};
     thread_local math::vec3 last_value;
     thread_local bool has_last = false;
-    if (has_last && std::memcmp(&last, &key, sizeof(Key)) == 0) return last_value;
+    if (has_last && last == key) return last_value;
     const Medium m = medium(a);
     const TransmittanceLut& lut = lut_for(m);
     const D3 sun = unit(sun_dir);

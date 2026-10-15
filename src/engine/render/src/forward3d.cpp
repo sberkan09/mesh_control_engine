@@ -1247,7 +1247,8 @@ void Forward3D::vol_params(const Scene3D& scene, PassU& pu) const {
     const Volumetrics& v = scene.volumetrics();
     const f32 far = max(v.max_distance, 1.0f);
     pu.vol = {1.0f, f32(vol_slices_), far, std::log2(1.0f + far / 1.0f)};  // kVolD0 = 1 m (shaders3d.h)
-    pu.vol_grid = {f32(vol_grid_.width), f32(vol_grid_.height), f32(kVolAtlasCols), f32((vol_slices_ + kVolAtlasCols - 1) / kVolAtlasCols)};
+    const u32 atlas_rows = (vol_slices_ + kVolAtlasCols - 1) / kVolAtlasCols;
+    pu.vol_grid = {f32(vol_grid_.width), f32(vol_grid_.height), f32(kVolAtlasCols), f32(atlas_rows)};
     pu.vol_medium = {max(v.density, 0.0f), max(v.height_falloff, 0.0f), v.base_height, clamp(v.anisotropy, -0.95f, 0.95f)};
     pu.vol_albedo = vec4(v.albedo, max(v.sun_intensity, 0.0f));
     pu.vol_scale = {max(v.local_intensity, 0.0f), max(v.ambient_intensity, 0.0f), 0.0f, 0.0f};
