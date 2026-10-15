@@ -188,7 +188,8 @@ bool valid_number_format(StringView f) {
     u32 conversions = 0;
     for (usize i = 0; i < f.size(); ++i) {
         if (f[i] != '%') continue;
-        if (++i < f.size() && f[i] == '%') continue;
+        ++i;
+        if (i < f.size() && f[i] == '%') continue;
         while (i < f.size() && (f[i] == '-' || f[i] == '+' || f[i] == ' ' || f[i] == '#' || f[i] == '0')) ++i;
         for (u32 n = 0; i < f.size() && f[i] >= '0' && f[i] <= '9'; ++i)
             if (++n > 2) return false;
