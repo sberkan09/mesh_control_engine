@@ -44,6 +44,9 @@ public:
     void update(World& world, const ui::UpdateContext& ctx);
     // A visible modal screen: the host switches input to the "UI" map while one is up.
     bool modal_visible() const;
+    // The document focus lives in: the topmost visible modal screen's (null when none is up). The
+    // screen reader speaks its focus (M-ACCESS).
+    const ui::Document* focus_document() const;
     // Each screen on its own layers below `base`, by order (two layers + two per open modal).
     void submit(render::SpriteBatch& batch, i16 base) const;
 
