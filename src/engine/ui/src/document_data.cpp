@@ -50,7 +50,7 @@ enum : u8 { Visible = 1u << 0, Interactable = 1u << 1, BlocksPointer = 1u << 2 }
 }
 
 struct UiWidgetRecord {
-    StrRef name, text, convar;
+    StrRef name, text, convar, action, bind, format;
     u32 parent;
     u8 kind;
     u8 flags;
@@ -66,7 +66,7 @@ struct UiWidgetRecord {
     f32 grid_cell[2], grid_spacing[2];
     u32 nav[NavEdgeCount];
 };
-static_assert(sizeof(UiWidgetRecord) == 24 + 4 + 8 + 40 + 124 * 5 + 16 + 8 + 4 + 16 + 16);
+static_assert(sizeof(UiWidgetRecord) == 48 + 4 + 8 + 40 + 124 * 5 + 16 + 8 + 4 + 16 + 16);
 
 void put_color(f32 (&o)[4], const Color& c) {
     o[0] = c.r;
@@ -184,6 +184,27 @@ u32 DocumentData::find(StringView path) const {
     return parent;
 }
 
+bool valid_number_format(StringView f) {
+    u32 conversions = 0;
+    for (usize i = 0; i < f.size(); ++i) {
+        if (f[i] != '%') continue;
+        if (++i < f.size() && f[i] == '%') continue;
+        while (i < f.size() && (f[i] == '-' || f[i] == '+' || f[i] == ' ' || f[i] == '#' || f[i] == '0')) ++i;
+        for (u32 n = 0; i < f.size() && f[i] >= '0' && f[i] <= '9'; ++i)
+            if (++n > 2) return false;
+        if (i < f.size() && f[i] == '.') {
+            ++i;
+            for (u32 n = 0; i < f.size() && f[i] >= '0' && f[i] <= '9'; ++i)
+                if (++n > 2) return false;
+        }
+        if (i >= f.size()) return false;
+        const char c = f[i];
+        if (c != 'f' && c != 'F' && c != 'e' && c != 'E' && c != 'g' && c != 'G') return false;
+        ++conversions;
+    }
+    return f.empty() || conversions == 1;
+}
+
 void DocumentData::clear() {
     font = {};
     sprites = {};
@@ -201,6 +222,9 @@ void encode_ui_document(const DocumentData& d, Array<byte>& out) {
         r.name = add_string(blob, w.name.view());
         r.text = add_string(blob, w.text.view());
         r.convar = add_string(blob, w.convar.view());
+        r.action = add_string(blob, w.action.view());
+        r.bind = add_string(blob, w.bind.view());
+        r.format = add_string(blob, w.format.view());
         r.parent = w.parent;
         r.kind = static_cast<u8>(w.kind);
         r.flags =
@@ -293,9 +317,11 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
             return fail(Errc::ReservedNonZero);
         WidgetData w;
         if (!read_string(blob, h.strings_size, r.name, w.name) || !read_string(blob, h.strings_size, r.text, w.text) ||
-            !read_string(blob, h.strings_size, r.convar, w.convar))
+            !read_string(blob, h.strings_size, r.convar, w.convar) ||
+            !read_string(blob, h.strings_size, r.action, w.action) || !read_string(blob, h.strings_size, r.bind, w.bind) ||
+            !read_string(blob, h.strings_size, r.format, w.format))
             return fail(Errc::OutOfBounds);
-        if (!valid_name(w.name.view())) return fail(Errc::InvalidArgument);
+        if (!valid_name(w.name.view()) || !valid_number_format(w.format.view())) return fail(Errc::InvalidArgument);
         if (r.parent != kNoWidgetIndex && r.parent >= i) return fail(Errc::OutOfBounds);  // parents come first
         if (r.kind > static_cast<u8>(WidgetKind::Tabs) || r.anchor_to > static_cast<u8>(AnchorTo::Screen) ||
             r.stack_axis > static_cast<u8>(Axis::Horizontal) || r.stack_align > static_cast<u8>(Align::Stretch))

@@ -1,0 +1,36 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "5703e000-0000-4000-8000-0000000003a0",
+  "name": "main",
+  "entities": [
+    {
+      "name": "Camera",
+      "components": {
+        "Camera2DComponent": { "pixels_per_meter": 48 },
+        "LocalTransform": { "position": [0, 0, 0] }
+      }
+    },
+    {
+      "name": "Hud",
+      "components": {
+        "UiScreen": { "document": "guid:5703e000-0000-4000-8000-0000000003a1" },
+        "Score": {}
+      }
+    },
+    {
+      "name": "PauseMenu",
+      "components": {
+        "UiScreen": { "document": "guid:5703e000-0000-4000-8000-0000000003a2", "order": 10, "visible": false },
+        "PauseMenu": {}
+      }
+    },
+    {
+      "name": "Spinner",
+      "components": {
+        "LocalTransform": { "position": [0, 0, 0] },
+        "Sprite": { "tint": [0.95, 0.6, 0.2, 1], "size": [2, 2] }
+      }
+    }
+  ]
+}

@@ -110,6 +110,7 @@
 #include "mce/scene/streaming.h"
 #include "mce/ui/ui.h"
 #include "ship_paths.h"
+#include "ui_screens.h"
 
 namespace {
 
@@ -346,6 +347,7 @@ public:
         scene::install_streaming(world_, assets_, streaming);
         MCE_TRY(scene::load(world_, assets_, scene, &entities_));
         scene::pump_streaming(world_, scene::PumpMode::Settle);
+        MCE_TRY(load_ui_screens());
         if (device_ && kit::has_camera_3d(world_)) MCE_TRY(init_3d());
         MCE_LOG_INFO("{}: scene {} ({}) with {} entities", desc_.app_name, asset::to_string(scene).view(), scene_path_.view(),
                      entities_.size());
@@ -371,12 +373,23 @@ public:
             update_ad_pause();
         }
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
+        if (t.actions) {  // the UI screens navigate with the newest snapshot (edges once: ui_fresh_)
+            ui_actions_ = *t.actions;
+            ui_fresh_ = true;
+        }
         if (paused_ || ad_paused_) return;  // sim_held() mirrors these two tests and the next
         // -capture_tick(s): the sim holds on the tick for the capture frame, however many ticks a slow
         // frame (Metal validation, a cold start) would otherwise catch up past it.
         if (capture_due()) return;
         tick_dt_ = t.dt;
-        if (t.actions) input::publish(world_, *t.actions);
+        if (screens_.active()) {
+            // The actions the scene's UI screens raised since the last tick ride in this tick's input.
+            input::InputState in = t.actions ? *t.actions : input::InputState{};
+            screens_.apply_actions(in, static_cast<f32>(t.dt));
+            input::publish(world_, in);
+        } else if (t.actions) {
+            input::publish(world_, *t.actions);
+        }
         publish_view_info();
         scene::pump_streaming(world_);
         if (!monetize_test_.empty()) monetize_test_requests();
@@ -438,7 +451,9 @@ public:
 
         update_console(bb);
         update_ui_layers(bb);
-        const bool overlay = paused_ || console_.is_open() || desc_.ui_layer_count > 0 || cv_stats.get_bool();
+        update_ui_screens(bb);
+        const bool overlay =
+            paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() || cv_stats.get_bool();
 
         // 3D: the kit3d scene first (it ends in the backbuffer); the 2D kit draws over it.
         if (!three_d_ && kit::has_camera_3d(world_)) {
@@ -668,6 +683,11 @@ private:
         scene_guid_ = c.current_guid;
         scene_path_.assign(c.current.view());
         scene::pump_streaming(world_, scene::PumpMode::Settle);
+        if (Result<void> r = load_ui_screens(); !r) {
+            FixedString<512> why;
+            format_error(r.error(), why);
+            MCE_LOG_ERROR("{}: the new scene's UI screens did not load: {}", desc_.app_name, why.view());
+        }
         if (device_ && kit::has_camera_3d(world_))
             if (Result<void> r = init_3d(); !r) MCE_LOG_ERROR("{}: 3D rendering did not start after the scene change", desc_.app_name);
     }
@@ -1250,9 +1270,61 @@ private:
         }
     }
 
+    // The scene's UI screens (kit::UiScreen, M-UI-DATA step 2).
+    Result<void> load_ui_screens() {
+        MCE_TRY(screens_.load(world_, assets_, entities_.span(), device_ ? &skin_.skin : nullptr, device_ ? &extract_ : nullptr));
+        return {};
+    }
+
+    void update_ui_screens(rhi::Extent2D bb) {
+        if (!screens_.active()) return;
+        // A visible modal screen owns the controls: the "UI" action map (Navigate / Confirm / Cancel)
+        // blocks the game's map below it until the screen hides.
+        const bool modal = screens_.modal_visible() && !console_.is_open();
+        if (modal && !ui_map_pushed_ && !ui_map_missing_) {
+            ui_map_pushed_ = input_.push_map(MCE_SID("UI"));
+            ui_map_missing_ = !ui_map_pushed_;
+            if (ui_map_missing_) MCE_LOG_WARN("{}: the input map has no \"UI\" map for the UI screens", desc_.app_name);
+        } else if (!modal && ui_map_pushed_) {
+            input_.pop_map();
+            ui_map_pushed_ = false;
+        }
+        ui::UpdateContext ctx;
+        ctx.viewport = bb;
+        ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
+                                         static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
+        ctx.ui_scale = ui_scale(bb);
+        ctx.dt = 1.0 / 60.0;
+        // Edges (Confirm, Cancel, a navigation press) once per tick, not once per rendered frame.
+        input::InputState in = ui_actions_;
+        if (in.has_action(MCE_SID("Navigate"))) {
+            const math::vec2 nav = in.axis2(MCE_SID("Navigate"));
+            in.move = nav;
+        }
+        if (!ui_fresh_) {
+            in.confirm_pressed = in.cancel_pressed = in.pause_pressed = in.fire_pressed = in.jump_pressed = false;
+            for (u32 i = 0; i < in.action_count; ++i) in.actions[i].pressed = in.actions[i].released = false;
+        }
+        ui_fresh_ = false;
+        ctx.actions = console_.is_open() ? nullptr : &in;
+        if (!console_.is_open()) {
+            const platform::PixelSize pt = window_->size();
+            const f32 sx = pt.width > 0 ? static_cast<f32>(bb.width) / static_cast<f32>(pt.width) : 1.0f;
+            const f32 sy = pt.height > 0 ? static_cast<f32>(bb.height) / static_cast<f32>(pt.height) : 1.0f;
+            if (ui_pointer_.touch) ctx.pointer = {ui_pointer_.pos.x * static_cast<f32>(bb.width), ui_pointer_.pos.y * static_cast<f32>(bb.height)};
+            else if (ui_pointer_.pos.x >= 0.0f) ctx.pointer = {ui_pointer_.pos.x * sx, ui_pointer_.pos.y * sy};
+            ctx.pointer_down = ui_pointer_.down;
+            ctx.pointer_pressed = ui_pointer_.pressed;
+            ctx.pointer_released = ui_pointer_.released;
+        }
+        ui_pointer_.pressed = ui_pointer_.released = false;
+        screens_.update(world_, ctx);
+    }
+
     void record_overlay(rhi::CommandBuffer& cmd, rhi::Extent2D bb) {
         render::SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
         hud.begin(render::compute_screen_view(bb), render::PassId::Screen2D);
+        screens_.submit(hud, -120);  // the scene's UI screens, under the game's UI layers
         // Game UI under the pause veil (sort layer 0) and the console (200).
         for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
             const ui::Layer* l = desc_.ui_layers[i];
@@ -1674,12 +1746,14 @@ private:
             case platform::EventType::TouchDown:
                 if (self->paused_ && !self->os_background_ && !self->console_.is_open() && e.code < 16) {
                     self->paused_touches_ |= 1u << e.code;
-                } else if (!self->paused_ && !self->console_.is_open() && e.x >= 0.85f && e.y <= 0.15f) {
+                } else if (!self->paused_ && !self->console_.is_open() && !self->screens_.active() && e.x >= 0.85f &&
+                           e.y <= 0.15f) {
                     self->paused_ = true;  // the top-right corner pauses (the default map's Pause tap zone)
                 }
                 break;
             default: break;
         }
+        self->track_ui_pointer(e);
         // The game's input: every event while the console is closed; releases and focus changes
         // always, so no key sticks behind the console or the pause overlay.
         if (!self->console_.is_open() || e.type == platform::EventType::KeyUp || e.type == platform::EventType::TouchUp ||
@@ -1718,7 +1792,9 @@ private:
             case platform::Key::F1:
                 if (cv_console.get_bool() && !(e.flags & platform::EventFlag::Repeat)) self->set_console(true);
                 break;
-            case platform::Key::Escape: self->paused_ = !self->paused_; break;
+            case platform::Key::Escape:
+                if (!self->screens_.active()) self->paused_ = !self->paused_;  // UI screens: the game's own Pause
+                break;
             case platform::Key::Q:
                 if (self->paused_) self->quit(0);
                 break;
@@ -1734,6 +1810,40 @@ private:
                     cv_fullscreen.set_bool(!cv_fullscreen.get_bool());
                 break;
             case platform::Key::F3: cv_stats.set_bool(!cv_stats.get_bool()); break;
+            default: break;
+        }
+    }
+
+    // The pointer the UI screens hit-test: the mouse (window points) or the first finger (0..1).
+    void track_ui_pointer(const platform::Event& e) {
+        switch (e.type) {
+            case platform::EventType::MouseMove:
+                if (!ui_pointer_.touch || !ui_pointer_.down) {
+                    ui_pointer_.touch = false;
+                    ui_pointer_.pos = {e.x, e.y};
+                }
+                break;
+            case platform::EventType::MouseButtonDown:
+            case platform::EventType::MouseButtonUp:
+                if (e.code != static_cast<u32>(platform::MouseButton::Left)) break;
+                ui_pointer_.touch = false;
+                ui_pointer_.pos = {e.x, e.y};
+                ui_pointer_.down = e.type == platform::EventType::MouseButtonDown;
+                (ui_pointer_.down ? ui_pointer_.pressed : ui_pointer_.released) = true;
+                break;
+            case platform::EventType::TouchDown:
+                if (ui_pointer_.down) break;  // one finger points
+                ui_pointer_ = UiPointer{{e.x, e.y}, e.code, true, true, true, false};
+                break;
+            case platform::EventType::TouchMove:
+                if (ui_pointer_.touch && ui_pointer_.down && ui_pointer_.slot == e.code) ui_pointer_.pos = {e.x, e.y};
+                break;
+            case platform::EventType::TouchUp:
+                if (!ui_pointer_.touch || !ui_pointer_.down || ui_pointer_.slot != e.code) break;
+                ui_pointer_.pos = {e.x, e.y};
+                ui_pointer_.down = false;
+                if (!(e.flags & platform::EventFlag::TouchCanceled)) ui_pointer_.released = true;
+                break;
             default: break;
         }
     }
@@ -1801,6 +1911,16 @@ private:
     Array<f64> view_free_;      // -view.free
     Array<f64> safe_override_;  // -safe_area
     bool paused_ = false;
+    player::UiScreens screens_;
+    input::InputState ui_actions_;  // the newest tick snapshot, for the UI screens' navigation
+    bool ui_fresh_ = false;         // ui_actions_ arrived since the last rendered frame
+    bool ui_map_pushed_ = false;
+    bool ui_map_missing_ = false;
+    struct UiPointer {
+        math::vec2 pos{-1, -1};
+        u32 slot = 0;
+        bool touch = false, down = false, pressed = false, released = false;
+    } ui_pointer_;
     bool background_ = false;  // unfocused or minimized
     bool unfocused_ = false;   // the window lost focus (or minimized); the focus-loss save ran
     bool fullscreen_ = false;  // what cv_fullscreen last applied

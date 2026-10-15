@@ -34,6 +34,14 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `ui::extract_document` / `cook::write_ui_document` write a document back, byte-identical after a re-cook. A widget
   starts from the look `ui::Builder` gives its kind. Mistakes fail the cook with `file:line:col`. MCP's
   `asset_create` / `asset_write` handle `.mcui`; the stock player does not load documents yet (step 2).
+- UI screens in the stock player, M-UI-DATA step 2 (SBA-32): a `UiScreen` component names a `.mcui` document a scene
+  shows (HUD, title, pause, win); `mce_player` builds it, draws it over the game, feeds it the pointer and, while a
+  modal screen is up, the `"UI"` action map. Gameplay stays behind the UI wall: it toggles `UiScreen::visible`,
+  widgets show fields through `"bind": "Component/field"` (+ `"format"`), and a widget's `"action"` raises that
+  input action in the next tick's `InputState` exactly as an `-input` script line would, so scripts replay runs
+  with the same hash (`ui::ActionRelay`, `ui::bind_document` in `mce/ui/screen_link.h`). With screens in a scene,
+  Esc and the corner tap are the game's `Pause`. `samples/ui_screens` is a HUD and a pause menu with no host code.
+  The `UiDocument` chunk is version 2 (re-cook `.mcui` assets).
 - Text with a look (M-UI-DATA step 4, SBA-34): `TextLabel` gains `letter_spacing`, `line_height`,
   `outline_width`/`outline_color` and `shadow_offset`/`shadow_color` (fractions of the label's height, editable
   through MCP `component_set`), and `ui::Style` gains `letter_spacing`, `text_outline`/`text_outline_color` and

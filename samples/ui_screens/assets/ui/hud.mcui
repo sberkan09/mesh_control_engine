@@ -1,0 +1,16 @@
+{
+  "format": "mce-ui", "version": 1, "guid": "5703e000-0000-4000-8000-0000000003a1",
+  "modal": false,
+  "widgets": [
+    { "name": "top", "kind": "Stack", "anchors": { "min": [0, 0], "max": [1, 0], "offset_min": [16, 12], "offset_max": [-16, 52] },
+      "stack": { "axis": "Horizontal", "spacing": 24 },
+      "children": [
+        { "name": "score", "kind": "Text", "text": "SCORE 0", "style": { "text_size": 26 },
+          "bind": "Score/points", "format": "SCORE %.0f" },
+        { "name": "time", "kind": "Text", "text": "0.0 s", "style": { "text_size": 26 },
+          "bind": "Score/time", "format": "%.1f s" } ] },
+    { "name": "pause", "kind": "Button", "text": "II",
+      "anchors": { "min": [1, 0], "max": [1, 0], "offset_min": [-72, 12], "offset_max": [-16, 68] },
+      "style": { "text_size": 26 }, "action": "Pause" }
+  ]
+}

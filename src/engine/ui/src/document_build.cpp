@@ -31,6 +31,8 @@ Result<void> build_document(const DocumentData& d, Document& doc) {
         doc.set_blocks_pointer(id, w.blocks_pointer);
         doc.set_stack(id, w.stack);
         doc.set_grid(id, w.grid);
+        doc.set_action(id, w.action.view());
+        doc.set_binding(id, w.bind.view(), w.format.view());
     }
     // What refers to other widgets or reads their state, once they all exist.
     for (u32 i = 0; i < d.widgets.size(); ++i) {
@@ -101,6 +103,9 @@ void extract_document(const Document& doc, DocumentData& out) {
         d.stack = doc.stack(w);
         d.grid = doc.grid(w);
         d.convar.assign(doc.convar(w));
+        d.action.assign(doc.action(w));
+        d.bind.assign(doc.binding(w));
+        d.format.assign(doc.binding_format(w));
         out.widgets.push_back(d);
         push_children(w, index);
     }
