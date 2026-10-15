@@ -138,6 +138,66 @@ TEST_CASE("project_check: broken references fail it; sRGB data textures and unre
     CHECK(findings(c.ok("project_check", R"({"checks":["srgb"]})"), "srgb").empty());
 }
 
+TEST_CASE("M-ACCESS gate: project_check flags a seeded UI contrast failure, small UI text, a timeline with no subtitles and uncaptioned sounds") {
+    const std::string root = demo_project("mcp_check_access");
+    // Grey on grey in a menu (the seeded failure), a readable title and button, tiny print, and a
+    // themed document whose unstated colours are the theme's (not judged).
+    write_file(root + "/assets/ui/menu.mcui", R"({
+  "format": "mce-ui", "version": 1, "guid": "5ce4e000-0000-4000-8000-0000000000b1",
+  "widgets": [
+    { "name": "box", "fill": true, "style": { "tint": [0.35, 0.35, 0.35, 1] },
+      "children": [
+        { "name": "title", "kind": "Text", "text": "PAUSED", "style": { "text_color": [1, 1, 1, 1], "text_size": 32 } },
+        { "name": "hint", "kind": "Text", "text": "press start", "style": { "text_color": [0.5, 0.5, 0.5, 1] } },
+        { "name": "legal", "kind": "Text", "text": "v1.0", "style": { "text_size": 9 } },
+        { "name": "resume", "kind": "Button", "text": "RESUME", "style": { "tint": [0.05, 0.05, 0.1, 1], "text_color": [1, 0.9, 0.5, 1] } }
+      ] }
+  ]
+}
+)");
+    write_file(root + "/assets/ui/menu.mcui.mceasset", sidecar("5ce4e000-0000-4000-8000-0000000000b1", "ui"));
+    write_file(root + "/assets/cutscene.mctimeline", R"({ "format": "mce-timeline", "version": 1, "name": "cutscene", "duration": 2,
+  "tracks": [ { "type": "audio", "keys": [ { "t": 0.5, "sound": "guid:5ce4e000-0000-4000-8000-000000000020" } ] } ] }
+)");
+    write_file(root + "/assets/scenes/bell.mcscene", R"({
+  "format": "mce-scene", "version": 1, "guid": "5ce4e000-0000-4000-8000-0000000000b2", "name": "bell",
+  "entities": [
+    { "id": 1, "name": "Bell", "components": { "SfxTrigger": { "on": "Start" } } },
+    { "id": 2, "name": "Door", "components": { "SfxTrigger": { "on": "Start" }, "SoundCaption": { "text": "[door creaks]" } } },
+    { "id": 3, "name": "Theme", "components": { "AudioSource": { "bus": "Music", "loop": true } } }
+  ]
+}
+)");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const std::string a11y = findings(c.ok("project_check", R"({"checks":["accessibility"]})"), "accessibility");
+    INFO(a11y);
+    CHECK(a11y.find("warning assets/ui/menu.mcui: hint: UI text contrast against the panel behind it is 1.8:1") != std::string::npos);
+    CHECK(a11y.find("legal: UI text is 9 px") != std::string::npos);
+    CHECK(a11y.find("title:") == std::string::npos);   // white on dark grey
+    CHECK(a11y.find("resume:") == std::string::npos);  // its own dark quad behind it
+    CHECK(a11y.find("warning assets/cutscene.mctimeline: the timeline plays sounds but has no subtitle track") != std::string::npos);
+    CHECK(a11y.find("info assets/scenes/bell.mcscene: Bell plays a sound with no caption") != std::string::npos);
+    CHECK(a11y.find("Door plays") == std::string::npos);   // captioned
+    CHECK(a11y.find("Theme plays") == std::string::npos);  // music needs none
+
+    // The fixes it names clear them.
+    write_file(root + "/assets/ui/menu.mcui", R"({
+  "format": "mce-ui", "version": 1, "guid": "5ce4e000-0000-4000-8000-0000000000b1",
+  "widgets": [ { "name": "box", "fill": true, "style": { "tint": [0.35, 0.35, 0.35, 1] },
+      "children": [ { "name": "hint", "kind": "Text", "text": "press start", "style": { "text_color": [1, 1, 1, 1], "text_size": 18 } } ] } ]
+}
+)");
+    write_file(root + "/assets/cutscene.mctimeline", R"({ "format": "mce-timeline", "version": 1, "name": "cutscene", "duration": 2,
+  "tracks": [ { "type": "audio", "keys": [ { "t": 0.5, "sound": "guid:5ce4e000-0000-4000-8000-000000000020" } ] },
+              { "type": "subtitle", "lines": [ { "t": 0.5, "duration": 1, "text": "[a bell rings]" } ] } ] }
+)");
+    const std::string after = findings(c.ok("project_check", R"({"checks":["accessibility"]})"), "accessibility");
+    CHECK(after.find("menu.mcui") == std::string::npos);
+    CHECK(after.find("cutscene.mctimeline") == std::string::npos);
+}
+
 TEST_CASE("ship_build: refused without a game module or outside an SDK") {
     const std::string root = demo_project("mcp_check_ship");
     Client c;

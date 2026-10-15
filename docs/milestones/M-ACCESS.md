@@ -1,6 +1,7 @@
 # M-ACCESS — Accessibility (milestone record)
 
-**Status:** in progress (engine gap track, ROADMAP "Engine gap tracks"; Linear SBA-95…99).
+**Status:** done on the desktop (engine gap track, ROADMAP "Engine gap tracks"; Linear SBA-95…99). Open: the
+screen reader on a phone and on each desktop OS (step 4, the demo).
 **Why:** N15 kept accessibility beyond rebinding out of v1.0; MCE now ships an SDK, store builds and agent-made
 games, and stores and players expect these options.
 **Measured on:** the Linux CI container (Mesa llvmpipe GL 4.5 and lavapipe Vulkan, Xvfb).
@@ -72,10 +73,84 @@ rebound per binding. Look sensitivity applies to the action named `Look`.
 | The platform bridge: `announce`, `running`, a sink for tests and logs | `platform::screen_reader` (`mce/platform/screen_reader.h`) | `test_platform` "screen reader announcements reach the sink ..." |
 | Android TalkBack: `MceActivity.mceScreenReaderOn` (touch exploration on) and `mceAnnounce` (`View.announceForAccessibility` on the UI thread), stamped by `android_app.py`, looked up over JNI | `cmake/mobile/android_app.py` `ACCESS_METHODS`, `screen_reader.cpp` | `android_bridges` checks the stamped methods and the JNI names and signatures |
 | iOS VoiceOver (`UIAccessibility.post(.announcement)`, `isVoiceOverRunning`), macOS VoiceOver (`NSAccessibilityAnnouncementRequestedNotification`, `isVoiceOverEnabled`), Windows (a minimal UI Automation provider hosted by the game's HWND, `UiaRaiseNotificationEvent`; `SPI_GETSCREENREADER`) | `screen_reader_uikit.swift`, `screen_reader_apple.mm`, `screen_reader_win32.cpp`, behind `MCE_SCREEN_READER_NATIVE` (OFF) | not compiled or run here: they need the Mac, a phone and a Windows machine |
-| The player speaks the focus of the topmost modal screen (or the open console), checking the OS once a second in mode 1 | `access.screen_reader` (0 never, 1 while a reader is on, 2 always), `PlayerApp::speak_focus`, `UiScreens::focus_document` | user guide 12.5 |
+| The player speaks the focus of the topmost modal screen (or the open console) | `access.screen_reader` (0 never, 1 while a reader is on, 2 always) read by `platform::screen_reader::wanted()`, which asks the OS at most once a second; `PlayerApp::speak_focus`, `UiScreens::focus_document` | user guide 12.5 |
 
 Device verification is open: TalkBack on an Android device or emulator, VoiceOver on iOS and macOS, and
 Narrator or NVDA on Windows, each with `MCE_SCREEN_READER_NATIVE=ON` where it applies. Until then the iOS, macOS
 and Windows bridges stay off by default (the StoreKit precedent). Limits: announcements only, no explorable tree
 (touch exploration, a reader's own list of the screen's items); the HUD is not read (it never takes focus);
 the editor's play-in-editor does not announce.
+
+## Step 5 — `project_check` rules, the guide, the novel stage (SBA-99)
+
+| Item | Where | Evidence |
+|---|---|---|
+| `.mcui` text: a `text_size` under 16 px at UI scale 1, and text below 4.5:1 against the nearest opaque panel behind it (colors as authored; a themed document's unstated colors are not judged) | `UiTextCheck` in `tools_check.cpp`, the `accessibility` section | `test_mcp_check` "M-ACCESS gate: project_check flags a seeded UI contrast failure, small UI text, a timeline with no subtitles and uncaptioned sounds" |
+| Subtitle coverage: a `.mctimeline` with an audio track and no subtitle track (warning); a scene `SfxTrigger`, or an `AudioSource` off the Music bus, with no `SoundCaption` (info) | same | same test |
+| The novel stage speaks: a page once shown (speaker first), the selected row with its place ("Wave back, 1 of 2", "dimmed" when locked), letters and panels, each once | `novel_speak` in `kit_novel/src/stage.cpp`, `NovelState::spoken` (a resource: not hashed) | `test_novel` "screen reader (M-ACCESS): the stage says the title row, each finished page with its speaker, and the choice" |
+| One switch for every speaker: `access.screen_reader` moved into `mce_platform` with `screen_reader::wanted()` | `screen_reader.h` / `.cpp` | the player and the stage share it |
+| `-access_log <file>`: every announcement to a text file (a desktop with no reader, captures) | `PlayerApp` | the demo below |
+| The stock options screen in Kindle and Undelivered (`assets/ui/options.mcui` and an `Options` entity: `UiFlow` Pause / Back, `UiScreen`); Kindle's sounds pushed with a caption (`play(f, clip, "coin")`) | `projects/Kindle`, `projects/Undelivered` | `kindle_level` and `undelivered_run` pass: both runs still hash the same |
+| User guide chapter | `docs/user-guide/24-accessibility.md` (README row; 12.5 and 16 updated) | — |
+
+## Demo
+
+Run in this container under the offscreen driver with Mesa's software GL. `samples/03_platformer` (Ember Step) has
+its own host with no `mce_ui` menus and no subtitle view; it takes `access.motion_scale` only. The Ember Step half of
+the demo therefore runs on Kindle (`projects/Kindle`, UC-D), which is Ember Step's mechanics and art on the stock
+player.
+
+The Kindle input file (`-input`, 11.5) for the first shots; the remap shot opens the options the same way, then
+`115 Move=0,1`, `130 Confirm`, `145 Move=0,-1`, `160 Move=0,-1`:
+
+```
+20-90 Move=1,0
+40-44 Jump
+100 Pause
+```
+
+| Shot | Command (from the project's build folder) | What it shows |
+|---|---|---|
+| ![Kindle captions](img/m-access-kindle-captions.jpg) | `kindle -input kindle.input -access.captions 1 -access.colorblind 2 -access.text_scale 1.5 -capture_ticks 46` | "[coin]" and "[jump]" captions over the level, the deuteranopia correction on the red and blue blocks |
+| ![Kindle options](img/m-access-kindle-options.jpg) | same run, Pause at tick 100 | the Display tab: text size, color filter (deuteranopia), motion, screen reader |
+| ![Kindle remap](img/m-access-kindle-remap.jpg) | Pause, up to the Controls tab, Confirm, down twice | the remap list: each action's keyboard, mouse and gamepad buttons, Toggle switches, the one-hand presets |
+| ![Undelivered options](img/m-access-undelivered-options.jpg) | `undelivered -access.text_scale 1.5 -access.colorblind 2 -capture_ticks 120`, input `60 Pause` | the same screen over the novel's title |
+
+The screen reader on the desktop, with `-access.screen_reader 2 -access_log heard.txt` (no reader runs in the
+container, so the log stands in for the speech):
+
+- Undelivered's title: `New game, 1 of 2`.
+- A bot run (`-novel.autoplay 1 -novel.instant 1`, 3000 ticks): 2,986 lines, among them every page with its speaker
+  (`Kaptan Hasan: Nermin's grandchild. You've grown into her nose.`) and 337 choice rows
+  (`I didn't forget. I was at university., 1 of 3`).
+- Kindle's options screen, Pause then up, Confirm, down, down: `Text size, slider, 1.25`, `Controls, tab`, `selected`,
+  `Left hand, button`, `Move Right, D, button`.
+
+`project_check` on the two projects after the change: no `.mcui` finding (the stock options screen passes). The
+existing scene rule warns about Kindle's HUD banner (4.2:1) and Undelivered's letter lines and HUD. The letter lines
+sit on a light card sprite the check does not pair with them, so that warning is a false positive; the guide says so.
+
+Open: VoiceOver and TalkBack reading Undelivered's menus on a phone, and Narrator or VoiceOver on a desktop OS. This
+needs the user's Mac and a phone (`MCE_SCREEN_READER_NATIVE=ON` for iOS, macOS and Windows).
+
+Found and fixed during the demo:
+
+- Menu presses were lost when the game drew fewer frames than it ran ticks (software GL here, any slow device): the
+  UI screens saw only the newest tick's snapshot, so a Confirm or a tap of the stick on an earlier tick never reached
+  them. The player now carries the edges and taps of the ticks no frame saw (`PlayerApp::carry_ui_edges`); the
+  remap demo above gives the same log on every run.
+- A remap button was read as its key alone ("D, button"). A control in a row led by a label now says the label
+  first ("Move Right, D, button"; `test_ui` "a control in a labelled row says the row's label first").
+- Slider values were read with two significant digits ("1.2" for 1.25); they now keep three.
+
+Limits found and left: the remap rows clip a fourth binding at the right edge of the Controls page; the options
+screen's title shares the top band with Kindle's HUD banner.
+
+## Gates
+
+| Gate | Result |
+|---|---|
+| Every option is a saved setting and never touches the sim hash | all `access.*` convars are `Saved` (settings.cfg, SBA-97). Hash evidence: `test_kit` "captions leave the state hash alone", "reduced motion scales the view's shake, never the camera's state"; the stage's speech state is in the `NovelState` resource; `kindle_level` and `undelivered_run` hash the same with the options screen added and captions pushed |
+| `project_check` flags a seeded contrast failure | `test_mcp_check` M-ACCESS gate: a seeded `.mcui` reads "UI text contrast against the panel behind it is 1.8:1" |
+| `local_ci.sh` green on every step | `--task` per step; `--batch` at the end of the milestone |
+

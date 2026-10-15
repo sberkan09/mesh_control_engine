@@ -141,6 +141,9 @@ MCE_CVAR(cv_scene, "scene", "", "Scene to play: GUID or source path (default: th
 MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window closes)", CVarFlags::None);
 MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames or -capture_tick) to this .ppm path (relative to the working directory; parents are created)",
          CVarFlags::None);
+MCE_CVAR(cv_access_log, "access_log", "",
+         "Append every screen reader announcement to this text file, one per line (a desktop without a reader, captures)",
+         CVarFlags::None);
 MCE_CVAR(cv_capture_tick, "capture_tick", 0,
          "Windowed: quit (and -capture) on the first frame after this many sim ticks of this run, whatever the frame rate; "
          "a tick restored by -save does not count (0 = off)",
@@ -210,10 +213,6 @@ MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
          CVarFlags::None);
-MCE_CVAR(cv_screen_reader, "access.screen_reader", 1,
-         "Speak the focused menu item and a focused slider's new value through the device's screen reader: "
-         "0 never, 1 while the OS reports a reader on (VoiceOver, TalkBack, Narrator...), 2 always",
-         CVarFlags::Saved);
 MCE_CVAR(cv_haptics, "haptics", true,
          "Haptic feedback: phone taps and gamepad rumble from platform::haptics::play (off: none; never in the state hash)",
          CVarFlags::Saved);
@@ -461,6 +460,17 @@ public:
             console_.init(skin_.skin, 0.5f);
             subtitles_.set_skin(skin_.skin);
             platform::screen_reader::attach(*window_);
+            if (!cv_access_log.get_string().empty()) {
+                access_log_ = std::fopen(FixedString<512>(cv_access_log.get_string()).c_str(), "w");
+                if (access_log_)
+                    platform::screen_reader::set_sink(
+                        [](void* user, StringView text) {
+                            auto* f = static_cast<std::FILE*>(user);
+                            std::fprintf(f, "%.*s\n", static_cast<int>(text.size()), text.data());
+                            std::fflush(f);
+                        },
+                        access_log_);
+            }
             for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
                 const ui::Layer* l = desc_.ui_layers[i];
                 if (l && l->init && !l->init(l->user, renderer_, skin_.skin))
@@ -507,7 +517,9 @@ public:
         }
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
         if (t.actions) {  // the UI screens navigate with the newest snapshot (edges once: ui_fresh_)
+            const input::InputState pending = ui_actions_;
             ui_actions_ = *t.actions;
+            if (ui_fresh_) carry_ui_edges(pending, ui_actions_);
             ui_fresh_ = true;
         }
         if (paused_ || ad_paused_) return;  // sim_held() mirrors these two tests and the next
@@ -1505,25 +1517,16 @@ private:
     // The screen reader (M-ACCESS): the focused item of the menu that owns focus (the console while
     // it is open), and a focused slider's new value, spoken through the device's reader.
     void speak_focus() {
-        const i32 mode = cv_screen_reader.get_int();
-        if (mode <= 0) return;
-        if (mode == 1) {  // the OS asked once a second: a reader turned on mid-game starts speaking
-            if (reader_check_frames_-- <= 0) {
-                reader_on_ = platform::screen_reader::running();
-                reader_check_frames_ = 60;
-            }
-            if (!reader_on_) {
-                announcer_.reset();
-                return;
-            }
+        if (!platform::screen_reader::wanted()) {
+            announcer_.reset();
+            return;
         }
         const ui::Document* doc = console_.is_open() ? &console_.document() : screens_.focus_document();
         FixedString<192> line;
         if (announcer_.next(doc, line)) platform::screen_reader::announce(line.view());
     }
     ui::AccessAnnouncer announcer_;
-    bool reader_on_ = false;
-    i32 reader_check_frames_ = 0;
+    std::FILE* access_log_ = nullptr;  // -access_log (kept open to the end; flushed per line)
 
     // The scene's UI screens (kit::UiScreen, M-UI-DATA step 2).
     Result<void> load_ui_screens() {
@@ -2270,6 +2273,27 @@ private:
     bool paused_ = false;
     bool settings_on_ = false;  // this run reads and writes <save folder>/settings.cfg
     player::UiScreens screens_;
+    // Several ticks between two rendered frames (a slow device, software GL): the edges and the
+    // navigation taps of the ticks no frame saw ride in the newest snapshot, so a press is never lost.
+    static void carry_ui_edges(const input::InputState& from, input::InputState& to) {
+        to.confirm_pressed |= from.confirm_pressed;
+        to.cancel_pressed |= from.cancel_pressed;
+        to.pause_pressed |= from.pause_pressed;
+        to.fire_pressed |= from.fire_pressed;
+        to.jump_pressed |= from.jump_pressed;
+        if (to.move.x == 0.0f && to.move.y == 0.0f) to.move = from.move;
+        for (u32 i = 0; i < to.action_count && i < from.action_count; ++i) {
+            if (to.action_names[i] != from.action_names[i]) continue;
+            input::ActionState& a = to.actions[i];
+            const input::ActionState& b = from.actions[i];
+            a.pressed = a.pressed || b.pressed;
+            a.released = a.released || b.released;
+            if (!a.held && b.held) {  // a tap that began and ended between two frames
+                a.x = b.x;
+                a.y = b.y;
+            }
+        }
+    }
     input::InputState ui_actions_;  // the newest tick snapshot, for the UI screens' navigation
     bool ui_fresh_ = false;         // ui_actions_ arrived since the last rendered frame
     kit::CutsceneView cutscene_;  // this frame's cutscene (letterbox, skip prompt)

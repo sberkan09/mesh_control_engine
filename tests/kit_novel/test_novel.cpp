@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "mce/audio/components.h"
 #include "mce/ecs/save.h"
@@ -17,7 +18,9 @@
 #include "mce/kit/timeline.h"
 #include "mce/kit/novel.h"
 #include "mce/loc/loc.h"
+#include "mce/convar.h"
 #include "mce/platform/haptics.h"
+#include "mce/platform/screen_reader.h"
 #include "novel_fixture.h"
 
 using namespace mce;
@@ -227,6 +230,42 @@ TEST_CASE("novel: a player's Enter starts a run and reads it") {
     for (u32 i = 0; i < 400 && !g.n().finished; ++i) g.step(i % 2 == 0 ? enter : input::InputState{});
     CHECK(g.n().finished);
     CHECK(g.n().ending != 0);
+}
+
+TEST_CASE("screen reader (M-ACCESS): the stage says the title row, each finished page with its speaker, and the choice") {
+    ConVar* reader = ConVar::find(StringId("access.screen_reader"));
+    REQUIRE(reader != nullptr);
+    reader->set_int(2);  // always: no reader runs here
+    std::vector<std::string> said;
+    platform::screen_reader::set_sink([](void* user, StringView text) { static_cast<std::vector<std::string>*>(user)->emplace_back(text); },
+                                      &said);
+    Novel g(0);
+    g.n().instant_text = true;
+    g.step();
+    g.step();
+    REQUIRE(g.n().mode == nv::Mode::Title);
+    REQUIRE(said.size() == 1);
+    CHECK(said[0] == "New game, 1 of 1");
+    input::InputState enter;
+    enter.confirm_pressed = true;
+    for (u32 i = 0; i < 400 && g.n().mode != nv::Mode::Choice; ++i) g.step(i % 2 == 0 ? enter : input::InputState{});
+    REQUIRE(g.n().mode == nv::Mode::Choice);
+    for (u32 i = 0; i < 4; ++i) g.step();  // nothing new: nothing said again
+    const std::vector<std::string> want{"New game, 1 of 1", "The harbour is quiet.", "Mira: Morning.", "Wave back, 1 of 2"};
+    CHECK(said == want);
+    input::InputState down;
+    down.move.y = -1.0f;
+    g.step(down);
+    g.step();
+    CHECK(said.back() == "Walk on, 2 of 2");
+
+    reader->set_int(0);  // never: the stage stays quiet
+    const size_t before = said.size();
+    g.step(enter);
+    for (u32 i = 0; i < 10; ++i) g.step();
+    CHECK(said.size() == before);
+    platform::screen_reader::set_sink(nullptr, nullptr);
+    reader->set_int(1);
 }
 
 TEST_CASE("dialogue: a conversation runs from a label, a variable gates its options") {

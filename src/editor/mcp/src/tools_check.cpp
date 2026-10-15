@@ -1,7 +1,8 @@
 // M-AGENT quality gates (SBA-53): project_check runs the checks a person would do before shipping
 // and returns them as findings an agent can act on: the cook (scenes and assets that fail to load),
 // broken and unused references, missing credits, colour space of data textures, each scene run
-// headless against a per-tick budget, and accessibility basics (text size and contrast).
+// headless against a per-tick budget, and accessibility basics (text size and contrast in scenes and
+// UI documents, subtitles for timelines that play sounds, captions for sounds).
 
 #include <cmath>
 
@@ -189,6 +190,61 @@ f32 vec_or(cook::JsonValue o, StringView key, u32 lane, f32 def) {
     const cook::JsonValue v = o.get(key);
     return v.is_array() && lane < v.size() && v.at(lane).is_number() ? static_cast<f32>(v.at(lane).as_number()) : def;
 }
+
+// A .mcui widget's own text (a tab's "label" counts) and its style's colours, read from the
+// document as authored: "style" over every state ("styles" per state are not read here).
+struct UiTextCheck {
+    StringView file;
+    f32 min_px;
+    bool themed;  // the document takes its colours from a theme: unstated colours are unknown
+    void (*report)(void* user, StringView file, u32 line, StringView msg, StringView fix);
+    void* user;
+
+    void walk(const cook::JsonValue& widgets, bool have_bg, const f32 bg[3]) const {
+        for (u32 i = 0; widgets.is_array() && i < widgets.size(); ++i) walk_one(widgets.at(i), have_bg, bg);
+    }
+    void walk_one(const cook::JsonValue& w, bool have_bg, const f32 parent_bg[3]) const {
+        const cook::JsonValue style = w.get("style");
+        f32 bg[3] = {parent_bg[0], parent_bg[1], parent_bg[2]};
+        bool here_bg = have_bg;
+        // A tint the widget draws opaquely enough to read text against (an image's tint colours the
+        // image, which this does not see).
+        const cook::JsonValue kind = w.get("kind");
+        const bool image = kind.is_string() && (kind.as_string() == "Image" || kind.as_string() == "Text");
+        const cook::JsonValue tint = style.get("tint");
+        if (!image && tint.is_array() && tint.size() >= 3 && (tint.size() < 4 || !tint.at(3).is_number() || tint.at(3).as_number() >= 0.5) &&
+            !(style.get("draw_quad").is_bool() && !style.get("draw_quad").as_bool())) {
+            here_bg = read_color(tint, bg);
+        }
+        const cook::JsonValue text = w.get("text");
+        const cook::JsonValue name = w.get("name");
+        const StringView who = name.is_string() ? name.as_string() : StringView("a widget");
+        if (text.is_string() && !text.as_string().empty()) {
+            if (const cook::JsonValue size = style.get("text_size"); size.is_number() && size.as_number() > 0 && size.as_number() < min_px) {
+                cook::String msg;
+                cook::appendf(msg, "%.*s: UI text is %.0f px at UI scale 1 (at least %.0f reads on a phone or TV)",
+                              static_cast<int>(who.size()), who.data(), size.as_number(), static_cast<f64>(min_px));
+                cook::String fix;
+                cook::appendf(fix, "raise its style.text_size to %.0f or more (players can also raise access.text_scale)", static_cast<f64>(min_px));
+                report(user, file, size.line(), msg.view(), fix.view());
+            }
+            f32 fg[3] = {1, 1, 1};
+            const bool stated = read_color(style.get("text_color"), fg);
+            if (here_bg && (stated || !themed)) {
+                const f32 ratio = contrast(luminance(fg[0], fg[1], fg[2]), luminance(bg[0], bg[1], bg[2]));
+                if (ratio < 4.5f) {
+                    cook::String msg;
+                    cook::appendf(msg, "%.*s: UI text contrast against the panel behind it is %.1f:1 (WCAG AA asks 4.5:1)",
+                                  static_cast<int>(who.size()), who.data(), static_cast<f64>(ratio));
+                    report(user, file, w.line(), msg.view(), "a lighter or darker style.text_color, or a darker or lighter panel tint");
+                }
+            }
+        }
+        walk(w.get("children"), here_bg, bg);
+        const cook::JsonValue tabs = w.get("tabs");
+        for (u32 t = 0; tabs.is_array() && t < tabs.size(); ++t) walk(tabs.at(t).get("children"), here_bg, bg);
+    }
+};
 
 // The colour a backing panel shows behind a label: the smallest Sprite whose rectangle holds the
 // label's position, its tint times its texture's average colour, blended over `clear` by alpha.
@@ -528,6 +584,63 @@ bool project_check(ToolCall& c) {
                     cook::appendf(msg, "%.*s: text contrast against what is behind it (a backing sprite, else the clear colour) is %.1f:1 (WCAG AA asks 4.5:1)",
                                   static_cast<int>(who.size()), who.data(), static_cast<f64>(ratio));
                     rep.add(Sev::Warning, "accessibility", file.view(), line, msg.view(), "a lighter or darker TextLabel.color, or a backing panel");
+                }
+            }
+        }
+    }
+
+    // ---- accessibility: UI documents (.mcui), and subtitle coverage of timelines and sounds
+    if (opt.enabled("accessibility")) {
+        for (usize i = 0; i < texts.size(); ++i) {
+            const StringView rel = text_files[i].view();
+            const bool ui_doc = ends_with(rel, ".mcui"), timeline = ends_with(rel, ".mctimeline");
+            const bool scene = ends_with(rel, ".mcscene") || ends_with(rel, ".mcprefab");
+            if (!ui_doc && !timeline && !scene) continue;
+            cook::JsonDoc doc;
+            cook::JsonError je;
+            if (!doc.parse(texts[i].view(), je)) continue;
+            cook::String file("assets/");
+            file += rel;
+            if (ui_doc) {
+                UiTextCheck check{file.view(), opt.min_text_px, doc.root().get("theme").is_string(),
+                                  [](void* user, StringView f, u32 line, StringView msg, StringView fix) {
+                                      static_cast<Report*>(user)->add(Sev::Warning, "accessibility", f, line, msg, fix);
+                                  },
+                                  &rep};
+                const f32 none[3] = {0, 0, 0};
+                check.walk(doc.root().get("widgets"), false, none);
+            } else if (timeline) {
+                // Sounds and voices with no line on screen: players who cannot hear them miss them.
+                const cook::JsonValue tracks = doc.root().get("tracks");
+                bool audio = false, subtitle = false;
+                u32 audio_line = 0;
+                for (u32 t = 0; tracks.is_array() && t < tracks.size(); ++t) {
+                    const cook::JsonValue type = tracks.at(t).get("type");
+                    if (!type.is_string()) continue;
+                    if (type.as_string() == "audio" && !audio) {
+                        audio = true;
+                        audio_line = tracks.at(t).line();
+                    }
+                    subtitle = subtitle || type.as_string() == "subtitle";
+                }
+                if (audio && !subtitle)
+                    rep.add(Sev::Warning, "accessibility", file.view(), audio_line,
+                            "the timeline plays sounds but has no subtitle track: players who cannot hear them miss what they say",
+                            "add a {\"type\": \"subtitle\"} track with the lines (and \"[sound]\" lines for sounds that matter)");
+            } else {
+                const cook::JsonValue ents = doc.root().get("entities");
+                for (u32 e = 0; ents.is_array() && e < ents.size(); ++e) {
+                    const cook::JsonValue comps = ents.at(e).get("components");
+                    const cook::JsonValue sfx = comps.get("SfxTrigger"), src = comps.get("AudioSource");
+                    const bool music = src.is_object() && src.get("bus").is_string() && src.get("bus").as_string() == "Music";
+                    if ((!sfx.is_object() && (!src.is_object() || music)) || comps.get("SoundCaption").is_object()) continue;
+                    const cook::JsonValue name = ents.at(e).get("name");
+                    const StringView who = name.is_string() ? name.as_string() : StringView("an entity");
+                    cook::String msg;
+                    cook::appendf(msg, "%.*s plays a sound with no caption (shown when a player turns access.captions on)",
+                                  static_cast<int>(who.size()), who.data());
+                    rep.add(Sev::Info, "accessibility", file.view(), (sfx.is_object() ? sfx : src).line(), msg.view(),
+                            "add SoundCaption {\"text\": \"[what it is]\"} if the sound tells the player something");
                 }
             }
         }
