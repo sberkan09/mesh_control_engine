@@ -125,7 +125,8 @@ struct PostFx {
         f32 dt = 1.0f / 60.0f;      // seconds since the last frame; set it every frame
     } auto_exposure;
     // Color grading on the tonemapped (display-space) frame: a 256 × 16 strip LUT (16³; see
-    // make_identity_lut), as Post2D's. The TextureStore key; 0 = off.
+    // make_identity_lut), as Post2D's. The TextureStore key; 0 (or a key the store
+    // does not hold) = off.
     u32 lut_key = 0;
     f32 lut_strength = 1.0f;  // 0 = ungraded, 1 = fully graded
     // Depth of field: a gather over a disk whose radius follows each pixel's circle of confusion: 0

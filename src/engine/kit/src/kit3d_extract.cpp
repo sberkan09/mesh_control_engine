@@ -313,7 +313,8 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.auto_exposure.speed_up = env.auto_exposure_speed_up;
     post.auto_exposure.speed_down = env.auto_exposure_speed_down;
     post.auto_exposure.dt = frame_dt_;
-    post.lut_key = texture_key(env.color_grade.guid);
+    const u32 lut = texture_key(env.color_grade.guid);
+    post.lut_key = lut == ~0u ? 0u : lut;  // texture_key's "none" is ~0u, PostFx's is 0
     post.lut_strength = env.color_grade_strength;
     post.dof.enabled = env.depth_of_field != 0 && quality_.dof_motion_blur;
     post.dof.focus_distance = env.dof_focus_distance;

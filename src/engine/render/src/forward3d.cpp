@@ -2201,7 +2201,7 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
                  post.bloom_intensity / f32(max(bloom_levels_, 1u)), bloom ? 1.0f : 0.0f};
     fu.viewport = {f32(size_.width), f32(size_.height), 1.0f / f32(size_.width), 1.0f / f32(size_.height)};
     // The tonemap pass's u_cluster: x auto exposure, y color-grade strength (0 = off).
-    const rhi::TextureHandle lut = post.lut_key != 0 ? textures_->get(post.lut_key) : rhi::TextureHandle{};
+    const rhi::TextureHandle lut = post.lut_key != 0 && textures_->contains(post.lut_key) ? textures_->get(post.lut_key) : rhi::TextureHandle{};
     const f32 grade = lut.is_null() ? 0.0f : clamp(post.lut_strength, 0.0f, 1.0f);
     fu.cluster = {stats_.auto_exposure ? 1.0f : 0.0f, grade, 0.0f, 0.0f};
     stats_.color_grade = grade > 0.0f;

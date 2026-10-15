@@ -1799,6 +1799,10 @@ TEST_CASE("render3d_gl: a color-grade LUT maps the tonemapped frame: identity ke
     CHECK(std::abs(ground2.luma() - (255 - ground0.luma())) <= 6);
     CHECK(std::abs(ground_half.luma() - 128) <= 8);
     CHECK(f.renderer.forward_3d().last_stats().color_grade);
+    // A key the store does not hold (the kit's ~0u "no texture") leaves the frame ungraded.
+    f.render(0.0f, true, graded(~0u, 1.0f));
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().color_grade);
+    CHECK(f.at_world(ground).luma() == ground0.luma());
     CHECK(f.device->validation_error_count() == 0);
 }
 
