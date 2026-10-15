@@ -163,7 +163,6 @@ private:
     Entity player_;
     u64 revision_ = ~u64(0);
     f32 playhead_ = -1.0f;
-    u64 play_ticks_ = ~u64(0);
     cook::String why_;
 };
 
