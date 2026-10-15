@@ -49,9 +49,9 @@
 // <save folder>/analytics.jsonl and copies the reports to <save folder>/crash_outbox/; none drops them. Consent
 // comes from the ad network's form (M-MONETIZE: personalized = granted, otherwise denied) unless the game sets it,
 // or from -liveops.consent granted|denied. Remote config (mce/liveops/remote_config.h) comes with them: the pack's
-// .mcconfig defaults, the values the last fetch saved, and a fetch at start (the host's fetcher,
-// -remote_config.file <cooked pack>, else Firebase Remote Config with the Firebase vendor); the game applies fetched values with RemoteConfig::apply_fetched. Game
-// services (mce/liveops/game_services.h) too, when the pack has a .mcservices: -liveops.provider local plays the
+// .mcconfig defaults, the values the last fetch saved, and a fetch at start (the host's fetcher, -remote_config.file
+// <cooked pack>, else Firebase Remote Config with the Firebase vendor); the game applies fetched values with
+// RemoteConfig::apply_fetched. Game services (mce/liveops/game_services.h) too, when the pack has a .mcservices: -liveops.provider local plays the
 // platform with a folder (-game_services.dir, -game_services.offline 1), and -game_services_test rehearses them.
 //
 // Input: windowed, the starter-kit "Gameplay" map (mce/input/default_map.h: Move on WASD / arrows /

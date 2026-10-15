@@ -135,14 +135,14 @@ bool fetch_remote_config(ConfigFn fn, void* user) {
 
 // MceFirebase.nativeConfigValue / nativeConfigDone: Remote Config's answer, on the SDK's thread.
 extern "C" JNIEXPORT void JNICALL Java_org_meshcontrol_firebase_MceFirebase_nativeConfigValue(JNIEnv* env, jclass,
-                                                                                               jstring key,
-                                                                                               jstring value) {
+                                                                                              jstring key,
+                                                                                              jstring value) {
     const mce::platform::detail::JStr k(env, key), v(env, value);
     mce::platform::firebase::config_value(k.view(), v.view());
 }
 
 extern "C" JNIEXPORT void JNICALL Java_org_meshcontrol_firebase_MceFirebase_nativeConfigDone(JNIEnv*, jclass,
-                                                                                              jboolean ok) {
+                                                                                             jboolean ok) {
     mce::platform::firebase::config_done(ok != JNI_FALSE);
 }
 
