@@ -56,9 +56,11 @@ embedding that can answer it.
 | Sandbox | `os`/`io`/clock/unseeded random absent; writes to globals, libraries and `mce` fail | `test_script` "sandbox", "read-only" |
 | Runaway and allocating scripts | Disabled by the step budget / memory cap; other scripts unaffected | `test_script` "step budget", "memory cap" |
 | Error quality | `name:line: message` for compile errors, runtime errors, unknown components and fields | `test_script` "errors" |
-| Cost | 2,000 entities, Debug: 3.31 ms/tick (Luau) vs 0.058 ms (C++), about 57×. Release: see below | `sample_script_headless` |
+| Cost | 2,000 entities: Release 0.82 ms/tick (Luau) vs 0.028 ms (C++), about 29×; Debug 3.31 vs 0.058 ms | `sample_script_headless` |
 
-Release timing: RELEASE_TIMING.
+Release timing (linux-gcc-release, 1,200 ticks): 0.82 ms/tick (Luau) vs 0.028 ms (C++), about 29×, with the VM at
+392 KiB. A 60 Hz tick has 16.7 ms, so rules over a few thousand entities fit; hot loops (particles, physics)
+stay in C++. Most of the cost is the per-call name lookup in `get`/`set` (open question 5).
 
 ## Open questions (for a M-SCRIPT milestone, if the user wants one)
 
