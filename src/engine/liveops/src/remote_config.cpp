@@ -2,6 +2,7 @@
 
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 #include "mce/asset/asset_system.h"
@@ -145,9 +146,18 @@ bool parse_config_value(const ConfigValues& defaults, StringView key, StringView
             break;
         }
         case ConfigType::Float: {
+            // std::from_chars for floating point is missing before iOS 26 and deleted in the NDK's libc++:
+            // strtod on a NUL-terminated copy, refusing what from_chars would (spaces, a second sign, hex).
             if (!text.empty() && text[0] == '+') ++first;
-            const auto r = std::from_chars(first, last, v.f);
-            if (text.empty() || r.ec != std::errc() || r.ptr != last || !std::isfinite(v.f)) return false;
+            const StringView rest(first, static_cast<usize>(last - first));
+            FixedString<64> tmp(rest);
+            if (tmp.truncated() || tmp.empty() || tmp.c_str()[0] == '+') return false;
+            for (const char c : rest)
+                if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == 'x' || c == 'X' || c == 'p' || c == 'P')
+                    return false;
+            char* end = nullptr;
+            v.f = std::strtod(tmp.c_str(), &end);
+            if (end != tmp.c_str() + tmp.size() || !std::isfinite(v.f)) return false;
             break;
         }
         case ConfigType::Bool: {

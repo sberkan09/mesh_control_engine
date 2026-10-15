@@ -150,6 +150,10 @@ TEST_CASE("remote config: text from a vendor service is typed by the defaults") 
     CHECK(v.f == doctest::Approx(2.25));
     CHECK(parse_config_value(d, "bonus", "3", v));
     CHECK(v.f == doctest::Approx(3.0));
+    CHECK(parse_config_value(d, "bonus", "+2.5", v));
+    CHECK(v.f == doctest::Approx(2.5));
+    CHECK(parse_config_value(d, "bonus", "-1e-3", v));
+    CHECK(v.f == doctest::Approx(-0.001));
     CHECK(parse_config_value(d, "motd", "Happy {holidays}", v));
     CHECK(v.type == ConfigType::String);
     CHECK(v.s.view() == "Happy {holidays}");
@@ -176,6 +180,8 @@ TEST_CASE("remote config: text from a vendor service is typed by the defaults") 
     CHECK_FALSE(parse_config_value(d, "every", "99999999999999999999", keep));
     CHECK_FALSE(parse_config_value(d, "bonus", "fast", keep));
     CHECK_FALSE(parse_config_value(d, "bonus", "inf", keep));
+    for (const char* t : {" 1.5", "1.5 ", "++1", "+-1", "0x1p3", "1.5abc", "nan", "1e999"})
+        CHECK_FALSE_MESSAGE(parse_config_value(d, "bonus", t, keep), t);
     CHECK_FALSE(parse_config_value(d, "winter", "maybe", keep));
     CHECK_FALSE(parse_config_value(d, "winter", "", keep));
     CHECK_FALSE(parse_config_value(d, "motd", std::string(256, 'x').c_str(), keep));
