@@ -200,6 +200,8 @@ bool EditorShell::open_project(StringView root) {
     timeline_preview_.stop(session_);
     if (timeline_.dirty()) (void)timeline_.save(session_);
     timeline_.close();
+    if (anim_graph_.dirty()) (void)anim_graph_.save(session_);
+    anim_graph_.close();
     if (Result<void> r = session_.open_project(root); !r) {
         FixedString<512> msg;
         format_error(r.error(), msg);
@@ -230,6 +232,16 @@ void EditorShell::open_timeline(asset::Guid guid) {
     }
     if (IEditorPanel* p = find_panel("Timeline")) p->open = true;
     focus_panel("Timeline");
+}
+
+void EditorShell::open_anim_graph(asset::Guid guid) {
+    if (anim_graph_.dirty() && guid != anim_graph_.guid()) (void)anim_graph_.save(session_);
+    if (!anim_graph_.open(session_, guid)) {
+        MCE_LOG_ERROR("editor: cannot open the animation graph: {}", anim_graph_.last_error());
+        return;
+    }
+    if (IEditorPanel* p = find_panel("Animation")) p->open = true;
+    focus_panel("Animation");
 }
 
 bool EditorShell::open_scene(StringView path) {
@@ -748,6 +760,7 @@ void EditorShell::draw_dockspace() {
         ImGui::DockBuilderDockWindow("Assets", bottom);
         ImGui::DockBuilderDockWindow("Tilemap", right);
         ImGui::DockBuilderDockWindow("Timeline", bottom);
+        ImGui::DockBuilderDockWindow("Animation", bottom);
         ImGui::DockBuilderFinish(id);
         for (auto& p : panels_) p->open = true;
     }

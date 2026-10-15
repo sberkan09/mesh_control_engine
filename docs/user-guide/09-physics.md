@@ -155,7 +155,45 @@ From code: `DistanceJointDesc` (a rod, a rope with `min_length < max_length`, or
 `hertz > 0`) and `RevoluteJointDesc` (a hinge with an optional angle limit and motor), created on
 the world with `create_distance_joint(desc)` / `create_revolute_joint(desc)` and addressed by the
 returned `JointId` (`destroy_joint`, `set_motor_speed`, `set_joint_limits`). Prismatic, wheel, weld and mouse joints are not built.
-Joints are not scene-authored yet.
+2D joints are not scene-authored yet.
+
+**3D joints** are components. Put a `Joint3D` on a body's entity (a `RigidBody3D`, or a static
+`BoxCollider3D` / `MeshCollider3D` when the other side moves) and set `connected` to the other body's
+entity, or leave it empty to join the body to the world. `kind` picks the joint:
+
+| kind | What it does | Its settings |
+|---|---|---|
+| `Fixed` | glues the two bodies together | — |
+| `Hinge` | turns about `axis` through `anchor` (a door, a wheel, a drawbridge) | `limits`, `limit_min` / `limit_max` in degrees, `friction` (N·m), the motor |
+| `Slider` | slides along `axis` without turning (a piston, a lift) | `limits`, `limit_min` / `limit_max` in metres, `friction` (N), the motor |
+| `Distance` | keeps `anchor` and `connected_anchor` apart (a rod, a rope, a chain link) | `min_distance` / `max_distance` (< 0: the distance when built); a rope is `min_distance = 0` |
+| `Cone` | a ball joint whose `axis` swings at most `cone_angle` degrees | `cone_angle` |
+| `SixDOF` | each axis of a frame (X = `axis`) locked, free or limited | `linear_min` / `linear_max` (m), `angular_min` / `angular_max` (degrees): min > max is free, min = max locked, else limited |
+
+`anchor` and `axis` are in the entity's space; `connected_anchor` is in the connected entity's space
+(the world's without one). The joint is built the first tick both bodies exist, and their poses
+then are its rest pose: a hinge's angle and a slider's position start at 0. Changing a setting
+rebuilds it from where the bodies are at that moment, except `enabled` (0 switches the joint off
+and keeps it) and the motor.
+
+- **Soft limits.** `spring_frequency > 0` turns hinge and slider limits, and the distance, into
+  springs (`spring_damping` 0..1): a bungee rope, a door that bounces off its stop.
+- **Motors** (hinges and sliders). `motor = Velocity` turns or slides at `motor_target` deg/s or
+  m/s; `motor = Position` drives to `motor_target` degrees or metres and holds it, as stiffly as
+  `motor_frequency` (Hz). `motor_max_force` caps the torque or force (0 = unlimited). Changing the
+  target or the mode does not rebuild the joint, so a sequence or a game module can open a door or
+  raise a drawbridge by writing `motor_target`.
+- **Breaking.** Above `break_force` (N) or `break_torque` (N·m) the joint breaks: `broken` turns 1,
+  a `JointBreak3D { joint, connected }` event is raised in `FixedUpdate_Physics`, and the joint stops
+  acting until one of its settings changes.
+- **Collisions.** The two bodies of a joint do not collide with each other, so a hinge pin can sit
+  inside both; set `collide_connected = 1` to keep them colliding.
+- **What it reports.** `position` (hinge degrees, slider or distance metres), `force` (N) and `torque`
+  (N·m) the joint held with in the last step: enough for a creaking-door sound or a "too heavy" check.
+
+Removing the component, or either body, removes the joint. From code, `physics::World3D` has the same
+joints (`create_joint(JointDesc3D)`, `set_joint_motor`, `set_joint_enabled`, `joint_state`), in
+radians and world space.
 
 ## 9.7 3D navigation
 

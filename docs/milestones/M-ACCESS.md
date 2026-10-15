@@ -5,7 +5,22 @@
 games, and stores and players expect these options.
 **Measured on:** the Linux CI container (Mesa llvmpipe GL 4.5 and lavapipe Vulkan, Xvfb).
 
-Step order: step 1 (subtitles, SBA-95) waits on M-CINEMA's timeline (SBA-76), so steps 2–5 go first.
+Step order: step 1 (subtitles, SBA-95) waited on M-CINEMA's timeline (SBA-76), so steps 2 and 3 went first.
+
+## Step 1 — Subtitles and captions (SBA-95)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Caption lines in the sim: `ShowCaption` events, `SoundCaption` tags on an `SfxTrigger` (each play) or an `AudioSource` (a loop while it plays), at most 8 lines, kept in the `Captions` resource; `kit::caption_lines` adds the playing timelines' subtitle lines | `mce/kit/captions.h`, installed by `kit::install_stock` | `test_kit` "ShowCaption lines show for their seconds ...", "a SoundCaption captions its SfxTrigger's plays and its looping AudioSource", "captions leave the state hash alone"; `test_kit` timeline "every track kind plays against the tick" reads Mira's line through `caption_lines` |
+| The subtitle view: a box per line centred at the bottom of the safe area, the speaker's name in its own color, sounds bracketed, wrapping at 80 % of the width, the newest three | `ui::SubtitleView`, `ui::subtitle_style()` (`mce/ui/subtitles.h`) | `test_ui` "subtitles show speech by default, sounds when captions are on ...", "subtitle size, background and safe area", "subtitle_style reads the access convars" |
+| The player draws it under the scene's UI screens | `PlayerApp::update_subtitles`, `record_overlay` | — |
+| The NPC dialogue box follows the subtitle settings | `novel::DialogueBox::update`: the name tag follows `access.subtitle_speaker`, the box opacity scales with `access.subtitle_background` (outlined text below 0.5) | defaults leave the box as styled (the novel goldens hold) |
+| Options | `access.subtitles`, `access.captions`, `access.subtitle_speaker`, `access.subtitle_size`, `access.subtitle_background` (Saved), on the template's options screen (Audio tab) | user guide 10.7 |
+
+Limits: the full-screen novel stage (`novel::install`) draws its own text box and does not read the subtitle
+settings yet; the dialogue box keeps its text size (its rows are the rectangles the sim hit-tests). Sound
+captions come from tags, not from the clip asset: an `.sfx` has no caption field.
+
 
 ## Step 2 — Visual options (SBA-96)
 

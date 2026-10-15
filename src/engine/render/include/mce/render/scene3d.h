@@ -170,6 +170,22 @@ struct AmbientOcclusion {
     f32 bias = 0.02f;      // ignores occluders this close to the tangent plane (cosine threshold)
 };
 
+// Screen-space reflections (M-VISUAL2 1): a ray along each pixel's mirror direction marched through
+// the SSAO prepass's half-resolution view depth; a hit reads last frame's lit HDR color there
+// (reprojected), so the first frame after it turns on, a resize or a new Forward3D reflects nothing yet.
+// The main pass blends the hit over the specular ambient (sky, IBL and reflection probes) by its
+// confidence and the surface's roughness; misses keep the probes. Off draws the frame without it.
+struct ScreenSpaceReflections {
+    bool enabled = false;
+    f32 max_distance = 8.0f;     // world meters a ray travels
+    f32 thickness = 0.25f;       // how far behind the depth buffer a ray may pass and still hit (meters)
+    u32 steps = 32;              // march steps before the 4-step binary refinement (4..128)
+    f32 max_roughness = 0.5f;    // rougher surfaces keep the probes only
+    f32 roughness_fade = 0.2f;   // the reflection fades out over this roughness range below max_roughness
+    f32 edge_fade = 0.1f;        // fraction of the screen at its borders over which hits fade out
+    f32 intensity = 1.0f;        // scales the reflected light
+};
+
 // Cascaded shadow maps for the sun (FR-R3D-040).
 struct ShadowSettings {
     u32 cascades = 3;                          // 1..kMaxCascades
@@ -539,6 +555,7 @@ public:
     void set_sky(const Sky& sky) { sky_ = sky; }
     void set_post(const PostFx& post) { post_ = post; }
     void set_ambient_occlusion(const AmbientOcclusion& ao) { ao_ = ao; }
+    void set_reflections(const ScreenSpaceReflections& ssr) { ssr_ = ssr; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -588,6 +605,7 @@ public:
     const Sky& sky() const { return sky_; }
     const PostFx& post() const { return post_; }
     const AmbientOcclusion& ambient_occlusion() const { return ao_; }
+    const ScreenSpaceReflections& reflections() const { return ssr_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -646,6 +664,7 @@ private:
     Sky sky_;
     PostFx post_;
     AmbientOcclusion ao_;
+    ScreenSpaceReflections ssr_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;

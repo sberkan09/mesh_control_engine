@@ -20,6 +20,9 @@ inline constexpr const char* kUiDocumentPanel = "UI Document";
 // The Timeline panel (timeline_panel.cpp): tracks, keys, curves, record mode and the preview.
 void add_timeline_panel(EditorShell& shell);
 inline constexpr const char* kTimelinePanel = "Timeline";
+// The Animation panel (animation_panel.cpp): an .mcanim graph, its inspector and a clip / graph preview.
+void add_animation_panel(EditorShell& shell);
+inline constexpr const char* kAnimationPanel = "Animation";
 // Drag-drop payload of the asset browser: the asset's Guid.
 inline constexpr const char* kAssetPayload = "MCE_ASSET";
 // Destroys every selected entity (Del in the Hierarchy and the Viewport).

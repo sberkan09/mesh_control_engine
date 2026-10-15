@@ -3,6 +3,7 @@
 #include "mce/kit/novel_ui.h"
 
 #include "mce/kit/novel.h"
+#include "mce/ui/subtitles.h"
 
 namespace mce::novel {
 
@@ -100,6 +101,7 @@ void DialogueBox::place(const DialogueLayout& layout) {
         doc_.set_style_all(row_text_[i], flat(st.text, st.text, px, false));
         row_look_[i] = 255;  // restyled on the next update
     }
+    box_alpha_ = -1.0f;  // the box restyles on the next update
 }
 
 void DialogueBox::show(bool on) {
@@ -121,8 +123,25 @@ void DialogueBox::update(World& world, const ui::UpdateContext& ctx) {
     if (d) {
         const LocaleText* lt = story_locale(*p, world);  // the player's language (presentation only)
         const char* who = d->speaker == 255 ? "" : localized_speaker(*p, lt, d->speaker);
+        // The player's subtitle settings (M-ACCESS): the speaker's name tag, and the box's
+        // opacity scaled as access.subtitle_background scales the subtitle boxes (0.6 = as styled).
+        const ui::SubtitleStyle sub = ui::subtitle_style();
         doc_.set_text(name_, StringView(who));
-        doc_.set_visible(name_tag_, who[0] != '\0');
+        doc_.set_visible(name_tag_, who[0] != '\0' && sub.speaker_names);
+        const f32 alpha = math::clamp(style_.box.a * sub.background / ui::SubtitleStyle{}.background, 0.0f, 1.0f);
+        if (alpha != box_alpha_) {
+            box_alpha_ = alpha;
+            math::Color box = style_.box;
+            box.a = alpha;
+            ui::Style look = flat(box, style_.text, layout_.text_px, true);
+            look.text_outline = alpha < 0.5f ? 1.0f : 0.0f;  // no box to read against: outline the page
+            doc_.set_style_all(box_, look);
+            for (u32 i = 0; i < 4; ++i) {
+                ui::Style t = flat(style_.text, style_.text, layout_.text_px, false);
+                t.text_outline = look.text_outline;
+                doc_.set_style_all(lines_[i], t);
+            }
+        }
         // The page typed out as far as the sim has revealed it. A choice with no prompt of its own
         // keeps the page before it up.
         const bool prompt = d->line[0] || d->line[1] || d->line[2] || d->line[3];
