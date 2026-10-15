@@ -161,6 +161,8 @@ reach all of its non-transient fields.
 | `render_frame` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `render_sheet` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `image_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `perf_run` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `perf_compare` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `module_build` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `module_test` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `test_run` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |

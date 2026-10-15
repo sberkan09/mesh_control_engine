@@ -99,6 +99,8 @@ each result's `content[0].text` is the tool's JSON).
 | See | `render_frame` | `tick?` (default 1), `width?`, `height?` (default 960 × 540), `scene?`, `input?`, `camera?`, `safe_area?`, `software?`, `convars?`, `save?` | cooks, draws the **saved** scene with the real player at the first frame after sim tick N and returns the frame as an MCP **image**; `save` also writes the PNG under the project folder. `convars` (`{"lc.quality": 0}`) sets console variables for that run only, so a setting can be previewed without changing the project; `run_headless` takes them too and puts the old values back after |
 | | `render_sheet` | `ticks` (1-16), `cameras?` (1-4), `cell_width?`, `cell_height?`, and `render_frame`'s `scene`, `input`, `safe_area`, `software` | one image: ticks in columns, cameras in rows, each cell labelled |
 | | `image_diff` | `golden`, `image` or `render`, `threshold?` (8), `max_score?` (0.01), `update?` | compares with a golden PNG in the project: `score` (mean channel difference, 0..1), `changed_fraction`, `pass`, and a heat map image; a missing golden is written |
+| Measure | `perf_run` | `scene?`, `frames?` (300), `warmup?` (30), `target?` (desktop), `width?`, `height?`, `headless?`, `software?`, `input?`, `convars?`, `save?`, `top?` (8) | runs the real player for N frames at one sim tick per frame, so counters repeat run to run. Returns the verdict against the target's budget, with advice for each limit it is over; frame, sim, render and GPU ms (p50/p95/p99/max); draws, triangles, sprites and other counters; the slowest systems; the GPU stages; and spike frames with their cause. Keeps the `.mcperf` (`cooked/.perf/last.mcperf`, or `save`) |
+| | `perf_compare` | `before?`, `after?` (default: `perf_run`'s last two), `target?`, `top?` | two captures side by side: p50/p95 times, the worst frame's counters, the systems that moved most, `better` and `worse`, and the after capture's verdict |
 | Code | `module_build` | `reload?` (true), `warnings?`, `target?` | rebuilds the game module with the project's CMake tree (the one the loaded module came from) and maps the new build into the server: new components and systems are live for the next call, no restart; compiler errors come back as `{severity, file, line, col, message}` |
 | | `module_test` | `filter?` (default `^<game>_`) | `ctest` in the module's build tree: each test's result, the output's end when one failed |
 | Playtest | `test_run` | `path?` (a `.mctest` file or folder, default `tests/`), `test?` (one inline) | plays each scenario headless with scripted input or a bot and evaluates its checks (section 14.3.1) |
@@ -231,6 +233,16 @@ Pick the one that fits the brief and name it as each `.mcui` document's `"theme"
 result with `ui_preview` or `render_frame`, and keep text readable: `project_check` warns about text under 16 px
 or under 4.5:1 contrast. Delete the themes and fonts the game does not use before shipping (`project_check`
 lists them as assets nothing references).
+
+### Is it fast enough?
+
+`perf_run` answers it for a target: `{"target": "mobile"}` judges the scene against the project's mobile budget
+(chapter 2.2) and lists, for each limit it is over, what to try. Change one thing, run again, and
+`perf_compare` with no arguments compares the last two runs. Each frame runs exactly one sim tick, so the
+counters are the same on every machine and every run, and a change in draws or triangles is the scene's.
+Times are the machine's own: on a box without a GPU, `gpu_ms` is the software rasterizer's, so read the
+counters first. `headless: true` measures the simulation alone (no window), which is the quickest way to
+find a slow system.
 
 ### Before shipping
 

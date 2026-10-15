@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- `perf_run` and `perf_compare` over MCP, M-PERF step 3 (SBA-115). `perf_run` measures a scene with the real player,
+  one sim tick per frame, so its counters repeat run to run. It judges the result against a target's budget, with
+  advice for each limit it is over. It also returns frame, sim, render and GPU times, draws, triangles and sprites,
+  the slowest systems, the GPU stages and spike frames, and it keeps the `.mcperf` capture. `perf_compare` compares
+  two captures (by default the last two runs) and says what got better or worse. User guide 14.
 - Performance budgets per target, M-PERF step 2 (SBA-114). The `.mceproj` takes `"budgets"` for desktop, mobile
   and web: frame, sim, render and GPU milliseconds, draws, triangles, sprites, upload bytes, heap allocations,
   sprite textures per scene and the largest texture edge. Fields left out keep the engine defaults. `project_set`
