@@ -127,6 +127,52 @@ On a 75 ms link with 20 ms of jitter and 5% loss, `sample_net_headless -sim 1` s
 A drifter's mean per-tick change in velocity is about 0.018 with `-interp 0` and about 0.001 with
 interpolation. The server's own value is 0.0003.
 
+**Your own player, without the round trip.** Remote entities can be drawn in the past; the one the
+player controls cannot. Waiting for the server's snapshot puts a round trip plus the jitter buffer
+between a key press and the move on screen. Client-side prediction (`mce/net/prediction.h`) runs the
+player's inputs through the same step function the server uses and draws the result at once. The
+server stays in charge:
+
+```cpp
+struct Input { f32 move_x; };                         // trivially copyable, small
+struct State { LocalTransform transform; };           // what the step changes; may hold more
+void step(void*, State& s, const Input& in, f32 dt);  // the SAME code on client and server
+
+// client
+net::Predictor<Input, State> predictor;
+predictor.init({}, step);
+client_rep.set_predicted(my_net_id);                  // snapshots stop drawing it
+// when it first appears: predictor.reset(State{*client_rep.latest_transform(my_net_id)});
+predictor.push(Input{axis});                          // every tick
+if (predictor.write_inputs(w)) host.send(server, input_channel, w.data(), net::Delivery::Sequenced);
+// on each snapshot of it, with the ack the server sent along (e.g. in write_extra):
+predictor.reconcile(ack, State{*client_rep.latest_transform(my_net_id)});
+predictor.smooth(f.dt);
+f.commands().set(my_entity, predictor.displayed());
+
+// server, one per player
+net::InputReceiver<Input> inputs;
+inputs.receive(packet, [&](const Input& in) { step(nullptr, state, in, dt); });
+// write inputs.last_seq() next to the player's state in the snapshot: that is the ack
+```
+
+Each input packet repeats the newest unacknowledged inputs (8 by default), so one lost packet costs
+nothing, and the server runs each input exactly once, in order. On a snapshot, `reconcile` drops the
+inputs the server has run, starts again from the server's state and replays the rest. When the server
+disagreed (an input it never got, a push only it knew about), the prediction corrects at once but the
+drawn player glides to it: `smooth` removes the difference at `correction_rate` (10 per second by
+default). An error larger than `snap_distance` (2 units) is a teleport and snaps. `stats()` counts
+pending inputs, corrections and snaps.
+
+The step must give the same result on both sides for the same state and input, so keep it free of
+anything only one side has (the wall clock, random numbers without a shared seed). Inputs travel as
+their raw bytes, so the server should treat them as untrusted: clamp them in the step function.
+
+`sample_net_headless -sim 1` predicts each client's player; a gust that only the server knows about
+pushes players back every two seconds. At 75 ms with 20 ms of jitter, the player is drawn about 200 ms
+behind its input with `-predict 0` and about 10 ms with prediction (what remains is the gusts being
+smoothed in).
+
 ## 20.5 Try it
 
 `samples/net_headless` runs a server and a client in one process over loopback and checks that the
@@ -196,7 +242,7 @@ line there the same way.
 
 ## 20.7 What it does not do yet
 
-Clients show the newest snapshot without prediction or smoothing, every client receives every
+Lag compensation for hit checks and rollback come next (M-NET2). Every client receives every
 replicated entity, and traffic is not encrypted. There are no lobbies, matchmaking or NAT traversal:
 players connect to an address and port. If you ship a game that links `mce_net`, list ENet (MIT
 licence) in your `CREDITS.md`.

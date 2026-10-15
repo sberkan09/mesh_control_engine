@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Predict the local player (SBA-84, M-NET2 step 3): `net::Predictor` runs the player's inputs through the same
+  step function as the server and draws the result at once; `net::InputReceiver` runs each input once on the
+  server, in order, across lost packets. On each snapshot the client reconciles with the server's ack, replays
+  what the server has not seen yet and glides to any correction instead of jumping.
+  `ReplicationClient::set_predicted` keeps snapshots from drawing that entity. In `sample_net_headless` at 75 ms
+  the player is drawn about 10 ms behind its input, against 200 ms without prediction. User guide 20.4.
 - Smooth remote entities (SBA-83, M-NET2 step 2): `ReplicationClient::set_interpolation` draws replicated entities a
   little in the past through a jitter buffer that adapts to the measured snapshot interval and arrival jitter,
   blending the snapshots around the render time. Past the newest snapshot an entity moves on for at most 0.1 s, then

@@ -1,6 +1,6 @@
 # M-NET2 — Multiplayer that games can ship (milestone record)
 
-**Status:** active. Steps 1–2 merged into `dev_claude`; steps 3–7 to come (Linear SBA-82 … SBA-88).
+**Status:** active. Steps 1–3 merged into `dev_claude`; steps 4–7 to come (Linear SBA-82 … SBA-88).
 **Why:** M-NET gives server-authoritative snapshots over ENet with no prediction or interpolation, so a moving player
 feels the round trip (ROADMAP "Engine gap tracks"; comparison in the project's `assessments/motor-kiyaslama-eksikler.md`).
 **Measured on:** the Linux CI container.
@@ -11,7 +11,7 @@ feels the round trip (ROADMAP "Engine gap tracks"; comparison in the project's `
 |---|---|---|
 | 1. Network test harness: simulated latency, jitter and loss; headless multi-client runner in `local_ci.sh`; net stats in the dev overlay | SBA-82 | done |
 | 2. Snapshot interpolation for remote entities, jitter buffer, extrapolation limits | SBA-83 | done |
-| 3. Client-side prediction and server reconciliation, misprediction smoothing | SBA-84 | — |
+| 3. Client-side prediction and server reconciliation, misprediction smoothing | SBA-84 | done |
 | 4. Lag compensation for hit checks (rewound colliders) | SBA-85 | — |
 | 5. Deterministic rollback/lockstep mode with desync detection by hash | SBA-86 | — |
 | 6. Sessions: `mce_relay` relay/lobby server, room codes; WebSocket/WebRTC transport | SBA-87 | — |
@@ -52,3 +52,19 @@ Notes:
 | Extrapolation limit: past the newest snapshot an entity moves on with its last velocity for `max_extrapolation_s` (0.1 s), then holds the newest snapshot exactly | same | `test_net` "past the newest snapshot it extrapolates up to the limit, then holds it exactly" |
 | Smoothness under jitter and loss: over `SimNetwork` at 60 ms ± 40 with 10% loss, the mean per-tick change in velocity drops from 0.133 (raw) to 0.004 (interpolated) | `tests/net/test_interpolation.cpp` | `test_net` "over a jittery, lossy link the mirror moves smoothly; raw snapshots stutter" (asserts at least 10×) |
 | The sample interpolates by default (`-interp 0` shows raw snapshots), prints a drifter's smoothness next to the server's, and hashes the path each client drew. The determinism stage's two runs cover interpolation | `samples/net_headless/main.cpp` | 4 clients at 75 ms ± 20, 5% loss: 0.0013 interpolated vs 0.018 raw (server 0.0003) |
+
+## Step 3 — client-side prediction and server reconciliation
+
+| Item | Where | Evidence |
+|---|---|---|
+| `net::Predictor<Input, State>`: `push()` numbers each input and steps the predicted state at once; `write_inputs()` sends the newest unacknowledged inputs (`redundancy`, 8) in a `MIN` packet; `reconcile(ack, server_state)` drops acknowledged inputs, restarts from the server's state and replays the rest; a stale ack is ignored | `mce/net/prediction.h`, `prediction.cpp` | `test_net` "when the server agrees, reconcile leaves the prediction bit for bit" (30 ticks, packets 6 ticks late, 0 corrections) |
+| `net::InputReceiver<Input>`: the server runs each input once, in sequence order, across lost packets and late duplicates; a gap wider than the redundancy skips the lost inputs; malformed packets (wrong size, another input type, empty) run nothing; `last_seq()` is the ack | same | `test_net` "inputs travel with redundancy and the server runs each once, in order", "a gap wider than the redundancy skips the lost inputs", "malformed input packets run nothing" |
+| Misprediction smoothing: a correction keeps the drawn transform where it was and removes the difference at `correction_rate` (10/s), position and rotation; below 0.1 mm it is gone and the drawn transform is the prediction bit for bit; past `snap_distance` (2) it snaps | same | `test_net` "a misprediction is replayed at once and smoothed on screen" (0.3 error: no drawn step over 0.06, exact after 2 s), "an error beyond the snap distance snaps" |
+| `ReplicationClient::set_predicted(net_id)`: snapshots and interpolation leave that entity's `LocalTransform` to the game; `latest_transform(net_id)` is the server's word for `reconcile`; `InterpolationStats::predicted` counts it. Repeats of the newest snapshot no longer feed the jitter estimate | `mce/net/replication.h`, `replication.cpp` | `test_net` "the replication client leaves a predicted entity to the game" |
+| The sample predicts each client's player (`-predict 0` draws it from snapshots). The server sends a WELCOME with the player's net id, acks inputs in the player's extra bytes, and pushes players back every 2 s with a gust only it knows about. The end-of-run check also waits for every input to be acknowledged and the smoothing to finish, then compares bit for bit | `samples/net_headless/main.cpp` | 4 clients at 75 ms ± 20, 5% loss: player drawn 12 ms behind its input predicted vs 201 ms from snapshots, 5 corrections (the gusts), 0 snaps; 8 clients at 150 ms ± 40, 15% loss: 7 corrections, every input arrived |
+
+Notes:
+- Input packets carry the inputs' raw bytes (trivially copyable, little-endian on every target), so
+  the step function validates them; the server trusts no client.
+- The server runs inputs as they arrive, one step each, the Quake usercmd model: a client that sends
+  more inputs than ticks moves faster. Capping inputs per server tick is left to the game for now.
