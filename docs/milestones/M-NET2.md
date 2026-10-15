@@ -1,6 +1,6 @@
 # M-NET2 — Multiplayer that games can ship (milestone record)
 
-**Status:** active. Steps 1–5 merged into `dev_claude`; steps 6–7 to come (Linear SBA-82 … SBA-88).
+**Status:** active. Steps 1–6 merged into `dev_claude`; step 7 to come (Linear SBA-82 … SBA-88).
 **Why:** M-NET gives server-authoritative snapshots over ENet with no prediction or interpolation, so a moving player
 feels the round trip (ROADMAP "Engine gap tracks"; comparison in the project's `assessments/motor-kiyaslama-eksikler.md`).
 **Measured on:** the Linux CI container.
@@ -14,7 +14,7 @@ feels the round trip (ROADMAP "Engine gap tracks"; comparison in the project's `
 | 3. Client-side prediction and server reconciliation, misprediction smoothing | SBA-84 | done |
 | 4. Lag compensation for hit checks (rewound colliders) | SBA-85 | done |
 | 5. Deterministic rollback/lockstep mode with desync detection by hash | SBA-86 | done |
-| 6. Sessions: `mce_relay` relay/lobby server, room codes; WebSocket/WebRTC transport | SBA-87 | — |
+| 6. Sessions: `mce_relay` relay/lobby server, room codes; WebSocket/WebRTC transport | SBA-87 | done (WebSocket; WebRTC not built) |
 | 7. Replication as data: `NetReplicated` / `NetOwner`, per-field flags, MCP, user guide | SBA-88 | — |
 
 ## Step 1 — the network test harness
@@ -100,3 +100,26 @@ Notes:
   it would make rollback a drop-in for any scene.
 - There is no time synchronisation: a peer whose clock runs ahead waits more often instead of being
   slowed down smoothly.
+
+## Step 6 — rooms through a relay, and a WebSocket transport
+
+| Item | Where | Evidence |
+|---|---|---|
+| `net::WebSocketHost`: a Transport over RFC 6455 WebSocket, server (`listen`) and client (`connect`), native over non-blocking TCP; binary messages `[channel][payload]`, masked client frames, 7/16/64-bit lengths, fragments, ping/pong round trip in `stats()`, close frames carrying the disconnect `user_data`, a size limit (1009) and handshake and silence timeouts | `mce/net/websocket.h`, `src/websocket.cpp`, `src/socket.cpp`, `src/ws_crypto.cpp` | `test_net` "the handshake's accept key matches RFC 6455's example", "a client connects over loopback, messages of every length cross, then it disconnects" (0 B to 70,000 B both ways), "the server closing tells the client, and a full server turns a client away", "a message over the limit closes the connection; nobody listening fails the connect" |
+| The web build's client over the browser's WebSocket (`emscripten_websocket_*`, `-lwebsocket.js`); `listen()` fails there | `src/websocket_web.cpp` | **not compiled here** (no Emscripten in the CI container); the M-WEB track's web builds compile it |
+| `net::RelayServer`: rooms with six-character codes (no 0/O/1/I, seeded), up to 8 members, host is member 0, joiners take the lowest free id; forwarding to one member or all with the sender's delivery; refusals (no such room, full, already in a room, bad request, too many rooms); the host leaving closes the room, the host can remove a member; served over any number of Transports at once | `mce/net/relay.h`, `src/relay.cpp` | `test_net` "a host makes a room, others join with its code, and members are peers", "codes are case-insensitive, and wrong codes, full rooms and double joins are refused", "the host can remove a member, a lost link closes the room, and room limits hold" |
+| `net::RelayClient`: a Transport whose peers are the room's members, so replication, prediction and rollback run through a room unchanged | same | `test_net` "snapshot replication runs unchanged through a room"; `sample_net_headless -sim 1 -relay 1` (ctest `sample_net_headless_relay`; `local_ci.sh` determinism stage across runs and Debug/Release): 3 clients at 40 ms ± 10 per hop, 5% loss, 600 ticks, every mirror matches, 48 of 48 shots hit when rewound |
+| `mce_relay`: UDP (ENet) on 7777 and WebSocket on 7778 in one process, counters in the log; `-selftest 1` puts a native client (UDP) and a WebSocket client in one room over loopback, sends both ways, checks a third is refused and that the room closes with its host | `src/engine/net/relay/` (under `src/engine/net/` because only mce_net may link mce_net) | ctest `mce_relay_selftest` |
+| Socket wall: socket headers only in `src/engine/net/src/` | `scripts/ci/check_walls.py` | `check_walls.py` |
+
+Notes:
+- WebRTC is not built: a browser-to-browser or browser-to-native connection without the relay needs
+  ICE/STUN/DTLS, a large dependency for a solo track. Through the relay, web and native builds
+  already play together; WebRTC would only take the relay hop out.
+- The relay and WebSocket speak plain `ws://`. A page served over `https://` may only open `wss://`,
+  so a deployment puts a TLS proxy (Caddy, nginx) in front of the WebSocket port; the web client
+  takes a `wss://host` address as it is.
+- Over WebSocket, Sequenced and Unreliable messages are delivered reliably (TCP); a lossy browser link
+  queues instead of dropping.
+- The gate "a web build joins a native host through the relay" waits on M-WEB's Emscripten build;
+  the selftest covers the same path with the native WebSocket client.
