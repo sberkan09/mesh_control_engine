@@ -137,7 +137,7 @@ directory). Helpers are in `input_test_util.h`.
 ## Known gaps
 
 - ADR-0026 §2 "Not built": per-player pad ownership (bindings read any pad until local
-  multiplayer) and the rebinding UI screen. Rumble exists only as `platform::gamepad_rumble`, with
+  multiplayer). The rebinding screen is the stock options screen (M-ACCESS, `ui::OptionsPanel`). Rumble exists only as `platform::gamepad_rumble`, with
   no input-map surface.
 - The default maps have no trigger actions on purpose: a new action changes the `InputState`
   layout and the 03_platformer determinism hash (ADR-0026 §2.3).

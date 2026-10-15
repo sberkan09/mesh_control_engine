@@ -294,12 +294,15 @@ void read_action(JsonValue a, input::InputMapSet& set, StringView file, DiagList
         for (u32 i = 0; i < bindings.size(); ++i) read_binding(bindings.at(i), def.type, set, file, diags);
     def.binding_count = static_cast<u16>(set.bindings.size() - def.first_binding);
     set.actions.push_back(def);
+    // The authored name rides along as the action's label (chunk v2), for options screens.
+    set.labels.resize(set.actions.size());
+    set.labels.back().assign(name.as_string().substr(0, input::kMaxActionLabel));
 }
 
 class InputMapImporter final : public IImporter {
 public:
     StringView id() const override { return "input"; }
-    u32 version() const override { return 1; }
+    u32 version() const override { return 2; }  // 2: action labels (chunk v2)
     ChunkType type() const override { return ChunkType::InputMap; }
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ".mcinput"; }

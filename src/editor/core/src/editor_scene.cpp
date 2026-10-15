@@ -625,29 +625,47 @@ bool EditorScene::duplicate_entities(Span<const EntityId> ids, Array<EntityId>* 
 bool EditorScene::set_component(EntityId id, const refl::TypeRecord& type, const void* value) {
     DocEntity* e = doc_.find(id);
     DocComponent* c = e ? e->find(type) : nullptr;
+    // The value before the edit, for the edit observer (copied: the observer may edit the scene).
+    Array<byte> before;
     if (!c) {
         // A prefab instance inheriting `type` from its root: the edit makes it an override.
         const DocComponent* base = e && !e->prefab.is_null() ? prefab_base(id, type) : nullptr;
         if (!base || std::memcmp(base->data(), value, type.size) == 0) return false;
-        Edit edit(*this, "Edit component");
+        if (observer_fn_) {
+            before.resize_uninitialized(type.size);
+            std::memcpy(before.data(), base->data(), type.size);
+        }
+        {
+            Edit edit(*this, "Edit component");
+            record(id);
+            doc_.add_component(id, type);
+            c = e->find(type);
+            std::memcpy(c->data(), base->data(), type.size);
+            c->overrides = changed_fields_mask(type, base->data(), value);
+            std::memcpy(c->data(), value, type.size);
+            mirror(id, *c);
+            touch();
+        }
+    } else {
+        if (std::memcmp(c->data(), value, type.size) == 0) return false;
+        if (observer_fn_) {
+            before.resize_uninitialized(type.size);
+            std::memcpy(before.data(), c->data(), type.size);
+        }
+        // One continuous drag of one component is one entry (coalescing until seal_undo()).
+        Edit edit(*this, "Edit component", (type.type_hash ^ (u64(id) * 0x9E3779B97F4A7C15ull)) | 1u);
         record(id);
-        doc_.add_component(id, type);
-        c = e->find(type);
-        std::memcpy(c->data(), base->data(), type.size);
-        c->overrides = changed_fields_mask(type, base->data(), value);
+        if (!e->prefab.is_null()) c->overrides |= changed_fields_mask(type, c->data(), value);
         std::memcpy(c->data(), value, type.size);
         mirror(id, *c);
         touch();
-        return true;
     }
-    if (std::memcmp(c->data(), value, type.size) == 0) return false;
-    // One continuous drag of one component is one entry (coalescing until seal_undo()).
-    Edit edit(*this, "Edit component", (type.type_hash ^ (u64(id) * 0x9E3779B97F4A7C15ull)) | 1u);
-    record(id);
-    if (!e->prefab.is_null()) c->overrides |= changed_fields_mask(type, c->data(), value);
-    std::memcpy(c->data(), value, type.size);
-    mirror(id, *c);
-    touch();
+    if (observer_fn_) {
+        Array<byte> after;
+        after.resize_uninitialized(type.size);
+        std::memcpy(after.data(), value, type.size);
+        observer_fn_(observer_user_, *this, id, type, before.data(), after.data());
+    }
     return true;
 }
 
