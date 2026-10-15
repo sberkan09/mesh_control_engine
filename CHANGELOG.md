@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Phone fixes from the Simulator and emulator checks (SBA-30): a language the player chooses no longer falls back
+  to the device's other languages (English chosen on a Turkish phone showed the kit's words in Turkish); SDL GPU's
+  debug mode is off in the iOS Simulator, whose Metal validation aborted on the first indirect draw; MSL for iOS
+  supports base vertex and base instance, so instanced PBR (Solstice Reach) opens on iOS.
 - Screens that open and close themselves, M-UI-DATA demo (SBA-38): `kit::UiFlow` shows, hides and holds a
   `UiScreen` on input actions (`show_on`, `hide_on`, `load_on` a scene, `pause`), and a paused screen holds the
   world (`World::set_held`: fixed-step systems stop, the tick count goes on, the hash replays). Undertow gets a
