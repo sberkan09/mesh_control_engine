@@ -25,6 +25,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/scene_document.cpp
         src/stub_world.cpp
         src/tilemap_editor.cpp
+        src/timeline_editor.cpp
         src/ui_document_editor.cpp
         src/viewport2d.cpp
     PUBLIC_DEPS
