@@ -619,7 +619,9 @@ Result<MeshView> MeshView::read(Span<const byte> payload) {
     constexpr const char* kStage = "asset.mesh.read";
     const auto* h = header_of<MeshHeader>(payload);
     if (!h) return Error(Errc::Truncated, kStage);
-    if (h->flags & ~u32(MeshFlags::Index32 | MeshFlags::Skinned | MeshFlags::Lods)) return Error(Errc::ReservedNonZero, kStage);
+    if (h->flags & ~u32(MeshFlags::Index32 | MeshFlags::Skinned | MeshFlags::Lods | MeshFlags::Ragdoll))
+        return Error(Errc::ReservedNonZero, kStage);
+    if ((h->flags & MeshFlags::Ragdoll) && !(h->flags & MeshFlags::Skinned)) return Error(Errc::ReservedNonZero, kStage);
     if (!(h->flags & MeshFlags::Skinned) && h->skin_offset != 0) return Error(Errc::ReservedNonZero, kStage);
     MeshView v;
     v.header = h;
@@ -699,8 +701,15 @@ Result<MeshView> MeshView::read(Span<const byte> payload) {
             if (skin.joint_count == 0 || skin.joint_count > kMaxSkinJoints || !in_bounds(skin.first_joint, skin.joint_count, sh->joint_count))
                 return bad(kStage, 0x40000 + k);
         }
-        for (u32 j = 0; j < sh->joint_count; ++j)
-            if (v.joints[j].node >= h->node_count) return bad(kStage, 0x50000 + j);
+        const bool ragdoll = (h->flags & MeshFlags::Ragdoll) != 0;
+        for (u32 j = 0; j < sh->joint_count; ++j) {
+            const MeshJoint& mj = v.joints[j];
+            if (mj.node >= h->node_count) return bad(kStage, 0x50000 + j);
+            const bool overrides = mj.ragdoll_flags != 0 || mj.ragdoll_radius != 0.0f || mj.ragdoll_swing != 0.0f ||
+                                   mj.ragdoll_twist != 0.0f || mj.ragdoll_mass != 0.0f;
+            if (!ragdoll && overrides) return Error(Errc::ReservedNonZero, kStage);
+            if (ragdoll && (mj.ragdoll_flags & ~0x3Fu)) return Error(Errc::ReservedNonZero, kStage);
+        }
         for (u32 s = 0; s < h->submesh_count; ++s) {
             const i32 k = v.submesh_skins[s];
             if (k < 0) continue;
