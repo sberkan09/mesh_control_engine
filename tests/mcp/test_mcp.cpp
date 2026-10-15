@@ -356,6 +356,12 @@ TEST_CASE("mcp tools: read and edit through the funnel; values are validated bef
     CHECK(c.fails("component_set", R"({"entity":7,"component":"McpProbe","path":"target","value":"$99"})").find("$<entity id>") != std::string::npos);
     CHECK(c.fails("component_set", R"({"entity":7,"component":"McpProbe","path":"target","value":"$0"})").find("no entity") != std::string::npos);
     CHECK(c.server.session().scene().get<mcptest::McpProbe>(7)->target == editor::doc_entity_ref(3));  // unchanged
+    // An entity name works where "$<id>" does (unique names only).
+    c.ok("component_set", R"({"entity":7,"component":"McpProbe","path":"target","value":null})");
+    const std::string name3 = str(c.ok("scene_get_entity", R"({"entity":3})").v().get("name"));
+    c.ok("component_set", R"({"entity":7,"component":"McpProbe","value":{"target":")" + name3 + R"("}})");
+    CHECK(c.server.session().scene().get<mcptest::McpProbe>(7)->target == editor::doc_entity_ref(3));
+    CHECK(c.fails("component_set", R"({"entity":7,"component":"McpProbe","path":"target","value":"Nobody"})").find("no entity with that name") != std::string::npos);
     c.ok("component_set", R"({"entity":7,"component":"McpProbe","value":{"label":"hi","points":[[1,2],[3,4],[5,6]]}})");
     c.ok("component_set", R"({"entity":7,"component":"McpProbe","path":"points[1].x","value":9})");
     auto probe = c.ok("scene_get_entity", R"({"entity":7})");
@@ -489,8 +495,11 @@ TEST_CASE("mcp tools: persistence stays inside the project and never clobbers si
     // run_headless plays another saved scene by path; asset_delete removes a file and its sidecar.
     auto other = c.ok("run_headless", R"({"scene":"scenes/copy.mcscene","ticks":5,"log_lines":0,"inspect":{"component":"RigidBody2D"}})");
     CHECK(str(other.v().get("scene")) == "scenes/copy.mcscene");
-    CHECK(other.v().get("inspect").get("entities").at(0).get("id").is_null());  // not the open scene: no ids
-    CHECK(c.fails("run_headless", R"({"scene":"scenes/copy.mcscene","inspect":{"entities":[7]}})").find("inspect.component") != std::string::npos);
+    CHECK(other.v().get("inspect").get("entities").at(0).get("id").is_number());  // the played scene's ids
+    // Names and ids in inspect name the played scene's entities.
+    auto ball = c.ok("run_headless", R"({"scene":"scenes/copy.mcscene","ticks":5,"log_lines":0,"inspect":{"entities":["Ball"]}})");
+    CHECK(ball.v().get("inspect").get("entities").at(0).get("id").as_number() == 5);
+    CHECK(c.fails("run_headless", R"({"scene":"scenes/copy.mcscene","inspect":{"entities":[99]}})").find("played scene") != std::string::npos);
     CHECK(c.fails("run_headless", R"({"scene":"scenes/nope.mcscene"})").find("no such scene") != std::string::npos);
     CHECK(c.fails("asset_delete", R"({"path":"scenes/demo.mcscene"})").find("open scene") != std::string::npos);
     CHECK(c.fails("asset_delete", R"({"path":"../x.png"})").find("under assets/") != std::string::npos);
@@ -862,6 +871,10 @@ TEST_CASE("mcp tools: project_get / project_set and the scene's WorldSettings (M
     CHECK(c.fails("project_set", R"({"values":{"gravity":[0,1]}})").find("not a project setting") != std::string::npos);
     CHECK(c.fails("project_set", R"({"values":{"title":"x","games":[1]}})").find("games") != std::string::npos);
     CHECK(read_file(root + "/Demo.mceproj") == before);
+    // A patch without start_scene keeps it.
+    p = c.ok("project_set", R"({"values":{"title":"Third Demo"}})");
+    CHECK(str(p.v().get("start_scene_path")) == "scenes/other.mcscene");
+    CHECK(str(parse(read_file(root + "/Demo.mceproj"))->root().get("start_scene")) == str(c.ok("scene_info").v().get("guid")));
 
     // WorldSettings: a bad value creates nothing; zero 2D gravity keeps the ball where it starts.
     CHECK(c.fails("scene_settings_set", R"({"values":{"gravity_2d":"down"}})").find("gravity_2d") != std::string::npos);

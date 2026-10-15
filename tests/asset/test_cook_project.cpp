@@ -64,6 +64,11 @@ struct CtLevel {
 };
 MCE_COMPONENT(CtLevel, next)
 
+struct CtCue {
+    AssetRef<Sequence> seq;
+};
+MCE_COMPONENT(CtCue, seq)
+
 struct CtSound {
     AssetRef<Sfx> clip;
     bool loop = false;
@@ -601,8 +606,8 @@ TEST_CASE("cook: missing and mistyped references name file:line:col") {
     CHECK(diag_text(r2).find("expected Texture") != std::string::npos);
 }
 
-TEST_CASE("cook: dependency cycles are reported once, naming the cycle") {
-    const std::string root = make_project("cook_cycle");
+TEST_CASE("cook: scenes may name each other in a loop (scene references are links, not dependencies)") {
+    const std::string root = make_project("cook_scene_links");
     const char* a = "b2b2b2b2-0000-4000-8000-00000000000a";
     const char* b = "b2b2b2b2-0000-4000-8000-00000000000b";
     auto level = [](const char* self, const char* next) {
@@ -614,12 +619,36 @@ TEST_CASE("cook: dependency cycles are reported once, naming the cycle") {
     CookService svc;
     const CookReport r = svc.cook(root.c_str(), CookOptions{});
     INFO(diag_text(r));
+    CHECK(r.ok());
+    CHECK(r.cooked == 7);
+    // Still checked: a link to a scene that is not there, or to something that is not a scene.
+    write_file(root + "/assets/scenes/b.mcscene", level(b, "b2b2b2b2-0000-4000-8000-0000000000ff"));
+    const CookReport r2 = svc.cook(root.c_str(), CookOptions{});
+    CHECK(!r2.ok());
+    CHECK(diag_text(r2).find("missing reference") != std::string::npos);
+    write_file(root + "/assets/scenes/b.mcscene", level(b, kTexGuid));
+    CHECK(diag_text(svc.cook(root.c_str(), CookOptions{})).find("expected Scene") != std::string::npos);
+}
+
+TEST_CASE("cook: dependency cycles are reported once, naming the cycle") {
+    // A prefab whose sequence spawns the prefab: each cook needs the other's output first.
+    const std::string root = make_project("cook_cycle");
+    const char* prefab = "b2b2b2b2-0000-4000-8000-00000000000c";
+    const char* seq = "b2b2b2b2-0000-4000-8000-00000000000d";
+    write_file(root + "/assets/spark.mcprefab", std::string("{ \"format\": \"mce-prefab\", \"version\": 1, \"guid\": \"") + prefab +
+                                                    "\", \"entities\": [ { \"components\": { \"CtCue\": { \"seq\": \"guid:" + seq +
+                                                    "\" } } } ] }");
+    write_file(root + "/assets/burst.mcseq", std::string("{ \"format\": \"mce-sequence\", \"version\": 1, \"guid\": \"") + seq +
+                                                 "\", \"steps\": [ { \"spawn\": \"guid:" + prefab + "\" } ] }");
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    INFO(diag_text(r));
     CHECK(!r.ok());
     u32 cycles = 0;
     for (const auto& d : r.diags.all()) cycles += d.code == Errc::DependencyCycle;
     CHECK(cycles == 1);
-    CHECK(diag_text(r).find("scenes/a.mcscene") != std::string::npos);
-    CHECK(diag_text(r).find("scenes/b.mcscene") != std::string::npos);
+    CHECK(diag_text(r).find("spark.mcprefab") != std::string::npos);
+    CHECK(diag_text(r).find("burst.mcseq") != std::string::npos);
     CHECK(r.cooked == 5);  // the rest of the project is unaffected
 }
 

@@ -70,6 +70,11 @@ expect_exit(0 ${MCE} headless "${project}" --ticks 300)
 if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
     message(FATAL_ERROR "mce headless:\n${LAST_OUTPUT}")
 endif()
+# The module's log lines go through the host's logger (the engine's format, no file:line), so the
+# in-game console and the MCP runs' log tails show them.
+if(NOT LAST_OUTPUT MATCHES "[0-9]\\] \\[info\\] sdk_probe: game systems installed" OR LAST_OUTPUT MATCHES "\\[sdk_probe.cpp:")
+    message(FATAL_ERROR "mce headless: the module's log line is not in the host's log:\n${LAST_OUTPUT}")
+endif()
 # `mce mcp` speaks the MCP stdio transport: stdout carries JSON-RPC lines only, from the first byte.
 file(WRITE "${WORK_DIR}/mcp_in.jsonl"
      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"sdk_test\",\"version\":\"0\"}}}\n")
@@ -130,6 +135,11 @@ list(GET shipped_host 0 shipped_host)
 expect_exit(0 "${shipped_host}" -headless 1 -ticks 300)
 if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
     message(FATAL_ERROR "the shipped host:\n${LAST_OUTPUT}")
+endif()
+# A fresh project registers its smoke test, so ctest (and the MCP tool module_test) has one to run.
+expect_exit(0 ${CMAKE_CTEST_COMMAND} --test-dir "${project}/build" -R headless_300)
+if(NOT LAST_OUTPUT MATCHES "100% tests passed, 0 tests failed out of 1")
+    message(FATAL_ERROR "the project's smoke test:\n${LAST_OUTPUT}")
 endif()
 if(NOT EXISTS "${WORK_DIR}/shipped/SdkProbe/CREDITS.md")
     message(FATAL_ERROR "mce ship left out CREDITS.md")

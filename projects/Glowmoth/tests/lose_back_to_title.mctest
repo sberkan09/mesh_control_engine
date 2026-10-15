@@ -1,0 +1,17 @@
+{
+  "name": "the lose screen goes back to the title",
+  "scene": "scenes/lose.mcscene",
+  "ticks": 240,
+  "input": "60-62 Jump",
+  "until": {
+    "scene": "scenes/main.mcscene"
+  },
+  "assert": [
+    {
+      "scene": "scenes/main.mcscene"
+    },
+    {
+      "log_errors": 0
+    }
+  ]
+}

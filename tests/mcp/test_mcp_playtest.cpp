@@ -4,11 +4,13 @@
 
 #include <doctest/doctest.h>
 
+#include <filesystem>
 #include <string>
 
 #include "mce/editor/play_session.h"
 #include "mce/gameplay.h"
 #include "mce/input/actions.h"
+#include "mce/scene/scene.h"
 #include "mcp_client.h"
 
 namespace playtest_game {
@@ -22,8 +24,15 @@ struct Walker {
     f32 wall_h = 0.0f;       // ...this high (jump over it)
     f32 hazard_x = 1000.0f;  // crossing this x respawns at the origin
     f32 vy = 0.0f;
+    f32 door_x = 1000.0f;    // crossing this x changes to scenes/win.mcscene
+    mce::u32 flaps = 0;      // side view: Jump presses allowed in the air (a double jump)
+    mce::u32 flapped = 0;
 };
-MCE_COMPONENT(Walker, speed, side, wall_x, wall_h, hazard_x, vy)
+MCE_COMPONENT(Walker, speed, side, wall_x, wall_h, hazard_x, vy, door_x, flaps, flapped)
+
+struct HazardCrossed {  // pushed on each respawn
+    mce::u32 unused = 0;
+};
 
 }  // namespace playtest_game
 
@@ -38,7 +47,13 @@ void walk(Frame& f) {
     f.query<playtest_game::Walker&, LocalTransform&>().each([&](playtest_game::Walker& w, LocalTransform& t) {
         const f32 dx = in.move.x * w.speed * f.dt;
         if (w.side) {
-            if (in.jump_pressed && t.position.y <= 0.001f) w.vy = 9.0f;
+            if (in.jump_pressed && t.position.y <= 0.001f) {
+                w.vy = 9.0f;
+                w.flapped = 0;
+            } else if (in.jump_pressed && w.flapped < w.flaps) {
+                w.vy = 9.0f;
+                ++w.flapped;
+            }
             w.vy -= 25.0f * f.dt;
             t.position.y += w.vy * f.dt;
             if (t.position.y < 0) {
@@ -52,12 +67,17 @@ void walk(Frame& f) {
             t.position.x += dx;
             t.position.y += in.move.y * w.speed * f.dt;
         }
-        if (t.position.x > w.hazard_x) t.position = math::vec3(0, 0, 0);
+        if (t.position.x > w.hazard_x) {
+            t.position = math::vec3(0, 0, 0);
+            f.events().push(playtest_game::HazardCrossed{});
+        }
+        if (t.position.x > w.door_x) scene::request_change(f.world(), "scenes/win.mcscene");
     });
 }
 
 ResultV install(World& world) {
     world.register_components<playtest_game::Walker>();
+    world.register_event<playtest_game::HazardCrossed>(Phase::FixedUpdate_Pre);
     world.add_system(Phase::FixedUpdate_Pre, "playtest_walk", &walk);
     return ok();
 }
@@ -152,12 +172,64 @@ TEST_CASE("playtest: side view jumps the wall; without Jump it reports the stuck
     auto died = h.ok("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","target":"Post"},"ticks":300,)"
                                  R"("teleport":1,"assert":[{"feel":"deaths","<=":0}]})");
     CHECK(num(died.v().get("feel").get("deaths")) >= 2);
+    // Event checks take the C++ name or the name without its namespace; an unknown one fails with the list.
+    auto events = h.ok("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","target":"Post"},"ticks":300,"assert":[)"
+                                   R"({"event":"HazardCrossed",">=":2},{"event":"playtest_game::HazardCrossed",">=":2},{"event":"Crossed","==":0}]})");
+    const cook::JsonValue ev = events.v().get("checks");
+    CHECK(ev.at(0).get("ok").as_bool());
+    CHECK(ev.at(1).get("ok").as_bool());
+    CHECK_FALSE(ev.at(2).get("ok").as_bool());
+    CHECK(str(ev.at(2).get("note")).find("playtest_game::HazardCrossed") != std::string::npos);
     CHECK_FALSE(died.v().get("ok").as_bool());
     CHECK_FALSE(died.v().get("checks").at(0).get("ok").as_bool());
     // A "death" condition counts too (here: the walker standing past x = 1.5 for the first time each life).
     auto counted = h.ok("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","target":"Post"},"ticks":120,"teleport":100,)"
                                     R"("death":{"entity":"Player","field":"LocalTransform.position.x",">":1.9}})");
     CHECK(num(counted.v().get("feel").get("deaths")) >= 1);
+}
+
+TEST_CASE("playtest: walk_to through waypoints, air jumps, and the game's reaction to the arrival") {
+    GameGuard game;
+    const std::string root = project("mcp_playtest_through");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/play.mcscene"));
+    c.init();
+    // By the Post (6, 0), then the Flag (6, 4): 10 m instead of the straight 7.2 m.
+    auto t = c.ok("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","through":["Post",[6,2]],"target":"Flag"},"ticks":900})");
+    const cook::JsonValue feel = t.v().get("feel");
+    CHECK(feel.get("finished").as_bool());
+    CHECK(num(feel.get("distance_m")) > 8.5);
+    CHECK(num(feel.get("time_to_finish_s")) > 2.2);
+    // The run goes on half a second after the arrival, so the game can react to it.
+    CHECK(num(t.v().get("ticks")) == doctest::Approx(num(feel.get("time_to_finish_s")) * 60 + 30).epsilon(0.02));
+    CHECK(c.fails("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","through":[],"target":"Flag"}})").find("bot.through") != std::string::npos);
+    CHECK(c.fails("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","through":["Nobody"],"target":"Flag"}})").find("no such entity") != std::string::npos);
+
+    // Side view, a wall one jump cannot clear (1.6 m high at most) but a jump and two flaps can:
+    // air_jumps presses Jump in the air on purpose (the plain bot only gets there when a stall's
+    // retry happens to land mid-air).
+    const std::string side = project("mcp_playtest_flap", R"({ "side": true, "wall_x": 3, "wall_h": 3.4, "flaps": 2 })");
+    Client s;
+    REQUIRE(s.server.open_project(sv(side), "scenes/play.mcscene"));
+    s.init();
+    auto plain = s.ok("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","target":"Post","plane":"x"},"ticks":600})");
+    auto flap = s.ok("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","target":"Post","plane":"x","air_jumps":2},"ticks":600})");
+    REQUIRE(flap.v().get("feel").get("finished").as_bool());
+    if (plain.v().get("feel").get("finished").as_bool())
+        CHECK(num(flap.v().get("feel").get("time_to_finish_s")) < num(plain.v().get("feel").get("time_to_finish_s")));
+    CHECK(s.fails("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","target":"Post","air_jumps":9}})").find("bot.air_jumps") != std::string::npos);
+
+    // A door on the way changes the scene: the level is over, not the actor dead.
+    const std::string door = project("mcp_playtest_door", R"({"door_x": 2})");
+    write_file(door + "/assets/scenes/win.mcscene", R"({ "format": "mce-scene", "version": 1,
+  "guid": "5ce4e000-0000-4000-8000-0000000007a2", "name": "win",
+  "entities": [{ "name": "Banner", "components": { "LocalTransform": {} } }] })");
+    Client d;
+    REQUIRE(d.server.open_project(sv(door), "scenes/play.mcscene"));
+    d.init();
+    auto through_door = d.ok("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","target":"Post"},"ticks":200})");
+    CHECK(through_door.v().get("feel").get("finished").as_bool());
+    CHECK(num(through_door.v().get("feel").get("deaths")) == 0);
 }
 
 TEST_CASE("playtest: explore covers ground and masher presses chords, both seeded") {
@@ -257,6 +329,38 @@ TEST_CASE("test_run: .mctest files under tests/ with field, tick, alive, event, 
     CHECK(c.fails("test_run", R"({"path":"../x"})").find("inside the project") != std::string::npos);
     CHECK(c.fails("test_run", R"({"test":{"input":"1 Jump","bot":{"kind":"masher"}}})").find("not both") != std::string::npos);
     CHECK(c.fails("test_run", R"({"test":{"assert":[{"feel":"fun","==":1}]}})").find("'feel' is") != std::string::npos);
+}
+
+TEST_CASE("test_run: a scene check follows the game's scene changes (scene::request_change)") {
+    GameGuard game;
+    const std::string root = project("mcp_test_scene_change", R"({"door_x": 2})");
+    write_file(root + "/assets/scenes/win.mcscene", R"({ "format": "mce-scene", "version": 1,
+  "guid": "5ce4e000-0000-4000-8000-0000000007a2", "name": "win",
+  "entities": [{ "name": "Banner", "components": { "LocalTransform": {} } }] })");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/play.mcscene"));
+    c.init();
+    // Walking right crosses the door at x = 2 (0.5 s at 4 m/s): the run moves to the win scene.
+    auto r = c.ok("test_run", R"({"test":{"input":"1- Move=1,0","ticks":120,"assert":[)"
+                              R"({"scene":"scenes/play.mcscene","tick":10},{"scene":"assets/scenes/win.mcscene"},)"
+                              R"({"entity":"Player","field":"LocalTransform.position.x",">":0}]}})");
+    const cook::JsonValue checks = r.v().get("results").at(0).get("checks");
+    REQUIRE(checks.size() == 3);
+    CHECK(checks.at(0).get("ok").as_bool());
+    CHECK(checks.at(1).get("ok").as_bool());
+    CHECK(str(checks.at(1).get("actual")) == "scenes/win.mcscene");
+    CHECK_FALSE(checks.at(2).get("ok").as_bool());  // the Player is in the scene the run left
+    CHECK(str(checks.at(2).get("note")).find("another scene") != std::string::npos);
+    // Until the win scene: the run stops on the tick after the door.
+    auto until = c.ok("test_run", R"({"test":{"input":"1- Move=1,0","ticks":600,"until":{"scene":"scenes/win.mcscene"}}})");
+    CHECK(until.v().get("results").at(0).get("stopped_early").as_bool());
+    CHECK(num(until.v().get("results").at(0).get("ticks")) < 40);
+    CHECK(c.fails("test_run", R"({"test":{"assert":[{"scene":"scenes/win.mcscene","==":1}]}})").find("no comparison") != std::string::npos);
+    // A change to a scene the pack lacks fails the run.
+    std::filesystem::remove(root + "/assets/scenes/win.mcscene");
+    auto broken = c.ok("test_run", R"({"test":{"input":"1- Move=1,0","ticks":120}})");
+    CHECK_FALSE(broken.v().get("ok").as_bool());
+    CHECK(str(broken.v().get("results").at(0).get("error")).find("scene.change") != std::string::npos);
 }
 
 TEST_CASE("run_headless trace: fields sampled every N ticks") {

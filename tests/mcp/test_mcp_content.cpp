@@ -4,6 +4,7 @@
 
 #include <doctest/doctest.h>
 
+#include <cstring>
 #include <filesystem>
 #include <string>
 
@@ -107,6 +108,23 @@ TEST_CASE("saving generated content: file, sidecar, CREDITS.md row, cooks with n
     Client c;
     REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
     c.init();
+    // A drawn sprite: rows of characters through a palette.
+    auto drawn = c.ok("gen_pixels", R"({"rows":[".ab.","abba",".ab."],"palette":{"a":"#102030","b":"#ffcc00ff"},"save":"sprites/lamp.png"})");
+    REQUIRE(drawn.images.size() == 1);
+    CHECK(drawn.v().get("width").as_number() == 4);
+    const auto lamp = cook::decode_png(Span<const byte>(reinterpret_cast<const byte*>(read_file(root + "/assets/sprites/lamp.png").data()),
+                                                        read_file(root + "/assets/sprites/lamp.png").size()));
+    REQUIRE(lamp);
+    CHECK(lamp.value().height == 3);
+    CHECK(lamp.value().rgba[3] == 0);                                  // '.' is transparent
+    CHECK(lamp.value().rgba[4] == 0x10);                               // 'a'
+    CHECK(lamp.value().rgba[(1 * 4 + 1) * 4] == 0xff);                 // 'b'
+    CHECK(c.fails("gen_pixels", R"({"rows":["ab","a"],"palette":{"a":"#000000","b":"#ffffff"}})").find("row 1") != std::string::npos);
+    CHECK(c.fails("gen_pixels", R"({"rows":["az"],"palette":{"a":"#000000"}})").find("'z'") != std::string::npos);
+    CHECK(c.fails("gen_pixels", R"({"rows":["a"],"palette":{"ab":"#000000"}})").find("'palette'") != std::string::npos);
+    // Pretty-printed tool JSON still goes out as one line (asset_schema's templates).
+    c.ok("asset_schema", R"({"type":"Tilemap"})");
+
     auto s = c.ok("gen_sprite", R"({"seed":2,"kind":"blob","save":"sprites/slime.png"})");
     const std::string guid = str(s.v().get("saved").get("guid"));
     CHECK(guid.find("guid:") == 0);
@@ -177,4 +195,57 @@ TEST_CASE("library_search and library_add: CC0 models with their texture, OFL fo
     CHECK(c.fails("library_add", R"({"id":"kenney-coin"})").find("already exists") != std::string::npos);
     CHECK(c.fails("library_add", R"({"id":"nope"})").find("library_search") != std::string::npos);
     CHECK(c.fails("library_add", R"({"id":"kenney-coin","path":"x.png"})").find("extension") != std::string::npos);
+}
+
+TEST_CASE("gen_mesh: primitives as .glb that cook, faces wound outwards, a shaded preview") {
+    const std::string root = demo_project("mcp_content_mesh");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    for (const char* shape : {"box", "plane", "sphere", "cylinder", "cone", "disc", "ramp"}) {
+        INFO(shape);
+        const std::string args = std::string(R"({"shape":")") + shape + R"(","size":[2,1,3],"segments":12,"color":"#a0c040","save":"models/)" + shape + R"(.glb"})";
+        auto t = c.ok("gen_mesh", args.c_str());
+        REQUIRE(t.images.size() == 1);
+        CHECK(t.v().get("triangles").as_number() >= 1);
+        // Read the .glb back: every triangle's winding agrees with its vertex normals (faces out).
+        const std::string glb = read_file(root + "/assets/models/" + shape + ".glb");
+        REQUIRE(glb.size() > 28);
+        CHECK(glb.compare(0, 4, "glTF") == 0);
+        u32 json_len = 0;
+        std::memcpy(&json_len, glb.data() + 12, 4);
+        auto doc = parse(glb.substr(20, json_len));
+        const usize bin = 20 + json_len + 8;
+        const cook::JsonValue views = doc->root().get("bufferViews");
+        const auto view_at = [&](u32 i) { return bin + static_cast<usize>(views.at(i).get("byteOffset").as_number()); };
+        const usize n_idx = static_cast<usize>(doc->root().get("accessors").at(3).get("count").as_number());
+        const auto f = [&](usize view, usize i) {
+            float v = 0;
+            std::memcpy(&v, glb.data() + view + i * 4, 4);
+            return v;
+        };
+        u32 bad = 0;
+        for (usize t3 = 0; t3 < n_idx; t3 += 3) {
+            u32 id[3];
+            for (int k = 0; k < 3; ++k) std::memcpy(&id[k], glb.data() + view_at(3) + (t3 + k) * 4, 4);
+            float p[3][3], n[3] = {0, 0, 0};
+            for (int k = 0; k < 3; ++k)
+                for (int a = 0; a < 3; ++a) {
+                    p[k][a] = f(view_at(0), id[k] * 3 + a);
+                    n[a] += f(view_at(1), id[k] * 3 + a);
+                }
+            const float ux = p[1][0] - p[0][0], uy = p[1][1] - p[0][1], uz = p[1][2] - p[0][2];
+            const float vx = p[2][0] - p[0][0], vy = p[2][1] - p[0][1], vz = p[2][2] - p[0][2];
+            const float gx = uy * vz - uz * vy, gy = uz * vx - ux * vz, gz = ux * vy - uy * vx;
+            if (gx * n[0] + gy * n[1] + gz * n[2] <= 0) ++bad;
+        }
+        CHECK(bad == 0);
+    }
+    auto cook = c.ok("cook_run");
+    CHECK(cook.v().get("ok").as_bool());
+    CHECK(listed(c, "models/ramp.glb"));
+    CHECK(read_file(root + "/CREDITS.md").find("made with gen_mesh (sphere 2x1x3 m)") != std::string::npos);
+    CHECK(c.fails("gen_mesh", R"({"shape":"teapot"})").find("'shape'") != std::string::npos);
+    CHECK(c.fails("gen_mesh", R"({"size":[1,0,1]})").find("'size'") != std::string::npos);
+    CHECK(c.fails("gen_mesh", R"({"save":"models/x.gltf"})").find(".glb") != std::string::npos);
 }

@@ -290,8 +290,14 @@ void snippet(const Chunk& ch, Span<const cook::String> terms, cook::String& out)
         if (p < at) at = p;
     }
     if (at == StringView::npos) at = 0;
-    const usize from = at > 120 ? at - 120 : 0;
-    const usize len = std::min<usize>(ch.raw.size() - from, 320);
+    // Both ends on UTF-8 character boundaries: a cut inside a multi-byte character is not valid
+    // JSON text for the client.
+    const StringView raw = ch.raw.view();
+    const auto continuation = [&](usize i) { return i < raw.size() && (static_cast<u8>(raw[i]) & 0xC0) == 0x80; };
+    usize from = at > 120 ? at - 120 : 0;
+    while (from > 0 && continuation(from)) --from;
+    usize len = std::min<usize>(raw.size() - from, 320);
+    while (len > 0 && continuation(from + len)) --len;
     bool space = false;
     if (from) out += "...";
     for (const char c : ch.raw.view().substr(from, len)) {
@@ -404,28 +410,29 @@ struct Feature {
 constexpr Feature kFeatures[] = {
     {"2D", "sprites, text, tilemaps, parallax, 2D lights, post effects", "data", "Sprite, TextLabel, TilemapLayer (.mctilemap), Parallax, Light2D, Post2DComponent"},
     {"2D", "particles", "data", "ParticleEmitter + .mcpart"},
-    {"2D", "sprite animation and atlases", "code", "no AnimatedSprite component yet (M-DATA-REACH step 5)"},
-    {"2D", "camera follow and shake", "code", "Camera2DComponent places the view; follow and shake are game code (M-DATA-REACH step 4)"},
+    {"2D", "sprite animation and atlases", "data", "AnimatedSprite + .mcsheet (gen_pixels or gen_sprite frames side by side)"},
+    {"2D", "camera follow and shake", "data", "Camera2DComponent + CameraFollow2D, CameraShake2D"},
     {"physics", "2D bodies, colliders, triggers", "data", "RigidBody2D, Collider2D"},
     {"physics", "3D static colliders", "data", "the 3D kit's colliders"},
-    {"physics", "3D dynamic bodies, character controller", "code", "M-DATA-REACH step 6"},
+    {"physics", "3D dynamic bodies, character controller", "data", "RigidBody3D, CharacterController3D (and CameraFollow3D)"},
     {"gameplay", "pathfinding", "data", "PathAgent + a kit::NavGrid resource (the grid is code)"},
     {"gameplay", "sequences and state machines", "data", "SequencePlayer + .mcseq; kit FSM"},
     {"gameplay", "game rules", "code", "the game module's systems (module_build reloads them)"},
     {"audio", "music and ambience", "data", "AudioSource"},
-    {"audio", "one-shot sound effects", "code", "M-DATA-REACH step 4 adds SfxTrigger"},
+    {"audio", "one-shot sound effects", "data", "SfxTrigger"},
     {"input", "actions, bindings, touch controls", "asset", ".mcinput"},
     {"ui", "HUD and menus", "code", "mce::ui from code; .mcui is M-UI-DATA"},
     {"3D", "meshes, materials, lights, sky", "data", "the 3D kit's components, glTF, .mcmat, .mcenv"},
     {"store and ads", "purchases, ads", "asset", ".mcstore, .mcservices"},
     {"live services", "remote config, crash reports", "asset", ".mcconfig, .mcservices"},
-    {"scenes", "prefabs", "data", "instances in .mcscene; creating and instancing them over MCP is M-DATA-REACH step 2"},
+    {"scenes", "prefabs", "data", "instances in .mcscene (entity_create with a prefab); prefab_create_from, prefab_apply, prefab_revert"},
+    {"scenes", "scene changes (title, levels, win and lose)", "code", "one call from a game system: scene::request_change(world, \"scenes/level2.mcscene\"); a .mctest checks {\"scene\": ...}"},
     {"scenes", "streaming", "data", "SceneChunk, StreamingFocus"},
     {"agent", "see a frame, compare to a golden", "mcp", "render_frame, render_sheet, image_diff"},
     {"agent", "rebuild and reload game code", "mcp", "module_build, module_test"},
     {"agent", "playtest without a person", "mcp", "test_run (.mctest), playtest bots, run_headless trace"},
     {"agent", "read the docs and samples", "mcp", "mce://docs/... resources, docs_search, prompts"},
-    {"agent", "make art, sound and music without a person", "mcp", "gen_palette, gen_sprite, gen_tileset, gen_texture, gen_sfx, gen_music"},
+    {"agent", "make art, sound and music without a person", "mcp", "gen_palette, gen_sprite, gen_pixels, gen_tileset, gen_texture, gen_mesh, gen_sfx, gen_music"},
     {"agent", "use CC0/OFL starter content with credits", "mcp", "library_search, library_add"},
     {"agent", "check the project and make the release zip", "mcp", "project_check, ship_build"},
     {"agent", "work with other agents on one project: who did what, locks, shared tasks, merged scene saves", "mcp",

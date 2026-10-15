@@ -20,6 +20,10 @@ struct DepRef {
     u32 line = 0;
     u32 col = 0;
     FixedString<128> where;  // human context ("textures.base_color", "entities[2].Sprite.atlas")
+    // A link only: the target must exist with the expected type, but this asset's cooked bytes do
+    // not depend on the target's (a scene naming the next scene keeps just its GUID). No ordering
+    // edge, so links may loop (title -> level -> win -> title).
+    bool link = false;
 };
 
 // Read-only view of the rest of the registry an importer may consult (types of referenced assets).

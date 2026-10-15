@@ -5,6 +5,7 @@
 #include "mce/ecs/hierarchy.h"
 #include "mce/log.h"
 #include "mce/refl/refl.h"
+#include "mce/scene/streaming.h"
 
 namespace mce::scene {
 
@@ -104,7 +105,47 @@ Result<void> load(World& world, asset::AssetSystem& assets, asset::Guid guid, Ar
     Result<asset::SceneView> view = asset::SceneView::read(assets.resolve(handle));
     Result<void> r = view ? instantiate(world, view.value(), spawned) : Result<void>(view.error());
     assets.release(asset::AnyHandle(handle));
+    if (r) {
+        SceneChange* c = world.try_resource<SceneChange>();
+        if (!c) c = &world.set_resource(SceneChange{});
+        c->current.assign(assets.info(key).path);
+        c->current_guid = guid;
+    }
     return r;
+}
+
+Result<asset::Guid> find_scene(const asset::AssetSystem& assets, StringView want) {
+    constexpr StringView kGuidPrefix = "guid:";
+    constexpr StringView kAssetsPrefix = "assets/";
+    if (want.starts_with(kGuidPrefix)) want.remove_prefix(kGuidPrefix.size());
+    if (Result<asset::Guid> g = asset::parse_guid(want)) {
+        const asset::AssetKey k = assets.find(g.value());
+        if (k == asset::kInvalidAssetKey || assets.info(k).type != asset::ChunkType::Scene)
+            return Error(Errc::NotFound, "scene.change", want);
+        return g.value();
+    }
+    if (want.starts_with(kAssetsPrefix)) want.remove_prefix(kAssetsPrefix.size());
+    for (asset::AssetKey k = 0; k < assets.asset_count(); ++k) {
+        const asset::AssetInfo info = assets.info(k);
+        if (info.type == asset::ChunkType::Scene && info.path == want) return info.guid;
+    }
+    return Error(Errc::NotFound, "scene.change", want);
+}
+
+Result<bool> apply_change(World& world, asset::AssetSystem& assets, Array<Entity>* spawned) {
+    SceneChange* c = world.try_resource<SceneChange>();
+    if (!c || c->next.empty()) return false;
+    const FixedString<256> target = c->next;
+    c->next.clear();
+    MCE_TRY_ASSIGN(const asset::Guid guid, find_scene(assets, target.view()));
+    if (SceneStreaming* s = world.try_resource<SceneStreaming>()) s->unload_all(world);
+    world.destroy_all();
+    if (spawned) spawned->clear();
+    MCE_TRY(load(world, assets, guid, spawned));
+    world.rerun_startup();
+    ++world.resource<SceneChange>().changes;
+    MCE_LOG_INFO("scene: changed to {}", target.view());
+    return true;
 }
 
 }  // namespace mce::scene

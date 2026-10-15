@@ -189,6 +189,7 @@ public:
 
     // ---- body mutation -----------------------------------------------------------------------------
     void set_linear_velocity(Entity e, vec3 v);  // kinematic + dynamic bodies
+    void set_angular_velocity(Entity e, vec3 v);  // kinematic + dynamic bodies, rad/s
     void apply_impulse(Entity e, vec3 impulse);  // dynamic bodies, at the centre of mass
     void teleport(Entity e, vec3 position, quat rotation);  // bodies and characters
 

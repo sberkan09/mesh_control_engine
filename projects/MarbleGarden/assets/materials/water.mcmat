@@ -1,0 +1,17 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "45b97505-820b-485f-877f-c31c172c5b38",
+  "name": "water",
+  "base_color": [0.6, 0.8, 0.85, 0.85],
+  "metallic": 0,
+  "roughness": 0.08,
+  "emissive": [0, 0, 0],
+  "alpha_mode": "blend",
+  "alpha_cutoff": 0.5,
+  "double_sided": false,
+  "unlit": false,
+  "textures": {
+    "base_color": "guid:2b02e130-b0dd-48bc-877d-e8f373576b94"
+  }
+}

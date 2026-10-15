@@ -34,7 +34,10 @@ what needs code). It goes in the game module, and the running MCP server picks i
 
 3. **Build and reload.** `module_build`: errors come back as `{file, line, col, message}`; fix and
    call again. On success the server maps the new build: `refl_describe_component {"name": "Patrol"}`
-   shows the fields, and the open scene is kept.
+   shows the fields, and the open scene is kept. Changing an existing component works the same
+   way: add a field, `module_build`, and the server knows the new field list (the open scene keeps
+   its values; when it names a field you removed, it no longer parses and the build's note says where
+   it was kept, under `.mce/module_reload/`).
 4. **Use it.** `component_add {"entity": "Guard", "component": "Patrol"}`, `scene_save`,
    `run_headless` with `trace` on `Guard`'s `LocalTransform.position.x` to see it move.
 5. **Test it.** `module_test` runs the project's ctest tests (the `<game>_headless_300` smoke test

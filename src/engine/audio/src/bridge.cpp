@@ -94,7 +94,10 @@ void audio_bridge(Frame& f) {
             if (const LocalTransform* t = f.world().try_get<LocalTransform>(e)) pos = t->position;
         if (!s.started) {
             if (!s.play_on_start) return;
-            s.handle = start(*dev, s, sp, resolve(ref.clips, s.clip.guid, s.clip_handle, s.bus == AudioBus::Music), pos);
+            const ClipHandle clip = resolve(ref.clips, s.clip.guid, s.clip_handle, s.bus == AudioBus::Music);
+            // The previous scene's source of the same music still fades out: start when it is done.
+            if (!clip.is_null() && dev->stream_busy(clip)) return;
+            s.handle = start(*dev, s, sp, clip, pos);
             s.started = true;
             return;
         }

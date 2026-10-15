@@ -31,6 +31,8 @@ bool engine_capabilities(ToolCall& c);
 // tools_content.cpp (SBA-52): procedural generators and the bundled CC0/OFL content library.
 bool gen_palette(ToolCall& c);
 bool gen_sprite(ToolCall& c);
+bool gen_pixels(ToolCall& c);
+bool gen_mesh(ToolCall& c);
 bool gen_tileset(ToolCall& c);
 bool gen_texture(ToolCall& c);
 bool gen_sfx(ToolCall& c);

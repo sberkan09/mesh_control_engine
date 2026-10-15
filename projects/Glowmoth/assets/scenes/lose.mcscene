@@ -1,0 +1,186 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "e39e4754-1cfa-40bc-8280-73061d76cc87",
+  "name": "lose",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Camera",
+      "components": {
+        "Camera2DComponent": { "clear_color": [0.03, 0.035, 0.11, 1], "fit_height": 15 },
+        "LocalTransform": {},
+        "Post2DComponent": { "vignette": true }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Sky",
+      "components": {
+        "LocalTransform": {},
+        "Parallax": { "factor": [0, 0] },
+        "Sprite": { "texture": "guid:31a249a2-4969-40db-b27b-67b4b81581ed", "size": [28, 15.75], "layer": -50 }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Moon",
+      "components": {
+        "LocalTransform": { "position": [8.5, 4.2, 0] },
+        "Parallax": { "factor": [0.04, 0] },
+        "Sprite": { "texture": "guid:db0fc8ce-114b-4529-b445-d2d3f8e3c422", "size": [4, 4], "layer": -45 }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Hills",
+      "components": {
+        "LocalTransform": { "position": [0, -4.2, 0] },
+        "Parallax": { "factor": [0.3, 0], "repeat_x": true },
+        "Sprite": { "texture": "guid:bcf83536-9d79-4245-8762-36d483fa9573", "size": [32, 6], "layer": -40 }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Meadow",
+      "components": {
+        "LocalTransform": { "position": [0, -6.5, 0] },
+        "Sprite": { "tint": [0.012, 0.01, 0.035, 1], "size": [40, 2], "layer": -30 }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Flower 1",
+      "components": {
+        "LocalTransform": { "position": [-11, -5, 0] },
+        "Sprite": { "texture": "guid:a64caeaa-9a39-4af2-ac2a-a6825e7ab3e8", "layer": 3 }
+      }
+    },
+    {
+      "id": 7,
+      "name": "Flower 2",
+      "components": {
+        "LocalTransform": { "position": [-8.5, -5, 0] },
+        "Sprite": { "texture": "guid:6e07ac6c-f8e3-44f9-9b8f-da1b4f10411a", "layer": 3 }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Flower 3",
+      "components": {
+        "LocalTransform": { "position": [-4, -5, 0] },
+        "Sprite": { "texture": "guid:a64caeaa-9a39-4af2-ac2a-a6825e7ab3e8", "layer": 3 }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Flower 4",
+      "components": {
+        "LocalTransform": { "position": [3.5, -5, 0] },
+        "Sprite": { "texture": "guid:6e07ac6c-f8e3-44f9-9b8f-da1b4f10411a", "layer": 3 }
+      }
+    },
+    {
+      "id": 10,
+      "name": "Flower 5",
+      "components": {
+        "LocalTransform": { "position": [7, -5, 0] },
+        "Sprite": { "texture": "guid:a64caeaa-9a39-4af2-ac2a-a6825e7ab3e8", "layer": 3 }
+      }
+    },
+    {
+      "id": 11,
+      "name": "Flower 6",
+      "components": {
+        "LocalTransform": { "position": [10.5, -5, 0] },
+        "Sprite": { "texture": "guid:6e07ac6c-f8e3-44f9-9b8f-da1b4f10411a", "layer": 3 }
+      }
+    },
+    {
+      "id": 12,
+      "name": "Music",
+      "components": {
+        "AudioSource": { "clip": "guid:2e25277d-33fe-42df-8f00-747e36a3d757", "gain_db": -6, "bus": "Music", "loop": true, "play_on_start": true, "fade_s": 0.5 },
+        "LocalTransform": {}
+      }
+    },
+    {
+      "id": 13,
+      "name": "Title Text",
+      "components": {
+        "LocalTransform": { "position": [0, 3.2, 0] },
+        "TextLabel": { "font": "guid:b8c076e2-21ea-42c5-9df1-effea26b7f23", "text": "LOST IN THE DARK", "color": [0.9, 0.45, 0.55, 1], "height": 1.6, "layer": 60 }
+      }
+    },
+    {
+      "id": 14,
+      "name": "Subtitle",
+      "components": {
+        "LocalTransform": { "position": [0, 1.5, 0] },
+        "TextLabel": { "font": "guid:b8c076e2-21ea-42c5-9df1-effea26b7f23", "text": "the bats caught you three times", "color": [0.75, 0.8, 1, 1], "height": 0.6, "layer": 60 }
+      }
+    },
+    {
+      "id": 15,
+      "name": "Hint",
+      "components": {
+        "LocalTransform": { "position": [0, -3.4, 0] },
+        "TextLabel": { "font": "guid:b8c076e2-21ea-42c5-9df1-effea26b7f23", "text": "PRESS SPACE TO TRY AGAIN", "color": [1, 0.95, 0.8, 1], "height": 0.6, "layer": 60 }
+      }
+    },
+    {
+      "id": 16,
+      "name": "Lantern 1",
+      "components": {
+        "LocalTransform": { "position": [-6, -4.6, 0] },
+        "Sprite": { "texture": "guid:732250bd-772f-44c1-84b4-90353ed8fa35", "size": [1.6, 1.75], "layer": 2 }
+      }
+    },
+    {
+      "id": 17,
+      "name": "Lantern 2",
+      "components": {
+        "LocalTransform": { "position": [6, -4.6, 0] },
+        "Sprite": { "texture": "guid:732250bd-772f-44c1-84b4-90353ed8fa35", "size": [1.6, 1.75], "layer": 2 }
+      }
+    },
+    {
+      "id": 18,
+      "name": "Bat 1",
+      "components": {
+        "AnimatedSprite": { "sheet": "guid:eed3502e-2313-4df5-b283-b244498af442", "clip": "fly" },
+        "Bob": { "height": 0.3, "period": 1.5 },
+        "LocalTransform": { "position": [-2, -0.6, 0] },
+        "Sprite": { "texture": "guid:8efd1be0-2ee2-4ba2-be8c-0df9e3e9f141", "size": [1.6, 1.2], "layer": 8 }
+      }
+    },
+    {
+      "id": 19,
+      "name": "Bat 2",
+      "components": {
+        "AnimatedSprite": { "sheet": "guid:eed3502e-2313-4df5-b283-b244498af442", "clip": "fly" },
+        "Bob": { "height": 0.3, "period": 1.9 },
+        "LocalTransform": { "position": [2, -1.2, 0] },
+        "Sprite": { "texture": "guid:8efd1be0-2ee2-4ba2-be8c-0df9e3e9f141", "size": [1.6, 1.2], "layer": 8 }
+      }
+    },
+    {
+      "id": 20,
+      "name": "Bat 3",
+      "components": {
+        "AnimatedSprite": { "sheet": "guid:eed3502e-2313-4df5-b283-b244498af442", "clip": "fly" },
+        "Bob": { "height": 0.3, "period": 2.3 },
+        "LocalTransform": { "position": [0, 0.2, 0] },
+        "Sprite": { "texture": "guid:8efd1be0-2ee2-4ba2-be8c-0df9e3e9f141", "size": [1.6, 1.2], "layer": 8 }
+      }
+    },
+    {
+      "id": 21,
+      "name": "Screen",
+      "components": {
+        "LocalTransform": {},
+        "MenuScreen": { "sound": "guid:b619c277-3f58-441b-9c1b-cece1e89bb73", "next_scene": "scenes/main.mcscene" }
+      }
+    }
+  ]
+}

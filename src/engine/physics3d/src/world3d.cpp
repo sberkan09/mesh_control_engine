@@ -435,6 +435,15 @@ void World3D::set_linear_velocity(Entity e, vec3 v) {
     if (math::length_sq(v) > 0.0f) bi.ActivateBody(s->body);
 }
 
+void World3D::set_angular_velocity(Entity e, vec3 v) {
+    Impl& w = *impl_;
+    const Impl::Slot* s = w.find(e);
+    if (!s || s->character || s->type == BodyType3D::Static) return;
+    JPH::BodyInterface& bi = w.system.GetBodyInterfaceNoLock();
+    bi.SetAngularVelocity(s->body, to_jph(v));
+    if (math::length_sq(v) > 0.0f) bi.ActivateBody(s->body);
+}
+
 void World3D::apply_impulse(Entity e, vec3 impulse) {
     Impl& w = *impl_;
     const Impl::Slot* s = w.find(e);

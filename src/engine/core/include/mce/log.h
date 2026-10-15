@@ -10,12 +10,50 @@
 #include "mce/fixed_string.h"
 #include "mce/types.h"
 
-#define MCE_LOG_TRACE(...) SPDLOG_TRACE(__VA_ARGS__)
-#define MCE_LOG_DEBUG(...) SPDLOG_DEBUG(__VA_ARGS__)
-#define MCE_LOG_INFO(...) SPDLOG_INFO(__VA_ARGS__)
-#define MCE_LOG_WARN(...) SPDLOG_WARN(__VA_ARGS__)
-#define MCE_LOG_ERROR(...) SPDLOG_ERROR(__VA_ARGS__)
-#define MCE_LOG_CRITICAL(...) SPDLOG_CRITICAL(__VA_ARGS__)
+// The format is fmt's: "{}" placeholders ("{:.2f}", "{:08x}"), never printf's %s / %u. A literal
+// format with a printf conversion fails to compile (it would log the % codes as they are).
+#define MCE_LOG_TRACE(...) (static_cast<void>(::mce::log::detail::Format(MCE_LOG_FORMAT_(__VA_ARGS__, 0))), SPDLOG_TRACE(__VA_ARGS__))
+#define MCE_LOG_DEBUG(...) (static_cast<void>(::mce::log::detail::Format(MCE_LOG_FORMAT_(__VA_ARGS__, 0))), SPDLOG_DEBUG(__VA_ARGS__))
+#define MCE_LOG_INFO(...) (static_cast<void>(::mce::log::detail::Format(MCE_LOG_FORMAT_(__VA_ARGS__, 0))), SPDLOG_INFO(__VA_ARGS__))
+#define MCE_LOG_WARN(...) (static_cast<void>(::mce::log::detail::Format(MCE_LOG_FORMAT_(__VA_ARGS__, 0))), SPDLOG_WARN(__VA_ARGS__))
+#define MCE_LOG_ERROR(...) (static_cast<void>(::mce::log::detail::Format(MCE_LOG_FORMAT_(__VA_ARGS__, 0))), SPDLOG_ERROR(__VA_ARGS__))
+#define MCE_LOG_CRITICAL(...) \
+    (static_cast<void>(::mce::log::detail::Format(MCE_LOG_FORMAT_(__VA_ARGS__, 0))), SPDLOG_CRITICAL(__VA_ARGS__))
+#define MCE_LOG_FORMAT_(f, ...) f
+
+namespace mce::log::detail {
+
+// Where a printf conversion starts in `s` (after %, flags, width, precision, length), or -1.
+constexpr int printf_conversion(const char* s) {
+    for (int i = 0; s[i] != 0; ++i) {
+        if (s[i] != '%') continue;
+        if (s[i + 1] == '%') {
+            ++i;
+            continue;
+        }
+        int j = i + 1;
+        while (s[j] == '-' || s[j] == '+' || s[j] == '#' || s[j] == '0' || (s[j] >= '1' && s[j] <= '9') || s[j] == '.') ++j;
+        while (s[j] == 'l' || s[j] == 'h' || s[j] == 'z' || s[j] == 'j' || s[j] == 't') ++j;
+        for (const char* c = "sdiufFxXeEgGcp"; *c; ++c)
+            if (s[j] == *c) return i;
+    }
+    return -1;
+}
+
+void printf_format_in_log_call();  // never defined: named in the error a printf format causes
+
+// The first argument of a MCE_LOG_* call: a literal is checked while compiling; anything else
+// (fmt::runtime(...)) passes as it is.
+struct Format {
+    template <usize N>
+    consteval Format(const char (&s)[N]) {  // NOLINT(google-explicit-constructor)
+        if (printf_conversion(s) >= 0) printf_format_in_log_call();
+    }
+    template <class T>
+    constexpr Format(const T&) {}  // NOLINT(google-explicit-constructor)
+};
+
+}  // namespace mce::log::detail
 
 namespace mce::log {
 

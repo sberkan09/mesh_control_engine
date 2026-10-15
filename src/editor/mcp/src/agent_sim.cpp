@@ -6,6 +6,7 @@
 #include "mce/cook/fs.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
+#include "mce/scene/scene.h"
 #include "tool_args.h"
 
 namespace mce::mcp {
@@ -429,7 +430,8 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
         have_value = true;
     }
     const cook::JsonValue field = v.get("field"), alive = v.get("alive"), event = v.get("event"), log_has = v.get("log_contains"),
-                          log_err = v.get("log_errors"), log_warn = v.get("log_warnings"), feel = v.get("feel");
+                          log_err = v.get("log_errors"), log_warn = v.get("log_warnings"), feel = v.get("feel"),
+                          scene = v.get("scene");
     if (field.valid()) {
         out.what = Condition::What::Field;
         if (!field.is_string()) return err_out(err, "'field' is 'Component.path'");
@@ -448,6 +450,17 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
             out.op = CompareOp::Ge;
             number(out.expected, 1);
         }
+    } else if (scene.valid()) {
+        // The scene the run is in (scene::request_change moves it), by source path.
+        out.what = Condition::What::Scene;
+        if (!scene.is_string() || scene.as_string().empty()) return err_out(err, "'scene' is a scene's source path, e.g. \"scenes/win.mcscene\"");
+        if (have_value) return err_out(err, "a scene check takes no comparison: {\"scene\": \"scenes/win.mcscene\"}");
+        StringView want = scene.as_string();
+        if (want.starts_with("assets/")) want.remove_prefix(7);
+        out.text = cook::String(want);
+        out.expected = Value{};
+        out.expected.kind = Value::Kind::String;
+        out.expected.s.assign(want);
     } else if (log_has.valid()) {
         out.what = Condition::What::LogContains;
         if (!log_has.is_string() || log_has.as_string().empty()) return err_out(err, "'log_contains' is the text to find");
@@ -468,7 +481,7 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
         out.text = cook::String(feel.as_string());
         if (!have_value) return err_out(err, "a feel check needs a comparison, e.g. {\"feel\": \"deaths\", \"<=\": 0}");
     } else {
-        return err_out(err, "a check names one of: field (+ entity), alive, event, log_contains, log_errors, log_warnings, feel");
+        return err_out(err, "a check names one of: field (+ entity), alive, event, scene, log_contains, log_errors, log_warnings, feel");
     }
     return true;
 }
@@ -483,15 +496,46 @@ bool eval_world(Condition& c, const World& world, Span<const Entity> spawned) {
         case Condition::What::Event: {
             Array<EventInfo> events;
             world.event_registry(events);
+            // The C++ name (game::GemCollected), or the name without its namespace when that is unique.
+            const StringView want = c.text.view();
+            auto unqualified = [&](StringView name) {
+                return name.size() > want.size() + 2 && name.substr(name.size() - want.size()) == want &&
+                       name.substr(name.size() - want.size() - 2, 2) == "::";
+            };
             u64 pushed = 0;
-            bool known = false;
+            u32 exact = 0, suffix = 0;
+            for (const EventInfo& e : events) exact += e.name == want ? 1u : 0u;
             for (const EventInfo& e : events) {
-                if (e.name != c.text.view()) continue;
+                const bool match = exact ? e.name == want : unqualified(e.name);
+                if (!match) continue;
                 pushed += e.total_pushed;
-                known = true;
+                ++suffix;
             }
+            // An unknown or ambiguous name has no count (the check fails, with a note), never a silent 0.
             c.actual = Value{};
-            number(c.actual, known ? static_cast<f64>(pushed) : 0.0);
+            if (exact || suffix == 1) number(c.actual, static_cast<f64>(pushed));
+            c.note.clear();
+            if (!exact && suffix > 1) {
+                c.note = "several event types end in '";
+                c.note += want;
+                c.note += "': name one with its namespace";
+            } else if (!exact && suffix == 0) {
+                c.note = "no event type named '";
+                c.note += want;
+                c.note += "' is registered; the game's events:";
+                for (const EventInfo& e : events) {
+                    c.note += ' ';
+                    c.note += e.name;
+                }
+            }
+            break;
+        }
+        case Condition::What::Scene: {
+            // The World is const here; the resource is only read.
+            const scene::SceneChange* sc = const_cast<World&>(world).try_resource<scene::SceneChange>();  // NOLINT(cppcoreguidelines-pro-type-const-cast)
+            c.actual = Value{};
+            c.actual.kind = Value::Kind::String;
+            if (sc) c.actual.s.assign(sc->current.view());
             break;
         }
         default: return false;
@@ -551,6 +595,7 @@ void write_condition(JsonWriter& w, const Condition& c) {
             what += "event ";
             what += c.text.view();
             break;
+        case Condition::What::Scene: what += "scene"; break;
         case Condition::What::LogContains:
             what += "log contains \"";
             what += c.text.view();
@@ -572,8 +617,10 @@ void write_condition(JsonWriter& w, const Condition& c) {
     if (c.tick) w.key("tick").num_u(c.tick);
     w.key("ok").boolean(c.ok);
     if (!c.checked) w.key("note").str(c.tick ? "the run ended before this tick" : "not evaluated");
+    else if (!c.note.empty())
+        w.key("note").str(c.note.view());
     else if (c.what == Condition::What::Field && c.actual.kind == Value::Kind::None)
-        w.key("note").str("the entity is gone or has no such component");
+        w.key("note").str("the entity is gone or has no such component (or the run is in another scene)");
     w.end_object();
 }
 
@@ -611,18 +658,32 @@ bool parse_bot(const editor::SceneDocument& doc, const cook::JsonValue& v, BotCo
         else return err_out(err, "bot.plane is xy (top-down 2D), x (side view) or xz (3D ground)");
     }
     if (out.kind == BotConfig::Kind::WalkTo) {
-        const cook::JsonValue target = v.get("target");
-        if (target.is_array()) {
-            Value t;
-            if (!parse_value(target, t) || t.kind != Value::Kind::Number || t.lanes < 2 || t.lanes > 3)
-                return err_out(err, "bot.target is a point [x, y] / [x, y, z] or an entity");
-            out.target = vec3(static_cast<f32>(t.v[0]), static_cast<f32>(t.v[1]), t.lanes == 3 ? static_cast<f32>(t.v[2]) : 0.f);
-        } else if (target.valid()) {
-            if (!scene_entity_index(doc, target, out.target_index, err)) return false;
-            out.target_is_entity = true;
-        } else {
-            return err_out(err, "bot.target: a point [x, y(, z)] or an entity for walk_to");
+        auto one = [&](const cook::JsonValue& t, const char* what) {
+            BotTarget bt;
+            if (t.is_array()) {
+                Value pt;
+                if (!parse_value(t, pt) || pt.kind != Value::Kind::Number || pt.lanes < 2 || pt.lanes > 3) {
+                    err += what;
+                    return err_out(err, " is a point [x, y] / [x, y, z] or an entity");
+                }
+                bt.point = vec3(static_cast<f32>(pt.v[0]), static_cast<f32>(pt.v[1]), pt.lanes == 3 ? static_cast<f32>(pt.v[2]) : 0.f);
+            } else {
+                if (!scene_entity_index(doc, t, bt.index, err)) return false;
+                bt.is_entity = true;
+            }
+            out.targets.push_back(bt);
+            return true;
+        };
+        const cook::JsonValue through = v.get("through");
+        if (through.valid()) {
+            if (!through.is_array() || through.size() == 0 || through.size() > 64)
+                return err_out(err, "bot.through is an array of 1-64 waypoints (points [x, y(, z)] or entities), reached in order before target");
+            for (u32 i = 0; i < through.size(); ++i)
+                if (!one(through.at(i), "bot.through[]")) return false;
         }
+        const cook::JsonValue target = v.get("target");
+        if (!target.valid()) return err_out(err, "bot.target: a point [x, y(, z)] or an entity for walk_to");
+        if (!one(target, "bot.target")) return false;
     }
     auto name = [&](const char* key, FixedString<32>& dst) {
         const cook::JsonValue n = v.get(key);
@@ -646,6 +707,11 @@ bool parse_bot(const editor::SceneDocument& doc, const cook::JsonValue& v, BotCo
         }
     } else if (out.kind == BotConfig::Kind::Masher) {
         for (const char* a : {"Move", "Jump", "Fire", "Confirm", "Cancel"}) out.actions.push_back(FixedString<32>(StringView(a)));
+    }
+    const cook::JsonValue air = v.get("air_jumps");
+    if (air.valid()) {
+        if (!air.is_integer() || air.as_number() < 0 || air.as_number() > 4) return err_out(err, "bot.air_jumps is 0-4 extra Jump presses in the air");
+        out.air_jumps = static_cast<u32>(air.as_number());
     }
     const cook::JsonValue reach = v.get("reach"), seed = v.get("seed"), period = v.get("period");
     if (reach.valid()) {
@@ -700,16 +766,27 @@ vec2 flat(BotConfig::Plane p, vec3 v) { return p == BotConfig::Plane::XZ ? vec2(
 }  // namespace
 
 void Bot::walk_to(u64 tick, vec3 pos) {
-    vec3 target = cfg_.target;
-    if (cfg_.target_is_entity && (cfg_.target_index >= spawned_.size() || !entity_position(*world_, spawned_[cfg_.target_index], target))) {
-        reached_ = true;  // the target is gone (collected): done
-        return;
-    }
-    const vec2 d = flat(cfg_.plane, target) - flat(cfg_.plane, pos);
-    const f32 dist = math::length(d);
-    if (dist <= cfg_.reach) {
-        reached_ = true;
-        return;
+    // The current leg's target; a reached waypoint (or a gone entity: collected) moves on to the next.
+    vec2 d;
+    f32 dist = 0;
+    for (;;) {
+        if (leg_ >= cfg_.targets.size()) {
+            reached_ = true;
+            return;
+        }
+        const BotTarget& t = cfg_.targets[leg_];
+        vec3 at = t.point;
+        const bool gone = t.is_entity && (t.index >= spawned_.size() || !entity_position(*world_, spawned_[t.index], at));
+        d = flat(cfg_.plane, at) - flat(cfg_.plane, pos);
+        dist = math::length(d);
+        if (!gone && dist > cfg_.reach) break;
+        if (leg_ + 1 == cfg_.targets.size()) {
+            reached_ = true;
+            return;
+        }
+        ++leg_;
+        best_ = 1e30f;
+        best_tick_ = tick;
     }
     reached_ = false;
     if (dist < best_ - 0.05f) {
@@ -721,11 +798,14 @@ void Bot::walk_to(u64 tick, vec3 pos) {
     if (cfg_.plane == BotConfig::Plane::X) {
         // Side view: hold the direction, jump when progress stalls (a step, a gap, a wall).
         dir = vec2(d.x > 0 ? 1.f : -1.f, 0.f);
+        // With air_jumps, each press is held 10 ticks and released for 2 before the next one.
         if (stalled && tick >= jump_until_ + 20) {
-            jump_until_ = tick + 14;
+            jump_from_ = tick;
+            jump_until_ = tick + 14 + 12 * cfg_.air_jumps;
             best_tick_ = tick;  // give the jump its chance
         }
-        if (tick <= jump_until_) script_.add(cfg_.jump.view(), tick, tick);
+        const bool released = cfg_.air_jumps > 0 && (tick - jump_from_) % 12 >= 10;
+        if (tick <= jump_until_ && !released) script_.add(cfg_.jump.view(), tick, tick);
     } else {
         // Top-down: sidestep (alternating sides) for half a second when progress stalls.
         if (stalled && tick >= detour_until_) {
@@ -842,13 +922,19 @@ RunHooks SimRun::hooks() {
         auto* r = static_cast<SimRun*>(user);
         r->last_tick = tick;
         if (r->trace) r->trace->sample(world, spawned, tick);
+        // A scene change leaves the starting scene (the hook sees no entities): the level is over,
+        // not the actor dead.
+        if (spawned.empty() && !r->left_scene) {
+            r->left_scene = true;
+            if (r->feel) r->feel->finish(tick);
+        }
         bool died = false;
-        if (r->death) {
+        if (r->death && !r->left_scene) {
             const bool now = eval_world(*r->death, world, spawned);
             died = now && !r->death_was;
             r->death_was = now;
         }
-        if (r->feel && r->has_actor) {
+        if (r->feel && r->has_actor && !r->left_scene) {
             bool wants = r->bot && r->bot->wants_move();
             if (!r->bot && r->script) wants = math::length(r->script->state().move) > 1e-4f;
             r->feel->tick(world, spawned, r->actor, tick, wants, died);
@@ -857,7 +943,13 @@ RunHooks SimRun::hooks() {
             for (Condition& c : *r->checks)
                 if (c.tick == tick) eval_world(c, world, spawned);
         bool stop = false;
-        if (r->bot && r->bot->config().kind == BotConfig::Kind::WalkTo && r->bot->reached()) stop = true;
+        // walk_to: the game gets half a second to react to the arrival (a door opens, a pickup
+        // counts, the scene changes) before the run ends.
+        if (r->bot && r->bot->config().kind == BotConfig::Kind::WalkTo && r->bot->reached() && r->reached_at == 0) {
+            r->reached_at = tick;
+            if (r->feel) r->feel->finish(tick);
+        }
+        if (r->reached_at != 0 && tick >= r->reached_at + SimRun::kSettleTicks) stop = true;
         if (r->until && eval_world(*r->until, world, spawned)) stop = true;
         if (stop) {
             if (r->feel) r->feel->finish(tick);

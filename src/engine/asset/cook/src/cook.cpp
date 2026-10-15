@@ -350,6 +350,7 @@ CookReport CookService::cook(StringView project_root, const CookOptions& opt) {
                 nodes[i].bad_refs = true;
                 continue;
             }
+            if (d.link) continue;
             if (*target != i && !nodes[i].deps.contains(*target)) nodes[i].deps.push_back(*target);
         }
         std::sort(nodes[i].deps.begin(), nodes[i].deps.end(),

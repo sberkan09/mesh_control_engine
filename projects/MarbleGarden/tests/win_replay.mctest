@@ -1,0 +1,17 @@
+{
+ "name": "win screen replays on Confirm",
+ "scene": "scenes/win.mcscene",
+ "ticks": 200,
+ "input": "60-66 Confirm",
+ "until": {
+  "scene": "scenes/garden.mcscene"
+ },
+ "assert": [
+  {
+   "scene": "scenes/garden.mcscene"
+  },
+  {
+   "log_errors": 0
+  }
+ ]
+}

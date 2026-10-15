@@ -371,7 +371,7 @@ public:
             update_ad_pause();
         }
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
-        if (paused_ || ad_paused_) return;
+        if (paused_ || ad_paused_) return;  // sim_held() mirrors these two tests and the next
         // -capture_tick(s): the sim holds on the tick for the capture frame, however many ticks a slow
         // frame (Metal validation, a cold start) would otherwise catch up past it.
         if (capture_due()) return;
@@ -385,6 +385,7 @@ public:
         if (!monetize_test_.empty()) monetize_test_events();
         if (game_services_print_) game_services_test_events();
         ++sim_ticks_;
+        apply_scene_change();
         if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
     }
 
@@ -560,6 +561,24 @@ public:
 
     u64 state_hash() { return world_.state_hash(); }
     input::InputSystem& input() { return input_; }
+
+    // -input's script, read by the sim's own tick count: a capture hold, a pause or an ad holds
+    // the sim while the app's ticks run on, and sampling by app tick would then shift the rest of
+    // the script (render_sheet's run would no longer play the run_headless one).
+    class ScriptBySimTick final : public app::IInputSource {
+    public:
+        ScriptBySimTick(PlayerApp& app, input::InputScript* script) : app_(app), script_(script) {}
+        const input::InputState* sample_for_tick(u64, u64 tick_close_us) override {
+            if (app_.sim_held()) return &script_->state();  // not published: on_tick returns early
+            return script_->sample_for_tick(app_.sim_ticks_ - app_.run_start_tick_ + 1, tick_close_us);
+        }
+
+    private:
+        PlayerApp& app_;
+        input::InputScript* script_;
+    };
+    // on_tick will not step the sim this tick (the same tests, in the same order).
+    bool sim_held() const { return paused_ || ad_paused_ || capture_due(); }
     u64 ticks() const { return sim_ticks_; }
     usize entity_count() const { return entities_.size(); }
     const scene::StreamingStats* streaming_stats() {
@@ -630,6 +649,27 @@ private:
         for (const asset::ModEntry& m : mods_.mods)
             MCE_LOG_INFO("{}: mod '{}' {} ({} assets) from {}", desc_.app_name, m.name.view(), m.version.view(), m.asset_count, m.path.view());
         if (!mods_.mods.empty()) std::printf("%s: %zu mod(s) loaded\n", desc_.app_name, mods_.mods.size());
+    }
+
+    // A scene change the game asked for this tick (scene::request_change): the new scene replaces
+    // every entity and runs Startup again. A target the pack lacks ends the run (exit 1).
+    void apply_scene_change() {
+        Result<bool> changed = scene::apply_change(world_, assets_, &entities_);
+        if (!changed) {
+            FixedString<512> why;
+            format_error(changed.error(), why);
+            MCE_LOG_ERROR("{}: the scene change failed: {}", desc_.app_name, why.view());
+            std::fprintf(stderr, "%s: the scene change failed: %s\n", desc_.app_name, why.c_str());
+            quit(1);
+            return;
+        }
+        if (!changed.value()) return;
+        const scene::SceneChange& c = world_.resource<scene::SceneChange>();
+        scene_guid_ = c.current_guid;
+        scene_path_.assign(c.current.view());
+        scene::pump_streaming(world_, scene::PumpMode::Settle);
+        if (device_ && kit::has_camera_3d(world_))
+            if (Result<void> r = init_3d(); !r) MCE_LOG_ERROR("{}: 3D rendering did not start after the scene change", desc_.app_name);
     }
 
     // A GUID, a source path ("scenes/level.mcscene"), or empty for the first scene by path.
@@ -1820,7 +1860,8 @@ int run_headless(const player::PlayerDesc& pd) {
     desc.name = pd.app_name;
     desc.headless = true;
     desc.max_ticks = static_cast<u64>(cv_ticks.get_int() > 0 ? cv_ticks.get_int() : 600);
-    desc.input_source = script.value();
+    PlayerApp::ScriptBySimTick by_sim(app, script.value());
+    desc.input_source = script.value() ? static_cast<app::IInputSource*>(&by_sim) : nullptr;
     const int rc = app::run(app, desc);
     if (rc == 0)
         std::printf("%s: %llu ticks, %zu entities, state_hash %016llx\n", pd.app_name, static_cast<unsigned long long>(app.ticks()),
@@ -1866,7 +1907,8 @@ int run_windowed(const player::PlayerDesc& pd) {
     desc.name = pd.app_name;
     desc.platform = &app;
     desc.fences = device.value().get();
-    desc.input_source = script.value() ? static_cast<app::IInputSource*>(script.value()) : &app.input();
+    PlayerApp::ScriptBySimTick by_sim(app, script.value());
+    desc.input_source = script.value() ? static_cast<app::IInputSource*>(&by_sim) : &app.input();
     app::RunStats stats;
     int rc = app::run(app, desc, &stats);
     const u32 gl_errors = device.value()->validation_error_count();

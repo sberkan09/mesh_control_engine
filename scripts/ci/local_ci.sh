@@ -205,6 +205,18 @@ stage_physics3d_determinism() {
             build/linux-gcc-release/samples/physics3d_headless/sample_physics3d_headless
 }
 
+# The M-AGENT demo games (docs/research/m-agent-demo/): Glowmoth's second level idle (bats and
+# lanterns) and Marble Garden's scripted win route (3D physics, five pickups, a scene change).
+stage_demo_games_determinism() {
+    cmake --build --preset linux-gcc-debug --target glowmoth marble_garden &&
+        cmake --build --preset linux-gcc-release --target glowmoth marble_garden &&
+        python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -ticks 1200 -scene 0c5b255e-286f-4293-a352-48dcb9c80653" \
+            build/linux-gcc-debug/projects/Glowmoth/glowmoth build/linux-gcc-release/projects/Glowmoth/glowmoth &&
+        python3 scripts/ci/determinism.py --runs 3 \
+            --args="-headless 1 -ticks 1800 -scene 5ebadc24-96f4-438c-a342-d6f37fb5ca8c -input projects/MarbleGarden/tests/win_route.input" \
+            build/linux-gcc-debug/projects/MarbleGarden/marble_garden build/linux-gcc-release/projects/MarbleGarden/marble_garden
+}
+
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
     configure linux-gcc-debug &&
@@ -238,7 +250,8 @@ stage_determinism() {
         stage_module_determinism &&
         stage_physics3d_determinism &&
         stage_cubes_determinism &&
-        stage_court_determinism
+        stage_court_determinism &&
+        stage_demo_games_determinism
 }
 
 # M5a: 04_cubes (cascade fit, Forward+ clustering, node animation) across runs and Debug/Release;

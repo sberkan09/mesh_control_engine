@@ -83,7 +83,7 @@ skips both). The bundle is signed ad hoc (`codesign -s -`), which Apple silicon 
 Developer ID signed or notarized, so a player may have to right-click it and choose Open the first
 time. `Info.plist` asks for macOS 26.0 or later. When the `.app` runs from a read-only location
 (App Translocation, `/Applications` without write access), the host maps the game module in place
-instead of copying it (chapter 6, section 6.13).
+instead of copying it (chapter 6, section 6.14).
 
 ## 15.5 Phones and the stores
 

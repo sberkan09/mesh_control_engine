@@ -385,6 +385,9 @@ public:
     // Places a reserved handle (reserve_entity) with type-erased components now; outside phases.
     void spawn_raw(Entity reserved, Span<const ecs::RawComponent> components);
     void destroy(Entity e);
+    // Destroys every entity (hooks run as for destroy); resources and systems stay. A scene change
+    // (scene::apply_change) starts from here.
+    void destroy_all();
     bool alive(Entity e) const;
     template <class T>
     bool has(Entity e) const;
@@ -457,6 +460,8 @@ public:
     void run_phase(Phase phase, Frame& frame);
     // Startup phase (once) + the three fixed phases.
     void tick(f64 dt, u64 tick_index, f32 time_scale = 1.0f);
+    // The next tick runs the Startup phase again (after a scene change: Startup is per scene).
+    void rerun_startup() { started_ = false; }
     void render(f32 alpha);
     // Applies pending commands and swaps the given phase's event queues.
     void sync(Phase phase);

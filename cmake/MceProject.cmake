@@ -187,6 +187,10 @@ function(mce_add_project game)
         # in the build tree the engine is found in the SDK.
         set_target_properties(${game} ${game}_game PROPERTIES BUILD_RPATH_USE_ORIGIN ON
                               BUILD_RPATH "${MCE_ORIGIN_RPATH};${MCE_LIB_DIR}")
+        if(MCE_BUILD_TESTS)  # the smoke test `ctest` and the MCP server's module_test run
+            add_test(NAME ${game}_headless_300 COMMAND ${game} -headless 1 -ticks 300)
+            set_tests_properties(${game}_headless_300 PROPERTIES PASS_REGULAR_EXPRESSION "300 ticks, [0-9]+ entities, state_hash")
+        endif()
         return()
     endif()
 

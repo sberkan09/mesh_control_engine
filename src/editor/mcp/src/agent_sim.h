@@ -104,21 +104,26 @@ enum class CompareOp : u8 { Eq, Ne, Lt, Le, Gt, Ge };
 // One check of a test: a component field, whether an entity is alive, how many events of a type
 // were pushed, the log, or a feel metric; at the end of the run or after tick `tick`.
 struct Condition {
-    enum class What : u8 { Field, Alive, Event, LogContains, LogErrors, LogWarnings, Feel };
+    enum class What : u8 { Field, Alive, Event, Scene, LogContains, LogErrors, LogWarnings, Feel };
     What what = What::Field;
     FieldProbe probe;          // Field, Alive (index only)
     CompareOp op = CompareOp::Eq;
     Value expected;
     f64 tolerance = 1e-4;      // numbers compare equal within this
-    cook::String text;         // event type, log text, feel metric
+    cook::String text;         // event type, scene path, log text, feel metric
     u64 tick = 0;              // 0: at the end
     // Result.
     bool checked = false;
     bool ok = false;
     Value actual;
+    cook::String note;  // why the check could not read what it names (an unknown event type)
 };
+// Field, Alive, Event and Scene: read from the world during the run (the rest after it).
+inline bool is_world_check(Condition::What w) {
+    return w == Condition::What::Field || w == Condition::What::Alive || w == Condition::What::Event || w == Condition::What::Scene;
+}
 bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v, Condition& out, cook::String& err);
-// Field, Alive and Event conditions (false for the others: they need the log or the feel report).
+// The world checks (false for the others: they need the log or the feel report).
 bool eval_world(Condition& c, const World& world, Span<const Entity> spawned);
 void eval_after(Condition& c, Span<const log::ConsoleLine> lines, const FeelTracker* feel);
 void write_condition(JsonWriter& w, const Condition& c);
@@ -127,11 +132,18 @@ void write_condition(JsonWriter& w, const Condition& c);
 
 // A built-in player that drives the game's input actions from the actor's position (no game code):
 //   walk_to  heads for `target` (a point or an entity), jumps (side view) or sidesteps (top-down)
-//            when it stops getting closer; done within `reach` metres.
+//            when it stops getting closer; done within `reach` metres. `through` lists waypoints
+//            (points or entities) it reaches first, in order: around a pond, past each pickup.
 //   explore  wanders in seeded random directions, turning when blocked; reports coverage.
 //   masher   presses a seeded random mix of `actions` every `period` ticks (crash and soft-lock hunting).
 // `plane`: "xy" (Move = the direction in the XY plane, 2D top-down or flying), "x" (side view:
 // Move.x only, Jump to climb), "xz" (3D on the ground: Move = (x, -z), forward is -Z).
+struct BotTarget {
+    bool is_entity = false;
+    usize index = 0;  // the entity's index in the scene (is_entity)
+    math::vec3 point;
+};
+
 struct BotConfig {
     enum class Kind : u8 { WalkTo, Explore, Masher };
     enum class Plane : u8 { XY, X, XZ };
@@ -139,13 +151,12 @@ struct BotConfig {
     Plane plane = Plane::XY;
     bool has_actor = false;
     usize actor = 0;
-    bool target_is_entity = false;
-    usize target_index = 0;
-    math::vec3 target;
+    Array<BotTarget> targets;  // walk_to: the waypoints (`through`), then `target`
     FixedString<32> move{"Move"};
     FixedString<32> jump{"Jump"};
     Array<FixedString<32>> actions;  // masher
     f32 reach = 0.5f;
+    u32 air_jumps = 0;  // walk_to, side view: extra Jump presses in the air (a double jump, a flap)
     u64 seed = 1;
     u32 period = 8;
 };
@@ -161,6 +172,7 @@ public:
     }
     const input::InputState* sample_for_tick(u64 tick, u64 tick_close_us) override;
     bool reached() const { return reached_; }
+    usize leg() const { return leg_; }  // walk_to: the index of the target it heads for
     bool wants_move() const { return wants_move_; }
     const BotConfig& config() const { return cfg_; }
 
@@ -179,12 +191,14 @@ private:
     input::InputScript script_;
     bool reached_ = false;
     bool wants_move_ = false;
+    usize leg_ = 0;
     // Steering state.
     f32 best_ = 1e30f;
     u64 best_tick_ = 0;
     u64 detour_until_ = 0;
     f32 detour_side_ = 1.f;
     u64 jump_until_ = 0;
+    u64 jump_from_ = 0;
     u64 turn_at_ = 0;
     math::vec2 heading_;
     math::vec3 last_pos_;
@@ -223,6 +237,9 @@ struct SimRun {
     Condition* death = nullptr;          // counts a death each time it becomes true
     bool death_was = false;
     bool stopped_early = false;
+    bool left_scene = false;  // the game changed scenes: the starting scene's entities are gone
+    u64 reached_at = 0;       // walk_to: the tick it reached its target (the run goes on kSettleTicks)
+    static constexpr u64 kSettleTicks = 30;
     u64 last_tick = 0;
     RunHooks hooks();
 };

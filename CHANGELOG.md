@@ -5,6 +5,29 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Scene changes at run time (SBA-56, from the M-AGENT demo's friction notes): a game system calls
+  `scene::request_change(world, "scenes/level2.mcscene")` and `mce_player`, the editor's play mode and every
+  MCP run swap every entity for the target scene after the tick, keeping resources and running Startup again.
+  Scenes may now reference each other in a loop (a scene's `AssetRef<Scene>` is a link, not a cook dependency),
+  and a `.mctest` checks `{"scene": "scenes/win.mcscene"}`. Also from the demo: `module_build` really loads the
+  rebuilt module (each load maps a fresh copy); `asset_schema` and `docs_search` no longer break the MCP stream
+  with raw newlines; `gen_pixels` draws exactly the sprite an agent describes and `gen_mesh` makes a box, plane, sphere, cylinder,
+  cone, disc or ramp as a `.glb`; `docs_search` cuts snippets on character boundaries; `project_check` counts every
+  `.mc*` document as a referrer, skips a drop shadow behind a readable copy of its text in the contrast check
+  and says when the performance check could not run; `project_set` keeps
+  `start_scene` when the patch does not name it; `engine_capabilities` lists the components that already do
+  what it called code; an SDK project's `ctest` runs its 300-tick smoke test.
+- From the M-AGENT demo's second round (SBA-56): `module_build` reloads a component whose fields changed (the
+  host drops the old module's reflection even when the loader keeps its image mapped); `render_sheet` and
+  `render_frame` play a long input script exactly as `run_headless` does (the player reads `-input` by sim tick);
+  a free camera left of the origin renders (a negative number on the command line is a value); `walk_to` takes
+  `through` waypoints and `air_jumps`, and runs half a second past the arrival; a scene change ends a bot's level
+  instead of counting a death; `.mctest` event checks accept the name without its namespace and fail on an
+  unknown one; entity references in values take the entity's name; `run_headless` `inspect` names the played
+  scene's entities; `project_check` measures text contrast against the sprite panel behind it, flags
+  `CREDITS.md` rows for files that are gone and treats input maps as entry points; `RigidBody3D.stop_spin`
+  zeroes a body's spin; a music source of the next scene waits for the same streamed clip to fade out instead
+  of staying silent; `MCE_LOG_*` with a printf format does not compile.
 - UI documents as data, M-UI-DATA step 1 (SBA-31): a `.mcui` asset (JSON) describes a `mce_ui` widget tree
   (anchors, per-state styles, stack and grid layouts, tabs, modals, nav edges, convar bindings, the skin's font and
   sprite sheet by reference) and cooks to a `UiDocument` chunk; `ui::build_document` builds it and

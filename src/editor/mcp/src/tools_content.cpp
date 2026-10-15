@@ -4,6 +4,7 @@
 // .mceasset sidecar and a CREDITS.md row, so the next cook_run takes it with no adopt step.
 
 #include <cmath>
+#include <cstring>
 
 #include "agent_gen.h"
 #include "agent_image.h"
@@ -578,6 +579,65 @@ bool gen_sprite(ToolCall& c) {
     return attach(c, enlarge(sheet, n > 1 ? 768 : 256));
 }
 
+// A sprite drawn as text: one string per row, one character per pixel, `palette` maps characters
+// to colors ('.' and ' ' are transparent). For the shapes gen_sprite's seeds will not give.
+bool gen_pixels(ToolCall& c) {
+    StringView save;
+    if (!arg_save(c, ".png", save)) return false;
+    const cook::JsonValue rows = arg(c, "rows");
+    const cook::JsonValue pal = arg(c, "palette");
+    if (!rows.is_array() || rows.size() == 0 || rows.size() > 256 || !rows.at(0).is_string())
+        return arg_missing(c, "rows", "1-256 strings of equal length, one character per pixel");
+    const usize w = rows.at(0).as_string().size();
+    if (w == 0 || w > 256) return arg_missing(c, "rows", "rows of 1-256 characters");
+    if (!pal.is_object() || pal.size() == 0) return arg_missing(c, "palette", "an object of one-character keys to \"#rrggbb\" or \"#rrggbbaa\"");
+    u32 table[256] = {};
+    bool known[256] = {};
+    known[static_cast<u8>('.')] = known[static_cast<u8>(' ')] = true;
+    for (u32 i = 0; i < pal.size(); ++i) {
+        const StringView k = pal.key_at(i);
+        u32 rgba = 0;
+        if (k.size() != 1 || !pal.at(i).is_string() || !gen::parse_hex(pal.at(i).as_string(), rgba))
+            return arg_missing(c, "palette", "an object of one-character keys to \"#rrggbb\" or \"#rrggbbaa\"");
+        table[static_cast<u8>(k[0])] = rgba;
+        known[static_cast<u8>(k[0])] = true;
+    }
+    const u32 iw = static_cast<u32>(w), ih = rows.size();
+    cook::Image img = make_image(iw, ih, 0);
+    for (u32 y = 0; y < ih; ++y) {
+        const cook::JsonValue r = rows.at(y);
+        if (!r.is_string() || r.as_string().size() != w) {
+            cook::appendf(c.error, "argument 'rows': row %u is not a string of %u characters like row 0", y, iw);
+            return false;
+        }
+        const StringView line = r.as_string();
+        for (u32 x = 0; x < iw; ++x) {
+            const u8 ch = static_cast<u8>(line[x]);
+            if (!known[ch]) {
+                cook::appendf(c.error, "argument 'rows': '%c' (row %u, column %u) is not in 'palette' ('.' and ' ' are transparent)",
+                              static_cast<char>(ch), y, x);
+                return false;
+            }
+            const u32 rgba = table[ch];
+            u8* px = &img.rgba[(static_cast<usize>(y) * iw + x) * 4];
+            px[0] = static_cast<u8>(rgba >> 24);
+            px[1] = static_cast<u8>(rgba >> 16);
+            px[2] = static_cast<u8>(rgba >> 8);
+            px[3] = static_cast<u8>(rgba);
+        }
+    }
+    Saved saved;
+    if (!save.empty()) {
+        cook::String src;
+        cook::appendf(src, "drawn with gen_pixels (%ux%u)", iw, ih);
+        if (!save_png(c, save, img, kPixelSettings, src.view(), saved)) return false;
+    }
+    c.out.begin_object().key("width").num_u(iw).key("height").num_u(ih);
+    if (!save.empty()) write_saved(c.out, saved);
+    c.out.end_object();
+    return attach(c, enlarge(img, 256));
+}
+
 bool gen_tileset(ToolCall& c) {
     u64 seed = 1, tile = 16;
     StringView style = "grass", save;
@@ -893,5 +953,285 @@ ToolFn recipe_tool(StringView name) {
 }
 
 }  // namespace
+
+// ---------------------------------------------------------------- gen_mesh
+
+namespace {
+
+// A primitive as glTF arrays: flat faces (box, ramp) duplicate their corners, round surfaces share
+// them. Y is up; the shape is centred on the origin and `size` is its full extent.
+struct MeshData {
+    Array<f32> pos, nrm, uv;  // 3, 3, 2 per vertex
+    Array<u32> idx;
+    u32 vertex(f32 x, f32 y, f32 z, f32 nx, f32 ny, f32 nz, f32 u, f32 v) {
+        const u32 i = static_cast<u32>(pos.size() / 3);
+        pos.push_back(x), pos.push_back(y), pos.push_back(z);
+        nrm.push_back(nx), nrm.push_back(ny), nrm.push_back(nz);
+        uv.push_back(u), uv.push_back(v);
+        return i;
+    }
+    void tri(u32 a, u32 b, u32 c) { idx.push_back(a), idx.push_back(b), idx.push_back(c); }
+    // A flat quad a b c d (counter-clockwise seen from outside) with its own normal.
+    void quad(const f32* a, const f32* b, const f32* c, const f32* d) {
+        const f32 ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = d[0] - a[0], vy = d[1] - a[1], vz = d[2] - a[2];
+        f32 nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        const f32 len = std::sqrt(nx * nx + ny * ny + nz * nz);
+        if (len > 0) nx /= len, ny /= len, nz /= len;
+        const u32 i0 = vertex(a[0], a[1], a[2], nx, ny, nz, 0, 1), i1 = vertex(b[0], b[1], b[2], nx, ny, nz, 1, 1);
+        const u32 i2 = vertex(c[0], c[1], c[2], nx, ny, nz, 1, 0), i3 = vertex(d[0], d[1], d[2], nx, ny, nz, 0, 0);
+        tri(i0, i1, i2), tri(i0, i2, i3);
+    }
+    void flat_tri(const f32* a, const f32* b, const f32* c) {
+        const f32 ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+        f32 nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        const f32 len = std::sqrt(nx * nx + ny * ny + nz * nz);
+        if (len > 0) nx /= len, ny /= len, nz /= len;
+        tri(vertex(a[0], a[1], a[2], nx, ny, nz, 0, 1), vertex(b[0], b[1], b[2], nx, ny, nz, 1, 1), vertex(c[0], c[1], c[2], nx, ny, nz, 0.5f, 0));
+    }
+};
+
+bool mesh_shape_known(StringView s) {
+    return s == "box" || s == "plane" || s == "sphere" || s == "cylinder" || s == "cone" || s == "disc" || s == "ramp";
+}
+
+void build_mesh(StringView shape, f32 sx, f32 sy, f32 sz, u32 seg, MeshData& m) {
+    constexpr f32 kPi = 3.14159265358979f;
+    const f32 hx = sx * 0.5f, hy = sy * 0.5f, hz = sz * 0.5f;
+    if (shape == "box") {
+        const f32 p[8][3] = {{-hx, -hy, -hz}, {hx, -hy, -hz}, {hx, hy, -hz}, {-hx, hy, -hz},
+                             {-hx, -hy, hz},  {hx, -hy, hz},  {hx, hy, hz},  {-hx, hy, hz}};
+        m.quad(p[4], p[5], p[6], p[7]);  // +Z
+        m.quad(p[1], p[0], p[3], p[2]);  // -Z
+        m.quad(p[5], p[1], p[2], p[6]);  // +X
+        m.quad(p[0], p[4], p[7], p[3]);  // -X
+        m.quad(p[7], p[6], p[2], p[3]);  // +Y
+        m.quad(p[0], p[1], p[5], p[4]);  // -Y
+    } else if (shape == "plane") {
+        const f32 a[3] = {-hx, 0, hz}, b[3] = {hx, 0, hz}, c[3] = {hx, 0, -hz}, d[3] = {-hx, 0, -hz};
+        m.quad(a, b, c, d);
+    } else if (shape == "ramp") {
+        // A wedge: the full height at +X, nothing at -X; the slope faces up and towards -X.
+        const f32 a[3] = {-hx, -hy, hz}, b[3] = {hx, -hy, hz}, c[3] = {hx, hy, hz};
+        const f32 d[3] = {-hx, -hy, -hz}, e[3] = {hx, -hy, -hz}, f[3] = {hx, hy, -hz};
+        m.flat_tri(a, b, c);      // +Z side
+        m.flat_tri(e, d, f);      // -Z side
+        m.quad(b, e, f, c);       // the +X back
+        m.quad(d, e, b, a);       // the bottom
+        m.quad(a, c, f, d);       // the slope
+    } else if (shape == "sphere") {
+        const u32 rings = math::max(seg / 2, 3u);
+        for (u32 r = 0; r <= rings; ++r) {
+            const f32 v = static_cast<f32>(r) / static_cast<f32>(rings), th = v * kPi;
+            for (u32 s = 0; s <= seg; ++s) {
+                const f32 u = static_cast<f32>(s) / static_cast<f32>(seg), ph = u * 2 * kPi;
+                const f32 nx = std::sin(th) * std::cos(ph), ny = std::cos(th), nz = -std::sin(th) * std::sin(ph);
+                m.vertex(nx * hx, ny * hy, nz * hz, nx, ny, nz, u, v);
+            }
+        }
+        for (u32 r = 0; r < rings; ++r)
+            for (u32 s = 0; s < seg; ++s) {
+                const u32 a = r * (seg + 1) + s, b = a + seg + 1;
+                if (r != 0) m.tri(a, b, a + 1);
+                if (r != rings - 1) m.tri(a + 1, b, b + 1);
+            }
+    } else {  // cylinder, cone, disc: a round side (none for a disc) and caps
+        const bool cone = shape == "cone", disc = shape == "disc";
+        const f32 top = disc ? 0.0f : hy, bottom = disc ? 0.0f : -hy;
+        if (!disc) {
+            const f32 slope = cone ? hx / sy : 0.0f;  // the side normal tilts up on a cone
+            for (u32 s = 0; s <= seg; ++s) {
+                const f32 u = static_cast<f32>(s) / static_cast<f32>(seg), ph = u * 2 * kPi;
+                const f32 cx = std::cos(ph), cz = -std::sin(ph);
+                const f32 l = std::sqrt(1 + slope * slope);
+                m.vertex(cx * hx, bottom, cz * hz, cx / l, slope / l, cz / l, u, 1);
+                m.vertex(cone ? 0.0f : cx * hx, top, cone ? 0.0f : cz * hz, cx / l, slope / l, cz / l, u, 0);
+            }
+            for (u32 s = 0; s < seg; ++s) {
+                const u32 a = s * 2;
+                m.tri(a, a + 2, a + 1);
+                if (!cone) m.tri(a + 1, a + 2, a + 3);
+            }
+        }
+        for (const int side : {1, -1}) {
+            if (cone && side == 1) continue;
+            if (disc && side == -1) continue;
+            const f32 y = side == 1 ? top : bottom;
+            const u32 centre = m.vertex(0, y, 0, 0, static_cast<f32>(side), 0, 0.5f, 0.5f);
+            for (u32 s = 0; s <= seg; ++s) {
+                const f32 ph = static_cast<f32>(s) / static_cast<f32>(seg) * 2 * kPi;
+                m.vertex(std::cos(ph) * hx, y, -std::sin(ph) * hz, 0, static_cast<f32>(side), 0, 0.5f + 0.5f * std::cos(ph), 0.5f + 0.5f * std::sin(ph));
+            }
+            for (u32 s = 0; s < seg; ++s) {
+                if (side == 1) m.tri(centre, centre + 1 + s, centre + 2 + s);
+                else m.tri(centre, centre + 2 + s, centre + 1 + s);
+            }
+        }
+    }
+}
+
+// The mesh as a .glb: one node, one primitive, one inline material.
+void write_glb(const MeshData& m, const f32 color[4], f32 roughness, StringView name, Array<byte>& out) {
+    Array<byte> bin;
+    const auto put = [&](const void* p, usize n) {
+        const usize at = bin.size();
+        bin.resize(at + n);
+        std::memcpy(bin.data() + at, p, n);
+    };
+    const usize n_vert = m.pos.size() / 3;
+    const usize pos_off = 0;
+    put(m.pos.data(), m.pos.size() * 4);
+    const usize nrm_off = bin.size();
+    put(m.nrm.data(), m.nrm.size() * 4);
+    const usize uv_off = bin.size();
+    put(m.uv.data(), m.uv.size() * 4);
+    const usize idx_off = bin.size();
+    put(m.idx.data(), m.idx.size() * 4);
+    while (bin.size() % 4) bin.push_back(byte{0});
+    f32 lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
+    for (usize i = 0; i < n_vert; ++i)
+        for (usize k = 0; k < 3; ++k) {
+            lo[k] = math::min(lo[k], m.pos[i * 3 + k]);
+            hi[k] = math::max(hi[k], m.pos[i * 3 + k]);
+        }
+    cook::String j;
+    cook::appendf(j, R"({"asset":{"version":"2.0","generator":"mce gen_mesh"},"scene":0,"scenes":[{"nodes":[0]}],)");
+    j += R"("nodes":[{"mesh":0,"name":)";
+    cook::append_json_string(j, name);
+    j += R"(}],"meshes":[{"name":)";
+    cook::append_json_string(j, name);
+    j += R"(,"primitives":[{"attributes":{"POSITION":0,"NORMAL":1,"TEXCOORD_0":2},"indices":3,"material":0}]}],)";
+    cook::appendf(j, R"("materials":[{"name":"%.*s","pbrMetallicRoughness":{"baseColorFactor":[%.4f,%.4f,%.4f,%.4f],"metallicFactor":0,"roughnessFactor":%.3f}%s}],)",
+                  static_cast<int>(name.size()), name.data(), static_cast<f64>(color[0]), static_cast<f64>(color[1]), static_cast<f64>(color[2]),
+                  static_cast<f64>(color[3]), static_cast<f64>(roughness), color[3] < 1.0f ? R"(,"alphaMode":"BLEND")" : "");
+    cook::appendf(j, R"("buffers":[{"byteLength":%zu}],"bufferViews":[)", bin.size());
+    cook::appendf(j, R"({"buffer":0,"byteOffset":%zu,"byteLength":%zu,"target":34962},)", pos_off, m.pos.size() * 4);
+    cook::appendf(j, R"({"buffer":0,"byteOffset":%zu,"byteLength":%zu,"target":34962},)", nrm_off, m.nrm.size() * 4);
+    cook::appendf(j, R"({"buffer":0,"byteOffset":%zu,"byteLength":%zu,"target":34962},)", uv_off, m.uv.size() * 4);
+    cook::appendf(j, R"({"buffer":0,"byteOffset":%zu,"byteLength":%zu,"target":34963}],"accessors":[)", idx_off, m.idx.size() * 4);
+    cook::appendf(j, R"({"bufferView":0,"componentType":5126,"count":%zu,"type":"VEC3","min":[%g,%g,%g],"max":[%g,%g,%g]},)", n_vert,
+                  static_cast<f64>(lo[0]), static_cast<f64>(lo[1]), static_cast<f64>(lo[2]), static_cast<f64>(hi[0]), static_cast<f64>(hi[1]),
+                  static_cast<f64>(hi[2]));
+    cook::appendf(j, R"({"bufferView":1,"componentType":5126,"count":%zu,"type":"VEC3"},)", n_vert);
+    cook::appendf(j, R"({"bufferView":2,"componentType":5126,"count":%zu,"type":"VEC2"},)", n_vert);
+    cook::appendf(j, R"({"bufferView":3,"componentType":5125,"count":%zu,"type":"SCALAR"}]})", m.idx.size());
+    while (j.size() % 4) j += ' ';
+    const auto u32le = [&](u32 v) {
+        const u8 b[4] = {static_cast<u8>(v), static_cast<u8>(v >> 8), static_cast<u8>(v >> 16), static_cast<u8>(v >> 24)};
+        const usize at = out.size();
+        out.resize(at + 4);
+        std::memcpy(out.data() + at, b, 4);
+    };
+    out.clear();
+    u32le(0x46546C67u);  // "glTF"
+    u32le(2);
+    u32le(static_cast<u32>(12 + 8 + j.size() + 8 + bin.size()));
+    u32le(static_cast<u32>(j.size()));
+    u32le(0x4E4F534Au);  // "JSON"
+    usize at = out.size();
+    out.resize(at + j.size());
+    std::memcpy(out.data() + at, j.c_str(), j.size());
+    u32le(static_cast<u32>(bin.size()));
+    u32le(0x004E4942u);  // "BIN\0"
+    at = out.size();
+    out.resize(at + bin.size());
+    if (!bin.empty()) std::memcpy(out.data() + at, bin.data(), bin.size());
+}
+
+// A small shaded preview: orthographic, from above and to the side, flat Lambert, z-buffered.
+cook::Image mesh_preview(const MeshData& m, const f32 color[4], u32 px) {
+    cook::Image img = make_image(px, px, 0x1a1d24ffu);
+    Array<f32> depth;
+    depth.resize(static_cast<usize>(px) * px, 1e30f);
+    // View: yaw 35 degrees, pitch 30 degrees down.
+    const f32 cy = std::cos(0.61f), sy = std::sin(0.61f), cp = std::cos(0.52f), sp = std::sin(0.52f);
+    const usize n = m.pos.size() / 3;
+    Array<f32> sx, syv, sz;
+    sx.resize(n), syv.resize(n), sz.resize(n);
+    f32 extent = 1e-6f;
+    for (usize i = 0; i < n; ++i) {
+        const f32 x = m.pos[i * 3], y = m.pos[i * 3 + 1], z = m.pos[i * 3 + 2];
+        const f32 rx = cy * x - sy * z, rz = sy * x + cy * z;
+        const f32 vy = cp * y - sp * rz, vz = sp * y + cp * rz;
+        sx[i] = rx, syv[i] = vy, sz[i] = vz;
+        extent = math::max(extent, math::max(std::fabs(rx), std::fabs(vy)));
+    }
+    const f32 scale = static_cast<f32>(px) * 0.42f / extent, mid = static_cast<f32>(px) * 0.5f;
+    const f32 lx = -0.4f, ly = 0.8f, lz = 0.45f;
+    for (usize t = 0; t + 2 < m.idx.size(); t += 3) {
+        const u32 a = m.idx[t], b = m.idx[t + 1], c = m.idx[t + 2];
+        const f32 ax = mid + sx[a] * scale, ay = mid - syv[a] * scale, bx = mid + sx[b] * scale, by = mid - syv[b] * scale;
+        const f32 cx2 = mid + sx[c] * scale, cy2 = mid - syv[c] * scale;
+        const f32 area = (bx - ax) * (cy2 - ay) - (by - ay) * (cx2 - ax);
+        if (std::fabs(area) < 1e-6f) continue;
+        const f32 nx = (m.nrm[a * 3] + m.nrm[b * 3] + m.nrm[c * 3]) / 3, ny = (m.nrm[a * 3 + 1] + m.nrm[b * 3 + 1] + m.nrm[c * 3 + 1]) / 3,
+                  nz = (m.nrm[a * 3 + 2] + m.nrm[b * 3 + 2] + m.nrm[c * 3 + 2]) / 3;
+        const f32 lit = 0.25f + 0.75f * math::max(0.0f, nx * lx + ny * ly + nz * lz);
+        const i32 x0 = math::max(0, static_cast<i32>(math::min(ax, math::min(bx, cx2)))), x1 = math::min(static_cast<i32>(px) - 1, static_cast<i32>(math::max(ax, math::max(bx, cx2))) + 1);
+        const i32 y0 = math::max(0, static_cast<i32>(math::min(ay, math::min(by, cy2)))), y1 = math::min(static_cast<i32>(px) - 1, static_cast<i32>(math::max(ay, math::max(by, cy2))) + 1);
+        for (i32 y = y0; y <= y1; ++y)
+            for (i32 x = x0; x <= x1; ++x) {
+                const f32 fx = static_cast<f32>(x) + 0.5f, fy = static_cast<f32>(y) + 0.5f;
+                const f32 w0 = ((bx - fx) * (cy2 - fy) - (by - fy) * (cx2 - fx)) / area;
+                const f32 w1 = ((cx2 - fx) * (ay - fy) - (cy2 - fy) * (ax - fx)) / area;
+                const f32 w2 = 1 - w0 - w1;
+                if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+                const f32 d = w0 * sz[a] + w1 * sz[b] + w2 * sz[c];
+                f32& z = depth[static_cast<usize>(y) * px + static_cast<usize>(x)];
+                if (d >= z) continue;
+                z = d;
+                u8* p = &img.rgba[(static_cast<usize>(y) * px + static_cast<usize>(x)) * 4];
+                for (int k = 0; k < 3; ++k) p[k] = static_cast<u8>(std::lround(math::clamp(color[k] * lit, 0.0f, 1.0f) * 255.0f));
+                p[3] = 255;
+            }
+    }
+    return img;
+}
+
+}  // namespace
+
+// Simple meshes for blocking out a 3D level: box, plane, sphere, cylinder, cone, disc and ramp.
+bool gen_mesh(ToolCall& c) {
+    StringView save;
+    if (!arg_save(c, ".glb", save)) return false;
+    StringView shape = "box";
+    if (!arg_choice(c, "shape", shape, mesh_shape_known, "one of box, plane, sphere, cylinder, cone, disc, ramp")) return false;
+    f32 size[3] = {1, 1, 1};
+    if (const cook::JsonValue s = arg(c, "size"); s.valid()) {
+        if (!s.is_array() || s.size() != 3) return arg_missing(c, "size", "[x, y, z] in metres, each 0.01 to 1000");
+        for (u32 i = 0; i < 3; ++i) {
+            if (!s.at(i).is_number() || s.at(i).as_number() < 0.01 || s.at(i).as_number() > 1000)
+                return arg_missing(c, "size", "[x, y, z] in metres, each 0.01 to 1000");
+            size[i] = static_cast<f32>(s.at(i).as_number());
+        }
+    }
+    u64 segments = 24;
+    if (!arg_uint(c, "segments", segments, 3, 128, false)) return false;
+    f32 color[4] = {0.8f, 0.8f, 0.8f, 1.0f};
+    StringView hex;
+    if (!arg_string(c, "color", hex, false)) return false;
+    if (!hex.empty()) {
+        u32 rgba = 0;
+        if (!gen::parse_hex(hex, rgba)) return arg_missing(c, "color", "\"#rrggbb\" or \"#rrggbbaa\"");
+        for (int k = 0; k < 4; ++k) color[k] = static_cast<f32>((rgba >> (24 - 8 * k)) & 0xFFu) / 255.0f;
+    }
+    f32 roughness = 0.8f;
+    if (!arg_f32(c, "roughness", roughness, 0, 1)) return false;
+    MeshData m;
+    build_mesh(shape, size[0], size[1], size[2], static_cast<u32>(segments), m);
+    Saved saved;
+    if (!save.empty()) {
+        Array<byte> glb;
+        write_glb(m, color, roughness, shape, glb);
+        cook::String src;
+        cook::appendf(src, "made with gen_mesh (%.*s %gx%gx%g m)", static_cast<int>(shape.size()), shape.data(), static_cast<f64>(size[0]),
+                      static_cast<f64>(size[1]), static_cast<f64>(size[2]));
+        if (!save_asset(c, save, glb.span(), "{}", src.view(), "the project's (generated)", saved)) return false;
+    }
+    c.out.begin_object().key("shape").str(shape).key("vertices").num_u(m.pos.size() / 3).key("triangles").num_u(m.idx.size() / 3);
+    c.out.key("size").begin_array().num_f(size[0]).num_f(size[1]).num_f(size[2]).end_array();
+    if (!save.empty()) write_saved(c.out, saved);
+    c.out.end_object();
+    return attach(c, mesh_preview(m, color, 256));
+}
 
 }  // namespace mce::mcp

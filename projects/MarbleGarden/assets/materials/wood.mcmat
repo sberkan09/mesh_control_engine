@@ -1,0 +1,17 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "a6def44b-f4c1-4aa8-8fe2-5f819f171a39",
+  "name": "wood",
+  "base_color": [0.9, 0.82, 0.75, 1],
+  "metallic": 0,
+  "roughness": 0.8,
+  "emissive": [0, 0, 0],
+  "alpha_mode": "opaque",
+  "alpha_cutoff": 0.5,
+  "double_sided": false,
+  "unlit": false,
+  "textures": {
+    "base_color": "guid:b6d77647-a285-488c-8671-d129b2edbf7b"
+  }
+}
