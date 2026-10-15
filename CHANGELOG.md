@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- The editor's UI Document panel (SBA-36, M-UI-DATA step 6): a `.mcui` document's widget tree (add, remove,
+  reorder, undo), an inspector for the selected widget (anchors, per-state or every-state styles, layouts, nav,
+  action, bind) and a live preview at phone, tablet and desktop sizes with the theme applied. Edits are read back by
+  the cook before they are kept and saved in the canonical form the MCP `ui_*` tools write, so a document goes
+  between the panel and MCP unchanged. Double-clicking a `.mcui` in Assets opens it.
 - `ui_theme_set` (SBA-57, M-UI-DATA step 5): an MCP tool sets the `.mcuitheme` a UI document is drawn with (by path
   or GUID, `null` for the default look) through the same read-back and canonical write as the widget tools, and
   `ui_list` with a document names its theme. There is no project-wide default theme: each document names its own.

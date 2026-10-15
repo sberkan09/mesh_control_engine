@@ -16,6 +16,7 @@ mce_add_test(test_editor UMBRELLA
         test_stub_world.cpp
         test_tilemap.cpp
         test_transform_gizmo.cpp
+        test_ui_document.cpp
         test_undo.cpp
     DEPS
         mce::mce_editor_layer)
@@ -26,7 +27,7 @@ add_dependencies(test_editor mce_player)
 
 # The editor's GPU paths on a real GL driver (CI: Xvfb + Mesa llvmpipe). Always builds; registers
 # only with MCE_GPU_TESTS.
-add_executable(test_editor_gl test_probe_bake_gl.cpp)
+add_executable(test_editor_gl test_probe_bake_gl.cpp test_ui_preview_gl.cpp)
 target_link_libraries(test_editor_gl PRIVATE mce::mce_editor_layer mce::mce_rhi_default mce::doctest_main)
 target_include_directories(test_editor_gl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
 target_compile_definitions(test_editor_gl PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_gl"

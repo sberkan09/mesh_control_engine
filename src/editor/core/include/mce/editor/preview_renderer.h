@@ -10,6 +10,7 @@
 #include "mce/kit/kit3d_extract.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/render/asset_upload.h"
+#include "mce/ui/ui.h"
 
 namespace mce::editor {
 
@@ -72,6 +73,18 @@ public:
     // The primary Camera3DComponent's view of `world` (false: none, or no 3D path).
     bool game_camera_3d(World& world, render::Camera3D& out);
 
+    // The UI document preview's pieces (ui_document_editor.h): the mounted assets, the extract that
+    // loads their fonts, the built-in UI skin (made on first use) and a count that moves whenever the
+    // content is remounted, so what was built from it is built again.
+    asset::AssetSystem* assets() const { return assets_; }
+    kit::SpriteExtract& sprites() { return extract_; }
+    const ui::Skin* ui_skin();
+    u64 content_generation() const { return generation_; }
+    // Clears `target` to `clear` and draws `batch` (begun with render::compute_screen_view) into it.
+    void record_screen(rhi::CommandBuffer& cmd, const render::SpriteBatch& batch, rhi::TextureHandle target, math::Color clear) {
+        record_batch(cmd, batch, target, clear, false);
+    }
+
     render::Renderer& renderer() { return renderer_; }
     const render::BatchStats& last_stats() const { return stats_; }
     const render::Scene3D::Stats& last_stats_3d() const { return stats3d_; }
@@ -93,6 +106,9 @@ private:
     asset::AssetSystem* assets_ = nullptr;
     render::BatchStats stats_;
     render::Scene3D::Stats stats3d_;
+    ui::BuiltinSkin ui_skin_;
+    bool ui_skin_ready_ = false, ui_skin_failed_ = false;
+    u64 generation_ = 0;
 };
 
 // True when `world` holds kit3d content to draw in 3D (a Camera3DComponent or a MeshRef).
