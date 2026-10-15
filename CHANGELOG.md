@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Screen-space reflections, M-VISUAL2 step 1 (SBA-101): `Environment3D.ssr` (or `Scene3D::set_reflections`) makes
+  smooth surfaces mirror what is on screen over the probes and the sky (`ssr_max_distance`, `ssr_thickness`,
+  `ssr_max_roughness`, `ssr_roughness_fade`, `ssr_intensity`). It reads the previous frame, so it shows from the
+  second frame; off on the Low quality tier, `r.ssr 0` turns it off. User guide 8.
 - Fair hits over lag (SBA-85, M-NET2 step 4): `net::LagCompensator` keeps a short history of `net::HitBox`es on
   the server and checks a shot against the tick its client was drawing (`ReplicationClient::drawn_tick`), within
   `max_rewind_s`. Over a 100 ms link every shot at the drawn target hits when rewound and none at the server's
