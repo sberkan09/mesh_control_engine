@@ -81,6 +81,11 @@ struct PostFx {
     f32 bloom_intensity = 0.05f;   // fraction of the blurred image added back
     f32 bloom_threshold = 1.0f;    // soft bright-pass knee start (exposed scene units); 0 = no threshold
     bool fxaa = true;
+    // Temporal anti-aliasing (M-VISUAL 5): a jittered projection, a velocity prepass and a history
+    // resolve with neighborhood clipping; replaces FXAA (which is then skipped). With
+    // Forward3DDesc::render_scale < 1 it also upsamples to the full output (temporal upscaling).
+    bool taa = false;
+    f32 taa_blend = 0.1f;  // weight of the new frame in the history
 };
 
 // Screen-space ambient occlusion (M-VISUAL 3): a half-resolution view-normal + depth prepass of the
@@ -190,6 +195,11 @@ struct MeshInstance {
     // Replaces the material of every submesh (null: each submesh draws its own). The caller keeps
     // it alive until the scene is drawn.
     const MaterialOverride* material = nullptr;
+    // TAA velocity (M-VISUAL 5): last frame's world matrix and node pose of a moving or animated
+    // instance (null / empty = the same as this frame's: only the camera moved it). Read only when
+    // PostFx::taa is on.
+    const math::mat4* prev_world = nullptr;
+    Span<const math::mat4> prev_pose;
 };
 
 // The material a submesh of `inst` draws with, and its map keys (the override's when it has one).
@@ -245,6 +255,8 @@ public:
         u32 first_index;
         u32 index_count;
         u32 base_vertex;
+        math::mat4 prev_model;  // last frame's `model` (TAA velocity; = model when nothing moved)
+        u32 prev_palette;       // skinned draws: last frame's joints in joint_palette() (= palette when unposed)
         f32 view_depth;     // positive distance along the view axis
         math::vec3 center;  // world bounding sphere
         f32 radius;

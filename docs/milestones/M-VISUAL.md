@@ -1,6 +1,6 @@
 # M-VISUAL — High-end 3D rendering (milestone record)
 
-**Status:** active (steps 1–4 done, 2026-10-14). Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
+**Status:** active (steps 1–5 done, 2026-10-14). Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
 **Why:** `Forward3D` suits stylized and low-poly 3D but has no compute path, GI, pre-filtered IBL,
 screen-space effects, local-light shadows or temporal pipeline. Each step below is opt-in, keeps GL as the
 reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leaves today's frame unchanged when off.
@@ -13,7 +13,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | 2 | Image-based lighting + reflection probes | SBA-7 | sky IBL, IBL texture source and runtime reflection probes, the editor bake and goldens done (all backends, fragment passes); real-GPU numbers on the Mac/device session |
 | 3 | SSAO / GTAO | SBA-8 | done: GL and SDL GPU (gated + goldens), Metal binds the stand-in; real-GPU budget on the Mac/device session |
 | 4 | Local-light shadows | SBA-9 | done: GL and SDL GPU (gated + golden), Metal untested; real-GPU budget on the Mac/device session |
-| 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | — |
+| 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | done: GL and SDL GPU (gated + goldens), High tier on TAA; Metal untested; real-GPU budget on the Mac/device session |
 | 6 | Global illumination (irradiance-probe volume) | SBA-11 | — |
 | 7 | Atmosphere and volumetrics | SBA-12 | — |
 | 8 | Post completion | SBA-13 | — |
@@ -292,3 +292,48 @@ llvmpipe; relative only):**
 
 Asking 8 lights for shadows grants the 2 most important (16 tiles hold 2 cube lights) at the same cost. Metal pixels
 and real-GPU numbers belong to the Mac/device session.
+
+## Step 5 — temporal pipeline (TAA, temporal upscaling)
+
+**API.** `PostFx::taa` (off by default) and `taa_blend` (the new frame's weight, 0.1). TAA replaces FXAA: the
+FXAA pass is skipped on a TAA frame. `MeshInstance::prev_world` / `prev_pose` give last frame's world matrix and
+node pose of a moving or animated instance (null / empty: only the camera moved it). `Forward3D::reset_history()`
+drops the history on a camera cut. Off switches: `Forward3DDesc::taa` (no pipelines) and `-r.taa 0`. The High
+quality tier now turns TAA on in place of FXAA (`QualitySettings::taa`), and kit scenes follow the environment's
+anti-aliasing switch. `Kit3DExtract` remembers each entity's world matrix from the previous extract, so moving
+MeshRefs carry their velocity; animated poses are not carried yet.
+
+**Passes.** The projection is shifted by a Halton(2, 3) sub-pixel offset over 8 frames (main pass, sky and SSAO
+prepass). After the MSAA resolve, a velocity prepass draws the opaques again at the 3D size into an RGBA16F target
+with its own depth. It writes the unjittered uv motion since last frame (rigid draws through `prev_model`, skinned
+ones through last frame's joints, which Scene3D appends to the palette), with b = 1 where a mesh is. The resolve
+then reads this frame's sample under each output pixel at its jittered position. It fetches the history at the
+reprojected uv (velocity, or the camera's reprojection of the far plane for the sky) with a 5-tap Catmull-Rom,
+clips it to the 3×3 neighborhood's variance box in YCoCg over Karis-weighted colors, and blends. Bloom and the
+tonemap read the result; timestamp `taa` covers the velocity pass and the resolve.
+
+**Temporal upscaling.** The history lives at the output size, so with `render_scale` < 1 the resolve upsamples.
+Each output pixel takes the input sample under it, weighted by how close that sample's jittered position landed
+(`2·blend·exp(−1.5·d²)`, d in output pixels). Over the jitter cycle the samples cover the sub-pixel positions of
+the full-size frame.
+
+**Gates.** The `render3d_gl` tests, on GL and SDL GPU:
+- TAA off draws today's frame, and frames after a TAA run match it again (0 pixels differ).
+- On a still frame, 16 TAA frames bring the 85 edge pixels from 30.6 to 14.3 mean levels off a 4× MSAA reference, while open ground keeps its shade.
+- A box sliding 0.3 m per frame ends 0.72 levels off its un-anti-aliased frame with velocity, against 0.95 without.
+- A skinned pose's previous joints double the palette, and its draws point at them.
+- A half-scale frame upscaled over 24 frames is 0.45 levels off the full-size reference, against 1.03 bilinear.
+
+Goldens `taa_still` and `taa_upscale` on linux-gl and linux-sdlgpu; the earlier goldens are unchanged.
+
+**Budget (04_cubes, 256 point lights, 1280×1024, 110 frames, Mesa llvmpipe; relative only):**
+
+| | FXAA (4× MSAA) | TAA (4× MSAA) | TAA (no MSAA) |
+|---|---|---|---|
+| main pass (ms) | 277.2 | 275.8 | 234.7 |
+| MSAA resolve (ms) | 7.7 | 10.3 | 0 |
+| TAA: velocity prepass + resolve (ms) | 0 | 38.3 | 38.5 |
+| FXAA (ms) | 19.6 | 0 | 0 |
+| GPU 3D frame total (ms) | 357.3 | 377.4 | 329.7 |
+
+Metal pixels and real-GPU numbers belong to the Mac/device session.

@@ -221,3 +221,25 @@ TEST_CASE("golden: a spot light and a point light shadow a row of boxes at night
     CHECK(f.renderer.forward_3d().last_stats().local_shadow_tiles == 7);
     check_golden("local_shadows", f);
 }
+
+namespace {
+void taa_only(Scene3D& s) {
+    PostFx post;
+    post.fxaa = false;
+    post.taa = true;
+    s.set_post(post);
+}
+}  // namespace
+
+TEST_CASE("golden: TAA after 16 still frames, no MSAA") {
+    Fixture3D f(1);
+    for (int i = 0; i < 16; ++i) f.render(0.0f, true, taa_only);
+    CHECK(f.renderer.forward_3d().last_stats().taa_history);
+    check_golden("taa_still", f);
+}
+
+TEST_CASE("golden: temporal upscaling of a half-scale frame after 24 frames") {
+    Fixture3D f(1, true, true, 0.5f);
+    for (int i = 0; i < 24; ++i) f.render(0.0f, true, taa_only);
+    check_golden("taa_upscale", f);
+}

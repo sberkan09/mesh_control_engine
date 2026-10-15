@@ -208,7 +208,9 @@ void Scene3D::build() {
     if (local_shadows_.enabled)
         for (const PointLight& l : point_lights_) local_wanted = local_wanted || l.cast_shadows;
     const bool collect_casters = light_.shadows || local_wanted;
+    const bool taa = post_.taa;  // previous transforms for the velocity prepass
     Array<u32> skin_first(*alloc_);   // per skin of the current instance: palette offset
+    Array<u32> skin_prev(*alloc_);    // and its previous pose's palette offset (TAA)
     Array<aabb3> skin_box(*alloc_);   // and its model-space bounds
     for (u32 i = 0; i < instances_.size(); ++i) {
         const MeshInstance& inst = instances_[i];
@@ -224,6 +226,14 @@ void Scene3D::build() {
                 skin_palette(mesh, k, inst.pose, palette);
                 skin_box[k] = skin_bounds(mesh, k, palette);
             }
+            skin_prev.resize(mesh.skins.size());
+            for (u32 k = 0; k < mesh.skins.size(); ++k) {
+                skin_prev[k] = skin_first[k];
+                if (!taa || inst.prev_pose.empty()) continue;
+                skin_prev[k] = static_cast<u32>(joint_palette_.size());
+                joint_palette_.resize(joint_palette_.size() + mesh.skins[k].joint_count);
+                skin_palette(mesh, k, inst.prev_pose, joint_palette_.span().subspan(skin_prev[k], mesh.skins[k].joint_count));
+            }
             ++stats_.skinned_instances;
         }
         const u32 lod = select_lod(inst, mesh);
@@ -238,17 +248,22 @@ void Scene3D::build() {
             d.mesh = &mesh;
             d.dequant = mat4::identity();
             d.palette = ~0u;
+            d.prev_palette = ~0u;
+            const mat4& prev_world = taa && inst.prev_world ? *inst.prev_world : inst.world;
             aabb3 wb;
             if (sm.skin != ~0u) {
                 // Skinned geometry lives in bind space: glTF ignores the skinned node's transform.
                 d.normal = transpose(inverse(inst.world));
                 if (skinning) {
                     d.model = inst.world;
+                    d.prev_model = prev_world;
                     d.dequant = sm.dequant;
                     d.palette = skin_first[sm.skin];
+                    d.prev_palette = skin_prev[sm.skin];
                     wb = transform_aabb(inst.world, skin_box[sm.skin]);
                 } else {  // the bind pose, drawn rigidly
                     d.model = inst.world * sm.dequant;
+                    d.prev_model = prev_world * sm.dequant;
                     wb = transform_aabb(inst.world, sm.bounds);
                 }
             } else {
@@ -256,6 +271,12 @@ void Scene3D::build() {
                 const mat4 node_world = inst.world * node;
                 wb = transform_aabb(node_world, sm.bounds);
                 d.model = node_world * sm.dequant;
+                d.prev_model = d.model;
+                if (taa && (inst.prev_world || !inst.prev_pose.empty())) {
+                    const Span<const mat4> pp = inst.prev_pose.empty() ? inst.pose : inst.prev_pose;
+                    const mat4& prev_node = sm.node < pp.size() ? pp[sm.node] : mesh.rest_pose[sm.node];
+                    d.prev_model = prev_world * prev_node * sm.dequant;
+                }
                 d.normal = transpose(inverse(node_world));
             }
             scene_bounds_ = any ? merge(scene_bounds_, wb) : wb;
