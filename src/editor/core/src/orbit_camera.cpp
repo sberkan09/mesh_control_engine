@@ -232,8 +232,10 @@ void orbit_wireframe(const EditorScene& scene, f32 depth, Array<Segment3D>& out,
 
 void NavMeshPreview::sync(const EditorScene& scene, asset::AssetSystem* assets) {
     const kit::NavMeshSurface3D* surface = nullptr;
-    for (const DocEntity& e : scene.doc().entities())
-        if ((surface = scene.get<kit::NavMeshSurface3D>(e.id))) break;
+    for (const DocEntity& e : scene.doc().entities()) {
+        surface = scene.get<kit::NavMeshSurface3D>(e.id);
+        if (surface) break;
+    }
     show_ = surface && surface->show;
     const asset::Guid guid = surface ? surface->baked.guid : asset::Guid{};
     if (guid.is_null() || !assets) {

@@ -561,7 +561,7 @@ bool bake_navmesh(const NavGeometry3D& g, const NavBakeSettings3D& s, Array<byte
 
     // Bucket triangles by the tiles (with their borders) their xz bounds touch, in triangle order.
     Array<Array<u32>> buckets;
-    buckets.resize(usize(tw * th));
+    buckets.resize(usize(tw) * usize(th));
     const f32 tcs = f32(ts) * cfg.cs;
     const f32 border = f32(cfg.borderSize) * cfg.cs;
     const u32 ntris = g.triangle_count();
@@ -581,7 +581,7 @@ bool bake_navmesh(const NavGeometry3D& g, const NavBakeSettings3D& s, Array<byte
         x1 = x1 >= tw ? tw - 1 : x1;
         z1 = z1 >= th ? th - 1 : z1;
         for (int z = z0; z <= z1; ++z)
-            for (int x = x0; x <= x1; ++x) buckets[usize(z * tw + x)].push_back(t);
+            for (int x = x0; x <= x1; ++x) buckets[usize(z) * usize(tw) + usize(x)].push_back(t);
     }
 
     Writer w(out);
@@ -615,7 +615,7 @@ bool bake_navmesh(const NavGeometry3D& g, const NavBakeSettings3D& s, Array<byte
             TileInput in;
             in.geom = &g;
             in.cfg = &cfg;
-            in.tris = buckets[usize(z * tw + x)].span();
+            in.tris = buckets[usize(z) * usize(tw) + usize(x)].span();
             const int n = bake_tile(ctx, in, x, z, comp, w);
             if (n < 0) {
                 MCE_LOG_WARN("navmesh bake: tile ({}, {}) failed", x, z);
