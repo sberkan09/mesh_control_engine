@@ -4,6 +4,8 @@
 
 #include <doctest/doctest.h>
 
+#include <cmath>
+
 #include "mce/convar.h"
 #include "mce/core.h"
 #include "mce/ecs/world.h"
@@ -11,6 +13,7 @@
 #include "mce/refl/refl.h"
 #include "mce/render/camera2d.h"
 #include "mce/render/sprite_batch.h"
+#include "mce/ui/document_data.h"
 #include "mce/ui/ui.h"
 
 using namespace mce;
@@ -682,4 +685,90 @@ TEST_CASE("ui: the developer console mirrors the log, runs convars and closes on
     con.update(c);
     CHECK_FALSE(con.is_open());
     cv_test_ui_volume.reset();
+}
+
+// ---- M-ACCESS: text scale and high contrast ----------------------------------------------------
+
+namespace {
+// WCAG 2 contrast ratio of two sRGB colors (alpha ignored).
+f32 contrast_ratio(Color a, Color b) {
+    const auto lum = [](Color c) {
+        const auto lin = [](f32 v) { return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
+        return 0.2126f * lin(c.r) + 0.7152f * lin(c.g) + 0.0722f * lin(c.b);
+    };
+    const f32 la = lum(a), lb = lum(b);
+    return (la > lb ? la + 0.05f : lb + 0.05f) / (la > lb ? lb + 0.05f : la + 0.05f);
+}
+}  // namespace
+
+TEST_CASE("M-ACCESS: text scale grows the text and the widgets sized by it, and relayouts on change") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    Builder col = b.stack("menu", StackLayout{}).at({0.5f, 0.5f}, {0, 0});
+    const WidgetId a = col.button("a", "RESUME").id();
+    d.update(frame());
+    const vec2 normal = d.rect(a).size();
+    UpdateContext big = frame();
+    big.text_scale = 2.0f;
+    d.update(big);
+    const vec2 scaled = d.rect(a).size();
+    CHECK(scaled.x > normal.x + 6 * 7 - 1);  // 6 glyphs, each at least 7 px wider
+    CHECK(scaled.y > normal.y + 10);
+    // The ui scale is untouched: the padding stays as authored.
+    CHECK(scaled.x - 2 * (normal.x - 32) == doctest::Approx(32.0f));
+    d.update(frame());
+    CHECK(d.rect(a).size().x == normal.x);
+}
+
+TEST_CASE("M-ACCESS: the high-contrast theme keeps text at 7:1 or more and leaves the document's styles") {
+    const ThemeData& hc = high_contrast_theme();
+    for (WidgetKind k : {WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Slider, WidgetKind::Panel, WidgetKind::Console})
+        for (u32 s = 0; s < kWidgetStateCount; ++s) {
+            if (s == static_cast<u32>(WidgetState::Disabled)) continue;
+            const Style& st = hc.styles[static_cast<u32>(k)][s];
+            INFO("kind " << static_cast<u32>(k) << " state " << s);
+            CHECK(st.tint.a == 1.0f);
+            CHECK(contrast_ratio(st.text_color, st.tint) >= 7.0f);
+        }
+    const Style& disabled = hc.styles[static_cast<u32>(WidgetKind::Button)][static_cast<u32>(WidgetState::Disabled)];
+    CHECK(contrast_ratio(disabled.text_color, disabled.tint) >= 4.5f);
+
+    // A themed style keeps its sprite, slice and text size; a bare label gains an outline.
+    Style mine;
+    mine.tint = {0.3f, 0.6f, 0.9f, 0.5f};
+    mine.text_color = {0.5f, 0.5f, 0.5f, 1};
+    mine.text_size = 22.0f;
+    mine.sprite_region = 7;
+    const Style b = high_contrast_style(WidgetKind::Button, WidgetState::Focused, mine);
+    CHECK(b.text_size == 22.0f);
+    CHECK(b.sprite_region == 7u);
+    CHECK(contrast_ratio(b.text_color, b.tint) >= 7.0f);
+    mine.draw_quad = false;
+    const Style t = high_contrast_style(WidgetKind::Text, WidgetState::Normal, mine);
+    CHECK(t.text_outline >= 1.0f);
+    CHECK(t.text_outline_color.a == 1.0f);
+
+    // Drawing with high contrast outlines a bare label (8 more copies of its glyphs) and never
+    // rewrites the document's own styles.
+    Fixture f;
+    const auto glyph_quads = [&](bool contrast) {
+        Document d;
+        d.set_skin(f.skin);
+        Builder root(d, d.root());
+        root.text("t", "HELLO").at({0.5f, 0.5f}, {200, 40});
+        UpdateContext c = frame();
+        c.high_contrast = contrast;
+        d.update(c);
+        render::SpriteBatch batch(f.sets, mem::heap());
+        batch.begin(render::compute_screen_view(rhi::Extent2D{1280, 720}), render::PassId::Screen2D);
+        d.submit(batch);
+        batch.build();
+        CHECK(d.style(d.find("t"), WidgetState::Normal).text_outline == 0.0f);
+        return batch.stats().quads;
+    };
+    const u32 plain = glyph_quads(false);
+    REQUIRE(plain > 0);
+    CHECK(glyph_quads(true) == plain * 9);
 }

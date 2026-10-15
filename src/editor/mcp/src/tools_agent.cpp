@@ -59,7 +59,8 @@ const ToolDef kAgentTools[] = {
      module_build},
     {"module_test",
      "Run the project's tests with ctest in the module's build tree (default filter: tests named <game>_*, such as the "
-     "<game>_headless_300 smoke test). Returns each test's result and the output's end when one failed.",
+     "<game>_headless_300 smoke test). Builds the host and the cooked pack first, so the tests play the current "
+     "content. Returns each test's result and the output's end when one failed.",
      R"j({"type":"object","properties":{"filter":{"type":"string","description":"ctest -R regular expression (default ^<game>_)"}}})j",
      module_test},
     {"test_run",

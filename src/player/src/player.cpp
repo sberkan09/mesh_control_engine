@@ -67,6 +67,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <optional>
 
 #include "hud_font.h"
@@ -75,6 +76,7 @@
 #include "mce/asset/mods.h"
 #include "mce/audio/components.h"
 #include "mce/core.h"
+#include "mce/ecs/dev_stats.h"
 #include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
 #include "mce/input/default_map.h"
@@ -170,6 +172,10 @@ MCE_CVAR(cv_save_on_focus_loss, "save_on_focus_loss", true,
 MCE_CVAR(cv_fullscreen, "fullscreen", false, "Desktop: borderless full screen (F11, Alt+Enter or Cmd+Ctrl+F toggle it)",
          CVarFlags::Saved);
 MCE_CVAR(cv_save, "save", "", "Save slot: loaded at start when it exists, written on clean quit (empty = off)",
+         CVarFlags::None);
+MCE_CVAR(cv_settings, "settings", true,
+         "Keep the saved options (volumes, quality, full screen...) in <save folder>/settings.cfg between runs "
+         "(windowed runs without -capture; 0 = this run neither reads nor writes it)",
          CVarFlags::None);
 MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the per-user MCE save folder)", CVarFlags::None);
 MCE_CVAR(cv_store_catalog, "store_catalog", "",
@@ -422,6 +428,17 @@ public:
                          module_.module.info->module_version, module_.module.loaded_path.c_str());
         }
         console::apply_deferred_command_line();  // the module's convars exist now; the rest are typos
+        // The saved options before anything reads them (the renderer reads r.quality). Captures
+        // (goldens, render_frame) stay on the defaults.
+        settings_on_ = device_ && cv_settings.get_bool() && cv_capture.get_string().empty() && cv_capture_tick.get_int() == 0 &&
+                       cv_capture_ticks.get_string().empty();
+        if (settings_on_) {
+            if (Result<void> r = console::load_settings(settings_path().view()); !r) {
+                FixedString<512> why;
+                format_error(r.error(), why);
+                MCE_LOG_WARN("{}: settings unreadable: {}", desc_.app_name, why.view());
+            }
+        }
         if (device_) {
             MCE_TRY(renderer_.init(*device_));
             assets_.set_upload_sink(&sink_);
@@ -1346,6 +1363,12 @@ private:
 
     // The UI scale for this framebuffer: the display's scale times -ui_scale, fitted (M-MOBILE 11b).
     f32 ui_scale(rhi::Extent2D bb) const { return ui::compute_ui_scale(bb, window_->display_scale(), cv_ui_scale.get_float()); }
+    // The accessibility settings every UI document draws with (M-ACCESS): text scale, high contrast.
+    static void apply_access(ui::UpdateContext& ctx) {
+        const render::AccessibilitySettings a = render::accessibility_settings();
+        ctx.text_scale = a.text_scale;
+        ctx.high_contrast = a.high_contrast;
+    }
 
     void set_console(bool open) {
         console_.set_open(open);
@@ -1358,6 +1381,7 @@ private:
         ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
                                          static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
         ctx.ui_scale = ui_scale(bb);
+        apply_access(ctx);
         input::InputState in;
         in.cancel_pressed = con_.cancel;
         ctx.actions = &in;
@@ -1381,6 +1405,7 @@ private:
         ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
                                          static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
         ctx.ui_scale = ui_scale(bb);
+        apply_access(ctx);
         ctx.dt = 1.0 / 60.0;
         for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
             const ui::Layer* l = desc_.ui_layers[i];
@@ -1420,6 +1445,7 @@ private:
         ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
                                          static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
         ctx.ui_scale = ui_scale(bb);
+        apply_access(ctx);
         ctx.dt = 1.0 / 60.0;
         // Edges (Confirm, Cancel, a navigation press) once per tick, not once per rendered frame.
         input::InputState in = ui_actions_;
@@ -1494,12 +1520,21 @@ private:
         } else {
             std::snprintf(line, sizeof line, "2D");
         }
+        add_stats_text(hud, line, 0);
+        // Lines other modules publish (DevStatsLines: mce_net's NetStatsMeter, ...).
+        if (const DevStatsLines* extra = world_.try_resource<DevStatsLines>()) {
+            for (u32 i = 0; i < extra->count; ++i) add_stats_text(hud, extra->lines[i].text.c_str(), i + 1);
+        }
+    }
+
+    void add_stats_text(render::SpriteBatch& hud, const char* text, u32 row) {
         render::TextLayout layout(mem::frame());
         render::TextLayoutDesc desc;
         desc.size_px = 16;
-        render::layout_text(font_.face, line, desc, layout);
+        render::layout_text(font_.face, text, desc, layout);
         render::TextPlacement p;
-        p.origin = {8.0f + static_cast<f32>(safe_insets_.left), 8.0f + static_cast<f32>(safe_insets_.top)};
+        p.origin = {8.0f + static_cast<f32>(safe_insets_.left),
+                    8.0f + static_cast<f32>(safe_insets_.top) + 20.0f * static_cast<f32>(row)};
         p.sort_order = 2;
         hud.add_text(font_, layout, p);
     }
@@ -1691,7 +1726,25 @@ private:
         MCE_LOG_INFO("mce_player: wrote {}", path);
     }
 
+    FixedString<512> settings_path() const {
+        FixedString<512> p(save::root());
+        p.append("/settings.cfg");
+        return p;
+    }
+
+    void write_settings() {
+        if (!settings_on_) return;
+        std::error_code ec;
+        std::filesystem::create_directories(std::filesystem::path(save::root().c_str()), ec);
+        if (Result<void> r = console::save_settings(settings_path().view()); !r) {
+            FixedString<512> why;
+            format_error(r.error(), why);
+            MCE_LOG_WARN("{}: settings not written: {}", desc_.app_name, why.view());
+        }
+    }
+
     void write_save() {
+        write_settings();
         const StringView slot = cv_save.get_string();
         if (slot.empty()) return;
         save::SaveInfo info;
@@ -2040,6 +2093,7 @@ private:
     Array<f64> view_free_;      // -view.free
     Array<f64> safe_override_;  // -safe_area
     bool paused_ = false;
+    bool settings_on_ = false;  // this run reads and writes <save folder>/settings.cfg
     player::UiScreens screens_;
     input::InputState ui_actions_;  // the newest tick snapshot, for the UI screens' navigation
     bool ui_fresh_ = false;         // ui_actions_ arrived since the last rendered frame

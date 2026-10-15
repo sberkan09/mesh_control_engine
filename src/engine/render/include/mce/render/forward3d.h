@@ -96,6 +96,7 @@ struct Forward3DStats {
     u32 froxels = 0;                 // its grid: columns × rows × slices
     bool auto_exposure = false;      // the histogram set this frame's exposure (M-VISUAL 8)
     bool color_grade = false;        // the LUT graded this frame
+    bool color_vision = false;       // the color-vision correction ran this frame (M-ACCESS)
     bool dof = false;                // depth of field blurred this frame
     bool motion_blur = false;        // motion blur smeared this frame
     u32 batches = 0;                 // instance batches drawn (M-VISUAL 9)

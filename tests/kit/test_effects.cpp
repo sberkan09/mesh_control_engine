@@ -5,6 +5,7 @@
 
 #include <cmath>
 
+#include "mce/convar.h"
 #include "mce/audio/components.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
@@ -221,4 +222,35 @@ TEST_CASE("effects: PathAgents walk on a NavGrid built from the scene's collider
     CHECK(w.resource<NavGrid>().width() == 32);
     CHECK(w.try_get<NavGridSource>(s)->blocked == 2 * 12);  // the 1 x 6 m wall in half-metre cells
     CHECK_FALSE(w.try_get<NavGridSource>(s)->rebuild);
+}
+
+TEST_CASE("M-ACCESS: reduced motion scales the view's shake, never the camera's state") {
+    ConVar* motion = ConVar::find(StringId("access.motion_scale"));
+    REQUIRE(motion != nullptr);
+    const auto run = [&](f32 scale, render::Camera2D& view) {
+        motion->set_float(scale);
+        World w;
+        w.register_components<LocalTransform>();
+        install_effects(w, nullptr);
+        w.register_components<Camera2DComponent>();
+        w.spawn_with(at(2, 3), Camera2DComponent{}, CameraShake2D{});
+        ShakeTrigger s;
+        s.trauma = 1.0f;
+        s.fire = true;
+        w.spawn_with(s);
+        for (u64 t = 0; t < 3; ++t) w.tick(kDt, t);
+        f32 ppm = 0.0f;
+        REQUIRE(primary_camera(w, view, ppm));
+        return w.state_hash();
+    };
+    render::Camera2D full, half, still;
+    const u64 h_full = run(1.0f, full), h_half = run(0.5f, half), h_still = run(0.0f, still);
+    motion->reset();
+    CHECK(h_full == h_half);  // the setting never reaches the simulation
+    CHECK(h_full == h_still);
+    CHECK(full.position.x != doctest::Approx(2.0f));
+    CHECK(half.position.x - 2.0f == doctest::Approx((full.position.x - 2.0f) * 0.5f));
+    CHECK(still.position.x == doctest::Approx(2.0f));
+    CHECK(still.position.y == doctest::Approx(3.0f));
+    CHECK(still.rotation == doctest::Approx(0.0f));
 }
