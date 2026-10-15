@@ -83,6 +83,7 @@
 #include "mce/input/ecs.h"
 #include "mce/input/input_system.h"
 #include "mce/input/script.h"
+#include "mce/kit/captions.h"
 #include "mce/kit/stock.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/kit3d_extract.h"
@@ -114,6 +115,7 @@
 #include "mce/player/player.h"
 #include "mce/scene/scene.h"
 #include "mce/scene/streaming.h"
+#include "mce/ui/subtitles.h"
 #include "mce/ui/ui.h"
 #include "ship_paths.h"
 #include "ui_screens.h"
@@ -449,6 +451,7 @@ public:
                                                         "player.hud_font"));
             MCE_TRY(ui::create_builtin_skin(renderer_, skin_));
             console_.init(skin_.skin, 0.5f);
+            subtitles_.set_skin(skin_.skin);
             for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
                 const ui::Layer* l = desc_.ui_layers[i];
                 if (l && l->init && !l->init(l->user, renderer_, skin_.skin))
@@ -574,6 +577,7 @@ public:
 
         update_console(bb);
         update_ui_layers(bb);
+        update_subtitles(bb);
         update_ui_screens(bb);
         const bool overlay =
             paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() || cv_stats.get_bool();
@@ -1458,6 +1462,30 @@ private:
         }
     }
 
+    // Subtitles and sound captions (M-ACCESS): timeline subtitle tracks, SoundCaption tags and
+    // ShowCaption lines (kit::caption_lines), as the access.subtitle* convars ask.
+    void update_subtitles(rhi::Extent2D bb) {
+        kit::caption_lines(world_, caption_lines_);
+        subtitle_lines_.clear();
+        for (const kit::CaptionLine& l : caption_lines_) {
+            ui::SubtitleLine s;
+            s.speaker = l.speaker.view();
+            s.text = l.text.view();
+            s.kind = l.kind == kit::CaptionKind::Sound ? ui::SubtitleKind::Sound : ui::SubtitleKind::Speech;
+            subtitle_lines_.push_back(s);
+        }
+        ui::UpdateContext ctx;
+        ctx.viewport = bb;
+        ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
+                                         static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
+        ctx.ui_scale = ui_scale(bb);
+        apply_access(ctx);
+        subtitles_.update(subtitle_lines_.span(), ctx, ui::subtitle_style());
+    }
+    ui::SubtitleView subtitles_;
+    Array<kit::CaptionLine> caption_lines_;
+    Array<ui::SubtitleLine> subtitle_lines_;
+
     // The scene's UI screens (kit::UiScreen, M-UI-DATA step 2).
     Result<void> load_ui_screens() {
         const ui::Skin* skin = device_ ? &skin_.skin : nullptr;
@@ -1522,6 +1550,7 @@ private:
     void record_overlay(rhi::CommandBuffer& cmd, rhi::Extent2D bb) {
         render::SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
         hud.begin(render::compute_screen_view(bb), render::PassId::Screen2D);
+        subtitles_.submit(hud, -124);  // under the scene's UI screens: a menu covers them
         screens_.submit(hud, -120);  // the scene's UI screens, under the game's UI layers
         // Game UI under the pause veil (sort layer 0) and the console (200).
         for (u32 i = 0; i < desc_.ui_layer_count; ++i) {

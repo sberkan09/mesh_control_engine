@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Subtitles and sound captions, M-ACCESS step 1 (SBA-95): the stock player draws timeline subtitle lines,
+  `kit::SoundCaption` tags on sounds and `kit::ShowCaption` lines at the bottom of the screen
+  (`ui::SubtitleView`), with `access.subtitles`, `access.captions`, `access.subtitle_speaker`, `access.subtitle_size`
+  and `access.subtitle_background` on the stock options screen. The NPC dialogue box follows the speaker and
+  background settings. User guide 10.7.
 - A stock options and remap screen, M-ACCESS step 3 (SBA-97): `mce new` projects get `assets/ui/options.mcui`
   (display, audio and controls tabs, shown by Pause). The controls tab lists the game's actions by name with a
   button per binding that captures the next press, a hold-to-toggle switch per button action, left- and

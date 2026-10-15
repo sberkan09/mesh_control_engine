@@ -10,6 +10,7 @@
 #include "mce/kit/bodies3d.h"          // RigidBody3D, CharacterController3D, Trigger3D
 #include "mce/kit/components.h"       // Sprite, TextLabel, Camera2DComponent, TilemapLayer, ParticleEmitter,
                                       // Light2D, Parallax, Post2DComponent, SequencePlayer, PathAgent
+#include "mce/kit/captions.h"         // SoundCaption (M-ACCESS)
 #include "mce/kit/effects.h"          // SfxTrigger, ParticleBurst, ShakeTrigger, CameraShake2D, CameraFollow2D/3D,
                                       // PhysicsEvents, NavGridSource
 #include "mce/kit/kit3d.h"            // MeshRef, PointLight3D, SpotLight3D, Camera3DComponent, Animator, Environment3D
