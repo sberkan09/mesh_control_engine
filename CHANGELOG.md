@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- A spatial upscaler and sharpening, M-VISUAL2 step 2 (SBA-102): frames drawn below the output size (Low and
+  Medium tiers without TAA) now reach it through an edge-adaptive upsample by default in kit games
+  (`Environment3D.upscaler`), and `Environment3D.sharpen` sharpens the final frame. Players override both with the
+  saved `r.upscaler` (`scene`, `bilinear`, `spatial`) and `r.sharpen`. User guide 8.
 - Screen-space reflections, M-VISUAL2 step 1 (SBA-101): `Environment3D.ssr` (or `Scene3D::set_reflections`) makes
   smooth surfaces mirror what is on screen over the probes and the sky (`ssr_max_distance`, `ssr_thickness`,
   `ssr_max_roughness`, `ssr_roughness_fade`, `ssr_intensity`). It reads the previous frame, so it shows from the

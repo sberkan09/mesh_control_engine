@@ -268,6 +268,11 @@ struct Environment3D {
     f32 ssr_max_roughness = 0.5f;  // rougher surfaces keep the probes only
     f32 ssr_roughness_fade = 0.2f; // roughness range below the maximum over which reflections fade
     f32 ssr_intensity = 1.0f;
+    // M-VISUAL2 2. When the quality tier draws below the output size (Low, Medium) without TAA: 1 =
+    // the edge-adaptive spatial upsample, 0 = bilinear. `sharpen` (0..1) sharpens the final frame.
+    // r.upscaler and r.sharpen override both per player.
+    u32 upscaler = 1;
+    f32 sharpen = 0.0f;
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -295,7 +300,9 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (ssao_intensity, Range{0, 4}), (ssao_power, Range{0.25f, 8}),
               (ssr, Help{"1: screen-space reflections on smooth surfaces (over the probes and the sky)"}),
               (ssr_max_distance, Range{0.1f, 200}), (ssr_thickness, Range{0.01f, 5}), (ssr_max_roughness, Range{0, 1}),
-              (ssr_roughness_fade, Range{0.01f, 1}), (ssr_intensity, Range{0, 4}))
+              (ssr_roughness_fade, Range{0.01f, 1}), (ssr_intensity, Range{0, 4}),
+              (upscaler, Range{0, 1}, Help{"below output size: 1 = edge-adaptive spatial upsample, 0 = bilinear"}),
+              (sharpen, Range{0, 1}, Help{"contrast-adaptive sharpening of the final frame (0 = off)"}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 

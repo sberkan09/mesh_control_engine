@@ -541,6 +541,8 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.dof.max_radius = env.dof_max_radius;
     post.motion_blur.enabled = env.motion_blur != 0 && quality_.dof_motion_blur;
     post.motion_blur.intensity = env.motion_blur_intensity;
+    post.upscaler = env.upscaler != 0 ? render::Upscaler::Spatial : render::Upscaler::Bilinear;
+    post.sharpen = env.sharpen;
     render::apply_accessibility(render::accessibility_settings(), post);  // M-ACCESS: never in the state
     scene.set_post(post);
     render::AmbientOcclusion ao;
