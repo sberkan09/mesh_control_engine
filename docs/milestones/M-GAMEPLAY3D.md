@@ -8,7 +8,7 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
 | 1. Navigation (navmesh, agents, obstacles, debug draw) | SBA-69 | done |
 | 2. Joints over Jolt | SBA-70 | done |
 | 3. Ragdolls | SBA-71 | done |
-| 4. Vehicles | SBA-72 | not started |
+| 4. Vehicles | SBA-72 | done |
 | 5. Animation (blend spaces, layers, IK, root motion) | SBA-73 | not started |
 | 6. Sensor queries as data | SBA-74 | not started |
 | 7. MCP and docs | SBA-75 | not started |
@@ -102,4 +102,27 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
   (one limb limp while the rest animates).
 - Skins other than skin 0, and per-part collision layers.
 - An editor gizmo for the parts (the editor sees `Ragdoll3D` as numbers).
+
+## Step 4 — vehicles (SBA-72)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Wheeled vehicles over Jolt's `VehicleConstraint` and `WheeledVehicleController`: any number of wheels (suspension, steering, brakes, tyre grip), axles through differentials, an engine and an automatic gearbox, a tilt limit; wheels cast cylinders against what the body's layer collides with | `World3D::create_vehicle(VehicleDesc3D)`, `set_vehicle_input`, `vehicle_state` (`mce/physics3d/world3d.h`) | `test_physics3d` vehicles cases: refused descriptions, gone with the body, a 1.2 t car rests on four wheels at one radius, reaches 8+ m/s and 2nd gear in 4 s, stops on its brakes, turns right, reverses; replay hash |
+| `Vehicle3D` component: a four-wheel car on a `RigidBody3D`, inputs or the player's Move / Jump / TriggerL, throttle against the motion brakes first, wheel models placed on the wheels | `mce/kit/vehicles3d.h`, systems `kit3d_vehicles` and `kit3d_vehicle_state`, installed by `install_stock`; registered in the editor, MCP and cook | `test_kit` vehicles3d cases: drive, wheel models, brake then reverse, Move steering and the handbrake, rebuild on a settings change, a kinematic body refused, removal, replay hash |
+| Docs | user guide 9.9, `docs/engine/capabilities.md` | `capabilities.py --check` |
+
+### Design notes
+
+- **Forward is −Z.** The kit's car faces the body's local −Z like cameras and `NavAgent3D`'s
+  `face_motion`; `World3D` takes any forward and up.
+- **Grip is the ground's too.** Jolt combines each tyre's friction with the ground body's
+  (square root of the product), so a road collider's `friction` is part of the car's feel.
+- **Hashes.** `World3D::hash_state` folds vehicles (engine rpm, gear, clutch, each wheel's spin,
+  angle, steering and suspension) only once a world has had one.
+
+### Not built (step 4)
+
+- Motorcycles and tracked vehicles (Jolt has both controllers), anti-roll bars, a manual gearbox,
+  engine torque curves as data.
+- Vehicles with other than four wheels from the component (the physics layer takes any number).
 
