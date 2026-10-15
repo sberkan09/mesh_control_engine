@@ -15,6 +15,7 @@ formats, which is what keeps the shipped game small and safe.
 | Font | `.ttf`, `.otf` | glyph atlas plus metrics | `TextLabel` |
 | Model | `.gltf`, `.glb` | mesh: quantized streams, node tree, inline materials, animation clips, optional skins | 3D rendering (chapter 8) |
 | Material | `.mcmat` | metallic-roughness parameters plus texture GUIDs | 3D rendering |
+| Terrain | `.mcterrain` | a heightmap: u16 samples, size, height range, chunk size | `Terrain3D` (chapter 8) |
 | Scene | `.mcscene` | columnar entity rows | the game, the editor |
 | Prefab | `.mcprefab` | the same, entity 0 as root | instances in scenes, runtime spawns |
 | Tilemap | `.mctilemap` | one tile layer over a tileset | `TilemapLayer` |
@@ -145,6 +146,16 @@ Besides scenes and prefabs (chapter 4), these text assets are JSON with a `forma
 
 `uv_scale` repeats the textures across the mesh's UVs: `[8, 8]` on a plane tiles a stone texture
 eight times each way (the samplers repeat), so a 30 m courtyard floor is one mesh, not many slabs.
+
+**Terrain** (`.mcterrain`, chapter 8): `resolution` samples per side (2^n+1, 33 to 4097), `chunk` quads
+per LOD node (a power of two, default 32), `size` in metres along x and z, `height_range` mapping sample
+0 and 65535 to metres. `heights` is base64 of `resolution²` little-endian u16 samples, z rows of x
+columns; or leave it out and give `fill` (one height in metres) for a flat start.
+
+```json
+{ "format": "mce-terrain", "version": 1, "guid": "<uuid>", "name": "island",
+  "resolution": 129, "chunk": 32, "size": [128, 128], "height_range": [0, 32], "fill": 0 }
+```
 
 **Particle preset** (`.mcpart`, chapter 7):
 

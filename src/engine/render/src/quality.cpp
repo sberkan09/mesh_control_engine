@@ -22,11 +22,13 @@ QualitySettings quality_settings(QualityTier tier) {
             q.gi_updates = false;
             q.volumetrics = false;
             q.dof_motion_blur = false;
+            q.terrain_pixel_error = 4.0f;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
             q.volumetric_tile = 16;
             q.volumetric_slices = 48;
+            q.terrain_pixel_error = 2.0f;
             break;
         case QualityTier::High:
             q.fxaa = false;
