@@ -67,6 +67,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <optional>
 
 #include "hud_font.h"
@@ -172,6 +173,11 @@ MCE_CVAR(cv_fullscreen, "fullscreen", false, "Desktop: borderless full screen (F
          CVarFlags::Saved);
 MCE_CVAR(cv_save, "save", "", "Save slot: loaded at start when it exists, written on clean quit (empty = off)",
          CVarFlags::None);
+MCE_CVAR(cv_settings, "settings", true,
+         "Keep the saved options (volumes, quality, full screen, accessibility...) in <save folder>/settings.cfg and the "
+         "key bindings in <app>.bindings between runs "
+         "(windowed runs without -capture; 0 = this run neither reads nor writes it)",
+         CVarFlags::None);
 MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the per-user MCE save folder)", CVarFlags::None);
 MCE_CVAR(cv_store_catalog, "store_catalog", "",
          "Games with purchases and ads: the store catalog, GUID or source path of a cooked .mcstore (default: the first in the pack)",
@@ -197,10 +203,6 @@ MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
          CVarFlags::Saved);
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
-         CVarFlags::None);
-MCE_CVAR(cv_settings, "settings", true,
-         "Windowed runs: load the player's settings (Saved convars) and key bindings from the save folder and write "
-         "them back when they change (off with -capture / -frames, so captures never read a player's settings)",
          CVarFlags::None);
 MCE_CVAR(cv_haptics, "haptics", true,
          "Haptic feedback: phone taps and gamepad rumble from platform::haptics::play (off: none; never in the state hash)",
@@ -427,6 +429,17 @@ public:
                          module_.module.info->module_version, module_.module.loaded_path.c_str());
         }
         console::apply_deferred_command_line();  // the module's convars exist now; the rest are typos
+        // The saved options before anything reads them (the renderer reads r.quality). Captures
+        // (goldens, render_frame) stay on the defaults.
+        settings_on_ = device_ && cv_settings.get_bool() && cv_capture.get_string().empty() && cv_capture_tick.get_int() == 0 &&
+                       cv_capture_ticks.get_string().empty();
+        if (settings_on_) {
+            if (Result<void> r = console::load_settings(settings_path().view()); !r) {
+                FixedString<512> why;
+                format_error(r.error(), why);
+                MCE_LOG_WARN("{}: settings unreadable: {}", desc_.app_name, why.view());
+            }
+        }
         if (device_) {
             MCE_TRY(renderer_.init(*device_));
             assets_.set_upload_sink(&sink_);
@@ -443,7 +456,7 @@ public:
             }
             if (cv_console.get_bool() && cv_console_open.get_bool()) set_console(true);
             MCE_TRY(load_input_map(cv_input_map.get_string()));
-            load_settings();
+            load_options();
             const platform::PixelSize fb = window_->framebuffer_size();
             input_.set_view_size(static_cast<f32>(fb.width), static_cast<f32>(fb.height));  // touch distances
             window_->set_event_handler(&PlayerApp::on_event, this);
@@ -549,7 +562,7 @@ public:
         meter_frame();
         if (device_) platform::haptics::set_enabled(cv_haptics.get_bool());  // the console or a settings menu may flip it
         ui::apply_input_options(input_);  // look sensitivity, hold-to-toggle (M-ACCESS)
-        save_settings(false);
+        save_options(false);
         if (!device_ || os_background_) return;  // no GPU work in the background (iOS ends apps that try)
         device_->begin_frame(rc.frame_index);
         const rhi::Extent2D bb = device_->backbuffer_size();
@@ -659,7 +672,7 @@ public:
     void on_shutdown() override {
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
-        save_settings(true);
+        save_options(true);
         if (cv_frame_report.get_int() > 0) report_run_frames();
         if (liveops_on_) liveops_.shutdown();
         if (game_services_on_) game_services_.shutdown();
@@ -828,28 +841,18 @@ private:
         return assets_.info(best).guid;
     }
 
-    // Player settings (M-ACCESS): every Saved convar (accessibility, ui_scale, volumes, sensitivity,
-    // hold-to-toggle) and the key bindings, as <app>.settings / <app>.bindings in the save folder.
-    // The command line still wins over the file (console::apply_saved).
-    bool settings_on() const {
-        return device_ && cv_settings.get_bool() && cv_frames.get_int() == 0 && cv_capture.get_string().empty() &&
-               cv_capture_tick.get_int() == 0 && cv_capture_ticks.get_string().empty();
-    }
-    FixedString<128> settings_name(const char* what) const {
+    // Options changed in game (M-ACCESS): the key bindings live in <app>.bindings in the save folder,
+    // and settings.cfg (console::save_settings) is written as soon as a Saved convar settles, not only
+    // at quit. Same runs as settings.cfg: windowed, no capture.
+    FixedString<128> bindings_name() const {
         FixedString<128> n(desc_.app_name ? desc_.app_name : "mce_player");
-        n.append(".");
-        n.append(what);
+        n.append(".bindings");
         return n;
     }
-    void load_settings() {
-        if (!settings_on()) return;
+    void load_options() {
+        if (!settings_on_) return;
         Array<byte> bytes;
-        if (save::read(settings_name("settings").view(), bytes)) {
-            const u32 n = console::apply_saved(StringView(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
-            MCE_LOG_INFO("{}: {} saved setting(s)", desc_.app_name, n);
-        }
-        bytes.clear();
-        if (save::read(settings_name("bindings").view(), bytes)) {
+        if (save::read(bindings_name().view(), bytes)) {
             if (Result<void> r = input_.deserialize_bindings(StringView(reinterpret_cast<const char*>(bytes.data()), bytes.size())); !r)
                 MCE_LOG_WARN("{}: the saved key bindings do not load; using the game's", desc_.app_name);
         }
@@ -857,8 +860,8 @@ private:
         bindings_gen_ = input_.bindings_generation();
     }
     // Writes what changed, once it has stopped changing for half a second (a slider drag writes once).
-    void save_settings(bool now) {
-        if (!settings_on()) return;
+    void save_options(bool now) {
+        if (!settings_on_) return;
         const u64 sg = console::saved_generation(), bg = input_.bindings_generation();
         if (sg == settings_gen_ && bg == bindings_gen_) return;
         if (sg != settings_seen_ || bg != bindings_seen_) {
@@ -868,16 +871,13 @@ private:
         }
         if (!now && ++settings_quiet_frames_ < 30) return;
         if (sg != settings_gen_) {
-            Array<char> text;
-            console::write_saved(text);
-            if (!save::write(settings_name("settings").view(), std::as_bytes(text.span())))
-                MCE_LOG_WARN("{}: could not write the settings file", desc_.app_name);
+            write_settings();
             settings_gen_ = sg;
         }
         if (bg != bindings_gen_) {
             Array<char> text;
             input_.serialize_bindings(text);
-            if (!save::write(settings_name("bindings").view(), std::as_bytes(text.span())))
+            if (!save::write(bindings_name().view(), std::as_bytes(text.span())))
                 MCE_LOG_WARN("{}: could not write the key bindings file", desc_.app_name);
             bindings_gen_ = bg;
         }
@@ -1559,10 +1559,12 @@ private:
         if (three_d_) {
             const kit::Kit3DStats& k = extract3d_.stats();
             const u32* lt = stats3d_.lod_triangles;
-            std::snprintf(line, sizeof line,
-                          "3D  TRIS %u (LOD %u/%u/%u/%u)  DRAWS %u/%u  MESHES %u  INST %u  LIGHTS %u  ANIM %u  MISSING %u",
-                          stats3d_.triangles, lt[0], lt[1], lt[2], lt[3], stats3d_.visible, stats3d_.submeshes, k.meshes,
-                          k.instances, stats3d_.point_lights, k.animated, k.missing);
+            const int n = std::snprintf(line, sizeof line,
+                                        "3D  TRIS %u (LOD %u/%u/%u/%u)  DRAWS %u/%u  MESHES %u  INST %u  LIGHTS %u  ANIM %u  MISSING %u",
+                                        stats3d_.triangles, lt[0], lt[1], lt[2], lt[3], stats3d_.visible, stats3d_.submeshes,
+                                        k.meshes, k.instances, stats3d_.point_lights, k.animated, k.missing);
+            if (k.terrains > 0 && n > 0 && static_cast<usize>(n) < sizeof line)  // M-TERRAIN: LOD nodes and their resident meshes
+                std::snprintf(line + n, sizeof line - static_cast<usize>(n), "  TERRAIN %u/%u", k.terrain_nodes, k.terrain_resident);
         } else {
             std::snprintf(line, sizeof line, "2D");
         }
@@ -1772,7 +1774,25 @@ private:
         MCE_LOG_INFO("mce_player: wrote {}", path);
     }
 
+    FixedString<512> settings_path() const {
+        FixedString<512> p(save::root());
+        p.append("/settings.cfg");
+        return p;
+    }
+
+    void write_settings() {
+        if (!settings_on_) return;
+        std::error_code ec;
+        std::filesystem::create_directories(std::filesystem::path(save::root().c_str()), ec);
+        if (Result<void> r = console::save_settings(settings_path().view()); !r) {
+            FixedString<512> why;
+            format_error(r.error(), why);
+            MCE_LOG_WARN("{}: settings not written: {}", desc_.app_name, why.view());
+        }
+    }
+
     void write_save() {
+        write_settings();
         const StringView slot = cv_save.get_string();
         if (slot.empty()) return;
         save::SaveInfo info;
@@ -1811,7 +1831,7 @@ private:
                 break;
             case platform::EventType::AppTerminating:
                 write_save();
-                save_settings(true);
+                save_options(true);
                 break;
             case platform::EventType::AppLowMemory: MCE_LOG_WARN("{}: the OS reports low memory", desc_.app_name); break;
             default: break;
@@ -2124,6 +2144,7 @@ private:
     Array<f64> view_free_;      // -view.free
     Array<f64> safe_override_;  // -safe_area
     bool paused_ = false;
+    bool settings_on_ = false;  // this run reads and writes <save folder>/settings.cfg
     player::UiScreens screens_;
     input::InputState ui_actions_;  // the newest tick snapshot, for the UI screens' navigation
     bool ui_fresh_ = false;         // ui_actions_ arrived since the last rendered frame

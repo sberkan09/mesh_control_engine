@@ -272,10 +272,25 @@ bool module_test(ToolCall& c) {
     } else {
         regex = cook::String(filter);
     }
+    if (!platform::file_exists(t.ctest.view())) return fail(c, "ctest is not beside the CMake that configured the build tree");
+    // The tests play the host with the build tree's pack: bring both up to date first (module_build
+    // and cook_run refresh neither), so the smoke test sees the current scenes.
+    {
+        const StringView args[] = {t.cmake.view(), "--build", t.dir.view(), "--target", t.game.view()};
+        Array<char> out;
+        i32 code = -1;
+        if (!run_captured(c, Span<const StringView>(args, 5), out, code)) return false;
+        if (code != 0) {
+            c.out.begin_object().key("ok").boolean(false).key("stage").str("build");
+            c.out.key("output_tail");
+            write_tail(c.out, out);
+            c.out.end_object();
+            return true;
+        }
+    }
     const StringView args[] = {t.ctest.view(), "--test-dir", t.dir.view(), "-R", regex.view(), "--output-on-failure", "--no-tests=error"};
     Array<char> out;
     i32 code = -1;
-    if (!platform::file_exists(t.ctest.view())) return fail(c, "ctest is not beside the CMake that configured the build tree");
     if (!run_captured(c, Span<const StringView>(args, 7), out, code)) return false;
 
     // ctest's per-test lines: "  1/3 Test  #7: name ....   Passed    0.12 sec"

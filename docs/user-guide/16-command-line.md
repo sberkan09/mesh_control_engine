@@ -32,6 +32,7 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-mods 0` | 1 | games that take mods (chapter 19): start without them |
 | `-mods_dir <dir>` | the game's `mods/` | games that take mods: read mods from this folder instead |
 | `-save_dir <dir>` | the per-user save folder | where slots live |
+| `-settings 0` | 1 | neither read nor write `<save folder>/settings.cfg` (the saved options: bus gains, `r.quality`, `fullscreen`, ...) |
 | `-console 0` | 1 | disable the developer console |
 | `-console_open 1` | 0 | start with the console open |
 | `-pause_on_focus_loss 0` | 1 | keep simulating when the window loses focus |

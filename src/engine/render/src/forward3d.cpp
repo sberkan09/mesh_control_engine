@@ -1922,7 +1922,7 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
         ObjectU ou;
         ou.model = d.model;
         ou.normal = d.normal;
-        ou.uv_rect = sm.uv_rect;
+        ou.uv_rect = tiled_uv_rect(sm.uv_rect, mat);
         ou.base_color = {mat.base_color[0] * inst.tint.x, mat.base_color[1] * inst.tint.y,
                          mat.base_color[2] * inst.tint.z, mat.base_color[3] * inst.tint.w};
         ou.emissive = {mat.emissive[0] * inst.emissive_tint.x, mat.emissive[1] * inst.emissive_tint.y,
@@ -1978,7 +1978,7 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
             ObjectU ou;
             ou.model = node * sm.dequant;
             ou.normal = transpose(inverse(node));
-            ou.uv_rect = sm.uv_rect;
+            ou.uv_rect = tiled_uv_rect(sm.uv_rect, mat);
             ou.base_color = {mat.base_color[0] * b.tint.x, mat.base_color[1] * b.tint.y, mat.base_color[2] * b.tint.z,
                              mat.base_color[3] * b.tint.w};
             ou.emissive = {mat.emissive[0], mat.emissive[1], mat.emissive[2], keys[3] != ~0u ? 1.0f : 0.0f};

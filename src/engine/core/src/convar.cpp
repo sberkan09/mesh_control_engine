@@ -91,16 +91,6 @@ void ConVar::changed() {
     if (on_change_) on_change_(*this);
 }
 
-bool ConVar::is_default() const {
-    switch (type_) {
-        case CVarType::Bool: return value_.b == default_.b;
-        case CVarType::Int: return value_.i == default_.i;
-        case CVarType::Float: return value_.f == default_.f;
-        case CVarType::String: return str_.view() == default_str_.view();
-    }
-    return true;
-}
-
 bool ConVar::get_bool() const {
     switch (type_) {
         case CVarType::Bool: return value_.b;
@@ -223,6 +213,16 @@ void ConVar::to_string(FixedString<128>& out) const {
         case CVarType::String: out.assign(str_.view()); return;
     }
     out.assign(buf);
+}
+
+bool ConVar::is_default() const {
+    switch (type_) {
+        case CVarType::Bool: return value_.b == default_.b;
+        case CVarType::Int: return value_.i == default_.i;
+        case CVarType::Float: return value_.f == default_.f;
+        case CVarType::String: return str_.view() == default_str_.view();
+    }
+    return true;
 }
 
 void ConVar::reset() {
@@ -510,47 +510,105 @@ u32 apply_deferred_command_line() {
     return unknown;
 }
 
-void write_saved(Array<char>& out) {
-    out.clear();
-    Array<ConVar*> vars;
-    ConVar::collect(vars);
-    FixedString<128> value;
-    for (const ConVar* v : vars) {
-        if (!(v->flags() & CVarFlags::Saved)) continue;
-        v->to_string(value);
-        const StringView name(v->name());
-        const bool quote = v->type() == CVarType::String;
-        for (char c : name) out.push_back(c);
-        out.push_back(' ');
-        if (quote) out.push_back('"');
-        for (char c : value.view())
-            if (c != '"' && c != '\n') out.push_back(c);
-        if (quote) out.push_back('"');
-        out.push_back('\n');
-    }
+// ------------------------------------------------------------------ settings file
+
+namespace {
+constexpr const char* kStageSettings = "console.settings";
+
+struct SettingLine {
+    FixedString<64> name;
+    FixedString<1024> value;
+};
+Array<SettingLine> g_setting_lines;  // the file's lines, rewritten by save_settings
+struct SettingStart {
+    StringId id;
+    FixedString<128> value;  // to_string() as load_settings left it
+};
+Array<SettingStart> g_setting_start;
+
+SettingLine* find_line(StringView name) {
+    for (SettingLine& l : g_setting_lines)
+        if (l.name.view() == name) return &l;
+    return nullptr;
 }
 
-u32 apply_saved(StringView text) {
-    u32 applied = 0;
-    usize at = 0;
-    while (at < text.size()) {
-        usize end = text.find('\n', at);
-        if (end == StringView::npos) end = text.size();
-        StringView line = text.substr(at, end - at);
-        at = end + 1;
-        while (!line.empty() && (is_space(line.back()) || line.back() == '\r')) line.remove_suffix(1);
-        usize i = 0;
-        while (i < line.size() && is_space(line[i])) ++i;
-        line = line.substr(i);
-        const usize sp = line.find(' ');
-        if (line.empty() || line[0] == '#' || sp == StringView::npos) continue;
-        ConVar* v = ConVar::find(StringId(line.substr(0, sp)));
-        if (!v || !(v->flags() & CVarFlags::Saved) || !v->is_default()) continue;
-        StringView value = line.substr(sp + 1);
-        if (value.size() >= 2 && value.front() == '"' && value.back() == '"') value = value.substr(1, value.size() - 2);
-        if (v->set_from_string(value)) ++applied;
+}  // namespace
+
+Result<void> load_settings(StringView path) {
+    const FixedString<512> p(path);
+    if (std::FILE* f = std::fopen(p.c_str(), "rb")) {
+        g_setting_lines.clear();
+        char line[1200];
+        while (std::fgets(line, sizeof(line), f)) {
+            StringView t(line);
+            while (!t.empty() && is_space(t[t.size() - 1])) t = t.substr(0, t.size() - 1);
+            usize sp = 0;
+            while (sp < t.size() && !is_space(t[sp])) ++sp;
+            if (sp == 0 || t[0] == '#') continue;
+            StringView value = sp < t.size() ? t.substr(sp + 1) : StringView();
+            SettingLine l;
+            l.name.assign(t.substr(0, sp));
+            l.value.assign(value);
+            if (SettingLine* old = find_line(l.name.view())) *old = l;
+            else g_setting_lines.push_back(l);
+        }
+        std::fclose(f);
     }
-    return applied;
+    for (const SettingLine& l : g_setting_lines) {
+        ConVar* v = ConVar::find(StringId(l.name.view()));
+        if (!v || !(v->flags() & CVarFlags::Saved) || !v->is_default()) continue;
+        if (!v->set_from_string(l.value.view())) MCE_LOG_WARN("settings: '{}' rejects '{}'", l.name.view(), l.value.view());
+    }
+    Array<ConVar*> all;
+    ConVar::collect(all);
+    for (ConVar* v : all) {
+        if (!(v->flags() & CVarFlags::Saved)) continue;
+        SettingStart* start = nullptr;
+        for (SettingStart& s : g_setting_start)
+            if (s.id == v->id()) start = &s;
+        if (start) continue;  // a later load (after a module) keeps the first snapshot
+        SettingStart s;
+        s.id = v->id();
+        v->to_string(s.value);
+        g_setting_start.push_back(s);
+    }
+    return ok();
+}
+
+Result<void> save_settings(StringView path) {
+    Array<ConVar*> all;
+    ConVar::collect(all);
+    for (ConVar* v : all) {
+        if (!(v->flags() & CVarFlags::Saved)) continue;
+        FixedString<128> now;
+        v->to_string(now);
+        const SettingStart* start = nullptr;
+        for (const SettingStart& s : g_setting_start)
+            if (s.id == v->id()) start = &s;
+        if (start && start->value.view() == now.view()) continue;  // unchanged this run (or set on the command line)
+        SettingLine l;
+        l.name.assign(v->name());
+        l.value.assign(v->type() == CVarType::String ? v->get_string() : now.view());
+        if (SettingLine* old = find_line(l.name.view())) *old = l;
+        else g_setting_lines.push_back(l);
+    }
+    const FixedString<512> p(path);
+    FixedString<520> tmp(path);
+    tmp.append(".tmp");
+    std::FILE* f = std::fopen(tmp.c_str(), "wb");
+    if (!f) return Error(Errc::AccessDenied, kStageSettings, path);
+    bool wrote = true;
+    for (const SettingLine& l : g_setting_lines)
+        wrote = wrote && std::fprintf(f, "%s %.*s\n", l.name.c_str(), static_cast<int>(l.value.size()), l.value.c_str()) > 0;
+    wrote = std::fflush(f) == 0 && wrote;
+    std::fclose(f);
+    if (!wrote) {
+        std::remove(tmp.c_str());
+        return Error(Errc::IoError, kStageSettings, path);
+    }
+    std::remove(p.c_str());  // rename does not overwrite everywhere
+    if (std::rename(tmp.c_str(), p.c_str()) != 0) return Error(Errc::IoError, kStageSettings, path);
+    return ok();
 }
 
 u64 saved_generation() { return g_saved_generation; }

@@ -142,10 +142,10 @@ action. Any `.mcui` gets the same list by naming a Stack `remap_list` (and butto
 `preset_left`, `preset_right`, `reset_bindings`); the other options are ordinary `"convar"` bindings.
 
 The player keeps the choices: every `Saved` convar (`access.*`, `ui_scale`, `fullscreen`, `haptics`,
-`audio.*_db`, `input.look_sensitivity`, `input.toggle_actions`) in `<app>.settings` and the key
+`audio.*_db`, `input.look_sensitivity`, `input.toggle_actions`) in `settings.cfg` and the key
 bindings in `<app>.bindings` in the save folder, written once a change settles and on quit. A flag
 on the command line still wins over the file; `-settings 0` turns the files off, and capture runs
-(`-frames`, `-capture*`) never read them.
+(`-capture*`) never read them.
 
 ## 11.5 Headless and in the editor
 

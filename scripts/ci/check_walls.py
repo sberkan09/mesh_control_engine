@@ -34,14 +34,21 @@ WALLS = [
     ),
     # SDL GPU (ADR-0038): the API lives in the SDL3 GPU backend alone, the mirror of the GL wall.
     ("SDL GPU wall", re.compile(r"\bSDL_\w*GPU\w*"), ["src/engine/rhi_sdlgpu/"], ["src/", "samples/", "games/", "tests/"]),
+    # WebGPU (ADR-0039): the API (emdawnwebgpu's webgpu.h) lives in the browser backend alone, and Tint
+    # (SPIR-V -> WGSL) in its translator file alone.
+    ("WebGPU wall", re.compile(r"\bWGPU[A-Z]\w*|\bwgpu[A-Z]\w*\s*\(|[<\"]webgpu/"), ["src/engine/rhi_webgpu/src/"],
+     ["src/", "samples/", "games/", "tests/", "tools/"]),
+    ("Tint wall", re.compile(r"[<\"]src/tint/|\btint::"), ["src/engine/rhi_webgpu/src/shader_wgsl.cpp"],
+     ["src/", "samples/", "games/", "tests/", "tools/"]),
     # The GLSL -> MSL translator (glslang, SPIRV-Cross) is private to the Metal backend; glslang is
-    # also the shader cook's validator, inside the cook library (ADR-0033), and the SDL GPU
-    # backend's GLSL -> SPIR-V translator, SPIRV-Cross also its SPIR-V -> MSL pass on Apple (ADR-0038).
+    # also the shader cook's validator, inside the cook library (ADR-0033), the SDL GPU backend's
+    # GLSL -> SPIR-V translator, SPIRV-Cross also its SPIR-V -> MSL pass on Apple (ADR-0038), and the
+    # first half of the WebGPU backend's GLSL -> WGSL translator (ADR-0039).
     (
         "shader-cross wall",
         re.compile(r"[<\"](glslang|SPIRV)/|[<\"]spirv_\w+\.hpp|\bspirv_cross::|\bglslang::"),
         ["src/engine/rhi_metal/", "src/engine/rhi_sdlgpu/src/shader_spirv.cpp", "src/engine/rhi_sdlgpu/src/shader_msl.cpp",
-         "src/engine/asset/cook/src/shader_importer.cpp"],
+         "src/engine/rhi_webgpu/src/shader_wgsl.cpp", "src/engine/asset/cook/src/shader_importer.cpp"],
         ["src/", "samples/", "games/", "tests/", "tools/"],
     ),
     # astc-encoder (M-MOBILE step 8) is cook-time only: the texture importer writes ASTC blocks, runtimes upload them.

@@ -283,6 +283,11 @@ foreach(t glslang glslang-default-resource-limits)
     endif()
 endforeach()
 
+# ---- Tint (web builds only: GLSL -> SPIR-V -> WGSL in mce_rhi_webgpu, ADR-0039) ------------
+if(MCE_WEB)
+    include("${CMAKE_CURRENT_LIST_DIR}/web/TintDependencies.cmake")
+endif()
+
 # ---- ENet (optional networking; mce_net only — ADR-0035) ------------------------------------
 # Reliable/unreliable sequenced channels over UDP. Compiled straight into mce_net (an object
 # library folded into its archive), so the opt-in module is one static library in the tree and in

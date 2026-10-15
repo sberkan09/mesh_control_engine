@@ -2,7 +2,7 @@
 # run again on mce_rhi_sdlgpu (Vulkan, lavapipe) as test_render_sdlgpu.
 # Always builds; registers only with MCE_GPU_TESTS.
 find_package(Threads REQUIRED)
-add_executable(test_render_gl test_render_gl.cpp test_render3d_gl.cpp test_render3d_scale_gl.cpp)
+add_executable(test_render_gl test_render_gl.cpp test_render3d_gl.cpp test_render3d_scale_gl.cpp test_render3d_terrain_gl.cpp)
 target_link_libraries(test_render_gl PRIVATE mce::mce_render mce::mce_rhi_default mce::doctest_main Threads::Threads)
 mce_apply_compile_policy(test_render_gl)
 if(MCE_GPU_TESTS)
@@ -23,3 +23,19 @@ mce_add_test(test_golden_gl UMBRELLA NO_CTEST
     DEPS mce::mce_render mce::mce_rhi_default mce::mce_asset_cook)
 target_compile_definitions(test_golden_gl PRIVATE MCE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden"
                                                   MCE_GOLDEN_OUT="${CMAKE_CURRENT_BINARY_DIR}/golden_out")
+
+# M-TERRAIN 1: a cooked terrain through the stock player, on GL and on the SDL GPU backend.
+if(MCE_GPU_TESTS AND TARGET mce_cook AND TARGET mce_player)
+    set(_mce_terrain_args -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                          -DPROJECT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/data/terrain_project)
+    add_test(NAME terrain_player_gl
+             COMMAND ${CMAKE_COMMAND} ${_mce_terrain_args} -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/terrain_gl
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/terrain_player_test.cmake)
+    set_tests_properties(terrain_player_gl PROPERTIES LABELS gpu)
+    if(MCE_RHI_SDLGPU)
+        add_test(NAME terrain_player_sdlgpu
+                 COMMAND ${CMAKE_COMMAND} ${_mce_terrain_args} -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/terrain_sdlgpu
+                         -P ${CMAKE_CURRENT_SOURCE_DIR}/terrain_player_test.cmake)
+        set_tests_properties(terrain_player_sdlgpu PROPERTIES LABELS gpu ENVIRONMENT "MCE_RHI=sdlgpu")
+    endif()
+endif()

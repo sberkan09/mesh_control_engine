@@ -9,7 +9,7 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   (display, audio and controls tabs, shown by Pause). The controls tab lists the game's actions by name with a
   button per binding that captures the next press, a hold-to-toggle switch per button action, left- and
   right-hand keyboard presets and a look sensitivity slider. The player now keeps every Saved convar and the key
-  bindings in `<app>.settings` / `<app>.bindings` in the save folder (`-settings 0` turns that off). Cooked input
+  bindings in `settings.cfg` / `<app>.bindings` in the save folder (`-settings 0` turns that off). Cooked input
   maps carry their action names (chunk v2; v1 still loads).
 - Accessibility options, M-ACCESS step 2 (SBA-96): `access.colorblind` (protanopia, deuteranopia, tritanopia
   correction in the 2D post and 3D tonemap passes) with `access.colorblind_strength`, `access.text_scale` for UI

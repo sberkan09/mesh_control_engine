@@ -209,6 +209,6 @@ None of the non-GPU tests above need a display.
   `<game>_editor`, `<game>_mcp` and `<game>_cook` executables of `mce_add_project`, which compile the
   game in, are the only way the tools know a game's components.
 - The runtime does not hot-reload a re-cooked input map. (Rebinding persistence is wired: the player
-  keeps `<app>.bindings` and `<app>.settings` in the save folder, M-ACCESS.)
+  keeps `settings.cfg` and `<app>.bindings` in the save folder, M-ACCESS.)
 - Crash reporting gaps from packaging v2: the Windows path has not been run, Windows `abort()`
   leaves no report, POSIX unwinds only the crashing thread, and reports are not uploaded.
