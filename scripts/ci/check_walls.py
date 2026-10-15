@@ -92,6 +92,13 @@ WALLS = [
         ["src/engine/net/src/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
+    # Luau (ADR-0041 spike): the VM and compiler headers stay inside mce_script's sources.
+    (
+        "Luau wall",
+        re.compile(r"#\s*include\s*[<\"](lua|lualib|luacode|luaconf)\.h[>\"]"),
+        ["src/engine/script/src/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
     # Editor MCP server (ADR-0027, N7): stdio is its only transport, no socket API in its code.
     (
         "MCP socket wall",
@@ -126,6 +133,10 @@ LINK_WALLS = [
     ("net opt-in wall", re.compile(r"\bmce_net\b"), ["src/engine/net/", "samples/", "games/", "projects/", "templates/", "tests/"]),
     ("Recast link wall", re.compile(r"\bmce_recast\b"), ["src/engine/physics3d/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
+    # The Luau scripting spike (ADR-0041) is opt-in: its test and its headless sample link it, no
+    # engine library, host or tool does; Luau's targets are linked by mce_script alone.
+    ("script opt-in wall", re.compile(r"\bmce_script\b"), ["src/engine/script/", "samples/script_headless/", "tests/script/"]),
+    ("Luau link wall", re.compile(r"\bLuau\.\w+"), ["src/engine/script/"]),
     # The visual-novel kit is opt-in the same way (M-NOVEL): games, samples and tests link it (its
     # dialogue box, mce_kit_novel_ui, a game's host). The authoring tools (editor, mce_mcp, mce_cook)
     # link its components so a novel scene opens and cooks anywhere (M-DATA-REACH 8); the player and
@@ -143,7 +154,7 @@ def umbrella_violations() -> list:
     text = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     m = ENGINE_LIBS_RE.search(text)
     out = []
-    for lib in ("mce_net", "mce_kit_novel", "mce_kit_novel_ui"):
+    for lib in ("mce_net", "mce_kit_novel", "mce_kit_novel_ui", "mce_script"):
         if m and re.search(r"\b%s\b" % lib, m.group(1)):
             out.append(f"CMakeLists.txt: opt-in wall: {lib} is listed in MCE_ENGINE_LIBS")
     return out
