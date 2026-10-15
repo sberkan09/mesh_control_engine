@@ -30,7 +30,7 @@ struct Rgb {
 };
 
 struct Fixture3D {
-    explicit Fixture3D(u32 msaa = 4, bool gpu_clusters = true, bool ibl = true) {
+    explicit Fixture3D(u32 msaa = 4, bool gpu_clusters = true, bool ibl = true, f32 render_scale = 1.0f) {
         REQUIRE(platform::init().has_value());
         platform::WindowDesc wd;
         wd.title = "test_render3d_gl";
@@ -50,6 +50,7 @@ struct Fixture3D {
         fd.shadow_size = 1024;
         fd.gpu_light_clusters = gpu_clusters;
         fd.ibl = ibl;
+        fd.render_scale = render_scale;
         REQUIRE(renderer.init_3d(fd).has_value());
         rhi::TextureDesc td;
         td.size = {kW, kH};

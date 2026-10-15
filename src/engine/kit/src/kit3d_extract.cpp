@@ -293,6 +293,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.bloom_intensity = env.bloom_intensity;
     post.bloom_threshold = env.bloom_threshold;
     post.fxaa = env.fxaa != 0 && quality_.fxaa;
+    post.taa = env.fxaa != 0 && quality_.taa;  // the environment's anti-aliasing switch covers both
     scene.set_post(post);
     render::ShadowSettings shadows;
     shadows.cascades = clamp(env.shadow_cascades, 1u, min(render::kMaxCascades, quality_.shadow_cascades));
@@ -320,6 +321,9 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     pending_.clear();
     pending_entity_.clear();
     pose_first_.clear();
+    // TAA velocity: this frame's world matrices go to worlds_[parity]; last frame's are in the other.
+    world_parity_ ^= 1u;
+    ++frame_stamp_;
 
     world.query<const MeshRef&>().each([&](Entity e, const MeshRef& m) {
         if (!m.visible) return;
@@ -343,6 +347,10 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         inst.mesh = key;
         inst.world = trs(pos, rot, scale);
         if (mesh->lod_levels > 1 && lod_states_.size() <= e.index) lod_states_.resize(e.index + 1, 0);
+        if (world_stamp_.size() <= e.index) {
+            world_stamp_.resize(e.index + 1, ~0u);  // never drawn: ~0u + 1 matches no stamp
+            for (Array<mat4>& w : worlds_) w.resize(e.index + 1, mat4::identity());
+        }
         inst.tint = m.tint;
         inst.emissive_tint = m.emissive_tint;
         inst.cast_shadows = m.cast_shadows != 0;
@@ -370,7 +378,13 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     for (usize i = 0; i < pending_.size(); ++i) {
         // The level the scene picked last frame (hysteresis), now that lod_states_ no longer grows.
         render::MeshInstance& inst = pending_[i];
-        if (meshes_->get(inst.mesh)->lod_levels > 1) inst.lod_state = &lod_states_[pending_entity_[i]];
+        const u32 ent = pending_entity_[i];
+        if (meshes_->get(inst.mesh)->lod_levels > 1) inst.lod_state = &lod_states_[ent];
+        // Drawn last frame too: its world then (the entity index may have been reused; the TAA
+        // neighborhood clip absorbs that one frame).
+        if (world_stamp_[ent] + 1 == frame_stamp_) inst.prev_world = &worlds_[world_parity_ ^ 1u][ent];
+        worlds_[world_parity_][ent] = inst.world;
+        world_stamp_[ent] = frame_stamp_;
         scene.add(inst);
     }
 

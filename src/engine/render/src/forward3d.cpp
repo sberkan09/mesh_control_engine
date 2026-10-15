@@ -20,6 +20,8 @@ MCE_CVAR(cv_ibl, "r.ibl", true, "Image-based lighting for scenes that ask for it
 MCE_CVAR(cv_ssao, "r.ssao", true,
          "Screen-space ambient occlusion for scenes that ask for it (AmbientOcclusion::enabled; off = no occlusion pass)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_taa, "r.taa", true,
+         "Temporal anti-aliasing for scenes that ask for it (PostFx::taa; off = FXAA only)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_local_shadows, "r.local_shadows", true,
          "Shadow maps for spot and point lights that ask for them (PointLight::cast_shadows; off = unshadowed)",
          CVarFlags::None);
@@ -106,7 +108,35 @@ struct PostU {
     vec4 params;  // x: threshold, y: knee, z: first pass, w: exposure
 };
 
-enum Stage : u32 { kTsBegin, kTsClusters, kTsSsao, kTsShadow, kTsMain, kTsResolve, kTsBloom, kTsTonemap, kTsFxaa };
+enum Stage : u32 { kTsBegin, kTsClusters, kTsSsao, kTsShadow, kTsMain, kTsResolve, kTsTaa, kTsBloom, kTsTonemap, kTsFxaa };
+
+struct VelPassU {  // kVelocityVS
+    mat4 jittered;
+    mat4 current;
+    mat4 previous;
+};
+struct VelObjU {
+    mat4 current;
+    mat4 previous;
+    mat4 dequant;
+    vec4 skin;  // x: this frame's first joint, y: last frame's (-1 = rigid)
+};
+struct TaaU {  // kTaaFS
+    mat4 reproject;
+    vec4 in;
+    vec4 out;
+    vec4 jitter;  // xy: uv jitter, z: history valid, w: blend
+};
+
+// Halton(base) radical inverse of i (i >= 1): the low-discrepancy jitter sequence.
+f32 halton(u32 i, u32 base) {
+    f32 f = 1.0f, r = 0.0f;
+    for (; i > 0; i /= base) {
+        f /= f32(base);
+        r += f * f32(i % base);
+    }
+    return r;
+}
 
 // The sky's PassU members; returns the texture to bind at bank::kSky.
 rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& device, const Sky& sky, PassU& pu) {
@@ -336,6 +366,22 @@ ResultV Forward3D::create_pipelines() {
         fs.debug_name = "ssao.blur";
         MCE_TRY_ASSIGN(ao_blur_, device_->create_pipeline(fs));
     }
+    if (desc_.taa && cv_taa.get_bool()) {
+        rhi::GraphicsPipelineDesc vp = sp;  // the shadow vertex streams, depth-tested, both faces
+        vp.vertex_shader = {kVelocityVS, "velocity.vert"};
+        vp.fragment_shader = {kVelocityFS, "velocity.frag"};
+        vp.vertex = layout;
+        vp.debug_name = "taa.velocity";
+        MCE_TRY_ASSIGN(velocity_pipe_, device_->create_pipeline(vp));
+        vp.vertex_shader = {kSkinnedVelocityVS, "velocity_skinned.vert"};
+        vp.vertex = skinned_layout;
+        vp.debug_name = "taa.velocity.skinned";
+        MCE_TRY_ASSIGN(velocity_skinned_, device_->create_pipeline(vp));
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kTaaFS, "taa.frag"};
+        fs.debug_name = "taa";
+        MCE_TRY_ASSIGN(taa_pipe_, device_->create_pipeline(fs));
+    }
     if (desc_.ibl && cv_ibl.get_bool()) {
         fs.fragment_shader = {kIblPrefilterFS, "ibl_prefilter.frag"};
         fs.debug_name = "ibl.prefilter";
@@ -364,7 +410,11 @@ ResultV Forward3D::create_pipelines() {
 
 void Forward3D::destroy_targets() {
     if (!device_) return;
-    for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_, &ao_gbuf_, &ao_depth_, &ao_a_, &ao_b_}) destroy(*device_, *t);
+    for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_, &ao_gbuf_, &ao_depth_, &ao_a_, &ao_b_, &velocity_,
+                                  &velocity_depth_, &history_[0], &history_[1]})
+        destroy(*device_, *t);
+    history_size_ = {};
+    history_valid_ = false;
     for (rhi::TextureHandle& t : bloom_) destroy(*device_, t);
     bloom_levels_ = 0;
     size_ = {};
@@ -424,7 +474,8 @@ void Forward3D::shutdown() {
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &skinned_cull_,
           &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
-          &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_}) {
+          &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &velocity_pipe_, &velocity_skinned_,
+          &taa_pipe_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
@@ -461,7 +512,8 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     t.shadow = ts.ms(b + kTsSsao, b + kTsShadow);
     t.main = ts.ms(b + kTsShadow, b + kTsMain);
     t.resolve = ts.ms(b + kTsMain, b + kTsResolve);
-    t.bloom = ts.ms(b + kTsResolve, b + kTsBloom);
+    t.taa = ts.ms(b + kTsResolve, b + kTsTaa);
+    t.bloom = ts.ms(b + kTsTaa, b + kTsBloom);
     t.tonemap = ts.ms(b + kTsBloom, b + kTsTonemap);
     t.fxaa = ts.ms(b + kTsTonemap, b + kTsFxaa);
     t.total = ts.ms(b + kTsBegin, b + kTsFxaa);
@@ -481,6 +533,21 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
                                               : rhi::Extent2D{max(1u, static_cast<u32>(std::lround(f32(view.width) * scale))),
                                                               max(1u, static_cast<u32>(std::lround(f32(view.height) * scale)))};
     ensure_targets(size);
+    // TAA: a sub-pixel shift of this frame's projection, Halton(2, 3) over 8 frames.
+    taa_on_ = scene.post().taa && !taa_pipe_.is_null();
+    jitter_ = mat4::identity();
+    jitter_uv_ = {0.0f, 0.0f};
+    if (taa_on_) {
+        const u32 i = taa_frame_++ % 8 + 1;
+        const f32 jx = (halton(i, 2) - 0.5f) * 2.0f / f32(size.width), jy = (halton(i, 3) - 0.5f) * 2.0f / f32(size.height);
+        jitter_.c[3][0] = jx;  // clip.xy += j * clip.w: NDC moves by j
+        jitter_.c[3][1] = jy;
+        jitter_uv_ = {jx * 0.5f, jy * 0.5f};
+    } else {
+        history_valid_ = false;  // a frame without TAA breaks the history
+    }
+    post_source_ = hdr_;
+    post_size_ = size;
     // The joint palette stays bound for the shadow and main passes (one copy per frame).
     const Span<const mat4> palette = scene.joint_palette();
     if (!palette.empty()) cmd.set_storage_data(rhi::bank::kJointPalette, std::as_bytes(palette));
@@ -499,6 +566,8 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     timestamp(cmd, kTsMain);
     if (desc_.msaa > 1) cmd.resolve(hdr_msaa_, hdr_);
     timestamp(cmd, kTsResolve);
+    if (taa_on_) record_taa(cmd, scene);
+    timestamp(cmd, kTsTaa);
     record_post(cmd, scene, target);
 }
 
@@ -855,9 +924,9 @@ void Forward3D::record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     pp.debug_name = "ssao.prepass";
     cmd.begin_pass(pp);
     FrameU fu{};
-    fu.view_proj = view.view_proj;
+    fu.view_proj = jitter_ * view.view_proj;
     fu.view = view.view;
-    fu.inv_view_proj = inverse(view.view_proj);
+    fu.inv_view_proj = inverse(fu.view_proj);
     fu.camera_pos = vec4(view.position, 0.0f);
     fu.viewport = {f32(half.width), f32(half.height), 1.0f / f32(half.width), 1.0f / f32(half.height)};
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
@@ -1009,9 +1078,9 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const ClusterLights& cl = stats_.gpu_clusters ? scene.cluster_setup() : scene.clusters();
     const PostFx& post = scene.post();
     FrameU fu;
-    fu.view_proj = view.view_proj;
+    fu.view_proj = jitter_ * view.view_proj;
     fu.view = view.view;
-    fu.inv_view_proj = inverse(view.view_proj);
+    fu.inv_view_proj = inverse(fu.view_proj);
     fu.camera_pos = vec4(view.position, 0.0f);
     fu.params = {scene.exposure(), desc_.encode_srgb_output ? 1.0f : 0.0f, post.bloom_intensity / f32(max(bloom_levels_, 1u)),
                  post.bloom && bloom_levels_ > 0 ? 1.0f : 0.0f};
@@ -1192,6 +1261,110 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
 }
 
 // ---- 4-6. bloom, tonemap, FXAA
+// ---- 3. TAA (M-VISUAL 5): the velocity prepass, then the history resolve into the next history slot.
+// The output is the full viewport, so a render_scale < 1 frame comes out upsampled.
+void Forward3D::record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const View3D& view = scene.view();
+    const rhi::Extent2D out = view.viewport;
+    if (velocity_.is_null()) {
+        rhi::TextureDesc d;
+        d.size = size_;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.debug_name = "mce.3d.velocity";
+        velocity_ = device_->create_texture(d);
+        rhi::TextureDesc z;
+        z.size = size_;
+        z.format = rhi::TextureFormat::D32_Float;
+        z.usage = rhi::TextureUsage::DepthTarget;
+        z.debug_name = "mce.3d.velocity_depth";
+        velocity_depth_ = device_->create_texture(z);
+    }
+    if (!(history_size_ == out)) {
+        for (rhi::TextureHandle& h : history_) destroy(*device_, h);
+        rhi::TextureDesc d;
+        d.size = out;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.debug_name = "mce.3d.taa_history0";
+        history_[0] = device_->create_texture(d);
+        d.debug_name = "mce.3d.taa_history1";
+        history_[1] = device_->create_texture(d);
+        history_size_ = out;
+        history_valid_ = false;
+    }
+
+    cmd.push_debug_scope("taa");
+    // Velocity: the opaques, unjittered positions now and last frame, rasterized with the jitter.
+    rhi::PassAttachment color;
+    color.texture = velocity_;
+    rhi::PassAttachment depth;
+    depth.texture = velocity_depth_;
+    depth.clear.depth = 1.0f;
+    depth.store = rhi::StoreOp::DontCare;
+    rhi::RenderPassDesc vp;
+    vp.colors = Span<const rhi::PassAttachment>(&color, 1);
+    vp.depth = depth;
+    vp.debug_name = "taa.velocity";
+    cmd.begin_pass(vp);
+    const mat4 previous = history_valid_ ? prev_view_proj_ : view.view_proj;
+    const VelPassU pu{jitter_ * view.view_proj, view.view_proj, previous};
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
+    rhi::PipelineHandle bound_pipe;
+    const GpuMesh* bound = nullptr;
+    const Span<const Scene3D::Draw> draws = scene.draws();
+    for (u32 i = 0; i < scene.opaque_count(); ++i) {
+        const Scene3D::Draw& d = draws[i];
+        if (d.mesh->vertices.is_null()) continue;
+        const rhi::PipelineHandle pipe = d.mesh->skinned() ? velocity_skinned_ : velocity_pipe_;
+        if (!(pipe == bound_pipe)) {
+            cmd.bind_pipeline(pipe);
+            bound_pipe = pipe;
+        }
+        if (d.mesh != bound) {
+            cmd.bind_vertex_buffer(d.mesh->vertices);
+            cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
+            bound = d.mesh;
+        }
+        const VelObjU ou{d.model, d.prev_model, d.dequant, {palette_index(d.palette), palette_index(d.prev_palette), 0.0f, 0.0f}};
+        cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
+        cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
+        ++stats_.velocity_draws;
+    }
+    cmd.end_pass();
+
+    // Resolve: history_[next] = clip(history_[current] reprojected) blended with this frame.
+    const u32 next = history_index_ ^ 1u;
+    rhi::PassAttachment o;
+    o.texture = history_[next];
+    o.load = rhi::LoadOp::DontCare;
+    rhi::RenderPassDesc rp;
+    rp.colors = Span<const rhi::PassAttachment>(&o, 1);
+    rp.debug_name = "taa.resolve";
+    cmd.begin_pass(rp);
+    cmd.bind_pipeline(taa_pipe_);
+    TaaU tu;
+    tu.reproject = previous * inverse(view.view_proj);
+    tu.in = {1.0f / f32(size_.width), 1.0f / f32(size_.height), f32(size_.width), f32(size_.height)};
+    tu.out = {1.0f / f32(out.width), 1.0f / f32(out.height), f32(out.width), f32(out.height)};
+    tu.jitter = {jitter_uv_.x, jitter_uv_.y, history_valid_ ? 1.0f : 0.0f, clamp(scene.post().taa_blend, 0.01f, 1.0f)};
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(tu));
+    cmd.bind_texture(rhi::bank::kAlbedo, hdr_, point_sampler_);
+    cmd.bind_texture(rhi::bank::kNormal, history_[history_index_], linear_clamp_);
+    cmd.bind_texture(rhi::bank::kOrm, velocity_, point_sampler_);
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+
+    stats_.taa = true;
+    stats_.taa_history = history_valid_;
+    history_index_ = next;
+    history_valid_ = true;
+    prev_view_proj_ = view.view_proj;
+    post_source_ = history_[next];
+    post_size_ = out;
+}
+
 void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target) {
     const PostFx& post = scene.post();
     auto fullscreen = [&](rhi::TextureHandle dst, rhi::LoadOp load, const char* name) {
@@ -1209,8 +1382,8 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
         cmd.push_debug_scope("bloom");
         PostU pu;
         for (u32 i = 0; i < bloom_levels_; ++i) {
-            const rhi::TextureHandle src = i == 0 ? hdr_ : bloom_[i - 1];
-            const rhi::Extent2D ss = i == 0 ? size_ : bloom_size_[i - 1];
+            const rhi::TextureHandle src = i == 0 ? post_source_ : bloom_[i - 1];
+            const rhi::Extent2D ss = i == 0 ? post_size_ : bloom_size_[i - 1];
             fullscreen(bloom_[i], rhi::LoadOp::DontCare, "bloom.down");
             cmd.bind_pipeline(bloom_down_);
             pu.texel = {1.0f / f32(ss.width), 1.0f / f32(ss.height), 0.0f, 0.0f};
@@ -1236,7 +1409,7 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     }
     timestamp(cmd, kTsBloom);
 
-    const bool fxaa = post.fxaa;
+    const bool fxaa = post.fxaa && !taa_on_;  // TAA replaces FXAA
     const View3D& view = scene.view();
     FrameU fu;
     fu.view_proj = view.view_proj;
@@ -1247,11 +1420,12 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
                  post.bloom_intensity / f32(max(bloom_levels_, 1u)), bloom ? 1.0f : 0.0f};
     fu.viewport = {f32(size_.width), f32(size_.height), 1.0f / f32(size_.width), 1.0f / f32(size_.height)};
     fullscreen(fxaa ? ldr_ : target, rhi::LoadOp::DontCare, "tonemap");
+    const rhi::Extent2D out = scene.view().viewport;
     cmd.bind_pipeline(tonemap_);
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
-    // 1:1 reads texel-exact; a scaled frame is upsampled bilinearly.
-    cmd.bind_texture(rhi::bank::kAlbedo, hdr_, desc_.render_scale >= 1.0f ? point_sampler_ : linear_clamp_);
-    cmd.bind_texture(rhi::bank::kNormal, bloom ? bloom_[0] : hdr_, linear_clamp_);
+    // 1:1 reads texel-exact; a scaled frame is upsampled bilinearly (TAA upsamples it itself).
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, post_size_ == out ? point_sampler_ : linear_clamp_);
+    cmd.bind_texture(rhi::bank::kNormal, bloom ? bloom_[0] : post_source_, linear_clamp_);
     cmd.draw_non_indexed(3);
     cmd.end_pass();
     timestamp(cmd, kTsTonemap);

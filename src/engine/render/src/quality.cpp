@@ -23,7 +23,10 @@ QualitySettings quality_settings(QualityTier tier) {
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
             break;
-        case QualityTier::High: break;
+        case QualityTier::High:
+            q.fxaa = false;
+            q.taa = true;
+            break;
     }
     return q;
 }
@@ -60,6 +63,7 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
     shadows.resolution = q.shadow_size;
     post.bloom = q.bloom;
     post.fxaa = q.fxaa;
+    post.taa = q.taa;
 }
 
 }  // namespace mce::render
