@@ -174,7 +174,8 @@ MCE_CVAR(cv_fullscreen, "fullscreen", false, "Desktop: borderless full screen (F
 MCE_CVAR(cv_save, "save", "", "Save slot: loaded at start when it exists, written on clean quit (empty = off)",
          CVarFlags::None);
 MCE_CVAR(cv_settings, "settings", true,
-         "Keep the saved options (volumes, quality, full screen...) in <save folder>/settings.cfg between runs "
+         "Keep the saved options (volumes, quality, full screen, accessibility...) in <save folder>/settings.cfg and the "
+         "key bindings in <app>.bindings between runs "
          "(windowed runs without -capture; 0 = this run neither reads nor writes it)",
          CVarFlags::None);
 MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the per-user MCE save folder)", CVarFlags::None);
@@ -455,6 +456,7 @@ public:
             }
             if (cv_console.get_bool() && cv_console_open.get_bool()) set_console(true);
             MCE_TRY(load_input_map(cv_input_map.get_string()));
+            load_options();
             const platform::PixelSize fb = window_->framebuffer_size();
             input_.set_view_size(static_cast<f32>(fb.width), static_cast<f32>(fb.height));  // touch distances
             window_->set_event_handler(&PlayerApp::on_event, this);
@@ -563,6 +565,8 @@ public:
         if (!os_background_ && sim_ticks_ > 0) world_.render(rc.alpha);
         meter_frame();
         if (device_) platform::haptics::set_enabled(cv_haptics.get_bool());  // the console or a settings menu may flip it
+        ui::apply_input_options(input_);  // look sensitivity, hold-to-toggle (M-ACCESS)
+        save_options(false);
         if (!device_ || os_background_) return;  // no GPU work in the background (iOS ends apps that try)
         device_->begin_frame(rc.frame_index);
         const rhi::Extent2D bb = device_->backbuffer_size();
@@ -672,6 +676,7 @@ public:
     void on_shutdown() override {
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
+        save_options(true);
         if (cv_frame_report.get_int() > 0) report_run_frames();
         if (liveops_on_) liveops_.shutdown();
         if (game_services_on_) game_services_.shutdown();
@@ -839,6 +844,50 @@ private:
         scene_path_.assign(assets_.info(best).path);
         return assets_.info(best).guid;
     }
+
+    // Options changed in game (M-ACCESS): the key bindings live in <app>.bindings in the save folder,
+    // and settings.cfg (console::save_settings) is written as soon as a Saved convar settles, not only
+    // at quit. Same runs as settings.cfg: windowed, no capture.
+    FixedString<128> bindings_name() const {
+        FixedString<128> n(desc_.app_name ? desc_.app_name : "mce_player");
+        n.append(".bindings");
+        return n;
+    }
+    void load_options() {
+        if (!settings_on_) return;
+        Array<byte> bytes;
+        if (save::read(bindings_name().view(), bytes)) {
+            if (Result<void> r = input_.deserialize_bindings(StringView(reinterpret_cast<const char*>(bytes.data()), bytes.size())); !r)
+                MCE_LOG_WARN("{}: the saved key bindings do not load; using the game's", desc_.app_name);
+        }
+        settings_gen_ = console::saved_generation();
+        bindings_gen_ = input_.bindings_generation();
+    }
+    // Writes what changed, once it has stopped changing for half a second (a slider drag writes once).
+    void save_options(bool now) {
+        if (!settings_on_) return;
+        const u64 sg = console::saved_generation(), bg = input_.bindings_generation();
+        if (sg == settings_gen_ && bg == bindings_gen_) return;
+        if (sg != settings_seen_ || bg != bindings_seen_) {
+            settings_seen_ = sg;
+            bindings_seen_ = bg;
+            settings_quiet_frames_ = 0;
+        }
+        if (!now && ++settings_quiet_frames_ < 30) return;
+        if (sg != settings_gen_) {
+            write_settings();
+            settings_gen_ = sg;
+        }
+        if (bg != bindings_gen_) {
+            Array<char> text;
+            input_.serialize_bindings(text);
+            if (!save::write(bindings_name().view(), std::as_bytes(text.span())))
+                MCE_LOG_WARN("{}: could not write the key bindings file", desc_.app_name);
+            bindings_gen_ = bg;
+        }
+    }
+    u64 settings_gen_ = 0, bindings_gen_ = 0, settings_seen_ = 0, bindings_seen_ = 0;
+    u32 settings_quiet_frames_ = 0;
 
     // The project's action maps (FR-INP-020): a GUID or source path, else the first cooked
     // .mcinput in the pack by path, else the built-in default map. A named map that is missing or
@@ -1423,6 +1472,7 @@ private:
             ui_preview_ = true;
             return screens_.load_preview(world_, assets_, entities_.span(), g.value(), skin, extract);
         }
+        screens_.set_input(&input_);  // a stock options screen's remap list (M-ACCESS)
         MCE_TRY(screens_.load(world_, assets_, entities_.span(), skin, extract));
         return {};
     }
@@ -1513,10 +1563,12 @@ private:
         if (three_d_) {
             const kit::Kit3DStats& k = extract3d_.stats();
             const u32* lt = stats3d_.lod_triangles;
-            std::snprintf(line, sizeof line,
-                          "3D  TRIS %u (LOD %u/%u/%u/%u)  DRAWS %u/%u  MESHES %u  INST %u  LIGHTS %u  ANIM %u  MISSING %u",
-                          stats3d_.triangles, lt[0], lt[1], lt[2], lt[3], stats3d_.visible, stats3d_.submeshes, k.meshes,
-                          k.instances, stats3d_.point_lights, k.animated, k.missing);
+            const int n = std::snprintf(line, sizeof line,
+                                        "3D  TRIS %u (LOD %u/%u/%u/%u)  DRAWS %u/%u  MESHES %u  INST %u  LIGHTS %u  ANIM %u  MISSING %u",
+                                        stats3d_.triangles, lt[0], lt[1], lt[2], lt[3], stats3d_.visible, stats3d_.submeshes,
+                                        k.meshes, k.instances, stats3d_.point_lights, k.animated, k.missing);
+            if (k.terrains > 0 && n > 0 && static_cast<usize>(n) < sizeof line)  // M-TERRAIN: LOD nodes and their resident meshes
+                std::snprintf(line + n, sizeof line - static_cast<usize>(n), "  TERRAIN %u/%u", k.terrain_nodes, k.terrain_resident);
         } else {
             std::snprintf(line, sizeof line, "2D");
         }
@@ -1781,7 +1833,10 @@ private:
                 audio_.set_paused(ad_paused_);
                 MCE_LOG_INFO("{}: back in the foreground (paused until resumed)", desc_.app_name);
                 break;
-            case platform::EventType::AppTerminating: write_save(); break;
+            case platform::EventType::AppTerminating:
+                write_save();
+                save_options(true);
+                break;
             case platform::EventType::AppLowMemory: MCE_LOG_WARN("{}: the OS reports low memory", desc_.app_name); break;
             default: break;
         }

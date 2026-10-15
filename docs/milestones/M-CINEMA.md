@@ -1,6 +1,6 @@
 # M-CINEMA — Timeline, animation editing, cutscenes and video (milestone record)
 
-**Status:** in progress on `dev_claude` (step 1 merged).
+**Status:** in progress on `dev_claude` (steps 1–2 merged).
 **Why:** the timeline and curve editor (FR-ENT-110, FR-EDT-130) was cut at M8 only for the solo-hours budget; the
 novel kit and the narrative games now want cutscenes, and MCE had no video playback (ROADMAP "Engine gap tracks").
 **Measured on:** the Linux CI container (`scripts/ci/local_ci.sh`).
@@ -36,3 +36,23 @@ novel kit and the narrative games now want cutscenes, and MCE had no video playb
   `kit::timeline_subtitle`; drawing them is M-ACCESS step 1.
 - `TimelineRegistry::define(guid, payload)` registers a cooked payload ahead of the asset system, for the editor
   panel's live preview (step 2).
+
+## Step 2 — the Timeline panel (SBA-77, FR-EDT-130)
+
+| Item | Where | Evidence |
+|---|---|---|
+| `.mctimeline` as data: `TimelineDocument` read by the importer and written canonically (defaults omitted, shortest round-tripping floats, one key per line); the importer is now read → `build_timeline_chunk` | `cook/timeline_text.h`, `timeline_importer.cpp` | `test_editor` "timeline editor: the canonical text reads back to the same document and chunk" |
+| `TimelineEditor`: open / create / sync, selection, playhead, add / remove track, add / set / move / remove key, duration, name; each edit written canonically and read back by the cook before it is kept; own undo stack of canonical texts, saved on disk | `editor/timeline_editor.h`, `timeline_editor.cpp` | `test_editor` "timeline editor: edits, refusals, undo and redo on disk", "… create makes a cooked timeline" |
+| Snapping (`snap_time`), sampling for curves (`sample_timeline_track`, `kit::timeline_eased`) | `timeline_editor.cpp`, `kit/timeline.cpp` | same tests |
+| Record mode: `EditorScene::set_edit_observer` sees every `set_component`; transform edits key the transform track (channels merged at one time), float / vector / color / quaternion fields key `Component.field` tracks, an unbound entity takes the first free binding | `editor_scene.h/.cpp`, `timeline_editor.cpp` | `test_editor` "timeline editor: record mode keys inspector edits at the playhead" |
+| Preview: a paused play session, the open (unsaved) timeline registered with `TimelineRegistry::define`, the player scrubbed to the playhead; Play runs on from there | `TimelinePreview` | `test_editor` "timeline editor: the preview scrubs the play world and never touches the document" (gate: scrubbing never mutates the saved scene) |
+| The ImGui panel: timeline picker and New, Undo / Redo, Preview, Play / Pause, Record, snap, playhead, length, zoom; track rows with key diamonds, range bars and subtitle text; ruler scrub, key drag with snap, double-click to add, Delete; curve view with vertical key drags; key inspector per track type; double-click a `.mctimeline` in Assets; `-editor.open` | `layer/timeline_panel.cpp`, `editor_shell.cpp`, `asset_panel.cpp`, `app/main.cpp` | `mce_editor -project <dir> -editor.open intro.mctimeline -frames 30 -capture` (0 GL errors) |
+
+### Design notes
+
+- **Cut: free tangents.** Curves use the per-key ease presets (linear, step, smooth, ease in, ease out) the runtime
+  already plays; Bézier tangents would add a key format change and runtime cost for little gain at this scale.
+- **Undo is the panel's own**, like the UI Document panel: one step per run of edits until a save, every step on
+  disk. The scene side of record mode (a new binding) is a normal scene edit with the scene's undo.
+- **The preview is play mode, paused**, so the document never moves; resuming play plays the timeline on from the
+  playhead with the game's systems running.

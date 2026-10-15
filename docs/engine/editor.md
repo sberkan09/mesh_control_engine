@@ -59,7 +59,8 @@ umbrella) that is the only way.
   scale, hand-rolled); `EditorCamera2D`, `pick_entity` (`viewport2d.h`, CPU picking);
   `PreviewRenderer` (`preview_renderer.h`, the kit extract plus overlays); `OrbitCamera`,
   `OrbitColliders` (`orbit_camera.h`, the 3D orbit view gated by `World3D::camera_sweep`);
-  `TilemapDocument`, `TilemapEditor` (`tilemap_editor.h`); `ConsoleModel` (`console_model.h`);
+  `TilemapDocument`, `TilemapEditor` (`tilemap_editor.h`); `TimelineEditor`, `TimelinePreview`,
+  `sample_timeline_track`, `snap_time` (`timeline_editor.h`; the Timeline panel, M-CINEMA step 2); `ConsoleModel` (`console_model.h`);
   `PerfMonitor` (`perf_monitor.h`, the Profiler panel's data); `StubWorld` (`stub_world.h`, the M0
   viewport content shown when no project is open).
 
@@ -149,6 +150,8 @@ rehearsal: new scene -> author -> save -> cook --pack -> the player runs it"), `
 `test_play_session.cpp` ("play: enter builds the player's world from the document; same hash as
 mce_player", "play: Play -> Stop -> Play gives the same first-tick state and the same run"),
 `test_hot_reload.cpp`, `test_transform_gizmo.cpp`, `test_asset_browser.cpp`, `test_tilemap.cpp`,
+`test_timeline_editor.cpp` ("timeline editor: the preview scrubs the play world and never touches the document",
+record mode, undo on disk),
 `test_orbit_camera.cpp`, `test_perf_monitor.cpp`, `test_console_model.cpp`, `test_draw_clip.cpp`,
 `test_stub_world.cpp`, `test_mod_project.cpp` ("mod project: the editor mounts the game's pack behind
 the mod"). It depends on `mce_player` being built.
@@ -180,7 +183,9 @@ GPU (label `gpu`, `MCE_GPU_TESTS`): `editor_smoke` (default layout over the stub
 
 ## Known gaps
 
-- Not built (M8 editor): the timeline / curve editor (FR-EDT-130 / FR-ENT-110), asset thumbnails,
+- Timeline panel (M-CINEMA step 2): curves use the timeline's ease presets, no free tangents; record
+  mode keys float-valued fields only (bool and integer fields are activation tracks, added by hand).
+- Not built (M8 editor): asset thumbnails,
   multi-scene tabs (one open document; a prefab opens in the same slot).
 - Prefab overrides target the instance root only; per-child overrides need a stable child id in the
   prefab format (M8 editor, "Model limits").

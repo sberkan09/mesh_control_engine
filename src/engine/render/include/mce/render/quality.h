@@ -7,6 +7,7 @@
 //   Low      1x    1024        1         off    FXAA  0.67          the bake only (none without one)     off (exp² fog)
 //   Medium   2x    1024        2         on     -     0.85          runtime updates                      16 px, 48 slices
 //   High     4x    2048        3         on     TAA   1.0           runtime updates                      8 px, 64 slices
+//   terrain LOD error (M-TERRAIN): 4 px on Low, 2 px on Medium, 1 px on High
 //   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High; M-VISUAL 8: Low drops depth of field and
 //   motion blur, every tier keeps auto exposure and the color grade)
 //
@@ -33,6 +34,9 @@ struct QualitySettings {
     u32 volumetric_tile = 8;     // Volumetrics::tile, at least
     u32 volumetric_slices = 64;  // Volumetrics::slices, at most
     bool dof_motion_blur = true; // PostFx::dof and PostFx::motion_blur are honored
+    // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
+    // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
+    f32 terrain_pixel_error = 1.0f;
 };
 
 QualitySettings quality_settings(QualityTier tier);

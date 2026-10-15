@@ -129,8 +129,23 @@ A custom host can also build a map in code with `InputMapBuilder` (see
 
 The input system supports capture rebinding (`begin_rebind` swallows the next press and binds it),
 binding overrides that re-apply when a map loads, and saving them to a text file
-(`save_bindings` / `load_bindings`). The player runtime does not expose a rebinding screen or
-persist overrides yet; a custom host can.
+(`save_bindings` / `load_bindings`).
+
+The player ships a stock options screen (M-ACCESS): `mce new` projects get
+`assets/ui/options.mcui`, shown by Pause and hidden by Back. Its Controls page lists every action of
+the game's input map (by the names the `.mcinput` gives them) with a button per keyboard, mouse and
+gamepad binding; confirming one waits for the next press (Escape cancels). Button actions get a
+**Toggle** switch (hold-to-toggle: one press latches, the next releases). **Left hand** and **Right
+hand** move every keyboard binding to WASD and the keys around it, or to the arrows, Enter and the
+right modifiers; **Reset** goes back to the map. A **Look sensitivity** slider scales the `Look`
+action. Any `.mcui` gets the same list by naming a Stack `remap_list` (and buttons `preset_both`,
+`preset_left`, `preset_right`, `reset_bindings`); the other options are ordinary `"convar"` bindings.
+
+The player keeps the choices: every `Saved` convar (`access.*`, `ui_scale`, `fullscreen`, `haptics`,
+`audio.*_db`, `input.look_sensitivity`, `input.toggle_actions`) in `settings.cfg` and the key
+bindings in `<app>.bindings` in the save folder, written once a change settles and on quit. A flag
+on the command line still wins over the file; `-settings 0` turns the files off, and capture runs
+(`-capture*`) never read them.
 
 ## 11.5 Headless and in the editor
 

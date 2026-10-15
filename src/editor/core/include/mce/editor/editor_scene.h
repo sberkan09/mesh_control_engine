@@ -130,6 +130,14 @@ public:
         apply_fn_ = fn;
         apply_user_ = user;
     }
+    // Called after set_component changes a component, with its value before and after (the
+    // timeline's record mode keys the edit). The observer may edit the scene itself; its own
+    // set_component calls reach it again.
+    using EditObserverFn = void (*)(void* user, EditorScene& scene, EntityId id, const refl::TypeRecord& type, const void* before, const void* after);
+    void set_edit_observer(EditObserverFn fn, void* user) {
+        observer_fn_ = fn;
+        observer_user_ = user;
+    }
 
     // ---- clipboard (FR-EDT-030 copy/paste) ----
     // Writes `ids` (in document order) as a .mcscene text: the system clipboard format.
@@ -241,6 +249,8 @@ private:
     Array<PrefabBase> bases_;  // one per mounted instance, rebuilt with the ghosts
     PrefabApplyFn apply_fn_ = nullptr;
     void* apply_user_ = nullptr;
+    EditObserverFn observer_fn_ = nullptr;
+    void* observer_user_ = nullptr;
 
     SceneDocument doc_;
     mem::UniquePtr<World> world_;

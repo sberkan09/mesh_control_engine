@@ -35,6 +35,7 @@ inline constexpr u8 ANIMGRAPH_VERSION = 1;  // CHNK_ANIMG: a 3D animation state 
 inline constexpr u8 SPRITESHEET_VERSION = 1;  // CHNK_SHEET: texture regions + flipbook clips (M-DATA-REACH 5)
 inline constexpr u8 UI_DOCUMENT_VERSION = 3;  // CHNK_UIDOC: one UI widget tree (M-UI-DATA 1; v2 actions + bindings; v3 theme + font roles; mce/ui/document_data.h)
 inline constexpr u8 UI_THEME_VERSION = 1;     // CHNK_UITHEME: a UI theme (M-UI-DATA 3; mce/ui/document_data.h)
+inline constexpr u8 TERRAIN_VERSION = 1;      // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -414,6 +415,49 @@ struct AnimGraphView {
     u32 find_state(StringView name) const;  // states.size() when absent
     static StringView text(const char* s, usize cap);  // a NUL-padded name
 };
+
+// ------------------------------------------------------------------ terrain (CHNK_TERRAIN)
+// A heightmap terrain (M-TERRAIN): resolution × resolution u16 height samples, z rows of x columns, row
+// 0 at z = -size_z / 2 and column 0 at x = -size_x / 2 of the terrain's own space (centred on the entity
+// that places it, Y up). A sample maps 0 -> height_min and 65535 -> height_max metres. Cooked from a
+// .mcterrain (terrain_importer.cpp); drawn through render::TerrainLod (mce/render/terrain.h).
+
+inline constexpr u32 kTerrainMinResolution = 33;
+inline constexpr u32 kTerrainMaxResolution = 4097;
+
+struct TerrainHeader {
+    u32 resolution;    // samples per side: 2^n + 1, kTerrainMinResolution..kTerrainMaxResolution
+    u32 chunk;         // quads per side of a finest LOD node: a power of two, 8..256, at most resolution - 1
+    f32 size[2];       // metres along x and z
+    f32 height_min;    // metres at sample 0
+    f32 height_max;    // metres at sample 65535 (> height_min)
+    u32 flags;         // none yet
+    u32 reserved[9];
+    u64 heights_offset;     // u16[resolution * resolution]
+    u64 reserved_offsets[3];
+};
+static_assert(sizeof(TerrainHeader) == 96);
+
+struct TerrainView {
+    const TerrainHeader* header = nullptr;
+    Span<const u16> heights;
+
+    u32 resolution() const { return header->resolution; }
+    // Metres between two neighbouring samples along x and z.
+    f32 spacing_x() const { return header->size[0] / static_cast<f32>(header->resolution - 1); }
+    f32 spacing_z() const { return header->size[1] / static_cast<f32>(header->resolution - 1); }
+    // The height in metres of sample (x, z).
+    f32 sample(u32 x, u32 z) const {
+        const f32 t = static_cast<f32>(heights[usize(z) * header->resolution + x]) / 65535.0f;
+        return header->height_min + t * (header->height_max - header->height_min);
+    }
+    // The bilinear height at (x, z) metres in the terrain's space, clamped to its edges.
+    f32 height_at(f32 x, f32 z) const;
+    // Validates the header (resolution 2^n + 1, chunk a power of two, finite sizes) and the sample count.
+    static Result<TerrainView> read(Span<const byte> payload);
+};
+
+void write_terrain(const TerrainHeader& header, Span<const u16> heights, Array<byte>& out);
 
 // ------------------------------------------------------------------ particle preset (CHNK_PART)
 // One emitter's parameters (FR-R2D-070, assets.md §2): the kit's particle system simulates them on
