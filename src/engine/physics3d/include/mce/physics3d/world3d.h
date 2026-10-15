@@ -10,6 +10,8 @@
 //  - joints between two bodies or a body and the world (fixed, hinge, slider, distance, cone,
 //    six-DOF) with limits, soft limits, friction, motors and a break force (M-GAMEPLAY3D step 2)
 //  - ragdolls: a tree of capsule / sphere bodies joined by swing-twist joints (M-GAMEPLAY3D step 3)
+//  - wheeled vehicles: suspension, tyres, an engine, an automatic gearbox and brakes on a body
+//    (M-GAMEPLAY3D step 4)
 //
 // Nothing in this header names a Jolt type: callers see MCE math types and the Entity that owns
 // each body. Jolt is reachable only from src/engine/physics3d/ (the JPH wall in check_walls.py).
@@ -225,6 +227,62 @@ struct RagdollDesc3D {
     f32 joint_friction = 0.0f;    // N*m each joint holds against motion
 };
 
+// ---- vehicles (M-GAMEPLAY3D step 4) ----------------------------------------------------------------
+
+// One wheel, in the vehicle body's space.
+struct WheelDesc3D {
+    vec3 position;                     // where the suspension attaches; the wheel hangs below it
+    f32 radius = 0.35f;
+    f32 width = 0.2f;
+    f32 suspension_min = 0.1f;         // m below `position` to the wheel's centre, fully compressed
+    f32 suspension_max = 0.35f;        // fully extended
+    f32 suspension_frequency = 1.5f;   // Hz
+    f32 suspension_damping = 0.5f;     // 0..1
+    f32 max_steer = 0.0f;              // rad either way (0: the wheel does not steer)
+    f32 max_brake_torque = 1500.0f;    // N*m
+    f32 max_handbrake_torque = 0.0f;   // N*m
+    f32 grip = 1.0f;                   // scales the tyre's friction both ways
+};
+
+// A pair of wheels the engine drives through a differential.
+struct AxleDesc3D {
+    i32 left = -1;                     // wheel index; -1 = none
+    i32 right = -1;
+    f32 torque_share = 1.0f;           // of the engine's torque (the shares should add up to 1)
+    f32 ratio = 3.42f;                 // gearbox to wheel
+};
+
+struct VehicleDesc3D {
+    Entity body;                       // a dynamic body
+    vec3 forward{0.0f, 0.0f, -1.0f};   // body space
+    vec3 up{0.0f, 1.0f, 0.0f};
+    Span<const WheelDesc3D> wheels;
+    Span<const AxleDesc3D> axles;
+    f32 engine_torque = 500.0f;        // N*m at the best rpm
+    f32 min_rpm = 1000.0f;
+    f32 max_rpm = 6000.0f;
+    Span<const f32> gears;             // forward ratios, 1st first (empty: 2.66, 1.78, 1.3, 1.0, 0.74)
+    f32 reverse_gear = -2.9f;
+    f32 max_tilt = 3.14159265f;        // rad the body may pitch or roll before it is held (pi: free)
+};
+
+struct WheelState3D {
+    bool contact = false;
+    Entity ground;          // the body under the wheel (null without contact, or for a body with no entity)
+    f32 suspension = 0.0f;  // m, current length
+    f32 spin = 0.0f;        // rad/s about the axle
+    f32 steer = 0.0f;       // rad
+    vec3 position;          // world: the wheel's centre
+    quat rotation;          // world: local +X is the axle (pointing right), local -Z forward
+};
+
+struct VehicleState3D {
+    f32 speed = 0.0f;  // m/s along the vehicle's forward (negative: reversing)
+    f32 rpm = 0.0f;
+    i32 gear = 0;      // > 0 forward, < 0 reverse, 0 neutral
+    u32 wheels_on_ground = 0;
+};
+
 struct QueryFilter3D {
     u16 layer_mask = 0xFFFF;
     Span<const Entity> exclude;  // e.g. self
@@ -335,6 +393,19 @@ public:
     // True while any part is awake.
     bool ragdoll_active(u32 ragdoll) const;
 
+    // ---- vehicles ------------------------------------------------------------------------------------
+    // Wheels, an engine and an automatic gearbox on `desc.body`. Its wheels sense the ground with
+    // cylinder casts against what the body's layer collides with. 0 when the body is missing or not
+    // dynamic, it already is a vehicle, there are no wheels, a wheel is malformed or an axle names a
+    // wheel that does not exist. Destroying the body destroys the vehicle.
+    u32 create_vehicle(const VehicleDesc3D& desc);
+    void destroy_vehicle(u32 vehicle);
+    bool has_vehicle(u32 vehicle) const;
+    // The driver: forward -1..1 (negative reverses), right -1..1, brake and handbrake 0..1.
+    void set_vehicle_input(u32 vehicle, f32 forward, f32 right, f32 brake, f32 handbrake);
+    // `wheels` may be empty, or hold one state per wheel.
+    bool vehicle_state(u32 vehicle, VehicleState3D& out, Span<WheelState3D> wheels = {}) const;
+
     // ---- camera collision (UC-B gate): sweep a sphere along the boom from the pivot `from` to the
     // desired camera position `to` against static + kinematic geometry. On a hit, put the camera at
     // ShapeHit3D::position. Characters and dynamic props never pull the camera in.
@@ -354,6 +425,7 @@ public:
         u32 characters = 0;
         u32 joints = 0;
         u32 ragdolls = 0;
+        u32 vehicles = 0;
     };
     Stats stats() const;
 
