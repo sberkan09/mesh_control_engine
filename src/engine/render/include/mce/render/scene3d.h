@@ -279,6 +279,34 @@ struct MaterialOverride {
     u32 emissive_key = ~0u;
 };
 
+// A splat-layered terrain's look (M-TERRAIN 2): up to kMaxLayers materials blended by a weight map.
+// Forward3D draws an instance carrying one with the terrain shader: each layer's maps come from one
+// layer of the texture arrays below (TextureStore keys; ~0u = no layer has that map), tiled in the
+// terrain's own xz metres, and the weights from the 2-layer RGBA8 `splat_key` array spanning the
+// terrain's extent. Kit3DExtract builds it from a .mcterrain's layers (render::compose_layer_array).
+struct TerrainShading {
+    static constexpr u32 kMaxLayers = 8;
+    struct Layer {
+        math::vec4 base_color{1.0f, 1.0f, 1.0f, 1.0f};  // the material's (multiplies its albedo map)
+        f32 roughness = 1.0f;
+        f32 metallic = 0.0f;
+        f32 tile = 4.0f;             // metres per repeat
+        f32 height_strength = 1.0f;  // height blend: how far its albedo brightness lifts it
+        bool triplanar = false;
+        bool albedo_map = false;     // the arrays below hold this layer's map
+        bool normal_map = false;
+        bool orm_map = false;
+        bool occlusion_in_orm = false;
+    };
+    Layer layers[kMaxLayers];
+    u32 layer_count = 0;
+    math::vec2 size{1.0f, 1.0f};  // the terrain's extent in metres along x and z
+    u32 splat_resolution = 0;     // weight samples per side
+    u32 albedo_key = ~0u, normal_key = ~0u, orm_key = ~0u, splat_key = ~0u;
+    bool triplanar = true;     // the quality tier lets triplanar layers project along x and z
+    bool height_blend = true;  // the quality tier blends by height (else by weight alone)
+};
+
 struct MeshInstance {
     u32 mesh = ~0u;                          // MeshStore key
     math::mat4 world = math::mat4::identity();
@@ -305,6 +333,10 @@ struct MeshInstance {
     // PostFx::taa or PostFx::motion_blur is on.
     const math::mat4* prev_world = nullptr;
     Span<const math::mat4> prev_pose;
+    // A terrain node (M-TERRAIN 2): drawn with the splat-layer shader instead of its material; `world`
+    // must be the terrain's own transform (its space is what the layers tile in). Kept alive by the
+    // caller until the scene is drawn.
+    const TerrainShading* terrain = nullptr;
 };
 
 // The material a submesh of `inst` draws with, and its map keys (the override's when it has one).

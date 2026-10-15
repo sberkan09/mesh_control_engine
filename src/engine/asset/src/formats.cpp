@@ -768,15 +768,30 @@ Result<TerrainView> TerrainView::read(Span<const byte> payload) {
     const bool heights_ok = h.height_min > -1e6f && h.height_max < 1e6f && h.height_max > h.height_min;
     if (!sizes_ok || !heights_ok) return bad("asset.terrain.extent");
     if (!span_at(payload, h.heights_offset, u64(n) * n, v.heights)) return bad("asset.terrain.heights");
+    if (h.layer_count > kTerrainMaxLayers) return bad("asset.terrain.layers", h.layer_count);
+    if (h.layer_count > 0) {
+        const u32 s = h.splat_resolution;
+        if (s < kTerrainMinResolution || s > n || ((s - 1) & (s - 2)) != 0) return bad("asset.terrain.splat_resolution", s);
+        if (!span_at(payload, h.layers_offset, h.layer_count, v.layers)) return bad("asset.terrain.layers");
+        if (!span_at(payload, h.splat_offset, u64(s) * s * 8, v.splat)) return bad("asset.terrain.splat");
+        for (const TerrainLayer& l : v.layers)
+            if (!(l.tile > 0.0f && l.tile < 1e6f) || !(l.height_strength >= 0.0f && l.height_strength <= 100.0f))
+                return bad("asset.terrain.layer");
+    } else if (h.splat_resolution != 0) {
+        return bad("asset.terrain.splat_resolution", h.splat_resolution);
+    }
     return v;
 }
 
-void write_terrain(const TerrainHeader& header, Span<const u16> heights, Array<byte>& out) {
+void write_terrain(const TerrainHeader& header, Span<const u16> heights, Array<byte>& out, Span<const TerrainLayer> layers,
+                   Span<const u8> splat) {
     PayloadBuilder b(out);
     TerrainHeader h = header;
-    h.heights_offset = 0;
+    h.heights_offset = h.layers_offset = h.splat_offset = 0;
     const usize at = b.append(&h, sizeof(h));
     h.heights_offset = b.append_span(heights);
+    if (!layers.empty()) h.layers_offset = b.append_span(layers);
+    if (!splat.empty()) h.splat_offset = b.append_span(splat);
     b.patch(at, h);
     b.finish();
 }

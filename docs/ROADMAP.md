@@ -90,7 +90,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-GAMEPLAY3D | [M-GAMEPLAY3D.md](milestones/M-GAMEPLAY3D.md), ADR-0040 (Linear SBA-69 … SBA-75) | active (step 1 done: Recast & Detour navmesh in `mce/physics3d/navmesh3d.h`, `.mcnav` assets, `NavMeshSurface3D` / `NavArea3D` / `NavLink3D` / `NavObstacle3D` / `NavAgent3D` in `mce/kit/nav3d.h`, the editor's Bake navmesh and preview) | steps 2–7, the demo |
 | M-CINEMA | [M-CINEMA.md](milestones/M-CINEMA.md) (Linear SBA-76 … SBA-81) | active (steps 1–2 done: `.mctimeline`, `TimelinePlayer`, the editor Timeline panel) | steps 3–6, the demo and the gates |
 | M-NET2 | [M-NET2.md](milestones/M-NET2.md) (added 2026-10-15) | active (steps 1–3 done) | steps 4–7, the demo |
-| M-TERRAIN | — (added 2026-10-15) | in progress: step 1 done (`docs/milestones/M-TERRAIN.md`) | steps 2–6, demo |
+| M-TERRAIN | — (added 2026-10-15) | in progress: steps 1–2 done (`docs/milestones/M-TERRAIN.md`) | steps 3–6, demo |
 | M-ACCESS | — (added 2026-10-15) | not started | all steps |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).

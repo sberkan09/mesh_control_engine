@@ -1,6 +1,6 @@
 # M-TERRAIN — Heightmap terrain (milestone record)
 
-**Status:** in progress (step 1 done, 2026-10-15). Plan: ROADMAP §M-TERRAIN; Linear SBA-89 … SBA-94.
+**Status:** in progress (steps 1 and 2 done, 2026-10-15). Plan: ROADMAP §M-TERRAIN; Linear SBA-89 … SBA-94.
 **Why:** SolsticeReach's island is a script-generated mesh in 16 chunks; there is no terrain an editor or an
 agent can shape. Each step is opt-in: a scene without a `Terrain3D` draws exactly as before.
 
@@ -9,7 +9,7 @@ agent can shape. Each step is opt-in: a scene without a `Terrain3D` draws exactl
 | # | Step | Linear | State |
 |---|---|---|---|
 | 1 | `Terrain3D` + `.mcterrain`, CDLOD-style LOD, normals, skirts | SBA-89 | done: GL and SDL GPU (gated), tier budgets below; Metal untested |
-| 2 | Splat layers (8), triplanar, height blend | SBA-90 | not started |
+| 2 | Splat layers (8), triplanar, height blend | SBA-90 | done: GL and SDL GPU (gated), tier knobs below; Metal untested |
 | 3 | Jolt height-field collision, holes | SBA-91 | not started |
 | 4 | Editor brushes with undo, cook round-trip | SBA-92 | not started |
 | 5 | Foliage and grass painting | SBA-93 | not started |
@@ -57,3 +57,31 @@ selection coverage, culling and shadow reach, transform invariance, mesh and ski
 (mixed-level nodes with T-junctions show no crack from a close oblique view; checked sensitive: 55 crack
 pixels with skirts removed), and `terrain_player_gl` / `terrain_player_sdlgpu` (a cooked project drawn
 by the stock `mce_player`, 0 GL errors, ≥ 10 K triangles).
+
+## Step 2 — splat layers
+
+**Asset.** `TerrainHeader` gained `layer_count`, `splat_resolution` and the offsets of a `TerrainLayer`
+table (a `.mcmat` GUID, tile metres, height strength, triplanar flag) and the weights: two RGBA8 planes
+(layers 0–3, 4–7) of `splat_resolution²`, the layout a 2-layer texture array uploads as is. The
+`.mcterrain` source adds `layers`, `splat_resolution` (default `min(resolution, 1025)`) and `splat`
+(u8 weights per layer per sample); without `splat`, each layer's `auto` rule (height and slope bands with
+soft edges) paints it at cook, unclaimed ground going to layer 0. Layer materials are cook dependencies.
+
+**Drawing.** `TerrainShading` (scene3d.h) on a `MeshInstance` switches its draws to `kTerrainFS`: the
+forward shader with `MCE_TERRAIN`, whose surface comes from `terrain_surface()` instead of the material.
+The layers' maps of one kind are layers of one texture array bound in the material slots (albedo 6, normal 7,
+ORM 8), the weights in the emissive slot 13, the per-layer parameters in a `TerrainU` block on bank 2.
+Layers tile in the terrain's own xz metres; triplanar layers add the x and z projections where the ground
+is steep (whiteout-blended normal maps, no tangents); height blend lets the layer whose albedo brightness
+rises highest win at a seam. The layer loop uses explicit gradients and skips layers under 1/500 weight.
+`Kit3DExtract::set_texture_store` lets the extract pack each kind with `render::compose_layer_array`
+(textures must share format, size and mips; a mismatch is left out with a warning) and upload the weights.
+
+**Tiers.** Low blends by weight alone, Medium adds height blend, High adds triplanar
+(`QualitySettings::terrain_height_blend`, `terrain_triplanar`).
+
+**Tests.** `test_cook` (layers, weights, auto rules, ten bad documents), `test_render` (array packing,
+mismatches), `test_render_gl` / `test_render_sdlgpu` (two layers split by their weights with and without
+height blend, a base color multiplying its layer, a checker on a 3 m cliff: 0 light/dark flips down the
+wall projected from above, 9 with triplanar), and the stock-player terrain project (grass on flats, rock on
+slopes by `auto` rules).
