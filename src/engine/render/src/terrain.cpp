@@ -3,6 +3,8 @@
 #include <cmath>
 #include <cstring>
 
+#include "mce/log.h"
+
 namespace mce::render {
 
 using namespace mce::math;
@@ -297,6 +299,64 @@ void TerrainLod::build_mesh(u32 index, f32 uv_tile, Array<byte>& out) const {
     d.bounds_max[1] = box.max.y;
     d.bounds_max[2] = box.max.z;
     asset::write_mesh(d, out);
+}
+
+bool compose_layer_array(Span<const asset::TextureView* const> layers, LayerArray& out, const char* debug_name) {
+    out.present = 0;
+    out.pixels.clear();
+    out.mips.clear();
+    const asset::TextureView* ref = nullptr;
+    auto srgb = [](const asset::TextureView& v) { return (v.header->flags & asset::TextureFlags::Srgb) != 0; };
+    for (u32 i = 0; i < static_cast<u32>(layers.size()); ++i) {
+        const asset::TextureView* v = layers[i];
+        if (!v || !v->header || v->mips.empty()) continue;
+        if (!ref) ref = v;
+        const asset::TextureHeader &a = *ref->header, &b = *v->header;
+        if (b.format != a.format || srgb(*v) != srgb(*ref) || b.width != a.width || b.height != a.height || v->mips.size() != ref->mips.size()) {
+            MCE_LOG_WARN("terrain: layer {} texture is {}x{} with {} mips, layer textures must match the first ({}x{}, {} mips, same format)",
+                         i, b.width, b.height, v->mips.size(), a.width, a.height, ref->mips.size());
+            continue;
+        }
+        out.present |= 1u << i;
+    }
+    if (!ref) return false;
+    const u32 count = static_cast<u32>(layers.size());
+    usize total = 0;
+    for (const asset::TextureMip& m : ref->mips) total += static_cast<usize>(m.layer_size) * count;
+    out.pixels.resize(total, byte{0});
+    usize at = 0;
+    for (u32 m = 0; m < ref->mips.size(); ++m) {
+        const usize layer_size = static_cast<usize>(ref->mips[m].layer_size);
+        for (u32 i = 0; i < count; ++i) {
+            if (!(out.present & (1u << i))) continue;
+            const Span<const byte> src = layers[i]->pixels(m, 0);
+            if (src.size() >= layer_size) std::memcpy(out.pixels.data() + at + usize(i) * layer_size, src.data(), layer_size);
+        }
+        out.mips.push_back(TextureMipUpload{ref->mips[m].width, ref->mips[m].height, Span<const byte>(out.pixels.data() + at, layer_size * count)});
+        at += layer_size * count;
+    }
+    const bool is_srgb = srgb(*ref);
+    if (ref->header->format == asset::TextureFormat::ASTC_4x4)
+        out.upload.format = is_srgb ? rhi::TextureFormat::ASTC_4x4_SRGB : rhi::TextureFormat::ASTC_4x4_UNorm;
+    else
+        out.upload.format = is_srgb ? rhi::TextureFormat::RGBA8_SRGB : rhi::TextureFormat::RGBA8_UNorm;
+    out.upload.layers = count;
+    out.upload.array = true;
+    out.upload.mips = out.mips.span();
+    out.upload.debug_name = debug_name;
+    return true;
+}
+
+TextureUpload splat_upload(const asset::TerrainView& terrain, TextureMipUpload& mip) {
+    const u32 n = terrain.splat_resolution();
+    mip = {n, n, Span<const byte>(reinterpret_cast<const byte*>(terrain.splat.data()), terrain.splat.size())};
+    TextureUpload up;
+    up.format = rhi::TextureFormat::RGBA8_UNorm;
+    up.layers = 2;
+    up.array = true;
+    up.mips = Span<const TextureMipUpload>(&mip, 1);
+    up.debug_name = "terrain.splat";
+    return up;
 }
 
 }  // namespace mce::render

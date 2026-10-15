@@ -36,6 +36,7 @@ inline constexpr u8 SPRITESHEET_VERSION = 1;  // CHNK_SHEET: texture regions + f
 inline constexpr u8 UI_DOCUMENT_VERSION = 3;  // CHNK_UIDOC: one UI widget tree (M-UI-DATA 1; v2 actions + bindings; v3 theme + font roles; mce/ui/document_data.h)
 inline constexpr u8 UI_THEME_VERSION = 1;     // CHNK_UITHEME: a UI theme (M-UI-DATA 3; mce/ui/document_data.h)
 inline constexpr u8 TERRAIN_VERSION = 1;      // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1)
+inline constexpr u8 NAVMESH_VERSION = 1;     // CHNK_NAV: the .mcnav bytes as baked (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -421,9 +422,30 @@ struct AnimGraphView {
 // 0 at z = -size_z / 2 and column 0 at x = -size_x / 2 of the terrain's own space (centred on the entity
 // that places it, Y up). A sample maps 0 -> height_min and 65535 -> height_max metres. Cooked from a
 // .mcterrain (terrain_importer.cpp); drawn through render::TerrainLod (mce/render/terrain.h).
+//
+// Splat layers (M-TERRAIN 2): up to kTerrainMaxLayers materials painted over the terrain by a weight map
+// of splat_resolution² samples spanning the same extent as the heights. The weights are stored as two
+// planes of RGBA8 (layers 0-3, then 4-7), each splat_resolution² × 4 bytes in the heights' order: the
+// layout a 2-layer RGBA8 texture array takes. A layer's weight is relative: the draw normalizes them.
 
 inline constexpr u32 kTerrainMinResolution = 33;
 inline constexpr u32 kTerrainMaxResolution = 4097;
+inline constexpr u32 kTerrainMaxLayers = 8;
+
+namespace TerrainLayerFlags {
+inline constexpr u32 kTriplanar = 1u << 0;  // also projected along x and z where the ground is steep
+}
+
+struct TerrainLayer {
+    u64 material[2];        // .mcmat GUID {hi, lo}; null = a white layer
+    f32 tile;               // metres one repeat of the layer's textures covers
+    f32 height_strength;    // how far the layer's albedo brightness lifts it over its neighbours (height blend)
+    u32 flags;              // TerrainLayerFlags
+    u32 reserved;
+
+    Guid material_guid() const { return Guid{material[0], material[1]}; }
+};
+static_assert(sizeof(TerrainLayer) == 32);
 
 struct TerrainHeader {
     u32 resolution;    // samples per side: 2^n + 1, kTerrainMinResolution..kTerrainMaxResolution
@@ -432,17 +454,24 @@ struct TerrainHeader {
     f32 height_min;    // metres at sample 0
     f32 height_max;    // metres at sample 65535 (> height_min)
     u32 flags;         // none yet
-    u32 reserved[9];
+    u32 layer_count;        // splat layers, 0..kTerrainMaxLayers (0: no splat map)
+    u32 splat_resolution;   // weight samples per side: 2^n + 1, 33..resolution (0 without layers)
+    u32 reserved[7];
     u64 heights_offset;     // u16[resolution * resolution]
-    u64 reserved_offsets[3];
+    u64 layers_offset;      // TerrainLayer[layer_count]
+    u64 splat_offset;       // u8[2][splat_resolution²][4]
+    u64 reserved_offset;
 };
 static_assert(sizeof(TerrainHeader) == 96);
 
 struct TerrainView {
     const TerrainHeader* header = nullptr;
     Span<const u16> heights;
+    Span<const TerrainLayer> layers;
+    Span<const u8> splat;  // 2 * splat_resolution² * 4 bytes, empty without layers
 
     u32 resolution() const { return header->resolution; }
+    u32 splat_resolution() const { return header->splat_resolution; }
     // Metres between two neighbouring samples along x and z.
     f32 spacing_x() const { return header->size[0] / static_cast<f32>(header->resolution - 1); }
     f32 spacing_z() const { return header->size[1] / static_cast<f32>(header->resolution - 1); }
@@ -453,11 +482,19 @@ struct TerrainView {
     }
     // The bilinear height at (x, z) metres in the terrain's space, clamped to its edges.
     f32 height_at(f32 x, f32 z) const;
-    // Validates the header (resolution 2^n + 1, chunk a power of two, finite sizes) and the sample count.
+    // Layer `layer`'s weight (0..255) at splat sample (x, z).
+    u8 weight(u32 x, u32 z, u32 layer) const {
+        const usize n = usize(header->splat_resolution) * header->splat_resolution;
+        return splat[(layer / 4) * n * 4 + (usize(z) * header->splat_resolution + x) * 4 + layer % 4];
+    }
+    // Validates the header (resolution 2^n + 1, chunk a power of two, finite sizes) and the sample,
+    // layer and weight counts.
     static Result<TerrainView> read(Span<const byte> payload);
 };
 
-void write_terrain(const TerrainHeader& header, Span<const u16> heights, Array<byte>& out);
+// `layers` (header.layer_count of them) and `splat` (2 * splat_resolution² * 4 bytes) are empty without layers.
+void write_terrain(const TerrainHeader& header, Span<const u16> heights, Array<byte>& out, Span<const TerrainLayer> layers = {},
+                   Span<const u8> splat = {});
 
 // ------------------------------------------------------------------ particle preset (CHNK_PART)
 // One emitter's parameters (FR-R2D-070, assets.md §2): the kit's particle system simulates them on

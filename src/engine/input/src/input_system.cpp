@@ -166,6 +166,7 @@ bool InputSystem::rebind(StringId map, StringId action, u32 index, const Binding
 }
 
 void InputSystem::set_override(StringId map, StringId action, u32 index, const BindingDef& b) {
+    ++bindings_generation_;
     const BindingDef& cooked = cooked_bindings_[static_cast<usize>(find_binding(map, action, index) - set_.bindings.data())];
     const bool is_default = cooked.device == b.device && cooked.axis == b.axis && cooked.curve == b.curve &&
                             cooked.flags == b.flags && cooked.code == b.code && cooked.scale == b.scale &&
@@ -201,6 +202,82 @@ void InputSystem::apply_overrides() {
 void InputSystem::reset_bindings() {
     if (cooked_bindings_.size() == set_.bindings.size()) set_.bindings = cooked_bindings_;
     overrides_.clear();
+    ++bindings_generation_;
+}
+
+// ---------------------------------------------------------------------------- player options
+
+void InputSystem::set_toggle(StringId action, bool on) {
+    for (usize i = 0; i < toggles_.size(); ++i)
+        if (toggles_[i] == action) {
+            if (!on) toggles_.erase(i);
+            return;
+        }
+    if (on) toggles_.push_back(action);
+}
+
+bool InputSystem::is_toggle(StringId action) const {
+    for (StringId t : toggles_)
+        if (t == action) return true;
+    return false;
+}
+
+void InputSystem::clear_toggles() {
+    toggles_.clear();
+    toggle_raw_held_.clear();
+}
+
+namespace {
+
+using platform::Key;
+
+// The keys each hand reaches without moving (direction keys first: right, left, up, down).
+constexpr Key kLeftDirs[4] = {Key::D, Key::A, Key::W, Key::S};
+constexpr Key kRightDirs[4] = {Key::Right, Key::Left, Key::Up, Key::Down};
+constexpr Key kLeftKeys[] = {Key::Space, Key::LShift, Key::E, Key::Q, Key::F, Key::R, Key::LCtrl, Key::Tab,
+                             Key::C, Key::X, Key::Z, Key::V, Key::G, Key::T, Key::Num1, Key::Num2,
+                             Key::Num3, Key::Num4};
+constexpr Key kRightKeys[] = {Key::Return, Key::RShift, Key::RCtrl, Key::Backspace, Key::L, Key::K, Key::J,
+                              Key::I, Key::O, Key::P, Key::U, Key::M, Key::N, Key::H, Key::Num9, Key::Num0,
+                              Key::Num8, Key::Num7};
+
+// The direction slot (0 right, 1 left, 2 up, 3 down) a keyboard binding drives on an axis action.
+u32 direction_of(const BindingDef& b) {
+    const bool neg = b.scale < 0.f;
+    return b.axis == 0 ? (neg ? 1u : 0u) : (neg ? 3u : 2u);
+}
+
+}  // namespace
+
+void InputSystem::apply_hand_preset(Hand hand) {
+    reset_bindings();
+    if (hand == Hand::Both) return;
+    const Key* dirs = hand == Hand::Left ? kLeftDirs : kRightDirs;
+    const Key* pool = hand == Hand::Left ? kLeftKeys : kRightKeys;
+    const usize pool_size = hand == Hand::Left ? sizeof(kLeftKeys) / sizeof(Key) : sizeof(kRightKeys) / sizeof(Key);
+    for (const ActionMapDef& m : set_.maps) {
+        usize next = 0;  // each map hands out the pool from its start: maps are not live together
+        for (u32 ai = 0; ai < m.action_count; ++ai) {
+            const ActionDef& a = set_.actions[m.first_action + ai];
+            const bool axis = a.type != ActionType::Button;
+            Key button_key = Key::Unknown;
+            for (u32 bi = 0; bi < a.binding_count; ++bi) {
+                const BindingDef& b = set_.bindings[a.first_binding + bi];
+                if (b.device != Device::Keyboard || b.code == static_cast<u32>(Key::Escape)) continue;
+                BindingDef nb = b;
+                if (axis) {
+                    nb.code = static_cast<u32>(dirs[direction_of(b)]);
+                } else {
+                    if (button_key == Key::Unknown) {
+                        // Skip the hand's direction keys: they stay free for movement.
+                        button_key = next < pool_size ? pool[next++] : pool[pool_size - 1];
+                    }
+                    nb.code = static_cast<u32>(button_key);
+                }
+                if (nb.code != b.code) rebind(m.name, a.name, bi, nb);
+            }
+        }
+    }
 }
 
 void InputSystem::serialize_bindings(Array<char>& out) const { write_bindings(overrides_.span(), out); }
@@ -698,6 +775,20 @@ void InputSystem::evaluate(InputState& out, const InputState& prev) const {
             switch (def.type) {
                 case ActionType::Button:
                     st.held = std::fabs(x) >= 0.5f;
+                    if (!toggles_.empty() && is_toggle(def.name)) {
+                        // Hold-to-toggle: a raw press flips the latch the previous tick left.
+                        usize raw_at = toggle_raw_held_.size();
+                        for (usize r = 0; r < toggle_raw_held_.size(); ++r)
+                            if (toggle_raw_held_[r] == def.name) raw_at = r;
+                        const bool raw_was = raw_at < toggle_raw_held_.size();
+                        const bool raw_pressed = st.held && !raw_was;
+                        if (st.held && !raw_was) toggle_raw_held_.push_back(def.name);
+                        if (!st.held && raw_was) toggle_raw_held_.erase(raw_at);
+                        bool latched = false;
+                        for (u32 p = 0; p < prev.action_count; ++p)
+                            if (prev.action_names[p] == def.name) latched = prev.actions[p].held;
+                        st.held = raw_pressed ? !latched : latched;
+                    }
                     st.x = st.held ? 1.f : 0.f;
                     break;
                 case ActionType::Axis1D:
@@ -720,6 +811,10 @@ void InputSystem::evaluate(InputState& out, const InputState& prev) const {
                     st.held = x != 0.f || y != 0.f;
                     break;
                 }
+            }
+            if (look_sensitivity_ != 1.f && def.name == MCE_SID("Look")) {
+                st.x *= look_sensitivity_;
+                st.y *= look_sensitivity_;
             }
 
             const ActionState* before = nullptr;

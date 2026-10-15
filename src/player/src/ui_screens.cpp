@@ -67,6 +67,13 @@ Result<void> UiScreens::add(Entity e, asset::AssetSystem& assets, asset::Guid gu
             delete sc.doc;
             return r;
         }
+        if (input_) {
+            sc.options = new ui::OptionsPanel();
+            if (!sc.options->attach(*sc.doc, *input_)) {
+                delete sc.options;
+                sc.options = nullptr;
+            }
+        }
     }
     screens_.push_back(sc);
     out = &screens_.back();
@@ -107,7 +114,10 @@ Result<void> UiScreens::load_preview(World&, asset::AssetSystem& assets, Span<co
 }
 
 void UiScreens::clear() {
-    for (Screen& s : screens_) delete s.doc;
+    for (Screen& s : screens_) {
+        delete s.options;
+        delete s.doc;
+    }
     screens_.clear();
     entities_.clear();
     relay_.clear();
@@ -140,6 +150,7 @@ void UiScreens::update(World& world, const ui::UpdateContext& ctx) {
             c.wheel = 0.0f;
         }
         s.doc->update(c);
+        if (s.options && s.visible) s.options->update();
         if (s.visible) relay_.collect(*s.doc);
     }
 }
