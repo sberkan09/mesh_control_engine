@@ -31,9 +31,13 @@ void add_anim3d_systems(World& world);
 // anim3d.cpp: the CPU copy of a mesh the animation systems read (null without an asset system,
 // or when the mesh does not load).
 const render::GpuMesh* anim3d_mesh(World& w, asset::Guid guid);
-// Model-space node matrices of `mesh` posed by Animator `a` (the rest pose without one, or when it
-// plays nothing). `out` holds mesh.nodes.size() matrices.
-void animated_pose(const render::GpuMesh& mesh, const Animator* a, Span<math::mat4> out);
+// Model-space node matrices of e's `mesh` posed by Animator `a` (the rest pose without one, or
+// when it plays nothing), through its graph's 2D blends, layers, root lock and IK goals (`ik`
+// false leaves the IK out). `out` holds mesh.nodes.size() matrices.
+void animated_pose(World& w, Entity e, const render::GpuMesh& mesh, const Animator* a, Span<math::mat4> out, bool ik = true);
+// The part of animated_pose for a graph with the step-5 extras (M-GAMEPLAY3D 5). False, and `out`
+// untouched, when a's graph has none: anim_samples and pose_samples pose it then.
+bool extended_pose(World& w, Entity e, const render::GpuMesh& mesh, const Animator& a, Span<math::mat4> out, bool ik = true);
 // Rotation of an orthonormal 3x3 (columns c0, c1, c2).
 math::quat quat_from_basis(math::vec3 c0, math::vec3 c1, math::vec3 c2);
 

@@ -385,8 +385,18 @@ bool AnimGraphEditor::rename_param(u32 i, StringView name) {
 bool AnimGraphEditor::remove_param(u32 i) {
     if (i >= doc_.params.size()) return false;
     for (const AnimGraphDocState& s : doc_.states)
-        if (s.is_blend() && s.blend_param == i) {
+        if (s.is_blend() && (s.blend_param == i || (s.blend_2d && s.blend_param_y == i))) {
             error_ = cook::String("a blend state uses this parameter");
+            return false;
+        }
+    for (const cook::AnimGraphDocLayer& l : doc_.layers)
+        if (l.weight_param == i) {
+            error_ = cook::String("a layer's weight uses this parameter");
+            return false;
+        }
+    for (const cook::AnimGraphDocIK& k : doc_.ik)
+        if (k.weight_param == i) {
+            error_ = cook::String("an IK chain's weight uses this parameter");
             return false;
         }
     for (const AnimGraphDocTransition& t : doc_.transitions)
@@ -397,8 +407,14 @@ bool AnimGraphEditor::remove_param(u32 i) {
             }
     AnimGraphDocument next = doc_;
     next.params.erase(i);
-    for (AnimGraphDocState& s : next.states)
+    for (AnimGraphDocState& s : next.states) {
         if (s.is_blend() && s.blend_param > i) --s.blend_param;
+        if (s.blend_2d && s.blend_param_y > i) --s.blend_param_y;
+    }
+    for (cook::AnimGraphDocLayer& l : next.layers)
+        if (l.weight_param != asset::kAnimNoParam && l.weight_param > i) --l.weight_param;
+    for (cook::AnimGraphDocIK& k : next.ik)
+        if (k.weight_param != asset::kAnimNoParam && k.weight_param > i) --k.weight_param;
     for (AnimGraphDocTransition& t : next.transitions)
         for (cook::AnimGraphDocCondition& c : t.when)
             if (c.param > i) --c.param;

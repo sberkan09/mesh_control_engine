@@ -74,7 +74,8 @@ Cook (`src/engine/asset/cook/include/mce/cook/`)
   Built-in importers: texture (PNG and JPEG via stb_image), WAV, font (TTF atlas via stb_truetype), material
   (`.mcmat`), scene (`.mcscene`), prefab (`.mcprefab`), glTF (meshoptimizer), tilemap (`.mctilemap`),
   sprite sheet (`.mcsheet` → `ChunkType::SpriteSheet`, `SpriteSheetView`), animation graph (`.mcanim` →
-  `ChunkType::AnimGraph`, `AnimGraphView`), particles (`.mcpart`), sequence (`.mcseq`), input map (`.mcinput` → `ChunkType::InputMap`, the
+  `ChunkType::AnimGraph`, `AnimGraphView`; a version 2 graph adds the chunk's extension block, minor 1: 2D blend
+  points, layers, mask bones, IK chains and the root motion bone), particles (`.mcpart`), sequence (`.mcseq`), input map (`.mcinput` → `ChunkType::InputMap`, the
   `mce/input/input_map.h` chunk, validated with `decode_input_map` at cook), shader (`.vert/.frag/.comp.glsl`, glslang). The glTF importer
   also imports skins (`JOINTS_0` / `WEIGHTS_0`, 4 influences, up to 256 joints per skin, inverse bind
   matrices); the sidecar setting `"skinning": false` imports a skinned mesh as a static one, and `"ragdoll"`

@@ -19,6 +19,7 @@ reach all of its non-transient fields.
 | `SaveKey` | `mce/ecs/save.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `LocalTransform` | `mce/ecs/transform.h` | yes | yes | yes | docs/user-guide/03-editor.md |
 | `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `IKTarget3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `CharacterController3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |

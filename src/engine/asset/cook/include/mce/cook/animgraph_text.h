@@ -14,7 +14,7 @@
 
 namespace mce::cook {
 
-inline constexpr u32 kAnimGraphFormatVersion = 1;
+inline constexpr u32 kAnimGraphFormatVersion = 2;  // 1 still reads; written when the graph uses no step-5 extras
 inline constexpr u32 kAnimGraphAny = asset::kAnimAnyState;  // a transition's `from`: any state
 
 const char* anim_compare_name(asset::AnimCompare op);  // ">", "<", ...
@@ -22,6 +22,11 @@ const char* anim_compare_name(asset::AnimCompare op);  // ">", "<", ...
 struct AnimGraphDocPoint {
     String clip;
     f32 at = 0.0f;
+};
+
+struct AnimGraphDocPoint2D {
+    String clip;
+    f32 x = 0.0f, y = 0.0f;
 };
 
 struct AnimGraphDocEvent {
@@ -33,7 +38,10 @@ struct AnimGraphDocState {
     String name;
     String clip;                       // a one-clip state (empty: a blend state)
     u8 blend_param = 0;                // a blend state: parameter index
-    Array<AnimGraphDocPoint> points;   // a blend state: >= 2, increasing `at`
+    Array<AnimGraphDocPoint> points;   // a 1D blend state: >= 2, increasing `at`
+    bool blend_2d = false;             // a 2D blend state ("blend2d"): blend_param is x, blend_param_y is y
+    u8 blend_param_y = 0;
+    Array<AnimGraphDocPoint2D> points2d;  // a 2D blend state: 3 to asset::kAnimGraphMaxBlend2D points
     bool loop = true;
     f32 speed = 1.0f;
     Array<AnimGraphDocEvent> events;
@@ -57,13 +65,45 @@ struct AnimGraphDocTransition {
     bool on_finish = false;
 };
 
+struct AnimGraphDocLayer {
+    String name;
+    String clip;
+    Array<String> mask;   // bones (each with its subtree); empty: every bone
+    f32 weight = 1.0f;
+    u8 weight_param = asset::kAnimNoParam;
+    f32 speed = 1.0f;
+    bool additive = false;
+    bool loop = true;
+};
+
+struct AnimGraphDocIK {
+    String name;
+    asset::AnimIKKind kind = asset::AnimIKKind::TwoBone;
+    String bone;
+    String pelvis;                         // Foot only
+    f32 weight = 1.0f;
+    u8 weight_param = asset::kAnimNoParam;
+    f32 axis[3] = {0.0f, 0.0f, 0.0f};      // LookAt: "axis" (default +Z); TwoBone / Foot: "pole" (default none)
+    f32 limit_deg = 60.0f;                 // LookAt
+    f32 reach = 0.5f;                      // Foot
+};
+
 struct AnimGraphDocument {
     String name;
     Array<String> params;  // up to asset::kAnimGraphMaxParams
     u32 start = 0;         // state index
     Array<AnimGraphDocState> states;
     Array<AnimGraphDocTransition> transitions;
+    String root_motion;               // the root motion bone (empty: none)
+    Array<AnimGraphDocLayer> layers;  // up to asset::kAnimGraphMaxLayers
+    Array<AnimGraphDocIK> ik;         // up to asset::kAnimGraphMaxIK
+
+    // Uses a step-5 extra (2D blends, layers, IK, root motion): written as version 2 and cooked
+    // with the CHNK_ANIMG extension.
+    bool extended() const;
 };
+
+const char* anim_ik_kind_name(asset::AnimIKKind k);  // "two_bone", "look_at", "foot"
 
 // Parses a .mcanim root into `out`. False when any error diagnostic was added.
 bool read_animgraph_document(JsonValue doc, StringView file, AnimGraphDocument& out, DiagList& diags);
