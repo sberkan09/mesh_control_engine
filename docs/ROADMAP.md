@@ -75,7 +75,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M9 (v1.0 gate) | [M9-ucd.md](milestones/M9-ucd.md) | done (`projects/Kindle`) | non-programmer double-click test, timed UC-C session, LRN gates, memory reconciliation, 60 fps on hardware |
 | M-SKIN | [M-SKIN.md](milestones/M-SKIN.md), ADR-0036 | done | — |
 | M-NET | ADR-0035 | done | — |
-| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (Linear SBA-82 … SBA-88) | active (step 1 done: `SimNetwork` with simulated latency, jitter and loss, `net::Transport`, `Host::set_conditions`, the headless multi-client runner in `local_ci.sh`, the `NET` line in the stats overlay; step 2 done: snapshot interpolation with an adaptive jitter buffer and an extrapolation limit; step 3 done: `net::Predictor` / `net::InputReceiver` client-side prediction with server reconciliation and smoothed corrections) | steps 4–7, the demo |
+| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (Linear SBA-82 … SBA-88) | active (step 1 done: `SimNetwork` with simulated latency, jitter and loss, `net::Transport`, `Host::set_conditions`, the headless multi-client runner in `local_ci.sh`, the `NET` line in the stats overlay; step 2 done: snapshot interpolation with an adaptive jitter buffer and an extrapolation limit; step 3 done: `net::Predictor` / `net::InputReceiver` client-side prediction with server reconciliation and smoothed corrections; step 4 done: `net::LagCompensator` rewinds `HitBox`es to the tick a client drew for hit checks) | steps 5–7, the demo |
 | Scene streaming / data mods | [scene-streaming.md](milestones/scene-streaming.md), ADR-0037 / ADR-0034 | done | — |
 | M-NOVEL | [M-NOVEL.md](milestones/M-NOVEL.md) (issues #115, #154) | done | letters are not translated yet (lines, options and names are, M-MOBILE 11e) |
 | M-KIT3D | [M-KIT3D.md](milestones/M-KIT3D.md) (issues #129, #158, #126) | done | — (follow-ups listed in the record) |
@@ -89,7 +89,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-WEB | — (added 2026-10-15) | active: step 1 done (ADR-0039, `docs/milestones/M-WEB.md`) | steps 2–7 |
 | M-GAMEPLAY3D | — (added 2026-10-15) | not started | all steps |
 | M-CINEMA | [M-CINEMA.md](milestones/M-CINEMA.md) (Linear SBA-76 … SBA-81) | active (steps 1–2 done: `.mctimeline`, `TimelinePlayer`, the editor Timeline panel) | steps 3–6, the demo and the gates |
-| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (added 2026-10-15) | active (steps 1–3 done) | steps 4–7, the demo |
+| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (added 2026-10-15) | active (steps 1–4 done) | steps 5–7, the demo |
 | M-TERRAIN | — (added 2026-10-15) | in progress: step 1 done (`docs/milestones/M-TERRAIN.md`) | steps 2–6, demo |
 | M-ACCESS | — (added 2026-10-15) | not started | all steps |
 

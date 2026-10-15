@@ -124,6 +124,13 @@ public:
     // LocalTransform for the render time. Not interpolating: does nothing.
     InterpolationStats update(Commands& cmd, const World& world, f64 dt_s);
     const InterpolationStats& interpolation_stats() const { return stats_; }
+    // The server tick (fractional) the last update() drew; without interpolation, the newest
+    // applied snapshot's tick.
+    f64 render_tick() const;
+    // The server tick whose state this entity shows: the render tick while it is interpolated or
+    // extrapolated, the snapshot's own tick while it is held. Send it with a shot at the entity for
+    // lag compensation (lag_compensation.h). The newest tick when not interpolating; 0 when unknown.
+    f64 drawn_tick(u32 net_id) const;
 
     // The entity with this server id is predicted by the game (prediction.h): apply() and update()
     // no longer write its LocalTransform. Can be set before the entity appears.
@@ -154,6 +161,7 @@ private:
         u32 seen = 0;  // the snapshot generation that last listed it
         bool predicted = false;
         LocalTransform latest;  // from the newest applied snapshot
+        f64 drawn_tick = 0.0;   // the server tick update() drew it at
         // Interpolating: the newest snapshots of this entity, oldest first (a ring).
         Sample history[kHistory];
         u32 head = 0;  // index of the oldest
@@ -175,7 +183,7 @@ private:
     bool has_tick_ = false;
 
     void sample_arrival(u32 tick);
-    LocalTransform sample(const Mirror& m, f64 render_tick, InterpolationStats& stats) const;
+    LocalTransform sample(const Mirror& m, f64 render_tick, InterpolationStats& stats, f64& drawn_tick) const;
 
     InterpolationDesc interp_;
     bool interpolate_ = false;

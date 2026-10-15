@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Fair hits over lag (SBA-85, M-NET2 step 4): `net::LagCompensator` keeps a short history of `net::HitBox`es on
+  the server and checks a shot against the tick its client was drawing (`ReplicationClient::drawn_tick`), within
+  `max_rewind_s`. Over a 100 ms link every shot at the drawn target hits when rewound and none at the server's
+  present. `sample_net_headless` fires at a drifter from every client. User guide 20.4.
 - Predict the local player (SBA-84, M-NET2 step 3): `net::Predictor` runs the player's inputs through the same
   step function as the server and draws the result at once; `net::InputReceiver` runs each input once on the
   server, in order, across lost packets. On each snapshot the client reconciles with the server's ack, replays
