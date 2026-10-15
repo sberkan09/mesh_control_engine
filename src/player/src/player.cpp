@@ -106,6 +106,7 @@
 #include "mce/platform/ads.h"
 #include "mce/platform/firebase.h"
 #include "mce/platform/game_services.h"
+#include "mce/platform/steam.h"
 #include "mce/platform/haptics.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -205,6 +206,14 @@ MCE_CVAR(cv_remote_config_file, "remote_config.file", "",
          CVarFlags::None);
 MCE_CVAR(cv_remote_config_dump, "remote_config.dump", false,
          "Remote config: print every value at start and after each apply", CVarFlags::None);
+MCE_CVAR(cv_steam_app_id, "steam.app_id", 0,
+         "Steam (M-STEAM): open steam_api and sign in for this app id (0 = no Steam); a run outside Steam names it "
+         "to the client the way steam_appid.txt does",
+         CVarFlags::None);
+MCE_CVAR(cv_steam_library, "steam.library", "", "Steam: the steam_api library to open (empty: next to the executable)",
+         CVarFlags::None);
+MCE_CVAR(cv_steam_restart, "steam.restart", false,
+         "Steam: a run started outside Steam asks Steam to relaunch it and quits (release builds on Steam)", CVarFlags::None);
 MCE_CVAR(cv_language, "language", "",
          "Play in this language (\"tr\", \"pt-BR\") for this run instead of the saved choice and the device languages",
          CVarFlags::None);
@@ -399,6 +408,11 @@ public:
         : desc_(desc), window_(window), device_(device), audio_(audio), sink_(renderer_, assets_), clips_(assets_, audio) {}
 
     ResultV on_init(app::Context&) override {
+        // Steam first: when it relaunches the game through itself, this run loads and saves nothing.
+        if (cv_steam_app_id.get_int() > 0 && !init_steam()) {
+            relaunching_ = true;
+            return ok();
+        }
         FixedString<1024> pack;
         if (!cv_pack.get_string().empty() || desc_.pack)
             samples::resolve_shipped_path(cv_pack.get_string(), desc_.pack ? desc_.pack : "", desc_.pack_fallback ? desc_.pack_fallback : "",
@@ -524,6 +538,7 @@ public:
             update_ad_pause();
         }
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
+        if (platform::steam::running()) platform::steam::run_callbacks(nullptr, nullptr);  // M-STEAM step 2 routes them
         if (t.actions) {  // the UI screens navigate with the newest snapshot (edges once: ui_fresh_)
             const input::InputState pending = ui_actions_;
             ui_actions_ = *t.actions;
@@ -724,6 +739,7 @@ public:
     }
 
     void on_shutdown() override {
+        if (relaunching_) return;  // nothing was loaded (Steam relaunches the game)
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
         save_options(true);
@@ -731,6 +747,7 @@ public:
         if (perf_on_) write_perf_capture();
         if (liveops_on_) liveops_.shutdown();
         if (game_services_on_) game_services_.shutdown();
+        platform::steam::shutdown();
         if (three_d_) {  // the last frame's 3D load (tests and LOD measurements read it)
             const u32* lt = stats3d_.lod_triangles;
             std::printf("%s: 3D last frame %u triangles (LOD %u/%u/%u/%u), %u draws\n", desc_.app_name, stats3d_.triangles,
@@ -977,6 +994,28 @@ private:
     // Every string table in the pack (assets/loc/<locale>.csv) goes into one Localization resource:
     // the saved choice first, then -language for this run, then the device languages, then
     // -default_language. A choice the game makes later (Localization::set_locale) is saved at once.
+    // Steam (M-STEAM step 1, ADR-0042): an app id opens steam_api; anything but a relaunch leaves the
+    // game running without Steam. False: Steam relaunches the game, so this run quits at once.
+    bool init_steam() {
+        platform::steam::Config sc;
+        sc.app_id = static_cast<u32>(cv_steam_app_id.get_int());
+        sc.library_path = cv_steam_library.get_string();
+        sc.restart_if_necessary = cv_steam_restart.get_bool();
+        FixedString<256> why;
+        const platform::steam::InitResult r = platform::steam::init(sc, &why);
+        if (r == platform::steam::InitResult::Restarting) {
+            MCE_LOG_INFO("{}: Steam relaunches the game; quitting", desc_.app_name);
+            quit(0);
+            return false;
+        }
+        if (r == platform::steam::InitResult::Ok)
+            MCE_LOG_INFO("{}: Steam on (app {}, {}{})", desc_.app_name, platform::steam::app_id(), platform::steam::persona_name(),
+                         platform::steam::on_steam_deck() ? ", Steam Deck" : "");
+        else
+            MCE_LOG_INFO("{}: no Steam ({}: {})", desc_.app_name, platform::steam::init_result_name(r), why.c_str());
+        return true;
+    }
+
     Result<void> init_localization() {
         loc::Localization l10n;
         for (asset::AssetKey k = 0; k < assets_.asset_count(); ++k) {
@@ -2450,6 +2489,7 @@ private:
     bool ui_map_pushed_ = false;
     bool ui_map_missing_ = false;
     bool ui_preview_ = false;  // -ui_preview: one document over the clear color
+    bool relaunching_ = false;  // Steam relaunches the game: this run quits before loading anything
     struct UiPointer {
         math::vec2 pos{-1, -1};
         u32 slot = 0;

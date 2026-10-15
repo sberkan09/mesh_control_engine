@@ -63,6 +63,14 @@ WALLS = [
         ["src/engine/platform/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
+    # Steamworks (ADR-0042): the flat API is opened at run time by mce_platform's steam*.cpp only; the
+    # test stand-ins for steam_api live under tests/platform/.
+    (
+        "Steam wall",
+        re.compile(r"\bSteamAPI_\w+|[<\"]steam/|\bISteam[A-Z]\w*|\bSteamworks::"),
+        ["src/engine/platform/src/steam", "tests/platform/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
     ("ImGui wall", re.compile(r"\bImGui(::|zmo)|[<\"]imgui"), ["src/editor/layer/"], ["src/", "samples/", "games/"]),
     ("JPH wall", re.compile(r"\bJPH::|[<\"]Jolt/"), ["src/engine/physics3d/"], ["src/", "samples/", "games/", "tests/"]),
     # Recast & Detour (ADR-0040): navigation, private to mce_physics3d's sources.
