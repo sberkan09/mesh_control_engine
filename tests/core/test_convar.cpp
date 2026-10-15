@@ -193,6 +193,22 @@ TEST_CASE("cheat lock (shipped builds)") {
     cv_test_bool.reset();
 }
 
+namespace {
+MCE_CVAR(cv_test_saved_f, "test.saved.f", 1.0f, "saved float", CVarFlags::Saved);
+}  // namespace
+
+TEST_CASE("M-ACCESS: a Saved convar change moves the settings generation") {
+    const u64 gen = console::saved_generation();
+    cv_test_saved_f.set_float(0.5f);
+    CHECK(console::saved_generation() > gen);
+    const u64 gen2 = console::saved_generation();
+    cv_test_int.set_int(7);  // not Saved: never moves it
+    CHECK(console::saved_generation() == gen2);
+    cv_test_int.reset();
+    cv_test_saved_f.reset();
+    CHECK(cv_test_saved_f.is_default());
+}
+
 TEST_CASE("saved convars round-trip through the settings file") {
     const std::string path = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp") + "/mce_test_settings.cfg";
     std::remove(path.c_str());

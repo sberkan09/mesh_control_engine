@@ -11,6 +11,18 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   and a viewport preview that poses any clip of an entity's mesh at a scrubbed time or runs its graph with typed
   parameter values, without touching the scene. A state may carry `pos` (where the editor draws it; the cook ignores
   it). Double-click an `.mcanim` in Assets, or `mce_editor -editor.open <file>`. User guide 8.9.
+- A stock options and remap screen, M-ACCESS step 3 (SBA-97): `mce new` projects get `assets/ui/options.mcui`
+  (display, audio and controls tabs, shown by Pause). The controls tab lists the game's actions by name with a
+  button per binding that captures the next press, a hold-to-toggle switch per button action, left- and
+  right-hand keyboard presets and a look sensitivity slider. The player now keeps every Saved convar and the key
+  bindings in `settings.cfg` / `<app>.bindings` in the save folder (`-settings 0` turns that off). Cooked input
+  maps carry their action names (chunk v2; v1 still loads).
+- Predict the local player (SBA-84, M-NET2 step 3): `net::Predictor` runs the player's inputs through the same
+  step function as the server and draws the result at once; `net::InputReceiver` runs each input once on the
+  server, in order, across lost packets. On each snapshot the client reconciles with the server's ack, replays
+  what the server has not seen yet and glides to any correction instead of jumping.
+  `ReplicationClient::set_predicted` keeps snapshots from drawing that entity. In `sample_net_headless` at 75 ms
+  the player is drawn about 10 ms behind its input, against 200 ms without prediction. User guide 20.4.
 - The editor's Timeline panel, M-CINEMA step 2 (SBA-77, FR-EDT-130): tracks and keys on a time ruler with
   scrubbing, snapping, key drags and a key inspector, a curve view of transform and property tracks, a viewport
   preview that plays the scene paused at the playhead (the scene document never changes), and record mode, which

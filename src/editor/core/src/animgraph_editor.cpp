@@ -100,8 +100,10 @@ void AnimGraphEditor::layout() {
             layout_[i * 2 + 1] = s.pos[1];
             continue;
         }
-        layout_[i * 2] = 40.0f + kGridX * static_cast<f32>(free % kGridColumns);
-        layout_[i * 2 + 1] = 40.0f + kGridY * static_cast<f32>(free / kGridColumns);
+        const auto column = free % kGridColumns;
+        const auto row = free / kGridColumns;
+        layout_[i * 2] = 40.0f + kGridX * static_cast<f32>(column);
+        layout_[i * 2 + 1] = 40.0f + kGridY * static_cast<f32>(row);
         ++free;
     }
 }
