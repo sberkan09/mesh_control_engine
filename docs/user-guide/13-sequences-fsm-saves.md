@@ -159,7 +159,7 @@ drive the same moves on different entities.
 | `audio` | `t`, `sound`, `gain_db` | plays a one-shot sound |
 | `camera` | `t`, `camera` | camera cuts: that camera is `primary` until the next cut, the track's other cameras are not |
 | `event` | `t`, `emit` | pushes a `kit::TimelineSignal`, and a `SeqSignal` so a sequence's `wait_event` can follow the timeline |
-| `subtitle` | `t`, `duration`, `text`, `speaker` | the line shown in that range; read it with `kit::timeline_subtitle` |
+| `subtitle` | `t`, `duration`, `text`, `speaker` | the line shown in that range: the stock player draws it as a subtitle (10.7); `kit::timeline_subtitle` reads it |
 
 `ease` shapes the curve from a key to the next one: `linear` (default), `step` (hold, then jump),
 `smooth`, `ease_in`, `ease_out`. Values hold before the first key and after the last. The cook

@@ -17,5 +17,6 @@
 #include "mce/net/net_stats.h"
 #include "mce/net/prediction.h"
 #include "mce/net/replication.h"
+#include "mce/net/rollback.h"
 #include "mce/net/sim_network.h"
 #include "mce/net/transport.h"
