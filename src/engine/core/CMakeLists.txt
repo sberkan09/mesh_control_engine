@@ -14,6 +14,7 @@ mce_add_library(mce_core
         src/memory.cpp
         src/result.cpp
         src/version.cpp
+        src/web.cpp
     PUBLIC_DEPS
         spdlog::spdlog
         Tracy::TracyClient)
