@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- UI documents as data, M-UI-DATA step 1 (SBA-31): a `.mcui` asset (JSON) describes a `mce_ui` widget tree
+  (anchors, per-state styles, stack and grid layouts, tabs, modals, nav edges, convar bindings, the skin's font and
+  sprite sheet by reference) and cooks to a `UiDocument` chunk; `ui::build_document` builds it and
+  `ui::extract_document` / `cook::write_ui_document` write a document back, byte-identical after a re-cook. A widget
+  starts from the look `ui::Builder` gives its kind. Mistakes fail the cook with `file:line:col`. MCP's
+  `asset_create` / `asset_write` handle `.mcui`; the stock player does not load documents yet (step 2).
 - Text with a look (M-UI-DATA step 4, SBA-34): `TextLabel` gains `letter_spacing`, `line_height`,
   `outline_width`/`outline_color` and `shadow_offset`/`shadow_color` (fractions of the label's height, editable
   through MCP `component_set`), and `ui::Style` gains `letter_spacing`, `text_outline`/`text_outline_color` and

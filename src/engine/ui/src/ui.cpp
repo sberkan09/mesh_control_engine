@@ -6,6 +6,7 @@
 #include "mce/convar.h"
 #include "mce/log.h"
 #include "mce/render/renderer.h"
+#include "mce/ui/document_data.h"
 
 namespace mce::ui {
 namespace {
@@ -633,6 +634,49 @@ bool Document::visible(WidgetId w) const {
 WidgetId Document::parent(WidgetId w) const {
     const Node* n = node(w);
     return n && n->parent != kNone ? id_of(n->parent) : WidgetId{};
+}
+
+bool Document::visible_self(WidgetId w) const {
+    const Node* n = node(w);
+    return n && n->visible;
+}
+bool Document::interactable(WidgetId w) const {
+    const Node* n = node(w);
+    return n && n->interactable;
+}
+bool Document::blocks_pointer(WidgetId w) const {
+    const Node* n = node(w);
+    return n && n->blocks_pointer;
+}
+NavEdges Document::nav(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->nav : NavEdges{};
+}
+StackLayout Document::stack(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->stack : StackLayout{};
+}
+GridLayout Document::grid(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->grid : GridLayout{};
+}
+void Document::range(WidgetId w, f32& lo, f32& hi, f32& step) const {
+    const Node* n = node(w);
+    lo = n ? n->lo : 0.0f;
+    hi = n ? n->hi : 1.0f;
+    step = n ? n->step : 0.1f;
+}
+StringView Document::convar(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->convar.view() : StringView();
+}
+WidgetId Document::first_child(WidgetId w) const {
+    const Node* n = node(w);
+    return n && n->first_child != kNone ? id_of(n->first_child) : WidgetId{};
+}
+WidgetId Document::next_sibling(WidgetId w) const {
+    const Node* n = node(w);
+    return n && n->next_sibling != kNone ? id_of(n->next_sibling) : WidgetId{};
 }
 
 WidgetState Document::state(WidgetId w) const {
@@ -1408,17 +1452,13 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
 
 Builder Builder::child(WidgetKind kind, StringView name) {
     const WidgetId id = doc_->add(id_, kind, name);
-    if (interactive_kind(kind)) apply_default_style(*doc_, id);
+    WidgetData d;
+    builder_defaults(kind, d);  // the same look a .mcui widget starts from
+    for (u32 i = 0; i < S(WidgetState::Count); ++i) doc_->set_style(id, static_cast<WidgetState>(i), d.styles[i]);
     return Builder(*doc_, id);
 }
 
-Builder Builder::panel(StringView name) {
-    Builder b = child(WidgetKind::Panel, name);
-    Style s;
-    s.tint = Color{0.06f, 0.06f, 0.08f, 0.85f};
-    doc_->set_style_all(b.id_, s);
-    return b;
-}
+Builder Builder::panel(StringView name) { return child(WidgetKind::Panel, name); }
 Builder Builder::image(StringView name, u32 sprite_region) {
     Builder b = child(WidgetKind::Image, name);
     Style s;
@@ -1458,14 +1498,7 @@ Builder Builder::grid(StringView name, const GridLayout& g) {
     doc_->set_grid(b.id_, g);
     return b;
 }
-Builder Builder::console(StringView name) {
-    Builder b = child(WidgetKind::Console, name);
-    Style s;
-    s.tint = Color{0.02f, 0.02f, 0.03f, 0.88f};
-    s.text_color = Color{0.9f, 0.9f, 0.9f, 1};
-    doc_->set_style_all(b.id_, s);
-    return b;
-}
+Builder Builder::console(StringView name) { return child(WidgetKind::Console, name); }
 
 Builder Builder::scroll(StringView name, const StackLayout& s) {
     Builder b = child(WidgetKind::Scroll, name);
@@ -1474,12 +1507,12 @@ Builder Builder::scroll(StringView name, const StackLayout& s) {
 }
 Builder Builder::modal(StringView name) {
     Builder b = child(WidgetKind::Panel, name);
-    Style s;
-    s.tint = Color{0.0f, 0.0f, 0.0f, 0.55f};
-    doc_->set_style_all(b.id_, s);
-    b.fill().to(AnchorTo::Screen);
-    doc_->set_blocks_pointer(b.id_, true);
-    doc_->set_visible(b.id_, false);
+    WidgetData d;
+    modal_defaults(d);
+    doc_->set_style_all(b.id_, d.styles[0]);
+    doc_->set_anchors(b.id_, d.anchors);
+    doc_->set_blocks_pointer(b.id_, d.blocks_pointer);
+    doc_->set_visible(b.id_, d.visible);
     return b;
 }
 Builder Builder::tabs(StringView name) {
@@ -1523,7 +1556,7 @@ Builder& Builder::at(vec2 anchor, vec2 size) {
     a.to = doc_->anchors(id_).to;
     a.min = a.max = anchor;
     a.pivot = vec2(0.5f, 0.5f);
-    a.offset_min = vec2(-size.x * 0.5f, -size.y * 0.5f);
+    a.offset_min = vec2(0.0f - size.x * 0.5f, 0.0f - size.y * 0.5f);  // +0 for a 0 size: data round-trips exactly
     a.offset_max = vec2(size.x * 0.5f, size.y * 0.5f);
     doc_->set_anchors(id_, a);
     return *this;
@@ -1589,24 +1622,9 @@ Builder& Builder::blocks_pointer() {
 }
 
 void apply_default_style(Document& doc, WidgetId w) {
-    Style normal;
-    normal.tint = Color{0.16f, 0.17f, 0.21f, 0.94f};
-    normal.text_color = Color{0.88f, 0.88f, 0.9f, 1};
-    Style hover = normal;
-    hover.tint = Color{0.24f, 0.25f, 0.31f, 0.96f};
-    Style pressed = normal;
-    pressed.tint = Color{0.1f, 0.1f, 0.13f, 0.96f};
-    Style focused = normal;
-    focused.tint = Color{0.34f, 0.25f, 0.12f, 0.96f};
-    focused.text_color = Color{1.0f, 0.88f, 0.55f, 1};
-    Style disabled = normal;
-    disabled.tint = Color{0.12f, 0.12f, 0.14f, 0.6f};
-    disabled.text_color = Color{0.5f, 0.5f, 0.52f, 1};
-    doc.set_style(w, WidgetState::Normal, normal);
-    doc.set_style(w, WidgetState::Hover, hover);
-    doc.set_style(w, WidgetState::Pressed, pressed);
-    doc.set_style(w, WidgetState::Focused, focused);
-    doc.set_style(w, WidgetState::Disabled, disabled);
+    WidgetData d;
+    builder_defaults(WidgetKind::Button, d);
+    for (u32 i = 0; i < S(WidgetState::Count); ++i) doc.set_style(w, static_cast<WidgetState>(i), d.styles[i]);
 }
 
 void apply_touch_pointer(UpdateContext& ctx, const input::InputState& state) {

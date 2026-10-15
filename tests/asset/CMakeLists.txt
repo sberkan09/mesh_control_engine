@@ -28,12 +28,14 @@ mce_add_test(test_cook UMBRELLA
         test_cook_config.cpp
         test_cook_services.cpp
         test_cook_strings.cpp
+        test_cook_ui.cpp
     DEPS
         mce::mce_asset_cook
         mce::mce_input
         mce::mce_monetize
         mce::mce_liveops
-        mce::mce_loc)
+        mce::mce_loc
+        mce::mce_ui)
 target_include_directories(test_cook PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_compile_definitions(test_cook PRIVATE ${MCE_ASSET_TEST_DEFS})
 
