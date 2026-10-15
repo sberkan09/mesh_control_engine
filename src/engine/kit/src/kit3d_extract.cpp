@@ -549,6 +549,15 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     ao.intensity = env.ssao_intensity;
     ao.power = env.ssao_power;
     scene.set_ambient_occlusion(ao);
+    render::ScreenSpaceReflections ssr;
+    ssr.enabled = env.ssr != 0;
+    ssr.max_distance = env.ssr_max_distance;
+    ssr.thickness = env.ssr_thickness;
+    ssr.max_roughness = env.ssr_max_roughness;
+    ssr.roughness_fade = env.ssr_roughness_fade;
+    ssr.intensity = env.ssr_intensity;
+    render::apply_quality(quality_, ssr);
+    scene.set_reflections(ssr);
     render::ShadowSettings shadows;
     shadows.cascades = clamp(env.shadow_cascades, 1u, min(render::kMaxCascades, quality_.shadow_cascades));
     shadows.resolution = quality_.shadow_size;

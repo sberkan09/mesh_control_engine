@@ -35,6 +35,7 @@ SDK); without `-module` it knows engine components only.
 | **Tilemap** | gives the selected entity a tilemap layer, picks the brush from a tileset, toggles the paint tool |
 | **UI Document** | a `.mcui` UI document's widget tree, the selected widget's fields and a live preview at phone, tablet and desktop sizes (chapter 12, "Editing documents in the editor"). Opens from the View menu or a double click on a `.mcui` in Assets |
 | **Timeline** | a `.mctimeline`'s tracks and keys on a time ruler, a curve view of the selected transform or property track, the selected key's fields, record mode and the viewport preview (chapter 13.5, "Editing timelines in the editor"). Opens from the View menu or a double click on a `.mctimeline` in Assets |
+| **Animation** | an `.mcanim` animation graph as boxes and arrows, its parameters, states and transitions, and a preview of an entity's clips and graph in the viewport (chapter 8.9, "Editing graphs and previewing clips"). Opens from the View menu or a double click on an `.mcanim` in Assets |
 | **Console** | the engine log and a command line for convars and confuncs |
 | **Stats** | editor frame rate, sim ticks, viewport size |
 | **Profiler** | editor frame-time history against the 16.6 ms budget, per-stage times, per-system ECS timings |
@@ -119,7 +120,8 @@ selection; the Inspector edits the first selected entity.
 - **Drag a prefab** into the Viewport to create an instance; double-click or "Open prefab" to edit
   the prefab asset itself.
 - **Double-click a scene** to open it (you are asked about unsaved changes). A UI document
-  (`.mcui`) opens in the UI Document panel, a timeline (`.mctimeline`) in the Timeline panel.
+  (`.mcui`) opens in the UI Document panel, a timeline (`.mctimeline`) in the Timeline panel, an animation graph (`.mcanim`) in the Animation
+  panel.
 - **Rename / move (F2)** rewrites the path in the registry and moves the sidecar with the file, so
   every reference keeps resolving. Dropping an asset on a folder moves it.
 - **New files** you copy into `assets/` by hand need a sidecar before they cook. The editor's

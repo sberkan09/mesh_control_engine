@@ -48,6 +48,7 @@ flowchart LR
     MNET["M-NET (built)"] --> MNET2["M-NET2 interpolation, prediction,<br/>rollback, relay/lobby"]
     MGP3D -.navmesh.-> MTERR["M-TERRAIN heightmap terrain,<br/>brushes, splat layers, foliage"]
     MCINE -.subtitle tracks.-> MACC["M-ACCESS subtitles, colorblind,<br/>remap screen, screen readers"]
+    MVIS --> MVIS2["M-VISUAL2 SSR, spatial upscaler<br/>and sharpening, contact shadows,<br/>clear coat, sheen, transmission"]
     MWEB -.web transport.-> MNET2
 ```
 
@@ -88,10 +89,11 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-AGENT | — (added 2026-10-14) | in progress: steps 1-8 (eyes, code loop, playtests, docs, content, quality gates, multi-agent, friction notes) done | demo and gates |
 | M-WEB | — (added 2026-10-15) | active: step 1 done (ADR-0039, `docs/milestones/M-WEB.md`) | steps 2–7 |
 | M-GAMEPLAY3D | [M-GAMEPLAY3D.md](milestones/M-GAMEPLAY3D.md), ADR-0040 (Linear SBA-69 … SBA-75) | active (step 1 done: Recast & Detour navmesh in `mce/physics3d/navmesh3d.h`, `.mcnav` assets, `NavMeshSurface3D` / `NavArea3D` / `NavLink3D` / `NavObstacle3D` / `NavAgent3D` in `mce/kit/nav3d.h`, the editor's Bake navmesh and preview; step 2 done: `Joint3D` fixed, hinge, slider, distance, cone and six-DOF joints with limits, motors and break forces in `mce/kit/joints3d.h`) | steps 3–7, the demo |
-| M-CINEMA | [M-CINEMA.md](milestones/M-CINEMA.md) (Linear SBA-76 … SBA-81) | active (steps 1–2 done: `.mctimeline`, `TimelinePlayer`, the editor Timeline panel) | steps 3–6, the demo and the gates |
+| M-CINEMA | [M-CINEMA.md](milestones/M-CINEMA.md) (Linear SBA-76 … SBA-81) | active (steps 1–3 done: `.mctimeline`, `TimelinePlayer`, the Timeline and Animation panels) | steps 4–6, the demo and the gates |
 | M-NET2 | [M-NET2.md](milestones/M-NET2.md) (added 2026-10-15) | active (steps 1–4 done) | steps 5–7, the demo |
 | M-TERRAIN | — (added 2026-10-15) | in progress: steps 1–2 done (`docs/milestones/M-TERRAIN.md`) | steps 3–6, demo |
 | M-ACCESS | — (added 2026-10-15) | not started | all steps |
+| M-VISUAL2 | [M-VISUAL2.md](milestones/M-VISUAL2.md) (Linear SBA-101 … SBA-105) | active (step 1 done: screen-space reflections, `ScreenSpaceReflections`, `Environment3D.ssr`, `r.ssr`) | steps 2–5, the demo and the gates |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -374,6 +376,14 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Builds, in order:** (1) subtitles and captions: a subtitle style and renderer in `mce_ui` (speaker name, background, size), fed by the novel kit, `Dialogue`, M-CINEMA subtitle tracks and tagged sound effects · (2) visual options: colorblind filters (protanopia, deuteranopia, tritanopia correction) in 2D and 3D post, UI text scale, a high-contrast theme, reduce-motion (camera shake, flashes and screen effects scaled down) · (3) a stock options and remap screen as a `.mcui` document: full rebinding for keyboard and gamepad, hold-to-toggle, sensitivity, one-hand presets · (4) screen readers: the `mce_ui` tree exposed to platform accessibility APIs (an AccessKit-style bridge or the platform APIs directly) on Windows, macOS and mobile, focus announcements · (5) `project_check` accessibility rules (text size, contrast, subtitle coverage) and a user guide chapter.
 **Demo:** Undelivered and Ember Step with subtitles, colorblind filters, text scale and the remap screen on; a screen reader reads Undelivered's menus on one desktop and one phone.
 **Gates:** every option is a setting saved with the player's settings and never touches the sim hash; `project_check` flags a seeded contrast failure; `local_ci.sh` green on every step.
+
+### M-VISUAL2 — Rendering gaps left after M-VISUAL · **size M (rough guess, ≈ 60–100 h engineering)** · tier: off-tier renderer track, gates nothing · priority 2
+
+*Reason: added 2026-10-15 by the M-VISUAL routine under the user's standing instruction to keep developing the engine; item 10 of the engine comparison (`assessments/motor-kiyaslama-eksikler.md`) lists what the 3D frame still lacks next to Godot, Unity and Unreal: screen-space reflections (M-VISUAL step 8 left SSR out as optional), a ready spatial upscaler with sharpening for tiers without TAA, finer shadow detail and the layered material models glTF already describes (Hi-Z occlusion culling shipped in M-VISUAL step 9). Ray tracing and a Vulkan/D3D12 desktop backend stay in M10+.*
+
+**Builds, in order:** (1) screen-space reflections: a depth-buffer ray march at half or full resolution with a roughness cut-off and fade, edge and back-face rejection, falling back to the reflection probes and sky IBL where the ray misses; `Environment3D.ssr` and its knobs, `r.ssr`, High tier on · (2) a spatial upscaler and sharpening: an edge-adaptive upsample for `render_scale < 1` without TAA and a contrast-adaptive sharpen after TAA or the upscale; `r.upscaler` (bilinear, spatial, temporal) and `r.sharpen`, saved with the player's settings · (3) contact shadows: a short screen-space shadow ray per pixel for the sun and shadowed local lights, filling detail the shadow maps lose; per-light `contact_shadows` · (4) material extensions: clear coat, sheen and anisotropy lobes and transmission with screen-space refraction of the opaque frame, cooked from `.mcmat` and glTF's `KHR_materials_*` extensions, off per material · (5) reach and the demo: every new knob as data on the kit components and over MCP, `samples/06_showcase` gains the new effects on its high profile, user-guide pages and goldens.
+**Demo:** `samples/06_showcase` side by side with SSR, sharpening and contact shadows on and off, the sheet stored in the milestone record.
+**Gates:** each effect is opt-in and the frame with it off is bit-identical to today's; GL and SDL GPU goldens per effect; a material without the new lobes draws today's pixels; no change to the sim hash; `local_ci.sh` green on every step. Real-GPU and mobile budgets and Metal pixels wait on the Mac/device session, as for M-VISUAL.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 

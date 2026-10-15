@@ -39,7 +39,7 @@ MCE_CVAR(cv_scene, "scene", "", "Scene to open, relative to assets/ (default: th
 MCE_CVAR(cv_select, "editor.select", "", "Select the entity with this name after opening the scene", CVarFlags::None);
 MCE_CVAR(cv_play, "editor.play", false, "Enter play-in-editor after opening the scene (the -selftest checks it)",
          CVarFlags::None);
-MCE_CVAR(cv_open, "editor.open", "", "Open this asset (relative to assets/) in its panel: a .mcui or a .mctimeline",
+MCE_CVAR(cv_open, "editor.open", "", "Open this asset (relative to assets/) in its panel: a .mcui, .mctimeline or .mcanim",
          CVarFlags::None);
 MCE_CVAR(cv_focus, "editor.panel", "", "Bring this panel's tab to the front at startup (e.g. Profiler)", CVarFlags::None);
 MCE_CVAR(cv_ini, "editor.ini", "mce_editor.ini", "Dock layout file (empty = no persistence)", CVarFlags::RequiresRestart);
@@ -75,6 +75,7 @@ public:
                 if (!a) return Error(Errc::FileNotFound, "mce_editor", cv_open.get_string());
                 if (a->type == asset::ChunkType::UiDocument) shell_.open_ui_document(a->guid);
                 if (a->type == asset::ChunkType::Timeline) shell_.open_timeline(a->guid);
+                if (a->type == asset::ChunkType::AnimGraph) shell_.open_anim_graph(a->guid);
             }
             if (cv_play.get_bool() && !shell_.play_in_editor()) return Error(Errc::InvalidArgument, "mce_editor", "play");
         }
