@@ -151,7 +151,8 @@ bool parse_config_value(const ConfigValues& defaults, StringView key, StringView
             if (!text.empty() && text[0] == '+') ++first;
             const StringView rest(first, static_cast<usize>(last - first));
             FixedString<64> tmp(rest);
-            if (tmp.truncated() || tmp.empty() || tmp.c_str()[0] == '+') return false;
+            if (tmp.truncated() || tmp.empty() || tmp.c_str()[0] == '+' || (first != text.data() && tmp.c_str()[0] == '-'))
+                return false;
             for (const char c : rest)
                 if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == 'x' || c == 'X' || c == 'p' || c == 'P')
                     return false;
