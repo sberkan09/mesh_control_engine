@@ -288,40 +288,22 @@ void kit3d_animators(Frame& f) {
     });
 }
 
-// Rotation of an orthonormal 3x3 (columns c0, c1, c2): Shepperd's method.
-quat quat_from_basis(vec3 c0, vec3 c1, vec3 c2) {
-    const f32 trace = c0.x + c1.y + c2.z;
-    quat q;
-    if (trace > 0.0f) {
-        const f32 s = std::sqrt(trace + 1.0f) * 2.0f;
-        q = {(c1.z - c2.y) / s, (c2.x - c0.z) / s, (c0.y - c1.x) / s, 0.25f * s};
-    } else if (c0.x > c1.y && c0.x > c2.z) {
-        const f32 s = std::sqrt(1.0f + c0.x - c1.y - c2.z) * 2.0f;
-        q = {0.25f * s, (c1.x + c0.y) / s, (c2.x + c0.z) / s, (c1.z - c2.y) / s};
-    } else if (c1.y > c2.z) {
-        const f32 s = std::sqrt(1.0f + c1.y - c0.x - c2.z) * 2.0f;
-        q = {(c1.x + c0.y) / s, 0.25f * s, (c2.y + c1.z) / s, (c2.x - c0.z) / s};
-    } else {
-        const f32 s = std::sqrt(1.0f + c2.z - c0.x - c1.y) * 2.0f;
-        q = {(c2.x + c0.z) / s, (c2.y + c1.z) / s, 0.25f * s, (c0.y - c1.x) / s};
-    }
-    return math::normalize(q);
+u32 find_clip(const render::GpuMesh& mesh, u64 id) {
+    for (u32 i = 0; i < mesh.clips.size(); ++i)
+        if (StringId(mesh.clips[i].name.view()).value == id) return i;
+    return ~0u;
 }
 
-// The model-space matrix of node `node` under the Animator's current pose (rest pose without one).
-mat4 bone_pose(const render::GpuMesh& mesh, u32 node, const Animator* a) {
-    if (!a || a->playing == 0) return mesh.rest_pose[node];
-    auto find = [&](u64 id) -> u32 {
-        for (u32 i = 0; i < mesh.clips.size(); ++i)
-            if (StringId(mesh.clips[i].name.view()).value == id) return i;
-        return ~0u;
-    };
+// The model-space matrix of node `node` of `target`'s mesh: its ragdoll's pose blended over the
+// Animator's (the rest pose without either).
+mat4 bone_pose(World& w, Entity target, const render::GpuMesh& mesh, u32 node) {
+    const Animator* a = w.try_get<Animator>(target);
+    const Ragdoll3DPoses* rp = w.try_resource<Ragdoll3DPoses>();
+    if (!(rp && rp->poses.find(target)) && (!a || a->playing == 0)) return mesh.rest_pose[node];
     Array<mat4> pose;
     pose.resize(mesh.nodes.size());
-    render::ClipSample samples[3];
-    const usize n = anim_samples(*a, mesh, find, samples);
-    if (n == 0) return mesh.rest_pose[node];
-    pose_samples(mesh, samples, n, pose.span());
+    animated_pose(mesh, a, pose.span());
+    apply_ragdoll_pose(w, target, pose.span());
     return pose[node];
 }
 
@@ -341,7 +323,7 @@ void kit3d_attach(Frame& f) {
         vec3 pos, scale;
         quat rot;
         world_pose(w, at.target, *tt, pos, rot, scale);
-        const mat4 m = math::trs(pos, rot, scale) * bone_pose(*mesh, node, w.try_get<Animator>(at.target)) *
+        const mat4 m = math::trs(pos, rot, scale) * bone_pose(w, at.target, *mesh, node) *
                        math::trs(at.offset, math::normalize(at.rotation), {1.0f, 1.0f, 1.0f});
         const vec3 c0 = m.col(0).xyz(), c1 = m.col(1).xyz(), c2 = m.col(2).xyz();
         t.position = m.col(3).xyz();
@@ -352,6 +334,41 @@ void kit3d_attach(Frame& f) {
 }
 
 }  // namespace
+
+// Shepperd's method.
+quat quat_from_basis(vec3 c0, vec3 c1, vec3 c2) {
+    const f32 trace = c0.x + c1.y + c2.z;
+    quat q;
+    if (trace > 0.0f) {
+        const f32 s = std::sqrt(trace + 1.0f) * 2.0f;
+        q = {(c1.z - c2.y) / s, (c2.x - c0.z) / s, (c0.y - c1.x) / s, 0.25f * s};
+    } else if (c0.x > c1.y && c0.x > c2.z) {
+        const f32 s = std::sqrt(1.0f + c0.x - c1.y - c2.z) * 2.0f;
+        q = {0.25f * s, (c1.x + c0.y) / s, (c2.x + c0.z) / s, (c1.z - c2.y) / s};
+    } else if (c1.y > c2.z) {
+        const f32 s = std::sqrt(1.0f + c1.y - c0.x - c2.z) * 2.0f;
+        q = {(c1.x + c0.y) / s, 0.25f * s, (c2.y + c1.z) / s, (c2.x - c0.z) / s};
+    } else {
+        const f32 s = std::sqrt(1.0f + c2.z - c0.x - c1.y) * 2.0f;
+        q = {(c2.x + c0.z) / s, (c2.y + c1.z) / s, 0.25f * s, (c0.y - c1.x) / s};
+    }
+    return math::normalize(q);
+}
+
+const render::GpuMesh* anim3d_mesh(World& w, asset::Guid guid) {
+    Anim3DAssets* cache = w.try_resource<Anim3DAssets>();
+    return cache ? cache->mesh(kit3d_assets(w), guid) : nullptr;
+}
+
+void animated_pose(const render::GpuMesh& mesh, const Animator* a, Span<mat4> out) {
+    render::ClipSample samples[3];
+    const usize n = a && a->playing != 0 ? anim_samples(*a, mesh, [&](u64 id) { return find_clip(mesh, id); }, samples) : 0;
+    if (n > 0) {
+        pose_samples(mesh, samples, n, out);
+        return;
+    }
+    for (usize i = 0; i < out.size() && i < mesh.rest_pose.size(); ++i) out[i] = mesh.rest_pose[i];
+}
 
 void install_anim3d(World& world) {
     world.register_components<AttachToBone>();

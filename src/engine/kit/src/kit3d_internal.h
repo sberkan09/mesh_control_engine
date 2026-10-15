@@ -1,8 +1,10 @@
 #pragma once
 // kit3d's collider builders, shared by the Startup system (kit3d.cpp) and the runtime sync of
-// bodies3d.cpp (colliders on runtime-spawned entities), and the Animator pose samples shared by
-// the extract (kit3d_extract.cpp) and AttachToBone (anim3d.cpp).
+// bodies3d.cpp (colliders on runtime-spawned entities), the Animator pose samples shared by the
+// extract (kit3d_extract.cpp) and AttachToBone (anim3d.cpp), and the ragdoll pose override
+// (ragdolls3d.cpp) both of them apply.
 
+#include "mce/containers/hash_map.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/kit3d.h"
@@ -22,6 +24,28 @@ asset::AssetSystem* kit3d_assets(World& w);
 // "kit3d_animators" and "kit3d_attach".
 void install_anim3d(World& world);
 void add_anim3d_systems(World& world);
+
+// anim3d.cpp: the CPU copy of a mesh the animation systems read (null without an asset system,
+// or when the mesh does not load).
+const render::GpuMesh* anim3d_mesh(World& w, asset::Guid guid);
+// Model-space node matrices of `mesh` posed by Animator `a` (the rest pose without one, or when it
+// plays nothing). `out` holds mesh.nodes.size() matrices.
+void animated_pose(const render::GpuMesh& mesh, const Animator* a, Span<math::mat4> out);
+// Rotation of an orthonormal 3x3 (columns c0, c1, c2).
+math::quat quat_from_basis(math::vec3 c0, math::vec3 c1, math::vec3 c2);
+
+// ragdolls3d.cpp: the pose a ragdoll gives its mesh, per entity: model-space node matrices and how
+// much they override the animation (1 while the physics drives it, falling to 0 as it blends back).
+struct RagdollPose {
+    Array<math::mat4> nodes;
+    f32 weight = 1.0f;
+};
+struct Ragdoll3DPoses {
+    HashMap<Entity, RagdollPose> poses;
+};
+// Blends `pose` (model-space node matrices of e's mesh) toward e's ragdoll pose. False (and `pose`
+// untouched) when e has none.
+bool apply_ragdoll_pose(World& w, Entity e, Span<math::mat4> pose);
 
 // The weighted clip samples posing `mesh` under Animator `a`: the playing clip, a blend state's
 // second clip (at the same phase) and the clip fading out. `find` maps a clip StringId to the

@@ -48,8 +48,6 @@ struct Builder {
     // matrix); every vertex goes wholly to joint `joint_of(bind position)`.
     template <class F>
     void skin_submesh(u32 s, std::initializer_list<u32> joint_nodes, F joint_of) {
-        skin_vertices.resize(vertices.size(), asset::MeshSkinVertex{});
-        submesh_skins.resize(submeshes.size(), -1);
         asset::MeshSkin skin{};
         skin.first_joint = static_cast<u32>(joints.size());
         skin.joint_count = static_cast<u32>(joint_nodes.size());
@@ -65,6 +63,16 @@ struct Builder {
             j.bounds_max[0] = -1.0f;
             joints.push_back(j);
         }
+        skins.push_back(skin);
+        skin_more(s, static_cast<u32>(skins.size() - 1), joint_of);
+    }
+
+    // Skins submesh `s` over the joints of an existing skin (several submeshes, one skeleton).
+    template <class F>
+    void skin_more(u32 s, u32 skin_index, F joint_of) {
+        skin_vertices.resize(vertices.size(), asset::MeshSkinVertex{});
+        submesh_skins.resize(submeshes.size(), -1);
+        const asset::MeshSkin& skin = skins[skin_index];
         const asset::MeshSubmesh& sm = submeshes[s];
         for (u32 v = 0; v < sm.vertex_count; ++v) {
             const asset::MeshVertex& q = vertices[sm.base_vertex + v];
@@ -82,8 +90,7 @@ struct Builder {
                 mj.bounds_max[c] = first ? p[c] : math::max(mj.bounds_max[c], p[c]);
             }
         }
-        submesh_skins[s] = static_cast<i32>(skins.size());
-        skins.push_back(skin);
+        submesh_skins[s] = static_cast<i32>(skin_index);
     }
 
     u32 add_node(i32 parent, math::vec3 t = {}, const char* name = nullptr) {
@@ -223,6 +230,8 @@ struct Builder {
             d.joints = joints.span();
             d.skin_vertices = sv.span();
             d.submesh_skins = ss.span();
+            for (const asset::MeshJoint& j : joints)
+                if (j.ragdoll_flags != 0) d.flags |= asset::MeshFlags::Ragdoll;
         }
         bool any = false;
         for (const asset::MeshSubmesh& s : submeshes)

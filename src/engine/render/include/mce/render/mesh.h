@@ -61,6 +61,12 @@ struct GpuJoint {
     math::mat4 inverse_bind;
     math::aabb3 bounds;       // bind space, of the vertices this joint moves
     bool influences = false;  // false: the joint moves no vertex (bounds unused)
+    // The sidecar's ragdoll overrides for this bone (asset::MeshRagdoll flags; 0 = none).
+    u32 ragdoll_flags = 0;
+    f32 ragdoll_radius = 0.0f;  // metres
+    f32 ragdoll_swing = 0.0f;   // degrees
+    f32 ragdoll_twist = 0.0f;   // degrees
+    f32 ragdoll_mass = 0.0f;    // weight on the bone's share of the mass
 };
 
 // The GPU vertex of a skinned mesh: the plain stream plus its influences (24 bytes).

@@ -228,7 +228,52 @@ From code, the `kit::Nav3D` resource holds the loaded `physics::NavMesh3D`: `fin
 the surface's `ready` is 1. Budget: a 200 × 200 m level at the default 0.2 m cells bakes in well
 under a second; a crowd of 128 agents steps in about a millisecond.
 
-## 9.8 Configuration
+## 9.8 Ragdolls
+
+A skinned character goes limp with a `Ragdoll3D` component (`mce/kit/ragdolls3d.h`) next to its
+`MeshRef` (and usually its `Animator`). Setting `active = 1` turns the skeleton into bodies, posed
+and moving as the animation had them that moment, and from then on the physics poses the mesh:
+the renderer, and anything pinned with `AttachToBone`, follow the bodies. Setting `active = 0`
+removes the bodies and blends from the last pose back to the animation over `blend_time` seconds.
+
+- **The parts.** Skin 0's skeleton gives one body per bone: a capsule from a bone to its child (a
+  thigh, a spine), a box over the vertices of a bone with several children (a pelvis, a chest), a
+  capsule or ball for a leaf (a hand, the head), each sized from the vertices the bone moves
+  (`radius_scale` thickens or thins them all). Each joins its parent with a joint that swings up to
+  `swing` degrees and twists up to `twist` either way. A bone that moves no vertex (a weapon
+  socket), or is shorter than `min_bone_length`, rides with its parent. `mass` (kg) is shared by
+  size. `parts` reports how many bodies were built.
+- **Hits.** `impulse` (N·s) is applied once while active and then cleared: on the whole body, or
+  on the bone named in `impulse_bone` (a shot to the head). Setting `active` and `impulse` in the
+  same tick knocks a character over.
+- **Getting up.** The entity's own transform does not move while the body falls: `root_position`
+  is where the root bone is now and `settled` turns 1 once every part rests. Move the entity there
+  (and play a get-up clip) before clearing `active`.
+- **Collisions.** Parts collide with layers in `mask` (and with each other, but not with their
+  neighbours). A character controller on the same entity would collide with its own ragdoll: put the
+  ragdoll on a `layer` the controller ignores, or remove the controller while the body is limp. Ray
+  and shape queries that hit a part report the ragdoll's entity.
+
+Per-bone overrides go in the mesh's import sidecar, by bone name:
+
+```json
+{ "ragdoll": {
+    "head":   { "radius": 0.11, "swing": 30, "twist": 40 },
+    "spine":  { "mass": 3 },
+    "sword":  { "exclude": true },
+    "pinky":  { "include": true } } }
+```
+
+`exclude` makes a bone ride its parent; `include` gives one a body even when it moves no vertex
+or is short; `radius` is in metres; `swing` and `twist` in degrees replace the component's; `mass`
+weighs the bone's share of the body's mass (2 = twice its size's share). A bone the mesh does not
+have fails the cook.
+
+From code, `physics::World3D` builds ragdolls from parts described in world space
+(`create_ragdoll(RagdollDesc3D, parts)`, `ragdoll_state`, `ragdoll_impulse`, `ragdoll_active`). The
+replay hash covers them.
+
+## 9.9 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3
 position iterations, warm starting on. A scene changes gravity with a `WorldSettings` component (`gravity_2d`; chapter 2,
@@ -239,7 +284,7 @@ off by default to keep older replays bit-identical; a new game that stacks many 
 
 Budget: 2,000 bodies is the tested ceiling; a 20-body stack settles within a second.
 
-## 9.9 Debugging
+## 9.10 Debugging
 
 The editor viewport overlays colliders. In code, `World2D::debug_draw(sink, flags)` fills line and
 circle primitives for a renderer you provide; `stats()` reports body and contact counts;
