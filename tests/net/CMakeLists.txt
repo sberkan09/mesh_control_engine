@@ -8,6 +8,7 @@ mce_add_test(test_net UMBRELLA
         test_lag_compensation.cpp
         test_prediction.cpp
         test_replication.cpp
+        test_rollback.cpp
         test_sim_network.cpp
     DEPS
         mce::mce_net)

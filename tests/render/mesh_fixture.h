@@ -18,6 +18,7 @@ struct Box {
     u32 node = 0;
     f32 color[4] = {1, 1, 1, 1};
     u32 flags = 0;  // asset::MaterialFlags
+    bool uvs = false;  // each face spans the texture once (else every UV is 0)
 };
 
 struct Builder {
@@ -148,6 +149,10 @@ struct Builder {
                 }
                 q.normal[0] = snorm(ox);
                 q.normal[1] = snorm(oy);
+                if (b.uvs) {
+                    q.uv[0] = static_cast<u16>(su[c] > 0 ? 65535 : 0);
+                    q.uv[1] = static_cast<u16>(sv[c] > 0 ? 65535 : 0);
+                }
                 vertices.push_back(q);
             }
             // With u x v = n and corners (-,-) (+,-) (+,+) (-,+) the quad winds CCW about n.

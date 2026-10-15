@@ -428,10 +428,18 @@ struct AnimGraphView {
 // of splat_resolution² samples spanning the same extent as the heights. The weights are stored as two
 // planes of RGBA8 (layers 0-3, then 4-7), each splat_resolution² × 4 bytes in the heights' order: the
 // layout a 2-layer RGBA8 texture array takes. A layer's weight is relative: the draw normalizes them.
+//
+// Holes (M-TERRAIN 3): with TerrainFlags::kHoles, a bit per height sample (sample i at bit i % 8 of byte
+// i / 8). A triangle with a hole at any corner is neither drawn nor collided with (Jolt's height-field
+// rule), so a hole sample opens the triangles around it.
 
 inline constexpr u32 kTerrainMinResolution = 33;
 inline constexpr u32 kTerrainMaxResolution = 4097;
 inline constexpr u32 kTerrainMaxLayers = 8;
+
+namespace TerrainFlags {
+inline constexpr u32 kHoles = 1u << 0;  // holes_offset holds the hole bits
+}
 
 namespace TerrainLayerFlags {
 inline constexpr u32 kTriplanar = 1u << 0;  // also projected along x and z where the ground is steep
@@ -454,14 +462,14 @@ struct TerrainHeader {
     f32 size[2];       // metres along x and z
     f32 height_min;    // metres at sample 0
     f32 height_max;    // metres at sample 65535 (> height_min)
-    u32 flags;         // none yet
+    u32 flags;         // TerrainFlags
     u32 layer_count;        // splat layers, 0..kTerrainMaxLayers (0: no splat map)
     u32 splat_resolution;   // weight samples per side: 2^n + 1, 33..resolution (0 without layers)
     u32 reserved[7];
     u64 heights_offset;     // u16[resolution * resolution]
     u64 layers_offset;      // TerrainLayer[layer_count]
     u64 splat_offset;       // u8[2][splat_resolution²][4]
-    u64 reserved_offset;
+    u64 holes_offset;       // u8[(resolution² + 7) / 8] with TerrainFlags::kHoles
 };
 static_assert(sizeof(TerrainHeader) == 96);
 
@@ -470,6 +478,7 @@ struct TerrainView {
     Span<const u16> heights;
     Span<const TerrainLayer> layers;
     Span<const u8> splat;  // 2 * splat_resolution² * 4 bytes, empty without layers
+    Span<const u8> holes;  // the hole bits, empty without TerrainFlags::kHoles
 
     u32 resolution() const { return header->resolution; }
     u32 splat_resolution() const { return header->splat_resolution; }
@@ -483,6 +492,14 @@ struct TerrainView {
     }
     // The bilinear height at (x, z) metres in the terrain's space, clamped to its edges.
     f32 height_at(f32 x, f32 z) const;
+    // The height of the surface the terrain draws and collides with at (x, z) metres: each quad split
+    // along its (x0, z0)-(x1, z1) diagonal into two planar triangles. Clamped to the edges.
+    f32 surface_at(f32 x, f32 z) const;
+    bool hole(u32 x, u32 z) const {
+        if (holes.empty()) return false;
+        const usize i = usize(z) * header->resolution + x;
+        return (holes[i / 8] >> (i % 8)) & 1u;
+    }
     // Layer `layer`'s weight (0..255) at splat sample (x, z).
     u8 weight(u32 x, u32 z, u32 layer) const {
         const usize n = usize(header->splat_resolution) * header->splat_resolution;
@@ -493,9 +510,10 @@ struct TerrainView {
     static Result<TerrainView> read(Span<const byte> payload);
 };
 
-// `layers` (header.layer_count of them) and `splat` (2 * splat_resolution² * 4 bytes) are empty without layers.
+// `layers` (header.layer_count of them) and `splat` (2 * splat_resolution² * 4 bytes) are empty without
+// layers; `holes` ((resolution² + 7) / 8 bytes) is empty without TerrainFlags::kHoles.
 void write_terrain(const TerrainHeader& header, Span<const u16> heights, Array<byte>& out, Span<const TerrainLayer> layers = {},
-                   Span<const u8> splat = {});
+                   Span<const u8> splat = {}, Span<const u8> holes = {});
 
 // ------------------------------------------------------------------ particle preset (CHNK_PART)
 // One emitter's parameters (FR-R2D-070, assets.md §2): the kit's particle system simulates them on

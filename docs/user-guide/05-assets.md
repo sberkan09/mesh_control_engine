@@ -173,6 +173,11 @@ ground no rule claims goes to layer 0:
 ]
 ```
 
+`holes` cuts the terrain open (cave mouths, tunnel entrances): base64 of a bit per height sample, sample
+`z * resolution + x` at bit `i % 8` of byte `i / 8`, `(resolution² + 7) / 8` bytes. Every triangle with a
+hole sample as a corner is left out of both the drawn surface and the `TerrainCollider3D` collision, so a
+3 × 3 block of hole samples opens a 4 × 4 m gap at 1 m spacing. An all-zero mask cooks to no holes.
+
 Give every layer's maps of one kind the same size and import settings: each kind is packed into one
 texture array, and a map that differs from the first layer's is left out with a warning.
 

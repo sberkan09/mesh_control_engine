@@ -32,13 +32,15 @@ bool parse_f32(StringView s, f32& out) {
     return end == tmp.c_str() + tmp.size();
 }
 
-// "1", "1,0", "true", "false", "0.5"
-bool parse_value(StringView s, f32& x, f32& y) {
+// "1", "1,0", "true", "false", "0.5"; `held` is false only for false / off.
+bool parse_value(StringView s, f32& x, f32& y, bool& held) {
     x = 1.f;
     y = 0.f;
+    held = true;
     if (s == "true" || s == "on") return true;
     if (s == "false" || s == "off") {
         x = 0.f;
+        held = false;
         return true;
     }
     const usize comma = s.find(',');
@@ -67,7 +69,14 @@ bool InputScript::add(StringView action, u64 from, u64 to, f32 x, f32 y) {
     s.name.assign(action);
     s.x = x;
     s.y = y;
+    s.held = x != 0.f || y != 0.f;
     segments_.push_back(s);
+    return true;
+}
+
+bool InputScript::add(const ScriptSegment& seg) {
+    if (!add(seg.name.view(), seg.from, seg.to, seg.x, seg.y)) return false;
+    segments_.back().held = seg.held;
     return true;
 }
 
@@ -126,12 +135,14 @@ Result<void> InputScript::parse(StringView text) {
         for (usize t = 1; t < n; ++t) {
             StringView name = tokens[t];
             f32 x = 1.f, y = 0.f;
+            bool held = true;
             if (const usize eq = name.find('='); eq != StringView::npos) {
-                if (!parse_value(name.substr(eq + 1), x, y))
+                if (!parse_value(name.substr(eq + 1), x, y, held))
                     return parse_error(line_no, "expected a value after '=': a number, x,y or true/false");
                 name = name.substr(0, eq);
             }
             if (!add(name, from, to, x, y)) return parse_error(line_no, "action names are 1-31 characters");
+            segments_.back().held = held;
         }
     }
     return ok();
@@ -179,7 +190,7 @@ const InputState& InputScript::evaluate(u64 tick) {
         ActionState& st = out.actions[slot];
         st.x = s.x;
         st.y = s.y;
-        st.held = s.x != 0.f || s.y != 0.f;
+        st.held = s.held;
     }
     // A segment ending at this tick's predecessor: the action is released this tick, which the loop
     // above never sees (it is not active). Carry it as a named, released action for one tick.

@@ -765,6 +765,16 @@ f32 TerrainView::height_at(f32 x, f32 z) const {
     return a + (b - a) * tz;
 }
 
+f32 TerrainView::surface_at(f32 x, f32 z) const {
+    const u32 n = header->resolution;
+    const f32 fx = std::clamp((x / header->size[0] + 0.5f) * static_cast<f32>(n - 1), 0.0f, static_cast<f32>(n - 1));
+    const f32 fz = std::clamp((z / header->size[1] + 0.5f) * static_cast<f32>(n - 1), 0.0f, static_cast<f32>(n - 1));
+    const u32 x0 = std::min(static_cast<u32>(fx), n - 2), z0 = std::min(static_cast<u32>(fz), n - 2);
+    const f32 u = fx - static_cast<f32>(x0), w = fz - static_cast<f32>(z0);
+    const f32 h00 = sample(x0, z0), h10 = sample(x0 + 1, z0), h01 = sample(x0, z0 + 1), h11 = sample(x0 + 1, z0 + 1);
+    return u >= w ? h00 + u * (h10 - h00) + w * (h11 - h10) : h00 + w * (h01 - h00) + u * (h11 - h01);
+}
+
 Result<TerrainView> TerrainView::read(Span<const byte> payload) {
     TerrainView v;
     v.header = header_of<TerrainHeader>(payload);
@@ -789,18 +799,20 @@ Result<TerrainView> TerrainView::read(Span<const byte> payload) {
     } else if (h.splat_resolution != 0) {
         return bad("asset.terrain.splat_resolution", h.splat_resolution);
     }
+    if ((h.flags & TerrainFlags::kHoles) && !span_at(payload, h.holes_offset, (u64(n) * n + 7) / 8, v.holes)) return bad("asset.terrain.holes");
     return v;
 }
 
 void write_terrain(const TerrainHeader& header, Span<const u16> heights, Array<byte>& out, Span<const TerrainLayer> layers,
-                   Span<const u8> splat) {
+                   Span<const u8> splat, Span<const u8> holes) {
     PayloadBuilder b(out);
     TerrainHeader h = header;
-    h.heights_offset = h.layers_offset = h.splat_offset = 0;
+    h.heights_offset = h.layers_offset = h.splat_offset = h.holes_offset = 0;
     const usize at = b.append(&h, sizeof(h));
     h.heights_offset = b.append_span(heights);
     if (!layers.empty()) h.layers_offset = b.append_span(layers);
     if (!splat.empty()) h.splat_offset = b.append_span(splat);
+    if (!holes.empty()) h.holes_offset = b.append_span(holes);
     b.patch(at, h);
     b.finish();
 }

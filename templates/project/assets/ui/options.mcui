@@ -24,6 +24,8 @@
                       { "name": "colorblind_strength", "kind": "Slider", "range": [0, 1, 0.1], "convar": "access.colorblind_strength" },
                       { "name": "motion_label", "kind": "Text", "text": "SCREEN SHAKE AND FLASHES" },
                       { "name": "motion", "kind": "Slider", "range": [0, 1, 0.1], "convar": "access.motion_scale" },
+                      { "name": "screen_reader_label", "kind": "Text", "text": "SCREEN READER: OFF / WHEN ON / ALWAYS" },
+                      { "name": "screen_reader", "kind": "Slider", "range": [0, 2, 1], "convar": "access.screen_reader" },
                       { "name": "fullscreen", "kind": "Toggle", "text": "FULL SCREEN", "convar": "fullscreen" }
                     ] } ] },
                 { "name": "audio", "label": "AUDIO", "children": [
