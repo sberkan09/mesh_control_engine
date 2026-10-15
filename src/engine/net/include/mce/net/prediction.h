@@ -110,7 +110,7 @@ public:
             if (has_seq_ && !detail::seq_after(seq, last_seq_)) continue;
             fn(static_cast<const Input&>(in));
             last_seq_ = seq;
-            has_seq_ = true;
+            has_seq_ = 1;
             ++ran;
         }
         return ran;
@@ -119,12 +119,13 @@ public:
     u32 last_seq() const { return last_seq_; }
     void reset() {
         last_seq_ = 0;
-        has_seq_ = false;
+        has_seq_ = 0;
     }
 
 private:
+    // No padding: a receiver often lives in a component, and component bytes reach state hashes.
     u32 last_seq_ = 0;
-    bool has_seq_ = false;
+    u32 has_seq_ = 0;
 };
 
 // Client side: the predicted state of the entity the local player controls. State is the game's

@@ -1,5 +1,6 @@
 #include "mce/net/prediction.h"
 
+#include <bit>
 #include <cmath>
 
 namespace mce::net::detail {
@@ -24,9 +25,13 @@ bool read_input_header(ByteReader& in, u32 input_size, u32& newest_seq, u32& cou
 }
 
 bool same_transform(const LocalTransform& a, const LocalTransform& b) {
-    return std::memcmp(&a.position, &b.position, sizeof a.position) == 0 &&
-           std::memcmp(&a.rotation, &b.rotation, sizeof a.rotation) == 0 &&
-           std::memcmp(&a.scale, &b.scale, sizeof a.scale) == 0;
+    const f32 fa[10] = {a.position.x, a.position.y, a.position.z, a.rotation.x, a.rotation.y,
+                        a.rotation.z, a.rotation.w, a.scale.x,    a.scale.y,    a.scale.z};
+    const f32 fb[10] = {b.position.x, b.position.y, b.position.z, b.rotation.x, b.rotation.y,
+                        b.rotation.z, b.rotation.w, b.scale.x,    b.scale.y,    b.scale.z};
+    for (int i = 0; i < 10; ++i)
+        if (std::bit_cast<u32>(fa[i]) != std::bit_cast<u32>(fb[i])) return false;
+    return true;
 }
 
 void Correction::begin(const LocalTransform& drawn, const LocalTransform& predicted, f32 snap_distance,

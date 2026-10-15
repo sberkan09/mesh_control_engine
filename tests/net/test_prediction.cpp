@@ -2,6 +2,7 @@
 
 #include <doctest/doctest.h>
 
+#include <bit>
 #include <cmath>
 #include <cstring>
 
@@ -36,7 +37,7 @@ Array<u8> packet_of(const Predictor<Input, State>& p) {
     return out;
 }
 
-bool same_bits(f32 a, f32 b) { return std::memcmp(&a, &b, sizeof a) == 0; }
+bool same_bits(f32 a, f32 b) { return std::bit_cast<u32>(a) == std::bit_cast<u32>(b); }
 
 }  // namespace
 
