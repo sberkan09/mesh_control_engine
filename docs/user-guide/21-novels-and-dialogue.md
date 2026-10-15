@@ -213,6 +213,9 @@ Add `"localize": {"base": "en"}` to the manifest. Each compile then writes the s
 
 | Key | Row |
 |---|---|
+| `story.title` | the title screen's name (when the manifest sets `"title"`) |
+| `story.extras` | the title menu's third row (when the manifest sets `"extras"`) |
+| `story.ending.<id>` | an ending's title (the ending card and the extras page) |
 | `story.name.<character>` | a speaker's name tag |
 | `story.<8 hex digits>` | a statement or an option, keyed by its text |
 
@@ -226,3 +229,20 @@ on languages, `loc::Localization`), and switch with it at once. A translated sta
 page count of its base line, so a playthrough is the same in every language and saves stay valid
 across a switch: a translation that cannot fill those pages or overflows them is a compile warning
 and shows in the base language. An option takes at most two lines. Letters are not translated yet.
+
+The kit's own words go through the same tables. Add the rows you want to any locale's CSV; a key
+no table has shows the English words below, never the key. A `.touch` row is used after the
+player read on with a finger, so a phone can say "Dokun" where a keyboard says "Enter":
+
+| Key | English |
+|---|---|
+| `novel.new_game`, `novel.continue` | New game, Continue (the title menu) |
+| `novel.pages_read#one`, `#other` | {count} page read, {count} pages read (the checkpoint) |
+| `novel.saved_go_on`, `novel.go_on` (`.touch`) | Saved.  Enter to go on. / Enter to go on. (Tap to go on.) |
+| `novel.ending_of` | Ending {n} of {total} |
+| `novel.enter` (`.touch`) | Enter (Tap) |
+| `novel.ending_unseen` | an ending not yet reached (the extras page) |
+| `novel.go_back` (`.touch`) | Enter to go back (Tap to go back) |
+
+A game's own panel hook (`NovelHooks::panel_line`) can look them up with `novel::kit_text` and
+`novel::kit_count`.

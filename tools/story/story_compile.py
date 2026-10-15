@@ -70,6 +70,9 @@ baked size; without Pillow an average glyph width), so the runtime never measure
 Translation (M-MOBILE step 11e), on with "localize": every text statement, option and speaker name
 gets a key in the project's string tables (assets/loc/<locale>.csv, mce/loc/string_table.h):
 
+    story.title, story.extras     the title screen's name (when story.json names one) and third row
+    story.ending.<id>             an ending's title (the kit reads these three from the tables at
+                                  runtime, novel::kit_text; its own words are novel.* keys)
     story.name.<character>        a speaker's name tag
     story.<8 hex digits>          a statement or an option: FNV-1a of its text, so an edited line gets
                                   a new key and its stale translations stop showing
@@ -224,6 +227,7 @@ class Manifest:
         self.sources = m.get("sources", ["story/*.story"])
         self.start = m.get("start", "start")
         self.title = m.get("title", project.name)
+        self.title_set = "title" in m  # a title the manifest names (the folder's name is not translated)
         self.extras = m.get("extras", "")
         self.characters, self.display = [], []
         for c in m.get("characters", []):
@@ -835,6 +839,12 @@ class Compiler:
                 return
             seen.add(key)
             rows.append((key, text))
+        if self.m.title_set:
+            add("story.title", self.m.title)
+        if self.m.extras:
+            add("story.extras", self.m.extras)
+        for eid, title in zip(self.m.endings[1:], self.m.ending_titles[1:]):
+            add(f"story.ending.{eid}", title)
         for cid, name in zip(self.m.characters, self.m.display):
             add(f"story.name.{cid}", name)
         keys = {}

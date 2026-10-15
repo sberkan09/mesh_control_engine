@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include <cstring>
+#include <string>
 
 #include "mce/audio/components.h"
 #include "mce/ecs/save.h"
@@ -315,6 +316,84 @@ TEST_CASE("translations (M-MOBILE 11e): the language chain picks a table; pages,
     CHECK(nv::scale_reveal(6, 12, 8) == 4);
     CHECK(nv::scale_reveal(12, 12, 8) == 8);
     CHECK(nv::scale_reveal(nv::kRevealAll, 12, 8) == 8);
+}
+
+namespace {
+
+// SBA-59: the kit's own words and the story's titles, Turkish over the English base table.
+loc::Localization kit_words() {
+    loc::Localization l;
+    loc::StringTable en;
+    en.set_locale("en");
+    REQUIRE(en.add("story.title", "Fixture"));
+    REQUIRE(en.add("story.ending.quiet", "Quiet"));
+    l.add_table(std::move(en));
+    loc::StringTable tr;
+    tr.set_locale("tr");
+    REQUIRE(tr.add("story.title", "Deneme"));
+    REQUIRE(tr.add("story.ending.quiet", "Sessiz son"));
+    REQUIRE(tr.add("novel.new_game", "Yeni oyun"));
+    REQUIRE(tr.add("novel.pages_read", "{count} sayfa okundu"));
+    REQUIRE(tr.add("novel.go_on", "Devam için Enter."));
+    REQUIRE(tr.add("novel.go_on.touch", "Devam için dokun."));
+    REQUIRE(tr.add("novel.ending_of", "Son {n} / {total}"));
+    l.add_table(std::move(tr));
+    REQUIRE(l.set_locale("tr"));
+    return l;
+}
+
+std::string stage_text(World& w, nv::StageRole role, u8 index) {
+    std::string out;
+    w.query<const nv::StagePart&, const kit::TextLabel&>().each([&](const nv::StagePart& sp, const kit::TextLabel& tl) {
+        if (sp.role == role && sp.index == index) out.assign(tl.text.view().data(), tl.text.view().size());
+    });
+    return out;
+}
+
+}  // namespace
+
+TEST_CASE("kit words (SBA-59): the title screen speaks the player's language; a key no table has keeps English") {
+    Novel g(0);
+    g.w.set_resource(kit_words());
+    g.step();
+    REQUIRE(g.n().mode == nv::Mode::Title);
+    g.step();
+    CHECK(stage_text(g.w, nv::StageRole::Title, 0) == "Deneme");
+    CHECK(stage_text(g.w, nv::StageRole::ChoiceText, 0) == "Yeni oyun");
+
+    Novel plain(0);  // no Localization: the story's own title and the English rows
+    plain.step();
+    plain.step();
+    CHECK(stage_text(plain.w, nv::StageRole::Title, 0) == "Fixture");
+    CHECK(stage_text(plain.w, nv::StageRole::ChoiceText, 0) == "New game");
+}
+
+TEST_CASE("kit words (SBA-59): panel lines, counts, placeholders, the touch wording and the English fallback") {
+    const loc::Localization tr = kit_words();
+    char buf[64];
+    nv::kit_count(&tr, "novel.pages_read", 3, "{count} page read", "{count} pages read", buf, sizeof(buf));
+    CHECK(std::string(buf) == "3 sayfa okundu");
+    nv::kit_count(nullptr, "novel.pages_read", 1, "{count} page read", "{count} pages read", buf, sizeof(buf));
+    CHECK(std::string(buf) == "1 page read");
+    nv::kit_count(nullptr, "novel.pages_read", 7, "{count} page read", "{count} pages read", buf, sizeof(buf));
+    CHECK(std::string(buf) == "7 pages read");
+
+    nv::kit_text(&tr, "novel.go_on", "Enter to go on.", buf, sizeof(buf));
+    CHECK(std::string(buf) == "Devam için Enter.");
+    nv::kit_text(&tr, "novel.go_on", "Tap to go on.", buf, sizeof(buf), {}, true);
+    CHECK(std::string(buf) == "Devam için dokun.");
+    nv::kit_text(&tr, "novel.continue", "Continue", buf, sizeof(buf));  // no row: English, never the key
+    CHECK(std::string(buf) == "Continue");
+
+    const loc::Arg args[] = {{"n", "2"}, {"total", "2"}};
+    nv::kit_text(&tr, "novel.ending_of", "Ending {n} of {total}", buf, sizeof(buf), args);
+    CHECK(std::string(buf) == "Son 2 / 2");
+    nv::kit_text(&tr, "story.ending.quiet", "Quiet", buf, sizeof(buf));
+    CHECK(std::string(buf) == "Sessiz son");
+
+    char small[8];  // a cut never splits a code point: "Devam i" + the two bytes of "ç" do not fit
+    nv::kit_text(&tr, "novel.go_on", "", small, sizeof(small));
+    CHECK(std::string(small) == "Devam i");
 }
 
 TEST_CASE("translations (M-MOBILE 11e): the run, its saves and its hash are the same in every language") {
