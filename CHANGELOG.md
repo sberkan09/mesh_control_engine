@@ -9,6 +9,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   focused slider's new value through TalkBack on Android (and, built with `MCE_SCREEN_READER_NATIVE`, VoiceOver on
   iOS and macOS and Narrator, NVDA or JAWS on Windows), while the OS reports a reader on (`access.screen_reader`).
   `ui::build_access_tree` gives each widget a role, a name and a value. User guide 12.5.
+- Rollback netcode (SBA-86, M-NET2 step 5): `net::RollbackSession` runs the whole game on every peer and
+  exchanges only inputs. It guesses late remote inputs, rolls back and replays when a guess was wrong, waits only
+  past `max_prediction` (0 is lockstep), and compares state hashes of confirmed frames so a desync is reported at
+  the frame it happened. `samples/net_rollback` keeps four peers in sync at 100 ms with 5% loss. User guide 20.7.
 - Subtitles and sound captions, M-ACCESS step 1 (SBA-95): the stock player draws timeline subtitle lines,
   `kit::SoundCaption` tags on sounds and `kit::ShowCaption` lines at the bottom of the screen
   (`ui::SubtitleView`), with `access.subtitles`, `access.captions`, `access.subtitle_speaker`, `access.subtitle_size`
