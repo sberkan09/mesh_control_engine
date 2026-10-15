@@ -251,29 +251,30 @@ const TimelineRegistry::Def* TimelineRegistry::resolve(const TimelinePlayer& p) 
     if (cached && (!assets_ || cached->key == asset::kInvalidAssetKey || assets_->generation(cached->key) == cached->generation))
         return cached;
     if (!assets_) return nullptr;
-    const asset::AssetKey key = assets_->find(guid);
-    Result<asset::AssetHandle<asset::Timeline>> h =
-        key == asset::kInvalidAssetKey ? Result<asset::AssetHandle<asset::Timeline>>(Error(Errc::NotFound, "kit.timeline"))
-                                       : assets_->load_sync<asset::Timeline>(key);
-    Def d;
-    Result<void> ok = h ? copy(d, guid, assets_->resolve(h.value())) : Result<void>(h.error());
-    if (ok) {
-        d.key = key;
-        d.generation = h.value().generation;
-        if (cached) *cached = static_cast<Def&&>(d);
-        else defs_.push_back(static_cast<Def&&>(d));
-        cached = cached ? cached : &defs_.back();
-    } else {
-        bool warned = false;
-        for (const asset::Guid& g : warned_) warned |= g == guid;
-        if (!warned) {
-            MCE_LOG_WARN("kit: timeline {} cannot be loaded; its players stay idle", asset::to_string(guid).view());
-            warned_.push_back(guid);
-        }
-        cached = nullptr;
+    const bool fresh = cached == nullptr;
+    if (fresh) {
+        defs_.push_back(Def{});
+        cached = &defs_.back();
     }
-    if (h) assets_->release(asset::AnyHandle(h.value()));
-    return cached;
+    const asset::AssetKey key = assets_->find(guid);
+    bool loaded = false;
+    if (key != asset::kInvalidAssetKey) {
+        if (Result<asset::AssetHandle<asset::Timeline>> h = assets_->load_sync<asset::Timeline>(key)) {
+            loaded = static_cast<bool>(copy(*cached, guid, assets_->resolve(h.value())));
+            cached->key = key;
+            cached->generation = h.value().generation;
+            assets_->release(asset::AnyHandle(h.value()));
+        }
+    }
+    if (loaded) return cached;
+    if (fresh) defs_.pop_back();
+    bool warned = false;
+    for (const asset::Guid& g : warned_) warned |= g == guid;
+    if (!warned) {
+        MCE_LOG_WARN("kit: timeline {} cannot be loaded; its players stay idle", asset::to_string(guid).view());
+        warned_.push_back(guid);
+    }
+    return nullptr;
 }
 
 bool TimelineRegistry::bind(World& world, Track& t, const Def& d) {
