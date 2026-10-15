@@ -153,6 +153,41 @@ struct ReflectionProbe {
 
 inline constexpr u32 kMaxReflectionProbes = 4;
 
+// A global-illumination irradiance-probe volume (M-VISUAL 6, DDGI-style without ray tracing): a grid
+// of counts[0] × counts[1] × counts[2] probes spanning `bounds` (corners included), each holding the
+// diffuse light arriving from every direction (an L1 lobe, stored as four tetrahedral samples). A
+// probe sees the scene through six small cube faces lit like the main pass: the sun (shadowed by its
+// own fit over the volume), the point and spot lights, emissive surfaces, the sky behind them and the
+// volume itself, so each update adds a bounce. `probes_per_frame` probes (x-major, wrapping) are
+// re-captured every frame and blended in by `hysteresis`, so moving lights and a turning sun carry
+// over; the first frame (or a new `version`, bounds or counts) starts a fill of every probe, spread
+// over frames by Forward3D's per-frame capture budget, and the volume lights the frame once full.
+// Inside the box the probes replace the sky's diffuse ambient and dim its reflections indoors; over
+// `fade_distance` outside it the sky's ambient returns. Diffuse only: reflections stay with the sky
+// and the reflection probes. Probes buried in walls see their backfaces and darken what is near them,
+// so keep the grid's planes off the walls.
+struct GiVolume {
+    bool enabled = false;
+    math::aabb3 bounds{{-8.0f, 0.0f, -8.0f}, {8.0f, 4.0f, 8.0f}};  // world space
+    u32 counts[3] = {8, 4, 8};    // probes per axis, 2..kMaxGiProbesPerAxis
+    f32 intensity = 1.0f;
+    f32 normal_bias = 0.25f;      // meters the lookup moves off the surface along its normal
+    f32 fade_distance = 1.0f;     // meters outside the box over which the volume fades to the sky
+    f32 hysteresis = 0.85f;       // weight of a probe's old value when it is re-captured
+    u32 probes_per_frame = 16;    // rolling updates (0 = frozen after the fill)
+    u32 version = 0;              // bump to refill every probe at once
+    // TextureStore key of the editor's bake (RGBM RGBA8, gi_volume_size() × 1 layer, cooked from
+    // .mcenv): loaded in place of the fill. ~0u (or not resident) = filled at runtime.
+    u32 baked = ~0u;
+    // False (the Low tier): never captured at runtime. With a bake the volume holds the bake; without
+    // one the scene draws without global illumination.
+    bool updates = true;
+};
+
+inline constexpr u32 kMaxGiProbesPerAxis = 32;
+// The volume texture's size: 4 texels per probe along x (probe x-major), one row per (y, z) pair.
+inline rhi::Extent2D gi_volume_size(const GiVolume& gi) { return {gi.counts[0] * 4, gi.counts[1] * gi.counts[2]}; }
+
 struct Cascade {
     math::mat4 view_proj;   // world -> light clip space
     f32 near_depth = 0.0f;  // view-depth range this cascade covers
@@ -299,6 +334,9 @@ public:
     void add_point_light(const PointLight& light);
     // Up to kMaxReflectionProbes; later ones are dropped (counted in stats().probes_dropped).
     void add_reflection_probe(const ReflectionProbe& probe);
+    // The scene's irradiance volume (one at most); counts are clamped to 2..kMaxGiProbesPerAxis.
+    void set_gi_volume(const GiVolume& gi);
+    const GiVolume& gi_volume() const { return gi_; }
     // Instances whose mesh key is not resident are skipped (counted nowhere).
     void add(const MeshInstance& instance);
     // Culls, builds the shadow fit and sorts. After build() the accessors below are valid.
@@ -317,7 +355,7 @@ public:
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
     Span<const ReflectionProbe> reflection_probes() const { return probes_.span(); }
     // Every opaque submesh of every instance at its base level, unculled: what probe captures draw.
-    // Empty when the scene has no reflection probes.
+    // Empty when the scene has neither reflection probes nor an enabled GI volume.
     Span<const Draw> probe_draws() const { return probe_draws_.span(); }
     // The Forward+ lists, assigned on the CPU on first use (Forward3D's GPU path never asks).
     const ClusterLights& clusters() const;
@@ -366,6 +404,7 @@ private:
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;
     LodSettings lod_;
+    GiVolume gi_;
     Array<PointLight> point_lights_;
     mutable ClusterLights clusters_;  // assigned lazily by clusters()
     Cascade cascades_[kMaxCascades];

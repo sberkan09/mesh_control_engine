@@ -46,6 +46,7 @@ reach all of its non-transient fields.
 | `PointLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `SpotLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `ReflectionProbe3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `GiVolume3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Camera3DComponent` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `Animator` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Environment3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |

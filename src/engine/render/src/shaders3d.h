@@ -3,7 +3,8 @@
 // (rhi-renderer.md §3.3): FrameU 0, PassU 1, ObjectU 3; std430 Clusters 4, LightPool 5,
 // LightIndices 6, JointPalette 7 (skinned vertex shaders); samplers albedo 6, normal 7, ORM 8,
 // shadow cascades 9, sky 10, emissive 13; image-based lighting (M-VISUAL 2): pre-filtered sky 12,
-// BRDF LUT 14, SH9 irradiance 15; screen-space ambient occlusion (M-VISUAL 3) 11.
+// BRDF LUT 14, SH9 irradiance 15; screen-space ambient occlusion (M-VISUAL 3) 11; the irradiance
+// volume (M-VISUAL 6) 5.
 // The C++ mirrors of the blocks live in forward3d.cpp and must match member for member.
 
 namespace mce::render::shaders3d {
@@ -44,7 +45,11 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_probe_min[4];   // box, w: blend distance
     vec4 p_probe_max[4];   // box, w: first u_env layer (sharp capture, then the pre-filtered layers)
     vec4 p_ao;             // x: screen-space ambient occlusion on (M-VISUAL 3)
-    vec4 p_local;          // x: local-light shadows on (M-VISUAL 4)
+    vec4 p_local;          // x: local-light shadows on (M-VISUAL 4), y: u_shadow layer of cascade 0
+    vec4 p_gi;             // x: irradiance volume on (M-VISUAL 6), y: intensity, z: normal bias, w: fade distance
+    vec4 p_gi_min;         // xyz: volume box
+    vec4 p_gi_max;
+    vec4 p_gi_counts;      // xyz: probes per axis
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -226,7 +231,7 @@ float sample_cascade(int i, vec3 world, vec3 n, vec3 l) {
     vec2 ts = 1.0 / vec2(textureSize(u_shadow, 0).xy);
     float sum = 0.0;
     for (int y = -1; y <= 1; ++y)
-        for (int x = -1; x <= 1; ++x) sum += texture(u_shadow, vec4(c.xy + vec2(x, y) * ts, float(i), min(c.z, 1.0)));
+        for (int x = -1; x <= 1; ++x) sum += texture(u_shadow, vec4(c.xy + vec2(x, y) * ts, float(i) + p_local.y, min(c.z, 1.0)));
     return sum * (1.0 / 9.0);
 }
 float shadow_term(vec3 world, vec3 n, vec3 l, float depth) {
@@ -322,6 +327,46 @@ vec3 perturb_normal(vec3 n, vec3 p, vec2 uv, vec3 ts) {
     return normalize(mat3(t * s, -b * s, n) * ts);
 }
 
+// ---- the irradiance volume (M-VISUAL 6): 4 texels per probe, the probe's light at the tetrahedron
+// directions kGiTetra (each the sphere integral of L * (1 + w.d) / 4pi). E(n) / pi = sum V_k (1/4 + 3/2 d_k.n)
+// is the L1 irradiance of the probe's view; the 8 probes around a point blend by trilinear weight
+// times a smooth backface term (a probe behind the surface counts little).
+layout(binding = 5) uniform sampler2D u_gi;
+const vec3 kGiTetra[4] = vec3[4](vec3(0.57735027, 0.57735027, 0.57735027), vec3(0.57735027, -0.57735027, -0.57735027),
+                                 vec3(-0.57735027, 0.57735027, -0.57735027), vec3(-0.57735027, -0.57735027, 0.57735027));
+vec3 gi_probe(ivec3 c, vec3 n) {
+    ivec2 t = ivec2(c.x * 4, c.y + int(p_gi_counts.y) * c.z);
+    vec3 e = vec3(0.0);
+    for (int k = 0; k < 4; ++k) e += texelFetch(u_gi, t + ivec2(k, 0), 0).rgb * (0.25 + 1.5 * dot(kGiTetra[k], n));
+    return max(e, vec3(0.0));
+}
+// rgb: irradiance / pi at p along n; a: how much of it applies (1 inside the box, 0 past the fade).
+vec4 gi_irradiance(vec3 p, vec3 n) {
+    vec3 bmin = p_gi_min.xyz, bmax = p_gi_max.xyz;
+    vec3 inside = min(p - bmin, bmax - p);
+    float fade = clamp(1.0 + min(min(inside.x, inside.y), inside.z) / max(p_gi.w, 1e-3), 0.0, 1.0);
+    if (fade <= 0.0) return vec4(0.0);
+    ivec3 counts = ivec3(p_gi_counts.xyz);
+    vec3 cell = (bmax - bmin) / vec3(counts - 1);
+    vec3 g = (clamp(p + n * p_gi.z, bmin, bmax) - bmin) / cell;
+    ivec3 base = clamp(ivec3(floor(g)), ivec3(0), counts - 2);
+    vec3 f = clamp(g - vec3(base), 0.0, 1.0);
+    vec3 sum = vec3(0.0);
+    float wsum = 0.0;
+    for (int i = 0; i < 8; ++i) {
+        ivec3 o = ivec3(i & 1, (i >> 1) & 1, i >> 2);
+        vec3 tw = mix(1.0 - f, f, vec3(o));
+        float w = tw.x * tw.y * tw.z;
+        vec3 to = bmin + vec3(base + o) * cell - p;
+        float d2 = dot(to, to);
+        float b = d2 > 1e-8 ? (dot(to * inversesqrt(d2), n) + 1.0) * 0.5 : 1.0;
+        w *= b * b + 0.05;
+        sum += gi_probe(base + o, n) * w;
+        wsum += w;
+    }
+    return vec4(sum / max(wsum, 1e-6), fade);
+}
+
 uint cluster_of(float depth) {
     uvec3 g = uvec3(u_cluster.xyz);
     uint tx = min(uint(gl_FragCoord.x * u_viewport.z * u_cluster.x), g.x - 1u);
@@ -388,22 +433,35 @@ void main() {
         float NoV = max(dot(n, v), 1e-4);
         vec3 r = reflect(-v, n);
         float horizon = clamp(1.0 + dot(r, normalize(v_normal)), 0.0, 1.0);
-        vec3 amb_diffuse, amb_spec;
+        vec3 amb_diffuse = p_ibl.x > 0.5 ? sh_irradiance(n) * diffuse * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
+        vec3 amb_spec;
+        // The irradiance volume: its light in place of the sky's, and the sky's reflections dimmed by how
+        // much of the sky's irradiance reaches this point (rooms do not mirror the open sky).
+        float gi_w = 0.0, sky_vis = 1.0;
+        if (p_gi.x > 0.5) {
+            vec4 gi = gi_irradiance(v_world, n);
+            gi_w = gi.a;
+            vec3 irr = gi.rgb * p_gi.y;
+            vec3 sky_irr = p_ibl.x > 0.5 ? sh_irradiance(n) * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5);
+            amb_diffuse = mix(amb_diffuse, irr * diffuse, gi_w);
+            const vec3 kLuma = vec3(0.2126, 0.7152, 0.0722);
+            sky_vis = mix(1.0, clamp(dot(irr, kLuma) / max(dot(sky_irr, kLuma), 1e-4), 0.0, 1.0), gi_w);
+        }
         if (p_ibl.x > 0.5) {
-            amb_diffuse = sh_irradiance(n) * diffuse * p_ibl.y;
             vec2 ab = textureLod(u_brdf_lut, vec2(NoV, rough), 0.0).rg;
-            vec3 env = prefiltered_sky(r, rough);
+            vec3 env = prefiltered_sky(r, rough) * sky_vis;
             if (p_probes.x > 0.5) env = probe_specular(v_world, r, rough, env);
             amb_spec = env * (f0 * ab.x + ab.y) * p_sky_horizon.w * horizon * horizon;
         } else {
-            amb_diffuse = mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
-            amb_spec = sky_radiance(r, rough * 8.0) * env_brdf(f0, rough, NoV) * p_sky_horizon.w * horizon * horizon;
+            amb_spec = sky_radiance(r, rough * 8.0) * sky_vis * env_brdf(f0, rough, NoV) * p_sky_horizon.w * horizon * horizon;
         }
         if (p_ao.x > 0.5) {  // SSAO darkens the ambient only; the screen position as the full-screen passes see it
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             ao *= textureLod(u_ao, c.xy / c.w * 0.5 + 0.5, 0.0).r;
         }
-        color += (amb_diffuse * mix(0.55, 1.0, sh * clamp(dot(n, l), 0.0, 1.0)) + amb_spec) * ao;
+        // The sky's flat ambient is darkened away from the sun; the volume's light is not (it saw the shadows).
+        float sun_side = mix(mix(0.55, 1.0, sh * clamp(dot(n, l), 0.0, 1.0)), 1.0, gi_w);
+        color += (amb_diffuse * sun_side + amb_spec) * ao;
     }
     vec3 emissive = o_emissive.rgb;
     if (o_emissive.w > 0.5) emissive *= texture(u_emissive, vec3(v_uv, 0.0)).rgb;
@@ -1021,6 +1079,67 @@ layout(location = 0) out vec4 o_color;
 void main() {
     vec4 t = textureLod(u_baked, vec3(v_uv, d_params.x), 0.0);
     o_color = vec4(t.rgb * t.a * d_params.z, 1.0);
+}
+)";
+
+// The irradiance volume's update (M-VISUAL 6): the cube faces of a batch of probes (6 layers per
+// probe, row-major from the batch's first row) into their 4 texels each: V_k = the sphere integral of
+// L * (1 + w.d_k) / 4pi over the faces' texels (solid angle 1 / (1 + u² + v²)^1.5). Drawn over the
+// batch's rows only, alpha = the new value's weight (alpha blending keeps the rest of the old one).
+constexpr const char* kGiProjectFS = R"(#version 450 core
+layout(std140, binding = 1) uniform GiProjectU {
+    vec4 g_size;    // x: texels per row, y: rows in the pass, z: face size
+    vec4 g_params;  // x: probes per row, y: weight of the new value, z: the pass's first face probe
+};
+layout(binding = 6) uniform sampler2DArray u_faces;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+const vec3 kTetra[4] = vec3[4](vec3(0.57735027, 0.57735027, 0.57735027), vec3(0.57735027, -0.57735027, -0.57735027),
+                               vec3(-0.57735027, 0.57735027, -0.57735027), vec3(-0.57735027, -0.57735027, 0.57735027));
+// The capture's faces (Forward3D probe_face_views): +x -x +y -y +z -z, each looking down -Z of
+// look_at(pos, pos + kFwd, kUp), so the face's ndc x runs along cross(kFwd, kUp) and ndc y along kUp.
+const vec3 kFwd[6] = vec3[6](vec3(1, 0, 0), vec3(-1, 0, 0), vec3(0, 1, 0), vec3(0, -1, 0), vec3(0, 0, 1), vec3(0, 0, -1));
+const vec3 kUp[6] = vec3[6](vec3(0, 1, 0), vec3(0, 1, 0), vec3(0, 0, -1), vec3(0, 0, 1), vec3(0, 1, 0), vec3(0, 1, 0));
+void main() {
+    int x = min(int(v_uv.x * g_size.x), int(g_size.x) - 1);
+    int row = min(int(v_uv.y * g_size.y), int(g_size.y) - 1);
+    int k = x & 3;
+    int layer = (int(g_params.z) + row * int(g_params.x) + (x >> 2)) * 6;
+    int res = int(g_size.z);
+    vec3 d_k = kTetra[k];
+    vec3 sum = vec3(0.0);
+    float wsum = 0.0;
+    for (int f = 0; f < 6; ++f) {
+        vec3 right = cross(kFwd[f], kUp[f]);
+        for (int j = 0; j < res; ++j) {
+            for (int i = 0; i < res; ++i) {
+                vec2 ndc = (vec2(i, j) + 0.5) * (2.0 / float(res)) - 1.0;
+                vec3 d = kFwd[f] + right * ndc.x + kUp[f] * ndc.y;
+                float len2 = dot(d, d);
+                float w = inversesqrt(len2) / len2;
+                d *= inversesqrt(len2);
+                sum += texelFetch(u_faces, ivec3(i, j, layer + f), 0).rgb * (w * (1.0 + dot(d, d_k)));
+                wsum += w;
+            }
+        }
+    }
+    o_color = vec4(sum / wsum, g_params.y);
+}
+)";
+
+// The irradiance volume as RGBM RGBA8 (the editor's bake reads it back), texel for texel.
+constexpr const char* kGiEncodeFS = R"(#version 450 core
+layout(std140, binding = 1) uniform ExportU {
+    vec4 e_params;  // z: RGBM range
+};
+layout(binding = 6) uniform sampler2D u_gi_src;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+void main() {
+    vec3 c = max(textureLod(u_gi_src, v_uv, 0.0).rgb, vec3(0.0));
+    float m = clamp(max(max(c.r, c.g), max(c.b, 1e-6)) / e_params.z, 1.0 / 255.0, 1.0);
+    m = ceil(m * 255.0) / 255.0;
+    o_color = vec4(min(c / (m * e_params.z), vec3(1.0)), m);
 }
 )";
 

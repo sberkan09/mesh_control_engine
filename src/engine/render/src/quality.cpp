@@ -19,6 +19,7 @@ QualitySettings quality_settings(QualityTier tier) {
     switch (tier) {
         case QualityTier::Low:
             q = QualitySettings{1, 1024, 1, false, true, 0.67f};
+            q.gi_updates = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -65,5 +66,7 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
     post.fxaa = q.fxaa;
     post.taa = q.taa;
 }
+
+void apply_quality(const QualitySettings& q, GiVolume& gi) { gi.updates = gi.updates && q.gi_updates; }
 
 }  // namespace mce::render

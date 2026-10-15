@@ -210,6 +210,7 @@ TEST_CASE("render3d_gl: GPU timestamps time every stage") {
     CHECK(t.clusters >= 0.0);
     CHECK(t.ssao >= 0.0);
     CHECK(t.shadow >= 0.0);
+    CHECK(t.gi >= 0.0);
     CHECK(t.main >= 0.0);
     CHECK(t.resolve >= 0.0);
     CHECK(t.bloom >= 0.0);
@@ -1153,5 +1154,246 @@ TEST_CASE("render3d_gl: temporal upscaling keeps a half-scale frame closer to fu
     const Forward3D& fw = f.renderer.forward_3d();
     CHECK(f.device->texture_desc(fw.velocity()).size.width == kW / 2);
     CHECK(f.device->texture_desc(fw.taa_history()).size.width == kW);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+// ---- global illumination: the irradiance volume (M-VISUAL 6) -------------------------------------
+
+namespace {
+
+usize differing_bytes(const Array<u8>& a, const Array<u8>& b) {
+    usize n = 0;
+    for (usize i = 0; i < a.size(); ++i) n += a[i] != b[i];
+    return n;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: GI off draws today's frame; a GI run in between and the Low tier leave no trace") {
+    Fixture3D f;
+    upload_probe_room(f);
+    bool gi = false, updates = true;
+    const auto scene = [&](Scene3D& s) {
+        gi_wall_scene(s, gi);
+        if (gi) {
+            GiVolume g = s.gi_volume();
+            g.updates = updates;
+            s.set_gi_volume(g);
+        }
+    };
+    const Forward3D& fw = f.renderer.forward_3d();
+    f.render(0.0f, true, scene);
+    const Array<u8> off = f.pixels;
+    CHECK_FALSE(fw.last_stats().gi);
+    gi = true;
+    for (int i = 0; i < 2; ++i) f.render(0.0f, true, scene);  // 48 probes fill over two frames
+    CHECK(fw.last_stats().gi);
+    CHECK(differing_bytes(f.pixels, off) > 0);
+    gi = false;
+    f.render(0.0f, true, scene);
+    CHECK(differing_bytes(f.pixels, off) == 0);
+    // The Low tier without a bake: no runtime captures, so no volume at all.
+    gi = true;
+    updates = false;
+    f.render(0.0f, true, scene);
+    CHECK_FALSE(fw.last_stats().gi);
+    CHECK(fw.last_stats().gi_probes == 0);
+    CHECK(differing_bytes(f.pixels, off) == 0);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: the volume bleeds an emissive wall's color onto the ground; fill once, then roll") {
+    Fixture3D f;
+    upload_probe_room(f);
+    bool gi = false;
+    const auto scene = [&](Scene3D& s) { gi_wall_scene(s, gi); };
+    const Forward3D& fw = f.renderer.forward_3d();
+    const vec3 spot{1.5f, 0.0f, -0.5f};  // the ground in front of the wall, beside the box
+    f.render(0.0f, true, scene);
+    const Rgb sky_only = f.at_world(spot);
+    gi = true;
+    f.render(0.0f, true, scene);  // the fill's first 32 probes: the frame keeps the sky's ambient
+    CHECK_FALSE(fw.last_stats().gi);
+    CHECK_FALSE(fw.last_stats().gi_filled);
+    CHECK(fw.last_stats().gi_probes == 32);
+    CHECK(f.at_world(spot).r == sky_only.r);
+    f.render(0.0f, true, scene);
+    const Rgb bled = f.at_world(spot);
+    INFO("sky " << sky_only.r << "," << sky_only.g << "," << sky_only.b << " gi " << bled.r << "," << bled.g << "," << bled.b);
+    MESSAGE("ground in front of the red wall: sky ambient " << sky_only.r << "," << sky_only.g << "," << sky_only.b
+                                                            << ", volume " << bled.r << "," << bled.g << "," << bled.b);
+    CHECK(fw.last_stats().gi);
+    CHECK(fw.last_stats().gi_filled);
+    CHECK(fw.last_stats().gi_probes == 16);  // the rest
+    CHECK(fw.last_stats().gi_draws > 0);
+    CHECK(bled.r > sky_only.r + 30);
+    CHECK(bled.r > bled.g + 30);
+    CHECK(bled.r > bled.b + 30);
+    f.render(0.0f, true, scene);
+    CHECK_FALSE(fw.last_stats().gi_filled);
+    CHECK(fw.last_stats().gi_probes == 8);  // two rows of four
+    const rhi::TextureDesc& vd = f.device->texture_desc(fw.gi_volume());
+    CHECK(vd.size.width == 16);
+    CHECK(vd.size.height == 12);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: sunlight bounces off the ground onto the box's unlit face") {
+    Fixture3D f;
+    bool gi = false;
+    const auto scene = [&](Scene3D& s) {
+        DirectionalLight sun;
+        sun.direction = {0.3f, -1.0f, 0.9f};  // lights the box's back (-z) face, not the one the camera sees
+        sun.intensity = 3.0f;
+        sun.ambient_sky = sun.ambient_ground = {0, 0, 0};
+        s.set_light(sun);
+        Sky sky;
+        sky.enabled = false;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        Fog fog;
+        fog.color = {0, 0, 0};
+        s.set_fog(fog);
+        if (gi) s.set_gi_volume(room_gi());
+    };
+    const vec3 face{0.2f, 0.4f, 0.5f};  // the +z face, toward the camera
+    f.render(0.0f, true, scene);
+    const Rgb dark = f.at_world(face);
+    gi = true;
+    for (int i = 0; i < 8; ++i) f.render(0.0f, true, scene);  // a bounce more on every sweep
+    const Rgb bounced = f.at_world(face);
+    INFO("unlit face " << dark.luma() << " -> " << bounced.luma());
+    MESSAGE("box face away from the sun: luma " << dark.luma() << " without the volume, " << bounced.luma() << " with it");
+    CHECK(dark.luma() < 8);
+    CHECK(bounced.luma() > dark.luma() + 15);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: rolling updates carry a light switched on into the volume") {
+    Fixture3D f;
+    upload_probe_room(f);
+    bool lamp = false;
+    u32 version = 0;
+    const auto scene = [&](Scene3D& s) {
+        gi_wall_scene(s, true);
+        GiVolume g = s.gi_volume();
+        g.hysteresis = 0.5f;
+        g.version = version;
+        s.set_gi_volume(g);
+        if (lamp) {
+            PointLight pl;
+            pl.position = {-1.5f, 0.6f, 1.5f};
+            pl.color = {0.2f, 1.0f, 0.2f};
+            pl.intensity = 30.0f;
+            pl.radius = 2.5f;  // short of the spot: what reaches it is bounced
+            s.add_point_light(pl);
+        }
+    };
+    const Forward3D& fw = f.renderer.forward_3d();
+    const vec3 spot{2.0f, 0.0f, 1.5f};
+    for (int i = 0; i < 2; ++i) f.render(0.0f, true, scene);
+    lamp = true;
+    f.render(0.0f, true, scene);
+    CHECK(fw.last_stats().gi_probes == 8);
+    const Rgb first = f.at_world(spot);
+    for (int i = 0; i < 24; ++i) f.render(0.0f, true, scene);  // four sweeps of the 12 rows
+    const Rgb rolled = f.at_world(spot);
+    version = 1;  // the reference: every probe captured with the lamp on
+    for (int i = 0; i < 2; ++i) f.render(0.0f, true, scene);
+    CHECK(fw.last_stats().gi_filled);
+    const Rgb filled = f.at_world(spot);
+    INFO("first " << first.g << " rolled " << rolled.g << " filled " << filled.g);
+    MESSAGE("green at the far ground after the lamp: first frame " << first.g << ", 24 frames " << rolled.g << ", refilled " << filled.g);
+    CHECK(filled.g > first.g + 6);
+    CHECK(std::abs(rolled.g - filled.g) * 3 < filled.g - first.g);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a crowded volume's captures stay inside the frame's uniform ring") {
+    Fixture3D f;
+    upload_probe_room(f);
+    const auto scene = [&](Scene3D& s) {
+        gi_wall_scene(s, true);
+        // 400 posts through the volume: a face sees up to hundreds of draws.
+        for (int z = 0; z < 20; ++z)
+            for (int x = 0; x < 20; ++x) {
+                MeshInstance m;
+                m.mesh = 1;
+                m.world = math::translation({-2.85f + 0.3f * f32(x), 0.0f, -2.85f + 0.3f * f32(z)}) *
+                          math::scaling({0.12f, 0.6f, 0.12f});
+                m.cast_shadows = false;
+                s.add(m);
+            }
+    };
+    const Forward3D& fw = f.renderer.forward_3d();
+    u32 frames = 0;
+    for (; frames < 64 && !fw.last_stats().gi_filled; ++frames) {
+        f.render(0.0f, true, scene);
+        CHECK(f.gpu.ring_overflows == 0);
+        CHECK(fw.last_stats().gi_probes > 0);  // a probe a frame at least
+        CHECK(fw.last_stats().gi_draws <= 6 * Forward3D::kGiMaxFaceDraws * fw.last_stats().gi_probes);
+    }
+    MESSAGE("crowded fill: " << frames << " frames, last frame " << fw.last_stats().gi_draws << " capture draws, "
+                             << f.gpu.uniform_bytes << " uniform bytes");
+    CHECK(fw.last_stats().gi_filled);
+    CHECK(frames > 2);  // the uniform budget, not kGiMaxBatchProbes, paced the fill
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a volume exported as RGBM and loaded back lights like the capture; Low uses the bake") {
+    Fixture3D f;
+    upload_probe_room(f);
+    bool updates = true;
+    u32 baked = ~0u;
+    const auto scene = [&](Scene3D& s) {
+        gi_wall_scene(s, false);
+        GiVolume g = room_gi();
+        g.baked = baked;
+        g.updates = updates;
+        s.set_gi_volume(g);
+    };
+    Forward3D& fw = f.renderer.forward_3d();
+    const vec3 spot{1.5f, 0.0f, -0.5f};
+    for (int i = 0; i < 2; ++i) f.render(0.0f, true, scene);
+    const Rgb captured = f.at_world(spot);
+    CHECK(fw.last_stats().gi_filled);
+
+    const rhi::Extent2D es = gi_volume_size(room_gi());
+    Array<u8> strip;
+    strip.resize(usize(es.width) * es.height * 4);
+    f.device->begin_frame(f.frame++);
+    {
+        rhi::CommandBuffer cmd;
+        REQUIRE(fw.record_gi_export(cmd));
+        f.device->submit(cmd);
+    }
+    REQUIRE(f.device->read_pixels(fw.gi_export_target(), rhi::Rect2D{0, 0, es.width, es.height}, strip.span()).has_value());
+    f.device->end_frame();
+    Array<u8> texels;
+    texels.resize(strip.size());
+    const usize row = usize(es.width) * 4;
+    for (u32 y = 0; y < es.height; ++y) std::memcpy(&texels[y * row], &strip[(es.height - 1 - y) * row], row);
+    const TextureMipUpload mip{es.width, es.height, std::as_bytes(texels.span())};
+    TextureUpload up;
+    up.layers = 1;
+    up.mips = Span<const TextureMipUpload>(&mip, 1);
+    baked = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(baked, 1, up).has_value());
+
+    updates = false;  // the Low tier: the bake, never a capture
+    f.render(0.0f, true, scene);
+    CHECK(fw.last_stats().gi);
+    CHECK(fw.last_stats().gi_loaded);
+    CHECK(fw.last_stats().gi_probes == 0);
+    const Rgb loaded = f.at_world(spot);
+    INFO("captured " << captured.r << "," << captured.g << " loaded " << loaded.r << "," << loaded.g);
+    CHECK(std::abs(loaded.r - captured.r) <= 6);
+    CHECK(std::abs(loaded.g - captured.g) <= 6);
+    f.render(0.0f, true, scene);
+    CHECK_FALSE(fw.last_stats().gi_loaded);  // decoded once
+    CHECK(fw.last_stats().gi_probes == 0);
+    updates = true;  // the higher tiers start from the bake and keep rolling
+    f.render(0.0f, true, scene);
+    CHECK(fw.last_stats().gi_probes == 8);
     CHECK(f.device->validation_error_count() == 0);
 }

@@ -3,10 +3,11 @@
 // the same scene as a desktop at a frame budget it holds. `r.quality` picks the tier (auto = Medium
 // on Android/iOS, High elsewhere); hosts apply it when they set up Forward3D and each Scene3D.
 //
-//   tier     MSAA  shadow map  cascades  bloom  AA    render scale
-//   Low      1x    1024        1         off    FXAA  0.67
-//   Medium   2x    1024        2         on     -     0.85
-//   High     4x    2048        3         on     TAA   1.0   (M-VISUAL 5: TAA in place of the pre-tier FXAA)
+//   tier     MSAA  shadow map  cascades  bloom  AA    render scale  GI volume (M-VISUAL 6)
+//   Low      1x    1024        1         off    FXAA  0.67          the bake only (none without one)
+//   Medium   2x    1024        2         on     -     0.85          runtime updates
+//   High     4x    2048        3         on     TAA   1.0           runtime updates
+//   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High)
 //
 // Render scale shrinks the 3D targets (HDR, depth, bloom chain); the tonemap/FXAA pass upsamples
 // into the full-size output, so 2D and UI drawn afterwards stay sharp.
@@ -26,6 +27,7 @@ struct QualitySettings {
     bool fxaa = true;
     f32 render_scale = 1.0f;
     bool taa = false;  // PostFx::taa (replaces FXAA where both are on)
+    bool gi_updates = true;  // GiVolume::updates: the irradiance volume is captured at runtime
 };
 
 QualitySettings quality_settings(QualityTier tier);
@@ -37,5 +39,7 @@ QualityTier quality_tier();
 void apply_quality(const QualitySettings& q, Forward3DDesc& desc);
 // Per-scene knobs: cascade count and resolution, bloom, FXAA, TAA. Distances and splits stay the scene's.
 void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& post);
+// The irradiance volume's runtime updates (a scene that turned them off keeps them off).
+void apply_quality(const QualitySettings& q, GiVolume& gi);
 
 }  // namespace mce::render

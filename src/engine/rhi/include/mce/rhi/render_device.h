@@ -108,6 +108,10 @@ public:
     virtual void submit(const CommandBuffer& cmd) = 0;
     virtual void end_frame() = 0;
     virtual void present(bool vsync) = 0;
+    // The index the open (or last) frame began with. Offline tools that submit more than a frame's
+    // rings hold (the editor's GI bake) end the frame and begin it again under the same index: that
+    // waits for its GPU work and starts the rings over.
+    virtual u64 frame_index() const = 0;
 
     // The current window backbuffer size in pixels.
     virtual Extent2D backbuffer_size() const = 0;

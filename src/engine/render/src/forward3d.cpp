@@ -1,5 +1,6 @@
 #include "mce/render/forward3d.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include "mce/convar.h"
@@ -22,23 +23,17 @@ MCE_CVAR(cv_ssao, "r.ssao", true,
          CVarFlags::RequiresRestart);
 MCE_CVAR(cv_taa, "r.taa", true,
          "Temporal anti-aliasing for scenes that ask for it (PostFx::taa; off = FXAA only)", CVarFlags::RequiresRestart);
+MCE_CVAR(cv_gi, "r.gi", true,
+         "Irradiance-volume global illumination for scenes that ask for it (GiVolume::enabled; off = the sky's ambient)",
+         CVarFlags::RequiresRestart);
 MCE_CVAR(cv_local_shadows, "r.local_shadows", true,
          "Shadow maps for spot and point lights that ask for them (PointLight::cast_shadows; off = unshadowed)",
          CVarFlags::None);
 
-// std140 mirrors of the shader blocks (shaders3d.h): vec4/mat4 members only, so no padding rules.
-struct FrameU {
-    mat4 view_proj;
-    mat4 view;
-    mat4 inv_view_proj;
-    vec4 camera_pos;
-    vec4 params;    // x: exposure, y: encode sRGB, z: bloom intensity, w: bloom on
-    vec4 viewport;  // w, h, 1/w, 1/h
-    vec4 cluster;   // grid x, y, z, light count
-    vec4 cluster_z; // slice scale, bias, near, far
-};
+}  // namespace
 
-struct PassU {
+// std140 mirror of the lit passes' PassU (shaders3d.h MCE_GLSL_PASS_U): vec4/mat4 members only.
+struct Forward3DPassU {
     vec4 light_dir;  // w: cascade count
     vec4 light_color;
     vec4 amb_sky;
@@ -58,7 +53,27 @@ struct PassU {
     vec4 probe_min[kMaxReflectionProbes];  // w: blend distance
     vec4 probe_max[kMaxReflectionProbes];  // w: first ibl_env layer
     vec4 ao;           // x: SSAO on
-    vec4 local;        // x: local-light shadows on (M-VISUAL 4)
+    vec4 local;        // x: local-light shadows on (M-VISUAL 4), y: shadow-map layer of cascade 0
+    vec4 gi;           // x: irradiance volume on (M-VISUAL 6), y: intensity, z: normal bias, w: fade distance
+    vec4 gi_min;
+    vec4 gi_max;
+    vec4 gi_counts;
+};
+
+namespace {
+
+using PassU = Forward3DPassU;
+
+// std140 mirrors of the shader blocks (shaders3d.h): vec4/mat4 members only, so no padding rules.
+struct FrameU {
+    mat4 view_proj;
+    mat4 view;
+    mat4 inv_view_proj;
+    vec4 camera_pos;
+    vec4 params;    // x: exposure, y: encode sRGB, z: bloom intensity, w: bloom on
+    vec4 viewport;  // w, h, 1/w, 1/h
+    vec4 cluster;   // grid x, y, z, light count
+    vec4 cluster_z; // slice scale, bias, near, far
 };
 
 struct LocalShadowRecord {  // std430 row of bank kLocalShadows (kMeshFS LocalShadow)
@@ -77,6 +92,11 @@ struct AoU {  // kAoFS / kAoBlurFS
 struct ProbeU {  // kProbeReprojectFS
     mat4 face_vp[6];
     vec4 pos;
+};
+
+struct GiProjectU {  // kGiProjectFS
+    vec4 size;    // x: texels per row, y: rows in the batch, z: face size
+    vec4 params;  // x: probes per row, y: weight of the new value
 };
 
 struct PrefilterU {  // kProbePrefilterFS
@@ -108,7 +128,7 @@ struct PostU {
     vec4 params;  // x: threshold, y: knee, z: first pass, w: exposure
 };
 
-enum Stage : u32 { kTsBegin, kTsClusters, kTsSsao, kTsShadow, kTsMain, kTsResolve, kTsTaa, kTsBloom, kTsTonemap, kTsFxaa };
+enum Stage : u32 { kTsBegin, kTsClusters, kTsSsao, kTsShadow, kTsGi, kTsMain, kTsResolve, kTsTaa, kTsBloom, kTsTonemap, kTsFxaa };
 
 struct VelPassU {  // kVelocityVS
     mat4 jittered;
@@ -192,6 +212,35 @@ void probe_face_views(vec3 pos, f32 near_z, f32 far_z, mat4 (&view)[6], mat4 (&v
         view[f] = look_at_rh(pos, pos + kDirs[f], kUps[f]);
         view_proj[f] = proj * view[f];
     }
+}
+
+// The volume's contents depend on its placement, its version and its bake (or the lack of one).
+u64 gi_key(const GiVolume& gi, rhi::TextureHandle baked) {
+    u64 h = 1469598103934665603ull;
+    auto mix = [&h](const void* q, usize n) {
+        const auto* b = static_cast<const u8*>(q);
+        for (usize i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
+    };
+    const f32 f[6] = {gi.bounds.min.x, gi.bounds.min.y, gi.bounds.min.z, gi.bounds.max.x, gi.bounds.max.y, gi.bounds.max.z};
+    const u32 u[6] = {gi.counts[0], gi.counts[1], gi.counts[2], gi.version, baked.index, baked.generation};
+    mix(f, sizeof(f));
+    mix(u, sizeof(u));
+    return h | 1u;
+}
+
+// Normalized Gribb-Hartmann planes of a view-projection; a sphere is outside when below any.
+void frustum_planes(const mat4& m, vec4 (&out)[6]) {
+    const vec4 r0 = m.row(0), r1 = m.row(1), r2 = m.row(2), r3 = m.row(3);
+    const vec4 planes[6] = {r3 + r0, r3 - r0, r3 + r1, r3 - r1, r3 + r2, r3 - r2};
+    for (int i = 0; i < 6; ++i) {
+        const f32 l = length(planes[i].xyz());
+        out[i] = l > 0.0f ? planes[i] * (1.0f / l) : planes[i];
+    }
+}
+bool sphere_in(const vec4 (&planes)[6], vec3 c, f32 r) {
+    for (const vec4& p : planes)
+        if (dot(p.xyz(), c) + p.w < -r) return false;
+    return true;
 }
 
 void destroy(rhi::RenderDevice& d, rhi::TextureHandle& t) {
@@ -382,6 +431,19 @@ ResultV Forward3D::create_pipelines() {
         fs.debug_name = "taa";
         MCE_TRY_ASSIGN(taa_pipe_, device_->create_pipeline(fs));
     }
+    if (desc_.gi && cv_gi.get_bool()) {
+        fs.fragment_shader = {kGiProjectFS, "gi_project.frag"};
+        fs.state.blend.mode = rhi::BlendMode::Alpha;  // alpha = the new value's weight (hysteresis)
+        fs.debug_name = "gi.project";
+        MCE_TRY_ASSIGN(gi_project_, device_->create_pipeline(fs));
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kGiEncodeFS, "gi_encode.frag"};
+        fs.debug_name = "gi.encode";
+        MCE_TRY_ASSIGN(gi_encode_, device_->create_pipeline(fs));
+        fs.fragment_shader = {kProbeDecodeFS, "probe_decode.frag"};
+        fs.debug_name = "gi.decode";
+        MCE_TRY_ASSIGN(gi_decode_, device_->create_pipeline(fs));
+    }
     if (desc_.ibl && cv_ibl.get_bool()) {
         fs.fragment_shader = {kIblPrefilterFS, "ibl_prefilter.frag"};
         fs.debug_name = "ibl.prefilter";
@@ -475,12 +537,16 @@ void Forward3D::shutdown() {
           &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
           &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &velocity_pipe_, &velocity_skinned_,
-          &taa_pipe_}) {
+          &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
-    for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_, &ao_off_})
+    for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_, &ao_off_,
+                                  &gi_volume_, &gi_faces_, &gi_faces_depth_, &gi_export_})
         destroy(*device_, *t);
+    gi_size_ = {};
+    gi_face_layers_ = gi_shadow_layer_ = gi_cursor_ = gi_filled_ = 0;
+    gi_key_ = 0;
     ibl_key_ = 0;
     ibl_env_layers_ = 0;
     for (u64& k : probe_keys_) k = 0;
@@ -510,7 +576,8 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     t.clusters = ts.ms(b + kTsBegin, b + kTsClusters);
     t.ssao = ts.ms(b + kTsClusters, b + kTsSsao);
     t.shadow = ts.ms(b + kTsSsao, b + kTsShadow);
-    t.main = ts.ms(b + kTsShadow, b + kTsMain);
+    t.gi = ts.ms(b + kTsShadow, b + kTsGi);
+    t.main = ts.ms(b + kTsGi, b + kTsMain);
     t.resolve = ts.ms(b + kTsMain, b + kTsResolve);
     t.taa = ts.ms(b + kTsResolve, b + kTsTaa);
     t.bloom = ts.ms(b + kTsTaa, b + kTsBloom);
@@ -554,6 +621,19 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     stats_.joints = static_cast<u32>(palette.size());
     record_ibl(cmd, scene);     // rare (sky changes), so outside the per-stage budget
     record_probes(cmd, scene);  // rare too (probe placed, moved or version bumped)
+    // The volume's sun fit takes one more shadow-map layer, added once a scene has a volume.
+    if (scene.gi_volume().enabled && !gi_project_.is_null() && gi_shadow_layer_ == 0) {
+        destroy(*device_, shadow_map_);
+        rhi::TextureDesc td;
+        td.size = {desc_.shadow_size, desc_.shadow_size};
+        td.format = rhi::TextureFormat::D32_Float;
+        td.usage = rhi::TextureUsage::DepthTarget;
+        td.dimension = rhi::TextureDimension::Tex2DArray;
+        gi_shadow_layer_ = kMaxCascades + desc_.local_shadow_layers;
+        td.array_layers = static_cast<u16>(gi_shadow_layer_ + 1);
+        td.debug_name = "mce.3d.shadow_cascades";
+        shadow_map_ = device_->create_texture(td);
+    }
     timestamp(cmd, kTsBegin);
     record_clusters(cmd, scene);
     timestamp(cmd, kTsClusters);
@@ -562,6 +642,8 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     record_shadows(cmd, scene);
     record_local_shadows(cmd, scene);
     timestamp(cmd, kTsShadow);
+    record_gi(cmd, scene);
+    timestamp(cmd, kTsGi);
     record_main(cmd, scene);
     timestamp(cmd, kTsMain);
     if (desc_.msaa > 1) cmd.resolve(hdr_msaa_, hdr_);
@@ -818,6 +900,7 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_lut_, linear_clamp_);
             cmd.bind_texture(rhi::bank::kIblSh, ibl_sh_, point_sampler_);
             cmd.bind_texture(rhi::bank::kAo, ao_off_, linear_clamp_);  // captures take no SSAO (PassU::ao.x = 0)
+            cmd.bind_texture(rhi::bank::kGiVolume, ao_off_, point_sampler_);  // nor the volume (PassU::gi.x = 0)
             cmd.set_storage_data(rhi::bank::kClusters, rhi::as_bytes(kNoRange));
             cmd.set_storage_data(rhi::bank::kLightIndices, rhi::as_bytes(kNoIndex));
             cmd.set_storage_data(rhi::bank::kLightPool, rhi::as_bytes(kNoLight));
@@ -1110,64 +1193,11 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             pu.cascade[i] = mat4::identity();
         }
     }
-    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu);
-    if (stats_.ibl) {
-        pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), ibl_own_source_ ? 1.0f : 0.0f};
-        cmd.bind_texture(rhi::bank::kIblEnv, ibl_env_, env_sampler_);
-        cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_lut_, linear_clamp_);
-        cmd.bind_texture(rhi::bank::kIblSh, ibl_sh_, point_sampler_);
-        const Span<const ReflectionProbe> probes = scene.reflection_probes();
-        if (stats_.probes > 0) {
-            pu.probes.x = f32(probes.size());
-            for (u32 i = 0; i < probes.size(); ++i) {
-                const ReflectionProbe& p = probes[i];
-                pu.probe_pos[i] = vec4(p.position, p.intensity);
-                pu.probe_min[i] = vec4(p.bounds.min, max(p.blend_distance, 1e-3f));
-                pu.probe_max[i] = vec4(p.bounds.max, f32(probe_base_layer(i)));
-            }
-        }
-    } else {
-        // IBL off: the shader branches around these samplers, but Metal's validation layer still wants
-        // every declared one bound (and of the declared type), so stand-ins fill the slots unread.
-        if (ibl_off_env_.is_null()) {
-            rhi::TextureDesc d;
-            d.format = rhi::TextureFormat::RGBA16F;
-            d.usage = rhi::TextureUsage::SampledColorTarget;
-            d.size = {1, 1};
-            d.dimension = rhi::TextureDimension::Tex2DArray;
-            d.array_layers = 1;
-            d.debug_name = "mce.3d.ibl_off_env";
-            ibl_off_env_ = device_->create_texture(d);
-            d.dimension = rhi::TextureDimension::Tex2D;
-            d.debug_name = "mce.3d.ibl_off_2d";
-            ibl_off_2d_ = device_->create_texture(d);
-        }
-        cmd.bind_texture(rhi::bank::kIblEnv, ibl_off_env_, linear_clamp_);
-        cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_off_2d_, linear_clamp_);
-        cmd.bind_texture(rhi::bank::kIblSh, ibl_off_2d_, point_sampler_);
-    }
+    const rhi::TextureHandle sky_tex = bind_ambient(cmd, scene, true, stats_.gi, pu);
     // SSAO: the blurred half-size visibility, upsampled bilinearly; a stand-in fills the slot when off.
     pu.ao = {stats_.ssao ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
     cmd.bind_texture(rhi::bank::kAo, stats_.ssao ? ao_a_ : ao_off_, linear_clamp_);
-    // Local-light shadow records, one per atlas tile (GpuPointLight::shadow points into them).
-    static constexpr LocalShadowRecord kNoShadow{};
-    if (local_shadows_) {
-        const Span<const LocalShadowTile> tiles = scene.local_shadow_tiles();
-        Array<LocalShadowRecord> records(mem::heap());
-        records.resize(tiles.size());
-        const f32 inv = 1.0f / f32(desc_.shadow_size);
-        for (u32 i = 0; i < tiles.size(); ++i) {
-            const LocalShadowTile& t = tiles[i];
-            // Rect2D is top-left based; the layer holds GL's layout, whose row 0 is the bottom.
-            const f32 v0 = f32(i32(desc_.shadow_size) - t.rect.y - i32(t.rect.height)) * inv;
-            records[i] = {t.view_proj, vec4(f32(t.rect.x) * inv, v0, f32(t.rect.width) * inv, f32(t.rect.height) * inv),
-                          vec4(f32(kMaxCascades + t.layer), t.texel_scale, 0.0f, 0.0f)};
-        }
-        cmd.set_storage_data(rhi::bank::kLocalShadows, std::as_bytes(records.span()));
-        pu.local.x = 1.0f;
-    } else {
-        cmd.set_storage_data(rhi::bank::kLocalShadows, rhi::as_bytes(kNoShadow));
-    }
+    bind_local_shadows(cmd, scene, pu);
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
@@ -1199,6 +1229,391 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     draw_meshes(cmd, scene, draws, scene.opaque_count(), static_cast<u32>(draws.size()), scene.opaque_count(), cache, true);
     cmd.end_pass();
     cmd.pop_debug_scope();
+}
+
+// ---- 1b. the irradiance volume (M-VISUAL 6): filled (or loaded from its bake) when it appears or
+// changes, then `probes_per_frame` probes re-captured every frame and blended in by the hysteresis.
+void Forward3D::record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    gi_shadowed_ = false;
+    const GiVolume& gi = scene.gi_volume();
+    if (!gi.enabled || gi_project_.is_null()) return;
+    const rhi::Extent2D vs = gi_volume_size(gi);
+    rhi::TextureHandle baked;
+    if (gi.baked != ~0u && textures_->contains(gi.baked)) {
+        const rhi::TextureHandle t = textures_->get(gi.baked);
+        const rhi::TextureDesc& d = device_->texture_desc(t);
+        if (d.size == vs && d.array_layers == 1)
+            baked = t;
+        else if (gi_key_ == 0)
+            MCE_LOG_WARN("render3d: the GI volume bake is {}x{}x{}, not {}x{}x1: filled at runtime", d.size.width,
+                         d.size.height, d.array_layers, vs.width, vs.height);
+    }
+    if (!gi.updates && baked.is_null()) return;  // the Low tier without a bake: the sky's ambient
+    if (gi_volume_.is_null() || !(gi_size_ == vs)) {
+        destroy(*device_, gi_volume_);
+        rhi::TextureDesc d;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.size = vs;
+        d.debug_name = "mce.3d.gi_volume";
+        gi_volume_ = device_->create_texture(d);
+        gi_size_ = vs;
+        gi_key_ = 0;
+    }
+    const u32 total = gi.counts[0] * gi.counts[1] * gi.counts[2];
+    const u64 key = gi_key(gi, baked);
+    cmd.push_debug_scope("gi");
+    if (key != gi_key_) {
+        gi_key_ = key;
+        gi_cursor_ = 0;
+        gi_filled_ = baked.is_null() ? 0 : total;
+        rhi::PassAttachment out;
+        out.texture = gi_volume_;
+        out.load = baked.is_null() ? rhi::LoadOp::Clear : rhi::LoadOp::DontCare;  // the fill's captures read zeros
+        out.clear.color[0] = out.clear.color[1] = out.clear.color[2] = out.clear.color[3] = 0.0f;
+        rhi::RenderPassDesc p;
+        p.colors = Span<const rhi::PassAttachment>(&out, 1);
+        p.debug_name = baked.is_null() ? "gi.clear" : "gi.decode";
+        cmd.begin_pass(p);
+        if (!baked.is_null()) {
+            cmd.bind_pipeline(gi_decode_);
+            const vec4 du{0.0f, 0.0f, kGiRgbmRange, 0.0f};
+            cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(du));
+            cmd.bind_texture(rhi::bank::kFirstSampler, baked, point_sampler_);
+            cmd.draw_non_indexed(3);
+        }
+        cmd.end_pass();
+        if (!baked.is_null()) stats_.gi_loaded = true;
+    }
+    if (gi_filled_ < total) {
+        // The fill: kGiMaxBatchProbes a frame (or what the uniform budget allows); the volume lights
+        // the frame once every probe has been captured.
+        gi_filled_ += gi_capture(cmd, scene, gi_filled_, min(kGiMaxBatchProbes, total - gi_filled_), 1.0f);
+        stats_.gi_filled = gi_filled_ == total;
+    } else if (!stats_.gi_loaded && gi.updates && gi.probes_per_frame > 0) {
+        const u32 n = min(min(gi.probes_per_frame, kGiMaxBatchProbes), total);
+        gi_cursor_ %= total;
+        gi_cursor_ = (gi_cursor_ + gi_capture(cmd, scene, gi_cursor_, n, clamp(1.0f - gi.hysteresis, 0.0f, 1.0f))) % total;
+    }
+    stats_.gi = gi_filled_ == total;
+    cmd.pop_debug_scope();
+}
+
+// Probes first, first + 1, ... (x-major, wrapping past the last) of the volume, up to `count`: six
+// faces each, then their projection, a pass per volume row touched. Stops early at the probe that
+// spends kGiCaptureBudget uniform uploads; returns the probes captured.
+u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 first, u32 count, f32 weight) {
+    const GiVolume& gi = scene.gi_volume();
+    const u32 cx = gi.counts[0], cy = gi.counts[1], total = cx * cy * gi.counts[2];
+    const u32 layers = 6 * kGiMaxBatchProbes;
+    u32 budget = kGiCaptureBudget;
+    if (gi_faces_.is_null() || gi_face_layers_ != layers) {
+        destroy(*device_, gi_faces_);
+        destroy(*device_, gi_faces_depth_);
+        rhi::TextureDesc d;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.size = {kGiFaceSize, kGiFaceSize};
+        d.dimension = rhi::TextureDimension::Tex2DArray;
+        d.array_layers = static_cast<u16>(layers);
+        d.debug_name = "mce.3d.gi_faces";
+        gi_faces_ = device_->create_texture(d);
+        d.format = rhi::TextureFormat::D32_Float;
+        d.usage = rhi::TextureUsage::DepthTarget;
+        d.debug_name = "mce.3d.gi_faces_depth";
+        gi_faces_depth_ = device_->create_texture(d);
+        gi_face_layers_ = layers;
+    }
+    const DirectionalLight& light = scene.light();
+    vec3 dir = normalize(light.direction);
+    if (!(length_sq(dir) > 0.0f)) dir = {0, -1, 0};
+    // The sun's shadow over the whole volume, once per frame: an orthographic box around the volume's
+    // bounding sphere, stretched toward the light over every caster.
+    const Span<const Scene3D::Draw> casters = scene.shadow_draws();
+    if (!gi_shadowed_ && light.shadows && !casters.empty() && gi_shadow_layer_ > 0) {
+        const vec3 c = gi.bounds.center();
+        const f32 r = max(length(gi.bounds.extents()), 0.01f);
+        const aabb3& sb = scene.scene_bounds();
+        const f32 reach = r + length(sb.center() - c) + length(sb.extents());
+        const vec3 up = std::fabs(dir.y) > 0.99f ? vec3{1, 0, 0} : vec3{0, 1, 0};
+        const mat4 lv = look_at_rh(c - dir * reach, c, up);
+        gi_shadow_vp_ = ortho_rh_no(-r, r, -r, r, 0.0f, reach + r) * lv;
+        gi_shadow_texel_ = 2.0f * r / f32(desc_.shadow_size);
+        rhi::RenderPassDesc sp;
+        rhi::PassAttachment depth;
+        depth.texture = shadow_map_;
+        depth.layer = static_cast<u16>(gi_shadow_layer_);
+        depth.clear.depth = 1.0f;
+        sp.depth = depth;
+        sp.debug_name = "gi.shadow";
+        cmd.begin_pass(sp);
+        rhi::PipelineHandle bound_pipe;
+        const GpuMesh* bound = nullptr;
+        for (const Scene3D::Draw& d : casters) shadow_draw(cmd, gi_shadow_vp_, d, bound_pipe, bound);
+        cmd.end_pass();
+        gi_shadowed_ = true;
+        budget -= min(budget, static_cast<u32>(casters.size()));
+    }
+
+    // A lit pass's state, as the main pass's but for one cluster holding every light.
+    const Fog& fog = scene.fog();
+    const Sky& sky = scene.sky();
+    const View3D& view = scene.view();
+    PassU pu{};
+    pu.light_dir = vec4(dir, gi_shadowed_ ? 1.0f : 0.0f);
+    pu.light_color = vec4(light.color * light.intensity, 0.0f);
+    pu.amb_sky = vec4(light.ambient_sky, 0.0f);
+    pu.amb_ground = vec4(light.ambient_ground, 0.0f);
+    pu.fog = vec4(fog.color, fog.density);
+    for (mat4& m : pu.cascade) m = mat4::identity();
+    pu.cascade[0] = gi_shadow_vp_;
+    pu.cascade_far = {3.0e38f, 0.0f, 0.0f, 0.0f};
+    pu.cascade_texel = {gi_shadow_texel_, 0.0f, 0.0f, 0.0f};
+    // The captures read the volume as it stands (zeros while it fills): each update adds a bounce.
+    const rhi::TextureHandle sky_tex = bind_ambient(cmd, scene, false, true, pu);
+    bind_local_shadows(cmd, scene, pu);
+    pu.local.y = f32(gi_shadow_layer_);  // cascade 0 is the volume's fit
+    cmd.bind_texture(rhi::bank::kAo, ao_off_, linear_clamp_);
+    // Every light in the pool; each probe's single cluster lists the kGiMaxCaptureLights that matter
+    // most to it (brightness × how much of its range the probe sits in). Storage bindings outlive passes.
+    const ClusterLights& cl = scene.cluster_setup();
+    const Span<const GpuPointLight> pool = cl.lights();
+    static constexpr GpuPointLight kNoLight{};
+    cmd.set_storage_data(rhi::bank::kLightPool, pool.empty() ? rhi::as_bytes(kNoLight) : std::as_bytes(pool));
+    struct Ranked {
+        f32 score;
+        u32 light;
+    };
+    Array<Ranked> ranked(mem::heap());
+    ranked.reserve(pool.size());
+    u32 picked[kGiMaxCaptureLights] = {};
+    const Span<const Scene3D::Draw> draws = scene.probe_draws();
+    Array<Scene3D::Draw> visible(mem::heap());
+    visible.reserve(draws.size());
+
+    // A draw narrower than a face texel (2r / d below 90° / kGiFaceSize) adds nothing a 16² face can hold.
+    constexpr f32 kGiMinTexelAngle = 0.5f * 1.5707963f / f32(kGiFaceSize);
+    struct Sized {
+        f32 size;  // r / d
+        u32 draw;
+    };
+    Array<Sized> sized(mem::heap());
+    sized.reserve(draws.size());
+    // A probe goes in when the budget still holds one as costly as the last (the first always does).
+    u32 done = 0, probe_cost = 0;
+    for (; done < count && (done == 0 || (budget > 0 && budget >= probe_cost)); ++done) {
+        const u32 probe = (first + done) % total, ix = probe % cx, vrow = probe / cx, iy = vrow % cy, iz = vrow / cy;
+        const u32 before = budget;
+        {
+            const vec3 t{cx > 1 ? f32(ix) / f32(cx - 1) : 0.5f, f32(iy) / f32(max(cy - 1, 1u)),
+                         f32(iz) / f32(max(gi.counts[2] - 1, 1u))};
+            const vec3 pos = gi.bounds.min + (gi.bounds.max - gi.bounds.min) * t;
+            mat4 face_view[6], face_vp[6];
+            probe_face_views(pos, view.near_z, view.far_z, face_view, face_vp);
+            ranked.clear();
+            for (u32 i = 0; i < pool.size(); ++i) {
+                const GpuPointLight& l = pool[i];
+                const vec3 c{l.color.x, l.color.y, l.color.z};
+                const f32 r2 = l.position_radius.w * l.position_radius.w;
+                const f32 d2 = length_sq(l.position_radius.xyz() - pos);
+                ranked.push_back({(0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z) * r2 / (d2 + r2), i});
+            }
+            const u32 k = min(static_cast<u32>(ranked.size()), kGiMaxCaptureLights);
+            std::partial_sort(ranked.begin(), ranked.begin() + k, ranked.end(),
+                              [](const Ranked& a, const Ranked& b) { return a.score > b.score || (a.score == b.score && a.light < b.light); });
+            for (u32 i = 0; i < k; ++i) picked[i] = ranked[i].light;
+            const ClusterRange range{0, k};
+            cmd.set_storage_data(rhi::bank::kClusters, rhi::as_bytes(range));
+            cmd.set_storage_data(rhi::bank::kLightIndices, Span<const byte>(reinterpret_cast<const byte*>(picked), sizeof(u32) * max(k, 1u)));
+            stats_.gi_lights = max(stats_.gi_lights, k);
+            for (u32 f = 0; f < 6; ++f) {
+                const u32 layer = done * 6 + f;
+                rhi::PassAttachment color;
+                color.texture = gi_faces_;
+                color.layer = static_cast<u16>(layer);
+                color.clear.color[0] = fog.color.x;
+                color.clear.color[1] = fog.color.y;
+                color.clear.color[2] = fog.color.z;
+                color.clear.color[3] = 1.0f;
+                rhi::PassAttachment depth;
+                depth.texture = gi_faces_depth_;
+                depth.layer = static_cast<u16>(layer);
+                depth.clear.depth = 1.0f;
+                depth.store = rhi::StoreOp::DontCare;
+                rhi::RenderPassDesc fp;
+                fp.colors = Span<const rhi::PassAttachment>(&color, 1);
+                fp.depth = depth;
+                fp.debug_name = "gi.face";
+                cmd.begin_pass(fp);
+                FrameU fu{};
+                fu.view_proj = face_vp[f];
+                fu.view = face_view[f];
+                fu.inv_view_proj = inverse(face_vp[f]);
+                fu.camera_pos = vec4(pos, 0.0f);
+                fu.params = {scene.exposure(), 0.0f, 0.0f, 0.0f};
+                const f32 px = f32(kGiFaceSize);
+                fu.viewport = {px, px, 1.0f / px, 1.0f / px};
+                fu.cluster = {1.0f, 1.0f, 1.0f, f32(k)};
+                fu.cluster_z = {0.0f, 0.0f, view.near_z, view.far_z};
+                cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
+                cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
+                cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
+                cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
+                vec4 planes[6];
+                frustum_planes(face_vp[f], planes);
+                sized.clear();
+                for (u32 i = 0; i < draws.size(); ++i) {
+                    const Scene3D::Draw& d = draws[i];
+                    const f32 size = d.radius / max(length(d.center - pos), 1e-4f);
+                    if (size >= kGiMinTexelAngle && sphere_in(planes, d.center, d.radius)) sized.push_back({size, i});
+                }
+                if (sized.size() > kGiMaxFaceDraws) {  // the widest, then back in draw (sort-key) order
+                    std::nth_element(sized.begin(), sized.begin() + kGiMaxFaceDraws, sized.end(),
+                                     [](const Sized& a, const Sized& b) { return a.size > b.size || (a.size == b.size && a.draw < b.draw); });
+                    sized.resize(kGiMaxFaceDraws);
+                    std::sort(sized.begin(), sized.end(), [](const Sized& a, const Sized& b) { return a.draw < b.draw; });
+                }
+                visible.clear();
+                for (const Sized& z : sized) visible.push_back(draws[z.draw]);
+                DrawCache cache;
+                const u32 nv = static_cast<u32>(visible.size());
+                draw_meshes(cmd, scene, visible.span(), 0, nv, nv, cache, false);
+                stats_.gi_draws += nv;
+                budget -= min(budget, nv + 3);
+                if (sky.enabled) {
+                    cmd.bind_pipeline(sky_);
+                    cmd.draw_non_indexed(3);
+                }
+                cmd.end_pass();
+            }
+        }
+        probe_cost = before - budget;
+    }
+    // The faces into the volume, a pass per run of probes along one row (the pass's viewport;
+    // Rect2D is top-left based, row 0 the volume's v 0).
+    for (u32 j = 0; j < done;) {
+        const u32 probe = (first + j) % total, ix = probe % cx, vrow = probe / cx;
+        const u32 n = min(done - j, cx - ix);
+        rhi::PassAttachment out;
+        out.texture = gi_volume_;
+        out.load = rhi::LoadOp::Load;
+        rhi::RenderPassDesc p;
+        p.colors = Span<const rhi::PassAttachment>(&out, 1);
+        p.viewport = rhi::Rect2D{i32(ix * 4), i32(gi_size_.height - vrow - 1), n * 4, 1};
+        p.debug_name = "gi.project";
+        cmd.begin_pass(p);
+        cmd.bind_pipeline(gi_project_);
+        const GiProjectU gu{{f32(n * 4), 1.0f, f32(kGiFaceSize), 0.0f}, {f32(n), weight, f32(j), 0.0f}};
+        cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(gu));
+        cmd.bind_texture(rhi::bank::kFirstSampler, gi_faces_, point_sampler_);
+        cmd.draw_non_indexed(3);
+        cmd.end_pass();
+        j += n;
+    }
+    stats_.gi_probes += done;
+    return done;
+}
+
+bool Forward3D::record_gi_export(rhi::CommandBuffer& cmd) {
+    MCE_ASSERT_MSG(!cmd.in_pass(), "Forward3D::record_gi_export inside a pass");
+    if (gi_volume_.is_null() || gi_key_ == 0 || gi_encode_.is_null()) return false;
+    if (gi_export_.is_null() || !(device_->texture_desc(gi_export_).size == gi_size_)) {
+        destroy(*device_, gi_export_);
+        rhi::TextureDesc d;
+        d.format = rhi::TextureFormat::RGBA8_UNorm;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.size = gi_size_;
+        d.debug_name = "mce.3d.gi_export";
+        gi_export_ = device_->create_texture(d);
+    }
+    rhi::PassAttachment out;
+    out.texture = gi_export_;
+    out.load = rhi::LoadOp::DontCare;
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&out, 1);
+    p.debug_name = "gi.export";
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(gi_encode_);
+    const vec4 eu{0.0f, 0.0f, kGiRgbmRange, 0.0f};
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(eu));
+    cmd.bind_texture(rhi::bank::kFirstSampler, gi_volume_, point_sampler_);
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    return true;
+}
+
+rhi::TextureHandle Forward3D::bind_ambient(rhi::CommandBuffer& cmd, const Scene3D& scene, bool probes, bool gi_on, PassU& pu) {
+    const Sky& sky = scene.sky();
+    const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu);
+    if (stats_.ibl) {
+        pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), ibl_own_source_ ? 1.0f : 0.0f};
+        cmd.bind_texture(rhi::bank::kIblEnv, ibl_env_, env_sampler_);
+        cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_lut_, linear_clamp_);
+        cmd.bind_texture(rhi::bank::kIblSh, ibl_sh_, point_sampler_);
+        const Span<const ReflectionProbe> rp = scene.reflection_probes();
+        if (probes && stats_.probes > 0) {
+            pu.probes.x = f32(rp.size());
+            for (u32 i = 0; i < rp.size(); ++i) {
+                const ReflectionProbe& p = rp[i];
+                pu.probe_pos[i] = vec4(p.position, p.intensity);
+                pu.probe_min[i] = vec4(p.bounds.min, max(p.blend_distance, 1e-3f));
+                pu.probe_max[i] = vec4(p.bounds.max, f32(probe_base_layer(i)));
+            }
+        }
+    } else {
+        // IBL off: the shader branches around these samplers, but Metal's validation layer still wants
+        // every declared one bound (and of the declared type), so stand-ins fill the slots unread.
+        if (ibl_off_env_.is_null()) {
+            rhi::TextureDesc d;
+            d.format = rhi::TextureFormat::RGBA16F;
+            d.usage = rhi::TextureUsage::SampledColorTarget;
+            d.size = {1, 1};
+            d.dimension = rhi::TextureDimension::Tex2DArray;
+            d.array_layers = 1;
+            d.debug_name = "mce.3d.ibl_off_env";
+            ibl_off_env_ = device_->create_texture(d);
+            d.dimension = rhi::TextureDimension::Tex2D;
+            d.debug_name = "mce.3d.ibl_off_2d";
+            ibl_off_2d_ = device_->create_texture(d);
+        }
+        cmd.bind_texture(rhi::bank::kIblEnv, ibl_off_env_, linear_clamp_);
+        cmd.bind_texture(rhi::bank::kIblBrdfLut, ibl_off_2d_, linear_clamp_);
+        cmd.bind_texture(rhi::bank::kIblSh, ibl_off_2d_, point_sampler_);
+    }
+    // The irradiance volume (record_gi() filled it this frame or before), or a stand-in.
+    if (gi_on) {
+        const GiVolume& gi = scene.gi_volume();
+        pu.gi = {1.0f, gi.intensity, max(gi.normal_bias, 0.0f), max(gi.fade_distance, 1e-3f)};
+        pu.gi_min = vec4(gi.bounds.min, 0.0f);
+        pu.gi_max = vec4(gi.bounds.max, 0.0f);
+        pu.gi_counts = {f32(gi.counts[0]), f32(gi.counts[1]), f32(gi.counts[2]), 0.0f};
+        cmd.bind_texture(rhi::bank::kGiVolume, gi_volume_, point_sampler_);
+    } else {
+        cmd.bind_texture(rhi::bank::kGiVolume, ao_off_, point_sampler_);
+    }
+    return sky_tex;
+}
+
+void Forward3D::bind_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene, PassU& pu) {
+    // Local-light shadow records, one per atlas tile (GpuPointLight::shadow points into them).
+    static constexpr LocalShadowRecord kNoShadow{};
+    if (!local_shadows_) {
+        cmd.set_storage_data(rhi::bank::kLocalShadows, rhi::as_bytes(kNoShadow));
+        return;
+    }
+    const Span<const LocalShadowTile> tiles = scene.local_shadow_tiles();
+    Array<LocalShadowRecord> records(mem::heap());
+    records.resize(tiles.size());
+    const f32 inv = 1.0f / f32(desc_.shadow_size);
+    for (u32 i = 0; i < tiles.size(); ++i) {
+        const LocalShadowTile& t = tiles[i];
+        // Rect2D is top-left based; the layer holds GL's layout, whose row 0 is the bottom.
+        const f32 v0 = f32(i32(desc_.shadow_size) - t.rect.y - i32(t.rect.height)) * inv;
+        records[i] = {t.view_proj, vec4(f32(t.rect.x) * inv, v0, f32(t.rect.width) * inv, f32(t.rect.height) * inv),
+                      vec4(f32(kMaxCascades + t.layer), t.texel_scale, 0.0f, 0.0f)};
+    }
+    cmd.set_storage_data(rhi::bank::kLocalShadows, std::as_bytes(records.span()));
+    pu.local.x = 1.0f;
 }
 
 void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin,

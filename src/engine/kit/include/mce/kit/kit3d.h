@@ -92,6 +92,39 @@ MCE_COMPONENT(ReflectionProbe3D, half_extents, (offset, Help{"capture point, ent
               (version, Help{"bump to re-capture"}), enabled,
               (baked, Help{"the editor's bake (.mcenv); empty = captured at runtime"}))
 
+// A global-illumination irradiance volume (M-VISUAL 6): a probes_x × probes_y × probes_z grid of
+// probes over the world-axis box of `half_extents` around the entity (centered at `offset`), lighting
+// the surfaces inside with the light the scene bounces: the sun, point and spot lights, emissive
+// surfaces and the sky, as seen from each probe (render::GiVolume). The first enabled one in the scene
+// is used. `probes_per_frame` probes are re-captured every frame and blended in by `hysteresis`, so
+// moving lights carry over; bump `version` to refill them all at once. With `baked` (the editor's
+// bake, a cooked .mcenv) the volume starts from the bake, and the Low quality tier uses the bake only
+// (no bake there: no global illumination). Keep the grid's planes off the walls: a probe buried in a
+// wall darkens what is near it.
+struct GiVolume3D {
+    math::vec3 half_extents{8.0f, 2.0f, 8.0f};
+    math::vec3 offset;
+    u32 probes_x = 8;
+    u32 probes_y = 4;
+    u32 probes_z = 8;
+    f32 intensity = 1.0f;
+    f32 normal_bias = 0.25f;
+    f32 fade_distance = 1.0f;
+    f32 hysteresis = 0.85f;
+    u32 probes_per_frame = 16;
+    u32 version = 0;
+    u32 enabled = 1;
+    asset::AssetRef<asset::Texture> baked;
+};
+MCE_COMPONENT(GiVolume3D, half_extents, (offset, Help{"box center, entity space"}), (probes_x, Range{2, 32}),
+              (probes_y, Range{2, 32}), (probes_z, Range{2, 32}), (intensity, Range{0, 4}),
+              (normal_bias, Range{0, 2}, Help{"meters a lookup moves off the surface"}),
+              (fade_distance, Range{0, 20}, Help{"meters outside the box over which the sky's ambient returns"}),
+              (hysteresis, Range{0, 0.99f}, Help{"weight of a probe's old light when it is re-captured"}),
+              (probes_per_frame, Range{0, 1024}, Help{"rolling updates; 0 = filled once"}),
+              (version, Help{"bump to refill every probe"}), enabled,
+              (baked, Help{"the editor's bake (.mcenv); empty = filled at runtime"}))
+
 // The 3D view a player renders from: the first `primary` camera in ECS order, at its entity's
 // transform (looking down local -Z). Drawn between the last two ticks' transforms, so a camera the
 // game moves every tick is smooth at any frame rate. A scene with one plays on the 3D path.

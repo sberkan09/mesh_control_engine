@@ -1,6 +1,6 @@
 # M-VISUAL — High-end 3D rendering (milestone record)
 
-**Status:** active (steps 1–5 done, 2026-10-14). Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
+**Status:** active (steps 1–6 done, 2026-10-15). Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
 **Why:** `Forward3D` suits stylized and low-poly 3D but has no compute path, GI, pre-filtered IBL,
 screen-space effects, local-light shadows or temporal pipeline. Each step below is opt-in, keeps GL as the
 reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leaves today's frame unchanged when off.
@@ -14,7 +14,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | 3 | SSAO / GTAO | SBA-8 | done: GL and SDL GPU (gated + goldens), Metal binds the stand-in; real-GPU budget on the Mac/device session |
 | 4 | Local-light shadows | SBA-9 | done: GL and SDL GPU (gated + golden), Metal untested; real-GPU budget on the Mac/device session |
 | 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | done: GL and SDL GPU (gated + goldens), High tier on TAA; Metal untested; real-GPU budget on the Mac/device session |
-| 6 | Global illumination (irradiance-probe volume) | SBA-11 | — |
+| 6 | Global illumination (irradiance-probe volume) | SBA-11 | done: GL and SDL GPU (gated + goldens), editor bake, Low tier on the bake; Metal untested; real-GPU budget on the Mac/device session |
 | 7 | Atmosphere and volumetrics | SBA-12 | — |
 | 8 | Post completion | SBA-13 | — |
 | 9 | Scale (GPU culling, foliage, decals, GPU particles) | SBA-14 | — |
@@ -337,3 +337,68 @@ Goldens `taa_still` and `taa_upscale` on linux-gl and linux-sdlgpu; the earlier 
 | GPU 3D frame total (ms) | 357.3 | 377.4 | 329.7 |
 
 Metal pixels and real-GPU numbers belong to the Mac/device session.
+
+## Step 6 — global illumination (irradiance-probe volume)
+
+**API.** `Scene3D::set_gi_volume(GiVolume)` (off by default): `bounds` (world box), `counts` (probes per axis,
+2..32, corners included), `intensity`, `normal_bias`, `fade_distance`, `hysteresis` (the old value's weight per
+update), `probes_per_frame` (rolling updates, 0 = frozen after the fill), `version` (bump to refill), `baked` (a
+TextureStore key) and `updates` (false = the bake only). Kit: the `GiVolume3D` component (box around the entity,
+`probes_x/y/z`, the same knobs; the first enabled one is used). Off switches: `enabled = false`,
+`Forward3DDesc::gi = false` (no pipelines) and `-r.gi 0`. The Low quality tier sets `QualitySettings::gi_updates =
+false`: the bake only, and no bake means no GI.
+
+**Probes.** DDGI-style without ray tracing. Each probe stores the light arriving from every direction as four
+tetrahedral samples V_k = (1/4π)∫L(1 + ω·d_k)dω (an L1 lobe that stays ≥ 0), in an RGBA16F volume texture of
+(counts[0]·4) × (counts[1]·counts[2]) texels (row y + counts[1]·z, texel x·4 + k), sampled from bank 5
+(`rhi::bank::kGiVolume`). Shading takes the eight surrounding probes, offset along the normal by `normal_bias`,
+weighted trilinearly × a backface term ((dot + 1)/2)² + 0.05, and reads E/π = Σ V_k (0.25 + 1.5 d_k·n). Inside the
+box this replaces the sky's diffuse ambient; the sky's reflections are scaled by how much of the sky the probes
+see (their luma against the sky irradiance's), and the sun-side darkening of the sky ambient is skipped. Over
+`fade_distance` outside the box the sky's ambient returns. With GI off the frame is bit-identical to before.
+
+**Captures.** A probe renders six 16² faces with the main PBR pipelines into an RGBA16F array: the sun, shadowed
+by its own orthographic fit over the volume (an extra layer of the cascade array, made on first use), the point
+and spot lights (the 32 that matter most to that probe, ranked by luminance × r² / (d² + r²), as one cluster),
+emissive surfaces, the sky and the volume itself, so each update adds a bounce. Each face draws the meshes inside
+its frustum that are wider than a texel, at most the 96 widest. A projection pass (one per run of probes along a
+volume row) integrates the faces into the four lobes and blends them in by 1 − `hysteresis` (1 for the fill).
+
+**Fill and rolling updates.** A new volume (first frame, new bounds, counts, version or bake) clears and fills:
+at most 32 probes a frame, fewer when the frame's capture budget runs out (1024 uniform uploads, a draw one and a
+face three, the first probe always goes), so a crowded scene keeps its frame inside the 1 MiB uniform ring. The
+volume lights the frame from the frame it is full (`Forward3DStats::gi`). After that `probes_per_frame` probes
+are re-captured each frame in x-major order, under the same budget. The `gi` timestamp covers the sun fit, the
+captures and the projection.
+
+**Bake.** `Forward3D::record_gi_export` draws the volume as RGBM (range 16) RGBA8; the editor's File > Bake GI
+volume runs the fill without hysteresis plus two sweeps, reads it back, writes `assets/gi/<scene>/gi_<id>.mcenv`
+and sets the component's `baked` (one undo step). A loaded bake is decoded into the volume and replaces the fill.
+
+**Gates.** The `render3d_gl` tests, on GL and SDL GPU:
+- GI off draws today's frame, frames after a GI run match it again, and the Low tier without a bake leaves no trace (0 pixels differ).
+- The ground in front of an emissive red wall goes from the sky's 125,135,156 to 200,55,64 once the volume fills (32 probes, then 16), and rolling updates then capture 8 a frame.
+- The box face away from the sun goes from luma 1 to 125 with sunlight bounced off the ground.
+- A lamp switched on reaches a far ground point only through bounces: green 60 on the first frame, 78 after 24 rolling frames, against 77 for a full refill.
+- A volume exported as RGBM and loaded back lights like the capture; the Low tier draws the bake.
+- 400 posts through the volume fill over 17 frames without a uniform-ring overflow, each face at most 96 draws.
+
+The editor test bakes a volume, reloads it and checks the bake lights the scene. Goldens `gi_bleed` and `gi_bounce`
+on linux-gl and linux-sdlgpu; the earlier goldens are unchanged.
+
+**Budget (04_cubes `-gi 1`: 7 × 3 × 7 probes over the panel cubes, 7 probes a frame, 256 point lights, 1280×720,
+110 frames, two runs each, Mesa llvmpipe; relative only):**
+
+| | GI off | GI on |
+|---|---|---|
+| GI update: sun fit + 7 probes' captures + projection (ms) | 0 | 51.8 |
+| main pass (ms) | 280.4 | 349.7 |
+| GPU 3D frame total (ms) | 362.9 | 487.8 |
+
+The main pass pays for the eight-probe lookup (32 volume fetches a pixel, every pixel of 04_cubes sits inside the
+volume). Capture frames stay at about 450 KiB of the 1 MiB uniform ring (the frame alone: 150 KiB).
+
+**Limits.** Light leaks through walls thinner than the probe spacing, and probes buried in walls darken what is near
+them (no probe relocation or visibility term yet): keep the grid's planes off walls. Diffuse only; reflections stay
+with the sky and the reflection probes. Lightmaps were not needed for the step's gates. Metal is untested; Metal
+pixels and real-GPU numbers belong to the Mac/device session.

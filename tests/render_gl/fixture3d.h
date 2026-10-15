@@ -201,4 +201,28 @@ inline ReflectionProbe room_probe() {
     return p;
 }
 
+// The irradiance volume of the GI cases (M-VISUAL 6): 4 × 3 × 4 probes around the box, none inside
+// it or inside the probe room's wall (z -1.3 .. -1.1).
+inline GiVolume room_gi() {
+    GiVolume g;
+    g.enabled = true;
+    g.bounds = {{-3, 0.2f, -3}, {3, 2.2f, 3}};
+    g.counts[0] = 4;
+    g.counts[1] = 3;
+    g.counts[2] = 4;
+    g.probes_per_frame = 8;
+    return g;
+}
+
+// The probe room's red emissive wall behind the box under a dim constant sky, no sun: what the
+// ground in front of the wall receives is the wall's light, bounced through the volume.
+inline void gi_wall_scene(Scene3D& s, bool gi) {
+    no_sun(s);
+    s.set_sky(constant_sky(0.05f, false));
+    MeshInstance m;
+    m.mesh = 8;
+    s.add(m);
+    if (gi) s.set_gi_volume(room_gi());
+}
+
 }  // namespace mce::render_test

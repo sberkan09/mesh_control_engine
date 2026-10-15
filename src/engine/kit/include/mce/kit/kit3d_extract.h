@@ -91,12 +91,15 @@ public:
     // no caps (High's knobs, with up to kMaxCascades), which is what the player passes on High.
     void set_quality(const render::QualitySettings& q) { quality_ = q; }
 
-    // Reflection probe bakes (M-VISUAL 2, the editor's bake): every MeshRef and static instance is
-    // submitted whatever the view (no culling, no distance thinning) and probes ignore their
-    // existing bakes, so the scene captures what it holds.
+    // Reflection probe and GI volume bakes (M-VISUAL 2 and 6, the editor's bakes): every MeshRef and
+    // static instance is submitted whatever the view (no culling, no distance thinning), probes and
+    // the volume ignore their existing bakes, and the volume replaces each probe it re-captures
+    // (no hysteresis, kGiMaxBatchProbes a frame) whatever the quality tier.
     void set_bake_mode(bool on) { bake_mode_ = on; }
     // The entities of the probes the last extract() added to the scene, in slot order.
     Span<const Entity> probe_entities() const { return probe_entities_.span(); }
+    // The GiVolume3D the last extract() gave the scene (null entity: none).
+    Entity gi_entity() const { return gi_entity_; }
 
 private:
     bool view_of(World& world, Entity e, const Camera3DComponent& c, f32 alpha, render::Camera3D& out);
@@ -149,6 +152,7 @@ private:
     Kit3DStats stats_;
     bool bake_mode_ = false;
     Array<Entity> probe_entities_;
+    Entity gi_entity_;
 };
 
 }  // namespace mce::kit

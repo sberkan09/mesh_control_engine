@@ -19,6 +19,7 @@ static_assert(sizeof(MeshRef) == 96);
 static_assert(sizeof(PointLight3D) == 40);
 static_assert(sizeof(SpotLight3D) == 60);
 static_assert(sizeof(ReflectionProbe3D) == 64);
+static_assert(sizeof(GiVolume3D) == 88);
 static_assert(sizeof(Camera3DComponent) == 24);
 static_assert(sizeof(Environment3D) == 240);
 static_assert(sizeof(BoxCollider3D) == 40);
@@ -203,7 +204,7 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
         if (assets) world.resource<Kit3DAssets>().assets = assets;
         return;
     }
-    world.register_components<MeshRef, PointLight3D, SpotLight3D, ReflectionProbe3D, Camera3DComponent, Animator,
+    world.register_components<MeshRef, PointLight3D, SpotLight3D, ReflectionProbe3D, GiVolume3D, Camera3DComponent, Animator,
                               Environment3D, BoxCollider3D, MeshCollider3D>();
     world.set_resource(Environment3D{});
     world.set_resource(Kit3DAssets{assets});

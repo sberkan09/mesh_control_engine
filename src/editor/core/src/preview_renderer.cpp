@@ -196,6 +196,76 @@ Result<void> PreviewRenderer::bake_probes(World& world, Array<ProbeBake>& out) {
     return ok();
 }
 
+Result<void> PreviewRenderer::bake_gi(World& world, GiBake& out) {
+    out = {};
+    constexpr const char* kWhere = "editor.bake_gi";
+    if (!ensure_3d()) return Error(Errc::InvalidArgument, kWhere, "the 3D preview is not running");
+    rhi::RenderDevice& device = renderer_.device();
+    render::Forward3D& fw = renderer_.forward_3d();
+    constexpr rhi::Extent2D kSize{16, 16};
+    rhi::TextureDesc td;
+    td.size = kSize;
+    td.usage = rhi::TextureUsage::SampledColorTarget;
+    td.debug_name = "mce.editor.gi_bake";
+    const rhi::TextureHandle target = device.create_texture(td);
+    fw.invalidate_gi();  // the preview's fill saw only its view's meshes
+    // In bake mode the extract submits every mesh and replaces each re-captured probe outright, so
+    // every sweep after the fill adds one bounce.
+    u32 sweeps = 0, frames = 0, probes = 0, probes_done = 0;
+    render::GiVolume gi;
+    bool filled = false;
+    for (; frames < 4096; ++frames) {
+        render::Scene3D scene(renderer_.meshes(), mem::heap());
+        scene.begin(render::Camera3D{}, kSize);
+        extract3d_.set_bake_mode(true);
+        extract3d_.extract(world, scene, 1.0f);
+        extract3d_.set_bake_mode(false);
+        scene.build();
+        gi = scene.gi_volume();
+        if (!gi.enabled) break;
+        probes = gi.counts[0] * gi.counts[1] * gi.counts[2];
+        rhi::CommandBuffer cmd;
+        renderer_.record_3d(cmd, scene, target);
+        device.submit(cmd);
+        // A bake submits many frames' captures: each one gets the device frame's rings afresh.
+        const u64 index = device.frame_index();
+        device.end_frame();
+        device.begin_frame(index);
+        const render::Forward3DStats& st = fw.last_stats();
+        if (!filled) {
+            filled = st.gi_filled;
+            if (!filled && st.gi_probes == 0) break;  // nothing captured: GI off in this renderer
+            continue;
+        }
+        probes_done += st.gi_probes;
+        if (probes_done >= probes) {
+            probes_done -= probes;
+            if (++sweeps == 2) break;
+        }
+    }
+    device.destroy_texture(target);
+    if (!gi.enabled) return Error(Errc::InvalidArgument, kWhere, "the scene has no enabled GiVolume3D");
+    if (!filled || sweeps < 2) return Error(Errc::Unsupported, kWhere, "the renderer did not fill the volume (GI off: -r.gi 0?)");
+
+    const rhi::Extent2D es = render::gi_volume_size(gi);
+    {
+        rhi::CommandBuffer cmd;
+        if (!fw.record_gi_export(cmd)) return Error(Errc::Unsupported, kWhere, "the volume holds nothing");
+        device.submit(cmd);
+    }
+    const usize row = usize(es.width) * 4;
+    Array<u8> strip;
+    strip.resize(row * es.height);
+    MCE_TRY(device.read_pixels(fw.gi_export_target(), rhi::Rect2D{0, 0, es.width, es.height}, strip.span()));
+    out.entity = extract3d_.gi_entity();
+    out.width = es.width;
+    out.height = es.height;
+    out.rgba.resize(strip.size());
+    for (u32 y = 0; y < es.height; ++y)  // read_pixels is top row first; .mcenv rows are v order
+        std::memcpy(&out.rgba[y * row], &strip[(es.height - 1 - y) * row], row);
+    return ok();
+}
+
 bool world_is_3d(World& world) {
     return kit::has_camera_3d(world) || world.query<const kit::MeshRef&>().count() > 0;
 }

@@ -312,6 +312,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
 void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     stats_ = {};
     probe_entities_.clear();
+    gi_entity_ = {};
     apply_environment(world, scene);
     const render::View3D& view = scene.view();
     const u64 tick = world.current_tick();
@@ -325,6 +326,50 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     world_parity_ ^= 1u;
     ++frame_stamp_;
 
+    // The irradiance volume first: while it captures at runtime, meshes and lights near it stay in the
+    // scene off-screen too, so its probes see the same room whichever way the camera looks.
+    bool gi_keep = false;
+    aabb3 gi_reach{};
+    world.query<const GiVolume3D&>().each([&](Entity e, const GiVolume3D& g) {
+        if (!g.enabled || scene.gi_volume().enabled) return;
+        vec3 pos, scale;
+        quat rot;
+        if (!pose_of(world, e, pos, rot, scale)) return;
+        render::GiVolume gv;
+        gv.enabled = true;
+        const vec3 c = pos + rotate(rot, g.offset), h = max(g.half_extents, vec3{0.01f, 0.01f, 0.01f});
+        gv.bounds = {c - h, c + h};
+        gv.counts[0] = g.probes_x;
+        gv.counts[1] = g.probes_y;
+        gv.counts[2] = g.probes_z;
+        gv.intensity = g.intensity;
+        gv.normal_bias = g.normal_bias;
+        gv.fade_distance = g.fade_distance;
+        gv.hysteresis = g.hysteresis;
+        gv.probes_per_frame = g.probes_per_frame;
+        gv.version = g.version;
+        if (bake_mode_) {
+            gv.hysteresis = 0.0f;
+            gv.probes_per_frame = render::Forward3D::kGiMaxBatchProbes;
+        } else {
+            gv.baked = texture_key(g.baked.guid);
+            render::apply_quality(quality_, gv);
+        }
+        scene.set_gi_volume(gv);
+        gi_entity_ = e;
+        if (gv.updates) {
+            const f32 margin = length(h);
+            gi_keep = true;
+            gi_reach = {gv.bounds.min - vec3{margin, margin, margin}, gv.bounds.max + vec3{margin, margin, margin}};
+        }
+    });
+    auto in_view = [&](vec3 c, f32 r) {
+        if (render::sphere_visible(view, c, r)) return true;
+        if (!gi_keep) return false;
+        const vec3 q = min(max(c, gi_reach.min), gi_reach.max);
+        return length_sq(c - q) <= r * r;
+    };
+
     world.query<const MeshRef&>().each([&](Entity e, const MeshRef& m) {
         if (!m.visible) return;
         vec3 pos, scale;
@@ -334,8 +379,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             track(e, pos, rot, scale, tick);
             interpolated(e, alpha, pos, rot, scale);
         }
-        if (!bake_mode_ && m.cull_radius > 0.0f &&
-            !render::sphere_visible(view, pos, m.cull_radius * max(scale.x, max(scale.y, scale.z))))
+        if (!bake_mode_ && m.cull_radius > 0.0f && !in_view(pos, m.cull_radius * max(scale.x, max(scale.y, scale.z))))
             return;
         const u32 key = mesh_key(m.mesh.guid);
         const render::GpuMesh* mesh = key != ~0u && meshes_ ? meshes_->get(key) : nullptr;
@@ -395,7 +439,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (!pose_of(world, e, pos, rot, scale)) return;
         render::PointLight pl;
         pl.position = pos + rotate(rot, l.offset);
-        if (!render::sphere_visible(view, pl.position, l.radius)) return;
+        if (!in_view(pl.position, l.radius)) return;
         pl.color = {l.color.r, l.color.g, l.color.b};
         pl.intensity = l.intensity;
         pl.radius = l.radius;
@@ -409,7 +453,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (!pose_of(world, e, pos, rot, scale)) return;
         render::PointLight pl;
         pl.position = pos + rotate(rot, l.offset);
-        if (!render::sphere_visible(view, pl.position, l.radius)) return;
+        if (!in_view(pl.position, l.radius)) return;
         pl.color = {l.color.r, l.color.g, l.color.b};
         pl.intensity = l.intensity;
         pl.radius = l.radius;
@@ -446,7 +490,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         keys.resize(si->meshes.size());
         for (u32 i = 0; i < si->meshes.size(); ++i) keys[i] = mesh_key(si->meshes[i]);
         for (const StaticCell3D& c : si->cells) {
-            if (!bake_mode_ && !render::sphere_visible(view, c.center, c.radius)) continue;
+            if (!bake_mode_ && !in_view(c.center, c.radius)) continue;
             ++stats_.cells_visible;
             const f32 dist = length(c.center - view.position);
             for (u32 i = c.first; i < c.first + c.count && i < si->instances.size(); ++i) {
