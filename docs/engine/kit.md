@@ -40,7 +40,12 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   `blend_weight`), transitions and `AnimEvent3D` events; one-shots finish (`loop`, `finished`,
   `restart`). Clip lengths and bone poses come from a device-less `render::MeshStore` copy of the
   mesh loaded through `install_kit3d`'s asset system. `kit3d_extract` poses up to three weighted
-  samples (the playing clip, the blend's second clip, the clip fading out).
+  samples (the playing clip, the blend's second clip, the clip fading out). A version 2 graph
+  (M-GAMEPLAY3D 5) adds 2D blend spaces, layers (bone masks, additive clips; playheads in
+  `layer_time`), root motion (`root_motion`, `root_velocity`, `root_turn`) and IK chains (two-bone,
+  look-at, foot); `extended_pose` builds that pose in local TRS (`render::sample_local`,
+  `compose_local`), and `"kit3d_ik"` gathers the chains' goals (`IKTarget3D`, rays down for feet)
+  into the `AnimIK3D` resource every pose of the tick reads.
 - `PathAgent`: walks to `target` over the world's `NavGrid` at `speed`, re-planning every
   `repath_interval` ticks; `status` and the current smoothed path (16 waypoints) are runtime
   fields (#152).

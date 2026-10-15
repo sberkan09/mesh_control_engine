@@ -9,7 +9,7 @@
 #include "mce/ecs/hierarchy.h"        // ChildOf, WorldTransform
 #include "mce/ecs/save.h"             // SaveKey
 #include "mce/ecs/transform.h"        // LocalTransform
-#include "mce/kit/anim3d.h"            // AttachToBone
+#include "mce/kit/anim3d.h"            // AttachToBone, IKTarget3D
 #include "mce/kit/bodies3d.h"          // RigidBody3D, CharacterController3D, Trigger3D
 #include "mce/kit/components.h"       // Sprite, TextLabel, Camera2DComponent, TilemapLayer, ParticleEmitter,
                                       // Light2D, Parallax, Post2DComponent, SequencePlayer, PathAgent
