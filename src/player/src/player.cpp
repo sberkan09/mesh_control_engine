@@ -552,7 +552,7 @@ public:
         if (perf_on_) {
             perf_frame_.sim_ms += static_cast<f32>(platform::now_us() - perf_t0) * 0.001f;
             ++perf_frame_.ticks;
-            if (perf_.sim_hz == 0 && t.dt > 0) perf_.sim_hz = static_cast<u32>(1.0 / t.dt + 0.5);
+            if (perf_.sim_hz == 0 && t.dt > 0) perf_.sim_hz = static_cast<u32>(std::lround(1.0 / t.dt));
         }
         if (!monetize_test_.empty()) monetize_test_events();
         if (game_services_print_) game_services_test_events();
@@ -2057,7 +2057,8 @@ private:
         perf_.app.assign(StringView(desc_.app_name));
         perf_.backend.assign(device_ ? device_->caps().api_name.view() : StringView("headless"));
         perf_.scene.assign(asset::to_string(scene_guid_).view());
-        for (usize p = 0; p < kPhaseCount && p < perf::kMaxPhases; ++p)
+        static_assert(kPhaseCount <= perf::kMaxPhases, "perf::Frame::phase_ms holds every ECS phase");
+        for (usize p = 0; p < kPhaseCount; ++p)
             perf_.phases.push_back(FixedString<32>(phase_name(static_cast<Phase>(p))));
         perf_.render_phases = (1u << static_cast<u32>(Phase::Render_Pre)) | (1u << static_cast<u32>(Phase::Render_Submit));
         static constexpr const char* kStages[] = {"clusters", "scale", "ssao", "ssr", "shadow", "gi", "volumetrics",
@@ -2141,7 +2142,8 @@ private:
             const render::Forward3DGpuTimes g = renderer_.forward_3d().gpu_times(ts);
             const f64 stages[] = {g.clusters, g.scale, g.ssao, g.ssr, g.shadow, g.gi, g.volumetrics,
                                   g.main, g.resolve, g.taa, g.post_fx, g.bloom, g.tonemap, g.fxaa};
-            for (usize i = 0; i < std::size(stages) && i < perf::kMaxGpuStages; ++i)
+            static_assert(sizeof(stages) / sizeof(stages[0]) <= perf::kMaxGpuStages, "perf::Frame::gpu_stage_ms holds every stage");
+            for (usize i = 0; i < std::size(stages); ++i)
                 target->gpu_stage_ms[i] = static_cast<f32>(stages[i]);
             if (g.total >= 0) target->gpu_ms = static_cast<f32>(g.total);
             if (g.total >= 0) return;

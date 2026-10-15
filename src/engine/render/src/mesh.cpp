@@ -113,6 +113,11 @@ ResultV MeshStore::upload(u32 key, u32 generation, Span<const byte> blob, Textur
                 for (int r = 0; r < 4; ++r) g.inverse_bind.c[c][r] = j.inverse_bind[c * 4 + r];
             g.influences = j.bounds_min[0] <= j.bounds_max[0];
             g.bounds = {{j.bounds_min[0], j.bounds_min[1], j.bounds_min[2]}, {j.bounds_max[0], j.bounds_max[1], j.bounds_max[2]}};
+            g.ragdoll_flags = j.ragdoll_flags;
+            g.ragdoll_radius = j.ragdoll_radius;
+            g.ragdoll_swing = j.ragdoll_swing;
+            g.ragdoll_twist = j.ragdoll_twist;
+            g.ragdoll_mass = j.ragdoll_mass;
             m.joints.push_back(g);
         }
     }

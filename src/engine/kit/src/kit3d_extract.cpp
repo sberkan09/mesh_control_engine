@@ -567,6 +567,8 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.dof.max_radius = env.dof_max_radius;
     post.motion_blur.enabled = env.motion_blur != 0 && quality_.dof_motion_blur;
     post.motion_blur.intensity = env.motion_blur_intensity;
+    post.upscaler = env.upscaler != 0 ? render::Upscaler::Spatial : render::Upscaler::Bilinear;
+    post.sharpen = env.sharpen;
     render::apply_accessibility(render::accessibility_settings(), post);  // M-ACCESS: never in the state
     scene.set_post(post);
     render::AmbientOcclusion ao;
@@ -659,6 +661,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         return length_sq(c - q) <= r * r;
     };
 
+    const Ragdoll3DPoses* ragdolls = world.try_resource<Ragdoll3DPoses>();
     world.query<const MeshRef&>().each([&](Entity e, const MeshRef& m) {
         if (!m.visible) return;
         vec3 pos, scale;
@@ -689,13 +692,20 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         inst.cast_shadows = m.cast_shadows != 0;
         inst.skinning = m.skinning != 0;
         inst.material = material(m.material.guid);
-        if (const Animator* a = world.try_get<Animator>(e); a && a->playing != 0 && !mesh->nodes.empty()) {
+        if (!mesh->nodes.empty()) {
+            const Animator* a = world.try_get<Animator>(e);
             render::ClipSample samples[3];
-            const usize n = anim_samples(*a, *mesh, [&](u64 id) { return find_clip_id(*mesh, id); }, samples);
-            if (n > 0) {
+            const usize n =
+                a && a->playing != 0 ? anim_samples(*a, *mesh, [&](u64 id) { return find_clip_id(*mesh, id); }, samples) : 0;
+            const bool ragdoll = ragdolls && ragdolls->poses.find(e);
+            if (n > 0 || ragdoll) {
                 const usize first = poses_.size();
                 poses_.resize(first + mesh->nodes.size());
-                pose_samples(*mesh, samples, n, Span<mat4>(poses_.data() + first, mesh->nodes.size()));
+                const Span<mat4> pose(poses_.data() + first, mesh->nodes.size());
+                if (n > 0) pose_samples(*mesh, samples, n, pose);
+                else
+                    for (usize i = 0; i < pose.size(); ++i) pose[i] = mesh->rest_pose[i];
+                if (ragdoll) apply_ragdoll_pose(world, e, pose);
                 pose_first_.push_back(static_cast<u32>(first));
                 pose_first_.push_back(static_cast<u32>(mesh->nodes.size()));
                 pose_first_.push_back(static_cast<u32>(pending_.size()));
