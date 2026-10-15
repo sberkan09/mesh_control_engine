@@ -11,7 +11,6 @@
 
 using namespace mce;
 using namespace mce::ui;
-using math::vec2;
 
 namespace {
 
