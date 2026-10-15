@@ -99,12 +99,15 @@ usize WebGpuDevice::push_ring(Ring& ring, Span<const byte> data, usize alignment
 }
 
 void WebGpuDevice::flush_rings() {
-    for (Ring* r : {&uniforms_, &geometry_, &storage_}) {
-        if (r->head <= r->flushed) continue;
-        const usize from = r->flushed & ~usize(3);
-        wgpuQueueWriteBuffer(queue_, r->buffer, from, r->staging.data() + from, align_up(r->head, 4) - from);
-        r->flushed = r->head;
-    }
+    auto flush = [&](Ring& r) {
+        if (r.head <= r.flushed) return;
+        const usize from = r.flushed & ~usize(3);
+        wgpuQueueWriteBuffer(queue_, r.buffer, from, r.staging.data() + from, align_up(r.head, 4) - from);
+        r.flushed = r.head;
+    };
+    flush(uniforms_);
+    flush(geometry_);
+    for (Ring& r : storage_) flush(r);
 }
 
 void WebGpuDevice::stage_payloads(const CommandBuffer& cb) {
@@ -149,10 +152,12 @@ void WebGpuDevice::stage_payloads(const CommandBuffer& cb) {
             }
             case CmdType::SetStorageData: {
                 const auto* c = static_cast<const cmd::SetStorageData*>(payload);
-                const usize at = push_ring(storage_, CommandBuffer::inline_data(c, c->size),
-                                           math::max<usize>(caps_.storage_buffer_alignment, 16));
+                Ring* ring = c->binding < kMaxStorageBindings ? storage_ring(c->binding) : nullptr;
+                const usize at = ring ? push_ring(*ring, CommandBuffer::inline_data(c, c->size),
+                                                  math::max<usize>(caps_.storage_buffer_alignment, 16))
+                                      : ~usize(0);
                 if (at == ~usize(0)) overflow("storage", c->size);
-                else prep = Prepared{storage_.buffer, static_cast<u32>(at), static_cast<u32>(align_up(usize(c->size), 4)), true};
+                else prep = Prepared{ring->buffer, static_cast<u32>(at), static_cast<u32>(align_up(usize(c->size), 4)), true};
                 break;
             }
             default: break;
