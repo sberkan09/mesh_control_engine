@@ -30,7 +30,7 @@
 
 namespace mce {
 class World;
-struct Frame;
+class Frame;
 }  // namespace mce
 
 namespace mce::kit {
