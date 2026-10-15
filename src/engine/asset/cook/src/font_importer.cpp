@@ -1,9 +1,14 @@
 // TTF -> CHNK_FONT: glyph atlas baked at cook with stb_truetype + stb_rect_pack (Skyline), plus
 // metrics and the kern-table pairs (assets.md §5.2; "atlas built at cook, not runtime" is the
-// FR-R2D-060 acceptance test). MSDF via msdf-atlas-gen is the v0.5 upgrade, same chunk type.
+// FR-R2D-060 acceptance test). The atlas is coverage, or with "sdf" a single-channel signed
+// distance field (stb_truetype's), which the sprite shader thresholds so text stays sharp far
+// above the baked size (M-UI-DATA 4). MSDF via msdf-atlas-gen remains the corner-exact upgrade.
 //
-// sidecar settings: { "size": 32, "ranges": [[32, 126]], "padding": 1, "strings": true }
+// sidecar settings: { "size": 32, "ranges": [[32, 126]], "padding": 1, "strings": true, "sdf": true, "spread": 6 }
 //   size     pixel height (ascent - descent)
+//   sdf      bake a distance field instead of coverage (default false)
+//   spread   sdf only: pixels at `size` the field reaches past the edge, an integer in [1, 32]
+//            (default size / 8, at least 2); outlines thicker than this fall off the field
 //   ranges   inclusive codepoint ranges; codepoints the font lacks are skipped
 //   strings  also every codepoint the project's string tables use (assets/loc/*.csv, M-MOBILE 11a),
 //            with their upper- and lower-case forms in each table's locale (Turkish İ and ı), so a
@@ -84,10 +89,99 @@ void string_table_codepoints(const ImportInput& in, Array<u32>& cps) {
     cps.resize(uniq);
 }
 
+// Coverage: stb_truetype's packer bakes antialiased glyphs, growing the atlas until all fit.
+bool bake_coverage(const unsigned char* data, f32 size, const Array<u32>& cps, int padding, Array<asset::FontGlyph>& glyphs,
+                   Array<u8>& atlas, u32& aw, u32& ah) {
+    Array<int> cp_ints;
+    for (u32 cp : cps) cp_ints.push_back(static_cast<int>(cp));
+    Array<stbtt_packedchar> packed;
+    packed.resize(cps.size());
+    bool packed_ok = false;
+    while (aw <= 4096 && ah <= 4096) {
+        atlas.clear();
+        atlas.resize(static_cast<usize>(aw) * ah, 0);
+        stbtt_pack_context pc;
+        if (stbtt_PackBegin(&pc, atlas.data(), static_cast<int>(aw), static_cast<int>(ah), 0, padding, nullptr)) {
+            stbtt_PackSetOversampling(&pc, 1, 1);
+            stbtt_pack_range range{};
+            range.font_size = size;
+            range.array_of_unicode_codepoints = cp_ints.data();
+            range.num_chars = static_cast<int>(cp_ints.size());
+            range.chardata_for_range = packed.data();
+            packed_ok = stbtt_PackFontRanges(&pc, data, 0, &range, 1) != 0;
+            stbtt_PackEnd(&pc);
+        }
+        if (packed_ok) break;
+        if (aw <= ah) aw *= 2;
+        else ah *= 2;
+    }
+    if (!packed_ok) return false;
+    for (usize i = 0; i < cps.size(); ++i) {
+        const stbtt_packedchar& p = packed[i];
+        glyphs.push_back(asset::FontGlyph{cps[i], p.x0, p.y0, p.x1, p.y1, p.xoff, p.yoff, p.xoff2, p.yoff2, p.xadvance});
+    }
+    return true;
+}
+
+// Signed distance field: 128 on the outline, +128/spread per pixel inside, clamped to [0, 255].
+// Each glyph's bitmap carries `spread` pixels of field around the outline; the quads include it.
+bool bake_sdf(const stbtt_fontinfo& info, f32 scale, const Array<u32>& cps, int spread, int padding, Array<asset::FontGlyph>& glyphs,
+              Array<u8>& atlas, u32& aw, u32& ah) {
+    struct Bitmap {
+        unsigned char* pixels = nullptr;
+        int w = 0, h = 0, xoff = 0, yoff = 0;
+    };
+    Array<Bitmap> bitmaps;
+    bitmaps.resize(cps.size());
+    for (usize i = 0; i < cps.size(); ++i) {
+        Bitmap& b = bitmaps[i];
+        b.pixels = stbtt_GetCodepointSDF(&info, scale, static_cast<int>(cps[i]), spread, 128, 128.0f / static_cast<f32>(spread), &b.w, &b.h,
+                                         &b.xoff, &b.yoff);
+        if (!b.pixels) b.w = b.h = 0;  // blank glyphs (space) have no field
+    }
+    Array<stbrp_rect> rects;
+    rects.resize(cps.size());
+    Array<stbrp_node> nodes;
+    bool packed_ok = false;
+    while (aw <= 4096 && ah <= 4096) {
+        for (usize i = 0; i < cps.size(); ++i) {
+            rects[i] = stbrp_rect{};
+            rects[i].id = static_cast<int>(i);
+            rects[i].w = bitmaps[i].w ? bitmaps[i].w + padding : 0;
+            rects[i].h = bitmaps[i].h ? bitmaps[i].h + padding : 0;
+        }
+        nodes.resize(aw);
+        stbrp_context rc;
+        stbrp_init_target(&rc, static_cast<int>(aw - padding), static_cast<int>(ah - padding), nodes.data(), static_cast<int>(aw));
+        packed_ok = stbrp_pack_rects(&rc, rects.data(), static_cast<int>(rects.size())) != 0;
+        if (packed_ok) break;
+        if (aw <= ah) aw *= 2;
+        else ah *= 2;
+    }
+    if (packed_ok) {
+        atlas.clear();
+        atlas.resize(static_cast<usize>(aw) * ah, 0);
+        for (usize i = 0; i < cps.size(); ++i) {
+            const Bitmap& b = bitmaps[i];
+            int adv = 0, lsb = 0;
+            stbtt_GetCodepointHMetrics(&info, static_cast<int>(cps[i]), &adv, &lsb);
+            const u16 x0 = static_cast<u16>(rects[i].x + padding), y0 = static_cast<u16>(rects[i].y + padding);
+            for (int y = 0; y < b.h; ++y)
+                for (int x = 0; x < b.w; ++x) atlas[usize(y0 + y) * aw + x0 + x] = b.pixels[y * b.w + x];
+            glyphs.push_back(asset::FontGlyph{cps[i], x0, y0, static_cast<u16>(x0 + b.w), static_cast<u16>(y0 + b.h), static_cast<f32>(b.xoff),
+                                              static_cast<f32>(b.yoff), static_cast<f32>(b.xoff + b.w), static_cast<f32>(b.yoff + b.h),
+                                              static_cast<f32>(adv) * scale});
+        }
+    }
+    for (Bitmap& b : bitmaps)
+        if (b.pixels) stbtt_FreeSDF(b.pixels, nullptr);
+    return packed_ok;
+}
+
 class FontImporter final : public IImporter {
 public:
     StringView id() const override { return "font"; }
-    u32 version() const override { return 1; }
+    u32 version() const override { return 2; }
     ChunkType type() const override { return ChunkType::Font; }
     bool native() const override { return false; }
     bool handles_extension(StringView ext) const override { return ext == ".ttf" || ext == ".otf"; }
@@ -109,11 +203,19 @@ public:
     bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
         const JsonValue s = in.settings;
         const StringView file = in.display_path;
-        if (!detail::check_keys(s, {"size", "ranges", "padding", "strings"}, file, kStage, diags)) return false;
-        if (const JsonValue v = s.valid() ? s.get("strings") : JsonValue(); v.valid() && !v.is_bool()) {
-            detail::error_at(diags, Errc::ImportFailed, file, v, kStage, "'strings' must be true or false");
-            return false;
+        if (!detail::check_keys(s, {"size", "ranges", "padding", "strings", "sdf", "spread"}, file, kStage, diags)) return false;
+        for (const char* key : {"strings", "sdf"}) {
+            if (const JsonValue v = s.valid() ? s.get(key) : JsonValue(); v.valid() && !v.is_bool()) {
+                String msg;
+                appendf(msg, "'%s' must be true or false", key);
+                detail::error_at(diags, Errc::ImportFailed, file, v, kStage, msg);
+                return false;
+            }
         }
+        const bool sdf = [&] {
+            const JsonValue v = s.valid() ? s.get("sdf") : JsonValue();
+            return v.valid() && v.as_bool();
+        }();
         f64 size = 32, padding = 1;
         if (!detail::read_number(s, "size", 32, size, file, kStage, diags)) return false;
         if (!detail::read_number(s, "padding", 1, padding, file, kStage, diags)) return false;
@@ -124,6 +226,18 @@ public:
         if (!(padding >= 0 && padding <= 16) || padding != static_cast<f64>(static_cast<int>(padding))) {
             detail::error_at(diags, Errc::ImportFailed, file, s.get("padding"), kStage, "'padding' must be an integer in [0, 16]");
             return false;
+        }
+        f64 spread = std::max(2.0, static_cast<f64>(static_cast<int>(size / 8)));
+        if (s.valid() && s.get("spread").valid()) {
+            if (!sdf) {
+                detail::error_at(diags, Errc::ImportFailed, file, s.get("spread"), kStage, "'spread' needs \"sdf\": true");
+                return false;
+            }
+            if (!detail::read_number(s, "spread", spread, spread, file, kStage, diags)) return false;
+            if (!(spread >= 1 && spread <= 32) || spread != static_cast<f64>(static_cast<int>(spread))) {
+                detail::error_at(diags, Errc::ImportFailed, file, s.get("spread"), kStage, "'spread' must be an integer in [1, 32]");
+                return false;
+            }
         }
 
         Array<Range> ranges;
@@ -196,46 +310,19 @@ public:
             return false;
         }
 
-        // Pack, growing the atlas until everything fits.
-        Array<int> cp_ints;
-        for (u32 cp : cps) cp_ints.push_back(static_cast<int>(cp));
-        Array<stbtt_packedchar> packed;
-        packed.resize(cps.size());
+        const f32 scale = stbtt_ScaleForPixelHeight(&info, static_cast<float>(size));
+        Array<asset::FontGlyph> glyphs;
         Array<u8> atlas;
         u32 aw = 128, ah = 128;
-        bool packed_ok = false;
-        while (aw <= 4096 && ah <= 4096) {
-            atlas.clear();
-            atlas.resize(static_cast<usize>(aw) * ah, 0);
-            stbtt_pack_context pc;
-            if (stbtt_PackBegin(&pc, atlas.data(), static_cast<int>(aw), static_cast<int>(ah), 0, static_cast<int>(padding), nullptr)) {
-                stbtt_PackSetOversampling(&pc, 1, 1);
-                stbtt_pack_range range{};
-                range.font_size = static_cast<float>(size);
-                range.array_of_unicode_codepoints = cp_ints.data();
-                range.num_chars = static_cast<int>(cp_ints.size());
-                range.chardata_for_range = packed.data();
-                packed_ok = stbtt_PackFontRanges(&pc, data, 0, &range, 1) != 0;
-                stbtt_PackEnd(&pc);
-            }
-            if (packed_ok) break;
-            if (aw <= ah) aw *= 2;
-            else ah *= 2;
-        }
-        if (!packed_ok) {
+        const bool baked = sdf ? bake_sdf(info, scale, cps, static_cast<int>(spread), static_cast<int>(padding), glyphs, atlas, aw, ah)
+                               : bake_coverage(data, static_cast<f32>(size), cps, static_cast<int>(padding), glyphs, atlas, aw, ah);
+        if (!baked) {
             diags.error(Errc::ImportFailed, file, 0, 0, kStage, "glyphs do not fit a 4096x4096 atlas (reduce size or ranges)");
             return false;
         }
 
-        const f32 scale = stbtt_ScaleForPixelHeight(&info, static_cast<float>(size));
         int ascent = 0, descent = 0, gap = 0;
         stbtt_GetFontVMetrics(&info, &ascent, &descent, &gap);
-
-        Array<asset::FontGlyph> glyphs;
-        for (usize i = 0; i < cps.size(); ++i) {
-            const stbtt_packedchar& p = packed[i];
-            glyphs.push_back(asset::FontGlyph{cps[i], p.x0, p.y0, p.x1, p.y1, p.xoff, p.yoff, p.xoff2, p.yoff2, p.xadvance});
-        }
 
         // Kern pairs: glyph-index pairs from the kern table, mapped back to our codepoints.
         Array<asset::FontKern> kerns;
@@ -273,6 +360,8 @@ public:
         h.line_gap = static_cast<f32>(gap) * scale;
         h.atlas_width = aw;
         h.atlas_height = ah;
+        h.flags = sdf ? asset::FontFlags::Sdf : 0u;
+        h.sdf_spread = sdf ? static_cast<f32>(spread) : 0.0f;
         Array<byte> payload;
         asset::write_font(h, glyphs.span(), kerns.span(), Span<const byte>(reinterpret_cast<const byte*>(atlas.data()), atlas.size()), payload);
         asset::ContainerWriter::ChunkDesc d;

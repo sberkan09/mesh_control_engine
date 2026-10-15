@@ -24,6 +24,7 @@ static_assert(sizeof(SpriteVertex) == 24);
 namespace vertex_flags {
 inline constexpr u32 kCoverage = 1u << 0;  // sample the font atlas (R8 coverage) instead of the sprite atlas
 inline constexpr u32 kLit = 1u << 1;       // normal-mapped: shaded by the batch's Lights2D (FR-R2D-090)
+inline constexpr u32 kSdf = 1u << 2;       // with kCoverage: the font atlas is a distance field, thresholded at 0.5
 }
 
 constexpr u32 pack_layer_flags(u32 layer, u32 flags, u32 orientation = 0) {

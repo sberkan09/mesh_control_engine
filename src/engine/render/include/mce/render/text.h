@@ -1,7 +1,8 @@
 #pragma once
 // Text layout over cook-baked font atlases (FR-R2D-060, rendering-2d D9).
 //
-// The font atlas is baked at cook (stb_truetype coverage today, MSDF at v0.5); the runtime never
+// The font atlas is baked at cook (stb_truetype coverage, or a signed distance field that stays
+// sharp when magnified; MSDF at v0.5); the runtime never
 // rasterizes. Layout is one function shared by HUD text, DebugDraw::text2d and the future
 // mce::ui: UTF-8 decode -> glyph lookup -> advance + kerning -> word wrap -> alignment. It yields
 // glyph quads in pixel space (+y down, origin at the top-left of the first line box); the
@@ -40,6 +41,7 @@ struct FontMetrics {
     f32 line_gap = 0;
     u32 atlas_width = 0;
     u32 atlas_height = 0;
+    f32 sdf_spread = 0;    // > 0: the atlas is a distance field (128 = edge) reaching this many pixels
 };
 
 class FontFace {

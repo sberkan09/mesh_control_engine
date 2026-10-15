@@ -36,6 +36,7 @@ void SpriteSets::update(SpriteSetId id, const SpriteSetDesc& desc) {
     s.pixels_per_meter = desc.pixels_per_meter > 0.0f ? desc.pixels_per_meter : 48.0f;
     s.filter = desc.filter;
     s.coverage = desc.coverage;
+    s.sdf = desc.coverage && desc.sdf;
     s.lit = desc.lit;
     s.normal_key = desc.normal_key;
 }
@@ -69,7 +70,8 @@ ResultV bake_tilemap(const TilemapDesc& d, const SpriteSets& sets, TilemapBake& 
     out.blend = d.blend;
 
     const u32 color = pack_color_srgb(d.tint);
-    const u32 flags = (sets.coverage(d.set) ? vertex_flags::kCoverage : 0u) | (sets.lit(d.set) ? vertex_flags::kLit : 0u);
+    const u32 flags = (sets.coverage(d.set) ? vertex_flags::kCoverage : 0u) | (sets.sdf(d.set) ? vertex_flags::kSdf : 0u) |
+                      (sets.lit(d.set) ? vertex_flags::kLit : 0u);
     const u32 regions = sets.region_count(d.set);
     const u32 cx_count = (d.width + kTileChunkSize - 1) / kTileChunkSize;
     const u32 cy_count = (d.height + kTileChunkSize - 1) / kTileChunkSize;
@@ -184,7 +186,8 @@ void SpriteBatch::expand_sprite(const SpriteInstance& s, SpriteVertex out[4]) co
     }
     const u32 color = pack_color_srgb(s.tint);
     const bool lit = sets_.lit(s.set);
-    const u32 flags = (sets_.coverage(s.set) ? vertex_flags::kCoverage : 0u) | (lit ? vertex_flags::kLit : 0u);
+    const u32 flags = (sets_.coverage(s.set) ? vertex_flags::kCoverage : 0u) | (sets_.sdf(s.set) ? vertex_flags::kSdf : 0u) |
+                      (lit ? vertex_flags::kLit : 0u);
     const u32 packed = pack_layer_flags(r.layer, flags, lit ? pack_orientation(s.rotation, s.flip_x, s.flip_y) : 0u);
     const vec2 p0 = place(x0, y0), p1 = place(x1, y0), p2 = place(x1, y1), p3 = place(x0, y1);
     out[0] = {p0.x, p0.y, ul, vb, color, packed};
@@ -276,7 +279,8 @@ void SpriteBatch::add_rect(const RectQuad& q) {
 void SpriteBatch::add_text(const Font& font, const TextLayout& layout, const TextPlacement& p) {
     if (!sets_.valid(font.set)) return;
     const u64 key = sort_key_2d(pass_, p.sort_layer, material(p.blend, font.set), p.sort_order);
-    const u32 packed = pack_layer_flags(0, sets_.coverage(font.set) ? vertex_flags::kCoverage : 0u);
+    const u32 packed = pack_layer_flags(
+        0, (sets_.coverage(font.set) ? vertex_flags::kCoverage : 0u) | (sets_.sdf(font.set) ? vertex_flags::kSdf : 0u));
     const f32 sy = p.y_down ? p.units_per_pixel : -p.units_per_pixel;
     // One copy of the glyphs, moved by (dx, dy) layout pixels (+y down).
     auto emit = [&](f32 dx, f32 dy, const math::Color& tint) {

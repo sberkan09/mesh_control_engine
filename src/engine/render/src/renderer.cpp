@@ -68,8 +68,12 @@ vec3 linear_to_srgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.
 void main() {
     float layer = float(v_packed & 0xFFu);
     uint flags = v_packed >> 24;
-    vec4 texel = (flags & 1u) != 0u ? vec4(1.0, 1.0, 1.0, texture(u_font, vec3(v_uv, layer)).r)
-                                    : texture(u_atlas, vec3(v_uv, layer));
+    // Font atlases: coverage is the alpha; a distance field (flag 4) is thresholded at 0.5 over one
+    // screen pixel, so magnified text keeps a hard edge. The derivative is taken outside the branch.
+    float field = texture(u_font, vec3(v_uv, layer)).r;
+    float aa = max(fwidth(field), 1e-4);
+    float cover = (flags & 4u) != 0u ? clamp((field - 0.5) / aa + 0.5, 0.0, 1.0) : field;
+    vec4 texel = (flags & 1u) != 0u ? vec4(1.0, 1.0, 1.0, cover) : texture(u_atlas, vec3(v_uv, layer));
     vec4 c = texel * vec4(srgb_to_linear(v_color.rgb), v_color.a);
     if ((flags & 2u) != 0u) c.rgb *= shade(layer);
     vec3 rgb = u_params.x > 0.5 ? linear_to_srgb(clamp(c.rgb, 0.0, 1.0)) : c.rgb;
@@ -258,6 +262,7 @@ Result<Font> Renderer::create_font(const FontMetrics& metrics, Span<const FontGl
     sd.texture_key = fs.texture_key;
     sd.filter = rhi::Filter::Linear;
     sd.coverage = true;
+    sd.sdf = metrics.sdf_spread > 0;
     sd.debug_name = debug_name;
     fs.set = sets_.create(sd);
     if (!fs.set.valid()) {
