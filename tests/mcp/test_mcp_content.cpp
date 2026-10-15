@@ -165,7 +165,7 @@ TEST_CASE("library_search and library_add: CC0 models with their texture, OFL fo
     REQUIRE(roads.v().get("entries").size() >= 1);
     CHECK(str(roads.v().get("entries").at(0).get("id")) == "kenney-road-corner");
     CHECK(str(roads.v().get("entries").at(0).get("license")) == "CC0 1.0");
-    CHECK(c.ok("library_search", R"({"kind":"font","license":"OFL"})").v().get("total").as_number() == 4);
+    CHECK(c.ok("library_search", R"({"kind":"font","license":"OFL"})").v().get("total").as_number() == 8);
     CHECK(c.ok("library_search", R"({"query":"sky","kind":"recipe"})").v().get("total").as_number() == 3);
     CHECK(c.ok("library_search", R"({"query":"zzzz"})").v().get("total").as_number() == 0);
 

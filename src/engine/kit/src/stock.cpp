@@ -1,6 +1,7 @@
 #include "mce/kit/stock.h"
 
 #include "mce/ecs/world.h"
+#include "mce/input/actions.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/components.h"
 #include "mce/kit/effects.h"
@@ -9,6 +10,7 @@
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_anim.h"
 #include "mce/physics/world2d.h"
+#include "mce/scene/scene.h"
 
 namespace mce::kit {
 
@@ -28,7 +30,43 @@ void kit_world_settings(Frame& f) {
     });
 }
 
+struct UiFlowInstalled {};
+
+bool pressed(const input::InputState* in, const FixedString<32>& action) {
+    if (!in || action.empty()) return false;
+    const StringId id(action.view());
+    return in->has_action(id) && in->pressed(id);
+}
+
+// Before the tick's gameplay: each UiFlow screen reacts to the actions this tick carries (the state
+// it started the tick in decides, so one action never shows and hides the same screen), then the
+// world holds while a pause screen is visible.
+void kit_ui_flow(Frame& f) {
+    const input::InputState* in = f.try_resource<input::InputState>();
+    bool hold = false;
+    asset::Guid load;
+    f.query<const UiFlow&, UiScreen&>().each([&](const UiFlow& flow, UiScreen& screen) {
+        if (screen.visible && pressed(in, flow.hide_on)) screen.visible = false;
+        else if (!screen.visible && pressed(in, flow.show_on)) screen.visible = true;
+        if (!flow.scene.guid.is_null() && pressed(in, flow.load_on) && load.is_null()) load = flow.scene.guid;
+        hold = hold || (screen.visible && flow.pause);
+    });
+    if (!load.is_null()) {
+        scene::request_change(f.world(), load);
+        hold = false;  // the next scene starts from its own screens
+    }
+    f.world().set_held(hold);
+}
+
 }  // namespace
+
+void install_ui_flow(World& world) {
+    if (world.try_resource<UiFlowInstalled>()) return;
+    world.set_resource(UiFlowInstalled{});
+    world.register_components<UiScreen, UiFlow>();
+    world.add_system(Phase::FixedUpdate_Pre, "kit_ui_flow", &kit_ui_flow);
+    world.run_when_held(Phase::FixedUpdate_Pre, "kit_ui_flow");
+}
 
 void install_world_settings(World& world) {
     if (world.try_resource<WorldSettingsInstalled>()) return;
@@ -43,6 +81,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_kit3d(world, assets);
     install_bodies3d(world, assets);
     install_world_settings(world);
+    install_ui_flow(world);
     install_effects(world, assets);
     install_sprite_animation(world, assets);
 }

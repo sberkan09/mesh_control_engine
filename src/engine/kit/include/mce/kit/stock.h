@@ -22,5 +22,8 @@ void install_stock(World& world, asset::AssetSystem* assets);
 // Only the WorldSettings system (Startup "kit_world_settings": the first WorldSettings into
 // physics2d's World2D and kit3d's Physics3D, whichever are installed). install_stock calls it.
 void install_world_settings(World& world);
+// kit::UiFlow (components.h): FixedUpdate_Pre "kit_ui_flow" shows and hides screens on input
+// actions and sets the world's hold; it runs on held ticks too. install_stock calls it.
+void install_ui_flow(World& world);
 
 }  // namespace mce::kit

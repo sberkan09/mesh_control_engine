@@ -395,6 +395,16 @@ void World::add_system(Phase phase, const char* name, SystemFn fn, const char* a
     system_name_cache_[static_cast<usize>(phase)].push_back(name);
 }
 
+void World::run_when_held(Phase phase, const char* name) {
+    bool found = false;
+    for (SystemEntry& e : systems_[static_cast<usize>(phase)])
+        if (StringView(e.name) == StringView(name)) {
+            e.when_held = true;
+            found = true;
+        }
+    MCE_ASSERT_MSG(found, "run_when_held: no such system in that phase");
+}
+
 Span<const char* const> World::system_names(Phase phase) const {
     return system_name_cache_[static_cast<usize>(phase)].span();
 }
@@ -432,7 +442,9 @@ void World::run_phase(Phase phase, Frame& frame) {
     frame.phase = phase;
     in_phase_ = true;
     Array<SystemEntry>& list = systems_[static_cast<usize>(phase)];
+    const bool fixed = phase == Phase::FixedUpdate_Pre || phase == Phase::FixedUpdate_Physics || phase == Phase::FixedUpdate_Post;
     for (usize i = 0; i < list.size(); ++i) {
+        if (fixed && held_ && !list[i].when_held) continue;  // read per system: a hold set mid-phase holds the rest
         current_system_ = list[i].id;
         current_phase_ = static_cast<u16>(phase);
         current_slot_ = static_cast<u16>(i);
