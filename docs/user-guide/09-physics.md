@@ -160,7 +160,7 @@ Joints are not scene-authored yet.
 ## 9.7 3D navigation
 
 A 3D scene gets a navigation mesh (navmesh) and agents that walk it from five components
-(`mce/kit/nav3d.h`, on Recast & Detour, ADR-0039). The stock player, play-in-editor and MCP's
+(`mce/kit/nav3d.h`, on Recast & Detour, ADR-0040). The stock player, play-in-editor and MCP's
 `run_headless` run them; nothing needs code.
 
 - `NavMeshSurface3D`: one per scene (the first in ECS order is used). Its settings say what an

@@ -1,5 +1,5 @@
 #pragma once
-// NavMesh3D — 3D navigation over embedded Recast & Detour (ADR-0039; ROADMAP M-GAMEPLAY3D step 1).
+// NavMesh3D — 3D navigation over embedded Recast & Detour (ADR-0040; ROADMAP M-GAMEPLAY3D step 1).
 //
 //  - bake_navmesh: walkable surfaces voxelized from triangles (colliders, meshes) into a tiled
 //    navmesh, with area volumes (per-area path costs, blocked boxes) and off-mesh links (jumps,

@@ -1,7 +1,7 @@
 #pragma once
 // 3D navigation as components (M-GAMEPLAY3D step 1): a navmesh over the scene's colliders, areas
 // with path costs, off-mesh links, carved obstacles, and agents that walk to a target around each
-// other, on physics::NavMesh3D (Recast & Detour, ADR-0039). kit::install_stock installs them.
+// other, on physics::NavMesh3D (Recast & Detour, ADR-0040). kit::install_stock installs them.
 //
 //   NavMeshSurface3D  the navmesh: the bake settings, and the baked .mcnav (the editor's or MCP's
 //                     navmesh_bake); without one it is baked from the scene at the first tick

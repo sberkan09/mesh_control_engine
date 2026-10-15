@@ -253,7 +253,7 @@ else()
     target_compile_options(Jolt PRIVATE -w)
 endif()
 
-# ---- Recast & Detour (3D navigation; mce_physics3d only — ADR-0039) ------------------------------
+# ---- Recast & Detour (3D navigation; mce_physics3d only — ADR-0040) ------------------------------
 # Navmesh bake (Recast), path queries and crowds (Detour, DetourCrowd) and carved obstacles
 # (DetourTileCache). Zlib licensed. Compiled straight into mce_physics3d (an object library folded
 # into its archive, like ENet into mce_net) with our flags: warnings off, and no FP contraction so a
@@ -311,6 +311,11 @@ foreach(t glslang glslang-default-resource-limits)
         endif()
     endif()
 endforeach()
+
+# ---- Tint (web builds only: GLSL -> SPIR-V -> WGSL in mce_rhi_webgpu, ADR-0039) ------------
+if(MCE_WEB)
+    include("${CMAKE_CURRENT_LIST_DIR}/web/TintDependencies.cmake")
+endif()
 
 # ---- ENet (optional networking; mce_net only — ADR-0035) ------------------------------------
 # Reliable/unreliable sequenced channels over UDP. Compiled straight into mce_net (an object

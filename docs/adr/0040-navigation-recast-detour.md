@@ -1,4 +1,4 @@
-# ADR-0039 — 3D navigation over embedded Recast & Detour
+# ADR-0040 — 3D navigation over embedded Recast & Detour
 
 **Status:** Accepted (2026-10-15). **Milestone:** M-GAMEPLAY3D step 1 (off-tier, opt-in). **Plan:**
 `docs/milestones/M-GAMEPLAY3D.md`. **Reference:** `src/engine/physics3d/include/mce/physics3d/navmesh3d.h`.

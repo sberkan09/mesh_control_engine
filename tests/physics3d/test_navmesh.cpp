@@ -1,4 +1,4 @@
-// NavMesh3D over Recast & Detour (ADR-0039; M-GAMEPLAY3D step 1): the bake (byte-identical run to
+// NavMesh3D over Recast & Detour (ADR-0040; M-GAMEPLAY3D step 1): the bake (byte-identical run to
 // run, areas, links, storeys), path and surface queries, carved obstacles and the crowd.
 
 #include <doctest/doctest.h>

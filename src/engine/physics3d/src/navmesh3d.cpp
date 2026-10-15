@@ -1,4 +1,4 @@
-// NavMesh3D over Recast & Detour (ADR-0039). With world3d.cpp, the only translation units that may
+// NavMesh3D over Recast & Detour (ADR-0040). With world3d.cpp, the only translation units that may
 // include Recast or Detour (the Recast wall in check_walls.py).
 //
 // The bake follows Recast's "temporary obstacles" pipeline: per tile, rasterize the triangles that

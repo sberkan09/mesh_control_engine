@@ -260,7 +260,7 @@ the player and the editor define. Flags you will meet:
 
 | Flag | Meaning |
 |---|---|
-| `Saved` | persisted across runs (the bus gains, `r.vsync`) |
+| `Saved` | kept between runs in `<save folder>/settings.cfg` (the bus gains, `r.vsync`, `r.quality`, `fullscreen`): the player loads it at start, after the game module's convars exist, and writes the ones changed during the run on quit, on focus loss and when the app goes to the background. A value given on the command line wins for that run and is not written; `-settings 0` neither reads nor writes the file, and captures (`-capture`) never do |
 | `Cheat` | refused from the console and the command line in shipped builds (`time_scale`); code may still set it |
 | `RequiresRestart` | read at start-up only (`headless`, `r.gl_debug`) |
 | `ReadOnly` | reported, never set |

@@ -1,5 +1,5 @@
 # mce_physics3d (L2): World3D, a facade over embedded Jolt Physics 5 (ADR-0003; ROADMAP M5b), and
-# NavMesh3D, navigation over embedded Recast & Detour (ADR-0039; M-GAMEPLAY3D).
+# NavMesh3D, navigation over embedded Recast & Detour (ADR-0040; M-GAMEPLAY3D).
 # The only target that links Jolt (privately) and compiles Recast & Detour (folded into this
 # archive): their headers, defines and flags stay inside.
 mce_add_library(mce_physics3d
