@@ -13,6 +13,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/asset/container.h"
 #include "mce/asset/xxhash.h"
+#include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/cook/cook.h"
 #include "mce/kit/anim3d.h"
@@ -143,7 +144,7 @@ std::string write_mesh_tree(const char* name, asset::Guid guid, Span<const byte>
 TEST_CASE("kit3d: the components are reflected and install is idempotent") {
     for (const char* name : {"MeshRef", "PointLight3D", "SpotLight3D", "ReflectionProbe3D", "Camera3DComponent", "Animator", "Environment3D",
                              "BoxCollider3D", "MeshCollider3D", "Foliage3D", "Decal3D", "ParticleEmitter3D", "Terrain3D",
-                             "TerrainCollider3D"}) {
+                             "TerrainCollider3D", "TerrainFoliage3D"}) {
         const refl::TypeRecord* t = refl::find_type(StringId(name));
         INFO(name);
         REQUIRE(t != nullptr);
@@ -909,4 +910,79 @@ TEST_CASE("kit3d: TerrainCollider3D collides with the drawn surface and falls th
     w.remove<kit::TerrainCollider3D>(late);
     CHECK_FALSE(phys.world.has_body(late));
     assets.release(asset::AnyHandle(th.value()));
+}
+
+TEST_CASE("kit3d: TerrainFoliage3D stands its copies on its own or its parent's terrain (M-TERRAIN 5)") {
+    const std::string src = cook_test::fresh_dir("kit3d_terrain_foliage");
+    cook_test::write_file(src + "/assets/flat.mcterrain", R"({ "format": "mce-terrain", "version": 1,
+        "guid": "7e7a0000-0000-4000-8000-0000000000d1", "resolution": 65, "chunk": 16, "size": [64, 64],
+        "height_range": [0, 10], "fill": 3 })");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(src.c_str()), cook::CookOptions{}).ok());
+    asset::AssetSystem assets;
+    const std::string cooked = src + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+
+    Fixture f;
+    f.extract.reset(&assets);
+    f.extract.bind_mesh(kBox, 1);
+    f.camera({0.0f, 20.0f, 0.0f});
+    kit::Terrain3D t;
+    t.terrain.guid = asset::parse_guid("7e7a0000-0000-4000-8000-0000000000d1").value();
+    const Entity ground = f.world.spawn_with(at({0.0f, 1.0f, 0.0f}), t);
+    kit::TerrainFoliage3D grass;
+    grass.mesh.guid = kBox;
+    grass.density = 0.25f;  // a 2 m grid: 32 x 32 cells, every one kept on a terrain without layers
+    grass.cull_distance = 0.0f;
+    const Entity child = f.world.spawn_with(at({}), ChildOf{ground}, grass);
+    kit::TerrainFoliage3D rocks = grass;
+    rocks.layer = 1;  // no such layer on this terrain: nothing
+    f.world.spawn_with(at({}), ChildOf{ground}, rocks);
+    f.world.spawn_with(at({50, 0, 0}), grass);  // no terrain here or on a parent: skipped
+    f.step();
+
+    auto frame = [&](render::Scene3D& scene) {
+        render::Camera3D cam;
+        REQUIRE(f.extract.camera(f.world, 1.0f, cam));
+        scene.begin(cam, {320, 180});
+        f.extract.extract(f.world, scene, 1.0f);
+    };
+    u32 version = 0;
+    {
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        CHECK(f.extract.stats().foliage == 1);
+        CHECK(f.extract.stats().foliage_instances == 1024);
+        REQUIRE(scene.batches().size() == 1);
+        const render::InstanceBatch& b = scene.batches()[0];
+        CHECK(b.mesh == 1);
+        CHECK(b.id == ((child.index + 1) | 0x80000000u));
+        for (const math::mat4& m : b.transforms) {
+            CHECK(m.c[3][1] == doctest::Approx(4.0f).epsilon(1e-3));  // 3 m of fill on an entity 1 m up
+            CHECK(std::fabs(m.c[3][0]) <= 32.0f);
+        }
+        version = b.version;
+    }
+    {  // unchanged: the same scatter
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        CHECK(scene.batches()[0].version == version);
+    }
+    {  // the terrain moves: re-scattered with it
+        f.world.try_get_mut<LocalTransform>(ground)->position = {0.0f, 2.0f, 0.0f};
+        f.step();
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        REQUIRE(scene.batches().size() == 1);
+        CHECK(scene.batches()[0].version != version);
+        CHECK(scene.batches()[0].transforms[0].c[3][1] == doctest::Approx(5.0f).epsilon(1e-3));
+    }
+    {  // disabled: no batch
+        f.world.try_get_mut<kit::TerrainFoliage3D>(child)->enabled = 0;
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        CHECK(scene.batches().empty());
+        CHECK(f.extract.stats().foliage == 0);
+    }
 }

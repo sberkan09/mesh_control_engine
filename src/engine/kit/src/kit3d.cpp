@@ -29,6 +29,7 @@ static_assert(sizeof(Decal3D) == 96);
 static_assert(sizeof(ParticleEmitter3D) == 184);
 static_assert(sizeof(Terrain3D) == 80);
 static_assert(sizeof(TerrainCollider3D) == 8);
+static_assert(sizeof(TerrainFoliage3D) == 128);
 
 // The asset system mesh colliders read their meshes from (install_kit3d's argument).
 struct Kit3DAssets {
@@ -259,7 +260,7 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
     }
     world.register_components<MeshRef, PointLight3D, SpotLight3D, ReflectionProbe3D, GiVolume3D, Camera3DComponent, Animator,
                               Environment3D, BoxCollider3D, MeshCollider3D, Foliage3D, Decal3D, ParticleEmitter3D, Terrain3D,
-                              TerrainCollider3D>();
+                              TerrainCollider3D, TerrainFoliage3D>();
     world.set_resource(Environment3D{});
     world.set_resource(Kit3DAssets{assets});
     if (!world.try_resource<StaticInstances3D>()) world.set_resource(StaticInstances3D{});

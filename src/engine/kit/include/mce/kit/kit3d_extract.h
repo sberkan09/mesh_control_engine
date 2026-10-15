@@ -193,6 +193,7 @@ private:
         Array<math::mat4> transforms;
     };
     Array<FoliageEntry> foliage_;
+    Array<FoliageEntry> terrain_foliage_;  // TerrainFoliage3D scatters (M-TERRAIN 5)
     struct BurstEntry {    // a ParticleEmitter3D's last burst_version
         Entity entity;
         u32 burst_version = 0;

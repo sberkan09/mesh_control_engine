@@ -91,7 +91,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-GAMEPLAY3D | [M-GAMEPLAY3D.md](milestones/M-GAMEPLAY3D.md), ADR-0040 (Linear SBA-69 … SBA-75) | active (step 1 done: Recast & Detour navmesh in `mce/physics3d/navmesh3d.h`, `.mcnav` assets, `NavMeshSurface3D` / `NavArea3D` / `NavLink3D` / `NavObstacle3D` / `NavAgent3D` in `mce/kit/nav3d.h`, the editor's Bake navmesh and preview; step 2 done: `Joint3D` fixed, hinge, slider, distance, cone and six-DOF joints with limits, motors and break forces in `mce/kit/joints3d.h`) | steps 3–7, the demo |
 | M-CINEMA | [M-CINEMA.md](milestones/M-CINEMA.md) (Linear SBA-76 … SBA-81) | active (steps 1–3 done: `.mctimeline`, `TimelinePlayer`, the Timeline and Animation panels) | steps 4–6, the demo and the gates |
 | M-NET2 | [M-NET2.md](milestones/M-NET2.md) (added 2026-10-15) | active (steps 1–5 done) | steps 6–7, the demo |
-| M-TERRAIN | — (added 2026-10-15) | in progress: steps 1–4 done (`docs/milestones/M-TERRAIN.md`) | steps 5–6, demo |
+| M-TERRAIN | — (added 2026-10-15) | in progress: steps 1–5 done (`docs/milestones/M-TERRAIN.md`) | step 6, demo |
 | M-ACCESS | — (added 2026-10-15) | not started | all steps |
 | M-VISUAL2 | [M-VISUAL2.md](milestones/M-VISUAL2.md) (Linear SBA-101 … SBA-105) | active (step 1 done: screen-space reflections, `ScreenSpaceReflections`, `Environment3D.ssr`, `r.ssr`) | steps 2–5, the demo and the gates |
 
