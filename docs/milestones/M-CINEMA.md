@@ -1,6 +1,6 @@
 # M-CINEMA — Timeline, animation editing, cutscenes and video (milestone record)
 
-**Status:** in progress on `dev_claude` (steps 1–2 merged).
+**Status:** in progress on `dev_claude` (steps 1–3 merged).
 **Why:** the timeline and curve editor (FR-ENT-110, FR-EDT-130) was cut at M8 only for the solo-hours budget; the
 novel kit and the narrative games now want cutscenes, and MCE had no video playback (ROADMAP "Engine gap tracks").
 **Measured on:** the Linux CI container (`scripts/ci/local_ci.sh`).
@@ -56,3 +56,24 @@ novel kit and the narrative games now want cutscenes, and MCE had no video playb
   disk. The scene side of record mode (a new binding) is a normal scene edit with the scene's undo.
 - **The preview is play mode, paused**, so the document never moves; resuming play plays the timeline on from the
   playhead with the game's systems running.
+
+## Step 3 — animation editing (SBA-78)
+
+| Item | Where | Evidence |
+|---|---|---|
+| `.mcanim` as data: `AnimGraphDocument` read by the importer and written canonically; the importer is now read → `build_animgraph_chunk`; a state's optional `pos` (editor layout, ignored by the cook) | `cook/animgraph_text.h`, `animgraph_importer.cpp` | `test_editor` "animgraph editor: the canonical text reads back to the same document and chunk"; `test_kit` anim graph case unchanged |
+| `AnimGraphEditor`: open / create / sync, states (unique names, clip or 1D blend, loop, speed, events, position), transitions (any-state, conditions, fade, on finish), start state, parameters (refused while in use), canonical read-back, own undo stack saved on disk | `editor/animgraph_editor.h`, `animgraph_editor.cpp` | `test_editor` "animgraph editor: edits, refusals, undo and redo on disk" |
+| Clip list of a cooked mesh (`mesh_clips`) | `animgraph_editor.cpp` | same tests |
+| Preview (`AnimPreview`): a paused play session; one clip posed at a scrubbed time with the graph set aside, or the entity's graph run with panel parameter values; the live state | `animgraph_editor.cpp` | `test_editor` "animgraph editor: the preview poses clips and runs the graph without touching the document" |
+| The ImGui Animation panel: graph canvas (drag, pan, right-click menus, arrows both ways), inspector, clip preview with scrub and play, graph run with parameters; double-click an `.mcanim` in Assets; `-editor.open` | `layer/animation_panel.cpp`, `editor_shell.cpp`, `asset_panel.cpp` | `mce_editor -editor.open walker.mcanim -frames 30 -capture` (0 GL errors) |
+
+### Design notes
+
+- **Cut: keyframe editing of mesh clips.** A mesh clip is node TRS keys inside the cooked mesh (ADR-0022: a clip
+  only animates the nodes of its own file), so editing one in the engine would mean a clip format of its own or
+  rewriting meshes. Models keep their clips from glTF; keyframed movement of entities and of reflected properties
+  is a timeline (step 2), which loops and binds up to eight entities. User guide 8.9 says so.
+- The graph's layout lives in the source (`pos` per state), so MCP, text edits and the panel agree on it; the cook
+  ignores it, so moving a box never changes the cooked bytes.
+- Previewing sets the Animator's clip and time in the play world only; "Run the graph" puts the entity's graph
+  back, so the preview never needs the document.

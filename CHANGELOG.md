@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- The editor's Animation panel, M-CINEMA step 3 (SBA-78): an `.mcanim` animation graph drawn as boxes and arrows
+  (drag states, add transitions from a right-click, any-state transitions, the start state), an inspector for
+  parameters, states (clip or 1D blend points, loop, speed, events) and transitions (conditions, fade, on finish),
+  and a viewport preview that poses any clip of an entity's mesh at a scrubbed time or runs its graph with typed
+  parameter values, without touching the scene. A state may carry `pos` (where the editor draws it; the cook ignores
+  it). Double-click an `.mcanim` in Assets, or `mce_editor -editor.open <file>`. User guide 8.9.
 - The editor's Timeline panel, M-CINEMA step 2 (SBA-77, FR-EDT-130): tracks and keys on a time ruler with
   scrubbing, snapping, key drags and a key inspector, a curve view of transform and property tracks, a viewport
   preview that plays the scene paused at the playhead (the scene document never changes), and record mode, which
