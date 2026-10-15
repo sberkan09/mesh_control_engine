@@ -266,6 +266,23 @@ TEST_CASE("golden: temporal upscaling of a half-scale frame after 24 frames") {
     check_golden("taa_upscale", f);
 }
 
+// ---- M-VISUAL2 2: spatial upsample and sharpening ------------------------------------------------
+
+TEST_CASE("golden: a half-scale frame through the spatial upsample and the sharpen") {
+    Fixture3D f(1, true, true, 0.5f);
+    f.render(0.0f, true, [](Scene3D& s) {
+        PostFx post;
+        post.bloom = false;
+        post.fxaa = false;
+        post.upscaler = Upscaler::Spatial;
+        post.sharpen = 0.5f;
+        s.set_post(post);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().upscaled);
+    CHECK(f.renderer.forward_3d().last_stats().sharpened);
+    check_golden("spatial_sharpen", f);
+}
+
 // ---- M-VISUAL 6: global illumination (the irradiance volume) -----------------------------------
 
 TEST_CASE("golden: a red emissive wall bleeds onto the ground through the irradiance volume") {

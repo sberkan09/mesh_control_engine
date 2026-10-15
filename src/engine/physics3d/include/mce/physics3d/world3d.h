@@ -9,6 +9,7 @@
 //  - raycasts and sphere casts, sorted and filtered like World2D's
 //  - joints between two bodies or a body and the world (fixed, hinge, slider, distance, cone,
 //    six-DOF) with limits, soft limits, friction, motors and a break force (M-GAMEPLAY3D step 2)
+//  - ragdolls: a tree of capsule / sphere bodies joined by swing-twist joints (M-GAMEPLAY3D step 3)
 //
 // Nothing in this header names a Jolt type: callers see MCE math types and the Entity that owns
 // each body. Jolt is reachable only from src/engine/physics3d/ (the JPH wall in check_walls.py).
@@ -194,6 +195,36 @@ struct JointState3D {
     f32 torque = 0.0f;     // the torque it held with in the last step (N*m)
 };
 
+// ---- ragdolls (M-GAMEPLAY3D step 3) ----------------------------------------------------------------
+
+// One body of a ragdoll, in world space at the moment the ragdoll is created.
+struct RagdollPart3D {
+    i32 parent = -1;  // index of the parent part, lower than this part's own; -1 = the root (part 0 only)
+    ShapeType3D shape = ShapeType3D::Capsule;  // Capsule, Sphere or Box
+    f32 radius = 0.1f;                         // Capsule, Sphere
+    f32 half_height = 0.1f;                    // Capsule: half the cylinder, along the body's local Y
+    vec3 half{0.1f, 0.1f, 0.1f};               // Box
+    vec3 position;                             // the body's centre
+    quat rotation;
+    f32 mass = 1.0f;                           // kg
+    vec3 pivot;                                // the joint to the parent part (ignored for the root)
+    vec3 twist_axis{0.0f, 1.0f, 0.0f};         // the axis the part twists about at the pivot
+    f32 swing = 0.785398f;                     // how far the twist axis may swing (rad)
+    f32 twist = 0.523599f;                     // how far the part may twist either way (rad)
+    vec3 linear_velocity;
+    vec3 angular_velocity;
+};
+
+struct RagdollDesc3D {
+    Entity owner;  // reported by queries that hit a part (each part's user data)
+    u8 layer = 0;
+    u16 mask = 0xFFFF;
+    f32 friction = 0.5f;          // contact friction
+    f32 linear_damping = 0.05f;
+    f32 angular_damping = 0.5f;
+    f32 joint_friction = 0.0f;    // N*m each joint holds against motion
+};
+
 struct QueryFilter3D {
     u16 layer_mask = 0xFFFF;
     Span<const Entity> exclude;  // e.g. self
@@ -288,6 +319,22 @@ public:
     void set_joint_enabled(u32 joint, bool enabled);
     bool joint_state(u32 joint, JointState3D& out) const;
 
+    // ---- ragdolls -------------------------------------------------------------------------------------
+    // The parts as bodies and swing-twist joints between each part and its parent. Neighbouring
+    // parts (a part and its parent, and parts that overlap at creation) never collide; parts of
+    // different ragdolls do. 0 when there are no parts, a parent index is out of order, a shape is
+    // malformed or the world is out of bodies.
+    u32 create_ragdoll(const RagdollDesc3D& desc, Span<const RagdollPart3D> parts);
+    void destroy_ragdoll(u32 ragdoll);
+    bool has_ragdoll(u32 ragdoll) const;
+    u32 ragdoll_part_count(u32 ragdoll) const;
+    // The parts' poses now, in creation order (`out` holds ragdoll_part_count() states; entity = the owner).
+    bool ragdoll_state(u32 ragdoll, Span<BodyState3D> out) const;
+    // An impulse at the centre of mass of one part, or (part < 0) spread over every part by mass.
+    void ragdoll_impulse(u32 ragdoll, i32 part, vec3 impulse);
+    // True while any part is awake.
+    bool ragdoll_active(u32 ragdoll) const;
+
     // ---- camera collision (UC-B gate): sweep a sphere along the boom from the pivot `from` to the
     // desired camera position `to` against static + kinematic geometry. On a hit, put the camera at
     // ShapeHit3D::position. Characters and dynamic props never pull the camera in.
@@ -306,6 +353,7 @@ public:
         u32 active_bodies = 0;  // awake dynamic/kinematic bodies
         u32 characters = 0;
         u32 joints = 0;
+        u32 ragdolls = 0;
     };
     Stats stats() const;
 

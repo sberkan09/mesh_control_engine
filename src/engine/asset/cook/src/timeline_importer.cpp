@@ -16,7 +16,7 @@
 //     {"type": "activation", "target": 2, "path": "MeshRef.visible", "ranges": [{"from": 1, "to": 3}]},
 //     {"type": "animation", "target": 3, "keys": [{"t": 0, "clip": "walk", "loop": true, "fade": 0.2}]},
 //     {"type": "audio", "keys": [{"t": 0.5, "sound": "guid:<sfx uuid>", "gain_db": -3}]},
-//     {"type": "camera", "cuts": [{"t": 0, "camera": 4}, {"t": 3, "camera": 5}]},
+//     {"type": "camera", "cuts": [{"t": 0, "camera": 4}, {"t": 3, "camera": 5, "blend": 1.5}]},
 //     {"type": "event", "keys": [{"t": 2.5, "emit": "door_open"}]},
 //     {"type": "subtitle", "lines": [{"t": 1, "duration": 2, "text": "Who's there?", "speaker": "Mira"}]}
 //   ]
@@ -205,10 +205,14 @@ struct Reader {
                 return;
             }
             case T::Camera:
-                if (!detail::check_keys(k, {"t", "camera"}, file, kStage, diags)) return;
+                if (!detail::check_keys(k, {"t", "camera", "blend"}, file, kStage, diags)) return;
                 read_time(k, "t", key.t);
                 if (!k.get("camera").valid()) error(k, "a cut names its 'camera' (\"self\" or a binding index)");
                 else read_target(k, "camera", key.camera);
+                if (const JsonValue bl = k.get("blend"); bl.valid()) {
+                    if (!bl.is_number() || bl.as_number() < 0) error(bl, "'blend' must be seconds >= 0");
+                    else key.blend = static_cast<f32>(bl.as_number());
+                }
                 return;
             case T::Event:
                 if (!detail::check_keys(k, {"t", "emit"}, file, kStage, diags)) return;
@@ -374,6 +378,10 @@ void write_key(const TimelineDocTrack& tr, const TimelineDocKey& k, String& out)
             field(out, "camera");
             if (k.camera == asset::kTimelineSelf) out += "\"self\"";
             else appendf(out, "%u", k.camera);
+            if (k.blend > 0.0f) {
+                field(out, "blend");
+                append_f32(out, k.blend);
+            }
             break;
         case T::Event:
             field(out, "emit");
@@ -651,7 +659,10 @@ void build_timeline_chunk(const TimelineDocument& d, Array<byte>& payload) {
                     key.guid[1] = k.sound.lo;
                     key.v[0] = k.gain_db;
                     break;
-                case T::Camera: key.target = k.camera; break;
+                case T::Camera:
+                    key.target = k.camera;
+                    key.v[0] = k.blend;
+                    break;
                 case T::Event: key.id = StringId(k.name.view()).value; break;
                 case T::Subtitle:
                     key.text = b.add_string(k.name.view());

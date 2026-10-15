@@ -17,6 +17,7 @@
 
 #include "../render/mesh_fixture.h"
 #include "fixture3d.h"
+#include "mce/convar.h"
 #include "mce/core.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
@@ -1254,6 +1255,93 @@ TEST_CASE("render3d_gl: temporal upscaling keeps a half-scale frame closer to fu
     CHECK(f.device->texture_desc(fw.velocity()).size.width == kW / 2);
     CHECK(f.device->texture_desc(fw.taa_history()).size.width == kW);
     CHECK(f.device->validation_error_count() == 0);
+}
+
+// ---- spatial upsample and sharpening (M-VISUAL2 2) ----------------------------------------------
+
+namespace {
+
+void finish_post(Scene3D& s, Upscaler upscaler, f32 sharpen) {
+    PostFx post;
+    post.bloom = false;
+    post.fxaa = false;
+    post.upscaler = upscaler;
+    post.sharpen = sharpen;
+    s.set_post(post);
+}
+
+// Sum of squared horizontal and vertical luma steps: higher = crisper edges.
+f64 edge_energy(const Array<u8>& px) {
+    const auto luma = [&](u32 x, u32 y) {
+        const usize i = (usize(y) * kW + x) * 4;
+        return 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
+    };
+    f64 e = 0.0;
+    for (u32 y = 0; y + 1 < kH; ++y)
+        for (u32 x = 0; x + 1 < kW; ++x) {
+            const f64 dx = luma(x + 1, y) - luma(x, y), dy = luma(x, y + 1) - luma(x, y);
+            e += dx * dx + dy * dy;
+        }
+    return e;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: the spatial upsample brings a half-scale frame nearer full resolution than bilinear") {
+    const Array<u8> ref = msaa_reference();
+    Fixture3D f(1, true, true, 0.5f);
+    f.render(0.0f, true, [](Scene3D& s) { post_aa(s, false); });  // today's path: the tonemap upsamples
+    const Array<u8> today = f.pixels;
+    f.render(0.0f, true, [](Scene3D& s) { finish_post(s, Upscaler::Bilinear, 0.0f); });
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().upscaled);
+    CHECK(differing_bytes(today, f.pixels) == 0);
+    f.render(0.0f, true, [](Scene3D& s) { finish_post(s, Upscaler::Spatial, 0.0f); });
+    CHECK(f.renderer.forward_3d().last_stats().upscaled);
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().sharpened);
+    const Array<u8> spatial = f.pixels;
+    const f64 e_bilinear = edge_energy(today), e_spatial = edge_energy(spatial);
+    const f64 d_bilinear = mean_abs_diff(today, ref), d_spatial = mean_abs_diff(spatial, ref);
+    MESSAGE("half scale: edge energy bilinear " << e_bilinear << ", spatial " << e_spatial << "; mean |diff| to 4x MSAA bilinear "
+                                                << d_bilinear << ", spatial " << d_spatial);
+    CHECK(d_spatial < d_bilinear * 0.9);  // nearer the full-resolution frame than the bilinear blur
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: sharpening crisps a full-size frame; spatial at full size and sharpen 0 change nothing") {
+    Fixture3D f(1);
+    f.render(0.0f, true, [](Scene3D& s) { finish_post(s, Upscaler::Bilinear, 0.0f); });
+    const Array<u8> plain = f.pixels;
+    f.render(0.0f, true, [](Scene3D& s) { finish_post(s, Upscaler::Spatial, 0.0f); });
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().upscaled);  // nothing to upsample
+    CHECK(differing_bytes(plain, f.pixels) == 0);
+    f.render(0.0f, true, [](Scene3D& s) { finish_post(s, Upscaler::Bilinear, 0.8f); });
+    CHECK(f.renderer.forward_3d().last_stats().sharpened);
+    const f64 e_plain = edge_energy(plain), e_sharp = edge_energy(f.pixels);
+    MESSAGE("full size: edge energy plain " << e_plain << ", sharpened " << e_sharp << ", mean |diff| " << mean_abs_diff(plain, f.pixels));
+    CHECK(e_sharp > e_plain * 1.05);
+    CHECK(mean_abs_diff(plain, f.pixels) < 4.0);  // a sharpen, not a different picture
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: sharpening follows the spatial upsample; r.upscaler and r.sharpen override the scene") {
+    Fixture3D h(1, true, true, 0.5f);
+    h.render(0.0f, true, [](Scene3D& s) { finish_post(s, Upscaler::Spatial, 0.5f); });
+    CHECK(h.renderer.forward_3d().last_stats().upscaled);
+    CHECK(h.renderer.forward_3d().last_stats().sharpened);
+    ConVar* up = ConVar::find(StringId("r.upscaler"));
+    ConVar* sh = ConVar::find(StringId("r.sharpen"));
+    MCE_REQUIRE_OR_RETURN(up && sh);
+    CHECK(up->set_string("bilinear"));
+    CHECK(sh->set_string("0"));
+    h.render(0.0f, true, [](Scene3D& s) { finish_post(s, Upscaler::Spatial, 0.5f); });
+    CHECK_FALSE(h.renderer.forward_3d().last_stats().upscaled);
+    CHECK_FALSE(h.renderer.forward_3d().last_stats().sharpened);
+    CHECK(up->set_string("spatial"));
+    h.render(0.0f, true, [](Scene3D& s) { finish_post(s, Upscaler::Bilinear, 0.0f); });
+    CHECK(h.renderer.forward_3d().last_stats().upscaled);
+    up->reset();
+    sh->reset();
+    CHECK(h.device->validation_error_count() == 0);
 }
 
 // ---- global illumination: the irradiance volume (M-VISUAL 6) -------------------------------------

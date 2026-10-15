@@ -405,6 +405,16 @@ void World::run_when_held(Phase phase, const char* name) {
     MCE_ASSERT_MSG(found, "run_when_held: no such system in that phase");
 }
 
+void World::run_during_cutscenes(Phase phase, const char* name) {
+    bool found = false;
+    for (SystemEntry& e : systems_[static_cast<usize>(phase)])
+        if (StringView(e.name) == StringView(name)) {
+            e.when_cutscene = true;
+            found = true;
+        }
+    MCE_ASSERT_MSG(found, "run_during_cutscenes: no such system in that phase");
+}
+
 Span<const char* const> World::system_names(Phase phase) const {
     return system_name_cache_[static_cast<usize>(phase)].span();
 }
@@ -444,7 +454,9 @@ void World::run_phase(Phase phase, Frame& frame) {
     Array<SystemEntry>& list = systems_[static_cast<usize>(phase)];
     const bool fixed = phase == Phase::FixedUpdate_Pre || phase == Phase::FixedUpdate_Physics || phase == Phase::FixedUpdate_Post;
     for (usize i = 0; i < list.size(); ++i) {
-        if (fixed && held_ && !list[i].when_held) continue;  // read per system: a hold set mid-phase holds the rest
+        // Read per system: a hold set mid-phase holds the rest.
+        if (fixed && held_ && !list[i].when_held) continue;
+        if (fixed && cutscene_held_ && !list[i].when_held && !list[i].when_cutscene) continue;
         current_system_ = list[i].id;
         current_phase_ = static_cast<u16>(phase);
         current_slot_ = static_cast<u16>(i);

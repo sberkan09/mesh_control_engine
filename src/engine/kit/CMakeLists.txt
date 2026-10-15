@@ -13,6 +13,7 @@ mce_add_library(mce_gameplay_kit
         src/kit3d_extract.cpp
         src/nav3d.cpp
         src/joints3d.cpp
+        src/ragdolls3d.cpp
         src/particles.cpp
         src/pathfinding.cpp
         src/sequence.cpp
@@ -20,6 +21,7 @@ mce_add_library(mce_gameplay_kit
         src/sprite_extract.cpp
         src/stock.cpp
         src/timeline.cpp
+        src/cinematic.cpp
     PUBLIC_DEPS
         mce::mce_ecs
         mce::mce_refl

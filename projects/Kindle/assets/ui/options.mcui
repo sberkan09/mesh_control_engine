@@ -1,0 +1,68 @@
+{
+  "format": "mce-ui", "version": 1, "guid": "331d1e16-2ef8-4b2c-9b5d-ca2b824b5d30",
+  "widgets": [
+    { "name": "veil", "fill": true, "style": { "tint": [0, 0, 0, 0.6] }, "blocks_pointer": true, "action": "Back",
+      "children": [
+        { "name": "box", "at": [0.5, 0.5, 760, 600],
+          "children": [
+            { "name": "title", "kind": "Text", "text": "OPTIONS", "font_role": "Title",
+              "anchors": { "min": [0, 0], "max": [1, 0], "offset_min": [24, 16], "offset_max": [-24, 52] } },
+            { "name": "tabs", "kind": "Tabs", "value": 0,
+              "anchors": { "min": [0, 0], "max": [1, 1], "offset_min": [24, 60], "offset_max": [-24, -70] },
+              "tabs": [
+                { "name": "display", "label": "DISPLAY", "children": [
+                  { "name": "list", "kind": "Scroll", "fill": true, "stack": { "spacing": 10, "padding": 8, "align": "Stretch" },
+                    "children": [
+                      { "name": "text_scale_label", "kind": "Text", "text": "TEXT SIZE" },
+                      { "name": "text_scale", "kind": "Slider", "range": [0.75, 2, 0.25], "convar": "access.text_scale", "default_focus": true },
+                      { "name": "ui_scale_label", "kind": "Text", "text": "INTERFACE SIZE" },
+                      { "name": "ui_scale", "kind": "Slider", "range": [0.5, 2, 0.25], "convar": "ui_scale" },
+                      { "name": "high_contrast", "kind": "Toggle", "text": "HIGH CONTRAST MENUS", "convar": "access.high_contrast" },
+                      { "name": "colorblind_label", "kind": "Text", "text": "COLOR FILTER: OFF / PROTANOPIA / DEUTERANOPIA / TRITANOPIA" },
+                      { "name": "colorblind", "kind": "Slider", "range": [0, 3, 1], "convar": "access.colorblind" },
+                      { "name": "colorblind_strength_label", "kind": "Text", "text": "COLOR FILTER STRENGTH" },
+                      { "name": "colorblind_strength", "kind": "Slider", "range": [0, 1, 0.1], "convar": "access.colorblind_strength" },
+                      { "name": "motion_label", "kind": "Text", "text": "SCREEN SHAKE AND FLASHES" },
+                      { "name": "motion", "kind": "Slider", "range": [0, 1, 0.1], "convar": "access.motion_scale" },
+                      { "name": "screen_reader_label", "kind": "Text", "text": "SCREEN READER: OFF / WHEN ON / ALWAYS" },
+                      { "name": "screen_reader", "kind": "Slider", "range": [0, 2, 1], "convar": "access.screen_reader" },
+                      { "name": "fullscreen", "kind": "Toggle", "text": "FULL SCREEN", "convar": "fullscreen" }
+                    ] } ] },
+                { "name": "audio", "label": "AUDIO", "children": [
+                  { "name": "list", "kind": "Scroll", "fill": true, "stack": { "spacing": 10, "padding": 8, "align": "Stretch" },
+                    "children": [
+                      { "name": "music_label", "kind": "Text", "text": "MUSIC" },
+                      { "name": "music", "kind": "Slider", "range": [-40, 0, 2], "convar": "audio.music_db" },
+                      { "name": "sfx_label", "kind": "Text", "text": "EFFECTS" },
+                      { "name": "sfx", "kind": "Slider", "range": [-40, 0, 2], "convar": "audio.sfx_db" },
+                      { "name": "haptics", "kind": "Toggle", "text": "VIBRATION", "convar": "haptics" },
+                      { "name": "subtitles", "kind": "Toggle", "text": "SUBTITLES", "convar": "access.subtitles" },
+                      { "name": "captions", "kind": "Toggle", "text": "SOUND CAPTIONS", "convar": "access.captions" },
+                      { "name": "subtitle_speaker", "kind": "Toggle", "text": "SPEAKER NAMES", "convar": "access.subtitle_speaker" },
+                      { "name": "subtitle_size_label", "kind": "Text", "text": "SUBTITLE SIZE" },
+                      { "name": "subtitle_size", "kind": "Slider", "range": [0.75, 2, 0.25], "convar": "access.subtitle_size" },
+                      { "name": "subtitle_background_label", "kind": "Text", "text": "SUBTITLE BACKGROUND" },
+                      { "name": "subtitle_background", "kind": "Slider", "range": [0, 1, 0.1], "convar": "access.subtitle_background" }
+                    ] } ] },
+                { "name": "controls", "label": "CONTROLS", "children": [
+                  { "name": "list", "kind": "Scroll", "fill": true, "stack": { "spacing": 8, "padding": 8, "align": "Stretch" },
+                    "children": [
+                      { "name": "sensitivity_label", "kind": "Text", "text": "LOOK SENSITIVITY" },
+                      { "name": "sensitivity", "kind": "Slider", "range": [0.25, 3, 0.25], "convar": "input.look_sensitivity" },
+                      { "name": "presets", "kind": "Stack", "stack": { "axis": "Horizontal", "spacing": 8 },
+                        "children": [
+                          { "name": "preset_both", "kind": "Button", "text": "TWO HANDS" },
+                          { "name": "preset_left", "kind": "Button", "text": "LEFT HAND" },
+                          { "name": "preset_right", "kind": "Button", "text": "RIGHT HAND" },
+                          { "name": "reset_bindings", "kind": "Button", "text": "RESET" }
+                        ] },
+                      { "name": "remap_hint", "kind": "Text", "text": "SELECT A KEY, THEN PRESS THE NEW ONE (ESCAPE CANCELS)" },
+                      { "name": "remap_list", "kind": "Stack", "stack": { "spacing": 6 } }
+                    ] } ] }
+              ] },
+            { "name": "back", "kind": "Button", "text": "BACK", "action": "Back",
+              "anchors": { "min": [0.5, 1], "max": [0.5, 1], "offset_min": [-90, -56], "offset_max": [90, -16] } }
+          ] }
+      ] }
+  ]
+}

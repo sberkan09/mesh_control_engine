@@ -13,12 +13,15 @@
 #include "mce/ecs/transform.h"
 #include "mce/input/actions.h"
 #include "mce/input/ecs.h"
+#include "mce/kit/cinematic.h"
 #include "mce/kit/components.h"
 #include "mce/kit/novel.h"
 #include "mce/kit/sequence.h"
+#include "mce/kit/timeline.h"
 #include "mce/loc/loc.h"
 #include "mce/log.h"
 #include "mce/platform/haptics.h"
+#include "mce/platform/screen_reader.h"
 
 namespace mce::novel {
 
@@ -110,6 +113,9 @@ void build_tables(NovelState& n, const Program& p) {
                 const i32 l = index_in(p.luts, p.lut_count, strip_ext(after(path, 13)));
                 if (l >= 0 && l < static_cast<i32>(NovelState::kLuts)) n.lut[l] = info.guid;
             }
+        } else if (info.type == asset::ChunkType::Timeline && starts_with(path, "timelines/")) {
+            const i32 t = index_in(p.timelines, p.timeline_count, strip_ext(after(path, 10)));
+            if (t > 0 && t < static_cast<i32>(NovelState::kTimelines)) n.timelines[t] = info.guid;
         } else if (info.type == asset::ChunkType::Sfx) {
             struct Dir {
                 const char* prefix;
@@ -225,6 +231,13 @@ void play_sfx(Context& c, u16 id, f32 gain_db) {
     c.f.events().push(ev);
 }
 
+// The @cutscene is over (played out, skipped, or the bot's turn): its entity goes, the story goes on.
+static void end_cutscene(Context& c) {
+    if (c.f.world().alive(c.n.cutscene)) c.f.commands().destroy(c.n.cutscene);
+    c.n.cutscene = Entity{};
+    resume(c);
+}
+
 void resume(Context& c) {
     NovelState& n = c.n;
     StoryState& s = c.s;
@@ -338,6 +351,24 @@ void resume(Context& c) {
                 n.hold_ticks = n.autopilot ? 0 : op.a;
                 n.mode = Mode::Wait;
                 return;
+            case OpKind::Cutscene: {
+                ++s.pc;
+                const asset::Guid guid = op.a < NovelState::kTimelines ? n.timelines[op.a] : asset::Guid{};
+                if (guid.is_null()) {
+                    MCE_LOG_ERROR("novel: @cutscene {} has no cooked timelines/<id>.mctimeline; skipped",
+                                  op.a < p.timeline_count ? p.timelines[op.a] : "?");
+                    break;
+                }
+                if (n.autopilot) break;  // the bot never waits
+                // Not a gameplay hold: the novel's own systems watch it end.
+                kit::TimelinePlayer player;
+                player.timeline.guid = guid;
+                kit::Cutscene cut;
+                cut.hold_gameplay = false;
+                n.cutscene = c.f.commands().spawn(player, cut);
+                n.mode = Mode::Cutscene;
+                return;
+            }
             case OpKind::Command:
                 ++s.pc;
                 n.command = op.a;
@@ -400,6 +431,7 @@ void bot_step(Context& c) {
         case Mode::Ending:
         case Mode::Fade:
         case Mode::Wait: resume(c); break;
+        case Mode::Cutscene: end_cutscene(c); break;
         case Mode::Game:
             if (n.hooks.game_bot) n.hooks.game_bot(c);
             else resume(c);
@@ -549,6 +581,13 @@ void player_step(Context& c) {
             if (n.hold_ticks > 0) --n.hold_ticks;
             else resume(c);
             break;
+        case Mode::Cutscene: {
+            // Spawned by a command buffer: it shows up at the end of the tick that played it.
+            World& w = c.f.world();
+            const kit::TimelinePlayer* tp = w.alive(n.cutscene) ? w.try_get<kit::TimelinePlayer>(n.cutscene) : nullptr;
+            if (tp && tp->finished) end_cutscene(c);
+            break;
+        }
         default: break;
     }
 }
@@ -828,6 +867,63 @@ void panel_line(Context& c, Panel panel, u32 line, char* buf, u32 cap) {
     }
 }
 
+// The screen reader (M-ACCESS): the stage draws its own text, so it says what a reader would find
+// on it: a page once it is all shown (the speaker first), the selected row with its place among
+// the rows, a letter, a panel. Each once (NovelState::spoken); output only.
+void say_part(FixedString<512>& out, StringView part, const char* sep = " ") {
+    if (part.empty()) return;
+    if (!out.empty()) out.append(StringView(sep));
+    out.append(part);
+}
+
+void novel_speak(Context& c, const ScreenLook& look, const u16 page[4], bool complete, const LocaleText* tr) {
+    NovelState& n = c.n;
+    const Program& p = c.p;
+    if (!platform::screen_reader::wanted()) {
+        n.spoken = 0;
+        return;
+    }
+    FixedString<512> say;
+    char buf[128];
+    if (look.rows) {
+        const bool game_rows = n.mode == Mode::Game;
+        u32 count = 0;
+        while (count < 4 && row_text(c, count, game_rows).a) ++count;
+        const RowText r = row_text(c, n.cursor, game_rows);
+        if (r.a) {
+            say_part(say, StringView(r.a));
+            if (r.b) say_part(say, StringView(r.b));
+            if (!r.enabled) say_part(say, "dimmed", ", ");
+            std::snprintf(buf, sizeof(buf), "%u of %u", static_cast<unsigned>(n.cursor) + 1, static_cast<unsigned>(count));
+            say_part(say, StringView(buf), ", ");
+        }
+    } else if (n.mode == Mode::Reading && complete) {
+        if (n.page_speaker < p.character_count) {
+            say_part(say, StringView(localized_speaker(p, tr, n.page_speaker)));
+            say.append(StringView(":"));
+        }
+        for (u32 i = 0; i < 4; ++i)
+            if (page[i]) say_part(say, StringView(text(p, page[i])));
+    } else if (n.mode == Mode::Letter) {
+        for (u32 i = 0; i < n.letter_count && n.letter_first + i < p.letter_line_count; ++i)
+            say_part(say, StringView(text(p, p.letter_lines[n.letter_first + i])));
+    } else if (n.mode == Mode::Checkpoint || n.mode == Mode::Ending || n.mode == Mode::Extras) {
+        const Panel panel = n.mode == Mode::Checkpoint ? Panel::Checkpoint : n.mode == Mode::Ending ? Panel::Ending : Panel::Extras;
+        for (u32 i = 0; i < 14; ++i) {  // the panel's PanelLine rows
+            buf[0] = 0;
+            panel_line(c, panel, i, buf, sizeof(buf));
+            say_part(say, StringView(buf), ". ");
+        }
+    }
+    if (say.empty()) return;
+    u32 h = 2166136261u ^ static_cast<u32>(n.mode);
+    for (const char ch : say.view()) h = (h ^ static_cast<u8>(ch)) * 16777619u;
+    h ^= n.pages * 2654435761u;  // the same words on a new page are said again
+    if (h == n.spoken) return;
+    n.spoken = h;
+    platform::screen_reader::announce(say.view());
+}
+
 void novel_present(Frame& f) {
     NovelState& n = f.resource<NovelState>();
     if (n.mode == Mode::Boot || n.mode == Mode::Done) return;
@@ -1031,6 +1127,7 @@ void novel_present(Frame& f) {
         post.vignette = true;
     });
 
+    novel_speak(c, look, page, complete, tr);
     if (n.hooks.present) n.hooks.present(c, look);
 }
 

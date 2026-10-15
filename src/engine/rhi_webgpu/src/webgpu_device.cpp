@@ -3,6 +3,7 @@
 #include "webgpu_device.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include "mce/log.h"
@@ -337,8 +338,7 @@ ResultV WebGpuDevice::init() {
         return r.buffer != nullptr;
     };
     if (!make_ring(uniforms_, desc_.uniform_ring_bytes + uniform_bind_size_, WGPUBufferUsage_Uniform, "mce.ring.uniform") ||
-        !make_ring(geometry_, desc_.geometry_ring_bytes, WGPUBufferUsage_Vertex | WGPUBufferUsage_Index, "mce.ring.geometry") ||
-        !make_ring(storage_, desc_.geometry_ring_bytes, WGPUBufferUsage_Storage, "mce.ring.storage"))
+        !make_ring(geometry_, desc_.geometry_ring_bytes, WGPUBufferUsage_Vertex | WGPUBufferUsage_Index, "mce.ring.geometry"))
         return Error(Errc::OutOfMemory, "rhi.webgpu.ring", "ring buffers");
 
     // Group 0: the four uniform banks, every bank bound at a dynamic offset into the uniform ring.
@@ -491,8 +491,10 @@ void WebGpuDevice::release_all() {
     }
     for (const GpuSampler& s : samplers_.dense()) wgpuSamplerRelease(s.sampler);
     for (GpuPipeline& p : pipelines_.dense()) release_pipeline(p);
-    for (Ring* r : {&uniforms_, &geometry_, &storage_})
+    for (Ring* r : {&uniforms_, &geometry_})
         if (r->buffer) wgpuBufferRelease(r->buffer);
+    for (Ring& r : storage_)
+        if (r.buffer) wgpuBufferRelease(r.buffer);
     for (u32 i = 0; i < 4; ++i) {
         if (dummy_view_[i]) wgpuTextureViewRelease(dummy_view_[i]);
         if (dummy_tex_[i]) wgpuTextureRelease(dummy_tex_[i]);
@@ -968,16 +970,30 @@ TextureDesc WebGpuDevice::texture_desc(TextureHandle h) const {
 
 // ---- frames ----------------------------------------------------------------------------------
 
+Ring* WebGpuDevice::storage_ring(u32 binding) {
+    Ring& r = storage_[binding];
+    if (!r.buffer) {
+        char name[32];
+        std::snprintf(name, sizeof(name), "mce.ring.storage.%u", binding);
+        r.capacity = align_up(desc_.geometry_ring_bytes, 256);
+        r.buffer = make_buffer(device_, r.capacity, WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst, name);
+        if (!r.buffer) return nullptr;
+        r.staging.resize(r.capacity);
+    }
+    return &r;
+}
+
 void WebGpuDevice::begin_frame(u64 frame_index) {
     MCE_ASSERT_MSG(!in_frame_, "begin_frame twice");
     frame_index_ = frame_index;
-    for (Ring* r : {&uniforms_, &geometry_, &storage_}) r->head = r->flushed = 0;
+    for (Ring* r : {&uniforms_, &geometry_}) r->head = r->flushed = 0;
+    for (Ring& r : storage_) r.head = r.flushed = 0;
     draw_args_.clear();
     // Bank data persists across frames (GL semantics); the ring does not, so it is re-staged lazily.
     for (u32 b = 0; b < kMaxUniformBanks; ++b) uniform_offset_[b] = ~0u;
     // Transient storage bindings point into last frame's ring bytes: they end with the frame.
-    for (BoundStorage& s : storage_bound_)
-        if (s.buffer == storage_.buffer) s = BoundStorage{};
+    for (u32 b = 0; b < kMaxStorageBindings; ++b)
+        if (storage_[b].buffer && storage_bound_[b].buffer == storage_[b].buffer) storage_bound_[b] = BoundStorage{};
     ++storage_gen_;
     ensure_backbuffer();
     stats_ = FrameStats{};
@@ -1002,7 +1018,8 @@ void WebGpuDevice::submit(const CommandBuffer& cb) {
 
 void WebGpuDevice::end_frame() {
     MCE_ASSERT_MSG(in_frame_, "end_frame without begin_frame");
-    stats_.geometry_bytes = geometry_.head + storage_.head;
+    stats_.geometry_bytes = geometry_.head;
+    for (const Ring& r : storage_) stats_.geometry_bytes += r.head;
     stats_.uniform_bytes = uniforms_.head;
     last_stats_ = stats_;
     in_frame_ = false;

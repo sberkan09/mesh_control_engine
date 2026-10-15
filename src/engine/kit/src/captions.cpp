@@ -84,6 +84,7 @@ void install_captions(World& world) {
     world.register_event<ShowCaption>(Phase::FixedUpdate_Pre);
     world.set_resource(Captions{});
     world.add_system(Phase::FixedUpdate_Post, "kit_captions", &kit_captions);
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit_captions");  // a cutscene's subtitles
 }
 
 void caption_lines(World& world, Array<CaptionLine>& out) {
