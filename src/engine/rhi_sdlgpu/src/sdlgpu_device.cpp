@@ -169,7 +169,13 @@ ResultV SdlGpuDevice::init() {
 #else
     const SDL_GPUShaderFormat formats = SDL_GPU_SHADERFORMAT_SPIRV;
 #endif
-    device_ = SDL_CreateGPUDevice(formats, desc_.debug_layer, nullptr);
+    bool debug = desc_.debug_layer;
+#if defined(__APPLE__) && TARGET_OS_SIMULATOR
+    // The Simulator's GPU has no indirect draw or dispatch, and SDL's debug mode turns Metal
+    // validation on, which aborts on the first indirect draw (SBA-30): no debug mode there.
+    debug = false;
+#endif
+    device_ = SDL_CreateGPUDevice(formats, debug, nullptr);
     if (!device_) {
         MCE_LOG_ERROR("rhi.sdlgpu: SDL_CreateGPUDevice failed: {}", SDL_GetError());
         return Error(Errc::Unsupported, "rhi.sdlgpu.device", SDL_GetError());
