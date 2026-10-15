@@ -21,7 +21,7 @@ a device or simulator run on the user's Mac.
 | 8 | Mobile budgets: quality tiers (shadow cascades, MSAA, post FX, render scale), ASTC texture profile in the cook, frame/thermal/battery numbers per tier | devices, on the Mac | done; iPhone 11 numbers below (battery drain and an Android phone still open) |
 | 9 | Demo: Ember Step (2D) and Solstice Reach or `04_diorama` (3D) playable by touch on one Android and one iOS device; 10-minute soak each | devices, on the Mac | done on the emulator, the Simulator and an iPhone 11 (Android phone open) |
 | 10 | Store readiness (added 2026-10-12 from issues #137–#140): per-game app icon from `<project>/ship/icon.png` (iOS `AppIcon` asset catalog via `actool`, Android mipmaps + adaptive icon, shared with the Windows icon input) #137 · `PrivacyInfo.xcprivacy` from an audit of the required-reason APIs the engine and SDL3 touch, with a per-project append path #138 · Android `compileSdk`/`targetSdk` as one variable at Play's current requirement, insets re-checked, a yearly check noted here #139 · a store step after `ship.py`: monotonic build numbers, TestFlight upload with an App Store Connect API key, Play internal track via the Developer API, secrets from the environment, `--dry-run` validation #140 | simulator + emulator (+ a store dry run), on the Mac | done (store upload untested: no credentials) |
-| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a–11f done in the cloud; 11c and 11d checked in the Simulator and the emulator (2026-10-14); 11a, 11b, 11e, 11f wait for a player game on phones (below) |
+| 11 | Languages, menus and phone feel (added 2026-10-12 from issues #146, #147, #150, #151): per-locale string tables (`<project>/loc/<locale>.csv` cooked into one `CHNK_STR` each), device-language selection with a fallback chain and a runtime switch persisted in the save, font atlases from the glyphs the tables use (Turkish ğ ı İ ş), locale-aware case mapping, `{count}` placeholders and plural rules, a cook warning for missing keys, localized app names stamped by `ship.py` (reopens N12; its trigger, a commercial release, is met) #146 · `mce_ui` layout for many aspect ratios: anchors and pivots against the parent or safe-area rect, stack and grid containers, 9-slice sprites, a scroll view with touch drag and inertia, toggle / slider / modal / tabs, a UI scale from DPI, all reflected for the editor and MCP #151 · `request_review()` over SKStoreReviewController and Play In-App Review, a logged no-op on desktop #147 · `haptics::play(preset)` over UIKit feedback generators, Android `VibrationEffect` and SDL gamepad rumble, a global setting, never in the determinism hash #150 | `local_ci.sh` (layout screenshots at 1280×720, 2400×1080, 2048×1536; EN ↔ TR switch; fakes) + simulator and emulator, on the Mac | 11a–11f done; 11c, 11d (2026-10-14) and 11a, 11e, 11f (2026-10-15) checked in the Simulator and the emulator; 11b's mce_ui layout on a phone and the kit's own UI strings open (below) |
 
 ## What shipped (steps 2–3)
 
@@ -185,12 +185,25 @@ a game in landscape on the emulator.
 - Tests: `test_cook` (`strings: a font with "strings": true …`, glyphs, warning, re-cook on a table edit) and
   `app_names` (the Python helper).
 
-Still open in 11a: the simulator/emulator check with a Turkish device language. The language choice, the
-string tables and the app names live in the player (`mce_player_runtime`) and in projects. Since SBA-30,
-`ship.py --project <dir> --target android|ios` builds a project for phones (its pack cooked by the host
-build's `<game>_cook`, `MCE_HOST_BUILD_DIR`); the phone check itself waits for a Mac run (see "Phone checks
-on the Mac" below). The Simulator already runs in Turkish, and
-StoreKit's system prompt follows it (11c).
+Checked on the Mac (2026-10-15, SBA-30) with a novel made from the template for the check (`PhoneNovel`, kept
+out of the repo: `story.json` with `"localize"` and Crimson Pro as `text.font`, an `en.csv` and a `tr.csv`
+with `app.name`), shipped with `ship.py --project <dir> --target ios|android`:
+
+- **iOS Simulator** (iPhone 17 Pro, iOS 26, device language Turkish): `language tr (2 string tables)`; the
+  home screen shows "Telefon Romanı" (`tr.lproj/InfoPlist.strings`); dialogue, speaker and choices are
+  Turkish, and İ Ğ Ü Ş Ö Ç ı ş ğ draw (screenshots `ios-sim-novel-tr-*.png`, `ios-sim-home-tr.png`).
+- **Android emulator** (Android 15): the per-app language (`cmd locale set-app-locales <pkg> --locales
+  tr-TR`, Settings → App languages for a player) reaches `platform::preferred_locales`: `language tr`; the
+  APK carries `values-tr/app_name` "Telefon Romanı"; the same Turkish pages draw.
+
+Found and fixed: the novel stage drew the box with the pack's *first* font, not the one the story compile
+wrapped the pages with; with the template's ASCII ProggyClean beside Crimson Pro every ş and ı showed as "?".
+`story.json`'s `text.font` now reaches the program (`Program::text_font`, a pack path) and the stage picks
+that font. The kit's own strings (the title menu's "New game" / "Continue", the checkpoint and ending
+panels) come from the string tables since SBA-59. A second Mac run (2026-10-15, also SBA-30) found that
+choosing English on a Turkish device still showed them in Turkish: the fallback chain was [the choice, the
+device's languages], so a key the English table lacked was read from Turkish. A chosen language now falls
+back only to the base language and the kit's English words (`Localization::rebuild`, `test_loc`).
 
 ## What shipped (step 11b: `mce_ui` on many screens)
 
@@ -220,8 +233,14 @@ StoreKit's system prompt follows it (11c).
   layout at 1280×720, 2400×1080 (notch and home indicator) and 2048×1536, checked by rect and pixel and written
   to `build/<preset>/tests/ui/tmp/ui_layout_<w>x<h>.ppm`.
 
-Still open in 11b: the same layout on the Mac simulator and Android emulator; it waits for a player game on
-phones, as 11a does.
+Still open in 11b: an `mce_ui` screen on a phone. The novel and Solstice Reach run on the Simulator and the
+emulator (2026-10-15), but neither builds its menus with `mce_ui` anchors, so the safe-area and DPI paths
+are still covered only by `test_ui_gl`'s 2400×1080 screenshot. The novel stage letterboxes to 16:9 on
+19.5:9 and 20:9 screens (black bars left and right), by design of the stage, not of `mce_ui`. The second Mac run measured it: the template novel draws in about 1280×720
+pixels in the middle of a 2622×1206 (iOS) or 2400×1080 (Android) screen, so even the 16:9 height is not
+filled and the cast sprite runs past it. The template's and Undelivered's camera now fit the 20 × 11.25 m
+stage to the screen (`fit_width` / `fit_height`), which fills the height on any phone; not yet re-checked
+on the Mac.
 
 ## What shipped (step 11c: the review prompt)
 
@@ -331,8 +350,10 @@ Still open in 11e: letters (`@lettertext`) show in the base language.
   2400×1080 screen with a notch at UI scale 2; a finger on a drawn row picks it), `test_input` (scripted
   Touch and Mouse).
 
-Still open in 11f: taps in the iOS Simulator and an Android emulator; the novel kit reaches phones with a
-player game, as 11a does.
+Checked on the Mac (2026-10-15, SBA-30), with the novel above: in the iOS Simulator and on the Android emulator
+a tap on the title row starts the game, a tap on the box reads on, and a tap on the second choice row picks
+it (the story jumps to its label); on Android each pick plays the `Selection` haptic (`TICK` in
+`dumpsys vibrator_manager`).
 
 ## Phone checks on the Mac (2026-10-14, SBA-5)
 
@@ -343,7 +364,7 @@ player game, as 11a does.
 | `ios-arm64` device build | every phone sample builds and links with the Swift bridges |
 | Physical iPhone | iPhone 11 (iOS 27.0.1) over USB, Xcode 27.0. Profiles: Xcode's automatic signing made "iOS Team Provisioning Profile" for `org.meshcontrol.sample-03-platformer` and `-04-diorama` (Sami's personal team, valid 7 days), through a throwaway Xcode project built with `-allowProvisioningUpdates`; `ship.py --target ios --preset ios-arm64` then signs the `.ipa` with `MCE_IOS_SIGN_IDENTITY` / `MCE_IOS_PROVISIONING_PROFILE`, and `xcrun devicectl device install app` installs it. The first launch needs the developer certificate trusted on the phone (Settings → General → VPN & Device Management). Both games run on the A13 GPU through Metal; numbers in step 8, soaks in step 9. Arguments go after `--` with `devicectl device process launch` (otherwise `-r.quality` is read as a devicectl flag) |
 | Physical Android phone | none attached (`adb devices` lists only the emulator) |
-| 11a, 11b, 11e, 11f on phones | run 2026-10-15 (SBA-30) on the iOS Simulator (iPhone 17 Pro, iOS 26.3) and the Android emulator (API 35, device language tr-TR) with a project made from the novel template (en/tr tables, Crimson Pro) and Solstice Reach. **11e passed**: dialogue, speaker, choices and narration in Turkish, ğüşıöç İĞÜŞÖÇ drawn right. **11f passed**: taps on the title row, the box and a choice; the Selection haptic fires on Android (two `TICK`s in `dumpsys vibrator_manager`), and on iOS it is on the same path (`stage.cpp`) but not felt in the Simulator. **11a partly**: a Turkish device starts in Turkish and the home screen shows the localized names; choosing English on a Turkish device left the kit's own words Turkish, because the chain was [choice, device languages], fixed here (a chosen language falls back only to the base language). **11b not passed**: neither game has an `mce_ui` screen, so the safe-area and DPI path is still unchecked on a phone, and the novel stage draws in a 1280×720 area in the middle of a 2622×1206 / 2400×1080 screen instead of filling it (open). Also found: Metal validation in the Simulator aborts on the first indirect draw (SDL debug mode is now off in the Simulator), and `pbr_instanced.vert` failed MSL translation for iOS (`ios_support_base_vertex_instance` now on). The phone build of a project also needs the Mac's local `ship.py` fixes (MCE_ONLY_PROJECT, novel `text.font`, phone save path) that are not on `dev_claude` yet. The iPhone run waits for SBA-58 |
+| 11a, 11b, 11e, 11f on phones | 2026-10-15 (SBA-30): a localized novel and Solstice Reach ship with `ship.py --project <dir> --target ios|android` and pass the smoke runs in the Simulator and on the emulator; 11a, 11e and 11f checked (above). Fixed on the way: the phone presets add no projects, so `ship.py` now sets `MCE_ONLY_PROJECT` to the one it ships; the player logs `pack mounted from` for the smoke checks; saves on Android and iOS went to a relative / read-only `~/.local/share` (an autosave failed with EROFS on Android) and now use the crash reports' per-user folder (`crash::user_data_root()`, the app's sandbox). The second run (iOS 26.3 Simulator, API 35 emulator in tr-TR, PhoneNovel and Solstice Reach) also found and fixed: SDL GPU's debug mode turned on Metal validation in the Simulator, which aborts on the first indirect draw (now off there; on the Mac `-r.gl_debug 0` worked around it), and `pbr_instanced.vert` failed MSL translation for iOS until `ios_support_base_vertex_instance` was set (Solstice Reach did not open on iOS) |
 | Store upload (step 10) | not run: a real TestFlight or Play internal-track upload is irreversible and waits for Sami's go-ahead and credentials |
 
 Found and fixed on the way (Xcode 27 arrived mid-session):

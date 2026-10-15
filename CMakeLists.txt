@@ -139,8 +139,13 @@ if(MCE_BUILD_SAMPLES)
 endif()
 
 # Projects made with scripts/new_project.py (assets.md §4.4): every projects/<name>/ with a CMakeLists.txt.
+# MCE_ONLY_PROJECT=<dir> adds that one project and no other, whatever MCE_BUILD_PROJECTS says: the phone
+# presets leave projects off, and scripts/ship.py --target android|ios --project sets it for the one it ships.
+set(MCE_ONLY_PROJECT "" CACHE PATH "Add only this project directory (scripts/ship.py --project on phones)")
 set(_mce_projects "")
-if(MCE_BUILD_PROJECTS)
+if(MCE_ONLY_PROJECT)
+    get_filename_component(_mce_projects "${MCE_ONLY_PROJECT}" ABSOLUTE BASE_DIR "${PROJECT_SOURCE_DIR}")
+elseif(MCE_BUILD_PROJECTS)
     file(GLOB _mce_projects LIST_DIRECTORIES true "${PROJECT_SOURCE_DIR}/projects/*")
 endif()
 foreach(_dir IN LISTS _mce_projects)
