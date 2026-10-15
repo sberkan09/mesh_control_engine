@@ -109,7 +109,7 @@ ui::build_document(data, doc);                          // the skin (data.font, 
 - `ui::extract_document` turns a live document back into data and `cook::write_ui_document`
   writes it as `.mcui` text; cooking that text gives the same chunk byte for byte.
 - Over MCP, `ui_create`, `ui_widget_add`, `ui_widget_set` and `ui_widget_remove` edit a document by
-  widget path and `ui_preview` shows it at a screen size, safe area and UI scale (chapter 14).
+  widget path, `ui_theme_set` picks its theme and `ui_preview` shows it at a screen size, safe area and UI scale (chapter 14).
 
 ### Screens in a scene (`UiScreen`)
 

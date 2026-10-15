@@ -5,6 +5,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- `ui_theme_set` (SBA-57, M-UI-DATA step 5): an MCP tool sets the `.mcuitheme` a UI document is drawn with (by path
+  or GUID, `null` for the default look) through the same read-back and canonical write as the widget tools, and
+  `ui_list` with a document names its theme. There is no project-wide default theme: each document names its own.
 - Game services run on Game Center and Play Games Services v2 (SBA-23): `liveops::PlatformGameServices` sends
   achievements and scores under the catalog's `"ios"` / `"android"` ids and keeps cloud-save versions inside
   Game Center saved games and Play Games snapshots, so a second device gets a conflict as on the local stand-in;
