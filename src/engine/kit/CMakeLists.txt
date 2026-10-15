@@ -10,6 +10,7 @@ mce_add_library(mce_gameplay_kit
         src/effects.cpp
         src/kit3d.cpp
         src/kit3d_extract.cpp
+        src/nav3d.cpp
         src/particles.cpp
         src/pathfinding.cpp
         src/sequence.cpp

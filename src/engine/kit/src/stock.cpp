@@ -6,6 +6,7 @@
 #include "mce/kit/components.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/nav3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_anim.h"
@@ -80,6 +81,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_sequences(world, assets);
     install_kit3d(world, assets);
     install_bodies3d(world, assets);
+    install_nav3d(world, assets);
     install_world_settings(world);
     install_ui_flow(world);
     install_effects(world, assets);

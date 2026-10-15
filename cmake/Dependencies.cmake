@@ -253,6 +253,35 @@ else()
     target_compile_options(Jolt PRIVATE -w)
 endif()
 
+# ---- Recast & Detour (3D navigation; mce_physics3d only — ADR-0039) ------------------------------
+# Navmesh bake (Recast), path queries and crowds (Detour, DetourCrowd) and carved obstacles
+# (DetourTileCache). Zlib licensed. Compiled straight into mce_physics3d (an object library folded
+# into its archive, like ENet into mce_net) with our flags: warnings off, and no FP contraction so a
+# bake is byte-identical run to run on one platform (ADR-0007). The Recast wall in
+# scripts/ci/check_walls.py confines its headers and symbols to src/engine/physics3d/src/.
+FetchContent_Declare(recastnavigation
+    GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
+    GIT_TAG        v1.6.0
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  _no_cmake_)  # its sources are compiled below with our flags
+FetchContent_MakeAvailable(recastnavigation)
+set(_mce_recast_dirs Recast Detour DetourCrowd DetourTileCache)
+set(_mce_recast_sources "")
+set(_mce_recast_includes "")
+foreach(dir IN LISTS _mce_recast_dirs)
+    file(GLOB _srcs CONFIGURE_DEPENDS "${recastnavigation_SOURCE_DIR}/${dir}/Source/*.cpp")
+    list(APPEND _mce_recast_sources ${_srcs})
+    list(APPEND _mce_recast_includes "${recastnavigation_SOURCE_DIR}/${dir}/Include")
+endforeach()
+add_library(mce_recast OBJECT ${_mce_recast_sources})
+target_include_directories(mce_recast SYSTEM PUBLIC ${_mce_recast_includes})
+set_target_properties(mce_recast PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(mce_recast PRIVATE /W0 /fp:precise)
+else()
+    target_compile_options(mce_recast PRIVATE -w -ffp-contract=off)
+endif()
+
 # ---- glslang (shader cook, every platform) ---------------------------------------------------
 # The cook validates .glsl stages and compiles their variants to SPIR-V (ADR-0033). Same tag and
 # options as cmake/macos/MetalDependencies.cmake: this declaration comes first, so on macOS the

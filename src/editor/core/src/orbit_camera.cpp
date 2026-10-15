@@ -4,7 +4,10 @@
 
 #include "mce/ecs/transform.h"
 #include "mce/editor/viewport2d.h"
+#include "mce/asset/asset_system.h"
+#include "mce/hash.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/nav3d.h"
 #include "mce/physics/components.h"
 
 namespace mce::editor {
@@ -225,6 +228,55 @@ void orbit_wireframe(const EditorScene& scene, f32 depth, Array<Segment3D>& out,
     out.push_back({{0, 0, 0}, {1, 0, 0}, Color{0.9f, 0.3f, 0.3f, 1}});
     out.push_back({{0, 0, 0}, {0, 1, 0}, Color{0.3f, 0.9f, 0.3f, 1}});
     out.push_back({{0, 0, 0}, {0, 0, 1}, Color{0.3f, 0.5f, 1.0f, 1}});
+}
+
+void NavMeshPreview::sync(const EditorScene& scene, asset::AssetSystem* assets) {
+    const kit::NavMeshSurface3D* surface = nullptr;
+    for (const DocEntity& e : scene.doc().entities())
+        if ((surface = scene.get<kit::NavMeshSurface3D>(e.id))) break;
+    show_ = surface && surface->show;
+    const asset::Guid guid = surface ? surface->baked.guid : asset::Guid{};
+    if (guid.is_null() || !assets) {
+        if (mesh_.loaded()) mesh_.clear();
+        guid_ = {};
+        hash_ = 0;
+        tris_.clear();
+        areas_.clear();
+        links_.clear();
+        return;
+    }
+    Result<asset::AssetHandle<asset::NavMesh>> h = assets->load_sync<asset::NavMesh>(guid);
+    if (!h) return;
+    const Span<const byte> blob = assets->resolve(h.value());
+    const u64 hash = fnv1a64(blob.data(), blob.size());
+    if (guid != guid_ || hash != hash_) {
+        guid_ = guid;
+        hash_ = hash;
+        tris_.clear();
+        areas_.clear();
+        links_.clear();
+        if (mesh_.load(blob, 1)) mesh_.debug_triangles(tris_, areas_, 0.03f, &links_);
+    }
+    assets->release(asset::AnyHandle(h.value()));
+}
+
+void NavMeshPreview::segments(Array<Segment3D>& out) const {
+    if (!show_) return;
+    const Color ground{0.2f, 0.85f, 0.55f, 0.55f}, other{0.95f, 0.75f, 0.2f, 0.7f}, link{0.95f, 0.35f, 0.9f, 1.0f};
+    usize budget = kMaxSegments;
+    for (usize t = 0; t < areas_.size() && budget >= 3; ++t, budget -= 3) {
+        const Color c = areas_[t] == physics::kNavAreaGround ? ground : other;
+        const vec3* v = &tris_[t * 3];
+        out.push_back({v[0], v[1], c});
+        out.push_back({v[1], v[2], c});
+        out.push_back({v[2], v[0], c});
+    }
+    for (usize i = 0; i + 1 < links_.size(); i += 2) {
+        const vec3 a = links_[i], b = links_[i + 1];
+        const vec3 mid = (a + b) * 0.5f + vec3{0.0f, 0.5f, 0.0f};  // an arc of two segments
+        out.push_back({a, mid, link});
+        out.push_back({mid, b, link});
+    }
 }
 
 bool project_segment(const render::View3D& view, const Segment3D& seg, vec2& a_px, vec2& b_px) {

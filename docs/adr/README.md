@@ -58,6 +58,7 @@ file name when the number alone is ambiguous.
 | [0036](0036-skeletal-skinning.md) | M-SKIN | Optional skeletal skinning: `CHNK_MESH` skin section, glTF skins, joint palette bank |
 | [0037](0037-scene-streaming.md) | post-M9 | Optional scene streaming: `SceneChunk` components, host-driven pump, asset loader thread |
 | [0038](0038-mobile-sdl-gpu-backend.md) | M-MOBILE | Mobile graphics through one SDL3 GPU backend (`mce_rhi_sdlgpu`) |
+| [0039](0039-navigation-recast-detour.md) | M-GAMEPLAY3D | 3D navigation over embedded Recast & Detour: tiled navmesh bake, carved obstacles, crowds |
 
 Some records amend earlier ones in dated "Amendment" sections at the end
 of the file (0017, 0018, 0021, 0022, 0029, 0032) or are superseded in part by later ADRs (0022 §7 and 0023 by 0036).
