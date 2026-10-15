@@ -538,6 +538,10 @@ bool Document::bind_property(WidgetId w, const World& world, Entity entity, Stri
         MCE_LOG_ERROR("ui: property '{}' is not a numeric or bool leaf", path);
         return false;
     }
+    if (format && !valid_number_format(StringView(format))) {
+        MCE_LOG_ERROR("ui: '{}' is not a number format (text and one f, e or g conversion)", format);
+        return false;
+    }
     PropertyBinding b;
     b.widget = w;
     b.world = &world;
@@ -669,6 +673,35 @@ void Document::range(WidgetId w, f32& lo, f32& hi, f32& step) const {
 StringView Document::convar(WidgetId w) const {
     const Node* n = node(w);
     return n ? n->convar.view() : StringView();
+}
+StringView Document::action(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->action.view() : StringView();
+}
+StringView Document::binding(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->binding.view() : StringView();
+}
+StringView Document::binding_format(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->binding_format.view() : StringView();
+}
+void Document::set_action(WidgetId w, StringView action) {
+    if (Node* n = node(w)) n->action.assign(action);
+}
+void Document::set_binding(WidgetId w, StringView path, StringView format) {
+    if (Node* n = node(w)) {
+        n->binding.assign(path);
+        n->binding_format.assign(format);
+        n->binding_done = false;
+    }
+}
+bool Document::binding_done(WidgetId w) const {
+    const Node* n = node(w);
+    return n && n->binding_done;
+}
+void Document::set_binding_done(WidgetId w) {
+    if (Node* n = node(w)) n->binding_done = true;
 }
 WidgetId Document::first_child(WidgetId w) const {
     const Node* n = node(w);

@@ -182,6 +182,14 @@ public:
     // Text re-formats with `format` (printf, one double; default "%g"), others take it as value.
     // Numeric and bool leaves only. The world must outlive the binding; a dead entity reads nothing.
     bool bind_property(WidgetId w, const World& world, Entity entity, StringView path, const char* format = nullptr);
+    // Data a host acts on (M-UI-DATA step 2; the document itself does nothing with it): the gameplay
+    // action the widget's events raise, and the property path (+ format) the host binds it to.
+    void set_action(WidgetId w, StringView action);
+    void set_binding(WidgetId w, StringView path, StringView format);
+    // Whether a host has dealt with the widget's binding (bound it, or given up on a bad path):
+    // ui::bind_document's bookkeeping. set_binding clears it.
+    bool binding_done(WidgetId w) const;
+    void set_binding_done(WidgetId w);
 
     // Per frame, Render_Pre: removal -> layout (dirty only) -> input -> state machines -> bindings.
     void update(const UpdateContext& ctx);
@@ -219,6 +227,9 @@ public:
     GridLayout grid(WidgetId w) const;
     void range(WidgetId w, f32& lo, f32& hi, f32& step) const;
     StringView convar(WidgetId w) const;      // the bound convar, or empty
+    StringView action(WidgetId w) const;      // set_action, or empty
+    StringView binding(WidgetId w) const;     // set_binding's path, or empty
+    StringView binding_format(WidgetId w) const;
     WidgetId default_focus() const { return default_focus_; }
     WidgetId first_child(WidgetId w) const;   // children in sibling (document) order
     WidgetId next_sibling(WidgetId w) const;
@@ -258,6 +269,10 @@ private:
         StackLayout stack;
         GridLayout grid;
         FixedString<64> convar;
+        FixedString<32> action;
+        FixedString<64> binding;
+        FixedString<32> binding_format;
+        bool binding_done = false;
         u32 console = ~0u;  // index into consoles_
         bool pressed = false;
     };

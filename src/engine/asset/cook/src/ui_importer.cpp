@@ -25,7 +25,9 @@
 // A widget starts from the look and values ui::Builder gives its kind (builder_defaults; with
 // "modal": true, modal_defaults), then takes the keys it names: so "style" changes only the fields
 // it lists. "kind_defaults": false starts from the C++ defaults instead (what write_ui_document
-// emits). Other keys: "visible", "interactable", "blocks_pointer". Names are unique among siblings
+// emits). Other keys: "visible", "interactable", "blocks_pointer". Gameplay reaches a document only
+// through data: "action" names the input action the widget's Confirmed / ValueChanged raises in the
+// player, and "bind": "Component/field" (+ "format", printf) shows a field read-only. Names are unique among siblings
 // and contain no '/'; "nav" edges and Document::find take paths of names from the root.
 //
 // A Tabs widget lists its pages under "tabs" (a bar button and a page each, as Builder::tab), or
@@ -169,7 +171,8 @@ private:
         if (!detail::check_keys(w, {"name",    "kind",         "kind_defaults",  "modal",         "anchors", "fill",
                                     "at",      "style",        "styles",         "text",          "value",   "range",
                                     "visible", "interactable", "blocks_pointer", "default_focus", "stack",   "grid",
-                                    "nav",     "convar",       "children",       "tabs"},
+                                    "nav",     "convar",       "children",       "tabs",          "action",  "bind",
+                                    "format"},
                                 file_, kStage, diags_))
             return;
         const JsonValue name = w.get("name");
@@ -288,6 +291,29 @@ private:
                 error(c, "'convar' must be a convar name of at most 63 bytes");
             else
                 d.convar.assign(c.as_string());
+        }
+        if (const JsonValue a = w.get("action"); a.valid()) {
+            if (!a.is_string() || a.as_string().empty() || a.as_string().size() > 31)
+                error(a, "'action' must be an action name of at most 31 bytes");
+            else
+                d.action.assign(a.as_string());
+        }
+        if (const JsonValue b = w.get("bind"); b.valid()) {
+            const StringView path = b.is_string() ? b.as_string() : StringView();
+            usize slash = 0;
+            while (slash < path.size() && path[slash] != '/') ++slash;
+            if (path.size() > 63 || slash == 0 || slash + 1 >= path.size())
+                error(b, "'bind' must be \"<Component>/<field>\" of at most 63 bytes");
+            else
+                d.bind.assign(path);
+        }
+        if (const JsonValue f = w.get("format"); f.valid()) {
+            if (!f.is_string() || f.as_string().size() > 31 || !ui::valid_number_format(f.as_string()))
+                error(f, "'format' must be a number format of at most 31 bytes: text and one %f / %e / %g");
+            else if (d.bind.empty())
+                error(f, "'format' needs a 'bind'");
+            else
+                d.format.assign(f.as_string());
         }
 
         const u32 index = push(d, name);
@@ -542,6 +568,18 @@ void write_widget(const ui::DocumentData& d, u32 i, u32 depth, String& out) {
         field("convar");
         append_json_string(out, w.convar.view());
     }
+    if (!w.action.empty()) {
+        field("action");
+        append_json_string(out, w.action.view());
+    }
+    if (!w.bind.empty()) {
+        field("bind");
+        append_json_string(out, w.bind.view());
+    }
+    if (!w.format.empty()) {
+        field("format");
+        append_json_string(out, w.format.view());
+    }
     bool any_child = false;
     for (u32 c = i + 1; c < d.widgets.size(); ++c) {
         if (d.widgets[c].parent != i) continue;
@@ -565,7 +603,7 @@ void write_widget(const ui::DocumentData& d, u32 i, u32 depth, String& out) {
 class UiImporter final : public IImporter {
 public:
     StringView id() const override { return "ui"; }
-    u32 version() const override { return 1; }
+    u32 version() const override { return 2; }
     ChunkType type() const override { return ChunkType::UiDocument; }
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ".mcui"; }

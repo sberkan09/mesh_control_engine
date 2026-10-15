@@ -10,8 +10,8 @@
 // encode/decode use nothing but this header, so the cook links them without the renderer;
 // build_document / extract_document are in a separate TU (document_build.cpp).
 //
-// Chunk layout v1 (little-endian, POD records): UiDocHeader | UiWidgetRecord[widget_count] |
-// string blob (names, texts, convars).
+// Chunk layout v2 (v2: action / bind / format strings) (little-endian, POD records): UiDocHeader | UiWidgetRecord[widget_count] |
+// string blob (names, texts, convars, actions, bindings).
 
 #include "mce/asset/guid.h"
 #include "mce/containers/array.h"
@@ -44,6 +44,13 @@ struct WidgetData {
     GridLayout grid;
     u32 nav[NavEdgeCount] = {kNoWidgetIndex, kNoWidgetIndex, kNoWidgetIndex, kNoWidgetIndex};  // widget indices
     FixedString<64> convar;  // bound with Document::bind_convar; empty = none
+    // Gameplay talks to a document through data (M-UI-DATA step 2). `action`: the input action a
+    // Confirmed / ValueChanged event raises in the player (InputState, so replays record it).
+    // `bind`: "<Component>/<field>" the host binds read-only with Document::bind_property, shown
+    // with `format` (printf, one double; empty = "%g").
+    FixedString<32> action;
+    FixedString<64> bind;
+    FixedString<32> format;
 };
 
 struct DocumentData {
@@ -70,6 +77,11 @@ void builder_defaults(WidgetKind kind, WidgetData& out);
 // Builder::modal's veil over a Panel: dim, anchored to the whole screen, blocks the pointer,
 // hidden until Document::open_modal.
 void modal_defaults(WidgetData& out);
+
+// A property binding's format is data, so it is checked before printf sees it: literal text, "%%",
+// and exactly one floating conversion (flags "-+ #0", a width and a precision of digits, then one of
+// f F e E g G). Empty is valid ("%g").
+bool valid_number_format(StringView format);
 
 // The CHNK_UIDOC payload. decode checks bounds, enumerators, the tree order, unique sibling names
 // and the nav / default-focus indices, so a chunk build_document would misread never loads.

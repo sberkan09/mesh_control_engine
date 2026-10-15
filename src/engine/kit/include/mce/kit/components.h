@@ -105,6 +105,25 @@ MCE_COMPONENT(TextLabel, font, text, color, (height, Range{0.05f, 10}, Help{"gly
               outline_color, (outline_width, Range{0, 0.5f}, Help{"outline thickness, a fraction of the height; 0 = none"}),
               shadow_color, (shadow_offset, Help{"drop shadow offset, a fraction of the height (+y up); [0, 0] = none"}))
 
+// A UI document (.mcui) the stock player shows over the game (M-UI-DATA step 2): a HUD, a title,
+// a pause or a win screen. Gameplay never touches the widgets; it talks to them through data:
+// toggle `visible` to show or hide the screen, give its widgets "bind": "Component/field" to show a
+// field (read from this entity when it has that component, else from the first entity that does),
+// and read the input actions its widgets name ("action"): a confirmed button presses its action for
+// one tick, a slider / toggle / tabs change presses its action with x = the new value. Those actions
+// travel in the tick's InputState exactly as an -input script line "<tick> <Action>" would, so a
+// script replays a run (an action is in the snapshot only on its press and release ticks: ask
+// has_action() before reading it). Screens stack by `order`
+// (higher on top); a visible modal screen takes focus and switches input to the "UI" action map.
+struct UiScreen {
+    asset::AssetRef<asset::UiDocument> document;
+    i32 order = 0;
+    bool visible = true;
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(UiScreen, (document, Help{"a .mcui UI document"}), (order, Range{-100, 100}, Help{"higher draws on top"}),
+              (visible, Help{"shown and fed input while set"}))
+
 // The view a player renders from: the first `primary` camera in ECS order, at its entity's
 // position (rotation about +Z included).
 struct Camera2DComponent {

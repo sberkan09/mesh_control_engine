@@ -32,7 +32,7 @@ inline constexpr u8 STORE_CATALOG_VERSION = 1;  // CHNK_STORE: products and ad p
 inline constexpr u8 GAME_SERVICES_CATALOG_VERSION = 1;  // CHNK_GSVC: game services catalog (M-LIVEOPS; mce/liveops/game_services.h)
 inline constexpr u8 ANIMGRAPH_VERSION = 1;  // CHNK_ANIMG: a 3D animation state graph (M-DATA-REACH 7)
 inline constexpr u8 SPRITESHEET_VERSION = 1;  // CHNK_SHEET: texture regions + flipbook clips (M-DATA-REACH 5)
-inline constexpr u8 UI_DOCUMENT_VERSION = 1;  // CHNK_UIDOC: one UI widget tree (M-UI-DATA 1; mce/ui/document_data.h)
+inline constexpr u8 UI_DOCUMENT_VERSION = 2;  // CHNK_UIDOC: one UI widget tree (M-UI-DATA 1; v2 actions + bindings; mce/ui/document_data.h)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)

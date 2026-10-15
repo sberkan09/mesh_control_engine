@@ -59,8 +59,9 @@ const char* const kMenu = R"({ "format": "mce-ui", "version": 1, "guid": "5703e0
     { "name": "bg", "fill": true, "style": { "tint": [0, 0, 0, 0.6] } },
     { "name": "menu", "kind": "Stack", "at": [0.5, 0.45, 320, 0], "stack": { "spacing": 12, "align": "Center" },
       "children": [
-        { "name": "title", "kind": "Text", "text": "UNDERTOW", "style": { "text_size": 32, "text_color": [1, 0.8, 0.4, 1], "text_outline": 2, "text_shadow": [2, 3] } },
-        { "name": "play", "kind": "Button", "text": "PLAY", "default_focus": true,
+        { "name": "title", "kind": "Text", "text": "UNDERTOW", "style": { "text_size": 32, "text_color": [1, 0.8, 0.4, 1], "text_outline": 2, "text_shadow": [2, 3] },
+          "bind": "Score/points", "format": "BEST %.0f" },
+        { "name": "play", "kind": "Button", "text": "PLAY", "default_focus": true, "action": "Play",
           "styles": { "Hover": { "tint": [0.3, 0.3, 0.4, 1], "slice": { "left": 4, "right": 4 } } },
           "nav": { "down": "menu/volume" } },
         { "name": "volume", "kind": "Slider", "range": [0, 1, 0.05], "value": 0.8, "convar": "test.ui_volume",
@@ -202,6 +203,10 @@ TEST_CASE("ui: authoring mistakes fail the cook with file and line") {
         {R"([ { "name": "t", "kind": "Tabs", "children": [ { "name": "bar", "kind": "Stack" } ] } ])",
          "Stack of tab buttons"},
         {R"([ { "name": "a", "anchors": { "to": "Window" } } ])", "enumerator"},
+        {R"([ { "name": "a", "kind": "Text", "bind": "Score/points", "format": "%s" } ])", "number format"},
+        {R"([ { "name": "a", "kind": "Text", "format": "%g" } ])", "needs a 'bind'"},
+        {R"([ { "name": "a", "kind": "Text", "bind": "points" } ])", "<Component>/<field>"},
+        {R"([ { "name": "a", "kind": "Button", "action": "" } ])", "action name"},
     };
     for (const Bad& b : bad) {
         CAPTURE(b.widgets);

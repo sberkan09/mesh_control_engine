@@ -242,6 +242,13 @@ Gameplay → UI notifications that are not state (a "LEVEL CLEARED" banner) are 
 (`EventQueue<T>`); UI → gameplay intents are `UiEvent`s the *runtime state* (not gameplay) turns into state-stack
 operations or gameplay events. Gameplay code never includes `mce/ui`.
 
+Since M-UI-DATA step 2 a document carries its links as data (`mce/ui/screen_link.h`): a widget's `bind` path
+(`Component/field` + format) is resolved by the host (`bind_document`: the screen's entity, else the first entity
+with the component), and its `action` names the input action its `Confirmed` / `ValueChanged` / modal `Cancelled`
+events raise. `ActionRelay` folds those into the next tick's `InputState` with `InputScript`'s edge rules, so a UI
+press and a script line `<tick> <Action>` give the same snapshot and hash. The stock player does this for every
+`kit::UiScreen` of a scene.
+
 ### 4.5 Drawing (FR-UI-020 acceptance: through the sprite batcher)
 
 `submit()` walks visible widgets in document order and appends to a `render::SpriteBatch` begun with
@@ -298,14 +305,15 @@ its state's lifetime; `WidgetId`s never outlive their document.
 ### 5.3 Determinism
 
 UI never writes gameplay state directly. Its outputs (`UiEvent`s turned into state-stack ops or gameplay events) are
-ordinary events and are part of the hashed stream. Because focus and navigation run on the quantized action
+ordinary events and are part of the hashed stream (data-driven screens raise input actions instead, §4.4). Because focus and navigation run on the quantized action
 snapshot, a replay produces the same events. Hover, transitions and pointer position are presentation-only.
 
 ### 5.4 Authoring
 
 C++ builders at v1.0 (§2). Since M-UI-DATA step 1 a document is also data: a `.mcui` JSON source cooks to a
 `CHNK_UIDOC` chunk (`mce/ui/document_data.h`), a flat serialization of the widget pool in document order (names,
-kinds, anchors, the five per-state styles, values, layouts, nav edges, convar bindings) plus the skin's font and
+kinds, anchors, the five per-state styles, values, layouts, nav edges, convar bindings, actions and property
+bindings) plus the skin's font and
 sprite sheet by GUID. `build_document` turns it into a `Document` and `extract_document` turns a `Document` back into
 it, and a `.mcui` widget starts from the same per-kind defaults `Builder` applies (`builder_defaults`), so code and
 data make the same documents. The cook reads anchors, styles and layouts through the reflected `Ui*` types. The

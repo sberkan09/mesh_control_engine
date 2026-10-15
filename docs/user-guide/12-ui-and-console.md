@@ -5,7 +5,7 @@ Three kinds of UI exist, and which you use depends on how much of the host you o
 | Need | Use | Available to |
 |---|---|---|
 | In-world and HUD text | `TextLabel` entities (with `Parallax {0, 0}` for a HUD) | every project, authored in scenes |
-| Menus, options, health bars with widgets | `mce_ui` documents, built in C++ or cooked from `.mcui` assets | programs that own their host (the samples); not yet the project template |
+| Menus, options, health bars with widgets | `mce_ui` documents, cooked from `.mcui` assets and placed in a scene with `UiScreen` (12.2), or built in C++ | every player-based project (`UiScreen`); programs that own their host (C++) |
 | A debugging command line in the shipped game | the developer console (`DevConsole`) | every player-based program, out of the box |
 
 ## 12.1 HUD through scene text
@@ -72,8 +72,8 @@ samples.
 ### UI documents as data (`.mcui`)
 
 A document can also be written as a `.mcui` asset (JSON source, cooked to a `UiDocument` chunk) and
-built at run time with `ui::build_document` (`mce/ui/document_data.h`). The stock player does not
-load them yet (ROADMAP M-UI-DATA step 2); a host that owns its loop can:
+built at run time with `ui::build_document` (`mce/ui/document_data.h`). The stock player shows the
+documents a scene names with `UiScreen` (below); a host that owns its loop can build one itself:
 
 ```json
 { "format": "mce-ui", "version": 1, "guid": "<uuid>",
@@ -108,6 +108,43 @@ ui::build_document(data, doc);                          // the skin (data.font, 
   name, a nav path that leads nowhere, a value outside its range) with `file:line:col`.
 - `ui::extract_document` turns a live document back into data and `cook::write_ui_document`
   writes it as `.mcui` text; cooking that text gives the same chunk byte for byte.
+
+### Screens in a scene (`UiScreen`)
+
+A `UiScreen` component names a `.mcui` document the stock player shows over the game: a HUD, a
+title, a pause or a win screen, with no host code. `samples/ui_screens` is a HUD and a pause menu
+done this way.
+
+```json
+{ "name": "Hud",   "components": { "UiScreen": { "document": "guid:<hud.mcui>" }, "Score": {} } },
+{ "name": "Pause", "components": { "UiScreen": { "document": "guid:<pause.mcui>", "order": 10, "visible": false } } }
+```
+
+Gameplay never includes `mce/ui`; it talks to the screens only through data:
+
+- **Showing a screen**: set `UiScreen::visible`. `order` stacks screens (higher on top). While a
+  screen whose document is modal (`"modal": true`, the default) is visible, it takes focus and
+  the input switches to the `"UI"` action map (Navigate, Confirm, Cancel), which blocks the game's
+  map below it. With screens in the scene, Esc and the top-right corner no longer pause the player:
+  they are the game's `Pause` action.
+- **Values on screen**: a widget's `"bind": "Component/field"` shows that field read-only (a Text
+  as `"format"`, a printf format with one `%f` / `%e` / `%g`, default `%g`; other widgets as their
+  value). The field is read from the screen's own entity when it has the component, else from the
+  first scene entity that does, and the binding waits until one does.
+- **Buttons to gameplay**: a widget's `"action": "Resume"` raises that input action. A confirmed
+  button presses it for one tick, a slider, toggle or tabs change presses it with `x` = the new
+  value, and a cancelled modal panel (Cancel / Esc) presses its own action. The action rides in
+  the next tick's `InputState` exactly as an `-input` script line `<tick> Resume` would, so a
+  script replays a run with the same state hash. Like a scripted action, it is in the snapshot only
+  on its press and release ticks: check `has_action` before reading it.
+
+```cpp
+const input::InputState* in = f.try_resource<input::InputState>();
+if (in && in->has_action(MCE_SID("Resume")) && in->pressed(MCE_SID("Resume"))) pause_screen.visible = false;
+```
+
+The documents use the built-in skin, or their `"font"`; sprite-sheet skins are not drawn yet
+(M-UI-DATA step 3).
 
 ## 12.3 The developer console
 

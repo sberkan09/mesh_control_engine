@@ -19,3 +19,4 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET mce_engine AND TARGET mce_playe
              COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_NM} "-DFILES=$<TARGET_FILE:mce_engine>;$<TARGET_FILE:mce_player>"
                      -DPATTERN=ImGui -P ${PROJECT_SOURCE_DIR}/cmake/ScanSymbols.cmake)
 endif()
+mce_add_test(test_ui_screen_link SOURCES test_ui_screen_link.cpp DEPS mce::mce_ui)
