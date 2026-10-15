@@ -362,7 +362,7 @@ void kit3d_ragdolls(Frame& f) {
         }
         if (math::length_sq(r.impulse) > 0.0f) {
             i32 part = -1;
-            if (r.impulse_bone.size() > 0) {
+            if (!r.impulse_bone.empty()) {
                 const MeshRef* ref = w.try_get<MeshRef>(e);
                 const render::GpuMesh* mesh = ref ? anim3d_mesh(w, ref->mesh.guid) : nullptr;
                 u32 n = mesh ? mesh->find_node(r.impulse_bone.view()) : ~0u;
