@@ -205,6 +205,7 @@ struct Program {
     u16 sfx_page = 0, sfx_move = 0, sfx_confirm = 0, sfx_letter = 0;
     u16 title_location = 0, title_time = 0, title_lut = 0, title_music = 0, title_ambience = 0;
     const char* background_normal_map = nullptr;  // an asset path, or null
+    const char* text_font = nullptr;  // story.json's text.font as a pack path: the box's font (null: the pack's first)
     // Ink: the box's speech and narration lines, the choice rows' text (normal, selected,
     // disabled), and the row sprites' tint (multiplied by 0.78 / 1 / 0.45 the same way).
     math::Color ink_speech{0.16f, 0.12f, 0.1f, 1}, ink_narration{0.36f, 0.29f, 0.23f, 1};
@@ -364,7 +365,7 @@ struct NovelState {
     asset::Guid ambience[kSounds];
     asset::Guid sfx[kSounds];
     asset::Guid normal_map;
-    asset::Guid font;  // the first font in the pack (the default stage's)
+    asset::Guid font;  // Program::text_font, else the first font in the pack (the default stage's)
 
     // the page on the box
     u8 page_speaker = 255;
