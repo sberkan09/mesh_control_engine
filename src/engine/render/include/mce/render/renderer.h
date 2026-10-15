@@ -17,6 +17,7 @@
 //   cmd.end_pass();
 
 #include "mce/containers/array.h"
+#include "mce/render/accessibility.h"
 #include "mce/render/forward3d.h"
 #include "mce/render/mesh.h"
 #include "mce/render/sprite_batch.h"
@@ -44,7 +45,11 @@ struct Post2D {
     f32 lut_strength = 1.0f;         // 0 = ungraded, 1 = fully graded
     bool chromatic_aberration = false;
     f32 aberration = 0.004f;         // red/blue UV split at the corners (fraction of the screen)
-    bool any() const { return vignette || color_grade || chromatic_aberration; }
+    // Color-vision correction (M-ACCESS), last in the pass; set from the player's settings by
+    // apply_accessibility, never by the game.
+    ColorVision color_vision = ColorVision::None;
+    f32 color_vision_strength = 1.0f;
+    bool any() const { return vignette || color_grade || chromatic_aberration || color_vision != ColorVision::None; }
 };
 
 // The identity 16³ color-grade LUT as a 256 × 16 RGBA8 strip: 16 slices across (blue), red

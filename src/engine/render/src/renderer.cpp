@@ -1,6 +1,7 @@
 #include "mce/render/renderer.h"
 
 #include "mce/log.h"
+#include "shaders_cvd.h"
 
 namespace mce::render {
 
@@ -81,8 +82,8 @@ void main() {
 }
 )";
 
-// 2D post (FR-R2D-100): chromatic aberration (radial R/B split), a 16³ strip-LUT grade, then the
-// vignette. Bindings: PostU = 1, the frame = 6, the LUT = 7.
+// 2D post (FR-R2D-100): chromatic aberration (radial R/B split), a 16³ strip-LUT grade, the
+// vignette, then the color-vision correction (M-ACCESS). Bindings: PostU = 1, the frame = 6, the LUT = 7.
 constexpr const char* kPostVS = R"(#version 450 core
 layout(location = 0) out vec2 v_uv;
 out gl_PerVertex { vec4 gl_Position; };
@@ -93,7 +94,7 @@ void main() {
 }
 )";
 
-constexpr const char* kPostFS = R"(#version 450 core
+constexpr const char* kPostFS = "#version 450 core\n" MCE_GLSL_CVD R"(
 layout(std140, binding = 1) uniform PostU { vec4 u_enable; vec4 u_vignette; vec4 u_grade; };
 layout(binding = 6) uniform sampler2D u_src;
 layout(binding = 7) uniform sampler2DArray u_lut;
@@ -121,14 +122,19 @@ void main() {
         float r = length(vec2(d.x * u_vignette.w, d.y)) * 2.0;
         c *= 1.0 - u_vignette.x * smoothstep(u_vignette.y, u_vignette.y + u_vignette.z, r);
     }
+    if (u_enable.w > 0.5) {  // color-vision correction: on linear values, last
+        vec3 l = mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
+        l = cvd_correct(int(u_enable.w + 0.5), u_grade.y, clamp(l, 0.0, 1.0));
+        c = mix(l * 12.92, 1.055 * pow(l, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, l));
+    }
     o_color = vec4(c, 1.0);
 }
 )";
 
 struct PostU {
-    math::vec4 enable;    // x vignette, y grade, z aberration
+    math::vec4 enable;    // x vignette, y grade, z aberration, w color-vision mode (0 = off)
     math::vec4 vignette;  // intensity, radius, softness, aspect
-    math::vec4 grade;     // lut strength, -, aberration
+    math::vec4 grade;     // lut strength, color-vision strength, aberration
 };
 
 struct FrameU {
@@ -363,10 +369,12 @@ void Renderer::record_post_2d(rhi::CommandBuffer& cmd, rhi::TextureHandle source
     pass.debug_name = "post2d";
     cmd.begin_pass(pass);
     PostU pu{};
-    pu.enable = {post.vignette ? 1.0f : 0.0f, post.color_grade ? 1.0f : 0.0f, post.chromatic_aberration ? 1.0f : 0.0f, 0.0f};
+    const f32 cvd_strength = math::clamp(post.color_vision_strength, 0.0f, 1.0f);
+    const f32 cvd = cvd_strength > 0.0f ? static_cast<f32>(post.color_vision) : 0.0f;
+    pu.enable = {post.vignette ? 1.0f : 0.0f, post.color_grade ? 1.0f : 0.0f, post.chromatic_aberration ? 1.0f : 0.0f, cvd};
     pu.vignette = {math::clamp(post.vignette_intensity, 0.0f, 1.0f), post.vignette_radius, math::max(post.vignette_softness, 1e-3f),
                    size.height ? static_cast<f32>(size.width) / static_cast<f32>(size.height) : 1.0f};
-    pu.grade = {math::clamp(post.lut_strength, 0.0f, 1.0f), 0.0f, post.aberration, 0.0f};
+    pu.grade = {math::clamp(post.lut_strength, 0.0f, 1.0f), cvd_strength, post.aberration, 0.0f};
     cmd.bind_pipeline(post_2d_);
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kAtlasArray, source, linear_sampler_);
