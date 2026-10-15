@@ -143,3 +143,98 @@ TEST_CASE("terrain: TerrainView rejects payloads that do not hold together") {
     asset::write_terrain(chunky, heights.span(), payload);
     CHECK_FALSE(asset::TerrainView::read(payload.span()));
 }
+
+TEST_CASE("terrain: splat layers cook with their materials, weights and auto rules (M-TERRAIN 2)") {
+    const std::string root = fresh_dir("terrain_layers");
+    write_file(root + "/assets/materials/grass.mcmat",
+               R"({ "format": "mce-material", "version": 1, "guid": "7e7a0000-0000-4000-8000-0000000000b1", "base_color": [0.3, 0.6, 0.2, 1] })");
+    write_file(root + "/assets/materials/rock.mcmat",
+               R"({ "format": "mce-material", "version": 1, "guid": "7e7a0000-0000-4000-8000-0000000000b2", "roughness": 0.8 })");
+    // Explicit weights: 33 x 33 samples of 2 layers, layer 1 on the east half.
+    std::string weights;
+    for (u32 z = 0; z < 33; ++z)
+        for (u32 x = 0; x < 33; ++x) {
+            weights.push_back(char(x < 16 ? 255 : 0));
+            weights.push_back(char(x < 16 ? 0 : 255));
+        }
+    write_file(root + "/assets/terrain/painted.mcterrain",
+               doc(R"("resolution": 33, "size": [32, 32], "height_range": [0, 8], "fill": 2,
+                      "layers": [ { "material": "guid:7e7a0000-0000-4000-8000-0000000000b1", "tile": 3 },
+                                  { "material": "guid:7e7a0000-0000-4000-8000-0000000000b2", "triplanar": true, "height_strength": 2 } ],
+                      "splat": ")" + base64(weights) + "\""));
+    // Auto rules over a ramp along x (0 to 30 m over 64 m: a 25° slope) with a flat west third.
+    std::string ramp;
+    for (u32 z = 0; z < 65; ++z)
+        for (u32 x = 0; x < 65; ++x) put16le(ramp, static_cast<u16>(x < 22 ? 0 : (x - 22) * 65535 / 42));
+    write_file(root + "/assets/terrain/auto.mcterrain",
+               R"({ "format": "mce-terrain", "version": 1, "guid": "7e7a0000-0000-4000-8000-0000000000a3",
+                    "resolution": 65, "size": [64, 64], "height_range": [0, 30], "splat_resolution": 33, "heights": ")" +
+                   base64(ramp) + R"(",
+                    "layers": [ { "auto": { "slope": [0, 10] } }, { "auto": { "slope": [15, 90] } }, { "auto": { "height": [25, 30] } } ] })");
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+    INFO(diags_of(r));
+    REQUIRE(r.ok());
+
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    auto h = assets.load_sync<asset::Terrain>(assets.find(asset::parse_guid(kGuid).value()));
+    REQUIRE(h);
+    const asset::TerrainView t = asset::TerrainView::read(assets.resolve(h.value())).value();
+    REQUIRE(t.layers.size() == 2);
+    CHECK(t.splat_resolution() == 33);  // min(resolution, 1025)
+    CHECK(t.layers[0].material_guid() == asset::parse_guid("7e7a0000-0000-4000-8000-0000000000b1").value());
+    CHECK(t.layers[0].tile == doctest::Approx(3.0f));
+    CHECK(t.layers[0].flags == 0u);
+    CHECK(t.layers[1].tile == doctest::Approx(4.0f));  // the default
+    CHECK(t.layers[1].flags == asset::TerrainLayerFlags::kTriplanar);
+    CHECK(t.layers[1].height_strength == doctest::Approx(2.0f));
+    CHECK(t.weight(3, 9, 0) == 255);
+    CHECK(t.weight(3, 9, 1) == 0);
+    CHECK(t.weight(30, 9, 0) == 0);
+    CHECK(t.weight(30, 9, 1) == 255);
+    CHECK(t.weight(30, 9, 4) == 0);  // the second plane is there, empty
+
+    auto ah = assets.load_sync<asset::Terrain>(assets.find(asset::parse_guid("7e7a0000-0000-4000-8000-0000000000a3").value()));
+    REQUIRE(ah);
+    const asset::TerrainView a = asset::TerrainView::read(assets.resolve(ah.value())).value();
+    REQUIRE(a.layers.size() == 3);
+    CHECK(a.splat_resolution() == 33);
+    // The flat west: layer 0 only. The slope: layer 1. The top of the ramp: layers 1 and 2 share it.
+    CHECK(a.weight(4, 16, 0) == 255);
+    CHECK(a.weight(20, 16, 1) == 255);
+    CHECK(a.weight(20, 16, 0) == 0);
+    CHECK(a.weight(30, 16, 2) > 100);
+    CHECK(a.weight(30, 16, 1) > 100);
+    CHECK(a.weight(30, 16, 0) == 0);
+}
+
+TEST_CASE("terrain: splat layer mistakes are cook errors") {
+    const std::string mat = R"({ "format": "mce-material", "version": 1, "guid": "7e7a0000-0000-4000-8000-0000000000b1" })";
+    const std::string base = R"("resolution": 33, "size": [10, 10], "height_range": [0, 1], )";
+    const std::string bad[] = {
+        doc(base + R"("splat": "AAAA")"),                                                                     // splat without layers
+        doc(base + R"("layers": [])"),                                                                        // no layers
+        doc(base + R"("layers": [{},{},{},{},{},{},{},{},{}])"),                                              // nine layers
+        doc(base + R"("layers": [{ "tile": 0 }])"),                                                           // zero tile
+        doc(base + R"("layers": [{ "tiles": 2 }])"),                                                          // a typo'd key
+        doc(base + R"("layers": [{ "auto": { "slope": [10, 120] } }])"),                                      // slope past 90
+        doc(base + R"("layers": [{}], "splat_resolution": 65)"),                                             // finer than the heights
+        doc(base + R"("layers": [{}, {}], "splat": "AAAA")"),                                                // wrong byte count
+        doc(base + R"("layers": [{ "material": "guid:7e7a0000-0000-4000-8000-0000000000ff" }])"),            // not in the project
+        doc(base + R"("layers": [{ "material": "guid:)" + std::string(kGuid) + R"(" }])"),                   // not a material
+    };
+    for (const std::string& text : bad) {
+        const std::string root = fresh_dir("terrain_layers_bad");
+        write_file(root + "/assets/m.mcmat", mat);
+        write_file(root + "/assets/t.mcterrain", text);
+        cook::CookService svc;
+        const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+        INFO(text);
+        INFO(diags_of(r));
+        CHECK_FALSE(r.ok());
+        CHECK(diags_of(r).find("t.mcterrain") != std::string::npos);
+    }
+}

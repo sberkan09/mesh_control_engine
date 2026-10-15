@@ -1,5 +1,5 @@
 #pragma once
-// mce_script (spike, ADR-0040): Luau scripts as ECS systems.
+// mce_script (spike, ADR-0041): Luau scripts as ECS systems.
 //
 // A ScriptHost owns one sandboxed Luau VM. Each script is compiled and its top level runs once in
 // its own environment; it must define `function update()`. install() registers one system in a
@@ -8,7 +8,7 @@
 // The rule that keeps determinism, saves and replays intact: scripts hold no state between ticks.
 // Everything a script remembers lives in reflected components it reads and writes through the
 // `mce` table, so World::state_hash covers it. Globals are read-only after the top level ran
-// (writes fail); state in upvalues is not caught yet (ADR-0040, open question 2).
+// (writes fail); state in upvalues is not caught yet (ADR-0041, open question 2).
 //
 // The script API (global `mce`, read-only):
 //   mce.each("CompA", "CompB", ..., fn)   calls fn(e) for every entity with all of them, in table

@@ -201,6 +201,18 @@ const LocalTransform* ReplicationClient::latest_transform(u32 net_id) const {
     return m ? &m->latest : nullptr;
 }
 
+f64 ReplicationClient::render_tick() const {
+    if (interpolate_ && has_render_) return render_s_ * interp_.tick_rate;
+    return static_cast<f64>(last_tick_);
+}
+
+f64 ReplicationClient::drawn_tick(u32 net_id) const {
+    const Mirror* m = entities_.find(net_id);
+    if (!m) return 0.0;
+    if (!interpolate_ || m->predicted || m->count == 0) return static_cast<f64>(last_tick_);
+    return m->drawn_tick;
+}
+
 Entity ReplicationClient::find(u32 net_id) const {
     const Mirror* m = entities_.find(net_id);
     return m ? m->entity : Entity::null;
@@ -270,8 +282,10 @@ void ReplicationClient::sample_arrival(u32 tick) {
     }
 }
 
-LocalTransform ReplicationClient::sample(const Mirror& m, f64 render_tick, InterpolationStats& stats) const {
+LocalTransform ReplicationClient::sample(const Mirror& m, f64 render_tick, InterpolationStats& stats,
+                                         f64& drawn_tick) const {
     const Sample& newest = m.at(m.count - 1);
+    drawn_tick = render_tick;
     if (render_tick >= static_cast<f64>(newest.tick)) {
         const f64 over = render_tick - static_cast<f64>(newest.tick);
         if (over <= 0.0) {
@@ -290,11 +304,13 @@ LocalTransform ReplicationClient::sample(const Mirror& m, f64 render_tick, Inter
             }
         }
         ++stats.held;
+        drawn_tick = static_cast<f64>(newest.tick);
         return newest.transform;
     }
     const Sample& oldest = m.at(0);
     if (render_tick <= static_cast<f64>(oldest.tick)) {
         ++stats.held;
+        drawn_tick = static_cast<f64>(oldest.tick);
         return oldest.transform;
     }
     u32 i = m.count - 1;
@@ -344,7 +360,7 @@ InterpolationStats ReplicationClient::update(Commands& cmd, const World& world, 
             continue;
         }
         if (m.count == 0 || !world.alive(m.entity)) continue;
-        cmd.set(m.entity, sample(m, render_tick, stats_));
+        cmd.set(m.entity, sample(m, render_tick, stats_, m.drawn_tick));
     }
     return stats_;
 }

@@ -24,6 +24,8 @@
 // Terrain3D (M-TERRAIN): the extract keeps each terrain's LOD tree and uploads a node's mesh into the
 // store the first time it is drawn (under MeshStore::allocate_key keys), releasing nodes not drawn for
 // a while; this needs the store given to init() as non-const (the player's and the editor's are).
+// A terrain with splat layers (M-TERRAIN 2) also packs its layers' maps into texture arrays and its
+// weights into a texture, which needs set_texture_store(); without one it draws with Terrain3D.material.
 //
 // Animator poses live in the extract until its next extract() call, so record the scene first.
 //
@@ -72,6 +74,8 @@ public:
     void init(const render::MeshStore& meshes, asset::AssetSystem* assets);
     // As above, and terrains may upload their node meshes into `meshes`.
     void init(render::MeshStore& meshes, asset::AssetSystem* assets);
+    // The store terrains upload their splat-layer arrays into (renderer.textures(); null: none).
+    void set_texture_store(render::TextureStore* textures) { textures_ = textures; }
     void shutdown();
     // Forgets every cached mesh / texture binding and transform (after remounting a different pack).
     void reset(asset::AssetSystem* assets);
@@ -152,11 +156,15 @@ private:
     void release_handles();
     void release_terrains();
     void extract_terrains(World& world, render::Scene3D& scene);
+    struct TerrainEntry;
+    void release_terrain(TerrainEntry& t);
+    void build_terrain_shading(TerrainEntry& t, const asset::TerrainView& view);
 
     render::QualitySettings quality_{.shadow_cascades = render::kMaxCascades};
     f32 frame_dt_ = 1.0f / 60.0f;
     const render::MeshStore* meshes_ = nullptr;
     render::MeshStore* writable_ = nullptr;  // the same store, when init() got it non-const
+    render::TextureStore* textures_ = nullptr;
     asset::AssetSystem* assets_ = nullptr;
     Array<MeshEntry> mesh_entries_;
     Array<TextureEntry> texture_entries_;
@@ -204,6 +212,7 @@ private:
         math::mat4 world_prev = math::mat4::identity();  // last drawn frame's world (TAA velocity)
         math::mat4 world_cur = math::mat4::identity();
         bool drawn = false;
+        render::TerrainShading shading;  // layer_count 0: drawn with Terrain3D.material
     };
     Array<mem::UniquePtr<TerrainEntry>> terrains_;
     Array<u32> terrain_nodes_;  // scratch: this frame's selection

@@ -260,6 +260,14 @@ struct Environment3D {
     f32 ssao_radius = 0.6f;     // world meters the samples reach
     f32 ssao_intensity = 1.0f;
     f32 ssao_power = 1.5f;      // contrast of the occlusion
+    // M-VISUAL2 1. Screen-space reflections: smooth surfaces mirror what the screen shows, over the
+    // probes and the sky. r.ssr 0 turns them off for every scene; the Low quality tier drops them.
+    u32 ssr = 0;
+    f32 ssr_max_distance = 8.0f;   // world meters a reflection ray travels
+    f32 ssr_thickness = 0.25f;     // meters behind a surface a ray may pass and still hit it
+    f32 ssr_max_roughness = 0.5f;  // rougher surfaces keep the probes only
+    f32 ssr_roughness_fade = 0.2f; // roughness range below the maximum over which reflections fade
+    f32 ssr_intensity = 1.0f;
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -284,7 +292,10 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (motion_blur_intensity, Range{0, 2}),
               (color_grade, Help{"256x16 strip LUT (16^3), imported srgb false; empty = ungraded"}),
               (ssao, Help{"1: screen-space ambient occlusion (darkens the ambient in creases)"}), (ssao_radius, Range{0.05f, 5}),
-              (ssao_intensity, Range{0, 4}), (ssao_power, Range{0.25f, 8}))
+              (ssao_intensity, Range{0, 4}), (ssao_power, Range{0.25f, 8}),
+              (ssr, Help{"1: screen-space reflections on smooth surfaces (over the probes and the sky)"}),
+              (ssr_max_distance, Range{0.1f, 200}), (ssr_thickness, Range{0.01f, 5}), (ssr_max_roughness, Range{0, 1}),
+              (ssr_roughness_fade, Range{0.01f, 1}), (ssr_intensity, Range{0, 4}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 

@@ -1,4 +1,4 @@
-// Headless Luau scripting spike (ADR-0040) for the determinism harness (FR-RUN-040).
+// Headless Luau scripting spike (ADR-0041) for the determinism harness (FR-RUN-040).
 //
 // N entities bounce inside a box; one system integrates and reflects them. `-mode lua` runs the
 // system as a Luau script through mce_script, `-mode cpp` as the same arithmetic in C++. Luau's

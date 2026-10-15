@@ -10,6 +10,7 @@
 mce_add_library(mce_net UMBRELLA
     SOURCES
         src/host.cpp
+        src/lag_compensation.cpp
         src/net_stats.cpp
         src/prediction.cpp
         src/replication.cpp

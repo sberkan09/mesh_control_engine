@@ -330,7 +330,7 @@ stage_determinism() {
         stage_script_determinism
 }
 
-# ADR-0040 spike: the Luau system hashes the same across runs and Debug/Release, and the same as
+# ADR-0041 spike: the Luau system hashes the same across runs and Debug/Release, and the same as
 # its C++ twin (`-mode cpp`), so the VM adds no float drift of its own.
 stage_script_determinism() {
     cmake --build --preset linux-gcc-debug --target sample_script_headless &&

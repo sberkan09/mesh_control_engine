@@ -12,6 +12,7 @@
 #include "mce/editor/console_model.h"
 #include "mce/editor/editor_session.h"
 #include "mce/editor/gizmo.h"
+#include "mce/editor/animgraph_editor.h"
 #include "mce/editor/tilemap_editor.h"
 #include "mce/editor/timeline_editor.h"
 #include "mce/editor/ui_document_editor.h"
@@ -106,6 +107,7 @@ public:
     EditorCamera2D& camera() { return camera_; }
     OrbitCamera& orbit() { return orbit_; }
     OrbitColliders& orbit_colliders() { return orbit_colliders_; }
+    NavMeshPreview& nav_preview() { return nav_preview_; }
     ViewSettings& view() { return view_; }
     TilemapEditor& tilemap() { return tilemap_; }
     // The UI document the UI Document panel edits (open_ui_document: a double click in Assets).
@@ -116,6 +118,9 @@ public:
     TimelineEditor& timeline() { return timeline_; }
     TimelinePreview& timeline_preview() { return timeline_preview_; }
     void open_timeline(asset::Guid guid);
+    // The animation graph the Animation panel edits (open_anim_graph: a double click in Assets).
+    AnimGraphEditor& anim_graph() { return anim_graph_; }
+    void open_anim_graph(asset::Guid guid);
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
@@ -182,11 +187,13 @@ private:
     EditorCamera2D camera_;
     OrbitCamera orbit_;
     OrbitColliders orbit_colliders_;
+    NavMeshPreview nav_preview_;
     ViewSettings view_;
     TilemapEditor tilemap_;
     UiDocumentEditor ui_document_;
     TimelineEditor timeline_;
     TimelinePreview timeline_preview_;
+    AnimGraphEditor anim_graph_;
     PerfMonitor perf_;
     FrameSample perf_pending_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;

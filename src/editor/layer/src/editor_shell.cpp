@@ -200,6 +200,8 @@ bool EditorShell::open_project(StringView root) {
     timeline_preview_.stop(session_);
     if (timeline_.dirty()) (void)timeline_.save(session_);
     timeline_.close();
+    if (anim_graph_.dirty()) (void)anim_graph_.save(session_);
+    anim_graph_.close();
     if (Result<void> r = session_.open_project(root); !r) {
         FixedString<512> msg;
         format_error(r.error(), msg);
@@ -230,6 +232,16 @@ void EditorShell::open_timeline(asset::Guid guid) {
     }
     if (IEditorPanel* p = find_panel("Timeline")) p->open = true;
     focus_panel("Timeline");
+}
+
+void EditorShell::open_anim_graph(asset::Guid guid) {
+    if (anim_graph_.dirty() && guid != anim_graph_.guid()) (void)anim_graph_.save(session_);
+    if (!anim_graph_.open(session_, guid)) {
+        MCE_LOG_ERROR("editor: cannot open the animation graph: {}", anim_graph_.last_error());
+        return;
+    }
+    if (IEditorPanel* p = find_panel("Animation")) p->open = true;
+    focus_panel("Animation");
 }
 
 bool EditorShell::open_scene(StringView path) {
@@ -637,6 +649,14 @@ void EditorShell::draw_menu_bar() {
                 focus_panel("Console");
             }
         }
+        if (ImGui::MenuItem("Bake navmesh", nullptr, false, proj && !playing())) {
+            if (Result<physics::NavBakeStats3D> r = session_.bake_navmesh(); !r) {
+                FixedString<512> why;
+                format_error(r.error(), why);
+                MCE_LOG_ERROR("editor: navmesh bake failed: {}", why.view());
+                focus_panel("Console");
+            }
+        }
         if (ImGui::MenuItem("Play in editor", "F5", false, proj && !playing())) play_in_editor();
         if (ImGui::MenuItem("Run in player", "Ctrl+F5", false, proj && !player_running())) play();
         ImGui::Separator();
@@ -740,6 +760,7 @@ void EditorShell::draw_dockspace() {
         ImGui::DockBuilderDockWindow("Assets", bottom);
         ImGui::DockBuilderDockWindow("Tilemap", right);
         ImGui::DockBuilderDockWindow("Timeline", bottom);
+        ImGui::DockBuilderDockWindow("Animation", bottom);
         ImGui::DockBuilderFinish(id);
         for (auto& p : panels_) p->open = true;
     }

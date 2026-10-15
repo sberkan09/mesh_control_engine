@@ -170,6 +170,22 @@ struct AmbientOcclusion {
     f32 bias = 0.02f;      // ignores occluders this close to the tangent plane (cosine threshold)
 };
 
+// Screen-space reflections (M-VISUAL2 1): a ray along each pixel's mirror direction marched through
+// the SSAO prepass's half-resolution view depth; a hit reads last frame's lit HDR color there
+// (reprojected), so the first frame after it turns on, a resize or a new Forward3D reflects nothing yet.
+// The main pass blends the hit over the specular ambient (sky, IBL and reflection probes) by its
+// confidence and the surface's roughness; misses keep the probes. Off draws the frame without it.
+struct ScreenSpaceReflections {
+    bool enabled = false;
+    f32 max_distance = 8.0f;     // world meters a ray travels
+    f32 thickness = 0.25f;       // how far behind the depth buffer a ray may pass and still hit (meters)
+    u32 steps = 32;              // march steps before the 4-step binary refinement (4..128)
+    f32 max_roughness = 0.5f;    // rougher surfaces keep the probes only
+    f32 roughness_fade = 0.2f;   // the reflection fades out over this roughness range below max_roughness
+    f32 edge_fade = 0.1f;        // fraction of the screen at its borders over which hits fade out
+    f32 intensity = 1.0f;        // scales the reflected light
+};
+
 // Cascaded shadow maps for the sun (FR-R3D-040).
 struct ShadowSettings {
     u32 cascades = 3;                          // 1..kMaxCascades
@@ -279,6 +295,34 @@ struct MaterialOverride {
     u32 emissive_key = ~0u;
 };
 
+// A splat-layered terrain's look (M-TERRAIN 2): up to kMaxLayers materials blended by a weight map.
+// Forward3D draws an instance carrying one with the terrain shader: each layer's maps come from one
+// layer of the texture arrays below (TextureStore keys; ~0u = no layer has that map), tiled in the
+// terrain's own xz metres, and the weights from the 2-layer RGBA8 `splat_key` array spanning the
+// terrain's extent. Kit3DExtract builds it from a .mcterrain's layers (render::compose_layer_array).
+struct TerrainShading {
+    static constexpr u32 kMaxLayers = 8;
+    struct Layer {
+        math::vec4 base_color{1.0f, 1.0f, 1.0f, 1.0f};  // the material's (multiplies its albedo map)
+        f32 roughness = 1.0f;
+        f32 metallic = 0.0f;
+        f32 tile = 4.0f;             // metres per repeat
+        f32 height_strength = 1.0f;  // height blend: how far its albedo brightness lifts it
+        bool triplanar = false;
+        bool albedo_map = false;     // the arrays below hold this layer's map
+        bool normal_map = false;
+        bool orm_map = false;
+        bool occlusion_in_orm = false;
+    };
+    Layer layers[kMaxLayers];
+    u32 layer_count = 0;
+    math::vec2 size{1.0f, 1.0f};  // the terrain's extent in metres along x and z
+    u32 splat_resolution = 0;     // weight samples per side
+    u32 albedo_key = ~0u, normal_key = ~0u, orm_key = ~0u, splat_key = ~0u;
+    bool triplanar = true;     // the quality tier lets triplanar layers project along x and z
+    bool height_blend = true;  // the quality tier blends by height (else by weight alone)
+};
+
 struct MeshInstance {
     u32 mesh = ~0u;                          // MeshStore key
     math::mat4 world = math::mat4::identity();
@@ -305,6 +349,10 @@ struct MeshInstance {
     // PostFx::taa or PostFx::motion_blur is on.
     const math::mat4* prev_world = nullptr;
     Span<const math::mat4> prev_pose;
+    // A terrain node (M-TERRAIN 2): drawn with the splat-layer shader instead of its material; `world`
+    // must be the terrain's own transform (its space is what the layers tile in). Kept alive by the
+    // caller until the scene is drawn.
+    const TerrainShading* terrain = nullptr;
 };
 
 // The material a submesh of `inst` draws with, and its map keys (the override's when it has one).
@@ -507,6 +555,7 @@ public:
     void set_sky(const Sky& sky) { sky_ = sky; }
     void set_post(const PostFx& post) { post_ = post; }
     void set_ambient_occlusion(const AmbientOcclusion& ao) { ao_ = ao; }
+    void set_reflections(const ScreenSpaceReflections& ssr) { ssr_ = ssr; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -556,6 +605,7 @@ public:
     const Sky& sky() const { return sky_; }
     const PostFx& post() const { return post_; }
     const AmbientOcclusion& ambient_occlusion() const { return ao_; }
+    const ScreenSpaceReflections& reflections() const { return ssr_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -614,6 +664,7 @@ private:
     Sky sky_;
     PostFx post_;
     AmbientOcclusion ao_;
+    ScreenSpaceReflections ssr_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;

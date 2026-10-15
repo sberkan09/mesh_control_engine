@@ -1,4 +1,4 @@
-# ADR-0040: Luau scripting spike (`mce_script`)
+# ADR-0041: Luau scripting spike (`mce_script`)
 
 **Status:** Proposed (2026-10-15), spike built. The user chose "spike first" on 2026-10-15; whether a M-SCRIPT
 milestone follows is the user's decision after reading the results below. **Requirements:** touches N2 (no

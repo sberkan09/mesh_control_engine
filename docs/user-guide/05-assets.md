@@ -157,6 +157,25 @@ columns; or leave it out and give `fill` (one height in metres) for a flat start
   "resolution": 129, "chunk": 32, "size": [128, 128], "height_range": [0, 32], "fill": 0 }
 ```
 
+`layers` paints the terrain with up to 8 materials. Each layer names a `.mcmat` (its base color map,
+normal map, roughness/metallic map and factors), a `tile` in metres per repeat (default 4), `triplanar`
+(also project along x and z on steep ground, so cliffs are not smeared) and `height_strength` (how far
+its albedo's brightness lifts it over its neighbours where layers meet). `splat` is the weight map:
+base64 of `splat_resolution²` samples (default `min(resolution, 1025)`), each one u8 weight per layer.
+Without `splat`, each layer's `auto` rule places it by `height` (metres) and `slope` (degrees), and
+ground no rule claims goes to layer 0:
+
+```json
+"layers": [
+  { "material": "guid:<grass>", "tile": 4, "auto": { "slope": [0, 25] } },
+  { "material": "guid:<rock>", "tile": 6, "triplanar": true, "auto": { "slope": [30, 90] } },
+  { "material": "guid:<snow>", "auto": { "height": [40, 60] } }
+]
+```
+
+Give every layer's maps of one kind the same size and import settings: each kind is packed into one
+texture array, and a map that differs from the first layer's is left out with a warning.
+
 **Particle preset** (`.mcpart`, chapter 7):
 
 ```json

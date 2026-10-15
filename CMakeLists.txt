@@ -29,7 +29,7 @@ option(MCE_BUILD_PROJECTS  "Build every projects/<name>/ game (off for an SDK-on
 option(MCE_TEMPLATE_PROBE  "Stamp the project template into the build tree and build it (tests the generator)" ON)
 option(MCE_PHYSICS_ORACLE  "Link Box2D v3 into test_physics2d as the solver oracle (ADR-0016)" ON)
 option(MCE_WITH_NET        "Build the optional networking module mce_net (ENet; a game opts in, ADR-0035)" ON)
-option(MCE_WITH_SCRIPT     "Build the Luau scripting spike mce_script (ADR-0040; nothing links it but its tests)" ON)
+option(MCE_WITH_SCRIPT     "Build the Luau scripting spike mce_script (ADR-0041; nothing links it but its tests)" ON)
 # ADR-0038: the SDL3 GPU backend (Vulkan on Linux/Android, Metal on iOS). Built on Linux so every
 # local_ci.sh run exercises it through lavapipe; selected at run time with MCE_RHI=sdlgpu.
 if(APPLE AND NOT IOS)
@@ -133,7 +133,7 @@ if(MCE_WITH_NET)
     add_subdirectory(src/engine/net)
 endif()
 if(MCE_WITH_SCRIPT)
-    # Spike (ADR-0040): not in MCE_ENGINE_LIBS; only its test and samples/script_headless link it.
+    # Spike (ADR-0041): not in MCE_ENGINE_LIBS; only its test and samples/script_headless link it.
     add_subdirectory(src/engine/script)
 endif()
 if(NOT CMAKE_CROSSCOMPILING)

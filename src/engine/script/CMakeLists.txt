@@ -1,4 +1,4 @@
-# mce_script (spike, ADR-0040): Luau scripts as ECS systems over reflected components.
+# mce_script (spike, ADR-0041): Luau scripts as ECS systems over reflected components.
 #
 # Opt-in like mce_net: not in MCE_ENGINE_LIBS, so libmce_engine never contains it. Only its test
 # (tests/script) and samples/script_headless link it while the spike is evaluated. Luau's headers

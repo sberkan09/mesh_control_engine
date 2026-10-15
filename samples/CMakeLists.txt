@@ -49,7 +49,7 @@ add_subdirectory(02_boids)
 add_subdirectory(physics2d_headless)
 add_subdirectory(physics3d_headless)
 if(MCE_WITH_SCRIPT)
-    add_subdirectory(script_headless)  # ADR-0040 spike
+    add_subdirectory(script_headless)  # ADR-0041 spike
 endif()
 add_subdirectory(sprites_2d)
 add_subdirectory(ui_gallery)

@@ -1,4 +1,4 @@
-// mce_script (spike, ADR-0040): the Luau host. See mce/script/script.h for the contract.
+// mce_script (spike, ADR-0041): the Luau host. See mce/script/script.h for the contract.
 //
 // Every lua_CFunction here may longjmp out (LUA_USE_LONGJMP): no object with a destructor lives
 // across a call that can raise (luaL_check*, luaL_error, lua_call).
