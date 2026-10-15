@@ -33,7 +33,10 @@ Runtime (`src/engine/asset/include/mce/asset/`)
   (4 u8 joint indices, 4 unorm8 weights summing to 255) and one skin index per submesh (-1 = rigid). Joints
   are ordinary nodes, so the node clips animate skeletons. A mesh without the flag is exactly the static
   layout (minor 0). `MeshView` exposes `skins`, `skin_vertices`, `submesh_skins` and `skinned()`, and
-  validates the skin section's indices.
+  validates the skin section's indices. `MeshFlags::Ragdoll` (minor `MESH_MINOR_RAGDOLL`, 3; needs `Skinned`)
+  marks joints that carry ragdoll overrides in fields that were reserved (`ragdoll_flags` of `MeshRagdoll`
+  Exclude / Include / Radius / Swing / Twist / Mass, `ragdoll_radius`, `ragdoll_swing`, `ragdoll_twist`,
+  `ragdoll_mass`); without the flag they must be zero.
 - `guid.h`: `Guid` (128-bit UUIDv4), `to_string`, `to_hex`, `parse_guid`.
 - `handle.h`: asset type tags (`Texture`, `Mesh`, `Material`, `Shader`, `Sfx`, `Font`, `Atlas`, `Scene`,
   `InputMap`, `Prefab`, `Tilemap`, `Sequence`, `ParticlePreset`, `SpriteSheet`), `AssetHandle<T>` (generational index),
@@ -74,7 +77,8 @@ Cook (`src/engine/asset/cook/include/mce/cook/`)
   `ChunkType::AnimGraph`, `AnimGraphView`), particles (`.mcpart`), sequence (`.mcseq`), input map (`.mcinput` → `ChunkType::InputMap`, the
   `mce/input/input_map.h` chunk, validated with `decode_input_map` at cook), shader (`.vert/.frag/.comp.glsl`, glslang). The glTF importer
   also imports skins (`JOINTS_0` / `WEIGHTS_0`, 4 influences, up to 256 joints per skin, inverse bind
-  matrices); the sidecar setting `"skinning": false` imports a skinned mesh as a static one.
+  matrices); the sidecar setting `"skinning": false` imports a skinned mesh as a static one, and `"ragdoll"`
+  writes per-bone ragdoll overrides into the joints (`MeshFlags::Ragdoll`, `MeshRagdoll` flags, chunk minor 3).
 - `mod_project.h`: mod projects (ADR-0034). `is_mod_project`, `read_mod_project` (`mod.json`), and
   `read_base_assets` (GUID to type from the manifests of the game packs a mod builds on). `CookService::cook`
   uses them: references into a base resolve by type without a dependency edge, an override (a base GUID in the

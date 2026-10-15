@@ -20,6 +20,7 @@ inline constexpr u8 SCENE_VERSION = 1;
 inline constexpr u8 MESH_VERSION = 1;
 inline constexpr u8 MESH_MINOR_SKIN = 1;  // minor of a chunk with MeshFlags::Skinned
 inline constexpr u8 MESH_MINOR_LODS = 2;  // minor of a chunk with MeshFlags::Lods (skinned or not)
+inline constexpr u8 MESH_MINOR_RAGDOLL = 3;  // minor of a chunk with MeshFlags::Ragdoll
 inline constexpr u8 TILEMAP_VERSION = 1;  // CHNK_TILE: one tile layer (v0.5, FR-R2D-115)
 inline constexpr u8 PARTICLE_VERSION = 1;  // CHNK_PART: one particle emitter preset (v0.5, FR-R2D-070)
 inline constexpr u8 SEQUENCE_VERSION = 1;  // CHNK_SEQ: one action-list sequence (v0.5, FR-ENT-100)
@@ -757,6 +758,7 @@ enum : u32 {
     Index32 = 1u << 0,
     Skinned = 1u << 1,  // a MeshSkinHeader at MeshHeader::skin_offset (chunk minor 1)
     Lods = 1u << 2,     // a MeshLod table after the strings (chunk minor 2)
+    Ragdoll = 1u << 3,  // MeshJoint's ragdoll fields hold the sidecar's per-bone overrides (chunk minor 3)
 };
 }
 
@@ -864,13 +866,29 @@ struct MeshSkin {
 };
 static_assert(sizeof(MeshSkin) == 16);
 
+// Per-bone ragdoll overrides (MeshFlags::Ragdoll, M-GAMEPLAY3D step 3): which fields of a
+// MeshJoint's ragdoll_* the sidecar set. Without the flag every ragdoll_* field is zero.
+namespace MeshRagdoll {
+enum : u32 {
+    Exclude = 1u << 0,  // no body: the bone rides with its parent's
+    Include = 1u << 1,  // a body even when shorter than the ragdoll's minimum bone length
+    Radius = 1u << 2,   // ragdoll_radius (metres) replaces the automatic radius
+    Swing = 1u << 3,    // ragdoll_swing (degrees): how far the bone swings from its parent
+    Twist = 1u << 4,    // ragdoll_twist (degrees): how far it twists either way
+    Mass = 1u << 5,     // ragdoll_mass: a weight on the bone's share of the mass
+};
+}
+
 struct MeshJoint {
     u32 node;               // the node whose model-space matrix drives the joint
-    u32 reserved[3];
+    u32 ragdoll_flags;      // MeshRagdoll
+    f32 ragdoll_radius;
+    f32 ragdoll_swing;
     f32 inverse_bind[16];   // column-major: bind space -> joint space
     f32 bounds_min[3];      // bind-space AABB of the vertices this joint influences; min > max = none
     f32 bounds_max[3];
-    u32 reserved2[2];
+    f32 ragdoll_twist;
+    f32 ragdoll_mass;
 };
 static_assert(sizeof(MeshJoint) == 112);
 
