@@ -5,6 +5,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Multiplayer test harness (SBA-82, M-NET2 step 1): `net::SimNetwork` is an in-memory network on a virtual clock
+  with per-link latency, jitter and loss from a seed, so a server and several clients in one process give the same
+  hash on every run and build. `net::Transport` is the interface both it and `net::Host` implement, so game code
+  runs over either. `Host::set_conditions` plays a real build over a simulated bad network.
+  `sample_net_headless -sim 1 -clients N` is the headless multi-client runner, and `local_ci.sh`'s determinism stage
+  runs it. `net::NetStatsMeter` adds a `NET` line (RTT, loss, bandwidth, drops) to the player's stats overlay (F3)
+  through the new `DevStatsLines` world resource. User guide 20.6.
 - Screens that open and close themselves, M-UI-DATA demo (SBA-38): `kit::UiFlow` shows, hides and holds a
   `UiScreen` on input actions (`show_on`, `hide_on`, `load_on` a scene, `pause`), and a paused screen holds the
   world (`World::set_held`: fixed-step systems stop, the tick count goes on, the hash replays). Undertow gets a
