@@ -57,6 +57,11 @@ public:
 // Returns true when anything changed.
 bool draw_inspector(DrawCtx& ui, EditorScene& scene, EntityId id);
 
+// Every authored field of the reflected struct `type` at `value`, as the inspector draws a
+// component's (no entity behind it: the UI document panel's anchors, styles and layouts). True when
+// a widget changed the value.
+bool draw_fields(DrawCtx& ui, const refl::TypeRecord& type, void* value);
+
 // Every reflected component type `e` does not carry yet, sorted by name.
 void addable_components(const DocEntity& e, Array<const refl::TypeRecord*>& out);
 

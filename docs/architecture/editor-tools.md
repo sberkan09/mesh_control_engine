@@ -289,6 +289,8 @@ struct ViewportPanel final : IEditorPanel { /* ... */ };
 
 **Tilemap authoring panel (v0.5, FR-EDT-121):** paint/erase on a 2D grid over the viewport (tile picker from the atlas sprite set, rect-fill via the FR-EDT-120 selection), writes the `.mctilemap` document through the same mutation funnel as everything else (§2.3). The re-bake loop: panel edit → document save → `CookService` request → tilemap chunk re-bake → hot-reload swap in the preview world (< 1 s, FR-AST-090) — the panel never builds GPU geometry itself; rhi-renderer consumes only the baked chunk (rhi-renderer §3.4 tilemap note).
 
+**UI document panel (M-UI-DATA step 6):** `UiDocumentEditor` (editor core, headless) holds one `.mcui` as `ui::DocumentData`. Structural edits (add, remove, move, kind change) re-order the flat depth-first widget list and remap parent, nav and default-focus indices. Every edit is written by `cook::write_ui_document`, read back whole by `cook::read_ui_document` and kept only when it reads, the same path as the MCP `ui_*` tools. `save()` writes that canonical text through `EditorSession::write_asset` (hot reload). Undo keeps canonical texts, one step per run of edits between saves. `draw_ui_inspector` draws a widget through the `DrawCtx` seam; anchors, styles and layouts go through the reflected `Ui*` structs (`draw_fields`). `UiDocumentPreview` builds a `ui::Document` the way the player's `UiScreens` does (the theme applied, the theme's fonts) with the preview renderer's built-in skin. It submits into a `Screen2D` batch at the chosen size and rebuilds when the document, the mount or the hot-reload count moves. The ImGui panel (`ui_panel.cpp`) is a thin adapter.
+
 ### 2.8 Play session (v0.5; MVP ships run-in-player)
 
 ```cpp

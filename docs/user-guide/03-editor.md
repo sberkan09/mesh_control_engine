@@ -33,6 +33,7 @@ SDK); without `-module` it knows engine components only.
 | **Cook** | the last cook's result and every diagnostic as `file:line:col`; Cook and Cook + Pack buttons |
 | **Play** | play-in-editor controls, the tick count and state hash, the live values of the selected entity, and the event-flow monitor |
 | **Tilemap** | gives the selected entity a tilemap layer, picks the brush from a tileset, toggles the paint tool |
+| **UI Document** | a `.mcui` UI document's widget tree, the selected widget's fields and a live preview at phone, tablet and desktop sizes (chapter 12, "Editing documents in the editor"). Opens from the View menu or a double click on a `.mcui` in Assets |
 | **Console** | the engine log and a command line for convars and confuncs |
 | **Stats** | editor frame rate, sim ticks, viewport size |
 | **Profiler** | editor frame-time history against the 16.6 ms budget, per-stage times, per-system ECS timings |
@@ -116,7 +117,8 @@ selection; the Inspector edits the first selected entity.
   `AssetRef` field in the Inspector to set the reference.
 - **Drag a prefab** into the Viewport to create an instance; double-click or "Open prefab" to edit
   the prefab asset itself.
-- **Double-click a scene** to open it (you are asked about unsaved changes).
+- **Double-click a scene** to open it (you are asked about unsaved changes). A UI document
+  (`.mcui`) opens in the UI Document panel.
 - **Rename / move (F2)** rewrites the path in the registry and moves the sidecar with the file, so
   every reference keeps resolving. Dropping an asset on a folder moves it.
 - **New files** you copy into `assets/` by hand need a sidecar before they cook. The editor's

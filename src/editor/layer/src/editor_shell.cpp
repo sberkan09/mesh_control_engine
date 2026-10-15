@@ -188,6 +188,8 @@ void EditorShell::request_quit() {
 }
 
 bool EditorShell::open_project(StringView root) {
+    if (ui_document_.dirty()) (void)ui_document_.save(session_);
+    ui_document_.close();
     if (Result<void> r = session_.open_project(root); !r) {
         FixedString<512> msg;
         format_error(r.error(), msg);
@@ -197,6 +199,16 @@ bool EditorShell::open_project(StringView root) {
     if (!session_.project().last_report().ok()) focus_panel("Cook");
     frame_scene();
     return true;
+}
+
+void EditorShell::open_ui_document(asset::Guid guid) {
+    if (ui_document_.dirty() && guid != ui_document_.guid()) (void)ui_document_.save(session_);
+    if (!ui_document_.open(session_, guid)) {
+        MCE_LOG_ERROR("editor: cannot open the UI document: {}", ui_document_.last_error());
+        return;
+    }
+    if (IEditorPanel* p = find_panel("UI Document")) p->open = true;
+    focus_panel("UI Document");
 }
 
 bool EditorShell::open_scene(StringView path) {
@@ -696,6 +708,7 @@ void EditorShell::draw_dockspace() {
         ImGui::DockBuilderSplitNode(top, ImGuiDir_Right, 0.24f, &right, &center);
         ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.22f, &left, &mid);
         ImGui::DockBuilderDockWindow("Viewport", mid);
+        ImGui::DockBuilderDockWindow("UI Document", mid);
         ImGui::DockBuilderDockWindow("Hierarchy", left);
         ImGui::DockBuilderDockWindow("Inspector", right);
         ImGui::DockBuilderDockWindow("Console", bottom);

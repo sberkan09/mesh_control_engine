@@ -13,6 +13,7 @@
 #include "mce/editor/editor_session.h"
 #include "mce/editor/gizmo.h"
 #include "mce/editor/tilemap_editor.h"
+#include "mce/editor/ui_document_editor.h"
 #include "mce/editor/orbit_camera.h"
 #include "mce/editor/perf_monitor.h"
 #include "mce/editor/preview_renderer.h"
@@ -106,6 +107,9 @@ public:
     OrbitColliders& orbit_colliders() { return orbit_colliders_; }
     ViewSettings& view() { return view_; }
     TilemapEditor& tilemap() { return tilemap_; }
+    // The UI document the UI Document panel edits (open_ui_document: a double click in Assets).
+    UiDocumentEditor& ui_document() { return ui_document_; }
+    void open_ui_document(asset::Guid guid);
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
@@ -174,6 +178,7 @@ private:
     OrbitColliders orbit_colliders_;
     ViewSettings view_;
     TilemapEditor tilemap_;
+    UiDocumentEditor ui_document_;
     PerfMonitor perf_;
     FrameSample perf_pending_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;
