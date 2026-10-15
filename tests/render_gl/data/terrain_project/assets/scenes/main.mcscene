@@ -1,0 +1,9 @@
+{ "format": "mce-scene", "version": 1, "guid": "7e7a0000-0000-4000-8000-00000000d003", "name": "main",
+  "entities": [
+    { "name": "Environment", "id": 1, "components": { "Environment3D": { "sun_direction": [-0.6, -0.5, -0.3], "sun_intensity": 3.0,
+        "fog_density": 0.006, "shadow_cascades": 3, "shadow_distance": 80 } } },
+    { "name": "Camera", "id": 2, "components": { "Camera3DComponent": { "fov_deg": 60, "near_z": 0.2, "far_z": 600 },
+        "LocalTransform": { "position": [-58, 24, 58], "rotation": [-0.1176, -0.3753, -0.0482, 0.9181] } } },
+    { "name": "Terrain", "id": 3, "components": { "LocalTransform": {}, "Terrain3D": { "terrain": "guid:7e7a0000-0000-4000-8000-00000000d001",
+        "material": "guid:7e7a0000-0000-4000-8000-00000000d002" } } }
+  ] }

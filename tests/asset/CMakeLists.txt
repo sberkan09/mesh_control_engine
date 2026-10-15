@@ -26,6 +26,7 @@ mce_add_test(test_cook UMBRELLA
         test_cook_shader.cpp
         test_cook_store.cpp
         test_cook_config.cpp
+        test_cook_terrain.cpp
         test_cook_services.cpp
         test_cook_strings.cpp
         test_cook_ui.cpp

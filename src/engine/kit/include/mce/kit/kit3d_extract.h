@@ -1,7 +1,7 @@
 #pragma once
 // Kit3DExtract — the render extract for the kit3d components (kit3d.h), the 3D twin of
 // SpriteExtract: reads MeshRef / Animator / PointLight3D / SpotLight3D / ReflectionProbe3D /
-// Foliage3D / Decal3D / ParticleEmitter3D / Camera3DComponent +
+// Foliage3D / Decal3D / ParticleEmitter3D / Terrain3D / Camera3DComponent +
 // LocalTransform (WorldTransform when the hierarchy wrote one), the Environment3D resource (or
 // component) and StaticInstances3D, and fills a Scene3D in ECS iteration order.
 //
@@ -21,6 +21,10 @@
 // and texture of the mounted content up front (players do, so the first frames do not hitch). A
 // mesh GUID that is not mounted is skipped with one warning.
 //
+// Terrain3D (M-TERRAIN): the extract keeps each terrain's LOD tree and uploads a node's mesh into the
+// store the first time it is drawn (under MeshStore::allocate_key keys), releasing nodes not drawn for
+// a while; this needs the store given to init() as non-const (the player's and the editor's are).
+//
 // Animator poses live in the extract until its next extract() call, so record the scene first.
 //
 // Interpolation: `alpha` is the app loop's fraction between the last tick and the next. Cameras,
@@ -32,6 +36,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/render/quality.h"
 #include "mce/render/scene3d.h"
+#include "mce/render/terrain.h"
 
 namespace mce::kit {
 
@@ -48,6 +53,11 @@ struct Kit3DStats {
     u32 foliage_instances = 0;
     u32 decals = 0;          // Decal3Ds submitted (the scene culls them)
     u32 particle_emitters = 0;
+    u32 terrains = 0;          // Terrain3Ds drawn (M-TERRAIN)
+    u32 terrain_nodes = 0;     // their LOD nodes submitted (the scene culls them per pass)
+    u32 terrain_triangles = 0;
+    u32 terrain_uploads = 0;   // node meshes built and uploaded this frame
+    u32 terrain_resident = 0;  // node meshes held in the store
 };
 
 class Kit3DExtract {
@@ -60,6 +70,8 @@ public:
     // `meshes` is the store Scene3D draws from (renderer.meshes(), or a CPU-only store in tests).
     // `assets` may be null: then only meshes bound with bind_mesh() draw.
     void init(const render::MeshStore& meshes, asset::AssetSystem* assets);
+    // As above, and terrains may upload their node meshes into `meshes`.
+    void init(render::MeshStore& meshes, asset::AssetSystem* assets);
     void shutdown();
     // Forgets every cached mesh / texture binding and transform (after remounting a different pack).
     void reset(asset::AssetSystem* assets);
@@ -138,10 +150,13 @@ private:
     void track(Entity e, const math::vec3& pos, const math::quat& rot, const math::vec3& scale, u64 tick);
     void interpolated(Entity e, f32 alpha, math::vec3& pos, math::quat& rot, math::vec3& scale) const;
     void release_handles();
+    void release_terrains();
+    void extract_terrains(World& world, render::Scene3D& scene);
 
     render::QualitySettings quality_{.shadow_cascades = render::kMaxCascades};
     f32 frame_dt_ = 1.0f / 60.0f;
     const render::MeshStore* meshes_ = nullptr;
+    render::MeshStore* writable_ = nullptr;  // the same store, when init() got it non-const
     asset::AssetSystem* assets_ = nullptr;
     Array<MeshEntry> mesh_entries_;
     Array<TextureEntry> texture_entries_;
@@ -176,6 +191,23 @@ private:
         u32 stamp = 0;
     };
     Array<BurstEntry> bursts_;
+    struct TerrainEntry {  // a Terrain3D's LOD tree and its resident node meshes
+        Entity entity;
+        asset::Guid guid;
+        asset::AnyHandle handle;
+        u32 generation = 0;   // of the asset the tree was built from
+        f32 uv_tile = 0.0f;
+        u32 stamp = 0;        // the extract that last saw it
+        render::TerrainLod lod;
+        Array<u32> keys;      // per node: its mesh-store key, ~0u = not resident
+        Array<u32> used;      // per node: the extract that last drew it
+        math::mat4 world_prev = math::mat4::identity();  // last drawn frame's world (TAA velocity)
+        math::mat4 world_cur = math::mat4::identity();
+        bool drawn = false;
+    };
+    Array<mem::UniquePtr<TerrainEntry>> terrains_;
+    Array<u32> terrain_nodes_;  // scratch: this frame's selection
+    Array<byte> terrain_blob_;  // scratch: a node's mesh payload
     Array<Entity> probe_entities_;
     Entity gi_entity_;
 };

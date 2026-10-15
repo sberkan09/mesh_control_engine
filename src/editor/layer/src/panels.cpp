@@ -619,6 +619,7 @@ void add_default_panels(EditorShell& shell) {
     add_asset_panel(shell);
     add_tilemap_panel(shell);
     add_ui_document_panel(shell);
+    add_timeline_panel(shell);
     add_project_settings_panel(shell);
 }
 

@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 
 #include "mce/convar.h"
@@ -14,6 +15,9 @@ MCE_CVAR(cv_test_bool, "test.bool", false, "test bool", CVarFlags::None);
 MCE_CVAR(cv_test_str, "test.str", "hello", "test string", CVarFlags::None);
 MCE_CVAR(cv_test_ro, "test.readonly", 1, "read-only", CVarFlags::ReadOnly);
 MCE_CVAR(cv_test_cheat, "test.cheat", 1.0f, "cheat", CVarFlags::Cheat);
+MCE_CVAR(cv_test_saved_db, "test.saved_db", 0.0f, "saved float", CVarFlags::Saved);
+MCE_CVAR(cv_test_saved_tier, "test.saved_tier", "auto", "saved string", CVarFlags::Saved | CVarFlags::RequiresRestart);
+MCE_CVAR(cv_test_saved_flag, "test.saved_flag", true, "saved bool", CVarFlags::Saved);
 
 int g_calls = 0;
 StringView g_last_arg;
@@ -187,4 +191,44 @@ TEST_CASE("cheat lock (shipped builds)") {
     cv_test_cheat.reset();
     cv_test_int.reset();
     cv_test_bool.reset();
+}
+
+TEST_CASE("saved convars round-trip through the settings file") {
+    const std::string path = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp") + "/mce_test_settings.cfg";
+    std::remove(path.c_str());
+    {  // a file from an earlier run: a module's convar not registered here, and the three saved ones
+        std::FILE* f = std::fopen(path.c_str(), "wb");
+        REQUIRE(f);
+        std::fputs("game.difficulty hard\ntest.saved_db -12\ntest.saved_tier low\ntest.saved_flag false\n", f);
+        std::fclose(f);
+    }
+    REQUIRE(cv_test_saved_tier.set_string("high"));  // the command line said -test.saved_tier high: it wins
+    REQUIRE(console::load_settings(StringView(path.c_str())));
+    CHECK(cv_test_saved_db.get_float() == -12.0f);
+    CHECK(cv_test_saved_tier.get_string() == "high");
+    CHECK_FALSE(cv_test_saved_flag.get_bool());
+
+    // The options screen turns the music down; the command-line tier stays out of the file.
+    REQUIRE(cv_test_saved_db.set_float(-6.0f));
+    REQUIRE(console::save_settings(StringView(path.c_str())));
+    std::string text;
+    {
+        std::FILE* f = std::fopen(path.c_str(), "rb");
+        REQUIRE(f);
+        char buf[512];
+        while (std::fgets(buf, sizeof(buf), f)) text += buf;
+        std::fclose(f);
+    }
+    CHECK(text.find("game.difficulty hard\n") != std::string::npos);  // kept for the module that owns it
+    CHECK(text.find("test.saved_db -6\n") != std::string::npos);
+    CHECK(text.find("test.saved_tier low\n") != std::string::npos);  // not "high"
+    CHECK(text.find("test.saved_flag false\n") != std::string::npos);
+    std::remove(path.c_str());
+    cv_test_saved_db.reset();
+    cv_test_saved_tier.reset();
+    cv_test_saved_flag.reset();
+}
+
+TEST_CASE("a missing settings file is no error") {
+    CHECK(console::load_settings("/nonexistent-dir/settings.cfg"));
 }
