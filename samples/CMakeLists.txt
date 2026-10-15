@@ -25,16 +25,20 @@ function(mce_sample_pack target)
         DEPENDS ${cook_dep} ${sources}
         COMMENT "Cooking ${target} content"
         VERBATIM)
-    add_custom_target(${target}_content DEPENDS "${pack}")
+    set(outputs "${pack}")
+    if(MCE_WEB)
+        # The browser fetches assets.mce from next to the page (resolve_shipped_path): copy it there.
+        add_custom_command(
+            OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/assets.mce"
+            COMMAND ${CMAKE_COMMAND} -E copy "${pack}" "${CMAKE_CURRENT_BINARY_DIR}/assets.mce"
+            DEPENDS "${pack}"
+            VERBATIM)
+        list(APPEND outputs "${CMAKE_CURRENT_BINARY_DIR}/assets.mce")
+    endif()
+    add_custom_target(${target}_content DEPENDS ${outputs})
     add_dependencies(${target} ${target}_content)
     target_compile_definitions(${target} PRIVATE MCE_SAMPLE_DEV_PACK="${pack}")
     set_target_properties(${target} PROPERTIES MCE_SAMPLE_PACK "${pack}")
-    if(MCE_WEB)
-        # Until packs stream over HTTP (M-WEB step 3) the browser build embeds the pack in its virtual
-        # file system at the same path, so MCE_SAMPLE_DEV_PACK resolves there too.
-        target_link_options(${target} PRIVATE "SHELL:--preload-file ${pack}@${pack}")
-        set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS "${pack}")
-    endif()
 endfunction()
 if(MCE_WEB)
     # Browsers (M-WEB): the windowed samples that ship to the web. All but 01_triangle cook a pack,

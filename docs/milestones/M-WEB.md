@@ -12,7 +12,7 @@ Chromium run on WebGPU/SwiftShader (`scripts/web/browser_smoke.cjs`).
 |---|---|---|---|
 | 1 | Graphics decision (ADR-0039): `mce_rhi_webgpu` over emdawnwebgpu, GLSL → WGSL with glslang + Tint, `web-*` presets; `01_triangle` draws in a browser | SBA-62 | done |
 | 2 | Emscripten toolchain for every sample and game: the player's main loop, the job system single-threaded (or pthreads under COOP/COEP), every engine library compiling | SBA-63 | done |
-| 3 | Files and assets: the pack over HTTP with progress, saves in IndexedDB | SBA-64 | not started |
+| 3 | Files and assets: the pack over HTTP with progress, saves in IndexedDB | SBA-64 | done |
 | 4 | Audio and input: WebAudio unlock, touch, gamepad, pointer lock, fullscreen | SBA-65 | not started |
 | 5 | `mce ship --target web`: shell page, itch.io zip, `mce serve` | SBA-66 | not started |
 | 6 | MCP `ship_build {"target":"web"}` and a Playwright smoke returning the state hash and a screenshot | SBA-67 | not started |
@@ -42,10 +42,19 @@ Numbers (`web-release`, MinSizeRel): `01_triangle.wasm` 8.9 MB, 2.5 MB gzipped; 
 | Jobs | the job system already runs jobs inline everywhere (`jobs.h`, until its v0.5 runtime flag), so the browser is single-threaded with no change; a pthreads build under COOP/COEP comes with that flag, not before | — |
 | Main loop | `app::run` + ASYNCIFY (step 1); no `emscripten_set_main_loop` callback rewrite | samples run their normal loop |
 | Cook | `mce_asset_cook` is skipped in cross builds (it never reaches a runtime target) | — |
-| Packs | interim: `mce_sample_pack` embeds the cooked pack with `--preload-file` at its dev path; step 3 streams it over HTTP | `.data` next to each `.wasm` |
+| Packs | (replaced in step 3) `mce_sample_pack` first embedded the pack with `--preload-file` | — |
 | Backend fixes | WGSL derivative uniformity relaxed like GL (`allow_non_uniform_derivatives`); write-only storage buffers become `read_write`; one transient storage ring per binding (WebGPU forbids one buffer read-write and read-only in one dispatch); WebAudio power-of-two buffers | — |
 | Build | links run one at a time (`mce_web_link` Ninja pool): wasm-opt's ASYNCIFY pass takes about 6 GB per executable | four parallel links were OOM-killed |
 | Smoke | `scripts/web/browser_smoke.cjs` on all six samples in headless Chromium (WebGPU/SwiftShader) | all PASS; `04_diorama` and `05_ashen_court` draw with shadows, clustered lights and GPU culling |
+
+## What shipped (step 3)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Browser services | `mce/web.h` (`src/engine/core/src/web.cpp`): `fetch_file`, `mount_persistent`, `persist`; no-ops outside a browser | — |
+| Pack over HTTP | `samples::resolve_shipped_path` downloads `assets.mce` from next to the page into the virtual file system when it is not there, reporting `Downloading assets.mce... (got/total)` through the page's `Module.setStatus` (the shell's progress bar); `mce_sample_pack` copies the pack next to the `.html` | `04_diorama: mounted /assets.mce`; no `.data` files any more |
+| Saves and settings | IndexedDB (IDBFS, `-lidbfs.js`) backs `/persistent` = `crash::user_data_root()`, mounted and loaded in `platform::init`; `save::write` and `console::save_settings` write it back at once; the page also writes it back every 5 s and on `pagehide` / hidden, which covers the other writers (novel stage, loc, monetize, liveops) | `browser_smoke.cjs --persist`: a probe file under `/persistent` survives a reload |
+| mmap | not needed: the asset system reads packs into heap buffers on every platform | — |
 
 ## Open items
 

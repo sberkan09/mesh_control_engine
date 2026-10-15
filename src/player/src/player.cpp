@@ -92,6 +92,7 @@
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/kit/video.h"
 #include "mce/liveops/game_services.h"
 #include "mce/liveops/liveops.h"
 #include "mce/liveops/platform_games.h"
@@ -106,6 +107,7 @@
 #include "mce/platform/ads.h"
 #include "mce/platform/firebase.h"
 #include "mce/platform/game_services.h"
+#include "mce/platform/steam.h"
 #include "mce/platform/haptics.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -205,6 +207,14 @@ MCE_CVAR(cv_remote_config_file, "remote_config.file", "",
          CVarFlags::None);
 MCE_CVAR(cv_remote_config_dump, "remote_config.dump", false,
          "Remote config: print every value at start and after each apply", CVarFlags::None);
+MCE_CVAR(cv_steam_app_id, "steam.app_id", 0,
+         "Steam (M-STEAM): open steam_api and sign in for this app id (0 = no Steam); a run outside Steam names it "
+         "to the client the way steam_appid.txt does",
+         CVarFlags::None);
+MCE_CVAR(cv_steam_library, "steam.library", "", "Steam: the steam_api library to open (empty: next to the executable)",
+         CVarFlags::None);
+MCE_CVAR(cv_steam_restart, "steam.restart", false,
+         "Steam: a run started outside Steam asks Steam to relaunch it and quits (release builds on Steam)", CVarFlags::None);
 MCE_CVAR(cv_language, "language", "",
          "Play in this language (\"tr\", \"pt-BR\") for this run instead of the saved choice and the device languages",
          CVarFlags::None);
@@ -399,6 +409,11 @@ public:
         : desc_(desc), window_(window), device_(device), audio_(audio), sink_(renderer_, assets_), clips_(assets_, audio) {}
 
     ResultV on_init(app::Context&) override {
+        // Steam first: when it relaunches the game through itself, this run loads and saves nothing.
+        if (cv_steam_app_id.get_int() > 0 && !init_steam()) {
+            relaunching_ = true;
+            return ok();
+        }
         FixedString<1024> pack;
         if (!cv_pack.get_string().empty() || desc_.pack)
             samples::resolve_shipped_path(cv_pack.get_string(), desc_.pack ? desc_.pack : "", desc_.pack_fallback ? desc_.pack_fallback : "",
@@ -460,6 +475,8 @@ public:
             MCE_TRY(renderer_.init(*device_));
             assets_.set_upload_sink(&sink_);
             MCE_TRY(extract_.init(renderer_, &assets_));
+            MCE_TRY(videos_.init(renderer_, &assets_));
+            extract_.set_videos(&videos_);
             samples::HudFont hud;
             MCE_TRY_ASSIGN(font_, renderer_.create_font(hud.metrics, hud.glyphs.span(), {}, std::as_bytes(hud.atlas.span()),
                                                         "player.hud_font"));
@@ -524,6 +541,7 @@ public:
             update_ad_pause();
         }
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
+        if (platform::steam::running()) platform::steam::run_callbacks(nullptr, nullptr);  // M-STEAM step 2 routes them
         if (t.actions) {  // the UI screens navigate with the newest snapshot (edges once: ui_fresh_)
             const input::InputState pending = ui_actions_;
             ui_actions_ = *t.actions;
@@ -627,8 +645,11 @@ public:
         update_subtitles(bb);
         speak_focus();
         update_ui_screens(bb);
-        const bool overlay =
-            paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() || cv_stats.get_bool() || cutscene;
+        // Video pictures step to their players' playheads before the extracts draw them.
+        if (!ui_preview_) videos_.update(world_);
+        film_ = !ui_preview_ && videos_.fullscreen(film_set_, film_aspect_);
+        const bool overlay = paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() ||
+                             cv_stats.get_bool() || cutscene || film_;
 
         // 3D: the kit3d scene first (it ends in the backbuffer); the 2D kit draws over it.
         if (!three_d_ && kit::has_camera_3d(world_)) {
@@ -724,6 +745,7 @@ public:
     }
 
     void on_shutdown() override {
+        if (relaunching_) return;  // nothing was loaded (Steam relaunches the game)
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
         save_options(true);
@@ -731,6 +753,7 @@ public:
         if (perf_on_) write_perf_capture();
         if (liveops_on_) liveops_.shutdown();
         if (game_services_on_) game_services_.shutdown();
+        platform::steam::shutdown();
         if (three_d_) {  // the last frame's 3D load (tests and LOD measurements read it)
             const u32* lt = stats3d_.lod_triangles;
             std::printf("%s: 3D last frame %u triangles (LOD %u/%u/%u/%u), %u draws\n", desc_.app_name, stats3d_.triangles,
@@ -742,6 +765,7 @@ public:
         if (window_) window_->set_relative_mouse(false);
         clips_.release_all();
         extract3d_.shutdown();
+        videos_.shutdown();
         extract_.shutdown();
         if (device_) renderer_.shutdown();
     }
@@ -977,6 +1001,28 @@ private:
     // Every string table in the pack (assets/loc/<locale>.csv) goes into one Localization resource:
     // the saved choice first, then -language for this run, then the device languages, then
     // -default_language. A choice the game makes later (Localization::set_locale) is saved at once.
+    // Steam (M-STEAM step 1, ADR-0042): an app id opens steam_api; anything but a relaunch leaves the
+    // game running without Steam. False: Steam relaunches the game, so this run quits at once.
+    bool init_steam() {
+        platform::steam::Config sc;
+        sc.app_id = static_cast<u32>(cv_steam_app_id.get_int());
+        sc.library_path = cv_steam_library.get_string();
+        sc.restart_if_necessary = cv_steam_restart.get_bool();
+        FixedString<256> why;
+        const platform::steam::InitResult r = platform::steam::init(sc, &why);
+        if (r == platform::steam::InitResult::Restarting) {
+            MCE_LOG_INFO("{}: Steam relaunches the game; quitting", desc_.app_name);
+            quit(0);
+            return false;
+        }
+        if (r == platform::steam::InitResult::Ok)
+            MCE_LOG_INFO("{}: Steam on (app {}, {}{})", desc_.app_name, platform::steam::app_id(), platform::steam::persona_name(),
+                         platform::steam::on_steam_deck() ? ", Steam Deck" : "");
+        else
+            MCE_LOG_INFO("{}: no Steam ({}: {})", desc_.app_name, platform::steam::init_result_name(r), why.c_str());
+        return true;
+    }
+
     Result<void> init_localization() {
         loc::Localization l10n;
         for (asset::AssetKey k = 0; k < assets_.asset_count(); ++k) {
@@ -1618,6 +1664,7 @@ private:
     void record_overlay(rhi::CommandBuffer& cmd, rhi::Extent2D bb) {
         render::SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
         hud.begin(render::compute_screen_view(bb), render::PassId::Screen2D);
+        if (film_) add_fullscreen_video(hud, bb);
         subtitles_.submit(hud, -124);  // under the scene's UI screens: a menu covers them
         screens_.submit(hud, -120);  // the scene's UI screens, under the game's UI layers
         // Game UI under the pause veil (sort layer 0) and the console (200).
@@ -1682,6 +1729,29 @@ private:
             s.sort_order = 1 + static_cast<i32>(i);
             hud.add(s);
         }
+    }
+
+    // A fullscreen kit::VideoPlayer: black over the frame, the film fitted inside it (bars on the
+    // sides that do not match its aspect), under the letterbox (-130), subtitles and UI.
+    void add_fullscreen_video(render::SpriteBatch& hud, rhi::Extent2D bb) {
+        const f32 w = static_cast<f32>(bb.width), h = static_cast<f32>(bb.height);
+        if (w <= 0.0f || h <= 0.0f || film_aspect_ <= 0.0f) return;
+        constexpr i16 kLayer = -134;
+        render::SpriteInstance back;
+        back.set = extract_.sprite_set(asset::Guid{});
+        back.position = {0.5f * w, 0.5f * h};
+        back.scale = {w, h};
+        back.tint = Color{0.0f, 0.0f, 0.0f, 1.0f};
+        back.sort_layer = kLayer;
+        hud.add(back);
+        render::SpriteInstance film;
+        film.set = film_set_;
+        film.position = {0.5f * w, 0.5f * h};
+        film.scale = w / h > film_aspect_ ? math::vec2{h * film_aspect_, h} : math::vec2{w, w / film_aspect_};
+        film.flip_y = true;  // the HUD's y runs down the screen; the film's first row is its top
+        film.sort_layer = kLayer;
+        film.sort_order = 1;
+        hud.add(film);
     }
 
     void add_pause_overlay(render::SpriteBatch& hud, rhi::Extent2D bb) {
@@ -2364,6 +2434,10 @@ private:
     render::AssetUploadSink sink_;
     audio::ClipBank clips_;
     kit::SpriteExtract extract_;
+    kit::VideoTextures videos_;  // kit::VideoPlayer pictures (M-CINEMA 5)
+    render::SpriteSetId film_set_;  // this frame's fullscreen video, when film_
+    f32 film_aspect_ = 0.0f;
+    bool film_ = false;
     kit::Kit3DExtract extract3d_;
     render::Scene3D::Stats stats3d_;
     bool three_d_ = false;         // the 3D path is on (a scene with a Camera3DComponent)
@@ -2450,6 +2524,7 @@ private:
     bool ui_map_pushed_ = false;
     bool ui_map_missing_ = false;
     bool ui_preview_ = false;  // -ui_preview: one document over the clear color
+    bool relaunching_ = false;  // Steam relaunches the game: this run quits before loading anything
     struct UiPointer {
         math::vec2 pos{-1, -1};
         u32 slot = 0;

@@ -9,6 +9,7 @@
 #include "mce/app.h"
 #include "mce/convar.h"
 #include "mce/log.h"
+#include "mce/web.h"
 #include "mce/platform/power.h"
 
 namespace mce::platform {
@@ -188,6 +189,7 @@ ResultV init(const PlatformDesc& desc) {
         MCE_LOG_ERROR("platform: SDL_Init failed: {}", SDL_GetError());
         return Error(Errc::PlatformInit, "platform.init", SDL_GetError());
     }
+    web::mount_persistent();  // a browser: saves and settings live in IndexedDB (no-op elsewhere)
     // Gamepads are optional: a missing joystick backend leaves the game keyboard/mouse-only.
     if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) MCE_LOG_WARN("platform: no gamepad support: {}", SDL_GetError());
     SDL_AddEventWatch(&lifecycle_watch, nullptr);

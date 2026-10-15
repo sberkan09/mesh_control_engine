@@ -160,6 +160,7 @@ drive the same moves on different entities.
 | `camera` | `t`, `camera`, `blend` | camera cuts: that camera is `primary` until the next cut, the track's other cameras are not; `blend` seconds ease the view over from the previous cut's camera (13.6) |
 | `event` | `t`, `emit` | pushes a `kit::TimelineSignal`, and a `SeqSignal` so a sequence's `wait_event` can follow the timeline |
 | `subtitle` | `t`, `duration`, `text`, `speaker` | the line shown in that range: the stock player draws it as a subtitle (10.7); `kit::timeline_subtitle` reads it |
+| `video` | `t`, `video`, `duration`, `gain_db` | the target's `VideoPlayer` plays that video from `t` for `duration` seconds (0, the default: to its end), then stops on its last frame (13.7) |
 
 `ease` shapes the curve from a key to the next one: `linear` (default), `step` (hold, then jump),
 `smooth`, `ease_in`, `ease_out`. Values hold before the first key and after the last. The cook
@@ -173,7 +174,7 @@ tick 30 at 60 Hz. The player's state is its own component fields, so a timeline 
 replays reproduce it, and with a `SaveKey` a save mid-timeline resumes on the same tick.
 
 `kit::timeline_scrub(world, entity, seconds)` moves the playhead and applies the transform,
-property, activation, camera and subtitle tracks at that time without firing the cues it passes
+property, activation, camera, subtitle and video tracks at that time without firing the cues it passes
 (animation, audio, event); playing on from there fires the keys after it. Animate entities without
 a dynamic physics body: physics owns a moving body's transform.
 
@@ -257,3 +258,44 @@ between them and property tracks drive their fields.
 All of it is sim state, so a cutscene replays and hashes the same, and the Timeline panel's preview
 shows the rail, look-at and blend at the playhead. In a novel, `@cutscene <timeline>` plays one
 (21).
+
+## 13.7 Video
+
+A `VideoPlayer` plays a film: on its entity's `Sprite` (a screen in the world), or over the whole
+screen as a splash (`mce/kit/video.h`, installed by the stock player, play-in-editor and
+`run_headless`).
+
+**Import.** The engine plays MPEG-1 with MP2 sound (ADR-0043). Convert any film with ffmpeg and drop
+it in `assets/`:
+
+```sh
+ffmpeg -i intro.mp4 -vf scale=640:-2 -c:v mpeg1video -q:v 4 -c:a mp2 -f mpeg intro.mpg
+```
+
+The editor writes the `.mpg.mceasset` sidecar (`importer: "video"`). Its settings: `audio` (keep the
+sound, default true) and `normalize` (raise the sound to -1 dBFS, default false). The cook decodes
+the sound once, so playing it costs the mixer what any sound costs, and warns about a film larger
+than 854x480, which a Low-tier phone may not decode inside its frame.
+
+| Field | Does |
+|---|---|
+| `video` | the film |
+| `playing` | on plays (the default); off pauses. The engine turns it off when a non-looping film ends and sets `finished` |
+| `loop` | start again at the end |
+| `restart` | set it to play from the start; the engine clears it |
+| `time` | seconds into the film; set it to jump |
+| `speed` | playback rate; the sound plays only at 1 |
+| `gain_db`, `sound` | the sound's gain, and whether it plays |
+| `fullscreen` | draw it over the whole screen, fitted with black bars, under the letterbox, subtitles and UI, in place of drawing on the `Sprite` |
+
+```json
+"Splash": { "VideoPlayer": { "video": "guid:<intro.mpg>", "fullscreen": true } },
+"TV":     { "LocalTransform": {}, "Sprite": { "size": [3.2, 1.8] },
+            "VideoPlayer": { "video": "guid:<news.mpg>", "loop": true, "gain_db": -12 } }
+```
+
+The playhead (`time`, `playing`, `finished`) is sim state: replays and saves see it and a film
+plays the same on every run. The pictures are decoded each frame for what is shown. A timeline's
+`video` track plays a film as one beat of a cutscene (13.5): skipping or scrubbing the cutscene shows
+the right frame. To leave a splash when it ends, watch `finished` in a sequence or your own system.
+
