@@ -8,6 +8,9 @@
 //                 ReplicationClient from a FixedUpdate_Pre system. Its own player is predicted
 //                 (M-NET2 step 3): drawn at once from its inputs, reconciled with the server's acks,
 //                 the gusts smoothed in (-predict 0: drawn from snapshots like everything else).
+//                 Every half second it fires from the origin at drifter 1 where it draws it, and
+//                 the server checks the shot against that moment (M-NET2 step 4, lag compensation)
+//                 and, for comparison, against its present.
 //
 // Two networks, one game loop (both are net::Transport):
 //   UDP (default)  one client over loopback UDP (net::Host); -latency/-jitter/-loss set
@@ -60,6 +63,9 @@ constexpr u8 kChannelInput = 2;     // sequenced: client -> server inputs
 constexpr u8 kMsgJoin = 1;
 constexpr u8 kMsgInput = 2;
 constexpr u8 kMsgWelcome = 3;  // server -> client: the net id of your player
+constexpr u8 kMsgShot = 4;     // client -> server: a ray from the origin and the tick the client drew
+constexpr u64 kShotTicks = 30;
+constexpr f32 kShotRange = 20.0f;
 constexpr u64 kGustTicks = 120;
 constexpr f32 kGust = 0.25f;
 constexpr u32 kKindDrifter = 1;
@@ -118,10 +124,18 @@ struct Server {
     net::ByteWriter snapshot;
     u64 tick = 0;
 
+    // Hit boxes of the last second, so a shot is checked against what its client was drawing.
+    // The rewind covers the slowest link CI runs (150 ms ± 40 plus the jitter buffer).
+    net::LagCompensator lag;
+    u32 shots = 0, hits_rewound = 0, hits_present = 0;
+    u32 too_old = 0;  // arrived after the rewind window (a reliable shot lost and resent): checked late
+
     void start(net::Transport& transport) {
         net = &transport;
+        lag.init(net::LagCompensationDesc{60.0, 1.0});
         for (u32 i = 0; i < 8; ++i) {
-            const Entity e = world.spawn_with(LocalTransform{}, Drifter{1.0f + f32(i), f32(i) * 0.7f});
+            const Entity e = world.spawn_with(LocalTransform{}, Drifter{1.0f + f32(i), f32(i) * 0.7f},
+                                              net::HitBox{{0.15f, 0.15f, 0.15f}, {}});
             replication.assign(world, e, kKindDrifter);
         }
         world.add_system(Phase::FixedUpdate_Post, "drift", [](Frame& f) {
@@ -168,14 +182,34 @@ struct Server {
                         if (std::isfinite(in.move_x)) p.move_x = std::fmax(-1.0f, std::fmin(1.0f, in.move_x));
                     });
                     world.try_get_mut<LocalTransform>(e)->position = s.transform.position;
+                } else if (msg == kMsgShot) {
+                    const u64 view_bits = r.read_u64();
+                    math::vec3 dir;
+                    dir.x = r.read_f32();
+                    dir.y = r.read_f32();
+                    dir.z = r.read_f32();
+                    if (!r.ok()) continue;
+                    f64 view = 0.0;
+                    std::memcpy(&view, &view_bits, sizeof view);
+                    dir = math::normalize(dir);
+                    ++shots;
+                    if (lag.clamp_view(view) > view) ++too_old;
+                    net::RewindHit hit;
+                    if (lag.raycast(view, {}, dir, kShotRange, hit) && hit.net_id == 1) ++hits_rewound;
+                    if (lag.raycast(static_cast<f64>(tick), {}, dir, kShotRange, hit) && hit.net_id == 1)
+                        ++hits_present;
                 }
             }
         }
     }
 
+    u64 snapshot_hash = 0;  // of the newest snapshot sent
     void broadcast_snapshot() {
         snapshot.clear();
         replication.write_snapshot(world, static_cast<u32>(tick), snapshot);
+        Hasher64 h;
+        h.bytes(snapshot.data().data(), snapshot.size());
+        snapshot_hash = h.value();
         net->broadcast(kChannelSnapshot, snapshot.data(), net::Delivery::Sequenced);
         net->flush();
     }
@@ -189,6 +223,7 @@ struct Server {
                 [](const Player& p, LocalTransform& t) { t.position.x -= p.move_x > 0.0f ? kGust : -kGust; });
         }
         world.tick(kDt, ++tick);
+        lag.record(world, static_cast<u32>(tick));
         track();
         broadcast_snapshot();
     }
@@ -212,7 +247,8 @@ struct Client {
     bool connected = false;
     u32 own_id = 0;  // our player's net id, from WELCOME
     net::Predictor<PlayerInput, PlayerState> predictor;
-    u32 ack = 0;  // from the newest snapshot of our player
+    u64 applied_hash = 0;  // of the newest snapshot applied
+    u32 ack = 0;           // from the newest snapshot of our player
     bool has_ack = false;
     u32 snapshots = 0;
     u64 tick = 0;
@@ -242,7 +278,12 @@ struct Client {
         world.add_system(Phase::FixedUpdate_Pre, "net_apply", [](Frame& f) {
             Client& c = *f.resource<Client*>();
             if (c.has_pending) {
-                if (c.replication.apply(f.commands(), f.world(), c.pending.data()).ok) ++c.snapshots;
+                if (c.replication.apply(f.commands(), f.world(), c.pending.data()).ok) {
+                    ++c.snapshots;
+                    Hasher64 h;
+                    h.bytes(c.pending.data().data(), c.pending.size());
+                    c.applied_hash = h.value();
+                }
                 c.has_pending = false;
             }
             c.predict(f);
@@ -263,6 +304,25 @@ struct Client {
         has_ack = false;
         predictor.smooth(f.dt);
         if (cv_predict.get_bool()) f.commands().set(replication.find(own_id), predictor.displayed());
+    }
+
+    // Fires from the origin at drifter 1 where this client draws it, with the tick it drew.
+    u32 shots = 0;
+    void fire() {
+        const Entity e = replication.find(1);
+        if (!connected || !world.alive(e)) return;
+        const math::vec3 dir = math::normalize(world.try_get<LocalTransform>(e)->position);
+        const f64 view = replication.drawn_tick(1);
+        u64 view_bits = 0;
+        std::memcpy(&view_bits, &view, sizeof view_bits);
+        net::ByteWriter shot;
+        shot.write_u8(kMsgShot);
+        shot.write_u64(view_bits);
+        shot.write_f32(dir.x);
+        shot.write_f32(dir.y);
+        shot.write_f32(dir.z);
+        net->send(server, kChannelControl, shot.data(), net::Delivery::Reliable);
+        ++shots;
     }
 
     void send_inputs() {
@@ -307,6 +367,7 @@ struct Client {
             send_inputs();
         }
         world.tick(kDt, ++tick);
+        if (input && tick > 120 && tick % kShotTicks == 0) fire();
         track();
         net->flush();
     }
@@ -348,10 +409,11 @@ bool same_bits(const LocalTransform& a, const LocalTransform& b) {
     return true;
 }
 
-// The client has the server's last snapshot, every input acknowledged and, interpolating or
+// The client has the server's last snapshot (the same bytes: a late input can change the
+// server's state after its last tick), every input acknowledged and, interpolating or
 // predicting, draws it exactly.
-bool caught_up(const Client& c, u32 final_tick) {
-    if (c.replication.last_tick() != final_tick) return false;
+bool caught_up(const Client& c, u32 final_tick, u64 snapshot_hash) {
+    if (c.replication.last_tick() != final_tick || c.applied_hash != snapshot_hash) return false;
     if (c.predictor.stats().pending != 0 || c.predictor.stats().offset != 0.0f) return false;
     if (!c.replication.interpolating()) return true;
     const net::InterpolationStats& s = c.replication.interpolation_stats();
@@ -385,7 +447,14 @@ bool check(Server& server, Client* clients, u32 count) {
                     client.snapshots, matched, replicated, static_cast<double>(player_x), client_ok ? "OK" : "FAILED");
         ok = ok && client_ok;
     }
-    return ok;
+    // Every shot at drifter 1 hits when checked against the moment its client drew; against the
+    // server's present most miss.
+    const bool shots_ok = server.shots > 0 && server.hits_rewound >= server.shots - server.too_old;
+    std::printf(
+        "  shots at drifter 1: %u (%u older than the rewind), hit when rewound %u, hit at the server's present %u -> "
+        "%s\n",
+        server.shots, server.too_old, server.hits_rewound, server.hits_present, shots_ok ? "OK" : "FAILED");
+    return ok && shots_ok;
 }
 
 f32 hold_for(u32 client) {
@@ -441,7 +510,7 @@ int run_sim() {
     const u32 final_tick = static_cast<u32>(server.tick);
     auto all_caught_up = [&] {
         for (u32 c = 0; c < count; ++c)
-            if (!caught_up(clients[c], final_tick)) return false;
+            if (!caught_up(clients[c], final_tick, server.snapshot_hash)) return false;
         return true;
     };
     for (u32 i = 0; i < 600 && !all_caught_up(); ++i) {
@@ -482,6 +551,9 @@ int run_sim() {
         h.u64v(clients[c].net->counters().messages_received);
         h.u64v(clients[c].net->counters().messages_dropped);
     }
+    h.u64v(server.hits_rewound);
+    h.u64v(server.hits_present);
+    h.u64v(server.too_old);
     h.u64v(server_end.counters().messages_received);
     h.u64v(server_end.counters().messages_dropped);
     std::printf("net_headless: %s, hash %016llx\n", ok ? "OK" : "FAILED", static_cast<unsigned long long>(h.value()));
@@ -527,7 +599,7 @@ int run_udp() {
     // Let the last snapshot land (loopback: a few ms, plus any simulated latency), then compare.
     const u32 final_tick = static_cast<u32>(server.tick);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3 + link.latency_ms / 250);
-    while (!caught_up(client, final_tick) && std::chrono::steady_clock::now() < deadline) {
+    while (!caught_up(client, final_tick, server.snapshot_hash) && std::chrono::steady_clock::now() < deadline) {
         server.receive();
         server.broadcast_snapshot();
         for (net::Event ev; server_host.poll(ev, 1);) {

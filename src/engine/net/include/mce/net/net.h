@@ -13,6 +13,7 @@
 
 #include "mce/net/bytes.h"
 #include "mce/net/host.h"
+#include "mce/net/lag_compensation.h"
 #include "mce/net/net_stats.h"
 #include "mce/net/prediction.h"
 #include "mce/net/replication.h"

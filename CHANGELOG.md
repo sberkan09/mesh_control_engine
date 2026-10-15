@@ -10,6 +10,16 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   (`ui::SubtitleView`), with `access.subtitles`, `access.captions`, `access.subtitle_speaker`, `access.subtitle_size`
   and `access.subtitle_background` on the stock options screen. The NPC dialogue box follows the speaker and
   background settings. User guide 10.7.
+- The editor's Animation panel, M-CINEMA step 3 (SBA-78): an `.mcanim` animation graph drawn as boxes and arrows
+  (drag states, add transitions from a right-click, any-state transitions, the start state), an inspector for
+  parameters, states (clip or 1D blend points, loop, speed, events) and transitions (conditions, fade, on finish),
+  and a viewport preview that poses any clip of an entity's mesh at a scrubbed time or runs its graph with typed
+  parameter values, without touching the scene. A state may carry `pos` (where the editor draws it; the cook ignores
+  it). Double-click an `.mcanim` in Assets, or `mce_editor -editor.open <file>`. User guide 8.9.
+- Fair hits over lag (SBA-85, M-NET2 step 4): `net::LagCompensator` keeps a short history of `net::HitBox`es on
+  the server and checks a shot against the tick its client was drawing (`ReplicationClient::drawn_tick`), within
+  `max_rewind_s`. Over a 100 ms link every shot at the drawn target hits when rewound and none at the server's
+  present. `sample_net_headless` fires at a drifter from every client. User guide 20.4.
 - A stock options and remap screen, M-ACCESS step 3 (SBA-97): `mce new` projects get `assets/ui/options.mcui`
   (display, audio and controls tabs, shown by Pause). The controls tab lists the game's actions by name with a
   button per binding that captures the next press, a hold-to-toggle switch per button action, left- and
