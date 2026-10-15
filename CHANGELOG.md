@@ -10,6 +10,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   without Steam loads nothing. The stock player signs in with `-steam.app_id <id>` (`-steam.library`,
   `-steam.restart` for release builds Steam relaunches) and pumps Steam's callbacks every frame; the sim hash is
   unchanged. User guide 23.10.
+- Performance captures, M-PERF step 1 (SBA-113): `mce_player -perf_capture <file>` writes a `.mcperf` JSON capture
+  of the run. Each frame gets its wall, sim, render CPU and GPU time, its GPU stages (3D), sim time per ECS phase and
+  its draws, passes, triangles, sprites, upload bytes and live heap allocations. The run adds per-system totals, p50/p95/p99/max
+  and the spike frames with their likely cause ("sim: FixedUpdate_Post", "gpu: shadow"). `-perf_warmup N` skips
+  loading frames. A capture never changes the state hash. User guide 16.
 - A spatial upscaler and sharpening, M-VISUAL2 step 2 (SBA-102): frames drawn below the output size (Low and
   Medium tiers without TAA) now reach it through an edge-adaptive upsample by default in kit games
   (`Environment3D.upscaler`), and `Environment3D.sharpen` sharpens the final frame. Players override both with the
