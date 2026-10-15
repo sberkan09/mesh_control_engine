@@ -37,6 +37,7 @@ inline constexpr u8 UI_DOCUMENT_VERSION = 3;  // CHNK_UIDOC: one UI widget tree 
 inline constexpr u8 UI_THEME_VERSION = 1;     // CHNK_UITHEME: a UI theme (M-UI-DATA 3; mce/ui/document_data.h)
 inline constexpr u8 TERRAIN_VERSION = 1;      // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1)
 inline constexpr u8 NAVMESH_VERSION = 1;     // CHNK_NAV: the .mcnav bytes as baked (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
+inline constexpr u8 VIDEO_VERSION = 1;       // CHNK_VID: an MPEG-1 program stream + its audio as PCM (M-CINEMA 5)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -167,6 +168,35 @@ struct SfxView {
     static Result<SfxView> read(Span<const byte> payload);
 };
 void write_sfx(const SfxHeader& header, Span<const f32> samples, Array<byte>& out);
+
+// ------------------------------------------------------------------ video (CHNK_VID)
+// The .mpg's bytes as imported (an MPEG-1 program stream; the runtime decodes its video with
+// render::VideoDecoder) and its audio decoded once at cook time to 48 kHz f32, so the mixer plays
+// it like any clip (ADR-0042). VideoHeader | mpeg bytes | f32 samples (audio_frames * audio_channels).
+
+struct VideoHeader {
+    u32 width;           // display size in pixels
+    u32 height;
+    f32 frame_rate;      // frames per second
+    f32 duration;        // seconds of video
+    u32 flags;           // 0 (reserved)
+    u32 audio_channels;  // 0 = silent, else 2 (interleaved)
+    u32 audio_frames;    // 48 kHz frames
+    f32 audio_gain;      // linear gain the cook applied (informational)
+    u64 mpeg_offset;
+    u64 mpeg_size;
+    u64 audio_offset;    // f32 interleaved samples
+    u32 reserved[2];
+};
+static_assert(sizeof(VideoHeader) == 64);
+
+struct VideoView {
+    const VideoHeader* header = nullptr;
+    Span<const byte> mpeg;
+    Span<const f32> audio;  // audio_frames * audio_channels
+    static Result<VideoView> read(Span<const byte> payload);
+};
+void write_video(const VideoHeader& header, Span<const byte> mpeg, Span<const f32> audio, Array<byte>& out);
 
 // ------------------------------------------------------------------ font (CHNK_FONT)
 
@@ -604,6 +634,7 @@ enum class TimelineTrackKind : u8 {
     Camera,      // camera cuts: the key's target camera is primary from its time until the next key
     Event,       // raises TimelineSignal (and a sequence SeqSignal) when the playhead crosses a key
     Subtitle,    // the line shown during [t, t + duration)
+    Video,       // the target's VideoPlayer plays the key's video during [t, t + duration) (0: to its end)
 };
 
 enum class TimelineEase : u8 { Linear, Step, Smooth, EaseIn, EaseOut };
@@ -631,9 +662,9 @@ struct TimelineKey {
     f32 t;             // seconds from the start
     f32 duration;      // Activation / Subtitle: the range's length
     f32 v[4];          // Property: the value; Animation: v[0] loop (0/1), v[1] fade (< 0 keeps the Animator's); Audio: v[0] gain dB;
-                       // Camera: v[0] blend seconds from the previous cut's camera (0 = a hard cut)
+                       // Camera: v[0] blend seconds from the previous cut's camera (0 = a hard cut); Video: v[0] gain dB
     u64 id;            // Animation: StringId of the clip; Event: StringId of the signal
-    u64 guid[2];       // Audio: the Sfx {hi, lo}
+    u64 guid[2];       // Audio: the Sfx {hi, lo}; Video: the Video
     u32 text;          // Animation: the clip name; Subtitle: the line
     u32 text2;         // Subtitle: the speaker (kTimelineNoString when none)
     TimelineEase ease; // Property: the curve from this key to the next

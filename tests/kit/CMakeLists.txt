@@ -19,13 +19,15 @@ mce_add_test(test_kit UMBRELLA
         test_sprite_anim.cpp
         test_timeline.cpp
         test_cinematic.cpp
+        test_video.cpp
         test_view_info.cpp
     DEPS
         mce::mce_gameplay_kit
         mce::mce_scene
         mce::mce_asset_cook)
 target_include_directories(test_kit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset ${CMAKE_CURRENT_SOURCE_DIR}/../render)
-target_compile_definitions(test_kit PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp")
+target_compile_definitions(test_kit PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp"
+                           MCE_TEST_VIDEO="${PROJECT_SOURCE_DIR}/tests/asset/data/video/red_blue.mpg")
 
 # The kit extract on a real GL 4.5 driver (CI: Xvfb + Mesa llvmpipe). Always builds; registers only
 # with MCE_GPU_TESTS.

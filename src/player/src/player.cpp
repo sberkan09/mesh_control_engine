@@ -92,6 +92,7 @@
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/kit/video.h"
 #include "mce/liveops/game_services.h"
 #include "mce/liveops/liveops.h"
 #include "mce/liveops/platform_games.h"
@@ -453,6 +454,8 @@ public:
             MCE_TRY(renderer_.init(*device_));
             assets_.set_upload_sink(&sink_);
             MCE_TRY(extract_.init(renderer_, &assets_));
+            MCE_TRY(videos_.init(renderer_, &assets_));
+            extract_.set_videos(&videos_);
             samples::HudFont hud;
             MCE_TRY_ASSIGN(font_, renderer_.create_font(hud.metrics, hud.glyphs.span(), {}, std::as_bytes(hud.atlas.span()),
                                                         "player.hud_font"));
@@ -607,8 +610,11 @@ public:
         update_subtitles(bb);
         speak_focus();
         update_ui_screens(bb);
-        const bool overlay =
-            paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() || cv_stats.get_bool() || cutscene;
+        // Video pictures step to their players' playheads before the extracts draw them.
+        if (!ui_preview_) videos_.update(world_);
+        film_ = !ui_preview_ && videos_.fullscreen(film_set_, film_aspect_);
+        const bool overlay = paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() ||
+                             cv_stats.get_bool() || cutscene || film_;
 
         // 3D: the kit3d scene first (it ends in the backbuffer); the 2D kit draws over it.
         if (!three_d_ && kit::has_camera_3d(world_)) {
@@ -719,6 +725,7 @@ public:
         if (window_) window_->set_relative_mouse(false);
         clips_.release_all();
         extract3d_.shutdown();
+        videos_.shutdown();
         extract_.shutdown();
         if (device_) renderer_.shutdown();
     }
@@ -1595,6 +1602,7 @@ private:
     void record_overlay(rhi::CommandBuffer& cmd, rhi::Extent2D bb) {
         render::SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
         hud.begin(render::compute_screen_view(bb), render::PassId::Screen2D);
+        if (film_) add_fullscreen_video(hud, bb);
         subtitles_.submit(hud, -124);  // under the scene's UI screens: a menu covers them
         screens_.submit(hud, -120);  // the scene's UI screens, under the game's UI layers
         // Game UI under the pause veil (sort layer 0) and the console (200).
@@ -1659,6 +1667,28 @@ private:
             s.sort_order = 1 + static_cast<i32>(i);
             hud.add(s);
         }
+    }
+
+    // A fullscreen kit::VideoPlayer: black over the frame, the film fitted inside it (bars on the
+    // sides that do not match its aspect), under the letterbox (-130), subtitles and UI.
+    void add_fullscreen_video(render::SpriteBatch& hud, rhi::Extent2D bb) {
+        const f32 w = static_cast<f32>(bb.width), h = static_cast<f32>(bb.height);
+        if (w <= 0.0f || h <= 0.0f || film_aspect_ <= 0.0f) return;
+        constexpr i16 kLayer = -134;
+        render::SpriteInstance back;
+        back.set = extract_.sprite_set(asset::Guid{});
+        back.position = {0.5f * w, 0.5f * h};
+        back.scale = {w, h};
+        back.tint = Color{0.0f, 0.0f, 0.0f, 1.0f};
+        back.sort_layer = kLayer;
+        hud.add(back);
+        render::SpriteInstance film;
+        film.set = film_set_;
+        film.position = {0.5f * w, 0.5f * h};
+        film.scale = w / h > film_aspect_ ? math::vec2{h * film_aspect_, h} : math::vec2{w, w / film_aspect_};
+        film.sort_layer = kLayer;
+        film.sort_order = 1;
+        hud.add(film);
     }
 
     void add_pause_overlay(render::SpriteBatch& hud, rhi::Extent2D bb) {
@@ -2214,6 +2244,10 @@ private:
     render::AssetUploadSink sink_;
     audio::ClipBank clips_;
     kit::SpriteExtract extract_;
+    kit::VideoTextures videos_;  // kit::VideoPlayer pictures (M-CINEMA 5)
+    render::SpriteSetId film_set_;  // this frame's fullscreen video, when film_
+    f32 film_aspect_ = 0.0f;
+    bool film_ = false;
     kit::Kit3DExtract extract3d_;
     render::Scene3D::Stats stats3d_;
     bool three_d_ = false;         // the 3D path is on (a scene with a Camera3DComponent)

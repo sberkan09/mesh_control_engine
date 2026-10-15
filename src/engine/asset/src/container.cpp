@@ -33,6 +33,7 @@ const char* chunk_type_name(ChunkType t) {
         case ChunkType::UiTheme: return "UiTheme";
         case ChunkType::Terrain: return "Terrain";
         case ChunkType::NavMesh: return "NavMesh";
+        case ChunkType::Video: return "Video";
     }
     return "ChunkType(?)";
 }

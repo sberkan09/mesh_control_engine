@@ -1,6 +1,6 @@
 # M-CINEMA — Timeline, animation editing, cutscenes and video (milestone record)
 
-**Status:** in progress on `dev_claude` (steps 1–3 merged).
+**Status:** in progress on `dev_claude` (steps 1–4 merged; step 5 below).
 **Why:** the timeline and curve editor (FR-ENT-110, FR-EDT-130) was cut at M8 only for the solo-hours budget; the
 novel kit and the narrative games now want cutscenes, and MCE had no video playback (ROADMAP "Engine gap tracks").
 **Measured on:** the Linux CI container (`scripts/ci/local_ci.sh`).
@@ -105,3 +105,29 @@ novel kit and the narrative games now want cutscenes, and MCE had no video playb
   holds what it needs itself.
 - Subtitles are not the cutscene's: M-ACCESS's subtitle view shows every timeline's lines with the player's
   subtitle settings, and the bars sit under it.
+
+## Step 5 — video (SBA-80, ADR-0042)
+
+| Item | Where | Evidence |
+|---|---|---|
+| ADR-0042: pl_mpeg (MIT, MPEG-1 + MP2) over WebM codecs and platform decoders; pinned `c871f2b`, compiled into `mce_render`, the pl_mpeg wall | `docs/adr/0042-video-pl-mpeg.md`, `cmake/Dependencies.cmake`, `check_walls.py` | walls pass |
+| `render::VideoDecoder`: open from memory, `show(t)` steps forward or seeks, RGBA8 pictures, `count_frames`, `decode_audio` | `render/video.h`, `video.cpp`, `plmpeg_impl.c` | `test_render` "video: the decoder reads the header and shows the frame at a time" (a committed 2 s red/blue clip: the colour at 0.5 s, 1.5 s and back at 0.2 s, 5 frames decoded for a 0.2 s step), "video: the decoder decodes the sound and refuses what is not MPEG-1" |
+| `CHNK_VID` (appended `ChunkType::Video`): header, the MPEG bytes, the sound as 48 kHz f32; `.mpg` / `.mpeg` importer (`audio`, `normalize`), exact length by frame count, a warning above 854x480 | `formats.h` (`VideoHeader`, `VideoView`), `video_importer.cpp`, `scene_importer.cpp`, editor asset type names | `test_cook` "video: .mpg cooks to CHNK_VID with its sound at 48 kHz", "video: a file that is not MPEG-1 fails the cook naming it" |
+| `VideoPlayer` and `"kit_video"`: the playhead as sim state (play, end, loop, restart, pause); the sound as one mixer voice started into the clip at the playhead, restarted on a jump or wrap, stopped on pause, mute, speed ≠ 1 or destroy | `kit/video.h`, `kit/video.cpp`, `stock.cpp` | `test_kit` "video: a VideoPlayer plays to its end, loops and restarts", "video: the sound follows the playhead" (offline mixer) |
+| Timeline `video` track (`TimelineTrackKind::Video`, appended): a state track setting the target's video, time and playing inside a key's range; scrub and skip show the right frame; the Timeline panel adds and edits video keys | `formats.h`, `timeline_importer.cpp`, `timeline_text.h`, `timeline.cpp`, `timeline_panel.cpp` | `test_kit` "video: a timeline video track drives the player, and a skip stops it" |
+| Render: `VideoTextures` (one decoder and texture per shown player, updated in place); a `VideoPlayer`'s `Sprite` draws the film; the stock player draws a `fullscreen` one fitted under the letterbox, subtitles and UI | `kit/video.cpp`, `sprite_extract.cpp`, `player.cpp` `add_fullscreen_video` | `mce_player -capture_ticks 30,150` (offscreen Mesa, 0 GL errors) on a 320x180 test-pattern clip: the sprite shows the frame counter "2" at 2.5 s, the fullscreen splash "0" at 0.5 s |
+| Low-tier budget: decode + RGBA convert 1.1 ms/frame at 640x360, 4.0 ms at 1280x720 on one desktop core; the cook warns above 854x480 | ADR-0042 §6, `video_importer.cpp` | measured on the CI container with the pinned pl_mpeg at `-O2` |
+
+### Design notes
+
+- **No `.mcvideo` wrapper.** The ROADMAP named one; an `.mpg` with the usual import sidecar does the same job
+  (settings, a GUID) without a second file format.
+- **The sound is cooked, not streamed.** The mixer plays only 48 kHz f32 and has no codec; decoding MP2 once at
+  cook keeps the run time to pictures. A film's sound costs its length in PCM (about 23 MB for a minute of
+  stereo), which suits splashes and cutscene beats, not feature-length video.
+- **pl_mpeg's length is short.** It ends at the last packet's time stamp, so the cook counts frames for the exact
+  length and the decoder's forward steps carry past pl_mpeg's seek limit.
+- **A UI image is not in this step.** A UI image is a region of the skin's one sprite set; a film there needs a
+  per-widget texture. The fullscreen view covers the splash case.
+- Mac-only check not run: the Metal backend's `update_texture` on the video texture (no Mac here).
+
