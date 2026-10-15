@@ -189,7 +189,8 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
 
 - `Sprite` shows its whole texture; atlas regions and animation wait for the sprite-sheet importer
   (comment on `Sprite`, ADR-0024 decision 4).
-- Not built (ADR-0032): the editor sequence live view and TimelinePlayer (FR-ENT-110, v1.0).
+- Not built (ADR-0032): the editor sequence live view. `TimelinePlayer` and `.mctimeline`
+  (`kit/timeline.h`, FR-ENT-110) landed in M-CINEMA step 1; the editor timeline panel is step 2.
 - The lit-2D GPU cost at 10k sprites and the 2D post cost at 1080p are open until measured on a
   hardware GPU (M6 2D budget table).
 - Pathfinding is grid A* only: no navmesh, no jump-point search, no agent avoidance; the grid and
