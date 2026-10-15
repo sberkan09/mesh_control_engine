@@ -11,6 +11,7 @@
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
 #include "mce/kit/bodies3d.h"
+#include "mce/kit/cinematic.h"
 #include "mce/kit/components.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/pathfinding.h"
@@ -192,6 +193,16 @@ void kit_effects(Frame& f) {
         s.offset = o.translation;
         s.offset_rotation = o.rotation;
     });
+    f.query<CameraShake3D>().each([&](CameraShake3D& s) {
+        s.trauma = math::clamp(s.trauma + trauma, 0.0f, 1.0f);
+        s.time += f.dt;
+        s.trauma = math::max(0.0f, s.trauma - s.decay_per_second * f.dt);
+        // Two noise streams: one moves the view (x, y) and rolls it, the other pitches and yaws it.
+        const render::ShakeOffset a = render::shake_offset(s.seed, s.time, s.trauma, s.max_translation, s.max_rotation, s.frequency_hz);
+        const render::ShakeOffset b = render::shake_offset(s.seed * 2654435761u + 1u, s.time, s.trauma, s.max_rotation, 0.0f, s.frequency_hz);
+        s.offset = {a.translation.x, a.translation.y, 0.0f};
+        s.offset_rotation = {b.translation.y, b.translation.x, a.rotation};
+    });
 }
 
 // The fraction of the remaining distance a smoothed follow covers this tick (1 = snap).
@@ -339,6 +350,8 @@ void install_effects(World& world, asset::AssetSystem* assets) {
     install_path_agents(world);
     world.add_system(Phase::FixedUpdate_Post, "kit_effects", &kit_effects);
     world.add_system(Phase::FixedUpdate_Post, "kit_camera_follow", &kit_camera_follow);
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit_effects");
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit_camera_follow");
 }
 
 }  // namespace mce::kit

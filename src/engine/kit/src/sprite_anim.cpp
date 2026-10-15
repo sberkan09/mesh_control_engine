@@ -126,6 +126,7 @@ void install_sprite_animation(World& world, asset::AssetSystem* assets) {
     sheets.assets = assets;
     world.set_resource(static_cast<SpriteSheets&&>(sheets));
     world.add_system(Phase::FixedUpdate_Post, "kit_sprite_animation", &kit_sprite_animation);
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit_sprite_animation");
 }
 
 }  // namespace mce::kit

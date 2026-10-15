@@ -115,3 +115,25 @@ TEST_CASE("M-ACCESS: the announcer speaks focus moves, then a focused value's ch
     REQUIRE(a.next(&m.doc, line));       // and came back: its focus is news again
     CHECK(line.view() == StringView("Subtitles, switch, off"));
 }
+
+TEST_CASE("M-ACCESS: a control in a labelled row says the row's label first (the remap list)") {
+    Document doc;
+    Builder root(doc, doc.root());
+    StackLayout row_layout;
+    row_layout.axis = Axis::Horizontal;
+    Builder row = root.stack("row", row_layout);
+    row.text("label", "Jump");
+    const WidgetId key = row.button("key", "Space").id();
+    const WidgetId toggle = row.toggle("toggle", "Toggle", false).id();
+    Builder column = root.stack("column");  // a vertical list: its first label names only the control after it
+    column.text("title", "OPTIONS");
+    const WidgetId back = column.button("back", "Back").id();
+    doc.update(ctx());
+    FixedString<192> line;
+    access_line(access_node(doc, key), line);
+    CHECK(line.view() == "Jump, Space, button");
+    access_line(access_node(doc, toggle), line);
+    CHECK(line.view() == "Jump, Toggle, switch, off");
+    access_line(access_node(doc, back), line);
+    CHECK(line.view() == "Back, button");
+}

@@ -390,6 +390,7 @@ void install_sequences(World& world, asset::AssetSystem* assets) {
     world.register_event<SeqAnimRequest>(Phase::FixedUpdate_Post);
     world.set_resource(SequenceRegistry(assets));
     world.add_system(Phase::FixedUpdate_Post, "sequence_runner", &sequence_runner);
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "sequence_runner");
 }
 
 }  // namespace mce::kit

@@ -4,6 +4,7 @@
 #include <cstdio>
 
 #include "mce/input/actions.h"
+#include "mce/kit/captions.h"
 
 namespace kindle {
 
@@ -44,12 +45,19 @@ vec2 half_extents(const World& w, Entity e) {
     return {0.5f, 0.5f};
 }
 
-void play(Frame& f, const asset::AssetRef<asset::Sfx>& clip, f32 gain_db = 0.0f) {
+// A sound and its caption (M-ACCESS): the caption shows when the player turns captions on
+// (access.captions); neither reaches the state hash.
+void play(Frame& f, const asset::AssetRef<asset::Sfx>& clip, const char* caption, f32 gain_db = 0.0f) {
     if (clip.guid.is_null()) return;
     audio::PlaySfx ev;
     ev.clip = clip.guid;
     ev.gain_db = gain_db;
     f.events().push(ev);
+    kit::ShowCaption cap;
+    cap.text = caption;
+    cap.seconds = 1.5f;
+    cap.kind = kit::CaptionKind::Sound;
+    f.events().push(cap);
 }
 
 const char* color_name(BlockColor c) { return c == BlockColor::Red ? "RED" : "BLUE"; }
@@ -151,7 +159,7 @@ void respawn(Frame& f, KindleState& ks, World2D& pw, Entity e, PlayerController&
     p.dash_ready = 1;
     p.invuln = kInvulnTicks;
     ++ks.deaths;
-    play(f, p.hurt_sound);
+    play(f, p.hurt_sound, "ouch");
 }
 
 void kindle_player(Frame& f) {
@@ -193,7 +201,7 @@ void kindle_player(Frame& f) {
             p.vel.y = p.jump_speed;
             p.jump_buffer = p.coyote = p.wall_coyote = 0;
             p.dash_ticks = 0;
-            play(f, p.jump_sound, -4.0f);
+            play(f, p.jump_sound, "jump", -4.0f);
         } else if (p.jump_buffer > 0 && p.wall_coyote > 0 && !p.grounded) {
             const i32 away = -p.last_wall;  // kick off the wall last touched
             p.vel = {static_cast<f32>(away) * kWallJumpX, kWallJumpY};
@@ -201,7 +209,7 @@ void kindle_player(Frame& f) {
             p.jump_buffer = p.wall_coyote = 0;
             p.wall_lock = kWallLockTicks;
             p.dash_ticks = 0;
-            play(f, p.jump_sound, -4.0f);
+            play(f, p.jump_sound, "jump", -4.0f);
         }
 
         if (control && dash_pressed && p.dash_ready && p.dash_ticks == 0) {
@@ -210,7 +218,7 @@ void kindle_player(Frame& f) {
             p.dash_ticks = kDashTicks;
             p.dash_ready = 0;
             p.wall_lock = 0;
-            play(f, p.jump_sound, -10.0f);
+            play(f, p.jump_sound, "dash", -10.0f);
         }
 
         if (p.dash_ticks > 0) {
@@ -261,7 +269,7 @@ void kindle_triggers(Frame& f) {
         if (ev.other != ks.player) continue;
         if (const Coin* coin = w.try_get<Coin>(ev.sensor)) {
             ks.coins += coin->value;
-            play(f, coin->sound, -3.0f);
+            play(f, coin->sound, "coin", -3.0f);
             f.commands().destroy(ev.sensor);
         } else if (w.has<Hazard>(ev.sensor)) {
             PlayerController* p = w.try_get_mut<PlayerController>(ks.player);
@@ -271,12 +279,12 @@ void kindle_triggers(Frame& f) {
             ks.active = ks.active == BlockColor::Red ? BlockColor::Blue : BlockColor::Red;
             ++ks.toggles;
             ++s->presses;
-            play(f, s->sound);
+            play(f, s->sound, "switch clicks");
         } else if (Goal* g = w.try_get_mut<Goal>(ev.sensor); g && ks.won == 0) {
             g->reached = 1;
             ks.won = 1;
             ks.won_at = ks.ticks;
-            play(f, g->sound);
+            play(f, g->sound, "flag fanfare");
         }
     }
 }
@@ -343,6 +351,7 @@ ResultV install(World& world) {
     if (!world.try_resource<input::InputState>()) input::install(world);
     // The audio bridge registers it too (idempotent); a host without audio drops the events.
     world.register_event<audio::PlaySfx>(Phase::FixedUpdate_Pre);
+    world.register_event<kit::ShowCaption>(Phase::FixedUpdate_Pre);
     world.register_components<SwitchBlock, ColorSwitch, PlayerController, Coin, Hazard, Goal, Crumble, Mover, CameraFollow,
                               HudText>();
 

@@ -2010,6 +2010,13 @@
         "RigidBody2D": { "type": "Kinematic", "fixed_rotation": true, "layer": 1, "mask": 9, "gravity_scale": 0 },
         "Sprite": { "texture": "guid:0da186c0-e909-422a-8de0-6196743f90be", "layer": 10 }
       }
+    },
+    {
+      "name": "Options",
+      "components": {
+        "UiFlow": { "show_on": "Pause", "hide_on": "Back", "pause": true },
+        "UiScreen": { "document": "guid:331d1e16-2ef8-4b2c-9b5d-ca2b824b5d30", "order": 10, "visible": false }
+      }
     }
   ]
 }

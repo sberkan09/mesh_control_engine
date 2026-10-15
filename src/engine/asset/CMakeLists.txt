@@ -21,4 +21,7 @@ target_link_libraries(mce_asset PUBLIC Threads::Threads)
 # mce_asset_cook: the cook library (scan, registry, importers, dependency graph, cook DB,
 # content-addressed outputs, pack). Backs mce_cook and the editor's cook button. Cook-time-only
 # third-party code (stb) is confined to this target and must never reach a runtime target.
-add_subdirectory(cook)
+# A cross build (phones, the browser) cooks with the host's mce_cook (MCE_HOST_COOK), so it has no cook library.
+if(NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(cook)
+endif()

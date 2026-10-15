@@ -51,6 +51,7 @@ void install(World& world, AudioDevice& device, ClipBank* clips, const char* aft
     world.set_resource(AudioRef{&device, clips});
     world.set_hooks<AudioSource>(nullptr, &on_source_removed);
     world.add_system(Phase::FixedUpdate_Post, "audio_bridge", &audio_bridge, after);
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "audio_bridge");
 }
 
 void audio_bridge(Frame& f) {
