@@ -1,6 +1,7 @@
 #pragma once
 // mce_platform (L1): Firebase, the live services vendor (M-LIVEOPS step 1): Crashlytics for native
-// crashes and Firebase Analytics for events.
+// crashes, Firebase Analytics for events and Firebase Remote Config as remote config's server
+// fetcher (M-LIVEOPS step 3).
 //
 // The store wall (check_walls.py) covers this too: the Firebase SDKs and JNI live only in
 // mce_platform and the stamped Android project. mce_liveops never sees them; the player hands
@@ -17,7 +18,7 @@
 // stamped manifest and Info.plist say so), keep crash reports on the device while Undecided, and
 // delete them on Denied.
 //
-// Calls are made on the main thread.
+// Calls are made on the main thread; remote config answers arrive on the SDK's thread.
 
 #include "mce/types.h"
 
@@ -48,5 +49,13 @@ bool start();
 void set_collection(Collection c);
 // One Analytics event (names and params already checked by liveops::analytics).
 void log_event(StringView name, Span<const Param> params);
+
+// Remote Config: fetches and activates in the background, then answers through `fn` on the SDK's
+// thread: once per value the service sent (key and value as text, `done` false), then once with
+// `done` true and `ok` false when the fetch failed. Values are text because the console stores them
+// so; liveops::parse_config_value types them by the cooked defaults. One fetch at a time: false
+// (and no answer) while one is running, after start() failed, or with no vendor.
+using ConfigFn = void (*)(void* user, StringView key, StringView value, bool done, bool ok);
+bool fetch_remote_config(ConfigFn fn, void* user);
 
 }  // namespace mce::platform::firebase

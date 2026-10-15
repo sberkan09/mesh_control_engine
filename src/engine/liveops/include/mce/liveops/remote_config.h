@@ -25,8 +25,9 @@
 // the middle of one. A Recorder captures the values in force when recording starts and every apply
 // with its tick; a Replayer plays them back with no fetcher, so replays hash the same.
 //
-// Fetching: an IConfigFetcher (a vendor's config service, or FileConfigFetcher, which reads a cooked
-// pack holding a .mcconfig: the static-file backend) runs when the service starts and when the game
+// Fetching: an IConfigFetcher (a vendor's config service such as the player's Firebase Remote Config
+// fetcher, or FileConfigFetcher, which reads a cooked pack holding a .mcconfig: the static-file
+// backend) runs when the service starts and when the game
 // calls fetch(). A fetcher that talks to a server waits for the player's consent (consent.h).
 
 #include <atomic>
@@ -69,6 +70,13 @@ private:
 void encode_config(const ConfigValues& v, Array<byte>& out);
 Result<void> decode_config(Span<const byte> payload, ConfigValues& out);
 u64 hash_config(const ConfigValues& v);
+
+// Vendor services hand values back as text (Firebase Remote Config stores every value so): types
+// `text` by the default for `key`. Int and float take the whole text as a number; bool takes
+// true/false, 1/0, yes/no, on/off, t/f, y/n in any case (Firebase's own rules); string takes the
+// text as is. False, and `out` untouched, when the defaults have no such key, the text does not parse
+// as its type, or a string runs past 255 bytes: such a value is dropped, as overlay drops a mismatch.
+bool parse_config_value(const ConfigValues& defaults, StringView key, StringView text, ConfigValue& out);
 
 // ---- fetching -----------------------------------------------------------------------------------
 

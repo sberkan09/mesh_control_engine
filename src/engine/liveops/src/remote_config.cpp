@@ -1,5 +1,7 @@
 #include "mce/liveops/remote_config.h"
 
+#include <charconv>
+#include <cmath>
 #include <cstring>
 
 #include "mce/asset/asset_system.h"
@@ -110,6 +112,65 @@ const char* config_type_name(ConfigType t) {
             return "string";
     }
     return "int";
+}
+
+namespace {
+
+bool equals_nocase(StringView a, const char* b) {
+    const usize n = std::strlen(b);
+    if (a.size() != n) return false;
+    for (usize i = 0; i < n; ++i) {
+        char c = a[i];
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+        if (c != b[i]) return false;
+    }
+    return true;
+}
+
+}  // namespace
+
+bool parse_config_value(const ConfigValues& defaults, StringView key, StringView text, ConfigValue& out) {
+    const ConfigValue* def = defaults.find(key);
+    if (!def) return false;
+    ConfigValue v;
+    v.key = def->key;
+    v.type = def->type;
+    const char* first = text.data();
+    const char* last = text.data() + text.size();
+    switch (def->type) {
+        case ConfigType::Int: {
+            if (!text.empty() && text[0] == '+') ++first;  // from_chars takes no '+'
+            const auto r = std::from_chars(first, last, v.i);
+            if (text.empty() || r.ec != std::errc() || r.ptr != last) return false;
+            break;
+        }
+        case ConfigType::Float: {
+            if (!text.empty() && text[0] == '+') ++first;
+            const auto r = std::from_chars(first, last, v.f);
+            if (text.empty() || r.ec != std::errc() || r.ptr != last || !std::isfinite(v.f)) return false;
+            break;
+        }
+        case ConfigType::Bool: {
+            static const char* const kTrue[] = {"true", "1", "t", "yes", "y", "on"};
+            static const char* const kFalse[] = {"false", "0", "f", "no", "n", "off"};
+            bool known = false;
+            for (const char* w : kTrue)
+                if (equals_nocase(text, w)) {
+                    v.i = 1;
+                    known = true;
+                }
+            for (const char* w : kFalse)
+                if (equals_nocase(text, w)) known = true;
+            if (!known) return false;
+            break;
+        }
+        case ConfigType::String:
+            if (text.size() > 255) return false;
+            v.s.assign(text);
+            break;
+    }
+    out = v;
+    return true;
 }
 
 const ConfigValue* ConfigValues::find(StringView key) const {
