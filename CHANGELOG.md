@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Contact shadows, M-VISUAL2 step 3 (SBA-103): `Environment3D.contact_shadows` (or `Scene3D::set_contact_shadows`)
+  marches a short screen-space ray toward the sun so creases, feet and small details get the shadows the cascades
+  miss (`contact_length`, `contact_thickness`, `contact_intensity`). Sun only for now; off on the Low tier;
+  `r.contact_shadows 0` turns it off. User guide 8.
 - A spatial upscaler and sharpening, M-VISUAL2 step 2 (SBA-102): frames drawn below the output size (Low and
   Medium tiers without TAA) now reach it through an edge-adaptive upsample by default in kit games
   (`Environment3D.upscaler`), and `Environment3D.sharpen` sharpens the final frame. Players override both with the

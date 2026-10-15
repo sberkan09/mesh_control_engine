@@ -23,6 +23,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.volumetrics = false;
             q.dof_motion_blur = false;
             q.ssr = false;
+            q.contact_shadows = false;
             q.terrain_pixel_error = 4.0f;
             q.terrain_triplanar = false;
             q.terrain_height_blend = false;
@@ -82,6 +83,7 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
 void apply_quality(const QualitySettings& q, GiVolume& gi) { gi.updates = gi.updates && q.gi_updates; }
 
 void apply_quality(const QualitySettings& q, ScreenSpaceReflections& ssr) { ssr.enabled = ssr.enabled && q.ssr; }
+void apply_quality(const QualitySettings& q, ContactShadows& c) { c.enabled = c.enabled && q.contact_shadows; }
 
 void apply_quality(const QualitySettings& q, Volumetrics& v) {
     v.enabled = v.enabled && q.volumetrics;

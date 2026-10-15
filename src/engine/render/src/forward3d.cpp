@@ -25,6 +25,9 @@ MCE_CVAR(cv_ssao, "r.ssao", true,
 MCE_CVAR(cv_ssr, "r.ssr", true,
          "Screen-space reflections for scenes that ask for them (ScreenSpaceReflections::enabled; off = the probes only)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_contact_shadows, "r.contact_shadows", true,
+         "Contact shadows for scenes that ask for them (ContactShadows::enabled; off = the sun's cascades only)",
+         CVarFlags::RequiresRestart);
 MCE_CVAR(cv_upscaler, "r.upscaler", "scene",
          "How a frame drawn below the output size reaches it: scene (what the scene asks), bilinear, spatial",
          CVarFlags::Saved);
@@ -67,7 +70,7 @@ struct Forward3DPassU {
     vec4 probe_pos[kMaxReflectionProbes];  // w: intensity
     vec4 probe_min[kMaxReflectionProbes];  // w: blend distance
     vec4 probe_max[kMaxReflectionProbes];  // w: first ibl_env layer
-    vec4 ao;           // x: SSAO on
+    vec4 ao;           // x: SSAO on, y: contact shadows on (bank kAo's g)
     vec4 local;        // x: local-light shadows on (M-VISUAL 4), y: shadow-map layer of cascade 0
     vec4 gi;           // x: irradiance volume on (M-VISUAL 6), y: intensity, z: normal bias, w: fade distance
     vec4 gi_min;
@@ -116,6 +119,13 @@ struct SsrU {  // kSsrFS
     mat4 reproject;  // this frame's view space -> last frame's (jittered) clip space
     vec4 params;     // x: max distance, y: thickness, z: steps, w: edge fade
     vec4 misc;       // x: last frame's color is valid
+};
+
+struct ContactU {  // kContactFS
+    mat4 proj;
+    vec4 dir;     // xyz: toward the sun, view space
+    vec4 params;  // x: length, y: thickness, z: steps, w: intensity
+    vec4 misc;    // x: copy the SSAO visibility into r
 };
 
 struct ProbeU {  // kProbeReprojectFS
@@ -182,7 +192,7 @@ struct PostU {
 };
 
 enum Stage : u32 {
-    kTsBegin, kTsClusters, kTsScale, kTsSsao, kTsSsr, kTsShadow, kTsGi, kTsVol, kTsMain, kTsResolve, kTsTaa, kTsPostFx, kTsBloom, kTsTonemap, kTsFxaa
+    kTsBegin, kTsClusters, kTsScale, kTsSsao, kTsSsr, kTsContact, kTsShadow, kTsGi, kTsVol, kTsMain, kTsResolve, kTsTaa, kTsPostFx, kTsBloom, kTsTonemap, kTsFxaa
 };
 
 struct ExpU {  // kExposureHistCS / kExposureReduceCS
@@ -505,7 +515,8 @@ ResultV Forward3D::create_pipelines() {
         else MCE_LOG_WARN("render3d: GPU light assignment unavailable, using the CPU path");
     }
     const bool ssao = desc_.ssao && cv_ssao.get_bool(), ssr = desc_.ssr && cv_ssr.get_bool();
-    if (ssao || ssr) {  // the half-resolution prepass both read
+    const bool contact = desc_.contact_shadows && cv_contact_shadows.get_bool();
+    if (ssao || ssr || contact) {  // the half-resolution prepass both read
         rhi::GraphicsPipelineDesc ap = pd;  // the mesh vertex stage, depth-tested, both faces
         ap.fragment_shader = {kAoPrepassFS, "ssao_prepass.frag"};
         ap.state = {};
@@ -523,6 +534,12 @@ ResultV Forward3D::create_pipelines() {
         fs.fragment_shader = {kSsrFS, "ssr.frag"};
         fs.debug_name = "ssr";
         MCE_TRY_ASSIGN(ssr_pipe_, device_->create_pipeline(fs));
+    }
+    if (contact) {
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kContactFS, "contact_shadows.frag"};
+        fs.debug_name = "contact_shadows";
+        MCE_TRY_ASSIGN(contact_pipe_, device_->create_pipeline(fs));
     }
     if (ssao) {
         fs.state.blend.mode = rhi::BlendMode::Opaque;
@@ -696,7 +713,7 @@ void Forward3D::shutdown() {
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &terrain_pipe_, &skinned_cull_,
           &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &upscale_pipe_, &sharpen_pipe_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
-          &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &velocity_pipe_, &velocity_skinned_,
+          &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &contact_pipe_, &velocity_pipe_, &velocity_skinned_,
           &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_, &exposure_hist_,
           &exposure_reduce_, &dof_pipe_, &motion_blur_pipe_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
@@ -742,7 +759,8 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     t.scale = ts.ms(b + kTsClusters, b + kTsScale);
     t.ssao = ts.ms(b + kTsScale, b + kTsSsao);
     t.ssr = ts.ms(b + kTsSsao, b + kTsSsr);
-    t.shadow = ts.ms(b + kTsSsr, b + kTsShadow);
+    t.contact = ts.ms(b + kTsSsr, b + kTsContact);
+    t.shadow = ts.ms(b + kTsContact, b + kTsShadow);
     t.gi = ts.ms(b + kTsShadow, b + kTsGi);
     t.volumetrics = ts.ms(b + kTsGi, b + kTsVol);
     t.main = ts.ms(b + kTsVol, b + kTsMain);
@@ -813,6 +831,8 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     timestamp(cmd, kTsSsao);
     record_ssr(cmd, scene);
     timestamp(cmd, kTsSsr);
+    record_contact(cmd, scene);
+    timestamp(cmd, kTsContact);
     record_shadows(cmd, scene);
     record_local_shadows(cmd, scene);
     timestamp(cmd, kTsShadow);
@@ -1346,6 +1366,38 @@ void Forward3D::record_ssr(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     stats_.ssr_history = ssr_prev_valid_;
 }
 
+// ---- contact shadows (M-VISUAL2 3): a short march toward the sun through the prepass's depth, at half
+// size, into ao_b_ (free once the SSAO blur is done): r carries the SSAO visibility on, g the sun's.
+void Forward3D::record_contact(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const ContactShadows& cs = scene.contact_shadows();
+    const DirectionalLight& light = scene.light();
+    if (!cs.enabled || contact_pipe_.is_null() || !light.contact_shadows || light.intensity <= 0.0f) return;
+    record_prepass(cmd, scene);
+    const View3D& view = scene.view();
+    cmd.push_debug_scope("contact_shadows");
+    rhi::PassAttachment out;
+    out.texture = ao_b_;
+    out.load = rhi::LoadOp::DontCare;
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&out, 1);
+    p.debug_name = "contact_shadows";
+    cmd.begin_pass(p);
+    ContactU u{};
+    u.proj = view.proj;
+    const vec4 to_sun = view.view * vec4(-normalize(light.direction), 0.0f);
+    u.dir = vec4(normalize(vec3(to_sun.x, to_sun.y, to_sun.z)), 0.0f);
+    u.params = {max(cs.length, 0.01f), max(cs.thickness, 1e-3f), f32(clamp(cs.steps, 4u, 64u)), clamp(cs.intensity, 0.0f, 1.0f)};
+    u.misc = {stats_.ssao ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+    cmd.bind_pipeline(contact_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(u));
+    cmd.bind_texture(rhi::bank::kFirstSampler, ao_gbuf_, point_sampler_);
+    cmd.bind_texture(rhi::bank::kFirstSampler + 1, stats_.ssao ? ao_a_ : ao_off_, point_sampler_);
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    stats_.contact_shadows = true;
+}
+
 // ---- 1. cascades: one depth-only pass per layer, each with its own caster list
 void Forward3D::record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const Span<const Cascade> cascades = scene.cascades();
@@ -1550,8 +1602,9 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     }
     cmd.bind_texture(rhi::bank::kVolumetrics, stats_.volumetrics && apply_fog ? vol_light_ : ao_off_, linear_clamp_);
     // SSAO: the blurred half-size visibility, upsampled bilinearly; a stand-in fills the slot when off.
-    pu.ao = {stats_.ssao ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
-    cmd.bind_texture(rhi::bank::kAo, stats_.ssao ? ao_a_ : ao_off_, linear_clamp_);
+    // Contact shadows put their own target there, which carries the SSAO in r and the sun's in g.
+    pu.ao = {stats_.ssao ? 1.0f : 0.0f, stats_.contact_shadows ? 1.0f : 0.0f, 0.0f, 0.0f};
+    cmd.bind_texture(rhi::bank::kAo, stats_.contact_shadows ? ao_b_ : stats_.ssao ? ao_a_ : ao_off_, linear_clamp_);
     // Screen-space reflections: the half-size trace, upsampled bilinearly; a stand-in when off.
     if (stats_.ssr) {
         const ScreenSpaceReflections& ssr = scene.reflections();
