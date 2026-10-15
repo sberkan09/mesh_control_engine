@@ -44,6 +44,7 @@ reach all of its non-transient fields.
 | `CameraFollow3D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
+| `Joint3D` | `mce/kit/joints3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `MeshRef` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `PointLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `SpotLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
