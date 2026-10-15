@@ -1,5 +1,6 @@
 # ui_screens: a HUD and a pause menu as UI documents (M-UI-DATA step 2), with no host code. The
-# scene (assets/scenes/main.mcscene) places two kit::UiScreen entities; the stock mce_player builds
+# scene (assets/scenes/main.mcscene) places two kit::UiScreen entities (day theme; night.mcscene
+# shows the same documents under the night theme, M-UI-DATA step 3); the stock mce_player builds
 # the .mcui documents, draws them over the game and turns their widgets' actions into input. The
 # game module (game/) only reads actions, writes the Score the HUD binds and toggles the pause
 # screen's `visible`: it never includes mce/ui (check_walls.py).
@@ -36,5 +37,10 @@ if(MCE_BUILD_TESTS)
                  COMMAND mce_player -pack "${pack}" -module $<TARGET_FILE:ui_screens_game> -frames 90
                          -input "${CMAKE_CURRENT_BINARY_DIR}/pause_script.txt" -platform.error_box 0 -r.vsync 0)
         set_tests_properties(ui_screens_player_gpu PROPERTIES LABELS gpu)
+        # The same documents under the night theme (M-UI-DATA step 3).
+        add_test(NAME ui_screens_night_gpu
+                 COMMAND mce_player -pack "${pack}" -scene scenes/night.mcscene -module $<TARGET_FILE:ui_screens_game> -frames 90
+                         -input "${CMAKE_CURRENT_BINARY_DIR}/pause_script.txt" -platform.error_box 0 -r.vsync 0)
+        set_tests_properties(ui_screens_night_gpu PROPERTIES LABELS gpu)
     endif()
 endif()

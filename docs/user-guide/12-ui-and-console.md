@@ -145,8 +145,39 @@ const input::InputState* in = f.try_resource<input::InputState>();
 if (in && in->has_action(MCE_SID("Resume")) && in->pressed(MCE_SID("Resume"))) pause_screen.visible = false;
 ```
 
-The documents use the built-in skin, or their `"font"`; sprite-sheet skins are not drawn yet
-(M-UI-DATA step 3).
+The documents use the built-in skin, or their `"font"`, or their theme's fonts (below);
+sprite-sheet skins are not drawn yet.
+
+### Themes (`.mcuitheme`)
+
+A theme restyles every screen of a game in one place. It is a `.mcuitheme` asset (JSON source,
+cooked to a `UiTheme` chunk):
+
+```json
+{
+  "format": "mce-uitheme", "version": 1, "guid": "<uuid>",
+  "palette": { "panel": [0.04, 0.05, 0.16, 0.92], "button": [0.35, 0.08, 0.32, 0.95], "accent": [0.1, 0.75, 0.7, 1] },
+  "fonts": { "body": "guid:<Font>", "title": "guid:<Font>", "button": "guid:<Font>" },
+  "styles": { "Button": { "style": { "text_outline": 1 } }, "Text": { "style": { "text_shadow": [2, 2] } } }
+}
+```
+
+- **`palette`**: the colors every widget kind's look is made of (`UiPalette`: `panel`, `button`,
+  `button_hover`, `button_pressed`, `button_focused`, `button_disabled`, `label` for Text widgets,
+  `text` for text on buttons, `text_focused`, `text_disabled`, `accent`, `console`,
+  `console_text`). Colors it leaves out are the engine's own look, which is the default theme.
+- **`fonts`**: a font per role. A widget's `"font_role"` picks one: `Title`, `Body` or `Button`
+  (default `Auto`: buttons, toggles and sliders use `button`, everything else `body`). A role with
+  no font uses the document's `"font"`, then the built-in one.
+- **`styles`**: per widget kind, `UiStyle` fields over every state (`"style"`) or one state
+  (`"styles": { "Hover": {...} }`), on top of the palette's look.
+
+A document names its theme with `"theme": "guid:<.mcuitheme>"`, and a `UiScreen` may name one
+too (`"theme"`), which wins: two scenes can show one document in two looks. A theme changes only
+what the document leaves to it: each style field that is still at its widget kind's default look
+takes the theme's value, and a field the document sets (a `"style"` tint, a text size) stays.
+`samples/ui_screens` shows its HUD and pause menu under a day theme (`scenes/main.mcscene`) and a
+night theme (`scenes/night.mcscene`) with the same two documents.
 
 ## 12.3 The developer console
 

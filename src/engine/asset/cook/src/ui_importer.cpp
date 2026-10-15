@@ -5,6 +5,7 @@
 // {
 //   "format": "mce-ui", "version": 1, "guid": "<uuid>",
 //   "font": "guid:<Font>", "sprites": "guid:<SpriteSheet>", "white_region": 0,   // the skin; omitted = built-in
+//   "theme": "guid:<UiTheme>",                           // a .mcuitheme (M-UI-DATA 3); omitted = the default look
 //   "modal": true,                                       // false: a HUD, never takes focus
 //   "widgets": [
 //     { "name": "menu", "kind": "Stack",                 // a UiWidgetKind; default Panel
@@ -27,7 +28,9 @@
 // it lists. "kind_defaults": false starts from the C++ defaults instead (what write_ui_document
 // emits). Other keys: "visible", "interactable", "blocks_pointer". Gameplay reaches a document only
 // through data: "action" names the input action the widget's Confirmed / ValueChanged raises in the
-// player, and "bind": "Component/field" (+ "format", printf) shows a field read-only. Names are unique among siblings
+// player, and "bind": "Component/field" (+ "format", printf) shows a field read-only. "font_role":
+// Body | Title | Button picks the theme's font for the widget's text (default Auto: Button for
+// buttons, toggles and sliders, Body otherwise). Names are unique among siblings
 // and contain no '/'; "nav" edges and Document::find take paths of names from the root.
 //
 // A Tabs widget lists its pages under "tabs" (a bar button and a page each, as Builder::tab), or
@@ -56,6 +59,7 @@ constexpr const char* kEdgeNames[ui::NavEdgeCount] = {"up", "down", "left", "rig
 
 const refl::EnumRecord& kind_enum() { return ui::mce_refl_enum_record_UiWidgetKind; }
 const refl::EnumRecord& state_enum() { return ui::mce_refl_enum_record_UiWidgetState; }
+const refl::EnumRecord& font_role_enum() { return ui::mce_refl_enum_record_UiFontRole; }
 
 struct PendingNav {
     u32 widget;
@@ -72,7 +76,7 @@ public:
     bool read(JsonValue doc) {
         const u32 errors_before = diags_.error_count();
         if (!detail::check_keys(doc,
-                                {"format", "version", "guid", "font", "sprites", "white_region", "modal", "widgets"},
+                                {"format", "version", "guid", "font", "sprites", "white_region", "theme", "modal", "widgets"},
                                 file_, kStage, diags_))
             return false;
         const JsonValue fmt = doc.get("format");
@@ -89,6 +93,7 @@ public:
         }
         read_ref(doc.get("font"), out_.font, "font");
         read_ref(doc.get("sprites"), out_.sprites, "sprites");
+        read_ref(doc.get("theme"), out_.theme, "theme");
         if (const JsonValue wr = doc.get("white_region"); wr.valid()) {
             if (!wr.is_integer() || wr.as_number() < 0 || wr.as_number() > 4294967294.0)
                 error(wr, "'white_region' must be a sprite region index");
@@ -172,7 +177,7 @@ private:
                                     "at",      "style",        "styles",         "text",          "value",   "range",
                                     "visible", "interactable", "blocks_pointer", "default_focus", "stack",   "grid",
                                     "nav",     "convar",       "children",       "tabs",          "action",  "bind",
-                                    "format"},
+                                    "format",  "font_role"},
                                 file_, kStage, diags_))
             return;
         const JsonValue name = w.get("name");
@@ -291,6 +296,13 @@ private:
                 error(c, "'convar' must be a convar name of at most 63 bytes");
             else
                 d.convar.assign(c.as_string());
+        }
+        if (const JsonValue f = w.get("font_role"); f.valid()) {
+            const refl::EnumValue* ev = f.is_string() ? font_role_enum().find(StringId(f.as_string())) : nullptr;
+            if (!ev)
+                error(f, "'font_role' must be a UiFontRole: Auto, Body, Title or Button");
+            else
+                d.font_role = static_cast<ui::FontRole>(ev->value);
         }
         if (const JsonValue a = w.get("action"); a.valid()) {
             if (!a.is_string() || a.as_string().empty() || a.as_string().size() > 31)
@@ -580,6 +592,11 @@ void write_widget(const ui::DocumentData& d, u32 i, u32 depth, String& out) {
         field("format");
         append_json_string(out, w.format.view());
     }
+    if (w.font_role != ui::FontRole::Auto) {
+        field("font_role");
+        const refl::EnumValue* role = font_role_enum().find(static_cast<i64>(w.font_role));
+        append_json_string(out, role ? StringView(role->name_str) : StringView("Auto"));
+    }
     bool any_child = false;
     for (u32 c = i + 1; c < d.widgets.size(); ++c) {
         if (d.widgets[c].parent != i) continue;
@@ -603,7 +620,7 @@ void write_widget(const ui::DocumentData& d, u32 i, u32 depth, String& out) {
 class UiImporter final : public IImporter {
 public:
     StringView id() const override { return "ui"; }
-    u32 version() const override { return 2; }
+    u32 version() const override { return 3; }
     ChunkType type() const override { return ChunkType::UiDocument; }
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ".mcui"; }
@@ -614,7 +631,7 @@ public:
             const char* key;
             ChunkType type;
         };
-        for (const Ref r : {Ref{"font", ChunkType::Font}, Ref{"sprites", ChunkType::SpriteSheet}}) {
+        for (const Ref r : {Ref{"font", ChunkType::Font}, Ref{"sprites", ChunkType::SpriteSheet}, Ref{"theme", ChunkType::UiTheme}}) {
             const JsonValue v = in.settings.get(r.key);
             Guid g;
             if (!v.is_string() || !parse_guid_ref(v.as_string(), g)) continue;
@@ -675,6 +692,7 @@ void write_ui_document(const ui::DocumentData& d, asset::Guid guid, String& out)
     };
     ref("font", d.font);
     ref("sprites", d.sprites);
+    ref("theme", d.theme);
     if (d.white_region != 0) appendf(out, ",\n  \"white_region\": %u", d.white_region);
     if (!d.modal) out += ",\n  \"modal\": false";
     out += ",\n  \"widgets\": [";
@@ -689,5 +707,168 @@ void write_ui_document(const ui::DocumentData& d, asset::Guid guid, String& out)
 }
 
 mem::UniquePtr<IImporter> make_ui_importer() { return mem::make_unique<UiImporter>(mem::heap()); }
+
+// ---- themes (M-UI-DATA step 3) ---------------------------------------------------------------------
+//
+// {
+//   "format": "mce-uitheme", "version": 1, "guid": "<uuid>",
+//   "palette": { "panel": [0.1, 0.1, 0.2, 0.9], "accent": [1, 0.5, 0.2, 1] },   // UiPalette fields
+//   "fonts": { "body": "guid:<Font>", "title": "guid:<Font>", "button": "guid:<Font>" },
+//   "sprites": "guid:<SpriteSheet>", "white_region": 0,
+//   "styles": { "Button": { "style": { "text_size": 20 }, "styles": { "Hover": { ... } } } }   // per UiWidgetKind
+// }
+//
+// Every kind's look starts from the palette (ui::theme_from_palette); "styles" changes only the
+// UiStyle fields it lists, over every state ("style") or one ("styles"), as in a .mcui widget.
+
+namespace {
+
+constexpr const char* kThemeStage = "cook.uitheme";
+constexpr const char* kFontRoleKeys[ui::kThemeFontCount] = {"body", "title", "button"};
+
+class ThemeReader {
+public:
+    ThemeReader(StringView file, ui::ThemeData& out, DiagList& diags) : file_(file), out_(out), diags_(diags) {}
+
+    void error(JsonValue at, StringView msg) { detail::error_at(diags_, Errc::ParseError, file_, at, kThemeStage, msg); }
+
+    bool read(JsonValue doc) {
+        const u32 errors_before = diags_.error_count();
+        if (!detail::check_keys(doc, {"format", "version", "guid", "palette", "fonts", "sprites", "white_region", "styles"}, file_,
+                                kThemeStage, diags_))
+            return false;
+        const JsonValue fmt = doc.get("format");
+        if (!fmt.is_string() || fmt.as_string() != "mce-uitheme") {
+            error(fmt.valid() ? fmt : doc, "\"format\" must be \"mce-uitheme\"");
+            return false;
+        }
+        const JsonValue ver = doc.get("version");
+        if (!ver.is_integer() || ver.as_number() != kUiThemeFormatVersion) {
+            String msg;
+            appendf(msg, "unsupported UI theme version (this cook reads version %u)", kUiThemeFormatVersion);
+            detail::error_at(diags_, Errc::VersionTooNew, file_, ver.valid() ? ver : doc, kThemeStage, msg);
+            return false;
+        }
+        ui::Palette palette;
+        if (const JsonValue p = doc.get("palette"); p.valid())
+            read_scene_component(refl::type_of<ui::UiPalette>(), p, &palette, 0, file_, "palette", diags_);
+        ui::theme_from_palette(palette, out_);
+        if (const JsonValue f = doc.get("fonts"); f.valid()) {
+            if (!f.is_object()) error(f, "'fonts' must be an object: body, title, button");
+            for (u32 i = 0; f.is_object() && i < f.size(); ++i) {
+                u32 role = ui::kThemeFontCount;
+                for (u32 r = 0; r < ui::kThemeFontCount; ++r)
+                    if (f.key_at(i) == StringView(kFontRoleKeys[r])) role = r;
+                if (role == ui::kThemeFontCount)
+                    error(f.at(i), "a 'fonts' key must be body, title or button");
+                else
+                    read_ref(f.at(i), out_.fonts[role], "fonts");
+            }
+        }
+        read_ref(doc.get("sprites"), out_.sprites, "sprites");
+        if (const JsonValue wr = doc.get("white_region"); wr.valid()) {
+            if (!wr.is_integer() || wr.as_number() < 0 || wr.as_number() > 4294967294.0)
+                error(wr, "'white_region' must be a sprite region index");
+            else
+                out_.white_region = static_cast<u32>(wr.as_number());
+        }
+        if (const JsonValue st = doc.get("styles"); st.valid()) {
+            if (!st.is_object()) error(st, "'styles' must be an object of UiWidgetKind names");
+            for (u32 i = 0; st.is_object() && i < st.size(); ++i) read_kind(st.key_at(i), st.at(i));
+        }
+        return diags_.error_count() == errors_before;
+    }
+
+private:
+    void read_ref(JsonValue v, asset::Guid& g, const char* key) {
+        if (!v.valid() || v.is_null()) return;
+        if (!v.is_string() || !parse_guid_ref(v.as_string(), g)) {
+            String msg;
+            appendf(msg, "'%s' must be \"guid:<uuid>\" or null", key);
+            error(v, msg);
+        }
+    }
+
+    void read_kind(StringView name, JsonValue v) {
+        const refl::EnumValue* ev = kind_enum().find(StringId(name));
+        if (!ev) {
+            error(v, "a 'styles' key must be a UiWidgetKind: Panel, Image, Text, Button, Toggle, Slider, Stack, Grid, Console, Scroll or Tabs");
+            return;
+        }
+        if (!v.is_object() || !detail::check_keys(v, {"style", "styles"}, file_, kThemeStage, diags_)) {
+            if (!v.is_object()) error(v, "a kind's look is { \"style\": {...}, \"styles\": { \"Hover\": {...} } }");
+            return;
+        }
+        ui::Style(&styles)[kWidgetStateCount] = out_.styles[ev->value];
+        if (const JsonValue st = v.get("style"); st.valid())
+            for (u32 s = 0; s < kWidgetStateCount; ++s)
+                if (!read_scene_component(refl::type_of<ui::UiStyle>(), st, &styles[s], 0, file_, "style", diags_)) break;
+        if (const JsonValue st = v.get("styles"); st.valid()) {
+            if (!st.is_object()) error(st, "'styles' must be an object of UiWidgetState names");
+            for (u32 i = 0; st.is_object() && i < st.size(); ++i) {
+                const refl::EnumValue* sv = state_enum().find(StringId(st.key_at(i)));
+                if (!sv || sv->value >= static_cast<i64>(kWidgetStateCount)) {
+                    error(st.at(i), "a 'styles' key must be Normal, Hover, Pressed, Focused or Disabled");
+                    continue;
+                }
+                read_scene_component(refl::type_of<ui::UiStyle>(), st.at(i), &styles[sv->value], 0, file_, "styles", diags_);
+            }
+        }
+    }
+
+    StringView file_;
+    ui::ThemeData& out_;
+    DiagList& diags_;
+};
+
+class UiThemeImporter final : public IImporter {
+public:
+    StringView id() const override { return "uitheme"; }
+    u32 version() const override { return 1; }
+    ChunkType type() const override { return ChunkType::UiTheme; }
+    bool native() const override { return true; }
+    bool handles_extension(StringView ext) const override { return ext == ".mcuitheme"; }
+
+    void scan_dependencies(const ImportInput& in, Array<DepRef>& out, DiagList& diags) const override {
+        (void)diags;  // a malformed reference is reported by cook()
+        auto add = [&](JsonValue v, ChunkType type, const char* where) {
+            Guid g;
+            if (!v.is_string() || !parse_guid_ref(v.as_string(), g)) return;
+            DepRef d;
+            d.guid = g;
+            d.expected = type;
+            d.line = v.line();
+            d.col = v.col();
+            d.where.assign(where);
+            out.push_back(d);
+        };
+        if (const JsonValue f = in.settings.get("fonts"); f.is_object())
+            for (u32 i = 0; i < f.size(); ++i) add(f.at(i), ChunkType::Font, "fonts");
+        add(in.settings.get("sprites"), ChunkType::SpriteSheet, "sprites");
+    }
+
+    bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
+        ui::ThemeData theme;
+        if (!read_ui_theme(in.settings, in.display_path, theme, diags)) return false;
+        Array<byte> bytes;
+        ui::encode_ui_theme(theme, bytes);
+        asset::ContainerWriter::ChunkDesc d;
+        d.type = ChunkType::UiTheme;
+        d.version = asset::chunk_version(asset::UI_THEME_VERSION, 0);
+        d.guid = in.guid;
+        out.add(d, bytes.span());
+        return true;
+    }
+};
+
+}  // namespace
+
+bool read_ui_theme(JsonValue doc, StringView file, ui::ThemeData& out, DiagList& diags) {
+    out = ui::default_theme();
+    ThemeReader r(file, out, diags);
+    return r.read(doc);
+}
+
+mem::UniquePtr<IImporter> make_ui_theme_importer() { return mem::make_unique<UiThemeImporter>(mem::heap()); }
 
 }  // namespace mce::cook

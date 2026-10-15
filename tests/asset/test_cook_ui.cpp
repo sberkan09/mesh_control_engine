@@ -59,7 +59,7 @@ const char* const kMenu = R"({ "format": "mce-ui", "version": 1, "guid": "5703e0
     { "name": "bg", "fill": true, "style": { "tint": [0, 0, 0, 0.6] } },
     { "name": "menu", "kind": "Stack", "at": [0.5, 0.45, 320, 0], "stack": { "spacing": 12, "align": "Center" },
       "children": [
-        { "name": "title", "kind": "Text", "text": "UNDERTOW", "style": { "text_size": 32, "text_color": [1, 0.8, 0.4, 1], "text_outline": 2, "text_shadow": [2, 3] },
+        { "name": "title", "kind": "Text", "text": "UNDERTOW", "font_role": "Title", "style": { "text_size": 32, "text_color": [1, 0.8, 0.4, 1], "text_outline": 2, "text_shadow": [2, 3] },
           "bind": "Score/points", "format": "BEST %.0f" },
         { "name": "play", "kind": "Button", "text": "PLAY", "default_focus": true, "action": "Play",
           "styles": { "Hover": { "tint": [0.3, 0.3, 0.4, 1], "slice": { "left": 4, "right": 4 } } },
@@ -91,6 +91,8 @@ TEST_CASE("ui: .mcui cooks to CHNK_UIDOC, decodes and builds a Document") {
     CHECK(d.widgets[d.find("menu/volume")].step == 0.05f);
     CHECK(d.widgets[d.find("menu/levels/l1")].styles[0].sprite_region == 7);
     CHECK(d.widgets[d.find("menu/title")].styles[0].text_outline == 2.0f);
+    CHECK(d.widgets[d.find("menu/title")].font_role == ui::FontRole::Title);
+    CHECK(d.widgets[play].font_role == ui::FontRole::Auto);
     CHECK(d.widgets[d.find("menu/title")].styles[4].text_shadow.y == 3.0f);
     CHECK(d.find("menu/options/bar/video") != ui::kNoWidgetIndex);
     CHECK_FALSE(d.widgets[d.find("menu/options/pages/audio")].visible);
@@ -207,6 +209,7 @@ TEST_CASE("ui: authoring mistakes fail the cook with file and line") {
         {R"([ { "name": "a", "kind": "Text", "format": "%g" } ])", "needs a 'bind'"},
         {R"([ { "name": "a", "kind": "Text", "bind": "points" } ])", "<Component>/<field>"},
         {R"([ { "name": "a", "kind": "Button", "action": "" } ])", "action name"},
+        {R"([ { "name": "a", "kind": "Text", "font_role": "Heading" } ])", "UiFontRole"},
     };
     for (const Bad& b : bad) {
         CAPTURE(b.widgets);
@@ -232,5 +235,141 @@ TEST_CASE("ui: authoring mistakes fail the cook with file and line") {
         const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
         CHECK_FALSE(r.ok());
         CHECK(ui_diags(r).find("menu.mcui:2:") != std::string::npos);
+    }
+}
+
+// ---- themes (M-UI-DATA step 3) ---------------------------------------------------------------------
+
+namespace {
+
+constexpr const char* kThemeGuid = "5703e000-0000-4000-8000-0000000000f1";
+constexpr const char* kFontGuid = "5703e000-0000-4000-8000-0000000000f2";
+
+const char* const kTheme = R"({ "format": "mce-uitheme", "version": 1, "guid": "5703e000-0000-4000-8000-0000000000f1",
+  "palette": { "panel": [0.1, 0.2, 0.4, 0.9], "button": [0.8, 0.2, 0.2, 1], "accent": [0.2, 1, 0.4, 1] },
+  "fonts": { "title": "guid:5703e000-0000-4000-8000-0000000000f2" },
+  "styles": { "Button": { "style": { "text_size": 20 }, "styles": { "Hover": { "tint": [1, 0.5, 0.5, 1] } } } } })";
+
+const char* const kThemedMenu = R"({ "format": "mce-ui", "version": 1, "guid": "5703e000-0000-4000-8000-0000000000e1",
+  "theme": "guid:5703e000-0000-4000-8000-0000000000f1",
+  "widgets": [
+    { "name": "bg", "fill": true },
+    { "name": "title", "kind": "Text", "text": "TITLE", "font_role": "Title" },
+    { "name": "play", "kind": "Button", "text": "PLAY" },
+    { "name": "quit", "kind": "Button", "text": "QUIT", "style": { "tint": [0, 0, 1, 1] } } ] })";
+
+struct ThemeProject {
+    std::string root;
+    asset::AssetSystem assets;
+};
+
+void cook_theme_project(ThemeProject& p, const std::string& dir) {
+    p.root = fresh_dir(dir);
+    write_file(p.root + "/assets/menu.mcui", kThemedMenu);
+    write_file(p.root + "/assets/night.mcuitheme", kTheme);
+    write_file(p.root + "/assets/title.ttf", read_file(std::string(MCE_TEST_DATA_DIR) + "/fonts/ProggyClean.ttf"));
+    write_file(p.root + "/assets/title.ttf.mceasset", sidecar(kFontGuid, "font", R"({ "size": 26 })"));
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(p.root.c_str()), cook::CookOptions{});
+    INFO(ui_diags(r));
+    REQUIRE(r.ok());
+    const std::string cooked = p.root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(p.assets.mount(Span<const StringView>(roots, 1)));
+}
+
+}  // namespace
+
+TEST_CASE("ui theme: the default theme is the Builder's look") {
+    ui::WidgetData button;
+    ui::builder_defaults(ui::WidgetKind::Button, button);
+    const ui::Palette p;
+    CHECK(button.styles[u32(ui::WidgetState::Normal)].tint.r == p.button.r);
+    CHECK(button.styles[u32(ui::WidgetState::Hover)].tint.g == p.button_hover.g);
+    CHECK(button.styles[u32(ui::WidgetState::Focused)].text_color.b == p.text_focused.b);
+    ui::WidgetData text;
+    ui::builder_defaults(ui::WidgetKind::Text, text);
+    CHECK_FALSE(text.styles[0].draw_quad);
+    CHECK(text.styles[0].text_color.r == 1.0f);
+    CHECK(ui::resolve_font_role(ui::WidgetKind::Slider, ui::FontRole::Auto) == ui::FontRole::Button);
+    CHECK(ui::resolve_font_role(ui::WidgetKind::Text, ui::FontRole::Auto) == ui::FontRole::Body);
+    CHECK(ui::resolve_font_role(ui::WidgetKind::Button, ui::FontRole::Title) == ui::FontRole::Title);
+}
+
+TEST_CASE("ui theme: .mcuitheme cooks; a theme restyles what a document leaves at its kind's look") {
+    ThemeProject p;
+    cook_theme_project(p, "ui_theme");
+    auto th = p.assets.load_sync<asset::UiTheme>(p.assets.find(asset::parse_guid(kThemeGuid).value()));
+    REQUIRE(th);
+    ui::ThemeData theme;
+    REQUIRE(ui::decode_ui_theme(p.assets.resolve(th.value()), theme));
+    const u32 kButton = u32(ui::WidgetKind::Button), kNormal = u32(ui::WidgetState::Normal), kHover = u32(ui::WidgetState::Hover);
+    CHECK(theme.palette.button.r == 0.8f);
+    CHECK(theme.styles[kButton][kNormal].tint.r == 0.8f);  // from the palette
+    CHECK(theme.styles[kButton][kNormal].text_size == 20.0f);
+    CHECK(theme.styles[kButton][kHover].tint.g == 0.5f);  // "styles" over the palette
+    CHECK(theme.styles[kButton][kHover].text_size == 20.0f);
+    CHECK(theme.styles[u32(ui::WidgetKind::Slider)][kNormal].accent.g == 1.0f);
+    CHECK(theme.font(ui::FontRole::Title) == asset::parse_guid(kFontGuid).value());
+    CHECK(theme.font(ui::FontRole::Body).is_null());
+
+    auto dh = p.assets.load_sync<asset::UiDocument>(p.assets.find(asset::parse_guid(kGuid).value()));
+    REQUIRE(dh);
+    ui::DocumentData d;
+    REQUIRE(ui::decode_ui_document(p.assets.resolve(dh.value()), d));
+    CHECK(d.theme == asset::parse_guid(kThemeGuid).value());
+    CHECK(d.widgets[d.find("title")].font_role == ui::FontRole::Title);
+    ui::apply_theme(theme, d);
+    CHECK(d.widgets[d.find("bg")].styles[kNormal].tint.b == 0.4f);
+    CHECK(d.widgets[d.find("play")].styles[kNormal].tint.r == 0.8f);
+    CHECK(d.widgets[d.find("play")].styles[kHover].tint.g == 0.5f);
+    CHECK(d.widgets[d.find("play")].styles[kNormal].text_size == 20.0f);
+    CHECK(d.widgets[d.find("quit")].styles[kNormal].tint.b == 1.0f);  // the document's own tint stays
+    CHECK(d.widgets[d.find("quit")].styles[kNormal].tint.r == 0.0f);
+    CHECK(d.widgets[d.find("quit")].styles[kNormal].text_size == 20.0f);  // a field it left alone does not
+
+    // The theme reference and font roles survive writing the document back.
+    ui::DocumentData again;
+    REQUIRE(ui::decode_ui_document(p.assets.resolve(dh.value()), again));
+    cook::String text;
+    cook::write_ui_document(again, asset::parse_guid(kGuid).value(), text);
+    CHECK(std::string(text.c_str()).find("\"theme\": \"guid:5703e000-0000-4000-8000-0000000000f1\"") != std::string::npos);
+    CHECK(std::string(text.c_str()).find("\"font_role\": \"Title\"") != std::string::npos);
+
+    // A truncated chunk does not decode.
+    const Span<const byte> bytes = p.assets.resolve(th.value());
+    ui::ThemeData bad;
+    CHECK_FALSE(ui::decode_ui_theme(bytes.subspan(0, bytes.size() - 1), bad));
+}
+
+TEST_CASE("ui theme: authoring mistakes fail the cook with file and line") {
+    struct Bad {
+        const char* body;
+        const char* expect;
+    };
+    const Bad bad[] = {
+        {R"("palette": { "panle": [1, 1, 1, 1] })", "panle"},
+        {R"("fonts": { "heading": null })", "body, title or button"},
+        {R"("fonts": { "body": "Proggy" })", "guid:<uuid>"},
+        {R"("styles": { "Buton": {} })", "UiWidgetKind"},
+        {R"("styles": { "Button": { "style": { "tnit": [1, 1, 1, 1] } } })", "tnit"},
+        {R"("styles": { "Button": { "styles": { "Count": {} } } })", "Normal, Hover"},
+        {R"("colours": {})", "colours"},
+    };
+    for (const Bad& b : bad) {
+        CAPTURE(b.body);
+        const std::string root = fresh_dir("ui_theme_bad");
+        std::string src = "{ \"format\": \"mce-uitheme\", \"version\": 1, \"guid\": \"";
+        src += kThemeGuid;
+        src += "\",\n  ";
+        src += b.body;
+        src += " }";
+        write_file(root + "/assets/look.mcuitheme", src);
+        cook::CookService svc;
+        const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+        CHECK_FALSE(r.ok());
+        const std::string diags = ui_diags(r);
+        CHECK(diags.find("look.mcuitheme:2:") != std::string::npos);
+        CHECK(diags.find(b.expect) != std::string::npos);
     }
 }

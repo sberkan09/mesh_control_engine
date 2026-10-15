@@ -7,7 +7,7 @@
       "children": [
         { "name": "menu", "kind": "Stack", "at": [0.5, 0.5, 320, 0], "stack": { "spacing": 14 },
           "children": [
-            { "name": "title", "kind": "Text", "text": "PAUSED", "style": { "text_size": 36 } },
+            { "name": "title", "kind": "Text", "text": "PAUSED", "font_role": "Title", "style": { "text_size": 36 } },
             { "name": "resume", "kind": "Button", "text": "RESUME", "style": { "text_size": 24 }, "action": "Resume",
               "default_focus": true, "nav": { "down": "veil/menu/restart" } },
             { "name": "restart", "kind": "Button", "text": "RESTART", "style": { "text_size": 24 }, "action": "Restart",
