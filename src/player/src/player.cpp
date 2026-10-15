@@ -385,6 +385,7 @@ public:
         mount_mods();
         const StringView roots[1] = {pack.view()};
         MCE_TRY(assets_.mount(Span<const StringView>(roots, 1)));
+        MCE_LOG_INFO("{}: pack mounted from {}", desc_.app_name, pack.view());  // the phone smoke runs look for it
         const StringView want_scene = !cv_scene.get_string().empty() ? cv_scene.get_string()
                                       : desc_.start_scene                ? StringView(desc_.start_scene)
                                                                          : StringView();
