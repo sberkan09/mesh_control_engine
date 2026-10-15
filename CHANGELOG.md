@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Screen reader support, M-ACCESS step 4 (SBA-98): the stock player speaks the focused menu item and a
+  focused slider's new value through TalkBack on Android (and, built with `MCE_SCREEN_READER_NATIVE`, VoiceOver on
+  iOS and macOS and Narrator, NVDA or JAWS on Windows), while the OS reports a reader on (`access.screen_reader`).
+  `ui::build_access_tree` gives each widget a role, a name and a value. User guide 12.5.
 - Subtitles and sound captions, M-ACCESS step 1 (SBA-95): the stock player draws timeline subtitle lines,
   `kit::SoundCaption` tags on sounds and `kit::ShowCaption` lines at the bottom of the screen
   (`ui::SubtitleView`), with `access.subtitles`, `access.captions`, `access.subtitle_speaker`, `access.subtitle_size`

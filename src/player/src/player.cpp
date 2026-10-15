@@ -106,6 +106,7 @@
 #include "mce/platform/haptics.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
+#include "mce/platform/screen_reader.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
 #include "mce/render/quality.h"
@@ -115,6 +116,7 @@
 #include "mce/player/player.h"
 #include "mce/scene/scene.h"
 #include "mce/scene/streaming.h"
+#include "mce/ui/access.h"
 #include "mce/ui/subtitles.h"
 #include "mce/ui/ui.h"
 #include "ship_paths.h"
@@ -206,6 +208,10 @@ MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
          CVarFlags::None);
+MCE_CVAR(cv_screen_reader, "access.screen_reader", 1,
+         "Speak the focused menu item and a focused slider's new value through the device's screen reader: "
+         "0 never, 1 while the OS reports a reader on (VoiceOver, TalkBack, Narrator...), 2 always",
+         CVarFlags::Saved);
 MCE_CVAR(cv_haptics, "haptics", true,
          "Haptic feedback: phone taps and gamepad rumble from platform::haptics::play (off: none; never in the state hash)",
          CVarFlags::Saved);
@@ -452,6 +458,7 @@ public:
             MCE_TRY(ui::create_builtin_skin(renderer_, skin_));
             console_.init(skin_.skin, 0.5f);
             subtitles_.set_skin(skin_.skin);
+            platform::screen_reader::attach(*window_);
             for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
                 const ui::Layer* l = desc_.ui_layers[i];
                 if (l && l->init && !l->init(l->user, renderer_, skin_.skin))
@@ -578,6 +585,7 @@ public:
         update_console(bb);
         update_ui_layers(bb);
         update_subtitles(bb);
+        speak_focus();
         update_ui_screens(bb);
         const bool overlay =
             paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() || cv_stats.get_bool();
@@ -1485,6 +1493,29 @@ private:
     ui::SubtitleView subtitles_;
     Array<kit::CaptionLine> caption_lines_;
     Array<ui::SubtitleLine> subtitle_lines_;
+
+    // The screen reader (M-ACCESS): the focused item of the menu that owns focus (the console while
+    // it is open), and a focused slider's new value, spoken through the device's reader.
+    void speak_focus() {
+        const i32 mode = cv_screen_reader.get_int();
+        if (mode <= 0) return;
+        if (mode == 1) {  // the OS asked once a second: a reader turned on mid-game starts speaking
+            if (reader_check_frames_-- <= 0) {
+                reader_on_ = platform::screen_reader::running();
+                reader_check_frames_ = 60;
+            }
+            if (!reader_on_) {
+                announcer_.reset();
+                return;
+            }
+        }
+        const ui::Document* doc = console_.is_open() ? &console_.document() : screens_.focus_document();
+        FixedString<192> line;
+        if (announcer_.next(doc, line)) platform::screen_reader::announce(line.view());
+    }
+    ui::AccessAnnouncer announcer_;
+    bool reader_on_ = false;
+    i32 reader_check_frames_ = 0;
 
     // The scene's UI screens (kit::UiScreen, M-UI-DATA step 2).
     Result<void> load_ui_screens() {
