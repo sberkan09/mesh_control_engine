@@ -15,6 +15,7 @@
 #include "mce/core.h"
 #include "mce/crash.h"
 #include "mce/version.h"
+#include "mce/web.h"
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
 #include "mce/platform/platform.h"
@@ -112,6 +113,12 @@ inline void resolve_shipped_path(StringView override_path, StringView file_name,
     if (std::FILE* f = std::fopen(out.c_str(), "rb")) {
         std::fclose(f);
         return;
+    }
+    // A browser build ships the file next to its page: download it (with a progress line) into the
+    // same place in the virtual file system (M-WEB step 3).
+    if (web::active() && !file_name.empty()) {
+        const FixedString<256> url(file_name);
+        if (web::fetch_file(url.c_str(), out.c_str())) return;
     }
     out.clear();
     out.append(dev_path);
