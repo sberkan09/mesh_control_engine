@@ -6,6 +6,7 @@
 // Paths: scene paths are absolute (or relative to the working directory); `scene_rel` helpers
 // take paths relative to the project's assets/ folder, which is how the catalog lists them.
 
+#include "mce/physics3d/navmesh3d.h"
 #include "mce/editor/editor_scene.h"
 #include "mce/editor/play_session.h"
 #include "mce/editor/project.h"
@@ -104,6 +105,11 @@ public:
     // (+ sidecar; a re-bake keeps the file's GUID), hot-reloads it and points the component's `baked`
     // at it (one undo step). The Low quality tier draws the volume from this bake only.
     Result<void> bake_gi_volume();
+    // Navmesh bake (M-GAMEPLAY3D 1): bakes the open scene's first NavMeshSurface3D from its colliders,
+    // areas and links (kit::bake_scene_navmesh), writes assets/navmesh/<scene>/nav_<entity id>.mcnav
+    // (+ sidecar; a re-bake keeps the file's GUID), hot-reloads it and points the component's `baked`
+    // at it (one undo step). Returns the stats of the bake.
+    Result<physics::NavBakeStats3D> bake_navmesh();
 
     // Every scene in the catalog, by path.
     void list_scenes(Array<const ProjectAsset*>& out) const;

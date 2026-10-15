@@ -58,6 +58,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_vol_albedo;     // rgb: scattering albedo, w: sun scale
     vec4 p_vol_scale;      // x: local light scale, y: ambient scale
     vec4 p_decals;         // x: decals to apply (M-VISUAL 9)
+    vec4 p_ssr;            // x: screen-space reflections on (M-VISUAL2 1), y: max roughness, z: roughness fade, w: intensity
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -302,12 +303,15 @@ vec4 vol_fog(vec2 uv, float depth) {
 }
 )"
 
-constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME R"(
+// The forward material shader. kTerrainFS is the same with MCE_TERRAIN: the surface comes from the
+// splat layers (terrain_surface) instead of the material's maps.
+#define MCE_GLSL_MESH_FS R"(
 layout(binding = 6) uniform sampler2DArray u_albedo;
 layout(binding = 7) uniform sampler2DArray u_normal_map;
 layout(binding = 8) uniform sampler2DArray u_orm;
 layout(binding = 13) uniform sampler2DArray u_emissive;
 layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility
+layout(binding = 3) uniform sampler2D u_ssr;  // half-resolution SSR: rgb reflected light, a confidence
 layout(location = 0) in vec3 v_world;
 layout(location = 1) in vec3 v_normal;
 layout(location = 2) in vec2 v_uv;
@@ -417,6 +421,8 @@ uint cluster_of(float depth) {
 
 // ---- projected decals (M-VISUAL 9): up to p_decals.x boxes in submission order, each blending its
 // color over the surface's base color and its roughness / metallic over the surface's, before lighting.
+// A smooth decal also fills the surface's normal-map bumps (`fill`: a puddle over paving is a flat
+// mirror; without it a low roughness lights each bump's rim as a dotted pattern).
 struct DecalRec {
     mat4 inv_world;  // world -> the unit box
     vec4 uv_rect;
@@ -435,7 +441,7 @@ vec4 decal_texture(int slot, vec2 uv, vec2 gx, vec2 gy) {
     return textureGrad(u_decal2, vec3(uv, 0.0), gx, gy);
 }
 // `ng`: the geometric normal; derivatives come from outside the loop (its branches diverge).
-void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout vec3 emit) {
+void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout vec3 emit, inout float fill) {
     vec3 dpx = dFdx(p), dpy = dFdy(p);
     int count = int(p_decals.x);
     for (int i = 0; i < count; ++i) {
@@ -458,25 +464,136 @@ void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout f
         albedo = mix(albedo, c, a);
         rough = mix(rough, q.x, a * q.z);
         metallic = mix(metallic, q.y, a * q.z);
+        fill = mix(fill, 1.0, a * q.z * (1.0 - q.x));
         emit += c * (q.w * a);
     }
 }
 
+#ifdef MCE_TERRAIN
+// ---- splat-layered terrain (M-TERRAIN 2): the layers' maps are layers of u_albedo / u_normal_map /
+// u_orm, the weights two RGBA layers of u_emissive (no emissive on a terrain), the parameters TerrainU.
+layout(std140, binding = 2) uniform TerrainU {
+    mat4 t_to_local;     // world -> terrain space (the layers tile in its xz metres)
+    vec4 t_size;         // xy: size along x and z, z: splat samples per side, w: layer count
+    vec4 t_flags;        // x: triplanar allowed, y: height blend allowed, z: height blend depth
+    vec4 t_color[8];     // rgb: base color, a: albedo map
+    vec4 t_params[8];    // x: 1 / tile, y: roughness, z: metallic, w: height strength
+    vec4 t_maps[8];      // x: normal map, y: ORM map, z: triplanar, w: occlusion in ORM.r
+};
+// One layer's map: projected along y, or along x, y and z blended by `bw` (zero weights skip their fetch).
+// Explicit gradients: the layer loop branches per fragment.
+vec4 terrain_fetch(sampler2DArray t, vec3 p, vec3 dx, vec3 dy, float layer, float s, vec3 bw) {
+    vec4 c = vec4(0.0);
+    if (bw.y > 0.0) c += textureGrad(t, vec3(p.xz * s, layer), dx.xz * s, dy.xz * s) * bw.y;
+    if (bw.x > 0.0) c += textureGrad(t, vec3(p.zy * s, layer), dx.zy * s, dy.zy * s) * bw.x;
+    if (bw.z > 0.0) c += textureGrad(t, vec3(p.xy * s, layer), dx.xy * s, dy.xy * s) * bw.z;
+    return c;
+}
+// A layer's normal map through each projection, reoriented onto the surface normal ("whiteout" blend).
+vec3 terrain_normal(vec3 p, vec3 dx, vec3 dy, float layer, float s, vec3 bw, vec3 n) {
+    vec3 r = vec3(0.0);
+    if (bw.y > 0.0) {
+        vec3 t = textureGrad(u_normal_map, vec3(p.xz * s, layer), dx.xz * s, dy.xz * s).xyz * 2.0 - 1.0;
+        r += vec3(t.x + n.x, abs(t.z) * n.y, n.z - t.y) * bw.y;
+    }
+    if (bw.x > 0.0) {
+        vec3 t = textureGrad(u_normal_map, vec3(p.zy * s, layer), dx.zy * s, dy.zy * s).xyz * 2.0 - 1.0;
+        r += vec3(abs(t.z) * n.x, n.y - t.y, t.x + n.z) * bw.x;
+    }
+    if (bw.z > 0.0) {
+        vec3 t = textureGrad(u_normal_map, vec3(p.xy * s, layer), dx.xy * s, dy.xy * s).xyz * 2.0 - 1.0;
+        r += vec3(t.x + n.x, n.y - t.y, abs(t.z) * n.z) * bw.z;
+    }
+    return r;
+}
+void terrain_surface(vec3 world, vec3 n, out vec3 albedo, out vec3 nrm, out float rough, out float metallic, out float ao) {
+    vec3 p = (t_to_local * vec4(world, 1.0)).xyz;
+    vec3 dx = dFdx(p), dy = dFdy(p);
+    float res = t_size.z;
+    vec2 suv = (p.xz / t_size.xy + 0.5) * ((res - 1.0) / res) + 0.5 / res;  // sample centres span the extent
+    vec4 s0 = textureLod(u_emissive, vec3(suv, 0.0), 0.0), s1 = textureLod(u_emissive, vec3(suv, 1.0), 0.0);
+    float w[8] = float[8](s0.x, s0.y, s0.z, s0.w, s1.x, s1.y, s1.z, s1.w);
+    int count = int(t_size.w);
+    vec3 tri = pow(abs(n), vec3(4.0));
+    tri /= max(tri.x + tri.y + tri.z, 1e-5);
+    tri = mix(vec3(0.0, 1.0, 0.0), tri, step(0.02, 1.0 - tri.y));  // nearly flat: the top projection alone
+    vec3 bws[8];
+    vec4 col[8];
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) {
+        sum += w[i];
+        bws[i] = (t_flags.x > 0.5 && t_maps[i].z > 0.5) ? tri : vec3(0.0, 1.0, 0.0);
+        col[i] = vec4(1.0);
+        if (w[i] > 0.002 && t_color[i].a > 0.5) col[i] = terrain_fetch(u_albedo, p, dx, dy, float(i), t_params[i].x, bws[i]);
+        col[i].rgb *= t_color[i].rgb;
+    }
+    for (int i = 0; i < count; ++i) w[i] /= max(sum, 1e-5);
+    if (t_flags.y > 0.5) {  // height blend: the layer that rises highest above its weight wins at the seam
+        float top = -1e9;
+        float h[8];
+        for (int i = 0; i < count; ++i) {
+            h[i] = w[i] > 0.002 ? w[i] + dot(col[i].rgb, vec3(0.2126, 0.7152, 0.0722)) * t_params[i].w * t_flags.z : -1e9;
+            top = max(top, h[i]);
+        }
+        sum = 0.0;
+        for (int i = 0; i < count; ++i) {
+            w[i] = max(h[i] - (top - t_flags.z), 0.0);
+            sum += w[i];
+        }
+        for (int i = 0; i < count; ++i) w[i] /= max(sum, 1e-5);
+    }
+    albedo = vec3(0.0);
+    nrm = vec3(0.0);
+    rough = 0.0;
+    metallic = 0.0;
+    ao = 0.0;
+    for (int i = 0; i < count; ++i) {
+        if (w[i] <= 0.002) continue;
+        float wi = w[i];
+        albedo += col[i].rgb * wi;
+        float r = t_params[i].y, m = t_params[i].z, o = 1.0;
+        if (t_maps[i].y > 0.5) {
+            vec3 orm = terrain_fetch(u_orm, p, dx, dy, float(i), t_params[i].x, bws[i]).rgb;
+            if (t_maps[i].w > 0.5) o = orm.r;
+            r *= orm.g;
+            m *= orm.b;
+        }
+        rough += r * wi;
+        metallic += m * wi;
+        ao += o * wi;
+        nrm += (t_maps[i].x > 0.5 ? normalize(terrain_normal(p, dx, dy, float(i), t_params[i].x, bws[i], n)) : n) * wi;
+    }
+    nrm = dot(nrm, nrm) > 1e-8 ? normalize(nrm) : n;
+}
+#endif
+
 void main() {
-    vec4 base = texture(u_albedo, vec3(v_uv, 0.0)) * o_base_color;
-    if (o_params.x > 0.0 && base.a < o_params.x) discard;  // alpha mask
     vec3 n = normalize(v_normal);
     if (!gl_FrontFacing) n = -n;
+#ifdef MCE_TERRAIN
+    vec4 base = vec4(1.0);
+    vec3 t_n;
+    float t_rough, t_metallic, t_ao;
+    terrain_surface(v_world, n, base.rgb, t_n, t_rough, t_metallic, t_ao);
+    base *= o_base_color;
+#else
+    vec4 base = texture(u_albedo, vec3(v_uv, 0.0)) * o_base_color;
+    if (o_params.x > 0.0 && base.a < o_params.x) discard;  // alpha mask
+#endif
     vec3 color;
     vec3 decal_emit = vec3(0.0);
     if (o_params.y > 0.5) {
         if (p_decals.x > 0.5) {
-            float r0 = 1.0, m0 = 0.0;
-            apply_decals(v_world, n, base.rgb, r0, m0, decal_emit);
+            float r0 = 1.0, m0 = 0.0, f0 = 0.0;
+            apply_decals(v_world, n, base.rgb, r0, m0, decal_emit, f0);
         }
         color = base.rgb;  // unlit
     } else {
+#ifdef MCE_TERRAIN
+        float rough = t_rough, metallic = t_metallic, ao = t_ao;
+#else
         float rough = o_params.z, metallic = o_params.w, ao = 1.0;
+#endif
         if (o_maps.y > 0.5) {
             vec3 orm = texture(u_orm, vec3(v_uv, 0.0)).rgb;
             if (o_maps.z > 0.5) ao = orm.r;
@@ -485,8 +602,16 @@ void main() {
                 metallic *= orm.b;
             }
         }
-        if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit);
-        if (o_maps.x > 0.5) n = perturb_normal(n, v_world, v_uv, texture(u_normal_map, vec3(v_uv, 0.0)).xyz * 2.0 - 1.0);
+        float fill = 0.0;
+        if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit, fill);
+#ifdef MCE_TERRAIN
+        n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
+#else
+        if (o_maps.x > 0.5) {  // uniform branch: perturb_normal takes derivatives
+            vec3 nb = perturb_normal(n, v_world, v_uv, texture(u_normal_map, vec3(v_uv, 0.0)).xyz * 2.0 - 1.0);
+            n = normalize(mix(nb, n, fill));
+        }
+#endif
         rough = clamp(rough, 0.045, 1.0);
         metallic = clamp(metallic, 0.0, 1.0);
         float a = rough * rough;
@@ -526,7 +651,7 @@ void main() {
         vec3 r = reflect(-v, n);
         float horizon = clamp(1.0 + dot(r, normalize(v_normal)), 0.0, 1.0);
         vec3 amb_diffuse = p_ibl.x > 0.5 ? sh_irradiance(n) * diffuse * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
-        vec3 amb_spec;
+        vec3 amb_spec, spec_brdf;
         // The irradiance volume: its light in place of the sky's, and the sky's reflections dimmed by how
         // much of the sky's irradiance reaches this point (rooms do not mirror the open sky).
         float gi_w = 0.0, sky_vis = 1.0;
@@ -543,9 +668,17 @@ void main() {
             vec2 ab = textureLod(u_brdf_lut, vec2(NoV, rough), 0.0).rg;
             vec3 env = prefiltered_sky(r, rough) * sky_vis;
             if (p_probes.x > 0.5) env = probe_specular(v_world, r, rough, env);
-            amb_spec = env * (f0 * ab.x + ab.y) * p_sky_horizon.w * horizon * horizon;
+            spec_brdf = f0 * ab.x + ab.y;
+            amb_spec = env * spec_brdf * p_sky_horizon.w * horizon * horizon;
         } else {
-            amb_spec = sky_radiance(r, rough * 8.0) * sky_vis * env_brdf(f0, rough, NoV) * p_sky_horizon.w * horizon * horizon;
+            spec_brdf = env_brdf(f0, rough, NoV);
+            amb_spec = sky_radiance(r, rough * 8.0) * sky_vis * spec_brdf * p_sky_horizon.w * horizon * horizon;
+        }
+        if (p_ssr.x > 0.5) {  // what the screen saw along r, over the probes, by confidence and roughness
+            vec4 c = u_view_proj * vec4(v_world, 1.0);
+            vec4 s = textureLod(u_ssr, c.xy / c.w * 0.5 + 0.5, 0.0);
+            float w = s.a * clamp((p_ssr.y - rough) / p_ssr.z, 0.0, 1.0);
+            amb_spec = mix(amb_spec, s.rgb * spec_brdf * p_ssr.w, w);
         }
         if (p_ao.x > 0.5) {  // SSAO darkens the ambient only; the screen position as the full-screen passes see it
             vec4 c = u_view_proj * vec4(v_world, 1.0);
@@ -569,7 +702,9 @@ void main() {
     }
     o_color = vec4(color, base.a);
 }
-)";
+)"
+constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_MESH_FS;
+constexpr const char* kTerrainFS = "#version 450 core\n#define MCE_TERRAIN 1\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_MESH_FS;
 
 constexpr const char* kShadowVS = R"(#version 450 core
 layout(std140, binding = 3) uniform ShadowU { mat4 s_mvp; };
@@ -811,6 +946,95 @@ void main() {
         }
     }
     o_ao = vec4(sum / wsum);
+}
+)";
+
+// ---- screen-space reflections (M-VISUAL2 1), at half resolution ----------------------------------
+// Each pixel of the SSAO prepass marches its mirror ray in screen space (uv and 1/z interpolated, so
+// the steps are perspective-correct), jittered per pixel by a 4x4 Bayer pattern, until it passes less
+// than `thickness` (plus the step's own depth travel) behind the depth buffer; 4 bisections refine the hit. The hit's view position is
+// reprojected into last frame, whose lit HDR color is read there. a = confidence: 0 for a miss, the
+// sky or a point last frame did not see, fading toward the screen's edges, the ray's
+// end and rays that turn toward the camera.
+constexpr const char* kSsrFS = R"(#version 450 core
+layout(std140, binding = 1) uniform SsrU {
+    mat4 r_proj;       // this frame's projection, unjittered
+    mat4 r_reproject;  // view space -> last frame's clip space
+    vec4 r_params;     // x: max distance (m), y: thickness (m), z: steps, w: edge fade (uv)
+    vec4 r_misc;       // x: last frame valid
+};
+layout(binding = 6) uniform sampler2D u_gbuf;  // view normal (xyz), view depth (w; 0 = nothing drawn)
+layout(binding = 7) uniform sampler2D u_prev;  // last frame's HDR color
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_ssr;
+vec3 view_pos(vec2 uv, float z) {
+    vec2 ndc = uv * 2.0 - 1.0;
+    return vec3((ndc.x + r_proj[2][0]) * z / r_proj[0][0], (ndc.y + r_proj[2][1]) * z / r_proj[1][1], -z);
+}
+vec2 project(vec3 p) {
+    vec4 c = r_proj * vec4(p, 1.0);
+    return c.xy / c.w * 0.5 + 0.5;
+}
+void main() {
+    o_ssr = vec4(0.0);
+    vec4 g = textureLod(u_gbuf, v_uv, 0.0);
+    if (r_misc.x < 0.5 || g.w <= 0.0) return;
+    vec3 p = view_pos(v_uv, g.w);
+    vec3 n = normalize(g.xyz);
+    vec3 d = reflect(normalize(p), n);
+    float facing = 1.0 - smoothstep(0.0, 0.6, d.z);  // toward the camera: what it hits is mostly unseen
+    if (facing <= 0.0) return;
+    float len = r_params.x;
+    const float kNear = 0.05;
+    if (d.z > 0.0 && p.z + d.z * len > -kNear) len = (-kNear - p.z) / d.z;  // stop before the camera
+    vec3 e = p + d * len;
+    vec2 uv0 = v_uv, uv1 = project(e);
+    float iz0 = 1.0 / g.w, iz1 = 1.0 / -e.z;
+    vec2 du = uv1 - uv0;
+    float tmax = 1.0;  // where the segment leaves the screen
+    if (du.x > 0.0) tmax = min(tmax, (1.0 - uv0.x) / du.x);
+    else if (du.x < 0.0) tmax = min(tmax, -uv0.x / du.x);
+    if (du.y > 0.0) tmax = min(tmax, (1.0 - uv0.y) / du.y);
+    else if (du.y < 0.0) tmax = min(tmax, -uv0.y / du.y);
+    const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+    ivec2 q = ivec2(gl_FragCoord.xy) & 3;
+    float jitter = (bayer[q.x * 4 + q.y] + 0.5) / 16.0;
+    int steps = int(r_params.z);
+    float lo = 0.0, t = 0.0, prev_rz = g.w;
+    bool hit = false;
+    for (int i = 0; i < 128 && i < steps; ++i) {
+        t = tmax * (float(i) + jitter) / float(steps);
+        float rz = 1.0 / mix(iz0, iz1, t);
+        vec4 sg = textureLod(u_gbuf, mix(uv0, uv1, t), 0.0);
+        float sz = sg.w, dz = rz - sz;
+        // Behind the depth buffer by less than the thickness plus this step's own depth travel, at a
+        // surface facing the ray (one the ray leaves, such as its own start at a grazing angle, is not a hit).
+        if (sz > 0.0 && dz > 0.0 && dz < r_params.y + abs(rz - prev_rz) && dot(sg.xyz, d) < 0.0) {
+            hit = true;
+            break;
+        }
+        lo = t;
+        prev_rz = rz;
+    }
+    if (!hit) return;
+    float hi = t;
+    for (int k = 0; k < 4; ++k) {
+        float m = 0.5 * (lo + hi);
+        float sz = textureLod(u_gbuf, mix(uv0, uv1, m), 0.0).w;
+        if (sz > 0.0 && 1.0 / mix(iz0, iz1, m) > sz) hi = m;
+        else lo = m;
+    }
+    vec2 huv = mix(uv0, uv1, hi);
+    vec4 hg = textureLod(u_gbuf, huv, 0.0);
+    if (hg.w <= 0.0 || dot(hg.xyz, d) >= 0.0) return;  // refined onto a surface the ray leaves
+    vec4 c = r_reproject * vec4(view_pos(huv, hg.w), 1.0);
+    if (c.w <= 1e-4) return;
+    vec2 puv = c.xy / c.w * 0.5 + 0.5;
+    if (any(lessThan(puv, vec2(0.0))) || any(greaterThan(puv, vec2(1.0)))) return;
+    vec2 edge = min(min(huv, 1.0 - huv), min(puv, 1.0 - puv));
+    float fade = r_params.w > 0.0 ? clamp(min(edge.x, edge.y) / r_params.w, 0.0, 1.0) : 1.0;
+    fade *= facing * (1.0 - smoothstep(0.75, 1.0, hi));
+    o_ssr = vec4(max(textureLod(u_prev, puv, 0.0).rgb, vec3(0.0)), fade);
 }
 )";
 

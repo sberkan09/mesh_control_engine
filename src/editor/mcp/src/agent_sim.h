@@ -133,7 +133,8 @@ void write_condition(JsonWriter& w, const Condition& c);
 // A built-in player that drives the game's input actions from the actor's position (no game code):
 //   walk_to  heads for `target` (a point or an entity), jumps (side view) or sidesteps (top-down)
 //            when it stops getting closer; done within `reach` metres. `through` lists waypoints
-//            (points or entities) it reaches first, in order: around a pond, past each pickup.
+//            (points or entities) it reaches first, in order: around a pond, past each pickup;
+//            a waypoint {at, wait} stands still `wait` ticks there (a pressure plate, a lift).
 //   explore  wanders in seeded random directions, turning when blocked; reports coverage.
 //   masher   presses a seeded random mix of `actions` every `period` ticks (crash and soft-lock hunting).
 // `plane`: "xy" (Move = the direction in the XY plane, 2D top-down or flying), "x" (side view:
@@ -142,6 +143,7 @@ struct BotTarget {
     bool is_entity = false;
     usize index = 0;  // the entity's index in the scene (is_entity)
     math::vec3 point;
+    u32 wait = 0;  // walk_to waypoint: ticks to stand still once reached
 };
 
 struct BotConfig {
@@ -192,6 +194,8 @@ private:
     bool reached_ = false;
     bool wants_move_ = false;
     usize leg_ = 0;
+    u64 wait_until_ = 0;  // standing at a waypoint until this tick
+    bool waiting_ = false;
     // Steering state.
     f32 best_ = 1e30f;
     u64 best_tick_ = 0;

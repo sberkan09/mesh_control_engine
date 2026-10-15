@@ -204,6 +204,13 @@ TEST_CASE("playtest: walk_to through waypoints, air jumps, and the game's reacti
     CHECK(num(t.v().get("ticks")) == doctest::Approx(num(feel.get("time_to_finish_s")) * 60 + 30).epsilon(0.02));
     CHECK(c.fails("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","through":[],"target":"Flag"}})").find("bot.through") != std::string::npos);
     CHECK(c.fails("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","through":["Nobody"],"target":"Flag"}})").find("no such entity") != std::string::npos);
+    // A waypoint with a dwell stands still there `wait` ticks (SBA-61): a second longer than going by.
+    auto by = c.ok("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","through":["Post"],"target":"Flag"},"ticks":900})");
+    auto stay = c.ok("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","through":[{"at":"Post","wait":60}],"target":"Flag"},"ticks":900})");
+    REQUIRE(stay.v().get("feel").get("finished").as_bool());
+    CHECK(num(stay.v().get("feel").get("time_to_finish_s")) - num(by.v().get("feel").get("time_to_finish_s")) == doctest::Approx(1.0).epsilon(0.1));
+    CHECK(c.fails("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","through":[{"at":"Post","wait":-1}],"target":"Flag"}})").find("wait") != std::string::npos);
+    CHECK(c.fails("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","through":[{"wait":5}],"target":"Flag"}})").find("\"at\"") != std::string::npos);
 
     // Side view, a wall one jump cannot clear (1.6 m high at most) but a jump and two flaps can:
     // air_jumps presses Jump in the air on purpose (the plain bot only gets there when a stall's

@@ -10,6 +10,7 @@
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/nav3d.h"
 #include "mce/editor/preview_renderer.h"
 #include "mce/log.h"
 
@@ -38,9 +39,9 @@ StringView scene_stem(StringView path) {
     return stem;
 }
 
-// Writes a baked environment (.mcenv, envmap.h) at `abs` and its "envmap" sidecar, keeping the
-// sidecar's GUID when the file was baked before. `guid` receives it.
-Result<void> write_bake(const cook::String& abs, u32 width, u32 height, u32 layers, Span<const u8> rgba, asset::Guid& guid) {
+// Writes a bake's sidecar next to `abs` unless one is there (a re-bake keeps its GUID) and creates
+// the folder. `guid` receives the sidecar's GUID.
+Result<void> bake_sidecar(const cook::String& abs, StringView importer, asset::Guid& guid) {
     cook::String sidecar_abs = abs;
     sidecar_abs += ".mceasset";
     guid = {};
@@ -58,9 +59,18 @@ Result<void> write_bake(const cook::String& abs, u32 width, u32 height, u32 laye
         guid = cook::generate_guid();
         cook::String text("{ \"guid\": \"");
         text += asset::to_string(guid).view();
-        text += "\", \"importer\": \"envmap\", \"importer_version\": 1, \"settings\": {} }\n";
+        text += "\", \"importer\": \"";
+        text += importer;
+        text += "\", \"importer_version\": 1, \"settings\": {} }\n";
         MCE_TRY(cook::fs::write_file_atomic(sidecar_abs.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.size())));
     }
+    return ok();
+}
+
+// Writes a baked environment (.mcenv, envmap.h) at `abs` and its "envmap" sidecar, keeping the
+// sidecar's GUID when the file was baked before. `guid` receives it.
+Result<void> write_bake(const cook::String& abs, u32 width, u32 height, u32 layers, Span<const u8> rgba, asset::Guid& guid) {
+    MCE_TRY(bake_sidecar(abs, "envmap", guid));
     Array<byte> file;
     cook::write_envmap(width, height, layers, rgba, file);
     return cook::fs::write_file_atomic(abs.view(), file.span());
@@ -163,6 +173,51 @@ Result<void> EditorSession::bake_gi_volume() {
     scene_.end_edit();
     MCE_LOG_INFO("editor: baked the GI volume into assets/{}", rel.view());
     return ok();
+}
+
+Result<physics::NavBakeStats3D> EditorSession::bake_navmesh() {
+    constexpr const char* kWhere = "editor.bake_navmesh";
+    if (!project_.is_open()) return Error(Errc::InvalidArgument, kWhere, "no project is open");
+    World& world = scene_.world();
+    Entity surface;
+    world.query<const kit::NavMeshSurface3D>().each([&](Entity e, const kit::NavMeshSurface3D&) {
+        if (surface.is_null()) surface = e;
+    });
+    if (surface.is_null()) return Error(Errc::NotFound, kWhere, "the scene has no NavMeshSurface3D");
+    const EntityId id = scene_.entity_for(surface);
+    if (id == kNoEntity || !scene_.get<kit::NavMeshSurface3D>(id))
+        return Error(Errc::Unsupported, kWhere, "the surface belongs to a prefab instance: bake it in its prefab");
+    Array<byte> blob;
+    physics::NavBakeStats3D stats;
+    if (!kit::bake_scene_navmesh(world, surface, project_.mounted(), blob, &stats))
+        return Error(Errc::InvalidArgument, kWhere, "nothing to bake (no colliders), or the settings are out of range (see the log)");
+
+    // assets/navmesh/<scene file stem>/nav_<id>.mcnav: stable per surface, so re-bakes overwrite.
+    cook::String rel("navmesh/");
+    rel += scene_stem(scene_.path());
+    rel += "/nav_";
+    char num[16];
+    std::snprintf(num, sizeof(num), "%u", id);
+    rel += StringView(num);
+    rel += ".mcnav";
+    const cook::String abs = project_.asset_path(rel.view());
+    asset::Guid guid;
+    MCE_TRY(bake_sidecar(abs, "navmesh", guid));
+    MCE_TRY(cook::fs::write_file_atomic(abs.view(), blob.span()));
+    watcher_.poll(0.0, 0.0);  // the write is ours: re-baseline the watcher
+    const HotReloadResult r = hot_reload(Span<const cook::String>(&rel, 1));
+    if (r.failed > 0) return Error(Errc::ImportFailed, kWhere, "the baked navmesh did not cook (see the log)");
+
+    kit::NavMeshSurface3D s = *scene_.get<kit::NavMeshSurface3D>(id);
+    if (s.baked.guid != guid) {
+        scene_.begin_edit("Bake navmesh");
+        s.baked.guid = guid;
+        scene_.set(id, s);
+        scene_.end_edit();
+    }
+    MCE_LOG_INFO("editor: baked the navmesh into assets/{} ({} x {} tiles, {} layers, {} bytes)", rel.view(), stats.tiles_x,
+                 stats.tiles_z, stats.layers, stats.bytes);
+    return stats;
 }
 
 Result<void> EditorSession::apply_to_prefab(asset::Guid prefab, const DocComponent& value, u64 fields) {

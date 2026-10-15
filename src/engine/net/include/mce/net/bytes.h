@@ -96,6 +96,16 @@ public:
         pos_ += n;
         return out;
     }
+    // The next n bytes, unprefixed (valid while the message is).
+    Span<const u8> read_raw(usize n) {
+        if (!ok_ || n > remaining()) {
+            fail();
+            return {};
+        }
+        Span<const u8> out = data_.subspan(pos_, n);
+        pos_ += n;
+        return out;
+    }
     StringView read_string() {
         const Span<const u8> b = read_bytes();
         return StringView(reinterpret_cast<const char*>(b.data()), b.size());

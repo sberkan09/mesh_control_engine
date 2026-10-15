@@ -2,9 +2,15 @@
 // loop the module supports, and its CI check.
 //
 //   server world: eight drifters circle the origin; a player entity appears for each client that
-//                 sends JOIN and moves by that client's inputs. Every tick it broadcasts a snapshot.
+//                 sends JOIN and moves by that client's inputs, and every 2 s a gust only the server
+//                 knows about pushes every player back. Every tick it broadcasts a snapshot.
 //   client world: sends JOIN, then one input per tick; mirrors the snapshots with
-//                 ReplicationClient from a FixedUpdate_Pre system.
+//                 ReplicationClient from a FixedUpdate_Pre system. Its own player is predicted
+//                 (M-NET2 step 3): drawn at once from its inputs, reconciled with the server's acks,
+//                 the gusts smoothed in (-predict 0: drawn from snapshots like everything else).
+//                 Every half second it fires from the origin at drifter 1 where it draws it, and
+//                 the server checks the shot against that moment (M-NET2 step 4, lag compensation)
+//                 and, for comparison, against its present.
 //
 // Two networks, one game loop (both are net::Transport):
 //   UDP (default)  one client over loopback UDP (net::Host); -latency/-jitter/-loss set
@@ -46,6 +52,8 @@ MCE_CVAR(cv_loss, "loss", 0.0f, "Chance a Sequenced/Unreliable message is lost (
 MCE_CVAR(cv_seed, "seed", 1, "Seed of the latency, jitter and loss rolls", CVarFlags::None);
 MCE_CVAR(cv_interp, "interp", true, "Clients draw snapshots interpolated through a jitter buffer (M-NET2 step 2)",
          CVarFlags::None);
+MCE_CVAR(cv_predict, "predict", true, "Clients predict their own player and reconcile it (M-NET2 step 3)",
+         CVarFlags::None);
 
 constexpr f64 kDt = 1.0 / 60.0;
 constexpr u8 kChannels = 3;
@@ -54,6 +62,12 @@ constexpr u8 kChannelSnapshot = 1;  // sequenced: server -> client snapshots
 constexpr u8 kChannelInput = 2;     // sequenced: client -> server inputs
 constexpr u8 kMsgJoin = 1;
 constexpr u8 kMsgInput = 2;
+constexpr u8 kMsgWelcome = 3;  // server -> client: the net id of your player
+constexpr u8 kMsgShot = 4;     // client -> server: a ray from the origin and the tick the client drew
+constexpr u64 kShotTicks = 30;
+constexpr f32 kShotRange = 20.0f;
+constexpr u64 kGustTicks = 120;
+constexpr f32 kGust = 0.25f;
 constexpr u32 kKindDrifter = 1;
 constexpr u32 kKindPlayer = 2;
 constexpr u32 kMaxClients = 8;
@@ -62,9 +76,24 @@ struct Drifter {
     f32 radius;
     f32 phase;
 };
+// What a client sends each tick, and the state the client predicts. The step is shared: the
+// server runs it for each input it receives, the client for each input it presses and again when
+// it replays unacknowledged inputs after a snapshot.
+struct PlayerInput {
+    f32 move_x;
+};
+struct PlayerState {
+    LocalTransform transform;
+};
+void step_player(void*, PlayerState& s, const PlayerInput& in, f32 dt) {
+    const f32 move = std::isfinite(in.move_x) ? std::fmax(-1.0f, std::fmin(1.0f, in.move_x)) : 0.0f;
+    s.transform.position.x += move * dt;
+}
+
 struct Player {
     net::PeerId peer;
-    f32 move_x;
+    f32 move_x;  // the last input
+    net::InputReceiver<PlayerInput> inputs;
 };
 
 // Mean |second difference| of a path sampled once per tick: 0 for steady motion, large for stutter.
@@ -95,10 +124,18 @@ struct Server {
     net::ByteWriter snapshot;
     u64 tick = 0;
 
+    // Hit boxes of the last second, so a shot is checked against what its client was drawing.
+    // The rewind covers the slowest link CI runs (150 ms ± 40 plus the jitter buffer).
+    net::LagCompensator lag;
+    u32 shots = 0, hits_rewound = 0, hits_present = 0;
+    u32 too_old = 0;  // arrived after the rewind window (a reliable shot lost and resent): checked late
+
     void start(net::Transport& transport) {
         net = &transport;
+        lag.init(net::LagCompensationDesc{60.0, 1.0});
         for (u32 i = 0; i < 8; ++i) {
-            const Entity e = world.spawn_with(LocalTransform{}, Drifter{1.0f + f32(i), f32(i) * 0.7f});
+            const Entity e = world.spawn_with(LocalTransform{}, Drifter{1.0f + f32(i), f32(i) * 0.7f},
+                                              net::HitBox{{0.15f, 0.15f, 0.15f}, {}});
             replication.assign(world, e, kKindDrifter);
         }
         world.add_system(Phase::FixedUpdate_Post, "drift", [](Frame& f) {
@@ -106,9 +143,12 @@ struct Server {
                 dr.phase += f.dt;
                 t.position = {dr.radius * std::cos(dr.phase), dr.radius * std::sin(dr.phase), 0.0f};
             });
-            f.query<const Player, LocalTransform>().each(
-                [&](const Player& p, LocalTransform& t) { t.position.x += p.move_x * f.dt; });
         });
+        net::ReplicationHooks hooks;
+        hooks.write_extra = [](void*, const World& w, Entity e, net::ByteWriter& out) {
+            if (const Player* p = w.try_get<Player>(e)) out.write_u32(p->inputs.last_seq());  // the ack
+        };
+        replication.set_hooks(hooks);
     }
 
     Entity player_of(net::PeerId peer) {
@@ -127,21 +167,49 @@ struct Server {
                 net::ByteReader r(ev.data);
                 const u8 msg = r.read_u8();
                 if (msg == kMsgJoin && r.ok() && player_of(ev.peer).is_null()) {
-                    const Entity e = world.spawn_with(LocalTransform{}, Player{ev.peer, 0.0f});
-                    replication.assign(world, e, kKindPlayer);
-                } else if (msg == kMsgInput) {
-                    const f32 move = r.read_f32();
+                    const Entity e = world.spawn_with(LocalTransform{}, Player{ev.peer, 0.0f, {}});
+                    net::ByteWriter welcome;
+                    welcome.write_u8(kMsgWelcome);
+                    welcome.write_u32(replication.assign(world, e, kKindPlayer));
+                    net->send(ev.peer, kChannelControl, welcome.data(), net::Delivery::Reliable);
+                } else if (msg == kMsgInput && r.ok()) {
                     const Entity e = player_of(ev.peer);
-                    if (r.ok() && !e.is_null() && std::isfinite(move))
-                        world.try_get_mut<Player>(e)->move_x = std::fmax(-1.0f, std::fmin(1.0f, move));
+                    if (e.is_null()) continue;
+                    Player& p = *world.try_get_mut<Player>(e);
+                    PlayerState s{*world.try_get<LocalTransform>(e)};
+                    p.inputs.receive(ev.data.subspan(1), [&](const PlayerInput& in) {
+                        step_player(nullptr, s, in, static_cast<f32>(kDt));
+                        if (std::isfinite(in.move_x)) p.move_x = std::fmax(-1.0f, std::fmin(1.0f, in.move_x));
+                    });
+                    world.try_get_mut<LocalTransform>(e)->position = s.transform.position;
+                } else if (msg == kMsgShot) {
+                    const u64 view_bits = r.read_u64();
+                    math::vec3 dir;
+                    dir.x = r.read_f32();
+                    dir.y = r.read_f32();
+                    dir.z = r.read_f32();
+                    if (!r.ok()) continue;
+                    f64 view = 0.0;
+                    std::memcpy(&view, &view_bits, sizeof view);
+                    dir = math::normalize(dir);
+                    ++shots;
+                    if (lag.clamp_view(view) > view) ++too_old;
+                    net::RewindHit hit;
+                    if (lag.raycast(view, {}, dir, kShotRange, hit) && hit.net_id == 1) ++hits_rewound;
+                    if (lag.raycast(static_cast<f64>(tick), {}, dir, kShotRange, hit) && hit.net_id == 1)
+                        ++hits_present;
                 }
             }
         }
     }
 
+    u64 snapshot_hash = 0;  // of the newest snapshot sent
     void broadcast_snapshot() {
         snapshot.clear();
         replication.write_snapshot(world, static_cast<u32>(tick), snapshot);
+        Hasher64 h;
+        h.bytes(snapshot.data().data(), snapshot.size());
+        snapshot_hash = h.value();
         net->broadcast(kChannelSnapshot, snapshot.data(), net::Delivery::Sequenced);
         net->flush();
     }
@@ -149,7 +217,13 @@ struct Server {
     // Network in, simulate one tick, snapshot out.
     void step() {
         receive();
+        if ((tick + 1) % kGustTicks == 0) {
+            // Something the clients cannot predict: their reconcile smooths it in.
+            world.query<const Player, LocalTransform>().each(
+                [](const Player& p, LocalTransform& t) { t.position.x -= p.move_x > 0.0f ? kGust : -kGust; });
+        }
         world.tick(kDt, ++tick);
+        lag.record(world, static_cast<u32>(tick));
         track();
         broadcast_snapshot();
     }
@@ -171,6 +245,11 @@ struct Client {
     net::PeerId server = net::kInvalidPeer;
     f32 move = 1.0f;  // the input this client holds
     bool connected = false;
+    u32 own_id = 0;  // our player's net id, from WELCOME
+    net::Predictor<PlayerInput, PlayerState> predictor;
+    u64 applied_hash = 0;  // of the newest snapshot applied
+    u32 ack = 0;           // from the newest snapshot of our player
+    bool has_ack = false;
     u32 snapshots = 0;
     u64 tick = 0;
     // Received this frame, applied by the net_apply system inside the tick.
@@ -183,14 +262,73 @@ struct Client {
         move = hold;
         world.set_resource<Client*>(this);
         if (cv_interp.get_bool()) replication.set_interpolation(net::InterpolationDesc{});
+        predictor.init(net::PredictionDesc{}, step_player);
+        net::ReplicationHooks hooks;
+        hooks.user = this;
+        hooks.read_extra = [](void* user, Commands&, Entity e, net::ByteReader& in) {
+            Client& c = *static_cast<Client*>(user);
+            if (c.own_id == 0 || e != c.replication.find(c.own_id)) return;
+            const u32 seq = in.read_u32();
+            if (in.ok()) {
+                c.ack = seq;
+                c.has_ack = true;
+            }
+        };
+        replication.set_hooks(hooks);
         world.add_system(Phase::FixedUpdate_Pre, "net_apply", [](Frame& f) {
             Client& c = *f.resource<Client*>();
             if (c.has_pending) {
-                if (c.replication.apply(f.commands(), f.world(), c.pending.data()).ok) ++c.snapshots;
+                if (c.replication.apply(f.commands(), f.world(), c.pending.data()).ok) {
+                    ++c.snapshots;
+                    Hasher64 h;
+                    h.bytes(c.pending.data().data(), c.pending.size());
+                    c.applied_hash = h.value();
+                }
                 c.has_pending = false;
             }
+            c.predict(f);
             c.replication.update(f.commands(), f.world(), f.dt);  // interpolating: draws the render time
         });
+    }
+
+    // Our player: start predicting when it first appears, reconcile on each snapshot of it, draw
+    // the prediction (snapshots no longer move it, set_predicted).
+    void predict(Frame& f) {
+        const LocalTransform* server_t = own_id ? replication.latest_transform(own_id) : nullptr;
+        if (!server_t) return;
+        if (!predictor.active()) {
+            predictor.reset(PlayerState{*server_t});
+        } else if (has_ack) {
+            predictor.reconcile(ack, PlayerState{*server_t});
+        }
+        has_ack = false;
+        predictor.smooth(f.dt);
+        if (cv_predict.get_bool()) f.commands().set(replication.find(own_id), predictor.displayed());
+    }
+
+    // Fires from the origin at drifter 1 where this client draws it, with the tick it drew.
+    u32 shots = 0;
+    void fire() {
+        const Entity e = replication.find(1);
+        if (!connected || !world.alive(e)) return;
+        const math::vec3 dir = math::normalize(world.try_get<LocalTransform>(e)->position);
+        const f64 view = replication.drawn_tick(1);
+        u64 view_bits = 0;
+        std::memcpy(&view_bits, &view, sizeof view_bits);
+        net::ByteWriter shot;
+        shot.write_u8(kMsgShot);
+        shot.write_u64(view_bits);
+        shot.write_f32(dir.x);
+        shot.write_f32(dir.y);
+        shot.write_f32(dir.z);
+        net->send(server, kChannelControl, shot.data(), net::Delivery::Reliable);
+        ++shots;
+    }
+
+    void send_inputs() {
+        net::ByteWriter packet;
+        packet.write_u8(kMsgInput);
+        if (predictor.write_inputs(packet)) net->send(server, kChannelInput, packet.data(), net::Delivery::Sequenced);
     }
 
     void receive() {
@@ -201,7 +339,18 @@ struct Client {
                 net->send(server, kChannelControl, Span<const u8>(join, 1), net::Delivery::Reliable);
             } else if (ev.kind == net::EventKind::Disconnected) {
                 connected = false;
+                own_id = 0;
+                predictor.stop();
                 replication.reset(world.commands(), world);
+            } else if (ev.kind == net::EventKind::Received && ev.channel == kChannelControl) {
+                net::ByteReader r(ev.data);
+                if (r.read_u8() == kMsgWelcome) {
+                    const u32 id = r.read_u32();
+                    if (r.ok()) {
+                        own_id = id;
+                        if (cv_predict.get_bool()) replication.set_predicted(id);
+                    }
+                }
             } else if (ev.kind == net::EventKind::Received && ev.channel == kChannelSnapshot) {
                 pending.clear();  // only the newest snapshot of the frame matters
                 pending.append(ev.data);
@@ -210,26 +359,37 @@ struct Client {
         }
     }
 
-    void step() {
+    // One tick holding `move` (input: false keeps resending the unacknowledged inputs only).
+    void step(bool input = true) {
         receive();
-        if (connected) {
-            net::ByteWriter input;
-            input.write_u8(kMsgInput);
-            input.write_f32(move);
-            net->send(server, kChannelInput, input.data(), net::Delivery::Sequenced);
+        if (connected && predictor.active()) {
+            if (input) predictor.push(PlayerInput{move});
+            send_inputs();
         }
         world.tick(kDt, ++tick);
+        if (input && tick > 120 && tick % kShotTicks == 0) fire();
         track();
         net->flush();
     }
 
     // How smooth drifter 1 looks here: the mean size of its per-tick change in velocity.
     Motion motion;
+    // How far behind its inputs our player is drawn, in seconds (0 when predicting).
+    f64 input_lag_s = 0.0;
+    u32 lag_samples = 0;
     void track() {
         const Entity e = replication.find(1);
         const LocalTransform* t = world.alive(e) ? world.try_get<LocalTransform>(e) : nullptr;
         if (t) motion.add(t->position);
+        const Entity own = own_id ? replication.find(own_id) : Entity::null;
+        const LocalTransform* ot = world.alive(own) ? world.try_get<LocalTransform>(own) : nullptr;
+        if (ot && predictor.active() && tick > 120) {
+            input_lag_s += std::fabs(static_cast<f64>(predictor.state().transform.position.x - ot->position.x) /
+                                     static_cast<f64>(move));
+            ++lag_samples;
+        }
     }
+    f64 mean_input_lag_ms() const { return lag_samples ? input_lag_s / lag_samples * 1000.0 : 0.0; }
 };
 
 // Bit-identical, field by field (NaN-safe, padding-free).
@@ -249,12 +409,15 @@ bool same_bits(const LocalTransform& a, const LocalTransform& b) {
     return true;
 }
 
-// The client has the server's last snapshot and, interpolating, draws it exactly.
-bool caught_up(const Client& c, u32 final_tick) {
-    if (c.replication.last_tick() != final_tick) return false;
+// The client has the server's last snapshot (the same bytes: a late input can change the
+// server's state after its last tick), every input acknowledged and, interpolating or
+// predicting, draws it exactly.
+bool caught_up(const Client& c, u32 final_tick, u64 snapshot_hash) {
+    if (c.replication.last_tick() != final_tick || c.applied_hash != snapshot_hash) return false;
+    if (c.predictor.stats().pending != 0 || c.predictor.stats().offset != 0.0f) return false;
     if (!c.replication.interpolating()) return true;
     const net::InterpolationStats& s = c.replication.interpolation_stats();
-    return s.interpolated == 0 && s.extrapolated == 0 && s.held == c.replication.size();
+    return s.interpolated == 0 && s.extrapolated == 0 && s.held + s.predicted == c.replication.size();
 }
 
 // Every client mirrors the server bit for bit, and each player moved the way its client held.
@@ -284,7 +447,14 @@ bool check(Server& server, Client* clients, u32 count) {
                     client.snapshots, matched, replicated, static_cast<double>(player_x), client_ok ? "OK" : "FAILED");
         ok = ok && client_ok;
     }
-    return ok;
+    // Every shot at drifter 1 hits when checked against the moment its client drew; against the
+    // server's present most miss.
+    const bool shots_ok = server.shots > 0 && server.hits_rewound >= server.shots - server.too_old;
+    std::printf(
+        "  shots at drifter 1: %u (%u older than the rewind), hit when rewound %u, hit at the server's present %u -> "
+        "%s\n",
+        server.shots, server.too_old, server.hits_rewound, server.hits_present, shots_ok ? "OK" : "FAILED");
+    return ok && shots_ok;
 }
 
 f32 hold_for(u32 client) {
@@ -340,16 +510,13 @@ int run_sim() {
     const u32 final_tick = static_cast<u32>(server.tick);
     auto all_caught_up = [&] {
         for (u32 c = 0; c < count; ++c)
-            if (!caught_up(clients[c], final_tick)) return false;
+            if (!caught_up(clients[c], final_tick, server.snapshot_hash)) return false;
         return true;
     };
     for (u32 i = 0; i < 600 && !all_caught_up(); ++i) {
         server.receive();
         server.broadcast_snapshot();
-        for (u32 c = 0; c < count; ++c) {
-            clients[c].receive();
-            clients[c].world.tick(kDt, ++clients[c].tick);
-        }
+        for (u32 c = 0; c < count; ++c) clients[c].step(false);  // resend unacknowledged inputs
         advance(++session_tick);
     }
 
@@ -363,6 +530,10 @@ int run_sim() {
     std::printf("  drifter 1 jerk: server %.5f, client 0 %.5f (%s, buffer %.0f ms, jitter %.1f ms)\n",
                 server.motion.mean(), clients[0].motion.mean(), cv_interp.get_bool() ? "interpolated" : "raw",
                 static_cast<double>(is.delay_s) * 1000.0, static_cast<double>(is.jitter_s) * 1000.0);
+    const net::PredictionStats& ps = clients[0].predictor.stats();
+    std::printf("  client 0 player: drawn %.0f ms behind its input (%s), %u corrections, %u snaps\n",
+                clients[0].mean_input_lag_ms(), cv_predict.get_bool() ? "predicted" : "from snapshots", ps.corrections,
+                ps.snaps);
 
     // The run's fingerprint: every world, the motion each client drew, and what the network did to
     // the traffic.
@@ -373,9 +544,16 @@ int run_sim() {
         u64 jerk_bits = 0;  // the path the client drew, not just where it ended
         std::memcpy(&jerk_bits, &clients[c].motion.jerk, sizeof jerk_bits);
         h.u64v(jerk_bits);
+        u64 lag_bits = 0;
+        std::memcpy(&lag_bits, &clients[c].input_lag_s, sizeof lag_bits);
+        h.u64v(lag_bits);
+        h.u64v(clients[c].predictor.stats().corrections);
         h.u64v(clients[c].net->counters().messages_received);
         h.u64v(clients[c].net->counters().messages_dropped);
     }
+    h.u64v(server.hits_rewound);
+    h.u64v(server.hits_present);
+    h.u64v(server.too_old);
     h.u64v(server_end.counters().messages_received);
     h.u64v(server_end.counters().messages_dropped);
     std::printf("net_headless: %s, hash %016llx\n", ok ? "OK" : "FAILED", static_cast<unsigned long long>(h.value()));
@@ -421,12 +599,12 @@ int run_udp() {
     // Let the last snapshot land (loopback: a few ms, plus any simulated latency), then compare.
     const u32 final_tick = static_cast<u32>(server.tick);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3 + link.latency_ms / 250);
-    while (!caught_up(client, final_tick) && std::chrono::steady_clock::now() < deadline) {
+    while (!caught_up(client, final_tick, server.snapshot_hash) && std::chrono::steady_clock::now() < deadline) {
         server.receive();
         server.broadcast_snapshot();
         for (net::Event ev; server_host.poll(ev, 1);) {
         }
-        client.step();
+        client.step(false);
     }
 
     std::printf("net_headless (udp): %u ticks, server sent %llu bytes\n", final_tick,

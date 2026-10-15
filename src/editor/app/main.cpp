@@ -39,6 +39,8 @@ MCE_CVAR(cv_scene, "scene", "", "Scene to open, relative to assets/ (default: th
 MCE_CVAR(cv_select, "editor.select", "", "Select the entity with this name after opening the scene", CVarFlags::None);
 MCE_CVAR(cv_play, "editor.play", false, "Enter play-in-editor after opening the scene (the -selftest checks it)",
          CVarFlags::None);
+MCE_CVAR(cv_open, "editor.open", "", "Open this asset (relative to assets/) in its panel: a .mcui, .mctimeline or .mcanim",
+         CVarFlags::None);
 MCE_CVAR(cv_focus, "editor.panel", "", "Bring this panel's tab to the front at startup (e.g. Profiler)", CVarFlags::None);
 MCE_CVAR(cv_ini, "editor.ini", "mce_editor.ini", "Dock layout file (empty = no persistence)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
@@ -66,6 +68,15 @@ public:
             if (!scene.empty() && !shell_.open_scene(scene)) return Error(Errc::ParseError, "mce_editor", scene);
             for (const editor::DocEntity& e : shell_.scene().doc().entities())
                 if (!cv_select.get_string().empty() && e.name.view() == cv_select.get_string()) shell_.scene().selection().set(e.id);
+            if (!cv_open.get_string().empty()) {
+                const editor::ProjectAsset* a = nullptr;
+                for (const editor::ProjectAsset& p : shell_.session().project().assets())
+                    if (p.path.view() == cv_open.get_string()) a = &p;
+                if (!a) return Error(Errc::FileNotFound, "mce_editor", cv_open.get_string());
+                if (a->type == asset::ChunkType::UiDocument) shell_.open_ui_document(a->guid);
+                if (a->type == asset::ChunkType::Timeline) shell_.open_timeline(a->guid);
+                if (a->type == asset::ChunkType::AnimGraph) shell_.open_anim_graph(a->guid);
+            }
             if (cv_play.get_bool() && !shell_.play_in_editor()) return Error(Errc::InvalidArgument, "mce_editor", "play");
         }
         focus_.append(cv_focus.get_string());  // last: opening a project focuses the Cook panel
@@ -264,7 +275,7 @@ int main(int argc, char** argv) {
     if (console::help_requested()) {
         console::print_help("mce_editor",
                             "usage: mce_editor [-project <dir> [-module <game module>] [-scene <path under assets/>]]\n"
-                            "                  [-editor.play 1] [-frames N [-capture <file.ppm>] [-selftest]] [-editor.ini <file>] [-help]\n"
+                            "                  [-editor.play 1] [-editor.open <asset>] [-frames N [-capture <file.ppm>] [-selftest]] [-editor.ini <file>] [-help]\n"
                             "  The docking editor. Without -project the viewport shows the stub world.");
         log::shutdown();
         return 0;

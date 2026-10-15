@@ -15,6 +15,15 @@ namespace {
 constinit ConVar* g_cvar_head = nullptr;
 constinit ConFunc* g_cfunc_head = nullptr;
 
+// After a stable sort by name of a newest-first list: keeps the first (newest) of each name.
+template <class T>
+void drop_shadowed(Array<T*>& out) {
+    usize w = 0;
+    for (usize i = 0; i < out.size(); ++i)
+        if (w == 0 || StringView(out[w - 1]->name()) != StringView(out[i]->name())) out[w++] = out[i];
+    while (out.size() > w) out.pop_back();
+}
+
 bool parse_bool(StringView s, bool& out) {
     if (s == "1" || s == "true" || s == "on" || s == "yes") {
         out = true;
@@ -67,22 +76,31 @@ ConVar::ConVar(const char* name, const char* def, const char* help, u32 flags)
     link();
 }
 
-ConVar::~ConVar() {
+ConVar::~ConVar() { unlink(); }
+
+void ConVar::unlink() {
     for (ConVar** p = &g_cvar_head; *p; p = &(*p)->next_) {
         if (*p == this) {
             *p = next_;
             break;
         }
     }
+    next_ = nullptr;
 }
 
 void ConVar::link() {
-    MCE_ASSERT_MSG(find(id_) == nullptr, "duplicate convar name");
+    // A name already taken is shadowed, not refused: two copies of one game module are live at a
+    // rebuild (the old one until its World is gone), and find() and collect() see the newest.
     next_ = g_cvar_head;
     g_cvar_head = this;
 }
 
+namespace {
+u64 g_saved_generation = 0;
+}
+
 void ConVar::changed() {
+    if (flags_ & CVarFlags::Saved) ++g_saved_generation;
     if (on_change_) on_change_(*this);
 }
 
@@ -210,6 +228,16 @@ void ConVar::to_string(FixedString<128>& out) const {
     out.assign(buf);
 }
 
+bool ConVar::is_default() const {
+    switch (type_) {
+        case CVarType::Bool: return value_.b == default_.b;
+        case CVarType::Int: return value_.i == default_.i;
+        case CVarType::Float: return value_.f == default_.f;
+        case CVarType::String: return str_.view() == default_str_.view();
+    }
+    return true;
+}
+
 void ConVar::reset() {
     value_ = default_;
     str_.assign(default_str_.view());
@@ -235,23 +263,27 @@ void ConVar::collect(Array<ConVar*>& out) {
         }
         out[j] = key;
     }
+    drop_shadowed(out);
 }
 
 // ------------------------------------------------------------------ ConFunc
 
 ConFunc::ConFunc(const char* name, Fn fn, const char* help) : name_(name), help_(help), id_(name), fn_(fn) {
-    MCE_ASSERT_MSG(find(id_) == nullptr, "duplicate confunc name");
-    next_ = g_cfunc_head;
+    next_ = g_cfunc_head;  // a taken name is shadowed, as ConVar::link
+
     g_cfunc_head = this;
 }
 
-ConFunc::~ConFunc() {
+ConFunc::~ConFunc() { unlink(); }
+
+void ConFunc::unlink() {
     for (ConFunc** p = &g_cfunc_head; *p; p = &(*p)->next_) {
         if (*p == this) {
             *p = next_;
             break;
         }
     }
+    next_ = nullptr;
 }
 
 ConFunc* ConFunc::find(StringId id) {
@@ -272,6 +304,7 @@ void ConFunc::collect(Array<ConFunc*>& out) {
         }
         out[j] = key;
     }
+    drop_shadowed(out);
 }
 
 // ------------------------------------------------------------------ console
@@ -494,6 +527,109 @@ u32 apply_deferred_command_line() {
     g_deferred_count = 0;
     return unknown;
 }
+
+// ------------------------------------------------------------------ settings file
+
+namespace {
+constexpr const char* kStageSettings = "console.settings";
+
+struct SettingLine {
+    FixedString<64> name;
+    FixedString<1024> value;
+};
+Array<SettingLine> g_setting_lines;  // the file's lines, rewritten by save_settings
+struct SettingStart {
+    StringId id;
+    FixedString<128> value;  // to_string() as load_settings left it
+};
+Array<SettingStart> g_setting_start;
+
+SettingLine* find_line(StringView name) {
+    for (SettingLine& l : g_setting_lines)
+        if (l.name.view() == name) return &l;
+    return nullptr;
+}
+
+}  // namespace
+
+Result<void> load_settings(StringView path) {
+    const FixedString<512> p(path);
+    if (std::FILE* f = std::fopen(p.c_str(), "rb")) {
+        g_setting_lines.clear();
+        char line[1200];
+        while (std::fgets(line, sizeof(line), f)) {
+            StringView t(line);
+            while (!t.empty() && is_space(t[t.size() - 1])) t = t.substr(0, t.size() - 1);
+            usize sp = 0;
+            while (sp < t.size() && !is_space(t[sp])) ++sp;
+            if (sp == 0 || t[0] == '#') continue;
+            StringView value = sp < t.size() ? t.substr(sp + 1) : StringView();
+            SettingLine l;
+            l.name.assign(t.substr(0, sp));
+            l.value.assign(value);
+            if (SettingLine* old = find_line(l.name.view())) *old = l;
+            else g_setting_lines.push_back(l);
+        }
+        std::fclose(f);
+    }
+    for (const SettingLine& l : g_setting_lines) {
+        ConVar* v = ConVar::find(StringId(l.name.view()));
+        if (!v || !(v->flags() & CVarFlags::Saved) || !v->is_default()) continue;
+        if (!v->set_from_string(l.value.view())) MCE_LOG_WARN("settings: '{}' rejects '{}'", l.name.view(), l.value.view());
+    }
+    Array<ConVar*> all;
+    ConVar::collect(all);
+    for (ConVar* v : all) {
+        if (!(v->flags() & CVarFlags::Saved)) continue;
+        SettingStart* start = nullptr;
+        for (SettingStart& s : g_setting_start)
+            if (s.id == v->id()) start = &s;
+        if (start) continue;  // a later load (after a module) keeps the first snapshot
+        SettingStart s;
+        s.id = v->id();
+        v->to_string(s.value);
+        g_setting_start.push_back(s);
+    }
+    return ok();
+}
+
+Result<void> save_settings(StringView path) {
+    Array<ConVar*> all;
+    ConVar::collect(all);
+    for (ConVar* v : all) {
+        if (!(v->flags() & CVarFlags::Saved)) continue;
+        FixedString<128> now;
+        v->to_string(now);
+        const SettingStart* start = nullptr;
+        for (const SettingStart& s : g_setting_start)
+            if (s.id == v->id()) start = &s;
+        if (start && start->value.view() == now.view()) continue;  // unchanged this run (or set on the command line)
+        SettingLine l;
+        l.name.assign(v->name());
+        l.value.assign(v->type() == CVarType::String ? v->get_string() : now.view());
+        if (SettingLine* old = find_line(l.name.view())) *old = l;
+        else g_setting_lines.push_back(l);
+    }
+    const FixedString<512> p(path);
+    FixedString<520> tmp(path);
+    tmp.append(".tmp");
+    std::FILE* f = std::fopen(tmp.c_str(), "wb");
+    if (!f) return Error(Errc::AccessDenied, kStageSettings, path);
+    bool wrote = true;
+    for (const SettingLine& l : g_setting_lines)
+        wrote = wrote && std::fprintf(f, "%s %.*s\n", l.name.c_str(), static_cast<int>(l.value.size()), l.value.c_str()) > 0;
+    wrote = std::fflush(f) == 0 && wrote;
+    std::fclose(f);
+    if (!wrote) {
+        std::remove(tmp.c_str());
+        return Error(Errc::IoError, kStageSettings, path);
+    }
+    std::remove(p.c_str());  // rename does not overwrite everywhere
+    if (std::rename(tmp.c_str(), p.c_str()) != 0) return Error(Errc::IoError, kStageSettings, path);
+    return ok();
+}
+
+u64 saved_generation() { return g_saved_generation; }
 
 }  // namespace console
 }  // namespace mce

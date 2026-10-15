@@ -65,6 +65,13 @@ WALLS = [
     ),
     ("ImGui wall", re.compile(r"\bImGui(::|zmo)|[<\"]imgui"), ["src/editor/layer/"], ["src/", "samples/", "games/"]),
     ("JPH wall", re.compile(r"\bJPH::|[<\"]Jolt/"), ["src/engine/physics3d/"], ["src/", "samples/", "games/", "tests/"]),
+    # Recast & Detour (ADR-0040): navigation, private to mce_physics3d's sources.
+    (
+        "Recast wall",
+        re.compile(r"[<\"](Recast|Detour)\w*\.h|\b(rc|dt)[A-Z]\w*\s*[(<*&]|\bdt(Nav|Crowd|Tile|Poly|Query)\w*"),
+        ["src/engine/physics3d/src/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
     ("Box2D wall", re.compile(r"\bb2[A-Z]\w*|[<\"]box2d/"), ["tests/physics2d/oracle/"], ["src/", "samples/", "games/", "tests/", "tools/"]),
     ("DirectXMath wall", re.compile(r"[<\"]DirectX\w*\.h|\bDirectX::"), ["tests/core/test_math_oracle"], ["src/", "samples/", "games/", "tests/", "tools/"]),
     # Cook-time-only third-party code (FR-AST-010): stb lives in the cook library, never in a
@@ -83,6 +90,13 @@ WALLS = [
         "ENet wall",
         re.compile(r"[<\"]enet/|\benet_[a-z_]+\s*\(|\bENet[A-Z]\w*"),
         ["src/engine/net/src/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
+    # Luau (ADR-0041 spike): the VM and compiler headers stay inside mce_script's sources.
+    (
+        "Luau wall",
+        re.compile(r"#\s*include\s*[<\"](lua|lualib|luacode|luaconf)\.h[>\"]"),
+        ["src/engine/script/src/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
     # Editor MCP server (ADR-0027, N7): stdio is its only transport, no socket API in its code.
@@ -117,7 +131,12 @@ LINK_WALLS = [
     # Networking is opt-in (ADR-0035): only games, samples and tests link mce_net; no engine
     # library, host, tool or the editor does, so the engine and every other game stay network-free.
     ("net opt-in wall", re.compile(r"\bmce_net\b"), ["src/engine/net/", "samples/", "games/", "projects/", "templates/", "tests/"]),
+    ("Recast link wall", re.compile(r"\bmce_recast\b"), ["src/engine/physics3d/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
+    # The Luau scripting spike (ADR-0041) is opt-in: its test and its headless sample link it, no
+    # engine library, host or tool does; Luau's targets are linked by mce_script alone.
+    ("script opt-in wall", re.compile(r"\bmce_script\b"), ["src/engine/script/", "samples/script_headless/", "tests/script/"]),
+    ("Luau link wall", re.compile(r"\bLuau\.\w+"), ["src/engine/script/"]),
     # The visual-novel kit is opt-in the same way (M-NOVEL): games, samples and tests link it (its
     # dialogue box, mce_kit_novel_ui, a game's host). The authoring tools (editor, mce_mcp, mce_cook)
     # link its components so a novel scene opens and cooks anywhere (M-DATA-REACH 8); the player and
@@ -135,7 +154,7 @@ def umbrella_violations() -> list:
     text = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     m = ENGINE_LIBS_RE.search(text)
     out = []
-    for lib in ("mce_net", "mce_kit_novel", "mce_kit_novel_ui"):
+    for lib in ("mce_net", "mce_kit_novel", "mce_kit_novel_ui", "mce_script"):
         if m and re.search(r"\b%s\b" % lib, m.group(1)):
             out.append(f"CMakeLists.txt: opt-in wall: {lib} is listed in MCE_ENGINE_LIBS")
     return out

@@ -15,6 +15,7 @@ formats, which is what keeps the shipped game small and safe.
 | Font | `.ttf`, `.otf` | glyph atlas plus metrics | `TextLabel` |
 | Model | `.gltf`, `.glb` | mesh: quantized streams, node tree, inline materials, animation clips, optional skins | 3D rendering (chapter 8) |
 | Material | `.mcmat` | metallic-roughness parameters plus texture GUIDs | 3D rendering |
+| Terrain | `.mcterrain` | a heightmap: u16 samples, size, height range, chunk size | `Terrain3D` (chapter 8) |
 | Scene | `.mcscene` | columnar entity rows | the game, the editor |
 | Prefab | `.mcprefab` | the same, entity 0 as root | instances in scenes, runtime spawns |
 | Tilemap | `.mctilemap` | one tile layer over a tileset | `TilemapLayer` |
@@ -137,10 +138,48 @@ Besides scenes and prefabs (chapter 4), these text assets are JSON with a `forma
 ```json
 { "format": "mce-material", "version": 1, "guid": "<uuid>",
   "base_color": [1, 1, 1, 1], "metallic": 0, "roughness": 1, "emissive": [0, 0, 0],
+  "uv_scale": [1, 1],
   "alpha_mode": "opaque", "alpha_cutoff": 0.5, "double_sided": false, "unlit": false,
   "textures": { "base_color": "guid:<uuid>", "normal": "guid:<uuid>",
                 "metallic_roughness": "guid:<uuid>", "emissive": "guid:<uuid>" } }
 ```
+
+`uv_scale` repeats the textures across the mesh's UVs: `[8, 8]` on a plane tiles a stone texture
+eight times each way (the samplers repeat), so a 30 m courtyard floor is one mesh, not many slabs.
+
+**Terrain** (`.mcterrain`, chapter 8): `resolution` samples per side (2^n+1, 33 to 4097), `chunk` quads
+per LOD node (a power of two, default 32), `size` in metres along x and z, `height_range` mapping sample
+0 and 65535 to metres. `heights` is base64 of `resolution²` little-endian u16 samples, z rows of x
+columns; or leave it out and give `fill` (one height in metres) for a flat start.
+
+```json
+{ "format": "mce-terrain", "version": 1, "guid": "<uuid>", "name": "island",
+  "resolution": 129, "chunk": 32, "size": [128, 128], "height_range": [0, 32], "fill": 0 }
+```
+
+`layers` paints the terrain with up to 8 materials. Each layer names a `.mcmat` (its base color map,
+normal map, roughness/metallic map and factors), a `tile` in metres per repeat (default 4), `triplanar`
+(also project along x and z on steep ground, so cliffs are not smeared) and `height_strength` (how far
+its albedo's brightness lifts it over its neighbours where layers meet). `splat` is the weight map:
+base64 of `splat_resolution²` samples (default `min(resolution, 1025)`), each one u8 weight per layer.
+Without `splat`, each layer's `auto` rule places it by `height` (metres) and `slope` (degrees), and
+ground no rule claims goes to layer 0:
+
+```json
+"layers": [
+  { "material": "guid:<grass>", "tile": 4, "auto": { "slope": [0, 25] } },
+  { "material": "guid:<rock>", "tile": 6, "triplanar": true, "auto": { "slope": [30, 90] } },
+  { "material": "guid:<snow>", "auto": { "height": [40, 60] } }
+]
+```
+
+`holes` cuts the terrain open (cave mouths, tunnel entrances): base64 of a bit per height sample, sample
+`z * resolution + x` at bit `i % 8` of byte `i / 8`, `(resolution² + 7) / 8` bytes. Every triangle with a
+hole sample as a corner is left out of both the drawn surface and the `TerrainCollider3D` collision, so a
+3 × 3 block of hole samples opens a 4 × 4 m gap at 1 m spacing. An all-zero mask cooks to no holes.
+
+Give every layer's maps of one kind the same size and import settings: each kind is packed into one
+texture array, and a map that differs from the first layer's is left out with a warning.
 
 **Particle preset** (`.mcpart`, chapter 7):
 

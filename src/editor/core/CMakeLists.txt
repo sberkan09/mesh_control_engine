@@ -8,6 +8,7 @@
 
 mce_add_library(mce_editor_core UMBRELLA
     SOURCES
+        src/animgraph_editor.cpp
         src/asset_browser.cpp
         src/console_model.cpp
         src/editor_scene.cpp
@@ -25,6 +26,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/scene_document.cpp
         src/stub_world.cpp
         src/tilemap_editor.cpp
+        src/timeline_editor.cpp
         src/ui_document_editor.cpp
         src/viewport2d.cpp
     PUBLIC_DEPS

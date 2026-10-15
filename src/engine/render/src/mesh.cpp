@@ -32,6 +32,7 @@ MeshStore::~MeshStore() { shutdown(); }
 void MeshStore::shutdown() {
     for (auto& m : meshes_) destroy(*m);
     meshes_.clear();
+    newest_.clear();
     device_ = nullptr;
 }
 
@@ -147,8 +148,18 @@ ResultV MeshStore::upload(u32 key, u32 generation, Span<const byte> blob, Textur
         id.debug_name = "asset.mesh.indices";
         m.indices = device_->create_buffer(id, view.indices);
     }
+    newest_.insert_or_assign(key, mesh.get());
     meshes_.push_back(std::move(mesh));
     return ok();
+}
+
+void MeshStore::refresh_newest(u32 key) {
+    for (usize i = meshes_.size(); i-- > 0;)
+        if (meshes_[i]->key == key) {
+            newest_.insert_or_assign(key, meshes_[i].get());
+            return;
+        }
+    newest_.erase(key);
 }
 
 void MeshStore::retire(u32 key, u32 generation) {
@@ -156,6 +167,7 @@ void MeshStore::retire(u32 key, u32 generation) {
         if (meshes_[i]->key != key || meshes_[i]->generation != generation) continue;
         destroy(*meshes_[i]);
         meshes_.erase(i);
+        refresh_newest(key);
         return;
     }
 }
@@ -166,12 +178,12 @@ void MeshStore::release(u32 key) {
         destroy(*meshes_[i]);
         meshes_.erase(i);
     }
+    newest_.erase(key);
 }
 
 const GpuMesh* MeshStore::get(u32 key) const {
-    for (usize i = meshes_.size(); i-- > 0;)
-        if (meshes_[i]->key == key) return meshes_[i].get();
-    return nullptr;
+    GpuMesh* const* m = newest_.find(key);
+    return m ? *m : nullptr;
 }
 
 namespace {

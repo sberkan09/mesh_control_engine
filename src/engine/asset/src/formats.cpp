@@ -1,6 +1,7 @@
 #include "mce/asset/formats.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace mce::asset {
@@ -255,6 +256,44 @@ void write_font(const FontHeader& header, Span<const FontGlyph> glyphs, Span<con
 }
 
 // ------------------------------------------------------------------ material
+
+namespace {
+f32 half_to_f32(u16 h) {
+    const u32 sign = (h >> 15) & 1u, exp = (h >> 10) & 0x1Fu, man = h & 0x3FFu;
+    f32 v;
+    if (exp == 0) v = std::ldexp(static_cast<f32>(man), -24);
+    else if (exp == 31) v = man ? 0.0f : 65504.0f;  // no NaN or infinity in a texture scale
+    else v = std::ldexp(static_cast<f32>(man | 0x400u), static_cast<int>(exp) - 25);
+    return sign ? -v : v;
+}
+
+u16 f32_to_half(f32 f) {
+    const f32 a = std::fabs(f);
+    const u16 sign = f < 0.0f ? 0x8000u : 0u;
+    if (!(a >= 6.1035156e-05f)) return sign;  // zero, subnormal range or NaN: 0 (read back as "no scale")
+    if (a >= 65504.0f) return static_cast<u16>(sign | 0x7BFFu);
+    int e = 0;
+    const f32 m = std::frexp(a, &e);  // a = m * 2^e, m in [0.5, 1)
+    u32 man = static_cast<u32>(std::lround((m * 2.0f - 1.0f) * 1024.0f));
+    if (man == 1024u) {
+        man = 0;
+        ++e;
+    }
+    return static_cast<u16>(sign | static_cast<u32>(e + 14) << 10 | man);
+}
+}  // namespace
+
+void MaterialChunk::uv_scale(f32 out[2]) const {
+    out[0] = out[1] = 1.0f;
+    if (uv_scale_half == 0) return;
+    out[0] = half_to_f32(static_cast<u16>(uv_scale_half & 0xFFFFu));
+    out[1] = half_to_f32(static_cast<u16>(uv_scale_half >> 16));
+}
+
+u32 MaterialChunk::pack_uv_scale(f32 u, f32 v) {
+    if (u == 1.0f && v == 1.0f) return 0;
+    return static_cast<u32>(f32_to_half(u)) | static_cast<u32>(f32_to_half(v)) << 16;
+}
 
 Result<const MaterialChunk*> MaterialChunk::read(Span<const byte> payload) {
     const auto* m = header_of<MaterialChunk>(payload);
@@ -699,6 +738,72 @@ void write_mesh(const MeshData& d, Array<byte>& out) {
         sh.submesh_skins_offset = b.append_span(d.submesh_skins);
         b.patch(skin_at, sh);
     }
+    b.patch(at, h);
+    b.finish();
+}
+
+// ------------------------------------------------------------------ terrain
+
+f32 TerrainView::height_at(f32 x, f32 z) const {
+    const u32 n = header->resolution;
+    const f32 fx = (x / header->size[0] + 0.5f) * static_cast<f32>(n - 1);
+    const f32 fz = (z / header->size[1] + 0.5f) * static_cast<f32>(n - 1);
+    const f32 cx = std::clamp(fx, 0.0f, static_cast<f32>(n - 1)), cz = std::clamp(fz, 0.0f, static_cast<f32>(n - 1));
+    const u32 x0 = std::min(static_cast<u32>(cx), n - 2), z0 = std::min(static_cast<u32>(cz), n - 2);
+    const f32 tx = cx - static_cast<f32>(x0), tz = cz - static_cast<f32>(z0);
+    const f32 a = sample(x0, z0) + (sample(x0 + 1, z0) - sample(x0, z0)) * tx;
+    const f32 b = sample(x0, z0 + 1) + (sample(x0 + 1, z0 + 1) - sample(x0, z0 + 1)) * tx;
+    return a + (b - a) * tz;
+}
+
+f32 TerrainView::surface_at(f32 x, f32 z) const {
+    const u32 n = header->resolution;
+    const f32 fx = std::clamp((x / header->size[0] + 0.5f) * static_cast<f32>(n - 1), 0.0f, static_cast<f32>(n - 1));
+    const f32 fz = std::clamp((z / header->size[1] + 0.5f) * static_cast<f32>(n - 1), 0.0f, static_cast<f32>(n - 1));
+    const u32 x0 = std::min(static_cast<u32>(fx), n - 2), z0 = std::min(static_cast<u32>(fz), n - 2);
+    const f32 u = fx - static_cast<f32>(x0), w = fz - static_cast<f32>(z0);
+    const f32 h00 = sample(x0, z0), h10 = sample(x0 + 1, z0), h01 = sample(x0, z0 + 1), h11 = sample(x0 + 1, z0 + 1);
+    return u >= w ? h00 + u * (h10 - h00) + w * (h11 - h10) : h00 + w * (h01 - h00) + u * (h11 - h01);
+}
+
+Result<TerrainView> TerrainView::read(Span<const byte> payload) {
+    TerrainView v;
+    v.header = header_of<TerrainHeader>(payload);
+    if (!v.header) return bad("asset.terrain.header");
+    const TerrainHeader& h = *v.header;
+    const u32 n = h.resolution;
+    if (n < kTerrainMinResolution || n > kTerrainMaxResolution || ((n - 1) & (n - 2)) != 0) return bad("asset.terrain.resolution", n);
+    if (h.chunk < 8 || h.chunk > 256 || (h.chunk & (h.chunk - 1)) != 0 || h.chunk > n - 1) return bad("asset.terrain.chunk", h.chunk);
+    const bool sizes_ok = h.size[0] > 0.0f && h.size[1] > 0.0f && h.size[0] < 1e7f && h.size[1] < 1e7f;
+    const bool heights_ok = h.height_min > -1e6f && h.height_max < 1e6f && h.height_max > h.height_min;
+    if (!sizes_ok || !heights_ok) return bad("asset.terrain.extent");
+    if (!span_at(payload, h.heights_offset, u64(n) * n, v.heights)) return bad("asset.terrain.heights");
+    if (h.layer_count > kTerrainMaxLayers) return bad("asset.terrain.layers", h.layer_count);
+    if (h.layer_count > 0) {
+        const u32 s = h.splat_resolution;
+        if (s < kTerrainMinResolution || s > n || ((s - 1) & (s - 2)) != 0) return bad("asset.terrain.splat_resolution", s);
+        if (!span_at(payload, h.layers_offset, h.layer_count, v.layers)) return bad("asset.terrain.layers");
+        if (!span_at(payload, h.splat_offset, u64(s) * s * 8, v.splat)) return bad("asset.terrain.splat");
+        for (const TerrainLayer& l : v.layers)
+            if (!(l.tile > 0.0f && l.tile < 1e6f) || !(l.height_strength >= 0.0f && l.height_strength <= 100.0f))
+                return bad("asset.terrain.layer");
+    } else if (h.splat_resolution != 0) {
+        return bad("asset.terrain.splat_resolution", h.splat_resolution);
+    }
+    if ((h.flags & TerrainFlags::kHoles) && !span_at(payload, h.holes_offset, (u64(n) * n + 7) / 8, v.holes)) return bad("asset.terrain.holes");
+    return v;
+}
+
+void write_terrain(const TerrainHeader& header, Span<const u16> heights, Array<byte>& out, Span<const TerrainLayer> layers,
+                   Span<const u8> splat, Span<const u8> holes) {
+    PayloadBuilder b(out);
+    TerrainHeader h = header;
+    h.heights_offset = h.layers_offset = h.splat_offset = h.holes_offset = 0;
+    const usize at = b.append(&h, sizeof(h));
+    h.heights_offset = b.append_span(heights);
+    if (!layers.empty()) h.layers_offset = b.append_span(layers);
+    if (!splat.empty()) h.splat_offset = b.append_span(splat);
+    if (!holes.empty()) h.holes_offset = b.append_span(holes);
     b.patch(at, h);
     b.finish();
 }

@@ -2,10 +2,13 @@
 // World3D — the 3D physics world, a facade over embedded Jolt Physics 5 (ADR-0003, physics.md §3.7;
 // ROADMAP M5b).
 //
-//  - static / kinematic / dynamic bodies; box, sphere, capsule, convex-hull and triangle-mesh shapes
+//  - static / kinematic / dynamic bodies; box, sphere, capsule, convex-hull, triangle-mesh and height-field
+//    shapes
 //  - CharacterVirtual-driven capsule controller (move_character) and the camera-boom sphere sweep
 //    (camera_sweep) — the two 3D additions to World2D's method set (physics.md §2.2)
 //  - raycasts and sphere casts, sorted and filtered like World2D's
+//  - joints between two bodies or a body and the world (fixed, hinge, slider, distance, cone,
+//    six-DOF) with limits, soft limits, friction, motors and a break force (M-GAMEPLAY3D step 2)
 //
 // Nothing in this header names a Jolt type: callers see MCE math types and the Entity that owns
 // each body. Jolt is reachable only from src/engine/physics3d/ (the JPH wall in check_walls.py).
@@ -26,7 +29,10 @@ using math::quat;
 using math::vec3;
 
 enum class BodyType3D : u8 { Static, Kinematic, Dynamic };
-enum class ShapeType3D : u8 { Box, Sphere, Capsule, Convex, Mesh };
+enum class ShapeType3D : u8 { Box, Sphere, Capsule, Convex, Mesh, HeightField };
+
+// A height-field sample that is a hole: the triangles touching it do not collide.
+inline constexpr f32 kHeightFieldHole = 3.40282347e38f;  // FLT_MAX
 
 // One shape per body, in the body's local frame (metres). Capsules and characters stand on +Y.
 // Convex and Mesh point at caller memory that only has to outlive create_body(): the shape is
@@ -38,6 +44,10 @@ struct Shape3D {
     f32 half_height = 0.5f;        // Capsule: half the length of the cylinder part
     Span<const vec3> points;       // Convex: hull input; Mesh: vertices
     Span<const u32> indices;       // Mesh: 3 per triangle, counter-clockwise seen from the front
+    Span<const f32> heights;       // HeightField: samples² heights, rows along +z of samples along +x
+    u32 samples = 0;               // HeightField: samples per side
+    vec3 origin;                   // HeightField: where sample (0, 0) at height 0 sits
+    vec3 spacing{1.0f, 1.0f, 1.0f};  // HeightField: metres between samples along x and z; y scales the heights
 
     static Shape3D box(vec3 half_extents) {
         Shape3D s;
@@ -69,6 +79,17 @@ struct Shape3D {
         s.type = ShapeType3D::Mesh;
         s.points = vertices;
         s.indices = triangle_indices;
+        return s;
+    }
+    // A terrain (M-TERRAIN 3), static bodies only: sample (x, z) at origin + spacing * (x, heights[z * samples + x], z),
+    // each quad split along its (x, z)-(x + 1, z + 1) diagonal; kHeightFieldHole samples open holes.
+    static Shape3D height_field(Span<const f32> heights, u32 samples, vec3 origin, vec3 spacing) {
+        Shape3D s;
+        s.type = ShapeType3D::HeightField;
+        s.heights = heights;
+        s.samples = samples;
+        s.origin = origin;
+        s.spacing = spacing;
         return s;
     }
 };
@@ -118,6 +139,59 @@ struct MoveResult3D {
     Entity ground_body;     // the body underfoot this tick, else null
     vec3 ground_velocity;   // velocity of the ground point (platform carry)
     bool hit_ceiling = false;
+};
+
+// ---- joints (M-GAMEPLAY3D step 2) -----------------------------------------------------------------
+
+enum class JointType3D : u8 {
+    Fixed,     // no relative motion
+    Hinge,     // turns about `axis` through `anchor` (a door, a wheel, a drawbridge)
+    Slider,    // slides along `axis`, no turning (a piston, a lift)
+    Distance,  // keeps the anchors between limit_min and limit_max apart (a rope, a chain link)
+    Cone,      // a ball joint whose `axis` swings at most cone_half_angle away (a shoulder)
+    SixDOF,    // each of the 6 axes locked, free or limited (anything else)
+};
+enum class JointMotorMode3D : u8 { Off, Velocity, Position };
+
+// Everything in world space, at the moment the joint is created: the bodies' current poses are
+// the joint's rest pose (hinge angle 0, slider position 0).
+struct JointDesc3D {
+    JointType3D type = JointType3D::Hinge;
+    JointMotorMode3D motor = JointMotorMode3D::Off;  // Hinge and Slider only
+    bool limits = false;             // Hinge, Slider: keep the angle / position in [limit_min, limit_max]
+    bool collide_connected = false;  // the two bodies still collide with each other
+    Entity a;                        // a body (created by create_body)
+    Entity b;                        // the other body, or null: `a` is held to the world
+    vec3 anchor;                     // the pivot (Distance: the point on a)
+    vec3 anchor_b;                   // Distance: the point on b (or in the world)
+    vec3 axis{0.0f, 1.0f, 0.0f};     // Hinge, Slider: the axis; Cone: the twist axis; SixDOF: the frame's X
+    vec3 normal;                     // SixDOF: the frame's Y (zero: any perpendicular to `axis`)
+    // Hinge: radians, min in [-pi, 0], max in [0, pi]. Slider: metres, min <= 0 <= max. Distance: metres
+    // (always applied; < 0 takes the anchors' distance at creation).
+    f32 limit_min = 0.0f;
+    f32 limit_max = 0.0f;
+    f32 cone_half_angle = 0.5f;      // Cone: radians
+    // SixDOF, per axis (x, y, z of the frame): min > max = free, min == max = locked there, else limited.
+    // Linear in metres, angular in radians (angular y and z in [-pi, pi], x in [-pi, pi]).
+    vec3 linear_min, linear_max;
+    vec3 angular_min, angular_max;
+    f32 spring_frequency = 0.0f;  // > 0: Hinge / Slider / Distance limits are a spring of this Hz (soft)
+    f32 spring_damping = 0.0f;    // the spring's damping ratio (0..1)
+    f32 friction = 0.0f;          // Hinge: N*m, Slider: N, holding against motion
+    f32 motor_target = 0.0f;      // Velocity: rad/s or m/s; Position: rad or m
+    f32 motor_max_force = 0.0f;   // N (Slider) or N*m (Hinge); 0 = unlimited
+    f32 motor_frequency = 2.0f;   // Position: how stiffly the motor drives to the target (Hz)
+    f32 motor_damping = 1.0f;     // Position: damping ratio
+    f32 break_force = 0.0f;       // N; the joint breaks (stops acting) above it; 0 = never
+    f32 break_torque = 0.0f;      // N*m; likewise for turning; 0 = never
+};
+
+struct JointState3D {
+    bool enabled = false;  // acting (not broken, not switched off)
+    bool broken = false;   // broke under break_force / break_torque
+    f32 position = 0.0f;   // Hinge: angle (rad); Slider: position (m); Distance: distance (m); others 0
+    f32 force = 0.0f;      // the linear force it held with in the last step (N)
+    f32 torque = 0.0f;     // the torque it held with in the last step (N*m)
 };
 
 struct QueryFilter3D {
@@ -201,6 +275,19 @@ public:
     // Last move result.
     bool controller_state(Entity e, MoveResult3D& out) const;
 
+    // ---- joints ---------------------------------------------------------------------------------------
+    // A joint between a.body and b.body (or the world). 0 when a body is missing (characters are not
+    // bodies), both are static, a == b, or the description is malformed. Destroying either body
+    // destroys the joint.
+    u32 create_joint(const JointDesc3D& desc);
+    void destroy_joint(u32 joint);
+    bool has_joint(u32 joint) const;
+    // Motor mode and target from now on (Hinge, Slider).
+    void set_joint_motor(u32 joint, JointMotorMode3D mode, f32 target, f32 max_force = 0.0f);
+    // Switches a joint off and on again (a broken joint stays off).
+    void set_joint_enabled(u32 joint, bool enabled);
+    bool joint_state(u32 joint, JointState3D& out) const;
+
     // ---- camera collision (UC-B gate): sweep a sphere along the boom from the pivot `from` to the
     // desired camera position `to` against static + kinematic geometry. On a hit, put the camera at
     // ShapeHit3D::position. Characters and dynamic props never pull the camera in.
@@ -218,6 +305,7 @@ public:
         u32 bodies = 0;
         u32 active_bodies = 0;  // awake dynamic/kinematic bodies
         u32 characters = 0;
+        u32 joints = 0;
     };
     Stats stats() const;
 

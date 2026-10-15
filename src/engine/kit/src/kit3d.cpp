@@ -16,17 +16,19 @@ namespace mce::kit {
 
 // World::state_hash hashes component bytes: these layouts have no implicit padding.
 static_assert(sizeof(MeshRef) == 96);
-static_assert(sizeof(PointLight3D) == 40);
-static_assert(sizeof(SpotLight3D) == 60);
+static_assert(sizeof(PointLight3D) == 44);
+static_assert(sizeof(SpotLight3D) == 64);
 static_assert(sizeof(ReflectionProbe3D) == 64);
 static_assert(sizeof(GiVolume3D) == 88);
 static_assert(sizeof(Camera3DComponent) == 24);
-static_assert(sizeof(Environment3D) == 360);
+static_assert(sizeof(Environment3D) == 400);
 static_assert(sizeof(BoxCollider3D) == 40);
 static_assert(sizeof(MeshCollider3D) == 32);
 static_assert(sizeof(Foliage3D) == 120);
 static_assert(sizeof(Decal3D) == 96);
 static_assert(sizeof(ParticleEmitter3D) == 184);
+static_assert(sizeof(Terrain3D) == 80);
+static_assert(sizeof(TerrainCollider3D) == 8);
 
 // The asset system mesh colliders read their meshes from (install_kit3d's argument).
 struct Kit3DAssets {
@@ -93,6 +95,51 @@ bool create_mesh_collider(World& w, Physics3D& phys, asset::AssetSystem* assets,
     return false;
 }
 
+bool create_terrain_collider(World& w, Physics3D& phys, asset::AssetSystem* assets, Entity e, const TerrainCollider3D& c,
+                             const LocalTransform& t) {
+    const Terrain3D* terrain = w.try_get<Terrain3D>(e);
+    if (!terrain || !assets) {
+        MCE_LOG_WARN("kit3d: terrain collider on entity {} skipped ({})", e.index, terrain ? "no asset system" : "no Terrain3D");
+        return false;
+    }
+    Result<asset::AssetHandle<asset::Terrain>> h = assets->load_sync<asset::Terrain>(terrain->terrain.guid);
+    if (!h) {
+        MCE_LOG_WARN("kit3d: terrain collider on entity {}: terrain {} does not load", e.index,
+                     asset::to_string(terrain->terrain.guid).view());
+        return false;
+    }
+    math::vec3 pos, scale;
+    math::quat rot;
+    world_pose(w, e, t, pos, rot, scale);
+    Array<f32> heights;
+    u32 n = 0;
+    math::vec3 origin, spacing;
+    if (const Result<asset::TerrainView> view = asset::TerrainView::read(assets->resolve(h.value()))) {
+        const asset::TerrainView& v = view.value();
+        n = v.resolution();
+        heights.resize(usize(n) * n);
+        for (u32 z = 0; z < n; ++z)
+            for (u32 x = 0; x < n; ++x)
+                heights[usize(z) * n + x] = v.hole(x, z) ? physics::kHeightFieldHole : v.sample(x, z);
+        origin = {-0.5f * v.header->size[0] * scale.x, 0.0f, -0.5f * v.header->size[1] * scale.z};
+        spacing = {v.spacing_x() * scale.x, scale.y, v.spacing_z() * scale.z};
+    }
+    assets->release(asset::AnyHandle(h.value()));
+    if (n == 0) {
+        MCE_LOG_WARN("kit3d: terrain collider on entity {}: unreadable terrain", e.index);
+        return false;
+    }
+    physics::BodyDesc3D d;
+    d.shape = physics::Shape3D::height_field(heights.span(), n, origin, spacing);
+    d.position = pos;
+    d.rotation = rot;
+    d.friction = c.friction;
+    d.layer = static_cast<u8>(c.layer & 15u);
+    if (phys.world.create_body(e, d)) return true;
+    MCE_LOG_WARN("kit3d: terrain collider on entity {} not created", e.index);
+    return false;
+}
+
 asset::AssetSystem* kit3d_assets(World& w) {
     const Kit3DAssets* a = w.try_resource<Kit3DAssets>();
     return a ? a->assets : nullptr;
@@ -110,6 +157,9 @@ void kit3d_colliders(Frame& f) {
     });
     f.query<const MeshCollider3D&, const LocalTransform&>().each([&](Entity e, const MeshCollider3D& c, const LocalTransform& t) {
         if (create_mesh_collider(f.world(), phys, assets, e, c, t)) ++phys.colliders;
+    });
+    f.query<const TerrainCollider3D&, const LocalTransform&>().each([&](Entity e, const TerrainCollider3D& c, const LocalTransform& t) {
+        if (create_terrain_collider(f.world(), phys, assets, e, c, t)) ++phys.colliders;
     });
 }
 
@@ -208,7 +258,8 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
         return;
     }
     world.register_components<MeshRef, PointLight3D, SpotLight3D, ReflectionProbe3D, GiVolume3D, Camera3DComponent, Animator,
-                              Environment3D, BoxCollider3D, MeshCollider3D, Foliage3D, Decal3D, ParticleEmitter3D>();
+                              Environment3D, BoxCollider3D, MeshCollider3D, Foliage3D, Decal3D, ParticleEmitter3D, Terrain3D,
+                              TerrainCollider3D>();
     world.set_resource(Environment3D{});
     world.set_resource(Kit3DAssets{assets});
     if (!world.try_resource<StaticInstances3D>()) world.set_resource(StaticInstances3D{});

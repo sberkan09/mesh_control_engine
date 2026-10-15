@@ -30,6 +30,10 @@ enum : u8 { Keyboard = 1u << 0, Mouse = 1u << 1, Gamepad = 1u << 2, All = 0x7 };
 }
 enum class RebindState : u8 { Idle, Waiting, Captured, TimedOut, Cancelled };
 
+// One-hand keyboard layouts (M-ACCESS step 3): Left keeps every keyboard binding on WASD and the
+// keys around it, Right on the arrows, Enter, the right modifiers and the keys left of them.
+enum class Hand : u8 { Both, Left, Right };
+
 struct InputStats {
     u64 events_folded = 0;
     u64 events_dropped = 0;  // queue overflow (oldest dropped)
@@ -90,6 +94,23 @@ public:
     Result<void> deserialize_bindings(StringView text);
     Result<void> save_bindings(StringView path) const;  // atomic: temp file + rename
     Result<void> load_bindings(StringView path);        // FileNotFound when there is no save yet
+
+    // ---- player options (M-ACCESS step 3) ----------------------------------------------------------
+    // Look sensitivity: the "Look" action's value (mouse, stick or touch) scaled after its clamp.
+    void set_look_sensitivity(f32 s) { look_sensitivity_ = s > 0.f ? s : 0.f; }
+    f32 look_sensitivity() const { return look_sensitivity_; }
+    // Hold-to-toggle: a Button action marked here latches. One press turns it held, the next press
+    // releases it, so the player never has to keep a key down. pressed/released follow the latch.
+    void set_toggle(StringId action, bool on);
+    bool is_toggle(StringId action) const;
+    void clear_toggles();
+    // A one-hand keyboard layout over the cooked map (Both = the cooked map): each map's keyboard
+    // bindings move to the hand's keys; Escape stays, mouse, gamepad and touch bindings stay.
+    // Recorded as overrides like any rebind, so save_bindings keeps it.
+    void apply_hand_preset(Hand hand);
+    // Bumped by every binding change (rebind, capture, reset, preset, deserialize): a host saves the
+    // bindings when it moves.
+    u64 bindings_generation() const { return bindings_generation_; }
 
     // ---- clock -----------------------------------------------------------------------
     void set_tick_rate(u32 hz);
@@ -209,6 +230,11 @@ private:
         bool button_action = true;
         BindingDef result;
     } rebind_;
+
+    f32 look_sensitivity_ = 1.f;
+    Array<StringId> toggles_;
+    mutable Array<StringId> toggle_raw_held_;  // toggle actions whose bindings were held last tick
+    u64 bindings_generation_ = 0;
 
     InputState cur_;
     InputState prev_;

@@ -12,6 +12,7 @@
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/ui/options_panel.h"
 #include "mce/ui/screen_link.h"
 #include "mce/ui/ui.h"
 
@@ -34,6 +35,8 @@ public:
                               const ui::Skin* skin, kit::SpriteExtract* extract);
     void clear();
     bool active() const { return !screens_.empty(); }
+    // The input system a document's remap list drives (M-ACCESS: ui::OptionsPanel); set before load.
+    void set_input(input::InputSystem* input) { input_ = input; }
 
     // Before the tick's systems: the raised actions into the snapshot.
     void apply_actions(input::InputState& state, f32 dt) { relay_.apply(state, dt); }
@@ -41,6 +44,9 @@ public:
     void update(World& world, const ui::UpdateContext& ctx);
     // A visible modal screen: the host switches input to the "UI" map while one is up.
     bool modal_visible() const;
+    // The document focus lives in: the topmost visible modal screen's (null when none is up). The
+    // screen reader speaks its focus (M-ACCESS).
+    const ui::Document* focus_document() const;
     // Each screen on its own layers below `base`, by order (two layers + two per open modal).
     void submit(render::SpriteBatch& batch, i16 base) const;
 
@@ -57,10 +63,12 @@ private:
         bool bindings_pending = true;
         bool always_visible = false;  // a preview: no UiScreen component behind it
         ui::Document* doc = nullptr;  // null headless
+        ui::OptionsPanel* options = nullptr;  // a document with a remap list (the stock options screen)
     };
     Array<Screen> screens_;
     Array<Entity> entities_;
     ui::ActionRelay relay_;
+    input::InputSystem* input_ = nullptr;
 };
 
 }  // namespace mce::player

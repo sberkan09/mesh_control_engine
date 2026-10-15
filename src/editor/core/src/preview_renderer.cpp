@@ -124,6 +124,7 @@ bool PreviewRenderer::ensure_3d() {
         return false;
     }
     extract3d_.init(renderer_.meshes(), assets_);
+    extract3d_.set_texture_store(&renderer_.textures());
     three_d_ = true;
     return true;
 }

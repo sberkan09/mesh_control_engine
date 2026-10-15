@@ -53,8 +53,10 @@ struct PointLight3D {
     f32 intensity = 3.0f;
     f32 radius = 7.0f;   // no light past this distance
     u32 enabled = 1;
+    u32 cast_shadows = 0;  // 1: a shadow map (six cube faces), granted by screen importance (r.local_shadows)
 };
-MCE_COMPONENT(PointLight3D, color, offset, (intensity, Range{0, 100}), (radius, Range{0.1f, 200}), enabled)
+MCE_COMPONENT(PointLight3D, color, offset, (intensity, Range{0, 100}), (radius, Range{0.1f, 200}), enabled,
+              (cast_shadows, Help{"1: casts shadows (cube shadow map, budgeted per frame)"}))
 
 // A spot light: a point light lit only inside a cone along `direction` (entity space). Full
 // intensity inside `inner_deg`, none past `outer_deg` (half-angles).
@@ -67,9 +69,11 @@ struct SpotLight3D {
     f32 outer_deg = 30.0f;
     f32 inner_deg = 20.0f;
     u32 enabled = 1;
+    u32 cast_shadows = 0;  // 1: a shadow map (one atlas tile), granted by screen importance (r.local_shadows)
 };
 MCE_COMPONENT(SpotLight3D, color, offset, (intensity, Range{0, 100}), direction, (radius, Range{0.1f, 200}),
-              (outer_deg, Range{1, 89}), (inner_deg, Range{0, 89}), enabled)
+              (outer_deg, Range{1, 89}), (inner_deg, Range{0, 89}), enabled,
+              (cast_shadows, Help{"1: casts shadows (one shadow atlas tile, budgeted per frame)"}))
 
 // A reflection probe (M-VISUAL 2): the scene seen from the entity's position plus `offset`, used
 // for the specular reflections of surfaces inside the world-axis box of `half_extents` around the
@@ -250,6 +254,20 @@ struct Environment3D {
     u32 motion_blur = 0;
     f32 motion_blur_intensity = 0.5f;        // the share of a frame's motion smeared (a shutter fraction)
     asset::AssetRef<asset::Texture> color_grade;  // the LUT; empty = ungraded
+    // M-VISUAL 3. Screen-space ambient occlusion: darkens the ambient light in creases and contact
+    // points (never the sun or the lights). r.ssao 0 turns it off for every scene.
+    u32 ssao = 0;
+    f32 ssao_radius = 0.6f;     // world meters the samples reach
+    f32 ssao_intensity = 1.0f;
+    f32 ssao_power = 1.5f;      // contrast of the occlusion
+    // M-VISUAL2 1. Screen-space reflections: smooth surfaces mirror what the screen shows, over the
+    // probes and the sky. r.ssr 0 turns them off for every scene; the Low quality tier drops them.
+    u32 ssr = 0;
+    f32 ssr_max_distance = 8.0f;   // world meters a reflection ray travels
+    f32 ssr_thickness = 0.25f;     // meters behind a surface a ray may pass and still hit it
+    f32 ssr_max_roughness = 0.5f;  // rougher surfaces keep the probes only
+    f32 ssr_roughness_fade = 0.2f; // roughness range below the maximum over which reflections fade
+    f32 ssr_intensity = 1.0f;
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -272,7 +290,12 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (dof_focus_range, Range{0, 100}), (dof_blur_range, Range{0.1f, 1000}), (dof_max_radius, Range{0, 0.05f}),
               (motion_blur, Help{"1: smear moving objects (and the camera's motion) along their velocity"}),
               (motion_blur_intensity, Range{0, 2}),
-              (color_grade, Help{"256x16 strip LUT (16^3), imported srgb false; empty = ungraded"}))
+              (color_grade, Help{"256x16 strip LUT (16^3), imported srgb false; empty = ungraded"}),
+              (ssao, Help{"1: screen-space ambient occlusion (darkens the ambient in creases)"}), (ssao_radius, Range{0.05f, 5}),
+              (ssao_intensity, Range{0, 4}), (ssao_power, Range{0.25f, 8}),
+              (ssr, Help{"1: screen-space reflections on smooth surfaces (over the probes and the sky)"}),
+              (ssr_max_distance, Range{0.1f, 200}), (ssr_thickness, Range{0.01f, 5}), (ssr_max_roughness, Range{0, 1}),
+              (ssr_roughness_fade, Range{0.01f, 1}), (ssr_intensity, Range{0, 4}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 
@@ -339,6 +362,35 @@ MCE_COMPONENT(Foliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's ma
               (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
               (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
               (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled)
+
+// ---- terrain (M-TERRAIN) -------------------------------------------------------------------------
+
+// A heightmap terrain: `terrain` (a .mcterrain) centred on the entity, scaled and turned with it. Drawn
+// as a quadtree of grid meshes (render::TerrainLod): near the camera at full resolution, farther away
+// in coarser nodes whose error stays under `pixel_error` pixels (0: the quality tier's, 4 / 2 / 1 px
+// on Low / Medium / High), joined by skirts. Shadows like any mesh. `material` (a .mcmat) covers the
+// whole terrain, its textures repeating every `uv_tile` metres (0: once over the terrain).
+struct Terrain3D {
+    asset::AssetRef<asset::Terrain> terrain;
+    asset::AssetRef<asset::Material> material;  // null = a plain grey
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+    f32 pixel_error = 0.0f;
+    f32 uv_tile = 0.0f;
+    u32 cast_shadows = 1;
+    u32 enabled = 1;
+};
+MCE_COMPONENT(Terrain3D, (terrain, Help{"a .mcterrain"}), (material, Help{"a .mcmat over the whole terrain; null = plain grey"}), tint,
+              (pixel_error, Range{0, 64}, Help{"LOD screen error in pixels; 0 = the quality tier's"}),
+              (uv_tile, Range{0, 10000}, Help{"metres per texture repeat; 0 = once over the terrain"}), cast_shadows, enabled)
+
+// A static height-field collider for the entity's Terrain3D, built at Startup (and for runtime-spawned
+// terrains) under the entity's transform. It collides with the same triangles the terrain draws at full
+// resolution, and the terrain's holes (cave mouths, tunnels) cut it like they cut the drawn surface.
+struct TerrainCollider3D {
+    f32 friction = 0.8f;
+    u32 layer = 0;
+};
+MCE_COMPONENT(TerrainCollider3D, (friction, Range{0, 2}), (layer, Range{0, 15}))
 
 // A projected decal: `texture` (rgb color, a coverage; empty = plain `color`) projected down the
 // entity's local -Y onto every opaque surface inside the box of `size` metres (x, projection depth y, z)
@@ -447,7 +499,7 @@ struct StaticInstances3D {
 // resources (each kept if already set: a game sets Physics3D first for its own PhysicsConfig3D)
 // and adds the systems:
 //   Startup              "kit3d_environment"  the scene's Environment3D component, if any, into the resource
-//   Startup              "kit3d_colliders"    BoxCollider3D / MeshCollider3D bodies (after the environment)
+//   Startup              "kit3d_colliders"    BoxCollider3D / MeshCollider3D / TerrainCollider3D bodies (after the environment)
 //   FixedUpdate_Physics  "kit3d_physics"      Physics3D::world.step when auto_step
 //   FixedUpdate_Post     "kit3d_animators"    Animator time, cross-fades, graphs and events (anim3d.h)
 //   FixedUpdate_Post     "kit3d_attach"       AttachToBone poses (after the animators)

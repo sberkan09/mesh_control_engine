@@ -28,6 +28,11 @@
 // render time passes the newest snapshot, an entity moves on with its last velocity for at most
 // max_extrapolation_s, then holds the newest snapshot's transform exactly. Everything runs on the
 // client's own tick time, so a run over SimNetwork stays deterministic.
+//
+// Client-side prediction (M-NET2 step 3, mce/net/prediction.h): the entity the local player
+// controls is drawn by the game's Predictor, a round trip ahead of the snapshots. set_predicted()
+// tells apply() and update() to leave its LocalTransform alone; latest_transform() gives the
+// server's word on it for Predictor::reconcile().
 
 #include "mce/containers/hash_map.h"
 #include "mce/ecs/transform.h"
@@ -95,6 +100,7 @@ struct InterpolationStats {
     u32 interpolated = 0;   // entities between two snapshots this update
     u32 extrapolated = 0;   // past the newest snapshot, moving on
     u32 held = 0;           // past the extrapolation limit, or with one snapshot only
+    u32 predicted = 0;      // drawn by the game's Predictor (set_predicted), not interpolated
 };
 
 struct ApplyResult {
@@ -118,13 +124,27 @@ public:
     // LocalTransform for the render time. Not interpolating: does nothing.
     InterpolationStats update(Commands& cmd, const World& world, f64 dt_s);
     const InterpolationStats& interpolation_stats() const { return stats_; }
+    // The server tick (fractional) the last update() drew; without interpolation, the newest
+    // applied snapshot's tick.
+    f64 render_tick() const;
+    // The server tick whose state this entity shows: the render tick while it is interpolated or
+    // extrapolated, the snapshot's own tick while it is held. Send it with a shot at the entity for
+    // lag compensation (lag_compensation.h). The newest tick when not interpolating; 0 when unknown.
+    f64 drawn_tick(u32 net_id) const;
+
+    // The entity with this server id is predicted by the game (prediction.h): apply() and update()
+    // no longer write its LocalTransform. Can be set before the entity appears.
+    void set_predicted(u32 net_id, bool predicted = true);
+    bool is_predicted(u32 net_id) const;
+    // The transform the newest applied snapshot gave this entity (null when not replicated yet).
+    const LocalTransform* latest_transform(u32 net_id) const;
 
     // The local entity for a server id (null when not replicated yet).
     Entity find(u32 net_id) const;
     usize size() const { return entities_.size(); }
     u32 last_tick() const { return last_tick_; }
     // Forgets every mirrored entity, destroying them (call it on disconnect); the next snapshot,
-    // from any server session, rebuilds the mirror.
+    // from any server session, rebuilds the mirror. Predicted ids are forgotten too.
     void reset(Commands& cmd, const World& world);
 
     void set_hooks(const ReplicationHooks& hooks) { hooks_ = hooks; }
@@ -139,6 +159,9 @@ private:
         Entity entity;
         NetId id;
         u32 seen = 0;  // the snapshot generation that last listed it
+        bool predicted = false;
+        LocalTransform latest;  // from the newest applied snapshot
+        f64 drawn_tick = 0.0;   // the server tick update() drew it at
         // Interpolating: the newest snapshots of this entity, oldest first (a ring).
         Sample history[kHistory];
         u32 head = 0;  // index of the oldest
@@ -154,12 +177,13 @@ private:
     ReplicationHooks hooks_;
     HashMap<u32, Mirror> entities_;
     Array<Entry> entries_;  // scratch: the snapshot being applied
+    Array<u32> predicted_;  // set_predicted ids
     u32 generation_ = 0;
     u32 last_tick_ = 0;
     bool has_tick_ = false;
 
     void sample_arrival(u32 tick);
-    LocalTransform sample(const Mirror& m, f64 render_tick, InterpolationStats& stats) const;
+    LocalTransform sample(const Mirror& m, f64 render_tick, InterpolationStats& stats, f64& drawn_tick) const;
 
     InterpolationDesc interp_;
     bool interpolate_ = false;

@@ -5,6 +5,7 @@
 // {
 //   "format": "mce-material", "version": 1, "guid": "<uuid>",
 //   "base_color": [1, 1, 1, 1], "metallic": 0, "roughness": 1, "emissive": [0, 0, 0],
+//   "uv_scale": [1, 1],   (how often the textures repeat across the mesh's UVs: [8, 8] tiles a floor)
 //   "alpha_mode": "opaque" | "mask" | "blend", "alpha_cutoff": 0.5,
 //   "double_sided": false, "unlit": false,
 //   "textures": { "base_color": "guid:<uuid>", "normal": ..., "metallic_roughness": ..., "emissive": ... }
@@ -81,7 +82,7 @@ public:
         const StringView file = in.display_path;
         const u32 errors_before = diags.error_count();
         if (!detail::check_keys(doc, {"format", "version", "guid", "name", "base_color", "metallic", "roughness", "emissive", "alpha_mode",
-                                      "alpha_cutoff", "double_sided", "unlit", "textures"},
+                                      "alpha_cutoff", "double_sided", "unlit", "uv_scale", "textures"},
                                 file, kStage, diags))
             return false;
         const JsonValue fmt = doc.get("format");
@@ -105,6 +106,13 @@ public:
         bool double_sided = false, unlit = false;
         read_vec(doc, "base_color", m.base_color, 4, file, diags);
         read_vec(doc, "emissive", m.emissive, 3, file, diags);
+        f32 uv_scale[2] = {1.0f, 1.0f};
+        if (read_vec(doc, "uv_scale", uv_scale, 2, file, diags)) {
+            if (!(uv_scale[0] > 0.0f && uv_scale[1] > 0.0f && uv_scale[0] <= 4096.0f && uv_scale[1] <= 4096.0f))
+                detail::error_at(diags, Errc::ParseError, file, doc.get("uv_scale"), kStage,
+                                 "'uv_scale' must be two numbers in (0, 4096]: how often the textures repeat across the mesh's UVs");
+            else m.uv_scale_half = asset::MaterialChunk::pack_uv_scale(uv_scale[0], uv_scale[1]);
+        }
         detail::read_number(doc, "metallic", 0, metallic, file, kStage, diags);
         detail::read_number(doc, "roughness", 1, roughness, file, kStage, diags);
         detail::read_number(doc, "alpha_cutoff", 0.5, cutoff, file, kStage, diags);

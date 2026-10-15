@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "cook_test_util.h"
+#include "mce/convar.h"
 #include "mce/audio/components.h"
 #include "mce/editor/play_session.h"
 #include "mce/input/ecs.h"
@@ -548,6 +549,14 @@ void count_ticks(Frame& f) {
     });
 }
 
+MCE_CVAR(cv_mcp_probe, "test.mcp_probe", 0, "read by probe_game_install's system", CVarFlags::None);
+i32 g_probe_seen = -1;
+void read_probe(Frame&) { g_probe_seen = cv_mcp_probe.get_int(); }
+ResultV probe_game_install(World& w) {
+    w.add_system(Phase::FixedUpdate_Pre, "mcp_test_probe", &read_probe);
+    return ok();
+}
+
 ResultV counter_game_install(World& w) {
     w.register_components<mcptest::McpCounter>();
     w.add_system(Phase::FixedUpdate_Pre, "mcp_test_count", &count_ticks);
@@ -605,6 +614,18 @@ TEST_CASE("mcp tools: run_headless runs the project's game systems and inspects 
     CHECK(c.fails("run_headless", R"({"inspect":{"entities":[9999]}})").find("no entity") != std::string::npos);
     CHECK(c.fails("run_headless", R"({"inspect":{"component":"Nope"}})").find("unknown component") != std::string::npos);
     CHECK(c.fails("run_headless", R"({"inspect":{}})").find("give 'entities'") != std::string::npos);
+
+    // convars: set for the run, put back after it (SBA-61: a convar-driven setting can be previewed).
+    editor::set_play_game_install(&probe_game_install);
+    c.ok("run_headless", R"({"ticks":2,"log_lines":0,"convars":{"test.mcp_probe":5}})");
+    CHECK(g_probe_seen == 5);
+    CHECK(cv_mcp_probe.get_int() == 0);
+    c.ok("run_headless", R"({"ticks":2,"log_lines":0})");
+    CHECK(g_probe_seen == 0);
+    editor::set_play_game_install(nullptr);
+    CHECK(c.fails("run_headless", R"({"convars":{"no.such.cvar":1}})").find("console_list") != std::string::npos);
+    CHECK(c.fails("run_headless", R"({"convars":{"test.mcp_probe":"x"}})").find("does not take") != std::string::npos);
+    CHECK(cv_mcp_probe.get_int() == 0);
 }
 
 TEST_CASE("mcp tools: cook_run adopt gives new source files a sidecar") {
@@ -685,7 +706,7 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
     // Every type asset_schema lists is created from its template and cooks clean.
     auto listed = c.ok("asset_schema");
     const cook::JsonValue types = listed.v().get("types");
-    REQUIRE(types.size() == 13);
+    REQUIRE(types.size() == 14);
     for (u32 i = 0; i < types.size(); ++i) {
         const std::string type = str(types.at(i).get("type")), ext = str(types.at(i).get("extension"));
         auto schema = c.ok("asset_schema", R"({"type":")" + type + R"("})");

@@ -253,6 +253,35 @@ else()
     target_compile_options(Jolt PRIVATE -w)
 endif()
 
+# ---- Recast & Detour (3D navigation; mce_physics3d only — ADR-0040) ------------------------------
+# Navmesh bake (Recast), path queries and crowds (Detour, DetourCrowd) and carved obstacles
+# (DetourTileCache). Zlib licensed. Compiled straight into mce_physics3d (an object library folded
+# into its archive, like ENet into mce_net) with our flags: warnings off, and no FP contraction so a
+# bake is byte-identical run to run on one platform (ADR-0007). The Recast wall in
+# scripts/ci/check_walls.py confines its headers and symbols to src/engine/physics3d/src/.
+FetchContent_Declare(recastnavigation
+    GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
+    GIT_TAG        v1.6.0
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  _no_cmake_)  # its sources are compiled below with our flags
+FetchContent_MakeAvailable(recastnavigation)
+set(_mce_recast_dirs Recast Detour DetourCrowd DetourTileCache)
+set(_mce_recast_sources "")
+set(_mce_recast_includes "")
+foreach(dir IN LISTS _mce_recast_dirs)
+    file(GLOB _srcs CONFIGURE_DEPENDS "${recastnavigation_SOURCE_DIR}/${dir}/Source/*.cpp")
+    list(APPEND _mce_recast_sources ${_srcs})
+    list(APPEND _mce_recast_includes "${recastnavigation_SOURCE_DIR}/${dir}/Include")
+endforeach()
+add_library(mce_recast OBJECT ${_mce_recast_sources})
+target_include_directories(mce_recast SYSTEM PUBLIC ${_mce_recast_includes})
+set_target_properties(mce_recast PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(mce_recast PRIVATE /W0 /fp:precise)
+else()
+    target_compile_options(mce_recast PRIVATE -w -ffp-contract=off)
+endif()
+
 # ---- glslang (shader cook, every platform) ---------------------------------------------------
 # The cook validates .glsl stages and compiles their variants to SPIR-V (ADR-0033). Same tag and
 # options as cmake/macos/MetalDependencies.cmake: this declaration comes first, so on macOS the
@@ -316,6 +345,33 @@ if(MCE_WITH_NET)
         target_compile_definitions(mce_enet PRIVATE HAS_FCNTL=1 HAS_POLL=1 HAS_GETADDRINFO=1 HAS_GETNAMEINFO=1
             HAS_INET_PTON=1 HAS_INET_NTOP=1 HAS_MSGHDR_FLAGS=1 HAS_SOCKLEN_T=1)
     endif()
+endif()
+
+# ---- Luau (scripting spike; mce_script only — ADR-0041) ------------------------------------
+# A sandboxed Luau VM for the M-SCRIPT spike. Only the VM, the compiler and their parts are built
+# (EXCLUDE_FROM_ALL keeps the CLI, analysis and codegen targets out of `all`). Determinism
+# (FR-RUN-040, ADR-0007): the VM and the compiler, whose constant folding runs on doubles, build
+# with the engine's precise floating point; codegen (JIT) is never linked. LUA_USE_LONGJMP makes VM
+# errors unwind with longjmp instead of C++ exceptions, so the -fno-exceptions engine can call it.
+# The compiler throws internally (luau_compile catches); it is meant for the cook, not the player.
+if(MCE_WITH_SCRIPT)
+    set(LUAU_BUILD_CLI OFF CACHE BOOL "" FORCE)
+    set(LUAU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(luau
+        GIT_REPOSITORY https://github.com/luau-lang/luau.git
+        GIT_TAG        0.742
+        GIT_SHALLOW    TRUE
+        SYSTEM
+        EXCLUDE_FROM_ALL)
+    FetchContent_MakeAvailable(luau)
+    target_compile_definitions(Luau.VM PUBLIC LUA_USE_LONGJMP=1)
+    foreach(_luau_target Luau.VM Luau.Compiler Luau.Ast)
+        if(MSVC)
+            target_compile_options(${_luau_target} PRIVATE /fp:precise /W0)
+        else()
+            target_compile_options(${_luau_target} PRIVATE -ffp-contract=off -w)
+        endif()
+    endforeach()
 endif()
 
 # ---- SPIRV-Cross (macOS only) ---------------------------------------------------------------

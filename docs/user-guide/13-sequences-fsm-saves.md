@@ -159,7 +159,7 @@ drive the same moves on different entities.
 | `audio` | `t`, `sound`, `gain_db` | plays a one-shot sound |
 | `camera` | `t`, `camera` | camera cuts: that camera is `primary` until the next cut, the track's other cameras are not |
 | `event` | `t`, `emit` | pushes a `kit::TimelineSignal`, and a `SeqSignal` so a sequence's `wait_event` can follow the timeline |
-| `subtitle` | `t`, `duration`, `text`, `speaker` | the line shown in that range; read it with `kit::timeline_subtitle` |
+| `subtitle` | `t`, `duration`, `text`, `speaker` | the line shown in that range: the stock player draws it as a subtitle (10.7); `kit::timeline_subtitle` reads it |
 
 `ease` shapes the curve from a key to the next one: `linear` (default), `step` (hold, then jump),
 `smooth`, `ease_in`, `ease_out`. Values hold before the first key and after the last. The cook
@@ -176,3 +176,35 @@ replays reproduce it, and with a `SaveKey` a save mid-timeline resumes on the sa
 property, activation, camera and subtitle tracks at that time without firing the cues it passes
 (animation, audio, event); playing on from there fires the keys after it. Animate entities without
 a dynamic physics body: physics owns a moving body's transform.
+
+### Editing timelines in the editor
+
+The **Timeline** panel edits a `.mctimeline` (double-click one in Assets, or **New...** in the
+panel; a new timeline has one event track with a `start` key). Each track is a row on the time
+ruler; its keys are diamonds, activation ranges and subtitle lines are bars.
+
+- **Scrub** by dragging on the ruler, or type the playhead's time. **Snap** rounds the playhead and
+  dragged keys to 1/30 s, 0.1 s, 0.25 s, 0.5 s or 1 s. The mouse wheel scrolls the ruler; Ctrl +
+  wheel or the zoom slider zooms.
+- **Keys:** click one to select it and edit it on the right (time, ease, values, clip, signal,
+  subtitle text...); drag it to move it; double-click a row to add a key there (it takes the track's
+  current value); Delete removes the selected key. **+ Track** adds a track of any type for the
+  player itself or one of its bindings (the bound entities are listed by name).
+- **Curves:** the selected transform or property track is drawn below as one line per component
+  (x red, y green, z blue, w grey), with its keys as dots. Drag a dot up or down to change that value.
+  The curve between two keys is the first key's `ease`; there are no free tangents.
+- **Preview** shows the open scene in the viewport at the playhead: the editor enters play mode
+  paused and scrubs the scene's `TimelinePlayer` that names this timeline, with your unsaved edits.
+  **Play** runs it from the playhead; **Pause** hands the time back to the playhead. The scene
+  document is never changed by previewing; uncheck Preview (or Stop) to go back to editing.
+- **Record:** with Record on, an edit you make in the Inspector or with a gizmo to an entity the
+  timeline drives is keyed at the playhead: moving, rotating or scaling keys its transform track,
+  a float, vector, color or quaternion field keys a `Component.field` property track. An entity the
+  `TimelinePlayer` does not bind yet takes its first free binding. The edit still changes the scene,
+  as any edit does.
+
+Every change is checked by the cook before it is kept (a bad path is refused with the cook's
+message) and saved as soon as you let go, so the file on disk is always one the cook reads. The
+panel has its own **Undo** and **Redo**; the scene's undo (Ctrl+Z) covers the scene side, such as a
+binding record mode added. A change written by an MCP tool or a text editor is read in while the
+panel has nothing unsaved.

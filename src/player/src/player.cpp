@@ -67,6 +67,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <optional>
 
 #include "hud_font.h"
@@ -82,6 +83,7 @@
 #include "mce/input/ecs.h"
 #include "mce/input/input_system.h"
 #include "mce/input/script.h"
+#include "mce/kit/captions.h"
 #include "mce/kit/stock.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/kit3d_extract.h"
@@ -104,6 +106,7 @@
 #include "mce/platform/haptics.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
+#include "mce/platform/screen_reader.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
 #include "mce/render/quality.h"
@@ -113,6 +116,8 @@
 #include "mce/player/player.h"
 #include "mce/scene/scene.h"
 #include "mce/scene/streaming.h"
+#include "mce/ui/access.h"
+#include "mce/ui/subtitles.h"
 #include "mce/ui/ui.h"
 #include "ship_paths.h"
 #include "ui_screens.h"
@@ -172,6 +177,11 @@ MCE_CVAR(cv_fullscreen, "fullscreen", false, "Desktop: borderless full screen (F
          CVarFlags::Saved);
 MCE_CVAR(cv_save, "save", "", "Save slot: loaded at start when it exists, written on clean quit (empty = off)",
          CVarFlags::None);
+MCE_CVAR(cv_settings, "settings", true,
+         "Keep the saved options (volumes, quality, full screen, accessibility...) in <save folder>/settings.cfg and the "
+         "key bindings in <app>.bindings between runs "
+         "(windowed runs without -capture; 0 = this run neither reads nor writes it)",
+         CVarFlags::None);
 MCE_CVAR(cv_save_dir, "save_dir", "", "Directory for save slots (default: the per-user MCE save folder)", CVarFlags::None);
 MCE_CVAR(cv_store_catalog, "store_catalog", "",
          "Games with purchases and ads: the store catalog, GUID or source path of a cooked .mcstore (default: the first in the pack)",
@@ -198,6 +208,10 @@ MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
          CVarFlags::None);
+MCE_CVAR(cv_screen_reader, "access.screen_reader", 1,
+         "Speak the focused menu item and a focused slider's new value through the device's screen reader: "
+         "0 never, 1 while the OS reports a reader on (VoiceOver, TalkBack, Narrator...), 2 always",
+         CVarFlags::Saved);
 MCE_CVAR(cv_haptics, "haptics", true,
          "Haptic feedback: phone taps and gamepad rumble from platform::haptics::play (off: none; never in the state hash)",
          CVarFlags::Saved);
@@ -423,6 +437,17 @@ public:
                          module_.module.info->module_version, module_.module.loaded_path.c_str());
         }
         console::apply_deferred_command_line();  // the module's convars exist now; the rest are typos
+        // The saved options before anything reads them (the renderer reads r.quality). Captures
+        // (goldens, render_frame) stay on the defaults.
+        settings_on_ = device_ && cv_settings.get_bool() && cv_capture.get_string().empty() && cv_capture_tick.get_int() == 0 &&
+                       cv_capture_ticks.get_string().empty();
+        if (settings_on_) {
+            if (Result<void> r = console::load_settings(settings_path().view()); !r) {
+                FixedString<512> why;
+                format_error(r.error(), why);
+                MCE_LOG_WARN("{}: settings unreadable: {}", desc_.app_name, why.view());
+            }
+        }
         if (device_) {
             MCE_TRY(renderer_.init(*device_));
             assets_.set_upload_sink(&sink_);
@@ -432,6 +457,8 @@ public:
                                                         "player.hud_font"));
             MCE_TRY(ui::create_builtin_skin(renderer_, skin_));
             console_.init(skin_.skin, 0.5f);
+            subtitles_.set_skin(skin_.skin);
+            platform::screen_reader::attach(*window_);
             for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
                 const ui::Layer* l = desc_.ui_layers[i];
                 if (l && l->init && !l->init(l->user, renderer_, skin_.skin))
@@ -439,6 +466,7 @@ public:
             }
             if (cv_console.get_bool() && cv_console_open.get_bool()) set_console(true);
             MCE_TRY(load_input_map(cv_input_map.get_string()));
+            load_options();
             const platform::PixelSize fb = window_->framebuffer_size();
             input_.set_view_size(static_cast<f32>(fb.width), static_cast<f32>(fb.height));  // touch distances
             window_->set_event_handler(&PlayerApp::on_event, this);
@@ -502,6 +530,10 @@ public:
         if (game_services_print_) game_services_test_events();
         ++sim_ticks_;
         apply_scene_change();
+        if (scene::take_quit_request(world_)) {
+            MCE_LOG_INFO("{}: the game asked to quit at tick {}", desc_.app_name, sim_ticks_);
+            quit(0);
+        }
         if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
     }
 
@@ -543,6 +575,8 @@ public:
         if (!os_background_ && sim_ticks_ > 0) world_.render(rc.alpha);
         meter_frame();
         if (device_) platform::haptics::set_enabled(cv_haptics.get_bool());  // the console or a settings menu may flip it
+        ui::apply_input_options(input_);  // look sensitivity, hold-to-toggle (M-ACCESS)
+        save_options(false);
         if (!device_ || os_background_) return;  // no GPU work in the background (iOS ends apps that try)
         device_->begin_frame(rc.frame_index);
         const rhi::Extent2D bb = device_->backbuffer_size();
@@ -554,6 +588,8 @@ public:
 
         update_console(bb);
         update_ui_layers(bb);
+        update_subtitles(bb);
+        speak_focus();
         update_ui_screens(bb);
         const bool overlay =
             paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() || cv_stats.get_bool();
@@ -652,6 +688,7 @@ public:
     void on_shutdown() override {
         // A clean quit flushes the save before anything is torn down (FR-RUN-060).
         write_save();
+        save_options(true);
         if (cv_frame_report.get_int() > 0) report_run_frames();
         if (liveops_on_) liveops_.shutdown();
         if (game_services_on_) game_services_.shutdown();
@@ -819,6 +856,50 @@ private:
         scene_path_.assign(assets_.info(best).path);
         return assets_.info(best).guid;
     }
+
+    // Options changed in game (M-ACCESS): the key bindings live in <app>.bindings in the save folder,
+    // and settings.cfg (console::save_settings) is written as soon as a Saved convar settles, not only
+    // at quit. Same runs as settings.cfg: windowed, no capture.
+    FixedString<128> bindings_name() const {
+        FixedString<128> n(desc_.app_name ? desc_.app_name : "mce_player");
+        n.append(".bindings");
+        return n;
+    }
+    void load_options() {
+        if (!settings_on_) return;
+        Array<byte> bytes;
+        if (save::read(bindings_name().view(), bytes)) {
+            if (Result<void> r = input_.deserialize_bindings(StringView(reinterpret_cast<const char*>(bytes.data()), bytes.size())); !r)
+                MCE_LOG_WARN("{}: the saved key bindings do not load; using the game's", desc_.app_name);
+        }
+        settings_gen_ = console::saved_generation();
+        bindings_gen_ = input_.bindings_generation();
+    }
+    // Writes what changed, once it has stopped changing for half a second (a slider drag writes once).
+    void save_options(bool now) {
+        if (!settings_on_) return;
+        const u64 sg = console::saved_generation(), bg = input_.bindings_generation();
+        if (sg == settings_gen_ && bg == bindings_gen_) return;
+        if (sg != settings_seen_ || bg != bindings_seen_) {
+            settings_seen_ = sg;
+            bindings_seen_ = bg;
+            settings_quiet_frames_ = 0;
+        }
+        if (!now && ++settings_quiet_frames_ < 30) return;
+        if (sg != settings_gen_) {
+            write_settings();
+            settings_gen_ = sg;
+        }
+        if (bg != bindings_gen_) {
+            Array<char> text;
+            input_.serialize_bindings(text);
+            if (!save::write(bindings_name().view(), std::as_bytes(text.span())))
+                MCE_LOG_WARN("{}: could not write the key bindings file", desc_.app_name);
+            bindings_gen_ = bg;
+        }
+    }
+    u64 settings_gen_ = 0, bindings_gen_ = 0, settings_seen_ = 0, bindings_seen_ = 0;
+    u32 settings_quiet_frames_ = 0;
 
     // The project's action maps (FR-INP-020): a GUID or source path, else the first cooked
     // .mcinput in the pack by path, else the built-in default map. A named map that is missing or
@@ -1393,6 +1474,53 @@ private:
         }
     }
 
+    // Subtitles and sound captions (M-ACCESS): timeline subtitle tracks, SoundCaption tags and
+    // ShowCaption lines (kit::caption_lines), as the access.subtitle* convars ask.
+    void update_subtitles(rhi::Extent2D bb) {
+        kit::caption_lines(world_, caption_lines_);
+        subtitle_lines_.clear();
+        for (const kit::CaptionLine& l : caption_lines_) {
+            ui::SubtitleLine s;
+            s.speaker = l.speaker.view();
+            s.text = l.text.view();
+            s.kind = l.kind == kit::CaptionKind::Sound ? ui::SubtitleKind::Sound : ui::SubtitleKind::Speech;
+            subtitle_lines_.push_back(s);
+        }
+        ui::UpdateContext ctx;
+        ctx.viewport = bb;
+        ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
+                                         static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
+        ctx.ui_scale = ui_scale(bb);
+        apply_access(ctx);
+        subtitles_.update(subtitle_lines_.span(), ctx, ui::subtitle_style());
+    }
+    ui::SubtitleView subtitles_;
+    Array<kit::CaptionLine> caption_lines_;
+    Array<ui::SubtitleLine> subtitle_lines_;
+
+    // The screen reader (M-ACCESS): the focused item of the menu that owns focus (the console while
+    // it is open), and a focused slider's new value, spoken through the device's reader.
+    void speak_focus() {
+        const i32 mode = cv_screen_reader.get_int();
+        if (mode <= 0) return;
+        if (mode == 1) {  // the OS asked once a second: a reader turned on mid-game starts speaking
+            if (reader_check_frames_-- <= 0) {
+                reader_on_ = platform::screen_reader::running();
+                reader_check_frames_ = 60;
+            }
+            if (!reader_on_) {
+                announcer_.reset();
+                return;
+            }
+        }
+        const ui::Document* doc = console_.is_open() ? &console_.document() : screens_.focus_document();
+        FixedString<192> line;
+        if (announcer_.next(doc, line)) platform::screen_reader::announce(line.view());
+    }
+    ui::AccessAnnouncer announcer_;
+    bool reader_on_ = false;
+    i32 reader_check_frames_ = 0;
+
     // The scene's UI screens (kit::UiScreen, M-UI-DATA step 2).
     Result<void> load_ui_screens() {
         const ui::Skin* skin = device_ ? &skin_.skin : nullptr;
@@ -1403,6 +1531,7 @@ private:
             ui_preview_ = true;
             return screens_.load_preview(world_, assets_, entities_.span(), g.value(), skin, extract);
         }
+        screens_.set_input(&input_);  // a stock options screen's remap list (M-ACCESS)
         MCE_TRY(screens_.load(world_, assets_, entities_.span(), skin, extract));
         return {};
     }
@@ -1456,6 +1585,7 @@ private:
     void record_overlay(rhi::CommandBuffer& cmd, rhi::Extent2D bb) {
         render::SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
         hud.begin(render::compute_screen_view(bb), render::PassId::Screen2D);
+        subtitles_.submit(hud, -124);  // under the scene's UI screens: a menu covers them
         screens_.submit(hud, -120);  // the scene's UI screens, under the game's UI layers
         // Game UI under the pause veil (sort layer 0) and the console (200).
         for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
@@ -1493,10 +1623,12 @@ private:
         if (three_d_) {
             const kit::Kit3DStats& k = extract3d_.stats();
             const u32* lt = stats3d_.lod_triangles;
-            std::snprintf(line, sizeof line,
-                          "3D  TRIS %u (LOD %u/%u/%u/%u)  DRAWS %u/%u  MESHES %u  INST %u  LIGHTS %u  ANIM %u  MISSING %u",
-                          stats3d_.triangles, lt[0], lt[1], lt[2], lt[3], stats3d_.visible, stats3d_.submeshes, k.meshes,
-                          k.instances, stats3d_.point_lights, k.animated, k.missing);
+            const int n = std::snprintf(line, sizeof line,
+                                        "3D  TRIS %u (LOD %u/%u/%u/%u)  DRAWS %u/%u  MESHES %u  INST %u  LIGHTS %u  ANIM %u  MISSING %u",
+                                        stats3d_.triangles, lt[0], lt[1], lt[2], lt[3], stats3d_.visible, stats3d_.submeshes,
+                                        k.meshes, k.instances, stats3d_.point_lights, k.animated, k.missing);
+            if (k.terrains > 0 && n > 0 && static_cast<usize>(n) < sizeof line)  // M-TERRAIN: LOD nodes and their resident meshes
+                std::snprintf(line + n, sizeof line - static_cast<usize>(n), "  TERRAIN %u/%u", k.terrain_nodes, k.terrain_resident);
         } else {
             std::snprintf(line, sizeof line, "2D");
         }
@@ -1531,6 +1663,7 @@ private:
         fd.msaa = math::min(fd.msaa, static_cast<u32>(math::clamp<i64>(cv_msaa.get_int(), 1, 8)));
         MCE_TRY(renderer_.init_3d(fd));
         extract3d_.init(renderer_.meshes(), &assets_);
+        extract3d_.set_texture_store(&renderer_.textures());
         // High caps no Environment3D cascade count (its 3 is only the scene default).
         if (tier == render::QualityTier::High) quality.shadow_cascades = render::kMaxCascades;
         extract3d_.set_quality(quality);
@@ -1706,7 +1839,25 @@ private:
         MCE_LOG_INFO("mce_player: wrote {}", path);
     }
 
+    FixedString<512> settings_path() const {
+        FixedString<512> p(save::root());
+        p.append("/settings.cfg");
+        return p;
+    }
+
+    void write_settings() {
+        if (!settings_on_) return;
+        std::error_code ec;
+        std::filesystem::create_directories(std::filesystem::path(save::root().c_str()), ec);
+        if (Result<void> r = console::save_settings(settings_path().view()); !r) {
+            FixedString<512> why;
+            format_error(r.error(), why);
+            MCE_LOG_WARN("{}: settings not written: {}", desc_.app_name, why.view());
+        }
+    }
+
     void write_save() {
+        write_settings();
         const StringView slot = cv_save.get_string();
         if (slot.empty()) return;
         save::SaveInfo info;
@@ -1743,7 +1894,10 @@ private:
                 audio_.set_paused(ad_paused_);
                 MCE_LOG_INFO("{}: back in the foreground (paused until resumed)", desc_.app_name);
                 break;
-            case platform::EventType::AppTerminating: write_save(); break;
+            case platform::EventType::AppTerminating:
+                write_save();
+                save_options(true);
+                break;
             case platform::EventType::AppLowMemory: MCE_LOG_WARN("{}: the OS reports low memory", desc_.app_name); break;
             default: break;
         }
@@ -2055,6 +2209,7 @@ private:
     Array<f64> view_free_;      // -view.free
     Array<f64> safe_override_;  // -safe_area
     bool paused_ = false;
+    bool settings_on_ = false;  // this run reads and writes <save folder>/settings.cfg
     player::UiScreens screens_;
     input::InputState ui_actions_;  // the newest tick snapshot, for the UI screens' navigation
     bool ui_fresh_ = false;         // ui_actions_ arrived since the last rendered frame

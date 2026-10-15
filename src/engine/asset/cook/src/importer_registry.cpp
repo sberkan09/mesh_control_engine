@@ -42,6 +42,8 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_ui_theme_importer());
     reg.add(make_string_importer());
     reg.add(make_envmap_importer());
+    reg.add(make_terrain_importer());
+    reg.add(make_navmesh_importer());
 }
 
 bool parse_guid_ref(StringView text, Guid& out) {

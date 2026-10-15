@@ -13,20 +13,31 @@
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/GroupFilter.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/ShapeCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Constraints/ConeConstraint.h>
+#include <Jolt/Physics/Constraints/DistanceConstraint.h>
+#include <Jolt/Physics/Constraints/FixedConstraint.h>
+#include <Jolt/Physics/Constraints/HingeConstraint.h>
+#include <Jolt/Physics/Constraints/SixDOFConstraint.h>
+#include <Jolt/Physics/Constraints/SliderConstraint.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
+#include <cfloat>
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
 
+#include "mce/containers/hash_map.h"
 #include "mce/hash.h"
 #include "mce/log.h"
 #include "mce/memory/allocator.h"
@@ -197,12 +208,31 @@ JPH::RefConst<JPH::Shape> build_shape(const Shape3D& s, f32 density) {
             settings = new JPH::MeshShapeSettings(std::move(verts), std::move(tris));
             break;
         }
+        case ShapeType3D::HeightField: {
+            static_assert(kHeightFieldHole == JPH::HeightFieldShapeConstants::cNoCollisionValue);
+            if (s.samples < 4 || s.samples > 8193 || s.heights.size() != usize(s.samples) * s.samples) return nullptr;
+            if (!positive(s.spacing.x) || !positive(s.spacing.z) || !positive(std::fabs(s.spacing.y))) return nullptr;
+            settings = new JPH::HeightFieldShapeSettings(s.heights.data(), to_jph(s.origin), to_jph(s.spacing), s.samples);
+            break;
+        }
     }
     if (!settings) return nullptr;
     JPH::ShapeSettings::ShapeResult r = settings->Create();
     if (r.HasError()) return nullptr;
     return r.Get();
 }
+
+// Body pairs joined by a joint with collide_connected off never collide. Such bodies carry this
+// filter with their slot index as the sub-group; `pairs` counts the joints per pair.
+class JointPairFilter final : public JPH::GroupFilter {
+public:
+    static u64 key(u32 a, u32 b) { return a < b ? (static_cast<u64>(a) << 32) | b : (static_cast<u64>(b) << 32) | a; }
+    bool CanCollide(const JPH::CollisionGroup& g1, const JPH::CollisionGroup& g2) const override {
+        if (g1.GetGroupFilter() != this || g2.GetGroupFilter() != this) return true;
+        return pairs.find(key(g1.GetSubGroupID(), g2.GetSubGroupID())) == nullptr;
+    }
+    HashMap<u64, u32> pairs;
+};
 
 }  // namespace
 
@@ -234,6 +264,27 @@ struct World3D::Impl {
     Array<u32> slot_of;  // entity index -> slot + 1 (0 = none)
     u32 characters = 0;
 
+    struct Joint {
+        JPH::Ref<JPH::TwoBodyConstraint> constraint;
+        JointDesc3D desc;
+        u32 slot_a = 0;
+        u32 slot_b = 0xFFFFFFFFu;  // the world
+        u32 generation = 0;
+        JPH::Vec3 local_a = JPH::Vec3::sZero();  // Distance: the anchors in a's and b's (or the world's) frame
+        JPH::Vec3 local_b = JPH::Vec3::sZero();
+        bool alive = false;
+        bool enabled = false;
+        bool broken = false;
+        bool filtered = false;  // counted in pair_filter
+        f32 force = 0.0f;
+        f32 torque = 0.0f;
+    };
+    Array<Joint> joints;
+    Array<u32> free_joints;
+    u32 live_joints = 0;
+    bool had_joints = false;  // hash_state folds joints only once a world has had one
+    JPH::Ref<JointPairFilter> pair_filter = new JointPairFilter();
+
     explicit Impl(const PhysicsConfig3D& c) : config(c), temp(static_cast<JPH::uint>(c.temp_allocator_bytes)) {
         system.Init(c.max_bodies, 0, c.max_body_pairs, c.max_contact_constraints, bp_layers, object_vs_bp,
                     object_pairs);
@@ -241,6 +292,9 @@ struct World3D::Impl {
     }
 
     ~Impl() {
+        for (Joint& j : joints)
+            if (j.alive) system.RemoveConstraint(j.constraint);
+        joints.clear();
         JPH::BodyInterface& bi = system.GetBodyInterfaceNoLock();
         for (Slot& s : slots) {
             if (!s.alive) continue;
@@ -281,6 +335,88 @@ struct World3D::Impl {
         s.entity = e;
         s.alive = true;
         return s;
+    }
+
+    // id = generation << 20 | (index + 1); 0 is never a joint.
+    Joint* find_joint(u32 id) {
+        const u32 i = (id & 0xFFFFFu) - 1u;
+        if ((id & 0xFFFFFu) == 0 || i >= joints.size()) return nullptr;
+        Joint& j = joints[i];
+        return j.alive && j.generation == (id >> 20) ? &j : nullptr;
+    }
+    const Joint* find_joint(u32 id) const { return const_cast<Impl*>(this)->find_joint(id); }
+
+    void remove_joint(Joint& j) {
+        system.RemoveConstraint(j.constraint);
+        if (j.filtered) {
+            const u64 k = JointPairFilter::key(j.slot_a, j.slot_b);
+            if (u32* n = pair_filter->pairs.find(k); n && --*n == 0) pair_filter->pairs.erase(k);
+        }
+        const u32 gen = j.generation;
+        j = Joint{};
+        j.generation = (gen + 1) & 0xFFFu;
+        free_joints.push_back(static_cast<u32>(&j - joints.data()));
+        --live_joints;
+    }
+
+    // After a step: the force and torque each joint held with, and the breaks (in creation order).
+    void check_joints() {
+        const f32 inv_dt = 1.0f / config.fixed_dt;
+        for (Joint& j : joints) {
+            if (!j.alive) continue;
+            if (!j.enabled) {
+                j.force = j.torque = 0.0f;
+                continue;
+            }
+            f32 lin = 0.0f, ang = 0.0f;
+            const auto len2 = [](const JPH::Vector<2>& v) { return std::sqrt(v[0] * v[0] + v[1] * v[1]); };
+            switch (j.desc.type) {
+            case JointType3D::Fixed: {
+                const auto* c = static_cast<const JPH::FixedConstraint*>(j.constraint.GetPtr());
+                lin = c->GetTotalLambdaPosition().Length();
+                ang = c->GetTotalLambdaRotation().Length();
+                break;
+            }
+            case JointType3D::Hinge: {
+                const auto* c = static_cast<const JPH::HingeConstraint*>(j.constraint.GetPtr());
+                lin = c->GetTotalLambdaPosition().Length();
+                const f32 r = len2(c->GetTotalLambdaRotation()), l = c->GetTotalLambdaRotationLimits();
+                ang = std::sqrt(r * r + l * l);
+                break;
+            }
+            case JointType3D::Slider: {
+                const auto* c = static_cast<const JPH::SliderConstraint*>(j.constraint.GetPtr());
+                const f32 p = len2(c->GetTotalLambdaPosition()), l = c->GetTotalLambdaPositionLimits();
+                lin = std::sqrt(p * p + l * l);
+                ang = c->GetTotalLambdaRotation().Length();
+                break;
+            }
+            case JointType3D::Distance:
+                lin = std::fabs(static_cast<const JPH::DistanceConstraint*>(j.constraint.GetPtr())->GetTotalLambdaPosition());
+                break;
+            case JointType3D::Cone: {
+                const auto* c = static_cast<const JPH::ConeConstraint*>(j.constraint.GetPtr());
+                lin = c->GetTotalLambdaPosition().Length();
+                ang = std::fabs(c->GetTotalLambdaRotation());
+                break;
+            }
+            case JointType3D::SixDOF: {
+                const auto* c = static_cast<const JPH::SixDOFConstraint*>(j.constraint.GetPtr());
+                lin = c->GetTotalLambdaPosition().Length();
+                ang = c->GetTotalLambdaRotation().Length();
+                break;
+            }
+            }
+            j.force = lin * inv_dt;
+            j.torque = ang * inv_dt;
+            const bool snap = (j.desc.break_force > 0.0f && j.force > j.desc.break_force) ||
+                              (j.desc.break_torque > 0.0f && j.torque > j.desc.break_torque);
+            if (!snap) continue;
+            j.constraint->SetEnabled(false);
+            j.enabled = false;
+            j.broken = true;
+            system.GetBodyInterfaceNoLock().ActivateConstraint(j.constraint);
+        }
     }
 
     void release(Slot& s) {
@@ -353,7 +489,8 @@ void World3D::set_gravity(vec3 gravity) {
 bool World3D::create_body(Entity e, const BodyDesc3D& desc) {
     Impl& w = *impl_;
     if (e.is_null() || has_body(e)) return false;
-    if (desc.shape.type == ShapeType3D::Mesh && desc.type == BodyType3D::Dynamic) return false;  // Jolt: no dynamic meshes
+    if ((desc.shape.type == ShapeType3D::Mesh || desc.shape.type == ShapeType3D::HeightField) && desc.type == BodyType3D::Dynamic)
+        return false;  // Jolt: no dynamic meshes or height fields
     JPH::RefConst<JPH::Shape> shape = build_shape(desc.shape, desc.density);
     if (!shape) return false;
 
@@ -406,6 +543,9 @@ void World3D::destroy_body(Entity e) {
     Impl& w = *impl_;
     Impl::Slot* s = w.find(e);
     if (!s) return;
+    const u32 slot = static_cast<u32>(s - w.slots.data());
+    for (Impl::Joint& j : w.joints)
+        if (j.alive && (j.slot_a == slot || j.slot_b == slot)) w.remove_joint(j);
     if (s->character) {
         w.char_vs_char.Remove(s->character);
         s->character = nullptr;
@@ -424,6 +564,7 @@ void World3D::step(f32 dt) {
     Impl& w = *impl_;
     MCE_ASSERT_MSG(dt == w.config.fixed_dt, "World3D::step: dt must equal the fixed step (physics.md D7)");
     w.system.Update(w.config.fixed_dt, 1, &w.temp, &w.jobs);
+    w.check_joints();
 }
 
 void World3D::set_linear_velocity(Entity e, vec3 v) {
@@ -547,6 +688,256 @@ bool World3D::controller_state(Entity e, MoveResult3D& out) const {
     return true;
 }
 
+// ---- joints ------------------------------------------------------------------------------------------
+
+namespace {
+
+JPH::SpringSettings spring_of(f32 frequency, f32 damping) {
+    JPH::SpringSettings s;
+    s.mMode = JPH::ESpringMode::FrequencyAndDamping;
+    s.mFrequency = frequency > 0.0f ? frequency : 0.0f;
+    s.mDamping = damping > 0.0f ? damping : 0.0f;
+    return s;
+}
+
+JPH::MotorSettings motor_of(const JointDesc3D& d) {
+    JPH::MotorSettings m(d.motor_frequency > 0.0f ? d.motor_frequency : 2.0f, d.motor_damping > 0.0f ? d.motor_damping : 0.0f);
+    const f32 limit = d.motor_max_force > 0.0f ? d.motor_max_force : FLT_MAX;
+    m.SetForceLimit(limit);
+    m.SetTorqueLimit(limit);
+    return m;
+}
+
+JPH::EMotorState motor_state(JointMotorMode3D m) {
+    switch (m) {
+    case JointMotorMode3D::Off: return JPH::EMotorState::Off;
+    case JointMotorMode3D::Velocity: return JPH::EMotorState::Velocity;
+    case JointMotorMode3D::Position: return JPH::EMotorState::Position;
+    }
+    return JPH::EMotorState::Off;
+}
+
+void apply_motor(JPH::TwoBodyConstraint* c, const JointDesc3D& d) {
+    const f32 limit = d.motor_max_force > 0.0f ? d.motor_max_force : FLT_MAX;
+    if (d.type == JointType3D::Hinge) {
+        auto* h = static_cast<JPH::HingeConstraint*>(c);
+        h->GetMotorSettings().SetTorqueLimit(limit);
+        if (d.motor == JointMotorMode3D::Velocity) h->SetTargetAngularVelocity(d.motor_target);
+        if (d.motor == JointMotorMode3D::Position) h->SetTargetAngle(d.motor_target);
+        h->SetMotorState(motor_state(d.motor));
+    } else if (d.type == JointType3D::Slider) {
+        auto* sl = static_cast<JPH::SliderConstraint*>(c);
+        sl->GetMotorSettings().SetForceLimit(limit);
+        if (d.motor == JointMotorMode3D::Velocity) sl->SetTargetVelocity(d.motor_target);
+        if (d.motor == JointMotorMode3D::Position) sl->SetTargetPosition(d.motor_target);
+        sl->SetMotorState(motor_state(d.motor));
+    }
+}
+
+// Six-DOF axis rule: min > max free, min == max locked, else limited.
+void six_dof_axis(JPH::SixDOFConstraintSettings& s, JPH::SixDOFConstraintSettings::EAxis axis, f32 lo, f32 hi, bool angular) {
+    if (lo > hi) {
+        s.MakeFreeAxis(axis);
+    } else if (lo == hi) {
+        s.MakeFixedAxis(axis);
+    } else {
+        if (angular) {
+            lo = math::clamp(lo, -JPH::JPH_PI, JPH::JPH_PI);
+            hi = math::clamp(hi, -JPH::JPH_PI, JPH::JPH_PI);
+        }
+        s.SetLimitedAxis(axis, lo, hi);
+    }
+}
+
+}  // namespace
+
+u32 World3D::create_joint(const JointDesc3D& d) {
+    Impl& w = *impl_;
+    const Impl::Slot* sa = w.find(d.a);
+    const Impl::Slot* sb = d.b.is_null() ? nullptr : w.find(d.b);
+    if (!sa || sa->character || d.a == d.b) return 0;
+    if (!d.b.is_null() && (!sb || sb->character)) return 0;
+    if (sa->type == BodyType3D::Static && (!sb || sb->type == BodyType3D::Static)) return 0;
+
+    const vec3 axis = math::normalize(d.axis);
+    if (d.type != JointType3D::Fixed && d.type != JointType3D::Distance && !(math::length_sq(axis) > 0.5f)) return 0;
+    vec3 normal = d.normal - axis * math::dot(axis, d.normal);
+    if (math::length_sq(normal) < 1e-8f) {  // any perpendicular, picked the same way every time
+        const vec3 other = std::fabs(axis.x) < 0.9f ? vec3{1.0f, 0.0f, 0.0f} : vec3{0.0f, 1.0f, 0.0f};
+        normal = other - axis * math::dot(axis, other);
+    }
+    normal = math::normalize(normal);
+    const JPH::RVec3 anchor = to_jph(d.anchor);
+
+    JPH::Ref<JPH::TwoBodyConstraintSettings> settings;
+    switch (d.type) {
+    case JointType3D::Fixed: {
+        auto* f = new JPH::FixedConstraintSettings();
+        f->mPoint1 = f->mPoint2 = anchor;
+        settings = f;
+        break;
+    }
+    case JointType3D::Hinge: {
+        auto* h = new JPH::HingeConstraintSettings();
+        h->mPoint1 = h->mPoint2 = anchor;
+        h->mHingeAxis1 = h->mHingeAxis2 = to_jph(axis);
+        h->mNormalAxis1 = h->mNormalAxis2 = to_jph(normal);
+        if (d.limits) {
+            h->mLimitsMin = math::clamp(d.limit_min, -JPH::JPH_PI, 0.0f);
+            h->mLimitsMax = math::clamp(d.limit_max, 0.0f, JPH::JPH_PI);
+        }
+        if (d.spring_frequency > 0.0f) h->mLimitsSpringSettings = spring_of(d.spring_frequency, d.spring_damping);
+        h->mMaxFrictionTorque = d.friction > 0.0f ? d.friction : 0.0f;
+        h->mMotorSettings = motor_of(d);
+        settings = h;
+        break;
+    }
+    case JointType3D::Slider: {
+        auto* sl = new JPH::SliderConstraintSettings();
+        sl->mPoint1 = sl->mPoint2 = anchor;
+        sl->mSliderAxis1 = sl->mSliderAxis2 = to_jph(axis);
+        sl->mNormalAxis1 = sl->mNormalAxis2 = to_jph(normal);
+        if (d.limits) {
+            sl->mLimitsMin = d.limit_min < 0.0f ? d.limit_min : 0.0f;
+            sl->mLimitsMax = d.limit_max > 0.0f ? d.limit_max : 0.0f;
+        }
+        if (d.spring_frequency > 0.0f) sl->mLimitsSpringSettings = spring_of(d.spring_frequency, d.spring_damping);
+        sl->mMaxFrictionForce = d.friction > 0.0f ? d.friction : 0.0f;
+        sl->mMotorSettings = motor_of(d);
+        settings = sl;
+        break;
+    }
+    case JointType3D::Distance: {
+        auto* ds = new JPH::DistanceConstraintSettings();
+        ds->mPoint1 = to_jph(d.anchor_b);
+        ds->mPoint2 = anchor;
+        const f32 rest = math::length(d.anchor_b - d.anchor);
+        const f32 lo = d.limit_min < 0.0f ? rest : d.limit_min;
+        const f32 hi = d.limit_max < 0.0f ? rest : d.limit_max;
+        ds->mMinDistance = math::min(lo, hi);
+        ds->mMaxDistance = math::max(lo, hi);
+        if (d.spring_frequency > 0.0f) ds->mLimitsSpringSettings = spring_of(d.spring_frequency, d.spring_damping);
+        settings = ds;
+        break;
+    }
+    case JointType3D::Cone: {
+        auto* c = new JPH::ConeConstraintSettings();
+        c->mPoint1 = c->mPoint2 = anchor;
+        c->mTwistAxis1 = c->mTwistAxis2 = to_jph(axis);
+        c->mHalfConeAngle = math::clamp(d.cone_half_angle, 0.0f, JPH::JPH_PI);
+        settings = c;
+        break;
+    }
+    case JointType3D::SixDOF: {
+        using Axis = JPH::SixDOFConstraintSettings::EAxis;
+        auto* x = new JPH::SixDOFConstraintSettings();
+        x->mPosition1 = x->mPosition2 = anchor;
+        x->mAxisX1 = x->mAxisX2 = to_jph(axis);
+        x->mAxisY1 = x->mAxisY2 = to_jph(normal);
+        x->mSwingType = JPH::ESwingType::Pyramid;
+        six_dof_axis(*x, Axis::TranslationX, d.linear_min.x, d.linear_max.x, false);
+        six_dof_axis(*x, Axis::TranslationY, d.linear_min.y, d.linear_max.y, false);
+        six_dof_axis(*x, Axis::TranslationZ, d.linear_min.z, d.linear_max.z, false);
+        six_dof_axis(*x, Axis::RotationX, d.angular_min.x, d.angular_max.x, true);
+        six_dof_axis(*x, Axis::RotationY, d.angular_min.y, d.angular_max.y, true);
+        six_dof_axis(*x, Axis::RotationZ, d.angular_min.z, d.angular_max.z, true);
+        settings = x;
+        break;
+    }
+    }
+    if (!settings) return 0;
+
+    JPH::BodyInterface& bi = w.system.GetBodyInterfaceNoLock();
+    // Jolt measures body 2 against body 1, so `b` (or the world) is body 1: angles and positions are a's.
+    JPH::TwoBodyConstraint* c = bi.CreateConstraint(settings, sb ? sb->body : JPH::BodyID(), sa->body);
+    if (!c) return 0;
+    w.system.AddConstraint(c);
+
+    u32 index;
+    if (!w.free_joints.empty()) {
+        index = w.free_joints.back();
+        w.free_joints.pop_back();
+    } else {
+        index = static_cast<u32>(w.joints.size());
+        if (index >= 0xFFFFFu) {
+            w.system.RemoveConstraint(c);
+            return 0;
+        }
+        w.joints.emplace_back();
+    }
+    Impl::Joint& j = w.joints[index];
+    j.constraint = c;
+    j.desc = d;
+    j.slot_a = static_cast<u32>(sa - w.slots.data());
+    j.slot_b = sb ? static_cast<u32>(sb - w.slots.data()) : 0xFFFFFFFFu;
+    j.alive = j.enabled = true;
+    j.broken = false;
+    if (d.type == JointType3D::Distance) {
+        j.local_a = bi.GetWorldTransform(sa->body).Inversed() * to_jph(d.anchor);
+        j.local_b = sb ? JPH::Vec3(bi.GetWorldTransform(sb->body).Inversed() * to_jph(d.anchor_b)) : to_jph(d.anchor_b);
+    }
+    if (!d.collide_connected && sb) {
+        bi.SetCollisionGroup(sa->body, JPH::CollisionGroup(w.pair_filter, 0, j.slot_a));
+        bi.SetCollisionGroup(sb->body, JPH::CollisionGroup(w.pair_filter, 0, j.slot_b));
+        ++w.pair_filter->pairs[JointPairFilter::key(j.slot_a, j.slot_b)];
+        j.filtered = true;
+    }
+    apply_motor(c, d);
+    bi.ActivateConstraint(c);
+    ++w.live_joints;
+    w.had_joints = true;
+    return (j.generation << 20) | (index + 1);
+}
+
+void World3D::destroy_joint(u32 joint) {
+    if (Impl::Joint* j = impl_->find_joint(joint)) impl_->remove_joint(*j);
+}
+
+bool World3D::has_joint(u32 joint) const { return impl_->find_joint(joint) != nullptr; }
+
+void World3D::set_joint_motor(u32 joint, JointMotorMode3D mode, f32 target, f32 max_force) {
+    Impl::Joint* j = impl_->find_joint(joint);
+    if (!j || (j->desc.type != JointType3D::Hinge && j->desc.type != JointType3D::Slider)) return;
+    if (j->desc.motor == mode && j->desc.motor_target == target && j->desc.motor_max_force == max_force) return;
+    j->desc.motor = mode;
+    j->desc.motor_target = target;
+    j->desc.motor_max_force = max_force;
+    apply_motor(j->constraint, j->desc);
+    impl_->system.GetBodyInterfaceNoLock().ActivateConstraint(j->constraint);
+}
+
+void World3D::set_joint_enabled(u32 joint, bool enabled) {
+    Impl::Joint* j = impl_->find_joint(joint);
+    if (!j || j->broken || j->enabled == enabled) return;
+    j->enabled = enabled;
+    j->constraint->SetEnabled(enabled);
+    impl_->system.GetBodyInterfaceNoLock().ActivateConstraint(j->constraint);
+}
+
+bool World3D::joint_state(u32 joint, JointState3D& out) const {
+    const Impl& w = *impl_;
+    const Impl::Joint* j = w.find_joint(joint);
+    if (!j) return false;
+    out = JointState3D{};
+    out.enabled = j->enabled;
+    out.broken = j->broken;
+    out.force = j->force;
+    out.torque = j->torque;
+    switch (j->desc.type) {
+    case JointType3D::Hinge: out.position = static_cast<const JPH::HingeConstraint*>(j->constraint.GetPtr())->GetCurrentAngle(); break;
+    case JointType3D::Slider: out.position = static_cast<const JPH::SliderConstraint*>(j->constraint.GetPtr())->GetCurrentPosition(); break;
+    case JointType3D::Distance: {
+        const JPH::BodyInterface& bi = w.system.GetBodyInterfaceNoLock();
+        const JPH::Vec3 pa = bi.GetWorldTransform(w.slots[j->slot_a].body) * j->local_a;
+        const JPH::Vec3 pb = j->slot_b != 0xFFFFFFFFu ? JPH::Vec3(bi.GetWorldTransform(w.slots[j->slot_b].body) * j->local_b) : j->local_b;
+        out.position = (pb - pa).Length();
+        break;
+    }
+    default: break;
+    }
+    return true;
+}
+
 std::optional<ShapeHit3D> World3D::camera_sweep(vec3 from, vec3 to, f32 sphere_radius) const {
     QueryFilter3D f;
     f.include_dynamic = false;
@@ -657,6 +1048,11 @@ u64 World3D::hash_state(u64 seed) const {
         v3(bi.GetLinearVelocity(s.body));
         v3(bi.GetAngularVelocity(s.body));
     }
+    if (w.had_joints) {  // a world that never had a joint keeps its pre-joint hashes
+        h.u32v(static_cast<u32>(w.joints.size()));
+        for (const Impl::Joint& j : w.joints)
+            h.u32v((j.alive ? 1u : 0u) | (j.enabled ? 2u : 0u) | (j.broken ? 4u : 0u) | (j.slot_a << 3));
+    }
     return h.value();
 }
 
@@ -666,6 +1062,7 @@ World3D::Stats World3D::stats() const {
     st.bodies = w.system.GetNumBodies();
     st.active_bodies = w.system.GetNumActiveBodies(JPH::EBodyType::RigidBody);
     st.characters = w.characters;
+    st.joints = w.live_joints;
     return st;
 }
 

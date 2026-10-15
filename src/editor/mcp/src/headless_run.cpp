@@ -15,6 +15,7 @@
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/physics/module.h"
+#include "mce/log.h"
 #include "mce/scene/scene.h"
 #include "mce/scene/streaming.h"
 
@@ -66,6 +67,11 @@ public:
         if (Result<bool> changed = scene::apply_change(world_, assets_, &entities_); !changed) {
             error_ = changed.error();
             failed_ = true;
+            quit();
+            return;
+        }
+        if (scene::take_quit_request(world_)) {  // the game's Quit: the run ends here, as the player's would
+            MCE_LOG_INFO("run_headless: the game asked to quit at tick {}", sim_ticks_);
             quit();
             return;
         }
