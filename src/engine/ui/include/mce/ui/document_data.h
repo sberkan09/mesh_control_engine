@@ -122,6 +122,13 @@ struct ThemeData {
 void theme_from_palette(const Palette& palette, ThemeData& out);
 // The engine's own look: Palette's defaults, no fonts, no sprites. builder_defaults reads it.
 const ThemeData& default_theme();
+// The high-contrast look (M-ACCESS): opaque black panels and buttons with white text, a yellow
+// focus and accent, at least 7:1 text contrast in every state. Document::update draws every widget
+// but images with its colors while UpdateContext::high_contrast is on.
+const ThemeData& high_contrast_theme();
+// `st` with `kind`/`state`'s high-contrast colors and a black text outline; its sprite, slice, text
+// size and spacing are kept.
+Style high_contrast_style(WidgetKind kind, WidgetState state, const Style& st);
 // Each widget style field of `d` that equals its kind's default look takes `theme`'s value.
 void apply_theme(const ThemeData& theme, DocumentData& d);
 // The font role a widget's text uses: `role`, or for Auto the kind's (Button for buttons, toggles,

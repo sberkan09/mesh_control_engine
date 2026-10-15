@@ -94,6 +94,8 @@ struct UpdateContext {
     rhi::Extent2D viewport;                         // pixels
     SafeInsets safe_insets;                         // the root lays out inside them (M-MOBILE)
     f32 ui_scale = 1.0f;                            // compute_ui_scale(); display scale × user setting (FR-R2D-080)
+    f32 text_scale = 1.0f;                          // text size on top of ui_scale (M-ACCESS access.text_scale)
+    bool high_contrast = false;                     // draw with high_contrast_theme()'s colors (M-ACCESS)
     const input::InputState* actions = nullptr;     // the UI action map's snapshot (null: no input)
     vec2 pointer{-1, -1};                           // pixels; negative = no pointer this frame
     bool pointer_down = false, pointer_pressed = false, pointer_released = false;
@@ -351,6 +353,8 @@ private:
     rhi::Extent2D viewport_{};
     SafeInsets safe_{};
     f32 scale_ = 1.0f;
+    f32 text_scale_ = 1.0f;     // UpdateContext::text_scale
+    bool high_contrast_ = false;
     bool layout_dirty_ = true, order_dirty_ = true, modal_ = true;
     vec2 prev_nav_;             // last frame's quantized direction (edges + key repeat)
     f64 nav_repeat_at_ = 0.0;

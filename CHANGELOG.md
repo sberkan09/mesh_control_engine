@@ -10,6 +10,15 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   preview that plays the scene paused at the playhead (the scene document never changes), and record mode, which
   keys inspector and gizmo edits at the playhead and binds new entities. Double-click a `.mctimeline` in Assets,
   or `mce_editor -editor.open <file>`. User guide 13.5 "Editing timelines in the editor".
+- Accessibility options, M-ACCESS step 2 (SBA-96): `access.colorblind` (protanopia, deuteranopia, tritanopia
+  correction in the 2D post and 3D tonemap passes) with `access.colorblind_strength`, `access.text_scale` for UI
+  text, `access.high_contrast` (a high-contrast palette over every UI document) and `access.motion_scale` (camera
+  shake, chromatic aberration, motion blur). All are saved convars outside the state hash.
+- Smooth remote entities (SBA-83, M-NET2 step 2): `ReplicationClient::set_interpolation` draws replicated entities a
+  little in the past through a jitter buffer that adapts to the measured snapshot interval and arrival jitter,
+  blending the snapshots around the render time. Past the newest snapshot an entity moves on for at most 0.1 s, then
+  holds. Over a 60 ms ± 40 link with 10% loss, motion is more than 10× smoother than raw snapshots.
+  `sample_net_headless` interpolates by default (`-interp 0` for raw). User guide 20.4.
 - Timelines, M-CINEMA step 1 (SBA-76, FR-ENT-110): a `.mctimeline` asset of keyed tracks (transform, property by
   reflected path, activation, animation clip, audio, camera cut, event, subtitle) and a `TimelinePlayer` component
   that plays one on its entity and up to eight bound entities, with play, pause, speed, loop, restart and a

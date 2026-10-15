@@ -16,9 +16,9 @@ struct PixelSize {
 };
 
 // The GPU API a window's surface is made for (ADR-0038). Resolved once per process: Android and iOS
-// always use SdlGpu; elsewhere MCE_RHI=sdlgpu selects it, else OpenGL (Metal on macOS).
-// rhi::create_default_device makes the matching device.
-enum class GpuApi : u8 { OpenGL, Metal, SdlGpu };
+// always use SdlGpu, the browser always WebGpu (ADR-0039); elsewhere MCE_RHI=sdlgpu selects it, else
+// OpenGL (Metal on macOS). rhi::create_default_device makes the matching device.
+enum class GpuApi : u8 { OpenGL, Metal, SdlGpu, WebGpu };
 GpuApi gpu_api();
 
 // Pixels the OS keeps for itself at each edge of a window (notch, rounded corners, home
