@@ -23,6 +23,7 @@ formats, which is what keeps the shipped game small and safe.
 | Animation graph | `.mcanim` | states over a mesh's clips, 1D blends, transitions, events | `Animator.graph` |
 | Particle preset | `.mcpart` | emitter parameters | `ParticleEmitter` |
 | Sequence | `.mcseq` | an action list | `SequencePlayer` |
+| Timeline | `.mctimeline` | keyed tracks: transforms, properties, cuts, cues, subtitles | `TimelinePlayer` (chapter 13.5) |
 | Input map | `.mcinput` | action maps and bindings | the player's input (chapter 11) |
 | UI document | `.mcui` | a widget tree: anchors, per-state styles, layouts, the skin by reference | `ui::build_document` (chapter 12.2) |
 | Shader | `.vert.glsl`, `.frag.glsl`, `.comp.glsl` | validated GLSL, variants, SPIR-V reflection | custom shaders (not yet reachable from a project) |
@@ -151,7 +152,7 @@ Besides scenes and prefabs (chapter 4), these text assets are JSON with a `forma
   "color_start": [1, 0.7, 0.25, 1], "color_end": [1, 0.2, 0.05, 0], "blend": "additive" }
 ```
 
-**Sequence** (`.mcseq`, chapter 13), **tilemap** (`.mctilemap`, chapter 7; the editor's
+**Sequence** (`.mcseq`, chapter 13), **timeline** (`.mctimeline`, chapter 13.5), **tilemap** (`.mctilemap`, chapter 7; the editor's
 Tilemap panel writes it) **sprite sheet** (`.mcsheet`, chapter 7.3) and **animation graph** (`.mcanim`, chapter 8.9).
 
 **Shaders** are validated and compiled to SPIR-V at cook, with variants declared as

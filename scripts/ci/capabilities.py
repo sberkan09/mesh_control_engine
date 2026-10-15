@@ -36,7 +36,6 @@ INTERNAL_CHUNKS = {
     "ModInfo": "a mod pack's identity, written by the mod cook",
     "AudioPacket": "reserved",
     "Atlas": "reserved",
-    "Timeline": "reserved",
     "Shader": "engine shaders, cooked from the engine's own sources",
 }
 

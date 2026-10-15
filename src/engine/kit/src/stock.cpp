@@ -9,6 +9,7 @@
 #include "mce/kit/nav3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
+#include "mce/kit/timeline.h"
 #include "mce/kit/sprite_anim.h"
 #include "mce/physics/world2d.h"
 #include "mce/scene/scene.h"
@@ -79,6 +80,7 @@ void install_world_settings(World& world) {
 void install_stock(World& world, asset::AssetSystem* assets) {
     install_particles(world, assets);
     install_sequences(world, assets);
+    install_timelines(world, assets);  // before kit3d: an animation key starts its clip the same tick
     install_kit3d(world, assets);
     install_bodies3d(world, assets);
     install_nav3d(world, assets);

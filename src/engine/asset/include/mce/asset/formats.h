@@ -23,6 +23,7 @@ inline constexpr u8 MESH_MINOR_LODS = 2;  // minor of a chunk with MeshFlags::Lo
 inline constexpr u8 TILEMAP_VERSION = 1;  // CHNK_TILE: one tile layer (v0.5, FR-R2D-115)
 inline constexpr u8 PARTICLE_VERSION = 1;  // CHNK_PART: one particle emitter preset (v0.5, FR-R2D-070)
 inline constexpr u8 SEQUENCE_VERSION = 1;  // CHNK_SEQ: one action-list sequence (v0.5, FR-ENT-100)
+inline constexpr u8 TIMELINE_VERSION = 1;  // CHNK_TIMELINE: one keyed timeline (M-CINEMA 1, FR-ENT-110)
 inline constexpr u8 SHADER_VERSION = 1;  // CHNK_SHD: one validated GLSL stage + variants + reflection (v0.5)
 inline constexpr u8 PREFAB_VERSION = 1;  // CHNK_Prefab: the scene layout below (v0.5, FR-ENT-070)
 inline constexpr u8 MOD_INFO_VERSION = 1;  // CHNK_MOD: a mod pack's identity (FR-RUN-090)
@@ -486,6 +487,80 @@ struct SequenceView {
     StringView name() const;
     bool loops() const { return (header->flags & 1u) != 0; }
     static Result<SequenceView> read(Span<const byte> payload);
+};
+
+// ------------------------------------------------------------------ timeline (CHNK_TIMELINE)
+// One keyed timeline (FR-ENT-110, M-CINEMA 1): tracks of time-stamped keys a TimelinePlayer
+// component (kit/timeline.h) samples every tick. A track drives one target: the playing entity or
+// one of the player's eight bound entities. Payload layout:
+//   TimelineHeader | TimelineTrack[track_count] | TimelineKey[key_count] | string pool
+// A track's keys are contiguous and sorted by time. Strings (property paths, clip names, subtitle
+// text) are NUL-terminated offsets into the pool; kTimelineNoString means none.
+enum class TimelineTrackKind : u8 {
+    Property,    // a reflected component field ("Comp.path"), interpolated between keys
+    Activation,  // a bool / integer field held at 1 inside the keys' [t, t + duration) ranges, else 0
+    Animation,   // sets the target's Animator clip when the playhead crosses a key
+    Audio,       // plays a sound (audio::PlaySfx) when the playhead crosses a key
+    Camera,      // camera cuts: the key's target camera is primary from its time until the next key
+    Event,       // raises TimelineSignal (and a sequence SeqSignal) when the playhead crosses a key
+    Subtitle,    // the line shown during [t, t + duration)
+};
+
+enum class TimelineEase : u8 { Linear, Step, Smooth, EaseIn, EaseOut };
+
+inline constexpr u8 kTimelineSelf = 0xFF;  // TimelineTrack::target / TimelineKey::target: the playing entity
+inline constexpr u32 kTimelineBindings = 8;  // TimelinePlayer::bindings
+inline constexpr u32 kTimelineNoString = ~0u;
+
+struct TimelineTrack {
+    TimelineTrackKind kind;
+    u8 target;         // a binding index or kTimelineSelf
+    u8 value_count;    // Property: floats per key (1 to 4; a quaternion is 4 and slerps)
+    u8 flags;          // TimelineTrackFlags
+    u32 first_key;
+    u32 key_count;
+    u32 path;          // Property / Activation: "Component.field.path" in the pool
+};
+static_assert(sizeof(TimelineTrack) == 16);
+
+namespace TimelineTrackFlags {
+inline constexpr u8 Quat = 1u << 0;  // Property: the four values are a rotation (slerp, not lerp)
+}
+
+struct TimelineKey {
+    f32 t;             // seconds from the start
+    f32 duration;      // Activation / Subtitle: the range's length
+    f32 v[4];          // Property: the value; Animation: v[0] loop (0/1), v[1] fade (< 0 keeps the Animator's); Audio: v[0] gain dB
+    u64 id;            // Animation: StringId of the clip; Event: StringId of the signal
+    u64 guid[2];       // Audio: the Sfx {hi, lo}
+    u32 text;          // Animation: the clip name; Subtitle: the line
+    u32 text2;         // Subtitle: the speaker (kTimelineNoString when none)
+    TimelineEase ease; // Property: the curve from this key to the next
+    u8 target;         // Camera: the camera's binding index or kTimelineSelf
+    u8 pad_[6];
+    Guid asset() const { return Guid{guid[0], guid[1]}; }
+};
+static_assert(sizeof(TimelineKey) == 64);
+
+struct TimelineHeader {
+    char name[32];       // NUL-padded
+    f32 duration;        // seconds; > 0
+    u32 track_count;
+    u32 key_count;
+    u32 string_bytes;
+    u32 reserved[4];
+};
+static_assert(sizeof(TimelineHeader) == 64);
+
+struct TimelineView {
+    const TimelineHeader* header = nullptr;
+    Span<const TimelineTrack> tracks;
+    Span<const TimelineKey> keys;
+    Span<const char> strings;
+    StringView name() const;
+    StringView string(u32 offset) const;  // empty for kTimelineNoString
+    Span<const TimelineKey> keys_of(const TimelineTrack& t) const { return keys.subspan(t.first_key, t.key_count); }
+    static Result<TimelineView> read(Span<const byte> payload);
 };
 
 // ------------------------------------------------------------------ shader (CHNK_SHD)

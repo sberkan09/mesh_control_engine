@@ -16,6 +16,7 @@
 #include "mce/kit/nav3d.h"            // NavMeshSurface3D, NavArea3D, NavLink3D, NavObstacle3D, NavAgent3D
 #include "mce/kit/novel.h"             // Dialogue, DialogueInput (M-NOVEL)
 #include "mce/kit/novel_components.h"  // StagePart, StoryState, ...
+#include "mce/kit/timeline.h"          // TimelinePlayer (M-CINEMA)
 #include "mce/physics/components.h"   // RigidBody2D, Collider2D, CharacterController2D, ...
 #include "mce/scene/streaming.h"      // SceneChunk, StreamingFocus, SceneChunkStatus
 #include "mce/ui/types.h"             // UiAnchors, UiStyle, UiSlice, UiStackLayout, UiGridLayout (values, not components)

@@ -62,6 +62,7 @@ reach all of its non-transient fields.
 | `NavLink3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `NavObstacle3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `NavAgent3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
+| `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
 | `StagePart` | `mce/kit/novel_components.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
@@ -85,6 +86,7 @@ reach all of its non-transient fields.
 | Font | .ttf | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
 | Scene | .mcscene (scene_* tools) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | Prefab | .mcprefab (prefab_* tools) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/03-editor.md |
+| Timeline | `.mctimeline` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | InputMap | `.mcinput` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/03-editor.md |
 | ParticlePreset | `.mcpart` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | StringTable | assets/loc/<locale>.csv | `asset_list`, `asset_set_import_settings` | no | docs/user-guide/05-assets.md |
