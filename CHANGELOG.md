@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Screens that open and close themselves, M-UI-DATA demo (SBA-38): `kit::UiFlow` shows, hides and holds a
+  `UiScreen` on input actions (`show_on`, `hide_on`, `load_on` a scene, `pause`), and a paused screen holds the
+  world (`World::set_held`: fixed-step systems stop, the tick count goes on, the hash replays). Undertow gets a
+  title, a pause menu, options with music and effects volume and a bound HUD, authored only through its MCP
+  server (`tools/author_ui_mcp.py`), in two themes on two scenes; library fonts Pixelify Sans, Press Start 2P,
+  Atkinson Hyperlegible Next and Karla; `mce://docs` serves `templates/`.
 - `ui_theme_set` (SBA-57, M-UI-DATA step 5): an MCP tool sets the `.mcuitheme` a UI document is drawn with (by path
   or GUID, `null` for the default look) through the same read-back and canonical write as the widget tools, and
   `ui_list` with a document names its theme. There is no project-wide default theme: each document names its own.

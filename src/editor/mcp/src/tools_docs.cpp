@@ -28,6 +28,7 @@ struct DocsRoots {
     cook::String samples;   // samples/<name>/...
     cook::String examples;  // <Name>/... (the SDK's example projects)
     cook::String library;   // library.json and the library's own files (tools_content.cpp)
+    cook::String templates; // the project templates (library entries may name their fonts)
     bool source_tree = false;
 };
 
@@ -46,6 +47,7 @@ DocsRoots find_roots(const Server& server) {
         r.samples = join(r.docs.view(), "../../mce/samples");
         r.examples = join(r.docs.view(), "../../mce/examples");
         r.library = join(r.docs.view(), "../../mce/library");
+        r.templates = join(r.docs.view(), "../../mce/templates");
         return r;
     }
     // An installed SDK: <prefix>/bin/mce_mcp next to <prefix>/share/doc/mce.
@@ -57,6 +59,7 @@ DocsRoots find_roots(const Server& server) {
         r.samples = cook::fs::absolute(join(d.view(), "../../mce/samples").view());
         r.examples = cook::fs::absolute(join(d.view(), "../../mce/examples").view());
         r.library = cook::fs::absolute(join(d.view(), "../../mce/library").view());
+        r.templates = cook::fs::absolute(join(d.view(), "../../mce/templates").view());
         return r;
     }
 #if defined(MCE_MCP_SOURCE_ROOT)
@@ -65,6 +68,7 @@ DocsRoots find_roots(const Server& server) {
     r.samples = join(MCE_MCP_SOURCE_ROOT, "samples");
     r.examples = join(MCE_MCP_SOURCE_ROOT, "projects");
     r.library = join(MCE_MCP_SOURCE_ROOT, "library");
+    r.templates = join(MCE_MCP_SOURCE_ROOT, "templates");
     r.source_tree = true;
 #endif
     return r;
@@ -93,6 +97,7 @@ cook::String content_root(const Server& server, StringView group) {
     if (group == "samples") return r.samples;
     if (group == "examples") return r.examples;
     if (group == "library") return r.library;
+    if (group == "templates") return r.templates;
     return {};
 }
 

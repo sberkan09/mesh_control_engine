@@ -6,5 +6,9 @@
 | `assets/sfx/*.wav` | synthesized by `tools/gen_sfx.py` (this project; numpy) | the repository's license |
 | `assets/effects/*.mcpart` | written by `tools/author_level_mcp.py` (this project) | the repository's license |
 | `assets/fonts/ProggyClean.ttf` | ProggyClean by Tristan Grimmer, the copy in `projects/Kindle/assets/fonts/` | MIT |
+| `assets/fonts/PixelifySans.ttf` | Pixelify Sans (pixel) by The Pixelify Sans Project Authors (github.com/eifetx/Pixelify-Sans), from the engine's content library (font-pixelify-sans) | SIL OFL 1.1 |
+| `assets/fonts/PressStart2P-Regular.ttf` | Press Start 2P (pixel titles) by Cody "CodeMan38" Boisclair (github.com/google/fonts/tree/main/ofl/pressstart2p), from the engine's content library (font-press-start-2p) | SIL OFL 1.1 |
+| `assets/fonts/AtkinsonHyperlegibleNext.ttf` | Atkinson Hyperlegible Next (clean sans) by Braille Institute (github.com/googlefonts/atkinson-hyperlegible-next), from the engine's content library (font-atkinson-hyperlegible-next) | SIL OFL 1.1 |
+| `assets/fonts/Karla.ttf` | Karla (sans titles) by Jonny Pinhorn (github.com/googlefonts/karla), from the engine's content library (font-karla) | SIL OFL 1.1 |
 
 The `.mceasset` sidecars (fresh GUIDs) and the scenes are this project's.

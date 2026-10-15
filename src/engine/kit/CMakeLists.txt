@@ -22,6 +22,7 @@ mce_add_library(mce_gameplay_kit
         mce::mce_asset
         mce::mce_render
         mce::mce_ecs_scene
+        mce::mce_scene  # kit::UiFlow loads a scene (scene::request_change)
         mce::mce_audio
         mce::mce_input  # CameraFollow3D orbits by the Look input
         mce::mce_physics2d

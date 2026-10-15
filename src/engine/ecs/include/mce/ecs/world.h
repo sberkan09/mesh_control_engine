@@ -447,6 +447,13 @@ public:
     // Registration order within a phase IS execution order. `after` (optional) names a system
     // that must already be registered in the same phase — asserted, never reordered.
     void add_system(Phase phase, const char* name, SystemFn fn, const char* after = nullptr);
+    // Held ticks (a pause screen, M-UI-DATA demo): while held, the fixed phases run only the
+    // systems marked run_when_held (the one that releases the hold, say); the tick index,
+    // commands and events still advance, Startup and the render phases are unaffected. The hold
+    // is sim state set by a system (kit::UiFlow), so a replay holds on the same ticks.
+    void set_held(bool held) { held_ = held; }
+    bool held() const { return held_; }
+    void run_when_held(Phase phase, const char* name);  // a system registered earlier in `phase`
     Span<const char* const> system_names(Phase phase) const;
     // Per-system wall time (editor perf dashboards). Off by default: the hot path reads no clock.
     // Turning it on resets the totals. Timings are listed in phase, then execution, order.
@@ -522,6 +529,7 @@ private:
         f64 last_ms = 0.0;  // profiling only
         f64 total_ms = 0.0;
         u64 runs = 0;
+        bool when_held = false;  // runs on held ticks too (run_when_held)
     };
     struct Resource {
         void* ptr = nullptr;
@@ -580,6 +588,7 @@ private:
     bool in_phase_ = false;
     bool started_ = false;
     bool profiling_ = false;
+    bool held_ = false;
     u64 tick_ = 0;
 };
 

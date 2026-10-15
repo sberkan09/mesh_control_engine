@@ -128,6 +128,27 @@ MCE_COMPONENT(UiScreen, (document, Help{"a .mcui UI document"}), (order, Range{-
               (visible, Help{"shown and fed input while set"}),
               (theme, Help{"a .mcuitheme; null: the theme the document names, or the default look"}))
 
+// A screen's navigation as data (M-UI-DATA demo): on the same entity as a UiScreen, the kit's
+// `kit_ui_flow` system shows it when `show_on` is pressed, hides it when `hide_on` is pressed, and
+// loads `scene` (scene::request_change) when `load_on` is pressed; the actions come from the game's
+// input map or the widgets of any screen ("action" in .mcui). While a `pause` screen is visible the
+// world's ticks are held (World::set_held): gameplay, physics and audio stop until it hides. A title
+// menu is a visible pause screen hidden by "Play"; a pause menu one shown by "Pause" and hidden by
+// "Resume" (its Cancel action too). All of it runs in the sim, so an -input script replays it.
+struct UiFlow {
+    asset::AssetRef<asset::Scene> scene;
+    FixedString<32> show_on;
+    FixedString<32> hide_on;
+    FixedString<32> load_on;
+    bool pause = false;
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(UiFlow, (scene, Help{"the scene load_on loads (null: none)"}),
+              (show_on, Help{"an input action that shows this screen, e.g. Pause"}),
+              (hide_on, Help{"an input action that hides it, e.g. Resume"}),
+              (load_on, Help{"an input action that loads 'scene', e.g. Restart"}),
+              (pause, Help{"hold the game (systems, physics, audio) while this screen is visible"}))
+
 // The view a player renders from: the first `primary` camera in ECS order, at its entity's
 // position (rotation about +Z included).
 struct Camera2DComponent {

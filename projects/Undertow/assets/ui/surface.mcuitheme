@@ -1,0 +1,30 @@
+{
+  "format": "mce-uitheme",
+  "version": 1,
+  "guid": "b60a27a4-9030-4e40-b7eb-fd7d3aea0c4a",
+  "palette": {
+    "accent": [0.95, 0.35, 0.55, 1],
+    "button": [0.9, 0.42, 0.2, 1],
+    "button_disabled": [0.75, 0.68, 0.6, 1],
+    "button_focused": [0.16, 0.32, 0.62, 1],
+    "button_hover": [0.98, 0.52, 0.28, 1],
+    "button_pressed": [0.66, 0.28, 0.12, 1],
+    "label": [1, 0.86, 0.6, 1],
+    "panel": [0.97, 0.91, 0.8, 0.94],
+    "text": [1, 0.98, 0.94, 1],
+    "text_focused": [1, 1, 1, 1]
+  },
+  "fonts": {
+    "body": "guid:f5b866cc-8b47-4371-9c28-be1f8447c3c5",
+    "button": "guid:f5b866cc-8b47-4371-9c28-be1f8447c3c5",
+    "title": "guid:974a037b-83d0-489d-a109-49ee7e25052b"
+  },
+  "styles": {
+    "Text": {
+      "style": {
+        "text_outline": 1,
+        "text_outline_color": [0.2, 0.1, 0.05, 1]
+      }
+    }
+  }
+}
