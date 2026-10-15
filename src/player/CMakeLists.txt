@@ -80,3 +80,12 @@ if(MCE_BUILD_TESTS AND TARGET mce_cook)
                      -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/game_services_test
                      -P ${PROJECT_SOURCE_DIR}/tests/liveops/player_game_services_test.cmake)
 endif()
+
+# Performance captures (M-PERF step 1): -perf_capture leaves the state hash alone and writes a .mcperf
+# with the frames, phases and systems of the run.
+if(MCE_BUILD_TESTS AND TARGET mce_cook)
+    add_test(NAME player_perf_capture
+             COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/perf_test
+                     -P ${PROJECT_SOURCE_DIR}/tests/perf/player_perf_test.cmake)
+endif()

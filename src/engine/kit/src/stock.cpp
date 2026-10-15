@@ -10,10 +10,12 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/joints3d.h"
 #include "mce/kit/ragdolls3d.h"
+#include "mce/kit/vehicles3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/timeline.h"
+#include "mce/kit/video.h"
 #include "mce/kit/sprite_anim.h"
 #include "mce/physics/world2d.h"
 #include "mce/scene/scene.h"
@@ -85,12 +87,14 @@ void install_world_settings(World& world) {
 void install_stock(World& world, asset::AssetSystem* assets) {
     install_particles(world, assets);
     install_sequences(world, assets);
+    install_video(world, assets);  // before the timelines: a video track's playhead wins the tick
     install_timelines(world, assets);  // before kit3d: an animation key starts its clip the same tick
     install_kit3d(world, assets);
     install_bodies3d(world, assets);
     install_nav3d(world, assets);
     install_joints3d(world, assets);
     install_ragdolls3d(world, assets);
+    install_vehicles3d(world, assets);
     install_world_settings(world);
     install_ui_flow(world);
     install_effects(world, assets);

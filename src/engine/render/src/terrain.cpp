@@ -402,4 +402,75 @@ TextureUpload splat_upload(const asset::TerrainView& terrain, TextureMipUpload& 
     return up;
 }
 
+// ---- foliage on the terrain (M-TERRAIN 5) ------------------------------------------------------------
+
+namespace {
+
+u64 scatter_hash(u64 seed, u64 cell) {
+    u64 z = seed * 0x9E3779B97F4A7C15ull + cell * 0xD1B54A32D192ED03ull + 0x632BE59BD9B4E019ull;
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+    return z ^ (z >> 31);
+}
+
+// The layer's weight (0..1) at terrain-space (x, z), bilinear over the splat grid.
+f32 layer_weight(const asset::TerrainView& t, u32 layer, f32 x, f32 z) {
+    if (layer >= TerrainScatter::kAnyLayer) return 1.0f;
+    if (t.header->layer_count == 0) return layer == 0 ? 1.0f : 0.0f;
+    if (layer >= t.header->layer_count) return 0.0f;
+    const u32 n = t.splat_resolution();
+    const f32 last = static_cast<f32>(n - 1);
+    const f32 fx = clamp((x / t.header->size[0] + 0.5f) * last, 0.0f, last), fz = clamp((z / t.header->size[1] + 0.5f) * last, 0.0f, last);
+    const u32 x0 = min(static_cast<u32>(fx), n - 2), z0 = min(static_cast<u32>(fz), n - 2);
+    const f32 u = fx - static_cast<f32>(x0), w = fz - static_cast<f32>(z0);
+    const f32 w00 = t.weight(x0, z0, layer), w10 = t.weight(x0 + 1, z0, layer);
+    const f32 w01 = t.weight(x0, z0 + 1, layer), w11 = t.weight(x0 + 1, z0 + 1, layer);
+    const f32 a = w00 + (w10 - w00) * u, b = w01 + (w11 - w01) * u;
+    return (a + (b - a) * w) / 255.0f;
+}
+
+}  // namespace
+
+void scatter_on_terrain(const asset::TerrainView& t, const TerrainScatter& s, Array<mat4>& out) {
+    out.clear();
+    if (!(s.density > 0.0f) || s.max_count == 0) return;
+    const f32 sx = t.header->size[0], sz = t.header->size[1];
+    f32 cell = 1.0f / std::sqrt(s.density);
+    const f64 cells = f64(sx) * sz / (f64(cell) * cell);
+    if (cells > 4.0 * s.max_count) cell *= static_cast<f32>(std::sqrt(cells / (4.0 * s.max_count)));
+    const u32 nx = max(1u, static_cast<u32>(std::ceil(sx / cell))), nz = max(1u, static_cast<u32>(std::ceil(sz / cell)));
+    const u32 n = t.resolution();
+    const f32 last = static_cast<f32>(n - 1);
+    const f32 max_grad = s.max_slope_deg >= 90.0f ? 1e30f : std::tan(radians(max(s.max_slope_deg, 0.0f)));
+    const f32 hx = 0.5f * t.spacing_x(), hz = 0.5f * t.spacing_z();
+    for (u32 cz = 0; cz < nz; ++cz)
+        for (u32 cx = 0; cx < nx; ++cx) {
+            u64 r = scatter_hash(s.seed, u64(cz) * nx + cx);
+            auto unit = [&r]() {
+                r = r * 6364136223846793005ull + 1442695040888963407ull;
+                return static_cast<f32>(r >> 40) * (1.0f / 16777216.0f);
+            };
+            const f32 x = -0.5f * sx + (static_cast<f32>(cx) + unit()) * cell;
+            const f32 z = -0.5f * sz + (static_cast<f32>(cz) + unit()) * cell;
+            const f32 keep = unit(), yaw = unit(), size = unit();
+            if (x > 0.5f * sx || z > 0.5f * sz) continue;
+            if (keep >= layer_weight(t, s.layer, x, z)) continue;
+            if (!t.holes.empty()) {
+                const u32 qx = min(static_cast<u32>(clamp((x / sx + 0.5f) * last, 0.0f, last)), n - 2);
+                const u32 qz = min(static_cast<u32>(clamp((z / sz + 0.5f) * last, 0.0f, last)), n - 2);
+                if (t.hole(qx, qz) || t.hole(qx + 1, qz) || t.hole(qx, qz + 1) || t.hole(qx + 1, qz + 1)) continue;
+            }
+            if (max_grad < 1e29f) {
+                const f32 gx = (t.surface_at(x + hx, z) - t.surface_at(x - hx, z)) / (2.0f * hx);
+                const f32 gz = (t.surface_at(x, z + hz) - t.surface_at(x, z - hz)) / (2.0f * hz);
+                if (gx * gx + gz * gz > max_grad * max_grad) continue;
+            }
+            const vec3 local{x * s.scale.x, t.surface_at(x, z) * s.scale.y, z * s.scale.z};
+            const f32 k = s.scale_min + (s.scale_max - s.scale_min) * size;
+            const quat turn = s.random_yaw ? s.rotation * quat_from_axis_angle({0, 1, 0}, yaw * 6.28318531f) : s.rotation;
+            out.push_back(trs(s.position + rotate(s.rotation, local), turn, {k, k, k}));
+            if (out.size() >= s.max_count) return;
+        }
+}
+
 }  // namespace mce::render

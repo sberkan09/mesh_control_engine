@@ -24,7 +24,9 @@ if(MCE_WEB)
         -sINITIAL_MEMORY=64MB
         -sSTACK_SIZE=1MB
         -sEXIT_RUNTIME=1
-        -sENVIRONMENT=web)
+        -sENVIRONMENT=web
+        -lidbfs.js  # IndexedDB behind /persistent (mce/web.h)
+        -sEXPORTED_RUNTIME_METHODS=FS)  # the page (and the smoke) can reach the virtual file system
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         list(APPEND MCE_WEB_LINK_OPTIONS -sASSERTIONS=2)
     endif()
