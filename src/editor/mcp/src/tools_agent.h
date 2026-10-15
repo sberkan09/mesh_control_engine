@@ -10,6 +10,8 @@ namespace mce::mcp {
 bool render_frame(ToolCall& c);
 bool render_sheet(ToolCall& c);
 bool image_diff(ToolCall& c);
+// ... and a timeline paused at a time (M-CINEMA step 6).
+bool timeline_preview(ToolCall& c);
 
 // tools_code.cpp (SBA-49): rebuild + hot reload of the game module, its ctest tests.
 bool module_build(ToolCall& c);

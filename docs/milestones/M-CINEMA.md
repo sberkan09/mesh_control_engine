@@ -1,6 +1,6 @@
 # M-CINEMA — Timeline, animation editing, cutscenes and video (milestone record)
 
-**Status:** in progress on `dev_claude` (steps 1–4 merged; step 5 below).
+**Status:** done on `dev_claude` (steps 1–6, the demo and the gates).
 **Why:** the timeline and curve editor (FR-ENT-110, FR-EDT-130) was cut at M8 only for the solo-hours budget; the
 novel kit and the narrative games now want cutscenes, and MCE had no video playback (ROADMAP "Engine gap tracks").
 **Measured on:** the Linux CI container (`scripts/ci/local_ci.sh`).
@@ -131,3 +131,40 @@ novel kit and the narrative games now want cutscenes, and MCE had no video playb
   per-widget texture. The fullscreen view covers the splash case.
 - Mac-only check not run: the Metal backend's `update_texture` on the video texture (no Mac here).
 
+
+## Step 6 — MCP, docs, the demo and the gates (SBA-81)
+
+| Item | Where | Evidence |
+|---|---|---|
+| `timeline_create`, `timeline_add_track`, `timeline_add_key`: `.mctimeline` edits read back by the cook's reader (a bad edit is refused with its `file:line`, nothing written) and saved canonically; keys merge in by time | `tools_timeline.cpp` | `test_mcp_agent` "timeline tools: create, add tracks and keys; the file stays canonical and cooks" |
+| `timeline_preview`: `render_frame`'s capture with every timeline held at a time (the player's `timeline.scrub` convar: `timeline_scrub`, speed 0, a cutscene's bars in) | `tools_render.cpp`, `player.cpp` `scrub_timelines` | `test_mcp_agent` (gpu) "timeline_preview: an agent-authored cutscene seen at several moments": same frame twice at one time, different frames at 0 s and 3 s, the letterbox rows black, `render_sheet` over the playing cutscene, the saved scene and timeline unchanged |
+| Video import settings in `asset_set_import_settings`, user guide 5.2 and 14; the timeline tools in user guide 13.5 and 14, `editor-mcp.md` | `tools.cpp`, `docs/user-guide/05-assets.md`, `13-sequences-fsm-saves.md`, `14-mcp-ai-workflow.md`, `docs/architecture/editor-mcp.md` | `capabilities.md`, the transcript golden's tool list |
+| Demo: `samples/cinema_demo`, a data-only project the stock player plays: a studio splash film on a fullscreen `VideoPlayer` (a timeline `video` track and an activation track on `VideoPlayer.fullscreen`), then a cutscene: a dolly on a four-point `CameraRail3D` with a look-at, two lamps fading up, the gate rising, music, three subtitle lines, a 1.5 s blended cut to a second camera and a courier walking through on an animation track; `tools/gen_content.py` synthesizes the music and the film | `samples/cinema_demo` | `cinema_demo_player` (two plays hash the same; a held skip changes the run; the skip replayed from its input hashes the same), `cinema_demo_player_gpu` (0 GL errors) |
+| A novel scene plays a cutscene: Undelivered opens on `@cutscene ferry` (the ferry's motor and horn, two subtitle lines) | `projects/Undelivered/assets/timelines/ferry.mctimeline`, `story/00_day1.story`, `story.json` | `undelivered_run` "undelivered: a player's inputs start a run, read a page and take a choice" (the cutscene shows a subtitle, then the first page); the bot runs skip it |
+| Gate: a recorded cutscene replays to the same hash | `test_cinematic.cpp` | `test_kit` "cinematic: a recorded cutscene with a skip replays to the same state hash" (an `InputRecorder` stream with a held skip, replayed through `InputReplayer`) |
+
+### Design notes
+
+- **The replay gate found a bug.** `Cutscene` had three padding bytes after `pad_`; a fresh component left them
+  undefined and the state hash read them, so two runs of the same cutscene hashed differently. `pad_` is now
+  four bytes and a `static_assert` keeps `bars` right after it.
+- **The fullscreen film was upside down.** The HUD's y runs down the screen; the film is flipped there (the
+  sprite path was right). Fixed in step 5's PR; the demo's splash is the check.
+- **The demo is a new sample, not Ashen Court.** Ashen Court (`samples/05_ashen_court`) is code only, with no
+  scene for the timeline panel to edit, and Solstice Reach's module writes its camera every frame. A data-only
+  project shows that a cutscene and a splash need no code at all. The scene and timeline were written as files,
+  not in the Timeline panel (no display here); an agent's authoring over MCP is the gpu test above.
+- **The stock player records no replay files** (13.4), so the demo's headless check replays its scripted input;
+  the recorded-stream replay is the kit test.
+- **`timeline_preview` holds every timeline in the scene** at the time; scenes with several unrelated timelines
+  scrub them together, which is what a cutscene's preview wants.
+- Mac-only checks not run: none new in this step (the Metal video texture is step 5's).
+
+## Gates
+
+| Gate | Evidence |
+|---|---|
+| A timeline played twice gives the same replay hash | `test_kit` "timeline: two runs hash the same every tick, and a save resumes to the same end" (step 1); "cinematic: a recorded cutscene with a skip replays to the same state hash"; `cinema_demo_player` |
+| Scrubbing never mutates the saved scene | the Timeline panel's preview (step 2, "timeline editor: the preview scrubs the play world and never touches the document"); `timeline_preview` (the gpu test compares the files) |
+| Video decode inside the Low-tier frame budget | 1.1 ms/frame at 640x360 (step 5); the cook warns above 854x480 |
+| `local_ci.sh` green on every step | each step's PR |

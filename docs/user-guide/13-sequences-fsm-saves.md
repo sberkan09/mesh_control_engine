@@ -210,6 +210,11 @@ panel has its own **Undo** and **Redo**; the scene's undo (Ctrl+Z) covers the sc
 binding record mode added. A change written by an MCP tool or a text editor is read in while the
 panel has nothing unsaved.
 
+**Over MCP** an agent writes a timeline with `timeline_create`, `timeline_add_track` and
+`timeline_add_key` (the same format, checked by the cook before it is written) and looks at it with
+`timeline_preview`, which draws the scene with every timeline held at a given second (chapter 14).
+The player does the same with `-timeline.scrub <seconds>`.
+
 ## 13.6 Cutscenes
 
 A cutscene is a timeline played with a `Cutscene` component next to its `TimelinePlayer`
@@ -256,7 +261,8 @@ between them and property tracks drive their fields.
 ```
 
 All of it is sim state, so a cutscene replays and hashes the same, and the Timeline panel's preview
-shows the rail, look-at and blend at the playhead. In a novel, `@cutscene <timeline>` plays one
+shows the rail, look-at and blend at the playhead. `samples/cinema_demo` is a whole one as data: a splash
+film, a dolly with a look-at, lamps, a rising gate, music, subtitles and a blended cut. In a novel, `@cutscene <timeline>` plays one
 (21).
 
 ## 13.7 Video

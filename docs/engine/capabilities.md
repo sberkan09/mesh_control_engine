@@ -159,6 +159,7 @@ reach all of its non-transient fields.
 | `console_exec` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `render_frame` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `render_sheet` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `timeline_preview` | `tools_agent.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `image_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `module_build` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `module_test` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
@@ -189,6 +190,9 @@ reach all of its non-transient fields.
 | `scene_switch` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_documents` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `report_friction` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `timeline_create` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
+| `timeline_add_track` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
+| `timeline_add_key` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `ui_list` | `tools_ui.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `ui_create` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |
 | `ui_widget_add` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |

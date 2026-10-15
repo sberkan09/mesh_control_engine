@@ -5,7 +5,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
-- Steam, M-STEAM step 1 (SBA-106, ADR-0043): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
+- Timelines over MCP and the cinema demo, M-CINEMA step 6 (SBA-81): `timeline_create`, `timeline_add_track` and
+  `timeline_add_key` write `.mctimeline` files checked by the cook, and `timeline_preview` draws the scene with every
+  timeline held at a given second (the player's `-timeline.scrub`). `samples/cinema_demo` opens on a splash film and
+  plays a cutscene with a camera dolly, a rising gate, music, subtitles and a blended cut, all as data.
+  Undelivered opens on a ferry cutscene. A `Cutscene` no longer hashes three undefined padding bytes, and the
+  fullscreen video is no longer drawn upside down.
+- Steam, M-STEAM step 1 (SBA-106, ADR-0042): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
   talks to it through the Steamworks flat API, so neither the repository nor the build needs the SDK and a game
   without Steam loads nothing. The stock player signs in with `-steam.app_id <id>` (`-steam.library`,
   `-steam.restart` for release builds Steam relaunches) and pumps Steam's callbacks every frame; the sim hash is
