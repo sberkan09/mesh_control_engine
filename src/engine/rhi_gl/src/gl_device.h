@@ -149,6 +149,7 @@ private:
     void exec_draw_indirect(const cmd::DrawIndirect& d);
     void exec_resolve(const cmd::Resolve& r);
     void exec_bind_storage_image(const cmd::BindStorageImage& c);
+    void exec_draw_indirect_buffer(const cmd::DrawIndirectBuffer& d);
     void exec_dispatch(const cmd::Dispatch* direct, const cmd::DispatchIndirect* indirect);
     void exec_barrier(u32 bits);
     void exec_write_timestamp(u32 index);

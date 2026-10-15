@@ -45,6 +45,7 @@ enum class CmdType : u16 {
     Dispatch,
     DispatchIndirect,
     Barrier,
+    DrawIndirectBuffer,
 };
 
 const char* cmd_type_name(CmdType t);
@@ -79,6 +80,7 @@ struct Draw { u32 index_count; u32 instance_count; u32 first_index; i32 base_ver
 struct DrawNonIndexed { u32 vertex_count; u32 instance_count; u32 first_vertex; u32 base_instance; };
 struct SetDrawArgs { u32 count; };            // followed by count * DrawIndexedIndirectCommand
 struct DrawIndirect { u32 first_command; u32 draw_count; };
+struct DrawIndirectBuffer { BufferHandle buffer; u64 offset; u32 draw_count; };
 struct PushDebugScope { const char* name; };
 struct Resolve { TextureHandle src; TextureHandle dst; };
 struct SetStorageData { u32 binding; u32 size; };  // followed by `size` bytes
@@ -118,6 +120,11 @@ public:
     // `first_command`, as ONE MultiDrawElementsIndirect against the bound vertex/index data.
     void set_draw_args(Span<const DrawIndexedIndirectCommand> commands);
     void draw_indirect(u32 draw_count, u32 first_command = 0);
+    // GPU-driven draws (M-VISUAL 9): `draw_count` DrawIndexedIndirectCommands read from `buffer` at
+    // `offset` (4-aligned) when the GPU executes the draw, typically written by an earlier dispatch
+    // (barrier(barrier::kIndirect | ...) in between). first_index counts from the bound index buffer;
+    // on GL that buffer must be bound at offset 0 (the commands cannot be rebased on the GPU).
+    void draw_indirect_buffer(BufferHandle buffer, u64 offset = 0, u32 draw_count = 1);
     // ---- compute (M-VISUAL 1; RenderDevice::caps().compute). Outside passes only. The compute
     // pipeline is bound with bind_pipeline; uniform banks, SSBOs and sampled textures bind as for draws.
     //

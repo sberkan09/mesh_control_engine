@@ -70,6 +70,8 @@ void Kit3DExtract::shutdown() {
 
 void Kit3DExtract::reset(asset::AssetSystem* assets) {
     release_handles();
+    foliage_.clear();
+    bursts_.clear();
     assets_ = assets;
 }
 
@@ -511,6 +513,152 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (scene.reflection_probes().size() > before) probe_entities_.push_back(e);
         ++stats_.reflection_probes;
     });
+
+    // Scale (M-VISUAL 9): foliage batches, decals, GPU particles on the scene's clock.
+    if (!bake_mode_) time_ += max(frame_dt_, 0.0f);
+    scene.set_time(time_, bake_mode_ ? 0.0f : max(frame_dt_, 0.0f));
+    world.query<const Foliage3D&>().each([&](Entity e, const Foliage3D& f) {
+        if (!f.enabled || f.count == 0) return;
+        vec3 pos, scale;
+        quat rot;
+        if (!pose_of(world, e, pos, rot, scale)) return;
+        const u32 key = mesh_key(f.mesh.guid);
+        const render::GpuMesh* mesh = key != ~0u && meshes_ ? meshes_->get(key) : nullptr;
+        if (!mesh) {
+            ++stats_.missing;
+            return;
+        }
+        // The scatter's inputs: a change re-scatters and bumps the batch's version (re-upload).
+        u64 h = 1469598103934665603ull;
+        auto mix = [&h](const void* p, usize n) {
+            for (usize i = 0; i < n; ++i) h = (h ^ static_cast<const u8*>(p)[i]) * 1099511628211ull;
+        };
+        mix(&pos, sizeof(pos));
+        mix(&f.half_extents, sizeof(f.half_extents));
+        mix(&f.count, sizeof(f.count));
+        mix(&f.seed, sizeof(f.seed));
+        mix(&f.scale_min, sizeof(f.scale_min));
+        mix(&f.scale_max, sizeof(f.scale_max));
+        mix(&f.random_yaw, sizeof(f.random_yaw));
+        FoliageEntry* entry = nullptr;
+        for (FoliageEntry& fe : foliage_)
+            if (fe.entity == e) entry = &fe;
+        if (!entry) {
+            foliage_.push_back({});
+            entry = &foliage_.back();
+            entry->entity = e;
+        }
+        if (entry->transforms.empty() || entry->key != h) {
+            render::FoliageScatter sc;
+            sc.origin = pos;
+            sc.half_extents = f.half_extents;
+            sc.count = f.count;
+            sc.seed = f.seed;
+            sc.scale_min = f.scale_min;
+            sc.scale_max = f.scale_max;
+            sc.random_yaw = f.random_yaw != 0;
+            render::scatter_foliage(sc, entry->transforms);
+            entry->key = h;
+            ++entry->version;
+        }
+        entry->stamp = frame_stamp_;
+        render::InstanceBatch b;
+        b.id = e.index + 1;
+        b.version = entry->version;
+        b.mesh = key;
+        b.transforms = entry->transforms.span();
+        b.cast_shadows = f.cast_shadows != 0;
+        b.cull_distance = bake_mode_ ? 0.0f : f.cull_distance;
+        b.tint = f.tint;
+        b.material = material(f.material.guid);
+        b.wind_amplitude = f.wind_amplitude;
+        b.wind_frequency = f.wind_frequency;
+        b.wind_direction = f.wind_direction;
+        scene.add_batch(b);
+        ++stats_.foliage;
+        stats_.foliage_instances += static_cast<u32>(entry->transforms.size());
+    });
+    for (usize i = 0; i < foliage_.size();) {  // gone, disabled or destroyed: its scatter is dropped
+        if (foliage_[i].stamp == frame_stamp_) {
+            ++i;
+            continue;
+        }
+        foliage_[i] = std::move(foliage_.back());
+        foliage_.pop_back();
+    }
+    world.query<const Decal3D&>().each([&](Entity e, const Decal3D& d) {
+        if (!d.enabled) return;
+        vec3 pos, scale;
+        quat rot;
+        if (!pose_of(world, e, pos, rot, scale)) return;
+        render::Decal rd;
+        rd.world = trs(pos, rot, scale) * scaling(max(d.size, vec3{0.001f, 0.001f, 0.001f}));
+        rd.texture = texture_key(d.texture.guid);
+        rd.uv_rect = d.uv_rect;
+        rd.color = d.color;
+        rd.roughness = d.roughness;
+        rd.metallic = d.metallic;
+        rd.material_weight = d.material_weight;
+        rd.emissive = d.emissive;
+        rd.angle_fade = d.angle_fade;
+        rd.edge_fade = d.edge_fade;
+        scene.add_decal(rd);
+        ++stats_.decals;
+    });
+    world.query<const ParticleEmitter3D&>().each([&](Entity e, const ParticleEmitter3D& p) {
+        vec3 pos, scale;
+        quat rot;
+        if (!pose_of(world, e, pos, rot, scale)) return;
+        BurstEntry* entry = nullptr;
+        for (BurstEntry& be : bursts_)
+            if (be.entity == e) entry = &be;
+        const bool first = entry == nullptr;
+        if (first) {
+            bursts_.push_back({});
+            entry = &bursts_.back();
+            entry->entity = e;
+        }
+        const bool burst = first || entry->burst_version != p.burst_version;
+        entry->burst_version = p.burst_version;
+        entry->stamp = frame_stamp_;
+        render::ParticleEmitter em;
+        em.id = e.index + 1;
+        em.max_particles = p.max_particles;
+        em.seed = p.seed;
+        em.position = pos + rotate(rot, p.offset);
+        em.box = p.box;
+        const vec3 dir = rotate(rot, p.direction);
+        em.direction = length_sq(dir) > 0.0f ? normalize(dir) : vec3{0.0f, 1.0f, 0.0f};
+        em.spread = radians(clamp(p.spread_deg, 0.0f, 180.0f));
+        em.rate = p.rate;
+        em.burst = burst ? p.burst : 0u;
+        em.emitting = p.emitting != 0;
+        em.speed_min = p.speed_min;
+        em.speed_max = p.speed_max;
+        em.lifetime_min = p.lifetime_min;
+        em.lifetime_max = p.lifetime_max;
+        em.gravity = p.gravity;
+        em.drag = p.drag;
+        em.collide = p.collide != 0;
+        em.ground_height = p.ground_height;
+        em.bounce = p.bounce;
+        em.size_start = p.size_start;
+        em.size_end = p.size_end;
+        em.color_start = p.color_start;
+        em.color_end = p.color_end;
+        em.additive = p.additive != 0;
+        em.texture = texture_key(p.texture.guid);
+        scene.add_particle_emitter(em);
+        ++stats_.particle_emitters;
+    });
+    for (usize i = 0; i < bursts_.size();) {
+        if (bursts_[i].stamp == frame_stamp_) {
+            ++i;
+            continue;
+        }
+        bursts_[i] = bursts_.back();
+        bursts_.pop_back();
+    }
 
     // Static copies, cell by cell.
     if (const StaticInstances3D* si = world.try_resource<StaticInstances3D>(); si && !si->instances.empty()) {

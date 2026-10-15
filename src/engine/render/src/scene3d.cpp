@@ -32,14 +32,17 @@ View3D compute_view_3d(const Camera3D& cam, rhi::Extent2D viewport) {
     const f32 aspect = viewport.height ? f32(viewport.width) / f32(viewport.height) : 1.0f;
     v.proj = perspective_rh_no(cam.fov_y, aspect, cam.near_z, cam.far_z);
     v.view_proj = v.proj * v.view;
-    const mat4& m = v.view_proj;
+    frustum_planes(v.view_proj, v.planes);
+    return v;
+}
+
+void frustum_planes(const mat4& m, vec4 out[6]) {
     const vec4 r0 = m.row(0), r1 = m.row(1), r2 = m.row(2), r3 = m.row(3);
     const vec4 planes[6] = {r3 + r0, r3 - r0, r3 + r1, r3 - r1, r3 + r2, r3 - r2};
     for (int i = 0; i < 6; ++i) {
         const f32 l = length(planes[i].xyz());
-        v.planes[i] = l > 0.0f ? planes[i] * (1.0f / l) : planes[i];
+        out[i] = l > 0.0f ? planes[i] * (1.0f / l) : planes[i];
     }
-    return v;
 }
 
 bool sphere_visible(const View3D& v, vec3 c, f32 r) {
@@ -128,7 +131,11 @@ Scene3D::Scene3D(const MeshStore& meshes, mem::IAllocator& alloc)
       instances_(alloc),
       draws_(alloc),
       shadow_draws_(alloc),
-      joint_palette_(alloc) {}
+      joint_palette_(alloc),
+      batches_(alloc),
+      decals_(alloc),
+      decal_slots_(alloc),
+      emitters_(alloc) {}
 
 void Scene3D::begin(const Camera3D& camera, rhi::Extent2D viewport) {
     view_ = compute_view_3d(camera, viewport);
@@ -146,6 +153,12 @@ void Scene3D::begin(const Camera3D& camera, rhi::Extent2D viewport) {
     cascade_casters_.clear();
     local_tiles_.clear();
     local_casters_.clear();
+    batches_.clear();
+    culling_ = {};
+    decals_.clear();
+    decal_slots_.clear();
+    decal_texture_count_ = 0;
+    emitters_.clear();
     cascade_count_ = 0;
     opaque_count_ = 0;
     stats_ = {};
@@ -176,6 +189,136 @@ void Scene3D::add(const MeshInstance& instance) {
     MCE_ASSERT_MSG(!built_, "Scene3D::add after build");
     if (!meshes_->get(instance.mesh)) return;
     instances_.push_back(instance);
+}
+
+namespace {
+
+// The batch path's bounding sphere of an instance: the mesh's rest bounds' sphere under `w`.
+void instance_sphere(const GpuMesh& mesh, const mat4& w, vec3& center, f32& radius, f32& scale) {
+    const f32 sx = length(vec3{w.c[0][0], w.c[0][1], w.c[0][2]});
+    const f32 sy = length(vec3{w.c[1][0], w.c[1][1], w.c[1][2]});
+    const f32 sz = length(vec3{w.c[2][0], w.c[2][1], w.c[2][2]});
+    scale = math::max(sx, math::max(sy, sz));
+    center = transform_point(w, mesh.bounds.center());
+    radius = length(mesh.bounds.extents()) * scale;
+}
+
+}  // namespace
+
+void Scene3D::add_batch(const InstanceBatch& batch) {
+    MCE_ASSERT_MSG(!built_, "Scene3D::add_batch after build");
+    const GpuMesh* mesh = meshes_->get(batch.mesh);
+    if (!mesh || mesh->skinned() || batch.transforms.empty()) return;
+    InstanceBatch b = batch;
+    if (b.bounds.min.x > b.bounds.max.x) {
+        bool first = true;
+        for (const mat4& w : b.transforms) {
+            vec3 c;
+            f32 r = 0.0f, sc = 0.0f;
+            instance_sphere(*mesh, w, c, r, sc);
+            const aabb3 box{c - vec3{r, r, r}, c + vec3{r, r, r}};
+            b.bounds = first ? box : merge(b.bounds, box);
+            first = false;
+        }
+    }
+    batches_.push_back(b);
+    ++stats_.batches;
+    stats_.batch_instances += static_cast<u32>(b.transforms.size());
+}
+
+void Scene3D::add_decal(const Decal& decal) {
+    MCE_ASSERT_MSG(!built_, "Scene3D::add_decal after build");
+    decals_.push_back(decal);
+}
+
+void Scene3D::add_particle_emitter(const ParticleEmitter& emitter) {
+    MCE_ASSERT_MSG(!built_, "Scene3D::add_particle_emitter after build");
+    if (emitter.max_particles == 0) return;
+    emitters_.push_back(emitter);
+    emitters_.back().max_particles = math::min(emitter.max_particles, kMaxParticlesPerEmitter);
+    ++stats_.particle_emitters;
+}
+
+vec4 batch_wind(const InstanceBatch& b) {
+    vec2 d = b.wind_direction;
+    const f32 l = std::sqrt(d.x * d.x + d.y * d.y);
+    d = l > 0.0f ? vec2{d.x / l, d.y / l} : vec2{1.0f, 0.0f};
+    return {b.wind_amplitude, b.wind_frequency, d.x, d.y};
+}
+
+u32 batch_lod(const GpuMesh& mesh, vec3 center, f32 radius, f32 scale, const View3D& view, const LodSettings& lod) {
+    const u32 levels = mesh.lod_levels;
+    if (levels <= 1) return 0;
+    if (lod.force_level != ~0u) return math::min(lod.force_level, levels - 1);
+    if (!lod.enabled) return 0;
+    const f32 distance = math::max(length(center - view.position) - radius, view.near_z);
+    const f32 px_per_unit = view.proj.c[1][1] * 0.5f * static_cast<f32>(view.viewport.height) / distance;
+    u32 level = 0;
+    for (u32 l = 1; l < levels; ++l)
+        if (mesh.lod_error[l] * scale * px_per_unit <= lod.pixel_error) level = l;
+    return level;
+}
+
+void cull_batch(const InstanceBatch& batch, const GpuMesh& mesh, const vec4 planes[6], const View3D& lod_view,
+                const LodSettings& lod, u32 level_bias, Array<BatchVisible>& out) {
+    const u32 levels = math::max(mesh.lod_levels, 1u);
+    for (u32 i = 0; i < batch.transforms.size(); ++i) {
+        vec3 c;
+        f32 r = 0.0f, scale = 0.0f;
+        instance_sphere(mesh, batch.transforms[i], c, r, scale);
+        bool inside = true;
+        for (int p = 0; p < 6 && inside; ++p) inside = dot(planes[p].xyz(), c) + planes[p].w >= -r;
+        if (!inside) continue;
+        if (batch.cull_distance > 0.0f && length(c - lod_view.position) - r > batch.cull_distance) continue;
+        const u32 level = math::min(batch_lod(mesh, c, r, scale, lod_view, lod) + level_bias, levels - 1);
+        out.push_back({level, i});
+    }
+}
+
+namespace {
+
+// splitmix64: the scatter's deterministic stream.
+struct SplitMix {
+    u64 state;
+    u64 next() {
+        u64 z = (state += 0x9E3779B97F4A7C15ull);
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+        return z ^ (z >> 31);
+    }
+    f32 unit() { return static_cast<f32>(next() >> 40) * (1.0f / 16777216.0f); }  // [0, 1)
+};
+
+}  // namespace
+
+void scatter_foliage(const FoliageScatter& sc, Array<mat4>& out) {
+    out.clear();
+    if (sc.count == 0) return;
+    const f32 hx = math::max(sc.half_extents.x, 1e-3f), hz = math::max(sc.half_extents.y, 1e-3f);
+    // A grid of at least `count` cells with the rectangle's aspect; a shuffled pick of them, one
+    // instance jittered inside each.
+    const u32 gx = math::max(1u, static_cast<u32>(std::ceil(std::sqrt(f32(sc.count) * hx / hz))));
+    const u32 gz = math::max(1u, (sc.count + gx - 1) / gx);
+    Array<u32> cells;
+    cells.resize(usize(gx) * gz);
+    for (u32 i = 0; i < cells.size(); ++i) cells[i] = i;
+    SplitMix rng{u64(sc.seed) * 0x2545F4914F6CDD1Dull + 1};
+    for (u32 i = static_cast<u32>(cells.size()) - 1; i > 0; --i) {
+        const u32 j = static_cast<u32>(rng.next() % (u64(i) + 1));
+        const u32 t = cells[i];
+        cells[i] = cells[j];
+        cells[j] = t;
+    }
+    out.resize(sc.count);
+    const f32 cw = 2.0f * hx / f32(gx), cd = 2.0f * hz / f32(gz);
+    for (u32 i = 0; i < sc.count; ++i) {
+        const u32 cell = cells[i];
+        const f32 x = -hx + (f32(cell % gx) + rng.unit()) * cw;
+        const f32 z = -hz + (f32(cell / gx) + rng.unit()) * cd;
+        const f32 yaw = sc.random_yaw ? rng.unit() * 2.0f * kPi : 0.0f;
+        const f32 s = sc.scale_min + (sc.scale_max - sc.scale_min) * rng.unit();
+        out[i] = trs(sc.origin + vec3{x, 0.0f, z}, quat_from_axis_angle({0, 1, 0}, yaw), {s, s, s});
+    }
 }
 
 u32 Scene3D::select_lod(const MeshInstance& inst, const GpuMesh& mesh) const {
@@ -339,6 +482,42 @@ void Scene3D::build() {
     }
     stats_.shadow_casters = static_cast<u32>(shadow_draws_.size());
     stats_.joints = static_cast<u32>(joint_palette_.size());
+    for (const InstanceBatch& b : batches_) {  // their casters reach into the cascades' depth range
+        scene_bounds_ = any ? merge(scene_bounds_, b.bounds) : b.bounds;
+        any = true;
+    }
+    // Decals: the visible ones in submission order, within the decal and texture limits.
+    for (const Decal& d : decals_) {
+        const vec3 c = transform_point(d.world, {0, 0, 0});
+        const f32 r = 0.5f * (length(vec3{d.world.c[0][0], d.world.c[0][1], d.world.c[0][2]}) +
+                              length(vec3{d.world.c[1][0], d.world.c[1][1], d.world.c[1][2]}) +
+                              length(vec3{d.world.c[2][0], d.world.c[2][1], d.world.c[2][2]}));
+        if (!sphere_visible(view_, c, r)) {
+            ++stats_.decals_culled;
+            continue;
+        }
+        if (decal_slots_.size() >= kMaxDecals) {
+            ++stats_.decals_dropped;
+            continue;
+        }
+        u32 slot = ~0u;
+        if (d.texture != ~0u) {
+            for (u32 t = 0; t < decal_texture_count_; ++t)
+                if (decal_textures_[t] == d.texture) slot = t;
+            if (slot == ~0u && decal_texture_count_ < kMaxDecalTextures) {
+                slot = decal_texture_count_;
+                decal_textures_[decal_texture_count_++] = d.texture;
+            }
+            if (slot == ~0u) {
+                ++stats_.decals_dropped;
+                continue;
+            }
+        }
+        decal_slots_.push_back(slot);
+        decals_[decal_slots_.size() - 1] = d;  // compacts in place: the write index trails the read one
+    }
+    decals_.resize(decal_slots_.size());
+    stats_.decals = static_cast<u32>(decals_.size());
 
     // Sort: opaque by (material, depth ascending), blended by depth descending. The radix sort is
     // stable, so equal keys keep instance/submesh submission order.

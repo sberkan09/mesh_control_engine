@@ -1,6 +1,6 @@
 # M-VISUAL — High-end 3D rendering (milestone record)
 
-**Status:** active (steps 1–6 done, 2026-10-15). Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
+**Status:** active (steps 1–9 done, 2026-10-15). Plan: ROADMAP §M-VISUAL; Linear SBA-6 … SBA-15.
 **Why:** `Forward3D` suits stylized and low-poly 3D but has no compute path, GI, pre-filtered IBL,
 screen-space effects, local-light shadows or temporal pipeline. Each step below is opt-in, keeps GL as the
 reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leaves today's frame unchanged when off.
@@ -17,7 +17,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | 6 | Global illumination (irradiance-probe volume) | SBA-11 | done: GL and SDL GPU (gated + goldens), editor bake, Low tier on the bake; Metal untested; real-GPU budget on the Mac/device session |
 | 7 | Atmosphere and volumetrics | SBA-12 | done: GL and SDL GPU (gated + goldens), Low tier without the volumetric fog; Metal untested; real-GPU budget on the Mac/device session |
 | 8 | Post completion | SBA-13 | done: GL and SDL GPU (gated + goldens), Low tier without depth of field and motion blur; SSR not taken (optional); Metal untested; real-GPU budget on the Mac/device session |
-| 9 | Scale (GPU culling, foliage, decals, GPU particles) | SBA-14 | — |
+| 9 | Scale (GPU culling, foliage, decals, GPU particles) | SBA-14 | done: GL and SDL GPU (gated + goldens), CPU culling fallback without compute; Metal untested; real-GPU budget on the Mac/device session |
 | demo | High-profile sample side by side | SBA-15 | — |
 
 ## Step 1 — compute in the RHI
@@ -526,3 +526,88 @@ step if a real GPU puts it over budget.
 separate near and far layers or bokeh shapes), and the motion blur has no depth test, so a moving object behind a
 still one can smear over its edge. Metal is untested; Metal pixels and real-GPU numbers belong to the Mac/device
 session.
+
+## Step 9 — scale (GPU culling, instanced foliage, decals, GPU particles)
+
+**API.** `Scene3D::add_batch(InstanceBatch)`: many copies of one rigid mesh (`transforms`, kept alive until the
+scene is drawn; `id` stable, `version` bumped when the matrices change), with `tint`, a `material` override,
+`cast_shadows`, `cull_distance` and a foliage wind (`wind_amplitude` × h² metres sideways, h the height above
+the copy's origin, at `wind_frequency` Hz along `wind_direction`, a phase that varies over the ground).
+`scatter_foliage(FoliageScatter)` fills a jittered, shuffled grid of yawed and scaled matrices (deterministic
+in `seed`). `InstanceCulling` picks the GPU path (`gpu`, `-r.gpu_culling 0`) and its occlusion test
+(`occlusion`, `occluder_divisor`, `-r.occlusion 0`). `Scene3D::add_decal(Decal)` projects a texture (or a plain
+color) down a box; `Scene3D::add_particle_emitter(ParticleEmitter)` simulates sprites on the GPU.
+`Scene3D::set_time(seconds, dt)` is the clock of the wind and the particles. Kit: `Foliage3D` (scatters at the
+entity and re-scatters when its inputs change), `Decal3D` (`size` metres at the entity's transform) and
+`ParticleEmitter3D` (bump `burst_version` for a burst); the extract runs the clock on the frame dt.
+04_cubes: `-foliage <count>`, `-decals 1`, `-particles 1`. With none of them used, the frame is bit-identical.
+
+**RHI.** `CommandBuffer::draw_indirect_buffer(buffer, offset, count)`: indexed draws whose commands a dispatch
+wrote (GL `glMultiDrawElementsIndirect`, SDL GPU `SDL_DrawGPUIndexedPrimitivesIndirect`, Metal one indirect
+draw per record). Gated on GL and SDL GPU by a compute pass that writes the commands.
+
+**Culling.** The batches' matrices live in a storage buffer per batch id, uploaded when the version, count or
+mesh changes. Every (view, batch) gets one indirect command per (LOD level, submesh) and a visible list per
+level; the views are the main view and each shadow cascade (when a batch casts shadows). A compute pass resets
+the commands from a template, then one dispatch per (view, batch) tests each instance's bounding sphere against
+the view's planes, the cull distance and, in the main view, the depth pyramid; a survivor takes a slot in its
+level's list with an atomic add on that level's commands. The instanced shaders read
+`i_world[i_visible[slot + gl_InstanceID]]`. The level is the per-instance pick of `MeshInstance` (screen-space
+error from the main camera, `shadow_bias` coarser in the cascades) without the hysteresis. Without compute,
+the same tests minus the pyramid run on the CPU (`cull_batch`) and each list draws instanced: the same frame.
+
+**Occlusion.** The frame's rigid, opaque, non-masked draws render their view depth into an RGBA32F target at
+1/`occluder_divisor` of the frame (cleared far); four compute reductions (4 × 4 each, the farthest depth) make
+a five-level pyramid. An instance is hidden when the nearest point of its sphere lies behind the farthest
+occluder depth over its screen rectangle, read at the level where the rectangle spans at most two texels. The
+cascades are not tested (a hidden copy still casts its shadow).
+
+**Decals.** In the lit pass (`kMeshFS`), before lighting: up to 64 records (inverse box matrix, uv rect, color,
+roughness / metallic / material weight / emissive, fades) in a storage buffer and up to three textures; a
+surface point inside a box takes the decal's color by its coverage × opacity × the angle and edge fades, and its
+roughness and metallic by the material weight; emissive decals add light. Derivatives are taken outside the
+loop (`textureGrad`), so the texture filters cleanly at the box edges. `Scene3D::build` culls them against the
+view and drops what is past 64 or past three distinct textures (stats). Probe and GI captures take no decals.
+
+**Particles.** One ring buffer per emitter id (two vec4 per particle), kept across frames. A dispatch per
+emitter spawns this frame's new particles into ring slots [cursor, cursor + n) from a hash of (seed, particles
+spawned so far, slot) and moves every live one (gravity, drag, an optional bounce off a ground plane). They draw
+after the blended draws as camera-facing quads (six vertices per particle, the dead ones collapsed), additive
+or premultiplied alpha, depth tested without writing, unsorted and unlit.
+
+**Gates.** `render3d_scale` (test_render_gl), on GL and SDL GPU:
+- Batches, decals and particles off draw today's frame; after frames with all three the frame matches it again (0 pixels differ).
+- GPU-culled batches draw the CPU path's frame exactly (0 pixels differ); both keep the 40 copies in view and drop the 5 behind the camera; a batch's shadows change the frame.
+- Occlusion: of 18 copies, the 9 behind a wall are dropped (18 → 9 visible), the frame is unchanged and the cascades still draw all of them.
+- Wind: with an amplitude the frame changes over time; without one the clock changes nothing.
+- A decal turns the ground under it blue and leaves the ground outside unchanged, one behind the camera is culled; an emissive decal glows in a shadow.
+- A burst of 200 particles glows (additive HDR) and survives into the next frame; an emitter not added frees its ring.
+
+Headless (`test_render`): `scatter_foliage` is deterministic, inside its rectangle, upright and spread out;
+`cull_batch` keeps the frustum and the cull distance and matches `batch_lod`; `Scene3D` counts batches, culled and
+dropped decals and clamps an emitter. Kit (`test_kit`): the three components become a batch, decals and an
+emitter; a changed seed re-scatters under a new version; a bumped `burst_version` bursts once.
+Goldens `scale_foliage_decal` and `particles_burst` on linux-gl and linux-sdlgpu; the earlier goldens are
+unchanged.
+
+**Budget (04_cubes, 64 point lights, 1280×720, 60 frames, debug build, Mesa llvmpipe; relative only):**
+
+| | off | `-foliage 20000` | ... `-r.occlusion 0` | ... `-r.gpu_culling 0` | `-decals 1` | `-particles 1` |
+|---|---|---|---|---|---|---|
+| scene build, CPU (ms) | 0.46 | 7.79 | 7.76 | 7.92 | 0.40 | 0.35 |
+| scale stage: occluders + pyramid + culling + particles (ms) | 0 | 13.5 | 3.7 | 0 | 0 | 1.8 |
+| shadows (ms) | 23.5 | 168.4 | 170.9 | 164.6 | 21.0 | 21.3 |
+| main pass (ms) | 196.4 | 713.6 | 793.7 | 759.6 | 196.4 | 186.1 |
+| GPU 3D frame total (ms) | 289.5 | 969.2 | 1042.1 | 997.1 | 282.5 | 271.6 |
+
+The 20000 pebbles are textured panel cubes (12 triangles each) under three cascades, so the shadow and main
+passes dominate on a software rasterizer. The depth pyramid costs about 10 ms and saves about 80 ms of main
+pass here (the panel cubes and the orrery hide some of the scatter). The extra 7.3 ms of scene build is the batch's
+bounds pass over 20000 matrices in a debug build; a caller that knows its bounds sets `InstanceBatch::bounds`
+and skips it. Decals and the 4096-particle fountain are within the run-to-run noise of llvmpipe.
+
+**Limits.** Batches are rigid (skinned meshes are skipped) and do not appear in local-light shadows,
+reflection probes or the GI volume; LOD has no hysteresis per copy. Decals have no normal maps, at most three
+textures a frame, and also cover the copies of batches inside them. Particles are unsorted and unlit, take no
+collision but a ground plane and no shadows. Metal is untested; Metal pixels and real-GPU numbers belong to the
+Mac/device session.

@@ -139,6 +139,7 @@ TEST_CASE("rhi: draw args and indirect draws round-trip") {
     cb.begin_pass(pass);
     cb.set_draw_args(Span<const DrawIndexedIndirectCommand>(cmds));
     cb.draw_indirect(2, 1);
+    cb.draw_indirect_buffer(BufferHandle{}, 40, 3);
     cb.end_pass();
 
     const CmdHeader* h = nullptr;
@@ -163,6 +164,11 @@ TEST_CASE("rhi: draw args and indirect draws round-trip") {
     CHECK(static_cast<const cmd::DrawIndirect*>(p)->first_command == 1);
     CHECK(static_cast<const cmd::DrawIndirect*>(p)->draw_count == 2);
     CHECK(std::string_view(cmd_type_name(CmdType::DrawIndirect)) == "DrawIndirect");
+    REQUIRE(r.next(h, p));
+    REQUIRE(h->type == CmdType::DrawIndirectBuffer);
+    CHECK(static_cast<const cmd::DrawIndirectBuffer*>(p)->offset == 40);
+    CHECK(static_cast<const cmd::DrawIndirectBuffer*>(p)->draw_count == 3);
+    CHECK(std::string_view(cmd_type_name(CmdType::DrawIndirectBuffer)) == "DrawIndirectBuffer");
 }
 
 TEST_CASE("rhi: resolve records outside a pass; the uniform bank range covers kObject") {
