@@ -138,6 +138,8 @@ void Scene3D::begin(const Camera3D& camera, rhi::Extent2D viewport) {
     probe_draws_.clear();
     probes_.clear();
     gi_ = {};
+    atmosphere_ = {};
+    volumetrics_ = {};
     joint_palette_.clear();
     point_lights_.clear();
     clusters_.clear();
@@ -209,6 +211,20 @@ void Scene3D::build() {
     app::IClock& clock = app::steady_clock();
     const f64 t_begin = clock.now_seconds();
     stats_.instances = static_cast<u32>(instances_.size());
+    if (atmosphere_.enabled) {
+        // The light above the air, then through it; the ambient from the sky and the lit ground.
+        const vec3 sun = atmosphere_quantized_sun(atmosphere_, -normalize(light_.direction));
+        const vec3 above = light_.color * light_.intensity;
+        atmosphere_sun_ = sun;
+        sun_irradiance_ = above * math::kPi;
+        const vec3 t = atmosphere_transmittance(atmosphere_, atmosphere_.altitude, sun);
+        if (atmosphere_.sun_transmittance) light_.color = light_.color * t;
+        if (atmosphere_.ambient) {
+            const vec3 sky = atmosphere_sky_ambient(atmosphere_, sun) * sun_irradiance_;
+            light_.ambient_sky = sky;
+            light_.ambient_ground = atmosphere_.ground_albedo * (above * t * max(sun.y, 0.0f) + sky);
+        }
+    }
     const vec3 forward = view_.forward;
     bool any = false;
     bool local_wanted = false;  // a light asks for a local shadow: casters are collected without the sun's

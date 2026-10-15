@@ -20,9 +20,12 @@ QualitySettings quality_settings(QualityTier tier) {
         case QualityTier::Low:
             q = QualitySettings{1, 1024, 1, false, true, 0.67f};
             q.gi_updates = false;
+            q.volumetrics = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
+            q.volumetric_tile = 16;
+            q.volumetric_slices = 48;
             break;
         case QualityTier::High:
             q.fxaa = false;
@@ -68,5 +71,11 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
 }
 
 void apply_quality(const QualitySettings& q, GiVolume& gi) { gi.updates = gi.updates && q.gi_updates; }
+
+void apply_quality(const QualitySettings& q, Volumetrics& v) {
+    v.enabled = v.enabled && q.volumetrics;
+    v.tile = v.tile > q.volumetric_tile ? v.tile : q.volumetric_tile;
+    v.slices = v.slices < q.volumetric_slices ? v.slices : q.volumetric_slices;
+}
 
 }  // namespace mce::render

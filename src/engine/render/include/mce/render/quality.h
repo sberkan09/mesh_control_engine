@@ -3,10 +3,10 @@
 // the same scene as a desktop at a frame budget it holds. `r.quality` picks the tier (auto = Medium
 // on Android/iOS, High elsewhere); hosts apply it when they set up Forward3D and each Scene3D.
 //
-//   tier     MSAA  shadow map  cascades  bloom  AA    render scale  GI volume (M-VISUAL 6)
-//   Low      1x    1024        1         off    FXAA  0.67          the bake only (none without one)
-//   Medium   2x    1024        2         on     -     0.85          runtime updates
-//   High     4x    2048        3         on     TAA   1.0           runtime updates
+//   tier     MSAA  shadow map  cascades  bloom  AA    render scale  GI volume (M-VISUAL 6)                volumetric fog (7)
+//   Low      1x    1024        1         off    FXAA  0.67          the bake only (none without one)     off (exp² fog)
+//   Medium   2x    1024        2         on     -     0.85          runtime updates                      16 px, 48 slices
+//   High     4x    2048        3         on     TAA   1.0           runtime updates                      8 px, 64 slices
 //   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High)
 //
 // Render scale shrinks the 3D targets (HDR, depth, bloom chain); the tonemap/FXAA pass upsamples
@@ -28,6 +28,9 @@ struct QualitySettings {
     f32 render_scale = 1.0f;
     bool taa = false;  // PostFx::taa (replaces FXAA where both are on)
     bool gi_updates = true;  // GiVolume::updates: the irradiance volume is captured at runtime
+    bool volumetrics = true;     // Volumetrics::enabled is honored (off: the exp² fog)
+    u32 volumetric_tile = 8;     // Volumetrics::tile, at least
+    u32 volumetric_slices = 64;  // Volumetrics::slices, at most
 };
 
 QualitySettings quality_settings(QualityTier tier);
@@ -41,5 +44,7 @@ void apply_quality(const QualitySettings& q, Forward3DDesc& desc);
 void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& post);
 // The irradiance volume's runtime updates (a scene that turned them off keeps them off).
 void apply_quality(const QualitySettings& q, GiVolume& gi);
+// Volumetric fog: off on Low; the froxel grid no finer than the tier's (a scene's coarser grid stays).
+void apply_quality(const QualitySettings& q, Volumetrics& v);
 
 }  // namespace mce::render

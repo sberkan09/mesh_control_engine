@@ -254,6 +254,7 @@ inline constexpr u32 kIblBrdfLut = 14; // 3D image-based lighting: split-sum BRD
 inline constexpr u32 kIblSh = 15;      // 3D image-based lighting: SH9 irradiance (9×1)
 inline constexpr u32 kAo = 11;         // 3D screen-space ambient occlusion (M-VISUAL 3); shares the slot with the font
 inline constexpr u32 kGiVolume = 5;    // 3D irradiance volume (M-VISUAL 6): 4 texels per probe
+inline constexpr u32 kVolumetrics = 4; // 3D volumetric fog (M-VISUAL 7): the integrated froxel atlas
 // std430 storage bindings (their own namespace in GL, independent of the sampler units above).
 inline constexpr u32 kClusters = 4;     // Forward+ per-cluster {offset, count}
 inline constexpr u32 kLightPool = 5;    // point lights

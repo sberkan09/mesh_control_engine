@@ -261,7 +261,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
         });
     }
     render::DirectionalLight sun;
-    sun.direction = env.sun_direction;
+    sun.direction = env.time_of_day >= 0.0f ? render::sun_direction_at(env.time_of_day) : env.sun_direction;
     sun.color = env.sun_color;
     sun.intensity = env.sun_intensity;
     sun.ambient_sky = env.ambient_sky;
@@ -287,6 +287,20 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     fog.color = env.fog_color;
     fog.density = env.fog_density;
     scene.set_fog(fog);
+    render::Atmosphere atmosphere;
+    atmosphere.enabled = env.atmosphere != 0;
+    atmosphere.intensity = env.atmosphere_intensity;
+    atmosphere.mie = env.atmosphere_haze;
+    scene.set_atmosphere(atmosphere);
+    render::Volumetrics vol;
+    vol.enabled = env.volumetric_fog != 0;
+    vol.density = env.volumetric_density;
+    vol.height_falloff = env.volumetric_height_falloff;
+    vol.anisotropy = env.volumetric_anisotropy;
+    vol.albedo = env.volumetric_albedo;
+    vol.max_distance = env.volumetric_distance;
+    render::apply_quality(quality_, vol);
+    scene.set_volumetrics(vol);
     scene.set_exposure(env.exposure);
     render::PostFx post;
     post.bloom = env.bloom != 0 && quality_.bloom;
