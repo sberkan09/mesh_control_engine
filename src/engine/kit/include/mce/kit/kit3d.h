@@ -390,6 +390,15 @@ MCE_COMPONENT(Terrain3D, (terrain, Help{"a .mcterrain"}), (material, Help{"a .mc
               (pixel_error, Range{0, 64}, Help{"LOD screen error in pixels; 0 = the quality tier's"}),
               (uv_tile, Range{0, 10000}, Help{"metres per texture repeat; 0 = once over the terrain"}), cast_shadows, enabled)
 
+// A static height-field collider for the entity's Terrain3D, built at Startup (and for runtime-spawned
+// terrains) under the entity's transform. It collides with the same triangles the terrain draws at full
+// resolution, and the terrain's holes (cave mouths, tunnels) cut it like they cut the drawn surface.
+struct TerrainCollider3D {
+    f32 friction = 0.8f;
+    u32 layer = 0;
+};
+MCE_COMPONENT(TerrainCollider3D, (friction, Range{0, 2}), (layer, Range{0, 15}))
+
 // A projected decal: `texture` (rgb color, a coverage; empty = plain `color`) projected down the
 // entity's local -Y onto every opaque surface inside the box of `size` metres (x, projection depth y, z)
 // at the entity's transform. It recolors the surface (and sets its roughness and metallic by
@@ -497,7 +506,7 @@ struct StaticInstances3D {
 // resources (each kept if already set: a game sets Physics3D first for its own PhysicsConfig3D)
 // and adds the systems:
 //   Startup              "kit3d_environment"  the scene's Environment3D component, if any, into the resource
-//   Startup              "kit3d_colliders"    BoxCollider3D / MeshCollider3D bodies (after the environment)
+//   Startup              "kit3d_colliders"    BoxCollider3D / MeshCollider3D / TerrainCollider3D bodies (after the environment)
 //   FixedUpdate_Physics  "kit3d_physics"      Physics3D::world.step when auto_step
 //   FixedUpdate_Post     "kit3d_animators"    Animator time, cross-fades, graphs and events (anim3d.h)
 //   FixedUpdate_Post     "kit3d_attach"       AttachToBone poses (after the animators)

@@ -4,8 +4,10 @@
 #include "mce/input/actions.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/components.h"
+#include "mce/kit/captions.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/joints3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
@@ -51,6 +53,7 @@ void kit_ui_flow(Frame& f) {
         if (screen.visible && pressed(in, flow.hide_on)) screen.visible = false;
         else if (!screen.visible && pressed(in, flow.show_on)) screen.visible = true;
         if (!flow.scene.guid.is_null() && pressed(in, flow.load_on) && load.is_null()) load = flow.scene.guid;
+        if (pressed(in, flow.quit_on)) scene::request_quit(f.world());
         hold = hold || (screen.visible && flow.pause);
     });
     if (!load.is_null()) {
@@ -84,10 +87,12 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_kit3d(world, assets);
     install_bodies3d(world, assets);
     install_nav3d(world, assets);
+    install_joints3d(world, assets);
     install_world_settings(world);
     install_ui_flow(world);
     install_effects(world, assets);
     install_sprite_animation(world, assets);
+    install_captions(world);  // after kit_effects: this tick's SfxTrigger plays are captioned
 }
 
 }  // namespace mce::kit

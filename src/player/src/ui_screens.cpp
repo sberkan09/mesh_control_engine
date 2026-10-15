@@ -129,6 +129,13 @@ bool UiScreens::modal_visible() const {
     return false;
 }
 
+const ui::Document* UiScreens::focus_document() const {
+    const ui::Document* top = nullptr;
+    for (const Screen& s : screens_)
+        if (s.visible && s.modal && s.doc) top = s.doc;
+    return top;
+}
+
 void UiScreens::update(World& world, const ui::UpdateContext& ctx) {
     // Pointer and focus go to the topmost visible modal only; a HUD below it still updates its bindings.
     const Screen* top_modal = nullptr;

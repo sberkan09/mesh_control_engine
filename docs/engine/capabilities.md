@@ -22,6 +22,7 @@ reach all of its non-transient fields.
 | `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `CharacterController3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
+| `SoundCaption` | `mce/kit/captions.h` | yes | yes | yes | docs/user-guide/10-audio.md |
 | `Sprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/03-editor.md |
 | `AnimatedSprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `TextLabel` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
@@ -44,6 +45,7 @@ reach all of its non-transient fields.
 | `CameraFollow3D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
+| `Joint3D` | `mce/kit/joints3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `MeshRef` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `PointLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `SpotLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
@@ -55,7 +57,8 @@ reach all of its non-transient fields.
 | `BoxCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `MeshCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Foliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
-| `Terrain3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md |
+| `Terrain3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/03-editor.md |
+| `TerrainCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `NavMeshSurface3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
@@ -97,10 +100,10 @@ reach all of its non-transient fields.
 | RemoteConfig | `.mcconfig` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/14-mcp-ai-workflow.md |
 | GameServicesCatalog | `.mcservices` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/14-mcp-ai-workflow.md |
 | SpriteSheet | `.mcsheet` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
-| AnimGraph | `.mcanim` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
+| AnimGraph | `.mcanim` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/03-editor.md |
 | UiDocument | `.mcui` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/03-editor.md |
 | UiTheme | `.mcuitheme` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/12-ui-and-console.md |
-| Terrain | `.mcterrain` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
+| Terrain | `.mcterrain` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/03-editor.md |
 | NavMesh | .mcnav (the editor's Bake navmesh) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/09-physics.md |
 
 ## MCP tools

@@ -1,4 +1,4 @@
-mce_add_test(test_ui SOURCES test_ui.cpp test_options_panel.cpp DEPS mce::mce_ui)
+mce_add_test(test_ui SOURCES test_ui.cpp test_options_panel.cpp test_subtitles.cpp test_access.cpp DEPS mce::mce_ui)
 mce_add_test(test_ui_layout SOURCES test_ui_layout.cpp DEPS mce::mce_ui)
 
 # The menu through the real 2D path (GL 4.5; CI: Xvfb + llvmpipe). Always builds; registers with MCE_GPU_TESTS.

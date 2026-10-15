@@ -112,17 +112,21 @@ TEST_CASE("module: unloading drops the module's reflected types even when its im
     // may keep a C++ module mapped after unload (its registrars then never run their destructors),
     // so the host drops what the module registered. A second handle on the copy keeps it mapped here.
     const StringId id("ModuleOnly");
+    const StringId cvar("test.module_only_cvar");
     REQUIRE(refl::find_type(id) == nullptr);
     Result<LoadedModule> r = open_game_module(MODTEST_GOOD);
     REQUIRE(r.has_value());
     LoadedModule mod = r.value();
     CHECK(refl::find_type(id) != nullptr);
+    CHECK(ConVar::find(cvar) != nullptr);
     Result<void*> pin = platform::load_library(mod.loaded_path);
     REQUIRE(pin.has_value());
     unload_game_module(mod);
     CHECK(refl::find_type(id) == nullptr);
+    CHECK(ConVar::find(cvar) == nullptr);  // and its convars (SBA-61: console_list showed each once per rebuild)
     platform::unload_library(pin.value());
     CHECK(refl::find_type(id) == nullptr);
+    CHECK(ConVar::find(cvar) == nullptr);
 }
 
 TEST_CASE("module: two live copies of one module map distinct images") {
@@ -142,8 +146,14 @@ TEST_CASE("module: two live copies of one module map distinct images") {
         run_ticks(b, 7);
         CHECK(total_hp(a) == static_cast<i32>(kSpawned) * (kStartHp - 5));
         CHECK(total_hp(b) == static_cast<i32>(kSpawned) * (kStartHp - 7));
+        Array<ConVar*> vars;  // both copies define it: the console lists the newest once
+        ConVar::collect(vars);
+        u32 listed = 0;
+        for (const ConVar* v : vars) listed += StringView(v->name()) == "test.module_only_cvar" ? 1u : 0u;
+        CHECK(listed == 1);
     }
     unload_game_module(ma);
+    CHECK(ConVar::find(StringId("test.module_only_cvar")) != nullptr);  // the live copy's
     unload_game_module(mb);
 }
 

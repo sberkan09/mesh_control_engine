@@ -140,6 +140,7 @@ struct UiFlow {
     FixedString<32> show_on;
     FixedString<32> hide_on;
     FixedString<32> load_on;
+    FixedString<32> quit_on;
     bool pause = false;
     u8 pad_[3] = {};
 };
@@ -147,6 +148,7 @@ MCE_COMPONENT(UiFlow, (scene, Help{"the scene load_on loads (null: none)"}),
               (show_on, Help{"an input action that shows this screen, e.g. Pause"}),
               (hide_on, Help{"an input action that hides it, e.g. Resume"}),
               (load_on, Help{"an input action that loads 'scene', e.g. Restart"}),
+              (quit_on, Help{"an input action that ends the game (scene::request_quit), e.g. Quit"}),
               (pause, Help{"hold the game (systems, physics, audio) while this screen is visible"}))
 
 // The view a player renders from: the first `primary` camera in ECS order, at its entity's

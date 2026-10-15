@@ -701,8 +701,124 @@ bool cook_run(ToolCall& c) {
     return true;
 }
 
-// Deletes a source file under assets/ with its .mceasset sidecar (the GUID registry entry); the
-// catalog is rescanned. The open scene's own file is refused. The next cook drops its outputs.
+// CREDITS.md without `rel` (under assets/): a row that names only it goes, a row that names several
+// files loses its name (the next one takes the folder when it was the first). False: nothing named it.
+// `row`: the line that named it.
+bool drop_credit(StringView text, StringView rel, cook::String& out, cook::String* row = nullptr) {
+    bool changed = false;
+    for (usize at = 0; at < text.size();) {
+        usize end = text.find('\n', at);
+        const bool last = end == StringView::npos;
+        if (last) end = text.size();
+        const StringView line = text.substr(at, end - at);
+        at = end + 1;
+        auto keep = [&](StringView l) {
+            out += l;
+            if (!last) out += '\n';
+        };
+        const usize cell_end = line.empty() || line[0] != '|' ? StringView::npos : line.find('|', 1);
+        if (cell_end == StringView::npos) {
+            keep(line);
+            continue;
+        }
+        // The first cell's names, resolved like project_check reads them: bare names share the folder before.
+        const StringView cell = line.substr(1, cell_end - 1);
+        Array<cook::String> names;
+        cook::String dir;
+        usize hit = ~usize(0);
+        for (usize t = cell.find('`'); t != StringView::npos; t = cell.find('`', t + 1)) {
+            const usize close = cell.find('`', t + 1);
+            if (close == StringView::npos) break;
+            StringView tok = cell.substr(t + 1, close - t - 1);
+            t = close;
+            cook::String name;
+            if (tok.size() > 7 && tok.substr(0, 7) == "assets/") {
+                name = cook::String(tok.substr(7));
+                const usize slash = name.view().rfind('/');
+                dir = cook::String(slash == StringView::npos ? StringView() : name.view().substr(0, slash + 1));
+            } else {
+                name = dir;
+                name += tok;
+            }
+            if (name.view() == rel) hit = names.size();
+            names.push_back(name);
+        }
+        if (hit == ~usize(0)) {
+            keep(line);
+            continue;
+        }
+        changed = true;
+        if (row) *row = cook::String(line);
+        if (names.size() == 1) continue;  // the row was this file's alone
+        cook::String l("| ");
+        cook::String first_dir;
+        bool first = true;
+        for (usize i = 0; i < names.size(); ++i) {
+            if (i == hit) continue;
+            const StringView n = names[i].view();
+            const usize slash = n.rfind('/');
+            const StringView d = slash == StringView::npos ? StringView() : n.substr(0, slash + 1);
+            if (!first) l += ", ";
+            l += '`';
+            if (first || d != first_dir.view()) {
+                l += "assets/";
+                l += n;
+            } else {
+                l += n.substr(d.size());
+            }
+            l += '`';
+            if (first) first_dir = cook::String(d);
+            first = false;
+        }
+        l += ' ';
+        l += line.substr(cell_end);
+        keep(l.view());
+    }
+    return changed;
+}
+
+// A deleted font's license text beside it: the `*.txt` its CREDITS.md row names in the license cell
+// (library_add writes "SIL OFL 1.1 (`CrimsonPro-OFL.txt`)") when no row left names it, else
+// <family>-OFL.txt when no other font of that family is left.
+cook::String orphan_font_license(const editor::EditorProject& project, StringView rel, StringView row, StringView credits_left) {
+    const cook::String ext = cook::lower_extension(rel);
+    if (ext.view() != ".ttf" && ext.view() != ".otf") return {};
+    const usize slash = rel.rfind('/');
+    const StringView dir = slash == StringView::npos ? StringView() : rel.substr(0, slash + 1);
+    const usize cell = row.empty() ? StringView::npos : row.find('|', 1);
+    for (usize t = cell == StringView::npos ? StringView::npos : row.find('`', cell); t != StringView::npos; t = row.find('`', t + 1)) {
+        const usize close = row.find('`', t + 1);
+        if (close == StringView::npos) break;
+        const StringView name = row.substr(t + 1, close - t - 1);
+        t = close;
+        if (name.find('/') != StringView::npos || cook::lower_extension(name).view() != ".txt") continue;
+        const StringView quoted = row.substr(t - name.size() - 1, name.size() + 2);
+        if (credits_left.find(quoted) != StringView::npos) return {};  // another font's row still names it
+        cook::String lic(dir);
+        lic += name;
+        return cook::fs::exists(project.asset_path(lic.view()).view()) ? lic : cook::String();
+    }
+    const StringView stem = rel.substr(dir.size(), rel.size() - dir.size() - ext.size());
+    const StringView family = stem.substr(0, stem.find('-') == StringView::npos ? stem.size() : stem.find('-'));
+    cook::String lic(dir);
+    lic += family;
+    lic += "-OFL.txt";
+    if (family.empty() || !cook::fs::exists(project.asset_path(lic.view()).view())) return {};
+    Array<cook::String> files;
+    (void)cook::fs::list_files(project.asset_path(dir.empty() ? StringView(".") : dir).view(), files);
+    for (const cook::String& f : files) {
+        const StringView n = f.view();
+        const cook::String fe = cook::lower_extension(n);
+        if (n.find('/') != StringView::npos || (fe.view() != ".ttf" && fe.view() != ".otf")) continue;
+        if (n.size() > family.size() && n.substr(0, family.size()) == family && (n[family.size()] == '-' || n[family.size()] == '.'))
+            return {};  // another weight of the family still needs it
+    }
+    return lic;
+}
+
+// Deletes a source file under assets/ with its .mceasset sidecar (the GUID registry entry), its
+// CREDITS.md row and, for the last font of a family, the license text beside it; the catalog is
+// rescanned. The open scene's own file is refused. The next cook drops its outputs.
 bool asset_delete(ToolCall& c) {
     StringView rel;
     if (!need_project(c) || !arg_string(c, "path", rel, true)) return false;
@@ -719,8 +835,27 @@ bool asset_delete(ToolCall& c) {
     const bool had_sidecar = cook::fs::exists(sidecar.view());
     if (!cook::fs::remove(abs.view())) return fail(c, "the file could not be deleted");
     if (had_sidecar) cook::fs::remove(sidecar.view());
+    const cook::String credits_path = cook::path_join(project.root(), "CREDITS.md");
+    cook::String credits, rest, row;
+    bool credited = cook::fs::read_text(credits_path.view(), credits) && drop_credit(credits.view(), rel, rest, &row);
+    cook::String license = orphan_font_license(project, rel, row.view(), credited ? rest.view() : credits.view());
+    if (!license.empty() && cook::fs::remove(project.asset_path(license.view()).view())) {
+        cook::String lic_sidecar = project.asset_path(license.view());
+        lic_sidecar += ".mceasset";
+        cook::fs::remove(lic_sidecar.view());
+    } else {
+        license = cook::String();
+    }
+    if (credited && !license.empty()) {
+        cook::String again;
+        if (drop_credit(rest.view(), license.view(), again)) rest = again;
+    }
+    if (credited && !cook::fs::write_file_atomic(credits_path.view(), Span<const byte>(reinterpret_cast<const byte*>(rest.c_str()), rest.size())))
+        credited = false;
     project.rescan();
-    c.out.begin_object().key("deleted").str(rel).key("sidecar").boolean(had_sidecar).end_object();
+    c.out.begin_object().key("deleted").str(rel).key("sidecar").boolean(had_sidecar).key("credit_removed").boolean(credited);
+    if (!license.empty()) c.out.key("license_removed").str(license.view());
+    c.out.end_object();
     return true;
 }
 
@@ -892,6 +1027,27 @@ void inspect_run(const World& world, Span<const Entity> spawned, void* user) {
 // segments {"from": tick, "to": tick, "actions": {"Move": [1, 0], "Jump": true, "Fire": 1}}.
 bool arg_input(ToolCall& c, input::InputScript& script) { return input_from(c, arg(c, "input"), script); }
 
+bool arg_convars(ToolCall& c, ConvarArgs& out) {
+    const cook::JsonValue v = arg(c, "convars");
+    if (!v.valid()) return true;
+    if (!v.is_object()) return arg_missing(c, "convars", "an object: convar name -> a number, true/false or a string");
+    for (u32 i = 0; i < v.size(); ++i) {
+        const StringView name = v.key_at(i);
+        bool ok = !name.empty() && name.size() < 64;
+        for (char ch : name) ok = ok && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '.' || ch == '_');
+        if (!ok) return arg_missing(c, "convars keys", "convar names (letters, digits, '.' and '_'; console_list lists them)");
+        const cook::JsonValue val = v.at(i);
+        cook::String text;
+        if (val.is_bool()) text = val.as_bool() ? "1" : "0";
+        else if (val.is_number()) cook::appendf(text, "%g", val.as_number());
+        else if (val.is_string()) text = val.as_string();
+        else return arg_missing(c, "convars values", "a number, true/false or a string");
+        out.names.push_back(cook::String(name));
+        out.values.push_back(std::move(text));
+    }
+    return true;
+}
+
 bool input_from(ToolCall& c, const cook::JsonValue& v, input::InputScript& script) {
     if (!v.valid()) return true;
     if (v.is_string()) {
@@ -926,7 +1082,15 @@ bool input_from(ToolCall& c, const cook::JsonValue& v, input::InputScript& scrip
                 x = static_cast<f32>(val.at(0).as_number());
                 y = static_cast<f32>(val.at(1).as_number());
             } else return arg_missing(c, "input[].actions values", "true/false, a number, or [x, y]");
-            if (!script.add(actions.key_at(a), f, t, x, y)) return arg_missing(c, "input[].actions keys", "action names of 1-31 characters");
+            input::ScriptSegment sg;  // a number holds the action whatever it is (0 too), as "Action=0" does
+            sg.from = f;
+            sg.to = t;
+            sg.name.assign(actions.key_at(a));
+            sg.x = x;
+            sg.y = y;
+            sg.held = !(val.is_bool() && !val.as_bool());
+            if (sg.name.truncated() || !script.add(sg))
+                return arg_missing(c, "input[].actions keys", "action names of 1-31 characters");
         }
     }
     return true;
@@ -941,7 +1105,27 @@ bool run_headless_tool(ToolCall& c) {
         !arg_uint(c, "log_lines", log_lines, 0, kMaxLogLines, false))
         return false;
     input::InputScript script;
-    if (!arg_input(c, script)) return false;
+    ConvarArgs convars;
+    if (!arg_input(c, script) || !arg_convars(c, convars)) return false;
+    // The run happens in this process: set them for the run and put the old values back after.
+    struct Restore {
+        Array<ConVar*> vars;
+        Array<cook::String> old;
+        ~Restore() {
+            for (usize i = 0; i < vars.size(); ++i) (void)vars[i]->set_from_string(old[i].view(), true);
+        }
+    } restore;
+    for (usize i = 0; i < convars.names.size(); ++i) {
+        ConVar* v = ConVar::find(StringId(convars.names[i].view()));
+        if (!v) return fail(c, "argument 'convars': no convar of that name here (console_list lists them)");
+        FixedString<128> was;
+        v->to_string(was);
+        if (was.truncated()) return fail(c, "argument 'convars': that convar's value is too long to put back after the run");
+        if (!v->set_from_string(convars.values[i].view(), true))
+            return fail(c, "argument 'convars': a value its convar does not take");
+        restore.vars.push_back(v);
+        restore.old.push_back(cook::String(was.view()));
+    }
     if (script.last_tick() > ticks)
         MCE_LOG_WARN("run_headless: the input script reaches tick {} but the run is {} ticks", script.last_tick(), ticks);
     // The scene to play: the open one (saved), or another saved scene of the project by path.
@@ -1210,7 +1394,8 @@ const ToolDef kTools[] = {
      R"({"type":"object","properties":{"pack":{"type":"boolean","default":false},"adopt":{"type":"boolean","default":false}}})",
      cook_run},
     {"cook_errors", "Diagnostics of the last cook (file, line, col, stage, message).", kNoArgs, cook_errors},
-    {"asset_delete", "Delete a source file under assets/ together with its .mceasset sidecar (not the open scene). The catalog is rescanned.",
+    {"asset_delete", "Delete a source file under assets/ together with its .mceasset sidecar and its CREDITS.md row (a font's "
+                     "license text too when no other font of its family is left; not the open scene). The catalog is rescanned.",
      R"({"type":"object","properties":{"path":{"type":"string","description":"Path under assets/, e.g. scenes/try2.mcscene"}},"required":["path"]})",
      asset_delete},
     {"run_headless",
@@ -1223,7 +1408,7 @@ const ToolDef kTools[] = {
      "live component values (Transient runtime fields included) of scene entities by id and/or of every entity with a "
      "component (at most 64); show picks the components to print. trace: component fields of scene entities every N ticks, "
      "as series (how a value moved over the run, not only where it ended).",
-     R"json({"type":"object","properties":{"scene":{"type":"string","description":"Play this saved scene (path under assets/) instead of the open one; inspect then takes 'component' only"},"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20},"input":{"description":"Either a script string, one segment per line: \"<from>[-<to>] Action[=value] ...\" (e.g. \"10-70 Move=1,0 Jump\\n100 Fire\"), or an array of segments","type":["string","array"],"items":{"type":"object","properties":{"from":{"type":"integer","minimum":1,"description":"First tick (1-based)"},"to":{"type":"integer","description":"Last tick, inclusive (default: from)"},"actions":{"type":"object","description":"Action name -> true, a number, or [x, y]","additionalProperties":{"type":["boolean","number","array"]}}},"required":["from","actions"]}},"inspect":{"type":"object","properties":{"entities":{"type":"array","items":{"type":["integer","string"]},"description":"Scene entity ids or names"},"component":{"type":"string","description":"Every live entity with this component (also ones the run spawned)"},"show":{"type":"array","items":{"type":"string"},"description":"Components to print (default: the entity's scene components, or the filter component + LocalTransform)"}}},"trace":{"type":"object","description":"Sample fields during the run: {\"every\": ticks (10), \"fields\": [{\"entity\": id or name, \"field\": \"LocalTransform.position.x\"}]} (at most 16 fields, 1000 rows)"}}})json",
+     R"json({"type":"object","properties":{"scene":{"type":"string","description":"Play this saved scene (path under assets/) instead of the open one; inspect then takes 'component' only"},"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"log_lines":{"type":"integer","minimum":0,"maximum":200,"default":20},"convars":{"type":"object","description":"Console variables for this run, name -> value (e.g. {\"lc.quality\": 0}); put back after it"},"input":{"description":"Either a script string, one segment per line: \"<from>[-<to>] Action[=value] ...\" (e.g. \"10-70 Move=1,0 Jump\\n100 Fire\"), or an array of segments","type":["string","array"],"items":{"type":"object","properties":{"from":{"type":"integer","minimum":1,"description":"First tick (1-based)"},"to":{"type":"integer","description":"Last tick, inclusive (default: from)"},"actions":{"type":"object","description":"Action name -> true, a number, or [x, y]","additionalProperties":{"type":["boolean","number","array"]}}},"required":["from","actions"]}},"inspect":{"type":"object","properties":{"entities":{"type":"array","items":{"type":["integer","string"]},"description":"Scene entity ids or names"},"component":{"type":"string","description":"Every live entity with this component (also ones the run spawned)"},"show":{"type":"array","items":{"type":"string"},"description":"Components to print (default: the entity's scene components, or the filter component + LocalTransform)"}}},"trace":{"type":"object","description":"Sample fields during the run: {\"every\": ticks (10), \"fields\": [{\"entity\": id or name, \"field\": \"LocalTransform.position.x\"}]} (at most 16 fields, 1000 rows)"}}})json",
      run_headless_tool},
     {"console_list", "List console variables (type, value, flags, help) and console functions. Optional name prefix.",
      R"({"type":"object","properties":{"prefix":{"type":"string"}}})", console_list},

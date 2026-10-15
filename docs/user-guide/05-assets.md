@@ -173,6 +173,16 @@ ground no rule claims goes to layer 0:
 ]
 ```
 
+`holes` cuts the terrain open (cave mouths, tunnel entrances): base64 of a bit per height sample, sample
+`z * resolution + x` at bit `i % 8` of byte `i / 8`, `(resolution² + 7) / 8` bytes. Every triangle with a
+hole sample as a corner is left out of both the drawn surface and the `TerrainCollider3D` collision, so a
+3 × 3 block of hole samples opens a 4 × 4 m gap at 1 m spacing. An all-zero mask cooks to no holes.
+
+The editor's Terrain panel (chapter 3) sculpts and paints a terrain in place. A stroke writes the file
+back with explicit `heights` (replacing `fill`), plus `splat` once a layer is painted (from then on the
+`auto` rules no longer apply) and `holes` once one is cut; every other key stays as written. Heights
+stay inside `height_range`: widen it first to raise higher or dig deeper.
+
 Give every layer's maps of one kind the same size and import settings: each kind is packed into one
 texture array, and a map that differs from the first layer's is left out with a warning.
 

@@ -166,7 +166,7 @@ private:
         const bool orbit_play = shell.playing() && !shell.view().play_camera && shell.session().play().world() &&
                                 world_is_3d(*shell.session().play().world());
         if ((shell.view().orbit_view && !shell.playing()) || orbit_play) {
-            interact_orbit(shell, hovered, scale);
+            interact_orbit(shell, hovered, scale, mouse);
             return;
         }
         if (hovered && io.MouseWheel != 0.0f) cam.zoom_at(mouse, size_, std::pow(1.15f, io.MouseWheel));
@@ -259,7 +259,7 @@ private:
     // dollies, F frames the colliders (a kit3d scene: through its camera). Inspection only:
     // picking and gizmos stay in the 2D view. Also drives a 3D game's play view when the play
     // camera is off.
-    void interact_orbit(EditorShell& shell, bool hovered, ImVec2 scale) {
+    void interact_orbit(EditorShell& shell, bool hovered, ImVec2 scale, math::vec2 mouse) {
         OrbitCamera& orbit = shell.orbit();
         const ImGuiIO& io = ImGui::GetIO();
         marquee_ = false;
@@ -281,7 +281,8 @@ private:
             }
         }
         if (hovered && io.MouseWheel != 0.0f) orbit.dolly(io.MouseWheel);
-        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) orbiting_ = true;
+        const bool sculpt = !shell.playing() && sculpt_terrain(shell, hovered, mouse);
+        if (!sculpt && hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) orbiting_ = true;
         if (orbiting_) {
             if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) orbit.orbit({io.MouseDelta.x * scale.x, io.MouseDelta.y * scale.y});
             else orbiting_ = false;
@@ -314,6 +315,11 @@ private:
         orbit_wireframe(shell.scene(), view.orbit_depth, segments_, !scene_3d);
         shell.nav_preview().sync(shell.scene(), shell.session().project().mounted());
         shell.nav_preview().segments(segments_);
+        if (brush_hover_ && sculpting(shell)) {
+            shell.terrain().brush_outline(shell.scene(), brush_local_, shell.terrain().brush.radius, rim_);
+            const math::Color c = shell.terrain().in_stroke() ? math::Color{1.0f, 0.75f, 0.3f, 1.0f} : math::Color{1.0f, 1.0f, 1.0f, 0.9f};
+            for (usize i = 0; i + 1 < rim_.size(); ++i) segments_.push_back(Segment3D{rim_[i], rim_[i + 1], c});
+        }
         // Pixels -> the 2D overlay path: a camera with one pixel per metre centred on the viewport.
         EditorCamera2D px_cam;
         px_cam.pixels_per_meter = 1.0f;
@@ -329,6 +335,74 @@ private:
             return;
         }
         shell.preview().record(cmd, empty_, v.target, v.size, px_cam, lines_.span(), math::Color{0.09f, 0.09f, 0.1f, 1.0f});
+    }
+
+    // ---- terrain sculpting (Terrain panel, M-TERRAIN 4) ----
+    // Active in the orbit view when the sculpt toggle is on and the single selected entity has a
+    // Terrain3D. Left drag on the terrain applies the brush each frame (scaled by the frame time;
+    // holes per dab), Ctrl applies the opposite op, Alt leaves the drag to the orbit. The stroke
+    // re-bakes every 0.2 s so the view follows, and once more on release: one undo step.
+    bool sculpting(EditorShell& shell) {
+        EditorScene& scene = shell.scene();
+        if (!shell.view().terrain_sculpt || shell.playing() || scene.selection().items().size() != 1) return false;
+        return shell.terrain().bind(shell.session(), scene.selection().items()[0]);
+    }
+
+    bool sculpt_terrain(EditorShell& shell, bool hovered, math::vec2 mouse) {
+        brush_hover_ = false;
+        TerrainEditor& te = shell.terrain();
+        if (!sculpting(shell)) {
+            if (te.in_stroke()) finish_sculpt(shell);
+            return false;
+        }
+        const ImGuiIO& io = ImGui::GetIO();
+        math::vec3 origin, dir, hit;
+        math::vec2 local;
+        pixel_ray(shell.orbit().camera(), size_, mouse, origin, dir);
+        const bool on = hovered && te.raycast(shell.scene(), origin, dir, hit, local);
+        brush_hover_ = on;
+        brush_local_ = local;
+        if (!te.in_stroke()) {
+            if (!on || io.KeyAlt || !ImGui::IsMouseClicked(ImGuiMouseButton_Left)) return false;
+            if (te.brush.op == TerrainBrushOp::Flatten) te.brush.target = te.doc().height_at(local.x, local.y);
+            te.begin_stroke();
+            flush_timer_ = 0.0f;
+        }
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            finish_sculpt(shell);
+            return true;
+        }
+        if (on) {
+            const TerrainBrushOp op = te.brush.op;
+            if (io.KeyCtrl) {
+                switch (op) {
+                    case TerrainBrushOp::Raise: te.brush.op = TerrainBrushOp::Lower; break;
+                    case TerrainBrushOp::Lower: te.brush.op = TerrainBrushOp::Raise; break;
+                    case TerrainBrushOp::Hole: te.brush.op = TerrainBrushOp::Fill; break;
+                    case TerrainBrushOp::Fill: te.brush.op = TerrainBrushOp::Hole; break;
+                    default: break;
+                }
+            }
+            const bool per_dab = te.brush.op == TerrainBrushOp::Hole || te.brush.op == TerrainBrushOp::Fill;
+            te.dab(local, per_dab ? 1.0f : io.DeltaTime);
+            te.brush.op = op;
+        }
+        flush_timer_ += io.DeltaTime;
+        if (flush_timer_ >= 0.2f && te.dirty()) {
+            flush_timer_ = 0.0f;
+            if (Result<f64> r = te.flush(shell.session()); !r) log_terrain_error(r.error());
+        }
+        return true;
+    }
+
+    void finish_sculpt(EditorShell& shell) {
+        if (Result<f64> r = shell.terrain().end_stroke(shell.session()); !r) log_terrain_error(r.error());
+    }
+
+    static void log_terrain_error(const Error& e) {
+        FixedString<512> msg;
+        format_error(e, msg);
+        MCE_LOG_ERROR("editor: terrain save failed: {}", msg.view());
     }
 
     // ---- tile painting (Tilemap panel, ADR-0030 §8) ----
@@ -442,6 +516,10 @@ private:
     rhi::Extent2D size_;
     Array<OverlayLine> lines_;
     Array<Segment3D> segments_;
+    Array<math::vec3> rim_;
+    bool brush_hover_ = false;
+    math::vec2 brush_local_{};
+    f32 flush_timer_ = 0.0f;
     World empty_;  // the orbit view draws overlays only
     bool orbiting_ = false;
     EntityId hover_ = kNoEntity;
@@ -620,8 +698,10 @@ void add_default_panels(EditorShell& shell) {
     add_play_panel(shell);
     add_asset_panel(shell);
     add_tilemap_panel(shell);
+    add_terrain_panel(shell);
     add_ui_document_panel(shell);
     add_timeline_panel(shell);
+    add_animation_panel(shell);
     add_project_settings_panel(shell);
 }
 

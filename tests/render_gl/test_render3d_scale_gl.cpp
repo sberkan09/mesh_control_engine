@@ -264,3 +264,69 @@ TEST_CASE("render3d_scale: GPU particles spawn, glow over the frame and keep the
     CHECK(differing(f.pixels, none) == 0);
     CHECK(f.device->validation_error_count() == 0);
 }
+
+TEST_CASE("render3d_scale: a smooth decal fills the normal map's bumps under it (a puddle is flat)") {
+    Fixture3D f;
+    // A checker of normals tilted ±37° about Z, 16 cells across the slab.
+    Array<u8> px;
+    for (u32 y = 0; y < 16; ++y) {
+        for (u32 x = 0; x < 16; ++x) {
+            const bool odd = ((x + y) & 1) != 0;
+            px.push_back(odd ? 204 : 51);  // x = ±0.6
+            px.push_back(128);
+            px.push_back(230);  // z = 0.8
+            px.push_back(255);
+        }
+    }
+    const TextureMipUpload mip{16, 16, std::as_bytes(px.span())};
+    TextureUpload up;
+    up.mips = Span<const TextureMipUpload>(&mip, 1);
+    const u32 bumps = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(bumps, 1, up).has_value());
+    MaterialOverride bumpy, plain;
+    for (MaterialOverride* m : {&bumpy, &plain}) {
+        for (int i = 0; i < 3; ++i) m->params.base_color[i] = 0.15f;  // dark: the lit slab stays under white
+        m->params.base_color[3] = 1.0f;
+        m->params.roughness = 0.8f;
+    }
+    bumpy.normal_key = bumps;
+    mesh_fixture::Builder slab_mesh;  // the ground slab again, with UVs for the normal map
+    slab_mesh.add_node(-1);
+    mesh_fixture::Box g;
+    g.center = {0, -0.1f, 0};
+    g.half = {6, 0.1f, 6};
+    g.uvs = true;
+    slab_mesh.add_box(g);
+    REQUIRE(f.renderer.meshes().upload(20, 1, slab_mesh.build().span()).has_value());
+    const auto scene = [&](const MaterialOverride* mat) {
+        return [mat](Scene3D& s) {
+            MeshInstance slab;  // over the fixture's ground
+            slab.mesh = 20;
+            slab.world = math::translation({0.0f, 0.01f, 0.0f});
+            slab.material = mat;
+            s.add(slab);
+            Decal d;
+            d.world = math::translation({2.0f, 0.0f, 2.0f}) * math::scaling({1.5f, 1.0f, 1.5f});
+            d.color = {0.1f, 0.1f, 0.12f, 1.0f};
+            d.roughness = 0.0f;
+            d.edge_fade = 0.0f;
+            s.add_decal(d);
+        };
+    };
+    f.render(0.0f, false, scene(&bumpy));
+    const Array<u8> with_bumps = f.pixels;
+    Rgb in_bumpy[3];
+    const vec3 inside[3] = {{2.0f, 0.01f, 2.0f}, {1.7f, 0.01f, 2.3f}, {2.3f, 0.01f, 1.7f}};
+    for (int i = 0; i < 3; ++i) in_bumpy[i] = f.at_world(inside[i]);
+    f.render(0.0f, false, scene(&plain));
+    CHECK(differing(f.pixels, with_bumps) > 0);  // the bumps show outside the puddle
+    for (int i = 0; i < 3; ++i) {
+        const Rgb p = f.at_world(inside[i]);
+        INFO("inside " << i << ": bumpy " << in_bumpy[i].r << "," << in_bumpy[i].g << "," << in_bumpy[i].b << " plain " << p.r << "," << p.g
+                       << "," << p.b);
+        CHECK(std::abs(p.r - in_bumpy[i].r) <= 2);
+        CHECK(std::abs(p.g - in_bumpy[i].g) <= 2);
+        CHECK(std::abs(p.b - in_bumpy[i].b) <= 2);
+    }
+    CHECK(f.device->validation_error_count() == 0);
+}

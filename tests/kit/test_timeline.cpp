@@ -9,6 +9,7 @@
 #include "mce/cook/cook.h"
 #include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/captions.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/timeline.h"
@@ -180,6 +181,14 @@ TEST_CASE("timeline: every track kind plays against the tick") {
     REQUIRE(kit::timeline_subtitle(s.world, s.e[0], speaker, text));
     CHECK(speaker == StringView("Mira"));
     CHECK(text == StringView("Who's there?"));
+    {  // what the player's subtitle view reads (M-ACCESS)
+        Array<kit::CaptionLine> lines;
+        kit::caption_lines(s.world, lines);
+        REQUIRE(lines.size() == 1);
+        CHECK(lines[0].speaker.view() == StringView("Mira"));
+        CHECK(lines[0].text.view() == StringView("Who's there?"));
+        CHECK(lines[0].source == s.e[0]);
+    }
     s.run(29);  // tick 59
     CHECK(s.cam(2).fov_deg == doctest::Approx(60.0f));  // a step key holds
     CHECK(s.world.try_get<kit::SequencePlayer>(listener)->active);

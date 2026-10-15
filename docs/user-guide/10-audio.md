@@ -92,3 +92,36 @@ voices keep their place and pick up where they stopped when the app comes back.
 - Mono clips pan; stereo clips keep their image. Music should be stereo at 48 kHz to skip
   resampling at cook.
 - Reverb sends, per-voice pitch and device hot-swap are not built.
+
+## 10.7 Subtitles and sound captions
+
+The stock player draws subtitles at the bottom of the screen, one box per line, newest at the
+bottom, under the menus. Lines come from three places:
+
+- a timeline's `subtitle` track (13.5): the line shows while the playhead is in its range;
+- `SoundCaption` on an entity with an `SfxTrigger` or an `AudioSource`: each play of the trigger
+  shows its text (`"[door slams]"`) for `seconds`, and a looping source keeps it up while it plays;
+- a `kit::ShowCaption` event from game code, for anything else (a voiced line, a one-shot `PlaySfx`):
+
+```cpp
+kit::ShowCaption c;
+c.speaker.assign("Ada");
+c.text.assign("Run!");
+c.seconds = 2.0f;  // 0: three seconds
+f.events().push(c);
+```
+
+The player chooses what shows (all `Saved`, on the stock options screen's Audio tab):
+
+| Convar | Default | |
+|---|---|---|
+| `access.subtitles` | 1 | speech lines |
+| `access.captions` | 0 | sound captions, in brackets |
+| `access.subtitle_speaker` | 1 | the speaker's name before the line, in its own color |
+| `access.subtitle_size` | 1 | text size (0.5..3), on top of `ui_scale` and `access.text_scale` |
+| `access.subtitle_background` | 0.6 | the box's opacity; 0 draws outlined text with no box |
+
+The default NPC dialogue box (21) follows `access.subtitle_speaker` and scales its box opacity by
+`access.subtitle_background`. Captions are presentation only: the lines live in a resource, never
+in a component, so a run hashes the same with them on or off. A host with its own UI reads the
+lines with `kit::caption_lines` and draws them with `ui::SubtitleView`.

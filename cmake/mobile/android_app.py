@@ -46,6 +46,8 @@ Review prompt (M-MOBILE step 11c): every game gets android/review/MceReview.java
 
 Haptics (M-MOBILE step 11d): every game gets android/haptics/MceHaptics.java (the vibrator's predefined
 effects; the manifest's VIBRATE permission) and MceActivity's mceHaptic, which platform::haptics::play() calls.
+Screen reader (M-ACCESS step 4): MceActivity's mceScreenReaderOn and mceAnnounce (TalkBack), which
+platform::screen_reader calls.
 
 Tooling: ANDROID_HOME (default ~/Library/Android/sdk), ANDROID_NDK_HOME (default: the newest NDK in
 the SDK), JAVA_HOME (default: /usr/libexec/java_home -v 17, then Homebrew's openjdk@17).
@@ -217,6 +219,27 @@ HAPTICS_METHODS = '''
     }
 '''
 
+# MceActivity's screen reader bridge, for platform/screen_reader.h's JNI calls
+# (src/engine/platform/src/screen_reader.cpp): TalkBack's state and its announcements.
+ACCESS_METHODS = '''
+    // ---- screen reader (mce_platform's screen_reader over JNI) ----
+    public boolean mceScreenReaderOn() {
+        android.view.accessibility.AccessibilityManager am = (android.view.accessibility.AccessibilityManager)
+            getSystemService(android.content.Context.ACCESSIBILITY_SERVICE);
+        return am != null && am.isEnabled() && am.isTouchExplorationEnabled();
+    }
+
+    public void mceAnnounce(final String text) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                android.view.View view = getWindow() != null ? getWindow().getDecorView() : null;
+                if (view != null) view.announceForAccessibility(text);
+            }
+        });
+    }
+'''
+
 
 def sdk_root():
     root = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT") or os.path.expanduser("~/Library/Android/sdk")
@@ -329,6 +352,7 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
         "CRASHLYTICS": "",
         "REVIEW": REVIEW_METHODS,
         "HAPTICS": HAPTICS_METHODS,
+        "ACCESS": ACCESS_METHODS,
         "DEPENDENCIES": "",
     }
     shop = monetize_info.read(art)

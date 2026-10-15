@@ -294,9 +294,9 @@ stage_demo_games_determinism() {
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
     configure linux-gcc-debug &&
-        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content stream_demo_content sample_shop_demo sample_liveops_demo sample_net_headless &&
+        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content stream_demo_content sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback &&
         configure linux-gcc-release &&
-        cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player sample_shop_demo sample_liveops_demo sample_net_headless &&
+        cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1000 -boids 20000" \
             build/linux-gcc-debug/samples/02_boids/sample_02_boids \
             build/linux-gcc-release/samples/02_boids/sample_02_boids &&
@@ -326,18 +326,42 @@ stage_determinism() {
         stage_physics3d_determinism &&
         stage_cubes_determinism &&
         stage_court_determinism &&
-        stage_demo_games_determinism
+        stage_demo_games_determinism &&
+        stage_script_determinism
+}
+
+# ADR-0041 spike: the Luau system hashes the same across runs and Debug/Release, and the same as
+# its C++ twin (`-mode cpp`), so the VM adds no float drift of its own.
+stage_script_determinism() {
+    cmake --build --preset linux-gcc-debug --target sample_script_headless &&
+        cmake --build --preset linux-gcc-release --target sample_script_headless &&
+        python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1200" \
+            build/linux-gcc-debug/samples/script_headless/sample_script_headless \
+            build/linux-gcc-release/samples/script_headless/sample_script_headless &&
+        python3 scripts/ci/determinism.py --runs 1 --args "-ticks 1200 -mode cpp" \
+            build/linux-gcc-debug/samples/script_headless/sample_script_headless \
+            build/linux-gcc-release/samples/script_headless/sample_script_headless &&
+        [[ "$(build/linux-gcc-release/samples/script_headless/sample_script_headless -ticks 1200 | grep -o 'hash [0-9a-f]*')" == \
+           "$(build/linux-gcc-release/samples/script_headless/sample_script_headless -ticks 1200 -mode cpp | grep -o 'hash [0-9a-f]*')" ]]
 }
 
 # M-NET2 step 1: a server and its clients over SimNetwork (simulated latency, jitter and loss on a
 # virtual clock): every client mirrors the server, and the hash is the same across runs and builds.
+# M-NET2 step 5: rollback peers (and lockstep) over SimNetwork agree on every confirmed frame, and
+# rollbacks, stalls and the confirmed state hash are the same across runs and builds.
 stage_net_determinism() {
     python3 scripts/ci/determinism.py --runs 3 --args "-sim 1 -clients 4 -latency 75 -jitter 20 -loss 0.05 -ticks 600" \
         build/linux-gcc-debug/samples/net_headless/sample_net_headless \
         build/linux-gcc-release/samples/net_headless/sample_net_headless &&
         python3 scripts/ci/determinism.py --runs 3 --args "-sim 1 -clients 8 -latency 150 -jitter 40 -loss 0.15 -seed 3 -ticks 900" \
             build/linux-gcc-debug/samples/net_headless/sample_net_headless \
-            build/linux-gcc-release/samples/net_headless/sample_net_headless
+            build/linux-gcc-release/samples/net_headless/sample_net_headless &&
+        python3 scripts/ci/determinism.py --runs 3 --args "-peers 4 -latency 100 -jitter 20 -loss 0.05 -frames 900" \
+            build/linux-gcc-debug/samples/net_rollback/sample_net_rollback \
+            build/linux-gcc-release/samples/net_rollback/sample_net_rollback &&
+        python3 scripts/ci/determinism.py --runs 3 --args "-peers 2 -prediction 0 -frames 300" \
+            build/linux-gcc-debug/samples/net_rollback/sample_net_rollback \
+            build/linux-gcc-release/samples/net_rollback/sample_net_rollback
 }
 
 # M5a: 04_cubes (cascade fit, Forward+ clustering, node animation) across runs and Debug/Release;

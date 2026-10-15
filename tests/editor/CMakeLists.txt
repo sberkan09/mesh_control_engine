@@ -1,6 +1,7 @@
 # Headless editor tests: editor_core logic and the layer's ImGui-free pieces. No window, no GPU.
 mce_add_test(test_editor UMBRELLA
     SOURCES
+        test_animgraph_editor.cpp
         test_asset_browser.cpp
         test_console_model.cpp
         test_draw_clip.cpp
@@ -15,6 +16,7 @@ mce_add_test(test_editor UMBRELLA
         test_prefab_preview.cpp
         test_scene_editing.cpp
         test_stub_world.cpp
+        test_terrain_editor.cpp
         test_tilemap.cpp
         test_timeline_editor.cpp
         test_transform_gizmo.cpp

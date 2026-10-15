@@ -69,6 +69,9 @@ public:
     static ConVar* find(StringId id);
     // All registered convars sorted by name (console listing, settings save).
     static void collect(Array<ConVar*>& out);
+    // Takes it off the registry before its destructor runs: a game module's convars when the
+    // loader may keep the module mapped after unloading it (module_host.cpp). Idempotent.
+    void unlink();
 
 private:
     void link();
@@ -106,6 +109,7 @@ public:
 
     static ConFunc* find(StringId id);
     static void collect(Array<ConFunc*>& out);
+    void unlink();  // as ConVar::unlink
 
 private:
     const char* name_;

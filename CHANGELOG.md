@@ -13,6 +13,31 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   smooth surfaces mirror what is on screen over the probes and the sky (`ssr_max_distance`, `ssr_thickness`,
   `ssr_max_roughness`, `ssr_roughness_fade`, `ssr_intensity`). It reads the previous frame, so it shows from the
   second frame; off on the Low quality tier, `r.ssr 0` turns it off. User guide 8.
+- Round-3 friction fixes (SBA-61): reloading a game module drops its old convars; an input script's `=0`
+  presses an action with value 0; a Text in a horizontal Stack no longer wraps below UI scale 1; game code can
+  quit the app (`scene::request_quit`, `UiFlow::quit_on` for a Quit button); `render_frame`, `render_sheet` and
+  `run_headless` take `convars` for one run; a `walk_to` waypoint `{at, wait}` stands still there; a smooth
+  `Decal3D` fills the normal map's bumps under it (puddles no longer light every bump as a dotted pattern);
+  `asset_delete` removes the file's `CREDITS.md` row and a font's license text with the family's last font.
+- Screen reader support, M-ACCESS step 4 (SBA-98): the stock player speaks the focused menu item and a
+  focused slider's new value through TalkBack on Android (and, built with `MCE_SCREEN_READER_NATIVE`, VoiceOver on
+  iOS and macOS and Narrator, NVDA or JAWS on Windows), while the OS reports a reader on (`access.screen_reader`).
+  `ui::build_access_tree` gives each widget a role, a name and a value. User guide 12.5.
+- Rollback netcode (SBA-86, M-NET2 step 5): `net::RollbackSession` runs the whole game on every peer and
+  exchanges only inputs. It guesses late remote inputs, rolls back and replays when a guess was wrong, waits only
+  past `max_prediction` (0 is lockstep), and compares state hashes of confirmed frames so a desync is reported at
+  the frame it happened. `samples/net_rollback` keeps four peers in sync at 100 ms with 5% loss. User guide 20.7.
+- Subtitles and sound captions, M-ACCESS step 1 (SBA-95): the stock player draws timeline subtitle lines,
+  `kit::SoundCaption` tags on sounds and `kit::ShowCaption` lines at the bottom of the screen
+  (`ui::SubtitleView`), with `access.subtitles`, `access.captions`, `access.subtitle_speaker`, `access.subtitle_size`
+  and `access.subtitle_background` on the stock options screen. The NPC dialogue box follows the speaker and
+  background settings. User guide 10.7.
+- The editor's Animation panel, M-CINEMA step 3 (SBA-78): an `.mcanim` animation graph drawn as boxes and arrows
+  (drag states, add transitions from a right-click, any-state transitions, the start state), an inspector for
+  parameters, states (clip or 1D blend points, loop, speed, events) and transitions (conditions, fade, on finish),
+  and a viewport preview that poses any clip of an entity's mesh at a scrubbed time or runs its graph with typed
+  parameter values, without touching the scene. A state may carry `pos` (where the editor draws it; the cook ignores
+  it). Double-click an `.mcanim` in Assets, or `mce_editor -editor.open <file>`. User guide 8.9.
 - Fair hits over lag (SBA-85, M-NET2 step 4): `net::LagCompensator` keeps a short history of `net::HitBox`es on
   the server and checks a shot against the tick its client was drawing (`ReplicationClient::drawn_tick`), within
   `max_rewind_s`. Over a 100 ms link every shot at the drawn target hits when rewound and none at the server's

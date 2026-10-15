@@ -24,6 +24,8 @@
                       { "name": "colorblind_strength", "kind": "Slider", "range": [0, 1, 0.1], "convar": "access.colorblind_strength" },
                       { "name": "motion_label", "kind": "Text", "text": "SCREEN SHAKE AND FLASHES" },
                       { "name": "motion", "kind": "Slider", "range": [0, 1, 0.1], "convar": "access.motion_scale" },
+                      { "name": "screen_reader_label", "kind": "Text", "text": "SCREEN READER: OFF / WHEN ON / ALWAYS" },
+                      { "name": "screen_reader", "kind": "Slider", "range": [0, 2, 1], "convar": "access.screen_reader" },
                       { "name": "fullscreen", "kind": "Toggle", "text": "FULL SCREEN", "convar": "fullscreen" }
                     ] } ] },
                 { "name": "audio", "label": "AUDIO", "children": [
@@ -33,7 +35,14 @@
                       { "name": "music", "kind": "Slider", "range": [-40, 0, 2], "convar": "audio.music_db" },
                       { "name": "sfx_label", "kind": "Text", "text": "EFFECTS" },
                       { "name": "sfx", "kind": "Slider", "range": [-40, 0, 2], "convar": "audio.sfx_db" },
-                      { "name": "haptics", "kind": "Toggle", "text": "VIBRATION", "convar": "haptics" }
+                      { "name": "haptics", "kind": "Toggle", "text": "VIBRATION", "convar": "haptics" },
+                      { "name": "subtitles", "kind": "Toggle", "text": "SUBTITLES", "convar": "access.subtitles" },
+                      { "name": "captions", "kind": "Toggle", "text": "SOUND CAPTIONS", "convar": "access.captions" },
+                      { "name": "subtitle_speaker", "kind": "Toggle", "text": "SPEAKER NAMES", "convar": "access.subtitle_speaker" },
+                      { "name": "subtitle_size_label", "kind": "Text", "text": "SUBTITLE SIZE" },
+                      { "name": "subtitle_size", "kind": "Slider", "range": [0.75, 2, 0.25], "convar": "access.subtitle_size" },
+                      { "name": "subtitle_background_label", "kind": "Text", "text": "SUBTITLE BACKGROUND" },
+                      { "name": "subtitle_background", "kind": "Slider", "range": [0, 1, 0.1], "convar": "access.subtitle_background" }
                     ] } ] },
                 { "name": "controls", "label": "CONTROLS", "children": [
                   { "name": "list", "kind": "Scroll", "fill": true, "stack": { "spacing": 8, "padding": 8, "align": "Stretch" },
