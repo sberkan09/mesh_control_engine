@@ -172,7 +172,9 @@ def build_mobile(art, args, env=None):
     run(["cmake", "--build", "--preset", args.host_preset, "--target", "mce_cook", *art.get("host_targets", [])])
     host_dir = os.path.join(ROOT, "build", args.host_preset)
     cook = os.path.join(host_dir, "tools", "cook", "mce_cook" + EXE)
-    configure = ["cmake", "--preset", args.preset, f"-DMCE_HOST_COOK={cook}", f"-DMCE_HOST_BUILD_DIR={host_dir}"]
+    configure = ["cmake", "--preset", args.preset, f"-DMCE_HOST_COOK={cook}", f"-DMCE_HOST_BUILD_DIR={host_dir}",
+                 # The phone presets add no projects: a project brings in just itself (a sample clears it).
+                 f"-DMCE_ONLY_PROJECT={os.path.abspath(args.project) if args.project else ''}"]
     print("+ " + " ".join(configure), flush=True)
     subprocess.run(configure, cwd=ROOT, env=env, check=True)
     run(["cmake", "--build", "--preset", args.preset, "--target", art["target"]])

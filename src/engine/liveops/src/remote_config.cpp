@@ -1,7 +1,10 @@
 #include "mce/liveops/remote_config.h"
 
 #include <charconv>
+#include <cctype>
 #include <cmath>
+#include <cstdlib>
+#include <string>
 #include <cstring>
 
 #include "mce/asset/asset_system.h"
@@ -145,9 +148,12 @@ bool parse_config_value(const ConfigValues& defaults, StringView key, StringView
             break;
         }
         case ConfigType::Float: {
-            if (!text.empty() && text[0] == '+') ++first;
-            const auto r = std::from_chars(first, last, v.f);
-            if (text.empty() || r.ec != std::errc() || r.ptr != last || !std::isfinite(v.f)) return false;
+            // strtod, not from_chars: iOS 16 / NDK libc++ have no floating-point from_chars.
+            if (text.empty() || std::isspace(static_cast<unsigned char>(text[0]))) return false;
+            const std::string buf(first, last);
+            char* end = nullptr;
+            v.f = std::strtod(buf.c_str(), &end);
+            if (end != buf.c_str() + buf.size() || !std::isfinite(v.f)) return false;
             break;
         }
         case ConfigType::Bool: {

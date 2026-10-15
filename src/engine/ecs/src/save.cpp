@@ -7,6 +7,7 @@
 #include <system_error>
 
 #include "mce/asset/xxhash.h"
+#include "mce/crash.h"
 
 namespace mce::save {
 
@@ -307,20 +308,9 @@ Result<Span<const byte>> read_replay(Span<const byte> payload, ReplayInfo& info)
 void set_root(StringView dir) { root_storage().assign(dir); }
 
 FixedString<512> default_root(StringView game) {
-    FixedString<512> r;
-#if defined(_WIN32)
-    const char* base = std::getenv("LOCALAPPDATA");
-    r.assign(base ? base : ".");
-#else
-    const char* xdg = std::getenv("XDG_DATA_HOME");
-    const char* home = std::getenv("HOME");
-    if (xdg && *xdg) {
-        r.assign(xdg);
-    } else {
-        r.assign(home ? home : ".");
-        r.append("/.local/share");
-    }
-#endif
+    // The crash reports' per-user folder: on Android and iOS that is inside the app's sandbox (a phone
+    // app has no HOME, or a read-only container root).
+    FixedString<512> r = crash::user_data_root();
     r.append("/MCE/");
     r.append(game);
     r.append("/saves");

@@ -34,7 +34,12 @@ bool installed();
 // The directory reports go to (empty until install()).
 StringView dump_dir();
 
-// Per-user: %LOCALAPPDATA%/MCE/<app>/crashes, $XDG_DATA_HOME (or ~/.local/share)/MCE/<app>/crashes.
+// The per-user folder MCE writes under (crash reports, saves): %LOCALAPPDATA% on Windows, the app's
+// files dir on Android, <container>/Library/Application Support on iOS, $XDG_DATA_HOME or ~/.local/share
+// elsewhere. No trailing slash.
+FixedString<512> user_data_root();
+
+// Per-user: user_data_root()/MCE/<app>/crashes.
 FixedString<512> default_dump_dir(StringView app_name);
 
 // Dereferences null, for `-crash_test 1` and the crash-report test: proves the whole chain.
