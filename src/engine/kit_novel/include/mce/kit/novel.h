@@ -77,6 +77,7 @@ enum class OpKind : u16 {
     Wait,        // a ticks
     Command,     // a game command id, b..f arguments (NovelHooks::command)
     Tag,         // a text id: a tag of the next page (#tag in the script; Dialogue::tags)
+    Cutscene,    // a timeline id (Program::timelines): plays it as a kit::Cutscene, then goes on
 };
 
 struct Op {
@@ -214,6 +215,8 @@ struct Program {
     const LocaleText* locales = nullptr;  // the translations (none without "localize")
     u16 locale_count = 0;
     const char* base_locale = "en";       // the language the script is written in
+    const char* const* timelines = nullptr;  // [0] = "none"; timelines/<id>.mctimeline (@cutscene)
+    u16 timeline_count = 0;
 };
 
 // The label's op, or kNone.
@@ -270,6 +273,7 @@ enum class Mode : u8 {
     Ending,      // the ending card
     Fade,        // a timed black
     Wait,        // a timed hold
+    Cutscene,    // a @cutscene timeline plays (kit::Cutscene: letterbox, subtitles, hold to skip)
     Done,        // nothing to run (no StoryState in the scene)
 };
 
@@ -364,6 +368,8 @@ struct NovelState {
     asset::Guid music[kSounds];
     asset::Guid ambience[kSounds];
     asset::Guid sfx[kSounds];
+    static constexpr u32 kTimelines = 32;
+    asset::Guid timelines[kTimelines];
     asset::Guid normal_map;
     asset::Guid font;  // Program::text_font, else the first font in the pack (the default stage's)
 
@@ -385,6 +391,9 @@ struct NovelState {
 
     // a game command's screen
     u16 command = 0;
+
+    // the @cutscene playing (an entity with a TimelinePlayer and a kit::Cutscene)
+    Entity cutscene;
 
     // timers and transitions
     u32 hold_ticks = 0;
