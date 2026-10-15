@@ -11,6 +11,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   finished flag. Keys fire on tick math, the state lives in the component (state hash, replays, saves), and
   `kit::timeline_scrub` moves the playhead without firing cues. Event keys also push `SeqSignal`, so sequences
   can wait on a timeline beat. MCP `asset_create` makes `.mctimeline` files; user guide 13.5.
+- Multiplayer test harness (SBA-82, M-NET2 step 1): `net::SimNetwork` is an in-memory network on a virtual clock
+  with per-link latency, jitter and loss from a seed, so a server and several clients in one process give the same
+  hash on every run and build. `net::Transport` is the interface both it and `net::Host` implement, so game code
+  runs over either. `Host::set_conditions` plays a real build over a simulated bad network.
+  `sample_net_headless -sim 1 -clients N` is the headless multi-client runner, and `local_ci.sh`'s determinism stage
+  runs it. `net::NetStatsMeter` adds a `NET` line (RTT, loss, bandwidth, drops) to the player's stats overlay (F3)
+  through the new `DevStatsLines` world resource. User guide 20.6.
 - Phone fixes from the Simulator and emulator checks (SBA-30): a language the player chooses no longer falls back
   to the device's other languages (English chosen on a Turkish phone showed the kit's words in Turkish); SDL GPU's
   debug mode is off in the iOS Simulator, whose Metal validation aborted on the first indirect draw; MSL for iOS
