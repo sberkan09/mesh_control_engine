@@ -101,6 +101,32 @@ client_rep.apply(f.commands(), f.world(), latest_snapshot);
 To send more than position, rotation and scale (health, an animation state), set `write_extra` on the
 server and `read_extra` on the client. When the client disconnects, call `client_rep.reset(...)`.
 
+**Smooth movement.** Applied as they land, snapshots make remote entities stutter: packets arrive
+unevenly and some never arrive. Turn on interpolation and the client draws every entity slightly in
+the past, blending the two snapshots around that moment:
+
+```cpp
+client_rep.set_interpolation({});                       // before the first apply
+// in the system, every tick:
+if (have_snapshot) client_rep.apply(f.commands(), f.world(), latest_snapshot);
+client_rep.update(f.commands(), f.world(), f.dt);      // writes LocalTransform
+```
+
+How far in the past it draws (the jitter buffer) adapts to the connection by default. It is two
+snapshot intervals plus how late snapshots have been arriving, kept between 50 and 350 ms. Set
+`InterpolationDesc::delay_s` to fix it instead, and `tick_rate` if the server does not tick at 60 Hz.
+Changes to the buffer never make entities jump: the client speeds up or slows down by at most 10%.
+
+When no new snapshot has arrived, an entity keeps moving at its last velocity for up to
+`max_extrapolation_s` (0.1 s). After that it stops at the newest snapshot's position.
+`interpolation_stats()` reports the buffer, the measured jitter, and how many entities were
+interpolated, extrapolated or held. Interpolation runs on the client's own tick time, so a run over
+`SimNetwork` stays deterministic.
+
+On a 75 ms link with 20 ms of jitter and 5% loss, `sample_net_headless -sim 1` shows the difference.
+A drifter's mean per-tick change in velocity is about 0.018 with `-interp 0` and about 0.001 with
+interpolation. The server's own value is 0.0003.
+
 ## 20.5 Try it
 
 `samples/net_headless` runs a server and a client in one process over loopback and checks that the

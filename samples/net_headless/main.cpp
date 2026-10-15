@@ -44,6 +44,8 @@ MCE_CVAR(cv_latency, "latency", 0, "One-way latency in ms on every link", CVarFl
 MCE_CVAR(cv_jitter, "jitter", 0, "Extra one-way delay, up to this many ms", CVarFlags::None);
 MCE_CVAR(cv_loss, "loss", 0.0f, "Chance a Sequenced/Unreliable message is lost (0..1)", CVarFlags::None);
 MCE_CVAR(cv_seed, "seed", 1, "Seed of the latency, jitter and loss rolls", CVarFlags::None);
+MCE_CVAR(cv_interp, "interp", true, "Clients draw snapshots interpolated through a jitter buffer (M-NET2 step 2)",
+         CVarFlags::None);
 
 constexpr f64 kDt = 1.0 / 60.0;
 constexpr u8 kChannels = 3;
@@ -63,6 +65,25 @@ struct Drifter {
 struct Player {
     net::PeerId peer;
     f32 move_x;
+};
+
+// Mean |second difference| of a path sampled once per tick: 0 for steady motion, large for stutter.
+struct Motion {
+    math::vec3 p0, p1;
+    u32 samples = 0;
+    f64 jerk = 0.0;
+    u32 counted = 0;
+    void add(math::vec3 p) {
+        if (samples >= 2) {
+            const math::vec3 d = p - p1 - (p1 - p0);
+            jerk += std::sqrt(static_cast<f64>(d.x * d.x + d.y * d.y + d.z * d.z));
+            ++counted;
+        }
+        p0 = p1;
+        p1 = p;
+        ++samples;
+    }
+    f64 mean() const { return counted ? jerk / counted : 0.0; }
 };
 
 // ---- server -----------------------------------------------------------------------------------
@@ -129,7 +150,15 @@ struct Server {
     void step() {
         receive();
         world.tick(kDt, ++tick);
+        track();
         broadcast_snapshot();
+    }
+
+    Motion motion;  // drifter 1 as the server simulates it
+    void track() {
+        world.query<const net::NetId, const LocalTransform>().each([&](const net::NetId& id, const LocalTransform& t) {
+            if (id.id == 1) motion.add(t.position);
+        });
     }
 };
 
@@ -153,11 +182,14 @@ struct Client {
         server = to_server;
         move = hold;
         world.set_resource<Client*>(this);
+        if (cv_interp.get_bool()) replication.set_interpolation(net::InterpolationDesc{});
         world.add_system(Phase::FixedUpdate_Pre, "net_apply", [](Frame& f) {
             Client& c = *f.resource<Client*>();
-            if (!c.has_pending) return;
-            if (c.replication.apply(f.commands(), f.world(), c.pending.data()).ok) ++c.snapshots;
-            c.has_pending = false;
+            if (c.has_pending) {
+                if (c.replication.apply(f.commands(), f.world(), c.pending.data()).ok) ++c.snapshots;
+                c.has_pending = false;
+            }
+            c.replication.update(f.commands(), f.world(), f.dt);  // interpolating: draws the render time
         });
     }
 
@@ -187,7 +219,16 @@ struct Client {
             net->send(server, kChannelInput, input.data(), net::Delivery::Sequenced);
         }
         world.tick(kDt, ++tick);
+        track();
         net->flush();
+    }
+
+    // How smooth drifter 1 looks here: the mean size of its per-tick change in velocity.
+    Motion motion;
+    void track() {
+        const Entity e = replication.find(1);
+        const LocalTransform* t = world.alive(e) ? world.try_get<LocalTransform>(e) : nullptr;
+        if (t) motion.add(t->position);
     }
 };
 
@@ -206,6 +247,14 @@ bool same_bits(const LocalTransform& a, const LocalTransform& b) {
     for (int i = 0; i < 10; ++i)
         if (!same_bits(fa[i], fb[i])) return false;
     return true;
+}
+
+// The client has the server's last snapshot and, interpolating, draws it exactly.
+bool caught_up(const Client& c, u32 final_tick) {
+    if (c.replication.last_tick() != final_tick) return false;
+    if (!c.replication.interpolating()) return true;
+    const net::InterpolationStats& s = c.replication.interpolation_stats();
+    return s.interpolated == 0 && s.extrapolated == 0 && s.held == c.replication.size();
 }
 
 // Every client mirrors the server bit for bit, and each player moved the way its client held.
@@ -286,11 +335,12 @@ int run_sim() {
     }
 
     // The server stops simulating and repeats its last snapshot until every client has it (a lost
-    // one is superseded by the next), for up to 10 virtual seconds.
+    // one is superseded by the next) and, interpolating, draws it: past the jitter buffer and the
+    // extrapolation limit every entity holds the newest snapshot. Up to 10 virtual seconds.
     const u32 final_tick = static_cast<u32>(server.tick);
     auto all_caught_up = [&] {
         for (u32 c = 0; c < count; ++c)
-            if (clients[c].replication.last_tick() != final_tick) return false;
+            if (!caught_up(clients[c], final_tick)) return false;
         return true;
     };
     for (u32 i = 0; i < 600 && !all_caught_up(); ++i) {
@@ -309,12 +359,20 @@ int run_sim() {
     FixedString<160> stats;
     meter.format(stats);
     std::printf("  server %s\n", stats.c_str());
+    const net::InterpolationStats& is = clients[0].replication.interpolation_stats();
+    std::printf("  drifter 1 jerk: server %.5f, client 0 %.5f (%s, buffer %.0f ms, jitter %.1f ms)\n",
+                server.motion.mean(), clients[0].motion.mean(), cv_interp.get_bool() ? "interpolated" : "raw",
+                static_cast<double>(is.delay_s) * 1000.0, static_cast<double>(is.jitter_s) * 1000.0);
 
-    // The run's fingerprint: every world, and what the network did to the traffic.
+    // The run's fingerprint: every world, the motion each client drew, and what the network did to
+    // the traffic.
     Hasher64 h;
     h.u64v(server.world.state_hash());
     for (u32 c = 0; c < count; ++c) {
         h.u64v(clients[c].world.state_hash());
+        u64 jerk_bits = 0;  // the path the client drew, not just where it ended
+        std::memcpy(&jerk_bits, &clients[c].motion.jerk, sizeof jerk_bits);
+        h.u64v(jerk_bits);
         h.u64v(clients[c].net->counters().messages_received);
         h.u64v(clients[c].net->counters().messages_dropped);
     }
@@ -363,7 +421,7 @@ int run_udp() {
     // Let the last snapshot land (loopback: a few ms, plus any simulated latency), then compare.
     const u32 final_tick = static_cast<u32>(server.tick);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3 + link.latency_ms / 250);
-    while (client.replication.last_tick() != final_tick && std::chrono::steady_clock::now() < deadline) {
+    while (!caught_up(client, final_tick) && std::chrono::steady_clock::now() < deadline) {
         server.receive();
         server.broadcast_snapshot();
         for (net::Event ev; server_host.poll(ev, 1);) {
