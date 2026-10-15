@@ -135,6 +135,54 @@ TEST_CASE("remote config: the chunk round-trips and rejects damage") {
     CHECK_FALSE(dup.add(make("", ConfigType::Int)));
 }
 
+TEST_CASE("remote config: text from a vendor service is typed by the defaults") {
+    const ConfigValues d = defaults();
+    ConfigValue v;
+    CHECK(parse_config_value(d, "every", "12", v));
+    CHECK(v.type == ConfigType::Int);
+    CHECK(v.i == 12);
+    CHECK(parse_config_value(d, "every", "-4", v));
+    CHECK(v.i == -4);
+    CHECK(parse_config_value(d, "every", "+4", v));
+    CHECK(v.i == 4);
+    CHECK(parse_config_value(d, "bonus", "2.25", v));
+    CHECK(v.type == ConfigType::Float);
+    CHECK(v.f == doctest::Approx(2.25));
+    CHECK(parse_config_value(d, "bonus", "3", v));
+    CHECK(v.f == doctest::Approx(3.0));
+    CHECK(parse_config_value(d, "motd", "Happy {holidays}", v));
+    CHECK(v.type == ConfigType::String);
+    CHECK(v.s.view() == "Happy {holidays}");
+    CHECK(parse_config_value(d, "motd", "", v));
+    CHECK(v.s.empty());
+    for (const char* t : {"true", "TRUE", "1", "t", "yes", "Y", "on"}) {
+        v = ConfigValue{};
+        CHECK_MESSAGE(parse_config_value(d, "winter", t, v), t);
+        CHECK(v.type == ConfigType::Bool);
+        CHECK(v.i == 1);
+    }
+    for (const char* t : {"false", "0", "F", "no", "n", "Off"}) {
+        v.i = 1;
+        CHECK_MESSAGE(parse_config_value(d, "winter", t, v), t);
+        CHECK(v.i == 0);
+    }
+
+    // Dropped, and the output untouched: an unknown key, text that is not the default's type, a long string.
+    ConfigValue keep = make("keep", ConfigType::Int, 99);
+    CHECK_FALSE(parse_config_value(d, "unknown", "1", keep));
+    CHECK_FALSE(parse_config_value(d, "every", "1.5", keep));
+    CHECK_FALSE(parse_config_value(d, "every", "12abc", keep));
+    CHECK_FALSE(parse_config_value(d, "every", "", keep));
+    CHECK_FALSE(parse_config_value(d, "every", "99999999999999999999", keep));
+    CHECK_FALSE(parse_config_value(d, "bonus", "fast", keep));
+    CHECK_FALSE(parse_config_value(d, "bonus", "inf", keep));
+    CHECK_FALSE(parse_config_value(d, "winter", "maybe", keep));
+    CHECK_FALSE(parse_config_value(d, "winter", "", keep));
+    CHECK_FALSE(parse_config_value(d, "motd", std::string(256, 'x').c_str(), keep));
+    CHECK(keep.key.view() == "keep");
+    CHECK(keep.i == 99);
+}
+
 TEST_CASE("remote config: a fetch waits for apply_fetched or the next launch, never mid-run") {
     fresh_save_root("rc_apply");
     set_consent(Consent::Granted);

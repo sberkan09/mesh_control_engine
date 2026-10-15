@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Remote config fetches from Firebase Remote Config on phone builds shipped with Firebase (SBA-24): each
+  console value is read as the type of its `.mcconfig` default (`liveops::parse_config_value`), and one the
+  defaults lack or that does not read as its type is skipped. `ship` adds `firebase-config` on Android, and
+  iOS links `FirebaseRemoteConfig` from `MCE_FIREBASE_SDK_DIR`. Not yet run on a device.
 - Scene changes at run time (SBA-56, from the M-AGENT demo's friction notes): a game system calls
   `scene::request_change(world, "scenes/level2.mcscene")` and `mce_player`, the editor's play mode and every
   MCP run swap every entity for the target scene after the tick, keeping resources and running Startup again.

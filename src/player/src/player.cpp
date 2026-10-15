@@ -49,8 +49,8 @@
 // <save folder>/analytics.jsonl and copies the reports to <save folder>/crash_outbox/; none drops them. Consent
 // comes from the ad network's form (M-MONETIZE: personalized = granted, otherwise denied) unless the game sets it,
 // or from -liveops.consent granted|denied. Remote config (mce/liveops/remote_config.h) comes with them: the pack's
-// .mcconfig defaults, the values the last fetch saved, and a fetch at start (the host's fetcher, or
-// -remote_config.file <cooked pack>); the game applies fetched values with RemoteConfig::apply_fetched. Game
+// .mcconfig defaults, the values the last fetch saved, and a fetch at start (the host's fetcher,
+// -remote_config.file <cooked pack>, else Firebase Remote Config with the Firebase vendor); the game applies fetched values with RemoteConfig::apply_fetched. Game
 // services (mce/liveops/game_services.h) too, when the pack has a .mcservices: -liveops.provider local plays the
 // platform with a folder (-game_services.dir, -game_services.offline 1), and -game_services_test rehearses them.
 //
@@ -259,6 +259,39 @@ public:
         }
         platform::firebase::log_event(e.name.view(), Span<const platform::firebase::Param>(params, n));
     }
+};
+
+// Remote config from Firebase Remote Config (platform/firebase.h): the server fetcher on phones
+// shipped with a Firebase config. The SDK answers with text on its own thread; each value is typed
+// by the cooked defaults, and one the defaults do not know or that does not parse is dropped.
+class FirebaseConfigFetcher final : public liveops::IConfigFetcher {
+public:
+    explicit FirebaseConfigFetcher(const liveops::ConfigValues& defaults) {
+        for (const liveops::ConfigValue& v : defaults.values()) defaults_.add(v);
+    }
+    const char* name() const override { return "firebase"; }
+    void fetch(liveops::ConfigFetchSink& sink) override {
+        sink_ = &sink;
+        values_.clear();
+        if (!platform::firebase::fetch_remote_config(&FirebaseConfigFetcher::answer, this)) sink.fetch_failed();
+    }
+
+private:
+    static void answer(void* user, StringView key, StringView value, bool done, bool ok) {
+        auto* self = static_cast<FirebaseConfigFetcher*>(user);
+        if (!done) {
+            liveops::ConfigValue v;
+            if (liveops::parse_config_value(self->defaults_, key, value, v)) self->values_.add(v);
+            else MCE_LOG_WARN("player: remote config value '{}' dropped (not in the defaults, or not their type)", key);
+            return;
+        }
+        if (ok) self->sink_->fetched(self->values_);
+        else self->sink_->fetch_failed();
+    }
+
+    liveops::ConfigValues defaults_;
+    liveops::ConfigValues values_;  // the running fetch's, filled on the SDK's thread
+    liveops::ConfigFetchSink* sink_ = nullptr;
 };
 
 int fail(const char* what, const Error& e) {
@@ -1006,6 +1039,11 @@ private:
         if (!cv_remote_config_file.get_string().empty()) {
             file_fetcher_.emplace(cv_remote_config_file.get_string());
             fetcher = &*file_fetcher_;
+        }
+        if (!fetcher && firebase_on_) {
+            firebase_config_.emplace(defaults);
+            fetcher = &*firebase_config_;
+            MCE_LOG_INFO("{}: remote config fetched from Firebase Remote Config", desc_.app_name);
         }
         if (cv_liveops_provider.get_string() == "none") fetcher = nullptr;
         remote_config_.init(defaults, fetcher);
@@ -1899,6 +1937,7 @@ private:
     u32 firebase_collection_ = ~0u;  // the Collection last handed to the SDK
     std::optional<liveops::OutboxUploader> local_outbox_;
     std::optional<liveops::FileConfigFetcher> file_fetcher_;  // -remote_config.file
+    std::optional<FirebaseConfigFetcher> firebase_config_;      // with firebase_on_ and no other fetcher
     liveops::RemoteConfigService remote_config_;  // before the World: its resource points here
     u32 dumped_config_version_ = ~0u;
     std::optional<liveops::LocalGameServices> local_services_;  // -liveops.provider local

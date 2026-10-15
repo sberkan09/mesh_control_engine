@@ -26,10 +26,10 @@ MceActivity's mceBilling* methods; one with ad placements gets android/ads/MceAd
 Ads and UMP (GMA, UMP), the mceAds* methods and its AdMob app id in the manifest. mce_platform calls
 both over JNI. Other games get none of it, and their store and ad backends are "none".
 
-Live services vendor (M-LIVEOPS step 1): with MCE_FIREBASE_ANDROID_CONFIG pointing at the project's
+Live services vendor (M-LIVEOPS steps 1 and 3): with MCE_FIREBASE_ANDROID_CONFIG pointing at the project's
 google-services.json (from the Firebase console; it is kept out of the repository and handed to the
 build through the environment), the game gets android/firebase/MceFirebase.java, the Firebase BoM with
-Analytics and Crashlytics NDK (FIREBASE_* below), the google-services and Crashlytics Gradle plugins,
+Analytics, Crashlytics NDK and Remote Config (FIREBASE_* below), the google-services and Crashlytics Gradle plugins,
 MceActivity's mceFirebase* methods and manifest flags that start both SDKs with collection off until
 the player consents. The release build uploads the unstripped library's symbols to Crashlytics
 (uploadCrashlyticsSymbolFileRelease). Without the variable nothing of Firebase is stamped in and
@@ -71,7 +71,8 @@ GMA = "com.google.android.gms:play-services-ads:23.6.0"
 UMP = "com.google.android.ump:user-messaging-platform:3.1.0"
 PLAY_REVIEW = "com.google.android.play:review:2.0.2"
 FIREBASE_BOM = "com.google.firebase:firebase-bom:33.7.0"
-FIREBASE_LIBS = ["com.google.firebase:firebase-analytics", "com.google.firebase:firebase-crashlytics-ndk"]
+FIREBASE_LIBS = ["com.google.firebase:firebase-analytics", "com.google.firebase:firebase-crashlytics-ndk",
+                 "com.google.firebase:firebase-config"]
 GOOGLE_SERVICES_PLUGIN = "com.google.gms:google-services:4.4.2"
 CRASHLYTICS_PLUGIN = "com.google.firebase:firebase-crashlytics-gradle:3.0.2"
 
@@ -86,6 +87,10 @@ FIREBASE_METHODS = '''
     public void mceFirebaseCollection(int collection) { if (firebase != null) firebase.setCollection(collection); }
     public void mceFirebaseEvent(String name, String[] keys, int[] kinds, long[] ints, double[] floats, String[] strings) {
         if (firebase != null) firebase.logEvent(name, keys, kinds, ints, floats, strings);
+    }
+    public void mceFirebaseRemoteConfig() {
+        if (firebase != null) firebase.fetchRemoteConfig();
+        else org.meshcontrol.firebase.MceFirebase.nativeConfigDone(false);
     }
 '''
 
@@ -310,7 +315,7 @@ def stamp(project, art, args, root, build_dir, lib, keystore):
         with open(os.path.join(project, "build.gradle"), "w") as f:
             f.write(root_gradle)
         copy_java("firebase", "MceFirebase.java", main)
-        print(f"ship: {art['name']} reports to Firebase: Crashlytics NDK and Analytics ({FIREBASE_BOM}) stamped in",
+        print(f"ship: {art['name']} reports to Firebase: Crashlytics NDK, Analytics and Remote Config ({FIREBASE_BOM}) stamped in",
               flush=True)
     if deps:
         lines = "".join(f"    implementation {d}\n" if d.startswith("platform(") else f"    implementation '{d}'\n"

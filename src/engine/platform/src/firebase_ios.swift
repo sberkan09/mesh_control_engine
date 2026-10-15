@@ -1,4 +1,4 @@
-// mce_platform: Firebase Crashlytics and Analytics for platform/firebase.h on iOS (built when
+// mce_platform: Firebase Crashlytics, Analytics and Remote Config for platform/firebase.h on iOS (built when
 // MCE_FIREBASE is ON; written against the Firebase iOS SDK 11+, from its Firebase.zip distribution).
 //
 // firebase.cpp calls the @_cdecl functions below on the main thread. The app's Info.plist (stamped
@@ -8,7 +8,14 @@
 import FirebaseAnalytics
 import FirebaseCore
 import FirebaseCrashlytics
+import FirebaseRemoteConfig
 import Foundation
+
+// Remote Config's answer (firebase.cpp): every value as text, then done.
+@_silgen_name("mce_firebase_config_value")
+func mce_firebase_config_value(_ key: UnsafePointer<CChar>, _ value: UnsafePointer<CChar>)
+@_silgen_name("mce_firebase_config_done")
+func mce_firebase_config_done(_ ok: Int32)
 
 private var pendingName = ""
 private var pendingParams: [String: Any] = [:]
@@ -66,4 +73,25 @@ public func mce_firebase_event_end() {
     Analytics.logEvent(pendingName, parameters: pendingParams.isEmpty ? nil : pendingParams)
     pendingName = ""
     pendingParams = [:]
+}
+
+// Fetches and activates, then hands every value the service sent to native code. The engine decides
+// when fetched values take effect (liveops::RemoteConfigService), so activating here only moves them
+// into the SDK's own active set.
+@_cdecl("mce_firebase_remote_config_fetch")
+public func mce_firebase_remote_config_fetch() {
+    let config = RemoteConfig.remoteConfig()
+    config.fetchAndActivate { status, _ in
+        if status == .error {
+            mce_firebase_config_done(0)
+            return
+        }
+        for key in config.allKeys(from: .remote) {
+            let value = config.configValue(forKey: key).stringValue
+            key.withCString { k in
+                value.withCString { v in mce_firebase_config_value(k, v) }
+            }
+        }
+        mce_firebase_config_done(1)
+    }
 }
