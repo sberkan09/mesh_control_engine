@@ -1824,7 +1824,7 @@ TEST_CASE("M-ACCESS: the tonemap pass applies the color-vision correction after 
     };
     const auto encode = [](f32 l) {
         const f32 c = l <= 0.0031308f ? l * 12.92f : 1.055f * std::pow(l, 1.0f / 2.4f) - 0.055f;
-        return static_cast<int>(c * 255.0f + 0.5f);
+        return static_cast<int>(std::lround(c * 255.0f));
     };
     const vec3 box_face{0.0f, 0.5f, 0.5f};
     f.render(0.0f, true, scene);

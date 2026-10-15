@@ -464,7 +464,7 @@ TEST_CASE("FR-R2D-100: 2D post — copy, vignette, LUT grade and chromatic aberr
     };
     const auto encode = [](f32 l) {
         const f32 c = l <= 0.0031308f ? l * 12.92f : 1.055f * std::pow(l, 1.0f / 2.4f) - 0.055f;
-        return static_cast<int>(c * 255.0f + 0.5f);
+        return static_cast<int>(std::lround(c * 255.0f));
     };
     for (ColorVision cv : {ColorVision::Protanopia, ColorVision::Deuteranopia, ColorVision::Tritanopia}) {
         Post2D c;
