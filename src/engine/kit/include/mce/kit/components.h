@@ -115,14 +115,18 @@ MCE_COMPONENT(TextLabel, font, text, color, (height, Range{0.05f, 10}, Help{"gly
 // script replays a run (an action is in the snapshot only on its press and release ticks: ask
 // has_action() before reading it). Screens stack by `order`
 // (higher on top); a visible modal screen takes focus and switches input to the "UI" action map.
+// `theme` (a .mcuitheme, M-UI-DATA step 3) restyles the document for this scene, in place of the
+// theme the document names: one menu document, a different look per scene.
 struct UiScreen {
     asset::AssetRef<asset::UiDocument> document;
     i32 order = 0;
     bool visible = true;
     u8 pad_[3] = {};
+    asset::AssetRef<asset::UiTheme> theme;
 };
 MCE_COMPONENT(UiScreen, (document, Help{"a .mcui UI document"}), (order, Range{-100, 100}, Help{"higher draws on top"}),
-              (visible, Help{"shown and fed input while set"}))
+              (visible, Help{"shown and fed input while set"}),
+              (theme, Help{"a .mcuitheme; null: the theme the document names, or the default look"}))
 
 // The view a player renders from: the first `primary` camera in ECS order, at its entity's
 // position (rotation about +Z included).

@@ -54,6 +54,7 @@ enum class ChunkType : u16 {  // closed set, appended only
     SpriteSheet,     // CHNK_SHEET: texture regions + named flipbook clips (M-DATA-REACH 5)
     AnimGraph,       // CHNK_ANIMG: a 3D animation state graph (M-DATA-REACH 7)
     UiDocument,      // CHNK_UIDOC: one UI widget tree (M-UI-DATA 1; mce/ui/document_data.h)
+    UiTheme,         // CHNK_UITHEME: a UI theme, palette + fonts + kind looks (M-UI-DATA 3; mce/ui/document_data.h)
 };
 
 const char* chunk_type_name(ChunkType t);

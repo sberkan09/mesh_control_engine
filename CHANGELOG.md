@@ -9,6 +9,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   console value is read as the type of its `.mcconfig` default (`liveops::parse_config_value`), and one the
   defaults lack or that does not read as its type is skipped. `ship` adds `firebase-config` on Android, and
   iOS links `FirebaseRemoteConfig` from `MCE_FIREBASE_SDK_DIR`. Not yet run on a device.
+- UI themes, M-UI-DATA step 3 (SBA-33): a `.mcuitheme` asset holds a palette (`UiPalette`), a font per role
+  (body, title, button) and per-kind `UiStyle` looks. A `.mcui` document names its theme with `"theme"`, a
+  `UiScreen` may override it, and every style field a document leaves at its kind's default look takes the theme's
+  value. Widgets pick a font with `"font_role"` (`ui::Skin` gains `title_font` / `button_font`). The engine's own
+  look is now `ui::default_theme()`. `samples/ui_screens` has a day and a night scene. MCP's `asset_create`
+  handles `.mcuitheme`.
 - Scene changes at run time (SBA-56, from the M-AGENT demo's friction notes): a game system calls
   `scene::request_change(world, "scenes/level2.mcscene")` and `mce_player`, the editor's play mode and every
   MCP run swap every entity for the target scene after the tick, keeping resources and running Startup again.

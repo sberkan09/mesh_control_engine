@@ -678,6 +678,17 @@ StringView Document::action(WidgetId w) const {
     const Node* n = node(w);
     return n ? n->action.view() : StringView();
 }
+FontRole Document::font_role(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->font_role : FontRole::Auto;
+}
+void Document::set_font_role(WidgetId w, FontRole role) {
+    if (Node* n = node(w)) {
+        n->font_role = role;
+        mark_layout();  // another font measures differently
+    }
+}
+const render::Font* Document::node_font(const Node& n) const { return skin_.font_for(resolve_font_role(n.kind, n.font_role)); }
 StringView Document::binding(WidgetId w) const {
     const Node* n = node(w);
     return n ? n->binding.view() : StringView();
@@ -777,12 +788,13 @@ u32 grid_columns(const GridLayout& g, f32 width, u32 count) {
 vec2 Document::measure(u32 index, f32 avail_width) const {
     const Node* n = &nodes_[index];
     const Style& st = n->styles[S(WidgetState::Normal)];
+    const render::Font* font = node_font(*n);
     auto measure_text = [&](StringView s) -> vec2 {
-        if (!skin_.font || s.empty()) return vec2(0, s.empty() ? 0.0f : text_px(st, skin_.font));
+        if (!font || s.empty()) return vec2(0, s.empty() ? 0.0f : text_px(st, font));
         render::TextLayoutDesc d;
-        d.size_px = text_px(st, skin_.font);
+        d.size_px = text_px(st, font);
         d.letter_spacing = st.letter_spacing;
-        return render::measure_text(skin_.font->face, s, d);
+        return render::measure_text(font->face, s, d);
     };
     const StringView label(n->text.data(), n->text.size());
     switch (n->kind) {
@@ -793,7 +805,7 @@ vec2 Document::measure(u32 index, f32 avail_width) const {
         }
         case WidgetKind::Toggle: {
             const vec2 t = measure_text(label);
-            const f32 box = text_px(st, skin_.font) + 4.0f;
+            const f32 box = text_px(st, font) + 4.0f;
             return vec2(box + 10.0f + t.x + 16.0f, (t.y > box ? t.y : box) + 10.0f);
         }
         case WidgetKind::Slider: return vec2(200.0f, 24.0f);
@@ -1354,14 +1366,14 @@ void Document::draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u
         }
 }
 
-void Document::draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 size, Color c, const Style& look,
-                         i16 layer, i32 order, f32 max_width) const {
-    if (!skin_.font || s.empty() || c.a <= 0.0f) return;
+void Document::draw_text(render::SpriteBatch& batch, const render::Font* font, StringView s, vec2 at, f32 size, Color c,
+                         const Style& look, i16 layer, i32 order, f32 max_width) const {
+    if (!font || s.empty() || c.a <= 0.0f) return;
     render::TextLayoutDesc d;
     d.size_px = size;
     d.max_width = max_width;
     d.letter_spacing = look.letter_spacing * scale_;
-    render::layout_text(skin_.font->face, s, d, scratch_);
+    render::layout_text(font->face, s, d, scratch_);
     math::aabb2 clip;
     if (draw_clip_) clip = math::aabb2{draw_clip_->min, draw_clip_->max};
     render::TextPlacement p;
@@ -1374,7 +1386,7 @@ void Document::draw_text(render::SpriteBatch& batch, StringView s, vec2 at, f32 
     p.outline_color = linear(look.text_outline_color);
     p.shadow_px = look.text_shadow * scale_;
     p.shadow_color = linear(look.text_shadow_color);
-    batch.add_text(*skin_.font, scratch_, p);
+    batch.add_text(*font, scratch_, p);
     u32 copies = 1;
     if (p.outline_px > 0.0f && p.outline_color.a > 0.0f) copies += 8;
     if ((p.shadow_px.x != 0.0f || p.shadow_px.y != 0.0f) && p.shadow_color.a > 0.0f) copies += 1;
@@ -1400,23 +1412,24 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
         draw_clip_ = n.clipped ? &n.clip : nullptr;
         const WidgetId id = id_of(i);
         const Style& st = n.styles[S(state(id))];
+        const render::Font* font = node_font(n);
         const i32 order = static_cast<i32>(k) * 4;
-        const f32 px = text_px(st, skin_.font) * scale_;
+        const f32 px = text_px(st, font) * scale_;
         const StringView label(n.text.data(), n.text.size());
         const Rect& r = n.rect;
         const u32 region = st.sprite_region == ~0u ? skin_.white_region : st.sprite_region;
         if (st.draw_quad && st.tint.a > 0.0f && r.max.x > r.min.x && r.max.y > r.min.y && n.kind != WidgetKind::Slider)
             draw_region(batch, r, st.tint, region, quad_layer, order, st.slice);
-        const f32 line_h = skin_.font ? skin_.font->face.line_height() * (px / skin_.font->face.metrics().pixel_height) : px;
+        const f32 line_h = font ? font->face.line_height() * (px / font->face.metrics().pixel_height) : px;
         switch (n.kind) {
-            case WidgetKind::Text: draw_text(batch, label, r.min, px, st.text_color, st, text_layer, order, r.size().x); break;
+            case WidgetKind::Text: draw_text(batch, font, label, r.min, px, st.text_color, st, text_layer, order, r.size().x); break;
             case WidgetKind::Button: {
-                if (label.empty() || !skin_.font) break;
+                if (label.empty() || !font) break;
                 render::TextLayoutDesc d;
                 d.size_px = px;
                 d.letter_spacing = st.letter_spacing * scale_;
-                const vec2 t = render::measure_text(skin_.font->face, label, d);
-                draw_text(batch, label, r.center() - t * 0.5f, px, st.text_color, st, text_layer, order);
+                const vec2 t = render::measure_text(font->face, label, d);
+                draw_text(batch, font, label, r.center() - t * 0.5f, px, st.text_color, st, text_layer, order);
                 // A tab's button: the selected one is underlined in the accent color.
                 const u32 tabs = n.parent != kNone ? nodes_[n.parent].parent : kNone;
                 if (tabs != kNone && nodes_[tabs].kind == WidgetKind::Tabs && nodes_[tabs].first_child == n.parent) {
@@ -1437,7 +1450,7 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
                     const f32 in = 3.0f * scale_;
                     draw_quad(batch, Rect{b.min + vec2(in, in), b.max - vec2(in, in)}, st.accent, quad_layer, order + 2);
                 }
-                draw_text(batch, label, vec2(b.max.x + pad, r.center().y - line_h * 0.5f), px, st.text_color, st, text_layer, order);
+                draw_text(batch, font, label, vec2(b.max.x + pad, r.center().y - line_h * 0.5f), px, st.text_color, st, text_layer, order);
                 break;
             }
             case WidgetKind::Slider: {
@@ -1461,12 +1474,12 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
                 in.append(c.input.view());
                 const bool caret = focused_ == id && std::fmod(time_, 1.0) < 0.5;
                 if (caret) in.append("_");
-                draw_text(batch, in.view(), vec2(r.min.x + pad, y), px, st.text_color, st, text_layer, order);
+                draw_text(batch, font, in.view(), vec2(r.min.x + pad, y), px, st.text_color, st, text_layer, order);
                 for (u32 l = c.count(); l-- > 0;) {
                     y -= line_h;
                     if (y < r.min.y + pad) break;
                     const ConsoleData::Line& line = c.at(l);
-                    draw_text(batch, line.text.view(), vec2(r.min.x + pad, y), px, line.color, st, text_layer, order + 1);
+                    draw_text(batch, font, line.text.view(), vec2(r.min.x + pad, y), px, line.color, st, text_layer, order + 1);
                 }
                 break;
             }

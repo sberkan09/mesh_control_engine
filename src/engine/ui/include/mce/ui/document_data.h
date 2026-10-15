@@ -10,8 +10,14 @@
 // encode/decode use nothing but this header, so the cook links them without the renderer;
 // build_document / extract_document are in a separate TU (document_build.cpp).
 //
-// Chunk layout v2 (v2: action / bind / format strings) (little-endian, POD records): UiDocHeader | UiWidgetRecord[widget_count] |
-// string blob (names, texts, convars, actions, bindings).
+// Chunk layout v3 (v2: action / bind / format strings; v3: the theme and each widget's font role)
+// (little-endian, POD records): UiDocHeader | UiWidgetRecord[widget_count] | string blob (names,
+// texts, convars, actions, bindings).
+//
+// Themes (M-UI-DATA step 3): a `.mcuitheme` asset (cooked by the `uitheme` importer to
+// CHNK_UITHEME) restyles every document that uses it. apply_theme gives each widget style field the
+// document leaves at its kind's default look (builder_defaults) the theme's value instead; fields a
+// document sets keep their value. default_theme() is the engine's own look.
 
 #include "mce/asset/guid.h"
 #include "mce/containers/array.h"
@@ -51,6 +57,7 @@ struct WidgetData {
     FixedString<32> action;
     FixedString<64> bind;
     FixedString<32> format;
+    FontRole font_role = FontRole::Auto;  // which of the skin's fonts the text uses
 };
 
 struct DocumentData {
@@ -61,6 +68,7 @@ struct DocumentData {
     asset::Guid font;
     asset::Guid sprites;
     u32 white_region = 0;
+    asset::Guid theme;  // a UiTheme; null: the default look (a scene's UiScreen may name one instead)
     bool modal = true;  // Document::set_modal
     u32 default_focus = kNoWidgetIndex;
     Array<WidgetData> widgets;  // depth-first document order: parents before children
@@ -93,7 +101,35 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out);
 // Unknown or cheat convars are logged by bind_convar and left unbound.
 Result<void> build_document(const DocumentData& d, Document& doc);
 // The document's tree (the root's subtree, root excluded) back into data: what an editor saves.
-// `font`, `sprites` and `white_region` are left as they are in `out`.
+// `font`, `sprites`, `white_region` and `theme` are left as they are in `out`.
 void extract_document(const Document& doc, DocumentData& out);
+
+// ------------------------------------------------------------------ themes
+
+inline constexpr u32 kThemeFontCount = 3;  // body, title, button: FontRole - 1
+
+struct ThemeData {
+    Palette palette;
+    asset::Guid fonts[kThemeFontCount];  // per role; null: the document's font (or the built-in one)
+    asset::Guid sprites;                 // a SpriteSheet skin; null: the document's
+    u32 white_region = 0;
+    Style styles[kWidgetKindCount][kWidgetStateCount];  // each kind's default look under this theme
+
+    asset::Guid font(FontRole role) const { return role == FontRole::Auto ? asset::Guid{} : fonts[static_cast<u32>(role) - 1]; }
+};
+
+// Every kind's look made of `palette`'s colors (what a theme with no "styles" overrides gets).
+void theme_from_palette(const Palette& palette, ThemeData& out);
+// The engine's own look: Palette's defaults, no fonts, no sprites. builder_defaults reads it.
+const ThemeData& default_theme();
+// Each widget style field of `d` that equals its kind's default look takes `theme`'s value.
+void apply_theme(const ThemeData& theme, DocumentData& d);
+// The font role a widget's text uses: `role`, or for Auto the kind's (Button for buttons, toggles,
+// sliders; Body otherwise).
+FontRole resolve_font_role(WidgetKind kind, FontRole role);
+
+// The CHNK_UITHEME payload (UI_THEME_VERSION); decode checks bounds and enumerators.
+void encode_ui_theme(const ThemeData& t, Array<byte>& out);
+Result<void> decode_ui_theme(Span<const byte> payload, ThemeData& out);
 
 }  // namespace mce::ui

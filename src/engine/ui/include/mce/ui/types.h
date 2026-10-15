@@ -18,6 +18,13 @@ MCE_ENUM(UiWidgetKind, Panel, Image, Text, Button, Toggle, Slider, Stack, Grid, 
 enum class WidgetState : u8 { Normal, Hover, Pressed, Focused, Disabled, Count };
 using UiWidgetState = WidgetState;
 MCE_ENUM(UiWidgetState, Normal, Hover, Pressed, Focused, Disabled, Count)
+inline constexpr u32 kWidgetKindCount = static_cast<u32>(WidgetKind::Tabs) + 1;
+
+// Which of the skin's fonts a widget's text uses (M-UI-DATA step 3: a theme has a font per role).
+// Auto: Button for buttons, toggles and sliders, Body for everything else.
+enum class FontRole : u8 { Auto, Body, Title, Button };
+using UiFontRole = FontRole;
+MCE_ENUM(UiFontRole, Auto, Body, Title, Button)
 
 // What a widget's anchors are fractions of: its parent's rect (the default; for the root's
 // children that is the safe area), the safe area (the screen minus the notch and the home
@@ -66,6 +73,29 @@ MCE_REFL_STRUCT(UiStyle, tint, text_color, accent, (sprite_region, Help{"into th
                 (letter_spacing, Range{-16, 64}, Help{"extra pixels between letters"}), text_outline_color,
                 (text_outline, Range{0, 16}, Help{"outline thickness in pixels; 0 = none"}), text_shadow_color,
                 (text_shadow, Help{"drop shadow offset in pixels, +y down; [0, 0] = none"}))
+
+// A theme's palette (M-UI-DATA step 3): the colors the widget kinds' default looks are made of.
+// These defaults are the engine's own look (ui::Builder, apply_default_style); sRGB like Style.
+struct Palette {
+    Color panel{0.06f, 0.06f, 0.08f, 0.85f};            // Panel backgrounds
+    Color button{0.16f, 0.17f, 0.21f, 0.94f};           // buttons, toggles, slider tracks
+    Color button_hover{0.24f, 0.25f, 0.31f, 0.96f};
+    Color button_pressed{0.1f, 0.1f, 0.13f, 0.96f};
+    Color button_focused{0.34f, 0.25f, 0.12f, 0.96f};
+    Color button_disabled{0.12f, 0.12f, 0.14f, 0.6f};
+    Color label{1, 1, 1, 1};                            // Text widgets
+    Color text{0.88f, 0.88f, 0.9f, 1};                  // on buttons, toggles and sliders
+    Color text_focused{1.0f, 0.88f, 0.55f, 1};
+    Color text_disabled{0.5f, 0.5f, 0.52f, 1};
+    Color accent{0.95f, 0.75f, 0.35f, 1};               // slider fill, toggle check, selected tab
+    Color console{0.02f, 0.02f, 0.03f, 0.88f};
+    Color console_text{0.9f, 0.9f, 0.9f, 1};
+};
+using UiPalette = Palette;
+MCE_REFL_STRUCT(UiPalette, (panel, Help{"Panel backgrounds"}), (button, Help{"buttons, toggles and slider tracks"}), button_hover,
+                button_pressed, button_focused, button_disabled, (label, Help{"Text widgets"}),
+                (text, Help{"text on buttons, toggles and sliders"}), text_focused, text_disabled,
+                (accent, Help{"slider fill, toggle check, selected tab"}), console, console_text)
 
 enum class Axis : u8 { Vertical, Horizontal };
 using UiAxis = Axis;

@@ -14,14 +14,14 @@
     {
       "name": "Hud",
       "components": {
-        "UiScreen": { "document": "guid:5703e000-0000-4000-8000-0000000003a1" },
+        "UiScreen": { "document": "guid:5703e000-0000-4000-8000-0000000003a1", "theme": "guid:5703e000-0000-4000-8000-0000000003a3" },
         "Score": {}
       }
     },
     {
       "name": "PauseMenu",
       "components": {
-        "UiScreen": { "document": "guid:5703e000-0000-4000-8000-0000000003a2", "order": 10, "visible": false },
+        "UiScreen": { "document": "guid:5703e000-0000-4000-8000-0000000003a2", "order": 10, "visible": false, "theme": "guid:5703e000-0000-4000-8000-0000000003a3" },
         "PauseMenu": {}
       }
     },
