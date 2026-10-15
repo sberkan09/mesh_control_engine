@@ -11,6 +11,7 @@
 #include "mce/platform/window.h"
 #include "mce/render/renderer.h"
 #include "mce/rhi/default_device.h"
+#include "mce/ui/document_data.h"
 #include "mce/ui/ui.h"
 
 using namespace mce;
@@ -308,6 +309,123 @@ TEST_CASE("ui_gl: one layout on a desktop, a notched phone and a tablet (layout 
             CHECK(y.r > y.b);
             device->destroy_texture(target);
         }
+        renderer.shutdown();
+    }
+    device.reset();
+    window.reset();
+    platform::shutdown();
+}
+
+// M-UI-DATA step 3: one document drawn under two themes looks clearly different with no change to
+// the document; a widget whose document sets its tint keeps it under both.
+TEST_CASE("ui_gl: one document, two themes") {
+    REQUIRE(platform::init().has_value());
+    platform::WindowDesc wd;
+    wd.title = "test_ui_gl";
+    wd.width = 64;
+    wd.height = 64;
+    wd.resizable = false;
+    wd.high_dpi = false;
+    auto w = platform::Window::create(wd);
+    REQUIRE(w.has_value());
+    mem::UniquePtr<platform::Window> window = std::move(w).value();
+    auto d = rhi::create_default_device(*window);
+    REQUIRE(d.has_value());
+    mem::UniquePtr<rhi::RenderDevice> device = std::move(d).value();
+    {
+        render::Renderer renderer;
+        REQUIRE(renderer.init(*device).has_value());
+        ui::BuiltinSkin skin;
+        REQUIRE(ui::create_builtin_skin(renderer, skin).has_value());
+
+        // bg (fill), play and quit buttons; quit's tint is the document's own.
+        ui::DocumentData data;
+        data.modal = false;  // a HUD: nothing focused, so the buttons show their Normal look
+        auto add = [&](ui::WidgetKind kind, const char* name, ui::Anchors a) {
+            ui::WidgetData wd2;
+            ui::builder_defaults(kind, wd2);
+            wd2.kind = kind;
+            wd2.name.assign(name);
+            wd2.anchors = a;
+            data.widgets.push_back(wd2);
+            return static_cast<u32>(data.widgets.size() - 1);
+        };
+        ui::Anchors fill;
+        fill.max = vec2(1, 1);
+        add(ui::WidgetKind::Panel, "bg", fill);
+        auto box = [](f32 x0, f32 y0, f32 x1, f32 y1) {
+            ui::Anchors a;
+            a.offset_min = vec2(x0, y0);
+            a.offset_max = vec2(x1, y1);
+            return a;
+        };
+        add(ui::WidgetKind::Button, "play", box(20, 20, 140, 60));
+        const u32 quit = add(ui::WidgetKind::Button, "quit", box(180, 20, 300, 60));
+        for (ui::Style& st : data.widgets[quit].styles) st.tint = ui::Color{0, 1, 0, 1};
+
+        ui::Palette day_p, night_p;
+        day_p.panel = ui::Color{0.92f, 0.9f, 0.85f, 1};
+        day_p.button = ui::Color{0.15f, 0.4f, 0.9f, 1};
+        night_p.panel = ui::Color{0.04f, 0.04f, 0.18f, 1};
+        night_p.button = ui::Color{0.9f, 0.3f, 0.1f, 1};
+        ui::ThemeData day, night;
+        ui::theme_from_palette(day_p, day);
+        ui::theme_from_palette(night_p, night);
+
+        rhi::TextureDesc td;
+        td.size = {kW, kH};
+        td.usage = rhi::TextureUsage::SampledColorTarget;
+        td.debug_name = "test.ui_theme";
+        const rhi::TextureHandle target = device->create_texture(td);
+        auto draw = [&](const ui::ThemeData& theme, Array<u8>& px) {
+            ui::DocumentData themed = data;
+            ui::apply_theme(theme, themed);
+            ui::Document doc;
+            doc.set_skin(skin.skin);
+            REQUIRE(ui::build_document(themed, doc));
+            ui::UpdateContext ctx;
+            ctx.viewport = {kW, kH};
+            doc.update(ctx);
+            device->begin_frame(0);
+            render::SpriteBatch batch(renderer.sprite_sets(), mem::heap());
+            batch.begin(render::compute_screen_view({kW, kH}), render::PassId::Screen2D);
+            doc.submit(batch);
+            batch.build();
+            rhi::PassAttachment color;
+            color.texture = target;
+            color.clear.color[3] = 1.0f;
+            rhi::RenderPassDesc pass;
+            pass.colors = Span<const rhi::PassAttachment>(&color, 1);
+            rhi::CommandBuffer cmd;
+            cmd.begin_pass(pass);
+            renderer.record_2d(cmd, batch);
+            cmd.end_pass();
+            device->submit(cmd);
+            px.resize(usize(kW) * kH * 4);
+            REQUIRE(device->read_pixels(target, rhi::Rect2D{0, 0, kW, kH}, px.span()).has_value());
+            device->end_frame();
+        };
+        Array<u8> a, b;
+        draw(day, a);
+        draw(night, b);
+        auto at = [](const Array<u8>& px, u32 x, u32 y) {
+            const usize i = (usize(y) * kW + x) * 4;
+            return Rgba{px[i], px[i + 1], px[i + 2], px[i + 3]};
+        };
+        const Rgba day_bg = at(a, 4, kH - 4), night_bg = at(b, 4, kH - 4);
+        CHECK(day_bg.r > 200);
+        CHECK(night_bg.r < 40);
+        CHECK(night_bg.b > night_bg.r);
+        const Rgba day_play = at(a, 24, 24), night_play = at(b, 24, 24);
+        CHECK(day_play.b > day_play.r + 80);
+        CHECK(night_play.r > night_play.b + 80);
+        // quit's own tint, the same under both themes.
+        const Rgba day_quit = at(a, 184, 24), night_quit = at(b, 184, 24);
+        CHECK(day_quit.g > 200);
+        CHECK(day_quit.r < 30);
+        CHECK(night_quit.g == day_quit.g);
+        CHECK(device->validation_error_count() == 0);
+        device->destroy_texture(target);
         renderer.shutdown();
     }
     device.reset();

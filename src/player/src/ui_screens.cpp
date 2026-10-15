@@ -22,6 +22,25 @@ Result<void> UiScreens::load(World& world, asset::AssetSystem& assets, Span<cons
         assets.release(asset::AnyHandle(h));
         MCE_TRY(decoded);
         for (const ui::WidgetData& w : data.widgets) relay_.declare(w.action.view());
+        // The theme: the scene's (UiScreen::theme), else the document's. A theme that does not load
+        // leaves the document's own look.
+        const asset::Guid theme_guid = !s->theme.guid.is_null() ? s->theme.guid : data.theme;
+        ui::ThemeData theme = ui::default_theme();
+        bool themed = false;
+        if (!theme_guid.is_null()) {
+            const Result<asset::AssetHandle<asset::UiTheme>> th = assets.load_sync<asset::UiTheme>(theme_guid);
+            if (th) {
+                const Result<void> tr = ui::decode_ui_theme(assets.resolve(th.value()), theme);
+                assets.release(asset::AnyHandle(th.value()));
+                if (tr) {
+                    ui::apply_theme(theme, data);
+                    themed = true;
+                }
+            }
+            if (!themed)
+                MCE_LOG_WARN("player: UI document {}: its theme does not load; using the document's own look",
+                             asset::to_string(guid).view());
+        }
         Screen sc;
         sc.entity = e;
         sc.order = s->order;
@@ -29,12 +48,20 @@ Result<void> UiScreens::load(World& world, asset::AssetSystem& assets, Span<cons
         sc.modal = data.modal;
         if (skin) {
             ui::Skin look = *skin;
-            if (!data.font.is_null()) {
-                const render::Font* f = extract ? extract->font(data.font) : nullptr;
-                if (f) look.font = f;
-                else MCE_LOG_WARN("player: UI document {}: its font does not load; using the built-in one",
-                                  asset::to_string(guid).view());
-            }
+            // Fonts: the document's names the body font; the theme's fill the roles the document
+            // leaves to it (body when the document has none, title, button).
+            auto load_font = [&](asset::Guid g) -> const render::Font* {
+                if (g.is_null()) return nullptr;
+                const render::Font* f = extract ? extract->font(g) : nullptr;
+                if (!f)
+                    MCE_LOG_WARN("player: UI document {}: a font does not load; using the built-in one",
+                                 asset::to_string(guid).view());
+                return f;
+            };
+            const asset::Guid body = !data.font.is_null() ? data.font : theme.font(ui::FontRole::Body);
+            if (const render::Font* f = load_font(body)) look.font = f;
+            look.title_font = load_font(theme.font(ui::FontRole::Title));
+            look.button_font = load_font(theme.font(ui::FontRole::Button));
             if (!data.sprites.is_null())
                 MCE_LOG_WARN("player: UI document {}: sprite-sheet skins are not drawn yet; using the built-in one",
                              asset::to_string(guid).view());

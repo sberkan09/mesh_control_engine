@@ -34,6 +34,7 @@ const char* asset_type_name(asset::ChunkType type) {
         case asset::SpriteSheet::chunk: return asset::SpriteSheet::name;
         case asset::AnimGraph::chunk: return asset::AnimGraph::name;
         case asset::UiDocument::chunk: return asset::UiDocument::name;
+        case asset::UiTheme::chunk: return asset::UiTheme::name;
         case asset::StringTable::chunk: return asset::StringTable::name;
         case asset::StoreCatalog::chunk: return asset::StoreCatalog::name;
         case asset::GameServicesCatalogChunk::chunk: return asset::GameServicesCatalogChunk::name;

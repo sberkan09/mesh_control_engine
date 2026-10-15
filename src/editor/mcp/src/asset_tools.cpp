@@ -166,13 +166,25 @@ constexpr AssetKind kKinds[] = {
 {"name":"font","type":"guid ref | null","default":null,"help":"A Font asset; null: the built-in 13 px font"},
 {"name":"sprites","type":"guid ref | null","default":null,"help":"A SpriteSheet whose region white_region is white (flat quads); null: built-in"},
 {"name":"white_region","type":"integer","default":0},
+{"name":"theme","type":"guid ref | null","default":null,"help":"A UiTheme (.mcuitheme): its palette, fonts and looks replace the kind defaults; a UiScreen's theme wins"},
 {"name":"modal","type":"boolean","default":true,"help":"false: a HUD, never takes focus"},
 {"name":"widgets","type":"array","help":"[{\"name\": 1-31 chars, no '/', \"kind\": Panel | Image | Text | Button | Toggle | Slider | Stack | Grid | Console | Scroll | Tabs, \"children\": [...]}]"},
 {"name":"widgets[] anchors","type":"one of","help":"\"fill\": true | \"at\": [anchor x, anchor y, width, height] (0 = preferred) | \"anchors\": UiAnchors {min, max, offset_min, offset_max, pivot, to: Parent | SafeArea | Screen}"},
-{"name":"widgets[] look","type":"object","help":"\"style\": UiStyle fields over every state {tint, text_color, accent, sprite_region, text_size, draw_quad, slice}; \"styles\": {\"Hover\": {...}} per state (Normal, Hover, Pressed, Focused, Disabled)"},
+{"name":"widgets[] look","type":"object","help":"\"style\": UiStyle fields over every state {tint, text_color, accent, sprite_region, text_size, draw_quad, slice}; \"styles\": {\"Hover\": {...}} per state (Normal, Hover, Pressed, Focused, Disabled); \"font_role\": Auto | Body | Title | Button (the theme's font)"},
 {"name":"widgets[] values","type":"object","help":"\"text\", \"value\", \"range\": [lo, hi, step], \"visible\", \"interactable\", \"blocks_pointer\", \"default_focus\": true, \"convar\": name (two-way), \"nav\": {\"up\" | \"down\" | \"left\" | \"right\": path}, \"stack\": UiStackLayout {axis, spacing, padding, align}, \"grid\": UiGridLayout {columns, cell, spacing}"},
 {"name":"widgets[] special","type":"object","help":"A Panel with \"modal\": true is a hidden, dimmed veil for Document::open_modal; a Tabs widget lists \"tabs\": [{\"name\", \"label\", \"children\"}] and its \"value\" is the page shown; \"kind_defaults\": false starts from the C++ defaults"}])json",
      R"json({"widgets":[{"name":"menu","kind":"Stack","at":[0.5,0.5,320,0],"children":[{"name":"play","kind":"Button","text":"PLAY","default_focus":true}]}]})json"},
+    {"UiTheme", ".mcuitheme", "mce-uitheme", 1,
+     "A UI theme (M-UI-DATA): a palette, a font per role and per-kind looks that restyle every .mcui document "
+     "naming it (\"theme\": \"guid:...\") or shown by a UiScreen whose theme is set. A widget style field the "
+     "document leaves at its kind's default look takes the theme's.",
+     R"json([
+{"name":"palette","type":"object","help":"UiPalette colors (sRGB): panel, button, button_hover, button_pressed, button_focused, button_disabled, label, text, text_focused, text_disabled, accent, console, console_text"},
+{"name":"fonts","type":"object","help":"{\"body\" | \"title\" | \"button\": \"guid:<Font>\"}; a widget's font_role picks one (Auto: button kinds use button, others body)"},
+{"name":"sprites","type":"guid ref | null","default":null,"help":"A SpriteSheet skin (white_region: its white region)"},
+{"name":"white_region","type":"integer","default":0},
+{"name":"styles","type":"object","help":"{\"<UiWidgetKind>\": {\"style\": UiStyle fields over every state, \"styles\": {\"Hover\": {...}}}} over the palette's look"}])json",
+     R"json({"palette":{"panel":[0.1,0.12,0.2,0.92],"button":[0.2,0.35,0.6,1],"accent":[1,0.6,0.2,1]}})json"},
     {"RemoteConfig", ".mcconfig", "mce-config", 1,
      "The project's remote config defaults (M-LIVEOPS). A value's type is its JSON's unless {\"type\": "
      "\"int|float|bool|string\", \"value\": ...} names it; keys are 1-63 letters, digits, '_', '-', '.'.",
@@ -605,7 +617,7 @@ const ToolDef kAssetTools[] = {
      "Describe a JSON source asset type: its fields (type, default, help) and the template asset_create starts from. "
      "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, "
      ".mcinput, .mcstore, .mcservices, .mcui, .mcconfig).",
-     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, RemoteConfig, or the extension"}}})json",
+     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, or the extension"}}})json",
      asset_schema},
     {"asset_create",
      "Create a JSON source asset at 'path' (its extension picks the type) with a fresh GUID: the type's template with "
