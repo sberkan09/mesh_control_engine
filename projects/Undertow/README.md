@@ -24,7 +24,7 @@ Engine surface used: `Sprite` + `normal_map` with `Light2D` (a headlamp, beacons
 (`.mcpart` presets: thrusters, explosions, sparks, current flow, bubbles), physics2d (dynamic drone,
 kinematic crushers and mines, static rock, sensors, a `DistanceJoint` rope), `AudioSource` + `PlaySfx`
 on two buses, code-defined `SequenceRegistry` sequences (the delivery fanfare and the win), a
-`Text` HUD, and `RunStats` (a ReadOnly/Transient component the MCP `inspect` reads back).
+`Text` HUD, `.mcui` screens with `UiFlow` (title, pause, options, HUD), and `RunStats` (a ReadOnly/Transient component the MCP `inspect` reads back).
 
 | Path | What |
 |---|---|
@@ -33,10 +33,11 @@ on two buses, code-defined `SequenceRegistry` sequences (the delivery fanfare an
 | `assets/textures/` | generated art (`tools/gen_art.py`: rock + normal map, drone, pods, hazards, the teal LUT) |
 | `assets/sfx/` | generated sounds (`tools/gen_sfx.py`: hum, impacts, chimes, a 16 s music loop) |
 | `assets/effects/*.mcpart` | particle presets written by the authoring script |
-| `assets/fonts/` | ProggyClean (`CREDITS.md`) |
+| `assets/ui/` | the screens (`title`, `pause`, `options`, `hud` `.mcui`) and two themes (`deep`, `surface` `.mcuitheme`), made by `tools/author_ui_mcp.py` |
+| `assets/fonts/` | ProggyClean, and Pixelify Sans, Press Start 2P, Atkinson Hyperlegible Next and Karla from the engine's content library (`CREDITS.md`) |
 | `games/undertow/module/` | the game module: `components.h` (19 components), `undertow.cpp` systems + `install`, `module.cpp` entry, `types.cpp` for the cook |
 | `games/undertow/host/` | the thin host executable (the engine's player runtime + this game) |
-| `tests/test_undertow.cpp` | ctest `undertow_level`: thrust and energy, gates and lasers, mines and checkpoints, death and respawn, the rope and the delivery, the win, a scripted run that docks a core, attract determinism |
+| `tests/test_undertow.cpp` | ctest `undertow_level`: thrust and energy, gates and lasers, mines and checkpoints, death and respawn, the rope and the delivery, the win, a scripted run that docks a core, attract determinism, the title and pause screens holding the run |
 
 From the engine checkout:
 
@@ -46,9 +47,15 @@ From the engine checkout:
     build/linux-gcc-debug/projects/Undertow/undertow_editor -project projects/Undertow  # edit
     python3 projects/Undertow/tools/gen_art.py && python3 projects/Undertow/tools/gen_sfx.py
     python3 projects/Undertow/tools/author_level_mcp.py --mcp build/linux-gcc-debug/projects/Undertow/undertow_mcp
+    python3 projects/Undertow/tools/author_ui_mcp.py --mcp build/linux-gcc-debug/projects/Undertow/undertow_mcp
     ctest --test-dir build/linux-gcc-debug -R undertow
     python3 scripts/ship.py --project projects/Undertow --smoke --smoke-headless   # the ship zip in dist/
 
 The authoring script rebuilds both scenes from scratch (it clears them entity by entity), cooks,
 runs the attract scene headless for 2 400 ticks and checks through `inspect` that the autopilot
-delivered a core, then writes a timing / friction report next to the transcript it kept.
+delivered a core, then writes a timing / friction report next to the transcript it kept. It
+clears the screens too, so run `author_ui_mcp.py` after it: that one adds the fonts from the
+engine's library, writes the themes and the four documents, puts them in both scenes with
+`UiScreen` and `UiFlow` (the title holds the run until PLAY, Esc pauses, QUIT TO TITLE reloads the
+scene; the attract scene shows the HUD in the `surface` theme), cooks, and plays a scripted
+Play / Pause / Resume run twice for the same hash. `--shots shots/` also saves `ui_preview` PNGs.

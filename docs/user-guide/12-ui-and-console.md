@@ -168,6 +168,34 @@ const input::InputState* in = f.try_resource<input::InputState>();
 if (in && in->has_action(MCE_SID("Resume")) && in->pressed(MCE_SID("Resume"))) pause_screen.visible = false;
 ```
 
+### Screens that open and close themselves (`UiFlow`)
+
+A title, a pause menu and an options page usually need no game code at all: `UiFlow` on the
+screen's entity shows, hides and holds it on input actions (the stock kit installs it).
+
+```json
+{ "name": "UI Title", "components": {
+    "UiScreen": { "document": "guid:<title.mcui>", "order": 20 },
+    "UiFlow": { "hide_on": "Play", "pause": true } } },
+{ "name": "UI Pause", "components": {
+    "UiScreen": { "document": "guid:<pause.mcui>", "order": 10, "visible": false },
+    "UiFlow": { "show_on": "Pause", "hide_on": "Resume", "load_on": "ToTitle",
+                "scene": "guid:<main.mcscene>", "pause": true } } }
+```
+
+- `show_on` / `hide_on` name the actions that show and hide the screen: a button's `"action"`, a
+  panel's Cancel action, Esc (`Pause` once screens are in the scene) or an `-input` script line.
+- `load_on` loads `scene` (often the scene itself, which restarts it: "Quit to title").
+- `pause: true` holds the game while the screen is visible: gameplay, physics, audio and every
+  other fixed-step system stop, while the tick count, the screens and the drawing go on. A held
+  tick is part of the run, so a script that pauses and resumes replays with the same state hash.
+  Code reads it with `World::held()`, and a system that must run while held registers with
+  `World::run_when_held`.
+
+`projects/Undertow` uses all of this (`tools/author_ui_mcp.py`): a title, a pause menu, an options
+page with music and effects volume, and a HUD bound to the drone, the same documents drawn in two
+themes on two scenes.
+
 The documents use the built-in skin, or their `"font"`, or their theme's fonts (below);
 sprite-sheet skins are not drawn yet.
 

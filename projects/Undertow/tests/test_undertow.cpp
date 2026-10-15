@@ -8,6 +8,8 @@
 //   - a pod on the rope is hauled; entering the dock delivers it and lights a beacon
 //   - delivering every core wins, and the win cue runs through the sequence runner
 //   - the attract scene's autopilot docks core 1; two runs hash the same (FR-RUN-040)
+//   - the screens (tools/author_ui_mcp.py): the title holds the run until Play, Pause holds it
+//     until Resume, Quit to title reloads the scene; two scripted runs hash the same
 #include <doctest/doctest.h>
 
 #include <cmath>
@@ -16,6 +18,7 @@
 #include "mce/input/ecs.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
+#include "mce/kit/stock.h"
 #include "mce/physics/module.h"
 #include "mce/scene/scene.h"
 #include "undertow.h"
@@ -32,7 +35,7 @@ struct Game {
     World w;
     u64 tick = 0;
 
-    explicit Game(StringView scene_path = "scenes/main.mcscene") {
+    explicit Game(StringView scene_path = "scenes/main.mcscene", bool ui_flow = false) {
         const StringView roots[1] = {StringView(UNDERTOW_PACK)};
         REQUIRE(static_cast<bool>(assets.mount(Span<const StringView>(roots, 1))));
         // The player runtime's order (src/player/src/player.cpp): input, physics, kit, the game, the scene.
@@ -40,6 +43,7 @@ struct Game {
         physics::install_physics2d(w);
         kit::install_particles(w, &assets);
         kit::install_sequences(w, &assets);
+        if (ui_flow) kit::install_ui_flow(w);  // the player installs it with the stock kit
         REQUIRE(static_cast<bool>(undertow::install(w)));
         asset::Guid scene;
         for (asset::AssetKey k = 0; k < assets.asset_count(); ++k)
@@ -145,7 +149,7 @@ TEST_CASE("undertow: the authored level has the pieces the design needs") {
     CHECK(g.count<Current>([](const Current&) { return true; }) == 4);
     CHECK(g.count<Mover>([](const Mover&) { return true; }) == 3);
     CHECK(g.count<Thruster>([](const Thruster&) { return true; }) == 4);
-    CHECK(g.count<HudText>([](const HudText&) { return true; }) == 4);
+    CHECK(g.count<HudText>([](const HudText&) { return true; }) == 3);
     CHECK(g.count<Autopilot>([](const Autopilot&) { return true; }) == 0);  // the main scene is played by a person
     CHECK(g.drone().hull == 3);
     CHECK(g.drone().energy == doctest::Approx(100.0f));
@@ -349,4 +353,67 @@ TEST_CASE("undertow: the attract scene's autopilot docks core 1; two runs hash t
     const u64 b = run(2400);
     CHECK(a == b);
     MESSAGE("attract 2400 ticks: state_hash " << a);
+}
+
+namespace {
+
+input::InputState press(const char* action, f32 mx = 0.0f, f32 my = 0.0f) {
+    input::InputState in = thrust(mx, my);
+    if (action) {
+        in.action_count = 1;
+        in.action_names[0] = StringId(action);
+        in.actions[0].held = in.actions[0].pressed = true;
+    }
+    return in;
+}
+
+// The screen whose flow hides it on `hide_on` (Play: the title, Resume: pause, Back: options).
+bool screen_visible(Game& g, const char* hide_on) {
+    bool visible = false, found = false;
+    g.w.query<const kit::UiFlow&, const kit::UiScreen&>().each([&](const kit::UiFlow& f, const kit::UiScreen& s) {
+        if (f.hide_on.view() == StringView(hide_on)) found = true, visible = s.visible;
+    });
+    REQUIRE(found);
+    return visible;
+}
+
+}  // namespace
+
+TEST_CASE("undertow: the title holds the run until Play; Pause holds it until Resume; two runs hash the same") {
+    auto run = [] {
+        Game g("scenes/main.mcscene", true);
+        CHECK(g.count<kit::UiFlow>([](const kit::UiFlow&) { return true; }) == 3);
+        CHECK(screen_visible(g, "Play"));
+        CHECK(g.w.held());
+        const u64 before = g.w.state_hash();
+        g.steps(30, thrust(1.0f, 0.0f));  // thrust under the title: the run does not move
+        CHECK(g.w.state_hash() == before);
+        g.step(press("Play"));
+        CHECK_FALSE(screen_visible(g, "Play"));
+        CHECK_FALSE(g.w.held());
+        g.step();  // the first played tick creates the bodies
+        const vec2 start = g.pos();
+        g.steps(40, thrust(1.0f, 0.0f));
+        CHECK(math::length(g.pos() - start) > 0.1f);
+        g.step(press("Pause"));
+        CHECK(screen_visible(g, "Resume"));
+        CHECK(g.w.held());
+        const vec2 paused = g.pos();
+        g.steps(30, thrust(0.0f, 1.0f));
+        CHECK(math::length(g.pos() - paused) < 1e-4f);
+        g.step(press("Options"));
+        CHECK(screen_visible(g, "Back"));
+        g.step(press("Back"));
+        CHECK_FALSE(screen_visible(g, "Back"));
+        CHECK(g.w.held());
+        g.step(press("Resume"));
+        CHECK_FALSE(screen_visible(g, "Resume"));
+        CHECK_FALSE(g.w.held());
+        g.steps(40, thrust(0.0f, 1.0f));
+        return g.w.state_hash();
+    };
+    const u64 a = run();
+    const u64 b = run();
+    CHECK(a == b);
+    MESSAGE("ui flow run: state_hash " << a);
 }

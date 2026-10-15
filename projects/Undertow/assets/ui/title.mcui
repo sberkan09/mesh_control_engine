@@ -1,0 +1,46 @@
+{
+  "format": "mce-ui", "version": 1, "guid": "4aaf029a-a8d2-475a-8ae4-0bdc4585bf4c",
+  "theme": "guid:b2230eb6-868e-4431-9845-2c8307c9dbf2",
+  "widgets": [
+    { "name": "veil", "kind": "Panel", "kind_defaults": false,
+      "anchors": { "max": [1, 1] },
+      "style": { "tint": [0, 0.03, 0.06, 0.8] },
+      "blocks_pointer": true,
+      "children": [
+        { "name": "menu", "kind": "Stack", "kind_defaults": false,
+          "anchors": { "min": [0.5, 0.5], "max": [0.5, 0.5], "offset_min": [-190, 0], "offset_max": [190, 0] },
+          "style": { "draw_quad": false },
+          "stack": { "spacing": 14 },
+          "children": [
+            { "name": "title", "kind": "Text", "kind_defaults": false,
+              "style": { "draw_quad": false },
+              "text": "UNDERTOW",
+              "font_role": "Title" },
+            { "name": "tagline", "kind": "Text", "kind_defaults": false,
+              "style": { "draw_quad": false },
+              "text": "HAUL FIVE REACTOR CORES HOME" },
+            { "name": "play", "kind": "Button", "kind_defaults": false,
+              "styles": {
+                "Normal": { "tint": [0.16, 0.17, 0.21, 0.94], "text_color": [0.88, 0.88, 0.9, 1] },
+                "Hover": { "tint": [0.24, 0.25, 0.31, 0.96], "text_color": [0.88, 0.88, 0.9, 1] },
+                "Pressed": { "tint": [0.1, 0.1, 0.13, 0.96], "text_color": [0.88, 0.88, 0.9, 1] },
+                "Focused": { "tint": [0.34, 0.25, 0.12, 0.96], "text_color": [1, 0.88, 0.55, 1] },
+                "Disabled": { "tint": [0.12, 0.12, 0.14, 0.6], "text_color": [0.5, 0.5, 0.52, 1] } },
+              "text": "PLAY",
+              "default_focus": true,
+              "nav": { "down": "veil/menu/options" },
+              "action": "Play" },
+            { "name": "options", "kind": "Button", "kind_defaults": false,
+              "styles": {
+                "Normal": { "tint": [0.16, 0.17, 0.21, 0.94], "text_color": [0.88, 0.88, 0.9, 1] },
+                "Hover": { "tint": [0.24, 0.25, 0.31, 0.96], "text_color": [0.88, 0.88, 0.9, 1] },
+                "Pressed": { "tint": [0.1, 0.1, 0.13, 0.96], "text_color": [0.88, 0.88, 0.9, 1] },
+                "Focused": { "tint": [0.34, 0.25, 0.12, 0.96], "text_color": [1, 0.88, 0.55, 1] },
+                "Disabled": { "tint": [0.12, 0.12, 0.14, 0.6], "text_color": [0.5, 0.5, 0.52, 1] } },
+              "text": "OPTIONS",
+              "nav": { "up": "veil/menu/play" },
+              "action": "Options" }
+          ] }
+      ] }
+  ]
+}

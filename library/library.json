@@ -620,6 +620,94 @@
    "license": "SIL OFL 1.1"
   },
   {
+   "id": "font-pixelify-sans",
+   "kind": "font",
+   "title": "Pixelify Sans (pixel)",
+   "tags": [
+    "pixel",
+    "retro",
+    "arcade",
+    "ui",
+    "body text",
+    "font"
+   ],
+   "files": [
+    "templates/project/assets/fonts/PixelifySans.ttf"
+   ],
+   "deps": [
+    "templates/project/assets/fonts/PixelifySans-OFL.txt"
+   ],
+   "author": "The Pixelify Sans Project Authors",
+   "source": "github.com/eifetx/Pixelify-Sans",
+   "license": "SIL OFL 1.1"
+  },
+  {
+   "id": "font-press-start-2p",
+   "kind": "font",
+   "title": "Press Start 2P (pixel titles)",
+   "tags": [
+    "pixel",
+    "retro",
+    "arcade",
+    "title",
+    "heading",
+    "font"
+   ],
+   "files": [
+    "templates/project/assets/fonts/PressStart2P-Regular.ttf"
+   ],
+   "deps": [
+    "templates/project/assets/fonts/PressStart2P-OFL.txt"
+   ],
+   "author": "Cody \"CodeMan38\" Boisclair",
+   "source": "github.com/google/fonts/tree/main/ofl/pressstart2p",
+   "license": "SIL OFL 1.1"
+  },
+  {
+   "id": "font-atkinson-hyperlegible-next",
+   "kind": "font",
+   "title": "Atkinson Hyperlegible Next (clean sans)",
+   "tags": [
+    "sans",
+    "clean",
+    "readable",
+    "ui",
+    "body text",
+    "font"
+   ],
+   "files": [
+    "templates/project/assets/fonts/AtkinsonHyperlegibleNext.ttf"
+   ],
+   "deps": [
+    "templates/project/assets/fonts/AtkinsonHyperlegibleNext-OFL.txt"
+   ],
+   "author": "Braille Institute",
+   "source": "github.com/googlefonts/atkinson-hyperlegible-next",
+   "license": "SIL OFL 1.1"
+  },
+  {
+   "id": "font-karla",
+   "kind": "font",
+   "title": "Karla (sans titles)",
+   "tags": [
+    "sans",
+    "grotesque",
+    "title",
+    "heading",
+    "ui",
+    "font"
+   ],
+   "files": [
+    "templates/project/assets/fonts/Karla.ttf"
+   ],
+   "deps": [
+    "templates/project/assets/fonts/Karla-OFL.txt"
+   ],
+   "author": "Jonny Pinhorn",
+   "source": "github.com/googlefonts/karla",
+   "license": "SIL OFL 1.1"
+  },
+  {
    "id": "sky-day",
    "kind": "texture",
    "title": "Day sky with clouds",

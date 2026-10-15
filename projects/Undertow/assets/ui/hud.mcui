@@ -1,0 +1,43 @@
+{
+  "format": "mce-ui", "version": 1, "guid": "b8c2e694-6585-4901-9703-00a76cbbf4a3",
+  "theme": "guid:b2230eb6-868e-4431-9845-2c8307c9dbf2",
+  "modal": false,
+  "widgets": [
+    { "name": "stats", "kind": "Stack", "kind_defaults": false,
+      "anchors": { "offset_min": [20, 16], "offset_max": [280, 0], "to": "SafeArea" },
+      "style": { "draw_quad": false },
+      "stack": { "spacing": 4 },
+      "children": [
+        { "name": "hull_label", "kind": "Text", "kind_defaults": false,
+          "style": { "draw_quad": false },
+          "text": "HULL" },
+        { "name": "hull", "kind": "Slider", "kind_defaults": false,
+          "styles": {
+            "Normal": { "tint": [0.16, 0.17, 0.21, 0.94], "text_color": [0.88, 0.88, 0.9, 1] },
+            "Hover": { "tint": [0.24, 0.25, 0.31, 0.96], "text_color": [0.88, 0.88, 0.9, 1] },
+            "Pressed": { "tint": [0.1, 0.1, 0.13, 0.96], "text_color": [0.88, 0.88, 0.9, 1] },
+            "Focused": { "tint": [0.34, 0.25, 0.12, 0.96], "text_color": [1, 0.88, 0.55, 1] },
+            "Disabled": { "tint": [0.12, 0.12, 0.14, 0.6], "text_color": [0.5, 0.5, 0.52, 1] } },
+          "range": [0, 3, 1],
+          "interactable": false,
+          "bind": "Drone/hull" },
+        { "name": "energy_label", "kind": "Text", "kind_defaults": false,
+          "style": { "draw_quad": false },
+          "text": "ENERGY" },
+        { "name": "energy", "kind": "Slider", "kind_defaults": false,
+          "styles": {
+            "Normal": { "tint": [0.16, 0.17, 0.21, 0.94], "text_color": [0.88, 0.88, 0.9, 1] },
+            "Hover": { "tint": [0.24, 0.25, 0.31, 0.96], "text_color": [0.88, 0.88, 0.9, 1] },
+            "Pressed": { "tint": [0.1, 0.1, 0.13, 0.96], "text_color": [0.88, 0.88, 0.9, 1] },
+            "Focused": { "tint": [0.34, 0.25, 0.12, 0.96], "text_color": [1, 0.88, 0.55, 1] },
+            "Disabled": { "tint": [0.12, 0.12, 0.14, 0.6], "text_color": [0.5, 0.5, 0.52, 1] } },
+          "range": [0, 100, 1],
+          "interactable": false,
+          "bind": "Drone/energy" },
+        { "name": "cores", "kind": "Text", "kind_defaults": false,
+          "style": { "draw_quad": false },
+          "bind": "RunStats/cores",
+          "format": "CORES %g / 5" }
+      ] }
+  ]
+}

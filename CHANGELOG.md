@@ -5,6 +5,16 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Screens that open and close themselves, M-UI-DATA demo (SBA-38): `kit::UiFlow` shows, hides and holds a
+  `UiScreen` on input actions (`show_on`, `hide_on`, `load_on` a scene, `pause`), and a paused screen holds the
+  world (`World::set_held`: fixed-step systems stop, the tick count goes on, the hash replays). Undertow gets a
+  title, a pause menu, options with music and effects volume and a bound HUD, authored only through its MCP
+  server (`tools/author_ui_mcp.py`), in two themes on two scenes; library fonts Pixelify Sans, Press Start 2P,
+  Atkinson Hyperlegible Next and Karla; `mce://docs` serves `templates/`.
+- Remote config builds for iOS and Android again: a float value is read with `strtod` instead of `std::from_chars`,
+  which iOS before 26 and the NDK's libc++ do not have. The values it accepts are unchanged. The Game Center
+  backend (`-DMCE_GAMEKIT=ON`) now compiles for the iOS Simulator and a `ship --target android` build with Play
+  Games produces its APK on a Mac (SBA-23).
 - The editor's UI Document panel (SBA-36, M-UI-DATA step 6): a `.mcui` document's widget tree (add, remove,
   reorder, undo), an inspector for the selected widget (anchors, per-state or every-state styles, layouts, nav,
   action, bind) and a live preview at phone, tablet and desktop sizes with the theme applied. Edits are read back by
