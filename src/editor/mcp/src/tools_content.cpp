@@ -1180,7 +1180,7 @@ cook::Image mesh_preview(const MeshData& m, const f32 color[4], u32 px) {
                 if (d >= z) continue;
                 z = d;
                 u8* p = &img.rgba[(static_cast<usize>(y) * px + static_cast<usize>(x)) * 4];
-                for (int k = 0; k < 3; ++k) p[k] = static_cast<u8>(math::clamp(color[k] * lit, 0.0f, 1.0f) * 255.0f + 0.5f);
+                for (int k = 0; k < 3; ++k) p[k] = static_cast<u8>(std::lround(math::clamp(color[k] * lit, 0.0f, 1.0f) * 255.0f));
                 p[3] = 255;
             }
     }

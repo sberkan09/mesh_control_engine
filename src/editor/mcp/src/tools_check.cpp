@@ -225,7 +225,7 @@ bool panel_behind(const cook::JsonValue& ents, u32 label, const editor::EditorPr
                 for (u32 k = 0; k < 3; ++k) sum[k] += px[i + k] / 255.0 * a8;
                 sum[3] += a8;
             }
-            const f64 n = static_cast<f64>(px.size() / 4);
+            const f64 n = static_cast<f64>(px.size()) / 4.0;
             for (u32 k = 0; k < 3; ++k) rgb[k] *= sum[3] > 0 ? static_cast<f32>(sum[k] / sum[3]) : 0.f;
             alpha *= static_cast<f32>(sum[3] / n);
         }
