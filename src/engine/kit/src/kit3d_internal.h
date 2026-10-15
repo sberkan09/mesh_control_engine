@@ -15,6 +15,9 @@ void world_pose(World& w, Entity e, const LocalTransform& local, math::vec3& pos
 bool create_box_collider(World& w, Physics3D& phys, Entity e, const BoxCollider3D& c, const LocalTransform& t);
 bool create_mesh_collider(World& w, Physics3D& phys, asset::AssetSystem* assets, Entity e, const MeshCollider3D& c,
                           const LocalTransform& t);
+// Needs the entity's Terrain3D; false (with a warning) without it or when the terrain does not load.
+bool create_terrain_collider(World& w, Physics3D& phys, asset::AssetSystem* assets, Entity e, const TerrainCollider3D& c,
+                             const LocalTransform& t);
 // install_kit3d's asset system (null when none).
 asset::AssetSystem* kit3d_assets(World& w);
 

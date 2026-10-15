@@ -160,3 +160,33 @@ TEST_CASE("world3d: Jolt allocations go through the MCE heap and are released wi
     }
     CHECK(mem::heap_live_allocations() == before);
 }
+
+TEST_CASE("world3d: a height field collides with its triangles, leaves holes open and stays static") {
+    // 9 x 9 samples, 1 m apart from (-4, 0, -4): a plane rising 0.5 m per sample along x, one hole sample.
+    f32 heights[81];
+    for (u32 z = 0; z < 9; ++z)
+        for (u32 x = 0; x < 9; ++x) heights[z * 9 + x] = 0.5f * static_cast<f32>(x);
+    heights[4 * 9 + 6] = kHeightFieldHole;  // sample (6, 4): world (2, -, 0)
+    BodyDesc3D d;
+    d.shape = Shape3D::height_field(Span<const f32>(heights, 81), 9, {-4, 0, -4}, {1, 1, 1});
+    World3D w;
+    REQUIRE(w.create_body(ent(1), d));
+    const auto hit = w.raycast({-1.5f, 10, -2.25f}, {0, -1, 0}, 20.0f);  // x = -1.5: sample 2.5
+    REQUIRE(hit.has_value());
+    CHECK(hit->entity == ent(1));
+    CHECK(hit->point.y == doctest::Approx(1.25f).epsilon(0.01));
+    CHECK_FALSE(w.raycast({2.0f, 10, 0.0f}, {0, -1, 0}, 20.0f).has_value());  // through the hole
+    CHECK(w.raycast({-2.0f, 10, 0.0f}, {0, -1, 0}, 20.0f).has_value());
+
+    // Malformed: too few samples, a count that does not match, zero spacing; dynamic like a mesh.
+    BodyDesc3D bad = d;
+    bad.shape = Shape3D::height_field(Span<const f32>(heights, 9), 3, {}, {1, 1, 1});
+    CHECK_FALSE(w.create_body(ent(2), bad));
+    bad.shape = Shape3D::height_field(Span<const f32>(heights, 80), 9, {}, {1, 1, 1});
+    CHECK_FALSE(w.create_body(ent(2), bad));
+    bad.shape = Shape3D::height_field(Span<const f32>(heights, 81), 9, {}, {0, 1, 1});
+    CHECK_FALSE(w.create_body(ent(2), bad));
+    bad = d;
+    bad.type = BodyType3D::Dynamic;
+    CHECK_FALSE(w.create_body(ent(2), bad));
+}
