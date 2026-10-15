@@ -1686,6 +1686,7 @@ private:
         film.set = film_set_;
         film.position = {0.5f * w, 0.5f * h};
         film.scale = w / h > film_aspect_ ? math::vec2{h * film_aspect_, h} : math::vec2{w, w / film_aspect_};
+        film.flip_y = true;  // the HUD's y runs down the screen; the film's first row is its top
         film.sort_layer = kLayer;
         film.sort_order = 1;
         hud.add(film);
