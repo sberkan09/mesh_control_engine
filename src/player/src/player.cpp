@@ -1603,6 +1603,7 @@ private:
         fd.msaa = math::min(fd.msaa, static_cast<u32>(math::clamp<i64>(cv_msaa.get_int(), 1, 8)));
         MCE_TRY(renderer_.init_3d(fd));
         extract3d_.init(renderer_.meshes(), &assets_);
+        extract3d_.set_texture_store(&renderer_.textures());
         // High caps no Environment3D cascade count (its 3 is only the scene default).
         if (tier == render::QualityTier::High) quality.shadow_cascades = render::kMaxCascades;
         extract3d_.set_quality(quality);

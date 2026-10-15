@@ -14,6 +14,7 @@
 
 #include "mce/editor/editor_scene.h"
 #include "mce/math/math.h"
+#include "mce/physics3d/navmesh3d.h"
 #include "mce/physics3d/world3d.h"
 #include "mce/render/scene3d.h"
 
@@ -85,6 +86,28 @@ struct Segment3D {
     math::Color color = math::Color::white();
 };
 void orbit_wireframe(const EditorScene& scene, f32 depth, Array<Segment3D>& out, bool sprite_quads = true);
+
+// The navmesh the scene's first NavMeshSurface3D points at (its `baked` .mcnav, M-GAMEPLAY3D 1),
+// for the orbit view: the walkable floor's triangle edges (tinted by area) and the off-mesh links.
+// sync() reloads when the bake changes (another GUID, or a re-bake under the same one).
+class NavMeshPreview {
+public:
+    static constexpr usize kMaxSegments = 60000;
+
+    void sync(const EditorScene& scene, asset::AssetSystem* assets);
+    // Nothing when there is no bake or the surface's `show` is off.
+    void segments(Array<Segment3D>& out) const;
+    const physics::NavMesh3D& mesh() const { return mesh_; }
+
+private:
+    physics::NavMesh3D mesh_;
+    asset::Guid guid_;
+    u64 hash_ = 0;
+    bool show_ = false;
+    Array<math::vec3> tris_;
+    Array<u8> areas_;
+    Array<math::vec3> links_;
+};
 
 // Projects `seg` through `view` to viewport pixels (origin top-left, +y down), clipped against
 // the near plane. False when the whole segment is behind the camera.

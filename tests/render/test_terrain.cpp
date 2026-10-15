@@ -266,3 +266,42 @@ TEST_CASE("terrain: a 513-sample terrain stays inside each quality tier's draw b
         prev_tris = tris;
     }
 }
+
+TEST_CASE("terrain: compose_layer_array packs matching layer textures and leaves the rest out") {
+    // Cooked RGBA8 textures of one value; 8x8 with 2 mips, or a 4x4 odd one out.
+    auto texture = [](u32 size, u32 mips, u8 value, Array<byte>& out) {
+        Array<byte> px[2];
+        asset::TextureMipData data[2];
+        for (u32 m = 0; m < mips; ++m) {
+            const u32 s = size >> m;
+            px[m].resize(usize(s) * s * 4, byte(value));
+            data[m] = {s, s, px[m].span()};
+        }
+        asset::write_texture(asset::TextureFormat::RGBA8, 1, asset::TextureFlags::Srgb, Span<const asset::TextureMipData>(data, mips), out);
+    };
+    Array<byte> a, b, odd;
+    texture(8, 2, 10, a);
+    texture(8, 2, 20, b);
+    texture(4, 1, 30, odd);
+    const asset::TextureView va = asset::TextureView::read(a.span()).value(), vb = asset::TextureView::read(b.span()).value(),
+                             vo = asset::TextureView::read(odd.span()).value();
+    const asset::TextureView* layers[4] = {&va, nullptr, &vo, &vb};
+    render::LayerArray arr;
+    REQUIRE(render::compose_layer_array(Span<const asset::TextureView* const>(layers, 4), arr));
+    CHECK(arr.present == 0b1001u);  // layer 1 has none, layer 2's does not match layer 0's
+    CHECK(arr.upload.layers == 4);
+    CHECK(arr.upload.format == rhi::TextureFormat::RGBA8_SRGB);
+    REQUIRE(arr.upload.mips.size() == 2);
+    const render::TextureMipUpload& m1 = arr.upload.mips[1];
+    CHECK(m1.width == 4);
+    REQUIRE(m1.pixels.size() == 4 * 4 * 4 * 4);
+    const usize layer = 4 * 4 * 4;
+    CHECK(u8(m1.pixels[0]) == 10);
+    CHECK(u8(m1.pixels[layer]) == 0);      // missing: zero
+    CHECK(u8(m1.pixels[2 * layer]) == 0);  // left out
+    CHECK(u8(m1.pixels[3 * layer + 5]) == 20);
+
+    const asset::TextureView* none[2] = {nullptr, nullptr};
+    CHECK_FALSE(render::compose_layer_array(Span<const asset::TextureView* const>(none, 2), arr));
+    CHECK(arr.present == 0u);
+}

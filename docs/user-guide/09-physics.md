@@ -157,7 +157,40 @@ the world with `create_distance_joint(desc)` / `create_revolute_joint(desc)` and
 returned `JointId` (`destroy_joint`, `set_motor_speed`, `set_joint_limits`). Prismatic, wheel, weld and mouse joints are not built.
 Joints are not scene-authored yet.
 
-## 9.7 Configuration
+## 9.7 3D navigation
+
+A 3D scene gets a navigation mesh (navmesh) and agents that walk it from five components
+(`mce/kit/nav3d.h`, on Recast & Detour, ADR-0040). The stock player, play-in-editor and MCP's
+`run_headless` run them; nothing needs code.
+
+- `NavMeshSurface3D`: one per scene (the first in ECS order is used). Its settings say what an
+  agent can do (`agent_radius`, `agent_height`, `agent_max_climb`, `agent_max_slope_deg`) and how
+  finely to voxelize (`cell_size`, `cell_height`, `tile_size`). The mesh is baked from the scene's
+  `BoxCollider3D` and `MeshCollider3D` in the layers of `layer_mask` (plus `MeshRef` meshes of
+  entities without a collider when `include_meshes` is set). **File → Bake navmesh** in the
+  editor writes `assets/navmesh/<scene>/nav_<id>.mcnav` (a `NavMesh` asset) and points `baked` at
+  it, and the editor's 3D view draws it (green floor, amber costly areas, pink links; `show` turns
+  it off). Without a bake the mesh is baked when the scene starts, and again whenever `version`
+  changes. The bake is byte-identical run to run.
+- `NavArea3D`: a box (axis-aligned) whose floor takes an `area` id with a path `cost` per metre:
+  mud at cost 5 is walked around unless the detour is longer. Area 0 cuts a hole; 1 is the ground.
+- `NavLink3D`: an off-mesh link from the entity to `end` (a jump across a gap, a ladder): paths
+  use it like floor.
+- `NavObstacle3D`: a box carved out of the mesh while `enabled`, following its entity (a door, a
+  crate, a drawbridge); agents re-plan around it. Areas and links are baked in, obstacles are not.
+- `NavAgent3D`: set `target` and `move_to = 1` and the entity walks there at `speed`, steering
+  around other agents (`avoid_agents`, `separation`). It writes `state` (Idle, Moving, Arrived,
+  NoPath, OffMesh), `velocity`, `distance` and `arrivals`. An agent with a `CharacterController3D`
+  (with `use_input` off) drives the controller's `move`, so it walks slopes and steps and pushes
+  bodies; otherwise its `LocalTransform` is put on the mesh. `face_motion` turns its local −Z to the
+  way it walks.
+
+From code, the `kit::Nav3D` resource holds the loaded `physics::NavMesh3D`: `find_path`,
+`raycast` (along the floor, stopping at walls), `nearest_point` and `area_at` work any time after
+the surface's `ready` is 1. Budget: a 200 × 200 m level at the default 0.2 m cells bakes in well
+under a second; a crowd of 128 agents steps in about a millisecond.
+
+## 9.8 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3
 position iterations, warm starting on. A scene changes gravity with a `WorldSettings` component (`gravity_2d`; chapter 2,
@@ -168,7 +201,7 @@ off by default to keep older replays bit-identical; a new game that stacks many 
 
 Budget: 2,000 bodies is the tested ceiling; a 20-body stack settles within a second.
 
-## 9.8 Debugging
+## 9.9 Debugging
 
 The editor viewport overlays colliders. In code, `World2D::debug_draw(sink, flags)` fills line and
 circle primitives for a renderer you provide; `stats()` reports body and contact counts;

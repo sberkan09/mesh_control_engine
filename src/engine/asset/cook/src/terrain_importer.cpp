@@ -8,10 +8,22 @@
 //   "size": [256, 256],           // metres along x and z, centred on the entity
 //   "height_range": [0, 40],      // metres a sample of 0 and of 65535 stand for
 //   "heights": "<base64>",        // resolution² little-endian u16, z rows of x columns; omitted = flat
-//   "fill": 0                     // metres of a flat terrain (no "heights"); default: the range's low end
+//   "fill": 0,                    // metres of a flat terrain (no "heights"); default: the range's low end
+//   "layers": [                   // splat layers (M-TERRAIN 2), at most 8, painted by "splat"
+//     { "material": "guid:<uuid>",          // a .mcmat: its maps, base color, roughness, metallic
+//       "tile": 4,                          // metres per repeat of its textures (default 4)
+//       "triplanar": false,                 // also project along x and z on steep ground
+//       "height_strength": 1,               // how far its albedo brightness lifts it over neighbours
+//       "auto": { "height": [lo, hi], "slope": [0, 30] } }   // with no "splat": where it grows
+//   ],
+//   "splat_resolution": 257,      // weight samples per side: 2^n + 1, 33..resolution (default min(resolution, 1025))
+//   "splat": "<base64>"           // splat_resolution² × layer count u8 weights, sample by sample;
+//                                 // omitted = the layers' "auto" rules, else all layer 0
 // }
 
+#include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include "importer_common.h"
@@ -53,6 +65,27 @@ bool base64_decode(StringView in, Array<byte>& out) {
     return true;
 }
 
+bool is_resolution(f64 n, f64 max) {
+    const u32 r = static_cast<u32>(n);
+    return n >= asset::kTerrainMinResolution && n <= max && f64(r) == n && ((r - 1) & (r - 2)) == 0;
+}
+
+// An "auto" rule's weight at height h (metres) and slope (degrees): 1 inside its ranges, fading over a
+// soft edge outside them.
+struct AutoRule {
+    bool any = false;
+    f32 height[2] = {-1e9f, 1e9f};
+    f32 slope[2] = {0.0f, 90.0f};
+    f32 height_edge = 1.0f;
+    f32 weight(f32 h, f32 deg) const {
+        auto band = [](f32 v, f32 lo, f32 hi, f32 edge) {
+            const f32 d = std::min(v - lo, hi - v);
+            return std::clamp(d / edge + 0.5f, 0.0f, 1.0f);
+        };
+        return band(h, height[0], height[1], height_edge) * band(deg, slope[0], slope[1], 4.0f);
+    }
+};
+
 class TerrainImporter final : public IImporter {
 public:
     StringView id() const override { return "terrain"; }
@@ -61,6 +94,29 @@ public:
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ".mcterrain"; }
 
+    void scan_dependencies(const ImportInput& in, Array<DepRef>& out, DiagList& diags) const override {
+        const JsonValue layers = in.settings.get("layers");
+        if (!layers.is_array()) return;  // cook() reports the wrong type
+        for (u32 i = 0; i < layers.size(); ++i) {
+            const JsonValue m = layers.at(i).is_object() ? layers.at(i).get("material") : JsonValue();
+            if (!m.valid() || m.is_null()) continue;
+            Guid g;
+            if (!m.is_string() || !parse_guid_ref(m.as_string(), g)) {
+                detail::error_at(diags, Errc::ParseError, in.display_path, m, kStage, "a layer's 'material' must be \"guid:<uuid>\" or null");
+                continue;
+            }
+            DepRef d;
+            d.guid = g;
+            d.expected = ChunkType::Material;
+            d.line = m.line();
+            d.col = m.col();
+            char where[48];
+            std::snprintf(where, sizeof where, "layers[%u].material", i);
+            d.where.assign(where);
+            out.push_back(d);
+        }
+    }
+
     bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
         const JsonValue doc = in.settings;
         const StringView file = in.display_path;
@@ -68,7 +124,8 @@ public:
             detail::error_at(diags, Errc::ParseError, file, at.valid() ? at : doc, kStage, msg);
             return false;
         };
-        if (!detail::check_keys(doc, {"format", "version", "guid", "name", "resolution", "chunk", "size", "height_range", "heights", "fill"},
+        if (!detail::check_keys(doc, {"format", "version", "guid", "name", "resolution", "chunk", "size", "height_range", "heights", "fill", "layers",
+                                      "splat_resolution", "splat"},
                                 file, kStage, diags))
             return false;
         const JsonValue fmt = doc.get("format");
@@ -85,7 +142,7 @@ public:
         const JsonValue res = doc.get("resolution");
         const f64 n = res.is_integer() ? res.as_number() : 0.0;
         const u32 resolution = static_cast<u32>(n);
-        if (n < asset::kTerrainMinResolution || n > asset::kTerrainMaxResolution || ((resolution - 1) & (resolution - 2)) != 0)
+        if (!is_resolution(n, asset::kTerrainMaxResolution))
             return fail(res, "'resolution' must be 2^n + 1 samples per side, 33 to 4097 (33, 65, 129, 257, 513, 1025, ...)");
         h.resolution = resolution;
 
@@ -147,13 +204,138 @@ public:
             for (u16& s : heights) s = v;
         }
 
+        Array<asset::TerrainLayer> layers;
+        Array<u8> splat;
+        if (!cook_layers(doc, file, h, heights.span(), layers, splat, diags)) return false;
+
         Array<byte> payload;
-        asset::write_terrain(h, heights.span(), payload);
+        asset::write_terrain(h, heights.span(), payload, layers.span(), splat.span());
         asset::ContainerWriter::ChunkDesc d;
         d.type = ChunkType::Terrain;
         d.version = asset::chunk_version(asset::TERRAIN_VERSION, 0);
         d.guid = in.guid;
         out.add(d, payload.span());
+        return true;
+    }
+
+private:
+    // "layers", "splat_resolution" and "splat" (or the layers' "auto" rules) into the header's layer
+    // fields, the layer table and the two RGBA8 weight planes.
+    static bool cook_layers(JsonValue doc, StringView file, asset::TerrainHeader& h, Span<const u16> heights,
+                            Array<asset::TerrainLayer>& layers, Array<u8>& splat, DiagList& diags) {
+        auto fail = [&](JsonValue at, StringView msg) {
+            detail::error_at(diags, Errc::ParseError, file, at.valid() ? at : doc, kStage, msg);
+            return false;
+        };
+        const JsonValue list = doc.get("layers");
+        if (!list.valid()) {
+            if (doc.get("splat").valid() || doc.get("splat_resolution").valid())
+                return fail(doc.get("splat").valid() ? doc.get("splat") : doc.get("splat_resolution"), "a splat map needs 'layers'");
+            return true;
+        }
+        if (!list.is_array() || list.size() == 0 || list.size() > asset::kTerrainMaxLayers)
+            return fail(list, "'layers' must be an array of 1 to 8 layers");
+        const u32 count = list.size();
+        Array<AutoRule> rules;
+        bool any_rule = false;
+        for (u32 i = 0; i < count; ++i) {
+            const JsonValue l = list.at(i);
+            if (!l.is_object()) return fail(l, "a layer must be an object");
+            if (!detail::check_keys(l, {"material", "tile", "triplanar", "height_strength", "auto"}, file, kStage, diags)) return false;
+            asset::TerrainLayer t{};
+            Guid g;
+            if (const JsonValue m = l.get("material"); m.is_string() && parse_guid_ref(m.as_string(), g)) {
+                t.material[0] = g.hi;
+                t.material[1] = g.lo;
+            }
+            f64 tile = 4.0, strength = 1.0;
+            bool triplanar = false;
+            if (!detail::read_number(l, "tile", 4.0, tile, file, kStage, diags) ||
+                !detail::read_number(l, "height_strength", 1.0, strength, file, kStage, diags) ||
+                !detail::read_bool(l, "triplanar", false, triplanar, file, kStage, diags))
+                return false;
+            if (!(tile > 0.0 && tile < 1e6)) return fail(l.get("tile"), "'tile' must be metres per repeat, above 0");
+            if (!(strength >= 0.0 && strength <= 100.0)) return fail(l.get("height_strength"), "'height_strength' must be 0 to 100");
+            t.tile = static_cast<f32>(tile);
+            t.height_strength = static_cast<f32>(strength);
+            if (triplanar) t.flags |= asset::TerrainLayerFlags::kTriplanar;
+            layers.push_back(t);
+
+            AutoRule r;
+            r.height_edge = std::max(1.0f, 0.02f * (h.height_max - h.height_min));
+            if (const JsonValue a = l.get("auto"); a.valid()) {
+                if (!a.is_object()) return fail(a, "'auto' must be an object");
+                if (!detail::check_keys(a, {"height", "slope"}, file, kStage, diags)) return false;
+                r.any = any_rule = true;
+                auto range = [&](const char* key, f32 (&dst)[2], f64 lo, f64 hi) {
+                    const JsonValue v = a.get(key);
+                    if (!v.valid()) return true;
+                    if (!v.is_array() || v.size() != 2 || !v.at(0).is_number() || !v.at(1).is_number() ||
+                        !(v.at(0).as_number() <= v.at(1).as_number()) || v.at(0).as_number() < lo || v.at(1).as_number() > hi) {
+                        String msg;
+                        appendf(msg, "'auto.%s' must be [low, high]%s", key, key[0] == 's' ? " in degrees, 0 to 90" : " in metres");
+                        return fail(v, msg.view());
+                    }
+                    dst[0] = static_cast<f32>(v.at(0).as_number());
+                    dst[1] = static_cast<f32>(v.at(1).as_number());
+                    return true;
+                };
+                if (!range("height", r.height, -1e5, 1e5) || !range("slope", r.slope, 0.0, 90.0)) return false;
+            }
+            rules.push_back(r);
+        }
+
+        u32 sres = std::min(h.resolution, 1025u);
+        if (const JsonValue sr = doc.get("splat_resolution"); sr.valid()) {
+            if (!sr.is_integer() || !is_resolution(sr.as_number(), h.resolution))
+                return fail(sr, "'splat_resolution' must be 2^n + 1 weight samples per side, 33 up to 'resolution'");
+            sres = static_cast<u32>(sr.as_number());
+        }
+        h.layer_count = count;
+        h.splat_resolution = sres;
+        const usize n = usize(sres) * sres;
+        splat.resize(n * 8, u8{0});
+        auto put = [&](usize sample, u32 layer, u8 w) { splat[(layer / 4) * n * 4 + sample * 4 + layer % 4] = w; };
+
+        if (const JsonValue data = doc.get("splat"); data.valid()) {
+            Array<byte> bytes;
+            if (!data.is_string() || !base64_decode(data.as_string(), bytes)) return fail(data, "'splat' must be a base64 string");
+            if (bytes.size() != n * count) {
+                String msg;
+                appendf(msg, "'splat' holds %zu bytes; %u x %u samples of %u layers need %zu (one u8 weight per layer per sample)", bytes.size(),
+                        sres, sres, count, n * count);
+                return fail(data, msg.view());
+            }
+            for (usize i = 0; i < n; ++i)
+                for (u32 l = 0; l < count; ++l) put(i, l, static_cast<u8>(bytes[i * count + l]));
+            return true;
+        }
+        if (!any_rule) {
+            for (usize i = 0; i < n; ++i) put(i, 0, 255);
+            return true;
+        }
+        // The "auto" rules over the heights: each weight sample takes the height and slope of the
+        // terrain at its position; a sample no rule claims goes to layer 0.
+        const u32 res = h.resolution;
+        const f32 dx = h.size[0] / f32(res - 1), dz = h.size[1] / f32(res - 1), scale = (h.height_max - h.height_min) / 65535.0f;
+        auto height = [&](i32 x, i32 z) {
+            x = std::clamp(x, 0, i32(res) - 1);
+            z = std::clamp(z, 0, i32(res) - 1);
+            return h.height_min + f32(heights[usize(z) * res + usize(x)]) * scale;
+        };
+        for (u32 sz = 0; sz < sres; ++sz)
+            for (u32 sx = 0; sx < sres; ++sx) {
+                const i32 x = i32(std::lround(f64(sx) * (res - 1) / (sres - 1))), z = i32(std::lround(f64(sz) * (res - 1) / (sres - 1)));
+                const f32 gx = (height(x + 1, z) - height(x - 1, z)) / (2.0f * dx), gz = (height(x, z + 1) - height(x, z - 1)) / (2.0f * dz);
+                const f32 deg = std::atan(std::sqrt(gx * gx + gz * gz)) * 57.29578f, hh = height(x, z);
+                f32 w[asset::kTerrainMaxLayers] = {}, sum = 0.0f;
+                for (u32 l = 0; l < count; ++l) {
+                    w[l] = rules[l].any ? rules[l].weight(hh, deg) : 0.0f;
+                    sum += w[l];
+                }
+                if (sum < 1.0f) w[0] += 1.0f - sum, sum = std::max(sum, 1.0f);
+                for (u32 l = 0; l < count; ++l) put(usize(sz) * sres + sx, l, static_cast<u8>(std::lround(w[l] / sum * 255.0f)));
+            }
         return true;
     }
 };
