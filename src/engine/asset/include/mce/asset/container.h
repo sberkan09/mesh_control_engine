@@ -56,6 +56,7 @@ enum class ChunkType : u16 {  // closed set, appended only
     UiDocument,      // CHNK_UIDOC: one UI widget tree (M-UI-DATA 1; mce/ui/document_data.h)
     UiTheme,         // CHNK_UITHEME: a UI theme, palette + fonts + kind looks (M-UI-DATA 3; mce/ui/document_data.h)
     Terrain,         // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN; mce/render/terrain.h)
+    NavMesh,         // CHNK_NAV: a baked 3D navmesh, the .mcnav bytes (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
 };
 
 const char* chunk_type_name(ChunkType t);

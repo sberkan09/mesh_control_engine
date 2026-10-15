@@ -65,6 +65,13 @@ WALLS = [
     ),
     ("ImGui wall", re.compile(r"\bImGui(::|zmo)|[<\"]imgui"), ["src/editor/layer/"], ["src/", "samples/", "games/"]),
     ("JPH wall", re.compile(r"\bJPH::|[<\"]Jolt/"), ["src/engine/physics3d/"], ["src/", "samples/", "games/", "tests/"]),
+    # Recast & Detour (ADR-0040): navigation, private to mce_physics3d's sources.
+    (
+        "Recast wall",
+        re.compile(r"[<\"](Recast|Detour)\w*\.h|\b(rc|dt)[A-Z]\w*\s*[(<*&]|\bdt(Nav|Crowd|Tile|Poly|Query)\w*"),
+        ["src/engine/physics3d/src/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
     ("Box2D wall", re.compile(r"\bb2[A-Z]\w*|[<\"]box2d/"), ["tests/physics2d/oracle/"], ["src/", "samples/", "games/", "tests/", "tools/"]),
     ("DirectXMath wall", re.compile(r"[<\"]DirectX\w*\.h|\bDirectX::"), ["tests/core/test_math_oracle"], ["src/", "samples/", "games/", "tests/", "tools/"]),
     # Cook-time-only third-party code (FR-AST-010): stb lives in the cook library, never in a
@@ -117,6 +124,7 @@ LINK_WALLS = [
     # Networking is opt-in (ADR-0035): only games, samples and tests link mce_net; no engine
     # library, host, tool or the editor does, so the engine and every other game stay network-free.
     ("net opt-in wall", re.compile(r"\bmce_net\b"), ["src/engine/net/", "samples/", "games/", "projects/", "templates/", "tests/"]),
+    ("Recast link wall", re.compile(r"\bmce_recast\b"), ["src/engine/physics3d/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
     # The visual-novel kit is opt-in the same way (M-NOVEL): games, samples and tests link it (its
     # dialogue box, mce_kit_novel_ui, a game's host). The authoring tools (editor, mce_mcp, mce_cook)
