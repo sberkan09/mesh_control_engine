@@ -59,6 +59,8 @@ def main():
         assert "package org.meshcontrol.review;" in review
         assert "requestReviewFlow" in review and "launchReviewFlow" in review
         assert "public void mceHaptic(int preset)" in activity, activity
+        assert "public boolean mceScreenReaderOn()" in activity and "public void mceAnnounce(final String text)" in activity
+        assert "announceForAccessibility" in activity
         haptics = read(os.path.join(main_dir, "java", "org", "meshcontrol", "haptics", "MceHaptics.java"))
         assert "package org.meshcontrol.haptics;" in haptics
         assert "VibrationEffect.createPredefined" in haptics
@@ -72,6 +74,8 @@ def main():
         src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src", "engine", "platform", "src")
         assert 'method("mceReviewRequest", "()V")' in read(os.path.join(src, "review.cpp"))
         assert 'method("mceHaptic", "(I)V")' in read(os.path.join(src, "haptics.cpp"))
+        reader = read(os.path.join(src, "screen_reader.cpp"))
+        assert 'method("mceScreenReaderOn", "()Z")' in reader and 'method("mceAnnounce", "(Ljava/lang/String;)V")' in reader
         # MceHaptics numbers its presets as platform::haptics::Preset does.
         header = read(os.path.join(src, "..", "include", "mce", "platform", "haptics.h"))
         names = ["Selection", "Light", "Medium", "Heavy", "Success", "Warning", "Error"]
