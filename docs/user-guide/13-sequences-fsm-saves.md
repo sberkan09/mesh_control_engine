@@ -135,7 +135,7 @@ everything out on one clock. Author it as a `.mctimeline` asset and play it with
     {"type": "activation", "target": 2, "path": "MeshRef.visible", "ranges": [{"from": 1, "to": 3}]},
     {"type": "animation", "target": 3, "keys": [{"t": 0.5, "clip": "walk", "loop": true}]},
     {"type": "audio", "keys": [{"t": 0, "sound": "guid:<music uuid>", "gain_db": -6}]},
-    {"type": "camera", "cuts": [{"t": 0, "camera": 4}, {"t": 3, "camera": 5}]},
+    {"type": "camera", "cuts": [{"t": 0, "camera": 4}, {"t": 3, "camera": 5, "blend": 1.5}]},
     {"type": "event", "keys": [{"t": 2.5, "emit": "door_open"}]},
     {"type": "subtitle", "lines": [{"t": 1, "duration": 2, "text": "Who's there?", "speaker": "Mira"}]}
   ] }
@@ -157,7 +157,7 @@ drive the same moves on different entities.
 | `activation` | `from`, `to` | a bool or integer field: 1 inside a range, 0 outside (`MeshRef.visible`, a light's `enabled`) |
 | `animation` | `t`, `clip`, `loop`, `fade` | sets the target's `Animator` clip and restarts it |
 | `audio` | `t`, `sound`, `gain_db` | plays a one-shot sound |
-| `camera` | `t`, `camera` | camera cuts: that camera is `primary` until the next cut, the track's other cameras are not |
+| `camera` | `t`, `camera`, `blend` | camera cuts: that camera is `primary` until the next cut, the track's other cameras are not; `blend` seconds ease the view over from the previous cut's camera (13.6) |
 | `event` | `t`, `emit` | pushes a `kit::TimelineSignal`, and a `SeqSignal` so a sequence's `wait_event` can follow the timeline |
 | `subtitle` | `t`, `duration`, `text`, `speaker` | the line shown in that range: the stock player draws it as a subtitle (10.7); `kit::timeline_subtitle` reads it |
 
@@ -208,3 +208,52 @@ message) and saved as soon as you let go, so the file on disk is always one the 
 panel has its own **Undo** and **Redo**; the scene's undo (Ctrl+Z) covers the scene side, such as a
 binding record mode added. A change written by an MCP tool or a text editor is read in while the
 panel has nothing unsaved.
+
+## 13.6 Cutscenes
+
+A cutscene is a timeline played with a `Cutscene` component next to its `TimelinePlayer`
+(`mce/kit/cinematic.h`, installed by the stock player, play-in-editor and `run_headless`). While the
+timeline plays:
+
+- **Gameplay is held.** The world's gameplay systems stop, as under a pause screen, but the
+  timelines, sequences, animators, particles, cameras, transforms and audio play on. Your own system
+  can play on too: `world.run_during_cutscenes(phase, "my_system")` after you add it. A pause
+  screen (`UiFlow`, 12) over a cutscene stops all of it. Turn `hold_gameplay` off for a cutscene the
+  game keeps running under (a novel's, below).
+- **Letterbox.** The player draws black bars `letterbox` of the screen high (0.12 by default; 0 for
+  none) that slide in and out over `letterbox_time` seconds, under the scene's UI screens.
+- **Subtitles.** The timeline's subtitle lines show over the lower bar, like every timeline's
+  (the player's subtitle view and its settings, 10.7).
+- **Skip.** With `skippable` on, the player shows `skip_prompt` ("Hold to skip") and a bar that
+  fills while `skip_action` (the UI map's `Cancel`: Esc, gamepad B) is held. Held for `skip_hold`
+  seconds (1 by default) the cutscene skips: the event keys after the playhead still fire, so
+  gameplay waiting on a beat hears it, each animation track's last clip starts, sounds stay silent,
+  the state tracks jump to the end and the player finishes. `skipped` records it.
+
+While a cutscene plays, the player switches the controls to the "UI" input map, so the game's own
+actions (Pause included) wait until it ends. `active`, `bars` and `skip_progress` are engine-written;
+`hold_gameplay` lifts on the tick after the timeline ends (on the same tick when it is skipped).
+
+```json
+"Intro": { "TimelinePlayer": { "timeline": "guid:<intro>", "bindings": ["$2", "$3", "$4", null, null, null, null, null] },
+           "Cutscene": { "letterbox": 0.1, "skip_prompt": "Hold Esc to skip" } }
+```
+
+**Cinematic cameras.** Put these on a `Camera3DComponent` entity; a timeline's camera track cuts
+between them and property tracks drive their fields.
+
+| Component | Does |
+|---|---|
+| `CameraRail3D` | a dolly: the camera moves along a Catmull-Rom curve through `points` (up to 8, the first `count`). `t` 0..1 is the place on the path (0 the first point, 1 the last); key it with a property track (`CameraRail3D.t`) or give it a `speed` (with `loop` the path closes). `face_path` turns the camera along the path |
+| `CameraLookAt3D` | turns the camera to face `target` plus `offset`; `smoothing` (1/s) eases it, 0 snaps |
+| `CameraShake3D` | trauma shake of the view: up to `max_translation` metres and `max_rotation` radians at trauma 1, growing with trauma². Set `trauma` (a property track keys it) or fire a `ShakeTrigger`, which shakes 2D and 3D cameras. The Reduce motion setting (`access.motion_scale`) scales the view's shake |
+| `CameraBlend3D` | eases the view from `from`'s view (position, orientation, field of view) to this camera's over `duration` seconds. A camera cut with `"blend"` writes it; set it yourself to blend outside a timeline |
+
+```json
+{"type": "property", "target": 4, "path": "CameraRail3D.t", "keys": [{"t": 0, "value": 0}, {"t": 4, "value": 1, "ease": "smooth"}]},
+{"type": "camera", "cuts": [{"t": 0, "camera": 4}, {"t": 4, "camera": 5, "blend": 1.5}]}
+```
+
+All of it is sim state, so a cutscene replays and hashes the same, and the Timeline panel's preview
+shows the rail, look-at and blend at the playhead. In a novel, `@cutscene <timeline>` plays one
+(21).

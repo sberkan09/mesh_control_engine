@@ -631,7 +631,8 @@ inline constexpr u8 Quat = 1u << 0;  // Property: the four values are a rotation
 struct TimelineKey {
     f32 t;             // seconds from the start
     f32 duration;      // Activation / Subtitle: the range's length
-    f32 v[4];          // Property: the value; Animation: v[0] loop (0/1), v[1] fade (< 0 keeps the Animator's); Audio: v[0] gain dB
+    f32 v[4];          // Property: the value; Animation: v[0] loop (0/1), v[1] fade (< 0 keeps the Animator's); Audio: v[0] gain dB;
+                       // Camera: v[0] blend seconds from the previous cut's camera (0 = a hard cut)
     u64 id;            // Animation: StringId of the clip; Event: StringId of the signal
     u64 guid[2];       // Audio: the Sfx {hi, lo}
     u32 text;          // Animation: the clip name; Subtitle: the line

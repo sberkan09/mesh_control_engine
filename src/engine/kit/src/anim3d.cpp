@@ -382,6 +382,8 @@ void install_anim3d(World& world) {
 void add_anim3d_systems(World& world) {
     world.add_system(Phase::FixedUpdate_Post, "kit3d_animators", &kit3d_animators);
     world.add_system(Phase::FixedUpdate_Post, "kit3d_attach", &kit3d_attach, "kit3d_animators");
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit3d_animators");
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit3d_attach");
 }
 
 }  // namespace mce::kit

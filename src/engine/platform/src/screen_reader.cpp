@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 
+#include "mce/convar.h"
 #include "mce/fixed_string.h"
 #include "mce/platform/window.h"
 
@@ -10,9 +11,18 @@
 #endif
 
 namespace mce::platform::screen_reader {
+
+MCE_CVAR(cv_screen_reader, "access.screen_reader", 1,
+         "Speak the focused menu item, a focused slider's new value and the novel stage's pages and rows "
+         "through the device's screen reader: 0 never, 1 while the OS reports a reader on (VoiceOver, "
+         "TalkBack, Narrator...), 2 always",
+         CVarFlags::Saved);
+
 namespace {
 
 Stats g_stats;
+u64 g_checked_ms = 0;
+bool g_running = false;
 Sink g_sink = nullptr;
 void* g_sink_user = nullptr;
 SDL_Window* g_window = nullptr;
@@ -52,6 +62,18 @@ void set_sink(Sink sink, void* user) {
 Stats stats() { return g_stats; }
 
 bool running() { return device_running(); }
+
+bool wanted() {
+    const i32 mode = cv_screen_reader.get_int();
+    if (mode <= 0) return false;
+    if (mode >= 2) return true;
+    const u64 now = SDL_GetTicks();
+    if (g_checked_ms == 0 || now - g_checked_ms >= 1000) {
+        g_running = device_running();
+        g_checked_ms = now == 0 ? 1 : now;
+    }
+    return g_running;
+}
 
 bool announce(StringView text) {
     if (text.empty()) return false;

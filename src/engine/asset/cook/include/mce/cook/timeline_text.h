@@ -45,6 +45,7 @@ struct TimelineDocKey {
     asset::Guid sound;    // Audio
     f32 gain_db = 0.0f;   // Audio
     u8 camera = asset::kTimelineSelf;  // Camera: the cut's camera
+    f32 blend = 0.0f;                  // Camera: seconds the view eases over from the previous cut's camera
 };
 
 struct TimelineDocTrack {

@@ -77,3 +77,31 @@ novel kit and the narrative games now want cutscenes, and MCE had no video playb
   ignores it, so moving a box never changes the cooked bytes.
 - Previewing sets the Animator's clip and time in the play world only; "Run the graph" puts the entity's graph
   back, so the preview never needs the document.
+
+## Step 4 — cutscenes (SBA-79)
+
+| Item | Where | Evidence |
+|---|---|---|
+| A cutscene hold: `World::set_cutscene_held` stops gameplay but runs the systems marked `run_during_cutscenes` (timelines, sequences, animators, attach, sprite animation, particles, effects, captions, follow and cinematic cameras, transforms, audio); a pause hold on top stops those too | `ecs/world.h`, `world.cpp`, each system's install | `test_kit` "cinematic: a cutscene hold stops gameplay only; a pause stops the cutscene's systems too" |
+| `CameraRail3D` (Catmull-Rom dolly through up to 8 points, `t` keyed or `speed`, `loop`, `face_path`), `CameraLookAt3D` (target + offset, smoothing) | `kit/cinematic.h`, `cinematic.cpp` ("kit_cinematic") | "cinematic: rails pass through their points, look-ats face their target" |
+| `CameraBlend3D` and a camera cut's `"blend"` seconds (key `v[0]`, no format change): the view eases position, orientation and field of view from the previous cut's camera | `timeline.cpp`, `kit3d_extract.cpp` `view_of`, cook `timeline_text.h`, Timeline panel key inspector | "cinematic: a cutscene holds gameplay while its timeline plays and blends between cameras" |
+| `CameraShake3D` (trauma model of `CameraShake2D`; `ShakeTrigger` feeds both); `access.motion_scale` scales the view's shake | `effects.cpp`, `kit3d_extract.cpp` | "cinematic: a ShakeTrigger shakes a 3D camera; reduced motion is the view's, not the trauma's" |
+| `Cutscene`: hold while its `TimelinePlayer` plays, letterbox bars sliding in and out, hold-to-skip on an action's `held_time` (`kit::timeline_skip`: remaining event keys fire, last animation keys start, state at the end); `kit::cutscene_view` for the player | `cinematic.cpp` ("kit_cutscene"), `timeline.cpp` | "cinematic: holding the skip action skips to the end, fires the remaining events and releases the hold" |
+| The stock player draws the bars (under M-ACCESS's subtitle view, which shows the timeline's lines) and the skip prompt with its bar, and switches to the "UI" input map while a cutscene plays | `player.cpp` `add_cutscene_overlay`, `update_ui_map` | `mce_player -capture_ticks 60,240,300` on a rail-camera cutscene scene (offscreen Mesa, 0 GL errors): bars, subtitle, skip prompt, the blend and the wide camera's shake |
+| Novel kit: `"timelines"` in story.json, `@cutscene <id>` (op `Cutscene`, mode `Cutscene`); the bot skips it; NPC dialogue skips the statement | `story_compile.py`, `novel.h`, `stage.cpp` | `test_novel` "novel: @cutscene plays a timeline as a cutscene and the story goes on when it ends or is skipped"; `story_compile` |
+
+### Design notes
+
+- **Two holds, not one.** `UiFlow` writes the pause hold every tick and a cutscene must not fight it, so the world
+  keeps two flags; a system runs on a held tick only if it is marked for every hold that is on. Pausing over a
+  cutscene freezes it; the cutscene alone keeps the camera, animation and sound alive.
+- **The blend is timeline time.** A cut's blend is sampled like every state track (elapsed = playhead − key), so
+  scrubbing and the editor preview show it; outside a timeline `kit_cutscene` advances `elapsed`. The view blends in
+  the extract, so the camera entities themselves never move.
+- **Skipping keeps beats.** A skipped cutscene still raises its remaining event keys, so gameplay or a sequence that
+  waits on `door_open` does not stall; sounds stay silent.
+- **Controls.** The skip action is the UI map's Cancel; the player pushes the UI map during a cutscene like a modal
+  screen, so gameplay input (Pause included) waits. A game wanting pause in cutscenes sets `hold_gameplay` off and
+  holds what it needs itself.
+- Subtitles are not the cutscene's: M-ACCESS's subtitle view shows every timeline's lines with the player's
+  subtitle settings, and the bars sit under it.
