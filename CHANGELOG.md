@@ -10,6 +10,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   Game Center saved games and Play Games snapshots, so a second device gets a conflict as on the local stand-in;
   a saved game the engine did not write is never overwritten. iOS builds it with `-DMCE_GAMEKIT=ON`; `ship`
   stamps Play Games into a game with a `.mcservices` when `MCE_PLAY_GAMES_APP_ID` is set. Not yet run on a device.
+- Novel kit words in the player's language (SBA-59, M-MOBILE 11e follow-up): the title menu, checkpoint, ending
+  card and extras page read `novel.*` keys from the string tables (English when no table has one; a `.touch` row
+  after a finger read on, "Tap" for "Enter"), and the story's title, extras row and ending titles read
+  `story.title`, `story.extras` and `story.ending.<id>`, which `mce story compile` now writes to the base table.
+  `novel::kit_text` / `kit_count` serve a game's own panel hook. The English checkpoint line says "1 page read".
 - Remote config fetches from Firebase Remote Config on phone builds shipped with Firebase (SBA-24): each
   console value is read as the type of its `.mcconfig` default (`liveops::parse_config_value`), and one the
   defaults lack or that does not read as its type is skipped. `ship` adds `firebase-config` on Android, and

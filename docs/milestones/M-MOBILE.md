@@ -304,6 +304,10 @@ and wins (Success):
   `test_novel_ui` (Turkish typing, a runtime switch and back, Turkish options) and `story_compile` (the base
   table beside game rows, `--check` on a stale table, the page-count fallback).
 
+The kit's own words followed (SBA-59): `novel.*` keys for the title menu and the panels (with `.touch`
+variants), and `story.title` / `story.extras` / `story.ending.<id>` rows from the compile; user guide 21
+lists them.
+
 Still open in 11e: letters (`@lettertext`) show in the base language.
 
 ## What shipped (step 11f: taps and clicks on dialogue and novel choices)

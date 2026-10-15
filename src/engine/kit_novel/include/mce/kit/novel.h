@@ -35,6 +35,7 @@ class AssetSystem;
 }
 namespace mce::loc {
 class Localization;
+struct Arg;
 }
 namespace mce::input {
 struct InputState;
@@ -231,6 +232,17 @@ const LocaleText* story_locale(const Program& p, World& world);  // the world's 
 void localized_page(const Program& p, const LocaleText* lt, const u16 base[4], u16 out[4]);
 void localized_option(const Program& p, const LocaleText* lt, const Option& o, u16& text, u16& text2);
 const char* localized_speaker(const Program& p, const LocaleText* lt, u8 character);
+// The kit's own words (the novel.* keys) and the story's titles (story.title, story.extras,
+// story.ending.<id>: the story compile writes them into the base table) in the player's language
+// (SBA-59). The pattern is the text of `key` on the language chain (with `touch`, "<key>.touch"
+// first: "Tap" where the keys say "Enter"), else `fallback`; formatted with `args` (loc::format)
+// into out[cap], NUL-terminated. A table that lacks a key shows the English words, never the key.
+void kit_text(const loc::Localization* l10n, StringView key, StringView fallback, char* out, u32 cap,
+              Span<const loc::Arg> args = {}, bool touch = false);
+// A count: the key's plural form for `count` (Localization::plural) when a table on the chain has
+// the key, else `one` / `other` with {count}.
+void kit_count(const loc::Localization* l10n, StringView key, i64 count, StringView one, StringView other, char* out,
+               u32 cap);
 // The typewriter runs on the base page (the sim's clock): `revealed` of its `base_points` mapped
 // onto a shown page of `shown_points`, so both finish together.
 u32 scale_reveal(u32 revealed, u32 base_points, u32 shown_points);
@@ -390,6 +402,11 @@ struct NovelState {
     u8 ending = 0;  // the ending reached (0 = none yet)
     u32 endings_this_session = 0;
     bool finished = false;  // an @end ran
+
+    // presentation (SBA-59): the last read-on was a finger (the panels say "Tap"), and the title
+    // menu's rows in the player's language
+    bool touch = false;
+    char title_rows[3][64] = {};
 };
 
 // Registers the kit's components and systems and the NovelState resource (an existing one keeps

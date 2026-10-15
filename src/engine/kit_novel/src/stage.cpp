@@ -16,6 +16,7 @@
 #include "mce/kit/components.h"
 #include "mce/kit/novel.h"
 #include "mce/kit/sequence.h"
+#include "mce/loc/loc.h"
 #include "mce/log.h"
 #include "mce/platform/haptics.h"
 
@@ -431,7 +432,10 @@ void apply_pointer(Context& c, Keys& k) {
     const kit::ViewInfo* view_res = c.f.try_resource<kit::ViewInfo>();
     const kit::ViewInfo view = view_res ? *view_res : kit::ViewInfo{};
     math::vec2 px;
-    if (!pointer_pressed(c.f.resource<input::InputState>(), view, px)) return;
+    const input::InputState& in = c.f.resource<input::InputState>();
+    if (!pointer_pressed(in, view, px)) return;
+    n.touch = false;  // the panels' "Tap" wording follows the last read-on (presentation only)
+    for (const input::TouchPoint& t : in.touch_points()) n.touch = n.touch || t.pressed;
     k.skip = k.up = k.down = k.left = k.right = false;
     k.advance = true;
     const bool rows = (n.mode == Mode::Title || n.mode == Mode::Choice) && n.vis_count > 0;
@@ -457,6 +461,7 @@ void player_step(Context& c) {
     StoryState& s = c.s;
     const Program& p = c.p;
     Keys k = read_keys(c.f, n);
+    if (k.advance) n.touch = false;
     apply_pointer(c, k);
     switch (n.mode) {
         case Mode::Title:
@@ -728,13 +733,30 @@ RowText row_text(Context& c, u32 row, bool game_rows) {
         return r;
     }
     if (n.mode == Mode::Title) {
-        const bool has_continue = c.s.pc != 0;
-        const char* rows[3] = {"New game", has_continue ? "Continue" : c.p.extras, has_continue ? c.p.extras : ""};
         if (row >= n.vis_count || row >= 3) return {nullptr, nullptr, false};
-        r.a = rows[row];
+        // rows: New game, [Continue,] [extras]
+        const bool has_continue = c.s.pc != 0;
+        const loc::Localization* l10n = c.f.try_resource<loc::Localization>();
+        char* out = c.n.title_rows[row];
+        const u32 cap = sizeof(c.n.title_rows[row]);
+        if (row == 0) kit_text(l10n, "novel.new_game", "New game", out, cap);
+        else if (row == 1 && has_continue) kit_text(l10n, "novel.continue", "Continue", out, cap);
+        else kit_text(l10n, "story.extras", c.p.extras, out, cap);
+        r.a = out;
         return r;
     }
     return {nullptr, nullptr, false};
+}
+
+// The story's title of ending `e` in the player's language (story.ending.<id>).
+void ending_title(const loc::Localization* l10n, const Program& p, u32 e, char* buf, u32 cap) {
+    if (e >= p.ending_count) {
+        buf[0] = 0;
+        return;
+    }
+    FixedString<96> key("story.ending.");
+    key.append(p.endings[e].id);
+    kit_text(l10n, key.view(), p.endings[e].title, buf, cap);
 }
 
 void panel_line(Context& c, Panel panel, u32 line, char* buf, u32 cap) {
@@ -742,25 +764,40 @@ void panel_line(Context& c, Panel panel, u32 line, char* buf, u32 cap) {
     if (c.n.hooks.panel_line && c.n.hooks.panel_line(c, panel, line, buf, cap)) return;
     const NovelState& n = c.n;
     const Program& p = c.p;
+    const loc::Localization* l10n = c.f.try_resource<loc::Localization>();
     switch (panel) {
         case Panel::Checkpoint:
-            if (line == 1) std::snprintf(buf, cap, "%u pages read", n.pages);
-            else if (line == 13) std::snprintf(buf, cap, "%s", n.autosave ? "Saved.  Enter to go on." : "Enter to go on.");
+            if (line == 1) kit_count(l10n, "novel.pages_read", n.pages, "{count} page read", "{count} pages read", buf, cap);
+            else if (line == 13 && n.autosave)
+                kit_text(l10n, "novel.saved_go_on", n.touch ? "Saved.  Tap to go on." : "Saved.  Enter to go on.", buf, cap, {}, n.touch);
+            else if (line == 13)
+                kit_text(l10n, "novel.go_on", n.touch ? "Tap to go on." : "Enter to go on.", buf, cap, {}, n.touch);
             break;
         case Panel::Ending:
-            if (line == 1) std::snprintf(buf, cap, "%s", n.ending < p.ending_count ? p.endings[n.ending].title : "");
-            else if (line == 3) std::snprintf(buf, cap, "Ending %u of %u", static_cast<u32>(n.ending), p.ending_count > 0 ? p.ending_count - 1u : 0u);
-            else if (line == 13) std::snprintf(buf, cap, "Enter");
+            if (line == 1) {
+                ending_title(l10n, p, n.ending, buf, cap);
+            } else if (line == 3) {
+                char at[12], of[12];
+                std::snprintf(at, sizeof(at), "%u", static_cast<u32>(n.ending));
+                std::snprintf(of, sizeof(of), "%u", p.ending_count > 0 ? p.ending_count - 1u : 0u);
+                const loc::Arg args[] = {{"n", StringView(at)}, {"total", StringView(of)}};
+                kit_text(l10n, "novel.ending_of", "Ending {n} of {total}", buf, cap, args);
+            } else if (line == 13) {
+                kit_text(l10n, "novel.enter", n.touch ? "Tap" : "Enter", buf, cap, {}, n.touch);
+            }
             break;
         case Panel::Extras:
             if (line == 0) {
-                std::snprintf(buf, cap, "%s", p.extras);
+                kit_text(l10n, "story.extras", p.extras, buf, cap);
             } else if (line >= 2 && line < 2u + p.ending_count - 1u && line <= 12) {
                 const u32 e = line - 1;
                 const bool seen = (c.s.endings_seen >> e) & 1;
-                std::snprintf(buf, cap, "%s  %s", seen ? "*" : "-", seen ? p.endings[e].title : "an ending not yet reached");
+                char title[64];
+                if (seen) ending_title(l10n, p, e, title, sizeof(title));
+                else kit_text(l10n, "novel.ending_unseen", "an ending not yet reached", title, sizeof(title));
+                std::snprintf(buf, cap, "%s  %s", seen ? "*" : "-", title);
             } else if (line == 13) {
-                std::snprintf(buf, cap, "Enter to go back");
+                kit_text(l10n, "novel.go_back", n.touch ? "Tap to go back" : "Enter to go back", buf, cap, {}, n.touch);
             }
             break;
         case Panel::Backlog: {
@@ -944,7 +981,11 @@ void novel_present(Frame& f) {
                 if (!title && n.hooks.hud) n.hooks.hud(c, buf, sizeof(buf));
                 set_text(tl, StringView(buf));
                 break;
-            case StageRole::Title: set_text(tl, title ? StringView(p.title) : StringView()); break;
+            case StageRole::Title:
+                buf[0] = 0;
+                if (title) kit_text(f.try_resource<loc::Localization>(), "story.title", p.title, buf, sizeof(buf));
+                set_text(tl, StringView(buf));
+                break;
             default: break;
         }
     });
