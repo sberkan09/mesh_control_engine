@@ -13,6 +13,15 @@ struct Image {
 };
 
 Result<Image> decode_png(Span<const byte> bytes);
+
+// A grey image at 16 bits (heightmaps, M-TERRAIN 6): 16-bit PNGs keep their precision, 8-bit ones are
+// widened (v * 257); colour images give their luminance. Rows top first.
+struct Image16 {
+    u32 width = 0;
+    u32 height = 0;
+    Array<u16> grey;  // width * height
+};
+Result<Image16> decode_png_grey16(Span<const byte> bytes);
 // Appends the PNG of `rgba` (width * height * 4 bytes) to `out`.
 Result<void> encode_png(u32 width, u32 height, Span<const u8> rgba, Array<byte>& out);
 

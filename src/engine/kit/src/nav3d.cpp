@@ -4,6 +4,7 @@
 
 #include "kit3d_internal.h"
 #include "mce/asset/asset_system.h"
+#include "mce/asset/formats.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
@@ -263,6 +264,34 @@ void kit3d_nav(Frame& f) {
     });
 }
 
+// The terrain's surface as triangles in its own space, scaled by `scale`: each quad split along its
+// (x0, z0)-(x1, z1) diagonal (as the collider and the draw split it), counter-clockwise from above,
+// and no triangle with a hole at a corner.
+void terrain_triangles(const asset::TerrainView& v, math::vec3 scale, Array<math::vec3>& verts, Array<u32>& indices) {
+    const u32 n = v.resolution();
+    const f32 x0 = -0.5f * v.header->size[0], z0 = -0.5f * v.header->size[1];
+    verts.resize(usize(n) * n);
+    for (u32 z = 0; z < n; ++z)
+        for (u32 x = 0; x < n; ++x)
+            verts[usize(z) * n + x] = {(x0 + static_cast<f32>(x) * v.spacing_x()) * scale.x, v.sample(x, z) * scale.y,
+                                       (z0 + static_cast<f32>(z) * v.spacing_z()) * scale.z};
+    indices.reserve(usize(n - 1) * (n - 1) * 6);
+    // A mirrored scale flips the winding; keep the walkable side up.
+    const bool flip = (scale.x * scale.y * scale.z) < 0.0f;
+    const auto tri = [&](u32 a, u32 b, u32 c) {
+        indices.push_back(a);
+        indices.push_back(flip ? c : b);
+        indices.push_back(flip ? b : c);
+    };
+    for (u32 z = 0; z + 1 < n; ++z)
+        for (u32 x = 0; x + 1 < n; ++x) {
+            const u32 i00 = z * n + x, i10 = i00 + 1, i01 = i00 + n, i11 = i01 + 1;
+            const bool h00 = v.hole(x, z), h10 = v.hole(x + 1, z), h01 = v.hole(x, z + 1), h11 = v.hole(x + 1, z + 1);
+            if (!h00 && !h01 && !h11) tri(i00, i01, i11);
+            if (!h00 && !h11 && !h10) tri(i00, i11, i10);
+        }
+}
+
 }  // namespace
 
 void gather_nav_geometry(World& w, Entity surface, asset::AssetSystem* assets, physics::NavGeometry3D& g,
@@ -318,6 +347,26 @@ void gather_nav_geometry(World& w, Entity surface, asset::AssetSystem* assets, p
     w.query<const MeshCollider3D, const LocalTransform>().each([&](Entity e, const MeshCollider3D& c, const LocalTransform& t) {
         if (in_layers(mask, c.layer)) add_mesh(e, c.mesh.guid, t, "MeshCollider3D");
     });
+    // Terrains with a TerrainCollider3D (M-TERRAIN 6): the triangles the collider has, holes left open.
+    w.query<const TerrainCollider3D, const Terrain3D, const LocalTransform>().each(
+        [&](Entity e, const TerrainCollider3D& c, const Terrain3D& tr, const LocalTransform& t) {
+            if (!in_layers(mask, c.layer) || !assets || tr.terrain.guid.is_null()) return;
+            Result<asset::AssetHandle<asset::Terrain>> h = assets->load_sync<asset::Terrain>(tr.terrain.guid);
+            if (!h) {
+                MCE_LOG_WARN("nav3d: the terrain on entity {} does not load; left out of the navmesh", e.index);
+                return;
+            }
+            math::vec3 pos, scale;
+            math::quat rot;
+            world_pose(w, e, t, pos, rot, scale);
+            Array<math::vec3> verts;
+            Array<u32> indices;
+            if (const Result<asset::TerrainView> view = asset::TerrainView::read(assets->resolve(h.value()))) {
+                terrain_triangles(view.value(), scale, verts, indices);
+            }
+            assets->release(asset::AnyHandle(h.value()));
+            if (!indices.empty()) g.add_mesh(verts.span(), indices.span(), math::trs(pos, rot, {1.0f, 1.0f, 1.0f}));
+        });
     if (s->include_meshes) {
         w.query<const MeshRef, const LocalTransform>().each([&](Entity e, const MeshRef& m, const LocalTransform& t) {
             if (w.has<BoxCollider3D>(e) || w.has<MeshCollider3D>(e) || w.has<RigidBody3D>(e) ||

@@ -1,6 +1,6 @@
 # M-TERRAIN — Heightmap terrain (milestone record)
 
-**Status:** in progress (steps 1–5 done, 2026-10-15). Plan: ROADMAP §M-TERRAIN; Linear SBA-89 … SBA-94.
+**Status:** done (steps 1–6 and the demo, 2026-10-15; Metal untested). Plan: ROADMAP §M-TERRAIN; Linear SBA-89 … SBA-94.
 **Why:** SolsticeReach's island is a script-generated mesh in 16 chunks; there is no terrain an editor or an
 agent can shape. Each step is opt-in: a scene without a `Terrain3D` draws exactly as before.
 
@@ -13,7 +13,7 @@ agent can shape. Each step is opt-in: a scene without a `Terrain3D` draws exactl
 | 3 | Jolt height-field collision, holes | SBA-91 | done: collision matches the drawn surface; holes in both |
 | 4 | Editor brushes with undo, cook round-trip | SBA-92 | done: eight brushes, stroke undo, the source round-trips |
 | 5 | Foliage and grass painting | SBA-93 | done: density per layer, painted with the layer brush |
-| 6 | MCP sculpt/paint, import, generator, navmesh bake; demo | SBA-94 | not started (SBA-69, the navmesh, is done) |
+| 6 | MCP sculpt/paint, import, generator, navmesh bake; demo | SBA-94 | done: four MCP tools, PNG/raw import, fBm + erosion-lite, terrains in the navmesh; SolsticeReach's island is a painted `Terrain3D` |
 
 ## Step 1 — terrain asset, LOD and drawing
 
@@ -163,3 +163,52 @@ half-weight strip, none on unpainted ground or in holes, every copy on `surface_
 gives the same copies, a transformed terrain moves them, the slope limit clears a steep ramp, zero
 density gives none. Kit: a child entity scatters 32×32 copies at the fill height, moving the terrain
 re-scatters, disabling drops the batch.
+
+## Step 6 — MCP tools, import, generator, navmesh; the demo
+
+**MCP.** `terrain_sculpt` (raise, lower, smooth, flatten, noise) and `terrain_paint` (a layer, holes, filling
+them) run the Terrain panel's brushes (`editor::TerrainDocument`) at `[x, z]` points or along them as a
+stroke, `terrain_import` reads a heightmap, `terrain_generate` grows a landscape (`mcp/src/tools_terrain.cpp`).
+Each reads the `.mcterrain`, cooks it in memory for the data the brushes edit, applies the change and writes
+it back through the asset tools' cook-checked write. Sculpt returns the height under each point, so an agent
+measures as it shapes (strength 0 only measures); paint returns each layer's share and the hole count.
+
+**Import.** `TerrainDocument::import_heightmap`: a PNG (8- or 16-bit grey through `cook::decode_png_grey16`;
+colour gives luminance) or raw 8/16-bit samples (square, or `raw_width`), resampled bilinearly to the
+resolution, the image's top row along -z, black and white mapped to `range` (default `height_range`).
+
+**Generator.** `TerrainDocument::generate`: fBm value noise (feature size, octaves, lacunarity, gain, a
+ridged blend) normalized into `[low, high]` of the height range, an island falloff, then erosion-lite:
+thermal passes move half the excess over the talus step down to steeper neighbours (mass kept), and rain
+droplets with inertia pick up silt where they speed up and leave it where they slow, climb or stop (mass
+kept to 2 %). The same seed gives the same terrain. A terrain whose layers follow `auto` rules re-applies
+them to the new shape.
+
+**Navmesh.** `gather_nav_geometry` adds each `TerrainCollider3D` terrain in the surface's layer mask: the
+collider's triangles (each quad split on its (x0, z0)-(x1, z1) diagonal, holes left out) under the entity's
+transform.
+
+**Demo.** SolsticeReach's island is one `Terrain3D` (`tools/gen_terrain.py`): 257 samples over the 200 m the
+16 mesh chunks covered, the heights from `tools/island.py` (the formula `module/terrain.h` builds the
+collider from), painted sand, grass, dry grass and rock with the rules the chunks used, rock triplanar, four
+`.mcmat` layers over the project's textures. Its grass is a `TerrainFoliage3D` child on the grass layer
+(0.8 per m², replacing four grass `Scatter` boxes). `tools/author_island_mcp.py` re-authored the scene
+through `solstice_reach_mcp` (419 entities, cook clean, 300 headless ticks with no warnings); the 16 chunk
+meshes are gone. The agent's valley is the MCP test below: generate an island, flatten a valley floor
+along a stroke, raise a hill, paint the valley, cut and fill a hole, import a heightmap, cook.
+
+![SolsticeReach on the terrain](m-terrain-island.png)
+
+**Tests.** Editor: PNG and raw import (orientation, ranges, clamping, bad files), the generator's range,
+seed determinism, island edges, thermal flattening with mass kept, droplets moving a quarter of the samples
+with mass kept. MCP: the session above, every refusal leaving the file unchanged. Kit: a navmesh baked from a
+holed terrain under a moved entity covers the ground, finds nothing in the hole and paths around it.
+SolsticeReach: the drawn terrain samples the collider's field to 2 mm, the grass is the island's child on
+layer 1; the bot's run, determinism and the GPU walk pass.
+
+## Gates
+
+- Draws inside the tier budgets (step 1), collision matches the drawn surface within 2 cm (step 3).
+- Edits are undoable in the editor and round-trip through the cook (step 4); MCP edits are cook-checked.
+- `local_ci.sh` green on every step.
+- Metal and real-GPU budgets wait on the Mac session, as for M-VISUAL.

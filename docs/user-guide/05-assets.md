@@ -183,6 +183,18 @@ back with explicit `heights` (replacing `fill`), plus `splat` once a layer is pa
 `auto` rules no longer apply) and `holes` once one is cut; every other key stays as written. Heights
 stay inside `height_range`: widen it first to raise higher or dig deeper.
 
+Agents shape terrains over MCP (chapter 14) with the same brushes: `terrain_sculpt` (raise, lower, smooth,
+flatten, noise) and `terrain_paint` (a layer, holes, filling them) dab at `[x, z]` points in metres from the
+terrain's centre, or along them as a stroke. `terrain_import` reads a heightmap under `assets/` into the
+heights: a `.png` (8- or 16-bit grey) or raw samples (`.r16`/`.raw` 16-bit little-endian, `.r8` 8-bit),
+resampled to `resolution`, the image's top row along -z and its left column along -x, black and white
+mapped to `range` (default `height_range`). `terrain_generate` grows a landscape: fBm value noise
+(`feature` metres across the largest hills, `octaves`, `lacunarity`, `gain`, `ridged`), stretched between
+`low` and `high` shares of `height_range`, sunk toward the edges by `island`, then erosion-lite: `thermal`
+passes settle slopes steeper than `talus_deg` and `droplets` of rain carve channels and silt up hollows.
+The same `seed` gives the same terrain. Each writes `heights` and keeps holes and painted layers; a
+terrain whose layers follow `auto` rules re-applies them to the new shape.
+
 Give every layer's maps of one kind the same size and import settings: each kind is packed into one
 texture array, and a map that differs from the first layer's is left out with a warning.
 
