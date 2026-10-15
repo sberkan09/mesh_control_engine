@@ -85,8 +85,15 @@ Result<mem::UniquePtr<AudioOutput>> AudioOutput::prepare(const AudioOutputDesc& 
         return Error(Errc::InvalidArgument, "platform.audio.open", "", desc.channels);
     if (desc.driver) SDL_SetHint(SDL_HINT_AUDIO_DRIVER, desc.driver);
     if (desc.period_frames) {
+        u32 period = desc.period_frames;
+#if defined(__EMSCRIPTEN__)
+        // WebAudio's ScriptProcessorNode takes power-of-two buffers of 256..16384 frames only.
+        u32 pow2 = 256;
+        while (pow2 < period && pow2 < 16384) pow2 <<= 1;
+        period = pow2;
+#endif
         char frames[16];
-        SDL_snprintf(frames, sizeof(frames), "%u", desc.period_frames);
+        SDL_snprintf(frames, sizeof(frames), "%u", period);
         SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, frames);
     }
     if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
@@ -117,6 +124,11 @@ Result<mem::UniquePtr<AudioOutput>> AudioOutput::open(const AudioOutputDesc& des
 
 Result<mem::UniquePtr<AudioOutput>> AudioOutput::open_async(const AudioOutputDesc& desc, AudioRenderFn fn, void* user) {
     MCE_TRY_ASSIGN(mem::UniquePtr<AudioOutput> out, prepare(desc, fn, user));
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+    // No threads in the browser (ADR-0039); opening a WebAudio context does not block anyway.
+    open_stream(*out->impl_);
+    return out;
+#else
     Impl* impl = out->impl_;
     impl->opener = std::thread([impl] {
         open_stream(*impl);
@@ -130,6 +142,7 @@ Result<mem::UniquePtr<AudioOutput>> AudioOutput::open_async(const AudioOutputDes
         SDL_CleanupTLS();  // not an SDL thread: SDL frees its thread-local state only when told
     });
     return out;
+#endif
 }
 
 AudioOutput::State AudioOutput::state() const {
