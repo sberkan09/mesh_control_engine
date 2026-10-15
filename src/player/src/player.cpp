@@ -1343,6 +1343,12 @@ private:
 
     // The UI scale for this framebuffer: the display's scale times -ui_scale, fitted (M-MOBILE 11b).
     f32 ui_scale(rhi::Extent2D bb) const { return ui::compute_ui_scale(bb, window_->display_scale(), cv_ui_scale.get_float()); }
+    // The accessibility settings every UI document draws with (M-ACCESS): text scale, high contrast.
+    static void apply_access(ui::UpdateContext& ctx) {
+        const render::AccessibilitySettings a = render::accessibility_settings();
+        ctx.text_scale = a.text_scale;
+        ctx.high_contrast = a.high_contrast;
+    }
 
     void set_console(bool open) {
         console_.set_open(open);
@@ -1355,6 +1361,7 @@ private:
         ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
                                          static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
         ctx.ui_scale = ui_scale(bb);
+        apply_access(ctx);
         input::InputState in;
         in.cancel_pressed = con_.cancel;
         ctx.actions = &in;
@@ -1378,6 +1385,7 @@ private:
         ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
                                          static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
         ctx.ui_scale = ui_scale(bb);
+        apply_access(ctx);
         ctx.dt = 1.0 / 60.0;
         for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
             const ui::Layer* l = desc_.ui_layers[i];
@@ -1417,6 +1425,7 @@ private:
         ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
                                          static_cast<f32>(safe_insets_.right), static_cast<f32>(safe_insets_.bottom)};
         ctx.ui_scale = ui_scale(bb);
+        apply_access(ctx);
         ctx.dt = 1.0 / 60.0;
         // Edges (Confirm, Cancel, a navigation press) once per tick, not once per rendered frame.
         input::InputState in = ui_actions_;
