@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Performance budgets per target, M-PERF step 2 (SBA-114). The `.mceproj` takes `"budgets"` for desktop, mobile
+  and web: frame, sim, render and GPU milliseconds, draws, triangles, sprites, upload bytes, heap allocations,
+  sprite textures per scene and the largest texture edge. Fields left out keep the engine defaults. `project_set`
+  checks the limits, and `project_get` shows each target's budget in force. `project_check` takes a `target` and
+  flags images over its `texture_size` and scenes over its `sprite_textures`, with the target's `sim_ms` as the
+  per-tick budget. `perf::judge` gives a capture's verdict against a budget. User guide 2.2 and 14.
 - Performance captures, M-PERF step 1 (SBA-113): `mce_player -perf_capture <file>` writes a `.mcperf` JSON capture
   of the run. Each frame gets its wall, sim, render CPU and GPU time, its GPU stages (3D), sim time per ECS phase and
   its draws, passes, triangles, sprites, upload bytes and live heap allocations. The run adds per-system totals, p50/p95/p99/max
