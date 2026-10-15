@@ -10,6 +10,7 @@
 #include "mce/cook/fs.h"
 #include "mce/cook/image.h"
 #include "mce/cook/json.h"
+#include "mce/editor/project_settings.h"
 #include "mce/mcp/headless_run.h"
 #include "mce/platform/platform.h"
 #include "tool_args.h"
@@ -307,7 +308,10 @@ bool texture_is_srgb(StringView sidecar_text) {
 struct Options {
     bool on[kCheckCount] = {};
     u64 ticks = 300;
-    f64 budget_ms = 4.0;
+    f64 budget_ms = 4.0;   // the target budget's sim_ms unless the call gives budget_ms
+    bool budget_ms_given = false;
+    perf::Target target = perf::Target::Desktop;
+    perf::Budget budget;
     f32 min_text_px = 16.0f;
     bool enabled(const char* name) const {
         for (usize i = 0; i < kCheckCount; ++i)
@@ -352,9 +356,14 @@ bool project_check(ToolCall& c) {
     if (const cook::JsonValue b = arg(c, "budget_ms"); b.valid()) {
         if (!b.is_number() || b.as_number() <= 0 || b.as_number() > 1000) return arg_missing(c, "budget_ms", "milliseconds per tick, 0..1000");
         opt.budget_ms = b.as_number();
+        opt.budget_ms_given = true;
     }
+    if (const cook::JsonValue t = arg(c, "target"); t.valid())
+        if (!t.is_string() || !perf::parse_target(t.as_string(), opt.target)) return arg_missing(c, "target", "desktop, mobile or web");
 
     editor::EditorProject& project = c.server.session().project();
+    if (!editor::project_budget(project, opt.target, opt.budget, c.error)) return false;
+    if (!opt.budget_ms_given) opt.budget_ms = opt.budget.sim_ms;
     project.rescan();
     Report rep;
 
@@ -646,6 +655,55 @@ bool project_check(ToolCall& c) {
         }
     }
 
+    // ---- performance, static (M-PERF step 2): textures larger than the target allows, and scenes whose
+    // sprites use more distinct textures than it allows (each texture is its own draw batch).
+    if (opt.enabled("performance")) {
+        const char* target = perf::target_name(opt.target);
+        if (opt.budget.texture_size > 0)
+            for (const cook::String& f : files) {
+                const cook::String ext = cook::lower_extension(f.view());
+                if (ext.view() != ".png" && ext.view() != ".jpg" && ext.view() != ".jpeg") continue;
+                cook::String bytes;
+                u32 w = 0, h = 0;
+                if (!cook::fs::read_text(project.asset_path(f.view()).view(), bytes) ||
+                    !cook::image_size(Span<const byte>(reinterpret_cast<const byte*>(bytes.c_str()), bytes.size()), w, h))
+                    continue;
+                if (w <= opt.budget.texture_size && h <= opt.budget.texture_size) continue;
+                cook::String file("assets/");
+                file += f.view();
+                cook::String m;
+                cook::appendf(m, "the image is %ux%u; the %s budget allows %u pixels a side (texture_size)", w, h, target,
+                              opt.budget.texture_size);
+                rep.add(Sev::Warning, "performance", file.view(), 0, m.view(),
+                        "scale it down, or raise budgets.<target>.texture_size with project_set if the target can take it");
+            }
+        if (opt.budget.sprite_textures > 0)
+            for (usize i = 0; i < text_files.size(); ++i) {
+                if (!ends_with(text_files[i].view(), ".mcscene")) continue;
+                cook::JsonDoc doc;
+                cook::JsonError je;
+                if (!doc.parse(texts[i].view(), je)) continue;
+                const cook::JsonValue ents = doc.root().get("entities");
+                Array<StringView> seen;
+                for (u32 e = 0; ents.is_array() && e < ents.size(); ++e) {
+                    const cook::JsonValue tex = ents.at(e).get("components").get("Sprite").get("texture");
+                    if (!tex.is_string() || tex.as_string().empty()) continue;
+                    bool known = false;
+                    for (StringView s : seen) known = known || s == tex.as_string();
+                    if (!known) seen.push_back(tex.as_string());
+                }
+                if (seen.size() <= opt.budget.sprite_textures) continue;
+                cook::String file("assets/");
+                file += text_files[i].view();
+                cook::String m;
+                cook::appendf(m, "sprites here use %zu different textures, and each one is a separate draw batch; the %s budget allows %u "
+                                 "(sprite_textures)",
+                              seen.size(), target, opt.budget.sprite_textures);
+                rep.add(Sev::Warning, "performance", file.view(), 0, m.view(),
+                        "pack the small images into one spritesheet (.mcsheet) so the sprites share a texture and a batch");
+            }
+    }
+
     // ---- performance: each scene headless, the sim's time per tick against the budget
     Array<PerfRow> perf;
     if (opt.enabled("performance") && !cooked.ok())
@@ -688,7 +746,7 @@ bool project_check(ToolCall& c) {
             row.entities = run.value().metrics.entities;
             row.avg_ms = row.ticks ? static_cast<f64>(timer.last_us - timer.start_us) / 1000.0 / static_cast<f64>(row.ticks) : 0;
             row.max_ms = static_cast<f64>(timer.max_us) / 1000.0;
-            if (row.avg_ms > opt.budget_ms) {
+            if (opt.budget_ms > 0 && row.avg_ms > opt.budget_ms) {
                 cook::String m;
                 cook::appendf(m, "the sim takes %.2f ms per tick on average over %llu ticks (budget %.2f ms; the slowest tick %.2f ms)", row.avg_ms,
                               static_cast<unsigned long long>(row.ticks), opt.budget_ms, row.max_ms);
@@ -739,6 +797,13 @@ bool project_check(ToolCall& c) {
         }
         c.out.end_array();
         c.out.key("budget_ms").num_f(opt.budget_ms);
+        c.out.key("target").str(perf::target_name(opt.target));
+        c.out.key("budget").begin_object();
+        for (const perf::BudgetField& f : perf::budget_fields()) {
+            if (f.integer) c.out.key(f.name).num_u(static_cast<u64>(f.get(opt.budget)));
+            else c.out.key(f.name).num_f(std::round(f.get(opt.budget) * 1000.0) / 1000.0);
+        }
+        c.out.end_object();
     }
     c.out.end_object();
     return true;

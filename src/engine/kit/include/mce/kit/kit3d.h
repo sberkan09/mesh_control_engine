@@ -158,6 +158,12 @@ MCE_COMPONENT(Camera3DComponent, (fov_deg, Range{5, 170}), (near_z, Range{0.001f
 // state's events raise AnimEvent3D (anim3d.h) as the playhead crosses them; `restart` returns to
 // the start state. Clip lengths come from the mesh, read through install_kit3d's asset system;
 // without it clips loop forever and one-shots never finish.
+//
+// A graph may also (M-GAMEPLAY3D step 5) blend a state's clips over two parameters (a 2D blend
+// space), play layers over the state machine (a clip on a bone mask, overriding or additive, each
+// with its own playhead in `layer_time`), take root motion from a bone (the entity moves by the
+// clip's ground motion, `root_motion`), and run IK chains: two-bone and look-at chains reach for
+// an IKTarget3D (anim3d.h), foot chains plant the feet on the ground below them.
 struct Animator {
     FixedString<32> clip;
     FixedString<32> state;                    // runtime: the graph state playing
@@ -178,8 +184,11 @@ struct Animator {
     bool loop = true;                         // without a graph: false plays `clip` once
     bool finished = false;                    // runtime: a one-shot clip or state reached its end
     bool restart = false;                     // set to replay from the start (the engine clears it)
-    u8 pad_ = 0;
+    u8 root_motion = 1;                       // a graph's root motion: 1 moves the entity, 2 only reports it, 0 leaves it in the pose
     u32 pad2_ = 0;
+    math::vec4 layer_time;                    // runtime: each graph layer's playhead, seconds
+    math::vec3 root_velocity;                 // runtime: the last tick's root motion, m/s in world space
+    f32 root_turn = 0.0f;                     // runtime: its turn about +Y, rad/s
 };
 MCE_COMPONENT(Animator, clip, (graph, Help{"an AnimGraph (.mcanim) that drives clip, fades and events"}),
               (params, Help{"the graph's parameters, in the order it lists them"}), (state, ReadOnly, Transient),
@@ -187,7 +196,11 @@ MCE_COMPONENT(Animator, clip, (graph, Help{"an AnimGraph (.mcanim) that drives c
               (last_event, ReadOnly, Transient), (speed, Range{-8, 8}), phase, (fade, Range{0, 5}), time,
               (previous_time, ReadOnly, Transient), (blend, ReadOnly, Transient), (blend_weight, ReadOnly, Transient),
               (events_fired, ReadOnly, Transient), (loop, Help{"without a graph: off plays the clip once"}),
-              (finished, ReadOnly, Transient), (restart, Help{"replay from the start (the engine clears it)"}))
+              (finished, ReadOnly, Transient), (restart, Help{"replay from the start (the engine clears it)"}),
+              (root_motion, Range{0, 2},
+               Help{"a graph's root motion: 1 moves the entity (a CharacterController3D through its move), 2 only reports "
+                    "root_velocity and root_turn, 0 leaves the motion in the pose"}),
+              (layer_time, ReadOnly, Transient), (root_velocity, ReadOnly, Transient), (root_turn, ReadOnly, Transient))
 
 // The world's light, sky, fog, post chain and shadows (the renderer's DirectionalLight, Sky, Fog,
 // PostFx and ShadowSettings, flattened for reflection). It lives in two places:
@@ -398,6 +411,41 @@ struct TerrainCollider3D {
     u32 layer = 0;
 };
 MCE_COMPONENT(TerrainCollider3D, (friction, Range{0, 2}), (layer, Range{0, 15}))
+
+// Grass, flowers or rocks growing on a terrain (M-TERRAIN 5): copies of `mesh` standing on the surface of
+// the Terrain3D on this entity (or on its parent), `density` per square metre where splat layer `layer`
+// has full weight and thinner where it has less (layer 8: everywhere), none in holes or on ground steeper
+// than `max_slope_deg`, at most `max_count`. Painting the layer in the editor paints the foliage. Drawn
+// like Foliage3D (render::scatter_on_terrain): one instanced batch, culled per copy, LOD, shadows, wind.
+// One kind per entity: put more kinds on child entities of the terrain.
+struct TerrainFoliage3D {
+    asset::AssetRef<asset::Mesh> mesh;
+    asset::AssetRef<asset::Material> material;  // a .mcmat on every copy instead of the mesh's own
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+    u32 layer = 0;
+    f32 density = 1.0f;
+    u32 max_count = 50000;
+    u32 seed = 1;
+    f32 scale_min = 0.8f;
+    f32 scale_max = 1.2f;
+    f32 max_slope_deg = 40.0f;
+    f32 wind_amplitude = 0.05f;
+    f32 wind_frequency = 0.5f;
+    math::vec2 wind_direction{1.0f, 0.0f};
+    f32 cull_distance = 60.0f;  // metres from the camera past which a copy is culled; 0 = the far plane
+    u32 cast_shadows = 0;
+    u32 random_yaw = 1;
+    u32 enabled = 1;
+    u32 pad_ = 0;
+};
+MCE_COMPONENT(TerrainFoliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's materials; null = the mesh's own"}), tint,
+              (layer, Range{0, 8}, Help{"the splat layer whose weight sets the density; 8 = everywhere"}),
+              (density, Range{0, 1000}, Help{"copies per square metre at full weight"}), (max_count, Range{0, 1000000}), seed,
+              (scale_min, Range{0.01f, 100}), (scale_max, Range{0.01f, 100}),
+              (max_slope_deg, Range{0, 90}, Help{"no copies on steeper ground"}),
+              (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
+              (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
+              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled)
 
 // A projected decal: `texture` (rgb color, a coverage; empty = plain `color`) projected down the
 // entity's local -Y onto every opaque surface inside the box of `size` metres (x, projection depth y, z)

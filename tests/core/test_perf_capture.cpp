@@ -1,10 +1,11 @@
-// .mcperf captures (M-PERF step 1): the summary's percentiles, counters and spike causes, and the
-// JSON text the player writes.
+// .mcperf captures and budgets (M-PERF steps 1-2): the summary's percentiles, counters and spike causes, the
+// JSON text the player writes, and the verdict against a target's budget.
 
 #include <doctest/doctest.h>
 
 #include <cstring>
 
+#include "mce/perf_budget.h"
 #include "mce/perf_capture.h"
 
 using namespace mce;
@@ -124,4 +125,56 @@ TEST_CASE("perf: write_mcperf writes the header, summary, systems and one line p
     usize lines = 0;
     for (const char* p = std::strstr(text, "{\"index\": "); p; p = std::strstr(p + 1, "{\"index\": ")) ++lines;
     CHECK(lines == 100);
+}
+
+TEST_CASE("perf: targets and budget fields by name") {
+    perf::Target t = perf::Target::Desktop;
+    CHECK(perf::parse_target("mobile", t));
+    CHECK(t == perf::Target::Mobile);
+    CHECK_FALSE(perf::parse_target("console", t));
+    CHECK(StringView(perf::target_name(perf::Target::Web)) == "web");
+    const perf::BudgetField* f = perf::find_budget_field("draws");
+    REQUIRE(f != nullptr);
+    CHECK(f->integer);
+    perf::Budget b = perf::default_budget(perf::Target::Mobile);
+    CHECK(f->get(b) == 400.0);
+    f->set(b, 250.0);
+    CHECK(b.draws == 250);
+    CHECK_FALSE(perf::find_budget_field("frame_ms")->integer);
+    CHECK(perf::find_budget_field("fps") == nullptr);
+    // Phones get the smaller numbers.
+    const perf::Budget d = perf::default_budget(perf::Target::Desktop);
+    CHECK(b.frame_ms > d.frame_ms);
+    CHECK(perf::default_budget(perf::Target::Mobile).draws < d.draws);
+    CHECK(perf::default_budget(perf::Target::Mobile).texture_size < d.texture_size);
+}
+
+TEST_CASE("perf: judge passes a capture inside the budget and names what is over") {
+    perf::Capture c = make_capture();  // p95 frame 10 ms, sim 2, render 3, gpu 4; max 12 draws, 1000 triangles
+    perf::Budget b;
+    b.frame_ms = 16.7f;
+    b.gpu_ms = 3.0f;      // over: 4 ms
+    b.draws = 12;         // at the limit: passes
+    b.triangles = 500;    // over: 1000
+    perf::Verdict v = perf::judge(perf::summarize(c), b);
+    CHECK_FALSE(v.pass);
+    REQUIRE(v.lines.size() == 4);  // the unlimited fields have no line
+    CHECK(StringView(v.lines[0].metric) == "frame_ms");
+    CHECK(StringView(v.lines[0].stat) == "p95");
+    CHECK_FALSE(v.lines[0].over);
+    CHECK(StringView(v.lines[1].metric) == "gpu_ms");
+    CHECK(v.lines[1].over);
+    CHECK(v.lines[1].measured == doctest::Approx(4.0));
+    CHECK(StringView(v.lines[2].metric) == "draws");
+    CHECK(StringView(v.lines[2].stat) == "max");
+    CHECK_FALSE(v.lines[2].over);
+    CHECK(StringView(v.lines[3].metric) == "triangles");
+    CHECK(v.lines[3].over);
+
+    // A headless capture has no GPU time: the GPU limit has no line rather than a pass.
+    for (perf::Frame& f : c.frames) f.gpu_ms = -1.0f;
+    b.triangles = 0;
+    v = perf::judge(perf::summarize(c), b);
+    CHECK(v.pass);
+    for (const perf::BudgetLine& l : v.lines) CHECK(StringView(l.metric) != "gpu_ms");
 }

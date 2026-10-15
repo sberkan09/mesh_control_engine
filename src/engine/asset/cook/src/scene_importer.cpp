@@ -53,7 +53,7 @@ bool asset_type_for(StringId type_id, ChunkType& out, const char*& name) {
                                              asset::Prefab::name,  asset::Tilemap::name,  asset::ParticlePreset::name,
                                              asset::Sequence::name, asset::SpriteSheet::name,
                                              asset::AnimGraph::name, asset::UiDocument::name, asset::UiTheme::name,
-                                             asset::Timeline::name, asset::Terrain::name};
+                                             asset::Timeline::name, asset::Terrain::name, asset::Video::name};
     for (const char* n : kNames) {
         if (StringId(n) == type_id) {
             name = n;

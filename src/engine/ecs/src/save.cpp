@@ -8,6 +8,7 @@
 
 #include "mce/asset/xxhash.h"
 #include "mce/crash.h"
+#include "mce/web.h"
 
 namespace mce::save {
 
@@ -365,6 +366,7 @@ Result<void> write(StringView name, Span<const byte> payload) {
     }
     stdfs::rename(tmp, target, ec);
     if (ec) return Error(Errc::IoError, kStageWrite, p.view(), static_cast<u32>(ec.value()));
+    web::persist();  // a browser keeps it in IndexedDB (no-op elsewhere)
     return ok();
 }
 

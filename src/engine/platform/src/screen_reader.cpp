@@ -25,7 +25,7 @@ u64 g_checked_ms = 0;
 bool g_running = false;
 Sink g_sink = nullptr;
 void* g_sink_user = nullptr;
-SDL_Window* g_window = nullptr;
+[[maybe_unused]] SDL_Window* g_window = nullptr;  // read by the Windows backend only
 
 bool device_running();
 bool device_announce(StringView text);

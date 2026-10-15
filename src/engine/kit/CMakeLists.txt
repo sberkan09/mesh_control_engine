@@ -23,6 +23,7 @@ mce_add_library(mce_gameplay_kit
         src/stock.cpp
         src/timeline.cpp
         src/cinematic.cpp
+        src/video.cpp
     PUBLIC_DEPS
         mce::mce_ecs
         mce::mce_refl

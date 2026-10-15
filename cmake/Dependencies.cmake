@@ -317,6 +317,17 @@ if(MCE_WEB)
     include("${CMAKE_CURRENT_LIST_DIR}/web/TintDependencies.cmake")
 endif()
 
+# ---- pl_mpeg (video: MPEG-1 video + MP2 audio; mce_render only — ADR-0043) -------------------
+# One MIT-licensed C header, no release tags upstream: pinned by commit. Its implementation is
+# compiled into mce_render (src/plmpeg_impl.c, warnings off), which wraps it as render::VideoDecoder
+# for the player's VideoPlayer textures and the cook's .mpg importer. Confined to
+# src/engine/render/src/ by the pl_mpeg wall in scripts/ci/check_walls.py.
+FetchContent_Declare(pl_mpeg
+    GIT_REPOSITORY https://github.com/phoboslab/pl_mpeg.git
+    GIT_TAG        c871f2be022ece7ef4f64230b4fb8e1fb9eb6023
+    SOURCE_SUBDIR  _no_cmake_)
+FetchContent_MakeAvailable(pl_mpeg)
+
 # ---- ENet (optional networking; mce_net only — ADR-0035) ------------------------------------
 # Reliable/unreliable sequenced channels over UDP. Compiled straight into mce_net (an object
 # library folded into its archive), so the opt-in module is one static library in the tree and in

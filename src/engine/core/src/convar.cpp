@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "mce/log.h"
+#include "mce/web.h"
 
 namespace mce {
 namespace {
@@ -626,6 +627,7 @@ Result<void> save_settings(StringView path) {
     }
     std::remove(p.c_str());  // rename does not overwrite everywhere
     if (std::rename(tmp.c_str(), p.c_str()) != 0) return Error(Errc::IoError, kStageSettings, path);
+    web::persist();  // a browser keeps it in IndexedDB (no-op elsewhere)
     return ok();
 }
 
