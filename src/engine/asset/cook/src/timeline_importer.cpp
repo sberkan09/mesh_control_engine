@@ -18,12 +18,14 @@
 //     {"type": "audio", "keys": [{"t": 0.5, "sound": "guid:<sfx uuid>", "gain_db": -3}]},
 //     {"type": "camera", "cuts": [{"t": 0, "camera": 4}, {"t": 3, "camera": 5, "blend": 1.5}]},
 //     {"type": "event", "keys": [{"t": 2.5, "emit": "door_open"}]},
-//     {"type": "subtitle", "lines": [{"t": 1, "duration": 2, "text": "Who's there?", "speaker": "Mira"}]}
+//     {"type": "subtitle", "lines": [{"t": 1, "duration": 2, "text": "Who's there?", "speaker": "Mira"}]},
+//     {"type": "video", "target": 6, "keys": [{"t": 0, "video": "guid:<mpg uuid>", "duration": 5, "gain_db": 0}]}
 //   ]
 // }
 //
 // Eases: "linear" (the default), "step", "smooth", "ease_in", "ease_out"; a key's ease shapes the
-// curve from it to the next key. Keys of a track are in time order.
+// curve from it to the next key. Keys of a track are in time order. A video key plays its video on the
+// target's VideoPlayer (kit/video.h) for `duration` seconds (0, the default: to the video's end).
 
 #include <cstdio>
 #include <cstdlib>
@@ -51,7 +53,8 @@ using asset::TimelineTrackKind;
 using T = TimelineDocTrackType;
 
 constexpr const char* kTypeNames[kTimelineDocTrackTypes] = {"transform", "property", "activation", "animation",
-                                                             "audio",     "camera",   "event",      "subtitle"};
+                                                             "audio",     "camera",   "event",      "subtitle",
+                                                             "video"};
 constexpr const char* kEaseNames[] = {"linear", "step", "smooth", "ease_in", "ease_out"};
 constexpr u32 kEaseCount = sizeof(kEaseNames) / sizeof(kEaseNames[0]);
 
@@ -219,6 +222,17 @@ struct Reader {
                 read_time(k, "t", key.t);
                 read_name(k, "emit", key.name, "'emit' must be a non-empty signal name");
                 return;
+            case T::Video: {
+                if (!detail::check_keys(k, {"t", "video", "duration", "gain_db"}, file, kStage, diags)) return;
+                read_time(k, "t", key.t);
+                const JsonValue v = k.get("video");
+                if (!v.is_string() || !parse_guid_ref(v.as_string(), key.video)) error(v.valid() ? v : k, "'video' must be \"guid:<uuid>\"");
+                if (k.get("duration").valid()) read_time(k, "duration", key.duration);
+                f64 gain = 0.0;
+                detail::read_number(k, "gain_db", 0.0, gain, file, kStage, diags);
+                key.gain_db = static_cast<f32>(gain);
+                return;
+            }
             case T::Subtitle: {
                 if (!detail::check_keys(k, {"t", "duration", "text", "speaker"}, file, kStage, diags)) return;
                 read_time(k, "t", key.t);
@@ -242,7 +256,7 @@ struct Reader {
         while (i < kTimelineDocTrackTypes && ty != kTypeNames[i]) ++i;
         if (i == kTimelineDocTrackTypes) {
             error(type.valid() ? type : track,
-                  "unknown track type: expected transform, property, activation, animation, audio, camera, event or subtitle");
+                  "unknown track type: expected transform, property, activation, animation, audio, camera, event, subtitle or video");
             return;
         }
         tr.type = static_cast<T>(i);
@@ -397,6 +411,21 @@ void write_key(const TimelineDocTrack& tr, const TimelineDocKey& k, String& out)
                 append_json_string(out, k.speaker.view());
             }
             break;
+        case T::Video: {
+            field(out, "video");
+            String s("guid:");
+            s += asset::to_string(k.video).view();
+            append_json_string(out, s.view());
+            if (k.duration > 0.0f) {
+                field(out, "duration");
+                append_f32(out, k.duration);
+            }
+            if (k.gain_db != 0.0f) {
+                field(out, "gain_db");
+                append_f32(out, k.gain_db);
+            }
+            break;
+        }
         case T::Activation: break;
     }
     if ((tr.type == T::Transform || tr.type == T::Property) && k.ease != TimelineEase::Linear) {
@@ -444,6 +473,7 @@ TimelineTrackKind kind_of(T t) {
         case T::Camera: return TimelineTrackKind::Camera;
         case T::Event: return TimelineTrackKind::Event;
         case T::Subtitle: return TimelineTrackKind::Subtitle;
+        case T::Video: return TimelineTrackKind::Video;
     }
     return TimelineTrackKind::Event;
 }
@@ -664,6 +694,11 @@ void build_timeline_chunk(const TimelineDocument& d, Array<byte>& payload) {
                     key.v[0] = k.blend;
                     break;
                 case T::Event: key.id = StringId(k.name.view()).value; break;
+                case T::Video:
+                    key.guid[0] = k.video.hi;
+                    key.guid[1] = k.video.lo;
+                    key.v[0] = k.gain_db;
+                    break;
                 case T::Subtitle:
                     key.text = b.add_string(k.name.view());
                     if (!k.speaker.empty()) key.text2 = b.add_string(k.speaker.view());
@@ -709,11 +744,12 @@ public:
         for (u32 i = 0; i < tracks.size(); ++i) {
             const JsonValue track = tracks.at(i);
             const JsonValue type = track.is_object() ? track.get("type") : JsonValue();
-            if (!type.is_string() || type.as_string() != "audio") continue;
+            const bool video = type.is_string() && type.as_string() == "video";
+            if (!type.is_string() || (type.as_string() != "audio" && !video)) continue;
             const JsonValue list = track.get("keys");
             if (!list.is_array()) continue;
             for (u32 j = 0; j < list.size(); ++j) {
-                const JsonValue v = list.at(j).is_object() ? list.at(j).get("sound") : JsonValue();
+                const JsonValue v = list.at(j).is_object() ? list.at(j).get(video ? "video" : "sound") : JsonValue();
                 if (!v.valid()) continue;
                 Guid g;
                 if (!v.is_string() || !parse_guid_ref(v.as_string(), g)) {
@@ -722,11 +758,11 @@ public:
                 }
                 DepRef d;
                 d.guid = g;
-                d.expected = ChunkType::Sfx;
+                d.expected = video ? ChunkType::Video : ChunkType::Sfx;
                 d.line = v.line();
                 d.col = v.col();
                 char where[64];
-                std::snprintf(where, sizeof(where), "tracks[%u].keys[%u].sound", i, j);
+                std::snprintf(where, sizeof(where), "tracks[%u].keys[%u].%s", i, j, video ? "video" : "sound");
                 d.where.assign(where);
                 out.push_back(d);
             }

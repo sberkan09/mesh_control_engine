@@ -7,6 +7,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/particles.h"
+#include "mce/kit/video.h"
 #include "mce/loc/loc.h"
 #include "mce/log.h"
 #include "mce/memory/frame_slots.h"
@@ -221,13 +222,13 @@ Placement shifted(Placement p, const Parallax& px, math::vec2 cam) {
 template <typename C, typename Fn>
 void each_placed(World& world, math::vec2 cam, Fn&& fn) {
     world.query<const LocalTransform, const C>().template without<WorldTransform, Parallax>().each(
-        [&](const LocalTransform& t, const C& c) { fn(placement(t), c, nullptr); });
+        [&](Entity e, const LocalTransform& t, const C& c) { fn(e, placement(t), c, nullptr); });
     world.query<const WorldTransform, const C>().template without<Parallax>().each(
-        [&](const WorldTransform& t, const C& c) { fn(placement(t), c, nullptr); });
+        [&](Entity e, const WorldTransform& t, const C& c) { fn(e, placement(t), c, nullptr); });
     world.query<const LocalTransform, const C, const Parallax>().template without<WorldTransform>().each(
-        [&](const LocalTransform& t, const C& c, const Parallax& p) { fn(shifted(placement(t), p, cam), c, &p); });
+        [&](Entity e, const LocalTransform& t, const C& c, const Parallax& p) { fn(e, shifted(placement(t), p, cam), c, &p); });
     world.query<const WorldTransform, const C, const Parallax>().each(
-        [&](const WorldTransform& t, const C& c, const Parallax& p) { fn(shifted(placement(t), p, cam), c, &p); });
+        [&](Entity e, const WorldTransform& t, const C& c, const Parallax& p) { fn(e, shifted(placement(t), p, cam), c, &p); });
 }
 
 }  // namespace
@@ -266,7 +267,7 @@ void SpriteExtract::collect_lights(World& world, render::SpriteBatch& batch) {
 void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
     const math::vec2 cam = batch.view().center;
     collect_lights(world, batch);
-    each_placed<Sprite>(world, cam, [&](const Placement& t, const Sprite& s, const Parallax* px) {
+    each_placed<Sprite>(world, cam, [&](Entity ent, const Placement& t, const Sprite& s, const Parallax* px) {
         render::SpriteInstance inst;
         inst.position = {t.position.x, t.position.y};
         inst.rotation = angle_z(t.rotation);
@@ -275,6 +276,11 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         inst.tint = s.tint;
         inst.set = sprite_set(s.texture.guid, s.normal_map.guid);
         inst.region = region_index(inst.set, s.region);
+        // A VideoPlayer on the entity shows its film in place of the texture (video.h).
+        if (const render::SpriteSetId film = videos_ ? videos_->sprite_set(ent) : render::SpriteSetId{}; film.valid()) {
+            inst.set = film;
+            inst.region = 0;
+        }
         inst.sort_layer = s.layer;
         inst.sort_order = s.order;
         inst.flip_x = s.flip_x;
@@ -298,7 +304,7 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
     });
 
     const loc::Localization* l10n = world.try_resource<loc::Localization>();
-    each_placed<TextLabel>(world, cam, [&](const Placement& t, const TextLabel& l, const Parallax*) {
+    each_placed<TextLabel>(world, cam, [&](Entity, const Placement& t, const TextLabel& l, const Parallax*) {
         const render::Font* f = font(l.font.guid);
         StringView text = l.text.view();
         if (!l.loc_key.empty() && l10n) text = l10n->text(l.loc_key.view());
@@ -335,7 +341,7 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         ps->draw(batch, [](void* self, asset::Guid tex) { return static_cast<SpriteExtract*>(self)->sprite_set(tex); }, this);
 
     for (TilemapEntry& e : tilemaps_) e.used = false;
-    each_placed<TilemapLayer>(world, cam, [&](const Placement& t, const TilemapLayer& l, const Parallax* px) {
+    each_placed<TilemapLayer>(world, cam, [&](Entity, const Placement& t, const TilemapLayer& l, const Parallax* px) {
         // A parallax layer stays baked where it was authored; the shift is a draw-time offset.
         const math::vec2 at{t.position.x, t.position.y};
         const math::vec2 shift = px ? math::vec2{cam.x * (1.0f - px->factor.x), cam.y * (1.0f - px->factor.y)} : math::vec2{};

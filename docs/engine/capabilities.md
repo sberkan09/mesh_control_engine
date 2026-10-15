@@ -75,6 +75,7 @@ reach all of its non-transient fields.
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
+| `VideoPlayer` | `mce/kit/video.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
 | `StagePart` | `mce/kit/novel_components.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
@@ -113,6 +114,7 @@ reach all of its non-transient fields.
 | UiTheme | `.mcuitheme` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/12-ui-and-console.md |
 | Terrain | `.mcterrain` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/03-editor.md |
 | NavMesh | .mcnav (the editor's Bake navmesh) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/09-physics.md |
+| Video | .mpg / .mpeg (MPEG-1 + MP2) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/13-sequences-fsm-saves.md |
 
 ## MCP tools
 

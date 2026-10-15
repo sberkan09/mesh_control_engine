@@ -24,6 +24,8 @@
 
 namespace mce::kit {
 
+class VideoTextures;
+
 class SpriteExtract {
 public:
     SpriteExtract() = default;
@@ -47,8 +49,11 @@ public:
 
     // Font for a GUID, or null when it cannot be loaded.
     const render::Font* font(asset::Guid guid);
+    // Draws a VideoPlayer's Sprite with its film (video.h); null (the default) draws the texture.
+    void set_videos(const VideoTextures* videos) { videos_ = videos; }
 
 private:
+    const VideoTextures* videos_ = nullptr;
     struct TextureEntry {
         asset::Guid guid;
         asset::Guid normal;

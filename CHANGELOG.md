@@ -5,7 +5,7 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
-- Steam, M-STEAM step 1 (SBA-106, ADR-0042): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
+- Steam, M-STEAM step 1 (SBA-106, ADR-0043): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
   talks to it through the Steamworks flat API, so neither the repository nor the build needs the SDK and a game
   without Steam loads nothing. The stock player signs in with `-steam.app_id <id>` (`-steam.library`,
   `-steam.restart` for release builds Steam relaunches) and pumps Steam's callbacks every frame; the sim hash is
@@ -33,6 +33,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   rows through the screen reader, and a control in a labelled row says the label first ("Move Right, D, button").
   The player takes `-access_log <file>` and no longer drops menu presses when it draws fewer frames than it runs
   ticks. Kindle and Undelivered get the stock options screen, and Kindle captions its sounds. User guide chapter 24.
+- Video, M-CINEMA step 5 (SBA-80, ADR-0043): `.mpg` files (MPEG-1 with MP2 sound; ffmpeg converts anything)
+  import as videos, and a `VideoPlayer` plays one on its entity's `Sprite` or over the whole screen as a splash,
+  with its sound in step (play, pause, loop, restart, seek, `finished` at the end). A timeline `video` track plays
+  a film as a cutscene beat. User guide 13.7.
 - Round-3 friction fixes (SBA-61): reloading a game module drops its old convars; an input script's `=0`
   presses an action with value 0; a Text in a horizontal Stack no longer wraps below UI scale 1; game code can
   quit the app (`scene::request_quit`, `UiFlow::quit_on` for a Quit button); `render_frame`, `render_sheet` and
