@@ -221,6 +221,19 @@ struct Environment3D {
     u32 sky_ibl = 0;  // 1: the sky lights the scene (image-based lighting, M-VISUAL 2)
     f32 ibl_texture_intensity = 1.0f;
     asset::AssetRef<asset::Texture> ibl_texture;  // equirect the IBL bakes from; null = the visible sky
+    // M-VISUAL 7. The physically based sky: it replaces the gradient and the sky texture, tints the sun
+    // (sun_color is then the light above the air) and sets the ambient from the sky and the lit ground.
+    u32 atmosphere = 0;
+    f32 atmosphere_intensity = 1.0f;
+    f32 atmosphere_haze = 1.0f;     // aerosols: whiter skies, a wider glow around the sun
+    f32 time_of_day = -1.0f;        // hours 0..24 placing the sun on a simple day's arc; -1 = sun_direction
+    // Volumetric fog in place of the exp² fog: a height fog lit by the sun (shafts), the lights and the ambient.
+    u32 volumetric_fog = 0;
+    f32 volumetric_density = 0.03f;          // extinction per meter at y = 0 and below
+    f32 volumetric_height_falloff = 0.15f;   // density × exp(-falloff · y) above 0
+    f32 volumetric_anisotropy = 0.5f;        // > 0 glows toward the lights
+    math::vec3 volumetric_albedo{0.9f, 0.9f, 0.9f};
+    f32 volumetric_distance = 48.0f;         // meters the froxel grid covers
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -230,7 +243,12 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (bloom_threshold, Range{0, 10}), fxaa, (shadow_cascades, Range{1, 4}), (shadow_distance, Range{1, 2000}),
               (shadow_blend, Range{0, 0.5f}), (sky_ibl, Help{"1: SH9 sky irradiance + pre-filtered sky reflections"}),
               (ibl_texture_intensity, Range{0, 10}),
-              (ibl_texture, Help{"equirect the image-based lighting bakes from; empty = the visible sky"}))
+              (ibl_texture, Help{"equirect the image-based lighting bakes from; empty = the visible sky"}),
+              (atmosphere, Help{"1: physically based sky (tints the sun, sets the ambient)"}), (atmosphere_intensity, Range{0, 10}),
+              (atmosphere_haze, Range{0, 10}), (time_of_day, Range{-1, 24}, Help{"hours placing the sun; -1 = sun_direction"}),
+              (volumetric_fog, Help{"1: froxel volumetric fog lit by the sun and lights (replaces the exp² fog)"}),
+              (volumetric_density, Range{0, 1}), (volumetric_height_falloff, Range{0, 2}), (volumetric_anisotropy, Range{-0.9f, 0.9f}),
+              volumetric_albedo, (volumetric_distance, Range{4, 500}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 

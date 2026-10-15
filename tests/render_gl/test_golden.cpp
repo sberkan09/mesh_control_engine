@@ -274,3 +274,56 @@ TEST_CASE("golden: sunlight bounced off the ground lights the box's unlit face")
     for (int i = 0; i < 8; ++i) f.render(0.0f, true, scene);
     check_golden("gi_bounce", f);
 }
+
+// ---- M-VISUAL 7: atmosphere and volumetric fog -------------------------------------------------
+
+TEST_CASE("golden: the physically based sky at sunset lights the scene through its IBL") {
+    Fixture3D f;
+    f.pitch_deg = 8.0f;  // the upper half is sky
+    f.render(0.0f, true, [](Scene3D& s) {
+        DirectionalLight sun;
+        sun.direction = sun_direction_at(17.4f, 60.0f, 20.0f);
+        sun.color = {1, 1, 1};
+        sun.intensity = 3.0f;
+        s.set_light(sun);
+        Atmosphere a;
+        a.enabled = true;
+        s.set_atmosphere(a);
+        Sky sky;
+        sky.ibl = true;
+        s.set_sky(sky);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().atmosphere);
+    check_golden("atmosphere_sunset", f);
+}
+
+TEST_CASE("golden: volumetric fog: sun shafts past a box and a point light's glow") {
+    Fixture3D f;
+    f.pitch_deg = 15.0f;
+    f.render(0.0f, true, [](Scene3D& s) {
+        DirectionalLight sun;
+        sun.direction = math::normalize(vec3{0.6f, -0.6f, 1.0f});  // low, in front of the camera
+        sun.intensity = 1.0f;
+        sun.ambient_sky = sun.ambient_ground = {0.03f, 0.03f, 0.04f};
+        s.set_light(sun);
+        Sky sky;
+        sky.zenith = sky.horizon = sky.ground = {0.02f, 0.02f, 0.03f};
+        sky.sun_intensity = 0.0f;
+        s.set_sky(sky);
+        PointLight l;
+        l.position = {-2.0f, 1.2f, 1.5f};
+        l.radius = 2.5f;
+        l.color = {1.0f, 0.5f, 0.2f};
+        l.intensity = 1.5f;
+        s.add_point_light(l);
+        Volumetrics v;
+        v.enabled = true;
+        v.density = 0.05f;
+        v.height_falloff = 0.3f;
+        v.anisotropy = 0.3f;
+        v.max_distance = 24.0f;
+        s.set_volumetrics(v);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().volumetrics);
+    check_golden("volumetric_shafts", f);
+}

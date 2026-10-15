@@ -50,6 +50,11 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_gi_min;         // xyz: volume box
     vec4 p_gi_max;
     vec4 p_gi_counts;      // xyz: probes per axis
+    vec4 p_vol;            // volumetric fog (M-VISUAL 7): x on, y slices, z max distance, w log2(1 + z / kVolD0)
+    vec4 p_vol_grid;       // x, y: froxel columns and rows, z, w: atlas tiles across and down (a tile per slice)
+    vec4 p_vol_medium;     // x: density, y: height falloff, z: base height, w: anisotropy g
+    vec4 p_vol_albedo;     // rgb: scattering albedo, w: sun scale
+    vec4 p_vol_scale;      // x: local light scale, y: ambient scale
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -200,13 +205,10 @@ vec3 prefiltered_sky(vec3 r, float rough) {
 }
 )"
 
-constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL R"(
-layout(binding = 6) uniform sampler2DArray u_albedo;
-layout(binding = 7) uniform sampler2DArray u_normal_map;
-layout(binding = 8) uniform sampler2DArray u_orm;
+// The sun's cascades, the Forward+ lists and the local-light shadows (the lit passes and the
+// volumetric fog's injection read them alike).
+#define MCE_GLSL_LIGHTS R"(
 layout(binding = 9) uniform sampler2DArrayShadow u_shadow;
-layout(binding = 13) uniform sampler2DArray u_emissive;
-layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility
 layout(std430, binding = 4) readonly buffer Clusters { uvec2 c_ranges[]; };
 struct Light { vec4 pos_radius; vec4 color; vec4 spot; vec4 shadow; };  // shadow: x first record (-1 = none), y records
 layout(std430, binding = 5) readonly buffer LightPool { Light l_lights[]; };
@@ -215,10 +217,6 @@ layout(std430, binding = 5) readonly buffer LightPool { Light l_lights[]; };
 struct LocalShadow { mat4 vp; vec4 rect; vec4 info; };
 layout(std430, binding = 11) readonly buffer LocalShadows { LocalShadow l_shadows[]; };
 layout(std430, binding = 6) readonly buffer LightIndices { uint l_indices[]; };
-layout(location = 0) in vec3 v_world;
-layout(location = 1) in vec3 v_normal;
-layout(location = 2) in vec2 v_uv;
-layout(location = 0) out vec4 o_color;
 
 // ---- shadows: cascade by view depth, PCF 3x3 over the hardware 2x2 compare, cross-faded
 float sample_cascade(int i, vec3 world, vec3 n, vec3 l) {
@@ -273,6 +271,43 @@ float local_shadow(vec4 shadow, vec3 light_pos, vec3 world, vec3 n, vec3 l) {
         for (int x = -1; x <= 1; ++x) sum += texture(u_shadow, vec4(clamp(uv + vec2(x, y) * ts, lo, hi), s.info.x, min(q.z, 1.0)));
     return sum * (1.0 / 9.0);
 }
+)"
+
+// Volumetric fog (M-VISUAL 7): the froxel grid's depth slices (log-spaced from the camera to
+// p_vol.z) and its integrated light, an atlas of one tile per slice (rgb: the light scattered toward
+// the camera up to the slice's far end, a: the transmittance there).
+#define MCE_GLSL_VOLUME R"(
+layout(binding = 4) uniform sampler2D u_vol;
+const float kVolD0 = 1.0;  // meters: the slices thicken past about this depth
+float vol_slice_of(float depth) { return log2(1.0 + max(depth, 0.0) / kVolD0) / p_vol.w * p_vol.y; }
+float vol_depth_of(float s) { return kVolD0 * (exp2(s / p_vol.y * p_vol.w) - 1.0); }
+vec2 vol_atlas_uv(vec2 uv, int slice) {
+    int cols = int(p_vol_grid.z);
+    vec2 g = p_vol_grid.xy;
+    vec2 p = clamp(uv * g, vec2(0.5), g - 0.5);  // bilinear taps stay inside the slice's tile
+    return (vec2(slice % cols, slice / cols) * g + p) / (g * p_vol_grid.zw);
+}
+// rgb: in-scattered light to add, a: transmittance to multiply, for a point at view depth `depth`
+// seen through screen uv (0..1, the full-screen passes' convention).
+vec4 vol_fog(vec2 uv, float depth) {
+    float s = min(vol_slice_of(depth), p_vol.y);
+    int k = int(floor(s));
+    vec4 a = k > 0 ? textureLod(u_vol, vol_atlas_uv(uv, k - 1), 0.0) : vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 b = k < int(p_vol.y) ? textureLod(u_vol, vol_atlas_uv(uv, k), 0.0) : a;
+    return mix(a, b, s - float(k));
+}
+)"
+
+constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME R"(
+layout(binding = 6) uniform sampler2DArray u_albedo;
+layout(binding = 7) uniform sampler2DArray u_normal_map;
+layout(binding = 8) uniform sampler2DArray u_orm;
+layout(binding = 13) uniform sampler2DArray u_emissive;
+layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility
+layout(location = 0) in vec3 v_world;
+layout(location = 1) in vec3 v_normal;
+layout(location = 2) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
 
 // ---- Cook-Torrance GGX (Karis 2013 / Filament): D_GGX, V_SmithGGXCorrelated, F_Schlick
 float D_GGX(float NoH, float a) {
@@ -466,9 +501,15 @@ void main() {
     vec3 emissive = o_emissive.rgb;
     if (o_emissive.w > 0.5) emissive *= texture(u_emissive, vec3(v_uv, 0.0)).rgb;
     color += emissive;
-    float dist = length(v_world - u_camera_pos.xyz);
-    float fog = 1.0 - exp(-(p_fog.w * dist) * (p_fog.w * dist));
-    color = mix(color, p_fog.rgb, clamp(fog, 0.0, 1.0));
+    if (p_vol.x > 0.5) {  // volumetric fog in place of the exp² fog
+        vec4 c = u_view_proj * vec4(v_world, 1.0);
+        vec4 f = vol_fog(c.xy / c.w * 0.5 + 0.5, -(u_view * vec4(v_world, 1.0)).z);
+        color = color * f.a + f.rgb;
+    } else {
+        float dist = length(v_world - u_camera_pos.xyz);
+        float fog = 1.0 - exp(-(p_fog.w * dist) * (p_fog.w * dist));
+        color = mix(color, p_fog.rgb, clamp(fog, 0.0, 1.0));
+    }
     o_color = vec4(color, base.a);
 }
 )";
@@ -737,7 +778,7 @@ void main() {
 }
 )";
 
-constexpr const char* kSkyFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U R"(
+constexpr const char* kSkyFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_VOLUME R"(
 layout(location = 0) in vec2 v_ndc;
 layout(location = 0) out vec4 o_color;
 void main() {
@@ -748,7 +789,12 @@ void main() {
     float cs = dot(d, sun);
     float edge = 1.0 - p_sun.x;
     c += p_light_color.rgb * p_sun.y * smoothstep(p_sun.x - edge * 0.25, p_sun.x + edge * 0.25, cs);
-    if (p_fog.w > 0.0) c = mix(p_fog.rgb, c, smoothstep(0.0, 0.35, d.y));  // haze toward the horizon
+    if (p_vol.x > 0.5) {  // the volumetric fog's whole depth in front of the sky
+        vec4 f = vol_fog(v_ndc * 0.5 + 0.5, 1e30);
+        c = c * f.a + f.rgb;
+    } else if (p_fog.w > 0.0) {
+        c = mix(p_fog.rgb, c, smoothstep(0.0, 0.35, d.y));  // haze toward the horizon
+    }
     o_color = vec4(c, 1.0);
 }
 )";
@@ -1140,6 +1186,100 @@ void main() {
     float m = clamp(max(max(c.r, c.g), max(c.b, 1e-6)) / e_params.z, 1.0 / 255.0, 1.0);
     m = ceil(m * 255.0) / 255.0;
     o_color = vec4(min(c / (m * e_params.z), vec3(1.0)), m);
+}
+)";
+
+// ---- volumetric fog (M-VISUAL 7). Both passes draw the whole atlas (a tile of froxel columns ×
+// rows per depth slice); FrameU and PassU are the main pass's.
+// Injection: each froxel's medium at its center, rgb = the light it scatters toward the camera per
+// meter (σs · in-scattered radiance), a = its extinction σt per meter.
+constexpr const char* kVolInjectFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_LIGHTS MCE_GLSL_VOLUME R"(
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+float hg(float g, float c) { return (1.0 - g * g) / (4.0 * PI * pow(max(1.0 + g * g - 2.0 * g * c, 1e-4), 1.5)); }
+void main() {
+    vec2 atlas = p_vol_grid.xy * p_vol_grid.zw;
+    vec2 cell = min(floor(v_uv * atlas), atlas - 1.0);
+    vec2 tile = floor(cell / p_vol_grid.xy);
+    int slice = int(tile.x) + int(tile.y) * int(p_vol_grid.z);
+    if (slice >= int(p_vol.y)) {
+        o_color = vec4(0.0);
+        return;
+    }
+    vec2 uv = (cell - tile * p_vol_grid.xy + 0.5) / p_vol_grid.xy;
+    float depth = vol_depth_of(float(slice) + 0.5);
+    vec4 w = u_inv_view_proj * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+    vec3 ray = w.xyz / w.w - u_camera_pos.xyz;
+    vec3 fwd = -vec3(u_view[0][2], u_view[1][2], u_view[2][2]);
+    vec3 p = u_camera_pos.xyz + ray * (depth / dot(ray, fwd));
+    vec3 rd = normalize(ray);
+    float sigma_t = p_vol_medium.x * (p_vol_medium.y > 0.0 ? exp(-p_vol_medium.y * max(p.y - p_vol_medium.z, 0.0)) : 1.0);
+    float g = p_vol_medium.w;
+    // The sun through its cascades (shafts where something casts a shadow). The engine's light
+    // scale I is irradiance / π, so the scattered radiance is σs · π · I · phase.
+    vec3 l = -p_light_dir.xyz;
+    vec3 lin = p_light_color.rgb * (PI * hg(g, dot(l, rd)) * shadow_term(p, l, l, depth) * p_vol_albedo.w);
+    // Point and spot lights of the froxel's cluster, with their shadows.
+    uvec3 grid = uvec3(u_cluster.xyz);
+    uint tx = min(uint(uv.x * u_cluster.x), grid.x - 1u), ty = min(uint(uv.y * u_cluster.y), grid.y - 1u);
+    uint tz = uint(clamp(int(floor(log(max(depth, 1e-4)) * u_cluster_z.x + u_cluster_z.y)), 0, int(grid.z) - 1));
+    uvec2 range = c_ranges[tx + grid.x * (ty + grid.y * tz)];
+    for (uint i = 0u; i < range.y; ++i) {
+        Light L = l_lights[l_indices[range.x + i]];
+        vec3 dl = L.pos_radius.xyz - p;
+        float d2 = dot(dl, dl);
+        float f = d2 * L.color.w;
+        float win = clamp(1.0 - f * f, 0.0, 1.0);
+        float att = win * win / max(d2, 0.01);
+        vec3 ld = dl * inversesqrt(d2);
+        float cone = clamp(dot(-ld, L.spot.xyz) + L.spot.w, 0.0, 1.0);
+        att *= cone * cone;
+        if (att <= 0.0) continue;
+        if (L.shadow.x >= 0.0 && p_local.x > 0.5) att *= local_shadow(L.shadow, L.pos_radius.xyz, p, ld, ld);
+        lin += L.color.rgb * (PI * att * hg(g, dot(ld, rd)) * p_vol_scale.x);
+    }
+    // The ambient, isotropic: the sphere's mean radiance, between the sky's and the ground's.
+    lin += (p_amb_sky.rgb + p_amb_ground.rgb) * (0.5 * p_vol_scale.y);
+    o_color = vec4(p_vol_albedo.rgb * sigma_t * lin, sigma_t);
+}
+)";
+
+// Integration front to back along each froxel column, up to this froxel's slice (energy-conserving
+// over each slice's thickness, Hillaire 2015): rgb = scattered light reaching the camera, a = the
+// transmittance, both at the slice's far end.
+constexpr const char* kVolIntegrateFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U R"(
+layout(binding = 6) uniform sampler2D u_media;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+const float kVolD0 = 1.0;
+float vol_depth_of(float s) { return kVolD0 * (exp2(s / p_vol.y * p_vol.w) - 1.0); }
+void main() {
+    vec2 atlas = p_vol_grid.xy * p_vol_grid.zw;
+    vec2 cell = min(floor(v_uv * atlas), atlas - 1.0);
+    vec2 tile = floor(cell / p_vol_grid.xy);
+    int slice = int(tile.x) + int(tile.y) * int(p_vol_grid.z);
+    if (slice >= int(p_vol.y)) {
+        o_color = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+    ivec2 xy = ivec2(cell - tile * p_vol_grid.xy);
+    vec2 uv = (vec2(xy) + 0.5) / p_vol_grid.xy;
+    vec4 w = u_inv_view_proj * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+    vec3 ray = w.xyz / w.w - u_camera_pos.xyz;
+    vec3 fwd = -vec3(u_view[0][2], u_view[1][2], u_view[2][2]);
+    float stretch = length(ray) / dot(ray, fwd);  // meters along the ray per meter of view depth
+    int cols = int(p_vol_grid.z);
+    vec3 light = vec3(0.0);
+    float trans = 1.0;
+    for (int k = 0; k <= slice; ++k) {
+        vec4 m = texelFetch(u_media, ivec2(k % cols, k / cols) * ivec2(p_vol_grid.xy) + xy, 0);
+        float len = (vol_depth_of(float(k + 1)) - vol_depth_of(float(k))) * stretch;
+        float t = exp(-m.a * len);
+        vec3 s = m.a > 1e-7 ? m.rgb * (1.0 - t) / m.a : m.rgb * len;
+        light += trans * s;
+        trans *= t;
+    }
+    o_color = vec4(light, trans);
 }
 )";
 

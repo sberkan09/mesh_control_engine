@@ -54,6 +54,9 @@ struct Forward3DDesc {
     // Irradiance-volume resources (M-VISUAL 6); a scene turns it on with GiVolume::enabled. False (or
     // -r.gi 0) draws every scene with the sky's ambient.
     bool gi = true;
+    // Volumetric fog pipelines (M-VISUAL 7); a scene turns it on with Volumetrics::enabled. False (or
+    // -r.volumetrics 0) draws every scene with the exp² fog.
+    bool volumetrics = true;
 };
 
 struct Forward3DStats {
@@ -83,6 +86,10 @@ struct Forward3DStats {
     u32 gi_probes = 0;          // probes captured this frame (the fill's or the rolling update's)
     u32 gi_draws = 0;           // draws of those captures, over all faces
     u32 gi_lights = 0;          // the most point / spot lights one probe's captures saw
+    bool atmosphere = false;         // the sky came from the atmosphere (M-VISUAL 7)
+    bool atmosphere_baked = false;   // ... re-baked this frame (the sun or the air changed)
+    bool volumetrics = false;        // volumetric fog lit this frame (M-VISUAL 7)
+    u32 froxels = 0;                 // its grid: columns × rows × slices
     u32 joints = 0;          // joint matrices uploaded for skinned meshes
     u32 bloom_levels = 0;
     bool fxaa = false;
@@ -96,13 +103,14 @@ struct Forward3DGpuTimes {
     f64 shadow = -1, main = -1, resolve = -1;
     f64 taa = -1;       // velocity prepass + TAA resolve (0 when the scene has no TAA)
     f64 gi = -1;        // irradiance-volume update (0 when the scene has no volume)
+    f64 volumetrics = -1;  // froxel injection + integration (0 when the scene has no volumetric fog)
     f64 bloom = -1, tonemap = -1, fxaa = -1, total = -1;
     f64 post() const { return bloom < 0 ? -1 : bloom + tonemap + (fxaa < 0 ? 0 : fxaa); }
 };
 
 class Forward3D {
 public:
-    static constexpr u32 kStageCount = 10;    // timestamps written: kStageCount + 1
+    static constexpr u32 kStageCount = 11;    // timestamps written: kStageCount + 1
     static constexpr u32 kMaxBloomLevels = 6;
 
     Forward3D() = default;
@@ -192,6 +200,11 @@ private:
     void timestamp(rhi::CommandBuffer& cmd, u32 stage);
     void record_clusters(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_ibl(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void update_atmosphere(const Scene3D& scene);
+    void record_volumetrics(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void vol_params(const Scene3D& scene, Forward3DPassU& pu) const;
+    void bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, bool apply_fog);
+    rhi::TextureHandle sky_texture_override() const { return atmo_on_ ? atmo_tex_ : rhi::TextureHandle{}; }
     void record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene);
@@ -254,6 +267,15 @@ private:
     rhi::TextureHandle ibl_off_2d_;      // the env array, and the LUT and SH slots
     rhi::SamplerHandle env_sampler_;     // linear, wraps around the equirect seam
     u64 ibl_key_ = 0;                    // the sky the IBL textures were baked from; 0 = none
+    rhi::TextureHandle atmo_tex_;        // the atmosphere's sky, equirect RGBA16F with mips (a new one per bake)
+    u64 atmo_key_ = 0;                   // what it was baked from
+    bool atmo_on_ = false;               // this frame draws it
+    static constexpr u32 kVolAtlasCols = 8;  // froxel slices per atlas row
+    rhi::PipelineHandle vol_inject_, vol_integrate_;
+    rhi::TextureHandle vol_media_;       // per froxel: rgb scattered light per meter, a extinction (RGBA16F atlas)
+    rhi::TextureHandle vol_light_;       // integrated: rgb light toward the camera, a transmittance
+    rhi::Extent2D vol_grid_;             // froxel columns × rows this frame
+    u32 vol_slices_ = 0;
     bool local_shadows_ = false;         // the atlas layers exist and r.local_shadows is on (this frame)
     bool local_mismatch_logged_ = false;
     bool ibl_own_source_ = false;        // baked from Sky::ibl_texture rather than the visible sky
