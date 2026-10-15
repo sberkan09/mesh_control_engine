@@ -16,6 +16,7 @@ mce_add_library(mce_gameplay_kit
         src/sprite_anim.cpp
         src/sprite_extract.cpp
         src/stock.cpp
+        src/timeline.cpp
     PUBLIC_DEPS
         mce::mce_ecs
         mce::mce_refl

@@ -52,3 +52,6 @@ v0.5 runner directly.
 
 **Note (2026-10-11):** the component header in Decision 2 is `mce/kit/components.h`
 (`src/engine/kit/include/mce/kit/components.h`).
+
+**Note (2026-10-15):** TimelinePlayer is built (M-CINEMA step 1, `mce/kit/timeline.h`); its
+event tracks push `SeqSignal`, so a sequence can `wait_event` on a timeline beat.

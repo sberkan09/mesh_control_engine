@@ -88,6 +88,15 @@ constexpr AssetKind kKinds[] = {
 {"name":"loop","type":"boolean","default":false},
 {"name":"steps","type":"array of step objects","help":"{\"wait\": s} | {\"wait_event\": id} | {\"move_to\": [x, y], \"speed\": m/s, \"relative\": bool} | {\"anim\": name} | {\"sound\": \"guid:<Sfx>\", \"gain_db\": db} | {\"stop_sound\": true} | {\"emit\": id} | {\"call\": hook} | {\"spawn\": \"guid:<Prefab>\", \"at\": [x, y], \"relative\": bool} | {\"destroy\": true}"}])json",
      R"json({"name":"sequence","loop":false,"steps":[{"wait":1}]})json"},
+    {"Timeline", ".mctimeline", "mce-timeline", 1,
+     "Keyed tracks a TimelinePlayer component plays against the fixed tick (cutscenes, scripted beats). A track's "
+     "\"target\" is \"self\" (the player's entity, the default) or a binding index 0-7 (TimelinePlayer.bindings). "
+     "Keys are in time order; a key's \"ease\" (linear, step, smooth, ease_in, ease_out) shapes the curve to the next key.",
+     R"json([
+{"name":"name","type":"string"},
+{"name":"duration","type":"number","help":"Seconds; default: the last key's end"},
+{"name":"tracks","type":"array of track objects","help":"{\"type\": \"transform\", \"target\", \"keys\": [{\"t\", \"position\": [x, y, z], \"rotation\": [x, y, z, w], \"scale\": [x, y, z], \"ease\"}]} | {\"type\": \"property\", \"target\", \"path\": \"Component.field\", \"keys\": [{\"t\", \"value\": number or [..], \"ease\"}]} | {\"type\": \"activation\", \"target\", \"path\": \"Component.bool_field\", \"ranges\": [{\"from\", \"to\"}]} | {\"type\": \"animation\", \"target\", \"keys\": [{\"t\", \"clip\", \"loop\", \"fade\"}]} | {\"type\": \"audio\", \"keys\": [{\"t\", \"sound\": \"guid:<Sfx>\", \"gain_db\"}]} | {\"type\": \"camera\", \"cuts\": [{\"t\", \"camera\": \"self\" | 0-7}]} | {\"type\": \"event\", \"keys\": [{\"t\", \"emit\": id}]} | {\"type\": \"subtitle\", \"lines\": [{\"t\", \"duration\", \"text\", \"speaker\"}]}"}])json",
+     R"json({"name":"timeline","duration":1,"tracks":[{"type":"event","keys":[{"t":0,"emit":"start"}]}]})json"},
     {"Tilemap", ".mctilemap", "mce-tilemap", 1,
      "One tile layer over a tileset texture cut into columns x rows cells, drawn by a TilemapLayer component (map: "
      "\"guid:...\"). tiles: width x height indices, row 0 = bottom; 0 = empty, n = cell n-1 (cells count left to right, "
@@ -630,7 +639,7 @@ const ToolDef kAssetTools[] = {
      "Describe a JSON source asset type: its fields (type, default, help) and the template asset_create starts from. "
      "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, "
      ".mcinput, .mcstore, .mcservices, .mcui, .mcconfig).",
-     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, or the extension"}}})json",
+     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Timeline, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, or the extension"}}})json",
      asset_schema},
     {"asset_create",
      "Create a JSON source asset at 'path' (its extension picks the type) with a fresh GUID: the type's template with "
