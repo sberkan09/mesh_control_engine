@@ -57,6 +57,24 @@ later read returns zero.
   after the transform, length-prefixed; `on_spawn` adds the client-only parts (sprite, mesh) from
   `NetId::kind`; `on_despawn` runs before a mirrored entity is destroyed.
 
+`websocket.h` — `WebSocketHost` (M-NET2 step 6), a `Transport` over WebSocket with Host's shape:
+`listen(WebSocketDesc)` / `open_client()` + `connect(host, port, user_data, path)`. Native builds speak
+RFC 6455 over non-blocking TCP (plain `ws://`); a web build's client uses the browser's WebSocket
+(`websocket_web.cpp`) and cannot listen. One binary message per send, `[channel][payload]`; every
+Delivery is reliable and ordered (TCP). Pings give `stats()` its RTT and drop silent peers after
+`timeout_ms`; a close frame carries the `disconnect` user_data; a message over `max_message` closes
+the connection.
+
+`relay.h` — rooms through a relay (M-NET2 step 6):
+
+- `RelayServer::init(RelayDesc)`, `add_transport(t)` (any number: the `mce_relay` tool serves UDP and
+  WebSocket at once), `update()` each loop, `stats()`.
+- `RelayClient` is a `Transport` whose peers are a room's members: `start(link, relay_peer, {channels})`,
+  `create_room(max)` / `join_room(code)`, `state()` (Idle, Requesting, InRoom, Refused, Closed),
+  `room_code()`, `member_id()` (the host is 0), `refusal()`, `leave()`. It polls the link itself.
+- Wire: one request or notice per message on the link's channel 0, data forwarded with the sender's
+  Delivery (channel 0 reliable, channel 1 otherwise). The relay never reads game data.
+
 ## A minimal game loop
 
 ```cpp
@@ -116,7 +134,8 @@ loopback, a client-driven player, and the bit-for-bit check.
 - No client-side prediction, reconciliation or interpolation buffer: a client shows the newest
   snapshot as-is (smooth enough on a LAN at 60 Hz; visible steps at high latency).
 - Full snapshots only: no delta compression, no interest management (every client gets every entity).
-- No encryption or authentication; no NAT traversal, lobbies or matchmaking.
+- No encryption or authentication (put a TLS proxy in front of `mce_relay`'s WebSocket port for `wss://`); no
+  matchmaking, host migration or WebRTC. Players who cannot accept connections meet through `mce_relay`.
 - The editor does not run multiplayer sessions: play-in-editor is one world. Test with a server host
   and a client host (or one process, as the sample does).
 - A shipped game that links `mce_net` must carry ENet's MIT notice in its credits.

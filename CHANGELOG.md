@@ -13,6 +13,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   smooth surfaces mirror what is on screen over the probes and the sky (`ssr_max_distance`, `ssr_thickness`,
   `ssr_max_roughness`, `ssr_roughness_fade`, `ssr_intensity`). It reads the previous frame, so it shows from the
   second frame; off on the Low quality tier, `r.ssr 0` turns it off. User guide 8.
+- Rooms through a relay, and WebSocket (SBA-87, M-NET2 step 6): `mce_relay` serves rooms with six-letter codes
+  over UDP and WebSocket at once, so players behind home routers and browsers can play together without opening
+  a port. `net::RelayClient` is a Transport whose peers are the room's members, so replication, prediction and
+  rollback run through it unchanged; `net::WebSocketHost` is a Transport over WebSocket (native TCP, or the
+  browser's in a web build). `sample_net_headless -sim 1 -relay 1` plays a session through a room. User guide 20.8.
 - Accessibility checks and guide, M-ACCESS step 5 (SBA-99). `project_check` now flags small and low-contrast
   `.mcui` text, timelines with sound but no subtitles, and uncaptioned sounds. The novel stage speaks its pages and
   rows through the screen reader, and a control in a labelled row says the label first ("Move Right, D, button").
