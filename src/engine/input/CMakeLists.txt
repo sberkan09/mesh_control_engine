@@ -10,6 +10,7 @@ mce_add_library(mce_input
         src/default_map.cpp
         src/ecs_bridge.cpp
         src/bindings.cpp
+        src/binding_names.cpp
     PUBLIC_DEPS
         mce::mce_core
         mce::mce_platform
