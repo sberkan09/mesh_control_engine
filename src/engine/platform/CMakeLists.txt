@@ -18,6 +18,7 @@ mce_add_library(mce_platform
         src/haptics.cpp
         src/power.cpp
         src/screen_reader.cpp
+        src/steam.cpp
     PUBLIC_DEPS
         mce::mce_core
     PRIVATE_DEPS

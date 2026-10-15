@@ -316,3 +316,27 @@ With the `local` provider nothing leaves the device and there is nothing to decl
 - The demo's device half (a forced crash shown symbolicated after relaunch on the Simulator and the
   emulator, achievements and a cloud restore on test accounts) waits on the vendor and the native
   providers; `samples/liveops_demo` covers the rest in CI.
+
+## 23.10 Steam
+
+Desktop games reach Steam through Valve's `steam_api` library, which the engine opens at run time
+(ADR-0041): the Steamworks SDK is not part of the engine or its build, and a game that never asks for
+Steam loads nothing. Put the library for your platform (`libsteam_api.so`, `steam_api64.dll`,
+`libsteam_api.dylib`, from the Steamworks SDK's `redistributable_bin`) next to the game's executable
+and start the player with your app id:
+
+```
+mce_player -pack assets.mce -steam.app_id 480
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `steam.app_id` | `0` | open Steam for this app (0: no Steam). A run outside Steam names the app to the client the way `steam_appid.txt` does |
+| `steam.library` | next to the executable | the `steam_api` to open |
+| `steam.restart` | `0` | a run started outside Steam asks Steam to relaunch it and quits (release builds) |
+
+The log says `Steam on (app 480, <player name>)`, or `no Steam (<reason>)` and the game goes on
+without it: no library, Steam not running, a client older than the library. Steam never changes the
+simulation. Achievements, leaderboards and cloud saves through Steam, the overlay, Steam Input and
+`ship --steam` come in the next M-STEAM steps; until they land, Steam is signed in and nothing more.
+
