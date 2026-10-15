@@ -117,6 +117,7 @@ constexpr u32 kOpDecorate = 71;
 constexpr u32 kOpMemberDecorate = 72;
 constexpr u32 kExecutionModeLocalSize = 17;
 constexpr u32 kDecorationNonWritable = 24;
+constexpr u32 kDecorationNonReadable = 25;
 constexpr u32 kDecorationBlock = 2;
 constexpr u32 kDecorationBufferBlock = 3;
 constexpr u32 kDecorationBinding = 33;
@@ -134,7 +135,7 @@ struct IdInfo {
     u32 set_word = 0;                       // index of the DescriptorSet literal, 0 = none
     u32 members = 0;                        // OpTypeStruct member count
     u32 nonwritable_members = 0;            // members decorated NonWritable
-    bool block = false, buffer_block = false, nonwritable = false;
+    bool block = false, buffer_block = false, nonwritable = false, nonreadable = false;
 };
 
 ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& res, FixedString<1024>& log,
@@ -202,6 +203,7 @@ ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& r
                     if (deco == kDecorationBlock) t->block = true;
                     if (deco == kDecorationBufferBlock) t->buffer_block = true;
                     if (deco == kDecorationNonWritable) t->nonwritable = true;
+                    if (deco == kDecorationNonReadable) t->nonreadable = true;
                 }
                 break;
             default: break;
@@ -244,6 +246,8 @@ ResultV rewrite_bindings(ShaderStage stage, Array<u32>& words, StageResources& r
                 return Error(Errc::ShaderCompile, "rhi.webgpu.spirv", name);
             }
             res.image_mask |= 1u << gl;
+            if (var.nonwritable) res.image_read_only_mask |= 1u << gl;
+            if (var.nonreadable) res.image_write_only_mask |= 1u << gl;
             group = kGroupImages;
         } else if (storage == kStorageStorageBuffer || (storage == kStorageUniform && ids[type].buffer_block)) {
             if (gl >= kMaxStorageBindings) {

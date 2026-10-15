@@ -54,6 +54,8 @@ struct StageResources {
     u32 storage_rw_mask = 0;                  // ... and written (compute only; graphics stages are read-only)
     u32 uniform_mask = 0;                     // bit b: uniform bank b is declared
     u32 image_mask = 0;                       // bit u: storage image unit u is declared (compute)
+    u32 image_read_only_mask = 0;             // ... as `readonly`
+    u32 image_write_only_mask = 0;            // ... as `writeonly`
     u32 local_size[3] = {1, 1, 1};
 };
 

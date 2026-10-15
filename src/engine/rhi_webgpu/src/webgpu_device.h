@@ -275,6 +275,7 @@ private:
     Array<Prepared> prepared_;  // one per payload command, stream order
     Array<DrawIndexedIndirectCommand> draw_args_;  // the frame's set_draw_args data (CPU side)
     Array<WGPUBindGroup> retired_groups_;  // replaced bind groups, released after the submit
+    WGPUComputePassEncoder compute_pass_ = nullptr;
     struct {
         WGPURenderPassEncoder pass = nullptr;
         TargetKey target;
