@@ -55,6 +55,7 @@ reach all of its non-transient fields.
 | `BoxCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `MeshCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Foliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `Terrain3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
@@ -92,6 +93,7 @@ reach all of its non-transient fields.
 | AnimGraph | `.mcanim` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | UiDocument | `.mcui` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/03-editor.md |
 | UiTheme | `.mcuitheme` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/12-ui-and-console.md |
+| Terrain | `.mcterrain` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 
 ## MCP tools
 
