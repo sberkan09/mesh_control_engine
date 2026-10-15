@@ -542,6 +542,10 @@ public:
         if (game_services_print_) game_services_test_events();
         ++sim_ticks_;
         apply_scene_change();
+        if (scene::take_quit_request(world_)) {
+            MCE_LOG_INFO("{}: the game asked to quit at tick {}", desc_.app_name, sim_ticks_);
+            quit(0);
+        }
         if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
     }
 

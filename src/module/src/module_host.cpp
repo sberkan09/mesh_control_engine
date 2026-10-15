@@ -8,6 +8,7 @@
 #include <unistd.h>
 #endif
 
+#include "mce/convar.h"
 #include "mce/log.h"
 #include "mce/platform/library.h"
 #include "mce/refl/type.h"
@@ -31,6 +32,12 @@ struct Slot {
     u32 enum_count = 0;
     const refl::TypeRecord* types[256] = {};
     const refl::EnumRecord* enums[64] = {};
+    // Its convars and console functions, dropped the same way (else console_list shows each once
+    // per rebuild and set/get reach the first, stale one).
+    u32 cvar_count = 0;
+    u32 cfunc_count = 0;
+    ConVar* cvars[128] = {};
+    ConFunc* cfuncs[64] = {};
 };
 Slot g_slots[kSlotCount];
 
@@ -112,6 +119,13 @@ bool copy_in_use(StringView path) {
     return false;
 }
 
+// Before the library goes: once it is unmapped its convars may be gone with it.
+void drop_console(Slot& s) {
+    for (u32 i = 0; i < s.cvar_count; ++i) s.cvars[i]->unlink();
+    for (u32 i = 0; i < s.cfunc_count; ++i) s.cfuncs[i]->unlink();
+    s.cvar_count = s.cfunc_count = 0;
+}
+
 void release_slot(u32 slot) {
     Slot& s = g_slots[slot];
     if (s.owns_copy) std::remove(s.loaded_path.c_str());
@@ -168,6 +182,10 @@ Result<LoadedModule> open_game_module(StringView path) {
     const u32 ne = static_cast<u32>(e0.size() < 256 ? e0.size() : 256);
     for (u32 i = 0; i < nt; ++i) types_before[i] = t0[i];
     for (u32 i = 0; i < ne; ++i) enums_before[i] = e0[i];
+    Array<ConVar*> cvars_before;
+    Array<ConFunc*> cfuncs_before;
+    ConVar::collect(cvars_before);
+    ConFunc::collect(cfuncs_before);
     const Result<void*> lib = platform::load_library(m.loaded_path);
     if (!lib) {
         release_slot(slot);
@@ -176,10 +194,27 @@ Result<LoadedModule> open_game_module(StringView path) {
     m.handle = lib.value();
     remember_new(refl::all(), types_before, nt, g_slots[slot].types, g_slots[slot].type_count);
     remember_new(refl::all_enums(), enums_before, ne, g_slots[slot].enums, g_slots[slot].enum_count);
+    {
+        Array<ConVar*> vars;
+        Array<ConFunc*> funcs;
+        ConVar::collect(vars);
+        ConFunc::collect(funcs);
+        Slot& sl = g_slots[slot];
+        auto had = [](const auto& before, const auto* x) {
+            for (const auto* b : before)
+                if (b == x) return true;
+            return false;
+        };
+        for (ConVar* v : vars)
+            if (!had(cvars_before, v) && sl.cvar_count < 128) sl.cvars[sl.cvar_count++] = v;
+        for (ConFunc* f : funcs)
+            if (!had(cfuncs_before, f) && sl.cfunc_count < 64) sl.cfuncs[sl.cfunc_count++] = f;
+    }
 
     const auto entry = reinterpret_cast<ModuleEntryFn>(platform::library_symbol(m.handle, kModuleEntrySymbol));
     m.info = entry ? entry() : nullptr;
     if (m.info == nullptr || m.info->install == nullptr) {
+        drop_console(g_slots[slot]);
         platform::unload_library(m.handle);
         release_slot(slot);
         return Error(Errc::ModuleMissingEntry, "module.entry", path);
@@ -187,6 +222,7 @@ Result<LoadedModule> open_game_module(StringView path) {
     if (m.info->engine_id != MCE_ENGINE_ID) {
         MCE_LOG_ERROR("module: {} was built against engine {:016x}, this engine is {:016x} ({}); rebuild it",
                       path, m.info->engine_id, MCE_ENGINE_ID, MCE_ENGINE_DESCRIBE);
+        drop_console(g_slots[slot]);
         platform::unload_library(m.handle);
         release_slot(slot);
         return Error(Errc::EngineIdMismatch, "module.version", path);
@@ -231,6 +267,7 @@ void unload_game_module(LoadedModule& module) {
     Slot& s = g_slots[module.slot];
     for (u32 i = 0; i < s.type_count; ++i) refl::unregister_type(s.types[i]);
     for (u32 i = 0; i < s.enum_count; ++i) refl::unregister_enum(s.enums[i]);
+    drop_console(s);
     platform::unload_library(module.handle);
     release_slot(module.slot);
     module = LoadedModule{};

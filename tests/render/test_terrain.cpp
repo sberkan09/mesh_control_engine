@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "mce/render/mesh.h"
 #include "mce/render/quality.h"
@@ -304,4 +305,87 @@ TEST_CASE("terrain: compose_layer_array packs matching layer textures and leaves
     const asset::TextureView* none[2] = {nullptr, nullptr};
     CHECK_FALSE(render::compose_layer_array(Span<const asset::TextureView* const>(none, 2), arr));
     CHECK(arr.present == 0u);
+}
+
+TEST_CASE("terrain: holes split their nodes to level 0 and cut the triangles around them (M-TERRAIN 3)") {
+    // A flat 129-sample, 128 m terrain with a 4 x 4 block of hole samples at (60..63, 70..73).
+    asset::TerrainHeader h{};
+    h.resolution = 129;
+    h.chunk = 16;
+    h.size[0] = h.size[1] = 128.0f;
+    h.height_min = 0.0f;
+    h.height_max = 40.0f;
+    h.flags = asset::TerrainFlags::kHoles;
+    Array<u16> heights;
+    heights.resize(129u * 129u, u16{8000});
+    Array<u8> holes;
+    holes.resize((129u * 129u + 7) / 8, u8{0});
+    for (u32 z = 70; z <= 73; ++z)
+        for (u32 x = 60; x <= 63; ++x) {
+            const u32 i = z * 129 + x;
+            holes[i / 8] |= static_cast<u8>(1u << (i % 8));
+        }
+    Array<byte> payload;
+    asset::write_terrain(h, heights.span(), payload, {}, {}, holes.span());
+    const TerrainLod lod = lod_of(payload);
+    CHECK(lod.hole(61, 71));
+    CHECK_FALSE(lod.hole(59, 71));
+
+    // Flat, so without holes the root would do; the nodes holding hole samples come down to level 0.
+    Array<u32> nodes;
+    TerrainSelectParams p;
+    p.shadow_reach = 1e9f;
+    lod.select(view_at({0, 200, -300}, {0, 0, 0}), p, nodes);
+    f32 area = 0.0f;
+    u32 holed = 0;
+    for (u32 i : nodes) {
+        const TerrainNode& n = lod.node(i);
+        area += (n.bounds.max.x - n.bounds.min.x) * (n.bounds.max.z - n.bounds.min.z);
+        if (n.holed) {
+            ++holed;
+            CHECK(n.level == 0);
+        }
+    }
+    CHECK(area == doctest::Approx(128.0f * 128.0f));
+    CHECK(holed == 1);  // samples 60..63 x 70..73 sit inside one 16-sample node: (3, 4)
+    CHECK(nodes.size() > 1);
+
+    // That node's mesh leaves out each grid triangle with a hole corner (as Jolt's height field does);
+    // its skirts run along x = 48 / 64 and z = 64 / 80, clear of the holes, so they stay whole.
+    const u32 index = lod.node_index(0, 3, 4);
+    const TerrainNode& n = lod.node(index);
+    REQUIRE(n.holed);
+    u32 cut = 0;
+    for (u32 z = 64; z < 80; ++z)
+        for (u32 x = 48; x < 64; ++x) {
+            const bool h00 = lod.hole(x, z), h10 = lod.hole(x + 1, z), h01 = lod.hole(x, z + 1), h11 = lod.hole(x + 1, z + 1);
+            cut += (h00 || h01 || h11) + (h00 || h11 || h10);
+        }
+    // 5 x 5 quads touch the 4 x 4 block and lose both triangles, but for two corner quads whose only hole
+    // corner is off the diagonal: they keep the triangle on the other side of it.
+    CHECK(cut == 48);
+    const u32 inner = (n.x > 0) + (n.x + 1 < 8) + (n.z > 0) + (n.z + 1 < 8);
+    CHECK(lod.node_triangles(index) == 16 * 16 * 2 - cut + inner * 16 * 2);
+    Array<byte> blob;
+    lod.build_mesh(index, 0.0f, blob);
+    auto view = asset::MeshView::read(blob.span());
+    REQUIRE(view);
+    const asset::MeshView& m = view.value();
+    CHECK(m.header->index_count / 3 == lod.node_triangles(index));
+    // No grid triangle (they come first, before the skirts) has a hole sample as a corner.
+    const bool wide = (m.header->flags & asset::MeshFlags::Index32) != 0;
+    const asset::MeshSubmesh& sm = m.submeshes[0];
+    for (u32 k = 0; k < (16 * 16 * 2 - cut) * 3; ++k) {
+        u32 vi = 0;
+        if (wide) std::memcpy(&vi, m.indices.data() + k * 4, 4);
+        else {
+            u16 v16 = 0;
+            std::memcpy(&v16, m.indices.data() + k * 2, 2);
+            vi = v16;
+        }
+        const asset::MeshVertex& q = m.vertices[vi];
+        const f32 x = sm.center[0] + q.position[0] / 32767.0f * sm.extent[0];
+        const f32 z = sm.center[2] + q.position[2] / 32767.0f * sm.extent[2];
+        CHECK_FALSE(lod.hole(static_cast<u32>(std::lround(x + 64.0f)), static_cast<u32>(std::lround(z + 64.0f))));
+    }
 }
