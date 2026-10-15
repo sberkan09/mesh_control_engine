@@ -36,3 +36,6 @@ Mira: Then you know.
 @return
 @label mira_bye
 @return
+@label theatre
+@cutscene intro
+@end

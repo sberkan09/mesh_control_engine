@@ -204,6 +204,43 @@ TEST_CASE("skin: MeshView rejects corrupt skin sections") {
     }
 }
 
+TEST_CASE("skin: ragdoll overrides need the Ragdoll flag; MeshStore keeps them") {
+    Arm arm;
+    arm.b.joints[1].ragdoll_flags = asset::MeshRagdoll::Radius | asset::MeshRagdoll::Swing;
+    arm.b.joints[1].ragdoll_radius = 0.15f;
+    arm.b.joints[1].ragdoll_swing = 25.0f;
+    const Array<byte> good = arm.b.build();  // the fixture sets MeshFlags::Ragdoll
+    MeshStore store;
+    REQUIRE(store.upload(1, 1, good.span()).has_value());
+    const GpuMesh& m = *store.get(1);
+    CHECK(m.joints[0].ragdoll_flags == 0);
+    CHECK(m.joints[1].ragdoll_flags == (asset::MeshRagdoll::Radius | asset::MeshRagdoll::Swing));
+    CHECK(m.joints[1].ragdoll_radius == 0.15f);
+    CHECK(m.joints[1].ragdoll_swing == 25.0f);
+
+    const auto* h = reinterpret_cast<const asset::MeshHeader*>(good.data());
+    CHECK((h->flags & asset::MeshFlags::Ragdoll) != 0);
+    {  // overrides without the flag
+        Array<byte> bad = good;
+        reinterpret_cast<asset::MeshHeader*>(bad.data())->flags &= ~u32(asset::MeshFlags::Ragdoll);
+        CHECK(asset::MeshView::read(bad.span()).error().code == Errc::ReservedNonZero);
+    }
+    {  // an unknown override bit
+        Array<byte> bad = good;
+        const auto* sh = reinterpret_cast<const asset::MeshSkinHeader*>(bad.data() + h->skin_offset);
+        reinterpret_cast<asset::MeshJoint*>(bad.data() + sh->joints_offset)[0].ragdoll_flags = 0x40;
+        CHECK(asset::MeshView::read(bad.span()).error().code == Errc::ReservedNonZero);
+    }
+    {  // the flag on a mesh without skins
+        mesh_fixture::Builder plain;
+        plain.add_node(-1);
+        plain.add_box({{0, 0.5f, 0}, {0.5f, 0.5f, 0.5f}});
+        Array<byte> bad = plain.build();
+        reinterpret_cast<asset::MeshHeader*>(bad.data())->flags |= asset::MeshFlags::Ragdoll;
+        CHECK_FALSE(asset::MeshView::read(bad.span()).has_value());
+    }
+}
+
 TEST_CASE("skin: playback events fire once per pass, across loops, for the current clip only") {
     mesh_fixture::Builder b;
     const u32 n = b.add_node(-1);

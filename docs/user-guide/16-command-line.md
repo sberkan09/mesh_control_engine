@@ -17,6 +17,7 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-ticks N` | 600 | headless: fixed ticks to simulate |
 | `-frames N` | 0 | windowed: quit after N rendered frames |
 | `-capture <path.ppm>` | | with `-frames`, `-capture_tick` or `-capture_ticks`: write the last frame as a PPM (the directory is created) |
+| `-access_log <file>` | | write every screen reader announcement to this text file, one per line (with `-access.screen_reader 2` on a desktop without a reader; 24.4) |
 | `-window WxH` | 1280x720 | windowed: the initial window size in points, e.g. `1080x2400` to check a phone layout |
 | `-fullscreen 1` | 0 (saved) | desktop: borderless full screen; F11, Alt+Enter or Cmd+Ctrl+F toggle it while playing |
 | `-capture_tick N` | 0 | windowed: quit after N simulation ticks of this run (frame-rate independent, unlike `-frames`; with `-save`, the restored slot's tick does not count) |

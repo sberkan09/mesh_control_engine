@@ -14,8 +14,9 @@
 //   window (screen_reader_win32.cpp).
 // - Linux desktop and the web: none (no AT-SPI bridge); announce() still reaches the sink.
 //
-// running() says whether the OS reports a reader on, so the player can speak only then
-// (access.screen_reader 1). Output only: nothing here touches World state. Main thread.
+// running() says whether the OS reports a reader on; wanted() applies the player's setting
+// (access.screen_reader: 0 never, 1 while a reader runs, 2 always), so the player's menus and the
+// novel stage speak only then. Output only: nothing here touches World state. Main thread.
 
 #include "mce/types.h"
 
@@ -36,6 +37,10 @@ void attach(const Window& window);
 // The OS reports a screen reader on (VoiceOver, TalkBack with explore by touch, or a Windows
 // reader through SPI_GETSCREENREADER). False where it cannot tell.
 bool running();
+
+// access.screen_reader says to speak now: 2, or 1 while running() (asked of the OS at most once a
+// second, so a reader turned on mid-game starts speaking).
+bool wanted();
 
 // Speaks `text` now, interrupting what the reader was saying. False when nothing could speak it
 // (the sink still sees it).

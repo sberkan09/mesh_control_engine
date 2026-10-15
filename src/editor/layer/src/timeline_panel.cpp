@@ -758,6 +758,9 @@ private:
             }
             case T::Camera:
                 commit |= target_combo("Camera", scene, player, key_.camera);
+                ImGui::DragFloat("Blend (s)", &key_.blend, 0.01f, 0.0f, 30.0f, "%.2f");
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Ease the view over from the previous cut's camera (0 = a hard cut)");
+                commit |= done();
                 break;
             case T::Event:
                 ImGui::InputText("Signal", text_, sizeof(text_));

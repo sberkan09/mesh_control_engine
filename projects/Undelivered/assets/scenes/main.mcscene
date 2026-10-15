@@ -715,6 +715,14 @@
         "LocalTransform": {},
         "StagePart": { "role": "Ambience" }
       }
+    },
+    {
+      "id": 159,
+      "name": "Options",
+      "components": {
+        "UiFlow": { "show_on": "Pause", "hide_on": "Back", "pause": true },
+        "UiScreen": { "document": "guid:da3fac4d-b310-4501-a0cb-e2f3c9c064e4", "order": 10, "visible": false }
+      }
     }
   ]
 }

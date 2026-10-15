@@ -5,7 +5,7 @@
 //
 //   SfxTrigger      plays a cooked Sfx once (an audio::PlaySfx event) on a FireOn condition
 //   ParticleBurst   ParticleSystem::burst on the entity's ParticleEmitter on a FireOn condition
-//   ShakeTrigger    adds trauma to every CameraShake2D on a FireOn condition
+//   ShakeTrigger    adds trauma to every CameraShake2D (and kit/cinematic.h CameraShake3D) on a FireOn condition
 //   CameraShake2D   trauma screen shake on a Camera2DComponent entity (render::shake_offset)
 //   CameraFollow2D  a 2D camera following an entity: offset, dead zone, smoothing, look-ahead, bounds
 //   CameraFollow3D  a 3D camera orbiting an entity: distance, yaw/pitch, smoothing, look-input orbit
@@ -72,7 +72,7 @@ MCE_COMPONENT(ParticleBurst, (count, Range{1, 4096}, Help{"particles per burst"}
               (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: 2D physics events naming this entity"}),
               (fire, Help{"set to burst once (the engine clears it)"}), (fired, ReadOnly, Transient))
 
-// Adds trauma to every CameraShake2D.
+// Adds trauma to every CameraShake2D and CameraShake3D (kit/cinematic.h).
 struct ShakeTrigger {
     f32 trauma = 0.5f;
     FireOn on = FireOn::Manual;
