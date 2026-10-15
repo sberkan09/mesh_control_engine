@@ -326,10 +326,57 @@ every peer ends with the same hash. `-prediction 0` shows lockstep at the same l
 about a third of the frames, waiting the rest of the time. `-desync_at 300` makes one peer compute
 something else at frame 300, and every peer reports a desync at frame 300.
 
-## 20.8 What it does not do yet
+## 20.8 Rooms through a relay, and web players
+
+Players at home usually cannot accept connections: their router does not forward a port to them,
+and a browser cannot open a UDP socket at all. A **relay** solves both. Everybody connects out to
+`mce_relay`, a small server you run somewhere public. The host makes a room and gets a six-letter
+code to share. The others join with that code, and the relay passes messages between the members.
+Nobody forwards a port, and a native build and a web build can play in the same room.
+
+Start the relay. It listens for native players on UDP port 7777 and for browsers on WebSocket port
+7778:
+
+```
+build/linux-gcc-debug/src/engine/net/relay/mce_relay
+build/linux-gcc-debug/src/engine/net/relay/mce_relay -selftest 1   # a native and a web client meet, then exit
+```
+
+In the game, connect to the relay instead of to a server, and use a `net::RelayClient` as the
+Transport. Everything written against Transport (replication, prediction, rollback) works through
+it unchanged:
+
+```cpp
+net::Host link;                        // a web build uses net::WebSocketHost and port 7778
+link.open_client();
+net::RelayClient room;
+room.start(link, link.connect("relay.example.com", 7777), {.channels = 3});
+room.create_room(4);                   // the host
+room.join_room("K7TQ2M");              // everybody else, with the code the host shows
+// once room.state() is InRoom: room.room_code() is the code to show; poll the room, not the link
+for (net::Event ev; room.poll(ev);) { /* Connected / Received / Disconnected, per member */ }
+```
+
+Members are peers: the host is always peer 0, and joiners get the lowest free number from 1 to 7.
+A client therefore sends to peer 0 where it used to send to the server. When a member leaves, the
+others see it disconnect. When the host leaves, the room closes and `state()` becomes `Closed`.
+A wrong code, a full room or a relay with too many rooms gives `Refused`, and `refusal()` says
+which.
+
+`net::WebSocketHost` is also usable on its own. It is a Transport over WebSocket, server or client,
+for a game server that browsers connect to directly. Over WebSocket every message is reliable and
+ordered, because it runs on TCP.
+
+`sample_net_headless -sim 1 -relay 1` plays the server and its clients through a relay room over the
+simulated network. Each message takes two trips (to the relay and from it), so `-latency` counts
+twice.
+
+## 20.9 What it does not do yet
 
 Rollback sessions do not adjust for a peer whose clock runs ahead (it simply waits more), and
 spectators are not supported. Every client receives every
-replicated entity, and traffic is not encrypted. There are no lobbies, matchmaking or NAT traversal:
-players connect to an address and port. If you ship a game that links `mce_net`, list ENet (MIT
+replicated entity, and traffic is not encrypted: the relay and WebSocket speak plain `ws://`, so put a
+TLS proxy in front of `mce_relay` for pages served over `https://`. There is no matchmaking, no host
+migration (the room closes with its host), and no WebRTC or direct peer-to-peer connection: through a
+relay every message passes through it. If you ship a game that links `mce_net`, list ENet (MIT
 licence) in your `CREDITS.md`.
