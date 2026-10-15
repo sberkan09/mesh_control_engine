@@ -1,6 +1,7 @@
 #include "mce/asset/formats.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace mce::asset {
@@ -255,6 +256,44 @@ void write_font(const FontHeader& header, Span<const FontGlyph> glyphs, Span<con
 }
 
 // ------------------------------------------------------------------ material
+
+namespace {
+f32 half_to_f32(u16 h) {
+    const u32 sign = (h >> 15) & 1u, exp = (h >> 10) & 0x1Fu, man = h & 0x3FFu;
+    f32 v;
+    if (exp == 0) v = std::ldexp(static_cast<f32>(man), -24);
+    else if (exp == 31) v = man ? 0.0f : 65504.0f;  // no NaN or infinity in a texture scale
+    else v = std::ldexp(static_cast<f32>(man | 0x400u), static_cast<int>(exp) - 25);
+    return sign ? -v : v;
+}
+
+u16 f32_to_half(f32 f) {
+    const f32 a = std::fabs(f);
+    const u16 sign = f < 0.0f ? 0x8000u : 0u;
+    if (!(a >= 6.1035156e-05f)) return sign;  // zero, subnormal range or NaN: 0 (read back as "no scale")
+    if (a >= 65504.0f) return static_cast<u16>(sign | 0x7BFFu);
+    int e = 0;
+    const f32 m = std::frexp(a, &e);  // a = m * 2^e, m in [0.5, 1)
+    u32 man = static_cast<u32>(std::lround((m * 2.0f - 1.0f) * 1024.0f));
+    if (man == 1024u) {
+        man = 0;
+        ++e;
+    }
+    return static_cast<u16>(sign | static_cast<u32>(e + 14) << 10 | man);
+}
+}  // namespace
+
+void MaterialChunk::uv_scale(f32 out[2]) const {
+    out[0] = out[1] = 1.0f;
+    if (uv_scale_half == 0) return;
+    out[0] = half_to_f32(static_cast<u16>(uv_scale_half & 0xFFFFu));
+    out[1] = half_to_f32(static_cast<u16>(uv_scale_half >> 16));
+}
+
+u32 MaterialChunk::pack_uv_scale(f32 u, f32 v) {
+    if (u == 1.0f && v == 1.0f) return 0;
+    return static_cast<u32>(f32_to_half(u)) | static_cast<u32>(f32_to_half(v)) << 16;
+}
 
 Result<const MaterialChunk*> MaterialChunk::read(Span<const byte> payload) {
     const auto* m = header_of<MaterialChunk>(payload);
