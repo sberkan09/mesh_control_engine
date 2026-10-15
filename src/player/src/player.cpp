@@ -101,6 +101,7 @@
 #include "mce/monetize/platform_ads.h"
 #include "mce/monetize/platform_store.h"
 #include "mce/monetize/monetize.h"
+#include "mce/perf_capture.h"
 #include "mce/physics/module.h"
 #include "mce/platform/ads.h"
 #include "mce/platform/firebase.h"
@@ -257,6 +258,12 @@ MCE_CVAR(cv_stats, "r.stats", false, "Draw the render stats line (F3 toggles)", 
 MCE_CVAR(cv_frame_report, "r.frame_report", 0,
          "Windowed: log the average, p95 and worst frame time every N frames, and for the whole run at exit (0 = off)",
          CVarFlags::None);
+MCE_CVAR(cv_perf_capture, "perf_capture", "",
+         "Write a .mcperf capture of the run to this file at exit: frame, sim, render and GPU times, sim time per phase "
+         "and system, render counters (M-PERF; never changes the state hash)",
+         CVarFlags::RequiresRestart);
+MCE_CVAR(cv_perf_warmup, "perf_warmup", 0, "-perf_capture: leave the run's first N frames out (loading, first uploads)",
+         CVarFlags::RequiresRestart);
 MCE_CVAR(cv_mouse_look, "mouse_look", true, "3D games: let a Camera3DComponent with mouse_look capture the mouse", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 // Analytics events to Firebase (platform/firebase.h): the vendor backend on phones shipped with a
@@ -495,6 +502,7 @@ public:
         MCE_LOG_INFO("{}: scene {} ({}) with {} entities", desc_.app_name, asset::to_string(scene).view(), scene_path_.view(),
                      entities_.size());
         scene_guid_ = scene;
+        start_perf_capture();
         if (!parse_lifecycle_test(cv_lifecycle_test.get_string()))
             return Error(Errc::InvalidArgument, "player: -lifecycle_test wants \"N,M\" (app ticks, N >= 1)");
         if (window_) set_safe_insets(window_insets());
@@ -539,7 +547,13 @@ public:
         scene::pump_streaming(world_);
         if (!monetize_test_.empty()) monetize_test_requests();
         if (!game_services_test_.empty()) game_services_test_requests();
+        const u64 perf_t0 = perf_on_ ? platform::now_us() : 0;
         world_.tick(t.dt, sim_ticks_);
+        if (perf_on_) {
+            perf_frame_.sim_ms += static_cast<f32>(platform::now_us() - perf_t0) * 0.001f;
+            ++perf_frame_.ticks;
+            if (perf_.sim_hz == 0 && t.dt > 0) perf_.sim_hz = static_cast<u32>(std::lround(1.0 / t.dt));
+        }
         if (!monetize_test_.empty()) monetize_test_events();
         if (game_services_print_) game_services_test_events();
         ++sim_ticks_;
@@ -582,6 +596,12 @@ public:
     }
 
     void on_render(const app::RenderContext& rc) override {
+        const u64 perf_t0 = perf_on_ ? platform::now_us() : 0;
+        render_frame(rc);
+        if (perf_on_) end_perf_frame(rc.frame_index, perf_t0);
+    }
+
+    void render_frame(const app::RenderContext& rc) {
         audio_.update();
         clips_.sync();
         sync_fullscreen();
@@ -641,12 +661,14 @@ public:
             scene3.build();
             renderer_.record_3d(cmd, scene3);
             stats3d_ = scene3.stats();
+            drew_3d_ = true;
         }
 
         render::SpriteBatch batch(renderer_.sprite_sets(), mem::frame());
         batch.begin(render::compute_view_2d(cam, bb, ppm));
         if (!ui_preview_) extract_.extract(world_, batch);  // -ui_preview: the document alone
         batch.build();
+        batch_stats_ = batch.stats();
 
         // With 2D post on, the world renders offscreen and the post pass writes the backbuffer (2D
         // games only: a 3D frame has its own post chain).
@@ -706,6 +728,7 @@ public:
         write_save();
         save_options(true);
         if (cv_frame_report.get_int() > 0) report_run_frames();
+        if (perf_on_) write_perf_capture();
         if (liveops_on_) liveops_.shutdown();
         if (game_services_on_) game_services_.shutdown();
         if (three_d_) {  // the last frame's 3D load (tests and LOD measurements read it)
@@ -2024,6 +2047,133 @@ private:
         set_muted(background);
     }
 
+    // -perf_capture <file> (M-PERF step 1): every frame's times and counters, written as .mcperf at
+    // exit. Profiling only times systems, so the run and its state hash are what they would be without.
+    void start_perf_capture() {
+        if (cv_perf_capture.get_string().empty()) return;
+        perf_on_ = true;
+        world_.set_profiling(true);
+        world_.reset_system_timings();
+        perf_.app.assign(StringView(desc_.app_name));
+        perf_.backend.assign(device_ ? device_->caps().api_name.view() : StringView("headless"));
+        perf_.scene.assign(asset::to_string(scene_guid_).view());
+        static_assert(kPhaseCount <= perf::kMaxPhases, "perf::Frame::phase_ms holds every ECS phase");
+        for (usize p = 0; p < kPhaseCount; ++p)
+            perf_.phases.push_back(FixedString<32>(phase_name(static_cast<Phase>(p))));
+        perf_.render_phases = (1u << static_cast<u32>(Phase::Render_Pre)) | (1u << static_cast<u32>(Phase::Render_Submit));
+        static constexpr const char* kStages[] = {"clusters", "scale", "ssao", "ssr", "shadow", "gi", "volumetrics",
+                                                  "main", "resolve", "taa", "post_fx", "bloom", "tonemap", "fxaa"};
+        for (const char* name : kStages) perf_.gpu_stages.push_back(FixedString<32>(name));
+        perf_.frames.reserve(4096);
+    }
+
+    void end_perf_frame(u64 frame_index, u64 start_us) {
+        const u64 now = platform::now_us();
+        perf::Frame& f = perf_frame_;
+        f.index = frame_index;
+        f.tick = sim_ticks_;
+        f.frame_ms = perf_last_start_us_ ? static_cast<f32>(start_us - perf_last_start_us_) * 0.001f : -1.0f;
+        f.render_ms = static_cast<f32>(now - start_us) * 0.001f;
+        perf_last_start_us_ = start_us;
+
+        // Sim and render system time this frame: each system's total minus its total at the last frame.
+        world_.system_timings(perf_timings_);
+        for (const SystemTiming& t : perf_timings_) {
+            const u8 phase = static_cast<u8>(t.phase);
+            usize i = 0;
+            while (i < perf_.systems.size() && !(perf_.systems[i].phase == phase && perf_.systems[i].name == StringView(t.name)))
+                ++i;
+            if (i == perf_.systems.size()) {
+                perf::SystemStats st;
+                st.name.assign(StringView(t.name ? t.name : "?"));
+                st.phase = phase;
+                perf_.systems.push_back(st);
+                perf_prev_total_.push_back(0.0);
+                perf_prev_runs_.push_back(0);
+            }
+            const f64 ms = math::max(t.total_ms - perf_prev_total_[i], 0.0);
+            const u64 runs = t.runs >= perf_prev_runs_[i] ? t.runs - perf_prev_runs_[i] : 0;
+            perf_prev_total_[i] = t.total_ms;
+            perf_prev_runs_[i] = t.runs;
+            if (perf_seen_ < static_cast<u64>(math::max<i64>(cv_perf_warmup.get_int(), 0))) continue;
+            perf::SystemStats& st = perf_.systems[i];
+            st.total_ms += ms;
+            st.runs += runs;
+            st.max_frame_ms = math::max(st.max_frame_ms, static_cast<f32>(ms));
+            if (phase < perf::kMaxPhases) f.phase_ms[phase] += static_cast<f32>(ms);
+        }
+
+        if (device_) {
+            const rhi::FrameStats& rs = device_->last_frame_stats();
+            f.counters.draws = rs.draws;
+            f.counters.passes = rs.passes;
+            f.counters.dispatches = rs.dispatches;
+            f.counters.ring_overflows = rs.ring_overflows;
+            f.counters.upload_bytes = rs.geometry_bytes + rs.uniform_bytes + rs.indirect_bytes;
+            attach_gpu_times();
+        }
+        if (drew_3d_) {
+            f.counters.triangles = stats3d_.triangles;
+            f.counters.meshes = stats3d_.visible;
+        }
+        f.counters.sprites = batch_stats_.quads + batch_stats_.tile_quads;
+        f.counters.sprite_batches = batch_stats_.groups;
+        f.counters.heap_allocations = mem::heap_live_allocations();
+
+        if (perf_seen_++ >= static_cast<u64>(math::max<i64>(cv_perf_warmup.get_int(), 0))) perf_.frames.push_back(f);
+        perf_frame_ = perf::Frame{};
+        drew_3d_ = false;
+        batch_stats_ = {};
+    }
+
+    // GPU timestamps arrive frames late: the newest completed set goes to the captured frame it was
+    // written in. The 3D path names its stages; a 2D frame has its first-to-last timestamp span.
+    void attach_gpu_times() {
+        const rhi::GpuTimestamps& ts = device_->last_gpu_timestamps();
+        if (ts.written == 0 || ts.frame_index == ~u64(0)) return;
+        perf::Frame* target = nullptr;
+        for (usize i = perf_.frames.size(); i-- > 0;) {
+            if (perf_.frames[i].index == ts.frame_index) target = &perf_.frames[i];
+            if (perf_.frames[i].index <= ts.frame_index) break;
+        }
+        if (!target && perf_frame_.index == ts.frame_index) target = &perf_frame_;
+        if (!target || target->gpu_ms >= 0.0f) return;
+        if (three_d_) {
+            const render::Forward3DGpuTimes g = renderer_.forward_3d().gpu_times(ts);
+            const f64 stages[] = {g.clusters, g.scale, g.ssao, g.ssr, g.shadow, g.gi, g.volumetrics,
+                                  g.main, g.resolve, g.taa, g.post_fx, g.bloom, g.tonemap, g.fxaa};
+            static_assert(sizeof(stages) / sizeof(stages[0]) <= perf::kMaxGpuStages, "perf::Frame::gpu_stage_ms holds every stage");
+            for (usize i = 0; i < std::size(stages); ++i)
+                target->gpu_stage_ms[i] = static_cast<f32>(stages[i]);
+            if (g.total >= 0) target->gpu_ms = static_cast<f32>(g.total);
+            if (g.total >= 0) return;
+        }
+        u32 first = ~0u, last = 0;
+        for (u32 i = 0; i < rhi::kMaxTimestamps; ++i)
+            if (ts.has(i)) {
+                if (first == ~0u) first = i;
+                last = i;
+            }
+        if (first != ~0u && last > first) target->gpu_ms = static_cast<f32>(ts.ms(first, last));
+    }
+
+    void write_perf_capture() {
+        const StringView path = cv_perf_capture.get_string();
+        if (Result<void> r = perf::save_mcperf(perf_, FixedString<1024>(path).c_str()); !r) {
+            FixedString<512> why;
+            format_error(r.error(), why);
+            MCE_LOG_ERROR("{}: -perf_capture not written: {}", desc_.app_name, why.view());
+            return;
+        }
+        const perf::Summary s = perf::summarize(perf_);
+        std::printf("%s: perf capture %.*s: %u frames, frame p50 %.2f / p95 %.2f / p99 %.2f / max %.2f ms, sim p95 %.2f ms, "
+                    "render p95 %.2f ms, %zu spikes, max %u draws / %u triangles\n",
+                    desc_.app_name, static_cast<int>(path.size()), path.data(), s.frames, static_cast<f64>(s.frame.p50),
+                    static_cast<f64>(s.frame.p95), static_cast<f64>(s.frame.p99), static_cast<f64>(s.frame.max),
+                    static_cast<f64>(s.sim.p95), static_cast<f64>(s.render.p95), s.spikes.size(), s.counters_max.draws,
+                    s.counters_max.triangles);
+    }
+
     // -r.frame_report N (#214): wall time between rendered frames, logged as average / p95 / worst
     // every N frames and for the whole run at exit. Windowed only (headless frames are not paced).
     void meter_frame() {
@@ -2309,6 +2459,18 @@ private:
     bool unfocused_ = false;   // the window lost focus (or minimized); the focus-loss save ran
     bool fullscreen_ = false;  // what cv_fullscreen last applied
     u64 last_frame_us_ = 0;    // -r.frame_report: the previous rendered frame
+    // -perf_capture (M-PERF step 1): the capture, the frame being measured (its ticks run before it
+    // draws) and each captured system's total at the last frame, to take per-frame differences.
+    bool perf_on_ = false;
+    perf::Capture perf_;
+    perf::Frame perf_frame_;
+    u64 perf_seen_ = 0;          // frames measured, the warm-up included
+    u64 perf_last_start_us_ = 0;
+    Array<SystemTiming> perf_timings_;
+    Array<f64> perf_prev_total_;  // parallel to perf_.systems
+    Array<u64> perf_prev_runs_;
+    bool drew_3d_ = false;        // this frame recorded the 3D scene (stats3d_ is its)
+    render::BatchStats batch_stats_;
     Array<f32> frame_ms_;      // this report window's frame times
     f64 run_sum_ms_ = 0;
     f32 run_worst_ms_ = 0;
