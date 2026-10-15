@@ -649,6 +649,14 @@ void EditorShell::draw_menu_bar() {
                 focus_panel("Console");
             }
         }
+        if (ImGui::MenuItem("Bake navmesh", nullptr, false, proj && !playing())) {
+            if (Result<physics::NavBakeStats3D> r = session_.bake_navmesh(); !r) {
+                FixedString<512> why;
+                format_error(r.error(), why);
+                MCE_LOG_ERROR("editor: navmesh bake failed: {}", why.view());
+                focus_panel("Console");
+            }
+        }
         if (ImGui::MenuItem("Play in editor", "F5", false, proj && !playing())) play_in_editor();
         if (ImGui::MenuItem("Run in player", "Ctrl+F5", false, proj && !player_running())) play();
         ImGui::Separator();
