@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Smooth remote entities (SBA-83, M-NET2 step 2): `ReplicationClient::set_interpolation` draws replicated entities a
+  little in the past through a jitter buffer that adapts to the measured snapshot interval and arrival jitter,
+  blending the snapshots around the render time. Past the newest snapshot an entity moves on for at most 0.1 s, then
+  holds. Over a 60 ms ± 40 link with 10% loss, motion is more than 10× smoother than raw snapshots.
+  `sample_net_headless` interpolates by default (`-interp 0` for raw). User guide 20.4.
 - Multiplayer test harness (SBA-82, M-NET2 step 1): `net::SimNetwork` is an in-memory network on a virtual clock
   with per-link latency, jitter and loss from a seed, so a server and several clients in one process give the same
   hash on every run and build. `net::Transport` is the interface both it and `net::Host` implement, so game code
