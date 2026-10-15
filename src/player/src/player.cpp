@@ -1482,10 +1482,12 @@ private:
         if (three_d_) {
             const kit::Kit3DStats& k = extract3d_.stats();
             const u32* lt = stats3d_.lod_triangles;
-            std::snprintf(line, sizeof line,
-                          "3D  TRIS %u (LOD %u/%u/%u/%u)  DRAWS %u/%u  MESHES %u  INST %u  LIGHTS %u  ANIM %u  MISSING %u",
-                          stats3d_.triangles, lt[0], lt[1], lt[2], lt[3], stats3d_.visible, stats3d_.submeshes, k.meshes,
-                          k.instances, stats3d_.point_lights, k.animated, k.missing);
+            const int n = std::snprintf(line, sizeof line,
+                                        "3D  TRIS %u (LOD %u/%u/%u/%u)  DRAWS %u/%u  MESHES %u  INST %u  LIGHTS %u  ANIM %u  MISSING %u",
+                                        stats3d_.triangles, lt[0], lt[1], lt[2], lt[3], stats3d_.visible, stats3d_.submeshes,
+                                        k.meshes, k.instances, stats3d_.point_lights, k.animated, k.missing);
+            if (k.terrains > 0 && n > 0 && static_cast<usize>(n) < sizeof line)  // M-TERRAIN: LOD nodes and their resident meshes
+                std::snprintf(line + n, sizeof line - static_cast<usize>(n), "  TERRAIN %u/%u", k.terrain_nodes, k.terrain_resident);
         } else {
             std::snprintf(line, sizeof line, "2D");
         }

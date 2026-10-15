@@ -25,6 +25,7 @@ bool chunk_type_for_asset_name(StringView name, ChunkType& out) {
         {ParticlePreset::name, ParticlePreset::chunk}, {Sequence::name, Sequence::chunk},
         {SpriteSheet::name, SpriteSheet::chunk}, {AnimGraph::name, AnimGraph::chunk},
         {UiDocument::name, UiDocument::chunk}, {UiTheme::name, UiTheme::chunk},
+        {Terrain::name, Terrain::chunk},
     };
     for (const Pair& p : kTable) {
         if (name == p.name) {
@@ -70,6 +71,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::AnimGraph: return ANIMGRAPH_VERSION;
         case ChunkType::UiDocument: return UI_DOCUMENT_VERSION;
         case ChunkType::UiTheme: return UI_THEME_VERSION;
+        case ChunkType::Terrain: return TERRAIN_VERSION;
         default: return 0;
     }
 }

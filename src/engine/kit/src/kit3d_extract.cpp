@@ -42,7 +42,24 @@ u32 find_clip_id(const render::GpuMesh& mesh, u64 id) {
 
 void Kit3DExtract::init(const render::MeshStore& meshes, asset::AssetSystem* assets) {
     meshes_ = &meshes;
+    writable_ = nullptr;
     assets_ = assets;
+}
+
+void Kit3DExtract::init(render::MeshStore& meshes, asset::AssetSystem* assets) {
+    meshes_ = &meshes;
+    writable_ = &meshes;
+    assets_ = assets;
+}
+
+void Kit3DExtract::release_terrains() {
+    for (auto& t : terrains_) {
+        if (writable_)
+            for (u32 k : t->keys)
+                if (k != ~0u) writable_->release(k);
+        if (assets_ && t->handle.generation != 0) assets_->release(t->handle);
+    }
+    terrains_.clear();
 }
 
 void Kit3DExtract::release_handles() {
@@ -63,12 +80,15 @@ void Kit3DExtract::release_handles() {
 }
 
 void Kit3DExtract::shutdown() {
+    release_terrains();
     release_handles();
     meshes_ = nullptr;
+    writable_ = nullptr;
     assets_ = nullptr;
 }
 
 void Kit3DExtract::reset(asset::AssetSystem* assets) {
+    release_terrains();
     release_handles();
     foliage_.clear();
     bursts_.clear();
@@ -178,6 +198,128 @@ u32 Kit3DExtract::mesh_key(asset::Guid guid) {
     }
     mesh_entries_.push_back(e);
     return e.key;
+}
+
+// ---- terrain (M-TERRAIN) ----------------------------------------------------------------------
+
+namespace {
+constexpr u32 kTerrainEvictFrames = 300;  // a node mesh not drawn for this many extracts is released
+}
+
+void Kit3DExtract::extract_terrains(World& world, render::Scene3D& scene) {
+    world.query<const Terrain3D&>().each([&](Entity e, const Terrain3D& t) {
+        if (!t.enabled || t.terrain.guid == asset::Guid{} || !assets_) return;
+        vec3 pos, scale;
+        quat rot;
+        if (!pose_of(world, e, pos, rot, scale)) return;
+        TerrainEntry* entry = nullptr;
+        for (auto& te : terrains_)
+            if (te->entity == e) entry = te.get();
+        if (!entry) {
+            terrains_.push_back(mem::make_unique<TerrainEntry>(mem::heap()));
+            entry = terrains_.back().get();
+            entry->entity = e;
+        }
+        entry->stamp = frame_stamp_;
+        // (Re)build the tree when the asset, its cooked generation (hot reload) or the UV tiling changed.
+        const asset::AssetKey key = assets_->find(t.terrain.guid);
+        if (key == asset::kInvalidAssetKey) {
+            if (!(entry->guid == t.terrain.guid)) MCE_LOG_WARN("kit3d: terrain {} is not in the mounted content", asset::to_string(t.terrain.guid).view());
+            entry->guid = t.terrain.guid;
+            return;
+        }
+        const u32 generation = assets_->generation(key);
+        if (!(entry->guid == t.terrain.guid) || entry->generation != generation || entry->uv_tile != t.uv_tile || entry->lod.empty()) {
+            if (writable_)
+                for (u32 k : entry->keys)
+                    if (k != ~0u) writable_->release(k);
+            entry->keys.clear();
+            entry->used.clear();
+            if (entry->handle.generation != 0) assets_->release(entry->handle);
+            entry->handle = {};
+            entry->lod = render::TerrainLod{};
+            entry->guid = t.terrain.guid;
+            entry->generation = generation;
+            entry->uv_tile = t.uv_tile;
+            entry->drawn = false;
+            if (Result<asset::AssetHandle<asset::Terrain>> h = assets_->load_sync<asset::Terrain>(key)) {
+                entry->handle = asset::AnyHandle(h.value());
+                entry->generation = assets_->generation(key);
+                const Result<asset::TerrainView> view = asset::TerrainView::read(assets_->resolve(h.value()));
+                if (!view || !entry->lod.init(view.value())) {
+                    MCE_LOG_WARN("kit3d: terrain {} does not read", asset::to_string(t.terrain.guid).view());
+                    entry->lod = render::TerrainLod{};
+                }
+            } else {
+                MCE_LOG_WARN("kit3d: terrain {} failed to load", asset::to_string(t.terrain.guid).view());
+            }
+            entry->keys.resize(entry->lod.node_count(), ~0u);
+            entry->used.resize(entry->lod.node_count(), 0u);
+        }
+        if (entry->lod.empty()) return;
+
+        render::TerrainSelectParams params;
+        params.world = trs(pos, rot, scale);
+        params.pixel_error = t.pixel_error > 0.0f ? t.pixel_error : quality_.terrain_pixel_error;
+        params.shadow_reach = bake_mode_ ? 1e30f : (t.cast_shadows ? scene.shadow_settings().distance : 0.0f);
+        terrain_nodes_.clear();
+        entry->lod.select(scene.view(), params, terrain_nodes_);
+        entry->world_prev = entry->drawn ? entry->world_cur : params.world;
+        entry->world_cur = params.world;
+        entry->drawn = true;
+        const render::MaterialOverride* mat = material(t.material.guid);
+        for (u32 n : terrain_nodes_) {
+            if (entry->keys[n] == ~0u) {
+                if (!writable_) {
+                    ++stats_.missing;
+                    continue;
+                }
+                entry->lod.build_mesh(n, t.uv_tile, terrain_blob_);
+                const u32 k = writable_->allocate_key();
+                if (!writable_->upload(k, 1, terrain_blob_.span())) {
+                    ++stats_.missing;
+                    continue;
+                }
+                entry->keys[n] = k;
+                ++stats_.terrain_uploads;
+            }
+            entry->used[n] = frame_stamp_;
+            render::MeshInstance inst;
+            inst.mesh = entry->keys[n];
+            inst.world = entry->world_cur;
+            inst.prev_world = &entry->world_prev;
+            inst.tint = t.tint;
+            inst.cast_shadows = t.cast_shadows != 0;
+            inst.material = mat;
+            scene.add(inst);
+            ++stats_.terrain_nodes;
+            stats_.terrain_triangles += entry->lod.node_triangles(n);
+        }
+        ++stats_.terrains;
+    });
+    // Drop terrains whose entity is gone, and (every 64th extract) node meshes not drawn lately.
+    for (usize i = terrains_.size(); i-- > 0;) {
+        TerrainEntry& te = *terrains_[i];
+        if (te.stamp != frame_stamp_) {
+            if (writable_)
+                for (u32 k : te.keys)
+                    if (k != ~0u) writable_->release(k);
+            if (assets_ && te.handle.generation != 0) assets_->release(te.handle);
+            terrains_.erase(i);
+            continue;
+        }
+        const bool sweep = (frame_stamp_ & 63u) == 0 && writable_;
+        const u32 root = te.lod.empty() ? ~0u : te.lod.root();
+        for (u32 n = 0; n < te.keys.size(); ++n) {
+            if (te.keys[n] == ~0u) continue;
+            if (sweep && n != root && frame_stamp_ - te.used[n] > kTerrainEvictFrames) {
+                writable_->release(te.keys[n]);
+                te.keys[n] = ~0u;
+                continue;
+            }
+            ++stats_.terrain_resident;
+        }
+    }
 }
 
 // ---- interpolation ----------------------------------------------------------------------------
@@ -462,6 +604,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         world_stamp_[ent] = frame_stamp_;
         scene.add(inst);
     }
+    extract_terrains(world, scene);
 
     world.query<const PointLight3D&>().each([&](Entity e, const PointLight3D& l) {
         if (!l.enabled || l.intensity <= 0.0f) return;

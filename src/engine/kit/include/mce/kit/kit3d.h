@@ -340,6 +340,26 @@ MCE_COMPONENT(Foliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's ma
               (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
               (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled)
 
+// ---- terrain (M-TERRAIN) -------------------------------------------------------------------------
+
+// A heightmap terrain: `terrain` (a .mcterrain) centred on the entity, scaled and turned with it. Drawn
+// as a quadtree of grid meshes (render::TerrainLod): near the camera at full resolution, farther away
+// in coarser nodes whose error stays under `pixel_error` pixels (0: the quality tier's, 4 / 2 / 1 px
+// on Low / Medium / High), joined by skirts. Shadows like any mesh. `material` (a .mcmat) covers the
+// whole terrain, its textures repeating every `uv_tile` metres (0: once over the terrain).
+struct Terrain3D {
+    asset::AssetRef<asset::Terrain> terrain;
+    asset::AssetRef<asset::Material> material;  // null = a plain grey
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+    f32 pixel_error = 0.0f;
+    f32 uv_tile = 0.0f;
+    u32 cast_shadows = 1;
+    u32 enabled = 1;
+};
+MCE_COMPONENT(Terrain3D, (terrain, Help{"a .mcterrain"}), (material, Help{"a .mcmat over the whole terrain; null = plain grey"}), tint,
+              (pixel_error, Range{0, 64}, Help{"LOD screen error in pixels; 0 = the quality tier's"}),
+              (uv_tile, Range{0, 10000}, Help{"metres per texture repeat; 0 = once over the terrain"}), cast_shadows, enabled)
+
 // A projected decal: `texture` (rgb color, a coverage; empty = plain `color`) projected down the
 // entity's local -Y onto every opaque surface inside the box of `size` metres (x, projection depth y, z)
 // at the entity's transform. It recolors the surface (and sets its roughness and metallic by

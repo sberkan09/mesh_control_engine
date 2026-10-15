@@ -141,7 +141,7 @@ std::string write_mesh_tree(const char* name, asset::Guid guid, Span<const byte>
 
 TEST_CASE("kit3d: the components are reflected and install is idempotent") {
     for (const char* name : {"MeshRef", "PointLight3D", "SpotLight3D", "ReflectionProbe3D", "Camera3DComponent", "Animator", "Environment3D",
-                             "BoxCollider3D", "MeshCollider3D", "Foliage3D", "Decal3D", "ParticleEmitter3D"}) {
+                             "BoxCollider3D", "MeshCollider3D", "Foliage3D", "Decal3D", "ParticleEmitter3D", "Terrain3D"}) {
         const refl::TypeRecord* t = refl::find_type(StringId(name));
         INFO(name);
         REQUIRE(t != nullptr);
@@ -675,4 +675,117 @@ TEST_CASE("kit3d: Foliage3D, Decal3D and ParticleEmitter3D become a batch, decal
     CHECK(third.batches()[0].version != version);
     CHECK(!same_matrix(third.batches()[0].transforms[0], first));
     CHECK(third.particle_emitters()[0].burst == 30);
+}
+
+TEST_CASE("kit3d: Terrain3D draws its LOD nodes, uploads them once and drops them with the entity (M-TERRAIN 1)") {
+    const std::string src = cook_test::fresh_dir("kit3d_terrain");
+    // A 129-sample, 128 m terrain: a ridge along x (heights from 0 to 32 m) so far nodes coarsen.
+    std::string bytes;
+    for (u32 z = 0; z < 129; ++z)
+        for (u32 x = 0; x < 129; ++x) {
+            const f32 h = 0.5f + 0.5f * std::sin(static_cast<f32>(x) * 0.2f) * std::cos(static_cast<f32>(z) * 0.15f);
+            cook_test::put16le(bytes, static_cast<u16>(h * 65535.0f));
+        }
+    static const char* k = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string b64;
+    for (size_t i = 0; i + 2 < bytes.size(); i += 3) {
+        const u32 v = (u32(u8(bytes[i])) << 16) | (u32(u8(bytes[i + 1])) << 8) | u8(bytes[i + 2]);
+        for (int s = 18; s >= 0; s -= 6) b64.push_back(k[(v >> s) & 63]);
+    }
+    if (bytes.size() % 3 == 2) {
+        const size_t i = bytes.size() - 2;
+        const u32 v = (u32(u8(bytes[i])) << 16) | (u32(u8(bytes[i + 1])) << 8);
+        b64 += {k[(v >> 18) & 63], k[(v >> 12) & 63], k[(v >> 6) & 63], '='};
+    }
+    cook_test::write_file(src + "/assets/ground.mcterrain", R"({ "format": "mce-terrain", "version": 1,
+        "guid": "7e7a0000-0000-4000-8000-0000000000b1", "resolution": 129, "chunk": 16, "size": [128, 128],
+        "height_range": [0, 32], "heights": ")" + b64 + "\" }");
+    cook_test::write_file(src + "/assets/grass.mcmat", R"({ "format": "mce-material", "version": 1,
+        "guid": "7e7a0000-0000-4000-8000-0000000000b2", "base_color": [0.2, 0.5, 0.1, 1] })");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(src.c_str()), cook::CookOptions{}).ok());
+    asset::AssetSystem assets;
+    const std::string cooked = src + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+
+    Fixture f;
+    f.extract.reset(&assets);
+    f.world.spawn_with(at({-60.0f, 34.0f, 60.0f}, math::quat_from_axis_angle({0, 1, 0}, math::radians(-45.0f))), kit::Camera3DComponent{});
+    kit::Terrain3D t;
+    t.terrain.guid = asset::parse_guid("7e7a0000-0000-4000-8000-0000000000b1").value();
+    t.material.guid = asset::parse_guid("7e7a0000-0000-4000-8000-0000000000b2").value();
+    t.pixel_error = 1.0f;
+    const Entity ground = f.world.spawn_with(at({0.0f, 0.0f, 0.0f}), t);
+    f.step();
+
+    auto frame = [&](render::Scene3D& scene) {
+        render::Camera3D cam;
+        REQUIRE(f.extract.camera(f.world, 1.0f, cam));
+        scene.begin(cam, {640, 360});
+        f.extract.extract(f.world, scene, 1.0f);
+    };
+    const u32 meshes_before = f.store.live_meshes();
+    u32 drawn = 0;
+    {
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        const kit::Kit3DStats& s = f.extract.stats();
+        CHECK(s.terrains == 1);
+        CHECK(s.terrain_nodes > 1);
+        CHECK(s.terrain_uploads == s.terrain_nodes);
+        CHECK(s.terrain_resident == s.terrain_nodes);
+        CHECK(s.terrain_triangles > 0);
+        drawn = s.terrain_nodes;
+        REQUIRE(scene.instances().size() == drawn);
+        for (const render::MeshInstance& inst : scene.instances()) {
+            CHECK(inst.mesh >= render::MeshStore::kFirstLocalKey);
+            REQUIRE(f.store.get(inst.mesh) != nullptr);
+            REQUIRE(inst.material != nullptr);
+            CHECK(inst.material->params.base_color[1] == doctest::Approx(0.5f));
+            CHECK(inst.prev_world != nullptr);
+        }
+        CHECK(f.store.live_meshes() == meshes_before + drawn);
+    }
+    {  // the same view: nothing new uploaded
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        CHECK(f.extract.stats().terrain_nodes == drawn);
+        CHECK(f.extract.stats().terrain_uploads == 0);
+    }
+    {  // a coarser error bound draws fewer nodes; the finer ones stay resident for now
+        f.world.try_get_mut<kit::Terrain3D>(ground)->pixel_error = 32.0f;
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        CHECK(f.extract.stats().terrain_nodes < drawn);
+        CHECK(f.extract.stats().terrain_resident >= drawn);
+    }
+    {  // a new UV tiling rebuilds every node mesh
+        f.world.try_get_mut<kit::Terrain3D>(ground)->uv_tile = 4.0f;
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        CHECK(f.extract.stats().terrain_uploads == f.extract.stats().terrain_nodes);
+        CHECK(f.store.live_meshes() == meshes_before + f.extract.stats().terrain_nodes);
+    }
+    // Gone with its entity.
+    f.world.destroy(ground);
+    {
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        CHECK(f.extract.stats().terrains == 0);
+        CHECK(f.store.live_meshes() == meshes_before);
+    }
+
+    // A const store (no uploads): the terrain counts as missing instead of drawing.
+    kit::Kit3DExtract read_only;
+    const render::MeshStore& cstore = f.store;
+    read_only.init(cstore, &assets);
+    f.world.spawn_with(at({0.0f, 0.0f, 0.0f}), t);
+    render::Scene3D scene(f.store, mem::heap());
+    render::Camera3D cam;
+    REQUIRE(read_only.camera(f.world, 1.0f, cam));
+    scene.begin(cam, {640, 360});
+    read_only.extract(f.world, scene, 1.0f);
+    CHECK(read_only.stats().terrain_nodes == 0);
+    CHECK(read_only.stats().missing > 0);
 }
