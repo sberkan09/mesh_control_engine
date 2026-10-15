@@ -172,6 +172,10 @@ void PlaySession::tick_once(u64 close_us) {
         format_error(changed.error(), why);
         MCE_LOG_ERROR("editor: play: the scene change failed: {}", why.view());
     }
+    if (scene::take_quit_request(*world_)) {  // the game's Quit pauses play mode (the editor stays open)
+        MCE_LOG_INFO("editor: play: the game asked to quit at tick {}; paused", ticks_);
+        pause();
+    }
     audio_->update();  // the Silent backend mixes one block per call (mce_player -headless)
     if (own_arena) mem::set_frame_arena(prev);
 }

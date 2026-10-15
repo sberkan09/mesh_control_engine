@@ -46,6 +46,7 @@ struct SceneChange {
     FixedString<256> current;  // the source path of the scene loaded last (by load or apply_change)
     asset::Guid current_guid;
     u32 changes = 0;           // scene changes applied so far
+    bool quit = false;         // request_quit: the host ends the run after this tick
 };
 
 // Asks the host to switch to `target` after this tick (the last request in a tick wins).
@@ -59,6 +60,23 @@ inline void request_change(World& world, asset::Guid target) {
     FixedString<64> text("guid:");
     text.append(asset::to_string(target).view());
     request_change(world, text.view());
+}
+
+// Asks the host to end the run after this tick, as the window's close button does: mce_player
+// quits cleanly (exit 0, the -save slot written), a headless run stops there, and the editor's
+// play mode pauses. A Quit button: kit::UiFlow's quit_on, or a system that calls this.
+inline void request_quit(World& world) {
+    SceneChange* c = world.try_resource<SceneChange>();
+    if (!c) c = &world.set_resource(SceneChange{});
+    c->quit = true;
+}
+
+// Host call, between ticks: true once when the game asked to quit (the request is cleared).
+inline bool take_quit_request(World& world) {
+    SceneChange* c = world.try_resource<SceneChange>();
+    if (!c || !c->quit) return false;
+    c->quit = false;
+    return true;
 }
 
 // The Scene asset named by `want`: GUID text ("guid:<uuid>" or the bare uuid) or a source path

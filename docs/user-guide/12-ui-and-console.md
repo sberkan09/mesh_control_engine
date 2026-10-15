@@ -186,6 +186,9 @@ screen's entity shows, hides and holds it on input actions (the stock kit instal
 - `show_on` / `hide_on` name the actions that show and hide the screen: a button's `"action"`, a
   panel's Cancel action, Esc (`Pause` once screens are in the scene) or an `-input` script line.
 - `load_on` loads `scene` (often the scene itself, which restarts it: "Quit to title").
+- `quit_on` ends the game, as the window's close button does: `mce_player` quits cleanly (the
+  `-save` slot is written), a headless run stops there and play mode in the editor pauses. Game
+  code asks the same with `scene::request_quit(world)`.
 - `pause: true` holds the game while the screen is visible: gameplay, physics, audio and every
   other fixed-step system stop, while the tick count, the screens and the drawing go on. A held
   tick is part of the run, so a script that pauses and resumes replays with the same state hash.

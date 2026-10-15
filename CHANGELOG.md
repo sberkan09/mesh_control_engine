@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Round-3 friction fixes (SBA-61): reloading a game module drops its old convars; an input script's `=0`
+  presses an action with value 0; a Text in a horizontal Stack no longer wraps below UI scale 1; game code can
+  quit the app (`scene::request_quit`, `UiFlow::quit_on` for a Quit button); `render_frame`, `render_sheet` and
+  `run_headless` take `convars` for one run; a `walk_to` waypoint `{at, wait}` stands still there; a smooth
+  `Decal3D` fills the normal map's bumps under it (puddles no longer light every bump as a dotted pattern);
+  `asset_delete` removes the file's `CREDITS.md` row and a font's license text with the family's last font.
 - Screen reader support, M-ACCESS step 4 (SBA-98): the stock player speaks the focused menu item and a
   focused slider's new value through TalkBack on Android (and, built with `MCE_SCREEN_READER_NATIVE`, VoiceOver on
   iOS and macOS and Narrator, NVDA or JAWS on Windows), while the OS reports a reader on (`access.screen_reader`).

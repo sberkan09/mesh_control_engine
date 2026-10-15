@@ -658,8 +658,18 @@ bool parse_bot(const editor::SceneDocument& doc, const cook::JsonValue& v, BotCo
         else return err_out(err, "bot.plane is xy (top-down 2D), x (side view) or xz (3D ground)");
     }
     if (out.kind == BotConfig::Kind::WalkTo) {
-        auto one = [&](const cook::JsonValue& t, const char* what) {
+        auto one = [&](const cook::JsonValue& in, const char* what) {
             BotTarget bt;
+            cook::JsonValue t = in;
+            if (in.is_object()) {  // a waypoint with a dwell: {"at": point or entity, "wait": ticks}
+                const cook::JsonValue wait = in.get("wait");
+                t = in.get("at");
+                if (!t.valid() || (wait.valid() && (!wait.is_integer() || wait.as_number() < 0 || wait.as_number() > 6000))) {
+                    err += what;
+                    return err_out(err, " as an object is {\"at\": a point or an entity, \"wait\": 0-6000 ticks to stand there}");
+                }
+                if (wait.valid()) bt.wait = static_cast<u32>(wait.as_number());
+            }
             if (t.is_array()) {
                 Value pt;
                 if (!parse_value(t, pt) || pt.kind != Value::Kind::Number || pt.lanes < 2 || pt.lanes > 3) {
@@ -784,6 +794,17 @@ void Bot::walk_to(u64 tick, vec3 pos) {
             reached_ = true;
             return;
         }
+        if (t.wait > 0) {  // stand still on the waypoint first
+            if (!waiting_) {
+                waiting_ = true;
+                wait_until_ = tick + t.wait;
+            }
+            if (tick < wait_until_) {
+                reached_ = false;
+                return;
+            }
+        }
+        waiting_ = false;
         ++leg_;
         best_ = 1e30f;
         best_tick_ = tick;
