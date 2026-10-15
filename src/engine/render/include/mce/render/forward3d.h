@@ -98,6 +98,16 @@ struct Forward3DStats {
     bool color_grade = false;        // the LUT graded this frame
     bool dof = false;                // depth of field blurred this frame
     bool motion_blur = false;        // motion blur smeared this frame
+    u32 batches = 0;                 // instance batches drawn (M-VISUAL 9)
+    bool batches_gpu = false;        // ... culled by the compute pass (false: on the CPU)
+    bool occlusion = false;          // ... and tested against the depth pyramid
+    u32 occluder_draws = 0;          // draws of the occluder depth pass
+    u32 batch_views = 0;             // views culled: the main view, then each cascade with casters
+    u32 batch_visible = 0;           // CPU path only: instances drawn in the main view (the GPU's count stays on the GPU)
+    u32 batch_draws = 0;             // instanced draws over all passes
+    u32 decals = 0;                  // decals the main pass applied
+    u32 particle_emitters = 0;       // emitters simulated and drawn
+    u32 particles_spawned = 0;       // particles spawned this frame
     u32 joints = 0;          // joint matrices uploaded for skinned meshes
     u32 bloom_levels = 0;
     bool fxaa = false;
@@ -113,13 +123,14 @@ struct Forward3DGpuTimes {
     f64 gi = -1;        // irradiance-volume update (0 when the scene has no volume)
     f64 volumetrics = -1;  // froxel injection + integration (0 when the scene has no volumetric fog)
     f64 post_fx = -1;      // exposure histogram + depth of field + motion blur (0 when the scene has none)
+    f64 scale = -1;        // occluder depth + pyramid + batch culling + particle simulation (M-VISUAL 9)
     f64 bloom = -1, tonemap = -1, fxaa = -1, total = -1;
     f64 post() const { return bloom < 0 ? -1 : bloom + tonemap + (fxaa < 0 ? 0 : fxaa); }
 };
 
 class Forward3D {
 public:
-    static constexpr u32 kStageCount = 12;    // timestamps written: kStageCount + 1
+    static constexpr u32 kStageCount = 13;    // timestamps written: kStageCount + 1
     static constexpr u32 kMaxBloomLevels = 6;
 
     Forward3D() = default;
@@ -210,6 +221,19 @@ public:
     rhi::BufferHandle exposure_buffer() const { return exposure_buf_; }
     // Forgets the adapted exposure: the next auto-exposure frame snaps to its target (a camera cut).
     void reset_exposure() { exposure_reset_ = true; }
+    // Scale (M-VISUAL 9). The batches' indirect commands of the last frame (DrawIndexedIndirectCommand
+    // records, written on the GPU) and where a (view, batch, level, submesh) lies in them: view 0 is
+    // the main view, view 1 + c cascade c. ~0u when that view or batch was not culled on the GPU.
+    rhi::BufferHandle batch_commands() const { return inst_args_; }
+    u32 batch_command(u32 view, u32 batch, u32 level, u32 submesh) const;
+    // The depth pyramid's levels (level 0: the occluder depth, RGBA32F view depth in r; each next
+    // level kHizRatio times smaller, the farthest depth under each texel); null until the first frame
+    // with occlusion culling.
+    static constexpr u32 kHizLevels = 5;
+    static constexpr u32 kHizRatio = 4;
+    rhi::TextureHandle hiz_level(u32 level) const { return level == 0 ? occ_color_ : level < kHizLevels ? hiz_[level - 1] : rhi::TextureHandle{}; }
+    // A particle emitter's ring (two vec4 per particle: position + age, velocity + lifetime), or null.
+    rhi::BufferHandle particle_buffer(u32 emitter_id) const;
 
 private:
     ResultV create_pipelines();
@@ -251,6 +275,27 @@ private:
     // pipelines. `main` counts them in the stats; `prepass` draws them all with the SSAO prepass.
     void draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin, u32 end,
                      u32 opaque_end, DrawCache& cache, bool main, bool prepass = false);
+    // ---- scale (M-VISUAL 9, forward3d_scale.cpp)
+    ResultV create_scale_pipelines();
+    void destroy_scale();
+    // Uploads changed batches, culls them for the view and the cascades (GPU or CPU), simulates the
+    // particles. Before the passes that draw batches.
+    void record_scale(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_occluders(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_particles_sim(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    // The batches of `view` in a shadow pass (cascade view_proj) or the velocity prepass.
+    void draw_batches_depth(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 view, const math::mat4& view_proj, bool velocity);
+    // The batches of the main view in the main pass or the SSAO prepass (ObjectU, forward3d.cpp).
+    void draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, DrawCache& cache, bool prepass);
+    void draw_particles(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    // The decal records and textures of a lit pass (`on` false: stand-ins); returns the record count
+    // for PassU::decals.x.
+    u32 bind_decals(rhi::CommandBuffer& cmd, const Scene3D& scene, bool on);
+    // Binds a batch's lists and issues the draw of (view, batch, level, submesh): indirect on the GPU
+    // path, an instanced draw of the CPU list otherwise. False when there is nothing to draw.
+    bool batch_draw(rhi::CommandBuffer& cmd, const GpuMesh& mesh, u32 view, u32 batch, u32 level, u32 submesh);
+    // The mesh's vertex/index buffers and the batch's matrices and visible list.
+    void bind_batch(rhi::CommandBuffer& cmd, const GpuMesh& mesh, u32 batch);
 
     rhi::RenderDevice* device_ = nullptr;
     const TextureStore* textures_ = nullptr;
@@ -357,6 +402,61 @@ private:
     rhi::TextureHandle fx_[2];           // RGBA16F ping-pong at fx_size_ (depth of field, motion blur)
     rhi::Extent2D fx_size_;
     u32 fx_next_ = 0;
+    // Scale (M-VISUAL 9)
+    rhi::PipelineHandle inst_cull_;      // instanced kMeshFS, back-face culled
+    rhi::PipelineHandle inst_two_sided_;
+    rhi::PipelineHandle inst_prepass_;   // SSAO prepass; null when SSAO is off
+    rhi::PipelineHandle inst_shadow_;
+    rhi::PipelineHandle inst_velocity_;  // null when the velocity prepass is off
+    rhi::PipelineHandle occluder_pipe_;  // the GPU path's (null without compute)
+    rhi::PipelineHandle hiz_reduce_;
+    rhi::PipelineHandle args_init_;
+    rhi::PipelineHandle cull_cs_;
+    rhi::PipelineHandle particle_sim_;   // null without compute
+    rhi::PipelineHandle particle_add_;
+    rhi::PipelineHandle particle_alpha_;
+    struct BatchGpu {                    // a batch's matrices on the GPU, kept under its id
+        u32 id = 0;
+        u32 version = 0;
+        const GpuMesh* mesh = nullptr;
+        u32 mesh_generation = 0;
+        u32 count = 0;
+        u32 capacity = 0;
+        rhi::BufferHandle transforms;
+        bool seen = false;
+    };
+    Array<BatchGpu> batch_gpu_;
+    struct BatchView {                   // a (view, batch) of this frame
+        u32 first_command = ~0u;         // GPU path: the commands of level 0, submesh 0
+        u32 slot[asset::kMaxMeshLods] = {};   // first visible slot of each level
+        u32 count[asset::kMaxMeshLods] = {};  // CPU path: instances in each level's list
+        u32 submeshes = 0;               // commands per level
+        bool culled = false;             // this view culled this batch
+    };
+    Array<BatchView> batch_views_;       // view * batches + batch
+    Array<u32> batch_gpu_index_;         // per scene batch: its BatchGpu
+    u32 batch_view_count_ = 0;
+    u32 batch_count_ = 0;
+    bool batches_gpu_ = false;
+    rhi::BufferHandle inst_args_;        // indirect commands (GPU path)
+    rhi::BufferHandle inst_visible_;     // visible lists (GPU path)
+    u32 inst_args_cap_ = 0;              // commands
+    u32 inst_visible_cap_ = 0;           // slots
+    rhi::TextureHandle occ_color_;       // RGBA32F view depth of the occluders (pyramid level 0)
+    rhi::TextureHandle occ_depth_;       // D32
+    rhi::TextureHandle hiz_[kHizLevels - 1];
+    rhi::Extent2D hiz_size_[kHizLevels];
+    struct EmitterGpu {
+        u32 id = 0;
+        u32 capacity = 0;
+        u32 seed = 0;
+        rhi::BufferHandle particles;
+        u32 cursor = 0;                  // the next ring slot to spawn into
+        u64 spawned = 0;                 // particles spawned so far (the random stream)
+        f32 carry = 0.0f;                // fractional spawns carried to the next frame
+        bool seen = false;
+    };
+    Array<EmitterGpu> emitters_gpu_;
     // Irradiance volume (M-VISUAL 6)
     rhi::PipelineHandle gi_project_;     // null when Forward3DDesc::gi is off
     rhi::PipelineHandle gi_encode_;

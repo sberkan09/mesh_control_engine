@@ -69,6 +69,7 @@ struct Forward3DPassU {
     vec4 vol_medium;  // density, height falloff, base height, anisotropy
     vec4 vol_albedo;  // rgb, w: sun scale
     vec4 vol_scale;   // x: local light scale, y: ambient scale
+    vec4 decals;      // x: decals to apply (M-VISUAL 9)
 };
 
 namespace {
@@ -123,7 +124,8 @@ struct ObjectU {
     vec4 params;    // x: alpha cutoff (0 = no mask), y: unlit, z: roughness, w: metallic
     vec4 maps;      // x: normal map, y: ORM map, z: occlusion in ORM.r, w: occlusion-only
     mat4 dequant;   // skinned draws: quantized -> bind space
-    vec4 skin;      // x: first palette joint, -1 = rigid
+    vec4 skin;      // x: first palette joint, -1 = rigid; instanced: y first visible slot, z time
+    vec4 inst;      // instanced (M-VISUAL 9): wind amplitude, frequency, direction xz
 };
 
 struct ShadowU {  // the rigid shadow shader reads only `mvp`
@@ -140,7 +142,7 @@ struct PostU {
 };
 
 enum Stage : u32 {
-    kTsBegin, kTsClusters, kTsSsao, kTsShadow, kTsGi, kTsVol, kTsMain, kTsResolve, kTsTaa, kTsPostFx, kTsBloom, kTsTonemap, kTsFxaa
+    kTsBegin, kTsClusters, kTsScale, kTsSsao, kTsShadow, kTsGi, kTsVol, kTsMain, kTsResolve, kTsTaa, kTsPostFx, kTsBloom, kTsTonemap, kTsFxaa
 };
 
 struct ExpU {  // kExposureHistCS / kExposureReduceCS
@@ -293,15 +295,7 @@ u64 gi_key(const GiVolume& gi, rhi::TextureHandle baked) {
     return h | 1u;
 }
 
-// Normalized Gribb-Hartmann planes of a view-projection; a sphere is outside when below any.
-void frustum_planes(const mat4& m, vec4 (&out)[6]) {
-    const vec4 r0 = m.row(0), r1 = m.row(1), r2 = m.row(2), r3 = m.row(3);
-    const vec4 planes[6] = {r3 + r0, r3 - r0, r3 + r1, r3 - r1, r3 + r2, r3 - r2};
-    for (int i = 0; i < 6; ++i) {
-        const f32 l = length(planes[i].xyz());
-        out[i] = l > 0.0f ? planes[i] * (1.0f / l) : planes[i];
-    }
-}
+// A sphere is outside the planes (render::frustum_planes) when below any.
 bool sphere_in(const vec4 (&planes)[6], vec3 c, f32 r) {
     for (const vec4& p : planes)
         if (dot(p.xyz(), c) + p.w < -r) return false;
@@ -493,6 +487,7 @@ ResultV Forward3D::create_pipelines() {
         vp.debug_name = "taa.velocity.skinned";
         MCE_TRY_ASSIGN(velocity_skinned_, device_->create_pipeline(vp));
     }
+    MCE_TRY(create_scale_pipelines());
     if (taa) {
         fs.state.blend.mode = rhi::BlendMode::Opaque;
         fs.fragment_shader = {kTaaFS, "taa.frag"};
@@ -668,6 +663,7 @@ void Forward3D::shutdown() {
         *b = {};
     }
     cluster_ranges_cap_ = cluster_indices_cap_ = 0;
+    destroy_scale();
     device_ = nullptr;
     textures_ = nullptr;
 }
@@ -682,7 +678,8 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     const u32 b = desc_.timestamp_base;
     t.frame_index = ts.frame_index;
     t.clusters = ts.ms(b + kTsBegin, b + kTsClusters);
-    t.ssao = ts.ms(b + kTsClusters, b + kTsSsao);
+    t.scale = ts.ms(b + kTsClusters, b + kTsScale);
+    t.ssao = ts.ms(b + kTsScale, b + kTsSsao);
     t.shadow = ts.ms(b + kTsSsao, b + kTsShadow);
     t.gi = ts.ms(b + kTsShadow, b + kTsGi);
     t.volumetrics = ts.ms(b + kTsGi, b + kTsVol);
@@ -748,6 +745,8 @@ void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Textu
     timestamp(cmd, kTsBegin);
     record_clusters(cmd, scene);
     timestamp(cmd, kTsClusters);
+    record_scale(cmd, scene);
+    timestamp(cmd, kTsScale);
     record_ssao(cmd, scene);
     timestamp(cmd, kTsSsao);
     record_shadows(cmd, scene);
@@ -1082,6 +1081,7 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.set_storage_data(rhi::bank::kLightPool, rhi::as_bytes(kNoLight));
             static constexpr LocalShadowRecord kNoShadow{};
             cmd.set_storage_data(rhi::bank::kLocalShadows, rhi::as_bytes(kNoShadow));
+            bind_decals(cmd, scene, false);
             DrawCache cache;
             draw_meshes(cmd, scene, draws, 0, static_cast<u32>(draws.size()), static_cast<u32>(draws.size()), cache, false);
             stats_.probe_draws += static_cast<u32>(draws.size());
@@ -1193,6 +1193,7 @@ void Forward3D::record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const Span<const Scene3D::Draw> draws = scene.draws();
     draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, false, true);
     stats_.ssao_draws = scene.opaque_count();
+    draw_batches(cmd, scene, cache, true);
     cmd.end_pass();
 
     auto fullscreen = [&](rhi::TextureHandle dst, const char* name) {
@@ -1245,6 +1246,7 @@ void Forward3D::record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         rhi::PipelineHandle bound_pipe;
         const GpuMesh* bound = nullptr;
         for (u32 k = 0; k < c.caster_count; ++k) shadow_draw(cmd, c.view_proj, casters[lists[c.first_caster + k]], bound_pipe, bound);
+        draw_batches_depth(cmd, scene, 1 + ci, c.view_proj, false);
         cmd.end_pass();
     }
     stats_.cascades = static_cast<u32>(cascades.size());
@@ -1431,6 +1433,9 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     pu.ao = {stats_.ssao ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
     cmd.bind_texture(rhi::bank::kAo, stats_.ssao ? ao_a_ : ao_off_, linear_clamp_);
     bind_local_shadows(cmd, scene, pu);
+    // Decals (M-VISUAL 9): the main pass only; the fog injection takes the stand-ins.
+    pu.decals.x = f32(bind_decals(cmd, scene, apply_fog));
+    if (apply_fog) stats_.decals = static_cast<u32>(pu.decals.x);
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
@@ -1477,6 +1482,7 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     DrawCache cache;
     const Span<const Scene3D::Draw> draws = scene.draws();
     draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, true);
+    draw_batches(cmd, scene, cache, false);
     if (sky.enabled) {  // behind the opaques, before the blended draws composite over it
         cmd.bind_pipeline(sky_);
         cache.pipe = sky_;
@@ -1484,6 +1490,7 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         cmd.draw_non_indexed(3);
     }
     draw_meshes(cmd, scene, draws, scene.opaque_count(), static_cast<u32>(draws.size()), scene.opaque_count(), cache, true);
+    draw_particles(cmd, scene);
     cmd.end_pass();
     cmd.pop_debug_scope();
 }
@@ -1933,6 +1940,64 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
     }
 }
 
+// ---- instanced batches (M-VISUAL 9) of the main view: the main pass or the SSAO prepass. Each
+// (submesh, level) is one draw of its visible list; o_skin.y names the list, o_inst the wind.
+void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, DrawCache& cache, bool prepass) {
+    if (batch_view_count_ == 0 || (prepass ? inst_prepass_.is_null() : inst_cull_.is_null())) return;
+    const rhi::TextureHandle white = textures_->white();
+    static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
+    const Span<const InstanceBatch> batches = scene.batches();
+    for (u32 bi = 0; bi < batch_count_; ++bi) {
+        if (!batch_views_[bi].culled) continue;
+        const InstanceBatch& b = batches[bi];
+        const GpuMesh& mesh = *scene.meshes().get(b.mesh);
+        if (mesh.vertices.is_null()) continue;
+        bind_batch(cmd, mesh, bi);
+        cache.mesh = nullptr;  // the batch's buffers replaced the cached mesh's
+        const BatchView& bv = batch_views_[bi];
+        const u32 levels = max(mesh.lod_levels, 1u);
+        for (u32 s = 0; s < mesh.submeshes.size(); ++s) {
+            const GpuSubmesh& sm = mesh.submeshes[s];
+            const asset::MaterialChunk& mat = b.material ? b.material->params : sm.material;
+            const u32 keys[4] = {b.material ? b.material->albedo_key : sm.albedo_key, b.material ? b.material->normal_key : sm.normal_key,
+                                 b.material ? b.material->orm_key : sm.orm_key, b.material ? b.material->emissive_key : sm.emissive_key};
+            const rhi::PipelineHandle pipe =
+                prepass ? inst_prepass_ : (mat.flags & asset::MaterialFlags::DoubleSided) ? inst_two_sided_ : inst_cull_;
+            if (!(pipe == cache.pipe)) {
+                cmd.bind_pipeline(pipe);
+                cache.pipe = pipe;
+                if (!prepass) ++stats_.pipeline_binds;
+            }
+            for (u32 t = 0; t < 4; ++t) {
+                if (keys[t] == cache.tex[t]) continue;
+                cmd.bind_texture(kSlots[t], keys[t] == ~0u ? white : textures_->get(keys[t]), material_sampler_);
+                cache.tex[t] = keys[t];
+                if (!prepass) ++stats_.texture_binds;
+            }
+            const mat4& node = mesh.rest_pose[sm.node];
+            ObjectU ou;
+            ou.model = node * sm.dequant;
+            ou.normal = transpose(inverse(node));
+            ou.uv_rect = sm.uv_rect;
+            ou.base_color = {mat.base_color[0] * b.tint.x, mat.base_color[1] * b.tint.y, mat.base_color[2] * b.tint.z,
+                             mat.base_color[3] * b.tint.w};
+            ou.emissive = {mat.emissive[0], mat.emissive[1], mat.emissive[2], keys[3] != ~0u ? 1.0f : 0.0f};
+            ou.params = {(mat.flags & asset::MaterialFlags::AlphaMask) ? mat.alpha_cutoff : 0.0f,
+                         (mat.flags & asset::MaterialFlags::Unlit) ? 1.0f : 0.0f, mat.roughness, mat.metallic};
+            ou.maps = {keys[1] != ~0u ? 1.0f : 0.0f, keys[2] != ~0u ? 1.0f : 0.0f,
+                       (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
+                       (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
+            ou.dequant = mat4::identity();
+            ou.inst = batch_wind(b);
+            for (u32 l = 0; l < levels; ++l) {
+                ou.skin = {-1.0f, f32(bv.slot[l]), scene.time(), 0.0f};
+                cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
+                if (batch_draw(cmd, mesh, 0, bi, l, s) && !prepass) ++stats_.main_draws;
+            }
+        }
+    }
+}
+
 // ---- 4-6. bloom, tonemap, FXAA
 // ---- 3. TAA (M-VISUAL 5): the velocity prepass, then the history resolve into the next history slot.
 // The output is the full viewport, so a render_scale < 1 frame comes out upsampled.
@@ -1989,6 +2054,7 @@ void Forward3D::record_velocity(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
         ++stats_.velocity_draws;
     }
+    draw_batches_depth(cmd, scene, 0, view.view_proj, true);
     cmd.end_pass();
     cmd.pop_debug_scope();
     // The camera reprojection of this frame (TAA's sky, motion blur's) uses the previous matrix.

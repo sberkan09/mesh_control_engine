@@ -265,6 +265,12 @@ inline constexpr u32 kClusterBounds = 9;  // GPU light assignment input: tile ex
 inline constexpr u32 kClusterCounter = 10; // GPU light assignment: index-list bump counter + drops (compute)
 inline constexpr u32 kLocalShadows = 11;   // 3D local-light shadow records (M-VISUAL 4)
 inline constexpr u32 kExposure = 12;       // 3D auto exposure: histogram + adapted exposure (M-VISUAL 8)
+inline constexpr u32 kInstances = 13;      // 3D instance batches' world matrices (M-VISUAL 9, vertex stage + culling)
+inline constexpr u32 kInstanceVisible = 14; // ... their visible lists, written by the culling
+inline constexpr u32 kInstanceArgs = 15;   // ... their indirect commands (culling compute only)
+inline constexpr u32 kDecals = 15;         // 3D decal records (kMeshFS, M-VISUAL 9)
+inline constexpr u32 kParticles = 13;      // 3D GPU particles (simulation compute, sprite vertex stage)
+inline constexpr u32 kDecalTexture0 = 0;   // 3D decal textures: samplers 0..2 (kMeshFS)
 inline constexpr u32 kUniformBanks = 4;  // FrameU, PassU, MaterialU, ObjectU
 }  // namespace bank
 

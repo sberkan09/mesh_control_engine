@@ -95,7 +95,6 @@ const char* asset_type_name(StringId id) {
 
 struct FieldDrawer {
     DrawCtx& ui;
-    const EditorScene& scene;
 
     // Returns true when the value at `p` changed.
     bool element(const refl::FieldRecord& f, const char* label, u8* p) {
@@ -284,6 +283,11 @@ struct FieldDrawer {
 
 }  // namespace
 
+bool draw_fields(DrawCtx& ui, const refl::TypeRecord& type, void* value) {
+    FieldDrawer d{ui};
+    return d.fields(type, static_cast<u8*>(value));
+}
+
 void addable_components(const DocEntity& e, Array<const refl::TypeRecord*>& out) {
     out.clear();
     for (const refl::TypeRecord* t : refl::all())  // sorted by name
@@ -337,7 +341,7 @@ bool draw_inspector(DrawCtx& ui, EditorScene& scene, EntityId id) {
             if (instance && &type != &refl::type_of<LocalTransform>())
                 action = ui.override_actions(overrides != 0 || !scene.prefab_base(id, type),
                                              (overrides & ~entity_ref_fields_mask(type)) != 0);
-            FieldDrawer d{ui, scene};
+            FieldDrawer d{ui};
             edited = d.fields(type, reinterpret_cast<u8*>(copy.data()), instance ? &overrides : nullptr);
             ui.end_component();
         }

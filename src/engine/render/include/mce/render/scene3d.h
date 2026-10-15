@@ -313,6 +313,105 @@ inline u32 emissive_key_of(const MeshInstance& inst, const GpuSubmesh& sm) {
     return inst.material ? inst.material->emissive_key : sm.emissive_key;
 }
 
+// ---- scale (M-VISUAL 9) -------------------------------------------------------------------------
+
+// Many copies of one rigid mesh (foliage, rocks, debris): world matrices the GPU culls and draws by
+// itself. Forward3D keeps the matrices in a GPU buffer under `id` (uploaded again when `version`, the
+// count or the mesh changes) and every frame a compute pass culls each instance against the view and
+// each sun cascade (and, for the view, against a depth pyramid of the frame's other opaques), picks
+// its LOD level and writes the visible lists and indirect draw commands the passes then draw. Opaque
+// and alpha-masked materials only (a blended one draws as opaque); skinned meshes are skipped. Batches
+// take part in the sun's cascades, the SSAO and velocity prepasses and the
+// main pass, not in local-light shadows, reflection probe or GI captures.
+struct InstanceBatch {
+    u32 id = 0;            // stable per batch (unique within the scene)
+    u32 version = 0;       // bump when `transforms` changed
+    u32 mesh = ~0u;        // MeshStore key
+    // World matrices, alive until the scene is drawn. Read every frame only on the CPU path
+    // (InstanceCulling::gpu off or no compute); the GPU path reads them when (re)uploading.
+    Span<const math::mat4> transforms;
+    // World bounds of every instance; an empty box (min > max, the default) is computed by add().
+    math::aabb3 bounds{{1.0f, 1.0f, 1.0f}, {-1.0f, -1.0f, -1.0f}};
+    bool cast_shadows = true;
+    f32 cull_distance = 0.0f;  // meters from the camera beyond which an instance is culled; 0 = the far plane
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+    const MaterialOverride* material = nullptr;  // as MeshInstance::material
+    // Foliage wind: a vertex sways sideways by amplitude × h² meters, h its height in meters above
+    // the instance's origin, at `frequency` Hz with a phase that varies over the ground (Scene3D's clock).
+    f32 wind_amplitude = 0.0f;
+    f32 wind_frequency = 0.5f;
+    math::vec2 wind_direction{1.0f, 0.0f};  // xz, normalized on use
+};
+
+struct InstanceCulling {
+    // Compute culling and indirect draws (needs compute); false culls the batches on the CPU against
+    // the frustum only (one instanced draw per visible list), which draws the same frame.
+    bool gpu = true;
+    // GPU only: the view's instances are also tested against a depth pyramid of the frame's other
+    // opaque draws (rigid, not alpha-masked), rendered at 1 / `occluder_divisor` of the frame size.
+    bool occlusion = true;
+    u32 occluder_divisor = 2;
+};
+
+// A projected decal (M-VISUAL 9): the unit box [-0.5, 0.5]³ under `world`, projecting its texture
+// along the box's local -Y onto every opaque surface inside it (the texture's u along local +X, v
+// along +Z). It changes the surface's base color, roughness and metallic before lighting (so decals
+// are lit, shadowed and fogged with the surface) and can glow. The main pass applies up to kMaxDecals
+// visible decals in submission order (later ones over earlier ones), from up to kMaxDecalTextures
+// distinct textures per frame; decals past either limit are dropped (Scene3D::Stats).
+struct Decal {
+    math::mat4 world = math::mat4::identity();
+    u32 texture = ~0u;                      // TextureStore key: rgb color, a coverage; ~0u = plain `color`
+    math::vec4 uv_rect{0.0f, 0.0f, 1.0f, 1.0f};  // offset.xy, scale.xy of the texture's region
+    math::vec4 color{1.0f, 1.0f, 1.0f, 1.0f};    // linear rgb multiplies the texture; a: opacity
+    f32 roughness = 0.7f;
+    f32 metallic = 0.0f;
+    f32 material_weight = 1.0f;  // how far roughness and metallic follow the decal (0 = keep the surface's)
+    f32 emissive = 0.0f;         // emitted = texture × color × this (glowing decals)
+    // Fades: where the surface faces away from the projection (its normal against local +Y) between
+    // cos = `angle_fade` + 0.1 and `angle_fade`, and toward the box's top and bottom over `edge_fade` of
+    // its half height.
+    f32 angle_fade = 0.2f;
+    f32 edge_fade = 0.2f;
+};
+
+inline constexpr u32 kMaxDecals = 64;
+inline constexpr u32 kMaxDecalTextures = 3;
+
+// GPU particles (M-VISUAL 9): a ring of `max_particles` simulated in compute, drawn as camera-facing
+// sprites after the blended draws (additive or alpha blended, unsorted, unlit, depth tested). Forward3D
+// keeps the particles under `id` across frames; an emitter not added for a frame (or a new
+// `max_particles` or `seed`) starts over. New particles spawn at `rate` per second of Scene3D's clock
+// plus `burst` this frame, inside the box around `position`, moving at a random speed in the cone of
+// half-angle `spread` around `direction`; they fall by `gravity`, slow by `drag`, can bounce off the
+// plane y = `ground_height`, and grow and fade from the start to the end values over their life.
+struct ParticleEmitter {
+    u32 id = 0;
+    u32 max_particles = 1024;  // the oldest particle is reused when the ring is full
+    u32 seed = 1;
+    math::vec3 position{0.0f, 0.0f, 0.0f};
+    math::vec3 box{0.0f, 0.0f, 0.0f};  // spawn volume half extents
+    math::vec3 direction{0.0f, 1.0f, 0.0f};
+    f32 spread = 0.4f;                 // radians
+    f32 rate = 64.0f;                  // particles per second (0 = bursts only)
+    u32 burst = 0;
+    bool emitting = true;              // false: no new particles, the live ones play out
+    f32 speed_min = 1.0f, speed_max = 3.0f;
+    f32 lifetime_min = 1.0f, lifetime_max = 2.0f;
+    math::vec3 gravity{0.0f, -9.81f, 0.0f};
+    f32 drag = 0.0f;                   // per second: velocity × e^(-drag · dt)
+    bool collide = false;              // bounce off y = ground_height
+    f32 ground_height = 0.0f;
+    f32 bounce = 0.3f;                 // the vertical speed kept by a bounce
+    f32 size_start = 0.2f, size_end = 0.05f;          // sprite width in meters
+    math::vec4 color_start{4.0f, 2.0f, 0.6f, 1.0f};   // linear (HDR allowed), a: opacity
+    math::vec4 color_end{1.0f, 0.2f, 0.05f, 0.0f};
+    bool additive = true;              // false: alpha blended
+    u32 texture = ~0u;                 // TextureStore key of the sprite (a: coverage); ~0u = a soft round dot
+};
+
+inline constexpr u32 kMaxParticlesPerEmitter = 1u << 18;
+
 // Screen-size LOD selection (#158): an instance draws the coarsest level whose geometric error,
 // projected at its distance, stays under `pixel_error` pixels. Going coarser needs the error under
 // pixel_error * (1 - hysteresis), so an instance at the boundary does not flicker. Shadow passes
@@ -378,6 +477,12 @@ public:
         u32 local_shadows_dropped = 0;  // lights that asked but did not fit the budget
         u32 lod_instances[asset::kMaxMeshLods] = {};  // instances at each level (meshes with levels)
         u32 lod_triangles[asset::kMaxMeshLods] = {};  // visible main-pass triangles at each level
+        u32 batches = 0;                // M-VISUAL 9: instance batches added
+        u32 batch_instances = 0;        // ... their instances, before culling
+        u32 decals = 0;                 // visible decals the main pass applies
+        u32 decals_culled = 0;          // outside the view
+        u32 decals_dropped = 0;         // visible, past kMaxDecals or kMaxDecalTextures
+        u32 particle_emitters = 0;
         f32 cluster_ms = 0.0f;   // CPU time of the Forward+ light setup + CPU assignment, if it ran (not deterministic)
         f32 build_ms = 0.0f;     // CPU time of build() in total (not deterministic)
     };
@@ -415,10 +520,24 @@ public:
     const GiVolume& gi_volume() const { return gi_; }
     // Instances whose mesh key is not resident are skipped (counted nowhere).
     void add(const MeshInstance& instance);
+    // M-VISUAL 9. Batches whose mesh is not resident or skinned, or that have no transforms, are skipped.
+    void add_batch(const InstanceBatch& batch);
+    void set_instance_culling(const InstanceCulling& culling) { culling_ = culling; }
+    const InstanceCulling& instance_culling() const { return culling_; }
+    void add_decal(const Decal& decal);
+    void add_particle_emitter(const ParticleEmitter& emitter);
+    // The scene's clock: seconds (the wind's phase) and the step since the last frame (particles).
+    void set_time(f32 seconds, f32 dt) {
+        time_ = seconds;
+        dt_ = dt;
+    }
+    f32 time() const { return time_; }
+    f32 dt() const { return dt_; }
     // Culls, builds the shadow fit and sorts. After build() the accessors below are valid.
     void build();
 
     bool built() const { return built_; }
+    const MeshStore& meshes() const { return *meshes_; }
     const View3D& view() const { return view_; }
     const DirectionalLight& light() const { return light_; }
     const Fog& fog() const { return fog_; }
@@ -452,6 +571,14 @@ public:
     u32 opaque_count() const { return opaque_count_; }
     // Every submesh of every instance (shadows come from off-screen casters too).
     Span<const Draw> shadow_draws() const { return shadow_draws_.span(); }
+    Span<const InstanceBatch> batches() const { return batches_.span(); }
+    // The decals the main pass applies (visible, within the limits), in submission order, and the
+    // texture keys they sample: Decal::texture of decals()[i] is decal_textures()[decal_slots()[i]]
+    // (slot ~0u = untextured).
+    Span<const Decal> decals() const { return decals_.span(); }
+    Span<const u32> decal_slots() const { return decal_slots_.span(); }
+    Span<const u32> decal_textures() const { return Span<const u32>(decal_textures_, decal_texture_count_); }
+    Span<const ParticleEmitter> particle_emitters() const { return emitters_.span(); }
     // Joint matrices (model space) of every skinned instance, skin by skin: Draw::palette indexes
     // it. Uploaded once per frame as the skinned shaders' storage buffer.
     Span<const math::mat4> joint_palette() const { return joint_palette_.span(); }
@@ -498,6 +625,15 @@ private:
     Array<Draw> probe_draws_;
     Array<ReflectionProbe> probes_;
     Array<math::mat4> joint_palette_;
+    Array<InstanceBatch> batches_;
+    InstanceCulling culling_;
+    Array<Decal> decals_;
+    Array<u32> decal_slots_;
+    u32 decal_textures_[kMaxDecalTextures] = {};
+    u32 decal_texture_count_ = 0;
+    Array<ParticleEmitter> emitters_;
+    f32 time_ = 0.0f;
+    f32 dt_ = 1.0f / 60.0f;
     u32 opaque_count_ = 0;
     math::aabb3 scene_bounds_{};
     math::mat4 light_view_proj_ = math::mat4::identity();
@@ -506,6 +642,39 @@ private:
 
 // World-space AABB of a local AABB under `m` (Arvo).
 math::aabb3 transform_aabb(const math::mat4& m, const math::aabb3& b);
+
+// The six normalized frustum planes of a view-projection (Gribb-Hartmann, inside = dot(n, p) + d >= 0).
+void frustum_planes(const math::mat4& view_proj, math::vec4 out[6]);
+
+// The batch's culling of one view, as the GPU does it (M-VISUAL 9): instance i is visible when its
+// bounding sphere (the mesh's bounds' sphere under its matrix, radius × the largest axis scale) is
+// inside `planes` and within the cull distance of `eye`; its LOD level follows Scene3D's LodSettings
+// from `lod_view` (the main view, also for the cascades) plus `level_bias`, without hysteresis.
+// Appends (level, instance) pairs, in instance order, to `out`.
+struct BatchVisible {
+    u32 level;
+    u32 instance;
+};
+void cull_batch(const InstanceBatch& batch, const GpuMesh& mesh, const math::vec4 planes[6], const View3D& lod_view,
+                const LodSettings& lod, u32 level_bias, Array<BatchVisible>& out);
+// The LOD level of a bounding sphere for `view` (the batch path's select_lod: no hysteresis).
+u32 batch_lod(const GpuMesh& mesh, math::vec3 center, f32 radius, f32 scale, const View3D& view, const LodSettings& lod);
+// A batch's wind for the instanced shaders: amplitude, frequency, normalized direction xz ((1, 0) when zero).
+math::vec4 batch_wind(const InstanceBatch& b);
+
+// Instanced foliage (M-VISUAL 9): `count` world matrices scattered over the rectangle of half extents
+// `half_extents` (x, z) around `origin`, each turned by a random yaw and scaled uniformly between
+// `scale_min` and `scale_max`, on a jittered grid so no two land on top of each other. Deterministic in
+// `seed`. Writes into `out` (resized to count).
+struct FoliageScatter {
+    math::vec3 origin{0.0f, 0.0f, 0.0f};
+    math::vec2 half_extents{5.0f, 5.0f};
+    u32 count = 100;
+    u32 seed = 1;
+    f32 scale_min = 0.8f, scale_max = 1.2f;
+    bool random_yaw = true;
+};
+void scatter_foliage(const FoliageScatter& scatter, Array<math::mat4>& out);
 
 // The minimal bounding sphere of the view-frustum slice [near_depth, far_depth] (centre on the
 // view axis, `center_depth` in front of the eye). Depends only on the slice and the projection,

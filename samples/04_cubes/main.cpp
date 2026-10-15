@@ -23,6 +23,9 @@
 //   04_cubes -atmos 1 -hour 17.5          M-VISUAL 7: the physically based sky, the sun at 17:30
 //   04_cubes -volfog 1                    M-VISUAL 7: froxel volumetric fog (sun shafts, the lights' glow)
 //   04_cubes -autoexp 1 -dof 12 -mblur 1  M-VISUAL 8: auto exposure, depth of field at 12 m, motion blur
+//   04_cubes -foliage 20000 -decals 1 -particles 1
+//                                         M-VISUAL 9: a wind-swept instanced scatter (GPU culled),
+//                                         projected decals on the floor, a GPU spark fountain
 //
 // Keys: drag (left mouse) or arrows orbit, wheel or Z/X zoom, Space auto orbit, L lights,
 // B bloom, A FXAA, 1/2/3 cascades, K sky texture, I image-based lighting, N night, P cross-fade the orrery clip, G reed
@@ -74,6 +77,10 @@ MCE_CVAR(cv_volfog, "volfog", false, "M-VISUAL 7: froxel volumetric fog lit by t
 MCE_CVAR(cv_autoexp, "autoexp", false, "M-VISUAL 8: auto exposure from the frame's luminance histogram", CVarFlags::None);
 MCE_CVAR(cv_dof, "dof", 0.0f, "M-VISUAL 8: depth of field focused this many meters away (0 = off)", CVarFlags::None);
 MCE_CVAR(cv_mblur, "mblur", false, "M-VISUAL 8: per-object motion blur (and the camera's)", CVarFlags::None);
+MCE_CVAR(cv_foliage, "foliage", 0, "M-VISUAL 9: this many wind-swept pebbles scattered over the floor as one instanced batch",
+         CVarFlags::None);
+MCE_CVAR(cv_decals, "decals", false, "M-VISUAL 9: projected decals on the floor", CVarFlags::None);
+MCE_CVAR(cv_particles, "particles", false, "M-VISUAL 9: a GPU particle spark fountain above the orrery", CVarFlags::None);
 MCE_CVAR(cv_night, "night", false, "Dim the sun so the point lights carry the scene", CVarFlags::None);
 MCE_CVAR(cv_yaw, "cam.yaw", 0.35f, "Initial orbit yaw (radians)", CVarFlags::None);
 MCE_CVAR(cv_pitch, "cam.pitch", 0.42f, "Initial orbit pitch (radians, down from the horizon)", CVarFlags::None);
@@ -132,7 +139,7 @@ struct LightRig {
 // Means of the per-stage times over the measured frames (NFR-F-01 table shape).
 struct Budget {
     f64 scene = 0, clusters = 0, record = 0, submit = 0;
-    f64 gpu_clusters = 0, gpu_ssao = 0, gpu_gi = 0, gpu_vol = 0, gpu_fx = 0, gpu_taa = 0, gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
+    f64 gpu_clusters = 0, gpu_scale = 0, gpu_ssao = 0, gpu_gi = 0, gpu_vol = 0, gpu_fx = 0, gpu_taa = 0, gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
     u64 frames = 0, gpu_frames = 0;
 };
 
@@ -188,6 +195,15 @@ public:
 
         build_layout();
         build_physics();
+        if (cv_foliage.get_int() > 0) {
+            FoliageScatter sc;
+            sc.half_extents = {11.0f, 11.0f};
+            sc.count = static_cast<u32>(cv_foliage.get_int());
+            sc.seed = 4;
+            sc.scale_min = 0.05f;
+            sc.scale_max = 0.14f;
+            scatter_foliage(sc, foliage_);
+        }
         walking_ = cv_walk.get_bool();
         yaw_ = prev_yaw_ = cv_yaw.get_float();
         pitch_ = cv_pitch.get_float();
@@ -255,6 +271,7 @@ public:
             ++budget_.frames;
             if (gpu_.total >= 0.0) {
                 budget_.gpu_clusters += gpu_.clusters;
+                budget_.gpu_scale += gpu_.scale;
                 budget_.gpu_ssao += gpu_.ssao;
                 budget_.gpu_taa += gpu_.taa;
                 budget_.gpu_gi += gpu_.gi;
@@ -301,6 +318,8 @@ public:
         if (budget_.gpu_frames > 0) {
             const f64 g = f64(budget_.gpu_frames);
             std::printf("  | Forward+ light assignment (compute) | - | %.3f |\n", budget_.gpu_clusters / g);
+            std::printf("  | scale: occluders + Hi-Z + batch culling + particles (%u instances) | - | %.3f |\n",
+                        static_cast<u32>(foliage_.size()), budget_.gpu_scale / g);
             std::printf("  | SSAO (prepass + occlusion + blur) | - | %.3f |\n", budget_.gpu_ssao / g);
             std::printf("  | shadows (cascades + %u local lights, %u tiles) | - | %.3f |\n", stats_.local_shadow_lights,
                         stats_.local_shadow_tiles, budget_.gpu_shadow / g);
@@ -560,6 +579,7 @@ private:
         scene.set_shadows(shadows);
 
         for (const MeshInstance& i : statics_) scene.add(i);
+        add_scale(scene, t);
 
         const GpuMesh& orrery = *meshes_->get(keys_[Orrery]);
         player_.pose(orrery, orrery_pose_.span());
@@ -612,6 +632,57 @@ private:
             }
         }
         scene.build();
+    }
+
+    // M-VISUAL 9: the pebble batch, the floor decals and the spark fountain, on the sample's clock.
+    void add_scale(Scene3D& scene, f32 t) {
+        scene.set_time(t, max(t - scale_time_, 0.0f));
+        scale_time_ = t;
+        if (!foliage_.empty()) {
+            InstanceBatch b;
+            b.id = 1;
+            b.version = 1;
+            b.mesh = keys_[PanelCube];
+            b.transforms = foliage_.span();
+            b.tint = {0.45f, 0.7f, 0.35f, 1.0f};
+            b.cull_distance = 60.0f;
+            b.wind_amplitude = 1.5f;  // the pebbles are small: h is a few centimeters
+            b.wind_frequency = 0.8f;
+            scene.add_batch(b);
+        }
+        if (cv_decals.get_bool()) {
+            // A painted lane mark between each pair of panel cube rows, and a glowing ring at the orrery.
+            for (int i = -2; i <= 2; ++i) {
+                Decal d;
+                d.world = translation({f32(i) * 3.2f, 0.0f, -4.8f}) * scaling({0.6f, 0.5f, 2.4f});
+                d.color = {0.9f, 0.75f, 0.1f, 1.0f};
+                d.roughness = 0.35f;
+                scene.add_decal(d);
+            }
+            Decal glow;
+            glow.world = translation({0.0f, 0.0f, 1.6f}) * scaling({2.2f, 0.6f, 2.2f});
+            glow.color = {0.2f, 0.6f, 1.0f, 0.8f};
+            glow.emissive = 1.5f;
+            glow.edge_fade = 0.4f;
+            scene.add_decal(glow);
+        }
+        if (cv_particles.get_bool()) {
+            ParticleEmitter e;
+            e.id = 1;
+            e.max_particles = 4096;
+            e.position = {0.0f, 2.2f, 1.6f};
+            e.box = {0.1f, 0.05f, 0.1f};
+            e.spread = 0.35f;
+            e.rate = 900.0f;
+            e.speed_min = 3.0f;
+            e.speed_max = 5.5f;
+            e.lifetime_min = 1.2f;
+            e.lifetime_max = 2.4f;
+            e.collide = true;
+            e.size_start = 0.06f;
+            e.size_end = 0.02f;
+            scene.add_particle_emitter(e);
+        }
     }
 
     void fold(const Scene3D& scene) {
@@ -780,6 +851,8 @@ private:
     bool reed_skinning_ = true;
     Array<MeshInstance> statics_;
     Array<LightRig> rigs_;
+    Array<mat4> foliage_;  // M-VISUAL 9 pebbles
+    f32 scale_time_ = 0.0f;
     Font font_;
 
     // M5b walk.

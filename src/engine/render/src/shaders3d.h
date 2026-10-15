@@ -55,6 +55,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_vol_medium;     // x: density, y: height falloff, z: base height, w: anisotropy g
     vec4 p_vol_albedo;     // rgb: scattering albedo, w: sun scale
     vec4 p_vol_scale;      // x: local light scale, y: ambient scale
+    vec4 p_decals;         // x: decals to apply (M-VISUAL 9)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -82,7 +83,8 @@ layout(std140, binding = 3) uniform ObjectU {
     vec4 o_params;     // x: alpha cutoff (0 = no mask), y: unlit, z: roughness, w: metallic
     vec4 o_maps;       // x: normal map, y: ORM map, z: occlusion in ORM.r, w: occlusion-only map
     mat4 o_dequant;    // skinned draws: quantized -> bind space (o_model is then the instance's world)
-    vec4 o_skin;       // x: first joint in the palette, -1 = rigid
+    vec4 o_skin;       // x: first joint in the palette, -1 = rigid; instanced draws: y first visible slot, z time
+    vec4 o_inst;       // instanced draws (M-VISUAL 9): x wind amplitude, y wind frequency, zw wind direction (xz)
 };
 )"
 // clang-format on
@@ -411,13 +413,65 @@ uint cluster_of(float depth) {
     return tx + g.x * (ty + g.y * tz);
 }
 
+// ---- projected decals (M-VISUAL 9): up to p_decals.x boxes in submission order, each blending its
+// color over the surface's base color and its roughness / metallic over the surface's, before lighting.
+struct DecalRec {
+    mat4 inv_world;  // world -> the unit box
+    vec4 uv_rect;
+    vec4 color;      // rgb, a: opacity
+    vec4 params;     // x: roughness, y: metallic, z: material weight, w: emissive
+    vec4 fade;       // x: angle fade (cos), y: edge fade (of the half height), z: texture slot (-1 = none)
+    vec4 axis;       // xyz: the projection's up axis in world space (local +Y)
+};
+layout(std430, binding = 15) readonly buffer Decals { DecalRec d_decals[]; };
+layout(binding = 0) uniform sampler2DArray u_decal0;
+layout(binding = 1) uniform sampler2DArray u_decal1;
+layout(binding = 2) uniform sampler2DArray u_decal2;
+vec4 decal_texture(int slot, vec2 uv, vec2 gx, vec2 gy) {
+    if (slot == 0) return textureGrad(u_decal0, vec3(uv, 0.0), gx, gy);
+    if (slot == 1) return textureGrad(u_decal1, vec3(uv, 0.0), gx, gy);
+    return textureGrad(u_decal2, vec3(uv, 0.0), gx, gy);
+}
+// `ng`: the geometric normal; derivatives come from outside the loop (its branches diverge).
+void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout vec3 emit) {
+    vec3 dpx = dFdx(p), dpy = dFdy(p);
+    int count = int(p_decals.x);
+    for (int i = 0; i < count; ++i) {
+        vec3 l = (d_decals[i].inv_world * vec4(p, 1.0)).xyz;
+        if (any(greaterThan(abs(l), vec3(0.5)))) continue;
+        vec4 fade = d_decals[i].fade;
+        float a = d_decals[i].color.a * clamp((dot(ng, d_decals[i].axis.xyz) - fade.x) * 10.0, 0.0, 1.0);
+        if (fade.y > 0.0) a *= clamp((0.5 - abs(l.y)) / (0.5 * fade.y), 0.0, 1.0);
+        if (a <= 0.0) continue;
+        vec4 r = d_decals[i].uv_rect;
+        vec2 uv = r.xy + (l.xz + 0.5) * r.zw;
+        vec4 tex = vec4(1.0);
+        if (fade.z >= 0.0) {
+            mat3 m = mat3(d_decals[i].inv_world);
+            tex = decal_texture(int(fade.z), uv, (m * dpx).xz * r.zw, (m * dpy).xz * r.zw);
+        }
+        a *= tex.a;
+        vec3 c = tex.rgb * d_decals[i].color.rgb;
+        vec4 q = d_decals[i].params;
+        albedo = mix(albedo, c, a);
+        rough = mix(rough, q.x, a * q.z);
+        metallic = mix(metallic, q.y, a * q.z);
+        emit += c * (q.w * a);
+    }
+}
+
 void main() {
     vec4 base = texture(u_albedo, vec3(v_uv, 0.0)) * o_base_color;
     if (o_params.x > 0.0 && base.a < o_params.x) discard;  // alpha mask
     vec3 n = normalize(v_normal);
     if (!gl_FrontFacing) n = -n;
     vec3 color;
+    vec3 decal_emit = vec3(0.0);
     if (o_params.y > 0.5) {
+        if (p_decals.x > 0.5) {
+            float r0 = 1.0, m0 = 0.0;
+            apply_decals(v_world, n, base.rgb, r0, m0, decal_emit);
+        }
         color = base.rgb;  // unlit
     } else {
         float rough = o_params.z, metallic = o_params.w, ao = 1.0;
@@ -429,6 +483,7 @@ void main() {
                 metallic *= orm.b;
             }
         }
+        if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit);
         if (o_maps.x > 0.5) n = perturb_normal(n, v_world, v_uv, texture(u_normal_map, vec3(v_uv, 0.0)).xyz * 2.0 - 1.0);
         rough = clamp(rough, 0.045, 1.0);
         metallic = clamp(metallic, 0.0, 1.0);
@@ -500,7 +555,7 @@ void main() {
     }
     vec3 emissive = o_emissive.rgb;
     if (o_emissive.w > 0.5) emissive *= texture(u_emissive, vec3(v_uv, 0.0)).rgb;
-    color += emissive;
+    color += emissive + decal_emit;
     if (p_vol.x > 0.5) {  // volumetric fog in place of the exp² fog
         vec4 c = u_view_proj * vec4(v_world, 1.0);
         vec4 f = vol_fog(c.xy / c.w * 0.5 + 0.5, -(u_view * vec4(v_world, 1.0)).z);
@@ -1327,6 +1382,372 @@ void main() {
     o_color = vec4(ab / float(kSamples), 0.0, 1.0);
 }
 )";
+
+// ---- scale (M-VISUAL 9) ---------------------------------------------------------------------------
+// Instance batches: per-instance world matrices (bank 13) and the visible lists the culling wrote
+// (bank 14); a draw's instance gl_InstanceID reads slot o_skin.y + gl_InstanceID (or its pass's
+// own block's). Normals go through the matrix's cofactor (any scale). Wind sways a vertex sideways
+// by amplitude × h², h its height above the instance origin.
+#define MCE_GLSL_INSTANCES R"(
+layout(std430, binding = 13) readonly buffer Instances { mat4 i_world[]; };
+layout(std430, binding = 14) readonly buffer Visible { uint i_visible[]; };
+mat4 instance_world(float first) { return i_world[i_visible[uint(first) + uint(gl_InstanceID)]]; }
+mat3 cofactor3(mat4 m) { return mat3(cross(m[1].xyz, m[2].xyz), cross(m[2].xyz, m[0].xyz), cross(m[0].xyz, m[1].xyz)); }
+vec3 wind_offset(mat4 w, vec3 p, float t, vec4 wind) {
+    if (wind.x == 0.0) return vec3(0.0);
+    float h = max(p.y - w[3].y, 0.0);
+    float f = 6.2831853 * wind.y * t + dot(w[3].xz, vec2(0.37, 0.71));
+    return vec3(wind.z, 0.0, wind.w) * (wind.x * h * h * (sin(f) + 0.35 * sin(2.3 * f + 1.7)));
+}
+vec3 oct_decode(vec2 e) {
+    vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
+    if (n.z < 0.0) n.xy = (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    return normalize(n);
+}
+)"
+
+// The instanced twin of kMeshVS: o_model is the submesh's node * dequant, the instance's matrix goes
+// on top. Feeds kMeshFS and kAoPrepassFS.
+constexpr const char* kInstancedMeshVS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_OBJECT_U MCE_GLSL_INSTANCES R"(
+layout(location = 0) in vec4 a_pos;
+layout(location = 1) in vec2 a_oct;
+layout(location = 2) in vec2 a_uv;
+layout(location = 0) out vec3 v_world;
+layout(location = 1) out vec3 v_normal;
+layout(location = 2) out vec2 v_uv;
+out gl_PerVertex { vec4 gl_Position; };
+void main() {
+    mat4 w = instance_world(o_skin.y);
+    vec4 p = w * (o_model * vec4(a_pos.xyz, 1.0));
+    p.xyz += wind_offset(w, p.xyz, o_skin.z, o_inst);
+    v_world = p.xyz;
+    v_normal = cofactor3(w) * (mat3(o_normal) * oct_decode(a_oct));
+    v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
+    gl_Position = u_view_proj * p;
+}
+)";
+
+// Shadow and velocity passes of a batch: their own per-draw block, alpha-masked like the main pass.
+#define MCE_GLSL_INST_PASS_U R"(
+layout(std140, binding = 3) uniform InstDrawU {
+    mat4 s_view_proj;  // shadows: the cascade's; velocity: unused (VelPassU)
+    mat4 s_local;      // node * dequant
+    vec4 s_info;       // x: first visible slot, y: time, z: previous time (velocity), w: alpha cutoff (0 = none)
+    vec4 s_wind;       // as ObjectU::o_inst
+    vec4 s_uv_rect;
+    vec4 s_base;       // x: base color alpha
+};
+layout(binding = 6) uniform sampler2DArray u_albedo;
+)"
+constexpr const char* kInstancedShadowVS = "#version 450 core\n" MCE_GLSL_INST_PASS_U MCE_GLSL_INSTANCES R"(
+layout(location = 0) in vec4 a_pos;
+layout(location = 2) in vec2 a_uv;
+layout(location = 0) out vec2 v_uv;
+out gl_PerVertex { vec4 gl_Position; };
+void main() {
+    mat4 w = instance_world(s_info.x);
+    vec4 p = w * (s_local * vec4(a_pos.xyz, 1.0));
+    p.xyz += wind_offset(w, p.xyz, s_info.y, s_wind);
+    v_uv = s_uv_rect.xy + a_uv * s_uv_rect.zw;
+    gl_Position = s_view_proj * p;
+}
+)";
+constexpr const char* kInstancedShadowFS = "#version 450 core\n" MCE_GLSL_INST_PASS_U R"(
+layout(location = 0) in vec2 v_uv;
+void main() {
+    if (s_info.w > 0.0 && texture(u_albedo, vec3(v_uv, 0.0)).a * s_base.x < s_info.w) discard;
+}
+)";
+constexpr const char* kInstancedVelocityVS = "#version 450 core\n" MCE_GLSL_INST_PASS_U MCE_GLSL_INSTANCES R"(
+layout(std140, binding = 1) uniform VelPassU { mat4 vp_jittered; mat4 vp_current; mat4 vp_previous; };
+layout(location = 0) in vec4 a_pos;
+layout(location = 2) in vec2 a_uv;
+layout(location = 0) out vec4 v_current;
+layout(location = 1) out vec4 v_previous;
+layout(location = 2) out vec2 v_uv;
+out gl_PerVertex { vec4 gl_Position; };
+void main() {
+    mat4 w = instance_world(s_info.x);
+    vec4 base = w * (s_local * vec4(a_pos.xyz, 1.0));
+    vec4 p = base, q = base;
+    p.xyz += wind_offset(w, base.xyz, s_info.y, s_wind);
+    q.xyz += wind_offset(w, base.xyz, s_info.z, s_wind);
+    v_uv = s_uv_rect.xy + a_uv * s_uv_rect.zw;
+    gl_Position = vp_jittered * p;
+    v_current = vp_current * p;
+    v_previous = vp_previous * q;
+}
+)";
+constexpr const char* kInstancedVelocityFS = "#version 450 core\n" MCE_GLSL_INST_PASS_U R"(
+layout(location = 0) in vec4 v_current;
+layout(location = 1) in vec4 v_previous;
+layout(location = 2) in vec2 v_uv;
+layout(location = 0) out vec4 o_velocity;
+void main() {
+    if (s_info.w > 0.0 && texture(u_albedo, vec3(v_uv, 0.0)).a * s_base.x < s_info.w) discard;
+    if (v_previous.w <= 1e-4) { o_velocity = vec4(16.0, 16.0, 1.0, v_current.w); return; }
+    o_velocity = vec4((v_current.xy / v_current.w - v_previous.xy / v_previous.w) * 0.5, 1.0, v_current.w);
+}
+)";
+#undef MCE_GLSL_INST_PASS_U
+
+// Occluders for the batches' occlusion test: the frame's rigid opaques, their view depth (meters along
+// the view axis) into an RGBA32F target cleared far.
+constexpr const char* kOccluderVS = R"(#version 450 core
+layout(std140, binding = 3) uniform OccU { mat4 c_mvp; mat4 c_mv; };
+layout(location = 0) in vec4 a_pos;
+layout(location = 0) out float v_depth;
+out gl_PerVertex { vec4 gl_Position; };
+void main() {
+    vec4 p = vec4(a_pos.xyz, 1.0);
+    v_depth = -(c_mv * p).z;
+    gl_Position = c_mvp * p;
+}
+)";
+constexpr const char* kOccluderFS = R"(#version 450 core
+layout(location = 0) in float v_depth;
+layout(location = 0) out vec4 o_depth;
+void main() { o_depth = vec4(v_depth); }
+)";
+
+// One level of the depth pyramid: each texel the farthest of the kHizRatio² (clamped) texels under it.
+constexpr const char* kHizReduceCS = R"(#version 450 core
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(std140, binding = 1) uniform HizU { vec4 h_size; };  // xy: source size, zw: this level's size
+layout(binding = 6) uniform sampler2D u_src;
+layout(rgba32f, binding = 0) uniform writeonly image2D u_dst;
+void main() {
+    ivec2 d = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 dst = ivec2(h_size.zw), src = ivec2(h_size.xy);
+    if (d.x >= dst.x || d.y >= dst.y) return;
+    ivec2 lo = d * 4, hi = min(lo + 4, src);
+    float m = 0.0;
+    for (int y = lo.y; y < hi.y; ++y)
+        for (int x = lo.x; x < hi.x; ++x) m = max(m, texelFetch(u_src, ivec2(x, y), 0).r);
+    imageStore(u_dst, d, vec4(m));
+}
+)";
+
+// The indirect commands start each frame from their template (index ranges, zero instances).
+constexpr const char* kInstanceArgsInitCS = R"(#version 450 core
+layout(local_size_x = 64) in;
+layout(std140, binding = 1) uniform InitU { uvec4 n_count; };  // x: uints to copy
+layout(std430, binding = 13) readonly buffer Template { uint t_words[]; };
+layout(std430, binding = 15) writeonly buffer Args { uint a_words[]; };
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i < n_count.x) a_words[i] = t_words[i];
+}
+)";
+
+// Culls one batch for one view: the frustum, the cull distance, the depth pyramid (view only), then the
+// LOD level; a visible instance takes the next slot of its level's list and counts into the level's
+// commands (one per submesh).
+constexpr const char* kInstanceCullCS = R"(#version 450 core
+layout(local_size_x = 64) in;
+layout(std140, binding = 1) uniform CullU {
+    mat4 c_view_proj;  // the view's (the depth pyramid's projection)
+    vec4 c_planes[6];
+    vec4 c_eye;        // xyz: the main camera (LOD, cull distance), w: cull distance (0 = none)
+    vec4 c_forward;    // xyz: the main view axis, w: near plane
+    vec4 c_sphere;     // the mesh's bounding sphere: center, radius
+    vec4 c_batch;      // x: instances, y: first visible slot, z: first command, w: submeshes
+    vec4 c_lod;        // x: levels, y: pixels per world unit at 1 m (proj[1][1] * height / 2), z: level bias, w: forced level (-1 = none)
+    vec4 c_lod_error;  // error of levels 0..3 (0 when LOD is off)
+    vec4 c_lod_px;     // x: pixel error
+    vec4 c_hiz;        // x: on, y, z: level 0 size, w: levels
+};
+layout(std430, binding = 13) readonly buffer Instances { mat4 i_world[]; };
+layout(std430, binding = 14) writeonly buffer Visible { uint v_slots[]; };
+layout(std430, binding = 15) buffer Args { uint a_words[]; };
+layout(binding = 0) uniform sampler2D u_hiz0;
+layout(binding = 1) uniform sampler2D u_hiz1;
+layout(binding = 2) uniform sampler2D u_hiz2;
+layout(binding = 3) uniform sampler2D u_hiz3;
+layout(binding = 4) uniform sampler2D u_hiz4;
+float hiz_fetch(int level, ivec2 p) {
+    if (level == 0) return texelFetch(u_hiz0, p, 0).r;
+    if (level == 1) return texelFetch(u_hiz1, p, 0).r;
+    if (level == 2) return texelFetch(u_hiz2, p, 0).r;
+    if (level == 3) return texelFetch(u_hiz3, p, 0).r;
+    return texelFetch(u_hiz4, p, 0).r;
+}
+// True when the sphere lies behind the pyramid's farthest occluder over its screen rectangle.
+bool occluded(vec3 c, float r) {
+    float near_depth = dot(c - c_eye.xyz, c_forward.xyz) - r;
+    if (near_depth <= c_forward.w) return false;
+    vec2 lo = vec2(1e30), hi = vec2(-1e30);
+    for (int i = 0; i < 8; ++i) {
+        vec3 k = c + r * vec3((i & 1) != 0 ? 1.0 : -1.0, (i & 2) != 0 ? 1.0 : -1.0, (i & 4) != 0 ? 1.0 : -1.0);
+        vec4 q = c_view_proj * vec4(k, 1.0);
+        if (q.w <= 1e-4) return false;
+        vec2 ndc = q.xy / q.w;
+        lo = min(lo, ndc);
+        hi = max(hi, ndc);
+    }
+    vec2 size = c_hiz.yz;
+    lo = clamp(lo * 0.5 + 0.5, 0.0, 1.0) * size;
+    hi = clamp(hi * 0.5 + 0.5, 0.0, 1.0) * size;
+    float extent = max(hi.x - lo.x, hi.y - lo.y);
+    int level = 0;
+    float span = 1.0;
+    while (span < extent && level < int(c_hiz.w) - 1) {
+        span *= 4.0;
+        ++level;
+    }
+    if (span < extent) return false;  // larger than the coarsest level's texels
+    ivec2 lsize = max(ivec2(ceil(size / span)), ivec2(1));
+    ivec2 a = clamp(ivec2(floor(lo / span)), ivec2(0), lsize - 1);
+    ivec2 b = clamp(ivec2(floor(hi / span)), ivec2(0), lsize - 1);
+    float far_depth = max(max(hiz_fetch(level, a), hiz_fetch(level, ivec2(b.x, a.y))),
+                          max(hiz_fetch(level, ivec2(a.x, b.y)), hiz_fetch(level, b)));
+    return near_depth > far_depth;
+}
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uint(c_batch.x)) return;
+    mat4 w = i_world[i];
+    float scale = max(max(length(w[0].xyz), length(w[1].xyz)), length(w[2].xyz));
+    vec3 c = (w * vec4(c_sphere.xyz, 1.0)).xyz;
+    float r = c_sphere.w * scale;
+    for (int p = 0; p < 6; ++p)
+        if (dot(c_planes[p].xyz, c) + c_planes[p].w < -r) return;
+    if (c_eye.w > 0.0 && length(c - c_eye.xyz) - r > c_eye.w) return;
+    if (c_hiz.x > 0.5 && occluded(c, r)) return;
+    uint levels = uint(c_lod.x);
+    uint level = 0u;
+    if (c_lod.w >= 0.0) {
+        level = min(uint(c_lod.w), levels - 1u);
+    } else if (levels > 1u) {
+        float px = c_lod.y / max(length(c - c_eye.xyz) - r, c_forward.w);
+        for (uint l = 1u; l < levels; ++l)
+            if (c_lod_error[l] * scale * px <= c_lod_px.x) level = l;
+    }
+    level = min(level + uint(c_lod.z), levels - 1u);
+    uint subs = uint(c_batch.w), n = uint(c_batch.x);
+    uint cmd = uint(c_batch.z) + level * subs;
+    uint slot = atomicAdd(a_words[cmd * 5u + 1u], 1u);
+    for (uint s = 1u; s < subs; ++s) atomicAdd(a_words[(cmd + s) * 5u + 1u], 1u);
+    v_slots[uint(c_batch.y) + level * n + slot] = i;
+}
+)";
+
+// GPU particles: two vec4 per particle (position, age; velocity, lifetime), lifetime 0 = never spawned.
+// The particles in the ring range [first, first + count) are (re)spawned, every other live one moves.
+#define MCE_GLSL_PARTICLES(qual) "layout(std430, binding = 13) " qual " buffer Particles { vec4 p_data[]; };\n"
+constexpr const char* kParticleSimCS = "#version 450 core\n" MCE_GLSL_PARTICLES("") R"(
+layout(local_size_x = 64) in;
+layout(std140, binding = 1) uniform SimU {
+    vec4 s_spawn;    // x: first ring slot, y: count, z: capacity, w: seed (uint bits)
+    vec4 s_step;     // x: dt, y: particles spawned before this frame (uint bits; the random stream), z: drag, w: bounce
+    vec4 s_origin;   // xyz: position, w: spread (radians)
+    vec4 s_box;      // xyz: spawn half extents, w: collide (> 0.5)
+    vec4 s_dir;      // xyz: direction (normalized), w: ground height
+    vec4 s_ranges;   // speed min, max, lifetime min, max
+    vec4 s_gravity;  // xyz
+};
+uint hash(uint x) {
+    x ^= x >> 16; x *= 0x7feb352du;
+    x ^= x >> 15; x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+float rnd(inout uint state) {
+    state = hash(state + 0x9e3779b9u);
+    return float(state >> 8) * (1.0 / 16777216.0);
+}
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    uint cap = uint(s_spawn.z);
+    if (i >= cap) return;
+    uint k = (i + cap - uint(s_spawn.x)) % cap;
+    float dt = s_step.x;
+    if (k < uint(s_spawn.y)) {
+        uint state = hash(floatBitsToUint(s_spawn.w) * 0x27d4eb2du ^ hash(floatBitsToUint(s_step.y) + k));
+        vec3 p = s_origin.xyz + s_box.xyz * (vec3(rnd(state), rnd(state), rnd(state)) * 2.0 - 1.0);
+        vec3 d = s_dir.xyz;
+        vec3 t = normalize(abs(d.y) < 0.99 ? cross(d, vec3(0.0, 1.0, 0.0)) : cross(d, vec3(1.0, 0.0, 0.0)));
+        vec3 b = cross(d, t);
+        float ct = mix(cos(s_origin.w), 1.0, rnd(state));
+        float st = sqrt(max(1.0 - ct * ct, 0.0));
+        float ph = 6.2831853 * rnd(state);
+        vec3 dir = d * ct + (t * cos(ph) + b * sin(ph)) * st;
+        float speed = mix(s_ranges.x, s_ranges.y, rnd(state));
+        float life = mix(s_ranges.z, s_ranges.w, rnd(state));
+        p_data[i * 2u] = vec4(p, 0.0);
+        p_data[i * 2u + 1u] = vec4(dir * speed, max(life, 1e-3));
+        return;
+    }
+    vec4 a = p_data[i * 2u], v = p_data[i * 2u + 1u];
+    if (v.w <= 0.0 || a.w >= v.w) return;
+    v.xyz = (v.xyz + s_gravity.xyz * dt) * exp(-s_step.z * dt);
+    a.xyz += v.xyz * dt;
+    if (s_box.w > 0.5 && a.y < s_dir.w && v.y < 0.0) {
+        a.y = s_dir.w;
+        v.y = -v.y * s_step.w;
+        v.xz *= 0.8;
+    }
+    a.w += dt;
+    p_data[i * 2u] = a;
+    p_data[i * 2u + 1u] = v;
+}
+)";
+// Camera-facing sprites: six vertices per particle (gl_InstanceID), dead ones off screen.
+constexpr const char* kParticleVS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PARTICLES("readonly") R"(
+layout(std140, binding = 3) uniform SpriteU {
+    vec4 q_size;    // x: start, y: end width (meters)
+    vec4 q_start;   // color at birth
+    vec4 q_end;     // color at death
+    vec4 q_info;    // x: textured
+};
+layout(location = 0) out vec2 v_uv;
+layout(location = 1) out vec4 v_color;
+out gl_PerVertex { vec4 gl_Position; };
+void main() {
+    uint i = uint(gl_InstanceID);
+    vec4 a = p_data[i * 2u], v = p_data[i * 2u + 1u];
+    if (v.w <= 0.0 || a.w >= v.w) {
+        gl_Position = vec4(0.0, 0.0, 2.0, 1.0);  // outside the clip volume
+        v_uv = vec2(0.0);
+        v_color = vec4(0.0);
+        return;
+    }
+    float t = clamp(a.w / v.w, 0.0, 1.0);
+    const vec2 kCorner[6] = vec2[6](vec2(-1, -1), vec2(1, -1), vec2(1, 1), vec2(-1, -1), vec2(1, 1), vec2(-1, 1));
+    vec2 c = kCorner[gl_VertexID % 6];
+    vec3 right = vec3(u_view[0][0], u_view[1][0], u_view[2][0]);
+    vec3 up = vec3(u_view[0][1], u_view[1][1], u_view[2][1]);
+    float half_size = 0.5 * mix(q_size.x, q_size.y, t);
+    vec3 p = a.xyz + (right * c.x + up * c.y) * half_size;
+    v_uv = c * 0.5 + 0.5;
+    v_color = mix(q_start, q_end, t);
+    gl_Position = u_view_proj * vec4(p, 1.0);
+}
+)";
+constexpr const char* kParticleFS = R"(#version 450 core
+layout(std140, binding = 3) uniform SpriteU { vec4 q_size; vec4 q_start; vec4 q_end; vec4 q_info; };
+layout(binding = 6) uniform sampler2DArray u_sprite;
+layout(location = 0) in vec2 v_uv;
+layout(location = 1) in vec4 v_color;
+layout(location = 0) out vec4 o_color;
+void main() {
+    float cover;
+    vec3 tint = vec3(1.0);
+    if (q_info.x > 0.5) {
+        vec4 s = texture(u_sprite, vec3(v_uv, 0.0));
+        cover = s.a;
+        tint = s.rgb;
+    } else {
+        float d = length(v_uv * 2.0 - 1.0);
+        cover = clamp(1.0 - d, 0.0, 1.0);
+        cover *= cover;
+    }
+    float a = cover * v_color.a;
+    o_color = vec4(tint * v_color.rgb * a, a);  // premultiplied (the additive pipeline ignores a)
+}
+)";
+#undef MCE_GLSL_PARTICLES
+#undef MCE_GLSL_INSTANCES
 
 #undef MCE_GLSL_IBL
 #undef MCE_GLSL_IBL_SAMPLING
