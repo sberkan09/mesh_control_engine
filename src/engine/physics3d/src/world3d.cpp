@@ -1200,6 +1200,7 @@ u32 World3D::create_vehicle(const VehicleDesc3D& d) {
         vs.mWheels.push_back(ws);
     }
     auto* cs = new JPH::WheeledVehicleControllerSettings();
+    vs.mController = cs;  // owned from here, so the early returns below release it
     cs->mEngine.mMaxTorque = d.engine_torque;
     cs->mEngine.mMinRPM = d.min_rpm;
     cs->mEngine.mMaxRPM = d.max_rpm;
@@ -1224,7 +1225,6 @@ u32 World3D::create_vehicle(const VehicleDesc3D& d) {
         ds.mEngineTorqueRatio = a.torque_share;
         cs->mDifferentials.push_back(ds);
     }
-    vs.mController = cs;
 
     JPH::Ref<JPH::VehicleConstraint> c;
     JPH::ObjectLayer layer = 0;
