@@ -659,4 +659,11 @@ void write_asset_schemas(JsonWriter& w) {
     w.end_array().end_object();
 }
 
+bool asset_tool_arg(ToolCall& c, const editor::ProjectAsset*& out) { return arg_asset(c, out); }
+bool asset_rel_valid(StringView rel) { return valid_rel(rel); }
+cook::String asset_guid_ref(asset::Guid g) { return guid_ref(g); }
+bool asset_validate_and_write(ToolCall& c, StringView rel, asset::Guid guid, StringView text) {
+    return validate_and_write(c, rel, guid, text);
+}
+
 }  // namespace mce::mcp
