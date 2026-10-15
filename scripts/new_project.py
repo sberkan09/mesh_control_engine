@@ -31,7 +31,7 @@ TEMPLATES = ROOT / "templates"
 # A template other than "project" is an overlay: templates/project first, then its own files over it.
 TEMPLATE_CHOICES = ("project", "novel")
 IN_ENGINE_TREE = (ROOT / "CMakeLists.txt").is_file()
-TEXT_SUFFIXES = {".txt", ".md", ".cpp", ".h", ".mceproj", ".mcscene", ".mceasset", ".gitignore", ".json"}
+TEXT_SUFFIXES = {".txt", ".md", ".cpp", ".h", ".mceproj", ".mcscene", ".mceasset", ".gitignore", ".json", ".mcuitheme"}
 
 
 def game_id(name):
@@ -142,6 +142,10 @@ def main():
         "@GUID_TEX_GROUND@": new_guid(),
         "@GUID_FONT@": new_guid(),
     }
+    # The starter themes (M-UI-DATA step 7): assets/ui/themes/{pixel,clean,story}.mcuitheme and their fonts.
+    for theme in ("PIXEL", "CLEAN", "STORY"):
+        for token in (f"@GUID_THEME_{theme}@", f"@GUID_FONT_{theme}@", f"@GUID_FONT_{theme}_TITLE@"):
+            tokens[token] = new_guid()
 
     def stamp(text):
         for k, v in tokens.items():
