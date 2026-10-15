@@ -975,7 +975,8 @@ f64 mean_abs_diff(const Array<u8>& a, const Array<u8>& b) {
     u64 sum = 0;
     for (usize i = 0; i < a.size(); i += 4)
         for (usize c = 0; c < 3; ++c) sum += u64(std::abs(int(a[i + c]) - int(b[i + c])));
-    return f64(sum) / f64(a.size() / 4 * 3);
+    const usize channels = a.size() / 4 * 3;
+    return f64(sum) / f64(channels);
 }
 
 void post_aa(Scene3D& s, bool taa) {
