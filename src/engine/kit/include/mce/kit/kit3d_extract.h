@@ -1,7 +1,7 @@
 #pragma once
 // Kit3DExtract — the render extract for the kit3d components (kit3d.h), the 3D twin of
 // SpriteExtract: reads MeshRef / Animator / PointLight3D / SpotLight3D / ReflectionProbe3D /
-// Camera3DComponent +
+// Foliage3D / Decal3D / ParticleEmitter3D / Camera3DComponent +
 // LocalTransform (WorldTransform when the hierarchy wrote one), the Environment3D resource (or
 // component) and StaticInstances3D, and fills a Scene3D in ECS iteration order.
 //
@@ -44,6 +44,10 @@ struct Kit3DStats {
     u32 reflection_probes = 0;
     u32 animated = 0;
     u32 missing = 0;         // MeshRefs whose mesh is not resident
+    u32 foliage = 0;         // Foliage3D batches submitted (M-VISUAL 9)
+    u32 foliage_instances = 0;
+    u32 decals = 0;          // Decal3Ds submitted (the scene culls them)
+    u32 particle_emitters = 0;
 };
 
 class Kit3DExtract {
@@ -90,8 +94,11 @@ public:
     // cascades, its shadow-map resolution, bloom and FXAA only when the tier keeps them. Default:
     // no caps (High's knobs, with up to kMaxCascades), which is what the player passes on High.
     void set_quality(const render::QualitySettings& q) { quality_ = q; }
-    // Seconds since the last extracted frame: how far Environment3D::auto_exposure adapts per frame.
+    // Seconds since the last extracted frame: how far Environment3D::auto_exposure adapts per frame,
+    // and the step of the scene's clock (foliage wind, particles: Scene3D::set_time).
     void set_frame_dt(f32 dt) { frame_dt_ = dt; }
+    // The scene clock's seconds so far (advanced by the frame dt every extract()).
+    f32 time() const { return time_; }
 
     // Reflection probe and GI volume bakes (M-VISUAL 2 and 6, the editor's bakes): every MeshRef and
     // static instance is submitted whatever the view (no culling, no distance thinning), probes and
@@ -154,6 +161,21 @@ private:
     u32 frame_stamp_ = 0;
     Kit3DStats stats_;
     bool bake_mode_ = false;
+    f32 time_ = 0.0f;
+    struct FoliageEntry {  // a Foliage3D's scatter, kept while its inputs stay the same
+        Entity entity;
+        u64 key = 0;
+        u32 version = 0;
+        u32 stamp = 0;     // the extract that last saw it
+        Array<math::mat4> transforms;
+    };
+    Array<FoliageEntry> foliage_;
+    struct BurstEntry {    // a ParticleEmitter3D's last burst_version
+        Entity entity;
+        u32 burst_version = 0;
+        u32 stamp = 0;
+    };
+    Array<BurstEntry> bursts_;
     Array<Entity> probe_entities_;
     Entity gi_entity_;
 };

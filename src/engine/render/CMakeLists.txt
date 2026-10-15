@@ -10,6 +10,7 @@ mce_add_library(mce_render
         src/camera2d.cpp
         src/clusters.cpp
         src/forward3d.cpp
+        src/forward3d_scale.cpp
         src/mesh.cpp
         src/quality.cpp
         src/renderer.cpp

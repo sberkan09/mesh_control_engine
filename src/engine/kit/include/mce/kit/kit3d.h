@@ -307,6 +307,106 @@ struct Physics3D {
     u32 colliders = 0;  // bodies the kit built at Startup
 };
 
+// ---- scale (M-VISUAL 9): instanced foliage, projected decals, GPU particles ----------------------
+
+// `count` copies of `mesh` scattered over the world-axis rectangle of `half_extents` (x, z) around the
+// entity, at its height, each turned by a random yaw (`random_yaw`) and scaled between `scale_min` and
+// `scale_max` (render::scatter_foliage, deterministic in `seed`). Drawn as one instanced batch culled
+// per instance (on the GPU where compute exists, against the frame's depth too), with LOD levels per
+// instance, shadows, and a wind sway of `wind_amplitude` × h² metres (h: height above the copy's
+// origin) at `wind_frequency` Hz along `wind_direction` (xz). Rigid meshes only; the copies take no
+// local-light shadows and are not seen by reflection probes or the GI volume.
+struct Foliage3D {
+    asset::AssetRef<asset::Mesh> mesh;
+    asset::AssetRef<asset::Material> material;     // a .mcmat on every copy instead of the mesh's own
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+    math::vec2 half_extents{5.0f, 5.0f};
+    u32 count = 200;
+    u32 seed = 1;
+    f32 scale_min = 0.8f;
+    f32 scale_max = 1.2f;
+    f32 wind_amplitude = 0.05f;
+    f32 wind_frequency = 0.5f;
+    math::vec2 wind_direction{1.0f, 0.0f};
+    f32 cull_distance = 0.0f;  // metres from the camera past which a copy is culled; 0 = the far plane
+    u32 cast_shadows = 1;
+    u32 random_yaw = 1;
+    u32 enabled = 1;
+};
+MCE_COMPONENT(Foliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's materials; null = the mesh's own"}), tint,
+              (half_extents, Help{"metres, x and z, around the entity"}), (count, Range{0, 1000000}), seed,
+              (scale_min, Range{0.01f, 100}), (scale_max, Range{0.01f, 100}),
+              (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
+              (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
+              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled)
+
+// A projected decal: `texture` (rgb color, a coverage; empty = plain `color`) projected down the
+// entity's local -Y onto every opaque surface inside the box of `size` metres (x, projection depth y, z)
+// at the entity's transform. It recolors the surface (and sets its roughness and metallic by
+// `material_weight`) before lighting, and can glow (`emissive`). Up to 64 visible decals from 3
+// distinct textures per frame (render::Decal).
+struct Decal3D {
+    asset::AssetRef<asset::Texture> texture;
+    math::vec4 color{1.0f, 1.0f, 1.0f, 1.0f};
+    math::vec4 uv_rect{0.0f, 0.0f, 1.0f, 1.0f};
+    math::vec3 size{1.0f, 1.0f, 1.0f};
+    f32 roughness = 0.7f;
+    f32 metallic = 0.0f;
+    f32 material_weight = 1.0f;
+    f32 emissive = 0.0f;
+    f32 angle_fade = 0.2f;
+    f32 edge_fade = 0.2f;
+    u32 enabled = 1;
+};
+MCE_COMPONENT(Decal3D, (texture, Help{"rgb color, a coverage; empty = plain color"}), (color, Help{"linear rgb, a opacity"}),
+              (uv_rect, Help{"offset xy, scale zw of the texture's region"}),
+              (size, Help{"metres: x, projection depth y, z"}), (roughness, Range{0, 1}), (metallic, Range{0, 1}),
+              (material_weight, Range{0, 1}, Help{"how far roughness and metallic follow the decal"}),
+              (emissive, Range{0, 100}), (angle_fade, Range{0, 1}), (edge_fade, Range{0, 1}), enabled)
+
+// GPU particles: up to `max_particles` camera-facing sprites simulated in compute (render::ParticleEmitter),
+// spawned at `rate` per second inside the box of half extents `box` around the entity's position plus
+// `offset`, moving at a random speed in the cone of half-angle `spread_deg` around `direction` (entity
+// space). They fall by `gravity`, slow by `drag`, bounce off y = `ground_height` with `collide`, and grow
+// and fade from the start to the end values over their life. Bump `burst_version` to spawn `burst` at
+// once. Additive or alpha blended, unsorted, unlit. Not part of the simulation (render-side state).
+struct ParticleEmitter3D {
+    asset::AssetRef<asset::Texture> texture;      // the sprite (a: coverage); empty = a soft round dot
+    math::vec4 color_start{4.0f, 2.0f, 0.6f, 1.0f};
+    math::vec4 color_end{1.0f, 0.2f, 0.05f, 0.0f};
+    math::vec3 offset;
+    math::vec3 box;
+    math::vec3 direction{0.0f, 1.0f, 0.0f};
+    math::vec3 gravity{0.0f, -9.81f, 0.0f};
+    f32 spread_deg = 23.0f;
+    f32 rate = 64.0f;
+    f32 speed_min = 1.0f;
+    f32 speed_max = 3.0f;
+    f32 lifetime_min = 1.0f;
+    f32 lifetime_max = 2.0f;
+    f32 drag = 0.0f;
+    f32 ground_height = 0.0f;
+    f32 bounce = 0.3f;
+    f32 size_start = 0.2f;
+    f32 size_end = 0.05f;
+    u32 max_particles = 1024;
+    u32 seed = 1;
+    u32 burst = 0;
+    u32 burst_version = 0;
+    u32 collide = 0;
+    u32 additive = 1;
+    u32 emitting = 1;
+    u32 pad_ = 0;
+};
+MCE_COMPONENT(ParticleEmitter3D, texture, (color_start, Help{"linear, HDR allowed; a opacity"}), color_end,
+              (offset, Help{"entity space"}), (box, Help{"spawn volume half extents"}), (direction, Help{"entity space"}),
+              gravity, (spread_deg, Range{0, 180}), (rate, Range{0, 100000}, Help{"per second; 0 = bursts only"}),
+              (speed_min, Range{0, 1000}), (speed_max, Range{0, 1000}), (lifetime_min, Range{0.01f, 600}),
+              (lifetime_max, Range{0.01f, 600}), (drag, Range{0, 100}), ground_height, (bounce, Range{0, 1}),
+              (size_start, Range{0, 100}, Help{"sprite width in metres"}), (size_end, Range{0, 100}),
+              (max_particles, Range{1, 262144}), seed, burst, (burst_version, Help{"bump to spawn `burst` once"}),
+              collide, additive, (emitting, Help{"0: no new particles, the live ones play out"}))
+
 // ---- many static copies of a few meshes (grass, rocks, trees) -----------------------------------
 
 // One copy. `max_distance` > 0 hides it past that camera distance; past `thin_distance` (> 0) only

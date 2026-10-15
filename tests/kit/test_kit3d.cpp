@@ -4,6 +4,8 @@
 
 #include <doctest/doctest.h>
 
+#include <cmath>
+
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -26,6 +28,13 @@ using math::quat;
 using math::vec3;
 
 namespace {
+
+bool same_matrix(const math::mat4& a, const math::mat4& b) {
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r)
+            if (a.c[c][r] != b.c[c][r]) return false;
+    return true;
+}
 
 constexpr f64 kDt = 1.0 / 60.0;
 const asset::Guid kBox{0x3d00000000000001ull, 0x8000000000000001ull};
@@ -132,7 +141,7 @@ std::string write_mesh_tree(const char* name, asset::Guid guid, Span<const byte>
 
 TEST_CASE("kit3d: the components are reflected and install is idempotent") {
     for (const char* name : {"MeshRef", "PointLight3D", "SpotLight3D", "ReflectionProbe3D", "Camera3DComponent", "Animator", "Environment3D",
-                             "BoxCollider3D", "MeshCollider3D"}) {
+                             "BoxCollider3D", "MeshCollider3D", "Foliage3D", "Decal3D", "ParticleEmitter3D"}) {
         const refl::TypeRecord* t = refl::find_type(StringId(name));
         INFO(name);
         REQUIRE(t != nullptr);
@@ -583,4 +592,87 @@ TEST_CASE("kit3d: MeshRef.material replaces the mesh's material; the quality tie
     CHECK(scene.shadow_settings().cascades == 1);
     CHECK(scene.shadow_settings().resolution == 1024);
     CHECK_FALSE(scene.post().bloom);
+}
+
+TEST_CASE("kit3d: Foliage3D, Decal3D and ParticleEmitter3D become a batch, decals and emitters (M-VISUAL 9)") {
+    Fixture f;
+    f.camera();
+    kit::Foliage3D grass;
+    grass.mesh.guid = kBox;
+    grass.count = 50;
+    grass.seed = 3;
+    grass.half_extents = {4, 2};
+    grass.wind_amplitude = 0.2f;
+    const Entity field = f.world.spawn_with(at({0, 0, -10}), grass);
+    kit::Foliage3D missing = grass;  // unbound mesh: skipped
+    missing.mesh.guid = asset::Guid{0x1, 0x2};
+    f.world.spawn_with(at({0, 0, -10}), missing);
+    kit::Decal3D decal;
+    decal.size = {2, 1, 3};
+    decal.color = {1, 0, 0, 1};
+    f.world.spawn_with(at({0, 0, -6}), decal);
+    decal.enabled = 0;
+    f.world.spawn_with(at({0, 0, -6}), decal);
+    kit::ParticleEmitter3D sparks;
+    sparks.offset = {0, 1, 0};
+    sparks.direction = {0, 0, -2};
+    sparks.burst = 30;
+    const Entity emitter = f.world.spawn_with(at({2, 0, -6}), sparks);
+    f.step();
+
+    auto frame = [&](render::Scene3D& scene) {
+        render::Camera3D cam;
+        REQUIRE(f.extract.camera(f.world, 1.0f, cam));
+        scene.begin(cam, {320, 180});
+        f.extract.extract(f.world, scene, 1.0f);
+        scene.build();
+    };
+    f.extract.set_frame_dt(0.25f);
+    render::Scene3D scene(f.store, mem::heap());
+    frame(scene);
+    CHECK(f.extract.stats().foliage == 1);
+    CHECK(f.extract.stats().foliage_instances == 50);
+    CHECK(f.extract.stats().missing == 1);
+    CHECK(f.extract.stats().decals == 1);
+    CHECK(f.extract.stats().particle_emitters == 1);
+    REQUIRE(scene.batches().size() == 1);
+    const render::InstanceBatch& b = scene.batches()[0];
+    CHECK(b.mesh == 1);
+    CHECK(b.transforms.size() == 50);
+    CHECK(b.wind_amplitude == doctest::Approx(0.2f));
+    for (const math::mat4& m : b.transforms) {
+        CHECK(std::fabs(m.c[3][0]) <= 4.0f);
+        CHECK(m.c[3][2] <= -8.0f);
+        CHECK(m.c[3][2] >= -12.0f);
+    }
+    const u32 version = b.version;
+    const math::mat4 first = b.transforms[0];
+    REQUIRE(scene.decals().size() == 1);
+    CHECK(scene.decals()[0].world.c[0][0] == doctest::Approx(2.0f));
+    CHECK(scene.decals()[0].world.c[2][2] == doctest::Approx(3.0f));
+    CHECK(scene.decals()[0].world.c[3][2] == doctest::Approx(-6.0f));
+    CHECK(scene.decals()[0].texture == ~0u);
+    REQUIRE(scene.particle_emitters().size() == 1);
+    const render::ParticleEmitter& em = scene.particle_emitters()[0];
+    CHECK(em.position.y == doctest::Approx(1.0f));
+    CHECK(em.direction.z == doctest::Approx(-1.0f));
+    CHECK(em.burst == 30);  // a new emitter bursts once
+    CHECK(scene.time() == doctest::Approx(0.25f));
+    CHECK(scene.dt() == doctest::Approx(0.25f));
+
+    // Unchanged: the same scatter and version, no burst, the clock runs on.
+    render::Scene3D again(f.store, mem::heap());
+    frame(again);
+    CHECK(again.batches()[0].version == version);
+    CHECK(same_matrix(again.batches()[0].transforms[0], first));
+    CHECK(again.particle_emitters()[0].burst == 0);
+    CHECK(again.time() == doctest::Approx(0.5f));
+    // A new seed re-scatters under a new version; a bumped burst_version bursts again.
+    f.world.try_get_mut<kit::Foliage3D>(field)->seed = 4;
+    f.world.try_get_mut<kit::ParticleEmitter3D>(emitter)->burst_version = 1;
+    render::Scene3D third(f.store, mem::heap());
+    frame(third);
+    CHECK(third.batches()[0].version != version);
+    CHECK(!same_matrix(third.batches()[0].transforms[0], first));
+    CHECK(third.particle_emitters()[0].burst == 30);
 }

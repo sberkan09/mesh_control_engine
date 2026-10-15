@@ -261,6 +261,31 @@ void GlDevice::exec_bind_storage_image(const cmd::BindStorageImage& c) {
     glBindImageTexture(c.unit, t->id, static_cast<GLint>(c.mip), layered, 0, access, t->internal);
 }
 
+void GlDevice::exec_draw_indirect_buffer(const cmd::DrawIndirectBuffer& d) {
+    const GlPipeline* p = ts_.pipeline;
+    if (!p || p->compute) {
+        MCE_ASSERT_MSG(false, "draw_indirect_buffer without a bound graphics pipeline");
+        return;
+    }
+    const GlBuffer* b = buffers_.try_get(d.buffer);
+    const bool ok = b && d.offset + u64(d.draw_count) * sizeof(DrawIndexedIndirectCommand) <= b->size;
+    MCE_ASSERT_MSG(ok, "draw_indirect_buffer: stale buffer or commands outside it");
+    if (!ok || d.draw_count == 0) return;
+    if (!ts_.ib_valid || (!ts_.vb_valid && p->stride > 0)) return;  // geometry overflowed or never set: skip
+    // The commands' first_index counts from the element buffer's start, which the GPU-written
+    // records cannot be rebased onto (exec_draw_indirect does that on the CPU).
+    MCE_ASSERT_MSG(ts_.ib_offset == 0, "draw_indirect_buffer: the index buffer must be bound at offset 0 on GL");
+    if (ts_.vb_valid)
+        glVertexArrayVertexBuffer(p->vao, 0, ts_.vb, static_cast<GLintptr>(ts_.vb_offset), static_cast<GLsizei>(p->stride));
+    glVertexArrayElementBuffer(p->vao, ts_.ib);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, b->id);
+    glMultiDrawElementsIndirect(ts_.topology, ts_.ib_format == IndexFormat::U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT,
+                                reinterpret_cast<const void*>(static_cast<uintptr_t>(d.offset)),
+                                static_cast<GLsizei>(d.draw_count), static_cast<GLsizei>(sizeof(DrawIndexedIndirectCommand)));
+    ++stats_.draws;
+    ++stats_.indirect_draws;
+}
+
 void GlDevice::exec_dispatch(const cmd::Dispatch* direct, const cmd::DispatchIndirect* indirect) {
     const GlPipeline* p = ts_.pipeline;
     if (!p || !p->compute) {
@@ -406,6 +431,9 @@ void GlDevice::submit(const CommandBuffer& cb) {
                 break;
             }
             case CmdType::DrawIndirect: exec_draw_indirect(*static_cast<const cmd::DrawIndirect*>(payload)); break;
+            case CmdType::DrawIndirectBuffer:
+                exec_draw_indirect_buffer(*static_cast<const cmd::DrawIndirectBuffer*>(payload));
+                break;
             case CmdType::PushDebugScope:
                 glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 1, -1, static_cast<const cmd::PushDebugScope*>(payload)->name);
                 break;

@@ -299,6 +299,17 @@ layout(std430, binding = 4) buffer Out { uint v[]; };
 void main() { v[gl_WorkGroupID.x] = 7u; }
 )";
 
+// Writes two indexed draw commands for draw_indirect_buffer: the quad's second triangle, once, and
+// its first triangle zero times (a culled draw).
+constexpr const char* kDrawArgsCS = R"(#version 450 core
+layout(local_size_x = 1) in;
+layout(std430, binding = 5) buffer Args { uint cmds[10]; };
+void main() {
+    cmds[0] = 3u; cmds[1] = 1u; cmds[2] = 3u; cmds[3] = 0u; cmds[4] = 0u;
+    cmds[5] = 3u; cmds[6] = 0u; cmds[7] = 0u; cmds[8] = 0u; cmds[9] = 0u;
+}
+)";
+
 constexpr const char* kImageWriteCS = R"(#version 450 core
 layout(local_size_x = 8, local_size_y = 8) in;
 layout(rgba8, binding = 0) uniform writeonly image2D u_out;
@@ -401,6 +412,66 @@ TEST_CASE("rhi_sdlgpu: dispatch_indirect reads arguments a dispatch wrote") {
     CHECK(v[0] == 7);
     CHECK(v[2] == 7);
     CHECK(v[3] == 0);  // three groups, not four
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("rhi_sdlgpu: draw_indirect_buffer draws the commands a dispatch wrote") {
+    Fixture f;
+    if (!f.ok) return;
+    const rhi::PipelineHandle pipe = f.make_pipeline();
+    const rhi::PipelineHandle args_pipe = make_compute(*f.device, kDrawArgsCS, "draw_args.comp");
+    if (pipe.is_null() || args_pipe.is_null()) return;
+    rhi::TextureDesc td;
+    td.size = {64, 64};
+    td.format = rhi::TextureFormat::RGBA8_UNorm;
+    td.usage = rhi::TextureUsage::SampledColorTarget;
+    const rhi::TextureHandle rt = f.device->create_texture(td);
+    // A full-target quad split along its diagonal: (0,1,2) below it, (0,2,3) above it.
+    static constexpr Vertex kQuad[] = {
+        {-1, -1, 0xFFFF0000u}, {1, -1, 0xFFFF0000u}, {1, 1, 0xFFFF0000u}, {-1, 1, 0xFFFF0000u}};
+    static constexpr u32 kQuadIdx[] = {0, 1, 2, 0, 2, 3};
+    const rhi::BufferHandle vb = f.device->create_buffer({rhi::BufferUsage::Vertex, sizeof(kQuad), "quad.vb"},
+                                                         rhi::as_bytes(Span<const Vertex>(kQuad)));
+    const rhi::BufferHandle ib = f.device->create_buffer({rhi::BufferUsage::Index, sizeof(kQuadIdx), "quad.ib"},
+                                                         rhi::as_bytes(Span<const u32>(kQuadIdx)));
+    const rhi::BufferHandle args =
+        f.device->create_buffer({rhi::BufferUsage::IndirectArgs, 2 * sizeof(rhi::DrawIndexedIndirectCommand), "draw.args"});
+
+    f.device->begin_frame(0);
+    rhi::CommandBuffer cmd;
+    cmd.bind_pipeline(args_pipe);
+    cmd.bind_storage_buffer(rhi::bank::kLightPool, args, 0, 0);
+    cmd.dispatch(1);
+    cmd.barrier(rhi::barrier::kIndirect);
+    rhi::PassAttachment color;
+    color.texture = rt;
+    color.clear.color[1] = 1.0f;
+    color.clear.color[3] = 1.0f;
+    rhi::RenderPassDesc pass;
+    pass.colors = Span<const rhi::PassAttachment>(&color, 1);
+    static constexpr f32 kOffsetScale[4] = {0, 0, 1, 1};
+    cmd.begin_pass(pass);
+    cmd.bind_pipeline(pipe);
+    cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(kOffsetScale));
+    cmd.bind_vertex_buffer(vb);
+    cmd.bind_index_buffer(ib, rhi::IndexFormat::U32);
+    cmd.draw_indirect_buffer(args, 0, 2);
+    cmd.end_pass();
+    f.device->submit(cmd);
+    Array<u8> px;
+    px.resize(64 * 64 * 4);
+    MCE_REQUIRE_OR_RETURN(f.device->read_pixels(rt, rhi::Rect2D{0, 0, 64, 64}, px.span()).has_value());
+    f.device->end_frame();
+    CHECK(f.device->last_frame_stats().indirect_draws == 1);
+    // Rows are top first: the upper-left half is the drawn triangle, the lower-right one was culled.
+    CHECK(pixel(px, 64, 8, 4).b == 255);
+    CHECK(pixel(px, 64, 8, 4).g == 0);
+    CHECK(pixel(px, 64, 56, 60).g == 255);
+    CHECK(pixel(px, 64, 56, 60).b == 0);
+    f.device->destroy_buffer(args);
+    f.device->destroy_buffer(vb);
+    f.device->destroy_buffer(ib);
+    f.device->destroy_texture(rt);
     CHECK(f.device->validation_error_count() == 0);
 }
 

@@ -28,6 +28,7 @@ const char* cmd_type_name(CmdType t) {
         case CmdType::BindStorageImage: return "BindStorageImage";
         case CmdType::Dispatch: return "Dispatch";
         case CmdType::DispatchIndirect: return "DispatchIndirect";
+        case CmdType::DrawIndirectBuffer: return "DrawIndirectBuffer";
         case CmdType::Barrier: return "Barrier";
     }
     return "?";
@@ -139,6 +140,12 @@ void CommandBuffer::set_draw_args(Span<const DrawIndexedIndirectCommand> command
 void CommandBuffer::draw_indirect(u32 draw_count, u32 first_command) {
     MCE_ASSERT_MSG(in_pass_, "draw outside a pass");
     push(CmdType::DrawIndirect, cmd::DrawIndirect{first_command, draw_count});
+}
+
+void CommandBuffer::draw_indirect_buffer(BufferHandle buffer, u64 offset, u32 draw_count) {
+    MCE_ASSERT_MSG(in_pass_, "draw outside a pass");
+    MCE_ASSERT_MSG(offset % 4 == 0, "draw_indirect_buffer: offset must be 4-aligned");
+    push(CmdType::DrawIndirectBuffer, cmd::DrawIndirectBuffer{buffer, offset, draw_count});
 }
 
 void CommandBuffer::resolve(TextureHandle src, TextureHandle dst) {
