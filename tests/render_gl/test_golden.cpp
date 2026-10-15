@@ -379,3 +379,57 @@ TEST_CASE("golden: motion blur of a box sliding sideways, auto exposure and a wa
     CHECK(f.renderer.forward_3d().last_stats().motion_blur);
     check_golden("motion_blur_grade", f);
 }
+
+// ---- M-VISUAL 9: scale -----------------------------------------------------------------------------
+
+TEST_CASE("golden: a scattered, wind-swept batch with its shadows and a projected decal") {
+    Fixture3D f;
+    FoliageScatter sc;
+    sc.half_extents = {3.0f, 3.0f};
+    sc.count = 60;
+    sc.seed = 9;
+    sc.scale_min = 0.15f;
+    sc.scale_max = 0.35f;
+    Array<math::mat4> grass;
+    scatter_foliage(sc, grass);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_time(0.6f, 0.016f);
+        InstanceBatch b;
+        b.id = 1;
+        b.version = 1;
+        b.mesh = 1;
+        b.transforms = grass.span();
+        b.tint = {0.25f, 0.8f, 0.3f, 1.0f};
+        b.wind_amplitude = 0.6f;
+        b.wind_frequency = 0.7f;
+        s.add_batch(b);
+        Decal d;
+        d.world = math::translation({1.6f, 0.0f, 1.8f}) * math::scaling({1.4f, 0.6f, 1.0f});
+        d.color = {0.1f, 0.15f, 0.9f, 1.0f};
+        d.roughness = 0.2f;
+        s.add_decal(d);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().batches == 1);
+    CHECK(f.renderer.forward_3d().last_stats().decals == 1);
+    check_golden("scale_foliage_decal", f);
+}
+
+TEST_CASE("golden: a GPU particle burst glowing above the ground") {
+    Fixture3D f;
+    if (!f.device->caps().compute) return;
+    for (int i = 0; i < 10; ++i)
+        f.render(0.0f, true, [&](Scene3D& s) {
+            s.set_time(0.05f * f32(i), 0.05f);
+            ParticleEmitter e;
+            e.id = 1;
+            e.max_particles = 512;
+            e.position = {1.6f, 0.4f, 1.4f};
+            e.box = {0.1f, 0.1f, 0.1f};
+            e.rate = 0.0f;
+            e.burst = i == 0 ? 300u : 0u;
+            e.collide = true;
+            s.add_particle_emitter(e);
+        });
+    CHECK(f.renderer.forward_3d().last_stats().particle_emitters == 1);
+    check_golden("particles_burst", f);
+}

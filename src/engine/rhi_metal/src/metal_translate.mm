@@ -287,6 +287,35 @@ void MetalDevice::exec_draw_indirect(const cmd::DrawIndirect& d) {
     ++stats_.indirect_draws;
 }
 
+void MetalDevice::exec_draw_indirect_buffer(const cmd::DrawIndirectBuffer& d) {
+    const MtlPipeline* p = ts_.pipeline;
+    if (!p) {
+        MCE_ASSERT_MSG(ts_.skip_pass, "draw_indirect_buffer without a bound pipeline");
+        return;
+    }
+    const MtlBuffer* args = buffers_.try_get(d.buffer);
+    const bool ok = args && d.offset % 4 == 0 && d.offset + u64(d.draw_count) * sizeof(DrawIndexedIndirectCommand) <= args->size;
+    MCE_ASSERT_MSG(ok, "draw_indirect_buffer: stale buffer or commands outside it");
+    if (!ok || d.draw_count == 0) return;
+    if (!ts_.enc || !ts_.pipeline_ok) return;
+    if (!ts_.ib_valid || (!ts_.vb_valid && p->stride > 0)) return;
+    // MTLDrawIndexedPrimitivesIndirectArguments has DrawIndexedIndirectCommand's layout; Metal takes
+    // one record per call, its indexStart counting from indexBufferOffset (as SDL GPU's does).
+    id<MTLRenderCommandEncoder> e = ts_.enc;
+    if (ts_.vb_valid) [e setVertexBuffer:ts_.vb offset:ts_.vb_offset atIndex:kVertexBufferIndex];
+    const MTLIndexType type = ts_.ib_format == IndexFormat::U16 ? MTLIndexTypeUInt16 : MTLIndexTypeUInt32;
+    for (u32 i = 0; i < d.draw_count; ++i) {
+        [e drawIndexedPrimitives:ts_.primitive
+                       indexType:type
+                     indexBuffer:ts_.ib
+               indexBufferOffset:ts_.ib_offset
+                  indirectBuffer:args->buffer
+            indirectBufferOffset:d.offset + u64(i) * sizeof(DrawIndexedIndirectCommand)];
+    }
+    ++stats_.draws;
+    ++stats_.indirect_draws;
+}
+
 void MetalDevice::exec_resolve(const cmd::Resolve& r) {
     const MtlTexture* src = textures_.try_get(r.src);
     const MtlTexture* dst = textures_.try_get(r.dst);
@@ -531,6 +560,9 @@ void MetalDevice::submit(const CommandBuffer& cb) {
                     break;
                 }
                 case CmdType::DrawIndirect: exec_draw_indirect(*static_cast<const cmd::DrawIndirect*>(payload)); break;
+                case CmdType::DrawIndirectBuffer:
+                    exec_draw_indirect_buffer(*static_cast<const cmd::DrawIndirectBuffer*>(payload));
+                    break;
                 case CmdType::PushDebugScope: {
                     NSString* name =
                         [NSString stringWithUTF8String:static_cast<const cmd::PushDebugScope*>(payload)->name];

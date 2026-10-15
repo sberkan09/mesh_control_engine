@@ -631,6 +631,22 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
                 ++stats_.indirect_draws;
                 break;
             }
+            case CmdType::DrawIndirectBuffer: {
+                const auto* d = static_cast<const cmd::DrawIndirectBuffer*>(payload);
+                const GpuBuffer* b = buffers_.try_get(d->buffer);
+                const bool ok = b && d->offset + u64(d->draw_count) * sizeof(DrawIndexedIndirectCommand) <= b->size;
+                MCE_ASSERT_MSG(ok, "draw_indirect_buffer: stale buffer or commands outside it");
+                if (!ok || d->draw_count == 0) break;
+                if (!ts_.ib_valid || !flush_draw_state(gcb)) break;
+                const SDL_GPUBufferBinding ib{ts_.ib, ts_.ib_offset};
+                SDL_BindGPUIndexBuffer(ts_.pass, &ib,
+                                       ts_.ib_format == IndexFormat::U16 ? SDL_GPU_INDEXELEMENTSIZE_16BIT
+                                                                         : SDL_GPU_INDEXELEMENTSIZE_32BIT);
+                SDL_DrawGPUIndexedPrimitivesIndirect(ts_.pass, b->buffer, static_cast<Uint32>(d->offset), d->draw_count);
+                ++stats_.draws;
+                ++stats_.indirect_draws;
+                break;
+            }
             case CmdType::PushDebugScope:
                 SDL_PushGPUDebugGroup(gcb, static_cast<const cmd::PushDebugScope*>(payload)->name);
                 ++ts_.scopes;
