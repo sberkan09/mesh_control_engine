@@ -238,3 +238,86 @@ TEST_CASE("terrain: splat layer mistakes are cook errors") {
         CHECK(diags_of(r).find("t.mcterrain") != std::string::npos);
     }
 }
+
+TEST_CASE("terrain: holes cook to a bitmask; an empty mask cooks to none (M-TERRAIN 3)") {
+    // 33 x 33 = 1089 samples, 137 bytes of bits: a 3 x 3 hole at samples (10..12, 20..22).
+    std::string mask(137, '\0');
+    for (u32 z = 20; z <= 22; ++z)
+        for (u32 x = 10; x <= 12; ++x) {
+            const u32 i = z * 33 + x;
+            mask[i / 8] = static_cast<char>(u8(mask[i / 8]) | (1u << (i % 8)));
+        }
+    const std::string root = fresh_dir("terrain_holes");
+    write_file(root + "/assets/cave.mcterrain",
+               doc(R"("resolution": 33, "size": [32, 32], "height_range": [0, 10], "fill": 4, "holes": ")" + base64(mask) + "\""));
+    write_file(root + "/assets/none.mcterrain",
+               R"({ "format": "mce-terrain", "version": 1, "guid": "7e7a0000-0000-4000-8000-0000000000a3",
+                    "resolution": 33, "size": [32, 32], "height_range": [0, 10], "holes": ")" +
+                   base64(std::string(137, '\0')) + "\" }");
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+    INFO(diags_of(r));
+    REQUIRE(r.ok());
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+
+    auto h = assets.load_sync<asset::Terrain>(assets.find(asset::parse_guid(kGuid).value()));
+    REQUIRE(h);
+    auto v = asset::TerrainView::read(assets.resolve(h.value()));
+    REQUIRE(v);
+    const asset::TerrainView& t = v.value();
+    CHECK((t.header->flags & asset::TerrainFlags::kHoles) != 0);
+    CHECK(t.holes.size() == 137);
+    u32 holes = 0;
+    for (u32 z = 0; z < 33; ++z)
+        for (u32 x = 0; x < 33; ++x) holes += t.hole(x, z);
+    CHECK(holes == 9);
+    CHECK(t.hole(11, 21));
+    CHECK_FALSE(t.hole(9, 21));
+    CHECK_FALSE(t.hole(11, 23));
+    // The heights under a hole stay as authored.
+    CHECK(t.sample(11, 21) == doctest::Approx(4.0f).epsilon(0.001));
+
+    auto nh = assets.load_sync<asset::Terrain>(assets.find(asset::parse_guid("7e7a0000-0000-4000-8000-0000000000a3").value()));
+    REQUIRE(nh);
+    auto nv = asset::TerrainView::read(assets.resolve(nh.value()));
+    REQUIRE(nv);
+    CHECK((nv.value().header->flags & asset::TerrainFlags::kHoles) == 0);
+    CHECK(nv.value().holes.empty());
+    CHECK_FALSE(nv.value().hole(11, 21));
+
+    // A mask of the wrong size is a cook error.
+    const std::string bad = fresh_dir("terrain_holes_bad");
+    write_file(bad + "/assets/t.mcterrain", doc(R"("resolution": 33, "size": [32, 32], "height_range": [0, 10], "holes": "AAAA")"));
+    cook::CookService svc2;
+    const cook::CookReport rb = svc2.cook(StringView(bad.c_str()), cook::CookOptions{});
+    CHECK_FALSE(rb.ok());
+    CHECK(diags_of(rb).find("holes") != std::string::npos);
+}
+
+TEST_CASE("terrain: surface_at follows the two triangles of each quad") {
+    // 33 x 33 samples over 32 x 32 m: only sample (1, 1) is raised, so the quad (0..1, 0..1) is two planes.
+    asset::TerrainHeader hd{};
+    hd.resolution = 33;
+    hd.chunk = 8;
+    hd.size[0] = hd.size[1] = 32.0f;
+    hd.height_min = 0.0f;
+    hd.height_max = 1.0f;
+    Array<u16> heights;
+    heights.resize(33 * 33, u16{0});
+    heights[34] = 65535;
+    Array<byte> blob;
+    asset::write_terrain(hd, heights.span(), blob);
+    auto v = asset::TerrainView::read(blob.span());
+    REQUIRE(v);
+    const asset::TerrainView& t = v.value();
+    // Quad (0, 0): corners at (-16, -16) .. (-15, -15) metres; the diagonal runs from h00 = 0 to h11 = 1.
+    CHECK(t.surface_at(-15.5f, -15.5f) == doctest::Approx(0.5f));    // on the diagonal
+    CHECK(t.surface_at(-15.25f, -15.75f) == doctest::Approx(0.25f));  // u = 0.75, w = 0.25: h00 + u(h10-h00) + w(h11-h10)
+    CHECK(t.surface_at(-15.75f, -15.25f) == doctest::Approx(0.25f));  // the other triangle, mirrored
+    // Bilinear differs off the diagonal: 0.75 * 0.25 there.
+    CHECK(t.height_at(-15.25f, -15.75f) == doctest::Approx(0.1875f));
+    CHECK(t.surface_at(-1000.0f, -1000.0f) == doctest::Approx(0.0f));  // clamped
+}

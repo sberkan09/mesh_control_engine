@@ -2,7 +2,8 @@
 // World3D — the 3D physics world, a facade over embedded Jolt Physics 5 (ADR-0003, physics.md §3.7;
 // ROADMAP M5b).
 //
-//  - static / kinematic / dynamic bodies; box, sphere, capsule, convex-hull and triangle-mesh shapes
+//  - static / kinematic / dynamic bodies; box, sphere, capsule, convex-hull, triangle-mesh and height-field
+//    shapes
 //  - CharacterVirtual-driven capsule controller (move_character) and the camera-boom sphere sweep
 //    (camera_sweep) — the two 3D additions to World2D's method set (physics.md §2.2)
 //  - raycasts and sphere casts, sorted and filtered like World2D's
@@ -26,7 +27,10 @@ using math::quat;
 using math::vec3;
 
 enum class BodyType3D : u8 { Static, Kinematic, Dynamic };
-enum class ShapeType3D : u8 { Box, Sphere, Capsule, Convex, Mesh };
+enum class ShapeType3D : u8 { Box, Sphere, Capsule, Convex, Mesh, HeightField };
+
+// A height-field sample that is a hole: the triangles touching it do not collide.
+inline constexpr f32 kHeightFieldHole = 3.40282347e38f;  // FLT_MAX
 
 // One shape per body, in the body's local frame (metres). Capsules and characters stand on +Y.
 // Convex and Mesh point at caller memory that only has to outlive create_body(): the shape is
@@ -38,6 +42,10 @@ struct Shape3D {
     f32 half_height = 0.5f;        // Capsule: half the length of the cylinder part
     Span<const vec3> points;       // Convex: hull input; Mesh: vertices
     Span<const u32> indices;       // Mesh: 3 per triangle, counter-clockwise seen from the front
+    Span<const f32> heights;       // HeightField: samples² heights, rows along +z of samples along +x
+    u32 samples = 0;               // HeightField: samples per side
+    vec3 origin;                   // HeightField: where sample (0, 0) at height 0 sits
+    vec3 spacing{1.0f, 1.0f, 1.0f};  // HeightField: metres between samples along x and z; y scales the heights
 
     static Shape3D box(vec3 half_extents) {
         Shape3D s;
@@ -69,6 +77,17 @@ struct Shape3D {
         s.type = ShapeType3D::Mesh;
         s.points = vertices;
         s.indices = triangle_indices;
+        return s;
+    }
+    // A terrain (M-TERRAIN 3), static bodies only: sample (x, z) at origin + spacing * (x, heights[z * samples + x], z),
+    // each quad split along its (x, z)-(x + 1, z + 1) diagonal; kHeightFieldHole samples open holes.
+    static Shape3D height_field(Span<const f32> heights, u32 samples, vec3 origin, vec3 spacing) {
+        Shape3D s;
+        s.type = ShapeType3D::HeightField;
+        s.heights = heights;
+        s.samples = samples;
+        s.origin = origin;
+        s.spacing = spacing;
         return s;
     }
 };

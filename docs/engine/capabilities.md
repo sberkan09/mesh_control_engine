@@ -56,6 +56,7 @@ reach all of its non-transient fields.
 | `MeshCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Foliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Terrain3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md |
+| `TerrainCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md |

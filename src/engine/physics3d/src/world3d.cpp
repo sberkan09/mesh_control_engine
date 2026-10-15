@@ -18,11 +18,13 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -197,6 +199,13 @@ JPH::RefConst<JPH::Shape> build_shape(const Shape3D& s, f32 density) {
             settings = new JPH::MeshShapeSettings(std::move(verts), std::move(tris));
             break;
         }
+        case ShapeType3D::HeightField: {
+            static_assert(kHeightFieldHole == JPH::HeightFieldShapeConstants::cNoCollisionValue);
+            if (s.samples < 4 || s.samples > 8193 || s.heights.size() != usize(s.samples) * s.samples) return nullptr;
+            if (!positive(s.spacing.x) || !positive(s.spacing.z) || !positive(std::fabs(s.spacing.y))) return nullptr;
+            settings = new JPH::HeightFieldShapeSettings(s.heights.data(), to_jph(s.origin), to_jph(s.spacing), s.samples);
+            break;
+        }
     }
     if (!settings) return nullptr;
     JPH::ShapeSettings::ShapeResult r = settings->Create();
@@ -353,7 +362,8 @@ void World3D::set_gravity(vec3 gravity) {
 bool World3D::create_body(Entity e, const BodyDesc3D& desc) {
     Impl& w = *impl_;
     if (e.is_null() || has_body(e)) return false;
-    if (desc.shape.type == ShapeType3D::Mesh && desc.type == BodyType3D::Dynamic) return false;  // Jolt: no dynamic meshes
+    if ((desc.shape.type == ShapeType3D::Mesh || desc.shape.type == ShapeType3D::HeightField) && desc.type == BodyType3D::Dynamic)
+        return false;  // Jolt: no dynamic meshes or height fields
     JPH::RefConst<JPH::Shape> shape = build_shape(desc.shape, desc.density);
     if (!shape) return false;
 
