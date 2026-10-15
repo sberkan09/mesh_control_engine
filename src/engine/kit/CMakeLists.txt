@@ -7,6 +7,7 @@ mce_add_library(mce_gameplay_kit
     SOURCES
         src/anim3d.cpp
         src/bodies3d.cpp
+        src/captions.cpp
         src/effects.cpp
         src/kit3d.cpp
         src/kit3d_extract.cpp

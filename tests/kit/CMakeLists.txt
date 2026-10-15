@@ -6,6 +6,7 @@
 mce_add_test(test_kit UMBRELLA
     SOURCES
         test_bodies3d.cpp
+        test_captions.cpp
         test_effects.cpp
         test_ui_flow.cpp
         test_fsm.cpp

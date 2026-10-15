@@ -58,6 +58,7 @@ public:
 private:
     void show(bool on);
     void place(const DialogueLayout& layout);  // anchors and text sizes for a layout
+    f32 box_alpha_ = -1.0f;  // the box opacity last styled (access.subtitle_background)
     DialogueBoxStyle style_;
     ui::Document doc_;
     ui::Layer layer_;
