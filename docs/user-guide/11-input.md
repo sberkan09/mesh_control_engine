@@ -164,7 +164,8 @@ on the command line still wins over the file; `-settings 0` turns the files off,
   ```
 
   Ticks are 1-based sim ticks. A value is a number, `x,y` for a 2D axis, or `true`/`false`; an
-  action with no value is held. Unnamed actions are released, and edges follow the normal rules.
+  action with no value is held. A number holds the action whatever it is: `10 Quality=0` presses
+  Quality with `x` = 0, as a UI slider set to 0 does; `false` (or `off`) names it without holding it. Unnamed actions are released, and edges follow the normal rules.
   `Touch` and `Mouse` are not actions: they place one finger (`touch_points()`) or the mouse.
   The stock map's `Point` action is the left mouse button, for a click where the mouse is.
   A bad file is an error (exit 1). With scripted input, an autoplay switch in your game (a

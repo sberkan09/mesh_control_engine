@@ -165,6 +165,9 @@ void kit3d_bodies(Frame& f) {
     f.query<const MeshCollider3D, const LocalTransform>().each([&](Entity e, const MeshCollider3D& c, const LocalTransform& t) {
         sync_static(e, t, [&] { return create_mesh_collider(w, phys, assets, e, c, t); });
     });
+    f.query<const TerrainCollider3D, const LocalTransform>().each([&](Entity e, const TerrainCollider3D& c, const LocalTransform& t) {
+        sync_static(e, t, [&] { return create_terrain_collider(w, phys, assets, e, c, t); });
+    });
 
     f.query<RigidBody3D, const LocalTransform>().each([&](Entity e, RigidBody3D& b, const LocalTransform& t) {
         if (!phys.world.has_body(e)) {
@@ -320,6 +323,7 @@ void install_bodies3d(World& world, asset::AssetSystem* assets) {
     world.set_hooks<CharacterController3D>(nullptr, &on_body_removed);
     world.set_hooks<BoxCollider3D>(nullptr, &on_body_removed);
     world.set_hooks<MeshCollider3D>(nullptr, &on_body_removed);
+    world.set_hooks<TerrainCollider3D>(nullptr, &on_body_removed);
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_bodies", &kit3d_bodies);
     world.add_system(Phase::FixedUpdate_Physics, "kit3d_writeback", &kit3d_writeback, "kit3d_physics");
     world.add_system(Phase::FixedUpdate_Physics, "kit3d_triggers", &kit3d_triggers, "kit3d_writeback");

@@ -1429,7 +1429,9 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
             draw_region(batch, r, st.tint, region, quad_layer, order, st.slice);
         const f32 line_h = font ? font->face.line_height() * (px / font->face.metrics().pixel_height) : px;
         switch (n.kind) {
-            case WidgetKind::Text: draw_text(batch, font, label, r.min, px, st.text_color, st, text_layer, order, r.size().x); break;
+            // One pixel of slack: the rect is snapped to whole pixels, so below UI scale 1 a Text sized to
+            // its own measured width (in a horizontal Stack) could lose a fraction and wrap (SBA-61).
+            case WidgetKind::Text: draw_text(batch, font, label, r.min, px, st.text_color, st, text_layer, order, r.size().x + 1.0f); break;
             case WidgetKind::Button: {
                 if (label.empty() || !font) break;
                 render::TextLayoutDesc d;

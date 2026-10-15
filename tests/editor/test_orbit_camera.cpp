@@ -150,6 +150,17 @@ TEST_CASE("orbit camera: wireframe segments project to viewport pixels, clipped 
     CHECK_FALSE(project_segment(view, Segment3D{{0, 0, 20}, {1, 0, 30}}, a, b));  // behind the eye
     CHECK(project_segment(view, Segment3D{{0, 0, 0}, {0, 0, 30}}, a, b));         // crosses the near plane
 
+    // pixel_ray inverts the projection: a point on the ray through a pixel projects back to it.
+    for (vec2 px : {vec2{400, 300}, vec2{10, 20}, vec2{790, 590}, vec2{123, 456}}) {
+        vec3 o, d;
+        pixel_ray(cam.camera(), {800, 600}, px, o, d);
+        CHECK(close(length(d), 1.0f, 1e-4f));
+        REQUIRE(project_segment(view, Segment3D{o + d * 5.0f, o + d * 9.0f}, a, b));
+        CHECK(close(a.x, px.x, 0.05f));
+        CHECK(close(a.y, px.y, 0.05f));
+        CHECK(close(b.x, px.x, 0.05f));
+    }
+
     EditorScene s;
     add_box(s, "Box", {0, 0}, {1, 1});
     Array<Segment3D> segs;

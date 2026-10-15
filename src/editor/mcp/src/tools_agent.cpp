@@ -12,8 +12,9 @@ namespace {
 #define MCE_RC1 "\"input\":{\"description\":\"Scripted input as run_headless takes it: a script string (\\\"10-70 Move=1,0 Jump\\\") or an array of {from, to, actions}\",\"type\":[\"string\",\"array\"]},"
 #define MCE_RC2 "\"camera\":{\"type\":\"object\",\"description\":\"Render from another camera (render only, the sim is unchanged): {\\\"entity\\\": id or name} of a camera entity in the open scene, {\\\"index\\\": n} (scene entity index), {\\\"position\\\": [x,y,z], \\\"target\\\": [x,y,z], \\\"fov\\\": deg} (free 3D) or {\\\"center\\\": [x,y], \\\"zoom\\\": z} (free 2D)\"},"
 #define MCE_RC3 "\"safe_area\":{\"type\":\"object\",\"description\":\"Pretend the screen has these safe-area insets in pixels {left, top, right, bottom}: UI lays out inside them and the image outlines them\"},"
-#define MCE_RC4 "\"software\":{\"type\":\"boolean\",\"description\":\"Force the offscreen software renderer (automatic when there is no display)\"}"
-#define MCE_RENDER_COMMON_PROPS MCE_RC0 MCE_RC1 MCE_RC2 MCE_RC3 MCE_RC4
+#define MCE_RC4 "\"software\":{\"type\":\"boolean\",\"description\":\"Force the offscreen software renderer (automatic when there is no display)\"},"
+#define MCE_RC5 "\"convars\":{\"type\":\"object\",\"description\":\"Console variables for this run, name -> value (e.g. {\\\"lc.quality\\\": 0}): preview a setting without changing the project\"}"
+#define MCE_RENDER_COMMON_PROPS MCE_RC0 MCE_RC1 MCE_RC2 MCE_RC3 MCE_RC4 MCE_RC5
 #define MCE_RF0 "\"tick\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":36000,\"default\":1,\"description\":\"Capture the first frame after this sim tick\"},"
 #define MCE_RF1 "\"width\":{\"type\":\"integer\",\"minimum\":64,\"maximum\":3840,\"default\":960},\"height\":{\"type\":\"integer\",\"minimum\":64,\"maximum\":3840,\"default\":540},"
 #define MCE_RENDER_FRAME_PROPS MCE_RF0 MCE_RF1 MCE_RENDER_COMMON_PROPS
@@ -76,7 +77,7 @@ const ToolDef kAgentTools[] = {
      "when stuck), explore (seeded random wandering, coverage) or masher (random button chords, crash and soft-lock "
      "hunting). Returns the feel report: time to finish, deaths, stuck spots with positions, idle time, distance, cells "
      "visited. Needs no game code: the bot drives the game's input actions (Move, Jump, ...).",
-     R"j({"type":"object","properties":{"bot":{"type":"object","description":"{kind: walk_to|explore|masher, actor: entity, target: [x,y(,z)] or entity (walk_to), through: [waypoints, points or entities, reached in order before target] (walk_to), air_jumps: 0-4 extra Jump presses in the air (walk_to, side view), plane: xy|x|xz (default xy; x = side view with Jump, xz = 3D ground), reach: m (0.5), seed, move: action (Move), jump: action (Jump), actions: [names] (masher), period: ticks (8)}"},)j"
+     R"j({"type":"object","properties":{"bot":{"type":"object","description":"{kind: walk_to|explore|masher, actor: entity, target: [x,y(,z)] or entity (walk_to), through: [waypoints, points or entities or {at, wait: ticks to stand there}, reached in order before target] (walk_to), air_jumps: 0-4 extra Jump presses in the air (walk_to, side view), plane: xy|x|xz (default xy; x = side view with Jump, xz = 3D ground), reach: m (0.5), seed, move: action (Move), jump: action (Jump), actions: [names] (masher), period: ticks (8)}"},)j"
      R"j("scene":{"type":"string","description":"A saved scene under assets/ (default: the open scene)"},)j"
      R"j("ticks":{"type":"integer","minimum":1,"maximum":36000,"default":1800},)j"
      R"j("until":{"type":"object","description":"Stop early when this check holds (a field, alive or event check)"},)j"

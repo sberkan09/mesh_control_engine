@@ -30,6 +30,11 @@ void write_log_lines(JsonWriter& w, Span<const log::ConsoleLine> lines, usize ma
 void progress(Server& server, cook::JsonValue token, u64 done, u64 total);
 // run_headless's `input` argument (a script string or an array of segments).
 bool arg_input(ToolCall& c, input::InputScript& script);
+// The `convars` argument of run_headless and render_frame: {name: value} as console text pairs.
+struct ConvarArgs {
+    Array<cook::String> names, values;
+};
+bool arg_convars(ToolCall& c, ConvarArgs& out);
 // The same for a value that is not a top-level argument (a .mctest file's "input").
 bool input_from(ToolCall& c, const cook::JsonValue& v, input::InputScript& script);
 

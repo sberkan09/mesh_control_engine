@@ -1,5 +1,5 @@
 // .mcterrain -> CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1). The editor's brushes and the MCP
-// terrain tools rewrite `heights`; everything else is set when the terrain is made.
+// terrain tools rewrite `heights`, `splat` and `holes`; everything else is set when the terrain is made.
 //
 // {
 //   "format": "mce-terrain", "version": 1, "guid": "<uuid>", "name": "island",
@@ -17,8 +17,10 @@
 //       "auto": { "height": [lo, hi], "slope": [0, 30] } }   // with no "splat": where it grows
 //   ],
 //   "splat_resolution": 257,      // weight samples per side: 2^n + 1, 33..resolution (default min(resolution, 1025))
-//   "splat": "<base64>"           // splat_resolution² × layer count u8 weights, sample by sample;
+//   "splat": "<base64>",          // splat_resolution² × layer count u8 weights, sample by sample;
 //                                 // omitted = the layers' "auto" rules, else all layer 0
+//   "holes": "<base64>"           // (M-TERRAIN 3) a bit per height sample, sample i at bit i % 8 of byte
+//                                 // i / 8: triangles touching a set sample are neither drawn nor collided
 // }
 
 #include <algorithm>
@@ -125,7 +127,7 @@ public:
             return false;
         };
         if (!detail::check_keys(doc, {"format", "version", "guid", "name", "resolution", "chunk", "size", "height_range", "heights", "fill", "layers",
-                                      "splat_resolution", "splat"},
+                                      "splat_resolution", "splat", "holes"},
                                 file, kStage, diags))
             return false;
         const JsonValue fmt = doc.get("format");
@@ -208,8 +210,25 @@ public:
         Array<u8> splat;
         if (!cook_layers(doc, file, h, heights.span(), layers, splat, diags)) return false;
 
+        Array<u8> holes;
+        if (const JsonValue hv = doc.get("holes"); hv.valid()) {
+            Array<byte> bytes;
+            if (!hv.is_string() || !base64_decode(hv.as_string(), bytes)) return fail(hv, "'holes' must be a base64 string");
+            const usize need = (usize(resolution) * resolution + 7) / 8;
+            if (bytes.size() != need) {
+                String msg;
+                appendf(msg, "'holes' holds %zu bytes; a %u x %u terrain needs %zu (a bit per sample)", bytes.size(), resolution, resolution, need);
+                return fail(hv, msg.view());
+            }
+            holes.resize(need);
+            bool any = false;
+            for (usize i = 0; i < need; ++i) any |= (holes[i] = static_cast<u8>(bytes[i])) != 0;
+            if (any) h.flags |= asset::TerrainFlags::kHoles;
+            else holes.clear();
+        }
+
         Array<byte> payload;
-        asset::write_terrain(h, heights.span(), payload, layers.span(), splat.span());
+        asset::write_terrain(h, heights.span(), payload, layers.span(), splat.span(), holes.span());
         asset::ContainerWriter::ChunkDesc d;
         d.type = ChunkType::Terrain;
         d.version = asset::chunk_version(asset::TERRAIN_VERSION, 0);
