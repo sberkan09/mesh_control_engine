@@ -859,7 +859,7 @@ Result<PipelineHandle> WebGpuDevice::create_pipeline(const GraphicsPipelineDesc&
         return Error(Errc::PipelineCreate, "rhi.pipeline.link", desc.debug_name);
     }
     if (auto r = make_layouts(p, false); !r) {
-        MCE_LOG_ERROR("rhi.webgpu: pipeline '{}': {}", desc.debug_name, r.error().detail.c_str());
+        MCE_LOG_ERROR("rhi.webgpu: pipeline '{}': {} {}", desc.debug_name, r.error().stage, r.error().path.c_str());
         release_pipeline(p);
         return r.error();
     }

@@ -40,6 +40,7 @@ option(MCE_RHI_SDLGPU      "Build the SDL3 GPU RHI backend mce_rhi_sdlgpu (ADR-0
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(MceMobile)  # MCE_MOBILE; on Android, executables become the activity's shared library
+include(MceWeb)     # MCE_WEB; Emscripten builds for the browser (ADR-0039)
 include(MceTarget)
 include(MceShip)
 include(MceProject)
@@ -52,7 +53,8 @@ include(EngineId)
 # explicit-instantiation ledger, finding F33), so modules are not supported there yet and every
 # tool links the static libraries instead (mce_engine_deps in cmake/MceTarget.cmake).
 # Phones link the game in too: iOS forbids loading code, and an Android build ships one library.
-if(WIN32 OR MCE_MOBILE)
+# A browser build is one .wasm, so the game is linked in there as well.
+if(WIN32 OR MCE_MOBILE OR MCE_WEB)
     set(MCE_GAME_MODULES_SUPPORTED OFF)
 else()
     set(MCE_GAME_MODULES_SUPPORTED ON)
@@ -62,6 +64,8 @@ if(MCE_MOBILE)
         message(FATAL_ERROR "Android/iOS builds need MCE_RHI_SDLGPU=ON (ADR-0038)")
     endif()
     set(MCE_RHI_BACKEND mce_rhi_sdlgpu)  # the only backend on a phone
+elseif(MCE_WEB)
+    set(MCE_RHI_BACKEND mce_rhi_webgpu)  # ADR-0039: the only backend in a browser
 elseif(APPLE)
     set(MCE_RHI_BACKEND mce_rhi_metal)  # ADR-0028: rhi::create_default_device picks the native backend
 else()
@@ -99,8 +103,11 @@ add_subdirectory(src/engine/physics3d)
 add_subdirectory(src/engine/platform)
 add_subdirectory(src/engine/input)
 add_subdirectory(src/engine/rhi)
-if(NOT MCE_MOBILE)
+if(NOT MCE_MOBILE AND NOT MCE_WEB)
     add_subdirectory(src/engine/rhi_gl)
+endif()
+if(MCE_WEB)
+    add_subdirectory(src/engine/rhi_webgpu)  # ADR-0039: the browser backend
 endif()
 if(APPLE AND NOT MCE_MOBILE)
     add_subdirectory(src/engine/rhi_metal)  # ADR-0028: the macOS backend
@@ -190,6 +197,6 @@ endif()
 # `cmake --install`: the SDK (tools, libmce_engine, headers, find_package(MCE), the project
 # template and the mce command). Last, so every target it installs exists. Phones ship apps, not an
 # SDK, and a cross build has no mce_cook of its own to install.
-if(NOT MCE_MOBILE AND NOT CMAKE_CROSSCOMPILING)
+if(NOT MCE_MOBILE AND NOT MCE_WEB AND NOT CMAKE_CROSSCOMPILING)
     include(MceInstall)
 endif()
