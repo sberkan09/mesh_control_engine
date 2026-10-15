@@ -198,7 +198,8 @@ constexpr AssetKind kKinds[] = {
     {"Terrain", ".mcterrain", "mce-terrain", 1,
      "A heightmap terrain (M-TERRAIN): resolution x resolution height samples over size metres, centred on the entity "
      "whose Terrain3D component (terrain: \"guid:...\") draws it, with LOD, shadows and an optional .mcmat. A new "
-     "terrain is flat at 'fill' (default: the low end of height_range).",
+     "terrain is flat at 'fill' (default: the low end of height_range). Up to 8 'layers' (each a .mcmat) paint it "
+     "by a weight map ('splat') or by height and slope rules ('auto').",
      R"json([
 {"name":"name","type":"string"},
 {"name":"resolution","type":"integer","default":129,"help":"Samples per side: 2^n + 1 (33, 65, 129, 257, 513, 1025, 2049, 4097)"},
@@ -206,7 +207,10 @@ constexpr AssetKind kKinds[] = {
 {"name":"size","type":"[x, z]","default":[128,128],"help":"Metres along x and z"},
 {"name":"height_range","type":"[low, high]","default":[0,32],"help":"Metres a sample of 0 and of 65535 stand for"},
 {"name":"heights","type":"string","help":"base64 of resolution^2 little-endian u16 samples, z rows of x columns; omitted = flat"},
-{"name":"fill","type":"number","help":"Metres of a flat terrain (without 'heights'); default: the low end of height_range"}])json",
+{"name":"fill","type":"number","help":"Metres of a flat terrain (without 'heights'); default: the low end of height_range"},
+{"name":"layers","type":"array","help":"Up to 8 splat layers: {material: \"guid:...\" (.mcmat), tile: metres per repeat (4), triplanar: false, height_strength: 1, auto: {height: [lo, hi], slope: [deg, deg]}}"},
+{"name":"splat_resolution","type":"integer","help":"Weight samples per side: 2^n + 1, 33 up to resolution; default min(resolution, 1025)"},
+{"name":"splat","type":"string","help":"base64 of splat_resolution^2 x layer count u8 weights, sample by sample; omitted = the layers' auto rules (else all layer 0)"}])json",
      R"json({"name":"terrain","resolution":129,"chunk":32,"size":[128,128],"height_range":[0,32]})json"},
     {"RemoteConfig", ".mcconfig", "mce-config", 1,
      "The project's remote config defaults (M-LIVEOPS). A value's type is its JSON's unless {\"type\": "
