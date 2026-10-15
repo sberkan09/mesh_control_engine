@@ -34,14 +34,21 @@ WALLS = [
     ),
     # SDL GPU (ADR-0038): the API lives in the SDL3 GPU backend alone, the mirror of the GL wall.
     ("SDL GPU wall", re.compile(r"\bSDL_\w*GPU\w*"), ["src/engine/rhi_sdlgpu/"], ["src/", "samples/", "games/", "tests/"]),
+    # WebGPU (ADR-0039): the API (emdawnwebgpu's webgpu.h) lives in the browser backend alone, and Tint
+    # (SPIR-V -> WGSL) in its translator file alone.
+    ("WebGPU wall", re.compile(r"\bWGPU[A-Z]\w*|\bwgpu[A-Z]\w*\s*\(|[<\"]webgpu/"), ["src/engine/rhi_webgpu/src/"],
+     ["src/", "samples/", "games/", "tests/", "tools/"]),
+    ("Tint wall", re.compile(r"[<\"]src/tint/|\btint::"), ["src/engine/rhi_webgpu/src/shader_wgsl.cpp"],
+     ["src/", "samples/", "games/", "tests/", "tools/"]),
     # The GLSL -> MSL translator (glslang, SPIRV-Cross) is private to the Metal backend; glslang is
-    # also the shader cook's validator, inside the cook library (ADR-0033), and the SDL GPU
-    # backend's GLSL -> SPIR-V translator, SPIRV-Cross also its SPIR-V -> MSL pass on Apple (ADR-0038).
+    # also the shader cook's validator, inside the cook library (ADR-0033), the SDL GPU backend's
+    # GLSL -> SPIR-V translator, SPIRV-Cross also its SPIR-V -> MSL pass on Apple (ADR-0038), and the
+    # first half of the WebGPU backend's GLSL -> WGSL translator (ADR-0039).
     (
         "shader-cross wall",
         re.compile(r"[<\"](glslang|SPIRV)/|[<\"]spirv_\w+\.hpp|\bspirv_cross::|\bglslang::"),
         ["src/engine/rhi_metal/", "src/engine/rhi_sdlgpu/src/shader_spirv.cpp", "src/engine/rhi_sdlgpu/src/shader_msl.cpp",
-         "src/engine/asset/cook/src/shader_importer.cpp"],
+         "src/engine/rhi_webgpu/src/shader_wgsl.cpp", "src/engine/asset/cook/src/shader_importer.cpp"],
         ["src/", "samples/", "games/", "tests/", "tools/"],
     ),
     # astc-encoder (M-MOBILE step 8) is cook-time only: the texture importer writes ASTC blocks, runtimes upload them.
@@ -78,7 +85,7 @@ WALLS = [
         ["src/engine/net/src/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
-    # Luau (ADR-0039 spike): the VM and compiler headers stay inside mce_script's sources.
+    # Luau (ADR-0040 spike): the VM and compiler headers stay inside mce_script's sources.
     (
         "Luau wall",
         re.compile(r"#\s*include\s*[<\"](lua|lualib|luacode|luaconf)\.h[>\"]"),
@@ -118,7 +125,7 @@ LINK_WALLS = [
     # library, host, tool or the editor does, so the engine and every other game stay network-free.
     ("net opt-in wall", re.compile(r"\bmce_net\b"), ["src/engine/net/", "samples/", "games/", "projects/", "templates/", "tests/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
-    # The Luau scripting spike (ADR-0039) is opt-in: its test and its headless sample link it, no
+    # The Luau scripting spike (ADR-0040) is opt-in: its test and its headless sample link it, no
     # engine library, host or tool does; Luau's targets are linked by mce_script alone.
     ("script opt-in wall", re.compile(r"\bmce_script\b"), ["src/engine/script/", "samples/script_headless/", "tests/script/"]),
     ("Luau link wall", re.compile(r"\bLuau\.\w+"), ["src/engine/script/"]),

@@ -1922,7 +1922,7 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
         ObjectU ou;
         ou.model = d.model;
         ou.normal = d.normal;
-        ou.uv_rect = sm.uv_rect;
+        ou.uv_rect = tiled_uv_rect(sm.uv_rect, mat);
         ou.base_color = {mat.base_color[0] * inst.tint.x, mat.base_color[1] * inst.tint.y,
                          mat.base_color[2] * inst.tint.z, mat.base_color[3] * inst.tint.w};
         ou.emissive = {mat.emissive[0] * inst.emissive_tint.x, mat.emissive[1] * inst.emissive_tint.y,
@@ -1978,7 +1978,7 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
             ObjectU ou;
             ou.model = node * sm.dequant;
             ou.normal = transpose(inverse(node));
-            ou.uv_rect = sm.uv_rect;
+            ou.uv_rect = tiled_uv_rect(sm.uv_rect, mat);
             ou.base_color = {mat.base_color[0] * b.tint.x, mat.base_color[1] * b.tint.y, mat.base_color[2] * b.tint.z,
                              mat.base_color[3] * b.tint.w};
             ou.emissive = {mat.emissive[0], mat.emissive[1], mat.emissive[2], keys[3] != ~0u ? 1.0f : 0.0f};
@@ -2266,11 +2266,15 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     fu.params = {scene.exposure(), desc_.encode_srgb_output ? 1.0f : 0.0f,
                  post.bloom_intensity / f32(max(bloom_levels_, 1u)), bloom ? 1.0f : 0.0f};
     fu.viewport = {f32(size_.width), f32(size_.height), 1.0f / f32(size_.width), 1.0f / f32(size_.height)};
-    // The tonemap pass's u_cluster: x auto exposure, y color-grade strength (0 = off).
+    // The tonemap pass's u_cluster: x auto exposure, y color-grade strength (0 = off), z color-vision
+    // mode (0 = off), w its strength.
     const rhi::TextureHandle lut = post.lut_key != 0 && textures_->contains(post.lut_key) ? textures_->get(post.lut_key) : rhi::TextureHandle{};
     const f32 grade = lut.is_null() ? 0.0f : clamp(post.lut_strength, 0.0f, 1.0f);
-    fu.cluster = {stats_.auto_exposure ? 1.0f : 0.0f, grade, 0.0f, 0.0f};
+    const f32 cvd_strength = clamp(post.color_vision_strength, 0.0f, 1.0f);
+    const f32 cvd = cvd_strength > 0.0f ? f32(post.color_vision) : 0.0f;
+    fu.cluster = {stats_.auto_exposure ? 1.0f : 0.0f, grade, cvd, cvd_strength};
     stats_.color_grade = grade > 0.0f;
+    stats_.color_vision = cvd > 0.0f;
     fullscreen(fxaa ? ldr_ : target, rhi::LoadOp::DontCare, "tonemap");
     const rhi::Extent2D out = scene.view().viewport;
     cmd.bind_pipeline(tonemap_);

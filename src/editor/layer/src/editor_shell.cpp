@@ -69,6 +69,12 @@ ResultV EditorShell::init(const EditorShellDesc& desc) {
     MCE_TRY(world_.init(*device_));
     MCE_TRY(preview_.init(*device_));
     session_.set_preview(&preview_);
+    // Record mode (Timeline panel): inspector and gizmo edits are keyed into the open timeline.
+    session_.scene().set_edit_observer(
+        [](void* user, EditorScene& scene, EntityId id, const refl::TypeRecord& type, const void* before, const void* after) {
+            static_cast<TimelineEditor*>(user)->record(scene, id, type, before, after);
+        },
+        &timeline_);
     MCE_LOG_INFO("editor: ImGui {} docking shell up ({} panels)", IMGUI_VERSION, panels_.size());
     return ok();
 }
@@ -77,6 +83,7 @@ void EditorShell::shutdown() {
     if (!impl_) return;
     for (auto& p : panels_) p->shutdown(*this);
     panels_.clear();
+    session_.scene().set_edit_observer(nullptr, nullptr);
     impl_->player.kill();
     impl_->player.wait();
     session_.set_preview(nullptr);
@@ -190,6 +197,9 @@ void EditorShell::request_quit() {
 bool EditorShell::open_project(StringView root) {
     if (ui_document_.dirty()) (void)ui_document_.save(session_);
     ui_document_.close();
+    timeline_preview_.stop(session_);
+    if (timeline_.dirty()) (void)timeline_.save(session_);
+    timeline_.close();
     if (Result<void> r = session_.open_project(root); !r) {
         FixedString<512> msg;
         format_error(r.error(), msg);
@@ -209,6 +219,17 @@ void EditorShell::open_ui_document(asset::Guid guid) {
     }
     if (IEditorPanel* p = find_panel("UI Document")) p->open = true;
     focus_panel("UI Document");
+}
+
+void EditorShell::open_timeline(asset::Guid guid) {
+    if (timeline_.dirty() && guid != timeline_.guid()) (void)timeline_.save(session_);
+    if (guid != timeline_.guid()) timeline_preview_.stop(session_);
+    if (!timeline_.open(session_, guid)) {
+        MCE_LOG_ERROR("editor: cannot open the timeline: {}", timeline_.last_error());
+        return;
+    }
+    if (IEditorPanel* p = find_panel("Timeline")) p->open = true;
+    focus_panel("Timeline");
 }
 
 bool EditorShell::open_scene(StringView path) {
@@ -718,6 +739,7 @@ void EditorShell::draw_dockspace() {
         ImGui::DockBuilderDockWindow("Play", bottom);
         ImGui::DockBuilderDockWindow("Assets", bottom);
         ImGui::DockBuilderDockWindow("Tilemap", right);
+        ImGui::DockBuilderDockWindow("Timeline", bottom);
         ImGui::DockBuilderFinish(id);
         for (auto& p : panels_) p->open = true;
     }

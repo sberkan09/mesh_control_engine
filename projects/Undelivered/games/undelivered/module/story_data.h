@@ -3846,6 +3846,7 @@ inline constexpr mce::novel::Program kProgram = {
     .title_music = 1,
     .title_ambience = 1,
     .background_normal_map = "textures/paper_normal.png",
+    .text_font = "fonts/CrimsonPro-Regular.ttf",
     .ink_speech = {0.16f, 0.12f, 0.1f, 1.0f},
     .ink_narration = {0.36f, 0.29f, 0.23f, 1.0f},
     .ink_row = {0.3f, 0.255f, 0.225f, 1.0f},

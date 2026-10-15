@@ -131,7 +131,7 @@ std::string scene_text(const char* tex_ref = kTexGuid) {
 
 std::string material_text() {
     return std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid +
-           R"(", "base_color": [0.5, 0.5, 0.5, 1], "roughness": 0.25, "alpha_mode": "mask",
+           R"(", "base_color": [0.5, 0.5, 0.5, 1], "roughness": 0.25, "alpha_mode": "mask", "uv_scale": [8, 0.5],
   "textures": { "base_color": "guid:)" + kTexGuid + R"(" } })";
 }
 
@@ -435,6 +435,10 @@ TEST_CASE("cook: author -> cook -> mount -> load the scene (M2 pipeline)") {
     CHECK(mat.value()->roughness == 0.25f);
     CHECK(mat.value()->texture(MaterialSlot::BaseColor) == G(kTexGuid));
     CHECK((mat.value()->flags & MaterialFlags::AlphaMask) != 0);
+    f32 uv[2];
+    mat.value()->uv_scale(uv);
+    CHECK(uv[0] == 8.0f);  // halves hold these exactly
+    CHECK(uv[1] == 0.5f);
 
     for (AnyHandle h : {AnyHandle(sh.value()), AnyHandle(th.value()), AnyHandle(snd.value()), AnyHandle(fh.value()), AnyHandle(mh.value())})
         as.release(h);
@@ -707,4 +711,17 @@ TEST_CASE("cook: importer setting validation") {
     CHECK(has_diag(r, Errc::ImportFailed, "audio/jump.wav"));
     CHECK(has_diag(r, Errc::ParseError, "textures/hero.png"));
     CHECK(report_for(r, kMatGuid)->status == AssetStatus::Blocked);  // depends on the failed texture
+}
+
+TEST_CASE("material uv_scale packs into two halves; unset means [1, 1]") {
+    MaterialChunk m{};
+    f32 uv[2];
+    m.uv_scale(uv);
+    CHECK(uv[0] == 1.0f);
+    CHECK(uv[1] == 1.0f);
+    CHECK(MaterialChunk::pack_uv_scale(1.0f, 1.0f) == 0u);
+    m.uv_scale_half = MaterialChunk::pack_uv_scale(3.3f, 120.0f);
+    m.uv_scale(uv);
+    CHECK(uv[0] == doctest::Approx(3.3f).epsilon(0.001));
+    CHECK(uv[1] == doctest::Approx(120.0f).epsilon(0.001));
 }

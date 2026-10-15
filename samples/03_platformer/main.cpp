@@ -608,7 +608,7 @@ private:
         const f32 k = 1.0f - std::exp(-8.0f * static_cast<f32>(rc.frame_dt));
         cam_pos_ = lerp(cam_pos_, target, k);
         camera_.position = cam_pos_;
-        view = compute_view_2d(camera_, bb, kPpm, shake_.offset());
+        view = compute_view_2d(camera_, bb, kPpm, scale_shake(shake_.offset(), accessibility_settings().motion_scale));
 
         SpriteBatch world(renderer_.sprite_sets(), mem::frame());
         world.begin(view);
@@ -779,14 +779,15 @@ private:
         const GameState& gs = world_.resource<GameState>();
         const Records* rec = world_.try_get<Records>(gs.records);
         const f32 w = static_cast<f32>(bb.width), h = static_cast<f32>(bb.height);
-        if (gs.flash_ticks > 0) {
+        const f32 motion = accessibility_settings().motion_scale;  // reduced motion dims the flash (M-ACCESS)
+        if (gs.flash_ticks > 0 && motion > 0.0f) {
             SpriteInstance s;
             s.set = sprites_;
             s.region = art::White;
             s.position = vec2{0.5f * w, 0.5f * h};
             s.scale = vec2{w, h};
-            s.tint = gs.won ? Color{1, 0.95f, 0.6f, 0.03f * static_cast<f32>(gs.flash_ticks)}
-                            : Color{1, 1, 0.8f, 0.05f * static_cast<f32>(gs.flash_ticks)};
+            s.tint = gs.won ? Color{1, 0.95f, 0.6f, 0.03f * motion * static_cast<f32>(gs.flash_ticks)}
+                            : Color{1, 1, 0.8f, 0.05f * motion * static_cast<f32>(gs.flash_ticks)};
             s.sort_layer = 10;
             b.add(s);
         }

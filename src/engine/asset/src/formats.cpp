@@ -1,6 +1,7 @@
 #include "mce/asset/formats.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace mce::asset {
@@ -256,6 +257,44 @@ void write_font(const FontHeader& header, Span<const FontGlyph> glyphs, Span<con
 
 // ------------------------------------------------------------------ material
 
+namespace {
+f32 half_to_f32(u16 h) {
+    const u32 sign = (h >> 15) & 1u, exp = (h >> 10) & 0x1Fu, man = h & 0x3FFu;
+    f32 v;
+    if (exp == 0) v = std::ldexp(static_cast<f32>(man), -24);
+    else if (exp == 31) v = man ? 0.0f : 65504.0f;  // no NaN or infinity in a texture scale
+    else v = std::ldexp(static_cast<f32>(man | 0x400u), static_cast<int>(exp) - 25);
+    return sign ? -v : v;
+}
+
+u16 f32_to_half(f32 f) {
+    const f32 a = std::fabs(f);
+    const u16 sign = f < 0.0f ? 0x8000u : 0u;
+    if (!(a >= 6.1035156e-05f)) return sign;  // zero, subnormal range or NaN: 0 (read back as "no scale")
+    if (a >= 65504.0f) return static_cast<u16>(sign | 0x7BFFu);
+    int e = 0;
+    const f32 m = std::frexp(a, &e);  // a = m * 2^e, m in [0.5, 1)
+    u32 man = static_cast<u32>(std::lround((m * 2.0f - 1.0f) * 1024.0f));
+    if (man == 1024u) {
+        man = 0;
+        ++e;
+    }
+    return static_cast<u16>(sign | static_cast<u32>(e + 14) << 10 | man);
+}
+}  // namespace
+
+void MaterialChunk::uv_scale(f32 out[2]) const {
+    out[0] = out[1] = 1.0f;
+    if (uv_scale_half == 0) return;
+    out[0] = half_to_f32(static_cast<u16>(uv_scale_half & 0xFFFFu));
+    out[1] = half_to_f32(static_cast<u16>(uv_scale_half >> 16));
+}
+
+u32 MaterialChunk::pack_uv_scale(f32 u, f32 v) {
+    if (u == 1.0f && v == 1.0f) return 0;
+    return static_cast<u32>(f32_to_half(u)) | static_cast<u32>(f32_to_half(v)) << 16;
+}
+
 Result<const MaterialChunk*> MaterialChunk::read(Span<const byte> payload) {
     const auto* m = header_of<MaterialChunk>(payload);
     if (!m) return Error(Errc::Truncated, "asset.material.read");
@@ -399,6 +438,59 @@ Result<SequenceView> SequenceView::read(Span<const byte> payload) {
     v.steps = Span<const SequenceStep>(reinterpret_cast<const SequenceStep*>(payload.data() + sizeof(SequenceHeader)),
                                        v.header->step_count);
     if (v.steps[v.steps.size() - 1].kind != SequenceStepKind::End) return Error(Errc::InvalidArgument, "asset.sequence.no_end");
+    return v;
+}
+
+// ------------------------------------------------------------------ timeline
+
+StringView TimelineView::name() const {
+    usize n = 0;
+    while (n < sizeof(header->name) && header->name[n] != '\0') ++n;
+    return StringView(header->name, n);
+}
+
+StringView TimelineView::string(u32 offset) const {
+    if (offset >= strings.size()) return {};
+    usize n = 0;
+    while (offset + n < strings.size() && strings[offset + n] != '\0') ++n;
+    return StringView(strings.data() + offset, n);
+}
+
+Result<TimelineView> TimelineView::read(Span<const byte> payload) {
+    TimelineView v;
+    v.header = header_of<TimelineHeader>(payload);
+    if (!v.header) return Error(Errc::Truncated, "asset.timeline.read");
+    const TimelineHeader& h = *v.header;
+    constexpr u32 kMax = 1u << 20;
+    if (!(h.duration > 0.0f) || h.track_count > kMax || h.key_count > kMax || h.string_bytes > kMax * 16)
+        return Error(Errc::InvalidArgument, "asset.timeline.read");
+    const u64 bytes = sizeof(TimelineHeader) + u64(h.track_count) * sizeof(TimelineTrack) + u64(h.key_count) * sizeof(TimelineKey) +
+                      h.string_bytes;
+    if (bytes > payload.size()) return Error(Errc::Truncated, "asset.timeline.read");
+    const byte* p = payload.data() + sizeof(TimelineHeader);
+    v.tracks = Span<const TimelineTrack>(reinterpret_cast<const TimelineTrack*>(p), h.track_count);
+    p += usize(h.track_count) * sizeof(TimelineTrack);
+    v.keys = Span<const TimelineKey>(reinterpret_cast<const TimelineKey*>(p), h.key_count);
+    p += usize(h.key_count) * sizeof(TimelineKey);
+    v.strings = Span<const char>(reinterpret_cast<const char*>(p), h.string_bytes);
+    if (h.string_bytes > 0 && v.strings[h.string_bytes - 1] != '\0') return Error(Errc::InvalidArgument, "asset.timeline.strings");
+    for (const TimelineTrack& t : v.tracks) {
+        if (t.kind > TimelineTrackKind::Subtitle || u64(t.first_key) + t.key_count > h.key_count ||
+            (t.target != kTimelineSelf && t.target >= kTimelineBindings))
+            return Error(Errc::InvalidArgument, "asset.timeline.track");
+        const bool pathed = t.kind == TimelineTrackKind::Property || t.kind == TimelineTrackKind::Activation;
+        if (pathed && t.path >= h.string_bytes) return Error(Errc::InvalidArgument, "asset.timeline.track");
+        if (t.kind == TimelineTrackKind::Property && (t.value_count == 0 || t.value_count > 4))
+            return Error(Errc::InvalidArgument, "asset.timeline.track");
+        f32 prev = 0.0f;
+        for (const TimelineKey& k : v.keys_of(t)) {
+            if (!(k.t >= prev) || !(k.duration >= 0.0f) || k.ease > TimelineEase::EaseOut ||
+                (k.target != kTimelineSelf && k.target >= kTimelineBindings) ||
+                (k.text != kTimelineNoString && k.text >= h.string_bytes) || (k.text2 != kTimelineNoString && k.text2 >= h.string_bytes))
+                return Error(Errc::InvalidArgument, "asset.timeline.key");
+            prev = k.t;
+        }
+    }
     return v;
 }
 
@@ -646,6 +738,45 @@ void write_mesh(const MeshData& d, Array<byte>& out) {
         sh.submesh_skins_offset = b.append_span(d.submesh_skins);
         b.patch(skin_at, sh);
     }
+    b.patch(at, h);
+    b.finish();
+}
+
+// ------------------------------------------------------------------ terrain
+
+f32 TerrainView::height_at(f32 x, f32 z) const {
+    const u32 n = header->resolution;
+    const f32 fx = (x / header->size[0] + 0.5f) * static_cast<f32>(n - 1);
+    const f32 fz = (z / header->size[1] + 0.5f) * static_cast<f32>(n - 1);
+    const f32 cx = std::clamp(fx, 0.0f, static_cast<f32>(n - 1)), cz = std::clamp(fz, 0.0f, static_cast<f32>(n - 1));
+    const u32 x0 = std::min(static_cast<u32>(cx), n - 2), z0 = std::min(static_cast<u32>(cz), n - 2);
+    const f32 tx = cx - static_cast<f32>(x0), tz = cz - static_cast<f32>(z0);
+    const f32 a = sample(x0, z0) + (sample(x0 + 1, z0) - sample(x0, z0)) * tx;
+    const f32 b = sample(x0, z0 + 1) + (sample(x0 + 1, z0 + 1) - sample(x0, z0 + 1)) * tx;
+    return a + (b - a) * tz;
+}
+
+Result<TerrainView> TerrainView::read(Span<const byte> payload) {
+    TerrainView v;
+    v.header = header_of<TerrainHeader>(payload);
+    if (!v.header) return bad("asset.terrain.header");
+    const TerrainHeader& h = *v.header;
+    const u32 n = h.resolution;
+    if (n < kTerrainMinResolution || n > kTerrainMaxResolution || ((n - 1) & (n - 2)) != 0) return bad("asset.terrain.resolution", n);
+    if (h.chunk < 8 || h.chunk > 256 || (h.chunk & (h.chunk - 1)) != 0 || h.chunk > n - 1) return bad("asset.terrain.chunk", h.chunk);
+    const bool sizes_ok = h.size[0] > 0.0f && h.size[1] > 0.0f && h.size[0] < 1e7f && h.size[1] < 1e7f;
+    const bool heights_ok = h.height_min > -1e6f && h.height_max < 1e6f && h.height_max > h.height_min;
+    if (!sizes_ok || !heights_ok) return bad("asset.terrain.extent");
+    if (!span_at(payload, h.heights_offset, u64(n) * n, v.heights)) return bad("asset.terrain.heights");
+    return v;
+}
+
+void write_terrain(const TerrainHeader& header, Span<const u16> heights, Array<byte>& out) {
+    PayloadBuilder b(out);
+    TerrainHeader h = header;
+    h.heights_offset = 0;
+    const usize at = b.append(&h, sizeof(h));
+    h.heights_offset = b.append_span(heights);
     b.patch(at, h);
     b.finish();
 }

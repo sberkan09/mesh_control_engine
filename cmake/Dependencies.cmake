@@ -283,6 +283,11 @@ foreach(t glslang glslang-default-resource-limits)
     endif()
 endforeach()
 
+# ---- Tint (web builds only: GLSL -> SPIR-V -> WGSL in mce_rhi_webgpu, ADR-0039) ------------
+if(MCE_WEB)
+    include("${CMAKE_CURRENT_LIST_DIR}/web/TintDependencies.cmake")
+endif()
+
 # ---- ENet (optional networking; mce_net only — ADR-0035) ------------------------------------
 # Reliable/unreliable sequenced channels over UDP. Compiled straight into mce_net (an object
 # library folded into its archive), so the opt-in module is one static library in the tree and in
@@ -313,7 +318,7 @@ if(MCE_WITH_NET)
     endif()
 endif()
 
-# ---- Luau (scripting spike; mce_script only — ADR-0039) ------------------------------------
+# ---- Luau (scripting spike; mce_script only — ADR-0040) ------------------------------------
 # A sandboxed Luau VM for the M-SCRIPT spike. Only the VM, the compiler and their parts are built
 # (EXCLUDE_FROM_ALL keeps the CLI, analysis and codegen targets out of `all`). Determinism
 # (FR-RUN-040, ADR-0007): the VM and the compiler, whose constant folding runs on doubles, build

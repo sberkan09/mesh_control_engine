@@ -29,7 +29,7 @@ option(MCE_BUILD_PROJECTS  "Build every projects/<name>/ game (off for an SDK-on
 option(MCE_TEMPLATE_PROBE  "Stamp the project template into the build tree and build it (tests the generator)" ON)
 option(MCE_PHYSICS_ORACLE  "Link Box2D v3 into test_physics2d as the solver oracle (ADR-0016)" ON)
 option(MCE_WITH_NET        "Build the optional networking module mce_net (ENet; a game opts in, ADR-0035)" ON)
-option(MCE_WITH_SCRIPT     "Build the Luau scripting spike mce_script (ADR-0039; nothing links it but its tests)" ON)
+option(MCE_WITH_SCRIPT     "Build the Luau scripting spike mce_script (ADR-0040; nothing links it but its tests)" ON)
 # ADR-0038: the SDL3 GPU backend (Vulkan on Linux/Android, Metal on iOS). Built on Linux so every
 # local_ci.sh run exercises it through lavapipe; selected at run time with MCE_RHI=sdlgpu.
 if(APPLE AND NOT IOS)
@@ -41,6 +41,7 @@ option(MCE_RHI_SDLGPU      "Build the SDL3 GPU RHI backend mce_rhi_sdlgpu (ADR-0
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(MceMobile)  # MCE_MOBILE; on Android, executables become the activity's shared library
+include(MceWeb)     # MCE_WEB; Emscripten builds for the browser (ADR-0039)
 include(MceTarget)
 include(MceShip)
 include(MceProject)
@@ -53,7 +54,8 @@ include(EngineId)
 # explicit-instantiation ledger, finding F33), so modules are not supported there yet and every
 # tool links the static libraries instead (mce_engine_deps in cmake/MceTarget.cmake).
 # Phones link the game in too: iOS forbids loading code, and an Android build ships one library.
-if(WIN32 OR MCE_MOBILE)
+# A browser build is one .wasm, so the game is linked in there as well.
+if(WIN32 OR MCE_MOBILE OR MCE_WEB)
     set(MCE_GAME_MODULES_SUPPORTED OFF)
 else()
     set(MCE_GAME_MODULES_SUPPORTED ON)
@@ -63,6 +65,8 @@ if(MCE_MOBILE)
         message(FATAL_ERROR "Android/iOS builds need MCE_RHI_SDLGPU=ON (ADR-0038)")
     endif()
     set(MCE_RHI_BACKEND mce_rhi_sdlgpu)  # the only backend on a phone
+elseif(MCE_WEB)
+    set(MCE_RHI_BACKEND mce_rhi_webgpu)  # ADR-0039: the only backend in a browser
 elseif(APPLE)
     set(MCE_RHI_BACKEND mce_rhi_metal)  # ADR-0028: rhi::create_default_device picks the native backend
 else()
@@ -100,8 +104,11 @@ add_subdirectory(src/engine/physics3d)
 add_subdirectory(src/engine/platform)
 add_subdirectory(src/engine/input)
 add_subdirectory(src/engine/rhi)
-if(NOT MCE_MOBILE)
+if(NOT MCE_MOBILE AND NOT MCE_WEB)
     add_subdirectory(src/engine/rhi_gl)
+endif()
+if(MCE_WEB)
+    add_subdirectory(src/engine/rhi_webgpu)  # ADR-0039: the browser backend
 endif()
 if(APPLE AND NOT MCE_MOBILE)
     add_subdirectory(src/engine/rhi_metal)  # ADR-0028: the macOS backend
@@ -126,7 +133,7 @@ if(MCE_WITH_NET)
     add_subdirectory(src/engine/net)
 endif()
 if(MCE_WITH_SCRIPT)
-    # Spike (ADR-0039): not in MCE_ENGINE_LIBS; only its test and samples/script_headless link it.
+    # Spike (ADR-0040): not in MCE_ENGINE_LIBS; only its test and samples/script_headless link it.
     add_subdirectory(src/engine/script)
 endif()
 if(NOT CMAKE_CROSSCOMPILING)
@@ -144,8 +151,13 @@ if(MCE_BUILD_SAMPLES)
 endif()
 
 # Projects made with scripts/new_project.py (assets.md §4.4): every projects/<name>/ with a CMakeLists.txt.
+# MCE_ONLY_PROJECT=<dir> adds that one project and no other, whatever MCE_BUILD_PROJECTS says: the phone
+# presets leave projects off, and scripts/ship.py --target android|ios --project sets it for the one it ships.
+set(MCE_ONLY_PROJECT "" CACHE PATH "Add only this project directory (scripts/ship.py --project on phones)")
 set(_mce_projects "")
-if(MCE_BUILD_PROJECTS)
+if(MCE_ONLY_PROJECT)
+    get_filename_component(_mce_projects "${MCE_ONLY_PROJECT}" ABSOLUTE BASE_DIR "${PROJECT_SOURCE_DIR}")
+elseif(MCE_BUILD_PROJECTS)
     file(GLOB _mce_projects LIST_DIRECTORIES true "${PROJECT_SOURCE_DIR}/projects/*")
 endif()
 foreach(_dir IN LISTS _mce_projects)
@@ -195,6 +207,6 @@ endif()
 # `cmake --install`: the SDK (tools, libmce_engine, headers, find_package(MCE), the project
 # template and the mce command). Last, so every target it installs exists. Phones ship apps, not an
 # SDK, and a cross build has no mce_cook of its own to install.
-if(NOT MCE_MOBILE AND NOT CMAKE_CROSSCOMPILING)
+if(NOT MCE_MOBILE AND NOT MCE_WEB AND NOT CMAKE_CROSSCOMPILING)
     include(MceInstall)
 endif()

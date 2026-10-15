@@ -1,5 +1,5 @@
 // Asset authoring tools (ROADMAP M-DATA-REACH step 1): every JSON source asset the cook reads
-// (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, .mcinput, .mcstore, .mcservices, .mcui, .mcconfig) can be
+// (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, .mcinput, .mcstore, .mcservices, .mcui, .mcconfig, .mcterrain) can be
 // created, read, rewritten and described over MCP, and a tilemap painted, without the client
 // writing files itself. A document is cooked in memory with the project's importer before
 // anything is written (cook_document: the same reference and value checks as cook_run), so a
@@ -88,6 +88,15 @@ constexpr AssetKind kKinds[] = {
 {"name":"loop","type":"boolean","default":false},
 {"name":"steps","type":"array of step objects","help":"{\"wait\": s} | {\"wait_event\": id} | {\"move_to\": [x, y], \"speed\": m/s, \"relative\": bool} | {\"anim\": name} | {\"sound\": \"guid:<Sfx>\", \"gain_db\": db} | {\"stop_sound\": true} | {\"emit\": id} | {\"call\": hook} | {\"spawn\": \"guid:<Prefab>\", \"at\": [x, y], \"relative\": bool} | {\"destroy\": true}"}])json",
      R"json({"name":"sequence","loop":false,"steps":[{"wait":1}]})json"},
+    {"Timeline", ".mctimeline", "mce-timeline", 1,
+     "Keyed tracks a TimelinePlayer component plays against the fixed tick (cutscenes, scripted beats). A track's "
+     "\"target\" is \"self\" (the player's entity, the default) or a binding index 0-7 (TimelinePlayer.bindings). "
+     "Keys are in time order; a key's \"ease\" (linear, step, smooth, ease_in, ease_out) shapes the curve to the next key.",
+     R"json([
+{"name":"name","type":"string"},
+{"name":"duration","type":"number","help":"Seconds; default: the last key's end"},
+{"name":"tracks","type":"array of track objects","help":"{\"type\": \"transform\", \"target\", \"keys\": [{\"t\", \"position\": [x, y, z], \"rotation\": [x, y, z, w], \"scale\": [x, y, z], \"ease\"}]} | {\"type\": \"property\", \"target\", \"path\": \"Component.field\", \"keys\": [{\"t\", \"value\": number or [..], \"ease\"}]} | {\"type\": \"activation\", \"target\", \"path\": \"Component.bool_field\", \"ranges\": [{\"from\", \"to\"}]} | {\"type\": \"animation\", \"target\", \"keys\": [{\"t\", \"clip\", \"loop\", \"fade\"}]} | {\"type\": \"audio\", \"keys\": [{\"t\", \"sound\": \"guid:<Sfx>\", \"gain_db\"}]} | {\"type\": \"camera\", \"cuts\": [{\"t\", \"camera\": \"self\" | 0-7}]} | {\"type\": \"event\", \"keys\": [{\"t\", \"emit\": id}]} | {\"type\": \"subtitle\", \"lines\": [{\"t\", \"duration\", \"text\", \"speaker\"}]}"}])json",
+     R"json({"name":"timeline","duration":1,"tracks":[{"type":"event","keys":[{"t":0,"emit":"start"}]}]})json"},
     {"Tilemap", ".mctilemap", "mce-tilemap", 1,
      "One tile layer over a tileset texture cut into columns x rows cells, drawn by a TilemapLayer component (map: "
      "\"guid:...\"). tiles: width x height indices, row 0 = bottom; 0 = empty, n = cell n-1 (cells count left to right, "
@@ -132,6 +141,7 @@ constexpr AssetKind kKinds[] = {
 {"name":"metallic","type":"number","default":0},
 {"name":"roughness","type":"number","default":1},
 {"name":"emissive","type":"[r, g, b]","default":[0,0,0]},
+{"name":"uv_scale","type":"[u, v]","default":[1,1],"help":"how often the textures repeat across the mesh's UVs ([8, 8] tiles a floor 8 times each way)"},
 {"name":"alpha_mode","type":"\"opaque\" | \"mask\" | \"blend\"","default":"opaque"},
 {"name":"alpha_cutoff","type":"number","default":0.5},
 {"name":"double_sided","type":"boolean","default":false},
@@ -185,6 +195,19 @@ constexpr AssetKind kKinds[] = {
 {"name":"white_region","type":"integer","default":0},
 {"name":"styles","type":"object","help":"{\"<UiWidgetKind>\": {\"style\": UiStyle fields over every state, \"styles\": {\"Hover\": {...}}}} over the palette's look"}])json",
      R"json({"palette":{"panel":[0.1,0.12,0.2,0.92],"button":[0.2,0.35,0.6,1],"accent":[1,0.6,0.2,1]}})json"},
+    {"Terrain", ".mcterrain", "mce-terrain", 1,
+     "A heightmap terrain (M-TERRAIN): resolution x resolution height samples over size metres, centred on the entity "
+     "whose Terrain3D component (terrain: \"guid:...\") draws it, with LOD, shadows and an optional .mcmat. A new "
+     "terrain is flat at 'fill' (default: the low end of height_range).",
+     R"json([
+{"name":"name","type":"string"},
+{"name":"resolution","type":"integer","default":129,"help":"Samples per side: 2^n + 1 (33, 65, 129, 257, 513, 1025, 2049, 4097)"},
+{"name":"chunk","type":"integer","default":32,"help":"Quads per side of a finest LOD node: 8, 16, 32, 64, 128 or 256"},
+{"name":"size","type":"[x, z]","default":[128,128],"help":"Metres along x and z"},
+{"name":"height_range","type":"[low, high]","default":[0,32],"help":"Metres a sample of 0 and of 65535 stand for"},
+{"name":"heights","type":"string","help":"base64 of resolution^2 little-endian u16 samples, z rows of x columns; omitted = flat"},
+{"name":"fill","type":"number","help":"Metres of a flat terrain (without 'heights'); default: the low end of height_range"}])json",
+     R"json({"name":"terrain","resolution":129,"chunk":32,"size":[128,128],"height_range":[0,32]})json"},
     {"RemoteConfig", ".mcconfig", "mce-config", 1,
      "The project's remote config defaults (M-LIVEOPS). A value's type is its JSON's unless {\"type\": "
      "\"int|float|bool|string\", \"value\": ...} names it; keys are 1-63 letters, digits, '_', '-', '.'.",
@@ -617,7 +640,7 @@ const ToolDef kAssetTools[] = {
      "Describe a JSON source asset type: its fields (type, default, help) and the template asset_create starts from. "
      "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, "
      ".mcinput, .mcstore, .mcservices, .mcui, .mcconfig).",
-     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, or the extension"}}})json",
+     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Timeline, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, or the extension"}}})json",
      asset_schema},
     {"asset_create",
      "Create a JSON source asset at 'path' (its extension picks the type) with a fresh GUID: the type's template with "

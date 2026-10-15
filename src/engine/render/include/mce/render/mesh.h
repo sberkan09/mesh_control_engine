@@ -19,6 +19,7 @@
 
 #include "mce/asset/formats.h"
 #include "mce/containers/array.h"
+#include "mce/containers/hash_map.h"
 #include "mce/math/math.h"
 #include "mce/rhi/render_device.h"
 
@@ -129,6 +130,8 @@ struct TextureKeyResolver {
 
 class MeshStore {
 public:
+    static constexpr u32 kFirstLocalKey = 0x80000000u;  // keys below belong to the asset system
+
     MeshStore() = default;
     MeshStore(const MeshStore&) = delete;
     MeshStore& operator=(const MeshStore&) = delete;
@@ -147,12 +150,20 @@ public:
     // Newest live generation of `key`, or null.
     const GpuMesh* get(u32 key) const;
     u32 live_meshes() const { return static_cast<u32>(meshes_.size()); }
+    bool has_device() const { return device_ != nullptr; }
+
+    // Keys for meshes made at runtime rather than cooked (terrain nodes, tools), above the asset
+    // system's.
+    u32 allocate_key() { return next_local_++; }
 
 private:
     void destroy(GpuMesh& m);
+    void refresh_newest(u32 key);
 
     rhi::RenderDevice* device_ = nullptr;
     Array<mem::UniquePtr<GpuMesh>> meshes_;  // newest generation of a key last
+    HashMap<u32, GpuMesh*> newest_;          // key -> its newest generation (get() is per draw)
+    u32 next_local_ = kFirstLocalKey;
 };
 
 // Model-space node matrices of `mesh` posed by clip `clip` at `time` seconds (looping), or the

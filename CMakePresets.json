@@ -94,7 +94,21 @@
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
     },
     { "name": "ios-sim-arm64", "displayName": "iOS Simulator arm64 (Metal)", "inherits": "ios-base", "cacheVariables": { "CMAKE_OSX_SYSROOT": "iphonesimulator", "CMAKE_Swift_COMPILER_TARGET": "arm64-apple-ios16.0-simulator", "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
-    { "name": "ios-arm64", "displayName": "iOS device arm64 (Metal)", "inherits": "ios-base", "cacheVariables": { "CMAKE_OSX_SYSROOT": "iphoneos", "CMAKE_Swift_COMPILER_TARGET": "arm64-apple-ios16.0", "CMAKE_BUILD_TYPE": "RelWithDebInfo" } }
+    { "name": "ios-arm64", "displayName": "iOS device arm64 (Metal)", "inherits": "ios-base", "cacheVariables": { "CMAKE_OSX_SYSROOT": "iphoneos", "CMAKE_Swift_COMPILER_TARGET": "arm64-apple-ios16.0", "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+    {
+      "name": "web-base",
+      "hidden": true,
+      "inherits": "base",
+      "description": "M-WEB: Emscripten (EMSDK in the environment, emsdk 5.0.6) to wasm, WebGPU through mce_rhi_webgpu (ADR-0039); packs cooked by the host's mce_cook (MCE_HOST_COOK)",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "MCE_BUILD_TESTS": "OFF", "MCE_BUILD_EDITOR": "OFF", "MCE_BUILD_PROJECTS": "OFF", "MCE_TEMPLATE_PROBE": "OFF",
+        "MCE_WITH_NET": "OFF", "MCE_WITH_SCRIPT": "OFF", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "OFF"
+      },
+      "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    { "name": "web-debug",   "displayName": "Web Debug (Emscripten, WebGPU)",   "inherits": "web-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "web-release", "displayName": "Web Release (Emscripten, WebGPU)", "inherits": "web-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "MinSizeRel" } }
   ],
   "buildPresets": [
     { "name": "msvc-debug",          "configurePreset": "msvc-debug" },
@@ -112,7 +126,9 @@
     { "name": "android-arm64-debug",   "configurePreset": "android-arm64-debug" },
     { "name": "android-arm64-release", "configurePreset": "android-arm64-release" },
     { "name": "ios-sim-arm64",         "configurePreset": "ios-sim-arm64" },
-    { "name": "ios-arm64",             "configurePreset": "ios-arm64" }
+    { "name": "ios-arm64",             "configurePreset": "ios-arm64" },
+    { "name": "web-debug",             "configurePreset": "web-debug" },
+    { "name": "web-release",           "configurePreset": "web-release" }
   ],
   "testPresets": [
     { "name": "msvc-debug",          "configurePreset": "msvc-debug",          "output": { "outputOnFailure": true } },

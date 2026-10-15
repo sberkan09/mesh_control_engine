@@ -19,6 +19,7 @@
 
 #include "mce/containers/array.h"
 #include "mce/math/math.h"
+#include "mce/render/accessibility.h"
 #include "mce/render/atmosphere.h"
 #include "mce/render/clusters.h"
 #include "mce/render/mesh.h"
@@ -129,6 +130,10 @@ struct PostFx {
     // does not hold) = off.
     u32 lut_key = 0;
     f32 lut_strength = 1.0f;  // 0 = ungraded, 1 = fully graded
+    // Color-vision correction (M-ACCESS) in the tonemap pass, after the grade; set from the
+    // player's settings by apply_accessibility, never by the game.
+    ColorVision color_vision = ColorVision::None;
+    f32 color_vision_strength = 1.0f;
     // Depth of field: a gather over a disk whose radius follows each pixel's circle of confusion: 0
     // within `focus_range` meters of `focus_distance`, growing to `max_radius` (a fraction of the view
     // height) over `blur_range` meters on either side. Reads the velocity prepass's depth.
@@ -305,6 +310,12 @@ struct MeshInstance {
 // The material a submesh of `inst` draws with, and its map keys (the override's when it has one).
 inline const asset::MaterialChunk& material_of(const MeshInstance& inst, const GpuSubmesh& sm) {
     return inst.material ? inst.material->params : sm.material;
+}
+// A submesh's UV rectangle with the material's repeat (.mcmat uv_scale) folded in.
+inline math::vec4 tiled_uv_rect(const math::vec4& uv_rect, const asset::MaterialChunk& mat) {
+    f32 s[2];
+    mat.uv_scale(s);
+    return {uv_rect.x * s[0], uv_rect.y * s[1], uv_rect.z * s[0], uv_rect.w * s[1]};
 }
 inline u32 albedo_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->albedo_key : sm.albedo_key; }
 inline u32 normal_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->normal_key : sm.normal_key; }

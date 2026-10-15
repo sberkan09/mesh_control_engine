@@ -76,7 +76,10 @@ void build_tables(NovelState& n, const Program& p) {
         const asset::AssetInfo info = a.info(k);
         const StringView path = info.path;
         if (info.type == asset::ChunkType::Font) {
-            if (n.font.is_null()) n.font = info.guid;
+            // The font the story compile wrapped the pages with; the pack may carry others (a title
+            // font, an ASCII console font) that lack its glyphs (Turkish ş, ı in a translation).
+            if (p.text_font && path == StringView(p.text_font)) n.font = info.guid;
+            else if (n.font.is_null()) n.font = info.guid;
         } else if (info.type == asset::ChunkType::Texture) {
             if (p.background_normal_map && path == StringView(p.background_normal_map)) {
                 n.normal_map = info.guid;

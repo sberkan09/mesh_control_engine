@@ -5,6 +5,47 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Predict the local player (SBA-84, M-NET2 step 3): `net::Predictor` runs the player's inputs through the same
+  step function as the server and draws the result at once; `net::InputReceiver` runs each input once on the
+  server, in order, across lost packets. On each snapshot the client reconciles with the server's ack, replays
+  what the server has not seen yet and glides to any correction instead of jumping.
+  `ReplicationClient::set_predicted` keeps snapshots from drawing that entity. In `sample_net_headless` at 75 ms
+  the player is drawn about 10 ms behind its input, against 200 ms without prediction. User guide 20.4.
+- The editor's Timeline panel, M-CINEMA step 2 (SBA-77, FR-EDT-130): tracks and keys on a time ruler with
+  scrubbing, snapping, key drags and a key inspector, a curve view of transform and property tracks, a viewport
+  preview that plays the scene paused at the playhead (the scene document never changes), and record mode, which
+  keys inspector and gizmo edits at the playhead and binds new entities. Double-click a `.mctimeline` in Assets,
+  or `mce_editor -editor.open <file>`. User guide 13.5 "Editing timelines in the editor".
+- Accessibility options, M-ACCESS step 2 (SBA-96): `access.colorblind` (protanopia, deuteranopia, tritanopia
+  correction in the 2D post and 3D tonemap passes) with `access.colorblind_strength`, `access.text_scale` for UI
+  text, `access.high_contrast` (a high-contrast palette over every UI document) and `access.motion_scale` (camera
+  shake, chromatic aberration, motion blur). All are saved convars outside the state hash.
+- Smooth remote entities (SBA-83, M-NET2 step 2): `ReplicationClient::set_interpolation` draws replicated entities a
+  little in the past through a jitter buffer that adapts to the measured snapshot interval and arrival jitter,
+  blending the snapshots around the render time. Past the newest snapshot an entity moves on for at most 0.1 s, then
+  holds. Over a 60 ms ± 40 link with 10% loss, motion is more than 10× smoother than raw snapshots.
+  `sample_net_headless` interpolates by default (`-interp 0` for raw). User guide 20.4.
+- Timelines, M-CINEMA step 1 (SBA-76, FR-ENT-110): a `.mctimeline` asset of keyed tracks (transform, property by
+  reflected path, activation, animation clip, audio, camera cut, event, subtitle) and a `TimelinePlayer` component
+  that plays one on its entity and up to eight bound entities, with play, pause, speed, loop, restart and a
+  finished flag. Keys fire on tick math, the state lives in the component (state hash, replays, saves), and
+  `kit::timeline_scrub` moves the playhead without firing cues. Event keys also push `SeqSignal`, so sequences
+  can wait on a timeline beat. MCP `asset_create` makes `.mctimeline` files; user guide 13.5.
+- Multiplayer test harness (SBA-82, M-NET2 step 1): `net::SimNetwork` is an in-memory network on a virtual clock
+  with per-link latency, jitter and loss from a seed, so a server and several clients in one process give the same
+  hash on every run and build. `net::Transport` is the interface both it and `net::Host` implement, so game code
+  runs over either. `Host::set_conditions` plays a real build over a simulated bad network.
+  `sample_net_headless -sim 1 -clients N` is the headless multi-client runner, and `local_ci.sh`'s determinism stage
+  runs it. `net::NetStatsMeter` adds a `NET` line (RTT, loss, bandwidth, drops) to the player's stats overlay (F3)
+  through the new `DevStatsLines` world resource. User guide 20.6.
+- Phone fixes from the Simulator and emulator checks (SBA-30): a language the player chooses no longer falls back
+  to the device's other languages (English chosen on a Turkish phone showed the kit's words in Turkish); SDL GPU's
+  debug mode is off in the iOS Simulator, whose Metal validation aborted on the first indirect draw; MSL for iOS
+  supports base vertex and base instance, so instanced PBR (Solstice Reach) opens on iOS.
+  `ship.py --project <dir> --target android|ios` builds the project (`MCE_ONLY_PROJECT`; the phone presets add
+  none), saves on phones go to the app's sandbox (`crash::user_data_root()`), and the novel stage draws the box
+  with `story.json`'s `text.font` instead of the pack's first font. The novel template's and Undelivered's camera
+  fit the stage to the screen, so a phone no longer shows it as a 1280×720 box in the middle.
 - Screens that open and close themselves, M-UI-DATA demo (SBA-38): `kit::UiFlow` shows, hides and holds a
   `UiScreen` on input actions (`show_on`, `hide_on`, `load_on` a scene, `pause`), and a paused screen holds the
   world (`World::set_held`: fixed-step systems stop, the tick count goes on, the hash replays). Undertow gets a

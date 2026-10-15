@@ -7,26 +7,16 @@
 // Threading: single-threaded. Call poll() from the game loop (a FixedUpdate_Pre system, or the
 // host loop between ticks); nothing runs in the background.
 //
+// Host implements Transport (transport.h): game code written against Transport also runs over
+// SimNetwork in tests.
+//
 // Determinism (FR-RUN-040): the network is input, not simulation. Received bytes enter the World
 // the way input does — applied by a system at a fixed point in the tick — and the server's
 // simulation never waits on a socket.
 
-#include "mce/containers/array.h"
-#include "mce/fixed_string.h"
-#include "mce/types.h"
+#include "mce/net/transport.h"
 
 namespace mce::net {
-
-// Index of a peer slot on its host. Stable from Connected to Disconnected; a slot is reused by a
-// later connection, which reports Connected again.
-using PeerId = u32;
-inline constexpr PeerId kInvalidPeer = ~PeerId(0);
-
-enum class Delivery : u8 {
-    Reliable,    // resent until acknowledged, ordered within the channel (events, chat, RPCs)
-    Sequenced,   // unreliable; a packet older than one already delivered is dropped (snapshots)
-    Unreliable,  // unreliable and unordered (fire-and-forget)
-};
 
 struct HostDesc {
     // listen(): the address to bind ("" = every interface, "127.0.0.1" = loopback only).
@@ -44,28 +34,10 @@ struct HostDesc {
     u32 timeout_ms = 5000;
 };
 
-enum class EventKind : u8 { Connected, Disconnected, Received };
-
-struct Event {
-    EventKind kind = EventKind::Received;
-    PeerId peer = kInvalidPeer;
-    u8 channel = 0;
-    // Received: the message, valid until the next poll() or close().
-    Span<const u8> data;
-    // Connected / Disconnected: the u32 the other side passed to connect() / disconnect().
-    u32 user_data = 0;
-};
-
-struct PeerStats {
-    u32 rtt_ms = 0;          // smoothed round-trip time
-    u32 rtt_variance_ms = 0;
-    u32 packet_loss = 0;     // ENet's estimate, in 1/65536ths
-};
-
-class Host {
+class Host final : public Transport {
 public:
     Host();
-    ~Host();
+    ~Host() override;
     Host(const Host&) = delete;
     Host& operator=(const Host&) = delete;
 
@@ -82,36 +54,43 @@ public:
     // Sends pending traffic and returns the next event, waiting up to timeout_ms for one.
     // False when there is none (or the host is closed). Typical loop:
     //     for (net::Event ev; host.poll(ev);) { ... }
-    bool poll(Event& out, u32 timeout_ms = 0);
+    bool poll(Event& out, u32 timeout_ms);
+    bool poll(Event& out) override { return poll(out, 0); }
 
     // Queues a message; it goes out on the next poll() or flush(). False when the peer is not
     // connected, the channel is out of range, or the message cannot be allocated.
-    bool send(PeerId peer, u8 channel, Span<const u8> data, Delivery delivery);
+    bool send(PeerId peer, u8 channel, Span<const u8> data, Delivery delivery) override;
     // Queues a message to every connected peer.
-    void broadcast(u8 channel, Span<const u8> data, Delivery delivery);
-    // Sends queued messages now, without receiving.
-    void flush();
+    void broadcast(u8 channel, Span<const u8> data, Delivery delivery) override;
+    // Sends queued messages now, without receiving (with conditions set: the ones that are due).
+    void flush() override;
 
     // Graceful: queued reliable messages go first, then the peer is told; poll() reports
     // Disconnected when it acknowledges (or times out).
-    void disconnect(PeerId peer, u32 user_data = 0);
+    void disconnect(PeerId peer, u32 user_data = 0) override;
     // Immediate: the peer is told once, unreliably, and forgotten (no Disconnected event).
     void disconnect_now(PeerId peer, u32 user_data = 0);
 
     // Tells every peer and releases the socket. The destructor does this too.
     void close();
 
+    // Simulated bad network on this host's outgoing messages (M-NET2 step 1): each one waits
+    // latency + jitter before it reaches ENet, and Sequenced / Unreliable ones are dropped at
+    // `loss`. Set it on the server or a client (or both, for the round trip). Wall-clock based, for
+    // playing a build; tests use SimNetwork. `seed` makes the loss and jitter rolls repeatable.
+    void set_conditions(const LinkConditions& conditions, u64 seed = 1);
+    const LinkConditions& conditions() const { return conditions_; }
+    // Messages held back by the conditions, not yet handed to ENet.
+    usize delayed_count() const { return delayed_.size(); }
+
     bool is_open() const { return host_ != nullptr; }
     u16 bound_port() const { return port_; }
-    bool is_connected(PeerId peer) const;
-    u32 connected_count() const;
-    // The connected peers, in slot order.
-    void connected_peers(Array<PeerId>& out) const;
-    PeerStats stats(PeerId peer) const;
+    bool is_connected(PeerId peer) const override;
+    PeerStats stats(PeerId peer) const override;
     // UDP payload bytes since listen()/open_client(), every peer and protocol overhead included.
     u64 bytes_sent() const;
     u64 bytes_received() const;
-    u8 channel_count() const { return channels_; }
+    u8 channel_count() const override { return channels_; }
 
     static HostDesc client_desc() {
         HostDesc d;
@@ -119,9 +98,23 @@ public:
         return d;
     }
 
+protected:
+    u32 peer_slots() const override { return static_cast<u32>(connected_.size()); }
+
 private:
+    struct Delayed {
+        u64 due_us = 0;
+        u64 order = 0;
+        PeerId peer = kInvalidPeer;
+        u8 channel = 0;
+        Delivery delivery = Delivery::Reliable;
+        Array<u8> bytes;
+    };
+
     bool create(const HostDesc& desc, bool bind);
     void release_received();
+    bool send_now(PeerId peer, u8 channel, Span<const u8> data, Delivery delivery);
+    void release_delayed();
 
     void* host_ = nullptr;      // the ENet host
     void* received_ = nullptr;  // the ENet packet backing the last Received event
@@ -129,6 +122,11 @@ private:
     u16 port_ = 0;
     u8 channels_ = 0;
     u32 timeout_ms_ = 5000;
+    LinkConditions conditions_;
+    u64 rng_ = 1;
+    u64 next_order_ = 0;
+    Array<Delayed> delayed_;
+    Array<u64> last_due_us_;  // per peer slot x channel: ordered deliveries never overtake
 };
 
 }  // namespace mce::net

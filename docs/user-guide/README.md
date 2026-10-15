@@ -24,7 +24,7 @@ code as built and why; this guide links to them where you may want the full deta
 | 10 | [Audio](10-audio.md) | Sound sources, one-shots, buses, 3D audio, music streams |
 | 11 | [Input](11-input.md) | The action snapshot, the default map, gamepads, rebinding |
 | 12 | [UI and the console](12-ui-and-console.md) | HUD text, runtime menus, the developer console, convars |
-| 13 | [Sequences, state machines and saves](13-sequences-fsm-saves.md) | Scripted action lists, FSM helper, save games, replays |
+| 13 | [Sequences, state machines and saves](13-sequences-fsm-saves.md) | Scripted action lists, timelines, FSM helper, save games, replays |
 | 14 | [Working with an AI agent (MCP)](14-mcp-ai-workflow.md) | The project MCP server, its tools, a proven workflow, pitfalls |
 | 15 | [Shipping](15-shipping.md) | The ship zip, symbols, crash reports, version metadata, cheats |
 | 16 | [Command-line reference](16-command-line.md) | Flags and convars of the player, the editor, the MCP server and the cook |

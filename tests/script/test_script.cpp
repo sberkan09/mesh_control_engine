@@ -1,4 +1,4 @@
-// mce_script spike (ADR-0039): Luau scripts as systems over reflected components.
+// mce_script spike (ADR-0040): Luau scripts as systems over reflected components.
 
 #include <doctest/doctest.h>
 

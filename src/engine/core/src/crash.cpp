@@ -7,6 +7,18 @@
 
 #include "mce/log.h"
 
+#if defined(__EMSCRIPTEN__)
+// A browser has no signals, minidumps or writable dump folder: a wasm trap surfaces as a JavaScript
+// exception in the page's console (ADR-0039), so the handler is not installed there.
+namespace mce::crash {
+bool install(const CrashDesc&) { return false; }
+bool installed() { return false; }
+StringView dump_dir() { return {}; }
+FixedString<512> default_dump_dir(StringView) { return {}; }
+void trigger_test_crash() { std::abort(); }
+}  // namespace mce::crash
+#else
+
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -572,7 +584,7 @@ void on_signal(int sig, siginfo_t* info, void* uctx) {
 
 }  // namespace
 
-FixedString<512> default_dump_dir(StringView app_name) {
+FixedString<512> user_data_root() {
     FixedString<512> r;
 #if defined(_WIN32)
     const char* base = std::getenv("LOCALAPPDATA");
@@ -604,6 +616,11 @@ FixedString<512> default_dump_dir(StringView app_name) {
         r.append("/.local/share");
     }
 #endif
+    return r;
+}
+
+FixedString<512> default_dump_dir(StringView app_name) {
+    FixedString<512> r = user_data_root();
     r.append("/MCE/");
     r.append(app_name);
     r.append("/crashes");
@@ -655,3 +672,5 @@ void trigger_test_crash() {
 }
 
 }  // namespace mce::crash
+
+#endif  // !__EMSCRIPTEN__

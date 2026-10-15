@@ -31,10 +31,12 @@ const char* asset_type_name(asset::ChunkType type) {
         case asset::Tilemap::chunk: return asset::Tilemap::name;
         case asset::ParticlePreset::chunk: return asset::ParticlePreset::name;
         case asset::Sequence::chunk: return asset::Sequence::name;
+        case asset::Timeline::chunk: return asset::Timeline::name;
         case asset::SpriteSheet::chunk: return asset::SpriteSheet::name;
         case asset::AnimGraph::chunk: return asset::AnimGraph::name;
         case asset::UiDocument::chunk: return asset::UiDocument::name;
         case asset::UiTheme::chunk: return asset::UiTheme::name;
+        case asset::Terrain::chunk: return asset::Terrain::name;
         case asset::StringTable::chunk: return asset::StringTable::name;
         case asset::StoreCatalog::chunk: return asset::StoreCatalog::name;
         case asset::GameServicesCatalogChunk::chunk: return asset::GameServicesCatalogChunk::name;
