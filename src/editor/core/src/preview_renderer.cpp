@@ -211,7 +211,7 @@ Result<void> PreviewRenderer::bake_gi(World& world, GiBake& out) {
     fw.invalidate_gi();  // the preview's fill saw only its view's meshes
     // In bake mode the extract submits every mesh and replaces each re-captured probe outright, so
     // every sweep after the fill adds one bounce.
-    u32 sweeps = 0, frames = 0, rows = 0, rows_done = 0;
+    u32 sweeps = 0, frames = 0, probes = 0, probes_done = 0;
     render::GiVolume gi;
     bool filled = false;
     for (; frames < 4096; ++frames) {
@@ -223,19 +223,23 @@ Result<void> PreviewRenderer::bake_gi(World& world, GiBake& out) {
         scene.build();
         gi = scene.gi_volume();
         if (!gi.enabled) break;
-        rows = render::gi_volume_size(gi).height;
+        probes = gi.counts[0] * gi.counts[1] * gi.counts[2];
         rhi::CommandBuffer cmd;
         renderer_.record_3d(cmd, scene, target);
         device.submit(cmd);
+        // A bake submits many frames' captures: each one gets the device frame's rings afresh.
+        const u64 index = device.frame_index();
+        device.end_frame();
+        device.begin_frame(index);
         const render::Forward3DStats& st = fw.last_stats();
         if (!filled) {
             filled = st.gi_filled;
             if (!filled && st.gi_probes == 0) break;  // nothing captured: GI off in this renderer
             continue;
         }
-        rows_done += st.gi_probes / gi.counts[0];
-        if (rows_done >= rows) {
-            rows_done -= rows;
+        probes_done += st.gi_probes;
+        if (probes_done >= probes) {
+            probes_done -= probes;
             if (++sweeps == 2) break;
         }
     }

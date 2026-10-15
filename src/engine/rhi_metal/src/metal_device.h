@@ -147,6 +147,7 @@ public:
     TextureDesc texture_desc(TextureHandle) const override;
 
     void begin_frame(u64 frame_index) override;
+    u64 frame_index() const override { return frame_index_; }
     void submit(const CommandBuffer& cmd) override;
     void end_frame() override;
     void present(bool vsync) override;
