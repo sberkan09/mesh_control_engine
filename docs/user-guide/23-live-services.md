@@ -16,8 +16,8 @@ Built so far (the vendor-neutral parts of M-LIVEOPS):
 - **game services** (M-LIVEOPS step 2): achievements, leaderboards and cloud saves through one API,
   with a local stand-in for Game Center and Play Games (23.6).
 
-The vendor is **Firebase**: Crashlytics catches native crashes on the phones and Analytics receives
-the events (23.7). It is stamped into a phone build only when the project hands `ship` its Firebase
+The vendor is **Firebase**: Crashlytics catches native crashes on the phones, Analytics receives
+the events and Remote Config serves remote config (23.7). It is stamped into a phone build only when the project hands `ship` its Firebase
 config; elsewhere the `local` provider below writes everything to files.
 
 ## 23.1 Turn it on
@@ -132,14 +132,23 @@ if (rc.get<bool>("winter_event", false)) { /* ... */ }
 since launch. Replays record the values in force and every apply with its tick, so they hash the same.
 
 **Fetching** happens at launch and when the game calls `fetch()`. The host picks the fetcher with
-`desc.config_fetcher` (`mce/liveops/remote_config.h IConfigFetcher`). A fetcher that talks to a
-server waits for consent (23.2). The static-file fetcher reads a cooked pack holding a `.mcconfig`.
+`desc.config_fetcher` (`mce/liveops/remote_config.h IConfigFetcher`); with no host fetcher and no
+`-remote_config.file`, a phone build with Firebase (23.7) fetches from **Firebase Remote Config**. A
+fetcher that talks to a server waits for consent (23.2).
+
+**Firebase Remote Config.** Add a parameter in the Firebase console for each key you want to change,
+with the same key as the `.mcconfig`. The console stores every value as text; the player reads it as
+the type of its default: a whole number for an int, a number for a float, `true`/`false` (or `1`/`0`,
+`yes`/`no`, `on`/`off`) for a bool, any text for a string. A parameter the defaults do not have, or
+whose text does not read as its type, is skipped with a warning in the log, and the rest still
+apply. Firebase caches fetches for 12 hours by default, so a change in the console reaches a player
+at their next launch after that. The static-file fetcher reads a cooked pack holding a `.mcconfig`.
 Try it with `-liveops 1 -remote_config.file <pack> -remote_config.dump 1`; the dump prints every
 value at start and after each apply. A failed fetch keeps the values in force.
 
 | Flag | Values | Default |
 |---|---|---|
-| `-remote_config.file` | a cooked pack (or `cooked/` folder) holding a `.mcconfig` | empty: the host's fetcher |
+| `-remote_config.file` | a cooked pack (or `cooked/` folder) holding a `.mcconfig` | empty: the host's fetcher, else Firebase |
 | `-remote_config.dump` | `1`: print the values in force | `0` |
 
 `-liveops.provider none` turns the fetcher off too.
@@ -234,7 +243,7 @@ Firebase console and reach `ship` through the environment.
    an iOS app (the bundle id), and download `google-services.json` and `GoogleService-Info.plist`.
    Keep them outside the repository (a secrets folder, or the CI's secret store).
 2. Android: `MCE_FIREBASE_ANDROID_CONFIG=/secrets/google-services.json python3 scripts/ship.py <game>
-   --target android`. The build gets Crashlytics NDK and Analytics, the Google services and
+   --target android`. The build gets Crashlytics NDK, Analytics and Remote Config, the Google services and
    Crashlytics Gradle plugins, and uploads the library's symbols to Crashlytics.
 3. iOS: unzip Firebase's iOS distribution (`Firebase.zip`) and build with `-DMCE_FIREBASE=ON
    -DMCE_FIREBASE_SDK_DIR=<that folder>`, then ship with `MCE_FIREBASE_IOS_CONFIG=/secrets/
@@ -277,8 +286,9 @@ With the `local` provider nothing leaves the device and there is nothing to decl
 - Firebase has not been run on a device yet: the Android and iOS sides are built and stamped, and
   the forced-crash check (a crash on the Simulator and the emulator shown symbolicated in the
   Crashlytics console after relaunch) needs a Mac, a Firebase project and its config files.
-- Remote config has no server fetcher yet: a vendor's config service (or an HTTP download of a
-  cooked pack) comes with the vendor choice. The static-file fetcher and the cache work today.
+- Firebase Remote Config has not been fetched on a device yet either: the fetcher is built and its
+  text-to-type rules run in CI, and the check (a console value applied after relaunch on the
+  Simulator and the emulator) needs the same Mac, project and config files.
 - Game services have no native provider yet: Game Center / iCloud and Play Games Services v2 need a
   Mac, devices and test accounts. The API, the outbox, cloud versions and the local fake work today.
 - The demo's device half (a forced crash shown symbolicated after relaunch on the Simulator and the

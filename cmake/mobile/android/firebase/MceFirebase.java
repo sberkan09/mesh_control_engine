@@ -6,12 +6,14 @@ import android.os.Bundle;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.analytics.FirebaseAnalytics;
 import com.google.firebase.crashlytics.FirebaseCrashlytics;
+import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigValue;
 
 import java.util.EnumMap;
 import java.util.Map;
 
-// Firebase Crashlytics and Analytics for mce_platform's live services vendor (platform/firebase.h,
-// M-LIVEOPS step 1). Stamped into the Gradle project of a game shipped with
+// Firebase Crashlytics, Analytics and Remote Config for mce_platform's live services vendor
+// (platform/firebase.h, M-LIVEOPS steps 1 and 3). Stamped into the Gradle project of a game shipped with
 // MCE_FIREBASE_ANDROID_CONFIG (cmake/mobile/android_app.py), driven through MceActivity's
 // mceFirebase* methods over JNI.
 //
@@ -21,6 +23,10 @@ import java.util.Map;
 // with collection off; setCollection turns it on once the player consents
 // (platform::firebase::Collection's values).
 public final class MceFirebase {
+    // Remote Config's answer (firebase.cpp): every value as text, then done.
+    static native void nativeConfigValue(String key, String value);
+    static native void nativeConfigDone(boolean ok);
+
     private final FirebaseAnalytics analytics;
 
     public MceFirebase(Activity activity) {
@@ -65,5 +71,23 @@ public final class MceFirebase {
             }
         }
         analytics.logEvent(name, params);
+    }
+
+    // Fetches and activates, then hands every value the service sent to native code. The engine
+    // decides when fetched values take effect (liveops::RemoteConfigService), so activating here
+    // only moves them into the SDK's own active set.
+    public void fetchRemoteConfig() {
+        FirebaseRemoteConfig config = FirebaseRemoteConfig.getInstance();
+        config.fetchAndActivate().addOnCompleteListener(task -> {
+            if (!task.isSuccessful()) {
+                nativeConfigDone(false);
+                return;
+            }
+            for (Map.Entry<String, FirebaseRemoteConfigValue> e : config.getAll().entrySet()) {
+                if (e.getValue().getSource() == FirebaseRemoteConfig.VALUE_SOURCE_REMOTE)
+                    nativeConfigValue(e.getKey(), e.getValue().asString());
+            }
+            nativeConfigDone(true);
+        });
     }
 }

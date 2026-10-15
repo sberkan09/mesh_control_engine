@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Remote config fetches from Firebase Remote Config on phone builds shipped with Firebase (SBA-24): each
+  console value is read as the type of its `.mcconfig` default (`liveops::parse_config_value`), and one the
+  defaults lack or that does not read as its type is skipped. `ship` adds `firebase-config` on Android, and
+  iOS links `FirebaseRemoteConfig` from `MCE_FIREBASE_SDK_DIR`. Not yet run on a device.
 - UI themes, M-UI-DATA step 3 (SBA-33): a `.mcuitheme` asset holds a palette (`UiPalette`), a font per role
   (body, title, button) and per-kind `UiStyle` looks. A `.mcui` document names its theme with `"theme"`, a
   `UiScreen` may override it, and every style field a document leaves at its kind's default look takes the theme's

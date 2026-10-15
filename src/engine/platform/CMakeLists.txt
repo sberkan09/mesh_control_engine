@@ -93,17 +93,19 @@ if(IOS AND MCE_ADMOB)
         "-framework AppTrackingTransparency" "-framework UIKit")
 endif()
 
-# The live services vendor (platform/firebase.h): Crashlytics and Analytics. Android needs nothing
+# The live services vendor (platform/firebase.h): Crashlytics, Analytics and Remote Config. Android needs nothing
 # here (MceFirebase.java and the Firebase Gradle plugins are stamped in by ship.py when
 # MCE_FIREBASE_ANDROID_CONFIG names the project's google-services.json). iOS links Google's
 # xcframeworks, which are not vendored: unzip Firebase's iOS distribution (Firebase.zip from the
-# firebase-ios-sdk releases) and point MCE_FIREBASE_SDK_DIR at its folder holding FirebaseAnalytics/
-# and FirebaseCrashlytics/. Opt-in until it has been run on a Mac.
-option(MCE_FIREBASE "iOS: build Firebase Crashlytics and Analytics into mce_platform" OFF)
-set(MCE_FIREBASE_SDK_DIR "" CACHE PATH "iOS: the unzipped Firebase.zip (FirebaseAnalytics/, FirebaseCrashlytics/)")
+# firebase-ios-sdk releases) and point MCE_FIREBASE_SDK_DIR at its folder holding FirebaseAnalytics/,
+# FirebaseCrashlytics/ and FirebaseRemoteConfig/. Opt-in until it has been run on a Mac.
+option(MCE_FIREBASE "iOS: build Firebase Crashlytics, Analytics and Remote Config into mce_platform" OFF)
+set(MCE_FIREBASE_SDK_DIR "" CACHE PATH
+    "iOS: the unzipped Firebase.zip (FirebaseAnalytics/, FirebaseCrashlytics/, FirebaseRemoteConfig/)")
 if(IOS AND MCE_FIREBASE)
-    if(NOT EXISTS "${MCE_FIREBASE_SDK_DIR}/FirebaseCrashlytics/FirebaseCrashlytics.xcframework")
-        message(FATAL_ERROR "MCE_FIREBASE needs MCE_FIREBASE_SDK_DIR with FirebaseCrashlytics/ and FirebaseAnalytics/ (got '${MCE_FIREBASE_SDK_DIR}')")
+    if(NOT EXISTS "${MCE_FIREBASE_SDK_DIR}/FirebaseCrashlytics/FirebaseCrashlytics.xcframework" OR
+       NOT EXISTS "${MCE_FIREBASE_SDK_DIR}/FirebaseRemoteConfig/FirebaseRemoteConfig.xcframework")
+        message(FATAL_ERROR "MCE_FIREBASE needs MCE_FIREBASE_SDK_DIR with FirebaseAnalytics/, FirebaseCrashlytics/ and FirebaseRemoteConfig/ (got '${MCE_FIREBASE_SDK_DIR}')")
     endif()
     enable_language(Swift)
     if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
@@ -112,7 +114,8 @@ if(IOS AND MCE_FIREBASE)
         set(_mce_slice "ios-arm64")
     endif()
     file(GLOB _mce_firebase_fws "${MCE_FIREBASE_SDK_DIR}/FirebaseAnalytics/*.xcframework"
-         "${MCE_FIREBASE_SDK_DIR}/FirebaseCrashlytics/*.xcframework")
+         "${MCE_FIREBASE_SDK_DIR}/FirebaseCrashlytics/*.xcframework"
+         "${MCE_FIREBASE_SDK_DIR}/FirebaseRemoteConfig/*.xcframework")
     list(REMOVE_DUPLICATES _mce_firebase_fws)
     target_sources(mce_platform PRIVATE src/firebase_ios.swift)
     target_compile_definitions(mce_platform PRIVATE MCE_FIREBASE=1)

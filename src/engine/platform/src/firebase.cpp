@@ -2,6 +2,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <atomic>
+
 #if defined(SDL_PLATFORM_ANDROID)
 #include "android_jni.h"
 #elif defined(SDL_PLATFORM_IOS) && defined(MCE_FIREBASE)
@@ -11,6 +13,35 @@
 namespace mce::platform::firebase {
 
 const char* backend_name(Backend b) { return b == Backend::Firebase ? "firebase" : "none"; }
+
+#if defined(SDL_PLATFORM_ANDROID) || (defined(SDL_PLATFORM_IOS) && defined(MCE_FIREBASE))
+namespace {
+
+// The running Remote Config fetch: set on the main thread, answered and cleared on the SDK's.
+std::atomic<ConfigFn> g_config_fn{nullptr};
+std::atomic<void*> g_config_user{nullptr};
+
+bool begin_config_fetch(ConfigFn fn, void* user) {
+    if (!fn) return false;
+    ConfigFn idle = nullptr;
+    if (!g_config_fn.compare_exchange_strong(idle, fn)) return false;
+    g_config_user.store(user);  // before the SDK is asked, so before any answer
+    return true;
+}
+
+void config_value(StringView key, StringView value) {
+    if (ConfigFn fn = g_config_fn.load()) fn(g_config_user.load(), key, value, false, true);
+}
+
+void config_done(bool ok) {
+    ConfigFn fn = g_config_fn.load();
+    void* user = g_config_user.load();
+    g_config_fn.store(nullptr);
+    if (fn) fn(user, StringView(), StringView(), true, ok);
+}
+
+}  // namespace
+#endif
 
 // ---- Android: MceFirebase through the stamped MceActivity ----------------------------------------
 #if defined(SDL_PLATFORM_ANDROID)
@@ -89,6 +120,34 @@ void log_event(StringView name, Span<const Param> params) {
     env->DeleteLocalRef(string_class);
 }
 
+bool fetch_remote_config(ConfigFn fn, void* user) {
+    if (!g_started || !begin_config_fetch(fn, user)) return false;
+    Jni j;
+    j.env->CallVoidMethod(j.activity, j.method("mceFirebaseRemoteConfig", "()V"));
+    if (!j.ok("mceFirebaseRemoteConfig")) {
+        g_config_fn.store(nullptr);
+        return false;
+    }
+    return true;
+}
+
+}  // namespace mce::platform::firebase
+
+// MceFirebase.nativeConfigValue / nativeConfigDone: Remote Config's answer, on the SDK's thread.
+extern "C" JNIEXPORT void JNICALL Java_org_meshcontrol_firebase_MceFirebase_nativeConfigValue(JNIEnv* env, jclass,
+                                                                                              jstring key,
+                                                                                              jstring value) {
+    const mce::platform::detail::JStr k(env, key), v(env, value);
+    mce::platform::firebase::config_value(k.view(), v.view());
+}
+
+extern "C" JNIEXPORT void JNICALL Java_org_meshcontrol_firebase_MceFirebase_nativeConfigDone(JNIEnv*, jclass,
+                                                                                             jboolean ok) {
+    mce::platform::firebase::config_done(ok != JNI_FALSE);
+}
+
+namespace mce::platform::firebase {
+
 // ---- iOS: Crashlytics + Analytics (firebase_ios.swift) ---------------------------------------------
 #elif defined(SDL_PLATFORM_IOS) && defined(MCE_FIREBASE)
 
@@ -101,7 +160,14 @@ void mce_firebase_event_int(const char* key, i64 v);
 void mce_firebase_event_float(const char* key, f64 v);
 void mce_firebase_event_string(const char* key, const char* v);
 void mce_firebase_event_end();
+void mce_firebase_remote_config_fetch();
 }
+
+// Remote Config's answer from firebase_ios.swift (@_silgen_name there), on the SDK's thread.
+extern "C" void mce_firebase_config_value(const char* key, const char* value) {
+    mce::platform::firebase::config_value(StringView(key ? key : ""), StringView(value ? value : ""));
+}
+extern "C" void mce_firebase_config_done(int ok) { mce::platform::firebase::config_done(ok != 0); }
 
 namespace {
 bool g_started = false;
@@ -142,6 +208,12 @@ void log_event(StringView name, Span<const Param> params) {
     mce_firebase_event_end();
 }
 
+bool fetch_remote_config(ConfigFn fn, void* user) {
+    if (!g_started || !begin_config_fetch(fn, user)) return false;
+    mce_firebase_remote_config_fetch();
+    return true;
+}
+
 // ---- everywhere else: no vendor ----------------------------------------------------------------------
 #else
 
@@ -149,6 +221,7 @@ Backend backend() { return Backend::None; }
 bool start() { return false; }
 void set_collection(Collection) {}
 void log_event(StringView, Span<const Param>) {}
+bool fetch_remote_config(ConfigFn, void*) { return false; }
 
 #endif
 
