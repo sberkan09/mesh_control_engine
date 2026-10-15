@@ -68,7 +68,7 @@ type, default, help and flags, and every console function. The list below is the
 | `-project <dir>` | | the project folder (holds `assets/`) |
 | `-module <file>` | | the game module to load (`lib<game>.so`): its components in the inspector and the cook, its `install()` in play-in-editor (`my_game_editor` has them compiled in) |
 | `-scene <path under assets/>` | the first scene | the scene to open |
-| `-editor.open <asset>` | | open a `.mcui` or `.mctimeline` (relative to `assets/`) in its panel at start-up |
+| `-editor.open <asset>` | | open a `.mcui`, `.mctimeline` or `.mcanim` (relative to `assets/`) in its panel at start-up |
 | `-editor.panel <name>` | | bring a panel's tab to the front at start-up (`Profiler`, `Play`, ...) |
 | `-editor.select <name>` | | select the entity with this name after opening |
 | `-editor.play 1` | 0 | enter play-in-editor after opening |
