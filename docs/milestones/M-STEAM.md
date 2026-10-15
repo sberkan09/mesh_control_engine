@@ -1,6 +1,6 @@
 # M-STEAM — Steamworks (milestone record)
 
-**Status:** active. Step 1 in review; steps 2–6 to come (Linear SBA-106 … SBA-111; SBA-112 is the run against
+**Status:** active. Step 1 done; steps 2–6 to come (Linear SBA-106 … SBA-111; SBA-112 is the run against
 the real Steam client, which needs the user's Steamworks account).
 **Why:** Steam is the desktop distribution channel; the engine comparison (the project's
 `assessments/motor-kiyaslama-eksikler.md`, item 2) lists it right after the web. Added 2026-10-15 under the
@@ -12,7 +12,7 @@ user's standing instruction to extend the roadmap when it runs out.
 
 | Step | Linear | State |
 |---|---|---|
-| 1. ADR-0042 and the run-time loader: `mce/platform/steam.h`, init and its refusals, manual-dispatch callbacks, the player's `-steam.app_id`, a stand-in library for tests, the Steam wall | SBA-106 | in review |
+| 1. ADR-0042 and the run-time loader: `mce/platform/steam.h`, init and its refusals, manual-dispatch callbacks, the player's `-steam.app_id`, a stand-in library for tests, the Steam wall | SBA-106 | done |
 | 2. Achievements, stats, leaderboards and cloud saves as `platform::game_services` `Backend::Steam` under `liveops::PlatformGameServices` | SBA-107 | — |
 | 3. Overlay (holds the world like a lost focus) and rich presence as data | SBA-108 | — |
 | 4. Steam Input: an action manifest from the cooked input map, glyphs, Steam Deck defaults | SBA-109 | — |

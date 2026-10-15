@@ -617,6 +617,58 @@ TEST_CASE("gltf: skins import joints, inverse binds, 4 unorm8 influences and per
     CHECK(m.header->bounds_min[0] == doctest::Approx(-0.2f).epsilon(1e-3));
 }
 
+TEST_CASE("gltf: the sidecar's ragdoll overrides land on the named bones; bad ones fail") {
+    CookService svc;
+    SUBCASE("overrides per bone, the Ragdoll flag and minor") {
+        const std::string root = make_project("gltf_ragdoll", skinned_doc(), false);
+        write_file(root + "/assets/models/crate.gltf.mceasset",
+                   sidecar(kGltfGuid, "gltf",
+                           "{ \"ragdoll\": { \"hip\": { \"radius\": 0.12, \"mass\": 2 }, "
+                           "\"knee\": { \"exclude\": true, \"swing\": 30, \"twist\": 10 } } }"));
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        INFO(diag_text(r));
+        REQUIRE(r.ok());
+        const std::vector<byte> a = cooked_mesh(root, kGltfGuid);
+        const MeshView m = MeshView::read(Span<const byte>(a.data(), a.size())).value();
+        CHECK((m.header->flags & MeshFlags::Ragdoll) != 0);
+        REQUIRE(m.joints.size() == 2);
+        CHECK(m.joints[0].ragdoll_flags == (MeshRagdoll::Radius | MeshRagdoll::Mass));
+        CHECK(m.joints[0].ragdoll_radius == doctest::Approx(0.12f));
+        CHECK(m.joints[0].ragdoll_mass == doctest::Approx(2.0f));
+        CHECK(m.joints[1].ragdoll_flags == (MeshRagdoll::Exclude | MeshRagdoll::Swing | MeshRagdoll::Twist));
+        CHECK(m.joints[1].ragdoll_swing == doctest::Approx(30.0f));
+        CHECK(m.joints[1].ragdoll_twist == doctest::Approx(10.0f));
+    }
+    SUBCASE("without overrides the mesh keeps the plain skinned layout") {
+        const std::string root = make_project("gltf_ragdoll_none", skinned_doc(), false);
+        write_file(root + "/assets/models/crate.gltf.mceasset", sidecar(kGltfGuid, "gltf", "{ \"ragdoll\": {} }"));
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        REQUIRE(r.ok());
+        const std::vector<byte> a = cooked_mesh(root, kGltfGuid);
+        const MeshView m = MeshView::read(Span<const byte>(a.data(), a.size())).value();
+        CHECK((m.header->flags & MeshFlags::Ragdoll) == 0);
+        CHECK(m.joints[0].ragdoll_flags == 0);
+    }
+    SUBCASE("an unknown bone, a bad value, both exclude and include, an unknown key") {
+        const char* cases[][2] = {
+            {"{ \"ragdoll\": { \"elbow\": { \"radius\": 0.1 } } }", "'ragdoll' bone 'elbow' is not a joint of the mesh's skins"},
+            {"{ \"ragdoll\": { \"hip\": { \"swing\": 200 } } }", "'ragdoll' bone 'hip': radius and mass must be >= 0"},
+            {"{ \"ragdoll\": { \"hip\": { \"exclude\": true, \"include\": true } } }", "'exclude' and 'include' both set"},
+            {"{ \"ragdoll\": { \"hip\": 3 } }", "'ragdoll' bone 'hip' must be an object"},
+            {"{ \"ragdoll\": { \"hip\": { \"stiff\": 1 } } }", "stiff"},
+        };
+        u32 i = 0;
+        for (const auto& c : cases) {
+            const std::string root = make_project(("gltf_ragdoll_bad" + std::to_string(i++)).c_str(), skinned_doc(), false);
+            write_file(root + "/assets/models/crate.gltf.mceasset", sidecar(kGltfGuid, "gltf", c[0]));
+            const CookReport r = svc.cook(root.c_str(), CookOptions{});
+            INFO(c[0]);
+            INFO(diag_text(r));
+            CHECK(has_error(r, c[1]));
+        }
+    }
+}
+
 TEST_CASE("gltf: skinning is optional per asset; bad skins fail with the JSON pointer") {
     CookService svc;
     SUBCASE("sidecar skinning: false imports the same file as a static mesh") {

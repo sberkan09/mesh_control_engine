@@ -181,6 +181,7 @@ private:
     // webgpu_translate.cpp
     void stage_payloads(const CommandBuffer& cb);
     void flush_rings();
+    Ring* storage_ring(u32 binding);
     void encode(const CommandBuffer& cb, WGPUCommandEncoder enc);
     void begin_pass(WGPUCommandEncoder enc, const cmd::BeginPass& p);
     void end_pass();
@@ -243,7 +244,9 @@ private:
 
     Ring uniforms_;  // 256-aligned blocks, bound through dynamic offsets
     Ring geometry_;  // vertex + index data
-    Ring storage_;   // set_storage_data, 256-aligned
+    // set_storage_data, one ring per binding (created on first use): WebGPU forbids one buffer bound
+    // read-write and read-only in the same dispatch, even at disjoint ranges.
+    Ring storage_[kMaxStorageBindings];
     u32 uniform_bind_size_ = 16384;
 
     // Persistent binding state (GL keeps it across passes and submits).

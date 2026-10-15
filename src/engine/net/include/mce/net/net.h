@@ -10,13 +10,17 @@
 //   net_stats.h    NetStatsMeter: rates and RTT for the dev overlay (ecs/dev_stats.h)
 //   bytes.h        ByteWriter / ByteReader: the little-endian message codec
 //   replication.h  NetId, ReplicationServer / ReplicationClient: server-authoritative snapshots
+//   websocket.h    WebSocketHost: a Transport over WebSocket, the one a web build can open
+//   relay.h        RelayServer / RelayClient: rooms with codes through a relay (mce_relay)
 
 #include "mce/net/bytes.h"
 #include "mce/net/host.h"
 #include "mce/net/lag_compensation.h"
 #include "mce/net/net_stats.h"
 #include "mce/net/prediction.h"
+#include "mce/net/relay.h"
 #include "mce/net/replication.h"
 #include "mce/net/rollback.h"
 #include "mce/net/sim_network.h"
 #include "mce/net/transport.h"
+#include "mce/net/websocket.h"

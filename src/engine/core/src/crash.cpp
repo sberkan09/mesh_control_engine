@@ -14,6 +14,8 @@ namespace mce::crash {
 bool install(const CrashDesc&) { return false; }
 bool installed() { return false; }
 StringView dump_dir() { return {}; }
+// The browser's virtual file system: saves live under /persistent, which M-WEB step 3 backs with IndexedDB.
+FixedString<512> user_data_root() { return FixedString<512>("/persistent"); }
 FixedString<512> default_dump_dir(StringView) { return {}; }
 void trigger_test_crash() { std::abort(); }
 }  // namespace mce::crash

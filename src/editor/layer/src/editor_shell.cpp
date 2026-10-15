@@ -759,6 +759,7 @@ void EditorShell::draw_dockspace() {
         ImGui::DockBuilderDockWindow("Play", bottom);
         ImGui::DockBuilderDockWindow("Assets", bottom);
         ImGui::DockBuilderDockWindow("Tilemap", right);
+        ImGui::DockBuilderDockWindow("Terrain", right);
         ImGui::DockBuilderDockWindow("Timeline", bottom);
         ImGui::DockBuilderDockWindow("Animation", bottom);
         ImGui::DockBuilderFinish(id);

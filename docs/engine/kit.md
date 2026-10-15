@@ -99,6 +99,16 @@ orbit), `PhysicsEvents` (engine-written last 2D trigger/contact pairs and counts
 `install_effects(world, assets)`: `"kit_nav_grid"` (`FixedUpdate_Pre`, before `"path_agents"`,
 which it installs), `"kit_effects"` and `"kit_camera_follow"` (`FixedUpdate_Post`).
 
+`cinematic.h` (M-CINEMA 4): `CameraRail3D` (Catmull-Rom dolly through up to 8 points; `rail_point`),
+`CameraLookAt3D`, `CameraShake3D` (fed by `ShakeTrigger`, advanced in `"kit_effects"`), `CameraBlend3D`
+(the extract's `view_of` blends from `from`'s view; a timeline camera cut with a blend writes it) and
+`Cutscene` (next to a `TimelinePlayer`: the world's cutscene hold, letterbox, hold-to-skip through
+`timeline_skip`; `cutscene_view` for the player's overlay). `install_cinematic(world)`: `"kit_cutscene"`
+(`FixedUpdate_Pre`, last in install_stock) and `"kit_cinematic"` (`FixedUpdate_Post`, after the
+timelines and follow cameras), both `run_during_cutscenes`. A cutscene hold (`World::set_cutscene_held`)
+runs only the systems so marked: timelines, sequences, animators, attach, sprite animation, particles,
+effects, captions, follow cameras, transforms and the audio bridge.
+
 `fsm.h` (header-only, namespace `mce::fsm`):
 
 - `Trans<S>` rows (`from`, `to`, guard `when` or timed `after`, `entry`, `exit` actions),
@@ -190,7 +200,8 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
 - `Sprite` shows its whole texture; atlas regions and animation wait for the sprite-sheet importer
   (comment on `Sprite`, ADR-0024 decision 4).
 - Not built (ADR-0032): the editor sequence live view. `TimelinePlayer` and `.mctimeline`
-  (`kit/timeline.h`, FR-ENT-110) landed in M-CINEMA step 1; the editor timeline panel is step 2.
+  (`kit/timeline.h`, FR-ENT-110) landed in M-CINEMA step 1, the editor timeline panel in step 2 and
+  cutscenes (`kit/cinematic.h`) in step 4.
 - The lit-2D GPU cost at 10k sprites and the 2D post cost at 1080p are open until measured on a
   hardware GPU (M6 2D budget table).
 - Pathfinding is grid A* only: no navmesh, no jump-point search, no agent avoidance; the grid and

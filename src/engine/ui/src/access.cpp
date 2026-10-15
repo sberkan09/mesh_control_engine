@@ -46,6 +46,15 @@ StringView label_before(const Document& doc, WidgetId w) {
     return !prev.is_null() && doc.kind(prev) == WidgetKind::Text ? doc.text(prev) : StringView();
 }
 
+// A row of controls led by a label ("Jump" | Space | Pad South | Toggle, the remap list): each
+// control's own text is said after the row's label, so a reader hears which action a key belongs to.
+StringView row_label(const Document& doc, WidgetId w) {
+    const WidgetId parent = doc.parent(w);
+    if (parent.is_null() || doc.kind(parent) != WidgetKind::Stack || doc.stack(parent).axis != Axis::Horizontal) return {};
+    const WidgetId first = doc.first_child(parent);
+    return !first.is_null() && first != w && doc.kind(first) == WidgetKind::Text ? doc.text(first) : StringView();
+}
+
 void value_of(const Document& doc, WidgetId w, AccessRole role, FixedString<32>& out) {
     out.clear();
     char buf[32];
@@ -118,6 +127,15 @@ AccessNode access_node(const Document& doc, WidgetId w) {
         name = label_before(doc, w);
     n.name.assign(name);
     reader_case(n.name);
+    if (!name.empty() && n.role != AccessRole::Text && n.role != AccessRole::Group) {
+        if (const StringView row = row_label(doc, w); !row.empty() && row != name) {
+            FixedString<128> own(n.name.view());
+            n.name.assign(row);
+            reader_case(n.name);
+            n.name.append(StringView(", "));
+            n.name.append(own.view());
+        }
+    }
     value_of(doc, w, n.role, n.value);
     n.rect = doc.rect(w);
     n.focused = doc.focused() == w;

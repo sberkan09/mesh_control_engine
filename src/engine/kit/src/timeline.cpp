@@ -5,6 +5,7 @@
 
 #include "mce/audio/components.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/cinematic.h"
 #include "mce/kit/components.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/sequence.h"
@@ -151,6 +152,22 @@ void apply_state(World& w, TimelineRegistry& reg, const TimelineRegistry::Def& d
                     if (!(cam == live)) set_primary(w, cam, false);
                 }
                 set_primary(w, live, true);
+                // A key with a blend (v[0] seconds) eases the view over from the previous key's camera.
+                const f32 blend = keys[cut].v[0];
+                const Entity prev = cut > 0 ? target_of(p, self, keys[cut - 1].target) : Entity{};
+                if (w.alive(live) && blend > 0.0f && !prev.is_null() && !(prev == live)) {
+                    CameraBlend3D b;
+                    if (const CameraBlend3D* had = w.try_get<CameraBlend3D>(live)) b = *had;
+                    b.from = prev;
+                    b.duration = blend;
+                    b.elapsed = time - keys[cut].t;
+                    // In a phase a new component goes through the command buffer (in place next tick).
+                    if (w.try_get<CameraBlend3D>(live) || !w.in_phase()) w.set(live, b);
+                    else w.commands().set(live, b);
+                } else if (CameraBlend3D* had = w.alive(live) ? w.try_get_mut<CameraBlend3D>(live) : nullptr) {
+                    had->elapsed = had->duration;  // a hard cut: no blend left
+                    had->weight = 1.0f;
+                }
                 break;
             }
             case TimelineTrackKind::Subtitle:
@@ -380,6 +397,47 @@ bool timeline_scrub(World& world, Entity e, f32 seconds) {
     p->fired_to = t > 0.0f ? t : -1.0f;
     p->finished = false;
     apply_state(world, *reg, *def, e, t, tolerance(0.0f));
+    place_cameras(world, 0.0f);  // rails and look-ats follow the keyed fields at once
+    return true;
+}
+
+bool timeline_skip(Frame& f, Entity e) {
+    World& w = f.world();
+    TimelineRegistry* reg = w.try_resource<TimelineRegistry>();
+    const TimelinePlayer* cp = w.try_get<TimelinePlayer>(e);
+    if (!reg || !cp) return false;
+    const TimelineRegistry::Def* def = reg->resolve(*cp);
+    if (!def) return false;
+    const f32 eps = tolerance(f.dt);
+    const f32 lo = cp->fired_to < 0.0f ? -1.0f : cp->fired_to + eps;
+    const TimelinePlayer p = *cp;
+    const bool seq = w.event_queue<SeqSignal>() != nullptr;
+    for (const TimelineRegistry::Track& t : def->tracks) {
+        const Span<const TimelineKey> keys = def->keys_of(t);
+        if (t.desc.kind == TimelineTrackKind::Event) {
+            for (const TimelineKey& k : keys) {
+                if (!(k.t > lo)) continue;
+                f.events().push(TimelineSignal{StringId(k.id), e});
+                if (seq) f.events().push(SeqSignal{StringId(k.id), e});
+            }
+        } else if (t.desc.kind == TimelineTrackKind::Animation && !keys.empty() && keys[keys.size() - 1].t > lo) {
+            const TimelineKey& k = keys[keys.size() - 1];
+            const Entity target = target_of(p, e, t.desc.target);
+            if (Animator* a = w.alive(target) ? w.try_get_mut<Animator>(target) : nullptr) {
+                a->clip.assign(def->string(k.text));
+                a->loop = k.v[0] != 0.0f;
+                if (k.v[1] >= 0.0f) a->fade = k.v[1];
+                a->restart = true;
+            }
+        }
+    }
+    TimelinePlayer* live = w.try_get_mut<TimelinePlayer>(e);
+    live->time = def->duration;
+    live->fired_to = def->duration;
+    live->playing = false;
+    live->finished = true;
+    live->restart = false;
+    apply_state(w, *reg, *def, e, def->duration, eps);
     return true;
 }
 
@@ -404,6 +462,7 @@ void install_timelines(World& world, asset::AssetSystem* assets) {
     world.register_event<TimelineSignal>(Phase::FixedUpdate_Post);
     world.set_resource(TimelineRegistry(assets));
     world.add_system(Phase::FixedUpdate_Post, "timeline_player", &timeline_player);
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "timeline_player");
 }
 
 }  // namespace mce::kit

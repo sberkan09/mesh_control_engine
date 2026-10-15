@@ -31,6 +31,12 @@
 //                                            previous level's triangles (default 0.35) while the
 //                                            deviation stays under `lod_error` of the primitive's
 //                                            size (default 0.05); a level that saves < 10% ends it
+//                   { "ragdoll": { "<bone>": { "exclude": true, "include": true, "radius": 0.08,
+//                                  "swing": 45, "twist": 20, "mass": 1.5 }, ... } }
+//                                            per-bone overrides for kit::Ragdoll3D (M-GAMEPLAY3D 3),
+//                                            by skin joint node name: no body (the bone rides with its
+//                                            parent), a body however short, capsule radius (m), swing
+//                                            and twist limits (degrees), a weight on its mass share
 //
 // Authored LODs: a node named `<name>_LOD<n>` (n = 1..3) is not drawn; its primitives become level
 // n of node `<name>`'s primitives (by index), quantized with their bounds. A primitive with
@@ -1413,6 +1419,76 @@ mat4 mat4_from(const f32 m[16]) {
     return r;
 }
 
+// The sidecar's "ragdoll" object: per-bone overrides written into the skin joints of the bones it
+// names (asset::MeshRagdoll). `any` is set when one was written.
+bool apply_ragdoll_settings(const ImportInput& in, const Output& out, SkinOutput& skins, bool& any, DiagList& diags) {
+    const JsonValue rag = in.settings.valid() ? in.settings.get("ragdoll") : JsonValue();
+    if (!rag.valid() || rag.is_null()) return true;
+    if (!rag.is_object()) {
+        diags.error(Errc::ParseError, in.display_path, 0, 0, kStage, "'ragdoll' must be an object of bone name -> overrides");
+        return false;
+    }
+    if (rag.size() > 0 && skins.joints.empty()) {
+        diags.error(Errc::InvalidArgument, in.display_path, 0, 0, kStage, "'ragdoll' names bones but the mesh has no skin");
+        return false;
+    }
+    for (u32 i = 0; i < rag.size(); ++i) {
+        const StringView bone = rag.key_at(i);
+        const JsonValue o = rag.at(i);
+        String what;
+        appendf(what, "'ragdoll' bone '%.*s'", static_cast<int>(bone.size()), bone.data());
+        const auto msg = [&](const char* rest) {
+            String m;
+            appendf(m, "%.*s%s", static_cast<int>(what.view().size()), what.view().data(), rest);
+            return m;
+        };
+        if (!o.is_object()) {
+            diags.error(Errc::ParseError, in.display_path, 0, 0, kStage, msg(" must be an object").view());
+            return false;
+        }
+        if (!detail::check_keys(o, {"exclude", "include", "radius", "swing", "twist", "mass"}, in.display_path, kStage, diags))
+            return false;
+        bool exclude = false, include = false;
+        f64 radius = 0.0, swing = 0.0, twist = 0.0, mass = 0.0;
+        if (!detail::read_bool(o, "exclude", false, exclude, in.display_path, kStage, diags) ||
+            !detail::read_bool(o, "include", false, include, in.display_path, kStage, diags) ||
+            !detail::read_number(o, "radius", 0.0, radius, in.display_path, kStage, diags) ||
+            !detail::read_number(o, "swing", 0.0, swing, in.display_path, kStage, diags) ||
+            !detail::read_number(o, "twist", 0.0, twist, in.display_path, kStage, diags) ||
+            !detail::read_number(o, "mass", 0.0, mass, in.display_path, kStage, diags))
+            return false;
+        if (exclude && include) {
+            diags.error(Errc::InvalidArgument, in.display_path, 0, 0, kStage, msg(": 'exclude' and 'include' both set").view());
+            return false;
+        }
+        if (radius < 0.0 || swing < 0.0 || swing > 180.0 || twist < 0.0 || twist > 180.0 || mass < 0.0) {
+            diags.error(Errc::InvalidArgument, in.display_path, 0, 0, kStage,
+                        msg(": radius and mass must be >= 0, swing and twist in 0..180 degrees").view());
+            return false;
+        }
+        u32 flags = (exclude ? asset::MeshRagdoll::Exclude : 0u) | (include ? asset::MeshRagdoll::Include : 0u) |
+                    (o.get("radius").valid() ? asset::MeshRagdoll::Radius : 0u) | (o.get("swing").valid() ? asset::MeshRagdoll::Swing : 0u) |
+                    (o.get("twist").valid() ? asset::MeshRagdoll::Twist : 0u) | (o.get("mass").valid() ? asset::MeshRagdoll::Mass : 0u);
+        bool found = false;
+        for (asset::MeshJoint& j : skins.joints) {
+            const asset::MeshNode& n = out.nodes[j.node];
+            if (StringView(out.strings.data() + n.name_offset, n.name_size) != bone) continue;
+            found = true;
+            j.ragdoll_flags = flags;
+            j.ragdoll_radius = static_cast<f32>(radius);
+            j.ragdoll_swing = static_cast<f32>(swing);
+            j.ragdoll_twist = static_cast<f32>(twist);
+            j.ragdoll_mass = static_cast<f32>(mass);
+        }
+        if (!found) {
+            diags.error(Errc::InvalidArgument, in.display_path, 0, 0, kStage, msg(" is not a joint of the mesh's skins").view());
+            return false;
+        }
+        any = any || flags != 0;
+    }
+    return true;
+}
+
 class GltfImporter final : public IImporter {
 public:
     StringView id() const override { return "gltf"; }
@@ -1447,7 +1523,7 @@ public:
     }
 
     bool cook(const ImportInput& in, asset::ContainerWriter& writer, DiagList& diags) const override {
-        if (!detail::check_keys(in.settings, {"scale", "max_triangles", "skinning", "lod_levels", "lod_ratio", "lod_error"},
+        if (!detail::check_keys(in.settings, {"scale", "max_triangles", "skinning", "lod_levels", "lod_ratio", "lod_error", "ragdoll"},
                                 in.display_path, kStage, diags))
             return false;
         f64 scale = 1.0, max_triangles = 0.0, lod_levels = 0.0, lod_ratio = 0.35, lod_error = 0.05;
@@ -1488,6 +1564,8 @@ public:
         if (!import_animations(cx, g, remap, static_cast<f32>(scale), out)) return false;
         SkinOutput skin_out;
         if (!import_skins(cx, g, remap, out.geo, skin_out)) return false;
+        bool ragdoll = false;
+        if (!apply_ragdoll_settings(in, out, skin_out, ragdoll, diags)) return false;
         if (diags.error_count() != errors_before) return false;
         if (out.geo.submeshes.empty()) cx.warning(g.root, "the scene has no mesh primitives");
         usize triangles = 0;  // the base levels: LODs are cheaper by construction
@@ -1572,11 +1650,13 @@ public:
             d.skin_vertices = out.geo.skin_vertices.span();
             d.submesh_skins = skin_out.submesh_skins.span();
         }
+        if (ragdoll) d.flags |= asset::MeshFlags::Ragdoll;
         Array<byte> payload;
         asset::write_mesh(d, payload);
         asset::ContainerWriter::ChunkDesc desc;
         desc.type = ChunkType::Mesh;
-        desc.version = asset::chunk_version(asset::MESH_VERSION, !lods.empty()              ? asset::MESH_MINOR_LODS
+        desc.version = asset::chunk_version(asset::MESH_VERSION, ragdoll                  ? asset::MESH_MINOR_RAGDOLL
+                                                                 : !lods.empty()          ? asset::MESH_MINOR_LODS
                                                                  : skin_out.skins.empty() ? 0
                                                                                           : asset::MESH_MINOR_SKIN);
         desc.guid = in.guid;

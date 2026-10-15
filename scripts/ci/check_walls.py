@@ -100,7 +100,15 @@ WALLS = [
         ["src/engine/net/src/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
-    # Luau (ADR-0042 spike): the VM and compiler headers stay inside mce_script's sources.
+    # Sockets (M-NET2 step 6): the WebSocket transport's TCP layer is private to mce_net's sources,
+    # like ENet. Everything else reaches the network through net::Transport.
+    (
+        "socket wall",
+        re.compile(r"[<\"](sys/socket\.h|netinet/|arpa/inet\.h|netdb\.h|winsock2?\.h|ws2tcpip\.h|emscripten/websocket\.h)"),
+        ["src/engine/net/src/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
+    # Luau (ADR-0041 spike): the VM and compiler headers stay inside mce_script's sources.
     (
         "Luau wall",
         re.compile(r"#\s*include\s*[<\"](lua|lualib|luacode|luaconf)\.h[>\"]"),
@@ -141,7 +149,7 @@ LINK_WALLS = [
     ("net opt-in wall", re.compile(r"\bmce_net\b"), ["src/engine/net/", "samples/", "games/", "projects/", "templates/", "tests/"]),
     ("Recast link wall", re.compile(r"\bmce_recast\b"), ["src/engine/physics3d/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
-    # The Luau scripting spike (ADR-0042) is opt-in: its test and its headless sample link it, no
+    # The Luau scripting spike (ADR-0041) is opt-in: its test and its headless sample link it, no
     # engine library, host or tool does; Luau's targets are linked by mce_script alone.
     ("script opt-in wall", re.compile(r"\bmce_script\b"), ["src/engine/script/", "samples/script_headless/", "tests/script/"]),
     ("Luau link wall", re.compile(r"\bLuau\.\w+"), ["src/engine/script/"]),

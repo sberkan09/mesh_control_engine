@@ -85,6 +85,8 @@
 #include "mce/input/script.h"
 #include "mce/kit/captions.h"
 #include "mce/kit/stock.h"
+#include "mce/kit/cinematic.h"
+#include "mce/kit/timeline.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/kit3d_extract.h"
 #include "mce/kit/particles.h"
@@ -139,6 +141,9 @@ MCE_CVAR(cv_mods_dir, "mods_dir", "", "Mods folder override (only for games that
 MCE_CVAR(cv_scene, "scene", "", "Scene to play: GUID or source path (default: the first scene)", CVarFlags::None);
 MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window closes)", CVarFlags::None);
 MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames or -capture_tick) to this .ppm path (relative to the working directory; parents are created)",
+         CVarFlags::None);
+MCE_CVAR(cv_access_log, "access_log", "",
+         "Append every screen reader announcement to this text file, one per line (a desktop without a reader, captures)",
          CVarFlags::None);
 MCE_CVAR(cv_capture_tick, "capture_tick", 0,
          "Windowed: quit (and -capture) on the first frame after this many sim ticks of this run, whatever the frame rate; "
@@ -217,10 +222,6 @@ MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
          CVarFlags::None);
-MCE_CVAR(cv_screen_reader, "access.screen_reader", 1,
-         "Speak the focused menu item and a focused slider's new value through the device's screen reader: "
-         "0 never, 1 while the OS reports a reader on (VoiceOver, TalkBack, Narrator...), 2 always",
-         CVarFlags::Saved);
 MCE_CVAR(cv_haptics, "haptics", true,
          "Haptic feedback: phone taps and gamepad rumble from platform::haptics::play (off: none; never in the state hash)",
          CVarFlags::Saved);
@@ -473,6 +474,17 @@ public:
             console_.init(skin_.skin, 0.5f);
             subtitles_.set_skin(skin_.skin);
             platform::screen_reader::attach(*window_);
+            if (!cv_access_log.get_string().empty()) {
+                access_log_ = std::fopen(FixedString<512>(cv_access_log.get_string()).c_str(), "w");
+                if (access_log_)
+                    platform::screen_reader::set_sink(
+                        [](void* user, StringView text) {
+                            auto* f = static_cast<std::FILE*>(user);
+                            std::fprintf(f, "%.*s\n", static_cast<int>(text.size()), text.data());
+                            std::fflush(f);
+                        },
+                        access_log_);
+            }
             for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
                 const ui::Layer* l = desc_.ui_layers[i];
                 if (l && l->init && !l->init(l->user, renderer_, skin_.skin))
@@ -520,7 +532,9 @@ public:
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
         if (platform::steam::running()) platform::steam::run_callbacks(nullptr, nullptr);  // M-STEAM step 2 routes them
         if (t.actions) {  // the UI screens navigate with the newest snapshot (edges once: ui_fresh_)
+            const input::InputState pending = ui_actions_;
             ui_actions_ = *t.actions;
+            if (ui_fresh_) carry_ui_edges(pending, ui_actions_);
             ui_fresh_ = true;
         }
         if (paused_ || ad_paused_) return;  // sim_held() mirrors these two tests and the next
@@ -603,11 +617,13 @@ public:
 
         update_console(bb);
         update_ui_layers(bb);
+        const bool cutscene = kit::cutscene_view(world_, cutscene_) && !ui_preview_;
+        update_ui_map(cutscene && cutscene_.active);
         update_subtitles(bb);
         speak_focus();
         update_ui_screens(bb);
         const bool overlay =
-            paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() || cv_stats.get_bool();
+            paused_ || console_.is_open() || desc_.ui_layer_count > 0 || screens_.active() || cv_stats.get_bool() || cutscene;
 
         // 3D: the kit3d scene first (it ends in the backbuffer); the 2D kit draws over it.
         if (!three_d_ && kit::has_camera_3d(world_)) {
@@ -1540,25 +1556,16 @@ private:
     // The screen reader (M-ACCESS): the focused item of the menu that owns focus (the console while
     // it is open), and a focused slider's new value, spoken through the device's reader.
     void speak_focus() {
-        const i32 mode = cv_screen_reader.get_int();
-        if (mode <= 0) return;
-        if (mode == 1) {  // the OS asked once a second: a reader turned on mid-game starts speaking
-            if (reader_check_frames_-- <= 0) {
-                reader_on_ = platform::screen_reader::running();
-                reader_check_frames_ = 60;
-            }
-            if (!reader_on_) {
-                announcer_.reset();
-                return;
-            }
+        if (!platform::screen_reader::wanted()) {
+            announcer_.reset();
+            return;
         }
         const ui::Document* doc = console_.is_open() ? &console_.document() : screens_.focus_document();
         FixedString<192> line;
         if (announcer_.next(doc, line)) platform::screen_reader::announce(line.view());
     }
     ui::AccessAnnouncer announcer_;
-    bool reader_on_ = false;
-    i32 reader_check_frames_ = 0;
+    std::FILE* access_log_ = nullptr;  // -access_log (kept open to the end; flushed per line)
 
     // The scene's UI screens (kit::UiScreen, M-UI-DATA step 2).
     Result<void> load_ui_screens() {
@@ -1575,19 +1582,22 @@ private:
         return {};
     }
 
-    void update_ui_screens(rhi::Extent2D bb) {
-        if (!screens_.active()) return;
-        // A visible modal screen owns the controls: the "UI" action map (Navigate / Confirm / Cancel)
-        // blocks the game's map below it until the screen hides.
-        const bool modal = screens_.modal_visible() && !console_.is_open();
+    // A visible modal screen or a playing cutscene owns the controls: the "UI" action map (Navigate /
+    // Confirm / Cancel; Cancel skips a cutscene) blocks the game's map below it until it ends.
+    void update_ui_map(bool cutscene) {
+        const bool modal = ((screens_.active() && screens_.modal_visible()) || cutscene) && !console_.is_open();
         if (modal && !ui_map_pushed_ && !ui_map_missing_) {
             ui_map_pushed_ = input_.push_map(MCE_SID("UI"));
             ui_map_missing_ = !ui_map_pushed_;
-            if (ui_map_missing_) MCE_LOG_WARN("{}: the input map has no \"UI\" map for the UI screens", desc_.app_name);
+            if (ui_map_missing_) MCE_LOG_WARN("{}: the input map has no \"UI\" map for UI screens and cutscenes", desc_.app_name);
         } else if (!modal && ui_map_pushed_) {
             input_.pop_map();
             ui_map_pushed_ = false;
         }
+    }
+
+    void update_ui_screens(rhi::Extent2D bb) {
+        if (!screens_.active()) return;
         ui::UpdateContext ctx;
         ctx.viewport = bb;
         ctx.safe_insets = ui::SafeInsets{static_cast<f32>(safe_insets_.left), static_cast<f32>(safe_insets_.top),
@@ -1631,11 +1641,63 @@ private:
             const ui::Layer* l = desc_.ui_layers[i];
             if (l && l->submit) l->submit(l->user, hud, static_cast<i16>(-40 + 4 * static_cast<i32>(i)));
         }
+        if (cutscene_.bars > 0.0f || cutscene_.active) add_cutscene_overlay(hud, bb);
         if (paused_) add_pause_overlay(hud, bb);
         if (cv_stats.get_bool()) add_stats_line(hud);
         console_.submit(hud, 200);
         hud.build();
         renderer_.record_2d(cmd, hud);
+    }
+
+    // A cutscene (kit::Cutscene, M-CINEMA): letterbox bars over the frame, under the subtitles
+    // (update_subtitles shows the timeline's lines) and the UI screens, and the hold-to-skip prompt.
+    void add_cutscene_overlay(render::SpriteBatch& hud, rhi::Extent2D bb) {
+        const f32 w = static_cast<f32>(bb.width), h = static_cast<f32>(bb.height);
+        const f32 bar = std::floor(h * cutscene_.letterbox * cutscene_.bars + 0.5f);
+        const render::SpriteSetId solid = extract_.sprite_set(asset::Guid{});
+        constexpr i16 kLayer = -130;  // over the world, under the subtitles (-124) and the UI screens (-120)
+        if (bar > 0.0f) {
+            for (u32 i = 0; i < 2; ++i) {
+                render::SpriteInstance s;
+                s.set = solid;
+                s.position = {0.5f * w, i == 0 ? 0.5f * bar : h - 0.5f * bar};
+                s.scale = {w, bar};
+                s.tint = Color{0.0f, 0.0f, 0.0f, 1.0f};
+                s.sort_layer = kLayer;
+                hud.add(s);
+            }
+        }
+        const kit::Cutscene* c = world_.alive(cutscene_.entity) ? world_.try_get<kit::Cutscene>(cutscene_.entity) : nullptr;
+        if (!c || !cutscene_.active) return;
+        const f32 scale = math::max(1.0f, std::floor(h / 360.0f));
+        const f32 margin = 12.0f * scale;
+        if (!cutscene_.show_skip) return;
+        render::TextLayout layout(mem::frame());
+        render::TextLayoutDesc desc;
+        desc.size_px = 14.0f * scale;
+        render::layout_text(skin_.font.face, c->skip_prompt.view(), desc, layout);
+        const f32 track = 64.0f * scale, thick = 3.0f * scale;
+        const f32 right = w - margin - static_cast<f32>(safe_insets_.right);
+        const f32 top = margin + static_cast<f32>(safe_insets_.top);
+        render::TextPlacement p;
+        p.origin = {right - track - margin - layout.width, top};
+        p.sort_layer = kLayer;
+        p.sort_order = 2;
+        p.tint = Color{1.0f, 1.0f, 1.0f, 0.8f};
+        hud.add_text(skin_.font, layout, p);
+        const f32 y = top + 0.5f * layout.height;
+        for (u32 i = 0; i < 2; ++i) {  // the track, then the fill
+            const f32 len = i == 0 ? track : track * cutscene_.skip_progress;
+            if (len <= 0.0f) continue;
+            render::SpriteInstance s;
+            s.set = solid;
+            s.position = {right - track + 0.5f * len, y};
+            s.scale = {len, thick};
+            s.tint = i == 0 ? Color{1.0f, 1.0f, 1.0f, 0.25f} : Color{1.0f, 1.0f, 1.0f, 0.9f};
+            s.sort_layer = kLayer;
+            s.sort_order = 1 + static_cast<i32>(i);
+            hud.add(s);
+        }
     }
 
     void add_pause_overlay(render::SpriteBatch& hud, rhi::Extent2D bb) {
@@ -2250,8 +2312,30 @@ private:
     bool paused_ = false;
     bool settings_on_ = false;  // this run reads and writes <save folder>/settings.cfg
     player::UiScreens screens_;
+    // Several ticks between two rendered frames (a slow device, software GL): the edges and the
+    // navigation taps of the ticks no frame saw ride in the newest snapshot, so a press is never lost.
+    static void carry_ui_edges(const input::InputState& from, input::InputState& to) {
+        to.confirm_pressed |= from.confirm_pressed;
+        to.cancel_pressed |= from.cancel_pressed;
+        to.pause_pressed |= from.pause_pressed;
+        to.fire_pressed |= from.fire_pressed;
+        to.jump_pressed |= from.jump_pressed;
+        if (to.move.x == 0.0f && to.move.y == 0.0f) to.move = from.move;
+        for (u32 i = 0; i < to.action_count && i < from.action_count; ++i) {
+            if (to.action_names[i] != from.action_names[i]) continue;
+            input::ActionState& a = to.actions[i];
+            const input::ActionState& b = from.actions[i];
+            a.pressed = a.pressed || b.pressed;
+            a.released = a.released || b.released;
+            if (!a.held && b.held) {  // a tap that began and ended between two frames
+                a.x = b.x;
+                a.y = b.y;
+            }
+        }
+    }
     input::InputState ui_actions_;  // the newest tick snapshot, for the UI screens' navigation
     bool ui_fresh_ = false;         // ui_actions_ arrived since the last rendered frame
+    kit::CutsceneView cutscene_;  // this frame's cutscene (letterbox, skip prompt)
     bool ui_map_pushed_ = false;
     bool ui_map_missing_ = false;
     bool ui_preview_ = false;  // -ui_preview: one document over the clear color

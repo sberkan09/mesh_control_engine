@@ -28,7 +28,9 @@
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/SixDOFConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
+#include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Ragdoll/Ragdoll.h>
 #include <Jolt/RegisterTypes.h>
 
 #include <cfloat>
@@ -285,6 +287,27 @@ struct World3D::Impl {
     bool had_joints = false;  // hash_state folds joints only once a world has had one
     JPH::Ref<JointPairFilter> pair_filter = new JointPairFilter();
 
+    struct RagdollSlot {
+        JPH::Ref<JPH::Ragdoll> ragdoll;
+        Entity owner;
+        u32 generation = 0;
+        bool alive = false;
+    };
+    Array<RagdollSlot> ragdolls;
+    Array<u32> free_ragdolls;
+    u32 live_ragdolls = 0;
+    u32 ragdoll_groups = 0;     // Jolt collision group per ragdoll (unique in the system)
+    bool had_ragdolls = false;  // hash_state folds ragdolls only once a world has had one
+
+    // id = generation << 20 | (index + 1), as joints.
+    RagdollSlot* find_ragdoll(u32 id) {
+        const u32 i = (id & 0xFFFFFu) - 1u;
+        if ((id & 0xFFFFFu) == 0 || i >= ragdolls.size()) return nullptr;
+        RagdollSlot& r = ragdolls[i];
+        return r.alive && r.generation == (id >> 20) ? &r : nullptr;
+    }
+    const RagdollSlot* find_ragdoll(u32 id) const { return const_cast<Impl*>(this)->find_ragdoll(id); }
+
     explicit Impl(const PhysicsConfig3D& c) : config(c), temp(static_cast<JPH::uint>(c.temp_allocator_bytes)) {
         system.Init(c.max_bodies, 0, c.max_body_pairs, c.max_contact_constraints, bp_layers, object_vs_bp,
                     object_pairs);
@@ -295,6 +318,9 @@ struct World3D::Impl {
         for (Joint& j : joints)
             if (j.alive) system.RemoveConstraint(j.constraint);
         joints.clear();
+        for (RagdollSlot& r : ragdolls)
+            if (r.alive) r.ragdoll->RemoveFromPhysicsSystem();
+        ragdolls.clear();  // destroys the parts' bodies
         JPH::BodyInterface& bi = system.GetBodyInterfaceNoLock();
         for (Slot& s : slots) {
             if (!s.alive) continue;
@@ -938,6 +964,160 @@ bool World3D::joint_state(u32 joint, JointState3D& out) const {
     return true;
 }
 
+// ---- ragdolls ------------------------------------------------------------------------------------------
+
+namespace {
+
+// A unit vector perpendicular to `v` (a unit vector).
+JPH::Vec3 perpendicular(JPH::Vec3Arg v) {
+    const JPH::Vec3 other = std::fabs(v.GetX()) < 0.9f ? JPH::Vec3::sAxisX() : JPH::Vec3::sAxisY();
+    return v.Cross(other).Normalized();
+}
+
+}  // namespace
+
+u32 World3D::create_ragdoll(const RagdollDesc3D& d, Span<const RagdollPart3D> parts) {
+    Impl& w = *impl_;
+    if (parts.empty() || parts.size() > 0xFFFFu) return 0;
+    JPH::Ref<JPH::RagdollSettings> rs = new JPH::RagdollSettings();
+    rs->mSkeleton = new JPH::Skeleton();
+    rs->mParts.resize(parts.size());
+    JPH::Array<JPH::Mat44> poses;
+    poses.reserve(parts.size());
+    for (usize i = 0; i < parts.size(); ++i) {
+        const RagdollPart3D& p = parts[i];
+        if ((i == 0) != (p.parent < 0) || p.parent >= static_cast<i32>(i)) return 0;
+        if (p.shape != ShapeType3D::Capsule && p.shape != ShapeType3D::Sphere && p.shape != ShapeType3D::Box) return 0;
+        if (!positive(p.mass)) return 0;
+        Shape3D shape;
+        shape.type = p.shape;
+        shape.radius = p.radius;
+        shape.half_height = p.half_height;
+        shape.half = p.half;
+        JPH::RefConst<JPH::Shape> js = build_shape(shape, 1000.0f);
+        if (!js) return 0;
+        rs->mSkeleton->AddJoint("", p.parent);
+        const JPH::Quat rot = to_jph(math::normalize(p.rotation));
+        JPH::RagdollSettings::Part& part = rs->mParts[i];
+        part.SetShape(js);
+        part.mPosition = to_jph(p.position);
+        part.mRotation = rot;
+        part.mMotionType = JPH::EMotionType::Dynamic;
+        part.mObjectLayer = object_layer(d.layer, d.mask, true);
+        part.mFriction = d.friction;
+        part.mLinearDamping = d.linear_damping;
+        part.mAngularDamping = d.angular_damping;
+        part.mLinearVelocity = to_jph(p.linear_velocity);
+        part.mAngularVelocity = to_jph(p.angular_velocity);
+        part.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+        part.mMassPropertiesOverride.mMass = p.mass;
+        poses.push_back(JPH::Mat44::sRotationTranslation(rot, to_jph(p.position)));
+        if (p.parent < 0) continue;
+        const JPH::Vec3 twist = to_jph(p.twist_axis);
+        if (twist.LengthSq() < 1e-8f) return 0;
+        auto* c = new JPH::SwingTwistConstraintSettings();
+        c->mSpace = JPH::EConstraintSpace::WorldSpace;
+        c->mPosition1 = c->mPosition2 = to_jph(p.pivot);
+        c->mTwistAxis1 = c->mTwistAxis2 = twist.Normalized();
+        c->mPlaneAxis1 = c->mPlaneAxis2 = perpendicular(c->mTwistAxis1);
+        const f32 swing = math::clamp(p.swing, 0.0f, 3.1f), tw = math::clamp(p.twist, 0.0f, 3.1f);
+        c->mNormalHalfConeAngle = c->mPlaneHalfConeAngle = swing;
+        c->mTwistMinAngle = -tw;
+        c->mTwistMaxAngle = tw;
+        c->mMaxFrictionTorque = d.joint_friction;
+        part.mToParent = c;
+    }
+    rs->Stabilize();
+    rs->DisableParentChildCollisions(poses.data(), 0.0f);
+    JPH::Ref<JPH::Ragdoll> r =
+        rs->CreateRagdoll(static_cast<JPH::CollisionGroup::GroupID>(++w.ragdoll_groups), pack(d.owner), &w.system);
+    if (!r) return 0;  // out of bodies
+    r->AddToPhysicsSystem(JPH::EActivation::Activate);
+
+    u32 i;
+    if (!w.free_ragdolls.empty()) {
+        i = w.free_ragdolls.back();
+        w.free_ragdolls.pop_back();
+    } else {
+        i = static_cast<u32>(w.ragdolls.size());
+        w.ragdolls.emplace_back();
+    }
+    Impl::RagdollSlot& slot = w.ragdolls[i];
+    slot.ragdoll = r;
+    slot.owner = d.owner;
+    slot.alive = true;
+    ++w.live_ragdolls;
+    w.had_ragdolls = true;
+    return (slot.generation << 20) | (i + 1);
+}
+
+void World3D::destroy_ragdoll(u32 ragdoll) {
+    Impl& w = *impl_;
+    Impl::RagdollSlot* r = w.find_ragdoll(ragdoll);
+    if (!r) return;
+    r->ragdoll->RemoveFromPhysicsSystem();
+    const u32 gen = r->generation;
+    *r = Impl::RagdollSlot{};  // releases the ragdoll: its bodies go
+    r->generation = (gen + 1) & 0xFFFu;
+    w.free_ragdolls.push_back(static_cast<u32>(r - w.ragdolls.data()));
+    --w.live_ragdolls;
+}
+
+bool World3D::has_ragdoll(u32 ragdoll) const { return impl_->find_ragdoll(ragdoll) != nullptr; }
+
+u32 World3D::ragdoll_part_count(u32 ragdoll) const {
+    const Impl::RagdollSlot* r = impl_->find_ragdoll(ragdoll);
+    return r ? static_cast<u32>(r->ragdoll->GetBodyCount()) : 0u;
+}
+
+bool World3D::ragdoll_state(u32 ragdoll, Span<BodyState3D> out) const {
+    const Impl& w = *impl_;
+    const Impl::RagdollSlot* r = w.find_ragdoll(ragdoll);
+    if (!r || out.size() < r->ragdoll->GetBodyCount()) return false;
+    const JPH::BodyInterface& bi = w.system.GetBodyInterfaceNoLock();
+    for (usize i = 0; i < r->ragdoll->GetBodyCount(); ++i) {
+        const JPH::BodyID id = r->ragdoll->GetBodyID(static_cast<int>(i));
+        JPH::RVec3 p;
+        JPH::Quat q;
+        bi.GetPositionAndRotation(id, p, q);
+        BodyState3D& s = out[i];
+        s = BodyState3D{};
+        s.entity = r->owner;
+        s.type = BodyType3D::Dynamic;
+        s.position = to_mce(p);
+        s.rotation = to_mce(q);
+        s.linear_velocity = to_mce(bi.GetLinearVelocity(id));
+        s.angular_velocity = to_mce(bi.GetAngularVelocity(id));
+    }
+    return true;
+}
+
+void World3D::ragdoll_impulse(u32 ragdoll, i32 part, vec3 impulse) {
+    Impl& w = *impl_;
+    Impl::RagdollSlot* r = w.find_ragdoll(ragdoll);
+    if (!r) return;
+    JPH::BodyInterface& bi = w.system.GetBodyInterfaceNoLock();
+    const int n = static_cast<int>(r->ragdoll->GetBodyCount());
+    if (part >= 0) {
+        if (part < n) bi.AddImpulse(r->ragdoll->GetBodyID(part), to_jph(impulse));
+        return;
+    }
+    // Spread by mass: every part gets the same change of velocity.
+    f32 total = 0.0f;
+    for (int i = 0; i < n; ++i) {
+        JPH::BodyLockRead lock(w.system.GetBodyLockInterfaceNoLock(), r->ragdoll->GetBodyID(i));
+        if (lock.Succeeded()) total += 1.0f / lock.GetBody().GetMotionProperties()->GetInverseMass();
+    }
+    if (total <= 0.0f) return;
+    const JPH::Vec3 dv = to_jph(impulse) / total;
+    for (int i = 0; i < n; ++i) bi.AddLinearVelocity(r->ragdoll->GetBodyID(i), dv);
+}
+
+bool World3D::ragdoll_active(u32 ragdoll) const {
+    const Impl::RagdollSlot* r = impl_->find_ragdoll(ragdoll);
+    return r && r->ragdoll->IsActive(false);
+}
+
 std::optional<ShapeHit3D> World3D::camera_sweep(vec3 from, vec3 to, f32 sphere_radius) const {
     QueryFilter3D f;
     f.include_dynamic = false;
@@ -1053,6 +1233,25 @@ u64 World3D::hash_state(u64 seed) const {
         for (const Impl::Joint& j : w.joints)
             h.u32v((j.alive ? 1u : 0u) | (j.enabled ? 2u : 0u) | (j.broken ? 4u : 0u) | (j.slot_a << 3));
     }
+    if (w.had_ragdolls) {  // likewise for ragdolls
+        h.u32v(static_cast<u32>(w.ragdolls.size()));
+        for (const Impl::RagdollSlot& r : w.ragdolls) {
+            h.u32v(r.alive ? 1u : 0u);
+            if (!r.alive) continue;
+            for (const JPH::BodyID id : r.ragdoll->GetBodyIDs()) {
+                JPH::RVec3 p;
+                JPH::Quat q;
+                bi.GetPositionAndRotation(id, p, q);
+                v3(p);
+                h.f32v(q.GetX());
+                h.f32v(q.GetY());
+                h.f32v(q.GetZ());
+                h.f32v(q.GetW());
+                v3(bi.GetLinearVelocity(id));
+                v3(bi.GetAngularVelocity(id));
+            }
+        }
+    }
     return h.value();
 }
 
@@ -1063,6 +1262,7 @@ World3D::Stats World3D::stats() const {
     st.active_bodies = w.system.GetNumActiveBodies(JPH::EBodyType::RigidBody);
     st.characters = w.characters;
     st.joints = w.live_joints;
+    st.ragdolls = w.live_ragdolls;
     return st;
 }
 

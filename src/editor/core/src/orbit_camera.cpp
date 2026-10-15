@@ -297,4 +297,12 @@ bool project_segment(const render::View3D& view, const Segment3D& seg, vec2& a_p
     return true;
 }
 
+void pixel_ray(const render::Camera3D& cam, rhi::Extent2D viewport, vec2 px, vec3& origin, vec3& dir) {
+    const f32 w = max(1.0f, static_cast<f32>(viewport.width)), h = max(1.0f, static_cast<f32>(viewport.height));
+    const f32 t = std::tan(0.5f * cam.fov_y);
+    const vec3 local{(px.x / w * 2.0f - 1.0f) * t * (w / h), (1.0f - px.y / h * 2.0f) * t, -1.0f};
+    origin = cam.position;
+    dir = normalize(rotate(cam.orientation, local));
+}
+
 }  // namespace mce::editor

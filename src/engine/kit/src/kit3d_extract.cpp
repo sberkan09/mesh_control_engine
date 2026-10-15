@@ -5,7 +5,9 @@
 #include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/cinematic.h"
 #include "mce/log.h"
+#include "mce/render/accessibility.h"
 #include "mce/string_id.h"
 #include "kit3d_internal.h"
 
@@ -453,6 +455,30 @@ bool Kit3DExtract::camera_of(World& world, Entity e, f32 alpha, render::Camera3D
 }
 
 bool Kit3DExtract::view_of(World& world, Entity e, const Camera3DComponent& c, f32 alpha, render::Camera3D& out) {
+    if (!base_view_of(world, e, c, alpha, out)) return false;
+    // M-CINEMA: a blend from another camera's view, then this camera's shake.
+    if (const CameraBlend3D* b = world.try_get<CameraBlend3D>(e); b && !(b->from == e) && world.alive(b->from)) {
+        const f32 w = camera_blend_weight(*b);
+        const Camera3DComponent* fc = world.try_get<Camera3DComponent>(b->from);
+        render::Camera3D from;
+        if (w < 1.0f && fc && base_view_of(world, b->from, *fc, alpha, from)) {
+            out.position = lerp(from.position, out.position, w);
+            out.orientation = normalize(slerp(from.orientation, out.orientation, w));
+            out.fov_y = lerp(from.fov_y, out.fov_y, w);
+        }
+    }
+    if (const CameraShake3D* s = world.try_get<CameraShake3D>(e); s && s->trauma > 0.0f) {
+        // Reduced motion (M-ACCESS) scales the view's shake, never the component.
+        const f32 motion = render::accessibility_settings().motion_scale;
+        const vec3 r = s->offset_rotation * motion;
+        out.position = out.position + rotate(out.orientation, s->offset * motion);
+        out.orientation = normalize(out.orientation * quat_from_axis_angle({0.0f, 1.0f, 0.0f}, r.y) *
+                                    quat_from_axis_angle({1.0f, 0.0f, 0.0f}, r.x) * quat_from_axis_angle({0.0f, 0.0f, 1.0f}, r.z));
+    }
+    return true;
+}
+
+bool Kit3DExtract::base_view_of(World& world, Entity e, const Camera3DComponent& c, f32 alpha, render::Camera3D& out) {
     vec3 pos, scale;
     quat rot;
     if (!pose_of(world, e, pos, rot, scale)) return false;
@@ -541,6 +567,8 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.dof.max_radius = env.dof_max_radius;
     post.motion_blur.enabled = env.motion_blur != 0 && quality_.dof_motion_blur;
     post.motion_blur.intensity = env.motion_blur_intensity;
+    post.upscaler = env.upscaler != 0 ? render::Upscaler::Spatial : render::Upscaler::Bilinear;
+    post.sharpen = env.sharpen;
     render::apply_accessibility(render::accessibility_settings(), post);  // M-ACCESS: never in the state
     scene.set_post(post);
     render::AmbientOcclusion ao;
@@ -633,6 +661,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         return length_sq(c - q) <= r * r;
     };
 
+    const Ragdoll3DPoses* ragdolls = world.try_resource<Ragdoll3DPoses>();
     world.query<const MeshRef&>().each([&](Entity e, const MeshRef& m) {
         if (!m.visible) return;
         vec3 pos, scale;
@@ -663,13 +692,20 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         inst.cast_shadows = m.cast_shadows != 0;
         inst.skinning = m.skinning != 0;
         inst.material = material(m.material.guid);
-        if (const Animator* a = world.try_get<Animator>(e); a && a->playing != 0 && !mesh->nodes.empty()) {
+        if (!mesh->nodes.empty()) {
+            const Animator* a = world.try_get<Animator>(e);
             render::ClipSample samples[3];
-            const usize n = anim_samples(*a, *mesh, [&](u64 id) { return find_clip_id(*mesh, id); }, samples);
-            if (n > 0) {
+            const usize n =
+                a && a->playing != 0 ? anim_samples(*a, *mesh, [&](u64 id) { return find_clip_id(*mesh, id); }, samples) : 0;
+            const bool ragdoll = ragdolls && ragdolls->poses.find(e);
+            if (n > 0 || ragdoll) {
                 const usize first = poses_.size();
                 poses_.resize(first + mesh->nodes.size());
-                pose_samples(*mesh, samples, n, Span<mat4>(poses_.data() + first, mesh->nodes.size()));
+                const Span<mat4> pose(poses_.data() + first, mesh->nodes.size());
+                if (n > 0) pose_samples(*mesh, samples, n, pose);
+                else
+                    for (usize i = 0; i < pose.size(); ++i) pose[i] = mesh->rest_pose[i];
+                if (ragdoll) apply_ragdoll_pose(world, e, pose);
                 pose_first_.push_back(static_cast<u32>(first));
                 pose_first_.push_back(static_cast<u32>(mesh->nodes.size()));
                 pose_first_.push_back(static_cast<u32>(pending_.size()));

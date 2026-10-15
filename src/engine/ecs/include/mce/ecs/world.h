@@ -451,9 +451,16 @@ public:
     // systems marked run_when_held (the one that releases the hold, say); the tick index,
     // commands and events still advance, Startup and the render phases are unaffected. The hold
     // is sim state set by a system (kit::UiFlow), so a replay holds on the same ticks.
+    // A cutscene hold (kit::Cutscene, M-CINEMA) is the lighter one: gameplay stops, but the systems
+    // marked run_during_cutscenes (timelines, animators, cameras, audio, transforms) play on. A
+    // pause hold on top of it stops those too.
     void set_held(bool held) { held_ = held; }
-    bool held() const { return held_; }
+    bool held() const { return held_ || cutscene_held_; }  // either hold
+    bool paused() const { return held_; }                    // the pause hold alone
+    void set_cutscene_held(bool held) { cutscene_held_ = held; }
+    bool cutscene_held() const { return cutscene_held_; }
     void run_when_held(Phase phase, const char* name);  // a system registered earlier in `phase`
+    void run_during_cutscenes(Phase phase, const char* name);  // likewise; runs through cutscene holds only
     Span<const char* const> system_names(Phase phase) const;
     // Per-system wall time (editor perf dashboards). Off by default: the hot path reads no clock.
     // Turning it on resets the totals. Timings are listed in phase, then execution, order.
@@ -529,7 +536,8 @@ private:
         f64 last_ms = 0.0;  // profiling only
         f64 total_ms = 0.0;
         u64 runs = 0;
-        bool when_held = false;  // runs on held ticks too (run_when_held)
+        bool when_held = false;      // runs on held ticks too (run_when_held)
+        bool when_cutscene = false;  // runs through cutscene holds (run_during_cutscenes)
     };
     struct Resource {
         void* ptr = nullptr;
@@ -589,6 +597,7 @@ private:
     bool started_ = false;
     bool profiling_ = false;
     bool held_ = false;
+    bool cutscene_held_ = false;
     u64 tick_ = 0;
 };
 

@@ -6,15 +6,21 @@
 
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "mce/audio/components.h"
 #include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
 #include "mce/input/ecs.h"
+#include "mce/cook/timeline_text.h"
+#include "mce/kit/cinematic.h"
 #include "mce/kit/components.h"
+#include "mce/kit/timeline.h"
 #include "mce/kit/novel.h"
 #include "mce/loc/loc.h"
+#include "mce/convar.h"
 #include "mce/platform/haptics.h"
+#include "mce/platform/screen_reader.h"
 #include "novel_fixture.h"
 
 using namespace mce;
@@ -165,6 +171,55 @@ TEST_CASE("novel: the bot plays a run through a game command to its policy's end
     CHECK(first.n().ending == static_cast<u8>(fx::Ending::Quiet));
 }
 
+TEST_CASE("novel: @cutscene plays a timeline as a cutscene and the story goes on when it ends or is skipped") {
+    for (const bool skip : {false, true}) {
+        Novel g(0);
+        kit::install_timelines(g.w, nullptr);
+        kit::install_cinematic(g.w);
+        cook::TimelineDocument d;
+        d.name = "intro";
+        d.duration = 0.5f;
+        Array<byte> payload;
+        cook::build_timeline_chunk(d, payload);
+        const asset::Guid guid{0x7e400000'00004000ull, 0x8000000000000009ull};
+        REQUIRE(g.w.resource<kit::TimelineRegistry>().define(guid, payload.span()));
+        g.n().timelines[1] = guid;  // what the pack's timelines/intro.mctimeline gives a cooked game
+        u16 theatre = 0;
+        for (u32 i = 0; i < fx::kProgram.label_count; ++i)
+            if (std::strcmp(fx::kProgram.labels[i].name, "theatre") == 0) theatre = fx::kProgram.labels[i].op;
+        REQUIRE(theatre != 0);
+        // A saved run standing at the label: the title menu offers Continue.
+        g.w.query<nv::StoryState&>().each([&](nv::StoryState& st) { st.pc = theatre; });
+        g.step();  // boot: the title menu
+        g.step();
+        input::InputState enter;
+        enter.confirm_pressed = true;
+        g.step(enter);  // Continue: the run resumes at the label
+        REQUIRE(g.n().mode == nv::Mode::Cutscene);
+        g.step();  // the cutscene entity arrives at the end of the tick that spawned it
+        const Entity e = g.n().cutscene;
+        REQUIRE(g.w.alive(e));
+        CHECK(g.w.try_get<kit::Cutscene>(e)->active);
+        CHECK_FALSE(g.w.cutscene_held());  // the novel's own systems watch it
+        u32 ticks = 0;
+        while (g.n().mode == nv::Mode::Cutscene && ticks < 120) {
+            input::InputState in;
+            if (skip) {
+                in.action_count = 1;
+                in.action_names[0] = StringId("Cancel");
+                in.actions[0].held = true;
+                in.actions[0].held_time = 2.0f;
+            }
+            g.step(in);
+            ++ticks;
+        }
+        CHECK(g.n().finished);  // @end after the cutscene
+        CHECK(ticks < (skip ? 5u : 40u));
+        g.step();
+        CHECK_FALSE(g.w.alive(e));
+    }
+}
+
 TEST_CASE("novel: a player's Enter starts a run and reads it") {
     Novel g(0);
     g.n().instant_text = true;
@@ -175,6 +230,42 @@ TEST_CASE("novel: a player's Enter starts a run and reads it") {
     for (u32 i = 0; i < 400 && !g.n().finished; ++i) g.step(i % 2 == 0 ? enter : input::InputState{});
     CHECK(g.n().finished);
     CHECK(g.n().ending != 0);
+}
+
+TEST_CASE("screen reader (M-ACCESS): the stage says the title row, each finished page with its speaker, and the choice") {
+    ConVar* reader = ConVar::find(StringId("access.screen_reader"));
+    REQUIRE(reader != nullptr);
+    reader->set_int(2);  // always: no reader runs here
+    std::vector<std::string> said;
+    platform::screen_reader::set_sink([](void* user, StringView text) { static_cast<std::vector<std::string>*>(user)->emplace_back(text); },
+                                      &said);
+    Novel g(0);
+    g.n().instant_text = true;
+    g.step();
+    g.step();
+    REQUIRE(g.n().mode == nv::Mode::Title);
+    REQUIRE(said.size() == 1);
+    CHECK(said[0] == "New game, 1 of 1");
+    input::InputState enter;
+    enter.confirm_pressed = true;
+    for (u32 i = 0; i < 400 && g.n().mode != nv::Mode::Choice; ++i) g.step(i % 2 == 0 ? enter : input::InputState{});
+    REQUIRE(g.n().mode == nv::Mode::Choice);
+    for (u32 i = 0; i < 4; ++i) g.step();  // nothing new: nothing said again
+    const std::vector<std::string> want{"New game, 1 of 1", "The harbour is quiet.", "Mira: Morning.", "Wave back, 1 of 2"};
+    CHECK(said == want);
+    input::InputState down;
+    down.move.y = -1.0f;
+    g.step(down);
+    g.step();
+    CHECK(said.back() == "Walk on, 2 of 2");
+
+    reader->set_int(0);  // never: the stage stays quiet
+    const size_t before = said.size();
+    g.step(enter);
+    for (u32 i = 0; i < 10; ++i) g.step();
+    CHECK(said.size() == before);
+    platform::screen_reader::set_sink(nullptr, nullptr);
+    reader->set_int(1);
 }
 
 TEST_CASE("dialogue: a conversation runs from a label, a variable gates its options") {
