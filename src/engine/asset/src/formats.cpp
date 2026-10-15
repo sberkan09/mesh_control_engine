@@ -441,6 +441,59 @@ Result<SequenceView> SequenceView::read(Span<const byte> payload) {
     return v;
 }
 
+// ------------------------------------------------------------------ timeline
+
+StringView TimelineView::name() const {
+    usize n = 0;
+    while (n < sizeof(header->name) && header->name[n] != '\0') ++n;
+    return StringView(header->name, n);
+}
+
+StringView TimelineView::string(u32 offset) const {
+    if (offset >= strings.size()) return {};
+    usize n = 0;
+    while (offset + n < strings.size() && strings[offset + n] != '\0') ++n;
+    return StringView(strings.data() + offset, n);
+}
+
+Result<TimelineView> TimelineView::read(Span<const byte> payload) {
+    TimelineView v;
+    v.header = header_of<TimelineHeader>(payload);
+    if (!v.header) return Error(Errc::Truncated, "asset.timeline.read");
+    const TimelineHeader& h = *v.header;
+    constexpr u32 kMax = 1u << 20;
+    if (!(h.duration > 0.0f) || h.track_count > kMax || h.key_count > kMax || h.string_bytes > kMax * 16)
+        return Error(Errc::InvalidArgument, "asset.timeline.read");
+    const u64 bytes = sizeof(TimelineHeader) + u64(h.track_count) * sizeof(TimelineTrack) + u64(h.key_count) * sizeof(TimelineKey) +
+                      h.string_bytes;
+    if (bytes > payload.size()) return Error(Errc::Truncated, "asset.timeline.read");
+    const byte* p = payload.data() + sizeof(TimelineHeader);
+    v.tracks = Span<const TimelineTrack>(reinterpret_cast<const TimelineTrack*>(p), h.track_count);
+    p += usize(h.track_count) * sizeof(TimelineTrack);
+    v.keys = Span<const TimelineKey>(reinterpret_cast<const TimelineKey*>(p), h.key_count);
+    p += usize(h.key_count) * sizeof(TimelineKey);
+    v.strings = Span<const char>(reinterpret_cast<const char*>(p), h.string_bytes);
+    if (h.string_bytes > 0 && v.strings[h.string_bytes - 1] != '\0') return Error(Errc::InvalidArgument, "asset.timeline.strings");
+    for (const TimelineTrack& t : v.tracks) {
+        if (t.kind > TimelineTrackKind::Subtitle || u64(t.first_key) + t.key_count > h.key_count ||
+            (t.target != kTimelineSelf && t.target >= kTimelineBindings))
+            return Error(Errc::InvalidArgument, "asset.timeline.track");
+        const bool pathed = t.kind == TimelineTrackKind::Property || t.kind == TimelineTrackKind::Activation;
+        if (pathed && t.path >= h.string_bytes) return Error(Errc::InvalidArgument, "asset.timeline.track");
+        if (t.kind == TimelineTrackKind::Property && (t.value_count == 0 || t.value_count > 4))
+            return Error(Errc::InvalidArgument, "asset.timeline.track");
+        f32 prev = 0.0f;
+        for (const TimelineKey& k : v.keys_of(t)) {
+            if (!(k.t >= prev) || !(k.duration >= 0.0f) || k.ease > TimelineEase::EaseOut ||
+                (k.target != kTimelineSelf && k.target >= kTimelineBindings) ||
+                (k.text != kTimelineNoString && k.text >= h.string_bytes) || (k.text2 != kTimelineNoString && k.text2 >= h.string_bytes))
+                return Error(Errc::InvalidArgument, "asset.timeline.key");
+            prev = k.t;
+        }
+    }
+    return v;
+}
+
 // ------------------------------------------------------------------ shader
 
 StringView ShaderView::define(u32 i) const {

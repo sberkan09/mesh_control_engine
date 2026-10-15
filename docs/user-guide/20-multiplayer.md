@@ -113,7 +113,62 @@ build/linux-gcc-debug/samples/net_headless/sample_net_headless -ticks 300
 To test your own game on one machine, run a server host and a client host connecting to
 `127.0.0.1`. The editor's play mode runs a single world, so it does not play multiplayer sessions.
 
-## 20.6 What it does not do yet
+## 20.6 Test on a bad network
+
+Loopback is faster than any real connection. Two tools let you see how your game behaves on a slow,
+jittery or lossy one.
+
+**`Transport`.** `Host` and `SimEndpoint` are both `net::Transport`s, with the same `poll`, `send`,
+`broadcast`, `flush` and `disconnect`. Write your server and client against `net::Transport&`, and the
+same code runs over real UDP or over the simulated network.
+
+**`SimNetwork`.** An in-memory network on a virtual clock. Every message is delayed by the link's latency
+plus some jitter, and may be lost:
+
+```cpp
+net::SimNetwork network(/*seed*/ 1);
+network.set_default_conditions({.latency_ms = 75, .jitter_ms = 20, .loss = 0.05f});
+net::SimEndpoint& server = network.add_endpoint(8, 3);   // up to 8 peers, 3 channels
+net::SimEndpoint& client = network.add_endpoint(1, 3);
+const net::PeerId to_server = client.connect(server);
+// each tick: poll and send on every endpoint, tick the worlds, then
+network.advance(16);                                     // milliseconds of virtual time
+```
+
+The delivery mode decides what loss and jitter do. `Reliable` messages are never lost: a lost one
+arrives a round trip later. `Reliable` and `Sequenced` messages keep their order. A `Sequenced`
+message older than one already delivered is dropped. `Unreliable` messages can arrive in any order.
+`set_conditions(from, to, ...)` sets one direction of one link.
+
+Nothing depends on the wall clock, so the same seed gives the same deliveries every time. A server
+and several clients in one process give the same state hashes on every run and in Debug and Release.
+That makes it the place to test multiplayer code headless:
+
+```
+sample_net_headless -sim 1 -clients 4 -latency 75 -jitter 20 -loss 0.05 -ticks 600
+```
+
+`local_ci.sh`'s determinism stage runs this sample at 75 ms and at 150 ms with 15% loss, and checks
+that every client mirrors the server and that the hash never changes.
+
+**`Host::set_conditions`.** Plays a real build over a simulated bad network. It holds each outgoing
+message for the latency plus jitter before ENet sends it, and drops `Sequenced` and `Unreliable`
+messages at the loss rate. It uses the wall clock, so set it on both the server and the client for
+the full round trip. `sample_net_headless -latency 75 -loss 0.05` runs the UDP sample this way.
+
+**Net stats.** `net::NetStatsMeter` turns a transport's counters into peers, round trip, loss,
+bandwidth and dropped messages per second. Call `meter.update(transport, frame_seconds)` each frame and
+`meter.publish(world)`, and the stock player's stats overlay (F3, `-r.stats 1`) shows a `NET` line
+under the render stats:
+
+```
+NET 1 peer  RTT 152 ms +-30  LOSS 5.0%  UP 3.2 KB/s  DOWN 41.0 KB/s  DROP 12
+```
+
+`publish` writes the world's `DevStatsLines` resource (`mce/ecs/dev_stats.h`). Any module can add a
+line there the same way.
+
+## 20.7 What it does not do yet
 
 Clients show the newest snapshot without prediction or smoothing, every client receives every
 replicated entity, and traffic is not encrypted. There are no lobbies, matchmaking or NAT traversal:

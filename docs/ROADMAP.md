@@ -75,6 +75,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M9 (v1.0 gate) | [M9-ucd.md](milestones/M9-ucd.md) | done (`projects/Kindle`) | non-programmer double-click test, timed UC-C session, LRN gates, memory reconciliation, 60 fps on hardware |
 | M-SKIN | [M-SKIN.md](milestones/M-SKIN.md), ADR-0036 | done | — |
 | M-NET | ADR-0035 | done | — |
+| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (Linear SBA-82 … SBA-88) | active (step 1 done: `SimNetwork` with simulated latency, jitter and loss, `net::Transport`, `Host::set_conditions`, the headless multi-client runner in `local_ci.sh`, the `NET` line in the stats overlay) | steps 2–7, the demo |
 | Scene streaming / data mods | [scene-streaming.md](milestones/scene-streaming.md), ADR-0037 / ADR-0034 | done | — |
 | M-NOVEL | [M-NOVEL.md](milestones/M-NOVEL.md) (issues #115, #154) | done | letters are not translated yet (lines, options and names are, M-MOBILE 11e) |
 | M-KIT3D | [M-KIT3D.md](milestones/M-KIT3D.md) (issues #129, #158, #126) | done | — (follow-ups listed in the record) |
@@ -87,7 +88,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-AGENT | — (added 2026-10-14) | in progress: steps 1-8 (eyes, code loop, playtests, docs, content, quality gates, multi-agent, friction notes) done | demo and gates |
 | M-WEB | — (added 2026-10-15) | not started | all steps |
 | M-GAMEPLAY3D | — (added 2026-10-15) | not started | all steps |
-| M-CINEMA | — (added 2026-10-15) | not started | all steps |
+| M-CINEMA | [M-CINEMA.md](milestones/M-CINEMA.md) (Linear SBA-76 … SBA-81) | active (step 1 done: `.mctimeline` and `TimelinePlayer`, `mce/kit/timeline.h`) | steps 2–6, the demo and the gates |
 | M-NET2 | — (added 2026-10-15) | not started | all steps |
 | M-TERRAIN | — (added 2026-10-15) | not started | all steps |
 | M-ACCESS | — (added 2026-10-15) | not started | all steps |

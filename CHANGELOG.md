@@ -5,6 +5,27 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Timelines, M-CINEMA step 1 (SBA-76, FR-ENT-110): a `.mctimeline` asset of keyed tracks (transform, property by
+  reflected path, activation, animation clip, audio, camera cut, event, subtitle) and a `TimelinePlayer` component
+  that plays one on its entity and up to eight bound entities, with play, pause, speed, loop, restart and a
+  finished flag. Keys fire on tick math, the state lives in the component (state hash, replays, saves), and
+  `kit::timeline_scrub` moves the playhead without firing cues. Event keys also push `SeqSignal`, so sequences
+  can wait on a timeline beat. MCP `asset_create` makes `.mctimeline` files; user guide 13.5.
+- Multiplayer test harness (SBA-82, M-NET2 step 1): `net::SimNetwork` is an in-memory network on a virtual clock
+  with per-link latency, jitter and loss from a seed, so a server and several clients in one process give the same
+  hash on every run and build. `net::Transport` is the interface both it and `net::Host` implement, so game code
+  runs over either. `Host::set_conditions` plays a real build over a simulated bad network.
+  `sample_net_headless -sim 1 -clients N` is the headless multi-client runner, and `local_ci.sh`'s determinism stage
+  runs it. `net::NetStatsMeter` adds a `NET` line (RTT, loss, bandwidth, drops) to the player's stats overlay (F3)
+  through the new `DevStatsLines` world resource. User guide 20.6.
+- Phone fixes from the Simulator and emulator checks (SBA-30): a language the player chooses no longer falls back
+  to the device's other languages (English chosen on a Turkish phone showed the kit's words in Turkish); SDL GPU's
+  debug mode is off in the iOS Simulator, whose Metal validation aborted on the first indirect draw; MSL for iOS
+  supports base vertex and base instance, so instanced PBR (Solstice Reach) opens on iOS.
+  `ship.py --project <dir> --target android|ios` builds the project (`MCE_ONLY_PROJECT`; the phone presets add
+  none), saves on phones go to the app's sandbox (`crash::user_data_root()`), and the novel stage draws the box
+  with `story.json`'s `text.font` instead of the pack's first font. The novel template's and Undelivered's camera
+  fit the stage to the screen, so a phone no longer shows it as a 1280×720 box in the middle.
 - Screens that open and close themselves, M-UI-DATA demo (SBA-38): `kit::UiFlow` shows, hides and holds a
   `UiScreen` on input actions (`show_on`, `hide_on`, `load_on` a scene, `pause`), and a paused screen holds the
   world (`World::set_held`: fixed-step systems stop, the tick count goes on, the hash replays). Undertow gets a
