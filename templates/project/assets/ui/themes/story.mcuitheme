@@ -1,0 +1,14 @@
+{
+  "format": "mce-uitheme", "version": 1, "guid": "@GUID_THEME_STORY@",
+  "palette": {
+    "panel": [0.95, 0.91, 0.82, 0.95],
+    "button": [0.45, 0.27, 0.18, 1], "button_hover": [0.56, 0.35, 0.24, 1], "button_pressed": [0.32, 0.18, 0.12, 1],
+    "button_focused": [0.82, 0.56, 0.22, 1], "button_disabled": [0.66, 0.6, 0.52, 1],
+    "text": [0.98, 0.94, 0.86, 1], "text_focused": [0.2, 0.12, 0.06, 1], "text_disabled": [0.9, 0.86, 0.78, 1],
+    "label": [0.3, 0.2, 0.14, 1], "accent": [0.75, 0.45, 0.2, 1]
+  },
+  "fonts": { "body": "guid:@GUID_FONT_STORY@", "title": "guid:@GUID_FONT_STORY_TITLE@", "button": "guid:@GUID_FONT_STORY_TITLE@" },
+  "styles": {
+    "Button": { "style": { "text_shadow": [1, 1], "text_shadow_color": [0.15, 0.08, 0.04, 0.6] } }
+  }
+}

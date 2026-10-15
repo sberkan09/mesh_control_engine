@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Starter UI themes, M-UI-DATA step 7 (SBA-37): `mce new` projects carry `assets/ui/themes/pixel.mcuitheme`
+  (Pixelify Sans, Press Start 2P), `clean.mcuitheme` (Atkinson Hyperlegible Next, Karla) and `story.mcuitheme`
+  (Crimson Pro), whose OFL fonts bake Latin-1 and Latin Extended-A, with `CREDITS.md` rows and license texts.
+  User guide 14 and the MCP `start_game` prompt tell agents to pick or make a theme for each game.
 - Game services run on Game Center and Play Games Services v2 (SBA-23): `liveops::PlatformGameServices` sends
   achievements and scores under the catalog's `"ios"` / `"android"` ids and keeps cloud-save versions inside
   Game Center saved games and Play Games snapshots, so a second device gets a conflict as on the local stand-in;
