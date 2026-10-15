@@ -1,5 +1,5 @@
-// UI document tools (ROADMAP M-UI-DATA step 5): ui_list, ui_create, ui_widget_add / set / remove;
-// ui_preview (the capture) lives with the other player renders in tools_render.cpp.
+// UI document tools (ROADMAP M-UI-DATA step 5): ui_list, ui_create, ui_widget_add / set / remove,
+// ui_theme_set; ui_preview (the capture) lives with the other player renders in tools_render.cpp.
 //
 // Every edit goes through the cook's own reader and writer: the document is read
 // (cook::read_ui_document), written in the canonical .mcui form (cook::write_ui_document: every
@@ -267,6 +267,7 @@ bool ui_list(ToolCall& c) {
         c.out.key("document").str(a->path.view()).key("guid").str(asset_guid_ref(a->guid).view());
         c.out.key("modal").boolean(d.modal);
         c.out.key("font").str(d.font.is_null() ? StringView("built-in") : asset_guid_ref(d.font).view());
+        c.out.key("theme").str(d.theme.is_null() ? StringView("default") : asset_guid_ref(d.theme).view());
         c.out.key("widgets").begin_array();
         cook::String path;
         for (u32 i = 0; i < d.widgets.size(); ++i) {
@@ -393,13 +394,51 @@ bool ui_widget_remove(ToolCall& c) {
     return apply_edit(c, *a, d, e);
 }
 
+// The document's theme: 'theme' is a .mcuitheme (path under assets/ or "guid:<uuid>"), or null for
+// the default look. The edit is on the read document; it is written canonically, read back and saved
+// like the widget edits.
+bool ui_theme_set(ToolCall& c) {
+    const editor::ProjectAsset* a = nullptr;
+    ui::DocumentData d;
+    if (!arg_document(c, a, d)) return false;
+    const cook::JsonValue t = arg(c, "theme");
+    if (!t.valid() || !(t.is_null() || t.is_string()))
+        return arg_missing(c, "theme", "a .mcuitheme path under assets/, \"guid:<uuid>\", or null for the default look");
+    const editor::EditorProject& project = c.server.session().project();
+    const editor::ProjectAsset* theme = nullptr;
+    if (t.is_string()) {
+        const StringView ref = t.as_string();
+        if (ref.size() > 5 && ref.substr(0, 5) == "guid:") {
+            const Result<asset::Guid> g = asset::parse_guid(ref.substr(5));
+            if (g) theme = project.find(g.value());
+        } else {
+            for (const editor::ProjectAsset& p : project.assets())
+                if (p.path.view() == ref) theme = &p;
+        }
+        if (!theme) return fail(c, "argument 'theme': no such asset (asset_list type UiTheme lists the themes)");
+        if (theme->type != asset::ChunkType::UiTheme) return fail(c, "argument 'theme' is not a UI theme (.mcuitheme)");
+    }
+    d.theme = theme ? theme->guid : asset::Guid();
+    cook::String text;
+    cook::write_ui_document(d, a->guid, text);
+    ui::DocumentData edited;
+    if (!read_doc(c, a->path.view(), text.view(), edited, "the edit does not make a valid document (nothing was written)")) return false;
+    if (!asset_validate_and_write(c, a->path.view(), a->guid, text.view())) return false;
+    c.out.begin_object();
+    c.out.key("document").str(a->path.view()).key("guid").str(asset_guid_ref(a->guid).view());
+    c.out.key("theme").str(edited.theme.is_null() ? StringView("default") : asset_guid_ref(edited.theme).view());
+    if (theme) c.out.key("theme_path").str(theme->path.view());
+    c.out.end_object();
+    return true;
+}
+
 #define MCE_UI_DOC R"j("document":{"type":"string","description":"The UI document: a .mcui path under assets/ or \"guid:<uuid>\""})j"
 
 const ToolDef kUiTools[] = {
     {"ui_list",
      "UI documents (.mcui): without 'document', every one in the project with its widget count and the input actions "
      "its widgets raise; with 'document', its widgets in order as paths (\"menu/play\") with kind, text, action, bind "
-     "and convar. A scene shows a document through a UiScreen component.",
+     "and convar, plus its font and theme. A scene shows a document through a UiScreen component.",
      R"j({"type":"object","properties":{)j" MCE_UI_DOC R"j(}})j",
      ui_list},
     {"ui_create",
@@ -434,6 +473,13 @@ const ToolDef kUiTools[] = {
      R"j({"type":"object","properties":{)j" MCE_UI_DOC
      R"j(,"widget":{"type":"string","description":"Widget path, e.g. menu/quit"}},"required":["document","widget"]})j",
      ui_widget_remove},
+    {"ui_theme_set",
+     "Set the theme a UI document is drawn with: 'theme' is a .mcuitheme (asset_create type UiTheme makes one: a "
+     "palette, fonts per role, per-kind looks) as a path under assets/ or \"guid:<uuid>\"; null goes back to the "
+     "default look. A UiScreen whose theme is set still wins in the player. ui_preview shows the result.",
+     R"j({"type":"object","properties":{)j" MCE_UI_DOC
+     R"j(,"theme":{"type":["string","null"],"description":"A .mcuitheme path under assets/ or \"guid:<uuid>\"; null: the default look"}},"required":["document","theme"]})j",
+     ui_theme_set},
     {"ui_preview",
      "See a UI document alone: the real player draws it over a plain background at a viewport size, safe area and UI "
      "scale, and the frame comes back as a PNG (offscreen software rendering when there is no display). Bound fields "

@@ -5,6 +5,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- `ui_theme_set` (SBA-57, M-UI-DATA step 5): an MCP tool sets the `.mcuitheme` a UI document is drawn with (by path
+  or GUID, `null` for the default look) through the same read-back and canonical write as the widget tools, and
+  `ui_list` with a document names its theme. There is no project-wide default theme: each document names its own.
 - Starter UI themes, M-UI-DATA step 7 (SBA-37): `mce new` projects carry `assets/ui/themes/pixel.mcuitheme`
   (Pixelify Sans, Press Start 2P), `clean.mcuitheme` (Atkinson Hyperlegible Next, Karla) and `story.mcuitheme`
   (Crimson Pro), whose OFL fonts bake Latin-1 and Latin Extended-A, with `CREDITS.md` rows and license texts.

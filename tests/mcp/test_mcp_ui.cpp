@@ -129,6 +129,38 @@ TEST_CASE("ui tools: create, list, add, set and remove widgets; the document rea
     CHECK(c.ok("cook_run").v().get("failed").as_number() == 0);
 }
 
+TEST_CASE("ui_theme_set: a document names a theme, by path or GUID, and goes back to the default look") {
+    const std::string root = ui_project("mcp_ui_theme");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    c.ok("ui_create", std::string(R"({"path":"ui/menu.mcui","widgets":)") + kMenuWidgets + "}");
+    auto t = c.ok("asset_create", R"({"path":"ui/warm.mcuitheme","content":{"palette":{"button":[0.8,0.3,0.1,1]}}})");
+    const std::string theme = str(t.v().get("guid"));
+    const std::string file = root + "/assets/ui/menu.mcui";
+    const std::vector<byte> plain = chunk_of(file);
+    CHECK(str(c.ok("ui_list", R"({"document":"ui/menu.mcui"})").v().get("theme")) == "default");
+
+    auto set = c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/warm.mcuitheme"})");
+    CHECK(str(set.v().get("theme")) == theme);
+    CHECK(str(c.ok("ui_list", R"({"document":"ui/menu.mcui"})").v().get("theme")) == theme);
+    CHECK(asset::to_string(data_of(file).theme).view() == sv(theme).substr(5));
+    const std::string themed = read_file(file);
+    c.ok("ui_theme_set", std::string(R"({"document":"ui/menu.mcui","theme":")") + theme + "\"}");
+    CHECK(read_file(file) == themed);  // the same theme by GUID: nothing changes
+
+    CHECK(c.fails("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"scenes/demo.mcscene"})").find("not a UI theme") != std::string::npos);
+    CHECK(c.fails("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/nope.mcuitheme"})").find("no such asset") != std::string::npos);
+    CHECK(c.fails("ui_theme_set", R"({"document":"ui/menu.mcui"})").find("theme") != std::string::npos);
+    CHECK(c.fails("ui_theme_set", R"({"document":"ui/warm.mcuitheme","theme":null})").find("not a UI document") != std::string::npos);
+    CHECK(read_file(file) == themed);
+    CHECK(c.ok("cook_run").v().get("failed").as_number() == 0);
+
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":null})");
+    CHECK(chunk_of(file) == plain);
+    CHECK(str(c.ok("ui_list", R"({"document":"ui/menu.mcui"})").v().get("theme")) == "default");
+}
+
 TEST_SUITE("gpu") {
 
 TEST_CASE("ui_preview: a document alone at a viewport, safe area and scale, checked against a golden") {
@@ -172,6 +204,35 @@ TEST_CASE("ui_preview: a document alone at a viewport, safe area and scale, chec
     std::filesystem::copy_file(golden, root + "/goldens/ui_preview_menu.png", std::filesystem::copy_options::overwrite_existing);
     auto d = c.ok("image_diff", R"({"golden":"goldens/ui_preview_menu.png","image":"shots/menu.png","max_score":0.005})");
     CHECK_MESSAGE(d.v().get("pass").as_bool(), "ui_preview drifted from tests/mcp/goldens/ui_preview_menu.png: " << d.text);
+}
+
+TEST_CASE("ui_preview: one document under two themes draws two different frames") {
+    const std::string root = ui_project("mcp_ui_preview_theme");
+    Client c([] {
+        mcp::ServerOptions opt;
+        opt.player = MCE_PLAYER_EXE;
+        return opt;
+    }());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    c.ok("ui_create", std::string(R"({"path":"ui/menu.mcui","widgets":)") + kMenuWidgets + "}");
+    c.ok("asset_create", R"({"path":"ui/warm.mcuitheme","content":{"palette":{"button":[0.85,0.35,0.1,1],"text":[1,0.95,0.8,1]}}})");
+    c.ok("asset_create", R"({"path":"ui/cold.mcuitheme","content":{"palette":{"button":[0.1,0.3,0.85,1],"text":[0.8,0.95,1,1]}}})");
+    const char* const shot = R"({"document":"ui/menu.mcui","width":320,"height":240})";
+    auto plain = c.ok("ui_preview", shot);
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/warm.mcuitheme"})");
+    auto warm = c.ok("ui_preview", shot);
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/cold.mcuitheme"})");
+    auto cold = c.ok("ui_preview", shot);
+    REQUIRE(warm.images.size() == 1);
+    REQUIRE(cold.images.size() == 1);
+    REQUIRE(warm.images[0].rgba.size() == cold.images[0].rgba.size());
+    auto same = [](const auto& a, const auto& b) { return std::equal(a.rgba.begin(), a.rgba.end(), b.rgba.begin()); };
+    CHECK_FALSE(same(warm.images[0], cold.images[0]));
+    CHECK_FALSE(same(plain.images[0], warm.images[0]));
+    // Back to the default look: the first frame again.
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":null})");
+    CHECK(same(plain.images[0], c.ok("ui_preview", shot).images[0]));
 }
 
 }  // TEST_SUITE("gpu")

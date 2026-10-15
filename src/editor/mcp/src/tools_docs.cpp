@@ -345,7 +345,7 @@ const Prompt kPrompts[] = {
      "4. Author the scenes with entity_create / component_set, save with scene_save, verify with run_headless (inspect, "
      "trace) and look with render_frame after every visible change. Give the game its own look: a new project has "
      "starter themes in assets/ui/themes (pixel, clean, story); name the one that fits the brief as each .mcui "
-     "document's \"theme\" (or a UiScreen's theme), or copy one and change its palette and fonts.\n"
+     "document's theme with ui_theme_set (or a UiScreen's theme), or copy one and change its palette and fonts.\n"
      "5. Write .mctest scenarios under tests/ (a walk_to bot that must finish each level, no log errors) and run them "
      "with test_run; use playtest's feel report (stuck spots, deaths, idle time) to fix levels.\n"
      "6. Keep goldens of the title and each level with image_diff, so later changes that break a screen show up.\n"
