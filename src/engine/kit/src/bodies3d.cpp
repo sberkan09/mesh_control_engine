@@ -181,9 +181,11 @@ void kit3d_bodies(Frame& f) {
             phys.world.set_linear_velocity(e, b.velocity);
         } else {
             if (b.set_velocity) phys.world.set_linear_velocity(e, b.velocity);
+            if (b.stop_spin) phys.world.set_angular_velocity(e, {});
             if (b.impulse.x != 0.0f || b.impulse.y != 0.0f || b.impulse.z != 0.0f) phys.world.apply_impulse(e, b.impulse);
         }
         b.set_velocity = false;
+        b.stop_spin = false;
         b.impulse = {};
     });
 

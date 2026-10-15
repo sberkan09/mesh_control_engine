@@ -7,6 +7,16 @@
 #include "mce/gameplay.h"
 #include "module_types.h"
 
+namespace mce::modtest {
+
+// A component only the module reflects: its record lives in the module image.
+struct ModuleOnly {
+    i32 level = 1;
+};
+MCE_COMPONENT(ModuleOnly, level)
+
+}  // namespace mce::modtest
+
 namespace {
 
 using namespace mce;

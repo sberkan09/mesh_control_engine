@@ -8,6 +8,7 @@
 #include "mce/core.h"
 #include "mce/module_host.h"
 #include "mce/platform/library.h"
+#include "mce/refl/type.h"
 #include "module_types.h"
 
 using namespace mce;
@@ -86,19 +87,42 @@ TEST_CASE("module: load, install, tick, unload") {
 
 TEST_CASE("module: reload at the play boundary reproduces the state hash") {
     u64 hashes[2] = {};
-    for (u64& h : hashes) {
+    FixedString<512> copies[2];
+    for (u32 i = 0; i < 2; ++i) {
         LoadedModule mod;
         {
             World w;
             Result<LoadedModule> r = load_game_module(MODTEST_GOOD, w);
             REQUIRE(r.has_value());
             mod = r.value();
+            copies[i] = mod.loaded_path;
             run_ticks(w, 600);
-            h = w.state_hash();
+            hashes[i] = w.state_hash();
         }
         unload_game_module(mod);
     }
     CHECK(hashes[0] == hashes[1]);
+    // A reload maps a copy under a new name: the loader may keep the old image mapped after
+    // unload, and the same name would hand it back instead of the rebuilt module.
+    CHECK(copies[0] != copies[1]);
+}
+
+TEST_CASE("module: unloading drops the module's reflected types even when its image stays mapped") {
+    // A rebuilt module whose component gained a field must not meet the old field list: the loader
+    // may keep a C++ module mapped after unload (its registrars then never run their destructors),
+    // so the host drops what the module registered. A second handle on the copy keeps it mapped here.
+    const StringId id("ModuleOnly");
+    REQUIRE(refl::find_type(id) == nullptr);
+    Result<LoadedModule> r = open_game_module(MODTEST_GOOD);
+    REQUIRE(r.has_value());
+    LoadedModule mod = r.value();
+    CHECK(refl::find_type(id) != nullptr);
+    Result<void*> pin = platform::load_library(mod.loaded_path);
+    REQUIRE(pin.has_value());
+    unload_game_module(mod);
+    CHECK(refl::find_type(id) == nullptr);
+    platform::unload_library(pin.value());
+    CHECK(refl::find_type(id) == nullptr);
 }
 
 TEST_CASE("module: two live copies of one module map distinct images") {

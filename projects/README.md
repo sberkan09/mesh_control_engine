@@ -21,3 +21,9 @@ The layout and the rules are in `docs/architecture/assets.md` §4.4; the record 
 `Undelivered/` is the narrative showcase: a light novel on the 2D kit, its script compiled to tables and its save game the whole run state (`docs/design/undelivered.md`).
 
 The third round, `docs/research/mcp-blind-test.md`, made a game without the engine source (an SDK-like setup); that project is kept in the project files, not here.
+
+`Glowmoth/` and `MarbleGarden/` are the M-AGENT demo games (`docs/research/m-agent-demo/`): each was made
+from a one-paragraph brief by AI agents over MCP, with no person after the brief. Glowmoth (a 2D
+pixel-art platformer) by one agent; Marble Garden (a 3D marble game) by three agents sharing the project
+(level, code and art). Their `.mctest` suites and render goldens run in local CI through
+`scripts/agent_demo/demo_gate.py`.

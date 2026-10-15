@@ -128,8 +128,7 @@ bool parse_spec(ToolCall& c, const cook::JsonValue& v, TestSpec& t) {
                           teleport = v.get("teleport");
     if (until.valid()) {
         if (!parse_condition(t.doc, until, t.until, err)) return spec_fail(c, t, err.view());
-        if (t.until.what != Condition::What::Field && t.until.what != Condition::What::Alive && t.until.what != Condition::What::Event)
-            return spec_fail(c, t, "'until' checks the world: a field, alive or an event");
+        if (!is_world_check(t.until.what)) return spec_fail(c, t, "'until' checks the world: a field, alive, an event or the scene");
         t.has_until = true;
     }
     if (death.valid()) {
@@ -148,8 +147,8 @@ bool parse_spec(ToolCall& c, const cook::JsonValue& v, TestSpec& t) {
                 msg += err.view();
                 return spec_fail(c, t, msg.view());
             }
-            if (cond.tick && cond.what != Condition::What::Field && cond.what != Condition::What::Alive && cond.what != Condition::What::Event)
-                return spec_fail(c, t, "'tick' is for world checks (field, alive, event); log and feel checks look at the whole run");
+            if (cond.tick && !is_world_check(cond.what))
+                return spec_fail(c, t, "'tick' is for world checks (field, alive, event, scene); log and feel checks look at the whole run");
             t.checks.push_back(static_cast<Condition&&>(cond));
         }
     }

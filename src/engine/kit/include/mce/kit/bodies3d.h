@@ -49,7 +49,8 @@ struct RigidBody3D {
     u8 layer = 0;                       // collision layer 0..15
     bool set_velocity = false;          // dynamic: apply `velocity` once (the engine clears it)
     u16 mask = 0xFFFF;                  // layers this body collides with
-    u16 pad_ = 0;
+    bool stop_spin = false;             // dynamic: zero the body's spin once (a respawn; the engine clears it)
+    u8 pad_ = 0;
     math::vec3 half{0.5f, 0.5f, 0.5f};  // Box half extents
     f32 radius = 0.5f;                  // Sphere, Capsule
     f32 half_height = 0.5f;             // Capsule: half the cylinder between the caps (along Y)
@@ -65,6 +66,7 @@ struct RigidBody3D {
 };
 MCE_COMPONENT(RigidBody3D, (hull, Help{"ConvexMesh: a mesh whose vertices make the hull"}), type, shape,
               (layer, Range{0, 15}), (set_velocity, Help{"dynamic: apply 'velocity' once (the engine clears it)"}), mask,
+              (stop_spin, Help{"dynamic: zero the spin once, e.g. on a respawn (the engine clears it)"}),
               (half, Help{"Box half extents, metres"}), (radius, Range{0.01f, 100}), (half_height, Range{0, 100}),
               (friction, Range{0, 2}), (restitution, Range{0, 1}), (density, Range{1, 100000}), (gravity_scale, Range{-10, 10}),
               (linear_damping, Range{0, 10}), (velocity, Help{"kinematic: m/s every tick; dynamic: with set_velocity"}),

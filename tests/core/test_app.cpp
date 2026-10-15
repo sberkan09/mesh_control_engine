@@ -2,6 +2,7 @@
 
 #include "mce/app.h"
 #include "mce/convar.h"
+#include "mce/log.h"
 
 using namespace mce;
 using namespace mce::app;
@@ -166,6 +167,29 @@ TEST_CASE("spiral-of-death clamp limits catch-up ticks per frame") {
     mem::set_frame_arena(nullptr);
 }
 
+TEST_CASE("sim.fast_forward runs sim.max_catchup ticks every frame, however short the frame") {
+    ConVar* ff = ConVar::find("sim.fast_forward");
+    ConVar* mc = ConVar::find("sim.max_catchup");
+    REQUIRE(ff);
+    REQUIRE(mc);
+    ff->set_bool(true);
+    mc->set_int(32);
+    CountingApp app;
+    FakeClock clock(0.001);  // a 1 ms frame would run no tick at 60 Hz
+    AppDesc desc;
+    desc.headless = true;
+    desc.clock = &clock;
+    desc.max_frames = 10;
+    desc.frame_arena_size = 64 * 1024;
+    run(app, desc);
+    ff->reset();
+    mc->reset();
+    CHECK(app.ticks >= 9 * 32);
+    CHECK(app.ticks <= 10 * 32);
+    CHECK(app.dt_constant);
+    mem::set_frame_arena(nullptr);
+}
+
 TEST_CASE("time_scale scales accumulator inflow, never dt (FR-RUN-050)") {
     ConVar* ts = ConVar::find("time_scale");
     REQUIRE(ts);
@@ -206,4 +230,15 @@ TEST_CASE("failing on_init returns a nonzero exit code") {
     desc.frame_arena_size = 64 * 1024;
     CHECK(run(app, desc) == 1);
     mem::set_frame_arena(nullptr);
+}
+
+// MCE_LOG_* refuses a printf format at compile time (its % codes would be logged as they are).
+static_assert(mce::log::detail::printf_conversion("gem %u of %u") == 4);
+static_assert(mce::log::detail::printf_conversion("%-8.3lf") == 0);
+static_assert(mce::log::detail::printf_conversion("{} at 50% done, 100%% sure, {:.1f}%") < 0);
+
+TEST_CASE("log: fmt formats pass the printf check") {
+    MCE_LOG_INFO("app test: {} of {} ({:.0f}%)", 1, 2, 50.0);
+    MCE_LOG_INFO("app test: no arguments");
+    CHECK(true);
 }

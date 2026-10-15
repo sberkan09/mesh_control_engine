@@ -60,6 +60,7 @@ MCE_CVAR(cv_sky_texture, "r.sky_texture", false, "Equirect sky texture instead o
 MCE_CVAR(cv_sky_ibl, "r.sky_ibl", false, "M-VISUAL 2: the sky lights the scene (SH9 irradiance + pre-filtered reflections)",
          CVarFlags::None);
 MCE_CVAR(cv_shadow_lights, "shadow_lights", 0, "M-VISUAL 4: the first N point lights ask for cube shadows", CVarFlags::None);
+MCE_CVAR(cv_taa, "taa", false, "M-VISUAL 5: temporal anti-aliasing (replaces FXAA)", CVarFlags::None);
 MCE_CVAR(cv_ao, "ao", false, "M-VISUAL 3: screen-space ambient occlusion", CVarFlags::None);
 MCE_CVAR(cv_night, "night", false, "Dim the sun so the point lights carry the scene", CVarFlags::None);
 MCE_CVAR(cv_yaw, "cam.yaw", 0.35f, "Initial orbit yaw (radians)", CVarFlags::None);
@@ -119,7 +120,7 @@ struct LightRig {
 // Means of the per-stage times over the measured frames (NFR-F-01 table shape).
 struct Budget {
     f64 scene = 0, clusters = 0, record = 0, submit = 0;
-    f64 gpu_clusters = 0, gpu_ssao = 0, gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
+    f64 gpu_clusters = 0, gpu_ssao = 0, gpu_taa = 0, gpu_shadow = 0, gpu_main = 0, gpu_resolve = 0, gpu_bloom = 0, gpu_tonemap = 0, gpu_fxaa = 0, gpu_total = 0;
     u64 frames = 0, gpu_frames = 0;
 };
 
@@ -243,6 +244,7 @@ public:
             if (gpu_.total >= 0.0) {
                 budget_.gpu_clusters += gpu_.clusters;
                 budget_.gpu_ssao += gpu_.ssao;
+                budget_.gpu_taa += gpu_.taa;
                 budget_.gpu_shadow += gpu_.shadow;
                 budget_.gpu_main += gpu_.main;
                 budget_.gpu_resolve += gpu_.resolve;
@@ -289,6 +291,7 @@ public:
                         stats_.local_shadow_tiles, budget_.gpu_shadow / g);
             std::printf("  | main pass (Forward+ PBR + sky) | - | %.3f |\n", budget_.gpu_main / g);
             std::printf("  | MSAA resolve | - | %.3f |\n", budget_.gpu_resolve / g);
+            std::printf("  | TAA (velocity prepass + resolve) | - | %.3f |\n", budget_.gpu_taa / g);
             std::printf("  | post: bloom | - | %.3f |\n", budget_.gpu_bloom / g);
             std::printf("  | post: tonemap | - | %.3f |\n", budget_.gpu_tonemap / g);
             std::printf("  | post: FXAA | - | %.3f |\n", budget_.gpu_fxaa / g);
@@ -504,6 +507,7 @@ private:
         PostFx post;
         post.bloom = cv_bloom.get_bool();
         post.fxaa = cv_fxaa.get_bool();
+        post.taa = cv_taa.get_bool();
         scene.set_post(post);
         ShadowSettings shadows;
         cascades_ = static_cast<u32>(clamp<i64>(cv_cascades.get_int(), 1, 4));

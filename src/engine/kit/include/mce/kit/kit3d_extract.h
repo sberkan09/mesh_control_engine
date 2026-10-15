@@ -142,6 +142,10 @@ private:
     Array<u32> pending_entity_;  // entity index of each pending_ instance
     Array<u8> lod_states_;   // per entity index: the LOD level last drawn (Scene3D hysteresis)
     Array<u8> static_lods_;  // per StaticInstances3D copy
+    Array<math::mat4> worlds_[2];  // per entity index: the world drawn this frame and last (TAA velocity)
+    Array<u32> world_stamp_;       // per entity index: the extract that last drew it
+    u32 world_parity_ = 0;
+    u32 frame_stamp_ = 0;
     Kit3DStats stats_;
     bool bake_mode_ = false;
     Array<Entity> probe_entities_;

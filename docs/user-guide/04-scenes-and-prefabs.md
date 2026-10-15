@@ -113,12 +113,21 @@ containing scene are resolved after flattening (section 4.6).
 ## 4.5 Several scenes
 
 A project can hold any number of `.mcscene` files. `start_scene` in the `.mceproj` names the one the
-game starts with; `-scene scenes/other.mcscene` (or its GUID) plays another. There is no built-in
-scene switching at run time yet: a game that needs several levels either keeps them in one scene
-and moves the player between areas, or loads the next scene from code (`scene::load` with a GUID
-the game stores on a component) after destroying the old entities. The samples take the first
-route. The editor opens one document at a time. A large world can instead stream its areas in
-and out around the player (section 4.8).
+game starts with; `-scene scenes/other.mcscene` (or its GUID) plays another. The game moves between
+them at run time with one call from any system (section 6.10):
+
+```cpp
+scene::request_change(f.world(), "scenes/level2.mcscene");   // or "guid:<uuid>", or a Guid
+```
+
+After that tick the host (`mce_player`, the editor's play mode and every MCP run) destroys every
+entity, loads the target scene and runs the Startup phase again. World resources stay, so a score
+or a lives count kept in a resource carries over. A title screen, levels and win and lose screens
+are simply separate scenes. Scenes may name each other in a loop (title, level, win, title): a
+reference to another scene, in a string field or an `AssetRef<asset::Scene>`, is a link and never
+a cook dependency. A `.mctest` checks where the run ended up with `{"scene": "scenes/win.mcscene"}`
+(section 14). The editor opens one document at a time. A large world can instead stream its areas
+in and out around the player (section 4.8).
 
 ## 4.6 Prefabs
 

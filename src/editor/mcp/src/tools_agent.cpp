@@ -75,7 +75,7 @@ const ToolDef kAgentTools[] = {
      "when stuck), explore (seeded random wandering, coverage) or masher (random button chords, crash and soft-lock "
      "hunting). Returns the feel report: time to finish, deaths, stuck spots with positions, idle time, distance, cells "
      "visited. Needs no game code: the bot drives the game's input actions (Move, Jump, ...).",
-     R"j({"type":"object","properties":{"bot":{"type":"object","description":"{kind: walk_to|explore|masher, actor: entity, target: [x,y(,z)] or entity (walk_to), plane: xy|x|xz (default xy; x = side view with Jump, xz = 3D ground), reach: m (0.5), seed, move: action (Move), jump: action (Jump), actions: [names] (masher), period: ticks (8)}"},)j"
+     R"j({"type":"object","properties":{"bot":{"type":"object","description":"{kind: walk_to|explore|masher, actor: entity, target: [x,y(,z)] or entity (walk_to), through: [waypoints, points or entities, reached in order before target] (walk_to), air_jumps: 0-4 extra Jump presses in the air (walk_to, side view), plane: xy|x|xz (default xy; x = side view with Jump, xz = 3D ground), reach: m (0.5), seed, move: action (Move), jump: action (Jump), actions: [names] (masher), period: ticks (8)}"},)j"
      R"j("scene":{"type":"string","description":"A saved scene under assets/ (default: the open scene)"},)j"
      R"j("ticks":{"type":"integer","minimum":1,"maximum":36000,"default":1800},)j"
      R"j("until":{"type":"object","description":"Stop early when this check holds (a field, alive or event check)"},)j"
@@ -113,6 +113,26 @@ const ToolDef kAgentTools[] = {
      R"j("variants":{"type":"integer","minimum":1,"maximum":16,"default":1},"colors":{"type":"array","items":{"type":"string"},"description":"Hex colors, dark to light"},)j"
      R"j("scheme":{"type":"string","description":"Palette scheme when 'colors' is not given (gen_palette's)"},)j" MCE_SAVE_PROPS "}}",
      gen_sprite},
+    {"gen_pixels",
+     "Draw a pixel-art image from text: 'rows' is one string per pixel row (all the same length), 'palette' maps each "
+     "character to a hex color ('.' and ' ' are transparent). For a specific shape (a moth, a lantern, a door) that "
+     "gen_sprite's seeds will not give. Returns an enlarged preview; 'save' writes the PNG with its sidecar (nearest "
+     "filtering) and a CREDITS.md row.",
+     R"j({"type":"object","properties":{"rows":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":256},)j"
+     R"j("palette":{"type":"object","additionalProperties":{"type":"string"},"description":"One-character keys to \"#rrggbb\" or \"#rrggbbaa\""},)j" MCE_SAVE_PROPS "},"
+     R"j("required":["rows","palette"]})j",
+     gen_pixels},
+    {"gen_mesh",
+     "Make a simple 3D mesh for blocking out a level or a toy-like game: a box, plane, sphere, cylinder, cone, disc or "
+     "ramp (a wedge rising towards +X), centred on the origin with Y up, 'size' its full extent in metres, in one "
+     "'color' with 'roughness'. Returns its vertex and triangle counts and a shaded preview; 'save' writes it as a .glb "
+     "(with its material inline) and a CREDITS.md row. Place it with the 3D kit's MeshRef (and MeshCollider3D).",
+     R"j({"type":"object","properties":{"shape":{"type":"string","enum":["box","plane","sphere","cylinder","cone","disc","ramp"],"default":"box"},)j"
+     R"j("size":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3,"description":"[x, y, z] in metres (default [1, 1, 1])"},)j"
+     R"j("segments":{"type":"integer","minimum":3,"maximum":128,"default":24,"description":"Around a round shape"},)j"
+     R"j("color":{"type":"string","description":"\"#rrggbb\" or \"#rrggbbaa\" (default light grey)"},)j"
+     R"j("roughness":{"type":"number","minimum":0,"maximum":1,"default":0.8},)j" MCE_SAVE_PROPS "}}",
+     gen_mesh},
     {"gen_tileset",
      "Generate a pixel-art tile set in one row: fill, fill_2, fill_3 (variations), top, top_left, top_right (surface "
      "edges), platform and decoration. Styles: grass, stone, brick, dirt, sand, snow, water, wood, metal. Returns each "
@@ -135,7 +155,7 @@ const ToolDef kAgentTools[] = {
      "random) varied by the seed, with any sfxr parameter overridden in 'params'. Returns the parameters used (tweak and "
      "call again), the length and level, and a waveform image. 'save' writes a 16-bit WAV under assets/.",
      R"j({"type":"object","properties":{"seed":{"type":"integer","minimum":0,"default":1},"preset":{"type":"string","enum":["pickup","laser","explosion","powerup","hit","jump","blip","random"],"default":"pickup"},)j"
-     R"j("params":{"type":"object","description":"sfxr parameters to override, e.g. {\"wave\": \"sine\", \"base_freq\": 0.4, \"env_decay\": 0.3}"},)j" MCE_SAVE_PROPS "}}",
+     R"j("params":{"type":"object","description":"sfxr parameters to override, e.g. {\"wave\": \"sine\", \"base_freq\": 0.4, \"env_decay\": 0.3}; wave is square, saw, sine or noise; the result lists every parameter with its value"},)j" MCE_SAVE_PROPS "}}",
      gen_sfx},
     {"gen_music",
      "Generate a seamless music loop (bass, chords, melody and optional drums) in a scale on a root note, exactly 'bars' "

@@ -1,0 +1,7 @@
+[
+  {"golden": "goldens/title.png", "render": {"scene": "scenes/main.mcscene", "tick": 60}, "max_score": 0.02},
+  {"golden": "goldens/garden.png", "render": {"scene": "scenes/garden.mcscene", "tick": 30}, "max_score": 0.02},
+  {"golden": "goldens/garden_overview.png", "render": {"scene": "scenes/garden.mcscene", "tick": 2, "camera": {"position": [0, 26, 22], "target": [0, 0, 0], "fov": 50}}, "max_score": 0.02},
+  {"golden": "goldens/win.png", "render": {"scene": "scenes/win.mcscene", "tick": 60}, "max_score": 0.02},
+  {"golden": "goldens/lose.png", "render": {"scene": "scenes/lose.mcscene", "tick": 60}, "max_score": 0.02}
+]

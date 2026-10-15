@@ -7,6 +7,7 @@
 
 #include "mce/asset/guid.h"
 #include "mce/cook/fs.h"
+#include "mce/cook/image.h"
 #include "mce/cook/json.h"
 #include "mce/mcp/headless_run.h"
 #include "mce/platform/platform.h"
@@ -68,10 +69,12 @@ u32 line_of(StringView text, usize at) {
     return line;
 }
 
-// Files under assets/ that hold references to other assets by GUID.
+// Files under assets/ that hold references to other assets by GUID: the engine's JSON documents
+// (.mcscene, .mcprefab, .mcmat, .mctilemap, .mcsheet, ... every ".mc*" but the sidecars) and .json.
 bool is_text_asset(StringView rel) {
-    return ends_with(rel, ".mcscene") || ends_with(rel, ".mcprefab") || ends_with(rel, ".mcmat") || ends_with(rel, ".mcpart") ||
-           ends_with(rel, ".mcseq") || ends_with(rel, ".json") || ends_with(rel, ".mcanim") || ends_with(rel, ".mctile");
+    const cook::String ext = cook::lower_extension(rel);
+    if (ext.view() == ".mceasset") return false;
+    return ext.view() == ".json" || (ext.size() > 3 && ext.view().substr(0, 3) == ".mc");
 }
 
 // Media that needs a credits row (code-made data files do not).
@@ -180,6 +183,57 @@ bool read_color(cook::JsonValue v, f32 rgb[3]) {
 f32 num_or(cook::JsonValue o, StringView key, f32 def) {
     const cook::JsonValue v = o.get(key);
     return v.is_number() ? static_cast<f32>(v.as_number()) : def;
+}
+
+f32 vec_or(cook::JsonValue o, StringView key, u32 lane, f32 def) {
+    const cook::JsonValue v = o.get(key);
+    return v.is_array() && lane < v.size() && v.at(lane).is_number() ? static_cast<f32>(v.at(lane).as_number()) : def;
+}
+
+// The colour a backing panel shows behind a label: the smallest Sprite whose rectangle holds the
+// label's position, its tint times its texture's average colour, blended over `clear` by alpha.
+// False when no sprite sits behind it.
+bool panel_behind(const cook::JsonValue& ents, u32 label, const editor::EditorProject& project, const f32 clear[3], f32 out[3]) {
+    const cook::JsonValue lt = ents.at(label).get("components").get("LocalTransform");
+    const f32 lx = vec_or(lt, "position", 0, 0), ly = vec_or(lt, "position", 1, 0);
+    f32 best = 1e30f;
+    bool found = false;
+    for (u32 e = 0; e < ents.size(); ++e) {
+        if (e == label) continue;
+        const cook::JsonValue comps = ents.at(e).get("components");
+        const cook::JsonValue sp = comps.get("Sprite"), tr = comps.get("LocalTransform");
+        if (!sp.is_object()) continue;
+        const f32 w = vec_or(sp, "size", 0, 1) * std::fabs(vec_or(tr, "scale", 0, 1)), h = vec_or(sp, "size", 1, 1) * std::fabs(vec_or(tr, "scale", 1, 1));
+        const f32 x0 = vec_or(tr, "position", 0, 0) - w * vec_or(sp, "pivot", 0, 0.5f), y0 = vec_or(tr, "position", 1, 0) - h * vec_or(sp, "pivot", 1, 0.5f);
+        if (lx < x0 || lx > x0 + w || ly < y0 || ly > y0 + h || w * h >= best) continue;
+        f32 rgb[3] = {1, 1, 1};
+        (void)read_color(sp.get("tint"), rgb);
+        f32 alpha = vec_or(sp, "tint", 3, 1);
+        const cook::JsonValue tex = sp.get("texture");
+        if (tex.is_string() && tex.as_string().size() >= 41 && tex.as_string().substr(0, 5) == "guid:") {
+            const Result<asset::Guid> g = asset::parse_guid(tex.as_string().substr(5, 36));
+            const editor::ProjectAsset* a = g ? project.find(g.value()) : nullptr;
+            cook::String bytes;
+            // A texture that cannot be read (missing, not a PNG) says nothing about the colour: no panel.
+            if (!a || !cook::fs::read_text(project.asset_path(a->path.view()).view(), bytes)) continue;
+            const Result<cook::Image> img = cook::decode_png(Span<const byte>(reinterpret_cast<const byte*>(bytes.c_str()), bytes.size()));
+            if (!img || !img.value().width || !img.value().height) continue;
+            f64 sum[4] = {};
+            const Array<u8>& px = img.value().rgba;
+            for (usize i = 0; i + 3 < px.size(); i += 4) {
+                const f64 a8 = px[i + 3] / 255.0;
+                for (u32 k = 0; k < 3; ++k) sum[k] += px[i + k] / 255.0 * a8;
+                sum[3] += a8;
+            }
+            const f64 n = static_cast<f64>(px.size()) / 4.0;
+            for (u32 k = 0; k < 3; ++k) rgb[k] *= sum[3] > 0 ? static_cast<f32>(sum[k] / sum[3]) : 0.f;
+            alpha *= static_cast<f32>(sum[3] / n);
+        }
+        for (u32 k = 0; k < 3; ++k) out[k] = rgb[k] * alpha + clear[k] * (1 - alpha);
+        best = w * h;
+        found = true;
+    }
+    return found;
 }
 
 // Texture slots of a material that hold data, not colour (sampled linear).
@@ -318,7 +372,8 @@ bool project_check(ToolCall& c) {
         }
         for (const editor::ProjectAsset& a : project.assets()) {
             const StringView p = a.path.view();
-            if (ends_with(p, ".mcscene")) continue;  // scenes are entry points
+            // Entry points: scenes, and input maps (the player loads the pack's first .mcinput itself).
+            if (ends_with(p, ".mcscene") || ends_with(p, ".mcinput")) continue;
             bool used = false;
             for (const Ref& r : refs) used = used || r.guid == a.guid;
             const asset::GuidString gs = asset::to_string(a.guid);
@@ -352,6 +407,20 @@ bool project_check(ToolCall& c) {
                     "add a row: | `assets/<path>` | source and author | license | (library_add and the gen_* tools write theirs)");
         }
         (void)missing;
+        // A row naming a file the project no longer has (asset_delete leaves its row behind).
+        for (const cook::String& p : pats) {
+            const StringView pv = p.view();
+            if (pv.find('*') != StringView::npos) continue;
+            bool found = false;
+            for (usize i = 0; !found && i < files.size(); ++i)
+                found = glob_match(pv, files[i].view()) || (pv.find('/') == StringView::npos && base_name(files[i].view()) == pv);
+            if (found) continue;
+            cook::String msg("CREDITS.md names ");
+            if (pv.find('/') != StringView::npos) msg += "assets/";
+            msg += pv;
+            msg += ", which the project no longer has";
+            rep.add(Sev::Warning, "credits", "CREDITS.md", 0, msg.view(), "remove the row, or restore the file");
+        }
     }
 
     // ---- colour space: data textures must not be sRGB, colour textures should be
@@ -437,12 +506,26 @@ bool project_check(ToolCall& c) {
                     cook::appendf(fix, "raise TextLabel.height to %.2f m or more", static_cast<f64>(opt.min_text_px / px_per_m));
                     rep.add(Sev::Warning, "accessibility", file.view(), line, msg.view(), fix.view());
                 }
-                f32 fg[3] = {1, 1, 1};
-                (void)read_color(label.get("color"), fg);
-                const f32 ratio = contrast(luminance(fg[0], fg[1], fg[2]), bg_l);
-                if (ratio < 4.5f) {
+                // Behind the text: a backing panel (a Sprite under it), else the camera's clear colour.
+                f32 panel[3];
+                const f32 behind_l = panel_behind(ents, e, project, bg, panel) ? luminance(panel[0], panel[1], panel[2]) : bg_l;
+                const auto label_contrast = [&](const cook::JsonValue& l) {
+                    f32 fg[3] = {1, 1, 1};
+                    (void)read_color(l.get("color"), fg);
+                    return contrast(luminance(fg[0], fg[1], fg[2]), behind_l);
+                };
+                const f32 ratio = label_contrast(label);
+                // A drop shadow: another label with the same text reads well, and this one only sits behind it.
+                bool shadow = false;
+                const cook::JsonValue text = label.get("text");
+                for (u32 o = 0; ratio < 4.5f && text.is_string() && o < ents.size() && !shadow; ++o) {
+                    const cook::JsonValue other = ents.at(o).get("components").get("TextLabel");
+                    shadow = o != e && other.is_object() && other.get("text").is_string() && other.get("text").as_string() == text.as_string() &&
+                             label_contrast(other) >= 4.5f;
+                }
+                if (ratio < 4.5f && !shadow) {
                     cook::String msg;
-                    cook::appendf(msg, "%.*s: text contrast against the background colour is %.1f:1 (WCAG AA asks 4.5:1)",
+                    cook::appendf(msg, "%.*s: text contrast against what is behind it (a backing sprite, else the clear colour) is %.1f:1 (WCAG AA asks 4.5:1)",
                                   static_cast<int>(who.size()), who.data(), static_cast<f64>(ratio));
                     rep.add(Sev::Warning, "accessibility", file.view(), line, msg.view(), "a lighter or darker TextLabel.color, or a backing panel");
                 }
@@ -452,6 +535,8 @@ bool project_check(ToolCall& c) {
 
     // ---- performance: each scene headless, the sim's time per tick against the budget
     Array<PerfRow> perf;
+    if (opt.enabled("performance") && !cooked.ok())
+        rep.add(Sev::Error, "performance", "", 0, "no scene was measured: the project does not cook", "project_check with the cook check lists why");
     if (opt.enabled("performance") && cooked.ok()) {
         const cook::String cooked_dir = cook::path_join(project.root(), "cooked");
         for (const editor::ProjectAsset& a : project.assets()) {

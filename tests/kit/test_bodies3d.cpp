@@ -3,6 +3,8 @@
 
 #include <doctest/doctest.h>
 
+#include <cmath>
+
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
@@ -65,6 +67,31 @@ TEST_CASE("bodies3d: a dynamic body falls, lands and writes its pose back; outsi
     // Destroying the entity removes the body.
     s.w.destroy(e);
     CHECK_FALSE(s.phys().world.has_body(e));
+}
+
+TEST_CASE("bodies3d: a rolling ball stops on set_velocity with stop_spin (a respawn)") {
+    Scene s;
+    RigidBody3D ball;
+    ball.shape = BodyShape3D::Sphere;
+    ball.radius = 0.5f;
+    ball.velocity = {4.0f, 0.0f, 0.0f};
+    ball.set_velocity = true;
+    const Entity e = s.w.spawn_with(at(0, 0.5f, 0), ball);
+    s.run(30);
+    physics::BodyState3D st;
+    REQUIRE(s.phys().world.body_state(e, st));
+    CHECK(math::length(st.angular_velocity) > 1.0f);  // rolling
+    // Back to the start, still: no velocity and no spin left over.
+    RigidBody3D& b = *s.w.try_get_mut<RigidBody3D>(e);
+    b.velocity = {};
+    b.set_velocity = true;
+    b.stop_spin = true;
+    s.w.try_get_mut<LocalTransform>(e)->position = {0.0f, 0.5f, 0.0f};
+    s.run(30);
+    CHECK_FALSE(s.w.try_get<RigidBody3D>(e)->stop_spin);
+    CHECK(std::fabs(s.pose(e).position.x) < 0.02f);
+    REQUIRE(s.phys().world.body_state(e, st));
+    CHECK(math::length(st.angular_velocity) < 0.05f);
 }
 
 TEST_CASE("bodies3d: kinematic bodies move by velocity; runtime colliders join the world") {

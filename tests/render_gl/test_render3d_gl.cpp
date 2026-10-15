@@ -966,3 +966,192 @@ TEST_CASE("render3d_gl: local shadow tiles go to the most important lights first
     CHECK(s2.stats().local_shadows_dropped == 1);
     CHECK(s2.local_shadow_tiles()[0].light == 1);
 }
+
+// ---- temporal anti-aliasing (M-VISUAL 5) --------------------------------------------------------------
+
+namespace {
+
+f64 mean_abs_diff(const Array<u8>& a, const Array<u8>& b) {
+    u64 sum = 0;
+    for (usize i = 0; i < a.size(); i += 4)
+        for (usize c = 0; c < 3; ++c) sum += u64(std::abs(int(a[i + c]) - int(b[i + c])));
+    const usize channels = a.size() / 4 * 3;
+    return f64(sum) / f64(channels);
+}
+
+void post_aa(Scene3D& s, bool taa) {
+    PostFx post;
+    post.bloom = false;
+    post.fxaa = false;
+    post.taa = taa;
+    s.set_post(post);
+}
+
+// The still frame with 4x MSAA: the reference the anti-aliased frames are measured against.
+Array<u8> msaa_reference() {
+    Fixture3D f(4);
+    f.render(0.0f, true, [](Scene3D& s) { post_aa(s, false); });
+    return f.pixels;
+}
+
+// A second box at z = 1.5 sliding along x (mesh 50), with or without its previous world.
+void upload_slider(Fixture3D& f) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    mesh_fixture::Box box;
+    box.center = {0, 0.4f, 0};
+    box.half = {0.4f, 0.4f, 0.4f};
+    box.color[0] = 0.2f;
+    box.color[1] = 0.4f;
+    box.color[2] = 0.9f;
+    b.add_box(box);
+    REQUIRE(f.renderer.meshes().upload(50, 1, b.build().span()).has_value());
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: TAA off draws today's frame, and a TAA run in between leaves no trace") {
+    Fixture3D f(1);
+    bool taa = false;
+    const auto scene = [&](Scene3D& s) { post_aa(s, taa); };
+    f.render(0.0f, true, scene);
+    const Array<u8> off = f.pixels;
+    const Forward3D& fw = f.renderer.forward_3d();
+    CHECK_FALSE(fw.last_stats().taa);
+    taa = true;
+    for (int i = 0; i < 3; ++i) f.render(0.0f, true, scene);
+    CHECK(fw.last_stats().taa);
+    CHECK(fw.last_stats().taa_history);
+    CHECK(fw.last_stats().velocity_draws == 2);
+    CHECK_FALSE(fw.last_stats().fxaa);
+    taa = false;
+    f.render(0.0f, true, scene);
+    usize differing = 0;
+    for (usize i = 0; i < off.size(); ++i) differing += f.pixels[i] != off[i];
+    CHECK(differing == 0);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: TAA over a still frame converges toward the multisampled edges") {
+    const Array<u8> ref = msaa_reference();
+    Fixture3D f(1);
+    f.render(0.0f, true, [](Scene3D& s) { post_aa(s, false); });
+    // The edges: pixels where the aliased frame is off the reference by more than a few levels.
+    const Array<u8> aliased_px = f.pixels;
+    Array<u8> edge;
+    edge.resize(ref.size() / 4);
+    usize edges = 0;
+    for (usize p = 0; p < edge.size(); ++p) {
+        int d = 0;
+        for (usize c = 0; c < 3; ++c) d = std::max(d, std::abs(int(aliased_px[p * 4 + c]) - int(ref[p * 4 + c])));
+        edge[p] = d > 12;
+        edges += edge[p];
+    }
+    const auto edge_error = [&](const Array<u8>& px) {
+        u64 sum = 0;
+        for (usize p = 0; p < edge.size(); ++p)
+            if (edge[p])
+                for (usize c = 0; c < 3; ++c) sum += u64(std::abs(int(px[p * 4 + c]) - int(ref[p * 4 + c])));
+        return f64(sum) / f64(std::max<usize>(edges, 1) * 3);
+    };
+    for (int i = 0; i < 16; ++i) f.render(0.0f, true, [](Scene3D& s) { post_aa(s, true); });
+    const f64 aliased = edge_error(aliased_px), taa = edge_error(f.pixels);
+    INFO(edges << " edge pixels; mean |diff| to 4x MSAA there: aliased " << aliased << ", TAA " << taa);
+    CHECK(edges > 50);
+    CHECK(taa < aliased * 0.6);
+    // Flat open ground keeps its shade (no blur, no drift).
+    const Rgb open = f.at_world({2.5f, 0.0f, 2.5f});
+    f.render(0.0f, true, [](Scene3D& s) { post_aa(s, false); });
+    CHECK(std::abs(f.at_world({2.5f, 0.0f, 2.5f}).luma() - open.luma()) <= 2);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: TAA follows a moving box through its velocity without a trail") {
+    const auto run = [](bool velocity, bool taa) {
+        Fixture3D f(1);
+        upload_slider(f);
+        math::mat4 prev = math::translation({-1.8f, 0.0f, 1.5f});
+        for (int k = 0; k < 12; ++k) {
+            const math::mat4 world = math::translation({-1.8f + 0.3f * f32(k), 0.0f, 1.5f});
+            f.render(0.0f, true, [&](Scene3D& s) {
+                post_aa(s, taa);
+                MeshInstance m;
+                m.mesh = 50;
+                m.world = world;
+                if (velocity) m.prev_world = &prev;
+                s.add(m);
+            });
+            prev = world;
+        }
+        return f.pixels;
+    };
+    const Array<u8> still = run(false, false);  // the last position without TAA
+    const f64 with_velocity = mean_abs_diff(run(true, true), still);
+    const f64 without = mean_abs_diff(run(false, true), still);
+    INFO("mean |diff| to the un-anti-aliased last frame: with velocity " << with_velocity << ", without " << without);
+    MESSAGE("moving box, mean |diff|: with velocity " << with_velocity << ", without " << without);
+    CHECK(with_velocity < without);
+    CHECK(with_velocity < 3.0);
+}
+
+TEST_CASE("render3d_gl: a skinned pose's previous joints feed the velocity") {
+    Fixture3D f(1);
+    mesh_fixture::Builder arm;
+    const u32 root = arm.add_node(-1);
+    const u32 a = arm.add_node(static_cast<i32>(root));
+    const u32 b = arm.add_node(static_cast<i32>(a), {0, 1, 0});
+    for (f32 y : {0.5f, 1.5f}) {
+        mesh_fixture::Box seg;
+        seg.center = {0, y, 0};
+        seg.half = {0.2f, 0.5f, 0.2f};
+        seg.node = root;
+        seg.color[1] = 0.8f;
+        arm.add_box(seg);
+    }
+    arm.skin_submesh(0, {a, b}, [](vec3) { return 0u; });
+    arm.skin_submesh(1, {a, b}, [](vec3) { return 1u; });
+    REQUIRE(f.renderer.meshes().upload(3, 1, arm.build().span()).has_value());
+    const GpuMesh& m = *f.renderer.meshes().get(3);
+    math::mat4 pose[3], prev[3];
+    pose_nodes(m, ~0u, 0.0f, Span<math::mat4>(pose, 3));
+    pose_nodes(m, ~0u, 0.0f, Span<math::mat4>(prev, 3));
+    prev[b] = prev[a] * math::trs({0, 1, 0}, math::quat_from_axis_angle({0, 0, 1}, 0.3f), {1, 1, 1});
+    for (bool taa : {false, true}) {
+        Scene3D scene(f.renderer.meshes(), mem::heap());
+        scene.begin(orbit_camera({0, 1, 0}, 0.0f, math::radians(10.0f), 6.0f), {kW, kH});
+        post_aa(scene, taa);
+        MeshInstance inst;
+        inst.mesh = 3;
+        inst.pose = Span<const math::mat4>(pose, 3);
+        inst.prev_pose = Span<const math::mat4>(prev, 3);
+        scene.add(inst);
+        scene.build();
+        // TAA adds last frame's joints after this frame's; the draws point at both.
+        CHECK(scene.joint_palette().size() == (taa ? 8u : 4u));
+        for (const Scene3D::Draw& d : scene.draws())
+            if (d.palette != ~0u) CHECK(d.prev_palette == (taa ? d.palette + 4 : d.palette));
+        f.device->begin_frame(f.frame++);
+        rhi::CommandBuffer cmd;
+        f.renderer.record_3d(cmd, scene, f.target);
+        f.device->submit(cmd);
+        f.device->end_frame();
+    }
+    CHECK(f.renderer.forward_3d().last_stats().velocity_draws == 2);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: temporal upscaling keeps a half-scale frame closer to full resolution") {
+    const Array<u8> ref = msaa_reference();
+    Fixture3D f(1, true, true, 0.5f);
+    f.render(0.0f, true, [](Scene3D& s) { post_aa(s, false); });
+    const f64 bilinear = mean_abs_diff(f.pixels, ref);
+    for (int i = 0; i < 24; ++i) f.render(0.0f, true, [](Scene3D& s) { post_aa(s, true); });
+    const f64 upscaled = mean_abs_diff(f.pixels, ref);
+    INFO("mean |diff| to full-res 4x MSAA: bilinear " << bilinear << ", temporal " << upscaled);
+    MESSAGE("mean |diff| to full-res 4x MSAA: bilinear " << bilinear << ", temporal " << upscaled);
+    CHECK(upscaled < bilinear * 0.75);
+    const Forward3D& fw = f.renderer.forward_3d();
+    CHECK(f.device->texture_desc(fw.velocity()).size.width == kW / 2);
+    CHECK(f.device->texture_desc(fw.taa_history()).size.width == kW);
+    CHECK(f.device->validation_error_count() == 0);
+}

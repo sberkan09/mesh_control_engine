@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "mce/log.h"
+
 namespace @GAME@ {
 
 using namespace mce;
@@ -33,6 +35,7 @@ ResultV install(World& world) {
     world.register_components<Spin, Bob>();
     world.add_system(Phase::FixedUpdate_Pre, "@GAME@_spin", &spin);
     world.add_system(Phase::FixedUpdate_Pre, "@GAME@_bob", &bob, "@GAME@_spin");
+    MCE_LOG_INFO("@GAME@: game systems installed");  // the module logs into the host's log
     return ok();
 }
 

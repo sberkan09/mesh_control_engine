@@ -248,3 +248,76 @@ TEST_CASE("streaming: distance to a box") {
     CHECK(scene::distance_to_box({4, 0, 0}, c, half) == doctest::Approx(3.0f));
     CHECK(scene::distance_to_box({4, 6, 0}, c, half) == doctest::Approx(5.0f));
 }
+
+namespace {
+
+struct Score {
+    i32 value = 0;
+};
+i32 g_startups = 0;
+
+}  // namespace
+
+TEST_CASE("scene change: request_change swaps every entity for the target scene and reruns Startup") {
+    Fixture f("scene_change", false);
+    g_startups = 0;
+    f.world.add_system(Phase::Startup, "count_startup", [](Frame&) { ++g_startups; });
+    f.world.set_resource(Score{7});
+    scene::pump_streaming(f.world, scene::PumpMode::Settle);
+    const Entity spare = f.world.spawn();  // spawned at run time, not by the scene
+    f.world.tick(1.0 / 60.0, 0);
+    CHECK(g_startups == 1);
+    REQUIRE(f.world.resource<scene::SceneChange>().current == StringView("base.mcscene"));
+
+    // Nothing pending: nothing happens.
+    CHECK(scene::apply_change(f.world, f.assets, &f.base).value() == false);
+
+    // An unknown target is an error and leaves the world as it was.
+    const u32 before = f.world.entity_count();
+    scene::request_change(f.world, "scenes/nowhere.mcscene");
+    CHECK_FALSE(scene::apply_change(f.world, f.assets, &f.base));
+    CHECK(f.world.entity_count() == before);
+    CHECK(f.world.resource<scene::SceneChange>().next.empty());
+
+    // By source path (a leading assets/ is fine): the streamed chunks, the run-time entity and the
+    // base scene all go; the resource stays.
+    scene::request_change(f.world, "assets/plain.mcscene");
+    REQUIRE(scene::apply_change(f.world, f.assets, &f.base).value());
+    CHECK(f.world.entity_count() == 1);
+    REQUIRE(f.base.size() == 1);
+    CHECK_FALSE(f.world.alive(spare));
+    CHECK(f.world.resource<Score>().value == 7);
+    const scene::SceneChange& c = f.world.resource<scene::SceneChange>();
+    CHECK(c.current == StringView("plain.mcscene"));
+    CHECK(c.current_guid == asset::parse_guid(kNoChunks).value());
+    CHECK(c.changes == 1);
+    f.world.tick(1.0 / 60.0, 1);
+    CHECK(g_startups == 2);
+
+    // By GUID text, back to the base scene (its chunks stream in again).
+    scene::request_change(f.world, std::string("guid:").append(kBase));
+    REQUIRE(scene::apply_change(f.world, f.assets, &f.base).value());
+    scene::pump_streaming(f.world, scene::PumpMode::Settle);
+    CHECK(f.base.size() == 4);
+    CHECK(f.world.entity_count() == 4 + 2 + 1);  // A (parent and child) and pinned C, as at the start
+    CHECK(scene::find_scene(f.assets, "chunk_b.mcscene").value() == asset::parse_guid(kChunkB).value());
+}
+
+TEST_CASE("scene change: scenes that name each other in a loop cook (scene references are links)") {
+    const std::string root = fresh_dir("scene_loop");
+    constexpr const char* kTitle = "5ce4e000-3333-4000-8000-000000000001";
+    constexpr const char* kLevel = "5ce4e000-3333-4000-8000-000000000002";
+    const auto link = [](const char* name, const char* to) {
+        return std::string(R"({ "name": ")") + name + R"(", "components": { "LocalTransform": { "position": [1000, 0, 0] },
+                     "SceneChunk": { "scene": "guid:)" + to + R"(", "half_extents": [1, 1, 1], "load_distance": 0, "unload_distance": 0 } } })";
+    };
+    write_scene(root, "title.mcscene", kTitle, link("ToLevel", kLevel));
+    write_scene(root, "level.mcscene", kLevel, link("ToTitle", kTitle));
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+    INFO(diag_text(r));
+    CHECK(r.ok());
+    // A link to a scene that is not there is still an error.
+    write_scene(root, "level.mcscene", kLevel, link("ToNowhere", "5ce4e000-3333-4000-8000-0000000000ff"));
+    CHECK_FALSE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+}

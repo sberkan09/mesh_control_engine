@@ -434,6 +434,130 @@ constexpr const char* kShadowFS = R"(#version 450 core
 void main() {}
 )";
 
+// ---- temporal anti-aliasing (M-VISUAL 5) -----------------------------------------------------------
+// Velocity prepass: the opaques again into a full-size RGBA16F target with their own depth; rg = this
+// pixel's motion in uv since last frame (current minus previous, both unjittered), b = 1 where a mesh
+// was drawn (the TAA resolve reprojects the rest as sky at infinity).
+#define MCE_GLSL_VELOCITY_U R"(
+layout(std140, binding = 1) uniform VelPassU { mat4 vp_jittered; mat4 vp_current; mat4 vp_previous; };
+layout(std140, binding = 3) uniform VelObjU { mat4 m_current; mat4 m_previous; mat4 m_dequant; vec4 m_skin; };
+layout(location = 0) in vec4 a_pos;
+layout(location = 0) out vec4 v_current;
+layout(location = 1) out vec4 v_previous;
+out gl_PerVertex { vec4 gl_Position; };
+)"
+constexpr const char* kVelocityVS = "#version 450 core\n" MCE_GLSL_VELOCITY_U R"(
+void main() {
+    vec4 p = vec4(a_pos.xyz, 1.0);
+    vec4 w = m_current * p;
+    gl_Position = vp_jittered * w;
+    v_current = vp_current * w;
+    v_previous = vp_previous * (m_previous * p);
+}
+)";
+// Skinned twin: m_skin.x = this frame's first joint, y = last frame's (-1 = rigid).
+constexpr const char* kSkinnedVelocityVS = "#version 450 core\n" MCE_GLSL_VELOCITY_U MCE_GLSL_SKIN R"(
+void main() {
+    vec4 p = m_dequant * vec4(a_pos.xyz, 1.0);
+    vec4 w = m_current * (skin_matrix(m_skin.x) * p);
+    gl_Position = vp_jittered * w;
+    v_current = vp_current * w;
+    v_previous = vp_previous * (m_previous * (skin_matrix(m_skin.y) * p));
+}
+)";
+#undef MCE_GLSL_VELOCITY_U
+constexpr const char* kVelocityFS = R"(#version 450 core
+layout(location = 0) in vec4 v_current;
+layout(location = 1) in vec4 v_previous;
+layout(location = 0) out vec4 o_velocity;
+void main() {
+    // Behind last frame's camera: no history to reuse (a motion that throws the lookup off screen).
+    if (v_previous.w <= 1e-4) { o_velocity = vec4(16.0, 16.0, 1.0, 1.0); return; }
+    o_velocity = vec4((v_current.xy / v_current.w - v_previous.xy / v_previous.w) * 0.5, 1.0, 1.0);
+}
+)";
+
+// TAA resolve: this frame's sample under each output pixel (point, at the jittered position), the
+// history reprojected by the velocity (5-tap Catmull-Rom), clipped to the 3x3 neighborhood's variance
+// box in YCoCg over Karis-weighted colors, blended by `blend`. When the output is larger than the
+// input (temporal upscaling), the new sample's weight falls off with its distance to the pixel.
+constexpr const char* kTaaFS = R"(#version 450 core
+layout(std140, binding = 1) uniform TaaU {
+    mat4 t_reproject;  // last frame's view-proj * inverse(this frame's), both unjittered: the sky
+    vec4 t_in;         // input texel size (xy) and size (zw)
+    vec4 t_out;        // output texel size (xy) and size (zw)
+    vec4 t_jitter;     // xy: this frame's jitter in uv, z: history valid, w: blend
+};
+layout(binding = 6) uniform sampler2D u_current;   // HDR, input size, point sampled
+layout(binding = 7) uniform sampler2D u_history;   // last output, linear
+layout(binding = 8) uniform sampler2D u_velocity;  // input size, point sampled
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+vec3 tm(vec3 c) { return c / (1.0 + max(c.r, max(c.g, c.b))); }
+vec3 itm(vec3 c) { return c / max(1.0 - max(c.r, max(c.g, c.b)), 1e-4); }
+vec3 to_ycocg(vec3 c) { return vec3(dot(c, vec3(0.25, 0.5, 0.25)), dot(c, vec3(0.5, 0.0, -0.5)), dot(c, vec3(-0.25, 0.5, -0.25))); }
+vec3 to_rgb(vec3 c) { return vec3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z); }
+vec3 history(vec2 uv) {  // Catmull-Rom from 5 bilinear taps (the corners dropped)
+    vec2 pos = uv * t_out.zw;
+    vec2 c = floor(pos - 0.5) + 0.5;
+    vec2 f = pos - c;
+    vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+    vec2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+    vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+    vec2 w3 = f * f * (-0.5 + 0.5 * f);
+    vec2 w12 = w1 + w2;
+    vec2 t12 = (c + w2 / w12) * t_out.xy, t0 = (c - 1.0) * t_out.xy, t3 = (c + 2.0) * t_out.xy;
+    vec3 r = textureLod(u_history, vec2(t12.x, t0.y), 0.0).rgb * (w12.x * w0.y) +
+             textureLod(u_history, vec2(t0.x, t12.y), 0.0).rgb * (w0.x * w12.y) +
+             textureLod(u_history, t12, 0.0).rgb * (w12.x * w12.y) +
+             textureLod(u_history, vec2(t3.x, t12.y), 0.0).rgb * (w3.x * w12.y) +
+             textureLod(u_history, vec2(t12.x, t3.y), 0.0).rgb * (w12.x * w3.y);
+    float w = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
+    return max(r / w, vec3(0.0));
+}
+void main() {
+    vec2 uv = v_uv;
+    // The input texel this pixel's point was rasterized in (the projection was shifted by the jitter).
+    vec2 cuv = (floor((uv + t_jitter.xy) * t_in.zw) + 0.5) * t_in.xy;
+    vec3 current = to_ycocg(tm(max(textureLod(u_current, cuv, 0.0).rgb, vec3(0.0))));
+    vec3 m1 = vec3(0.0), m2 = vec3(0.0), lo = vec3(1e9), hi = vec3(-1e9);
+    for (int y = -1; y <= 1; ++y)
+        for (int x = -1; x <= 1; ++x) {
+            vec3 s = to_ycocg(tm(max(textureLod(u_current, cuv + vec2(x, y) * t_in.xy, 0.0).rgb, vec3(0.0))));
+            m1 += s;
+            m2 += s * s;
+            lo = min(lo, s);
+            hi = max(hi, s);
+        }
+    vec3 mu = m1 * (1.0 / 9.0);
+    vec3 sigma = sqrt(max(m2 * (1.0 / 9.0) - mu * mu, vec3(0.0)));
+    lo = max(lo, mu - 1.25 * sigma);
+    hi = min(hi, mu + 1.25 * sigma);
+
+    vec4 vel = textureLod(u_velocity, cuv, 0.0);
+    vec2 prev;
+    if (vel.b > 0.5) {
+        prev = uv - vel.xy;
+    } else {
+        vec4 p = t_reproject * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+        prev = p.xy / p.w * 0.5 + 0.5;
+    }
+    float alpha = t_jitter.w;
+    if (t_out.z > t_in.z + 0.5) {  // upscaling: trust the new sample by how close it landed
+        vec2 d = (cuv - t_jitter.xy - uv) * t_out.zw;
+        alpha = clamp(alpha * 2.0 * exp(-1.5 * dot(d, d)), 0.02, 1.0);
+    }
+    if (t_jitter.z < 0.5 || any(lessThan(prev, vec2(0.0))) || any(greaterThan(prev, vec2(1.0)))) alpha = 1.0;
+    vec3 h = to_ycocg(tm(history(prev)));
+    vec3 centre = 0.5 * (lo + hi), extent = 0.5 * (hi - lo) + 1e-5;
+    vec3 off = h - centre;
+    vec3 a = abs(off / extent);
+    float m = max(a.x, max(a.y, a.z));
+    if (m > 1.0) h = centre + off / m;
+    o_color = vec4(itm(max(to_rgb(mix(h, current, alpha)), vec3(0.0))), 1.0);
+}
+)";
+
 // ---- screen-space ambient occlusion (M-VISUAL 3), all at half resolution --------------------------
 // Prepass: the opaques' view-space normal (xyz) and view depth (w; 0 = nothing drawn), over kMeshVS
 // or kSkinnedMeshVS, honouring alpha masks.

@@ -226,10 +226,12 @@ bool render_ticks(ToolCall& c, RenderRequest& rq, Array<cook::Image>& frames, bo
     for (StringView a : {StringView("-pack"), cooked.view(), StringView("-scene"), guid.view(), StringView("-window"), window.view(),
                          StringView("-capture_ticks"), ticks.view(), StringView("-capture"), shot.view()})
         args.push_back(a);
-    // A preview, not a session: no focus pause, no mouse grab, no error dialogs, no vsync wait.
+    // A preview, not a session: no focus pause, no mouse grab, no error dialogs, no vsync wait, and
+    // the sim runs ahead of the wall clock to the captured ticks (32 a frame).
     for (StringView a : {StringView("-pause_on_focus_loss"), StringView("0"), StringView("-mouse_look"), StringView("0"),
                          StringView("-platform.error_box"), StringView("0"), StringView("-r.vsync"), StringView("0"),
-                         StringView("-console_open"), StringView("0")})
+                         StringView("-console_open"), StringView("0"), StringView("-sim.fast_forward"), StringView("1"),
+                         StringView("-sim.max_catchup"), StringView("32")})
         args.push_back(a);
     if (c.server.module().loaded()) {
         args.push_back("-module");

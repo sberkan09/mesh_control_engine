@@ -107,6 +107,7 @@ private:
     mem::UniquePtr<audio::ClipBank> clips_;
     mem::UniquePtr<World> world_;
     Array<Entity> entities_;
+    asset::AssetSystem* assets_ = nullptr;  // the project's mounted pack (scene::apply_change)
     mem::UniquePtr<mem::LinearArena> scratch_;  // frame arena for ticks run outside an app frame
     State state_ = State::Stopped;
     f64 accumulator_ = 0.0;

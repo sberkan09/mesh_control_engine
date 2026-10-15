@@ -1,0 +1,17 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "b39cf0be-b8ea-43ef-970a-92eeca61320f",
+  "name": "stone",
+  "base_color": [1, 1, 1, 1],
+  "metallic": 0,
+  "roughness": 0.9,
+  "emissive": [0, 0, 0],
+  "alpha_mode": "opaque",
+  "alpha_cutoff": 0.5,
+  "double_sided": false,
+  "unlit": false,
+  "textures": {
+    "base_color": "guid:a72363ae-d5c7-4cc0-a995-b8bd1115020c"
+  }
+}

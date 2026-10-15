@@ -1,0 +1,17 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "33e0f3ce-b167-446f-a9ef-43dbc18b1d67",
+  "name": "grass",
+  "base_color": [0.9, 0.9, 0.85, 1],
+  "metallic": 0,
+  "roughness": 0.95,
+  "emissive": [0, 0, 0],
+  "alpha_mode": "opaque",
+  "alpha_cutoff": 0.5,
+  "double_sided": false,
+  "unlit": false,
+  "textures": {
+    "base_color": "guid:894f5981-73f4-4ae8-8b3c-c7d7320c9e70"
+  }
+}

@@ -62,12 +62,19 @@ public:
         scene::pump_streaming(world_);
         world_.tick(t.dt, sim_ticks_);
         ++sim_ticks_;
+        // A scene change the game asked for this tick (scene::request_change), as mce_player applies it.
+        if (Result<bool> changed = scene::apply_change(world_, assets_, &entities_); !changed) {
+            error_ = changed.error();
+            failed_ = true;
+            quit();
+            return;
+        }
         if (monetize_on_) monetize_.update();
         if (config_on_) remote_config_.update();
         if (services_on_) game_services_.update();
         audio_.update();  // the Silent backend mixes one block per call
         if (progress_ && (sim_ticks_ % kProgressTicks == 0 || sim_ticks_ == total_)) progress_(sim_ticks_, total_, user_);
-        if (hooks_ && hooks_->tick && !hooks_->tick(world_, entities_.span(), sim_ticks_, hooks_->user)) quit();
+        if (hooks_ && hooks_->tick && !hooks_->tick(world_, hook_entities(), sim_ticks_, hooks_->user)) quit();
     }
 
     void on_render(const app::RenderContext&) override {
@@ -138,10 +145,16 @@ public:
     }
 
     World& world() { return world_; }
-    Span<const Entity> spawned() const { return entities_.span(); }
+    // The run's scene entities, spawned[i] = scene entity i, while the run is in the scene it started
+    // in; empty in any other scene (the hooks' probes name entities of the starting scene).
+    Span<const Entity> hook_entities() {
+        const scene::SceneChange* c = world_.try_resource<scene::SceneChange>();
+        return !c || c->current_guid == scene_ ? entities_.span() : Span<const Entity>();
+    }
     u64 ticks() const { return sim_ticks_; }
     usize entity_count() const { return entities_.size(); }
     const Error& error() const { return error_; }
+    bool failed() const { return failed_; }
 
 private:
     asset::AssetSystem& assets_;
@@ -164,6 +177,7 @@ private:
     Array<Entity> entities_;
     u64 sim_ticks_ = 0;
     Error error_;
+    bool failed_ = false;  // a tick failed (a scene change to a scene the pack lacks)
 };
 
 }  // namespace
@@ -188,12 +202,12 @@ Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, 
         desc.headless = true;
         desc.max_ticks = ticks;
         desc.input_source = input;
-        if (app::run(app, desc) != 0) return app.error();
+        if (app::run(app, desc) != 0 || app.failed()) return app.error();
         out.ticks = app.ticks();
         out.entities = app.entity_count();
         out.state_hash = app.world().state_hash();
         out.metrics = app.world().metrics();
-        if (inspect) inspect(app.world(), app.spawned(), inspect_user);
+        if (inspect) inspect(app.world(), app.hook_entities(), inspect_user);
     }
     return out;
 }

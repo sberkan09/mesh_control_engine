@@ -1,0 +1,46 @@
+{
+  "name": "a walk_to bot lights level 1's lanterns and enters the moon gate",
+  "scene": "scenes/level1.mcscene",
+  "ticks": 2400,
+  "bot": {
+    "kind": "walk_to",
+    "actor": "Moth",
+    "target": [
+      70,
+      5
+    ],
+    "plane": "x"
+  },
+  "until": {
+    "scene": "scenes/level2.mcscene"
+  },
+  "assert": [
+    {
+      "scene": "scenes/level2.mcscene"
+    },
+    {
+      "feel": "finished_tick",
+      ">": 0
+    },
+    {
+      "feel": "finished_tick",
+      "<=": 1800
+    },
+    {
+      "log_contains": "lantern lit (3/3)"
+    },
+    {
+      "log_contains": "the moon gate is open"
+    },
+    {
+      "log_contains": "level complete"
+    },
+    {
+      "feel": "deaths",
+      "<=": 1
+    },
+    {
+      "log_errors": 0
+    }
+  ]
+}
