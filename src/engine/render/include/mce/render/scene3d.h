@@ -311,6 +311,12 @@ struct MeshInstance {
 inline const asset::MaterialChunk& material_of(const MeshInstance& inst, const GpuSubmesh& sm) {
     return inst.material ? inst.material->params : sm.material;
 }
+// A submesh's UV rectangle with the material's repeat (.mcmat uv_scale) folded in.
+inline math::vec4 tiled_uv_rect(const math::vec4& uv_rect, const asset::MaterialChunk& mat) {
+    f32 s[2];
+    mat.uv_scale(s);
+    return {uv_rect.x * s[0], uv_rect.y * s[1], uv_rect.z * s[0], uv_rect.w * s[1]};
+}
 inline u32 albedo_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->albedo_key : sm.albedo_key; }
 inline u32 normal_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->normal_key : sm.normal_key; }
 inline u32 orm_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->orm_key : sm.orm_key; }
