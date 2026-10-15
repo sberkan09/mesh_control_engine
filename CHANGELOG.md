@@ -9,6 +9,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   (Pixelify Sans, Press Start 2P), `clean.mcuitheme` (Atkinson Hyperlegible Next, Karla) and `story.mcuitheme`
   (Crimson Pro), whose OFL fonts bake Latin-1 and Latin Extended-A, with `CREDITS.md` rows and license texts.
   User guide 14 and the MCP `start_game` prompt tell agents to pick or make a theme for each game.
+- Game services run on Game Center and Play Games Services v2 (SBA-23): `liveops::PlatformGameServices` sends
+  achievements and scores under the catalog's `"ios"` / `"android"` ids and keeps cloud-save versions inside
+  Game Center saved games and Play Games snapshots, so a second device gets a conflict as on the local stand-in;
+  a saved game the engine did not write is never overwritten. iOS builds it with `-DMCE_GAMEKIT=ON`; `ship`
+  stamps Play Games into a game with a `.mcservices` when `MCE_PLAY_GAMES_APP_ID` is set. Not yet run on a device.
 - Novel kit words in the player's language (SBA-59, M-MOBILE 11e follow-up): the title menu, checkpoint, ending
   card and extras page read `novel.*` keys from the string tables (English when no table has one; a `.touch` row
   after a finger read on, "Tap" for "Enter"), and the story's title, extras row and ending titles read

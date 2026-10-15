@@ -52,6 +52,7 @@
 // .mcconfig defaults, the values the last fetch saved, and a fetch at start (the host's fetcher, -remote_config.file
 // <cooked pack>, else Firebase Remote Config with the Firebase vendor); the game applies fetched values with
 // RemoteConfig::apply_fetched. Game services (mce/liveops/game_services.h) too, when the pack has a .mcservices:
+// the host's provider, else Game Center / Play Games where the build has them (mce/liveops/platform_games.h);
 // -liveops.provider local plays the platform with a folder (-game_services.dir, -game_services.offline 1), and
 // -game_services_test rehearses them.
 //
@@ -88,6 +89,7 @@
 #include "mce/kit/sprite_extract.h"
 #include "mce/liveops/game_services.h"
 #include "mce/liveops/liveops.h"
+#include "mce/liveops/platform_games.h"
 #include "mce/liveops/remote_config.h"
 #include "mce/loc/loc.h"
 #include "mce/monetize/fake.h"
@@ -97,6 +99,7 @@
 #include "mce/physics/module.h"
 #include "mce/platform/ads.h"
 #include "mce/platform/firebase.h"
+#include "mce/platform/game_services.h"
 #include "mce/platform/haptics.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -297,6 +300,63 @@ private:
     liveops::ConfigValues defaults_;
     liveops::ConfigValues values_;  // the running fetch's, filled on the SDK's thread
     liveops::ConfigFetchSink* sink_ = nullptr;
+};
+
+// Game Center / Play Games (platform/game_services.h) for liveops::PlatformGameServices: the game
+// services provider on a phone build that has them.
+class PlatformGamesBridge final : public liveops::IPlatformGamesBackend {
+public:
+    const char* name() const override { return platform::game_services::backend_name(platform::game_services::backend()); }
+    bool ios_ids() const override {
+        return platform::game_services::backend() == platform::game_services::Backend::GameCenter;
+    }
+    bool start(liveops::PlatformGamesSink& sink) override {
+        sink_ = &sink;
+        return platform::game_services::start(&PlatformGamesBridge::answer, this);
+    }
+    void stop() override { platform::game_services::stop(); }
+    void sign_in(bool interactive) override { platform::game_services::sign_in(interactive); }
+    void report_achievement(StringView id, u32 steps, u32 total, u16 tag) override {
+        platform::game_services::report_achievement(id, steps, total, tag);
+    }
+    void submit_score(StringView id, i64 score, u16 tag) override {
+        platform::game_services::submit_score(id, score, tag);
+    }
+    void read_blob(StringView name, u16 tag) override { platform::game_services::read_blob(name, tag); }
+    void write_blob(StringView name, Span<const byte> blob, u16 tag) override {
+        platform::game_services::write_blob(name, blob, tag);
+    }
+    void show_achievements() override { platform::game_services::show_achievements(); }
+    void show_leaderboard(StringView id) override { platform::game_services::show_leaderboard(id); }
+
+private:
+    static void answer(void* user, const platform::game_services::Answer& a) {
+        liveops::PlatformGamesSink* sink = static_cast<PlatformGamesBridge*>(user)->sink_;
+        using Kind = platform::game_services::AnswerKind;
+        switch (a.kind) {
+            case Kind::SignedIn:
+                sink->platform_signed_in(a.ok);
+                break;
+            case Kind::Achievement:
+                sink->platform_achievement(a.tag, a.ok);
+                break;
+            case Kind::Score:
+                sink->platform_score(a.tag, a.ok);
+                break;
+            case Kind::BlobRead:
+                sink->platform_blob_read(a.tag,
+                                         !a.ok       ? liveops::BlobRead::Failed
+                                         : a.missing ? liveops::BlobRead::Missing
+                                                     : liveops::BlobRead::Ok,
+                                         a.bytes);
+                break;
+            case Kind::BlobWritten:
+                sink->platform_blob_written(a.tag, a.ok);
+                break;
+        }
+    }
+
+    liveops::PlatformGamesSink* sink_ = nullptr;
 };
 
 int fail(const char* what, const Error& e) {
@@ -911,6 +971,11 @@ private:
             provider = &*local_services_;
         } else if (mode == "none") {
             provider = nullptr;
+        } else if (!provider && platform::game_services::backend() != platform::game_services::Backend::None) {
+            // The phone's own: Game Center or Play Games, when the build has them.
+            platform_games_.emplace(platform_games_bridge_);
+            provider = &*platform_games_;
+            MCE_LOG_INFO("{}: game services on {}", desc_.app_name, platform_games_bridge_.name());
         }
         game_services_.init(catalog, provider);
         game_services_.install(world_);
@@ -1944,6 +2009,8 @@ private:
     u32 firebase_collection_ = ~0u;  // the Collection last handed to the SDK
     std::optional<liveops::OutboxUploader> local_outbox_;
     std::optional<liveops::FileConfigFetcher> file_fetcher_;  // -remote_config.file
+    PlatformGamesBridge platform_games_bridge_;
+    std::optional<liveops::PlatformGameServices> platform_games_;  // Game Center / Play Games
     std::optional<FirebaseConfigFetcher> firebase_config_;      // with firebase_on_ and no other fetcher
     liveops::RemoteConfigService remote_config_;  // before the World: its resource points here
     u32 dumped_config_version_ = ~0u;

@@ -14,7 +14,7 @@ Built so far (the vendor-neutral parts of M-LIVEOPS):
 - **remote config** (M-LIVEOPS step 3): values the game reads by key, cooked defaults plus newer
   values fetched in the background (23.5);
 - **game services** (M-LIVEOPS step 2): achievements, leaderboards and cloud saves through one API,
-  with a local stand-in for Game Center and Play Games (23.6).
+  on Game Center and Play Games, with a local stand-in for both (23.6).
 
 The vendor is **Firebase**: Crashlytics catches native crashes on the phones, Analytics receives
 the events and Remote Config serves remote config (23.7). It is stamped into a phone build only when the project hands `ship` its Firebase
@@ -216,6 +216,26 @@ and scores go to `game_services.jsonl` in it, and cloud saves to `cloud/<name>.b
 | `-game_services.offline` | `1`: sign-in and every call fail | `0` |
 | `-game_services_test` | `"tick:action[:id[:value]] ..."` with `sign_in`, `unlock`, `progress`, `score`, `write`, `cloud_save`, `cloud_load`, `keep_local`, `keep_cloud`; prints every event | empty |
 
+**On the phones** the provider is the platform's own, when the host brings none and the build has it:
+Game Center on iOS, Play Games Services v2 on Android. Achievements and leaderboards go out under the
+catalog's `"ios"` or `"android"` ids; one without an id for the platform at hand stays in the outbox
+(the log says which). An incremental achievement reports its steps (Game Center gets a percentage, Play
+Games the step count; give it the same number of steps in the Play Console). Cloud saves are Game
+Center saved games and Play Games snapshots, named as in `"cloud_saves"`. The engine keeps the version
+inside the saved data, so a second device saving over an older version gets a conflict as on the
+local stand-in. A saved game under the same name that this engine did not write (an older build's) is
+left untouched, and cloud calls on it fail. `-liveops.provider local` or `none` still overrides the
+platform.
+
+- **iOS:** build with `-DMCE_GAMEKIT=ON`. Turn on Game Center (and iCloud, for saved games) for the
+  App ID; the provisioning profile carries both capabilities. Add the achievements and leaderboards
+  in App Store Connect with the ids in `"ios"`.
+- **Android:** in the Play Console, set up Play Games Services, add the achievements and
+  leaderboards (their ids go in `"android"`), and turn on Saved Games for cloud saves. Ship with
+  `MCE_PLAY_GAMES_APP_ID=<the project id> python3 scripts/ship.py <game> --target android`. The game
+  gets Play Games Services v2 and its project id in the manifest. Without the variable, a game with a
+  `.mcservices` keeps its game services on the device, and `ship` says so.
+
 ## 23.7 The demo and vendor setup
 
 `samples/liveops_demo` is every service in one headless game: a level runner that unlocks
@@ -289,8 +309,10 @@ With the `local` provider nothing leaves the device and there is nothing to decl
 - Firebase Remote Config has not been fetched on a device yet either: the fetcher is built and its
   text-to-type rules run in CI, and the check (a console value applied after relaunch on the
   Simulator and the emulator) needs the same Mac, project and config files.
-- Game services have no native provider yet: Game Center / iCloud and Play Games Services v2 need a
-  Mac, devices and test accounts. The API, the outbox, cloud versions and the local fake work today.
+- Game Center and Play Games have not been run on a device yet: the providers are built and stamped,
+  and their engine side (store ids, cloud versions, foreign saves) runs in CI against a fake platform.
+  The check (sign-in, an achievement, a score and a cloud restore on test accounts) needs a Mac,
+  devices and test accounts.
 - The demo's device half (a forced crash shown symbolicated after relaunch on the Simulator and the
   emulator, achievements and a cloud restore on test accounts) waits on the vendor and the native
   providers; `samples/liveops_demo` covers the rest in CI.
