@@ -33,9 +33,11 @@ The full flag list (`--module`, `--base`, `--quiet`, ...) is in
 
 ## CI
 
-There is no hosted CI. Before merging a PR, run `scripts/ci/local_ci.sh` on Linux (all stages) or
-`scripts/ci/local_ci.sh --quick` (walls + gcc debug with GPU tests); it prints a pass/fail summary and keeps logs
-in `build/local-ci-logs/`. Its clang-tidy stage checks only the files changed since `origin/dev_claude`;
+There is no hosted CI. Before merging a PR, run `scripts/ci/local_ci.sh` on Linux; it prints a pass/fail
+summary and keeps logs in `build/local-ci-logs/`. A thread working through a milestone runs
+`local_ci.sh --task` (walls, gcc debug with GPU tests, clang-tidy, and determinism when the change touches
+simulation code) before merging each task, and `local_ci.sh --batch` (every stage) on every third task and at the
+milestone's end; a red `--batch` run is that thread's next fix. `--quick` is walls + gcc debug only. Its clang-tidy stage checks only the files changed since `origin/dev_claude`;
 `--tidy-all` checks the whole tree. On a Mac, `scripts/ci/local_ci_macos.sh` (or `--quick`) does the same for the
 `macos-*` presets. Windows/MSVC builds are checked by hand on a Windows machine.
 `scripts/ci/setup_env.sh` installs its Ubuntu 24.04 packages (cloud sessions run it on start through
