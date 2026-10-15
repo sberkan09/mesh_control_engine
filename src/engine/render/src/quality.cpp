@@ -22,6 +22,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.gi_updates = false;
             q.volumetrics = false;
             q.dof_motion_blur = false;
+            q.ssr = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -74,6 +75,8 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
 }
 
 void apply_quality(const QualitySettings& q, GiVolume& gi) { gi.updates = gi.updates && q.gi_updates; }
+
+void apply_quality(const QualitySettings& q, ScreenSpaceReflections& ssr) { ssr.enabled = ssr.enabled && q.ssr; }
 
 void apply_quality(const QualitySettings& q, Volumetrics& v) {
     v.enabled = v.enabled && q.volumetrics;

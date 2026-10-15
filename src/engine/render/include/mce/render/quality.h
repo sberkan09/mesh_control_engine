@@ -8,7 +8,8 @@
 //   Medium   2x    1024        2         on     -     0.85          runtime updates                      16 px, 48 slices
 //   High     4x    2048        3         on     TAA   1.0           runtime updates                      8 px, 64 slices
 //   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High; M-VISUAL 8: Low drops depth of field and
-//   motion blur, every tier keeps auto exposure and the color grade)
+//   motion blur, every tier keeps auto exposure and the color grade; M-VISUAL2 1: Low drops
+//   screen-space reflections)
 //
 // Render scale shrinks the 3D targets (HDR, depth, bloom chain); the tonemap/FXAA pass upsamples
 // into the full-size output, so 2D and UI drawn afterwards stay sharp.
@@ -33,6 +34,7 @@ struct QualitySettings {
     u32 volumetric_tile = 8;     // Volumetrics::tile, at least
     u32 volumetric_slices = 64;  // Volumetrics::slices, at most
     bool dof_motion_blur = true; // PostFx::dof and PostFx::motion_blur are honored
+    bool ssr = true;             // ScreenSpaceReflections::enabled is honored (M-VISUAL2 1)
 };
 
 QualitySettings quality_settings(QualityTier tier);
@@ -49,5 +51,7 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
 void apply_quality(const QualitySettings& q, GiVolume& gi);
 // Volumetric fog: off on Low; the froxel grid no finer than the tier's (a scene's coarser grid stays).
 void apply_quality(const QualitySettings& q, Volumetrics& v);
+// Screen-space reflections: off on Low (the probes and the sky remain).
+void apply_quality(const QualitySettings& q, ScreenSpaceReflections& ssr);
 
 }  // namespace mce::render

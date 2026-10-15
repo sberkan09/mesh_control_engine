@@ -3,6 +3,8 @@
 //
 //   0. SSAO          (AmbientOcclusion::enabled, M-VISUAL 3) half-resolution normal + depth prepass of
 //                    the opaques, obscurance, depth-aware blur; read by the main pass's ambient terms
+//   0b. SSR          (ScreenSpaceReflections::enabled, M-VISUAL2 1) a ray march through the same
+//                    prepass's depth reading last frame's HDR; blended over the main pass's probes
 //   1. cascades      up to 4 sun cascades into one D32 2D-array (shadow_size² per layer), depth only,
 //                    then the spot / point light atlas tiles (M-VISUAL 4)
 //   1b. GI           (GiVolume::enabled, M-VISUAL 6) the irradiance volume's rolling update: a sun
@@ -45,6 +47,9 @@ struct Forward3DDesc {
     // Screen-space ambient occlusion resources (M-VISUAL 3); a scene turns it on with
     // AmbientOcclusion::enabled. False (or -r.ssao 0) draws every scene without it.
     bool ssao = true;
+    // Screen-space reflection pipelines (M-VISUAL2 1); a scene turns them on with
+    // ScreenSpaceReflections::enabled. False (or -r.ssr 0) keeps every scene on the probes and the sky.
+    bool ssr = true;
     // Local-light shadow atlas layers after the cascades (M-VISUAL 4); keep
     // LocalShadowSettings::layers equal. 0 (or -r.local_shadows 0) draws every light unshadowed.
     u32 local_shadow_layers = 1;
@@ -80,7 +85,9 @@ struct Forward3DStats {
     u32 probes_loaded = 0;      // baked probes decoded into their slots this frame
     u32 probe_draws = 0;        // draws of those captures, over all six faces
     bool ssao = false;          // this frame's ambient was darkened by screen-space ambient occlusion
-    u32 ssao_draws = 0;         // the SSAO prepass's draws
+    u32 ssao_draws = 0;         // the half-size prepass's draws (SSAO and SSR read it)
+    bool ssr = false;           // this frame traced screen-space reflections (M-VISUAL2 1)
+    bool ssr_history = false;   // ... over a valid previous frame (false: nothing reflected yet)
     bool taa = false;           // this frame went through the TAA resolve
     bool taa_history = false;   // ... blending a valid history (false on the first frame or after a reset)
     u32 velocity_draws = 0;     // the velocity prepass's draws
@@ -119,6 +126,7 @@ struct Forward3DGpuTimes {
     u64 frame_index = ~u64(0);
     f64 clusters = -1;  // the GPU light assignment (0 when it ran on the CPU)
     f64 ssao = -1;      // prepass + occlusion + blur (0 when the scene has no SSAO)
+    f64 ssr = -1;       // the reflection trace, and the prepass when SSAO is off (0 when the scene has no SSR)
     f64 shadow = -1, main = -1, resolve = -1;
     f64 taa = -1;       // velocity prepass + TAA resolve (0 when the scene has no TAA)
     f64 gi = -1;        // irradiance-volume update (0 when the scene has no volume)
@@ -131,7 +139,7 @@ struct Forward3DGpuTimes {
 
 class Forward3D {
 public:
-    static constexpr u32 kStageCount = 13;    // timestamps written: kStageCount + 1
+    static constexpr u32 kStageCount = 14;    // timestamps written: kStageCount + 1
     static constexpr u32 kMaxBloomLevels = 6;
 
     Forward3D() = default;
@@ -187,6 +195,9 @@ public:
     // SSAO (M-VISUAL 3): the blurred ambient visibility (r) at half the 3D target's size; null until
     // the first frame with AmbientOcclusion::enabled.
     rhi::TextureHandle ssao() const { return ao_a_; }
+    // SSR (M-VISUAL2 1): RGBA16F at half the 3D target's size, rgb = last frame's light at the hit,
+    // a = its confidence (0 = a miss); null until the first frame with ScreenSpaceReflections::enabled.
+    rhi::TextureHandle ssr() const { return ssr_; }
     // TAA (M-VISUAL 5): the velocity target (RGBA16F at the 3D size: rg = uv motion, b = covered, a =
     // view depth) and the newest history (RGBA16F at the output size); null until the first frame
     // with PostFx::taa (or motion blur / depth of field for the velocity).
@@ -249,7 +260,9 @@ private:
     void bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, bool apply_fog);
     rhi::TextureHandle sky_texture_override() const { return atmo_on_ ? atmo_tex_ : rhi::TextureHandle{}; }
     void record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_prepass(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_ssr(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void shadow_draw(rhi::CommandBuffer& cmd, const math::mat4& view_proj, const Scene3D::Draw& d, rhi::PipelineHandle& bound_pipe,
@@ -324,6 +337,11 @@ private:
     rhi::TextureHandle ao_a_;            // RGBA8 half size: occlusion, then the blurred result
     rhi::TextureHandle ao_b_;            // RGBA8 half size: the horizontal blur
     rhi::TextureHandle ao_off_;          // 1×1 stand-in bound at bank::kAo while SSAO is off
+    bool prepass_done_ = false;          // this frame's half-size prepass ran (SSAO or SSR)
+    rhi::PipelineHandle ssr_pipe_;       // null when Forward3DDesc::ssr is off
+    rhi::TextureHandle ssr_;             // RGBA16F half size: reflected light, confidence
+    math::mat4 ssr_prev_vp_ = math::mat4::identity();  // last frame's jittered view-proj
+    bool ssr_prev_valid_ = false;        // hdr_ holds a frame drawn with ssr_prev_vp_
     rhi::PipelineHandle ibl_prefilter_;  // null when Forward3DDesc::ibl is off
     rhi::PipelineHandle ibl_sh_pipe_;
     rhi::PipelineHandle ibl_brdf_;
