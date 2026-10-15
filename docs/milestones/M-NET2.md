@@ -1,6 +1,6 @@
 # M-NET2 — Multiplayer that games can ship (milestone record)
 
-**Status:** active. Step 1 merged into `dev_claude`; steps 2–7 to come (Linear SBA-82 … SBA-88).
+**Status:** active. Steps 1–2 merged into `dev_claude`; steps 3–7 to come (Linear SBA-82 … SBA-88).
 **Why:** M-NET gives server-authoritative snapshots over ENet with no prediction or interpolation, so a moving player
 feels the round trip (ROADMAP "Engine gap tracks"; comparison in the project's `assessments/motor-kiyaslama-eksikler.md`).
 **Measured on:** the Linux CI container.
@@ -10,7 +10,7 @@ feels the round trip (ROADMAP "Engine gap tracks"; comparison in the project's `
 | Step | Linear | State |
 |---|---|---|
 | 1. Network test harness: simulated latency, jitter and loss; headless multi-client runner in `local_ci.sh`; net stats in the dev overlay | SBA-82 | done |
-| 2. Snapshot interpolation for remote entities, jitter buffer, extrapolation limits | SBA-83 | — |
+| 2. Snapshot interpolation for remote entities, jitter buffer, extrapolation limits | SBA-83 | done |
 | 3. Client-side prediction and server reconciliation, misprediction smoothing | SBA-84 | — |
 | 4. Lag compensation for hit checks (rewound colliders) | SBA-85 | — |
 | 5. Deterministic rollback/lockstep mode with desync detection by hash | SBA-86 | — |
@@ -42,3 +42,13 @@ Notes:
   wire loses, and dropping a reliable message above it would break its contract.
 - `SimNetwork` replies to a connect (accept, refuse) are timed from the connect's arrival, so a handshake takes
   exactly one round trip inside a single `advance()`.
+
+## Step 2 — snapshot interpolation
+
+| Item | Where | Evidence |
+|---|---|---|
+| `ReplicationClient::set_interpolation(InterpolationDesc)`: `apply()` records each entity's transform with its server tick (16 per entity), `update(cmd, world, dt)` writes `LocalTransform` for a render time behind the server, lerping position and scale and slerping rotation between the two snapshots around it | `mce/net/replication.h`, `replication.cpp` | `test_net` "the render time blends the two snapshots around it" |
+| Jitter buffer: the server's clock is estimated from the earliest arrivals; the adaptive delay is two snapshot intervals plus a decaying peak of how late snapshots run, within 50–350 ms (or fixed with `delay_s`). The render time is steered toward its target at most 10% faster or slower, so a buffer change never jumps | same | `test_net` "the adaptive buffer grows with arrival jitter" (floor at no jitter, +50 ms or more at 80 ms) |
+| Extrapolation limit: past the newest snapshot an entity moves on with its last velocity for `max_extrapolation_s` (0.1 s), then holds the newest snapshot exactly | same | `test_net` "past the newest snapshot it extrapolates up to the limit, then holds it exactly" |
+| Smoothness under jitter and loss: over `SimNetwork` at 60 ms ± 40 with 10% loss, the mean per-tick change in velocity drops from 0.133 (raw) to 0.004 (interpolated) | `tests/net/test_interpolation.cpp` | `test_net` "over a jittery, lossy link the mirror moves smoothly; raw snapshots stutter" (asserts at least 10×) |
+| The sample interpolates by default (`-interp 0` shows raw snapshots), prints a drifter's smoothness next to the server's, and hashes the path each client drew. The determinism stage's two runs cover interpolation | `samples/net_headless/main.cpp` | 4 clients at 75 ms ± 20, 5% loss: 0.0013 interpolated vs 0.018 raw (server 0.0003) |
