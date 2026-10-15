@@ -1,0 +1,6 @@
+{
+  "guid": "@GUID_FONT_PIXEL@",
+  "importer": "font",
+  "importer_version": 2,
+  "settings": {"size": 24, "ranges": [[32, 126], [160, 383]], "padding": 1}
+}

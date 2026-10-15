@@ -179,6 +179,11 @@ takes the theme's value, and a field the document sets (a `"style"` tint, a text
 `samples/ui_screens` shows its HUD and pause menu under a day theme (`scenes/main.mcscene`) and a
 night theme (`scenes/night.mcscene`) with the same two documents.
 
+A project from `mce new` starts with three themes in `assets/ui/themes/`: `pixel` (Pixelify Sans and
+Press Start 2P), `clean` (Atkinson Hyperlegible Next and Karla) and `story` (Crimson Pro). Their fonts
+are OFL, bake Latin-1 and Latin Extended-A (Turkish included), and are listed in the project's
+`CREDITS.md`; chapter 14 says which fits which game.
+
 ## 12.3 The developer console
 
 Every player-based program (the stock player, every project host, the samples) has a console:

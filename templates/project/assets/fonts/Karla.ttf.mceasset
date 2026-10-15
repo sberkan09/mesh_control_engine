@@ -1,0 +1,6 @@
+{
+  "guid": "@GUID_FONT_CLEAN_TITLE@",
+  "importer": "font",
+  "importer_version": 2,
+  "settings": {"size": 44, "ranges": [[32, 126], [160, 383]], "padding": 1, "sdf": true}
+}

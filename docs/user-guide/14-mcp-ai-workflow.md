@@ -213,6 +213,25 @@ a generator. `library_add` copies an entry into `assets/` (models into `models/`
 `Textures/colormap.png`, fonts into `fonts/` with their license file), writes fresh sidecars and adds a
 `CREDITS.md` row with the author, the source and the license, so `mce ship` carries the credits.
 
+### A look for each game
+
+Every game made from the same template should not look the same. `mce new` projects carry three starter
+themes in `assets/ui/themes/` (user guide 12, "Themes"), each with its own OFL fonts that cover Turkish and the
+other Latin-1 and Latin Extended-A languages:
+
+| Theme | Fonts (body, title) | For |
+|---|---|---|
+| `pixel.mcuitheme` | Pixelify Sans, Press Start 2P | retro and arcade games: dark panels, warm buttons, a hard text shadow |
+| `clean.mcuitheme` | Atkinson Hyperlegible Next, Karla | puzzle, casual and tool-like games: slate panels, blue buttons |
+| `story.mcuitheme` | Crimson Pro, Crimson Pro Bold | novels and quiet games: paper panels, brown buttons, dark ink |
+
+Pick the one that fits the brief and name it as each `.mcui` document's `"theme"` (`ui_theme_set`), or a
+`UiScreen`'s `theme` for one scene; give titles `"font_role": "Title"`. When none fits, copy one to a new
+`.mcuitheme` with a fresh `guid` and change its palette and fonts (`library_add` brings more fonts). Look at the
+result with `ui_preview` or `render_frame`, and keep text readable: `project_check` warns about text under 16 px
+or under 4.5:1 contrast. Delete the themes and fonts the game does not use before shipping (`project_check`
+lists them as assets nothing references).
+
 ### Before shipping
 
 `project_check` is the review a person would do before a release, as data. Errors (an asset or scene that
