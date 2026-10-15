@@ -572,7 +572,7 @@ void on_signal(int sig, siginfo_t* info, void* uctx) {
 
 }  // namespace
 
-FixedString<512> default_dump_dir(StringView app_name) {
+FixedString<512> user_data_root() {
     FixedString<512> r;
 #if defined(_WIN32)
     const char* base = std::getenv("LOCALAPPDATA");
@@ -604,6 +604,11 @@ FixedString<512> default_dump_dir(StringView app_name) {
         r.append("/.local/share");
     }
 #endif
+    return r;
+}
+
+FixedString<512> default_dump_dir(StringView app_name) {
+    FixedString<512> r = user_data_root();
     r.append("/MCE/");
     r.append(app_name);
     r.append("/crashes");

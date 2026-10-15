@@ -108,6 +108,14 @@ class StoryTest(unittest.TestCase):
         cmd = self.ops(c, "Command")[0]
         self.assertEqual((cmd["a"], cmd["b"], cmd["c"]), (0, 3, 4))
 
+    def test_the_text_font_reaches_the_program_as_a_pack_path(self):
+        # The stage draws the box with the font the pages were wrapped with, not the pack's first font
+        # (an ASCII font there lost the Turkish letters on phones).
+        story = {"a.story": "@label start\nMira: Hello.\n@end\n"}
+        manifest = MANIFEST.replace('"format"', '"text": {"font": "assets/fonts/Body.ttf"}, "format"')
+        self.assertEqual(self.compile(story, manifest).m.text_font, "fonts/Body.ttf")
+        self.assertIsNone(self.compile(story).m.text_font)
+
     def test_the_base_table_is_written_beside_the_game_rows(self):
         story = {"a.story": "@label start\nMira: Hello there.\nMira:\n  > \"Go\" -> x\n  > \"Stay\" -> x\n@label x\n@end\n"}
         c, en = self.localized(story, {"en.csv": "key,text\nmenu.play,Play\nstory.dead,Gone\n"})

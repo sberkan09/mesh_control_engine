@@ -11,6 +11,14 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   finished flag. Keys fire on tick math, the state lives in the component (state hash, replays, saves), and
   `kit::timeline_scrub` moves the playhead without firing cues. Event keys also push `SeqSignal`, so sequences
   can wait on a timeline beat. MCP `asset_create` makes `.mctimeline` files; user guide 13.5.
+- Phone fixes from the Simulator and emulator checks (SBA-30): a language the player chooses no longer falls back
+  to the device's other languages (English chosen on a Turkish phone showed the kit's words in Turkish); SDL GPU's
+  debug mode is off in the iOS Simulator, whose Metal validation aborted on the first indirect draw; MSL for iOS
+  supports base vertex and base instance, so instanced PBR (Solstice Reach) opens on iOS.
+  `ship.py --project <dir> --target android|ios` builds the project (`MCE_ONLY_PROJECT`; the phone presets add
+  none), saves on phones go to the app's sandbox (`crash::user_data_root()`), and the novel stage draws the box
+  with `story.json`'s `text.font` instead of the pack's first font. The novel template's and Undelivered's camera
+  fit the stage to the screen, so a phone no longer shows it as a 1280×720 box in the middle.
 - Screens that open and close themselves, M-UI-DATA demo (SBA-38): `kit::UiFlow` shows, hides and holds a
   `UiScreen` on input actions (`show_on`, `hide_on`, `load_on` a scene, `pause`), and a paused screen holds the
   world (`World::set_held`: fixed-step systems stop, the tick count goes on, the hash replays). Undertow gets a

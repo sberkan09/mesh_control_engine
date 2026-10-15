@@ -309,6 +309,8 @@ class Manifest:
         tx = m.get("text", {})
         lt = m.get("letters", {})
         self.font = project / tx["font"] if tx.get("font") else None
+        # The same font as the cooked pack names it (paths under assets/), for the stage to pick it.
+        self.text_font = tx["font"][len("assets/"):] if tx.get("font", "").startswith("assets/") else None
         self.px = int(tx.get("px", 32))
         self.line_px = float(tx.get("line_px", 860))
         self.lines_per_page = int(tx.get("lines_per_page", 4))
@@ -1109,6 +1111,7 @@ class Compiler:
             ("title_location", str(ts["location"])), ("title_time", str(ts["time"])), ("title_lut", str(ts["lut"])),
             ("title_music", str(ts["music"])), ("title_ambience", str(ts["ambience"])),
             ("background_normal_map", self.cstr(m.normal_map) if m.normal_map else "nullptr"),
+            ("text_font", self.cstr(m.text_font) if m.text_font else "nullptr"),
             ("ink_speech", col(m.ink["speech"])), ("ink_narration", col(m.ink["narration"])), ("ink_row", col(m.ink["row"])),
             ("ink_row_selected", col(m.ink["row_selected"])), ("ink_row_disabled", col(m.ink["row_disabled"])),
             ("row_tint", col(m.ink["row_tint"])),

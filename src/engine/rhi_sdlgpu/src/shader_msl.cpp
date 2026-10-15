@@ -27,6 +27,8 @@ ResultV spirv_to_msl(ShaderStage stage, const Array<u32>& spirv, const StageReso
         mo.platform = platform == MslPlatform::iOS ? spirv_cross::CompilerMSL::Options::iOS
                                                    : spirv_cross::CompilerMSL::Options::macOS;
         mo.set_msl_version(2, 3);
+        // gl_BaseInstance / gl_BaseVertex (instanced PBR): needs A9+, which every iOS the engine ships to has.
+        mo.ios_support_base_vertex_instance = true;
         mo.enable_point_size_builtin = true;
         compiler.set_msl_options(mo);
         // The SPIR-V already has SDL GPU's clip space; nothing to fix up here.

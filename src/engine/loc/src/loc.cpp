@@ -334,8 +334,11 @@ Result<void> Localization::load_choice(StringView save_name) {
 
 void Localization::rebuild() {
     Array<LocaleTag> want;
+    // A language the player chose stands alone: a key its table lacks falls back to the base
+    // language (or the caller's own text), never to the device's other languages (SBA-30, 11a).
     if (!user_.empty()) want.push_back(user_);
-    for (const LocaleTag& p : preferred_) want.push_back(p);
+    else
+        for (const LocaleTag& p : preferred_) want.push_back(p);
     Array<LocaleTag> available;
     for (const StringTable& t : tables_) available.push_back(LocaleTag(t.locale()));
     Array<LocaleTag> next;
