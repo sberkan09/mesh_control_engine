@@ -82,7 +82,7 @@ reach all of its non-transient fields.
 | Font | .ttf | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
 | Scene | .mcscene (scene_* tools) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | Prefab | .mcprefab (prefab_* tools) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/03-editor.md |
-| Timeline | `.mctimeline` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
+| Timeline | `.mctimeline` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/03-editor.md |
 | InputMap | `.mcinput` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/03-editor.md |
 | ParticlePreset | `.mcpart` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | StringTable | assets/loc/<locale>.csv | `asset_list`, `asset_set_import_settings` | no | docs/user-guide/05-assets.md |
