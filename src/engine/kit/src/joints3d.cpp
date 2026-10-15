@@ -1,7 +1,5 @@
 #include "mce/kit/joints3d.h"
 
-#include <cstring>
-
 #include "kit3d_internal.h"
 #include "mce/containers/hash_map.h"
 #include "mce/ecs/transform.h"
@@ -43,7 +41,15 @@ Joint3D structural(const Joint3D& j) {
     return s;
 }
 
-bool same(const Joint3D& a, const Joint3D& b) { return std::memcmp(&a, &b, sizeof(Joint3D)) == 0; }
+// Byte-for-byte (padding-free, see the static_assert): -0 and NaN count as changes, which is what a
+// rebuild check wants.
+bool same(const Joint3D& a, const Joint3D& b) {
+    const auto* pa = reinterpret_cast<const unsigned char*>(&a);
+    const auto* pb = reinterpret_cast<const unsigned char*>(&b);
+    for (usize i = 0; i < sizeof(Joint3D); ++i)
+        if (pa[i] != pb[i]) return false;
+    return true;
+}
 
 physics::JointMotorMode3D motor_mode(JointMotor3D m) {
     switch (m) {
