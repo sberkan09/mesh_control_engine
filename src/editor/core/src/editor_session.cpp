@@ -437,6 +437,7 @@ bool EditorSession::tick_hot_reload(f64 now, f64 interval) {
 
 HotReloadResult EditorSession::hot_reload(Span<const cook::String> changed) {
     if (!project_.is_open()) return {};
+    ++reload_count_;
     struct Ctx {
         EditorSession* self;
     } ctx{this};

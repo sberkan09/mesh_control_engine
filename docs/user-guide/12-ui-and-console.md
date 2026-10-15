@@ -111,6 +111,29 @@ ui::build_document(data, doc);                          // the skin (data.font, 
 - Over MCP, `ui_create`, `ui_widget_add`, `ui_widget_set` and `ui_widget_remove` edit a document by
   widget path, `ui_theme_set` picks its theme and `ui_preview` shows it at a screen size, safe area and UI scale (chapter 14).
 
+### Editing documents in the editor
+
+The editor's **UI Document** panel (View menu, or double-click a `.mcui` in Assets) edits the
+same files:
+
+- **New...** makes an empty document; the combo opens any other one.
+- The tree shows the widgets by name and kind. **Add** puts a widget of the chosen kind under the
+  selected one (or at the root) with its kind's look and a free name; **Remove**, the arrows and
+  **Undo** / **Redo** change the tree.
+- The inspector shows the selected widget's fields: text, value and range, the flags, action, bind,
+  format and convar, the font role, the anchors, one state's style (with **Every state**, a field you
+  change there changes in every state), the stack or grid layout and the nav edges as widget
+  paths. Changing the kind gives the widget that kind's look. With nothing selected it shows the
+  document's own fields: modal, font and theme.
+- The preview draws the document alone, as the player does (the theme and its fonts applied) at
+  Phone (390 × 844), Phone landscape, Tablet and Desktop (1280 × 720) sizes. The pointer works in it,
+  so buttons show their hover and pressed looks.
+
+Every edit is read back by the cook before it is kept, so one the cook would refuse (a duplicate
+name, a bad format) shows the cook's message and changes nothing. When no field is held any more,
+the document is saved in the canonical form the MCP tools write and hot-reloaded. A change made on
+disk meanwhile (an MCP tool, a text editor) shows up in the panel.
+
 ### Screens in a scene (`UiScreen`)
 
 A `UiScreen` component names a `.mcui` document the stock player shows over the game: a HUD, a

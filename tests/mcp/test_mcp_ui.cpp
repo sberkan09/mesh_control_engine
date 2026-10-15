@@ -9,6 +9,7 @@
 #include <string>
 
 #include "mce/cook/ui_text.h"
+#include "mce/editor/ui_document_editor.h"
 #include "mce/ui/document_data.h"
 #include "mcp_client.h"
 
@@ -159,6 +160,52 @@ TEST_CASE("ui_theme_set: a document names a theme, by path or GUID, and goes bac
     c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":null})");
     CHECK(chunk_of(file) == plain);
     CHECK(str(c.ok("ui_list", R"({"document":"ui/menu.mcui"})").v().get("theme")) == "default");
+}
+
+TEST_CASE("UI Document panel: a document edited in the editor round-trips through the cook and the MCP tools") {
+    const std::string root = ui_project("mcp_ui_panel");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    editor::EditorSession& session = c.server.session();
+    editor::UiDocumentEditor ed;
+    REQUIRE(ed.create(session, "ui/pause.mcui").has_value());
+    REQUIRE(ed.add_widget(ui::kNoWidgetIndex, ui::WidgetKind::Stack));
+    REQUIRE(ed.add_widget(0, ui::WidgetKind::Button));
+    REQUIRE(ed.add_widget(0, ui::WidgetKind::Slider));
+    ui::DocumentData next = ed.data();
+    next.widgets[1].text.assign("RESUME");
+    next.widgets[1].action.assign("Resume");
+    next.widgets[1].nav[ui::NavDown] = 2;
+    next.widgets[2].convar.assign("snd.volume");
+    next.default_focus = 1;
+    REQUIRE(ed.apply(next));
+    REQUIRE(ed.save(session).has_value());
+    const std::string file = root + "/assets/ui/pause.mcui";
+    const std::string saved = read_file(file);
+    const std::vector<byte> chunk = chunk_of(file);
+
+    // MCP reads what the panel wrote, and an edit that changes nothing leaves it byte for byte.
+    auto one = c.ok("ui_list", R"({"document":"ui/pause.mcui"})");
+    REQUIRE(one.v().get("widgets").size() == 3);
+    CHECK(str(one.v().get("widgets").at(1).get("path")) == "stack/button");
+    CHECK(str(one.v().get("widgets").at(1).get("action")) == "Resume");
+    CHECK(one.v().get("widgets").at(1).get("default_focus").as_bool());
+    c.ok("ui_widget_set", R"({"document":"ui/pause.mcui","widget":"stack/button","fields":{"text":"RESUME"}})");
+    CHECK(read_file(file) == saved);
+    CHECK(chunk_of(file) == chunk);
+    CHECK(c.ok("cook_run").v().get("failed").as_number() == 0);
+
+    // An MCP edit comes back into the panel, and the panel's next save keeps it.
+    c.ok("ui_widget_set", R"({"document":"ui/pause.mcui","widget":"stack/slider","fields":{"range":[0,1,0.25]}})");
+    REQUIRE(ed.sync(session));
+    CHECK(ed.data().widgets[2].step == 0.25f);
+    REQUIRE(ed.move_widget(2, -1));
+    REQUIRE(ed.save(session).has_value());
+    auto moved = c.ok("ui_list", R"({"document":"ui/pause.mcui"})");
+    CHECK(str(moved.v().get("widgets").at(1).get("path")) == "stack/slider");
+    CHECK(data_of(file).widgets[data_of(file).find("stack/slider")].step == 0.25f);
+    CHECK(read_file(file) == std::string(ed.text().view().data(), ed.text().view().size()));
 }
 
 TEST_SUITE("gpu") {

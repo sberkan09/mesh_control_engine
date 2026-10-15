@@ -23,10 +23,24 @@ void PreviewRenderer::shutdown() {
     three_d_ = three_d_failed_ = false;
     extract_.shutdown();
     renderer_.shutdown();
+    ui_skin_ready_ = ui_skin_failed_ = false;
+}
+
+const ui::Skin* PreviewRenderer::ui_skin() {
+    if (ui_skin_ready_) return &ui_skin_.skin;
+    if (ui_skin_failed_ || !renderer_.initialized()) return nullptr;
+    if (Result<ui::BuiltinSkin*> r = ui::create_builtin_skin(renderer_, ui_skin_); !r) {
+        MCE_LOG_ERROR("editor: the UI preview's built-in skin did not start");
+        ui_skin_failed_ = true;
+        return nullptr;
+    }
+    ui_skin_ready_ = true;
+    return &ui_skin_.skin;
 }
 
 void PreviewRenderer::set_assets(asset::AssetSystem* assets) {
     if (assets == assets_) return;
+    ++generation_;
     if (assets_) {
         extract_.reset(nullptr);  // releases its handles while the old system is still alive
         if (three_d_) extract3d_.reset(nullptr);
