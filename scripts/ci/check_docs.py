@@ -4,6 +4,8 @@
   links     a relative link in a Markdown file points at a file or directory that exists, and a
             `#anchor` names a heading of the target (GitHub's slug rules)
   includes  an `#include "mce/..."` line in a document names a header under some `src/**/include`
+  flags     a `-name` after `mce_player` on a line of a document is a console variable (`MCE_CVAR(id, "name"`
+            or `ConVar id("name"`) some source declares: the command line sets convars
 
 A miss is an error unless `scripts/ci/docs.allow` lists it as `kind | file | target | reason`. A listed miss
 that no longer happens is an error too, so the list only shrinks. `--list` prints the misses as allow lines.
@@ -69,9 +71,26 @@ def include_roots():
     return inc
 
 
+def convar_names():
+    names = set()
+    pat = re.compile(r'(?:MCE_CVAR\(\s*\w+,|\bConVar\s+\w+\s*[({])\s*"([^"]+)"')
+    for d in ("src", "samples", "projects", "templates", "tests"):
+        for p in (ROOT / d).rglob("*"):
+            if p.suffix in (".cpp", ".h") and "build" not in p.relative_to(ROOT).parts:
+                names.update(pat.findall(p.read_text(errors="ignore")))
+    return names
+
+
+def player_flags(line):
+    """The `-name` tokens of a `mce_player` command on `line` (up to a pipe, `&&` or `ctest`)."""
+    seg = re.split(r"\||&&|;|\bctest\b", line[line.index("mce_player"):])[0]
+    return re.findall(r"(?:^|\s)-{1,2}([A-Za-z_][A-Za-z0-9_.]*)", seg)
+
+
 def misses():
     out = []
     incs = include_roots()
+    cvars = convar_names()
     for p in md_files():
         rel = p.relative_to(ROOT).as_posix()
         raw = p.read_text(errors="ignore")
@@ -85,6 +104,11 @@ def misses():
                 out.append(("link", rel, url, "no such file"))
             elif frag and dest.suffix == ".md" and frag not in anchors(dest):
                 out.append(("anchor", rel, url, "no such heading"))
+        for line in raw.splitlines():
+            if "mce_player" in line:
+                for f in player_flags(line):
+                    if f not in cvars:
+                        out.append(("flag", rel, "-" + f, "no convar of that name"))
         for m in re.finditer(r'#include\s+[<"](mce/[^>"]+)[>"]', raw):
             if m.group(1) not in incs:
                 out.append(("include", rel, m.group(1), "no such header"))
