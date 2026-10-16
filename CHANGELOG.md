@@ -11,6 +11,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   component runs one per entity every fixed tick, and a `Blackboard` component holds the keys. All run state is in
   the two components, so trees are deterministic, hashed, replayed and saved. Games register tasks by name
   (`kit::BtRegistry::register_task`) and read and write keys by name (`kit::bb_*`). User guide 13.8.
+- Steam demo and guide, M-STEAM step 6 (SBA-111): `samples/steam_demo` plays on Steam through the stock player;
+  `ctest -R sample_steam_demo` runs it against the stand-in `steam_api` (Steam Input, the overlay, rich presence,
+  achievements, a leaderboard, Steam Cloud, the same state hash with and without Steam, the depot started like
+  Steam starts it). New user guide chapter 26 (Steam) with a release checklist.
 - `ship --steam`, M-STEAM step 5 (SBA-110): `scripts/ship.py --steam <app id>` and `mce ship --steam` lay out the
   desktop build's Steam depot (`steam_api` beside the executable, no `steam_appid.txt`) and the steamcmd app and
   depot build scripts in `dist/<Name>-steam/`; shipping on each OS into the same folder adds its depot. Nothing is
@@ -31,7 +35,7 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   stock player, `ui_preview` and the editor's UI Document panel (style `sprite_region` and 9-slice `slice` index
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
-  User guide 12.2.
+  User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
 - Per-client delta snapshots, M-NET3 step 1 (SBA-123): `ReplicationServer::write_snapshot_for` writes each client
   only the entities relevant to it (`NetRelevance { radius }` around the entities it owns) and codes them against
   the newest snapshot it acknowledged (`write_ack` / `read_ack`): a still entity costs two bytes. `apply` reads
