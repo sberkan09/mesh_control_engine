@@ -10,6 +10,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   chapter 28 explains both.
 - Docs checks in the guide, M-DOCCHECK step 4 (SBA-179): user guide 1.8 describes what the walls stage checks in the
   documents and where the accepted misses live. M-DOCCHECK is done.
+- Cook errors name the fix, M-WORKFLOW step 3 (SBA-182, #379): the error for a file without a sidecar says
+  `cook_run {"adopt": true}` or `mce cook <project> --adopt`; `cook_run` takes `paths` (cook only those assets and what
+  they depend on, into `cooked/`, never the pack) and `skip_errors` (returns `failed_files`); `mce_cook` has `--only`
+  and `--skip-errors`; `mce play` and `mce headless` warn when the pack is older than `assets/`; an unknown component or
+  field says to rebuild the module and restart the MCP server. User guide 5.4, 14, 16 and 17.
 - Several agents on one scene, M-WORKFLOW step 2 (SBA-181, #378): `scene_open` always re-reads the file and
   replaces a copy `scene_switch` parked; a `scene_save` that cannot merge a teammate's save is refused naming
   the entities on disk it lacks, and `overwrite: true` saves anyway; `entity_delete` reports the entity

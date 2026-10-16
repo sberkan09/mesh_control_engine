@@ -191,7 +191,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `navmesh_bake` | `tools.cpp` | docs/user-guide/08-3d.md |
 | `scene_undo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_redo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `cook_run` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `cook_run` | `tools.cpp` | docs/user-guide/05-assets.md |
 | `cook_errors` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `asset_delete` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `run_headless` | `tools.cpp` | docs/user-guide/02-projects.md |
@@ -203,7 +203,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `image_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `perf_run` | `tools_agent.cpp` | docs/user-guide/03-editor.md |
 | `perf_compare` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `module_build` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `module_build` | `tools_agent.cpp` | docs/user-guide/05-assets.md |
 | `module_test` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `test_run` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `playtest` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |

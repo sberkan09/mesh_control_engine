@@ -377,11 +377,11 @@ Result<void> EditorSession::save_scene_as(StringView path, asset::Guid keep) {
     return ok();
 }
 
-const cook::CookReport& EditorSession::cook(bool pack, bool adopt) {
+const cook::CookReport& EditorSession::cook(bool pack, bool adopt, Span<const cook::String> paths, bool skip_errors) {
     play_.stop();  // the play world reads the mounted tree the cook replaces
     if (preview_) preview_->set_assets(nullptr);
     scene_.set_assets(nullptr);
-    const cook::CookReport& report = project_.cook(pack, adopt);
+    const cook::CookReport& report = project_.cook(pack, adopt, paths, skip_errors);
     attach_preview();
     return report;
 }
