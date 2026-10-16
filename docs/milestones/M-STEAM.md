@@ -1,6 +1,6 @@
 # M-STEAM — Steamworks (milestone record)
 
-**Status:** active. Steps 1–4 done; steps 5–6 to come (Linear SBA-106 … SBA-111; SBA-112 is the run against
+**Status:** active. Steps 1–5 done; step 6 to come (Linear SBA-106 … SBA-111; SBA-112 is the run against
 the real Steam client, which needs the user's Steamworks account).
 **Why:** Steam is the desktop distribution channel; the engine comparison (the project's
 `assessments/motor-kiyaslama-eksikler.md`, item 2) lists it right after the web. Added 2026-10-15 under the
@@ -16,7 +16,7 @@ user's standing instruction to extend the roadmap when it runs out.
 | 2. Achievements, stats, leaderboards and cloud saves as `platform::game_services` `Backend::Steam` under `liveops::PlatformGameServices` | SBA-107 | done |
 | 3. Overlay (holds the world like a lost focus) and rich presence as data | SBA-108 | done |
 | 4. Steam Input: an action manifest from the cooked input map, glyphs, Steam Deck defaults | SBA-109 | done |
-| 5. `ship --steam`: depots per platform, `steam_api` beside the binary, generated steamcmd build scripts | SBA-110 | — |
+| 5. `ship --steam`: depots per platform, `steam_api` beside the binary, generated steamcmd build scripts | SBA-110 | done |
 | 6. Demo, user guide, gates | SBA-111 | — |
 | Later: the real Steam client (achievements configured, overlay, Steam Input, a beta-branch upload) | SBA-112 | needs the user's account |
 
@@ -66,3 +66,14 @@ Not measured: the real overlay and the friends list's rendering of a localized p
 
 Not measured: a real controller through the Steam client, the Deck's trackpad, the Steamworks page's
 manifest upload (SBA-112). Several maps share the one set `Game`; per-map sets (menus) are not generated.
+
+## Step 5 — ship --steam
+
+| Item | Where | Evidence |
+|---|---|---|
+| The depot layout (`content/<os>/` with `steam_api` beside the executable, inside the `.app` on macOS, no `steam_appid.txt`), the app and depot build scripts for every platform present (depot ids app + 1/2/3 by default), `UPLOAD.txt` with the steamcmd line; the library from `--steam-library` or `STEAMWORKS_SDK` | `tools/mce_cli/mce_steam.py` (installed beside `mce`) | ctest `steam_depot`: three platforms accumulated into one output, a chosen depot id and branch, the scripts' braces balance, the SDK lookup and its error |
+| `scripts/ship.py --steam <app>` (`--steam-depot`, `--steam-library`, `--steam-branch`), `mce ship --steam`, MCP `ship_build` `steam_app_id` / `steam_library` (returns `steam_build_script`) | `scripts/ship.py`, `tools/mce_cli/mce.py`, `tools_code.cpp` | `mcp_transcript` (the tool's schema) |
+| A player started the way Steam starts it: no `-steam.app_id`, `SteamAppId` in the environment, `steam_api` found beside the executable; `-steam.app_id -1` keeps Steam off | `src/player/src/player.cpp` (`steam_app_id`) | ctest `steam_depot`: the stock player copied into a depot with the stand-in as `libsteam_api.so` signs in as app 480, and runs without Steam when `SteamAppId` is unset |
+
+Not measured: a real steamcmd upload and a build installed by the Steam client (SBA-112); Windows and
+macOS depots made on their own OS (the layout is tested here from staged folders).

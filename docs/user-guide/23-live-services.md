@@ -332,7 +332,7 @@ mce_player -pack assets.mce -steam.app_id 480
 
 | Option | Default | Meaning |
 |---|---|---|
-| `steam.app_id` | `0` | open Steam for this app (0: no Steam). A run outside Steam names the app to the client the way `steam_appid.txt` does |
+| `steam.app_id` | `0` | open Steam for this app (0: the `SteamAppId` Steam starts the game with, else no Steam; -1: never). A run outside Steam names the app to the client the way `steam_appid.txt` does |
 | `steam.library` | next to the executable | the `steam_api` to open |
 | `steam.restart` | `0` | a run started outside Steam asks Steam to relaunch it and quits (release builds) |
 | `steam.input` | `1` | read controllers through Steam Input while Steam runs |
@@ -406,5 +406,8 @@ for release.
   bindings as without Steam.
 
 Headless runs play scripted input only, so Steam Input never changes a `-headless` state hash.
-`ship --steam` comes in the next M-STEAM step.
+
+**Shipping on Steam.** `ship.py --steam <app id>` (or `mce ship --steam`) lays out the Steam depot of
+each desktop platform with `steam_api` beside the executable, and the steamcmd scripts that upload it
+(15.7). A game started by Steam needs no `-steam.app_id`: the player takes `SteamAppId` from Steam.
 

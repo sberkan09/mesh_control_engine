@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- `ship --steam`, M-STEAM step 5 (SBA-110): `scripts/ship.py --steam <app id>` and `mce ship --steam` lay out the
+  desktop build's Steam depot (`steam_api` beside the executable, no `steam_appid.txt`) and the steamcmd app and
+  depot build scripts in `dist/<Name>-steam/`; shipping on each OS into the same folder adds its depot. Nothing is
+  uploaded. The MCP tool `ship_build` takes `steam_app_id`. A game started by Steam signs in from `SteamAppId`
+  without `-steam.app_id` (`-1` keeps Steam off). Covered by ctest `steam_depot`. User guide 15.7.
 - Compressed audio clips, M-AUDIO2 step 1 (SBA-118, ADR-0044). `.ogg` files import (importer `ogg`), and a
   `.wav` sidecar's `"compress": "vorbis"` stores the clip as Ogg Vorbis, about a tenth of float PCM
   (`"quality"`, default 0.4). A compressed clip decodes when it loads; on the Music bus its stream pages decode
