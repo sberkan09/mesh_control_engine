@@ -194,10 +194,10 @@ struct ReverbRT {
         f32 buf[freeverb::kMaxComb];
         u32 len = 1, pos = 0;
         f32 store = 0.f;
-        f32 process(f32 x, f32 feedback, f32 damp) {
+        f32 process(f32 x, f32 fb, f32 dm) {
             const f32 out = buf[pos];
-            store = freeverb::flush(out * (1.f - damp) + store * damp);
-            buf[pos] = freeverb::flush(x + store * feedback);
+            store = freeverb::flush(out * (1.f - dm) + store * dm);
+            buf[pos] = freeverb::flush(x + store * fb);
             if (++pos == len) pos = 0;
             return out;
         }
