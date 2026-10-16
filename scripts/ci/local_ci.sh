@@ -165,7 +165,8 @@ stage_trees() {
 # Disk: a project container's writable space is a fixed allowance (about 40 GB), and one tree is 8-15 GB,
 # so a full run cannot keep them all. Before each stage, when less than MCE_CI_MIN_FREE_GB (default 22: the ASan tree is 18 GB and its sdk_install test copies binaries, a
 # Debug or Release tree) is free, the build trees no later stage needs are deleted, largest first, until
-# there is room (the ccache survives, so a later run rebuilds them from cache). With less than
+# there is room, then, if still short, the ones only later stages need (the ccache survives, so they are
+# rebuilt from cache). With less than
 # MCE_CI_HARD_MIN_GB (default 3) free after that the stage is not started and says so. A run with plenty
 # of room deletes nothing.
 MIN_FREE_GB="${MCE_CI_MIN_FREE_GB:-22}"
@@ -183,6 +184,18 @@ reclaim_space() {  # $1: index in stages of the stage about to run; returns 1 wh
         t="$(basename "$d")"
         [[ -n "${needed[$t]:-}" ]] && continue
         echo "=== disk: ${free} GB free (want ${MIN_FREE_GB}); removing the finished build tree build/$t ($(du -sh "$d" | cut -f1))"
+        rm -rf "$d"
+        free="$(free_gb)"
+        [[ "$free" -ge "$MIN_FREE_GB" ]] && return 0
+    done < <(du -s "$ROOT"/build/linux-*/ 2>/dev/null | sort -rn | cut -f2-)
+    # Still short: a tree only a later stage needs, left over from an earlier run, costs less to rebuild
+    # (the ccache has it) than the stage about to run costs to fail.
+    local -A now=()
+    for t in $(stage_trees "${stages[$1]}"); do now[$t]=1; done
+    while IFS= read -r d; do
+        t="$(basename "$d")"
+        [[ -n "${now[$t]:-}" ]] && continue
+        echo "=== disk: ${free} GB free (want ${MIN_FREE_GB}); removing build/$t, a later stage rebuilds it ($(du -sh "$d" | cut -f1))"
         rm -rf "$d"
         free="$(free_gb)"
         [[ "$free" -ge "$MIN_FREE_GB" ]] && return 0
