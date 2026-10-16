@@ -74,6 +74,8 @@ reach all of its non-transient fields.
 | `NavObstacle3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `NavAgent3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
+| `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `Overlap3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `VideoPlayer` | `mce/kit/video.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |

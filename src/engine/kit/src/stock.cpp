@@ -10,6 +10,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/joints3d.h"
 #include "mce/kit/ragdolls3d.h"
+#include "mce/kit/sensors3d.h"
 #include "mce/kit/vehicles3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/particles.h"
@@ -95,6 +96,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_joints3d(world, assets);
     install_ragdolls3d(world, assets);
     install_vehicles3d(world, assets);
+    install_sensors3d(world, assets);
     install_world_settings(world);
     install_ui_flow(world);
     install_effects(world, assets);
