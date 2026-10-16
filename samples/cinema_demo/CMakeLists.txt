@@ -32,5 +32,11 @@ if(MCE_BUILD_TESTS)
         add_test(NAME cinema_demo_player_gpu
                  COMMAND mce_player -pack "${pack}" -frames 600 -platform.error_box 0 -r.vsync 0)
         set_tests_properties(cinema_demo_player_gpu PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "600 frames, [0-9]+ ticks, 0 GL errors")
+        # 271 s under llvmpipe (M4): the full 600 frames run only in the integration run (`slow`); --task runs the
+        # first 120 frames (the splash film and the dolly's start) with the same GL-error check.
+        mce_mark_slow(cinema_demo_player_gpu)
+        add_test(NAME cinema_demo_player_gpu_smoke
+                 COMMAND mce_player -pack "${pack}" -frames 120 -platform.error_box 0 -r.vsync 0)
+        set_tests_properties(cinema_demo_player_gpu_smoke PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "120 frames, [0-9]+ ticks, 0 GL errors")
     endif()
 endif()

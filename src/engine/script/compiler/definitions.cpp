@@ -68,6 +68,7 @@ declare mce: {
     raycast2d: (origin: vector, dir: vector, max: number, skip: Entity?) -> RayHit?,
     overlap2d: (min: vector, max: vector, skip: Entity?) -> { Entity },
     move_and_collide: (e: Entity, delta: vector) -> MoveResult2D,
+    teleport2d: (e: Entity, position: vector) -> (),
     velocity2d: (e: Entity) -> vector,
     set_velocity2d: (e: Entity, velocity: vector) -> (),
     impulse2d: (e: Entity, impulse: vector) -> (),

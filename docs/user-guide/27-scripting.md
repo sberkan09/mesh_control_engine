@@ -113,6 +113,7 @@ map does not define reads as not pressed and zero.
 | `mce.raycast2d(origin, dir, max, skip?)` | the first hit, `{entity, point, normal, distance}`, or `nil`; `skip` is an entity to ignore |
 | `mce.overlap2d(min, max, skip?)` | the entities whose shapes' boxes overlap the box |
 | `mce.move_and_collide(e, delta)` | moves a character body; `{position, grounded, ground, ceiling, wall_left, wall_right}` |
+| `mce.teleport2d(e, position)` | puts a 2D body at `position` with no sweep (a respawn, a level's start); writing `LocalTransform.position` does not move a body, the physics step writes the body's position back over it |
 | `mce.velocity2d(e)`, `mce.set_velocity2d(e, v)`, `mce.impulse2d(e, v)` | a 2D body's velocity, and pushes |
 | `mce.raycast3d(origin, dir, max, skip?)` | the same for the 3D physics world |
 

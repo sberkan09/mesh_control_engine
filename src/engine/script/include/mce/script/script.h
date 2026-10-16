@@ -31,7 +31,7 @@
 //              mce.quit().
 //   physics    mce.raycast2d(origin, dir, max) / mce.raycast3d(...) -> hit table or nil,
 //              mce.overlap2d(min, max) -> entities, mce.move_and_collide(e, delta) -> result,
-//              mce.velocity2d(e), mce.set_velocity2d(e, v), mce.impulse2d(e, v).
+//              mce.teleport2d(e, position), mce.velocity2d(e), mce.set_velocity2d(e, v), mce.impulse2d(e, v).
 //
 // Sandbox: base, table, string, math, utf8, bit32, buffer and vector libraries only (no os, io,
 // debug, coroutine, print, collectgarbage, getfenv/setfenv, math.random); every script gets a
