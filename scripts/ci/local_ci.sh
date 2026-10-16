@@ -10,6 +10,12 @@
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages (a stage named here always runs in full)
 #   scripts/ci/local_ci.sh regen      # integration runner only: regenerate the generated files (below)
 #   scripts/ci/local_ci.sh --save-cache-only   # integration runner only: refresh the ccache snapshot
+#   scripts/ci/local_ci.sh --task --resume     # after the container restarted mid-run: skip the stages that passed
+#
+# --resume: a stage that passed is recorded (build/local-ci-logs/passed/<stage>) with a key of HEAD, the working
+# tree diff and the run's arguments; a later run with --resume and the same key skips it. A project container
+# restarts every 30-40 min and kills the run (claude_communication, 2026-10-16), so a long --task is run as
+# `--task`, then `--task --resume` after each restart; the build trees and the ccache survive on disk.
 #
 # regen builds mce_mcp in the gcc debug tree and runs scripts/ci/regen_generated.py: capabilities.md, the sample
 # coverage allow list and the transcript golden. scripts/ci/integration_run.sh commits the result; threads do not.
@@ -96,6 +102,7 @@ save_cache=0
 save_only=0
 tidy_all=0
 task_run=0
+resume=0   # --resume: skip the stages that already passed for this exact change
 declare -A named=()  # stages the command line named: never scoped
 for arg in "$@"; do
     case "$arg" in
@@ -106,7 +113,8 @@ for arg in "$@"; do
         --save-cache) save_cache=1 ;;
         --save-cache-only) save_cache=1; save_only=1 ;;
         --tidy-all) tidy_all=1 ;;
-        -h|--help) sed -n '2,77p' "$0"; exit 0 ;;
+        --resume) resume=1 ;;
+        -h|--help) sed -n '2,82p' "$0"; exit 0 ;;
         *) stages+=("$arg"); named[$arg]=1 ;;
     esac
 done
@@ -293,20 +301,37 @@ stage_trees() {
     esac
 }
 
-# Disk: a project container's writable space is a fixed allowance (about 40 GB), and one tree is 8-16 GB,
-# so a full run cannot keep them all. Before each stage, when less than MCE_CI_MIN_FREE_GB (default 22: the
-# ASan tree is 18 GB and its sdk_install test copies binaries, a Debug or Release tree) is free, the build
-# trees no later stage needs are deleted, largest first, until there is room, then, if still short, the
-# ones only later stages need (the ccache survives, so they are rebuilt from cache). With less than
-# MCE_CI_HARD_MIN_GB (default 3) free after that the stage is not started and says so. A run with plenty
-# of room deletes nothing.
+# Disk: a project container's writable space is a fixed allowance (about 40 GB), and one tree is 8-18 GB,
+# so a full run cannot keep them all. Before each stage, when less is free than the stage wants
+# (stage_want_gb: nothing for a stage without a build tree, a few GB when its tree already exists, the size
+# of a fresh tree otherwise: MCE_CI_TREE_GB (12) for a Debug/Release tree, MCE_CI_MIN_FREE_GB (22) for the
+# ASan tree, whose sdk_install test copies binaries), the build trees no later stage needs are deleted,
+# largest first, until there is room, then, if still short, the ones only later stages need (the ccache
+# survives, so they are rebuilt from cache). With less than MCE_CI_HARD_MIN_GB (default 3) free after that
+# the stage is not started and says so. A run with plenty of room deletes nothing, and a stage that needs
+# no tree (walls) never deletes one: the earlier rule deleted a finished Debug tree before walls to make
+# room it did not need, so every second run started cold (claude_communication C3).
 MIN_FREE_GB="${MCE_CI_MIN_FREE_GB:-22}"
+TREE_GB="${MCE_CI_TREE_GB:-12}"
 HARD_MIN_GB="${MCE_CI_HARD_MIN_GB:-3}"
 free_gb() { df -BG --output=avail "$ROOT/build" 2>/dev/null | tail -1 | tr -dc '0-9'; }
+stage_want_gb() {  # $1 stage
+    local t n want=0
+    for t in $(stage_trees "$1"); do
+        if [[ -d "$ROOT/build/$t" ]]; then n=4
+        elif [[ "$t" == linux-asan ]]; then n="$MIN_FREE_GB"
+        elif [[ "$1" == tidy || "$1" == release-build ]] && [[ "$(tu_scope "$1")" != full ]]; then n=4  # objects, not a tree
+        else n="$TREE_GB"
+        fi
+        (( n > want )) && want=$n
+    done
+    echo "$want"
+}
 reclaim_space() {  # $1: index in stages of the stage about to run; returns 1 when there is no room
-    local free i t d
+    local free want i t d
+    want="$(stage_want_gb "${stages[$1]}")"
     free="$(free_gb)"
-    [[ -z "$free" || "$free" -ge "$MIN_FREE_GB" ]] && return 0
+    [[ -z "$free" || "$free" -ge "$want" ]] && return 0
     local -A needed=()
     for ((i = $1; i < ${#stages[@]}; i++)); do
         for t in $(stage_trees "${stages[$i]}"); do needed[$t]=1; done
@@ -314,10 +339,10 @@ reclaim_space() {  # $1: index in stages of the stage about to run; returns 1 wh
     while IFS= read -r d; do
         t="$(basename "$d")"
         [[ -n "${needed[$t]:-}" ]] && continue
-        echo "=== disk: ${free} GB free (want ${MIN_FREE_GB}); removing the finished build tree build/$t ($(du -sh "$d" | cut -f1))"
+        echo "=== disk: ${free} GB free (${stages[$1]} wants ${want}); removing the finished build tree build/$t ($(du -sh "$d" | cut -f1))"
         rm -rf "$d"
         free="$(free_gb)"
-        [[ "$free" -ge "$MIN_FREE_GB" ]] && return 0
+        [[ "$free" -ge "$want" ]] && return 0
     done < <(du -s "$ROOT"/build/linux-*/ 2>/dev/null | sort -rn | cut -f2-)
     # Still short: a tree only a later stage needs, left over from an earlier run, costs less to rebuild
     # (the ccache has it) than the stage about to run costs to fail.
@@ -326,16 +351,16 @@ reclaim_space() {  # $1: index in stages of the stage about to run; returns 1 wh
     while IFS= read -r d; do
         t="$(basename "$d")"
         [[ -n "${now[$t]:-}" ]] && continue
-        echo "=== disk: ${free} GB free (want ${MIN_FREE_GB}); removing build/$t, a later stage rebuilds it ($(du -sh "$d" | cut -f1))"
+        echo "=== disk: ${free} GB free (${stages[$1]} wants ${want}); removing build/$t, a later stage rebuilds it ($(du -sh "$d" | cut -f1))"
         rm -rf "$d"
         free="$(free_gb)"
-        [[ "$free" -ge "$MIN_FREE_GB" ]] && return 0
+        [[ "$free" -ge "$want" ]] && return 0
     done < <(du -s "$ROOT"/build/linux-*/ 2>/dev/null | sort -rn | cut -f2-)
     if [[ "$free" -lt "$HARD_MIN_GB" ]]; then
         echo "=== disk: only ${free} GB free and no finished build tree is left to delete; free space or run fewer stages at once"
         return 1
     fi
-    echo "=== disk: ${free} GB free, less than the ${MIN_FREE_GB} GB wanted; going on"
+    echo "=== disk: ${free} GB free, less than the ${want} GB wanted; going on"
 }
 
 JOBS="$(nproc 2>/dev/null || echo 4)"
@@ -660,7 +685,7 @@ det_subjects_of() {
             cmake/*|CMakeLists.txt|CMakePresets.json|scripts/ci/determinism.py|scripts/ci/local_ci.sh) echo ALL ;;
         src/engine/physics2d/*) echo physics2d boids platformer demo_games ;;
         src/engine/physics3d/*) echo physics3d cubes court diorama gameplay3d demo_games ;;
-        src/engine/scene/*) echo scene stream gameplay3d cubes demo_games ;;
+        src/engine/scene/*) echo scene stream gameplay3d cubes diorama court demo_games ;;
         src/engine/script/*) echo script demo_games gameplay3d ;;
         src/engine/render/*|src/engine/rhi*/*|src/engine/kit/*|src/engine/kit_novel/*|src/engine/asset/*)
             echo cubes diorama court gameplay3d demo_games platformer ;;
@@ -858,17 +883,26 @@ if [[ $save_only -eq 1 ]]; then save_cache_snapshot; exit 0; fi
 [[ $HAVE_CCACHE -eq 1 ]] && ccache --zero-stats > /dev/null
 preconfigure
 
+# The key of this run for --resume: the commit, the uncommitted changes and the arguments.
+PASSED_DIR="$LOG_DIR/passed"
+run_key="$({ git rev-parse HEAD; git diff HEAD; git ls-files --others --exclude-standard | xargs -r sha1sum; echo "${stages[*]} task=$task_run tidy_all=$tidy_all"; } 2>/dev/null | sha1sum | cut -c1-16)"
+[[ $resume -eq 1 ]] || rm -rf "$PASSED_DIR"
+mkdir -p "$PASSED_DIR"
+
 failed=0
 for ((si = 0; si < ${#stages[@]}; si++)); do
     s="${stages[$si]}"
     echo "=== $s"
     start=$SECONDS
     read -r h0 m0 <<< "$(ccache_counts)"
-    if ! reclaim_space "$si"; then
+    if [[ $resume -eq 1 && -f "$PASSED_DIR/$s" && "$(cat "$PASSED_DIR/$s")" == "$run_key" ]]; then
+        RESULT[$s]="PASS (resumed: passed in an earlier run of this change)"
+    elif ! reclaim_space "$si"; then
         RESULT[$s]="FAIL (0s) — no disk space, see above"
         failed=1
     elif run_stage "$s" > "$LOG_DIR/$s.log" 2>&1; then
         RESULT[$s]="PASS ($((SECONDS - start))s)"
+        echo "$run_key" > "$PASSED_DIR/$s"
     else
         RESULT[$s]="FAIL ($((SECONDS - start))s) — see build/local-ci-logs/$s.log"
         failed=1
