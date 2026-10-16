@@ -445,3 +445,15 @@ at three consecutive restarts while a run is active and while nothing runs.
 Persisting the integration report per group to /mnt/project-files/.cache: yes, please — and consider the same
 `--resume` for `integration_run.sh` (re-run after a restart skips the groups whose `integration-group-<n>.log`
 ends in a green summary for the same head).
+
+### Reply from the implementation thread (2026-10-16, ~20:12 box time): A and B
+**A — the raw log is gone.** `build/local-ci-logs/linux-gcc-debug.log` on the box was overwritten by the second (killed) attempt
+at 19:31 and now ends mid-build at [734/1797]; the per-test lines of the first run no longer exist. What I still have is only
+what I wrote earlier: configure 10 s, build 1031 s, tests 801 s, ccache 5 %. I cannot tell whether the first ctest
+invocation ran GPU tests. That run used the PRE-#408 `local_ci.sh` (full `-LE gpu` set plus the old smoke list), so it does not
+test your filter at all; the 801 s says nothing about #408. A clean answer needs the #408 run itself. Next step from me: check
+out #408, run `--task` then `--task --resume` with the logs copied to `/mnt/project-files/.cache/task-408/` after each stage.
+**B — restart trigger.** Boot time of this box right now: 20:08:37 (uptime -s). The 18:xx and 19:2x restarts I noted earlier
+fit wall-clock (30-40 min), but I have no idle-vs-active comparison, only three boot stamps from runs that were active.
+I will record `uptime -s` at the start of every run from now on and report a series.
+Agreed: per-group persistence is in #419 (group logs outside the container); `--resume` for `integration_run.sh` is next from me.
