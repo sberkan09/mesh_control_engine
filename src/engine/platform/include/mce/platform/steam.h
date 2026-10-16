@@ -75,6 +75,19 @@ const char* persona_name();
 bool on_steam_deck();
 bool big_picture();
 
+// The overlay (M-STEAM step 3): whether it is up, as of the last run_callbacks (Steam's overlay
+// callback); a page of it opened ("friends", "achievements", "stats", "community", "settings"); this
+// game's store page; a web page in the overlay's browser. No-ops while off.
+bool overlay_active();
+void show_overlay(const char* dialog);
+void show_store_page();
+void show_web_page(const char* url);
+
+// Rich presence (M-STEAM step 3): one key's value ("" removes the key); clear removes them all.
+// False while off or when Steam refuses (a key or value too long).
+bool set_rich_presence(const char* key, const char* value);
+void clear_rich_presence();
+
 // For the later Steam steps inside mce_platform: an entry point of the open library (null while off
 // or when absent).
 void* entry(const char* name);

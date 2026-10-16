@@ -25,6 +25,11 @@ if(NOT IOS AND NOT ANDROID)
                  COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
                          -DSTEAM_STUB=$<TARGET_FILE:mce_steam_stub> -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/steam_games_test
                          -P ${CMAKE_CURRENT_SOURCE_DIR}/player_steam_games_test.cmake)
+        # The overlay holding the game and rich presence from the scene (M-STEAM step 3).
+        add_test(NAME player_steam_overlay
+                 COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                         -DSTEAM_STUB=$<TARGET_FILE:mce_steam_stub> -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/steam_overlay_test
+                         -P ${CMAKE_CURRENT_SOURCE_DIR}/player_steam_overlay_test.cmake)
     endif()
 endif()
 
