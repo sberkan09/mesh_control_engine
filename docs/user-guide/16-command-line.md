@@ -104,13 +104,14 @@ for `my_game_mcp`). `--docs` is the folder served as `mce://docs/...` (default: 
 ## 16.4 The cook
 
 ```
-my_game_cook <project-dir> [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]
-mce_cook <project-dir> [--module <lib<game>.so>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]
+my_game_cook <project-dir> [--base <pack>]... [--pack] [--force] [--adopt] [--only <path>]... [--skip-errors] [--quiet]
+mce_cook <project-dir> [--module <lib<game>.so>] [--base <pack>]... [--pack] [--force] [--adopt] [--only <path>]... [--skip-errors] [--quiet]
 ```
 
 Exit 0 clean, 1 cook errors (a module that fails to load among them), 2 usage. `mce_cook`
 without `--module` knows engine components only. `--base` names a game pack the project builds
 on (a mod, chapter 19): references may name its assets and same-GUID assets override them.
+`--only <path>` (repeatable) cooks just that file or folder under `assets/` and what it depends on, into `cooked/` only (never the pack); `--skip-errors` lists every failing file at the end (section 5.4). A source file with no sidecar is a cook error until `--adopt` registers it. `mce play` and `mce headless` run the build's pack and print a warning when it is older than `assets/`: `mce build` refreshes it.
 
 ## 16.5 Scripts
 
@@ -147,7 +148,7 @@ mce headless <project> [--ticks N] [player flags ...]
 mce editor <project> [editor flags ...]
 mce mcp <project> [--scene <path>] [--allow-cheats] [--agent <name>]
 mce mcp-config <project> [--desktop] [--remove]
-mce cook <project> [--pack] [--force] [--adopt] [--quiet]
+mce cook <project> [--pack] [--force] [--adopt] [--only <path>]... [--skip-errors] [--quiet]
 mce story compile [<project>] [--check] [--werror] [--out header] [--report md]
 mce import aseprite <export.json> [--out f.mcsheet] [--name n] [--werror]
 mce import tiled <map.tmj> [--out-dir d] [--name n] [--tile-size m] [--werror]

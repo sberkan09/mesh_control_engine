@@ -231,6 +231,7 @@ def cmd_aseprite(args):
         with open(side, "w", encoding="utf-8", newline="\n") as f:
             f.write(dumps(doc_side) + "\n")
         print(f"wrote {side}")
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write(dumps(sheet) + "\n")
     print(f"wrote {out} ({len(sheet['regions'])} regions, {len(sheet['clips'])} clips)")
@@ -737,6 +738,7 @@ def cmd_ldtk(args):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="mce import", description="2D authoring-tool exports into native assets")
+    ap.add_argument("--merge-output", action="store_true", help=argparse.SUPPRESS)  # warnings on stdout (the MCP tool)
     sub = ap.add_subparsers(dest="tool", metavar="<tool>", required=True)
     s = sub.add_parser("aseprite", help="Aseprite JSON export + PNG into a .mcsheet")
     s.add_argument("file", help="the exported .json")
@@ -760,6 +762,8 @@ def main(argv=None):
     s.add_argument("--werror", action="store_true", help="a warning is a failure; nothing is written")
     s.set_defaults(fn=cmd_ldtk)
     args = ap.parse_args(argv)
+    if args.merge_output:
+        sys.stderr = sys.stdout
     return args.fn(args)
 
 

@@ -14,6 +14,14 @@
 
 namespace mce::cook {
 
+// Appended to "unknown component / field" errors: the usual cause when the name is the game's own is a
+// module (the loaded .so) older than the source. A scene cannot cook until the process has the new layout.
+inline constexpr const char* kStaleModuleHint =
+    " - if this is in your game's code, the module this process loaded is older than the source: rebuild it "
+    "(`mce build`, or the MCP tool module_build), then restart the MCP server (`mce mcp <project>`; module_build "
+    "reloads in place only when the server was started with --module) or run `mce cook <project>` (it loads the "
+    "module fresh)";
+
 inline constexpr u32 kSceneFormatVersion = 1;
 inline constexpr u32 kNoSceneEntity = 0xFFFFFFFFu;
 
