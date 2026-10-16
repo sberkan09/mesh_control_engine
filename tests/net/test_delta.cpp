@@ -60,7 +60,8 @@ struct Session {
         sw.query<const NetId, const LocalTransform>().each([&](const NetId& id, const LocalTransform& t) {
             const Entity e = client.find(id.id);
             const LocalTransform* m = cw.alive(e) ? cw.try_get<LocalTransform>(e) : nullptr;
-            ok = ok && m && std::memcmp(&m->position, &t.position, sizeof t.position) == 0;
+            ok = ok && m && m->position.x == t.position.x && m->position.y == t.position.y &&
+                 m->position.z == t.position.z;
         });
         return ok;
     }
