@@ -2,12 +2,16 @@
 //
 //   NODE_PATH=$(npm root -g) node scripts/web/probe_smoke.cjs <dir> input
 //   NODE_PATH=$(npm root -g) node scripts/web/probe_smoke.cjs <dir> relay <path/to/native/mce_relay>
+//   NODE_PATH=$(npm root -g) node scripts/web/probe_smoke.cjs <dir> shell
 //
 // input: mce_input_web_probe (src/engine/platform/web_probe). Audio must start suspended (the
 //   browser's autoplay rule) and run after the first click; the click must ask for pointer lock; a
 //   key press, a tap and a gamepad (a fake one behind navigator.getGamepads) must reach the engine.
 // relay: starts the native mce_relay on a free WebSocket port and opens mce_relay_web_probe, whose
 //   two browser RelayClients make a room, join it and swap a message (M-NET2 over WebSocket).
+// shell: a shipped web folder (scripts/ship.py --target web): on a desktop-sized page and on a phone-sized
+//   touch one, the cover shows the icon and "Click/Tap to play" once the game runs, the click or tap
+//   hides it and starts the audio, and the canvas fills the page and follows a resize.
 //
 // Needs Playwright (npm -g) and a Chromium; PLAYWRIGHT_BROWSERS_PATH or /opt/pw-browsers/chromium.
 const http = require('http');
@@ -18,8 +22,8 @@ const { spawn } = require('child_process');
 const { chromium } = require('playwright');
 
 const [dir, mode, relayExe] = process.argv.slice(2);
-if (!dir || !['input', 'relay'].includes(mode) || (mode === 'relay' && !relayExe)) {
-  console.error('usage: probe_smoke.cjs <dir> input | relay <mce_relay>');
+if (!dir || !['input', 'relay', 'shell'].includes(mode) || (mode === 'relay' && !relayExe)) {
+  console.error('usage: probe_smoke.cjs <dir> input | relay <mce_relay> | shell');
   process.exit(2);
 }
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
@@ -81,6 +85,74 @@ const strictAutoplay = () => {
   };
 };
 
+// The shipped page on a desktop browser and on a phone.
+async function shellChecks(chromium, exe, url) {
+  const browser = await chromium.launch({
+    executablePath: exe,
+    args: ['--headless=new', '--enable-unsafe-webgpu', '--enable-features=Vulkan', '--use-vulkan=swiftshader',
+           '--use-webgpu-adapter=swiftshader', '--use-angle=swiftshader'],
+  });
+  let ok = true;
+  const check = (what, pass) => {
+    console.log(`probe: ${pass ? 'ok  ' : 'FAIL'} ${what}`);
+    if (!pass) ok = false;
+  };
+  const devices = [
+    { label: 'desktop', options: { viewport: { width: 1280, height: 800 } }, gesture: 'click', resize: { width: 900, height: 600 } },
+    { label: 'phone', options: { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
+      gesture: 'tap', resize: { width: 844, height: 390 } },
+  ];
+  try {
+    for (const d of devices) {
+      const context = await browser.newContext(d.options);
+      const tab = await context.newPage();
+      const errors = [];
+      tab.on('console', (m) => { if (/\[(error|critical)\]/.test(m.text())) errors.push(m.text()); });
+      tab.on('pageerror', (e) => errors.push(e.message));
+      await tab.addInitScript(strictAutoplay);
+      await tab.goto(url);
+      const play = tab.locator('#mce-play');
+      let shown = false;
+      for (let t = 0; !shown && t < 60000; t += 200) {
+        shown = await play.isVisible();
+        if (!shown) await tab.waitForTimeout(200);
+      }
+      check(`${d.label}: the cover offers "${d.gesture === 'tap' ? 'Tap' : 'Click'} to play" once the game runs`,
+            shown && (await play.textContent()).startsWith(d.gesture === 'tap' ? 'Tap' : 'Click'));
+      const icon = await tab.evaluate(() => { const i = document.querySelector('#mce-cover img'); return !!i && i.naturalWidth > 0; });
+      if (fs.existsSync(path.join(root, 'icon.png'))) check(`${d.label}: the cover shows the game's icon`, icon);
+      else console.log(`probe: --   ${d.label}: no icon (the game has no ship/icon.png)`);
+      const audioBefore = await tab.evaluate(() => (Module.mceAudioState ? Module.mceAudioState() : 'none'));
+      if (d.gesture === 'tap') await play.tap(); else await play.click();
+      await tab.waitForTimeout(500);
+      check(`${d.label}: the ${d.gesture} hides the cover`, !(await tab.locator('#mce-cover').isVisible()));
+      const audioAfter = await tab.evaluate(() => (Module.mceAudioState ? Module.mceAudioState() : 'none'));
+      // (Before it, headless Chromium may already count the page as activated; the input probe checks the
+      // suspended start on its own.)
+      check(`${d.label}: the audio runs after the ${d.gesture} (${audioBefore} -> ${audioAfter})`, audioAfter === 'running');
+      const size = () => tab.evaluate(() => {
+        const c = document.getElementById('canvas');
+        return { css: [c.clientWidth, c.clientHeight], px: [c.width, c.height], view: [innerWidth, innerHeight], dpr: devicePixelRatio };
+      });
+      let s = await size();
+      check(`${d.label}: the canvas fills the page (${s.css} css, ${s.px} px)`,
+            s.css[0] === s.view[0] && s.css[1] === s.view[1] && s.px[0] >= s.css[0] && s.px[1] >= s.css[1]);
+      await tab.setViewportSize(d.resize);
+      await tab.waitForTimeout(800);
+      s = await size();
+      check(`${d.label}: the canvas follows a resize to ${d.resize.width}x${d.resize.height} (${s.css} css, ${s.px} px)`,
+            s.css[0] === d.resize.width && s.css[1] === d.resize.height && s.px[0] >= s.css[0] && s.px[1] >= s.css[1]);
+      await tab.waitForTimeout(500);
+      await tab.screenshot({ path: path.join(root, `..`, `shell-${d.label}.png`) });
+      check(`${d.label}: no errors (${errors.slice(0, 2).join(' | ')})`, errors.length === 0);
+      await context.close();
+    }
+  } finally {
+    await browser.close();
+  }
+  return ok;
+}
+
 (async () => {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   let relay = null;
@@ -91,6 +163,13 @@ const strictAutoplay = () => {
   });
   const lines = [];
   let failed = false;
+  if (mode === 'shell') {
+    browser.close();
+    failed = !(await shellChecks(chromium, exe, `http://127.0.0.1:${server.address().port}/index.html`));
+    server.close();
+    console.log(failed ? 'probe: FAIL' : 'probe: PASS');
+    process.exit(failed ? 1 : 0);
+  }
   const check = (what, ok) => {
     console.log(`probe: ${ok ? 'ok  ' : 'FAIL'} ${what}`);
     if (!ok) failed = true;
