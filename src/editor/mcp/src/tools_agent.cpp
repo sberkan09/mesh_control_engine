@@ -38,6 +38,13 @@ const ToolDef kAgentTools[] = {
      R"j("cell_width":{"type":"integer","minimum":64,"maximum":3840,"default":320},"cell_height":{"type":"integer","minimum":64,"maximum":3840,"default":180},)j" MCE_RENDER_COMMON_PROPS
      R"j(},"required":["ticks"]})j",
      render_sheet},
+    {"timeline_preview",
+     "See a cutscene at a moment: draw the scene with every timeline in it paused at 'time' seconds (state tracks applied, "
+     "cinematic cameras placed, the timeline's video frame shown) with the real player, as render_frame does. Returns the "
+     "frame as a PNG image; 'save' also writes it under the project folder.",
+     R"j({"type":"object","properties":{"time":{"type":"number","minimum":0,"maximum":3600,"description":"Seconds into the timelines"},)j" MCE_RENDER_FRAME_PROPS
+     R"j(,"save":{"type":"string","description":"Also write the frame as a PNG at this path inside the project folder"}},"required":["time"]})j",
+     timeline_preview},
     {"image_diff",
      "Compare a frame with a golden PNG in the project: 'image' (a PNG in the project) or 'render' (render_frame's arguments). "
      "Returns the score (mean channel difference, 0..1), the changed fraction and pass (score <= max_score), with a heat map "
@@ -224,8 +231,12 @@ const ToolDef kAgentTools[] = {
      "Make the release zip: the project's full CMake build (host, game module and the cooked pack; the module is mapped "
      "again), a smoke run of the host headless for 'ticks' ticks, then the SDK's `mce ship` (host, module, engine "
      "library, assets.mce, CREDITS.md). Returns each stage and the zip's path; ok is false with the stage that failed "
-     "and the end of its output. Needs the server of an installed SDK (mce mcp <project>).",
-     R"j({"type":"object","properties":{"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"build":{"type":"boolean","default":true,"description":"Run the full build first (false: ship what is built)"},)j"
+     "and the end of its output. Needs the server of an installed SDK (mce mcp <project>). target \"web\": the browser "
+     "build for itch.io instead (`mce ship --target web`, from the engine checkout the SDK came from, for a project under "
+     "its projects/; needs the Emscripten SDK and Playwright): it plays 'ticks' ticks in headless Chromium and returns "
+     "the zip, the state_hash, matches_headless (the same ticks run headless in the browser) and a screenshot of the "
+     "last frame.",
+     R"j({"type":"object","properties":{"target":{"type":"string","enum":["desktop","web"],"default":"desktop"},"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"build":{"type":"boolean","default":true,"description":"Run the full build first (false: ship what is built; desktop only)"},)j"
      R"j("version":{"type":"string","description":"Version in the zip's name (default: the .mceproj's, else the SDK's)"},"out":{"type":"string","description":"Folder inside the project for the zip (default dist/)"}}})j",
      ship_build},
     {"project_watch",

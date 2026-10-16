@@ -11,8 +11,10 @@
 #include "mce/audio/components.h"
 #include "mce/ecs/save.h"
 #include "mce/input/ecs.h"
+#include "mce/kit/cinematic.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
+#include "mce/kit/timeline.h"
 #include "mce/physics/module.h"
 #include "mce/scene/scene.h"
 #include "story_data.h"
@@ -40,6 +42,8 @@ struct Game {
         w.register_components<audio::AudioSource>();  // no device here; the scene still authors the sound beds
         kit::install_particles(w, &assets);
         kit::install_sequences(w, &assets);
+        kit::install_timelines(w, &assets);  // @cutscene (install_stock's, without a renderer)
+        kit::install_cinematic(w);
         NovelState state;
         state.autopilot = autopilot;
         state.autosave = false;
@@ -161,7 +165,15 @@ TEST_CASE("undelivered: a player's inputs start a run, read a page and take a ch
     REQUIRE(g.n().mode == Mode::Title);
     input::InputState confirm;
     confirm.confirm_pressed = true;
-    g.step(confirm);  // New game
+    g.step(confirm);  // New game: the ferry comes in (@cutscene ferry), then the first page
+    CHECK(g.n().mode == Mode::Cutscene);
+    bool subtitled = false;
+    for (u32 i = 0; i < 600 && g.n().mode == Mode::Cutscene; ++i) {
+        g.step();
+        StringView speaker, text;
+        subtitled = subtitled || (g.w.alive(g.n().cutscene) && kit::timeline_subtitle(g.w, g.n().cutscene, speaker, text));
+    }
+    CHECK(subtitled);
     CHECK(g.n().mode == Mode::Reading);
     CHECK(g.var(st::var::day) == 1);
     CHECK(g.n().revealed < static_cast<f32>(g.n().page_chars));
