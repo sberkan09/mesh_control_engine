@@ -1,0 +1,11 @@
+{
+  "format": "mce-services", "version": 1, "guid": "57ea0000-0000-4000-8000-0000000000b1",
+  "achievements": [
+    { "id": "first_win", "steam": "ACH_WIN_ONE_GAME" },
+    { "id": "win_5", "steps": 5, "steam": "ACH_WIN_5_GAMES" }
+  ],
+  "leaderboards": [
+    { "id": "best_time", "order": "lower_is_better", "steam": "Best Time" }
+  ],
+  "cloud_saves": [ "progress" ]
+}
