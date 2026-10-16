@@ -26,6 +26,7 @@ reach all of its non-transient fields.
 | `LocalTransform` | `mce/ecs/transform.h` | yes | yes | yes | docs/user-guide/03-editor.md |
 | `Blackboard` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |
 | `AiBrain` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/05-assets.md |
+| `AiTokenPool` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |
 | `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `IKTarget3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |

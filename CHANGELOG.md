@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Utility AI, attack tokens and point queries, M-AI step 4 (SBA-131): a `utility` node runs the child whose
+  `score` (a base plus weighted linear, power, logistic or step curves of blackboard keys) is highest, and
+  keeps a running child until another beats it by `hysteresis`. An `AiTokenPool` hands out a few tokens and a
+  `token` node takes one or fails, so only some enemies attack at once. The stock task `find_point` stores the
+  best point on rings around the entity: on the navmesh or grid, visible or hidden from a key, near, far or
+  close. `.mcbt` cooks to `CHNK_BT` v3. User guide 13.8.
 - AI perception, M-AI step 3 (SBA-130): a `Perceiver` sees every `Stimulus` of another team inside its cone and
   range with a clear line of sight (rays through the 3D or the 2D physics world), remembers a lost target for
   `forget` seconds and hears `kit::Noise` events (the tree's `make_noise` task makes one). It writes `target`,
