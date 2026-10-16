@@ -339,10 +339,13 @@ bool ship_build(ToolCall& c) {
     BuildTree t;
     u64 ticks = 300;
     bool build = true;
-    StringView version, out_rel;
+    StringView version, out_rel, steam_library;
+    u64 steam_app = 0;
     if (!arg_uint(c, "ticks", ticks, 1, 36000, false) || !arg_bool(c, "build", build) || !arg_string(c, "version", version, false) ||
-        !arg_string(c, "out", out_rel, false))
+        !arg_string(c, "out", out_rel, false) || !arg_uint(c, "steam_app_id", steam_app, 1, 0xffffffffull, false) ||
+        !arg_string(c, "steam_library", steam_library, false))
         return false;
+    if (!steam_library.empty() && steam_app == 0) return arg_missing(c, "steam_app_id", "the Steam app id that steam_library ships with");
     for (const char ch : version)
         if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '.' || ch == '-' || ch == '_'))
             return arg_missing(c, "version", "a version such as 1.0.2 (letters, digits, '.', '-', '_')");
@@ -418,6 +421,16 @@ bool ship_build(ToolCall& c) {
             args.push_back("--out");
             args.push_back(out_dir.view());
         }
+        cook::String app;
+        if (steam_app != 0) {
+            cook::appendf(app, "%llu", static_cast<unsigned long long>(steam_app));
+            args.push_back("--steam");
+            args.push_back(app.view());
+            if (!steam_library.empty()) {
+                args.push_back("--steam-library");
+                args.push_back(steam_library);
+            }
+        }
         Array<char> out;
         i32 code = -1;
         if (!run_captured(c, args.span(), out, code)) return false;
@@ -436,6 +449,13 @@ bool ship_build(ToolCall& c) {
         i64 mtime = 0;
         (void)cook::fs::stat(zip, size, mtime);
         c.out.key("ok").boolean(true).key("zip").str(zip).key("bytes").num_u(size);
+        // "steam: <content dir> (depot N), <app build script>"
+        if (const usize st = text.find("\nsteam: "); steam_app != 0 && st != StringView::npos) {
+            StringView line = text.substr(st + 8);
+            line = line.substr(0, line.find('\n'));
+            const usize comma = line.rfind(", ");
+            if (comma != StringView::npos) c.out.key("steam_build_script").str(line.substr(comma + 2));
+        }
     }
     c.out.end_object();
     return true;

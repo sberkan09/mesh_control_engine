@@ -17,6 +17,10 @@
                                                         # the .js/.wasm and the pack, ready for itch.io;
                                                         # `mce serve <zip>` plays it (scripts/web/web_package.py;
                                                         # needs the Emscripten SDK: source emsdk_env.sh)
+    python3 scripts/ship.py platformer --steam 480      # ... and dist/Ember-Step-steam/: the Steam depot for
+                                                        # this OS (steam_api beside the executable) and the
+                                                        # steamcmd build scripts (tools/mce_cli/mce_steam.py;
+                                                        # --steam-library or STEAMWORKS_SDK; uploads nothing)
 
 Phone builds take the app icon from <game>/ship/icon.png (1024x1024; cmake/mobile/app_icon.py), the name
 under it per language from the app.name key of <game>/assets/loc/<locale>.csv (cmake/mobile/app_names.py)
@@ -60,6 +64,8 @@ ENGINE_SUFFIX = ".dylib" if sys.platform == "darwin" else MODULE_SUFFIX  # SHARE
 MACOS = sys.platform == "darwin"
 sys.path.insert(0, os.path.join(ROOT, "cmake", "mobile"))
 sys.path.insert(0, os.path.join(ROOT, "scripts", "web"))
+sys.path.insert(0, os.path.join(ROOT, "tools", "mce_cli"))
+import mce_steam  # Steam depots and steamcmd build scripts (M-STEAM step 5), shared with `mce ship --steam`
 if MACOS:
     sys.path.insert(0, os.path.join(ROOT, "cmake", "macos"))
     import macos_bundle  # dSYMs, strip + ad-hoc signing, the .app bundle (Mac-owned)
@@ -352,6 +358,10 @@ def ship(art, args):
         print(f"ship: {sym_zip} (symbols, keep it; never ship it)")
     if args.smoke:
         smoke(stage, art, args)
+    if args.steam:
+        mce_steam.make_depot(stage, os.path.join(args.out, art["name"] + "-steam"), args.steam, os_tag(),
+                             mce_steam.find_library(os_tag(), args.steam_library), args.version, art["title"],
+                             args.steam_depot, args.steam_branch)
     return zip_path
 
 
@@ -461,7 +471,18 @@ def main():
     ap.add_argument("--smoke", action="store_true", help="run the staged executable once after packaging "
                                                        "(web: in headless Chromium, needs Playwright)")
     ap.add_argument("--smoke-headless", action="store_true", help="with --smoke: headless run (no display needed)")
+    ap.add_argument("--steam", type=int, metavar="APP_ID", default=0,
+                    help="desktop: also lay out the Steam depot for this OS and the steamcmd build scripts in "
+                         "<out>/<Name>-steam (M-STEAM; nothing is uploaded)")
+    ap.add_argument("--steam-depot", type=int, default=0,
+                    help="with --steam: this OS's depot id (default: app + 1 Windows, + 2 Linux, + 3 macOS)")
+    ap.add_argument("--steam-library", help="with --steam: the steam_api to ship (default: from STEAMWORKS_SDK)")
+    ap.add_argument("--steam-branch", default="", help="with --steam: the branch the build is set live on (default: none)")
     args = ap.parse_args()
+    if args.steam and args.target != "desktop":
+        ap.error("--steam ships the desktop build (--target desktop)")
+    if (args.steam_depot or args.steam_library or args.steam_branch) and not args.steam:
+        ap.error("--steam-depot, --steam-library and --steam-branch go with --steam <app id>")
     if args.preset is None:
         args.preset = {"android": "android-arm64-release", "ios": "ios-sim-arm64",
                        "web": "web-release"}.get(args.target, default_preset())

@@ -85,6 +85,7 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/scripts/new_project.py" "${PROJECT_SOURC
 file(WRITE "${PROJECT_BINARY_DIR}/sdk/VERSION" "${PROJECT_VERSION}\n${MCE_ENGINE_DESCRIBE}\n")
 install(FILES "${PROJECT_BINARY_DIR}/sdk/VERSION" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce.py" DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME mce)
+install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_steam.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce ship --steam
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/install.sh" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce)  # mce update (release installs)
 
 # The example projects (`mce example <Name>` copies one out): sources and content, no build outputs.

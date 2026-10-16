@@ -224,9 +224,12 @@ const ToolDef kAgentTools[] = {
      "Make the release zip: the project's full CMake build (host, game module and the cooked pack; the module is mapped "
      "again), a smoke run of the host headless for 'ticks' ticks, then the SDK's `mce ship` (host, module, engine "
      "library, assets.mce, CREDITS.md). Returns each stage and the zip's path; ok is false with the stage that failed "
-     "and the end of its output. Needs the server of an installed SDK (mce mcp <project>).",
+     "and the end of its output. With steam_app_id it also lays out the Steam depot for this OS and the steamcmd build "
+     "scripts (<out>/<Name>-steam; nothing is uploaded). Needs the server of an installed SDK (mce mcp <project>).",
      R"j({"type":"object","properties":{"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"build":{"type":"boolean","default":true,"description":"Run the full build first (false: ship what is built)"},)j"
-     R"j("version":{"type":"string","description":"Version in the zip's name (default: the .mceproj's, else the SDK's)"},"out":{"type":"string","description":"Folder inside the project for the zip (default dist/)"}}})j",
+     R"j("version":{"type":"string","description":"Version in the zip's name (default: the .mceproj's, else the SDK's)"},"out":{"type":"string","description":"Folder inside the project for the zip (default dist/)"},)j"
+     R"j("steam_app_id":{"type":"integer","minimum":1,"maximum":4294967295,"description":"Also make the Steam depot and build scripts for this app"},)j"
+     R"j("steam_library":{"type":"string","description":"With steam_app_id: the steam_api to ship (default: from the server's STEAMWORKS_SDK)"}}})j",
      ship_build},
     {"project_watch",
      "What the other agents on this project did: the event feed (.mce/events.jsonl), one event per write with agent, "

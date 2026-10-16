@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- `ship --steam`, M-STEAM step 5 (SBA-110): `scripts/ship.py --steam <app id>` and `mce ship --steam` lay out the
+  desktop build's Steam depot (`steam_api` beside the executable, no `steam_appid.txt`) and the steamcmd app and
+  depot build scripts in `dist/<Name>-steam/`; shipping on each OS into the same folder adds its depot. Nothing is
+  uploaded. The MCP tool `ship_build` takes `steam_app_id`. A game started by Steam signs in from `SteamAppId`
+  without `-steam.app_id` (`-1` keeps Steam off). Covered by ctest `steam_depot`. User guide 15.7.
 - Steam Input, M-STEAM step 4 (SBA-109): while Steam runs, Steam reads every controller as the input map's actions
   and the player feeds them in by name next to the map's own bindings (`InputSystem::set_action_feeds`). The options
   screen names gamepad bindings by Steam's own names. `mce_player -steam.write_input_config <dir>` writes the action
