@@ -61,7 +61,8 @@ umbrella) that is the only way.
   `OrbitColliders` (`orbit_camera.h`, the 3D orbit view gated by `World3D::camera_sweep`);
   `TilemapDocument`, `TilemapEditor` (`tilemap_editor.h`); `TimelineEditor`, `TimelinePreview`,
   `sample_timeline_track`, `snap_time` (`timeline_editor.h`; the Timeline panel, M-CINEMA step 2);
-  `AnimGraphEditor`, `AnimPreview`, `mesh_clips` (`animgraph_editor.h`; the Animation panel, M-CINEMA step 3); `ConsoleModel` (`console_model.h`);
+  `AnimGraphEditor`, `AnimPreview`, `mesh_clips` (`animgraph_editor.h`; the Animation panel, M-CINEMA step 3);
+  `BtEditor`, `bt_play_brains`, `bt_live`, `bt_push_to_play` (`bt_editor.h`; the Behavior Tree panel, M-AI step 5); `ConsoleModel` (`console_model.h`);
   `PerfMonitor` (`perf_monitor.h`, the Profiler panel's data); `StubWorld` (`stub_world.h`, the M0
   viewport content shown when no project is open).
 
@@ -153,7 +154,8 @@ rehearsal: new scene -> author -> save -> cook --pack -> the player runs it"), `
 mce_player", "play: Play -> Stop -> Play gives the same first-tick state and the same run"),
 `test_hot_reload.cpp`, `test_transform_gizmo.cpp`, `test_asset_browser.cpp`, `test_tilemap.cpp`,
 `test_animgraph_editor.cpp` (graph round trip, edits and undo on disk, clip list, the preview posing a clip
-and running the graph without touching the document), `test_timeline_editor.cpp` ("timeline editor: the preview scrubs the play world and never touches the document",
+and running the graph without touching the document), `test_bt_editor.cpp` (tree round trip, node and key
+edits and refusals, undo on disk, a tree that does not cook, the debugger on a playing brain), `test_timeline_editor.cpp` ("timeline editor: the preview scrubs the play world and never touches the document",
 record mode, undo on disk),
 `test_orbit_camera.cpp`, `test_perf_monitor.cpp`, `test_console_model.cpp`, `test_draw_clip.cpp`,
 `test_stub_world.cpp`, `test_mod_project.cpp` ("mod project: the editor mounts the game's pack behind
@@ -166,7 +168,8 @@ real `mce_mcp` over pipes against `transcripts/demo_edit.golden.jsonl`); `mcp_sy
 socket symbols in `mce_mcp_core`, no ImGui symbols in `mce_mcp_core` or `mce_mcp`; not on Windows).
 
 GPU (label `gpu`, `MCE_GPU_TESTS`): `editor_smoke` (default layout over the stub world),
-`editor_scene_smoke` and `editor_play_smoke` (over the cooked `samples/scene_demo`), and
+`editor_scene_smoke` and `editor_play_smoke` (over the cooked `samples/scene_demo`), `ai_demo_editor_bt`
+(the Behavior Tree panel over the playing `samples/ai_demo`), and
 `template_probe_editor_gpu` from the project template.
 
 ## Design records
