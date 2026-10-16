@@ -178,7 +178,7 @@ orbit; M-MOVE3D 2: a spring arm over `World3D::camera_sweep`, look-ahead, first 
 `install_effects(world, assets)`: `"kit_nav_grid"` (`FixedUpdate_Pre`, before `"path_agents"`,
 which it installs), `"kit_effects"` and `"kit_camera_follow"` (`FixedUpdate_Post`).
 
-`cinematic.h` (M-CINEMA 4): `CameraRail3D` (Catmull-Rom dolly through up to 8 points; `rail_point`),
+`cinematic.h` (M-CINEMA 4): `CameraRail3D` (Catmull-Rom dolly through up to 8 points (a scene writes all 8 entries); `rail_point`),
 `CameraLookAt3D`, `CameraShake3D` (fed by `ShakeTrigger`, advanced in `"kit_effects"`), `CameraBlend3D`
 (the extract's `view_of` blends from `from`'s view; a timeline camera cut with a blend writes it) and
 `Cutscene` (next to a `TimelinePlayer`: the world's cutscene hold, letterbox, hold-to-skip through

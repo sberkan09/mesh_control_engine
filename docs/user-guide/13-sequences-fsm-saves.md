@@ -148,7 +148,8 @@ everything out on one clock. Author it as a `.mctimeline` asset and play it with
 
 A track drives its `target`: `"self"` (the default, the entity with the `TimelinePlayer`) or a
 binding index 0 to 7, which names an entity in the player's `bindings`. So one timeline asset can
-drive the same moves on different entities.
+drive the same moves on different entities. `bindings` is a fixed array of 8: write all 8 entries (`"$<id>"`
+or `null`), as above; fewer is an error, not "the first few".
 
 | Track | Keys | Does |
 |---|---|---|
@@ -250,7 +251,7 @@ between them and property tracks drive their fields.
 
 | Component | Does |
 |---|---|
-| `CameraRail3D` | a dolly: the camera moves along a Catmull-Rom curve through `points` (up to 8, the first `count`). `t` 0..1 is the place on the path (0 the first point, 1 the last); key it with a property track (`CameraRail3D.t`) or give it a `speed` (with `loop` the path closes). `face_path` turns the camera along the path |
+| `CameraRail3D` | a dolly: the camera moves along a Catmull-Rom curve through the first `count` of its 8 `points` (a scene or `component_set` must still write all 8 `[x, y, z]` entries, unused ones `[0, 0, 0]`; a shorter array is an error). `t` 0..1 is the place on the path (0 the first point, 1 the last); key it with a property track (`CameraRail3D.t`) or give it a `speed` (with `loop` the path closes). `face_path` turns the camera along the path |
 | `CameraLookAt3D` | turns the camera to face `target` plus `offset`; `smoothing` (1/s) eases it, 0 snaps |
 | `CameraShake3D` | trauma shake of the view: up to `max_translation` metres and `max_rotation` radians at trauma 1, growing with trauma². Set `trauma` (a property track keys it) or fire a `ShakeTrigger`, which shakes 2D and 3D cameras. The Reduce motion setting (`access.motion_scale`) scales the view's shake |
 | `CameraBlend3D` | eases the view from `from`'s view (position, orientation, field of view) to this camera's over `duration` seconds. A camera cut with `"blend"` writes it; set it yourself to blend outside a timeline |
@@ -414,7 +415,9 @@ How a tree runs:
 - Timing is tick math, as with sequences: `wait` 0.5 s completes on its 30th tick at 60 Hz.
 - `AiBrain.active` off pauses the tree where it is; `restart` starts it again from scratch.
 - A brain whose entity has no `Blackboard` gets one on its first tick and starts on the next. Key
-  defaults are written when the brain starts, unless the key is already set.
+  defaults are written when the brain starts, unless the key is already set. When you write a `Blackboard`
+  yourself, `numbers` (16), `vectors` (8) and `entities` (8) are fixed arrays: pass every entry (`null` for an
+  unset entity); a shorter array is an error.
 
 Everything a tree knows is in `AiBrain` and `Blackboard`. Trees are deterministic, they are in the
 state hash and in replays, and a save (give the entity a `SaveKey`) resumes them on the same node.
