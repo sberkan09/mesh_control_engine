@@ -28,7 +28,6 @@ void pan_gains(f32 gain, f32 pan, bool stereo, f32& l, f32& r) {
 // open end (above or below anything audible) and is bypassed once there.
 constexpr u32 kGlideFrames = 32;
 constexpr f32 kGlideStep = 1.0442737824274138f;  // 2^(1/16)
-constexpr f32 kLowpassOpen = 22000.f, kHighpassOpen = 10.f;
 
 void glide_step(BusFilterRT& f, BiquadDesc::Type type, f32 open) {
     const f32 goal = f.target_hz > 0.f ? f.target_hz : open;
@@ -110,6 +109,9 @@ void Mixer::process_commands() {
                     // A scheduled voice that has not started yet jumps straight to its new level.
                     set_targets(*v, v->start > mix_sample_ ? 0 : kRampFrames);
                 }
+                break;
+            case CmdType::VoiceLowpass:
+                if (VoiceRT* v = find_voice(c.index, c.voice.generation)) v->lowpass.target_hz = c.voice.gain;
                 break;
             case CmdType::VoicePitch:
                 if (VoiceRT* v = find_voice(c.index, c.voice.generation); v && clips_[v->clip].stream < 0) v->step = rate_step(c.voice.rate);
@@ -471,9 +473,9 @@ void Mixer::render(f32* out, u32 frames) {
         for (f32* b : reverb_buf_) std::memset(b, 0, sizeof(f32) * n * kChannels);
 
         for (VoiceRT& v : real_)
-            if (v.active) mix_voice(v, bus_buf_[v.bus], n);
+            if (v.active) mix_to_bus(v, n);
         for (VoiceRT& v : tails_)
-            if (v.active) mix_voice(v, bus_buf_[v.bus], n);
+            if (v.active) mix_to_bus(v, n);
         for (VoiceRT& v : virtual_)
             if (v.active) advance_virtual(v, n);
         promote_virtual();
@@ -548,6 +550,18 @@ void Mixer::fold_bus(u32 b, u32 frames) {
             if (--bus.ramp_left == 0) bus.cur = bus.target;
         }
     }
+}
+
+void Mixer::mix_to_bus(VoiceRT& v, u32 frames) {
+    f32* bus = bus_buf_[v.bus];
+    if (v.lowpass.target_hz <= 0.f && !v.lowpass.q.on) {
+        mix_voice(v, bus, frames);
+        return;
+    }
+    std::memset(voice_buf_, 0, sizeof(f32) * frames * kChannels);
+    mix_voice(v, voice_buf_, frames);
+    run_filter(v.lowpass, BiquadDesc::Type::LowPass, kLowpassOpen, voice_buf_, frames, mix_sample_);
+    for (u32 i = 0; i < frames * kChannels; ++i) bus[i] += voice_buf_[i];
 }
 
 bool Mixer::run_duck(u32 b, u32 frames) {

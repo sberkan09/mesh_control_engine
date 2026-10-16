@@ -93,6 +93,28 @@ it on a live voice, say for an engine's revs). Between samples the mixer interpo
   falloff and min/max distances.
 - 2D games can ignore all of this; a source without `AudioSpatial` is plain stereo.
 
+**Occlusion.** Add `AudioOcclusion` to a 3D source and walls between it and the ear muffle it. Every
+tick the bridge casts a ray from the listener to the source through the 3D physics world (or the
+2D one when there is no 3D world), against the colliders whose layers are in `mask`. When something
+is in the way the source fades over 0.1 s by `gain_db` (default -12) and its own low-pass closes
+towards `lowpass_hz` (default 800); when the way clears, both come back. The source and the
+listener never block themselves. A game with its own idea of a wall (a door state, a grid) sets
+`AudioRef::occlusion` to its own test. The stock kit installs the physics one.
+
+```json
+{ "name": "Machine", "components": {
+    "LocalTransform": { "position": [1, 1, -16] },
+    "AudioSource": { "clip": "guid:...", "loop": true, "play_on_start": true },
+    "AudioSpatial": { "attenuation_id": 1 },
+    "AudioOcclusion": { "gain_db": -12, "lowpass_hz": 600 } } }
+```
+
+**Doppler.** `AudioDoppler {"factor": 1}` on a 3D source bends its pitch with the speed it closes on
+the ear, as sound does at 343 m/s. The source's and the listener's speeds come from how far they
+moved since the last tick. The shift stays within half and twice the pitch, and `factor` scales
+it (0 turns it off). It multiplies the pitch a sound set picked, so footsteps keep their variation.
+Occlusion and Doppler change only what you hear: neither moves the state hash.
+
 ## 10.5 Volume, buses and effects
 
 Five saved convars drive the named buses: `audio.master_db`, `audio.music_db`, `audio.sfx_db`,
@@ -170,6 +192,12 @@ state, not game state: it never changes the save, the replay or the state hash.
 - The mixer never allocates or locks on the audio thread; game code never waits on it.
 - Audio commands are produced by the deterministic sim, so a replay produces the same sound
   commands; the harness hashes them.
+- `mce_player -headless 1 -ticks 720 -audio_record run.wav` renders what a run sounds like with no
+  device: each tick mixes its share (800 frames at 60 Hz) into a 48 kHz float WAV, and the player
+  prints `audio_record <frames> frames (<s> s), peak <p>, hash <h>`. The mixer runs in a fixed
+  order, so the same run gives the same hash on every machine. That makes a scripted run's sound
+  testable: `samples/audio_rooms` checks its walk this way (chapter 18). The `audio.*` options
+  apply, so `-audio.reverb 0` renders the dry mix.
 
 ## 10.7 Content notes
 

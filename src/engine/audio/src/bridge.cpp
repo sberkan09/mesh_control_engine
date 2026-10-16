@@ -10,6 +10,8 @@ static_assert(sizeof(AudioBusEffects) == 16);
 static_assert(sizeof(AudioReverb) == 20);
 static_assert(sizeof(AudioDuck) == 20);
 static_assert(sizeof(AudioSnapshot) == 20);
+static_assert(sizeof(AudioOcclusion) == 16);
+static_assert(sizeof(AudioDoppler) == 8);
 
 namespace {
 
@@ -37,13 +39,18 @@ i8 half_db(f32 db) {
     return static_cast<i8>(h < -127.f ? -127.f : h > 127.f ? 127.f : (h < 0.f ? h - 0.5f : h + 0.5f));
 }
 
-AudioHandle start(AudioDevice& dev, AudioSource& s, AudioSpatial* sp, const ClipPick& pick, math::vec3 position) {
+u16 rate_of(f32 pitch) { return pitch == 1.f ? u16(0) : static_cast<u16>(std::lround(math::clamp(pitch, kMinPitch, kMaxPitch) * 4096.f)); }
+f32 pitch_of(const AudioSource& s) { return s.pick_rate == 0 ? 1.f : static_cast<f32>(s.pick_rate) / 4096.f; }
+
+// `extra_db`: occlusion's cut, on top of the source's own gain.
+AudioHandle start(AudioDevice& dev, AudioSource& s, AudioSpatial* sp, const ClipPick& pick, math::vec3 position, f32 extra_db) {
     const ClipHandle clip = pick.clip;
     s.fade_t = s.fade_s > 0.f ? 0.f : 1.f;
     s.pick_gain = half_db(pick.gain_db);
+    s.pick_rate = rate_of(pick.pitch);
     PlayParams p;
     p.pitch = pick.pitch;
-    p.gain_db = faded_gain(s);
+    p.gain_db = faded_gain(s) + extra_db;
     p.pan = s.pan;
     p.priority = s.priority;
     p.bus = static_cast<BusId>(s.bus);
@@ -70,6 +77,7 @@ void on_source_removed(World& w, Entity e) {
 void install(World& world, AudioDevice& device, ClipBank* clips, const char* after) {
     world.register_components<AudioSource>();
     world.register_components<AudioSpatial, AudioListener>();
+    world.register_components<AudioOcclusion, AudioDoppler>();
     world.register_components<AudioBusEffects, AudioReverb, AudioLimiter>();
     world.register_components<AudioDuck, AudioSnapshot>();
     world.register_event<PlaySfx>(Phase::FixedUpdate_Pre);
@@ -88,9 +96,11 @@ void audio_bridge(Frame& f) {
 
     // The listener first, so this tick's plays and moves spatialize against this tick's ear.
     bool have_listener = false;
+    Entity listener_entity;
     f.query<const AudioListener&>().each([&](Entity e, const AudioListener& al) {
         if (have_listener) return;
         have_listener = true;
+        listener_entity = e;
         Listener l;
         l.gain_db = al.gain_db;
         if (const LocalTransform* t = f.world().try_get<LocalTransform>(e)) {
@@ -102,6 +112,12 @@ void audio_bridge(Frame& f) {
         if (l.position != cur.position || l.forward != cur.forward || l.up != cur.up || l.gain_db != cur.gain_db)
             dev->set_listener(l);
     });
+    // The listener's movement this tick, for Doppler (none on its first tick).
+    const f32 dt = static_cast<f32>(f.dt);
+    const math::vec3 ear = dev->listener().position;
+    const math::vec3 ear_velocity = ref.have_last_listener && dt > 0.f ? (ear - ref.last_listener) * (1.f / dt) : math::vec3{};
+    ref.last_listener = ear;
+    ref.have_last_listener = have_listener;
 
     u64 nth = 0;
     for (const PlaySfx& ev : f.events().read<PlaySfx>()) {
@@ -122,12 +138,26 @@ void audio_bridge(Frame& f) {
         math::vec3 pos;
         if (sp)
             if (const LocalTransform* t = f.world().try_get<LocalTransform>(e)) pos = t->position;
+        // Occlusion: the ray decides where the amount heads; it gets there over 100 ms.
+        f32 occluded_db = 0.f, occluded_hz = 0.f;
+        AudioOcclusion* oc = sp ? f.world().try_get_mut<AudioOcclusion>(e) : nullptr;
+        if (oc) {
+            const bool blocked = have_listener && ref.occlusion && ref.occlusion(f.world(), e, listener_entity, ear, pos, oc->mask);
+            const f32 step = dt / 0.1f;
+            oc->amount = blocked ? math::min(1.f, oc->amount + step) : math::max(0.f, oc->amount - step);
+            occluded_db = oc->amount * oc->gain_db;
+            if (oc->amount > 0.f) {
+                const f32 open = std::log(20000.f), shut = std::log(math::clamp(oc->lowpass_hz, 20.f, 20000.f));
+                occluded_hz = std::exp(open + oc->amount * (shut - open));
+            }
+        }
         if (!s.started) {
             if (!s.play_on_start) return;
             const ClipPick pick = resolve(ref.clips, s.clip.guid, s.clip_handle, play_seed(f.tick, e.index, s.clip.guid), s.bus == AudioBus::Music);
             // The previous scene's source of the same music still fades out: start when it is done.
             if (!pick.clip.is_null() && dev->stream_busy(pick.clip)) return;
-            s.handle = start(*dev, s, sp, pick, pos);
+            s.handle = start(*dev, s, sp, pick, pos, occluded_db);
+            if (oc) dev->set_handle_lowpass(s.handle, occluded_hz);
             s.started = true;
             return;
         }
@@ -141,7 +171,8 @@ void audio_bridge(Frame& f) {
                 dev->stop(s.handle);
                 ClipPick again;
                 again.clip = now;
-                s.handle = start(*dev, s, sp, again, pos);
+                again.pitch = pitch_of(s);
+                s.handle = start(*dev, s, sp, again, pos, occluded_db);
                 return;
             }
         }
@@ -151,13 +182,31 @@ void audio_bridge(Frame& f) {
         }
         // Live edits (inspector, gameplay) and the fade-in ramp in; nothing is sent when nothing changed.
         if (s.fade_t < 1.f) s.fade_t = s.fade_s > 0.f ? math::min(1.f, s.fade_t + f.dt / s.fade_s) : 1.f;
-        if (const f32 gain = faded_gain(s); gain != s.applied_gain_db) {
+        if (oc) dev->set_handle_lowpass(s.handle, occluded_hz);
+        if (const f32 gain = faded_gain(s) + occluded_db; gain != s.applied_gain_db) {
             dev->set_handle_gain(s.handle, gain);
             s.applied_gain_db = gain;
         }
         if (s.pan != s.applied_pan) {
             dev->set_handle_pan(s.handle, s.pan);
             s.applied_pan = s.pan;
+        }
+        // Doppler from both movements along the line between them, before the new position lands.
+        if (AudioDoppler* dp = sp ? f.world().try_get_mut<AudioDoppler>(e) : nullptr; dp && have_listener && dt > 0.f) {
+            constexpr f32 kSpeedOfSound = 343.f;
+            const math::vec3 to_source = pos - ear;
+            const f32 dist = math::length(to_source);
+            f32 shift = 1.f;
+            if (dist > 1e-4f && dp->factor > 0.f) {
+                const math::vec3 dir = to_source * (1.f / dist);
+                const f32 source_closing = -math::dot((pos - sp->applied_position) * (1.f / dt), dir) * dp->factor;
+                const f32 ear_closing = math::dot(ear_velocity, dir) * dp->factor;
+                shift = math::clamp((kSpeedOfSound + ear_closing) / math::max(kSpeedOfSound - source_closing, 1.f), 0.5f, 2.f);
+            }
+            if (std::fabs(shift - dp->applied) > 1e-3f) {
+                dev->set_handle_pitch(s.handle, pitch_of(s) * shift);
+                dp->applied = shift;
+            }
         }
         if (sp && pos != sp->applied_position) {
             dev->set_handle_position(s.handle, pos);

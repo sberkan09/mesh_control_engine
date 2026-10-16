@@ -1,6 +1,6 @@
 # M-AUDIO2 — Audio a shipped game needs (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–4 done). Plan: ROADMAP §M-AUDIO2; Linear SBA-118 … SBA-122.
+**Status:** done (added and finished 2026-10-16). Plan: ROADMAP §M-AUDIO2; Linear SBA-118 … SBA-122.
 
 **Why:** MCE's mixer has buses, 3D attenuation, voice virtualisation and streaming. A shipped game needs more,
 and the user guide says what is missing (10.6): "WAV only", and "reverb sends, per-voice pitch and device
@@ -33,7 +33,7 @@ It needs no device. The mixer can render offline into a buffer, so every step ga
 | 2 | Variation: per-voice pitch (resampling playback rate), and sound sets (`.mcsound`: clips picked at random or in sequence, with pitch and volume ranges), seeded from the sim so replays repeat | SBA-119 | done |
 | 3 | Bus effects: biquad low/high-pass, a reverb send (Freeverb-style), a master limiter. Each bus's chain is project data, with parameters as convars and components | SBA-120 | done |
 | 4 | Ducking and snapshots: a bus ducks under another bus's level (sidechain), and named mixer snapshots (e.g. "paused" = muffled world) blend in over a fade from game events and the pause | SBA-121 | done |
-| 5 | Occlusion for 3D sources (a physics ray: low-pass and gain), Doppler, the user guide, MCP reach and the demo | SBA-122 | not started |
+| 5 | Occlusion for 3D sources (a physics ray: low-pass and gain), Doppler, the user guide, MCP reach and the demo | SBA-122 | done |
 
 **Demo:** a sample walks a listener through rooms. Footsteps come from a sound set with pitch variation, a
 cave bus adds reverb, the music ducks under a voice line, the pause snapshot muffles the world, and a wall
@@ -147,3 +147,61 @@ reachable only from code. This step adds what was missing and puts the mix in th
   - `AudioDuck` drives the device and switches off when removed.
 - **Docs.** User guide 10.5 (ducking, snapshots, `audio.voice_db`), 4 and 6.
 
+
+## Step 5 — Occlusion, Doppler and the demo (done, SBA-122)
+
+- **Voice low-pass.** Each voice has its own Simper low-pass (`set_handle_lowpass`), the same filter and glide as
+  the bus bands. It runs only while it is closed or still opening, so an open voice mixes bit-exact as before.
+- **Occlusion.** `AudioOcclusion` (mask, `gain_db`, `lowpass_hz`) on a 3D source. Every tick the bridge asks
+  `AudioRef::occlusion` whether something lies between the listener and the source, and moves the amount 0..1
+  toward the answer over 0.1 s. The gain drops by `amount * gain_db`, and the low-pass closes from 20 kHz toward
+  `lowpass_hz` in octaves. The kit's `install_audio_occlusion` (in `install_stock`) answers with a ray through
+  `Physics3D`, or `World2D` when there is no 3D world, that skips the source and the listener.
+- **Doppler.** `AudioDoppler` (`factor`). The source's and the listener's velocities come from their moves since
+  the last tick. The shift is (c + ear closing) / (c − source closing) at c = 343 m/s, kept in [0.5, 2], and
+  multiplies the voice's pitch (a sound set's pick included). It is sent only when it moves by more than 0.1%.
+- **Offline render.** `mce_player -headless 1 -audio_record run.wav` uses the Offline backend and renders each
+  tick's share of the mix (800 frames at 60 Hz) into a 48 kHz float WAV. It prints the length, the peak and a
+  hash of the samples. The player now binds the `audio.*` options to its device, windowed and headless alike.
+  Before this, `audio.music_db` and the rest changed nothing in the stock player, although the guide said they
+  did.
+- **Demo.** `samples/audio_rooms`, a data-only project the stock player plays. A timeline walks the listener 18 m
+  through three rooms in 12 s:
+  - footsteps come from a three-clip sound set with pitch and gain ranges, on a looping sequence;
+  - a cart drives past at 30 m/s with Doppler;
+  - the middle room sends the SFX bus into a reverb;
+  - the music ducks 12 dB under a voice line;
+  - a snapshot muffles the mix for a second;
+  - a machine behind two walls is occluded until the listener passes the second wall.
+- **Measured.** The ctest `audio_rooms_player` renders the walk twice: the same hash, a peak of 0.8913 (the
+  limiter's -1 dB ceiling). Each feature, removed from the scene, changes the render where the timeline puts it
+  and nowhere else (RMS of the difference per half second):
+  - the reverb at 4–8 s and its tail (0.023–0.034);
+  - the ducking at 6–10 s (0.07–0.08);
+  - the occlusion until 8 s (0.035–0.13);
+  - the Doppler during the pass, 1.5–3 s (up to 0.17);
+  - the muffle at 9.5–10.5 s (0.06).
+
+  `-audio.reverb 0` renders the dry walk. The pack is 127 kB with the music, voice and hum in Vorbis and
+  1,507 kB with every clip as PCM (8.4%).
+- **Reach.** `engine_capabilities` lists occlusion, Doppler and the offline render.
+- **Tests.**
+  - `tests/audio/test_occlusion_doppler.cpp`: a voice low-pass takes a high tone down and an open one is
+    bit-exact; occlusion with a fake ray fades the gain and closes the filter over 100 ms, and clears again;
+    Doppler raises the pitch while the source or the listener closes, lowers it while they part, returns to 1
+    when nobody moves, and is off at factor 0.
+  - `tests/kit/test_audio_occlusion.cpp`: a 3D box wall and a 2D wall occlude, and a mask of 0 lets the sound
+    through.
+- **Docs.** User guide 10.4 (occlusion, Doppler), 10.6 (`-audio_record`), 4, 6, 16 and 18.
+
+## Close
+
+All five steps are merged. The gates:
+- Offline renders hash the same on every run (the demo's ctest, and every mixer test).
+- The sim hash is unchanged: the audio state lives in `AudioRef` and the device.
+- No allocation or lock on the audio thread (the mixer tests).
+- A Vorbis clip decodes within 37 dB SNR of its source (step 1).
+- `local_ci.sh` is green on every step and in the closing batch.
+
+The "every machine" half of the first gate is checked across compilers: the gcc debug and clang release
+players render the demo to the same hash (`-ffp-contract=off` and a fixed mixing order).
