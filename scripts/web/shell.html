@@ -1,0 +1,122 @@
+<!doctype html>
+<!-- The page a web build ships in (M-WEB, scripts/web/web_package.py fills the {{...}} fields). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>{{TITLE}}</title>
+{{ICON_LINK}}
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; overscroll-behavior: none; }
+  /* The canvas fills the page; SDL follows its CSS size (a resizable window), so the game resizes
+     with the browser and turns with the phone. touch-action: none keeps taps from scrolling or zooming. */
+  #canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block;
+            touch-action: none; outline: none; -webkit-tap-highlight-color: transparent; user-select: none;
+            -webkit-user-select: none; -webkit-touch-callout: none; }
+  #mce-cover { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+               justify-content: center; gap: 18px; background: rgba(0, 0, 0, 0.82); color: #eee;
+               font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; text-align: center;
+               padding: 16px; box-sizing: border-box; cursor: default; z-index: 2; }
+  #mce-cover img { width: 96px; height: 96px; border-radius: 18px; image-rendering: auto; }
+  #mce-cover h1 { margin: 0; font-size: 24px; font-weight: 600; }
+  #mce-bar { width: min(320px, 80vw); height: 6px; border-radius: 3px; background: #333; overflow: hidden; }
+  #mce-bar > div { height: 100%; width: 0; background: #e8a33c; transition: width 0.15s; }
+  #mce-status { min-height: 1.4em; color: #aaa; font-size: 14px; }
+  #mce-play { display: none; padding: 12px 28px; border: 0; border-radius: 8px; background: #e8a33c;
+              color: #111; font: inherit; font-weight: 600; cursor: pointer; }
+  #mce-cover.ready #mce-bar { display: none; }
+  #mce-cover.ready #mce-play { display: block; }
+  #mce-cover.error #mce-bar, #mce-cover.error #mce-play { display: none; }
+  #mce-cover.error #mce-status { color: #f88; }
+  #mce-fullscreen { position: fixed; right: 10px; bottom: 10px; z-index: 1; width: 36px; height: 36px;
+                    border: 0; border-radius: 6px; background: rgba(0, 0, 0, 0.45); color: #ddd;
+                    font-size: 20px; line-height: 36px; cursor: pointer; opacity: 0.6; display: none; }
+  #mce-fullscreen:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+<div id="mce-cover">
+  {{ICON_IMG}}
+  <h1>{{TITLE}}</h1>
+  <div id="mce-bar"><div></div></div>
+  <div id="mce-status">Loading...</div>
+  <button id="mce-play" type="button">Click to play</button>
+</div>
+<button id="mce-fullscreen" type="button" title="Full screen" aria-label="Full screen">&#x26F6;</button>
+<script>
+(() => {
+  const cover = document.getElementById("mce-cover");
+  const bar = document.querySelector("#mce-bar > div");
+  const status = document.getElementById("mce-status");
+  const play = document.getElementById("mce-play");
+  const full = document.getElementById("mce-fullscreen");
+  const canvas = document.getElementById("canvas");
+  const touch = matchMedia("(pointer: coarse)").matches;
+  let started = false, failed = false;
+
+  const fail = (text) => {
+    failed = true;
+    cover.className = "error";
+    cover.style.display = "flex";
+    status.textContent = text;
+  };
+  if (!navigator.gpu) {
+    fail("This game needs WebGPU: a current Chrome, Edge or Safari, or Firefox 141 and later.");
+    return;
+  }
+  // Whatever the cover shows, the first click, tap or key press also starts the game's audio
+  // (browsers keep it silent until then), so the cover asks for one before the game is in view.
+  const begin = () => {
+    if (failed || !cover.classList.contains("ready")) return;
+    cover.style.display = "none";
+    full.style.display = document.fullscreenEnabled ? "block" : "none";
+    canvas.focus();
+  };
+  play.textContent = touch ? "Tap to play" : "Click to play";
+  cover.addEventListener("pointerup", begin);
+  addEventListener("keydown", (e) => { if (cover.style.display !== "none") { begin(); e.preventDefault(); } });
+  full.addEventListener("click", () => {
+    if (Module.requestFullscreen) Module.requestFullscreen(false, true);
+    else canvas.requestFullscreen();
+  });
+
+  window.Module = {
+    canvas,
+    locateFile: (path) => (path.endsWith(".wasm") ? "{{WASM}}" : path),
+    print: (text) => console.log(text),
+    printErr: (text) => {
+      console.error(text);
+      if (/\[critical\]/.test(text)) fail(text.replace(/^\[[^\]]*\] \[critical\] /, ""));
+    },
+    // The engine reports "Downloading assets.mce... (got/total)" while it fetches the pack, and ""
+    // when done; Emscripten itself reports its start-up steps here too.
+    setStatus: (text) => {
+      if (failed) return;
+      const m = /\((\d+)\/(\d+)\)/.exec(text || "");
+      if (m) bar.style.width = Math.min(100, (100 * Number(m[1])) / Math.max(1, Number(m[2]))) + "%";
+      if (text) {
+        status.textContent = text.replace(/\s*\(\d+\/\d+\)$/, "").replace(/^Downloading .*/, "Downloading the game...");
+      }
+    },
+    onAbort: (what) => fail("The game stopped: " + what),
+  };
+  // Running: the first frame was asked for. Until a gesture the game plays on silently behind the cover.
+  const ready = () => {
+    if (started || failed) return;
+    started = true;
+    bar.style.width = "100%";
+    status.textContent = "";
+    cover.classList.add("ready");
+  };
+  const raf = requestAnimationFrame;
+  let frames = 0;
+  window.requestAnimationFrame = (fn) => raf((t) => { if (++frames === 2) ready(); fn(t); });
+})();
+</script>
+<script async src="{{SCRIPT}}"></script>
+</body>
+</html>
