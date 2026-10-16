@@ -3,6 +3,8 @@
 // focus into view), 9-slice images, modals and tabs, and the reflected authoring structs. CPU only;
 // test_ui_gl draws the same layouts at three screen sizes.
 
+#include <cmath>
+
 #include <doctest/doctest.h>
 
 #include "mce/core.h"
@@ -477,4 +479,41 @@ TEST_CASE("layout: the authoring structs are reflected for the editor and the MC
         CAPTURE(e);
         CHECK(refl::find_enum(StringId(e)) != nullptr);
     }
+}
+
+TEST_CASE("layout: a Text widget aligns its lines left, center or right across its rect") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    const WidgetId t = b.text("label", "HELLO").at({0.5f, 0.5f}, {400, 0}).id();
+    auto glyph_span = [&](TextAlign a, f32& lo, f32& hi) {
+        d.set_text_align(t, a);
+        d.update(frame());
+        render::SpriteBatch batch(f.sets, mem::heap());
+        batch.begin(render::compute_screen_view(rhi::Extent2D{1280, 720}), render::PassId::Screen2D);
+        d.submit(batch);
+        batch.build();
+        REQUIRE(batch.vertices().size() > 0);
+        lo = 1e9f;
+        hi = -1e9f;
+        for (const render::SpriteVertex& v : batch.vertices()) {
+            lo = math::min(lo, v.x);
+            hi = math::max(hi, v.x);
+        }
+    };
+    CHECK(d.text_align(t) == TextAlign::Left);
+    f32 lo = 0, hi = 0;
+    glyph_span(TextAlign::Left, lo, hi);
+    const Rect r = d.rect(t);
+    REQUIRE(r.size().x == doctest::Approx(400.0f));
+    CHECK(std::fabs(lo - r.min.x) <= 1.5f);
+    const f32 width = hi - lo;
+    CHECK(width < 200.0f);
+    glyph_span(TextAlign::Center, lo, hi);
+    CHECK(std::fabs(0.5f * (lo + hi) - r.center().x) <= 1.5f);
+    CHECK(hi - lo == doctest::Approx(width));
+    glyph_span(TextAlign::Right, lo, hi);
+    CHECK(std::fabs(hi - r.max.x) <= 1.5f);
+    CHECK(hi - lo == doctest::Approx(width));
 }

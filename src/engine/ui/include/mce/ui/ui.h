@@ -197,6 +197,8 @@ public:
     void set_action(WidgetId w, StringView action);
     // Which of the skin's fonts the widget's text uses (Auto: by kind; see ui::resolve_font_role).
     void set_font_role(WidgetId w, FontRole role);
+    // Where a Text widget's lines sit across its rect (default Left; other kinds ignore it).
+    void set_text_align(WidgetId w, TextAlign align);
     void set_binding(WidgetId w, StringView path, StringView format);
     // Whether a host has dealt with the widget's binding (bound it, or given up on a bad path):
     // ui::bind_document's bookkeeping. set_binding clears it.
@@ -241,6 +243,7 @@ public:
     StringView convar(WidgetId w) const;      // the bound convar, or empty
     StringView action(WidgetId w) const;      // set_action, or empty
     FontRole font_role(WidgetId w) const;      // set_font_role, or Auto
+    TextAlign text_align(WidgetId w) const;    // set_text_align, or Left
     StringView binding(WidgetId w) const;     // set_binding's path, or empty
     StringView binding_format(WidgetId w) const;
     WidgetId default_focus() const { return default_focus_; }
@@ -287,6 +290,7 @@ private:
         FixedString<32> binding_format;
         bool binding_done = false;
         FontRole font_role = FontRole::Auto;
+        TextAlign text_align = TextAlign::Left;
         u32 console = ~0u;  // index into consoles_
         bool pressed = false;
     };
@@ -333,7 +337,7 @@ private:
     void draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u32 region, i16 layer, i32 order,
                      const Slice& slice = {}) const;
     void draw_text(render::SpriteBatch& batch, const render::Font* font, StringView s, vec2 at, f32 size, Color c,
-                   const Style& look, i16 layer, i32 order, f32 max_width = 0.0f) const;
+                   const Style& look, i16 layer, i32 order, f32 max_width = 0.0f, TextAlign align = TextAlign::Left) const;
     const render::Font* node_font(const Node& n) const;
     mutable const Rect* draw_clip_ = nullptr;  // set by submit() while drawing a clipped widget
 

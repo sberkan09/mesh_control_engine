@@ -58,6 +58,7 @@ struct WidgetData {
     FixedString<64> bind;
     FixedString<32> format;
     FontRole font_role = FontRole::Auto;  // which of the skin's fonts the text uses
+    TextAlign text_align = TextAlign::Left;  // a Text widget's lines across its rect
 };
 
 struct DocumentData {

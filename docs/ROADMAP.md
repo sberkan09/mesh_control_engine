@@ -50,6 +50,7 @@ flowchart LR
     MGP3D -.navmesh.-> MTERR["M-TERRAIN heightmap terrain,<br/>brushes, splat layers, foliage"]
     MCINE -.subtitle tracks.-> MACC["M-ACCESS subtitles, colorblind,<br/>remap screen, screen readers"]
     MVIS --> MVIS2["M-VISUAL2 SSR, spatial upscaler<br/>and sharpening, contact shadows,<br/>clear coat, sheen, transmission"]
+    MUIDATA --> MUIDATA2["M-UI-DATA2 the blind test's follow-ups<br/>text alignment, theme resets,<br/>.mcui checks, document-only preview"]
     MWEB -.web transport.-> MNET2
     MAGENT --> MPERF["M-PERF captures, budgets per target,<br/>perf_run over MCP, counter gate"]
     M6 --> MAUDIO2["M-AUDIO2 Ogg Vorbis clips, pitch and sound sets,<br/>bus effects, ducking, snapshots, occlusion"]
@@ -98,6 +99,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-TERRAIN | [M-TERRAIN.md](milestones/M-TERRAIN.md) (Linear SBA-89 … SBA-94) | done (steps 1–6 and the demo: SolsticeReach's island is a painted `Terrain3D`) | Metal untested |
 | M-ACCESS | [M-ACCESS.md](milestones/M-ACCESS.md) (Linear SBA-95 … SBA-99) | done on the desktop (steps 1–5, the demo and the gates) | the screen reader on a phone and on each desktop OS |
 | M-VISUAL2 | [M-VISUAL2.md](milestones/M-VISUAL2.md) (Linear SBA-101 … SBA-105) | done in the cloud (steps 1–5 and the demo, 2026-10-16: screen-space reflections, spatial upsample and sharpening, contact shadows for the sun, clear coat, sheen, anisotropy and transmission; every knob on `Environment3D`, `.mcmat` and over MCP; `samples/06_showcase` on/off sheet) | local-light contact shadows, extension textures, real-GPU budgets and Metal pixels |
+| M-UI-DATA2 | [M-UI-DATA2.md](milestones/M-UI-DATA2.md) (Linear SBA-153 … SBA-156) | active (step 1 done: a Text widget's `text_align`) | steps 2–4 |
 | M-PERF | [M-PERF.md](milestones/M-PERF.md) (Linear SBA-113 … SBA-117, added 2026-10-15) | done on the desktop (steps 1–5, the demo and the gates) | a capture on a phone and in a browser |
 | M-STEAM | [M-STEAM.md](milestones/M-STEAM.md), ADR-0042 (Linear SBA-106 … SBA-112) | done against a stand-in `steam_api` (steps 1–6: the run-time loader, game services, the overlay and rich presence, Steam Input, `ship --steam` depots, `samples/steam_demo` and user guide 26) | the real-client run, SBA-112 (needs the user's Steamworks account) |
 | M-AUDIO2 | [M-AUDIO2.md](milestones/M-AUDIO2.md) (Linear SBA-118 … SBA-122, added 2026-10-16) | active: step 1 done (Ogg Vorbis clips, ADR-0044); step 2 done (per-voice pitch, `.mcsound` sound sets); step 3 done (bus filters, reverb sends, limiter as scene components); step 4 done (ducking, mixer snapshots, the pause mix) | step 5, the demo and the gates |
@@ -407,6 +409,14 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Builds, in order:** (1) subtitles and captions: a subtitle style and renderer in `mce_ui` (speaker name, background, size), fed by the novel kit, `Dialogue`, M-CINEMA subtitle tracks and tagged sound effects · (2) visual options: colorblind filters (protanopia, deuteranopia, tritanopia correction) in 2D and 3D post, UI text scale, a high-contrast theme, reduce-motion (camera shake, flashes and screen effects scaled down) · (3) a stock options and remap screen as a `.mcui` document: full rebinding for keyboard and gamepad, hold-to-toggle, sensitivity, one-hand presets · (4) screen readers: the `mce_ui` tree exposed to platform accessibility APIs (an AccessKit-style bridge or the platform APIs directly) on Windows, macOS and mobile, focus announcements · (5) `project_check` accessibility rules (text size, contrast, subtitle coverage) and a user guide chapter.
 **Demo:** Undelivered and Ember Step with subtitles, colorblind filters, text scale and the remap screen on; a screen reader reads Undelivered's menus on one desktop and one phone.
 **Gates:** every option is a setting saved with the player's settings and never touches the sim hash; `project_check` flags a seeded contrast failure; `local_ci.sh` green on every step.
+
+### M-UI-DATA2 — What the M-UI-DATA blind test found · **size S (rough guess, ≈ 20–40 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 2
+
+*Reason: added 2026-10-16 by the M-VISUAL routine under the project's standing instruction to extend the roadmap when no milestone is free (M-VISUAL2 is done; every other open milestone has an owner). The M-UI-DATA blind test (2026-10-16) left four follow-ups in that milestone's row; each made the agent work around the data instead of saying what it meant.*
+
+**Builds, in order:** (1) a Text widget's own `text_align` (Left, Center, Right) in `.mcui`, `CHNK_UIDOC`, `ui::Document`, the editor inspector and MCP's schema, so a centered title needs no wrapping Stack · (2) a document can set a value back to its kind's default over a theme (today an equal value reads as unset and the theme's wins) · (3) `project_check`'s text size and contrast checks read `.mcui` Text and Button labels with their theme applied, naming the document and widget path · (4) `ui_preview` cooks only the document and what it references (theme, fonts, sheets), so a broken scene no longer blocks a UI preview; the user guide and the `start_game` prompt.
+**Demo:** the blind test's brief again, checked for a centered title without a Stack, a theme reset, and a `project_check` finding on a document label.
+**Gates:** documents without the new keys cook to the same bytes and draw the same pixels; each step's tests in `test_cook_ui`, `test_ui_layout` and `test_mcp_*`; `local_ci.sh` green on every step.
 
 ### M-VISUAL2 — Rendering gaps left after M-VISUAL · **size M (rough guess, ≈ 60–100 h engineering)** · tier: off-tier renderer track, gates nothing · priority 2
 

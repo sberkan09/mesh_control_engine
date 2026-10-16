@@ -5,6 +5,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Text alignment in UI documents, M-UI-DATA2 step 1 (SBA-153): a `.mcui` Text widget takes
+  `"text_align": "Center"` (or `Right`) to place its text across its own rect, so a centered title no
+  longer needs a wrapping Stack. The editor's inspector and MCP's `ui_widget_set` reach it. User guide 12.
 - Utility AI, attack tokens and point queries, M-AI step 4 (SBA-131): a `utility` node runs the child whose
   `score` (a base plus weighted linear, power, logistic or step curves of blackboard keys) is highest, and
   keeps a running child until another beats it by `hysteresis`. An `AiTokenPool` hands out a few tokens and a
