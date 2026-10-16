@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Performance counter gate and guide, M-PERF step 5 (SBA-117). `scripts/ci/perf_gate.py` runs `perf_run` on
+  a copy of a project and fails when draws, passes, dispatches, triangles, meshes, sprites or sprite batches
+  grow past the project's `perf/counters.json` (`--update` writes new ones). Glowmoth and Marble Garden run it
+  in `local_ci.sh` (`*_perf_counters`), and `glowmoth_perf_counters_seeded` proves it catches a planted draw
+  regression. New user guide chapter 25, "Performance". M-PERF is done on the desktop.
 - Steam Input, M-STEAM step 4 (SBA-109): while Steam runs, Steam reads every controller as the input map's actions
   and the player feeds them in by name next to the map's own bindings (`InputSystem::set_action_feeds`). The options
   screen names gamepad bindings by Steam's own names. `mce_player -steam.write_input_config <dir>` writes the action

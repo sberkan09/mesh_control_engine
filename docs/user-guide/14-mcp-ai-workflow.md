@@ -249,7 +249,8 @@ A person reads the same captures in the editor: the Profiler panel's **Capture**
 for the chosen target, every frame as a bar (spikes red, frames over the frame budget amber), the frame you
 click taken apart into sim and render phases, GPU stages and counters, the spikes with their cause, and the
 slowest systems. **Compare with** a second capture (`previous.mcperf` by default) adds the `perf_compare`
-tables, with what got better in green and what got worse in red.
+tables, with what got better in green and what got worse in red. Chapter 25 covers captures, budgets and
+the counter gate in full.
 
 ### Before shipping
 
