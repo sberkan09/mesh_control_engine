@@ -44,7 +44,7 @@ math::vec4 split_cell(SplitLayout layout, u32 count, u32 index, f32 aspect) {
     switch (layout) {
         case SplitLayout::Columns: return {i / n, 0.0f, 1.0f / n, 1.0f};
         case SplitLayout::Rows: return {0.0f, i / n, 1.0f, 1.0f / n};
-        default: return {static_cast<f32>(index % 2) * 0.5f, static_cast<f32>(index / 2) * 0.5f, 0.5f, 0.5f};
+        default: return {index % 2 == 0 ? 0.0f : 0.5f, index < 2 ? 0.0f : 0.5f, 0.5f, 0.5f};
     }
 }
 
