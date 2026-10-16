@@ -342,7 +342,7 @@ AudioHandle AudioDevice::play_at(ClipHandle clip, u64 mix_sample, const PlayPara
     const bool spatial = p.attenuation_id != 0 && p.attenuation_id < kMaxAttenuationCurves;
     const f32 base_gain = c.voice.gain;
     if (spatial) {
-        const Spatial sp = spatialize(listener_, impl.curves[p.attenuation_id], p.position);
+        const Spatial sp = spatialize(listeners(), listener_mix_, impl.curves[p.attenuation_id], p.position);
         c.voice.gain = base_gain * sp.gain;
         c.voice.pan = sp.pan;
     }
@@ -417,7 +417,7 @@ void AudioDevice::set_handle_position(AudioHandle h, math::vec3 position) {
 
 void AudioDevice::respatialize(u32 index) {
     HandleSlot& slot = impl_->handles[index];
-    const Spatial sp = spatialize(listener_, impl_->curves[slot.attenuation], slot.position);
+    const Spatial sp = spatialize(listeners(), listener_mix_, impl_->curves[slot.attenuation], slot.position);
     const f32 gain = slot.base_gain * sp.gain;
     if (gain == slot.sent_gain && sp.pan == slot.sent_pan) return;  // nothing audible changed
     AudioCommand c;
@@ -435,8 +435,13 @@ void AudioDevice::respatialize(u32 index) {
     }
 }
 
-void AudioDevice::set_listener(const Listener& l) {
-    listener_ = l;
+void AudioDevice::set_listener(const Listener& l) { set_listeners(Span<const Listener>(&l, 1), ListenerMix::First); }
+
+void AudioDevice::set_listeners(Span<const Listener> ls, ListenerMix mix) {
+    if (ls.empty()) return;
+    listener_count_ = static_cast<u32>(ls.size() < kMaxListeners ? ls.size() : kMaxListeners);
+    for (u32 i = 0; i < listener_count_; ++i) listeners_[i] = ls[i];
+    listener_mix_ = mix;
     for (u32 i = 0; i < kMaxHandles; ++i)
         if (impl_->handles[i].live && impl_->handles[i].attenuation != 0) respatialize(i);
 }

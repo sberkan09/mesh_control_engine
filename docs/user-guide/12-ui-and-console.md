@@ -155,6 +155,11 @@ done this way.
 { "name": "Pause", "components": { "UiScreen": { "document": "guid:<pause.mcui>", "order": 10, "visible": false } } }
 ```
 
+In a split screen (M-VIEWS 4) each player gets their own HUD: a `UiScreenView {"camera": "$<n>"}`
+next to the `UiScreen` lays the document out in that camera's view instead of the whole window, at
+a UI scale picked for the view's size, with the safe area only on the window's edges. The pointer
+reaches it only inside the view. While the camera draws no view the screen covers the window.
+
 Gameplay never includes `mce/ui`; it talks to the screens only through data:
 
 - **Showing a screen**: set `UiScreen::visible`. `order` stacks screens (higher on top). While a
