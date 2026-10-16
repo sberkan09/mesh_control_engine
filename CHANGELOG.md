@@ -15,12 +15,21 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP
   `run_headless` run the scene's scripts from bytecode where `MCE_WITH_SCRIPT` is on, and the player links no
   Luau compiler. Scenes without scripts run and hash as before. New user guide chapter 27 (Scripting in Luau).
+- 2D bone animation, M-ANIM2D step 2 (SBA-141): a `.mcskel2d` holds `"animations"`, clips of per-bone rotate,
+  translate and scale keys (offsets from the rest pose) with linear, stepped or bezier curves and timed events.
+  A `Skeleton2DAnimator` plays them on the entity's `Skeleton2D`, cross-fades on a clip change and writes only
+  the channels the clips key, so gameplay keeps the rest. An `.mcanim` graph drives it with the same state
+  machine as the 3D `Animator`. Events raise `AnimEvent3D`. State is saved and hashed. User guide 7.13.
 - Behavior tree stock tasks and aborts, M-AI step 2 (SBA-129): trees reach the kit with no code. `move_to` walks
   a `NavAgent3D` or a `PathAgent` to a vec3 key or after an entity key, `look_at` turns the entity, `animate`
   plays a sprite or Animator clip (and can wait for it), `play_sound`, `spawn`, `raise` and `wait_event` (which
   sequences hear too) and `log`. A guard's `abort` ("self", "lower", "both") re-checks its condition every tick
   and stops its own branch or a selector's lower-priority branch. `samples/ai_demo`: the stock player runs a
   guard that patrols, hears an alarm and catches a thief (`ctest -R ai_demo_player`). User guide 13.8.
+- Bus effects, M-AUDIO2 step 3 (SBA-120): `AudioBusEffects` gives a bus a low-pass and high-pass (gliding, no
+  clicks) and a send into one of two Freeverb reverb units, `AudioReverb` sets a unit up, and `AudioLimiter`
+  turns on the master limiter, all from the scene and keyable in timelines. `AudioDevice::set_bus_filter`,
+  `set_bus_send` and `set_reverb` do the same from code. `audio.reverb 0` turns reverb off. User guide 10.5.
 - Behavior trees, M-AI step 1 (SBA-128, ADR-0045): `.mcbt` files describe an AI's decisions as data (sequence,
   selector, parallel, invert, succeed, fail, repeat, retry, cooldown, timeout, guard, check, wait, set, emit and
   task nodes) over typed blackboard keys, and cook to `CHNK_BT` with errors at file:line:col. An `AiBrain`
