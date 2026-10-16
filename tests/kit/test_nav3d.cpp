@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
@@ -131,6 +132,41 @@ TEST_CASE("nav3d: a steered character eases in at its own acceleration (M-MOVE3D
     const f32 instant = speed_after(0.0f), eased = speed_after(2.0f);
     CHECK(instant > 2.0f);
     CHECK(eased == doctest::Approx(31.0f / 60.0f * 2.0f).epsilon(0.05));
+}
+
+TEST_CASE("nav3d: a steered character with acceleration reaches the agent's speed through turns (#377)") {
+    // 20 m in two legs: 10 m along +X, then a turn onto a 10 m diagonal. The agent faces its walk, so
+    // the entity turns every tick the steering bends; a turn must not stop the character.
+    auto walk = [](f32 acceleration) {
+        Scene s(false);
+        const Entity a = s.agent({-10, 0.9f, 0}, {0, 0, 0});
+        CharacterController3D c;
+        c.acceleration = acceleration;
+        c.deceleration = acceleration;
+        s.w.add(a, c);
+        u32 ticks = 0;
+        for (; ticks < 60 * 20 && s.nav(a).state != NavAgentState::Arrived; ++ticks) s.run(1);
+        s.w.try_get_mut<NavAgent3D>(a)->target = {7.07f, 0, 7.07f};
+        s.run(30);  // into the diagonal
+        const math::vec3 p0 = s.pos(a);
+        s.run(60);
+        const math::vec3 d = s.pos(a) - p0;
+        const f32 speed = std::sqrt(d.x * d.x + d.z * d.z);  // m over 1 s, mid-leg
+        ticks += 90;
+        for (; ticks < 60 * 40 && s.nav(a).state != NavAgentState::Arrived; ++ticks) s.run(1);
+        CHECK(s.nav(a).state == NavAgentState::Arrived);
+        CHECK(s.pos(a).x == doctest::Approx(7.07f).epsilon(0.05));
+        CHECK(s.pos(a).z == doctest::Approx(7.07f).epsilon(0.05));
+        return std::pair<f32, f32>{speed, static_cast<f32>(ticks) * kDt};
+    };
+    const f32 agent_speed = NavAgent3D{}.speed;
+    const auto [instant_speed, instant_time] = walk(0.0f);
+    const auto [eased_speed, eased_time] = walk(14.0f);
+    CHECK(instant_speed > 0.9f * agent_speed);
+    CHECK(eased_speed > 0.9f * agent_speed);
+    // 20 m at 3.5 m/s is 5.7 s; the eased walk adds two ramps and a stop, not a crawl.
+    CHECK(eased_time < instant_time + 1.5f);
+    CHECK(eased_time < 20.0f / agent_speed * 1.5f);
 }
 
 TEST_CASE("nav3d: an agent follows an entity, re-planning only as it moves away") {

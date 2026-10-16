@@ -210,7 +210,11 @@ void kit3d_bodies(Frame& f) {
             }
         } else if (const Pose* p = st.poses.find(e); p && !same(*p, t.position, t.rotation)) {
             phys.world.teleport(e, t.position, t.rotation);
-            c.velocity = {};
+            // Only a move is a teleport that stops the character. A turn (NavAgent3D's face_motion, a
+            // facing script) keeps the ramped velocity: zeroing it there held a steered character at
+            // one tick of acceleration on every turning tick (#377).
+            const math::vec3 d = t.position - p->position;
+            if (d.x != 0.0f || d.y != 0.0f || d.z != 0.0f) c.velocity = {};
         }
         // Crouching shrinks the capsule at once; standing back up waits for room overhead.
         const bool want_crouch = c.crouch_half_height > 0.0f && c.crouch_half_height < c.half_height &&
