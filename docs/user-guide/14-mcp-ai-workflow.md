@@ -187,7 +187,10 @@ too, so the 3D gameplay components read like a debugger: a `NavAgent3D`'s `state
 `torque` and `broken`; a `Ragdoll3D`'s `parts`, `root_position` and `settled`; a `Vehicle3D`'s
 `speed`, `rpm`, `gear` and `wheels_on_ground`; a sensor's `hit`, `count` and `enters`.
 `tests/mcp/test_mcp_gameplay3d.cpp` builds `samples/07_gameplay3d` this way, from an empty
-project, and checks it with `inspect`.
+project, and checks it with `inspect`. `tests/mcp/test_mcp_move3d.cpp` does the same for
+`samples/08_movement`: a character course (hurdle, crouch tunnel, lift) walked with a scripted `input`,
+and a kart race, read back through a `CharacterController3D`'s `crouched` and `grounded`, a
+`Locomotion3D`'s `ground_speed`, an `Animator`'s `state` and a `VehicleDriver3D`'s `laps_done`.
 
 `trace` samples fields while the run goes, as series: `{"trace": {"every": 10, "fields":
 [{"entity": "Player", "field": "LocalTransform.position"}, {"entity": "Player", "field":

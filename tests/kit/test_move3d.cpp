@@ -6,6 +6,7 @@
 
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <cmath>
 
 #include "mce/ecs/transform.h"
@@ -777,4 +778,79 @@ TEST_CASE("move3d: a driven lap replays to the same hash") {
         return t.r.w.state_hash();
     };
     CHECK(play() == play());
+}
+
+// ---- the budget: a crowd and a race together ------------------------------------------------------
+
+namespace {
+
+// 64 characters pacing in circles on an 8 x 8 grid and 8 cars lapping the track at once.
+struct Crowd {
+    Road r;
+    Entity people[64];
+    Entity cars[8];
+    math::vec3 starts[8];
+    Crowd() {
+        for (u32 i = 0; i < 64; ++i) {
+            CharacterController3D c;
+            c.acceleration = 30.0f;
+            c.deceleration = 40.0f;
+            c.layer = 1;
+            people[i] = r.w.spawn_with(at(30.0f + 3.0f * f32(i % 8), 0.9f, -40.0f + 3.0f * f32(i / 8)), c);
+        }
+        const math::vec3 wp[5] = {{0, 0, -10}, {0, 0, -90}, {-40, 0, -90}, {-40, 0, 30}, {0, 0, 30}};
+        Entity points[5];
+        for (u32 i = 0; i < 5; ++i) points[i] = r.w.spawn_with(at(wp[i].x, wp[i].y, wp[i].z));
+        for (u32 i = 0; i < 5; ++i) {
+            Waypoint3D w;
+            w.next = points[(i + 1) % 5];
+            r.w.add(points[i], w);
+        }
+        for (u32 i = 0; i < 8; ++i) {
+            Vehicle3D v;
+            v.anti_roll = 8000.0f;
+            const Entity c = r.car(v);
+            r.w.try_get_mut<LocalTransform>(c)->position = {-9.0f + 9.0f * f32(i % 3), 1.2f, 9.0f * f32(i / 3)};
+            VehicleDriver3D d;
+            d.path = points[0];
+            d.max_speed = 12.0f + f32(i);
+            r.w.add(c, d);
+            cars[i] = c;
+            starts[i] = r.pose(c).position;
+        }
+    }
+    void run(u32 ticks) {
+        for (u32 i = 0; i < ticks; ++i) {
+            const f32 a = f32(r.t) * 0.05f;
+            for (u32 p = 0; p < 64; ++p) r.w.try_get_mut<CharacterController3D>(people[p])->move = {std::cos(a + f32(p)) * 3.0f, 0, std::sin(a + f32(p)) * 3.0f};
+            r.run(1);
+        }
+    }
+};
+
+}  // namespace
+
+TEST_CASE("move3d: 64 characters and 8 driven cars run together inside a frame's budget, and replay to the same hash") {
+    Crowd a;
+    a.run(60);  // settle and start
+    const auto t0 = std::chrono::steady_clock::now();
+    a.run(300);
+    const f64 ms = std::chrono::duration<f64, std::milli>(std::chrono::steady_clock::now() - t0).count() / 300.0;
+    for (u32 i = 0; i < 8; ++i) {
+        const math::vec3 p = a.r.pose(a.cars[i]).position;
+        CHECK(math::length(p - a.starts[i]) > 20.0f);  // under way, in traffic
+        CHECK(p.y > 0.2f);                             // still on the road
+    }
+    for (Entity p : a.people) {
+        const math::vec3 q = a.r.w.try_get<LocalTransform>(p)->position;
+        CHECK(std::isfinite(q.x + q.y + q.z));
+        CHECK(q.y > 0.5f);
+    }
+    MESSAGE("64 characters + 8 cars: ", ms, " ms per tick");
+#ifdef NDEBUG
+    CHECK(ms < 16.6);  // a 60 Hz frame, simulation only
+#endif
+    Crowd b;
+    b.run(360);
+    CHECK(a.r.w.state_hash() == b.r.w.state_hash());
 }

@@ -1,6 +1,6 @@
 # M-MOVE3D — 3D movement that feels shipped (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–5 done). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
+**Status:** done (added 2026-10-16; steps 1–6 done). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
 
 **Why:** M-GAMEPLAY3D gave 3D games their systems: navmesh agents, joints, ragdolls, vehicles and sensors.
 What a player feels is still raw:
@@ -26,7 +26,7 @@ It needs no device. Every step gates on headless runs and replay hashes in `loca
 | 3 | Vehicle feel: anti-roll, downforce, wheel slip and skid events, self-righting, gears as data | SBA-136 | done |
 | 4 | AI drivers: `VehicleDriver3D` on a waypoint path, laps; agents with acceleration | SBA-137 | done |
 | 5 | Animation from movement: `Locomotion3D`, foot IK on slopes and stairs | SBA-138 | done |
-| 6 | MCP and docs; the demo `samples/08_movement` | SBA-139 | not started |
+| 6 | MCP and docs; the demo `samples/08_movement`; the hierarchy order fix (6b) | SBA-139 | done |
 
 **Demo:** `samples/08_movement`, built over MCP alone. A humanoid runs an obstacle course, and a cart races
 two AI karts. A scripted input replays to the same hash in Debug and Release.
@@ -214,3 +214,27 @@ headless sample hashes only `07_gameplay3d` changes (`ee6bfe319ca8e23b` -> `cc49
 ticks). A per-entity dump of both runs differs in one entity only, the camera: `kit_camera_follow`
 (`FixedUpdate_Post`) used to read the cart's `WorldTransform` from last tick and now follows this
 tick's pose. The cart, grunts, ragdolls, door and bridge are byte-identical at every tick checked.
+
+## Step 6 — the demo and the gates
+
+- **Demo `samples/08_movement`** is an editor project (assets and `scenes/course.mcscene`, no code) built over
+  MCP alone by `tests/mcp/test_mcp_move3d.cpp` (`MCE_MOVE3D_EXPORT=samples/08_movement` writes it):
+  - A `gen_mesh` humanoid on a `CharacterController3D` (`use_input`, acceleration 40, coyote time, jump
+    buffer, crouch) with `Locomotion3D` driving an `.mcanim` graph (Idle and Walk), under a
+    `CameraFollow3D` with `collide`.
+  - The course: a 0.8 m hurdle (above the 0.35 m step height, so a jump is needed), a lintel with 1.5 m of
+    headroom (a crouch is needed), and a kinematic lift a looping `.mctimeline` moves up to a 3.5 m ledge.
+  - A race: three karts (`Vehicle3D`, anti-roll 8000) on `VehicleDriver3D` over five `Waypoint3D` points, two
+    laps each.
+- **Gates:**
+  - `test_mcp_move3d` runs the course with a scripted input and checks every obstacle (jump over the
+    hurdle, stopped by the lintel when standing, crouched through it, carried up and onto the ledge),
+    that the graph is on Walk at 5 m/s and that Locomotion3D reads it, that all three karts finish two
+    laps in 15 to 45 s, and that a replay matches.
+  - `ctest` `sample_08_movement_player_900` plays it with `drive.input` (900 ticks, 17 entities).
+  - `local_ci.sh` determinism runs the same 900 ticks three times on the Debug and Release players and
+    compares the hashes.
+  - `tests/kit/test_move3d.cpp` "64 characters and 8 driven cars": 300 ticks of the crowd and the race
+    together at 6.4 ms a tick in Debug (the budget asserts 16.6 ms in Release builds), and two runs hash
+    equal.
+- **Coverage:** `Locomotion3D`, `Waypoint3D` and `VehicleDriver3D` leave `sample_coverage.allow`.

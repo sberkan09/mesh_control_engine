@@ -1,0 +1,165 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "b2343712-afde-4288-b1ea-22b3eebb76ba",
+  "name": "course",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Floor",
+      "components": {
+        "BoxCollider3D": { "half": [120, 0.5, 120] },
+        "LocalTransform": { "position": [30, -0.5, -20] },
+        "MeshRef": { "mesh": "guid:66494e31-4ba6-4fe1-a676-35e4cf0e33e6" }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Hurdle",
+      "components": {
+        "BoxCollider3D": { "half": [3, 0.4, 0.3] },
+        "LocalTransform": { "position": [0, 0.4, 10] },
+        "MeshRef": { "mesh": "guid:4661179b-3f0e-4ca9-b1af-fbffb2b5869c" }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Lintel",
+      "components": {
+        "BoxCollider3D": { "half": [3, 0.25, 2] },
+        "LocalTransform": { "position": [0, 1.75, 0] },
+        "MeshRef": { "mesh": "guid:d95c1292-3666-4d9c-bfd8-f4cf835f158b" }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Pillar West",
+      "components": {
+        "BoxCollider3D": { "half": [0.3, 0.75, 2] },
+        "LocalTransform": { "position": [-3.3, 0.75, 0] },
+        "MeshRef": { "mesh": "guid:06f92356-68aa-405f-b43c-55895edf7c5e" }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Pillar East",
+      "components": {
+        "BoxCollider3D": { "half": [0.3, 0.75, 2] },
+        "LocalTransform": { "position": [3.3, 0.75, 0] },
+        "MeshRef": { "mesh": "guid:06f92356-68aa-405f-b43c-55895edf7c5e" }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Lift",
+      "components": {
+        "LocalTransform": { "position": [0, 0.2, -12] },
+        "MeshRef": { "mesh": "guid:2d370613-f17c-4c8f-886c-fefbc5da2289" },
+        "RigidBody3D": { "type": "Kinematic", "half": [1.5, 0.2, 1.5] },
+        "TimelinePlayer": { "timeline": "guid:2a3a38e7-81c8-4222-8b5b-cc70522bcf07", "loop": true }
+      }
+    },
+    {
+      "id": 7,
+      "name": "Ledge",
+      "components": {
+        "BoxCollider3D": { "half": [3, 1.75, 3] },
+        "LocalTransform": { "position": [0, 1.75, -17] },
+        "MeshRef": { "mesh": "guid:ba65cadf-85e9-44a1-8eb4-fbfc5e784701" }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Hero",
+      "components": {
+        "Animator": { "graph": "guid:399975c8-169e-4ff2-9502-62c15ad05698" },
+        "CharacterController3D": { "jump_speed": 6.5, "layer": 1, "use_input": true, "acceleration": 40, "deceleration": 50, "coyote_time": 0.15, "jump_buffer": 0.1, "crouch_half_height": 0.3 },
+        "LocalTransform": { "position": [0, 0.9, 20] },
+        "Locomotion3D": {},
+        "MeshRef": { "mesh": "guid:9103d6ca-ae55-482a-9899-683eef357908" }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Waypoint 0",
+      "components": {
+        "LocalTransform": { "position": [40, 0, -10] },
+        "Waypoint3D": { "next": "$9" }
+      }
+    },
+    {
+      "id": 10,
+      "name": "Waypoint 1",
+      "components": {
+        "LocalTransform": { "position": [40, 0, -70] },
+        "Waypoint3D": { "next": "$10" }
+      }
+    },
+    {
+      "id": 11,
+      "name": "Waypoint 2",
+      "components": {
+        "LocalTransform": { "position": [70, 0, -70] },
+        "Waypoint3D": { "next": "$11" }
+      }
+    },
+    {
+      "id": 12,
+      "name": "Waypoint 3",
+      "components": {
+        "LocalTransform": { "position": [70, 0, 20] },
+        "Waypoint3D": { "next": "$12" }
+      }
+    },
+    {
+      "id": 13,
+      "name": "Waypoint 4",
+      "components": {
+        "LocalTransform": { "position": [40, 0, 20] },
+        "Waypoint3D": { "next": "$8" }
+      }
+    },
+    {
+      "id": 14,
+      "name": "Kart 0",
+      "components": {
+        "LocalTransform": { "position": [38, 1.2, 2] },
+        "MeshRef": { "mesh": "guid:81253884-2456-4774-b885-0b02efe4282b" },
+        "RigidBody3D": { "half": [0.9, 0.4, 1.7], "density": 300 },
+        "Vehicle3D": { "drive": "All", "front_axle": -1.4, "rear_axle": 1.4, "track": 0.9, "wheel_y": -0.3, "anti_roll": 8000 },
+        "VehicleDriver3D": { "path": "$8", "max_speed": 14, "laps": 2 }
+      }
+    },
+    {
+      "id": 15,
+      "name": "Kart 1",
+      "components": {
+        "LocalTransform": { "position": [42, 1.2, 8] },
+        "MeshRef": { "mesh": "guid:81253884-2456-4774-b885-0b02efe4282b" },
+        "RigidBody3D": { "half": [0.9, 0.4, 1.7], "density": 300 },
+        "Vehicle3D": { "drive": "All", "front_axle": -1.4, "rear_axle": 1.4, "track": 0.9, "wheel_y": -0.3, "anti_roll": 8000 },
+        "VehicleDriver3D": { "path": "$8", "max_speed": 16, "laps": 2 }
+      }
+    },
+    {
+      "id": 16,
+      "name": "Kart 2",
+      "components": {
+        "LocalTransform": { "position": [38, 1.2, 14] },
+        "MeshRef": { "mesh": "guid:81253884-2456-4774-b885-0b02efe4282b" },
+        "RigidBody3D": { "half": [0.9, 0.4, 1.7], "density": 300 },
+        "Vehicle3D": { "drive": "All", "front_axle": -1.4, "rear_axle": 1.4, "track": 0.9, "wheel_y": -0.3, "anti_roll": 8000 },
+        "VehicleDriver3D": { "path": "$8", "max_speed": 18, "laps": 2 }
+      }
+    },
+    {
+      "id": 17,
+      "name": "Camera",
+      "components": {
+        "Camera3DComponent": {},
+        "CameraFollow3D": { "target": "$7", "pitch": 0.4, "collide": true },
+        "LocalTransform": {}
+      }
+    }
+  ]
+}

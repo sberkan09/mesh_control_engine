@@ -314,7 +314,7 @@ stage_demo_games_determinism() {
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
     configure linux-gcc-debug &&
-        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content stream_demo_content gameplay3d_content sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback &&
+        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content stream_demo_content gameplay3d_content movement_content sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback &&
         configure linux-gcc-release &&
         cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1000 -boids 20000" \
@@ -337,6 +337,9 @@ stage_determinism() {
             build/linux-gcc-debug/src/player/mce_player build/linux-gcc-release/src/player/mce_player &&
         python3 scripts/ci/determinism.py --runs 3 \
             --args="-headless 1 -ticks 600 -pack build/linux-gcc-debug/samples/07_gameplay3d/project/assets.mce -input samples/07_gameplay3d/drive.input" \
+            build/linux-gcc-debug/src/player/mce_player build/linux-gcc-release/src/player/mce_player &&
+        python3 scripts/ci/determinism.py --runs 3 \
+            --args="-headless 1 -ticks 900 -pack build/linux-gcc-debug/samples/08_movement/project/assets.mce -input samples/08_movement/drive.input" \
             build/linux-gcc-debug/src/player/mce_player build/linux-gcc-release/src/player/mce_player &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1850" \
             build/linux-gcc-debug/samples/shop_demo/sample_shop_demo \

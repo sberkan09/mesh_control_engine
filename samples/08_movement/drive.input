@@ -1,0 +1,5 @@
+# 08_movement: run the course. Forward all the way, a jump at the hurdle (ticks 95-100), a crouch
+# under the lintel (170-400); the lift carries the hero up to the ledge. The karts drive themselves.
+1-900 Move=0,1
+95-100 Jump
+170-400 Crouch

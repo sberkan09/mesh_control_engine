@@ -1,0 +1,12 @@
+{
+  "format": "mce-timeline", "version": 1, "guid": "2a3a38e7-81c8-4222-8b5b-cc70522bcf07", "name": "lift",
+  "tracks": [
+    { "type": "transform", "keys": [
+        { "t": 0, "position": [0, 0.2, -12] },
+        { "t": 8, "position": [0, 0.2, -12] },
+        { "t": 12, "position": [0, 3.3, -12], "ease": "smooth" },
+        { "t": 20, "position": [0, 3.3, -12] },
+        { "t": 24, "position": [0, 0.2, -12], "ease": "smooth" }
+      ] }
+  ]
+}
