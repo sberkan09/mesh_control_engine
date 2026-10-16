@@ -3,6 +3,7 @@
 mce_add_test(test_net UMBRELLA
     SOURCES
         test_bytes.cpp
+        test_delta.cpp
         test_host.cpp
         test_interpolation.cpp
         test_lag_compensation.cpp

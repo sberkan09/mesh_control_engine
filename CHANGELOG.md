@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Per-client delta snapshots, M-NET3 step 1 (SBA-123): `ReplicationServer::write_snapshot_for` writes each client
+  only the entities relevant to it (`NetRelevance { radius }` around the entities it owns) and codes them against
+  the newest snapshot it acknowledged (`write_ack` / `read_ack`): a still entity costs two bytes. `apply` reads
+  both forms. `sample_net_headless` now sends about a third of the bytes it did. User guide 20.10.
 - Replication as data, M-NET2 step 7 (SBA-88): mark entities `NetReplicated` in a scene and
   `ReplicationServer::assign_tagged` gives them their `NetId` with no code. Component fields flagged
   `Replicated` (`MCE_COMPONENT(Health, (hp, Replicated))`) travel in every snapshot and land in the client's

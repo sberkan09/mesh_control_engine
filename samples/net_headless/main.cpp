@@ -3,7 +3,9 @@
 //
 //   server world: eight drifters circle the origin; a player entity appears for each client that
 //                 sends JOIN and moves by that client's inputs, and every 2 s a gust only the server
-//                 knows about pushes every player back. Every tick it broadcasts a snapshot.
+//                 knows about pushes every player back. Every tick it sends each client its own snapshot,
+//                 delta-coded against the one the client acknowledged (M-NET3 step 1; -delta 0: one
+//                 full broadcast).
 //   client world: sends JOIN, then one input per tick; mirrors the snapshots with
 //                 ReplicationClient from a FixedUpdate_Pre system. Its own player is predicted
 //                 (M-NET2 step 3): drawn at once from its inputs, reconciled with the server's acks,
@@ -59,6 +61,9 @@ MCE_CVAR(cv_interp, "interp", true, "Clients draw snapshots interpolated through
          CVarFlags::None);
 MCE_CVAR(cv_predict, "predict", true, "Clients predict their own player and reconcile it (M-NET2 step 3)",
          CVarFlags::None);
+MCE_CVAR(cv_delta, "delta", true,
+         "Per-client snapshots coded against each client's acknowledged one (M-NET3 step 1); 0: one broadcast",
+         CVarFlags::None);
 MCE_CVAR(cv_relay, "relay", false, "-sim: everybody meets in a room on a relay instead of connecting to the server (M-NET2 step 6)",
          CVarFlags::None);
 
@@ -71,6 +76,7 @@ constexpr u8 kMsgJoin = 1;
 constexpr u8 kMsgInput = 2;
 constexpr u8 kMsgWelcome = 3;  // server -> client: the net id of your player
 constexpr u8 kMsgShot = 4;     // client -> server: a ray from the origin and the tick the client drew
+constexpr u8 kMsgAck = 5;      // client -> server: the newest snapshot applied (delta snapshots)
 constexpr u64 kShotTicks = 30;
 constexpr f32 kShotRange = 20.0f;
 constexpr u64 kGustTicks = 120;
@@ -170,6 +176,7 @@ struct Server {
         for (net::Event ev; net->poll(ev);) {
             if (ev.kind == net::EventKind::Disconnected) {
                 if (const Entity e = player_of(ev.peer); !e.is_null()) world.destroy(e);
+                replication.forget_client(ev.peer);
             } else if (ev.kind == net::EventKind::Received) {
                 net::ByteReader r(ev.data);
                 const u8 msg = r.read_u8();
@@ -179,6 +186,8 @@ struct Server {
                     welcome.write_u8(kMsgWelcome);
                     welcome.write_u32(replication.assign(world, e, kKindPlayer));
                     net->send(ev.peer, kChannelControl, welcome.data(), net::Delivery::Reliable);
+                } else if (msg == kMsgAck && r.ok()) {
+                    replication.read_ack(ev.peer, r);
                 } else if (msg == kMsgInput && r.ok()) {
                     const Entity e = player_of(ev.peer);
                     if (e.is_null()) continue;
@@ -210,14 +219,26 @@ struct Server {
         }
     }
 
-    u64 snapshot_hash = 0;  // of the newest snapshot sent
+    // Content hash of the newest snapshot: every client gets the same entities here (nothing has
+    // NetRelevance), so per-client snapshots share it.
+    u64 snapshot_hash = 0;
+    u64 bytes_sent = 0, bytes_full = 0;  // snapshot bytes written, and what full broadcasts would cost
     void broadcast_snapshot() {
         snapshot.clear();
-        replication.write_snapshot(world, static_cast<u32>(tick), snapshot);
-        Hasher64 h;
-        h.bytes(snapshot.data().data(), snapshot.size());
-        snapshot_hash = h.value();
-        net->broadcast(kChannelSnapshot, snapshot.data(), net::Delivery::Sequenced);
+        snapshot_hash = replication.write_snapshot(world, static_cast<u32>(tick), snapshot);
+        if (!cv_delta.get_bool()) {
+            net->broadcast(kChannelSnapshot, snapshot.data(), net::Delivery::Sequenced);
+            net->flush();
+            return;
+        }
+        const usize full = snapshot.size();
+        world.query<const Player>().each([&](const Player& p) {
+            snapshot.clear();
+            replication.write_snapshot_for(world, static_cast<u32>(tick), p.peer, snapshot);
+            net->send(p.peer, kChannelSnapshot, snapshot.data(), net::Delivery::Sequenced);
+            bytes_sent += snapshot.size();
+            bytes_full += full;
+        });
         net->flush();
     }
 
@@ -258,6 +279,7 @@ struct Client {
     u32 ack = 0;           // from the newest snapshot of our player
     bool has_ack = false;
     u32 snapshots = 0;
+    u32 deltas = 0;  // of those, delta-coded
     u64 tick = 0;
     // Received this frame, applied by the net_apply system inside the tick.
     net::ByteWriter pending;
@@ -285,11 +307,11 @@ struct Client {
         world.add_system(Phase::FixedUpdate_Pre, "net_apply", [](Frame& f) {
             Client& c = *f.resource<Client*>();
             if (c.has_pending) {
-                if (c.replication.apply(f.commands(), f.world(), c.pending.data()).ok) {
+                const net::ApplyResult r = c.replication.apply(f.commands(), f.world(), c.pending.data());
+                if (r.ok) {
                     ++c.snapshots;
-                    Hasher64 h;
-                    h.bytes(c.pending.data().data(), c.pending.size());
-                    c.applied_hash = h.value();
+                    c.applied_hash = c.replication.content_hash();
+                    if (r.delta) ++c.deltas;
                 }
                 c.has_pending = false;
             }
@@ -333,6 +355,12 @@ struct Client {
     }
 
     void send_inputs() {
+        if (cv_delta.get_bool() && replication.last_tick() != 0) {
+            net::ByteWriter msg;
+            msg.write_u8(kMsgAck);
+            replication.write_ack(msg);
+            net->send(server, kChannelInput, msg.data(), net::Delivery::Sequenced);
+        }
         net::ByteWriter packet;
         packet.write_u8(kMsgInput);
         if (predictor.write_inputs(packet)) net->send(server, kChannelInput, packet.data(), net::Delivery::Sequenced);
@@ -580,6 +608,18 @@ int run_sim() {
     std::printf("  drifter 1 jerk: server %.5f, client 0 %.5f (%s, buffer %.0f ms, jitter %.1f ms)\n",
                 server.motion.mean(), clients[0].motion.mean(), cv_interp.get_bool() ? "interpolated" : "raw",
                 static_cast<double>(is.delay_s) * 1000.0, static_cast<double>(is.jitter_s) * 1000.0);
+    if (cv_delta.get_bool()) {
+        u32 deltas = 0, snapshots = 0;
+        for (u32 c = 0; c < count; ++c) {
+            deltas += clients[c].deltas;
+            snapshots += clients[c].snapshots;
+        }
+        std::printf("  snapshots: %u of %u applied were deltas; %llu bytes sent, %llu as full broadcasts (%.0f%%)\n",
+                    deltas, snapshots, static_cast<unsigned long long>(server.bytes_sent),
+                    static_cast<unsigned long long>(server.bytes_full),
+                    server.bytes_full ? 100.0 * static_cast<double>(server.bytes_sent) / static_cast<double>(server.bytes_full)
+                                      : 0.0);
+    }
     const net::PredictionStats& ps = clients[0].predictor.stats();
     std::printf("  client 0 player: drawn %.0f ms behind its input (%s), %u corrections, %u snaps\n",
                 clients[0].mean_input_lag_ms(), cv_predict.get_bool() ? "predicted" : "from snapshots", ps.corrections,

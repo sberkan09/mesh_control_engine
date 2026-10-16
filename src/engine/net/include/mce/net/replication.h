@@ -41,12 +41,26 @@
 // missing, leaving the other fields alone). Entity fields travel as NetIds and come back as the
 // client's own entities (null when the target is not replicated). A component whose replicated
 // fields differ between server and client builds is skipped and counted, never misread.
+//
+// Per-client snapshots (M-NET3 step 1): write_snapshot_for() writes one client's snapshot. It lists
+// only the entities relevant to that client (NetRelevance, mce/ecs/replicated.h) and codes each one
+// against the newest snapshot the client acknowledged, so an entity that did not change costs two
+// bytes and a moving one only its changed transform floats. The client acknowledges with write_ack()
+// in a message it already sends (its inputs); the server passes it to read_ack(). apply() takes both
+// forms. Until an acknowledgement arrives, or when it is too old, the client gets a full snapshot.
+//
+//   server, per send tick, per client:   rep.write_snapshot_for(world, tick, peer, w); host.send(peer, 1, w.data(), Sequenced);
+//   server, on a client message:          rep.read_ack(peer, reader);
+//   client, in each input message:        client.write_ack(w);
+//   server, on disconnect:                rep.forget_client(peer);
 
 #include "mce/containers/hash_map.h"
 #include "mce/ecs/replicated.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
+#include "mce/memory/allocator.h"
 #include "mce/net/bytes.h"
+#include "mce/net/transport.h"
 #include "mce/refl/type.h"
 
 namespace mce::net {
@@ -85,14 +99,60 @@ public:
     u32 assign_tagged(World& world);
     u32 assign_tagged(Commands& cmd, World& world);
 
-    // Appends one snapshot of every entity with NetId + LocalTransform, in id order.
-    void write_snapshot(World& world, u32 tick, ByteWriter& out) const;
+    // Appends one snapshot of every entity with NetId + LocalTransform, in id order. Returns its
+    // content hash: the client's content_hash() after applying it.
+    u64 write_snapshot(World& world, u32 tick, ByteWriter& out) const;
+
+    // Per client (see the top of this file): the entities relevant to `peer`, delta-coded against
+    // the newest snapshot it acknowledged, or in full. Returns the content hash, as above.
+    u64 write_snapshot_for(World& world, u32 tick, PeerId peer, ByteWriter& out);
+    // Reads what ReplicationClient::write_ack wrote. False (and nothing changes) when malformed.
+    bool read_ack(PeerId peer, ByteReader& in);
+    // Drops the client's history: its next snapshot is full. Call on disconnect.
+    void forget_client(PeerId peer);
+    struct ClientStats {
+        u32 snapshots = 0;  // written by write_snapshot_for
+        u32 full = 0;       // of those, full (no usable acknowledgement)
+        u32 entities = 0;   // relevant entities in the newest one
+        u64 bytes = 0;      // total written
+    };
+    // Null for a peer write_snapshot_for has not written to.
+    const ClientStats* client_stats(PeerId peer) const;
+    // Snapshots kept per client (and applied ones kept by the client) to code against: an
+    // acknowledgement older than this many sends gets a full snapshot.
+    static constexpr u32 kBaselines = 32;
 
     void set_hooks(const ReplicationHooks& hooks) { hooks_ = hooks; }
 
+    // The canonical entry bytes of one snapshot and where each entity's entry starts (by id).
+    struct Canonical {
+        struct Ref {
+            u32 id = 0;
+            u32 offset = 0;
+            u32 size = 0;
+        };
+        u32 tick = 0;
+        u64 hash = 0;
+        Array<u8> bytes;
+        Array<Ref> refs;  // in id order
+        const Ref* find(u32 id) const;
+    };
+
 private:
+    struct Client {
+        PeerId peer = kInvalidPeer;
+        Canonical sent[kBaselines];  // a ring of the newest snapshots written to it
+        u32 head = 0;                // next slot to write
+        u32 count = 0;
+        i32 baseline = -1;           // slot of the newest acknowledged one still kept
+        ClientStats stats;
+    };
+    Client* client(PeerId peer);
+    void build(World& world, u32 tick, PeerId peer, Canonical& out) const;
+
     ReplicationHooks hooks_;
     u32 next_id_ = 1;
+    Array<mem::UniquePtr<Client>> clients_;
 };
 
 struct InterpolationDesc {
@@ -126,6 +186,8 @@ struct ApplyResult {
     u32 despawned = 0;
     u32 components = 0;          // components whose Replicated fields were written
     u32 skipped_components = 0;  // unknown here, or with different Replicated fields
+    bool delta = false;              // the snapshot was coded against an earlier one
+    bool missing_baseline = false;   // ...that this client no longer has (or never applied): ignored
 };
 
 class ReplicationClient {
@@ -160,6 +222,10 @@ public:
     Entity find(u32 net_id) const;
     usize size() const { return entities_.size(); }
     u32 last_tick() const { return last_tick_; }
+    // Of the newest applied snapshot: what the server's write_snapshot(_for) returned for it.
+    u64 content_hash() const { return content_hash_; }
+    // The acknowledgement of the newest applied snapshot, for the server's read_ack (12 bytes).
+    void write_ack(ByteWriter& out) const;
     // Forgets every mirrored entity, destroying them (call it on disconnect); the next snapshot,
     // from any server session, rebuilds the mirror. Predicted ids are forgotten too.
     void reset(Commands& cmd, const World& world);
@@ -193,6 +259,11 @@ private:
         Span<const u8> fields;
     };
     void apply_fields(Commands& cmd, const World& world, Entity e, Span<const u8> fields, ApplyResult& result);
+    ReplicationServer::Canonical history_[ReplicationServer::kBaselines];  // applied snapshots, a ring
+    u32 history_head_ = 0;
+    u32 history_count_ = 0;
+    ReplicationServer::Canonical canon_;  // the snapshot being applied
+    u64 content_hash_ = 0;
     Array<u8> scratch_;  // one component's bytes while its fields are written
     ReplicationHooks hooks_;
     HashMap<u32, Mirror> entities_;
@@ -221,6 +292,10 @@ private:
 // Version 2 (M-NET2 step 7) adds each entry's Replicated fields after its extra bytes.
 inline constexpr u8 kSnapshotMagic[3] = {'M', 'S', 'N'};
 inline constexpr u8 kSnapshotVersion = 2;
+// Delta snapshots (M-NET3 step 1): "MSD" magic, version, tick, content hash, baseline tick and
+// hash, entity count, then per entity its id gap, a change mask and what changed.
+inline constexpr u8 kDeltaMagic[3] = {'M', 'S', 'D'};
+inline constexpr u8 kDeltaVersion = 1;
 
 // The Replicated fields of a reflected type, hashed by name, kind and size (0: it has none). Server
 // and client compare it so a component built differently on each side is skipped, not misread.
