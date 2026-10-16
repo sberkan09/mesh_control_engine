@@ -27,6 +27,15 @@ tiled:    a Tiled map exported as JSON (.tmj; tilesets embedded or external .tsj
             unless --tile-size says otherwise. Infinite, isometric and hex maps, margins and spacing in a
             tileset and XML tilesets are errors with the way out; flips and animated tiles are warnings.
 
+ldtk:     an LDtk project (.ldtk; external level files are followed) becomes, per level, <name>_<level>.mcscene
+          plus one <name>_<level>_<layer>.mctilemap per Tiles / AutoLayer / IntGrid-with-tiles layer:
+            tile layers     tile id = column + row * tileset columns + 1; layer order and opacity kept
+            IntGrid         every non-zero cell is solid; neighbouring cells merge into static boxes
+            entity layers   every entity is a named marker entity at its pivot; tagged 'solid' or 'sensor'
+                            it is a static box (sensor: a trigger) about its rectangle
+          --level L imports one level. Padding and spacing, a layer grid that differs from its tileset's
+          are errors; flipped tiles, stacked tiles, entity fields and hidden layers are warnings.
+
 Unsupported features are warnings that name the feature (stderr); --werror turns them into a failure and
 nothing is written.
 """
@@ -479,6 +488,41 @@ def convert_tiled(doc, map_dir, name, out_dir, existing, tile_size, imp):
     return files
 
 
+def resolve_guids(files):
+    """Replaces the converters' placeholders in `files` with GUID references; returns the texture sidecars
+    that have to be written as [(path, guid)]."""
+    tex_guid, new_sidecars = {}, []
+    for fdoc in files.values():
+        ts = fdoc.get("tileset")
+        if isinstance(ts, tuple) and ts[1] not in tex_guid:
+            side = ts[1] + ".mceasset"
+            g = existing_guid(side)
+            if not g:
+                g = str(uuid.uuid4())
+                new_sidecars.append((side, g))
+            tex_guid[ts[1]] = g
+    fname_guid = {f: d["guid"] for f, d in files.items()}
+    for fdoc in files.values():
+        ts = fdoc.get("tileset")
+        if isinstance(ts, tuple):
+            fdoc["tileset"] = "guid:" + tex_guid[ts[1]]
+        for e in fdoc.get("entities", []):
+            tl = e["components"].get("TilemapLayer")
+            if tl:
+                tl["map"] = "guid:" + fname_guid[tl["map"][1]]
+    return new_sidecars
+
+
+def write_outputs(out_dir, files, new_sidecars):
+    os.makedirs(out_dir, exist_ok=True)
+    for side, g in new_sidecars:
+        write_json(side, {"guid": g, "importer": "texture", "importer_version": 1,
+                          "settings": {"srgb": True, "mips": False, "filter": "nearest"}})
+        print(f"wrote {side}")
+    for f in sorted(files):
+        write_json(os.path.join(out_dir, f), files[f])
+
+
 def cmd_tiled(args):
     imp = Importer("tiled")
     src = args.file
@@ -494,43 +538,200 @@ def cmd_tiled(args):
                 if g:
                     existing[f] = g
         files = convert_tiled(doc, map_dir, name, out_dir, existing, args.tile_size, imp)
-        # Textures: one sidecar GUID per tileset image.
-        tex_guid = {}
-        new_sidecars = []
-        for fdoc in files.values():
-            ts = fdoc.get("tileset")
-            if isinstance(ts, tuple) and ts[1] not in tex_guid:
-                side = ts[1] + ".mceasset"
-                g = existing_guid(side)
-                if not g:
-                    g = str(uuid.uuid4())
-                    new_sidecars.append((side, g))
-                tex_guid[ts[1]] = g
-        fname_guid = {f: d["guid"] for f, d in files.items()}
-        for fdoc in files.values():
-            ts = fdoc.get("tileset")
-            if isinstance(ts, tuple):
-                fdoc["tileset"] = "guid:" + tex_guid[ts[1]]
-            for e in fdoc.get("entities", []):
-                tl = e["components"].get("TilemapLayer")
-                if tl:
-                    tl["map"] = "guid:" + fname_guid[tl["map"][1]]
+        new_sidecars = resolve_guids(files)
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
         print(f"mce import tiled: {src}: {e}", file=sys.stderr)
         return 1
     if imp.warnings and args.werror:
         print("mce import tiled: --werror: nothing written", file=sys.stderr)
         return 1
-    os.makedirs(out_dir, exist_ok=True)
-    for side, g in new_sidecars:
-        write_json(side, {"guid": g, "importer": "texture", "importer_version": 1,
-                          "settings": {"srgb": True, "mips": False, "filter": "nearest"}})
-        print(f"wrote {side}")
-    for f in sorted(files):
-        write_json(os.path.join(out_dir, f), files[f])
+    write_outputs(out_dir, files, new_sidecars)
     maps = sum(1 for f in files if f.endswith(".mctilemap"))
     ents = len(files[f"{name}.mcscene"]["entities"])
     print(f"wrote {out_dir}{os.sep}{name}.mcscene ({ents} entities) and {maps} tilemap(s)")
+    return 0
+
+
+def ldtk_tilesets(doc, base_dir, imp):
+    """{tileset uid: {name, image, columns, rows, grid}} for the tilesets that have an image file."""
+    out = {}
+    for ts in (doc.get("defs") or {}).get("tilesets") or []:
+        rel = ts.get("relPath")
+        name = str(ts.get("identifier", "tileset"))
+        if not rel:
+            continue  # LDtk's embedded icon atlas
+        grid = int(ts["tileGridSize"])
+        if int(ts.get("padding", 0)) or int(ts.get("spacing", 0)):
+            raise ValueError(f"tileset '{name}' has padding or spacing; the engine cuts a tileset into equal "
+                             "cells with none. Re-export the tileset image without them")
+        wpx, hpx = int(ts["pxWid"]), int(ts["pxHei"])
+        if grid <= 0 or wpx % grid or hpx % grid:
+            raise ValueError(f"tileset '{name}': the {wpx}x{hpx} image is not a whole number of {grid}px cells")
+        image = os.path.normpath(os.path.join(base_dir, rel))
+        if not os.path.isfile(image):
+            raise ValueError(f"tileset '{name}': the image '{rel}' was not found ({image})")
+        out[ts["uid"]] = {"name": safe_name(name), "image": image, "columns": wpx // grid, "rows": hpx // grid,
+                          "grid": grid}
+    return out
+
+
+def ldtk_levels(doc, base_dir, only):
+    """[level dict with layerInstances] (external level files read), optionally just the one called `only`."""
+    out = []
+    for lv in doc.get("levels") or []:
+        if only and lv.get("identifier") != only:
+            continue
+        if lv.get("layerInstances") is None and lv.get("externalRelPath"):
+            lv = read_json(os.path.normpath(os.path.join(base_dir, lv["externalRelPath"])))
+        if lv.get("layerInstances") is None:
+            raise ValueError(f"level '{lv.get('identifier')}' has no layers; save the project in LDtk and export again")
+        out.append(lv)
+    if only and not out:
+        raise ValueError(f"no level called '{only}' (levels: " +
+                         ", ".join(str(l.get("identifier")) for l in doc.get("levels") or []) + ")")
+    if not out:
+        raise ValueError("the project has no levels")
+    return out
+
+
+def convert_ldtk(doc, base_dir, name, existing, tile_size, imp, only=None):
+    """{file name: JSON doc}: per level a scene and one tilemap per rendered layer. Pure; GUIDs from `existing`."""
+    # The world layout is ignored: every level is its own scene with its origin at the level's bottom-left.
+    tilesets = ldtk_tilesets(doc, base_dir, imp)
+    grid0 = int(doc.get("defaultGridSize") or 16)
+    s = tile_size / grid0  # metres per LDtk pixel
+    files = {}
+
+    def guid_of(fname):
+        return existing.get(fname) or str(uuid.uuid4())
+
+    for lv in ldtk_levels(doc, base_dir, only):
+        lname = safe_name(lv.get("identifier", "level"))
+        pw, ph = int(lv["pxWid"]), int(lv["pxHei"])
+        entities, taken = [], {}
+
+        def add(ename, comps):
+            n = taken.get(ename, 0) + 1
+            taken[ename] = n
+            entities.append({"id": len(entities) + 1, "name": ename if n == 1 else f"{ename} {n}", "components": comps})
+
+        layers = lv["layerInstances"]
+        for depth, lyr in enumerate(reversed(layers), 1):  # LDtk lists the top layer first; order 1 = bottom
+            ident = str(lyr.get("__identifier", "layer"))
+            kind = lyr.get("__type")
+            grid = int(lyr["__gridSize"])
+            cw, ch = int(lyr["__cWid"]), int(lyr["__cHei"])
+            ox, oy = int(lyr.get("__pxTotalOffsetX", 0)), int(lyr.get("__pxTotalOffsetY", 0))
+            where = f"level '{lv.get('identifier')}' layer '{ident}'"
+
+            def px_to_m(x, y):
+                return [num((ox + x) * s), num((ph - oy - y) * s), 0]
+
+            def boxes(cells, label, **flags):
+                for i, (c, r, w, h) in enumerate(merge_rects(cells, cw, ch)):
+                    col = {"shape": {"half": [num(w * grid * s / 2), num(h * grid * s / 2)]}, "density": 0}
+                    col.update(flags)
+                    add(f"{label} {i}", {"Collider2D": col, "RigidBody2D": {},
+                                         "LocalTransform": {"position": px_to_m((c + w / 2) * grid, (r + h / 2) * grid)}})
+
+            if kind == "Entities":
+                for e in lyr.get("entityInstances") or []:
+                    ename = str(e.get("__identifier", "entity"))
+                    x, y = e["px"]
+                    w, h = float(e.get("width", 0)), float(e.get("height", 0))
+                    pv = e.get("__pivot") or [0, 0]
+                    tags = e.get("__tags") or []
+                    solid, sensor = "solid" in tags, "sensor" in tags
+                    if (solid or sensor) and w > 0 and h > 0:
+                        col = {"shape": {"half": [num(w * s / 2), num(h * s / 2)]}, "density": 0}
+                        if sensor:
+                            col["is_sensor"] = True
+                        add(ename, {"Collider2D": col, "RigidBody2D": {},
+                                    "LocalTransform": {"position": px_to_m(x + (0.5 - pv[0]) * w, y + (0.5 - pv[1]) * h)}})
+                    else:
+                        add(ename, {"LocalTransform": {"position": px_to_m(x, y)}})
+                if any(e.get("fieldInstances") for e in lyr.get("entityInstances") or []):
+                    imp.warn(f"{where}: entity fields are not imported (name an entity by its identifier or tag it "
+                             "'solid' / 'sensor')")
+                continue
+            if kind not in ("IntGrid", "Tiles", "AutoLayer"):
+                imp.warn(f"{where} is a {kind} layer, which is not imported")
+                continue
+            if kind == "IntGrid":
+                csv = lyr.get("intGridCsv") or []
+                if len(csv) != cw * ch:
+                    raise ValueError(f"{where}: intGridCsv has {len(csv)} cells, expected {cw}x{ch}")
+                solid = [(i % cw, i // cw) for i, v in enumerate(csv) if v]
+                if solid:
+                    boxes(solid, f"{ident} collision")
+            tiles = lyr.get("gridTiles") if kind == "Tiles" else lyr.get("autoLayerTiles")
+            tiles = tiles or []
+            if not tiles or not lyr.get("visible", True):
+                if tiles:
+                    imp.warn(f"{where} is hidden; skipped")
+                continue
+            ts = tilesets.get(lyr.get("__tilesetDefUid"))
+            if ts is None:
+                imp.warn(f"{where} uses a tileset without an image file; skipped")
+                continue
+            if ts["grid"] != grid:
+                raise ValueError(f"{where}: the layer grid ({grid}px) differs from its tileset's ({ts['grid']}px)")
+            cells, flipped, stacked = [0] * (cw * ch), False, False
+            for t in tiles:
+                x, y = t["px"]
+                sx, sy = t["src"]
+                col, row = x // grid, y // grid
+                if x % grid or y % grid or sx % grid or sy % grid or not (0 <= col < cw and 0 <= row < ch):
+                    raise ValueError(f"{where}: a tile at {x},{y} is not on the layer's {grid}px grid")
+                if t.get("f"):
+                    flipped = True
+                at = (ch - 1 - row) * cw + col  # the engine's row 0 is the bottom
+                stacked = stacked or cells[at] != 0
+                cells[at] = (sy // grid) * ts["columns"] + sx // grid + 1
+            if flipped:
+                imp.warn(f"{where} has flipped tiles; they draw unflipped")
+            if stacked:
+                imp.warn(f"{where} stacks several tiles in one cell; the last one wins")
+            fname = f"{name}_{lname}_{safe_name(ident)}.mctilemap"
+            files[fname] = {"format": "mce-tilemap", "version": 1, "guid": guid_of(fname), "name": fname[:-len(".mctilemap")],
+                            "tileset": ("png", ts["image"]), "columns": ts["columns"], "rows": ts["rows"],
+                            "width": cw, "height": ch, "tile_size": num(grid * s), "tiles": cells}
+            comp = {"map": ("map", fname), "order": depth}
+            if float(lyr.get("__opacity", 1)) != 1:
+                comp["tint"] = [1, 1, 1, num(lyr["__opacity"])]
+            add(ident, {"LocalTransform": {"position": px_to_m(0, ch * grid)}, "TilemapLayer": comp})
+        scene = f"{name}_{lname}.mcscene"
+        files[scene] = {"format": "mce-scene", "version": 1, "guid": guid_of(scene), "name": f"{name}_{lname}",
+                        "entities": entities}
+    return files
+
+
+def cmd_ldtk(args):
+    imp = Importer("ldtk")
+    src = args.file
+    try:
+        doc = read_json(src)
+        base_dir = os.path.dirname(os.path.abspath(src))
+        out_dir = args.out_dir or base_dir
+        name = safe_name(args.name or os.path.splitext(os.path.basename(src))[0])
+        existing = {}
+        for f in os.listdir(out_dir) if os.path.isdir(out_dir) else []:
+            if f.startswith(name) and f.endswith((".mcscene", ".mctilemap")):
+                g = existing_guid(os.path.join(out_dir, f))
+                if g:
+                    existing[f] = g
+        files = convert_ldtk(doc, base_dir, name, existing, args.tile_size, imp, args.level)
+        new_sidecars = resolve_guids(files)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        print(f"mce import ldtk: {src}: {e}", file=sys.stderr)
+        return 1
+    if imp.warnings and args.werror:
+        print("mce import ldtk: --werror: nothing written", file=sys.stderr)
+        return 1
+    write_outputs(out_dir, files, new_sidecars)
+    scenes = sorted(f for f in files if f.endswith(".mcscene"))
+    maps = sum(1 for f in files if f.endswith(".mctilemap"))
+    print(f"wrote {len(scenes)} scene(s) ({', '.join(scenes)}) and {maps} tilemap(s) in {out_dir}")
     return 0
 
 
@@ -550,6 +751,14 @@ def main(argv=None):
     s.add_argument("--tile-size", type=float, default=1.0, help="metres per tile (default 1)")
     s.add_argument("--werror", action="store_true", help="a warning is a failure; nothing is written")
     s.set_defaults(fn=cmd_tiled)
+    s = sub.add_parser("ldtk", help="LDtk .ldtk project: one scene per level, tilemaps per tile layer")
+    s.add_argument("file", help="the .ldtk project")
+    s.add_argument("--out-dir", help="where to write (default: beside the project)")
+    s.add_argument("--name", help="base name of the files written (default: the project's file name)")
+    s.add_argument("--level", help="import only the level with this identifier (default: every level)")
+    s.add_argument("--tile-size", type=float, default=1.0, help="metres per default grid cell (default 1)")
+    s.add_argument("--werror", action="store_true", help="a warning is a failure; nothing is written")
+    s.set_defaults(fn=cmd_ldtk)
     args = ap.parse_args(argv)
     return args.fn(args)
 

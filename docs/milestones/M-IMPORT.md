@@ -23,7 +23,7 @@ infinite maps, isometric and hex maps, Tiled/LDtk live reload in the editor, wri
 |---|---|---|---|---|
 | 1 | `mce import aseprite`: frames, tags as clips, durations, slices (`tools/mce_cli/mce_import.py`, `tests/import/test_import.py`; user guide 7.3) | SBA-167 | Sonnet | done |
 | 2 | `mce import tiled`: tile layers, flips, animated tiles, object layers (user guide 7.3) | SBA-168 | Sonnet | done |
-| 3 | `mce import ldtk`: levels as scenes, IntGrid colliders, entity layers | SBA-169 | Sonnet | not started |
+| 3 | `mce import ldtk`: levels as scenes, IntGrid colliders, entity layers (user guide 7.3) | SBA-169 | Sonnet | done |
 | 4 | MCP `asset_import`, guide, sample, gates | SBA-170 | Sonnet | not started |
 
 **Gates:**
