@@ -460,12 +460,16 @@ stage_determinism() {
 # ADR-0041 spike: the Luau system hashes the same across runs and Debug/Release, and the same as
 # its C++ twin (`-mode cpp`), so the VM adds no float drift of its own.
 stage_script_determinism() {
-    cmake --build --preset linux-gcc-debug --target sample_script_headless ember_script &&
-        cmake --build --preset linux-gcc-release --target sample_script_headless ember_script &&
+    cmake --build --preset linux-gcc-debug --target sample_script_headless ember_script dungeon &&
+        cmake --build --preset linux-gcc-release --target sample_script_headless ember_script dungeon &&
         python3 scripts/ci/determinism.py --runs 3 \
             --args="-headless 1 -ticks 1800 -input projects/EmberScript/tests/run_right.input" \
             build/linux-gcc-debug/projects/EmberScript/ember_script \
             build/linux-gcc-release/projects/EmberScript/ember_script &&
+        python3 scripts/ci/determinism.py --runs 3 \
+            --args="-headless 1 -ticks 3000 -input projects/Dungeon/tests/autopilot.input" \
+            build/linux-gcc-debug/projects/Dungeon/dungeon \
+            build/linux-gcc-release/projects/Dungeon/dungeon &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1200" \
             build/linux-gcc-debug/samples/script_headless/sample_script_headless \
             build/linux-gcc-release/samples/script_headless/sample_script_headless &&

@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Procedural levels, M-PROCGEN step 5 (SBA-175): `projects/Dungeon`, a script-only top-down crawl over seeded levels (rooms,
+  caves, walk) with an autopilot that follows the new `ProcLevel.path_markers`, and a `.mctest` per generator that clears ten
+  seeds. Luau gets `mce.teleport2d(e, position)`: writing `LocalTransform.position` never moved a 2D body (the physics step
+  writes it back), so scripts could not respawn one; EmberScript's respawn now works. M-PROCGEN is done.
 - Procedural levels, M-PROCGEN step 3 (SBA-173): a `ProcLevel` component builds a seeded level in the game (merged wall
   colliders, floor, Start/Exit markers) and rebuilds it when the seed changes or `reroll` is set, also from Luau; user guide 28.5.
 - Procedural levels, M-PROCGEN step 4 (SBA-174): MCP `procgen_run` shows a seeded level as text (and checks a run of seeds, or

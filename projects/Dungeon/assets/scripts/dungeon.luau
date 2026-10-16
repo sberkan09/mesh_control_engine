@@ -7,6 +7,8 @@
 --   v[3] autopilot (1 = on)   v[4] next Path marker   v[16] kind (1 = player)
 local VARS = mce.field("ScriptVars", "v")
 local POS = mce.field("LocalTransform", "position")
+local SEED = mce.field("ProcLevel", "seed")
+local KIND = mce.field("ProcLevel", "kind")
 
 local SPEED = 7.0     -- m/s
 local LEVELS = 10     -- levels per scene
@@ -29,7 +31,7 @@ function update()
     local level = nil
     mce.each("ProcLevel", function(e) level = e end)
     if not level then return end
-    local seed, kind = mce.get(level, "ProcLevel", "seed", "kind")
+    local seed, kind = mce.get(level, SEED, KIND)
 
     mce.each("ScriptVars", function(p)
         local v = mce.get(p, VARS)
@@ -40,7 +42,7 @@ function update()
         if v[1] ~= seed then
             local start = marker("Start")
             if not start then return end
-            mce.set(p, POS, mce.get(start, POS))
+            mce.teleport2d(p, mce.get(start, POS))
             v[1] = seed
             v[4] = 1
             mce.set(p, VARS, v)

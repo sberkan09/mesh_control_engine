@@ -4,6 +4,7 @@
 
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <cmath>
 
 #include "mce/ecs/transform.h"
@@ -215,4 +216,27 @@ TEST_CASE("ProcLevel: with no ProcLevel in the scene the system changes nothing,
     CHECK(before == 50);
     CHECK(after == before);
     CHECK(w.owned() == 0);
+}
+
+// The generation budget (M-PROCGEN 5): a 128 x 128 level of every kind builds in a few milliseconds in a release
+// build. The bound here is two orders of magnitude looser (it must hold in Debug on a loaded machine) so it
+// catches an accidental O(n^2), not a slow day; the entity count is the deterministic half of the budget.
+TEST_CASE("ProcLevel: a 128 x 128 level of every kind builds within budget") {
+    const ProcKind kinds[] = {ProcKind::Rooms, ProcKind::Caves, ProcKind::Walk, ProcKind::Noise};
+    u32 levels = 0;
+    const auto t0 = std::chrono::steady_clock::now();
+    for (ProcKind k : kinds)
+        for (u32 seed = 1; seed <= 10; ++seed) {
+            LevelWorld w;
+            ProcLevel l = level(k, 128, 128, seed);
+            l.path_markers = true;
+            w.add(l);
+            w.run(2);
+            CHECK(w.owned() > 3);
+            CHECK(w.owned() < 128 * 128 / 4);
+            ++levels;
+        }
+    const f64 ms = std::chrono::duration<f64, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    MESSAGE(levels << " levels in " << ms << " ms");
+    CHECK(ms < 20000.0);
 }
