@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Behavior tree stock tasks and aborts, M-AI step 2 (SBA-129): trees reach the kit with no code. `move_to` walks
+  a `NavAgent3D` or a `PathAgent` to a vec3 key or after an entity key, `look_at` turns the entity, `animate`
+  plays a sprite or Animator clip (and can wait for it), `play_sound`, `spawn`, `raise` and `wait_event` (which
+  sequences hear too) and `log`. A guard's `abort` ("self", "lower", "both") re-checks its condition every tick
+  and stops its own branch or a selector's lower-priority branch. `samples/ai_demo`: the stock player runs a
+  guard that patrols, hears an alarm and catches a thief (`ctest -R ai_demo_player`). User guide 13.8.
 - Behavior trees, M-AI step 1 (SBA-128, ADR-0045): `.mcbt` files describe an AI's decisions as data (sequence,
   selector, parallel, invert, succeed, fail, repeat, retry, cooldown, timeout, guard, check, wait, set, emit and
   task nodes) over typed blackboard keys, and cook to `CHNK_BT` with errors at file:line:col. An `AiBrain`
@@ -47,6 +53,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
   User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
+- Spectators and clock sync, M-NET3 step 2 (SBA-124): a `RollbackSession` with `.spectator = true` watches
+  without playing, fed confirmed inputs by one player (`write_spectator_packet`), and checks its hashes. With
+  `time_sync` (on by default) a rollback peer whose clock runs ahead skips a tick now and then instead of
+  stalling in bursts: in `sample_net_rollback -drift 30` the fast peer stalls 10 times instead of 40. Rollback
+  packets are now version 2. `ReplicationServer::set_view` / `set_sees_all` give replication spectators a
+  camera or every entity. User guide 20.7 and 20.10.
 - Per-client delta snapshots, M-NET3 step 1 (SBA-123): `ReplicationServer::write_snapshot_for` writes each client
   only the entities relevant to it (`NetRelevance { radius }` around the entities it owns) and codes them against
   the newest snapshot it acknowledged (`write_ack` / `read_ack`): a still entity costs two bytes. `apply` reads

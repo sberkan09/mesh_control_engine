@@ -638,7 +638,8 @@ bool bt_children_ok(BtNodeKind k, u32 n) {
 
 bool bt_node_ok(const BtNode& n, const BtHeader& h, Span<const BtKey> keys) {
     auto str_ok = [&](u32 s) { return s == kBtNoString || s < h.string_bytes; };
-    if (!str_ok(n.name) || !str_ok(n.text)) return false;
+    if (!str_ok(n.name) || !str_ok(n.text) || !str_ok(n.arg)) return false;
+    if (n.kind == BtNodeKind::Guard ? n.abort > static_cast<u8>(BtAbort::Both) : n.abort != 0) return false;
     if (bt_needs_slot(n.kind) ? n.slot >= h.slot_count : n.slot != kBtNoSlot) return false;
     if (!(n.a == n.a)) return false;  // NaN
     const BtKey* key = n.key < keys.size() ? &keys[n.key] : nullptr;
@@ -703,6 +704,7 @@ Result<BtView> BtView::read(Span<const byte> payload) {
     // The shape: every node's subtree nests inside its parent's, children counted, depth bounded.
     if (v.nodes[0].end != h.node_count) return Error(Errc::InvalidArgument, "asset.bt.shape");
     u16 stack[kBtMaxDepth + 1];
+    u16 parents[kBtMaxDepth + 1];  // the node each `stack` entry ends
     u32 depth = 0;
     for (u32 i = 0; i < h.node_count; ++i) {
         const BtNode& n = v.nodes[i];
@@ -710,6 +712,9 @@ Result<BtView> BtView::read(Span<const byte> payload) {
             return Error(Errc::InvalidArgument, "asset.bt.node");
         while (depth > 0 && i >= stack[depth - 1]) --depth;
         if (depth > 0 && n.end > stack[depth - 1]) return Error(Errc::InvalidArgument, "asset.bt.shape");
+        // A guard that aborts lower-priority branches has a selector for a parent.
+        if (n.abort >= static_cast<u8>(BtAbort::Lower) && (depth == 0 || v.nodes[parents[depth - 1]].kind != BtNodeKind::Selector))
+            return Error(Errc::InvalidArgument, "asset.bt.abort");
         u32 children = 0;
         for (u32 c = i + 1; c < n.end; c = v.nodes[c].end) {
             if (v.nodes[c].end <= c || v.nodes[c].end > n.end) return Error(Errc::InvalidArgument, "asset.bt.shape");
@@ -718,6 +723,7 @@ Result<BtView> BtView::read(Span<const byte> payload) {
         if (children != n.child_count || !bt_children_ok(n.kind, children) || children > kBtMaxChildren)
             return Error(Errc::InvalidArgument, "asset.bt.shape");
         if (depth == kBtMaxDepth) return Error(Errc::InvalidArgument, "asset.bt.depth");
+        parents[depth] = static_cast<u16>(i);
         stack[depth++] = n.end;
     }
     return v;

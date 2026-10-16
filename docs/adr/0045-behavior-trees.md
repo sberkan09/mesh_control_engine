@@ -58,3 +58,14 @@ with no code.
 queries are step 4. The editor panel is step 5, and the MCP tools are step 6. Subtrees referencing other `.mcbt`
 files and randomness in nodes are left out until a game needs them. Randomness will come from the sim RNG so
 replays stay exact.
+
+**Step 2 (SBA-129).**
+- **Observers.** `BtNode::abort` on a guard (CHNK_BT v2) makes it an observer that re-checks its condition every
+  tick. `self` halts the guard's running child when the condition fails. `lower`, allowed only on a selector's
+  child, makes the selector check that guard before resuming a later running child: the first such guard that
+  holds halts the running child and the selector restarts at it in the same tick. Polling every tick gives the
+  same results as Unreal's on-change observers in a fixed-tick sim and keeps no subscription state.
+- **Stock tasks.** `install_ai` registers `move_to`, `look_at`, `animate`, `play_sound`, `spawn`, `raise`,
+  `wait_event` and `log` as ordinary tasks, so a game can replace one by name. They read a string argument
+  (`BtNode::arg`) and a key through `bt_key_position`, and reach the kit through the components' own fields and
+  events, as a game would.
