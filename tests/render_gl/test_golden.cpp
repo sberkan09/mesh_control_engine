@@ -304,6 +304,79 @@ TEST_CASE("golden: contact shadows alone at the box's foot under a low sun") {
     check_golden("contact_foot", f);
 }
 
+// ---- M-VISUAL2 4: material extensions -----------------------------------------------------------
+
+TEST_CASE("golden: clear coat, sheen and anisotropy on three boxes under the sun and the sky") {
+    Fixture3D f;
+    const auto lobed = [&](u32 key, f32 x, const f32 (&color)[3], f32 rough, f32 metal, const asset::MaterialExt& ext) {
+        mesh_fixture::Builder box;
+        box.add_node(-1);
+        mesh_fixture::Box b;
+        b.center = {x, 0.4f, 1.6f};  // in front of the fixture's own box
+        b.half = {0.4f, 0.4f, 0.4f};
+        for (int i = 0; i < 3; ++i) b.color[i] = color[i];
+        b.uvs = true;
+        box.add_box(b);
+        box.submeshes.back().material.roughness = rough;
+        box.submeshes.back().material.metallic = metal;
+        box.materials.push_back(ext);
+        REQUIRE(f.renderer.meshes().upload(key, 1, box.build().span()).has_value());
+    };
+    asset::MaterialExt coat{}, sheen{}, aniso{};
+    coat.clearcoat = 1.0f;
+    coat.clearcoat_roughness = 0.05f;
+    sheen.sheen_color[0] = 1.0f;
+    sheen.sheen_color[1] = 0.9f;
+    sheen.sheen_color[2] = 0.8f;
+    sheen.sheen_roughness = 0.4f;
+    aniso.anisotropy = 0.8f;
+    lobed(30, -1.4f, {0.05f, 0.1f, 0.4f}, 0.7f, 0.0f, coat);
+    lobed(31, 0.0f, {0.3f, 0.02f, 0.05f}, 0.9f, 0.0f, sheen);
+    lobed(32, 1.4f, {0.9f, 0.8f, 0.6f}, 0.3f, 1.0f, aniso);
+    f.render(0.0f, true, [](Scene3D& s) {
+        Sky sky;
+        sky.ibl = true;
+        sky.specular_ambient = 1.0f;
+        s.set_sky(sky);
+        for (u32 key : {30u, 31u, 32u}) {
+            MeshInstance m;
+            m.mesh = key;
+            s.add(m);
+        }
+    });
+    check_golden("material_lobes", f);
+}
+
+TEST_CASE("golden: a green glass box in front of the fixture's box refracts it") {
+    Fixture3D f;
+    mesh_fixture::Builder box;
+    box.add_node(-1);
+    mesh_fixture::Box b;
+    b.center = {0.3f, 0.45f, 1.3f};
+    b.half = {0.45f, 0.45f, 0.45f};
+    b.color[0] = 0.6f;
+    b.color[1] = 0.95f;
+    b.color[2] = 0.7f;
+    b.uvs = true;
+    box.add_box(b);
+    box.submeshes.back().material.roughness = 0.1f;
+    asset::MaterialExt glass{};
+    glass.transmission = 1.0f;
+    glass.ior = 1.5f;
+    box.materials.push_back(glass);
+    REQUIRE(f.renderer.meshes().upload(30, 1, box.build().span()).has_value());
+    f.render(0.0f, true, [](Scene3D& s) {
+        Sky sky;
+        sky.ibl = true;
+        s.set_sky(sky);
+        MeshInstance m;
+        m.mesh = 30;
+        s.add(m);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().transmissive == 1);
+    check_golden("material_glass", f);
+}
+
 // ---- M-VISUAL 6: global illumination (the irradiance volume) -----------------------------------
 
 TEST_CASE("golden: a red emissive wall bleeds onto the ground through the irradiance volume") {

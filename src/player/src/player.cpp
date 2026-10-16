@@ -217,8 +217,8 @@ MCE_CVAR(cv_remote_config_file, "remote_config.file", "",
 MCE_CVAR(cv_remote_config_dump, "remote_config.dump", false,
          "Remote config: print every value at start and after each apply", CVarFlags::None);
 MCE_CVAR(cv_steam_app_id, "steam.app_id", 0,
-         "Steam (M-STEAM): open steam_api and sign in for this app id (0 = no Steam); a run outside Steam names it "
-         "to the client the way steam_appid.txt does",
+         "Steam (M-STEAM): open steam_api and sign in for this app id (0: the SteamAppId Steam starts the game with, "
+         "else no Steam; -1: never); a run outside Steam names it to the client the way steam_appid.txt does",
          CVarFlags::None);
 MCE_CVAR(cv_steam_library, "steam.library", "", "Steam: the steam_api library to open (empty: next to the executable)",
          CVarFlags::None);
@@ -239,6 +239,9 @@ MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
          CVarFlags::Saved);
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
+         CVarFlags::None);
+MCE_CVAR(cv_timeline_scrub, "timeline.scrub", -1.0f,
+         "Start with every timeline held at this many seconds (state tracks applied, speed 0): the MCP server's timeline_preview",
          CVarFlags::None);
 MCE_CVAR(cv_haptics, "haptics", true,
          "Haptic feedback: phone taps and gamepad rumble from platform::haptics::play (off: none; never in the state hash)",
@@ -430,7 +433,7 @@ public:
 
     ResultV on_init(app::Context&) override {
         // Steam first: when it relaunches the game through itself, this run loads and saves nothing.
-        if (cv_steam_app_id.get_int() > 0 && !init_steam()) {
+        if (steam_app_id() != 0 && !init_steam()) {
             relaunching_ = true;
             return ok();
         }
@@ -540,6 +543,7 @@ public:
         MCE_TRY(scene::load(world_, assets_, scene, &entities_));
         scene::pump_streaming(world_, scene::PumpMode::Settle);
         MCE_TRY(load_ui_screens());
+        scrub_timelines();
         if (device_ && kit::has_camera_3d(world_)) MCE_TRY(init_3d());
         MCE_LOG_INFO("{}: scene {} ({}) with {} entities", desc_.app_name, asset::to_string(scene).view(), scene_path_.view(),
                      entities_.size());
@@ -1030,11 +1034,23 @@ private:
     // Every string table in the pack (assets/loc/<locale>.csv) goes into one Localization resource:
     // the saved choice first, then -language for this run, then the device languages, then
     // -default_language. A choice the game makes later (Localization::set_locale) is saved at once.
+    // -steam.app_id, else the SteamAppId Steam launches a game with (a shipped depot has no
+    // steam_appid.txt and no command line of ours, M-STEAM step 5); 0: no Steam.
+    static u32 steam_app_id() {
+        const i64 id = cv_steam_app_id.get_int();
+        if (id != 0) return id > 0 && id <= 0xffffffffll ? static_cast<u32>(id) : 0;
+        const char* env = std::getenv("SteamAppId");
+        if (!env || !*env) return 0;
+        char* end = nullptr;
+        const unsigned long long v = std::strtoull(env, &end, 10);
+        return end && *end == 0 && v <= 0xffffffffull ? static_cast<u32>(v) : 0;
+    }
+
     // Steam (M-STEAM step 1, ADR-0042): an app id opens steam_api; anything but a relaunch leaves the
     // game running without Steam. False: Steam relaunches the game, so this run quits at once.
     bool init_steam() {
         platform::steam::Config sc;
-        sc.app_id = static_cast<u32>(cv_steam_app_id.get_int());
+        sc.app_id = steam_app_id();
         sc.library_path = cv_steam_library.get_string();
         sc.restart_if_necessary = cv_steam_restart.get_bool();
         FixedString<256> why;
@@ -1627,6 +1643,21 @@ private:
     std::FILE* access_log_ = nullptr;  // -access_log (kept open to the end; flushed per line)
 
     // The scene's UI screens (kit::UiScreen, M-UI-DATA step 2).
+    // -timeline.scrub <seconds>: every timeline paused at that time, its state tracks applied (a
+    // cutscene frame for timeline_preview; the cues before it do not fire).
+    void scrub_timelines() {
+        const f32 t = cv_timeline_scrub.get_float();
+        if (t < 0.0f) return;
+        Array<Entity> players;
+        world_.query<const kit::TimelinePlayer>().each([&](Entity e, const kit::TimelinePlayer&) { players.push_back(e); });
+        for (Entity e : players) {
+            kit::timeline_scrub(world_, e, t);
+            // Held at the playhead, still playing: a cutscene keeps its hold and its bars (in at once).
+            if (kit::TimelinePlayer* p = world_.try_get_mut<kit::TimelinePlayer>(e)) p->speed = 0.0f;
+            if (kit::Cutscene* c = world_.try_get_mut<kit::Cutscene>(e)) c->bars = 1.0f;
+        }
+    }
+
     Result<void> load_ui_screens() {
         const ui::Skin* skin = device_ ? &skin_.skin : nullptr;
         kit::SpriteExtract* extract = device_ ? &extract_ : nullptr;

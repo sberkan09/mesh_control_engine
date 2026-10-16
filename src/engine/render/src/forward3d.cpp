@@ -153,7 +153,24 @@ struct ObjectU {
     mat4 dequant;   // skinned draws: quantized -> bind space
     vec4 skin;      // x: first palette joint, -1 = rigid; instanced: y first visible slot, z time
     vec4 inst;      // instanced (M-VISUAL 9): wind amplitude, frequency, direction xz
+    vec4 coat;      // M-VISUAL2 4 (material_ext_uniforms): clear coat, its alpha, anisotropy, its rotation
+    vec4 sheen;     // rgb color, w alpha
+    vec4 ext;       // x: lobes on, y: ior (0 = 1.5), z: transmission
 };
+
+// The MaterialExt lobes in ObjectU's terms; all zero for a plain material.
+void material_ext_uniforms(const asset::MaterialExt& e, ObjectU& ou) {
+    ou.coat = {};
+    ou.sheen = {};
+    ou.ext = {};
+    if (!e.any()) return;
+    const f32 cr = clamp(e.clearcoat_roughness, 0.045f, 1.0f), sr = clamp(e.sheen_roughness, 0.09f, 1.0f);
+    const bool sheen = e.sheen_color[0] > 0.0f || e.sheen_color[1] > 0.0f || e.sheen_color[2] > 0.0f;
+    ou.coat = {clamp(e.clearcoat, 0.0f, 1.0f), cr * cr, clamp(e.anisotropy, -0.95f, 0.95f), e.anisotropy_rotation};
+    ou.sheen = {max(e.sheen_color[0], 0.0f), max(e.sheen_color[1], 0.0f), max(e.sheen_color[2], 0.0f), sr * sr};
+    const bool lobes = e.clearcoat > 0.0f || sheen || e.anisotropy != 0.0f;
+    ou.ext = {lobes ? 1.0f : 0.0f, e.ior > 0.0f ? clamp(e.ior, 1.0f, 3.0f) : 0.0f, clamp(e.transmission, 0.0f, 1.0f), 0.0f};
+}
 
 struct TerrainU {  // kTerrainFS (M-TERRAIN 2), bank kMaterial
     mat4 to_local;
@@ -535,6 +552,10 @@ ResultV Forward3D::create_pipelines() {
         fs.debug_name = "ssr";
         MCE_TRY_ASSIGN(ssr_pipe_, device_->create_pipeline(fs));
     }
+    fs.state.blend.mode = rhi::BlendMode::Opaque;
+    fs.fragment_shader = {kFrameCopyFS, "frame_copy.frag"};
+    fs.debug_name = "frame_copy";
+    MCE_TRY_ASSIGN(frame_copy_, device_->create_pipeline(fs));
     if (contact) {
         fs.state.blend.mode = rhi::BlendMode::Opaque;
         fs.fragment_shader = {kContactFS, "contact_shadows.frag"};
@@ -647,7 +668,7 @@ ResultV Forward3D::create_pipelines() {
 
 void Forward3D::destroy_targets() {
     if (!device_) return;
-    for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_, &ao_gbuf_, &ao_depth_, &ao_a_, &ao_b_, &ssr_, &fin_src_, &fin_up_,
+    for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_, &ao_gbuf_, &ao_depth_, &ao_a_, &ao_b_, &ssr_, &fin_src_, &fin_up_, &trans_src_,
                                   &velocity_, &velocity_depth_, &history_[0], &history_[1]})
         destroy(*device_, *t);
     ssr_prev_valid_ = false;  // the new HDR target holds no frame yet
@@ -713,7 +734,7 @@ void Forward3D::shutdown() {
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &terrain_pipe_, &skinned_cull_,
           &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &upscale_pipe_, &sharpen_pipe_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
-          &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &contact_pipe_, &velocity_pipe_, &velocity_skinned_,
+          &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &contact_pipe_, &frame_copy_, &velocity_pipe_, &velocity_skinned_,
           &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_, &exposure_hist_,
           &exposure_reduce_, &dof_pipe_, &motion_blur_pipe_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
@@ -1604,7 +1625,8 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     // SSAO: the blurred half-size visibility, upsampled bilinearly; a stand-in fills the slot when off.
     // Contact shadows put their own target there, which carries the SSAO in r and the sun's in g.
     pu.ao = {stats_.ssao ? 1.0f : 0.0f, stats_.contact_shadows ? 1.0f : 0.0f, 0.0f, 0.0f};
-    cmd.bind_texture(rhi::bank::kAo, stats_.contact_shadows ? ao_b_ : stats_.ssao ? ao_a_ : ao_off_, linear_clamp_);
+    ao_bound_ = stats_.contact_shadows ? ao_b_ : stats_.ssao ? ao_a_ : ao_off_;
+    cmd.bind_texture(rhi::bank::kAo, ao_bound_, linear_clamp_);
     // Screen-space reflections: the half-size trace, upsampled bilinearly; a stand-in when off.
     if (stats_.ssr) {
         const ScreenSpaceReflections& ssr = scene.reflections();
@@ -1646,10 +1668,15 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     color.clear.color[1] = fog.color.y;
     color.clear.color[2] = fog.color.z;
     color.clear.color[3] = 1.0f;
+    // Transmissive draws (M-VISUAL2 4) refract a copy of the opaque frame: the pass breaks before them.
+    const Span<const Scene3D::Draw> draws = scene.draws();
+    bool transmissive = false;
+    for (u32 i = scene.opaque_count(); i < draws.size() && !transmissive; ++i)
+        transmissive = material_ext_of(scene.instances()[draws[i].instance], draws[i].mesh->submeshes[draws[i].submesh]).transmission > 0.0f;
     rhi::PassAttachment depth;
     depth.texture = depth_;
     depth.clear.depth = 1.0f;
-    depth.store = rhi::StoreOp::DontCare;
+    depth.store = transmissive ? rhi::StoreOp::Store : rhi::StoreOp::DontCare;
     rhi::RenderPassDesc mp;
     mp.colors = Span<const rhi::PassAttachment>(&color, 1);
     mp.depth = depth;
@@ -1659,7 +1686,6 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     bind_main_state(cmd, scene, true);
 
     DrawCache cache;
-    const Span<const Scene3D::Draw> draws = scene.draws();
     draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, true);
     draw_batches(cmd, scene, cache, false);
     if (sky.enabled) {  // behind the opaques, before the blended draws composite over it
@@ -1668,7 +1694,39 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         ++stats_.pipeline_binds;
         cmd.draw_non_indexed(3);
     }
-    draw_meshes(cmd, scene, draws, scene.opaque_count(), static_cast<u32>(draws.size()), scene.opaque_count(), cache, true);
+    if (transmissive) {
+        cmd.end_pass();
+        if (trans_src_.is_null()) {
+            rhi::TextureDesc d = device_->texture_desc(hdr_);
+            d.debug_name = "mce.3d.transmission_src";
+            trans_src_ = device_->create_texture(d);
+        }
+        if (desc_.msaa > 1) {
+            cmd.resolve(hdr_msaa_, trans_src_);
+        } else {
+            rhi::PassAttachment out;
+            out.texture = trans_src_;
+            out.load = rhi::LoadOp::DontCare;
+            rhi::RenderPassDesc cp;
+            cp.colors = Span<const rhi::PassAttachment>(&out, 1);
+            cp.debug_name = "transmission.copy";
+            cmd.begin_pass(cp);
+            cmd.bind_pipeline(frame_copy_);
+            cmd.bind_texture(rhi::bank::kFirstSampler, hdr_, point_sampler_);
+            cmd.draw_non_indexed(3);
+            cmd.end_pass();
+        }
+        color.load = rhi::LoadOp::Load;
+        depth.load = rhi::LoadOp::Load;
+        depth.store = rhi::StoreOp::DontCare;
+        mp.depth = depth;
+        mp.debug_name = "forward.transmissive";
+        cmd.begin_pass(mp);
+        bind_main_state(cmd, scene, true);
+        cache = DrawCache{};
+    }
+    draw_meshes(cmd, scene, draws, scene.opaque_count(), static_cast<u32>(draws.size()), scene.opaque_count(), cache, true,
+                false, transmissive);
     draw_particles(cmd, scene);
     cmd.end_pass();
     cmd.pop_debug_scope();
@@ -2062,7 +2120,7 @@ void Forward3D::bind_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene
 }
 
 void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin,
-                            u32 end, u32 opaque_end, DrawCache& cache, bool main, bool prepass) {
+                            u32 end, u32 opaque_end, DrawCache& cache, bool main, bool prepass, bool frame) {
     const rhi::TextureHandle white = textures_->white();
     static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
     auto bind_map = [&](DrawCache& c, u32 i, u32 key) {
@@ -2125,11 +2183,22 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
                    (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
         ou.dequant = d.dequant;
         ou.skin = {palette_index(d.palette), 0.0f, 0.0f, 0.0f};
+        material_ext_uniforms(material_ext_of(inst, sm), ou);
+        const bool refracts = frame && ou.ext.z > 0.0f && !prepass && !terrain;
+        if (refracts != cache.frame_at_ao) {  // the opaque frame in the SSAO's slot for this draw only
+            cmd.bind_texture(rhi::bank::kAo, refracts ? trans_src_ : ao_bound_, linear_clamp_);
+            cache.frame_at_ao = refracts;
+        }
+        if (refracts) {
+            ou.ext.w = 1.0f;
+            if (main) ++stats_.transmissive;
+        }
         if (terrain) {  // lit, no maps of its own: the layers are the surface
             ou.base_color = inst.tint;
             ou.emissive = {0.0f, 0.0f, 0.0f, 0.0f};
             ou.params = {0.0f, 0.0f, 1.0f, 0.0f};
             ou.maps = {0.0f, 0.0f, 0.0f, 0.0f};
+            material_ext_uniforms(asset::MaterialExt{}, ou);
         }
         cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
         cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
@@ -2186,6 +2255,7 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
                        (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
             ou.dequant = mat4::identity();
             ou.inst = batch_wind(b);
+            material_ext_uniforms(b.material ? b.material->ext : sm.material_ext, ou);
             for (u32 l = 0; l < levels; ++l) {
                 ou.skin = {-1.0f, f32(bv.slot[l]), scene.time(), 0.0f};
                 cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));

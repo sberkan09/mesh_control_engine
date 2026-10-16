@@ -10,13 +10,14 @@
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/nav3d.h"
 #include "mce/log.h"
 #include "mce/render/mesh.h"
 
 namespace mce::kit {
 
 // Padding-free: World::state_hash hashes component bytes.
-static_assert(sizeof(Ragdoll3D) == 116);
+static_assert(sizeof(Ragdoll3D) == 120);
 
 namespace {
 
@@ -325,6 +326,17 @@ void kit3d_ragdolls(Frame& f) {
     Ragdolls3DState& st = f.resource<Ragdolls3DState>();
     Ragdoll3DPoses& rp = f.resource<Ragdoll3DPoses>();
     const f32 dt = phys.world.config().fixed_dt;
+    // on_trigger: last tick's trigger and sensor entries, on either side of the event.
+    if (w.event_queue<TriggerEnter3D>()) {
+        auto events = f.events();
+        for (const TriggerEnter3D& ev : events.read<TriggerEnter3D>())
+            for (const Entity x : {ev.trigger, ev.other}) {
+                Ragdoll3D* r = w.alive(x) ? w.try_get_mut<Ragdoll3D>(x) : nullptr;
+                if (!r || !r->on_trigger || r->active) continue;
+                r->active = 1;
+                if (NavAgent3D* a = w.try_get_mut<NavAgent3D>(x)) a->move_to = 0;
+            }
+    }
     f.query<Ragdoll3D>().each([&](Entity e, Ragdoll3D& r) {
         Live* live = st.live.find(e);
         if (live && !phys.world.has_ragdoll(live->id)) {

@@ -108,349 +108,349 @@ inline constexpr u16 kLinesPerPage = 4, kLetterLinesPerPage = 12;
 
 inline constexpr mce::novel::LabelInfo kLabels[] = {
     {"start", 0},
-    {"d1_hasan_uni", 13},
-    {"d1_hasan_nermin", 16},
-    {"d1_hasan_sunday", 20},
-    {"d1_hasan_after", 23},
-    {"d1_cafe", 27},
-    {"d1_mira_sunday", 43},
-    {"d1_mira_pack", 45},
-    {"d1_mira_hint", 49},
-    {"d1_mira_now", 52},
-    {"d1_mira_later", 55},
-    {"d1_cafe_end", 59},
-    {"d1_grocery", 61},
-    {"d1_cemil_find", 71},
-    {"d1_cemil_keep", 73},
-    {"d1_cemil_end", 77},
-    {"d1_postoffice", 81},
-    {"d1_night_why", 95},
-    {"d1_night_right", 97},
-    {"d1_night_afraid", 100},
-    {"d1_night_end", 103},
-    {"next_day", 107},
-    {"morning_pier", 112},
-    {"mp_day2", 118},
-    {"mp2_tell", 123},
-    {"mp2_quiet", 128},
-    {"mp_day4", 130},
-    {"mp4_yusuf", 139},
-    {"mp4_feride", 141},
-    {"mp4_halil", 143},
-    {"mp4_hasan", 145},
-    {"mp4_cemil", 148},
-    {"mp_day6", 150},
-    {"mp6_hasan_letter", 157},
-    {"mp6_boat", 160},
-    {"mp_end", 165},
-    {"morning_cafe", 168},
-    {"mc3_yusuf", 181},
-    {"mc3_feride", 183},
-    {"mc3_halil", 187},
-    {"mc3_hasan", 189},
-    {"mc3_cemil", 191},
-    {"mc_day3_choice", 193},
-    {"mc3_take", 197},
-    {"mc3_mother", 201},
-    {"mc3_post", 204},
-    {"mc_day5", 208},
-    {"mc5_yusuf", 217},
-    {"mc5_feride", 219},
-    {"mc5_halil", 222},
-    {"mc5_hasan", 224},
-    {"mc5_cemil", 226},
-    {"mc_day5_tail", 228},
-    {"mc5_knows", 232},
-    {"mc5_blessing", 234},
-    {"mc_end", 238},
-    {"drawer_hub", 241},
-    {"drawer_empty", 255},
-    {"afternoon_choice", 257},
-    {"aft_mira", 262},
-    {"aft_selin", 267},
-    {"aft_yusuf", 272},
-    {"aft_alone", 277},
-    {"night", 282},
-    {"night_six", 291},
-    {"n6_blamed", 302},
-    {"n6_end", 303},
-    {"journal_line", 305},
-    {"jl_1", 313},
-    {"jl_2", 315},
-    {"jl_3", 317},
-    {"jl_4", 319},
-    {"jl_5", 321},
-    {"jl_6", 323},
-    {"deliver1", 325},
-    {"d1r_read", 331},
-    {"d1_scene", 333},
-    {"d1_seal_read", 342},
-    {"d1_admit", 344},
-    {"d1_deflect", 347},
-    {"d1_reading", 350},
-    {"d1_read_know", 357},
-    {"d1_read_honest", 359},
-    {"d1_find_out", 364},
-    {"d1_write", 367},
-    {"d1_after_write", 371},
-    {"d1_resolved", 375},
-    {"d1_end", 380},
-    {"deliver2", 382},
-    {"d2r_read", 388},
-    {"d2_scene", 390},
-    {"d2_seal_read", 398},
-    {"d2_admit", 400},
-    {"d2_deflect", 403},
-    {"d2_reading", 406},
-    {"d2_not_fail", 411},
-    {"d2_would_go", 414},
-    {"d2_mira", 419},
-    {"d2_mira_known", 425},
-    {"d2_turn", 428},
-    {"d2_both", 431},
-    {"d2_you", 437},
-    {"d2_you_blessing", 441},
-    {"d2_nothing", 444},
-    {"d2_after", 447},
-    {"d2_resolved", 451},
-    {"d2_end", 452},
-    {"deliver3", 454},
-    {"d3r_read", 460},
-    {"d3_scene", 462},
-    {"d3_seal_read", 470},
-    {"d3_admit", 472},
-    {"d3_deflect", 475},
-    {"d3_reading", 478},
-    {"d3_not_personal", 484},
-    {"d3_asked", 486},
-    {"d3_selin", 490},
-    {"d3_selin_sake", 492},
-    {"d3_selin_human", 496},
-    {"d3_turn", 499},
-    {"d3_stay", 503},
-    {"d3_hand", 508},
-    {"d3_go", 513},
-    {"d3_after", 517},
-    {"d3_resolved", 520},
-    {"d3_end", 521},
-    {"deliver4", 523},
-    {"d4r_read", 529},
-    {"d4_scene", 531},
-    {"d4_seal_read", 540},
-    {"d4_admit", 542},
-    {"d4_sorry", 546},
-    {"d4_reading", 548},
-    {"d4_every_boat", 553},
-    {"d4_steps", 557},
-    {"d4_turn", 561},
-    {"d4_stay", 565},
-    {"d4_go", 570},
-    {"d4_want", 572},
-    {"d4_after", 577},
-    {"d4_resolved", 580},
-    {"d4_end", 581},
-    {"deliver5", 583},
-    {"d5r_read", 589},
-    {"d5_scene", 591},
-    {"d5_seal_read", 599},
-    {"d5_reading", 602},
-    {"d5_right", 606},
-    {"d5_no_business", 608},
-    {"d5_open", 611},
-    {"d5_turn", 614},
-    {"d5_ring", 617},
-    {"d5_dont", 622},
-    {"d5_island", 626},
-    {"d5_after", 632},
-    {"d5_resolved", 635},
-    {"d5_end", 636},
-    {"deliver6", 638},
-    {"d6_read", 647},
-    {"d6_hard", 655},
-    {"d6_honest", 658},
-    {"d6_shut", 664},
-    {"d6_end", 666},
-    {"d6_radio_hint", 668},
-    {"mira_1", 670},
-    {"m1_go", 679},
-    {"m1_longer", 682},
-    {"m1_anything", 684},
-    {"m1_end", 688},
-    {"mira_2", 692},
-    {"m2_knows", 704},
-    {"m2_choice", 705},
-    {"m2_sing", 706},
-    {"m2_mother", 710},
-    {"m2_nermin", 713},
-    {"m2_end", 717},
-    {"mira_3", 719},
-    {"m3_told", 730},
-    {"m3_blessed", 733},
-    {"m3_stamp", 737},
-    {"m3_tell", 742},
-    {"m3_keep", 745},
-    {"m3_confess", 747},
-    {"m3_face", 751},
-    {"m3_pier", 754},
-    {"m3_sing", 757},
-    {"m3_me", 761},
-    {"m3_end", 764},
-    {"mira_4", 766},
-    {"m4_stamped", 777},
-    {"m4_blessed", 779},
-    {"m4_tomorrow", 782},
-    {"m4_anyway", 784},
-    {"m4_stay_say", 789},
-    {"m4_dough", 794},
-    {"m4_crowd", 797},
-    {"m4_blackboard", 799},
-    {"m4_boat", 802},
-    {"m4_roof", 805},
-    {"m4_end", 808},
-    {"mira_5", 810},
-    {"selin_1", 820},
-    {"s1_timer", 830},
-    {"s1_going", 833},
-    {"s1_letters", 835},
-    {"s1_end", 840},
-    {"selin_2", 842},
-    {"s2_delivered", 852},
-    {"s2_told", 855},
-    {"s2_choice", 857},
-    {"s2_wanted", 858},
-    {"s2_wanted_go", 862},
-    {"s2_radio_show", 865},
-    {"s2_end", 870},
-    {"selin_3", 873},
-    {"s3_keeper", 883},
-    {"s3_choice", 886},
-    {"s3_yes", 887},
-    {"s3_no", 890},
-    {"s3_sea", 893},
-    {"s3_end", 897},
-    {"selin_4", 900},
-    {"s4_keeper", 910},
-    {"s4_pier", 914},
-    {"s4_up", 917},
-    {"s4_count", 922},
-    {"s4_say", 926},
-    {"s4_post", 931},
-    {"s4_prove", 936},
-    {"s4_end", 939},
-    {"selin_5", 942},
-    {"radio_offer", 953},
-    {"ro_offer", 956},
-    {"ro_yes", 959},
-    {"ro_no", 968},
-    {"ro_done", 970},
-    {"yusuf_1", 971},
-    {"y1_two", 980},
-    {"y1_plank", 983},
-    {"y1_leave", 986},
-    {"y1_end", 988},
-    {"yusuf_2", 990},
-    {"y2_delivered", 1000},
-    {"y2_wrote", 1004},
-    {"y2_bring", 1010},
-    {"y2_want", 1012},
-    {"y2_say_that", 1015},
-    {"y2_go", 1019},
-    {"y2_end", 1022},
-    {"yusuf_3", 1024},
-    {"y3_working", 1035},
-    {"y3_name_kemal", 1037},
-    {"y3_name_nermin", 1041},
-    {"y3_float", 1045},
-    {"y3_end", 1050},
-    {"yusuf_4", 1052},
-    {"y4_wrote", 1063},
-    {"y4_kemal", 1066},
-    {"y4_end", 1080},
-    {"yusuf_5", 1082},
-    {"alone_1", 1091},
-    {"a1_keep", 1098},
-    {"a1_hasan", 1100},
-    {"a1_leave", 1103},
-    {"a1_end", 1106},
-    {"alone_2", 1107},
-    {"a2_take", 1116},
-    {"a2_burn", 1118},
-    {"a2_cemil", 1121},
-    {"a2_end", 1124},
-    {"alone_3", 1125},
-    {"a3_kept", 1136},
-    {"a3_open", 1138},
-    {"a3_shut", 1147},
-    {"a3_read", 1149},
-    {"a3_have", 1154},
-    {"a3_end", 1155},
-    {"alone_4", 1156},
-    {"a4_stamp", 1163},
-    {"a4_hand", 1166},
-    {"a4_leave", 1171},
-    {"a4_end", 1173},
-    {"alone_5", 1174},
-    {"day7", 1180},
-    {"d7_kemal_note", 1188},
-    {"d7_cast", 1189},
-    {"d7_feride_yes", 1195},
-    {"d7_feride_bless", 1198},
-    {"d7_feride_end", 1200},
-    {"d7_selin_keeper", 1205},
-    {"d7_selin_end", 1207},
-    {"d7_yusuf_letter", 1213},
-    {"d7_yusuf_boat", 1215},
-    {"d7_yusuf_end", 1216},
-    {"d7_cemil_sold", 1222},
-    {"d7_cemil_island", 1225},
-    {"d7_cemil_end", 1226},
-    {"d7_no_reply", 1229},
-    {"d7_set_ow", 1234},
-    {"d7_skip_ow", 1235},
-    {"d7_set_lk", 1238},
-    {"d7_skip_lk", 1239},
-    {"d7_alone", 1243},
-    {"ending_return_address", 1245},
-    {"ra_go", 1258},
-    {"ra_stay", 1263},
-    {"ending_open_water", 1268},
-    {"ending_lamp_keeper", 1282},
-    {"ending_drawer_shut", 1296},
-    {"ending_last_ferry", 1308},
-    {"lf_mira_goes", 1316},
-    {"lf_board", 1317},
-    {"epilogue", 1322},
-    {"ep_yusuf_none", 1332},
-    {"ep_yusuf_boat", 1334},
-    {"ep_feride", 1335},
-    {"ep_feride_none", 1339},
-    {"ep_feride_bless", 1341},
-    {"ep_halil", 1342},
-    {"ep_halil_none", 1346},
-    {"ep_halil_keeper", 1348},
-    {"ep_hasan", 1349},
-    {"ep_hasan_none", 1353},
-    {"ep_hasan_boat", 1355},
-    {"ep_cemil", 1357},
-    {"ep_cemil_sold", 1361},
-    {"ep_cemil_vote", 1364},
-    {"ep_deniz", 1365},
-    {"ep_deniz_read", 1371},
-    {"ep_deniz_wrote", 1373},
-    {"ep_deniz_stay", 1375},
-    {"ep_end", 1377},
-    {"__letter_1", 1380},
-    {"__letter_2", 1384},
-    {"__letter_3", 1388},
-    {"__letter_4", 1392},
-    {"__letter_5", 1396},
-    {"__letter_6", 1400},
-    {"__letter_7", 1404},
+    {"d1_hasan_uni", 14},
+    {"d1_hasan_nermin", 17},
+    {"d1_hasan_sunday", 21},
+    {"d1_hasan_after", 24},
+    {"d1_cafe", 28},
+    {"d1_mira_sunday", 44},
+    {"d1_mira_pack", 46},
+    {"d1_mira_hint", 50},
+    {"d1_mira_now", 53},
+    {"d1_mira_later", 56},
+    {"d1_cafe_end", 60},
+    {"d1_grocery", 62},
+    {"d1_cemil_find", 72},
+    {"d1_cemil_keep", 74},
+    {"d1_cemil_end", 78},
+    {"d1_postoffice", 82},
+    {"d1_night_why", 96},
+    {"d1_night_right", 98},
+    {"d1_night_afraid", 101},
+    {"d1_night_end", 104},
+    {"next_day", 108},
+    {"morning_pier", 113},
+    {"mp_day2", 119},
+    {"mp2_tell", 124},
+    {"mp2_quiet", 129},
+    {"mp_day4", 131},
+    {"mp4_yusuf", 140},
+    {"mp4_feride", 142},
+    {"mp4_halil", 144},
+    {"mp4_hasan", 146},
+    {"mp4_cemil", 149},
+    {"mp_day6", 151},
+    {"mp6_hasan_letter", 158},
+    {"mp6_boat", 161},
+    {"mp_end", 166},
+    {"morning_cafe", 169},
+    {"mc3_yusuf", 182},
+    {"mc3_feride", 184},
+    {"mc3_halil", 188},
+    {"mc3_hasan", 190},
+    {"mc3_cemil", 192},
+    {"mc_day3_choice", 194},
+    {"mc3_take", 198},
+    {"mc3_mother", 202},
+    {"mc3_post", 205},
+    {"mc_day5", 209},
+    {"mc5_yusuf", 218},
+    {"mc5_feride", 220},
+    {"mc5_halil", 223},
+    {"mc5_hasan", 225},
+    {"mc5_cemil", 227},
+    {"mc_day5_tail", 229},
+    {"mc5_knows", 233},
+    {"mc5_blessing", 235},
+    {"mc_end", 239},
+    {"drawer_hub", 242},
+    {"drawer_empty", 256},
+    {"afternoon_choice", 258},
+    {"aft_mira", 263},
+    {"aft_selin", 268},
+    {"aft_yusuf", 273},
+    {"aft_alone", 278},
+    {"night", 283},
+    {"night_six", 292},
+    {"n6_blamed", 303},
+    {"n6_end", 304},
+    {"journal_line", 306},
+    {"jl_1", 314},
+    {"jl_2", 316},
+    {"jl_3", 318},
+    {"jl_4", 320},
+    {"jl_5", 322},
+    {"jl_6", 324},
+    {"deliver1", 326},
+    {"d1r_read", 332},
+    {"d1_scene", 334},
+    {"d1_seal_read", 343},
+    {"d1_admit", 345},
+    {"d1_deflect", 348},
+    {"d1_reading", 351},
+    {"d1_read_know", 358},
+    {"d1_read_honest", 360},
+    {"d1_find_out", 365},
+    {"d1_write", 368},
+    {"d1_after_write", 372},
+    {"d1_resolved", 376},
+    {"d1_end", 381},
+    {"deliver2", 383},
+    {"d2r_read", 389},
+    {"d2_scene", 391},
+    {"d2_seal_read", 399},
+    {"d2_admit", 401},
+    {"d2_deflect", 404},
+    {"d2_reading", 407},
+    {"d2_not_fail", 412},
+    {"d2_would_go", 415},
+    {"d2_mira", 420},
+    {"d2_mira_known", 426},
+    {"d2_turn", 429},
+    {"d2_both", 432},
+    {"d2_you", 438},
+    {"d2_you_blessing", 442},
+    {"d2_nothing", 445},
+    {"d2_after", 448},
+    {"d2_resolved", 452},
+    {"d2_end", 453},
+    {"deliver3", 455},
+    {"d3r_read", 461},
+    {"d3_scene", 463},
+    {"d3_seal_read", 471},
+    {"d3_admit", 473},
+    {"d3_deflect", 476},
+    {"d3_reading", 479},
+    {"d3_not_personal", 485},
+    {"d3_asked", 487},
+    {"d3_selin", 491},
+    {"d3_selin_sake", 493},
+    {"d3_selin_human", 497},
+    {"d3_turn", 500},
+    {"d3_stay", 504},
+    {"d3_hand", 509},
+    {"d3_go", 514},
+    {"d3_after", 518},
+    {"d3_resolved", 521},
+    {"d3_end", 522},
+    {"deliver4", 524},
+    {"d4r_read", 530},
+    {"d4_scene", 532},
+    {"d4_seal_read", 541},
+    {"d4_admit", 543},
+    {"d4_sorry", 547},
+    {"d4_reading", 549},
+    {"d4_every_boat", 554},
+    {"d4_steps", 558},
+    {"d4_turn", 562},
+    {"d4_stay", 566},
+    {"d4_go", 571},
+    {"d4_want", 573},
+    {"d4_after", 578},
+    {"d4_resolved", 581},
+    {"d4_end", 582},
+    {"deliver5", 584},
+    {"d5r_read", 590},
+    {"d5_scene", 592},
+    {"d5_seal_read", 600},
+    {"d5_reading", 603},
+    {"d5_right", 607},
+    {"d5_no_business", 609},
+    {"d5_open", 612},
+    {"d5_turn", 615},
+    {"d5_ring", 618},
+    {"d5_dont", 623},
+    {"d5_island", 627},
+    {"d5_after", 633},
+    {"d5_resolved", 636},
+    {"d5_end", 637},
+    {"deliver6", 639},
+    {"d6_read", 648},
+    {"d6_hard", 656},
+    {"d6_honest", 659},
+    {"d6_shut", 665},
+    {"d6_end", 667},
+    {"d6_radio_hint", 669},
+    {"mira_1", 671},
+    {"m1_go", 680},
+    {"m1_longer", 683},
+    {"m1_anything", 685},
+    {"m1_end", 689},
+    {"mira_2", 693},
+    {"m2_knows", 705},
+    {"m2_choice", 706},
+    {"m2_sing", 707},
+    {"m2_mother", 711},
+    {"m2_nermin", 714},
+    {"m2_end", 718},
+    {"mira_3", 720},
+    {"m3_told", 731},
+    {"m3_blessed", 734},
+    {"m3_stamp", 738},
+    {"m3_tell", 743},
+    {"m3_keep", 746},
+    {"m3_confess", 748},
+    {"m3_face", 752},
+    {"m3_pier", 755},
+    {"m3_sing", 758},
+    {"m3_me", 762},
+    {"m3_end", 765},
+    {"mira_4", 767},
+    {"m4_stamped", 778},
+    {"m4_blessed", 780},
+    {"m4_tomorrow", 783},
+    {"m4_anyway", 785},
+    {"m4_stay_say", 790},
+    {"m4_dough", 795},
+    {"m4_crowd", 798},
+    {"m4_blackboard", 800},
+    {"m4_boat", 803},
+    {"m4_roof", 806},
+    {"m4_end", 809},
+    {"mira_5", 811},
+    {"selin_1", 821},
+    {"s1_timer", 831},
+    {"s1_going", 834},
+    {"s1_letters", 836},
+    {"s1_end", 841},
+    {"selin_2", 843},
+    {"s2_delivered", 853},
+    {"s2_told", 856},
+    {"s2_choice", 858},
+    {"s2_wanted", 859},
+    {"s2_wanted_go", 863},
+    {"s2_radio_show", 866},
+    {"s2_end", 871},
+    {"selin_3", 874},
+    {"s3_keeper", 884},
+    {"s3_choice", 887},
+    {"s3_yes", 888},
+    {"s3_no", 891},
+    {"s3_sea", 894},
+    {"s3_end", 898},
+    {"selin_4", 901},
+    {"s4_keeper", 911},
+    {"s4_pier", 915},
+    {"s4_up", 918},
+    {"s4_count", 923},
+    {"s4_say", 927},
+    {"s4_post", 932},
+    {"s4_prove", 937},
+    {"s4_end", 940},
+    {"selin_5", 943},
+    {"radio_offer", 954},
+    {"ro_offer", 957},
+    {"ro_yes", 960},
+    {"ro_no", 969},
+    {"ro_done", 971},
+    {"yusuf_1", 972},
+    {"y1_two", 981},
+    {"y1_plank", 984},
+    {"y1_leave", 987},
+    {"y1_end", 989},
+    {"yusuf_2", 991},
+    {"y2_delivered", 1001},
+    {"y2_wrote", 1005},
+    {"y2_bring", 1011},
+    {"y2_want", 1013},
+    {"y2_say_that", 1016},
+    {"y2_go", 1020},
+    {"y2_end", 1023},
+    {"yusuf_3", 1025},
+    {"y3_working", 1036},
+    {"y3_name_kemal", 1038},
+    {"y3_name_nermin", 1042},
+    {"y3_float", 1046},
+    {"y3_end", 1051},
+    {"yusuf_4", 1053},
+    {"y4_wrote", 1064},
+    {"y4_kemal", 1067},
+    {"y4_end", 1081},
+    {"yusuf_5", 1083},
+    {"alone_1", 1092},
+    {"a1_keep", 1099},
+    {"a1_hasan", 1101},
+    {"a1_leave", 1104},
+    {"a1_end", 1107},
+    {"alone_2", 1108},
+    {"a2_take", 1117},
+    {"a2_burn", 1119},
+    {"a2_cemil", 1122},
+    {"a2_end", 1125},
+    {"alone_3", 1126},
+    {"a3_kept", 1137},
+    {"a3_open", 1139},
+    {"a3_shut", 1148},
+    {"a3_read", 1150},
+    {"a3_have", 1155},
+    {"a3_end", 1156},
+    {"alone_4", 1157},
+    {"a4_stamp", 1164},
+    {"a4_hand", 1167},
+    {"a4_leave", 1172},
+    {"a4_end", 1174},
+    {"alone_5", 1175},
+    {"day7", 1181},
+    {"d7_kemal_note", 1189},
+    {"d7_cast", 1190},
+    {"d7_feride_yes", 1196},
+    {"d7_feride_bless", 1199},
+    {"d7_feride_end", 1201},
+    {"d7_selin_keeper", 1206},
+    {"d7_selin_end", 1208},
+    {"d7_yusuf_letter", 1214},
+    {"d7_yusuf_boat", 1216},
+    {"d7_yusuf_end", 1217},
+    {"d7_cemil_sold", 1223},
+    {"d7_cemil_island", 1226},
+    {"d7_cemil_end", 1227},
+    {"d7_no_reply", 1230},
+    {"d7_set_ow", 1235},
+    {"d7_skip_ow", 1236},
+    {"d7_set_lk", 1239},
+    {"d7_skip_lk", 1240},
+    {"d7_alone", 1244},
+    {"ending_return_address", 1246},
+    {"ra_go", 1259},
+    {"ra_stay", 1264},
+    {"ending_open_water", 1269},
+    {"ending_lamp_keeper", 1283},
+    {"ending_drawer_shut", 1297},
+    {"ending_last_ferry", 1309},
+    {"lf_mira_goes", 1317},
+    {"lf_board", 1318},
+    {"epilogue", 1323},
+    {"ep_yusuf_none", 1333},
+    {"ep_yusuf_boat", 1335},
+    {"ep_feride", 1336},
+    {"ep_feride_none", 1340},
+    {"ep_feride_bless", 1342},
+    {"ep_halil", 1343},
+    {"ep_halil_none", 1347},
+    {"ep_halil_keeper", 1349},
+    {"ep_hasan", 1350},
+    {"ep_hasan_none", 1354},
+    {"ep_hasan_boat", 1356},
+    {"ep_cemil", 1358},
+    {"ep_cemil_sold", 1362},
+    {"ep_cemil_vote", 1365},
+    {"ep_deniz", 1366},
+    {"ep_deniz_read", 1372},
+    {"ep_deniz_wrote", 1374},
+    {"ep_deniz_stay", 1376},
+    {"ep_end", 1378},
+    {"__letter_1", 1381},
+    {"__letter_2", 1385},
+    {"__letter_3", 1389},
+    {"__letter_4", 1393},
+    {"__letter_5", 1397},
+    {"__letter_6", 1401},
+    {"__letter_7", 1405},
 };
 inline constexpr const char* kLabelNames[] = {"start", "d1_hasan_uni", "d1_hasan_nermin", "d1_hasan_sunday", "d1_hasan_after", "d1_cafe", "d1_mira_sunday", "d1_mira_pack", "d1_mira_hint", "d1_mira_now", "d1_mira_later", "d1_cafe_end", "d1_grocery", "d1_cemil_find", "d1_cemil_keep", "d1_cemil_end", "d1_postoffice", "d1_night_why", "d1_night_right", "d1_night_afraid", "d1_night_end", "next_day", "morning_pier", "mp_day2", "mp2_tell", "mp2_quiet", "mp_day4", "mp4_yusuf", "mp4_feride", "mp4_halil", "mp4_hasan", "mp4_cemil", "mp_day6", "mp6_hasan_letter", "mp6_boat", "mp_end", "morning_cafe", "mc3_yusuf", "mc3_feride", "mc3_halil", "mc3_hasan", "mc3_cemil", "mc_day3_choice", "mc3_take", "mc3_mother", "mc3_post", "mc_day5", "mc5_yusuf", "mc5_feride", "mc5_halil", "mc5_hasan", "mc5_cemil", "mc_day5_tail", "mc5_knows", "mc5_blessing", "mc_end", "drawer_hub", "drawer_empty", "afternoon_choice", "aft_mira", "aft_selin", "aft_yusuf", "aft_alone", "night", "night_six", "n6_blamed", "n6_end", "journal_line", "jl_1", "jl_2", "jl_3", "jl_4", "jl_5", "jl_6", "deliver1", "d1r_read", "d1_scene", "d1_seal_read", "d1_admit", "d1_deflect", "d1_reading", "d1_read_know", "d1_read_honest", "d1_find_out", "d1_write", "d1_after_write", "d1_resolved", "d1_end", "deliver2", "d2r_read", "d2_scene", "d2_seal_read", "d2_admit", "d2_deflect", "d2_reading", "d2_not_fail", "d2_would_go", "d2_mira", "d2_mira_known", "d2_turn", "d2_both", "d2_you", "d2_you_blessing", "d2_nothing", "d2_after", "d2_resolved", "d2_end", "deliver3", "d3r_read", "d3_scene", "d3_seal_read", "d3_admit", "d3_deflect", "d3_reading", "d3_not_personal", "d3_asked", "d3_selin", "d3_selin_sake", "d3_selin_human", "d3_turn", "d3_stay", "d3_hand", "d3_go", "d3_after", "d3_resolved", "d3_end", "deliver4", "d4r_read", "d4_scene", "d4_seal_read", "d4_admit", "d4_sorry", "d4_reading", "d4_every_boat", "d4_steps", "d4_turn", "d4_stay", "d4_go", "d4_want", "d4_after", "d4_resolved", "d4_end", "deliver5", "d5r_read", "d5_scene", "d5_seal_read", "d5_reading", "d5_right", "d5_no_business", "d5_open", "d5_turn", "d5_ring", "d5_dont", "d5_island", "d5_after", "d5_resolved", "d5_end", "deliver6", "d6_read", "d6_hard", "d6_honest", "d6_shut", "d6_end", "d6_radio_hint", "mira_1", "m1_go", "m1_longer", "m1_anything", "m1_end", "mira_2", "m2_knows", "m2_choice", "m2_sing", "m2_mother", "m2_nermin", "m2_end", "mira_3", "m3_told", "m3_blessed", "m3_stamp", "m3_tell", "m3_keep", "m3_confess", "m3_face", "m3_pier", "m3_sing", "m3_me", "m3_end", "mira_4", "m4_stamped", "m4_blessed", "m4_tomorrow", "m4_anyway", "m4_stay_say", "m4_dough", "m4_crowd", "m4_blackboard", "m4_boat", "m4_roof", "m4_end", "mira_5", "selin_1", "s1_timer", "s1_going", "s1_letters", "s1_end", "selin_2", "s2_delivered", "s2_told", "s2_choice", "s2_wanted", "s2_wanted_go", "s2_radio_show", "s2_end", "selin_3", "s3_keeper", "s3_choice", "s3_yes", "s3_no", "s3_sea", "s3_end", "selin_4", "s4_keeper", "s4_pier", "s4_up", "s4_count", "s4_say", "s4_post", "s4_prove", "s4_end", "selin_5", "radio_offer", "ro_offer", "ro_yes", "ro_no", "ro_done", "yusuf_1", "y1_two", "y1_plank", "y1_leave", "y1_end", "yusuf_2", "y2_delivered", "y2_wrote", "y2_bring", "y2_want", "y2_say_that", "y2_go", "y2_end", "yusuf_3", "y3_working", "y3_name_kemal", "y3_name_nermin", "y3_float", "y3_end", "yusuf_4", "y4_wrote", "y4_kemal", "y4_end", "yusuf_5", "alone_1", "a1_keep", "a1_hasan", "a1_leave", "a1_end", "alone_2", "a2_take", "a2_burn", "a2_cemil", "a2_end", "alone_3", "a3_kept", "a3_open", "a3_shut", "a3_read", "a3_have", "a3_end", "alone_4", "a4_stamp", "a4_hand", "a4_leave", "a4_end", "alone_5", "day7", "d7_kemal_note", "d7_cast", "d7_feride_yes", "d7_feride_bless", "d7_feride_end", "d7_selin_keeper", "d7_selin_end", "d7_yusuf_letter", "d7_yusuf_boat", "d7_yusuf_end", "d7_cemil_sold", "d7_cemil_island", "d7_cemil_end", "d7_no_reply", "d7_set_ow", "d7_skip_ow", "d7_set_lk", "d7_skip_lk", "d7_alone", "ending_return_address", "ra_go", "ra_stay", "ending_open_water", "ending_lamp_keeper", "ending_drawer_shut", "ending_last_ferry", "lf_mira_goes", "lf_board", "epilogue", "ep_yusuf_none", "ep_yusuf_boat", "ep_feride", "ep_feride_none", "ep_feride_bless", "ep_halil", "ep_halil_none", "ep_halil_keeper", "ep_hasan", "ep_hasan_none", "ep_hasan_boat", "ep_cemil", "ep_cemil_sold", "ep_cemil_vote", "ep_deniz", "ep_deniz_read", "ep_deniz_wrote", "ep_deniz_stay", "ep_end", "__letter_1", "__letter_2", "__letter_3", "__letter_4", "__letter_5", "__letter_6", "__letter_7"};
-inline constexpr u16 kLabelOps[] = {0, 13, 16, 20, 23, 27, 43, 45, 49, 52, 55, 59, 61, 71, 73, 77, 81, 95, 97, 100, 103, 107, 112, 118, 123, 128, 130, 139, 141, 143, 145, 148, 150, 157, 160, 165, 168, 181, 183, 187, 189, 191, 193, 197, 201, 204, 208, 217, 219, 222, 224, 226, 228, 232, 234, 238, 241, 255, 257, 262, 267, 272, 277, 282, 291, 302, 303, 305, 313, 315, 317, 319, 321, 323, 325, 331, 333, 342, 344, 347, 350, 357, 359, 364, 367, 371, 375, 380, 382, 388, 390, 398, 400, 403, 406, 411, 414, 419, 425, 428, 431, 437, 441, 444, 447, 451, 452, 454, 460, 462, 470, 472, 475, 478, 484, 486, 490, 492, 496, 499, 503, 508, 513, 517, 520, 521, 523, 529, 531, 540, 542, 546, 548, 553, 557, 561, 565, 570, 572, 577, 580, 581, 583, 589, 591, 599, 602, 606, 608, 611, 614, 617, 622, 626, 632, 635, 636, 638, 647, 655, 658, 664, 666, 668, 670, 679, 682, 684, 688, 692, 704, 705, 706, 710, 713, 717, 719, 730, 733, 737, 742, 745, 747, 751, 754, 757, 761, 764, 766, 777, 779, 782, 784, 789, 794, 797, 799, 802, 805, 808, 810, 820, 830, 833, 835, 840, 842, 852, 855, 857, 858, 862, 865, 870, 873, 883, 886, 887, 890, 893, 897, 900, 910, 914, 917, 922, 926, 931, 936, 939, 942, 953, 956, 959, 968, 970, 971, 980, 983, 986, 988, 990, 1000, 1004, 1010, 1012, 1015, 1019, 1022, 1024, 1035, 1037, 1041, 1045, 1050, 1052, 1063, 1066, 1080, 1082, 1091, 1098, 1100, 1103, 1106, 1107, 1116, 1118, 1121, 1124, 1125, 1136, 1138, 1147, 1149, 1154, 1155, 1156, 1163, 1166, 1171, 1173, 1174, 1180, 1188, 1189, 1195, 1198, 1200, 1205, 1207, 1213, 1215, 1216, 1222, 1225, 1226, 1229, 1234, 1235, 1238, 1239, 1243, 1245, 1258, 1263, 1268, 1282, 1296, 1308, 1316, 1317, 1322, 1332, 1334, 1335, 1339, 1341, 1342, 1346, 1348, 1349, 1353, 1355, 1357, 1361, 1364, 1365, 1371, 1373, 1375, 1377, 1380, 1384, 1388, 1392, 1396, 1400, 1404};
+inline constexpr u16 kLabelOps[] = {0, 14, 17, 21, 24, 28, 44, 46, 50, 53, 56, 60, 62, 72, 74, 78, 82, 96, 98, 101, 104, 108, 113, 119, 124, 129, 131, 140, 142, 144, 146, 149, 151, 158, 161, 166, 169, 182, 184, 188, 190, 192, 194, 198, 202, 205, 209, 218, 220, 223, 225, 227, 229, 233, 235, 239, 242, 256, 258, 263, 268, 273, 278, 283, 292, 303, 304, 306, 314, 316, 318, 320, 322, 324, 326, 332, 334, 343, 345, 348, 351, 358, 360, 365, 368, 372, 376, 381, 383, 389, 391, 399, 401, 404, 407, 412, 415, 420, 426, 429, 432, 438, 442, 445, 448, 452, 453, 455, 461, 463, 471, 473, 476, 479, 485, 487, 491, 493, 497, 500, 504, 509, 514, 518, 521, 522, 524, 530, 532, 541, 543, 547, 549, 554, 558, 562, 566, 571, 573, 578, 581, 582, 584, 590, 592, 600, 603, 607, 609, 612, 615, 618, 623, 627, 633, 636, 637, 639, 648, 656, 659, 665, 667, 669, 671, 680, 683, 685, 689, 693, 705, 706, 707, 711, 714, 718, 720, 731, 734, 738, 743, 746, 748, 752, 755, 758, 762, 765, 767, 778, 780, 783, 785, 790, 795, 798, 800, 803, 806, 809, 811, 821, 831, 834, 836, 841, 843, 853, 856, 858, 859, 863, 866, 871, 874, 884, 887, 888, 891, 894, 898, 901, 911, 915, 918, 923, 927, 932, 937, 940, 943, 954, 957, 960, 969, 971, 972, 981, 984, 987, 989, 991, 1001, 1005, 1011, 1013, 1016, 1020, 1023, 1025, 1036, 1038, 1042, 1046, 1051, 1053, 1064, 1067, 1081, 1083, 1092, 1099, 1101, 1104, 1107, 1108, 1117, 1119, 1122, 1125, 1126, 1137, 1139, 1148, 1150, 1155, 1156, 1157, 1164, 1167, 1172, 1174, 1175, 1181, 1189, 1190, 1196, 1199, 1201, 1206, 1208, 1214, 1216, 1217, 1223, 1226, 1227, 1230, 1235, 1236, 1239, 1240, 1244, 1246, 1259, 1264, 1269, 1283, 1297, 1309, 1317, 1318, 1323, 1333, 1335, 1336, 1340, 1342, 1343, 1347, 1349, 1350, 1354, 1356, 1358, 1362, 1365, 1366, 1372, 1374, 1376, 1378, 1381, 1385, 1389, 1393, 1397, 1401, 1405};
 inline constexpr u16 kStart = 0;
-inline constexpr u16 kLetterLabels[8] = {0, 1380, 1384, 1388, 1392, 1396, 1400, 1404};
+inline constexpr u16 kLetterLabels[8] = {0, 1381, 1385, 1389, 1393, 1397, 1401, 1405};
 
 inline constexpr u16 kTextCount = 1543;
 inline constexpr const char* kText[] = {
@@ -1999,126 +1999,127 @@ inline constexpr const char* kText[] = {
     "She kept seven.*",
 };
 
-inline constexpr u16 kOpCount = 1409;
+inline constexpr u16 kOpCount = 1410;
 inline constexpr Op kOps[] = {
     {u16(OpKind::Bg), 1, 2, 1, 0, 0, 0},  // 00_day1.story:4
     {u16(OpKind::Music), 1, 0, 0, 0, 0, 0},  // 00_day1.story:4
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 00_day1.story:4
     {u16(OpKind::Set), 32769, 1, 0, 0, 0, 0},  // 00_day1.story:5
-    {u16(OpKind::Say), 65535, 65535, 1, 2, 3, 4},  // 00_day1.story:10
-    {u16(OpKind::Say), 65535, 65535, 5, 0, 0, 0},  // 00_day1.story:10
-    {u16(OpKind::Say), 65535, 65535, 6, 7, 8, 9},  // 00_day1.story:14
-    {u16(OpKind::Show), 1, 6, 0, 0, 0, 0},  // 00_day1.story:15
-    {u16(OpKind::Say), 6, 65535, 10, 0, 0, 0},  // 00_day1.story:17
-    {u16(OpKind::Say), 6, 65535, 11, 12, 0, 0},  // 00_day1.story:19
-    {u16(OpKind::Say), 65535, 65535, 13, 14, 0, 0},  // 00_day1.story:22
-    {u16(OpKind::Say), 6, 1, 15, 16, 0, 0},  // 00_day1.story:24
-    {u16(OpKind::Choice), 0, 3, 0, 0, 0, 0},  // 00_day1.story:28
-    {u16(OpKind::Say), 6, 65535, 20, 21, 0, 0},  // 00_day1.story:33
-    {u16(OpKind::Say), 65535, 65535, 22, 23, 0, 0},  // 00_day1.story:34
-    {u16(OpKind::Jump), 23, 0, 0, 0, 0, 0},  // 00_day1.story:34
-    {u16(OpKind::Say), 6, 2, 24, 25, 26, 0},  // 00_day1.story:39
-    {u16(OpKind::Say), 6, 65535, 27, 28, 0, 0},  // 00_day1.story:40
-    {u16(OpKind::Add), 32790, 1, 0, 0, 0, 0},  // 00_day1.story:40
-    {u16(OpKind::Jump), 23, 0, 0, 0, 0, 0},  // 00_day1.story:41
-    {u16(OpKind::Say), 6, 3, 29, 30, 31, 0},  // 00_day1.story:46
-    {u16(OpKind::Say), 6, 65535, 32, 33, 34, 0},  // 00_day1.story:48
-    {u16(OpKind::Jump), 23, 0, 0, 0, 0, 0},  // 00_day1.story:48
-    {u16(OpKind::Say), 6, 65535, 35, 36, 37, 0},  // 00_day1.story:53
-    {u16(OpKind::Sfx), 6, 0, 0, 0, 0, 0},  // 00_day1.story:53
-    {u16(OpKind::Say), 65535, 65535, 38, 39, 40, 0},  // 00_day1.story:56
-    {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 00_day1.story:56
-    {u16(OpKind::Bg), 2, 2, 1, 0, 0, 0},  // 00_day1.story:58
-    {u16(OpKind::Music), 2, 0, 0, 0, 0, 0},  // 00_day1.story:58
-    {u16(OpKind::Ambience), 2, 0, 0, 0, 0, 0},  // 00_day1.story:58
-    {u16(OpKind::Say), 65535, 65535, 41, 42, 43, 44},  // 00_day1.story:62
-    {u16(OpKind::Show), 1, 1, 1, 0, 0, 0},  // 00_day1.story:62
-    {u16(OpKind::Say), 1, 1, 45, 0, 0, 0},  // 00_day1.story:64
-    {u16(OpKind::Say), 1, 65535, 46, 0, 0, 0},  // 00_day1.story:65
-    {u16(OpKind::Show), 0, 2, 1, 0, 0, 0},  // 00_day1.story:65
-    {u16(OpKind::Say), 2, 1, 47, 48, 0, 0},  // 00_day1.story:68
-    {u16(OpKind::Say), 65535, 65535, 49, 50, 51, 52},  // 00_day1.story:71
-    {u16(OpKind::Say), 65535, 65535, 53, 0, 0, 0},  // 00_day1.story:71
-    {u16(OpKind::Say), 2, 65535, 54, 0, 0, 0},  // 00_day1.story:72
-    {u16(OpKind::Hide), 2, 0, 0, 0, 0, 0},  // 00_day1.story:72
-    {u16(OpKind::Expr), 1, 4, 0, 0, 0, 0},  // 00_day1.story:73
-    {u16(OpKind::Say), 1, 4, 55, 0, 0, 0},  // 00_day1.story:75
-    {u16(OpKind::Choice), 3, 2, 0, 0, 0, 0},  // 00_day1.story:77
-    {u16(OpKind::Say), 1, 2, 58, 59, 60, 0},  // 00_day1.story:82
-    {u16(OpKind::Jump), 49, 0, 0, 0, 0, 0},  // 00_day1.story:82
-    {u16(OpKind::Say), 1, 2, 61, 62, 63, 0},  // 00_day1.story:87
-    {u16(OpKind::Say), 1, 65535, 64, 0, 0, 0},  // 00_day1.story:88
-    {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 00_day1.story:88
-    {u16(OpKind::Jump), 49, 0, 0, 0, 0, 0},  // 00_day1.story:89
-    {u16(OpKind::Say), 65535, 65535, 65, 66, 67, 0},  // 00_day1.story:94
-    {u16(OpKind::Say), 1, 4, 68, 69, 0, 0},  // 00_day1.story:95
-    {u16(OpKind::Choice), 5, 2, 0, 0, 0, 0},  // 00_day1.story:97
-    {u16(OpKind::Say), 1, 3, 72, 73, 74, 0},  // 00_day1.story:102
-    {u16(OpKind::Say), 65535, 65535, 75, 0, 0, 0},  // 00_day1.story:103
-    {u16(OpKind::Jump), 59, 0, 0, 0, 0, 0},  // 00_day1.story:103
-    {u16(OpKind::Say), 1, 1, 76, 77, 0, 0},  // 00_day1.story:107
-    {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 00_day1.story:107
-    {u16(OpKind::Set), 20, 1, 0, 0, 0, 0},  // 00_day1.story:108
-    {u16(OpKind::Jump), 59, 0, 0, 0, 0, 0},  // 00_day1.story:109
-    {u16(OpKind::Say), 1, 65535, 78, 79, 0, 0},  // 00_day1.story:113
-    {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 00_day1.story:113
-    {u16(OpKind::Bg), 8, 2, 1, 0, 0, 0},  // 00_day1.story:115
-    {u16(OpKind::Music), 0, 0, 0, 0, 0, 0},  // 00_day1.story:115
-    {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 00_day1.story:115
-    {u16(OpKind::Say), 65535, 65535, 80, 81, 82, 0},  // 00_day1.story:118
-    {u16(OpKind::Show), 1, 7, 0, 0, 0, 0},  // 00_day1.story:118
-    {u16(OpKind::Say), 7, 65535, 83, 84, 85, 0},  // 00_day1.story:121
-    {u16(OpKind::Say), 7, 65535, 86, 87, 0, 0},  // 00_day1.story:122
-    {u16(OpKind::Say), 65535, 65535, 88, 89, 0, 0},  // 00_day1.story:123
-    {u16(OpKind::Say), 7, 2, 90, 91, 92, 93},  // 00_day1.story:126
-    {u16(OpKind::Choice), 7, 2, 0, 0, 0, 0},  // 00_day1.story:128
-    {u16(OpKind::Say), 7, 65535, 97, 98, 99, 0},  // 00_day1.story:133
-    {u16(OpKind::Jump), 77, 0, 0, 0, 0, 0},  // 00_day1.story:133
-    {u16(OpKind::Say), 7, 1, 100, 0, 0, 0},  // 00_day1.story:137
-    {u16(OpKind::Say), 7, 65535, 101, 102, 0, 0},  // 00_day1.story:139
-    {u16(OpKind::Add), 32791, 1, 0, 0, 0, 0},  // 00_day1.story:139
-    {u16(OpKind::Jump), 77, 0, 0, 0, 0, 0},  // 00_day1.story:140
-    {u16(OpKind::Say), 7, 65535, 103, 104, 105, 106},  // 00_day1.story:146
-    {u16(OpKind::Say), 7, 65535, 107, 0, 0, 0},  // 00_day1.story:146
-    {u16(OpKind::Say), 7, 3, 108, 109, 110, 0},  // 00_day1.story:148
-    {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 00_day1.story:148
-    {u16(OpKind::Bg), 3, 3, 3, 0, 0, 0},  // 00_day1.story:150
-    {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 00_day1.story:150
-    {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 00_day1.story:150
-    {u16(OpKind::Say), 65535, 65535, 111, 112, 113, 114},  // 00_day1.story:154
-    {u16(OpKind::Say), 65535, 65535, 115, 0, 0, 0},  // 00_day1.story:154
-    {u16(OpKind::Say), 65535, 65535, 116, 117, 118, 0},  // 00_day1.story:156
-    {u16(OpKind::Sfx), 4, 0, 0, 0, 0, 0},  // 00_day1.story:156
-    {u16(OpKind::Say), 65535, 65535, 119, 0, 0, 0},  // 00_day1.story:158
-    {u16(OpKind::Say), 65535, 65535, 120, 121, 122, 123},  // 00_day1.story:160
-    {u16(OpKind::Say), 65535, 65535, 124, 125, 0, 0},  // 00_day1.story:161
-    {u16(OpKind::Say), 65535, 65535, 126, 127, 128, 129},  // 00_day1.story:163
-    {u16(OpKind::Say), 65535, 65535, 130, 131, 0, 0},  // 00_day1.story:165
-    {u16(OpKind::Say), 65535, 65535, 132, 0, 0, 0},  // 00_day1.story:166
-    {u16(OpKind::Choice), 9, 3, 0, 0, 0, 0},  // 00_day1.story:169
-    {u16(OpKind::Say), 65535, 65535, 136, 137, 138, 0},  // 00_day1.story:174
-    {u16(OpKind::Jump), 103, 0, 0, 0, 0, 0},  // 00_day1.story:174
-    {u16(OpKind::Say), 65535, 65535, 139, 140, 141, 0},  // 00_day1.story:179
-    {u16(OpKind::Set), 24, 1, 0, 0, 0, 0},  // 00_day1.story:179
-    {u16(OpKind::Jump), 103, 0, 0, 0, 0, 0},  // 00_day1.story:180
-    {u16(OpKind::Say), 65535, 65535, 142, 143, 144, 145},  // 00_day1.story:186
-    {u16(OpKind::Set), 23, 1, 0, 0, 0, 0},  // 00_day1.story:186
-    {u16(OpKind::Jump), 103, 0, 0, 0, 0, 0},  // 00_day1.story:187
-    {u16(OpKind::Say), 65535, 65535, 146, 147, 148, 149},  // 00_day1.story:193
-    {u16(OpKind::Say), 65535, 65535, 150, 0, 0, 0},  // 00_day1.story:193
-    {u16(OpKind::Checkpoint), 0, 0, 0, 0, 0, 0},  // 00_day1.story:193
-    {u16(OpKind::Jump), 107, 0, 0, 0, 0, 0},  // 00_day1.story:194
+    {u16(OpKind::Cutscene), 1, 0, 0, 0, 0, 0},  // 00_day1.story:6
+    {u16(OpKind::Say), 65535, 65535, 1, 2, 3, 4},  // 00_day1.story:11
+    {u16(OpKind::Say), 65535, 65535, 5, 0, 0, 0},  // 00_day1.story:11
+    {u16(OpKind::Say), 65535, 65535, 6, 7, 8, 9},  // 00_day1.story:15
+    {u16(OpKind::Show), 1, 6, 0, 0, 0, 0},  // 00_day1.story:16
+    {u16(OpKind::Say), 6, 65535, 10, 0, 0, 0},  // 00_day1.story:18
+    {u16(OpKind::Say), 6, 65535, 11, 12, 0, 0},  // 00_day1.story:20
+    {u16(OpKind::Say), 65535, 65535, 13, 14, 0, 0},  // 00_day1.story:23
+    {u16(OpKind::Say), 6, 1, 15, 16, 0, 0},  // 00_day1.story:25
+    {u16(OpKind::Choice), 0, 3, 0, 0, 0, 0},  // 00_day1.story:29
+    {u16(OpKind::Say), 6, 65535, 20, 21, 0, 0},  // 00_day1.story:34
+    {u16(OpKind::Say), 65535, 65535, 22, 23, 0, 0},  // 00_day1.story:35
+    {u16(OpKind::Jump), 24, 0, 0, 0, 0, 0},  // 00_day1.story:35
+    {u16(OpKind::Say), 6, 2, 24, 25, 26, 0},  // 00_day1.story:40
+    {u16(OpKind::Say), 6, 65535, 27, 28, 0, 0},  // 00_day1.story:41
+    {u16(OpKind::Add), 32790, 1, 0, 0, 0, 0},  // 00_day1.story:41
+    {u16(OpKind::Jump), 24, 0, 0, 0, 0, 0},  // 00_day1.story:42
+    {u16(OpKind::Say), 6, 3, 29, 30, 31, 0},  // 00_day1.story:47
+    {u16(OpKind::Say), 6, 65535, 32, 33, 34, 0},  // 00_day1.story:49
+    {u16(OpKind::Jump), 24, 0, 0, 0, 0, 0},  // 00_day1.story:49
+    {u16(OpKind::Say), 6, 65535, 35, 36, 37, 0},  // 00_day1.story:54
+    {u16(OpKind::Sfx), 6, 0, 0, 0, 0, 0},  // 00_day1.story:54
+    {u16(OpKind::Say), 65535, 65535, 38, 39, 40, 0},  // 00_day1.story:57
+    {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 00_day1.story:57
+    {u16(OpKind::Bg), 2, 2, 1, 0, 0, 0},  // 00_day1.story:59
+    {u16(OpKind::Music), 2, 0, 0, 0, 0, 0},  // 00_day1.story:59
+    {u16(OpKind::Ambience), 2, 0, 0, 0, 0, 0},  // 00_day1.story:59
+    {u16(OpKind::Say), 65535, 65535, 41, 42, 43, 44},  // 00_day1.story:63
+    {u16(OpKind::Show), 1, 1, 1, 0, 0, 0},  // 00_day1.story:63
+    {u16(OpKind::Say), 1, 1, 45, 0, 0, 0},  // 00_day1.story:65
+    {u16(OpKind::Say), 1, 65535, 46, 0, 0, 0},  // 00_day1.story:66
+    {u16(OpKind::Show), 0, 2, 1, 0, 0, 0},  // 00_day1.story:66
+    {u16(OpKind::Say), 2, 1, 47, 48, 0, 0},  // 00_day1.story:69
+    {u16(OpKind::Say), 65535, 65535, 49, 50, 51, 52},  // 00_day1.story:72
+    {u16(OpKind::Say), 65535, 65535, 53, 0, 0, 0},  // 00_day1.story:72
+    {u16(OpKind::Say), 2, 65535, 54, 0, 0, 0},  // 00_day1.story:73
+    {u16(OpKind::Hide), 2, 0, 0, 0, 0, 0},  // 00_day1.story:73
+    {u16(OpKind::Expr), 1, 4, 0, 0, 0, 0},  // 00_day1.story:74
+    {u16(OpKind::Say), 1, 4, 55, 0, 0, 0},  // 00_day1.story:76
+    {u16(OpKind::Choice), 3, 2, 0, 0, 0, 0},  // 00_day1.story:78
+    {u16(OpKind::Say), 1, 2, 58, 59, 60, 0},  // 00_day1.story:83
+    {u16(OpKind::Jump), 50, 0, 0, 0, 0, 0},  // 00_day1.story:83
+    {u16(OpKind::Say), 1, 2, 61, 62, 63, 0},  // 00_day1.story:88
+    {u16(OpKind::Say), 1, 65535, 64, 0, 0, 0},  // 00_day1.story:89
+    {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 00_day1.story:89
+    {u16(OpKind::Jump), 50, 0, 0, 0, 0, 0},  // 00_day1.story:90
+    {u16(OpKind::Say), 65535, 65535, 65, 66, 67, 0},  // 00_day1.story:95
+    {u16(OpKind::Say), 1, 4, 68, 69, 0, 0},  // 00_day1.story:96
+    {u16(OpKind::Choice), 5, 2, 0, 0, 0, 0},  // 00_day1.story:98
+    {u16(OpKind::Say), 1, 3, 72, 73, 74, 0},  // 00_day1.story:103
+    {u16(OpKind::Say), 65535, 65535, 75, 0, 0, 0},  // 00_day1.story:104
+    {u16(OpKind::Jump), 60, 0, 0, 0, 0, 0},  // 00_day1.story:104
+    {u16(OpKind::Say), 1, 1, 76, 77, 0, 0},  // 00_day1.story:108
+    {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 00_day1.story:108
+    {u16(OpKind::Set), 20, 1, 0, 0, 0, 0},  // 00_day1.story:109
+    {u16(OpKind::Jump), 60, 0, 0, 0, 0, 0},  // 00_day1.story:110
+    {u16(OpKind::Say), 1, 65535, 78, 79, 0, 0},  // 00_day1.story:114
+    {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 00_day1.story:114
+    {u16(OpKind::Bg), 8, 2, 1, 0, 0, 0},  // 00_day1.story:116
+    {u16(OpKind::Music), 0, 0, 0, 0, 0, 0},  // 00_day1.story:116
+    {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 00_day1.story:116
+    {u16(OpKind::Say), 65535, 65535, 80, 81, 82, 0},  // 00_day1.story:119
+    {u16(OpKind::Show), 1, 7, 0, 0, 0, 0},  // 00_day1.story:119
+    {u16(OpKind::Say), 7, 65535, 83, 84, 85, 0},  // 00_day1.story:122
+    {u16(OpKind::Say), 7, 65535, 86, 87, 0, 0},  // 00_day1.story:123
+    {u16(OpKind::Say), 65535, 65535, 88, 89, 0, 0},  // 00_day1.story:124
+    {u16(OpKind::Say), 7, 2, 90, 91, 92, 93},  // 00_day1.story:127
+    {u16(OpKind::Choice), 7, 2, 0, 0, 0, 0},  // 00_day1.story:129
+    {u16(OpKind::Say), 7, 65535, 97, 98, 99, 0},  // 00_day1.story:134
+    {u16(OpKind::Jump), 78, 0, 0, 0, 0, 0},  // 00_day1.story:134
+    {u16(OpKind::Say), 7, 1, 100, 0, 0, 0},  // 00_day1.story:138
+    {u16(OpKind::Say), 7, 65535, 101, 102, 0, 0},  // 00_day1.story:140
+    {u16(OpKind::Add), 32791, 1, 0, 0, 0, 0},  // 00_day1.story:140
+    {u16(OpKind::Jump), 78, 0, 0, 0, 0, 0},  // 00_day1.story:141
+    {u16(OpKind::Say), 7, 65535, 103, 104, 105, 106},  // 00_day1.story:147
+    {u16(OpKind::Say), 7, 65535, 107, 0, 0, 0},  // 00_day1.story:147
+    {u16(OpKind::Say), 7, 3, 108, 109, 110, 0},  // 00_day1.story:149
+    {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 00_day1.story:149
+    {u16(OpKind::Bg), 3, 3, 3, 0, 0, 0},  // 00_day1.story:151
+    {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 00_day1.story:151
+    {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 00_day1.story:151
+    {u16(OpKind::Say), 65535, 65535, 111, 112, 113, 114},  // 00_day1.story:155
+    {u16(OpKind::Say), 65535, 65535, 115, 0, 0, 0},  // 00_day1.story:155
+    {u16(OpKind::Say), 65535, 65535, 116, 117, 118, 0},  // 00_day1.story:157
+    {u16(OpKind::Sfx), 4, 0, 0, 0, 0, 0},  // 00_day1.story:157
+    {u16(OpKind::Say), 65535, 65535, 119, 0, 0, 0},  // 00_day1.story:159
+    {u16(OpKind::Say), 65535, 65535, 120, 121, 122, 123},  // 00_day1.story:161
+    {u16(OpKind::Say), 65535, 65535, 124, 125, 0, 0},  // 00_day1.story:162
+    {u16(OpKind::Say), 65535, 65535, 126, 127, 128, 129},  // 00_day1.story:164
+    {u16(OpKind::Say), 65535, 65535, 130, 131, 0, 0},  // 00_day1.story:166
+    {u16(OpKind::Say), 65535, 65535, 132, 0, 0, 0},  // 00_day1.story:167
+    {u16(OpKind::Choice), 9, 3, 0, 0, 0, 0},  // 00_day1.story:170
+    {u16(OpKind::Say), 65535, 65535, 136, 137, 138, 0},  // 00_day1.story:175
+    {u16(OpKind::Jump), 104, 0, 0, 0, 0, 0},  // 00_day1.story:175
+    {u16(OpKind::Say), 65535, 65535, 139, 140, 141, 0},  // 00_day1.story:180
+    {u16(OpKind::Set), 24, 1, 0, 0, 0, 0},  // 00_day1.story:180
+    {u16(OpKind::Jump), 104, 0, 0, 0, 0, 0},  // 00_day1.story:181
+    {u16(OpKind::Say), 65535, 65535, 142, 143, 144, 145},  // 00_day1.story:187
+    {u16(OpKind::Set), 23, 1, 0, 0, 0, 0},  // 00_day1.story:187
+    {u16(OpKind::Jump), 104, 0, 0, 0, 0, 0},  // 00_day1.story:188
+    {u16(OpKind::Say), 65535, 65535, 146, 147, 148, 149},  // 00_day1.story:194
+    {u16(OpKind::Say), 65535, 65535, 150, 0, 0, 0},  // 00_day1.story:194
+    {u16(OpKind::Checkpoint), 0, 0, 0, 0, 0, 0},  // 00_day1.story:194
+    {u16(OpKind::Jump), 108, 0, 0, 0, 0, 0},  // 00_day1.story:195
     {u16(OpKind::Add), 32769, 1, 0, 0, 0, 0},  // 10_days.story:6
-    {u16(OpKind::If), 1, 1180, 0, 0, 0, 0},  // 10_days.story:7
-    {u16(OpKind::If), 2, 168, 0, 0, 0, 0},  // 10_days.story:8
-    {u16(OpKind::If), 3, 168, 0, 0, 0, 0},  // 10_days.story:9
-    {u16(OpKind::Jump), 112, 0, 0, 0, 0, 0},  // 10_days.story:10
+    {u16(OpKind::If), 1, 1181, 0, 0, 0, 0},  // 10_days.story:7
+    {u16(OpKind::If), 2, 169, 0, 0, 0, 0},  // 10_days.story:8
+    {u16(OpKind::If), 3, 169, 0, 0, 0, 0},  // 10_days.story:9
+    {u16(OpKind::Jump), 113, 0, 0, 0, 0, 0},  // 10_days.story:10
     {u16(OpKind::Bg), 1, 0, 0, 0, 0, 0},  // 10_days.story:13
     {u16(OpKind::Music), 1, 0, 0, 0, 0, 0},  // 10_days.story:13
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 10_days.story:13
-    {u16(OpKind::If), 4, 118, 0, 0, 0, 0},  // 10_days.story:14
-    {u16(OpKind::If), 5, 130, 0, 0, 0, 0},  // 10_days.story:15
-    {u16(OpKind::Jump), 150, 0, 0, 0, 0, 0},  // 10_days.story:16
+    {u16(OpKind::If), 4, 119, 0, 0, 0, 0},  // 10_days.story:14
+    {u16(OpKind::If), 5, 131, 0, 0, 0, 0},  // 10_days.story:15
+    {u16(OpKind::Jump), 151, 0, 0, 0, 0, 0},  // 10_days.story:16
     {u16(OpKind::Say), 65535, 65535, 151, 152, 153, 0},  // 10_days.story:21
     {u16(OpKind::Show), 1, 6, 0, 0, 0, 0},  // 10_days.story:21
     {u16(OpKind::Say), 6, 65535, 154, 155, 156, 0},  // 10_days.story:24
@@ -2128,72 +2129,72 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 6, 2, 161, 0, 0, 0},  // 10_days.story:32
     {u16(OpKind::Say), 6, 65535, 162, 163, 164, 0},  // 10_days.story:34
     {u16(OpKind::Add), 32790, 1, 0, 0, 0, 0},  // 10_days.story:34
-    {u16(OpKind::Jump), 165, 0, 0, 0, 0, 0},  // 10_days.story:35
+    {u16(OpKind::Jump), 166, 0, 0, 0, 0, 0},  // 10_days.story:35
     {u16(OpKind::Say), 6, 65535, 165, 166, 167, 0},  // 10_days.story:40
-    {u16(OpKind::Jump), 165, 0, 0, 0, 0, 0},  // 10_days.story:40
+    {u16(OpKind::Jump), 166, 0, 0, 0, 0, 0},  // 10_days.story:40
     {u16(OpKind::Say), 65535, 65535, 168, 169, 170, 171},  // 10_days.story:45
     {u16(OpKind::Show), 1, 6, 0, 0, 0, 0},  // 10_days.story:45
-    {u16(OpKind::If), 6, 139, 0, 0, 0, 0},  // 10_days.story:46
-    {u16(OpKind::If), 7, 141, 0, 0, 0, 0},  // 10_days.story:47
-    {u16(OpKind::If), 8, 143, 0, 0, 0, 0},  // 10_days.story:48
-    {u16(OpKind::If), 9, 145, 0, 0, 0, 0},  // 10_days.story:49
-    {u16(OpKind::If), 10, 148, 0, 0, 0, 0},  // 10_days.story:50
+    {u16(OpKind::If), 6, 140, 0, 0, 0, 0},  // 10_days.story:46
+    {u16(OpKind::If), 7, 142, 0, 0, 0, 0},  // 10_days.story:47
+    {u16(OpKind::If), 8, 144, 0, 0, 0, 0},  // 10_days.story:48
+    {u16(OpKind::If), 9, 146, 0, 0, 0, 0},  // 10_days.story:49
+    {u16(OpKind::If), 10, 149, 0, 0, 0, 0},  // 10_days.story:50
     {u16(OpKind::Say), 6, 65535, 172, 173, 0, 0},  // 10_days.story:53
-    {u16(OpKind::Jump), 165, 0, 0, 0, 0, 0},  // 10_days.story:53
+    {u16(OpKind::Jump), 166, 0, 0, 0, 0, 0},  // 10_days.story:53
     {u16(OpKind::Say), 6, 65535, 174, 175, 176, 0},  // 10_days.story:57
-    {u16(OpKind::Jump), 165, 0, 0, 0, 0, 0},  // 10_days.story:57
+    {u16(OpKind::Jump), 166, 0, 0, 0, 0, 0},  // 10_days.story:57
     {u16(OpKind::Say), 6, 2, 177, 178, 179, 0},  // 10_days.story:61
-    {u16(OpKind::Jump), 165, 0, 0, 0, 0, 0},  // 10_days.story:61
+    {u16(OpKind::Jump), 166, 0, 0, 0, 0, 0},  // 10_days.story:61
     {u16(OpKind::Say), 6, 65535, 180, 181, 182, 0},  // 10_days.story:65
-    {u16(OpKind::Jump), 165, 0, 0, 0, 0, 0},  // 10_days.story:65
+    {u16(OpKind::Jump), 166, 0, 0, 0, 0, 0},  // 10_days.story:65
     {u16(OpKind::Expr), 6, 1, 0, 0, 0, 0},  // 10_days.story:67
     {u16(OpKind::Say), 6, 1, 183, 184, 185, 0},  // 10_days.story:70
-    {u16(OpKind::Jump), 165, 0, 0, 0, 0, 0},  // 10_days.story:70
+    {u16(OpKind::Jump), 166, 0, 0, 0, 0, 0},  // 10_days.story:70
     {u16(OpKind::Say), 6, 3, 186, 187, 0, 0},  // 10_days.story:74
-    {u16(OpKind::Jump), 165, 0, 0, 0, 0, 0},  // 10_days.story:74
+    {u16(OpKind::Jump), 166, 0, 0, 0, 0, 0},  // 10_days.story:74
     {u16(OpKind::Say), 65535, 65535, 188, 189, 190, 0},  // 10_days.story:79
     {u16(OpKind::Show), 1, 6, 0, 0, 0, 0},  // 10_days.story:79
-    {u16(OpKind::If), 11, 160, 0, 0, 0, 0},  // 10_days.story:80
+    {u16(OpKind::If), 11, 161, 0, 0, 0, 0},  // 10_days.story:80
     {u16(OpKind::Say), 6, 65535, 191, 192, 193, 0},  // 10_days.story:83
-    {u16(OpKind::If), 12, 157, 0, 0, 0, 0},  // 10_days.story:83
+    {u16(OpKind::If), 12, 158, 0, 0, 0, 0},  // 10_days.story:83
     {u16(OpKind::Say), 6, 65535, 194, 195, 0, 0},  // 10_days.story:85
-    {u16(OpKind::Jump), 165, 0, 0, 0, 0, 0},  // 10_days.story:85
+    {u16(OpKind::Jump), 166, 0, 0, 0, 0, 0},  // 10_days.story:85
     {u16(OpKind::Expr), 6, 1, 0, 0, 0, 0},  // 10_days.story:87
     {u16(OpKind::Say), 6, 1, 196, 197, 0, 0},  // 10_days.story:89
-    {u16(OpKind::Jump), 165, 0, 0, 0, 0, 0},  // 10_days.story:89
+    {u16(OpKind::Jump), 166, 0, 0, 0, 0, 0},  // 10_days.story:89
     {u16(OpKind::Sfx), 7, 0, 0, 0, 0, 0},  // 10_days.story:91
     {u16(OpKind::Say), 65535, 65535, 198, 199, 200, 0},  // 10_days.story:94
     {u16(OpKind::Say), 6, 4, 201, 202, 203, 0},  // 10_days.story:96
     {u16(OpKind::Say), 6, 65535, 204, 205, 206, 0},  // 10_days.story:98
-    {u16(OpKind::Jump), 165, 0, 0, 0, 0, 0},  // 10_days.story:98
+    {u16(OpKind::Jump), 166, 0, 0, 0, 0, 0},  // 10_days.story:98
     {u16(OpKind::Set), 32773, 0, 0, 0, 0, 0},  // 10_days.story:101
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 10_days.story:102
-    {u16(OpKind::Jump), 241, 0, 0, 0, 0, 0},  // 10_days.story:103
+    {u16(OpKind::Jump), 242, 0, 0, 0, 0, 0},  // 10_days.story:103
     {u16(OpKind::Bg), 2, 0, 1, 0, 0, 0},  // 10_days.story:106
     {u16(OpKind::Music), 2, 0, 0, 0, 0, 0},  // 10_days.story:106
     {u16(OpKind::Ambience), 2, 0, 0, 0, 0, 0},  // 10_days.story:106
-    {u16(OpKind::If), 13, 208, 0, 0, 0, 0},  // 10_days.story:107
+    {u16(OpKind::If), 13, 209, 0, 0, 0, 0},  // 10_days.story:107
     {u16(OpKind::Say), 65535, 65535, 207, 208, 209, 0},  // 10_days.story:111
     {u16(OpKind::Show), 1, 1, 0, 0, 0, 0},  // 10_days.story:111
-    {u16(OpKind::If), 14, 181, 0, 0, 0, 0},  // 10_days.story:112
-    {u16(OpKind::If), 15, 183, 0, 0, 0, 0},  // 10_days.story:113
-    {u16(OpKind::If), 16, 187, 0, 0, 0, 0},  // 10_days.story:114
-    {u16(OpKind::If), 17, 189, 0, 0, 0, 0},  // 10_days.story:115
-    {u16(OpKind::If), 18, 191, 0, 0, 0, 0},  // 10_days.story:116
+    {u16(OpKind::If), 14, 182, 0, 0, 0, 0},  // 10_days.story:112
+    {u16(OpKind::If), 15, 184, 0, 0, 0, 0},  // 10_days.story:113
+    {u16(OpKind::If), 16, 188, 0, 0, 0, 0},  // 10_days.story:114
+    {u16(OpKind::If), 17, 190, 0, 0, 0, 0},  // 10_days.story:115
+    {u16(OpKind::If), 18, 192, 0, 0, 0, 0},  // 10_days.story:116
     {u16(OpKind::Say), 1, 65535, 210, 211, 212, 0},  // 10_days.story:119
-    {u16(OpKind::Jump), 193, 0, 0, 0, 0, 0},  // 10_days.story:119
+    {u16(OpKind::Jump), 194, 0, 0, 0, 0, 0},  // 10_days.story:119
     {u16(OpKind::Say), 1, 4, 213, 214, 215, 0},  // 10_days.story:123
-    {u16(OpKind::Jump), 193, 0, 0, 0, 0, 0},  // 10_days.story:123
+    {u16(OpKind::Jump), 194, 0, 0, 0, 0, 0},  // 10_days.story:123
     {u16(OpKind::Expr), 1, 2, 0, 0, 0, 0},  // 10_days.story:125
     {u16(OpKind::Say), 1, 2, 216, 217, 218, 0},  // 10_days.story:128
     {u16(OpKind::Say), 1, 65535, 219, 0, 0, 0},  // 10_days.story:129
-    {u16(OpKind::Jump), 193, 0, 0, 0, 0, 0},  // 10_days.story:129
+    {u16(OpKind::Jump), 194, 0, 0, 0, 0, 0},  // 10_days.story:129
     {u16(OpKind::Say), 1, 65535, 220, 221, 222, 223},  // 10_days.story:133
-    {u16(OpKind::Jump), 193, 0, 0, 0, 0, 0},  // 10_days.story:133
+    {u16(OpKind::Jump), 194, 0, 0, 0, 0, 0},  // 10_days.story:133
     {u16(OpKind::Say), 1, 1, 224, 225, 226, 0},  // 10_days.story:137
-    {u16(OpKind::Jump), 193, 0, 0, 0, 0, 0},  // 10_days.story:137
+    {u16(OpKind::Jump), 194, 0, 0, 0, 0, 0},  // 10_days.story:137
     {u16(OpKind::Say), 1, 3, 227, 228, 229, 0},  // 10_days.story:141
-    {u16(OpKind::Jump), 193, 0, 0, 0, 0, 0},  // 10_days.story:141
+    {u16(OpKind::Jump), 194, 0, 0, 0, 0, 0},  // 10_days.story:141
     {u16(OpKind::Expr), 1, 4, 0, 0, 0, 0},  // 10_days.story:144
     {u16(OpKind::Say), 1, 4, 230, 231, 232, 233},  // 10_days.story:148
     {u16(OpKind::Say), 1, 65535, 234, 235, 236, 96},  // 10_days.story:150
@@ -2201,117 +2202,117 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 1, 1, 240, 241, 242, 0},  // 10_days.story:158
     {u16(OpKind::Set), 10, 1, 0, 0, 0, 0},  // 10_days.story:158
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 10_days.story:159
-    {u16(OpKind::Jump), 238, 0, 0, 0, 0, 0},  // 10_days.story:160
+    {u16(OpKind::Jump), 239, 0, 0, 0, 0, 0},  // 10_days.story:160
     {u16(OpKind::Say), 1, 2, 243, 244, 245, 246},  // 10_days.story:166
     {u16(OpKind::Set), 10, 1, 0, 0, 0, 0},  // 10_days.story:166
-    {u16(OpKind::Jump), 238, 0, 0, 0, 0, 0},  // 10_days.story:167
+    {u16(OpKind::Jump), 239, 0, 0, 0, 0, 0},  // 10_days.story:167
     {u16(OpKind::Say), 1, 4, 247, 248, 0, 0},  // 10_days.story:172
     {u16(OpKind::Set), 10, 1, 0, 0, 0, 0},  // 10_days.story:172
     {u16(OpKind::Add), 32785, 2, 0, 0, 0, 0},  // 10_days.story:173
-    {u16(OpKind::Jump), 238, 0, 0, 0, 0, 0},  // 10_days.story:174
+    {u16(OpKind::Jump), 239, 0, 0, 0, 0, 0},  // 10_days.story:174
     {u16(OpKind::Say), 65535, 65535, 249, 250, 251, 252},  // 10_days.story:179
     {u16(OpKind::Show), 1, 1, 0, 0, 0, 0},  // 10_days.story:179
-    {u16(OpKind::If), 19, 217, 0, 0, 0, 0},  // 10_days.story:180
-    {u16(OpKind::If), 20, 219, 0, 0, 0, 0},  // 10_days.story:181
-    {u16(OpKind::If), 21, 222, 0, 0, 0, 0},  // 10_days.story:182
-    {u16(OpKind::If), 22, 224, 0, 0, 0, 0},  // 10_days.story:183
-    {u16(OpKind::If), 23, 226, 0, 0, 0, 0},  // 10_days.story:184
+    {u16(OpKind::If), 19, 218, 0, 0, 0, 0},  // 10_days.story:180
+    {u16(OpKind::If), 20, 220, 0, 0, 0, 0},  // 10_days.story:181
+    {u16(OpKind::If), 21, 223, 0, 0, 0, 0},  // 10_days.story:182
+    {u16(OpKind::If), 22, 225, 0, 0, 0, 0},  // 10_days.story:183
+    {u16(OpKind::If), 23, 227, 0, 0, 0, 0},  // 10_days.story:184
     {u16(OpKind::Say), 1, 65535, 253, 254, 0, 0},  // 10_days.story:186
-    {u16(OpKind::Jump), 228, 0, 0, 0, 0, 0},  // 10_days.story:186
+    {u16(OpKind::Jump), 229, 0, 0, 0, 0, 0},  // 10_days.story:186
     {u16(OpKind::Say), 1, 65535, 255, 256, 257, 0},  // 10_days.story:190
-    {u16(OpKind::Jump), 228, 0, 0, 0, 0, 0},  // 10_days.story:190
+    {u16(OpKind::Jump), 229, 0, 0, 0, 0, 0},  // 10_days.story:190
     {u16(OpKind::Expr), 1, 2, 0, 0, 0, 0},  // 10_days.story:192
     {u16(OpKind::Say), 1, 2, 258, 259, 260, 261},  // 10_days.story:196
-    {u16(OpKind::Jump), 228, 0, 0, 0, 0, 0},  // 10_days.story:196
+    {u16(OpKind::Jump), 229, 0, 0, 0, 0, 0},  // 10_days.story:196
     {u16(OpKind::Say), 1, 65535, 262, 263, 264, 0},  // 10_days.story:200
-    {u16(OpKind::Jump), 228, 0, 0, 0, 0, 0},  // 10_days.story:200
+    {u16(OpKind::Jump), 229, 0, 0, 0, 0, 0},  // 10_days.story:200
     {u16(OpKind::Say), 1, 1, 265, 266, 267, 0},  // 10_days.story:204
-    {u16(OpKind::Jump), 228, 0, 0, 0, 0, 0},  // 10_days.story:204
+    {u16(OpKind::Jump), 229, 0, 0, 0, 0, 0},  // 10_days.story:204
     {u16(OpKind::Say), 1, 3, 268, 269, 270, 0},  // 10_days.story:208
-    {u16(OpKind::Jump), 228, 0, 0, 0, 0, 0},  // 10_days.story:208
-    {u16(OpKind::If), 24, 234, 0, 0, 0, 0},  // 10_days.story:211
-    {u16(OpKind::If), 25, 232, 0, 0, 0, 0},  // 10_days.story:212
+    {u16(OpKind::Jump), 229, 0, 0, 0, 0, 0},  // 10_days.story:208
+    {u16(OpKind::If), 24, 235, 0, 0, 0, 0},  // 10_days.story:211
+    {u16(OpKind::If), 25, 233, 0, 0, 0, 0},  // 10_days.story:212
     {u16(OpKind::Say), 1, 4, 271, 272, 0, 0},  // 10_days.story:214
-    {u16(OpKind::Jump), 238, 0, 0, 0, 0, 0},  // 10_days.story:214
+    {u16(OpKind::Jump), 239, 0, 0, 0, 0, 0},  // 10_days.story:214
     {u16(OpKind::Say), 1, 4, 273, 274, 0, 0},  // 10_days.story:217
-    {u16(OpKind::Jump), 238, 0, 0, 0, 0, 0},  // 10_days.story:217
+    {u16(OpKind::Jump), 239, 0, 0, 0, 0, 0},  // 10_days.story:217
     {u16(OpKind::Expr), 1, 1, 0, 0, 0, 0},  // 10_days.story:219
     {u16(OpKind::Say), 1, 1, 275, 276, 277, 0},  // 10_days.story:222
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 10_days.story:222
-    {u16(OpKind::Jump), 238, 0, 0, 0, 0, 0},  // 10_days.story:223
+    {u16(OpKind::Jump), 239, 0, 0, 0, 0, 0},  // 10_days.story:223
     {u16(OpKind::Set), 32773, 0, 0, 0, 0, 0},  // 10_days.story:226
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 10_days.story:227
-    {u16(OpKind::Jump), 241, 0, 0, 0, 0, 0},  // 10_days.story:228
+    {u16(OpKind::Jump), 242, 0, 0, 0, 0, 0},  // 10_days.story:228
     {u16(OpKind::Bg), 9, 1, 3, 0, 0, 0},  // 10_days.story:233
     {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 10_days.story:233
     {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 10_days.story:233
     {u16(OpKind::Command), 0, 0, 0, 0, 0, 0},  // 10_days.story:234
-    {u16(OpKind::If), 26, 325, 0, 0, 0, 0},  // 10_days.story:235
-    {u16(OpKind::If), 27, 382, 0, 0, 0, 0},  // 10_days.story:236
-    {u16(OpKind::If), 28, 454, 0, 0, 0, 0},  // 10_days.story:237
-    {u16(OpKind::If), 29, 523, 0, 0, 0, 0},  // 10_days.story:238
-    {u16(OpKind::If), 30, 583, 0, 0, 0, 0},  // 10_days.story:239
-    {u16(OpKind::If), 31, 638, 0, 0, 0, 0},  // 10_days.story:240
-    {u16(OpKind::If), 32, 255, 0, 0, 0, 0},  // 10_days.story:241
+    {u16(OpKind::If), 26, 326, 0, 0, 0, 0},  // 10_days.story:235
+    {u16(OpKind::If), 27, 383, 0, 0, 0, 0},  // 10_days.story:236
+    {u16(OpKind::If), 28, 455, 0, 0, 0, 0},  // 10_days.story:237
+    {u16(OpKind::If), 29, 524, 0, 0, 0, 0},  // 10_days.story:238
+    {u16(OpKind::If), 30, 584, 0, 0, 0, 0},  // 10_days.story:239
+    {u16(OpKind::If), 31, 639, 0, 0, 0, 0},  // 10_days.story:240
+    {u16(OpKind::If), 32, 256, 0, 0, 0, 0},  // 10_days.story:241
     {u16(OpKind::Say), 65535, 65535, 278, 279, 280, 0},  // 10_days.story:244
     {u16(OpKind::Add), 32784, 0, 0, 0, 0, 0},  // 10_days.story:244
-    {u16(OpKind::Jump), 257, 0, 0, 0, 0, 0},  // 10_days.story:245
+    {u16(OpKind::Jump), 258, 0, 0, 0, 0, 0},  // 10_days.story:245
     {u16(OpKind::Say), 65535, 65535, 281, 282, 283, 0},  // 10_days.story:250
-    {u16(OpKind::Jump), 257, 0, 0, 0, 0, 0},  // 10_days.story:250
+    {u16(OpKind::Jump), 258, 0, 0, 0, 0, 0},  // 10_days.story:250
     {u16(OpKind::Bg), 3, 1, 0, 0, 0, 0},  // 10_days.story:253
     {u16(OpKind::Music), 0, 0, 0, 0, 0, 0},  // 10_days.story:253
     {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 10_days.story:253
     {u16(OpKind::Say), 65535, 65535, 284, 285, 0, 0},  // 10_days.story:255
     {u16(OpKind::Choice), 17, 4, 0, 0, 0, 0},  // 10_days.story:259
-    {u16(OpKind::If), 33, 670, 0, 0, 0, 0},  // 10_days.story:262
-    {u16(OpKind::If), 34, 692, 0, 0, 0, 0},  // 10_days.story:263
-    {u16(OpKind::If), 35, 719, 0, 0, 0, 0},  // 10_days.story:264
-    {u16(OpKind::If), 36, 766, 0, 0, 0, 0},  // 10_days.story:265
-    {u16(OpKind::Jump), 810, 0, 0, 0, 0, 0},  // 10_days.story:266
-    {u16(OpKind::If), 37, 820, 0, 0, 0, 0},  // 10_days.story:268
-    {u16(OpKind::If), 38, 842, 0, 0, 0, 0},  // 10_days.story:269
-    {u16(OpKind::If), 39, 873, 0, 0, 0, 0},  // 10_days.story:270
-    {u16(OpKind::If), 40, 900, 0, 0, 0, 0},  // 10_days.story:271
-    {u16(OpKind::Jump), 942, 0, 0, 0, 0, 0},  // 10_days.story:272
-    {u16(OpKind::If), 41, 971, 0, 0, 0, 0},  // 10_days.story:274
-    {u16(OpKind::If), 42, 990, 0, 0, 0, 0},  // 10_days.story:275
-    {u16(OpKind::If), 43, 1024, 0, 0, 0, 0},  // 10_days.story:276
-    {u16(OpKind::If), 44, 1052, 0, 0, 0, 0},  // 10_days.story:277
-    {u16(OpKind::Jump), 1082, 0, 0, 0, 0, 0},  // 10_days.story:278
-    {u16(OpKind::If), 45, 1091, 0, 0, 0, 0},  // 10_days.story:280
-    {u16(OpKind::If), 46, 1107, 0, 0, 0, 0},  // 10_days.story:281
-    {u16(OpKind::If), 47, 1125, 0, 0, 0, 0},  // 10_days.story:282
-    {u16(OpKind::If), 48, 1156, 0, 0, 0, 0},  // 10_days.story:283
-    {u16(OpKind::Jump), 1174, 0, 0, 0, 0, 0},  // 10_days.story:284
+    {u16(OpKind::If), 33, 671, 0, 0, 0, 0},  // 10_days.story:262
+    {u16(OpKind::If), 34, 693, 0, 0, 0, 0},  // 10_days.story:263
+    {u16(OpKind::If), 35, 720, 0, 0, 0, 0},  // 10_days.story:264
+    {u16(OpKind::If), 36, 767, 0, 0, 0, 0},  // 10_days.story:265
+    {u16(OpKind::Jump), 811, 0, 0, 0, 0, 0},  // 10_days.story:266
+    {u16(OpKind::If), 37, 821, 0, 0, 0, 0},  // 10_days.story:268
+    {u16(OpKind::If), 38, 843, 0, 0, 0, 0},  // 10_days.story:269
+    {u16(OpKind::If), 39, 874, 0, 0, 0, 0},  // 10_days.story:270
+    {u16(OpKind::If), 40, 901, 0, 0, 0, 0},  // 10_days.story:271
+    {u16(OpKind::Jump), 943, 0, 0, 0, 0, 0},  // 10_days.story:272
+    {u16(OpKind::If), 41, 972, 0, 0, 0, 0},  // 10_days.story:274
+    {u16(OpKind::If), 42, 991, 0, 0, 0, 0},  // 10_days.story:275
+    {u16(OpKind::If), 43, 1025, 0, 0, 0, 0},  // 10_days.story:276
+    {u16(OpKind::If), 44, 1053, 0, 0, 0, 0},  // 10_days.story:277
+    {u16(OpKind::Jump), 1083, 0, 0, 0, 0, 0},  // 10_days.story:278
+    {u16(OpKind::If), 45, 1092, 0, 0, 0, 0},  // 10_days.story:280
+    {u16(OpKind::If), 46, 1108, 0, 0, 0, 0},  // 10_days.story:281
+    {u16(OpKind::If), 47, 1126, 0, 0, 0, 0},  // 10_days.story:282
+    {u16(OpKind::If), 48, 1157, 0, 0, 0, 0},  // 10_days.story:283
+    {u16(OpKind::Jump), 1175, 0, 0, 0, 0, 0},  // 10_days.story:284
     {u16(OpKind::Bg), 3, 3, 3, 0, 0, 0},  // 10_days.story:287
     {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 10_days.story:287
     {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 10_days.story:287
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 10_days.story:288
-    {u16(OpKind::If), 49, 291, 0, 0, 0, 0},  // 10_days.story:289
+    {u16(OpKind::If), 49, 292, 0, 0, 0, 0},  // 10_days.story:289
     {u16(OpKind::Say), 65535, 65535, 290, 291, 0, 0},  // 10_days.story:292
-    {u16(OpKind::Call), 305, 0, 0, 0, 0, 0},  // 10_days.story:292
+    {u16(OpKind::Call), 306, 0, 0, 0, 0, 0},  // 10_days.story:292
     {u16(OpKind::Checkpoint), 0, 0, 0, 0, 0, 0},  // 10_days.story:293
-    {u16(OpKind::Jump), 107, 0, 0, 0, 0, 0},  // 10_days.story:294
+    {u16(OpKind::Jump), 108, 0, 0, 0, 0, 0},  // 10_days.story:294
     {u16(OpKind::Say), 65535, 65535, 292, 293, 294, 0},  // 10_days.story:299
-    {u16(OpKind::Call), 305, 0, 0, 0, 0, 0},  // 10_days.story:299
+    {u16(OpKind::Call), 306, 0, 0, 0, 0, 0},  // 10_days.story:299
     {u16(OpKind::Say), 65535, 65535, 295, 0, 0, 0},  // 10_days.story:301
     {u16(OpKind::Sfx), 4, 0, 0, 0, 0, 0},  // 10_days.story:301
-    {u16(OpKind::Letter), 7, 1404, 0, 0, 0, 0},  // 10_days.story:302
+    {u16(OpKind::Letter), 7, 1405, 0, 0, 0, 0},  // 10_days.story:302
     {u16(OpKind::Set), 6, 1, 0, 0, 0, 0},  // 10_days.story:303
     {u16(OpKind::Set), 45, 1, 0, 0, 0, 0},  // 10_days.story:304
     {u16(OpKind::Say), 65535, 65535, 296, 297, 298, 0},  // 10_days.story:307
-    {u16(OpKind::If), 50, 302, 0, 0, 0, 0},  // 10_days.story:307
+    {u16(OpKind::If), 50, 303, 0, 0, 0, 0},  // 10_days.story:307
     {u16(OpKind::Say), 65535, 65535, 299, 300, 301, 0},  // 10_days.story:310
-    {u16(OpKind::Jump), 303, 0, 0, 0, 0, 0},  // 10_days.story:310
+    {u16(OpKind::Jump), 304, 0, 0, 0, 0, 0},  // 10_days.story:310
     {u16(OpKind::Say), 65535, 65535, 302, 303, 304, 305},  // 10_days.story:314
     {u16(OpKind::Checkpoint), 0, 0, 0, 0, 0, 0},  // 10_days.story:315
-    {u16(OpKind::Jump), 107, 0, 0, 0, 0, 0},  // 10_days.story:316
-    {u16(OpKind::If), 51, 313, 0, 0, 0, 0},  // 10_days.story:320
-    {u16(OpKind::If), 52, 315, 0, 0, 0, 0},  // 10_days.story:321
-    {u16(OpKind::If), 53, 317, 0, 0, 0, 0},  // 10_days.story:322
-    {u16(OpKind::If), 54, 319, 0, 0, 0, 0},  // 10_days.story:323
-    {u16(OpKind::If), 55, 321, 0, 0, 0, 0},  // 10_days.story:324
-    {u16(OpKind::If), 56, 323, 0, 0, 0, 0},  // 10_days.story:325
+    {u16(OpKind::Jump), 108, 0, 0, 0, 0, 0},  // 10_days.story:316
+    {u16(OpKind::If), 51, 314, 0, 0, 0, 0},  // 10_days.story:320
+    {u16(OpKind::If), 52, 316, 0, 0, 0, 0},  // 10_days.story:321
+    {u16(OpKind::If), 53, 318, 0, 0, 0, 0},  // 10_days.story:322
+    {u16(OpKind::If), 54, 320, 0, 0, 0, 0},  // 10_days.story:323
+    {u16(OpKind::If), 55, 322, 0, 0, 0, 0},  // 10_days.story:324
+    {u16(OpKind::If), 56, 324, 0, 0, 0, 0},  // 10_days.story:325
     {u16(OpKind::Say), 65535, 65535, 306, 307, 308, 0},  // 10_days.story:328
     {u16(OpKind::Return), 0, 0, 0, 0, 0, 0},  // 10_days.story:328
     {u16(OpKind::Say), 65535, 65535, 309, 310, 311, 0},  // 10_days.story:332
@@ -2330,9 +2331,9 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Music), 5, 0, 0, 0, 0, 0},  // 20_letters.story:141
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 20_letters.story:141
     {u16(OpKind::Set), 32773, 1, 0, 0, 0, 0},  // 20_letters.story:142
-    {u16(OpKind::If), 57, 331, 0, 0, 0, 0},  // 20_letters.story:143
-    {u16(OpKind::Jump), 333, 0, 0, 0, 0, 0},  // 20_letters.story:144
-    {u16(OpKind::Letter), 1, 1380, 0, 0, 0, 0},  // 20_letters.story:146
+    {u16(OpKind::If), 57, 332, 0, 0, 0, 0},  // 20_letters.story:143
+    {u16(OpKind::Jump), 334, 0, 0, 0, 0, 0},  // 20_letters.story:144
+    {u16(OpKind::Letter), 1, 1381, 0, 0, 0, 0},  // 20_letters.story:146
     {u16(OpKind::Set), 39, 1, 0, 0, 0, 0},  // 20_letters.story:147
     {u16(OpKind::Say), 65535, 65535, 500, 501, 502, 0},  // 20_letters.story:151
     {u16(OpKind::Show), 1, 5, 0, 0, 0, 0},  // 20_letters.story:151
@@ -2340,73 +2341,73 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 65535, 65535, 506, 0, 0, 0},  // 20_letters.story:155
     {u16(OpKind::Say), 65535, 65535, 507, 508, 509, 0},  // 20_letters.story:157
     {u16(OpKind::Expr), 5, 2, 0, 0, 0, 0},  // 20_letters.story:157
-    {u16(OpKind::If), 58, 342, 0, 0, 0, 0},  // 20_letters.story:158
+    {u16(OpKind::If), 58, 343, 0, 0, 0, 0},  // 20_letters.story:158
     {u16(OpKind::Say), 5, 2, 510, 0, 0, 0},  // 20_letters.story:160
-    {u16(OpKind::Jump), 350, 0, 0, 0, 0, 0},  // 20_letters.story:160
+    {u16(OpKind::Jump), 351, 0, 0, 0, 0, 0},  // 20_letters.story:160
     {u16(OpKind::Say), 5, 3, 511, 512, 0, 0},  // 20_letters.story:164
     {u16(OpKind::Choice), 21, 2, 0, 0, 0, 0},  // 20_letters.story:166
     {u16(OpKind::Say), 5, 65535, 515, 516, 0, 0},  // 20_letters.story:169
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 20_letters.story:169
-    {u16(OpKind::Jump), 350, 0, 0, 0, 0, 0},  // 20_letters.story:170
+    {u16(OpKind::Jump), 351, 0, 0, 0, 0, 0},  // 20_letters.story:170
     {u16(OpKind::Say), 5, 3, 517, 518, 0, 0},  // 20_letters.story:174
     {u16(OpKind::Add), 32789, 65535, 0, 0, 0, 0},  // 20_letters.story:174
-    {u16(OpKind::Jump), 350, 0, 0, 0, 0, 0},  // 20_letters.story:175
+    {u16(OpKind::Jump), 351, 0, 0, 0, 0, 0},  // 20_letters.story:175
     {u16(OpKind::Say), 65535, 65535, 519, 520, 521, 0},  // 20_letters.story:180
     {u16(OpKind::Say), 5, 65535, 522, 0, 0, 0},  // 20_letters.story:181
     {u16(OpKind::Say), 5, 2, 523, 524, 0, 0},  // 20_letters.story:183
-    {u16(OpKind::If), 59, 357, 0, 0, 0, 0},  // 20_letters.story:183
+    {u16(OpKind::If), 59, 358, 0, 0, 0, 0},  // 20_letters.story:183
     {u16(OpKind::Say), 5, 65535, 525, 526, 0, 0},  // 20_letters.story:185
     {u16(OpKind::Choice), 23, 2, 0, 0, 0, 0},  // 20_letters.story:187
-    {u16(OpKind::Jump), 371, 0, 0, 0, 0, 0},  // 20_letters.story:188
+    {u16(OpKind::Jump), 372, 0, 0, 0, 0, 0},  // 20_letters.story:188
     {u16(OpKind::Say), 5, 65535, 529, 530, 531, 0},  // 20_letters.story:192
     {u16(OpKind::Choice), 25, 2, 0, 0, 0, 0},  // 20_letters.story:194
     {u16(OpKind::Say), 65535, 65535, 534, 535, 0, 0},  // 20_letters.story:197
     {u16(OpKind::Say), 5, 1, 536, 537, 0, 0},  // 20_letters.story:198
     {u16(OpKind::Add), 32789, 2, 0, 0, 0, 0},  // 20_letters.story:198
     {u16(OpKind::Set), 32774, 1, 0, 0, 0, 0},  // 20_letters.story:199
-    {u16(OpKind::Jump), 371, 0, 0, 0, 0, 0},  // 20_letters.story:200
+    {u16(OpKind::Jump), 372, 0, 0, 0, 0, 0},  // 20_letters.story:200
     {u16(OpKind::Say), 5, 65535, 538, 539, 0, 0},  // 20_letters.story:203
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 20_letters.story:203
-    {u16(OpKind::Jump), 371, 0, 0, 0, 0, 0},  // 20_letters.story:204
+    {u16(OpKind::Jump), 372, 0, 0, 0, 0, 0},  // 20_letters.story:204
     {u16(OpKind::Say), 5, 4, 540, 541, 0, 0},  // 20_letters.story:208
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 20_letters.story:208
     {u16(OpKind::Set), 13, 1, 0, 0, 0, 0},  // 20_letters.story:209
-    {u16(OpKind::Jump), 371, 0, 0, 0, 0, 0},  // 20_letters.story:210
+    {u16(OpKind::Jump), 372, 0, 0, 0, 0, 0},  // 20_letters.story:210
     {u16(OpKind::Set), 32, 1, 0, 0, 0, 0},  // 20_letters.story:213
-    {u16(OpKind::If), 60, 375, 0, 0, 0, 0},  // 20_letters.story:214
+    {u16(OpKind::If), 60, 376, 0, 0, 0, 0},  // 20_letters.story:214
     {u16(OpKind::Say), 5, 65535, 542, 543, 0, 0},  // 20_letters.story:216
-    {u16(OpKind::Jump), 380, 0, 0, 0, 0, 0},  // 20_letters.story:216
+    {u16(OpKind::Jump), 381, 0, 0, 0, 0, 0},  // 20_letters.story:216
     {u16(OpKind::Add), 32768, 1, 0, 0, 0, 0},  // 20_letters.story:218
     {u16(OpKind::Say), 5, 65535, 544, 545, 546, 547},  // 20_letters.story:221
-    {u16(OpKind::If), 61, 380, 0, 0, 0, 0},  // 20_letters.story:221
+    {u16(OpKind::If), 61, 381, 0, 0, 0, 0},  // 20_letters.story:221
     {u16(OpKind::Say), 5, 65535, 548, 0, 0, 0},  // 20_letters.story:223
     {u16(OpKind::Set), 13, 1, 0, 0, 0, 0},  // 20_letters.story:223
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 20_letters.story:225
-    {u16(OpKind::Jump), 257, 0, 0, 0, 0, 0},  // 20_letters.story:226
+    {u16(OpKind::Jump), 258, 0, 0, 0, 0, 0},  // 20_letters.story:226
     {u16(OpKind::Bg), 2, 1, 1, 0, 0, 0},  // 20_letters.story:229
     {u16(OpKind::Music), 2, 0, 0, 0, 0, 0},  // 20_letters.story:229
     {u16(OpKind::Ambience), 2, 0, 0, 0, 0, 0},  // 20_letters.story:229
     {u16(OpKind::Set), 32773, 2, 0, 0, 0, 0},  // 20_letters.story:230
-    {u16(OpKind::If), 62, 388, 0, 0, 0, 0},  // 20_letters.story:231
-    {u16(OpKind::Jump), 390, 0, 0, 0, 0, 0},  // 20_letters.story:232
-    {u16(OpKind::Letter), 2, 1384, 0, 0, 0, 0},  // 20_letters.story:234
+    {u16(OpKind::If), 62, 389, 0, 0, 0, 0},  // 20_letters.story:231
+    {u16(OpKind::Jump), 391, 0, 0, 0, 0, 0},  // 20_letters.story:232
+    {u16(OpKind::Letter), 2, 1385, 0, 0, 0, 0},  // 20_letters.story:234
     {u16(OpKind::Set), 40, 1, 0, 0, 0, 0},  // 20_letters.story:235
     {u16(OpKind::Say), 65535, 65535, 549, 550, 551, 0},  // 20_letters.story:239
     {u16(OpKind::Show), 1, 2, 0, 0, 0, 0},  // 20_letters.story:239
     {u16(OpKind::Say), 2, 65535, 552, 553, 0, 0},  // 20_letters.story:242
     {u16(OpKind::Say), 65535, 65535, 554, 555, 0, 0},  // 20_letters.story:243
     {u16(OpKind::Expr), 2, 2, 0, 0, 0, 0},  // 20_letters.story:243
-    {u16(OpKind::If), 63, 398, 0, 0, 0, 0},  // 20_letters.story:244
+    {u16(OpKind::If), 63, 399, 0, 0, 0, 0},  // 20_letters.story:244
     {u16(OpKind::Say), 65535, 65535, 556, 557, 558, 0},  // 20_letters.story:247
-    {u16(OpKind::Jump), 406, 0, 0, 0, 0, 0},  // 20_letters.story:247
+    {u16(OpKind::Jump), 407, 0, 0, 0, 0, 0},  // 20_letters.story:247
     {u16(OpKind::Say), 2, 65535, 559, 0, 0, 0},  // 20_letters.story:250
     {u16(OpKind::Choice), 27, 2, 0, 0, 0, 0},  // 20_letters.story:252
     {u16(OpKind::Say), 2, 1, 562, 563, 0, 0},  // 20_letters.story:255
     {u16(OpKind::Add), 32786, 1, 0, 0, 0, 0},  // 20_letters.story:255
-    {u16(OpKind::Jump), 406, 0, 0, 0, 0, 0},  // 20_letters.story:256
+    {u16(OpKind::Jump), 407, 0, 0, 0, 0, 0},  // 20_letters.story:256
     {u16(OpKind::Say), 2, 3, 564, 565, 0, 0},  // 20_letters.story:259
     {u16(OpKind::Add), 32786, 65535, 0, 0, 0, 0},  // 20_letters.story:259
-    {u16(OpKind::Jump), 406, 0, 0, 0, 0, 0},  // 20_letters.story:260
+    {u16(OpKind::Jump), 407, 0, 0, 0, 0, 0},  // 20_letters.story:260
     {u16(OpKind::Say), 65535, 65535, 566, 567, 568, 569},  // 20_letters.story:265
     {u16(OpKind::Say), 2, 65535, 570, 0, 0, 0},  // 20_letters.story:266
     {u16(OpKind::Say), 2, 2, 571, 572, 573, 0},  // 20_letters.story:268
@@ -2414,21 +2415,21 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Choice), 29, 3, 0, 0, 0, 0},  // 20_letters.story:273
     {u16(OpKind::Say), 2, 3, 580, 581, 582, 0},  // 20_letters.story:278
     {u16(OpKind::Add), 32786, 1, 0, 0, 0, 0},  // 20_letters.story:278
-    {u16(OpKind::Jump), 428, 0, 0, 0, 0, 0},  // 20_letters.story:279
+    {u16(OpKind::Jump), 429, 0, 0, 0, 0, 0},  // 20_letters.story:279
     {u16(OpKind::Say), 65535, 65535, 583, 0, 0, 0},  // 20_letters.story:283
     {u16(OpKind::Say), 2, 4, 584, 585, 586, 587},  // 20_letters.story:286
     {u16(OpKind::Add), 32786, 2, 0, 0, 0, 0},  // 20_letters.story:286
     {u16(OpKind::Set), 27, 1, 0, 0, 0, 0},  // 20_letters.story:287
-    {u16(OpKind::Jump), 428, 0, 0, 0, 0, 0},  // 20_letters.story:288
-    {u16(OpKind::If), 64, 425, 0, 0, 0, 0},  // 20_letters.story:291
+    {u16(OpKind::Jump), 429, 0, 0, 0, 0, 0},  // 20_letters.story:288
+    {u16(OpKind::If), 64, 426, 0, 0, 0, 0},  // 20_letters.story:291
     {u16(OpKind::Say), 2, 3, 588, 0, 0, 0},  // 20_letters.story:293
     {u16(OpKind::Say), 65535, 65535, 589, 590, 591, 0},  // 20_letters.story:295
     {u16(OpKind::Set), 5, 1, 0, 0, 0, 0},  // 20_letters.story:295
     {u16(OpKind::Add), 32785, 65535, 0, 0, 0, 0},  // 20_letters.story:296
-    {u16(OpKind::Jump), 428, 0, 0, 0, 0, 0},  // 20_letters.story:297
+    {u16(OpKind::Jump), 429, 0, 0, 0, 0, 0},  // 20_letters.story:297
     {u16(OpKind::Say), 2, 2, 592, 593, 594, 0},  // 20_letters.story:302
     {u16(OpKind::Set), 5, 1, 0, 0, 0, 0},  // 20_letters.story:302
-    {u16(OpKind::Jump), 428, 0, 0, 0, 0, 0},  // 20_letters.story:303
+    {u16(OpKind::Jump), 429, 0, 0, 0, 0, 0},  // 20_letters.story:303
     {u16(OpKind::Expr), 2, 2, 0, 0, 0, 0},  // 20_letters.story:306
     {u16(OpKind::Say), 2, 65535, 595, 596, 0, 0},  // 20_letters.story:309
     {u16(OpKind::Choice), 32, 3, 0, 0, 0, 0},  // 20_letters.story:312
@@ -2437,31 +2438,31 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 2, 1, 605, 606, 607, 0},  // 20_letters.story:320
     {u16(OpKind::Add), 32786, 2, 0, 0, 0, 0},  // 20_letters.story:320
     {u16(OpKind::Set), 2, 1, 0, 0, 0, 0},  // 20_letters.story:321
-    {u16(OpKind::Jump), 447, 0, 0, 0, 0, 0},  // 20_letters.story:322
+    {u16(OpKind::Jump), 448, 0, 0, 0, 0, 0},  // 20_letters.story:322
     {u16(OpKind::Say), 2, 1, 608, 609, 0, 0},  // 20_letters.story:327
     {u16(OpKind::Add), 32786, 1, 0, 0, 0, 0},  // 20_letters.story:327
-    {u16(OpKind::If), 65, 441, 0, 0, 0, 0},  // 20_letters.story:328
-    {u16(OpKind::Jump), 447, 0, 0, 0, 0, 0},  // 20_letters.story:329
+    {u16(OpKind::If), 65, 442, 0, 0, 0, 0},  // 20_letters.story:328
+    {u16(OpKind::Jump), 448, 0, 0, 0, 0, 0},  // 20_letters.story:329
     {u16(OpKind::Say), 2, 65535, 610, 611, 0, 0},  // 20_letters.story:333
     {u16(OpKind::Set), 2, 1, 0, 0, 0, 0},  // 20_letters.story:333
-    {u16(OpKind::Jump), 447, 0, 0, 0, 0, 0},  // 20_letters.story:334
+    {u16(OpKind::Jump), 448, 0, 0, 0, 0, 0},  // 20_letters.story:334
     {u16(OpKind::Say), 65535, 65535, 612, 613, 0, 0},  // 20_letters.story:339
     {u16(OpKind::Say), 2, 65535, 614, 615, 0, 0},  // 20_letters.story:340
-    {u16(OpKind::Jump), 447, 0, 0, 0, 0, 0},  // 20_letters.story:340
+    {u16(OpKind::Jump), 448, 0, 0, 0, 0, 0},  // 20_letters.story:340
     {u16(OpKind::Set), 33, 1, 0, 0, 0, 0},  // 20_letters.story:343
     {u16(OpKind::Set), 27, 0, 0, 0, 0, 0},  // 20_letters.story:344
-    {u16(OpKind::If), 66, 451, 0, 0, 0, 0},  // 20_letters.story:345
-    {u16(OpKind::Jump), 452, 0, 0, 0, 0, 0},  // 20_letters.story:346
+    {u16(OpKind::If), 66, 452, 0, 0, 0, 0},  // 20_letters.story:345
+    {u16(OpKind::Jump), 453, 0, 0, 0, 0, 0},  // 20_letters.story:346
     {u16(OpKind::Add), 32768, 1, 0, 0, 0, 0},  // 20_letters.story:348
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 20_letters.story:350
-    {u16(OpKind::Jump), 257, 0, 0, 0, 0, 0},  // 20_letters.story:351
+    {u16(OpKind::Jump), 258, 0, 0, 0, 0, 0},  // 20_letters.story:351
     {u16(OpKind::Bg), 4, 1, 2, 0, 0, 0},  // 20_letters.story:354
     {u16(OpKind::Music), 4, 0, 0, 0, 0, 0},  // 20_letters.story:354
     {u16(OpKind::Ambience), 3, 0, 0, 0, 0, 0},  // 20_letters.story:354
     {u16(OpKind::Set), 32773, 3, 0, 0, 0, 0},  // 20_letters.story:355
-    {u16(OpKind::If), 67, 460, 0, 0, 0, 0},  // 20_letters.story:356
-    {u16(OpKind::Jump), 462, 0, 0, 0, 0, 0},  // 20_letters.story:357
-    {u16(OpKind::Letter), 3, 1388, 0, 0, 0, 0},  // 20_letters.story:359
+    {u16(OpKind::If), 67, 461, 0, 0, 0, 0},  // 20_letters.story:356
+    {u16(OpKind::Jump), 463, 0, 0, 0, 0, 0},  // 20_letters.story:357
+    {u16(OpKind::Letter), 3, 1389, 0, 0, 0, 0},  // 20_letters.story:359
     {u16(OpKind::Set), 41, 1, 0, 0, 0, 0},  // 20_letters.story:360
     {u16(OpKind::Say), 65535, 65535, 616, 617, 618, 619},  // 20_letters.story:365
     {u16(OpKind::Say), 65535, 65535, 620, 0, 0, 0},  // 20_letters.story:365
@@ -2469,16 +2470,16 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 4, 65535, 621, 622, 623, 0},  // 20_letters.story:368
     {u16(OpKind::Say), 4, 3, 624, 625, 0, 0},  // 20_letters.story:370
     {u16(OpKind::Say), 65535, 65535, 626, 627, 628, 0},  // 20_letters.story:372
-    {u16(OpKind::If), 68, 470, 0, 0, 0, 0},  // 20_letters.story:372
-    {u16(OpKind::Jump), 478, 0, 0, 0, 0, 0},  // 20_letters.story:373
+    {u16(OpKind::If), 68, 471, 0, 0, 0, 0},  // 20_letters.story:372
+    {u16(OpKind::Jump), 479, 0, 0, 0, 0, 0},  // 20_letters.story:373
     {u16(OpKind::Say), 4, 3, 629, 0, 0, 0},  // 20_letters.story:376
     {u16(OpKind::Choice), 35, 2, 0, 0, 0, 0},  // 20_letters.story:378
     {u16(OpKind::Say), 4, 65535, 633, 634, 0, 0},  // 20_letters.story:381
     {u16(OpKind::Add), 32788, 1, 0, 0, 0, 0},  // 20_letters.story:381
-    {u16(OpKind::Jump), 478, 0, 0, 0, 0, 0},  // 20_letters.story:382
+    {u16(OpKind::Jump), 479, 0, 0, 0, 0, 0},  // 20_letters.story:382
     {u16(OpKind::Say), 4, 3, 635, 0, 0, 0},  // 20_letters.story:385
     {u16(OpKind::Add), 32788, 65535, 0, 0, 0, 0},  // 20_letters.story:385
-    {u16(OpKind::Jump), 478, 0, 0, 0, 0, 0},  // 20_letters.story:386
+    {u16(OpKind::Jump), 479, 0, 0, 0, 0, 0},  // 20_letters.story:386
     {u16(OpKind::Say), 4, 65535, 636, 637, 0, 0},  // 20_letters.story:390
     {u16(OpKind::Say), 4, 2, 638, 639, 640, 641},  // 20_letters.story:393
     {u16(OpKind::Say), 4, 2, 642, 0, 0, 0},  // 20_letters.story:393
@@ -2486,20 +2487,20 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 65535, 65535, 644, 645, 0, 0},  // 20_letters.story:395
     {u16(OpKind::Choice), 37, 3, 0, 0, 0, 0},  // 20_letters.story:398
     {u16(OpKind::Say), 4, 3, 650, 651, 0, 0},  // 20_letters.story:403
-    {u16(OpKind::Jump), 499, 0, 0, 0, 0, 0},  // 20_letters.story:403
+    {u16(OpKind::Jump), 500, 0, 0, 0, 0, 0},  // 20_letters.story:403
     {u16(OpKind::Say), 65535, 65535, 652, 0, 0, 0},  // 20_letters.story:407
     {u16(OpKind::Say), 4, 4, 653, 654, 655, 656},  // 20_letters.story:410
     {u16(OpKind::Add), 32788, 2, 0, 0, 0, 0},  // 20_letters.story:410
-    {u16(OpKind::Jump), 499, 0, 0, 0, 0, 0},  // 20_letters.story:411
+    {u16(OpKind::Jump), 500, 0, 0, 0, 0, 0},  // 20_letters.story:411
     {u16(OpKind::Say), 4, 2, 657, 658, 659, 0},  // 20_letters.story:416
     {u16(OpKind::Choice), 40, 2, 0, 0, 0, 0},  // 20_letters.story:418
     {u16(OpKind::Say), 4, 65535, 663, 664, 0, 0},  // 20_letters.story:421
     {u16(OpKind::Add), 32788, 1, 0, 0, 0, 0},  // 20_letters.story:421
     {u16(OpKind::Set), 17, 1, 0, 0, 0, 0},  // 20_letters.story:422
-    {u16(OpKind::Jump), 499, 0, 0, 0, 0, 0},  // 20_letters.story:423
+    {u16(OpKind::Jump), 500, 0, 0, 0, 0, 0},  // 20_letters.story:423
     {u16(OpKind::Say), 4, 3, 665, 666, 0, 0},  // 20_letters.story:427
     {u16(OpKind::Set), 17, 1, 0, 0, 0, 0},  // 20_letters.story:427
-    {u16(OpKind::Jump), 499, 0, 0, 0, 0, 0},  // 20_letters.story:428
+    {u16(OpKind::Jump), 500, 0, 0, 0, 0, 0},  // 20_letters.story:428
     {u16(OpKind::Expr), 4, 0, 0, 0, 0, 0},  // 20_letters.story:431
     {u16(OpKind::Say), 4, 65535, 667, 668, 669, 670},  // 20_letters.story:435
     {u16(OpKind::Say), 4, 65535, 671, 672, 673, 0},  // 20_letters.story:437
@@ -2508,29 +2509,29 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 4, 65535, 681, 682, 0, 0},  // 20_letters.story:446
     {u16(OpKind::Add), 32788, 1, 0, 0, 0, 0},  // 20_letters.story:446
     {u16(OpKind::Set), 3, 1, 0, 0, 0, 0},  // 20_letters.story:447
-    {u16(OpKind::Jump), 517, 0, 0, 0, 0, 0},  // 20_letters.story:448
+    {u16(OpKind::Jump), 518, 0, 0, 0, 0, 0},  // 20_letters.story:448
     {u16(OpKind::Say), 4, 2, 683, 0, 0, 0},  // 20_letters.story:452
     {u16(OpKind::Say), 4, 65535, 684, 685, 686, 0},  // 20_letters.story:454
     {u16(OpKind::Add), 32788, 2, 0, 0, 0, 0},  // 20_letters.story:454
     {u16(OpKind::Set), 3, 1, 0, 0, 0, 0},  // 20_letters.story:455
-    {u16(OpKind::Jump), 517, 0, 0, 0, 0, 0},  // 20_letters.story:456
+    {u16(OpKind::Jump), 518, 0, 0, 0, 0, 0},  // 20_letters.story:456
     {u16(OpKind::Say), 4, 3, 687, 688, 0, 0},  // 20_letters.story:461
     {u16(OpKind::Add), 32788, 1, 0, 0, 0, 0},  // 20_letters.story:461
     {u16(OpKind::Set), 17, 0, 0, 0, 0, 0},  // 20_letters.story:462
-    {u16(OpKind::Jump), 517, 0, 0, 0, 0, 0},  // 20_letters.story:463
+    {u16(OpKind::Jump), 518, 0, 0, 0, 0, 0},  // 20_letters.story:463
     {u16(OpKind::Set), 34, 1, 0, 0, 0, 0},  // 20_letters.story:466
-    {u16(OpKind::If), 69, 520, 0, 0, 0, 0},  // 20_letters.story:467
-    {u16(OpKind::Jump), 521, 0, 0, 0, 0, 0},  // 20_letters.story:468
+    {u16(OpKind::If), 69, 521, 0, 0, 0, 0},  // 20_letters.story:467
+    {u16(OpKind::Jump), 522, 0, 0, 0, 0, 0},  // 20_letters.story:468
     {u16(OpKind::Add), 32768, 1, 0, 0, 0, 0},  // 20_letters.story:470
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 20_letters.story:472
-    {u16(OpKind::Jump), 257, 0, 0, 0, 0, 0},  // 20_letters.story:473
+    {u16(OpKind::Jump), 258, 0, 0, 0, 0, 0},  // 20_letters.story:473
     {u16(OpKind::Bg), 1, 1, 1, 0, 0, 0},  // 20_letters.story:476
     {u16(OpKind::Music), 1, 0, 0, 0, 0, 0},  // 20_letters.story:476
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 20_letters.story:476
     {u16(OpKind::Set), 32773, 4, 0, 0, 0, 0},  // 20_letters.story:477
-    {u16(OpKind::If), 70, 529, 0, 0, 0, 0},  // 20_letters.story:478
-    {u16(OpKind::Jump), 531, 0, 0, 0, 0, 0},  // 20_letters.story:479
-    {u16(OpKind::Letter), 4, 1392, 0, 0, 0, 0},  // 20_letters.story:481
+    {u16(OpKind::If), 70, 530, 0, 0, 0, 0},  // 20_letters.story:478
+    {u16(OpKind::Jump), 532, 0, 0, 0, 0, 0},  // 20_letters.story:479
+    {u16(OpKind::Letter), 4, 1393, 0, 0, 0, 0},  // 20_letters.story:481
     {u16(OpKind::Set), 42, 1, 0, 0, 0, 0},  // 20_letters.story:482
     {u16(OpKind::Say), 65535, 65535, 689, 690, 691, 0},  // 20_letters.story:486
     {u16(OpKind::Show), 1, 6, 0, 0, 0, 0},  // 20_letters.story:486
@@ -2538,17 +2539,17 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 65535, 65535, 694, 695, 0, 0},  // 20_letters.story:489
     {u16(OpKind::Expr), 6, 2, 0, 0, 0, 0},  // 20_letters.story:489
     {u16(OpKind::Say), 65535, 65535, 696, 697, 698, 699},  // 20_letters.story:492
-    {u16(OpKind::If), 71, 540, 0, 0, 0, 0},  // 20_letters.story:492
+    {u16(OpKind::If), 71, 541, 0, 0, 0, 0},  // 20_letters.story:492
     {u16(OpKind::Say), 6, 2, 700, 701, 0, 0},  // 20_letters.story:495
-    {u16(OpKind::Jump), 548, 0, 0, 0, 0, 0},  // 20_letters.story:495
+    {u16(OpKind::Jump), 549, 0, 0, 0, 0, 0},  // 20_letters.story:495
     {u16(OpKind::Say), 6, 3, 702, 0, 0, 0},  // 20_letters.story:498
     {u16(OpKind::Choice), 45, 2, 0, 0, 0, 0},  // 20_letters.story:500
     {u16(OpKind::Say), 6, 65535, 705, 0, 0, 0},  // 20_letters.story:503
     {u16(OpKind::Say), 65535, 65535, 706, 0, 0, 0},  // 20_letters.story:504
     {u16(OpKind::Add), 32790, 1, 0, 0, 0, 0},  // 20_letters.story:504
-    {u16(OpKind::Jump), 548, 0, 0, 0, 0, 0},  // 20_letters.story:505
+    {u16(OpKind::Jump), 549, 0, 0, 0, 0, 0},  // 20_letters.story:505
     {u16(OpKind::Say), 6, 1, 707, 708, 0, 0},  // 20_letters.story:508
-    {u16(OpKind::Jump), 548, 0, 0, 0, 0, 0},  // 20_letters.story:508
+    {u16(OpKind::Jump), 549, 0, 0, 0, 0, 0},  // 20_letters.story:508
     {u16(OpKind::Say), 65535, 65535, 709, 710, 711, 0},  // 20_letters.story:513
     {u16(OpKind::Say), 6, 65535, 712, 0, 0, 0},  // 20_letters.story:514
     {u16(OpKind::Say), 6, 4, 713, 714, 715, 0},  // 20_letters.story:516
@@ -2557,11 +2558,11 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 6, 1, 721, 722, 723, 0},  // 20_letters.story:525
     {u16(OpKind::Say), 6, 65535, 724, 725, 0, 0},  // 20_letters.story:527
     {u16(OpKind::Add), 32790, 1, 0, 0, 0, 0},  // 20_letters.story:527
-    {u16(OpKind::Jump), 561, 0, 0, 0, 0, 0},  // 20_letters.story:528
+    {u16(OpKind::Jump), 562, 0, 0, 0, 0, 0},  // 20_letters.story:528
     {u16(OpKind::Say), 65535, 65535, 726, 727, 728, 0},  // 20_letters.story:533
     {u16(OpKind::Say), 6, 4, 729, 730, 731, 732},  // 20_letters.story:536
     {u16(OpKind::Add), 32790, 2, 0, 0, 0, 0},  // 20_letters.story:536
-    {u16(OpKind::Jump), 561, 0, 0, 0, 0, 0},  // 20_letters.story:537
+    {u16(OpKind::Jump), 562, 0, 0, 0, 0, 0},  // 20_letters.story:537
     {u16(OpKind::Expr), 6, 0, 0, 0, 0, 0},  // 20_letters.story:540
     {u16(OpKind::Say), 6, 65535, 733, 734, 735, 0},  // 20_letters.story:543
     {u16(OpKind::Say), 6, 65535, 736, 737, 0, 0},  // 20_letters.story:544
@@ -2570,51 +2571,51 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 6, 1, 744, 745, 0, 0},  // 20_letters.story:552
     {u16(OpKind::Add), 32790, 1, 0, 0, 0, 0},  // 20_letters.story:552
     {u16(OpKind::Set), 32775, 1, 0, 0, 0, 0},  // 20_letters.story:553
-    {u16(OpKind::Jump), 577, 0, 0, 0, 0, 0},  // 20_letters.story:554
+    {u16(OpKind::Jump), 578, 0, 0, 0, 0, 0},  // 20_letters.story:554
     {u16(OpKind::Say), 6, 2, 746, 747, 748, 0},  // 20_letters.story:559
-    {u16(OpKind::Jump), 577, 0, 0, 0, 0, 0},  // 20_letters.story:559
+    {u16(OpKind::Jump), 578, 0, 0, 0, 0, 0},  // 20_letters.story:559
     {u16(OpKind::Say), 6, 4, 749, 750, 751, 0},  // 20_letters.story:564
     {u16(OpKind::Say), 6, 65535, 752, 753, 754, 0},  // 20_letters.story:566
     {u16(OpKind::Add), 32790, 2, 0, 0, 0, 0},  // 20_letters.story:566
     {u16(OpKind::Set), 32775, 1, 0, 0, 0, 0},  // 20_letters.story:567
-    {u16(OpKind::Jump), 577, 0, 0, 0, 0, 0},  // 20_letters.story:568
+    {u16(OpKind::Jump), 578, 0, 0, 0, 0, 0},  // 20_letters.story:568
     {u16(OpKind::Set), 35, 1, 0, 0, 0, 0},  // 20_letters.story:571
-    {u16(OpKind::If), 72, 580, 0, 0, 0, 0},  // 20_letters.story:572
-    {u16(OpKind::Jump), 581, 0, 0, 0, 0, 0},  // 20_letters.story:573
+    {u16(OpKind::If), 72, 581, 0, 0, 0, 0},  // 20_letters.story:572
+    {u16(OpKind::Jump), 582, 0, 0, 0, 0, 0},  // 20_letters.story:573
     {u16(OpKind::Add), 32768, 1, 0, 0, 0, 0},  // 20_letters.story:575
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 20_letters.story:577
-    {u16(OpKind::Jump), 257, 0, 0, 0, 0, 0},  // 20_letters.story:578
+    {u16(OpKind::Jump), 258, 0, 0, 0, 0, 0},  // 20_letters.story:578
     {u16(OpKind::Bg), 8, 1, 0, 0, 0, 0},  // 20_letters.story:581
     {u16(OpKind::Music), 0, 0, 0, 0, 0, 0},  // 20_letters.story:581
     {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 20_letters.story:581
     {u16(OpKind::Set), 32773, 5, 0, 0, 0, 0},  // 20_letters.story:582
-    {u16(OpKind::If), 73, 589, 0, 0, 0, 0},  // 20_letters.story:583
-    {u16(OpKind::Jump), 591, 0, 0, 0, 0, 0},  // 20_letters.story:584
-    {u16(OpKind::Letter), 5, 1396, 0, 0, 0, 0},  // 20_letters.story:586
+    {u16(OpKind::If), 73, 590, 0, 0, 0, 0},  // 20_letters.story:583
+    {u16(OpKind::Jump), 592, 0, 0, 0, 0, 0},  // 20_letters.story:584
+    {u16(OpKind::Letter), 5, 1397, 0, 0, 0, 0},  // 20_letters.story:586
     {u16(OpKind::Set), 43, 1, 0, 0, 0, 0},  // 20_letters.story:587
     {u16(OpKind::Say), 65535, 65535, 755, 756, 757, 0},  // 20_letters.story:591
     {u16(OpKind::Show), 1, 7, 0, 0, 0, 0},  // 20_letters.story:591
     {u16(OpKind::Say), 7, 65535, 758, 759, 0, 0},  // 20_letters.story:594
     {u16(OpKind::Say), 65535, 65535, 760, 761, 0, 0},  // 20_letters.story:595
     {u16(OpKind::Expr), 7, 2, 0, 0, 0, 0},  // 20_letters.story:595
-    {u16(OpKind::If), 74, 599, 0, 0, 0, 0},  // 20_letters.story:596
+    {u16(OpKind::If), 74, 600, 0, 0, 0, 0},  // 20_letters.story:596
     {u16(OpKind::Say), 7, 2, 762, 763, 764, 0},  // 20_letters.story:599
-    {u16(OpKind::Jump), 602, 0, 0, 0, 0, 0},  // 20_letters.story:599
+    {u16(OpKind::Jump), 603, 0, 0, 0, 0, 0},  // 20_letters.story:599
     {u16(OpKind::Say), 7, 3, 765, 766, 767, 0},  // 20_letters.story:603
     {u16(OpKind::Add), 32791, 1, 0, 0, 0, 0},  // 20_letters.story:603
-    {u16(OpKind::Jump), 602, 0, 0, 0, 0, 0},  // 20_letters.story:604
+    {u16(OpKind::Jump), 603, 0, 0, 0, 0, 0},  // 20_letters.story:604
     {u16(OpKind::Say), 65535, 65535, 768, 769, 770, 771},  // 20_letters.story:610
     {u16(OpKind::Say), 7, 65535, 772, 773, 0, 0},  // 20_letters.story:611
     {u16(OpKind::Say), 7, 2, 774, 775, 776, 777},  // 20_letters.story:614
     {u16(OpKind::Choice), 52, 3, 0, 0, 0, 0},  // 20_letters.story:617
     {u16(OpKind::Say), 7, 3, 781, 782, 783, 0},  // 20_letters.story:622
-    {u16(OpKind::Jump), 614, 0, 0, 0, 0, 0},  // 20_letters.story:622
+    {u16(OpKind::Jump), 615, 0, 0, 0, 0, 0},  // 20_letters.story:622
     {u16(OpKind::Say), 7, 65535, 784, 785, 786, 0},  // 20_letters.story:626
     {u16(OpKind::Add), 32791, 1, 0, 0, 0, 0},  // 20_letters.story:626
-    {u16(OpKind::Jump), 614, 0, 0, 0, 0, 0},  // 20_letters.story:627
+    {u16(OpKind::Jump), 615, 0, 0, 0, 0, 0},  // 20_letters.story:627
     {u16(OpKind::Say), 7, 4, 787, 788, 789, 790},  // 20_letters.story:632
     {u16(OpKind::Add), 32791, 1, 0, 0, 0, 0},  // 20_letters.story:632
-    {u16(OpKind::Jump), 614, 0, 0, 0, 0, 0},  // 20_letters.story:633
+    {u16(OpKind::Jump), 615, 0, 0, 0, 0, 0},  // 20_letters.story:633
     {u16(OpKind::Expr), 7, 0, 0, 0, 0, 0},  // 20_letters.story:636
     {u16(OpKind::Say), 7, 65535, 791, 792, 793, 0},  // 20_letters.story:639
     {u16(OpKind::Choice), 55, 3, 0, 0, 0, 0},  // 20_letters.story:642
@@ -2622,55 +2623,55 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Set), 0, 1, 0, 0, 0, 0},  // 20_letters.story:647
     {u16(OpKind::Set), 8, 1, 0, 0, 0, 0},  // 20_letters.story:648
     {u16(OpKind::Add), 32791, 1, 0, 0, 0, 0},  // 20_letters.story:649
-    {u16(OpKind::Jump), 632, 0, 0, 0, 0, 0},  // 20_letters.story:650
+    {u16(OpKind::Jump), 633, 0, 0, 0, 0, 0},  // 20_letters.story:650
     {u16(OpKind::Say), 7, 3, 803, 804, 805, 0},  // 20_letters.story:655
     {u16(OpKind::Set), 22, 1, 0, 0, 0, 0},  // 20_letters.story:655
     {u16(OpKind::Add), 32791, 1, 0, 0, 0, 0},  // 20_letters.story:656
-    {u16(OpKind::Jump), 632, 0, 0, 0, 0, 0},  // 20_letters.story:657
+    {u16(OpKind::Jump), 633, 0, 0, 0, 0, 0},  // 20_letters.story:657
     {u16(OpKind::Say), 7, 4, 806, 807, 0, 0},  // 20_letters.story:662
     {u16(OpKind::Say), 7, 65535, 808, 809, 810, 811},  // 20_letters.story:665
     {u16(OpKind::Add), 32791, 2, 0, 0, 0, 0},  // 20_letters.story:665
     {u16(OpKind::Set), 8, 1, 0, 0, 0, 0},  // 20_letters.story:666
     {u16(OpKind::Set), 32776, 1, 0, 0, 0, 0},  // 20_letters.story:667
-    {u16(OpKind::Jump), 632, 0, 0, 0, 0, 0},  // 20_letters.story:668
+    {u16(OpKind::Jump), 633, 0, 0, 0, 0, 0},  // 20_letters.story:668
     {u16(OpKind::Set), 36, 1, 0, 0, 0, 0},  // 20_letters.story:671
-    {u16(OpKind::If), 75, 635, 0, 0, 0, 0},  // 20_letters.story:672
-    {u16(OpKind::Jump), 636, 0, 0, 0, 0, 0},  // 20_letters.story:673
+    {u16(OpKind::If), 75, 636, 0, 0, 0, 0},  // 20_letters.story:672
+    {u16(OpKind::Jump), 637, 0, 0, 0, 0, 0},  // 20_letters.story:673
     {u16(OpKind::Add), 32768, 1, 0, 0, 0, 0},  // 20_letters.story:675
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 20_letters.story:677
-    {u16(OpKind::Jump), 257, 0, 0, 0, 0, 0},  // 20_letters.story:678
+    {u16(OpKind::Jump), 258, 0, 0, 0, 0, 0},  // 20_letters.story:678
     {u16(OpKind::Bg), 3, 1, 3, 0, 0, 0},  // 20_letters.story:681
     {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 20_letters.story:681
     {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 20_letters.story:681
-    {u16(OpKind::If), 76, 647, 0, 0, 0, 0},  // 20_letters.story:682
+    {u16(OpKind::If), 76, 648, 0, 0, 0, 0},  // 20_letters.story:682
     {u16(OpKind::Say), 65535, 65535, 812, 813, 814, 0},  // 20_letters.story:685
     {u16(OpKind::Say), 65535, 65535, 815, 816, 817, 0},  // 20_letters.story:687
     {u16(OpKind::Set), 25, 1, 0, 0, 0, 0},  // 20_letters.story:687
     {u16(OpKind::Set), 32773, 0, 0, 0, 0, 0},  // 20_letters.story:688
-    {u16(OpKind::Jump), 257, 0, 0, 0, 0, 0},  // 20_letters.story:689
+    {u16(OpKind::Jump), 258, 0, 0, 0, 0, 0},  // 20_letters.story:689
     {u16(OpKind::Set), 32773, 6, 0, 0, 0, 0},  // 20_letters.story:692
     {u16(OpKind::Set), 25, 0, 0, 0, 0, 0},  // 20_letters.story:693
     {u16(OpKind::Say), 65535, 65535, 818, 819, 820, 0},  // 20_letters.story:696
-    {u16(OpKind::Letter), 6, 1400, 0, 0, 0, 0},  // 20_letters.story:696
+    {u16(OpKind::Letter), 6, 1401, 0, 0, 0, 0},  // 20_letters.story:696
     {u16(OpKind::Set), 44, 1, 0, 0, 0, 0},  // 20_letters.story:697
     {u16(OpKind::Say), 65535, 65535, 821, 822, 0, 0},  // 20_letters.story:699
     {u16(OpKind::Say), 65535, 65535, 823, 0, 0, 0},  // 20_letters.story:700
     {u16(OpKind::Choice), 58, 3, 0, 0, 0, 0},  // 20_letters.story:703
     {u16(OpKind::Say), 65535, 65535, 828, 829, 830, 831},  // 20_letters.story:708
     {u16(OpKind::Add), 32768, 0, 0, 0, 0, 0},  // 20_letters.story:708
-    {u16(OpKind::Jump), 666, 0, 0, 0, 0, 0},  // 20_letters.story:709
+    {u16(OpKind::Jump), 667, 0, 0, 0, 0, 0},  // 20_letters.story:709
     {u16(OpKind::Say), 65535, 65535, 832, 833, 834, 835},  // 20_letters.story:715
     {u16(OpKind::Say), 65535, 65535, 836, 0, 0, 0},  // 20_letters.story:715
     {u16(OpKind::Say), 65535, 65535, 837, 838, 0, 0},  // 20_letters.story:717
     {u16(OpKind::Add), 32768, 1, 0, 0, 0, 0},  // 20_letters.story:717
     {u16(OpKind::Set), 32777, 1, 0, 0, 0, 0},  // 20_letters.story:718
-    {u16(OpKind::Jump), 666, 0, 0, 0, 0, 0},  // 20_letters.story:719
+    {u16(OpKind::Jump), 667, 0, 0, 0, 0, 0},  // 20_letters.story:719
     {u16(OpKind::Say), 65535, 65535, 839, 840, 841, 0},  // 20_letters.story:724
-    {u16(OpKind::Jump), 666, 0, 0, 0, 0, 0},  // 20_letters.story:724
-    {u16(OpKind::If), 77, 668, 0, 0, 0, 0},  // 20_letters.story:727
-    {u16(OpKind::Jump), 257, 0, 0, 0, 0, 0},  // 20_letters.story:728
+    {u16(OpKind::Jump), 667, 0, 0, 0, 0, 0},  // 20_letters.story:724
+    {u16(OpKind::If), 77, 669, 0, 0, 0, 0},  // 20_letters.story:727
+    {u16(OpKind::Jump), 258, 0, 0, 0, 0, 0},  // 20_letters.story:728
     {u16(OpKind::Say), 65535, 65535, 842, 843, 844, 0},  // 20_letters.story:732
-    {u16(OpKind::Jump), 257, 0, 0, 0, 0, 0},  // 20_letters.story:732
+    {u16(OpKind::Jump), 258, 0, 0, 0, 0, 0},  // 20_letters.story:732
     {u16(OpKind::Bg), 2, 2, 1, 0, 0, 0},  // 30_afternoons.story:5
     {u16(OpKind::Music), 2, 0, 0, 0, 0, 0},  // 30_afternoons.story:5
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 30_afternoons.story:5
@@ -2682,17 +2683,17 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Choice), 61, 3, 0, 0, 0, 0},  // 30_afternoons.story:18
     {u16(OpKind::Say), 1, 2, 857, 858, 0, 0},  // 30_afternoons.story:23
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:23
-    {u16(OpKind::Jump), 688, 0, 0, 0, 0, 0},  // 30_afternoons.story:24
+    {u16(OpKind::Jump), 689, 0, 0, 0, 0, 0},  // 30_afternoons.story:24
     {u16(OpKind::Say), 1, 3, 859, 860, 0, 0},  // 30_afternoons.story:27
-    {u16(OpKind::Jump), 688, 0, 0, 0, 0, 0},  // 30_afternoons.story:27
+    {u16(OpKind::Jump), 689, 0, 0, 0, 0, 0},  // 30_afternoons.story:27
     {u16(OpKind::Say), 65535, 65535, 861, 862, 863, 0},  // 30_afternoons.story:31
     {u16(OpKind::Say), 1, 4, 864, 0, 0, 0},  // 30_afternoons.story:32
     {u16(OpKind::Add), 32785, 2, 0, 0, 0, 0},  // 30_afternoons.story:32
-    {u16(OpKind::Jump), 688, 0, 0, 0, 0, 0},  // 30_afternoons.story:33
+    {u16(OpKind::Jump), 689, 0, 0, 0, 0, 0},  // 30_afternoons.story:33
     {u16(OpKind::Expr), 1, 1, 0, 0, 0, 0},  // 30_afternoons.story:36
     {u16(OpKind::Say), 1, 65535, 865, 866, 0, 0},  // 30_afternoons.story:38
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:38
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:39
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:39
     {u16(OpKind::Bg), 7, 2, 3, 0, 0, 0},  // 30_afternoons.story:41
     {u16(OpKind::Music), 0, 0, 0, 0, 0, 0},  // 30_afternoons.story:41
     {u16(OpKind::Ambience), 3, 0, 0, 0, 0, 0},  // 30_afternoons.story:41
@@ -2702,32 +2703,32 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Show), 1, 1, 0, 0, 0, 0},  // 30_afternoons.story:46
     {u16(OpKind::Say), 1, 65535, 872, 873, 874, 0},  // 30_afternoons.story:49
     {u16(OpKind::Say), 1, 2, 875, 876, 0, 0},  // 30_afternoons.story:50
-    {u16(OpKind::If), 78, 704, 0, 0, 0, 0},  // 30_afternoons.story:50
+    {u16(OpKind::If), 78, 705, 0, 0, 0, 0},  // 30_afternoons.story:50
     {u16(OpKind::Say), 1, 65535, 877, 878, 879, 0},  // 30_afternoons.story:53
-    {u16(OpKind::Jump), 705, 0, 0, 0, 0, 0},  // 30_afternoons.story:53
+    {u16(OpKind::Jump), 706, 0, 0, 0, 0, 0},  // 30_afternoons.story:53
     {u16(OpKind::Say), 1, 65535, 880, 881, 882, 0},  // 30_afternoons.story:57
     {u16(OpKind::Choice), 64, 3, 0, 0, 0, 0},  // 30_afternoons.story:61
     {u16(OpKind::Say), 65535, 65535, 886, 887, 888, 0},  // 30_afternoons.story:66
     {u16(OpKind::Add), 32785, 2, 0, 0, 0, 0},  // 30_afternoons.story:66
     {u16(OpKind::Set), 28, 1, 0, 0, 0, 0},  // 30_afternoons.story:67
-    {u16(OpKind::Jump), 717, 0, 0, 0, 0, 0},  // 30_afternoons.story:68
+    {u16(OpKind::Jump), 718, 0, 0, 0, 0, 0},  // 30_afternoons.story:68
     {u16(OpKind::Say), 1, 3, 889, 890, 891, 0},  // 30_afternoons.story:72
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:72
-    {u16(OpKind::Jump), 717, 0, 0, 0, 0, 0},  // 30_afternoons.story:73
+    {u16(OpKind::Jump), 718, 0, 0, 0, 0, 0},  // 30_afternoons.story:73
     {u16(OpKind::Say), 1, 4, 892, 0, 0, 0},  // 30_afternoons.story:76
     {u16(OpKind::Say), 1, 65535, 893, 894, 0, 0},  // 30_afternoons.story:78
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:78
-    {u16(OpKind::Jump), 717, 0, 0, 0, 0, 0},  // 30_afternoons.story:79
+    {u16(OpKind::Jump), 718, 0, 0, 0, 0, 0},  // 30_afternoons.story:79
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:82
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:83
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:83
     {u16(OpKind::Bg), 1, 2, 1, 0, 0, 0},  // 30_afternoons.story:85
     {u16(OpKind::Music), 1, 0, 0, 0, 0, 0},  // 30_afternoons.story:85
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 30_afternoons.story:85
     {u16(OpKind::Add), 32781, 1, 0, 0, 0, 0},  // 30_afternoons.story:86
     {u16(OpKind::Say), 65535, 65535, 895, 896, 897, 0},  // 30_afternoons.story:89
     {u16(OpKind::Show), 1, 1, 2, 0, 0, 0},  // 30_afternoons.story:89
-    {u16(OpKind::If), 80, 733, 0, 0, 0, 0},  // 30_afternoons.story:90
-    {u16(OpKind::If), 81, 730, 0, 0, 0, 0},  // 30_afternoons.story:91
+    {u16(OpKind::If), 80, 734, 0, 0, 0, 0},  // 30_afternoons.story:90
+    {u16(OpKind::If), 81, 731, 0, 0, 0, 0},  // 30_afternoons.story:91
     {u16(OpKind::Say), 1, 2, 898, 899, 900, 0},  // 30_afternoons.story:94
     {u16(OpKind::Say), 1, 65535, 901, 902, 0, 0},  // 30_afternoons.story:95
     {u16(OpKind::Choice), 67, 3, 0, 0, 0, 0},  // 30_afternoons.story:98
@@ -2742,31 +2743,31 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 65535, 65535, 924, 0, 0, 0},  // 30_afternoons.story:120
     {u16(OpKind::Add), 32785, 2, 0, 0, 0, 0},  // 30_afternoons.story:120
     {u16(OpKind::Set), 29, 1, 0, 0, 0, 0},  // 30_afternoons.story:121
-    {u16(OpKind::Jump), 764, 0, 0, 0, 0, 0},  // 30_afternoons.story:122
+    {u16(OpKind::Jump), 765, 0, 0, 0, 0, 0},  // 30_afternoons.story:122
     {u16(OpKind::Say), 1, 2, 925, 926, 927, 0},  // 30_afternoons.story:126
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:126
-    {u16(OpKind::Jump), 764, 0, 0, 0, 0, 0},  // 30_afternoons.story:127
+    {u16(OpKind::Jump), 765, 0, 0, 0, 0, 0},  // 30_afternoons.story:127
     {u16(OpKind::Say), 1, 3, 928, 929, 930, 0},  // 30_afternoons.story:131
-    {u16(OpKind::Jump), 764, 0, 0, 0, 0, 0},  // 30_afternoons.story:131
+    {u16(OpKind::Jump), 765, 0, 0, 0, 0, 0},  // 30_afternoons.story:131
     {u16(OpKind::Say), 65535, 65535, 931, 932, 0, 0},  // 30_afternoons.story:134
     {u16(OpKind::Say), 1, 4, 933, 934, 0, 0},  // 30_afternoons.story:136
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:136
-    {u16(OpKind::Jump), 764, 0, 0, 0, 0, 0},  // 30_afternoons.story:137
+    {u16(OpKind::Jump), 765, 0, 0, 0, 0, 0},  // 30_afternoons.story:137
     {u16(OpKind::Say), 1, 2, 935, 936, 0, 0},  // 30_afternoons.story:141
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:141
-    {u16(OpKind::Jump), 764, 0, 0, 0, 0, 0},  // 30_afternoons.story:142
+    {u16(OpKind::Jump), 765, 0, 0, 0, 0, 0},  // 30_afternoons.story:142
     {u16(OpKind::Say), 1, 1, 937, 0, 0, 0},  // 30_afternoons.story:145
     {u16(OpKind::Add), 32785, 2, 0, 0, 0, 0},  // 30_afternoons.story:145
-    {u16(OpKind::Jump), 764, 0, 0, 0, 0, 0},  // 30_afternoons.story:146
+    {u16(OpKind::Jump), 765, 0, 0, 0, 0, 0},  // 30_afternoons.story:146
     {u16(OpKind::Say), 65535, 65535, 938, 939, 940, 0},  // 30_afternoons.story:150
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:150
     {u16(OpKind::Set), 16, 1, 0, 0, 0, 0},  // 30_afternoons.story:151
-    {u16(OpKind::Jump), 764, 0, 0, 0, 0, 0},  // 30_afternoons.story:152
+    {u16(OpKind::Jump), 765, 0, 0, 0, 0, 0},  // 30_afternoons.story:152
     {u16(OpKind::Say), 1, 4, 941, 942, 943, 944},  // 30_afternoons.story:157
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:157
-    {u16(OpKind::Jump), 764, 0, 0, 0, 0, 0},  // 30_afternoons.story:158
+    {u16(OpKind::Jump), 765, 0, 0, 0, 0, 0},  // 30_afternoons.story:158
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:161
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:162
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:162
     {u16(OpKind::Bg), 2, 3, 1, 0, 0, 0},  // 30_afternoons.story:164
     {u16(OpKind::Music), 2, 0, 0, 0, 0, 0},  // 30_afternoons.story:164
     {u16(OpKind::Ambience), 2, 0, 0, 0, 0, 0},  // 30_afternoons.story:164
@@ -2774,8 +2775,8 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 65535, 65535, 945, 946, 947, 948},  // 30_afternoons.story:169
     {u16(OpKind::Say), 65535, 65535, 949, 0, 0, 0},  // 30_afternoons.story:169
     {u16(OpKind::Show), 1, 1, 1, 0, 0, 0},  // 30_afternoons.story:169
-    {u16(OpKind::If), 82, 779, 0, 0, 0, 0},  // 30_afternoons.story:170
-    {u16(OpKind::If), 83, 777, 0, 0, 0, 0},  // 30_afternoons.story:171
+    {u16(OpKind::If), 82, 780, 0, 0, 0, 0},  // 30_afternoons.story:170
+    {u16(OpKind::If), 83, 778, 0, 0, 0, 0},  // 30_afternoons.story:171
     {u16(OpKind::Say), 1, 2, 950, 951, 952, 953},  // 30_afternoons.story:175
     {u16(OpKind::Choice), 75, 3, 0, 0, 0, 0},  // 30_afternoons.story:178
     {u16(OpKind::Say), 1, 4, 959, 960, 961, 0},  // 30_afternoons.story:182
@@ -2784,33 +2785,33 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 1, 4, 969, 970, 0, 0},  // 30_afternoons.story:190
     {u16(OpKind::Choice), 80, 3, 0, 0, 0, 0},  // 30_afternoons.story:193
     {u16(OpKind::Say), 1, 65535, 975, 0, 0, 0},  // 30_afternoons.story:197
-    {u16(OpKind::Jump), 808, 0, 0, 0, 0, 0},  // 30_afternoons.story:197
+    {u16(OpKind::Jump), 809, 0, 0, 0, 0, 0},  // 30_afternoons.story:197
     {u16(OpKind::Say), 1, 3, 976, 977, 978, 0},  // 30_afternoons.story:201
     {u16(OpKind::Say), 1, 2, 979, 980, 0, 0},  // 30_afternoons.story:202
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:202
     {u16(OpKind::Set), 19, 1, 0, 0, 0, 0},  // 30_afternoons.story:203
-    {u16(OpKind::Jump), 808, 0, 0, 0, 0, 0},  // 30_afternoons.story:204
+    {u16(OpKind::Jump), 809, 0, 0, 0, 0, 0},  // 30_afternoons.story:204
     {u16(OpKind::Say), 1, 65535, 981, 0, 0, 0},  // 30_afternoons.story:207
     {u16(OpKind::Say), 65535, 65535, 982, 0, 0, 0},  // 30_afternoons.story:208
     {u16(OpKind::Say), 1, 4, 983, 984, 985, 0},  // 30_afternoons.story:210
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:210
-    {u16(OpKind::Jump), 808, 0, 0, 0, 0, 0},  // 30_afternoons.story:211
+    {u16(OpKind::Jump), 809, 0, 0, 0, 0, 0},  // 30_afternoons.story:211
     {u16(OpKind::Say), 1, 1, 986, 0, 0, 0},  // 30_afternoons.story:214
     {u16(OpKind::Add), 32785, 2, 0, 0, 0, 0},  // 30_afternoons.story:214
-    {u16(OpKind::Jump), 808, 0, 0, 0, 0, 0},  // 30_afternoons.story:215
+    {u16(OpKind::Jump), 809, 0, 0, 0, 0, 0},  // 30_afternoons.story:215
     {u16(OpKind::Say), 1, 3, 987, 0, 0, 0},  // 30_afternoons.story:218
-    {u16(OpKind::Jump), 808, 0, 0, 0, 0, 0},  // 30_afternoons.story:218
+    {u16(OpKind::Jump), 809, 0, 0, 0, 0, 0},  // 30_afternoons.story:218
     {u16(OpKind::Say), 1, 1, 988, 989, 0, 0},  // 30_afternoons.story:221
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:221
-    {u16(OpKind::Jump), 808, 0, 0, 0, 0, 0},  // 30_afternoons.story:222
+    {u16(OpKind::Jump), 809, 0, 0, 0, 0, 0},  // 30_afternoons.story:222
     {u16(OpKind::Say), 1, 65535, 990, 991, 0, 0},  // 30_afternoons.story:225
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:225
-    {u16(OpKind::Jump), 808, 0, 0, 0, 0, 0},  // 30_afternoons.story:226
+    {u16(OpKind::Jump), 809, 0, 0, 0, 0, 0},  // 30_afternoons.story:226
     {u16(OpKind::Say), 65535, 65535, 992, 993, 994, 995},  // 30_afternoons.story:231
     {u16(OpKind::Add), 32785, 2, 0, 0, 0, 0},  // 30_afternoons.story:231
-    {u16(OpKind::Jump), 808, 0, 0, 0, 0, 0},  // 30_afternoons.story:232
+    {u16(OpKind::Jump), 809, 0, 0, 0, 0, 0},  // 30_afternoons.story:232
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:235
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:236
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:236
     {u16(OpKind::Bg), 2, 2, 1, 0, 0, 0},  // 30_afternoons.story:238
     {u16(OpKind::Music), 2, 0, 0, 0, 0, 0},  // 30_afternoons.story:238
     {u16(OpKind::Ambience), 2, 0, 0, 0, 0, 0},  // 30_afternoons.story:238
@@ -2820,7 +2821,7 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 65535, 65535, 999, 1000, 0, 0},  // 30_afternoons.story:244
     {u16(OpKind::Add), 32785, 1, 0, 0, 0, 0},  // 30_afternoons.story:244
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:245
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:246
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:246
     {u16(OpKind::Bg), 4, 2, 2, 0, 0, 0},  // 30_afternoons.story:249
     {u16(OpKind::Music), 4, 0, 0, 0, 0, 0},  // 30_afternoons.story:249
     {u16(OpKind::Ambience), 3, 0, 0, 0, 0, 0},  // 30_afternoons.story:249
@@ -2833,16 +2834,16 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Choice), 83, 3, 0, 0, 0, 0},  // 30_afternoons.story:264
     {u16(OpKind::Say), 3, 3, 1015, 1016, 1017, 1018},  // 30_afternoons.story:270
     {u16(OpKind::Add), 32787, 1, 0, 0, 0, 0},  // 30_afternoons.story:270
-    {u16(OpKind::Jump), 840, 0, 0, 0, 0, 0},  // 30_afternoons.story:271
+    {u16(OpKind::Jump), 841, 0, 0, 0, 0, 0},  // 30_afternoons.story:271
     {u16(OpKind::Say), 3, 65535, 1019, 1020, 1021, 0},  // 30_afternoons.story:275
-    {u16(OpKind::Jump), 840, 0, 0, 0, 0, 0},  // 30_afternoons.story:275
+    {u16(OpKind::Jump), 841, 0, 0, 0, 0, 0},  // 30_afternoons.story:275
     {u16(OpKind::Say), 3, 2, 1022, 1023, 0, 0},  // 30_afternoons.story:279
     {u16(OpKind::Say), 65535, 65535, 1024, 1025, 0, 0},  // 30_afternoons.story:281
     {u16(OpKind::Add), 32787, 1, 0, 0, 0, 0},  // 30_afternoons.story:281
     {u16(OpKind::Set), 21, 1, 0, 0, 0, 0},  // 30_afternoons.story:282
-    {u16(OpKind::Jump), 840, 0, 0, 0, 0, 0},  // 30_afternoons.story:283
+    {u16(OpKind::Jump), 841, 0, 0, 0, 0, 0},  // 30_afternoons.story:283
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:286
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:287
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:287
     {u16(OpKind::Bg), 4, 2, 2, 0, 0, 0},  // 30_afternoons.story:289
     {u16(OpKind::Music), 4, 0, 0, 0, 0, 0},  // 30_afternoons.story:289
     {u16(OpKind::Ambience), 3, 0, 0, 0, 0, 0},  // 30_afternoons.story:289
@@ -2850,30 +2851,30 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 65535, 65535, 1026, 1027, 1028, 0},  // 30_afternoons.story:293
     {u16(OpKind::Show), 1, 3, 0, 0, 0, 0},  // 30_afternoons.story:293
     {u16(OpKind::Say), 3, 65535, 1029, 1030, 1031, 0},  // 30_afternoons.story:296
-    {u16(OpKind::If), 85, 852, 0, 0, 0, 0},  // 30_afternoons.story:296
+    {u16(OpKind::If), 85, 853, 0, 0, 0, 0},  // 30_afternoons.story:296
     {u16(OpKind::Say), 3, 2, 1032, 1033, 1034, 0},  // 30_afternoons.story:299
-    {u16(OpKind::Jump), 857, 0, 0, 0, 0, 0},  // 30_afternoons.story:299
-    {u16(OpKind::If), 86, 855, 0, 0, 0, 0},  // 30_afternoons.story:301
+    {u16(OpKind::Jump), 858, 0, 0, 0, 0, 0},  // 30_afternoons.story:299
+    {u16(OpKind::If), 86, 856, 0, 0, 0, 0},  // 30_afternoons.story:301
     {u16(OpKind::Say), 3, 2, 1035, 1036, 1037, 0},  // 30_afternoons.story:304
-    {u16(OpKind::Jump), 857, 0, 0, 0, 0, 0},  // 30_afternoons.story:304
+    {u16(OpKind::Jump), 858, 0, 0, 0, 0, 0},  // 30_afternoons.story:304
     {u16(OpKind::Say), 3, 2, 1038, 1039, 1040, 0},  // 30_afternoons.story:308
     {u16(OpKind::Say), 3, 65535, 1041, 1042, 1043, 0},  // 30_afternoons.story:310
     {u16(OpKind::Choice), 86, 3, 0, 0, 0, 0},  // 30_afternoons.story:314
     {u16(OpKind::Say), 3, 4, 1048, 1049, 0, 0},  // 30_afternoons.story:318
     {u16(OpKind::Say), 3, 65535, 1050, 1051, 0, 0},  // 30_afternoons.story:320
     {u16(OpKind::Add), 32787, 2, 0, 0, 0, 0},  // 30_afternoons.story:320
-    {u16(OpKind::Jump), 870, 0, 0, 0, 0, 0},  // 30_afternoons.story:321
+    {u16(OpKind::Jump), 871, 0, 0, 0, 0, 0},  // 30_afternoons.story:321
     {u16(OpKind::Say), 3, 65535, 1052, 1053, 1054, 0},  // 30_afternoons.story:325
     {u16(OpKind::Add), 32787, 1, 0, 0, 0, 0},  // 30_afternoons.story:325
-    {u16(OpKind::Jump), 870, 0, 0, 0, 0, 0},  // 30_afternoons.story:326
+    {u16(OpKind::Jump), 871, 0, 0, 0, 0, 0},  // 30_afternoons.story:326
     {u16(OpKind::Say), 65535, 65535, 1055, 1056, 0, 0},  // 30_afternoons.story:330
     {u16(OpKind::Say), 3, 65535, 1057, 1058, 1059, 0},  // 30_afternoons.story:332
     {u16(OpKind::Add), 32787, 1, 0, 0, 0, 0},  // 30_afternoons.story:332
     {u16(OpKind::Set), 9, 1, 0, 0, 0, 0},  // 30_afternoons.story:333
-    {u16(OpKind::Jump), 870, 0, 0, 0, 0, 0},  // 30_afternoons.story:334
-    {u16(OpKind::Call), 953, 0, 0, 0, 0, 0},  // 30_afternoons.story:337
+    {u16(OpKind::Jump), 871, 0, 0, 0, 0, 0},  // 30_afternoons.story:334
+    {u16(OpKind::Call), 954, 0, 0, 0, 0, 0},  // 30_afternoons.story:337
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:338
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:339
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:339
     {u16(OpKind::Bg), 5, 3, 4, 0, 0, 0},  // 30_afternoons.story:341
     {u16(OpKind::Music), 4, 0, 0, 0, 0, 0},  // 30_afternoons.story:341
     {u16(OpKind::Ambience), 5, 0, 0, 0, 0, 0},  // 30_afternoons.story:341
@@ -2881,26 +2882,26 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 65535, 65535, 1060, 1061, 1062, 1063},  // 30_afternoons.story:346
     {u16(OpKind::Show), 1, 3, 0, 0, 0, 0},  // 30_afternoons.story:346
     {u16(OpKind::Say), 3, 65535, 1064, 1065, 1066, 0},  // 30_afternoons.story:349
-    {u16(OpKind::If), 88, 883, 0, 0, 0, 0},  // 30_afternoons.story:349
+    {u16(OpKind::If), 88, 884, 0, 0, 0, 0},  // 30_afternoons.story:349
     {u16(OpKind::Say), 3, 2, 1067, 1068, 0, 0},  // 30_afternoons.story:352
-    {u16(OpKind::Jump), 886, 0, 0, 0, 0, 0},  // 30_afternoons.story:352
+    {u16(OpKind::Jump), 887, 0, 0, 0, 0, 0},  // 30_afternoons.story:352
     {u16(OpKind::Expr), 3, 4, 0, 0, 0, 0},  // 30_afternoons.story:354
     {u16(OpKind::Say), 3, 4, 1069, 1070, 1071, 0},  // 30_afternoons.story:357
     {u16(OpKind::Say), 3, 65535, 1072, 1073, 0, 0},  // 30_afternoons.story:359
     {u16(OpKind::Choice), 89, 3, 0, 0, 0, 0},  // 30_afternoons.story:363
     {u16(OpKind::Say), 3, 1, 1078, 1079, 0, 0},  // 30_afternoons.story:368
     {u16(OpKind::Add), 32787, 1, 0, 0, 0, 0},  // 30_afternoons.story:368
-    {u16(OpKind::Jump), 897, 0, 0, 0, 0, 0},  // 30_afternoons.story:369
+    {u16(OpKind::Jump), 898, 0, 0, 0, 0, 0},  // 30_afternoons.story:369
     {u16(OpKind::Say), 3, 3, 1080, 1081, 0, 0},  // 30_afternoons.story:373
     {u16(OpKind::Add), 32787, 1, 0, 0, 0, 0},  // 30_afternoons.story:373
-    {u16(OpKind::Jump), 897, 0, 0, 0, 0, 0},  // 30_afternoons.story:374
+    {u16(OpKind::Jump), 898, 0, 0, 0, 0, 0},  // 30_afternoons.story:374
     {u16(OpKind::Say), 3, 4, 1082, 1083, 1084, 0},  // 30_afternoons.story:378
     {u16(OpKind::Say), 3, 65535, 1085, 1086, 0, 0},  // 30_afternoons.story:379
     {u16(OpKind::Add), 32787, 2, 0, 0, 0, 0},  // 30_afternoons.story:379
-    {u16(OpKind::Jump), 897, 0, 0, 0, 0, 0},  // 30_afternoons.story:380
-    {u16(OpKind::Call), 953, 0, 0, 0, 0, 0},  // 30_afternoons.story:383
+    {u16(OpKind::Jump), 898, 0, 0, 0, 0, 0},  // 30_afternoons.story:380
+    {u16(OpKind::Call), 954, 0, 0, 0, 0, 0},  // 30_afternoons.story:383
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:384
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:385
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:385
     {u16(OpKind::Bg), 4, 3, 4, 0, 0, 0},  // 30_afternoons.story:387
     {u16(OpKind::Music), 4, 0, 0, 0, 0, 0},  // 30_afternoons.story:387
     {u16(OpKind::Ambience), 3, 0, 0, 0, 0, 0},  // 30_afternoons.story:387
@@ -2908,7 +2909,7 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 65535, 65535, 1087, 1088, 1089, 0},  // 30_afternoons.story:391
     {u16(OpKind::Show), 1, 3, 2, 0, 0, 0},  // 30_afternoons.story:391
     {u16(OpKind::Say), 3, 2, 1090, 1091, 0, 0},  // 30_afternoons.story:394
-    {u16(OpKind::If), 89, 910, 0, 0, 0, 0},  // 30_afternoons.story:394
+    {u16(OpKind::If), 89, 911, 0, 0, 0, 0},  // 30_afternoons.story:394
     {u16(OpKind::Say), 3, 65535, 1092, 1093, 1094, 1095},  // 30_afternoons.story:397
     {u16(OpKind::Choice), 92, 3, 0, 0, 0, 0},  // 30_afternoons.story:400
     {u16(OpKind::Expr), 3, 4, 0, 0, 0, 0},  // 30_afternoons.story:402
@@ -2917,32 +2918,32 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Choice), 95, 3, 0, 0, 0, 0},  // 30_afternoons.story:410
     {u16(OpKind::Say), 3, 65535, 1109, 1110, 1111, 0},  // 30_afternoons.story:415
     {u16(OpKind::Add), 32787, 1, 0, 0, 0, 0},  // 30_afternoons.story:415
-    {u16(OpKind::Jump), 939, 0, 0, 0, 0, 0},  // 30_afternoons.story:416
+    {u16(OpKind::Jump), 940, 0, 0, 0, 0, 0},  // 30_afternoons.story:416
     {u16(OpKind::Say), 3, 1, 1112, 0, 0, 0},  // 30_afternoons.story:419
     {u16(OpKind::Say), 3, 65535, 1113, 1114, 0, 0},  // 30_afternoons.story:421
     {u16(OpKind::Add), 32787, 2, 0, 0, 0, 0},  // 30_afternoons.story:421
     {u16(OpKind::Set), 18, 1, 0, 0, 0, 0},  // 30_afternoons.story:422
-    {u16(OpKind::Jump), 939, 0, 0, 0, 0, 0},  // 30_afternoons.story:423
+    {u16(OpKind::Jump), 940, 0, 0, 0, 0, 0},  // 30_afternoons.story:423
     {u16(OpKind::Say), 3, 4, 1115, 1116, 0, 0},  // 30_afternoons.story:426
     {u16(OpKind::Say), 65535, 65535, 1117, 0, 0, 0},  // 30_afternoons.story:427
     {u16(OpKind::Add), 32787, 1, 0, 0, 0, 0},  // 30_afternoons.story:427
-    {u16(OpKind::Jump), 939, 0, 0, 0, 0, 0},  // 30_afternoons.story:428
+    {u16(OpKind::Jump), 940, 0, 0, 0, 0, 0},  // 30_afternoons.story:428
     {u16(OpKind::Say), 3, 65535, 1118, 0, 0, 0},  // 30_afternoons.story:431
     {u16(OpKind::Say), 65535, 65535, 1119, 0, 0, 0},  // 30_afternoons.story:432
     {u16(OpKind::Say), 3, 1, 1120, 0, 0, 0},  // 30_afternoons.story:433
     {u16(OpKind::Add), 32787, 2, 0, 0, 0, 0},  // 30_afternoons.story:433
-    {u16(OpKind::Jump), 939, 0, 0, 0, 0, 0},  // 30_afternoons.story:434
+    {u16(OpKind::Jump), 940, 0, 0, 0, 0, 0},  // 30_afternoons.story:434
     {u16(OpKind::Say), 3, 4, 1121, 1122, 1123, 0},  // 30_afternoons.story:438
     {u16(OpKind::Say), 3, 65535, 1124, 1125, 0, 0},  // 30_afternoons.story:439
     {u16(OpKind::Add), 32787, 2, 0, 0, 0, 0},  // 30_afternoons.story:439
     {u16(OpKind::Set), 18, 1, 0, 0, 0, 0},  // 30_afternoons.story:440
-    {u16(OpKind::Jump), 939, 0, 0, 0, 0, 0},  // 30_afternoons.story:441
+    {u16(OpKind::Jump), 940, 0, 0, 0, 0, 0},  // 30_afternoons.story:441
     {u16(OpKind::Say), 3, 65535, 1126, 1127, 0, 0},  // 30_afternoons.story:445
     {u16(OpKind::Add), 32787, 1, 0, 0, 0, 0},  // 30_afternoons.story:445
-    {u16(OpKind::Jump), 939, 0, 0, 0, 0, 0},  // 30_afternoons.story:446
-    {u16(OpKind::Call), 953, 0, 0, 0, 0, 0},  // 30_afternoons.story:449
+    {u16(OpKind::Jump), 940, 0, 0, 0, 0, 0},  // 30_afternoons.story:446
+    {u16(OpKind::Call), 954, 0, 0, 0, 0, 0},  // 30_afternoons.story:449
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:450
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:451
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:451
     {u16(OpKind::Bg), 4, 2, 2, 0, 0, 0},  // 30_afternoons.story:453
     {u16(OpKind::Music), 4, 0, 0, 0, 0, 0},  // 30_afternoons.story:453
     {u16(OpKind::Ambience), 3, 0, 0, 0, 0, 0},  // 30_afternoons.story:453
@@ -2951,11 +2952,11 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 3, 65535, 1128, 0, 0, 0},  // 30_afternoons.story:457
     {u16(OpKind::Say), 65535, 65535, 1129, 0, 0, 0},  // 30_afternoons.story:458
     {u16(OpKind::Add), 32787, 1, 0, 0, 0, 0},  // 30_afternoons.story:458
-    {u16(OpKind::Call), 953, 0, 0, 0, 0, 0},  // 30_afternoons.story:459
+    {u16(OpKind::Call), 954, 0, 0, 0, 0, 0},  // 30_afternoons.story:459
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:460
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:461
-    {u16(OpKind::If), 92, 970, 0, 0, 0, 0},  // 30_afternoons.story:465
-    {u16(OpKind::If), 93, 956, 0, 0, 0, 0},  // 30_afternoons.story:466
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:461
+    {u16(OpKind::If), 92, 971, 0, 0, 0, 0},  // 30_afternoons.story:465
+    {u16(OpKind::If), 93, 957, 0, 0, 0, 0},  // 30_afternoons.story:466
     {u16(OpKind::Return), 0, 0, 0, 0, 0, 0},  // 30_afternoons.story:467
     {u16(OpKind::Show), 1, 3, 0, 0, 0, 0},  // 30_afternoons.story:469
     {u16(OpKind::Say), 3, 65535, 1130, 1131, 1132, 1133},  // 30_afternoons.story:472
@@ -2983,90 +2984,90 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Choice), 100, 3, 0, 0, 0, 0},  // 30_afternoons.story:506
     {u16(OpKind::Say), 5, 2, 1157, 1158, 1159, 1160},  // 30_afternoons.story:512
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 30_afternoons.story:512
-    {u16(OpKind::Jump), 988, 0, 0, 0, 0, 0},  // 30_afternoons.story:513
+    {u16(OpKind::Jump), 989, 0, 0, 0, 0, 0},  // 30_afternoons.story:513
     {u16(OpKind::Say), 5, 1, 1161, 1162, 0, 0},  // 30_afternoons.story:517
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 30_afternoons.story:517
-    {u16(OpKind::Jump), 988, 0, 0, 0, 0, 0},  // 30_afternoons.story:518
+    {u16(OpKind::Jump), 989, 0, 0, 0, 0, 0},  // 30_afternoons.story:518
     {u16(OpKind::Say), 5, 3, 1163, 1164, 1165, 0},  // 30_afternoons.story:522
-    {u16(OpKind::Jump), 988, 0, 0, 0, 0, 0},  // 30_afternoons.story:522
+    {u16(OpKind::Jump), 989, 0, 0, 0, 0, 0},  // 30_afternoons.story:522
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:525
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:526
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:526
     {u16(OpKind::Bg), 6, 2, 1, 0, 0, 0},  // 30_afternoons.story:528
     {u16(OpKind::Music), 5, 0, 0, 0, 0, 0},  // 30_afternoons.story:528
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 30_afternoons.story:528
     {u16(OpKind::Add), 32783, 1, 0, 0, 0, 0},  // 30_afternoons.story:529
     {u16(OpKind::Say), 65535, 65535, 1166, 1167, 1168, 1169},  // 30_afternoons.story:533
     {u16(OpKind::Show), 1, 5, 0, 0, 0, 0},  // 30_afternoons.story:533
-    {u16(OpKind::If), 94, 1000, 0, 0, 0, 0},  // 30_afternoons.story:534
+    {u16(OpKind::If), 94, 1001, 0, 0, 0, 0},  // 30_afternoons.story:534
     {u16(OpKind::Say), 5, 65535, 1170, 1171, 1172, 1173},  // 30_afternoons.story:538
     {u16(OpKind::Choice), 103, 2, 0, 0, 0, 0},  // 30_afternoons.story:540
-    {u16(OpKind::Jump), 1022, 0, 0, 0, 0, 0},  // 30_afternoons.story:541
-    {u16(OpKind::If), 95, 1004, 0, 0, 0, 0},  // 30_afternoons.story:543
+    {u16(OpKind::Jump), 1023, 0, 0, 0, 0, 0},  // 30_afternoons.story:541
+    {u16(OpKind::If), 95, 1005, 0, 0, 0, 0},  // 30_afternoons.story:543
     {u16(OpKind::Say), 5, 2, 1176, 1177, 1178, 1179},  // 30_afternoons.story:547
     {u16(OpKind::Choice), 105, 2, 0, 0, 0, 0},  // 30_afternoons.story:549
-    {u16(OpKind::Jump), 1022, 0, 0, 0, 0, 0},  // 30_afternoons.story:550
+    {u16(OpKind::Jump), 1023, 0, 0, 0, 0, 0},  // 30_afternoons.story:550
     {u16(OpKind::Expr), 5, 1, 0, 0, 0, 0},  // 30_afternoons.story:552
     {u16(OpKind::Say), 5, 1, 1182, 1183, 1184, 0},  // 30_afternoons.story:555
     {u16(OpKind::Say), 5, 65535, 1185, 0, 0, 0},  // 30_afternoons.story:556
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 30_afternoons.story:556
     {u16(OpKind::Set), 15, 1, 0, 0, 0, 0},  // 30_afternoons.story:557
-    {u16(OpKind::Jump), 1022, 0, 0, 0, 0, 0},  // 30_afternoons.story:558
+    {u16(OpKind::Jump), 1023, 0, 0, 0, 0, 0},  // 30_afternoons.story:558
     {u16(OpKind::Say), 5, 65535, 1186, 0, 0, 0},  // 30_afternoons.story:562
-    {u16(OpKind::Jump), 1022, 0, 0, 0, 0, 0},  // 30_afternoons.story:562
+    {u16(OpKind::Jump), 1023, 0, 0, 0, 0, 0},  // 30_afternoons.story:562
     {u16(OpKind::Say), 5, 3, 1187, 1188, 1189, 1190},  // 30_afternoons.story:567
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 30_afternoons.story:567
-    {u16(OpKind::Jump), 1022, 0, 0, 0, 0, 0},  // 30_afternoons.story:568
+    {u16(OpKind::Jump), 1023, 0, 0, 0, 0, 0},  // 30_afternoons.story:568
     {u16(OpKind::Say), 5, 4, 1191, 1192, 0, 0},  // 30_afternoons.story:572
     {u16(OpKind::Add), 32789, 2, 0, 0, 0, 0},  // 30_afternoons.story:572
     {u16(OpKind::Set), 13, 1, 0, 0, 0, 0},  // 30_afternoons.story:573
-    {u16(OpKind::Jump), 1022, 0, 0, 0, 0, 0},  // 30_afternoons.story:574
+    {u16(OpKind::Jump), 1023, 0, 0, 0, 0, 0},  // 30_afternoons.story:574
     {u16(OpKind::Say), 5, 2, 1193, 1194, 0, 0},  // 30_afternoons.story:578
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 30_afternoons.story:578
-    {u16(OpKind::Jump), 1022, 0, 0, 0, 0, 0},  // 30_afternoons.story:579
+    {u16(OpKind::Jump), 1023, 0, 0, 0, 0, 0},  // 30_afternoons.story:579
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:582
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:583
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:583
     {u16(OpKind::Bg), 6, 2, 1, 0, 0, 0},  // 30_afternoons.story:585
     {u16(OpKind::Music), 5, 0, 0, 0, 0, 0},  // 30_afternoons.story:585
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 30_afternoons.story:585
     {u16(OpKind::Add), 32783, 1, 0, 0, 0, 0},  // 30_afternoons.story:586
     {u16(OpKind::Show), 1, 5, 0, 0, 0, 0},  // 30_afternoons.story:587
-    {u16(OpKind::If), 96, 1045, 0, 0, 0, 0},  // 30_afternoons.story:588
-    {u16(OpKind::If), 97, 1035, 0, 0, 0, 0},  // 30_afternoons.story:589
+    {u16(OpKind::If), 96, 1046, 0, 0, 0, 0},  // 30_afternoons.story:588
+    {u16(OpKind::If), 97, 1036, 0, 0, 0, 0},  // 30_afternoons.story:589
     {u16(OpKind::Say), 5, 65535, 1195, 1196, 1197, 0},  // 30_afternoons.story:592
     {u16(OpKind::Say), 65535, 65535, 1198, 1199, 0, 0},  // 30_afternoons.story:593
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 30_afternoons.story:593
-    {u16(OpKind::Jump), 1050, 0, 0, 0, 0, 0},  // 30_afternoons.story:594
+    {u16(OpKind::Jump), 1051, 0, 0, 0, 0, 0},  // 30_afternoons.story:594
     {u16(OpKind::Say), 5, 4, 1200, 1201, 1045, 0},  // 30_afternoons.story:598
     {u16(OpKind::Choice), 107, 2, 0, 0, 0, 0},  // 30_afternoons.story:600
     {u16(OpKind::Say), 5, 65535, 1204, 1205, 0, 0},  // 30_afternoons.story:604
     {u16(OpKind::Add), 32789, 2, 0, 0, 0, 0},  // 30_afternoons.story:604
     {u16(OpKind::Set), 15, 1, 0, 0, 0, 0},  // 30_afternoons.story:605
-    {u16(OpKind::Jump), 1050, 0, 0, 0, 0, 0},  // 30_afternoons.story:606
+    {u16(OpKind::Jump), 1051, 0, 0, 0, 0, 0},  // 30_afternoons.story:606
     {u16(OpKind::Say), 5, 1, 1206, 1207, 0, 0},  // 30_afternoons.story:610
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 30_afternoons.story:610
     {u16(OpKind::Set), 15, 1, 0, 0, 0, 0},  // 30_afternoons.story:611
-    {u16(OpKind::Jump), 1050, 0, 0, 0, 0, 0},  // 30_afternoons.story:612
+    {u16(OpKind::Jump), 1051, 0, 0, 0, 0, 0},  // 30_afternoons.story:612
     {u16(OpKind::Sfx), 7, 0, 0, 0, 0, 0},  // 30_afternoons.story:614
     {u16(OpKind::Say), 65535, 65535, 1208, 1209, 1210, 0},  // 30_afternoons.story:617
     {u16(OpKind::Say), 5, 1, 1211, 1212, 1213, 0},  // 30_afternoons.story:619
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 30_afternoons.story:619
-    {u16(OpKind::Jump), 1050, 0, 0, 0, 0, 0},  // 30_afternoons.story:620
+    {u16(OpKind::Jump), 1051, 0, 0, 0, 0, 0},  // 30_afternoons.story:620
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:623
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:624
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:624
     {u16(OpKind::Bg), 6, 2, 1, 0, 0, 0},  // 30_afternoons.story:626
     {u16(OpKind::Music), 5, 0, 0, 0, 0, 0},  // 30_afternoons.story:626
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 30_afternoons.story:626
     {u16(OpKind::Add), 32783, 1, 0, 0, 0, 0},  // 30_afternoons.story:627
-    {u16(OpKind::If), 98, 1066, 0, 0, 0, 0},  // 30_afternoons.story:628
+    {u16(OpKind::If), 98, 1067, 0, 0, 0, 0},  // 30_afternoons.story:628
     {u16(OpKind::Show), 1, 5, 0, 0, 0, 0},  // 30_afternoons.story:629
     {u16(OpKind::Say), 5, 65535, 1214, 1215, 0, 0},  // 30_afternoons.story:632
-    {u16(OpKind::If), 99, 1063, 0, 0, 0, 0},  // 30_afternoons.story:632
+    {u16(OpKind::If), 99, 1064, 0, 0, 0, 0},  // 30_afternoons.story:632
     {u16(OpKind::Say), 5, 2, 1216, 1217, 1218, 0},  // 30_afternoons.story:635
     {u16(OpKind::Add), 32789, 0, 0, 0, 0, 0},  // 30_afternoons.story:635
-    {u16(OpKind::Jump), 1080, 0, 0, 0, 0, 0},  // 30_afternoons.story:636
+    {u16(OpKind::Jump), 1081, 0, 0, 0, 0, 0},  // 30_afternoons.story:636
     {u16(OpKind::Say), 5, 4, 1219, 1220, 1221, 0},  // 30_afternoons.story:640
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 30_afternoons.story:640
-    {u16(OpKind::Jump), 1080, 0, 0, 0, 0, 0},  // 30_afternoons.story:641
+    {u16(OpKind::Jump), 1081, 0, 0, 0, 0, 0},  // 30_afternoons.story:641
     {u16(OpKind::Sfx), 7, 0, 0, 0, 0, 0},  // 30_afternoons.story:643
     {u16(OpKind::Say), 65535, 65535, 1222, 1223, 1224, 1225},  // 30_afternoons.story:647
     {u16(OpKind::Show), 0, 5, 1, 0, 0, 0},  // 30_afternoons.story:647
@@ -3082,7 +3083,7 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Add), 32790, 1, 0, 0, 0, 0},  // 30_afternoons.story:660
     {u16(OpKind::Hide), 6, 0, 0, 0, 0, 0},  // 30_afternoons.story:661
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:663
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:664
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:664
     {u16(OpKind::Bg), 6, 2, 1, 0, 0, 0},  // 30_afternoons.story:666
     {u16(OpKind::Music), 5, 0, 0, 0, 0, 0},  // 30_afternoons.story:666
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 30_afternoons.story:666
@@ -3091,7 +3092,7 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 5, 65535, 1243, 1244, 0, 0},  // 30_afternoons.story:671
     {u16(OpKind::Add), 32789, 1, 0, 0, 0, 0},  // 30_afternoons.story:671
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 30_afternoons.story:672
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:673
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:673
     {u16(OpKind::Bg), 3, 2, 3, 0, 0, 0},  // 30_afternoons.story:676
     {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 30_afternoons.story:676
     {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 30_afternoons.story:676
@@ -3100,14 +3101,14 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 65535, 65535, 1249, 1250, 1251, 0},  // 30_afternoons.story:683
     {u16(OpKind::Choice), 109, 3, 0, 0, 0, 0},  // 30_afternoons.story:686
     {u16(OpKind::Say), 65535, 65535, 1255, 1256, 0, 0},  // 30_afternoons.story:689
-    {u16(OpKind::Jump), 1106, 0, 0, 0, 0, 0},  // 30_afternoons.story:689
+    {u16(OpKind::Jump), 1107, 0, 0, 0, 0, 0},  // 30_afternoons.story:689
     {u16(OpKind::Say), 65535, 65535, 1257, 1258, 1259, 0},  // 30_afternoons.story:693
     {u16(OpKind::Add), 32790, 1, 0, 0, 0, 0},  // 30_afternoons.story:693
-    {u16(OpKind::Jump), 1106, 0, 0, 0, 0, 0},  // 30_afternoons.story:694
+    {u16(OpKind::Jump), 1107, 0, 0, 0, 0, 0},  // 30_afternoons.story:694
     {u16(OpKind::Say), 65535, 65535, 1260, 1261, 1262, 0},  // 30_afternoons.story:698
     {u16(OpKind::Set), 7, 1, 0, 0, 0, 0},  // 30_afternoons.story:698
-    {u16(OpKind::Jump), 1106, 0, 0, 0, 0, 0},  // 30_afternoons.story:699
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:701
+    {u16(OpKind::Jump), 1107, 0, 0, 0, 0, 0},  // 30_afternoons.story:699
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:701
     {u16(OpKind::Bg), 3, 2, 3, 0, 0, 0},  // 30_afternoons.story:703
     {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 30_afternoons.story:703
     {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 30_afternoons.story:703
@@ -3118,28 +3119,28 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Say), 65535, 65535, 1272, 1273, 1274, 0},  // 30_afternoons.story:712
     {u16(OpKind::Choice), 112, 3, 0, 0, 0, 0},  // 30_afternoons.story:715
     {u16(OpKind::Say), 65535, 65535, 1278, 1279, 0, 0},  // 30_afternoons.story:718
-    {u16(OpKind::Jump), 1124, 0, 0, 0, 0, 0},  // 30_afternoons.story:718
+    {u16(OpKind::Jump), 1125, 0, 0, 0, 0, 0},  // 30_afternoons.story:718
     {u16(OpKind::Say), 65535, 65535, 1280, 1281, 1282, 0},  // 30_afternoons.story:722
     {u16(OpKind::Set), 7, 1, 0, 0, 0, 0},  // 30_afternoons.story:722
-    {u16(OpKind::Jump), 1124, 0, 0, 0, 0, 0},  // 30_afternoons.story:723
+    {u16(OpKind::Jump), 1125, 0, 0, 0, 0, 0},  // 30_afternoons.story:723
     {u16(OpKind::Add), 32791, 1, 0, 0, 0, 0},  // 30_afternoons.story:725
     {u16(OpKind::Say), 65535, 65535, 1283, 1284, 0, 0},  // 30_afternoons.story:728
-    {u16(OpKind::Jump), 1124, 0, 0, 0, 0, 0},  // 30_afternoons.story:728
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:730
+    {u16(OpKind::Jump), 1125, 0, 0, 0, 0, 0},  // 30_afternoons.story:728
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:730
     {u16(OpKind::Bg), 3, 2, 3, 0, 0, 0},  // 30_afternoons.story:732
     {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 30_afternoons.story:732
     {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 30_afternoons.story:732
     {u16(OpKind::Add), 32784, 1, 0, 0, 0, 0},  // 30_afternoons.story:733
     {u16(OpKind::Say), 65535, 65535, 1285, 1286, 1287, 0},  // 30_afternoons.story:736
-    {u16(OpKind::If), 100, 1149, 0, 0, 0, 0},  // 30_afternoons.story:736
-    {u16(OpKind::If), 101, 1136, 0, 0, 0, 0},  // 30_afternoons.story:737
+    {u16(OpKind::If), 100, 1150, 0, 0, 0, 0},  // 30_afternoons.story:736
+    {u16(OpKind::If), 101, 1137, 0, 0, 0, 0},  // 30_afternoons.story:737
     {u16(OpKind::Say), 65535, 65535, 1288, 1289, 1290, 1291},  // 30_afternoons.story:741
     {u16(OpKind::Say), 65535, 65535, 1292, 0, 0, 0},  // 30_afternoons.story:741
     {u16(OpKind::Set), 32777, 0, 0, 0, 0, 0},  // 30_afternoons.story:741
-    {u16(OpKind::Jump), 1155, 0, 0, 0, 0, 0},  // 30_afternoons.story:742
+    {u16(OpKind::Jump), 1156, 0, 0, 0, 0, 0},  // 30_afternoons.story:742
     {u16(OpKind::Say), 65535, 65535, 1293, 1294, 1295, 0},  // 30_afternoons.story:746
     {u16(OpKind::Choice), 115, 2, 0, 0, 0, 0},  // 30_afternoons.story:748
-    {u16(OpKind::Letter), 6, 1400, 0, 0, 0, 0},  // 30_afternoons.story:750
+    {u16(OpKind::Letter), 6, 1401, 0, 0, 0, 0},  // 30_afternoons.story:750
     {u16(OpKind::Set), 44, 1, 0, 0, 0, 0},  // 30_afternoons.story:751
     {u16(OpKind::Set), 25, 0, 0, 0, 0, 0},  // 30_afternoons.story:752
     {u16(OpKind::Set), 32773, 6, 0, 0, 0, 0},  // 30_afternoons.story:753
@@ -3147,16 +3148,16 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Add), 32768, 1, 0, 0, 0, 0},  // 30_afternoons.story:755
     {u16(OpKind::Say), 65535, 65535, 1298, 1299, 1300, 0},  // 30_afternoons.story:758
     {u16(OpKind::Say), 65535, 65535, 843, 844, 0, 0},  // 30_afternoons.story:759
-    {u16(OpKind::Jump), 1155, 0, 0, 0, 0, 0},  // 30_afternoons.story:759
+    {u16(OpKind::Jump), 1156, 0, 0, 0, 0, 0},  // 30_afternoons.story:759
     {u16(OpKind::Say), 65535, 65535, 1301, 1302, 0, 0},  // 30_afternoons.story:763
-    {u16(OpKind::Jump), 1155, 0, 0, 0, 0, 0},  // 30_afternoons.story:763
-    {u16(OpKind::If), 102, 1154, 0, 0, 0, 0},  // 30_afternoons.story:765
+    {u16(OpKind::Jump), 1156, 0, 0, 0, 0, 0},  // 30_afternoons.story:763
+    {u16(OpKind::If), 102, 1155, 0, 0, 0, 0},  // 30_afternoons.story:765
     {u16(OpKind::Say), 65535, 65535, 1303, 1304, 1305, 1306},  // 30_afternoons.story:768
     {u16(OpKind::Set), 32777, 1, 0, 0, 0, 0},  // 30_afternoons.story:768
     {u16(OpKind::Say), 65535, 65535, 843, 844, 0, 0},  // 30_afternoons.story:770
-    {u16(OpKind::Jump), 1155, 0, 0, 0, 0, 0},  // 30_afternoons.story:770
+    {u16(OpKind::Jump), 1156, 0, 0, 0, 0, 0},  // 30_afternoons.story:770
     {u16(OpKind::Say), 65535, 65535, 1307, 1308, 1309, 0},  // 30_afternoons.story:774
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:775
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:775
     {u16(OpKind::Bg), 3, 3, 3, 0, 0, 0},  // 30_afternoons.story:777
     {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 30_afternoons.story:777
     {u16(OpKind::Ambience), 5, 0, 0, 0, 0, 0},  // 30_afternoons.story:777
@@ -3166,86 +3167,86 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Choice), 117, 3, 0, 0, 0, 0},  // 30_afternoons.story:787
     {u16(OpKind::Sfx), 5, 0, 0, 0, 0, 0},  // 30_afternoons.story:789
     {u16(OpKind::Say), 65535, 65535, 1320, 1321, 0, 0},  // 30_afternoons.story:792
-    {u16(OpKind::Jump), 1173, 0, 0, 0, 0, 0},  // 30_afternoons.story:792
+    {u16(OpKind::Jump), 1174, 0, 0, 0, 0, 0},  // 30_afternoons.story:792
     {u16(OpKind::Sfx), 5, 0, 0, 0, 0, 0},  // 30_afternoons.story:794
     {u16(OpKind::Say), 65535, 65535, 1322, 1323, 1324, 0},  // 30_afternoons.story:797
     {u16(OpKind::Add), 32768, 0, 0, 0, 0, 0},  // 30_afternoons.story:797
     {u16(OpKind::Set), 7, 1, 0, 0, 0, 0},  // 30_afternoons.story:798
-    {u16(OpKind::Jump), 1173, 0, 0, 0, 0, 0},  // 30_afternoons.story:799
+    {u16(OpKind::Jump), 1174, 0, 0, 0, 0, 0},  // 30_afternoons.story:799
     {u16(OpKind::Say), 65535, 65535, 1325, 1326, 1327, 0},  // 30_afternoons.story:803
-    {u16(OpKind::Jump), 1173, 0, 0, 0, 0, 0},  // 30_afternoons.story:803
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:805
+    {u16(OpKind::Jump), 1174, 0, 0, 0, 0, 0},  // 30_afternoons.story:803
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:805
     {u16(OpKind::Bg), 3, 2, 3, 0, 0, 0},  // 30_afternoons.story:807
     {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 30_afternoons.story:807
     {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 30_afternoons.story:807
     {u16(OpKind::Add), 32784, 1, 0, 0, 0, 0},  // 30_afternoons.story:808
     {u16(OpKind::Say), 65535, 65535, 1328, 1329, 1330, 1331},  // 30_afternoons.story:812
-    {u16(OpKind::Jump), 282, 0, 0, 0, 0, 0},  // 30_afternoons.story:812
+    {u16(OpKind::Jump), 283, 0, 0, 0, 0, 0},  // 30_afternoons.story:812
     {u16(OpKind::Bg), 1, 0, 1, 0, 0, 0},  // 40_day7.story:4
     {u16(OpKind::Music), 6, 0, 0, 0, 0, 0},  // 40_day7.story:4
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 40_day7.story:4
     {u16(OpKind::Set), 32773, 0, 0, 0, 0, 0},  // 40_day7.story:5
     {u16(OpKind::Say), 65535, 65535, 1332, 1333, 1334, 1335},  // 40_day7.story:9
     {u16(OpKind::Say), 65535, 65535, 1336, 1337, 1338, 1339},  // 40_day7.story:12
-    {u16(OpKind::If), 103, 1188, 0, 0, 0, 0},  // 40_day7.story:12
-    {u16(OpKind::Jump), 1189, 0, 0, 0, 0, 0},  // 40_day7.story:13
+    {u16(OpKind::If), 103, 1189, 0, 0, 0, 0},  // 40_day7.story:12
+    {u16(OpKind::Jump), 1190, 0, 0, 0, 0, 0},  // 40_day7.story:13
     {u16(OpKind::Say), 65535, 65535, 1340, 1341, 1342, 0},  // 40_day7.story:17
     {u16(OpKind::Show), 2, 6, 0, 0, 0, 0},  // 40_day7.story:19
     {u16(OpKind::Say), 6, 65535, 1343, 1344, 1345, 1346},  // 40_day7.story:23
     {u16(OpKind::Show), 0, 2, 0, 0, 0, 0},  // 40_day7.story:25
-    {u16(OpKind::If), 104, 1195, 0, 0, 0, 0},  // 40_day7.story:26
+    {u16(OpKind::If), 104, 1196, 0, 0, 0, 0},  // 40_day7.story:26
     {u16(OpKind::Say), 2, 65535, 1347, 1348, 0, 0},  // 40_day7.story:29
-    {u16(OpKind::Jump), 1200, 0, 0, 0, 0, 0},  // 40_day7.story:29
-    {u16(OpKind::If), 105, 1198, 0, 0, 0, 0},  // 40_day7.story:31
+    {u16(OpKind::Jump), 1201, 0, 0, 0, 0, 0},  // 40_day7.story:29
+    {u16(OpKind::If), 105, 1199, 0, 0, 0, 0},  // 40_day7.story:31
     {u16(OpKind::Say), 2, 2, 1349, 1350, 1351, 0},  // 40_day7.story:34
-    {u16(OpKind::Jump), 1200, 0, 0, 0, 0, 0},  // 40_day7.story:34
+    {u16(OpKind::Jump), 1201, 0, 0, 0, 0, 0},  // 40_day7.story:34
     {u16(OpKind::Expr), 2, 1, 0, 0, 0, 0},  // 40_day7.story:36
     {u16(OpKind::Say), 2, 1, 1352, 1353, 1354, 1355},  // 40_day7.story:40
     {u16(OpKind::Hide), 2, 0, 0, 0, 0, 0},  // 40_day7.story:41
     {u16(OpKind::Show), 0, 3, 0, 0, 0, 0},  // 40_day7.story:43
-    {u16(OpKind::If), 106, 1205, 0, 0, 0, 0},  // 40_day7.story:44
+    {u16(OpKind::If), 106, 1206, 0, 0, 0, 0},  // 40_day7.story:44
     {u16(OpKind::Say), 3, 65535, 1356, 1357, 1358, 0},  // 40_day7.story:47
-    {u16(OpKind::Jump), 1207, 0, 0, 0, 0, 0},  // 40_day7.story:47
+    {u16(OpKind::Jump), 1208, 0, 0, 0, 0, 0},  // 40_day7.story:47
     {u16(OpKind::Expr), 3, 4, 0, 0, 0, 0},  // 40_day7.story:49
     {u16(OpKind::Say), 3, 4, 1359, 1360, 1361, 0},  // 40_day7.story:52
     {u16(OpKind::Hide), 3, 0, 0, 0, 0, 0},  // 40_day7.story:53
     {u16(OpKind::Show), 0, 5, 0, 0, 0, 0},  // 40_day7.story:55
-    {u16(OpKind::If), 107, 1215, 0, 0, 0, 0},  // 40_day7.story:56
-    {u16(OpKind::If), 108, 1213, 0, 0, 0, 0},  // 40_day7.story:57
+    {u16(OpKind::If), 107, 1216, 0, 0, 0, 0},  // 40_day7.story:56
+    {u16(OpKind::If), 108, 1214, 0, 0, 0, 0},  // 40_day7.story:57
     {u16(OpKind::Say), 5, 65535, 1362, 1363, 0, 0},  // 40_day7.story:59
-    {u16(OpKind::Jump), 1216, 0, 0, 0, 0, 0},  // 40_day7.story:59
+    {u16(OpKind::Jump), 1217, 0, 0, 0, 0, 0},  // 40_day7.story:59
     {u16(OpKind::Say), 5, 4, 1364, 1365, 0, 0},  // 40_day7.story:63
-    {u16(OpKind::Jump), 1216, 0, 0, 0, 0, 0},  // 40_day7.story:63
+    {u16(OpKind::Jump), 1217, 0, 0, 0, 0, 0},  // 40_day7.story:63
     {u16(OpKind::Say), 5, 1, 1366, 1367, 1368, 1369},  // 40_day7.story:68
     {u16(OpKind::Hide), 5, 0, 0, 0, 0, 0},  // 40_day7.story:69
     {u16(OpKind::Show), 0, 7, 0, 0, 0, 0},  // 40_day7.story:71
-    {u16(OpKind::If), 109, 1222, 0, 0, 0, 0},  // 40_day7.story:72
-    {u16(OpKind::If), 110, 1225, 0, 0, 0, 0},  // 40_day7.story:73
+    {u16(OpKind::If), 109, 1223, 0, 0, 0, 0},  // 40_day7.story:72
+    {u16(OpKind::If), 110, 1226, 0, 0, 0, 0},  // 40_day7.story:73
     {u16(OpKind::Say), 7, 65535, 1370, 1371, 1372, 0},  // 40_day7.story:76
-    {u16(OpKind::Jump), 1226, 0, 0, 0, 0, 0},  // 40_day7.story:76
+    {u16(OpKind::Jump), 1227, 0, 0, 0, 0, 0},  // 40_day7.story:76
     {u16(OpKind::Say), 7, 2, 1373, 1374, 1375, 1376},  // 40_day7.story:81
     {u16(OpKind::Say), 7, 2, 1045, 0, 0, 0},  // 40_day7.story:81
-    {u16(OpKind::Jump), 1226, 0, 0, 0, 0, 0},  // 40_day7.story:81
+    {u16(OpKind::Jump), 1227, 0, 0, 0, 0, 0},  // 40_day7.story:81
     {u16(OpKind::Say), 7, 4, 1377, 1378, 1379, 0},  // 40_day7.story:85
     {u16(OpKind::Hide), 7, 0, 0, 0, 0, 0},  // 40_day7.story:86
-    {u16(OpKind::If), 111, 1229, 0, 0, 0, 0},  // 40_day7.story:89
-    {u16(OpKind::If), 112, 1245, 0, 0, 0, 0},  // 40_day7.story:90
+    {u16(OpKind::If), 111, 1230, 0, 0, 0, 0},  // 40_day7.story:89
+    {u16(OpKind::If), 112, 1246, 0, 0, 0, 0},  // 40_day7.story:90
     {u16(OpKind::Set), 30, 0, 0, 0, 0, 0},  // 40_day7.story:94
     {u16(OpKind::Set), 31, 0, 0, 0, 0, 0},  // 40_day7.story:95
-    {u16(OpKind::If), 113, 1235, 0, 0, 0, 0},  // 40_day7.story:96
-    {u16(OpKind::If), 114, 1234, 0, 0, 0, 0},  // 40_day7.story:97
-    {u16(OpKind::Jump), 1235, 0, 0, 0, 0, 0},  // 40_day7.story:98
+    {u16(OpKind::If), 113, 1236, 0, 0, 0, 0},  // 40_day7.story:96
+    {u16(OpKind::If), 114, 1235, 0, 0, 0, 0},  // 40_day7.story:97
+    {u16(OpKind::Jump), 1236, 0, 0, 0, 0, 0},  // 40_day7.story:98
     {u16(OpKind::Set), 30, 1, 0, 0, 0, 0},  // 40_day7.story:100
-    {u16(OpKind::If), 115, 1239, 0, 0, 0, 0},  // 40_day7.story:102
-    {u16(OpKind::If), 116, 1238, 0, 0, 0, 0},  // 40_day7.story:103
-    {u16(OpKind::Jump), 1239, 0, 0, 0, 0, 0},  // 40_day7.story:104
+    {u16(OpKind::If), 115, 1240, 0, 0, 0, 0},  // 40_day7.story:102
+    {u16(OpKind::If), 116, 1239, 0, 0, 0, 0},  // 40_day7.story:103
+    {u16(OpKind::Jump), 1240, 0, 0, 0, 0, 0},  // 40_day7.story:104
     {u16(OpKind::Set), 31, 1, 0, 0, 0, 0},  // 40_day7.story:106
     {u16(OpKind::Show), 1, 1, 2, 0, 0, 0},  // 40_day7.story:109
     {u16(OpKind::Sfx), 9, 0, 0, 0, 0, 0},  // 40_day7.story:110
     {u16(OpKind::Say), 65535, 65535, 1380, 1381, 1382, 1383},  // 40_day7.story:114
     {u16(OpKind::Choice), 120, 4, 0, 0, 0, 0},  // 40_day7.story:118
-    {u16(OpKind::If), 120, 1296, 0, 0, 0, 0},  // 40_day7.story:121
-    {u16(OpKind::Jump), 1308, 0, 0, 0, 0, 0},  // 40_day7.story:122
+    {u16(OpKind::If), 120, 1297, 0, 0, 0, 0},  // 40_day7.story:121
+    {u16(OpKind::Jump), 1309, 0, 0, 0, 0, 0},  // 40_day7.story:122
     {u16(OpKind::Bg), 1, 0, 1, 0, 0, 0},  // 40_day7.story:125
     {u16(OpKind::Music), 6, 0, 0, 0, 0, 0},  // 40_day7.story:125
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 40_day7.story:125
@@ -3263,12 +3264,12 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Ending), 1, 0, 0, 0, 0, 0},  // 40_day7.story:147
     {u16(OpKind::Say), 65535, 65535, 1406, 1407, 1408, 1409},  // 40_day7.story:151
     {u16(OpKind::Say), 65535, 65535, 1410, 0, 0, 0},  // 40_day7.story:151
-    {u16(OpKind::Jump), 1322, 0, 0, 0, 0, 0},  // 40_day7.story:151
+    {u16(OpKind::Jump), 1323, 0, 0, 0, 0, 0},  // 40_day7.story:151
     {u16(OpKind::Set), 18, 1, 0, 0, 0, 0},  // 40_day7.story:154
     {u16(OpKind::Ending), 1, 0, 0, 0, 0, 0},  // 40_day7.story:155
     {u16(OpKind::Say), 65535, 65535, 1411, 1412, 1413, 1414},  // 40_day7.story:160
     {u16(OpKind::Say), 65535, 65535, 1415, 1416, 0, 0},  // 40_day7.story:160
-    {u16(OpKind::Jump), 1322, 0, 0, 0, 0, 0},  // 40_day7.story:160
+    {u16(OpKind::Jump), 1323, 0, 0, 0, 0, 0},  // 40_day7.story:160
     {u16(OpKind::Bg), 1, 0, 1, 0, 0, 0},  // 40_day7.story:163
     {u16(OpKind::Music), 6, 0, 0, 0, 0, 0},  // 40_day7.story:163
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 40_day7.story:163
@@ -3282,7 +3283,7 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 40_day7.story:172
     {u16(OpKind::Ending), 2, 0, 0, 0, 0, 0},  // 40_day7.story:173
     {u16(OpKind::Say), 65535, 65535, 1424, 1425, 1426, 1427},  // 40_day7.story:177
-    {u16(OpKind::Jump), 1322, 0, 0, 0, 0, 0},  // 40_day7.story:177
+    {u16(OpKind::Jump), 1323, 0, 0, 0, 0, 0},  // 40_day7.story:177
     {u16(OpKind::Bg), 4, 0, 2, 0, 0, 0},  // 40_day7.story:180
     {u16(OpKind::Music), 4, 0, 0, 0, 0, 0},  // 40_day7.story:180
     {u16(OpKind::Ambience), 3, 0, 0, 0, 0, 0},  // 40_day7.story:180
@@ -3296,7 +3297,7 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Ending), 3, 0, 0, 0, 0, 0},  // 40_day7.story:190
     {u16(OpKind::Say), 65535, 65535, 1437, 1438, 1439, 1440},  // 40_day7.story:195
     {u16(OpKind::Say), 65535, 65535, 1441, 0, 0, 0},  // 40_day7.story:195
-    {u16(OpKind::Jump), 1322, 0, 0, 0, 0, 0},  // 40_day7.story:195
+    {u16(OpKind::Jump), 1323, 0, 0, 0, 0, 0},  // 40_day7.story:195
     {u16(OpKind::Bg), 3, 0, 3, 0, 0, 0},  // 40_day7.story:198
     {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 40_day7.story:198
     {u16(OpKind::Ambience), 4, 0, 0, 0, 0, 0},  // 40_day7.story:198
@@ -3308,74 +3309,74 @@ inline constexpr Op kOps[] = {
     {u16(OpKind::Bg), 1, 0, 1, 0, 0, 0},  // 40_day7.story:206
     {u16(OpKind::Say), 65535, 65535, 1450, 1451, 1452, 1453},  // 40_day7.story:210
     {u16(OpKind::Say), 65535, 65535, 1454, 0, 0, 0},  // 40_day7.story:210
-    {u16(OpKind::Jump), 1322, 0, 0, 0, 0, 0},  // 40_day7.story:210
+    {u16(OpKind::Jump), 1323, 0, 0, 0, 0, 0},  // 40_day7.story:210
     {u16(OpKind::Bg), 1, 0, 1, 0, 0, 0},  // 40_day7.story:213
     {u16(OpKind::Music), 6, 0, 0, 0, 0, 0},  // 40_day7.story:213
     {u16(OpKind::Ambience), 1, 0, 0, 0, 0, 0},  // 40_day7.story:213
     {u16(OpKind::Set), 19, 1, 0, 0, 0, 0},  // 40_day7.story:214
     {u16(OpKind::Show), 1, 1, 0, 0, 0, 0},  // 40_day7.story:215
-    {u16(OpKind::If), 121, 1316, 0, 0, 0, 0},  // 40_day7.story:216
+    {u16(OpKind::If), 121, 1317, 0, 0, 0, 0},  // 40_day7.story:216
     {u16(OpKind::Say), 1, 65535, 1455, 1456, 0, 0},  // 40_day7.story:218
-    {u16(OpKind::Jump), 1317, 0, 0, 0, 0, 0},  // 40_day7.story:218
+    {u16(OpKind::Jump), 1318, 0, 0, 0, 0, 0},  // 40_day7.story:218
     {u16(OpKind::Say), 1, 1, 1457, 1458, 0, 0},  // 40_day7.story:222
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 40_day7.story:223
     {u16(OpKind::Ending), 5, 0, 0, 0, 0, 0},  // 40_day7.story:224
     {u16(OpKind::Say), 65535, 65535, 1459, 1460, 1461, 1462},  // 40_day7.story:229
     {u16(OpKind::Say), 65535, 65535, 1463, 1464, 0, 0},  // 40_day7.story:229
-    {u16(OpKind::Jump), 1322, 0, 0, 0, 0, 0},  // 40_day7.story:229
+    {u16(OpKind::Jump), 1323, 0, 0, 0, 0, 0},  // 40_day7.story:229
     {u16(OpKind::Bg), 0, 3, 3, 0, 0, 0},  // 40_day7.story:232
     {u16(OpKind::Music), 3, 0, 0, 0, 0, 0},  // 40_day7.story:232
     {u16(OpKind::Ambience), 0, 0, 0, 0, 0, 0},  // 40_day7.story:232
     {u16(OpKind::Hide), 65535, 0, 0, 0, 0, 0},  // 40_day7.story:233
     {u16(OpKind::Set), 26, 1, 0, 0, 0, 0},  // 40_day7.story:234
     {u16(OpKind::Say), 65535, 65535, 1465, 0, 0, 0},  // 40_day7.story:236
-    {u16(OpKind::If), 122, 1332, 0, 0, 0, 0},  // 40_day7.story:237
-    {u16(OpKind::If), 123, 1334, 0, 0, 0, 0},  // 40_day7.story:238
+    {u16(OpKind::If), 122, 1333, 0, 0, 0, 0},  // 40_day7.story:237
+    {u16(OpKind::If), 123, 1335, 0, 0, 0, 0},  // 40_day7.story:238
     {u16(OpKind::Say), 65535, 65535, 1466, 1467, 1468, 1469},  // 40_day7.story:242
-    {u16(OpKind::Jump), 1335, 0, 0, 0, 0, 0},  // 40_day7.story:242
+    {u16(OpKind::Jump), 1336, 0, 0, 0, 0, 0},  // 40_day7.story:242
     {u16(OpKind::Say), 65535, 65535, 1470, 1471, 1472, 0},  // 40_day7.story:246
-    {u16(OpKind::Jump), 1335, 0, 0, 0, 0, 0},  // 40_day7.story:246
+    {u16(OpKind::Jump), 1336, 0, 0, 0, 0, 0},  // 40_day7.story:246
     {u16(OpKind::Say), 65535, 65535, 1473, 1474, 1475, 1476},  // 40_day7.story:251
-    {u16(OpKind::If), 124, 1339, 0, 0, 0, 0},  // 40_day7.story:253
-    {u16(OpKind::If), 125, 1341, 0, 0, 0, 0},  // 40_day7.story:254
+    {u16(OpKind::If), 124, 1340, 0, 0, 0, 0},  // 40_day7.story:253
+    {u16(OpKind::If), 125, 1342, 0, 0, 0, 0},  // 40_day7.story:254
     {u16(OpKind::Say), 65535, 65535, 1477, 1478, 1479, 0},  // 40_day7.story:257
-    {u16(OpKind::Jump), 1342, 0, 0, 0, 0, 0},  // 40_day7.story:257
+    {u16(OpKind::Jump), 1343, 0, 0, 0, 0, 0},  // 40_day7.story:257
     {u16(OpKind::Say), 65535, 65535, 1480, 1481, 0, 0},  // 40_day7.story:261
-    {u16(OpKind::Jump), 1342, 0, 0, 0, 0, 0},  // 40_day7.story:261
+    {u16(OpKind::Jump), 1343, 0, 0, 0, 0, 0},  // 40_day7.story:261
     {u16(OpKind::Say), 65535, 65535, 1482, 1483, 1484, 1485},  // 40_day7.story:266
-    {u16(OpKind::If), 126, 1346, 0, 0, 0, 0},  // 40_day7.story:268
-    {u16(OpKind::If), 127, 1348, 0, 0, 0, 0},  // 40_day7.story:269
+    {u16(OpKind::If), 126, 1347, 0, 0, 0, 0},  // 40_day7.story:268
+    {u16(OpKind::If), 127, 1349, 0, 0, 0, 0},  // 40_day7.story:269
     {u16(OpKind::Say), 65535, 65535, 1486, 1487, 1488, 1489},  // 40_day7.story:272
-    {u16(OpKind::Jump), 1349, 0, 0, 0, 0, 0},  // 40_day7.story:272
+    {u16(OpKind::Jump), 1350, 0, 0, 0, 0, 0},  // 40_day7.story:272
     {u16(OpKind::Say), 65535, 65535, 1490, 1491, 1492, 1493},  // 40_day7.story:277
-    {u16(OpKind::Jump), 1349, 0, 0, 0, 0, 0},  // 40_day7.story:277
+    {u16(OpKind::Jump), 1350, 0, 0, 0, 0, 0},  // 40_day7.story:277
     {u16(OpKind::Say), 65535, 65535, 1494, 1495, 1496, 1497},  // 40_day7.story:282
-    {u16(OpKind::If), 128, 1353, 0, 0, 0, 0},  // 40_day7.story:284
-    {u16(OpKind::If), 129, 1355, 0, 0, 0, 0},  // 40_day7.story:285
+    {u16(OpKind::If), 128, 1354, 0, 0, 0, 0},  // 40_day7.story:284
+    {u16(OpKind::If), 129, 1356, 0, 0, 0, 0},  // 40_day7.story:285
     {u16(OpKind::Say), 65535, 65535, 1498, 1499, 1500, 1501},  // 40_day7.story:289
-    {u16(OpKind::Jump), 1357, 0, 0, 0, 0, 0},  // 40_day7.story:289
+    {u16(OpKind::Jump), 1358, 0, 0, 0, 0, 0},  // 40_day7.story:289
     {u16(OpKind::Say), 65535, 65535, 1502, 1503, 1504, 1505},  // 40_day7.story:294
-    {u16(OpKind::Jump), 1357, 0, 0, 0, 0, 0},  // 40_day7.story:294
+    {u16(OpKind::Jump), 1358, 0, 0, 0, 0, 0},  // 40_day7.story:294
     {u16(OpKind::Say), 65535, 65535, 1506, 1507, 1508, 1509},  // 40_day7.story:299
     {u16(OpKind::Say), 65535, 65535, 1045, 0, 0, 0},  // 40_day7.story:299
-    {u16(OpKind::If), 130, 1361, 0, 0, 0, 0},  // 40_day7.story:301
-    {u16(OpKind::If), 131, 1364, 0, 0, 0, 0},  // 40_day7.story:302
+    {u16(OpKind::If), 130, 1362, 0, 0, 0, 0},  // 40_day7.story:301
+    {u16(OpKind::If), 131, 1365, 0, 0, 0, 0},  // 40_day7.story:302
     {u16(OpKind::Say), 65535, 65535, 1510, 1511, 1512, 1513},  // 40_day7.story:305
-    {u16(OpKind::Jump), 1365, 0, 0, 0, 0, 0},  // 40_day7.story:305
+    {u16(OpKind::Jump), 1366, 0, 0, 0, 0, 0},  // 40_day7.story:305
     {u16(OpKind::Say), 65535, 65535, 1514, 1515, 1516, 1517},  // 40_day7.story:310
     {u16(OpKind::Say), 65535, 65535, 1518, 0, 0, 0},  // 40_day7.story:310
-    {u16(OpKind::Jump), 1365, 0, 0, 0, 0, 0},  // 40_day7.story:310
+    {u16(OpKind::Jump), 1366, 0, 0, 0, 0, 0},  // 40_day7.story:310
     {u16(OpKind::Say), 65535, 65535, 1519, 1520, 1521, 1522},  // 40_day7.story:315
-    {u16(OpKind::If), 132, 1375, 0, 0, 0, 0},  // 40_day7.story:317
-    {u16(OpKind::If), 133, 1373, 0, 0, 0, 0},  // 40_day7.story:318
-    {u16(OpKind::If), 134, 1371, 0, 0, 0, 0},  // 40_day7.story:319
+    {u16(OpKind::If), 132, 1376, 0, 0, 0, 0},  // 40_day7.story:317
+    {u16(OpKind::If), 133, 1374, 0, 0, 0, 0},  // 40_day7.story:318
+    {u16(OpKind::If), 134, 1372, 0, 0, 0, 0},  // 40_day7.story:319
     {u16(OpKind::Say), 65535, 65535, 1523, 1524, 1525, 1526},  // 40_day7.story:323
     {u16(OpKind::Say), 65535, 65535, 1527, 0, 0, 0},  // 40_day7.story:323
-    {u16(OpKind::Jump), 1377, 0, 0, 0, 0, 0},  // 40_day7.story:323
+    {u16(OpKind::Jump), 1378, 0, 0, 0, 0, 0},  // 40_day7.story:323
     {u16(OpKind::Say), 65535, 65535, 1523, 1528, 1529, 1530},  // 40_day7.story:327
-    {u16(OpKind::Jump), 1377, 0, 0, 0, 0, 0},  // 40_day7.story:327
+    {u16(OpKind::Jump), 1378, 0, 0, 0, 0, 0},  // 40_day7.story:327
     {u16(OpKind::Say), 65535, 65535, 1531, 1532, 1533, 1534},  // 40_day7.story:332
-    {u16(OpKind::Jump), 1377, 0, 0, 0, 0, 0},  // 40_day7.story:332
+    {u16(OpKind::Jump), 1378, 0, 0, 0, 0, 0},  // 40_day7.story:332
     {u16(OpKind::Say), 65535, 65535, 1535, 1536, 1537, 1538},  // 40_day7.story:337
     {u16(OpKind::Say), 65535, 65535, 1539, 0, 0, 0},  // 40_day7.story:337
     {u16(OpKind::Fade), 0, 0, 0, 0, 0, 0},  // 40_day7.story:339
@@ -3414,132 +3415,132 @@ inline constexpr Op kOps[] = {
 
 inline constexpr u16 kOptionCount = 126;
 inline constexpr Option kOptions[] = {
-    {17, 0, 13, 0, 0, 0},
-    {18, 0, 16, 0, 5, 0},
-    {19, 0, 20, 0, 6, 0},
-    {56, 0, 43, 0, 0, 0},
-    {57, 0, 45, 0, 5, 0},
-    {70, 0, 52, 0, 6, 0},
-    {71, 0, 55, 0, 0, 0},
-    {94, 0, 71, 0, 0, 0},
-    {95, 96, 73, 0, 5, 0},
-    {133, 0, 95, 0, 0, 0},
-    {134, 0, 97, 0, 6, 0},
-    {135, 0, 100, 0, 5, 0},
-    {158, 0, 123, 0, 5, 0},
-    {159, 0, 128, 0, 0, 0},
-    {237, 0, 197, 0, 1, 0},
-    {238, 0, 201, 0, 0, 0},
-    {239, 0, 204, 0, 4, 0},
-    {286, 0, 262, 0, 1, 0},
-    {287, 0, 267, 0, 2, 0},
-    {288, 0, 272, 0, 0, 0},
-    {289, 0, 277, 0, 3, 0},
-    {513, 0, 344, 0, 5, 0},
-    {514, 0, 347, 0, 0, 0},
-    {527, 0, 364, 0, 0, 0},
-    {528, 0, 367, 0, 4, 0},
-    {532, 533, 359, 0, 5, 0},
-    {528, 0, 367, 0, 4, 0},
-    {560, 0, 400, 0, 5, 0},
-    {561, 0, 403, 0, 0, 0},
-    {577, 0, 411, 0, 0, 0},
-    {578, 0, 414, 0, 6, 0},
-    {579, 0, 419, 0, 5, 0},
-    {597, 0, 431, 0, 5, 0},
-    {598, 599, 437, 0, 0, 0},
-    {600, 0, 444, 0, 3, 0},
-    {630, 631, 472, 0, 5, 0},
-    {632, 0, 475, 0, 0, 0},
-    {646, 0, 484, 0, 0, 0},
-    {647, 648, 486, 0, 6, 0},
-    {649, 0, 490, 0, 5, 0},
-    {660, 661, 492, 0, 5, 0},
-    {662, 0, 496, 0, 0, 0},
-    {674, 675, 503, 0, 2, 0},
-    {676, 677, 508, 0, 4, 0},
-    {678, 0, 513, 0, 1, 0},
-    {703, 0, 542, 0, 5, 0},
-    {704, 0, 546, 0, 0, 0},
-    {719, 0, 553, 0, 0, 0},
-    {720, 0, 557, 0, 6, 0},
-    {738, 739, 565, 0, 2, 0},
-    {740, 741, 570, 0, 1, 0},
-    {742, 0, 572, 0, 5, 0},
-    {778, 0, 606, 0, 0, 0},
-    {779, 0, 608, 0, 6, 0},
-    {780, 0, 611, 0, 5, 0},
-    {794, 795, 617, 0, 1, 0},
-    {796, 797, 622, 0, 2, 0},
-    {798, 799, 626, 0, 5, 0},
-    {824, 0, 655, 0, 6, 0},
-    {825, 826, 658, 0, 4, 0},
-    {827, 0, 664, 0, 3, 0},
-    {854, 0, 679, 0, 1, 0},
-    {855, 0, 682, 0, 2, 0},
-    {856, 0, 684, 0, 0, 0},
-    {883, 0, 706, 0, 0, 0},
-    {884, 0, 710, 0, 6, 0},
-    {885, 0, 713, 79, 1, 0},
-    {903, 0, 737, 0, 4, 0},
-    {904, 0, 742, 0, 5, 0},
-    {905, 0, 745, 0, 0, 0},
-    {911, 0, 747, 0, 5, 0},
-    {912, 0, 751, 0, 6, 0},
-    {918, 0, 754, 0, 1, 0},
-    {919, 0, 757, 0, 0, 0},
-    {920, 0, 761, 0, 5, 0},
-    {954, 0, 782, 0, 0, 0},
-    {955, 956, 784, 0, 1, 0},
-    {957, 958, 789, 0, 2, 0},
-    {962, 963, 794, 0, 5, 0},
-    {964, 965, 797, 0, 0, 0},
-    {971, 0, 799, 0, 0, 0},
-    {972, 973, 802, 0, 1, 0},
-    {974, 0, 805, 84, 5, 0},
-    {1012, 0, 830, 0, 0, 0},
-    {1013, 0, 833, 0, 1, 0},
-    {1014, 0, 835, 0, 5, 0},
-    {1044, 1045, 858, 87, 5, 0},
-    {1046, 0, 862, 0, 6, 0},
-    {1047, 0, 865, 0, 0, 0},
-    {1074, 0, 887, 0, 2, 0},
-    {1075, 0, 890, 0, 6, 0},
-    {1076, 1077, 893, 0, 0, 0},
-    {1096, 1097, 914, 0, 1, 0},
-    {1098, 0, 917, 90, 2, 0},
-    {1099, 0, 922, 0, 0, 0},
-    {1105, 0, 926, 0, 2, 0},
-    {1106, 1107, 931, 91, 5, 0},
-    {1108, 0, 936, 0, 0, 0},
-    {1134, 0, 959, 0, 4, 0},
-    {1135, 0, 968, 0, 3, 0},
-    {1154, 0, 980, 0, 0, 0},
-    {1155, 0, 983, 0, 2, 0},
-    {1156, 0, 986, 0, 1, 0},
-    {1174, 0, 1010, 0, 0, 0},
-    {1175, 0, 1012, 0, 6, 0},
-    {1180, 0, 1015, 0, 4, 0},
-    {1181, 0, 1019, 0, 1, 0},
-    {1202, 0, 1037, 0, 5, 0},
-    {1203, 0, 1041, 0, 0, 0},
-    {1252, 0, 1098, 0, 0, 0},
-    {1253, 0, 1100, 0, 5, 0},
-    {1254, 0, 1103, 0, 3, 0},
-    {1275, 0, 1116, 0, 0, 0},
-    {1276, 0, 1118, 0, 3, 0},
-    {1277, 0, 1121, 0, 5, 0},
-    {1296, 0, 1138, 0, 4, 0},
-    {1297, 0, 1147, 0, 3, 0},
-    {1317, 0, 1163, 0, 0, 0},
-    {1318, 0, 1166, 0, 5, 0},
-    {1319, 0, 1171, 0, 3, 0},
-    {1384, 0, 1268, 117, 1, 0},
-    {1385, 0, 1282, 118, 2, 1},
-    {1386, 0, 1243, 0, 0, 0},
-    {1387, 0, 1296, 119, 3, 0},
-    {1402, 1403, 1258, 0, 1, 0},
-    {1404, 1405, 1263, 0, 2, 0},
+    {17, 0, 14, 0, 0, 0},
+    {18, 0, 17, 0, 5, 0},
+    {19, 0, 21, 0, 6, 0},
+    {56, 0, 44, 0, 0, 0},
+    {57, 0, 46, 0, 5, 0},
+    {70, 0, 53, 0, 6, 0},
+    {71, 0, 56, 0, 0, 0},
+    {94, 0, 72, 0, 0, 0},
+    {95, 96, 74, 0, 5, 0},
+    {133, 0, 96, 0, 0, 0},
+    {134, 0, 98, 0, 6, 0},
+    {135, 0, 101, 0, 5, 0},
+    {158, 0, 124, 0, 5, 0},
+    {159, 0, 129, 0, 0, 0},
+    {237, 0, 198, 0, 1, 0},
+    {238, 0, 202, 0, 0, 0},
+    {239, 0, 205, 0, 4, 0},
+    {286, 0, 263, 0, 1, 0},
+    {287, 0, 268, 0, 2, 0},
+    {288, 0, 273, 0, 0, 0},
+    {289, 0, 278, 0, 3, 0},
+    {513, 0, 345, 0, 5, 0},
+    {514, 0, 348, 0, 0, 0},
+    {527, 0, 365, 0, 0, 0},
+    {528, 0, 368, 0, 4, 0},
+    {532, 533, 360, 0, 5, 0},
+    {528, 0, 368, 0, 4, 0},
+    {560, 0, 401, 0, 5, 0},
+    {561, 0, 404, 0, 0, 0},
+    {577, 0, 412, 0, 0, 0},
+    {578, 0, 415, 0, 6, 0},
+    {579, 0, 420, 0, 5, 0},
+    {597, 0, 432, 0, 5, 0},
+    {598, 599, 438, 0, 0, 0},
+    {600, 0, 445, 0, 3, 0},
+    {630, 631, 473, 0, 5, 0},
+    {632, 0, 476, 0, 0, 0},
+    {646, 0, 485, 0, 0, 0},
+    {647, 648, 487, 0, 6, 0},
+    {649, 0, 491, 0, 5, 0},
+    {660, 661, 493, 0, 5, 0},
+    {662, 0, 497, 0, 0, 0},
+    {674, 675, 504, 0, 2, 0},
+    {676, 677, 509, 0, 4, 0},
+    {678, 0, 514, 0, 1, 0},
+    {703, 0, 543, 0, 5, 0},
+    {704, 0, 547, 0, 0, 0},
+    {719, 0, 554, 0, 0, 0},
+    {720, 0, 558, 0, 6, 0},
+    {738, 739, 566, 0, 2, 0},
+    {740, 741, 571, 0, 1, 0},
+    {742, 0, 573, 0, 5, 0},
+    {778, 0, 607, 0, 0, 0},
+    {779, 0, 609, 0, 6, 0},
+    {780, 0, 612, 0, 5, 0},
+    {794, 795, 618, 0, 1, 0},
+    {796, 797, 623, 0, 2, 0},
+    {798, 799, 627, 0, 5, 0},
+    {824, 0, 656, 0, 6, 0},
+    {825, 826, 659, 0, 4, 0},
+    {827, 0, 665, 0, 3, 0},
+    {854, 0, 680, 0, 1, 0},
+    {855, 0, 683, 0, 2, 0},
+    {856, 0, 685, 0, 0, 0},
+    {883, 0, 707, 0, 0, 0},
+    {884, 0, 711, 0, 6, 0},
+    {885, 0, 714, 79, 1, 0},
+    {903, 0, 738, 0, 4, 0},
+    {904, 0, 743, 0, 5, 0},
+    {905, 0, 746, 0, 0, 0},
+    {911, 0, 748, 0, 5, 0},
+    {912, 0, 752, 0, 6, 0},
+    {918, 0, 755, 0, 1, 0},
+    {919, 0, 758, 0, 0, 0},
+    {920, 0, 762, 0, 5, 0},
+    {954, 0, 783, 0, 0, 0},
+    {955, 956, 785, 0, 1, 0},
+    {957, 958, 790, 0, 2, 0},
+    {962, 963, 795, 0, 5, 0},
+    {964, 965, 798, 0, 0, 0},
+    {971, 0, 800, 0, 0, 0},
+    {972, 973, 803, 0, 1, 0},
+    {974, 0, 806, 84, 5, 0},
+    {1012, 0, 831, 0, 0, 0},
+    {1013, 0, 834, 0, 1, 0},
+    {1014, 0, 836, 0, 5, 0},
+    {1044, 1045, 859, 87, 5, 0},
+    {1046, 0, 863, 0, 6, 0},
+    {1047, 0, 866, 0, 0, 0},
+    {1074, 0, 888, 0, 2, 0},
+    {1075, 0, 891, 0, 6, 0},
+    {1076, 1077, 894, 0, 0, 0},
+    {1096, 1097, 915, 0, 1, 0},
+    {1098, 0, 918, 90, 2, 0},
+    {1099, 0, 923, 0, 0, 0},
+    {1105, 0, 927, 0, 2, 0},
+    {1106, 1107, 932, 91, 5, 0},
+    {1108, 0, 937, 0, 0, 0},
+    {1134, 0, 960, 0, 4, 0},
+    {1135, 0, 969, 0, 3, 0},
+    {1154, 0, 981, 0, 0, 0},
+    {1155, 0, 984, 0, 2, 0},
+    {1156, 0, 987, 0, 1, 0},
+    {1174, 0, 1011, 0, 0, 0},
+    {1175, 0, 1013, 0, 6, 0},
+    {1180, 0, 1016, 0, 4, 0},
+    {1181, 0, 1020, 0, 1, 0},
+    {1202, 0, 1038, 0, 5, 0},
+    {1203, 0, 1042, 0, 0, 0},
+    {1252, 0, 1099, 0, 0, 0},
+    {1253, 0, 1101, 0, 5, 0},
+    {1254, 0, 1104, 0, 3, 0},
+    {1275, 0, 1117, 0, 0, 0},
+    {1276, 0, 1119, 0, 3, 0},
+    {1277, 0, 1122, 0, 5, 0},
+    {1296, 0, 1139, 0, 4, 0},
+    {1297, 0, 1148, 0, 3, 0},
+    {1317, 0, 1164, 0, 0, 0},
+    {1318, 0, 1167, 0, 5, 0},
+    {1319, 0, 1172, 0, 3, 0},
+    {1384, 0, 1269, 117, 1, 0},
+    {1385, 0, 1283, 118, 2, 1},
+    {1386, 0, 1244, 0, 0, 0},
+    {1387, 0, 1297, 119, 3, 0},
+    {1402, 1403, 1259, 0, 1, 0},
+    {1404, 1405, 1264, 0, 2, 0},
 };
 
 inline constexpr Clause kClauses[] = {
@@ -3702,6 +3703,7 @@ inline constexpr const char* kPoseNames[] = {"stand", "gesture"};
 inline constexpr const char* kLocationNames[] = {"none", "pier", "cafe", "postoffice", "lighthouse", "radio", "cove", "school", "grocery", "drawer"};
 inline constexpr const char* kLutNames[] = {"neutral", "warm", "cold", "sepia", "night"};
 inline constexpr const char* kMusicNames[] = {"none", "harbour", "cafe", "drawer", "light", "cove", "sunday"};
+inline constexpr const char* kTimelineNames[] = {"none", "ferry"};
 inline constexpr const char* kAmbienceNames[] = {"none", "sea", "cafe", "wind", "clock", "radio"};
 inline constexpr const char* kSfxNames[] = {"none", "page", "move", "confirm", "envelope", "stamp", "horn", "motor", "static", "bell"};
 inline constexpr const char* kTagNames[] = {"first", "leave", "stay", "shut", "write", "honest", "hard"};
@@ -3853,6 +3855,8 @@ inline constexpr mce::novel::Program kProgram = {
     .ink_row_selected = {0.12f, 0.102f, 0.09f, 1.0f},
     .ink_row_disabled = {0.55f, 0.4675f, 0.4125f, 1.0f},
     .row_tint = {1.0f, 1.0f, 1.0f, 1.0f},
+    .timelines = kTimelineNames,
+    .timeline_count = 2,
 };
 
 }  // namespace undelivered::story

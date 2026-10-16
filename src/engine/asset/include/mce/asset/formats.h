@@ -13,14 +13,16 @@ namespace mce::asset {
 // Schema majors (TocEntry::chunk_version high byte) this build reads and writes.
 inline constexpr u8 MANIFEST_VERSION = 1;
 inline constexpr u8 TEXTURE_VERSION = 1;
-inline constexpr u8 SFX_VERSION = 1;
+inline constexpr u8 SFX_VERSION = 1;  // minor 1: SfxFlags::Vorbis payloads (M-AUDIO2 1)
 inline constexpr u8 FONT_VERSION = 1;
 inline constexpr u8 MATERIAL_VERSION = 1;
+inline constexpr u8 MATERIAL_MINOR_EXT = 1;  // minor of a material chunk followed by a MaterialExt
 inline constexpr u8 SCENE_VERSION = 1;
 inline constexpr u8 MESH_VERSION = 1;
 inline constexpr u8 MESH_MINOR_SKIN = 1;  // minor of a chunk with MeshFlags::Skinned
 inline constexpr u8 MESH_MINOR_LODS = 2;  // minor of a chunk with MeshFlags::Lods (skinned or not)
 inline constexpr u8 MESH_MINOR_RAGDOLL = 3;  // minor of a chunk with MeshFlags::Ragdoll
+inline constexpr u8 MESH_MINOR_MATERIALS = 4;  // minor of a chunk with MeshFlags::Materials
 inline constexpr u8 TILEMAP_VERSION = 1;  // CHNK_TILE: one tile layer (v0.5, FR-R2D-115)
 inline constexpr u8 PARTICLE_VERSION = 1;  // CHNK_PART: one particle emitter preset (v0.5, FR-R2D-070)
 inline constexpr u8 SEQUENCE_VERSION = 1;  // CHNK_SEQ: one action-list sequence (v0.5, FR-ENT-100)
@@ -148,6 +150,7 @@ void write_texture(TextureFormat format, u32 layers, u32 flags, Span<const Textu
 namespace SfxFlags {
 enum : u32 {
     Looping = 1u << 0,
+    Vorbis = 1u << 1,  // data_offset holds a u64 byte count and an Ogg Vorbis stream (M-AUDIO2 1)
 };
 }
 
@@ -159,16 +162,19 @@ struct SfxHeader {
     u64 loop_end;
     u32 flags;         // SfxFlags
     f32 gain;          // normalization gain the cook applied (informational)
-    u64 data_offset;   // float32 interleaved samples
+    u64 data_offset;   // float32 interleaved samples, or (Vorbis) a u64 byte count then the stream
 };
 static_assert(sizeof(SfxHeader) == 48);
 
 struct SfxView {
     const SfxHeader* header = nullptr;
-    Span<const f32> samples;  // frame_count * channels
+    Span<const f32> samples;  // frame_count * channels (empty for Vorbis)
+    Span<const byte> vorbis;  // the Ogg Vorbis stream (Vorbis only); it decodes to frame_count frames
     static Result<SfxView> read(Span<const byte> payload);
 };
 void write_sfx(const SfxHeader& header, Span<const f32> samples, Array<byte>& out);
+// A Vorbis clip: `header` without SfxFlags::Vorbis is fine, the writer sets it.
+void write_sfx_vorbis(const SfxHeader& header, Span<const byte> stream, Array<byte>& out);
 
 // ------------------------------------------------------------------ video (CHNK_VID)
 // The .mpg's bytes as imported (an MPEG-1 program stream; the runtime decodes its video with
@@ -285,6 +291,30 @@ struct MaterialChunk {  // the whole payload: fixed-width param block + texture 
     static Result<const MaterialChunk*> read(Span<const byte> payload);
 };
 static_assert(sizeof(MaterialChunk) == 112);
+
+// M-VISUAL2 4: the lobes glTF's KHR_materials_clearcoat, _sheen, _anisotropy, _transmission and _ior
+// add, factors only (their textures are not cooked). A .mcmat chunk carries one after its
+// MaterialChunk (chunk minor MATERIAL_MINOR_EXT); a mesh, one per submesh (MeshFlags::Materials).
+// All zero is the plain material: nothing changes in how it draws.
+struct MaterialExt {
+    f32 clearcoat;            // 0..1: a clear varnish layer over the base
+    f32 clearcoat_roughness;  // the varnish's own roughness
+    f32 sheen_color[3];       // linear; 0 = no sheen (cloth's soft glow at grazing angles)
+    f32 sheen_roughness;
+    f32 anisotropy;           // -1..1: highlights stretched along the UV tangent (> 0) or bitangent (< 0)
+    f32 anisotropy_rotation;  // radians around the normal, from the UV tangent
+    f32 transmission;         // 0..1: light passes through, bending the opaque frame behind
+    f32 ior;                  // index of refraction; 0 = 1.5 (the dielectric F0 of 0.04)
+    u32 reserved[6];
+
+    bool any() const {
+        return clearcoat > 0.0f || sheen_color[0] > 0.0f || sheen_color[1] > 0.0f || sheen_color[2] > 0.0f || anisotropy != 0.0f ||
+               transmission > 0.0f || ior > 0.0f;
+    }
+    // The extension after a material chunk's MaterialChunk, or all zero without one.
+    static MaterialExt of_material(Span<const byte> payload);
+};
+static_assert(sizeof(MaterialExt) == 64);
 
 // ------------------------------------------------------------------ tilemap (CHNK_TILE)
 // One tile layer (FR-R2D-115, ADR-0030 §8): a width x height grid of tile indices, row 0 at the
@@ -866,6 +896,7 @@ enum : u32 {
     Skinned = 1u << 1,  // a MeshSkinHeader at MeshHeader::skin_offset (chunk minor 1)
     Lods = 1u << 2,     // a MeshLod table after the strings (chunk minor 2)
     Ragdoll = 1u << 3,  // MeshJoint's ragdoll fields hold the sidecar's per-bone overrides (chunk minor 3)
+    Materials = 1u << 4,  // a MaterialExt per submesh, at MeshSubmesh::reserved2[0] (chunk minor 4)
 };
 }
 
@@ -914,7 +945,7 @@ struct MeshSubmesh {
     f32 uv_offset[2];
     f32 uv_scale[2];
     MaterialChunk material;  // inline glTF material (texture refs by GUID)
-    u32 reserved2[2];
+    u32 reserved2[2];        // [0]: with MeshFlags::Materials, the payload offset of this submesh's MaterialExt
 };
 static_assert(sizeof(MeshSubmesh) == 192);
 
@@ -1043,6 +1074,9 @@ struct MeshView {
     Span<const i32> submesh_skins;
     // LOD table (empty unless MeshFlags::Lods).
     Span<const MeshLod> lods;
+    // One per submesh with MeshFlags::Materials, else empty.
+    Span<const MaterialExt> materials;
+    MaterialExt material_ext(u32 s) const { return materials.empty() ? MaterialExt{} : materials[s]; }
 
     bool skinned() const { return header && (header->flags & MeshFlags::Skinned); }
     // The coarser levels of submesh `s` (empty: none).
@@ -1081,6 +1115,8 @@ struct MeshData {
     // Optional LOD table: written (and MeshFlags::Lods set) when non-empty; submeshes name their
     // range of it in reserved[0] (count) and reserved[1] (first).
     Span<const MeshLod> lods;
+    // Optional material extensions: written (and MeshFlags::Materials set) when non-empty, one per submesh.
+    Span<const MaterialExt> materials;
     u32 flags = 0;
     f32 bounds_min[3] = {0, 0, 0};
     f32 bounds_max[3] = {0, 0, 0};

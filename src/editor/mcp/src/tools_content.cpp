@@ -1000,21 +1000,72 @@ struct MeshData {
 };
 
 bool mesh_shape_known(StringView s) {
-    return s == "box" || s == "plane" || s == "sphere" || s == "cylinder" || s == "cone" || s == "disc" || s == "ramp";
+    return s == "box" || s == "plane" || s == "sphere" || s == "cylinder" || s == "cone" || s == "disc" || s == "ramp" ||
+           s == "humanoid";
+}
+
+// An axis-aligned box centred on (cx, cy, cz).
+void add_box(MeshData& m, f32 cx, f32 cy, f32 cz, f32 hx, f32 hy, f32 hz) {
+    const f32 p[8][3] = {{cx - hx, cy - hy, cz - hz}, {cx + hx, cy - hy, cz - hz}, {cx + hx, cy + hy, cz - hz}, {cx - hx, cy + hy, cz - hz},
+                         {cx - hx, cy - hy, cz + hz}, {cx + hx, cy - hy, cz + hz}, {cx + hx, cy + hy, cz + hz}, {cx - hx, cy + hy, cz + hz}};
+    m.quad(p[4], p[5], p[6], p[7]);  // +Z
+    m.quad(p[1], p[0], p[3], p[2]);  // -Z
+    m.quad(p[5], p[1], p[2], p[6]);  // +X
+    m.quad(p[0], p[4], p[7], p[3]);  // -X
+    m.quad(p[7], p[6], p[2], p[3]);  // +Y
+    m.quad(p[0], p[1], p[5], p[4]);  // -Y
+}
+
+// ---- the humanoid: a skinned figure of 13 boxes, one bone each (rigid skinning), with Idle and
+// Walk clips. Centred like the other shapes (the feet at -height/2, so a CharacterController3D's
+// capsule centre is its origin); forward is -Z. Sized from [width (shoulders), height, depth].
+struct HumanoidBone {
+    const char* name;
+    i32 parent;
+    f32 x, y;                     // the joint, model space: x in widths, y in heights from the feet
+    f32 cx, cy, cz, hx, hy, hz;   // its box: centre (x in widths, y and z in heights), half extents (heights)
+};
+constexpr HumanoidBone kHumanoid[] = {
+    {"hips", -1, 0.0f, 0.50f, 0.0f, 0.545f, 0.0f, 0.0f, 0.075f, 0.0f},  // hx, hz from width and depth below
+    {"spine", 0, 0.0f, 0.62f, 0.0f, 0.72f, 0.0f, 0.0f, 0.10f, 0.0f},
+    {"head", 1, 0.0f, 0.84f, 0.0f, 0.91f, 0.0f, 0.065f, 0.07f, 0.065f},
+    {"upper_arm_l", 1, 0.5f, 0.80f, 0.5f, 0.715f, 0.0f, 0.035f, 0.085f, 0.035f},
+    {"forearm_l", 3, 0.5f, 0.63f, 0.5f, 0.555f, 0.0f, 0.03f, 0.075f, 0.03f},
+    {"upper_arm_r", 1, -0.5f, 0.80f, -0.5f, 0.715f, 0.0f, 0.035f, 0.085f, 0.035f},
+    {"forearm_r", 5, -0.5f, 0.63f, -0.5f, 0.555f, 0.0f, 0.03f, 0.075f, 0.03f},
+    {"thigh_l", 0, 0.2f, 0.48f, 0.2f, 0.375f, 0.0f, 0.045f, 0.105f, 0.045f},
+    {"shin_l", 7, 0.2f, 0.27f, 0.2f, 0.16f, 0.0f, 0.04f, 0.11f, 0.04f},
+    {"foot_l", 8, 0.2f, 0.05f, 0.2f, 0.025f, -0.03f, 0.04f, 0.025f, 0.07f},
+    {"thigh_r", 0, -0.2f, 0.48f, -0.2f, 0.375f, 0.0f, 0.045f, 0.105f, 0.045f},
+    {"shin_r", 10, -0.2f, 0.27f, -0.2f, 0.16f, 0.0f, 0.04f, 0.11f, 0.04f},
+    {"foot_r", 11, -0.2f, 0.05f, -0.2f, 0.025f, -0.03f, 0.04f, 0.025f, 0.07f},
+};
+constexpr u32 kHumanoidBones = sizeof(kHumanoid) / sizeof(kHumanoid[0]);
+
+void humanoid_joint(u32 b, f32 w, f32 h, f32 out[3]) {
+    out[0] = kHumanoid[b].x * w;
+    out[1] = (kHumanoid[b].y - 0.5f) * h;
+    out[2] = 0.0f;
+}
+
+// The boxes; `joints` gets the bone of every vertex.
+void build_humanoid(f32 w, f32 h, f32 d, MeshData& m, Array<u8>& joints) {
+    for (u32 b = 0; b < kHumanoidBones; ++b) {
+        const HumanoidBone& k = kHumanoid[b];
+        f32 hx = k.hx * h, hz = k.hz * h;
+        if (b == 0) hx = 0.32f * w, hz = 0.4f * d;  // the pelvis and the chest follow width and depth
+        if (b == 1) hx = 0.42f * w, hz = 0.45f * d;
+        const usize before = m.pos.size() / 3;
+        add_box(m, k.cx * w, (k.cy - 0.5f) * h, k.cz * h, hx, k.hy * h, hz);
+        for (usize v = before; v < m.pos.size() / 3; ++v) joints.push_back(static_cast<u8>(b));
+    }
 }
 
 void build_mesh(StringView shape, f32 sx, f32 sy, f32 sz, u32 seg, MeshData& m) {
     constexpr f32 kPi = 3.14159265358979f;
     const f32 hx = sx * 0.5f, hy = sy * 0.5f, hz = sz * 0.5f;
     if (shape == "box") {
-        const f32 p[8][3] = {{-hx, -hy, -hz}, {hx, -hy, -hz}, {hx, hy, -hz}, {-hx, hy, -hz},
-                             {-hx, -hy, hz},  {hx, -hy, hz},  {hx, hy, hz},  {-hx, hy, hz}};
-        m.quad(p[4], p[5], p[6], p[7]);  // +Z
-        m.quad(p[1], p[0], p[3], p[2]);  // -Z
-        m.quad(p[5], p[1], p[2], p[6]);  // +X
-        m.quad(p[0], p[4], p[7], p[3]);  // -X
-        m.quad(p[7], p[6], p[2], p[3]);  // +Y
-        m.quad(p[0], p[1], p[5], p[4]);  // -Y
+        add_box(m, 0, 0, 0, hx, hy, hz);
     } else if (shape == "plane") {
         const f32 a[3] = {-hx, 0, hz}, b[3] = {hx, 0, hz}, c[3] = {hx, 0, -hz}, d[3] = {-hx, 0, -hz};
         m.quad(a, b, c, d);
@@ -1078,6 +1129,176 @@ void build_mesh(StringView shape, f32 sx, f32 sy, f32 sz, u32 seg, MeshData& m) 
     }
 }
 
+// The .glb container around a JSON chunk (padded here) and a binary chunk (already 4-aligned).
+void pack_glb(cook::String& j, const Array<byte>& bin, Array<byte>& out) {
+    while (j.size() % 4) j += ' ';
+    const auto u32le = [&](u32 v) {
+        const u8 b[4] = {static_cast<u8>(v), static_cast<u8>(v >> 8), static_cast<u8>(v >> 16), static_cast<u8>(v >> 24)};
+        const usize at = out.size();
+        out.resize(at + 4);
+        std::memcpy(out.data() + at, b, 4);
+    };
+    out.clear();
+    u32le(0x46546C67u);  // "glTF"
+    u32le(2);
+    u32le(static_cast<u32>(12 + 8 + j.size() + 8 + bin.size()));
+    u32le(static_cast<u32>(j.size()));
+    u32le(0x4E4F534Au);  // "JSON"
+    usize at = out.size();
+    out.resize(at + j.size());
+    std::memcpy(out.data() + at, j.c_str(), j.size());
+    u32le(static_cast<u32>(bin.size()));
+    u32le(0x004E4942u);  // "BIN\0"
+    at = out.size();
+    out.resize(at + bin.size());
+    if (!bin.empty()) std::memcpy(out.data() + at, bin.data(), bin.size());
+}
+
+// Appends bytes to a glTF binary chunk, 4-aligned, and records a bufferView and an accessor for them.
+struct GlbBuilder {
+    Array<byte> bin;
+    cook::String views, accessors;
+    u32 count = 0;
+    u32 add(const void* p, usize bytes, const char* accessor_tail, i32 target) {
+        while (bin.size() % 4) bin.push_back(byte{0});
+        const usize at = bin.size();
+        bin.resize(at + bytes);
+        std::memcpy(bin.data() + at, p, bytes);
+        if (count) views += ',', accessors += ',';
+        cook::appendf(views, R"({"buffer":0,"byteOffset":%zu,"byteLength":%zu)", at, bytes);
+        if (target) cook::appendf(views, R"(,"target":%d)", target);
+        views += '}';
+        cook::appendf(accessors, R"({"bufferView":%u,%s})", count, accessor_tail);
+        return count++;
+    }
+};
+
+// The humanoid as a skinned .glb: a root node, the skinned mesh node, 13 joint nodes, two clips.
+void write_humanoid_glb(const MeshData& m, const Array<u8>& joint_of, f32 w, f32 h, const f32 color[4], f32 roughness, Array<byte>& out) {
+    constexpr f32 kDeg = 3.14159265358979f / 180.0f;
+    const usize n_vert = m.pos.size() / 3;
+    GlbBuilder g;
+    f32 lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
+    for (usize i = 0; i < n_vert; ++i)
+        for (usize k = 0; k < 3; ++k) {
+            lo[k] = math::min(lo[k], m.pos[i * 3 + k]);
+            hi[k] = math::max(hi[k], m.pos[i * 3 + k]);
+        }
+    cook::String tail;
+    cook::appendf(tail, R"("componentType":5126,"count":%zu,"type":"VEC3","min":[%g,%g,%g],"max":[%g,%g,%g])", n_vert, static_cast<f64>(lo[0]),
+                  static_cast<f64>(lo[1]), static_cast<f64>(lo[2]), static_cast<f64>(hi[0]), static_cast<f64>(hi[1]), static_cast<f64>(hi[2]));
+    const u32 a_pos = g.add(m.pos.data(), m.pos.size() * 4, tail.c_str(), 34962);
+    tail.clear();
+    cook::appendf(tail, R"("componentType":5126,"count":%zu,"type":"VEC3")", n_vert);
+    const u32 a_nrm = g.add(m.nrm.data(), m.nrm.size() * 4, tail.c_str(), 34962);
+    tail.clear();
+    cook::appendf(tail, R"("componentType":5126,"count":%zu,"type":"VEC2")", n_vert);
+    const u32 a_uv = g.add(m.uv.data(), m.uv.size() * 4, tail.c_str(), 34962);
+    Array<u8> j4;
+    Array<f32> w4;
+    for (usize v = 0; v < n_vert; ++v) {
+        j4.push_back(joint_of[v]), j4.push_back(0), j4.push_back(0), j4.push_back(0);
+        w4.push_back(1.0f), w4.push_back(0.0f), w4.push_back(0.0f), w4.push_back(0.0f);
+    }
+    tail.clear();
+    cook::appendf(tail, R"("componentType":5121,"count":%zu,"type":"VEC4")", n_vert);
+    const u32 a_joints = g.add(j4.data(), j4.size(), tail.c_str(), 34962);
+    tail.clear();
+    cook::appendf(tail, R"("componentType":5126,"count":%zu,"type":"VEC4")", n_vert);
+    const u32 a_weights = g.add(w4.data(), w4.size() * 4, tail.c_str(), 34962);
+    tail.clear();
+    cook::appendf(tail, R"("componentType":5125,"count":%zu,"type":"SCALAR")", m.idx.size());
+    const u32 a_idx = g.add(m.idx.data(), m.idx.size() * 4, tail.c_str(), 34963);
+    // Bind pose: no rotations, so each inverse bind matrix is a translation by minus the joint.
+    Array<f32> ibm;
+    for (u32 b = 0; b < kHumanoidBones; ++b) {
+        f32 p[3];
+        humanoid_joint(b, w, h, p);
+        const f32 mtx[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -p[0], -p[1], -p[2], 1};
+        for (const f32 x : mtx) ibm.push_back(x);
+    }
+    tail.clear();
+    cook::appendf(tail, R"("componentType":5126,"count":%u,"type":"MAT4")", kHumanoidBones);
+    const u32 a_ibm = g.add(ibm.data(), ibm.size() * 4, tail.c_str(), 0);
+
+    // Clips: rotations about X (positive swings a limb forward, towards -Z) at five keys a loop.
+    struct Track {
+        u32 bone;
+        f32 deg[5];
+    };
+    const Track walk[] = {
+        {7, {25, 0, -25, 0, 25}},    {10, {-25, 0, 25, 0, -25}}, {8, {-5, -35, -5, -5, -5}}, {11, {-5, -5, -5, -35, -5}},
+        {3, {-18, 0, 18, 0, -18}},   {5, {18, 0, -18, 0, 18}},   {4, {15, 15, 15, 15, 15}},  {6, {15, 15, 15, 15, 15}},
+        {1, {4, 2, 4, 2, 4}},
+    };
+    const Track idle[] = {{1, {0, 2, 0, -1, 0}}, {2, {0, -2, 0, 1, 0}}, {4, {8, 10, 8, 10, 8}}, {6, {8, 10, 8, 10, 8}}};
+    const auto clip = [&](const char* name, const Track* tracks, usize n, f32 period, cook::String& anim) {
+        const f32 times[5] = {0, period * 0.25f, period * 0.5f, period * 0.75f, period};
+        cook::String t;
+        cook::appendf(t, R"("componentType":5126,"count":5,"type":"SCALAR","min":[0],"max":[%g])", static_cast<f64>(period));
+        const u32 a_time = g.add(times, sizeof times, t.c_str(), 0);
+        cook::appendf(anim, R"({"name":"%s","samplers":[)", name);
+        cook::String channels;
+        for (usize i = 0; i < n; ++i) {
+            f32 q[20];
+            for (u32 k = 0; k < 5; ++k) {
+                const f32 half = tracks[i].deg[k] * kDeg * 0.5f;
+                q[k * 4] = std::sin(half), q[k * 4 + 1] = 0.0f, q[k * 4 + 2] = 0.0f, q[k * 4 + 3] = std::cos(half);
+            }
+            const u32 a_rot = g.add(q, sizeof q, R"("componentType":5126,"count":5,"type":"VEC4")", 0);
+            if (i) anim += ',', channels += ',';
+            cook::appendf(anim, R"({"input":%u,"output":%u,"interpolation":"LINEAR"})", a_time, a_rot);
+            cook::appendf(channels, R"({"sampler":%zu,"target":{"node":%u,"path":"rotation"}})", i, tracks[i].bone + 2);
+        }
+        anim += R"(],"channels":[)";
+        anim += channels.view();
+        anim += "]}";
+    };
+    cook::String anims;
+    clip("Idle", idle, sizeof idle / sizeof idle[0], 2.0f, anims);
+    anims += ',';
+    clip("Walk", walk, sizeof walk / sizeof walk[0], 1.0f, anims);
+
+    // Nodes: 0 the root, 1 the skinned mesh, 2.. the joints (bone b is node b + 2).
+    cook::String j;
+    j += R"({"asset":{"version":"2.0","generator":"mce gen_mesh"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[)";
+    j += R"({"name":"humanoid","children":[1,2]},{"name":"humanoid_mesh","mesh":0,"skin":0})";
+    for (u32 b = 0; b < kHumanoidBones; ++b) {
+        f32 p[3], q[3] = {0, 0, 0};
+        humanoid_joint(b, w, h, p);
+        if (kHumanoid[b].parent >= 0) humanoid_joint(static_cast<u32>(kHumanoid[b].parent), w, h, q);
+        cook::appendf(j, R"(,{"name":"%s","translation":[%g,%g,%g])", kHumanoid[b].name, static_cast<f64>(p[0] - q[0]),
+                      static_cast<f64>(p[1] - q[1]), static_cast<f64>(p[2] - q[2]));
+        bool first = true;
+        for (u32 c = 0; c < kHumanoidBones; ++c)
+            if (kHumanoid[c].parent == static_cast<i32>(b)) {
+                j += first ? R"(,"children":[)" : ",";
+                cook::appendf(j, "%u", c + 2);
+                first = false;
+            }
+        if (!first) j += ']';
+        j += '}';
+    }
+    j += R"(],"skins":[{"name":"humanoid_skin","inverseBindMatrices":)";
+    cook::appendf(j, "%u", a_ibm);
+    j += R"(,"skeleton":2,"joints":[)";
+    for (u32 b = 0; b < kHumanoidBones; ++b) cook::appendf(j, "%s%u", b ? "," : "", b + 2);
+    cook::appendf(j, R"(]}],"meshes":[{"name":"humanoid","primitives":[{"attributes":{"POSITION":%u,"NORMAL":%u,"TEXCOORD_0":%u,"JOINTS_0":%u,"WEIGHTS_0":%u},"indices":%u,"material":0}]}],)",
+                  a_pos, a_nrm, a_uv, a_joints, a_weights, a_idx);
+    cook::appendf(j, R"("materials":[{"name":"humanoid","pbrMetallicRoughness":{"baseColorFactor":[%.4f,%.4f,%.4f,%.4f],"metallicFactor":0,"roughnessFactor":%.3f}}],)",
+                  static_cast<f64>(color[0]), static_cast<f64>(color[1]), static_cast<f64>(color[2]), static_cast<f64>(color[3]),
+                  static_cast<f64>(roughness));
+    j += R"("animations":[)";
+    j += anims.view();
+    while (g.bin.size() % 4) g.bin.push_back(byte{0});
+    cook::appendf(j, R"(],"buffers":[{"byteLength":%zu}],"bufferViews":[)", g.bin.size());
+    j += g.views.view();
+    j += R"(],"accessors":[)";
+    j += g.accessors.view();
+    j += "]}";
+    pack_glb(j, g.bin, out);
+}
+
 // The mesh as a .glb: one node, one primitive, one inline material.
 void write_glb(const MeshData& m, const f32 color[4], f32 roughness, StringView name, Array<byte>& out) {
     Array<byte> bin;
@@ -1123,27 +1344,7 @@ void write_glb(const MeshData& m, const f32 color[4], f32 roughness, StringView 
     cook::appendf(j, R"({"bufferView":1,"componentType":5126,"count":%zu,"type":"VEC3"},)", n_vert);
     cook::appendf(j, R"({"bufferView":2,"componentType":5126,"count":%zu,"type":"VEC2"},)", n_vert);
     cook::appendf(j, R"({"bufferView":3,"componentType":5125,"count":%zu,"type":"SCALAR"}]})", m.idx.size());
-    while (j.size() % 4) j += ' ';
-    const auto u32le = [&](u32 v) {
-        const u8 b[4] = {static_cast<u8>(v), static_cast<u8>(v >> 8), static_cast<u8>(v >> 16), static_cast<u8>(v >> 24)};
-        const usize at = out.size();
-        out.resize(at + 4);
-        std::memcpy(out.data() + at, b, 4);
-    };
-    out.clear();
-    u32le(0x46546C67u);  // "glTF"
-    u32le(2);
-    u32le(static_cast<u32>(12 + 8 + j.size() + 8 + bin.size()));
-    u32le(static_cast<u32>(j.size()));
-    u32le(0x4E4F534Au);  // "JSON"
-    usize at = out.size();
-    out.resize(at + j.size());
-    std::memcpy(out.data() + at, j.c_str(), j.size());
-    u32le(static_cast<u32>(bin.size()));
-    u32le(0x004E4942u);  // "BIN\0"
-    at = out.size();
-    out.resize(at + bin.size());
-    if (!bin.empty()) std::memcpy(out.data() + at, bin.data(), bin.size());
+    pack_glb(j, bin, out);
 }
 
 // A small shaded preview: orthographic, from above and to the side, flat Lambert, z-buffered.
@@ -1198,13 +1399,16 @@ cook::Image mesh_preview(const MeshData& m, const f32 color[4], u32 px) {
 
 }  // namespace
 
-// Simple meshes for blocking out a 3D level: box, plane, sphere, cylinder, cone, disc and ramp.
+// Simple meshes for blocking out a 3D level: box, plane, sphere, cylinder, cone, disc and ramp; and a
+// skinned, animated humanoid for characters, crowds and ragdolls.
 bool gen_mesh(ToolCall& c) {
     StringView save;
     if (!arg_save(c, ".glb", save)) return false;
     StringView shape = "box";
-    if (!arg_choice(c, "shape", shape, mesh_shape_known, "one of box, plane, sphere, cylinder, cone, disc, ramp")) return false;
+    if (!arg_choice(c, "shape", shape, mesh_shape_known, "one of box, plane, sphere, cylinder, cone, disc, ramp, humanoid")) return false;
+    const bool humanoid = shape == "humanoid";
     f32 size[3] = {1, 1, 1};
+    if (humanoid) size[0] = 0.5f, size[1] = 1.8f, size[2] = 0.28f;
     if (const cook::JsonValue s = arg(c, "size"); s.valid()) {
         if (!s.is_array() || s.size() != 3) return arg_missing(c, "size", "[x, y, z] in metres, each 0.01 to 1000");
         for (u32 i = 0; i < 3; ++i) {
@@ -1226,11 +1430,18 @@ bool gen_mesh(ToolCall& c) {
     f32 roughness = 0.8f;
     if (!arg_f32(c, "roughness", roughness, 0, 1)) return false;
     MeshData m;
-    build_mesh(shape, size[0], size[1], size[2], static_cast<u32>(segments), m);
+    Array<u8> joints;
+    if (humanoid)
+        build_humanoid(size[0], size[1], size[2], m, joints);
+    else
+        build_mesh(shape, size[0], size[1], size[2], static_cast<u32>(segments), m);
     Saved saved;
     if (!save.empty()) {
         Array<byte> glb;
-        write_glb(m, color, roughness, shape, glb);
+        if (humanoid)
+            write_humanoid_glb(m, joints, size[0], size[1], color, roughness, glb);
+        else
+            write_glb(m, color, roughness, shape, glb);
         cook::String src;
         cook::appendf(src, "made with gen_mesh (%.*s %gx%gx%g m)", static_cast<int>(shape.size()), shape.data(), static_cast<f64>(size[0]),
                       static_cast<f64>(size[1]), static_cast<f64>(size[2]));
@@ -1238,6 +1449,12 @@ bool gen_mesh(ToolCall& c) {
     }
     c.out.begin_object().key("shape").str(shape).key("vertices").num_u(m.pos.size() / 3).key("triangles").num_u(m.idx.size() / 3);
     c.out.key("size").begin_array().num_f(size[0]).num_f(size[1]).num_f(size[2]).end_array();
+    if (humanoid) {
+        c.out.key("bones").begin_array();
+        for (const HumanoidBone& b : kHumanoid) c.out.str(StringView(b.name));
+        c.out.end_array();
+        c.out.key("clips").begin_array().str("Idle").str("Walk").end_array();
+    }
     if (!save.empty()) write_saved(c.out, saved);
     c.out.end_object();
     return attach(c, mesh_preview(m, color, 256));

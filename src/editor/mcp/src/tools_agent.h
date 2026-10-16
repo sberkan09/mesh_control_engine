@@ -11,6 +11,8 @@ namespace mce::mcp {
 bool render_frame(ToolCall& c);
 bool render_sheet(ToolCall& c);
 bool image_diff(ToolCall& c);
+// ... and a timeline paused at a time (M-CINEMA step 6).
+bool timeline_preview(ToolCall& c);
 // ... and what they share with perf_run: the player to run, whether there is a display, an input
 // script as -input text, and one run of the player to its exit (with Mesa's software rasterizer).
 bool find_player(const Server& server, cook::String& out);

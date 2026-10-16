@@ -18,7 +18,7 @@ static_assert(sizeof(NavMeshSurface3D) == 96);
 static_assert(sizeof(NavArea3D) == 32);
 static_assert(sizeof(NavLink3D) == 24);
 static_assert(sizeof(NavObstacle3D) == 32);
-static_assert(sizeof(NavAgent3D) == 76);
+static_assert(sizeof(NavAgent3D) == 88);
 
 namespace {
 
@@ -197,10 +197,20 @@ void kit3d_nav(Frame& f) {
 
     // Agents: add, re-param, follow outside moves, (re)target; drop the gone.
     for (AgentSlot& s : st.agents) s.seen = false;
-    f.query<const NavAgent3D, const LocalTransform>().each([&](Entity e, const NavAgent3D& a, const LocalTransform& t) {
+    f.query<NavAgent3D, const LocalTransform>().each([&](Entity e, NavAgent3D& a, const LocalTransform& t) {
         math::vec3 pos, scale;
         math::quat rot;
         world_pose(w, e, t, pos, rot, scale);
+        // A followed entity's position is the target; small moves keep the current plan.
+        bool replan = false;
+        if (!a.follow.is_null() && w.alive(a.follow)) {
+            if (const LocalTransform* ft = w.try_get<LocalTransform>(a.follow)) {
+                math::vec3 fpos, fscale;
+                math::quat frot;
+                world_pose(w, a.follow, *ft, fpos, frot, fscale);
+                a.target = fpos;
+            }
+        }
         AgentSlot* slot = find_agent(st, e);
         const physics::NavAgentParams3D params = params_of(a);
         if (!slot) {
@@ -219,7 +229,11 @@ void kit3d_nav(Frame& f) {
         }
         // A controller (or anything outside) moved the entity: the agent follows.
         if (!same(slot->written, pos)) mesh.move_agent(slot->agent, pos);
-        if (a.move_to && (!slot->moving || !same(slot->target, a.target))) {
+        if (a.follow.is_null())
+            replan = !same(slot->target, a.target);
+        else
+            replan = math::length_sq(slot->target - a.target) > a.follow_repath * a.follow_repath;
+        if (a.move_to && (!slot->moving || replan)) {
             mesh.set_agent_target(slot->agent, a.target);
             slot->moving = true;
             slot->target = a.target;

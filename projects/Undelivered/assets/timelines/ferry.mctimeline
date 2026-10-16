@@ -1,0 +1,48 @@
+{
+  "format": "mce-timeline",
+  "version": 1,
+  "guid": "0dd1e7e0-5a2c-4c1e-9f3a-6e1f0e7a1d01",
+  "name": "ferry",
+  "duration": 6.5,
+  "tracks": [
+    {
+      "type": "audio",
+      "keys": [
+        {
+          "t": 0,
+          "sound": "guid:9c24d3d0-fb19-4542-bf13-4614d622981a",
+          "gain_db": -6
+        },
+        {
+          "t": 3.4,
+          "sound": "guid:f1afb499-5a89-46b5-831e-c4a3889f2702",
+          "gain_db": -3
+        }
+      ]
+    },
+    {
+      "type": "subtitle",
+      "lines": [
+        {
+          "t": 0.6,
+          "duration": 2.6,
+          "text": "Kuzgun. Three hundred and eleven people, one post office."
+        },
+        {
+          "t": 3.6,
+          "duration": 2.6,
+          "text": "The last ferry of the season comes in late, as it always does."
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "keys": [
+        {
+          "t": 6.5,
+          "emit": "ferry_docked"
+        }
+      ]
+    }
+  ]
+}

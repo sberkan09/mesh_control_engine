@@ -123,16 +123,22 @@ constexpr AssetKind kKinds[] = {
 {"name":"regions","type":"array","help":"[{\"name\": \"hurt\", \"rect\": [x, y, w, h]}] in pixels, y down from the top"},
 {"name":"clips","type":"array","help":"[{\"name\": 1-31 chars, \"frames\": [index | region name, ...] | {\"from\": a, \"to\": b}, \"fps\": 12, \"mode\": \"Loop\" | \"PingPong\" | \"Once\", \"events\": [{\"frame\": index within the clip, \"name\": 1-23 chars}]}]"}])json",
      R"json({"name":"sheet","texture":null,"grid":{"columns":1,"rows":1},"clips":[{"name":"idle","frames":[0],"fps":12,"mode":"Loop"}]})json"},
-    {"AnimGraph", ".mcanim", "mce-animgraph", 1,
-     "A 3D animation state graph: states play a mesh clip or a 1D blend of clips, transitions fire on parameter "
-     "conditions or when a one-shot state finishes. An Animator component (graph: \"guid:...\") runs it on its "
-     "MeshRef; Animator.params holds the parameter values in the order 'params' lists them.",
+    {"AnimGraph", ".mcanim", "mce-animgraph", 2,
+     "A 3D animation state graph: states play a mesh clip, a 1D blend of clips or a 2D blend space, transitions fire "
+     "on parameter conditions or when a one-shot state finishes; layers play clips over a bone mask on top (override "
+     "or additive), root_motion moves the entity by a bone's ground motion, and IK chains put a hand on an "
+     "IKTarget3D, turn a head towards one, or plant feet on the ground. An Animator component (graph: \"guid:...\") runs "
+     "it on its MeshRef; Animator.params holds the parameter values in the order 'params' lists them. A graph without "
+     "the version 2 fields (blend2d, root_motion, layers, ik) is saved as version 1.",
      R"json([
 {"name":"name","type":"string"},
 {"name":"params","type":"array of strings","help":"Up to 4 parameter names (1-23 chars)"},
 {"name":"start","type":"string","help":"The first state (default: the first listed)"},
-{"name":"states","type":"array","help":"[{\"name\": 1-31 chars, \"clip\": mesh clip name | \"blend\": {\"param\": name, \"points\": [{\"clip\": name, \"at\": value}, ...]}, \"loop\": true, \"speed\": 1, \"events\": [{\"time\": seconds, \"name\": 1-23 chars}]}]"},
-{"name":"transitions","type":"array","help":"[{\"from\": state | \"*\", \"to\": state, \"when\": [{\"param\": name, \"op\": \">\" | \">=\" | \"<\" | \"<=\" | \"==\" | \"!=\", \"value\": n}], \"on_finish\": false, \"fade\": 0.2}]"}])json",
+{"name":"states","type":"array","help":"[{\"name\": 1-31 chars, \"clip\": mesh clip name | \"blend\": {\"param\": name, \"points\": [{\"clip\": name, \"at\": value}, ...]} | \"blend2d\": {\"x\": param, \"y\": param, \"points\": 3-8 [{\"clip\": name, \"at\": [x, y]}]}, \"loop\": true, \"speed\": 1, \"events\": [{\"time\": seconds, \"name\": 1-23 chars}]}]"},
+{"name":"transitions","type":"array","help":"[{\"from\": state | \"*\", \"to\": state, \"when\": [{\"param\": name, \"op\": \">\" | \">=\" | \"<\" | \"<=\" | \"==\" | \"!=\", \"value\": n}], \"on_finish\": false, \"fade\": 0.2}]"},
+{"name":"root_motion","type":"string","help":"(version 2) A bone (usually the hips) whose ground motion and turn move the entity; Animator.root_motion picks move, report or off"},
+{"name":"layers","type":"array","help":"(version 2) Up to 4 [{\"name\", \"clip\", \"mask\": [bone, ...] (each with its subtree; empty = the whole body), \"weight\": 0-1, \"param\": a parameter scaling the weight, \"additive\": false, \"loop\": true, \"speed\": 1}]"},
+{"name":"ik","type":"array","help":"(version 2) Up to 4 [{\"name\", \"type\": \"two_bone\" | \"look_at\" | \"foot\", \"bone\": the end bone (a hand, the head, a foot), \"pelvis\": the bone a foot chain lowers, \"weight\": 0-1, \"param\", \"pole\": [x, y, z] (two_bone, foot), \"axis\": [x, y, z] and \"limit\": degrees (look_at), \"reach\": metres a foot ray looks down}]; goals come from IKTarget3D entities naming the chain"}])json",
      R"json({"name":"graph","states":[{"name":"idle","clip":"Idle"}]})json"},
     {"Material", ".mcmat", "mce-material", 1, "A metallic-roughness material; texture references are Texture assets.",
      R"json([

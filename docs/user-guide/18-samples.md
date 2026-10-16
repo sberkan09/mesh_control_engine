@@ -36,10 +36,12 @@ pitfalls come from them.
 | `04_diorama` | glTF kit meshes, one directional light with a shadow map, fog, node animation; Artifact B | `sample_04_diorama` |
 | `04_cubes` | the M5 renderer: PBR, Forward+ point and spot lights, cascaded shadows, sky, bloom, FXAA, GPU timings; a capsule walk on 3D physics; skinned reeds (optional skinning, `G` or `-skin 0` turns the skeletons off) | `sample_04_cubes`, `-walk 1`, `-skin 0` |
 | `05_ashen_court` (Ashen Court) | a third-person melee slice: `World3D` characters, a swept camera boom, FSM enemies, 3D one-shots, a triangle budget | `sample_05_ashen_court`, `-autoplay 1` |
+| `07_gameplay3d` | the 3D gameplay systems with no code, built over MCP alone: grunts (a `gen_mesh` humanoid) chase a drivable cart across a baked navmesh and keep apart, the cart pushes a hinged door open, a drawbridge lowers on its motor, and the cart's bumper sensor sends the grunts it hits into ragdolls | `mce_player -pack build/<preset>/samples/07_gameplay3d/project/assets.mce`, WASD drives; `-headless 1 -input samples/07_gameplay3d/drive.input` |
 | `physics2d_headless`, `physics3d_headless` | physics-only determinism scenes | `-ticks 1200` |
 | `net_headless` | the optional networking module: a server and a client in one process over loopback, snapshot replication, a client-driven player ([Multiplayer](20-multiplayer.md)) | `sample_net_headless -ticks 300` |
 | `shop_demo` | purchases and ads against the fake store and ad network: gems and "remove ads" bought, a rewarded continue, interstitials between levels, restore, a relaunch that keeps the entitlement, record and replay ([Purchases and ads](22-purchases-and-ads.md)) | `sample_shop_demo -ticks 1850` |
 | `liveops_demo` | live services against local stand-ins: achievements and a leaderboard on a folder "platform", a cloud restore after reinstall, a remote config value that changes the game after relaunch (and survives airplane mode), analytics that consent gates, record and replay ([Live services](23-live-services.md)) | `sample_liveops_demo -ticks 1850` |
+| `steam_demo` | the stock player on Steam against a stand-in `steam_api`: Steam Input, the overlay holding the game, rich presence, achievements, a leaderboard, a Steam Cloud save, the depot started the way Steam starts it ([Steam](26-steam.md)) | `ctest -R sample_steam_demo` |
 
 Windowed samples accept `-frames N` and `-capture out.ppm`; most accept `-headless 1 -ticks N` and
 print a state hash.
