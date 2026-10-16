@@ -64,6 +64,7 @@ u64 read_entries(Frame& f, Array<Entry>& out) {
 
 void load(SceneScripts& s, Span<const Entry> entries) {
     s.host = mem::make_unique<ScriptHost>(mem::heap(), s.budget);
+    s.host->set_assets(s.assets);
     for (const Entry& e : entries) {
         const asset::AssetKey key = s.assets->find(e.guid);
         if (key == asset::kInvalidAssetKey) {
