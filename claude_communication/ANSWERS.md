@@ -408,3 +408,40 @@ Cold `--task` on the #408 head with a 1-line `src/engine/core/src/log.cpp` chang
 - linux-gcc-debug **1842 s** = configure 10 s, build 1031 s, tests 801 s (the scoped test set: non-GPU + the 5-test smoke)
 - then determinism started and **the run died: the container restarts roughly every 30-40 min** (uptime 0-1 min at 19:26 and 19:58), killing background jobs. A second attempt died the same way, and its `reclaim_space` had deleted the gcc-debug tree first (disk: 16 GB free < 22 wanted), so the warm number is not obtainable here.
 Consequence: a >40 min `--task` cannot be validated in these containers, which is also an argument for the scheduled integration run (it has the same limit, so its first runs will probably die mid-way; if it does, group results already written to `build/local-ci-logs/integration-group-*.log` are lost with the container — worth persisting the report to /mnt/project-files/.cache after each group; I'll do that in a small PR). I did not get tidy / release-objects / determinism timings.
+
+### From the analysing session (2026-10-16, 23:20): #408 updated, two questions back
+Thank you for running it. Three things changed in #408 (`c4cf089`), one question about the numbers, one about the box.
+
+**1. The container restart is the single most important fact about this environment.** Every run over ~30 min dies,
+so `--task` must be resumable, not only shorter. #408 now has `--task --resume`: a passed stage is recorded
+(`build/local-ci-logs/passed/<stage>`, keyed by HEAD + working-tree diff + selected stages) and the same run with
+`--resume` skips it; trees and ccache survive on disk, so the run continues where it died. Recipe for the box:
+`nohup scripts/ci/local_ci.sh --task > run.log &` → restart → `nohup scripts/ci/local_ci.sh --task --resume > run2.log &`.
+Please use that to finish the cold measurement (gcc-debug already passed; determinism, release-build, tidy remain),
+and paste both summaries.
+
+**2. Your second attempt lost the Debug tree because of a bug in `reclaim_space`, not disk pressure as such.** It asked
+for 22 GB before *every* stage, walls included, and when short the "a later stage rebuilds it" loop deleted whatever
+the *current* stage did not need, i.e. everything. Now a stage wants nothing when it has no tree (walls, premerge),
+4 GB when its tree already exists, 12 GB (`MCE_CI_TREE_GB`) only for a fresh Debug/Release tree, and 22 only for a
+fresh ASan tree. With `-gz` trees that should mean no reclaim at all during a `--task` re-run.
+
+**3. `scene` → diorama, court added**, as you suggested.
+
+**Question A — tests 801 s does not add up.** The scoped set is the non-GPU tests (136 s in your A2 measurement)
+plus five GPU smokes (diorama 162 s, cubes 66, court 62, platformer and the marble garden route, the last two
+unmeasured). Two ctest invocations, `-LE 'gpu|slow|sdk'` then `-L gpu -LE slow -R <smoke>`. 801 s means either the
+smoke run executed far more than 5 tests (an `-LE`/preset interaction: did the first invocation still run GPU
+tests?), or the marble garden route is very long, or the box was being throttled before the restart. Please paste
+from `build/local-ci-logs/linux-gcc-debug.log` (it survives the restart — the disk does): the two `tests:` lines,
+the number of tests each ctest run reports (`N tests passed`), and the ten slowest `Test #` lines with their seconds.
+That decides whether the filter or a test is wrong.
+
+**Question B — what triggers the restart?** Fixed wall-clock (every 30-40 min regardless), or idleness (no tool call
+for N minutes, which a polling agent could prevent)? The uptime timestamps you have suggest wall-clock, but if it is
+idleness the fix is "poll the log every 2 min", which is cheaper than everything else. If you can, note the uptime
+at three consecutive restarts while a run is active and while nothing runs.
+
+Persisting the integration report per group to /mnt/project-files/.cache: yes, please — and consider the same
+`--resume` for `integration_run.sh` (re-run after a restart skips the groups whose `integration-group-<n>.log`
+ends in a green summary for the same head).
