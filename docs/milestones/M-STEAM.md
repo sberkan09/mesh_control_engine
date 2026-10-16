@@ -1,7 +1,7 @@
 # M-STEAM — Steamworks (milestone record)
 
-**Status:** active. Steps 1–5 done; step 6 to come (Linear SBA-106 … SBA-111; SBA-112 is the run against
-the real Steam client, which needs the user's Steamworks account).
+**Status:** done against the stand-in (steps 1–6, Linear SBA-106 … SBA-111). Open: SBA-112, the run against
+the real Steam client, which needs the user's Steamworks account.
 **Why:** Steam is the desktop distribution channel; the engine comparison (the project's
 `assessments/motor-kiyaslama-eksikler.md`, item 2) lists it right after the web. Added 2026-10-15 under the
 user's standing instruction to extend the roadmap when it runs out.
@@ -17,7 +17,7 @@ user's standing instruction to extend the roadmap when it runs out.
 | 3. Overlay (holds the world like a lost focus) and rich presence as data | SBA-108 | done |
 | 4. Steam Input: an action manifest from the cooked input map, glyphs, Steam Deck defaults | SBA-109 | done |
 | 5. `ship --steam`: depots per platform, `steam_api` beside the binary, generated steamcmd build scripts | SBA-110 | done |
-| 6. Demo, user guide, gates | SBA-111 | — |
+| 6. Demo, user guide, gates | SBA-111 | done |
 | Later: the real Steam client (achievements configured, overlay, Steam Input, a beta-branch upload) | SBA-112 | needs the user's account |
 
 ## Step 1 — the run-time loader
@@ -77,3 +77,15 @@ manifest upload (SBA-112). Several maps share the one set `Game`; per-map sets (
 
 Not measured: a real steamcmd upload and a build installed by the Steam client (SBA-112); Windows and
 macOS depots made on their own OS (the layout is tested here from staged folders).
+
+## Step 6 — the demo, the user guide and the gates
+
+| Item | Where | Evidence |
+|---|---|---|
+| `samples/steam_demo`: a content project (a scene with a `RichPresence`, a `.mcservices` with Steam names) played by the stock player | `samples/steam_demo/` | ctest `sample_steam_demo` (below) |
+| One run on the stand-in: Steam Input reading the controller's Jump, the presence sent once, achievement, progress, a score on "Best Time" and a Steam Cloud save; the overlay holding the sim; the same state hash with and without Steam (overlay aside, which pauses); the build laid out as a depot and started with `SteamAppId` only | `samples/steam_demo/steam_demo_test.py` | ctest `sample_steam_demo`, in every `local_ci.sh` debug stage |
+| User guide chapter 26 (Steam): turning it on, the demo, game services, overlay, presence, Steam Input, shipping, a release checklist; 23.10 points to it | `docs/user-guide/26-steam.md` | — |
+
+The gates are the ctests above (`ctest -R steam`: `test_platform` "steam:" cases, `player_steam_*`,
+`player_game_services_steam`, `scene_demo_player_steam`, `steam_depot`, `sample_steam_demo`), all run by
+`local_ci.sh`. Not measured: anything in Valve's client (SBA-112).

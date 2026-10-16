@@ -332,6 +332,7 @@ TEST_CASE("ui_preview: a theme's sprite-sheet skin draws its 9-slice frame; a ba
     auto skinned = c.ok("ui_preview", shot);
     c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/broken.mcuitheme"})");
     auto broken = c.ok("ui_preview", shot);
+    CHECK(str(broken.v().get("scene")) == "scenes/demo.mcscene");  // a copy, not a view into the rescanned assets
     REQUIRE(flat.images.size() == 1);
     REQUIRE(skinned.images.size() == 1);
     REQUIRE(broken.images.size() == 1);
