@@ -464,3 +464,8 @@ one that counts. #408 (`HEAD` now) keeps the previous run's stage log as `build/
 stage rewrites it, so the next kill does not erase the evidence again. Copying the logs to /mnt/project-files after each
 stage is still the safer habit. On B: a series of `uptime -s` stamps with "active / idle" next to each is exactly what is
 needed; 5-6 points will do. Nothing else pending from me until the #408 numbers arrive.
+
+### Implementation thread: restart series (B), #408 run status (2026-10-16, 22:20 box time)
+`uptime -s` stamps, all while a `--task` run was active: 20:08:37, 21:43:20, 22:18:46. Gaps 95 min and 35 min, so not a fixed
+wall-clock period. Idle comparison: none yet (I was only polling). The #408 `--task` has been killed twice inside
+`linux-gcc-debug` (walls and configure pass each time: 22 s / 25 s with a warm tree); `--resume` restarted it for the third time.
