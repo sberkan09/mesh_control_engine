@@ -1,4 +1,4 @@
-// A stand-in for Valve's steam_api library (M-STEAM steps 1-3): the flat entry points mce_platform opens,
+// A stand-in for Valve's steam_api library (M-STEAM steps 1-4): the flat entry points mce_platform opens,
 // with answers the test sets through MceSteamStub_* and a count of every call. Built as a shared
 // library so the loader's real path (open, look up by name, close) runs in CI without Steam.
 
@@ -268,4 +268,154 @@ STUB_EXPORT void SteamAPI_ISteamFriends_ActivateGameOverlayToStore(void* self, u
 }
 STUB_EXPORT void SteamAPI_ISteamFriends_ActivateGameOverlayToWebPage(void* self, const char* url, int32_t) {
     if (self == &s().friends) s().overlay = std::string("web:") + url;
+}
+
+// ---- Steam Input (step 4): every name Steam is asked for is known (the manifest is the test's);
+// MCE_STEAM_STUB_PADS (a count) connects controllers and MCE_STEAM_STUB_INPUT ("Jump,Move=0.5:-1")
+// holds digital and analog actions for a player run. An action's origin is its handle, named
+// "Stub <action>". The first read of a held action is printed.
+namespace {
+
+#pragma pack(push, 1)
+struct DigitalData {
+    bool state;
+    bool active;
+};
+struct AnalogData {
+    int32_t mode;
+    float x;
+    float y;
+    bool active;
+};
+#pragma pack(pop)
+
+struct Held {
+    float x = 0.f, y = 0.f;
+    bool printed = false;
+};
+struct InputStub {
+    bool loaded = false;
+    int input = 0;
+    bool on = false;
+    int pads = 0;
+    uint64_t active_set = 0;
+    std::map<std::string, uint64_t> handles;  // "s:Game", "d:Jump", "a:Move"
+    std::map<std::string, Held> held;
+    std::vector<std::string> names = {""};    // by handle
+};
+InputStub& in() {
+    static InputStub st;
+    if (!st.loaded) {
+        st.loaded = true;
+        if (const char* p = std::getenv("MCE_STEAM_STUB_PADS")) st.pads = std::atoi(p);
+        const char* list = std::getenv("MCE_STEAM_STUB_INPUT");
+        for (std::string rest = list ? list : ""; !rest.empty();) {
+            const size_t comma = rest.find(',');
+            const std::string item = rest.substr(0, comma);
+            rest = comma == std::string::npos ? "" : rest.substr(comma + 1);
+            Held h;
+            h.x = 1.f;
+            const size_t eq = item.find('=');
+            if (eq != std::string::npos) std::sscanf(item.c_str() + eq + 1, "%f:%f", &h.x, &h.y);
+            st.held[item.substr(0, eq)] = h;
+        }
+    }
+    return st;
+}
+uint64_t input_handle(void* self, char kind, const char* name) {
+    if (self != &in().input || !in().on) return 0;
+    const std::string key = std::string(1, kind) + ":" + name;
+    auto it = in().handles.find(key);
+    if (it != in().handles.end()) return it->second;
+    in().names.push_back(name);
+    return in().handles[key] = in().names.size() - 1;
+}
+const Held* held(uint64_t controller, uint64_t action) {
+    if (controller == 0 || controller > static_cast<uint64_t>(in().pads) || in().active_set == 0 || action >= in().names.size())
+        return nullptr;
+    const auto it = in().held.find(in().names[action]);
+    if (it == in().held.end()) return nullptr;
+    if (!it->second.printed) {
+        it->second.printed = true;
+        std::printf("steam stub: input %s held\n", it->first.c_str());
+        std::fflush(stdout);
+    }
+    return &it->second;
+}
+
+}  // namespace
+
+STUB_EXPORT void MceSteamStub_SetPads(int n) { in().pads = n; }
+STUB_EXPORT void MceSteamStub_Hold(const char* action, float x, float y) {
+    Held h;
+    h.x = x;
+    h.y = y;
+    in().held[action] = h;
+}
+STUB_EXPORT void MceSteamStub_Release(const char* action) { in().held.erase(action); }
+STUB_EXPORT const char* MceSteamStub_ActiveSet() {
+    return in().active_set < in().names.size() ? in().names[in().active_set].c_str() : "";
+}
+STUB_EXPORT void MceSteamStub_ResetInput() {
+    in() = InputStub{};
+    in().loaded = true;
+}
+STUB_EXPORT void* SteamAPI_SteamInput_v006() { return &in().input; }
+STUB_EXPORT bool SteamAPI_ISteamInput_Init(void* self, bool explicit_frame) {
+    count("SteamAPI_ISteamInput_Init");
+    in().on = self == &in().input && explicit_frame;
+    return in().on;
+}
+STUB_EXPORT bool SteamAPI_ISteamInput_Shutdown(void* self) {
+    count("SteamAPI_ISteamInput_Shutdown");
+    in().on = false;
+    return self == &in().input;
+}
+STUB_EXPORT void SteamAPI_ISteamInput_RunFrame(void*, bool) { count("SteamAPI_ISteamInput_RunFrame"); }
+STUB_EXPORT int32_t SteamAPI_ISteamInput_GetConnectedControllers(void* self, uint64_t* out) {
+    if (self != &in().input || !in().on) return 0;
+    for (int i = 0; i < in().pads && i < 16; ++i) out[i] = static_cast<uint64_t>(i) + 1;
+    return std::min(in().pads, 16);
+}
+STUB_EXPORT uint64_t SteamAPI_ISteamInput_GetActionSetHandle(void* self, const char* name) { return input_handle(self, 's', name); }
+STUB_EXPORT uint64_t SteamAPI_ISteamInput_GetDigitalActionHandle(void* self, const char* name) {
+    return input_handle(self, 'd', name);
+}
+STUB_EXPORT uint64_t SteamAPI_ISteamInput_GetAnalogActionHandle(void* self, const char* name) {
+    return input_handle(self, 'a', name);
+}
+STUB_EXPORT void SteamAPI_ISteamInput_ActivateActionSet(void* self, uint64_t controller, uint64_t set) {
+    count("SteamAPI_ISteamInput_ActivateActionSet");
+    if (self == &in().input && controller == ~uint64_t(0)) in().active_set = set;
+}
+STUB_EXPORT DigitalData SteamAPI_ISteamInput_GetDigitalActionData(void*, uint64_t controller, uint64_t action) {
+    const Held* h = held(controller, action);
+    DigitalData d{h != nullptr, in().active_set != 0 && controller <= static_cast<uint64_t>(in().pads)};
+    return d;
+}
+STUB_EXPORT AnalogData SteamAPI_ISteamInput_GetAnalogActionData(void*, uint64_t controller, uint64_t action) {
+    const Held* h = held(controller, action);
+    AnalogData d{1, h ? h->x : 0.f, h ? h->y : 0.f, in().active_set != 0 && controller <= static_cast<uint64_t>(in().pads)};
+    return d;
+}
+STUB_EXPORT int32_t SteamAPI_ISteamInput_GetDigitalActionOrigins(void*, uint64_t controller, uint64_t set, uint64_t action,
+                                                                int32_t* out) {
+    if (controller == 0 || set == 0 || action == 0 || action >= in().names.size()) return 0;
+    out[0] = static_cast<int32_t>(action);
+    return 1;
+}
+STUB_EXPORT int32_t SteamAPI_ISteamInput_GetAnalogActionOrigins(void* self, uint64_t controller, uint64_t set, uint64_t action,
+                                                               int32_t* out) {
+    return SteamAPI_ISteamInput_GetDigitalActionOrigins(self, controller, set, action, out);
+}
+STUB_EXPORT const char* SteamAPI_ISteamInput_GetStringForActionOrigin(void*, int32_t origin) {
+    static std::string text;
+    if (origin <= 0 || static_cast<size_t>(origin) >= in().names.size()) return nullptr;
+    text = "Stub " + in().names[static_cast<size_t>(origin)];
+    return text.c_str();
+}
+STUB_EXPORT const char* SteamAPI_ISteamInput_GetGlyphPNGForActionOrigin(void*, int32_t origin, int32_t, uint32_t) {
+    static std::string path;
+    path = "/stub/glyphs/" + std::to_string(origin) + ".png";
+    return path.c_str();
 }

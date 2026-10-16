@@ -1,4 +1,4 @@
-// M-STEAM steps 1-2: the Steamworks loader and Steam as the game services backend against a stub
+// M-STEAM steps 1-4: the Steamworks loader and Steam as the game services backend against a stub
 // steam_api (steam_stub.cpp), so the open, the init answers, the callback pump, asynchronous call
 // results, achievements, leaderboards, Steam Cloud and the shutdown run in CI without Steam.
 
@@ -12,6 +12,7 @@
 #include "mce/platform/game_services.h"
 #include "mce/platform/library.h"
 #include "mce/platform/steam.h"
+#include "mce/platform/steam_input.h"
 
 using namespace mce;
 namespace steam = mce::platform::steam;
@@ -335,5 +336,63 @@ TEST_CASE("steam: the overlay's state from its callback, its pages, and rich pre
     CHECK_FALSE(steam::overlay_active());  // a new run starts with it closed
     REQUIRE(steam::init(stub_config(480)) == steam::InitResult::Ok);
     CHECK_FALSE(steam::overlay_active());
+    steam::shutdown();
+}
+
+TEST_CASE("steam: Steam Input reads the actions of the set by name, and names their inputs") {
+    StubControls stub;
+    stub.get<void (*)()>("MceSteamStub_ResetInput")();
+    const auto pads = stub.get<void (*)(int)>("MceSteamStub_SetPads");
+    const auto hold = stub.get<void (*)(const char*, float, float)>("MceSteamStub_Hold");
+    const auto release = stub.get<void (*)(const char*)>("MceSteamStub_Release");
+    const auto active_set = stub.get<const char* (*)()>("MceSteamStub_ActiveSet");
+    namespace sin = steam::input;
+    CHECK_FALSE(sin::start());  // Steam is off
+    REQUIRE(steam::init(stub_config(480)) == steam::InitResult::Ok);
+    REQUIRE(sin::start());
+    CHECK(sin::running());
+    CHECK(stub.calls("SteamAPI_ISteamInput_Init") == 1);
+
+    sin::Action actions[2];
+    actions[0].name.assign("Jump");
+    actions[1].name.assign("Move");
+    actions[1].kind = sin::Kind::Analog;
+    sin::Value values[2];
+    // No controller: nothing read, no set activated.
+    CHECK(sin::frame("Game", Span<const sin::Action>(actions, 2), Span<sin::Value>(values, 2)) == 0);
+    CHECK_FALSE(values[0].active);
+    CHECK(stub.calls("SteamAPI_ISteamInput_RunFrame") == 1);
+    CHECK(stub.calls("SteamAPI_ISteamInput_ActivateActionSet") == 0);
+    FixedString<64> name;
+    FixedString<256> glyph;
+    CHECK_FALSE(sin::origin("Game", actions[0], name, glyph));
+
+    pads(2);
+    hold("Jump", 1.f, 0.f);
+    hold("Move", 0.5f, -1.f);
+    CHECK(sin::frame("Game", Span<const sin::Action>(actions, 2), Span<sin::Value>(values, 2)) == 2);
+    CHECK(sin::controllers() == 2);
+    CHECK(StringView(active_set()) == "Game");
+    CHECK(values[0].active);
+    CHECK(values[0].x == 1.f);
+    CHECK(values[1].active);
+    CHECK(values[1].x == 0.5f);
+    CHECK(values[1].y == -1.f);
+
+    release("Jump");
+    release("Move");
+    sin::frame("Game", Span<const sin::Action>(actions, 2), Span<sin::Value>(values, 2));
+    CHECK(values[0].active);  // bound, just not held
+    CHECK(values[0].x == 0.f);
+    CHECK(values[1].x == 0.f);
+
+    REQUIRE(sin::origin("Game", actions[0], name, glyph));
+    CHECK(name.view() == "Stub Jump");
+    CHECK(glyph.view().size() > 0);
+
+    sin::stop();
+    CHECK_FALSE(sin::running());
+    CHECK(stub.calls("SteamAPI_ISteamInput_Shutdown") == 1);
+    CHECK(sin::frame("Game", Span<const sin::Action>(actions, 2), Span<sin::Value>(values, 2)) == 0);
     steam::shutdown();
 }

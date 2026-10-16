@@ -286,6 +286,13 @@ struct Environment3D {
     // r.upscaler and r.sharpen override both per player.
     u32 upscaler = 1;
     f32 sharpen = 0.0f;
+    // M-VISUAL2 3. Contact shadows: a short screen-space ray toward the sun shadows the creases, feet
+    // and small details the cascades are too coarse for. r.contact_shadows 0 turns them off for every
+    // scene; the Low quality tier drops them.
+    u32 contact_shadows = 0;
+    f32 contact_length = 0.35f;     // world meters the ray travels toward the sun
+    f32 contact_thickness = 0.1f;   // meters behind a surface a sample may be and still occlude
+    f32 contact_intensity = 1.0f;   // 0..1: how much of the sun an occluded pixel loses
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -315,7 +322,9 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (ssr_max_distance, Range{0.1f, 200}), (ssr_thickness, Range{0.01f, 5}), (ssr_max_roughness, Range{0, 1}),
               (ssr_roughness_fade, Range{0.01f, 1}), (ssr_intensity, Range{0, 4}),
               (upscaler, Range{0, 1}, Help{"below output size: 1 = edge-adaptive spatial upsample, 0 = bilinear"}),
-              (sharpen, Range{0, 1}, Help{"contrast-adaptive sharpening of the final frame (0 = off)"}))
+              (sharpen, Range{0, 1}, Help{"contrast-adaptive sharpening of the final frame (0 = off)"}),
+              (contact_shadows, Help{"1: short screen-space sun shadows in creases and under small details"}),
+              (contact_length, Range{0.01f, 5}), (contact_thickness, Range{0.005f, 2}), (contact_intensity, Range{0, 1}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 

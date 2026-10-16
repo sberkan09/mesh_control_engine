@@ -51,9 +51,13 @@ public:
     friend bool operator==(const FixedString& a, StringView b) { return a.view() == b; }
 
 private:
-    char buf_[N] = {};
+    // No implicit padding: World::state_hash hashes component bytes, and a copied FixedString would
+    // otherwise carry whatever its source's padding held (the buffer is rounded up to len_'s
+    // alignment, and the flag is followed by explicit zero bytes).
+    char buf_[N + (4 - N % 4) % 4] = {};
     u32 len_ = 0;
     bool truncated_ = false;
+    u8 pad_[3] = {};
 };
 
 }  // namespace mce

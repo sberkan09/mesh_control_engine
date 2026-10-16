@@ -12,6 +12,16 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `NetOwner` names the player that controls an entity. A component built with other flagged fields on the
   client is skipped and counted, never misread. `refl_describe_component` marks the fields `"replicated"`.
   Snapshot version 2. User guide 20.9.
+- Steam Input, M-STEAM step 4 (SBA-109): while Steam runs, Steam reads every controller as the input map's actions
+  and the player feeds them in by name next to the map's own bindings (`InputSystem::set_action_feeds`). The options
+  screen names gamepad bindings by Steam's own names. `mce_player -steam.write_input_config <dir>` writes the action
+  manifest and the Steam Deck, Xbox, PlayStation and Switch Pro default configurations from the pack's input map;
+  `-steam.input 0` turns it off. Headless hashes are unchanged. Covered on the stand-in by `test_input`,
+  `test_platform` and `player_steam_input`. User guide 23.10.
+- Contact shadows, M-VISUAL2 step 3 (SBA-103): `Environment3D.contact_shadows` (or `Scene3D::set_contact_shadows`)
+  marches a short screen-space ray toward the sun so creases, feet and small details get the shadows the cascades
+  miss (`contact_length`, `contact_thickness`, `contact_intensity`). Sun only for now; off on the Low tier;
+  `r.contact_shadows 0` turns it off. User guide 8.
 - The editor's Profiler reads captures, M-PERF step 4 (SBA-116). A new **Capture** tab opens a `.mcperf` from
   the player or `perf_run`: the budget verdict for a target, a strip of every frame (spikes red, over-budget
   amber; click one), the chosen frame's phases, GPU stages and counters, the spikes and the slowest systems.
@@ -33,14 +43,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   uploaded keep-best) and Steam Cloud files. `.mcservices` entries take an optional `steam` name (the catalog id
   otherwise); the catalog chunk is v2, so packs re-cook. `steam::await_call` waits for Steam's asynchronous call
   results. The stand-in `steam_api` covers it all in CI (`test_platform`, `player_game_services_steam`).
-- Steam, M-STEAM step 1 (SBA-106, ADR-0042): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
 - Performance budgets per target, M-PERF step 2 (SBA-114). The `.mceproj` takes `"budgets"` for desktop, mobile
   and web: frame, sim, render and GPU milliseconds, draws, triangles, sprites, upload bytes, heap allocations,
   sprite textures per scene and the largest texture edge. Fields left out keep the engine defaults. `project_set`
   checks the limits, and `project_get` shows each target's budget in force. `project_check` takes a `target` and
   flags images over its `texture_size` and scenes over its `sprite_textures`, with the target's `sim_ms` as the
   per-tick budget. `perf::judge` gives a capture's verdict against a budget. User guide 2.2 and 14.
-- Steam, M-STEAM step 1 (SBA-106, ADR-0043): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
+- Steam, M-STEAM step 1 (SBA-106, ADR-0042): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
   talks to it through the Steamworks flat API, so neither the repository nor the build needs the SDK and a game
   without Steam loads nothing. The stock player signs in with `-steam.app_id <id>` (`-steam.library`,
   `-steam.restart` for release builds Steam relaunches) and pumps Steam's callbacks every frame; the sim hash is
