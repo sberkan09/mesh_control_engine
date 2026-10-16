@@ -61,6 +61,17 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   writes only keyed slots (`Skeleton2DBlend::write_slots`). Deform offsets are not stored: the
   extract samples them with `skeleton2d_animator_sample`, a pure function of the saved animator
   fields.
+- 2D IK, `Skeleton2DIK` and `IKTarget2D` (`skeleton2d.h`, `src/skeleton2d_ik.cpp`, M-ANIM2D 4):
+  chunk minor 3 adds up to 16 constraints (two-bone or CCD; a chain is its last bone and that
+  bone's nearest ancestors) sorted by `order`, and `IKMix` timelines that key a constraint's mix.
+  The pure `skeleton2d_solve_pose` poses the bones, then solves each constraint in the skeleton's
+  space: it turns bones by aiming in their parent's space, writes local rotations back and
+  recomputes the bones after them. Two-bone is analytic (law of cosines, a straight chain out of
+  reach, no stretch); CCD runs a fixed pass count with no tolerance exit. `"kit_skeleton2d"` and
+  `SpriteExtract` both call it, with the targets of `skeleton2d_ik_targets` (`IKTarget2D`
+  entities taken into the skeleton's space) and the mixes of `skeleton2d_ik_state` (the optional
+  `Skeleton2DIK`: keyed mixes plus a gameplay `override_mix`; before the animator's `Commands` add
+  one, the keyed mixes sampled from the animator). Followers move after the solve.
 - `Animator` graphs and `AttachToBone` (`anim3d.h`, M-DATA-REACH 7): an `.mcanim` AnimGraph
   (`ChunkType::AnimGraph`, `AnimGraphView`) drives the Animator's clip, 1D blends (`blend_clip`,
   `blend_weight`), transitions and `AnimEvent3D` events; one-shots finish (`loop`, `finished`,

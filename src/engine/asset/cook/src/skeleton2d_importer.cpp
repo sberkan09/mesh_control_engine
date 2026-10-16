@@ -37,6 +37,17 @@
 // normalized to sum to 1. Color keys are absolute linear RGBA; attachment keys are stepped; deform
 // offsets (2 per vertex, default 0) are metres in the space of the bones the vertex follows.
 //
+// M-ANIM2D 4 adds IK constraints (chunk minor 3; a skeleton without them cooks as before):
+//   "ik": [{"name": "arm", "bones": ["upper", "lower"], "target": "hand_target", "mix": 1,
+//           "type": "two_bone" | "ccd", "bend": "positive" | "negative", "iterations": 10, "order": 0}]
+//   "animations": [{..., "ik": {"arm": [{"t": 0, "mix": 1, "curve": ...}]}}]
+// "bones" is the chain, parent first: each bone is the child of the one before. "type" defaults to
+// "two_bone" for two bones and "ccd" otherwise; "bend" (two-bone, default "positive": the elbow
+// bends counter-clockwise) and "iterations" (CCD, 1 to 64, default 10) belong to their type.
+// "target" names a bone outside the chain and not under its first bone; without it only an
+// IKTarget2D entity drives the constraint. "mix" is 0..1 (default 1). Constraints apply in "order"
+// (default 0; ties keep the listed order). At most 16 constraints and 32 bones per chain.
+//
 // Metres and degrees in the text, Y up; the chunk stores radians. A bone's x, y and rotation are
 // its rest pose in its parent's space; "scale" is [sx, sy] or one number. A slot's offset and
 // rotation place the quad's pivot in its bone's space. A null or absent texture draws a solid quad
@@ -205,9 +216,11 @@ bool read_curve(Reader& r, JsonValue key, StringView anim, StringView bone, Key&
 
 bool read_slot_keys(Reader& r, JsonValue a, StringView name, const SlotNames& slots, Animations& out,
                     asset::Skeleton2DAnimation& anim, f32& last);
+bool read_ik_keys(Reader& r, JsonValue a, StringView name, const Array<StringView>& ik_names, Animations& out,
+                  asset::Skeleton2DAnimation& anim, f32& last);
 
 bool read_animations(Reader& r, JsonValue list, const Array<StringView>& bone_names, const SlotNames& slots,
-                     Array<char>& pool, Animations& out) {
+                     const Array<StringView>& ik_names, Array<char>& pool, Animations& out) {
     if (!list.valid()) return true;
     if (!list.is_array()) return r.fail(list, "'animations' must be an array");
     if (list.size() > asset::kSkeleton2DMaxAnimations) {
@@ -220,8 +233,8 @@ bool read_animations(Reader& r, JsonValue list, const Array<StringView>& bone_na
         const JsonValue a = list.at(ai);
         if (!a.is_object())
             return r.fail(a, "an animation is {\"name\", \"duration\", \"loop\", \"bones\", \"events\"}");
-        if (!detail::check_keys(a, {"name", "duration", "loop", "bones", "events", "slots", "deform"}, r.file, kStage,
-                                r.diags))
+        if (!detail::check_keys(a, {"name", "duration", "loop", "bones", "events", "slots", "deform", "ik"}, r.file,
+                                kStage, r.diags))
             return false;
         StringView name;
         if (!r.name(a, "animation", name)) return false;
@@ -310,6 +323,7 @@ bool read_animations(Reader& r, JsonValue list, const Array<StringView>& bone_na
         }
 
         if (!read_slot_keys(r, a, name, slots, out, anim, last)) return false;
+        if (!read_ik_keys(r, a, name, ik_names, out, anim, last)) return false;
 
         const JsonValue events = a.get("events");
         if (events.valid() && !events.is_array()) return anim_fail(r, events, name, {}, "'events' must be an array");
@@ -493,6 +507,192 @@ bool read_slot_keys(Reader& r, JsonValue a, StringView name, const SlotNames& sl
                                     slots.global[entry], out, anim, last, {"t", "offsets", "curve"}, fill))
                 return false;
         }
+    }
+    return true;
+}
+
+bool ik_key_fail(Reader& r, JsonValue at, StringView anim, StringView ik, const char* msg) {
+    String text;
+    appendf(text, "animation '%.*s', ik '%.*s': %s", static_cast<int>(anim.size()), anim.data(), static_cast<int>(ik.size()),
+            ik.data(), msg);
+    return r.fail(at, text.view());
+}
+
+// An animation's "ik": {constraint name: [{"t", "mix", "curve"}]}, IKMix timelines of bone keys.
+bool read_ik_keys(Reader& r, JsonValue a, StringView name, const Array<StringView>& ik_names, Animations& out,
+                  asset::Skeleton2DAnimation& anim, f32& last) {
+    const JsonValue list = a.get("ik");
+    if (!list.valid()) return true;
+    if (!list.is_object()) return anim_fail(r, list, name, {}, "'ik' must be an object of IK constraint name: keys");
+    for (u32 ci = 0; ci < list.size(); ++ci) {
+        const StringView ik = list.key_at(ci);
+        const JsonValue keys = list.at(ci);
+        i32 found = -1;
+        for (u32 j = 0; j < ik_names.size(); ++j)
+            if (ik_names[j] == ik) found = static_cast<i32>(j);
+        if (found < 0) return ik_key_fail(r, keys, name, ik, "no IK constraint has that name");
+        for (u32 j = 0; j < ci; ++j)
+            if (list.key_at(j) == ik) return ik_key_fail(r, keys, name, ik, "the constraint is listed twice");
+        if (!keys.is_array() || keys.size() == 0) return ik_key_fail(r, keys, name, ik, "keys must be an array of at least one key");
+        if (out.keys.size() + keys.size() > asset::kSkeleton2DMaxKeys)
+            return ik_key_fail(r, keys, name, ik, "the skeleton has too many keys");
+        asset::Skeleton2DTimeline tl{};
+        tl.bone = static_cast<u16>(found);
+        tl.channel = asset::Skeleton2DChannel::IKMix;
+        tl.first_key = static_cast<u32>(out.keys.size());
+        tl.key_count = keys.size();
+        f32 prev = 0.0f;
+        for (u32 ki = 0; ki < keys.size(); ++ki) {
+            const JsonValue key = keys.at(ki);
+            if (!key.is_object()) return ik_key_fail(r, key, name, ik, "a key is an object with \"t\"");
+            if (!detail::check_keys(key, {"t", "mix", "curve"}, r.file, kStage, r.diags)) return false;
+            asset::Skeleton2DKey k{};
+            if (!key.get("t").valid()) return ik_key_fail(r, key, name, ik, "a key needs a time 't'");
+            if (!r.number(key, "t", 0.0, k.t)) return false;
+            if (k.t < 0.0f) return ik_key_fail(r, key.get("t"), name, ik, "a key's 't' must be 0 or more");
+            if (ki > 0 && !(k.t > prev)) {
+                String msg;
+                appendf(msg, "mix keys must be in increasing time order (t %g after %g)", static_cast<f64>(k.t),
+                        static_cast<f64>(prev));
+                return ik_key_fail(r, key.get("t"), name, ik, msg.c_str());
+            }
+            prev = k.t;
+            if (!r.number(key, "mix", 1.0, k.value[0])) return false;
+            if (k.value[0] < 0.0f || k.value[0] > 1.0f) return ik_key_fail(r, key.get("mix"), name, ik, "'mix' must be in 0..1");
+            if (!read_curve(r, key, name, {}, k)) return false;
+            out.keys.push_back(k);
+        }
+        if (prev > last) last = prev;
+        if (out.timelines.size() >= asset::kSkeleton2DMaxTimelines)
+            return ik_key_fail(r, keys, name, ik, "the skeleton has too many timelines");
+        out.timelines.push_back(tl);
+        ++anim.timeline_count;
+    }
+    return true;
+}
+
+bool ik_fail(Reader& r, JsonValue at, StringView ik, const char* msg) {
+    String text;
+    appendf(text, "ik constraint '%.*s': %s", static_cast<int>(ik.size()), ik.data(), msg);
+    return r.fail(at, text.view());
+}
+
+// The skeleton's "ik" constraints, sorted by "order" (stable), and their names in that order.
+bool read_ik(Reader& r, JsonValue list, const Array<Skeleton2DBone>& bones, const Array<StringView>& bone_names,
+             Array<char>& pool, Array<asset::Skeleton2DIKConstraint>& out, Array<StringView>& names) {
+    if (!list.valid()) return true;
+    if (!list.is_array() || list.size() > asset::kSkeleton2DMaxIK) {
+        String msg;
+        appendf(msg, "'ik' must be an array of at most %u constraints", asset::kSkeleton2DMaxIK);
+        return r.fail(list, msg.view());
+    }
+    auto bone_index = [&](StringView n) {
+        for (u32 j = 0; j < bone_names.size(); ++j)
+            if (bone_names[j] == n) return static_cast<i32>(j);
+        return -1;
+    };
+    Array<asset::Skeleton2DIKConstraint> listed;
+    Array<StringView> listed_names;
+    for (u32 ci = 0; ci < list.size(); ++ci) {
+        const JsonValue o = list.at(ci);
+        if (!o.is_object())
+            return r.fail(o, "an IK constraint is {\"name\", \"bones\", \"target\", \"mix\", \"type\", \"bend\", "
+                             "\"iterations\", \"order\"}");
+        if (!detail::check_keys(o, {"name", "bones", "target", "mix", "type", "bend", "iterations", "order"}, r.file, kStage,
+                                r.diags))
+            return false;
+        StringView name;
+        if (!r.name(o, "IK constraint", name)) return false;
+        for (const StringView& other : listed_names)
+            if (other == name) return ik_fail(r, o.get("name"), name, "two IK constraints share this name");
+        asset::Skeleton2DIKConstraint c{};
+        const JsonValue chain = o.get("bones");
+        if (!chain.is_array() || chain.size() == 0 || chain.size() > asset::kSkeleton2DMaxIKChain) {
+            String msg;
+            appendf(msg, "'bones' must be an array of 1 to %u bone names, parent first", asset::kSkeleton2DMaxIKChain);
+            return ik_fail(r, chain.valid() ? chain : o, name, msg.c_str());
+        }
+        i32 first = -1, prev = -1;
+        for (u32 i = 0; i < chain.size(); ++i) {
+            const JsonValue bn = chain.at(i);
+            const i32 b = bn.is_string() ? bone_index(bn.as_string()) : -1;
+            if (b < 0) return ik_fail(r, bn, name, "'bones' must name bones of the skeleton");
+            const StringView bs = bn.as_string();
+            if (prev >= 0 && bones[static_cast<u32>(b)].parent != static_cast<u16>(prev)) {
+                const StringView ps = bone_names[static_cast<u32>(prev)];
+                String msg;
+                appendf(msg, "bone '%.*s' is not a child of '%.*s': a chain lists each bone's child next",
+                        static_cast<int>(bs.size()), bs.data(), static_cast<int>(ps.size()), ps.data());
+                return ik_fail(r, bn, name, msg.c_str());
+            }
+            if (first < 0) first = b;
+            prev = b;
+        }
+        c.bone = static_cast<u16>(prev);
+        c.bone_count = static_cast<u16>(chain.size());
+        const JsonValue type = o.get("type");
+        bool two = chain.size() == 2;
+        if (type.is_string() && type.as_string() == "two_bone") two = true;
+        else if (type.is_string() && type.as_string() == "ccd") two = false;
+        else if (type.valid()) return ik_fail(r, type, name, "'type' must be \"two_bone\" or \"ccd\"");
+        if (two && chain.size() != 2) return ik_fail(r, chain, name, "a two-bone constraint lists exactly 2 bones");
+        c.kind = two ? asset::Skeleton2DIKKind::TwoBone : asset::Skeleton2DIKKind::CCD;
+        if (const JsonValue bend = o.get("bend"); bend.valid()) {
+            if (!two) return ik_fail(r, bend, name, "'bend' belongs to a two-bone constraint");
+            if (bend.is_string() && bend.as_string() == "negative") c.flags = asset::Skeleton2DIKFlags::BendNegative;
+            else if (!(bend.is_string() && bend.as_string() == "positive"))
+                return ik_fail(r, bend, name, "'bend' must be \"positive\" or \"negative\"");
+        }
+        const JsonValue it = o.get("iterations");
+        if (it.valid() && two) return ik_fail(r, it, name, "'iterations' belongs to a CCD constraint");
+        if (!two) {
+            c.iterations = 10;
+            if (it.valid()) {
+                if (!it.is_integer() || it.as_number() < 1.0 || it.as_number() > asset::kSkeleton2DMaxIKIterations) {
+                    String msg;
+                    appendf(msg, "'iterations' must be a whole number from 1 to %u", asset::kSkeleton2DMaxIKIterations);
+                    return ik_fail(r, it, name, msg.c_str());
+                }
+                c.iterations = static_cast<u32>(it.as_number());
+            }
+        }
+        c.target = asset::kSkeleton2DNoTarget;
+        if (const JsonValue t = o.get("target"); t.valid() && !t.is_null()) {
+            const i32 b = t.is_string() ? bone_index(t.as_string()) : -1;
+            if (b < 0) return ik_fail(r, t, name, "'target' must name a bone of the skeleton, or be null");
+            for (u32 x = static_cast<u32>(b); x != asset::kSkeleton2DNoParent; x = bones[x].parent)
+                if (x == static_cast<u32>(first)) {
+                    const StringView ts = t.as_string();
+                    String msg;
+                    appendf(msg, "target bone '%.*s' is in the chain or under its first bone, so it would move with the solve",
+                            static_cast<int>(ts.size()), ts.data());
+                    return ik_fail(r, t, name, msg.c_str());
+                }
+            c.target = static_cast<u16>(b);
+        }
+        if (!r.number(o, "mix", 1.0, c.mix)) return false;
+        if (c.mix < 0.0f || c.mix > 1.0f) return ik_fail(r, o.get("mix"), name, "'mix' must be in 0..1");
+        if (const JsonValue ord = o.get("order"); ord.valid()) {
+            if (!ord.is_integer() || ord.as_number() < -1000000.0 || ord.as_number() > 1000000.0)
+                return ik_fail(r, ord, name, "'order' must be a whole number");
+            c.order = static_cast<i32>(ord.as_number());
+        }
+        c.name = add_string(pool, name);
+        listed.push_back(c);
+        listed_names.push_back(name);
+    }
+    // Stable sort by order (insertion: at most 16).
+    Array<u32> idx;
+    for (u32 i = 0; i < listed.size(); ++i) {
+        u32 at = static_cast<u32>(idx.size());
+        while (at > 0 && listed[idx[at - 1]].order > listed[i].order) --at;
+        idx.push_back(0);
+        for (u32 k = static_cast<u32>(idx.size()) - 1; k > at; --k) idx[k] = idx[k - 1];
+        idx[at] = i;
+    }
+    for (u32 i : idx) {
+        out.push_back(listed[i]);
+        names.push_back(listed_names[i]);
     }
     return true;
 }
@@ -719,7 +919,8 @@ bool read_slot_attachments(Reader& r, JsonValue s, StringView name, u32 slot_ind
 class Skeleton2DImporter final : public IImporter {
 public:
     StringView id() const override { return "skeleton2d"; }
-    u32 version() const override { return 3; }  // 2: animations (M-ANIM2D 2); 3: attachments, meshes, slot keys (M-ANIM2D 3)
+    // 2: animations (M-ANIM2D 2); 3: attachments, meshes, slot keys (M-ANIM2D 3); 4: IK (M-ANIM2D 4)
+    u32 version() const override { return 4; }
     ChunkType type() const override { return ChunkType::Skeleton2D; }
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ".mcskel2d"; }
@@ -760,8 +961,8 @@ public:
     bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
         const JsonValue doc = in.settings;
         Reader r{in.display_path, diags};
-        if (!detail::check_keys(doc, {"format", "version", "guid", "name", "bones", "slots", "animations"}, r.file, kStage,
-                                diags))
+        if (!detail::check_keys(doc, {"format", "version", "guid", "name", "bones", "slots", "animations", "ik"}, r.file,
+                                kStage, diags))
             return false;
         const JsonValue fmt = doc.get("format");
         if (!fmt.is_string() || fmt.as_string() != "mce-skeleton2d")
@@ -899,8 +1100,12 @@ public:
             slots.push_back(slot);
         }
 
+        Array<asset::Skeleton2DIKConstraint> ik;
+        Array<StringView> ik_names;
+        if (!read_ik(r, doc.get("ik"), bones, bone_names, pool, ik, ik_names)) return false;
+
         Animations anims;
-        if (!read_animations(r, doc.get("animations"), bone_names, slot_names, pool, anims)) return false;
+        if (!read_animations(r, doc.get("animations"), bone_names, slot_names, ik_names, pool, anims)) return false;
         attached = attached || anims.slot_timelines;
 
         h.bone_count = static_cast<u32>(bones.size());
@@ -920,6 +1125,11 @@ public:
             ah.slot_key_count = static_cast<u32>(anims.slot_keys.size());
             ah.value_count = static_cast<u32>(anims.values.size());
         }
+        asset::Skeleton2DIKHeader ih{};
+        if (!ik.empty()) {
+            h.flags |= asset::Skeleton2DHeaderFlags::IK;
+            ih.constraint_count = static_cast<u32>(ik.size());
+        }
         Array<byte> payload;
         auto append = [&](const void* p, usize n) {
             const usize at = payload.size();
@@ -928,6 +1138,7 @@ public:
         };
         append(&h, sizeof(h));
         if (attached) append(&ah, sizeof(ah));
+        if (!ik.empty()) append(&ih, sizeof(ih));
         append(bones.data(), bones.size() * sizeof(Skeleton2DBone));
         append(slots.data(), slots.size() * sizeof(Skeleton2DSlot));
         append(anims.animations.data(), anims.animations.size() * sizeof(asset::Skeleton2DAnimation));
@@ -942,14 +1153,16 @@ public:
             append(anims.slot_keys.data(), anims.slot_keys.size() * sizeof(asset::Skeleton2DSlotKey));
             append(anims.values.data(), anims.values.size() * sizeof(f32));
         }
+        append(ik.data(), ik.size() * sizeof(asset::Skeleton2DIKConstraint));
         append(pool.data(), pool.size());
 
         asset::ContainerWriter::ChunkDesc d;
         d.type = ChunkType::Skeleton2D;
-        // Minor 1 only when there are animations, minor 2 only with attachments, meshes or slot keys:
-        // a skeleton without them cooks byte for byte as before.
+        // Minor 1 only when there are animations, minor 2 only with attachments, meshes or slot keys,
+        // minor 3 only with IK: a skeleton without them cooks byte for byte as before.
         d.version = asset::chunk_version(asset::SKELETON2D_VERSION,
-                                         attached                  ? asset::SKELETON2D_MINOR_ATTACHMENTS
+                                         !ik.empty()                ? asset::SKELETON2D_MINOR_IK
+                                         : attached                 ? asset::SKELETON2D_MINOR_ATTACHMENTS
                                          : anims.animations.empty() ? 0
                                                                     : asset::SKELETON2D_MINOR_ANIMATIONS);
         d.guid = in.guid;
