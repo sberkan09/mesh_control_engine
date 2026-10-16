@@ -1,6 +1,6 @@
 # M-STEAM — Steamworks (milestone record)
 
-**Status:** active. Steps 1–2 done; steps 3–6 to come (Linear SBA-106 … SBA-111; SBA-112 is the run against
+**Status:** active. Steps 1–3 done; steps 4–6 to come (Linear SBA-106 … SBA-111; SBA-112 is the run against
 the real Steam client, which needs the user's Steamworks account).
 **Why:** Steam is the desktop distribution channel; the engine comparison (the project's
 `assessments/motor-kiyaslama-eksikler.md`, item 2) lists it right after the web. Added 2026-10-15 under the
@@ -14,7 +14,7 @@ user's standing instruction to extend the roadmap when it runs out.
 |---|---|---|
 | 1. ADR-0042 and the run-time loader: `mce/platform/steam.h`, init and its refusals, manual-dispatch callbacks, the player's `-steam.app_id`, a stand-in library for tests, the Steam wall | SBA-106 | done |
 | 2. Achievements, stats, leaderboards and cloud saves as `platform::game_services` `Backend::Steam` under `liveops::PlatformGameServices` | SBA-107 | done |
-| 3. Overlay (holds the world like a lost focus) and rich presence as data | SBA-108 | — |
+| 3. Overlay (holds the world like a lost focus) and rich presence as data | SBA-108 | done |
 | 4. Steam Input: an action manifest from the cooked input map, glyphs, Steam Deck defaults | SBA-109 | — |
 | 5. `ship --steam`: depots per platform, `steam_api` beside the binary, generated steamcmd build scripts | SBA-110 | — |
 | 6. Demo, user guide, gates | SBA-111 | — |
@@ -42,3 +42,14 @@ user's standing instruction to extend the roadmap when it runs out.
 
 Not measured: the real Steam client (achievements and boards defined on a Steamworks page, Cloud quota);
 that is SBA-112.
+
+## Step 3 — the overlay and rich presence
+
+| Item | Where | Evidence |
+|---|---|---|
+| `RichPresence` (data component: status, a localization token, two substitutions) and the `OpenOverlay` event kept in `OverlayRequests` until the player takes them; `kit::install_stock` installs them; neither changes the state hash | `mce/kit/presence.h`, `src/engine/kit/src/presence.cpp` | `test_kit` "the first enabled RichPresence is the one shown", "OpenOverlay requests wait until the player takes them", "presence and overlay requests leave the state hash alone" |
+| The loader tracks the overlay from Steam's callback (331) and opens pages, the store page and web pages; rich presence keys set and cleared | `mce/platform/steam.h`, `steam.cpp` | `test_platform` "the overlay's state from its callback, its pages, and rich presence" |
+| The stock player: the overlay holds the game like a lost focus (pause, mute, the focus-loss save), the scene's presence sent when it changes, overlay requests passed on | `src/player/src/player.cpp` (`update_steam`) | ctest `player_steam_overlay`: the stand-in opens its overlay on frame 3 and closes it on frame 6; "Steam overlay open: the game holds" then "closed"; the three presence keys sent once |
+| The cook, the editor and the MCP server register `RichPresence` | the three `engine_components.cpp` | `capabilities.py --check` |
+
+Not measured: the real overlay and the friends list's rendering of a localized presence (SBA-112).

@@ -50,6 +50,14 @@ using U32ObjFn = u32 (*)(void* self);
 using BoolObjFn = bool (*)(void* self);
 using U64ObjFn = u64 (*)(void* self);
 using StrObjFn = const char* (*)(void* self);
+using OverlayFn = void (*)(void* self, const char* dialog);
+using StoreFn = void (*)(void* self, u32 app_id, i32 flag);
+using WebFn = void (*)(void* self, const char* url, i32 mode);
+using PresenceFn = bool (*)(void* self, const char* key, const char* value);
+using VoidObjFn = void (*)(void* self);
+
+// GameOverlayActivated_t: m_bActive first.
+constexpr i32 kOverlayActivated = 331;
 
 struct State {
     void* lib = nullptr;
@@ -60,6 +68,7 @@ struct State {
     NextCallbackFn next = nullptr;
     PipeVoidFn free_last = nullptr;
     CallResultGetFn call_result = nullptr;
+    bool overlay = false;
     Waiting waiting[kMaxCalls];
     void* utils = nullptr;
     void* user = nullptr;
@@ -204,6 +213,7 @@ u32 run_callbacks(CallbackFn fn, void* user) {
     CallbackMsg msg{};
     while (g.next(g.pipe, &msg)) {
         ++n;
+        if (msg.callback == kOverlayActivated && msg.param_size >= 1) g.overlay = msg.param[0] != 0;
         if (msg.callback == kCallCompleted && msg.param_size >= i32(sizeof(CallCompleted))) {
             CallCompleted done;
             std::memcpy(&done, msg.param, sizeof(done));
@@ -239,6 +249,33 @@ bool await_call(u64 call, i32 expected_id, CallResultFn fn, void* user) {
         return true;
     }
     return false;
+}
+
+bool overlay_active() { return g.running && g.overlay; }
+
+void show_overlay(const char* dialog) {
+    const auto f = find<OverlayFn>("SteamAPI_ISteamFriends_ActivateGameOverlay");
+    if (g.running && g.friends && f) f(g.friends, dialog);
+}
+
+void show_store_page() {
+    const auto f = find<StoreFn>("SteamAPI_ISteamFriends_ActivateGameOverlayToStore");
+    if (g.running && g.friends && f) f(g.friends, app_id(), 0);  // k_EOverlayToStoreFlag_None
+}
+
+void show_web_page(const char* url) {
+    const auto f = find<WebFn>("SteamAPI_ISteamFriends_ActivateGameOverlayToWebPage");
+    if (g.running && g.friends && f) f(g.friends, url, 0);  // k_EActivateGameOverlayToWebPageMode_Default
+}
+
+bool set_rich_presence(const char* key, const char* value) {
+    const auto f = find<PresenceFn>("SteamAPI_ISteamFriends_SetRichPresence");
+    return g.running && g.friends && f && f(g.friends, key, value);
+}
+
+void clear_rich_presence() {
+    const auto f = find<VoidObjFn>("SteamAPI_ISteamFriends_ClearRichPresence");
+    if (g.running && g.friends && f) f(g.friends);
 }
 
 u32 app_id() {

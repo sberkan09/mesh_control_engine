@@ -1,10 +1,11 @@
-// A stand-in for Valve's steam_api library (M-STEAM steps 1-2): the flat entry points mce_platform opens,
+// A stand-in for Valve's steam_api library (M-STEAM steps 1-3): the flat entry points mce_platform opens,
 // with answers the test sets through MceSteamStub_* and a count of every call. Built as a shared
 // library so the loader's real path (open, look up by name, close) runs in CI without Steam.
 
 #include <cstdint>
 #include <algorithm>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <iterator>
 #include <map>
@@ -47,6 +48,9 @@ struct Stub {
     std::map<std::string, int32_t> best;
     std::map<std::string, std::vector<uint8_t>> files;
     std::string overlay;
+    std::map<std::string, std::string> presence;
+    int frames = 0;
+    int overlay_open_at = -1, overlay_close_at = -1;  // MCE_STEAM_STUB_OVERLAY ("open,close" frames)
     uint64_t next_call = 100;
     std::map<uint64_t, Pending> results;  // asynchronous call results, fetched by handle
     // MCE_STEAM_STUB_BOARDS ("a,b"): the boards a run of the stock player finds.
@@ -57,6 +61,8 @@ struct Stub {
             boards[rest.substr(0, comma)] = 0;
             rest = comma == std::string::npos ? "" : rest.substr(comma + 1);
         }
+        if (const char* o = std::getenv("MCE_STEAM_STUB_OVERLAY"))
+            std::sscanf(o, "%d,%d", &overlay_open_at, &overlay_close_at);
     }
 };
 Stub& s() {
@@ -104,6 +110,13 @@ STUB_EXPORT void SteamAPI_ManualDispatch_Init() { count("SteamAPI_ManualDispatch
 STUB_EXPORT int32_t SteamAPI_GetHSteamPipe() { return 7; }
 STUB_EXPORT void SteamAPI_ManualDispatch_RunFrame(int32_t pipe) {
     count(pipe == 7 ? "SteamAPI_ManualDispatch_RunFrame" : "bad pipe");
+    ++s().frames;
+    if (s().frames == s().overlay_open_at || s().frames == s().overlay_close_at) {
+        // GameOverlayActivated_t: m_bActive, m_bUserInitiated, m_nAppID, m_dwOverlayPID.
+        uint8_t ev[12] = {static_cast<uint8_t>(s().frames == s().overlay_open_at ? 1 : 0), 1};
+        Pending p{331, std::vector<uint8_t>(ev, ev + sizeof(ev))};
+        s().queue.push_back(p);
+    }
     for (Pending& p : s().queue) s().ready.push_back(p);
     s().queue.clear();
 }
@@ -227,5 +240,32 @@ STUB_EXPORT bool SteamAPI_ISteamRemoteStorage_FileWrite(void* self, const char* 
     return true;
 }
 STUB_EXPORT void SteamAPI_ISteamFriends_ActivateGameOverlay(void* self, const char* dialog) {
-    if (self == &s().friends) s().overlay = dialog;
+    if (self != &s().friends) return;
+    s().overlay = dialog;
+    std::printf("steam stub: overlay %s\n", dialog);
+    std::fflush(stdout);
+}
+
+// ---- overlay pages and rich presence (step 3); printed so a player run's test can see them
+STUB_EXPORT const char* MceSteamStub_Presence(const char* key) {
+    const auto it = s().presence.find(key);
+    return it == s().presence.end() ? "" : it->second.c_str();
+}
+STUB_EXPORT int MceSteamStub_PresenceCount() { return static_cast<int>(s().presence.size()); }
+STUB_EXPORT bool SteamAPI_ISteamFriends_SetRichPresence(void* self, const char* key, const char* value) {
+    if (self != &s().friends || std::strlen(key) > 64 || std::strlen(value) > 256) return false;
+    if (*value) s().presence[key] = value;
+    else s().presence.erase(key);
+    std::printf("steam stub: rich presence %s=%s\n", key, value);
+    std::fflush(stdout);
+    return true;
+}
+STUB_EXPORT void SteamAPI_ISteamFriends_ClearRichPresence(void* self) {
+    if (self == &s().friends) s().presence.clear();
+}
+STUB_EXPORT void SteamAPI_ISteamFriends_ActivateGameOverlayToStore(void* self, uint32_t app, int32_t) {
+    if (self == &s().friends) s().overlay = "store:" + std::to_string(app);
+}
+STUB_EXPORT void SteamAPI_ISteamFriends_ActivateGameOverlayToWebPage(void* self, const char* url, int32_t) {
+    if (self == &s().friends) s().overlay = std::string("web:") + url;
 }

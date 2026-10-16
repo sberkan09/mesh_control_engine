@@ -11,6 +11,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   **Compare with** adds a second capture's before/after tables. `mce_editor -editor.perf_capture <file>` opens
   one at start-up. The comparison is now shared editor code (`mce/editor/perf_compare.h`) that MCP's
   `perf_compare` uses too. User guide 3 and 14.
+- Steam overlay and rich presence, M-STEAM step 3 (SBA-108): the Steam overlay holds the game like a lost focus
+  (pause, mute, the focus-loss save). A `RichPresence` component says what friends see (status, a localization
+  token and two substitutions), sent only when it changes. The `OpenOverlay` event opens the friends,
+  achievements, stats, community, settings, store or web page (`mce/kit/presence.h`). Neither changes the state
+  hash. Covered on the stand-in by `test_kit`, `test_platform` and `player_steam_overlay`.
 - `perf_run` and `perf_compare` over MCP, M-PERF step 3 (SBA-115). `perf_run` measures a scene with the real player,
   one sim tick per frame, so its counters repeat run to run. It judges the result against a target's budget, with
   advice for each limit it is over. It also returns frame, sim, render and GPU times, draws, triangles and sprites,
