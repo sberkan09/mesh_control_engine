@@ -12,8 +12,11 @@
 #include "mce/core.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/particles.h"
+#include "mce/kit/render_textures.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/kit/views.h"
 #include "mce/loc/loc.h"
+#include "mce/memory/frame_slots.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
@@ -438,4 +441,112 @@ TEST_CASE("M-DATA-REACH 8, M-UI-DATA 4: a TextLabel wraps, shows its loc_key's s
     CHECK(rows_shadow > rows_plain);
     CHECK(cols_shadow > cols_plain);
     f.extract.reset(nullptr);
+}
+
+namespace {
+
+// M-VIEWS 3: the frame as the player draws it with views: the textures synced, then every view.
+struct ViewFrame {
+    Fixture& f;
+    kit::RenderTextures rts;
+    Array<kit::ViewEntry> views;
+    mem::FrameSlots slots{mem::heap()};  // record_views builds its batches in the frame arena
+    explicit ViewFrame(Fixture& fx) : f(fx) {
+        rts.init(f.renderer);
+        f.extract.set_render_textures(&rts);
+    }
+    ~ViewFrame() {
+        f.extract.set_render_textures(nullptr);
+        rts.shutdown();
+    }
+    void render(f32 dt = 1.0f / 60.0f) {
+        rts.sync(f.world, dt);
+        slots.begin_frame(f.frame);
+        f.device->begin_frame(f.frame++);
+        REQUIRE(kit::collect_views(f.world, {kW, kH}, views, &kit::render_texture_size, &rts));
+        kit::ViewRecordContext vc;
+        vc.renderer = &f.renderer;
+        vc.extract2d = &f.extract;
+        vc.render_textures = &rts;
+        vc.target = f.target;
+        vc.target_size = {kW, kH};
+        rhi::CommandBuffer cmd;
+        stats = kit::record_views(cmd, f.world, views.span(), vc);
+        f.device->submit(cmd);
+        REQUIRE(f.device->read_pixels(f.target, rhi::Rect2D{0, 0, kW, kH}, f.pixels.span()).has_value());
+        f.device->end_frame();
+        slots.end_frame(nullptr);
+    }
+    kit::ViewRecordStats stats;
+};
+
+}  // namespace
+
+TEST_CASE("M-VIEWS 3: a camera draws into a RenderTexture that a sprite elsewhere shows") {
+    Fixture f;
+    ViewFrame vf(f);
+    const math::Color gray{0.5f, 0.5f, 0.5f, 1.0f};
+    // The window's camera at the origin; the texture's camera 20 m away, both clearing to gray.
+    const Entity win = f.camera({0, 0});
+    f.world.try_get_mut<kit::Camera2DComponent>(win)->clear_color = gray;
+    kit::RenderTexture rt;
+    rt.width = rt.height = 32;  // 2 m x 2 m at 16 px per metre
+    const Entity tex = f.world.spawn_with(rt);
+    kit::Camera2DComponent cc;
+    cc.pixels_per_meter = kPpm;
+    cc.primary = false;
+    cc.clear_color = gray;
+    kit::CameraView cv;
+    cv.target = tex;
+    f.world.spawn_with(LocalTransform{{20, 0, 0}, math::quat::identity(), {1, 1, 1}}, cc, cv);
+    f.sprite({20, 0}, kRed);                            // the middle half of the texture
+    const Entity screen = f.sprite({0, 0}, kWhite, {4, 4});  // the texture, twice its size
+    f.world.add(screen, kit::ShowRenderTexture{tex});
+
+    vf.render();
+    CHECK(vf.stats.views_texture == 1);
+    CHECK(vf.rts.live() == 1);
+    CHECK(is(f.at_view({0, 0}), 255, 0, 0));  // the red sprite, seen through the texture
+    // The texture's clear shows as the window's own clear does (the linear texture's encode).
+    const Rgba in_tex = f.at_view({1.5f, 1.5f}), window = f.at_view({4.0f, 2.5f});
+    INFO("texture clear " << int(in_tex.r) << " window clear " << int(window.r));
+    CHECK(is(in_tex, window.r, window.g, window.b));
+    CHECK_FALSE(is(window, 255, 255, 255));
+    CHECK(f.device->validation_error_count() == 0);
+
+    // A surface inside the texture's own view never samples it: it shows its own (green) look, and
+    // upright (the texture's top-right corner is the screen's top-right).
+    const Entity mirror = f.sprite({20.75f, 0.75f}, kGreen, {0.5f, 0.5f});
+    f.world.add(mirror, kit::ShowRenderTexture{tex});
+    vf.render();
+    vf.render();
+    const Rgba m = f.at_view({1.5f, 1.5f});
+    INFO("mirror " << int(m.r) << " " << int(m.g) << " " << int(m.b));
+    CHECK(is(m, 0, 255, 0));
+
+    // A new size re-makes the texture; the picture stays where it was.
+    const rhi::TextureHandle before = vf.rts.find(tex)->texture;
+    f.world.try_get_mut<kit::RenderTexture>(tex)->width = 64;
+    f.world.try_get_mut<kit::RenderTexture>(tex)->height = 64;
+    vf.render();
+    CHECK(vf.rts.find(tex)->texture != before);
+    CHECK(vf.rts.find(tex)->size.width == 64);
+    CHECK(is(f.at_view({0, 0}), 255, 0, 0));
+
+    // update_hz: 10 redraws a second at 20 frames a second is every second frame.
+    f.world.try_get_mut<kit::RenderTexture>(tex)->update_hz = 10.0f;
+    u32 drawn = 0;
+    for (int i = 0; i < 10; ++i) {
+        vf.render(0.05f);
+        drawn += vf.stats.views_texture;
+    }
+    CHECK(drawn == 5);
+    CHECK(is(f.at_view({0, 0}), 255, 0, 0));  // a frame that skipped the redraw keeps the picture
+
+    // The RenderTexture gone: its texture freed, the screen shows its own white.
+    f.world.destroy(tex);
+    vf.render();
+    CHECK(vf.rts.live() == 0);
+    CHECK(is(f.at_view({0, 0}), 255, 255, 255));
+    CHECK(f.device->validation_error_count() == 0);
 }

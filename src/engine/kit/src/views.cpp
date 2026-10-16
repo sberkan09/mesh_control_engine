@@ -6,6 +6,7 @@
 #include "mce/kit/components.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/kit3d_extract.h"
+#include "mce/kit/render_textures.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/memory/frame_slots.h"
 
@@ -85,31 +86,26 @@ void set_clear(rhi::PassAttachment& a, const math::Color& c) {
     a.clear.color[3] = c.a;
 }
 
-}  // namespace
+// A clear color as a linear render texture stores it: what the window shows for `c` is c itself
+// (no encode on a clear), so a texture that the window later shows through the encode holds c's
+// linear value.
+math::Color linear_clear(const math::Color& c) {
+    auto lin = [](f32 v) { return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
+    return {lin(c.r), lin(c.g), lin(c.b), c.a};
+}
 
-ViewRecordStats record_views(rhi::CommandBuffer& cmd, World& world, Span<const ViewEntry> views, const ViewRecordContext& ctx) {
-    ViewRecordStats st;
-    MCE_ASSERT_MSG(ctx.renderer && ctx.extract2d, "record_views: renderer and sprite extract required");
+// One view into `target` (record_views' loop body). False when it drew nothing.
+bool record_view(rhi::CommandBuffer& cmd, World& world, Span<const ViewEntry> views, usize i, const ViewRecordContext& ctx,
+                 rhi::TextureHandle target, bool linear, ViewRecordStats& st) {
     render::Renderer& renderer = *ctx.renderer;
+    const ViewEntry& v = views[i];
     {
-        rhi::PassAttachment c;
-        c.texture = ctx.target;
-        set_clear(c, ctx.clear);
-        rhi::RenderPassDesc p;
-        p.colors = Span<const rhi::PassAttachment>(&c, 1);
-        p.debug_name = "views.clear";
-        cmd.begin_pass(p);
-        cmd.end_pass();
-    }
-    for (usize i = 0; i < views.size(); ++i) {
-        const ViewEntry& v = views[i];
-        if (!v.target.is_null()) continue;  // texture targets: M-VIEWS 3
         const rhi::Extent2D size{v.rect.width, v.rect.height};
         if (v.is_3d) {
             render::Camera3D cam3;
-            if (!ctx.extract3d || !renderer.has_3d() || !ctx.extract3d->camera_of(world, v.camera, ctx.alpha, cam3)) continue;
+            if (!ctx.extract3d || !renderer.has_3d() || !ctx.extract3d->camera_of(world, v.camera, ctx.alpha, cam3)) return false;
             const u32 slot = renderer.view_slot((u64(v.camera.generation) << 32) | v.camera.index);
-            if (slot == ~0u) continue;  // more 3D views than Forward3D::kMaxViews
+            if (slot == ~0u) return false;  // more 3D views than Forward3D::kMaxViews
             render::Scene3D scene(renderer.meshes(), mem::frame());
             scene.begin(cam3, size);
             scene.set_lod(ctx.lod);
@@ -125,35 +121,83 @@ ViewRecordStats record_views(rhi::CommandBuffer& cmd, World& world, Span<const V
             out.slot = slot;
             out.rect = v.rect;
             out.first = first;
-            renderer.record_3d(cmd, scene, ctx.target, out);
-            if (first) st.first_3d = scene.stats();
+            out.linear_output = linear;
+            renderer.record_3d(cmd, scene, target, out);
+            if (!linear && st.window_3d++ == 0) st.first_3d = scene.stats();
             ++st.views_3d;
-            continue;
+            return true;
         }
         render::Camera2D cam;
         f32 ppm = 48.0f;
         math::Color clear = ctx.clear;
-        if (!camera_2d_of(world, v.camera, cam, ppm, &clear)) continue;
+        if (!camera_2d_of(world, v.camera, cam, ppm, &clear)) return false;
         bool on_3d = false;
-        for (usize j = 0; j < i; ++j) on_3d = on_3d || (views[j].is_3d && views[j].target.is_null() && covers(views[j].rect, v.rect));
+        for (usize j = 0; j < i; ++j) on_3d = on_3d || (views[j].is_3d && views[j].target == v.target && covers(views[j].rect, v.rect));
         render::SpriteBatch batch(renderer.sprite_sets(), mem::frame());
         batch.begin(render::compute_view_2d(cam, size, ppm));
         ctx.extract2d->extract(world, batch);
         batch.build();
-        if (st.views_2d == 0) st.first_2d = batch.stats();
+        if (!linear && st.window_2d++ == 0) st.first_2d = batch.stats();
         ++st.views_2d;
         rhi::PassAttachment color;
-        color.texture = ctx.target;
+        color.texture = target;
         color.load = on_3d ? rhi::LoadOp::Load : rhi::LoadOp::Clear;
-        set_clear(color, clear);
+        set_clear(color, linear ? linear_clear(clear) : clear);
         rhi::RenderPassDesc pass;
         pass.colors = Span<const rhi::PassAttachment>(&color, 1);
         pass.viewport = v.rect;
         pass.debug_name = "views.2d";
         cmd.begin_pass(pass);
-        renderer.record_2d(cmd, batch);
+        renderer.record_2d(cmd, batch, linear);
         cmd.end_pass();
+        return true;
     }
+}
+
+
+}  // namespace
+
+ViewRecordStats record_views(rhi::CommandBuffer& cmd, World& world, Span<const ViewEntry> views, const ViewRecordContext& ctx) {
+    ViewRecordStats st;
+    MCE_ASSERT_MSG(ctx.renderer && ctx.extract2d, "record_views: renderer and sprite extract required");
+    auto clear_pass = [&](rhi::TextureHandle t, const math::Color& color, const char* name) {
+        rhi::PassAttachment c;
+        c.texture = t;
+        set_clear(c, color);
+        rhi::RenderPassDesc p;
+        p.colors = Span<const rhi::PassAttachment>(&c, 1);
+        p.debug_name = name;
+        cmd.begin_pass(p);
+        cmd.end_pass();
+    };
+    bool window_cleared = false;
+    RenderTextures* rts = ctx.render_textures;
+    // A texture no view has drawn yet (its camera missing or not due) shows black, not stale memory.
+    if (rts) rts->clear_new(cmd);
+    for (usize i = 0; i < views.size(); ++i) {
+        const ViewEntry& v = views[i];
+        rhi::TextureHandle target = ctx.target;
+        bool linear = false;
+        if (!v.target.is_null()) {
+            RenderTextures::Entry* rt = rts ? rts->find(v.target) : nullptr;
+            if (!rt || rt->texture.is_null() || !rt->due) continue;  // none, or keeps last picture
+            target = rt->texture;
+            linear = true;
+            if (!rt->cleared) {
+                clear_pass(target, math::Color{0.0f, 0.0f, 0.0f, 1.0f}, "views.texture_clear");
+                rt->cleared = true;
+            }
+        } else if (!window_cleared) {
+            clear_pass(ctx.target, ctx.clear, "views.clear");
+            window_cleared = true;
+        }
+        // A view never samples the texture it draws into (render_textures.h).
+        if (rts) rts->set_drawing(v.target);
+        const bool drawn = record_view(cmd, world, views, i, ctx, target, linear, st);
+        if (rts) rts->set_drawing({});
+        if (drawn && linear) ++st.views_texture;
+    }
+    if (!window_cleared) clear_pass(ctx.target, ctx.clear, "views.clear");
     return st;
 }
 

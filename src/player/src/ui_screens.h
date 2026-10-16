@@ -11,6 +11,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
+#include "mce/kit/render_textures.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/ui/options_panel.h"
 #include "mce/ui/screen_link.h"
@@ -47,6 +48,9 @@ public:
     // The document focus lives in: the topmost visible modal screen's (null when none is up). The
     // screen reader speaks its focus (M-ACCESS).
     const ui::Document* focus_document() const;
+    // Per rendered frame, before submit: image widgets named like a RenderTexture's `ui_image` show
+    // that texture (M-VIEWS 3); a name whose texture is gone falls back to the skin's image.
+    void bind_render_textures(const kit::RenderTextures& rts);
     // Each screen on its own layers below `base`, by order (two layers + two per open modal).
     void submit(render::SpriteBatch& batch, i16 base) const;
 
@@ -67,6 +71,7 @@ private:
     };
     Array<Screen> screens_;
     Array<Entity> entities_;
+    Array<FixedString<32>> rt_images_;  // the ui_image names bound last frame
     ui::ActionRelay relay_;
     input::InputSystem* input_ = nullptr;
 };

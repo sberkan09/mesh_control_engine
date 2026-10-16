@@ -1,6 +1,6 @@
 # M-VIEWS — Several views and local players (milestone record)
 
-**Status:** active (added 2026-10-16; design note written; steps 1-2 done). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
+**Status:** active (added 2026-10-16; design note written; steps 1-3 done). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
 
 **Why:** one camera draws into the window. `Renderer::record_3d(cmd, scene, target)` already renders to a
 texture, but only a C++ host can use it. Input has no notion of a second player. A game cannot show a
@@ -52,9 +52,37 @@ global illumination (the probe volume is shared by all views).
   entity's bits); a slot no key asked for since the last `end_views()` is released (its textures retired
   by the RHI past the frames in flight). The player calls `end_views()` every frame; the editor releases
   every slot when play stops.
-- Known limits (step 2): views into textures are skipped until step 3; 2D post (`Post2D`) is off in the
+- Known limits (step 2): 2D post (`Post2D`) is off in the
   multi-view path; GPU timestamps and `last_stats()` describe the first 3D view; per-entity LOD
   hysteresis is shared by the views; a particle emitter only the later views see is not simulated.
+
+**Step 3 — render textures** (kit/render_textures.h; changes from the design note marked *):
+- `kit::RenderTexture {width, height, update_hz, enabled, ui_image}` on its own entity. *No `format` (always
+  linear RGBA16F) and no `camera` field: a camera points at the texture with `CameraView.target`, so one
+  texture can hold several cameras' rects.
+- *`kit::ShowRenderTexture {source, slot, intensity}` instead of a `TextureRef` type: on a `Sprite` it
+  replaces the sprite's texture; on a `MeshRef` it replaces submesh 0's material (base color for slot 0,
+  emission times `intensity` for slot 1) on every submesh. A `.mcui` image widget whose name equals
+  `RenderTexture.ui_image` shows it (`ui::Document::set_image_texture`, `player::UiScreens::bind_render_textures`).
+- `kit::RenderTextures` (host-owned, like `VideoTextures`): `sync(world, frame_dt)` once a frame makes,
+  re-makes (size change) and frees the textures and decides which are due (`update_hz`); `release()` on the
+  editor's play stop, `shutdown()` with the host. *Textures are made on the device and adopted by the
+  `TextureStore` under a local key (`TextureStore::adopt`), not taken from a transient pool; freeing goes
+  through `release(key)`, which the RHI defers past the frames in flight. Creation and resize allocate;
+  steady frames do not.
+- Drawing: `collect_views(..., &kit::render_texture_size, &rts)` sorts texture views first;
+  `record_views` clears a due texture once (black), draws its views with `ViewOutput::linear_output` /
+  `record_2d(..., linear_output)` (no sRGB encode; a 2D camera's clear color is linearized so it shows as
+  in the window), then the window's views. A texture no view has drawn yet is cleared black once
+  (`RenderTextures::clear_new`, which the single-view paths call too).
+- Orientation: a drawn texture holds its top row at v = 1 (uploaded art at v = 0) on both backends; the
+  sprite region is flipped and the screen material gets `uv_scale` v = -1 (the material sampler repeats).
+- *No `project_check` cycle error: a view never samples the texture it draws (that surface falls back to
+  its own look), and two textures that show each other show each other's previous frame.
+- Known limits (step 3): the anti-aliasing filter of a 3D view into a texture runs on linear values (edges
+  differ by a few levels from the window); the v flip of a screen material also flips its normal and ORM
+  maps; on the single-view debug paths (`-view.*` overrides, `-ui_preview`) textures keep their last
+  picture; the editor counts `update_hz` at 60 frames a second.
 
 ## Steps
 
@@ -62,7 +90,7 @@ global illumination (the probe volume is shared by all views).
 |---|---|---|---|---|
 | 1 | Local players and per-slot input: slot maps (`MapFlag` bits 8..11), per-slot pads, join by button, `P2/` script names (the `LocalPlayer` component moves to step 5, where something uses it) | SBA-161 | Sonnet | done |
 | 2 | Camera viewports and targets, several cameras per frame | SBA-162 | Opus | done |
-| 3 | `RenderTexture`: minimap, mirror, monitor, picture-in-picture | SBA-163 | Opus | not started |
+| 3 | `RenderTexture`: minimap, mirror, monitor, picture-in-picture | SBA-163 | Opus | done |
 | 4 | Split-screen: layouts, per-view HUD, listener, budgets | SBA-164 | Opus | not started |
 | 5 | The co-op kit and `samples/09_coop` | SBA-165 | Sonnet | not started |
 | 6 | MCP `view_*` / `player_*`, `render_frame` view argument, guide and gates | SBA-166 | Sonnet | not started |

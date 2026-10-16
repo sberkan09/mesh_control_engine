@@ -219,14 +219,38 @@ TEST_CASE("M-ACCESS gate: project_check flags a seeded UI contrast failure, smal
     c.init();
     const std::string a11y = findings(c.ok("project_check", R"({"checks":["accessibility"]})"), "accessibility");
     INFO(a11y);
-    CHECK(a11y.find("warning assets/ui/menu.mcui: hint: UI text contrast against the panel behind it is 1.8:1") != std::string::npos);
-    CHECK(a11y.find("legal: UI text is 9 px") != std::string::npos);
-    CHECK(a11y.find("title:") == std::string::npos);   // white on dark grey
-    CHECK(a11y.find("resume:") == std::string::npos);  // its own dark quad behind it
+    CHECK(a11y.find("warning assets/ui/menu.mcui: box/hint: UI text contrast against the panel behind it is 1.8:1") != std::string::npos);
+    CHECK(a11y.find("box/legal: UI text is 9 px") != std::string::npos);
+    CHECK(a11y.find("box/title:") == std::string::npos);   // white on dark grey
+    CHECK(a11y.find("box/resume:") == std::string::npos);  // its own dark quad behind it
     CHECK(a11y.find("warning assets/cutscene.mctimeline: the timeline plays sounds but has no subtitle track") != std::string::npos);
     CHECK(a11y.find("info assets/scenes/bell.mcscene: Bell plays a sound with no caption") != std::string::npos);
     CHECK(a11y.find("Door plays") == std::string::npos);   // captioned
     CHECK(a11y.find("Theme plays") == std::string::npos);  // music needs none
+
+    // A themed document is judged with its theme applied (M-UI-DATA2 3): a theme that makes buttons
+    // pale and small flags a button that states nothing itself, naming the widget's path.
+    write_file(root + "/assets/ui/pale.mcuitheme", R"({ "format": "mce-uitheme", "version": 1, "guid": "5ce4e000-0000-4000-8000-0000000000c1",
+  "palette": { "button": [0.95, 0.95, 0.95, 1] },
+  "styles": { "Button": { "style": { "text_size": 10 } } } }
+)");
+    write_file(root + "/assets/ui/pale.mcuitheme.mceasset", sidecar("5ce4e000-0000-4000-8000-0000000000c1", "uitheme"));
+    write_file(root + "/assets/ui/shop.mcui", R"({
+  "format": "mce-ui", "version": 1, "guid": "5ce4e000-0000-4000-8000-0000000000c2",
+  "theme": "guid:5ce4e000-0000-4000-8000-0000000000c1",
+  "widgets": [ { "name": "bar", "kind": "Stack", "children": [ { "name": "buy", "kind": "Button", "text": "BUY" } ] } ]
+}
+)");
+    write_file(root + "/assets/ui/shop.mcui.mceasset", sidecar("5ce4e000-0000-4000-8000-0000000000c2", "ui"));
+    {
+        Client themed;
+        REQUIRE(themed.server.open_project(sv(root), "scenes/demo.mcscene"));
+        themed.init();
+        const std::string t = findings(themed.ok("project_check", R"({"checks":["accessibility"]})"), "accessibility");
+        INFO(t);
+        CHECK(t.find("assets/ui/shop.mcui: bar/buy: UI text is 10 px") != std::string::npos);
+        CHECK(t.find("bar/buy: UI text contrast against the panel behind it is 1.") != std::string::npos);
+    }
 
     // The fixes it names clear them.
     write_file(root + "/assets/ui/menu.mcui", R"({
