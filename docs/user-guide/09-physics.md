@@ -231,7 +231,9 @@ A 3D scene gets a navigation mesh (navmesh) and agents that walk it from five co
   (with `use_input` off) drives the controller's `move`, so it walks slopes and steps and pushes
   bodies, easing in and out at the controller's own `acceleration` and `deceleration` when they are
   set (8.7); otherwise its `LocalTransform` is put on the mesh. `face_motion` turns its local −Z to the
-  way it walks. With `follow` set to an entity (the player, a cart, a leader) the engine writes that
+  way it walks (a turn alone never resets the controller's speed; moving the entity yourself does).
+  The controller's `acceleration` and `deceleration` are the only limits on how fast it gets up to
+  speed, so leave them 0 for a sentry that should move at `speed` at once. With `follow` set to an entity (the player, a cart, a leader) the engine writes that
   entity's position into `target` every tick and re-plans once it has moved `follow_repath` metres,
   so an enemy chases without code.
 

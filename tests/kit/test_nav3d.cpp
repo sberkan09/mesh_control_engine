@@ -133,6 +133,37 @@ TEST_CASE("nav3d: a steered character eases in at its own acceleration (M-MOVE3D
     CHECK(eased == doctest::Approx(31.0f / 60.0f * 2.0f).epsilon(0.05));
 }
 
+TEST_CASE("nav3d: a steered character with an acceleration reaches the agent's speed (#377)") {
+    for (const f32 acceleration : {8.0f, 20.0f, 60.0f}) {
+        Scene s(false);
+        const Entity a = s.agent({-10, 0.9f, 0}, {10, 0, 0});
+        CharacterController3D c;
+        c.acceleration = acceleration;
+        c.deceleration = acceleration;
+        s.w.add(a, c);
+        s.run(120);
+        const f32 x0 = s.pos(a).x;
+        s.run(30);
+        const f32 speed = (s.pos(a).x - x0) * 2.0f;
+        CHECK(speed > 0.8f * s.nav(a).speed);
+    }
+}
+
+TEST_CASE("nav3d: a patrolling steered character keeps its speed while the post moves (#377)") {
+    Scene s(false);
+    const Entity a = s.agent({-10, 0.9f, 0}, {10, 0, 0});
+    CharacterController3D c;
+    c.acceleration = 8.0f;
+    c.deceleration = 8.0f;
+    s.w.add(a, c);
+    const f32 x0 = s.pos(a).x;
+    for (u32 i = 0; i < 180; ++i) {
+        s.w.try_get_mut<NavAgent3D>(a)->target = {10, 0, (i / 6) % 2 ? 0.5f : -0.5f};  // a post that keeps shifting; face_motion turns the entity every tick
+        s.run(1);
+    }
+    CHECK(s.pos(a).x - x0 > 0.8f * 3.5f * 3.0f - 3.0f);
+}
+
 TEST_CASE("nav3d: an agent follows an entity, re-planning only as it moves away") {
     Scene s(false);
     const Entity leader = s.w.spawn_with(at(8, 0, 0));
