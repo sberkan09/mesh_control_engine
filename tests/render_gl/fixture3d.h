@@ -225,4 +225,73 @@ inline void gi_wall_scene(Scene3D& s, bool gi) {
     if (gi) s.set_gi_volume(room_gi());
 }
 
+
+// M-VISUAL3 2: a 12 m tiled floor (mesh 20, just above the ground slab) whose [normal, height] array and albedo
+// carry one brick pattern, with the material both ways: `on` (parallax) and `off` (the same maps, flat).
+struct ParallaxFloor {
+    MaterialOverride on, off;
+    u32 albedo = ~0u, array = ~0u;
+};
+
+inline ParallaxFloor make_parallax_floor(Fixture3D& f) {
+    constexpr u32 N = 64;
+    Array<u8> albedo, layers;
+    for (u32 y = 0; y < N; ++y)
+        for (u32 x = 0; x < N; ++x) {
+            const bool groove = (x % 16) < 3 || (y % 16) < 3;
+            const u8 c = groove ? 40 : 220;
+            albedo.push_back(c);
+            albedo.push_back(c);
+            albedo.push_back(c);
+            albedo.push_back(255);
+        }
+    for (u32 i = 0; i < N * N; ++i) {  // layer 0: a flat normal map
+        layers.push_back(128);
+        layers.push_back(128);
+        layers.push_back(255);
+        layers.push_back(255);
+    }
+    for (u32 y = 0; y < N; ++y)  // layer 1: the height map, grooves low
+        for (u32 x = 0; x < N; ++x) {
+            const u8 h = ((x % 16) < 3 || (y % 16) < 3) ? 0 : 255;
+            layers.push_back(h);
+            layers.push_back(h);
+            layers.push_back(h);
+            layers.push_back(255);
+        }
+    ParallaxFloor p;
+    const TextureMipUpload amip{N, N, std::as_bytes(albedo.span())};
+    TextureUpload aup;
+    aup.mips = Span<const TextureMipUpload>(&amip, 1);
+    p.albedo = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(p.albedo, 1, aup).has_value());
+    const TextureMipUpload lmip{N, N, std::as_bytes(layers.span())};
+    TextureUpload lup;
+    lup.layers = 2;
+    lup.mips = Span<const TextureMipUpload>(&lmip, 1);
+    p.array = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(p.array, 1, lup).has_value());
+
+    mesh_fixture::Builder floor;
+    floor.add_node(-1);
+    mesh_fixture::Box fb;
+    fb.center = {0, -0.098f, 0};
+    fb.half = {6, 0.1f, 6};
+    fb.uvs = true;
+    floor.add_box(fb);
+    REQUIRE(f.renderer.meshes().upload(20, 1, floor.build().span()).has_value());
+
+    p.off.albedo_key = p.albedo;
+    p.off.params.base_color[0] = p.off.params.base_color[1] = p.off.params.base_color[2] = p.off.params.base_color[3] = 1.0f;
+    p.off.params.roughness = 0.9f;
+    p.off.params.uv_scale_half = asset::MaterialChunk::pack_uv_scale(4.0f, 4.0f);
+    p.on = p.off;
+    p.on.normal_key = p.array;
+    p.on.parallax = true;
+    p.on.ext.set_height(asset::Guid{1, 2});
+    p.on.ext.height_scale = 0.08f;
+    return p;
+}
+
+
 }  // namespace mce::render_test

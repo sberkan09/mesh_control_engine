@@ -2347,3 +2347,72 @@ TEST_CASE("render3d_gl: motion blur smears a moving box along its motion and lea
     CHECK(differing_bytes(f.pixels, blurred_still) == 0);
     CHECK(f.device->validation_error_count() == 0);
 }
+
+// M-VISUAL3 2: parallax occlusion mapping. A tiled floor whose [normal, height] array and albedo carry the
+// same brick pattern: the grooves are low, so a grazing view shifts the albedo under the height field.
+namespace {
+
+// Frames differ in this many pixels (any channel by more than 8).
+u32 differing(const Array<u8>& a, const Array<u8>& b) {
+    u32 n = 0;
+    for (usize i = 0; i < a.size(); i += 4)
+        if (std::abs(int(a[i]) - int(b[i])) > 8 || std::abs(int(a[i + 1]) - int(b[i + 1])) > 8 || std::abs(int(a[i + 2]) - int(b[i + 2])) > 8) ++n;
+    return n;
+}
+
+// Of the floor points just in front of the box (under the camera when it looks down), on a 0.1 m grid, how many show different colors in the two frames.
+u32 differing_floor(const Fixture3D& f, const Array<u8>& a, const Array<u8>& b) {
+    u32 n = 0;
+    for (f32 x = -1.2f; x <= 1.2f; x += 0.1f)
+        for (f32 z = 0.8f; z <= 1.2f; z += 0.1f) {
+            const math::vec4 c = f.view.view_proj * math::vec4(vec3{x, 0, z}, 1.0f);
+            const usize px = usize((c.x / c.w * 0.5f + 0.5f) * kW), py = usize((0.5f - c.y / c.w * 0.5f) * kH);
+            const usize i = (py * kW + px) * 4;
+            if (std::abs(int(a[i]) - int(b[i])) > 8 || std::abs(int(a[i + 1]) - int(b[i + 1])) > 8) ++n;
+        }
+    return n;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: parallax shifts a brick floor at grazing angles, less looking down; far, Low and off draw flat") {
+    Fixture3D f;
+    ParallaxFloor p = make_parallax_floor(f);
+    const auto draw = [&](const MaterialOverride* m, ParallaxSettings ps = {}) {
+        f.render(0.0f, false, [&, m, ps](Scene3D& s) {
+            no_sun(s);
+            s.set_sky(constant_sky(1.0f, false));
+            s.set_parallax(ps);
+            MeshInstance fl;
+            fl.mesh = 20;
+            fl.material = m;
+            s.add(fl);
+        });
+        return f.pixels;
+    };
+    f.pitch_deg = 12.0f;
+    const Array<u8> flat_grazing = draw(&p.off);
+    const Array<u8> pom_grazing = draw(&p.on);
+    const u32 grazing = differing_floor(f, flat_grazing, pom_grazing);
+    f.pitch_deg = 89.0f;
+    const Array<u8> flat_down = draw(&p.off);
+    const Array<u8> pom_down = draw(&p.on);
+    const u32 down = differing_floor(f, flat_down, pom_down);
+    INFO("differing pixels: grazing " << grazing << ", looking down " << down);
+    CHECK(grazing > 20);
+    CHECK(down * 2 < grazing);
+
+    f.pitch_deg = 12.0f;
+    ParallaxSettings near_only;
+    near_only.distance = 1.0f;  // the floor is 7 m away: faded out
+    CHECK(differing(draw(&p.on, near_only), flat_grazing) == 0);
+    ParallaxSettings low;
+    apply_quality(quality_settings(QualityTier::Low), low);
+    CHECK(differing(draw(&p.on, low), flat_grazing) == 0);
+    ParallaxSettings medium;
+    apply_quality(quality_settings(QualityTier::Medium), medium);
+    CHECK(medium.distance == 15.0f);
+    CHECK(medium.max_steps == 16);
+    CHECK(differing(draw(&p.on), pom_grazing) == 0);  // deterministic
+    CHECK(f.device->validation_error_count() == 0);
+}

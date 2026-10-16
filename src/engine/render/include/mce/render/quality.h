@@ -45,6 +45,10 @@ struct QualitySettings {
     // per map), and splat layers meet by height rather than by weight alone.
     bool terrain_triplanar = true;
     bool terrain_height_blend = true;
+    // M-VISUAL3 2: parallax occlusion mapping fades out at this view depth (meters; 0 = off) and a
+    // material's march steps are clamped to `parallax_max_steps`. Low: off. Medium: 15 m, 16 steps.
+    f32 parallax_distance = 30.0f;
+    u32 parallax_max_steps = 32;
 };
 
 QualitySettings quality_settings(QualityTier tier);
@@ -65,5 +69,7 @@ void apply_quality(const QualitySettings& q, Volumetrics& v);
 void apply_quality(const QualitySettings& q, ScreenSpaceReflections& ssr);
 // Contact shadows: off on Low (the cascades remain).
 void apply_quality(const QualitySettings& q, ContactShadows& c);
+// Parallax occlusion mapping: its distance and step cap (off on Low).
+void apply_quality(const QualitySettings& q, ParallaxSettings& p);
 
 }  // namespace mce::render

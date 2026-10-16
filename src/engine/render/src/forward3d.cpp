@@ -156,7 +156,19 @@ struct ObjectU {
     vec4 coat;      // M-VISUAL2 4 (material_ext_uniforms): clear coat, its alpha, anisotropy, its rotation
     vec4 sheen;     // rgb color, w alpha
     vec4 ext;       // x: lobes on, y: ior (0 = 1.5), z: transmission
+    vec4 pom;       // M-VISUAL3 2 (parallax_uniforms): height scale, min and max march steps, fade-out view depth
 };
+
+// A parallax material's march in ObjectU's terms; all zero (the shader skips it) for any other draw.
+void parallax_uniforms(const MaterialOverride* m, const ParallaxSettings& p, ObjectU& ou) {
+    ou.pom = {};
+    if (!m || !m->parallax || !m->ext.parallax() || p.distance <= 0.0f || p.max_steps < 4) return;
+    u32 lo = m->ext.parallax_steps & 0xffffu, hi = m->ext.parallax_steps >> 16;
+    if (lo == 0 && hi == 0) lo = 8, hi = 32;
+    hi = min(clamp(hi, 4u, 64u), p.max_steps);
+    lo = min(clamp(lo, 4u, 64u), hi);
+    ou.pom = {m->ext.height_scale, f32(lo), f32(hi), p.distance};
+}
 
 // The MaterialExt lobes in ObjectU's terms; all zero for a plain material.
 void material_ext_uniforms(const asset::MaterialExt& e, ObjectU& ou) {
@@ -2237,9 +2249,10 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
                        mat.emissive[2] * inst.emissive_tint.z, emissive != ~0u ? 1.0f : 0.0f};
         ou.params = {(mat.flags & asset::MaterialFlags::AlphaMask) ? mat.alpha_cutoff : 0.0f,
                      (mat.flags & asset::MaterialFlags::Unlit) ? 1.0f : 0.0f, mat.roughness, mat.metallic};
-        ou.maps = {normal != ~0u ? 1.0f : 0.0f, orm != ~0u ? 1.0f : 0.0f,
+        ou.maps = {normal_map_of(inst, sm) ? 1.0f : 0.0f, orm != ~0u ? 1.0f : 0.0f,
                    (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
                    (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
+        parallax_uniforms(terrain ? nullptr : inst.material, scene.parallax(), ou);
         ou.dequant = d.dequant;
         ou.skin = {palette_index(d.palette), 0.0f, 0.0f, 0.0f};
         material_ext_uniforms(material_ext_of(inst, sm), ou);
@@ -2309,11 +2322,13 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
             ou.emissive = {mat.emissive[0], mat.emissive[1], mat.emissive[2], keys[3] != ~0u ? 1.0f : 0.0f};
             ou.params = {(mat.flags & asset::MaterialFlags::AlphaMask) ? mat.alpha_cutoff : 0.0f,
                          (mat.flags & asset::MaterialFlags::Unlit) ? 1.0f : 0.0f, mat.roughness, mat.metallic};
-            ou.maps = {keys[1] != ~0u ? 1.0f : 0.0f, keys[2] != ~0u ? 1.0f : 0.0f,
+            ou.maps = {keys[1] != ~0u && (!b.material || !b.material->parallax || b.material->parallax_normal) ? 1.0f : 0.0f,
+                       keys[2] != ~0u ? 1.0f : 0.0f,
                        (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
                        (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
             ou.dequant = mat4::identity();
             ou.inst = batch_wind(b);
+            parallax_uniforms(b.material, scene.parallax(), ou);
             material_ext_uniforms(b.material ? b.material->ext : sm.material_ext, ou);
             for (u32 l = 0; l < levels; ++l) {
                 ou.skin = {-1.0f, f32(bv.slot[l]), scene.time(), 0.0f};

@@ -91,6 +91,7 @@ layout(std140, binding = 3) uniform ObjectU {
     vec4 o_coat;       // M-VISUAL2 4: x clear coat, y its alpha (roughness²), z anisotropy, w its rotation (radians)
     vec4 o_sheen;      // rgb sheen color, w its alpha (roughness², at least 0.0078)
     vec4 o_ext;        // x: any of the lobes above on, y: index of refraction (0 = 1.5), z: transmission
+    vec4 o_pom;        // M-VISUAL3 2: x parallax height scale (texture repeats; 0 = off), y/z min/max march steps, w fade-out view depth (m)
 };
 )"
 // clang-format on
@@ -627,9 +628,58 @@ void terrain_surface(vec3 world, vec3 n, out vec3 albedo, out vec3 nrm, out floa
 }
 #endif
 
+#ifndef MCE_TERRAIN
+// Parallax occlusion mapping (M-VISUAL3 2): the height map is layer 1 of u_normal_map (white = high). The
+// view ray is marched through o_pom.y..z layers of the height field in the surface's uv frame, then the last
+// two layers are intersected linearly. The tangent frame solves the uv Jacobian from screen derivatives, so
+// anisotropic uv scales and mirrored uvs shift correctly. No self-shadowing, no depth offset.
+vec2 parallax_uv(vec3 p, vec3 n, vec2 uv, float view_depth) {
+    float scale = o_pom.x * (1.0 - smoothstep(0.75 * o_pom.w, o_pom.w, view_depth));
+    if (scale <= 0.0) return uv;
+    vec3 dp1 = dFdx(p), dp2 = dFdy(p);
+    vec2 duv1 = dFdx(uv), duv2 = dFdy(uv);
+    float det = duv1.x * duv2.y - duv1.y * duv2.x;
+    if (abs(det) < 1e-20) return uv;
+    vec3 t = (dp1 * duv2.y - dp2 * duv1.y) / det;  // d p / d u
+    vec3 b = (dp2 * duv1.x - dp1 * duv2.x) / det;  // d p / d v
+    float tt = dot(t, t), bb = dot(b, b), tb = dot(t, b);
+    float gram = tt * bb - tb * tb;
+    if (gram < 1e-20) return uv;
+    vec3 v = normalize(u_camera_pos.xyz - p);
+    float vn = dot(v, n);
+    if (vn <= 0.0) return uv;
+    vec3 vt = v - n * vn;
+    float vu = dot(vt, t), vv = dot(vt, b);
+    vec2 dir = vec2(vu * bb - vv * tb, vv * tt - vu * tb) / gram;  // uv displacement per meter along the view's tangential part
+    float depth_m = scale * 0.5 * (sqrt(tt) + sqrt(bb));              // the deepest point, in meters
+    vec2 total = dir * depth_m / max(vn, 0.05);
+    float layers = floor(mix(o_pom.z, o_pom.y, vn) + 0.5);
+    vec2 step_uv = total / layers;
+    float step_d = 1.0 / layers;
+    vec2 gx = duv1, gy = duv2;
+    vec2 cur = uv, prev = uv;
+    float cur_d = 0.0, prev_d = 0.0;
+    float tex_d = 1.0 - textureGrad(u_normal_map, vec3(cur, 1.0), gx, gy).r;
+    float prev_tex_d = tex_d;
+    for (int i = 0; i < 64; ++i) {
+        if (cur_d >= tex_d || float(i) >= layers) break;
+        prev = cur;
+        prev_d = cur_d;
+        prev_tex_d = tex_d;
+        cur -= step_uv;
+        cur_d += step_d;
+        tex_d = 1.0 - textureGrad(u_normal_map, vec3(cur, 1.0), gx, gy).r;
+    }
+    float after = tex_d - cur_d, before = prev_tex_d - prev_d;
+    float w = (after - before) != 0.0 ? clamp(after / (after - before), 0.0, 1.0) : 0.0;
+    return mix(cur, prev, w);
+}
+#endif
+
 void main() {
     vec3 n = normalize(v_normal);
     if (!gl_FrontFacing) n = -n;
+    vec2 uv = v_uv;
 #ifdef MCE_TERRAIN
     vec4 base = vec4(1.0);
     vec3 t_n;
@@ -637,7 +687,8 @@ void main() {
     terrain_surface(v_world, n, base.rgb, t_n, t_rough, t_metallic, t_ao);
     base *= o_base_color;
 #else
-    vec4 base = texture(u_albedo, vec3(v_uv, 0.0)) * o_base_color;
+    if (o_pom.x > 0.0) uv = parallax_uv(v_world, n, v_uv, -(u_view * vec4(v_world, 1.0)).z);  // uniform branch: it takes derivatives
+    vec4 base = texture(u_albedo, vec3(uv, 0.0)) * o_base_color;
     if (o_params.x > 0.0 && base.a < o_params.x) discard;  // alpha mask
 #endif
     vec3 color;
@@ -655,7 +706,7 @@ void main() {
         float rough = o_params.z, metallic = o_params.w, ao = 1.0;
 #endif
         if (o_maps.y > 0.5) {
-            vec3 orm = texture(u_orm, vec3(v_uv, 0.0)).rgb;
+            vec3 orm = texture(u_orm, vec3(uv, 0.0)).rgb;
             if (o_maps.z > 0.5) ao = orm.r;
             if (o_maps.w < 0.5) {
                 rough *= orm.g;
@@ -668,7 +719,7 @@ void main() {
         n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
 #else
         if (o_maps.x > 0.5) {  // uniform branch: perturb_normal takes derivatives
-            vec3 nb = perturb_normal(n, v_world, v_uv, texture(u_normal_map, vec3(v_uv, 0.0)).xyz * 2.0 - 1.0);
+            vec3 nb = perturb_normal(n, v_world, v_uv, texture(u_normal_map, vec3(uv, 0.0)).xyz * 2.0 - 1.0);
             n = normalize(mix(nb, n, fill));
         }
 #endif
@@ -796,7 +847,7 @@ void main() {
         }
     }
     vec3 emissive = o_emissive.rgb;
-    if (o_emissive.w > 0.5) emissive *= texture(u_emissive, vec3(v_uv, 0.0)).rgb;
+    if (o_emissive.w > 0.5) emissive *= texture(u_emissive, vec3(uv, 0.0)).rgb;
     color += emissive + decal_emit;
     if (p_vol.x > 0.5) {  // volumetric fog in place of the exp² fog
         vec4 c = u_view_proj * vec4(v_world, 1.0);

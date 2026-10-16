@@ -566,3 +566,18 @@ TEST_CASE("golden: a GPU particle burst glowing above the ground") {
     CHECK(f.renderer.forward_3d().last_stats().particle_emitters == 1);
     check_golden("particles_burst", f);
 }
+
+// ---- M-VISUAL3 2: parallax occlusion mapping ----------------------------------------------------
+
+TEST_CASE("golden: parallax_cobble: a grazing view of a brick floor whose joints are carved by its height map") {
+    Fixture3D f;
+    ParallaxFloor p = make_parallax_floor(f);
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        MeshInstance fl;
+        fl.mesh = 20;
+        fl.material = &p.on;
+        s.add(fl);
+    });
+    check_golden("parallax_cobble", f);
+}

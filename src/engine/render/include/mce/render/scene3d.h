@@ -324,6 +324,13 @@ struct MaterialOverride {
     bool parallax_normal = false;
 };
 
+// Parallax occlusion mapping's reach (M-VISUAL3 2; the quality tiers set it): beyond `distance` (view
+// depth, meters) a parallax material draws flat; 0 = off. A material's march steps are clamped to `max_steps`.
+struct ParallaxSettings {
+    f32 distance = 30.0f;
+    u32 max_steps = 32;
+};
+
 // A splat-layered terrain's look (M-TERRAIN 2): up to kMaxLayers materials blended by a weight map.
 // Forward3D draws an instance carrying one with the terrain shader: each layer's maps come from one
 // layer of the texture arrays below (TextureStore keys; ~0u = no layer has that map), tiled in the
@@ -403,6 +410,10 @@ inline math::vec4 tiled_uv_rect(const math::vec4& uv_rect, const asset::Material
 }
 inline u32 albedo_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->albedo_key : sm.albedo_key; }
 inline u32 normal_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->normal_key : sm.normal_key; }
+// Whether the draw's normal map is a real normal map (a parallax array may hold only a height layer).
+inline bool normal_map_of(const MeshInstance& inst, const GpuSubmesh& sm) {
+    return normal_key_of(inst, sm) != ~0u && (!inst.material || !inst.material->parallax || inst.material->parallax_normal);
+}
 inline u32 orm_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->orm_key : sm.orm_key; }
 inline u32 emissive_key_of(const MeshInstance& inst, const GpuSubmesh& sm) {
     return inst.material ? inst.material->emissive_key : sm.emissive_key;
@@ -593,6 +604,7 @@ public:
     void set_ambient_occlusion(const AmbientOcclusion& ao) { ao_ = ao; }
     void set_reflections(const ScreenSpaceReflections& ssr) { ssr_ = ssr; }
     void set_contact_shadows(const ContactShadows& c) { contact_ = c; }
+    void set_parallax(const ParallaxSettings& p) { parallax_ = p; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -644,6 +656,7 @@ public:
     const AmbientOcclusion& ambient_occlusion() const { return ao_; }
     const ScreenSpaceReflections& reflections() const { return ssr_; }
     const ContactShadows& contact_shadows() const { return contact_; }
+    const ParallaxSettings& parallax() const { return parallax_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -704,6 +717,7 @@ private:
     AmbientOcclusion ao_;
     ScreenSpaceReflections ssr_;
     ContactShadows contact_;
+    ParallaxSettings parallax_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;
