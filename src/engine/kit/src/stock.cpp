@@ -20,6 +20,7 @@
 #include "mce/kit/nav3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/presence.h"
+#include "mce/kit/proclevel.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/skeleton2d.h"
 #include "mce/kit/timeline.h"
@@ -113,6 +114,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_sprite_animation(world, assets);
     install_skeleton2d(world, assets);  // after the timelines: a key on Skeleton2D.pose poses the same tick
     install_presence(world);
+    install_proclevel(world);
     install_captions(world);  // after kit_effects: this tick's SfxTrigger plays are captioned
     install_cinematic(world);  // last: kit_cinematic runs after the timelines and the follow cameras
     install_audio_occlusion(world);

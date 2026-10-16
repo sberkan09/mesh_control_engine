@@ -100,6 +100,16 @@ struct AudioListener {
 };
 MCE_COMPONENT(AudioListener, (gain_db, Range{-60, 12}))
 
+// Several listeners (split-screen, M-VIEWS 4): put an AudioListener on each player's camera and one
+// of these anywhere in the scene. `mix` 1 hears each 3D sound from the listener nearest to it, 2
+// takes the loudest listener's volume and blends the pans; 0 (or no such component) keeps the
+// first AudioListener only. Up to audio::kMaxListeners listeners count, in query order; Doppler and
+// occlusion follow the first.
+struct AudioListenerMix {
+    u32 mix = 1;  // ListenerMix: 0 first, 1 nearest, 2 mixed
+};
+MCE_COMPONENT(AudioListenerMix, (mix, Range{0, 2}, Help{"0 first listener, 1 nearest listener, 2 mixed"}))
+
 // Bus effects from the scene (M-AUDIO2 3): a bus's low-pass and high-pass, and how much of it feeds
 // a reverb unit. One entity per bus (the first in query order wins); removing it puts the bus back
 // to dry and unfiltered. Timelines and sequences can key the fields like any component's, e.g. a
