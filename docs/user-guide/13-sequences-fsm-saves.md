@@ -159,7 +159,7 @@ drive the same moves on different entities.
 | `audio` | `t`, `sound`, `gain_db` | plays a one-shot sound |
 | `camera` | `t`, `camera`, `blend` | camera cuts: that camera is `primary` until the next cut, the track's other cameras are not; `blend` seconds ease the view over from the previous cut's camera (13.6) |
 | `event` | `t`, `emit` | pushes a `kit::TimelineSignal`, and a `SeqSignal` so a sequence's `wait_event` can follow the timeline |
-| `subtitle` | `t`, `duration`, `text`, `speaker` | the line shown in that range: the stock player draws it as a subtitle (10.7); `kit::timeline_subtitle` reads it |
+| `subtitle` | `t`, `duration`, `text`, `speaker` | the line shown in that range: the stock player draws it as a subtitle (10.8); `kit::timeline_subtitle` reads it |
 | `video` | `t`, `video`, `duration`, `gain_db` | the target's `VideoPlayer` plays that video from `t` for `duration` seconds (0, the default: to its end), then stops on its last frame (13.7) |
 
 `ease` shapes the curve from a key to the next one: `linear` (default), `step` (hold, then jump),
@@ -229,7 +229,7 @@ timeline plays:
 - **Letterbox.** The player draws black bars `letterbox` of the screen high (0.12 by default; 0 for
   none) that slide in and out over `letterbox_time` seconds, under the scene's UI screens.
 - **Subtitles.** The timeline's subtitle lines show over the lower bar, like every timeline's
-  (the player's subtitle view and its settings, 10.7).
+  (the player's subtitle view and its settings, 10.8).
 - **Skip.** With `skippable` on, the player shows `skip_prompt` ("Hold to skip") and a bar that
   fills while `skip_action` (the UI map's `Cancel`: Esc, gamepad B) is held. Held for `skip_hold`
   seconds (1 by default) the cutscene skips: the event keys after the playhead still fire, so

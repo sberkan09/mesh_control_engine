@@ -194,6 +194,14 @@ Result<SfxView> SfxView::read(Span<const byte> payload) {
     if ((h->flags & SfxFlags::Looping) && !(h->loop_start < h->loop_end && h->loop_end <= h->frame_count)) return bad(kStage);
     SfxView v;
     v.header = h;
+    if (h->flags & SfxFlags::Set) {
+        Span<const SoundSetHeader> sh;
+        if (!span_at(payload, h->data_offset, 1, sh)) return bad(kStage);
+        v.set = sh.data();
+        if (v.set->clip_count > 4096) return bad(kStage);
+        if (!span_at(payload, h->data_offset + sizeof(SoundSetHeader), v.set->clip_count, v.set_clips)) return bad(kStage);
+        return v;
+    }
     if (h->flags & SfxFlags::Vorbis) {
         Span<const u64> size;
         if (!span_at(payload, h->data_offset, 1, size)) return bad(kStage);
@@ -225,6 +233,22 @@ void write_sfx_vorbis(const SfxHeader& header, Span<const byte> stream, Array<by
     std::memcpy(block.data(), &n, sizeof(n));
     if (n) std::memcpy(block.data() + sizeof(u64), stream.data(), stream.size());
     h.data_offset = b.append(block.data(), block.size());
+    b.patch(at, h);
+    b.finish();
+}
+
+void write_sound_set(const SoundSetHeader& set, Span<const Guid> clips, Array<byte>& out) {
+    PayloadBuilder b(out);
+    SfxHeader h{};
+    h.sample_rate = 48000;
+    h.channels = 1;
+    h.flags = SfxFlags::Set;
+    h.gain = 1.0f;
+    const usize at = b.append(&h, sizeof(h));
+    SoundSetHeader s = set;
+    s.clip_count = static_cast<u32>(clips.size());
+    h.data_offset = b.append(&s, sizeof(s));
+    if (!clips.empty()) b.append(clips.data(), clips.size() * sizeof(Guid));
     b.patch(at, h);
     b.finish();
 }

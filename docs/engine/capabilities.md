@@ -104,7 +104,7 @@ reach all of its non-transient fields.
 | Mesh | .gltf / .glb | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/08-3d.md |
 | Material | `.mcmat` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | Texture | .png / .jpg | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
-| Sfx | .wav | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/10-audio.md |
+| Sfx | .wav / .ogg / .mcsound (sound set) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
 | Font | .ttf | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
 | Scene | .mcscene (scene_* tools) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | Prefab | .mcprefab (prefab_* tools) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/03-editor.md |
