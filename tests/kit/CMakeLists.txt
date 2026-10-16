@@ -3,11 +3,13 @@
 # helper (FR-ENT-090); grid A* pathfinding and PathAgent (#152); the kit3d components, systems and
 # extract into a CPU-side Scene3D (M-KIT3D); the effect components, sprite-sheet animation and
 # 3D bodies (M-DATA-REACH 4-6); 3D navigation components (M-GAMEPLAY3D 1), joints (2), ragdolls (3), vehicles (4) and
-# animation graphs v2 (5).
+# animation graphs v2 (5); character feel (M-MOVE3D 1).
 mce_add_test(test_kit UMBRELLA
     SOURCES
         test_ai.cpp
+        test_ai_tasks.cpp
         test_bodies3d.cpp
+        test_move3d.cpp
         test_captions.cpp
         test_presence.cpp
         test_effects.cpp
@@ -23,6 +25,7 @@ mce_add_test(test_kit UMBRELLA
         test_particles.cpp
         test_pathfinding.cpp
         test_sequence.cpp
+        test_skeleton2d.cpp
         test_sprite_anim.cpp
         test_timeline.cpp
         test_cinematic.cpp

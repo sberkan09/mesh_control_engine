@@ -88,7 +88,7 @@ const char* asset_type_name(StringId id) {
     static constexpr const char* kNames[] = {asset::Texture::name, asset::Mesh::name, asset::Material::name,
                                              asset::Shader::name,  asset::Sfx::name,  asset::Font::name,
                                              asset::Atlas::name,   asset::Scene::name, asset::InputMap::name,
-                                             asset::Video::name, asset::BehaviorTree::name};
+                                             asset::Video::name, asset::BehaviorTree::name, asset::Script::name};
     for (const char* n : kNames)
         if (StringId(n) == id) return n;
     return "";

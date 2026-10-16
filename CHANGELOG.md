@@ -5,6 +5,17 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Luau scripts as assets, M-SCRIPT step 1 (SBA-147, ADR-0041): `.luau` files under `assets/` cook (importer
+  `script`) to a `Script` asset of Luau bytecode, with syntax errors at `file:line:col`. A `ScriptSystem`
+  component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP
+  `run_headless` run the scene's scripts from bytecode where `MCE_WITH_SCRIPT` is on, and the player links no
+  Luau compiler. Scenes without scripts run and hash as before. New user guide chapter 27 (Scripting in Luau).
+- Behavior tree stock tasks and aborts, M-AI step 2 (SBA-129): trees reach the kit with no code. `move_to` walks
+  a `NavAgent3D` or a `PathAgent` to a vec3 key or after an entity key, `look_at` turns the entity, `animate`
+  plays a sprite or Animator clip (and can wait for it), `play_sound`, `spawn`, `raise` and `wait_event` (which
+  sequences hear too) and `log`. A guard's `abort` ("self", "lower", "both") re-checks its condition every tick
+  and stops its own branch or a selector's lower-priority branch. `samples/ai_demo`: the stock player runs a
+  guard that patrols, hears an alarm and catches a thief (`ctest -R ai_demo_player`). User guide 13.8.
 - Bus effects, M-AUDIO2 step 3 (SBA-120): `AudioBusEffects` gives a bus a low-pass and high-pass (gliding, no
   clicks) and a send into one of two Freeverb reverb units, `AudioReverb` sets a unit up, and `AudioLimiter`
   turns on the master limiter, all from the scene and keyable in timelines. `AudioDevice::set_bus_filter`,
@@ -20,6 +31,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `SfxTrigger`, `PlaySfx`, sequences and timelines take it as they are. Picks come from the tick, so replays repeat.
   `PlayParams::pitch` and `AudioDevice::set_handle_pitch` play any clip at a rate (0.25..4). MCP `asset_create`
   makes a `SoundSet`. User guide 10.3 is new; the audio chapter's later sections move up one number.
+- 2D skeletons, M-ANIM2D step 1 (SBA-140): `.mcskel2d` assets (bones with a rest pose, textured slots in draw
+  order) cook to `CHNK_SKEL2D`. A `Skeleton2D` component poses one on its entity every fixed tick from the rest
+  pose and its per-bone `pose` offsets (up to 64 bones), and the sprite extraction draws its slots with the
+  component's tint, flips, layer and order. `Bone2DFollow` keeps an entity on a named bone. Poses are in the
+  state hash and in saves. MCP `asset_create` makes `.mcskel2d` files. User guide 7.13.
 - Material extensions, M-VISUAL2 step 4 (SBA-104): clear coat, sheen, anisotropy and transmission. `.mcmat`
   gains `clearcoat`, `clearcoat_roughness`, `sheen_color`, `sheen_roughness`, `anisotropy`,
   `anisotropy_rotation`, `transmission` and `ior`; glTF files bring the same from `KHR_materials_clearcoat`,
@@ -51,6 +67,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
   User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
+- Spectators and clock sync, M-NET3 step 2 (SBA-124): a `RollbackSession` with `.spectator = true` watches
+  without playing, fed confirmed inputs by one player (`write_spectator_packet`), and checks its hashes. With
+  `time_sync` (on by default) a rollback peer whose clock runs ahead skips a tick now and then instead of
+  stalling in bursts: in `sample_net_rollback -drift 30` the fast peer stalls 10 times instead of 40. Rollback
+  packets are now version 2. `ReplicationServer::set_view` / `set_sees_all` give replication spectators a
+  camera or every entity. User guide 20.7 and 20.10.
 - Per-client delta snapshots, M-NET3 step 1 (SBA-123): `ReplicationServer::write_snapshot_for` writes each client
   only the entities relevant to it (`NetRelevance { radius }` around the entities it owns) and codes them against
   the newest snapshot it acknowledged (`write_ack` / `read_ack`): a still entity costs two bytes. `apply` reads

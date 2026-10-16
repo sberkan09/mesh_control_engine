@@ -13,6 +13,7 @@
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/components.h"
+#include "mce/kit/kit3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/pathfinding.h"
 #include "mce/log.h"
@@ -27,7 +28,7 @@ static_assert(sizeof(ParticleBurst) == 12);
 static_assert(sizeof(ShakeTrigger) == 12);
 static_assert(sizeof(CameraShake2D) == 40);
 static_assert(sizeof(CameraFollow2D) == 60);
-static_assert(sizeof(CameraFollow3D) == 64);
+static_assert(sizeof(CameraFollow3D) == 104);
 static_assert(sizeof(PhysicsEvents) == 56);
 static_assert(sizeof(NavGridSource) == 40);
 
@@ -55,6 +56,7 @@ bool position_of(World& w, Entity e, math::vec3& out) {
 struct Named {
     Array<Entity> trigger;
     Array<Entity> contact;
+    Array<Entity> landed;  // characters that touched down (Landed3D)
 };
 
 void add_unique(Array<Entity>& list, Entity e) {
@@ -78,6 +80,7 @@ bool should_fire(FireOn on, bool& fire, u32 fired, Entity e, const Named& n) {
     case FireOn::Start: go = go || fired == 0; break;
     case FireOn::TriggerEnter: go = go || named(n.trigger, e); break;
     case FireOn::ContactBegin: go = go || named(n.contact, e); break;
+    case FireOn::Landed: go = go || named(n.landed, e); break;
     }
     return go;
 }
@@ -132,6 +135,8 @@ void record_physics_events(Frame& f, Named& n) {
                     if (p->touching > 0) --p->touching;
                 }
     }
+    if (w.event_queue<Landed3D>())
+        for (const Landed3D& ev : events.read<Landed3D>()) add_unique(n.landed, ev.entity);
     if (w.event_queue<TriggerEnter3D>()) {
         for (const TriggerEnter3D& ev : events.read<TriggerEnter3D>()) {
             add_unique(n.trigger, ev.trigger);
@@ -238,16 +243,36 @@ void kit_camera_follow(Frame& f) {
     });
 
     const input::InputState* in = w.try_resource<input::InputState>();
+    Physics3D* phys = w.try_resource<Physics3D>();
     f.query<CameraFollow3D, LocalTransform>().each([&](CameraFollow3D& c, LocalTransform& t) {
         math::vec3 p;
         if (!position_of(w, c.target, p)) return;
+        math::vec3 foe;
+        const bool locked = position_of(w, c.lock_on, foe);
+        if (locked) {
+            // Behind the target on the line from the locked entity: the target in front, it beyond.
+            const f32 dx = p.x - foe.x, dz = p.z - foe.z;
+            if (dx * dx + dz * dz > 1e-8f) {
+                f32 turn = std::atan2(dx, dz) - c.yaw;
+                turn -= math::kTau * std::floor((turn + math::kPi) / math::kTau);  // the short way round
+                const f32 most = c.lock_on_rate * f.dt;
+                c.yaw += c.lock_on_rate > 0.0f ? math::clamp(turn, -most, most) : turn;
+            }
+        }
         if (in && c.orbit_speed > 0.0f) {
-            c.yaw -= in->look.x * c.orbit_speed * f.dt;
+            if (!locked) c.yaw -= in->look.x * c.orbit_speed * f.dt;
             c.pitch += in->look.y * c.orbit_speed * f.dt;
         }
         c.pitch = math::clamp(c.pitch, c.min_pitch, math::max(c.min_pitch, c.max_pitch));
-        const math::vec3 goal = p + c.offset;
-        if (!c.primed) {
+        const math::vec3 raw = p + c.offset;
+        math::vec3 goal = raw;
+        if (c.primed && c.look_ahead > 0.0f) {
+            const math::vec3 v = (raw - c.last_goal) * (1.0f / f.dt);
+            goal = goal + math::vec3{v.x, 0.0f, v.z} * c.look_ahead;
+        }
+        c.last_goal = raw;
+        const bool fresh = !c.primed;
+        if (!c.primed || c.first_person) {
             c.pivot = goal;
             c.primed = true;
         } else {
@@ -257,7 +282,20 @@ void kit_camera_follow(Frame& f) {
         const math::quat q = math::normalize(math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, c.yaw) *
                                              math::quat_from_axis_angle({1.0f, 0.0f, 0.0f}, -c.pitch));
         t.rotation = q;
-        t.position = c.pivot + math::rotate(q, math::vec3{0.0f, 0.0f, c.distance});
+        if (c.first_person) {
+            c.arm = 0.0f;
+            t.position = c.pivot;
+            return;
+        }
+        // The spring arm: a wall pulls the camera in at once; it eases back out at return_speed.
+        f32 reach = c.distance;
+        const math::vec3 back = math::rotate(q, math::vec3{0.0f, 0.0f, 1.0f});
+        if (c.collide && phys)
+            if (const auto hit = phys->world.camera_sweep(c.pivot, c.pivot + back * c.distance, c.collision_radius))
+                reach = math::clamp(math::dot(hit->position - c.pivot, back), 0.0f, c.distance);
+        if (fresh || !c.collide || reach <= c.arm || c.return_speed <= 0.0f) c.arm = reach;
+        else c.arm = math::min(reach, c.arm + c.return_speed * f.dt);
+        t.position = c.pivot + back * c.arm;
     });
 }
 

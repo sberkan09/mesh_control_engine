@@ -50,7 +50,7 @@ Keep the sound references as `AssetRef<Sfx>` fields on your components (`jump_so
 
 Without code, `SfxTrigger` on an entity plays its `clip` once: `gain_db`, `gain_jitter_db` (each
 play adds a value in ± that many dB, drawn from the entity and play count, so replays match), `pan`
-and `bus` (`Master`, `Music`, `SFX`, `UI`). `on` picks when it fires: `Manual` when its `fire` flag is set (by data, a sequence field track or MCP `entity_set_component`; the engine clears it), `Start` on the first tick, `TriggerEnter` / `ContactBegin` when a 2D physics event names the entity (as the sensor, the other body or either contact body). `fired` counts the plays. It plays as a `PlaySfx` on the next
+and `bus` (`Master`, `Music`, `SFX`, `UI`). `on` picks when it fires: `Manual` when its `fire` flag is set (by data, a sequence field track or MCP `entity_set_component`; the engine clears it), `Start` on the first tick, `TriggerEnter` / `ContactBegin` when a 2D physics event names the entity (as the sensor, the other body or either contact body), `Landed` when a 3D character on the entity touches down. `fired` counts the plays. It plays as a `PlaySfx` on the next
 tick. For a different clip or pitch on each play, name a sound set (10.3) as its `clip`.
 
 ## 10.3 Sound sets and pitch

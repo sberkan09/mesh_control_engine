@@ -22,6 +22,7 @@
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Constraints/ConeConstraint.h>
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
@@ -749,6 +750,22 @@ MoveResult3D World3D::move_character(Entity e, vec3 delta, const ControllerParam
     return r;
 }
 
+bool World3D::set_character_height(Entity e, f32 half_height, const ControllerParams3D& p, bool force) {
+    Impl& w = *impl_;
+    Impl::Slot* s = w.find(e);
+    if (!s || !s->character || !positive(half_height) || !positive(p.radius)) return false;
+    // The shorter capsule hangs below the standing centre so its bottom stays on the floor.
+    const f32 drop = p.half_height - half_height;
+    JPH::Ref<JPH::Shape> shape = new JPH::CapsuleShape(half_height, p.radius);
+    if (drop > 1e-6f) shape = new JPH::RotatedTranslatedShape(JPH::Vec3(0.0f, -drop, 0.0f), JPH::Quat::sIdentity(), shape);
+    const JPH::DefaultBroadPhaseLayerFilter bp_filter(w.object_vs_bp, s->character_layer);
+    const JPH::DefaultObjectLayerFilter layer_filter(w.object_pairs, s->character_layer);
+    const JPH::BodyFilter body_filter;
+    const JPH::ShapeFilter shape_filter;
+    const f32 max_penetration = force ? FLT_MAX : 1.5f * p.padding;
+    return s->character->SetShape(shape, max_penetration, bp_filter, layer_filter, body_filter, shape_filter, w.temp);
+}
+
 bool World3D::controller_state(Entity e, MoveResult3D& out) const {
     const Impl::Slot* s = impl_->find(e);
     if (!s || !s->character) return false;
@@ -1330,9 +1347,14 @@ struct Capsule3D {
 
 bool character_capsule(const JPH::CharacterVirtual& ch, Capsule3D& out) {
     const JPH::Shape* shape = ch.GetShape();
+    out.center = to_mce(ch.GetPosition());
+    if (shape && shape->GetSubType() == JPH::EShapeSubType::RotatedTranslated) {  // crouched
+        const auto* moved = static_cast<const JPH::RotatedTranslatedShape*>(shape);
+        out.center = out.center + to_mce(moved->GetPosition());
+        shape = moved->GetInnerShape();
+    }
     if (!shape || shape->GetSubType() != JPH::EShapeSubType::Capsule) return false;
     const auto* capsule = static_cast<const JPH::CapsuleShape*>(shape);
-    out.center = to_mce(ch.GetPosition());
     out.half_height = capsule->GetHalfHeightOfCylinder();
     out.radius = capsule->GetRadius();
     return true;

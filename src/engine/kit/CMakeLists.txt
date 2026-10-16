@@ -20,11 +20,13 @@ mce_add_library(mce_gameplay_kit
         src/particles.cpp
         src/pathfinding.cpp
         src/sequence.cpp
+        src/skeleton2d.cpp
         src/sprite_anim.cpp
         src/sprite_extract.cpp
         src/stock.cpp
         src/timeline.cpp
         src/ai.cpp
+        src/ai_tasks.cpp
         src/cinematic.cpp
         src/video.cpp
     PUBLIC_DEPS

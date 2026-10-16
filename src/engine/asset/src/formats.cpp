@@ -281,6 +281,35 @@ void write_video(const VideoHeader& header, Span<const byte> mpeg, Span<const f3
     b.finish();
 }
 
+// ------------------------------------------------------------------ script
+
+Result<ScriptView> ScriptView::read(Span<const byte> payload) {
+    constexpr const char* kStage = "asset.script.read";
+    const auto* h = header_of<ScriptHeader>(payload);
+    if (!h) return Error(Errc::Truncated, kStage);
+    if (h->bytecode_size == 0) return bad(kStage);
+    usize len = 0;
+    while (len < sizeof(h->name) && h->name[len] != 0) ++len;
+    if (len == sizeof(h->name)) return bad(kStage);
+    ScriptView v;
+    v.header = h;
+    v.name = StringView(h->name, len);
+    if (!span_at(payload, h->bytecode_offset, h->bytecode_size, v.bytecode)) return bad(kStage);
+    return v;
+}
+
+void write_script(StringView name, Span<const byte> bytecode, Array<byte>& out) {
+    PayloadBuilder b(out);
+    ScriptHeader h{};
+    const usize n = name.size() < sizeof(h.name) - 1 ? name.size() : sizeof(h.name) - 1;
+    for (usize i = 0; i < n; ++i) h.name[i] = name[i];
+    const usize at = b.append(&h, sizeof(h));
+    h.bytecode_offset = b.append(bytecode.data(), bytecode.size());
+    h.bytecode_size = bytecode.size();
+    b.patch(at, h);
+    b.finish();
+}
+
 // ------------------------------------------------------------------ font
 
 const FontGlyph* FontView::find(u32 codepoint) const {
@@ -605,6 +634,66 @@ Result<TimelineView> TimelineView::read(Span<const byte> payload) {
     return v;
 }
 
+// ------------------------------------------------------------------ 2D skeleton
+
+StringView Skeleton2DView::name() const {
+    usize n = 0;
+    while (n < sizeof(header->name) && header->name[n] != '\0') ++n;
+    return StringView(header->name, n);
+}
+
+StringView Skeleton2DView::string(u32 offset) const {
+    if (offset >= strings.size()) return {};
+    usize n = 0;
+    while (offset + n < strings.size() && strings[offset + n] != '\0') ++n;
+    return StringView(strings.data() + offset, n);
+}
+
+i32 Skeleton2DView::find_bone(StringView n) const {
+    for (usize i = 0; i < bones.size(); ++i)
+        if (string(bones[i].name) == n) return static_cast<i32>(i);
+    return -1;
+}
+
+Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
+    Skeleton2DView v;
+    v.header = header_of<Skeleton2DHeader>(payload);
+    if (!v.header) return Error(Errc::Truncated, "asset.skeleton2d.read");
+    const Skeleton2DHeader& h = *v.header;
+    if (h.bone_count == 0 || h.bone_count > kSkeleton2DMaxBones || h.slot_count > kSkeleton2DMaxSlots ||
+        h.string_bytes > (1u << 20))
+        return Error(Errc::InvalidArgument, "asset.skeleton2d.read");
+    const u64 bytes = sizeof(Skeleton2DHeader) + u64(h.bone_count) * sizeof(Skeleton2DBone) +
+                      u64(h.slot_count) * sizeof(Skeleton2DSlot) + h.string_bytes;
+    if (bytes > payload.size()) return Error(Errc::Truncated, "asset.skeleton2d.read");
+    const byte* p = payload.data() + sizeof(Skeleton2DHeader);
+    v.bones = Span<const Skeleton2DBone>(reinterpret_cast<const Skeleton2DBone*>(p), h.bone_count);
+    p += usize(h.bone_count) * sizeof(Skeleton2DBone);
+    v.slots = Span<const Skeleton2DSlot>(reinterpret_cast<const Skeleton2DSlot*>(p), h.slot_count);
+    p += usize(h.slot_count) * sizeof(Skeleton2DSlot);
+    v.strings = Span<const char>(reinterpret_cast<const char*>(p), h.string_bytes);
+    if (h.string_bytes == 0 || v.strings[h.string_bytes - 1] != '\0') return Error(Errc::InvalidArgument, "asset.skeleton2d.strings");
+    auto finite = [](const f32* f, usize n) {
+        for (usize i = 0; i < n; ++i)
+            if (!std::isfinite(f[i])) return false;
+        return true;
+    };
+    for (u32 i = 0; i < h.bone_count; ++i) {
+        const Skeleton2DBone& b = v.bones[i];
+        const f32 nums[] = {b.x, b.y, b.rotation, b.scale_x, b.scale_y, b.length};
+        // Parents first: a bone's parent has a lower index, so one pass poses the tree.
+        if (b.name >= h.string_bytes || (b.parent != kSkeleton2DNoParent && b.parent >= i) || (i == 0 && b.parent != kSkeleton2DNoParent) ||
+            !finite(nums, 6))
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.bone");
+    }
+    for (const Skeleton2DSlot& s : v.slots) {
+        if (s.name >= h.string_bytes || s.bone >= h.bone_count || s.kind != Skeleton2DSlotKind::Quad || !finite(s.rect, 4) ||
+            !finite(s.size, 2) || !finite(s.pivot, 2) || !finite(s.offset, 2) || !finite(&s.rotation, 1) || !finite(s.tint, 4))
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.slot");
+    }
+    return v;
+}
+
 // ------------------------------------------------------------------ behavior tree
 
 StringView BtView::name() const {
@@ -638,7 +727,8 @@ bool bt_children_ok(BtNodeKind k, u32 n) {
 
 bool bt_node_ok(const BtNode& n, const BtHeader& h, Span<const BtKey> keys) {
     auto str_ok = [&](u32 s) { return s == kBtNoString || s < h.string_bytes; };
-    if (!str_ok(n.name) || !str_ok(n.text)) return false;
+    if (!str_ok(n.name) || !str_ok(n.text) || !str_ok(n.arg)) return false;
+    if (n.kind == BtNodeKind::Guard ? n.abort > static_cast<u8>(BtAbort::Both) : n.abort != 0) return false;
     if (bt_needs_slot(n.kind) ? n.slot >= h.slot_count : n.slot != kBtNoSlot) return false;
     if (!(n.a == n.a)) return false;  // NaN
     const BtKey* key = n.key < keys.size() ? &keys[n.key] : nullptr;
@@ -703,6 +793,7 @@ Result<BtView> BtView::read(Span<const byte> payload) {
     // The shape: every node's subtree nests inside its parent's, children counted, depth bounded.
     if (v.nodes[0].end != h.node_count) return Error(Errc::InvalidArgument, "asset.bt.shape");
     u16 stack[kBtMaxDepth + 1];
+    u16 parents[kBtMaxDepth + 1];  // the node each `stack` entry ends
     u32 depth = 0;
     for (u32 i = 0; i < h.node_count; ++i) {
         const BtNode& n = v.nodes[i];
@@ -710,6 +801,9 @@ Result<BtView> BtView::read(Span<const byte> payload) {
             return Error(Errc::InvalidArgument, "asset.bt.node");
         while (depth > 0 && i >= stack[depth - 1]) --depth;
         if (depth > 0 && n.end > stack[depth - 1]) return Error(Errc::InvalidArgument, "asset.bt.shape");
+        // A guard that aborts lower-priority branches has a selector for a parent.
+        if (n.abort >= static_cast<u8>(BtAbort::Lower) && (depth == 0 || v.nodes[parents[depth - 1]].kind != BtNodeKind::Selector))
+            return Error(Errc::InvalidArgument, "asset.bt.abort");
         u32 children = 0;
         for (u32 c = i + 1; c < n.end; c = v.nodes[c].end) {
             if (v.nodes[c].end <= c || v.nodes[c].end > n.end) return Error(Errc::InvalidArgument, "asset.bt.shape");
@@ -718,6 +812,7 @@ Result<BtView> BtView::read(Span<const byte> payload) {
         if (children != n.child_count || !bt_children_ok(n.kind, children) || children > kBtMaxChildren)
             return Error(Errc::InvalidArgument, "asset.bt.shape");
         if (depth == kBtMaxDepth) return Error(Errc::InvalidArgument, "asset.bt.depth");
+        parents[depth] = static_cast<u16>(i);
         stack[depth++] = n.end;
     }
     return v;

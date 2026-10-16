@@ -1,4 +1,4 @@
-// mce_script (spike, ADR-0041): the Luau host. See mce/script/script.h for the contract.
+// mce_script (ADR-0041, M-SCRIPT): the Luau host. See mce/script/script.h for the contract.
 //
 // Every lua_CFunction here may longjmp out (LUA_USE_LONGJMP): no object with a destructor lives
 // across a call that can raise (luaL_check*, luaL_error, lua_call).
@@ -10,7 +10,6 @@
 #include <cstring>
 
 #include "lua.h"
-#include "luacode.h"
 #include "lualib.h"
 
 #include "mce/hash.h"
@@ -331,27 +330,6 @@ int l_random(lua_State* L) {
 
 }  // namespace
 
-Result<Array<u8>> compile(StringView name, StringView source) {
-    lua_CompileOptions opts{};
-    opts.optimizationLevel = 1;
-    opts.debugLevel = 1;  // line info for error messages
-    usize size = 0;
-    char* bc = luau_compile(source.data(), source.size(), &opts, &size);
-    if (!bc) return Error(Errc::OutOfMemory, "script.compile", name);
-    // A failed compile returns bytecode whose first byte is 0, followed by the message.
-    if (size == 0 || bc[0] == 0) {
-        FixedString<256> msg(name);
-        msg.append(StringView(size > 1 ? bc + 1 : "", size > 1 ? size - 1 : 0));
-        std::free(bc);
-        return Error(Errc::ParseError, "script.compile", msg.view());
-    }
-    Array<u8> out;
-    out.resize(size);
-    std::memcpy(out.data(), bc, size);
-    std::free(bc);
-    return out;
-}
-
 ScriptHost::ScriptHost(const ScriptBudget& budget, u64 seed) : budget_(budget), seed_(seed) {
     L_ = lua_newstate(&ScriptHost::alloc_fn, this);
     MCE_VERIFY(L_ != nullptr);
@@ -415,13 +393,7 @@ void ScriptHost::fail(u32 index, const char* message) {
     MCE_LOG_ERROR("script {}: {}", info.name.c_str(), info.error.c_str());
 }
 
-Result<u32> ScriptHost::add(StringView name, StringView source) {
-    auto bc = compile(name, source);
-    if (!bc) return bc.error();
-    return add_bytecode(name, bc.value().span());
-}
-
-Result<u32> ScriptHost::add_bytecode(StringView name, Span<const u8> bytecode) {
+Result<u32> ScriptHost::add_bytecode(StringView name, Span<const u8> bytecode, u8 group) {
     FixedString<64> chunk(name);
     FixedString<66> chunk_name("=");  // '=' : error messages say "name:line:", not [string "name"]
     chunk_name.append(chunk.view());
@@ -439,6 +411,7 @@ Result<u32> ScriptHost::add_bytecode(StringView name, Span<const u8> bytecode) {
     info.name = chunk;
     infos_.push_back(info);
     update_refs_.push_back(-1);
+    groups_.push_back(group);
 
     current_ = index;
     steps_ = 0;
@@ -474,7 +447,11 @@ void ScriptHost::install(World& w, Phase phase) {
     w.add_system(phase, "script.update", &script_update);
 }
 
-void ScriptHost::run(Frame& f) {
+void ScriptHost::run(Frame& f) { run_scripts(f, true, 0); }
+
+void ScriptHost::run(Frame& f, u8 group) { run_scripts(f, false, group); }
+
+void ScriptHost::run_scripts(Frame& f, bool all, u8 group) {
     lua_pop(L_, lua_gettop(L_));
     frame_ = &f;
     lua_getglobal(L_, "mce");
@@ -484,7 +461,7 @@ void ScriptHost::run(Frame& f) {
     lua_setreadonly(L_, -1, 1);
     lua_pop(L_, 1);
     for (u32 i = 0; i < infos_.size(); ++i) {
-        if (infos_[i].state != ScriptState::Running) continue;
+        if (infos_[i].state != ScriptState::Running || (!all && groups_[i] != group)) continue;
         current_ = i;
         steps_ = 0;
         random_calls_ = 0;

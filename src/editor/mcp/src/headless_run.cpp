@@ -7,6 +7,9 @@
 #include "mce/editor/play_session.h"
 #include "mce/input/ecs.h"
 #include "mce/kit/stock.h"
+#if MCE_HAS_SCRIPT
+#include "mce/script/scene_scripts.h"
+#endif
 #include "mce/liveops/game_services.h"
 #include "mce/liveops/remote_config.h"
 #include "mce/monetize/catalog.h"
@@ -38,6 +41,9 @@ public:
         physics::install_physics2d(world_);
         audio::install(world_, audio_, &clips_);
         kit::install_stock(world_, &assets_);
+#if MCE_HAS_SCRIPT
+        script::install_scene_scripts(world_, &assets_);  // the scene's ScriptSystems, as mce_player
+#endif
         if (ResultV s = install_services(); !s) {
             error_ = s.error();
             return s;

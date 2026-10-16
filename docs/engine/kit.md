@@ -35,6 +35,13 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
 - `AnimatedSprite`: plays a `.mcsheet` clip onto the `Sprite` beside it (`sprite_anim.h`:
   `install_sprite_animation`, `"kit_sprite_animation"` in `FixedUpdate_Post`, `SpriteAnimEvent`
   for frame events) over `render/sprite_animation.h` (M-DATA-REACH 5).
+- `Skeleton2D` and `Bone2DFollow` (`skeleton2d.h`, M-ANIM2D 1): a `.mcskel2d` skeleton
+  (`ChunkType::Skeleton2D`, `Skeleton2DView`) posed from its rest pose plus the component's per-bone
+  `pose` offsets (64 bones, `Save`), written to `world` by `"kit_skeleton2d"` in `FixedUpdate_Post`
+  (`install_skeleton2d`, in `install_stock`). `SpriteExtract` draws the slots in slot order from the
+  pure `skeleton2d_quads`; `Skeleton2DRegistry` copies skeletons out of their chunks (and takes
+  `define`d payloads for tests and tools). `Bone2DFollow` writes a follower's `LocalTransform` from a
+  named bone.
 - `Animator` graphs and `AttachToBone` (`anim3d.h`, M-DATA-REACH 7): an `.mcanim` AnimGraph
   (`ChunkType::AnimGraph`, `AnimGraphView`) drives the Animator's clip, 1D blends (`blend_clip`,
   `blend_weight`), transitions and `AnimEvent3D` events; one-shots finish (`loop`, `finished`,
@@ -89,7 +96,9 @@ play-in-editor and MCP `run_headless`; `install_world_settings` applies the firs
 (`gravity_2d`, `gravity_3d`, in `components.h`) at Startup.
 
 `bodies3d.h` (M-DATA-REACH 6): `RigidBody3D` (dynamic/kinematic; box, sphere, capsule, convex hull
-of a mesh), `CharacterController3D` (capsule walk by `move` or the Move/Jump input), `Trigger3D`
+of a mesh), `CharacterController3D` (capsule walk by `move` or the Move/Jump input; M-MOVE3D 1 feel:
+acceleration, coyote time, jump buffer, jump cut, air jumps, sprint, crouch via
+`World3D::set_character_height`, `Landed3D` events, `FireOn::Landed`), `Trigger3D`
 (box/sphere overlap with `TriggerEnter3D` / `TriggerExit3D`); `install_bodies3d`: `"kit3d_bodies"`
 (`FixedUpdate_Pre`: create, teleport on outside moves, velocities, characters, runtime and moved
 static colliders), `"kit3d_writeback"` and `"kit3d_triggers"` after `"kit3d_physics"`; remove hooks
@@ -107,7 +116,7 @@ out. `install_sensors3d` (from `install_stock`, after `install_bodies3d`): `"kit
 `ContactBegin`); `SfxTrigger` (a `PlaySfx` with dB jitter, `audio::AudioBus`), `ParticleBurst`,
 `ShakeTrigger`, `CameraShake2D` (added to the view by `primary_camera`), `CameraFollow2D` (offset,
 dead zone, smoothing, look-ahead, bounds), `CameraFollow3D` (orbit with yaw/pitch, Look-input
-orbit), `PhysicsEvents` (engine-written last 2D trigger/contact pairs and counts), `NavGridSource`
+orbit; M-MOVE3D 2: a spring arm over `World3D::camera_sweep`, look-ahead, first person, lock-on), `PhysicsEvents` (engine-written last 2D trigger/contact pairs and counts), `NavGridSource`
 (the `NavGrid` from a tilemap layer and/or static colliders; automatic from colliders when absent).
 `install_effects(world, assets)`: `"kit_nav_grid"` (`FixedUpdate_Pre`, before `"path_agents"`,
 which it installs), `"kit_effects"` and `"kit_camera_follow"` (`FixedUpdate_Post`).

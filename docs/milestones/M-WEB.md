@@ -1,6 +1,6 @@
 # M-WEB — Web (WASM) export (milestone record)
 
-**Status:** active (started 2026-10-15). **Decision record:** ADR-0039 (WebGPU through `mce_rhi_webgpu`).
+**Status:** done (2026-10-15 → 2026-10-16; the browser checks outside Chromium wait on Sami). **Decision record:** ADR-0039 (WebGPU through `mce_rhi_webgpu`).
 **Plan:** `docs/ROADMAP.md`, "M-WEB". **Linear:** project mesh_control_engine, milestone M-WEB, SBA-62…SBA-68.
 
 ## Plan
@@ -16,9 +16,9 @@ Chromium run on WebGPU/SwiftShader (`scripts/web/browser_smoke.cjs`).
 | 4 | Audio and input: WebAudio unlock, touch, gamepad, pointer lock, fullscreen | SBA-65 | done |
 | 5 | `mce ship --target web`: shell page, itch.io zip, `mce serve` | SBA-66 | done |
 | 6 | MCP `ship_build {"target":"web"}` and a Playwright smoke returning the state hash and a screenshot | SBA-67 | done |
-| 7 | A `web` stage in `local_ci.sh` | SBA-68 | not started |
+| 7 | A `web` stage in `local_ci.sh`, the demo and the gates | SBA-68 | done |
 
-**Demo:** Ember Step, a novel and `04_diorama` in Chrome, Firefox and a mobile browser.
+**Demo:** Ember Step, a novel and `04_diorama` in Chrome, Firefox and a mobile browser (below: Chromium here, the rest on Sami's devices).
 
 ## What shipped (step 1)
 
@@ -89,6 +89,37 @@ Numbers (`web-release`, MinSizeRel): `01_triangle.wasm` 8.9 MB, 2.5 MB gzipped; 
 | Ship and MCP | `ship.py --smoke --smoke-ticks N`, `mce ship --target web --smoke-ticks N`, MCP `ship_build {"target":"web","ticks":N}` → `zip`, `state_hash`, `headless_state_hash`, `matches_headless`, `screenshot` | `ship_build` on Undelivered, 240 ticks: `ok: true`, `matches_headless: true` |
 | Docs | `docs/user-guide/14-mcp-ai-workflow.md` (`ship_build`) | — |
 
+## What shipped (step 7)
+
+| Item | Where | Evidence |
+|---|---|---|
+| CI stage | `scripts/ci/local_ci.sh web` → `scripts/web/web_ci.py`: the host `mce_cook` and `mce_relay`, `web-release` with the six samples and both probes, `browser_smoke.cjs` on each sample, `probe_smoke.cjs input` and `relay`, Ember Step shipped and `probe_smoke.cjs shell` on its page, then the gates. Part of the full run; `--task` adds it when a change touches the web code; it reports a skip and passes without the Emscripten SDK or Playwright | `web PASS (172s)` on a warm tree |
+| Baselines | `tests/web/baselines.json`; `web_ci.py --skip-build --update` rewrites the measured values | — |
+| Presets | `web-base` turns `MCE_WITH_NET` on, so the relay probe builds in the stage | — |
+| Shell check | a game that opens no audio device (`04_diorama`) is reported, not failed | — |
+| Docs | `docs/user-guide/15-shipping.md` §15.6 (`--smoke-ticks`, the web stage and its gates) | — |
+
+## Gates
+
+| Gate | How it is checked | Result |
+|---|---|---|
+| The web replay hash is stable run to run (its own baseline) | Kindle shipped with `--smoke-ticks 600`: drawn and headless in Chromium, compared with `tests/web/baselines.json` | `321eaf1806bcebf2` drawn and headless, the same on a second full run of the stage |
+| The smoke passes in `local_ci.sh` | the `web` stage | PASS |
+| The zip uploads to itch.io unchanged | `web_ci.py` checks the zip against itch.io's HTML rules: `index.html` at the root, flat, at most 1000 files and 500 MB extracted, names under 240 characters, no unfilled template field, every file the page loads present by its exact name | Ember Step: 8 files, 9.5 MiB extracted, OK. A real upload to itch.io needs Sami's account (noted in Linear) |
+| A cold load of the 2D sample stays under a stated size budget | Ember Step: the page, loader, wasm, icon and pack, each gzipped at level 6 as a server sends them, under `cold_load.budget_bytes` = 4.00 MiB | 2.82 MiB |
+
+## Demo
+
+| Game | Zip | Headless Chromium (WebGPU on SwiftShader) |
+|---|---|---|
+| Ember Step (`ship.py platformer --target web --smoke`) | 2.8 MiB | smoke PASS; shell page PASS on a 1280×800 desktop page and a 390×844 phone page (touch, 3× DPR): cover, icon, tap, audio, fill and resize |
+| Undelivered, the novel (`--smoke-ticks 300`) | 46 MiB | 300 ticks drawn and headless `156647983e9abc4c`, 1987 colours; shell page PASS on desktop and phone |
+| `04_diorama` (`ship.py diorama --target web --smoke`) | 2.6 MiB | smoke PASS, 1590 colours; the shell's desktop checks pass, the phone page (3× DPR, shadows on SwiftShader) is too slow in software for the probe's tap |
+| Kindle shipped by an agent over MCP (`ship_build {"target":"web","ticks":600}`) | 3.9 MiB | `ok: true`, `state_hash` `321eaf1806bcebf2` (the stage's baseline), `matches_headless: true`, a screenshot |
+
+Desktop Firefox, Safari and real phones need a person with those browsers: Sami's check, recorded on SBA-68 in
+Linear. This cloud box only has Chromium.
+
 ## Open items
 
 - Size: cook WGSL next to SPIR-V once renderer shaders are cooked assets (drops Tint from the page), narrow
@@ -100,6 +131,9 @@ Numbers (`web-release`, MinSizeRel): `01_triangle.wasm` 8.9 MB, 2.5 MB gzipped; 
   `156647983e9abc4c` on wasm, `901e0417fc3e43e0` on Linux GCC): another compiler and libm. Within one build the
   drawn and headless runs agree, which is what the smoke checks. Lockstep play between a browser and a desktop
   would need the deterministic math path on both (M-NET2 replicates state, so it is unaffected).
+- Firefox, Safari and real phones: not checked from the cloud (Chromium only); SBA-68 lists them for Sami.
+- `04_diorama`'s phone-sized page is too slow on SwiftShader for the shell probe; Ember Step's page is the one
+  the stage checks.
 - `-run_ticks` is the player's (projects and `mce_player`); the hand-written samples (`03_platformer`, ...) run
   the plain smoke.
 - Timestamp queries are off (`DeviceCaps::timestamp_queries = false`); the profiler shows CPU times on the web.
