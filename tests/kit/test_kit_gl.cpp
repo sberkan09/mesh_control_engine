@@ -550,3 +550,34 @@ TEST_CASE("M-VIEWS 3: a camera draws into a RenderTexture that a sprite elsewher
     CHECK(is(f.at_view({0, 0}), 255, 255, 255));
     CHECK(f.device->validation_error_count() == 0);
 }
+
+TEST_CASE("M-VIEWS 5: two 2D cameras in a split screen each keep their own cell and clear color") {
+    Fixture f;
+    ViewFrame vf(f);
+    auto cam = [&](f32 x, math::Color clear, u32 split) {
+        kit::Camera2DComponent c;
+        c.pixels_per_meter = kPpm;
+        c.primary = false;
+        c.pixel_snap = false;
+        c.clear_color = clear;
+        kit::CameraView cv;
+        cv.split = split;
+        f.world.spawn_with(LocalTransform{{x, 0, 0}, math::quat::identity(), {1, 1, 1}}, c, cv);
+    };
+    cam(0.0f, math::Color{0.0f, 0.0f, 0.5f, 1.0f}, 1);
+    cam(50.0f, math::Color{0.5f, 0.0f, 0.0f, 1.0f}, 2);
+    f.world.spawn_with(kit::SplitScreen{kit::SplitLayout::Columns, 0});
+    f.sprite({0, 0}, kRed);
+    f.sprite({50, 0}, kGreen);
+    vf.render();
+    auto px = [&](u32 x, u32 y) {
+        const usize i = (usize(y) * kW + x) * 4;
+        return Rgba{f.pixels[i], f.pixels[i + 1], f.pixels[i + 2], f.pixels[i + 3]};
+    };
+    CHECK(is(px(40, 48), 255, 0, 0));   // player 1's cell: the red sprite (a later cell's clear did not wipe it)
+    CHECK(is(px(120, 48), 0, 255, 0));  // player 2's cell: the green sprite
+    const Rgba a = px(2, 2), b = px(157, 2);
+    INFO("cell clears " << int(a.r) << "," << int(a.g) << "," << int(a.b) << " and " << int(b.r) << "," << int(b.g) << "," << int(b.b));
+    CHECK((a.b > a.r && b.r > b.b));  // each cell shows its own camera's background
+    CHECK(f.device->validation_error_count() == 0);
+}
