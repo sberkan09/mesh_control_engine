@@ -110,6 +110,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-SCRIPT | [M-SCRIPT.md](milestones/M-SCRIPT.md) (Linear SBA-147 … SBA-152, added 2026-10-16; ADR-0041) | active (steps 1–5 done: phones and web unverified here) | step 6, the demo and the gates |
 | M-COVER | [M-COVER.md](milestones/M-COVER.md) (Linear SBA-157 … SBA-160, added 2026-10-16) | active (step 1 done: the sample coverage gate in the walls stage, `scripts/ci/sample_coverage.allow`; steps 2–3 done: `samples/kit3d_tour`, `samples/kit2d_tour`) | step 4, the systems tour |
 | M-VIEWS | [M-VIEWS.md](milestones/M-VIEWS.md) (Linear SBA-161 … SBA-166, added 2026-10-16) | active (step 1 done: local players, per-slot maps and pads, join by button, `P2/` script names) | steps 1–6 |
+| M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | active (step 1 done: `mce import aseprite`) | steps 2–4 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -566,6 +567,19 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Demo:** `samples/09_coop` with four players in a split screen plus a minimap render texture, recorded headless as a sheet and hashed twice.
 **Gates:** a scene with one camera and no `RenderTexture` draws the same pixels as today (GL and SDL GPU goldens); the sim hash does not depend on the number of views; single-player input behaves as before; `local_ci.sh` green on every step. Real-GPU frame budgets of a four-way split wait on a device session.
+
+### M-IMPORT — 2D authoring-tool importers: Aseprite, Tiled, LDtk · **size M (rough guess, ≈ 40–70 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free. Indie 2D art is drawn in Aseprite and levels are built in Tiled or LDtk; today a user types `.mcsheet` regions by hand (or an agent does) and the tilemap asset holds one layer, with no auto-tiling. `docs/user-guide/07-2d.md` 7.8 lists the limits. A converter that turns those tools' exports into the engine's native text assets removes the biggest hand-work step of 2D games and gives agents a real input format. It needs no device and no engine runtime change except the tilemap limits noted in step 2.*
+
+**Builds, in order:**
+1. `mce import aseprite <export.json>`: Aseprite's JSON export (array or hash frames) with its PNG becomes a `.mcsheet`: frames to regions, tags to clips (forward, reverse, ping-pong), per-frame durations to fps and a warning when they differ, slices to named regions; the PNG gets a sidecar when it has none; re-importing keeps the sheet's GUID.
+2. `mce import tiled <map.tmj>`: tile layers to one `.mctilemap` each (flip flags kept or baked), tileset images adopted, animated tiles to sheet clips, object layers to a `.mcscene` fragment of `Collider2D` and marker entities.
+3. `mce import ldtk <project.ldtk>`: each level to a scene, IntGrid layers to colliders, tile and auto layers to tilemaps, entity layers to entities with their fields.
+4. Reach and close: MCP `asset_import` over the same converters, user-guide chapter 5 and 7 updates, a sample built from real Aseprite, Tiled and LDtk exports, and the gates.
+
+**Demo:** a sample project whose sprites, map and second level come only from exported files, played headless twice for the same hash.
+**Gates:** converters are pure functions of their inputs (same bytes out twice); unknown or unsupported features are warnings that name the feature, never silent; the cooked output of an imported sheet equals the hand-written one for the same data; `local_ci.sh` green on every step.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
