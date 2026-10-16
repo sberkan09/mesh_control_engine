@@ -12,8 +12,8 @@
 //                     its entity
 //   NavAgent3D        walks to `target` when `move_to` is set, steering around other agents
 //
-// The bake reads BoxCollider3D and MeshCollider3D (kit3d.h) in the collision layers of
-// `layer_mask`, plus the MeshRef meshes of entities without a collider when `include_meshes` is
+// The bake reads BoxCollider3D, MeshCollider3D and TerrainCollider3D (kit3d.h; a terrain's holes
+// stay open) in the collision layers of `layer_mask`, plus the MeshRef meshes of entities without a collider when `include_meshes` is
 // set; NavArea3D and NavLink3D are baked in, so changing them needs a re-bake (a runtime bake
 // re-runs when `version` changes). NavObstacle3D and the agents are live.
 //
@@ -106,8 +106,12 @@ enum class NavAgentState : u8 { Idle, Moving, Arrived, NoPath, OffMesh };
 MCE_ENUM(NavAgentState, Idle, Moving, Arrived, NoPath, OffMesh)
 
 // Walks to `target` while `move_to` is set (clear it to stop), following a navmesh path and
-// steering around other agents. Changing `target` re-plans.
+// steering around other agents. Changing `target` re-plans. With `follow` set (an entity: the
+// player, a leader) the engine writes that entity's position into `target` every tick and re-plans
+// once it has moved `follow_repath` metres from the last plan, so an enemy chases without code.
 struct NavAgent3D {
+    Entity follow;
+    f32 follow_repath = 0.5f;  // metres
     math::vec3 target;
     f32 speed = 3.5f;          // m/s
     f32 acceleration = 8.0f;   // m/s^2
@@ -125,7 +129,8 @@ struct NavAgent3D {
     math::vec3 next_corner;    // engine-written: the next point on the path
     u32 arrivals = 0;          // engine-written: times the agent arrived
 };
-MCE_COMPONENT(NavAgent3D, target, (speed, Range{0, 100}, Help{"m/s"}), (acceleration, Range{0, 1000}), (radius, Range{0.05f, 10}),
+MCE_COMPONENT(NavAgent3D, (follow, Help{"an entity to chase: its position becomes the target every tick"}),
+              (follow_repath, Range{0.01f, 100}, Help{"metres the followed entity moves before a re-plan"}), target, (speed, Range{0, 100}, Help{"m/s"}), (acceleration, Range{0, 1000}), (radius, Range{0.05f, 10}),
               (height, Range{0.1f, 20}), (separation, Range{0, 20}), (arrive_distance, Range{0.01f, 10}),
               (avoidance, Range{0, 3}, Help{"0 cheapest .. 3 best"}), (move_to, Help{"1: walk to target"}), avoid_agents,
               (face_motion, Help{"1: face the walking direction"}), (state, ReadOnly, Transient), (velocity, ReadOnly, Transient),

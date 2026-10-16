@@ -1,0 +1,521 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "c1e3a000-0000-4000-8000-000000000100",
+  "name": "intro",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Environment",
+      "components": {
+        "Environment3D": {
+          "sun_direction": [
+            -0.3,
+            -0.6,
+            -0.75
+          ],
+          "sun_intensity": 0.6,
+          "sun_color": [
+            0.7,
+            0.75,
+            1.0
+          ],
+          "ambient_sky": [
+            0.1,
+            0.12,
+            0.2
+          ],
+          "ambient_ground": [
+            0.05,
+            0.04,
+            0.04
+          ],
+          "exposure": 1.2,
+          "fog_density": 0.03,
+          "fog_color": [
+            0.08,
+            0.09,
+            0.14
+          ],
+          "shadow_cascades": 2,
+          "shadow_distance": 30,
+          "bloom_intensity": 0.12
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Dolly Camera",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            1.2,
+            10
+          ]
+        },
+        "Camera3DComponent": {
+          "fov_deg": 55,
+          "near_z": 0.05,
+          "far_z": 200
+        },
+        "CameraRail3D": {
+          "points": [
+            [
+              0,
+              1.2,
+              10
+            ],
+            [
+              -3.5,
+              2.2,
+              5.5
+            ],
+            [
+              -1.5,
+              1.9,
+              1.5
+            ],
+            [
+              0,
+              1.7,
+              -1.5
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "count": 4
+        },
+        "CameraLookAt3D": {
+          "target": "$5",
+          "offset": [
+            0,
+            1.6,
+            0
+          ],
+          "smoothing": 4
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Gate Camera",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            2.4,
+            1.5,
+            -4.8
+          ]
+        },
+        "Camera3DComponent": {
+          "fov_deg": 45,
+          "near_z": 0.05,
+          "far_z": 200,
+          "primary": 0
+        },
+        "CameraLookAt3D": {
+          "target": "$7",
+          "offset": [
+            0,
+            1.2,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Floor",
+      "components": {
+        "LocalTransform": {},
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000010"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Wall L",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -7.9,
+            0,
+            -8
+          ],
+          "scale": [
+            0.75,
+            1,
+            1
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000012"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Gate",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            -8
+          ],
+          "scale": [
+            6.8,
+            3.2,
+            0.4
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000013",
+          "interpolate": 1
+        }
+      }
+    },
+    {
+      "id": 7,
+      "name": "Wall R",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            7.9,
+            0,
+            -8
+          ],
+          "scale": [
+            0.75,
+            1,
+            1
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000012"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Courier",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            -11.5
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000015",
+          "interpolate": 1
+        },
+        "Animator": {
+          "clip": "idle",
+          "fade": 0.25
+        }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Lamp L",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -2.2,
+            0,
+            -4.5
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000014"
+        },
+        "PointLight3D": {
+          "color": [
+            1,
+            0.65,
+            0.35,
+            1
+          ],
+          "offset": [
+            0,
+            2.1,
+            0
+          ],
+          "intensity": 0,
+          "radius": 8
+        }
+      }
+    },
+    {
+      "id": 10,
+      "name": "Lamp R",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            2.2,
+            0,
+            -4.5
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000014"
+        },
+        "PointLight3D": {
+          "color": [
+            1,
+            0.65,
+            0.35,
+            1
+          ],
+          "offset": [
+            0,
+            2.1,
+            0
+          ],
+          "intensity": 0,
+          "radius": 8
+        }
+      }
+    },
+    {
+      "id": 11,
+      "name": "Gate Light",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            2.4,
+            -11
+          ]
+        },
+        "PointLight3D": {
+          "color": [
+            0.55,
+            0.75,
+            1,
+            1
+          ],
+          "intensity": 6,
+          "radius": 7
+        }
+      }
+    },
+    {
+      "id": 12,
+      "name": "Splash",
+      "components": {
+        "VideoPlayer": {
+          "video": "guid:c1e3a000-0000-4000-8000-000000000050",
+          "playing": false
+        }
+      }
+    },
+    {
+      "id": 13,
+      "name": "Director",
+      "components": {
+        "TimelinePlayer": {
+          "timeline": "guid:c1e3a000-0000-4000-8000-000000000060",
+          "bindings": [
+            "$1",
+            "$2",
+            "$5",
+            "$8",
+            "$9",
+            "$7",
+            "$11",
+            "$10"
+          ]
+        },
+        "Cutscene": {
+          "letterbox": 0.1,
+          "skip_prompt": "Hold Esc to skip"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "name": "Pillar 1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -3.6,
+            0,
+            -7.4
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000011"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "name": "Pillar 2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            3.6,
+            0,
+            -7.4
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000011"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "name": "Pillar 3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -3.6,
+            0,
+            -2.5
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000011"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "name": "Pillar 4",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            3.6,
+            0,
+            -2.5
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000011"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "name": "Pillar 5",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -3.6,
+            0,
+            2.5
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000011"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "name": "Pillar 6",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            3.6,
+            0,
+            2.5
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000011"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "name": "Crate 1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -1.2,
+            0,
+            4.2
+          ],
+          "rotation": [
+            0,
+            -0.17,
+            0,
+            0.9854440623394105
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000013"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "name": "Crate 2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            1.6,
+            0,
+            3.4
+          ],
+          "rotation": [
+            0,
+            0.0,
+            0,
+            1.0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000013"
+        }
+      }
+    },
+    {
+      "id": 22,
+      "name": "Crate 3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -5,
+            0,
+            -5.5
+          ],
+          "rotation": [
+            0,
+            0.17,
+            0,
+            0.9854440623394105
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:c1e3a000-0000-4000-8000-000000000013"
+        }
+      }
+    }
+  ]
+}

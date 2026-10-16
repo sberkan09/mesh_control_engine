@@ -58,9 +58,21 @@ Result<void> UiScreens::add(Entity e, asset::AssetSystem& assets, asset::Guid gu
         if (const render::Font* f = load_font(body)) look.font = f;
         look.title_font = load_font(theme.font(ui::FontRole::Title));
         look.button_font = load_font(theme.font(ui::FontRole::Button));
-        if (!data.sprites.is_null())
-            MCE_LOG_WARN("player: UI document {}: sprite-sheet skins are not drawn yet; using the built-in one",
-                         asset::to_string(guid).view());
+        // Sprites: the document's sheet, else the theme's (apply_theme copied it into `data`). Style
+        // sprite regions index it; a sheet that does not load, or whose white region is out of
+        // range, leaves the built-in skin (flat quads).
+        if (!data.sprites.is_null()) {
+            u32 regions = 0;
+            const render::SpriteSetId set = extract ? extract->ui_sheet_set(data.sprites, &regions) : render::SpriteSetId{};
+            if (set.valid() && data.white_region < regions) {
+                look.set = set;
+                look.white_region = data.white_region;
+            } else {
+                MCE_LOG_WARN("player: UI document {}: its sprite sheet {} does not load{}; using the built-in skin",
+                             asset::to_string(guid).view(), asset::to_string(data.sprites).view(),
+                             set.valid() ? " (white_region is past its regions)" : "");
+            }
+        }
         sc.doc = new ui::Document();
         sc.doc->set_skin(look);
         if (Result<void> r = ui::build_document(data, *sc.doc); !r) {

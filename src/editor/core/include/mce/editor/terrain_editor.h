@@ -38,6 +38,32 @@ struct TerrainBrush {
     u32 seed = 1;         // Noise
 };
 
+// A heightmap file read into the heights (M-TERRAIN 6; TerrainDocument::import_heightmap).
+struct TerrainHeightmapImport {
+    bool png = true;       // false: a raw file of samples, rows one after another
+    u32 raw_bits = 16;     // raw: 8 or 16 bits a sample (16: little-endian)
+    u32 raw_width = 0;     // raw: samples per row; 0 = a square file
+    f32 low = 0.0f;        // metres the darkest value stands for ...
+    f32 high = 0.0f;       // ... and the brightest; low == high: the terrain's height range
+};
+
+// A procedural terrain (M-TERRAIN 6; TerrainDocument::generate): fBm value noise, an optional
+// island falloff, then erosion-lite (thermal slides and rain droplets). Deterministic in `seed`.
+struct TerrainGenerate {
+    u32 seed = 1;
+    f32 feature = 0.0f;      // metres across the largest hills; 0 = a quarter of the terrain's size
+    u32 octaves = 6;         // 1..12, each `lacunarity` times finer and `gain` times weaker
+    f32 lacunarity = 2.0f;
+    f32 gain = 0.5f;
+    f32 ridged = 0.0f;       // 0 rolling hills .. 1 sharp ridges
+    f32 low = 0.0f;          // the share (0..1) of the height range the lowest ground stands at ...
+    f32 high = 1.0f;         // ... and the highest
+    f32 island = 0.0f;       // 0..1: how far in from the edges the land falls to `low` (0: no falloff)
+    u32 thermal = 0;         // thermal passes: ground steeper than `talus_deg` slides down
+    f32 talus_deg = 35.0f;
+    u32 droplets = 0;        // rain droplets, each carving a channel and leaving its silt in hollows
+};
+
 // Brush weight at `d` metres from the centre: 1 inside `hardness` of the radius, a smooth fall to 0
 // at the rim.
 f32 terrain_brush_falloff(const TerrainBrush& b, f32 d);
@@ -68,6 +94,13 @@ public:
     // Applies one dab of `b` centred on (x, z) metres in the terrain's space, `scale` times its
     // strength (a frame's share). Returns the samples (height, weight or hole) it changed.
     u32 apply(const TerrainBrush& b, math::vec2 center, f32 scale = 1.0f);
+    // Replaces the heights with a heightmap file resampled bilinearly to the resolution: a PNG (8- or
+    // 16-bit, colour gives its luminance) or raw samples. The file's top row lies along -z and its left
+    // column along -x. Heights outside the range are clamped to it; holes and layers stay. False with
+    // `error` set when the file does not read.
+    bool import_heightmap(Span<const byte> file, const TerrainHeightmapImport& o, cook::String& error);
+    // Replaces the heights with a generated landscape (holes and layers stay).
+    void generate(const TerrainGenerate& g);
 
 private:
     cook::String kept_;            // the source's other keys, one `  "key": value,` line each

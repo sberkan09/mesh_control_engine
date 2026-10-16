@@ -44,6 +44,20 @@ Result<Image> decode_png(Span<const byte> bytes) {
     return img;
 }
 
+Result<Image16> decode_png_grey16(Span<const byte> bytes) {
+    if (bytes.size() > 0x7FFFFFFF) return Error(Errc::ImportFailed, kStage, "image too large");
+    int w = 0, h = 0, comp = 0;
+    stbi_us* px = stbi_load_16_from_memory(reinterpret_cast<const stbi_uc*>(bytes.data()), static_cast<int>(bytes.size()), &w, &h, &comp, 1);
+    if (!px) return Error(Errc::ImportFailed, kStage, stbi_failure_reason());
+    Image16 img;
+    img.width = u32(w);
+    img.height = u32(h);
+    img.grey.resize(usize(w) * usize(h));
+    std::memcpy(img.grey.data(), px, img.grey.size() * sizeof(u16));
+    stbi_image_free(px);
+    return img;
+}
+
 Result<void> encode_png(u32 width, u32 height, Span<const u8> rgba, Array<byte>& out) {
     if (width == 0 || height == 0 || rgba.size() != usize(width) * height * 4)
         return Error(Errc::InvalidArgument, kStage, "rgba is not width * height * 4 bytes");

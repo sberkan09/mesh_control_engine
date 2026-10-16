@@ -86,6 +86,9 @@
 
   window.Module = {
     canvas,
+    // The page's query is the game's command line: index.html?run_ticks=600&fast_forward=1 runs
+    // "-run_ticks 600 -fast_forward 1" (a shipped build still refuses cheat convars).
+    arguments: [...new URLSearchParams(location.search)].flatMap(([k, v]) => ["-" + k.replace(/^-+/, ""), v]),
     locateFile: (path) => (path.endsWith(".wasm") ? "{{WASM}}" : path),
     print: (text) => console.log(text),
     printErr: (text) => {

@@ -212,10 +212,11 @@ A 3D scene gets a navigation mesh (navmesh) and agents that walk it from five co
 - `NavMeshSurface3D`: one per scene (the first in ECS order is used). Its settings say what an
   agent can do (`agent_radius`, `agent_height`, `agent_max_climb`, `agent_max_slope_deg`) and how
   finely to voxelize (`cell_size`, `cell_height`, `tile_size`). The mesh is baked from the scene's
-  `BoxCollider3D` and `MeshCollider3D` in the layers of `layer_mask` (plus `MeshRef` meshes of
-  entities without a collider when `include_meshes` is set). **File → Bake navmesh** in the
-  editor writes `assets/navmesh/<scene>/nav_<id>.mcnav` (a `NavMesh` asset) and points `baked` at
-  it, and the editor's 3D view draws it (green floor, amber costly areas, pink links; `show` turns
+  `BoxCollider3D`, `MeshCollider3D` and `TerrainCollider3D` in the layers of `layer_mask` (a
+  terrain's holes stay open; plus `MeshRef` meshes of entities without a collider when
+  `include_meshes` is set). **File → Bake navmesh** in the editor (or MCP's `navmesh_bake`,
+  chapter 14) writes `assets/navmesh/<scene>/nav_<id>.mcnav` (a `NavMesh` asset) and points `baked`
+  at it, and the editor's 3D view draws it (green floor, amber costly areas, pink links; `show` turns
   it off). Without a bake the mesh is baked when the scene starts, and again whenever `version`
   changes. The bake is byte-identical run to run.
 - `NavArea3D`: a box (axis-aligned) whose floor takes an `area` id with a path `cost` per metre:
@@ -229,7 +230,9 @@ A 3D scene gets a navigation mesh (navmesh) and agents that walk it from five co
   NoPath, OffMesh), `velocity`, `distance` and `arrivals`. An agent with a `CharacterController3D`
   (with `use_input` off) drives the controller's `move`, so it walks slopes and steps and pushes
   bodies; otherwise its `LocalTransform` is put on the mesh. `face_motion` turns its local −Z to the
-  way it walks.
+  way it walks. With `follow` set to an entity (the player, a cart, a leader) the engine writes that
+  entity's position into `target` every tick and re-plans once it has moved `follow_repath` metres,
+  so an enemy chases without code.
 
 From code, the `kit::Nav3D` resource holds the loaded `physics::NavMesh3D`: `find_path`,
 `raycast` (along the floor, stopping at walls), `nearest_point` and `area_at` work any time after
@@ -253,7 +256,10 @@ removes the bodies and blends from the last pose back to the animation over `ble
   size. `parts` reports how many bodies were built.
 - **Hits.** `impulse` (N·s) is applied once while active and then cleared: on the whole body, or
   on the bone named in `impulse_bone` (a shot to the head). Setting `active` and `impulse` in the
-  same tick knocks a character over.
+  same tick knocks a character over. With `on_trigger = 1` the character goes limp by itself when a
+  `TriggerEnter3D` names it: a `Trigger3D` it walks into, a `Raycast3D` or `Overlap3D` sensor that
+  touches its capsule (a cart's bumper, a trap), or its own sensor touching something; its
+  `NavAgent3D` stops (`move_to` cleared). `samples/07_gameplay3d` does this with no code.
 - **Getting up.** The entity's own transform does not move while the body falls: `root_position`
   is where the root bone is now and `settled` turns 1 once every part rests. Move the entity there
   (and play a get-up clip) before clearing `active`.

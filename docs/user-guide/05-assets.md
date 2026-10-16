@@ -54,6 +54,7 @@ Settings per importer (every key is optional; the defaults are shown):
 | `texture` | `"srgb": true` (colour data; set `false` for normal maps, LUTs and data textures), `"mips": true`, `"filter": "nearest"` (`"linear"` for smooth, non-pixel-art sprites; chapter 7.1) |
 | `wav` | `"normalize": true` (peak to -1 dBFS), `"loop": false`, `"loop_start"`, `"loop_end"` (source-rate frames; default to the file's own loop markers) |
 | `font` | `"size": 32` (pixel height), `"ranges": [[32, 126]]` (inclusive codepoint ranges), `"padding": 1`, `"strings": true` (also every character the string tables use), `"sdf": true` (bake a distance field: text drawn well above `size` keeps sharp edges; outlines wider than the field fade), `"spread": 4` (with `sdf`: how many pixels at `size` the field reaches, default `size / 8`, at least 2) |
+| `video` | `"audio": true` (keep the film's MP2 sound), `"normalize": false` (raise the sound to -1 dBFS); the film itself is converted to MPEG-1 beforehand (13.7) |
 | `gltf` | `"scale": 1.0` (applied to every root node), `"max_triangles": 0` (0 = no budget; a budget makes an over-size mesh a cook error), `"skinning": true` (`false` imports skinned meshes as static ones; see Skinning in [chapter 8](08-3d.md#86-rendering-a-frame-yourself)), `"lod_levels": 0` (1..3 generates that many coarser levels), `"lod_ratio": 0.35`, `"lod_error": 0.05` (section 8.4), `"ragdoll": {}` (per-bone ragdoll overrides by bone name; section 9.8) |
 
 Edit settings in the sidecar file, or through MCP's `asset_set_import_settings`. A settings change
@@ -188,6 +189,18 @@ The editor's Terrain panel (chapter 3) sculpts and paints a terrain in place. A 
 back with explicit `heights` (replacing `fill`), plus `splat` once a layer is painted (from then on the
 `auto` rules no longer apply) and `holes` once one is cut; every other key stays as written. Heights
 stay inside `height_range`: widen it first to raise higher or dig deeper.
+
+Agents shape terrains over MCP (chapter 14) with the same brushes: `terrain_sculpt` (raise, lower, smooth,
+flatten, noise) and `terrain_paint` (a layer, holes, filling them) dab at `[x, z]` points in metres from the
+terrain's centre, or along them as a stroke. `terrain_import` reads a heightmap under `assets/` into the
+heights: a `.png` (8- or 16-bit grey) or raw samples (`.r16`/`.raw` 16-bit little-endian, `.r8` 8-bit),
+resampled to `resolution`, the image's top row along -z and its left column along -x, black and white
+mapped to `range` (default `height_range`). `terrain_generate` grows a landscape: fBm value noise
+(`feature` metres across the largest hills, `octaves`, `lacunarity`, `gain`, `ridged`), stretched between
+`low` and `high` shares of `height_range`, sunk toward the edges by `island`, then erosion-lite: `thermal`
+passes settle slopes steeper than `talus_deg` and `droplets` of rain carve channels and silt up hollows.
+The same `seed` gives the same terrain. Each writes `heights` and keeps holes and painted layers; a
+terrain whose layers follow `auto` rules re-applies them to the new shape.
 
 Give every layer's maps of one kind the same size and import settings: each kind is packed into one
 texture array, and a map that differs from the first layer's is left out with a warning.

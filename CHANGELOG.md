@@ -11,6 +11,28 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `_sheen`, `_anisotropy`, `_transmission` and `_ior` (factors only). Transmissive materials show the opaque
   scene behind them, tinted and slightly refracted. Materials without them draw exactly as before. User guide
   5.7 and 8.5.
+- Timelines over MCP and the cinema demo, M-CINEMA step 6 (SBA-81): `timeline_create`, `timeline_add_track` and
+  `timeline_add_key` write `.mctimeline` files checked by the cook, and `timeline_preview` draws the scene with every
+  timeline held at a given second (the player's `-timeline.scrub`). `samples/cinema_demo` opens on a splash film and
+  plays a cutscene with a camera dolly, a rising gate, music, subtitles and a blended cut, all as data.
+  Undelivered opens on a ferry cutscene. A `Cutscene` no longer hashes three undefined padding bytes, and the
+  fullscreen video is no longer drawn upside down.
+- Sprite-sheet UI skins, M-UI-DATA: a `.mcui` document's or `.mcuitheme`'s `"sprites"` sheet is now drawn by the
+  stock player, `ui_preview` and the editor's UI Document panel (style `sprite_region` and 9-slice `slice` index
+  the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
+  `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
+  User guide 12.2.
+- Per-client delta snapshots, M-NET3 step 1 (SBA-123): `ReplicationServer::write_snapshot_for` writes each client
+  only the entities relevant to it (`NetRelevance { radius }` around the entities it owns) and codes them against
+  the newest snapshot it acknowledged (`write_ack` / `read_ack`): a still entity costs two bytes. `apply` reads
+  both forms. `sample_net_headless` now sends about a third of the bytes it did. User guide 20.10.
+- Replication as data, M-NET2 step 7 (SBA-88): mark entities `NetReplicated` in a scene and
+  `ReplicationServer::assign_tagged` gives them their `NetId` with no code. Component fields flagged
+  `Replicated` (`MCE_COMPONENT(Health, (hp, Replicated))`) travel in every snapshot and land in the client's
+  copy; other fields keep the client's value, and `Entity` fields come back as the client's own entities.
+  `NetOwner` names the player that controls an entity. A component built with other flagged fields on the
+  client is skipped and counted, never misread. `refl_describe_component` marks the fields `"replicated"`.
+  Snapshot version 2. User guide 20.9.
 - Performance counter gate and guide, M-PERF step 5 (SBA-117). `scripts/ci/perf_gate.py` runs `perf_run` on
   a copy of a project and fails when draws, passes, dispatches, triangles, meshes, sprites or sprite batches
   grow past the project's `perf/counters.json` (`--update` writes new ones). Glowmoth and Marble Garden run it

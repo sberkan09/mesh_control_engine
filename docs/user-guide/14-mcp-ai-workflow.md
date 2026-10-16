@@ -63,12 +63,16 @@ each result's `content[0].text` is the tool's JSON).
 | | `scene_list_entities` | `component?` | id, name, component types, in file order |
 | | `scene_get_entity` | `entity` | the entity in `.mcscene` form; defaults omitted |
 | | `asset_list` | `type?` | `guid:<uuid>`, path, type |
-| | `asset_set_import_settings` | `path` or `guid`, `settings` | rewrites a sidecar's settings |
+| | `asset_set_import_settings` | `path` or `guid`, `settings` | rewrites a sidecar's settings (chapter 5.2 lists each importer's: a texture's `srgb` and `mips`, a video's `audio` and `normalize`, ...) |
 | Assets | `asset_schema` | `type?` | without `type`: the JSON source types below; with one (`ParticlePreset` or `.mcpart`, ...): its fields with type, default and help, and the template `asset_create` starts from |
 | | `asset_create` | `path`, `content?` | a new `.mcpart`, `.mcseq`, `.mctilemap`, `.mcsheet`, `.mcanim`, `.mcmat`, `.mcinput`, `.mcstore`, `.mcservices`, `.mcui` or `.mcconfig` (the extension picks the type) with a fresh GUID: the template with `content`'s fields over it. Returns `guid:<uuid>` |
 | | `asset_write` | `path` or `guid`, `content`, `mode?` | `merge` (default) replaces the named fields and keeps the rest, `replace` writes exactly `content`; the GUID stays |
 | | `asset_read` | `path` or `guid` | the parsed document of a JSON source asset (scenes and prefabs too) |
 | | `tilemap_paint` | `path` or `guid`, `clear?`, `cells?`, `rects?`, `fills?`, `preview?` | `[x, y, tile]` cells, `[x0, y0, x1, y1, tile]` rectangles and `[x, y, tile]` flood fills, applied in that order; (0, 0) is bottom-left, tile 0 erases, n draws tileset cell n-1. `preview` returns the map as text rows |
+| Terrain | `terrain_sculpt` | `path` or `guid`, `op`, `points`, `radius?`, `strength?`, `hardness?`, `target?`, `seed?`, `stroke?`, `repeat?` | the Terrain panel's brushes on a `.mcterrain`: `raise`, `lower`, `smooth`, `flatten` (to `target` metres) or `noise`, a dab at each `[x, z]` point (metres from the terrain's centre) or along them with `stroke`. Returns the samples changed, the height range and the height under each point after the change (`strength` 0 only measures) |
+| | `terrain_paint` | `path` or `guid`, `points`, `mode?` (`layer`, `hole`, `fill`), `layer?`, `radius?`, `strength?`, `hardness?`, `stroke?`, `repeat?` | paints a splat layer (its `TerrainFoliage3D` grows there), cuts holes or closes them. Returns each layer's share of the paint in percent and the hole samples |
+| | `terrain_import` | `path` or `guid`, `file`, `range?`, `raw_bits?`, `raw_width?` | a heightmap under `assets/` (`.png`, `.r16`/`.raw`, `.r8`) into the heights, resampled to the resolution (chapter 5.7) |
+| | `terrain_generate` | `path` or `guid`, `seed?`, `feature?`, `octaves?`, `lacunarity?`, `gain?`, `ridged?`, `low?`, `high?`, `island?`, `thermal?`, `talus_deg?`, `droplets?` | fBm hills, an island falloff and erosion-lite into the heights; deterministic in `seed` (chapter 5.7) |
 | UI | `ui_list` | `document?` | without `document`: every `.mcui` with its widget count and the input actions it raises; with one (path or `guid:<uuid>`): its widgets as paths (`menu/play`) with kind, text, action, bind, convar |
 | | `ui_create` | `path`, `modal?` (true), `font?`, `widgets?` | a new `.mcui` with a fresh GUID; `widgets` in the `.mcui` widget format (`asset_schema` type `UiDocument`) |
 | | `ui_widget_add` | `document`, `widget`, `parent?` (root), `index?` (last) | adds a `.mcui` widget object (with its children) |
@@ -76,6 +80,9 @@ each result's `content[0].text` is the tool's JSON).
 | | `ui_widget_remove` | `document`, `widget` | the widget and its children; refused while a nav edge names it |
 | | `ui_theme_set` | `document`, `theme` (a `.mcuitheme` path or `guid:`; `null`: the default look) | sets the theme the document is drawn with (a `UiScreen`'s theme still wins in the player); `ui_list` with `document` names it |
 | | `ui_preview` | `document`, `width?`, `height?` (960 × 540), `safe_area?`, `ui_scale?`, `save?`, `software?` | the real player draws the document alone and returns the frame as an MCP **image**; `save` writes the PNG for `image_diff` |
+| Timeline | `timeline_create` | `path`, `tracks` (one or more), `name?`, `duration?` | a new `.mctimeline` with a fresh GUID; `tracks` in the `.mctimeline` track format (`asset_schema` type `Timeline`, user guide 13.5). Play it with a `TimelinePlayer` (`component_add` with `{"timeline": "guid:<uuid>"}`), and add a `Cutscene` for the letterbox, hold and skip |
+| | `timeline_add_track` | `timeline`, `track`, `index?` (last) | adds a `.mctimeline` track object (`{"type": "property", "target": 0, "path": "CameraRail3D.t", "keys": [...]}`) |
+| | `timeline_add_key` | `timeline`, `track` (index), `key` or `keys` | adds keys (or ranges, cuts, lines, in the track's own form) merged in by time; returns the play length |
 | Edit | `entity_create` | `name`, `components?` (object: type name → fields), `transform?` (bool, default true: add a `LocalTransform`), `at?` (int: hierarchy index, default the end) | returns the id; place the entity with `components.LocalTransform`, e.g. `{"name": "Crate", "components": {"LocalTransform": {"position": [0, 1, 0]}}}` |
 | | `entity_create` with `prefab` | `name`, `prefab` (`"guid:<uuid>"` of a `.mcprefab`), `components?` | an instance; `components` override the prefab root's fields, `LocalTransform` places it |
 | | `entity_delete`, `entity_duplicate` | `entity` | |
@@ -92,11 +99,13 @@ each result's `content[0].text` is the tool's JSON).
 | Persist | `scene_new` | `name`, `force?` | fresh GUID, unsaved |
 | | `scene_open` | `path`, `force?` | path under `assets/`; a `.mcprefab` opens the prefab itself (entity 0 is its root) |
 | | `scene_save` | `path?`, `name?`, `force?`, `resolve?` | atomic; a `.mcprefab` path saves a prefab; `name` renames the scene; a file another agent saved meanwhile is merged by entity (conflicts refuse unless `resolve` is `ours` or `theirs`); refuses to overwrite another existing file unless `force` |
+| | `navmesh_bake` | none | bakes the scene's first `NavMeshSurface3D` into `assets/navmesh/<scene>/nav_<id>.mcnav` and points its `baked` at it (save the scene to keep that); returns the asset, its `content_hash` (the same scene bakes byte-identical), tiles, layers, triangles and bytes |
 | Build | `cook_run` | `pack?`, `adopt?` | incremental; `adopt` writes sidecars for new source files |
 | | `cook_errors` | | last diagnostics with file, line, col |
 | | `asset_delete` | `path` | deletes a source file under `assets/`, its `.mceasset` sidecar and its `CREDITS.md` row (a font's license text too, once no row names it; not the open scene) |
 | Verify | `run_headless` | `ticks` (default 300), `log_lines`, `scene?`, `input?`, `inspect?`, `trace?`, `convars?` | cooks, plays the **saved** scene (or another saved scene named by `scene`) with the engine systems and the game's `install()`, returns `state_hash`, metrics and the log tail. A pack with a `.mcstore` gets the fake store and ad network, one with a `.mcconfig` its cooked defaults, one with a `.mcservices` game services on this device; nothing is saved or sent |
 | See | `render_frame` | `tick?` (default 1), `width?`, `height?` (default 960 × 540), `scene?`, `input?`, `camera?`, `safe_area?`, `software?`, `convars?`, `save?` | cooks, draws the **saved** scene with the real player at the first frame after sim tick N and returns the frame as an MCP **image**; `save` also writes the PNG under the project folder. `convars` (`{"lc.quality": 0}`) sets console variables for that run only, so a setting can be previewed without changing the project; `run_headless` takes them too and puts the old values back after |
+| | `timeline_preview` | `time`, and `render_frame`'s other arguments | the frame with every timeline in the scene held at `time` seconds: state tracks applied, cinematic cameras placed, a cutscene's letterbox and subtitle showing. Look at a cutscene at its beats without playing it through |
 | | `render_sheet` | `ticks` (1-16), `cameras?` (1-4), `cell_width?`, `cell_height?`, and `render_frame`'s `scene`, `input`, `safe_area`, `software` | one image: ticks in columns, cameras in rows, each cell labelled |
 | | `image_diff` | `golden`, `image` or `render`, `threshold?` (8), `max_score?` (0.01), `update?` | compares with a golden PNG in the project: `score` (mean channel difference, 0..1), `changed_fraction`, `pass`, and a heat map image; a missing golden is written |
 | Measure | `perf_run` | `scene?`, `frames?` (300), `warmup?` (30), `target?` (desktop), `width?`, `height?`, `headless?`, `software?`, `input?`, `convars?`, `save?`, `top?` (8) | runs the real player for N frames at one sim tick per frame, so counters repeat run to run. Returns the verdict against the target's budget, with advice for each limit it is over; frame, sim, render and GPU ms (p50/p95/p99/max); draws, triangles, sprites and other counters; the slowest systems; the GPU stages; and spike frames with their cause. Keeps the `.mcperf` (`cooked/.perf/last.mcperf`, or `save`) |
@@ -110,7 +119,7 @@ each result's `content[0].text` is the tool's JSON).
 | Content | `gen_palette` | `seed?`, `count?` (6), `scheme?` (analogous, complementary, triad, pastel, earth, neon, mono), `save?` | hex colors dark to light and a swatch image |
 | | `gen_sprite` | `seed?`, `kind?` (creature, character, ship, item, blob), `width?`, `height?` (16), `variants?`, `colors?` or `scheme?`, `save?` | mirrored, outlined, shaded pixel sprites in one row, their rects and an enlarged preview |
 | | `gen_pixels` | `rows` (equal-length strings, one character per pixel), `palette` (character to `#rrggbb[aa]`; `.` and space are clear), `save?`, `overwrite?` | exactly the sprite you drew, as a PNG, with an enlarged preview: a moth, a lantern, two animation frames side by side |
-| | `gen_mesh` | `shape?` (box, plane, sphere, cylinder, cone, disc, ramp), `size?` ([x, y, z] m), `segments?`, `color?`, `roughness?`, `save?` (.glb) | a centred, Y-up mesh with its material inline, its vertex and triangle counts and a shaded preview, for blocking out a 3D level |
+| | `gen_mesh` | `shape?` (box, plane, sphere, cylinder, cone, disc, ramp, humanoid), `size?` ([x, y, z] m), `segments?`, `color?`, `roughness?`, `save?` (.glb) | a centred, Y-up mesh with its material inline, its vertex and triangle counts and a shaded preview, for blocking out a 3D level. `humanoid` is a skinned figure (size [shoulders, height, depth], default [0.5, 1.8, 0.28], facing −Z) with 13 bones and the clips `Idle` and `Walk`: an `Animator` plays them, `Ragdoll3D` makes it go limp, `AttachToBone` pins props to its bones |
 | | `gen_tileset` | `seed?`, `style?` (grass, stone, brick, dirt, sand, snow, water, wood, metal), `tile?` (16), `colors?`, `save?` | eight tiles in one row (fill, fill_2, fill_3, top, top_left, top_right, platform, decoration) with their rects |
 | | `gen_texture` | `seed?`, `kind?` (value, perlin, fbm, ridged, worley, sky), `width?`, `height?`, `scale?`, `octaves?`, `tileable?`, `colors?`, `clouds?`, `stars?`, `save?` | a tileable noise texture through gradient stops, or an equirect sky (width twice the height) |
 | | `gen_sfx` | `seed?`, `preset?` (pickup, laser, explosion, powerup, hit, jump, blip, random), `params?`, `save?` (.wav) | an sfxr sound: the parameters used (change any and call again), length, peak and a waveform image |
@@ -118,7 +127,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `library_search` | `query?`, `kind?` (model, sound, music, font, texture, sprite, recipe), `license?`, `limit?` (20) | entries of the bundled content library with id, license, author and tags |
 | | `library_add` | `id`, `path?`, `overwrite?` | copies the entry into `assets/` (with the files it needs and a font's license text), or runs a recipe's generator (see "Content: generators and the library" below) |
 | Ship | `project_check` | `checks?`, `ticks?` (300), `target?` (desktop), `budget_ms?` (the target's `sim_ms`), `max_findings?` (200) | findings with severity, file, line, message and a fix: cook errors, broken and unused references, missing credits, sRGB on data textures, each scene's ms per tick, images over the target's `texture_size` and scenes over its `sprite_textures`, 2D text size and contrast; `pass` when there is no error |
-| | `ship_build` | `build?` (true), `ticks?` (300), `version?`, `out?` | full build, a headless smoke run of the host, then `mce ship`: each stage's result and the zip's path (needs the SDK's server, `mce mcp`) |
+| | `ship_build` | `target?` (`desktop`, `web`), `build?` (true), `ticks?` (300), `version?`, `out?` | full build, a headless smoke run of the host, then `mce ship`: each stage's result and the zip's path (needs the SDK's server, `mce mcp`). `web`: the itch.io zip from `mce ship --target web` (a project under the engine checkout's `projects/`, chapter 15, section 15.6), `ticks` played in headless Chromium: `state_hash`, `matches_headless` (the same ticks headless in the browser) and `screenshot` of the last frame |
 | Team | `project_watch` | `since?`, `limit?` (50), `others?` | the other agents' writes from `.mce/events.jsonl`: seq, time, agent, tool, path; `next` for the next call |
 | | `asset_lock` / `asset_unlock` / `asset_locks` | `path`, `note?`, `ttl?` (1800 s) / `path`, `force?` / — | while you hold a lock, other agents' writes to that file are refused |
 | | `task_list` / `task_add` / `task_claim` / `task_update` | `status?` / `title`, `notes?`, `depends?`, `files?` / `id?` / `id`, `status?`, `notes?` | the shared `tasks.mctasks`; a claim is never granted twice, and waits for its dependencies |
@@ -171,7 +180,13 @@ server draws with `mce_player` beside it (with its `--module`), or with the proj
 reports, after the last tick, the live values (`Transient` fields included) of the listed scene
 entities (of the played scene: with `scene`, ids and names name that file's entities) and of every
 entity carrying `GameState`, spawned ones included, up to 64. This is how an
-agent checks "did the player reach the flag" without a window.
+agent checks "did the player reach the flag" without a window. Engine-written fields come back
+too, so the 3D gameplay components read like a debugger: a `NavAgent3D`'s `state`, `target`,
+`distance` and `next_corner`; a `Joint3D`'s `position` (hinge degrees, slider metres), `force`,
+`torque` and `broken`; a `Ragdoll3D`'s `parts`, `root_position` and `settled`; a `Vehicle3D`'s
+`speed`, `rpm`, `gear` and `wheels_on_ground`; a sensor's `hit`, `count` and `enters`.
+`tests/mcp/test_mcp_gameplay3d.cpp` builds `samples/07_gameplay3d` this way, from an empty
+project, and checks it with `inspect`.
 
 `trace` samples fields while the run goes, as series: `{"trace": {"every": 10, "fields":
 [{"entity": "Player", "field": "LocalTransform.position"}, {"entity": "Player", "field":
@@ -223,13 +238,14 @@ other Latin-1 and Latin Extended-A languages:
 
 | Theme | Fonts (body, title) | For |
 |---|---|---|
-| `pixel.mcuitheme` | Pixelify Sans, Press Start 2P | retro and arcade games: dark panels, warm buttons, a hard text shadow |
-| `clean.mcuitheme` | Atkinson Hyperlegible Next, Karla | puzzle, casual and tool-like games: slate panels, blue buttons |
-| `story.mcuitheme` | Crimson Pro, Crimson Pro Bold | novels and quiet games: paper panels, brown buttons, dark ink |
+| `pixel.mcuitheme` | Pixelify Sans, Press Start 2P | retro and arcade games: dark panels, warm bevelled buttons, a hard text shadow |
+| `clean.mcuitheme` | Atkinson Hyperlegible Next, Karla | puzzle, casual and tool-like games: slate panels, rounded blue buttons |
+| `story.mcuitheme` | Crimson Pro, Crimson Pro Bold | novels and quiet games: paper panels with an ink rule, brown buttons, dark ink |
 
 Pick the one that fits the brief and name it as each `.mcui` document's `"theme"` (`ui_theme_set`), or a
 `UiScreen`'s `theme` for one scene; give titles `"font_role": "Title"`. When none fits, copy one to a new
-`.mcuitheme` with a fresh `guid` and change its palette and fonts (`library_add` brings more fonts). Look at the
+`.mcuitheme` with a fresh `guid` and change its palette, fonts and skin (`<theme>_skin.png`, `gen_pixels` can
+redraw it; `library_add` brings more fonts). Look at the
 result with `ui_preview` or `render_frame`, and keep text readable: `project_check` warns about text under 16 px
 or under 4.5:1 contrast. Delete the themes and fonts the game does not use before shipping (`project_check`
 lists them as assets nothing references).
