@@ -50,6 +50,13 @@ function update()
 end
 )";
 
+// Bytecode without the compile-time checks: tests of what the run-time sandbox stops by itself.
+Result<u32> add_unchecked(ScriptHost& host, const char* name, const char* source) {
+    Result<Array<u8>> bc = script::compile_unchecked(name, source);
+    if (!bc) return bc.error();
+    return host.add_bytecode(name, bc.value().span());
+}
+
 void spawn_movers(World& w, u32 n) {
     w.register_components<Mover, Counter>();
     for (u32 i = 0; i < n; ++i) {
@@ -124,7 +131,8 @@ TEST_CASE("script: the sandbox hides the clock, the OS and unseeded randomness")
     w.register_components<Mover, Counter>();
     w.spawn_with(Counter{});
     ScriptHost host;
-    REQUIRE(script::add_source(host, "probe", R"(
+    // The cook rejects these names (test_script_check.cpp); this is what the VM does on its own.
+    REQUIRE(add_unchecked(host, "probe", R"(
 assert(os == nil and io == nil and debug == nil and coroutine == nil)
 assert(print == nil and collectgarbage == nil and getfenv == nil and setfenv == nil)
 assert(math.random == nil and math.randomseed == nil)
@@ -158,9 +166,9 @@ TEST_CASE("script: globals and built-in libraries are read-only") {
     World w;
     w.register_components<Mover, Counter>();
     ScriptHost host;
-    REQUIRE(script::add_source(host, "globals", "function update() leaked = 1 end"));
-    REQUIRE(script::add_source(host, "stdlib", "function update() string.len = nil end"));
-    REQUIRE(script::add_source(host, "api", "function update() mce.get = nil end"));
+    REQUIRE(add_unchecked(host, "globals", "function update() leaked = 1 end"));
+    REQUIRE(add_unchecked(host, "stdlib", "function update() string.len = nil end"));
+    REQUIRE(add_unchecked(host, "api", "function update() mce.get = nil end"));
     host.install(w);
     w.tick(1.0 / 60, 1);
     for (const auto& s : host.scripts()) {
@@ -221,8 +229,9 @@ TEST_CASE("script: errors name the script and the line") {
     w.register_components<Mover, Counter>();
     w.spawn_with(Counter{});
     ScriptHost host;
-    REQUIRE(script::add_source(host, "typo", "function update()\n  mce.each(\"Countr\", function(e) end)\nend"));
-    REQUIRE(script::add_source(host, 
+    // Literal names fail the compile (test_script_check.cpp); these are the run-time errors.
+    REQUIRE(add_unchecked(host, "typo", "function update()\n  mce.each(\"Countr\", function(e) end)\nend"));
+    REQUIRE(add_unchecked(host,
         "field", "function update()\n  mce.each(\"Counter\", function(e)\n mce.get(e, \"Counter\", \"m\") end)\nend"));
     REQUIRE(!script::add_source(host, "noupdate", "local x = 1"));
     host.install(w);

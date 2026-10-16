@@ -29,6 +29,7 @@ mce_add_library(mce_mcp_core UMBRELLA
         src/tools_content.cpp
         src/tools_docs.cpp
         src/tools_render.cpp
+        src/tools_script.cpp
         src/tools_test.cpp
         src/values.cpp
     PUBLIC_DEPS
@@ -49,5 +50,5 @@ mce_add_executable(mce_mcp UMBRELLA
 
 # Scene scripts (M-SCRIPT 1): kit::ScriptSystem components run in this host where scripting is on.
 if(MCE_WITH_SCRIPT)
-    target_link_libraries(mce_mcp_core PRIVATE mce::mce_script)
+    target_link_libraries(mce_mcp_core PRIVATE mce::mce_script mce::mce_script_compiler)  # script_check
 endif()

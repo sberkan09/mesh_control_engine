@@ -239,6 +239,13 @@ void write_log_lines(JsonWriter& w, Span<const log::ConsoleLine> lines, usize ma
     w.end_array();
 }
 
+void write_script_errors(JsonWriter& w, const HeadlessRun& run) {
+    if (run.script_errors.empty()) return;
+    w.key("script_errors").begin_array();
+    for (const ScriptFailure& f : run.script_errors) w.begin_object().key("script").str(f.name.view()).key("error").str(f.error.view()).end_object();
+    w.end_array();
+}
+
 namespace {
 
 void write_component_object(JsonWriter& w, const DocComponent& c) {
@@ -1255,6 +1262,7 @@ bool run_headless_tool(ToolCall& c) {
     c.out.key("log").begin_object().key("warnings").num_u(warnings).key("errors").num_u(errors).key("tail");
     write_log_lines(c.out, lines.span(), static_cast<usize>(log_lines));
     c.out.end_object();
+    write_script_errors(c.out, h);
     if (inspecting) c.out.key("inspect").raw(inspect.json.view());
     if (trace.active()) {
         c.out.key("trace");
@@ -1468,7 +1476,7 @@ Span<const ToolDef> tool_table() {
     static const Array<ToolDef> all = [] {
         Array<ToolDef> a;
         for (const ToolDef& t : kTools) a.push_back(t);
-        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table(), prefab_tool_table(), project_tool_table(), ui_tool_table(), terrain_tool_table(), timeline_tool_table()})
+        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table(), prefab_tool_table(), project_tool_table(), ui_tool_table(), terrain_tool_table(), timeline_tool_table(), script_tool_table()})
             for (const ToolDef& t : group) a.push_back(t);
         return a;
     }();
