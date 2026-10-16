@@ -5,6 +5,7 @@
 
 #include <doctest/doctest.h>
 
+#include <bit>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -175,7 +176,8 @@ TEST_CASE("skeleton2d anim: linear, stepped and bezier keys sample exactly") {
     // Deterministic: the same input gives the same bits.
     f32 w[2];
     asset::skeleton2d_sample(bz, 0.5f, w);
-    CHECK(std::memcmp(v, w, sizeof v) == 0);
+    CHECK(std::bit_cast<u32>(v[0]) == std::bit_cast<u32>(w[0]));
+    CHECK(std::bit_cast<u32>(v[1]) == std::bit_cast<u32>(w[1]));
 }
 
 TEST_CASE("skeleton2d anim: animations cook into CHNK_SKEL2D minor 1") {
