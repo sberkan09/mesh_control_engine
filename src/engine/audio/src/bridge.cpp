@@ -158,6 +158,8 @@ void audio_bridge(Frame& f) {
             if (!pick.clip.is_null() && dev->stream_busy(pick.clip)) return;
             s.handle = start(*dev, s, sp, pick, pos, occluded_db);
             if (oc) dev->set_handle_lowpass(s.handle, occluded_hz);
+            // A new voice plays at the source's own pitch: Doppler sends its shift from the next tick.
+            if (AudioDoppler* dp = sp ? f.world().try_get_mut<AudioDoppler>(e) : nullptr) dp->applied = 1.f;
             s.started = true;
             return;
         }
@@ -173,6 +175,7 @@ void audio_bridge(Frame& f) {
                 again.clip = now;
                 again.pitch = pitch_of(s);
                 s.handle = start(*dev, s, sp, again, pos, occluded_db);
+                if (AudioDoppler* dp = sp ? f.world().try_get_mut<AudioDoppler>(e) : nullptr) dp->applied = 1.f;
                 return;
             }
         }
@@ -196,10 +199,16 @@ void audio_bridge(Frame& f) {
             constexpr f32 kSpeedOfSound = 343.f;
             const math::vec3 to_source = pos - ear;
             const f32 dist = math::length(to_source);
+            const math::vec3 source_velocity = (pos - sp->applied_position) * (1.f / dt);
             f32 shift = 1.f;
-            if (dist > 1e-4f && dp->factor > 0.f) {
+            // Faster than sound in one tick is a teleport, a spawn or a scene change, not a motion:
+            // that tick keeps the shift it had instead of chirping.
+            const bool jumped = math::length(source_velocity) > kSpeedOfSound || math::length(ear_velocity) > kSpeedOfSound;
+            if (jumped) {
+                shift = dp->applied;
+            } else if (dist > 1e-4f && dp->factor > 0.f) {
                 const math::vec3 dir = to_source * (1.f / dist);
-                const f32 source_closing = -math::dot((pos - sp->applied_position) * (1.f / dt), dir) * dp->factor;
+                const f32 source_closing = -math::dot(source_velocity, dir) * dp->factor;
                 const f32 ear_closing = math::dot(ear_velocity, dir) * dp->factor;
                 shift = math::clamp((kSpeedOfSound + ear_closing) / math::max(kSpeedOfSound - source_closing, 1.f), 0.5f, 2.f);
             }

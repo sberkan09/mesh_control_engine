@@ -1,5 +1,6 @@
 #include "mce/kit/stock.h"
 
+#include <cmath>
 #include <optional>
 
 #include "mce/audio/components.h"
@@ -135,7 +136,11 @@ bool audio_occluded(World& w, Entity source, Entity listener, math::vec3 from, m
         physics::QueryFilter q;
         q.layer_mask = mask;
         q.exclude = Span<const Entity>(skip, 2);
-        return w2->raycast({from.x, from.y}, {d.x / dist, d.y / dist}, dist, q).has_value();
+        // The 2D world is the XY plane: z is dropped, as everywhere else in 2D, so the ray is as
+        // long as the plane distance (a 3D scene with only a World2D is read the same way).
+        const f32 plane = std::sqrt(d.x * d.x + d.y * d.y);
+        if (plane < 1e-4f) return false;
+        return w2->raycast({from.x, from.y}, {d.x / plane, d.y / plane}, plane, q).has_value();
     }
     return false;
 }

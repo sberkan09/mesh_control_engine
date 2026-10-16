@@ -144,3 +144,92 @@ TEST_CASE("AudioDoppler: closing raises the pitch, receding lowers it, from eith
     move(e, speed * static_cast<f32>(dt));
     CHECK(w.try_get<AudioDoppler>(e)->applied == 1.f);
 }
+
+namespace {
+
+// Positive-going zero crossings of the left channel: a sine's cycles, whatever its level.
+u32 crossings(const Array<f32>& out, u32 from, u32 to) {
+    u32 n = 0;
+    for (u32 i = from + 1; i < to; ++i) n += out[(i - 1) * 2] <= 0.f && out[i * 2] > 0.f ? 1u : 0u;
+    return n;
+}
+
+}  // namespace
+
+TEST_CASE("AudioDoppler: a voice that starts again plays at the shift, even for a source at a steady speed") {
+    auto dev = test::offline_device();
+    AttenuationCurve curve;
+    curve.min_distance = 1000.f;  // no distance falloff: only the pitch is measured
+    curve.max_distance = 2000.f;
+    REQUIRE(dev->set_attenuation(1, curve));
+    const Array<f32> tone = sine(48000, 1000.0, 0.5f);
+    World w;
+    install(w, *dev);
+    w.register_components<LocalTransform>();
+    w.spawn_with(AudioListener{}, LocalTransform{});
+    AudioSource src;
+    src.clip_handle = dev->register_clip(test::payload(tone)).value();
+    src.loop = true;
+    src.play_on_start = true;
+    LocalTransform at;
+    at.position = {0.f, 0.f, -100.f};
+    AudioSpatial spatial;
+    spatial.attenuation_id = 1;
+    const Entity e = w.spawn_with(src, spatial, AudioDoppler{}, at);
+
+    const f64 dt = 1.0 / 60.0;
+    const f32 speed = 34.3f;
+    const f32 expect = 343.f / (343.f - speed);
+    u64 t = 1;
+    const auto step = [&] {
+        w.try_get_mut<LocalTransform>(e)->position.z += speed * static_cast<f32>(dt);
+        w.tick(dt, t++);
+    };
+    for (int i = 0; i < 4; ++i) step();
+    CHECK(w.try_get<AudioDoppler>(e)->applied == doctest::Approx(expect).epsilon(1e-3));
+
+    // Gameplay plays the source again: a new voice at pitch 1 replaces the old one.
+    dev->stop(w.try_get<AudioSource>(e)->handle);
+    w.try_get_mut<AudioSource>(e)->started = false;
+    step();
+    CHECK(w.try_get<AudioDoppler>(e)->applied == 1.f);
+    step();
+    CHECK(w.try_get<AudioDoppler>(e)->applied == doctest::Approx(expect).epsilon(1e-3));
+    Array<f32> out;
+    test::render(*dev, out, 12000);
+    // 1 kHz at the shift is 1111 Hz: 222 cycles in 0.2 s (9600 frames), not 200.
+    CHECK(crossings(out, 2400, 12000) > 215u);
+}
+
+TEST_CASE("AudioDoppler: a teleport is not a speed; that tick keeps the shift it had") {
+    auto dev = test::offline_device();
+    const Array<f32> tone = test::dc_clip(48000, 0.1f);
+    World w;
+    install(w, *dev);
+    w.register_components<LocalTransform>();
+    const Entity ear = w.spawn_with(AudioListener{}, LocalTransform{});
+    AudioSource src;
+    src.clip_handle = dev->register_clip(test::payload(tone)).value();
+    src.loop = true;
+    src.play_on_start = true;
+    LocalTransform at;
+    at.position = {0.f, 0.f, -100.f};
+    const Entity e = w.spawn_with(src, AudioSpatial{}, AudioDoppler{}, at);
+    const f64 dt = 1.0 / 60.0;
+    w.tick(dt, 1);
+    w.tick(dt, 2);
+    CHECK(w.try_get<AudioDoppler>(e)->applied == 1.f);
+
+    // The source jumps 60 m in one tick (3,600 m/s): no chirp.
+    w.try_get_mut<LocalTransform>(e)->position.z += 60.f;
+    w.tick(dt, 3);
+    CHECK(w.try_get<AudioDoppler>(e)->applied == 1.f);
+    // So does the listener (a scene change puts it somewhere else).
+    w.try_get_mut<LocalTransform>(ear)->position.z -= 60.f;
+    w.tick(dt, 4);
+    CHECK(w.try_get<AudioDoppler>(e)->applied == 1.f);
+    // A real approach right after still shifts.
+    w.try_get_mut<LocalTransform>(e)->position.z -= 34.3f / 60.f;  // toward the listener, now behind it
+    w.tick(dt, 5);
+    CHECK(w.try_get<AudioDoppler>(e)->applied > 1.05f);
+}

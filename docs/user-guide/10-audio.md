@@ -98,7 +98,7 @@ tick the bridge casts a ray from the listener to the source through the 3D physi
 2D one when there is no 3D world), against the colliders whose layers are in `mask`. When something
 is in the way the source fades over 0.1 s by `gain_db` (default -12) and its own low-pass closes
 towards `lowpass_hz` (default 800); when the way clears, both come back. The source and the
-listener never block themselves. A game with its own idea of a wall (a door state, a grid) sets
+listener never block themselves. With only the 2D physics world, the ray runs in the XY plane and ignores z, as 2D does everywhere. A game with its own idea of a wall (a door state, a grid) sets
 `AudioRef::occlusion` to its own test. The stock kit installs the physics one.
 
 ```json
