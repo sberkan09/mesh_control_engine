@@ -21,8 +21,9 @@ global illumination (the probe volume is shared by all views).
   pool, shown by a `TextureRef` that `Sprite`, a `MeshRef` material slot and a `mce_ui` image accept. A
   texture is drawn before the views that sample it; a cycle is a `project_check` error.
 - **Fallback.** No `RenderTexture` and one camera takes today's path unchanged (golden-image gate).
-- **LocalPlayer.** Component `{slot, device}`; `InputMap` evaluates per slot. `run_headless` takes
-  `player=<slot>` on input scripts. Keyboard/mouse is slot 0; pads join by `join_action`.
+- **Local players (as built, step 1).** A map flagged for slot N is always active and publishes
+  `player_action_id(N, name)`; gamepad bindings read the slot's assigned pad; scripts spell `P2/Move`.
+  The `LocalPlayer` component `{slot}` arrives with the co-op kit (step 5).
 - **Model split.** Steps 2–4 change the render pipeline and per-frame GPU resources: Opus. Steps 1, 5 and 6
   follow existing patterns (input maps, kit components, MCP tools): Sonnet.
 
@@ -30,7 +31,7 @@ global illumination (the probe volume is shared by all views).
 
 | # | Step | Linear | Model | State |
 |---|---|---|---|---|
-| 1 | Local players and per-slot input | SBA-161 | Sonnet | not started |
+| 1 | Local players and per-slot input: slot maps (`MapFlag` bits 8..11), per-slot pads, join by button, `P2/` script names (the `LocalPlayer` component moves to step 5, where something uses it) | SBA-161 | Sonnet | done |
 | 2 | Camera viewports and targets, several cameras per frame | SBA-162 | Opus | not started |
 | 3 | `RenderTexture`: minimap, mirror, monitor, picture-in-picture | SBA-163 | Opus | not started |
 | 4 | Split-screen: layouts, per-view HUD, listener, budgets | SBA-164 | Opus | not started |
