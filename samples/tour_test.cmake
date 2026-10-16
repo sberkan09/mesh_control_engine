@@ -1,7 +1,11 @@
 # The tour samples' headless contract (cmake -P): the pack plays with no error and two plays of the
 # same ticks end on the same state hash (the M-COVER samples are data, so this is the whole test).
 function(run_player out_var)
-    execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -ticks "${TICKS}" -pack "${PACK}"
+    set(scene_args "")
+    if(SCENE)  # optional: the scene to play (default: the pack's first)
+        set(scene_args -scene "${SCENE}")
+    endif()
+    execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -ticks "${TICKS}" -pack "${PACK}" ${scene_args}
                     RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
     if(NOT rc EQUAL 0)
         message(FATAL_ERROR "mce_player exited ${rc}\n${out}\n${err}")

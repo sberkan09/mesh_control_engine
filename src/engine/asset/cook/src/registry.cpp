@@ -51,6 +51,28 @@ struct Sidecar {
 
 }  // namespace
 
+String normalize_scope_path(StringView p) {
+    String s;
+    for (char c : p) s += c == '\\' ? '/' : c;
+    StringView v = s.view();
+    while (v.size() >= 2 && v[0] == '.' && v[1] == '/') v.remove_prefix(2);
+    if (v.size() >= 7 && v.substr(0, 7) == "assets/") v.remove_prefix(7);
+    while (!v.empty() && v.back() == '/') v.remove_suffix(1);
+    if (ends_with(v, kSidecarExt)) v.remove_suffix(kSidecarExt.size());
+    return String(v);
+}
+
+bool in_scope(StringView rel, Span<const String> scope) {
+    if (scope.empty()) return true;
+    for (const String& p : scope) {
+        const StringView v = p.view();
+        if (v.empty()) return true;  // "assets/" itself: everything
+        if (rel == v) return true;
+        if (rel.size() > v.size() && rel.substr(0, v.size()) == v && rel[v.size()] == '/') return true;
+    }
+    return false;
+}
+
 Guid generate_guid() {
     std::random_device rd;
     auto word = [&] { return (static_cast<u64>(rd()) << 32) ^ static_cast<u64>(rd()); };
@@ -60,7 +82,8 @@ Guid generate_guid() {
     return g;
 }
 
-bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& importers, bool adopt, DiagList& diags) {
+bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& importers, bool adopt, DiagList& diags,
+                         Span<const String> scope) {
     records_.clear();
     root_ = path_join(project_root, "assets");
     const u32 errors_before = diags.error_count();
@@ -74,6 +97,7 @@ bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& import
         return false;
     }
 
+    DiagList quiet;  // errors of files outside `scope`: collected nowhere
     // Pass 1: sidecars.
     Array<Sidecar> sidecars;
     for (const String& f : files) {
@@ -82,21 +106,22 @@ bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& import
         sc.rel = f;
         sc.source_rel = String(f.view().substr(0, f.size() - kSidecarExt.size()));
         const String disp = display(f);
+        DiagList& d1 = in_scope(sc.source_rel.view(), scope) ? diags : quiet;  // outside the scope: not this run's business
         Array<byte> bytes;
         if (!asset::read_file(path_join(root_, f), bytes)) {
-            diags.error(Errc::IoError, disp, 0, 0, kStage, "cannot read sidecar");
+            d1.error(Errc::IoError, disp, 0, 0, kStage, "cannot read sidecar");
             sidecars.push_back(std::move(sc));
             continue;
         }
         JsonError je;
         if (!sc.doc.parse(StringView(reinterpret_cast<const char*>(bytes.data()), bytes.size()), je)) {
-            diags.error(Errc::ParseError, disp, je.line, je.col, kStage, je.message.view());
+            d1.error(Errc::ParseError, disp, je.line, je.col, kStage, je.message.view());
         } else {
             const JsonValue g = sc.doc.root().get("guid");
             auto parsed = g.is_string() ? asset::parse_guid(g.as_string()) : Result<Guid>(Error(Errc::ParseError, kStage));
             if (!parsed) {
-                diags.error(Errc::ParseError, disp, g.valid() ? g.line() : 1, g.valid() ? g.col() : 1, kStage,
-                            "sidecar needs a \"guid\" in canonical UUID form");
+                d1.error(Errc::ParseError, disp, g.valid() ? g.line() : 1, g.valid() ? g.col() : 1, kStage,
+                         "sidecar needs a \"guid\" in canonical UUID form");
             } else {
                 sc.guid = parsed.value();
                 sc.valid = true;
@@ -120,15 +145,17 @@ bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& import
         if (ends_with(f, kSidecarExt)) continue;
         const String ext = lower_extension(f);
         const String disp = display(f);
+        const bool wanted = in_scope(f.view(), scope);
+        DiagList& dg = wanted ? diags : quiet;
         const IImporter* imp = importers.for_extension(ext);
         if (!imp) {
-            if (!ignorable(ext)) diags.warning(disp, 0, 0, kStage, "no importer for this file type; ignored");
+            if (!ignorable(ext) && wanted) diags.warning(disp, 0, 0, kStage, "no importer for this file type; ignored");
             continue;
         }
         AssetRecord rec;
         rec.source_path = f;
         if (!asset::read_file(path_join(root_, f), rec.source)) {
-            diags.error(Errc::IoError, disp, 0, 0, kStage, "cannot read source file");
+            dg.error(Errc::IoError, disp, 0, 0, kStage, "cannot read source file");
             continue;
         }
         rec.source_hash = asset::xxh64(rec.source.data(), rec.source.size());
@@ -136,13 +163,13 @@ bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& import
         if (imp->native()) {
             JsonError je;
             if (!rec.doc.parse(StringView(reinterpret_cast<const char*>(rec.source.data()), rec.source.size()), je)) {
-                diags.error(Errc::ParseError, disp, je.line, je.col, kStage, je.message.view());
+                dg.error(Errc::ParseError, disp, je.line, je.col, kStage, je.message.view());
                 continue;
             }
             const JsonValue g = rec.doc.root().get("guid");
             auto parsed = g.is_string() ? asset::parse_guid(g.as_string()) : Result<Guid>(Error(Errc::ParseError, kStage));
             if (!parsed) {
-                diags.error(Errc::MissingSidecar, disp, g.valid() ? g.line() : 1, g.valid() ? g.col() : 1, kStage,
+                dg.error(Errc::MissingSidecar, disp, g.valid() ? g.line() : 1, g.valid() ? g.col() : 1, kStage,
                             "native asset needs a top-level \"guid\" in canonical UUID form");
                 continue;
             }
@@ -173,14 +200,14 @@ bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& import
                     break;
                 }
             }
-            if (!sc && adopt) {
+            if (!sc && adopt && wanted) {
                 String to(f);
                 to += kSidecarExt;
                 Sidecar fresh;
                 fresh.rel = to;
                 fresh.source_rel = f;
                 fresh.guid = generate_guid();
-                write_sidecar(path_join(root_, to), fresh.guid, *imp, diags);
+                write_sidecar(path_join(root_, to), fresh.guid, *imp, dg);
                 String text("{\"guid\":\"");
                 text += asset::to_string(fresh.guid).view();
                 text += "\",\"importer\":\"";
@@ -193,7 +220,7 @@ bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& import
                 sc = &sidecars.back();
             }
             if (!sc) {
-                diags.error(Errc::MissingSidecar, disp, 0, 0, kStage, "unregistered asset (no .mceasset sidecar): cook with adopt (mce_cook --adopt, or the MCP cook_run with \"adopt\": true)");
+                dg.error(Errc::MissingSidecar, disp, 0, 0, kStage, "unregistered asset (no .mceasset sidecar). Fix: adopt it, which writes the sidecar: over MCP call cook_run {\"adopt\": true}; on the command line run `mce cook <project> --adopt` (`mce_cook <project> --adopt` without the SDK launcher)");
                 continue;
             }
             sc->claimed = true;
@@ -202,7 +229,7 @@ bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& import
             const JsonValue importer = root.get("importer");
             const String sdisp = display(sc->rel);
             if (!importer.is_string()) {
-                diags.error(Errc::ParseError, sdisp, 1, 1, kStage, "sidecar needs an \"importer\" string");
+                dg.error(Errc::ParseError, sdisp, 1, 1, kStage, "sidecar needs an \"importer\" string");
                 continue;
             }
             const IImporter* chosen = importers.find(importer.as_string());
@@ -210,12 +237,12 @@ bool AssetRegistry::scan(StringView project_root, const ImporterRegistry& import
                 String msg("unknown importer '");
                 msg += importer.as_string();
                 msg += "'";
-                diags.error(Errc::NotFound, sdisp, importer.line(), importer.col(), kStage, msg);
+                dg.error(Errc::NotFound, sdisp, importer.line(), importer.col(), kStage, msg);
                 continue;
             }
             const JsonValue settings = root.get("settings");
             if (settings.valid() && !settings.is_object()) {
-                diags.error(Errc::ParseError, sdisp, settings.line(), settings.col(), kStage, "\"settings\" must be an object");
+                dg.error(Errc::ParseError, sdisp, settings.line(), settings.col(), kStage, "\"settings\" must be an object");
                 continue;
             }
             rec.guid = sc->guid;

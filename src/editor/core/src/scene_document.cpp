@@ -274,6 +274,7 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
                 cook::String msg("unknown component type '");
                 msg += tname;
                 msg += "' (not registered with mce_refl in the editor)";
+                msg += cook::kStaleModuleHint;
                 diags.error(Errc::NotFound, file, comps.at(c).line(), comps.at(c).col(), kStage, msg);
                 continue;
             }
