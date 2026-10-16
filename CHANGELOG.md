@@ -5,6 +5,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Accessibility checks on themed UI documents, M-UI-DATA2 step 3 (SBA-155): `project_check` judges the Text,
+  Button and Toggle labels of a `.mcui` document with the kind's default look and its theme applied (before,
+  themed colors were skipped and unstated sizes unseen), and names the widget by its path. User guide 24.5.
 - A platformer in Luau, M-SCRIPT step 6a (SBA-152): `projects/EmberScript` is a side-view game of scripts and
   data (player controller, enemy state machine, goal) with `.mctest` scenarios, and `ScriptVars` gives a
   script-only game 16 saved numbers per entity to remember things in. User guide 27.8.
