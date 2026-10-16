@@ -220,13 +220,22 @@ bool record_view(rhi::CommandBuffer& cmd, World& world, Span<const ViewEntry> vi
         if (linear)
             for (auto& col : view.view_proj.c) col[1] = -col[1];
         batch.begin(view);
+        // A view that does not own its whole target (a split-screen cell, a second camera into a texture)
+        // loads what is there and fills its own rect with its clear color: a clear would wipe the others.
+        bool earlier = false;
+        for (usize j = 0; j < i; ++j) earlier = earlier || views[j].target == v.target;
+        const bool owns_target = v.target.is_null()
+                                     ? (ctx.target_size.width == 0 || covers(v.rect, rhi::Rect2D{0, 0, ctx.target_size.width, ctx.target_size.height}))
+                                     : true;
+        const bool fill = !on_3d && (earlier || !owns_target);
+        if (fill && clear.a > 0.0f) ctx.extract2d->add_fill(batch, linear_clear(clear));  // alpha 0: an overlay camera
         ctx.extract2d->extract(world, batch);
         batch.build();
         if (!linear && st.window_2d++ == 0) st.first_2d = batch.stats();
         ++st.views_2d;
         rhi::PassAttachment color;
         color.texture = target;
-        color.load = on_3d ? rhi::LoadOp::Load : rhi::LoadOp::Clear;
+        color.load = on_3d || fill ? rhi::LoadOp::Load : rhi::LoadOp::Clear;
         set_clear(color, linear ? linear_clear(clear) : clear);
         rhi::RenderPassDesc pass;
         pass.colors = Span<const rhi::PassAttachment>(&color, 1);

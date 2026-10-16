@@ -1,6 +1,6 @@
 # M-VIEWS — Several views and local players (milestone record)
 
-**Status:** active (added 2026-10-16; design note written; steps 1-5 done). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
+**Status:** done 2026-10-16 (added 2026-10-16; design note written; steps 1-6 done). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
 
 **Why:** one camera draws into the window. `Renderer::record_3d(cmd, scene, target)` already renders to a
 texture, but only a C++ host can use it. Input has no notion of a second player. A game cannot show a
@@ -134,6 +134,27 @@ global illumination (the probe volume is shared by all views).
 - Known limits: a 3D player needs a `Camera3DComponent` per `PlayerCamera` (the offset is yours); two players on one
   pad is not possible; the player count is not part of any resource hash (the entities are).
 
+**Step 6 — MCP and gates** (editor/mcp/src/tools_views.cpp, tools_render.cpp):
+- `view_list` (camera views, `SplitScreen`, textures with their cameras and the surfaces that show them, `problems`),
+  `view_add` (a `RenderTexture`, its camera and an optional `ShowRenderTexture` in one call), `player_list` (`CoopGame`,
+  per player spawns, cameras and the `.mcinput` maps with `"player"`, `problems`), `player_setup` (a whole co-op rig).
+  They edit the open scene through `EditorScene` (undoable, like `entity_create`), read the project's `.mcinput` files for
+  the map check, and need no GPU.
+- `render_frame` (and `render_sheet`, `image_diff`'s `render`) take `view`: `{"player": n}` draws the camera of local
+  player n alone and full size (the entity with a `PlayerCamera` for them, else the `CameraView` whose `split` is n),
+  `{"texture": entity}` the camera that fills that `RenderTexture`; it is the existing `camera` override resolved from the
+  scene (not with `camera`). Without `view` the frame is the window as the players see it, split cells included. Join the
+  players through `input` (`"5 P2/Join"`): their cameras follow their players from the tick they join.
+- Found by looking at the demo frame (software render_frame): a 2D view that did not own its whole target cleared it, so in
+  a split screen only the last cell survived (GL clears ignore the viewport; SDL GPU clears the attachment). `record_views` now
+  loads for such a view (a split cell, a second camera into a texture) and fills its rect with its camera's clear color
+  (`SpriteExtract::add_fill`, a solid quad under everything; a clear color with alpha 0 is an overlay camera and fills nothing).
+  `tests/kit/test_kit_gl.cpp` has the GL case; `tests/mcp/test_mcp_agent.cpp` checks the four cells of `samples/09_coop`.
+- Also fixed: the co-op spawn is deferred inside a system phase, so the player's tint is a prefab override, not an edit of the
+  spawned entity (which did not exist yet).
+- Gates: the MCP transcript golden and `docs/engine/capabilities.md` regenerated; user guide 8.4, 11.3, 14.2, 18 updated.
+  GPU frame budgets of a four-way split wait on a device session (the `coop_sample_player_gpu` test is the hook).
+
 ## Steps
 
 | # | Step | Linear | Model | State |
@@ -143,7 +164,7 @@ global illumination (the probe volume is shared by all views).
 | 3 | `RenderTexture`: minimap, mirror, monitor, picture-in-picture | SBA-163 | Opus | done |
 | 4 | Split-screen: layouts, per-view HUD, listener, budgets | SBA-164 | Opus | done |
 | 5 | The co-op kit and `samples/09_coop` | SBA-165 | Sonnet | done |
-| 6 | MCP `view_*` / `player_*`, `render_frame` view argument, guide and gates | SBA-166 | Sonnet | not started |
+| 6 | MCP `view_*` / `player_*`, `render_frame` view argument, guide and gates | SBA-166 | Sonnet | done |
 
 **Gates:**
 - One camera and no `RenderTexture` draws the same pixels as before (GL and SDL GPU goldens).
