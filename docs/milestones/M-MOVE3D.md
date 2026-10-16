@@ -1,6 +1,6 @@
 # M-MOVE3D — 3D movement that feels shipped (milestone record)
 
-**Status:** active (added 2026-10-16; step 1 done). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
+**Status:** active (added 2026-10-16; steps 1–2 done). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
 
 **Why:** M-GAMEPLAY3D gave 3D games their systems: navmesh agents, joints, ragdolls, vehicles and sensors.
 What a player feels is still raw:
@@ -22,7 +22,7 @@ It needs no device. Every step gates on headless runs and replay hashes in `loca
 | # | Step | Linear | State |
 |---|---|---|---|
 | 1 | Character feel: acceleration, deceleration and air control; coyote time, jump buffer, jump cut and air jumps; sprint and crouch; `Landed3D` | SBA-134 | done |
-| 2 | Camera: spring arm, look-ahead, first person, lock-on | SBA-135 | not started |
+| 2 | Camera: spring arm, look-ahead, first person, lock-on | SBA-135 | done |
 | 3 | Vehicle feel: anti-roll, downforce, wheel slip and skid events, self-righting, gears as data | SBA-136 | not started |
 | 4 | AI drivers: `VehicleDriver3D` on a waypoint path, laps; agents with acceleration | SBA-137 | not started |
 | 5 | Animation from movement: `Locomotion3D`, foot IK on slopes and stairs | SBA-138 | not started |
@@ -70,3 +70,30 @@ still pass.
 - sprint ×1.5 and crouch ×0.5, with standing refused under a 1.3 m roof;
 - a landing at sqrt(2g·2.1) m/s that fires a `ParticleBurst`;
 - a replay of every feature to the same hash.
+
+## Step 2 — the camera
+
+`CameraFollow3D` (`mce/kit/effects.h`) gains these fields. Each is off by default, and with all of
+them off the camera's pose is computed exactly as before.
+
+- **Spring arm (`collide`):** each tick, `World3D::camera_sweep` sweeps a sphere of
+  `collision_radius` from the pivot along the boom. The arm snaps in to the hit, measured along the
+  boom, and grows back at `return_speed` once the way is clear. On the camera's first tick it starts
+  at its reach rather than growing out from the target.
+- **Look-ahead:** the pivot leads by `look_ahead` seconds of the target's ground velocity. The
+  velocity is measured from the unsmoothed pivot's change per tick (`last_goal`), so it works for any
+  target: a character, a body or an entity moved by a sequence.
+- **First person:** the camera sits on the pivot with the orbit's rotation.
+- **Lock-on:** the yaw turns the short way round, at most `lock_on_rate` × dt per tick, towards
+  `atan2(target − locked)`, which puts the locked entity straight beyond the target. Look input
+  stops turning the yaw while locked.
+
+**Tests:** `tests/kit/test_move3d.cpp` covers:
+
+- a wall face at 3 m puts the camera at 2.8 m (the 0.2 m sphere), while a boom without `collide`
+  stays at 6 m;
+- with the wall removed, the arm is at 3.8 m after 15 ticks at 4 m/s, then back at 6 m;
+- look-ahead of 0.5 s at 3 m/s leads by 1.5 m and ignores vertical motion;
+- the first-person pose and look direction;
+- lock-on at 3 rad/s turns 0.5 rad in 10 ticks, then lines the camera, the target and the foe up;
+- a replay with every feature hashes the same.
