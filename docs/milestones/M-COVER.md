@@ -1,6 +1,6 @@
 # M-COVER — Docs and sample coverage (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–3 done). Plan: ROADMAP §M-COVER; Linear SBA-157 … SBA-160.
+**Status:** done (added 2026-10-16; steps 1–4 done). Plan: ROADMAP §M-COVER; Linear SBA-157 … SBA-160.
 
 **Why:** the capability table (M-DATA-REACH) already fails `local_ci.sh` when a component, asset type or MCP
 tool is named by no document. Nothing checks that a component is *shown working*. A user who finds
@@ -21,7 +21,7 @@ It needs no device and no engine code: the work is a gate and data-only samples.
 | 1 | The gate: `capabilities.py --check` (in the walls stage) fails for a component that no file under `samples/`, `projects/` or `templates/` names, unless `scripts/ci/sample_coverage.allow` lists it with a reason; it also fails for a listed component a sample now shows, so the list only shrinks. The table gains a "Shown in" column | SBA-157 | done |
 | 2 | A 3D tour sample, data only, played by the stock player: bone attachment, IK, locomotion, camera shake and blends, probes, GI volume, foliage, terrain collider, decal, 3D particles, nav areas, links and obstacles, a sensor ray, a waypoint circuit and a vehicle driver. A ctest runs it headless twice for the same hash | SBA-158 | done |
 | 3 | A 2D and gameplay tour: a 2D skeleton with animator, slots, follow and IK, camera shake and shake triggers, particle bursts, physics events, a nav grid source with path agents, sound captions, a token pool | SBA-159 | done |
-| 4 | A systems tour: replicated and owned entities, a script system, dialogue; the allow-list ends with only state the engine writes (`Blackboard`, `SceneChunkStatus`) | SBA-160 | not started |
+| 4 | A systems tour: replicated and owned entities, dialogue (the script system is shown by the script template); the allow-list ends with only state the engine writes (`Blackboard`, `SceneChunkStatus`) | SBA-160 | done |
 
 **Gates:**
 - `local_ci.sh` walls fails on an unshown, unlisted component, and on a stale list entry.
@@ -83,3 +83,21 @@ It needs no device and no engine code: the work is a gate and data-only samples.
 - **Test.** `ctest -R kit2d_tour`: 600 ticks, 10 entities, no `[error]` or `[warn]`, the same hash twice.
 - **List.** 14 components leave `sample_coverage.allow`; 7 remain (net, script, dialogue, and the two engine-written
   ones).
+
+## Step 4 — The systems tour (done, SBA-160)
+
+- **Sample.** `samples/systems_tour`, a small headless program, because these need code to start: a story
+  (`story/`, compiled by `mce story compile` into a header at build time) and one NPC entity with `NetReplicated`
+  (archetype 1), `NetOwner` (peer 0), `Dialogue` and `DialogueInput`. It starts the `guide` conversation, presses
+  the confirm key through each page, picks the first option and checks the end state.
+- **Checked by running it.** The conversation ends after 12 ticks with `talks` 1 and `asked_server` set; the net
+  components keep their values.
+- **Test.** `ctest -R sample_systems_tour`.
+- **List.** `NetReplicated`, `NetOwner`, `Dialogue` and `DialogueInput` leave `sample_coverage.allow`
+  (`ScriptSystem` already left it when the script template landed). Only `Blackboard` and `SceneChunkStatus`
+  remain, state the engine writes.
+
+## Result
+
+Every reflected component is named by a guide chapter and by at least one sample, project or template, or sits
+on the allow-list with a reason; `local_ci.sh` (walls stage) keeps it that way.

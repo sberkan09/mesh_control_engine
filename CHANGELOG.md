@@ -5,9 +5,27 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Accessibility checks on themed UI documents, M-UI-DATA2 step 3 (SBA-155): `project_check` judges the Text,
+  Button and Toggle labels of a `.mcui` document with the kind's default look and its theme applied (before,
+  themed colors were skipped and unstated sizes unseen), and names the widget by its path. User guide 24.5.
+- Planned: M-PROCGEN (SBA-171 … SBA-175), deterministic procedural levels as data (docs/milestones/M-PROCGEN.md).
+- Luau recipes (a countdown, a state machine, spawning, physics events), user guide 27.9; M-SCRIPT is done.
+- Script games for agents, M-SCRIPT step 6b (SBA-152): the `start_game` prompt offers a script-only game, `docs_search`
+  finds chapter 27, `script_check` takes `assets/scripts/x.luau` as well as `scripts/x.luau`, and the guide lists the
+  gotchas a blind agent hit (27.8).
 - A platformer in Luau, M-SCRIPT step 6a (SBA-152): `projects/EmberScript` is a side-view game of scripts and
   data (player controller, enemy state machine, goal) with `.mctest` scenarios, and `ScriptVars` gives a
   script-only game 16 saved numbers per entity to remember things in. User guide 27.8.
+- 2D skeleton demo and gates, M-ANIM2D step 6 (SBA-145): `samples/skel2d_demo` is a cut-out courier with no code: a
+  15-bone `.mcskel2d` on one generated atlas, idle, walk and jump clips under a `.mcanim` graph that a timeline
+  drives, a weighted cape mesh with deform keys, a face attachment swap, IK legs that keep the feet on `IKTarget2D`
+  entities, and a lantern on a hand bone. It plays headless twice for the same hash (`ctest -R skel2d_demo`) and
+  `test_kit` checks its poses. The six 2D skeleton components leave `scripts/ci/sample_coverage.allow`. User
+  guide 7.13.
+- Systems tour sample, M-COVER step 4 (SBA-160): `samples/systems_tour` shows `NetReplicated`, `NetOwner`, `Dialogue`
+  and `DialogueInput` on one NPC with a compiled story and runs the conversation to its end
+  (`ctest -R sample_systems_tour`). The sample coverage list now holds only `Blackboard` and `SceneChunkStatus`.
+  M-COVER is done.
 - Behavior tree MCP tools, the squad demo and the gates, M-AI step 6 (SBA-133): `bt_create`, `bt_add_node` and
   `bt_set` write a `.mcbt` the cook checks before anything is written, and `bt_trace` plays a saved scene
   headless and reports one brain's running path and blackboard over time and when each node started.

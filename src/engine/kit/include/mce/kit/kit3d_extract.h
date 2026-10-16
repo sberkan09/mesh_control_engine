@@ -42,6 +42,8 @@
 
 namespace mce::kit {
 
+class RenderTextures;
+
 struct Kit3DStats {
     u32 meshes = 0;          // MeshRefs submitted
     u32 instances = 0;       // StaticInstances3D copies submitted
@@ -76,6 +78,8 @@ public:
     void init(render::MeshStore& meshes, asset::AssetSystem* assets);
     // The store terrains upload their splat-layer arrays into (renderer.textures(); null: none).
     void set_texture_store(render::TextureStore* textures) { textures_ = textures; }
+    // M-VIEWS 3: a MeshRef with ShowRenderTexture draws the texture as its base color or emission.
+    void set_render_textures(const RenderTextures* rts) { render_textures_ = rts; }
     void shutdown();
     // Forgets every cached mesh / texture binding and transform (after remounting a different pack).
     void reset(asset::AssetSystem* assets);
@@ -192,6 +196,8 @@ private:
     Array<u32> world_stamp_;       // per entity index: the extract that last drew it
     Array<u8> prev_ok_;            // per entity index: this frame's draw had last frame's world (worlds_)
     bool extra_view_ = false;      // extract_view(): a later view of the frame
+    const RenderTextures* render_textures_ = nullptr;
+    Array<render::MaterialOverride> screen_materials_;  // this extract's ShowRenderTexture materials (reserved up front: stable)
     u32 world_parity_ = 0;
     u32 frame_stamp_ = 0;
     Kit3DStats stats_;

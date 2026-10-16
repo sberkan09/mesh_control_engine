@@ -108,7 +108,8 @@ public:
 
     // ---- frame
     // Records a built batch into the currently open pass of `cmd`: one MDI per batch group.
-    void record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch);
+    // `linear_output`: the pass's target holds linear color (a float render texture, M-VIEWS): no sRGB encode.
+    void record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch, bool linear_output = false);
     // Records the 2D post pass (FR-R2D-100): samples `source` (the finished 2D frame, a sampled
     // color target of `size`) and writes `target` (null = backbuffer). Outside any pass. With no
     // effect enabled it is a plain copy.

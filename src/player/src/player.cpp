@@ -98,6 +98,7 @@
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/kit/video.h"
+#include "mce/kit/render_textures.h"
 #include "mce/kit/views.h"
 #include "mce/liveops/game_services.h"
 #include "mce/liveops/liveops.h"
@@ -510,6 +511,8 @@ public:
             MCE_TRY(extract_.init(renderer_, &assets_));
             MCE_TRY(videos_.init(renderer_, &assets_));
             extract_.set_videos(&videos_);
+            render_textures_.init(renderer_);
+            extract_.set_render_textures(&render_textures_);
             samples::HudFont hud;
             MCE_TRY_ASSIGN(font_, renderer_.create_font(hud.metrics, hud.glyphs.span(), {}, std::as_bytes(hud.atlas.span()),
                                                         "player.hud_font"));
@@ -726,13 +729,16 @@ public:
         rhi::CommandBuffer cmd(mem::frame());
         // M-VIEWS: with a CameraView in the scene every view draws into its rect (render_views);
         // the debug view overrides (-view.*) and the UI preview keep the single view.
+        if (!ui_preview_) render_textures_.sync(world_, capture_due() ? 1.0f / 60.0f : static_cast<f32>(rc.frame_dt));
         const bool multi = !ui_preview_ && !film_ && view_entity().is_null() && view_free_.empty() &&
-                           kit::collect_views(world_, bb, views_);
+                           kit::collect_views(world_, bb, views_, &kit::render_texture_size, &render_textures_);
+        if (!multi && !ui_preview_) render_textures_.clear_new(cmd);
         if (multi) {
             kit::ViewRecordContext vc;
             vc.renderer = &renderer_;
             vc.extract3d = three_d_ ? &extract3d_ : nullptr;
             vc.extract2d = &extract_;
+            vc.render_textures = &render_textures_;
             vc.target_size = bb;
             vc.clear = clear;
             vc.alpha = alpha;
@@ -860,6 +866,7 @@ public:
         if (window_) window_->set_relative_mouse(false);
         clips_.release_all();
         extract3d_.shutdown();
+        render_textures_.shutdown();
         videos_.shutdown();
         extract_.shutdown();
         if (device_) renderer_.shutdown();
@@ -1788,6 +1795,7 @@ private:
         hud.begin(render::compute_screen_view(bb), render::PassId::Screen2D);
         if (film_) add_fullscreen_video(hud, bb);
         subtitles_.submit(hud, -124);  // under the scene's UI screens: a menu covers them
+        screens_.bind_render_textures(render_textures_);
         screens_.submit(hud, -120);  // the scene's UI screens, under the game's UI layers
         // Game UI under the pause veil (sort layer 0) and the console (200).
         for (u32 i = 0; i < desc_.ui_layer_count; ++i) {
@@ -1941,6 +1949,7 @@ private:
         MCE_TRY(renderer_.init_3d(fd));
         extract3d_.init(renderer_.meshes(), &assets_);
         extract3d_.set_texture_store(&renderer_.textures());
+        extract3d_.set_render_textures(&render_textures_);
         // High caps no Environment3D cascade count (its 3 is only the scene default).
         if (tier == render::QualityTier::High) quality.shadow_cascades = render::kMaxCascades;
         extract3d_.set_quality(quality);
@@ -2705,6 +2714,7 @@ private:
     audio::ClipBank clips_;
     kit::SpriteExtract extract_;
     kit::VideoTextures videos_;  // kit::VideoPlayer pictures (M-CINEMA 5)
+    kit::RenderTextures render_textures_;  // cameras drawing into textures (M-VIEWS 3)
     render::SpriteSetId film_set_;  // this frame's fullscreen video, when film_
     f32 film_aspect_ = 0.0f;
     bool film_ = false;

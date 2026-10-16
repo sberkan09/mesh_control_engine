@@ -1,6 +1,6 @@
 # M-ANIM2D — 2D skeletal animation (milestone record)
 
-**Status:** active (steps 1 to 5 done; step 6 next).
+**Status:** done (steps 1–6; SBA-146, the Spine/DragonBones import, is Later).
 **Why:** 2D characters animate only by sprite frames today; cut-out rigs (bones, blended clips, skinned meshes, IK) are what Godot's Skeleton2D, Unity's 2D Animation and Spine give 2D games. Added 2026-10-16 under the user's standing instruction to extend the roadmap when no milestone is free.
 **Plan:** ROADMAP § M-ANIM2D.
 **Measured on:** the Linux CI container.
@@ -14,7 +14,7 @@
 | 3. Mesh attachments and CPU skinning, deform keys (and the slot keys moved from step 2) | SBA-142 | done |
 | 4. Two-bone and CCD IK as data | SBA-143 | done |
 | 5. Editor skeleton panel and MCP `skel2d_*` tools | SBA-144 | done |
-| 6. Demo, user guide, gates | SBA-145 | — |
+| 6. Demo, user guide, gates | SBA-145 | done |
 | Later: Spine / DragonBones JSON import | SBA-146 | not scheduled |
 
 ## Step 1 — skeletons, the world pose and the slots
@@ -96,21 +96,21 @@ its parents (with it the tip lands close). There is no `"stretch"` option: bones
 lengths. A `.mcanim` graph's IK chains still apply to 3D only; 2D IK comes from the skeleton. With
 two `IKTarget2D` entities on one constraint the later in query order wins.
 
-## Step 5: the Skeleton panel and the MCP `skel2d_*` tools
+## Step 6: the demo, the user guide and the gates
 
 | Item | Where | Evidence |
 |---|---|---|
-| One document layer for both front ends: `editor::skel2d::new_text`, `add_bone`, `set_bone_rest`, `add_slot`, `add_ik`, `key` take the `.mcskel2d` text and return it edited in the indented form. They only change the JSON (a small mutable tree over the cook's reader); the importer is the validator, so there is no second rule set. `key` creates the animation and the channel list, keeps keys sorted and replaces a key at the same time | `src/editor/core/src/skeleton2d_editor.cpp`, `mce/editor/skeleton2d_editor.h` | `test_editor` "skeleton2d editor: create, edit, save; the file cooks and reopens to the same document" (all six channels, a batch of keys merged by time, a key replaced, the saved file cooked and read back by a second editor) |
-| `Skeleton2DEditor`: open, create, sync from disk, select a bone, pick an animation and time, edits with undo and redo, save with hot reload. Every edit is cooked in memory (`cook_skeleton2d`, a scan of the project cached per open) and kept only if it cooks; the cooked definition stays current for the preview | same | "the importer refuses bad edits with file:line text and nothing changes" (unknown parent, duplicate name, unknown slot bone, missing texture, a bad chain, a key on an unknown bone, not-JSON; text and revision unchanged), "undo and redo land on disk, a run of edits is one step", "sync picks up a change made on disk, and not over unsaved edits" |
-| Pose preview: `skeleton2d_pose` blends the named animation at a time with `Skeleton2DBlend` (the animator's own code), sets the IK mixes the clip keys, applies IK targets and calls `skeleton2d_solve_pose`. No solver code is copied | same | "the pose preview equals the runtime's pose functions": the rest pose of a skeleton without IK is bit equal to `skeleton2d_pose_offsets`; an animation at 0.5 s is bit equal to `skeleton2d_solve_pose` over the same offsets; an IK target puts the tip on the point within 1e-4; unknown animation and constraint names report |
-| Viewport overlay: `skeleton2d_bone_lines` and `skeleton2d_entity_lines` turn the previewed pose into `OverlayLine`s (the hook the selection quads and gizmo use), placed by the entity's transform and flips. The viewport panel adds them for selected entities that play the open skeleton | same, `src/editor/layer/src/panels.cpp` | "the viewport overlay places the previewed bones on the entity" (a mirrored entity at (3, 1): the root stub, the arm origin and tip, the selected bone wider, a non-skeleton entity gives nothing) |
-| The Skeleton panel (bone tree, slot list, IK list; rest-pose fields; world transform readout; animation combo, time slider, play; IK aim points; key buttons; add bone, slot and animation; undo and redo; autosave when no field is held). Assets double-click opens it; View menu lists it | `src/editor/layer/src/skeleton_panel.cpp`, `editor_shell.cpp`, `asset_panel.cpp` | builds and links on Linux; the ImGui drawing needs a display and is not run in CI |
-| MCP tools: `skel2d_create`, `skel2d_add_bone`, `skel2d_add_slot`, `skel2d_add_ik`, `skel2d_key` (one key or `keys`), `skel2d_preview` (bone transforms as JSON plus a PNG). Each edit goes through the document layer, then `asset_validate_and_write`, so a bad call returns the importer's `file:line:col` text and writes nothing | `src/editor/mcp/src/tools_skeleton2d.cpp` | `test_mcp_agent` "skel2d tools: build a rig and an animation; the file stays valid at every step" (bones, a textured slot, a solid slot, mesh attachments, IK, every channel, replaced key, refused calls with the file unchanged), "skel2d_preview returns the pose and a drawing" (rest numbers, image sizes, an animation at 0.5 s equal to `skeleton2d_pose_offsets` for all 3 bones, a looping wrap, an IK target) |
-| Docs and gates | user guide 7.13 "Editing", 14 (tool table), `editor-mcp.md`, `capabilities.md` | `scripts/ci/capabilities.py --check` (six new tool rows), `scripts/ci/check_walls.py`, ctest `mcp_transcript` (golden regenerated: six more tools) |
+| `samples/skel2d_demo`: a data-only project the stock `mce_player` plays. A cut-out courier (`courier.mcskel2d`: 15 bones, 13 slots on one generated 128 x 128 atlas, a weighted cape mesh with deform keys, a `calm` / `wow` face attachment, two two-bone IK constraints) with `idle`, `walk` and a one-shot `jump` under `courier.mcanim` (parameters `speed` and `jump`). A `.mctimeline` on a `Director` entity moves it, writes `Skeleton2DAnimator.params` and flips it; two `IKTarget2D` entities (`ChildOf` the courier) are its feet's targets; a `Bone2DFollow` lantern rides a hand. The art is `gen_art.py` (Pillow), no outside assets | `samples/skel2d_demo/` | `mce_cook` cooks 5 assets with 0 errors; `mce_player -headless 1 -ticks 900` ends on 15 entities and one `state_hash` (8270d46a01742050), the same on every run and in the gcc Release build |
+| Headless gate: 900 ticks (one and a half laps of the 12 s timeline) played twice must print the same hash and no `[error]` or `[warn]` | `samples/skel2d_demo/CMakeLists.txt` with `samples/tour_test.cmake` | ctest `skel2d_demo_player` |
+| Poses with numbers: idle puts both foot bones within 2 mm of their `IKTarget2D` entities (the hip is 2 to 6 cm below rest, so the legs are bent); the walk has both IK mixes at 0; at 5.9 s the graph is in `jump`, the root is more than 0.4 m up and the head slot shows attachment 1; at 6.7 s it is idle again with the root down and the feet back on their targets; the timeline flips it at 6.9 s; the lantern sits at the courier plus the forearm bone times (0.3, -0.04); two 900-tick runs hash the same and a 899-tick run differs | `tests/kit/test_skeleton2d_demo.cpp` | `test_kit` "skel2d_demo: the sample's assets cook", "...idle plants the feet on the IK targets, walking frees them, the jump swaps the face", "...two runs hash the same, a longer run differs" (47 assertions) |
+| GPU smoke (label `gpu`, Linux Xvfb + Mesa llvmpipe, 1280 x 720): `mce_player -frames 240 -capture`; read by eye at ticks 30, 100, 115, 340, 350, 360, 375 and 700 with `-capture_ticks` (idle with planted feet and bent knees, the walk's stride and arm swing, the crouch, the airborne surprised face with the cape flaring, a mirrored walk back) with 0 GL errors | `samples/skel2d_demo/CMakeLists.txt` | ctest `skel2d_demo_player_gpu` (only with `MCE_GPU_TESTS`) |
+| User guide 7.13 gains "The demo: `samples/skel2d_demo`" (what each piece shows, the `-90` slot turn, where the feet targets live); `docs/user-guide/18-samples.md` has the sample's row | `docs/user-guide/07-2d.md`, `18-samples.md` | `scripts/ci/check_walls.py` |
+| Sample coverage gate: `Skeleton2D`, `Bone2DFollow`, `Skeleton2DAnimator`, `Skeleton2DSlots`, `Skeleton2DIK` and `IKTarget2D` named in the sample's scene, their lines gone from `scripts/ci/sample_coverage.allow`; the capability table regenerated | `scripts/ci/sample_coverage.allow`, `docs/engine/capabilities.md` | `python3 scripts/ci/capabilities.py --check` |
 
-Limits found in step 5: the `skel2d_preview` image is a CPU line drawing of bones and quad slots (mesh
-attachments are not drawn, no textures); a textured render needs a scene and `render_frame`. There is
-no bone drag gizmo in the viewport: bones are lines, and rest poses are edited in the panel's fields.
-The viewport sprites show the scene's saved pose while the overlay shows the panel's previewed pose.
-The panel cannot remove or rename a bone, slot or constraint yet (MCP has no tool for it either; edit
-the text with `asset_write`). `skel2d_preview` has no `save` argument for the PNG.
+Limits found in step 6: the plan's "IK feet on a slope" is flat ground here: the engine has no 2D ground
+query a scene can use without code, so the targets are fixed entities (a game moves them from a
+raycast). The walk and jump are keyed FK with the IK mix at 0; the planted feet are the idle's. A
+foot bone is not kept level by IK (the foot turns with the shin while the legs bend). The courier is
+mirrored with `flip_x` from a timeline activation track, so a flipped courier's `ChildOf` foot targets
+mirror with it. A scripted-input replay is not part of this sample: it takes no input (the timeline
+is its player). Debug and Release (gcc) end 900 ticks on the same hash, 8270d46a01742050, checked by hand; ctest runs the Debug build only.

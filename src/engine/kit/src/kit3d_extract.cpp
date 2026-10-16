@@ -6,6 +6,7 @@
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/cinematic.h"
+#include "mce/kit/render_textures.h"
 #include "mce/log.h"
 #include "mce/render/accessibility.h"
 #include "mce/string_id.h"
@@ -675,6 +676,14 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         return length_sq(c - q) <= r * r;
     };
 
+    // Screens (M-VIEWS 3): one material per ShowRenderTexture, kept until the next extract; the
+    // array never grows past what is reserved here, so the scene's pointers stay put.
+    screen_materials_.clear();
+    if (render_textures_) {
+        usize screens = 0;
+        world.query<const ShowRenderTexture&>().each([&](const ShowRenderTexture&) { ++screens; });
+        screen_materials_.reserve(screens);
+    }
     const Ragdoll3DPoses* ragdolls = world.try_resource<Ragdoll3DPoses>();
     world.query<const MeshRef&>().each([&](Entity e, const MeshRef& m) {
         if (!m.visible) return;
@@ -707,6 +716,37 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         inst.cast_shadows = m.cast_shadows != 0;
         inst.skinning = m.skinning != 0;
         inst.material = material(m.material.guid);
+        if (render_textures_ && screen_materials_.size() < screen_materials_.capacity()) {
+            const ShowRenderTexture* show = world.try_get<ShowRenderTexture>(e);
+            const u32 rt = show ? render_textures_->texture_key(show->source) : ~0u;
+            if (rt != ~0u && !mesh->submeshes.empty()) {
+                render::MaterialOverride o;
+                if (inst.material) {
+                    o = *inst.material;
+                } else {
+                    const render::GpuSubmesh& s0 = mesh->submeshes[0];
+                    o.params = s0.material;
+                    o.ext = s0.material_ext;
+                    o.albedo_key = s0.albedo_key;
+                    o.normal_key = s0.normal_key;
+                    o.orm_key = s0.orm_key;
+                    o.emissive_key = s0.emissive_key;
+                }
+                if (show->slot == 1) {
+                    o.emissive_key = rt;
+                    for (f32& c : o.params.emissive) c = show->intensity;
+                } else {
+                    o.albedo_key = rt;
+                }
+                // A drawn texture holds its top row at v = 1 (uploaded art at v = 0): the repeat's
+                // negative v flips it upright (the material sampler repeats).
+                f32 uv[2];
+                o.params.uv_scale(uv);
+                o.params.uv_scale_half = asset::MaterialChunk::pack_uv_scale(uv[0], -uv[1]);
+                screen_materials_.push_back(o);
+                inst.material = &screen_materials_.back();
+            }
+        }
         if (!mesh->nodes.empty()) {
             const Animator* a = world.try_get<Animator>(e);
             const usize first = poses_.size();

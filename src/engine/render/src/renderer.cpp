@@ -422,7 +422,7 @@ void Renderer::record_post_2d(rhi::CommandBuffer& cmd, rhi::TextureHandle source
     cmd.end_pass();
 }
 
-void Renderer::record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch) {
+void Renderer::record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch, bool linear_output) {
     MCE_ASSERT_MSG(batch.built(), "record_2d: batch not built");
     MCE_ASSERT_MSG(cmd.in_pass(), "record_2d: no open pass");
     if (!batch.built() || batch.groups().empty()) return;
@@ -430,7 +430,7 @@ void Renderer::record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch) {
     cmd.push_debug_scope("sprites");
     FrameU fu;
     fu.view_proj = batch.view().view_proj;
-    fu.params[0] = desc_.encode_srgb_output ? 1.0f : 0.0f;
+    fu.params[0] = desc_.encode_srgb_output && !linear_output ? 1.0f : 0.0f;
     fu.params[1] = fu.params[2] = fu.params[3] = 0.0f;
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
     const Lights2D& lights = batch.lights();
