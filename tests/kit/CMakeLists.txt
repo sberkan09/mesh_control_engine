@@ -14,6 +14,7 @@ mce_add_test(test_kit UMBRELLA
         test_fsm.cpp
         test_kit3d.cpp
         test_anim3d.cpp
+        test_sensors3d.cpp
         test_nav3d.cpp
         test_joints3d.cpp
         test_ragdolls3d.cpp

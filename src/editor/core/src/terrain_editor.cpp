@@ -5,6 +5,7 @@
 
 #include "mce/asset/formats.h"
 #include "mce/cook/fs.h"
+#include "mce/cook/image.h"
 #include "mce/kit/kit3d.h"
 #include "mce/log.h"
 
@@ -277,6 +278,208 @@ u32 TerrainDocument::apply(const TerrainBrush& b, math::vec2 c, f32 scale) {
             }
         }
     return changed;
+}
+
+bool TerrainDocument::import_heightmap(Span<const byte> file, const TerrainHeightmapImport& o, cook::String& error) {
+    if (!loaded()) {
+        error += "no terrain is loaded";
+        return false;
+    }
+    u32 w = 0, h = 0;
+    Array<f32> src;  // 0..1, rows top first
+    if (o.png) {
+        Result<cook::Image16> img = cook::decode_png_grey16(file);
+        if (!img) {
+            error += "the PNG does not read: ";
+            error += img.error().path.view();
+            return false;
+        }
+        w = img.value().width;
+        h = img.value().height;
+        src.resize(usize(w) * h);
+        for (usize i = 0; i < src.size(); ++i) src[i] = static_cast<f32>(img.value().grey[i]) / 65535.0f;
+    } else {
+        if (o.raw_bits != 8 && o.raw_bits != 16) {
+            error += "raw_bits must be 8 or 16";
+            return false;
+        }
+        const usize bytes = o.raw_bits / 8, n = file.size() / bytes;
+        if (n == 0 || n * bytes != file.size()) {
+            error += "the raw file's size is not a whole number of samples";
+            return false;
+        }
+        w = o.raw_width;
+        if (w == 0) {
+            w = static_cast<u32>(std::lround(std::sqrt(static_cast<f64>(n))));
+            if (usize(w) * w != n) {
+                error += "the raw file is not square: give raw_width";
+                return false;
+            }
+        }
+        if (n % w != 0) {
+            error += "the raw file's samples are not a whole number of raw_width rows";
+            return false;
+        }
+        h = static_cast<u32>(n / w);
+        src.resize(n);
+        for (usize i = 0; i < n; ++i)
+            src[i] = bytes == 1 ? static_cast<f32>(u8(file[i])) / 255.0f
+                                : static_cast<f32>(u32(u8(file[2 * i])) | (u32(u8(file[2 * i + 1])) << 8)) / 65535.0f;
+    }
+    if (w < 2 || h < 2) {
+        error += "the heightmap needs at least 2 x 2 samples";
+        return false;
+    }
+    const f32 lo = o.low == o.high ? height_min : o.low, hi = o.low == o.high ? height_max : o.high;
+    const u32 n = resolution;
+    for (u32 z = 0; z < n; ++z)
+        for (u32 x = 0; x < n; ++x) {
+            const f32 fx = static_cast<f32>(x) / static_cast<f32>(n - 1) * static_cast<f32>(w - 1);
+            const f32 fz = static_cast<f32>(z) / static_cast<f32>(n - 1) * static_cast<f32>(h - 1);
+            const u32 x0 = std::min(static_cast<u32>(fx), w - 2), z0 = std::min(static_cast<u32>(fz), h - 2);
+            const f32 u = fx - static_cast<f32>(x0), v = fz - static_cast<f32>(z0);
+            const f32* r0 = src.data() + usize(z0) * w;
+            const f32* r1 = r0 + w;
+            const f32 a = r0[x0] + (r0[x0 + 1] - r0[x0]) * u, b = r1[x0] + (r1[x0 + 1] - r1[x0]) * u;
+            heights[usize(z) * n + x] = math::clamp(lo + (a + (b - a) * v) * (hi - lo), height_min, height_max);
+        }
+    return true;
+}
+
+void TerrainDocument::generate(const TerrainGenerate& g) {
+    if (!loaded()) return;
+    const u32 n = resolution;
+    const math::vec2 sp = spacing();
+    const f32 feature = g.feature > 0.0f ? g.feature : 0.25f * std::max(size.x, size.y);
+    const u32 octaves = std::clamp(g.octaves, 1u, 12u);
+    const f32 ridged = math::clamp(g.ridged, 0.0f, 1.0f);
+    // fBm in [-1, 1], then stretched over the range [low, high] of the heights.
+    Array<f32> t;
+    t.resize(usize(n) * n);
+    f32 tmin = 1e30f, tmax = -1e30f;
+    for (u32 z = 0; z < n; ++z)
+        for (u32 x = 0; x < n; ++x) {
+            const f32 px = -0.5f * size.x + static_cast<f32>(x) * sp.x, pz = -0.5f * size.y + static_cast<f32>(z) * sp.y;
+            f32 sum = 0.0f, amp = 1.0f, total = 0.0f, cell = feature;
+            for (u32 o = 0; o < octaves; ++o) {
+                const f32 v = value_noise(px, pz, std::max(cell, 1e-3f), g.seed * 977u + o);
+                sum += amp * ((1.0f - ridged) * v + ridged * (1.0f - 2.0f * std::fabs(v)));
+                total += amp;
+                amp *= g.gain;
+                cell /= std::max(g.lacunarity, 1.01f);
+            }
+            const f32 v = sum / total;
+            t[usize(z) * n + x] = v;
+            tmin = std::min(tmin, v);
+            tmax = std::max(tmax, v);
+        }
+    const f32 span = height_max - height_min;
+    const f32 lo = math::clamp(g.low, 0.0f, 1.0f), hi = math::clamp(g.high, 0.0f, 1.0f);
+    const f32 island = math::clamp(g.island, 0.0f, 1.0f);
+    for (u32 z = 0; z < n; ++z)
+        for (u32 x = 0; x < n; ++x) {
+            f32 v = tmax > tmin ? (t[usize(z) * n + x] - tmin) / (tmax - tmin) : 0.5f;
+            if (island > 0.0f) {
+                // 1 inside, falling to 0 over the outer `island` share of the way to the edge.
+                const f32 dx = static_cast<f32>(x) / static_cast<f32>(n - 1) * 2.0f - 1.0f;
+                const f32 dz = static_cast<f32>(z) / static_cast<f32>(n - 1) * 2.0f - 1.0f;
+                const f32 d = std::sqrt(dx * dx + dz * dz);
+                const f32 e = math::clamp((d - (1.0f - island)) / island, 0.0f, 1.0f);
+                v *= 1.0f - e * e * (3.0f - 2.0f * e);
+            }
+            heights[usize(z) * n + x] = height_min + (lo + v * (hi - lo)) * span;
+        }
+
+    // Thermal: where a neighbour is lower by more than the talus step, half the excess moves down
+    // (shared out among the steep neighbours), so slopes settle toward talus_deg.
+    const f32 talus = std::tan(math::radians(math::clamp(g.talus_deg, 1.0f, 89.0f)));
+    const f32 step_x = talus * sp.x, step_z = talus * sp.y;
+    Array<f32> delta;
+    for (u32 pass = 0; pass < g.thermal; ++pass) {
+        delta.clear();
+        delta.resize(heights.size(), 0.0f);
+        for (u32 z = 0; z < n; ++z)
+            for (u32 x = 0; x < n; ++x) {
+                const usize i = usize(z) * n + x;
+                const f32 hgt = heights[i];
+                usize nb[4];
+                f32 ex[4];
+                u32 k = 0;
+                f32 excess = 0.0f, most = 0.0f;
+                const auto consider = [&](usize j, f32 limit) {
+                    const f32 d = hgt - heights[j] - limit;
+                    if (d <= 0.0f) return;
+                    nb[k] = j;
+                    ex[k++] = d;
+                    excess += d;
+                    most = std::max(most, d);
+                };
+                if (x > 0) consider(i - 1, step_x);
+                if (x + 1 < n) consider(i + 1, step_x);
+                if (z > 0) consider(i - n, step_z);
+                if (z + 1 < n) consider(i + n, step_z);
+                if (k == 0) continue;
+                const f32 moved = 0.25f * most;
+                delta[i] -= moved;
+                for (u32 j = 0; j < k; ++j) delta[nb[j]] += moved * ex[j] / excess;
+            }
+        for (usize i = 0; i < heights.size(); ++i) heights[i] += delta[i];
+    }
+
+    // Droplets: each starts at a random sample, runs downhill with some inertia, picks up silt
+    // where it speeds up (up to a capacity set by its speed and the drop) and leaves it where it
+    // slows or climbs. The 4 samples around it share each change by their bilinear weights.
+    const f32 cell = 0.5f * (sp.x + sp.y);
+    for (u32 d = 0; d < g.droplets; ++d) {
+        f32 px = lattice(static_cast<i32>(d), 17, g.seed) * static_cast<f32>(n - 1);
+        f32 pz = lattice(static_cast<i32>(d), 31, g.seed) * static_cast<f32>(n - 1);
+        f32 dx = 0.0f, dz = 0.0f, speed = 1.0f, water = 1.0f, silt = 0.0f;
+        for (u32 life = 0; life < 64; ++life) {
+            const u32 x0 = std::min(static_cast<u32>(px), n - 2), z0 = std::min(static_cast<u32>(pz), n - 2);
+            const f32 u = px - static_cast<f32>(x0), v = pz - static_cast<f32>(z0);
+            const usize i00 = usize(z0) * n + x0, i10 = i00 + 1, i01 = i00 + n, i11 = i01 + 1;
+            const f32 h00 = heights[i00], h10 = heights[i10], h01 = heights[i01], h11 = heights[i11];
+            const f32 here = (h00 + (h10 - h00) * u) * (1.0f - v) + (h01 + (h11 - h01) * u) * v;
+            const f32 gx = (h10 - h00) * (1.0f - v) + (h11 - h01) * v, gz = (h01 - h00) * (1.0f - u) + (h11 - h10) * u;
+            dx = dx * 0.3f - gx * 0.7f;
+            dz = dz * 0.3f - gz * 0.7f;
+            const f32 len = std::sqrt(dx * dx + dz * dz);
+            if (len < 1e-6f) break;
+            dx /= len;
+            dz /= len;
+            const f32 nx = px + dx, nz = pz + dz;
+            if (nx < 0.0f || nz < 0.0f || nx > static_cast<f32>(n - 1) || nz > static_cast<f32>(n - 1)) break;
+            const u32 bx = std::min(static_cast<u32>(nx), n - 2), bz = std::min(static_cast<u32>(nz), n - 2);
+            const f32 bu = nx - static_cast<f32>(bx), bv = nz - static_cast<f32>(bz);
+            const usize j00 = usize(bz) * n + bx;
+            const f32 there = (heights[j00] + (heights[j00 + 1] - heights[j00]) * bu) * (1.0f - bv) +
+                              (heights[j00 + n] + (heights[j00 + n + 1] - heights[j00 + n]) * bu) * bv;
+            const f32 drop = here - there;  // > 0 downhill
+            const f32 capacity = std::max(drop / cell, 0.01f) * speed * water * 0.5f * cell;
+            f32 change;  // > 0 deposits
+            if (drop < 0.0f) change = std::min(-drop, silt);
+            else if (silt > capacity) change = 0.3f * (silt - capacity);
+            else change = -std::min(0.3f * (capacity - silt), drop);
+            silt -= change;
+            heights[i00] += change * (1.0f - u) * (1.0f - v);
+            heights[i10] += change * u * (1.0f - v);
+            heights[i01] += change * (1.0f - u) * v;
+            heights[i11] += change * u * v;
+            speed = std::sqrt(std::max(0.0f, speed * speed + drop / cell * 4.0f));
+            water *= 0.98f;
+            px = nx;
+            pz = nz;
+        }
+        // What the droplet still carries settles where it stopped.
+        const u32 sx = std::min(static_cast<u32>(px), n - 2), sz = std::min(static_cast<u32>(pz), n - 2);
+        const f32 su = px - static_cast<f32>(sx), sv = pz - static_cast<f32>(sz);
+        const usize s00 = usize(sz) * n + sx;
+        heights[s00] += silt * (1.0f - su) * (1.0f - sv);
+        heights[s00 + 1] += silt * su * (1.0f - sv);
+        heights[s00 + n] += silt * (1.0f - su) * sv;
+        heights[s00 + n + 1] += silt * su * sv;
+    }
+    for (f32& hgt : heights) hgt = math::clamp(hgt, height_min, height_max);
 }
 
 // ---- TerrainEditor ----

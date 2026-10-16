@@ -1,6 +1,7 @@
 #include "mce/ecs/world.h"
 
 #include "mce/app.h"
+#include "mce/ecs/replicated.h"  // registers NetReplicated / NetOwner with mce_refl wherever mce_ecs links
 #include "mce/hash.h"
 
 namespace mce {
@@ -140,6 +141,12 @@ Entity Commands::spawn() {
 }
 
 void Commands::destroy(Entity e) { record(Op::Destroy, e, ecs::kInvalidComponent, 0); }
+
+void Commands::set_raw(Entity e, ecs::ComponentId c, const void* value) {
+    const u32 size = world_.component(c).size;
+    void* p = record(Op::Set, e, c, size);
+    if (size) std::memcpy(p, value, size);
+}
 
 void Commands::spawn_raw(Entity reserved, Span<const ecs::RawComponent> components) {
     usize bytes = 0;

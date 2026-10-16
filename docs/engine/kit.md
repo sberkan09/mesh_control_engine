@@ -95,6 +95,14 @@ of a mesh), `CharacterController3D` (capsule walk by `move` or the Move/Jump inp
 static colliders), `"kit3d_writeback"` and `"kit3d_triggers"` after `"kit3d_physics"`; remove hooks
 destroy the bodies.
 
+`sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
+`hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the
+entity: `count`, `enters`, `last_other`), both pushing `TriggerEnter3D` / `TriggerExit3D` with the
+sensor as `trigger`, so `PhysicsEvents` and `FireOn::TriggerEnter` see them. A sensor skips its own
+entity and its `ChildOf` ancestors; switching it off, removing it or destroying it lets everything
+out. `install_sensors3d` (from `install_stock`, after `install_bodies3d`): `"kit3d_sensors"` after
+`"kit3d_triggers"`. Tests: `tests/kit/test_sensors3d.cpp`.
+
 `effects.h` (M-DATA-REACH 4): `FireOn` (`Manual` via the `fire` flag, `Start`, `TriggerEnter`,
 `ContactBegin`); `SfxTrigger` (a `PlaySfx` with dB jitter, `audio::AudioBus`), `ParticleBurst`,
 `ShakeTrigger`, `CameraShake2D` (added to the view by `primary_camera`), `CameraFollow2D` (offset,
