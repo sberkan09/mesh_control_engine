@@ -79,7 +79,9 @@
 # (a project container's allowance is about 40 GB; a tree is 8-16 GB) the trees no later stage needs are
 # deleted before the next stage; MCE_CI_MIN_FREE_GB (22) and MCE_CI_HARD_MIN_GB (3) tune it.
 #
-# Exit code 0 only if every selected stage passed. A summary table is printed at the end, with the
+# Exit code 0 only if every selected stage passed. Each stage's log is build/local-ci-logs/<stage>.log (the
+# previous run's is kept as <stage>.prev.log, so a run killed by a restart does not erase the evidence of the
+# last one). A summary table is printed at the end, with the
 # configure / build / test split of a preset stage and the ccache hit rate of every stage.
 
 set -uo pipefail
@@ -114,7 +116,7 @@ for arg in "$@"; do
         --save-cache-only) save_cache=1; save_only=1 ;;
         --tidy-all) tidy_all=1 ;;
         --resume) resume=1 ;;
-        -h|--help) sed -n '2,82p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,84p' "$0"; exit 0 ;;
         *) stages+=("$arg"); named[$arg]=1 ;;
     esac
 done
@@ -900,7 +902,7 @@ for ((si = 0; si < ${#stages[@]}; si++)); do
     elif ! reclaim_space "$si"; then
         RESULT[$s]="FAIL (0s) — no disk space, see above"
         failed=1
-    elif run_stage "$s" > "$LOG_DIR/$s.log" 2>&1; then
+    elif { [[ -f "$LOG_DIR/$s.log" ]] && mv -f "$LOG_DIR/$s.log" "$LOG_DIR/$s.prev.log"; run_stage "$s" > "$LOG_DIR/$s.log" 2>&1; }; then
         RESULT[$s]="PASS ($((SECONDS - start))s)"
         echo "$run_key" > "$PASSED_DIR/$s"
     else
