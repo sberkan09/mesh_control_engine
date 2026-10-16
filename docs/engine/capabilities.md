@@ -95,6 +95,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Stimulus` | `mce/kit/perception.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `RichPresence` | `mce/kit/presence.h` | yes | yes | yes | docs/user-guide/26-steam.md | samples/steam_demo/assets/scenes/main.mcscene |
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
+| `RenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap) |
+| `ShowRenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap) |
 | `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Overlap3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Skeleton2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
