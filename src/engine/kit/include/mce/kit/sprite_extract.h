@@ -111,7 +111,8 @@ private:
     Array<TilemapEntry> tilemaps_;
     // Skeletons for worlds without kit::install_skeleton2d (the editor's edit world).
     Skeleton2DRegistry skeletons_;
-    Array<Skeleton2DQuad> quads_;
+    Skeleton2DDraws draws_;      // one skeleton's slots, reused
+    Skeleton2DDeform deform_;    // one skeleton's sampled deform offsets, reused
 };
 
 // The first primary Camera2DComponent with a LocalTransform, in ECS order. False (and a default

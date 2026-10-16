@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- 2D meshes and slot keys, M-ANIM2D step 3 (SBA-142): a `.mcskel2d` slot can list several `"attachments"` and
+  show one at a time, quads or meshes. A mesh is textured triangles whose vertices sit on the slot's bone or are
+  weighted to up to 4 bones (skinned on the CPU, the same bits everywhere). Animations key slot colors (alpha 0
+  hides), attachment swaps (stepped) and per-vertex mesh deforms. Slot state lives in an optional
+  `Skeleton2DSlots` component, saved and hashed. Meshes draw through the sprite batch as triangles
+  (`SpriteBatch::add_triangle`) on every backend. Old skeletons read and draw as before. User guide 7.13.
 - Luau scripts as assets, M-SCRIPT step 1 (SBA-147, ADR-0041): `.luau` files under `assets/` cook (importer
   `script`) to a `Script` asset of Luau bytecode, with syntax errors at `file:line:col`. A `ScriptSystem`
   component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP

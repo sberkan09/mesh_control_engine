@@ -662,6 +662,12 @@ i32 Skeleton2DView::find_animation(StringView n) const {
     return -1;
 }
 
+i32 Skeleton2DView::find_slot(StringView n) const {
+    for (usize i = 0; i < slots.size(); ++i)
+        if (string(slots[i].name) == n) return static_cast<i32>(i);
+    return -1;
+}
+
 Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
     Skeleton2DView v;
     v.header = header_of<Skeleton2DHeader>(payload);
@@ -669,14 +675,30 @@ Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
     const Skeleton2DHeader& h = *v.header;
     if (h.bone_count == 0 || h.bone_count > kSkeleton2DMaxBones || h.slot_count > kSkeleton2DMaxSlots ||
         h.string_bytes > (1u << 20) || h.animation_count > kSkeleton2DMaxAnimations ||
-        h.timeline_count > kSkeleton2DMaxTimelines || h.key_count > kSkeleton2DMaxKeys || h.event_count > kSkeleton2DMaxEvents)
+        h.timeline_count > kSkeleton2DMaxTimelines || h.key_count > kSkeleton2DMaxKeys || h.event_count > kSkeleton2DMaxEvents ||
+        (h.flags & ~u32(Skeleton2DHeaderFlags::Attachments)) != 0)
         return Error(Errc::InvalidArgument, "asset.skeleton2d.read");
-    const u64 bytes = sizeof(Skeleton2DHeader) + u64(h.bone_count) * sizeof(Skeleton2DBone) +
-                      u64(h.slot_count) * sizeof(Skeleton2DSlot) + u64(h.animation_count) * sizeof(Skeleton2DAnimation) +
-                      u64(h.timeline_count) * sizeof(Skeleton2DTimeline) + u64(h.key_count) * sizeof(Skeleton2DKey) +
-                      u64(h.event_count) * sizeof(Skeleton2DEvent) + h.string_bytes;
+    // Minor 2: the attachment header follows the header.
+    Skeleton2DAttachmentHeader ah{};
+    const bool attached = (h.flags & Skeleton2DHeaderFlags::Attachments) != 0;
+    if (attached) {
+        if (payload.size() < sizeof(Skeleton2DHeader) + sizeof(Skeleton2DAttachmentHeader))
+            return Error(Errc::Truncated, "asset.skeleton2d.read");
+        std::memcpy(&ah, payload.data() + sizeof(Skeleton2DHeader), sizeof ah);
+        if (ah.attachment_count > kSkeleton2DMaxAttachments || ah.vertex_count > kSkeleton2DMaxVertices ||
+            ah.weight_count > kSkeleton2DMaxWeights || ah.index_count > kSkeleton2DMaxIndices ||
+            ah.slot_key_count > kSkeleton2DMaxSlotKeys || ah.value_count > kSkeleton2DMaxValues)
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.read");
+    }
+    const u64 bytes = sizeof(Skeleton2DHeader) + (attached ? sizeof(Skeleton2DAttachmentHeader) : 0u) +
+                      u64(h.bone_count) * sizeof(Skeleton2DBone) + u64(h.slot_count) * sizeof(Skeleton2DSlot) +
+                      u64(h.animation_count) * sizeof(Skeleton2DAnimation) + u64(h.timeline_count) * sizeof(Skeleton2DTimeline) +
+                      u64(h.key_count) * sizeof(Skeleton2DKey) + u64(h.event_count) * sizeof(Skeleton2DEvent) +
+                      u64(ah.attachment_count) * sizeof(Skeleton2DAttachment) + u64(ah.vertex_count) * sizeof(Skeleton2DVertex) +
+                      u64(ah.weight_count) * sizeof(Skeleton2DWeight) + u64(ah.index_count) * sizeof(u32) +
+                      u64(ah.slot_key_count) * sizeof(Skeleton2DSlotKey) + u64(ah.value_count) * sizeof(f32) + h.string_bytes;
     if (bytes > payload.size()) return Error(Errc::Truncated, "asset.skeleton2d.read");
-    const byte* p = payload.data() + sizeof(Skeleton2DHeader);
+    const byte* p = payload.data() + sizeof(Skeleton2DHeader) + (attached ? sizeof(Skeleton2DAttachmentHeader) : 0u);
     auto take = [&p](auto& span, u32 count) {
         using T = typename std::remove_reference_t<decltype(span)>::value_type;
         span = Span<const T>(reinterpret_cast<const T*>(p), count);
@@ -688,6 +710,12 @@ Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
     take(v.timelines, h.timeline_count);
     take(v.keys, h.key_count);
     take(v.events, h.event_count);
+    take(v.attachments, ah.attachment_count);
+    take(v.vertices, ah.vertex_count);
+    take(v.weights, ah.weight_count);
+    take(v.indices, ah.index_count);
+    take(v.slot_keys, ah.slot_key_count);
+    take(v.values, ah.value_count);
     v.strings = Span<const char>(reinterpret_cast<const char*>(p), h.string_bytes);
     if (h.string_bytes == 0 || v.strings[h.string_bytes - 1] != '\0') return Error(Errc::InvalidArgument, "asset.skeleton2d.strings");
     auto finite = [](const f32* f, usize n) {
@@ -703,11 +731,50 @@ Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
             !finite(nums, 6))
             return Error(Errc::InvalidArgument, "asset.skeleton2d.bone");
     }
-    for (const Skeleton2DSlot& s : v.slots) {
+    for (u32 si = 0; si < h.slot_count; ++si) {
+        const Skeleton2DSlot& s = v.slots[si];
         if (s.name >= h.string_bytes || s.bone >= h.bone_count || s.kind != Skeleton2DSlotKind::Quad || !finite(s.rect, 4) ||
             !finite(s.size, 2) || !finite(s.pivot, 2) || !finite(s.offset, 2) || !finite(&s.rotation, 1) || !finite(s.tint, 4))
             return Error(Errc::InvalidArgument, "asset.skeleton2d.slot");
+        // A slot's attachments: a range of the attachment array, each naming this slot. Without
+        // any, the slot's own quad is attachment 0.
+        const u32 count = s.attachment_count == 0 ? 1u : s.attachment_count;
+        const bool shown_ok = s.attachment == kSkeleton2DNoAttachment || s.attachment < count;
+        if (!attached ? (s.first_attachment != 0 || s.attachment_count != 0 || s.attachment != 0)
+                      : (s.attachment_count > kSkeleton2DMaxSlotAttachments ||
+                         u64(s.first_attachment) + s.attachment_count > ah.attachment_count || !shown_ok))
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.slot");
+        for (u32 i = 0; i < s.attachment_count; ++i)
+            if (v.attachments[s.first_attachment + i].slot != si) return Error(Errc::InvalidArgument, "asset.skeleton2d.slot");
     }
+    for (const Skeleton2DAttachment& a : v.attachments) {
+        if (a.name >= h.string_bytes || a.slot >= h.slot_count || a.kind > Skeleton2DAttachmentKind::Mesh ||
+            !finite(a.rect, 4) || !finite(a.size, 2) || !finite(a.pivot, 2) || !finite(a.offset, 2) || !finite(&a.rotation, 1))
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.attachment");
+        if (a.kind != Skeleton2DAttachmentKind::Mesh) continue;
+        if (a.vertex_count < 3 || a.vertex_count > kSkeleton2DMaxMeshVertices || u64(a.first_vertex) + a.vertex_count > ah.vertex_count ||
+            a.index_count < 3 || a.index_count % 3 != 0 || a.index_count > 3 * kSkeleton2DMaxMeshTriangles ||
+            u64(a.first_index) + a.index_count > ah.index_count)
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.mesh");
+        for (u32 i = 0; i < a.index_count; ++i)
+            if (v.indices[a.first_index + i] >= a.vertex_count) return Error(Errc::InvalidArgument, "asset.skeleton2d.mesh");
+    }
+    for (const Skeleton2DVertex& vx : v.vertices) {
+        const f32 nums[] = {vx.u, vx.v, vx.x, vx.y};
+        if (!finite(nums, 4) || vx.weight_count > kSkeleton2DMaxVertexWeights ||
+            u64(vx.first_weight) + vx.weight_count > ah.weight_count)
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.vertex");
+        f32 sum = 0.0f;
+        for (u32 i = 0; i < vx.weight_count; ++i) {
+            const Skeleton2DWeight& w = v.weights[vx.first_weight + i];
+            const f32 nums2[] = {w.x, w.y, w.weight};
+            if (w.bone >= h.bone_count || !finite(nums2, 3) || !(w.weight >= 0.0f) || !(w.weight <= 1.0f))
+                return Error(Errc::InvalidArgument, "asset.skeleton2d.weight");
+            sum += w.weight;
+        }
+        if (vx.weight_count > 0 && !(std::fabs(sum - 1.0f) <= 1e-3f)) return Error(Errc::InvalidArgument, "asset.skeleton2d.weight");
+    }
+    if (!finite(v.values.data(), v.values.size())) return Error(Errc::InvalidArgument, "asset.skeleton2d.value");
     for (const Skeleton2DAnimation& a : v.animations) {
         if (a.name >= h.string_bytes || !std::isfinite(a.duration) || !(a.duration >= 0.0f) ||
             u64(a.first_timeline) + a.timeline_count > h.timeline_count || u64(a.first_event) + a.event_count > h.event_count ||
@@ -721,18 +788,47 @@ Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
             prev = e.t;
         }
     }
+    auto curve_ok = [&finite](Skeleton2DCurve c, const f32 bz[4]) {
+        return c <= Skeleton2DCurve::Bezier &&
+               (c != Skeleton2DCurve::Bezier || (finite(bz, 4) && bz[0] >= 0.0f && bz[0] <= 1.0f && bz[2] >= 0.0f && bz[2] <= 1.0f));
+    };
     for (const Skeleton2DTimeline& t : v.timelines) {
-        if (t.bone >= h.bone_count || t.channel > Skeleton2DChannel::Scale || t.key_count == 0 ||
-            u64(t.first_key) + t.key_count > h.key_count)
+        if (t.channel > Skeleton2DChannel::Deform || t.key_count == 0)
             return Error(Errc::InvalidArgument, "asset.skeleton2d.timeline");
+        if (t.channel <= Skeleton2DChannel::Scale) {
+            if (t.bone >= h.bone_count || u64(t.first_key) + t.key_count > h.key_count || t.attachment != 0)
+                return Error(Errc::InvalidArgument, "asset.skeleton2d.timeline");
+            for (u32 i = 0; i < t.key_count; ++i) {
+                const Skeleton2DKey& k = v.keys[t.first_key + i];
+                if (!std::isfinite(k.t) || !(k.t >= 0.0f) || (i > 0 && !(k.t > v.keys[t.first_key + i - 1].t)) ||
+                    !finite(k.value, 2) || !curve_ok(k.curve, k.bezier))
+                    return Error(Errc::InvalidArgument, "asset.skeleton2d.key");
+            }
+            continue;
+        }
+        // Slot timelines: a real slot; Deform names a mesh the slot lists.
+        if (t.bone >= h.slot_count || u64(t.first_key) + t.key_count > ah.slot_key_count)
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.timeline");
+        const Skeleton2DSlot& slot = v.slots[t.bone];
+        u32 width = 4;  // values per key
+        if (t.channel == Skeleton2DChannel::Deform) {
+            if (t.attachment < slot.first_attachment || t.attachment >= slot.first_attachment + slot.attachment_count ||
+                v.attachments[t.attachment].kind != Skeleton2DAttachmentKind::Mesh)
+                return Error(Errc::InvalidArgument, "asset.skeleton2d.timeline");
+            width = 2 * v.attachments[t.attachment].vertex_count;
+        } else if (t.attachment != 0) {
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.timeline");
+        }
+        const u32 slot_attachments = slot.attachment_count == 0 ? 1u : slot.attachment_count;
         for (u32 i = 0; i < t.key_count; ++i) {
-            const Skeleton2DKey& k = v.keys[t.first_key + i];
-            const bool bezier_ok = k.curve != Skeleton2DCurve::Bezier ||
-                                   (finite(k.bezier, 4) && k.bezier[0] >= 0.0f && k.bezier[0] <= 1.0f && k.bezier[2] >= 0.0f &&
-                                    k.bezier[2] <= 1.0f);
-            if (!std::isfinite(k.t) || !(k.t >= 0.0f) || (i > 0 && !(k.t > v.keys[t.first_key + i - 1].t)) ||
-                !finite(k.value, 2) || k.curve > Skeleton2DCurve::Bezier || !bezier_ok)
-                return Error(Errc::InvalidArgument, "asset.skeleton2d.key");
+            const Skeleton2DSlotKey& k = v.slot_keys[t.first_key + i];
+            bool ok = std::isfinite(k.t) && k.t >= 0.0f && (i == 0 || k.t > v.slot_keys[t.first_key + i - 1].t) &&
+                      curve_ok(k.curve, k.bezier);
+            if (t.channel == Skeleton2DChannel::Attachment)
+                ok = ok && k.curve == Skeleton2DCurve::Stepped && (k.value == kSkeleton2DNoAttachmentKey || k.value < slot_attachments);
+            else
+                ok = ok && u64(k.value) + width <= ah.value_count;
+            if (!ok) return Error(Errc::InvalidArgument, "asset.skeleton2d.key");
         }
     }
     return v;
@@ -785,6 +881,31 @@ void skeleton2d_sample(Span<const Skeleton2DKey> keys, f32 t, f32 out[2]) {
     else if (a.curve == Skeleton2DCurve::Bezier) f = skeleton2d_bezier(a.bezier, u);
     out[0] = a.value[0] + (b.value[0] - a.value[0]) * f;
     out[1] = a.value[1] + (b.value[1] - a.value[1]) * f;
+}
+
+void skeleton2d_slot_interval(Span<const Skeleton2DSlotKey> keys, f32 t, u32& a, u32& b, f32& f) {
+    a = b = 0;
+    f = 0.0f;
+    if (keys.empty() || !(t > keys[0].t)) return;
+    const u32 last = static_cast<u32>(keys.size() - 1);
+    if (t >= keys[last].t) {
+        a = b = last;
+        return;
+    }
+    // The interval [keys[lo].t, keys[lo + 1].t) holding t, as skeleton2d_sample finds it.
+    u32 lo = 0, hi = last;
+    while (hi - lo > 1) {
+        const u32 mid = (lo + hi) / 2;
+        if (keys[mid].t <= t) lo = mid;
+        else hi = mid;
+    }
+    const Skeleton2DSlotKey& k = keys[lo];
+    const f32 u = (t - k.t) / (keys[lo + 1].t - k.t);
+    a = lo;
+    b = lo + 1;
+    f = u;
+    if (k.curve == Skeleton2DCurve::Stepped) f = 0.0f;
+    else if (k.curve == Skeleton2DCurve::Bezier) f = skeleton2d_bezier(k.bezier, u);
 }
 
 // ------------------------------------------------------------------ behavior tree

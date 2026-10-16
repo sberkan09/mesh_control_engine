@@ -45,6 +45,7 @@ inline constexpr u8 BEHAVIOR_TREE_VERSION = 2;  // CHNK_BT: one behavior tree (M
 inline constexpr u8 SKELETON2D_VERSION = 1;  // CHNK_SKEL2D: a 2D cut-out skeleton, bones + slots (M-ANIM2D 1)
 inline constexpr u8 SCRIPT_VERSION = 1;      // CHNK_SCRIPT: one Luau script's bytecode (M-SCRIPT 1)
 inline constexpr u8 SKELETON2D_MINOR_ANIMATIONS = 1;  // minor of a CHNK_SKEL2D with animations (M-ANIM2D 2)
+inline constexpr u8 SKELETON2D_MINOR_ATTACHMENTS = 2;  // minor of a CHNK_SKEL2D with Skeleton2DHeaderFlags::Attachments (M-ANIM2D 3)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -966,9 +967,11 @@ void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<co
 // ------------------------------------------------------------------ 2D skeleton (CHNK_SKEL2D)
 // A 2D cut-out skeleton (M-ANIM2D 1): a bone tree and the slots (textured quads) drawn on its
 // bones. kit::Skeleton2D (kit/skeleton2d.h) poses and draws one. Payload layout:
-//   Skeleton2DHeader | Skeleton2DBone[bone_count] | Skeleton2DSlot[slot_count]
-//   | Skeleton2DAnimation[animation_count] | Skeleton2DTimeline[timeline_count]
-//   | Skeleton2DKey[key_count] | Skeleton2DEvent[event_count] | string pool
+//   Skeleton2DHeader | [Skeleton2DAttachmentHeader] | Skeleton2DBone[bone_count]
+//   | Skeleton2DSlot[slot_count] | Skeleton2DAnimation[animation_count]
+//   | Skeleton2DTimeline[timeline_count] | Skeleton2DKey[key_count] | Skeleton2DEvent[event_count]
+//   | [Skeleton2DAttachment[] | Skeleton2DVertex[] | Skeleton2DWeight[] | u32 index[]
+//      | Skeleton2DSlotKey[] | f32 value[]] | string pool
 // Bones are topologically ordered: a bone's parent comes before it (bone 0 is a root). Slots are
 // in draw order (the first is drawn first, behind the rest). Units: metres and radians, Y up.
 // Names are NUL-terminated offsets into the pool.
@@ -978,6 +981,16 @@ void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<co
 // kit::Skeleton2D::pose: rotation and translation add, scale multiplies. A key's curve shapes the
 // interval up to the next key. A minor-0 chunk has zero animation counts (the header's former
 // reserved words), so it reads unchanged.
+//
+// Attachments (M-ANIM2D 3, chunk minor 2, header flag Attachments): the bracketed parts above,
+// counted by the Skeleton2DAttachmentHeader right after the header. A slot lists its attachments
+// (quads or meshes) and the one shown at first; one is shown at a time. A slot without listed
+// attachments (every slot of a minor 0 or 1 chunk) has one quad attachment named after the slot,
+// made of the slot's own fields. Slot timelines (Color, Attachment, Deform) key a slot: their keys
+// are Skeleton2DSlotKeys, their values in the f32 value array. A chunk without the flag reads as
+// before. Limits: 64 attachments per slot, 4096 in all; a mesh has 3 to 1024 vertices and 1 to
+// 2048 triangles; 65536 vertices, 262144 weights and 393216 indices in all; a vertex has at most 4
+// weights, which sum to 1 (within 1e-3; the cook normalizes them).
 inline constexpr u32 kSkeleton2DMaxBones = 64;   // kit::Skeleton2D holds one pose per bone
 inline constexpr u32 kSkeleton2DMaxSlots = 256;
 inline constexpr u16 kSkeleton2DNoParent = 0xFFFF;
@@ -985,10 +998,28 @@ inline constexpr u32 kSkeleton2DMaxAnimations = 256;
 inline constexpr u32 kSkeleton2DMaxTimelines = 16384;    // all animations together
 inline constexpr u32 kSkeleton2DMaxKeys = 1u << 20;      // all timelines together
 inline constexpr u32 kSkeleton2DMaxEvents = 16384;       // all animations together
+inline constexpr u32 kSkeleton2DMaxSlotAttachments = 64;  // per slot (kit::Skeleton2DSlots holds a u8 index)
+inline constexpr u32 kSkeleton2DMaxAttachments = 4096;   // all slots together
+inline constexpr u32 kSkeleton2DMaxMeshVertices = 1024;  // per mesh
+inline constexpr u32 kSkeleton2DMaxMeshTriangles = 2048; // per mesh
+inline constexpr u32 kSkeleton2DMaxVertices = 65536;     // all meshes together
+inline constexpr u32 kSkeleton2DMaxWeights = 262144;     // all vertices together
+inline constexpr u32 kSkeleton2DMaxVertexWeights = 4;    // per vertex
+inline constexpr u32 kSkeleton2DMaxIndices = 393216;     // all meshes together
+inline constexpr u32 kSkeleton2DMaxSlotKeys = 1u << 20;  // all slot timelines together
+inline constexpr u32 kSkeleton2DMaxValues = 1u << 22;    // color and deform key values together
+inline constexpr u8 kSkeleton2DNoAttachment = 0xFF;      // Skeleton2DSlot::attachment: none shown
+inline constexpr u32 kSkeleton2DNoAttachmentKey = ~0u;   // an Attachment key's value: hide the slot
 
 enum class Skeleton2DSlotKind : u8 {
-    Quad,  // a texture rect stretched to `size` (version 1's only kind; meshes come later)
+    Quad,  // the slot's own fields: a texture rect stretched to `size` (meshes are attachments, minor 2)
 };
+
+namespace Skeleton2DHeaderFlags {
+enum : u32 {
+    Attachments = 1u << 0,  // minor 2: a Skeleton2DAttachmentHeader follows the header
+};
+}
 
 struct Skeleton2DBone {
     u32 name;          // string pool offset
@@ -1013,8 +1044,14 @@ struct Skeleton2DSlot {
     f32 pivot[2];           // normalized; (0, 0) = bottom-left
     f32 offset[2];          // metres in the bone's space: where the pivot sits
     f32 rotation;           // radians in the bone's space
-    f32 tint[4];            // linear RGBA
-    u32 reserved[3];
+    f32 tint[4];            // linear RGBA: the slot's setup color
+    // Minor 2 (zero before): the slot's attachments [first_attachment, + attachment_count). With
+    // none, the fields above are the slot's one quad attachment (index 0).
+    u32 first_attachment;
+    u16 attachment_count;
+    u8 attachment;          // the attachment shown at first (an index in the slot's list), or kSkeleton2DNoAttachment
+    u8 reserved0;
+    u32 reserved1;
     Guid texture_guid() const { return Guid{texture[0], texture[1]}; }
 };
 static_assert(sizeof(Skeleton2DSlot) == 96);
@@ -1024,13 +1061,71 @@ struct Skeleton2DHeader {
     u32 bone_count;  // 1 to kSkeleton2DMaxBones
     u32 slot_count;  // 0 to kSkeleton2DMaxSlots
     u32 string_bytes;
-    u32 flags;       // reserved (0)
+    u32 flags;       // Skeleton2DHeaderFlags (zero before minor 2)
     u32 animation_count;  // minor 1 (zero in minor 0)
     u32 timeline_count;
     u32 key_count;
     u32 event_count;
 };
 static_assert(sizeof(Skeleton2DHeader) == 64);
+
+// Minor 2: follows the header when its flags have Attachments.
+struct Skeleton2DAttachmentHeader {
+    u32 attachment_count;
+    u32 vertex_count;    // mesh vertices, all meshes
+    u32 weight_count;    // bone weights, all weighted vertices
+    u32 index_count;     // triangle indices, all meshes
+    u32 slot_key_count;  // keys of Color, Attachment and Deform timelines
+    u32 value_count;     // f32 values of color and deform keys
+    u32 reserved[2];
+};
+static_assert(sizeof(Skeleton2DAttachmentHeader) == 32);
+
+enum class Skeleton2DAttachmentKind : u8 {
+    Quad,  // a texture rect stretched to `size`, placed like a minor-0 slot
+    Mesh,  // textured triangles; vertices in the slot bone's space or weighted to bones
+};
+
+struct Skeleton2DAttachment {
+    u32 name;  // string pool offset; unique within its slot
+    u16 slot;  // the slot that lists it
+    Skeleton2DAttachmentKind kind;
+    u8 flags;  // reserved (0)
+    u64 texture[2];  // texture GUID {hi, lo}; zero = solid, in the slot's color
+    // Quad: as Skeleton2DSlot's fields.
+    f32 rect[4];
+    f32 size[2];
+    f32 pivot[2];
+    f32 offset[2];
+    f32 rotation;
+    // Mesh: vertices [first_vertex, + vertex_count) and triangle indices [first_index, + index_count),
+    // three per triangle, each below vertex_count (relative to first_vertex).
+    u32 first_vertex;
+    u32 vertex_count;
+    u32 first_index;
+    u32 index_count;
+    u32 reserved[3];
+    Guid texture_guid() const { return Guid{texture[0], texture[1]}; }
+};
+static_assert(sizeof(Skeleton2DAttachment) == 96);
+
+// A mesh vertex. Unweighted (weight_count 0): (x, y) in metres in the slot bone's space.
+// Weighted: its position is the sum over its weights of weight * bone world * (weight x, y).
+struct Skeleton2DVertex {
+    f32 u, v;          // texture coordinates, 0..1; v = 0 is the top row
+    f32 x, y;          // unweighted position
+    u32 first_weight;  // weighted: [first_weight, + weight_count) in the weight array
+    u32 weight_count;  // 0 (unweighted) to kSkeleton2DMaxVertexWeights
+};
+static_assert(sizeof(Skeleton2DVertex) == 24);
+
+struct Skeleton2DWeight {
+    u16 bone;
+    u16 reserved;
+    f32 x, y;    // metres in the bone's space
+    f32 weight;  // 0 to 1; a vertex's weights sum to 1
+};
+static_assert(sizeof(Skeleton2DWeight) == 16);
 
 namespace Skeleton2DAnimationFlags {
 enum : u32 {
@@ -1051,9 +1146,12 @@ struct Skeleton2DAnimation {
 static_assert(sizeof(Skeleton2DAnimation) == 32);
 
 enum class Skeleton2DChannel : u8 {
-    Rotate,     // value[0]: radians added to the rest rotation
-    Translate,  // value[0], value[1]: metres added to the rest x, y
-    Scale,      // value[0], value[1]: factors multiplying the rest scale
+    Rotate,      // value[0]: radians added to the rest rotation
+    Translate,   // value[0], value[1]: metres added to the rest x, y
+    Scale,       // value[0], value[1]: factors multiplying the rest scale
+    Color,       // minor 2, slot keys: the slot's color (linear RGBA, absolute)
+    Attachment,  // minor 2, slot keys: the attachment shown (stepped)
+    Deform,      // minor 2, slot keys: per-vertex offsets of one mesh attachment
 };
 
 enum class Skeleton2DCurve : u8 {
@@ -1063,12 +1161,14 @@ enum class Skeleton2DCurve : u8 {
 };
 
 struct Skeleton2DTimeline {
-    u16 bone;
+    u16 bone;  // the bone; for Color, Attachment and Deform the slot
     Skeleton2DChannel channel;
     u8 reserved0;
-    u32 first_key;  // its keys: [first_key, first_key + key_count), strictly increasing in time
-    u32 key_count;  // 1 or more
-    u32 reserved1;
+    // Its keys: [first_key, first_key + key_count), strictly increasing in time. Bone channels
+    // index the Skeleton2DKeys, slot channels the Skeleton2DSlotKeys.
+    u32 first_key;
+    u32 key_count;   // 1 or more
+    u32 attachment;  // Deform: the mesh attachment (an index in the attachment array, listed by the slot); else 0
 };
 static_assert(sizeof(Skeleton2DTimeline) == 16);
 
@@ -1080,6 +1180,19 @@ struct Skeleton2DKey {
     f32 bezier[4];
 };
 static_assert(sizeof(Skeleton2DKey) == 32);
+
+// A key of a Color, Attachment or Deform timeline.
+struct Skeleton2DSlotKey {
+    f32 t;  // seconds, 0 or more
+    // Color: the index of 4 values (linear r, g, b, a). Deform: the index of 2 * vertex_count values
+    // (x, y offsets per vertex). Attachment: an index in the slot's attachments, or
+    // kSkeleton2DNoAttachmentKey to hide the slot.
+    u32 value;
+    Skeleton2DCurve curve;  // Attachment keys are Stepped
+    u8 reserved0[3];
+    f32 bezier[4];
+};
+static_assert(sizeof(Skeleton2DSlotKey) == 28);
 
 struct Skeleton2DEvent {
     f32 t;     // seconds into the animation
@@ -1096,6 +1209,13 @@ struct Skeleton2DView {
     Span<const Skeleton2DTimeline> timelines;
     Span<const Skeleton2DKey> keys;
     Span<const Skeleton2DEvent> events;
+    // Minor 2 (empty before).
+    Span<const Skeleton2DAttachment> attachments;
+    Span<const Skeleton2DVertex> vertices;
+    Span<const Skeleton2DWeight> weights;
+    Span<const u32> indices;
+    Span<const Skeleton2DSlotKey> slot_keys;
+    Span<const f32> values;
     Span<const char> strings;
     StringView name() const;
     StringView string(u32 offset) const;
@@ -1103,9 +1223,13 @@ struct Skeleton2DView {
     i32 find_bone(StringView name) const;
     // The index of the animation named `name`, or -1.
     i32 find_animation(StringView name) const;
+    // The index of the slot named `name`, or -1.
+    i32 find_slot(StringView name) const;
     // Checks counts, parent order, slot bones, string offsets, that every number is finite, and
     // for animations: timeline and event ranges, bone indices, channels, curves (bezier cx in
-    // 0..1), and keys and events in time order.
+    // 0..1), and keys and events in time order. Minor 2: attachment ranges per slot, mesh vertex,
+    // weight and index ranges (indices below the mesh's vertex count, weights on real bones and
+    // summing to 1 within 1e-3), slot timelines on real slots and meshes, key value ranges.
     static Result<Skeleton2DView> read(Span<const byte> payload);
 };
 
@@ -1115,6 +1239,10 @@ struct Skeleton2DView {
 void skeleton2d_sample(Span<const Skeleton2DKey> keys, f32 t, f32 out[2]);
 // The eased fraction of a bezier curve (cx1, cy1, cx2, cy2) at x = u in 0..1.
 f32 skeleton2d_bezier(const f32 c[4], f32 u);
+// Where t falls in a slot timeline's keys: the keys a and b on either side and the eased
+// fraction f, so a value is va + (vb - va) * f. Before the first key a = b = 0; after the last a =
+// b = the last. A Stepped key gives f = 0 up to the next key.
+void skeleton2d_slot_interval(Span<const Skeleton2DSlotKey> keys, f32 t, u32& a, u32& b, f32& f);
 
 // ------------------------------------------------------------------ shader (CHNK_SHD)
 // One GLSL 4.5 stage (assets.md §5.2, FR-AST-060): the validated source text, the variant table

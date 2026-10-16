@@ -72,7 +72,7 @@ Interchange formats are closed: glTF 2.0 (`.gltf`/`.glb`), PNG/JPG, WAV. MCE-nat
 | Prefab | `.mcprefab` | `CHNK_PREFAB` | entity sub-tree template; nested flattened at cook | v0.5 |
 | Timeline | `.mctimeline` | `CHNK_TIMELINE` | track/clip data (FR-ENT-110) | built (M-CINEMA 1; `kit/timeline.h`) |
 | Behavior tree | `.mcbt` | `CHNK_BT` | pre-order nodes, typed blackboard keys (ADR-0045) | built (M-AI 1-2; `kit/ai.h`) |
-| 2D skeleton | `.mcskel2d` | `CHNK_SKEL2D` | bones (rest pose, parents first) + slots (textured quads in draw order) + animations (minor 1: per-bone rotate / translate / scale timelines with linear, stepped or bezier keys, events) + names | built (M-ANIM2D 1, 2; `kit/skeleton2d.h`) |
+| 2D skeleton | `.mcskel2d` | `CHNK_SKEL2D` | bones (rest pose, parents first) + slots (textured quads in draw order) + animations (minor 1: per-bone rotate / translate / scale timelines with linear, stepped or bezier keys, events) + attachments (minor 2, header flag: per-slot quad and mesh attachments, mesh vertices with up to 4 normalized bone weights, triangles, slot color / attachment and mesh deform timelines) + names | built (M-ANIM2D 1, 2, 3; `kit/skeleton2d.h`) |
 | Input action map | `.mcinput` | `CHNK_INPUT` | named actions, bindings, curves (FR-INP-020) | MVP |
 | Animation clips | glTF node-transform tracks | `CHNK_ANIM` | sampled or keyframed node tracks (MVP: single-node TRS; per-node tracks sampled at runtime by the ECS `AnimationPlayer` — see `ecs-gameplay` §3.8) | MVP (diorama prop) |
 | Particle preset | `.mcpart` (MCE-native) | `CHNK_PART` | emitter parameters + sprite GUID + spawn curves (FR-R2D-050) | v0.5 |
