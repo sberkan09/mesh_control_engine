@@ -1,0 +1,83 @@
+# CI notes from the M-GAMEPLAY3D / M-MOVE3D thread (local_ci.sh)
+
+Scope: what this thread remembers and what is in its logs. Nothing was measured for this note.
+Anything not known is marked "don't know". Numbers are from this container (cloud, about 39 GB disk
+allowance, 8 cores).
+
+## Timing (measured in this thread's own runs, not re-measured now)
+- `--task` on a simulation-touching change: walls 7 s, linux-gcc-debug 416 s, tidy 282-296 s,
+  determinism 143-159 s. About 14-15 min wall in total, stages run one after another.
+  - These runs were warm: the gcc trees already existed from the work before them.
+  - linux-gcc-debug is mostly the build plus `ctest -LE gpu` (about 130 tests). The test part is
+    about 60 s: `sdk_install` alone takes 57 s, so with `-j8` it sets the floor.
+- `--batch` (everything, with ASan, clang-release, web): don't know the full wall time. It never
+  fitted the disk in one go (see below), so it was always run as separate stages.
+- Cold tree (fresh container, no build dirs): don't know. A full gcc-debug rebuild after a big merge
+  from dev_claude (800+ targets) took roughly 10+ minutes of compile before tests.
+- Longest single stage: linux-gcc-debug, then tidy, then determinism. ASan and clang-release: don't
+  know exact times; ASan link is the heaviest on disk.
+
+## What goes red, and why (most frequent first)
+1. Golden / generated files after a merge or a new component:
+   - `tests/mcp/transcripts/demo_edit.golden.jsonl` (the `mcp_transcript` test) breaks after almost
+     every merge of dev_claude that adds components or MCP tool fields. Fix: take theirs, rebuild,
+     `python3 tests/mcp/run_transcript.py --exe .../mce_mcp --update`.
+   - `docs/engine/capabilities.md`: regenerate with `python3 scripts/ci/capabilities.py`, then
+     `--check`. Adding a sample that shows a component also makes `sample_coverage.allow` fail until
+     the line is deleted.
+2. Merge conflicts in `docs/ROADMAP.md` every time: parallel threads edit adjacent milestone rows.
+   Not a CI failure but it blocks each merge; we resolve it with a small script (take theirs except
+   our own row).
+3. Compiler strictness (`-Werror -Wconversion -Wshadow`, unused function/variable) and size
+   `static_assert`s on components (no padding: `state_hash` hashes raw bytes). Caught in the gcc-debug
+   stage, cheap to fix.
+4. Replay hash changes: legitimate ones (an ordering fix) show up only as a changed number in a
+   sample test or in determinism. We found them by comparing per-entity hashes of two builds.
+5. Disk, see below.
+6. Real bugs: found by unit tests in gcc-debug, not by a later stage.
+- Flaky tests: don't know of any in this thread's runs.
+
+## Runs per task
+- Usually one `--task` per PR; two or three when a review follow-up adds a commit (PR #344 had two).
+- Exact count over the whole milestone: don't know.
+
+## ccache
+- ccache is installed and used. The last `--task` run reported 656 cacheable calls and 104 hits
+  (15.85%), i.e. mostly misses, because the branch had just merged many files from dev_claude.
+- Whether the saved ccache snapshot (`--save-cache`) helped: don't know. We did not compare with and
+  without it.
+
+## Disk-full events
+- About 39 GB allowance. Typical sizes: build/linux-gcc-debug 9-15 GB (it grows), linux-clang-debug
+  5 GB, linux-gcc-release 2 GB, ASan more than any of them.
+- Happened once for sure: a full `--batch` died at the ASan link with "No space left on device".
+  Since then: kill, delete passed build dirs, run stages one by one
+  (`local_ci.sh linux-asan`, delete the tree, `linux-clang-release`, delete, then
+  `tidy determinism web`).
+- Free space was down to about 4 GB at the end of step 6 with only gcc-debug, gcc-release and
+  clang-debug present.
+
+## Tricks and things we tried
+- Run stages separately and `rm -rf` each finished stage's build dir (above). The most useful one.
+- `--task` instead of `--batch` per PR; `--batch` only every third task and at a milestone's end
+  (project rule).
+- determinism stage builds the gcc Debug and Release trees itself, so `linux-gcc-release` is not named.
+- Comparing hashes between a base and a changed build: copy `libmce_engine.so` of each build to a
+  folder and run the same `mce_player` binary with `LD_LIBRARY_PATH` pointing at each (the player is
+  linked against the shared engine library). Saved a second full build.
+- A temporary env-gated per-entity hash dump in `World::state_hash` (not committed) found which
+  entity diverged.
+- Tried and dropped: waiting for the build with `pgrep -f ninja` in a shell loop. The pattern matched
+  the loop's own command line and it ran until the timeout; use the background-task notification
+  instead.
+
+## Things local_ci did not catch (found later)
+- The hierarchy ran after the kit's FixedUpdate_Post readers (a one-tick lag for children). Every
+  stage was green; a new foot-IK stair test on a child model exposed it. CI only covers what a test
+  asserts.
+- A tick-wraparound problem in the new hierarchy tick bookkeeping (a parent's move lost after 2^32
+  ticks): found by review, not by any stage. The regression test needs `debug_set_change_tick`.
+- A Release-only budget (`#ifdef NDEBUG`) in a test is only exercised in the Release/clang-release
+  runs, not in `--task`.
+- GPU tests run only in linux-gcc-debug, and only in `--batch`/full runs; `--task` does not run them.
+  Don't know of a GPU-only break that slipped through in this thread.

@@ -1,0 +1,54 @@
+# CI notes from the M-ACCESS / M-AUDIO2 / M-COVER / M-DOCCHECK thread
+
+Written from memory and from the logs I still have (/tmp/x/*.log of this session). No new measurements.
+Container: cloud sandbox, one writable allowance of roughly 40 GB, 16 GB-class RAM not checked. "Don't know" where I did not record it.
+
+## Typical times (local_ci.sh, one stage each, ccache warm unless noted)
+- walls: 9-21 s (capabilities, bump_version, check_walls; check_docs adds ~1 s).
+- linux-gcc-debug: 470-650 s on a tree that was already configured (build + ctest). Cold tree: don't know, longer; I rarely saw one.
+- linux-clang-release: 400-670 s.
+- tidy: 0-15 s when only docs/scripts changed (the stage skips or is cached), 170-370 s when C++ changed.
+- determinism: ~480 s (builds gcc-debug and gcc-release samples, then runs each 3 times).
+- linux-asan: 315-505 s, but only when the disk had room (see below).
+- `--task` (walls + gcc-debug + tidy) is therefore ~10-15 min; `--batch` (adds clang-release, determinism, asan) ~35-45 min if run as separate stages.
+- Whole-tree cold build of any one preset: don't know (not seen in this thread).
+
+## What takes longest
+- gcc-debug build+ctest and clang-release are the two longest single stages; determinism is next because it builds two presets of the samples. Test run time inside gcc-debug: don't know the split from build time.
+
+## Why stages go red (in my experience, most to least frequent)
+1. Disk full ("No space left on device" in ld, cook writes, ninja regenerate). About 6 times in ~2 days. Never a code failure, but local_ci reports FAIL and the log summary looks like a real error until you grep the log.
+2. Real errors in my own change: a handful (Werror -Wshadow/-Wconversion in new tests; wrong test sign; array bounds in a test). Caught by gcc-debug or tidy, never by walls.
+3. Golden / transcript drift after merging dev_claude: the MCP transcript (tests/mcp) needed re-blessing after conflict resolution twice.
+4. Flaky: I did not see a flaky test fail in this thread. Don't know about others.
+
+## How often I ran --task per task
+- Usually 2 per task PR, sometimes 3: once before opening the PR, then again after merging dev_claude to resolve a 405 "merge conflicts" (dev_claude moves every 10-30 min with 6+ threads). One M-COVER PR needed 3 merges of dev_claude (a --task each time or a walls-only check when only CHANGELOG conflicted).
+- --batch only at milestone end (and every 3rd task in the rules); each batch also hit the disk problem once.
+
+## ccache
+- ccache stays at its 2.5 GB limit (was 3.0 GB, 120%), hit rate in a late run 82% (734/895). It clearly helps rebuilds after a merge; I did not measure the "snapshot" restore itself. Don't know whether a fresh container restores it.
+
+## Disk
+- Build trees are large: gcc-debug ~14 GB, clang-debug ~8 GB, gcc-release ~4 GB, plus asan and clang-release. Two or three of them together hit the ~40 GB allowance.
+- `df` misleads here (252G total, 100% used at 39G). Workaround that worked every time: delete build/linux-clang-debug, linux-gcc-release, linux-asan, linux-clang-release between stages and run asan alone (`local_ci.sh linux-asan`). When /tmp tasks dir fills too, tool output is lost (ENOSPC) until space is freed.
+- PR #371 (last-resort reclaim of trees later stages need) merged recently; I have not seen its effect yet.
+
+## Cost of the coverage gate (M-COVER)
+- capabilities.py --check with the sample corpus: well under 1 s extra in walls (it reads sample files once). Not a cost issue.
+- The sample tours themselves add ctests: kit3d_tour, kit2d_tour 600 ticks x2 runs each, a few seconds each. Negligible.
+
+## Tricks / things tried
+- Run stages in the background with a log and poll for a FINISHED marker; do not run asan together with other stages (disk).
+- Split `local_ci.sh walls linux-gcc-debug tidy determinism` and `linux-clang-release` and `linux-asan` into separate invocations, deleting trees in between.
+- For a docs-only merge conflict (CHANGELOG/ROADMAP) I re-ran only walls + capabilities --check once the previous head was green; full --task each time costs ~10 min and dev_claude often moves again meanwhile.
+- A `pgrep -f script.sh` waiter matches its own command line and never ends; wait on a log marker instead (a stale FINISHED line in an old log also ends the wait immediately: delete the log first).
+- Tried and dropped: none that I recall besides the above.
+
+## Failures local_ci did not catch (found later)
+- M-AUDIO2: a Doppler pitch not reset when a voice restarted, and a chirp on a teleport; both caught by review (PR #343), not CI. Tests for them were added.
+- The coverage allow-list conflicts are caught by walls only after the merge, not at PR time, so conflicting threads each re-do the list.
+- Hosted CI is gone, so nothing runs on the PR itself; a green local run on an older head says nothing about the merged head.
+
+## Don't know
+- Cold-tree times per stage, RAM/CPU of the container, how much of the stage time is test execution vs compile, Windows/macOS stages (local_ci_macos.sh never run by me), android/ios/web presets.

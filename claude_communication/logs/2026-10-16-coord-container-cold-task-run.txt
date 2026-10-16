@@ -1,0 +1,33 @@
+=== --task: the change touches simulation code, determinism runs too
+=== --task: the change touches C++ code, the gcc Release build runs too
+=== ccache restored from /mnt/project-files/.cache/ccache-linux.tar.zst (12s)
+=== configure (linux-gcc-debug linux-gcc-release linux-clang-debug)
+    done (155s)
+=== walls
+    PASS (12s)
+=== linux-gcc-debug
+    PASS (1381s)
+=== determinism
+=== disk: 14 GB free (want 22); removing build/linux-clang-debug, a later stage rebuilds it (18M)
+=== disk: 14 GB free, less than the 22 GB wanted; going on
+    PASS (631s)
+=== release-build
+=== disk: 11 GB free (want 22); removing the finished build tree build/linux-gcc-debug (15G)
+    PASS (504s)
+=== tidy
+=== disk: 13 GB free (want 22); removing the finished build tree build/linux-gcc-release (16G)
+    PASS (797s)
+
+=== Summary (90cc11e2)
+  walls                  PASS (12s)
+  linux-gcc-debug        PASS (1381s)
+  determinism            PASS (631s)
+  release-build          PASS (504s)
+  tidy                   PASS (797s)
+  ccache: Cacheable calls:   3357 / 4665 (71.96%)
+  ccache:   Hits:             357 / 3357 (10.63%)
+  ccache:   Misses:          3000 / 3357 (89.37%)
+
+real	58m11.707s
+user	181m12.716s
+sys	20m43.728s

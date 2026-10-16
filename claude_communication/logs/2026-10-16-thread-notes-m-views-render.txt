@@ -1,0 +1,27 @@
+# CI notes from the M-VIEWS render thread (steps 2-4, 2026-10-16)
+
+Observations from this thread only; no new measurements were run for this note.
+
+## Timings seen (scripts/ci/local_ci.sh)
+- `--task`, step 3: walls 9 s, linux-gcc-debug 489 s, tidy 351 s, determinism 174 s (about 17 min). ccache hit rate 42 %.
+- `--quick` after merging dev_claude: linux-gcc-debug 633 s, ccache hits 38 %.
+- First baseline of the session (cold-ish ccache restored from /mnt/project-files/.cache, 14 % hits): linux-gcc-debug 1013 s.
+- Restoring ccache from the project-files tarball took about 6 s.
+- `--batch`: linux-clang-release reached 375 s before the disk filled. No full batch time is known.
+- The share of GPU tests (xvfb + llvmpipe/lavapipe) inside linux-gcc-debug: don't know. The stage log does not split build time from ctest time. Most of the time looked like compiling.
+
+## GPU tests and goldens
+- The thread ran test_render_gl, test_kit_gl and test_ui_layout by hand under `xvfb-run`, on GL and `MCE_RHI=sdlgpu`. Each filtered run took seconds, not minutes. I don't know the time for the full suites.
+- `scripts/golden.sh` runs 23 golden cases × 3 runs on GL and on SDL GPU. It passed every time it ran: 4 times in this thread, 23/23 each time. No flake was seen. Total time: don't know exactly; roughly a few minutes.
+- llvmpipe and lavapipe gave the same numbers in the render-texture tests. GL and SDL GPU player captures differ by up to 32 levels, near the particles.
+
+## Skipping GPU tests on non-render changes
+- Probably safe for changes that touch neither src/engine/{render,rhi,kit,ui}, nor src/player, nor src/editor.
+- Risky otherwise. Render behavior lives outside src/engine/render too: kit extracts and views, the player's frame loop, editor preview. A path filter limited to "render/" would have missed bugs in this thread, for example a render-texture orientation issue that was fixed in kit and player code.
+
+## Disk and ccache
+- The session's disk allowance is about 39 GB. A `--batch` run filled it: every stage after walls failed with "No space left on device", and the failure looked like build errors.
+- Tree sizes: linux-gcc-debug 14 GB, linux-clang-debug 7.9 GB (tidy), linux-gcc-release 3.5 GB, linux-clang-release 1.9 GB, build/_fetch 0.9 GB, ccache 1.5 GB. linux-asan comes on top of these.
+- Workaround used: run the batch stages one at a time and delete each tree after its stage.
+- Suggestion: have `--batch` check free space first, or delete the clang and asan trees after their stages.
+- ccache hit rates stay low (12-42 %) after merges that touch widely included headers. Each step here touched kit/render headers.

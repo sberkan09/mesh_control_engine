@@ -1,0 +1,54 @@
+# CI notes from the M-MOBILE / M-ANIM2D thread (routine 1)
+
+Source: my own run logs and memory of one long session (M-ANIM2D steps 1-6, SBA-140..146, plus a few others). No new measurements taken for this file.
+
+## Timings I saw (Linux container, `-j4`, ccache on)
+- walls: ~10 s. Always cheap.
+- linux-gcc-debug (build + all tests incl. GPU under Xvfb/llvmpipe): 631 s and 1060 s on two `--batch`/`--task` runs. Dominated by compiling; tests are the minority. Cold tree after I deleted it: a full rebuild plus ctest took roughly 15-20 min.
+- linux-clang-release: 465 s (partial, died on disk) and 889 s (complete).
+- linux-asan: 662 s (died on disk), 905 s (complete, after deleting the tree first).
+- tidy: 346 s (died on disk), 632 s (complete). One `--task` run showed "tidy PASS (0s)", I assume it had nothing new to analyse, don't know exactly.
+- determinism: 531 s complete (builds and runs the gcc Release tree). 14 s when it failed immediately on disk-full.
+- web: ~0 s (a no-op here as far as I could tell).
+- Whole `--batch` when nothing fails and the disk holds: roughly 1 h wall clock. Don't know a clean warm-tree figure; I never had one, because I kept deleting trees.
+- `--task` (walls + gcc-debug + tidy + determinism): about 25-35 min in practice.
+
+## What turns it red, most to least common
+1. **Disk full ("No space left on device")**: by far the most frequent. Happened on every `--batch` I ran (3 times in this session). Symptoms: assembler/linker "No space left", `ninja: build stopped`, stages like asan/tidy/determinism fail in 7-14 s. The container allowance is ~39 G; build trees were: linux-gcc-debug ~14 G, linux-clang-debug ~7.7 G, linux-clang-release ~5.3 G, asan up to a few G, `_fetch` ~0.9 G, `/root/.cache` ~1.6 G. Not a real code failure; re-running a single stage after freeing space passes.
+2. **Generated-file goldens**: `docs/engine/capabilities.md`, the MCP transcript golden (`tests/mcp/transcripts/demo_edit.golden.jsonl`), ROADMAP/CHANGELOG conflicts. Those go red after merging origin/dev_claude, not because of the change itself. Fix: regenerate with `capabilities.py` / `run_transcript.py --update`, never hand-merge.
+3. **Other threads' changes on dev_claude**: once, three GPU samples (`sample_04_diorama_gpu`, `sample_06_showcase_gpu`, `cinema_demo_player_gpu`) went red on my PR purely from a shader-warning change in another milestone; reported to the coordinator, fixed on dev_claude in a separate PR.
+4. **clang-tidy findings in my own test code** (e.g. `bugprone-suspicious-memory-comparison` on memcmp of floats). Real but cheap; caught only by the tidy stage, not by gcc.
+5. Flaky tests: none that I could attribute. Don't know of any.
+6. Real test failures from my own change: rare (fixed before the first CI run by running the targeted ctest).
+
+## How many times I ran CI per task
+- Usually `--task` once per PR, plus a manual targeted ctest (`-R`/`-LE gpu`) and `check_walls.py` + `capabilities.py --check` several times before it.
+- Because dev_claude moves fast (8-10 commits per hour at times), every PR needed a merge of origin/dev_claude right before merging, then a rebuild and a smaller re-check (non-GPU ctest, walls, capabilities, transcript). So effectively 1 full `--task` + 2-3 partial re-verifications per task.
+- `--batch` every 3rd task and at milestone ends: done 3 times, each hit disk-full at least once.
+
+## ccache
+- UPDATE (later run): on the last `--task` the ccache hit rate was 57 % (642 / 1129), so it does help once the cache is not wiped; earlier 7-8 % was after my own `ccache -C` and fresh presets. Original note: don't know whether the ccache snapshot helped. In my logs the hit rate was low: 7-8 % hits (about 80 / 1000 cacheable calls) on the batch stages, 0.7 % on determinism after `ccache -C`. I also ran `ccache -C` myself to reclaim disk, so I probably destroyed any benefit. Each fresh preset is a different compile configuration, so cross-preset hits are rare anyway.
+
+## Disk tricks that worked
+- After a stage passes, `rm -rf build/<preset>` for linux-asan, linux-clang-release, linux-gcc-release, linux-clang-debug (keep linux-gcc-debug only while still needed).
+- Run failed stages one at a time (`local_ci.sh linux-asan`, etc.) instead of the whole batch.
+- `ccache -C` freed a few GB (but costs cache).
+- Delete gcc-debug too before running asan alone if the disk is under ~10 G free.
+- A recent dev_claude commit (PR #371) added stage ordering and disk reclaim to local_ci.sh; I haven't tested it, so I don't know how well it works.
+
+## Things tried and dropped
+- Running `--batch` end to end in one go on this container: never fit; dropped for per-stage runs.
+- Building everything with -j8: not tried (rule is `-j4` only).
+- Don't know about any other variants.
+
+## Bugs local_ci did not catch (found later)
+- ImGui panel for the editor was never run on a display (no display in CI), so only compile-time and the document layer are covered. Same for the Skeleton panel viewport overlay.
+- Real-device GPU behaviour: GPU smoke tests run on llvmpipe only; I can't speak to hardware GPUs.
+- Merge-race breakages: a green local run on a stale base can be red after merging newer dev_claude. Not a local_ci gap as such, but the reason for re-merging and re-testing right before merge.
+- The worker-written docs once said "step 5 is its own change" after it had merged; no gate checks milestone-record consistency with the ROADMAP row (I caught it by reading).
+- Duplicate work between threads (SBA-160 built twice) is not detectable by CI; only Linear state + `git log origin/dev_claude` checks help.
+
+## Suggestions (opinion, not measured)
+- Split stages so a disk-full stage can be resumed alone (already what I did by hand).
+- Make `--task` skip rebuilding gcc-debug when only docs/python changed.
+- A cheap pre-merge "rebase check" (walls + capabilities + transcript golden) would catch most post-merge reds in under a minute.

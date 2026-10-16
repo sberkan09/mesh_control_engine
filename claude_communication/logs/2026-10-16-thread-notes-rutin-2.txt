@@ -1,0 +1,45 @@
+# local_ci.sh notes from routine 2 (M-VISUAL, then M-UI-DATA2)
+
+Source: what I remember from this session and its logs (PRs #308, #325, #328, #340, #347, #368). No measurements were run for this file. Anything I do not know says "don't know".
+
+## Timings seen (cloud container, this repo)
+- `--task` on a C++ change = walls + linux-gcc-debug + tidy + release-build (release-build is added automatically when C++ changes).
+- walls: 9-31 s.
+- linux-gcc-debug (build + ctest): 592-835 s. Longest stage by a wide margin. Warm vs cold tree: don't know exactly; the 592 s run followed a warm tree, 794-835 s runs had more rebuilds.
+- tidy: 103 s on a rerun right after a green build (ccache 85% hits); 512-614 s on a fresh run. So tidy is mostly compile time, ccache decides it.
+- release-build (gcc Release, build only): 98 s when the tree was warm; the cold run died at target 828/934 after 442 s because the disk filled.
+- Whole `--task` end to end: roughly 20-25 min when nothing goes wrong. `--batch` timings: don't know (I did not run one in the last stretch).
+
+## What goes red, and why (my runs)
+- Disk full: by far the most common. Hit tidy, asan, determinism and release-build at different times. Always "No space left on device" in the log, never a code problem. Rerunning the single failed stage after freeing space fixed it every time.
+- Base branch breakage that is not my change: once `mcp_transcript` failed (component count 77 vs 79). Fixed on `dev_claude` by someone else; merging the base cleared it.
+- My own test expectations: a couple of times a new test assertion was wrong (alignment rect read before update; a theme test assuming "own_style" only covers one state). Caught by the focused ctest subset before local_ci.
+- Golden images / flaky tests: don't know of any in my runs. I did not see a flake that passed on a plain rerun.
+- Real compile errors: rare, and found by the incremental gcc-debug build before local_ci.
+
+## Runs per task
+- Normally 1 full `--task` plus 1-3 reruns of a single stage (`local_ci.sh tidy`, `local_ci.sh release-build`) after a disk failure. Plus 1-2 incremental rebuild + focused `ctest -R 'ui|cook|mcp|editor'` rounds (about 100 s of ctest) before the real run.
+
+## ccache
+- Cacheable calls ~99-100%, but hit rate on `--task` was only 13-21%. Reason I believe: I trimmed/cleared ccache (`ccache -M 1G; ccache -c`, once `ccache -C`) to get disk back, and the container is fresh per session. A rerun immediately after a successful build hit 85%.
+- Whether a ccache snapshot restored at session start would help: don't know, but the cold-start numbers above suggest it would cut tidy and release-build a lot. ccache directory was ~1.1 GB when I looked.
+
+## Disk
+- Per-session allowance is small (~40 GB used when full). `build/linux-gcc-debug` ~14 GB, `build/linux-gcc-release` ~13 GB, plus asan/clang trees if ever built, plus `build/_fetch` ~0.9 GB, ccache ~1.1 GB.
+- Fixes I used: delete trees I am not using (`linux-asan`, `linux-clang-release`, `linux-clang-debug`), `ccache -M 1G; ccache -c`, and as last resort delete `linux-gcc-debug` (costs a ~15 min rebuild next task).
+- At least 5 disk-full incidents in the last stretch.
+
+## Tricks that worked
+- Run one stage alone: `scripts/ci/local_ci.sh tidy` / `release-build`.
+- Run a focused `ctest -R` subset on the changed area before the full `--task`.
+- Long CI in a background process: tool-level background jobs get killed at a time limit (I lost two `--task` runs at about the 10-30 min mark). Starting it detached `( ... > log 2>&1 & )` and watching the log with a Monitor loop on "Summary" survived.
+- Xvfb for GL tests: `Xvfb :97 -screen 0 1280x1024x24 &`, `DISPLAY=:97`.
+
+## Tried and dropped
+- Waiting on a foreground `--task` call: killed by the tool timeout.
+- Keeping all build trees: fills the disk.
+
+## What local_ci did not catch (found later)
+- Merge drift: CHANGELOG conflicts on nearly every PR when merging `dev_claude` just before merge (text conflicts, not CI). After the final base merge I often do not rebuild, so a semantic clash with someone else's change would only show on `dev_claude`. Don't know of a case where it did.
+- -O2-only warnings: now covered by release-build in `--task`.
+- Shader global-initializer problem (PR #325) only showed on real shader compile paths, not in the usual stages; don't know how it was first noticed beyond that.

@@ -1,0 +1,23 @@
+== gcc-debug (ccache warm, tree cold)
+16:25:02 [108s rc=0] cmake --preset linux-gcc-debug
+16:36:57 [715s rc=0] cmake --build --preset linux-gcc-debug
+== gcc-debug no-op rebuild (warm tree)
+16:36:58 [1s rc=0] cmake --build --preset linux-gcc-debug
+== gcc-debug after touching log.cpp
+16:38:32 [94s rc=0] cmake --build --preset linux-gcc-debug
+== ctest non-GPU (-LE gpu) and list
+ctest -LE gpu: 136s
+== gcc-release (ccache warm, tree cold)
+16:43:03 [118s rc=0] cmake --preset linux-gcc-release
+16:59:24 [981s rc=0] cmake --build --preset linux-gcc-release
+== release no-op
+16:59:24 [0s rc=0] cmake --build --preset linux-gcc-release
+== release touch log.cpp (full build target)
+17:00:30 [66s rc=0] cmake --build --preset linux-gcc-release
+== release touch + only the object
+obj=
+17:00:31 [0s rc=0] ninja -C build/linux-gcc-release 
+== tidy
+17:00:35 [4s rc=0] cmake --preset linux-clang-debug
+run-clang-tidy one file: 7s rc=0
+DONE

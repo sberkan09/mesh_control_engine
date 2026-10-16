@@ -1,0 +1,64 @@
+# CI notes from the M-SCRIPT thread (local_ci.sh, 2026-10-16)
+
+Source: my own logs under build/local-ci-logs and memory of the session. No new measurements were taken.
+Environment: cloud container, one 252G volume with a ~39G write allowance, ccache 2.5G of 5G, GCC 13 and clang.
+
+## Typical times (seconds, wall clock)
+- `walls`: 7-10, always cheap.
+- `--task` = walls + linux-gcc-debug + tidy (+ determinism when simulation code changed):
+  - gcc-debug: 500-630 on a mostly warm tree (ccache hit rate 66-87%). First run after a long gap or after deleting the tree: 566 (17% hits).
+  - tidy: 130-280 normally; 420-460 when the clang-debug tree had to be built first (cold). It checks only files changed against origin/dev_claude, so on a clean tree it takes 0s.
+  - determinism: 130-410 (builds gcc debug + release sample targets, then 3 runs each); 200-590 in the batch.
+  - Whole `--task` therefore ~15-25 min.
+- `--batch` stages one by one: gcc-debug 395-585, clang-release 420-620, asan 207-530 (asan 345 when clean), determinism 275-590, release-build 370, web 0 (skipped, no emsdk).
+- Whole batch run in one go: >45 min, and it never finished in one go once because of disk (below).
+- Cold vs warm: don't know exact cold numbers for a never-built tree (I never started from nothing); the nearest cold case is a deleted preset tree with ccache still warm: gcc-debug ~400-630.
+
+## Slowest stage
+- Builds dominate: linux-gcc-debug (all test targets + the ctest run, ~200 tests, the GL ones are slow: "gpu = 1200 s*proc"), then clang-release, then determinism (it builds two more trees).
+- ctest inside gcc-debug is ~380 s of the ~550 s (test time 379 s in one log).
+
+## What goes red, and why (most to least frequent for me)
+1. Disk full (by far the most common): "No space left on device" in the link step, shown as a failed stage with no test failure. Each preset tree is large: gcc-debug 14G, clang-debug 7-8G, clang-release 8.8G, asan 11G, gcc-release 3.5G, _fetch 0.9G, ccache 2.6G. `--task` leaves gcc-debug + clang-debug (tidy) + gcc-release (determinism) = >25G, plus the rest hits the 39G allowance. It happened 5 times in this thread.
+2. MCP golden: `mcp_transcript` fails whenever a tool or its description changes (new tool, new prompt text). Fix: `python3 tests/mcp/run_transcript.py --exe <mce_mcp> --work /tmp/x --update`. Also it fails if the mce_mcp binary is stale (not rebuilt) - looks like a golden diff.
+3. Generated docs gates: `capabilities.py --check` (docs/engine/capabilities.md must be regenerated; a locally cooked `projects/*/cooked/mce.d.luau` is scanned and falsely reports "now shows it" - delete cooked/ first) and the sample coverage allow-list.
+4. Merge conflicts after the PR, not in CI: CHANGELOG.md, docs/ROADMAP.md, docs/engine/capabilities.md conflict almost every time because other threads merge constantly. Resolve: keep both changelog lines, regenerate capabilities.
+5. Real code errors: rare (my test expectation off by one in 4a, a crash test noise, determinism.py argument needing `--args=...` when the value starts with `-`).
+6. GPU editor tests (`test_editor_gl`, `*_editor_gpu`) fail outside local_ci with "No available video device"; inside local_ci they pass. Not a real failure.
+- Flaky: I saw none in this thread.
+
+## How many times I ran it
+- About 1-2 `--task` runs per task (6 tasks, ~10 `--task` runs), plus 3-4 single-stage re-runs per task when disk filled. `--batch` 3 times (the third by stages).
+- 4a needed 2 runs (golden). Most other first runs were red only because of disk.
+
+## ccache
+- Works: hit rates 66-100% when sources did not change between runs (tidy and determinism re-runs show 99-100%).
+- The restore at start ("restore_cache") and the 5G cap seemed fine; I never used --save-cache. Whether the snapshot restore itself helps vs the local ccache dir: don't know.
+- Hits drop to 17% right after a merge from dev_claude brings in many headers (everything recompiles): ~25 min.
+
+## Working under the 39G allowance
+- What works: run stages one at a time and `rm -rf build/<preset>` after each passing stage: gcc-debug, clang-release, asan, then tidy (builds clang-debug, delete after), determinism, web. I scripted it (a for-loop over local_ci.sh <stage>). `local_ci.sh <stage>` runs a single stage.
+- The preset trees are not the whole story: delete clang-debug before running determinism, gcc-debug before asan.
+- Deleting trees costs rebuild time (gcc-debug ~400-600 s even with ccache), so a task that needs a binary again (MCP tools, test_kit) pays it twice.
+
+## sdk_install test
+- `sdk` label test: 122 s*proc in gcc-debug (one test). It installs the SDK, stamps and builds projects, ships, and runs launchers; it is a fixed ~2 min. Don't know how much of that is the install step itself.
+
+## Tricks and things tried
+- Run only what changed while developing: build the single test target (`cmake --build build/linux-gcc-debug --target test_kit`) and `ctest -R`; use full local_ci only before the PR.
+- `local_ci.sh tidy` skips unchanged files: run it after committing nothing new to see 0 s.
+- Avoid editing tracked files while a stage runs (cook and capabilities read the tree).
+- A docs-only PR skips local_ci (agreed rule); I still ran capabilities/walls checks by hand.
+- GitHub says "405 merge conflicts" for 20-60 s after a push even when clean; retry after confirming `git merge-base --is-ancestor origin/dev_claude HEAD`.
+- Tried and dropped: one-go `--batch` (disk), foreground waiting with sleep (blocked by the harness; use background + notification).
+
+## Bugs local_ci did not catch (found later)
+- Web, Android and iOS builds with the Luau runtime: not built at all here (no emsdk, NDK, Xcode); the stage `web` is skipped. Unverified, not "known broken".
+- Tracy zones (`TRACY_ENABLE`) are compiled out in local_ci; I only syntax-checked them by hand.
+- Editor UI paths (Console, Cook panel) have no automated test beyond a parser test.
+- Nothing found later that local_ci should have caught; the one surprise was a stale `mce_mcp` binary making a golden test red.
+
+## Don't know
+- True cold build time from an empty tree and empty ccache.
+- Whether `--save-cache` / the cache restore is faster than the plain local ccache.
+- Cost split inside the `sdk` test.

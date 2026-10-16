@@ -1,0 +1,1824 @@
+Preset CMake variables:
+
+  CMAKE_BUILD_TYPE="Debug"
+  CMAKE_CXX_COMPILER="g++"
+  CMAKE_C_COMPILER="gcc"
+  MCE_BUILD_TESTS="ON"
+
+-- Build spdlog: 1.17.0
+-- Build type: Debug
+Parsing public/common/TracyVersion.hpp file
+VERSION 0.14.1
+-- Could NOT find rocprofiler-sdk (missing: rocprofiler-sdk_DIR)
+-- TRACY_ENABLE: ON
+-- TRACY_ON_DEMAND: ON
+-- TRACY_CALLSTACK: (not set)
+-- TRACY_PLATFORM_HEADER: (not set)
+-- TRACY_NO_CALLSTACK: OFF
+-- TRACY_NO_CALLSTACK_INLINES: OFF
+-- TRACY_ONLY_LOCALHOST: OFF
+-- TRACY_NO_BROADCAST: ON
+-- TRACY_ONLY_IPV4: OFF
+-- TRACY_NO_CODE_TRANSFER: OFF
+-- TRACY_NO_CONTEXT_SWITCH: OFF
+-- TRACY_NO_EXIT: OFF
+-- TRACY_NO_SAMPLING: OFF
+-- TRACY_NO_WAIT_STACKS: OFF
+-- TRACY_NO_VERIFY: OFF
+-- TRACY_NO_VSYNC_CAPTURE: OFF
+-- TRACY_NO_FRAME_IMAGE: OFF
+-- TRACY_NO_SYSTEM_TRACING: OFF
+-- TRACY_PATCHABLE_NOPSLEDS: OFF
+-- TRACY_MANUAL_LIFETIME: OFF
+-- TRACY_FIBERS: OFF
+-- TRACY_NO_CRASH_HANDLER: OFF
+-- TRACY_TIMER_FALLBACK: OFF
+-- TRACY_DISALLOW_HW_TIMER: OFF
+-- TRACY_LIBUNWIND_BACKTRACE: OFF
+-- TRACY_SYMBOL_OFFLINE_RESOLVE: OFF
+-- TRACY_LIBBACKTRACE_ELF_DYNLOAD_SUPPORT: OFF
+-- TRACY_DEBUGINFOD: OFF
+-- TRACY_IGNORE_MEMORY_FAULTS: OFF
+-- TRACY_OPENGL_AUTO_CALIBRATION: OFF
+-- TRACY_VERBOSE: OFF
+-- TRACY_NO_INTERNAL_MESSAGE: OFF
+-- TRACY_DEMANGLE: OFF
+-- Could NOT find ALSA (missing: ALSA_LIBRARY ALSA_INCLUDE_DIR) 
+CMake Warning at build/linux-gcc-debug/_deps/sdl3-src/cmake/sdlchecks.cmake:130 (message):
+  Unable to find the alsa development library
+Call Stack (most recent call first):
+  build/linux-gcc-debug/_deps/sdl3-src/CMakeLists.txt:1829 (CheckALSA)
+
+
+-- Checking for module 'jack'
+--   Package 'jack', required by 'virtual:world', not found
+-- Checking for module 'libpipewire-0.3>=0.3.44'
+--   Package 'libpipewire-0.3', required by 'virtual:world', not found
+-- Checking for module 'libpulse>=0.9.15'
+--   Package 'libpulse', required by 'virtual:world', not found
+-- Checking for module 'sndio'
+--   Package 'sndio', required by 'virtual:world', not found
+-- dynamic libX11 -> libX11.so.6
+-- dynamic libXext -> libXext.so.6
+-- dynamic libXcursor -> libXcursor.so.1
+-- dynamic libXi -> libXi.so.6
+-- dynamic libXfixes -> libXfixes.so.3
+-- dynamic libXrandr -> libXrandr.so.2
+-- dynamic libXrender -> libXrender.so.1
+-- dynamic libXss -> libXss.so.1
+-- dynamic libXtst -> libXtst.so.6
+-- Checking for module 'fribidi'
+--   Package 'fribidi', required by 'virtual:world', not found
+-- Checking for module 'libthai'
+--   Package 'libthai', required by 'virtual:world', not found
+-- Checking for module 'libdrm'
+--   Package 'libdrm', required by 'virtual:world', not found
+-- Checking for module 'gbm'
+--   Package 'gbm', required by 'virtual:world', not found
+-- Checking for modules 'wayland-client>=1.18;wayland-egl;wayland-cursor;egl;xkbcommon>=0.5.0'
+--   Package 'wayland-client', required by 'virtual:world', not found
+--   Package 'wayland-egl', required by 'virtual:world', not found
+--   Package 'wayland-cursor', required by 'virtual:world', not found
+-- Checking for one of the modules 'dbus-1;dbus'
+-- Checking for one of the modules 'ibus-1.0;ibus'
+-- Checking for one of the modules 'liburing-ffi'
+-- Checking for module 'libusb-1.0>=1.0.16'
+--   Package 'libusb-1.0', required by 'virtual:world', not found
+-- Could NOT find LibUSB (missing: LibUSB_LIBRARY LibUSB_INCLUDE_PATH) (found version "LibUSB_VERSION-NOTFOUND")
+-- 
+-- SDL3 was configured with the following options:
+-- 
+-- Platform: Linux-6.18.44-fc-v139
+-- 64-bit:   TRUE
+-- Compiler: /usr/bin/gcc
+-- Revision: SDL-3.4.18-release-3.4.18
+-- Vendor:   
+-- 
+-- Subsystems:
+--   Audio:    ON
+--   Video:    ON
+--   GPU:      ON
+--   Render:   OFF
+--   Camera:   OFF
+--   Joystick: ON
+--   Haptic:   ON
+--   Hidapi:   ON
+--   Power:    ON
+--   Sensor:   ON
+--   Dialog:   OFF
+--   Tray:     ON
+-- 
+-- Options:
+--   SDL_ALSA                    (Wanted: ON): OFF
+--   SDL_ALSA_SHARED             (Wanted: ON): OFF
+--   SDL_ALTIVEC                 (Wanted: OFF): OFF
+--   SDL_ARMNEON                 (Wanted: OFF): OFF
+--   SDL_ASAN                    (Wanted: OFF): OFF
+--   SDL_ASSEMBLY                (Wanted: ON): ON
+--   SDL_ASSERTIONS              (Wanted: auto): auto
+--   SDL_AVX                     (Wanted: ON): ON
+--   SDL_AVX2                    (Wanted: ON): ON
+--   SDL_AVX512F                 (Wanted: ON): ON
+--   SDL_BACKGROUNDING_SIGNAL    (Wanted: OFF): OFF
+--   SDL_CCACHE                  (Wanted: OFF): OFF
+--   SDL_CLANG_TIDY              (Wanted: OFF): OFF
+--   SDL_CLOCK_GETTIME           (Wanted: ON): ON
+--   SDL_COCOA                   (Wanted: OFF): OFF
+--   SDL_DBUS                    (Wanted: ON): OFF
+--   SDL_DEPS_SHARED             (Wanted: ON): OFF
+--   SDL_DIRECTX                 (Wanted: OFF): OFF
+--   SDL_DISKAUDIO               (Wanted: ON): ON
+--   SDL_DLOPEN_NOTES            (Wanted: ON): ON
+--   SDL_DUMMYAUDIO              (Wanted: ON): ON
+--   SDL_DUMMYCAMERA             (Wanted: OFF): OFF
+--   SDL_DUMMYVIDEO              (Wanted: ON): ON
+--   SDL_EXAMPLES                (Wanted: OFF): OFF
+--   SDL_EXAMPLES_LINK_SHARED    (Wanted: OFF): OFF
+--   SDL_FOREGROUNDING_SIGNAL    (Wanted: OFF): OFF
+--   SDL_FRIBIDI                 (Wanted: ON): OFF
+--   SDL_FRIBIDI_SHARED          (Wanted: ON): OFF
+--   SDL_GCC_ATOMICS             (Wanted: ON): ON
+--   SDL_HIDAPI                  (Wanted: ON): ON
+--   SDL_HIDAPI_JOYSTICK         (Wanted: ON): ON
+--   SDL_HIDAPI_LIBUSB           (Wanted: ON): OFF
+--   SDL_HIDAPI_LIBUSB_SHARED    (Wanted: ON): OFF
+--   SDL_IBUS                    (Wanted: ON): OFF
+--   SDL_INSTALL                 (Wanted: OFF): OFF
+--   SDL_INSTALL_TESTS           (Wanted: OFF): OFF
+--   SDL_JACK                    (Wanted: ON): OFF
+--   SDL_JACK_SHARED             (Wanted: ON): OFF
+--   SDL_KMSDRM                  (Wanted: ON): OFF
+--   SDL_KMSDRM_SHARED           (Wanted: ON): OFF
+--   SDL_LASX                    (Wanted: OFF): OFF
+--   SDL_LIBC                    (Wanted: ON): ON
+--   SDL_LIBICONV                (Wanted: OFF): OFF
+--   SDL_LIBTHAI                 (Wanted: ON): OFF
+--   SDL_LIBTHAI_SHARED          (Wanted: ON): OFF
+--   SDL_LIBUDEV                 (Wanted: ON): OFF
+--   SDL_LIBURING                (Wanted: ON): OFF
+--   SDL_LSX                     (Wanted: OFF): OFF
+--   SDL_METAL                   (Wanted: OFF): OFF
+--   SDL_MMX                     (Wanted: ON): ON
+--   SDL_OFFSCREEN               (Wanted: ON): ON
+--   SDL_OPENGL                  (Wanted: ON): ON
+--   SDL_OPENGLES                (Wanted: ON): ON
+--   SDL_OPENVR                  (Wanted: OFF): OFF
+--   SDL_OSS                     (Wanted: OFF): OFF
+--   SDL_PIPEWIRE                (Wanted: ON): OFF
+--   SDL_PIPEWIRE_SHARED         (Wanted: ON): OFF
+--   SDL_PTHREADS                (Wanted: ON): ON
+--   SDL_PTHREADS_SEM            (Wanted: ON): ON
+--   SDL_PULSEAUDIO              (Wanted: ON): OFF
+--   SDL_PULSEAUDIO_SHARED       (Wanted: ON): OFF
+--   SDL_RENDER_D3D              (Wanted: OFF): OFF
+--   SDL_RENDER_D3D11            (Wanted: OFF): OFF
+--   SDL_RENDER_D3D12            (Wanted: OFF): OFF
+--   SDL_RENDER_GPU              (Wanted: OFF): OFF
+--   SDL_RENDER_METAL            (Wanted: OFF): OFF
+--   SDL_RENDER_VULKAN           (Wanted: OFF): OFF
+--   SDL_ROCKCHIP                (Wanted: OFF): OFF
+--   SDL_RPATH                   (Wanted: ON): OFF
+--   SDL_RPI                     (Wanted: OFF): OFF
+--   SDL_SNDIO                   (Wanted: ON): OFF
+--   SDL_SNDIO_SHARED            (Wanted: ON): OFF
+--   SDL_SSE                     (Wanted: ON): ON
+--   SDL_SSE2                    (Wanted: ON): ON
+--   SDL_SSE3                    (Wanted: ON): ON
+--   SDL_SSE4_1                  (Wanted: ON): ON
+--   SDL_SSE4_2                  (Wanted: ON): ON
+--   SDL_SYSTEM_ICONV            (Wanted: ON): ON
+--   SDL_TESTS                   (Wanted: OFF): OFF
+--   SDL_TESTS_LINK_SHARED       (Wanted: OFF): OFF
+--   SDL_UNINSTALL               (Wanted: OFF): OFF
+--   SDL_VIRTUAL_JOYSTICK        (Wanted: ON): ON
+--   SDL_VIVANTE                 (Wanted: OFF): OFF
+--   SDL_VULKAN                  (Wanted: ON): ON
+--   SDL_WASAPI                  (Wanted: OFF): OFF
+--   SDL_WAYLAND                 (Wanted: ON): OFF
+--   SDL_WAYLAND_LIBDECOR        (Wanted: ON): OFF
+--   SDL_WAYLAND_LIBDECOR_SHARED (Wanted: ON): OFF
+--   SDL_WAYLAND_SHARED          (Wanted: ON): OFF
+--   SDL_X11                     (Wanted: ON): ON
+--   SDL_X11_SHARED              (Wanted: ON): ON
+--   SDL_X11_XCURSOR             (Wanted: ON): ON
+--   SDL_X11_XDBE                (Wanted: ON): ON
+--   SDL_X11_XFIXES              (Wanted: ON): ON
+--   SDL_X11_XINPUT              (Wanted: ON): ON
+--   SDL_X11_XRANDR              (Wanted: ON): ON
+--   SDL_X11_XSCRNSAVER          (Wanted: ON): ON
+--   SDL_X11_XSHAPE              (Wanted: ON): ON
+--   SDL_X11_XSYNC               (Wanted: ON): ON
+--   SDL_X11_XTEST               (Wanted: ON): ON
+--   SDL_XINPUT                  (Wanted: OFF): OFF
+-- 
+--  Build Shared Library: OFF
+--  Build Static Library: ON
+-- 
+-- Enabled backends:
+--   Video drivers: dummy offscreen x11(dynamic)
+--   X11 libraries: xcursor xdbe xfixes xinput2 xrandr xscrnsaver xshape xsync xtest
+--   Render drivers: ogl ogl_es2
+--   GPU drivers: vulkan
+--   Audio drivers: disk dummy
+--   Joystick drivers: hidapi linux virtual
+--   Camera drivers: dummy
+-- 
+-- If something was not detected, although the libraries
+-- were installed, then make sure you have set the
+-- CMAKE_C_FLAGS and CMAKE_PREFIX_PATH CMake variables correctly.
+-- 
+-- CMake C compiler: GNU
+-- CMake C++ compiler: GNU
+-- CMake system name: Linux
+-- CMake host system processor: x86_64
+-- Box2D using Unix
+CMake Deprecation Warning at build/linux-gcc-debug/_deps/libdatachannel-src/deps/plog/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.5 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+CMake Deprecation Warning at build/linux-gcc-debug/_deps/libdatachannel-src/deps/usrsctp/CMakeLists.txt:33 (cmake_minimum_required):
+  Compatibility with CMake < 3.5 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+-- Compiler flags (CMAKE_C_FLAGS):  -std=c99 -pedantic -Wall -Wextra -Wfloat-equal -Wshadow -Wpointer-arith -Wunreachable-code -Winit-self -Wno-unused-function -Wno-unused-parameter -Wno-unreachable-code -Wstrict-prototypes
+-- MCE engine id: 2bee6f4993be8f65 (90cc11e2-dirty Debug GNU-13.3.0 asan=OFF)
+-- Configuring done (8.3s)
+-- Generating done (0.4s)
+-- Build files have been written to: /home/user/dev_wt/build/linux-gcc-debug
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+Preset CMake variables:
+
+  CMAKE_BUILD_TYPE="RelWithDebInfo"
+  CMAKE_CXX_COMPILER="g++"
+  CMAKE_C_COMPILER="gcc"
+  MCE_BUILD_TESTS="ON"
+
+-- Build spdlog: 1.17.0
+-- Build type: RelWithDebInfo
+Parsing public/common/TracyVersion.hpp file
+VERSION 0.14.1
+-- Could NOT find rocprofiler-sdk (missing: rocprofiler-sdk_DIR)
+-- TRACY_ENABLE: ON
+-- TRACY_ON_DEMAND: ON
+-- TRACY_CALLSTACK: (not set)
+-- TRACY_PLATFORM_HEADER: (not set)
+-- TRACY_NO_CALLSTACK: OFF
+-- TRACY_NO_CALLSTACK_INLINES: OFF
+-- TRACY_ONLY_LOCALHOST: OFF
+-- TRACY_NO_BROADCAST: ON
+-- TRACY_ONLY_IPV4: OFF
+-- TRACY_NO_CODE_TRANSFER: OFF
+-- TRACY_NO_CONTEXT_SWITCH: OFF
+-- TRACY_NO_EXIT: OFF
+-- TRACY_NO_SAMPLING: OFF
+-- TRACY_NO_WAIT_STACKS: OFF
+-- TRACY_NO_VERIFY: OFF
+-- TRACY_NO_VSYNC_CAPTURE: OFF
+-- TRACY_NO_FRAME_IMAGE: OFF
+-- TRACY_NO_SYSTEM_TRACING: OFF
+-- TRACY_PATCHABLE_NOPSLEDS: OFF
+-- TRACY_MANUAL_LIFETIME: OFF
+-- TRACY_FIBERS: OFF
+-- TRACY_NO_CRASH_HANDLER: OFF
+-- TRACY_TIMER_FALLBACK: OFF
+-- TRACY_DISALLOW_HW_TIMER: OFF
+-- TRACY_LIBUNWIND_BACKTRACE: OFF
+-- TRACY_SYMBOL_OFFLINE_RESOLVE: OFF
+-- TRACY_LIBBACKTRACE_ELF_DYNLOAD_SUPPORT: OFF
+-- TRACY_DEBUGINFOD: OFF
+-- TRACY_IGNORE_MEMORY_FAULTS: OFF
+-- TRACY_OPENGL_AUTO_CALIBRATION: OFF
+-- TRACY_VERBOSE: OFF
+-- TRACY_NO_INTERNAL_MESSAGE: OFF
+-- TRACY_DEMANGLE: OFF
+-- Could NOT find ALSA (missing: ALSA_LIBRARY ALSA_INCLUDE_DIR) 
+CMake Warning at build/_fetch/a6ffdce8d0a1/sdl3-src/cmake/sdlchecks.cmake:130 (message):
+  Unable to find the alsa development library
+Call Stack (most recent call first):
+  build/_fetch/a6ffdce8d0a1/sdl3-src/CMakeLists.txt:1829 (CheckALSA)
+
+
+-- Checking for module 'jack'
+--   Package 'jack', required by 'virtual:world', not found
+-- Checking for module 'libpipewire-0.3>=0.3.44'
+--   Package 'libpipewire-0.3', required by 'virtual:world', not found
+-- Checking for module 'libpulse>=0.9.15'
+--   Package 'libpulse', required by 'virtual:world', not found
+-- Checking for module 'sndio'
+--   Package 'sndio', required by 'virtual:world', not found
+-- dynamic libX11 -> libX11.so.6
+-- dynamic libXext -> libXext.so.6
+-- dynamic libXcursor -> libXcursor.so.1
+-- dynamic libXi -> libXi.so.6
+-- dynamic libXfixes -> libXfixes.so.3
+-- dynamic libXrandr -> libXrandr.so.2
+-- dynamic libXrender -> libXrender.so.1
+-- dynamic libXss -> libXss.so.1
+-- dynamic libXtst -> libXtst.so.6
+-- Checking for module 'fribidi'
+--   Package 'fribidi', required by 'virtual:world', not found
+-- Checking for module 'libthai'
+--   Package 'libthai', required by 'virtual:world', not found
+-- Checking for module 'libdrm'
+--   Package 'libdrm', required by 'virtual:world', not found
+-- Checking for module 'gbm'
+--   Package 'gbm', required by 'virtual:world', not found
+-- Checking for modules 'wayland-client>=1.18;wayland-egl;wayland-cursor;egl;xkbcommon>=0.5.0'
+--   Package 'wayland-client', required by 'virtual:world', not found
+--   Package 'wayland-egl', required by 'virtual:world', not found
+--   Package 'wayland-cursor', required by 'virtual:world', not found
+-- Checking for one of the modules 'dbus-1;dbus'
+-- Checking for one of the modules 'ibus-1.0;ibus'
+-- Checking for one of the modules 'liburing-ffi'
+-- Checking for module 'libusb-1.0>=1.0.16'
+--   Package 'libusb-1.0', required by 'virtual:world', not found
+-- Could NOT find LibUSB (missing: LibUSB_LIBRARY LibUSB_INCLUDE_PATH) (found version "LibUSB_VERSION-NOTFOUND")
+-- 
+-- SDL3 was configured with the following options:
+-- 
+-- Platform: Linux-6.18.44-fc-v139
+-- 64-bit:   TRUE
+-- Compiler: /usr/bin/gcc
+-- Revision: SDL-3.4.18-release-3.4.18
+-- Vendor:   
+-- 
+-- Subsystems:
+--   Audio:    ON
+--   Video:    ON
+--   GPU:      ON
+--   Render:   OFF
+--   Camera:   OFF
+--   Joystick: ON
+--   Haptic:   ON
+--   Hidapi:   ON
+--   Power:    ON
+--   Sensor:   ON
+--   Dialog:   OFF
+--   Tray:     ON
+-- 
+-- Options:
+--   SDL_ALSA                    (Wanted: ON): OFF
+--   SDL_ALSA_SHARED             (Wanted: ON): OFF
+--   SDL_ALTIVEC                 (Wanted: OFF): OFF
+--   SDL_ARMNEON                 (Wanted: OFF): OFF
+--   SDL_ASAN                    (Wanted: OFF): OFF
+--   SDL_ASSEMBLY                (Wanted: ON): ON
+--   SDL_ASSERTIONS              (Wanted: auto): auto
+--   SDL_AVX                     (Wanted: ON): ON
+--   SDL_AVX2                    (Wanted: ON): ON
+--   SDL_AVX512F                 (Wanted: ON): ON
+--   SDL_BACKGROUNDING_SIGNAL    (Wanted: OFF): OFF
+--   SDL_CCACHE                  (Wanted: OFF): OFF
+--   SDL_CLANG_TIDY              (Wanted: OFF): OFF
+--   SDL_CLOCK_GETTIME           (Wanted: ON): ON
+--   SDL_COCOA                   (Wanted: OFF): OFF
+--   SDL_DBUS                    (Wanted: ON): OFF
+--   SDL_DEPS_SHARED             (Wanted: ON): OFF
+--   SDL_DIRECTX                 (Wanted: OFF): OFF
+--   SDL_DISKAUDIO               (Wanted: ON): ON
+--   SDL_DLOPEN_NOTES            (Wanted: ON): ON
+--   SDL_DUMMYAUDIO              (Wanted: ON): ON
+--   SDL_DUMMYCAMERA             (Wanted: OFF): OFF
+--   SDL_DUMMYVIDEO              (Wanted: ON): ON
+--   SDL_EXAMPLES                (Wanted: OFF): OFF
+--   SDL_EXAMPLES_LINK_SHARED    (Wanted: OFF): OFF
+--   SDL_FOREGROUNDING_SIGNAL    (Wanted: OFF): OFF
+--   SDL_FRIBIDI                 (Wanted: ON): OFF
+--   SDL_FRIBIDI_SHARED          (Wanted: ON): OFF
+--   SDL_GCC_ATOMICS             (Wanted: ON): ON
+--   SDL_HIDAPI                  (Wanted: ON): ON
+--   SDL_HIDAPI_JOYSTICK         (Wanted: ON): ON
+--   SDL_HIDAPI_LIBUSB           (Wanted: ON): OFF
+--   SDL_HIDAPI_LIBUSB_SHARED    (Wanted: ON): OFF
+--   SDL_IBUS                    (Wanted: ON): OFF
+--   SDL_INSTALL                 (Wanted: OFF): OFF
+--   SDL_INSTALL_TESTS           (Wanted: OFF): OFF
+--   SDL_JACK                    (Wanted: ON): OFF
+--   SDL_JACK_SHARED             (Wanted: ON): OFF
+--   SDL_KMSDRM                  (Wanted: ON): OFF
+--   SDL_KMSDRM_SHARED           (Wanted: ON): OFF
+--   SDL_LASX                    (Wanted: OFF): OFF
+--   SDL_LIBC                    (Wanted: ON): ON
+--   SDL_LIBICONV                (Wanted: OFF): OFF
+--   SDL_LIBTHAI                 (Wanted: ON): OFF
+--   SDL_LIBTHAI_SHARED          (Wanted: ON): OFF
+--   SDL_LIBUDEV                 (Wanted: ON): OFF
+--   SDL_LIBURING                (Wanted: ON): OFF
+--   SDL_LSX                     (Wanted: OFF): OFF
+--   SDL_METAL                   (Wanted: OFF): OFF
+--   SDL_MMX                     (Wanted: ON): ON
+--   SDL_OFFSCREEN               (Wanted: ON): ON
+--   SDL_OPENGL                  (Wanted: ON): ON
+--   SDL_OPENGLES                (Wanted: ON): ON
+--   SDL_OPENVR                  (Wanted: OFF): OFF
+--   SDL_OSS                     (Wanted: OFF): OFF
+--   SDL_PIPEWIRE                (Wanted: ON): OFF
+--   SDL_PIPEWIRE_SHARED         (Wanted: ON): OFF
+--   SDL_PTHREADS                (Wanted: ON): ON
+--   SDL_PTHREADS_SEM            (Wanted: ON): ON
+--   SDL_PULSEAUDIO              (Wanted: ON): OFF
+--   SDL_PULSEAUDIO_SHARED       (Wanted: ON): OFF
+--   SDL_RENDER_D3D              (Wanted: OFF): OFF
+--   SDL_RENDER_D3D11            (Wanted: OFF): OFF
+--   SDL_RENDER_D3D12            (Wanted: OFF): OFF
+--   SDL_RENDER_GPU              (Wanted: OFF): OFF
+--   SDL_RENDER_METAL            (Wanted: OFF): OFF
+--   SDL_RENDER_VULKAN           (Wanted: OFF): OFF
+--   SDL_ROCKCHIP                (Wanted: OFF): OFF
+--   SDL_RPATH                   (Wanted: ON): OFF
+--   SDL_RPI                     (Wanted: OFF): OFF
+--   SDL_SNDIO                   (Wanted: ON): OFF
+--   SDL_SNDIO_SHARED            (Wanted: ON): OFF
+--   SDL_SSE                     (Wanted: ON): ON
+--   SDL_SSE2                    (Wanted: ON): ON
+--   SDL_SSE3                    (Wanted: ON): ON
+--   SDL_SSE4_1                  (Wanted: ON): ON
+--   SDL_SSE4_2                  (Wanted: ON): ON
+--   SDL_SYSTEM_ICONV            (Wanted: ON): ON
+--   SDL_TESTS                   (Wanted: OFF): OFF
+--   SDL_TESTS_LINK_SHARED       (Wanted: OFF): OFF
+--   SDL_UNINSTALL               (Wanted: OFF): OFF
+--   SDL_VIRTUAL_JOYSTICK        (Wanted: ON): ON
+--   SDL_VIVANTE                 (Wanted: OFF): OFF
+--   SDL_VULKAN                  (Wanted: ON): ON
+--   SDL_WASAPI                  (Wanted: OFF): OFF
+--   SDL_WAYLAND                 (Wanted: ON): OFF
+--   SDL_WAYLAND_LIBDECOR        (Wanted: ON): OFF
+--   SDL_WAYLAND_LIBDECOR_SHARED (Wanted: ON): OFF
+--   SDL_WAYLAND_SHARED          (Wanted: ON): OFF
+--   SDL_X11                     (Wanted: ON): ON
+--   SDL_X11_SHARED              (Wanted: ON): ON
+--   SDL_X11_XCURSOR             (Wanted: ON): ON
+--   SDL_X11_XDBE                (Wanted: ON): ON
+--   SDL_X11_XFIXES              (Wanted: ON): ON
+--   SDL_X11_XINPUT              (Wanted: ON): ON
+--   SDL_X11_XRANDR              (Wanted: ON): ON
+--   SDL_X11_XSCRNSAVER          (Wanted: ON): ON
+--   SDL_X11_XSHAPE              (Wanted: ON): ON
+--   SDL_X11_XSYNC               (Wanted: ON): ON
+--   SDL_X11_XTEST               (Wanted: ON): ON
+--   SDL_XINPUT                  (Wanted: OFF): OFF
+-- 
+--  Build Shared Library: OFF
+--  Build Static Library: ON
+-- 
+-- Enabled backends:
+--   Video drivers: dummy offscreen x11(dynamic)
+--   X11 libraries: xcursor xdbe xfixes xinput2 xrandr xscrnsaver xshape xsync xtest
+--   Render drivers: ogl ogl_es2
+--   GPU drivers: vulkan
+--   Audio drivers: disk dummy
+--   Joystick drivers: hidapi linux virtual
+--   Camera drivers: dummy
+-- 
+-- If something was not detected, although the libraries
+-- were installed, then make sure you have set the
+-- CMAKE_C_FLAGS and CMAKE_PREFIX_PATH CMake variables correctly.
+-- 
+-- CMake C compiler: GNU
+-- CMake C++ compiler: GNU
+-- CMake system name: Linux
+-- CMake host system processor: x86_64
+-- Box2D using Unix
+CMake Deprecation Warning at build/_fetch/a6ffdce8d0a1/libdatachannel-src/deps/plog/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.5 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+CMake Deprecation Warning at build/_fetch/a6ffdce8d0a1/libdatachannel-src/deps/usrsctp/CMakeLists.txt:33 (cmake_minimum_required):
+  Compatibility with CMake < 3.5 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+-- Compiler flags (CMAKE_C_FLAGS):  -std=c99 -pedantic -Wall -Wextra -Wfloat-equal -Wshadow -Wpointer-arith -Wunreachable-code -Winit-self -Wno-unused-function -Wno-unused-parameter -Wno-unreachable-code -Wstrict-prototypes
+-- MCE engine id: f92dd41cf92530a2 (90cc11e2-dirty RelWithDebInfo GNU-13.3.0 asan=OFF)
+-- Configuring done (3.7s)
+-- Generating done (0.4s)
+-- Build files have been written to: /home/user/dev_wt/build/linux-gcc-release
+[0/2] Re-checking globbed directories...
+[1/1077] Building C object CMakeFiles/mce_glad.dir/third_party/glad/src/gl.c.o
+[2/1077] Linking C static library libmce_glad.a
+[3/1077] Building CXX object CMakeFiles/mce_meshopt.dir/build/_fetch/a6ffdce8d0a1/meshoptimizer-src/src/vfetchoptimizer.cpp.o
+[4/1077] Building CXX object CMakeFiles/mce_meshopt.dir/build/_fetch/a6ffdce8d0a1/meshoptimizer-src/src/vcacheoptimizer.cpp.o
+[5/1077] Building CXX object CMakeFiles/mce_meshopt.dir/build/_fetch/a6ffdce8d0a1/meshoptimizer-src/src/indexgenerator.cpp.o
+[6/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_color_unquantize.cpp.o
+[7/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_block_sizes.cpp.o
+[8/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_color_quantize.cpp.o
+[9/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_diagnostic_trace.cpp.o
+[10/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_compute_variance.cpp.o
+[11/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_compress_symbolic.cpp.o
+[12/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_averages_and_directions.cpp.o
+[13/1077] Building CXX object CMakeFiles/mce_meshopt.dir/build/_fetch/a6ffdce8d0a1/meshoptimizer-src/src/simplifier.cpp.o
+[14/1077] Linking CXX static library libmce_meshopt.a
+[15/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_decompress_symbolic.cpp.o
+[16/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_find_best_partitioning.cpp.o
+[17/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_image.cpp.o
+[18/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_mathlib.cpp.o
+[19/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_mathlib_softfloat.cpp.o
+[20/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_integer_sequence.cpp.o
+[21/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_entry.cpp.o
+[22/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_partition_tables.cpp.o
+[23/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_ideal_endpoints_and_weights.cpp.o
+[24/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_percentile_tables.cpp.o
+[25/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_quantization.cpp.o
+[26/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/ogg-src/src/bitwise.c.o
+[27/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_symbolic_physical.cpp.o
+[28/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_weight_quant_xfer_tables.cpp.o
+[29/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/ogg-src/src/framing.c.o
+[30/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_weight_align.cpp.o
+[31/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/mdct.c.o
+[32/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/envelope.c.o
+[33/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/window.c.o
+[34/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/lpc.c.o
+[35/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/analysis.c.o
+[36/1077] Building CXX object CMakeFiles/mce_astcenc.dir/build/_fetch/a6ffdce8d0a1/astcenc-src/Source/astcenc_pick_best_endpoint_format.cpp.o
+[37/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/block.c.o
+[38/1077] Linking CXX static library libmce_astcenc.a
+[39/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/lsp.c.o
+[40/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/synthesis.c.o
+[41/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/smallft.c.o
+[42/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/floor0.c.o
+[43/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/info.c.o
+[44/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/registry.c.o
+[45/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/mapping0.c.o
+[46/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/lookup.c.o
+[47/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/psy.c.o
+[48/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/sharedbook.c.o
+[49/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/codebook.c.o
+[50/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/bitrate.c.o
+[51/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Recast/Source/RecastAlloc.cpp.o
+[52/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/res0.c.o
+[53/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Recast/Source/RecastAssert.cpp.o
+[54/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/floor1.c.o
+[55/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Recast/Source/RecastFilter.cpp.o
+[56/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Recast/Source/Recast.cpp.o
+[57/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Recast/Source/RecastArea.cpp.o
+[58/1077] Building C object CMakeFiles/mce_vorbisenc.dir/build/_fetch/a6ffdce8d0a1/vorbis-src/lib/vorbisenc.c.o
+[59/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Recast/Source/RecastLayers.cpp.o
+[60/1077] Linking C static library libmce_vorbisenc.a
+[61/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Detour/Source/DetourAlloc.cpp.o
+[62/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Detour/Source/DetourAssert.cpp.o
+[63/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Recast/Source/RecastRasterization.cpp.o
+[64/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Recast/Source/RecastContour.cpp.o
+[65/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Detour/Source/DetourCommon.cpp.o
+[66/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Recast/Source/RecastMeshDetail.cpp.o
+[67/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Recast/Source/RecastMesh.cpp.o
+[68/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Detour/Source/DetourNode.cpp.o
+[69/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Detour/Source/DetourNavMeshBuilder.cpp.o
+[70/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Detour/Source/DetourNavMesh.cpp.o
+[71/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/DetourCrowd/Source/DetourLocalBoundary.cpp.o
+[72/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Recast/Source/RecastRegion.cpp.o
+[73/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/DetourCrowd/Source/DetourPathQueue.cpp.o
+[74/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/DetourCrowd/Source/DetourObstacleAvoidance.cpp.o
+[75/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/DetourCrowd/Source/DetourCrowd.cpp.o
+[76/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/DetourCrowd/Source/DetourPathCorridor.cpp.o
+[77/1077] Building C object CMakeFiles/mce_enet.dir/build/_fetch/a6ffdce8d0a1/enet-src/callbacks.c.o
+[78/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/DetourCrowd/Source/DetourProximityGrid.cpp.o
+[79/1077] Building C object CMakeFiles/mce_enet.dir/build/_fetch/a6ffdce8d0a1/enet-src/list.c.o
+[80/1077] Building C object CMakeFiles/mce_enet.dir/build/_fetch/a6ffdce8d0a1/enet-src/compress.c.o
+[81/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/Detour/Source/DetourNavMeshQuery.cpp.o
+[82/1077] Building C object CMakeFiles/mce_enet.dir/build/_fetch/a6ffdce8d0a1/enet-src/host.c.o
+[83/1077] Building C object CMakeFiles/mce_enet.dir/build/_fetch/a6ffdce8d0a1/enet-src/packet.c.o
+[84/1077] Building C object CMakeFiles/mce_enet.dir/build/_fetch/a6ffdce8d0a1/enet-src/win32.c.o
+[85/1077] Building C object CMakeFiles/mce_enet.dir/build/_fetch/a6ffdce8d0a1/enet-src/peer.c.o
+[86/1077] Building C object CMakeFiles/mce_enet.dir/build/_fetch/a6ffdce8d0a1/enet-src/unix.c.o
+[87/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/DetourTileCache/Source/DetourTileCache.cpp.o
+[88/1077] Building C object CMakeFiles/mce_enet.dir/build/_fetch/a6ffdce8d0a1/enet-src/protocol.c.o
+[89/1077] Building CXX object CMakeFiles/mce_recast.dir/build/_fetch/a6ffdce8d0a1/recastnavigation-src/DetourTileCache/Source/DetourTileCacheBuilder.cpp.o
+[90/1077] Building CXX object _deps/spdlog-build/CMakeFiles/spdlog.dir/src/cfg.cpp.o
+[91/1077] Building CXX object _deps/spdlog-build/CMakeFiles/spdlog.dir/src/async.cpp.o
+[92/1077] Building CXX object _deps/spdlog-build/CMakeFiles/spdlog.dir/src/stdout_sinks.cpp.o
+[93/1077] Building CXX object _deps/spdlog-build/CMakeFiles/spdlog.dir/src/file_sinks.cpp.o
+[94/1077] Building CXX object _deps/spdlog-build/CMakeFiles/spdlog.dir/src/color_sinks.cpp.o
+[95/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/cmake_pch.h.gch
+[96/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/SDL.c.o
+[97/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/SDL_assert.c.o
+[98/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/SDL_error.c.o
+[99/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/SDL_guid.c.o
+[100/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/SDL_hashtable.c.o
+[101/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/SDL_hints.c.o
+[102/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/SDL_list.c.o
+[103/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/SDL_log.c.o
+[104/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/SDL_properties.c.o
+[105/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/SDL_utils.c.o
+[106/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/atomic/SDL_atomic.c.o
+[107/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/atomic/SDL_spinlock.c.o
+[108/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/audio/SDL_audio.c.o
+[109/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/audio/SDL_audiocvt.c.o
+[110/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/audio/SDL_audiodev.c.o
+[111/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/cmake_pch.hxx.gch
+[112/1077] Building CXX object _deps/spdlog-build/CMakeFiles/spdlog.dir/src/bundled_fmtlib_format.cpp.o
+[113/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/audio/SDL_audioqueue.c.o
+[114/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/audio/SDL_mixer.c.o
+[115/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/audio/SDL_audioresample.c.o
+[116/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/audio/SDL_audiotypecvt.c.o
+[117/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/core/SDL_core_unsupported.c.o
+[118/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/camera/SDL_camera.c.o
+[119/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_categories.c.o
+[120/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/audio/SDL_wave.c.o
+[121/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/cpuinfo/SDL_cpuinfo.c.o
+[122/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_clipboardevents.c.o
+[123/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_displayevents.c.o
+[124/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_dropevents.c.o
+[125/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_eventwatch.c.o
+[126/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/dynapi/SDL_dynapi.c.o
+[127/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_keysym_to_keycode.c.o
+[128/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_keyboard.c.o
+[129/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_keysym_to_scancode.c.o
+[130/1077] Building CXX object _deps/spdlog-build/CMakeFiles/spdlog.dir/src/spdlog.cpp.o
+[131/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_keymap.c.o
+[132/1077] Linking CXX static library _deps/spdlog-build/libspdlog.a
+[133/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_quit.c.o
+[134/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_pen.c.o
+[135/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_scancode_tables.c.o
+[136/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_events.c.o
+[137/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/imKStoUCS.c.o
+[138/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_mouse.c.o
+[139/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_windowevents.c.o
+[140/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/filesystem/SDL_filesystem.c.o
+[141/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/events/SDL_touch.c.o
+[142/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/io/SDL_asyncio.c.o
+[143/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/io/generic/SDL_asyncio_generic.c.o
+[144/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/haptic/SDL_haptic.c.o
+[145/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/hidapi/SDL_hidapi.c.o
+[146/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/io/SDL_iostream.c.o
+[147/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/SDL_steam_virtual_gamepad.c.o
+[148/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/controller_type.c.o
+[149/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/locale/SDL_locale.c.o
+[150/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/main/SDL_runapp.c.o
+[151/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/main/SDL_main_callbacks.c.o
+[152/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/misc/SDL_libusb.c.o
+[153/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/misc/SDL_url.c.o
+[154/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/power/SDL_power.c.o
+[155/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/SDL_joystick.c.o
+[156/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/gpu/SDL_gpu.c.o
+[157/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/SDL_render_unsupported.c.o
+[158/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/direct3d/SDL_shaders_d3d.c.o
+[159/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/direct3d/SDL_render_d3d.c.o
+[160/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/direct3d11/SDL_render_d3d11.c.o
+[161/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/direct3d12/SDL_render_d3d12.c.o
+[162/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/direct3d11/SDL_shaders_d3d11.c.o
+[163/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/direct3d12/SDL_shaders_d3d12.c.o
+[164/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/gpu/SDL_pipeline_gpu.c.o
+[165/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/SDL_yuv_sw.c.o
+[166/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/SDL_gamepad.c.o
+[167/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/gpu/SDL_render_gpu.c.o
+[168/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/gpu/SDL_shaders_gpu.c.o
+[169/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/opengl/SDL_render_gl.c.o
+[170/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/opengl/SDL_shaders_gl.c.o
+[171/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/ngage/SDL_render_ngage.c.o
+[172/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/opengles2/SDL_render_gles2.c.o
+[173/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/psp/SDL_render_psp.c.o
+[174/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/ps2/SDL_render_ps2.c.o
+[175/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/opengles2/SDL_shaders_gles2.c.o
+[176/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/software/SDL_blendfillrect.c.o
+[177/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/software/SDL_blendline.c.o
+[178/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/software/SDL_blendpoint.c.o
+[179/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/software/SDL_drawpoint.c.o
+[180/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/software/SDL_triangle.c.o
+[181/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/software/SDL_drawline.c.o
+[182/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/software/SDL_render_sw.c.o
+[183/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/vitagxm/SDL_render_vita_gxm.c.o
+[184/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/vitagxm/SDL_render_vita_gxm_tools.c.o
+[185/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/vitagxm/SDL_render_vita_gxm_memory.c.o
+[186/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/vulkan/SDL_shaders_vulkan.c.o
+[187/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/vulkan/SDL_render_vulkan.c.o
+[188/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_crc32.c.o
+[189/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_crc16.c.o
+[190/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_iconv.c.o
+[191/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_malloc.c.o
+[192/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/sensor/SDL_sensor.c.o
+[193/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_getenv.c.o
+[194/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_memcpy.c.o
+[195/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_memmove.c.o
+[196/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_mslibc.c.o
+[197/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_memset.c.o
+[198/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_murmur3.c.o
+[199/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_random.c.o
+[200/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_qsort.c.o
+[201/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_stdlib.c.o
+[202/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_strtokr.c.o
+[203/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/time/SDL_time.c.o
+[204/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/stdlib/SDL_string.c.o
+[205/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/storage/SDL_storage.c.o
+[206/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/thread/SDL_thread.c.o
+[207/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_blit.c.o
+[208/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/timer/SDL_timer.c.o
+[209/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/render/SDL_render.c.o
+[210/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_blit_1.c.o
+[211/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_RLEaccel.c.o
+[212/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_blit_0.c.o
+[213/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_blit_copy.c.o
+[214/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_bmp.c.o
+[215/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_clipboard.c.o
+[216/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_blit_slow.c.o
+[217/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_blit_A.c.o
+[218/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_fillrect.c.o
+[219/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_egl.c.o
+[220/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_rotate.c.o
+[221/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_blit_N.c.o
+[222/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_pixels.c.o
+[223/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_rect.c.o
+[224/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_stretch.c.o
+[225/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_video_unsupported.c.o
+[226/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_vulkan_utils.c.o
+[227/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_surface.c.o
+[228/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/yuv2rgb/yuv_rgb_lsx.c.o
+[229/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_video.c.o
+[230/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_yuv.c.o
+[231/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/e_atan2.c.o
+[232/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/e_exp.c.o
+[233/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/e_fmod.c.o
+[234/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/e_log.c.o
+[235/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/e_log10.c.o
+[236/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/e_pow.c.o
+[237/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/e_rem_pio2.c.o
+[238/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/e_sqrt.c.o
+[239/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_stb.c.o
+[240/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/k_cos.c.o
+[241/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/k_sin.c.o
+[242/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/yuv2rgb/yuv_rgb_sse.c.o
+[243/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/k_rem_pio2.c.o
+[244/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/yuv2rgb/yuv_rgb_std.c.o
+[245/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/k_tan.c.o
+[246/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_atan.c.o
+[247/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_copysign.c.o
+[248/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_floor.c.o
+[249/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_fabs.c.o
+[250/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_cos.c.o
+[251/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_isinf.c.o
+[252/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_isinff.c.o
+[253/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_isnanf.c.o
+[254/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_isnan.c.o
+[255/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_modf.c.o
+[256/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_scalbn.c.o
+[257/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_sin.c.o
+[258/1077] Building CXX object _deps/tracy-build/CMakeFiles/TracyClient.dir/public/TracyClient.cpp.o
+In file included from ../_fetch/a6ffdce8d0a1/tracy-src/public/TracyClient.cpp:23:
+../_fetch/a6ffdce8d0a1/tracy-src/public/client/TracyProfiler.cpp: In constructor 'tracy::Profiler::Profiler()':
+../_fetch/a6ffdce8d0a1/tracy-src/public/client/TracyProfiler.cpp:1594:9: warning: ignoring return value of 'int pipe(int*)' declared with attribute 'warn_unused_result' [-Wunused-result]
+ 1594 |     pipe(m_pipe);
+      |     ~~~~^~~~~~~~
+In file included from ../_fetch/a6ffdce8d0a1/tracy-src/public/TracyClient.cpp:25:
+../_fetch/a6ffdce8d0a1/tracy-src/public/client/TracySysPower.cpp: In member function 'void tracy::SysPower::ScanDirectory(const char*, int)':
+../_fetch/a6ffdce8d0a1/tracy-src/public/client/TracySysPower.cpp:88:33: warning: ignoring return value of 'int fscanf(FILE*, const char*, ...)' declared with attribute 'warn_unused_result' [-Wunused-result]
+   88 |                     (void)fscanf( f, "%" PRIu64, &maxRange );
+      |                           ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[259/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/libm/s_tan.c.o
+[260/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/audio/dummy/SDL_dummyaudio.c.o
+[261/1077] Linking CXX static library _deps/tracy-build/libTracyClient.a
+[262/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/loadso/dlopen/SDL_sysloadso.c.o
+[263/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/audio/disk/SDL_diskaudio.c.o
+[264/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/dummy/SDL_nullevents.c.o
+[265/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/dummy/SDL_nullframebuffer.c.o
+[266/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/dummy/SDL_nullvideo.c.o
+[267/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/virtual/SDL_virtualjoystick.c.o
+[268/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11clipboard.c.o
+[269/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11framebuffer.c.o
+[270/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11messagebox.c.o
+[271/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11keyboard.c.o
+[272/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11modes.c.o
+[273/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11events.c.o
+[274/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11opengles.c.o
+[275/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/SDL_blit_auto.c.o
+[276/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11dyn.c.o
+[277/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11settings.c.o
+[278/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11mouse.c.o
+[279/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11shape.c.o
+[280/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11pen.c.o
+[281/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11touch.c.o
+[282/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11opengl.c.o
+[283/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11video.c.o
+[284/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11xfixes.c.o
+[285/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11vulkan.c.o
+[286/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11xtest.c.o
+[287/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11xinput2.c.o
+[288/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11xsync.c.o
+[289/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11toolkit.c.o
+[290/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/core/unix/SDL_fribidi.c.o
+[291/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/core/unix/SDL_appid.c.o
+[292/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/tray/unix/SDL_tray.c.o
+[293/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/core/unix/SDL_libthai.c.o
+[294/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/core/unix/SDL_poll.c.o
+[295/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/core/unix/SDL_gtk.c.o
+[296/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/xsettings-client.c.o
+[297/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/edid-parse.c.o
+[298/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/core/linux/SDL_evdev_capabilities.c.o
+[299/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/core/linux/SDL_threadprio.c.o
+[300/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/haptic/linux/SDL_syshaptic.c.o
+[301/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/x11/SDL_x11window.c.o
+[302/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_8bitdo.c.o
+[303/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/core/linux/SDL_evdev_kbd.c.o
+[304/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/core/linux/SDL_evdev.c.o
+[305/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_combined.c.o
+[306/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_luna.c.o
+[307/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_gamecube.c.o
+[308/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_lg4ff.c.o
+[309/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_flydigi.c.o
+[310/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_rumble.c.o
+[311/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_ps5.c.o
+[312/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_ps3.c.o
+[313/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_stadia.c.o
+[314/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_sinput.c.o
+[315/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_shield.c.o
+[316/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_ps4.c.o
+[317/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_steam_hori.c.o
+[318/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_steamdeck.c.o
+[319/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_switch2.c.o
+[320/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_steam_triton.c.o
+[321/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_steam.c.o
+[322/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_gip.c.o
+[323/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_xbox360.c.o
+[324/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_xbox360w.c.o
+[325/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_report_descriptor.c.o
+[326/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_zuiki.c.o
+[327/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/haptic/hidapi/SDL_hidapihaptic.c.o
+[328/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_xboxone.c.o
+[329/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/thread/pthread/SDL_systhread.c.o
+[330/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_wii.c.o
+[331/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/thread/pthread/SDL_sysmutex.c.o
+[332/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/thread/pthread/SDL_sysrwlock.c.o
+[333/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/thread/pthread/SDL_syscond.c.o
+[334/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/thread/pthread/SDL_systls.c.o
+[335/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapi_switch.c.o
+[336/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/hidapi/SDL_hidapijoystick.c.o
+[337/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/thread/pthread/SDL_syssem.c.o
+[338/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/misc/unix/SDL_sysurl.c.o
+[339/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/locale/unix/SDL_syslocale.c.o
+[340/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/power/linux/SDL_syspower.c.o
+[341/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/storage/generic/SDL_genericstorage.c.o
+[342/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/haptic/hidapi/SDL_hidapihaptic_lg4ff.c.o
+[343/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/joystick/linux/SDL_sysjoystick.c.o
+[344/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/filesystem/posix/SDL_sysfsops.c.o
+[345/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/filesystem/unix/SDL_sysfilesystem.c.o
+[346/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/timer/unix/SDL_systimer.c.o
+[347/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/dialog/SDL_dialog.c.o
+[348/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/time/unix/SDL_systime.c.o
+[349/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/storage/steam/SDL_steamstorage.c.o
+[350/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/process/SDL_process.c.o
+[351/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/dialog/unix/SDL_zenitymessagebox.c.o
+[352/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/offscreen/SDL_offscreenframebuffer.c.o
+[353/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/offscreen/SDL_offscreenevents.c.o
+[354/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/offscreen/SDL_offscreenvideo.c.o
+[355/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/offscreen/SDL_offscreenopengles.c.o
+[356/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/offscreen/SDL_offscreenwindow.c.o
+[357/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/process/posix/SDL_posixprocess.c.o
+[358/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/dialog/dummy/SDL_dummydialog.c.o
+[359/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/sensor/dummy/SDL_dummysensor.c.o
+[360/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/camera/dummy/SDL_camera_dummy.c.o
+[361/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/tray/SDL_tray_utils.c.o
+[362/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/video/offscreen/SDL_offscreenvulkan.c.o
+[363/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/main/generic/SDL_sysmain_callbacks.c.o
+[364/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Compute/ComputeSystem.cpp.o
+[365/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/Color.cpp.o
+[366/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/IssueReporting.cpp.o
+[367/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/AABBTree/AABBTreeBuilder.cpp.o
+[368/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/JobSystemSingleThreaded.cpp.o
+[369/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/Memory.cpp.o
+[370/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/JobSystemWithBarrier.cpp.o
+[371/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/LinearCurve.cpp.o
+[372/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/JobSystemThreadPool.cpp.o
+[373/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/Factory.cpp.o
+[374/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/Profiler.cpp.o
+[375/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/RTTI.cpp.o
+[376/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/TickCounter.cpp.o
+[377/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/Semaphore.cpp.o
+[378/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Core/StringTools.cpp.o
+[379/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Geometry/ConvexHullBuilder2D.cpp.o
+[380/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Math/Vec3.cpp.o
+[381/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/ObjectStream/SerializableObject.cpp.o
+[382/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Geometry/OrientedBox.cpp.o
+[383/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Geometry/Indexify.cpp.o
+[384/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Geometry/ConvexHullBuilder.cpp.o
+[385/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Body/Body.cpp.o
+[386/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Body/BodyCreationSettings.cpp.o
+[387/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Body/MassProperties.cpp.o
+[388/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Body/MotionProperties.cpp.o
+[389/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Body/BodyManager.cpp.o
+[390/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/BroadPhase/BroadPhase.cpp.o
+[391/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Character/CharacterBase.cpp.o
+[392/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Character/Character.cpp.o
+[393/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/BroadPhase/BroadPhaseBruteForce.cpp.o
+[394/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Body/BodyInterface.cpp.o
+[395/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/BroadPhase/BroadPhaseQuadTree.cpp.o
+[396/1077] Building C object _deps/sdl3-build/CMakeFiles/SDL3-static.dir/src/gpu/vulkan/SDL_gpu_vulkan.c.o
+[397/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/CastConvexVsTriangles.cpp.o
+[398/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/CastSphereVsTriangles.cpp.o
+[399/1077] Linking C static library _deps/sdl3-build/libSDL3.a
+[400/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/BroadPhase/QuadTree.cpp.o
+[401/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/CollideConvexVsTriangles.cpp.o
+[402/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/CollisionGroup.cpp.o
+[403/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/CollideSphereVsTriangles.cpp.o
+[404/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/CollisionDispatch.cpp.o
+[405/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/GroupFilterTable.cpp.o
+[406/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/GroupFilter.cpp.o
+[407/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/ManifoldBetweenTwoFaces.cpp.o
+[408/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/NarrowPhaseStats.cpp.o
+[409/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/PhysicsMaterial.cpp.o
+[410/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Character/CharacterVirtual.cpp.o
+[411/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/EstimateCollisionResponse.cpp.o
+[412/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/PhysicsMaterialSimple.cpp.o
+[413/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/NarrowPhaseQuery.cpp.o
+[414/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/BoxShape.cpp.o
+[415/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/CapsuleShape.cpp.o
+[416/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/CompoundShape.cpp.o
+[417/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/DecoratedShape.cpp.o
+[418/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/EmptyShape.cpp.o
+[419/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/CylinderShape.cpp.o
+[420/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/ConvexHullShape.cpp.o
+[421/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.cpp.o
+[422/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/ConvexShape.cpp.o
+[423/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/MutableCompoundShape.cpp.o
+[424/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/PlaneShape.cpp.o
+[425/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/ScaledShape.cpp.o
+[426/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/RotatedTranslatedShape.cpp.o
+[427/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/SphereShape.cpp.o
+[428/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/TaperedCapsuleShape.cpp.o
+[429/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/Shape.cpp.o
+[430/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/TaperedCylinderShape.cpp.o
+[431/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/TransformedShape.cpp.o
+[432/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/Constraint.cpp.o
+[433/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/HeightFieldShape.cpp.o
+[434/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/TriangleShape.cpp.o
+[435/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/ConeConstraint.cpp.o
+[436/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/MeshShape.cpp.o
+[437/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/ConstraintManager.cpp.o
+[438/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/DistanceConstraint.cpp.o
+[439/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/FixedConstraint.cpp.o
+[440/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Collision/Shape/StaticCompoundShape.cpp.o
+[441/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/MotorSettings.cpp.o
+[442/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/GearConstraint.cpp.o
+[443/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/PathConstraintPath.cpp.o
+[444/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/PathConstraintPathHermite.cpp.o
+[445/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/HingeConstraint.cpp.o
+[446/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/PulleyConstraint.cpp.o
+[447/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/PointConstraint.cpp.o
+[448/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/SpringSettings.cpp.o
+[449/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/RackAndPinionConstraint.cpp.o
+[450/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/TwoBodyConstraint.cpp.o
+[451/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/DeterminismLog.cpp.o
+[452/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/PathConstraint.cpp.o
+[453/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/SliderConstraint.cpp.o
+[454/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/SwingTwistConstraint.cpp.o
+[455/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Hair/HairShaders.cpp.o
+[456/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Hair/RegisterHair.cpp.o
+[457/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/SixDOFConstraint.cpp.o
+[458/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/IslandBuilder.cpp.o
+[459/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/LargeIslandSplitter.cpp.o
+[460/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Hair/Hair.cpp.o
+[461/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/PhysicsUpdateContext.cpp.o
+[462/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/PhysicsScene.cpp.o
+[463/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/SoftBody/SoftBodyCreationSettings.cpp.o
+[464/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Hair/HairSettings.cpp.o
+[465/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/SoftBody/SoftBodyShape.cpp.o
+[466/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/StateRecorderImpl.cpp.o
+[467/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Ragdoll/Ragdoll.cpp.o
+[468/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Constraints/ContactConstraintManager.cpp.o
+[469/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/SoftBody/SoftBodyMotionProperties.cpp.o
+[470/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/VehicleAntiRollBar.cpp.o
+[471/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/VehicleCollisionTester.cpp.o
+[472/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/TrackedVehicleController.cpp.o
+[473/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/PhysicsSystem.cpp.o
+[474/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/MotorcycleController.cpp.o
+[475/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/VehicleController.cpp.o
+[476/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/VehicleEngine.cpp.o
+[477/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/VehicleDifferential.cpp.o
+[478/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/VehicleTrack.cpp.o
+[479/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/VehicleTransmission.cpp.o
+[480/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/Wheel.cpp.o
+[481/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Renderer/DebugRendererPlayback.cpp.o
+[482/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Renderer/DebugRenderer.cpp.o
+[483/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/VehicleConstraint.cpp.o
+[484/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/RegisterTypes.cpp.o
+[485/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Renderer/DebugRendererSimple.cpp.o
+[486/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Renderer/DebugRendererRecorder.cpp.o
+[487/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Skeleton/SkeletalAnimation.cpp.o
+[488/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Skeleton/SkeletonPose.cpp.o
+[489/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Skeleton/SkeletonMapper.cpp.o
+[490/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/TriangleSplitter/TriangleSplitter.cpp.o
+[491/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Skeleton/Skeleton.cpp.o
+[492/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/TriangleSplitter/TriangleSplitterBinning.cpp.o
+[493/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/TriangleSplitter/TriangleSplitterMean.cpp.o
+[494/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/Vehicle/WheeledVehicleController.cpp.o
+[495/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang-default-resource-limits.dir/ResourceLimits/resource_limits_c.cpp.o
+[496/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang-default-resource-limits.dir/ResourceLimits/ResourceLimits.cpp.o
+[497/1077] Linking CXX static library _deps/glslang-build/glslang/libglslang-default-resource-limits.a
+[498/1077] Building CXX object _deps/joltphysics-build/CMakeFiles/Jolt.dir/__/Jolt/Physics/SoftBody/SoftBodySharedSettings.cpp.o
+[499/1077] Linking CXX static library _deps/joltphysics-build/libJolt.a
+[500/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/candidate.cpp.o
+[501/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/channel.cpp.o
+[502/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/datachannel.cpp.o
+[503/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/message.cpp.o
+[504/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/mediahandler.cpp.o
+[505/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/rtcpreceivingsession.cpp.o
+[506/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/global.cpp.o
+[507/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/websocket.cpp.o
+[508/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/websocketserver.cpp.o
+[509/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/rtppacketizationconfig.cpp.o
+[510/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/rtcpsrreporter.cpp.o
+[511/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/rtppacketizer.cpp.o
+[512/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/rtpdepacketizer.cpp.o
+[513/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/h264rtppacketizer.cpp.o
+[514/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/h264rtpdepacketizer.cpp.o
+[515/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/nalunit.cpp.o
+[516/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/h265rtppacketizer.cpp.o
+[517/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/h265nalunit.cpp.o
+[518/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/av1rtppacketizer.cpp.o
+[519/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/rtcpnackresponder.cpp.o
+[520/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/track.cpp.o
+[521/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/cmake_pch.hxx.gch
+[522/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/rtp.cpp.o
+[523/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/CInterface/glslang_c_interface.cpp.o
+[524/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/configuration.cpp.o
+[525/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/description.cpp.o
+[526/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/GenericCodeGen/CodeGen.cpp.o
+[527/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/GenericCodeGen/Link.cpp.o
+[528/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/peerconnection.cpp.o
+[529/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/OSDependent/Unix/ossource.cpp.o
+[530/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/InfoSink.cpp.o
+[531/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/attribute.cpp.o
+[532/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/IntermTraverse.cpp.o
+[533/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/capi.cpp.o
+[534/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/Constant.cpp.o
+[535/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/iomapper.cpp.o
+[536/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/PoolAlloc.cpp.o
+[537/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/ParseContextBase.cpp.o
+[538/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/RemoveTree.cpp.o
+[539/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/Intermediate.cpp.o
+[540/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/Initialize.cpp.o
+[541/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/glslang_tab.cpp.o
+[542/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/Scan.cpp.o
+[543/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/SpirvIntrinsics.cpp.o
+[544/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/SymbolTable.cpp.o
+[545/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/limits.cpp.o
+[546/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/Versions.cpp.o
+[547/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/intermOut.cpp.o
+[548/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/parseConst.cpp.o
+[549/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/ShaderLang.cpp.o
+[550/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/preprocessor/PpAtom.cpp.o
+[551/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/preprocessor/PpContext.cpp.o
+[552/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/preprocessor/PpTokens.cpp.o
+[553/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/preprocessor/PpScanner.cpp.o
+[554/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/preprocessor/Pp.cpp.o
+[555/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/reflection.cpp.o
+[556/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/__/SPIRV/InReadableOrder.cpp.o
+[557/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/propagateNoContraction.cpp.o
+[558/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/__/SPIRV/Logger.cpp.o
+[559/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/linkValidate.cpp.o
+[560/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/__/SPIRV/SpvTools.cpp.o
+[561/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/__/SPIRV/disassemble.cpp.o
+[562/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/MachineIndependent/ParseHelper.cpp.o
+[563/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/__/SPIRV/SpvPostProcess.cpp.o
+[564/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/pacinghandler.cpp.o
+[565/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/plihandler.cpp.o
+[566/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/__/SPIRV/doc.cpp.o
+[567/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/rembhandler.cpp.o
+[568/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/__/SPIRV/CInterface/spirv_c_interface.cpp.o
+[569/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/dtlssrtptransport.cpp.o
+[570/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/channel.cpp.o
+[571/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/certificate.cpp.o
+[572/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/datachannel.cpp.o
+[573/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/icetransport.cpp.o
+[574/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/__/SPIRV/SpvBuilder.cpp.o
+[575/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/init.cpp.o
+[576/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/dtlstransport.cpp.o
+[577/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/logcounter.cpp.o
+[578/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/tls.cpp.o
+[579/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/threadpool.cpp.o
+[580/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/utils.cpp.o
+[581/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/sha.cpp.o
+[582/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/processor.cpp.o
+[583/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/pollinterrupter.cpp.o
+[584/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/pollservice.cpp.o
+[585/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/http.cpp.o
+[586/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/sctptransport.cpp.o
+[587/1077] Building CXX object _deps/glslang-build/glslang/CMakeFiles/glslang.dir/__/SPIRV/GlslangToSpv.cpp.o
+[588/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/track.cpp.o
+[589/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/httpproxytransport.cpp.o
+[590/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/tcpserver.cpp.o
+[591/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/tcptransport.cpp.o
+[592/1077] Linking CXX static library _deps/glslang-build/glslang/libglslang.a
+[593/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/websocketserver.cpp.o
+[594/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/websocket.cpp.o
+[595/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/tlstransport.cpp.o
+[596/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/verifiedtlstransport.cpp.o
+[597/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/transport.cpp.o
+[598/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/wshandshake.cpp.o
+[599/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_bsd_addr.c.o
+[600/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_callout.c.o
+[601/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_asconf.c.o
+[602/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_auth.c.o
+[603/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_crc32.c.o
+[604/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/wstransport.cpp.o
+[605/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_cc_functions.c.o
+[606/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_peeloff.c.o
+[607/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_sha1.c.o
+[608/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_ss_functions.c.o
+[609/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_sysctl.c.o
+[610/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_indata.c.o
+[611/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_input.c.o
+[612/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_userspace.c.o
+[613/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_timer.c.o
+[614/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet6/sctp6_usrreq.c.o
+[615/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_pcb.c.o
+[616/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/user_environment.c.o
+[617/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/user_recv_thread.c.o
+[618/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/user_mbuf.c.o
+[619/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/addr.c.o
+[620/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/user_socket.c.o
+[621/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/crc32.c.o
+[622/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/const_time.c.o
+[623/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/conn.c.o
+[624/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctputil.c.o
+[625/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_output.c.o
+[626/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/agent.c.o
+[627/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/conn_thread.c.o
+[628/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/base64.c.o
+[629/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/conn_poll.c.o
+[630/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/conn_mux.c.o
+[631/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/hmac.c.o
+[632/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/log.c.o
+[633/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/hash.c.o
+[634/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/ice.c.o
+[635/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/juice.c.o
+[636/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/random.c.o
+[637/1077] Building C object _deps/libdatachannel-build/deps/usrsctp/usrsctplib/CMakeFiles/usrsctp.dir/netinet/sctp_usrreq.c.o
+[638/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/timestamp.c.o
+[639/1077] Linking C static library _deps/libdatachannel-build/deps/usrsctp/usrsctplib/libusrsctp.a
+[640/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Common.dir/Common/src/BytecodeWire.cpp.o
+[641/1077] Building CXX object _deps/libdatachannel-build/CMakeFiles/datachannel-static.dir/src/impl/peerconnection.cpp.o
+[642/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/stun.c.o
+[643/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/udp.c.o
+[644/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/turn.c.o
+[645/1077] Building C object _deps/libdatachannel-build/deps/libjuice/CMakeFiles/juice-static.dir/src/server.c.o
+[646/1077] Linking C static library _deps/libdatachannel-build/deps/libjuice/libjuice-static.a
+[647/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Ast.dir/Ast/src/Confusables.cpp.o
+[648/1077] Linking CXX static library _deps/libdatachannel-build/libdatachannel-static.a
+[649/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Common.dir/Common/src/TimeTrace.cpp.o
+[650/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Common.dir/Common/src/StringUtils.cpp.o
+[651/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Ast.dir/Ast/src/Location.cpp.o
+[652/1077] Linking CXX static library _deps/luau-build/libLuau.Common.a
+[653/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Ast.dir/Ast/src/Allocator.cpp.o
+[654/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Ast.dir/Ast/src/Cst.cpp.o
+[655/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Ast.dir/Ast/src/Ast.cpp.o
+[656/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Ast.dir/Ast/src/Lexer.cpp.o
+[657/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Bytecode.dir/Bytecode/src/BytecodeDump.cpp.o
+[658/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Bytecode.dir/Bytecode/src/Sccp.cpp.o
+[659/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Compiler.dir/Compiler/src/Builtins.cpp.o
+[660/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Ast.dir/Ast/src/PrettyPrinter.cpp.o
+[661/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Compiler.dir/Compiler/src/BuiltinFolding.cpp.o
+[662/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Bytecode.dir/Bytecode/src/BytecodeBuilder.cpp.o
+[663/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Compiler.dir/Compiler/src/ConstantFolding.cpp.o
+[664/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Compiler.dir/Compiler/src/CostModel.cpp.o
+[665/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Compiler.dir/Compiler/src/TableShape.cpp.o
+[666/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Compiler.dir/Compiler/src/lcode.cpp.o
+[667/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Bytecode.dir/Bytecode/src/BytecodeGraph.cpp.o
+[668/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Compiler.dir/Compiler/src/ValueTracking.cpp.o
+[669/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Compiler.dir/Compiler/src/Types.cpp.o
+[670/1077] Linking CXX static library _deps/luau-build/libLuau.Bytecode.a
+[671/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Ast.dir/Ast/src/Parser.cpp.o
+[672/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Config.dir/Config/src/LinterConfig.cpp.o
+[673/1077] Linking CXX static library _deps/luau-build/libLuau.Ast.a
+[674/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Config.dir/Config/src/Config.cpp.o
+[675/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Config.dir/Config/src/LuauConfig.cpp.o
+[676/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Anyification.cpp.o
+[677/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Compiler.dir/Compiler/src/Compiler.cpp.o
+[678/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/ApplyTypeFunction.cpp.o
+[679/1077] Linking CXX static library _deps/luau-build/libLuau.Compiler.a
+[680/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/AstUtils.cpp.o
+[681/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/AstJsonEncoder.cpp.o
+[682/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Autocomplete.cpp.o
+[683/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/AstQuery.cpp.o
+[684/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Constraint.cpp.o
+[685/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Clone.cpp.o
+[686/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/ConstraintGraph.cpp.o
+[687/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/AutocompleteCore.cpp.o
+[688/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/BuiltinDefinitions.cpp.o
+[689/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/ControlFlowGraph.cpp.o
+[690/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/BuiltinTypeFunctions.cpp.o
+[691/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/DumpCFG.cpp.o
+[692/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeStateMap.cpp.o
+[693/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Def.cpp.o
+[694/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/EmbeddedBuiltinDefinitions.cpp.o
+[695/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/DataFlowGraph.cpp.o
+[696/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/DcrLogger.cpp.o
+[697/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/FileResolver.cpp.o
+[698/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/ExpectedTypeVisitor.cpp.o
+[699/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/ConstraintSolver.cpp.o
+[700/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/NativeStackGuard.cpp.o
+[701/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Error.cpp.o
+[702/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/ConstraintGenerator.cpp.o
+[703/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/GlobalTypes.cpp.o
+[704/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Generalization.cpp.o
+[705/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Instantiation.cpp.o
+[706/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/IterativeTypeVisitor.cpp.o
+[707/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/FragmentAutocomplete.cpp.o
+[708/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Instantiation2.cpp.o
+[709/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/IostreamHelpers.cpp.o
+[710/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/JsonEmitter.cpp.o
+[711/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/LValue.cpp.o
+[712/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/IterativeTypeFunctionTypeVisitor.cpp.o
+[713/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Module.cpp.o
+[714/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Linter.cpp.o
+[715/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/NonStrictTypeChecker.cpp.o
+[716/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/OverloadResolver.cpp.o
+[717/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Refinement.cpp.o
+[718/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/RecursionCounter.cpp.o
+[719/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Quantify.cpp.o
+[720/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Scope.cpp.o
+[721/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/RequireTracer.cpp.o
+[722/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/StructuralTypeEquality.cpp.o
+[723/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Normalize.cpp.o
+[724/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Symbol.cpp.o
+[725/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Frontend.cpp.o
+[726/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Simplify.cpp.o
+[727/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TableLiteralInference.cpp.o
+[728/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/ToDot.cpp.o
+[729/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Substitution.cpp.o
+[730/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TopoSortStatements.cpp.o
+[731/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeArena.cpp.o
+[732/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TxnLog.cpp.o
+[733/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypedAllocator.cpp.o
+[734/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeAttach.cpp.o
+[735/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Type.cpp.o
+[736/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeFunctionError.cpp.o
+[737/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/ToString.cpp.o
+[738/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Subtyping.cpp.o
+[739/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeFunctionReductionGuesser.cpp.o
+[740/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeIds.cpp.o
+[741/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeFunction.cpp.o
+[742/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeOrPack.cpp.o
+[743/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypePack.cpp.o
+[744/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeFunctionRuntime.cpp.o
+[745/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Unifiable.cpp.o
+[746/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeFunctionRuntimeBuilder.cpp.o
+[747/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypePath.cpp.o
+[748/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeUtils.cpp.o
+[749/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeChecker2.cpp.o
+[750/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/laux.cpp.o
+[751/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lbaselib.cpp.o
+[752/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lapi.cpp.o
+[753/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lbuffer.cpp.o
+[754/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lbuflib.cpp.o
+[755/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lbitlib.cpp.o
+[756/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lcorolib.cpp.o
+[757/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/ldblib.cpp.o
+[758/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Unifier2.cpp.o
+[759/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/ldebug.cpp.o
+[760/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/ldo.cpp.o
+[761/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lfunc.cpp.o
+[762/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/UserDefinedTypeFunction.cpp.o
+[763/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/linit.cpp.o
+[764/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lgc.cpp.o
+[765/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lbuiltins.cpp.o
+[766/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lmem.cpp.o
+[767/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lmathlib.cpp.o
+[768/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lgcdebug.cpp.o
+[769/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lperf.cpp.o
+[770/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/loslib.cpp.o
+[771/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lstate.cpp.o
+[772/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lobject.cpp.o
+[773/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lstring.cpp.o
+[774/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lnumprint.cpp.o
+[775/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/ltm.cpp.o
+[776/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/ludata.cpp.o
+[777/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lutf8lib.cpp.o
+[778/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lveclib.cpp.o
+[779/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/ltablib.cpp.o
+[780/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lstrlib.cpp.o
+[781/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/ltable.cpp.o
+[782/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lclasslib.cpp.o
+[783/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lintlib.cpp.o
+[784/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lvector.cpp.o
+[785/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lclass.cpp.o
+[786/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lvmload.cpp.o
+[787/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lvmutils.cpp.o
+[788/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/assert.cpp.o
+[789/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/app.cpp.o
+[790/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/Unifier.cpp.o
+[791/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/hash.cpp.o
+[792/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/jobs.cpp.o
+[793/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/math.cpp.o
+[794/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/convar.cpp.o
+[795/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.VM.dir/VM/src/lvmexecute.cpp.o
+[796/1077] Linking CXX static library _deps/luau-build/libLuau.VM.a
+[797/1077] Linking CXX static library _deps/luau-build/libLuau.Config.a
+[798/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/memory.cpp.o
+[799/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/perf_budget.cpp.o
+[800/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/version.cpp.o
+[801/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/result.cpp.o
+[802/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/web.cpp.o
+[803/1077] Building CXX object src/engine/refl/CMakeFiles/mce_refl.dir/src/registry.cpp.o
+[804/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/crash.cpp.o
+[805/1077] Building CXX object src/engine/refl/CMakeFiles/mce_refl.dir/src/property_path.cpp.o
+[806/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/log.cpp.o
+[807/1077] Building CXX object src/engine/asset/CMakeFiles/mce_asset.dir/src/file_io.cpp.o
+[808/1077] Building CXX object src/engine/asset/CMakeFiles/mce_asset.dir/src/container.cpp.o
+[809/1077] Building CXX object src/engine/core/CMakeFiles/mce_core.dir/src/perf_capture.cpp.o
+[810/1077] Building CXX object src/engine/asset/CMakeFiles/mce_asset.dir/src/guid.cpp.o
+[811/1077] Linking CXX static library src/engine/core/libmce_core.a
+[812/1077] Linking CXX static library src/engine/refl/libmce_refl.a
+[813/1077] Building CXX object src/engine/asset/CMakeFiles/mce_asset.dir/src/xxhash.cpp.o
+[814/1077] Building CXX object src/engine/asset/CMakeFiles/mce_asset.dir/src/vorbis.cpp.o
+[815/1077] Building CXX object src/engine/asset/CMakeFiles/mce_asset.dir/src/mods.cpp.o
+[816/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/audio.cpp.o
+[817/1077] Building C object src/engine/asset/CMakeFiles/mce_asset.dir/src/stb_vorbis_impl.c.o
+[818/1077] Building CXX object src/engine/asset/CMakeFiles/mce_asset.dir/src/asset_system.cpp.o
+[819/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/cook_db.cpp.o
+[820/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/diagnostics.cpp.o
+[821/1077] Building CXX object src/engine/asset/CMakeFiles/mce_asset.dir/src/formats.cpp.o
+[822/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/navmesh_importer.cpp.o
+[823/1077] Linking CXX static library src/engine/asset/libmce_asset.a
+[824/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/cook.cpp.o
+[825/1077] Building C object src/engine/asset/cook/CMakeFiles/mce_stb.dir/src/stb_impl.c.o
+[826/1077] Linking C static library src/engine/asset/cook/libmce_stb.a
+[827/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/envmap_importer.cpp.o
+[828/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/fs_util.cpp.o
+[829/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/font_importer.cpp.o
+[830/1077] Building CXX object _deps/luau-build/CMakeFiles/Luau.Analysis.dir/Analysis/src/TypeInfer.cpp.o
+[831/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/importer_registry.cpp.o
+[832/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/image.cpp.o
+[833/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/material_importer.cpp.o
+[834/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/mod_project.cpp.o
+[835/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/input_map_importer.cpp.o
+[836/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/particle_importer.cpp.o
+[837/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/sound_set_importer.cpp.o
+[838/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/json.cpp.o
+[839/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/spritesheet_importer.cpp.o
+[840/1077] Linking CXX static library _deps/luau-build/libLuau.Analysis.a
+[841/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/terrain_importer.cpp.o
+[842/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/gltf_importer.cpp.o
+[843/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/registry.cpp.o
+[844/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/scene_writer.cpp.o
+[845/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/sequence_importer.cpp.o
+[846/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/animgraph_importer.cpp.o
+[847/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/store_importer.cpp.o
+[848/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/scene_importer.cpp.o
+[849/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/shader_importer.cpp.o
+[850/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/config_importer.cpp.o
+[851/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/timeline_importer.cpp.o
+[852/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/string.cpp.o
+[853/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/services_importer.cpp.o
+[854/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/skeleton2d_importer.cpp.o
+[855/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/string_importer.cpp.o
+[856/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/bt_importer.cpp.o
+[857/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/tilemap_importer.cpp.o
+[858/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/vorbis_encode.cpp.o
+[859/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/texture_importer.cpp.o
+[860/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/video_importer.cpp.o
+[861/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/wav_importer.cpp.o
+[862/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/script_importer.cpp.o
+[863/1077] Building CXX object src/engine/ecs/CMakeFiles/mce_ecs_scene.dir/src/prefab.cpp.o
+[864/1077] Building CXX object src/engine/ecs/CMakeFiles/mce_ecs.dir/src/world.cpp.o
+[865/1077] Building CXX object src/engine/physics2d/CMakeFiles/mce_physics2d.dir/src/dynamic_tree.cpp.o
+[866/1077] Building CXX object src/engine/ecs/CMakeFiles/mce_ecs_scene.dir/src/save.cpp.o
+[867/1077] Building CXX object src/engine/physics2d/CMakeFiles/mce_physics2d.dir/src/collision.cpp.o
+[868/1077] Building CXX object src/engine/asset/cook/CMakeFiles/mce_asset_cook.dir/src/ui_importer.cpp.o
+[869/1077] Building CXX object src/engine/ecs/CMakeFiles/mce_ecs.dir/src/hierarchy.cpp.o
+[870/1077] Linking CXX static library src/engine/ecs/libmce_ecs.a
+[871/1077] Linking CXX static library src/engine/ecs/libmce_ecs_scene.a
+[872/1077] Building CXX object src/engine/physics2d/CMakeFiles/mce_physics2d.dir/src/module.cpp.o
+[873/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/platform.cpp.o
+[874/1077] Building CXX object src/engine/physics2d/CMakeFiles/mce_physics2d.dir/src/world2d.cpp.o
+[875/1077] Linking CXX static library src/engine/physics2d/libmce_physics2d.a
+[876/1077] Building CXX object src/engine/physics3d/CMakeFiles/mce_physics3d.dir/src/navmesh3d.cpp.o
+[877/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/window.cpp.o
+[878/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/library.cpp.o
+[879/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/audio_output.cpp.o
+[880/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/gamepad.cpp.o
+[881/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/firebase.cpp.o
+[882/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/process.cpp.o
+[883/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/store.cpp.o
+[884/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/ads.cpp.o
+[885/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/power.cpp.o
+[886/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/screen_reader.cpp.o
+[887/1077] Building CXX object src/engine/physics3d/CMakeFiles/mce_physics3d.dir/src/world3d.cpp.o
+[888/1077] Linking CXX static library src/engine/physics3d/libmce_physics3d.a
+[889/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/game_services.cpp.o
+[890/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/haptics.cpp.o
+[891/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/steam.cpp.o
+[892/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/review.cpp.o
+[893/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/steam_input.cpp.o
+[894/1077] Building CXX object src/engine/platform/CMakeFiles/mce_platform.dir/src/steam_games.cpp.o
+[895/1077] Building CXX object src/engine/input/CMakeFiles/mce_input.dir/src/input_map.cpp.o
+[896/1077] Linking CXX static library src/engine/platform/libmce_platform.a
+[897/1077] Building CXX object src/engine/input/CMakeFiles/mce_input.dir/src/replay.cpp.o
+[898/1077] Building CXX object src/engine/input/CMakeFiles/mce_input.dir/src/default_map.cpp.o
+[899/1077] Building CXX object src/engine/input/CMakeFiles/mce_input.dir/src/ecs_bridge.cpp.o
+[900/1077] Building CXX object src/engine/input/CMakeFiles/mce_input.dir/src/bindings.cpp.o
+[901/1077] Building CXX object src/engine/input/CMakeFiles/mce_input.dir/src/binding_names.cpp.o
+[902/1077] Building CXX object src/engine/rhi/CMakeFiles/mce_rhi.dir/src/types.cpp.o
+[903/1077] Building CXX object src/engine/input/CMakeFiles/mce_input.dir/src/input_state.cpp.o
+[904/1077] Building CXX object src/engine/rhi/CMakeFiles/mce_rhi.dir/src/command_buffer.cpp.o
+[905/1077] Linking CXX static library src/engine/rhi/libmce_rhi.a
+[906/1077] Building CXX object src/engine/input/CMakeFiles/mce_input.dir/src/steam_config.cpp.o
+[907/1077] Building CXX object src/engine/input/CMakeFiles/mce_input.dir/src/script.cpp.o
+[908/1077] Building CXX object src/engine/rhi_sdlgpu/CMakeFiles/mce_rhi_sdlgpu.dir/src/shader_spirv.cpp.o
+[909/1077] Building CXX object src/engine/input/CMakeFiles/mce_input.dir/src/input_system.cpp.o
+[910/1077] Linking CXX static library src/engine/input/libmce_input.a
+[911/1077] Building CXX object src/engine/rhi_default/CMakeFiles/mce_rhi_default.dir/src/default_device.cpp.o
+[912/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/accessibility.cpp.o
+[913/1077] Building CXX object src/engine/rhi_gl/CMakeFiles/mce_rhi_gl.dir/src/gl_translate.cpp.o
+[914/1077] Building CXX object src/engine/rhi_sdlgpu/CMakeFiles/mce_rhi_sdlgpu.dir/src/sdlgpu_translate.cpp.o
+[915/1077] Building CXX object src/engine/rhi_gl/CMakeFiles/mce_rhi_gl.dir/src/gl_device.cpp.o
+[916/1077] Linking CXX static library src/engine/rhi_gl/libmce_rhi_gl.a
+[917/1077] Building CXX object src/engine/rhi_sdlgpu/CMakeFiles/mce_rhi_sdlgpu.dir/src/sdlgpu_device.cpp.o
+[918/1077] Linking CXX static library src/engine/rhi_sdlgpu/libmce_rhi_sdlgpu.a
+[919/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/atmosphere.cpp.o
+[920/1077] Linking CXX static library src/engine/rhi_default/libmce_rhi_default.a
+[921/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/camera2d.cpp.o
+[922/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/clusters.cpp.o
+[923/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/asset_upload.cpp.o
+[924/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/quality.cpp.o
+[925/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/sort_key.cpp.o
+[926/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/sprite_animation.cpp.o
+[927/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/forward3d_scale.cpp.o
+[928/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/scene3d.cpp.o
+[929/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/sprite_batch.cpp.o
+[930/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/mesh.cpp.o
+[931/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/renderer.cpp.o
+[932/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/text.cpp.o
+[933/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/video.cpp.o
+[934/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/types.cpp.o
+[935/1077] Building C object src/engine/render/CMakeFiles/mce_render.dir/src/plmpeg_impl.c.o
+[936/1077] Building CXX object src/engine/ui/CMakeFiles/mce_ui.dir/src/access.cpp.o
+[937/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/forward3d.cpp.o
+[938/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/texture_store.cpp.o
+[939/1077] Building CXX object src/engine/ui/CMakeFiles/mce_ui.dir/src/document_build.cpp.o
+[940/1077] Building CXX object src/engine/render/CMakeFiles/mce_render.dir/src/terrain.cpp.o
+[941/1077] Linking CXX static library src/engine/render/libmce_render.a
+[942/1077] Building CXX object src/engine/ui/CMakeFiles/mce_ui.dir/src/dev_console.cpp.o
+[943/1077] Building CXX object src/engine/ui/CMakeFiles/mce_ui.dir/src/document_data.cpp.o
+[944/1077] Building CXX object src/engine/ui/CMakeFiles/mce_ui.dir/src/options_panel.cpp.o
+[945/1077] Building CXX object src/engine/ui/CMakeFiles/mce_ui.dir/src/subtitles.cpp.o
+[946/1077] Building CXX object src/engine/audio/CMakeFiles/mce_audio.dir/src/mixer.cpp.o
+[947/1077] Building CXX object src/engine/ui/CMakeFiles/mce_ui.dir/src/screen_link.cpp.o
+[948/1077] Building CXX object src/engine/audio/CMakeFiles/mce_audio.dir/src/audio_device.cpp.o
+[949/1077] Building CXX object src/engine/audio/CMakeFiles/mce_audio.dir/src/stream.cpp.o
+[950/1077] Building CXX object src/engine/audio/CMakeFiles/mce_audio.dir/src/spatial.cpp.o
+[951/1077] Building CXX object src/engine/audio/CMakeFiles/mce_audio.dir/src/bridge.cpp.o
+[952/1077] Building CXX object src/engine/monetize/CMakeFiles/mce_monetize.dir/src/catalog.cpp.o
+[953/1077] Building CXX object src/engine/audio/CMakeFiles/mce_audio.dir/src/clip_bank.cpp.o
+[954/1077] Linking CXX static library src/engine/audio/libmce_audio.a
+[955/1077] Building CXX object src/engine/ui/CMakeFiles/mce_ui.dir/src/ui.cpp.o
+[956/1077] Linking CXX static library src/engine/ui/libmce_ui.a
+[957/1077] Building CXX object src/engine/monetize/CMakeFiles/mce_monetize.dir/src/platform_ads.cpp.o
+[958/1077] Building CXX object src/engine/monetize/CMakeFiles/mce_monetize.dir/src/platform_store.cpp.o
+[959/1077] Building CXX object src/engine/monetize/CMakeFiles/mce_monetize.dir/src/fake.cpp.o
+[960/1077] Building CXX object src/engine/monetize/CMakeFiles/mce_monetize.dir/src/monetize.cpp.o
+[961/1077] Linking CXX static library src/engine/monetize/libmce_monetize.a
+[962/1077] Building CXX object src/engine/liveops/CMakeFiles/mce_liveops.dir/src/analytics.cpp.o
+[963/1077] Building CXX object src/engine/liveops/CMakeFiles/mce_liveops.dir/src/game_services_catalog.cpp.o
+[964/1077] Building CXX object src/engine/liveops/CMakeFiles/mce_liveops.dir/src/platform_games.cpp.o
+[965/1077] Building CXX object src/engine/liveops/CMakeFiles/mce_liveops.dir/src/crash_upload.cpp.o
+[966/1077] Building CXX object src/engine/liveops/CMakeFiles/mce_liveops.dir/src/liveops.cpp.o
+[967/1077] Building CXX object src/engine/liveops/CMakeFiles/mce_liveops.dir/src/local_game_services.cpp.o
+[968/1077] Building CXX object src/engine/liveops/CMakeFiles/mce_liveops.dir/src/game_services.cpp.o
+[969/1077] Building CXX object src/engine/loc/CMakeFiles/mce_loc.dir/src/string_table.cpp.o
+[970/1077] Building CXX object src/engine/liveops/CMakeFiles/mce_liveops.dir/src/remote_config.cpp.o
+[971/1077] Building CXX object src/engine/loc/CMakeFiles/mce_loc.dir/src/loc.cpp.o
+[972/1077] Linking CXX static library src/engine/liveops/libmce_liveops.a
+[973/1077] Linking CXX static library src/engine/loc/libmce_loc.a
+[974/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/presence.cpp.o
+[975/1077] Building CXX object src/engine/scene/CMakeFiles/mce_scene.dir/src/scene.cpp.o
+[976/1077] Building CXX object src/engine/scene/CMakeFiles/mce_scene.dir/src/streaming.cpp.o
+[977/1077] Linking CXX static library src/engine/scene/libmce_scene.a
+[978/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/captions.cpp.o
+[979/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/anim3d.cpp.o
+[980/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/bodies3d.cpp.o
+[981/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/kit3d.cpp.o
+[982/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/effects.cpp.o
+[983/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/nav3d.cpp.o
+[984/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/kit3d_extract.cpp.o
+[985/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/joints3d.cpp.o
+[986/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/sensors3d.cpp.o
+[987/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/ragdolls3d.cpp.o
+[988/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/vehicles3d.cpp.o
+[989/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/pathfinding.cpp.o
+[990/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/particles.cpp.o
+[991/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/skeleton2d_ik.cpp.o
+[992/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/sequence.cpp.o
+[993/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/skeleton2d_anim.cpp.o
+[994/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/skeleton2d.cpp.o
+[995/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/sprite_anim.cpp.o
+[996/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/stock.cpp.o
+[997/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/perception.cpp.o
+[998/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/cinematic.cpp.o
+[999/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/sprite_extract.cpp.o
+[1000/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/timeline.cpp.o
+[1001/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/ai.cpp.o
+[1002/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/ai_tasks.cpp.o
+[1003/1077] Building CXX object src/engine/kit_novel/CMakeFiles/mce_kit_novel.dir/src/localize.cpp.o
+[1004/1077] Building CXX object src/engine/kit_novel/CMakeFiles/mce_kit_novel.dir/src/program.cpp.o
+[1005/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/video.cpp.o
+[1006/1077] Building CXX object src/engine/kit_novel/CMakeFiles/mce_kit_novel.dir/src/pointer.cpp.o
+[1007/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/views.cpp.o
+[1008/1077] Building CXX object src/engine/kit/CMakeFiles/mce_gameplay_kit.dir/src/render_textures.cpp.o
+[1009/1077] Linking CXX static library src/engine/kit/libmce_gameplay_kit.a
+[1010/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/net_stats.cpp.o
+[1011/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/lag_compensation.cpp.o
+[1012/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/prediction.cpp.o
+[1013/1077] Building CXX object src/engine/kit_novel/CMakeFiles/mce_kit_novel.dir/src/dialogue.cpp.o
+[1014/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/rollback.cpp.o
+[1015/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/host.cpp.o
+[1016/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/ws_crypto.cpp.o
+[1017/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/sim_network.cpp.o
+[1018/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/rtc.cpp.o
+[1019/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/relay.cpp.o
+[1020/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/socket.cpp.o
+[1021/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/replication.cpp.o
+[1022/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/websocket.cpp.o
+[1023/1077] Building CXX object src/engine/kit_novel/CMakeFiles/mce_kit_novel.dir/src/stage.cpp.o
+[1024/1077] Building CXX object src/engine/script/CMakeFiles/mce_script_compiler.dir/compiler/definitions.cpp.o
+[1025/1077] Building CXX object src/engine/net/CMakeFiles/mce_net.dir/src/rtc_native.cpp.o
+[1026/1077] Building CXX object src/engine/script/CMakeFiles/mce_script_compiler.dir/compiler/compiler.cpp.o
+[1027/1077] Building CXX object src/engine/script/CMakeFiles/mce_script.dir/src/script.cpp.o
+[1028/1077] Building CXX object src/engine/script/CMakeFiles/mce_script_compiler.dir/compiler/names_check.cpp.o
+[1029/1077] Building CXX object src/engine/script/CMakeFiles/mce_script_compiler.dir/compiler/state_check.cpp.o
+[1030/1077] Building CXX object src/engine/script/CMakeFiles/mce_script.dir/src/scene_scripts.cpp.o
+[1031/1077] Building CXX object src/module/CMakeFiles/mce_engine.dir/src/engine_dll.cpp.o
+[1032/1077] Building CXX object src/engine/script/CMakeFiles/mce_script.dir/src/api_world.cpp.o
+[1033/1077] Building CXX object tools/cook/CMakeFiles/mce_cook.dir/main.cpp.o
+[1034/1077] Building CXX object src/module/CMakeFiles/mce_module_host.dir/src/module_host.cpp.o
+[1035/1077] Building CXX object src/player/CMakeFiles/mce_player.dir/main.cpp.o
+[1036/1077] Linking CXX static library src/module/libmce_module_host.a
+[1037/1077] Building CXX object src/engine/script/CMakeFiles/mce_script_compiler.dir/compiler/typecheck.cpp.o
+[1038/1077] Linking CXX shared library src/module/libmce_engine.so
+[1039/1077] Linking CXX static library src/engine/kit_novel/libmce_kit_novel.a
+[1040/1077] Building CXX object samples/02_boids/CMakeFiles/sample_02_boids.dir/main.cpp.o
+[1041/1077] Linking CXX static library src/engine/script/libmce_script.a
+[1042/1077] Linking CXX static library src/engine/script/libmce_script_compiler.a
+[1043/1077] Building CXX object tools/cook/CMakeFiles/mce_cook.dir/engine_components.cpp.o
+[1044/1077] Linking CXX static library src/engine/net/libmce_net.a
+[1045/1077] Linking CXX static library src/engine/asset/cook/libmce_asset_cook.a
+[1046/1077] Linking CXX executable samples/02_boids/sample_02_boids
+[1047/1077] Building CXX object src/player/CMakeFiles/mce_player_runtime.dir/src/ui_screens.cpp.o
+[1048/1077] Building CXX object samples/physics2d_headless/CMakeFiles/sample_physics2d_headless.dir/main.cpp.o
+[1049/1077] Linking CXX executable samples/physics2d_headless/sample_physics2d_headless
+[1050/1077] Linking CXX executable tools/cook/mce_cook
+[1051/1077] Cooking sample_03_platformer content
+mce_cook: 5 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 1a6189aa6ec33937; pack 1a52bec7d80fb481
+[1052/1077] Building CXX object samples/03_platformer/CMakeFiles/platformer.dir/game/platformer.cpp.o
+[1053/1077] Building CXX object samples/net_rollback/CMakeFiles/sample_net_rollback.dir/main.cpp.o
+[1054/1077] Cooking sample_04_diorama content
+mce_cook: 21 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest e5e182ad4728cd8b; pack 24ff32bb6d3bccaa
+[1055/1077] Building CXX object samples/03_platformer/CMakeFiles/platformer.dir/game/module.cpp.o
+[1056/1077] Linking CXX shared module samples/03_platformer/libplatformer.so
+[1057/1077] Building CXX object samples/net_headless/CMakeFiles/sample_net_headless.dir/main.cpp.o
+[1058/1077] Linking CXX executable samples/net_rollback/sample_net_rollback
+[1059/1077] Linking CXX executable samples/net_headless/sample_net_headless
+[1060/1077] Cooking sample_shop_demo content
+mce_cook: 1 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest e11878093c57d8d6; pack 16f4aa95d41a7229
+[1061/1077] Cooking sample_liveops_demo content
+mce_cook: 2 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 70ecd7b5dfd4ed73; pack 016b50c59ba81d86
+[1062/1077] Building CXX object samples/03_platformer/CMakeFiles/sample_03_platformer.dir/art.cpp.o
+[1063/1077] Building CXX object src/player/CMakeFiles/mce_player_runtime.dir/src/player.cpp.o
+[1064/1077] Linking CXX static library src/player/libmce_player_runtime.a
+[1065/1077] Linking CXX executable src/player/mce_player
+[1066/1077] Building CXX object samples/liveops_demo/CMakeFiles/sample_liveops_demo.dir/main.cpp.o
+[1067/1077] Building CXX object samples/04_diorama/CMakeFiles/sample_04_diorama.dir/main.cpp.o
+[1068/1077] Linking CXX executable samples/liveops_demo/sample_liveops_demo
+[1069/1077] Building CXX object samples/shop_demo/CMakeFiles/sample_shop_demo.dir/main.cpp.o
+[1070/1077] Building CXX object tests/devhost/CMakeFiles/mce_devhost.dir/main.cpp.o
+[1071/1077] Linking CXX executable samples/shop_demo/sample_shop_demo
+[1072/1077] Linking CXX executable tests/devhost/mce_devhost
+[1073/1077] Building CXX object samples/03_platformer/CMakeFiles/sample_03_platformer.dir/main.cpp.o
+[1074/1077] Linking CXX executable samples/03_platformer/sample_03_platformer
+[1075/1077] Linking CXX executable samples/04_diorama/sample_04_diorama
+[1076/1077] Building CXX object tests/module/CMakeFiles/modtest_good.dir/test_game_module.cpp.o
+[1077/1077] Linking CXX shared module tests/module/modules/libmodtest_good.so
+build/linux-gcc-debug/samples/02_boids/sample_02_boids run 0: fe4331ea25a61469
+build/linux-gcc-debug/samples/02_boids/sample_02_boids run 1: fe4331ea25a61469
+build/linux-gcc-debug/samples/02_boids/sample_02_boids run 2: fe4331ea25a61469
+build/linux-gcc-release/samples/02_boids/sample_02_boids run 0: fe4331ea25a61469
+build/linux-gcc-release/samples/02_boids/sample_02_boids run 1: fe4331ea25a61469
+build/linux-gcc-release/samples/02_boids/sample_02_boids run 2: fe4331ea25a61469
+OK: 6 runs, hash fe4331ea25a61469
+build/linux-gcc-debug/samples/physics2d_headless/sample_physics2d_headless run 0: 99aaed33d32858e4
+build/linux-gcc-debug/samples/physics2d_headless/sample_physics2d_headless run 1: 99aaed33d32858e4
+build/linux-gcc-debug/samples/physics2d_headless/sample_physics2d_headless run 2: 99aaed33d32858e4
+build/linux-gcc-release/samples/physics2d_headless/sample_physics2d_headless run 0: 99aaed33d32858e4
+build/linux-gcc-release/samples/physics2d_headless/sample_physics2d_headless run 1: 99aaed33d32858e4
+build/linux-gcc-release/samples/physics2d_headless/sample_physics2d_headless run 2: 99aaed33d32858e4
+OK: 6 runs, hash 99aaed33d32858e4
+build/linux-gcc-debug/samples/03_platformer/sample_03_platformer run 0: e458e8cc5ad510f4
+build/linux-gcc-debug/samples/03_platformer/sample_03_platformer run 1: e458e8cc5ad510f4
+build/linux-gcc-debug/samples/03_platformer/sample_03_platformer run 2: e458e8cc5ad510f4
+build/linux-gcc-release/samples/03_platformer/sample_03_platformer run 0: e458e8cc5ad510f4
+build/linux-gcc-release/samples/03_platformer/sample_03_platformer run 1: e458e8cc5ad510f4
+build/linux-gcc-release/samples/03_platformer/sample_03_platformer run 2: e458e8cc5ad510f4
+OK: 6 runs, hash e458e8cc5ad510f4
+build/linux-gcc-debug/samples/04_diorama/sample_04_diorama run 0: 4b8f9c4484985f2d
+build/linux-gcc-debug/samples/04_diorama/sample_04_diorama run 1: 4b8f9c4484985f2d
+build/linux-gcc-debug/samples/04_diorama/sample_04_diorama run 2: 4b8f9c4484985f2d
+build/linux-gcc-release/samples/04_diorama/sample_04_diorama run 0: 4b8f9c4484985f2d
+build/linux-gcc-release/samples/04_diorama/sample_04_diorama run 1: 4b8f9c4484985f2d
+build/linux-gcc-release/samples/04_diorama/sample_04_diorama run 2: 4b8f9c4484985f2d
+OK: 6 runs, hash 4b8f9c4484985f2d
+build/linux-gcc-debug/src/player/mce_player run 0: cb0197e002e36782
+build/linux-gcc-debug/src/player/mce_player run 1: cb0197e002e36782
+build/linux-gcc-debug/src/player/mce_player run 2: cb0197e002e36782
+build/linux-gcc-release/src/player/mce_player run 0: cb0197e002e36782
+build/linux-gcc-release/src/player/mce_player run 1: cb0197e002e36782
+build/linux-gcc-release/src/player/mce_player run 2: cb0197e002e36782
+OK: 6 runs, hash cb0197e002e36782
+build/linux-gcc-debug/src/player/mce_player run 0: 57da9c5b4d24ffc0
+build/linux-gcc-debug/src/player/mce_player run 1: 57da9c5b4d24ffc0
+build/linux-gcc-debug/src/player/mce_player run 2: 57da9c5b4d24ffc0
+build/linux-gcc-release/src/player/mce_player run 0: 57da9c5b4d24ffc0
+build/linux-gcc-release/src/player/mce_player run 1: 57da9c5b4d24ffc0
+build/linux-gcc-release/src/player/mce_player run 2: 57da9c5b4d24ffc0
+OK: 6 runs, hash 57da9c5b4d24ffc0
+build/linux-gcc-debug/src/player/mce_player run 0: cc49e872cae6cadd
+build/linux-gcc-debug/src/player/mce_player run 1: cc49e872cae6cadd
+build/linux-gcc-debug/src/player/mce_player run 2: cc49e872cae6cadd
+build/linux-gcc-release/src/player/mce_player run 0: cc49e872cae6cadd
+build/linux-gcc-release/src/player/mce_player run 1: cc49e872cae6cadd
+build/linux-gcc-release/src/player/mce_player run 2: cc49e872cae6cadd
+OK: 6 runs, hash cc49e872cae6cadd
+build/linux-gcc-debug/samples/shop_demo/sample_shop_demo run 0: ec490a03024d6bd8
+build/linux-gcc-debug/samples/shop_demo/sample_shop_demo run 1: ec490a03024d6bd8
+build/linux-gcc-debug/samples/shop_demo/sample_shop_demo run 2: ec490a03024d6bd8
+build/linux-gcc-release/samples/shop_demo/sample_shop_demo run 0: ec490a03024d6bd8
+build/linux-gcc-release/samples/shop_demo/sample_shop_demo run 1: ec490a03024d6bd8
+build/linux-gcc-release/samples/shop_demo/sample_shop_demo run 2: ec490a03024d6bd8
+OK: 6 runs, hash ec490a03024d6bd8
+build/linux-gcc-debug/samples/liveops_demo/sample_liveops_demo run 0: 05fe6ab13f2ff4e2
+build/linux-gcc-debug/samples/liveops_demo/sample_liveops_demo run 1: 05fe6ab13f2ff4e2
+build/linux-gcc-debug/samples/liveops_demo/sample_liveops_demo run 2: 05fe6ab13f2ff4e2
+build/linux-gcc-release/samples/liveops_demo/sample_liveops_demo run 0: 05fe6ab13f2ff4e2
+build/linux-gcc-release/samples/liveops_demo/sample_liveops_demo run 1: 05fe6ab13f2ff4e2
+build/linux-gcc-release/samples/liveops_demo/sample_liveops_demo run 2: 05fe6ab13f2ff4e2
+OK: 6 runs, hash 05fe6ab13f2ff4e2
+build/linux-gcc-debug/samples/net_headless/sample_net_headless run 0: c7b6e2779ad0c93a
+build/linux-gcc-debug/samples/net_headless/sample_net_headless run 1: c7b6e2779ad0c93a
+build/linux-gcc-debug/samples/net_headless/sample_net_headless run 2: c7b6e2779ad0c93a
+build/linux-gcc-release/samples/net_headless/sample_net_headless run 0: c7b6e2779ad0c93a
+build/linux-gcc-release/samples/net_headless/sample_net_headless run 1: c7b6e2779ad0c93a
+build/linux-gcc-release/samples/net_headless/sample_net_headless run 2: c7b6e2779ad0c93a
+OK: 6 runs, hash c7b6e2779ad0c93a
+build/linux-gcc-debug/samples/net_headless/sample_net_headless run 0: 2f287ee93fd5a166
+build/linux-gcc-debug/samples/net_headless/sample_net_headless run 1: 2f287ee93fd5a166
+build/linux-gcc-debug/samples/net_headless/sample_net_headless run 2: 2f287ee93fd5a166
+build/linux-gcc-release/samples/net_headless/sample_net_headless run 0: 2f287ee93fd5a166
+build/linux-gcc-release/samples/net_headless/sample_net_headless run 1: 2f287ee93fd5a166
+build/linux-gcc-release/samples/net_headless/sample_net_headless run 2: 2f287ee93fd5a166
+OK: 6 runs, hash 2f287ee93fd5a166
+build/linux-gcc-debug/samples/net_headless/sample_net_headless run 0: 24960e94f631e77c
+build/linux-gcc-debug/samples/net_headless/sample_net_headless run 1: 24960e94f631e77c
+build/linux-gcc-debug/samples/net_headless/sample_net_headless run 2: 24960e94f631e77c
+build/linux-gcc-release/samples/net_headless/sample_net_headless run 0: 24960e94f631e77c
+build/linux-gcc-release/samples/net_headless/sample_net_headless run 1: 24960e94f631e77c
+build/linux-gcc-release/samples/net_headless/sample_net_headless run 2: 24960e94f631e77c
+OK: 6 runs, hash 24960e94f631e77c
+build/linux-gcc-debug/samples/net_rollback/sample_net_rollback run 0: 228250f297ba0555
+build/linux-gcc-debug/samples/net_rollback/sample_net_rollback run 1: 228250f297ba0555
+build/linux-gcc-debug/samples/net_rollback/sample_net_rollback run 2: 228250f297ba0555
+build/linux-gcc-release/samples/net_rollback/sample_net_rollback run 0: 228250f297ba0555
+build/linux-gcc-release/samples/net_rollback/sample_net_rollback run 1: 228250f297ba0555
+build/linux-gcc-release/samples/net_rollback/sample_net_rollback run 2: 228250f297ba0555
+OK: 6 runs, hash 228250f297ba0555
+build/linux-gcc-debug/samples/net_rollback/sample_net_rollback run 0: dca89766efc7196b
+build/linux-gcc-debug/samples/net_rollback/sample_net_rollback run 1: dca89766efc7196b
+build/linux-gcc-debug/samples/net_rollback/sample_net_rollback run 2: dca89766efc7196b
+build/linux-gcc-release/samples/net_rollback/sample_net_rollback run 0: dca89766efc7196b
+build/linux-gcc-release/samples/net_rollback/sample_net_rollback run 1: dca89766efc7196b
+build/linux-gcc-release/samples/net_rollback/sample_net_rollback run 2: dca89766efc7196b
+OK: 6 runs, hash dca89766efc7196b
+build/linux-gcc-debug/tests/devhost/mce_devhost run 0: efb10d1ca00d5af3
+build/linux-gcc-debug/tests/devhost/mce_devhost run 1: efb10d1ca00d5af3
+build/linux-gcc-debug/tests/devhost/mce_devhost run 2: efb10d1ca00d5af3
+OK: 3 runs, hash efb10d1ca00d5af3
+build/linux-gcc-release/tests/devhost/mce_devhost run 0: efb10d1ca00d5af3
+build/linux-gcc-release/tests/devhost/mce_devhost run 1: efb10d1ca00d5af3
+build/linux-gcc-release/tests/devhost/mce_devhost run 2: efb10d1ca00d5af3
+OK: 3 runs, hash efb10d1ca00d5af3
+module state hash: debug state_hash efb10d1ca00d5af3, release state_hash efb10d1ca00d5af3
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object samples/physics3d_headless/CMakeFiles/sample_physics3d_headless.dir/main.cpp.o
+[2/2] Linking CXX executable samples/physics3d_headless/sample_physics3d_headless
+build/linux-gcc-debug/samples/physics3d_headless/sample_physics3d_headless run 0: 0ba655b268c4f03e
+build/linux-gcc-debug/samples/physics3d_headless/sample_physics3d_headless run 1: 0ba655b268c4f03e
+build/linux-gcc-debug/samples/physics3d_headless/sample_physics3d_headless run 2: 0ba655b268c4f03e
+build/linux-gcc-release/samples/physics3d_headless/sample_physics3d_headless run 0: 0ba655b268c4f03e
+build/linux-gcc-release/samples/physics3d_headless/sample_physics3d_headless run 1: 0ba655b268c4f03e
+build/linux-gcc-release/samples/physics3d_headless/sample_physics3d_headless run 2: 0ba655b268c4f03e
+OK: 6 runs, hash 0ba655b268c4f03e
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+[0/2] Re-checking globbed directories...
+[1/3] Cooking sample_04_cubes content
+mce_cook: 15 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 116c39af77d285d7; pack 7727734194d73280
+[2/3] Building CXX object samples/04_cubes/CMakeFiles/sample_04_cubes.dir/main.cpp.o
+[3/3] Linking CXX executable samples/04_cubes/sample_04_cubes
+build/linux-gcc-debug/samples/04_cubes/sample_04_cubes run 0: 03c3df36ae1538e3
+build/linux-gcc-debug/samples/04_cubes/sample_04_cubes run 1: 03c3df36ae1538e3
+build/linux-gcc-debug/samples/04_cubes/sample_04_cubes run 2: 03c3df36ae1538e3
+build/linux-gcc-release/samples/04_cubes/sample_04_cubes run 0: 03c3df36ae1538e3
+build/linux-gcc-release/samples/04_cubes/sample_04_cubes run 1: 03c3df36ae1538e3
+build/linux-gcc-release/samples/04_cubes/sample_04_cubes run 2: 03c3df36ae1538e3
+OK: 6 runs, hash 03c3df36ae1538e3
+build/linux-gcc-debug/samples/04_cubes/sample_04_cubes run 0: 898c8a74689f60ce
+build/linux-gcc-debug/samples/04_cubes/sample_04_cubes run 1: 898c8a74689f60ce
+build/linux-gcc-debug/samples/04_cubes/sample_04_cubes run 2: 898c8a74689f60ce
+build/linux-gcc-release/samples/04_cubes/sample_04_cubes run 0: 898c8a74689f60ce
+build/linux-gcc-release/samples/04_cubes/sample_04_cubes run 1: 898c8a74689f60ce
+build/linux-gcc-release/samples/04_cubes/sample_04_cubes run 2: 898c8a74689f60ce
+OK: 6 runs, hash 898c8a74689f60ce
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+[0/2] Re-checking globbed directories...
+[1/4] Cooking sample_05_ashen_court content
+mce_cook: 21 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest cb1bccd6d19cd5d9; pack 923f5166b6418462
+[2/4] Building CXX object samples/05_ashen_court/CMakeFiles/sample_05_ashen_court.dir/game/court.cpp.o
+[3/4] Building CXX object samples/05_ashen_court/CMakeFiles/sample_05_ashen_court.dir/main.cpp.o
+[4/4] Linking CXX executable samples/05_ashen_court/sample_05_ashen_court
+build/linux-gcc-debug/samples/05_ashen_court/sample_05_ashen_court run 0: a3c6f73e25e594ca
+build/linux-gcc-debug/samples/05_ashen_court/sample_05_ashen_court run 1: a3c6f73e25e594ca
+build/linux-gcc-debug/samples/05_ashen_court/sample_05_ashen_court run 2: a3c6f73e25e594ca
+build/linux-gcc-release/samples/05_ashen_court/sample_05_ashen_court run 0: a3c6f73e25e594ca
+build/linux-gcc-release/samples/05_ashen_court/sample_05_ashen_court run 1: a3c6f73e25e594ca
+build/linux-gcc-release/samples/05_ashen_court/sample_05_ashen_court run 2: a3c6f73e25e594ca
+OK: 6 runs, hash a3c6f73e25e594ca
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+[0/2] Re-checking globbed directories...
+[1/20] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_cook.dir/__/__/tools/cook/main.cpp.o
+[2/20] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_cook.dir/__/__/tools/cook/main.cpp.o
+[3/20] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_cook.dir/games/marble_garden/module/types.cpp.o
+[4/20] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_cook.dir/games/glowmoth/module/types.cpp.o
+[5/20] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_cook.dir/__/__/tools/cook/engine_components.cpp.o
+[6/20] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_cook.dir/__/__/tools/cook/engine_components.cpp.o
+[7/20] Linking CXX executable projects/MarbleGarden/marble_garden_cook
+[8/20] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_game.dir/games/glowmoth/module/module.cpp.o
+[9/20] Linking CXX executable projects/Glowmoth/glowmoth_cook
+[10/20] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_game.dir/games/marble_garden/module/module.cpp.o
+[11/20] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_game.dir/games/glowmoth/module/glowmoth.cpp.o
+[12/20] Linking CXX shared module projects/Glowmoth/libglowmoth.so
+[13/20] Cooking marble_garden content
+mce_cook: 36 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 60e6b47d0d1d1b9f; pack 3911478c2fa05e72
+[14/20] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden.dir/games/marble_garden/host/main.cpp.o
+[15/20] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_game.dir/games/marble_garden/module/marble_garden.cpp.o
+[16/20] Linking CXX shared module projects/MarbleGarden/libmarble_garden.so
+[17/20] Linking CXX executable projects/MarbleGarden/marble_garden
+[18/20] Cooking glowmoth content
+mce_cook: 33 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest ea88e7ab8ede9870; pack 584088782db94e6f
+[19/20] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth.dir/games/glowmoth/host/main.cpp.o
+[20/20] Linking CXX executable projects/Glowmoth/glowmoth
+build/linux-gcc-debug/projects/Glowmoth/glowmoth run 0: b3f090bbabf58ca7
+build/linux-gcc-debug/projects/Glowmoth/glowmoth run 1: b3f090bbabf58ca7
+build/linux-gcc-debug/projects/Glowmoth/glowmoth run 2: b3f090bbabf58ca7
+build/linux-gcc-release/projects/Glowmoth/glowmoth run 0: b3f090bbabf58ca7
+build/linux-gcc-release/projects/Glowmoth/glowmoth run 1: b3f090bbabf58ca7
+build/linux-gcc-release/projects/Glowmoth/glowmoth run 2: b3f090bbabf58ca7
+OK: 6 runs, hash b3f090bbabf58ca7
+build/linux-gcc-debug/projects/MarbleGarden/marble_garden run 0: f5594ddb59467ba5
+build/linux-gcc-debug/projects/MarbleGarden/marble_garden run 1: f5594ddb59467ba5
+build/linux-gcc-debug/projects/MarbleGarden/marble_garden run 2: f5594ddb59467ba5
+build/linux-gcc-release/projects/MarbleGarden/marble_garden run 0: f5594ddb59467ba5
+build/linux-gcc-release/projects/MarbleGarden/marble_garden run 1: f5594ddb59467ba5
+build/linux-gcc-release/projects/MarbleGarden/marble_garden run 2: f5594ddb59467ba5
+OK: 6 runs, hash f5594ddb59467ba5
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+[0/2] Re-checking globbed directories...
+[1/5] Cooking ember_script content
+mce_cook: 5 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 6935ebf8dfa1114a; pack 21eb383bea865236
+[2/5] Building CXX object projects/EmberScript/CMakeFiles/ember_script.dir/ember_script_script_host.cpp.o
+[3/5] Linking CXX executable projects/EmberScript/ember_script
+[4/5] Building CXX object samples/script_headless/CMakeFiles/sample_script_headless.dir/main.cpp.o
+[5/5] Linking CXX executable samples/script_headless/sample_script_headless
+build/linux-gcc-debug/projects/EmberScript/ember_script run 0: 6468a8ec4ab6cf5f
+build/linux-gcc-debug/projects/EmberScript/ember_script run 1: 6468a8ec4ab6cf5f
+build/linux-gcc-debug/projects/EmberScript/ember_script run 2: 6468a8ec4ab6cf5f
+build/linux-gcc-release/projects/EmberScript/ember_script run 0: 6468a8ec4ab6cf5f
+build/linux-gcc-release/projects/EmberScript/ember_script run 1: 6468a8ec4ab6cf5f
+build/linux-gcc-release/projects/EmberScript/ember_script run 2: 6468a8ec4ab6cf5f
+OK: 6 runs, hash 6468a8ec4ab6cf5f
+build/linux-gcc-debug/samples/script_headless/sample_script_headless run 0: 5653932ad4a0368c
+build/linux-gcc-debug/samples/script_headless/sample_script_headless run 1: 5653932ad4a0368c
+build/linux-gcc-debug/samples/script_headless/sample_script_headless run 2: 5653932ad4a0368c
+build/linux-gcc-release/samples/script_headless/sample_script_headless run 0: 5653932ad4a0368c
+build/linux-gcc-release/samples/script_headless/sample_script_headless run 1: 5653932ad4a0368c
+build/linux-gcc-release/samples/script_headless/sample_script_headless run 2: 5653932ad4a0368c
+OK: 6 runs, hash 5653932ad4a0368c
+build/linux-gcc-debug/samples/script_headless/sample_script_headless run 0: 5653932ad4a0368c
+build/linux-gcc-release/samples/script_headless/sample_script_headless run 0: 5653932ad4a0368c
+OK: 2 runs, hash 5653932ad4a0368c

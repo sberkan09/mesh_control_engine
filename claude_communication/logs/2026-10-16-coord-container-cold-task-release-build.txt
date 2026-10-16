@@ -1,0 +1,953 @@
+Preset CMake variables:
+
+  CMAKE_BUILD_TYPE="RelWithDebInfo"
+  CMAKE_CXX_COMPILER="g++"
+  CMAKE_C_COMPILER="gcc"
+  MCE_BUILD_TESTS="ON"
+
+-- Build spdlog: 1.17.0
+-- Build type: RelWithDebInfo
+Parsing public/common/TracyVersion.hpp file
+VERSION 0.14.1
+-- Could NOT find rocprofiler-sdk (missing: rocprofiler-sdk_DIR)
+-- TRACY_ENABLE: ON
+-- TRACY_ON_DEMAND: ON
+-- TRACY_CALLSTACK: (not set)
+-- TRACY_PLATFORM_HEADER: (not set)
+-- TRACY_NO_CALLSTACK: OFF
+-- TRACY_NO_CALLSTACK_INLINES: OFF
+-- TRACY_ONLY_LOCALHOST: OFF
+-- TRACY_NO_BROADCAST: ON
+-- TRACY_ONLY_IPV4: OFF
+-- TRACY_NO_CODE_TRANSFER: OFF
+-- TRACY_NO_CONTEXT_SWITCH: OFF
+-- TRACY_NO_EXIT: OFF
+-- TRACY_NO_SAMPLING: OFF
+-- TRACY_NO_WAIT_STACKS: OFF
+-- TRACY_NO_VERIFY: OFF
+-- TRACY_NO_VSYNC_CAPTURE: OFF
+-- TRACY_NO_FRAME_IMAGE: OFF
+-- TRACY_NO_SYSTEM_TRACING: OFF
+-- TRACY_PATCHABLE_NOPSLEDS: OFF
+-- TRACY_MANUAL_LIFETIME: OFF
+-- TRACY_FIBERS: OFF
+-- TRACY_NO_CRASH_HANDLER: OFF
+-- TRACY_TIMER_FALLBACK: OFF
+-- TRACY_DISALLOW_HW_TIMER: OFF
+-- TRACY_LIBUNWIND_BACKTRACE: OFF
+-- TRACY_SYMBOL_OFFLINE_RESOLVE: OFF
+-- TRACY_LIBBACKTRACE_ELF_DYNLOAD_SUPPORT: OFF
+-- TRACY_DEBUGINFOD: OFF
+-- TRACY_IGNORE_MEMORY_FAULTS: OFF
+-- TRACY_OPENGL_AUTO_CALIBRATION: OFF
+-- TRACY_VERBOSE: OFF
+-- TRACY_NO_INTERNAL_MESSAGE: OFF
+-- TRACY_DEMANGLE: OFF
+-- Could NOT find ALSA (missing: ALSA_LIBRARY ALSA_INCLUDE_DIR) 
+CMake Warning at build/_fetch/a6ffdce8d0a1/sdl3-src/cmake/sdlchecks.cmake:130 (message):
+  Unable to find the alsa development library
+Call Stack (most recent call first):
+  build/_fetch/a6ffdce8d0a1/sdl3-src/CMakeLists.txt:1829 (CheckALSA)
+
+
+-- Checking for module 'jack'
+--   Package 'jack', required by 'virtual:world', not found
+-- Checking for module 'libpipewire-0.3>=0.3.44'
+--   Package 'libpipewire-0.3', required by 'virtual:world', not found
+-- Checking for module 'libpulse>=0.9.15'
+--   Package 'libpulse', required by 'virtual:world', not found
+-- Checking for module 'sndio'
+--   Package 'sndio', required by 'virtual:world', not found
+-- dynamic libX11 -> libX11.so.6
+-- dynamic libXext -> libXext.so.6
+-- dynamic libXcursor -> libXcursor.so.1
+-- dynamic libXi -> libXi.so.6
+-- dynamic libXfixes -> libXfixes.so.3
+-- dynamic libXrandr -> libXrandr.so.2
+-- dynamic libXrender -> libXrender.so.1
+-- dynamic libXss -> libXss.so.1
+-- dynamic libXtst -> libXtst.so.6
+-- Checking for module 'fribidi'
+--   Package 'fribidi', required by 'virtual:world', not found
+-- Checking for module 'libthai'
+--   Package 'libthai', required by 'virtual:world', not found
+-- Checking for module 'libdrm'
+--   Package 'libdrm', required by 'virtual:world', not found
+-- Checking for module 'gbm'
+--   Package 'gbm', required by 'virtual:world', not found
+-- Checking for modules 'wayland-client>=1.18;wayland-egl;wayland-cursor;egl;xkbcommon>=0.5.0'
+--   Package 'wayland-client', required by 'virtual:world', not found
+--   Package 'wayland-egl', required by 'virtual:world', not found
+--   Package 'wayland-cursor', required by 'virtual:world', not found
+-- Checking for one of the modules 'dbus-1;dbus'
+-- Checking for one of the modules 'ibus-1.0;ibus'
+-- Checking for one of the modules 'liburing-ffi'
+-- Checking for module 'libusb-1.0>=1.0.16'
+--   Package 'libusb-1.0', required by 'virtual:world', not found
+-- Could NOT find LibUSB (missing: LibUSB_LIBRARY LibUSB_INCLUDE_PATH) (found version "LibUSB_VERSION-NOTFOUND")
+-- 
+-- SDL3 was configured with the following options:
+-- 
+-- Platform: Linux-6.18.44-fc-v139
+-- 64-bit:   TRUE
+-- Compiler: /usr/bin/gcc
+-- Revision: SDL-3.4.18-release-3.4.18
+-- Vendor:   
+-- 
+-- Subsystems:
+--   Audio:    ON
+--   Video:    ON
+--   GPU:      ON
+--   Render:   OFF
+--   Camera:   OFF
+--   Joystick: ON
+--   Haptic:   ON
+--   Hidapi:   ON
+--   Power:    ON
+--   Sensor:   ON
+--   Dialog:   OFF
+--   Tray:     ON
+-- 
+-- Options:
+--   SDL_ALSA                    (Wanted: ON): OFF
+--   SDL_ALSA_SHARED             (Wanted: ON): OFF
+--   SDL_ALTIVEC                 (Wanted: OFF): OFF
+--   SDL_ARMNEON                 (Wanted: OFF): OFF
+--   SDL_ASAN                    (Wanted: OFF): OFF
+--   SDL_ASSEMBLY                (Wanted: ON): ON
+--   SDL_ASSERTIONS              (Wanted: auto): auto
+--   SDL_AVX                     (Wanted: ON): ON
+--   SDL_AVX2                    (Wanted: ON): ON
+--   SDL_AVX512F                 (Wanted: ON): ON
+--   SDL_BACKGROUNDING_SIGNAL    (Wanted: OFF): OFF
+--   SDL_CCACHE                  (Wanted: OFF): OFF
+--   SDL_CLANG_TIDY              (Wanted: OFF): OFF
+--   SDL_CLOCK_GETTIME           (Wanted: ON): ON
+--   SDL_COCOA                   (Wanted: OFF): OFF
+--   SDL_DBUS                    (Wanted: ON): OFF
+--   SDL_DEPS_SHARED             (Wanted: ON): OFF
+--   SDL_DIRECTX                 (Wanted: OFF): OFF
+--   SDL_DISKAUDIO               (Wanted: ON): ON
+--   SDL_DLOPEN_NOTES            (Wanted: ON): ON
+--   SDL_DUMMYAUDIO              (Wanted: ON): ON
+--   SDL_DUMMYCAMERA             (Wanted: OFF): OFF
+--   SDL_DUMMYVIDEO              (Wanted: ON): ON
+--   SDL_EXAMPLES                (Wanted: OFF): OFF
+--   SDL_EXAMPLES_LINK_SHARED    (Wanted: OFF): OFF
+--   SDL_FOREGROUNDING_SIGNAL    (Wanted: OFF): OFF
+--   SDL_FRIBIDI                 (Wanted: ON): OFF
+--   SDL_FRIBIDI_SHARED          (Wanted: ON): OFF
+--   SDL_GCC_ATOMICS             (Wanted: ON): ON
+--   SDL_HIDAPI                  (Wanted: ON): ON
+--   SDL_HIDAPI_JOYSTICK         (Wanted: ON): ON
+--   SDL_HIDAPI_LIBUSB           (Wanted: ON): OFF
+--   SDL_HIDAPI_LIBUSB_SHARED    (Wanted: ON): OFF
+--   SDL_IBUS                    (Wanted: ON): OFF
+--   SDL_INSTALL                 (Wanted: OFF): OFF
+--   SDL_INSTALL_TESTS           (Wanted: OFF): OFF
+--   SDL_JACK                    (Wanted: ON): OFF
+--   SDL_JACK_SHARED             (Wanted: ON): OFF
+--   SDL_KMSDRM                  (Wanted: ON): OFF
+--   SDL_KMSDRM_SHARED           (Wanted: ON): OFF
+--   SDL_LASX                    (Wanted: OFF): OFF
+--   SDL_LIBC                    (Wanted: ON): ON
+--   SDL_LIBICONV                (Wanted: OFF): OFF
+--   SDL_LIBTHAI                 (Wanted: ON): OFF
+--   SDL_LIBTHAI_SHARED          (Wanted: ON): OFF
+--   SDL_LIBUDEV                 (Wanted: ON): OFF
+--   SDL_LIBURING                (Wanted: ON): OFF
+--   SDL_LSX                     (Wanted: OFF): OFF
+--   SDL_METAL                   (Wanted: OFF): OFF
+--   SDL_MMX                     (Wanted: ON): ON
+--   SDL_OFFSCREEN               (Wanted: ON): ON
+--   SDL_OPENGL                  (Wanted: ON): ON
+--   SDL_OPENGLES                (Wanted: ON): ON
+--   SDL_OPENVR                  (Wanted: OFF): OFF
+--   SDL_OSS                     (Wanted: OFF): OFF
+--   SDL_PIPEWIRE                (Wanted: ON): OFF
+--   SDL_PIPEWIRE_SHARED         (Wanted: ON): OFF
+--   SDL_PTHREADS                (Wanted: ON): ON
+--   SDL_PTHREADS_SEM            (Wanted: ON): ON
+--   SDL_PULSEAUDIO              (Wanted: ON): OFF
+--   SDL_PULSEAUDIO_SHARED       (Wanted: ON): OFF
+--   SDL_RENDER_D3D              (Wanted: OFF): OFF
+--   SDL_RENDER_D3D11            (Wanted: OFF): OFF
+--   SDL_RENDER_D3D12            (Wanted: OFF): OFF
+--   SDL_RENDER_GPU              (Wanted: OFF): OFF
+--   SDL_RENDER_METAL            (Wanted: OFF): OFF
+--   SDL_RENDER_VULKAN           (Wanted: OFF): OFF
+--   SDL_ROCKCHIP                (Wanted: OFF): OFF
+--   SDL_RPATH                   (Wanted: ON): OFF
+--   SDL_RPI                     (Wanted: OFF): OFF
+--   SDL_SNDIO                   (Wanted: ON): OFF
+--   SDL_SNDIO_SHARED            (Wanted: ON): OFF
+--   SDL_SSE                     (Wanted: ON): ON
+--   SDL_SSE2                    (Wanted: ON): ON
+--   SDL_SSE3                    (Wanted: ON): ON
+--   SDL_SSE4_1                  (Wanted: ON): ON
+--   SDL_SSE4_2                  (Wanted: ON): ON
+--   SDL_SYSTEM_ICONV            (Wanted: ON): ON
+--   SDL_TESTS                   (Wanted: OFF): OFF
+--   SDL_TESTS_LINK_SHARED       (Wanted: OFF): OFF
+--   SDL_UNINSTALL               (Wanted: OFF): OFF
+--   SDL_VIRTUAL_JOYSTICK        (Wanted: ON): ON
+--   SDL_VIVANTE                 (Wanted: OFF): OFF
+--   SDL_VULKAN                  (Wanted: ON): ON
+--   SDL_WASAPI                  (Wanted: OFF): OFF
+--   SDL_WAYLAND                 (Wanted: ON): OFF
+--   SDL_WAYLAND_LIBDECOR        (Wanted: ON): OFF
+--   SDL_WAYLAND_LIBDECOR_SHARED (Wanted: ON): OFF
+--   SDL_WAYLAND_SHARED          (Wanted: ON): OFF
+--   SDL_X11                     (Wanted: ON): ON
+--   SDL_X11_SHARED              (Wanted: ON): ON
+--   SDL_X11_XCURSOR             (Wanted: ON): ON
+--   SDL_X11_XDBE                (Wanted: ON): ON
+--   SDL_X11_XFIXES              (Wanted: ON): ON
+--   SDL_X11_XINPUT              (Wanted: ON): ON
+--   SDL_X11_XRANDR              (Wanted: ON): ON
+--   SDL_X11_XSCRNSAVER          (Wanted: ON): ON
+--   SDL_X11_XSHAPE              (Wanted: ON): ON
+--   SDL_X11_XSYNC               (Wanted: ON): ON
+--   SDL_X11_XTEST               (Wanted: ON): ON
+--   SDL_XINPUT                  (Wanted: OFF): OFF
+-- 
+--  Build Shared Library: OFF
+--  Build Static Library: ON
+-- 
+-- Enabled backends:
+--   Video drivers: dummy offscreen x11(dynamic)
+--   X11 libraries: xcursor xdbe xfixes xinput2 xrandr xscrnsaver xshape xsync xtest
+--   Render drivers: ogl ogl_es2
+--   GPU drivers: vulkan
+--   Audio drivers: disk dummy
+--   Joystick drivers: hidapi linux virtual
+--   Camera drivers: dummy
+-- 
+-- If something was not detected, although the libraries
+-- were installed, then make sure you have set the
+-- CMAKE_C_FLAGS and CMAKE_PREFIX_PATH CMake variables correctly.
+-- 
+-- CMake C compiler: GNU
+-- CMake C++ compiler: GNU
+-- CMake system name: Linux
+-- CMake host system processor: x86_64
+-- Box2D using Unix
+CMake Deprecation Warning at build/_fetch/a6ffdce8d0a1/libdatachannel-src/deps/plog/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.5 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+CMake Deprecation Warning at build/_fetch/a6ffdce8d0a1/libdatachannel-src/deps/usrsctp/CMakeLists.txt:33 (cmake_minimum_required):
+  Compatibility with CMake < 3.5 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+-- Compiler flags (CMAKE_C_FLAGS):  -std=c99 -pedantic -Wall -Wextra -Wfloat-equal -Wshadow -Wpointer-arith -Wunreachable-code -Winit-self -Wno-unused-function -Wno-unused-parameter -Wno-unreachable-code -Wstrict-prototypes
+-- MCE engine id: f92dd41cf92530a2 (90cc11e2-dirty RelWithDebInfo GNU-13.3.0 asan=OFF)
+-- Configuring done (3.4s)
+-- Generating done (0.4s)
+-- Build files have been written to: /home/user/dev_wt/build/linux-gcc-release
+[0/2] Re-checking globbed directories...
+[1/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/aabb.c.o
+[2/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/arena_allocator.c.o
+[3/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/array.c.o
+[4/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/bitset.c.o
+[5/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/body.c.o
+[6/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/broad_phase.c.o
+[7/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/constraint_graph.c.o
+[8/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/contact.c.o
+[9/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/contact_solver.c.o
+[10/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/core.c.o
+[11/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/distance.c.o
+[12/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/distance_joint.c.o
+[13/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/dynamic_tree.c.o
+[14/672] Building CXX object CMakeFiles/mce_imgui.dir/build/_fetch/a6ffdce8d0a1/imgui-src/imgui_tables.cpp.o
+[15/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/geometry.c.o
+[16/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/hull.c.o
+[17/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/id_pool.c.o
+[18/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/island.c.o
+[19/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/joint.c.o
+[20/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/math_functions.c.o
+[21/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/motor_joint.c.o
+[22/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/mouse_joint.c.o
+[23/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/mover.c.o
+[24/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/manifold.c.o
+[25/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/prismatic_joint.c.o
+[26/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/revolute_joint.c.o
+[27/672] Building CXX object CMakeFiles/mce_imgui.dir/build/_fetch/a6ffdce8d0a1/imgui-src/imgui_draw.cpp.o
+[28/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/sensor.c.o
+[29/672] Building CXX object CMakeFiles/mce_imgui.dir/build/_fetch/a6ffdce8d0a1/imgui-src/imgui_demo.cpp.o
+[30/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/solver_set.c.o
+[31/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/table.c.o
+[32/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/timer.c.o
+[33/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/types.c.o
+[34/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/weld_joint.c.o
+[35/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/wheel_joint.c.o
+[36/672] Building CXX object _deps/glslang-build/SPIRV/CMakeFiles/SPIRV.dir/__/glslang/stub.cpp.o
+[37/672] Linking CXX static library _deps/glslang-build/SPIRV/libSPIRV.a
+[38/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/solver.c.o
+[39/672] Building CXX object _deps/glslang-build/glslang/CMakeFiles/GenericCodeGen.dir/stub.cpp.o
+[40/672] Building CXX object _deps/glslang-build/glslang/CMakeFiles/MachineIndependent.dir/stub.cpp.o
+[41/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/shape.c.o
+[42/672] Linking CXX static library _deps/glslang-build/glslang/libGenericCodeGen.a
+[43/672] Building CXX object _deps/glslang-build/glslang/OSDependent/Unix/CMakeFiles/OSDependent.dir/__/__/stub.cpp.o
+[44/672] Linking CXX static library _deps/glslang-build/glslang/libMachineIndependent.a
+[45/672] Linking CXX static library _deps/glslang-build/glslang/OSDependent/Unix/libOSDependent.a
+[46/672] Building C object _deps/box2d-build/src/CMakeFiles/box2d.dir/world.c.o
+[47/672] Linking C static library _deps/box2d-build/src/libbox2d.a
+[48/672] Building CXX object src/engine/kit_novel/CMakeFiles/mce_kit_novel_ui.dir/src/dialogue_box.cpp.o
+[49/672] Linking CXX static library src/engine/kit_novel/libmce_kit_novel_ui.a
+[50/672] Building CXX object CMakeFiles/mce_imgui.dir/build/_fetch/a6ffdce8d0a1/imgui-src/imgui_widgets.cpp.o
+[51/672] Building CXX object src/engine/net/relay/CMakeFiles/mce_relay.dir/main.cpp.o
+[52/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/asset_browser.cpp.o
+[53/672] Linking CXX executable src/engine/net/relay/mce_relay
+[54/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/animgraph_editor.cpp.o
+[55/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/bt_editor.cpp.o
+[56/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/console_model.cpp.o
+[57/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/hot_reload.cpp.o
+[58/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/editor_scene.cpp.o
+[59/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/gizmo.cpp.o
+[60/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/inspector.cpp.o
+[61/672] Building CXX object CMakeFiles/mce_imgui.dir/build/_fetch/a6ffdce8d0a1/imgui-src/imgui.cpp.o
+[62/672] Linking CXX static library libmce_imgui.a
+[63/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/engine_components.cpp.o
+[64/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/perf_file.cpp.o
+[65/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/perf_compare.cpp.o
+[66/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/perf_monitor.cpp.o
+[67/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/orbit_camera.cpp.o
+[68/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/editor_session.cpp.o
+[69/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/scene_document.cpp.o
+[70/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/stub_world.cpp.o
+[71/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/project_settings.cpp.o
+[72/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/project.cpp.o
+[73/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/play_session.cpp.o
+[74/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/preview_renderer.cpp.o
+[75/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/timeline_editor.cpp.o
+[76/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/skeleton2d_editor.cpp.o
+[77/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/viewport2d.cpp.o
+[78/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/terrain_editor.cpp.o
+[79/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/draw_clip.cpp.o
+[80/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/tilemap_editor.cpp.o
+[81/672] Building CXX object src/editor/core/CMakeFiles/mce_editor_core.dir/src/ui_document_editor.cpp.o
+[82/672] Linking CXX static library src/editor/core/libmce_editor_core.a
+[83/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/imgui_platform.cpp.o
+[84/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/asset_panel.cpp.o
+[85/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/bt_panel.cpp.o
+[86/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/animation_panel.cpp.o
+[87/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/imgui_renderer.cpp.o
+[88/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/imgui_draw_ctx.cpp.o
+[89/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/editor_shell.cpp.o
+[90/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/profiler_panel.cpp.o
+[91/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/project_settings_panel.cpp.o
+[92/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/panels.cpp.o
+[93/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/play_panel.cpp.o
+[94/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/scene_panels.cpp.o
+[95/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/skeleton_panel.cpp.o
+[96/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/terrain_panel.cpp.o
+[97/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/tilemap_panel.cpp.o
+[98/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/ui_panel.cpp.o
+[99/672] Building CXX object src/editor/app/CMakeFiles/mce_editor.dir/main.cpp.o
+[100/672] Building CXX object src/editor/layer/CMakeFiles/mce_editor_layer.dir/src/timeline_panel.cpp.o
+[101/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/agent_image.cpp.o
+[102/672] Linking CXX static library src/editor/layer/libmce_editor_layer.a
+[103/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/json_writer.cpp.o
+[104/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/agent_gen.cpp.o
+[105/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/prefab_tools.cpp.o
+[106/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/project_tools.cpp.o
+[107/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/agent_sim.cpp.o
+[108/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/server.cpp.o
+[109/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/asset_tools.cpp.o
+[110/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/headless_run.cpp.o
+[111/672] Linking CXX executable src/editor/app/mce_editor
+[112/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_agent.cpp.o
+[113/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_terrain.cpp.o
+[114/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_perf.cpp.o
+[115/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools.cpp.o
+[116/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_ui.cpp.o
+[117/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_check.cpp.o
+[118/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_team.cpp.o
+[119/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_friction.cpp.o
+[120/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_timeline.cpp.o
+[121/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_bt.cpp.o
+[122/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_code.cpp.o
+[123/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_skeleton2d.cpp.o
+[124/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_script.cpp.o
+[125/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_docs.cpp.o
+[126/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/values.cpp.o
+[127/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_content.cpp.o
+[128/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_render.cpp.o
+[129/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp.dir/app/main.cpp.o
+[130/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp_core.dir/src/tools_test.cpp.o
+[131/672] Linking CXX static library src/editor/mcp/libmce_mcp_core.a
+[132/672] Building CXX object samples/01_triangle/CMakeFiles/01_triangle.dir/main.cpp.o
+[133/672] Building CXX object samples/sprites_2d/CMakeFiles/sprites_2d.dir/main.cpp.o
+[134/672] Linking CXX executable samples/01_triangle/01_triangle
+[135/672] Building CXX object samples/03_platformer/CMakeFiles/test_ember_step.dir/tests/test_ember_step.cpp.o
+[136/672] Linking CXX executable samples/sprites_2d/sprites_2d
+[137/672] Building CXX object samples/05_ashen_court/CMakeFiles/test_ashen_court.dir/game/court.cpp.o
+[138/672] Cooking sample_06_showcase content
+mce_cook: 10 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 00d8610ca6e5e174; pack e6b69cba57e80f66
+[139/672] Cooking scene_demo content
+mce_cook: 5 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 0c1dc1a8f96a475d; pack 4de6e87ffbec0f7e
+[140/672] Cooking 07_gameplay3d content
+mce_cook: 9 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest e61d8b3ea33cfde4; pack d43ac72524730955
+[141/672] Building CXX object samples/ui_gallery/CMakeFiles/ui_gallery.dir/main.cpp.o
+[142/672] Building CXX object src/editor/mcp/CMakeFiles/mce_mcp.dir/app/engine_components.cpp.o
+[143/672] Cooking kit3d_tour content
+mce_cook: 6 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 26cd1644fc35f56f; pack e5025f17e8302b1a
+[144/672] Cooking kit2d_tour content
+mce_cook: 5 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 9f55068dcbe11f33; pack 429892c117766bb4
+[145/672] Building CXX object samples/05_ashen_court/CMakeFiles/test_ashen_court.dir/tests/test_ashen_court.cpp.o
+[146/672] Building CXX object samples/03_platformer/CMakeFiles/test_ember_step.dir/game/platformer.cpp.o
+[147/672] Linking CXX executable samples/ui_gallery/ui_gallery
+[148/672] Cooking stream_demo content
+mce_cook: 6 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 5d9e4d734b2f490e; pack 68a196940bb4bac1
+[149/672] Cooking cinema_demo content
+mce_cook: 13 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 818a241dbc0ebd9b; pack 836161c9f1355323
+[150/672] Cooking extras_2d content
+mce_cook: 9 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest f163bb515af35c41; pack 653a0b724a7a6517
+[151/672] Cooking audio_rooms content
+mce_cook: 10 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 39a976ed272c4290; pack 86eaa9157edb88c3
+[152/672] Cooking skel2d_demo content
+mce_cook: 5 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest dbcb3c55796ab155; pack 2539012fec54cdde
+[153/672] mce story compile: systems_tour
+story compile: 1 files, 10 statements, 2 pages, 1 choices, 19 words -> /home/user/dev_wt/build/linux-gcc-release/samples/systems_tour/generated/systems_tour_story.h (updated); unreachable labels: 3; endings missing: none
+[154/672] Cooking steam_demo content
+mce_cook: 2 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 2de5c292e06d1e33; pack a846e1544f104fed
+[155/672] Cooking ai_demo content
+mce_cook: 8 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 1b43abba710ad0ae; pack 4b1dbc23329e86c0
+[156/672] Linking CXX executable src/editor/mcp/mce_mcp
+[157/672] Building CXX object samples/06_showcase/CMakeFiles/sample_06_showcase.dir/main.cpp.o
+[158/672] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_editor.dir/__/__/src/editor/app/main.cpp.o
+[159/672] Linking CXX executable samples/06_showcase/sample_06_showcase
+[160/672] Building CXX object samples/systems_tour/CMakeFiles/sample_systems_tour.dir/main.cpp.o
+[161/672] Building CXX object samples/ui_screens/CMakeFiles/ui_screens_game.dir/game/ui_screens_game.cpp.o
+[162/672] Linking CXX executable samples/systems_tour/sample_systems_tour
+[163/672] Linking CXX shared module samples/ui_screens/libui_screens_game.so
+[164/672] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_mcp.dir/games/glowmoth/module/types.cpp.o
+[165/672] Cooking ui_screens content
+mce_cook: 6 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest c57d7f337406c504; pack 3c3d6c2629f90b50
+[166/672] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_mcp.dir/__/__/src/editor/mcp/app/main.cpp.o
+[167/672] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_mcp.dir/__/__/src/editor/mcp/app/engine_components.cpp.o
+[168/672] Building CXX object projects/Kindle/CMakeFiles/kindle_cook.dir/__/__/tools/cook/main.cpp.o
+[169/672] Building CXX object projects/Kindle/CMakeFiles/kindle_cook.dir/games/kindle/module/types.cpp.o
+[170/672] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_editor.dir/glowmoth_editor_game.cpp.o
+[171/672] Building CXX object projects/Kindle/CMakeFiles/kindle_cook.dir/__/__/tools/cook/engine_components.cpp.o
+[172/672] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_editor.dir/games/glowmoth/module/glowmoth.cpp.o
+[173/672] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_mcp.dir/glowmoth_mcp_game.cpp.o
+[174/672] Linking CXX executable projects/Kindle/kindle_cook
+[175/672] Building CXX object projects/Kindle/CMakeFiles/kindle_editor.dir/__/__/src/editor/app/main.cpp.o
+[176/672] Building CXX object projects/Kindle/CMakeFiles/kindle_game.dir/games/kindle/module/module.cpp.o
+[177/672] Cooking kindle content
+mce_cook: 28 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest e806d7f498684a5e; pack 138286ce149e7444
+[178/672] Building CXX object projects/Glowmoth/CMakeFiles/glowmoth_mcp.dir/games/glowmoth/module/glowmoth.cpp.o
+[179/672] Building CXX object projects/Kindle/CMakeFiles/kindle.dir/games/kindle/host/main.cpp.o
+[180/672] Linking CXX executable projects/Glowmoth/glowmoth_editor
+[181/672] Building CXX object projects/Kindle/CMakeFiles/kindle_game.dir/games/kindle/module/kindle.cpp.o
+[182/672] Linking CXX shared module projects/Kindle/libkindle.so
+[183/672] Linking CXX executable projects/Kindle/kindle
+[184/672] Linking CXX executable projects/Glowmoth/glowmoth_mcp
+[185/672] Building CXX object projects/Kindle/CMakeFiles/kindle_editor.dir/kindle_editor_game.cpp.o
+[186/672] Building CXX object projects/Kindle/CMakeFiles/kindle_mcp.dir/games/kindle/module/types.cpp.o
+[187/672] Building CXX object projects/Kindle/CMakeFiles/kindle_mcp.dir/__/__/src/editor/mcp/app/main.cpp.o
+[188/672] Building CXX object projects/Kindle/CMakeFiles/kindle_level.dir/tests/test_kindle.cpp.o
+[189/672] Building CXX object projects/Kindle/CMakeFiles/kindle_mcp.dir/__/__/src/editor/mcp/app/engine_components.cpp.o
+[190/672] Building CXX object projects/Kindle/CMakeFiles/kindle_editor.dir/games/kindle/module/kindle.cpp.o
+[191/672] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_editor.dir/__/__/src/editor/app/main.cpp.o
+[192/672] Building CXX object projects/Kindle/CMakeFiles/kindle_level.dir/games/kindle/module/kindle.cpp.o
+[193/672] Building CXX object projects/Kindle/CMakeFiles/kindle_mcp.dir/kindle_mcp_game.cpp.o
+[194/672] Linking CXX executable projects/Kindle/kindle_editor
+[195/672] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_mcp.dir/games/marble_garden/module/types.cpp.o
+[196/672] Building CXX object projects/Kindle/CMakeFiles/kindle_mcp.dir/games/kindle/module/kindle.cpp.o
+[197/672] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_mcp.dir/__/__/src/editor/mcp/app/main.cpp.o
+[198/672] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_mcp.dir/__/__/src/editor/mcp/app/engine_components.cpp.o
+[199/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_cook.dir/__/__/tools/cook/main.cpp.o
+[200/672] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_editor.dir/marble_garden_editor_game.cpp.o
+[201/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_cook.dir/games/prism_break/module/types.cpp.o
+[202/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_cook.dir/__/__/tools/cook/engine_components.cpp.o
+[203/672] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_editor.dir/games/marble_garden/module/marble_garden.cpp.o
+[204/672] Linking CXX executable projects/Kindle/kindle_mcp
+[205/672] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_mcp.dir/marble_garden_mcp_game.cpp.o
+[206/672] Linking CXX executable projects/PrismBreak/prism_break_cook
+[207/672] Linking CXX executable projects/MarbleGarden/marble_garden_editor
+[208/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_editor.dir/__/__/src/editor/app/main.cpp.o
+[209/672] Cooking prism_break content
+mce_cook: 12 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 0a211359978015cb; pack e0d49315f0940562
+[210/672] Building CXX object projects/MarbleGarden/CMakeFiles/marble_garden_mcp.dir/games/marble_garden/module/marble_garden.cpp.o
+[211/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break.dir/games/prism_break/host/main.cpp.o
+[212/672] Building CXX object projects/Room3D/CMakeFiles/room3d_cook.dir/__/__/tools/cook/main.cpp.o
+[213/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_game.dir/games/prism_break/module/module.cpp.o
+[214/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_game.dir/games/prism_break/module/prism_break.cpp.o
+[215/672] Linking CXX shared module projects/PrismBreak/libprism_break.so
+[216/672] Building CXX object projects/Room3D/CMakeFiles/room3d_cook.dir/__/__/tools/cook/engine_components.cpp.o
+[217/672] Linking CXX executable projects/PrismBreak/prism_break
+[218/672] Building CXX object projects/Room3D/CMakeFiles/room3d_cook.dir/games/room3d/module/types.cpp.o
+[219/672] Linking CXX executable projects/MarbleGarden/marble_garden_mcp
+[220/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_mcp.dir/games/prism_break/module/types.cpp.o
+[221/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_mcp.dir/__/__/src/editor/mcp/app/engine_components.cpp.o
+[222/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_editor.dir/prism_break_editor_game.cpp.o
+[223/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_editor.dir/games/prism_break/module/prism_break.cpp.o
+[224/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_mcp.dir/__/__/src/editor/mcp/app/main.cpp.o
+[225/672] Linking CXX executable projects/Room3D/room3d_cook
+[226/672] Building CXX object projects/Room3D/CMakeFiles/room3d_game.dir/games/room3d/module/room3d.cpp.o
+[227/672] Building CXX object projects/Room3D/CMakeFiles/room3d_editor.dir/__/__/src/editor/app/main.cpp.o
+[228/672] Linking CXX executable projects/PrismBreak/prism_break_editor
+[229/672] Cooking room3d content
+mce_cook: 13 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 15f5babd45d30b06; pack 974baa63dbd5621f
+[230/672] Building CXX object projects/Room3D/CMakeFiles/room3d.dir/games/room3d/host/main.cpp.o
+[231/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_mcp.dir/prism_break_mcp_game.cpp.o
+[232/672] Building CXX object projects/PrismBreak/CMakeFiles/prism_break_mcp.dir/games/prism_break/module/prism_break.cpp.o
+[233/672] Building CXX object projects/Room3D/CMakeFiles/room3d_game.dir/games/room3d/module/module.cpp.o
+[234/672] Linking CXX shared module projects/Room3D/libroom3d.so
+[235/672] Linking CXX executable projects/Room3D/room3d
+[236/672] Linking CXX executable projects/PrismBreak/prism_break_mcp
+[237/672] Building CXX object projects/Room3D/CMakeFiles/room3d_mcp.dir/__/__/src/editor/mcp/app/main.cpp.o
+[238/672] Building CXX object projects/Room3D/CMakeFiles/room3d_editor.dir/room3d_editor_game.cpp.o
+[239/672] Building CXX object projects/Room3D/CMakeFiles/room3d_editor.dir/games/room3d/module/room3d.cpp.o
+[240/672] Building CXX object projects/Room3D/CMakeFiles/room3d_mcp.dir/games/room3d/module/types.cpp.o
+[241/672] Building CXX object projects/Room3D/CMakeFiles/room3d_mcp.dir/games/room3d/module/room3d.cpp.o
+[242/672] Building CXX object projects/Room3D/CMakeFiles/room3d_play.dir/games/room3d/module/room3d.cpp.o
+[243/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_cook.dir/__/__/tools/cook/main.cpp.o
+[244/672] Building CXX object projects/Room3D/CMakeFiles/room3d_mcp.dir/__/__/src/editor/mcp/app/engine_components.cpp.o
+[245/672] Building CXX object projects/Room3D/CMakeFiles/room3d_play.dir/tests/test_room3d.cpp.o
+[246/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_cook.dir/games/solstice_reach/module/types.cpp.o
+[247/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_cook.dir/__/__/tools/cook/engine_components.cpp.o
+[248/672] Linking CXX executable projects/Room3D/room3d_editor
+[249/672] Building CXX object projects/Room3D/CMakeFiles/room3d_mcp.dir/room3d_mcp_game.cpp.o
+[250/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_editor.dir/__/__/src/editor/app/main.cpp.o
+[251/672] Linking CXX executable projects/SolsticeReach/solstice_reach_cook
+[252/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_game.dir/games/solstice_reach/module/module.cpp.o
+[253/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_game.dir/games/solstice_reach/module/present.cpp.o
+[254/672] Linking CXX executable projects/Room3D/room3d_mcp
+[255/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_cook.dir/__/__/tools/cook/main.cpp.o
+[256/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_game.dir/games/solstice_reach/module/solstice_reach.cpp.o
+[257/672] Linking CXX shared module projects/SolsticeReach/libsolstice_reach.so
+[258/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_cook.dir/games/undelivered/module/types.cpp.o
+[259/672] Cooking solstice_reach content
+mce_cook: 65 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest e67af57764e4a6f2; pack 0144b69f739c17a6
+[260/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach.dir/games/solstice_reach/host/main.cpp.o
+[261/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_cook.dir/__/__/tools/cook/engine_components.cpp.o
+[262/672] Linking CXX executable projects/SolsticeReach/solstice_reach
+[263/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_editor.dir/games/solstice_reach/module/solstice_reach.cpp.o
+[264/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_editor.dir/solstice_reach_editor_game.cpp.o
+[265/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_mcp.dir/games/solstice_reach/module/types.cpp.o
+[266/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_editor.dir/games/solstice_reach/module/present.cpp.o
+[267/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_mcp.dir/__/__/src/editor/mcp/app/engine_components.cpp.o
+[268/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_mcp.dir/__/__/src/editor/mcp/app/main.cpp.o
+[269/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_mcp.dir/games/solstice_reach/module/solstice_reach.cpp.o
+[270/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_mcp.dir/games/solstice_reach/module/present.cpp.o
+[271/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_run.dir/games/solstice_reach/module/solstice_reach.cpp.o
+[272/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_game.dir/games/undelivered/module/undelivered.cpp.o
+[273/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_run.dir/games/solstice_reach/module/present.cpp.o
+[274/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_run.dir/tests/test_solstice_reach.cpp.o
+[275/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_editor.dir/__/__/src/editor/app/main.cpp.o
+[276/672] Linking CXX executable projects/SolsticeReach/solstice_reach_editor
+[277/672] Building CXX object projects/Undertow/CMakeFiles/undertow_cook.dir/__/__/tools/cook/main.cpp.o
+[278/672] Building CXX object projects/SolsticeReach/CMakeFiles/solstice_reach_mcp.dir/solstice_reach_mcp_game.cpp.o
+[279/672] Linking CXX executable projects/Undelivered/undelivered_cook
+[280/672] Building CXX object projects/Undertow/CMakeFiles/undertow_cook.dir/__/__/tools/cook/engine_components.cpp.o
+[281/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_game.dir/games/undelivered/module/module.cpp.o
+[282/672] Building CXX object projects/Undertow/CMakeFiles/undertow_cook.dir/games/undertow/module/types.cpp.o
+[283/672] Linking CXX shared module projects/Undelivered/libundelivered.so
+[284/672] Linking CXX executable projects/SolsticeReach/solstice_reach_mcp
+[285/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_editor.dir/undelivered_editor_game.cpp.o
+[286/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_editor.dir/games/undelivered/module/undelivered.cpp.o
+[287/672] Building CXX object projects/Undertow/CMakeFiles/undertow_editor.dir/__/__/src/editor/app/main.cpp.o
+[288/672] Linking CXX executable projects/Undertow/undertow_cook
+[289/672] Building CXX object projects/Undertow/CMakeFiles/undertow_game.dir/games/undertow/module/module.cpp.o
+[290/672] Linking CXX executable projects/Undelivered/undelivered_editor
+[291/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_cook.dir/__/__/__/__/tools/cook/main.cpp.o
+[292/672] Cooking undertow content
+mce_cook: 56 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest d7dc4329bba1c99f; pack d7e53491a06acd71
+[293/672] Building CXX object projects/Undertow/CMakeFiles/undertow.dir/games/undertow/host/main.cpp.o
+[294/672] Building CXX object projects/Undertow/CMakeFiles/undertow_editor.dir/undertow_editor_game.cpp.o
+[295/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_cook.dir/__/__/__/__/tools/cook/engine_components.cpp.o
+[296/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_cook.dir/games/template_probe/module/types.cpp.o
+[297/672] Building CXX object projects/Undertow/CMakeFiles/undertow_game.dir/games/undertow/module/undertow.cpp.o
+[298/672] Linking CXX shared module projects/Undertow/libundertow.so
+[299/672] Linking CXX executable projects/Undertow/undertow
+[300/672] Linking CXX executable templateprobe_build/template_probe_cook
+[301/672] Building CXX object projects/Undertow/CMakeFiles/undertow_editor.dir/games/undertow/module/undertow.cpp.o
+[302/672] Building CXX object projects/Undertow/CMakeFiles/undertow_mcp.dir/__/__/src/editor/mcp/app/main.cpp.o
+[303/672] Building CXX object projects/Undertow/CMakeFiles/undertow_mcp.dir/games/undertow/module/types.cpp.o
+[304/672] Building CXX object projects/Undertow/CMakeFiles/undertow_mcp.dir/games/undertow/module/undertow.cpp.o
+[305/672] Building CXX object projects/Undertow/CMakeFiles/undertow_mcp.dir/__/__/src/editor/mcp/app/engine_components.cpp.o
+[306/672] Building CXX object projects/Undertow/CMakeFiles/undertow_level.dir/tests/test_undertow.cpp.o
+[307/672] Linking CXX executable projects/Undertow/undertow_editor
+[308/672] Building CXX object projects/Undertow/CMakeFiles/undertow_level.dir/games/undertow/module/undertow.cpp.o
+[309/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_editor.dir/__/__/__/__/src/editor/app/main.cpp.o
+[310/672] Building CXX object projects/Undertow/CMakeFiles/undertow_mcp.dir/undertow_mcp_game.cpp.o
+[311/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_game.dir/games/template_probe/module/template_probe.cpp.o
+[312/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_game.dir/games/template_probe/module/module.cpp.o
+[313/672] Linking CXX shared module templateprobe_build/libtemplate_probe.so
+[314/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_cook.dir/__/__/__/__/tools/cook/main.cpp.o
+[315/672] Cooking template_probe content
+mce_cook: 20 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest f83bdcbd05974bd7; pack 4c1d2e48dd3ba61d
+[316/672] Building CXX object templateprobe_build/CMakeFiles/template_probe.dir/games/template_probe/host/main.cpp.o
+[317/672] Linking CXX executable templateprobe_build/template_probe
+[318/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_editor.dir/games/template_probe/module/template_probe.cpp.o
+[319/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_cook.dir/__/__/__/__/tools/cook/engine_components.cpp.o
+[320/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_mcp.dir/games/template_probe/module/types.cpp.o
+[321/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_editor.dir/template_probe_editor_game.cpp.o
+[322/672] Linking CXX executable projects/Undertow/undertow_mcp
+[323/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_mcp.dir/games/template_probe/module/template_probe.cpp.o
+[324/672] Cooking undelivered content
+mce_cook: 141 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest 0c79eca3365fff0d; pack fa481513937d2421
+[325/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered.dir/games/undelivered/host/main.cpp.o
+[326/672] Linking CXX executable projects/Undelivered/undelivered
+[327/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_cook.dir/games/novel_probe/module/types.cpp.o
+[328/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_mcp.dir/__/__/__/__/src/editor/mcp/app/main.cpp.o
+[329/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_mcp.dir/__/__/__/__/src/editor/mcp/app/engine_components.cpp.o
+[330/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_mcp.dir/games/undelivered/module/types.cpp.o
+[331/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_mcp.dir/games/undelivered/module/undelivered.cpp.o
+[332/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_mcp.dir/__/__/src/editor/mcp/app/engine_components.cpp.o
+[333/672] Linking CXX executable templateprobe_build/template_probe_editor
+[334/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_run.dir/games/undelivered/module/undelivered.cpp.o
+[335/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_mcp.dir/__/__/src/editor/mcp/app/main.cpp.o
+[336/672] mce story compile: novel_probe
+story compile: 1 files, 11 statements, 3 pages, 1 choices, 36 words -> /home/user/dev_wt/build/linux-gcc-release/template_probe/NovelProbe/games/novel_probe/module/story_data.h (unchanged); unreachable labels: 0; endings missing: none
+[337/672] Building CXX object templateprobe_build/CMakeFiles/template_probe_mcp.dir/template_probe_mcp_game.cpp.o
+[338/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_mcp.dir/undelivered_mcp_game.cpp.o
+[339/672] Linking CXX executable novelprobe_build/novel_probe_cook
+[340/672] Linking CXX executable templateprobe_build/template_probe_mcp
+[341/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_editor.dir/__/__/__/__/src/editor/app/main.cpp.o
+[342/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_game.dir/games/novel_probe/module/novel_probe.cpp.o
+[343/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_run.dir/tests/test_undelivered.cpp.o
+[344/672] Linking CXX executable projects/Undelivered/undelivered_mcp
+[345/672] Cooking script_probe content
+mce_cook: 3 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest d0967f10315beec4; pack dbc86c1a85b8c698
+[346/672] Building CXX object scriptprobe_build/CMakeFiles/script_probe.dir/script_probe_script_host.cpp.o
+[347/672] Linking CXX executable scriptprobe_build/script_probe
+[348/672] Cooking novel_probe content
+mce_cook: 20 cooked, 0 up to date, 0 failed; 0 error(s), 0 warning(s); manifest d9a1a24d6136c7ad; pack d176aa7f5847fa52
+[349/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe.dir/games/novel_probe/host/main.cpp.o
+[350/672] Building CXX object projects/Undelivered/CMakeFiles/undelivered_run.dir/__/__/tests/test_main.cpp.o
+[351/672] Linking CXX executable projects/Undelivered/undelivered_run
+[352/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_game.dir/games/novel_probe/module/module.cpp.o
+[353/672] Building CXX object tests/core/CMakeFiles/test_core.dir/test_app.cpp.o
+[354/672] Linking CXX shared module novelprobe_build/libnovel_probe.so
+[355/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_editor.dir/novel_probe_editor_game.cpp.o
+[356/672] Linking CXX executable novelprobe_build/novel_probe
+[357/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_editor.dir/games/novel_probe/module/novel_probe.cpp.o
+[358/672] Building CXX object tests/core/CMakeFiles/test_core.dir/test_containers.cpp.o
+[359/672] Building CXX object tests/core/CMakeFiles/test_core.dir/test_convar.cpp.o
+[360/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_mcp.dir/games/novel_probe/module/types.cpp.o
+[361/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_mcp.dir/games/novel_probe/module/novel_probe.cpp.o
+[362/672] Building CXX object tests/core/CMakeFiles/test_core.dir/test_crash.cpp.o
+[363/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_mcp.dir/__/__/__/__/src/editor/mcp/app/engine_components.cpp.o
+[364/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_mcp.dir/__/__/__/__/src/editor/mcp/app/main.cpp.o
+[365/672] Building CXX object tests/core/CMakeFiles/test_core.dir/test_hash.cpp.o
+[366/672] Building CXX object tests/core/CMakeFiles/test_core.dir/test_math.cpp.o
+[367/672] Building CXX object tests/core/CMakeFiles/test_core.dir/test_memory.cpp.o
+[368/672] Linking CXX executable novelprobe_build/novel_probe_editor
+[369/672] Building CXX object tests/core/CMakeFiles/test_core.dir/test_state_stack.cpp.o
+[370/672] Building CXX object tests/core/CMakeFiles/test_core.dir/test_result.cpp.o
+[371/672] Building CXX object tests/core/CMakeFiles/test_core.dir/test_perf_capture.cpp.o
+[372/672] Building CXX object tests/CMakeFiles/mce_doctest_main.dir/test_main.cpp.o
+[373/672] Linking CXX static library tests/libmce_doctest_main.a
+[374/672] Linking CXX executable samples/03_platformer/test_ember_step
+[375/672] Building CXX object tests/refl/CMakeFiles/test_refl.dir/test_second_tu.cpp.o
+[376/672] Building CXX object tests/refl/CMakeFiles/test_refl.dir/test_property_path.cpp.o
+[377/672] Linking CXX executable samples/05_ashen_court/test_ashen_court
+[378/672] Linking CXX executable projects/Kindle/kindle_level
+[379/672] Building CXX object tests/refl/CMakeFiles/test_refl.dir/test_registry.cpp.o
+[380/672] Building CXX object novelprobe_build/CMakeFiles/novel_probe_mcp.dir/novel_probe_mcp_game.cpp.o
+[381/672] Linking CXX executable projects/SolsticeReach/solstice_reach_run
+[382/672] Linking CXX executable tests/core/test_core
+[383/672] Linking CXX executable projects/Room3D/room3d_play
+[384/672] Linking CXX executable tests/refl/test_refl
+[385/672] Linking CXX executable projects/Undertow/undertow_level
+[386/672] Building CXX object tests/asset/CMakeFiles/test_asset.dir/test_guid_formats.cpp.o
+[387/672] Building CXX object tests/core/CMakeFiles/test_math_oracle.dir/test_math_oracle.cpp.o
+[388/672] Building CXX object tests/asset/CMakeFiles/test_asset.dir/test_container.cpp.o
+[389/672] Linking CXX executable tests/core/test_math_oracle
+[390/672] Linking CXX executable novelprobe_build/novel_probe_mcp
+[391/672] Building CXX object tests/asset/CMakeFiles/test_asset.dir/test_asset_system.cpp.o
+[392/672] Building CXX object tests/asset/CMakeFiles/test_asset.dir/test_mods.cpp.o
+[393/672] Linking CXX executable tests/asset/test_asset
+[394/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_json_audio.cpp.o
+[395/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_lod.cpp.o
+[396/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_input.cpp.o
+[397/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_mod.cpp.o
+[398/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_shader.cpp.o
+[399/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_gltf.cpp.o
+[400/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_store.cpp.o
+[401/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_config.cpp.o
+[402/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_video.cpp.o
+[403/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_terrain.cpp.o
+[404/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_services.cpp.o
+[405/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/__/test_main.cpp.o
+[406/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_vorbis.cpp.o
+[407/672] Building CXX object tests/asset/CMakeFiles/test_shader_gl.dir/__/test_main.cpp.o
+[408/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_sound.cpp.o
+[409/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_project.cpp.o
+[410/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_strings.cpp.o
+[411/672] Building CXX object tests/ecs/CMakeFiles/test_ecs.dir/test_commands.cpp.o
+[412/672] Building CXX object tests/ecs/CMakeFiles/test_ecs.dir/test_world.cpp.o
+[413/672] Building CXX object tests/ecs/CMakeFiles/test_ecs.dir/test_events.cpp.o
+[414/672] Building CXX object tests/asset/CMakeFiles/test_shader_gl.dir/test_shader_gl.cpp.o
+[415/672] Building CXX object tests/ecs/CMakeFiles/test_ecs.dir/test_determinism.cpp.o
+[416/672] Building CXX object tests/asset/CMakeFiles/test_cook.dir/test_cook_ui.cpp.o
+[417/672] Building CXX object tests/ecs/CMakeFiles/test_ecs.dir/test_change_detection.cpp.o
+[418/672] Building CXX object tests/ecs/CMakeFiles/test_ecs_scene.dir/__/test_main.cpp.o
+[419/672] Building CXX object tests/ecs/CMakeFiles/test_ecs.dir/test_hierarchy.cpp.o
+[420/672] Linking CXX executable tests/ecs/test_ecs
+[421/672] Building CXX object tests/ecs/CMakeFiles/test_ecs_scene.dir/test_save.cpp.o
+[422/672] Linking CXX executable tests/asset/test_shader_gl
+[423/672] Building CXX object tests/physics2d/CMakeFiles/test_physics2d.dir/test_collision.cpp.o
+[424/672] Linking CXX executable tests/asset/test_cook
+[425/672] Building CXX object tests/ecs/CMakeFiles/test_ecs_scene.dir/test_prefab.cpp.o
+[426/672] Building CXX object tests/physics2d/CMakeFiles/test_physics2d.dir/test_manifold_cases.cpp.o
+[427/672] Building CXX object tests/physics2d/CMakeFiles/test_physics2d.dir/test_solver.cpp.o
+[428/672] Building CXX object tests/physics2d/CMakeFiles/test_physics2d.dir/test_controller.cpp.o
+[429/672] Building CXX object tests/physics2d/CMakeFiles/test_physics2d.dir/test_module.cpp.o
+[430/672] Building CXX object tests/physics2d/CMakeFiles/test_physics2d.dir/test_world.cpp.o
+[431/672] Building CXX object tests/physics2d/CMakeFiles/test_physics2d.dir/oracle/test_box2d_oracle.cpp.o
+[432/672] Building CXX object tests/physics3d/CMakeFiles/test_physics3d.dir/test_world3d.cpp.o
+[433/672] Building CXX object tests/physics3d/CMakeFiles/test_physics3d.dir/test_queries.cpp.o
+[434/672] Building CXX object tests/physics2d/CMakeFiles/test_physics2d.dir/test_joints_sleep.cpp.o
+[435/672] Linking CXX executable tests/ecs/test_ecs_scene
+[436/672] Linking CXX executable tests/physics2d/test_physics2d
+[437/672] Building CXX object tests/physics3d/CMakeFiles/test_physics3d.dir/test_character.cpp.o
+[438/672] Building CXX object tests/physics3d/CMakeFiles/test_physics3d.dir/test_budget.cpp.o
+[439/672] Building CXX object tests/physics3d/CMakeFiles/test_physics3d.dir/test_mirror.cpp.o
+[440/672] Building CXX object tests/physics3d/CMakeFiles/test_physics3d.dir/test_navmesh.cpp.o
+[441/672] Building CXX object tests/physics3d/CMakeFiles/test_physics3d.dir/test_joints.cpp.o
+[442/672] Building CXX object tests/physics3d/CMakeFiles/test_physics3d.dir/test_ragdolls.cpp.o
+[443/672] Building CXX object tests/physics3d/CMakeFiles/test_physics3d.dir/test_vehicles.cpp.o
+[444/672] Building CXX object tests/platform/CMakeFiles/test_platform.dir/test_power.cpp.o
+[445/672] Building CXX object tests/platform/CMakeFiles/test_platform.dir/test_platform.cpp.o
+[446/672] Building CXX object tests/platform/CMakeFiles/test_platform.dir/test_review.cpp.o
+[447/672] Linking CXX executable tests/physics3d/test_physics3d
+[448/672] Building CXX object tests/platform/CMakeFiles/mce_steam_stub_old.dir/steam_stub_old.cpp.o
+[449/672] Linking CXX shared library tests/platform/libmce_steam_stub_old.so
+[450/672] Building CXX object tests/platform/CMakeFiles/test_platform.dir/test_haptics.cpp.o
+[451/672] Building CXX object tests/platform/CMakeFiles/test_platform.dir/test_screen_reader.cpp.o
+[452/672] Building CXX object tests/input/CMakeFiles/test_input.dir/test_script.cpp.o
+[453/672] Building CXX object tests/input/CMakeFiles/test_input.dir/test_replay.cpp.o
+[454/672] Building CXX object tests/input/CMakeFiles/test_input.dir/test_quantization.cpp.o
+[455/672] Building CXX object tests/input/CMakeFiles/test_input.dir/test_actions.cpp.o
+[456/672] Building CXX object tests/platform/CMakeFiles/test_platform.dir/test_steam.cpp.o
+[457/672] Building CXX object tests/input/CMakeFiles/test_input.dir/test_touch.cpp.o
+[458/672] Building CXX object tests/input/CMakeFiles/test_input.dir/test_options.cpp.o
+[459/672] Building CXX object tests/input/CMakeFiles/test_input.dir/test_gamepad_rebind.cpp.o
+[460/672] Building CXX object tests/input/CMakeFiles/test_input.dir/test_steam_config.cpp.o
+[461/672] Building CXX object tests/input/CMakeFiles/test_input.dir/test_local_players.cpp.o
+[462/672] Building CXX object tests/platform/CMakeFiles/mce_steam_stub.dir/steam_stub.cpp.o
+[463/672] Linking CXX shared library tests/platform/libmce_steam_stub.so
+[464/672] Linking CXX executable tests/input/test_input
+[465/672] Linking CXX executable tests/platform/test_platform
+[466/672] Building CXX object tests/rhi/CMakeFiles/test_rhi.dir/test_command_buffer.cpp.o
+[467/672] Linking CXX executable tests/rhi/test_rhi
+[468/672] Building CXX object tests/rhi_sdlgpu/CMakeFiles/test_shader_spirv.dir/test_shader_spirv.cpp.o
+[469/672] Building CXX object tests/rhi_gl/CMakeFiles/test_rhi_gl.dir/test_rhi_gl.cpp.o
+[470/672] Linking CXX executable tests/rhi_sdlgpu/test_shader_spirv
+[471/672] Linking CXX executable tests/rhi_gl/test_rhi_gl
+[472/672] Building CXX object tests/rhi_sdlgpu/CMakeFiles/test_rhi_sdlgpu.dir/test_rhi_sdlgpu.cpp.o
+[473/672] Building CXX object tests/render/CMakeFiles/test_render.dir/test_render3d.cpp.o
+[474/672] Linking CXX executable tests/rhi_sdlgpu/test_rhi_sdlgpu
+[475/672] Building CXX object tests/render/CMakeFiles/test_render.dir/test_render3d_lod.cpp.o
+[476/672] Building CXX object tests/render/CMakeFiles/test_render.dir/test_render3d_m5a.cpp.o
+[477/672] Building CXX object tests/render/CMakeFiles/test_render.dir/test_render3d_skin.cpp.o
+[478/672] Building CXX object tests/render/CMakeFiles/test_render.dir/test_render.cpp.o
+[479/672] Building CXX object tests/render/CMakeFiles/test_render.dir/test_video.cpp.o
+[480/672] Building CXX object tests/render/CMakeFiles/test_render.dir/test_render3d_scale.cpp.o
+[481/672] Building CXX object tests/render/CMakeFiles/test_render.dir/test_terrain.cpp.o
+[482/672] Building CXX object tests/render/CMakeFiles/test_render.dir/test_accessibility.cpp.o
+[483/672] Linking CXX executable tests/render/test_render
+[484/672] Building CXX object tests/render_gl/CMakeFiles/test_render_gl.dir/test_render3d_views_gl.cpp.o
+[485/672] Building CXX object tests/render_gl/CMakeFiles/test_render_gl.dir/test_render_gl.cpp.o
+[486/672] Building CXX object tests/render_gl/CMakeFiles/test_golden_gl.dir/__/test_main.cpp.o
+[487/672] Building CXX object tests/render_gl/CMakeFiles/test_render_gl.dir/test_render3d_scale_gl.cpp.o
+[488/672] Building CXX object tests/render_gl/CMakeFiles/test_render_gl.dir/test_render3d_terrain_gl.cpp.o
+[489/672] Building CXX object tests/ui/CMakeFiles/test_ui.dir/test_options_panel.cpp.o
+[490/672] Building CXX object tests/ui/CMakeFiles/test_ui.dir/test_subtitles.cpp.o
+[491/672] Building CXX object tests/ui/CMakeFiles/test_ui.dir/test_access.cpp.o
+[492/672] Building CXX object tests/ui/CMakeFiles/test_ui_screen_link.dir/test_ui_screen_link.cpp.o
+[493/672] Building CXX object tests/render_gl/CMakeFiles/test_golden_gl.dir/test_golden.cpp.o
+[494/672] Linking CXX executable tests/render_gl/test_golden_gl
+[495/672] Linking CXX executable tests/ui/test_ui_screen_link
+[496/672] Building CXX object tests/ui/CMakeFiles/test_ui.dir/test_ui.cpp.o
+[497/672] Linking CXX executable tests/ui/test_ui
+[498/672] Building CXX object tests/audio/CMakeFiles/test_audio.dir/test_stream.cpp.o
+[499/672] Building CXX object tests/render_gl/CMakeFiles/test_render_gl.dir/test_render3d_gl.cpp.o
+[500/672] Building CXX object tests/ui/CMakeFiles/test_ui_layout.dir/test_ui_layout.cpp.o
+[501/672] Linking CXX executable tests/ui/test_ui_layout
+[502/672] Building CXX object tests/ui/CMakeFiles/test_ui_gl.dir/test_ui_gl.cpp.o
+[503/672] Building CXX object tests/audio/CMakeFiles/test_audio.dir/test_mixer.cpp.o
+[504/672] Linking CXX executable tests/render_gl/test_render_gl
+[505/672] Linking CXX executable tests/ui/test_ui_gl
+[506/672] Building CXX object tests/audio/CMakeFiles/test_audio.dir/test_device.cpp.o
+[507/672] Building CXX object tests/audio/CMakeFiles/test_audio.dir/test_clip_bank.cpp.o
+[508/672] Building CXX object tests/audio/CMakeFiles/test_audio.dir/test_mixer_v05.cpp.o
+[509/672] Building CXX object tests/audio/CMakeFiles/test_audio.dir/test_pitch_sets.cpp.o
+[510/672] Building CXX object tests/audio/CMakeFiles/test_audio.dir/test_bus_effects.cpp.o
+[511/672] Building CXX object tests/scene/CMakeFiles/test_scene.dir/__/test_main.cpp.o
+[512/672] Building CXX object tests/audio/CMakeFiles/test_audio.dir/test_duck_snapshots.cpp.o
+[513/672] Building CXX object tests/audio/CMakeFiles/test_audio.dir/test_occlusion_doppler.cpp.o
+[514/672] Linking CXX executable tests/audio/test_audio
+[515/672] Building CXX object tests/scene/CMakeFiles/test_scene.dir/test_streaming.cpp.o
+[516/672] Building CXX object tests/scene/CMakeFiles/test_scene.dir/test_scene.cpp.o
+[517/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_ai.cpp.o
+[518/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_ai_perception.cpp.o
+[519/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_ai_budget.cpp.o
+[520/672] Linking CXX executable tests/scene/test_scene
+[521/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_ai_utility.cpp.o
+[522/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_audio_occlusion.cpp.o
+[523/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_ai_tasks.cpp.o
+[524/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_presence.cpp.o
+[525/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_bodies3d.cpp.o
+[526/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_captions.cpp.o
+[527/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_ui_flow.cpp.o
+[528/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_fsm.cpp.o
+[529/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_effects.cpp.o
+[530/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_move3d.cpp.o
+[531/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_nav3d.cpp.o
+[532/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_joints3d.cpp.o
+[533/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_sensors3d.cpp.o
+[534/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_vehicles3d.cpp.o
+[535/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_ragdolls3d.cpp.o
+[536/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_anim3d.cpp.o
+[537/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_pathfinding.cpp.o
+[538/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_particles.cpp.o
+[539/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_sequence.cpp.o
+[540/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_kit3d.cpp.o
+[541/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_skeleton2d_demo.cpp.o
+[542/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_skeleton2d_anim.cpp.o
+[543/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_skeleton2d.cpp.o
+[544/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_sprite_anim.cpp.o
+[545/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_skeleton2d_ik.cpp.o
+[546/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_view_info.cpp.o
+[547/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_skeleton2d_mesh.cpp.o
+[548/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/__/test_main.cpp.o
+[549/672] Building CXX object tests/kit/CMakeFiles/test_kit_gl.dir/__/test_main.cpp.o
+[550/672] mce story compile: the novel kit's test story
+story compile: 1 files, 25 statements, 7 pages, 2 choices, 37 words -> /home/user/dev_wt/build/linux-gcc-release/tests/kit_novel/generated/novel_fixture.h (updated); unreachable labels: 6; endings missing: none
+[551/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_video.cpp.o
+[552/672] Building CXX object tests/kit_novel/CMakeFiles/test_novel.dir/__/test_main.cpp.o
+[553/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_cinematic.cpp.o
+[554/672] Building CXX object tests/kit_novel/CMakeFiles/test_novel_ui.dir/__/test_main.cpp.o
+[555/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_timeline.cpp.o
+[556/672] Building CXX object tests/kit/CMakeFiles/test_kit.dir/test_views.cpp.o
+[557/672] Building CXX object tests/monetize/CMakeFiles/test_monetize.dir/test_fake.cpp.o
+[558/672] Building CXX object tests/kit_novel/CMakeFiles/test_novel_ui.dir/test_dialogue_box.cpp.o
+[559/672] Building CXX object tests/monetize/CMakeFiles/test_monetize.dir/test_monetize.cpp.o
+[560/672] Linking CXX executable tests/kit_novel/test_novel_ui
+[561/672] Linking CXX executable tests/kit/test_kit
+[562/672] Building CXX object tests/monetize/CMakeFiles/test_monetize.dir/test_platform_ads.cpp.o
+[563/672] Building CXX object tests/monetize/CMakeFiles/test_monetize.dir/test_platform_store.cpp.o
+[564/672] Building CXX object tests/kit_novel/CMakeFiles/test_novel.dir/test_novel.cpp.o
+[565/672] Building CXX object tests/monetize/CMakeFiles/test_monetize.dir/test_remove_ads.cpp.o
+[566/672] Linking CXX executable tests/monetize/test_monetize
+[567/672] Building CXX object tests/loc/CMakeFiles/test_loc.dir/test_loc.cpp.o
+[568/672] Building CXX object tests/kit/CMakeFiles/test_kit_gl.dir/test_kit_gl.cpp.o
+[569/672] Linking CXX executable tests/loc/test_loc
+[570/672] Linking CXX executable tests/kit_novel/test_novel
+[571/672] Building CXX object tests/liveops/CMakeFiles/test_liveops.dir/test_game_services.cpp.o
+[572/672] Building CXX object tests/liveops/CMakeFiles/test_liveops.dir/test_platform_games.cpp.o
+[573/672] Building CXX object tests/liveops/CMakeFiles/test_liveops.dir/test_liveops.cpp.o
+[574/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_bytes.cpp.o
+[575/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_host.cpp.o
+[576/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_delta.cpp.o
+[577/672] Linking CXX executable tests/kit/test_kit_gl
+[578/672] Building CXX object tests/liveops/CMakeFiles/test_liveops.dir/test_remote_config.cpp.o
+[579/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_interpolation.cpp.o
+[580/672] Linking CXX executable tests/liveops/test_liveops
+[581/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_lag_compensation.cpp.o
+[582/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_prediction.cpp.o
+[583/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_replicated_fields.cpp.o
+[584/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_relay.cpp.o
+[585/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_replication.cpp.o
+[586/672] Building CXX object tests/net/CMakeFiles/test_net.dir/__/test_main.cpp.o
+[587/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_rollback.cpp.o
+[588/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_rtc.cpp.o
+[589/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_sim_network.cpp.o
+[590/672] Building CXX object tests/script/CMakeFiles/test_script.dir/test_script.cpp.o
+[591/672] Building CXX object tests/net/CMakeFiles/test_net.dir/test_websocket.cpp.o
+[592/672] Building CXX object tests/script/CMakeFiles/test_script.dir/test_script_state.cpp.o
+[593/672] Linking CXX executable tests/net/test_net
+[594/672] Building CXX object tests/abi_spike/CMakeFiles/mce_spike_engine.dir/spike_engine.cpp.o
+[595/672] Linking CXX shared library tests/abi_spike/libmce_spike_engine.so
+[596/672] Building CXX object tests/abi_spike/CMakeFiles/mce_spike_game.dir/spike_game.cpp.o
+[597/672] Linking CXX shared module tests/abi_spike/libmce_spike_game.so
+[598/672] Building CXX object tests/abi_spike/CMakeFiles/mce_spike_host.dir/spike_host.cpp.o
+[599/672] Building CXX object tests/script/CMakeFiles/test_script.dir/__/test_main.cpp.o
+[600/672] Linking CXX executable tests/abi_spike/mce_spike_host
+[601/672] Building CXX object tests/script/CMakeFiles/test_script.dir/test_script_check.cpp.o
+[602/672] Building CXX object tests/script/CMakeFiles/test_script.dir/test_scene_scripts.cpp.o
+[603/672] Building CXX object tests/script/CMakeFiles/test_script.dir/test_script_crash.cpp.o
+[604/672] Building CXX object tests/script/CMakeFiles/test_script.dir/test_script_api.cpp.o
+[605/672] Building CXX object tests/module/CMakeFiles/test_module.dir/__/test_main.cpp.o
+[606/672] Linking CXX executable tests/script/test_script
+[607/672] Building CXX object tests/module/CMakeFiles/modtest_no_entry.dir/test_game_module.cpp.o
+[608/672] Linking CXX shared module tests/module/modules/libmodtest_no_entry.so
+[609/672] Building CXX object tests/module/CMakeFiles/modtest_install_fail.dir/test_game_module.cpp.o
+[610/672] Building CXX object tests/module/CMakeFiles/test_module.dir/test_module.cpp.o
+[611/672] Linking CXX shared module tests/module/modules/libmodtest_install_fail.so
+[612/672] Building CXX object tests/module/CMakeFiles/modtest_stale.dir/test_game_module.cpp.o
+[613/672] Linking CXX shared module tests/module/modules/libmodtest_stale.so
+[614/672] Linking CXX executable tests/module/test_module
+[615/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_draw_clip.cpp.o
+[616/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_animgraph_editor.cpp.o
+[617/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_asset_browser.cpp.o
+[618/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_console_model.cpp.o
+[619/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_hot_reload.cpp.o
+[620/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_mod_project.cpp.o
+[621/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_bt_editor.cpp.o
+[622/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_perf_compare.cpp.o
+[623/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_orbit_camera.cpp.o
+[624/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_hierarchy.cpp.o
+[625/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_navmesh_bake.cpp.o
+[626/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_perf_monitor.cpp.o
+[627/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_stub_world.cpp.o
+[628/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_prefab_preview.cpp.o
+[629/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_play_session.cpp.o
+[630/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_prefab_overrides.cpp.o
+[631/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_timeline_editor.cpp.o
+[632/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_tilemap.cpp.o
+[633/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_skeleton2d_editor.cpp.o
+[634/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_terrain_editor.cpp.o
+[635/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/__/test_main.cpp.o
+[636/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_transform_gizmo.cpp.o
+[637/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_scene_editing.cpp.o
+[638/672] Building CXX object tests/mcp/CMakeFiles/test_mcp.dir/__/test_main.cpp.o
+[639/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_ui_document.cpp.o
+[640/672] Building CXX object tests/editor/CMakeFiles/test_editor.dir/test_undo.cpp.o
+[641/672] Building CXX object tests/editor/CMakeFiles/test_editor_gl.dir/test_probe_bake_gl.cpp.o
+[642/672] Building CXX object tests/editor/CMakeFiles/test_editor_gl.dir/test_ui_preview_gl.cpp.o
+[643/672] Building CXX object tests/mcp/CMakeFiles/test_mcp.dir/test_mcp_script.cpp.o
+[644/672] Linking CXX executable tests/editor/test_editor
+[645/672] Linking CXX executable tests/editor/test_editor_gl
+[646/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_agent.dir/test_mcp_agent.cpp.o
+[647/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_agent.dir/__/test_main.cpp.o
+[648/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_agent.dir/test_mcp_ui.cpp.o
+[649/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_playtest.dir/__/test_main.cpp.o
+[650/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_agent.dir/test_mcp_timeline.cpp.o
+[651/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_docs.dir/__/test_main.cpp.o
+[652/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_agent.dir/test_mcp_bt.cpp.o
+[653/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_content.dir/__/test_main.cpp.o
+[654/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_agent.dir/test_mcp_skeleton2d.cpp.o
+[655/672] Building CXX object tests/mcp/CMakeFiles/test_mcp.dir/test_mcp.cpp.o
+[656/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_gameplay3d.dir/test_mcp_gameplay3d.cpp.o
+[657/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_docs.dir/test_mcp_docs.cpp.o
+[658/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_gameplay3d.dir/__/test_main.cpp.o
+[659/672] Linking CXX executable tests/mcp/test_mcp
+[660/672] Linking CXX executable tests/mcp/test_mcp_agent
+[661/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_playtest.dir/test_mcp_playtest.cpp.o
+[662/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_check.dir/__/test_main.cpp.o
+[663/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_content.dir/test_mcp_content.cpp.o
+[664/672] Linking CXX executable tests/mcp/test_mcp_docs
+[665/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_team.dir/__/test_main.cpp.o
+[666/672] Linking CXX executable tests/mcp/test_mcp_gameplay3d
+[667/672] Linking CXX executable tests/mcp/test_mcp_playtest
+[668/672] Linking CXX executable tests/mcp/test_mcp_content
+[669/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_check.dir/test_mcp_check.cpp.o
+[670/672] Building CXX object tests/mcp/CMakeFiles/test_mcp_team.dir/test_mcp_team.cpp.o
+[671/672] Linking CXX executable tests/mcp/test_mcp_check
+[672/672] Linking CXX executable tests/mcp/test_mcp_team

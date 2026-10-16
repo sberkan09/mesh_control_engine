@@ -1,0 +1,41 @@
+# CI notes from routine 3 / M-NET3 thread (from memory and logs of this session only; no new measurements)
+
+Context: container with a ~40 GB per-session write allowance (df shows 252G, but "Avail" hits ~0 at ~40 GB used). Repo build trees are the bulk of it.
+
+## Timings seen (this session, SBA-127 `--batch` run, partly cold trees)
+- walls: 19-24 s.
+- linux-gcc-debug (build + ctest): 1515 s on a mostly cold tree. Warm incremental: don't know exactly (a few minutes when only one sample changes).
+- tidy (clang-debug build + clang-tidy): 750 s, 592 s, 362 s on three runs; all three failed (two for disk, one for a real finding). Cold clang-debug build is the bulk.
+- linux-clang-release: 531 s (PASS); 123 s when it died of disk.
+- linux-asan: 1527 s (PASS).
+- determinism: 235 s, failed on disk (glslang compile, "No space left" writing /tmp/cc*.s). Full pass time: don't know for this session.
+- web: 54 s when it failed on disk. Earlier (SBA-126) the web stage ran many minutes; don't know the exact figure.
+- Longest stages: linux-gcc-debug and linux-asan, then tidy and a cold clang build.
+- Typical `--task` / `--batch` end to end: don't know (never ran either to a clean finish in one go this session; I ran the stages one by one through a small script, `batch.sh`, so I could delete build trees between stages).
+
+## What turns CI red, most to least frequent (this session)
+1. Disk full. Happened twice in one `--batch` (determinism, web, tidy, clang-release, asan all "failed" at once; the log shows `No space left on device` or `cannot write pack`). Not a code error but looks like many failures. Tree sizes: gcc-debug ~14 GB, clang-debug ~6.5 GB, clang-release ~6.2 GB, gcc-release ~3.3 GB, web-release ~1.3 GB, build/_fetch ~0.9 GB, /root/.cache ~2 GB.
+2. Docs/golden-style walls: capabilities table out of date and `scripts/ci/sample_coverage.allow` entries that a new sample makes stale ("now shows it; remove it from the allow list", "run scripts/ci/capabilities.py"). Cheap to fix, but only walls finds it (19 s), so run walls first.
+3. clang-tidy finds things gcc -Werror does not (bugprone-misplaced-widening-cast on `static_cast<unsigned long long>(a + 1)`).
+4. Real test failures in new code were caught earlier by running the new ctest targets directly, not by local_ci.
+5. Flaky: none seen in the net tests this session (SimNetwork is deterministic). The web stage's sample smokes (04_diorama, 04_cubes, 05_ashen_court) time out on the canvas screenshot under software WebGPU; looks environmental, not re-verified against dev_claude yet.
+
+## Things that wasted time
+- An interrupted build leaves a truncated `.o`; the next archive step fails with "ranlib: file truncated". Fix: delete zero/truncated objects (`find -name '*.o' -size 0 -delete`, or the named object) and rebuild.
+- A container restart kills background stages (the web stage was lost once); results are only in `build/local-ci-logs/*.log`.
+- Foreground commands over 120 s are moved to background; use a monitor on the log instead of polling.
+- `determinism.py --args "-headless ..."` fails argparse when the value starts with `-`; use `--args="..."`.
+- Stage order matters for disk: running tidy, clang-release, asan, determinism, web one at a time and deleting the build tree after each fits in the allowance; running them with all trees alive does not.
+
+## Tricks and things tried
+- Run `walls` alone first (19 s) before spending 25 min on gcc-debug.
+- Delete linux-clang-debug after tidy, clang-release and asan trees right after their stage, gcc trees after determinism. Free space went from ~0 to ~25 GB this way.
+- ccache is in use (`ccache /usr/bin/g++` in the logs). Whether a ccache snapshot helps across container restarts: don't know; I did not check hit rates. After a restart the first builds were still slow.
+- Building only the target that changed (`cmake --build --preset ... --target sample_x`) and running `ctest -R name` (with `xvfb-run -a` for gpu-labelled tests) is how I iterate; local_ci only for the final gate.
+- The fetched dependencies (glslang, libdatachannel, SDL3) rebuild in every preset tree; they are a large share of a cold build (the ninja step counts are 1000-2700 per tree).
+
+## Counts
+- `--task` runs per task: don't know exactly; for SBA-127 I ran the stages individually about 2 times each (first time lost to disk).
+
+## Bugs local_ci did not catch (but later showed up)
+- Don't know of any for this task. (A GL-test-only failure appears when ctest runs without a display; local_ci provides one.)

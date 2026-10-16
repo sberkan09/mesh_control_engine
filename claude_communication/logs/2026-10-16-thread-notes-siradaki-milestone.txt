@@ -1,0 +1,42 @@
+# local_ci.sh notes from the thread that wrote the release-build stage and disk management (PR #363, #371)
+
+Source: one day of running `local_ci.sh --task` / `--batch` in a cloud container. I did not run new measurements for this note; anything not listed as observed is marked "don't know".
+
+## Disk
+- Container disk is a fixed per-session allowance (~40 GB usable), not what `df` suggests. "Avail 0 with low Used" means the allowance is spent.
+- Observed tree sizes (approx): ASan tree ~18 GB; release and gcc-debug trees 8-20 GB each depending on stage; `build/_fetch` (third-party sources) ~0.9 GB and survives cleanup. Exact per-stage numbers: don't know, I only saw `du -sh` in the reclaim log lines.
+- `--batch` originally died with "No space left on device" twice (release tree, then asan `sdk_install` test, which copies binaries).
+- Reclaim logic (`reclaim_space`, before each stage): if free < MIN (22 GB) delete finished trees no later stage needs; if still short delete trees later stages need (they rebuild fast from ccache); if free < HARD (3 GB) the stage is not started and says so.
+- Why 22 GB: first default was 16 GB; the asan `sdk_install` test failed with 1 GB free after a 16 GB start, because the ASan tree (18 GB) plus the install copy needs headroom. 22 = ASan tree + install copy + margin. It is an empirical choice, not derived; don't know the true minimum.
+- Why 3 GB hard floor: below that nothing links or installs; failing early is cheaper than a half-built stage.
+- Both are env-tunable: `MCE_CI_MIN_FREE_GB`, `MCE_CI_HARD_MIN_GB`. Stage order is canonicalised (`CANON_ORDER`/`order_stages`) so cleanup knows what is "later".
+
+## Timings (observed, this container, warm ccache)
+- `--task` (walls + linux-gcc-debug + tidy): ~9 s walls, ~530 s gcc-debug (build + ctest), tidy ~0 s when no C++ changed. Total ~9-10 min. Python/docs-only changes still pay the gcc-debug stage if any non-md file changes.
+- Cold-cache gcc-debug, clang-release, asan, web individual times: don't know (never timed in isolation). A full `--batch` was several times the `--task` time; exact figure don't know.
+- configure ~6-26 s.
+
+## ccache
+- Used when installed (`CMAKE_*_COMPILER_LAUNCHER`), `CCACHE_MAXSIZE` default 3G. In a project container the cache dir is restored from a shared location.
+- Observed on a `--task` run: 270 cacheable calls, 75.6% hits (204/270). Misses are the files touched by the change plus the dependents.
+- 3G may be too small for debug + release + asan + clang all together; don't know the eviction rate.
+
+## Stages that go red most often, and why
+- Disk exhaustion (see above) was the top cause today, not code.
+- Missing system packages on a fresh container (SDL dev libs): `scripts/ci/setup_env.sh` fixes it; run it first.
+- `release-build` (new stage): catches release-only compile problems (unused vars, `-Werror` under NDEBUG, asserts compiled out). #359 was the case that motivated it.
+- walls: fast, rarely red; catches banned patterns early.
+- tidy: skipped when no C++ changed (`touches_cpp`).
+- Test compile errors in new test files (e.g. `Key::Enter` vs `Key::Return`) show up only after the long gcc-debug build starts; no way found to compile just the new test faster except building that target directly.
+
+## What local_ci does not catch
+- #359 class: `bt_panel.cpp` fixed-size buffer overflow (`char new_error_[512]`) only visible in a stage/config the task run did not include (editor code under release/asan). `--task` runs gcc-debug only; release/asan/clang/web problems appear only in `--batch`. That is why I added release-build, but editor-only code paths under ASan are still only covered in `--batch`.
+- Anything needing a device/GPU/window, web (emscripten) runtime behaviour, and Windows/macOS builds: not covered locally. Don't know how much of the web stage is exercised beyond build.
+- Docs-only PRs skip local_ci by project rule; broken doc tables (a blank line inside a markdown table) are not checked by anything I know of.
+
+## Tricks, and things tried and dropped
+- Use `scripts/ci/local_ci.sh --task` per PR and `--batch` every 3rd task; I do not run `--batch` on docs-only or Python-only work.
+- Delete trees between stages instead of lowering parallelism; keeping all trees never fit.
+- Run long stages in the background and poll the log (`=== Summary` line); foreground commands are capped at 10 min and gcc-debug alone is ~9 min.
+- Dropped: deleting ccache to save space (rebuild cost far higher than its 3 GB); lowering MIN to 16 GB (caused the asan failure); two-pass delete was kept (first finished trees, then later-needed ones).
+- Not tried: splitting ctest by label across stages, `ninja -j` tuning, mold/lld linker, unity builds, precompiled headers. Don't know their effect.

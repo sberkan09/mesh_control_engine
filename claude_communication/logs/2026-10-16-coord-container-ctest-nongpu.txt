@@ -1,0 +1,288 @@
+Test project /home/user/dev_wt/build/linux-gcc-debug
+        Start  38: extras_2d_save_clean
+        Start  74: room3d_save_clean
+        Start   1: script_probe_runs_scripts
+        Start   2: novel_probe_plays_to_end
+  1/140 Test  #38: extras_2d_save_clean ..............   Passed    0.01 sec
+        Start  39: extras_2d_save_write
+  2/140 Test  #74: room3d_save_clean .................   Passed    0.01 sec
+        Start  75: room3d_save_write
+  3/140 Test  #39: extras_2d_save_write ..............   Passed    0.45 sec
+        Start   4: mce_relay_selftest
+  4/140 Test   #1: script_probe_runs_scripts .........   Passed    0.47 sec
+        Start   5: player_help
+  5/140 Test  #75: room3d_save_write .................   Passed    0.46 sec
+        Start   6: player_mods
+  6/140 Test   #4: mce_relay_selftest ................   Passed    0.34 sec
+        Start   7: player_crash_report
+  7/140 Test   #5: player_help .......................   Passed    0.35 sec
+        Start   8: player_monetize
+  8/140 Test   #2: novel_probe_plays_to_end ..........   Passed    1.19 sec
+        Start   3: novel_probe_plays_by_touch
+  9/140 Test   #7: player_crash_report ...............   Passed    0.85 sec
+        Start   9: player_liveops
+ 10/140 Test   #3: novel_probe_plays_by_touch ........   Passed    0.88 sec
+        Start  10: player_remote_config
+ 11/140 Test   #6: player_mods .......................   Passed    1.75 sec
+        Start  11: player_game_services
+ 12/140 Test   #8: player_monetize ...................   Passed    3.35 sec
+        Start  12: player_perf_capture
+ 13/140 Test  #10: player_remote_config ..............   Passed    2.33 sec
+        Start  13: sample_02_boids_300
+ 14/140 Test   #9: player_liveops ....................   Passed    3.26 sec
+        Start  14: sample_physics2d_headless_300
+ 15/140 Test  #14: sample_physics2d_headless_300 .....   Passed    0.34 sec
+        Start  15: sample_physics3d_headless_300
+ 16/140 Test  #12: player_perf_capture ...............   Passed    1.21 sec
+        Start  16: sample_script_headless_300
+ 17/140 Test  #13: sample_02_boids_300 ...............   Passed    1.12 sec
+        Start  17: sample_script_headless_cpp_300
+ 18/140 Test  #15: sample_physics3d_headless_300 .....   Passed    0.33 sec
+        Start  18: test_ember_step
+ 19/140 Test  #17: sample_script_headless_cpp_300 ....   Passed    0.36 sec
+        Start  21: sample_04_diorama_300
+ 20/140 Test  #11: player_game_services ..............   Passed    3.69 sec
+        Start  22: sample_04_cubes_300
+ 21/140 Test  #18: test_ember_step ...................   Passed    0.52 sec
+        Start  19: sample_03_platformer_300
+ 22/140 Test  #21: sample_04_diorama_300 .............   Passed    0.49 sec
+        Start  23: sample_04_cubes_walk_300
+ 23/140 Test  #19: sample_03_platformer_300 ..........   Passed    0.52 sec
+        Start  20: devhost_platformer_300
+ 24/140 Test  #16: sample_script_headless_300 ........   Passed    1.29 sec
+        Start  24: test_ashen_court
+ 25/140 Test  #20: devhost_platformer_300 ............   Passed    0.40 sec
+        Start  25: sample_05_ashen_court_300
+ 26/140 Test  #22: sample_04_cubes_300 ...............   Passed    1.49 sec
+        Start  26: sample_06_showcase_300
+ 27/140 Test  #25: sample_05_ashen_court_300 .........   Passed    0.59 sec
+        Start  27: scene_demo_player_600
+ 28/140 Test  #27: scene_demo_player_600 .............   Passed    0.69 sec
+        Start  28: scene_demo_player_input
+ 29/140 Test  #23: sample_04_cubes_walk_300 ..........   Passed    2.05 sec
+        Start  29: scene_demo_player_lifecycle
+ 30/140 Test  #26: sample_06_showcase_300 ............   Passed    1.14 sec
+        Start  30: sample_07_gameplay3d_player_600
+ 31/140 Test  #24: test_ashen_court ..................   Passed    1.89 sec
+        Start  31: kit3d_tour_player
+ 32/140 Test  #28: scene_demo_player_input ...........   Passed    0.33 sec
+        Start  32: kit2d_tour_player
+ 33/140 Test  #32: kit2d_tour_player .................   Passed    1.11 sec
+        Start  33: ui_screens_player
+ 34/140 Test  #30: sample_07_gameplay3d_player_600 ...   Passed    1.43 sec
+        Start  34: cinema_demo_player
+ 35/140 Test  #29: scene_demo_player_lifecycle .......   Passed    1.57 sec
+        Start  35: stream_demo_player_300
+ 36/140 Test  #35: stream_demo_player_300 ............   Passed    0.46 sec
+        Start  36: audio_rooms_player
+ 37/140 Test  #31: kit3d_tour_player .................   Passed    1.92 sec
+        Start  37: extras_2d_player_600
+ 38/140 Test  #37: extras_2d_player_600 ..............   Passed    0.55 sec
+        Start  40: extras_2d_save_load
+ 39/140 Test  #40: extras_2d_save_load ...............   Passed    0.32 sec
+        Start  41: skel2d_demo_player
+ 40/140 Test  #33: ui_screens_player .................   Passed    1.91 sec
+        Start  42: sample_net_headless_300
+ 41/140 Test  #42: sample_net_headless_300 ...........   Passed    0.40 sec
+        Start  43: sample_net_headless_sim
+ 42/140 Test  #34: cinema_demo_player ................   Passed    2.25 sec
+        Start  44: sample_net_headless_relay
+ 43/140 Test  #43: sample_net_headless_sim ...........   Passed    0.56 sec
+        Start  45: sample_net_headless_broadcast
+ 44/140 Test  #44: sample_net_headless_relay .........   Passed    0.54 sec
+        Start  46: sample_net_headless_migration
+ 45/140 Test  #41: skel2d_demo_player ................   Passed    1.61 sec
+        Start  47: sample_net_headless_spectators
+ 46/140 Test  #45: sample_net_headless_broadcast .....   Passed    0.42 sec
+        Start  48: sample_net_rollback
+ 47/140 Test  #46: sample_net_headless_migration .....   Passed    0.41 sec
+        Start  49: sample_net_rollback_lockstep
+ 48/140 Test  #49: sample_net_rollback_lockstep ......   Passed    0.34 sec
+        Start  50: sample_net_rollback_desync
+ 49/140 Test  #47: sample_net_headless_spectators ....   Passed    0.59 sec
+        Start  51: sample_net_rollback_drift
+ 50/140 Test  #48: sample_net_rollback ...............   Passed    0.55 sec
+        Start  52: sample_shop_demo_300
+ 51/140 Test  #50: sample_net_rollback_desync ........   Passed    0.46 sec
+        Start  53: sample_shop_demo_flows
+ 52/140 Test  #52: sample_shop_demo_300 ..............   Passed    0.39 sec
+        Start  54: sample_liveops_demo_300
+ 53/140 Test  #51: sample_net_rollback_drift .........   Passed    0.58 sec
+        Start  55: sample_liveops_demo_flows
+ 54/140 Test  #54: sample_liveops_demo_300 ...........   Passed    0.31 sec
+        Start  56: sample_steam_demo
+ 55/140 Test  #36: audio_rooms_player ................   Passed    4.39 sec
+        Start  57: ai_demo_player
+ 56/140 Test  #56: sample_steam_demo .................   Passed    1.50 sec
+        Start  59: sample_systems_tour
+ 57/140 Test  #53: sample_shop_demo_flows ............   Passed    1.91 sec
+        Start  60: ember_script_headless_300
+ 58/140 Test  #59: sample_systems_tour ...............   Passed    0.34 sec
+        Start  61: EmberScript_mctests
+ 59/140 Test  #60: ember_script_headless_300 .........   Passed    0.41 sec
+        Start  62: glowmoth_headless_300
+ 60/140 Test  #62: glowmoth_headless_300 .............   Passed    0.49 sec
+        Start  63: glowmoth_mctests
+ 61/140 Test  #55: sample_liveops_demo_flows .........   Passed    3.53 sec
+        Start  64: kindle_headless_300
+ 62/140 Test  #61: EmberScript_mctests ...............   Passed    1.68 sec
+        Start  65: kindle_level
+ 63/140 Test  #64: kindle_headless_300 ...............   Passed    0.56 sec
+        Start  66: marble_garden_headless_300
+ 64/140 Test  #65: kindle_level ......................   Passed    0.48 sec
+        Start  69: prism_break_headless_300
+ 65/140 Test  #69: prism_break_headless_300 ..........   Passed    0.45 sec
+        Start  70: prism_break_attract_clears
+ 66/140 Test  #57: ai_demo_player ....................   Passed    3.91 sec
+        Start  72: room3d_headless_300
+ 67/140 Test  #66: marble_garden_headless_300 ........   Passed    0.59 sec
+        Start  67: marble_garden_mctests
+ 68/140 Test  #72: room3d_headless_300 ...............   Passed    0.48 sec
+        Start  73: room3d_play
+ 69/140 Test  #73: room3d_play .......................   Passed    0.42 sec
+        Start  76: room3d_save_resume
+ 70/140 Test  #76: room3d_save_resume ................   Passed    0.41 sec
+        Start  77: solstice_reach_headless_300
+ 71/140 Test  #77: solstice_reach_headless_300 .......   Passed    1.41 sec
+        Start  78: solstice_reach_run
+ 72/140 Test  #70: prism_break_attract_clears ........   Passed    5.56 sec
+        Start  71: prism_break_start_scene
+ 73/140 Test  #71: prism_break_start_scene ...........   Passed    0.34 sec
+        Start  79: undelivered_headless_300
+ 74/140 Test  #79: undelivered_headless_300 ..........   Passed    2.12 sec
+        Start  80: undelivered_run
+ 75/140 Test  #63: glowmoth_mctests ..................   Passed   12.20 sec
+        Start  81: undertow_headless_300
+ 76/140 Test  #67: marble_garden_mctests .............   Passed   10.42 sec
+        Start  68: marble_garden_win_route
+ 77/140 Test  #81: undertow_headless_300 .............   Passed    0.39 sec
+        Start  82: undertow_level
+ 78/140 Test  #68: marble_garden_win_route ...........   Passed    1.38 sec
+        Start  83: template_probe_headless_300
+ 79/140 Test  #83: template_probe_headless_300 .......   Passed    0.47 sec
+        Start  84: novel_probe_headless_300
+ 80/140 Test  #78: solstice_reach_run ................   Passed    9.74 sec
+        Start  85: script_probe_headless_300
+ 81/140 Test  #82: undertow_level ....................   Passed    2.00 sec
+        Start  86: test_core
+ 82/140 Test  #84: novel_probe_headless_300 ..........   Passed    0.41 sec
+        Start  87: test_math_oracle
+ 83/140 Test  #87: test_math_oracle ..................   Passed    0.05 sec
+        Start  88: test_refl
+ 84/140 Test  #88: test_refl .........................   Passed    0.01 sec
+        Start  89: test_asset
+ 85/140 Test  #85: script_probe_headless_300 .........   Passed    0.36 sec
+        Start  90: test_cook
+ 86/140 Test  #86: test_core .........................   Passed    0.42 sec
+        Start  91: mce_cook_cli
+ 87/140 Test  #89: test_asset ........................   Passed    0.33 sec
+        Start  92: mce_cook_module
+ 88/140 Test  #91: mce_cook_cli ......................   Passed    2.36 sec
+        Start  93: test_ecs
+ 89/140 Test  #90: test_cook .........................   Passed    2.72 sec
+        Start  94: test_ecs_scene
+ 90/140 Test  #94: test_ecs_scene ....................   Passed    0.49 sec
+        Start  95: test_physics2d
+ 91/140 Test  #93: test_ecs ..........................   Passed    0.72 sec
+        Start  96: test_physics3d
+ 92/140 Test  #92: mce_cook_module ...................   Passed    6.56 sec
+        Start  97: test_platform
+ 93/140 Test  #97: test_platform .....................   Passed    0.36 sec
+        Start  98: scene_demo_player_steam
+ 94/140 Test  #98: scene_demo_player_steam ...........   Passed    0.66 sec
+        Start  99: player_game_services_steam
+ 95/140 Test  #99: player_game_services_steam ........   Passed    0.72 sec
+        Start 100: player_steam_overlay
+ 96/140 Test #100: player_steam_overlay ..............   Passed    0.69 sec
+        Start 101: player_steam_input
+ 97/140 Test #101: player_steam_input ................   Passed    1.75 sec
+        Start 102: steam_depot
+ 98/140 Test #102: steam_depot .......................   Passed    0.95 sec
+        Start 103: android_bridges
+ 99/140 Test #103: android_bridges ...................   Passed    0.10 sec
+        Start 104: test_input
+100/140 Test  #80: undelivered_run ...................   Passed   18.59 sec
+        Start 105: test_rhi
+101/140 Test #105: test_rhi ..........................   Passed    0.32 sec
+        Start 106: test_shader_spirv
+102/140 Test #104: test_input ........................   Passed    2.95 sec
+        Start 107: test_render
+103/140 Test #106: test_shader_spirv .................   Passed    1.04 sec
+        Start 108: test_ui
+104/140 Test #108: test_ui ...........................   Passed    0.38 sec
+        Start 109: test_ui_layout
+105/140 Test #107: test_render .......................   Passed    0.67 sec
+        Start 110: ui_no_imgui_symbols
+106/140 Test #109: test_ui_layout ....................   Passed    0.34 sec
+        Start 111: test_ui_screen_link
+107/140 Test  #96: test_physics3d ....................   Passed   12.62 sec
+        Start 112: test_audio
+108/140 Test  #95: test_physics2d ....................   Passed   12.75 sec
+        Start 113: test_scene
+109/140 Test #111: test_ui_screen_link ...............   Passed    0.33 sec
+        Start 114: test_kit
+110/140 Test #113: test_scene ........................   Passed    0.33 sec
+        Start 115: test_novel
+111/140 Test #110: ui_no_imgui_symbols ...............   Passed    0.58 sec
+        Start 116: test_novel_ui
+112/140 Test #115: test_novel ........................   Passed    0.36 sec
+        Start 117: story_compile
+113/140 Test #116: test_novel_ui .....................   Passed    0.36 sec
+        Start 118: test_monetize
+114/140 Test #117: story_compile .....................   Passed    0.12 sec
+        Start 119: test_loc
+115/140 Test #118: test_monetize .....................   Passed    0.35 sec
+        Start 120: app_names
+116/140 Test #120: app_names .........................   Passed    0.05 sec
+        Start 121: import_converters
+117/140 Test #119: test_loc ..........................   Passed    0.33 sec
+        Start 122: test_liveops
+118/140 Test #121: import_converters .................   Passed    0.05 sec
+        Start 123: test_net
+119/140 Test #122: test_liveops ......................   Passed    0.32 sec
+        Start 124: test_script
+120/140 Test #112: test_audio ........................   Passed    2.67 sec
+        Start 125: player_scripts
+121/140 Test #125: player_scripts ....................   Passed    2.13 sec
+        Start 126: player_no_luau_compiler
+122/140 Test #124: test_script .......................   Passed    4.15 sec
+        Start 127: devhost_headless_10k
+123/140 Test #127: devhost_headless_10k ..............   Passed    0.34 sec
+        Start 128: abi_spike
+124/140 Test #128: abi_spike .........................   Passed    0.00 sec
+        Start 129: test_module
+125/140 Test #129: test_module .......................   Passed    0.36 sec
+        Start 130: sdk_install
+126/140 Test #123: test_net ..........................   Passed    7.52 sec
+        Start 131: test_editor
+127/140 Test #126: player_no_luau_compiler ...........   Passed    6.60 sec
+        Start 132: test_mcp
+128/140 Test #131: test_editor .......................   Passed    4.05 sec
+        Start 133: mcp_transcript
+129/140 Test #133: mcp_transcript ....................   Passed    0.73 sec
+        Start 134: mcp_symbol_wall
+130/140 Test #134: mcp_symbol_wall ...................   Passed    1.89 sec
+        Start 136: test_mcp_playtest
+131/140 Test #132: test_mcp ..........................   Passed    5.12 sec
+        Start 135: test_mcp_agent
+132/140 Test #136: test_mcp_playtest .................   Passed    2.53 sec
+        Start 137: test_mcp_docs
+133/140 Test #137: test_mcp_docs .....................   Passed    0.54 sec
+        Start 138: test_mcp_content
+134/140 Test #114: test_kit ..........................   Passed   18.98 sec
+        Start 139: test_mcp_gameplay3d
+135/140 Test #135: test_mcp_agent ....................   Passed    4.36 sec
+        Start 140: test_mcp_check
+136/140 Test #139: test_mcp_gameplay3d ...............   Passed    1.76 sec
+        Start 141: test_mcp_team
+137/140 Test #141: test_mcp_team .....................   Passed    0.38 sec
+138/140 Test #138: test_mcp_content ..................   Passed    2.93 sec
+139/140 Test #140: test_mcp_check ....................   Passed    0.60 sec
+140/140 Test #130: sdk_install .......................   Passed   82.15 sec
+
+100% tests passed, 0 tests failed out of 140
+
+Label Time Summary:
+sdk    =  82.15 sec*proc (1 test)
+
+Total Test time (real) = 136.04 sec
