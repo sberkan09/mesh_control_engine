@@ -16,6 +16,8 @@
 // stream, at most kMaxAttempts times; then the call fails with Errc::InvalidArgument and a stage
 // that says which generator gave up, never a hang.
 
+#include <span>
+
 #include "mce/containers/array.h"
 #include "mce/hash.h"
 #include "mce/result.h"
@@ -118,5 +120,69 @@ struct NoiseParams {
     u32 min_floor_percent = 20;
 };
 Result<ProcGrid> generate_noise(u32 width, u32 height, u64 seed, const NoiseParams& p = {});
+
+
+// ---- wave function collapse (M-PROCGEN 2) --------------------------------------------------------
+//
+// Fills a width x height grid with tiles so that every pair of neighbours is one the rules allow.
+// The rules are an adjacency table over at most kWfcMaxTiles tiles, written by hand (add_pair) or
+// learned from an example map (from_example: every neighbouring pair in the example is allowed, a
+// tile's weight is how often it occurs). Tiles are named by the ids the caller uses; the table keeps
+// them in ascending id order, so the result does not depend on the order a map lists them.
+//
+// The solver is the usual one with integer state: a 64-bit mask of the tiles each cell may still be;
+// repeat { pick the cell with the fewest options (a seeded draw among ties), pick a tile by weight
+// from the "wfc" stream, narrow the neighbours until nothing changes }. A cell with no option left is
+// a contradiction: the whole grid restarts on the next attempt's stream, at most `max_restarts`
+// times, then the call fails with Errc::InvalidArgument and a stage that says so, never a hang.
+// Pinned cells (a start room the level must keep) are set before the first pick; pins that already
+// contradict each other fail at once.
+
+inline constexpr u32 kWfcMaxTiles = 64;
+
+enum class WfcDir : u8 { East, West, South, North };  // x + 1, x - 1, y + 1, y - 1 (rows grow downwards)
+
+class WfcRules {
+public:
+    // Allows tile `b` to sit next to tile `a` in direction `dir` (and `a` in the opposite direction
+    // of `b`). Fails when a new tile would be the 65th.
+    Result<void> add_pair(u32 a, WfcDir dir, u32 b);
+    // Sets a tile's weight (default 1; 0 is changed to 1). Adds the tile if it is new.
+    Result<void> set_weight(u32 tile, u32 weight);
+    // Learns the pairs and the weights from a row-major example of `width` x `height` tile ids.
+    static Result<WfcRules> from_example(std::span<const u32> tiles, u32 width, u32 height);
+
+    u32 tile_count() const { return static_cast<u32>(ids_.size()); }
+    u32 id_of(u32 index) const { return ids_[index]; }
+    // The dense index of a tile id, or -1.
+    i32 index_of(u32 id) const;
+    bool allows(u32 a_id, WfcDir dir, u32 b_id) const;
+    // For the solver: the weight and the allowed-neighbour mask of a dense index.
+    u32 weight_of(u32 index) const { return weight_[index]; }
+    u64 allow_mask(WfcDir dir, u32 index) const { return allow_[static_cast<u32>(dir)][index]; }
+
+private:
+    Result<u32> intern(u32 id);  // the dense index, adding the tile when new (ids stay sorted)
+    Array<u32> ids_;             // ascending
+    Array<u32> weight_;
+    Array<u64> allow_[4];        // [dir][index] = mask of the indices allowed next to it
+};
+
+struct WfcPin {
+    i32 x = 0;
+    i32 y = 0;
+    u32 tile = 0;  // a tile id the rules know
+};
+
+struct WfcGrid {
+    u32 width = 0;
+    u32 height = 0;
+    Array<u32> tiles;  // row-major tile ids
+    u32 restarts = 0;  // contradictions met before this draw worked
+    u32 at(u32 x, u32 y) const { return tiles[static_cast<usize>(y) * width + x]; }
+    u64 hash() const;
+};
+
+Result<WfcGrid> generate_wfc(u32 width, u32 height, u64 seed, const WfcRules& rules, std::span<const WfcPin> pins = {}, u32 max_restarts = 32);
 
 }  // namespace mce::kit::procgen

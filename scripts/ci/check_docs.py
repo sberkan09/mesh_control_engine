@@ -4,6 +4,9 @@
   links     a relative link in a Markdown file points at a file or directory that exists, and a
             `#anchor` names a heading of the target (GitHub's slug rules)
   includes  an `#include "mce/..."` line in a document names a header under some `src/**/include`
+  untested  a `samples/<name>` or `projects/<name>` directory no test runs: its own build files register no
+            test, no test-registering CMake file or CI script elsewhere names it, and (a script project) it
+            has no `tests/*.mctest` for cmake/ScriptProject to run
   flags     a `-name` after `mce_player` on a line of a document is a console variable (`MCE_CVAR(id, "name"`
             or `ConVar id("name"`) some source declares: the command line sets convars
 
@@ -87,10 +90,37 @@ def player_flags(line):
     return re.findall(r"(?:^|\s)-{1,2}([A-Za-z_][A-Za-z0-9_.]*)", seg)
 
 
+TEST_CALL = re.compile(r"\b(?:add_test|mce_add_test|add_mce_test|add_script_project_tests)\s*\(")
+
+
+def untested():
+    """`samples/<d>` and `projects/<d>` that nothing tests."""
+    cmake = [p for p in ROOT.rglob("*") if p.name == "CMakeLists.txt" or p.suffix == ".cmake"]
+    cmake = [p for p in cmake if not ({"build", ".git", "_fetch"} & set(p.relative_to(ROOT).parts))]
+    ci = [p for p in (ROOT / "scripts/ci").iterdir() if p.suffix in (".sh", ".py")]
+    out = []
+    for kind in ("samples", "projects"):
+        for d in sorted((ROOT / kind).iterdir()):
+            if not d.is_dir() or d.name == "build":
+                continue
+            own = [p for p in cmake if d in p.parents]
+            if any(TEST_CALL.search(p.read_text(errors="ignore")) for p in own):
+                continue
+            named = re.compile(re.escape(f"{kind}/{d.name}") + r"(?![\w-])")
+            if any(named.search(p.read_text(errors="ignore")) for p in ci):
+                continue
+            has_cmake = (d / "CMakeLists.txt").exists()
+            if kind == "projects" and not has_cmake and list((d / "tests").glob("*.mctest")):
+                continue  # a script project: cmake/ScriptProject runs its scenarios
+            out.append(("untested", f"{kind}/{d.name}", "-", "no test runs it"))
+    return out
+
+
 def misses():
     out = []
     incs = include_roots()
     cvars = convar_names()
+    out.extend(untested())
     for p in md_files():
         rel = p.relative_to(ROOT).as_posix()
         raw = p.read_text(errors="ignore")
