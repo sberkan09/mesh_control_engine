@@ -1,0 +1,442 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "b0a30000-0000-4000-8000-000000000010",
+ "name": "tour",
+ "entities": [
+  {
+   "id": 1,
+   "name": "Field",
+   "components": {
+    "Terrain3D": {
+     "terrain": "guid:b0a30000-0000-4000-8000-000000000021"
+    },
+    "TerrainCollider3D": {
+     "friction": 0.9
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2,
+   "name": "World",
+   "components": {
+    "WorldSettings": {
+     "gravity_3d": [
+      0,
+      -9.81,
+      0
+     ]
+    },
+    "Environment3D": {}
+   }
+  },
+  {
+   "id": 3,
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "primary": 1
+    },
+    "CameraShake3D": {
+     "trauma": 0.3,
+     "max_translation": 0.05
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      3,
+      12
+     ],
+     "rotation": [
+      -0.1,
+      0,
+      0,
+      0.995
+     ]
+    }
+   }
+  },
+  {
+   "id": 4,
+   "name": "Camera B",
+   "components": {
+    "Camera3DComponent": {
+     "primary": 0
+    },
+    "CameraBlend3D": {
+     "from": "$2",
+     "duration": 1.5
+    },
+    "LocalTransform": {
+     "position": [
+      8,
+      5,
+      10
+     ],
+     "rotation": [
+      -0.15,
+      0.25,
+      0,
+      0.955
+     ]
+    }
+   }
+  },
+  {
+   "id": 5,
+   "name": "Hero",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:632caf8a-ee5a-4027-9ca0-5d7242556094"
+    },
+    "Animator": {
+     "graph": "guid:b0a30000-0000-4000-8000-000000000020"
+    },
+    "Locomotion3D": {
+     "stride_speed": 1.5
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.9,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 6,
+   "name": "Gaze",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      3,
+      1.7,
+      -2
+     ]
+    },
+    "IKTarget3D": {
+     "animator": "$4",
+     "chain": "head",
+     "weight": 1
+    }
+   }
+  },
+  {
+   "id": 7,
+   "name": "Hat",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a"
+    },
+    "AttachToBone": {
+     "target": "$4",
+     "bone": "head",
+     "offset": [
+      0,
+      0.3,
+      0
+     ]
+    },
+    "LocalTransform": {
+     "scale": [
+      0.15,
+      0.15,
+      0.15
+     ]
+    }
+   }
+  },
+  {
+   "id": 8,
+   "name": "Probe",
+   "components": {
+    "ReflectionProbe3D": {
+     "half_extents": [
+      10,
+      4,
+      10
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      3,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 9,
+   "name": "GI",
+   "components": {
+    "GiVolume3D": {
+     "half_extents": [
+      10,
+      3,
+      10
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      3,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 10,
+   "name": "Meadow",
+   "components": {
+    "Foliage3D": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a",
+     "count": 80,
+     "half_extents": [
+      12,
+      12
+     ],
+     "scale_min": 0.2,
+     "scale_max": 0.35
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      -8
+     ]
+    }
+   }
+  },
+  {
+   "id": 11,
+   "name": "Scorch",
+   "components": {
+    "Decal3D": {
+     "color": [
+      0.1,
+      0.1,
+      0.1,
+      0.8
+     ],
+     "size": [
+      3,
+      2,
+      3
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -5,
+      0.5,
+      2
+     ]
+    }
+   }
+  },
+  {
+   "id": 12,
+   "name": "Fire",
+   "components": {
+    "ParticleEmitter3D": {
+     "rate": 40,
+     "collide": 1
+    },
+    "LocalTransform": {
+     "position": [
+      -5,
+      0.2,
+      2
+     ]
+    }
+   }
+  },
+  {
+   "id": 13,
+   "name": "Navmesh",
+   "components": {
+    "NavMeshSurface3D": {
+     "bounds_half": [
+      20,
+      5,
+      20
+     ]
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "id": 14,
+   "name": "Mud",
+   "components": {
+    "NavArea3D": {
+     "half": [
+      3,
+      1,
+      3
+     ],
+     "area": 2,
+     "cost": 4
+    },
+    "LocalTransform": {
+     "position": [
+      4,
+      0,
+      -6
+     ]
+    }
+   }
+  },
+  {
+   "id": 15,
+   "name": "Crate",
+   "components": {
+    "NavObstacle3D": {
+     "half": [
+      1,
+      1,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -4,
+      1,
+      -6
+     ]
+    }
+   }
+  },
+  {
+   "id": 16,
+   "name": "Jump",
+   "components": {
+    "NavLink3D": {
+     "end": [
+      0,
+      0,
+      -4
+     ],
+     "radius": 0.5
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      -2
+     ]
+    }
+   }
+  },
+  {
+   "id": 17,
+   "name": "Sensor",
+   "components": {
+    "Raycast3D": {
+     "direction": [
+      0,
+      -1,
+      0
+     ],
+     "distance": 5
+    },
+    "LocalTransform": {
+     "position": [
+      2,
+      2,
+      2
+     ]
+    }
+   }
+  },
+  {
+   "id": 18,
+   "name": "Gate 1",
+   "components": {
+    "Waypoint3D": {
+     "next": "$18",
+     "radius": 4
+    },
+    "LocalTransform": {
+     "position": [
+      20,
+      0,
+      10
+     ]
+    }
+   }
+  },
+  {
+   "id": 19,
+   "name": "Gate 2",
+   "components": {
+    "Waypoint3D": {
+     "next": "$19",
+     "radius": 4
+    },
+    "LocalTransform": {
+     "position": [
+      20,
+      0,
+      30
+     ]
+    }
+   }
+  },
+  {
+   "id": 20,
+   "name": "Gate 3",
+   "components": {
+    "Waypoint3D": {
+     "next": "$17",
+     "radius": 4
+    },
+    "LocalTransform": {
+     "position": [
+      -10,
+      0,
+      20
+     ]
+    }
+   }
+  },
+  {
+   "id": 21,
+   "name": "Car",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:e213f420-52a9-4b08-996e-d214d9d86a75"
+    },
+    "RigidBody3D": {
+     "half": [
+      0.9,
+      0.4,
+      1.5
+     ],
+     "density": 300
+    },
+    "Vehicle3D": {},
+    "VehicleDriver3D": {
+     "path": "$17",
+     "max_speed": 12
+    },
+    "LocalTransform": {
+     "position": [
+      20,
+      1,
+      0
+     ]
+    }
+   }
+  }
+ ]
+}

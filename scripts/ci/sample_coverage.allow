@@ -4,24 +4,6 @@
 
 Blackboard | state the engine writes and games read; nothing to author
 SceneChunkStatus | state the engine writes and games read; nothing to author
-AttachToBone | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-IKTarget3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-Locomotion3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-CameraShake3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-CameraBlend3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-ReflectionProbe3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-GiVolume3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-Foliage3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-TerrainCollider3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-Decal3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-ParticleEmitter3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-NavArea3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-NavLink3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-NavObstacle3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-Raycast3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-Waypoint3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-VehicleDriver3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-WorldSettings | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
 PathAgent | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
 ParticleBurst | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
 ShakeTrigger | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample

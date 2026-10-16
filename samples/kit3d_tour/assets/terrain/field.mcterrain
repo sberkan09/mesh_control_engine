@@ -1,0 +1,4 @@
+{
+  "format": "mce-terrain", "version": 1, "guid": "b0a30000-0000-4000-8000-000000000021", "name": "field",
+  "resolution": 33, "chunk": 16, "size": [80, 80], "height_range": [0, 4], "fill": 0
+}
