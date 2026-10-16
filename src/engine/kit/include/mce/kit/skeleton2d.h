@@ -28,6 +28,14 @@
 // and loses the shear.
 //
 // Limits: 64 bones (the component holds one pose per bone; the cook refuses more) and 256 slots.
+//
+// Animation (M-ANIM2D 2). The .mcskel2d's "animations" are clips of per-bone keys (rotate,
+// translate, scale; offsets from the rest pose like `pose`) and timed events. A
+// Skeleton2DAnimator next to the Skeleton2D plays them: "kit_skeleton2d_animators" runs just
+// before "kit_skeleton2d" in FixedUpdate_Post, advances the playhead, cross-fades and writes the
+// animated channels into `pose`. A channel (one bone's rotation, translation or scale) that no
+// clip being sampled keys is not written: gameplay and timelines own it. With a `graph` (an
+// .mcanim AnimGraph, the 3D Animator's format) the graph's states name the skeleton's animations.
 
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
@@ -72,7 +80,7 @@ MCE_REFL_STRUCT(Bone2DTransform, a, b, c, d, x, y)
 
 // Plays a .mcskel2d on its entity (kit::install_skeleton2d) and draws its slots through the sprite
 // extract. `pose[i]` offsets bone i from its rest pose (written by gameplay, timelines through
-// "Skeleton2D.pose[i].rotation", and later by clips and IK); `world` is engine-written.
+// "Skeleton2D.pose[i].rotation", by a Skeleton2DAnimator, and later by IK); `world` is engine-written.
 struct Skeleton2D {
     asset::AssetRef<asset::Skeleton2D> skeleton;
     math::Color tint;     // multiplies every slot's tint
@@ -110,6 +118,60 @@ MCE_COMPONENT(Bone2DFollow, (skeleton, Help{"the entity with the Skeleton2D"}), 
               (offset, Help{"metres in the bone's space"}), (rotation, Help{"radians added to the bone's"}), follow_rotation,
               follow_scale)
 
+// Plays the animations of its entity's Skeleton2D asset (M-ANIM2D 2), modelled on the 3D Animator
+// (kit3d.h). `clip` names an animation; a new name starts it at 0 and cross-fades from the old
+// over `fade` seconds. `time` advances by dt * speed every tick. A clip loops when its asset says
+// "loop" (the default) and `loop` is on; otherwise it plays once, holds its last pose and sets
+// `finished`; `restart` plays it again.
+//
+// Each tick the animator samples the clip (and the clip fading out, weight 1 - `blend`) and
+// writes the blended value of every channel those clips key into Skeleton2D::pose. A clip that
+// does not key a channel the other one keys contributes the rest offset (zero, scale one) to the
+// blend. Channels no sampled clip keys keep what gameplay wrote. Rotations blend linearly as
+// offsets (radians), scales linearly as factors.
+//
+// With `graph` (an .mcanim AnimGraph) the graph drives the animator exactly as it drives the 3D
+// Animator: `state` is the state playing, `params` its parameters in the order it lists them,
+// transitions on parameter conditions or a one-shot's end cross-fade over their own fade, 1D and
+// 2D blend states mix their clips at the same phase (`blend_clip`, `blend_weight`), and `restart`
+// returns to the start state. A state's clip names one of the skeleton's animations; clip lengths
+// come from the skeleton. Layers, root motion and IK chains of a graph are ignored in 2D.
+//
+// Events. A clip's events (and a graph state's) raise kit::AnimEvent3D{entity, StringId of the
+// name} (anim3d.h) as the playhead crosses them, once per crossing (a loop wrap crosses again);
+// `last_event` and `events_fired` record them. Every field is saved, so a save restores a
+// cross-fade mid-way.
+struct Skeleton2DAnimator {
+    FixedString<32> clip;
+    FixedString<32> state;                    // runtime: the graph state playing
+    asset::AssetRef<asset::AnimGraph> graph;  // optional state graph (.mcanim)
+    u64 playing = 0;                          // runtime: StringId of the animation `time` belongs to
+    u64 previous = 0;                         // runtime: the animation fading out
+    u64 blend_clip = 0;                       // runtime: a blend state's second animation
+    math::vec4 params;                        // the graph's parameters, in its order
+    FixedString<24> last_event;               // runtime: the last event's name
+    f32 speed = 1.0f;
+    f32 fade = 0.2f;                          // cross-fade seconds (0 = cut); a graph transition sets its own
+    f32 time = 0.0f;                          // seconds into `clip`
+    f32 previous_time = 0.0f;                 // runtime: seconds into `previous`
+    f32 blend = 1.0f;                         // runtime: 0..1 weight of `clip` against `previous`
+    f32 blend_weight = 0.0f;                  // runtime: 0..1 weight of `blend_clip` against `clip`
+    u32 events_fired = 0;                     // runtime
+    bool loop = true;                         // without a graph: false plays `clip` once
+    bool finished = false;                    // runtime: a one-shot clip or state reached its end
+    bool restart = false;                     // set to replay from the start (the engine clears it)
+    u8 pad_ = 0;
+};
+MCE_COMPONENT(Skeleton2DAnimator, (clip, Save, Help{"an animation of the entity's Skeleton2D"}),
+              (state, ReadOnly, Transient, Save), (graph, Help{"an AnimGraph (.mcanim) whose states name the animations"}),
+              (playing, ReadOnly, Transient, Save), (previous, ReadOnly, Transient, Save),
+              (blend_clip, ReadOnly, Transient, Save), (params, Save, Help{"the graph's parameters, in the order it lists them"}),
+              (last_event, ReadOnly, Transient, Save), (speed, Range{-8, 8}, Save), (fade, Range{0, 5}, Save), (time, Save),
+              (previous_time, ReadOnly, Transient, Save), (blend, ReadOnly, Transient, Save),
+              (blend_weight, ReadOnly, Transient, Save), (events_fired, ReadOnly, Transient, Save),
+              (loop, Save, Help{"without a graph: off plays the clip once"}), (finished, ReadOnly, Transient, Save),
+              (restart, Save, Help{"replay from the start (the engine clears it)"}))
+
 class Skeleton2DRegistry {
 public:
     Skeleton2DRegistry() = default;
@@ -125,9 +187,16 @@ public:
         FixedString<32> name;
         Array<asset::Skeleton2DBone> bones;
         Array<asset::Skeleton2DSlot> slots;
+        Array<asset::Skeleton2DAnimation> animations;
+        Array<asset::Skeleton2DTimeline> timelines;
+        Array<asset::Skeleton2DKey> keys;
+        Array<asset::Skeleton2DEvent> events;
+        Array<u64> animation_ids;  // StringId of each animation's name
         Array<char> strings;
         StringView string(u32 offset) const;
         i32 find_bone(StringView name) const;  // -1 when none
+        i32 find_animation(u64 id) const;      // by StringId of the name; -1 when none
+        f32 duration(u64 id) const;            // an animation's length; 0 when none
     };
 
     // The definition for a GUID: its cooked asset (copied out once, re-read on hot reload), or one
@@ -137,10 +206,24 @@ public:
     // asset system: tools preview unsaved edits through it, tests skip the cook.
     Result<void> define(asset::Guid guid, Span<const byte> payload);
 
+    // The AnimGraph for a GUID (a Skeleton2DAnimator's graph): one registered with define_graph,
+    // else its cooked asset (reloaded when it hot-reloads). False when it does not resolve.
+    bool graph(asset::Guid guid, asset::AnimGraphView& out);
+    // Registers (or replaces) a CHNK_ANIMG payload for `guid`, ahead of the asset system.
+    Result<void> define_graph(asset::Guid guid, Span<const byte> payload);
+
 private:
+    struct Graph {
+        asset::Guid guid;
+        asset::AnyHandle handle;
+        Array<byte> bytes;  // a defined graph's payload
+        bool defined = false;
+        bool failed = false;
+    };
     asset::AssetSystem* assets_ = nullptr;
     Array<Def> defs_;
     Array<asset::Guid> warned_;
+    Array<Graph> graphs_;
 };
 
 // ---------------------------------------------------------------- pure pose math
@@ -181,12 +264,32 @@ Bone2DTransform transform_2d(const math::vec3& position, const math::quat& rotat
 
 // ---------------------------------------------------------------- systems
 
-// Registers Skeleton2D and Bone2DFollow, sets the Skeleton2DRegistry resource and adds
-// "kit_skeleton2d" to FixedUpdate_Post. Idempotent (re-points the assets).
+// Registers Skeleton2D, Bone2DFollow and Skeleton2DAnimator and the AnimEvent3D event, sets the
+// Skeleton2DRegistry resource and adds, in this order, to FixedUpdate_Post:
+//   "kit_skeleton2d_animators"  Skeleton2DAnimator time, cross-fades, graphs, events; writes pose
+//   "kit_skeleton2d"            every Skeleton2D's world pose, then the Bone2DFollow entities
+// Idempotent (re-points the assets).
 void install_skeleton2d(World& world, asset::AssetSystem* assets);
 
-// The system itself (exposed for tests and custom pipelines).
+// The systems themselves (exposed for tests and custom pipelines).
 void kit_skeleton2d(Frame& f);
+void kit_skeleton2d_animators(Frame& f);
+
+// A weighted blend of animation samples, as the animator builds it each tick (exposed for tests and
+// tools that preview a clip). add() samples animation `anim` of `def` at `t` seconds (a looping
+// animation wraps past its end, a one-shot clamps) and adds each keyed channel's value times `w`.
+// write() sets the keyed channels of `pose`: rotation and translation are the weighted sums,
+// scale the weighted sum plus one (the rest factor) times the weight of the samples that did not
+// key it. Channels no sample keyed keep their value.
+struct Skeleton2DBlend {
+    Bone2DPose acc[kSkeleton2DBones];      // weighted sums (scale starts at 0)
+    math::vec3 weight[kSkeleton2DBones];   // per bone: rotate, translate, scale weight that keyed it
+    u8 keyed[kSkeleton2DBones] = {};       // per bone: bit 0 rotate, bit 1 translate, bit 2 scale
+
+    Skeleton2DBlend();
+    void add(const Skeleton2DRegistry::Def& def, u32 anim, f32 t, f32 w);
+    void write(u32 bone_count, Bone2DPose* pose) const;
+};
 
 // A bone's world transform in the skeleton's space by name, from `e`'s Skeleton2D (as the last
 // tick posed it). False when `e` has no Skeleton2D, it does not resolve, or no bone has the name.

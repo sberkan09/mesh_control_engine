@@ -13,11 +13,15 @@
     {"id": 3, "name": "Guard", "components": {
       "LocalTransform": {"position": [-6, 0, -6]},
       "NavAgent3D": {"speed": 3},
-      "AiBrain": {"tree": "guid:a1de0000-0000-4000-8000-000000000001"}}},
+      "AiBrain": {"tree": "guid:a1de0000-0000-4000-8000-000000000001"},
+      "Perceiver": {"sight_range": 7, "sight_angle": 140, "forget": 4, "team": 1}}},
     {"id": 4, "name": "Bell", "components": {
       "LocalTransform": {"position": [0, 0, 0]},
       "AiBrain": {"tree": "guid:a1de0000-0000-4000-8000-000000000002"}}},
     {"id": 5, "name": "Thief", "components": {
-      "LocalTransform": {"position": [8, 0, 8]}}}
+      "LocalTransform": {"position": [8, 0, 8]},
+      "NavAgent3D": {"speed": 1.5},
+      "AiBrain": {"tree": "guid:a1de0000-0000-4000-8000-000000000003"},
+      "Stimulus": {"team": 2}}}
   ]
 }

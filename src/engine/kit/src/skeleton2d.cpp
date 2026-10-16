@@ -5,7 +5,9 @@
 
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/anim3d.h"
 #include "mce/log.h"
+#include "mce/string_id.h"
 
 namespace mce::kit {
 
@@ -125,6 +127,18 @@ i32 Skeleton2DRegistry::Def::find_bone(StringView n) const {
     return -1;
 }
 
+i32 Skeleton2DRegistry::Def::find_animation(u64 id) const {
+    if (id == 0) return -1;
+    for (usize i = 0; i < animation_ids.size(); ++i)
+        if (animation_ids[i] == id) return static_cast<i32>(i);
+    return -1;
+}
+
+f32 Skeleton2DRegistry::Def::duration(u64 id) const {
+    const i32 i = find_animation(id);
+    return i < 0 ? 0.0f : animations[static_cast<usize>(i)].duration;
+}
+
 namespace {
 
 Result<void> copy_def(Skeleton2DRegistry::Def& d, asset::Guid guid, Span<const byte> payload) {
@@ -135,9 +149,21 @@ Result<void> copy_def(Skeleton2DRegistry::Def& d, asset::Guid guid, Span<const b
     d.name.assign(v.name());
     d.bones.clear();
     d.slots.clear();
+    d.animations.clear();
+    d.timelines.clear();
+    d.keys.clear();
+    d.events.clear();
+    d.animation_ids.clear();
     d.strings.clear();
     for (const asset::Skeleton2DBone& b : v.bones) d.bones.push_back(b);
     for (const asset::Skeleton2DSlot& s : v.slots) d.slots.push_back(s);
+    for (const asset::Skeleton2DAnimation& a : v.animations) {
+        d.animations.push_back(a);
+        d.animation_ids.push_back(StringId(v.string(a.name)).value);
+    }
+    for (const asset::Skeleton2DTimeline& t : v.timelines) d.timelines.push_back(t);
+    for (const asset::Skeleton2DKey& k : v.keys) d.keys.push_back(k);
+    for (const asset::Skeleton2DEvent& e : v.events) d.events.push_back(e);
     for (char c : v.strings) d.strings.push_back(c);
     return {};
 }
@@ -278,9 +304,13 @@ void install_skeleton2d(World& world, asset::AssetSystem* assets) {
         r->set_assets(assets);
         return;
     }
-    world.register_components<Skeleton2D, Bone2DFollow>();
+    world.register_components<Skeleton2D, Bone2DFollow, Skeleton2DAnimator>();
+    world.register_event<AnimEvent3D>(Phase::FixedUpdate_Post);  // shared with kit3d's Animator (idempotent)
     world.set_resource(Skeleton2DRegistry(assets));
-    world.add_system(Phase::FixedUpdate_Post, "kit_skeleton2d", &kit_skeleton2d);
+    // The animators write `pose` before the skeletons turn it into world transforms.
+    world.add_system(Phase::FixedUpdate_Post, "kit_skeleton2d_animators", &kit_skeleton2d_animators);
+    world.add_system(Phase::FixedUpdate_Post, "kit_skeleton2d", &kit_skeleton2d, "kit_skeleton2d_animators");
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit_skeleton2d_animators");
     world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit_skeleton2d");
 }
 

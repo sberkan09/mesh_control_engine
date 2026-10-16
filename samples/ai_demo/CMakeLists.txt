@@ -1,7 +1,8 @@
 # ai_demo: M-AI's demo, a data-only project the stock mce_player plays. A guard patrols between two
-# posts on a navmesh (move_to, look_at, wait in a repeat) until a bell's tree rings the alarm; the
-# guard's tree hears it (wait_event), and a guard that observes lower-priority branches cuts the
-# patrol short and chases the thief (abort "lower"). Steps 3-6 of M-AI grow it.
+# posts on a navmesh (move_to, look_at, wait in a repeat). A thief sneaks in and makes a noise; the
+# guard's Perceiver hears it and later sees the thief, and guards that observe lower-priority
+# branches (abort "lower") cut the patrol short to investigate and then to chase. A bell's tree
+# rings an alarm the guard waits for (wait_event). Steps 4-6 of M-AI grow it.
 if(NOT TARGET mce_cook)
     return()
 endif()
@@ -20,7 +21,7 @@ add_custom_target(ai_demo_content ALL DEPENDS "${pack}")
 add_dependencies(ai_demo_content mce_player)
 
 if(MCE_BUILD_TESTS)
-    # Headless: the alarm cuts the patrol short and the guard catches the thief, the same way twice.
+    # Headless: the noise and the sighting cut the patrol short and the guard catches the thief, the same way twice.
     add_test(NAME ai_demo_player
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack}
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/player_test.cmake)

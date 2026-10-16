@@ -429,6 +429,7 @@ constexpr Feature kFeatures[] = {
     {"audio", "one-shot sound effects", "data", "SfxTrigger"},
     {"audio", "compressed clips (Ogg Vorbis)", "asset", ".ogg, or \"compress\": \"vorbis\" in a .wav sidecar"},
     {"audio", "varied one-shots (sound sets, pitch)", "asset", ".mcsound named as the clip; PlayParams::pitch from code"},
+    {"audio", "bus filters, reverb, limiter", "data", "AudioBusEffects, AudioReverb, AudioLimiter"},
     {"input", "actions, bindings, touch controls", "asset", ".mcinput"},
     {"ui", "HUD and menus", "code", "mce::ui from code; .mcui is M-UI-DATA"},
     {"3D", "meshes, materials, lights, sky", "data", "the 3D kit's components, glTF, .mcmat, .mcenv"},

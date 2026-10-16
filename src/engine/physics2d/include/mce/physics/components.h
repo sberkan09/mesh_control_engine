@@ -136,5 +136,10 @@ struct ContactEnd2D {
     Entity a;
     Entity b;
 };
+// Reflected for scripts (mce.events, M-SCRIPT 2).
+MCE_EVENT(TriggerEnter, sensor, other)
+MCE_EVENT(TriggerExit, sensor, other)
+MCE_EVENT(ContactBegin2D, a, b, point, normal, approach_speed)
+MCE_EVENT(ContactEnd2D, a, b)
 
 }  // namespace mce::physics

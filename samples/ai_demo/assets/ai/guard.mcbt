@@ -4,11 +4,13 @@
   "guid": "a1de0000-0000-4000-8000-000000000001",
   "name": "guard",
   "blackboard": {
+    "target": "entity",
+    "sees": "bool",
+    "last_seen": "vec3",
+    "heard_at": "vec3",
     "alert": {"type": "bool", "default": false},
-    "caught": {"type": "bool", "default": false},
     "post_a": {"type": "vec3", "default": [-6, 0, -6]},
-    "post_b": {"type": "vec3", "default": [-6, 0, 6]},
-    "thief_at": {"type": "vec3", "default": [8, 0, 8]}
+    "post_b": {"type": "vec3", "default": [-6, 0, 6]}
   },
   "root": {"parallel": [
     {"sequence": [
@@ -18,12 +20,18 @@
     ], "name": "listen"},
     {"selector": [
       {"guard": {"sequence": [
-        {"task": "log", "text": "chasing"},
-        {"task": "move_to", "key": "thief_at", "radius": 1.0},
+        {"task": "log", "text": "spotted the thief"},
+        {"task": "move_to", "key": "target", "radius": 1.2},
         {"task": "log", "text": "caught the thief"},
-        {"set": "caught", "value": true},
         {"wait": 1000}
-      ]}, "key": "alert", "value": true, "abort": "lower", "name": "chase"},
+      ]}, "key": "target", "abort": "lower", "name": "chase"},
+      {"guard": {"sequence": [
+        {"task": "log", "text": "heard something"},
+        {"task": "move_to", "key": "heard_at", "radius": 1},
+        {"task": "look_at", "key": "post_a"},
+        {"wait": 1},
+        {"set": "heard_at", "clear": true}
+      ]}, "key": "heard_at", "abort": "lower", "name": "investigate"},
       {"repeat": {"sequence": [
         {"task": "move_to", "key": "post_a"},
         {"task": "look_at", "key": "post_b"},

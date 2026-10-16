@@ -26,9 +26,14 @@ MCE_CVAR(cv_music_db, "audio.music_db", 0.0f, "Music bus gain (dB)", CVarFlags::
 MCE_CVAR(cv_sfx_db, "audio.sfx_db", 0.0f, "SFX bus gain (dB)", CVarFlags::Saved);
 MCE_CVAR(cv_ui_db, "audio.ui_db", 0.0f, "UI bus gain (dB)", CVarFlags::Saved);
 MCE_CVAR(cv_enabled, "audio.enabled", true, "Open an audio device (false = run silent)", CVarFlags::RequiresRestart);
+MCE_CVAR(cv_reverb, "audio.reverb", true, "Reverb on the buses that send to it (false = dry everywhere)", CVarFlags::Saved);
 
 inline constexpr u32 kNamedBuses = Bus_User0;  // Master/Music/SFX/UI have options-screen convars
 ConVar* const kBusConvars[kNamedBuses] = {&cv_master_db, &cv_music_db, &cv_sfx_db, &cv_ui_db};
+
+void on_reverb_convar(ConVar& var) {
+    if (g_convar_device) g_convar_device->set_reverb_allowed(var.get_bool());
+}
 
 void on_bus_convar(ConVar& var) {
     if (!g_convar_device) return;
@@ -153,6 +158,8 @@ Result<mem::UniquePtr<AudioDevice>> AudioDevice::create(const AudioDesc& desc) {
     dev->free_handle_count_ = kMaxHandles;
     dev->command_hash_ = kFnv64Offset;
     for (BusId& p : dev->bus_parent_) p = Bus_Master;
+    for (auto& sends : dev->send_db_)
+        for (f32& db : sends) db = -96.f;
 
     dev->backend_ = desc.backend;
     if (desc.backend == Backend::Device && !cv_enabled.get_bool()) dev->backend_ = Backend::Silent;
@@ -189,6 +196,8 @@ Result<mem::UniquePtr<AudioDevice>> AudioDevice::create(const AudioDesc& desc) {
             kBusConvars[b]->set_on_change(&on_bus_convar);
             if (kBusConvars[b]->get_float() != 0.f) dev->set_bus_gain(static_cast<BusId>(b), kBusConvars[b]->get_float());
         }
+        cv_reverb.set_on_change(&on_reverb_convar);
+        dev->reverb_allowed_ = cv_reverb.get_bool();
     }
     return dev;
 }
@@ -499,6 +508,8 @@ Result<void> AudioDevice::set_bus_eq(BusId bus, u32 band, const BiquadDesc& d) {
 }
 
 void AudioDevice::set_limiter(const LimiterDesc& d) {
+    if (d == limiter_) return;
+    limiter_ = d;
     AudioCommand c;
     c.type = CmdType::Limiter;
     c.flags = d.enabled ? 1 : 0;
@@ -507,6 +518,84 @@ void AudioDevice::set_limiter(const LimiterDesc& d) {
     c.voice.pan = 1.f - std::exp(-1.f / frames);
     if (impl_->commands.push(c)) hash_config(command_hash_, c, c.voice.gain, c.voice.pan);
     else ++impl_->commands_dropped;
+}
+
+void AudioDevice::set_bus_filter(BusId bus, const BusFilterDesc& d) {
+    if (bus >= kBusCount) return;
+    const auto band = [](f32 hz) { return hz > 0.f ? math::clamp(hz, 20.f, 20000.f) : 0.f; };  // NaN and <= 0: off
+    BusFilterDesc f;
+    f.lowpass_hz = band(d.lowpass_hz);
+    f.highpass_hz = band(d.highpass_hz);
+    if (f == filter_[bus]) return;
+    AudioCommand c;
+    c.type = CmdType::BusFilter;
+    c.index = bus;
+    c.voice.gain = f.lowpass_hz;
+    c.voice.pan = f.highpass_hz;
+    if (!impl_->commands.push(c)) {
+        ++impl_->commands_dropped;
+        return;
+    }
+    filter_[bus] = f;
+    hash_config(command_hash_, c, f.lowpass_hz, f.highpass_hz);
+}
+
+Result<void> AudioDevice::set_bus_send(BusId bus, u32 unit, f32 send_db) {
+    if (bus == Bus_Master || bus >= kBusCount || unit >= kReverbUnits)
+        return Error(Errc::InvalidArgument, "audio.bus.send", "a bus other than Master sends to reverb unit 0 or 1", bus);
+    const f32 db = std::isnan(send_db) || send_db <= -96.f ? -96.f : math::clamp(send_db, -96.f, 12.f);
+    if (db == send_db_[bus][unit]) return ok();
+    AudioCommand c;
+    c.type = CmdType::BusSend;
+    c.index = bus;
+    c.flags = static_cast<u8>(unit);
+    c.voice.gain = db_to_linear(db);
+    if (!impl_->commands.push(c)) return Error(Errc::AudioQueueFull, "audio.bus.send");
+    send_db_[bus][unit] = db;
+    hash_config(command_hash_, c, db);
+    return ok();
+}
+
+Result<void> AudioDevice::set_reverb(u32 unit, const ReverbDesc& d) {
+    if (unit >= kReverbUnits) return Error(Errc::InvalidArgument, "audio.reverb", "unit", unit);
+    const auto unit_range = [](f32 v) { return std::isnan(v) ? 0.5f : math::clamp(v, 0.f, 1.f); };
+    ReverbDesc r = d;
+    r.room_size = unit_range(d.room_size);
+    r.damping = unit_range(d.damping);
+    r.width = std::isnan(d.width) ? 1.f : math::clamp(d.width, 0.f, 1.f);
+    r.wet_db = std::isnan(d.wet_db) ? 0.f : math::clamp(d.wet_db, -96.f, 12.f);
+    if (r == reverb_[unit]) return ok();
+    reverb_[unit] = r;
+    send_reverb(unit);
+    return ok();
+}
+
+void AudioDevice::set_reverb_allowed(bool allowed) {
+    if (allowed == reverb_allowed_) return;
+    reverb_allowed_ = allowed;
+    for (u32 u = 0; u < kReverbUnits; ++u)
+        if (reverb_[u].enabled) send_reverb(u);
+}
+
+void AudioDevice::send_reverb(u32 unit) {
+    const ReverbDesc& r = reverb_[unit];
+    AudioCommand c;
+    c.type = CmdType::Reverb;
+    c.index = unit;
+    c.flags = r.enabled && reverb_allowed_ ? 1 : 0;
+    // Freeverb's mapping: room size to comb feedback, damping to the combs' low-pass, and wet
+    // level with width to the same-side and cross-side return gains.
+    const f32 wet = db_to_linear(r.wet_db);
+    c.reverb.feedback = r.room_size * detail::freeverb::kScaleRoom + detail::freeverb::kOffsetRoom;
+    c.reverb.damp = r.damping * detail::freeverb::kScaleDamp;
+    c.reverb.wet1 = wet * (r.width * 0.5f + 0.5f);
+    c.reverb.wet2 = wet * ((1.f - r.width) * 0.5f);
+    if (!impl_->commands.push(c)) {
+        ++impl_->commands_dropped;
+        return;
+    }
+    hash_config(command_hash_, c, c.reverb.feedback, c.reverb.damp);
+    hash_config(command_hash_, c, c.reverb.wet1, c.reverb.wet2);
 }
 
 void AudioDevice::set_paused(bool paused) {
