@@ -130,7 +130,35 @@ The first Play upload of a new app has to be made by hand in the Play Console (t
 the app); after that `--store` takes over. Android builds target the API level Google Play currently
 requires (API 36, `ANDROID_API` in `cmake/mobile/android_app.py`).
 
-## 15.6 Checklist before shipping
+## 15.6 The web
+
+`ship.py --target web` builds the game for browsers (WebAudio, WebGPU, ADR-0039) and zips it for an
+itch.io HTML upload. It needs the Emscripten SDK in the shell (`source <emsdk>/emsdk_env.sh`); like the
+phone builds, the pack is cooked on your computer first (`--host-preset`).
+
+    python3 scripts/ship.py platformer --target web --smoke
+    python3 scripts/ship.py --project projects/MyGame --target web
+    mce ship projects/MyGame --target web        # the same, from mce (the project must be under projects/)
+    mce serve dist/Ember-Step-<version>-web.zip   # play it: http://127.0.0.1:8000/
+
+The zip is flat, with `index.html` at its root:
+
+| File | What |
+|---|---|
+| `index.html` | the page (`scripts/web/shell.html`): a loading bar while the pack downloads, the icon from `ship/icon.png`, "Click to play" (or "Tap to play" on a phone), which also starts the audio (browsers keep it silent until then), a full-screen button, and a message when the browser has no WebGPU. The canvas fills the page and follows the window and the phone's rotation |
+| `<Name>.js`, `<Name>.wasm` | the game |
+| `assets.mce`, `VERSION.txt` | fetched by the game when it starts |
+
+Browsers do not run the page from a `file://` address; `mce serve` serves a zip, a folder or a project's
+newest web zip with the right types (`application/wasm`) and headers (`--lan` lets a phone on the same
+network open it). On itch.io: upload the zip as "HTML", tick "This file will be played in the browser",
+and turn on "Mobile friendly" for touch games. `--smoke` opens the staged page in headless Chromium and
+checks that it runs and draws (it needs Playwright).
+
+The game needs WebGPU: current Chrome, Edge and Safari, and Firefox 141 and later. Saves and settings
+go to the browser's IndexedDB, so they stay with that browser on that device.
+
+## 15.7 Checklist before shipping
 
 1. Every scene cooks clean (`my_game_cook projects/MyGame --pack` exits 0).
 2. `my_game -headless 1 -ticks 3600` runs a minute without an error in the log.

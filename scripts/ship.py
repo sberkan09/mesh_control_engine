@@ -13,6 +13,10 @@
                                                         # or TestFlight for an .ipa (cmake/mobile/store.py)
     python3 scripts/ship.py --project projects/Undelivered --target android   # a project on phones too: the
                                                         # host build's <game>_cook cooks its pack
+    python3 scripts/ship.py platformer --target web     # dist/Ember-Step-<version>-web.zip (M-WEB): index.html,
+                                                        # the .js/.wasm and the pack, ready for itch.io;
+                                                        # `mce serve <zip>` plays it (scripts/web/web_package.py;
+                                                        # needs the Emscripten SDK: source emsdk_env.sh)
 
 Phone builds take the app icon from <game>/ship/icon.png (1024x1024; cmake/mobile/app_icon.py), the name
 under it per language from the app.name key of <game>/assets/loc/<locale>.csv (cmake/mobile/app_names.py)
@@ -55,6 +59,7 @@ MODULE_PREFIX, MODULE_SUFFIX = ("", ".dll") if os.name == "nt" else ("lib", ".so
 ENGINE_SUFFIX = ".dylib" if sys.platform == "darwin" else MODULE_SUFFIX  # SHARED, not MODULE
 MACOS = sys.platform == "darwin"
 sys.path.insert(0, os.path.join(ROOT, "cmake", "mobile"))
+sys.path.insert(0, os.path.join(ROOT, "scripts", "web"))
 if MACOS:
     sys.path.insert(0, os.path.join(ROOT, "cmake", "macos"))
     import macos_bundle  # dSYMs, strip + ad-hoc signing, the .app bundle (Mac-owned)
@@ -63,6 +68,7 @@ ARTIFACTS = {
     "diorama": {
         "name": "MCE-Diorama",
         "title": "MCE Diorama (Artifact B)",
+        "display_title": "MCE Diorama",  # what a player sees (the web page)
         "sample": "04_diorama",
         "target": "sample_04_diorama",
         "module": None,
@@ -72,6 +78,7 @@ ARTIFACTS = {
     "platformer": {
         "name": "Ember-Step",
         "title": "Ember Step (Artifact A)",
+        "display_title": "Ember Step",
         "sample": "03_platformer",
         "target": "sample_03_platformer",
         "module": "platformer",
@@ -166,8 +173,8 @@ def project_outputs(project, args):
 
 
 def build_mobile(art, args, env=None):
-    """A phone build: the host's mce_cook (and a project's <game>_cook) first, they cook the packs;
-    then the game on the phone preset."""
+    """A cross build (phones, the web): the host's mce_cook (and a project's <game>_cook) first, they
+    cook the packs; then the game on the cross preset."""
     run(["cmake", "--preset", args.host_preset])
     run(["cmake", "--build", "--preset", args.host_preset, "--target", "mce_cook", *art.get("host_targets", [])])
     host_dir = os.path.join(ROOT, "build", args.host_preset)
@@ -206,7 +213,34 @@ def ship_ios(art, args):
     return out
 
 
+def ship_web(art, args):
+    """The browser build (ADR-0039): the web preset, then the shell page and the itch.io zip."""
+    import web_package
+    if not args.no_build:
+        if not os.environ.get("EMSDK"):
+            sys.exit("ship: --target web needs the Emscripten SDK in the environment: source <emsdk>/emsdk_env.sh")
+        build_mobile(art, args)
+    commit = git("rev-parse", "HEAD") or "unknown"
+    dirty = bool(git("status", "--porcelain", "--untracked-files=no"))
+    zip_path, stage = web_package.package(art, args, commit, dirty)
+    if args.smoke:
+        # Headless Chromium on the staged folder (WebGPU on SwiftShader): the page loads, fetches its
+        # pack, runs and draws.
+        cmd = ["node", os.path.join(ROOT, "scripts", "web", "browser_smoke.cjs"), stage, "index",
+               os.path.join(args.out, art["name"] + "-web-smoke.png"), "3000"]
+        env = dict(os.environ)
+        if "NODE_PATH" not in env and shutil.which("npm"):  # Playwright installed with npm -g
+            env["NODE_PATH"] = subprocess.run(["npm", "root", "-g"], capture_output=True, text=True).stdout.strip()
+        print("+ " + " ".join(cmd), flush=True)
+        if subprocess.run(cmd, cwd=ROOT, env=env).returncode != 0:
+            sys.exit("ship: the web smoke run failed")
+        print("ship: smoke run OK")
+    return zip_path
+
+
 def ship(art, args):
+    if args.target == "web":
+        return ship_web(art, args)
     if args.target == "android":
         return ship_android(art, args)
     if args.target == "ios":
@@ -405,12 +439,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("artifact", nargs="?", choices=[*ARTIFACTS, "all"])
     ap.add_argument("--project", help="ship a project directory made by scripts/new_project.py instead")
-    ap.add_argument("--target", choices=["desktop", "android", "ios"], default="desktop",
+    ap.add_argument("--target", choices=["desktop", "android", "ios", "web"], default="desktop",
                     help="android: an APK for arm64 phones (M-MOBILE; needs the Android SDK/NDK and JDK 17); "
-                         "ios: an app for the Simulator, or with --preset ios-arm64 a signed .ipa (needs Xcode)")
+                         "ios: an app for the Simulator, or with --preset ios-arm64 a signed .ipa (needs Xcode); "
+                         "web: a page for browsers with WebGPU, zipped for itch.io (M-WEB; needs the Emscripten SDK)")
     ap.add_argument("--preset", default=None,
-                    help="default: the platform's release preset (android: android-arm64-release, ios: ios-sim-arm64)")
-    ap.add_argument("--host-preset", default=default_preset(), help="--target android/ios: the host build whose mce_cook cooks the pack")
+                    help="default: the platform's release preset (android: android-arm64-release, ios: ios-sim-arm64, "
+                         "web: web-release)")
+    ap.add_argument("--host-preset", default=default_preset(), help="--target android/ios/web: the host build whose mce_cook cooks the pack")
     ap.add_argument("--aab", action="store_true", help="--target android: also build the Play Store bundle (.aab)")
     ap.add_argument("--version", default=None, help="default: <engine version>+<short commit> (the engine's CMake project VERSION)")
     ap.add_argument("--build-number", type=int, default=None,
@@ -422,11 +458,13 @@ def main():
     ap.add_argument("--out", default=os.path.join(ROOT, "dist"))
     ap.add_argument("--no-build", action="store_true", help="package the existing build outputs")
     ap.add_argument("--keep-symbols", action="store_true", help="do not strip (Linux)")
-    ap.add_argument("--smoke", action="store_true", help="run the staged executable once after packaging")
+    ap.add_argument("--smoke", action="store_true", help="run the staged executable once after packaging "
+                                                       "(web: in headless Chromium, needs Playwright)")
     ap.add_argument("--smoke-headless", action="store_true", help="with --smoke: headless run (no display needed)")
     args = ap.parse_args()
     if args.preset is None:
-        args.preset = {"android": "android-arm64-release", "ios": "ios-sim-arm64"}.get(args.target, default_preset())
+        args.preset = {"android": "android-arm64-release", "ios": "ios-sim-arm64",
+                       "web": "web-release"}.get(args.target, default_preset())
     if (args.store or args.dry_run) and args.target == "desktop":
         ap.error("--store and --dry-run apply to --target android/ios")
     if args.dry_run and not args.store:

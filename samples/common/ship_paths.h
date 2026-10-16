@@ -42,6 +42,8 @@ inline BuildInfo read_build_info() {
     BuildInfo info;
     FixedString<1024> path(platform::base_path());
     path.append("VERSION.txt");
+    // A web page fetches it from next to itself (scripts/web/web_package.py ships one; a dev page has none).
+    if (web::active()) web::fetch_file("VERSION.txt", path.c_str());
     std::FILE* f = std::fopen(path.c_str(), "rb");
     if (!f) {
         info.version.assign("dev ");

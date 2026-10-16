@@ -16,6 +16,10 @@
     mce story compile [<project>] [--check] [--werror]   compile story/*.story (story/story.json) into the
                                                 game's C++ header (mce/kit/novel.h) and story/REPORT.md
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
+    mce ship <project> --target web [--smoke]   the browser build, zipped for itch.io (runs the engine
+                                                checkout's scripts/ship.py: needs the Emscripten SDK)
+    mce serve <zip | folder | project> [--port N] [--lan] [--open]   play a web build locally (the right
+                                                MIME types and headers; browsers do not run file:// pages)
     mce friction [<project>...] [--out file] [--json]   collect the agents' friction notes (friction.jsonl,
                                                 written by the MCP tool report_friction) into one backlog
     mce update [<project>...] [--release [tag]] [--no-pull]  reinstall this SDK from where it came from, then rebuild
@@ -275,8 +279,43 @@ def sdk_version():
     return (lines[0].strip() if lines else "unknown"), (lines[1].strip() if len(lines) > 1 else "")
 
 
+def engine_checkout():
+    """The engine source tree: this script's own (tools/mce_cli/mce.py in a checkout), or the checkout
+    install.sh built this SDK from; None for a release SDK."""
+    here = HERE.parents[2] if len(HERE.parents) > 2 else None
+    if here and (here / "scripts" / "ship.py").is_file():
+        return here
+    kind, checkout = sdk_origin()
+    if kind == "source" and (checkout / "scripts" / "ship.py").is_file():
+        return checkout
+    return None
+
+
+def cmd_ship_web(args, p):
+    # A web build cross-compiles the engine with the project (cmake/MceProject.cmake links the game in),
+    # which the installed SDK has no libraries for: it runs from the engine checkout.
+    checkout = engine_checkout()
+    if checkout is None:
+        sys.exit("mce: --target web builds from the engine checkout (scripts/ship.py), and this SDK came from a "
+                 "release; clone the engine and run python3 scripts/ship.py --project <dir> --target web there")
+    try:
+        p.dir.relative_to(checkout / "projects")
+    except ValueError:
+        sys.exit(f"mce: --target web builds projects inside the engine checkout: copy {p.dir} to "
+                 f"{checkout / 'projects'} (the engine adds every projects/<name>/), then run this again")
+    cmd = [sys.executable, checkout / "scripts" / "ship.py", "--project", p.dir, "--target", "web",
+           "--out", pathlib.Path(args.out or (p.dir / "dist")).resolve()]
+    if args.version:
+        cmd += ["--version", args.version]
+    if args.smoke:
+        cmd.append("--smoke")
+    return run(cmd, cwd=checkout)
+
+
 def cmd_ship(args):
     p = Project(args.project)
+    if args.target == "web":
+        return cmd_ship_web(args, p)
     p.built()
     if not p.pack.is_file():
         sys.exit(f"mce: {p.pack} is missing: run `mce build {p.dir}` first")
@@ -311,6 +350,69 @@ def cmd_ship(args):
         z.writestr(f"{p.name}/VERSION.txt", version_txt)
         z.writestr(f"{p.name}/README.txt", readme)
     print(f"mce: wrote {zip_path} ({zip_path.stat().st_size // 1024} KiB)")
+    return 0
+
+
+def web_root(where):
+    """The folder `mce serve` serves: a web build folder (index.html), its zip (unpacked to a temporary
+    folder) or a project, whose newest dist/*-web.zip it picks."""
+    path = pathlib.Path(where).resolve()
+    if path.is_dir() and not (path / "index.html").is_file():
+        zips = sorted((path / "dist").glob("*-web.zip"), key=lambda z: z.stat().st_mtime) if (path / "dist").is_dir() else []
+        if not zips:
+            sys.exit(f"mce: {path} has no index.html and no dist/*-web.zip (mce ship {path} --target web makes one)")
+        path = zips[-1]
+    if path.is_file() and path.suffix == ".zip":
+        import tempfile
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="mce-serve-"))
+        with zipfile.ZipFile(path) as z:
+            z.extractall(tmp)
+        tops = [d for d in tmp.iterdir()]
+        root = tops[0] if len(tops) == 1 and tops[0].is_dir() else tmp
+        print(f"mce: {path.name} unpacked to {root}")
+        return root
+    if not (path / "index.html").is_file():
+        sys.exit(f"mce: {path} is not a web build (no index.html)")
+    return path
+
+
+def cmd_serve(args):
+    import functools
+    import http.server
+    root = web_root(args.where)
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
+                          ".wasm": "application/wasm", ".js": "text/javascript", ".mce": "application/octet-stream"}
+
+        def end_headers(self):
+            # Cross-origin isolation (what a threaded build needs for SharedArrayBuffer; itch.io offers the
+            # same switch), and no stale copy after a rebuild.
+            self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+            self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+            self.send_header("Cache-Control", "no-cache")
+            super().end_headers()
+
+        def log_message(self, fmt, *a):
+            if not args.quiet:
+                super().log_message(fmt, *a)
+
+    host = "0.0.0.0" if args.lan else "127.0.0.1"
+    server = http.server.ThreadingHTTPServer((host, args.port), functools.partial(Handler, directory=str(root)))
+    port = server.server_address[1]
+    url = f"http://127.0.0.1:{port}/"
+    print(f"mce: serving {root} at {url}" + (" (and on this machine's address, for a phone on the same network)"
+                                            if args.lan else "") + "; Ctrl+C stops", flush=True)
+    if args.open:
+        import webbrowser
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
     return 0
 
 
@@ -506,11 +608,21 @@ def main(argv):
     s.add_argument("rest", nargs=argparse.REMAINDER)
     s.set_defaults(fn=cmd_headless)
 
-    s = sub.add_parser("ship", help="zip the host, module, engine library and pack")
+    s = sub.add_parser("ship", help="zip the host, module, engine library and pack (--target web: the browser build)")
     s.add_argument("project")
+    s.add_argument("--target", choices=("desktop", "web"), default="desktop")
     s.add_argument("--out")
     s.add_argument("--version")
+    s.add_argument("--smoke", action="store_true", help="--target web: play it once in headless Chromium")
     s.set_defaults(fn=cmd_ship)
+
+    s = sub.add_parser("serve", help="play a web build locally: its zip, its folder, or a project's newest one")
+    s.add_argument("where", nargs="?", default=".")
+    s.add_argument("--port", type=int, default=8000, help="0 picks a free port")
+    s.add_argument("--lan", action="store_true", help="listen on every address, not only this machine")
+    s.add_argument("--open", action="store_true", help="open it in the default browser")
+    s.add_argument("--quiet", action="store_true", help="no request log")
+    s.set_defaults(fn=cmd_serve)
 
     s = sub.add_parser("friction", help="collect the friction notes agents wrote (report_friction) into a backlog")
     s.add_argument("projects", nargs="*", help="project folders (default: the current folder)")
