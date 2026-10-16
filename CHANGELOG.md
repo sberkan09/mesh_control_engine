@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Sample coverage gate, M-COVER step 1 (SBA-157): `local_ci.sh`'s walls stage now fails for a component that no
+  sample, project or template names, unless `scripts/ci/sample_coverage.allow` lists it with a reason. 39
+  components start on the list; the next steps show them in three tour samples. The capability table gains a
+  "Shown in" column.
 - Resetting a themed value in UI documents, M-UI-DATA2 step 2 (SBA-154): a `.mcui` widget's
   `"own_style": ["tint", ...]` keeps those style fields at the kind's default look over a theme, where an
   equal value used to read as unset and the theme's won. Old documents cook and draw the same. The editor's
