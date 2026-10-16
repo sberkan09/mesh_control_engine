@@ -519,3 +519,33 @@ key and the task succeeds; with none, it fails. Hiding from the player and movin
 ```
 
 `kit::bt_utility_scores` returns a utility node's current scores, for a debug view.
+
+### Editing and debugging trees in the editor
+
+The **Behavior Tree** panel edits a `.mcbt` (double-click one in Assets, or **New...** in the
+panel; a new tree is a selector over a one-second wait). The tree is drawn as an outline: each line
+is a node's kind, its value (a task's name, a check's key, a wait's seconds) and its `name`.
+
+- **Right-click a node** to add a child of any kind (a composite or decorator comes with a `wait 0`
+  placeholder child, a check or set names the first key), wrap it in a decorator or composite,
+  unwrap it, move it up or down among its siblings, or remove it with its subtree.
+- **The inspector** shows the selected node's value and members as JSON (`"text"`, `2`, `true`,
+  `[0, 1, 0]`). Edit one and press Enter; **x** removes a member; **+ Field** adds one (`abort`,
+  `radius`, `by`...).
+- **The blackboard** lists the keys with their type and default. Renaming a key renames it in the
+  nodes that name it; a key a node still uses cannot be removed.
+- **Problems** lists what the cook says about the tree, with line and column. Every edit is cooked
+  before it is kept, and one that breaks a tree that cooks is refused with the cook's message. A
+  tree that does not cook when you open it (a hand edit) can be edited until it does.
+
+Edits are saved as soon as you let go, so the file on disk is always the tree the panel shows. The
+panel has its own **Undo** and **Redo**, and reads a change an MCP tool or a text editor wrote
+while nothing is unsaved.
+
+**While playing**, the panel debugs a brain running the tree (pick it from the list when several
+do). Each node is coloured by its status: green while it runs (the active path), blue when it last
+succeeded, red when it last failed, grey when it has not run. A utility node's children show their
+current scores in brackets, and the blackboard shows each key's live value. **Run edits** runs the
+tree as it is now in the play world (its brains start again) without saving. The viewport draws
+each `Perceiver`'s sight cone and a line to the target it sees (green) or last saw (yellow); turn it
+off with **Perception** in the panel or the View menu.

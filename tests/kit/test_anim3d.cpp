@@ -14,6 +14,7 @@
 #include "mce/cook/animgraph_text.h"
 #include "mce/cook/cook.h"
 #include "mce/cook/json.h"
+#include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/anim3d.h"
@@ -91,7 +92,7 @@ struct Rig {
     u64 t = 0;
     Entity e;
 
-    Rig(const char* name, const std::string& graph_json, bool floor = false) {
+    Rig(const char* name, const std::string& graph_json, bool floor = false, bool hierarchy = false) {
         const Array<byte> blob = rig_blob();
         const std::string mesh_root = write_mesh_tree((std::string(name) + "_mesh").c_str(), kRig, blob.span());
         const std::string src = cook_test::fresh_dir(name);
@@ -105,6 +106,7 @@ struct Rig {
         w.register_components<LocalTransform>();
         install_kit3d(w, &assets);
         install_bodies3d(w, &assets);
+        if (hierarchy) ecs::install_hierarchy(w);  // after the kit, as scene::load installs it
         if (floor) {
             BoxCollider3D f;
             f.half = {20.0f, 0.5f, 20.0f};
@@ -479,4 +481,159 @@ TEST_CASE("anim3d: root motion and IK replay to the same state hash") {
         return r.w.state_hash();
     };
     CHECK(run("anim3d_hash_a") == run("anim3d_hash_b"));
+}
+
+// ---- M-MOVE3D 5: animation from movement ------------------------------------------------------------
+
+namespace {
+
+// Idle, walk, air and duck states driven only by the parameters Locomotion3D fills.
+std::string locomotion_graph() {
+    return graph(R"("params": ["speed", "grounded", "crouch", "move_y"], "start": "idle",
+        "states": [ { "name": "idle", "clip": "idle" }, { "name": "walk", "clip": "bob" },
+                    { "name": "air", "clip": "lift" }, { "name": "duck", "clip": "pose_f" } ],
+        "transitions": [
+            { "from": "*", "to": "air", "when": [ { "param": "grounded", "op": "<", "value": 0.5 } ], "fade": 0 },
+            { "from": "*", "to": "duck", "when": [ { "param": "crouch", "op": ">", "value": 0.5 }, { "param": "grounded", "op": ">", "value": 0.5 } ], "fade": 0 },
+            { "from": "air", "to": "idle", "when": [ { "param": "grounded", "op": ">", "value": 0.5 } ], "fade": 0 },
+            { "from": "duck", "to": "idle", "when": [ { "param": "crouch", "op": "<", "value": 0.5 } ], "fade": 0 },
+            { "from": "idle", "to": "walk", "when": [ { "param": "speed", "op": ">", "value": 0.5 } ], "fade": 0 },
+            { "from": "walk", "to": "idle", "when": [ { "param": "speed", "op": "<", "value": 0.3 } ], "fade": 0 } ])");
+}
+
+}  // namespace
+
+TEST_CASE("anim3d: Locomotion3D feeds a character's run, jump and crouch to the graph") {
+    Rig r("anim3d_loco", locomotion_graph(), true);
+    r.w.try_get_mut<LocalTransform>(r.e)->position = {0, 0.9f, 0};
+    CharacterController3D cc;
+    cc.crouch_half_height = 0.3f;
+    r.w.add(r.e, cc);
+    Locomotion3D l;
+    l.stride_speed = 2.0f;
+    r.w.add(r.e, l);
+    auto loco = [&]() -> const Locomotion3D& { return *r.w.try_get<Locomotion3D>(r.e); };
+    auto ctl = [&]() -> CharacterController3D& { return *r.w.try_get_mut<CharacterController3D>(r.e); };
+    r.run(30);
+    CHECK(loco().found == 4);
+    CHECK(r.anim().params.y == 1.0f);  // grounded
+    CHECK(r.anim().state.view() == "idle");
+    CHECK(r.anim().speed == 1.0f);
+
+    // Walking forward (-Z) at 3 m/s: speed and move_y follow within 0.1 s smoothing, the walk plays
+    // 1.5x fast for a 2 m/s stride.
+    ctl().move = {0, 0, -3};
+    r.run(60);
+    CHECK(r.anim().params.x == doctest::Approx(3.0f).epsilon(0.01));
+    CHECK(r.anim().params.w == doctest::Approx(3.0f).epsilon(0.01));
+    CHECK(r.anim().state.view() == "walk");
+    CHECK(r.anim().speed == doctest::Approx(1.5f).epsilon(0.01));
+    // Sideways: move_y falls to 0 while speed holds.
+    ctl().move = {3, 0, 0};
+    r.run(60);
+    CHECK(r.anim().params.x == doctest::Approx(3.0f).epsilon(0.01));
+    CHECK(std::fabs(r.anim().params.w) < 0.05f);
+    CHECK(loco().local_move.x == doctest::Approx(3.0f).epsilon(0.01));
+    // Fast: the play rate clamps at max_rate.
+    ctl().move = {0, 0, -6};
+    r.run(60);
+    CHECK(r.anim().speed == doctest::Approx(2.0f));
+
+    // Stopped: idle at rate 1.
+    ctl().move = {};
+    r.run(60);
+    CHECK(r.anim().state.view() == "idle");
+    CHECK(r.anim().speed == 1.0f);
+
+    // A jump: airborne with a rising vertical speed, back to idle on landing.
+    ctl().jump = true;
+    r.run(10);
+    CHECK(r.anim().params.y == 0.0f);
+    CHECK(loco().vertical_speed > 1.0f);
+    CHECK(r.anim().state.view() == "air");
+    r.run(90);
+    CHECK(r.anim().params.y == 1.0f);
+    CHECK(r.anim().state.view() == "idle");
+
+    // Crouching ducks; standing up returns.
+    ctl().crouch = true;
+    r.run(5);
+    CHECK(r.anim().params.z == 1.0f);
+    CHECK(r.anim().state.view() == "duck");
+    ctl().crouch = false;
+    r.run(5);
+    CHECK(r.anim().params.z == 0.0f);
+    CHECK(r.anim().state.view() == "idle");
+}
+
+TEST_CASE("anim3d: Locomotion3D reads a moved entity's speed and drives another entity's Animator") {
+    Rig r("anim3d_loco_moved", locomotion_graph());
+    // The mover has no controller: its position's change is the motion. The model (r.e) is a
+    // separate entity named in `animator`.
+    Locomotion3D l;
+    l.animator = r.e;
+    l.smoothing = 0.0f;
+    const Entity mover = r.w.spawn_with(LocalTransform{{}, quat::identity(), {1, 1, 1}}, l);
+    r.run(2);
+    for (u32 i = 0; i < 20; ++i) {
+        r.w.try_get_mut<LocalTransform>(mover)->position.z -= 0.05f;  // 3 m/s forward
+        r.run(1);
+    }
+    CHECK(r.anim().params.x == doctest::Approx(3.0f).epsilon(1e-3));
+    CHECK(r.anim().params.w == doctest::Approx(3.0f).epsilon(1e-3));
+    CHECK(r.anim().params.y == 1.0f);
+    CHECK(r.anim().state.view() == "walk");
+    CHECK(r.anim().speed == 1.0f);  // no stride_speed: the play rate is left alone
+}
+
+TEST_CASE("anim3d: foot IK plants both feet on a slope and a stair while the character walks") {
+    const std::string feet = graph(R"("params": ["speed"], "states": [ { "name": "stand", "clip": "idle" } ],
+        "ik": [ { "name": "foot_l", "type": "foot", "bone": "foot_l", "pelvis": "hips", "reach": 0.5, "pole": [0, 0, 1] },
+                { "name": "foot_r", "type": "foot", "bone": "foot_r", "pelvis": "hips", "reach": 0.5, "pole": [0, 0, 1] } ])");
+    {
+        // A 10 degree slope rising towards +X: the left foot (x = 0.2) stands higher than the right.
+        Rig r("anim3d_feet_slope", feet);
+        const f32 rise = std::tan(10.0f * math::kPi / 180.0f);
+        BoxCollider3D slope;
+        slope.half = {5.0f, 0.5f, 5.0f};
+        const quat tilt = math::quat_from_axis_angle({0, 0, 1}, 10.0f * math::kPi / 180.0f);
+        r.w.spawn_with(LocalTransform{math::rotate(tilt, vec3{0, -0.5f, 0}), tilt, {1, 1, 1}}, slope);
+        const Entity fl = r.marker("foot_l"), fr = r.marker("foot_r"), hips = r.marker("hips");
+        r.run(2);
+        CHECK(r.pos(fl).y == doctest::Approx(0.2f * rise).epsilon(0.01).scale(1.0));
+        CHECK(r.pos(fr).y == doctest::Approx(-0.2f * rise).epsilon(0.01).scale(1.0));
+        // The pelvis drops by the lower foot's depth so that leg still reaches.
+        CHECK(r.pos(hips).y == doctest::Approx(1.0f - 0.2f * rise).epsilon(0.01).scale(1.0));
+    }
+    {
+        // A character walking along a 0.15 m stair edge (the left foot on the step, the right on the
+        // floor) keeps both feet on their surfaces every tick while Locomotion3D reports its speed.
+        Rig r("anim3d_feet_stair", feet, true, true);
+        BoxCollider3D step;
+        step.half = {1.0f, 0.075f, 6.0f};
+        r.w.spawn_with(LocalTransform{{1.1f, 0.075f, -4.0f}, quat::identity(), {1, 1, 1}}, step);
+        // The controller is on a mover; the model hangs below it as a child, feet on the floor.
+        CharacterController3D cc;
+        cc.radius = 0.05f;  // thin enough to walk beside the step without climbing it
+        cc.half_height = 0.85f;
+        Locomotion3D l;
+        l.animator = r.e;
+        const Entity mover = r.w.spawn_with(LocalTransform{{0, 0.9f, 0}, quat::identity(), {1, 1, 1}}, cc, l);
+        r.w.add(r.e, ChildOf{mover});
+        r.w.try_get_mut<LocalTransform>(r.e)->position = {0, -0.9f, 0};
+        ecs::propagate_transforms(r.w);
+        const Entity fl = r.marker("foot_l"), fr = r.marker("foot_r");
+        r.run(30);
+        r.w.try_get_mut<CharacterController3D>(mover)->move = {0, 0, -2};
+        f32 worst_l = 0.0f, worst_r = 0.0f;
+        for (u32 i = 0; i < 90; ++i) {
+            r.run(1);
+            worst_l = math::max(worst_l, std::fabs(r.pos(fl).y - 0.15f));
+            worst_r = math::max(worst_r, std::fabs(r.pos(fr).y));
+        }
+        CHECK(r.pos(mover).z < -2.5f);
+        CHECK(r.anim().params.x == doctest::Approx(2.0f).epsilon(0.02));
+        CHECK(worst_l < 0.01f);
+        CHECK(worst_r < 0.01f);
+    }
 }

@@ -16,6 +16,7 @@ static_assert(sizeof(Bone2DPose) == 20);
 static_assert(sizeof(Bone2DTransform) == 24);
 static_assert(sizeof(Skeleton2D) == 2872);
 static_assert(sizeof(Bone2DFollow) == 64);
+static_assert(sizeof(Skeleton2DSlots) == 4 + kSkeleton2DSlotCount + kSkeleton2DSlotCount * sizeof(math::Color));
 
 // ------------------------------------------------------------------ pose math
 
@@ -79,37 +80,125 @@ Bone2DTransform transform_2d(const math::vec3& position, const math::quat& rotat
     return Bone2DTransform::trs({position.x, position.y}, angle_z(rotation), {scale.x, scale.y});
 }
 
-void skeleton2d_quads(const Skeleton2DRegistry::Def& def, const Skeleton2D& sk, const Bone2DTransform& entity,
-                      Array<Skeleton2DQuad>& out) {
+namespace {
+
+// A quad attachment as a sprite: placed at m * (offset, rotation), decomposed into rotation and
+// axis lengths (a sprite has no shear): the +x axis gives the angle, the determinant the signed
+// +y length.
+Skeleton2DQuad quad_of(const asset::Skeleton2DAttachment& s, const Bone2DTransform& bone) {
+    const Bone2DTransform m = bone * Bone2DTransform::trs({s.offset[0], s.offset[1]}, s.rotation, {1.0f, 1.0f});
+    const f32 sx = std::sqrt(m.a * m.a + m.b * m.b);
+    const f32 det = m.a * m.d - m.b * m.c;
+    Skeleton2DQuad q;
+    q.texture = s.texture_guid();
+    q.rect = {s.rect[0], s.rect[1], s.rect[2], s.rect[3]};
+    q.position = {m.x, m.y};
+    q.rotation = sx > 0.0f ? std::atan2(m.b, m.a) : 0.0f;
+    const f32 sy = sx > 0.0f ? det / sx : std::sqrt(m.c * m.c + m.d * m.d);
+    q.scale = {s.size[0] * sx, s.size[1] * sy};
+    q.pivot = {s.pivot[0], s.pivot[1]};
+    return q;
+}
+
+}  // namespace
+
+void skeleton2d_slots_setup(const Skeleton2DRegistry::Def& def, Skeleton2DSlots& slots) {
+    const u32 n = def.slots.size() < kSkeleton2DSlotCount ? static_cast<u32>(def.slots.size()) : kSkeleton2DSlotCount;
+    for (u32 i = 0; i < kSkeleton2DSlotCount; ++i) {
+        if (i < n) {
+            const asset::Skeleton2DSlot& s = def.slots[i];
+            slots.attachment[i] = s.attachment;
+            slots.color[i] = {s.tint[0], s.tint[1], s.tint[2], s.tint[3]};
+        } else {
+            slots.attachment[i] = 0;
+            slots.color[i] = math::Color{};
+        }
+    }
+    slots.slot_count = n;
+}
+
+void skeleton2d_draws(const Skeleton2DRegistry::Def& def, const Skeleton2D& sk, const Skeleton2DSlots* slots,
+                      const Skeleton2DDeform* deform, const Bone2DTransform& entity, Skeleton2DDraws& out) {
+    skeleton2d_draws(def, sk, slots, deform, nullptr, nullptr, entity, out);
+}
+
+void skeleton2d_draws(const Skeleton2DRegistry::Def& def, const Skeleton2D& sk, const Skeleton2DSlots* slots,
+                      const Skeleton2DDeform* deform, const Skeleton2DIK* ik, const Skeleton2DIKTargets* targets,
+                      const Bone2DTransform& entity, Skeleton2DDraws& out) {
     if (!sk.visible) return;
     Bone2DTransform world[kSkeleton2DBones];
-    skeleton2d_pose_offsets(def.bones.span(), Span<const Bone2DPose>(sk.pose, kSkeleton2DBones),
-                            Span<Bone2DTransform>(world, kSkeleton2DBones));
+    skeleton2d_solve_pose(def, Span<const Bone2DPose>(sk.pose, kSkeleton2DBones), ik, targets,
+                          Span<Bone2DTransform>(world, kSkeleton2DBones));
     // Flips mirror the skeleton about the entity's origin.
     const Bone2DTransform placed =
         entity * Bone2DTransform::trs({}, 0.0f, {sk.flip_x ? -1.0f : 1.0f, sk.flip_y ? -1.0f : 1.0f});
     const usize bone_count = def.bones.size() < kSkeleton2DBones ? def.bones.size() : kSkeleton2DBones;
+    const bool live = slots && slots->slot_count != 0 && slots->slot_count == def.slots.size();
     for (u32 i = 0; i < def.slots.size(); ++i) {
         const asset::Skeleton2DSlot& s = def.slots[i];
         if (s.bone >= bone_count) continue;
-        const Bone2DTransform m =
-            placed * world[s.bone] * Bone2DTransform::trs({s.offset[0], s.offset[1]}, s.rotation, {1.0f, 1.0f});
-        // Decompose into rotation and axis lengths (a sprite has no shear): the +x axis gives the
-        // angle, the determinant the signed +y length.
-        const f32 sx = std::sqrt(m.a * m.a + m.b * m.b);
-        const f32 det = m.a * m.d - m.b * m.c;
-        Skeleton2DQuad q;
-        q.texture = s.texture_guid();
-        q.rect = {s.rect[0], s.rect[1], s.rect[2], s.rect[3]};
-        q.position = {m.x, m.y};
-        q.rotation = sx > 0.0f ? std::atan2(m.b, m.a) : 0.0f;
-        const f32 sy = sx > 0.0f ? det / sx : std::sqrt(m.c * m.c + m.d * m.d);
-        q.scale = {s.size[0] * sx, s.size[1] * sy};
-        q.pivot = {s.pivot[0], s.pivot[1]};
-        q.tint = {s.tint[0] * sk.tint.r, s.tint[1] * sk.tint.g, s.tint[2] * sk.tint.b, s.tint[3] * sk.tint.a};
-        q.slot = i;
-        out.push_back(q);
+        const u32 shown = live ? slots->attachment[i] : s.attachment;
+        if (shown >= s.attachment_count) continue;  // none (255) or out of the slot's list
+        const math::Color c = live ? slots->color[i] : math::Color{s.tint[0], s.tint[1], s.tint[2], s.tint[3]};
+        const math::Color tint{c.r * sk.tint.r, c.g * sk.tint.g, c.b * sk.tint.b, c.a * sk.tint.a};
+        if (!(tint.a > 0.0f)) continue;  // alpha 0 hides the slot
+        const u32 ai = s.first_attachment + shown;
+        if (ai >= def.attachments.size()) continue;
+        const asset::Skeleton2DAttachment& a = def.attachments[ai];
+        const Bone2DTransform bone = placed * world[s.bone];
+        if (a.kind == asset::Skeleton2DAttachmentKind::Quad) {
+            Skeleton2DQuad q = quad_of(a, bone);
+            q.tint = tint;
+            q.slot = i;
+            out.quads.push_back(q);
+            continue;
+        }
+        // A mesh: each vertex in the slot bone's space, or the weighted sum of its bones' world
+        // transforms of its weight positions, in the order listed. The deform offset adds to the
+        // local position(s) first, so it turns with the bones.
+        if (u64(a.first_vertex) + a.vertex_count > def.vertices.size() || u64(a.first_index) + a.index_count > def.indices.size())
+            continue;
+        const f32* d = deform ? deform->of(ai) : nullptr;
+        Skeleton2DMesh m;
+        m.texture = a.texture_guid();
+        m.tint = tint;
+        m.rotation = std::atan2(bone.b, bone.a);
+        m.mirrored = bone.a * bone.d - bone.b * bone.c < 0.0f;
+        m.slot = i;
+        m.first_vertex = static_cast<u32>(out.vertices.size());
+        m.vertex_count = a.vertex_count;
+        m.first_index = static_cast<u32>(out.indices.size());
+        m.index_count = a.index_count;
+        for (u32 v = 0; v < a.vertex_count; ++v) {
+            const asset::Skeleton2DVertex& vx = def.vertices[a.first_vertex + v];
+            const f32 dx = d ? d[2 * v] : 0.0f;
+            const f32 dy = d ? d[2 * v + 1] : 0.0f;
+            math::vec2 p;
+            if (vx.weight_count == 0) {
+                p = bone.apply({vx.x + dx, vx.y + dy});
+            } else {
+                f32 px = 0.0f, py = 0.0f;
+                for (u32 k = 0; k < vx.weight_count && vx.first_weight + k < def.weights.size(); ++k) {
+                    const asset::Skeleton2DWeight& w = def.weights[vx.first_weight + k];
+                    const math::vec2 q =
+                        w.bone < bone_count ? world[w.bone].apply({w.x + dx, w.y + dy}) : math::vec2{w.x + dx, w.y + dy};
+                    px = px + w.weight * q.x;
+                    py = py + w.weight * q.y;
+                }
+                p = placed.apply({px, py});
+            }
+            out.vertices.push_back(Skeleton2DMeshVertex{p, {vx.u, vx.v}});
+        }
+        for (u32 k = 0; k < a.index_count; ++k) out.indices.push_back(def.indices[a.first_index + k]);
+        out.meshes.push_back(m);
     }
+}
+
+void skeleton2d_quads(const Skeleton2DRegistry::Def& def, const Skeleton2D& sk, const Bone2DTransform& entity,
+                      Array<Skeleton2DQuad>& out) {
+    Skeleton2DDraws d;
+    skeleton2d_draws(def, sk, nullptr, nullptr, entity, d);
+    for (const Skeleton2DQuad& q : d.quads) out.push_back(q);
 }
 
 // ------------------------------------------------------------------ registry
@@ -124,6 +213,21 @@ StringView Skeleton2DRegistry::Def::string(u32 offset) const {
 i32 Skeleton2DRegistry::Def::find_bone(StringView n) const {
     for (usize i = 0; i < bones.size(); ++i)
         if (string(bones[i].name) == n) return static_cast<i32>(i);
+    return -1;
+}
+
+i32 Skeleton2DRegistry::Def::find_slot(StringView n) const {
+    for (usize i = 0; i < slots.size(); ++i)
+        if (string(slots[i].name) == n) return static_cast<i32>(i);
+    return -1;
+}
+
+i32 Skeleton2DRegistry::Def::find_attachment(u32 slot, StringView n) const {
+    if (slot >= slots.size()) return -1;
+    const asset::Skeleton2DSlot& s = slots[slot];
+    for (u32 i = 0; i < s.attachment_count; ++i)
+        if (s.first_attachment + i < attachments.size() && string(attachments[s.first_attachment + i].name) == n)
+            return static_cast<i32>(i);
     return -1;
 }
 
@@ -155,16 +259,59 @@ Result<void> copy_def(Skeleton2DRegistry::Def& d, asset::Guid guid, Span<const b
     d.events.clear();
     d.animation_ids.clear();
     d.strings.clear();
+    d.attachments.clear();
+    d.vertices.clear();
+    d.weights.clear();
+    d.indices.clear();
+    d.slot_keys.clear();
+    d.values.clear();
+    d.slot_timelines = false;
+    d.ik.clear();
+    d.ik_timelines = false;
     for (const asset::Skeleton2DBone& b : v.bones) d.bones.push_back(b);
     for (const asset::Skeleton2DSlot& s : v.slots) d.slots.push_back(s);
     for (const asset::Skeleton2DAnimation& a : v.animations) {
         d.animations.push_back(a);
         d.animation_ids.push_back(StringId(v.string(a.name)).value);
     }
-    for (const asset::Skeleton2DTimeline& t : v.timelines) d.timelines.push_back(t);
+    for (const asset::Skeleton2DTimeline& t : v.timelines) {
+        d.timelines.push_back(t);
+        d.slot_timelines |= t.channel == asset::Skeleton2DChannel::Color || t.channel == asset::Skeleton2DChannel::Attachment;
+        d.ik_timelines |= t.channel == asset::Skeleton2DChannel::IKMix;
+    }
+    for (const asset::Skeleton2DIKConstraint& c : v.ik) d.ik.push_back(c);
     for (const asset::Skeleton2DKey& k : v.keys) d.keys.push_back(k);
     for (const asset::Skeleton2DEvent& e : v.events) d.events.push_back(e);
+    for (const asset::Skeleton2DAttachment& a : v.attachments) d.attachments.push_back(a);
+    for (const asset::Skeleton2DVertex& x : v.vertices) d.vertices.push_back(x);
+    for (const asset::Skeleton2DWeight& w : v.weights) d.weights.push_back(w);
+    for (u32 i : v.indices) d.indices.push_back(i);
+    for (const asset::Skeleton2DSlotKey& k : v.slot_keys) d.slot_keys.push_back(k);
+    for (f32 x : v.values) d.values.push_back(x);
     for (char c : v.strings) d.strings.push_back(c);
+    // A slot without listed attachments shows its own quad: append it as the slot's one
+    // attachment, named after the slot (after the chunk's, so timeline indices keep pointing at
+    // the same entries).
+    for (u32 i = 0; i < d.slots.size(); ++i) {
+        asset::Skeleton2DSlot& s = d.slots[i];
+        if (s.attachment_count != 0) continue;
+        asset::Skeleton2DAttachment a{};
+        a.name = s.name;
+        a.slot = static_cast<u16>(i);
+        a.kind = asset::Skeleton2DAttachmentKind::Quad;
+        a.texture[0] = s.texture[0];
+        a.texture[1] = s.texture[1];
+        for (u32 k = 0; k < 4; ++k) a.rect[k] = s.rect[k];
+        for (u32 k = 0; k < 2; ++k) {
+            a.size[k] = s.size[k];
+            a.pivot[k] = s.pivot[k];
+            a.offset[k] = s.offset[k];
+        }
+        a.rotation = s.rotation;
+        s.first_attachment = static_cast<u32>(d.attachments.size());
+        s.attachment_count = 1;
+        d.attachments.push_back(a);
+    }
     return {};
 }
 
@@ -240,17 +387,51 @@ bool placement_2d(World& w, Entity e, Bone2DTransform& out) {
 void kit_skeleton2d(Frame& f) {
     Skeleton2DRegistry* reg = f.try_resource<Skeleton2DRegistry>();
     if (!reg) return;
-    f.query<Skeleton2D>().each([&](Entity, Skeleton2D& sk) {
+    World& w = f.world();
+    // IK mix state set up from the skeleton when fresh or when its constraint count changed.
+    f.query<const Skeleton2D, Skeleton2DIK>().each([&](Entity, const Skeleton2D& sk, Skeleton2DIK& ik) {
+        const Skeleton2DRegistry::Def* def = reg->resolve(sk.skeleton.guid);
+        const u32 n = def ? static_cast<u32>(def->ik.size() < kSkeleton2DIKCount ? def->ik.size() : kSkeleton2DIKCount) : 0u;
+        if (def && n != 0 && ik.constraint_count != n) skeleton2d_ik_setup(*def, ik);
+    });
+    // IKTarget2D::found: the skeleton resolves and has the constraint (written only when it changes).
+    {
+        Array<Entity> flip;
+        f.query<const IKTarget2D>().each([&](Entity te, const IKTarget2D& t) {
+            const Skeleton2D* sk = w.alive(t.skeleton) ? w.try_get<Skeleton2D>(t.skeleton) : nullptr;
+            const Skeleton2DRegistry::Def* def = sk ? reg->resolve(sk->skeleton.guid) : nullptr;
+            const i32 ci = def ? def->find_ik(t.constraint.view()) : -1;
+            const u32 found = ci >= 0 && static_cast<u32>(ci) < kSkeleton2DIKCount ? 1u : 0u;
+            if (found != t.found) flip.push_back(te);
+        });
+        for (Entity te : flip)
+            if (IKTarget2D* t = w.try_get_mut<IKTarget2D>(te)) t->found = t->found ? 0u : 1u;
+    }
+    f.query<Skeleton2D>().each([&](Entity e, Skeleton2D& sk) {
         const Skeleton2DRegistry::Def* def = reg->resolve(sk.skeleton.guid);
         const u32 n =
             def ? static_cast<u32>(def->bones.size() < kSkeleton2DBones ? def->bones.size() : kSkeleton2DBones) : 0u;
         Bone2DTransform world[kSkeleton2DBones];
-        if (def)
-            skeleton2d_pose_offsets(def->bones.span(), Span<const Bone2DPose>(sk.pose, kSkeleton2DBones),
-                                    Span<Bone2DTransform>(world, kSkeleton2DBones));
+        if (def) {
+            // The pose, then the IK constraints (skeleton2d_solve_pose, as the extract draws it).
+            Skeleton2DIKTargets targets;
+            Skeleton2DIK scratch;
+            const Skeleton2DIK* ik = nullptr;
+            if (!def->ik.empty()) {
+                skeleton2d_ik_targets(w, e, *def, sk, targets);
+                ik = skeleton2d_ik_state(w, e, *def, *reg, scratch);
+            }
+            skeleton2d_solve_pose(*def, Span<const Bone2DPose>(sk.pose, kSkeleton2DBones), ik, &targets,
+                                  Span<Bone2DTransform>(world, kSkeleton2DBones));
+        }
         for (u32 i = n; i < kSkeleton2DBones; ++i) world[i] = Bone2DTransform{};
         sk.bone_count = n;
         std::memcpy(sk.world, world, sizeof(world));
+    });
+    // Slot state set up from the skeleton when fresh or when the skeleton's slot count changed.
+    f.query<const Skeleton2D, Skeleton2DSlots>().each([&](Entity, const Skeleton2D& sk, Skeleton2DSlots& slots) {
+        const Skeleton2DRegistry::Def* def = reg->resolve(sk.skeleton.guid);
+        if (def && (slots.slot_count == 0 || slots.slot_count != def->slots.size())) skeleton2d_slots_setup(*def, slots);
     });
 
     // Followers, after every skeleton is posed (ECS order).
@@ -261,7 +442,6 @@ void kit_skeleton2d(Frame& f) {
     Array<Follow> follows;
     f.query<const Bone2DFollow, const LocalTransform>().each(
         [&](Entity e, const Bone2DFollow& b, const LocalTransform&) { follows.push_back(Follow{e, b}); });
-    World& w = f.world();
     for (const Follow& fl : follows) {
         Bone2DTransform bone;
         if (!w.alive(fl.f.skeleton) || !skeleton2d_bone(w, fl.f.skeleton, fl.f.bone.view(), bone)) continue;
@@ -304,7 +484,7 @@ void install_skeleton2d(World& world, asset::AssetSystem* assets) {
         r->set_assets(assets);
         return;
     }
-    world.register_components<Skeleton2D, Bone2DFollow, Skeleton2DAnimator>();
+    world.register_components<Skeleton2D, Bone2DFollow, Skeleton2DAnimator, Skeleton2DSlots, Skeleton2DIK, IKTarget2D>();
     world.register_event<AnimEvent3D>(Phase::FixedUpdate_Post);  // shared with kit3d's Animator (idempotent)
     world.set_resource(Skeleton2DRegistry(assets));
     // The animators write `pose` before the skeletons turn it into world transforms.

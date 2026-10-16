@@ -54,9 +54,11 @@
 
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
+#include "mce/cook/bt_text.h"
 #include "mce/string_id.h"
 
 namespace mce::cook {
@@ -64,7 +66,6 @@ namespace mce::cook {
 namespace {
 
 constexpr const char* kStage = "cook.bt";
-constexpr u32 kBtFormatVersion = 1;
 
 // The stock tasks' arguments (kit::install_ai). Each maps onto the node: "key" to `key`; "radius",
 // "gain_db" and "finish" to `a`; "offset" to `v`; the one string argument to `arg`.
@@ -757,45 +758,8 @@ public:
     }
 
     bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
-        const JsonValue doc = in.settings;
-        const StringView file = in.display_path;
-        const u32 errors_before = diags.error_count();
-        if (!detail::check_keys(doc, {"format", "version", "guid", "name", "blackboard", "root"}, file, kStage, diags)) return false;
-        const JsonValue fmt = doc.get("format");
-        if (!fmt.is_string() || fmt.as_string() != "mce-bt") {
-            detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-bt\"");
-            return false;
-        }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kBtFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported behavior tree version (this cook reads version %u)", kBtFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
-        asset::BtHeader header{};
-        if (const JsonValue name = doc.get("name"); name.valid()) {
-            if (!name.is_string() || name.as_string().size() >= sizeof(header.name))
-                detail::error_at(diags, Errc::ParseError, file, name, kStage, "'name' must be a string of at most 31 bytes");
-            else std::memcpy(header.name, name.as_string().data(), name.as_string().size());
-        }
-        Builder b{file, diags, {}, {}, {}, {}, {}, 0};
-        b.read_blackboard(doc.get("blackboard"));
-        const JsonValue root = doc.get("root");
-        if (!root.valid()) {
-            detail::error_at(diags, Errc::ParseError, file, doc, kStage, "a behavior tree needs a 'root' node");
-            return false;
-        }
-        b.emit(root, 0, false);
-        if (diags.error_count() != errors_before) return false;
-
-        header.slot_count = b.slots;
         Array<byte> payload;
-        asset::write_behavior_tree(header, b.keys.span(), b.nodes.span(), b.considerations.span(), b.strings.span(), payload);
-        if (Result<asset::BtView> check = asset::BtView::read(payload.span()); !check) {
-            detail::error_at(diags, Errc::InvalidArgument, file, doc, kStage, "internal: the cooked tree does not read back");
-            return false;
-        }
+        if (!build_behavior_tree(in.settings, in.display_path, payload, diags)) return false;
         asset::ContainerWriter::ChunkDesc d;
         d.type = ChunkType::BehaviorTree;
         d.version = asset::chunk_version(asset::BEHAVIOR_TREE_VERSION, 0);
@@ -806,6 +770,336 @@ public:
 };
 
 }  // namespace
+
+// ------------------------------------------------------------------ the document (bt_text.h)
+
+namespace {
+
+constexpr const char* kKindNames[] = {"sequence", "selector", "parallel", "invert", "succeed", "fail", "repeat",
+                                      "retry", "cooldown", "timeout", "guard", "check", "wait", "set",
+                                      "emit", "task", "utility", "score", "token"};
+static_assert(std::size(kKindNames) == std::size(kKinds));
+constexpr const char* kKeyTypeNames[] = {"bool", "int", "float", "vec3", "entity"};
+
+void doc_error(DiagList& diags, StringView file, JsonValue at, StringView msg) {
+    detail::error_at(diags, Errc::ParseError, file, at, kStage, msg);
+}
+
+bool read_doc_node(JsonValue v, StringView file, u32 depth, BtDocument& d, DiagList& diags) {
+    if (!v.is_object()) {
+        doc_error(diags, file, v, "a node must be an object with one kind key");
+        return false;
+    }
+    if (depth > asset::kBtMaxDepth) {
+        String msg;
+        appendf(msg, "a tree is at most %u nodes deep", asset::kBtMaxDepth);
+        doc_error(diags, file, v, msg);
+        return false;
+    }
+    if (d.nodes.size() >= asset::kBtMaxNodes) {
+        String msg;
+        appendf(msg, "a tree has at most %u nodes", asset::kBtMaxNodes);
+        doc_error(diags, file, v, msg);
+        return false;
+    }
+    i32 kind = -1;
+    for (u32 i = 0; i < v.size(); ++i)
+        if (bt_is_kind(v.key_at(i))) {
+            if (kind >= 0) {
+                doc_error(diags, file, v, "a node has exactly one kind key");
+                return false;
+            }
+            kind = static_cast<i32>(i);
+        }
+    if (kind < 0) {
+        doc_error(diags, file, v, "a node needs a kind key (sequence, selector, task, ...)");
+        return false;
+    }
+    const u32 index = static_cast<u32>(d.nodes.size());
+    d.nodes.push_back(BtDocNode{});
+    BtDocNode n;
+    n.kind.assign(v.key_at(static_cast<u32>(kind)));
+    const JsonValue main = v.at(static_cast<u32>(kind));
+    const BtArity arity = bt_kind_arity(n.kind.view());
+    Array<JsonValue> kids;
+    if (arity == BtArity::Many) {
+        if (!main.is_array()) {
+            String msg;
+            appendf(msg, "'%s' takes an array of nodes", n.kind.c_str());
+            doc_error(diags, file, main, msg);
+            return false;
+        }
+        for (u32 i = 0; i < main.size(); ++i) kids.push_back(main.at(i));
+    } else if (arity == BtArity::One) {
+        kids.push_back(main);
+    } else {
+        write_inline_json(main, n.value);
+    }
+    for (u32 i = 0; i < v.size(); ++i) {
+        if (i == static_cast<u32>(kind)) continue;
+        BtDocField f;
+        f.name.assign(v.key_at(i));
+        write_inline_json(v.at(i), f.json);
+        n.fields.push_back(f);
+    }
+    for (const JsonValue& k : kids) {
+        n.children.push_back(static_cast<u32>(d.nodes.size()));
+        if (!read_doc_node(k, file, depth + 1, d, diags)) return false;
+    }
+    d.nodes[index] = n;
+    return true;
+}
+
+void write_doc_node(const BtDocument& d, u32 i, u32 indent, String& out) {
+    const BtDocNode& n = d.nodes[i];
+    out += "{";
+    append_json_string(out, n.kind.view());
+    out += ": ";
+    const BtArity arity = bt_kind_arity(n.kind.view());
+    if (arity == BtArity::Many) {
+        out += "[";
+        for (usize c = 0; c < n.children.size(); ++c) {
+            out += c ? ",\n" : "\n";
+            for (u32 s = 0; s < indent + 2; ++s) out += " ";
+            if (n.children[c] < d.nodes.size()) write_doc_node(d, n.children[c], indent + 2, out);
+        }
+        if (!n.children.empty()) {
+            out += "\n";
+            for (u32 s = 0; s < indent; ++s) out += " ";
+        }
+        out += "]";
+    } else if (arity == BtArity::One) {
+        if (!n.children.empty() && n.children[0] < d.nodes.size()) write_doc_node(d, n.children[0], indent, out);
+        else out += "null";
+    } else {
+        out += n.value.empty() ? StringView("null") : n.value.view();
+    }
+    for (const BtDocField& f : n.fields) {
+        out += ", ";
+        append_json_string(out, f.name.view());
+        out += ": ";
+        out += f.json.empty() ? StringView("null") : f.json.view();
+    }
+    out += "}";
+}
+
+}  // namespace
+
+Span<const char* const> bt_kind_names() { return Span<const char* const>(kKindNames, std::size(kKindNames)); }
+
+bool bt_is_kind(StringView kind) {
+    for (const char* k : kKindNames)
+        if (kind == k) return true;
+    return false;
+}
+
+BtArity bt_kind_arity(StringView kind) {
+    for (const Kind& k : kKinds) {
+        if (kind != k.key) continue;
+        if (k.kind <= BtNodeKind::Parallel || k.kind == BtNodeKind::Utility) return BtArity::Many;
+        if (k.kind <= BtNodeKind::Guard || k.kind == BtNodeKind::Score || k.kind == BtNodeKind::Token) return BtArity::One;
+        return BtArity::Leaf;
+    }
+    return BtArity::Leaf;
+}
+
+Span<const char* const> bt_key_type_names() { return Span<const char* const>(kKeyTypeNames, std::size(kKeyTypeNames)); }
+
+void write_inline_json(JsonValue v, String& out) {
+    if (!v.valid()) return;
+    switch (v.type()) {
+    case JsonType::Null: out += "null"; break;
+    case JsonType::Bool: out += v.as_bool() ? "true" : "false"; break;
+    case JsonType::Number: append_json_number(out, v.as_number()); break;
+    case JsonType::String: append_json_string(out, v.as_string()); break;
+    case JsonType::Array:
+        out += "[";
+        for (u32 i = 0; i < v.size(); ++i) {
+            if (i) out += ", ";
+            write_inline_json(v.at(i), out);
+        }
+        out += "]";
+        break;
+    case JsonType::Object:
+        out += "{";
+        for (u32 i = 0; i < v.size(); ++i) {
+            if (i) out += ", ";
+            append_json_string(out, v.key_at(i));
+            out += ": ";
+            write_inline_json(v.at(i), out);
+        }
+        out += "}";
+        break;
+    }
+}
+
+StringView BtDocNode::field(StringView name) const {
+    for (const BtDocField& f : fields)
+        if (f.name.view() == name) return f.json.view();
+    return {};
+}
+
+void BtDocNode::set_field(StringView name, StringView json) {
+    for (usize i = 0; i < fields.size(); ++i) {
+        if (fields[i].name.view() != name) continue;
+        if (json.empty()) fields.erase(i);
+        else fields[i].json.assign(json);
+        return;
+    }
+    if (json.empty()) return;
+    BtDocField f;
+    f.name.assign(name);
+    f.json.assign(json);
+    fields.push_back(f);
+}
+
+void BtDocument::preorder(Array<u32>& out) const {
+    out.clear();
+    if (nodes.empty()) return;
+    Array<u32> stack;
+    stack.push_back(0);
+    while (!stack.empty()) {
+        const u32 n = stack.back();
+        stack.pop_back();
+        if (n >= nodes.size() || out.size() >= nodes.size()) continue;
+        out.push_back(n);
+        const Array<u32>& c = nodes[n].children;
+        for (usize i = c.size(); i-- > 0;) stack.push_back(c[i]);
+    }
+}
+
+u32 BtDocument::parent(u32 node) const {
+    for (u32 i = 0; i < nodes.size(); ++i)
+        for (u32 c : nodes[i].children)
+            if (c == node) return i;
+    return kBtNoNode;
+}
+
+u32 BtDocument::find_key(StringView key) const {
+    for (u32 i = 0; i < keys.size(); ++i)
+        if (keys[i].name.view() == key) return i;
+    return kBtNoNode;
+}
+
+bool read_behavior_tree_document(JsonValue doc, StringView file, BtDocument& out, DiagList& diags) {
+    out = BtDocument();
+    const u32 errors_before = diags.error_count();
+    if (!doc.is_object()) {
+        doc_error(diags, file, doc, "a behavior tree is a JSON object");
+        return false;
+    }
+    if (!detail::check_keys(doc, {"format", "version", "guid", "name", "blackboard", "root"}, file, kStage, diags)) return false;
+    const JsonValue fmt = doc.get("format");
+    if (!fmt.is_string() || fmt.as_string() != "mce-bt") {
+        doc_error(diags, file, fmt.valid() ? fmt : doc, "\"format\" must be \"mce-bt\"");
+        return false;
+    }
+    if (const JsonValue name = doc.get("name"); name.valid()) {
+        if (name.is_string()) out.name.assign(name.as_string());
+        else doc_error(diags, file, name, "'name' must be a string");
+    }
+    if (const JsonValue bb = doc.get("blackboard"); bb.valid()) {
+        if (!bb.is_object()) {
+            doc_error(diags, file, bb, "'blackboard' must be an object of key: type or key: {\"type\", \"default\"}");
+        } else {
+            for (u32 i = 0; i < bb.size(); ++i) {
+                BtDocKey k;
+                k.name.assign(bb.key_at(i));
+                const JsonValue v = bb.at(i);
+                JsonValue type = v;
+                if (v.is_object()) {
+                    type = v.get("type");
+                    if (const JsonValue def = v.get("default"); def.valid()) write_inline_json(def, k.def);
+                }
+                if (!type.is_string()) {
+                    doc_error(diags, file, type.valid() ? type : v, "a key's type is bool, int, float, vec3 or entity");
+                    continue;
+                }
+                k.type.assign(type.as_string());
+                out.keys.push_back(k);
+            }
+        }
+    }
+    if (const JsonValue root = doc.get("root"); root.valid()) {
+        if (!read_doc_node(root, file, 0, out, diags)) out.nodes.clear();
+    }
+    return diags.error_count() == errors_before;
+}
+
+void write_behavior_tree_document(const BtDocument& d, asset::Guid guid, String& out) {
+    out += "{\n  \"format\": \"mce-bt\", \"version\": ";
+    appendf(out, "%u", kBtFormatVersion);
+    out += ", \"guid\": ";
+    append_json_string(out, asset::to_string(guid).view());
+    if (!d.name.empty()) {
+        out += ",\n  \"name\": ";
+        append_json_string(out, d.name.view());
+    }
+    if (!d.keys.empty()) {
+        out += ",\n  \"blackboard\": {";
+        for (usize i = 0; i < d.keys.size(); ++i) {
+            out += i ? ",\n    " : "\n    ";
+            append_json_string(out, d.keys[i].name.view());
+            out += ": ";
+            if (d.keys[i].def.empty()) {
+                append_json_string(out, d.keys[i].type.view());
+            } else {
+                out += "{\"type\": ";
+                append_json_string(out, d.keys[i].type.view());
+                out += ", \"default\": ";
+                out += d.keys[i].def.view();
+                out += "}";
+            }
+        }
+        out += "\n  }";
+    }
+    if (!d.nodes.empty()) {
+        out += ",\n  \"root\": ";
+        write_doc_node(d, 0, 2, out);
+    }
+    out += "\n}\n";
+}
+
+bool build_behavior_tree(JsonValue doc, StringView file, Array<byte>& payload, DiagList& diags) {
+    payload.clear();
+    const u32 errors_before = diags.error_count();
+    if (!detail::check_keys(doc, {"format", "version", "guid", "name", "blackboard", "root"}, file, kStage, diags)) return false;
+    const JsonValue fmt = doc.get("format");
+    if (!fmt.is_string() || fmt.as_string() != "mce-bt") {
+        detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-bt\"");
+        return false;
+    }
+    const JsonValue ver = doc.get("version");
+    if (!ver.is_integer() || ver.as_number() != kBtFormatVersion) {
+        String msg;
+        appendf(msg, "unsupported behavior tree version (this cook reads version %u)", kBtFormatVersion);
+        detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
+        return false;
+    }
+    asset::BtHeader header{};
+    if (const JsonValue name = doc.get("name"); name.valid()) {
+        if (!name.is_string() || name.as_string().size() >= sizeof(header.name))
+            detail::error_at(diags, Errc::ParseError, file, name, kStage, "'name' must be a string of at most 31 bytes");
+        else std::memcpy(header.name, name.as_string().data(), name.as_string().size());
+    }
+    Builder b{file, diags, {}, {}, {}, {}, {}, 0};
+    b.read_blackboard(doc.get("blackboard"));
+    const JsonValue root = doc.get("root");
+    if (!root.valid()) {
+        detail::error_at(diags, Errc::ParseError, file, doc, kStage, "a behavior tree needs a 'root' node");
+        return false;
+    }
+    b.emit(root, 0, false);
+    if (diags.error_count() != errors_before) return false;
+
+    header.slot_count = b.slots;
+    asset::write_behavior_tree(header, b.keys.span(), b.nodes.span(), b.considerations.span(), b.strings.span(), payload);
+    if (Result<asset::BtView> check = asset::BtView::read(payload.span()); !check) {
+        detail::error_at(diags, Errc::InvalidArgument, file, doc, kStage, "internal: the cooked tree does not read back");
+        return false;
+    }
+    return true;
+}
 
 mem::UniquePtr<IImporter> make_bt_importer() { return mem::make_unique<BtImporter>(mem::heap()); }
 

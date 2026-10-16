@@ -1,5 +1,10 @@
 #include "mce/kit/stock.h"
 
+#include <cmath>
+#include <optional>
+
+#include "mce/audio/components.h"
+
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
 #include "mce/kit/bodies3d.h"
@@ -18,6 +23,7 @@
 #include "mce/kit/sequence.h"
 #include "mce/kit/skeleton2d.h"
 #include "mce/kit/timeline.h"
+#include "mce/physics/world2d.h"
 #include "mce/kit/ai.h"
 #include "mce/kit/video.h"
 #include "mce/kit/sprite_anim.h"
@@ -109,6 +115,40 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_presence(world);
     install_captions(world);  // after kit_effects: this tick's SfxTrigger plays are captioned
     install_cinematic(world);  // last: kit_cinematic runs after the timelines and the follow cameras
+    install_audio_occlusion(world);
+}
+
+namespace {
+
+// Whether anything in `mask` lies on the segment from the listener to the source (neither counts).
+bool audio_occluded(World& w, Entity source, Entity listener, math::vec3 from, math::vec3 to, u16 mask) {
+    const math::vec3 d = to - from;
+    const f32 dist = math::length(d);
+    if (dist < 1e-4f) return false;
+    const Entity skip[2] = {source, listener};
+    if (const Physics3D* w3 = w.try_resource<Physics3D>()) {
+        physics::QueryFilter3D q;
+        q.layer_mask = mask;
+        q.exclude = Span<const Entity>(skip, 2);
+        return w3->world.raycast(from, d * (1.0f / dist), dist, q).has_value();
+    }
+    if (const physics::World2D* w2 = w.try_resource<physics::World2D>()) {
+        physics::QueryFilter q;
+        q.layer_mask = mask;
+        q.exclude = Span<const Entity>(skip, 2);
+        // The 2D world is the XY plane: z is dropped, as everywhere else in 2D, so the ray is as
+        // long as the plane distance (a 3D scene with only a World2D is read the same way).
+        const f32 plane = std::sqrt(d.x * d.x + d.y * d.y);
+        if (plane < 1e-4f) return false;
+        return w2->raycast({from.x, from.y}, {d.x / plane, d.y / plane}, plane, q).has_value();
+    }
+    return false;
+}
+
+}  // namespace
+
+void install_audio_occlusion(World& world) {
+    if (audio::AudioRef* ref = world.try_resource<audio::AudioRef>()) ref->occlusion = &audio_occluded;
 }
 
 }  // namespace mce::kit

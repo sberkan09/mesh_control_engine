@@ -372,26 +372,71 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
 
     // 2D skeletons: each visible one's slots in slot order, on the component's layer and order
     // (skeleton2d.h). Equal keys keep submission order, so slots sharing a texture stack in order.
+    // Quads go in as sprites, meshes as triangles. Deform offsets are sampled here from the
+    // animator's saved state (skeleton2d.h: a pure function of hashed fields, so nothing to save).
     Skeleton2DRegistry* skeletons = world.try_resource<Skeleton2DRegistry>();
     if (!skeletons) skeletons = &skeletons_;
-    each_placed<Skeleton2D>(world, cam, [&](Entity, const Placement& t, const Skeleton2D& sk, const Parallax*) {
+    each_placed<Skeleton2D>(world, cam, [&](Entity e, const Placement& t, const Skeleton2D& sk, const Parallax*) {
         if (!sk.visible) return;
         const Skeleton2DRegistry::Def* def = skeletons->resolve(sk.skeleton.guid);
         if (!def) return;
-        quads_.clear();
-        skeleton2d_quads(*def, sk, transform_2d(t.position, t.rotation, t.scale), quads_);
-        for (const Skeleton2DQuad& q : quads_) {
-            render::SpriteInstance inst;
-            inst.position = q.position;
-            inst.rotation = q.rotation;
-            inst.scale = q.scale;
-            inst.pivot = q.pivot;
-            inst.tint = q.tint;
-            inst.set = sprite_set(q.texture);
-            inst.region = region_index(inst.set, q.rect);
-            inst.sort_layer = sk.layer;
-            inst.sort_order = sk.order;
-            batch.add(inst);
+        draws_.clear();
+        deform_.clear();
+        const Skeleton2DDeform* deform = nullptr;
+        if (const Skeleton2DAnimator* a = world.try_get<Skeleton2DAnimator>(e); a && !def->attachments.empty()) {
+            asset::AnimGraphView g;
+            const bool graphed = a->graph.guid != asset::Guid{} && skeletons->graph(a->graph.guid, g);
+            Skeleton2DBlend blend;
+            blend.deform = &deform_;
+            skeleton2d_animator_sample(*def, *a, graphed ? &g : nullptr, blend);
+            deform = &deform_;
+        }
+        // IK (M-ANIM2D 4): the same targets and mixes the tick solves with.
+        Skeleton2DIKTargets targets;
+        Skeleton2DIK ik_scratch;
+        const Skeleton2DIK* ik = nullptr;
+        if (!def->ik.empty()) {
+            skeleton2d_ik_targets(world, e, *def, sk, targets);
+            ik = skeleton2d_ik_state(world, e, *def, *skeletons, ik_scratch);
+        }
+        skeleton2d_draws(*def, sk, world.try_get<Skeleton2DSlots>(e), deform, ik, &targets,
+                         transform_2d(t.position, t.rotation, t.scale), draws_);
+        // Merge quads and meshes by slot: both lists are in slot order.
+        usize qi = 0, mi = 0;
+        while (qi < draws_.quads.size() || mi < draws_.meshes.size()) {
+            const bool quad =
+                mi >= draws_.meshes.size() || (qi < draws_.quads.size() && draws_.quads[qi].slot < draws_.meshes[mi].slot);
+            if (quad) {
+                const Skeleton2DQuad& q = draws_.quads[qi++];
+                render::SpriteInstance inst;
+                inst.position = q.position;
+                inst.rotation = q.rotation;
+                inst.scale = q.scale;
+                inst.pivot = q.pivot;
+                inst.tint = q.tint;
+                inst.set = sprite_set(q.texture);
+                inst.region = region_index(inst.set, q.rect);
+                inst.sort_layer = sk.layer;
+                inst.sort_order = sk.order;
+                batch.add(inst);
+                continue;
+            }
+            const Skeleton2DMesh& m = draws_.meshes[mi++];
+            render::SpriteTriangle tri;
+            tri.set = sprite_set(m.texture);
+            tri.sort_layer = sk.layer;
+            tri.sort_order = sk.order;
+            tri.rotation = m.rotation;
+            tri.flip_y = m.mirrored;
+            for (u32 k = 0; k + 2 < m.index_count; k += 3) {
+                for (u32 c = 0; c < 3; ++c) {
+                    const Skeleton2DMeshVertex& v = draws_.vertices[m.first_vertex + draws_.indices[m.first_index + k + c]];
+                    tri.v[c].position = v.position;
+                    tri.v[c].uv = v.uv;
+                    tri.v[c].tint = m.tint;
+                }
+                batch.add_triangle(tri);
+            }
         }
     });
 

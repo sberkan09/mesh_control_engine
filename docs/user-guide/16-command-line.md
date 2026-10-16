@@ -47,7 +47,9 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-time_scale x` | 1 | sim speed (a cheat; scales how many ticks run, never `dt`) |
 | `-sim.max_catchup N` | 5 | max fixed ticks per rendered frame |
 | `-audio.enabled 0` | 1 | run silent |
-| `-audio.master_db`, `-audio.music_db`, `-audio.sfx_db`, `-audio.ui_db` | 0 | bus gains in dB (saved) |
+| `-audio.master_db`, `-audio.music_db`, `-audio.sfx_db`, `-audio.ui_db`, `-audio.voice_db` | 0 | bus gains in dB (saved) |
+| `-audio.reverb 0` | 1 (saved) | every reverb unit off (a dry mix) |
+| `-audio_record <file.wav>` | | headless: render the mix offline, every tick's share, into a 48 kHz float WAV, and print its length, peak and a hash of its samples |
 | `-platform.video_driver <name>` | | SDL video driver override (`dummy`, `offscreen`, `x11`, ...) |
 | `-platform.error_box 0` | 1 | no message box on boot failure |
 | `-version` | | print the version line and exit |

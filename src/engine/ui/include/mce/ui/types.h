@@ -25,6 +25,28 @@ inline constexpr u32 kWidgetKindCount = static_cast<u32>(WidgetKind::Tabs) + 1;
 enum class FontRole : u8 { Auto, Body, Title, Button };
 using UiFontRole = FontRole;
 MCE_ENUM(UiFontRole, Auto, Body, Title, Button)
+// Where a Text widget's lines sit across its rect (M-UI-DATA2 1); buttons always center theirs.
+enum class TextAlign : u8 { Left, Center, Right };
+using UiTextAlign = TextAlign;
+MCE_ENUM(UiTextAlign, Left, Center, Right)
+
+// Style fields a widget keeps over a theme even when they equal the kind's default look
+// (M-UI-DATA2 2): apply_theme gives a field still at the default the theme's value, so a bit here
+// is how a document says "the kind's default, not the theme's". Each bit covers that field in every
+// state. `.mcui` spells them as "own_style": ["tint", ...].
+enum StyleOwn : u8 {
+    OwnTint = 1u << 0,
+    OwnTextColor = 1u << 1,
+    OwnAccent = 1u << 2,
+    OwnSprite = 1u << 3,  // sprite_region, slice and draw_quad
+    OwnTextSize = 1u << 4,
+    OwnLetterSpacing = 1u << 5,
+    OwnTextOutline = 1u << 6,  // text_outline and its color
+    OwnTextShadow = 1u << 7,   // text_shadow and its color
+};
+inline constexpr u32 kStyleOwnCount = 8;
+inline constexpr const char* kStyleOwnNames[kStyleOwnCount] = {"tint",         "text_color",     "accent",      "sprite",
+                                                               "text_size",    "letter_spacing", "text_outline", "text_shadow"};
 
 // What a widget's anchors are fractions of: its parent's rect (the default; for the root's
 // children that is the safe area), the safe area (the screen minus the notch and the home

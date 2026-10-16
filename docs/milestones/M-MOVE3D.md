@@ -1,6 +1,6 @@
 # M-MOVE3D — 3D movement that feels shipped (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–4 done). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
+**Status:** active (added 2026-10-16; steps 1–5 done). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
 
 **Why:** M-GAMEPLAY3D gave 3D games their systems: navmesh agents, joints, ragdolls, vehicles and sensors.
 What a player feels is still raw:
@@ -25,7 +25,7 @@ It needs no device. Every step gates on headless runs and replay hashes in `loca
 | 2 | Camera: spring arm, look-ahead, first person, lock-on | SBA-135 | done |
 | 3 | Vehicle feel: anti-roll, downforce, wheel slip and skid events, self-righting, gears as data | SBA-136 | done |
 | 4 | AI drivers: `VehicleDriver3D` on a waypoint path, laps; agents with acceleration | SBA-137 | done |
-| 5 | Animation from movement: `Locomotion3D`, foot IK on slopes and stairs | SBA-138 | not started |
+| 5 | Animation from movement: `Locomotion3D`, foot IK on slopes and stairs | SBA-138 | done |
 | 6 | MCP and docs; the demo `samples/08_movement` | SBA-139 | not started |
 
 **Demo:** `samples/08_movement`, built over MCP alone. A humanoid runs an obstacle course, and a cart races
@@ -173,3 +173,44 @@ them drives exactly as before.
 
 `tests/kit/test_nav3d.cpp`: an agent steering a character with 2 m/s² reaches 31/60 × 2 m/s after
 31 ticks, while the instant controller is past 2 m/s.
+
+## Step 5 — animation from movement
+
+- **`Locomotion3D`** (`mce/kit/anim3d.h`), on the mover, runs as `"kit3d_locomotion"` in
+  `FixedUpdate_Post` before `"kit3d_animators"`.
+  - It reads the motion from a `CharacterController3D` (velocity, `grounded`, `crouched`), else a
+    `NavAgent3D`'s velocity, else the change of the world position.
+  - It writes the graph parameters it finds by name: `speed`, `move_x`, `move_y`,
+    `vertical_speed`, `grounded`, `airborne` and `crouch`.
+  - The speeds are eased over `smoothing` seconds.
+  - With `stride_speed`, it sets the Animator's play rate to speed ÷ `stride_speed`, clamped, and
+    to 1 when still.
+  - `animator` points it at a model on another entity.
+- **Foot IK on slopes and stairs** is the existing foot chain (M-GAMEPLAY3D 5). Step 5 adds tests
+  for a slope and for a walking character.
+
+**Tests:** `tests/kit/test_anim3d.cpp`:
+- A character with a graph whose states switch only on those parameters goes from idle to walk at
+  3 m/s, with `speed` and `move_y` at 3 and the walk at 1.5× for a 2 m/s stride. Walking sideways
+  leaves `move_y` at 0 and `move_x` at 3, and at 6 m/s the rate clamps at 2.
+  - Stopping returns to idle at rate 1.
+  - A jump goes to the air state, with `grounded` at 0 and a rising `vertical_speed`, and lands
+    back in idle.
+  - Crouching ducks, and standing returns.
+- An entity moved only by its transform drives another entity's Animator at exactly 3 m/s.
+- On a 10° slope the feet sit at ±0.2·tan 10° and the pelvis drops by the lower foot's depth.
+- A character walking 2 m/s beside a 0.15 m stair keeps one foot on the step and one on the floor
+  within 1 cm (measured: 0.1 mm) on every tick of a 90-tick walk.
+
+**Hierarchy order (fixed in step 6b):** `ecs::install_hierarchy` used to register
+`"transform_propagate"` only where it was called. A shipped scene with a `ChildOf` gets it at
+`scene::load`, after `kit::install_stock`, so in `FixedUpdate_Post` it ran after the kit's animators,
+IK and `AttachToBone`, and a model hanging as a child of its mover was posed and foot-cast from last
+tick's `WorldTransform`. The hierarchy now also registers `"transform_propagate_early"` at the front
+of `FixedUpdate_Post` (`World::add_system_first`), so every Post reader sees this tick's moves; the
+late pass stays where install was called and only redoes what Post systems moved after the early
+one. The stair test installs the hierarchy after the kit, the shipped order. Replay impact: of the
+headless sample hashes only `07_gameplay3d` changes (`ee6bfe319ca8e23b` -> `cc49e872cae6cadd` at 600
+ticks). A per-entity dump of both runs differs in one entity only, the camera: `kit_camera_follow`
+(`FixedUpdate_Post`) used to read the cart's `WorldTransform` from last tick and now follows this
+tick's pose. The cart, grunts, ragdolls, door and bridge are byte-identical at every tick checked.

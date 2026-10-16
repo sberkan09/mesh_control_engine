@@ -222,6 +222,34 @@ void SpriteBatch::add(const SpriteInstance& s) {
     quads_.push_back(q);
 }
 
+void SpriteBatch::add_triangle(const SpriteTriangle& t) {
+    ++stats_.submitted;
+    if (!sets_.valid(t.set)) {
+        ++stats_.culled;
+        return;
+    }
+    const SpriteRegion& r = sets_.region(t.set, t.region);
+    const bool lit = sets_.lit(t.set);
+    const u32 flags = (sets_.coverage(t.set) ? vertex_flags::kCoverage : 0u) | (sets_.sdf(t.set) ? vertex_flags::kSdf : 0u) |
+                      (lit ? vertex_flags::kLit : 0u);
+    const u32 packed = pack_layer_flags(r.layer, flags, lit ? pack_orientation(t.rotation, t.flip_x, t.flip_y) : 0u);
+    RawQuad q;
+    for (u32 i = 0; i < 3; ++i) {
+        const SpriteTriangle::Vertex& v = t.v[i];
+        q.v[i] = {v.position.x, v.position.y, r.u0 + (r.u1 - r.u0) * v.uv.x, r.v0 + (r.v1 - r.v0) * v.uv.y,
+                  pack_color_srgb(v.tint), packed};
+    }
+    q.v[3] = q.v[2];  // degenerate: the quad's second triangle (2, 3, 0) has no area
+    if (!visible(q.v)) {
+        ++stats_.culled;
+        return;
+    }
+    ++stats_.triangles;
+    push_item(sort_key_2d(pass_, t.sort_layer, material(t.blend, t.set), t.sort_order), ItemKind::Quad,
+              static_cast<u32>(quads_.size()));
+    quads_.push_back(q);
+}
+
 namespace {
 
 // Cuts the span [a0, a1] (any order) to [lo, hi], moving its texture coordinates t0 / t1 with it.

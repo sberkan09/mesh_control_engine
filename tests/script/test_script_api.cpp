@@ -56,10 +56,17 @@ struct Rig {
     ScriptHost host;
     u64 tick = 0;
 
-    explicit Rig(const char* source) {
+    // `checked` false: bytecode without the compile-time name checks, to reach the run-time errors.
+    explicit Rig(const char* source, bool checked = true) {
         w.register_components<Probe, Tagged, LocalTransform>();
         INFO(source);
-        REQUIRE(script::add_source(host, "api", source));
+        if (checked) {
+            REQUIRE(script::add_source(host, "api", source));
+        } else {
+            Result<Array<u8>> bc = script::compile_unchecked("api", source);
+            REQUIRE(bc);
+            REQUIRE(host.add_bytecode("api", bc.value().span()));
+        }
         host.install(w);
     }
     void step(u32 n = 1) {
@@ -183,23 +190,23 @@ end
     CHECK(error_of(r.h()).find("event 'Ping' is not registered") != std::string::npos);
 }
 
-TEST_CASE("script api: unknown names are errors, not silent zeros") {
+TEST_CASE("script api: unknown names are errors at run time too") {
     Rig r(R"(
 function update() mce.spawn({ Nope = {} }) end
-)");
+)", false);
     r.step();
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
     CHECK(error_of(r.h()).find("unknown component 'Nope'") != std::string::npos);
 
     Rig r2(R"(
 function update() mce.events("Probe") end
-)");
+)", false);
     r2.step();
     CHECK(error_of(r2.h()).find("unknown event 'Probe'") != std::string::npos);
 
     Rig r3(R"(
 function update() mce.spawn({ Probe = { nope = 1 } }) end
-)");
+)", false);
     r3.step();
     CHECK(error_of(r3.h()).find("'Probe' has no field 'nope'") != std::string::npos);
 }

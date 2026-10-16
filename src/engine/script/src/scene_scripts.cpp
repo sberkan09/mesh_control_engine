@@ -29,7 +29,7 @@ struct SceneScripts {
     bool reported_no_assets = false;
 };
 
-u64 read_entries(Frame& f, Array<Entry>& out) {
+u64 read_entries(Frame& f, const asset::AssetSystem* assets, Array<Entry>& out) {
     out.clear();
     // Unregistered: no scene put a ScriptSystem here. Querying would register it, and a world
     // without scripts must stay exactly as it was (same components, same hash).
@@ -58,6 +58,11 @@ u64 read_entries(Frame& f, Array<Entry>& out) {
         h = mix64(h ^ e.guid.hi);
         h = mix64(h ^ e.guid.lo);
         h = mix64(h ^ (u64(static_cast<u32>(e.order)) << 8 | u64(e.phase)));
+        // A recooked script (editor hot reload bumps the asset's generation) rebuilds the host too.
+        if (assets) {
+            const asset::AssetKey key = assets->find(e.guid);
+            if (key != asset::kInvalidAssetKey) h = mix64(h ^ assets->generation(key));
+        }
     }
     return h | 1;  // never 0
 }
@@ -91,7 +96,7 @@ void load(SceneScripts& s, Span<const Entry> entries) {
 
 void sync(Frame& f, SceneScripts& s) {
     Array<Entry> entries;
-    const u64 sig = read_entries(f, entries);
+    const u64 sig = read_entries(f, s.assets, entries);
     if (sig == s.signature) return;
     s.signature = sig;
     s.host.reset();

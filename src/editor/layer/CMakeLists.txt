@@ -13,6 +13,7 @@ endif()
 mce_add_library(mce_editor_layer UMBRELLA
     SOURCES
         src/animation_panel.cpp
+        src/bt_panel.cpp
         src/asset_panel.cpp
         src/draw_clip.cpp
         src/editor_shell.cpp

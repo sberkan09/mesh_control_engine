@@ -456,6 +456,7 @@ endif()
 # with the engine's precise floating point; codegen (JIT) is never linked. LUA_USE_LONGJMP makes VM
 # errors unwind with longjmp instead of C++ exceptions, so the -fno-exceptions engine can call it.
 # The compiler throws internally (luau_compile catches); it is meant for the cook, not the player.
+# Luau.Analysis (the type checker, M-SCRIPT 4) links into mce_script_compiler only, like the compiler.
 if(MCE_WITH_SCRIPT)
     set(LUAU_BUILD_CLI OFF CACHE BOOL "" FORCE)
     set(LUAU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -467,7 +468,7 @@ if(MCE_WITH_SCRIPT)
         EXCLUDE_FROM_ALL)
     FetchContent_MakeAvailable(luau)
     target_compile_definitions(Luau.VM PUBLIC LUA_USE_LONGJMP=1)
-    foreach(_luau_target Luau.VM Luau.Compiler Luau.Ast)
+    foreach(_luau_target Luau.VM Luau.Compiler Luau.Ast Luau.Config Luau.Analysis)
         if(MSVC)
             target_compile_options(${_luau_target} PRIVATE /fp:precise /W0)
         else()

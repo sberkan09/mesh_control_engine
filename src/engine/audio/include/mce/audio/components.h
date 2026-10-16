@@ -37,7 +37,9 @@ struct AudioSource {
     // ---- engine-written, not serialized ----
     bool started = false;
     i8 pick_gain = 0;  // a sound set's gain for this play, in 0.5 dB steps (0 for a plain clip)
-    u8 pad_[2] = {};   // explicit and zeroed: World::state_hash hashes component bytes (ADR-0007)
+    // A sound set's pitch for this play, 4.12 fixed point (0 = 1, so a plain clip's bytes stay zero:
+    // World::state_hash hashes component bytes, ADR-0007). Doppler scales it (M-AUDIO2 5).
+    u16 pick_rate = 0;
     AudioHandle handle;
     ClipHandle playing_clip;  // what `handle` plays; a hot reload swaps it and restarts loops
     f32 applied_gain_db = 0.f;
@@ -63,6 +65,33 @@ struct AudioSpatial {
     math::vec3 applied_position;
 };
 MCE_COMPONENT(AudioSpatial, attenuation_id)
+
+// Occlusion for a 3D source (M-AUDIO2 5): while something in `mask` lies between the listener and the
+// source, the source drops by gain_db and loses its highs above lowpass_hz, fading over 100 ms. The
+// test is a physics ray from the listener (kit::install_audio_occlusion provides it: 3D physics when
+// the world has it, else 2D); without one, nothing is occluded.
+struct AudioOcclusion {
+    u16 mask = 0xFFFF;
+    u16 pad_ = 0;
+    f32 gain_db = -12.f;
+    f32 lowpass_hz = 800.f;
+    // ---- engine-written, not serialized ----
+    f32 amount = 0.f;  // 0 = clear .. 1 = fully occluded
+};
+MCE_COMPONENT(AudioOcclusion,
+    (mask, Help{"physics layers that block sound"}),
+    (gain_db, Range{-60, 0}),
+    (lowpass_hz, Range{20, 20000}))
+
+// Doppler for a 3D source (M-AUDIO2 5): its pitch rises while it closes on the listener and falls
+// while it pulls away, from both movements per tick (speed of sound 343 units/s, scaled by factor;
+// the shift is held to an octave either way). Streamed music does not shift.
+struct AudioDoppler {
+    f32 factor = 1.f;
+    // ---- engine-written, not serialized ----
+    f32 applied = 1.f;  // the shift last sent
+};
+MCE_COMPONENT(AudioDoppler, (factor, Range{0, 10}, Help{"0 = off, 1 = real-world strength"}))
 
 // The ear (usually on the camera entity). Exactly one is used: the first in query order. Its
 // LocalTransform gives position and orientation (forward = rotation * -Z, up = rotation * +Y).
@@ -183,6 +212,13 @@ struct AudioRef {
     u8 fx_reverbs = 0;
     u8 fx_ducks = 0;
     bool fx_limiter = false;
+    // Occlusion (M-AUDIO2 5): whether something in `mask` blocks the straight line from the listener
+    // at `from` to the source at `to` (neither entity counts). Null: nothing is occluded.
+    using OcclusionTest = bool (*)(World& world, Entity source, Entity listener, math::vec3 from, math::vec3 to, u16 mask);
+    OcclusionTest occlusion = nullptr;
+    // The listener last tick, for Doppler.
+    math::vec3 last_listener{};
+    bool have_last_listener = false;
     // Snapshot fades (0..1) by entity: sound state, kept out of the components the sim hashes.
     static constexpr u32 kMaxSnapshots = 16;
     struct SnapshotFade {
@@ -193,7 +229,7 @@ struct AudioRef {
     u32 snapshot_count = 0;
 };
 
-// Registers AudioSource, AudioSpatial, AudioListener, AudioBusEffects, AudioReverb, AudioLimiter, AudioDuck,
+// Registers AudioSource, AudioSpatial, AudioOcclusion, AudioDoppler, AudioListener, AudioBusEffects, AudioReverb, AudioLimiter, AudioDuck,
 // AudioSnapshot, PlaySfx, the AudioRef resource, the remove hook (stop with a 50 ms
 // fade) and the audio_bridge system in FixedUpdate_Post. Call after any system named in `after`.
 // The host calls clips->sync() once per frame before the sim ticks.

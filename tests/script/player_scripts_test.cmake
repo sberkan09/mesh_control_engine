@@ -12,7 +12,7 @@ function(run expected_rc)
 endfunction()
 
 function(sidecar path guid)
-    file(WRITE "${path}.mceasset" "{ \"guid\": \"${guid}\", \"importer\": \"script\", \"importer_version\": 1, \"settings\": {} }\n")
+    file(WRITE "${path}.mceasset" "{ \"guid\": \"${guid}\", \"importer\": \"script\", \"importer_version\": 2, \"settings\": {} }\n")
 endfunction()
 
 set(SCENE_GUID "5c000000-0000-4000-8000-0000000000a1")
@@ -48,6 +48,11 @@ file(WRITE "${WORK_DIR}/game/assets/scenes/main.mcscene" "{
 }
 ")
 run(0 "${MCE_COOK}" "${WORK_DIR}/game" --pack --quiet)
+# The API the scripts were checked against, for editors (M-SCRIPT 4).
+file(READ "${WORK_DIR}/game/cooked/mce.d.luau" defs)
+if(NOT defs MATCHES "declare mce: {" OR NOT defs MATCHES "\"LocalTransform\"")
+    message(FATAL_ERROR "the cook did not write cooked/mce.d.luau:\n${defs}")
+endif()
 
 set(PLAY "${MCE_PLAYER}" -pack "${WORK_DIR}/game/assets.mce" -scene ${SCENE_GUID} -headless 1 -ticks 12 -platform.error_box 0)
 run(0 ${PLAY})
@@ -69,6 +74,22 @@ file(WRITE "${WORK_DIR}/game/assets/scripts/push.luau" "function update()\n  loc
 run(1 "${MCE_COOK}" "${WORK_DIR}/game" --pack)
 if(NOT LAST_OUTPUT MATCHES "push.luau:2:13")
     message(FATAL_ERROR "the cook error does not name file:line:col:\n${LAST_OUTPUT}")
+endif()
+
+# State kept outside components fails the cook too (M-SCRIPT 3).
+file(WRITE "${WORK_DIR}/game/assets/scripts/push.luau" "local count = 0\nfunction update()\n    count += 1\nend\n")
+run(1 "${MCE_COOK}" "${WORK_DIR}/game" --pack)
+if(NOT LAST_OUTPUT MATCHES "push.luau:3:5: [^\n]*top-level local 'count'")
+    message(FATAL_ERROR "the cook does not reject hidden state at file:line:col:\n${LAST_OUTPUT}")
+endif()
+
+# Names are checked against the registry and every problem is reported, each at file:line:col.
+file(WRITE "${WORK_DIR}/game/assets/scripts/push.luau"
+     "function update()\n    mce.each(\"LocalTransfrom\", function(e) end)\n    print(mce.tick())\nend\n")
+run(1 "${MCE_COOK}" "${WORK_DIR}/game" --pack)
+if(NOT LAST_OUTPUT MATCHES "push.luau:2:14: [^\n]*unknown component 'LocalTransfrom' \\(did you mean 'LocalTransform'\\?\\)"
+   OR NOT LAST_OUTPUT MATCHES "push.luau:3:5: [^\n]*'print' is not available")
+    message(FATAL_ERROR "the cook does not report every name problem at file:line:col:\n${LAST_OUTPUT}")
 endif()
 
 message(STATUS "scene scripts hold: cooked bytecode runs in the player, errors name file and line")

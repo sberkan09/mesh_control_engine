@@ -187,6 +187,23 @@ void put_crumb(const log::ConsoleLine& line, void* user) {
     o.put("\n");
 }
 
+// Writers registered with add_context: fn is stored last, so a half-written slot is never called.
+constexpr usize kMaxContext = 4;
+std::atomic<ContextFn> g_context_fn[kMaxContext];
+std::atomic<void*> g_context_user[kMaxContext];
+
+void put_context(Out& o) {
+    bool any = false;
+    for (usize i = 0; i < kMaxContext; ++i) {
+        const ContextFn fn = g_context_fn[i].load(std::memory_order_acquire);
+        if (!fn) continue;
+        if (!any) o.put("context:\n");
+        any = true;
+        fn(g_context_user[i].load(std::memory_order_relaxed),
+           [](void* sink, const char* text) { static_cast<Out*>(sink)->put(text); }, &o);
+    }
+}
+
 void put_breadcrumbs(Out& o) {
     o.put("breadcrumbs (oldest first):\n");
     if (!log::try_visit_breadcrumbs(&put_crumb, &o)) o.put("  (log ring locked by the crashing thread)\n");
@@ -290,6 +307,7 @@ LONG WINAPI on_exception(EXCEPTION_POINTERS* ep) {
         o.put(" ");
         put_address(o, reinterpret_cast<uintptr_t>(frames[i]));
     }
+    put_context(o);
     put_breadcrumbs(o);
     o.put("crash report: ");
     o.put(report);
@@ -537,6 +555,7 @@ void on_signal(int sig, siginfo_t* info, void* uctx) {
     if (pc_first) put_frame(o, index++, pc);
     for (int i = first; i < n; ++i) put_frame(o, index++, reinterpret_cast<uintptr_t>(frames[i]));
     put_modules(o);
+    put_context(o);
     put_breadcrumbs(o);
     o.put("crash report: ");
     o.put(report);
@@ -671,6 +690,22 @@ void trigger_test_crash() {
     volatile int* volatile p = nullptr;
     *p = 42;  // NOLINT(clang-analyzer-core.NullDereference): the point
     std::abort();
+}
+
+bool add_context(ContextFn fn, void* user) {
+    for (usize i = 0; i < kMaxContext; ++i) {
+        ContextFn expected = nullptr;
+        if (g_context_fn[i].load(std::memory_order_relaxed) != nullptr) continue;
+        g_context_user[i].store(user, std::memory_order_relaxed);
+        if (g_context_fn[i].compare_exchange_strong(expected, fn, std::memory_order_release)) return true;
+    }
+    return false;
+}
+
+void remove_context(void* user) {
+    for (usize i = 0; i < kMaxContext; ++i)
+        if (g_context_fn[i].load(std::memory_order_relaxed) && g_context_user[i].load(std::memory_order_relaxed) == user)
+            g_context_fn[i].store(nullptr, std::memory_order_release);
 }
 
 }  // namespace mce::crash

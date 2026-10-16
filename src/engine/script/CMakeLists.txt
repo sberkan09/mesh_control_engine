@@ -28,8 +28,15 @@ target_compile_definitions(mce_script INTERFACE MCE_HAS_SCRIPT=1)
 mce_add_library(mce_script_compiler UMBRELLA
     SOURCES
         compiler/compiler.cpp
+        compiler/definitions.cpp
+        compiler/names_check.cpp
+        compiler/state_check.cpp
+        compiler/typecheck.cpp
     PUBLIC_DEPS
         mce::mce_script
     PRIVATE_DEPS
         Luau.Compiler
+        Luau.Analysis
         Luau.Ast)
+# Luau's analysis throws on internal limits; typecheck.cpp (alone in the engine) catches them.
+set_source_files_properties(compiler/typecheck.cpp PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/EHsc,-fexceptions>")

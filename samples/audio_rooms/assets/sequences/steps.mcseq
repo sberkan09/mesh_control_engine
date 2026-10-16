@@ -1,0 +1,11 @@
+{
+  "format": "mce-sequence",
+  "version": 1,
+  "guid": "a0d10000-0000-4000-8000-000000000012",
+  "name": "steps",
+  "loop": true,
+  "steps": [
+    { "sound": "guid:a0d10000-0000-4000-8000-000000000004", "gain_db": -2 },
+    { "wait": 0.45 }
+  ]
+}

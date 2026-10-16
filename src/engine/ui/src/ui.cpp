@@ -688,6 +688,20 @@ void Document::set_font_role(WidgetId w, FontRole role) {
         mark_layout();  // another font measures differently
     }
 }
+TextAlign Document::text_align(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->text_align : TextAlign::Left;
+}
+void Document::set_text_align(WidgetId w, TextAlign align) {
+    if (Node* n = node(w)) n->text_align = align;
+}
+u8 Document::own_style(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->own_style : u8(0);
+}
+void Document::set_own_style(WidgetId w, u8 own) {
+    if (Node* n = node(w)) n->own_style = own;
+}
 const render::Font* Document::node_font(const Node& n) const { return skin_.font_for(resolve_font_role(n.kind, n.font_role)); }
 StringView Document::binding(WidgetId w) const {
     const Node* n = node(w);
@@ -1371,11 +1385,12 @@ void Document::draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u
 }
 
 void Document::draw_text(render::SpriteBatch& batch, const render::Font* font, StringView s, vec2 at, f32 size, Color c,
-                         const Style& look, i16 layer, i32 order, f32 max_width) const {
+                         const Style& look, i16 layer, i32 order, f32 max_width, TextAlign align) const {
     if (!font || s.empty() || c.a <= 0.0f) return;
     render::TextLayoutDesc d;
     d.size_px = size;
     d.max_width = max_width;
+    d.align = static_cast<render::TextAlign>(align);
     d.letter_spacing = look.letter_spacing * scale_;
     render::layout_text(font->face, s, d, scratch_);
     math::aabb2 clip;
@@ -1431,7 +1446,13 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
         switch (n.kind) {
             // One pixel of slack: the rect is snapped to whole pixels, so below UI scale 1 a Text sized to
             // its own measured width (in a horizontal Stack) could lose a fraction and wrap (SBA-61).
-            case WidgetKind::Text: draw_text(batch, font, label, r.min, px, st.text_color, st, text_layer, order, r.size().x + 1.0f); break;
+            case WidgetKind::Text: {
+                // Center / Right place the lines across that same box, less the slack pixel.
+                const f32 slack = n.text_align == TextAlign::Center ? 0.5f : n.text_align == TextAlign::Right ? 1.0f : 0.0f;
+                draw_text(batch, font, label, r.min - vec2(slack, 0.0f), px, st.text_color, st, text_layer, order, r.size().x + 1.0f,
+                          n.text_align);
+                break;
+            }
             case WidgetKind::Button: {
                 if (label.empty() || !font) break;
                 render::TextLayoutDesc d;

@@ -178,6 +178,9 @@ MCE_CVAR(cv_safe_area, "safe_area", "",
 MCE_CVAR(cv_window, "window", "", "Windowed: initial window size as WxH in points, e.g. 1080x2400 to check a phone layout (default 1280x720)",
          CVarFlags::None);
 MCE_CVAR(cv_ticks, "ticks", 600, "Headless: ticks to simulate (windowed runs use -frames)", CVarFlags::None);
+MCE_CVAR(cv_audio_record, "audio_record", "",
+         "Headless: mix the audio offline, a tick's worth per tick, and write it to this .wav (48 kHz stereo float)",
+         CVarFlags::None);
 MCE_CVAR(cv_run_ticks, "run_ticks", 0,
          "Windowed: quit right after this many sim ticks and print the state hash as -headless does, so a drawn run (a "
          "browser smoke) can be checked against a headless one (0 = off)",
@@ -617,8 +620,23 @@ public:
             MCE_LOG_INFO("{}: the game asked to quit at tick {}", desc_.app_name, sim_ticks_);
             quit(0);
         }
-        if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
+        if (recording_) {
+            // -audio_record: this tick's share of the mix, rendered offline (M-AUDIO2 5).
+            record_carry_ += t.dt * audio::kSampleRate;
+            const u32 n = static_cast<u32>(record_carry_);
+            record_carry_ -= n;
+            const usize at = audio_record_.size();
+            audio_record_.resize(at + static_cast<usize>(n) * audio::kChannels);
+            audio_.render_offline(audio_record_.data() + at, n);
+            audio_.update();
+        } else if (!device_) {
+            audio_.update();  // headless: the Silent backend mixes one block per call
+        }
     }
+
+    // -audio_record (headless, Offline backend): every tick renders its share of the mix.
+    void start_audio_record() { recording_ = true; }
+    const Array<f32>& audio_recording() const { return audio_record_; }
 
     // kit::ViewInfo for the game's systems: the screen and the primary camera's view as of this tick.
     // Headless keeps the struct's fixed 1280 x 720 landscape defaults (deterministic hashes).
@@ -2642,6 +2660,9 @@ private:
     platform::Window* window_;
     rhi::RenderDevice* device_;
     audio::AudioDevice& audio_;
+    bool recording_ = false;
+    f64 record_carry_ = 0.0;
+    Array<f32> audio_record_;
     asset::AssetSystem assets_;
     render::Renderer renderer_;
     render::AssetUploadSink sink_;
@@ -2807,6 +2828,47 @@ Result<input::InputScript*> load_input_script(const player::PlayerDesc& pd) {
     return &script;
 }
 
+// -audio_record: the recorded mix as a 48 kHz stereo IEEE-float WAV, and a line with its length, peak
+// and a hash of its samples (the same run gives the same hash: the mixer runs in a fixed order).
+bool write_audio_record(const player::PlayerDesc& pd, StringView path, const Array<f32>& samples) {
+    const u32 frames = static_cast<u32>(samples.size() / audio::kChannels);
+    const u32 data_bytes = static_cast<u32>(samples.size() * sizeof(f32));
+    const auto put32 = [](byte* p, u32 v) { std::memcpy(p, &v, 4); };
+    const auto put16 = [](byte* p, u16 v) { std::memcpy(p, &v, 2); };
+    byte h[44];
+    std::memcpy(h, "RIFF", 4);
+    put32(h + 4, 36 + data_bytes);
+    std::memcpy(h + 8, "WAVEfmt ", 8);
+    put32(h + 16, 16);
+    put16(h + 20, 3);  // IEEE float
+    put16(h + 22, audio::kChannels);
+    put32(h + 24, audio::kSampleRate);
+    put32(h + 28, audio::kSampleRate * audio::kChannels * 4);
+    put16(h + 32, audio::kChannels * 4);
+    put16(h + 34, 32);
+    std::memcpy(h + 36, "data", 4);
+    put32(h + 40, data_bytes);
+    const FixedString<1024> p(path);
+    std::FILE* f = std::fopen(p.c_str(), "wb");
+    if (!f) {
+        MCE_LOG_ERROR("{}: -audio_record cannot write {}", pd.app_name, p.c_str());
+        return false;
+    }
+    const bool ok = std::fwrite(h, 1, sizeof h, f) == sizeof h && std::fwrite(samples.data(), 1, data_bytes, f) == data_bytes;
+    std::fclose(f);
+    if (!ok) {
+        MCE_LOG_ERROR("{}: -audio_record could not write all of {}", pd.app_name, p.c_str());
+        return false;
+    }
+    f32 peak = 0.f;
+    for (const f32 v : samples) peak = std::max(peak, std::fabs(v));
+    Hasher64 hs;
+    hs.bytes(samples.data(), data_bytes);
+    std::printf("%s: audio_record %u frames (%.2f s), peak %.4f, hash %016llx\n", pd.app_name, frames,
+                static_cast<f64>(frames) / audio::kSampleRate, static_cast<f64>(peak), static_cast<unsigned long long>(hs.value()));
+    return true;
+}
+
 int run_headless(const player::PlayerDesc& pd) {
     // The windowed-only flags: say so instead of silently running the default tick count.
     if (cv_frames.get_int() > 0)
@@ -2814,13 +2876,16 @@ int run_headless(const player::PlayerDesc& pd) {
                      cv_ticks.get_int() > 0 ? cv_ticks.get_int() : 600);
     if (!cv_capture.get_string().empty() || cv_capture_tick.get_int() > 0 || !cv_capture_ticks.get_string().empty())
         MCE_LOG_WARN("{}: -capture / -capture_tick(s) need a window; nothing is drawn headless", pd.app_name);
+    const StringView record = cv_audio_record.get_string();
     audio::AudioDesc ad;
-    ad.backend = audio::Backend::Silent;
+    ad.backend = record.empty() ? audio::Backend::Silent : audio::Backend::Offline;
+    ad.bind_convars = true;  // the options: audio.*_db and audio.reverb, as a windowed run mixes them
     auto audio = audio::AudioDevice::create(ad);
     if (!audio) return 1;
     Result<input::InputScript*> script = load_input_script(pd);
     if (!script) return fail("input script", script.error());
     PlayerApp app(pd, nullptr, nullptr, *audio.value());
+    if (!record.empty()) app.start_audio_record();
     app::AppDesc desc;
     desc.name = pd.app_name;
     desc.headless = true;
@@ -2831,6 +2896,7 @@ int run_headless(const player::PlayerDesc& pd) {
     if (rc == 0)
         std::printf("%s: %llu ticks, %zu entities, state_hash %016llx\n", pd.app_name, static_cast<unsigned long long>(app.ticks()),
                     app.entity_count(), static_cast<unsigned long long>(app.state_hash()));
+    if (rc == 0 && !record.empty() && !write_audio_record(pd, record, app.audio_recording())) return 1;
     if (const scene::StreamingStats* st = app.streaming_stats(); rc == 0 && st && st->chunks > 0)
         std::printf("%s: streaming %u/%u chunks loaded, %u streamed entities, %llu loads, %llu unloads\n", pd.app_name,
                     st->loaded, st->chunks, st->streamed_entities, static_cast<unsigned long long>(st->total_loads),
@@ -2862,7 +2928,9 @@ int run_windowed(const player::PlayerDesc& pd) {
     dd.uniform_ring_bytes = static_cast<usize>(math::clamp<i64>(cv_uniform_ring.get_int(), 1, 64)) * MiB;
     auto device = rhi::create_default_device(*window.value(), dd);
     if (!device) return fail("render device creation failed", device.error());
-    auto audio = audio::AudioDevice::create({});  // falls back to Silent when no output device opens
+    audio::AudioDesc ad;
+    ad.bind_convars = true;  // the options screen's audio.*_db and audio.reverb drive the mix
+    auto audio = audio::AudioDevice::create(ad);  // falls back to Silent when no output device opens
     if (!audio) return fail("audio init failed", audio.error());
 
     Result<input::InputScript*> script = load_input_script(pd);

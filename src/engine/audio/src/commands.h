@@ -16,6 +16,8 @@ enum class CmdType : u8 {
     BusFilter, BusSend, Reverb,
     // M-AUDIO2 4
     BusTrim, BusDuck,
+    // M-AUDIO2 5
+    VoiceLowpass,
 };
 
 namespace CmdFlag {
@@ -77,7 +79,8 @@ struct AudioCommand {
     // (bit 7 = bypass). Limiter: flags = enabled. BusFilter: index = bus, voice.gain = low-pass Hz,
     // voice.pan = high-pass Hz (0 = off). BusSend: index = bus, flags = unit, voice.gain = linear send.
     // Reverb: index = unit, flags = enabled. BusTrim: index = bus, voice.gain = linear trim.
-    // BusDuck: index = ducked bus, bus = key bus, flags = enabled.
+    // BusDuck: index = ducked bus, bus = key bus, flags = enabled. VoiceLowpass: index = voice handle,
+    // voice.gain = cutoff Hz (0 = off).
 
     AudioCommand() : voice{0, 0, kRateUnit, 0.f, 0.f, 0} {}
 };

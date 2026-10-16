@@ -30,6 +30,15 @@ struct ClipRT {
     i8 stream = -1;  // index into the stream rings, or -1 for in-memory
 };
 
+// A bus (M-AUDIO2 3) or voice (M-AUDIO2 5) low-pass or high-pass that glides to its target cutoff.
+// A band glides to its open end when off, and is bypassed once there.
+inline constexpr f32 kLowpassOpen = 22000.f, kHighpassOpen = 10.f;
+struct BusFilterRT {
+    SvfRT q;
+    f32 cur_hz = kLowpassOpen, target_hz = 0.f;  // 0 = off (gliding to the band's open end)
+    u32 fade_in = 0;  // frames into the dry-to-filtered crossfade of a band just switched on
+};
+
 struct VoiceRT {
     u32 handle_index = 0;
     u32 handle_gen = 0;
@@ -49,6 +58,7 @@ struct VoiceRT {
     bool loop = false;
     bool active = false;
     bool ending = false;  // fading out; ends when the ramp completes
+    BusFilterRT lowpass;  // occlusion (M-AUDIO2 5): mixed through it only while it is on or set
 };
 
 // A post-fader send level, ramped like a bus gain (M-AUDIO2 3).
@@ -71,12 +81,6 @@ struct SendRamp {
     bool silent() const { return cur == 0.f && left == 0; }
 };
 
-// A bus low-pass or high-pass that glides to its target cutoff (M-AUDIO2 3).
-struct BusFilterRT {
-    SvfRT q;
-    f32 cur_hz = 0.f, target_hz = 0.f;  // 0 = off (gliding to the band's open end)
-    u32 fade_in = 0;  // frames into the dry-to-filtered crossfade of a band just switched on
-};
 
 // A sidechain ducker on a stock bus (M-AUDIO2 4): a peak envelope of the key bus drives the gain
 // toward depth (attack) or back to 1 (release). Turned off, it releases before it goes idle.
@@ -117,6 +121,8 @@ private:
     void advance_virtual(VoiceRT& v, u32 frames);
     // Mixes `frames` of `v` into `dst` (stereo interleaved); ends the voice when it finishes.
     void mix_voice(VoiceRT& v, f32* dst, u32 frames);
+    // mix_voice into the voice's bus, through its low-pass when that is in use.
+    void mix_to_bus(VoiceRT& v, u32 frames);
     void promote_virtual();
     // Sums bus `b` (filtered, EQ'd) into its parent with b's ramped gain, trim and duck, and into
     // the reverb inputs it sends to.
@@ -154,6 +160,7 @@ private:
 
     f32 bus_buf_[kBusCount][kBlockFrames * kChannels];
     f32 reverb_buf_[kReverbUnits][kBlockFrames * kChannels];
+    f32 voice_buf_[kBlockFrames * kChannels];
     Atomics stats_;
 };
 

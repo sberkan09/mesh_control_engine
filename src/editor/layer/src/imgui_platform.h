@@ -28,6 +28,10 @@ private:
     void* cursors_[16] = {};
 };
 
+// Opens a file with the system's default application (a .luau error opens its script). False when
+// the system has none.
+bool open_file_externally(const char* absolute_path);
+
 // USB HID usage (platform::Key / SDL scancode) -> ImGuiKey. ImGuiKey_None when unmapped.
 int imgui_key_from_hid(u32 hid);
 

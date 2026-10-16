@@ -26,5 +26,8 @@ void install_world_settings(World& world);
 // kit::UiFlow (components.h): FixedUpdate_Pre "kit_ui_flow" shows and hides screens on input
 // actions and sets the world's hold; it runs on held ticks too. install_stock calls it.
 void install_ui_flow(World& world);
+// AudioOcclusion's ray (M-AUDIO2 5): sets audio::AudioRef::occlusion to a physics raycast (Physics3D
+// when installed, else physics2d's World2D). Needs audio::install first; install_stock calls it.
+void install_audio_occlusion(World& world);
 
 }  // namespace mce::kit

@@ -450,6 +450,24 @@ bool draw_ui_inspector(DrawCtx& ui, UiDocumentEditor& ed, u32& state, bool& ever
         w.font_role = static_cast<ui::FontRole>(role);
         changed = true;
     }
+    if (w.kind == ui::WidgetKind::Text) {
+        i64 align = static_cast<i64>(w.text_align);
+        if (ui.enum_field("Text align", &align, ui::mce_refl_enum_record_UiTextAlign)) {
+            w.text_align = static_cast<ui::TextAlign>(align);
+            changed = true;
+        }
+    }
+    if (ui.begin_group("Keep over the theme", false)) {
+        ui.help("A ticked field stays the kind's default look even when a theme restyles it");
+        for (u32 b = 0; b < ui::kStyleOwnCount; ++b) {
+            bool own = (w.own_style & (1u << b)) != 0;
+            if (ui.checkbox(ui::kStyleOwnNames[b], &own)) {
+                w.own_style = static_cast<u8>(own ? (w.own_style | (1u << b)) : (w.own_style & ~(1u << b)));
+                changed = true;
+            }
+        }
+        ui.end_group();
+    }
     if (ui.begin_group("Anchors", true)) {
         changed |= draw_fields(ui, refl::type_of<ui::UiAnchors>(), &w.anchors);
         ui.end_group();

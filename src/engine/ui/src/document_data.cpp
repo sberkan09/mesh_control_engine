@@ -59,7 +59,8 @@ struct UiWidgetRecord {
     u8 stack_axis;
     u8 stack_align;
     u8 font_role;  // v3: FontRole
-    u8 pad[2];
+    u8 text_align;  // TextAlign (M-UI-DATA2 1; was padding: older payloads read Left)
+    u8 own_style;   // StyleOwn bits (M-UI-DATA2 2; was padding: older payloads read 0)
     f32 anchors[10];  // min, max, offset_min, offset_max, pivot
     StyleRecord styles[kWidgetStateCount];
     f32 value, lo, hi, step;
@@ -254,19 +255,27 @@ bool same(vec2 a, vec2 b) { return a.x == b.x && a.y == b.y; }
 bool same(const Slice& a, const Slice& b) { return a.left == b.left && a.top == b.top && a.right == b.right && a.bottom == b.bottom; }
 
 // Each field of `st` still at `def` takes `theme`'s.
-void theme_style(Style& st, const Style& def, const Style& theme) {
-    if (same(st.tint, def.tint)) st.tint = theme.tint;
-    if (same(st.text_color, def.text_color)) st.text_color = theme.text_color;
-    if (same(st.accent, def.accent)) st.accent = theme.accent;
-    if (st.sprite_region == def.sprite_region) st.sprite_region = theme.sprite_region;
-    if (st.text_size == def.text_size) st.text_size = theme.text_size;
-    if (st.draw_quad == def.draw_quad) st.draw_quad = theme.draw_quad;
-    if (same(st.slice, def.slice)) st.slice = theme.slice;
-    if (st.letter_spacing == def.letter_spacing) st.letter_spacing = theme.letter_spacing;
-    if (same(st.text_outline_color, def.text_outline_color)) st.text_outline_color = theme.text_outline_color;
-    if (st.text_outline == def.text_outline) st.text_outline = theme.text_outline;
-    if (same(st.text_shadow_color, def.text_shadow_color)) st.text_shadow_color = theme.text_shadow_color;
-    if (same(st.text_shadow, def.text_shadow)) st.text_shadow = theme.text_shadow;
+// `own` (StyleOwn bits) names the fields the widget keeps even at the default.
+void theme_style(Style& st, const Style& def, const Style& theme, u8 own) {
+    auto open = [own](StyleOwn bit) { return (own & bit) == 0; };
+    if (open(OwnTint) && same(st.tint, def.tint)) st.tint = theme.tint;
+    if (open(OwnTextColor) && same(st.text_color, def.text_color)) st.text_color = theme.text_color;
+    if (open(OwnAccent) && same(st.accent, def.accent)) st.accent = theme.accent;
+    if (open(OwnSprite)) {
+        if (st.sprite_region == def.sprite_region) st.sprite_region = theme.sprite_region;
+        if (st.draw_quad == def.draw_quad) st.draw_quad = theme.draw_quad;
+        if (same(st.slice, def.slice)) st.slice = theme.slice;
+    }
+    if (open(OwnTextSize) && st.text_size == def.text_size) st.text_size = theme.text_size;
+    if (open(OwnLetterSpacing) && st.letter_spacing == def.letter_spacing) st.letter_spacing = theme.letter_spacing;
+    if (open(OwnTextOutline)) {
+        if (same(st.text_outline_color, def.text_outline_color)) st.text_outline_color = theme.text_outline_color;
+        if (st.text_outline == def.text_outline) st.text_outline = theme.text_outline;
+    }
+    if (open(OwnTextShadow)) {
+        if (same(st.text_shadow_color, def.text_shadow_color)) st.text_shadow_color = theme.text_shadow_color;
+        if (same(st.text_shadow, def.text_shadow)) st.text_shadow = theme.text_shadow;
+    }
 }
 
 }  // namespace
@@ -275,7 +284,7 @@ void apply_theme(const ThemeData& theme, DocumentData& d) {
     const ThemeData& def = default_theme();
     for (WidgetData& w : d.widgets) {
         const u32 k = static_cast<u32>(w.kind);
-        for (u32 s = 0; s < kWidgetStateCount; ++s) theme_style(w.styles[s], def.styles[k][s], theme.styles[k][s]);
+        for (u32 s = 0; s < kWidgetStateCount; ++s) theme_style(w.styles[s], def.styles[k][s], theme.styles[k][s], w.own_style);
     }
     if (d.sprites.is_null() && !theme.sprites.is_null()) {
         d.sprites = theme.sprites;
@@ -372,6 +381,8 @@ void encode_ui_document(const DocumentData& d, Array<byte>& out) {
         put_vec(r.anchors + 8, w.anchors.pivot);
         for (u32 s = 0; s < kWidgetStateCount; ++s) put_style(r.styles[s], w.styles[s]);
         r.font_role = static_cast<u8>(w.font_role);
+        r.text_align = static_cast<u8>(w.text_align);
+        r.own_style = w.own_style;
         r.value = w.value;
         r.lo = w.lo;
         r.hi = w.hi;
@@ -431,7 +442,7 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
             out.clear();
             return Error(code, kStage, {}, i);
         };
-        bool pad_ok = r.pad[0] == 0 && r.pad[1] == 0;
+        bool pad_ok = true;
         for (const StyleRecord& s : r.styles) pad_ok = pad_ok && s.pad[0] == 0 && s.pad[1] == 0 && s.pad[2] == 0;
         if (!pad_ok || (r.flags & ~u8(WidgetFlag::Visible | WidgetFlag::Interactable | WidgetFlag::BlocksPointer)) != 0)
             return fail(Errc::ReservedNonZero);
@@ -445,7 +456,7 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
         if (r.parent != kNoWidgetIndex && r.parent >= i) return fail(Errc::OutOfBounds);  // parents come first
         if (r.kind > static_cast<u8>(WidgetKind::Tabs) || r.anchor_to > static_cast<u8>(AnchorTo::Screen) ||
             r.stack_axis > static_cast<u8>(Axis::Horizontal) || r.stack_align > static_cast<u8>(Align::Stretch) ||
-            r.font_role > static_cast<u8>(FontRole::Button))
+            r.font_role > static_cast<u8>(FontRole::Button) || r.text_align > static_cast<u8>(TextAlign::Right))
             return fail(Errc::InvalidArgument);
         for (u32 e = 0; e < NavEdgeCount; ++e)
             if (r.nav[e] != kNoWidgetIndex && r.nav[e] >= h.widget_count) return fail(Errc::OutOfBounds);
@@ -475,6 +486,8 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
         w.anchors.to = static_cast<AnchorTo>(r.anchor_to);
         for (u32 s = 0; s < kWidgetStateCount; ++s) get_style(r.styles[s], w.styles[s]);
         w.font_role = static_cast<FontRole>(r.font_role);
+        w.text_align = static_cast<TextAlign>(r.text_align);
+        w.own_style = r.own_style;
         w.value = r.value;
         w.lo = r.lo;
         w.hi = r.hi;

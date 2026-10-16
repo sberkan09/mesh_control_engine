@@ -5,12 +5,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
+#include "imgui_platform.h"
 #include "imgui_renderer.h"
 #include "mce/editor/editor_shell.h"
 #include "mce/editor/asset_browser.h"
+#include "mce/editor/console_model.h"
 #include "mce/editor/gizmo.h"
+#include "mce/kit/perception.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/log.h"
 #include "scene_panels.h"
@@ -99,7 +103,8 @@ public:
                     shell.orbit().unresolved();
                     cam3 = shell.orbit().camera();
                 }
-                shell.preview().record_3d(cmd, *play.world(), v.target, v.size, cam3, {}, kClear3D);
+                if (view.show_perception) perception_lines_3d(*play.world(), cam3, v.size);
+                shell.preview().record_3d(cmd, *play.world(), v.target, v.size, cam3, lines_.span(), kClear3D);
                 return;
             }
             EditorCamera2D cam = shell.camera();
@@ -112,6 +117,11 @@ public:
                 cam.pixels_per_meter = ppm;
             }
             if (view.show_grid && !view.play_camera) grid_lines(cam, v.size, view.grid_step, view.grid_major, lines_);
+            if (view.show_perception) {
+                perception_.clear();
+                kit::perception_debug_lines(*play.world(), perception_);
+                for (const kit::PerceptionLine& l : perception_) lines_.push_back({{l.a.x, l.a.y}, {l.b.x, l.b.y}, l.color, 1.5f});
+            }
             shell.preview().record(cmd, *play.world(), v.target, v.size, cam, lines_.span(), clear);
             return;
         }
@@ -300,6 +310,20 @@ private:
         ImGui::TextColored(cut > 1e-3f ? ImVec4(1, 0.7f, 0.3f, 1) : ImVec4(0.7f, 0.7f, 0.7f, 1),
                            "orbit  boom %.2f m%s  (%u colliders)", static_cast<double>(orbit.effective),
                            cut > 1e-3f ? "  cut by collision" : "", shell.orbit_colliders().body_count());
+    }
+
+    // The perceivers' cones and targets (Behavior Tree panel), projected into the overlay's pixels.
+    void perception_lines_3d(World& world, const render::Camera3D& cam, rhi::Extent2D size) {
+        perception_.clear();
+        kit::perception_debug_lines(world, perception_);
+        if (perception_.empty()) return;
+        const render::View3D view3d = render::compute_view_3d(cam, size);
+        const math::vec2 half{0.5f * static_cast<f32>(size.width), 0.5f * static_cast<f32>(size.height)};
+        for (const kit::PerceptionLine& l : perception_) {
+            math::vec2 a, b;
+            if (!project_segment(view3d, Segment3D{l.a, l.b, l.color}, a, b)) continue;
+            lines_.push_back({{a.x - half.x, half.y - a.y}, {b.x - half.x, half.y - b.y}, l.color, 1.5f});
+        }
     }
 
     void record_orbit(EditorShell& shell, rhi::CommandBuffer& cmd, const ViewportInfo& v) {
@@ -515,6 +539,7 @@ private:
     rhi::TextureHandle target_;
     rhi::Extent2D size_;
     Array<OverlayLine> lines_;
+    Array<kit::PerceptionLine> perception_;
     Array<Segment3D> segments_;
     Array<math::vec3> rim_;
     bool brush_hover_ = false;
@@ -538,6 +563,25 @@ private:
 class ConsolePanel final : public IEditorPanel {
 public:
     const char* name() const override { return "Console"; }
+
+    // The item just drawn names a script line (M-SCRIPT 4b): double-click opens the file in the
+    // system's editor, the context menu copies "scripts/x.luau:3" for it.
+    static void script_line_actions(EditorShell& shell, const ScriptLocation& where) {
+        StringView rel = where.path;
+        if (rel.starts_with("assets/")) rel = rel.substr(7);
+        char label[320];
+        std::snprintf(label, sizeof(label), "%.*s:%u", static_cast<int>(rel.size()), rel.data(), where.line);
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && shell.session().project().is_open()) {
+            ImGui::SetClipboardText(label);  // so an editor's "go to line" can take it
+            const auto abs = shell.session().project().asset_path(rel);
+            if (!open_file_externally(abs.c_str())) MCE_LOG_WARN("console: no application opens {}", abs.c_str());
+        }
+        if (ImGui::BeginPopupContextItem("##script_line")) {
+            if (ImGui::MenuItem("Copy script:line")) ImGui::SetClipboardText(label);
+            ImGui::EndPopup();
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Double-click opens %s", label);
+    }
 
     void draw(EditorShell& shell) override {
         ConsoleModel& console = shell.console();
@@ -574,7 +618,16 @@ public:
                 for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
                     const log::ConsoleLine& l = console.line(visible_[static_cast<usize>(row)]);
                     ImGui::PushStyleColor(ImGuiCol_Text, level_color(l.level));
-                    ImGui::TextUnformatted(l.text.c_str(), l.text.c_str() + l.text.view().size());
+                    ScriptLocation where;
+                    if (find_script_location(l.text.view(), where)) {
+                        // A script error: double-click opens the script, right-click copies "path:line".
+                        ImGui::PushID(row);
+                        ImGui::Selectable(l.text.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+                        script_line_actions(shell, where);
+                        ImGui::PopID();
+                    } else {
+                        ImGui::TextUnformatted(l.text.c_str(), l.text.c_str() + l.text.view().size());
+                    }
                     ImGui::PopStyleColor();
                 }
             }
@@ -702,6 +755,7 @@ void add_default_panels(EditorShell& shell) {
     add_ui_document_panel(shell);
     add_timeline_panel(shell);
     add_animation_panel(shell);
+    add_bt_panel(shell);
     add_project_settings_panel(shell);
 }
 
