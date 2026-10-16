@@ -176,7 +176,12 @@ void EditorProject::remount() {
     }
     if (is_file(cook::path_join(cooked.view(), "manifest.mce"))) {
         auto fresh = mem::make_unique<asset::AssetSystem>(mem::heap());
-        if (Result<void> r = fresh->mount(roots.span()); r) {
+        // The project's own cook may carry scripts; its base packs (a mod project's game) are not ours.
+        asset::MountOptions own;
+        own.allow_code = true;
+        Result<void> r = fresh->mount(Span<const StringView>(roots.data(), 1), own);
+        if (r && roots.size() > 1) r = fresh->mount(Span<const StringView>(roots.data() + 1, roots.size() - 1));
+        if (r) {
             mounted_ = std::move(fresh);
         } else {
             FixedString<512> msg;
