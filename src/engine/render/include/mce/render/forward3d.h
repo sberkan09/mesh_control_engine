@@ -5,6 +5,8 @@
 //                    the opaques, obscurance, depth-aware blur; read by the main pass's ambient terms
 //   0b. SSR          (ScreenSpaceReflections::enabled, M-VISUAL2 1) a ray march through the same
 //                    prepass's depth reading last frame's HDR; blended over the main pass's probes
+//   0c. contact      (ContactShadows::enabled, M-VISUAL2 3) a short march toward the sun through the
+//                    prepass's depth; darkens the sun's light where the cascades are too coarse
 //   1. cascades      up to 4 sun cascades into one D32 2D-array (shadow_size² per layer), depth only,
 //                    then the spot / point light atlas tiles (M-VISUAL 4)
 //   1b. GI           (GiVolume::enabled, M-VISUAL 6) the irradiance volume's rolling update: a sun
@@ -53,6 +55,8 @@ struct Forward3DDesc {
     // Screen-space reflection pipelines (M-VISUAL2 1); a scene turns them on with
     // ScreenSpaceReflections::enabled. False (or -r.ssr 0) keeps every scene on the probes and the sky.
     bool ssr = true;
+    // ContactShadows::enabled. False (or -r.contact_shadows 0) leaves the sun to its cascades alone.
+    bool contact_shadows = true;
     // Local-light shadow atlas layers after the cascades (M-VISUAL 4); keep
     // LocalShadowSettings::layers equal. 0 (or -r.local_shadows 0) draws every light unshadowed.
     u32 local_shadow_layers = 1;
@@ -88,9 +92,10 @@ struct Forward3DStats {
     u32 probes_loaded = 0;      // baked probes decoded into their slots this frame
     u32 probe_draws = 0;        // draws of those captures, over all six faces
     bool ssao = false;          // this frame's ambient was darkened by screen-space ambient occlusion
-    u32 ssao_draws = 0;         // the half-size prepass's draws (SSAO and SSR read it)
+    u32 ssao_draws = 0;         // the half-size prepass's draws (SSAO, SSR and contact shadows read it)
     bool ssr = false;           // this frame traced screen-space reflections (M-VISUAL2 1)
     bool ssr_history = false;   // ... over a valid previous frame (false: nothing reflected yet)
+    bool contact_shadows = false;  // this frame marched contact shadows toward the sun (M-VISUAL2 3)
     bool taa = false;           // this frame went through the TAA resolve
     bool taa_history = false;   // ... blending a valid history (false on the first frame or after a reset)
     u32 velocity_draws = 0;     // the velocity prepass's draws
@@ -132,6 +137,7 @@ struct Forward3DGpuTimes {
     f64 clusters = -1;  // the GPU light assignment (0 when it ran on the CPU)
     f64 ssao = -1;      // prepass + occlusion + blur (0 when the scene has no SSAO)
     f64 ssr = -1;       // the reflection trace, and the prepass when SSAO is off (0 when the scene has no SSR)
+    f64 contact = -1;   // the contact-shadow march, and the prepass when SSAO and SSR are off (0 when off)
     f64 shadow = -1, main = -1, resolve = -1;
     f64 taa = -1;       // velocity prepass + TAA resolve (0 when the scene has no TAA)
     f64 gi = -1;        // irradiance-volume update (0 when the scene has no volume)
@@ -144,7 +150,7 @@ struct Forward3DGpuTimes {
 
 class Forward3D {
 public:
-    static constexpr u32 kStageCount = 14;    // timestamps written: kStageCount + 1
+    static constexpr u32 kStageCount = 15;    // timestamps written: kStageCount + 1
     static constexpr u32 kMaxBloomLevels = 6;
 
     Forward3D() = default;
@@ -203,6 +209,9 @@ public:
     // SSR (M-VISUAL2 1): RGBA16F at half the 3D target's size, rgb = last frame's light at the hit,
     // a = its confidence (0 = a miss); null until the first frame with ScreenSpaceReflections::enabled.
     rhi::TextureHandle ssr() const { return ssr_; }
+    // RGBA8 half size: r = the SSAO visibility (1 without SSAO), g = the sun's contact visibility.
+    // Valid after a frame with contact shadows (Stats::contact_shadows).
+    rhi::TextureHandle contact_shadows() const { return ao_b_; }
     // TAA (M-VISUAL 5): the velocity target (RGBA16F at the 3D size: rg = uv motion, b = covered, a =
     // view depth) and the newest history (RGBA16F at the output size); null until the first frame
     // with PostFx::taa (or motion blur / depth of field for the velocity).
@@ -268,6 +277,7 @@ private:
     void record_prepass(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_ssao(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_ssr(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_contact(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void shadow_draw(rhi::CommandBuffer& cmd, const math::mat4& view_proj, const Scene3D::Draw& d, rhi::PipelineHandle& bound_pipe,
@@ -341,13 +351,14 @@ private:
     rhi::TextureHandle ao_gbuf_;         // RGBA16F half size: view normal, view depth
     rhi::TextureHandle ao_depth_;        // D32 half size (prepass visibility only)
     rhi::TextureHandle ao_a_;            // RGBA8 half size: occlusion, then the blurred result
-    rhi::TextureHandle ao_b_;            // RGBA8 half size: the horizontal blur
+    rhi::TextureHandle ao_b_;            // RGBA8 half size: the horizontal blur, then the contact shadows
     rhi::TextureHandle ao_off_;          // 1×1 stand-in bound at bank::kAo while SSAO is off
-    bool prepass_done_ = false;          // this frame's half-size prepass ran (SSAO or SSR)
+    bool prepass_done_ = false;          // this frame's half-size prepass ran (SSAO, SSR or contact shadows)
     rhi::PipelineHandle ssr_pipe_;       // null when Forward3DDesc::ssr is off
     rhi::TextureHandle ssr_;             // RGBA16F half size: reflected light, confidence
     math::mat4 ssr_prev_vp_ = math::mat4::identity();  // last frame's jittered view-proj
     bool ssr_prev_valid_ = false;        // hdr_ holds a frame drawn with ssr_prev_vp_
+    rhi::PipelineHandle contact_pipe_;   // null when Forward3DDesc::contact_shadows is off; writes ao_b_
     rhi::PipelineHandle ibl_prefilter_;  // null when Forward3DDesc::ibl is off
     rhi::PipelineHandle ibl_sh_pipe_;
     rhi::PipelineHandle ibl_brdf_;

@@ -73,6 +73,7 @@ type, default, help and flags, and every console function. The list below is the
 | `-scene <path under assets/>` | the first scene | the scene to open |
 | `-editor.open <asset>` | | open a `.mcui`, `.mctimeline` or `.mcanim` (relative to `assets/`) in its panel at start-up |
 | `-editor.panel <name>` | | bring a panel's tab to the front at start-up (`Profiler`, `Play`, ...) |
+| `-editor.perf_capture <file>` | | open a `.mcperf` capture in the Profiler's Capture tab at start-up (relative to the project, or absolute) |
 | `-editor.select <name>` | | select the entity with this name after opening |
 | `-editor.play 1` | 0 | enter play-in-editor after opening |
 | `-editor.player <path>` | beside the editor / the build tree | the player executable for Ctrl+F5 |
