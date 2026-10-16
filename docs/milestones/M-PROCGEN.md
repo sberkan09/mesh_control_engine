@@ -59,3 +59,32 @@ dungeon editor.
   grid with a pinned hash, learned rules and id order, weights, pins, errors, the 64-tile cap.
 - Not done: tiles with symmetry/rotation variants, overlapping-model WFC, and rules from a `.mctilemap` file (the
   example is passed as ids; step 3's `ProcLevel` reads the tilemap).
+
+## Step 3 design note (`ProcLevel`) — for review before code
+
+**Question.** The renderer draws a `TilemapLayer` from a baked asset by GUID (`SpriteExtract::draw_tilemap` →
+`load_sync<Tilemap>`). A level made at run time from a seed has no asset. Options:
+
+| Option | Cost | Risk |
+|---|---|---|
+| A. Expand into entities: wall rectangles (rows of walls merged greedily) with `Collider2D` + `Sprite`, one floor `Sprite`, marker entities | kit only; a 128x128 cave is a few hundred rectangles, not 16k tiles | per-tile art variants (autotile) are not possible; fine for the first version |
+| B. Register a runtime tilemap through `AssetSystem::commit_reload` on a placeholder `.mctilemap` | tile-accurate art | `commit_reload` is editor-only today and needs a `Tilemap` container writer outside the cook library: touches the asset system, hence core |
+| C. Bake only (`procgen_run bake` writes a `.mctilemap`) | no runtime change | no reroll in a running game, which is the point of a seed |
+
+**Recommendation.** Step 3 = option A, step 4's `bake` = option C (authors who want tile art bake a result and paint
+over it). Option B stays an open item and needs an Opus decision because it changes the asset system.
+
+**Shape of A.**
+- `ProcLevel { kind, width, height, seed, params…, tile_size, reroll }` is a reflected component (all fields `Save`).
+  `kit::ProcLevelSystem` runs in the stock hosts, once per (kind, seed, params) change: it destroys the entities it
+  made earlier (tagged with a `ProcLevelOwned { owner }` component) and builds new ones. `reroll` bumps the seed by
+  one and clears itself, so a script or a button can ask for the next level through `mce.set`.
+- Generated entities are ordinary entities, so they are in the `state_hash`; a project without a `ProcLevel`
+  creates nothing and hashes as today. Expansion is a pure function of the component, so a replay rebuilds the same
+  level.
+- Markers: `Start`, `Exit` (from `ProcGrid::start/exit`) as named entities with a `ProcMarker { kind, index }`
+  component that scripts find with `mce.find`.
+- Luau needs no new API: `mce.set(level, "seed", n)` or `reroll = true`; the system runs in the same tick.
+
+**Needs your decision (coordinator / Opus review):** option A vs B, and whether the system belongs in the stock hosts
+(like `ScriptSystem`) or as a kit system any game registers.
