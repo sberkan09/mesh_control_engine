@@ -14,7 +14,7 @@ Chromium run on WebGPU/SwiftShader (`scripts/web/browser_smoke.cjs`).
 | 2 | Emscripten toolchain for every sample and game: the player's main loop, the job system single-threaded (or pthreads under COOP/COEP), every engine library compiling | SBA-63 | done |
 | 3 | Files and assets: the pack over HTTP with progress, saves in IndexedDB | SBA-64 | done |
 | 4 | Audio and input: WebAudio unlock, touch, gamepad, pointer lock, fullscreen | SBA-65 | done |
-| 5 | `mce ship --target web`: shell page, itch.io zip, `mce serve` | SBA-66 | not started |
+| 5 | `mce ship --target web`: shell page, itch.io zip, `mce serve` | SBA-66 | done |
 | 6 | MCP `ship_build {"target":"web"}` and a Playwright smoke returning the state hash and a screenshot | SBA-67 | not started |
 | 7 | A `web` stage in `local_ci.sh` | SBA-68 | not started |
 
@@ -67,10 +67,24 @@ Numbers (`web-release`, MinSizeRel): `01_triangle.wasm` 8.9 MB, 2.5 MB gzipped; 
 | Input probe | `mce_input_web_probe` (`src/engine/platform/web_probe`), driven by `scripts/web/probe_smoke.cjs <dir> input`: a fake pad behind `navigator.getGamepads`, CDP touches, and the strict autoplay rule (headless Chromium never blocks audio) | 13 checks, PASS |
 | Relay over WebSocket (M-NET2) | `mce_relay_web_probe` (`src/engine/net/web_probe`): two `RelayClient`s over `websocket_web.cpp` against a native `mce_relay`; `probe_smoke.cjs <dir> relay <mce_relay>` | room made, the guest joined, messages crossed both ways: OK |
 
+## What shipped (step 5)
+
+| Item | Where | Evidence |
+|---|---|---|
+| `ship.py --target web` | `scripts/ship.py` (the cross path of the phone builds: host cook first, then the `web-release` preset with `MCE_HOST_COOK` / `MCE_ONLY_PROJECT`), `scripts/web/web_package.py` | `Ember-Step-<v>-web.zip` 2.8 MiB (wasm 8.9 MiB, 2.5 MiB gzipped) and the visual novel `--project projects/Undelivered` 46 MiB (mostly its pack; wasm 3.6 MiB gzipped); `--smoke` PASS on both |
+| Shell page | `scripts/web/shell.html`: loading bar fed by the pack download, icon, "Click/Tap to play" (the gesture that starts audio), full-screen button, WebGPU check, `[critical]` shown on the page; the canvas fills the page through CSS, which SDL follows (resizable window) | `probe_smoke.cjs <stage> shell`: desktop and phone (390x844 at 3x, touch) both show the cover once the game runs, the click or tap hides it and audio runs, the canvas fills the page and follows a resize and rotation |
+| itch.io zip | flat, `index.html` at the root; `VERSION.txt` is fetched at start, so a web build is a shipped build (cheats locked) | `03_platformer 0.9.0+… web-release …, cheats locked` |
+| `mce serve` | `tools/mce_cli/mce.py serve <zip | folder | project>`: `application/wasm`, COOP/COEP, no-cache, `--lan` for a phone, `--open` | headers checked with curl |
+| `mce ship --target web` | runs the engine checkout's `ship.py` (the SDK's own or the one `install.sh` came from) for a project under `projects/` | — |
+| Docs | `docs/user-guide/15-shipping.md` §15.6 | — |
+
 ## Open items
 
 - Size: cook WGSL next to SPIR-V once renderer shaders are cooked assets (drops Tint from the page), narrow
   ASYNCIFY to the frame yield and the device waits.
+- `mce ship --target web` for a project outside the checkout: the SDK installs no web libraries, so it runs
+  `ship.py` in the checkout, which only adds projects under `projects/` (a host build of another tree would need
+  its own `MCE_ONLY_PROJECT` run).
 - Timestamp queries are off (`DeviceCaps::timestamp_queries = false`); the profiler shows CPU times on the web.
 - Pixel parity with GL: checked by eye (orientation, winding) on `01_triangle`; a golden comparison against the GL
   backend comes with the renderer samples in step 2.
