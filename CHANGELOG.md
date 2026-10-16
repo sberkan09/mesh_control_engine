@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- 2D skeleton demo and gates, M-ANIM2D step 6 (SBA-145): `samples/skel2d_demo` is a cut-out courier with no code: a
+  15-bone `.mcskel2d` on one generated atlas, idle, walk and jump clips under a `.mcanim` graph that a timeline
+  drives, a weighted cape mesh with deform keys, a face attachment swap, IK legs that keep the feet on `IKTarget2D`
+  entities, and a lantern on a hand bone. It plays headless twice for the same hash (`ctest -R skel2d_demo`) and
+  `test_kit` checks its poses. The six 2D skeleton components leave `scripts/ci/sample_coverage.allow`. User
+  guide 7.13.
 - Behavior tree MCP tools, the squad demo and the gates, M-AI step 6 (SBA-133): `bt_create`, `bt_add_node` and
   `bt_set` write a `.mcbt` the cook checks before anything is written, and `bt_trace` plays a saved scene
   headless and reports one brain's running path and blackboard over time and when each node started.

@@ -1,6 +1,6 @@
 # M-ANIM2D — 2D skeletal animation (milestone record)
 
-**Status:** active (steps 1, 2, 3 and 4 done; step 5 next).
+**Status:** done (steps 1–6; SBA-146, the Spine/DragonBones import, is Later).
 **Why:** 2D characters animate only by sprite frames today; cut-out rigs (bones, blended clips, skinned meshes, IK) are what Godot's Skeleton2D, Unity's 2D Animation and Spine give 2D games. Added 2026-10-16 under the user's standing instruction to extend the roadmap when no milestone is free.
 **Plan:** ROADMAP § M-ANIM2D.
 **Measured on:** the Linux CI container.
@@ -14,7 +14,7 @@
 | 3. Mesh attachments and CPU skinning, deform keys (and the slot keys moved from step 2) | SBA-142 | done |
 | 4. Two-bone and CCD IK as data | SBA-143 | done |
 | 5. Editor skeleton panel and MCP `skel2d_*` tools | SBA-144 | — |
-| 6. Demo, user guide, gates | SBA-145 | — |
+| 6. Demo, user guide, gates | SBA-145 | done |
 | Later: Spine / DragonBones JSON import | SBA-146 | not scheduled |
 
 ## Step 1 — skeletons, the world pose and the slots
@@ -95,3 +95,22 @@ Limits found in step 4: a two-bone solve is exact only without non-uniform scale
 its parents (with it the tip lands close). There is no `"stretch"` option: bones keep their
 lengths. A `.mcanim` graph's IK chains still apply to 3D only; 2D IK comes from the skeleton. With
 two `IKTarget2D` entities on one constraint the later in query order wins.
+
+## Step 6: the demo, the user guide and the gates
+
+| Item | Where | Evidence |
+|---|---|---|
+| `samples/skel2d_demo`: a data-only project the stock `mce_player` plays. A cut-out courier (`courier.mcskel2d`: 15 bones, 13 slots on one generated 128 x 128 atlas, a weighted cape mesh with deform keys, a `calm` / `wow` face attachment, two two-bone IK constraints) with `idle`, `walk` and a one-shot `jump` under `courier.mcanim` (parameters `speed` and `jump`). A `.mctimeline` on a `Director` entity moves it, writes `Skeleton2DAnimator.params` and flips it; two `IKTarget2D` entities (`ChildOf` the courier) are its feet's targets; a `Bone2DFollow` lantern rides a hand. The art is `gen_art.py` (Pillow), no outside assets | `samples/skel2d_demo/` | `mce_cook` cooks 5 assets with 0 errors; `mce_player -headless 1 -ticks 900` ends on 15 entities and one `state_hash` (8270d46a01742050), the same on every run and in the gcc Release build |
+| Headless gate: 900 ticks (one and a half laps of the 12 s timeline) played twice must print the same hash and no `[error]` or `[warn]` | `samples/skel2d_demo/CMakeLists.txt` with `samples/tour_test.cmake` | ctest `skel2d_demo_player` |
+| Poses with numbers: idle puts both foot bones within 2 mm of their `IKTarget2D` entities (the hip is 2 to 6 cm below rest, so the legs are bent); the walk has both IK mixes at 0; at 5.9 s the graph is in `jump`, the root is more than 0.4 m up and the head slot shows attachment 1; at 6.7 s it is idle again with the root down and the feet back on their targets; the timeline flips it at 6.9 s; the lantern sits at the courier plus the forearm bone times (0.3, -0.04); two 900-tick runs hash the same and a 899-tick run differs | `tests/kit/test_skeleton2d_demo.cpp` | `test_kit` "skel2d_demo: the sample's assets cook", "...idle plants the feet on the IK targets, walking frees them, the jump swaps the face", "...two runs hash the same, a longer run differs" (47 assertions) |
+| GPU smoke (label `gpu`, Linux Xvfb + Mesa llvmpipe, 1280 x 720): `mce_player -frames 240 -capture`; read by eye at ticks 30, 100, 115, 340, 350, 360, 375 and 700 with `-capture_ticks` (idle with planted feet and bent knees, the walk's stride and arm swing, the crouch, the airborne surprised face with the cape flaring, a mirrored walk back) with 0 GL errors | `samples/skel2d_demo/CMakeLists.txt` | ctest `skel2d_demo_player_gpu` (only with `MCE_GPU_TESTS`) |
+| User guide 7.13 gains "The demo: `samples/skel2d_demo`" (what each piece shows, the `-90` slot turn, where the feet targets live); `docs/user-guide/18-samples.md` has the sample's row | `docs/user-guide/07-2d.md`, `18-samples.md` | `scripts/ci/check_walls.py` |
+| Sample coverage gate: `Skeleton2D`, `Bone2DFollow`, `Skeleton2DAnimator`, `Skeleton2DSlots`, `Skeleton2DIK` and `IKTarget2D` named in the sample's scene, their lines gone from `scripts/ci/sample_coverage.allow`; the capability table regenerated | `scripts/ci/sample_coverage.allow`, `docs/engine/capabilities.md` | `python3 scripts/ci/capabilities.py --check` |
+
+Limits found in step 6: the plan's "IK feet on a slope" is flat ground here: the engine has no 2D ground
+query a scene can use without code, so the targets are fixed entities (a game moves them from a
+raycast). The walk and jump are keyed FK with the IK mix at 0; the planted feet are the idle's. A
+foot bone is not kept level by IK (the foot turns with the shin while the legs bend). The courier is
+mirrored with `flip_x` from a timeline activation track, so a flipped courier's `ChildOf` foot targets
+mirror with it. A scripted-input replay is not part of this sample: it takes no input (the timeline
+is its player). Debug and Release (gcc) end 900 ticks on the same hash, 8270d46a01742050, checked by hand; ctest runs the Debug build only.

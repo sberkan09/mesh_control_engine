@@ -97,12 +97,12 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Overlap3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
-| `Skeleton2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/05-assets.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `Bone2DFollow` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `Skeleton2DAnimator` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `Skeleton2DSlots` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `Skeleton2DIK` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `IKTarget2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
+| `Skeleton2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/skel2d_demo/assets/scenes/courier.mcscene |
+| `Bone2DFollow` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/skel2d_demo/assets/scenes/courier.mcscene |
+| `Skeleton2DAnimator` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/skel2d_demo/assets/scenes/courier.mcscene |
+| `Skeleton2DSlots` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/skel2d_demo/assets/scenes/courier.mcscene |
+| `Skeleton2DIK` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/skel2d_demo/assets/scenes/courier.mcscene |
+| `IKTarget2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/skel2d_demo/assets/scenes/courier.mcscene |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
