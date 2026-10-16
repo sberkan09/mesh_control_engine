@@ -185,6 +185,21 @@ public:
         ranged("ior", 1, 3, e.ior);
         ranged("height_scale", 0, 0.5, e.height_scale);
         e.set_height(height);
+        // Height is data, not color: an sRGB import (the texture default) would be uploaded as sRGB and bend the depth.
+        if (ChunkType ht = ChunkType::Manifest; !height.is_null() && in.lookup && in.lookup->type_of(height, ht) && ht == ChunkType::Texture) {
+            JsonValue ts;
+            StringView tpath;
+            bool srgb = true;
+            DiagList unused;
+            if (in.lookup->native_document(height, ts, tpath)) detail::read_bool(ts, "srgb", true, srgb, tpath, kStage, unused);
+            if (srgb) {
+                String msg("the height map assets/");
+                msg += tpath;
+                msg += " is imported as sRGB (its \"srgb\" setting defaults to true): set \"srgb\": false in its .mceasset so the depth is not bent";
+                const JsonValue at = doc.get("textures").get(kHeightSlot);
+                diags.warning(file, at.valid() ? at.line() : 0, at.valid() ? at.col() : 0, kStage, msg);
+            }
+        }
         if (e.height_scale > 0.0f && height.is_null())
             detail::error_at(diags, Errc::ParseError, file, doc.get("height_scale"), kStage,
                              "'height_scale' needs a height map: set textures.height");

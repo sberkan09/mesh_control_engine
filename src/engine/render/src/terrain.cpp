@@ -356,8 +356,8 @@ bool compose_layer_array(Span<const asset::TextureView* const> layers, LayerArra
         if (!ref) ref = v;
         const asset::TextureHeader &a = *ref->header, &b = *v->header;
         if (b.format != a.format || srgb(*v) != srgb(*ref) || b.width != a.width || b.height != a.height || v->mips.size() != ref->mips.size()) {
-            MCE_LOG_WARN("terrain: layer {} texture is {}x{} with {} mips, layer textures must match the first ({}x{}, {} mips, same format)",
-                         i, b.width, b.height, v->mips.size(), a.width, a.height, ref->mips.size());
+            MCE_LOG_WARN("{}: layer {} texture is {}x{} with {} mips, layer textures must match the first ({}x{}, {} mips, same format)",
+                         debug_name, i, b.width, b.height, v->mips.size(), a.width, a.height, ref->mips.size());
             continue;
         }
         out.present |= 1u << i;

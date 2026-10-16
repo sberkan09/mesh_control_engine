@@ -866,7 +866,8 @@ TEST_CASE("material: a height map, height_scale and parallax_steps cook into Mat
     const char* bad[] = {
         R"("height_scale": 0.04)",                                                        // no height map to scale
         R"("height_scale": 0.9, "textures": { "height": "guid:a1a1a1a1-0000-4000-8000-000000000001" })",  // out of range
-        R"("parallax_steps": [2, 40])", R"("parallax_steps": [40, 8])", R"("parallax_steps": 8)",
+        R"("parallax_steps": [2, 40])", R"("parallax_steps": [40, 8])", R"("parallax_steps": 8)", R"("parallax_steps": [8, 65])",
+        R"("parallax_steps": [8.5, 32])", R"("height_scale": 0.04, "textures": { "height": null })",
         R"("textures": { "height": "guid:a1a1a1a1-0000-4000-8000-000000000004" })",     // a material, not a texture
     };
     for (const char* extra : bad) {
@@ -875,6 +876,37 @@ TEST_CASE("material: a height map, height_scale and parallax_steps cook into Mat
         CHECK_MESSAGE(!b.ok(), extra);
         CHECK(report_for(b, kMatGuid)->status != AssetStatus::Cooked);
     }
+
+    // A height map without a scale cooks and is off.
+    write(std::string(R"("textures": { "height": "guid:)") + kTexGuid + R"(" })");
+    REQUIRE(svc.cook(root.c_str(), CookOptions{}).ok());
+}
+
+TEST_CASE("material: a height map imported as sRGB warns, naming the texture; srgb false is silent (M-VISUAL3 2)") {
+    const std::string root = make_project("cook_material_height_srgb");
+    const char* linear_guid = "a1a1a1a1-0000-4000-8000-0000000000a5";
+    write_file(root + "/assets/textures/disp.png", make_gradient_png(5, 3));
+    write_file(root + "/assets/textures/disp.png.mceasset", sidecar(linear_guid, "texture", R"({ "srgb": false })"));
+    auto material = [&](const char* tex) {
+        write_file(root + "/assets/materials/hero.mcmat",
+                   std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid + R"(", "height_scale": 0.04, "textures": { "height": "guid:)" +
+                       tex + R"(" } })");
+    };
+    auto height_warnings = [](const CookReport& r) {
+        u32 n = 0;
+        for (const auto& d : r.diags.all())
+            n += d.severity == cook::Severity::Warning && std::string(d.message.c_str()).find("height map assets/textures/hero.png") != std::string::npos;
+        return n;
+    };
+    CookService svc;
+    material(kTexGuid);  // hero.png: no "srgb" setting, which defaults to true
+    const CookReport warned = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(warned.ok());
+    CHECK(height_warnings(warned) == 1);
+    material(linear_guid);
+    const CookReport quiet = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(quiet.ok());
+    CHECK(height_warnings(quiet) == 0);
 }
 
 TEST_CASE("material: the M-VISUAL2 4 lobes cook after the base block; a plain material has none; bad ranges fail") {

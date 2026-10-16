@@ -601,6 +601,9 @@ TEST_CASE("M-VISUAL3 2: a material with a height map gets one [normal, height] a
     write_file(root + "/assets/n.png.mceasset", sidecar(guid_n, "texture", opts));
     write_file(root + "/assets/h.png.mceasset", sidecar(guid_h, "texture", opts));
     write_file(root + "/assets/s.png.mceasset", sidecar(guid_s, "texture", opts));
+    const char* guid_c = "7a270000-0000-4000-8000-000000000004";  // an sRGB height map
+    write_file(root + "/assets/c.png", make_png(4, 4, grey));
+    write_file(root + "/assets/c.png.mceasset", sidecar(guid_c, "texture", R"({ "srgb": true, "mips": false })"));
     auto mat = [&](const char* guid, const std::string& textures) {
         write_file(std::string(root + "/assets/") + guid + ".mcmat",
                    std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + guid + R"(", "height_scale": 0.05, "textures": )" + textures + " }");
@@ -611,6 +614,10 @@ TEST_CASE("M-VISUAL3 2: a material with a height map gets one [normal, height] a
     mat(good, std::string(R"({ "normal": "guid:)") + guid_n + R"(", "height": "guid:)" + guid_h + R"(" })");
     mat(no_normal, std::string(R"({ "height": "guid:)") + guid_h + R"(" })");
     mat(mismatch, std::string(R"({ "normal": "guid:)") + guid_n + R"(", "height": "guid:)" + guid_s + R"(" })");
+    const char* srgb_with_normal = "7a270000-0000-4000-8000-000000000013";
+    const char* srgb_alone = "7a270000-0000-4000-8000-000000000014";
+    mat(srgb_with_normal, std::string(R"({ "normal": "guid:)") + guid_n + R"(", "height": "guid:)" + guid_c + R"(" })");
+    mat(srgb_alone, std::string(R"({ "height": "guid:)") + guid_c + R"(" })");
     cook::CookService svc;
     REQUIRE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
 
@@ -640,7 +647,7 @@ TEST_CASE("M-VISUAL3 2: a material with a height map gets one [normal, height] a
     ex3.bind_mesh(kBox, 1);
     REQUIRE(ex3.preload().has_value());
     world.spawn_with(LocalTransform{}, kit::Camera3DComponent{});
-    const char* guids[] = {good, no_normal, mismatch};
+    const char* guids[] = {good, no_normal, mismatch, srgb_with_normal, srgb_alone};
     for (const char* g : guids) {
         kit::MeshRef m;
         m.mesh.guid = kBox;
@@ -653,7 +660,7 @@ TEST_CASE("M-VISUAL3 2: a material with a height map gets one [normal, height] a
     render::Scene3D scene(f.renderer.meshes(), mem::heap());
     scene.begin(cam, {64, 64});
     ex3.extract(world, scene, 1.0f);
-    REQUIRE(scene.instances().size() == 3);
+    REQUIRE(scene.instances().size() == 5);
     const render::MaterialOverride *a = scene.instances()[0].material, *n = scene.instances()[1].material, *x = scene.instances()[2].material;
     REQUIRE((a && n && x));
     CHECK(a->parallax);
@@ -668,6 +675,14 @@ TEST_CASE("M-VISUAL3 2: a material with a height map gets one [normal, height] a
     CHECK_FALSE(x->parallax);
     CHECK(x->ext.height_scale == 0.0f);
     CHECK(x->normal_key < render::TextureStore::kFirstLocalKey);
+    // An sRGB height map is refused, with or without a normal map (alone it would set the array's format).
+    for (u32 i : {3u, 4u}) {
+        const render::MaterialOverride* c = scene.instances()[i].material;
+        REQUIRE(c != nullptr);
+        CHECK_FALSE(c->parallax);
+        CHECK(c->ext.height_scale == 0.0f);
+        CHECK(c->normal_key < render::TextureStore::kFirstLocalKey);
+    }
     ex3.shutdown();
     f.extract.reset(nullptr);
 }

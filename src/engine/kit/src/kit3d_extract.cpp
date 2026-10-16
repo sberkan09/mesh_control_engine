@@ -230,6 +230,8 @@ u32 Kit3DExtract::texture_key(asset::Guid guid) {
 // texture key, which replaces the material's normal_key (the shader reads layer 1 for the march). Without a
 // texture store, or when the two textures do not match (size, mips, format, color space) or the height does
 // not load, the material draws without parallax: `ext`'s height is cleared so the renderer sees none.
+// The array is built once, when the material first resolves, and lives until reset()/shutdown(): a texture hot
+// reload or a texture store swap does not rebuild it (follow-up if the editor needs it).
 u32 Kit3DExtract::build_parallax_array(render::MaterialOverride& m, asset::Guid material_guid) {
     const asset::Guid layer_guid[2] = {m.params.texture(asset::MaterialSlot::Normal), m.ext.height()};
     asset::TextureView views[2] = {};
@@ -245,8 +247,11 @@ u32 Kit3DExtract::build_parallax_array(render::MaterialOverride& m, asset::Guid 
                     views[i] = tv.value();
                     ptrs[i] = &views[i];
                 }
+                break;
             }
         }
+        // Height is linear data: an sRGB one (and, with no normal map, the array's format) would bend the depth.
+        if (ptrs[1] && (views[1].header->flags & asset::TextureFlags::Srgb)) ptrs[1] = nullptr;
     }
     render::LayerArray arr;
     u32 key = ~0u;
@@ -257,9 +262,10 @@ u32 Kit3DExtract::build_parallax_array(render::MaterialOverride& m, asset::Guid 
         if (!textures_->upload(key, 1, arr.upload)) key = ~0u;
     }
     if (key == ~0u) {
-        MCE_LOG_WARN("kit3d: material {} draws without parallax: its height map is missing, not resident, or does not match the normal map "
-                     "(same size, mips and format, both linear)",
-                     asset::to_string(material_guid).view());
+        MCE_LOG_WARN("kit3d: material {} draws without parallax: its height map {} is missing, not resident, imported as sRGB, or does "
+                     "not match the normal map {} (same size, mips and format, both linear)",
+                     asset::to_string(material_guid).view(), asset::to_string(layer_guid[1]).view(),
+                     asset::to_string(layer_guid[0]).view());
         m.ext.height_scale = 0.0f;
         return ~0u;
     }
