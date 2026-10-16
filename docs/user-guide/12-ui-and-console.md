@@ -199,8 +199,15 @@ screen's entity shows, hides and holds it on input actions (the stock kit instal
 page with music and effects volume, and a HUD bound to the drone, the same documents drawn in two
 themes on two scenes.
 
-The documents use the built-in skin, or their `"font"`, or their theme's fonts (below);
-sprite-sheet skins are not drawn yet.
+The documents use the built-in skin, or their `"font"`, or their theme's fonts (below). A document's
+`"sprites"` (or its theme's) names a sprite sheet (`.mcsheet`) the widgets draw from: a style's
+`sprite_region` is a region of that sheet, in the sheet's order (a `"grid"`'s cells first, then the
+named `"regions"`), its `slice` insets are texels of that region, and `"white_region"` is a region of
+plain white texels that flat quads (tracks, checks, carets, sprite_region `4294967295`) draw with.
+The widget's tint multiplies the texels, so a skin drawn in greys takes the palette's colors. A sheet
+that does not load, or whose `white_region` is not one of its regions, leaves the built-in skin and
+logs a warning. With `"filter": "linear"` on the texture, keep a margin of the same texels around
+each region (the white one most of all), or the edges blend with their neighbours.
 
 ### Themes (`.mcuitheme`)
 
@@ -212,7 +219,9 @@ cooked to a `UiTheme` chunk):
   "format": "mce-uitheme", "version": 1, "guid": "<uuid>",
   "palette": { "panel": [0.04, 0.05, 0.16, 0.92], "button": [0.35, 0.08, 0.32, 0.95], "accent": [0.1, 0.75, 0.7, 1] },
   "fonts": { "body": "guid:<Font>", "title": "guid:<Font>", "button": "guid:<Font>" },
-  "styles": { "Button": { "style": { "text_outline": 1 } }, "Text": { "style": { "text_shadow": [2, 2] } } }
+  "sprites": "guid:<SpriteSheet>", "white_region": 0,
+  "styles": { "Button": { "style": { "text_outline": 1, "sprite_region": 2, "slice": { "left": 4, "top": 4, "right": 4, "bottom": 4 } } },
+              "Text": { "style": { "text_shadow": [2, 2] } } }
 }
 ```
 
@@ -223,6 +232,8 @@ cooked to a `UiTheme` chunk):
 - **`fonts`**: a font per role. A widget's `"font_role"` picks one: `Title`, `Body` or `Button`
   (default `Auto`: buttons, toggles and sliders use `button`, everything else `body`). A role with
   no font uses the document's `"font"`, then the built-in one.
+- **`sprites`** and **`white_region`**: the skin, a sprite sheet as for a document (above). A
+  document's own `"sprites"` wins over its theme's.
 - **`styles`**: per widget kind, `UiStyle` fields over every state (`"style"`) or one state
   (`"styles": { "Hover": {...} }`), on top of the palette's look.
 
@@ -236,7 +247,10 @@ night theme (`scenes/night.mcscene`) with the same two documents.
 A project from `mce new` starts with three themes in `assets/ui/themes/`: `pixel` (Pixelify Sans and
 Press Start 2P), `clean` (Atkinson Hyperlegible Next and Karla) and `story` (Crimson Pro). Their fonts
 are OFL, bake Latin-1 and Latin Extended-A (Turkish included), and are listed in the project's
-`CREDITS.md`; chapter 14 says which fits which game.
+`CREDITS.md`; chapter 14 says which fits which game. Each has a sprite skin beside it
+(`<theme>_skin.png` and `<theme>_skin.mcsheet`: a white region, a panel and a button): `pixel` draws
+bevelled buttons with a hard outline, `clean` rounded corners, `story` a paper panel with a double ink
+rule. Edit the PNG to restyle every panel and button of the game.
 
 ## 12.3 The developer console
 

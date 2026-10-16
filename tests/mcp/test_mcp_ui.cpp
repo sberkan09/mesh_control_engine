@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <string>
 
+#include "mce/cook/image.h"
 #include "mce/cook/ui_text.h"
 #include "mce/editor/ui_document_editor.h"
 #include "mce/ui/document_data.h"
@@ -280,6 +281,63 @@ TEST_CASE("ui_preview: one document under two themes draws two different frames"
     // Back to the default look: the first frame again.
     c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":null})");
     CHECK(same(plain.images[0], c.ok("ui_preview", shot).images[0]));
+}
+
+TEST_CASE("ui_preview: a theme's sprite-sheet skin draws its 9-slice frame; a bad one falls back to flat quads") {
+    const std::string root = ui_project("mcp_ui_preview_skin");
+    Client c([] {
+        mcp::ServerOptions opt;
+        opt.player = MCE_PLAYER_EXE;
+        return opt;
+    }());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    c.ok("ui_create", std::string(R"({"path":"ui/menu.mcui","widgets":)") + kMenuWidgets + "}");
+    // The skin: a 16 x 16 texture with a white 4 x 4 block and a 12 x 12 frame with a 3-texel black
+    // border around a white middle. The sheet's default 1 x 1 grid is region 0, so they are 1 and 2.
+    Array<u8> rgba;
+    for (u32 y = 0; y < 16; ++y)
+        for (u32 x = 0; x < 16; ++x) {
+            const bool frame = x >= 4 && y < 12;
+            const bool border = frame && (x < 7 || x > 12 || y < 3 || y > 8);
+            const u8 v = border ? 0 : 255;
+            for (u8 b : {v, v, v, u8(frame || (x < 4 && y < 4) ? 255 : 0)}) rgba.push_back(b);
+        }
+    Array<byte> png;
+    REQUIRE(cook::encode_png(16, 16, rgba.span(), png).has_value());
+    std::filesystem::create_directories(root + "/assets/ui");
+    write_file(root + "/assets/ui/skin.png", std::string(reinterpret_cast<const char*>(png.data()), png.size()));
+    write_file(root + "/assets/ui/skin.png.mceasset",
+               "{ \"guid\": \"5ce4e000-0000-4000-8000-0000000000a1\", \"importer\": \"texture\", \"importer_version\": 1,"
+               " \"settings\": { \"srgb\": true, \"mips\": false } }\n");
+    const std::string sheet = str(c.ok("asset_create", R"({"path":"ui/skin.mcsheet","content":{"texture":"guid:5ce4e000-0000-4000-8000-0000000000a1",)"
+                                                       R"("image_size":[16,16],"regions":[{"name":"white","rect":[0,0,4,4]},{"name":"frame","rect":[4,0,12,12]}]}})")
+                                      .v().get("guid"));
+    const std::string palette = R"("palette":{"button":[0.85,0.35,0.1,1],"text":[1,0.95,0.8,1]})";
+    const std::string framed = R"("styles":{"Button":{"style":{"sprite_region":2,"slice":{"left":3,"top":3,"right":3,"bottom":3}}}})";
+    c.ok("asset_create", R"({"path":"ui/flat.mcuitheme","content":{)" + palette + "}}");
+    c.ok("asset_create", R"({"path":"ui/skinned.mcuitheme","content":{)" + palette + R"(,"sprites":")" + sheet + R"(","white_region":1,)" + framed + "}}");
+    c.ok("asset_create", R"({"path":"ui/broken.mcuitheme","content":{)" + palette + R"(,"sprites":")" + sheet + R"(","white_region":7,)" + framed + "}}");
+    const char* const shot = R"({"document":"ui/menu.mcui","width":320,"height":240})";
+    // Dark pixels: the frame's border, tinted by the button color, stays dark.
+    auto dark = [](const auto& img) {
+        usize n = 0;
+        for (usize i = 0; i + 3 < img.rgba.size(); i += 4)
+            if (img.rgba[i] < 24 && img.rgba[i + 1] < 24 && img.rgba[i + 2] < 24) ++n;
+        return n;
+    };
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/flat.mcuitheme"})");
+    auto flat = c.ok("ui_preview", shot);
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/skinned.mcuitheme"})");
+    auto skinned = c.ok("ui_preview", shot);
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/broken.mcuitheme"})");
+    auto broken = c.ok("ui_preview", shot);
+    REQUIRE(flat.images.size() == 1);
+    REQUIRE(skinned.images.size() == 1);
+    REQUIRE(broken.images.size() == 1);
+    // Two buttons, each with a 3-pixel border at UI scale 1: well over a hundred more dark pixels.
+    CHECK(dark(skinned.images[0]) > dark(flat.images[0]) + 200);
+    CHECK(dark(broken.images[0]) == dark(flat.images[0]));
 }
 
 }  // TEST_SUITE("gpu")

@@ -227,13 +227,14 @@ other Latin-1 and Latin Extended-A languages:
 
 | Theme | Fonts (body, title) | For |
 |---|---|---|
-| `pixel.mcuitheme` | Pixelify Sans, Press Start 2P | retro and arcade games: dark panels, warm buttons, a hard text shadow |
-| `clean.mcuitheme` | Atkinson Hyperlegible Next, Karla | puzzle, casual and tool-like games: slate panels, blue buttons |
-| `story.mcuitheme` | Crimson Pro, Crimson Pro Bold | novels and quiet games: paper panels, brown buttons, dark ink |
+| `pixel.mcuitheme` | Pixelify Sans, Press Start 2P | retro and arcade games: dark panels, warm bevelled buttons, a hard text shadow |
+| `clean.mcuitheme` | Atkinson Hyperlegible Next, Karla | puzzle, casual and tool-like games: slate panels, rounded blue buttons |
+| `story.mcuitheme` | Crimson Pro, Crimson Pro Bold | novels and quiet games: paper panels with an ink rule, brown buttons, dark ink |
 
 Pick the one that fits the brief and name it as each `.mcui` document's `"theme"` (`ui_theme_set`), or a
 `UiScreen`'s `theme` for one scene; give titles `"font_role": "Title"`. When none fits, copy one to a new
-`.mcuitheme` with a fresh `guid` and change its palette and fonts (`library_add` brings more fonts). Look at the
+`.mcuitheme` with a fresh `guid` and change its palette, fonts and skin (`<theme>_skin.png`, `gen_pixels` can
+redraw it; `library_add` brings more fonts). Look at the
 result with `ui_preview` or `render_frame`, and keep text readable: `project_check` warns about text under 16 px
 or under 4.5:1 contrast. Delete the themes and fonts the game does not use before shipping (`project_check`
 lists them as assets nothing references).

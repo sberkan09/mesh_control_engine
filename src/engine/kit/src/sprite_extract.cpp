@@ -62,10 +62,17 @@ void SpriteExtract::release_handles() {
             if (t.handle.generation != 0) assets_->release(t.handle);
             if (t.normal_handle.generation != 0) assets_->release(t.normal_handle);
         }
-    if (renderer_)
+    if (assets_)
+        for (const SheetEntry& s : sheets_)
+            if (s.texture.generation != 0) assets_->release(s.texture);
+    if (renderer_) {
         for (const TextureEntry& t : textures_)
             if (t.set.valid() && !(t.set == missing_set_)) renderer_->sprite_sets().destroy(t.set);
+        for (const SheetEntry& s : sheets_)
+            if (s.set.valid()) renderer_->sprite_sets().destroy(s.set);
+    }
     textures_.clear();
+    sheets_.clear();
     fonts_.clear();  // the renderer keeps font storage until shutdown
 }
 
@@ -196,6 +203,64 @@ const render::Font* SpriteExtract::font(asset::Guid guid) {
     }
     fonts_.push_back(e);
     return e.ok ? &fonts_.back().font : nullptr;
+}
+
+render::SpriteSetId SpriteExtract::ui_sheet_set(asset::Guid guid, u32* region_count) {
+    if (region_count) *region_count = 0;
+    if (guid == asset::Guid{}) return {};
+    for (const SheetEntry& s : sheets_)
+        if (s.guid == guid) {
+            if (region_count) *region_count = s.regions;
+            return s.set;
+        }
+    SheetEntry e;
+    e.guid = guid;
+    if (assets_ && renderer_) {
+        const asset::AssetKey key = assets_->find(guid);
+        Result<asset::AssetHandle<asset::SpriteSheet>> h =
+            key != asset::kInvalidAssetKey ? assets_->load_sync<asset::SpriteSheet>(key)
+                                           : Result<asset::AssetHandle<asset::SpriteSheet>>(Error(Errc::NotFound, "kit.sheet"));
+        if (h) {
+            Result<asset::SpriteSheetView> v = asset::SpriteSheetView::read(assets_->resolve(h.value()));
+            const asset::Guid tex = v ? v.value().header->texture_guid() : asset::Guid{};
+            const asset::AssetKey tkey = tex == asset::Guid{} ? asset::kInvalidAssetKey : assets_->find(tex);
+            Result<asset::AssetHandle<asset::Texture>> th =
+                tkey != asset::kInvalidAssetKey ? assets_->load_sync<asset::Texture>(tkey)
+                                                : Result<asset::AssetHandle<asset::Texture>>(Error(Errc::NotFound, "kit.sheet"));
+            auto tv = th ? asset::TextureView::read(assets_->resolve(th.value())) : Result<asset::TextureView>(Error(Errc::NotFound, "kit.sheet"));
+            if (tv && !v.value().regions.empty()) {
+                render::SpriteSetDesc d;
+                d.texture_key = tkey;
+                // Regions sized so that width_m × pixels_per_meter is the region's width in texels.
+                const f32 w = static_cast<f32>(tv.value().header->width), hgt = static_cast<f32>(tv.value().header->height);
+                Array<render::SpriteRegion> regions;
+                for (const asset::SpriteSheetRegion& r : v.value().regions) {
+                    render::SpriteRegion sr;
+                    sr.u0 = r.u0;
+                    sr.v0 = r.v0;
+                    sr.u1 = r.u1;
+                    sr.v1 = r.v1;
+                    sr.width_m = (r.u1 - r.u0) * w / d.pixels_per_meter;
+                    sr.height_m = (r.v1 - r.v0) * hgt / d.pixels_per_meter;
+                    regions.push_back(sr);
+                }
+                d.regions = regions.span();
+                if ((tv.value().header->flags & asset::TextureFlags::LinearFilter) != 0) d.filter = rhi::Filter::Linear;
+                d.debug_name = "kit.ui_sheet";
+                e.set = renderer_->create_sprite_set(d);
+                e.regions = static_cast<u32>(regions.size());
+                e.texture = asset::AnyHandle(th.value());
+            } else if (th) {
+                assets_->release(asset::AnyHandle(th.value()));
+            }
+            assets_->release(asset::AnyHandle(h.value()));  // the set copied the regions
+        }
+        if (!e.set.valid())
+            MCE_LOG_WARN("kit: sprite sheet {} (or its texture) cannot be loaded as a UI skin", asset::to_string(guid).view());
+    }
+    if (region_count) *region_count = e.regions;
+    sheets_.push_back(e);
+    return e.set;
 }
 
 // Where an entity is drawn: its WorldTransform when the hierarchy wrote one (ChildOf scenes,
