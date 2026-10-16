@@ -102,6 +102,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-AUDIO2 | [M-AUDIO2.md](milestones/M-AUDIO2.md) (Linear SBA-118 … SBA-122, added 2026-10-16) | active: step 1 done (Ogg Vorbis clips, ADR-0044) | steps 2–5, the demo and the gates |
 | M-NET3 | [M-NET3.md](milestones/M-NET3.md) (Linear SBA-123 … SBA-127, added 2026-10-16) | active (step 1 done: per-client delta snapshots, `NetRelevance`, acknowledgements; about a third of the snapshot bytes in `sample_net_headless`) | steps 2–5, the demo and the gates |
 | M-MOVE3D | [M-MOVE3D.md](milestones/M-MOVE3D.md) (Linear SBA-134 … SBA-139, added 2026-10-16) | active (step 1 in progress) | steps 1–6, the demo and the gates |
+| M-ANIM2D | [M-ANIM2D.md](milestones/M-ANIM2D.md) (Linear SBA-140 … SBA-146, added 2026-10-16) | active (step 1 in progress) | steps 1–6, the demo and the gates |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -465,6 +466,24 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 - Replay hashes hold across runs and builds.
 - 64 characters and 8 vehicles step within a stated budget.
 - Defaults keep existing scenes moving as before (the same positions after a fixed run).
+- `local_ci.sh` green on every step.
+
+### M-ANIM2D — 2D skeletal animation · **size M (rough guess, ≈ 60–90 h engineering)** · tier: off-tier, opt-in per entity, gates nothing · priority 3
+
+*Reason: added 2026-10-16 by the M-MOBILE routine under the user's standing instruction to keep developing the engine when no milestone is free. MCE's 2D characters animate by sprite frames only (`SpriteAnimator`); 3D has skinning, the `.mcanim` state graph and IK. Godot (Skeleton2D, Bone2D, Polygon2D skinning), Unity (2D Animation package) and Spine-based pipelines give 2D games cut-out rigs: smooth motion from a few parts, blended clips and IK feet, at a fraction of the art cost of frame-by-frame. Needs no device: every step gates on headless runs, extraction tests and replay hashes.*
+
+**Builds, in order:**
+1. `.mcskel2d` assets (bones with rest poses, slots with sprites and draw order) cooked to `CHNK_SKEL2D`, the `Skeleton2D` component with a deterministic world pose, and slots drawn through the sprite extraction.
+2. Bone clips (rotate, translate, scale, attachment and tint keys, events) with crossfade, driven by the existing `.mcanim` state graph.
+3. Mesh attachments weighted to bones, skinned on the CPU into the 2D batch, with deform keys.
+4. Two-bone and CCD IK constraints as data, targets as bones or entities.
+5. The editor's skeleton panel and bone gizmos, and MCP `skel2d_*` tools.
+6. The demo `samples/skel2d_demo`, the user guide and the gates.
+
+**Demo:** `samples/skel2d_demo`: a rigged character idles, walks and jumps under a state graph, with a skinned part and IK feet on a slope; a scripted input replays to the same hash in Debug and Release.
+**Gates:**
+- Pose, sampling, skinning and IK each have headless tests with exact numbers.
+- Replay hashes hold across runs and builds; a scene without `Skeleton2D` plays today's hash.
 - `local_ci.sh` green on every step.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
