@@ -65,7 +65,7 @@ cd "$ROOT"
 
 export LIBGL_ALWAYS_SOFTWARE=1  # Mesa llvmpipe: GL 4.5 core without a GPU
 
-ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism release-build web premerge)
+ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism release-build web)
 declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=OFF [linux-gcc-release]=OFF [linux-asan]=OFF)
 
 stages=()
@@ -589,7 +589,7 @@ run_stage() {
         release-build) stage_release_build ;;
         web) stage_web ;;
         premerge) stage_premerge ;;
-        *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]})"; return 2 ;;
+        *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]} premerge)"; return 2 ;;
     esac
 }
 
