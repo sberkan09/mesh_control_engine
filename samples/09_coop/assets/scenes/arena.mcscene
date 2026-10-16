@@ -52,7 +52,7 @@
      ]
     },
     "CameraView": {
-     "target": "$3"
+     "target": "$2"
     },
     "LocalTransform": {}
    }
@@ -75,7 +75,7 @@
      ]
     },
     "ShowRenderTexture": {
-     "source": "$3"
+     "source": "$2"
     },
     "LocalTransform": {
      "position": [

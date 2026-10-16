@@ -355,6 +355,8 @@ const Prompt kPrompts[] = {
      "document's theme with ui_theme_set (or a UiScreen's theme), or copy one and change its palette and fonts. A Text widget takes text_align (Center needs no wrapping Stack), "
      "own_style keeps a kind's default look over the theme, and ui_preview shows one document even while a scene is "
      "broken.\n"
+     "   A minimap, mirror, monitor or split-screen co-op game: view_add and player_setup build the components, view_list and "
+     "player_list name what is missing, render_frame (view, input \"5 P2/Join\") looks at one player or one texture.\n"
      "5. Write .mctest scenarios under tests/ (a walk_to bot that must finish each level, no log errors) and run them "
      "with test_run; use playtest's feel report (stuck spots, deaths, idle time) to fix levels.\n"
      "6. Keep goldens of the title and each level with image_diff, so later changes that break a screen show up.\n"
