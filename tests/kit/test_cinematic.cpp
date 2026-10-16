@@ -9,6 +9,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/input/ecs.h"
+#include "mce/input/replay.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
@@ -267,6 +268,53 @@ TEST_CASE("cinematic: holding the skip action skips to the end, fires the remain
     tick(c.w, c.t);
     CHECK(g_beats == 1);
     CHECK(g_ends == 1);
+}
+
+// M-CINEMA's replay gate: a cutscene skipped part way, recorded as an input stream, replays to the
+// same state hash, and a run with another input does not.
+TEST_CASE("cinematic: a recorded cutscene with a skip replays to the same state hash") {
+    auto input_at = [](u64 t) {
+        input::InputState in;
+        in.tick = t;
+        if (t >= 10 && t < 40) {  // hold Cancel: with skip_hold 0.4 s the skip lands 24 ticks in
+            in.action_count = 1;
+            in.action_names[0] = StringId("Cancel");
+            in.actions[0].held = true;
+            in.actions[0].pressed = t == 10;
+            in.actions[0].held_time = static_cast<f32>(t - 10 + 1) * kDt;
+        }
+        return in;
+    };
+    auto short_hold = [](Cinema& c) { c.w.try_get_mut<kit::Cutscene>(c.director)->skip_hold = 0.4f; };
+    input::InputRecorder rec;
+    Cinema live;
+    short_hold(live);
+    for (u64 i = 0; i < 90; ++i) {
+        const input::InputState in = input_at(live.t);
+        rec.record(in);
+        input::publish(live.w, in);
+        live.w.tick(kDt, live.t++);
+    }
+    CHECK(live.cut().skipped);
+    const u64 live_hash = live.w.state_hash();
+
+    Cinema replay;
+    short_hold(replay);
+    input::InputReplayer rp(rec.bytes());
+    input::InputState in;
+    while (rp.next(in)) {
+        input::publish(replay.w, in);
+        replay.w.tick(kDt, replay.t++);
+    }
+    CHECK(replay.t == 90);
+    CHECK(replay.cut().skipped);
+    CHECK(replay.w.state_hash() == live_hash);
+
+    Cinema watched;  // no skip: the cutscene plays out, another hash
+    short_hold(watched);
+    for (u64 i = 0; i < 90; ++i) tick(watched.w, watched.t);
+    CHECK_FALSE(watched.cut().skipped);
+    CHECK(watched.w.state_hash() != live_hash);
 }
 
 TEST_CASE("cinematic: a ShakeTrigger shakes a 3D camera; reduced motion is the view's, not the trauma's") {

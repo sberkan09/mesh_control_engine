@@ -38,6 +38,13 @@ const ToolDef kAgentTools[] = {
      R"j("cell_width":{"type":"integer","minimum":64,"maximum":3840,"default":320},"cell_height":{"type":"integer","minimum":64,"maximum":3840,"default":180},)j" MCE_RENDER_COMMON_PROPS
      R"j(},"required":["ticks"]})j",
      render_sheet},
+    {"timeline_preview",
+     "See a cutscene at a moment: draw the scene with every timeline in it paused at 'time' seconds (state tracks applied, "
+     "cinematic cameras placed, the timeline's video frame shown) with the real player, as render_frame does. Returns the "
+     "frame as a PNG image; 'save' also writes it under the project folder.",
+     R"j({"type":"object","properties":{"time":{"type":"number","minimum":0,"maximum":3600,"description":"Seconds into the timelines"},)j" MCE_RENDER_FRAME_PROPS
+     R"j(,"save":{"type":"string","description":"Also write the frame as a PNG at this path inside the project folder"}},"required":["time"]})j",
+     timeline_preview},
     {"image_diff",
      "Compare a frame with a golden PNG in the project: 'image' (a PNG in the project) or 'render' (render_frame's arguments). "
      "Returns the score (mean channel difference, 0..1), the changed fraction and pass (score <= max_score), with a heat map "

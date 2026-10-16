@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Timelines over MCP and the cinema demo, M-CINEMA step 6 (SBA-81): `timeline_create`, `timeline_add_track` and
+  `timeline_add_key` write `.mctimeline` files checked by the cook, and `timeline_preview` draws the scene with every
+  timeline held at a given second (the player's `-timeline.scrub`). `samples/cinema_demo` opens on a splash film and
+  plays a cutscene with a camera dolly, a rising gate, music, subtitles and a blended cut, all as data.
+  Undelivered opens on a ferry cutscene. A `Cutscene` no longer hashes three undefined padding bytes, and the
+  fullscreen video is no longer drawn upside down.
 - Sprite-sheet UI skins, M-UI-DATA: a `.mcui` document's or `.mcuitheme`'s `"sprites"` sheet is now drawn by the
   stock player, `ui_preview` and the editor's UI Document panel (style `sprite_region` and 9-slice `slice` index
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
