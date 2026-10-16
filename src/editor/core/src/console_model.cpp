@@ -8,6 +8,28 @@
 
 namespace mce::editor {
 
+bool find_script_location(StringView text, ScriptLocation& out) {
+    constexpr StringView kExt = ".luau:";
+    for (usize at = text.find(kExt); at != StringView::npos; at = text.find(kExt, at + 1)) {
+        usize begin = at;
+        while (begin > 0) {
+            const char c = text[begin - 1];
+            if (c == ' ' || c == '\t' || c == '"' || c == '\'' || c == '(' || c == '[' || c == '=') break;
+            --begin;
+        }
+        const usize digits = at + kExt.size();
+        u32 line = 0;
+        usize end = digits;
+        while (end < text.size() && text[end] >= '0' && text[end] <= '9' && end - digits < 9) line = line * 10 + u32(text[end++] - '0');
+        if (end == digits || begin == at) continue;
+        out.path = text.substr(begin, at + 5 - begin);
+        out.line = line;
+        return true;
+    }
+    return false;
+}
+
+
 ConsoleModel::ConsoleModel(usize scrollback) {
     MCE_ASSERT_MSG(scrollback > 0, "ConsoleModel needs a scrollback");
     lines_.resize(scrollback);

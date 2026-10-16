@@ -12,6 +12,7 @@
 //   replication.h  NetId, ReplicationServer / ReplicationClient: server-authoritative snapshots
 //   websocket.h    WebSocketHost: a Transport over WebSocket, the one a web build can open
 //   relay.h        RelayServer / RelayClient: rooms with codes through a relay (mce_relay)
+//   rtc.h          RtcHost: a room whose members also connect directly over WebRTC data channels
 
 #include "mce/net/bytes.h"
 #include "mce/net/host.h"
@@ -21,6 +22,7 @@
 #include "mce/net/relay.h"
 #include "mce/net/replication.h"
 #include "mce/net/rollback.h"
+#include "mce/net/rtc.h"
 #include "mce/net/sim_network.h"
 #include "mce/net/transport.h"
 #include "mce/net/websocket.h"

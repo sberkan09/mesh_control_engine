@@ -60,6 +60,7 @@ struct HandleSlot {
     f32 base_gain = 1.f;  // linear, before attenuation
     math::vec3 position;
     f32 sent_gain = 0.f, sent_pan = 0.f;
+    f32 sent_lowpass = 0.f;
 };
 
 struct StreamMain {
@@ -360,6 +361,7 @@ AudioHandle AudioDevice::play_at(ClipHandle clip, u64 mix_sample, const PlayPara
     slot.position = p.position;
     slot.sent_gain = c.voice.gain;
     slot.sent_pan = c.voice.pan;
+    slot.sent_lowpass = 0.f;
     const AudioHandle h{idx, slot.generation};
     if (m.stream >= 0) impl.streams[m.stream].playing = h;
     return h;
@@ -468,6 +470,24 @@ void AudioDevice::set_handle_pitch(AudioHandle h, f32 pitch) {
     c.voice.rate = encode_rate(pitch);
     if (impl_->commands.push(c)) hash_command(command_hash_, c);
     else ++impl_->commands_dropped;
+}
+
+void AudioDevice::set_handle_lowpass(AudioHandle h, f32 cutoff_hz) {
+    if (!is_playing(h)) return;
+    const f32 hz = cutoff_hz > 0.f ? math::clamp(cutoff_hz, 20.f, 20000.f) : 0.f;  // NaN and <= 0: off
+    HandleSlot& slot = impl_->handles[h.index];
+    if (hz == slot.sent_lowpass) return;
+    AudioCommand c;
+    c.type = CmdType::VoiceLowpass;
+    c.index = h.index;
+    c.voice.generation = h.generation;
+    c.voice.gain = hz;
+    if (!impl_->commands.push(c)) {
+        ++impl_->commands_dropped;
+        return;
+    }
+    slot.sent_lowpass = hz;
+    hash_command(command_hash_, c);
 }
 
 void AudioDevice::set_bus_gain(BusId bus, f32 gain_db) {

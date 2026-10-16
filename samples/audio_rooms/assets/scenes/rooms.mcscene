@@ -1,0 +1,92 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "a0d10000-0000-4000-8000-000000000010",
+  "name": "rooms",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Walker",
+      "components": {
+        "LocalTransform": { "position": [0, 1.6, 0] },
+        "AudioListener": {},
+        "SequencePlayer": { "sequence": "guid:a0d10000-0000-4000-8000-000000000012" },
+        "TimelinePlayer": { "timeline": "guid:a0d10000-0000-4000-8000-000000000011", "bindings": ["$1", "$3", "$8", "$9", null, null, null, null] }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Mixer",
+      "components": {
+        "AudioReverb": { "unit": 0, "room_size": 0.88, "damping": 0.3, "wet_db": -2 },
+        "AudioBusEffects": { "bus": "SFX", "reverb_unit": 0, "reverb_send_db": -96 },
+        "AudioDuck": { "bus": "Music", "key": "Voice", "depth_db": -12, "attack_ms": 30, "release_ms": 500 },
+        "AudioLimiter": {}
+      }
+    },
+    {
+      "id": 3,
+      "name": "Music",
+      "components": {
+        "AudioSource": { "clip": "guid:a0d10000-0000-4000-8000-000000000005", "bus": "Music", "gain_db": -8, "loop": true, "play_on_start": true }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Narrator",
+      "components": {
+        "AudioSource": { "clip": "guid:a0d10000-0000-4000-8000-000000000006", "bus": "Voice", "gain_db": -2 }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Machine",
+      "components": {
+        "LocalTransform": { "position": [1, 1, -16] },
+        "AudioSource": { "clip": "guid:a0d10000-0000-4000-8000-000000000007", "gain_db": 6, "loop": true, "play_on_start": true },
+        "AudioSpatial": { "attenuation_id": 1 },
+        "AudioOcclusion": { "gain_db": -12, "lowpass_hz": 600 }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Wall A",
+      "components": {
+        "LocalTransform": { "position": [0, 1.5, -6] },
+        "BoxCollider3D": { "half": [5, 3, 0.2] }
+      }
+    },
+    {
+      "id": 7,
+      "name": "Wall B",
+      "components": {
+        "LocalTransform": { "position": [0, 1.5, -12] },
+        "BoxCollider3D": { "half": [5, 3, 0.2] }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Pause mix",
+      "components": {
+        "AudioSnapshot": { "bus": "Master", "while_paused": true, "fade_s": 0.3, "gain_db": -6, "lowpass_hz": 600 }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Muffle",
+      "components": {
+        "AudioSnapshot": { "bus": "Master", "fade_s": 0.3, "gain_db": -4, "lowpass_hz": 700 }
+      }
+    },
+    {
+      "id": 10,
+      "name": "Cart",
+      "components": {
+        "LocalTransform": { "position": [-30, 1, -3] },
+        "AudioSource": { "clip": "guid:a0d10000-0000-4000-8000-000000000007", "gain_db": 0, "loop": true, "play_on_start": true },
+        "AudioSpatial": { "attenuation_id": 1 },
+        "AudioDoppler": { "factor": 1 }
+      }
+    }
+  ]
+}

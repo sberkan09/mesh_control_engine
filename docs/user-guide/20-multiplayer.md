@@ -439,6 +439,31 @@ the relay hands the room to a client. That client's mirror becomes the server, t
 players back with a JOIN that names them, and at the end every remaining client matches the new host
 bit for bit.
 
+**Direct connections over WebRTC.** Through the relay every message pays two hops. `net::RtcHost` is a
+room that also tries to connect each pair of members directly, over WebRTC data channels, with the
+relay carrying the offer, answer and ICE candidates. It is a `Transport`, so the game code does not
+change:
+
+```cpp
+net::RtcDesc desc;
+desc.channels = 3;
+desc.ice_server = "stun:stun.l.google.com:19302";   // empty: host candidates only (one machine, a LAN)
+net::RtcHost room;
+room.start(link, relay_peer, desc);
+room.room().quick_play("arena", 4);                  // rooms work as above, through room.room()
+for (net::Event ev; room.poll(ev);) { /* Connected / Received / Disconnected, as before */ }
+room.path(peer);                                     // Relay, Connecting or Direct
+```
+
+A pair that connects sends Reliable messages over an ordered channel and Sequenced and Unreliable
+ones over an unordered channel without retransmits; Reliable messages keep their order across the
+switch from the relay. A pair that cannot connect (a strict NAT, `desc.direct = false`, a build
+without WebRTC) stays on the relay and everything still works; so does a pair whose direct link
+drops later, though Reliable messages in flight on it are lost then. Native builds use libdatachannel
+(Linux with OpenSSL, `MCE_WITH_RTC`); a web build uses the browser's `RTCPeerConnection`, so a
+browser and a native player connect directly. There is no TURN server: a pair that STUN cannot
+connect stays on the relay.
+
 ## 20.9 Replication as data
 
 You can mark what replicates in the scene instead of writing `assign` and `write_extra` code. Add
@@ -515,6 +540,6 @@ per-client snapshots like a player and acknowledges them the same way.
 
 Traffic is not encrypted: the relay and WebSocket speak plain `ws://`, so put a
 TLS proxy in front of `mce_relay` for pages served over `https://`. Quick play matches by mode and
-size only, with no skill rating or region. There is no WebRTC or direct peer-to-peer connection:
-through a relay every message passes through it. If you ship a game that links `mce_net`, list ENet (MIT
-licence) in your `CREDITS.md`.
+size only, with no skill rating or region. Direct connections need a STUN server across the internet and have no TURN
+fallback beyond the relay. If you ship a game that links `mce_net`, list ENet (MIT licence) in your
+`CREDITS.md`, and on Linux libdatachannel (MPL-2.0), libjuice (MPL-2.0), usrsctp (BSD-3-Clause) and OpenSSL.

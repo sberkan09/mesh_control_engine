@@ -98,3 +98,18 @@ TEST_CASE("ConsoleModel completes convar and confunc names") {
     CHECK(m.complete_common("test_editor.p").view() == "test_editor.ping");
     CHECK(m.complete_common("zzz_nothing").view() == "zzz_nothing");
 }
+
+TEST_CASE("find_script_location reads the .luau path and line out of an error line") {
+    ScriptLocation loc;
+    REQUIRE(find_script_location("script failed: scripts/push.luau:3: boom", loc));
+    CHECK(loc.path == "scripts/push.luau");
+    CHECK(loc.line == 3);
+    REQUIRE(find_script_location("error: assets/scripts/a.luau:2:13: unknown component 'Movr'", loc));
+    CHECK(loc.path == "assets/scripts/a.luau");
+    CHECK(loc.line == 2);
+    REQUIRE(find_script_location("script failed: \"ui/hud.luau:12: x\"", loc));
+    CHECK(loc.path == "ui/hud.luau");
+    CHECK_FALSE(find_script_location("script failed: not enough memory", loc));
+    CHECK_FALSE(find_script_location("see .luau:5 here", loc));
+    CHECK_FALSE(find_script_location("a.luau: no line", loc));
+}

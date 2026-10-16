@@ -44,7 +44,7 @@ SAMPLES = [
     ("04_cubes", "sample_04_cubes"),
     ("05_ashen_court", "sample_05_ashen_court"),
 ]
-PROBES = ["mce_input_web_probe", "mce_relay_web_probe"]
+PROBES = ["mce_input_web_probe", "mce_relay_web_probe", "mce_rtc_web_probe"]
 
 # itch.io's HTML upload limits (itch.io/docs/creators/html5): at most 1000 files and 500 MB
 # extracted, names up to 240 characters, index.html at the root.
@@ -98,6 +98,7 @@ def smoke_probes(host):
     check(["node", "scripts/web/probe_smoke.cjs", os.path.join(web, "platform", "web_probe"), "input"])
     relay = os.path.join(host, "src", "engine", "net", "relay", "mce_relay")
     check(["node", "scripts/web/probe_smoke.cjs", os.path.join(web, "net", "web_probe"), "relay", relay])
+    check(["node", "scripts/web/probe_smoke.cjs", os.path.join(web, "net", "web_probe"), "rtc", relay])
 
 
 def ship(args):

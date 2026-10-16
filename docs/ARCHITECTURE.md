@@ -533,6 +533,7 @@ nlohmann/json and GitHub Actions; none of them was adopted.*
 | Graphics API | OpenGL 4.5 Core (Linux, Windows); Metal (macOS) | GL loader glad2, generated and vendored in `third_party/glad`; Metal via system frameworks | loader is boilerplate |
 | Shader toolchain | glslang (shader cook validation and SPIR-V reflection, ADR-0033); on macOS glslang + SPIRV-Cross translate GLSL → MSL at pipeline creation (ADR-0028) | glslang 16.6.0, SPIRV-Cross vulkan-sdk-1.4.363.0 | dependency |
 | Networking (optional) | ENet, linked only by `mce_net` (ADR-0035) | v1.3.18 | dependency |
+| WebRTC (optional) | libdatachannel (with libjuice, usrsctp; system OpenSSL), linked only by `mce_net` on Linux (`MCE_WITH_RTC`, M-NET3 step 4); the browser's `RTCPeerConnection` on the web | v0.22.6 | dependency |
 | RHI | `mce_rhi` + `mce_rhi_gl` / `mce_rhi_metal`, chosen by `mce_rhi_default` | — | **hand-written** |
 | Renderer | `mce_render` (2D batches; 3D PBR, Forward+, CSM, post, skinning) | — | **hand-written** |
 | ECS | `mce_ecs` (archetype tables) | — | **hand-written** |

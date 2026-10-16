@@ -5,6 +5,14 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Scripts while you work, M-SCRIPT step 4b (SBA-150): a `.luau` file recooked while the game plays in the
+  editor takes effect on the next tick; each script's `update()` has a Tracy zone; a crash report names the
+  running script and its Luau stack (`crash::add_context` lets other subsystems add sections too); the
+  Console and Cook panels open the script an error line names. User guide 27.6.
+- Sample coverage gate, M-COVER step 1 (SBA-157): `local_ci.sh`'s walls stage now fails for a component that no
+  sample, project or template names, unless `scripts/ci/sample_coverage.allow` lists it with a reason. 39
+  components start on the list; the next steps show them in three tour samples. The capability table gains a
+  "Shown in" column.
 - Resetting a themed value in UI documents, M-UI-DATA2 step 2 (SBA-154): a `.mcui` widget's
   `"own_style": ["tint", ...]` keeps those style fields at the kind's default look over a theme, where an
   equal value used to read as unset and the theme's won. Old documents cook and draw the same. The editor's
@@ -52,6 +60,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   keys. `samples/06_showcase` shows reflections, contact shadows, sharpening, glass, lacquer and brushed
   metal on its High profile, and `-profile highbase` draws High without them for the on/off sheet in the
   milestone record.
+- Occlusion and Doppler, M-AUDIO2 step 5 (SBA-122): `AudioOcclusion` on a 3D source fades it down and closes
+  a low-pass while a physics ray from the listener hits a wall, and `AudioDoppler` bends its pitch with how fast
+  it and the listener close. `mce_player -headless 1 -audio_record run.wav` renders a run's mix offline and
+  prints a hash of its samples. The stock player now applies the `audio.*_db` and `audio.reverb` options; before,
+  they did nothing there. New sample `audio_rooms` walks a listener through every M-AUDIO2 feature. User guide
+  10.4 and 10.6.
 - AI perception, M-AI step 3 (SBA-130): a `Perceiver` sees every `Stimulus` of another team inside its cone and
   range with a clear line of sight (rays through the 3D or the 2D physics world), remembers a lost target for
   `forget` seconds and hears `kit::Noise` events (the tree's `make_noise` task makes one). It writes `target`,
@@ -140,6 +154,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
   User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
+- WebRTC data channels, M-NET3 step 4 (SBA-126): `net::RtcHost` is a relay room whose members also connect directly
+  over WebRTC, signalled through the relay, so a pair that connects stops paying the relay hop and one that cannot
+  stays on the relay. Native builds use libdatachannel (Linux with OpenSSL; `MCE_WITH_RTC`), a web build the
+  browser's `RTCPeerConnection`, so a browser and a native player connect directly. `mce_relay -echo_mode` runs a
+  native echo member for the headless Chromium probe. User guide 20.8.
 - Matchmaking and host migration, M-NET3 step 3 (SBA-125): `RelayClient::quick_play(mode, size)` puts a player in
   an open room of that mode or makes one, and `list_rooms` fetches listed rooms for a lobby. A room made with
   `host_migration` survives its host: the relay hands it to the lowest member, `on_host_change` tells every member,

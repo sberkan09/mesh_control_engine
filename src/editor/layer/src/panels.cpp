@@ -5,11 +5,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
+#include "imgui_platform.h"
 #include "imgui_renderer.h"
 #include "mce/editor/editor_shell.h"
 #include "mce/editor/asset_browser.h"
+#include "mce/editor/console_model.h"
 #include "mce/editor/gizmo.h"
 #include "mce/kit/perception.h"
 #include "mce/kit/sprite_extract.h"
@@ -563,6 +566,25 @@ class ConsolePanel final : public IEditorPanel {
 public:
     const char* name() const override { return "Console"; }
 
+    // The item just drawn names a script line (M-SCRIPT 4b): double-click opens the file in the
+    // system's editor, the context menu copies "scripts/x.luau:3" for it.
+    static void script_line_actions(EditorShell& shell, const ScriptLocation& where) {
+        StringView rel = where.path;
+        if (rel.starts_with("assets/")) rel = rel.substr(7);
+        char label[320];
+        std::snprintf(label, sizeof(label), "%.*s:%u", static_cast<int>(rel.size()), rel.data(), where.line);
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && shell.session().project().is_open()) {
+            ImGui::SetClipboardText(label);  // so an editor's "go to line" can take it
+            const auto abs = shell.session().project().asset_path(rel);
+            if (!open_file_externally(abs.c_str())) MCE_LOG_WARN("console: no application opens {}", abs.c_str());
+        }
+        if (ImGui::BeginPopupContextItem("##script_line")) {
+            if (ImGui::MenuItem("Copy script:line")) ImGui::SetClipboardText(label);
+            ImGui::EndPopup();
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Double-click opens %s", label);
+    }
+
     void draw(EditorShell& shell) override {
         ConsoleModel& console = shell.console();
 
@@ -598,7 +620,16 @@ public:
                 for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
                     const log::ConsoleLine& l = console.line(visible_[static_cast<usize>(row)]);
                     ImGui::PushStyleColor(ImGuiCol_Text, level_color(l.level));
-                    ImGui::TextUnformatted(l.text.c_str(), l.text.c_str() + l.text.view().size());
+                    ScriptLocation where;
+                    if (find_script_location(l.text.view(), where)) {
+                        // A script error: double-click opens the script, right-click copies "path:line".
+                        ImGui::PushID(row);
+                        ImGui::Selectable(l.text.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+                        script_line_actions(shell, where);
+                        ImGui::PopID();
+                    } else {
+                        ImGui::TextUnformatted(l.text.c_str(), l.text.c_str() + l.text.view().size());
+                    }
                     ImGui::PopStyleColor();
                 }
             }
