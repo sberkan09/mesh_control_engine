@@ -7,8 +7,10 @@
     "text": [0.98, 0.94, 0.86, 1], "text_focused": [0.2, 0.12, 0.06, 1], "text_disabled": [0.9, 0.86, 0.78, 1],
     "label": [0.3, 0.2, 0.14, 1], "accent": [0.75, 0.45, 0.2, 1]
   },
+  "sprites": "guid:@GUID_SKIN_STORY@", "white_region": 0,
   "fonts": { "body": "guid:@GUID_FONT_STORY@", "title": "guid:@GUID_FONT_STORY_TITLE@", "button": "guid:@GUID_FONT_STORY_TITLE@" },
   "styles": {
-    "Button": { "style": { "text_shadow": [1, 1], "text_shadow_color": [0.15, 0.08, 0.04, 0.6] } }
+    "Panel": { "style": { "sprite_region": 1, "slice": { "left": 4, "top": 4, "right": 4, "bottom": 4 } } },
+    "Button": { "style": { "sprite_region": 2, "slice": { "left": 4, "top": 4, "right": 4, "bottom": 4 }, "text_shadow": [1, 1], "text_shadow_color": [0.15, 0.08, 0.04, 0.6] } }
   }
 }

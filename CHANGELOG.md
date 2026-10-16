@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Sprite-sheet UI skins, M-UI-DATA: a `.mcui` document's or `.mcuitheme`'s `"sprites"` sheet is now drawn by the
+  stock player, `ui_preview` and the editor's UI Document panel (style `sprite_region` and 9-slice `slice` index
+  the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
+  `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
+  User guide 12.2.
 - Performance counter gate and guide, M-PERF step 5 (SBA-117). `scripts/ci/perf_gate.py` runs `perf_run` on
   a copy of a project and fails when draws, passes, dispatches, triangles, meshes, sprites or sprite batches
   grow past the project's `perf/counters.json` (`--update` writes new ones). Glowmoth and Marble Garden run it
