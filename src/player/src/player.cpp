@@ -76,6 +76,7 @@
 #include "mce/asset/mods.h"
 #include "mce/audio/components.h"
 #include "mce/core.h"
+#include "mce/web.h"
 #include "mce/ecs/dev_stats.h"
 #include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
@@ -174,6 +175,10 @@ MCE_CVAR(cv_safe_area, "safe_area", "",
 MCE_CVAR(cv_window, "window", "", "Windowed: initial window size as WxH in points, e.g. 1080x2400 to check a phone layout (default 1280x720)",
          CVarFlags::None);
 MCE_CVAR(cv_ticks, "ticks", 600, "Headless: ticks to simulate (windowed runs use -frames)", CVarFlags::None);
+MCE_CVAR(cv_run_ticks, "run_ticks", 0,
+         "Windowed: quit right after this many sim ticks and print the state hash as -headless does, so a drawn run (a "
+         "browser smoke) can be checked against a headless one (0 = off)",
+         CVarFlags::None);
 MCE_CVAR(cv_input, "input", "",
          "Input script file: per-tick action states (\"10-70 Move=1,0 Jump\" per line) published to the game instead of the keyboard",
          CVarFlags::None);
@@ -234,6 +239,9 @@ MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
          CVarFlags::Saved);
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
+         CVarFlags::None);
+MCE_CVAR(cv_timeline_scrub, "timeline.scrub", -1.0f,
+         "Start with every timeline held at this many seconds (state tracks applied, speed 0): the MCP server's timeline_preview",
          CVarFlags::None);
 MCE_CVAR(cv_haptics, "haptics", true,
          "Haptic feedback: phone taps and gamepad rumble from platform::haptics::play (off: none; never in the state hash)",
@@ -535,6 +543,7 @@ public:
         MCE_TRY(scene::load(world_, assets_, scene, &entities_));
         scene::pump_streaming(world_, scene::PumpMode::Settle);
         MCE_TRY(load_ui_screens());
+        scrub_timelines();
         if (device_ && kit::has_camera_3d(world_)) MCE_TRY(init_3d());
         MCE_LOG_INFO("{}: scene {} ({}) with {} entities", desc_.app_name, asset::to_string(scene).view(), scene_path_.view(),
                      entities_.size());
@@ -1634,6 +1643,21 @@ private:
     std::FILE* access_log_ = nullptr;  // -access_log (kept open to the end; flushed per line)
 
     // The scene's UI screens (kit::UiScreen, M-UI-DATA step 2).
+    // -timeline.scrub <seconds>: every timeline paused at that time, its state tracks applied (a
+    // cutscene frame for timeline_preview; the cues before it do not fire).
+    void scrub_timelines() {
+        const f32 t = cv_timeline_scrub.get_float();
+        if (t < 0.0f) return;
+        Array<Entity> players;
+        world_.query<const kit::TimelinePlayer>().each([&](Entity e, const kit::TimelinePlayer&) { players.push_back(e); });
+        for (Entity e : players) {
+            kit::timeline_scrub(world_, e, t);
+            // Held at the playhead, still playing: a cutscene keeps its hold and its bars (in at once).
+            if (kit::TimelinePlayer* p = world_.try_get_mut<kit::TimelinePlayer>(e)) p->speed = 0.0f;
+            if (kit::Cutscene* c = world_.try_get_mut<kit::Cutscene>(e)) c->bars = 1.0f;
+        }
+    }
+
     Result<void> load_ui_screens() {
         const ui::Skin* skin = device_ ? &skin_.skin : nullptr;
         kit::SpriteExtract* extract = device_ ? &extract_ : nullptr;
@@ -2842,11 +2866,17 @@ int run_windowed(const player::PlayerDesc& pd) {
     desc.fences = device.value().get();
     PlayerApp::ScriptBySimTick by_sim(app, script.value());
     desc.input_source = script.value() ? static_cast<app::IInputSource*>(&by_sim) : &app.input();
+    if (cv_run_ticks.get_int() > 0) desc.max_ticks = static_cast<u64>(cv_run_ticks.get_int());
     app::RunStats stats;
     int rc = app::run(app, desc, &stats);
     const u32 gl_errors = device.value()->validation_error_count();
     std::printf("%s: %llu frames, %llu ticks, %u GL errors\n", pd.app_name, static_cast<unsigned long long>(stats.frames),
                 static_cast<unsigned long long>(app.ticks()), gl_errors);
+    if (rc == 0 && cv_run_ticks.get_int() > 0)
+        std::printf("%s: %llu ticks, %zu entities, state_hash %016llx\n", pd.app_name, static_cast<unsigned long long>(stats.ticks),
+                    app.entity_count(), static_cast<unsigned long long>(app.state_hash()));
+    // A browser smoke screenshots the last frame before the page tears the game down.
+    if (cv_run_ticks.get_int() > 0) web::linger(10000);
     if (rc == 0 && gl_errors != 0) rc = 2;
     return rc;
 }

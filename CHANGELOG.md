@@ -10,6 +10,26 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   depot build scripts in `dist/<Name>-steam/`; shipping on each OS into the same folder adds its depot. Nothing is
   uploaded. The MCP tool `ship_build` takes `steam_app_id`. A game started by Steam signs in from `SteamAppId`
   without `-steam.app_id` (`-1` keeps Steam off). Covered by ctest `steam_depot`. User guide 15.7.
+- Compressed audio clips, M-AUDIO2 step 1 (SBA-118, ADR-0044). `.ogg` files import (importer `ogg`), and a
+  `.wav` sidecar's `"compress": "vorbis"` stores the clip as Ogg Vorbis, about a tenth of float PCM
+  (`"quality"`, default 0.4). A compressed clip decodes when it loads; on the Music bus its stream pages decode
+  as they fill. libvorbis encodes in the cook, stb_vorbis decodes at run time. The WAV importer's version is
+  now 2, so clips re-cook once.
+- Timelines over MCP and the cinema demo, M-CINEMA step 6 (SBA-81): `timeline_create`, `timeline_add_track` and
+  `timeline_add_key` write `.mctimeline` files checked by the cook, and `timeline_preview` draws the scene with every
+  timeline held at a given second (the player's `-timeline.scrub`). `samples/cinema_demo` opens on a splash film and
+  plays a cutscene with a camera dolly, a rising gate, music, subtitles and a blended cut, all as data.
+  Undelivered opens on a ferry cutscene. A `Cutscene` no longer hashes three undefined padding bytes, and the
+  fullscreen video is no longer drawn upside down.
+- Sprite-sheet UI skins, M-UI-DATA: a `.mcui` document's or `.mcuitheme`'s `"sprites"` sheet is now drawn by the
+  stock player, `ui_preview` and the editor's UI Document panel (style `sprite_region` and 9-slice `slice` index
+  the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
+  `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
+  User guide 12.2.
+- Per-client delta snapshots, M-NET3 step 1 (SBA-123): `ReplicationServer::write_snapshot_for` writes each client
+  only the entities relevant to it (`NetRelevance { radius }` around the entities it owns) and codes them against
+  the newest snapshot it acknowledged (`write_ack` / `read_ack`): a still entity costs two bytes. `apply` reads
+  both forms. `sample_net_headless` now sends about a third of the bytes it did. User guide 20.10.
 - Replication as data, M-NET2 step 7 (SBA-88): mark entities `NetReplicated` in a scene and
   `ReplicationServer::assign_tagged` gives them their `NetId` with no code. Component fields flagged
   `Replicated` (`MCE_COMPONENT(Health, (hp, Replicated))`) travel in every snapshot and land in the client's

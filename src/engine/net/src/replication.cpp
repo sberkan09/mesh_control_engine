@@ -131,33 +131,272 @@ u32 ReplicationServer::assign_tagged(Commands& cmd, World& world) {
     return n;
 }
 
-void ReplicationServer::write_snapshot(World& world, u32 tick, ByteWriter& out) const {
+namespace {
+
+// One entity's canonical entry: the bytes a full snapshot carries for it.
+void encode_entry(World& world, Entity e, const ReplicationHooks& hooks, ByteWriter& out, ByteWriter& extra,
+                  ByteWriter& one) {
+    const NetId& id = *world.try_get<NetId>(e);
+    out.write_varu32(id.id);
+    out.write_varu32(id.kind);
+    write_transform(out, *world.try_get<LocalTransform>(e));
+    extra.clear();
+    if (hooks.write_extra) hooks.write_extra(hooks.user, world, e, extra);
+    out.write_bytes(extra.data());
+    extra.clear();
+    write_fields(world, e, extra, one);
+    out.write_bytes(extra.data());
+}
+
+u64 content_hash_of(u32 tick, Span<const u8> entries) {
+    Hasher64 h;
+    h.u32v(tick);
+    h.bytes(entries.data(), entries.size());
+    return h.value();
+}
+
+// The parts of one canonical entry.
+struct Parsed {
+    u32 id = 0;
+    u32 kind = 0;
+    Span<const u8> transform;  // 40 bytes
+    Span<const u8> extra;
+    Span<const u8> fields;
+};
+
+bool parse_entry(ByteReader& r, Parsed& p) {
+    p.id = r.read_varu32();
+    p.kind = r.read_varu32();
+    p.transform = r.read_raw(40);
+    p.extra = r.read_bytes();
+    p.fields = r.read_bytes();
+    return r.ok() && p.id != 0;
+}
+
+bool same(Span<const u8> a, Span<const u8> b) {
+    return a.size() == b.size() && (a.empty() || std::memcmp(a.data(), b.data(), a.size()) == 0);
+}
+
+enum : u8 { kDeltaNew = 1, kDeltaTransform = 2, kDeltaExtra = 4, kDeltaFields = 8 };
+
+// Fills `out` (tick, refs, hash) from canonical entry bytes already in out.bytes.
+bool index_canonical(ReplicationServer::Canonical& out, u32 tick, u32 count) {
+    out.tick = tick;
+    out.refs.clear();
+    out.refs.reserve(count);
+    ByteReader r(out.bytes.span());
+    u32 prev = 0;
+    for (u32 i = 0; i < count; ++i) {
+        const usize at = out.bytes.size() - r.remaining();
+        Parsed p;
+        if (!parse_entry(r, p) || (i > 0 && p.id <= prev)) return false;
+        prev = p.id;
+        const usize end = out.bytes.size() - r.remaining();
+        out.refs.push_back({p.id, static_cast<u32>(at), static_cast<u32>(end - at)});
+    }
+    if (!r.at_end()) return false;
+    out.hash = content_hash_of(tick, out.bytes.span());
+    return true;
+}
+
+void copy_canonical(ReplicationServer::Canonical& to, const ReplicationServer::Canonical& from) {
+    to.tick = from.tick;
+    to.hash = from.hash;
+    to.bytes.resize(from.bytes.size());
+    if (!from.bytes.empty()) std::memcpy(to.bytes.data(), from.bytes.data(), from.bytes.size());
+    to.refs.resize(from.refs.size());
+    for (usize i = 0; i < from.refs.size(); ++i) to.refs[i] = from.refs[i];
+}
+
+}  // namespace
+
+const ReplicationServer::Canonical::Ref* ReplicationServer::Canonical::find(u32 id) const {
+    usize lo = 0, hi = refs.size();
+    while (lo < hi) {
+        const usize mid = (lo + hi) / 2;
+        if (refs[mid].id < id) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo < refs.size() && refs[lo].id == id ? &refs[lo] : nullptr;
+}
+
+// The relevant entities for `peer` (all of them for kInvalidPeer), in id order, as canonical entries.
+void ReplicationServer::build(World& world, u32 tick, PeerId peer, Canonical& out) const {
     struct Item {
         u32 id;
         Entity e;
     };
+    Array<math::vec3> views;  // where the peer's own entities are
+    if (peer != kInvalidPeer) {
+        world.query<const NetOwner, const LocalTransform>().each([&](const NetOwner& o, const LocalTransform& t) {
+            if (o.peer == peer) views.push_back(t.position);
+        });
+    }
     Array<Item> items;
-    world.query<const NetId, const LocalTransform>().each(
-        [&](Entity e, const NetId& id, const LocalTransform&) { items.push_back(Item{id.id, e}); });
+    world.query<const NetId, const LocalTransform>().each([&](Entity e, const NetId& id, const LocalTransform& t) {
+        if (peer != kInvalidPeer) {
+            const NetRelevance* rel = world.try_get<NetRelevance>(e);
+            const NetOwner* own = world.try_get<NetOwner>(e);
+            if (rel && rel->radius > 0.0f && !(own && own->peer == peer)) {
+                bool near = false;
+                const f32 r2 = rel->radius * rel->radius;
+                for (const math::vec3& v : views) {
+                    const math::vec3 d = t.position - v;
+                    if (d.x * d.x + d.y * d.y + d.z * d.z <= r2) {
+                        near = true;
+                        break;
+                    }
+                }
+                if (!near) return;
+            }
+        }
+        items.push_back(Item{id.id, e});
+    });
     std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.id < b.id; });
 
+    ByteWriter entries, extra, one;
+    out.refs.clear();
+    out.refs.reserve(items.size());
+    for (const Item& it : items) {
+        const usize at = entries.size();
+        encode_entry(world, it.e, hooks_, entries, extra, one);
+        out.refs.push_back({it.id, static_cast<u32>(at), static_cast<u32>(entries.size() - at)});
+    }
+    out.tick = tick;
+    out.bytes.resize(entries.size());
+    if (entries.size()) std::memcpy(out.bytes.data(), entries.data().data(), entries.size());
+    out.hash = content_hash_of(tick, entries.data());
+}
+
+namespace {
+
+void write_full(const ReplicationServer::Canonical& c, ByteWriter& out) {
     out.append(Span<const u8>(kSnapshotMagic, 3));
     out.write_u8(kSnapshotVersion);
-    out.write_u32(tick);
-    out.write_varu32(static_cast<u32>(items.size()));
-    ByteWriter extra, one;
-    for (const Item& it : items) {
-        const NetId& id = *world.try_get<NetId>(it.e);
-        out.write_varu32(id.id);
-        out.write_varu32(id.kind);
-        write_transform(out, *world.try_get<LocalTransform>(it.e));
-        extra.clear();
-        if (hooks_.write_extra) hooks_.write_extra(hooks_.user, world, it.e, extra);
-        out.write_bytes(extra.data());
-        extra.clear();
-        write_fields(world, it.e, extra, one);
-        out.write_bytes(extra.data());
+    out.write_u32(c.tick);
+    out.write_varu32(static_cast<u32>(c.refs.size()));
+    out.append(c.bytes.span());
+}
+
+void write_delta(const ReplicationServer::Canonical& c, const ReplicationServer::Canonical& base, ByteWriter& out) {
+    out.append(Span<const u8>(kDeltaMagic, 3));
+    out.write_u8(kDeltaVersion);
+    out.write_u32(c.tick);
+    out.write_u64(c.hash);
+    out.write_u32(base.tick);
+    out.write_u64(base.hash);
+    out.write_varu32(static_cast<u32>(c.refs.size()));
+    u32 prev = 0;
+    for (const ReplicationServer::Canonical::Ref& ref : c.refs) {
+        const Span<const u8> mine(c.bytes.data() + ref.offset, ref.size);
+        ByteReader rm(mine);
+        Parsed now;
+        parse_entry(rm, now);
+        out.write_varu32(ref.id - prev);
+        prev = ref.id;
+        const ReplicationServer::Canonical::Ref* old_ref = base.find(ref.id);
+        Parsed old;
+        if (old_ref) {
+            ByteReader ro(Span<const u8>(base.bytes.data() + old_ref->offset, old_ref->size));
+            parse_entry(ro, old);
+        }
+        if (!old_ref || old.kind != now.kind) {
+            out.write_u8(kDeltaNew);
+            ByteReader skip(mine);
+            skip.read_varu32();  // the id is already written
+            out.append(mine.subspan(mine.size() - skip.remaining(), skip.remaining()));
+            continue;
+        }
+        u16 mask = 0;
+        for (u32 f = 0; f < 10; ++f)
+            if (std::memcmp(now.transform.data() + f * 4, old.transform.data() + f * 4, 4) != 0) mask |= u16(1u << f);
+        const bool extra = !same(now.extra, old.extra), fields = !same(now.fields, old.fields);
+        out.write_u8(static_cast<u8>((mask ? kDeltaTransform : 0) | (extra ? kDeltaExtra : 0) | (fields ? kDeltaFields : 0)));
+        if (mask) {
+            out.write_u16(mask);
+            for (u32 f = 0; f < 10; ++f)
+                if (mask & (1u << f)) out.append(now.transform.subspan(f * 4, 4));
+        }
+        if (extra) out.write_bytes(now.extra);
+        if (fields) out.write_bytes(now.fields);
     }
+}
+
+}  // namespace
+
+u64 ReplicationServer::write_snapshot(World& world, u32 tick, ByteWriter& out) const {
+    Canonical c;
+    build(world, tick, kInvalidPeer, c);
+    write_full(c, out);
+    return c.hash;
+}
+
+ReplicationServer::Client* ReplicationServer::client(PeerId peer) {
+    for (auto& c : clients_)
+        if (c->peer == peer) return c.get();
+    return nullptr;
+}
+
+u64 ReplicationServer::write_snapshot_for(World& world, u32 tick, PeerId peer, ByteWriter& out) {
+    Client* cl = client(peer);
+    if (!cl) {
+        clients_.push_back(mem::make_unique<Client>(mem::heap()));
+        cl = clients_.back().get();
+        cl->peer = peer;
+    }
+    Canonical& slot = cl->sent[cl->head];
+    if (cl->baseline == static_cast<i32>(cl->head)) cl->baseline = -1;  // about to be overwritten
+    build(world, tick, peer, slot);
+    const usize before = out.size();
+    if (cl->baseline >= 0) {
+        write_delta(slot, cl->sent[cl->baseline], out);
+    } else {
+        write_full(slot, out);
+        ++cl->stats.full;
+    }
+    ++cl->stats.snapshots;
+    cl->stats.entities = static_cast<u32>(slot.refs.size());
+    cl->stats.bytes += out.size() - before;
+    cl->head = (cl->head + 1) % kBaselines;
+    if (cl->count < kBaselines) ++cl->count;
+    return slot.hash;
+}
+
+bool ReplicationServer::read_ack(PeerId peer, ByteReader& in) {
+    const u32 tick = in.read_u32();
+    const u64 hash = in.read_u64();
+    if (!in.ok()) return false;
+    Client* cl = client(peer);
+    if (!cl) return true;
+    if (tick == 0 && hash == 0) {  // the client has nothing (reset): full snapshots again
+        cl->baseline = -1;
+        return true;
+    }
+    // Newest first, so a resend of the same tick finds the snapshot the client applied.
+    for (u32 i = 1; i <= cl->count; ++i) {
+        const u32 s = (cl->head + kBaselines - i) % kBaselines;
+        const Canonical& c = cl->sent[s];
+        if (c.tick != tick || c.hash != hash) continue;
+        // Only forward: an older acknowledgement arriving late changes nothing.
+        if (cl->baseline >= 0 && static_cast<i32>(tick - cl->sent[cl->baseline].tick) < 0) return true;
+        cl->baseline = static_cast<i32>(s);
+        return true;
+    }
+    return true;  // too old, or never sent: keep the current baseline
+}
+
+void ReplicationServer::forget_client(PeerId peer) {
+    for (usize i = 0; i < clients_.size(); ++i)
+        if (clients_[i]->peer == peer) {
+            clients_.erase(i);
+            return;
+        }
+}
+
+const ReplicationServer::ClientStats* ReplicationServer::client_stats(PeerId peer) const {
+    for (const auto& c : clients_)
+        if (c->peer == peer) return &c->stats;
+    return nullptr;
 }
 
 // ---- client ---------------------------------------------------------------------------------
@@ -168,31 +407,110 @@ ApplyResult ReplicationClient::apply(Commands& cmd, const World& world, Span<con
     const u8 m0 = r.read_u8(), m1 = r.read_u8(), m2 = r.read_u8();
     const u8 version = r.read_u8();
     const u32 tick = r.read_u32();
-    const u32 count = r.read_varu32();
     result.tick = tick;
-    if (!r.ok() || m0 != kSnapshotMagic[0] || m1 != kSnapshotMagic[1] || m2 != kSnapshotMagic[2] ||
-        version != kSnapshotVersion || count > r.remaining() / kMinEntryBytes) {
-        return result;
-    }
+    const bool full = m0 == kSnapshotMagic[0] && m1 == kSnapshotMagic[1] && m2 == kSnapshotMagic[2] &&
+                      version == kSnapshotVersion;
+    const bool delta =
+        m0 == kDeltaMagic[0] && m1 == kDeltaMagic[1] && m2 == kDeltaMagic[2] && version == kDeltaVersion;
+    if (!r.ok() || (!full && !delta)) return result;
     // Sequenced delivery already drops late packets; this also covers an unordered channel.
     // Serial-number comparison, so a tick counter that wraps keeps working. A new server session
     // starts its ticks again: the client calls reset() on disconnect.
     if (has_tick_ && tick != last_tick_ && static_cast<i32>(tick - last_tick_) < 0) return result;
 
-    // Pass 1: parse and validate everything before queuing any command.
+    // Rebuild the canonical entries (a delta onto its baseline) before queuing any command.
+    canon_.bytes.clear();
+    u32 count = 0;
+    if (full) {
+        count = r.read_varu32();
+        if (!r.ok() || count > r.remaining() / kMinEntryBytes) return result;
+        const Span<const u8> rest = r.read_raw(r.remaining());
+        canon_.bytes.resize(rest.size());
+        if (!rest.empty()) std::memcpy(canon_.bytes.data(), rest.data(), rest.size());
+        if (!index_canonical(canon_, tick, count)) return result;
+    } else {
+        result.delta = true;
+        const u64 hash = r.read_u64();
+        const u32 base_tick = r.read_u32();
+        const u64 base_hash = r.read_u64();
+        count = r.read_varu32();
+        if (!r.ok() || count > r.remaining() / 2) return result;
+        const ReplicationServer::Canonical* base = nullptr;
+        for (u32 i = 1; i <= history_count_ && !base; ++i) {
+            const ReplicationServer::Canonical& h = history_[(history_head_ + ReplicationServer::kBaselines - i) %
+                                                             ReplicationServer::kBaselines];
+            if (h.tick == base_tick && h.hash == base_hash) base = &h;
+        }
+        if (!base) {
+            result.missing_baseline = true;
+            return result;
+        }
+        ByteWriter w;
+        u32 id = 0;
+        for (u32 i = 0; i < count; ++i) {
+            const u32 gap = r.read_varu32();
+            const u8 flags = r.read_u8();
+            if (!r.ok() || gap == 0 || id + gap < id) return result;
+            id += gap;
+            w.write_varu32(id);
+            if (flags & kDeltaNew) {
+                if (flags != kDeltaNew) return result;
+                const u32 kind = r.read_varu32();
+                const Span<const u8> t = r.read_raw(40);
+                const Span<const u8> extra = r.read_bytes(), fields = r.read_bytes();
+                if (!r.ok()) return result;
+                w.write_varu32(kind);
+                w.append(t);
+                w.write_bytes(extra);
+                w.write_bytes(fields);
+                continue;
+            }
+            if (flags & ~u8(kDeltaTransform | kDeltaExtra | kDeltaFields)) return result;
+            const ReplicationServer::Canonical::Ref* ref = base->find(id);
+            if (!ref) return result;
+            ByteReader rb(Span<const u8>(base->bytes.data() + ref->offset, ref->size));
+            Parsed old;
+            if (!parse_entry(rb, old)) return result;
+            w.write_varu32(old.kind);
+            u8 t[40];
+            std::memcpy(t, old.transform.data(), 40);
+            if (flags & kDeltaTransform) {
+                const u16 mask = r.read_u16();
+                if (mask >> 10) return result;
+                for (u32 f = 0; f < 10; ++f)
+                    if (mask & (1u << f)) {
+                        const Span<const u8> v = r.read_raw(4);
+                        if (!r.ok()) return result;
+                        std::memcpy(t + f * 4, v.data(), 4);
+                    }
+            }
+            w.append(Span<const u8>(t, 40));
+            w.write_bytes((flags & kDeltaExtra) ? r.read_bytes() : old.extra);
+            w.write_bytes((flags & kDeltaFields) ? r.read_bytes() : old.fields);
+            if (!r.ok()) return result;
+        }
+        if (!r.at_end()) return result;
+        canon_.bytes.resize(w.size());
+        if (w.size()) std::memcpy(canon_.bytes.data(), w.data().data(), w.size());
+        if (!index_canonical(canon_, tick, count) || canon_.hash != hash) return result;
+    }
+
+    // Pass 1: the entries, validated above.
     entries_.clear();
     entries_.reserve(count);
+    ByteReader er(canon_.bytes.span());
     for (u32 i = 0; i < count; ++i) {
+        Parsed p;
+        parse_entry(er, p);
         Entry en;
-        en.id.id = r.read_varu32();
-        en.id.kind = r.read_varu32();
-        en.transform = read_transform(r);
-        en.extra = r.read_bytes();
-        en.fields = r.read_bytes();
-        if (!r.ok() || en.id.id == 0) return result;
+        en.id.id = p.id;
+        en.id.kind = p.kind;
+        ByteReader tr(p.transform);
+        en.transform = read_transform(tr);
+        en.extra = p.extra;
+        en.fields = p.fields;
         entries_.push_back(en);
     }
-    if (!r.at_end()) return result;
 
     // A repeat of the newest snapshot says nothing about timing.
     if (interpolate_ && !(has_tick_ && tick == last_tick_)) sample_arrival(tick);
@@ -258,10 +576,22 @@ ApplyResult ReplicationClient::apply(Commands& cmd, const World& world, Span<con
         ++result.despawned;
     }
 
+    // Kept to decode deltas against. The entries point into canon_, and this copy is separate.
+    ReplicationServer::Canonical& slot = history_[history_head_];
+    copy_canonical(slot, canon_);
+    history_head_ = (history_head_ + 1) % ReplicationServer::kBaselines;
+    if (history_count_ < ReplicationServer::kBaselines) ++history_count_;
+    content_hash_ = canon_.hash;
+
     last_tick_ = tick;
     has_tick_ = true;
     result.ok = true;
     return result;
+}
+
+void ReplicationClient::write_ack(ByteWriter& out) const {
+    out.write_u32(has_tick_ ? last_tick_ : 0u);
+    out.write_u64(has_tick_ ? content_hash_ : 0u);
 }
 
 void ReplicationClient::apply_fields(Commands& cmd, const World& world, Entity e, Span<const u8> fields,
@@ -371,6 +701,9 @@ void ReplicationClient::reset(Commands& cmd, const World& world) {
     }
     entities_.clear();
     predicted_.clear();
+    history_count_ = 0;
+    history_head_ = 0;
+    content_hash_ = 0;
     has_tick_ = false;
     last_tick_ = 0;
     has_offset_ = false;

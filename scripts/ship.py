@@ -234,6 +234,8 @@ def ship_web(art, args):
         # pack, runs and draws.
         cmd = ["node", os.path.join(ROOT, "scripts", "web", "browser_smoke.cjs"), stage, "index",
                os.path.join(args.out, art["name"] + "-web-smoke.png"), "3000"]
+        if args.smoke_ticks:  # a player-based game: N ticks drawn, the hash checked against a headless run
+            cmd += ["--ticks", str(args.smoke_ticks)]
         env = dict(os.environ)
         if "NODE_PATH" not in env and shutil.which("npm"):  # Playwright installed with npm -g
             env["NODE_PATH"] = subprocess.run(["npm", "root", "-g"], capture_output=True, text=True).stdout.strip()
@@ -471,6 +473,9 @@ def main():
     ap.add_argument("--smoke", action="store_true", help="run the staged executable once after packaging "
                                                        "(web: in headless Chromium, needs Playwright)")
     ap.add_argument("--smoke-headless", action="store_true", help="with --smoke: headless run (no display needed)")
+    ap.add_argument("--smoke-ticks", type=int, default=0,
+                    help="web, with --smoke: run a project (mce_player) N ticks in the browser and check its state hash "
+                         "against a headless browser run")
     ap.add_argument("--steam", type=int, metavar="APP_ID", default=0,
                     help="desktop: also lay out the Steam depot for this OS and the steamcmd build scripts in "
                          "<out>/<Name>-steam (M-STEAM; nothing is uploaded)")

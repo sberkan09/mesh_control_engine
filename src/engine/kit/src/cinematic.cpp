@@ -1,6 +1,7 @@
 #include "mce/kit/cinematic.h"
 
 #include <cmath>
+#include <cstddef>
 
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
@@ -12,6 +13,7 @@ namespace mce::kit {
 
 static_assert(sizeof(CameraRail3D) == 112);
 static_assert(sizeof(CameraBlend3D) == 20);
+static_assert(offsetof(Cutscene, bars) == offsetof(Cutscene, pad_) + sizeof(Cutscene::pad_));  // no hidden padding
 
 namespace {
 

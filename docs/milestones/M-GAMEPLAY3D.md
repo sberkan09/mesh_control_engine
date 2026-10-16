@@ -11,8 +11,8 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
 | 4. Vehicles | SBA-72 | done |
 | 5. Animation (blend spaces, layers, IK, root motion) | SBA-73 | done |
 | 6. Sensor queries as data | SBA-74 | done |
-| 7. MCP and docs | SBA-75 | not started |
-| Demo `samples/07_gameplay3d` | — | not started |
+| 7. MCP and docs | SBA-75 | done |
+| Demo `samples/07_gameplay3d` | SBA-75 | done |
 
 ## Step 1 — navigation (SBA-69)
 
@@ -190,3 +190,49 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
 - Sphere casts against characters, capsule and box casts, all hits along a ray (`raycast_all` in
   3D), and contact points for overlaps.
 - More than 64 entities in one `Overlap3D` (the rest are not tracked).
+
+## Step 7 — MCP and docs (SBA-75)
+
+| Item | Where | Evidence |
+|---|---|---|
+| `navmesh_bake`: the editor's File > Bake navmesh over MCP; returns the asset, its content hash, tiles, layers, triangles, bytes | `mce_mcp` (`tools.cpp`) | `test_mcp_gameplay3d`: the `.mcnav` is named after the saved scene, and a re-bake has the same content hash |
+| `gen_mesh` `humanoid`: a skinned figure (13 bones, rigid skinning, `Idle` and `Walk` clips), centred like the other shapes so a `CharacterController3D` carries it | `tools_content.cpp` (`build_humanoid`, `write_humanoid_glb`) | `test_mcp_content` "gen_mesh: a skinned humanoid…": 13 joints and 2 animations in the `.glb`, it cooks, walks (the Animator's time advances, a prop pinned to `forearm_l` follows) and goes limp with 11 or more parts |
+| Schemas: `asset_schema` `AnimGraph` describes version 2 (`blend2d`, `root_motion`, `layers`, `ik`) | `asset_tools.cpp` | `test_mcp` asset_create / asset_write cases (every kind created from its template and cooked) |
+| `run_headless` `inspect` of agents, joints, ragdolls, vehicles and sensors: their engine-written fields come back | the existing inspect, documented in user guide 14.2 | `test_mcp_gameplay3d` reads `NavAgent3D.state` / `target`, `Joint3D.position`, `Ragdoll3D.parts`, `Vehicle3D.wheels_on_ground`, `Overlap3D.enters` |
+| Gameplay without code for the demo: `NavAgent3D.follow` (chase an entity, re-plan after `follow_repath` metres) and `Ragdoll3D.on_trigger` (limp on a `TriggerEnter3D` naming it, its agent stopped) | `mce/kit/nav3d.h`, `mce/kit/ragdolls3d.h` | `test_kit` "nav3d: an agent follows an entity…", "ragdolls3d: on_trigger goes limp…" |
+| Fix: a scene whose `NavMeshSurface3D` points at a baked `.mcnav` failed to cook ("unknown asset type"); the scene importer now knows `NavMesh` | `scene_importer.cpp` | `test_mcp_gameplay3d`: `cook_run` after `navmesh_bake` |
+| Docs | user guide 8.8 (gameplay without code), 9.7 (`follow`, `navmesh_bake`), 9.8 (`on_trigger`), 14.2 (`navmesh_bake`, `gen_mesh` humanoid, what inspect reads), 18 (the sample), `docs/engine/physics3d.md`, `docs/engine/capabilities.md` | `capabilities.py --check` |
+
+## Demo — `samples/07_gameplay3d` (SBA-75)
+
+| Item | Where | Evidence |
+|---|---|---|
+| The arena: a wall with a door hinged in its gap, a platform with a motor drawbridge, a cart (`Vehicle3D`, driven by Move) with a bumper `Overlap3D` on a child, three humanoid grunts (`CharacterController3D` steered by `NavAgent3D` following the cart, `Ragdoll3D` with `on_trigger`), a follow camera, a baked navmesh | `samples/07_gameplay3d/assets/` (no code) | `sample_07_gameplay3d_player_600`: `mce_player` plays the cooked pack headless with `drive.input` (600 ticks, 13 entities, no errors) |
+| Built over MCP alone, from an empty project | `tests/mcp/test_mcp_gameplay3d.cpp`; `MCE_GAMEPLAY3D_EXPORT=<dir>` writes the project the sample was copied from | "M-GAMEPLAY3D demo: the 07_gameplay3d arena built over MCP alone": `gen_mesh`, `entity_create`, `navmesh_bake`, `scene_save`, `cook_run`, `run_headless` |
+| Behaviour | the same test | after 1 s the grunts are Moving towards the cart, at least 0.8 m apart, and the bridge is lowering; after 5 s of throttle the door has swung past 20 degrees (about 87), the bridge sits at -104 degrees, the cart is through the gap with its wheels down, the bumper has entered at least once and a grunt it hit is a ragdoll of 11 or more parts with its agent stopped |
+
+### Gates
+
+| Gate | Evidence |
+|---|---|
+| The navmesh bake is byte-identical run to run | `navmesh_bake` twice: the same content hash (`test_mcp_gameplay3d`); `test_kit` nav3d "a bake through the helper is byte-identical" (step 1) |
+| Replay hashes hold with joints, ragdolls and vehicles | the demo run twice in `run_headless` gives one hash; `scripts/ci/local_ci.sh` determinism stage plays `07_gameplay3d` 3 times each in Debug and Release (`95583ae52a5b13e4`, all six equal); the replay cases of steps 2–6 |
+| The 2,000-body budget still holds | `test_physics3d` "budget3d: 2,000 dynamic bodies step within budget": 0.47 ms per step in clang Release (budget 3 ms); FR-PHY-050's 2D budget unchanged |
+| `local_ci.sh` green on every step | `--task` before each PR; `--batch` after steps 3 and 6 and at the milestone's end |
+
+### Design notes
+
+- **One scene, three routes.** The sample's files are the MCP-built project copied out, `mce_player`
+  plays them, and the test rebuilds them from nothing on every ctest run, so the MCP route cannot
+  rot behind the files.
+- **Death without code.** `on_trigger` reuses the trigger events every sensor already raises, so
+  a trap (`Trigger3D`), a bumper (`Overlap3D`) or a shot (`Raycast3D`) kills the same way.
+- **Layers keep a ragdoll off its own capsule.** The grunts' controllers are on layer 1 and ignore
+  layer 2; their ragdolls are on layer 2 and ignore layer 1.
+
+### Not built (step 7)
+
+- Editor UI for the humanoid's proportions and clips beyond Idle and Walk; a get-up after a ragdoll.
+- Cart wheel models in the sample (the wheels are simulated, not drawn).
+- A Windows/MSVC or macOS run of the demo: it runs only in the Linux CI container (no Mac check
+  was made; see the Linear issue).

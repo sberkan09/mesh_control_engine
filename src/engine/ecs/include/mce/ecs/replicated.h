@@ -7,6 +7,9 @@
 //                   LocalTransform and every component field flagged Replicated reach the clients
 //   NetOwner        the peer that controls the entity, as the server numbers peers (through a relay
 //                   room that is the member id, the same on every member); it is replicated itself
+//   NetRelevance    with per-client snapshots, the entity reaches only clients that own an entity
+//                   within `radius` of it (and the client that owns it); without it, or with
+//                   radius 0, every client gets it
 //
 // A field opts in to replication with the Replicated attribute, the way Save opts in to saves:
 //
@@ -28,5 +31,12 @@ struct NetOwner {
 };
 MCE_COMPONENT(NetOwner, (peer, Replicated,
                          Help{"the peer that controls this entity, as the server numbers peers (4294967295 = nobody)"}))
+
+struct NetRelevance {
+    f32 radius = 0.0f;
+};
+MCE_COMPONENT(NetRelevance,
+              (radius, Range{0.0f, 1000.0f},
+               Help{"per-client snapshots send this entity only to clients with an owned entity this close (0 = all)"}))
 
 }  // namespace mce

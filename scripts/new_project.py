@@ -31,7 +31,7 @@ TEMPLATES = ROOT / "templates"
 # A template other than "project" is an overlay: templates/project first, then its own files over it.
 TEMPLATE_CHOICES = ("project", "novel")
 IN_ENGINE_TREE = (ROOT / "CMakeLists.txt").is_file()
-TEXT_SUFFIXES = {".txt", ".md", ".cpp", ".h", ".mceproj", ".mcscene", ".mceasset", ".gitignore", ".json", ".mcuitheme", ".mcui"}
+TEXT_SUFFIXES = {".txt", ".md", ".cpp", ".h", ".mceproj", ".mcscene", ".mceasset", ".gitignore", ".json", ".mcuitheme", ".mcui", ".mcsheet"}
 
 
 def game_id(name):
@@ -90,6 +90,98 @@ def novel_guide_pixel(x, y):  # a soft silhouette: a head over shoulders
     body = y >= 24 and abs(dx) <= 6 + (y - 24) // 3
     return (236, 214, 190, 255) if head else (120, 92, 140, 255) if body else (0, 0, 0, 0)
 
+# The starter themes' sprite skins (M-UI-DATA step 7): a 64 x 16 sheet per theme with a white
+# block (region 0, flat quads: the middle of an 8 x 8 block, so linear filtering never reaches the
+# transparent texels around it), a panel (region 1, x 16) and a button (region 2, x 40), each
+# 16 x 16 with a gap between them and drawn in greys so the theme's palette tints them. The
+# .mcsheet beside each names the regions.
+SKIN_SIZE = (64, 16)
+
+
+def rounded_alpha(x, y, radius):
+    """Coverage of a 16 x 16 cell's rounded rect at pixel (x, y), 4 x 4 supersampled."""
+    hits = 0
+    for sy in range(4):
+        for sx in range(4):
+            px, py = x + (sx + 0.5) / 4, y + (sy + 0.5) / 4
+            cx = min(max(px, radius), 16 - radius)
+            cy = min(max(py, radius), 16 - radius)
+            hits += (px - cx) ** 2 + (py - cy) ** 2 <= radius * radius
+    return hits / 16
+
+
+def pixel_cell(kind, x, y):
+    edge = x in (0, 15) or y in (0, 15)
+    if kind == "button":
+        if (x in (0, 15)) and (y in (0, 15)):
+            return (0, 0, 0, 0)  # notched corners
+        if edge:
+            return (24, 22, 30, 255)
+        if y == 1 or (x == 1 and y < 14):
+            return (255, 255, 255, 255)
+        if y >= 13 or x == 14:
+            return (150, 150, 150, 255)
+        return (225, 225, 225, 255)
+    if edge:
+        return (24, 22, 30, 255)
+    if x == 1 or y == 1:
+        return (255, 255, 255, 255)
+    if x == 14 or y == 14:
+        return (180, 180, 180, 255)
+    return (255, 255, 255, 255)
+
+
+def clean_cell(kind, x, y):
+    a = rounded_alpha(x, y, 6.0 if kind == "panel" else 5.0)
+    if kind == "button" and y >= 14:
+        return (205, 205, 205, int(255 * a))  # a soft bottom lip
+    return (255, 255, 255, int(255 * a))
+
+
+def story_cell(kind, x, y):
+    a = rounded_alpha(x, y, 3.0)
+    inner = min(x, y, 15 - x, 15 - y)
+    if kind == "panel":
+        if inner == 0:
+            v = 120  # an ink rule
+        elif inner == 3 and 3 <= x <= 12 and 3 <= y <= 12:
+            v = 190  # a second, finer rule inside it
+        else:
+            v = 255  # the middle stretches, so it stays flat
+        return (v, v, v, int(255 * a))
+    if inner == 0:
+        v = 110
+    elif y == 1:
+        v = 255
+    elif y >= 13:
+        v = 185
+    else:
+        v = 232
+    return (v, v, v, int(255 * a))
+
+
+SKIN_CELLS = {"PIXEL": pixel_cell, "CLEAN": clean_cell, "STORY": story_cell}
+
+
+def skin_pixel(theme):
+    cell = SKIN_CELLS[theme]
+
+    def pixel(x, y):
+        if x < 16:
+            return (255, 255, 255, 255) if x < 8 and y < 8 else (0, 0, 0, 0)
+        if 16 <= x < 32:
+            return cell("panel", x - 16, y)
+        if 40 <= x < 56:
+            return cell("button", x - 40, y)
+        return (0, 0, 0, 0)
+
+    return pixel
+
+
+def texture_sidecar(guid, filter_mode):
+    return ('{\n  "guid": "%s",\n  "importer": "texture",\n  "importer_version": 1,\n'
+            '  "settings": { "srgb": true, "mips": false, "filter": "%s" }\n}\n' % (guid, filter_mode))
+
 
 def story_compiler():
     """tools/story/story_compile.py in the engine tree, beside this script in the SDK."""
@@ -145,7 +237,8 @@ def main():
     }
     # The starter themes (M-UI-DATA step 7): assets/ui/themes/{pixel,clean,story}.mcuitheme and their fonts.
     for theme in ("PIXEL", "CLEAN", "STORY"):
-        for token in (f"@GUID_THEME_{theme}@", f"@GUID_FONT_{theme}@", f"@GUID_FONT_{theme}_TITLE@"):
+        for token in (f"@GUID_THEME_{theme}@", f"@GUID_FONT_{theme}@", f"@GUID_FONT_{theme}_TITLE@", f"@GUID_SKIN_{theme}@",
+                      f"@GUID_SKIN_TEX_{theme}@"):
             tokens[token] = new_guid()
 
     def stamp(text):
@@ -186,6 +279,16 @@ def main():
     for rel, data, guid in art:
         (tex / rel).write_bytes(data)
         (tex / f"{rel}.mceasset").write_text(sidecar(tokens[guid]), encoding="utf-8", newline="\n")
+        written += 2
+
+    # The starter themes' skin textures (their .mcsheet files come from the template).
+    themes = out / "assets" / "ui" / "themes"
+    for theme in SKIN_CELLS:
+        name = f"{theme.lower()}_skin.png"
+        (themes / name).write_bytes(png(*SKIN_SIZE, skin_pixel(theme)))
+        (themes / f"{name}.mceasset").write_text(texture_sidecar(tokens[f"@GUID_SKIN_TEX_{theme}@"],
+                                                                 "nearest" if theme == "PIXEL" else "linear"),
+                                                 encoding="utf-8", newline="\n")
         written += 2
 
     if args.template == "novel":

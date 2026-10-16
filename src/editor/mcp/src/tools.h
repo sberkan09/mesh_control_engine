@@ -55,6 +55,8 @@ Span<const ToolDef> ui_tool_table();
 bool ui_document_arg(ToolCall& c, const editor::ProjectAsset*& out);
 // tools_render.cpp: ui_preview's capture (a player run with -ui_preview).
 bool ui_preview(ToolCall& c);
+// tools_timeline.cpp (M-CINEMA step 6): timeline_create, timeline_add_track, timeline_add_key.
+Span<const ToolDef> timeline_tool_table();
 // prefab_tools.cpp: prefab_create_from / prefab_apply / prefab_revert.
 Span<const ToolDef> prefab_tool_table();
 // project_tools.cpp: project_get / project_set / scene_settings_get / scene_settings_set.

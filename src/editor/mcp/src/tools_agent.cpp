@@ -38,6 +38,13 @@ const ToolDef kAgentTools[] = {
      R"j("cell_width":{"type":"integer","minimum":64,"maximum":3840,"default":320},"cell_height":{"type":"integer","minimum":64,"maximum":3840,"default":180},)j" MCE_RENDER_COMMON_PROPS
      R"j(},"required":["ticks"]})j",
      render_sheet},
+    {"timeline_preview",
+     "See a cutscene at a moment: draw the scene with every timeline in it paused at 'time' seconds (state tracks applied, "
+     "cinematic cameras placed, the timeline's video frame shown) with the real player, as render_frame does. Returns the "
+     "frame as a PNG image; 'save' also writes it under the project folder.",
+     R"j({"type":"object","properties":{"time":{"type":"number","minimum":0,"maximum":3600,"description":"Seconds into the timelines"},)j" MCE_RENDER_FRAME_PROPS
+     R"j(,"save":{"type":"string","description":"Also write the frame as a PNG at this path inside the project folder"}},"required":["time"]})j",
+     timeline_preview},
     {"image_diff",
      "Compare a frame with a golden PNG in the project: 'image' (a PNG in the project) or 'render' (render_frame's arguments). "
      "Returns the score (mean channel difference, 0..1), the changed fraction and pass (score <= max_score), with a heat map "
@@ -151,9 +158,13 @@ const ToolDef kAgentTools[] = {
     {"gen_mesh",
      "Make a simple 3D mesh for blocking out a level or a toy-like game: a box, plane, sphere, cylinder, cone, disc or "
      "ramp (a wedge rising towards +X), centred on the origin with Y up, 'size' its full extent in metres, in one "
-     "'color' with 'roughness'. Returns its vertex and triangle counts and a shaded preview; 'save' writes it as a .glb "
-     "(with its material inline) and a CREDITS.md row. Place it with the 3D kit's MeshRef (and MeshCollider3D).",
-     R"j({"type":"object","properties":{"shape":{"type":"string","enum":["box","plane","sphere","cylinder","cone","disc","ramp"],"default":"box"},)j"
+     "'color' with 'roughness'. 'humanoid' is a skinned figure (size [shoulder width, height, depth], default "
+     "[0.5, 1.8, 0.28], facing -Z, feet at -height/2 so a CharacterController3D's capsule centre is its origin) with "
+     "13 bones (hips, spine, head, upper_arm_l/r, forearm_l/r, thigh_l/r, shin_l/r, foot_l/r) and the clips Idle and "
+     "Walk: an Animator plays them, Ragdoll3D makes it go limp, AttachToBone pins props to its bones. Returns its "
+     "vertex and triangle counts and a shaded preview; 'save' writes it as a .glb (with its material inline) and a "
+     "CREDITS.md row. Place it with the 3D kit's MeshRef (and MeshCollider3D).",
+     R"j({"type":"object","properties":{"shape":{"type":"string","enum":["box","plane","sphere","cylinder","cone","disc","ramp","humanoid"],"default":"box"},)j"
      R"j("size":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3,"description":"[x, y, z] in metres (default [1, 1, 1])"},)j"
      R"j("segments":{"type":"integer","minimum":3,"maximum":128,"default":24,"description":"Around a round shape"},)j"
      R"j("color":{"type":"string","description":"\"#rrggbb\" or \"#rrggbbaa\" (default light grey)"},)j"
@@ -224,11 +235,15 @@ const ToolDef kAgentTools[] = {
      "Make the release zip: the project's full CMake build (host, game module and the cooked pack; the module is mapped "
      "again), a smoke run of the host headless for 'ticks' ticks, then the SDK's `mce ship` (host, module, engine "
      "library, assets.mce, CREDITS.md). Returns each stage and the zip's path; ok is false with the stage that failed "
-     "and the end of its output. With steam_app_id it also lays out the Steam depot for this OS and the steamcmd build "
-     "scripts (<out>/<Name>-steam; nothing is uploaded). Needs the server of an installed SDK (mce mcp <project>).",
-     R"j({"type":"object","properties":{"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"build":{"type":"boolean","default":true,"description":"Run the full build first (false: ship what is built)"},)j"
+     "and the end of its output. Needs the server of an installed SDK (mce mcp <project>). target \"web\": the browser "
+     "build for itch.io instead (`mce ship --target web`, from the engine checkout the SDK came from, for a project under "
+     "its projects/; needs the Emscripten SDK and Playwright): it plays 'ticks' ticks in headless Chromium and returns "
+     "the zip, the state_hash, matches_headless (the same ticks run headless in the browser) and a screenshot of the "
+     "last frame. Desktop with steam_app_id: also the Steam depot for this OS and the steamcmd build scripts "
+     "(<out>/<Name>-steam; nothing is uploaded).",
+     R"j({"type":"object","properties":{"target":{"type":"string","enum":["desktop","web"],"default":"desktop"},"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"build":{"type":"boolean","default":true,"description":"Run the full build first (false: ship what is built; desktop only)"},)j"
      R"j("version":{"type":"string","description":"Version in the zip's name (default: the .mceproj's, else the SDK's)"},"out":{"type":"string","description":"Folder inside the project for the zip (default dist/)"},)j"
-     R"j("steam_app_id":{"type":"integer","minimum":1,"maximum":4294967295,"description":"Also make the Steam depot and build scripts for this app"},)j"
+     R"j("steam_app_id":{"type":"integer","minimum":1,"maximum":4294967295,"description":"Desktop: also make the Steam depot and build scripts for this app"},)j"
      R"j("steam_library":{"type":"string","description":"With steam_app_id: the steam_api to ship (default: from the server's STEAMWORKS_SDK)"}}})j",
      ship_build},
     {"project_watch",

@@ -1,0 +1,136 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "debcd0da-dee0-41a1-83f1-97784f016faf",
+  "name": "arena",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Floor",
+      "components": {
+        "BoxCollider3D": { "half": [30, 0.5, 30] },
+        "LocalTransform": { "position": [0, -0.5, 0] },
+        "MeshRef": { "mesh": "guid:26df0098-b9d4-492c-8452-d7627e9fc8e6" }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Wall West",
+      "components": {
+        "BoxCollider3D": { "half": [14, 1.5, 0.3] },
+        "LocalTransform": { "position": [-16, 1.5, 0] },
+        "MeshRef": { "mesh": "guid:09f9a383-4218-4a34-8b84-182cd92aec03" }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Wall East",
+      "components": {
+        "BoxCollider3D": { "half": [14, 1.5, 0.3] },
+        "LocalTransform": { "position": [16, 1.5, 0] },
+        "MeshRef": { "mesh": "guid:09f9a383-4218-4a34-8b84-182cd92aec03" }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Door",
+      "components": {
+        "Joint3D": { "limits": 1, "anchor": [-1.9, 0, 0], "limit_min": -110, "limit_max": 110, "friction": 40 },
+        "LocalTransform": { "position": [0, 1.25, 0] },
+        "MeshRef": { "mesh": "guid:12409a12-5ee6-444e-97c1-3c5547c3a40b" },
+        "RigidBody3D": { "half": [1.9, 1.15, 0.1], "density": 200 }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Platform",
+      "components": {
+        "BoxCollider3D": { "half": [3, 0.5, 2] },
+        "LocalTransform": { "position": [12, 0.5, 12] },
+        "MeshRef": { "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a" }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Drawbridge",
+      "components": {
+        "Joint3D": { "motor": "Position", "limits": 1, "anchor": [0, -2, 0], "axis": [1, 0, 0], "limit_min": -110, "limit_max": 0, "motor_target": -104, "motor_frequency": 0.5 },
+        "LocalTransform": { "position": [12, 3.05, 9.85] },
+        "MeshRef": { "mesh": "guid:989645d4-5a0f-4984-9228-b7a24e77498e" },
+        "RigidBody3D": { "half": [1.5, 2, 0.1], "density": 500 }
+      }
+    },
+    {
+      "id": 7,
+      "name": "Cart",
+      "components": {
+        "LocalTransform": { "position": [0, 1, 12] },
+        "MeshRef": { "mesh": "guid:e213f420-52a9-4b08-996e-d214d9d86a75" },
+        "RigidBody3D": { "half": [0.9, 0.4, 1.5], "density": 300 },
+        "Vehicle3D": { "use_input": 1, "engine_torque": 900 }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Bumper",
+      "components": {
+        "ChildOf": { "parent": "$6" },
+        "LocalTransform": { "position": [0, 0, -1.8] },
+        "Overlap3D": { "shape": "Box", "dynamic": 0, "half": [1.1, 0.6, 0.4] }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Grunt 0",
+      "components": {
+        "Animator": { "clip": "Walk" },
+        "CharacterController3D": { "layer": 1, "mask": 65531 },
+        "LocalTransform": { "position": [-5, 0.9, -12] },
+        "MeshRef": { "mesh": "guid:632caf8a-ee5a-4027-9ca0-5d7242556094" },
+        "NavAgent3D": { "follow": "$6", "speed": 3, "move_to": 1 },
+        "Ragdoll3D": { "layer": 2, "mask": 65533, "on_trigger": 1 }
+      }
+    },
+    {
+      "id": 10,
+      "name": "Grunt 1",
+      "components": {
+        "Animator": { "clip": "Walk" },
+        "CharacterController3D": { "layer": 1, "mask": 65531 },
+        "LocalTransform": { "position": [0, 0.9, -12] },
+        "MeshRef": { "mesh": "guid:632caf8a-ee5a-4027-9ca0-5d7242556094" },
+        "NavAgent3D": { "follow": "$6", "speed": 3, "move_to": 1 },
+        "Ragdoll3D": { "layer": 2, "mask": 65533, "on_trigger": 1 }
+      }
+    },
+    {
+      "id": 11,
+      "name": "Grunt 2",
+      "components": {
+        "Animator": { "clip": "Walk" },
+        "CharacterController3D": { "layer": 1, "mask": 65531 },
+        "LocalTransform": { "position": [5, 0.9, -12] },
+        "MeshRef": { "mesh": "guid:632caf8a-ee5a-4027-9ca0-5d7242556094" },
+        "NavAgent3D": { "follow": "$6", "speed": 3, "move_to": 1 },
+        "Ragdoll3D": { "layer": 2, "mask": 65533, "on_trigger": 1 }
+      }
+    },
+    {
+      "id": 12,
+      "name": "Camera",
+      "components": {
+        "Camera3DComponent": {},
+        "CameraFollow3D": { "target": "$6", "distance": 10, "pitch": 0.5 },
+        "LocalTransform": {}
+      }
+    },
+    {
+      "id": 13,
+      "name": "Navmesh",
+      "components": {
+        "LocalTransform": {},
+        "NavMeshSurface3D": { "baked": "guid:5f0a29ed-c6da-4360-bb6f-71a76b74287a" }
+      }
+    }
+  ]
+}
