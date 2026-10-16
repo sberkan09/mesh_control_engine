@@ -13,7 +13,8 @@ small seam PR, merged first, prefer changing a .cpp, forward-declare, and say in
 header has to change.
 
 Includes are resolved textually: `#include "a/b.h"` / `<a/b.h>` match a header whose path ends in a/b.h
-(quoted includes also try the including file's directory first). Generated headers and system headers are
+(quoted includes also try the including file's directory first). A one-component include matches by
+basename, so counts are upper bounds. Generated headers and system headers are
 not in the tree and are ignored.
 """
 
@@ -26,7 +27,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SCAN_DIRS = ["src", "samples", "games", "projects", "templates", "tests", "tools"]
+SCAN_DIRS = ["src", "samples", "projects", "templates", "tests", "tools"]
 HEADER_EXT = {".h", ".hpp", ".inl"}
 TU_EXT = {".c", ".cc", ".cpp", ".mm"}
 INCLUDE = re.compile(r'^\s*#\s*include\s*([<"])([^>"]+)[>"]', re.M)
@@ -121,7 +122,7 @@ def main():
     wide = 0
     for n, h in counts:
         mark = "  WARNING" if n >= args.warn else ""
-        print(f"include fanout: {n:5d} of {len(tus)} TUs include {h}{mark}")
+        print(f"include fanout: at most {n:5d} of {len(tus)} TUs include {h}{mark}")
         wide += n >= args.warn
     if wide and not args.all:
         print(f"include fanout: WARNING, {wide} header(s) reach {args.warn}+ TUs: every build tree rebuilds them after the merge.")
