@@ -20,6 +20,7 @@ formats, which is what keeps the shipped game small and safe.
 | Prefab | `.mcprefab` | the same, entity 0 as root | instances in scenes, runtime spawns |
 | Tilemap | `.mctilemap` | one tile layer over a tileset | `TilemapLayer` |
 | Sprite sheet | `.mcsheet` | texture regions and named flipbook clips with frame events | `AnimatedSprite`, `Sprite.region` |
+| 2D skeleton | `.mcskel2d` | a bone tree (rest pose) and the textured slots drawn on it | `Skeleton2D` (chapter 7.13) |
 | String table | `assets/loc/<locale>.csv` | one language's text by key (`StringTable` chunks) | `TextLabel.loc_key`, `loc::Localization` (chapter 21) |
 | Animation graph | `.mcanim` | states over a mesh's clips, 1D blends, transitions, events | `Animator.graph` |
 | Particle preset | `.mcpart` | emitter parameters | `ParticleEmitter` |

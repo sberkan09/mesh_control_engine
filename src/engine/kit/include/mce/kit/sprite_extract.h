@@ -1,6 +1,6 @@
 #pragma once
 // SpriteExtract — the render extract for the starter-kit components (renderer.h: "extract lives
-// with the gameplay kit"). Reads Sprite / TextLabel / TilemapLayer / Camera2DComponent + LocalTransform
+// with the gameplay kit"). Reads Sprite / Skeleton2D slots / TextLabel / TilemapLayer / Camera2DComponent + LocalTransform
 // (WorldTransform when the hierarchy wrote one), plus the ParticleSystem resource's live particles,
 // and fills
 // a SpriteBatch in ECS iteration order (deterministic draw order, FR-RUN-040).
@@ -20,6 +20,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/components.h"
+#include "mce/kit/skeleton2d.h"
 #include "mce/render/renderer.h"
 
 namespace mce::kit {
@@ -108,6 +109,9 @@ private:
     Array<FontEntry> fonts_;
     Array<SheetEntry> sheets_;
     Array<TilemapEntry> tilemaps_;
+    // Skeletons for worlds without kit::install_skeleton2d (the editor's edit world).
+    Skeleton2DRegistry skeletons_;
+    Array<Skeleton2DQuad> quads_;
 };
 
 // The first primary Camera2DComponent with a LocalTransform, in ECS order. False (and a default

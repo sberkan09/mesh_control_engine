@@ -1,0 +1,37 @@
+{
+  "format": "mce-bt",
+  "version": 1,
+  "guid": "a1de0000-0000-4000-8000-000000000001",
+  "name": "guard",
+  "blackboard": {
+    "alert": {"type": "bool", "default": false},
+    "caught": {"type": "bool", "default": false},
+    "post_a": {"type": "vec3", "default": [-6, 0, -6]},
+    "post_b": {"type": "vec3", "default": [-6, 0, 6]},
+    "thief_at": {"type": "vec3", "default": [8, 0, 8]}
+  },
+  "root": {"parallel": [
+    {"sequence": [
+      {"task": "wait_event", "event": "alarm"},
+      {"set": "alert", "value": true},
+      {"task": "log", "text": "heard the alarm"}
+    ], "name": "listen"},
+    {"selector": [
+      {"guard": {"sequence": [
+        {"task": "log", "text": "chasing"},
+        {"task": "move_to", "key": "thief_at", "radius": 1.0},
+        {"task": "log", "text": "caught the thief"},
+        {"set": "caught", "value": true},
+        {"wait": 1000}
+      ]}, "key": "alert", "value": true, "abort": "lower", "name": "chase"},
+      {"repeat": {"sequence": [
+        {"task": "move_to", "key": "post_a"},
+        {"task": "look_at", "key": "post_b"},
+        {"wait": 0.5},
+        {"task": "move_to", "key": "post_b"},
+        {"task": "look_at", "key": "post_a"},
+        {"wait": 0.5}
+      ]}, "name": "patrol"}
+    ]}
+  ]}
+}

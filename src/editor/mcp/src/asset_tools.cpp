@@ -115,7 +115,7 @@ constexpr AssetKind kKinds[] = {
      R"json([
 {"name":"name","type":"string"},
 {"name":"blackboard","type":"object","help":"key: \"bool\" | \"int\" | \"float\" | \"vec3\" | \"entity\", or key: {\"type\", \"default\"}; at most 16 bool/int/float, 8 vec3 and 8 entity keys"},
-{"name":"root","type":"node object","help":"{\"sequence\" | \"selector\": [nodes]} | {\"parallel\": [nodes], \"policy\": \"all\" | \"one\"} | {\"invert\" | \"succeed\" | \"fail\": node} | {\"repeat\" | \"retry\": node, \"count\": n (0 = forever)} | {\"cooldown\" | \"timeout\": node, \"seconds\": s} | {\"guard\": node, \"key\", \"op\", \"value\"} | {\"check\": key, \"op\": \"is_set\" | \"not_set\" | \"==\" | \"!=\" | \"<\" | \"<=\" | \">\" | \">=\", \"value\"} | {\"wait\": s} | {\"set\": key, \"value\" | \"add\" | \"clear\": true | \"from\": key} | {\"emit\": signal} | {\"task\": name, \"key\", \"value\", \"vector\"}; at most 128 nodes"}])json",
+{"name":"root","type":"node object","help":"{\"sequence\" | \"selector\": [nodes]} | {\"parallel\": [nodes], \"policy\": \"all\" | \"one\"} | {\"invert\" | \"succeed\" | \"fail\": node} | {\"repeat\" | \"retry\": node, \"count\": n (0 = forever)} | {\"cooldown\" | \"timeout\": node, \"seconds\": s} | {\"guard\": node, \"key\", \"op\", \"value\", \"abort\": \"none\" | \"self\" | \"lower\" | \"both\"} | {\"check\": key, \"op\": \"is_set\" | \"not_set\" | \"==\" | \"!=\" | \"<\" | \"<=\" | \">\" | \">=\", \"value\"} | {\"wait\": s} | {\"set\": key, \"value\" | \"add\" | \"clear\": true | \"from\": key} | {\"emit\": signal} | {\"task\": name, \"key\", \"value\", \"vector\", \"arg\"}; stock tasks: {\"task\": \"move_to\" | \"look_at\", \"key\": vec3 or entity key, \"radius\"} | {\"task\": \"animate\", \"clip\", \"finish\": bool} | {\"task\": \"play_sound\", \"sound\": \"guid:...\", \"gain_db\"} | {\"task\": \"spawn\", \"prefab\": \"guid:...\", \"key\", \"offset\"} | {\"task\": \"raise\" | \"wait_event\", \"event\"} | {\"task\": \"log\", \"text\"}; at most 128 nodes"}])json",
      R"json({"name":"brain","blackboard":{"alert":{"type":"bool","default":false}},"root":{"selector":[{"sequence":[{"check":"alert","value":true},{"emit":"alarm"},{"set":"alert","value":false}]},{"wait":1}]}})json"},
     {"Tilemap", ".mctilemap", "mce-tilemap", 1,
      "One tile layer over a tileset texture cut into columns x rows cells, drawn by a TilemapLayer component (map: "
@@ -143,6 +143,16 @@ constexpr AssetKind kKinds[] = {
 {"name":"regions","type":"array","help":"[{\"name\": \"hurt\", \"rect\": [x, y, w, h]}] in pixels, y down from the top"},
 {"name":"clips","type":"array","help":"[{\"name\": 1-31 chars, \"frames\": [index | region name, ...] | {\"from\": a, \"to\": b}, \"fps\": 12, \"mode\": \"Loop\" | \"PingPong\" | \"Once\", \"events\": [{\"frame\": index within the clip, \"name\": 1-23 chars}]}]"}])json",
      R"json({"name":"sheet","texture":null,"grid":{"columns":1,"rows":1},"clips":[{"name":"idle","frames":[0],"fps":12,"mode":"Loop"}]})json"},
+    {"Skeleton2D", ".mcskel2d", "mce-skeleton2d", 1,
+     "A 2D cut-out skeleton: a bone tree and the slots (textured quads) drawn on its bones. A Skeleton2D component "
+     "(skeleton: \"guid:...\") poses and draws it; Skeleton2D.pose[i] offsets bone i from its rest pose. Metres and "
+     "degrees, Y up. Bones list parents before children; slots are in draw order (first drawn first, behind). At most "
+     "64 bones and 256 slots.",
+     R"json([
+{"name":"name","type":"string"},
+{"name":"bones","type":"array of bone objects","help":"{\"name\": 1-31 chars, unique, \"parent\": a bone listed earlier (absent: a root), \"x\": m, \"y\": m, \"rotation\": degrees, \"scale\": [sx, sy] or s, \"length\": m}; the first bone is a root"},
+{"name":"slots","type":"array of slot objects","help":"{\"name\": 1-31 chars, unique, \"bone\": a bone name, \"texture\": \"guid:<Texture>\" | null (a solid quad), \"rect\": [u0, v0, u1, v1] (v0 = top), \"size\": [w, h] m, \"pivot\": [x, y] 0-1, \"offset\": [x, y] m in the bone's space, \"rotation\": degrees, \"tint\": [r, g, b, a]}"}])json",
+     R"json({"name":"skeleton","bones":[{"name":"root"},{"name":"body","parent":"root","y":0.5,"length":0.5}],"slots":[{"name":"body","bone":"body","texture":null,"size":[0.4,0.6],"pivot":[0.5,0],"tint":[1,1,1,1]}]})json"},
     {"AnimGraph", ".mcanim", "mce-animgraph", 2,
      "A 3D animation state graph: states play a mesh clip, a 1D blend of clips or a 2D blend space, transitions fire "
      "on parameter conditions or when a one-shot state finishes; layers play clips over a bone mask on top (override "
@@ -669,9 +679,9 @@ bool tilemap_paint(ToolCall& c) {
 const ToolDef kAssetTools[] = {
     {"asset_schema",
      "Describe a JSON source asset type: its fields (type, default, help) and the template asset_create starts from. "
-     "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcsound, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, "
+     "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcsound, .mcseq, .mctilemap, .mcsheet, .mcskel2d, .mcanim, .mcmat, "
      ".mcinput, .mcstore, .mcservices, .mcui, .mcconfig).",
-     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, SoundSet, Sequence, Timeline, BehaviorTree, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, or the extension"}}})json",
+     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, SoundSet, Sequence, Timeline, BehaviorTree, Tilemap, SpriteSheet, Skeleton2D, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, or the extension"}}})json",
      asset_schema},
     {"asset_create",
      "Create a JSON source asset at 'path' (its extension picks the type) with a fresh GUID: the type's template with "

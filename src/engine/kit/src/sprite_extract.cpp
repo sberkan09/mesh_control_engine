@@ -37,6 +37,7 @@ render::SpriteSetId whole_texture_set(render::Renderer& r, u32 texture_key, rhi:
 ResultV SpriteExtract::init(render::Renderer& renderer, asset::AssetSystem* assets) {
     renderer_ = &renderer;
     assets_ = assets;
+    skeletons_ = Skeleton2DRegistry(assets);
     // A 1x1 white texture under a renderer-local key: solid quads take their color from the tint.
     white_key_ = renderer.textures().allocate_key();
     static constexpr u8 kWhite[4] = {255, 255, 255, 255};
@@ -91,6 +92,7 @@ void SpriteExtract::shutdown() {
 void SpriteExtract::reset(asset::AssetSystem* assets) {
     release_handles();
     assets_ = assets;
+    skeletons_ = Skeleton2DRegistry(assets);
 }
 
 render::SpriteSetId SpriteExtract::sprite_set(asset::Guid guid, asset::Guid normal) {
@@ -365,6 +367,31 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
             render::SpriteInstance copy = inst;
             copy.position.x = inst.position.x + k * w;
             batch.add(copy);
+        }
+    });
+
+    // 2D skeletons: each visible one's slots in slot order, on the component's layer and order
+    // (skeleton2d.h). Equal keys keep submission order, so slots sharing a texture stack in order.
+    Skeleton2DRegistry* skeletons = world.try_resource<Skeleton2DRegistry>();
+    if (!skeletons) skeletons = &skeletons_;
+    each_placed<Skeleton2D>(world, cam, [&](Entity, const Placement& t, const Skeleton2D& sk, const Parallax*) {
+        if (!sk.visible) return;
+        const Skeleton2DRegistry::Def* def = skeletons->resolve(sk.skeleton.guid);
+        if (!def) return;
+        quads_.clear();
+        skeleton2d_quads(*def, sk, transform_2d(t.position, t.rotation, t.scale), quads_);
+        for (const Skeleton2DQuad& q : quads_) {
+            render::SpriteInstance inst;
+            inst.position = q.position;
+            inst.rotation = q.rotation;
+            inst.scale = q.scale;
+            inst.pivot = q.pivot;
+            inst.tint = q.tint;
+            inst.set = sprite_set(q.texture);
+            inst.region = region_index(inst.set, q.rect);
+            inst.sort_layer = sk.layer;
+            inst.sort_order = sk.order;
+            batch.add(inst);
         }
     });
 
