@@ -75,9 +75,10 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
 - **Layer checks (review of the first version).** The hash alone leaves the root cause: a re-hashed blob still
   reaches Detour. `navmesh_blob_valid` therefore decodes every layer the way the tile cache will and refuses
   it unless its header is Detour's (magic, version), its size and usable window are consistent, its tile
-  coordinates and layer index are inside the blob's grid, every area id is below 64, and no connection bit
-  points out of the grid (the case where the contour walker reads past its region array and then finds a
-  region with no edge). A layer that passes is one the builder can walk.
+  coordinates and layer index are inside the blob's grid, every area id is below 64, and every connection bit
+  stays in the grid, is mutual and joins two walkable cells (the contour walk follows connections while the
+  region builder ignores them; an inconsistent one reads past the region array or leaves a region with no
+  edge, and the simplifier divides by its vertex count). A layer that passes is one the builder can walk.
 - **Test.** `test_navmesh.cpp` flips bytes in the header, the layers and the trailer, edits the layer header
   (magic, version, tile x and y, width, window) and the decoded grid (a connection toward x − 1 at x = 0, an
   area id 200) with the hash made right again, and expects a refusal from `navmesh_blob_valid` and `load`; the

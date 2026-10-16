@@ -183,6 +183,24 @@ TEST_CASE("navmesh3d: a damaged bake is refused, not handed to Detour (M-FUZZ 2b
     refused(with_edited_layer(a, [](Array<byte>& g, unsigned w, unsigned h) {
         g[usize(w) * h + usize(w) * h / 2] = byte{200};  // an area id
     }));
+    // A connection nobody reciprocates, and one that joins a cell to a non-walkable one: the contour walk
+    // follows them while the region builder ignores them.
+    refused(with_edited_layer(a, [](Array<byte>& g, unsigned w, unsigned h) {
+        const usize n = usize(w) * h;
+        for (usize i = 0; i < n; ++i) {
+            if (!(static_cast<unsigned>(g[2 * n + i]) & 1u) || i % w == 0) continue;  // connected toward x - 1
+            g[2 * n + i - 1] = static_cast<byte>(static_cast<unsigned>(g[2 * n + i - 1]) & ~4u);  // its answer
+            return;
+        }
+    }));
+    refused(with_edited_layer(a, [](Array<byte>& g, unsigned w, unsigned h) {
+        const usize n = usize(w) * h;
+        for (usize i = 0; i < n; ++i) {
+            if (!(static_cast<unsigned>(g[2 * n + i]) & 1u) || i % w == 0) continue;
+            g[n + i - 1] = byte{0};  // the neighbour is no longer walkable
+            return;
+        }
+    }));
 }
 
 TEST_CASE("navmesh3d: the committed sample bake loads, and a version-1 file asks for a re-bake") {

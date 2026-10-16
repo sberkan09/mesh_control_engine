@@ -40,7 +40,7 @@ three ship it on Recast & Detour.
    tile cache trusts the layers, and a damaged byte made its contour builder divide by zero, so `navmesh_blob_valid`,
    `NavMesh3D::load` and the `.mcnav` importer refuse a blob whose hash does not match (a version-1 file is re-baked).
    The hash only catches damage, so `navmesh_blob_valid` also decodes every layer and refuses one Detour's builder
-   cannot walk safely (bad layer header or tile coordinates, an area id above 63, a connection bit out of the grid).
+   cannot walk safely (bad layer header or tile coordinates, an area id above 63, a connection bit that leaves the grid, is not mutual or joins a non-walkable cell).
 5. **Areas and costs.** Polygon areas are ids 0..31: 0 is not walkable, 1 is the default ground, 2.. are the game's
    with a cost per area (`set_area_cost`), shared by queries and the crowd. Bake inputs mark areas per triangle and
    with axis-aligned volumes; a volume of area 0 cuts a hole.

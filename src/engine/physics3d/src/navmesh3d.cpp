@@ -126,7 +126,7 @@ struct PackBits final : dtTileCacheCompressor {
 
 // ---- the blob (.mcnav) ----------------------------------------------------------------------------
 // Little-endian fields written one by one (no struct padding reaches the bytes; the writer and reader copy
-// native values, so the format is little-endian on every platform the engine targets, which all are):
+// native values, so the format is little-endian on every platform the engine targets):
 //   "MCNV" u32 version, the settings, bmin[3] bmax[3], i32 tiles_x tiles_z, u32 layers, u32 links,
 //   links (start[3] end[3] radius, u8 area, u8 bidirectional, u16 0, u32 user_id),
 //   layers (u32 size, size bytes, zero padding to 4).
@@ -671,7 +671,16 @@ bool layer_valid(const byte* src, u32 size, const BlobHeader& h) {
                 for (int d = 0; ok && d < 4; ++d) {
                     if (!((layer->cons[i] & 0xf) & (1 << d))) continue;
                     const int nx = x + kDx[d], ny = y + kDy[d];
-                    if (nx < 0 || ny < 0 || nx >= w || ny >= ht) ok = false;  // a connection out of the grid
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= ht) {
+                        ok = false;  // a connection out of the grid
+                        continue;
+                    }
+                    // The contour walk follows connections, the region builder does not look at them: a
+                    // connection must be mutual and join two walkable cells, or a region can be left with
+                    // a contour of fewer than two points (a division by zero in the simplifier).
+                    const int j = nx + ny * w;
+                    if (layer->areas[i] == 0 || layer->areas[j] == 0 || !((layer->cons[j] & 0xf) & (1 << ((d + 2) & 3))))
+                        ok = false;
                 }
             }
         }
