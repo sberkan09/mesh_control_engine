@@ -6,6 +6,7 @@
 # animation graphs v2 (5); character feel (M-MOVE3D 1).
 mce_add_test(test_kit UMBRELLA
     SOURCES
+        test_ai.cpp
         test_bodies3d.cpp
         test_move3d.cpp
         test_captions.cpp

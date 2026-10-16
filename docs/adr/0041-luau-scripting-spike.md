@@ -80,3 +80,9 @@ stay in C++. The per-call name lookup in `get`/`set` is the likely first cost to
    `local pos = mce.field("Ball", "position")`) is the first optimization to measure.
 6. **Tooling.** Type definitions for the `mce` API and the reflected components, `luau-analyze` behind an MCP
    `script_check` tool, script stacks in Tracy zones and crash reports, hot reload in play-in-editor.
+
+## Amendment 2026-10-16
+
+The user chose to add the M-SCRIPT milestone (ROADMAP) after reading these results; N2 is reopened for Luau
+only (REQUIREMENTS §5). The open questions above become its steps; this record stays the design of record until
+M-SCRIPT's own decisions amend it.

@@ -536,7 +536,7 @@ void Scene3D::build() {
             const auto q = static_cast<u32>(dn * f32(0xFFFFFF));
             const MeshInstance& inst = instances_[d.instance];
             const asset::MaterialChunk& mat = material_of(inst, sm);
-            const bool blend = (mat.flags & asset::MaterialFlags::AlphaBlend) != 0;
+            const bool blend = drawn_after_opaques(inst, sm);
             const auto material = static_cast<u16>(((albedo_key_of(inst, sm) & 0x7FFF) << 1) |
                                                    ((mat.flags & asset::MaterialFlags::DoubleSided) ? 1u : 0u));
             keys[i] = blend ? sort_key_3d(PassId::Transparent, 0, 0xFFFFFFu - q) : sort_key_3d(PassId::Opaque, material, q);
@@ -550,9 +550,7 @@ void Scene3D::build() {
     }
     opaque_count_ = 0;
     while (opaque_count_ < draws_.size() &&
-           !(material_of(instances_[draws_[opaque_count_].instance], draws_[opaque_count_].mesh->submeshes[draws_[opaque_count_].submesh])
-                 .flags &
-             asset::MaterialFlags::AlphaBlend))
+           !drawn_after_opaques(instances_[draws_[opaque_count_].instance], draws_[opaque_count_].mesh->submeshes[draws_[opaque_count_].submesh]))
         ++opaque_count_;
 
     // Shadow fit (rhi-renderer.md §3.5): an orthographic box around the scene's bounding sphere,
