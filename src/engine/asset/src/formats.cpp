@@ -934,12 +934,16 @@ bool bt_needs_slot(BtNodeKind k) {
 
 // The children a node kind takes: composites one or more, decorators exactly one, leaves none.
 bool bt_children_ok(BtNodeKind k, u32 n) {
-    if (k <= BtNodeKind::Parallel) return n >= 1;
-    if (k <= BtNodeKind::Guard) return n == 1;
+    if (k <= BtNodeKind::Parallel || k == BtNodeKind::Utility) return n >= 1;
+    if (k <= BtNodeKind::Guard || k == BtNodeKind::Score || k == BtNodeKind::Token) return n == 1;
     return n == 0;
 }
 
+bool bt_finite(f32 x) { return x == x && x - x == 0.0f; }
+
 bool bt_node_ok(const BtNode& n, const BtHeader& h, Span<const BtKey> keys) {
+    if (n.key3 != kBtNoKey && n.key3 >= keys.size()) return false;
+    if (!bt_finite(n.b) || !bt_finite(n.c)) return false;
     auto str_ok = [&](u32 s) { return s == kBtNoString || s < h.string_bytes; };
     if (!str_ok(n.name) || !str_ok(n.text) || !str_ok(n.arg)) return false;
     if (n.kind == BtNodeKind::Guard ? n.abort > static_cast<u8>(BtAbort::Both) : n.abort != 0) return false;
@@ -971,6 +975,9 @@ bool bt_node_ok(const BtNode& n, const BtHeader& h, Span<const BtKey> keys) {
         return false;
     }
     case BtNodeKind::Task: return n.key == kBtNoKey || key;
+    case BtNodeKind::Utility: return n.a >= 0.0f;
+    case BtNodeKind::Score: return u32(n.key2) + n.op <= h.consideration_count;
+    case BtNodeKind::Token: return n.arg != kBtNoString && (n.key == kBtNoKey || (key && key->type == BtKeyType::Entity));
     default: return true;
     }
 }
@@ -983,15 +990,18 @@ Result<BtView> BtView::read(Span<const byte> payload) {
     if (!v.header) return Error(Errc::Truncated, "asset.bt.read");
     const BtHeader& h = *v.header;
     if (h.node_count == 0 || h.node_count > kBtMaxNodes || h.key_count > kBtMaxKeys || h.slot_count > kBtMaxSlots ||
-        h.string_bytes > (1u << 20))
+        h.string_bytes > (1u << 20) || h.consideration_count > 0xFFFF)
         return Error(Errc::InvalidArgument, "asset.bt.read");
-    const u64 bytes = sizeof(BtHeader) + u64(h.key_count) * sizeof(BtKey) + u64(h.node_count) * sizeof(BtNode) + h.string_bytes;
+    const u64 bytes = sizeof(BtHeader) + u64(h.key_count) * sizeof(BtKey) + u64(h.node_count) * sizeof(BtNode) +
+                      u64(h.consideration_count) * sizeof(BtConsideration) + h.string_bytes;
     if (bytes > payload.size()) return Error(Errc::Truncated, "asset.bt.read");
     const byte* p = payload.data() + sizeof(BtHeader);
     v.keys = Span<const BtKey>(reinterpret_cast<const BtKey*>(p), h.key_count);
     p += usize(h.key_count) * sizeof(BtKey);
     v.nodes = Span<const BtNode>(reinterpret_cast<const BtNode*>(p), h.node_count);
     p += usize(h.node_count) * sizeof(BtNode);
+    v.considerations = Span<const BtConsideration>(reinterpret_cast<const BtConsideration*>(p), h.consideration_count);
+    p += usize(h.consideration_count) * sizeof(BtConsideration);
     v.strings = Span<const char>(reinterpret_cast<const char*>(p), h.string_bytes);
     if (h.string_bytes > 0 && v.strings[h.string_bytes - 1] != '\0') return Error(Errc::InvalidArgument, "asset.bt.strings");
 
@@ -1004,6 +1014,11 @@ Result<BtView> BtView::read(Span<const byte> payload) {
         used[arr] |= 1u << k.slot;
     }
 
+    for (const BtConsideration& c : v.considerations)
+        if (c.key >= h.key_count || c.curve > BtCurve::Step || c.invert > 1 || !bt_finite(c.from) || !bt_finite(c.to) ||
+            !bt_finite(c.exponent) || !bt_finite(c.weight))
+            return Error(Errc::InvalidArgument, "asset.bt.consideration");
+
     // The shape: every node's subtree nests inside its parent's, children counted, depth bounded.
     if (v.nodes[0].end != h.node_count) return Error(Errc::InvalidArgument, "asset.bt.shape");
     u16 stack[kBtMaxDepth + 1];
@@ -1011,7 +1026,7 @@ Result<BtView> BtView::read(Span<const byte> payload) {
     u32 depth = 0;
     for (u32 i = 0; i < h.node_count; ++i) {
         const BtNode& n = v.nodes[i];
-        if (n.kind > BtNodeKind::Task || n.end <= i || n.end > h.node_count || !bt_node_ok(n, h, v.keys))
+        if (n.kind > BtNodeKind::Token || n.end <= i || n.end > h.node_count || !bt_node_ok(n, h, v.keys))
             return Error(Errc::InvalidArgument, "asset.bt.node");
         while (depth > 0 && i >= stack[depth - 1]) --depth;
         if (depth > 0 && n.end > stack[depth - 1]) return Error(Errc::InvalidArgument, "asset.bt.shape");
@@ -1021,6 +1036,7 @@ Result<BtView> BtView::read(Span<const byte> payload) {
         u32 children = 0;
         for (u32 c = i + 1; c < n.end; c = v.nodes[c].end) {
             if (v.nodes[c].end <= c || v.nodes[c].end > n.end) return Error(Errc::InvalidArgument, "asset.bt.shape");
+            if (n.kind == BtNodeKind::Utility && v.nodes[c].kind != BtNodeKind::Score) return Error(Errc::InvalidArgument, "asset.bt.utility");
             ++children;
         }
         if (children != n.child_count || !bt_children_ok(n.kind, children) || children > kBtMaxChildren)
@@ -1032,14 +1048,16 @@ Result<BtView> BtView::read(Span<const byte> payload) {
     return v;
 }
 
-void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<const BtNode> nodes, Span<const char> strings,
-                         Array<byte>& out) {
+void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<const BtNode> nodes,
+                         Span<const BtConsideration> considerations, Span<const char> strings, Array<byte>& out) {
     BtHeader h = header;
     h.key_count = static_cast<u32>(keys.size());
     h.node_count = static_cast<u32>(nodes.size());
+    h.consideration_count = static_cast<u32>(considerations.size());
     h.string_bytes = static_cast<u32>(strings.size());
     out.clear();
-    out.resize(sizeof(BtHeader) + keys.size() * sizeof(BtKey) + nodes.size() * sizeof(BtNode) + strings.size());
+    out.resize(sizeof(BtHeader) + keys.size() * sizeof(BtKey) + nodes.size() * sizeof(BtNode) +
+               considerations.size() * sizeof(BtConsideration) + strings.size());
     byte* p = out.data();
     std::memcpy(p, &h, sizeof(h));
     p += sizeof(h);
@@ -1047,6 +1065,8 @@ void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<co
     p += keys.size() * sizeof(BtKey);
     if (!nodes.empty()) std::memcpy(p, nodes.data(), nodes.size() * sizeof(BtNode));
     p += nodes.size() * sizeof(BtNode);
+    if (!considerations.empty()) std::memcpy(p, considerations.data(), considerations.size() * sizeof(BtConsideration));
+    p += considerations.size() * sizeof(BtConsideration);
     if (!strings.empty()) std::memcpy(p, strings.data(), strings.size());
 }
 

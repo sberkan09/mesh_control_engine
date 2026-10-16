@@ -1,5 +1,6 @@
-# ai_demo headless contract (cmake -P): the stock player runs the trees from the scene. The bell
-# rings at 6 s, the guard hears it, leaves its patrol and catches the thief; two plays hash the same.
+# ai_demo headless contract (cmake -P): the stock player runs the trees from the scene. The thief
+# sneaks in at 3 s and makes a noise; the guard hears it, leaves its patrol to look, spots the thief
+# with its Perceiver and catches it. Two plays hash the same.
 
 function(run_player out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -ticks 1200 -pack "${PACK}"
@@ -11,8 +12,8 @@ function(run_player out_var)
     if(all MATCHES "does not load|cannot be loaded|is not registered|\\[error\\]")
         message(FATAL_ERROR "the demo logged an error:\n${all}")
     endif()
-    foreach(line "bell \\(entity [0-9]+\\): ringing the alarm" "guard \\(entity [0-9]+\\): heard the alarm"
-                 "guard \\(entity [0-9]+\\): chasing" "guard \\(entity [0-9]+\\): caught the thief")
+    foreach(line "thief \\(entity [0-9]+\\): sneaking in" "guard \\(entity [0-9]+\\): heard something"
+                 "guard \\(entity [0-9]+\\): spotted the thief" "guard \\(entity [0-9]+\\): caught the thief")
         if(NOT all MATCHES "${line}")
             message(FATAL_ERROR "no '${line}' in the log:\n${all}")
         endif()

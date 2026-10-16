@@ -41,7 +41,7 @@ inline constexpr u8 UI_THEME_VERSION = 1;     // CHNK_UITHEME: a UI theme (M-UI-
 inline constexpr u8 TERRAIN_VERSION = 1;      // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1)
 inline constexpr u8 NAVMESH_VERSION = 1;     // CHNK_NAV: the .mcnav bytes as baked (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
 inline constexpr u8 VIDEO_VERSION = 1;       // CHNK_VID: an MPEG-1 program stream + its audio as PCM (M-CINEMA 5)
-inline constexpr u8 BEHAVIOR_TREE_VERSION = 2;  // CHNK_BT: one behavior tree (M-AI 1; mce/kit/ai.h); 2: guard aborts, task arguments (M-AI 2)
+inline constexpr u8 BEHAVIOR_TREE_VERSION = 3;  // CHNK_BT: one behavior tree (M-AI 1; mce/kit/ai.h); 2: guard aborts, task arguments (M-AI 2); 3: utility, score, token nodes, 64-byte nodes (M-AI 4)
 inline constexpr u8 SKELETON2D_VERSION = 1;  // CHNK_SKEL2D: a 2D cut-out skeleton, bones + slots (M-ANIM2D 1)
 inline constexpr u8 SCRIPT_VERSION = 1;      // CHNK_SCRIPT: one Luau script's bytecode (M-SCRIPT 1)
 inline constexpr u8 SKELETON2D_MINOR_ANIMATIONS = 1;  // minor of a CHNK_SKEL2D with animations (M-ANIM2D 2)
@@ -856,7 +856,7 @@ struct TimelineView {
 // ------------------------------------------------------------------ behavior tree (CHNK_BT)
 // One behavior tree (M-AI 1, ADR-0045): its nodes in pre-order and the blackboard keys they read
 // and write. An AiBrain component (kit/ai.h) runs it against the fixed tick. Payload layout:
-//   BtHeader | BtKey[key_count] | BtNode[node_count] | string pool
+//   BtHeader | BtKey[key_count] | BtNode[node_count] | BtConsideration[consideration_count] | string pool
 // Node 0 is the root. A node's children follow it: the first is node i + 1, each next one starts at
 // the previous one's `end`, and the last one's `end` is the parent's. Strings (key and node names,
 // task names) are NUL-terminated offsets into the pool; kBtNoString means none.
@@ -877,7 +877,27 @@ enum class BtNodeKind : u8 {
     Set,       // writes a blackboard key, succeeds
     Emit,      // raises kit::BtSignal `id`, succeeds
     Task,      // a task registered by name (kit::BtRegistry::register_task)
+    Utility,   // M-AI 4, a composite of Score children: runs the best-scoring one (`a`: hysteresis)
+    Score,     // a decorator: its child's utility, `base` (`a`) plus considerations key2 .. key2 + op
+    Token,     // a decorator: runs its child holding a token of the AiTokenPool named by `arg`
 };
+
+// Score: how a consideration maps its key to 0..1. The key's value is first put on 0..1 between
+// `from` and `to` (clamped; a vec3 or entity key is 1 when set, else 0), inverted when `invert` is
+// set, then shaped: Linear as is, Power to the `exponent`, Logistic an S around 0.5 of steepness
+// `exponent`, Step 1 at or above `exponent`, else 0. An unset key counts as 0.
+enum class BtCurve : u8 { Linear, Power, Logistic, Step };
+
+struct BtConsideration {
+    u16 key;
+    BtCurve curve;
+    u8 invert;
+    f32 from;
+    f32 to;
+    f32 exponent;
+    f32 weight;        // the score adds weight x the shaped value
+};
+static_assert(sizeof(BtConsideration) == 20);
 
 enum class BtKeyType : u8 { Bool, Int, Float, Vec3, Entity };
 
@@ -937,9 +957,14 @@ struct BtNode {
     u16 key2;          // Set (Copy): the key copied
     u8 abort;          // Guard: a BtAbort (0 elsewhere)
     u8 pad_;
-    u32 arg;           // Task: its string argument (a clip, a guid, an event, a text), or kBtNoString
+    u32 arg;           // Task, Token: the string argument (a clip, a guid, an event, a pool), or kBtNoString
+    u16 key3;          // Task: a third key (find_point's `from`), or kBtNoKey
+    u16 key4;          // reserved: kBtNoKey
+    f32 b;             // Task: a second number argument
+    f32 c;             // Task: a third number argument
+    u32 flags;         // Task: argument flags
 };
-static_assert(sizeof(BtNode) == 48);
+static_assert(sizeof(BtNode) == 64);
 
 struct BtHeader {
     char name[32];     // NUL-padded
@@ -947,7 +972,8 @@ struct BtHeader {
     u32 key_count;
     u32 slot_count;
     u32 string_bytes;
-    u32 reserved[4];
+    u32 consideration_count;
+    u32 reserved[3];
 };
 static_assert(sizeof(BtHeader) == 64);
 
@@ -955,14 +981,19 @@ struct BtView {
     const BtHeader* header = nullptr;
     Span<const BtKey> keys;
     Span<const BtNode> nodes;
+    Span<const BtConsideration> considerations;
     Span<const char> strings;
     StringView name() const;
     StringView string(u32 offset) const;  // empty for kBtNoString
     // Checks the tree's shape too: child links inside the array, depth, slots and key types.
     static Result<BtView> read(Span<const byte> payload);
 };
-void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<const BtNode> nodes, Span<const char> strings,
-                         Array<byte>& out);
+void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<const BtNode> nodes,
+                         Span<const BtConsideration> considerations, Span<const char> strings, Array<byte>& out);
+inline void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<const BtNode> nodes, Span<const char> strings,
+                                Array<byte>& out) {
+    write_behavior_tree(header, keys, nodes, Span<const BtConsideration>(), strings, out);
+}
 
 // ------------------------------------------------------------------ 2D skeleton (CHNK_SKEL2D)
 // A 2D cut-out skeleton (M-ANIM2D 1): a bone tree and the slots (textured quads) drawn on its

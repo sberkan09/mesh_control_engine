@@ -1189,6 +1189,7 @@ u32 World3D::create_vehicle(const VehicleDesc3D& d) {
     const JPH::Vec3 up = to_jph(d.up), forward = to_jph(d.forward);
     if (up.LengthSq() < 1e-8f || forward.LengthSq() < 1e-8f || std::fabs(up.Normalized().Dot(forward.Normalized())) > 0.01f) return 0;
     if (!positive(d.engine_torque) || !positive(d.max_rpm) || d.min_rpm < 0.0f || d.min_rpm >= d.max_rpm) return 0;
+    if (!positive(d.shift_down_rpm) || d.shift_down_rpm >= d.shift_up_rpm) return 0;
 
     JPH::VehicleConstraintSettings vs;
     vs.mUp = up.Normalized();
@@ -1217,11 +1218,24 @@ u32 World3D::create_vehicle(const VehicleDesc3D& d) {
         for (JPH::LinearCurve::Point& p : ws->mLateralFriction.mPoints) p.mY *= wd.grip;
         vs.mWheels.push_back(ws);
     }
+    const i32 wheel_total = static_cast<i32>(d.wheels.size());
+    for (const AntiRollBar3D& bar : d.anti_roll_bars) {
+        if (bar.left < 0 || bar.left >= wheel_total || bar.right < 0 || bar.right >= wheel_total || bar.left == bar.right ||
+            bar.stiffness < 0.0f)
+            return 0;
+        JPH::VehicleAntiRollBar ab;
+        ab.mLeftWheel = bar.left;
+        ab.mRightWheel = bar.right;
+        ab.mStiffness = bar.stiffness;
+        vs.mAntiRollBars.push_back(ab);
+    }
     // Held by a Ref so the refusals below (bad gears, reverse gear, axles) release it.
     const JPH::Ref<JPH::WheeledVehicleControllerSettings> cs = new JPH::WheeledVehicleControllerSettings();
     cs->mEngine.mMaxTorque = d.engine_torque;
     cs->mEngine.mMinRPM = d.min_rpm;
     cs->mEngine.mMaxRPM = d.max_rpm;
+    cs->mTransmission.mShiftUpRPM = d.shift_up_rpm;
+    cs->mTransmission.mShiftDownRPM = d.shift_down_rpm;
     if (!d.gears.empty()) {
         cs->mTransmission.mGearRatios.clear();
         for (const f32 g : d.gears) {
@@ -1319,6 +1333,11 @@ bool World3D::vehicle_state(u32 vehicle, VehicleState3D& out, Span<WheelState3D>
         if (ws.contact) {
             JPH::BodyLockRead lock(w.system.GetBodyLockInterfaceNoLock(), wheel->GetContactBodyID());
             if (lock.Succeeded() && lock.GetBody().GetUserData() != 0) ws.ground = unpack(lock.GetBody().GetUserData());
+        }
+        if (ws.contact) {
+            const auto* wv = static_cast<const JPH::WheelWV*>(wheel);
+            ws.longitudinal_slip = wv->mLongitudinalSlip;
+            ws.lateral_slip = wv->mLateralSlip;
         }
         ws.suspension = wheel->GetSuspensionLength();
         ws.spin = wheel->GetAngularVelocity();

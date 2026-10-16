@@ -1,10 +1,12 @@
 #include "mce/kit/ai.h"
 
+#include <cmath>
 #include <cstring>
 
 #include "kit3d_internal.h"
 #include "mce/ecs/transform.h"
 #include "mce/hash.h"
+#include "mce/kit/perception.h"
 #include "mce/log.h"
 
 namespace mce::kit {
@@ -53,6 +55,77 @@ void write_defaults(const BtRegistry::Def& d, Blackboard& bb) {
     }
 }
 
+// A consideration's shaped value (asset::BtCurve) for the key's current value.
+f32 consider(World& w, const Blackboard* bb, const BtRegistry::Def& d, const asset::BtConsideration& c) {
+    const BtKey& k = d.keys[c.key];
+    f32 t = 0.0f;
+    if (key_set(w, bb, k)) {
+        if (numeric(k.type)) {
+            const f32 span = c.to - c.from;
+            t = span != 0.0f ? (bb->numbers[k.slot] - c.from) / span : (bb->numbers[k.slot] >= c.from ? 1.0f : 0.0f);
+            t = t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t;
+        } else {
+            t = 1.0f;
+        }
+    }
+    if (c.invert) t = 1.0f - t;
+    switch (c.curve) {
+    case asset::BtCurve::Linear: return t;
+    case asset::BtCurve::Power: return std::pow(t, c.exponent);
+    case asset::BtCurve::Logistic: return 1.0f / (1.0f + std::exp(-c.exponent * (t - 0.5f)));
+    case asset::BtCurve::Step: return t >= c.exponent ? 1.0f : 0.0f;
+    }
+    return t;
+}
+
+f32 score_of(World& w, const Blackboard* bb, const BtRegistry::Def& d, const BtNode& n) {
+    f32 s = n.a;
+    for (u32 i = n.key2; i < u32(n.key2) + n.op && i < d.considerations.size(); ++i)
+        s += d.considerations[i].weight * consider(w, bb, d, d.considerations[i]);
+    return s;
+}
+
+// The pool a token node asks: on the entity of its key, else the first with its name.
+AiTokenPool* pool_of(World& w, const Blackboard* bb, const BtRegistry::Def& d, const BtNode& n) {
+    const StringView name = d.string(n.arg);
+    if (n.key != asset::kBtNoKey) {
+        const BtKey& k = d.keys[n.key];
+        if (!key_set(w, bb, k)) return nullptr;
+        AiTokenPool* p = w.try_get_mut<AiTokenPool>(bb->entities[k.slot]);
+        return p && p->name.view() == name ? p : nullptr;
+    }
+    AiTokenPool* found = nullptr;
+    w.query<AiTokenPool>().each([&](Entity, AiTokenPool& p) {
+        if (!found && p.name.view() == name) found = &p;
+    });
+    return found;
+}
+
+bool take_token(World& w, AiTokenPool& p, Entity e) {
+    u32 kept = 0;
+    bool holding = false;
+    for (u32 i = 0; i < p.held && i < AiTokenPool::kMaxHolders; ++i) {
+        if (!w.alive(p.holders[i])) continue;
+        holding |= p.holders[i] == e;
+        p.holders[kept++] = p.holders[i];
+    }
+    for (u32 i = kept; i < AiTokenPool::kMaxHolders; ++i) p.holders[i] = Entity{};
+    p.held = kept;
+    if (holding) return true;
+    const u32 cap = p.capacity < AiTokenPool::kMaxHolders ? p.capacity : AiTokenPool::kMaxHolders;
+    if (p.held >= cap) return false;
+    p.holders[p.held++] = e;
+    return true;
+}
+
+void give_token(AiTokenPool& p, Entity e) {
+    u32 kept = 0;
+    for (u32 i = 0; i < p.held && i < AiTokenPool::kMaxHolders; ++i)
+        if (p.holders[i] != e) p.holders[kept++] = p.holders[i];
+    for (u32 i = kept; i < AiTokenPool::kMaxHolders; ++i) p.holders[i] = Entity{};
+    p.held = kept;
+}
+
 struct Run {
     Frame& f;
     World& w;
@@ -86,11 +159,14 @@ struct Run {
         return r == BtStatus::Idle ? BtStatus::Failure : r;
     }
 
-    // Stops node `i`'s running descendants (and `i` itself): tasks hear it once, statuses go Idle.
+    // Stops node `i`'s running descendants (and `i` itself): tasks hear it once, tokens go back,
+    // statuses go Idle.
     void halt(u32 i) {
         for (u32 j = i; j < node(i).end; ++j) {
             if (status(j) != BtStatus::Running) continue;
             if (node(j).kind == BtNodeKind::Task) call_task(j, false, true);
+            if (node(j).kind == BtNodeKind::Token)
+                if (AiTokenPool* p = pool_of(w, bb, d, node(j))) give_token(*p, e);
             b.nodes[j] = pack(BtStatus::Idle, 0);
         }
     }
@@ -256,6 +332,41 @@ struct Run {
         case BtNodeKind::Set: apply_set(n); return BtStatus::Success;
         case BtNodeKind::Emit: f.events().push(BtSignal{StringId(n.id), e}); return BtStatus::Success;
         case BtNodeKind::Task: return call_task(i, entering, false);
+        case BtNodeKind::Utility: {
+            // Every child's score; the best (the first on a tie) runs, and a running one is
+            // replaced only by a score above its own plus the hysteresis.
+            u32 best = 0;
+            f32 best_score = 0.0f, scores[asset::kBtMaxChildren] = {};
+            for (u32 k = 0, c = i + 1; k < n.child_count; ++k, c = node(c).end) {
+                scores[k] = score_of(w, bb, d, node(c));
+                if (k == 0 || scores[k] > best_score) {
+                    best = k;
+                    best_score = scores[k];
+                }
+            }
+            u32 cur = cursor_of(b.nodes[i]);
+            const bool running = !entering && cur < n.child_count && status(child(i, cur)) == BtStatus::Running;
+            if (running) {
+                if (best != cur && best_score > scores[cur] + n.a) {
+                    halt(child(i, cur));
+                    cur = best;
+                }
+            } else {
+                if (best_score <= 0.0f) return BtStatus::Failure;
+                cur = best;
+            }
+            b.nodes[i] = pack(BtStatus::Running, cur);
+            return tick(child(i, cur));
+        }
+        case BtNodeKind::Score: return tick(i + 1);
+        case BtNodeKind::Token: {
+            AiTokenPool* p = pool_of(w, bb, d, n);
+            if (entering && (!p || !take_token(w, *p, e))) return BtStatus::Failure;
+            const BtStatus r = tick(i + 1);
+            if (r != BtStatus::Running)
+                if (AiTokenPool* q = pool_of(w, bb, d, n)) give_token(*q, e);
+            return r;
+        }
         }
         return BtStatus::Failure;
     }
@@ -308,6 +419,8 @@ Result<void> BtRegistry::copy(Def& d, asset::Guid guid, Span<const byte> payload
     d.strings.clear();
     for (const BtKey& k : v.keys) d.keys.push_back(k);
     for (const BtNode& n : v.nodes) d.nodes.push_back(n);
+    d.considerations.clear();
+    for (const asset::BtConsideration& c : v.considerations) d.considerations.push_back(c);
     for (char c : v.strings) d.strings.push_back(c);
     return {};
 }
@@ -446,16 +559,28 @@ void install_ai(World& world, asset::AssetSystem* assets) {
         r->set_assets(assets);
         return;
     }
-    world.register_components<AiBrain, Blackboard>();
+    install_perception(world);  // first: "ai_perception" runs ahead of "ai_brains"
+    world.register_components<AiBrain, Blackboard, AiTokenPool>();
     world.register_event<BtSignal>(Phase::FixedUpdate_Pre);
     world.set_resource(BtRegistry(assets));
     world.add_system(Phase::FixedUpdate_Pre, "ai_brains", &ai_brains);
     register_stock_tasks(world.resource<BtRegistry>());
 }
 
-bool bt_key_position(const BtTaskCall& call, math::vec3& out, Entity* target) {
-    if (call.node.key >= call.tree.keys.size() || !call.blackboard) return false;
-    const BtKey& k = call.tree.keys[call.node.key];
+bool bt_key_position(const BtTaskCall& call, math::vec3& out, Entity* target) { return bt_key_position(call, call.node.key, out, target); }
+
+bool bt_utility_scores(World& w, Entity e, u32 node, Array<f32>& out) {
+    out.clear();
+    const BtRegistry::Def* d = def_of(w, e);
+    if (!d || node >= d->nodes.size() || d->nodes[node].kind != BtNodeKind::Utility) return false;
+    const Blackboard* bb = w.try_get<Blackboard>(e);
+    for (u32 k = 0, c = node + 1; k < d->nodes[node].child_count; ++k, c = d->nodes[c].end) out.push_back(score_of(w, bb, *d, d->nodes[c]));
+    return true;
+}
+
+bool bt_key_position(const BtTaskCall& call, u16 key, math::vec3& out, Entity* target) {
+    if (key >= call.tree.keys.size() || !call.blackboard) return false;
+    const BtKey& k = call.tree.keys[key];
     World& w = call.frame.world();
     if (!key_set(w, call.blackboard, k)) return false;
     if (k.type == BtKeyType::Vec3) {

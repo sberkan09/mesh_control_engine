@@ -310,11 +310,27 @@ Front, All).
   tick, steering, spinning and following the suspension.
 - **What it reports.** `speed` (m/s forward, negative reversing), `rpm`, `gear` (negative in
   reverse) and `wheels_on_ground`: enough for a speedometer, an engine sound's pitch or "airborne".
+- **Handling (M-MOVE3D).** Each is off by default. `anti_roll` (N/m) puts a bar across each axle
+  that keeps the body level in corners; keep it under the springs' own rate (about 25,000 N/m for a
+  1,500 kg car at 1.5 Hz) or the car gets twitchy. `downforce` presses the car onto its wheels with
+  `downforce` × speed² newtons. `gears` sets the number of forward gears, spread evenly from
+  `first_gear` to `top_gear` (0 keeps the stock five), and the automatic gearbox shifts up above
+  `shift_up_rpm` and down below `shift_down_rpm`.
+- **Skids.** With `skid_slip` above 0, a grounded wheel going faster than 3 m/s skids when its
+  sideways slip (rad) or its lock under braking passes it, and stops at 70% of it. Each start sends a
+  `Skid3D` event (vehicle, wheel, slip, position), and `ParticleBurst`, `PlaySfx` or `ShakeTrigger`
+  with `on: Skid` fire on it. `skidding` holds a bit per wheel (fl, fr, rl, rr) and `lateral_slip`
+  the largest sideways slip.
+- **Self-righting.** `self_right = 1` puts a car that has stayed tilted past about 53° (or upside
+  down) and nearly still for `right_after` seconds back on its wheels, a metre up and facing the way
+  it did. `rightings` counts the times.
 
-Changing a setting other than the driver's inputs and the wheel entities rebuilds the vehicle. The
+Changing a setting other than the driver's inputs, the wheel entities, `downforce`, `skid_slip` and
+the self-righting rebuilds the vehicle. The
 wheels find the ground with cylinder casts against whatever the body's layer collides with. From
 code, `physics::World3D` has the same vehicles with any number of wheels and axles
-(`create_vehicle(VehicleDesc3D)`, `set_vehicle_input`, `vehicle_state`); the replay hash covers them.
+(`create_vehicle(VehicleDesc3D)` with `anti_roll_bars` and shift points, `set_vehicle_input`,
+`vehicle_state` with each wheel's `longitudinal_slip` and `lateral_slip`); the replay hash covers them.
 
 ## 9.10 Configuration
 
