@@ -605,6 +605,66 @@ Result<TimelineView> TimelineView::read(Span<const byte> payload) {
     return v;
 }
 
+// ------------------------------------------------------------------ 2D skeleton
+
+StringView Skeleton2DView::name() const {
+    usize n = 0;
+    while (n < sizeof(header->name) && header->name[n] != '\0') ++n;
+    return StringView(header->name, n);
+}
+
+StringView Skeleton2DView::string(u32 offset) const {
+    if (offset >= strings.size()) return {};
+    usize n = 0;
+    while (offset + n < strings.size() && strings[offset + n] != '\0') ++n;
+    return StringView(strings.data() + offset, n);
+}
+
+i32 Skeleton2DView::find_bone(StringView n) const {
+    for (usize i = 0; i < bones.size(); ++i)
+        if (string(bones[i].name) == n) return static_cast<i32>(i);
+    return -1;
+}
+
+Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
+    Skeleton2DView v;
+    v.header = header_of<Skeleton2DHeader>(payload);
+    if (!v.header) return Error(Errc::Truncated, "asset.skeleton2d.read");
+    const Skeleton2DHeader& h = *v.header;
+    if (h.bone_count == 0 || h.bone_count > kSkeleton2DMaxBones || h.slot_count > kSkeleton2DMaxSlots ||
+        h.string_bytes > (1u << 20))
+        return Error(Errc::InvalidArgument, "asset.skeleton2d.read");
+    const u64 bytes = sizeof(Skeleton2DHeader) + u64(h.bone_count) * sizeof(Skeleton2DBone) +
+                      u64(h.slot_count) * sizeof(Skeleton2DSlot) + h.string_bytes;
+    if (bytes > payload.size()) return Error(Errc::Truncated, "asset.skeleton2d.read");
+    const byte* p = payload.data() + sizeof(Skeleton2DHeader);
+    v.bones = Span<const Skeleton2DBone>(reinterpret_cast<const Skeleton2DBone*>(p), h.bone_count);
+    p += usize(h.bone_count) * sizeof(Skeleton2DBone);
+    v.slots = Span<const Skeleton2DSlot>(reinterpret_cast<const Skeleton2DSlot*>(p), h.slot_count);
+    p += usize(h.slot_count) * sizeof(Skeleton2DSlot);
+    v.strings = Span<const char>(reinterpret_cast<const char*>(p), h.string_bytes);
+    if (h.string_bytes == 0 || v.strings[h.string_bytes - 1] != '\0') return Error(Errc::InvalidArgument, "asset.skeleton2d.strings");
+    auto finite = [](const f32* f, usize n) {
+        for (usize i = 0; i < n; ++i)
+            if (!std::isfinite(f[i])) return false;
+        return true;
+    };
+    for (u32 i = 0; i < h.bone_count; ++i) {
+        const Skeleton2DBone& b = v.bones[i];
+        const f32 nums[] = {b.x, b.y, b.rotation, b.scale_x, b.scale_y, b.length};
+        // Parents first: a bone's parent has a lower index, so one pass poses the tree.
+        if (b.name >= h.string_bytes || (b.parent != kSkeleton2DNoParent && b.parent >= i) || (i == 0 && b.parent != kSkeleton2DNoParent) ||
+            !finite(nums, 6))
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.bone");
+    }
+    for (const Skeleton2DSlot& s : v.slots) {
+        if (s.name >= h.string_bytes || s.bone >= h.bone_count || s.kind != Skeleton2DSlotKind::Quad || !finite(s.rect, 4) ||
+            !finite(s.size, 2) || !finite(s.pivot, 2) || !finite(s.offset, 2) || !finite(&s.rotation, 1) || !finite(s.tint, 4))
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.slot");
+    }
+    return v;
+}
+
 // ------------------------------------------------------------------ behavior tree
 
 StringView BtView::name() const {
