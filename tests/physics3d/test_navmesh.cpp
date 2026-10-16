@@ -4,8 +4,10 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
+#include "mce/hash.h"
 #include "mce/physics3d/navmesh3d.h"
 
 using namespace mce;
@@ -55,6 +57,169 @@ f32 max_z(const Array<vec3>& p) {
 }
 
 }  // namespace
+
+namespace {
+
+// A blob whose trailing hash is made right again after an edit: damage that is not an accident.
+void reseal(Array<byte>& blob) {
+    const u64 h = fnv1a64(blob.data(), blob.size() - 8);
+    std::memcpy(blob.data() + blob.size() - 8, &h, 8);
+}
+
+// Offset of the first tile layer's header (Detour's 'DTLR' magic, little-endian) inside a bake.
+usize first_layer(const Array<byte>& blob) {
+    const byte magic[4] = {byte('R'), byte('L'), byte('T'), byte('D')};
+    for (usize i = 8; i + 4 <= blob.size(); ++i)
+        if (std::memcmp(blob.data() + i, magic, 4) == 0) return i;
+    return 0;
+}
+
+// Decodes PackBits (the bake's layer compression) after Detour's layer header.
+bool unpack(const byte* in, usize size, Array<byte>& out) {
+    usize i = 0;
+    while (i < size) {
+        const unsigned c = static_cast<unsigned>(in[i++]);
+        if (c < 128) {
+            if (i + c + 1 > size) return false;
+            for (unsigned k = 0; k <= c; ++k) out.push_back(in[i + k]);
+            i += c + 1;
+        } else if (c > 128) {
+            if (i >= size) return false;
+            for (unsigned k = 0; k < 257 - c; ++k) out.push_back(in[i]);
+            ++i;
+        }
+    }
+    return true;
+}
+
+// The blob with its first layer's grid replaced by `edit(grid)` (heights, areas, cons, regs; width x height each),
+// stored as literal PackBits runs, and the hash made right again.
+Array<byte> with_edited_layer(const Array<byte>& blob, void (*edit)(Array<byte>& grid, unsigned w, unsigned h)) {
+    constexpr usize kLayerHeader = 56;  // the tile layer header, aligned to 4
+    const usize at = first_layer(blob);
+    u32 old_size = 0;
+    std::memcpy(&old_size, blob.data() + at - 4, 4);
+    Array<byte> grid;
+    REQUIRE(unpack(blob.data() + at + kLayerHeader, old_size - kLayerHeader, grid));
+    const unsigned w = static_cast<unsigned>(blob[at + 48]), h = static_cast<unsigned>(blob[at + 49]);
+    REQUIRE(grid.size() >= usize(w) * h * 3);  // heights, areas, cons (the regions are rebuilt at load)
+    edit(grid, w, h);
+    Array<byte> layer;
+    for (usize i = 0; i < kLayerHeader; ++i) layer.push_back(blob[at + i]);
+    for (usize i = 0; i < grid.size();) {
+        const usize n = grid.size() - i < 128 ? grid.size() - i : 128;
+        layer.push_back(static_cast<byte>(n - 1));
+        for (usize k = 0; k < n; ++k) layer.push_back(grid[i + k]);
+        i += n;
+    }
+    const usize old_padded = (old_size + 3) & ~usize(3);
+    Array<byte> out;
+    for (usize i = 0; i < at - 4; ++i) out.push_back(blob[i]);
+    const u32 size = static_cast<u32>(layer.size());
+    for (usize i = 0; i < 4; ++i) out.push_back(static_cast<byte>((size >> (8 * i)) & 0xFF));
+    for (byte b : layer) out.push_back(b);
+    while (out.size() % 4) out.push_back(byte{0});
+    for (usize i = at + old_padded; i < blob.size(); ++i) out.push_back(blob[i]);
+    reseal(out);
+    return out;
+}
+
+// The bytes of a version-1 file: the same blob without the trailing hash, marked version 1.
+Array<byte> as_version_1(const Array<byte>& blob) {
+    Array<byte> out;
+    REQUIRE(blob.size() > 8);
+    for (usize i = 0; i + 8 < blob.size(); ++i) out.push_back(blob[i]);
+    out[4] = byte{1};
+    return out;
+}
+
+void refused(const Array<byte>& blob) {
+    CHECK_FALSE(navmesh_blob_valid(blob.span()));
+    NavMesh3D nav;
+    CHECK_FALSE(nav.load(blob.span()));
+    CHECK_FALSE(nav.loaded());
+}
+
+}  // namespace
+
+TEST_CASE("navmesh3d: a damaged bake is refused, not handed to Detour (M-FUZZ 2b)") {
+    // Found by test_fuzz: a mutated layer byte passed the header and size checks, and Detour's contour
+    // builder then divided by zero. The trailing hash catches damage; the layer checks catch an edit that was
+    // hashed again.
+    Array<byte> a;
+    REQUIRE(bake_navmesh(level(), settings(), a));
+    REQUIRE(navmesh_blob_valid(a.span()));
+    const usize layer_bytes_from = a.size() / 2;  // well inside the compressed tile layers
+    for (usize at : {layer_bytes_from, layer_bytes_from + 1, a.size() - 9, a.size() - 8, a.size() - 1, usize(60)}) {
+        Array<byte> bad = a;
+        bad[at] = static_cast<byte>(static_cast<unsigned>(bad[at]) ^ 0x5Au);
+        refused(bad);
+    }
+    // A version-1 file (no trailer) is refused too: re-bake it.
+    refused(as_version_1(a));
+
+    // A layer edit with the hash made right again must still be refused.
+    const usize L = first_layer(a);
+    REQUIRE(L > 8);
+    const auto patched = [&](usize off, byte v) {
+        Array<byte> b = a;
+        b[L + off] = v;
+        reseal(b);
+        return b;
+    };
+    refused(patched(0, byte{0}));    // magic
+    refused(patched(4, byte{9}));    // version
+    refused(patched(8, byte{200}));  // tx outside the tile grid
+    refused(patched(12, byte{200}));  // ty
+    refused(patched(48, byte{0}));   // width 0
+    refused(patched(51, byte{255}));  // maxx beyond the width
+
+    // The grid itself: a connection bit toward a cell outside the layer (the contour walker reads past its
+    // region array), and an area beyond the ones the engine has.
+    CHECK(navmesh_blob_valid(with_edited_layer(a, [](Array<byte>&, unsigned, unsigned) {}).span()));  // the helper is faithful
+    refused(with_edited_layer(a, [](Array<byte>& g, unsigned w, unsigned h) {
+        g[usize(w) * h * 2] = byte{0x01};  // cons of cell (0, 0): connected toward x - 1
+    }));
+    refused(with_edited_layer(a, [](Array<byte>& g, unsigned w, unsigned h) {
+        g[usize(w) * h + usize(w) * h / 2] = byte{200};  // an area id
+    }));
+    // A connection nobody reciprocates, and one that joins a cell to a non-walkable one: the contour walk
+    // follows them while the region builder ignores them.
+    refused(with_edited_layer(a, [](Array<byte>& g, unsigned w, unsigned h) {
+        const usize n = usize(w) * h;
+        for (usize i = 0; i < n; ++i) {
+            if (!(static_cast<unsigned>(g[2 * n + i]) & 1u) || i % w == 0) continue;  // connected toward x - 1
+            g[2 * n + i - 1] = static_cast<byte>(static_cast<unsigned>(g[2 * n + i - 1]) & ~4u);  // its answer
+            return;
+        }
+    }));
+    refused(with_edited_layer(a, [](Array<byte>& g, unsigned w, unsigned h) {
+        const usize n = usize(w) * h;
+        for (usize i = 0; i < n; ++i) {
+            if (!(static_cast<unsigned>(g[2 * n + i]) & 1u) || i % w == 0) continue;
+            g[n + i - 1] = byte{0};  // the neighbour is no longer walkable
+            return;
+        }
+    }));
+}
+
+TEST_CASE("navmesh3d: the committed sample bake loads, and a version-1 file asks for a re-bake") {
+    Array<byte> blob;
+    {
+        std::FILE* f = std::fopen(MCE_NAV_SAMPLE, "rb");
+        REQUIRE(f);
+        byte buf[4096];
+        usize n;
+        while ((n = std::fread(buf, 1, sizeof buf, f)) > 0)
+            for (usize i = 0; i < n; ++i) blob.push_back(buf[i]);
+        std::fclose(f);
+    }
+    NavMesh3D nav;
+    REQUIRE(nav.load(blob.span()));
+    CHECK(nav.loaded());
+    CHECK_FALSE(nav.load(as_version_1(blob).span()));
+    CHECK_FALSE(nav.loaded());
+}
 
 TEST_CASE("navmesh3d: the bake is byte-identical run to run and validates") {
     const NavGeometry3D g = level();
