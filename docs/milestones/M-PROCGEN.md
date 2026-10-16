@@ -21,7 +21,7 @@ dungeon editor.
 
 | # | Step | Linear | Model | State |
 |---|---|---|---|---|
-| 1 | `mce/kit/procgen.h`: streams, BSP rooms, caves, drunkard's walk, noise threshold; connectivity | SBA-171 | Sonnet | not started |
+| 1 | `mce/kit/procgen.h`: streams, BSP rooms, caves, drunkard's walk, noise threshold; connectivity | SBA-171 | Sonnet | done |
 | 2 | Wave function collapse: adjacency from an example tilemap or rules, pinned cells, bounded restarts | SBA-172 | Sonnet | not started |
 | 3 | `ProcLevel`: the stock hosts build tilemap, colliders and markers from a seed; also from Luau | SBA-173 | Sonnet | not started |
 | 4 | MCP `procgen_run`, the `reachable` assertion in `.mctest`, user guide | SBA-174 | Sonnet | not started |
@@ -32,3 +32,17 @@ dungeon editor.
 - Connectivity holds on every tested seed (a thousand per generator in the unit test).
 - A project without `ProcLevel` builds and hashes as today.
 - `local_ci.sh` green on every step.
+
+## Step 1 as built
+
+- `mce/kit/procgen.h` and `src/procgen.cpp` in `mce_gameplay_kit`: `Rng` with named child streams, `ProcGrid`,
+  `generate_rooms`, `generate_caves`, `generate_walk`, `generate_noise` (`docs/engine/kit.md`). No float and no
+  unordered container anywhere: noise is fixed point, the region search is a breadth-first queue.
+- Every generator ends in the same `finalize`: wall border, keep the largest 4-connected floor region (the
+  first found on a tie), check `min_floor_percent`, start from the `"start"` stream, exit = the cell farthest
+  from the start by steps (smallest index on a tie). A missed target retries on the next attempt's stream,
+  up to 16 times, then fails with a named stage.
+- `tests/kit/test_procgen.cpp`: same bytes twice, a thousand seeds per generator all connected, sizes 8 to 256,
+  the exit is the farthest cell, parameters shape the level, stream independence, ASCII, bad parameters, and one
+  pinned hash per generator.
+- Known limit: caves below about 16 x 16 can fail with the named error (too little floor survives smoothing).

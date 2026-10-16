@@ -28,6 +28,7 @@ mce_add_test(test_kit UMBRELLA
         test_vehicles3d.cpp
         test_particles.cpp
         test_pathfinding.cpp
+        test_procgen.cpp
         test_sequence.cpp
         test_skeleton2d.cpp
         test_skeleton2d_anim.cpp
