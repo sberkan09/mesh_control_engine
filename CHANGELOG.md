@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Compressed audio clips, M-AUDIO2 step 1 (SBA-118, ADR-0044). `.ogg` files import (importer `ogg`), and a
+  `.wav` sidecar's `"compress": "vorbis"` stores the clip as Ogg Vorbis, about a tenth of float PCM
+  (`"quality"`, default 0.4). A compressed clip decodes when it loads; on the Music bus its stream pages decode
+  as they fill. libvorbis encodes in the cook, stb_vorbis decodes at run time. The WAV importer's version is
+  now 2, so clips re-cook once.
 - Timelines over MCP and the cinema demo, M-CINEMA step 6 (SBA-81): `timeline_create`, `timeline_add_track` and
   `timeline_add_key` write `.mctimeline` files checked by the cook, and `timeline_preview` draws the scene with every
   timeline held at a given second (the player's `-timeline.scrub`). `samples/cinema_demo` opens on a splash film and

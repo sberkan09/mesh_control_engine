@@ -7,9 +7,14 @@
 //
 // Page p always holds stream-timeline frames [p·F, (p+1)·F), F = kStreamPageFrames, so the
 // timeline → source mapping is a pure function — loop wrap-around is bit-exact by construction.
+//
+// An encoded source (ClipPayload::encoded, Ogg Vorbis, M-AUDIO2 1) decodes on the filler as the
+// pages fill: runs of consecutive source frames are read in one go, and the reader seeks only when
+// the mapped frame jumps (the loop wrap, or pages the mixer skipped). The audio thread never decodes.
 
 #include <atomic>
 
+#include "mce/asset/vorbis.h"
 #include "mce/audio/audio.h"
 
 namespace mce::audio::detail {
@@ -24,8 +29,12 @@ struct StreamRing {
     ClipPayload source;
     bool loop = false;
     u64 fill_page = 0;
+    asset::VorbisReader decoder;  // open while `source` is encoded
+    u64 decode_at = 0;            // source frame the decoder reads next
+    f32 decoded[kStreamPageFrames * 2];
 
-    // Main thread, while no voice reads this ring: rewind to the start of `src` and prime it.
+    // Main thread, while no voice reads this ring: rewind to the start of `src` and prime it. An
+    // encoded `src` that does not open plays as silence (logged).
     void reset(const ClipPayload& src, bool looping);
     // Fills pages ahead of the mixer, at most `max_pages`. Returns pages written.
     u32 pump(u32 max_pages = kStreamPages);

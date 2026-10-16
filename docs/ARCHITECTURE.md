@@ -539,7 +539,7 @@ nlohmann/json and GitHub Actions; none of them was adopted.*
 | Math | `mce::math` scalar-first | DirectXMath jun2026 as test oracle only (`test_math_oracle`) | **hand-written** |
 | 2D physics | `mce_physics2d` (sequential impulse) | Box2D v3.1.1 as test-time oracle only (ADR-0016, Box2D wall) | **hand-written** |
 | 3D physics | Jolt (ADR-0003), behind `mce_physics3d` | v5.6.0 via FetchContent (JPH and Jolt link walls) | embedded |
-| Audio | `mce_audio` mixer on the SDL3 callback | — | **hand-written** |
+| Audio | `mce_audio` mixer on the SDL3 callback; Ogg Vorbis clips (ADR-0044) | stb_vorbis (stb @2c980bb) decodes, in `mce_asset` only (stb_vorbis wall); libvorbis v1.3.7 + libogg v1.3.5 encode, cook-only (libvorbis wall) | **hand-written** mixer |
 | Video | `render::VideoDecoder` over pl_mpeg (ADR-0043), `kit::VideoPlayer` | pl_mpeg @c871f2b (MIT, MPEG-1 + MP2), in `mce_render` only (pl_mpeg wall) | embedded |
 | Reflection | `mce_refl` | — | **hand-written** |
 | Asset pipeline | `mce_asset` + `mce_asset_cook` + `mce_cook` | cook-only: stb @2c980bb (images, stb_truetype fonts), meshoptimizer v0.25, glslang; JSON is the hand-written codec `mce/cook/json.h` (errors carry line and column) | **hand-written** |

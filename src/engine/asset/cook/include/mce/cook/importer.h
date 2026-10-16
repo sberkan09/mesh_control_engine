@@ -121,6 +121,7 @@ private:
 // Built-in importer factories.
 mem::UniquePtr<IImporter> make_texture_importer();
 mem::UniquePtr<IImporter> make_wav_importer();
+mem::UniquePtr<IImporter> make_ogg_importer();
 mem::UniquePtr<IImporter> make_video_importer();  // .mpg -> CHNK_VID (M-CINEMA 5)
 mem::UniquePtr<IImporter> make_font_importer();
 mem::UniquePtr<IImporter> make_material_importer();

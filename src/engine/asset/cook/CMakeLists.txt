@@ -43,6 +43,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/tilemap_importer.cpp
         src/ui_importer.cpp
         src/video_importer.cpp
+        src/vorbis_encode.cpp
         src/wav_importer.cpp
     PUBLIC_DEPS
         mce::mce_asset
@@ -55,5 +56,6 @@ mce_add_library(mce_asset_cook UMBRELLA
         mce_stb
         mce_meshopt
         mce_astcenc
+        mce_vorbisenc
         glslang::glslang
         glslang::glslang-default-resource-limits)

@@ -427,6 +427,7 @@ constexpr Feature kFeatures[] = {
     {"gameplay", "game rules", "code", "the game module's systems (module_build reloads them)"},
     {"audio", "music and ambience", "data", "AudioSource"},
     {"audio", "one-shot sound effects", "data", "SfxTrigger"},
+    {"audio", "compressed clips (Ogg Vorbis)", "asset", ".ogg, or \"compress\": \"vorbis\" in a .wav sidecar"},
     {"input", "actions, bindings, touch controls", "asset", ".mcinput"},
     {"ui", "HUD and menus", "code", "mce::ui from code; .mcui is M-UI-DATA"},
     {"3D", "meshes, materials, lights, sky", "data", "the 3D kit's components, glTF, .mcmat, .mcenv"},
