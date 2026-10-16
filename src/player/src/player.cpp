@@ -583,6 +583,8 @@ public:
             if (ui_fresh_) carry_ui_edges(pending, ui_actions_);
             ui_fresh_ = true;
         }
+        // The pause snapshot (AudioSnapshot while_paused) fades in while no tick runs (M-AUDIO2 4).
+        if (paused_) audio::update_mix(world_, static_cast<f32>(t.dt), true);
         if (paused_ || ad_paused_) return;  // sim_held() mirrors these two tests and the next
         // -capture_tick(s): the sim holds on the tick for the capture frame, however many ticks a slow
         // frame (Metal validation, a cold start) would otherwise catch up past it.

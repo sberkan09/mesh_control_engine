@@ -6,7 +6,7 @@
 //   mce_relay -selftest 1                       a native and a WebSocket client meet in a room, then exit
 //
 // Every -stats seconds it logs clients, rooms and traffic. It holds no game state: a room lives as
-// long as its host is connected.
+// long as its host is connected, or, made with host migration, as long as anyone is in it.
 
 #include <chrono>
 #include <cstdio>
@@ -34,8 +34,10 @@ using Clock = std::chrono::steady_clock;
 f64 seconds_since(Clock::time_point t) { return std::chrono::duration<f64>(Clock::now() - t).count(); }
 
 void log_stats(const net::RelayStats& s) {
-    MCE_LOG_INFO("relay: {} clients, {} rooms ({} created, {} joins, {} refused), {} messages / {} bytes forwarded, {} dropped",
-                 s.clients, s.rooms, s.rooms_created, s.joins, s.refusals, s.forwarded, s.forwarded_bytes, s.dropped);
+    MCE_LOG_INFO("relay: {} clients, {} rooms ({} created, {} joins, {} quick plays, {} host migrations, {} refused), "
+                 "{} messages / {} bytes forwarded, {} dropped",
+                 s.clients, s.rooms, s.rooms_created, s.joins, s.quick_plays, s.host_migrations, s.refusals, s.forwarded,
+                 s.forwarded_bytes, s.dropped);
 }
 
 struct Member {

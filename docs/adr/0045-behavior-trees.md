@@ -59,6 +59,16 @@ queries are step 4. The editor panel is step 5, and the MCP tools are step 6. Su
 files and randomness in nodes are left out until a game needs them. Randomness will come from the sim RNG so
 replays stay exact.
 
+**Step 4 (SBA-131).** Utility selection is a node kind whose children are `Score` nodes; considerations are a
+table after the nodes in `CHNK_BT` v3, each a blackboard key, a response curve and a weight. The selector
+recomputes every score each tick and switches only when another child beats the running one by `hysteresis`.
+Tokens are an `AiTokenPool` component that brains share by name or by an entity key. Point queries are the
+stock task `find_point`, not a node kind, so a game can replace it.
+
+**Step 3 (SBA-130).** Perception is a separate system ("ai_perception", ahead of "ai_brains") that writes
+blackboard keys named by the `Perceiver`; trees never query the world for what they see. Its memory lives in the
+`Perceiver`'s runtime fields, so it is hashed and saved like the brain.
+
 **Step 2 (SBA-129).**
 - **Observers.** `BtNode::abort` on a guard (CHNK_BT v2) makes it an observer that re-checks its condition every
   tick. `self` halts the guard's running child when the condition fails. `lower`, allowed only on a selector's

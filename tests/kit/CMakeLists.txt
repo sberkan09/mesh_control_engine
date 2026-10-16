@@ -8,6 +8,8 @@ mce_add_test(test_kit UMBRELLA
     SOURCES
         test_ai.cpp
         test_ai_tasks.cpp
+        test_ai_perception.cpp
+        test_ai_utility.cpp
         test_bodies3d.cpp
         test_move3d.cpp
         test_captions.cpp

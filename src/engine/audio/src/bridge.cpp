@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "mce/audio/components.h"
 
 namespace mce::audio {
@@ -6,6 +8,8 @@ namespace mce::audio {
 static_assert(sizeof(AudioSource) == 80);
 static_assert(sizeof(AudioBusEffects) == 16);
 static_assert(sizeof(AudioReverb) == 20);
+static_assert(sizeof(AudioDuck) == 20);
+static_assert(sizeof(AudioSnapshot) == 20);
 
 namespace {
 
@@ -61,65 +65,13 @@ void on_source_removed(World& w, Entity e) {
     if (ref && ref->device && src && !src->handle.is_null()) ref->device->stop(src->handle, src->fade_s > 0.05f ? src->fade_s : 0.05f);
 }
 
-// The scene's effect components onto the device (M-AUDIO2 3). The device sends only changes, so
-// this runs every tick; an effect whose component went away goes back to its default.
-void apply_effects(Frame& f, AudioRef& ref, AudioDevice& dev) {
-    u16 buses = 0;
-    f.query<const AudioBusEffects&>().each([&](Entity, const AudioBusEffects& fx) {
-        const BusId b = static_cast<BusId>(fx.bus);
-        if (b >= kBusCount || (buses & (1u << b)) != 0) return;
-        buses = static_cast<u16>(buses | (1u << b));
-        BusFilterDesc d;
-        d.lowpass_hz = fx.lowpass_hz;
-        d.highpass_hz = fx.highpass_hz;
-        dev.set_bus_filter(b, d);
-        if (b == Bus_Master) return;
-        for (u32 u = 0; u < kReverbUnits; ++u) (void)dev.set_bus_send(b, u, u == fx.reverb_unit ? fx.reverb_send_db : -96.f);
-    });
-    for (u32 b = 0; b < kBusCount; ++b) {
-        if ((ref.fx_buses & ~buses & (1u << b)) == 0) continue;
-        dev.set_bus_filter(static_cast<BusId>(b), BusFilterDesc{});
-        if (b != Bus_Master)
-            for (u32 u = 0; u < kReverbUnits; ++u) (void)dev.set_bus_send(static_cast<BusId>(b), u, -96.f);
-    }
-    ref.fx_buses = buses;
-
-    u8 units = 0;
-    f.query<const AudioReverb&>().each([&](Entity, const AudioReverb& r) {
-        if (r.unit >= kReverbUnits || (units & (1u << r.unit)) != 0) return;
-        units = static_cast<u8>(units | (1u << r.unit));
-        ReverbDesc d;
-        d.enabled = true;
-        d.room_size = r.room_size;
-        d.damping = r.damping;
-        d.width = r.width;
-        d.wet_db = r.wet_db;
-        (void)dev.set_reverb(r.unit, d);
-    });
-    for (u32 u = 0; u < kReverbUnits; ++u)
-        if ((ref.fx_reverbs & ~units & (1u << u)) != 0) (void)dev.set_reverb(u, ReverbDesc{});
-    ref.fx_reverbs = units;
-
-    bool limiter = false;
-    f.query<const AudioLimiter&>().each([&](Entity, const AudioLimiter& l) {
-        if (limiter) return;
-        limiter = true;
-        LimiterDesc d;
-        d.enabled = true;
-        d.ceiling_db = l.ceiling_db;
-        d.release_ms = l.release_ms;
-        dev.set_limiter(d);
-    });
-    if (ref.fx_limiter && !limiter) dev.set_limiter(LimiterDesc{});
-    ref.fx_limiter = limiter;
-}
-
 }  // namespace
 
 void install(World& world, AudioDevice& device, ClipBank* clips, const char* after) {
     world.register_components<AudioSource>();
     world.register_components<AudioSpatial, AudioListener>();
     world.register_components<AudioBusEffects, AudioReverb, AudioLimiter>();
+    world.register_components<AudioDuck, AudioSnapshot>();
     world.register_event<PlaySfx>(Phase::FixedUpdate_Pre);
     world.set_resource(AudioRef{&device, clips});
     world.set_hooks<AudioSource>(nullptr, &on_source_removed);
@@ -131,8 +83,8 @@ void audio_bridge(Frame& f) {
     AudioRef& ref = f.resource<AudioRef>();
     AudioDevice* dev = ref.device;
     if (!dev) return;
-    // Effects before this tick's plays, so a sound starts with the bus as the scene has it.
-    apply_effects(f, ref, *dev);
+    // The mix before this tick's plays, so a sound starts with the bus as the scene has it.
+    update_mix(f.world(), static_cast<f32>(f.dt), false);
 
     // The listener first, so this tick's plays and moves spatialize against this tick's ear.
     bool have_listener = false;
@@ -212,6 +164,133 @@ void audio_bridge(Frame& f) {
             sp->applied_position = pos;
         }
     });
+}
+
+// The scene's mix components onto the device (M-AUDIO2 3–4). The device sends only changes, so
+// this runs every tick; an effect whose component went away goes back to its default.
+void update_mix(World& world, f32 dt, bool paused) {
+    AudioRef* ref_ptr = world.try_resource<AudioRef>();
+    if (!ref_ptr || !ref_ptr->device) return;
+    AudioRef& ref = *ref_ptr;
+    AudioDevice& dev = *ref.device;
+
+    // Filters and sends from AudioBusEffects (the first entity per bus wins).
+    BusFilterDesc filter[kBusCount];
+    u16 effects = 0;
+    world.query<const AudioBusEffects&>().each([&](Entity, const AudioBusEffects& fx) {
+        const BusId b = static_cast<BusId>(fx.bus);
+        if (b >= kBusCount || (effects & (1u << b)) != 0) return;
+        effects = static_cast<u16>(effects | (1u << b));
+        filter[b].lowpass_hz = fx.lowpass_hz;
+        filter[b].highpass_hz = fx.highpass_hz;
+        if (b == Bus_Master) return;
+        for (u32 u = 0; u < kReverbUnits; ++u) (void)dev.set_bus_send(b, u, u == fx.reverb_unit ? fx.reverb_send_db : -96.f);
+    });
+    const u16 sends = static_cast<u16>(effects & ~1u);
+    for (u32 b = 1; b < kBusCount; ++b)
+        if ((ref.fx_sends & ~sends & (1u << b)) != 0)
+            for (u32 u = 0; u < kReverbUnits; ++u) (void)dev.set_bus_send(static_cast<BusId>(b), u, -96.f);
+    ref.fx_sends = sends;
+
+    // Snapshots: advance each fade, then blend into the bus's trim and filters. A snapshot's filter
+    // moves the cutoff from where the bus has it (open when off) toward its own, in octaves.
+    AudioRef::SnapshotFade fades[AudioRef::kMaxSnapshots];
+    u32 count = 0;
+    f32 trim[kBusCount] = {};
+    u16 snapped = 0;
+    constexpr f32 kLowOpen = 20000.f, kHighOpen = 20.f;
+    f32 lowpass[kBusCount], highpass[kBusCount];
+    for (u32 b = 0; b < kBusCount; ++b) {
+        lowpass[b] = filter[b].lowpass_hz > 0.f ? filter[b].lowpass_hz : kLowOpen;
+        highpass[b] = filter[b].highpass_hz > 0.f ? filter[b].highpass_hz : kHighOpen;
+    }
+    world.query<const AudioSnapshot&>().each([&](Entity e, const AudioSnapshot& snap) {
+        const BusId b = static_cast<BusId>(snap.bus);
+        if (b >= kBusCount || count == AudioRef::kMaxSnapshots) return;
+        f32 w = 0.f;
+        for (u32 i = 0; i < ref.snapshot_count; ++i)
+            if (ref.snapshots[i].entity == e) w = ref.snapshots[i].weight;
+        const f32 target = snap.active || (snap.while_paused && paused) ? 1.f : 0.f;
+        const f32 step = snap.fade_s > 0.f ? dt / snap.fade_s : 1.f;
+        w = target > w ? math::min(target, w + step) : math::max(target, w - step);
+        fades[count].entity = e;
+        fades[count].weight = w;
+        ++count;
+        snapped = static_cast<u16>(snapped | (1u << b));
+        if (w <= 0.f) return;
+        trim[b] += w * snap.gain_db;
+        if (snap.lowpass_hz > 0.f)
+            lowpass[b] = math::min(lowpass[b], std::exp(std::log(lowpass[b]) + w * (std::log(math::max(snap.lowpass_hz, 20.f)) - std::log(lowpass[b]))));
+        if (snap.highpass_hz > 0.f)
+            highpass[b] = math::max(highpass[b], std::exp(std::log(highpass[b]) + w * (std::log(math::max(snap.highpass_hz, 20.f)) - std::log(highpass[b]))));
+    });
+    for (u32 i = 0; i < count; ++i) ref.snapshots[i] = fades[i];
+    ref.snapshot_count = count;
+    for (u32 b = 0; b < kBusCount; ++b)
+        if (((snapped | ref.fx_trims) & (1u << b)) != 0) dev.set_bus_trim(static_cast<BusId>(b), trim[b]);
+    ref.fx_trims = snapped;
+
+    const u16 filtered = static_cast<u16>(effects | snapped);
+    for (u32 b = 0; b < kBusCount; ++b) {
+        if (((filtered | ref.fx_buses) & (1u << b)) == 0) continue;
+        BusFilterDesc d;
+        d.lowpass_hz = lowpass[b] >= kLowOpen ? filter[b].lowpass_hz : lowpass[b];
+        d.highpass_hz = highpass[b] <= kHighOpen ? filter[b].highpass_hz : highpass[b];
+        dev.set_bus_filter(static_cast<BusId>(b), d);
+    }
+    ref.fx_buses = filtered;
+
+    // Ducking (the first entity per ducked bus wins).
+    u8 ducks = 0;
+    world.query<const AudioDuck&>().each([&](Entity, const AudioDuck& duck) {
+        const BusId b = static_cast<BusId>(duck.bus);
+        if (b == Bus_Master || b >= Bus_User0 || (ducks & (1u << b)) != 0) return;
+        DuckDesc d;
+        d.enabled = true;
+        d.key = static_cast<BusId>(duck.key);
+        d.depth_db = duck.depth_db;
+        d.threshold_db = duck.threshold_db;
+        d.attack_ms = duck.attack_ms;
+        d.release_ms = duck.release_ms;
+        if (dev.set_bus_duck(b, d)) ducks = static_cast<u8>(ducks | (1u << b));
+    });
+    for (u32 b = 1; b < Bus_User0; ++b)
+        if ((ref.fx_ducks & ~ducks & (1u << b)) != 0) {
+            DuckDesc off = dev.bus_duck(static_cast<BusId>(b));
+            off.enabled = false;
+            (void)dev.set_bus_duck(static_cast<BusId>(b), off);
+        }
+    ref.fx_ducks = ducks;
+
+    // Reverb units and the limiter.
+    u8 units = 0;
+    world.query<const AudioReverb&>().each([&](Entity, const AudioReverb& r) {
+        if (r.unit >= kReverbUnits || (units & (1u << r.unit)) != 0) return;
+        units = static_cast<u8>(units | (1u << r.unit));
+        ReverbDesc d;
+        d.enabled = true;
+        d.room_size = r.room_size;
+        d.damping = r.damping;
+        d.width = r.width;
+        d.wet_db = r.wet_db;
+        (void)dev.set_reverb(r.unit, d);
+    });
+    for (u32 u = 0; u < kReverbUnits; ++u)
+        if ((ref.fx_reverbs & ~units & (1u << u)) != 0) (void)dev.set_reverb(u, ReverbDesc{});
+    ref.fx_reverbs = units;
+
+    bool limiter = false;
+    world.query<const AudioLimiter&>().each([&](Entity, const AudioLimiter& l) {
+        if (limiter) return;
+        limiter = true;
+        LimiterDesc d;
+        d.enabled = true;
+        d.ceiling_db = l.ceiling_db;
+        d.release_ms = l.release_ms;
+        dev.set_limiter(d);
+    });
+    if (ref.fx_limiter && !limiter) dev.set_limiter(LimiterDesc{});
+    ref.fx_limiter = limiter;
 }
 
 }  // namespace mce::audio

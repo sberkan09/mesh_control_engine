@@ -25,11 +25,12 @@ MCE_CVAR(cv_master_db, "audio.master_db", 0.0f, "Master bus gain (dB)", CVarFlag
 MCE_CVAR(cv_music_db, "audio.music_db", 0.0f, "Music bus gain (dB)", CVarFlags::Saved);
 MCE_CVAR(cv_sfx_db, "audio.sfx_db", 0.0f, "SFX bus gain (dB)", CVarFlags::Saved);
 MCE_CVAR(cv_ui_db, "audio.ui_db", 0.0f, "UI bus gain (dB)", CVarFlags::Saved);
+MCE_CVAR(cv_voice_db, "audio.voice_db", 0.0f, "Voice bus gain (dB): dialogue on the first user bus", CVarFlags::Saved);
 MCE_CVAR(cv_enabled, "audio.enabled", true, "Open an audio device (false = run silent)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_reverb, "audio.reverb", true, "Reverb on the buses that send to it (false = dry everywhere)", CVarFlags::Saved);
 
-inline constexpr u32 kNamedBuses = Bus_User0;  // Master/Music/SFX/UI have options-screen convars
-ConVar* const kBusConvars[kNamedBuses] = {&cv_master_db, &cv_music_db, &cv_sfx_db, &cv_ui_db};
+inline constexpr u32 kNamedBuses = Bus_User0 + 1;  // Master/Music/SFX/UI/Voice have options-screen convars
+ConVar* const kBusConvars[kNamedBuses] = {&cv_master_db, &cv_music_db, &cv_sfx_db, &cv_ui_db, &cv_voice_db};
 
 void on_reverb_convar(ConVar& var) {
     if (g_convar_device) g_convar_device->set_reverb_allowed(var.get_bool());
@@ -567,6 +568,50 @@ Result<void> AudioDevice::set_reverb(u32 unit, const ReverbDesc& d) {
     if (r == reverb_[unit]) return ok();
     reverb_[unit] = r;
     send_reverb(unit);
+    return ok();
+}
+
+void AudioDevice::set_bus_trim(BusId bus, f32 trim_db) {
+    if (bus >= kBusCount) return;
+    const f32 db = std::isnan(trim_db) || trim_db <= -96.f ? -96.f : math::clamp(trim_db, -96.f, 12.f);
+    if (db == trim_db_[bus]) return;
+    AudioCommand c;
+    c.type = CmdType::BusTrim;
+    c.index = bus;
+    c.voice.gain = db_to_linear(db);
+    if (!impl_->commands.push(c)) {
+        ++impl_->commands_dropped;
+        return;
+    }
+    trim_db_[bus] = db;
+    hash_config(command_hash_, c, db);
+}
+
+Result<void> AudioDevice::set_bus_duck(BusId bus, const DuckDesc& d) {
+    if (bus == Bus_Master || bus >= Bus_User0 || d.key == Bus_Master || d.key >= kBusCount || d.key == bus)
+        return Error(Errc::InvalidArgument, "audio.bus.duck", "Music, SFX or UI ducks under another bus (not Master)", bus);
+    const auto finite = [](f32 v, f32 lo, f32 hi, f32 fallback) { return std::isnan(v) ? fallback : math::clamp(v, lo, hi); };
+    DuckDesc k = d;
+    k.depth_db = finite(d.depth_db, -96.f, 0.f, -10.f);
+    k.threshold_db = finite(d.threshold_db, -96.f, 0.f, -40.f);
+    k.attack_ms = finite(d.attack_ms, 0.f, 5000.f, 20.f);
+    k.release_ms = finite(d.release_ms, 0.f, 10000.f, 400.f);
+    if (k == duck_[bus]) return ok();
+    // One-pole approach factors: ~63% of the way in the given time (0 ms = at once).
+    const auto coef = [](f32 ms) { return ms <= 0.f ? 1.f : 1.f - std::exp(-1.f / (ms * 0.001f * static_cast<f32>(kSampleRate))); };
+    AudioCommand c;
+    c.type = CmdType::BusDuck;
+    c.index = bus;
+    c.bus = k.key;
+    c.flags = k.enabled ? 1 : 0;
+    c.duck.threshold = db_to_linear(k.threshold_db);
+    c.duck.depth = db_to_linear(k.depth_db);
+    c.duck.attack = coef(k.attack_ms);
+    c.duck.release = coef(k.release_ms);
+    if (!impl_->commands.push(c)) return Error(Errc::AudioQueueFull, "audio.bus.duck");
+    duck_[bus] = k;
+    hash_config(command_hash_, c, c.duck.threshold, c.duck.depth);
+    hash_config(command_hash_, c, c.duck.attack, c.duck.release);
     return ok();
 }
 

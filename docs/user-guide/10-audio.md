@@ -50,7 +50,7 @@ Keep the sound references as `AssetRef<Sfx>` fields on your components (`jump_so
 
 Without code, `SfxTrigger` on an entity plays its `clip` once: `gain_db`, `gain_jitter_db` (each
 play adds a value in ± that many dB, drawn from the entity and play count, so replays match), `pan`
-and `bus` (`Master`, `Music`, `SFX`, `UI`). `on` picks when it fires: `Manual` when its `fire` flag is set (by data, a sequence field track or MCP `entity_set_component`; the engine clears it), `Start` on the first tick, `TriggerEnter` / `ContactBegin` when a 2D physics event names the entity (as the sensor, the other body or either contact body), `Landed` when a 3D character on the entity touches down. `fired` counts the plays. It plays as a `PlaySfx` on the next
+and `bus` (`Master`, `Music`, `SFX`, `UI`). `on` picks when it fires: `Manual` when its `fire` flag is set (by data, a sequence field track or MCP `entity_set_component`; the engine clears it), `Start` on the first tick, `TriggerEnter` / `ContactBegin` when a 2D physics event names the entity (as the sensor, the other body or either contact body), `Landed` when a 3D character on the entity touches down, `Skid` when a wheel of the entity's `Vehicle3D` starts to skid. `fired` counts the plays. It plays as a `PlaySfx` on the next
 tick. For a different clip or pitch on each play, name a sound set (10.3) as its `clip`.
 
 ## 10.3 Sound sets and pitch
@@ -95,8 +95,8 @@ it on a live voice, say for an engine's revs). Between samples the mixer interpo
 
 ## 10.5 Volume, buses and effects
 
-Four saved convars drive the named buses: `audio.master_db`, `audio.music_db`, `audio.sfx_db`,
-`audio.ui_db`. Set them from the console (`audio.music_db -12`), the command line, or bind them to
+Five saved convars drive the named buses: `audio.master_db`, `audio.music_db`, `audio.sfx_db`,
+`audio.ui_db` and `audio.voice_db` (the `Voice` bus, for dialogue). Set them from the console (`audio.music_db -12`), the command line, or bind them to
 sliders in a runtime options menu (chapter 12). `audio.enabled 0` runs silent. When the window loses focus
 or minimizes, the player pauses the sim (the pause overlay waits for the player on return) and
 mutes the master bus until focus comes back (`-pause_on_focus_loss 0` turns both off). On a
@@ -129,8 +129,35 @@ A cave level that makes its footsteps ring and muffles the music:
   costs nothing.
 - `audio.reverb 0` (saved) turns every reverb off, for players who find it tiring and for slow devices.
 - Code has the same controls on `AudioDevice`: `set_bus_filter`, `set_bus_send`, `set_reverb`,
-  `set_limiter`. The per-bus EQ bands (`set_bus_eq`) and the bus graph (`set_bus_parent`) are
+  `set_limiter`, and for the next two `set_bus_duck` and `set_bus_trim`. The per-bus EQ bands (`set_bus_eq`) and the bus graph (`set_bus_parent`) are
   code-only.
+
+**Ducking.** `AudioDuck` turns one bus down while another plays: the music drops under a voice line
+and comes back after it.
+
+```json
+{ "name": "Duck music", "components": {
+    "AudioDuck": { "bus": "Music", "key": "Voice", "depth_db": -12, "attack_ms": 20, "release_ms": 400 } } }
+```
+
+The ducked bus is `Music`, `SFX` or `UI`; the key is any other bus but `Master`. Put voice lines on the
+`Voice` bus (`"bus": "Voice"` on their `AudioSource`). The key is heard before its own volume, so a player
+who turns dialogue down in the options still gets the music out of the way. `threshold_db` (default -40)
+is how loud the key must be.
+
+**Snapshots.** An `AudioSnapshot` changes one bus while it is on: a gain offset (`gain_db`) and a
+low-pass or high-pass (`lowpass_hz`, `highpass_hz`; 0 leaves the bus's own). It fades in and out over
+`fade_s`. Set `active` from gameplay, a sequence or a timeline key, or tick `while_paused` to make it the
+pause snapshot: the stock player turns it on while its pause overlay is up, so the world sounds
+muffled behind the menu.
+
+```json
+{ "name": "Pause mix", "components": {
+    "AudioSnapshot": { "bus": "SFX", "while_paused": true, "fade_s": 0.3, "gain_db": -6, "lowpass_hz": 600 } } }
+```
+
+Snapshots on the same bus add their gains, and the tightest filter wins. A snapshot's fade is sound
+state, not game state: it never changes the save, the replay or the state hash.
 
 ## 10.6 How it behaves under pressure
 

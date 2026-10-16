@@ -9,11 +9,32 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   that assigns a top-level local or changes a table one holds, and table or function keys the source shows;
   `pairs` and `next` raise on such keys at run time. A script's memory is its components, so a reload between
   two ticks keeps the state hash. User guide 27.4.
+- Utility AI, attack tokens and point queries, M-AI step 4 (SBA-131): a `utility` node runs the child whose
+  `score` (a base plus weighted linear, power, logistic or step curves of blackboard keys) is highest, and
+  keeps a running child until another beats it by `hysteresis`. An `AiTokenPool` hands out a few tokens and a
+  `token` node takes one or fails, so only some enemies attack at once. The stock task `find_point` stores the
+  best point on rings around the entity: on the navmesh or grid, visible or hidden from a key, near, far or
+  close. `.mcbt` cooks to `CHNK_BT` v3. User guide 13.8.
+- M-VISUAL2 is done (step 5, SBA-105). `Environment3D` gains `ssr_steps`, `ssr_edge_fade` and
+  `contact_steps`, and MCP's Material schema lists the clear coat, sheen, anisotropy, transmission and ior
+  keys. `samples/06_showcase` shows reflections, contact shadows, sharpening, glass, lacquer and brushed
+  metal on its High profile, and `-profile highbase` draws High without them for the on/off sheet in the
+  milestone record.
+- AI perception, M-AI step 3 (SBA-130): a `Perceiver` sees every `Stimulus` of another team inside its cone and
+  range with a clear line of sight (rays through the 3D or the 2D physics world), remembers a lost target for
+  `forget` seconds and hears `kit::Noise` events (the tree's `make_noise` task makes one). It writes `target`,
+  `sees`, `last_seen` and `heard_at` into its tree's blackboard. `interval` staggers a crowd's checks over the
+  ticks. In `ai_demo` the guard now spots the thief. User guide 13.8.
 - The Luau script API, M-SCRIPT step 2 (SBA-148): scripts spawn, change and destroy entities (through
   `Commands`), instantiate prefabs, read and emit events by name (`MCE_EVENT` reflects an event type; the
   physics trigger and contact events have it), send and hear the kit's named signals, play sounds, read input
   actions, change scene, quit, and query 2D and 3D physics. `mce.field` handles and multi-field `get` / `set`
   halve the per-entity cost: the 2,000-entity bench runs in about 0.35 ms per tick. User guide 27.3 lists it all.
+- Ducking and mixer snapshots, M-AUDIO2 step 4 (SBA-121): `AudioDuck` turns Music, SFX or UI down while
+  another bus plays (the music under a voice line). `AudioSnapshot` fades a gain offset and a low-pass or
+  high-pass onto a bus while it is active, or while the game is paused (`while_paused`: the stock player's
+  pause overlay muffles the world). The new `Voice` bus is for dialogue, with a saved `audio.voice_db`.
+  `AudioDevice::set_bus_duck`, `set_bus_trim` and `audio::update_mix` do the same from code. User guide 10.5.
 - Luau scripts as assets, M-SCRIPT step 1 (SBA-147, ADR-0041): `.luau` files under `assets/` cook (importer
   `script`) to a `Script` asset of Luau bytecode, with syntax errors at `file:line:col`. A `ScriptSystem`
   component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP
@@ -81,6 +102,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
   User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
+- Matchmaking and host migration, M-NET3 step 3 (SBA-125): `RelayClient::quick_play(mode, size)` puts a player in
+  an open room of that mode or makes one, and `list_rooms` fetches listed rooms for a lobby. A room made with
+  `host_migration` survives its host: the relay hands it to the lowest member, `on_host_change` tells every member,
+  and `ReplicationServer::adopt` turns the new host's mirror into the server world. `sample_net_headless -relay 1
+  -host_leaves 300` loses its host halfway and every client keeps matching the new one. The relay protocol is now
+  version 2. User guide 20.8.
 - Spectators and clock sync, M-NET3 step 2 (SBA-124): a `RollbackSession` with `.spectator = true` watches
   without playing, fed confirmed inputs by one player (`write_spectator_packet`), and checks its hashes. With
   `time_sync` (on by default) a rollback peer whose clock runs ahead skips a tick now and then instead of

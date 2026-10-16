@@ -383,6 +383,7 @@ The stock tasks need no code. Each takes its own named arguments:
 | `raise`, `event` | raises a signal that `wait_event` and sequences' `wait_event` (13.1) hear on the next tick |
 | `wait_event`, `event` | runs until that signal is raised (by `raise`, `emit` or a sequence's `emit`) |
 | `log`, `text` | writes the text to the log with the tree's name and the entity |
+| `make_noise`, `loudness` | makes a noise perceivers hear from `loudness` metres (below) |
 
 ```json
 {"selector": [
@@ -419,5 +420,102 @@ Everything a tree knows is in `AiBrain` and `Blackboard`. Trees are deterministi
 state hash and in replays, and a save (give the entity a `SaveKey`) resumes them on the same node.
 `BtRegistry::validate_tasks()` names a task that a loaded tree uses but your game never registered;
 such a node fails and is logged once. The design is ADR-0045. `samples/ai_demo` is a data-only project
-in which the stock player runs a patrolling guard and an alarm. Perception, utility choices and the
-editor's tree panel come in the next steps of M-AI.
+in which the stock player runs a guard that patrols, spots a thief and catches it. Utility choices and
+the editor's tree panel come in the next steps of M-AI.
+
+### Perception
+
+A `Perceiver` gives an AI eyes and ears, and writes what it notices into its tree's blackboard. A
+`Stimulus` is something it can see. A `Noise` is something it can hear.
+
+```json
+"Guard": { "LocalTransform": {}, "AiBrain": { "tree": "guid:<guard.mcbt>" },
+           "Perceiver": { "sight_range": 10, "sight_angle": 100, "forget": 4, "team": 1 } },
+"Thief": { "LocalTransform": {}, "Stimulus": { "team": 2 } }
+```
+
+- **Sight.** Each check, every `Stimulus` of another team inside the cone (`sight_angle` degrees in
+  all, around −Z in 3D or +X in the 2D plane, from the `eye` offset) and within `sight_range` times
+  its `visibility` is tested with a ray. In 3D the ray goes through the kit's physics world, and in
+  2D (`space: Plane2D`) through physics2d's. Colliders in the `mask` layers block it. The nearest one
+  in sight becomes the target.
+- **Memory.** A target out of sight is remembered for `forget` seconds. `awareness` falls from 1 to 0
+  over that time, and then the target is dropped.
+- **Hearing.** A `kit::Noise` event (push one from code, or use the `make_noise` task) is heard within
+  its `loudness` times the perceiver's `hearing`. A noise from the perceiver's own team is not heard.
+- **The blackboard.** If the tree declares them, the perceiver writes `target` (entity; cleared when
+  forgotten), `sees` (bool), `last_seen` (vec3) and `heard_at` (vec3; it stays set until the tree
+  clears it). The key names are fields of the `Perceiver`, so two trees can use their own names.
+- **A crowd.** `interval: 4` checks sight every fourth tick, staggered by entity, so 400 guards cast
+  rays for 100 of them per tick. `kit::PerceptionStats` counts the checks and rays each tick.
+
+A guard that reacts the tick it sees someone puts the chase first, behind a guard that aborts the
+lower branches:
+
+```json
+{"selector": [
+  {"guard": {"task": "move_to", "key": "target", "radius": 1}, "key": "target", "abort": "lower"},
+  {"guard": {"sequence": [{"task": "move_to", "key": "heard_at"}, {"set": "heard_at", "clear": true}]},
+   "key": "heard_at", "abort": "lower"},
+  {"repeat": {"sequence": [{"task": "move_to", "key": "post_a"}, {"task": "move_to", "key": "post_b"}]}}
+]}
+```
+
+Perception runs just before the trees in each tick, and its state is in the `Perceiver`, so it is
+deterministic and saved. `kit::perception_debug_lines` returns each perceiver's cone and a line to its
+target, for a debug overlay.
+
+### Choosing by score, sharing tokens, finding a spot
+
+Three more pieces let a tree weigh options instead of only checking them in order.
+
+**Utility.** A `utility` node's children are `score` nodes. Each tick every score is computed, and
+the child with the highest one runs (on a tie, the first). A score is `base` plus, for each
+consideration in `by`, `weight` times a response curve of a blackboard key:
+
+- The key's value is mapped from `from`…`to` onto 0…1 and clamped. A bool or vector key counts 1
+  when set and 0 when not. `invert: true` turns 0…1 around.
+- `curve` shapes it: `linear` (the default), `power` (to the `exponent`, 2 by default), `logistic`
+  (an S around 0.5, steepness `exponent`, 10 by default) or `step` (1 at or above `exponent`, 0.5 by
+  default).
+
+A running child keeps running until another one scores more than `hysteresis` above it, so an AI
+does not flicker between two close options. When no child scores above 0 the node fails.
+
+```json
+{"utility": [
+  {"score": {"task": "attack"}, "base": 0.1,
+   "by": [{"key": "health", "from": 0, "to": 100, "curve": "power", "exponent": 2}]},
+  {"score": {"task": "move_to", "key": "cover"}, "by": [{"key": "health", "to": 100, "invert": true}]}
+], "hysteresis": 0.1}
+```
+
+**Tokens.** An `AiTokenPool` component (a `name` and a `capacity`, up to 8) hands out a limited
+number of tokens, so only two of ten enemies attack at once. A `token` node takes one when it starts
+and fails if none is free; it gives it back when its child finishes or is halted, and a dead holder's
+token is freed. The pool is the one on the entity in `key` (an entity key) or, without `key`, the
+first pool in the scene with that `pool` name:
+
+```json
+{"selector": [
+  {"token": {"task": "attack"}, "pool": "attackers"},
+  {"task": "move_to", "key": "flank"}
+]}
+```
+
+**Point queries.** The stock task `find_point` tries points on `rings` rings (1–8, 2 by default) of
+`count` points each (1–32, 8 by default) out to `radius` (5 by default) around the entity, or
+around the `around` key. Points off the navmesh, or on a blocked `NavGrid` cell, are skipped. With
+`from` (a vec3 or entity key, such as a threat), `need: "visible"` or `"hidden"` keeps only the
+points with or without a clear line of sight from it. `prefer` picks among the rest: `near` the
+entity (the default), `far` from `from`, or `close` to it. The best point goes into the `store` vec3
+key and the task succeeds; with none, it fails. Hiding from the player and moving there:
+
+```json
+{"sequence": [
+  {"task": "find_point", "store": "cover", "from": "target", "need": "hidden", "radius": 8},
+  {"task": "move_to", "key": "cover"}
+]}
+```
+
+`kit::bt_utility_scores` returns a utility node's current scores, for a debug view.
