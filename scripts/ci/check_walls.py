@@ -7,6 +7,7 @@ Each wall: a regex that may only appear under the allowed path prefixes. A line 
 
 import pathlib
 import re
+import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -267,6 +268,8 @@ def main() -> int:
                         continue
                     if pattern.search(line):
                         violations.append(f"{rel}:{no}: {name}: {line.strip()}")
+    # M3: a changed header that reaches many translation units is a warning, never a failure.
+    subprocess.run([sys.executable, str(ROOT / "scripts/ci/include_fanout.py")], check=False)
     if violations:
         print("Wall violations:")
         for v in violations:
