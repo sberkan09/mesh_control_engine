@@ -29,7 +29,7 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   stock player, `ui_preview` and the editor's UI Document panel (style `sprite_region` and 9-slice `slice` index
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
-  User guide 12.2.
+  User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
 - Per-client delta snapshots, M-NET3 step 1 (SBA-123): `ReplicationServer::write_snapshot_for` writes each client
   only the entities relevant to it (`NetRelevance { radius }` around the entities it owns) and codes them against
   the newest snapshot it acknowledged (`write_ack` / `read_ack`): a still entity costs two bytes. `apply` reads
