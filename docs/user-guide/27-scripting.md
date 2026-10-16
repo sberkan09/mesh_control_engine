@@ -41,7 +41,7 @@ A `ScriptSystem` component names one script. Put it on its own entity (by conven
 | Field | Default | Meaning |
 |---|---|---|
 | `script` | — | the `Script` asset whose `update()` runs |
-| `phase` | `Pre` | `Pre`: before physics (FixedUpdate_Pre); `Post`: after it (FixedUpdate_Post) |
+| `phase` | `Pre` | `Pre`: before physics (FixedUpdate_Pre); `Post`: after it (FixedUpdate_Post). A script that calls `mce.move_and_collide` or sets 2D velocities needs `Post`: the bodies are made by the first physics step |
 | `order` | 0 | scripts of a phase run lowest first; ties run in ECS order |
 | `enabled` | true | off: the script is not loaded |
 
@@ -258,3 +258,15 @@ C++ at all: `player.luau` (run, coyote time, jump buffer, a shorter hop when Jum
 It is a smaller game than the C++ sample `samples/03_platformer` (one level, one enemy, no wall jump or dash),
 not a line-by-line port; the Luau-versus-C++ twin the determinism stage compares is the bouncing-box sample
 (`samples/script_headless`).
+
+**Gotchas** (found by an agent that built a script-only game blind):
+
+- The `walk_to` bot steers by `x` only in a side view (`plane: "x"`): `through` points and the target never make
+  it climb. Build the level so that walking right gets there (a hill of steps), or put a jump in an `input` script.
+- `mce.quit()` ends the whole run, tests included. A pickup that quits when the last coin is taken ends every test
+  that passes it; log "level complete" and destroy the goal instead, as `goal.luau` does.
+- Two kinematic bodies block each other, so a touch check must be wider than the sum of their half-widths
+  (a 0.4 and a 0.45 half-width: test `|dx| < 1.0`), or the layers' masks must let them overlap (`projects/EmberScript`).
+- `script_check` takes `path` relative to `assets/` (`scripts/player.luau`); `assets/scripts/...` works too.
+- Every MCP call in a `mce_mcp` session shares one scene; a one-shot client that starts a server per call should pass
+  `"scene": "scenes/main.mcscene"` to `run_headless`.
