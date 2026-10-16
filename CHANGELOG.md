@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- The Luau script API, M-SCRIPT step 2 (SBA-148): scripts spawn, change and destroy entities (through
+  `Commands`), instantiate prefabs, read and emit events by name (`MCE_EVENT` reflects an event type; the
+  physics trigger and contact events have it), send and hear the kit's named signals, play sounds, read input
+  actions, change scene, quit, and query 2D and 3D physics. `mce.field` handles and multi-field `get` / `set`
+  halve the per-entity cost: the 2,000-entity bench runs in about 0.35 ms per tick. User guide 27.3 lists it all.
 - 2D meshes and slot keys, M-ANIM2D step 3 (SBA-142): a `.mcskel2d` slot can list several `"attachments"` and
   show one at a time, quads or meshes. A mesh is textured triangles whose vertices sit on the slot's bone or are
   weighted to up to 4 bones (skinned on the CPU, the same bits everywhere). Animations key slot colors (alpha 0
