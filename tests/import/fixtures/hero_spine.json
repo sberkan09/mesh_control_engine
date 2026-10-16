@@ -1,0 +1,68 @@
+{
+  "skeleton": { "hash": "hand-written", "spine": "4.1.24", "x": -50, "y": 0, "width": 100, "height": 160 },
+  "bones": [
+    { "name": "root" },
+    { "name": "hip", "parent": "root", "y": 50, "length": 20 },
+    { "name": "arm_upper", "parent": "hip", "x": 20, "y": 30, "rotation": -30, "length": 40 },
+    { "name": "arm_lower", "parent": "arm_upper", "x": 40, "length": 40, "scaleX": 1.1 },
+    { "name": "hand_goal", "parent": "root", "x": 80, "y": 60 }
+  ],
+  "slots": [
+    { "name": "body", "bone": "hip", "color": "ffffffff", "attachment": "body" },
+    { "name": "cape", "bone": "hip", "color": "ccddeeff", "attachment": "cape" }
+  ],
+  "ik": [
+    { "name": "arm_ik", "order": 0, "bones": [ "arm_upper", "arm_lower" ], "target": "hand_goal", "mix": 0.75, "bendPositive": false }
+  ],
+  "skins": [
+    { "name": "default",
+      "attachments": {
+        "body": {
+          "body": { "path": "body", "x": 0, "y": 30, "rotation": 5, "width": 40, "height": 60 },
+          "body_hit": { "path": "body_hit", "x": 0, "y": 30, "width": 40, "height": 60 }
+        },
+        "cape": {
+          "cape": {
+            "type": "mesh", "path": "cape", "hull": 4,
+            "uvs": [ 0, 0, 1, 0, 1, 1, 0, 1 ],
+            "triangles": [ 0, 1, 2, 0, 2, 3 ],
+            "vertices": [
+              1, 1, -20, 60, 1,
+              1, 1, 20, 60, 1,
+              2, 1, 20, 0, 0.5, 2, -10, 5, 0.5,
+              2, 1, -20, 0, 0.25, 2, -30, 5, 0.75 ]
+          }
+        }
+      } },
+    { "name": "gold", "attachments": { "body": { "body": { "path": "body_hit", "width": 40, "height": 60 } } } }
+  ],
+  "events": { "step": { "int": 1 }, "land": {} },
+  "animations": {
+    "wave": {
+      "bones": {
+        "arm_upper": {
+          "rotate": [
+            { "value": 0, "curve": [ 0.15, 0, 0.35, 30 ] },
+            { "time": 0.5, "value": 30, "curve": "stepped" },
+            { "time": 1, "value": 0 }
+          ],
+          "translate": [ { "x": 0, "y": 0 }, { "time": 1, "x": 10, "y": -20 } ]
+        },
+        "hip": { "scale": [ { "x": 1, "y": 1 }, { "time": 0.5, "x": 1.1, "y": 0.9 }, { "time": 1, "x": 1, "y": 1 } ] }
+      },
+      "slots": {
+        "body": { "attachment": [ { "name": "body" }, { "time": 0.5, "name": "body_hit" } ] },
+        "cape": { "rgba": [ { "color": "ffffffff", "curve": [ 0.3, 1, 0.6, 1, 0.3, 1, 0.6, 0.5, 0.3, 1, 0.6, 0.5, 0.3, 1, 0.6, 1 ] }, { "time": 1, "color": "ff8080ff" } ] }
+      },
+      "ik": { "arm_ik": [ { "mix": 0 }, { "time": 0.5, "mix": 1 } ] },
+      "deform": { "default": { "cape": { "cape": [
+        { },
+        { "time": 0.5, "offset": 4, "vertices": [ 0, 0, 0, 0, 10, 0, 10, 0 ] },
+        { "time": 1 } ] } } },
+      "events": [ { "time": 0.5, "name": "step" } ]
+    },
+    "idle": {
+      "bones": { "hip": { "translate": [ { "y": 0 }, { "time": 0.8, "y": 4 }, { "time": 1.6, "y": 0 } ] } }
+    }
+  }
+}

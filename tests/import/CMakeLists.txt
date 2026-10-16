@@ -2,3 +2,13 @@
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME import_converters
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_import.py" "${CMAKE_CURRENT_BINARY_DIR}/import_test")
+
+# SBA-146: Spine / DragonBones skeletons (tools/mce_cli/mce_import_skel.py); with mce_cook the output is cooked for real.
+if(TARGET mce_cook)
+    add_test(NAME import_skeletons
+             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_import_skel.py" "${CMAKE_CURRENT_BINARY_DIR}/import_skel_test"
+                     "$<TARGET_FILE:mce_cook>")
+else()
+    add_test(NAME import_skeletons
+             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_import_skel.py" "${CMAKE_CURRENT_BINARY_DIR}/import_skel_test")
+endif()

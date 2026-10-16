@@ -99,6 +99,7 @@ install(FILES "${PROJECT_BINARY_DIR}/sdk/VERSION" DESTINATION ${CMAKE_INSTALL_DA
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce.py" DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME mce)
 install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_steam.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce ship --steam
 install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_import.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce import
+install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_import_skel.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce import spine|dragonbones
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/install.sh" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce)  # mce update (release installs)
 
 # The example projects (`mce example <Name>` copies one out): sources and content, no build outputs.
