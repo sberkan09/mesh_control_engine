@@ -41,7 +41,7 @@ A `ScriptSystem` component names one script. Put it on its own entity (by conven
 | Field | Default | Meaning |
 |---|---|---|
 | `script` | — | the `Script` asset whose `update()` runs |
-| `phase` | `Pre` | `Pre`: before physics (FixedUpdate_Pre); `Post`: after it (FixedUpdate_Post) |
+| `phase` | `Pre` | `Pre`: before physics (FixedUpdate_Pre); `Post`: after it (FixedUpdate_Post). A script that calls `mce.move_and_collide` or sets 2D velocities needs `Post`: the bodies are made by the first physics step |
 | `order` | 0 | scripts of a phase run lowest first; ties run in ECS order |
 | `enabled` | true | off: the script is not loaded |
 
@@ -223,3 +223,94 @@ from there). The engine's CMake gives such a project a host that is the stock pl
 (`mce_add_script_project`), and the host build's `mce_cook` cooks the pack. The phone and web toolchains (the
 Android NDK, Xcode, the Emscripten SDK) are the ones the other projects use.
 
+
+## 27.8 Remembering things: `ScriptVars`
+
+A script keeps nothing between ticks, and a game with no C++ cannot define its own components, so the kit
+has one made for this: `ScriptVars`, 16 numbers (`v`) on any entity, saved and hashed like every other
+component. A script names the slots however it likes; write the layout in a comment at the top.
+
+```lua
+local VARS = mce.field("ScriptVars", "v")
+
+function update()
+    mce.each("ScriptVars", function(e)
+        local v = mce.get(e, VARS)      -- a table of 16 numbers (v[1] .. v[16])
+        v[1] = v[1] + 1                 -- a counter
+        mce.set(e, VARS, v)             -- write the table back
+    end)
+end
+```
+
+The scene gives the first values (`"ScriptVars": { "v": [0, 1, 38, 3, 4, 0, ...] }`). A convention that scales
+to several kinds of entity: keep the kind in the last slot (`v[16]`: 1 = player, 2 = enemy, 3 = goal) and let
+each script skip the entities that are not its own.
+
+**Example: `projects/EmberScript`.** Ember Step's controller and an enemy state machine in Luau, with no
+C++ at all: `player.luau` (run, coyote time, jump buffer, a shorter hop when Jump is let go, respawn),
+`enemy.luau` (patrol / chase / return, stomp or hurt) and `goal.luau`. Scripts that move bodies run in the
+`Post` phase, so the physics bodies exist on the first tick. Its `.mctest` scenarios (`tests/`) are the ones
+`test_run` plays: a bot reaches the goal, the walker sends the player back, a jump lands on the walker.
+
+    cmake --build build/linux-gcc-debug --target ember_script
+    build/linux-gcc-debug/projects/EmberScript/ember_script -headless 1 -ticks 1800 -input projects/EmberScript/tests/run_right.input
+
+It is a smaller game than the C++ sample `samples/03_platformer` (one level, one enemy, no wall jump or dash),
+not a line-by-line port; the Luau-versus-C++ twin the determinism stage compares is the bouncing-box sample
+(`samples/script_headless`).
+
+**Gotchas** (found by an agent that built a script-only game blind):
+
+- The `walk_to` bot steers by `x` only in a side view (`plane: "x"`): `through` points and the target never make
+  it climb. Build the level so that walking right gets there (a hill of steps), or put a jump in an `input` script.
+- `mce.quit()` ends the whole run, tests included. A pickup that quits when the last coin is taken ends every test
+  that passes it; log "level complete" and destroy the goal instead, as `goal.luau` does.
+- Two kinematic bodies block each other, so a touch check must be wider than the sum of their half-widths
+  (a 0.4 and a 0.45 half-width: test `|dx| < 1.0`), or the layers' masks must let them overlap (`projects/EmberScript`).
+- `script_check` takes `path` relative to `assets/` (`scripts/player.luau`); `assets/scripts/...` works too.
+- Every MCP call in a `mce_mcp` session shares one scene; a one-shot client that starts a server per call should pass
+  `"scene": "scenes/main.mcscene"` to `run_headless`.
+
+## 27.9 Recipes
+
+Each is a whole script; the state sits in `ScriptVars` or another component, never in a local.
+
+**A countdown that fires once** (`v[1]` = ticks left, set in the scene; `v[16]` = 4 marks a timer entity):
+
+```lua
+local VARS = mce.field("ScriptVars", "v")
+function update()
+    mce.each("ScriptVars", function(e)
+        local v = mce.get(e, VARS)
+        if v[16] ~= 4 or v[1] <= 0 then return end
+        v[1] = v[1] - 1
+        mce.set(e, VARS, v)
+        if v[1] == 0 then mce.signal("timer_done", e) end   -- a sequence or timeline can wait on it
+    end)
+end
+```
+
+**A state machine** is a number in a slot and an if-chain, as `projects/EmberScript/assets/scripts/enemy.luau`
+does (Patrol, Chase, Return); keep the transitions in one place and write the state back once at the end.
+
+**Spawning on a beat** (a prefab every 90 ticks):
+
+```lua
+function update()
+    if mce.tick() % 90 == 0 then
+        mce.instantiate("guid:<prefab>", vector.create(mce.random() * 10, 6, 0))
+    end
+end
+```
+
+**Reacting to physics events** (a sensor under a pickup; see `mce.events`):
+
+```lua
+function update()
+    for _, hit in ipairs(mce.events("TriggerEnter")) do
+        if mce.has(hit.other, "ScriptVars") then mce.destroy(hit.sensor) end
+    end
+end
+```
+
+**Playing a sound on a press:** `if mce.pressed("Jump") then mce.play_sound("guid:<sfx>", -6) end`.

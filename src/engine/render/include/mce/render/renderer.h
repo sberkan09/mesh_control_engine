@@ -117,6 +117,19 @@ public:
     // Records a built Scene3D (shadow, forward HDR, resolve, tonemap) into `target` (null =
     // backbuffer). Outside any pass; init_3d() first.
     void record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target = {});
+    // M-VIEWS: one view of a frame with several (Forward3D::ViewOutput: its slot, its rect of the
+    // target, whether it is the frame's first 3D record).
+    void record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target, const Forward3D::ViewOutput& out);
+
+    // ---- views (M-VIEWS): stable Forward3D view slots for the views a host draws, by a key of its
+    // own (an entity's bits). view_slot() answers the slot a key held last frame, else a free one
+    // (~0u when every slot is taken); end_views() ends the frame: a slot no key asked for since the
+    // last end_views() is released (its targets and history destroyed). Slot 0 is the single-view
+    // path's: released, it keeps its targets for that path.
+    u32 view_slot(u64 key);
+    void end_views();
+    // Forgets every view (an editor play session ends): slots 1.. are released.
+    void release_views();
 
     rhi::SamplerHandle sampler(rhi::Filter filter) const {
         return filter == rhi::Filter::Nearest ? point_sampler_ : linear_sampler_;
@@ -152,6 +165,12 @@ private:
     rhi::BufferHandle quad_indices_;
     Array<TilemapSlot> tilemaps_;
     Array<FontStorage> fonts_;
+    struct ViewSlot {
+        u64 key = 0;
+        bool held = false;  // a key owns the slot
+        bool asked = false; // view_slot() named it since the last end_views()
+    };
+    ViewSlot view_slots_[Forward3D::kMaxViews];
 };
 
 }  // namespace mce::render

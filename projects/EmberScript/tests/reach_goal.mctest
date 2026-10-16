@@ -1,0 +1,12 @@
+{
+  "name": "the player reaches the goal",
+  "scene": "scenes/main.mcscene",
+  "ticks": 2400,
+  "bot": { "kind": "walk_to", "actor": "Player", "target": "Goal", "plane": "x" },
+  "until": { "alive": "Goal", "value": false },
+  "assert": [
+    { "alive": "Goal", "value": false },
+    { "log_contains": "level complete" },
+    { "log_errors": 0 }
+  ]
+}

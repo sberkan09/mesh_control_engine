@@ -1,0 +1,10 @@
+{
+  "format": "mce-project",
+  "version": 1,
+  "name": "EmberScript",
+  "title": "EmberScript",
+  "engine_version": "0.9.0",
+  "games": [],
+  "start_scene": "6513270e-269e-4d37-b2a7-4de452e6b438",
+  "plugins": []
+}

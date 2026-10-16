@@ -18,6 +18,9 @@
 // held. Segments may overlap: later lines win for the same action. "Touch" and "Mouse" are not
 // actions: they put one finger (InputState::touch_points) or the mouse (mouse_pos_px) there.
 //
+// Local players (M-VIEWS): "P2/Move" is the second player's Move ("P1/Move" is plain "Move"; P2..P4 read as
+// player_action_id(1..3, "Move"), the names a slot-N input map publishes).
+//
 // The script implements app::IInputSource, so AppDesc::input_source = &script feeds every tick.
 
 #include "mce/app.h"

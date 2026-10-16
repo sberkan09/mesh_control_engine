@@ -1,0 +1,22 @@
+{
+  "format": "mce-skeleton2d", "version": 1, "guid": "b0a30000-0000-4000-8000-000000000031", "name": "puppet",
+  "bones": [
+    { "name": "root" },
+    { "name": "torso", "parent": "root", "x": 0, "y": 0.2, "length": 1 },
+    { "name": "upper", "parent": "torso", "x": 0.3, "y": 0.9, "rotation": -20, "length": 0.6 },
+    { "name": "forearm", "parent": "upper", "x": 0.6, "y": 0, "length": 0.6 }
+  ],
+  "slots": [
+    { "name": "body", "bone": "torso", "texture": null, "size": [0.6, 1.1], "pivot": [0.5, 0], "tint": [0.3, 0.6, 0.9, 1] },
+    { "name": "arm", "bone": "upper", "texture": null, "size": [0.6, 0.2], "pivot": [0, 0.5], "tint": [0.9, 0.7, 0.3, 1] },
+    { "name": "hand", "bone": "forearm", "texture": null, "size": [0.6, 0.18], "pivot": [0, 0.5], "tint": [0.9, 0.4, 0.3, 1] }
+  ],
+  "ik": [
+    { "name": "arm", "bones": ["upper", "forearm"], "mix": 1, "type": "two_bone" }
+  ],
+  "animations": [
+    { "name": "wave", "duration": 1, "loop": true,
+      "bones": { "torso": { "rotate": [ { "t": 0, "value": 0 }, { "t": 0.5, "value": 4 }, { "t": 1, "value": 0 } ] } },
+      "events": [ { "t": 0.5, "name": "beat" } ] }
+  ]
+}

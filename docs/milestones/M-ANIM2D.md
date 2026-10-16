@@ -13,7 +13,7 @@
 | 2. Bone clips and crossfade, driven by the `.mcanim` state graph | SBA-141 | done |
 | 3. Mesh attachments and CPU skinning, deform keys (and the slot keys moved from step 2) | SBA-142 | done |
 | 4. Two-bone and CCD IK as data | SBA-143 | done |
-| 5. Editor skeleton panel and MCP `skel2d_*` tools | SBA-144 | — |
+| 5. Editor skeleton panel and MCP `skel2d_*` tools | SBA-144 | done |
 | 6. Demo, user guide, gates | SBA-145 | done |
 | Later: Spine / DragonBones JSON import | SBA-146 | not scheduled |
 

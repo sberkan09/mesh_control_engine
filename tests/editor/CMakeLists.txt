@@ -17,6 +17,7 @@ mce_add_test(test_editor UMBRELLA
         test_prefab_overrides.cpp
         test_prefab_preview.cpp
         test_scene_editing.cpp
+        test_skeleton2d_editor.cpp
         test_stub_world.cpp
         test_terrain_editor.cpp
         test_tilemap.cpp
