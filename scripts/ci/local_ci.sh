@@ -8,14 +8,18 @@
 #   scripts/ci/local_ci.sh --batch    # every 3rd task and at a milestone's end: everything (same as no stage)
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages
 #
-# Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism, web. linux-gcc-release
-# runs only when named: determinism already builds and runs the gcc Release tree, and linux-clang-release
-# runs the tests in Release.
+# Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism, release-build, web.
+# release-build compiles the whole gcc Release tree (the SDK's) without running it: determinism builds only
+# the targets it runs. linux-gcc-release runs only when named: it is that tree plus its tests, and
+# linux-clang-release runs the tests in Release.
 # GPU tests run under Xvfb + Mesa llvmpipe (GL) and lavapipe (Vulkan, for mce_rhi_sdlgpu, ADR-0038), in
 # linux-gcc-debug only; the other presets build them without running them.
 #
 # --task adds determinism when the change touches simulation code: src/engine/{core,ecs,refl,scene,kit,
 # kit_novel,physics2d,physics3d,audio,input,net,monetize}, or a changed file with MCE_COMPONENT or state_hash.
+#
+# --task also adds release-build when the change touches C++ code: -O2 enables warnings (format-truncation,
+# maybe-uninitialized) the Debug tree cannot raise.
 #
 # tidy checks the translation units changed since the merge base with $MCE_TIDY_BASE (default
 # origin/dev_claude), committed or not, plus the ones that include a changed header. It covers the whole
@@ -47,7 +51,7 @@ cd "$ROOT"
 
 export LIBGL_ALWAYS_SOFTWARE=1  # Mesa llvmpipe: GL 4.5 core without a GPU
 
-ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism web)
+ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism release-build web)
 declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=OFF [linux-gcc-release]=OFF [linux-asan]=OFF)
 
 stages=()
@@ -92,6 +96,19 @@ touches_sim() {
 if [[ $task_run -eq 1 ]] && touches_sim; then
     echo "=== --task: the change touches simulation code, determinism runs too"
     stages+=(determinism)
+fi
+
+# --task: a change to C++ code also builds the gcc Release tree, where -O2 raises warnings Debug does not.
+touches_cpp() {
+    local f
+    while IFS= read -r f; do
+        [[ "$f" =~ ^(src|samples|tests|projects|tools)/.*\.(h|hpp|cpp|cc|c)$ ]] && return 0
+    done < <(changed_files)
+    return 1
+}
+if [[ $task_run -eq 1 ]] && touches_cpp; then
+    echo "=== --task: the change touches C++ code, the gcc Release build runs too"
+    stages+=(release-build)
 fi
 
 # --task: a change to the web build (the WebGPU backend, the web glue, the shell and its scripts) also runs web.
@@ -210,6 +227,7 @@ preconfigure() {
             linux-*) [[ -n "${GPU_TESTS[$s]:-}" ]] && want[$s]=1 ;;
             tidy) want[linux-clang-debug]=1 ;;
             determinism) want[linux-gcc-debug]=1; want[linux-gcc-release]=1 ;;
+            release-build) want[linux-gcc-release]=1 ;;
         esac
     done
     [[ ${#want[@]} -gt 1 ]] || return 0
@@ -309,6 +327,15 @@ stage_demo_games_determinism() {
         python3 scripts/ci/determinism.py --runs 3 \
             --args="-headless 1 -ticks 1800 -scene 5ebadc24-96f4-438c-a342-d6f37fb5ca8c -input projects/MarbleGarden/tests/win_route.input" \
             build/linux-gcc-debug/projects/MarbleGarden/marble_garden build/linux-gcc-release/projects/MarbleGarden/marble_garden
+}
+
+# Every target of the gcc Release tree, tests included, compiled but not run. The determinism stage builds
+# only the targets it runs, so a -Werror that fires in the editor, the MCP server or a sample in Release
+# (gcc 13's -Wformat-truncation did, #359) passed every earlier stage; the SDK build (release_sdk.sh) is
+# this tree.
+stage_release_build() {
+    configure linux-gcc-release &&
+        cmake --build --preset linux-gcc-release
 }
 
 stage_determinism() {
@@ -440,6 +467,7 @@ run_stage() {
         linux-*) [[ -n "${GPU_TESTS[$1]:-}" ]] || { echo "unknown preset stage: $1"; return 2; }; stage_preset "$1" ;;
         tidy) stage_tidy ;;
         determinism) stage_determinism ;;
+        release-build) stage_release_build ;;
         web) stage_web ;;
         *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]})"; return 2 ;;
     esac
