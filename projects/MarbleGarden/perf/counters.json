@@ -1,0 +1,20 @@
+{
+  "runs": [
+    {
+      "scene": "scenes/garden.mcscene",
+      "frames": 60,
+      "warmup": 10,
+      "width": 480,
+      "height": 270,
+      "counters": {
+        "draws": 109,
+        "passes": 17,
+        "dispatches": 1,
+        "triangles": 1230,
+        "meshes": 23,
+        "sprites": 13,
+        "sprite_batches": 2
+      }
+    }
+  ]
+}

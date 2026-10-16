@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Performance counter gate and guide, M-PERF step 5 (SBA-117). `scripts/ci/perf_gate.py` runs `perf_run` on
+  a copy of a project and fails when draws, passes, dispatches, triangles, meshes, sprites or sprite batches
+  grow past the project's `perf/counters.json` (`--update` writes new ones). Glowmoth and Marble Garden run it
+  in `local_ci.sh` (`*_perf_counters`), and `glowmoth_perf_counters_seeded` proves it catches a planted draw
+  regression. New user guide chapter 25, "Performance". M-PERF is done on the desktop.
 - The editor's Profiler reads captures, M-PERF step 4 (SBA-116). A new **Capture** tab opens a `.mcperf` from
   the player or `perf_run`: the budget verdict for a target, a strip of every frame (spikes red, over-budget
   amber; click one), the chosen frame's phases, GPU stages and counters, the spikes and the slowest systems.
