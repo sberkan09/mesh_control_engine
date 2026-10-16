@@ -11,6 +11,8 @@
 //   - fetch_file(): downloads a file next to the page (the cooked pack) into the virtual file system,
 //     reporting progress through the page's Module.setStatus.
 
+#include "mce/types.h"
+
 namespace mce::web {
 
 // True in a browser build.
@@ -24,6 +26,10 @@ void persist();
 
 // Resumes the page's audio on its first user gesture. Idempotent.
 void install_audio_unlock();
+
+// Waits up to `ms` with the last frame still on the page (Module.mceLingering is true), so a test can
+// screenshot a run that is about to end; the page's Module.mceRelease() ends the wait early.
+void linger(u32 ms);
 
 // Downloads `url` (relative to the page) into `path`, creating its folder. False on a network or
 // HTTP error, and always outside a browser.
