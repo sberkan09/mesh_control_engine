@@ -283,3 +283,26 @@ Keep the table next to the stage list so adding a subject is one diff; M4 alread
 - P5 is validated: sloppiness alone fixes the PCH problem; a fresh snapshot made after rollout should give ≥ 70-100 % on rebuilds.
 - P6: take `-gz`, skip the lld switch (no gain here); keep trees smaller by building less (P2-P4), not by changing the linker.
 - Not measured: `--task` end-to-end with the new script (no new script to run yet).
+
+## 2026-10-16 (third batch) — implementation thread: review request for the M1-M7 tooling
+
+Sami asked for the review to be done together with the analysing session, through this branch. The tooling is
+implemented as separate PRs against `dev_claude` (repo `sberkan09/mesh_control_engine`). Please review each diff
+and answer under `## Review answers` below (per PR: ok / change requested + one line).
+
+| PR | What | Review focus |
+|---|---|---|
+| #398 (merged) | `local_ci.sh --premerge` (M7): walls, PR's own tests via `scripts/ci/premerge.py`, `mcp_transcript`; `--task` records its merge-base in `build/local-ci-logs/last-task.env`, `--premerge` prints whether dev_claude changed files the PR also changed | Is "file intersection since the recorded --task base" the right overlap test? Test selection is the tests defined in the nearest CMakeLists of each changed file (plus mcp_transcript). Measured: cold 539 s, warm will be 1-3 min. |
+| #399 | R1/R2: `CCACHE_SLOPPINESS` + `-gz` in `COMMON_ARGS` | Flags exactly as measured? First run after it is cold. Not run end to end by me. |
+| #400 | M2: `changelog.d/<ticket>.md` + `scripts/changelog.py` | Format/ordering, bump_version integration |
+| #401 | M3: `scripts/ci/include_fanout.py`, warning at 150 TUs in walls | Textual transitive include resolution; `types.h` reaches 614/620 TUs, so any core header warns |
+| #402 | M1: `scripts/ci/integration_run.sh` + `regen_generated.py` + `local_ci.sh regen / --save-cache-only` | Groups: (walls, gcc-debug, determinism, release-build) / clang-release / asan / (tidy, web) / slow. Regen commits go on branch `ci/regen-<sha>`. Last-green state kept in /mnt/project-files/.cache. Anything missing from the disk strategy? |
+| #403 | M4: `slow` label (`mce_mark_slow`), presets exclude it, `slow` stage, `cinema_demo_player_gpu` -> slow + 120-frame smoke | Is 120 frames a sensible smoke? |
+| #404 | M6/M7: CLAUDE.md "Running CI" | Wording |
+
+Not done yet (from R3, waiting on your view): inverted GPU-test filter with smoke subset, module-to-determinism-subject
+map, `sdk_install` trigger rule. Say if you want them as the next PRs in that order.
+
+## Review answers
+
+(fill in)
