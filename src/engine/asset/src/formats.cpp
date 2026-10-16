@@ -130,6 +130,7 @@ u64 texture_level_bytes(TextureFormat format, u32 width, u32 height) {
     switch (format) {
         case TextureFormat::RGBA8: return static_cast<u64>(width) * height * 4;
         case TextureFormat::ASTC_4x4: return static_cast<u64>((width + 3) / 4) * ((height + 3) / 4) * 16;
+        case TextureFormat::RGBA16F: return static_cast<u64>(width) * height * 8;
     }
     return 0;
 }
@@ -396,6 +397,18 @@ void MaterialChunk::uv_scale(f32 out[2]) const {
 u32 MaterialChunk::pack_uv_scale(f32 u, f32 v) {
     if (u == 1.0f && v == 1.0f) return 0;
     return static_cast<u32>(f32_to_half(u)) | static_cast<u32>(f32_to_half(v)) << 16;
+}
+
+Guid MaterialExt::height() const {
+    const u32* t = height_texture;
+    return Guid{static_cast<u64>(t[0]) | static_cast<u64>(t[1]) << 32, static_cast<u64>(t[2]) | static_cast<u64>(t[3]) << 32};
+}
+
+void MaterialExt::set_height(Guid g) {
+    height_texture[0] = static_cast<u32>(g.hi);
+    height_texture[1] = static_cast<u32>(g.hi >> 32);
+    height_texture[2] = static_cast<u32>(g.lo);
+    height_texture[3] = static_cast<u32>(g.lo >> 32);
 }
 
 MaterialExt MaterialExt::of_material(Span<const byte> payload) {

@@ -71,6 +71,36 @@ TEST_CASE("formats: texture write/read and pixel views") {
     CHECK(!TextureView::read(payload.span().first(8)));
 }
 
+TEST_CASE("formats: RGBA16F level sizes and the material extension's height map (M-VISUAL3 seam)") {
+    CHECK(texture_level_bytes(TextureFormat::RGBA16F, 4, 2) == 64);
+    CHECK(texture_level_bytes(TextureFormat::RGBA16F, 1, 1) == 8);
+    CHECK(texture_level_bytes(TextureFormat::RGBA8, 4, 2) == 32);
+
+    MaterialExt e{};
+    CHECK(e.height().is_null());
+    CHECK(!e.parallax());
+    CHECK(!e.any());
+    const Guid g{0x0f1e2d3c4b5a6978ull, 0x8796a5b4c3d2e1f0ull};
+    e.set_height(g);
+    CHECK(e.height() == g);
+    CHECK(!e.parallax());  // no scale yet
+    e.height_scale = 0.04f;
+    e.parallax_steps = 8u | 32u << 16;
+    CHECK(e.parallax());
+    CHECK(!e.any());  // the lobes stay off: parallax is separate
+
+    // Round trip through a material chunk's payload, as the material importer writes it.
+    Array<byte> payload;
+    payload.resize(sizeof(MaterialChunk) + sizeof(MaterialExt), byte{0});
+    std::memcpy(payload.data() + sizeof(MaterialChunk), &e, sizeof(MaterialExt));
+    const MaterialExt r = MaterialExt::of_material(payload.span());
+    CHECK(r.height() == g);
+    CHECK(r.height_scale == 0.04f);
+    CHECK((r.parallax_steps & 0xFFFFu) == 8u);
+    CHECK((r.parallax_steps >> 16) == 32u);
+    CHECK(MaterialExt::of_material(payload.span().first(sizeof(MaterialChunk))).height().is_null());
+}
+
 TEST_CASE("formats: sfx write/read with loop validation") {
     const f32 s[6] = {0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f};
     SfxHeader h{};
