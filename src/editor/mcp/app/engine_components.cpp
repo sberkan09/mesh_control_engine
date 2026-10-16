@@ -4,6 +4,7 @@
 
 #include "mce/audio/components.h"     // AudioSource
 #include "mce/ecs/hierarchy.h"        // ChildOf, WorldTransform
+#include "mce/ecs/replicated.h"       // NetReplicated, NetOwner (M-NET2)
 #include "mce/ecs/save.h"             // SaveKey
 #include "mce/ecs/transform.h"        // LocalTransform
 #include "mce/kit/anim3d.h"            // AttachToBone, IKTarget3D

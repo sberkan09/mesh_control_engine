@@ -33,11 +33,21 @@
 // controls is drawn by the game's Predictor, a round trip ahead of the snapshots. set_predicted()
 // tells apply() and update() to leave its LocalTransform alone; latest_transform() gives the
 // server's word on it for Predictor::reconcile().
+//
+// Replication as data (M-NET2 step 7, mce/ecs/replicated.h): an entity a scene marks NetReplicated
+// gets its NetId from assign_tagged(), with no code. Every reflected component field flagged
+// Replicated (MCE_COMPONENT(Health, (hp, Replicated))) travels in the snapshot after the game's
+// extra bytes, and the client writes those fields into its mirror (adding the component when
+// missing, leaving the other fields alone). Entity fields travel as NetIds and come back as the
+// client's own entities (null when the target is not replicated). A component whose replicated
+// fields differ between server and client builds is skipped and counted, never misread.
 
 #include "mce/containers/hash_map.h"
+#include "mce/ecs/replicated.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/net/bytes.h"
+#include "mce/refl/type.h"
 
 namespace mce::net {
 
@@ -69,6 +79,11 @@ public:
     u32 assign(Commands& cmd, Entity e, u32 kind);
     // Outside a phase (setup code).
     u32 assign(World& world, Entity e, u32 kind);
+    // Assigns a NetId to every entity marked NetReplicated that has none yet (kind from the
+    // component), in entity order; returns how many. Call after loading a scene, or every tick to
+    // pick up entities spawned with NetReplicated. Outside a phase / inside one through `cmd`.
+    u32 assign_tagged(World& world);
+    u32 assign_tagged(Commands& cmd, World& world);
 
     // Appends one snapshot of every entity with NetId + LocalTransform, in id order.
     void write_snapshot(World& world, u32 tick, ByteWriter& out) const;
@@ -109,6 +124,8 @@ struct ApplyResult {
     u32 spawned = 0;
     u32 updated = 0;
     u32 despawned = 0;
+    u32 components = 0;          // components whose Replicated fields were written
+    u32 skipped_components = 0;  // unknown here, or with different Replicated fields
 };
 
 class ReplicationClient {
@@ -173,7 +190,10 @@ private:
         NetId id;
         LocalTransform transform;
         Span<const u8> extra;
+        Span<const u8> fields;
     };
+    void apply_fields(Commands& cmd, const World& world, Entity e, Span<const u8> fields, ApplyResult& result);
+    Array<u8> scratch_;  // one component's bytes while its fields are written
     ReplicationHooks hooks_;
     HashMap<u32, Mirror> entities_;
     Array<Entry> entries_;  // scratch: the snapshot being applied
@@ -198,7 +218,12 @@ private:
 };
 
 // Snapshot wire format, for tools and tests: "MSN" magic, version, tick, entity count, entries.
+// Version 2 (M-NET2 step 7) adds each entry's Replicated fields after its extra bytes.
 inline constexpr u8 kSnapshotMagic[3] = {'M', 'S', 'N'};
-inline constexpr u8 kSnapshotVersion = 1;
+inline constexpr u8 kSnapshotVersion = 2;
+
+// The Replicated fields of a reflected type, hashed by name, kind and size (0: it has none). Server
+// and client compare it so a component built differently on each side is skipped, not misread.
+u32 replicated_layout(const refl::TypeRecord& type);
 
 }  // namespace mce::net

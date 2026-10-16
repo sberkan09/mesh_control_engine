@@ -5,6 +5,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Replication as data, M-NET2 step 7 (SBA-88): mark entities `NetReplicated` in a scene and
+  `ReplicationServer::assign_tagged` gives them their `NetId` with no code. Component fields flagged
+  `Replicated` (`MCE_COMPONENT(Health, (hp, Replicated))`) travel in every snapshot and land in the client's
+  copy; other fields keep the client's value, and `Entity` fields come back as the client's own entities.
+  `NetOwner` names the player that controls an entity. A component built with other flagged fields on the
+  client is skipped and counted, never misread. `refl_describe_component` marks the fields `"replicated"`.
+  Snapshot version 2. User guide 20.9.
 - Performance budgets per target, M-PERF step 2 (SBA-114). The `.mceproj` takes `"budgets"` for desktop, mobile
   and web: frame, sim, render and GPU milliseconds, draws, triangles, sprites, upload bytes, heap allocations,
   sprite textures per scene and the largest texture edge. Fields left out keep the engine defaults. `project_set`

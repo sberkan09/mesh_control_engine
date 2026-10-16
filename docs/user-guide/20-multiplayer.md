@@ -371,7 +371,42 @@ ordered, because it runs on TCP.
 simulated network. Each message takes two trips (to the relay and from it), so `-latency` counts
 twice.
 
-## 20.9 What it does not do yet
+## 20.9 Replication as data
+
+You can mark what replicates in the scene instead of writing `assign` and `write_extra` code. Add
+`NetReplicated` to every entity the clients should see, and set its `kind` to your own archetype
+number, the same one `on_spawn` receives. After the server loads the scene, one call gives all of
+those entities their `NetId`:
+
+```cpp
+rep.assign_tagged(world);              // after loading; again each tick to pick up new entities
+rep.assign_tagged(f.commands(), f.world());   // the same from inside a system
+```
+
+Fields opt in to replication with the `Replicated` attribute, the way `Save` opts them in to save
+games:
+
+```cpp
+struct Health { f32 hp = 100; f32 regen = 1; Entity attacker; };
+MCE_COMPONENT(Health, (hp, Replicated), regen, (attacker, Replicated))
+```
+
+Every snapshot carries the flagged fields of every component on a replicated entity. The client
+writes them into its own copy and adds the component when the entity does not have it yet. Fields
+without the flag keep the client's own value, so a component can mix server state with things only
+the client uses. An `Entity` field arrives as the client's own entity for the same object, or as
+null when the target is not replicated. `NetOwner { peer }` names the player that controls an entity
+and is replicated itself, so each client can find its own player. Through a relay room the peer is
+the member number, which is the same on every member.
+
+Both builds must agree on a component's flagged fields. When a client runs a build where they differ
+(a field renamed, added or resized), that component is skipped and counted in
+`ApplyResult::skipped_components` instead of being read wrongly, and the rest of the snapshot still
+applies. Flagged fields cost bytes in every snapshot for every entity, so flag what clients draw or
+show, not the whole component. `refl_describe_component` over MCP marks these fields
+`"replicated": true`, so an agent can see and set up replication without reading code.
+
+## 20.10 What it does not do yet
 
 Rollback sessions do not adjust for a peer whose clock runs ahead (it simply waits more), and
 spectators are not supported. Every client receives every
