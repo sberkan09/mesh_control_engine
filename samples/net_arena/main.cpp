@@ -262,7 +262,7 @@ public:
                 if (base.ends_with(".ppm")) base.remove_suffix(4);
                 FixedString<1100> name(base);
                 char suffix[32];
-                std::snprintf(suffix, sizeof(suffix), "_%05llu", static_cast<unsigned long long>(rc.frame_index + 1));
+                std::snprintf(suffix, sizeof(suffix), "_%05llu", static_cast<unsigned long long>(rc.frame_index) + 1);
                 name.append(suffix);
                 name.append(".ppm");
                 capture(name.c_str(), bb);
