@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Flag check, M-DOCCHECK step 2 (SBA-177): `check_docs.py` also fails for a `-flag` after `mce_player` in a
+  document that no source declares as a console variable. Every documented flag passes today.
+- Docs checks, M-DOCCHECK step 1 (SBA-176): the walls stage runs `scripts/ci/check_docs.py`, which fails for a
+  relative link or `#anchor` in a document that points nowhere and for an `#include` line of an `mce/` header that names no
+  header (`scripts/ci/docs.allow` lists the four accepted sketches). The guide index's broken platform-notes link
+  is fixed.
 - Accessibility checks on themed UI documents, M-UI-DATA2 step 3 (SBA-155): `project_check` judges the Text,
   Button and Toggle labels of a `.mcui` document with the kind's default look and its theme applied (before,
   themed colors were skipped and unstated sizes unseen), and names the widget by its path. User guide 24.5.
@@ -23,6 +29,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   entities, and a lantern on a hand bone. It plays headless twice for the same hash (`ctest -R skel2d_demo`) and
   `test_kit` checks its poses. The six 2D skeleton components leave `scripts/ci/sample_coverage.allow`. User
   guide 7.13.
+- Systems tour sample, M-COVER step 4 (SBA-160): `samples/systems_tour` shows `NetReplicated`, `NetOwner`, `Dialogue`
+  and `DialogueInput` on one NPC with a compiled story and runs the conversation to its end
+  (`ctest -R sample_systems_tour`). The sample coverage list now holds only `Blackboard` and `SceneChunkStatus`.
+  M-COVER is done.
 - Behavior tree MCP tools, the squad demo and the gates, M-AI step 6 (SBA-133): `bt_create`, `bt_add_node` and
   `bt_set` write a `.mcbt` the cook checks before anything is written, and `bt_trace` plays a saved scene
   headless and reports one brain's running path and blackboard over time and when each node started.
