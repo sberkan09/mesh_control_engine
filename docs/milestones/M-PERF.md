@@ -1,6 +1,6 @@
 # M-PERF — Performance tooling for games and agents (milestone record)
 
-**Status:** active (added 2026-10-15; steps 1–4 done). Plan: ROADMAP §M-PERF; Linear SBA-113 … SBA-117.
+**Status:** done on the desktop (added 2026-10-15; steps 1–5, the demo and the gates). Plan: ROADMAP §M-PERF; Linear SBA-113 … SBA-117.
 **Why:** a game made with MCE, by a person or by an agent, has no way to answer "where does my frame go, and
 does it fit the phone or the browser?". Today's parts are scattered and editor-only: the editor's Profiler
 panel (`PerfMonitor`, FR-EDT-140), `World::set_profiling` per-system timings, Forward3D's GPU stage
@@ -22,7 +22,7 @@ replacement (Tracy stays the developer's deep-dive tool).
 | 2 | Budgets per target in the project and static `project_check` rules | SBA-114 | done |
 | 3 | MCP `perf_run` and `perf_compare` | SBA-115 | done |
 | 4 | The editor's Profiler panel reads captures: frame strip, frame breakdown, compare | SBA-116 | done |
-| 5 | Counter gate in `local_ci.sh`, user guide chapter, demo | SBA-117 | not started |
+| 5 | Counter gate in `local_ci.sh`, user guide chapter, demo | SBA-117 | done |
 
 **Demo:** an agent, over MCP alone, runs `perf_run` on a sample with a planted hotspot (a system that walks
 every entity per entity, and a scene with an unbatched texture per sprite), reads the report, fixes both, and
@@ -168,3 +168,77 @@ the Profiler and logs `Profiler: opened <file> (N frames, N systems, N spikes)`,
 
 **Known limits.** The panel picks files by path (the editor has no file dialog for project files outside
 `assets/`). The strip draws one bar per frame, so long captures pack bars below a pixel wide.
+
+## Step 5 — the counter gate, the guide chapter, the demo
+
+**Counter gate.** `scripts/ci/perf_gate.py` reads a project's `perf/counters.json` (scenes, run sizes and the
+counters each had). It runs MCP `perf_run` on a fresh copy of the project and fails when a held counter (draws,
+passes, dispatches, triangles, meshes, sprites, sprite batches) is above its baseline. A counter below its
+baseline passes with a note, and `--update` writes the measured counters back. Upload bytes and heap allocations
+are printed, not held. Times are never judged. The gate drives the project's own `<game>_mcp`, as `demo_gate.py`
+does, so it measures with the game's host and module.
+
+- Baselines: Glowmoth `scenes/level1.mcscene` and `scenes/main.mcscene` (10 draws, 9 sprite batches each);
+  Marble Garden `scenes/garden.mcscene` (109 draws, 17 passes, 1 dispatch, 1,230 triangles, 23 meshes).
+- ctest: `glowmoth_perf_counters`, `marble_garden_perf_counters` (label `gpu`), so `local_ci.sh`'s gcc-debug stage
+  runs them. `glowmoth_perf_counters_seeded` adds three sprites with a texture each to the copy (`--seed`) and
+  passes only when the gate fails on draws. It caught 13 draws > 10, 135 sprites > 132 and 12 batches > 9.
+
+**Guide.** Chapter 25, "Performance": captures, budgets per target, `perf_run` / `perf_compare`, the Profiler's
+Capture tab, the counter gate, and a table of common fixes.
+
+## Demo
+
+Run in this container under Xvfb with Mesa's software GL, on a copy of Glowmoth, through the stock `mce_mcp
+--module libglowmoth.so`. Everything below came from MCP calls; the code change was a file edit and `module_build`.
+
+**Planted.**
+- Data: 900 "petal" sprites in `level1`, each with its own 4×4 texture, all in the camera's view.
+- Code: a `glowmoth_glow` system that, for every entity, walks every entity to count the ones within 3 m.
+
+**Before** (`perf_run`, target `mobile`, 120 frames after 20 warm-up, 960×540): the verdict fails.
+
+| Over | Measured | Mobile limit |
+|---|---|---|
+| `sim_ms` p95 | 8.41 | 4 |
+| `render_ms` p95 | 14.61 | 8 |
+| `draws` max | 910 | 400 |
+
+`top_systems` led with `glowmoth_glow` at 7.55 ms per frame; the next system was `physics_step` at 0.03.
+`draws` came with the advice "share textures (one spritesheet) so sprites batch". `project_check` with
+`target: mobile` warned that "sprites here use 909 different textures ... the mobile budget allows 16".
+
+**Fixed.**
+- Code: `glowmoth_glow` buckets entities into 3 m cells and looks at each sprite's cell and its eight neighbours.
+  `module_build` rebuilt and reloaded the module with 0 errors.
+- Data: `component_set` pointed the 900 petals' `Sprite.texture` at one texture.
+
+**After** (`perf_run`, same arguments): the verdict passes. `perf_compare`:
+
+| | Before | After | Change |
+|---|---|---|---|
+| frame p95 | 25.31 ms | 9.95 ms | −60.7% |
+| sim p95 | 8.41 ms | 1.95 ms | −76.8% |
+| render p95 | 14.61 ms | 5.90 ms | −59.6% |
+| draws | 910 | 11 | −899 |
+| sprite batches | 909 | 10 | −899 |
+| `glowmoth_glow` | 7.55 ms/frame | 1.52 ms/frame | |
+
+`better`: frame_ms, sim_ms, render_ms, draws, sprite_batches, upload_bytes, heap_allocations; `worse`: none;
+`pass_before: false`, and the after verdict passes. `project_check` gave no performance finding. The grid still
+costs 1.5 ms in this debug build (it sorts 1,000 cells every tick); a release build or a grid kept between ticks
+would cut it further.
+
+## Gates (as run)
+
+- A capture never changes the sim hash: `player_perf_capture` (step 1).
+- The same run gives the same counters: `test_mcp_agent` runs `perf_run` twice and gets identical
+  `counters_max` (step 3). The counter gate holds those counters on every `local_ci.sh` run. Counters come from
+  the RHI's own counts, not from timing, so they do not depend on the machine. Only the GL backend is measured
+  here (another backend can count passes or batches differently).
+- A seeded over-budget scene fails the verdict: `perf_capture` / `judge` tests (step 2), and the demo above.
+- The counter stage catches a seeded draw regression: `glowmoth_perf_counters_seeded`.
+- `local_ci.sh` green on every step. The `--batch` at milestone end is recorded in the step 5 PR.
+
+**Open.** A capture on a phone and in a browser (the mobile and web budgets are judged here on desktop timings;
+the counters carry over). This needs a device.

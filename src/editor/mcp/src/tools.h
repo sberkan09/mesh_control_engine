@@ -47,6 +47,8 @@ bool asset_tool_arg(ToolCall& c, const editor::ProjectAsset*& out);
 bool asset_rel_valid(StringView rel);
 cook::String asset_guid_ref(asset::Guid g);
 bool asset_validate_and_write(ToolCall& c, StringView rel, asset::Guid guid, StringView text);
+// tools_terrain.cpp (M-TERRAIN 6): terrain_sculpt, terrain_paint, terrain_import, terrain_generate.
+Span<const ToolDef> terrain_tool_table();
 // tools_ui.cpp (M-UI-DATA step 5): ui_list, ui_create, ui_widget_add / set / remove, ui_preview.
 Span<const ToolDef> ui_tool_table();
 // The UI document named by 'document' (a .mcui path or "guid:<uuid>"), read and checked.

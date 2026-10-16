@@ -1,17 +1,21 @@
 // Solstice Reach: the game played through its real systems on the cooked pack.
 //
-//   - the C++ terrain port matches the Python generator's height field to the float (the collider
-//     and the drawn chunks agree)
+//   - the C++ terrain port matches the Python generator's height field to the float, and the drawn
+//     Terrain3D samples the same field (the collider and the drawn island agree)
 //   - the authored island has what the design needs: seven heliostats in a chain, shards, a spawn
 //   - the bot (autopilot over the authored waypoints) aligns every mirror, the hour follows
 //   - two runs hash the same (determinism)
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
 #include "mce/asset/asset_system.h"
+#include "mce/asset/formats.h"
+#include "mce/ecs/hierarchy.h"
 #include "mce/input/ecs.h"
+#include "mce/kit/kit3d.h"
 #include "mce/scene/scene.h"
 #include "solstice_reach.h"
 #include "terrain.h"
@@ -95,6 +99,42 @@ TEST_CASE("solstice_reach: the island is authored") {
     const Keeper& k = g.keeper();
     CHECK(k.pos.y > terrain::height_f(k.pos.x, k.pos.z));
     CHECK(k.pos.y < terrain::height_f(k.pos.x, k.pos.z) + 3.0f);
+}
+
+TEST_CASE("solstice_reach: the island is a painted Terrain3D on the collider's height field (M-TERRAIN 6)") {
+    Game g(false);
+    Entity island;
+    asset::Guid guid;
+    u32 terrains = 0;
+    g.w.query<const kit::Terrain3D&>().each([&](Entity e, const kit::Terrain3D& t) {
+        island = e;
+        guid = t.terrain.guid;
+        ++terrains;
+    });
+    REQUIRE(terrains == 1);
+    auto h = g.assets.load_sync<asset::Terrain>(guid);
+    REQUIRE(static_cast<bool>(h));
+    auto view = asset::TerrainView::read(g.assets.resolve(h.value()));
+    REQUIRE(static_cast<bool>(view));
+    const asset::TerrainView& v = view.value();
+    CHECK(v.header->layer_count == 4);
+    const f32 half = 0.5f * v.header->size[0];
+    // Every sample stands on the field to its 16-bit step; between samples the drawn surface stays
+    // within a few centimetres on the walkable ground.
+    f64 worst = 0.0;
+    for (u32 z = 0; z < v.resolution(); z += 3)
+        for (u32 x = 0; x < v.resolution(); x += 3) {
+            const f64 px = -half + f64(x) * v.spacing_x(), pz = -half + f64(z) * v.spacing_z();
+            worst = std::max(worst, std::fabs(v.sample(x, z) - terrain::height(px, pz)));
+        }
+    CHECK(worst < 0.002);
+    // The grass grows from the grass layer as the island's child.
+    u32 foliage = 0;
+    g.w.query<const kit::TerrainFoliage3D&, const ChildOf&>().each([&](const kit::TerrainFoliage3D& f, const ChildOf& c) {
+        foliage += c.parent == island && f.layer == 1;
+    });
+    CHECK(foliage == 1);
+    g.assets.release(asset::AnyHandle(h.value()));
 }
 
 TEST_CASE("solstice_reach: the bot aligns every mirror and the hour follows") {
