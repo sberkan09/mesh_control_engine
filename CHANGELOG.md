@@ -8,6 +8,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 - Procedural levels, M-PROCGEN step 4 (SBA-174): MCP `procgen_run` shows a seeded level as text (and checks a run of seeds, or
   bakes it into a `.mctilemap`), a `.mctest` can assert `{"reachable": {kind, width, height, seed, count}}`, and user guide
   chapter 28 explains both.
+- Mutation tests for the chunk readers, M-FUZZ step 1 (SBA-185): `tests/fuzz` has a deterministic byte mutator and
+  runs the asset module's 19 chunk readers over 22,000 mutated payloads of every chunk the samples cook
+  (`ctest -R test_fuzz`); none crashes, hangs or asserts. `docs/milestones/M-FUZZ.md` lists every parser of
+  untrusted bytes and what covers it.
 - Docs checks in the guide, M-DOCCHECK step 4 (SBA-179): user guide 1.8 describes what the walls stage checks in the
   documents and where the accepted misses live. M-DOCCHECK is done.
 - Several agents on one scene, M-WORKFLOW step 2 (SBA-181, #378): `scene_open` always re-reads the file and

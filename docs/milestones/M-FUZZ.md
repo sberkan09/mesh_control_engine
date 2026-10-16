@@ -1,0 +1,63 @@
+# M-FUZZ — Hostile input: loaders and parsers never crash (milestone record)
+
+**Status:** active (added 2026-10-16; step 1 done). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
+
+**Why:** a shipped game opens packs, saves, recordings and downloaded mods it did not write, and the editor and
+MCP server open files agents wrote. Today two parsers have a mutation test (the `.mce` container, 1,000 byte
+mutations, and the MCP request path). Every other reader trusts its input after a header check, and a bad length
+or count there is a crash, a hang or an out-of-bounds read that ASan would find only if something fed it one.
+
+It needs no device: a deterministic mutator, ctest targets and fixes with regression tests.
+
+**Not in scope:**
+- A coverage-guided fuzzer (libFuzzer, AFL): the tests here are seeded and replayable in `local_ci.sh`.
+- Fuzzing the GPU drivers, the OS or third-party libraries beyond the calls the engine makes into them.
+
+## Steps
+
+| # | Step | Linear | State |
+|---|---|---|---|
+| 1 | The mutator and a survey of every parser of untrusted bytes; the asset module's 19 chunk readers over mutated payloads of every cooked sample chunk | SBA-185 | done |
+| 2 | Walk what the readers accept (every view's arrays and offsets) so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, nav mesh) and the importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps); fix the findings | SBA-186 | not started |
+| 3 | Saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | not started |
+| 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | not started |
+
+## Step 1 — Mutator and survey (done, SBA-185)
+
+- **Mutator.** `tests/fuzz/mutator.h`: a splitmix64 stream; each mutant has 1–4 damages (a random byte, a bit
+  flip, a 32-bit field set to an edge value such as 0, 1, 0x7FFFFFFF, 0xFFFFFFFF, a zeroed range, a copied range,
+  two swapped bytes) and one in six is also truncated. The copy sits in 8-byte aligned storage, as a real chunk
+  does. A mutant is a pure function of (pack path, chunk index, iteration), so a failure replays from the
+  `INFO` line the test prints.
+- **Test.** `tests/fuzz/test_chunk_readers.cpp` (`ctest -R test_fuzz`, 3.5 s): every `assets.mce` under the
+  build tree's `samples/` and `projects/` (28 packs), every chunk of a type with a `read()` (17 types present),
+  64 mutants per chunk up to 64 KB, 16 up to 1 MB, 4 above: 22,680 mutants. A reader may return an error or a
+  view; it must not crash, hang or fire an `MCE_ASSERT` (the test main turns an unexpected one into a failure).
+  The run checks it covered at least 10 chunk types.
+- **Result.** No finding: the 19 readers (`ManifestView`, `TextureView`, `SfxView`, `VideoView`, `ScriptView`,
+  `FontView`, `MaterialChunk`, `TilemapView`, `AnimGraphView`, `TerrainView`, `ParticlePresetChunk`,
+  `SequenceView`, `TimelineView`, `BtView`, `Skeleton2DView`, `ShaderView`, `MeshView`, `SceneView`,
+  `ModInfoView`) check their headers and bounds. About 64% of the mutants still read without an error, which
+  means a reader accepts them and the damage sits in what a user of the view reads next: that is step 2.
+  No sample pack contains a Shader or ModInfo chunk, so those two readers ran only on the untouched path.
+
+### Survey: parsers of untrusted bytes
+
+| Entry point | Where | Input comes from | Mutation coverage today | Step |
+|---|---|---|---|---|
+| `.mce` container open | `asset/container.h` `ContainerView::open` | any pack, mod | 1,000 mutations (`test_container`) | done |
+| 19 chunk readers | `asset/formats.h` `*::read` | packs, mods | header and bounds only (this step) | 1, 2 |
+| UI document, theme | `ui/document_data.h` `decode_ui_document`, `decode_ui_theme` | packs | none | 2 |
+| String tables | `loc/string_table.h` `decode_table` | packs, mods | none | 2 |
+| Store, remote config, game services catalogs | `monetize/catalog.h`, `liveops/remote_config.h`, `liveops/game_services.h` | packs | none | 2 |
+| Nav mesh | `physics3d` `.mcnav` bytes | packs | none | 2 |
+| Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | none | 2 |
+| PNG, glTF, Ogg Vorbis, MPEG-1 | `cook/image.h` `decode_png`; cook glTF; `asset/vorbis.h` `decode_vorbis`; video | importing source files | none | 2 |
+| Text assets (`.mcscene`, `.mcprefab`, `.mcanim`, `.mcskel2d`, `.mcterrain`, `.mcbt`, `.mcui`, timelines, `.mcsound`) | cook JSON reader and per-type validators | project sources, agents | none | 2 |
+| Save files, replays | `ecs/save.h` `read_save`, `read_replay` | the player's disk | none | 3 |
+| Input recordings | `input/script.h` `parse` | tests, bug reports | none | 3 |
+| `.mcperf` captures | `editor/core/perf_file.h` | tools | none | 3 |
+| Replication and relay packets | `net/replication.h` `read_ack`, `apply`; `net/relay.h`; `net/bytes.h` `ByteReader` | the network | none | 3 |
+| Luau source and bytecode | `script/` compile and load | project scripts, mods | none | 3 |
+| MCP requests | `mcp/server.h` | agents | mutated and random requests (`test_mcp`) | done |
+| Console and command line | `core/convar.cpp` | the player | none | 3 |
