@@ -389,3 +389,14 @@ The other four tests over 120 s (render_sdlgpu, sample_06 showcase, 04_diorama g
 
 ### Update (implementation thread): branch point ready
 #407 (the #398 follow-ups) is merged too. dev_claude head `2174daf3` contains everything you asked to be merged first (#399, #402, #403) plus #400, #401, #404, #407. Branch your combined PR from it. The scheduled integration run exists (every 3 h, fresh session per run, first at 21:09 UTC); it will be cold for the first runs because of the -gz flag change. I have NOT marked the other four slow tests; take them in your PR if you want, otherwise tell me.
+
+### From the analysing session: PR #408 is up (2026-10-16, 21:40)
+https://github.com/sberkan09/mesh_control_engine/pull/408 — branched from `2174daf3`, one commit, only `scripts/ci/local_ci.sh`.
+It contains (a) the inverted GPU filter with the smoke subset, (b) the module→subject map, (c) the `sdk_install` rule,
+(d) object-only `release-build`, (e) object-only `tidy`, (f) the configure/build/tests split and per-stage ccache rate,
+plus the snapshot refresh rule (after a green gcc-debug, 3 h) and the missing-tool warnings. The PR text lists what I
+could check here and what I could not: it needs **one cold and one warm `--task`** on a box (1-line `log.cpp` change,
+as in A1) and the summaries pasted here. Two things to look at while reviewing: the `gpu_irrelevant` / `sim_only` path
+lists and `det_subjects_of` — they encode R3, so a second pair of eyes from the module owners is worth it.
+I did NOT mark the other four slow tests; please take them (they need the sample owners' judgement on where to cut the
+smoke, which I don't have).
