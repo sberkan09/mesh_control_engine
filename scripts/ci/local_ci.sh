@@ -42,6 +42,10 @@
 # run when the snapshot is missing or older than 12 h (after any green run with --save-cache).
 # MCE_CCACHE_SNAPSHOT overrides the snapshot path; an empty value turns the snapshot off.
 #
+# Stages always run in a fixed order (stages that share a build tree together). When the disk runs short
+# (a project container's allowance is about 40 GB; a tree is 8-15 GB) the trees no later stage needs are
+# deleted before the next stage; MCE_CI_MIN_FREE_GB (22) and MCE_CI_HARD_MIN_GB (3) tune it.
+#
 # Exit code 0 only if every selected stage passed. A summary table is printed at the end.
 
 set -uo pipefail
@@ -129,6 +133,66 @@ fi
 
 LOG_DIR="$ROOT/build/local-ci-logs"
 mkdir -p "$LOG_DIR"
+
+# Stages run in this order whatever order they were named or added in: the ones that share a build tree
+# sit together (the gcc trees: tests, determinism, the Release build), so a tree is finished with before
+# the next one starts and can be dropped when the disk is short (reclaim_space). Unknown names go last
+# and fail in run_stage with the list of known ones.
+CANON_ORDER=(walls linux-gcc-debug determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
+order_stages() {
+    local -A seen=()
+    local c s sorted=()
+    for c in "${CANON_ORDER[@]}"; do
+        for s in "${stages[@]}"; do
+            [[ "$s" == "$c" && -z "${seen[$s]:-}" ]] && { sorted+=("$s"); seen[$s]=1; }
+        done
+    done
+    for s in "${stages[@]}"; do [[ -z "${seen[$s]:-}" ]] && { sorted+=("$s"); seen[$s]=1; }; done
+    stages=("${sorted[@]}")
+}
+order_stages
+
+# The build trees (build/<preset>) a stage uses.
+stage_trees() {
+    case "$1" in
+        linux-*) echo "$1" ;;
+        tidy) echo linux-clang-debug ;;
+        determinism) echo "linux-gcc-debug linux-gcc-release" ;;
+        release-build) echo linux-gcc-release ;;
+    esac
+}
+
+# Disk: a project container's writable space is a fixed allowance (about 40 GB), and one tree is 8-15 GB,
+# so a full run cannot keep them all. Before each stage, when less than MCE_CI_MIN_FREE_GB (default 22: the ASan tree is 18 GB and its sdk_install test copies binaries, a
+# Debug or Release tree) is free, the build trees no later stage needs are deleted, largest first, until
+# there is room (the ccache survives, so a later run rebuilds them from cache). With less than
+# MCE_CI_HARD_MIN_GB (default 3) free after that the stage is not started and says so. A run with plenty
+# of room deletes nothing.
+MIN_FREE_GB="${MCE_CI_MIN_FREE_GB:-22}"
+HARD_MIN_GB="${MCE_CI_HARD_MIN_GB:-3}"
+free_gb() { df -BG --output=avail "$ROOT/build" 2>/dev/null | tail -1 | tr -dc '0-9'; }
+reclaim_space() {  # $1: index in stages of the stage about to run; returns 1 when there is no room
+    local free i t d
+    free="$(free_gb)"
+    [[ -z "$free" || "$free" -ge "$MIN_FREE_GB" ]] && return 0
+    local -A needed=()
+    for ((i = $1; i < ${#stages[@]}; i++)); do
+        for t in $(stage_trees "${stages[$i]}"); do needed[$t]=1; done
+    done
+    while IFS= read -r d; do
+        t="$(basename "$d")"
+        [[ -n "${needed[$t]:-}" ]] && continue
+        echo "=== disk: ${free} GB free (want ${MIN_FREE_GB}); removing the finished build tree build/$t ($(du -sh "$d" | cut -f1))"
+        rm -rf "$d"
+        free="$(free_gb)"
+        [[ "$free" -ge "$MIN_FREE_GB" ]] && return 0
+    done < <(du -s "$ROOT"/build/linux-*/ 2>/dev/null | sort -rn | cut -f2-)
+    if [[ "$free" -lt "$HARD_MIN_GB" ]]; then
+        echo "=== disk: only ${free} GB free and no finished build tree is left to delete; free space or run fewer stages at once"
+        return 1
+    fi
+    echo "=== disk: ${free} GB free, less than the ${MIN_FREE_GB} GB wanted; going on"
+}
 
 JOBS="$(nproc 2>/dev/null || echo 4)"
 
@@ -479,10 +543,14 @@ preconfigure
 
 declare -A RESULT
 failed=0
-for s in "${stages[@]}"; do
+for ((si = 0; si < ${#stages[@]}; si++)); do
+    s="${stages[$si]}"
     echo "=== $s"
     start=$SECONDS
-    if run_stage "$s" > "$LOG_DIR/$s.log" 2>&1; then
+    if ! reclaim_space "$si"; then
+        RESULT[$s]="FAIL (0s) — no disk space, see above"
+        failed=1
+    elif run_stage "$s" > "$LOG_DIR/$s.log" 2>&1; then
         RESULT[$s]="PASS ($((SECONDS - start))s)"
     else
         RESULT[$s]="FAIL ($((SECONDS - start))s) — see build/local-ci-logs/$s.log"
