@@ -48,6 +48,7 @@ reach all of its non-transient fields.
 | `SequencePlayer` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `PathAgent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `WorldSettings` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/02-projects.md |
+| `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md |
 | `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
@@ -84,6 +85,8 @@ reach all of its non-transient fields.
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Overlap3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `Skeleton2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/05-assets.md |
+| `Bone2DFollow` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `VideoPlayer` | `mce/kit/video.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |
@@ -127,6 +130,8 @@ reach all of its non-transient fields.
 | NavMesh | .mcnav (the editor's Bake navmesh) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/09-physics.md |
 | Video | .mpg / .mpeg (MPEG-1 + MP2) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/13-sequences-fsm-saves.md |
 | BehaviorTree | `.mcbt` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
+| Skeleton2D | `.mcskel2d` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
+| Script | .luau (Luau source, compiled at cook; MCE_WITH_SCRIPT) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/27-scripting.md |
 
 ## MCP tools
 

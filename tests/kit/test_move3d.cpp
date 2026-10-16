@@ -1,5 +1,6 @@
-// Character feel (M-MOVE3D step 1): CharacterController3D's acceleration, coyote time, jump buffer,
-// jump cut, air jumps, sprint, crouch and the Landed3D event, with the numbers each one promises.
+// M-MOVE3D, with the numbers each feature promises. Step 1, character feel: CharacterController3D's
+// acceleration, coyote time, jump buffer, jump cut, air jumps, sprint, crouch and the Landed3D event.
+// Step 2, the camera: CameraFollow3D's spring arm, look-ahead, first person and lock-on.
 
 #include <doctest/doctest.h>
 
@@ -287,6 +288,123 @@ TEST_CASE("move3d: a run with every feature replays to the same hash") {
             k.release_jump = i % 50 == 14;
             k.crouch = i >= 100 && i < 160;
             k.sprint = i < 60;
+            s.run(1);
+        }
+        return s.w.state_hash();
+    };
+    CHECK(play() == play());
+}
+
+// ---- step 2: the camera ----------------------------------------------------------------------------
+
+namespace {
+
+// A camera on a target at the origin, boom along +Z (yaw 0, pitch 0), pivot at the target.
+Entity follow_cam(Scene& s, Entity target, const CameraFollow3D& base = {}) {
+    CameraFollow3D c = base;
+    c.target = target;
+    c.offset = {};
+    c.pitch = 0.0f;
+    c.min_pitch = -1.0f;
+    c.smoothing = 0.0f;
+    return s.w.spawn_with(LocalTransform{}, c);
+}
+
+math::vec3 pos(Scene& s, Entity e) { return s.w.try_get<LocalTransform>(e)->position; }
+
+}  // namespace
+
+TEST_CASE("move3d: the spring arm stays in front of a wall and eases back out when it goes") {
+    Scene s;
+    const Entity target = s.w.spawn_with(at(0, 1, 0));
+    const Entity wall = s.box({0, 1, 3.25f}, {5, 5, 0.25f});  // its near face at z = 3
+    CameraFollow3D c;
+    c.collide = true;
+    c.collision_radius = 0.2f;
+    c.return_speed = 4.0f;
+    const Entity cam = follow_cam(s, target, c);
+    const Entity free = follow_cam(s, target);  // collide off: the old boom
+    s.run(2);
+    CHECK(pos(s, cam).z == doctest::Approx(2.8f).epsilon(0.01));  // the face less the sphere's radius
+    CHECK(pos(s, free).z == doctest::Approx(6.0f).epsilon(0.001));
+    CHECK(s.w.try_get<CameraFollow3D>(cam)->arm == doctest::Approx(2.8f).epsilon(0.01));
+
+    s.w.destroy(wall);
+    s.run(16);  // the first tick still sees the old wall's body go; then 15 ticks at 4 m/s: + 1 m
+    CHECK(pos(s, cam).z == doctest::Approx(3.8f).epsilon(0.02));
+    s.run(40);
+    CHECK(pos(s, cam).z == doctest::Approx(6.0f).epsilon(0.001));  // capped at distance
+}
+
+TEST_CASE("move3d: look-ahead leads the pivot by the target's ground velocity") {
+    Scene s;
+    const Entity target = s.w.spawn_with(at(0, 1, 0));
+    CameraFollow3D c;
+    c.look_ahead = 0.5f;
+    const Entity cam = follow_cam(s, target, c);
+    for (u32 i = 0; i < 10; ++i) {
+        s.w.try_get_mut<LocalTransform>(target)->position = {3.0f * kDt * static_cast<f32>(i), 1.0f + 0.1f * static_cast<f32>(i), 0};
+        s.run(1);
+    }
+    const CameraFollow3D& f = *s.w.try_get<CameraFollow3D>(cam);
+    const math::vec3 p = s.w.try_get<LocalTransform>(target)->position;
+    CHECK(f.pivot.x == doctest::Approx(p.x + 1.5f).epsilon(0.001));  // 3 m/s for 0.5 s
+    CHECK(f.pivot.y == doctest::Approx(p.y).epsilon(0.001));         // vertical motion is not led
+}
+
+TEST_CASE("move3d: first person puts the camera at the pivot looking along yaw and pitch") {
+    Scene s;
+    const Entity target = s.w.spawn_with(at(2, 0, 3));
+    CameraFollow3D c;
+    c.first_person = true;
+    const Entity cam = follow_cam(s, target, c);
+    s.w.try_get_mut<CameraFollow3D>(cam)->offset = {0, 1.6f, 0};
+    s.w.try_get_mut<CameraFollow3D>(cam)->yaw = math::kPi / 2.0f;
+    s.run(1);
+    CHECK(math::near(pos(s, cam), {2, 1.6f, 3}, 1e-4f));
+    const math::vec3 look = math::rotate(s.w.try_get<LocalTransform>(cam)->rotation, math::vec3{0, 0, -1});
+    CHECK(math::near(look, {-1, 0, 0}, 1e-4f));  // yaw a quarter turn left of -Z
+}
+
+TEST_CASE("move3d: lock-on turns the camera to frame the target in front of the locked entity") {
+    Scene s;
+    const Entity target = s.w.spawn_with(at(0, 1, 0));
+    const Entity foe = s.w.spawn_with(at(10, 1, 0));
+    CameraFollow3D c;
+    c.lock_on = foe;
+    c.lock_on_rate = 3.0f;  // 0.05 rad per tick
+    const Entity cam = follow_cam(s, target, c);
+    s.run(10);
+    CHECK(s.w.try_get<CameraFollow3D>(cam)->yaw == doctest::Approx(-0.5f).epsilon(0.001));
+    s.run(30);
+    CHECK(s.w.try_get<CameraFollow3D>(cam)->yaw == doctest::Approx(-math::kPi / 2.0f).epsilon(0.001));
+    const math::vec3 look = math::rotate(s.w.try_get<LocalTransform>(cam)->rotation, math::vec3{0, 0, -1});
+    const math::vec3 to_foe = math::normalize(s.w.try_get<LocalTransform>(foe)->position - pos(s, cam));
+    CHECK(math::dot(look, to_foe) > 0.999f);  // the camera, the target and the foe on one line
+    CHECK(pos(s, cam).x == doctest::Approx(-6.0f).epsilon(0.001));
+
+    // Free again: the orbit stays where lock-on left it.
+    s.w.try_get_mut<CameraFollow3D>(cam)->lock_on = {};
+    s.run(5);
+    CHECK(s.w.try_get<CameraFollow3D>(cam)->yaw == doctest::Approx(-math::kPi / 2.0f).epsilon(0.001));
+}
+
+TEST_CASE("move3d: a camera run with every feature replays to the same hash") {
+    auto play = [] {
+        Scene s;
+        s.box({0, 1, 3.25f}, {5, 5, 0.25f});
+        CharacterController3D walker;
+        walker.acceleration = 20.0f;
+        const Entity hero = s.w.spawn_with(at(-4, 0.9f, 0), walker);
+        const Entity foe = s.w.spawn_with(at(6, 1, -4));
+        CameraFollow3D c;
+        c.collide = true;
+        c.look_ahead = 0.3f;
+        c.lock_on_rate = 2.0f;
+        const Entity cam = follow_cam(s, hero, c);
+        for (u32 i = 0; i < 180; ++i) {
+            s.cc(hero).move = {3, 0, i < 90 ? 0.0f : 2.0f};
+            s.w.try_get_mut<CameraFollow3D>(cam)->lock_on = i >= 60 && i < 140 ? foe : Entity{};
             s.run(1);
         }
         return s.w.state_hash();

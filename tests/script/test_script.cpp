@@ -5,7 +5,7 @@
 #include <cstring>
 
 #include "mce/refl/macros.h"
-#include "mce/script/script.h"
+#include "mce/script/compiler.h"
 
 using namespace mce;
 using mce::math::vec3;
@@ -65,7 +65,7 @@ u64 run_movers(u32 ticks) {
     World w;
     spawn_movers(w, 64);
     ScriptHost host;
-    REQUIRE(host.add("mover", kMover));
+    REQUIRE(script::add_source(host, "mover", kMover));
     host.install(w);
     for (u32 t = 1; t <= ticks; ++t) w.tick(1.0 / 60, t);
     CHECK(host.scripts()[0].state == ScriptState::Running);
@@ -81,7 +81,7 @@ TEST_CASE("script: a Luau system moves entities through reflected fields") {
     m.velocity = {6.0f, 0, 0};
     const Entity e = w.spawn_with(m);
     ScriptHost host;
-    REQUIRE(host.add("mover", kMover));
+    REQUIRE(script::add_source(host, "mover", kMover));
     host.install(w);
     for (u32 t = 1; t <= 60; ++t) w.tick(1.0 / 60, t);
     const Mover* got = w.try_get<Mover>(e);
@@ -101,7 +101,7 @@ TEST_CASE("script: writes mark the component changed") {
     w.register_components<Mover, Counter>();
     const Entity e = w.spawn_with(Counter{});
     ScriptHost host;
-    REQUIRE(host.add("count", R"(
+    REQUIRE(script::add_source(host, "count", R"(
 function update()
     mce.each("Counter", function(e)
         mce.set(e, "Counter", "n", mce.get(e, "Counter", "n") + 1)
@@ -124,7 +124,7 @@ TEST_CASE("script: the sandbox hides the clock, the OS and unseeded randomness")
     w.register_components<Mover, Counter>();
     w.spawn_with(Counter{});
     ScriptHost host;
-    REQUIRE(host.add("probe", R"(
+    REQUIRE(script::add_source(host, "probe", R"(
 assert(os == nil and io == nil and debug == nil and coroutine == nil)
 assert(print == nil and collectgarbage == nil and getfenv == nil and setfenv == nil)
 assert(math.random == nil and math.randomseed == nil)
@@ -144,7 +144,7 @@ end
     w2.register_components<Mover, Counter>();
     w2.spawn_with(Counter{});
     ScriptHost host2;
-    REQUIRE(host2.add("probe", R"(
+    REQUIRE(script::add_source(host2, "probe", R"(
 function update()
     mce.each("Counter", function(e) mce.set(e, "Counter", "n", math.floor(mce.random() * 1000000)) end)
 end
@@ -158,9 +158,9 @@ TEST_CASE("script: globals and built-in libraries are read-only") {
     World w;
     w.register_components<Mover, Counter>();
     ScriptHost host;
-    REQUIRE(host.add("globals", "function update() leaked = 1 end"));
-    REQUIRE(host.add("stdlib", "function update() string.len = nil end"));
-    REQUIRE(host.add("api", "function update() mce.get = nil end"));
+    REQUIRE(script::add_source(host, "globals", "function update() leaked = 1 end"));
+    REQUIRE(script::add_source(host, "stdlib", "function update() string.len = nil end"));
+    REQUIRE(script::add_source(host, "api", "function update() mce.get = nil end"));
     host.install(w);
     w.tick(1.0 / 60, 1);
     for (const auto& s : host.scripts()) {
@@ -176,8 +176,8 @@ TEST_CASE("script: the step budget stops a runaway script, the others keep runni
     script::ScriptBudget budget;
     budget.steps_per_tick = 10000;
     ScriptHost host(budget);
-    REQUIRE(host.add("spin", "function update() while true do end end"));
-    REQUIRE(host.add("count", R"(
+    REQUIRE(script::add_source(host, "spin", "function update() while true do end end"));
+    REQUIRE(script::add_source(host, "count", R"(
 function update()
     mce.each("Counter", function(e) mce.set(e, "Counter", "n", mce.get(e, "Counter", "n") + 1) end)
 end
@@ -198,7 +198,7 @@ TEST_CASE("script: the memory cap stops an allocating script") {
     budget.memory_bytes = 2u * 1024u * 1024u;
     budget.steps_per_tick = 100000000;
     ScriptHost host(budget);
-    REQUIRE(host.add("hog", R"(
+    REQUIRE(script::add_source(host, "hog", R"(
 function update()
     local t = {}
     for i = 1, 10000000 do t[i] = i end
@@ -221,10 +221,10 @@ TEST_CASE("script: errors name the script and the line") {
     w.register_components<Mover, Counter>();
     w.spawn_with(Counter{});
     ScriptHost host;
-    REQUIRE(host.add("typo", "function update()\n  mce.each(\"Countr\", function(e) end)\nend"));
-    REQUIRE(host.add(
+    REQUIRE(script::add_source(host, "typo", "function update()\n  mce.each(\"Countr\", function(e) end)\nend"));
+    REQUIRE(script::add_source(host, 
         "field", "function update()\n  mce.each(\"Counter\", function(e)\n mce.get(e, \"Counter\", \"m\") end)\nend"));
-    REQUIRE(!host.add("noupdate", "local x = 1"));
+    REQUIRE(!script::add_source(host, "noupdate", "local x = 1"));
     host.install(w);
     w.tick(1.0 / 60, 1);
     CHECK(std::strstr(host.scripts()[0].error.c_str(), "typo:2:") != nullptr);

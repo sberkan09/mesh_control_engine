@@ -10,6 +10,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `forget` seconds and hears `kit::Noise` events (the tree's `make_noise` task makes one). It writes `target`,
   `sees`, `last_seen` and `heard_at` into its tree's blackboard. `interval` staggers a crowd's checks over the
   ticks. In `ai_demo` the guard now spots the thief. User guide 13.8.
+- Luau scripts as assets, M-SCRIPT step 1 (SBA-147, ADR-0041): `.luau` files under `assets/` cook (importer
+  `script`) to a `Script` asset of Luau bytecode, with syntax errors at `file:line:col`. A `ScriptSystem`
+  component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP
+  `run_headless` run the scene's scripts from bytecode where `MCE_WITH_SCRIPT` is on, and the player links no
+  Luau compiler. Scenes without scripts run and hash as before. New user guide chapter 27 (Scripting in Luau).
 - Behavior tree stock tasks and aborts, M-AI step 2 (SBA-129): trees reach the kit with no code. `move_to` walks
   a `NavAgent3D` or a `PathAgent` to a vec3 key or after an entity key, `look_at` turns the entity, `animate`
   plays a sprite or Animator clip (and can wait for it), `play_sound`, `spawn`, `raise` and `wait_event` (which
@@ -27,6 +32,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `SfxTrigger`, `PlaySfx`, sequences and timelines take it as they are. Picks come from the tick, so replays repeat.
   `PlayParams::pitch` and `AudioDevice::set_handle_pitch` play any clip at a rate (0.25..4). MCP `asset_create`
   makes a `SoundSet`. User guide 10.3 is new; the audio chapter's later sections move up one number.
+- 2D skeletons, M-ANIM2D step 1 (SBA-140): `.mcskel2d` assets (bones with a rest pose, textured slots in draw
+  order) cook to `CHNK_SKEL2D`. A `Skeleton2D` component poses one on its entity every fixed tick from the rest
+  pose and its per-bone `pose` offsets (up to 64 bones), and the sprite extraction draws its slots with the
+  component's tint, flips, layer and order. `Bone2DFollow` keeps an entity on a named bone. Poses are in the
+  state hash and in saves. MCP `asset_create` makes `.mcskel2d` files. User guide 7.13.
 - Material extensions, M-VISUAL2 step 4 (SBA-104): clear coat, sheen, anisotropy and transmission. `.mcmat`
   gains `clearcoat`, `clearcoat_roughness`, `sheen_color`, `sheen_roughness`, `anisotropy`,
   `anisotropy_rotation`, `transmission` and `ior`; glTF files bring the same from `KHR_materials_clearcoat`,

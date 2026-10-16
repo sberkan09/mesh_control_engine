@@ -24,6 +24,7 @@
 #include "mce/kit/novel_components.h"  // StagePart, StoryState, ...
 #include "mce/kit/ragdolls3d.h"        // Ragdoll3D
 #include "mce/kit/sensors3d.h"         // Raycast3D, Overlap3D
+#include "mce/kit/skeleton2d.h"        // Skeleton2D, Bone2DFollow (M-ANIM2D)
 #include "mce/kit/timeline.h"          // TimelinePlayer (M-CINEMA)
 #include "mce/kit/ai.h"                // AiBrain, Blackboard (M-AI)
 #include "mce/kit/perception.h"        // Perceiver, Stimulus (M-AI 3)

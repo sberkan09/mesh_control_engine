@@ -35,6 +35,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/sequence_importer.cpp
         src/timeline_importer.cpp
         src/bt_importer.cpp
+        src/skeleton2d_importer.cpp
         src/shader_importer.cpp
         src/store_importer.cpp
         src/config_importer.cpp
@@ -61,3 +62,10 @@ mce_add_library(mce_asset_cook UMBRELLA
         mce_vorbisenc
         glslang::glslang
         glslang::glslang-default-resource-limits)
+
+# Luau scripts (M-SCRIPT 1): .luau -> CHNK_SCRIPT through mce_script_compiler, where the build has
+# scripting. The compiler lives here (and in the editor), never in the player.
+if(MCE_WITH_SCRIPT)
+    target_sources(mce_asset_cook PRIVATE src/script_importer.cpp)
+    target_link_libraries(mce_asset_cook PRIVATE mce::mce_script_compiler)
+endif()

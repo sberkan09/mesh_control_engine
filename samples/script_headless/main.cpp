@@ -13,7 +13,7 @@
 #include <cstring>
 
 #include "mce/refl/macros.h"
-#include "mce/script/script.h"
+#include "mce/script/compiler.h"
 
 using namespace mce;
 using mce::math::vec3;
@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
 
     script::ScriptHost host;
     if (lua) {
-        auto added = host.add("balls", kScript);
+        auto added = script::add_source(host, "balls", kScript);
         if (!added) {
             std::fprintf(stderr, "script_headless: %s\n", added.error().path.c_str());
             return 1;

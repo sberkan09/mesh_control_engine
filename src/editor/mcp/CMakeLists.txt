@@ -46,3 +46,8 @@ mce_add_executable(mce_mcp UMBRELLA
         mce::mce_mcp_core
         mce::mce_kit_novel  # its components, so a novel project's scenes open without --module
         mce::mce_module_host)
+
+# Scene scripts (M-SCRIPT 1): kit::ScriptSystem components run in this host where scripting is on.
+if(MCE_WITH_SCRIPT)
+    target_link_libraries(mce_mcp_core PRIVATE mce::mce_script)
+endif()

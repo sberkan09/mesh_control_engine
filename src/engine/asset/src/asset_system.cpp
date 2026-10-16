@@ -29,6 +29,8 @@ bool chunk_type_for_asset_name(StringView name, ChunkType& out) {
         {NavMesh::name, NavMesh::chunk},
         {Video::name, Video::chunk},
         {BehaviorTree::name, BehaviorTree::chunk},
+        {Skeleton2D::name, Skeleton2D::chunk},
+        {Script::name, Script::chunk},
     };
     for (const Pair& p : kTable) {
         if (name == p.name) {
@@ -79,6 +81,8 @@ u8 supported_major(ChunkType t) {
         case ChunkType::NavMesh: return NAVMESH_VERSION;
         case ChunkType::Video: return VIDEO_VERSION;
         case ChunkType::BehaviorTree: return BEHAVIOR_TREE_VERSION;
+        case ChunkType::Skeleton2D: return SKELETON2D_VERSION;
+        case ChunkType::Script: return SCRIPT_VERSION;
         default: return 0;
     }
 }
