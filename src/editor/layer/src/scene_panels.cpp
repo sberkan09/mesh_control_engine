@@ -12,6 +12,8 @@
 #include "mce/editor/asset_browser.h"
 #include "mce/editor/editor_shell.h"
 #include "mce/log.h"
+#include "imgui_platform.h"
+#include "mce/editor/console_model.h"
 #include "scene_panels.h"
 
 namespace mce::editor {
@@ -341,9 +343,9 @@ public:
         ImGui::Separator();
         if (ImGui::BeginChild("##diags", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar)) {
             u32 shown = 0;
-            shown += list(project.scan_diags(), "catalog");
-            shown += list(shell.session().scene_diags(), "scene");
-            shown += list(r.diags, "cook");
+            shown += list(shell, project.scan_diags(), "catalog");
+            shown += list(shell, shell.session().scene_diags(), "scene");
+            shown += list(shell, r.diags, "cook");
             for (const cook::AssetReport& a : r.assets) {
                 if (a.status != cook::AssetStatus::Failed && a.status != cook::AssetStatus::Blocked) continue;
                 ImGui::TextColored(ImVec4(1, 0.7f, 0.4f, 1), "%s %s (previous output keeps serving)",
@@ -356,7 +358,7 @@ public:
     }
 
 private:
-    static u32 list(const cook::DiagList& diags, const char* source) {
+    static u32 list(EditorShell& shell, const cook::DiagList& diags, const char* source) {
         u32 n = 0;
         for (const cook::Diagnostic& d : diags.all()) {
             cook::String line;
@@ -366,6 +368,14 @@ private:
             ImGui::TextColored(err ? ImVec4(1, 0.45f, 0.4f, 1) : ImVec4(1, 0.8f, 0.4f, 1), "[%s] %s", source, line.c_str());
             if (ImGui::BeginPopupContextItem("##copy")) {
                 if (ImGui::MenuItem("Copy")) ImGui::SetClipboardText(line.c_str());
+                ScriptLocation where;
+                if (find_script_location(line.view(), where) && shell.session().project().is_open() &&
+                    ImGui::MenuItem("Open script")) {
+                    StringView rel = where.path;
+                    if (rel.starts_with("assets/")) rel = rel.substr(7);
+                    const auto abs = shell.session().project().asset_path(rel);
+                    if (!open_file_externally(abs.c_str())) MCE_LOG_WARN("cook panel: no application opens {}", abs.c_str());
+                }
                 ImGui::EndPopup();
             }
             ImGui::PopID();

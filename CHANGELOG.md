@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Scripts while you work, M-SCRIPT step 4b (SBA-150): a `.luau` file recooked while the game plays in the
+  editor takes effect on the next tick; each script's `update()` has a Tracy zone; a crash report names the
+  running script and its Luau stack (`crash::add_context` lets other subsystems add sections too); the
+  Console and Cook panels open the script an error line names. User guide 27.6.
 - Sample coverage gate, M-COVER step 1 (SBA-157): `local_ci.sh`'s walls stage now fails for a component that no
   sample, project or template names, unless `scripts/ci/sample_coverage.allow` lists it with a reason. 39
   components start on the list; the next steps show them in three tour samples. The capability table gains a

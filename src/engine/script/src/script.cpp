@@ -11,9 +11,18 @@
 #include "api.h"
 #include "mce/asset/guid.h"
 #include "mce/asset/handle.h"
+#include "mce/crash.h"
 #include "mce/hash.h"
 #include "mce/log.h"
 #include "mce/scene/scene.h"
+
+#if defined(TRACY_ENABLE)
+#include <tracy/Tracy.hpp>
+// One zone per script, named after it, so the profiler shows which script costs what.
+#define MCE_SCRIPT_ZONE(name) ZoneTransientN(mce_script_zone, name, true)
+#else
+#define MCE_SCRIPT_ZONE(name) ((void)0)
+#endif
 
 namespace mce::script {
 
@@ -556,6 +565,7 @@ ScriptHost::ScriptHost(const ScriptBudget& budget, u64 seed) : budget_(budget), 
     L_ = lua_newstate(&ScriptHost::alloc_fn, this);
     MCE_VERIFY(L_ != nullptr);
     lua_callbacks(L_)->userdata = this;
+    crash::add_context(&ScriptHost::crash_context, this);
     for (const luaL_Reg* lib = kLibs; lib->func; ++lib) {
         lua_pushcfunction(L_, lib->func, nullptr);
         lua_pushstring(L_, lib->name);
@@ -586,7 +596,36 @@ ScriptHost::ScriptHost(const ScriptBudget& budget, u64 seed) : budget_(budget), 
 }
 
 ScriptHost::~ScriptHost() {
+    crash::remove_context(this);
     if (L_) lua_close(L_);
+}
+
+// A crash while a script runs (a host function faulting) says which script and where in it. Runs in
+// the signal handler: lua_getinfo only reads the call stack.
+void ScriptHost::crash_context(void* user, void (*put)(void* sink, const char* text), void* sink) {
+    const auto* h = static_cast<const ScriptHost*>(user);
+    if (!h->in_update_ || h->current_ >= h->infos_.size()) return;
+    put(sink, "  luau: update() of script ");
+    put(sink, h->infos_[h->current_].name.c_str());
+    put(sink, "\n");
+    for (int level = 0; level < 12; ++level) {
+        lua_Debug ar;
+        if (!lua_getinfo(h->L_, level, "sln", &ar)) break;
+        char line[16];
+        int n = 0;
+        for (int v = ar.currentline < 0 ? 0 : ar.currentline, d = 1000000000; d > 0; d /= 10)
+            if (v / d != 0 || n > 0 || d == 1) line[n++] = static_cast<char>('0' + (v / d) % 10);
+        line[n] = '\0';
+        put(sink, "    at ");
+        put(sink, ar.short_src ? ar.short_src : "?");
+        put(sink, ":");
+        put(sink, line);
+        if (ar.name) {
+            put(sink, " in ");
+            put(sink, ar.name);
+        }
+        put(sink, "\n");
+    }
 }
 
 void* ScriptHost::alloc_fn(void* ud, void* ptr, usize osize, usize nsize) {
@@ -687,11 +726,14 @@ void ScriptHost::run_scripts(Frame& f, bool all, u8 group) {
     lua_pop(L_, 1);
     for (u32 i = 0; i < infos_.size(); ++i) {
         if (infos_[i].state != ScriptState::Running || (!all && groups_[i] != group)) continue;
+        MCE_SCRIPT_ZONE(infos_[i].name.c_str());
         current_ = i;
         steps_ = 0;
         random_calls_ = 0;
         lua_getref(L_, update_refs_[i]);
+        in_update_ = true;
         const int rc = lua_pcall(L_, 0, 0, 0);
+        in_update_ = false;
         infos_[i].last_steps = steps_;
         if (rc != 0) {
             fail(i, lua_tostring(L_, -1));
