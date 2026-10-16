@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Steam overlay and rich presence, M-STEAM step 3 (SBA-108): the Steam overlay holds the game like a lost focus
+  (pause, mute, the focus-loss save). A `RichPresence` component says what friends see (status, a localization
+  token and two substitutions), sent only when it changes. The `OpenOverlay` event opens the friends,
+  achievements, stats, community, settings, store or web page (`mce/kit/presence.h`). Neither changes the state
+  hash. Covered on the stand-in by `test_kit`, `test_platform` and `player_steam_overlay`.
 - Steam game services, M-STEAM step 2 (SBA-107): while Steam runs, it is the desktop game services backend, so
   `GameServices` unlocks, progress, scores and cloud saves reach Steam achievements, leaderboards (found once,
   uploaded keep-best) and Steam Cloud files. `.mcservices` entries take an optional `steam` name (the catalog id
