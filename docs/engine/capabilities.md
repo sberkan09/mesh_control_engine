@@ -167,6 +167,7 @@ reach all of its non-transient fields.
 | `console_exec` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `render_frame` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `render_sheet` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `timeline_preview` | `tools_agent.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `image_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `perf_run` | `tools_agent.cpp` | docs/user-guide/03-editor.md |
 | `perf_compare` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
@@ -203,6 +204,9 @@ reach all of its non-transient fields.
 | `terrain_paint` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_import` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_generate` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
+| `timeline_create` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
+| `timeline_add_track` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
+| `timeline_add_key` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `ui_list` | `tools_ui.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `ui_create` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |
 | `ui_widget_add` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |

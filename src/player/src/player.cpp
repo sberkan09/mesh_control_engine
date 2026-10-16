@@ -240,6 +240,9 @@ MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
          CVarFlags::None);
+MCE_CVAR(cv_timeline_scrub, "timeline.scrub", -1.0f,
+         "Start with every timeline held at this many seconds (state tracks applied, speed 0): the MCP server's timeline_preview",
+         CVarFlags::None);
 MCE_CVAR(cv_haptics, "haptics", true,
          "Haptic feedback: phone taps and gamepad rumble from platform::haptics::play (off: none; never in the state hash)",
          CVarFlags::Saved);
@@ -540,6 +543,7 @@ public:
         MCE_TRY(scene::load(world_, assets_, scene, &entities_));
         scene::pump_streaming(world_, scene::PumpMode::Settle);
         MCE_TRY(load_ui_screens());
+        scrub_timelines();
         if (device_ && kit::has_camera_3d(world_)) MCE_TRY(init_3d());
         MCE_LOG_INFO("{}: scene {} ({}) with {} entities", desc_.app_name, asset::to_string(scene).view(), scene_path_.view(),
                      entities_.size());
@@ -1627,6 +1631,21 @@ private:
     std::FILE* access_log_ = nullptr;  // -access_log (kept open to the end; flushed per line)
 
     // The scene's UI screens (kit::UiScreen, M-UI-DATA step 2).
+    // -timeline.scrub <seconds>: every timeline paused at that time, its state tracks applied (a
+    // cutscene frame for timeline_preview; the cues before it do not fire).
+    void scrub_timelines() {
+        const f32 t = cv_timeline_scrub.get_float();
+        if (t < 0.0f) return;
+        Array<Entity> players;
+        world_.query<const kit::TimelinePlayer>().each([&](Entity e, const kit::TimelinePlayer&) { players.push_back(e); });
+        for (Entity e : players) {
+            kit::timeline_scrub(world_, e, t);
+            // Held at the playhead, still playing: a cutscene keeps its hold and its bars (in at once).
+            if (kit::TimelinePlayer* p = world_.try_get_mut<kit::TimelinePlayer>(e)) p->speed = 0.0f;
+            if (kit::Cutscene* c = world_.try_get_mut<kit::Cutscene>(e)) c->bars = 1.0f;
+        }
+    }
+
     Result<void> load_ui_screens() {
         const ui::Skin* skin = device_ ? &skin_.skin : nullptr;
         kit::SpriteExtract* extract = device_ ? &extract_ : nullptr;

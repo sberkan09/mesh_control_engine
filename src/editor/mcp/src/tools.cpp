@@ -1380,7 +1380,7 @@ const ToolDef kTools[] = {
      R"({"type":"object","properties":{"type":{"type":"string","description":"Texture, Font, Sfx, Scene, Mesh, Material, ..."}}})",
      asset_list},
     {"asset_set_import_settings",
-     "Replace an asset's importer settings in its .mceasset sidecar (texture: {\"srgb\": bool, \"mips\": bool}; a normal map or LUT needs srgb false). Keys are validated by the next cook_run.",
+     "Replace an asset's importer settings in its .mceasset sidecar (texture: {\"srgb\": bool, \"mips\": bool}; a normal map or LUT needs srgb false; video (.mpg): {\"audio\": bool, \"normalize\": bool}). Keys are validated by the next cook_run.",
      R"({"type":"object","properties":{"path":{"type":"string","description":"Path under assets/, e.g. textures/rock_n.png"},"guid":{"type":"string","description":"\"guid:<uuid>\" instead of path"},"settings":{"type":"object"}},"required":["settings"]})",
      asset_set_import_settings},
     {"entity_create",
@@ -1468,7 +1468,7 @@ Span<const ToolDef> tool_table() {
     static const Array<ToolDef> all = [] {
         Array<ToolDef> a;
         for (const ToolDef& t : kTools) a.push_back(t);
-        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table(), prefab_tool_table(), project_tool_table(), ui_tool_table(), terrain_tool_table()})
+        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table(), prefab_tool_table(), project_tool_table(), ui_tool_table(), terrain_tool_table(), timeline_tool_table()})
             for (const ToolDef& t : group) a.push_back(t);
         return a;
     }();
