@@ -147,6 +147,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
   User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
+- WebRTC data channels, M-NET3 step 4 (SBA-126): `net::RtcHost` is a relay room whose members also connect directly
+  over WebRTC, signalled through the relay, so a pair that connects stops paying the relay hop and one that cannot
+  stays on the relay. Native builds use libdatachannel (Linux with OpenSSL; `MCE_WITH_RTC`), a web build the
+  browser's `RTCPeerConnection`, so a browser and a native player connect directly. `mce_relay -echo_mode` runs a
+  native echo member for the headless Chromium probe. User guide 20.8.
 - Matchmaking and host migration, M-NET3 step 3 (SBA-125): `RelayClient::quick_play(mode, size)` puts a player in
   an open room of that mode or makes one, and `list_rooms` fetches listed rooms for a lobby. A room made with
   `host_migration` survives its host: the relay hands it to the lowest member, `on_host_change` tells every member,
