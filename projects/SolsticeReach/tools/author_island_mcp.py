@@ -134,7 +134,7 @@ def main():
     m = Mcp(args.mcp, ROOT, args.transcript)
 
     names = {c["name"] for c in m.tool("refl_list_components")["components"]}
-    for need in ("MeshRef", "PointLight3D", "Animator", "BoxCollider3D", "Camera3DComponent", "Environment3D", "Camera2DComponent",
+    for need in ("Terrain3D", "TerrainFoliage3D", "MeshRef", "PointLight3D", "Animator", "BoxCollider3D", "Camera3DComponent", "Environment3D", "Camera2DComponent",
                  "TextLabel", "Scatter", "Glow", "KeeperModel", "Beam", "HudText", "ReachSounds", "Heliostat", "Sunshard",
                  "KeeperSpawn", "Waypoint", "GullPath", "Progress", "SaveKey"):
         if need not in names:
@@ -188,8 +188,13 @@ def main():
                GullPath={"radius": radius, "height": height, "speed": speed, "phase": phase})
 
     # ---- the terrain, the sea ------------------------------------------------------------------
-    for k in range(16):
-        model("Island chunk", f"island_{k:02d}", (0, 0, 0), shadows=1)
+    # The island is one Terrain3D painted sand, grass, dry grass and rock (tools/gen_terrain.py); its
+    # grass grows from the grass layer. The game's collider is module/terrain.h, from the same formula.
+    island_id = create("Island", (0, 0, 0), Terrain3D={"terrain": ref("terrain/island.mcterrain")})
+    create("Island grass", (0, 0, 0), ChildOf={"parent": f"${island_id}"},
+           TerrainFoliage3D={"mesh": mesh("grass_tuft"), "layer": 1, "density": 0.8, "max_count": 40000, "seed": 11,
+                             "scale_min": 0.7, "scale_max": 1.4, "max_slope_deg": 38.0, "wind_amplitude": 0.06,
+                             "cull_distance": 70.0})
     model("Sea", "sea", (0, 0, 0), shadows=0)
 
     # ---- the run: progress, the Keeper's spawn, the bot's route ---------------------------------
@@ -533,11 +538,7 @@ def main():
         s.update(kw)
         create(name, (pos[0], ground(*pos), pos[1]), Scatter=s)
 
-    grass = dict(min_scale=0.7, max_scale=1.4, max_slope_deg=38.0, min_height=1.2)
-    scatter("Grass south", (0.0, 50.0), (62.0, 40.0), 0.55, ["grass_tuft"], 11, **grass)
-    scatter("Grass north", (0.0, -45.0), (72.0, 42.0), 0.42, ["grass_tuft"], 12, max_height=48.5, **grass)
-    scatter("Grass east", (62.0, -8.0), (34.0, 44.0), 0.42, ["grass_tuft"], 13, **grass)
-    scatter("Grass west", (-64.0, 2.0), (30.0, 44.0), 0.36, ["grass_tuft"], 14, **grass)
+    # Grass grows from the terrain's grass layer (Island grass, above).
     scatter("Flowers terraces", (-8.0, 42.0), (36.0, 14.0), 0.09, ["flower"], 21, min_scale=0.8, max_scale=1.3,
             max_slope_deg=30.0, min_height=4.0)
     scatter("Flowers garden", (54.0, 8.0), (16.0, 16.0), 0.1, ["flower"], 22, min_scale=0.8, max_scale=1.3,

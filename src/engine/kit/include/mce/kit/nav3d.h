@@ -12,8 +12,8 @@
 //                     its entity
 //   NavAgent3D        walks to `target` when `move_to` is set, steering around other agents
 //
-// The bake reads BoxCollider3D and MeshCollider3D (kit3d.h) in the collision layers of
-// `layer_mask`, plus the MeshRef meshes of entities without a collider when `include_meshes` is
+// The bake reads BoxCollider3D, MeshCollider3D and TerrainCollider3D (kit3d.h; a terrain's holes
+// stay open) in the collision layers of `layer_mask`, plus the MeshRef meshes of entities without a collider when `include_meshes` is
 // set; NavArea3D and NavLink3D are baked in, so changing them needs a re-bake (a runtime bake
 // re-runs when `version` changes). NavObstacle3D and the agents are live.
 //

@@ -46,10 +46,11 @@ the bot plays; prints `N ticks, E entities, state_hash H`), `-r.stats 1`, `-r.lo
 | `assets/sfx`, `assets/input` | the three sounds (`tools/gen_sounds.py`) and the action map `controls.mcinput` |
 | `games/solstice_reach/module/` | the game module: `components.h` (`Scatter`, `Glow`, `KeeperModel`, `Beam`, `HudText`, `ReachSounds`, `Heliostat`, `Sunshard`, `KeeperSpawn`, `Keeper`, `Waypoint`, `GullPath`, `Progress`, next to the kit's `MeshRef`, `PointLight3D`, `Animator`, `BoxCollider3D`), `terrain.h` (the height field, the same formula as `tools/island.py`), `solstice_reach.cpp` (the sim), `present.cpp` (the sim's state as kit components) |
 | `games/solstice_reach/host/` | a `PlayerDesc`: the stock player with this game's module and pack |
+| `tools/gen_terrain.py` | writes the island as a painted `.mcterrain` and its four layer materials from `tools/island.py` |
 | `tools/island.py` | the island's shape: plateaus and ramps over fBm; `python3 tools/island.py` prints the steepest grade of every ramp |
 | `tools/gen_assets.py` | regenerates `assets/models` and `assets/textures` (about a minute; deterministic) |
 | `tools/author_island_mcp.py` | re-authors the scene through `solstice_reach_mcp` (`--mcp build/.../solstice_reach_mcp`) |
-| `tests/test_solstice_reach.cpp` | the terrain port against the generator, the authored island, the bot's full run, determinism |
+| `tests/test_solstice_reach.cpp` | the terrain port against the generator, the drawn terrain against the collider's field, the authored island, the bot's full run, determinism |
 
 ## How it is built
 
@@ -59,8 +60,10 @@ the bot plays; prints `N ticks, E entities, state_hash H`), `-r.stats 1`, `-r.lo
   the title and finale orbits), the `Environment3D` resource from the hour (eight sky keys, the
   moon, the star map), the lantern / sconce / firefly glows, the beams, the Keeper's body and
   lantern, the gulls, the HUD's `TextLabel`s and the sounds, every tick.
-- The terrain is a height field evaluated twice from the same formula: `tools/island.py` writes the
-  16 terrain chunks, `module/terrain.h` builds the collider (a 1 m mesh in the kit's `Physics3D`
+- The terrain is a height field evaluated twice from the same formula: `tools/gen_terrain.py` writes
+  it as `assets/terrain/island.mcterrain` (a `Terrain3D`, 257 samples over 200 m, painted sand, grass,
+  dry grass and rock by the rules the old mesh chunks used; its grass is a `TerrainFoliage3D` on the
+  grass layer), `module/terrain.h` builds the collider (a 1 m mesh in the kit's `Physics3D`
   world, next to the kit's box colliders) and places scatter; the test checks both agree to 1e-9 m
   on 400 points.
 - `Scatter` volumes place grass, flowers, trees and stones by a seeded hash into the kit's
@@ -72,7 +75,8 @@ the bot plays; prints `N ticks, E entities, state_hash H`), `-r.stats 1`, `-r.lo
 - Saves: `-save <slot>` restores `Progress`, the mirrors, the shards and the Keeper (`SaveKey`s
   9001, 9002, 9100+, 9200+); the title then offers CONTINUE.
 
-Regenerate after changing the island's shape: `python3 tools/gen_assets.py`, update
+Regenerate after changing the island's shape: `python3 tools/gen_assets.py` (it runs
+`tools/gen_terrain.py` too), update
 `tools/terrain_ref.txt` (the test's reference heights; see the test), then re-author the scene with
 `tools/author_island_mcp.py` so every prop sits on the new ground.
 

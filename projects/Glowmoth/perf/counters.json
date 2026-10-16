@@ -1,0 +1,36 @@
+{
+  "runs": [
+    {
+      "scene": "scenes/level1.mcscene",
+      "frames": 60,
+      "warmup": 10,
+      "width": 480,
+      "height": 270,
+      "counters": {
+        "draws": 10,
+        "passes": 2,
+        "dispatches": 0,
+        "triangles": 0,
+        "meshes": 0,
+        "sprites": 132,
+        "sprite_batches": 9
+      }
+    },
+    {
+      "scene": "scenes/main.mcscene",
+      "frames": 30,
+      "warmup": 10,
+      "width": 480,
+      "height": 270,
+      "counters": {
+        "draws": 10,
+        "passes": 2,
+        "dispatches": 0,
+        "triangles": 0,
+        "meshes": 0,
+        "sprites": 116,
+        "sprite_batches": 9
+      }
+    }
+  ]
+}

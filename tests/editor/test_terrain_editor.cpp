@@ -11,6 +11,7 @@
 
 #include "cook_test_util.h"
 #include "mce/asset/formats.h"
+#include "mce/cook/image.h"
 #include "mce/editor/editor_session.h"
 #include "mce/editor/terrain_editor.h"
 #include "mce/kit/kit3d.h"
@@ -320,4 +321,160 @@ TEST_CASE("terrain editor: strokes save, re-bake and round-trip through the cook
     CHECK(m.layer1[12 * 65 + 12] == 255);
     CHECK(m.holes == 9);
     CHECK(session.cook().diags.error_count() == 0);
+}
+
+TEST_CASE("terrain import and generator: PNG and raw heightmaps, fBm with an island falloff and erosion-lite (M-TERRAIN 6)") {
+    // An 8-bit PNG, 17 x 9, brightening left to right: column c is c * 15 (0..240).
+    {
+        TerrainDocument d = flat_doc();
+        Array<u8> rgba;
+        for (u32 y = 0; y < 9; ++y)
+            for (u32 x = 0; x < 17; ++x) {
+                const u8 v = static_cast<u8>(x * 15);
+                rgba.push_back(v);
+                rgba.push_back(v);
+                rgba.push_back(v);
+                rgba.push_back(255);
+            }
+        Array<byte> png;
+        REQUIRE(cook::encode_png(17, 9, rgba.span(), png).has_value());
+        TerrainHeightmapImport o;
+        cook::String err;
+        REQUIRE(d.import_heightmap(png.span(), o, err));
+        // 0 -> 0 m and 255 -> 10 m (the terrain's range); sample x lands at image column x / 2.
+        CHECK(d.height(0, 5) == doctest::Approx(0.0f).epsilon(1e-4));
+        CHECK(d.height(32, 5) == doctest::Approx(240.0f / 255.0f * 10.0f).epsilon(1e-3));
+        CHECK(d.height(16, 0) == doctest::Approx(120.0f / 255.0f * 10.0f).epsilon(1e-3));
+        CHECK(d.height(16, 0) == doctest::Approx(d.height(16, 32)));
+        CHECK(d.height(1, 7) == doctest::Approx(7.5f / 255.0f * 10.0f).epsilon(1e-3));
+        // A range of its own maps black and white; values past the terrain's range are clamped.
+        o.low = 2.0f;
+        o.high = 20.0f;
+        REQUIRE(d.import_heightmap(png.span(), o, err));
+        CHECK(d.height(0, 0) == doctest::Approx(2.0f));
+        CHECK(d.height(32, 0) == doctest::Approx(10.0f));
+        // Not a PNG.
+        const char junk[] = "not a png";
+        CHECK_FALSE(d.import_heightmap(Span<const byte>(reinterpret_cast<const byte*>(junk), sizeof(junk)), TerrainHeightmapImport{}, err));
+        CHECK(err.view().find("PNG") != StringView::npos);
+    }
+    // Raw: 16-bit little-endian, square, rows down the file along +z.
+    {
+        TerrainDocument d = flat_doc(0);
+        Array<byte> raw;
+        for (u32 z = 0; z < 5; ++z)
+            for (u32 x = 0; x < 5; ++x) {
+                const u16 v = static_cast<u16>(z * 16383);
+                raw.push_back(static_cast<byte>(v & 0xFF));
+                raw.push_back(static_cast<byte>(v >> 8));
+            }
+        TerrainHeightmapImport o;
+        o.png = false;
+        cook::String err;
+        REQUIRE(d.import_heightmap(raw.span(), o, err));
+        CHECK(d.height(7, 0) == doctest::Approx(0.0f));
+        CHECK(d.height(7, 32) == doctest::Approx(4.0f * 16383.0f / 65535.0f * 10.0f).epsilon(1e-4));
+        CHECK(d.height(3, 16) == doctest::Approx(2.0f * 16383.0f / 65535.0f * 10.0f).epsilon(1e-4));
+        // 8-bit, 4 x 2: needs raw_width; with it, reads.
+        Array<byte> raw8;
+        for (int v : {0, 0, 0, 0, 255, 255, 255, 255}) raw8.push_back(static_cast<byte>(v));
+        o.raw_bits = 8;
+        err.clear();
+        CHECK_FALSE(d.import_heightmap(raw8.span(), o, err));
+        CHECK(err.view().find("raw_width") != StringView::npos);
+        o.raw_width = 4;
+        REQUIRE(d.import_heightmap(raw8.span(), o, err));
+        CHECK(d.height(0, 0) == doctest::Approx(0.0f));
+        CHECK(d.height(0, 32) == doctest::Approx(10.0f));
+        CHECK(d.height(0, 16) == doctest::Approx(5.0f));
+        // Odd byte counts are refused.
+        o.raw_bits = 16;
+        o.raw_width = 0;
+        raw.push_back(byte{0});
+        CHECK_FALSE(d.import_heightmap(raw.span(), o, err));
+    }
+    // The generator: the range it is given, deterministic in the seed, an island sinks at the edges.
+    {
+        TerrainDocument d = flat_doc();
+        d.holes[0] = 0x5;  // two holes stay through it
+        TerrainGenerate g;
+        g.seed = 7;
+        g.low = 0.2f;
+        g.high = 0.9f;
+        d.generate(g);
+        f32 lo = 1e9f, hi = -1e9f;
+        for (f32 h : d.heights) {
+            lo = std::fmin(lo, h);
+            hi = std::fmax(hi, h);
+        }
+        CHECK(lo == doctest::Approx(2.0f).epsilon(1e-3));
+        CHECK(hi == doctest::Approx(9.0f).epsilon(1e-3));
+        CHECK(d.holes[0] == 0x5);
+        TerrainDocument same = flat_doc();
+        same.generate(g);
+        CHECK(same.heights.size() == d.heights.size());
+        bool equal = true;
+        for (usize i = 0; i < d.heights.size(); ++i) equal = equal && same.heights[i] == d.heights[i];
+        CHECK(equal);
+        g.seed = 8;
+        same.generate(g);
+        u32 differ = 0;
+        for (usize i = 0; i < d.heights.size(); ++i) differ += std::fabs(same.heights[i] - d.heights[i]) > 0.01f;
+        CHECK(differ > d.heights.size() / 2);
+
+        g.seed = 7;
+        g.island = 0.5f;
+        d.generate(g);
+        // Every edge sample sinks to the low end; the middle is land.
+        for (u32 i = 0; i < 33; ++i) {
+            CHECK(d.height(i, 0) == doctest::Approx(2.0f).epsilon(1e-3));
+            CHECK(d.height(0, i) == doctest::Approx(2.0f).epsilon(1e-3));
+            CHECK(d.height(32, i) == doctest::Approx(2.0f).epsilon(1e-3));
+        }
+        f64 middle = 0.0;
+        for (u32 z = 12; z <= 20; ++z)
+            for (u32 x = 12; x <= 20; ++x) middle += d.height(x, z);
+        CHECK(middle / 81.0 > 3.0);
+    }
+    // Erosion-lite: thermal passes flatten the steepest slope toward the talus angle; droplets move
+    // ground without adding or losing it (what a droplet still carries settles where it stops).
+    {
+        TerrainDocument d = flat_doc(0);
+        TerrainGenerate g;
+        g.seed = 3;
+        g.feature = 8.0f;
+        g.ridged = 1.0f;
+        d.generate(g);
+        const auto steepest = [](const TerrainDocument& t) {
+            f32 m = 0.0f;
+            for (u32 z = 0; z < 33; ++z)
+                for (u32 x = 0; x + 1 < 33; ++x) m = std::fmax(m, std::fabs(t.height(x + 1, z) - t.height(x, z)));
+            return m;
+        };
+        const f32 before = steepest(d);
+        TerrainDocument eroded = flat_doc(0);
+        g.thermal = 60;
+        g.talus_deg = 30.0f;
+        eroded.generate(g);
+        const f32 after = steepest(eroded);
+        CHECK(after < before);
+        CHECK(after < 0.75f * before);
+        f64 mass_before = 0.0, mass_after = 0.0;
+        for (f32 h : d.heights) mass_before += h;
+        for (f32 h : eroded.heights) mass_after += h;
+        CHECK(std::fabs(mass_after - mass_before) < 0.02 * mass_before);  // thermal moves ground, adds none
+
+        TerrainDocument rained = flat_doc(0);
+        g.thermal = 0;
+        g.droplets = 3000;
+        rained.generate(g);
+        u32 moved = 0;
+        f64 mass_rain = 0.0;
+        for (usize i = 0; i < d.heights.size(); ++i) {
+            moved += std::fabs(rained.heights[i] - d.heights[i]) > 1e-3f;
+            mass_rain += rained.heights[i];
+        }
+        CHECK(moved > d.heights.size() / 4);
+        CHECK(std::fabs(mass_rain - mass_before) < 0.02 * mass_before);
+    }
 }

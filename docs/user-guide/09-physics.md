@@ -212,10 +212,11 @@ A 3D scene gets a navigation mesh (navmesh) and agents that walk it from five co
 - `NavMeshSurface3D`: one per scene (the first in ECS order is used). Its settings say what an
   agent can do (`agent_radius`, `agent_height`, `agent_max_climb`, `agent_max_slope_deg`) and how
   finely to voxelize (`cell_size`, `cell_height`, `tile_size`). The mesh is baked from the scene's
-  `BoxCollider3D` and `MeshCollider3D` in the layers of `layer_mask` (plus `MeshRef` meshes of
-  entities without a collider when `include_meshes` is set). **File → Bake navmesh** in the
-  editor (or MCP's `navmesh_bake`, chapter 14) writes `assets/navmesh/<scene>/nav_<id>.mcnav` (a
-  `NavMesh` asset) and points `baked` at it, and the editor's 3D view draws it (green floor, amber costly areas, pink links; `show` turns
+  `BoxCollider3D`, `MeshCollider3D` and `TerrainCollider3D` in the layers of `layer_mask` (a
+  terrain's holes stay open; plus `MeshRef` meshes of entities without a collider when
+  `include_meshes` is set). **File → Bake navmesh** in the editor (or MCP's `navmesh_bake`,
+  chapter 14) writes `assets/navmesh/<scene>/nav_<id>.mcnav` (a `NavMesh` asset) and points `baked`
+  at it, and the editor's 3D view draws it (green floor, amber costly areas, pink links; `show` turns
   it off). Without a bake the mesh is baked when the scene starts, and again whenever `version`
   changes. The bake is byte-identical run to run.
 - `NavArea3D`: a box (axis-aligned) whose floor takes an `area` id with a path `cost` per metre:
