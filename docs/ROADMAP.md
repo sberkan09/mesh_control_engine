@@ -110,7 +110,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-SCRIPT | [M-SCRIPT.md](milestones/M-SCRIPT.md) (Linear SBA-147 … SBA-152, added 2026-10-16; ADR-0041) | active (steps 1–5 done: phones and web unverified here) | step 6, the demo and the gates |
 | M-COVER | [M-COVER.md](milestones/M-COVER.md) (Linear SBA-157 … SBA-160, added 2026-10-16) | active (step 1 done: the sample coverage gate in the walls stage, `scripts/ci/sample_coverage.allow`; steps 2–3 done: `samples/kit3d_tour`, `samples/kit2d_tour`) | step 4, the systems tour |
 | M-VIEWS | [M-VIEWS.md](milestones/M-VIEWS.md) (Linear SBA-161 … SBA-166, added 2026-10-16) | active (step 1 done: local players, per-slot maps and pads, join by button, `P2/` script names) | steps 1–6 |
-| M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | active (step 1 next) | steps 1–4 |
+| M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | active (step 1 done: `mce import aseprite`) | steps 2–4 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 

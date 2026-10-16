@@ -7,7 +7,7 @@
 exports and write the native text assets, so the cook, the runtime and the determinism contract are
 untouched.
 
-**Design.** `tools/import/mce_import.py` (Python, no dependencies), run as `mce import <tool> <file>
+**Design.** `tools/mce_cli/mce_import.py` (Python, no dependencies), run as `mce import <tool> <file>
 [--project <dir>]`, installed beside `story_compile.py`. A converter is a pure function of its input
 bytes: no clock, no random GUID for an existing asset (a re-import reads the GUID out of the file it
 overwrites), keys sorted, so the output is the same twice. Unsupported features are warnings printed with
@@ -21,7 +21,7 @@ infinite maps, isometric and hex maps, Tiled/LDtk live reload in the editor, wri
 
 | # | Step | Linear | Model | State |
 |---|---|---|---|---|
-| 1 | `mce import aseprite`: frames, tags as clips, durations, slices | SBA-167 | Sonnet | in progress |
+| 1 | `mce import aseprite`: frames, tags as clips, durations, slices (`tools/mce_cli/mce_import.py`, `tests/import/test_import.py`; user guide 7.3) | SBA-167 | Sonnet | done |
 | 2 | `mce import tiled`: tile layers, flips, animated tiles, object layers | SBA-168 | Sonnet | not started |
 | 3 | `mce import ldtk`: levels as scenes, IntGrid colliders, entity layers | SBA-169 | Sonnet | not started |
 | 4 | MCP `asset_import`, guide, sample, gates | SBA-170 | Sonnet | not started |
