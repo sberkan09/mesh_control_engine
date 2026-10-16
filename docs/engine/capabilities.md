@@ -233,6 +233,12 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `bt_set` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `bt_trace` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `script_check` | `tools_script.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `skel2d_create` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `skel2d_add_bone` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `skel2d_add_slot` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `skel2d_add_ik` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `skel2d_key` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `skel2d_preview` | `tools_skeleton2d.cpp` | docs/user-guide/07-2d.md |
 | `terrain_sculpt` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_paint` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_import` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |

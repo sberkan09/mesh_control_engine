@@ -14,6 +14,7 @@
 #include "mce/editor/gizmo.h"
 #include "mce/editor/animgraph_editor.h"
 #include "mce/editor/bt_editor.h"
+#include "mce/editor/skeleton2d_editor.h"
 #include "mce/editor/terrain_editor.h"
 #include "mce/editor/tilemap_editor.h"
 #include "mce/editor/timeline_editor.h"
@@ -129,6 +130,10 @@ public:
     // The behavior tree the Behavior Tree panel edits (open_bt: a double click in Assets).
     BtEditor& bt() { return bt_; }
     void open_bt(asset::Guid guid);
+    // The 2D skeleton the Skeleton panel edits (open_skeleton2d: a double click in Assets). The
+    // viewport draws its bones, in the panel's previewed pose, on the selected entities that play it.
+    Skeleton2DEditor& skeleton2d() { return skeleton2d_; }
+    void open_skeleton2d(asset::Guid guid);
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
@@ -215,6 +220,7 @@ private:
     TimelinePreview timeline_preview_;
     AnimGraphEditor anim_graph_;
     BtEditor bt_;
+    Skeleton2DEditor skeleton2d_;
     PerfMonitor perf_;
     FrameSample perf_pending_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;

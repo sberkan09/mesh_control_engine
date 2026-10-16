@@ -38,6 +38,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `file:line:col`. It writes `cooked/mce.d.luau` for editors (luau-lsp). The MCP tool `script_check` runs the
   same checks without cooking, and `run_headless` / `test_run` report failed scene scripts as
   `script_errors`. User guide 27.5.
+- The Skeleton panel and `skel2d_*` MCP tools, M-ANIM2D step 5 (SBA-144): rig and animate a 2D character
+  without writing the `.mcskel2d` text. The editor panel shows the bone tree, slots and IK constraints, edits a
+  bone's rest pose, scrubs an animation to preview the pose, aims IK constraints at points, keys bones at the
+  current time, and the viewport draws the bones of selected entities. MCP gets `skel2d_create`,
+  `skel2d_add_bone`, `skel2d_add_slot`, `skel2d_add_ik`, `skel2d_key` and `skel2d_preview` (the bone
+  transforms from the runtime's pose functions, plus a line drawing). Both write through the same code and the
+  importer checks every edit, so a bad one names `file:line` and changes nothing. User guide 7.13 and 14.
 - The editor's Behavior Tree panel, M-AI step 5 (SBA-132): open a `.mcbt` from Assets and edit it as an outline
   (add, wrap, unwrap, move and remove nodes, edit values and members as JSON, blackboard keys), with every edit
   cooked before it is kept, undo, and the cook's problems listed. While playing it colours each node by its

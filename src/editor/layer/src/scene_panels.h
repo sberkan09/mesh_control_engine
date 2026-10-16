@@ -27,6 +27,9 @@ inline constexpr const char* kAnimationPanel = "Animation";
 // The Behavior Tree panel (bt_panel.cpp): an .mcbt tree, its inspector and blackboard, and the play debugger.
 void add_bt_panel(EditorShell& shell);
 inline constexpr const char* kBtPanel = "Behavior Tree";
+// The Skeleton panel (skeleton_panel.cpp): a .mcskel2d's bones, slots, rest poses, animation scrubber and IK targets.
+void add_skeleton_panel(EditorShell& shell);
+inline constexpr const char* kSkeletonPanel = "Skeleton";
 // Drag-drop payload of the asset browser: the asset's Guid.
 inline constexpr const char* kAssetPayload = "MCE_ASSET";
 // Destroys every selected entity (Del in the Hierarchy and the Viewport).
