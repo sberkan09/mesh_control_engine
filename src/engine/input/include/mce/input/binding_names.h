@@ -20,4 +20,12 @@ const char* gamepad_axis_name(platform::GamepadAxis a);      // "Left Stick X", 
 // the action reads from it ("Left Stick Left" for LeftX scaled -1). Touch bindings read "Touch".
 void binding_name(const BindingDef& b, BindingName& out);
 
+// A platform that owns the controller's bindings (Steam Input, M-STEAM step 4) names an action's
+// controller input itself (Steam's "A Button"): the namer returns false when it has no name.
+// Process-wide; null restores the map's own names.
+using GamepadNamer = bool (*)(void* user, StringId action, BindingName& out);
+void set_gamepad_namer(GamepadNamer fn, void* user);
+// binding_name for `action`'s binding: a gamepad binding asks the namer first.
+void action_binding_name(StringId action, const BindingDef& b, BindingName& out);
+
 }  // namespace mce::input
