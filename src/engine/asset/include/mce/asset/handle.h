@@ -37,6 +37,7 @@ struct NavMesh { static constexpr ChunkType chunk = ChunkType::NavMesh; static c
 struct Video { static constexpr ChunkType chunk = ChunkType::Video; static constexpr const char* name = "Video"; };
 struct BehaviorTree { static constexpr ChunkType chunk = ChunkType::BehaviorTree; static constexpr const char* name = "BehaviorTree"; };
 struct Skeleton2D { static constexpr ChunkType chunk = ChunkType::Skeleton2D; static constexpr const char* name = "Skeleton2D"; };
+struct Script { static constexpr ChunkType chunk = ChunkType::Script; static constexpr const char* name = "Script"; };
 struct Sequence { static constexpr ChunkType chunk = ChunkType::Sequence; static constexpr const char* name = "Sequence"; };
 struct Timeline { static constexpr ChunkType chunk = ChunkType::Timeline; static constexpr const char* name = "Timeline"; };
 struct ParticlePreset { static constexpr ChunkType chunk = ChunkType::ParticlePreset; static constexpr const char* name = "ParticlePreset"; };
