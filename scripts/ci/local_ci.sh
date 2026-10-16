@@ -23,7 +23,7 @@
 # merge (capabilities.md, transcript goldens, the sample coverage allow list) are the integration runner's to
 # regenerate; a failure in the golden check on a file the PR did not touch is not a reason for --task.
 #
-# Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism, release-build, web.
+# Stages: walls, linux-gcc-debug, slow, linux-clang-release, linux-asan, tidy, determinism, release-build, web.
 # release-build compiles the whole gcc Release tree (the SDK's) without running it: determinism builds only
 # the targets it runs. linux-gcc-release runs only when named: it is that tree plus its tests, and
 # linux-clang-release runs the tests in Release.
@@ -70,7 +70,7 @@ cd "$ROOT"
 
 export LIBGL_ALWAYS_SOFTWARE=1  # Mesa llvmpipe: GL 4.5 core without a GPU
 
-ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism release-build web)
+ALL_STAGES=(walls linux-gcc-debug slow linux-clang-release linux-asan tidy determinism release-build web)
 declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=OFF [linux-gcc-release]=OFF [linux-asan]=OFF)
 
 stages=()
@@ -156,7 +156,7 @@ mkdir -p "$LOG_DIR"
 # sit together (the gcc trees: tests, determinism, the Release build), so a tree is finished with before
 # the next one starts and can be dropped when the disk is short (reclaim_space). Unknown names go last
 # and fail in run_stage with the list of known ones.
-CANON_ORDER=(walls regen premerge linux-gcc-debug determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
+CANON_ORDER=(walls regen premerge linux-gcc-debug slow determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
 order_stages() {
     local -A seen=()
     local c s sorted=()
@@ -174,7 +174,7 @@ order_stages
 stage_trees() {
     case "$1" in
         linux-*) echo "$1" ;;
-        premerge|regen) echo linux-gcc-debug ;;
+        premerge|regen|slow) echo linux-gcc-debug ;;
         tidy) echo linux-clang-debug ;;
         determinism) echo "linux-gcc-debug linux-gcc-release" ;;
         release-build) echo linux-gcc-release ;;
@@ -330,7 +330,7 @@ preconfigure() {
     for s in "${stages[@]}"; do
         case "$s" in
             linux-*) [[ -n "${GPU_TESTS[$s]:-}" ]] && want[$s]=1 ;;
-            premerge|regen) want[linux-gcc-debug]=1 ;;
+            premerge|regen|slow) want[linux-gcc-debug]=1 ;;
             tidy) want[linux-clang-debug]=1 ;;
             determinism) want[linux-gcc-debug]=1; want[linux-gcc-release]=1 ;;
             release-build) want[linux-gcc-release]=1 ;;
@@ -359,6 +359,14 @@ stage_preset() {
     configure "$preset" &&
         cmake --build --preset "$preset" &&
         run_tests "$preset"
+}
+
+# slow (M4): the tests labelled `slow` (over 60 s: the full versions of tests that ship a smoke variant for --task),
+# in the gcc debug tree. Part of the full run, i.e. the integration run; threads' --task skips them.
+stage_slow() {
+    configure linux-gcc-debug &&
+        cmake --build --preset linux-gcc-debug &&
+        xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" ctest --preset linux-gcc-debug-slow -j "$JOBS"
 }
 
 # regen: the generated files, rebuilt from the code (integration runner). mce_mcp is the transcript golden's server.
@@ -613,6 +621,7 @@ run_stage() {
         web) stage_web ;;
         premerge) stage_premerge ;;
         regen) stage_regen ;;
+        slow) stage_slow ;;
         *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]} premerge regen)"; return 2 ;;
     esac
 }

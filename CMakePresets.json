@@ -132,16 +132,17 @@
     { "name": "web-release",           "configurePreset": "web-release" }
   ],
   "testPresets": [
-    { "name": "msvc-debug",          "configurePreset": "msvc-debug",          "output": { "outputOnFailure": true } },
-    { "name": "msvc-release",        "configurePreset": "msvc-release",        "output": { "outputOnFailure": true } },
-    { "name": "msvc-asan",           "configurePreset": "msvc-asan",           "output": { "outputOnFailure": true } },
-    { "name": "linux-gcc-debug",     "configurePreset": "linux-gcc-debug",     "output": { "outputOnFailure": true } },
-    { "name": "linux-gcc-release",   "configurePreset": "linux-gcc-release",   "output": { "outputOnFailure": true } },
-    { "name": "linux-clang-debug",   "configurePreset": "linux-clang-debug",   "output": { "outputOnFailure": true } },
-    { "name": "linux-clang-release", "configurePreset": "linux-clang-release", "output": { "outputOnFailure": true } },
-    { "name": "linux-asan",          "configurePreset": "linux-asan",          "output": { "outputOnFailure": true } },
-    { "name": "macos-debug",         "configurePreset": "macos-debug",         "output": { "outputOnFailure": true } },
-    { "name": "macos-release",       "configurePreset": "macos-release",       "output": { "outputOnFailure": true } },
-    { "name": "macos-asan",          "configurePreset": "macos-asan",          "output": { "outputOnFailure": true } }
+    { "name": "msvc-debug",          "configurePreset": "msvc-debug",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "msvc-release",        "configurePreset": "msvc-release",        "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "msvc-asan",           "configurePreset": "msvc-asan",           "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-gcc-debug",     "configurePreset": "linux-gcc-debug",     "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-gcc-debug-slow", "configurePreset": "linux-gcc-debug", "output": { "outputOnFailure": true }, "filter": { "include": { "label": "slow" } } },
+    { "name": "linux-gcc-release",   "configurePreset": "linux-gcc-release",   "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-clang-debug",   "configurePreset": "linux-clang-debug",   "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-clang-release", "configurePreset": "linux-clang-release", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-asan",          "configurePreset": "linux-asan",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "macos-debug",         "configurePreset": "macos-debug",         "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "macos-release",       "configurePreset": "macos-release",       "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "macos-asan",          "configurePreset": "macos-asan",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } }
   ]
 }
