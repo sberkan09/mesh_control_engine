@@ -11,6 +11,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/asset/guid.h"
 #include "mce/audio/components.h"
+#include "mce/ecs/transform.h"
 #include "mce/ecs/prefab.h"
 #include "mce/input/actions.h"
 #include "mce/kit/ai.h"
@@ -412,6 +413,24 @@ int l_move_and_collide(lua_State* L) {
     return 1;
 }
 
+// mce.teleport2d(e, position): puts a 2D body at `position` without sweeping (a respawn, a level's start).
+// The physics step writes LocalTransform back from the body, so a plain LocalTransform write does not move a body.
+int l_teleport2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    const math::vec2 at = check_vec2(L, 2);
+    if (!pw.has_body(e)) luaL_error(L, "mce.teleport2d: the entity has no 2D body");
+    f32 angle = 0.0f;
+    if (LocalTransform* t = w.try_get_mut<LocalTransform>(e)) {
+        angle = angle_z(t->rotation);
+        t->position.x = at.x;
+        t->position.y = at.y;
+    }
+    pw.teleport(e, at, angle);
+    return 0;
+}
+
 int l_velocity2d(lua_State* L) {
     physics::World2D& pw = physics2d(L);
     push_vec2(L, pw.linear_velocity(check_entity(L, 1)));
@@ -491,6 +510,7 @@ const luaL_Reg kWorldLib[] = {
     {"raycast2d", l_raycast2d},
     {"overlap2d", l_overlap2d},
     {"move_and_collide", l_move_and_collide},
+    {"teleport2d", l_teleport2d},
     {"velocity2d", l_velocity2d},
     {"set_velocity2d", l_set_velocity2d},
     {"impulse2d", l_impulse2d},

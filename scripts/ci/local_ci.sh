@@ -5,10 +5,25 @@
 #   scripts/ci/local_ci.sh --quick    # walls + linux-gcc-debug (with GPU tests)
 #   scripts/ci/local_ci.sh --tidy-all # everything, with clang-tidy over the whole tree
 #   scripts/ci/local_ci.sh --task     # after each task: walls + linux-gcc-debug + tidy (+ determinism, below)
-#   scripts/ci/local_ci.sh --batch    # every 3rd task and at a milestone's end: everything (same as no stage)
+#   scripts/ci/local_ci.sh --premerge # right before merging, if dev_claude moved: walls + the PR's own tests (below)
+#   scripts/ci/local_ci.sh --batch    # the full matrix; the integration runner's job, threads do not run it
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages
+#   scripts/ci/local_ci.sh regen      # integration runner only: regenerate the generated files (below)
+#   scripts/ci/local_ci.sh --save-cache-only   # integration runner only: refresh the ccache snapshot
 #
-# Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism, release-build, web.
+# regen builds mce_mcp in the gcc debug tree and runs scripts/ci/regen_generated.py: capabilities.md, the sample
+# coverage allow list and the transcript golden. scripts/ci/integration_run.sh commits the result; threads do not.
+#
+# --premerge (the M7 gate, ~1-3 min) is for after dev_claude was merged into the branch: a PR goes green with ONE
+# --task on its own base and is not re-run. It runs walls (capabilities --check included), then builds mce_mcp
+# and the tests defined next to the files the PR changed (scripts/ci/premerge.py tests) and runs those plus the
+# MCP transcript golden (`ctest -R`). It also prints whether dev_claude changed files the PR also changes since
+# the last green --task (the base is recorded in build/local-ci-logs/last-task.env; MCE_PREMERGE_SINCE=<sha>
+# overrides): only then is a --task re-run needed. Generated files that went stale after the
+# merge (capabilities.md, transcript goldens, the sample coverage allow list) are the integration runner's to
+# regenerate; a failure in the golden check on a file the PR did not touch is not a reason for --task.
+#
+# Stages: walls, linux-gcc-debug, slow, linux-clang-release, linux-asan, tidy, determinism, release-build, web.
 # release-build compiles the whole gcc Release tree (the SDK's) without running it: determinism builds only
 # the targets it runs. linux-gcc-release runs only when named: it is that tree plus its tests, and
 # linux-clang-release runs the tests in Release.
@@ -55,26 +70,29 @@ cd "$ROOT"
 
 export LIBGL_ALWAYS_SOFTWARE=1  # Mesa llvmpipe: GL 4.5 core without a GPU
 
-ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism release-build web)
+ALL_STAGES=(walls linux-gcc-debug slow linux-clang-release linux-asan tidy determinism release-build web)
 declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=OFF [linux-gcc-release]=OFF [linux-asan]=OFF)
 
 stages=()
 save_cache=0
+save_only=0
 tidy_all=0
 task_run=0
 for arg in "$@"; do
     case "$arg" in
         --quick) stages+=(walls linux-gcc-debug) ;;
         --task) stages+=(walls linux-gcc-debug tidy); task_run=1 ;;
+        --premerge) stages+=(walls premerge) ;;
         --batch) ;;
         --save-cache) save_cache=1 ;;
+        --save-cache-only) save_cache=1; save_only=1 ;;
         --tidy-all) tidy_all=1 ;;
-        -h|--help) sed -n '2,42p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,52p' "$0"; exit 0 ;;
         *) stages+=("$arg") ;;
     esac
 done
 full_run=0
-[[ ${#stages[@]} -eq 0 ]] && { stages=("${ALL_STAGES[@]}"); full_run=1; }
+[[ ${#stages[@]} -eq 0 && $save_only -eq 0 ]] && { stages=("${ALL_STAGES[@]}"); full_run=1; }
 
 # Files changed since the merge base with $MCE_TIDY_BASE (default origin/dev_claude), committed or
 # not; prints nothing when the base ref is missing.
@@ -138,7 +156,7 @@ mkdir -p "$LOG_DIR"
 # sit together (the gcc trees: tests, determinism, the Release build), so a tree is finished with before
 # the next one starts and can be dropped when the disk is short (reclaim_space). Unknown names go last
 # and fail in run_stage with the list of known ones.
-CANON_ORDER=(walls linux-gcc-debug determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
+CANON_ORDER=(walls regen premerge linux-gcc-debug slow determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
 order_stages() {
     local -A seen=()
     local c s sorted=()
@@ -156,6 +174,7 @@ order_stages
 stage_trees() {
     case "$1" in
         linux-*) echo "$1" ;;
+        premerge|regen|slow) echo linux-gcc-debug ;;
         tidy) echo linux-clang-debug ;;
         determinism) echo "linux-gcc-debug linux-gcc-release" ;;
         release-build) echo linux-gcc-release ;;
@@ -209,12 +228,21 @@ reclaim_space() {  # $1: index in stages of the stage about to run; returns 1 wh
 
 JOBS="$(nproc 2>/dev/null || echo 4)"
 
-# Extra configure arguments shared by every preset.
+# Extra configure arguments shared by every preset. The linux presets set -gz themselves (CMakePresets.json
+# linux-base: debug sections compressed, a gcc-debug tree 13 GB -> 8.2 GB, claude_communication R2), so a tree
+# configured by hand with `cmake --preset` and one configured here agree. Changing the flags invalidates every
+# cached object once: the first run after this lands is cold and the next snapshot is rebuilt.
 COMMON_ARGS=()
 SNAPSHOT=""
+HAVE_CCACHE=0
 if command -v ccache > /dev/null; then
+    HAVE_CCACHE=1
     export CCACHE_BASEDIR="$ROOT" CCACHE_NOHASHDIR=1  # hits survive a different checkout path
     export CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}" CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-3G}"
+    # Without these ccache cannot cache a TU that uses a precompiled header (SDL3's): 1308 of 4665 calls were
+    # uncacheable, a gcc-debug build with a full cache took 700 s; with them it hits 100 % and takes 110 s
+    # (claude_communication R1).
+    export CCACHE_SLOPPINESS="${CCACHE_SLOPPINESS:-pch_defines,time_macros,include_file_mtime,include_file_ctime}"
     COMMON_ARGS+=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
     if [[ -d /mnt/project-files/ ]] && command -v zstd > /dev/null; then
         SNAPSHOT="${MCE_CCACHE_SNAPSHOT-/mnt/project-files/.cache/ccache-linux.tar.zst}"
@@ -302,6 +330,7 @@ preconfigure() {
     for s in "${stages[@]}"; do
         case "$s" in
             linux-*) [[ -n "${GPU_TESTS[$s]:-}" ]] && want[$s]=1 ;;
+            premerge|regen|slow) want[linux-gcc-debug]=1 ;;
             tidy) want[linux-clang-debug]=1 ;;
             determinism) want[linux-gcc-debug]=1; want[linux-gcc-release]=1 ;;
             release-build) want[linux-gcc-release]=1 ;;
@@ -330,6 +359,45 @@ stage_preset() {
     configure "$preset" &&
         cmake --build --preset "$preset" &&
         run_tests "$preset"
+}
+
+# slow (M4): the tests labelled `slow` (over 60 s: the full versions of tests that ship a smoke variant for --task),
+# in the gcc debug tree. Part of the full run, i.e. the integration run; threads' --task skips them.
+stage_slow() {
+    configure linux-gcc-debug &&
+        cmake --build --preset linux-gcc-debug &&
+        xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" ctest --preset linux-gcc-debug-slow -j "$JOBS"
+}
+
+# regen: the generated files, rebuilt from the code (integration runner). mce_mcp is the transcript golden's server.
+stage_regen() {
+    configure linux-gcc-debug &&
+        cmake --build --preset linux-gcc-debug --target mce_mcp &&
+        python3 scripts/ci/regen_generated.py --exe build/linux-gcc-debug/src/editor/mcp/mce_mcp
+}
+
+# --premerge: report whether a --task re-run is needed, build the PR's own tests and run them with the
+# transcript golden. An overlap makes the stage fail so the summary says so.
+stage_premerge() {
+    local since="${MCE_PREMERGE_SINCE:-}" rc=0 out regex targets full
+    python3 scripts/ci/premerge.py overlap ${since:+--since "$since"} || rc=$?
+    out="$(python3 scripts/ci/premerge.py tests)"
+    regex="$(sed -n 's/^REGEX=//p' <<< "$out")"
+    targets="$(sed -n 's/^TARGETS=//p' <<< "$out")"
+    full="$(sed -n 's/^FULL_BUILD=//p' <<< "$out")"
+    echo "premerge: tests $regex"
+    configure linux-gcc-debug || return 1
+    if [[ "$full" == 1 ]]; then
+        cmake --build --preset linux-gcc-debug || return 1
+    else
+        # A target premerge.py guessed wrong (a test command that is not a target) falls back to the full build.
+        # shellcheck disable=SC2086
+        cmake --build --preset linux-gcc-debug --target $targets || cmake --build --preset linux-gcc-debug || return 1
+    fi
+    xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" ctest --preset linux-gcc-debug -j "$JOBS" -R "$regex" || return 1
+    [[ $rc -eq 0 ]] && return 0
+    echo "premerge: tests pass, but a --task re-run is needed (see the overlap above, or no --task base is recorded)"
+    return 1
 }
 
 # Prints the run-clang-tidy file regexes: one per changed translation unit, or the whole tree.
@@ -460,12 +528,16 @@ stage_determinism() {
 # ADR-0041 spike: the Luau system hashes the same across runs and Debug/Release, and the same as
 # its C++ twin (`-mode cpp`), so the VM adds no float drift of its own.
 stage_script_determinism() {
-    cmake --build --preset linux-gcc-debug --target sample_script_headless ember_script &&
-        cmake --build --preset linux-gcc-release --target sample_script_headless ember_script &&
+    cmake --build --preset linux-gcc-debug --target sample_script_headless ember_script dungeon &&
+        cmake --build --preset linux-gcc-release --target sample_script_headless ember_script dungeon &&
         python3 scripts/ci/determinism.py --runs 3 \
             --args="-headless 1 -ticks 1800 -input projects/EmberScript/tests/run_right.input" \
             build/linux-gcc-debug/projects/EmberScript/ember_script \
             build/linux-gcc-release/projects/EmberScript/ember_script &&
+        python3 scripts/ci/determinism.py --runs 3 \
+            --args="-headless 1 -ticks 3000 -input projects/Dungeon/tests/autopilot.input" \
+            build/linux-gcc-debug/projects/Dungeon/dungeon \
+            build/linux-gcc-release/projects/Dungeon/dungeon &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1200" \
             build/linux-gcc-debug/samples/script_headless/sample_script_headless \
             build/linux-gcc-release/samples/script_headless/sample_script_headless &&
@@ -546,18 +618,22 @@ stage_web() {
 
 run_stage() {
     case "$1" in
-        walls) python3 scripts/ci/check_walls.py && python3 scripts/bump_version.py --check && python3 scripts/ci/capabilities.py --check && python3 scripts/ci/check_docs.py ;;
+        walls) python3 scripts/ci/check_walls.py && python3 scripts/bump_version.py --check && python3 scripts/ci/capabilities.py --check && python3 scripts/ci/check_docs.py && python3 scripts/changelog.py --check ;;
         linux-*) [[ -n "${GPU_TESTS[$1]:-}" ]] || { echo "unknown preset stage: $1"; return 2; }; stage_preset "$1" ;;
         tidy) stage_tidy ;;
         determinism) stage_determinism ;;
         release-build) stage_release_build ;;
         web) stage_web ;;
-        *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]})"; return 2 ;;
+        premerge) stage_premerge ;;
+        regen) stage_regen ;;
+        slow) stage_slow ;;
+        *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]} premerge regen)"; return 2 ;;
     esac
 }
 
 restore_cache
-[[ ${#COMMON_ARGS[@]} -gt 0 ]] && ccache --zero-stats > /dev/null
+if [[ $save_only -eq 1 ]]; then save_cache_snapshot; exit 0; fi
+[[ $HAVE_CCACHE -eq 1 ]] && ccache --zero-stats > /dev/null
 preconfigure
 
 declare -A RESULT
@@ -582,9 +658,15 @@ done
 echo
 echo "=== Summary ($(git rev-parse --short HEAD 2>/dev/null))"
 for s in "${stages[@]}"; do printf '  %-22s %s\n' "$s" "${RESULT[$s]}"; done
-if [[ ${#COMMON_ARGS[@]} -gt 0 ]]; then
+if [[ $HAVE_CCACHE -eq 1 ]]; then
     ccache --show-stats 2> /dev/null | grep -E '^(Cacheable calls|  Hits|  Misses)' | awk '!seen[$0]++' |
         sed 's/^/  ccache: /'
     [[ $failed -eq 0 ]] && save_cache_snapshot
+fi
+# A --task whose walls and gcc-debug tests passed records the base it ran on (a tidy-only fix needs no re-run), so --premerge can tell later whether dev_claude moved onto the
+# PR's files (scripts/ci/premerge.py overlap).
+if [[ $task_run -eq 1 && "${RESULT[walls]:-}" == PASS* && "${RESULT[linux-gcc-debug]:-}" == PASS* ]]; then
+    printf 'BASE=%s\nHEAD=%s\n' "$(git merge-base HEAD "${MCE_TIDY_BASE:-origin/dev_claude}" 2>/dev/null)" \
+        "$(git rev-parse HEAD)" > "$LOG_DIR/last-task.env"
 fi
 exit $failed

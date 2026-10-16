@@ -20,8 +20,10 @@ needs changes to compile.
 
 ## How
 
-1. Every PR that changes what a user of the engine sees adds a line under `## Unreleased` in `CHANGELOG.md`.
-2. The bumping PR runs `python3 scripts/bump_version.py x.y.z`. It updates `CMakeLists.txt`, the projects'
+1. Every PR that changes what a user of the engine sees adds a fragment `changelog.d/<ticket>.md` (see
+   `changelog.d/README.md`), never an edit of `CHANGELOG.md`. `scripts/changelog.py` appends the fragments under
+   `## Unreleased` and deletes them; the bumping PR commits the fragment deletions.
+2. The bumping PR runs `python3 scripts/bump_version.py x.y.z`. It collects the fragments, updates `CMakeLists.txt`, the projects'
    `engine_version`, the user-guide example, and turns `## Unreleased` into `## x.y.z (date)`.
 3. After that PR merges, tag the merge commit `vx.y.z`: `git tag -a vx.y.z origin/dev_claude && git push origin vx.y.z`,
    or on GitHub, Releases → Draft a new release → tag `vx.y.z`, target `dev_claude`. Cloud Claude sessions can
