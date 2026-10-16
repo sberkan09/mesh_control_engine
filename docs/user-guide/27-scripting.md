@@ -270,3 +270,47 @@ not a line-by-line port; the Luau-versus-C++ twin the determinism stage compares
 - `script_check` takes `path` relative to `assets/` (`scripts/player.luau`); `assets/scripts/...` works too.
 - Every MCP call in a `mce_mcp` session shares one scene; a one-shot client that starts a server per call should pass
   `"scene": "scenes/main.mcscene"` to `run_headless`.
+
+## 27.9 Recipes
+
+Each is a whole script; the state sits in `ScriptVars` or another component, never in a local.
+
+**A countdown that fires once** (`v[1]` = ticks left, set in the scene; `v[16]` = 4 marks a timer entity):
+
+```lua
+local VARS = mce.field("ScriptVars", "v")
+function update()
+    mce.each("ScriptVars", function(e)
+        local v = mce.get(e, VARS)
+        if v[16] ~= 4 or v[1] <= 0 then return end
+        v[1] = v[1] - 1
+        mce.set(e, VARS, v)
+        if v[1] == 0 then mce.signal("timer_done", e) end   -- a sequence or timeline can wait on it
+    end)
+end
+```
+
+**A state machine** is a number in a slot and an if-chain, as `projects/EmberScript/assets/scripts/enemy.luau`
+does (Patrol, Chase, Return); keep the transitions in one place and write the state back once at the end.
+
+**Spawning on a beat** (a prefab every 90 ticks):
+
+```lua
+function update()
+    if mce.tick() % 90 == 0 then
+        mce.instantiate("guid:<prefab>", vector.create(mce.random() * 10, 6, 0))
+    end
+end
+```
+
+**Reacting to physics events** (a sensor under a pickup; see `mce.events`):
+
+```lua
+function update()
+    for _, hit in ipairs(mce.events("TriggerEnter")) do
+        if mce.has(hit.other, "ScriptVars") then mce.destroy(hit.sensor) end
+    end
+end
+```
+
+**Playing a sound on a press:** `if mce.pressed("Jump") then mce.play_sound("guid:<sfx>", -6) end`.

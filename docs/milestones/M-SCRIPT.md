@@ -1,6 +1,6 @@
 # M-SCRIPT — Luau scripting for games without a compiler (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–4 done, 5 in progress). Plan: ROADMAP §M-SCRIPT; design of record
+**Status:** done (added 2026-10-16; steps 1–6 merged; the phone and web builds with the Luau runtime are unverified in this environment). Plan: ROADMAP §M-SCRIPT; design of record
 ADR-0041; Linear SBA-147 … SBA-152.
 
 **Why:** today every game needs a C++ toolchain and, on phones and the web, its own build. A script game is
