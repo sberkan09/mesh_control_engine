@@ -83,8 +83,16 @@ struct ActionDef {
 namespace MapFlag {
 enum : u32 {
     BlocksBelow = 1u << 0,  // while on the stack, maps beneath it are not evaluated (menus)
+    // Bits 8..11: the local player slot the map belongs to (M-VIEWS step 1). Slot 0 is the stack as
+    // always. A map of slot 1..3 is not on the stack: it is evaluated every tick, its actions are
+    // published as player_action_id(slot, name), and its gamepad bindings read only the pad
+    // assigned to that slot (InputSystem::assign_pad).
+    PlayerShift = 8,
+    PlayerMask = 0xFu << PlayerShift,
 };
 }
+constexpr u32 map_player_flags(u32 slot) { return (slot << MapFlag::PlayerShift) & MapFlag::PlayerMask; }
+constexpr u32 map_player(u32 flags) { return (flags & MapFlag::PlayerMask) >> MapFlag::PlayerShift; }
 
 struct ActionMapDef {
     StringId name;
