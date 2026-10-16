@@ -34,10 +34,6 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Blackboard` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | allowed: state the engine writes and games read; nothing to author |
 | `AiBrain` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `AiTokenPool` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard_squad.mcscene |
-| `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample |
-| `IKTarget3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample |
-| `Locomotion3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample |
-| `AiTokenPool` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
 | `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `IKTarget3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Locomotion3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
