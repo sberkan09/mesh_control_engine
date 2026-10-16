@@ -71,10 +71,19 @@ if(NOT TARGET mce::mce_engine)
         INTERFACE_COMPILE_DEFINITIONS "SPDLOG_COMPILED_LIB;FMT_USE_EXCEPTIONS=0;SPDLOG_NO_EXCEPTIONS;SPDLOG_ACTIVE_LEVEL=@MCE_SDK_SPDLOG_LEVEL@;MCE_RENDER_HAS_ASSET=1"
         INTERFACE_LINK_LIBRARIES "Threads::Threads")
 
+    if(NOT "@MCE_SDK_SCRIPT_FILE@" STREQUAL "")
+        # Scene scripts (M-SCRIPT): the runner and Luau's VM, linked by the player runtime.
+        add_library(mce::luau_vm STATIC IMPORTED)
+        set_target_properties(mce::luau_vm PROPERTIES IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_LUAU_VM_FILE@")
+        add_library(mce::mce_script STATIC IMPORTED)
+        set_target_properties(mce::mce_script PROPERTIES
+            IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_SCRIPT_FILE@"
+            INTERFACE_LINK_LIBRARIES "mce::luau_vm;mce::mce_engine")
+    endif()
     add_library(mce::mce_player_runtime STATIC IMPORTED)
     set_target_properties(mce::mce_player_runtime PROPERTIES
         IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_RUNTIME_FILE@"
-        INTERFACE_LINK_LIBRARIES "mce::mce_engine")
+        INTERFACE_LINK_LIBRARIES "@MCE_SDK_RUNTIME_LINKS@")
 
     if(NOT "@MCE_SDK_NET_FILE@" STREQUAL "")
         add_library(mce::mce_net STATIC IMPORTED)

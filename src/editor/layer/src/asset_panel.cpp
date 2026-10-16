@@ -36,7 +36,7 @@ public:
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 12.0f);
         if (ImGui::InputTextWithHint("##filter", "search all folders", filter_, sizeof(filter_))) model_.set_filter(filter_);
         ImGui::SameLine();
-        static constexpr const char* kTypes[] = {"All", "Texture", "Prefab", "Scene", "Material", "Sfx", "Font", "Mesh", "Tilemap", "ParticlePreset", "Sequence", "Timeline", "SpriteSheet", "AnimGraph", "UiDocument", "UiTheme", "Terrain", "NavMesh", "Video", "BehaviorTree", "Skeleton2D"};
+        static constexpr const char* kTypes[] = {"All", "Texture", "Prefab", "Scene", "Material", "Sfx", "Font", "Mesh", "Tilemap", "ParticlePreset", "Sequence", "Timeline", "SpriteSheet", "AnimGraph", "UiDocument", "UiTheme", "Terrain", "NavMesh", "Video", "BehaviorTree", "Skeleton2D", "Script"};
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
         if (ImGui::Combo("##type", &type_, kTypes, IM_ARRAYSIZE(kTypes))) model_.set_type(type_ == 0 ? StringView() : StringView(kTypes[type_]));
 

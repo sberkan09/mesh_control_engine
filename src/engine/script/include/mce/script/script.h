@@ -1,9 +1,12 @@
 #pragma once
-// mce_script (spike, ADR-0041): Luau scripts as ECS systems.
+// mce_script (ADR-0041, M-SCRIPT): Luau scripts as ECS systems.
 //
-// A ScriptHost owns one sandboxed Luau VM. Each script is compiled and its top level runs once in
-// its own environment; it must define `function update()`. install() registers one system in a
-// phase that calls every script's update(), in the order the scripts were added, once per tick.
+// A ScriptHost owns one sandboxed Luau VM. Each script is loaded from bytecode (mce_cook writes it
+// into CHNK_SCRIPT; mce/script/compiler.h compiles source for tools and tests, and the player never
+// links the compiler) and its top level runs once in its own environment; it must define
+// `function update()`. install() registers one system in a phase that calls every script's
+// update(), in the order the scripts were added, once per tick. Scenes name their scripts with
+// kit::ScriptSystem components, which mce/script/scene_scripts.h runs in the stock hosts.
 //
 // The rule that keeps determinism, saves and replays intact: scripts hold no state between ticks.
 // Everything a script remembers lives in reflected components it reads and writes through the
@@ -49,9 +52,6 @@ struct ScriptInfo {
     FixedString<256> error;  // "<name>:<line>: message" once Failed
 };
 
-// Luau source -> bytecode. Fails with Errc::ParseError and "<name>:<line>: message" in path.
-Result<Array<u8>> compile(StringView name, StringView source);
-
 class ScriptHost {
 public:
     explicit ScriptHost(const ScriptBudget& budget = {}, u64 seed = 0x5C121D7ull);
@@ -59,9 +59,9 @@ public:
     ScriptHost(const ScriptHost&) = delete;
     ScriptHost& operator=(const ScriptHost&) = delete;
 
-    // Compiles and adds a script; its top level runs now (with the step budget). Returns its index.
-    Result<u32> add(StringView name, StringView source);
-    Result<u32> add_bytecode(StringView name, Span<const u8> bytecode);
+    // Adds a script from bytecode; its top level runs now (with the step budget). Returns its
+    // index. `group` picks which run(f, group) calls it (scene scripts: one group per phase).
+    Result<u32> add_bytecode(StringView name, Span<const u8> bytecode, u8 group = 0);
 
     // Registers the "script.update" system in `phase` and points the World at this host. The host
     // must outlive every tick of `w`. One host per World.
@@ -69,6 +69,8 @@ public:
 
     // Runs every running script's update() once (what the installed system does).
     void run(Frame& f);
+    // Runs the running scripts of one group, in the order they were added.
+    void run(Frame& f, u8 group);
 
     Span<const ScriptInfo> scripts() const { return infos_.span(); }
     usize memory_used() const { return mem_used_; }
@@ -78,6 +80,7 @@ private:
     static void* alloc_fn(void* ud, void* ptr, usize osize, usize nsize);
     static void interrupt_fn(lua_State* L, int gc);
     void fail(u32 index, const char* message);
+    void run_scripts(Frame& f, bool all, u8 group);
 
     lua_State* L_ = nullptr;
     ScriptBudget budget_;
@@ -85,6 +88,7 @@ private:
     usize mem_used_ = 0;
     Array<ScriptInfo> infos_;
     Array<int> update_refs_;  // lua_ref of each script's update function
+    Array<u8> groups_;
     // Per-call context the C functions read (valid only inside run()).
     Frame* frame_ = nullptr;
     u32 current_ = 0;

@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Luau scripts as assets, M-SCRIPT step 1 (SBA-147, ADR-0041): `.luau` files under `assets/` cook (importer
+  `script`) to a `Script` asset of Luau bytecode, with syntax errors at `file:line:col`. A `ScriptSystem`
+  component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP
+  `run_headless` run the scene's scripts from bytecode where `MCE_WITH_SCRIPT` is on, and the player links no
+  Luau compiler. Scenes without scripts run and hash as before. New user guide chapter 27 (Scripting in Luau).
 - 2D bone animation, M-ANIM2D step 2 (SBA-141): a `.mcskel2d` holds `"animations"`, clips of per-bone rotate,
   translate and scale keys (offsets from the rest pose) with linear, stepped or bezier curves and timed events.
   A `Skeleton2DAnimator` plays them on the entity's `Skeleton2D`, cross-fades on a clip change and writes only

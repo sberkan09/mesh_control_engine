@@ -6,6 +6,9 @@
 #include "mce/input/ecs.h"
 #include "mce/input/input_system.h"
 #include "mce/kit/stock.h"
+#if MCE_HAS_SCRIPT
+#include "mce/script/scene_scripts.h"
+#endif
 #include "mce/kit/kit3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/sequence.h"
@@ -93,6 +96,9 @@ Result<void> PlaySession::enter(EditorProject& project, const SceneDocument& doc
     physics::install_physics2d(*world_);
     audio::install(*world_, *audio_, clips_.get());
     kit::install_stock(*world_, assets);
+#if MCE_HAS_SCRIPT
+    script::install_scene_scripts(*world_, assets);  // the scene's ScriptSystems, as mce_player
+#endif
     if (g_game_install) {
         if (Result<void> r = g_game_install(*world_); !r) {
             diags.error(r.error().code, rel.view(), 0, 0, kStage, "the game's install() failed");

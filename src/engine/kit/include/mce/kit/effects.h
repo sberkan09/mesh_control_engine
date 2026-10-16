@@ -8,7 +8,8 @@
 //   ShakeTrigger    adds trauma to every CameraShake2D (and kit/cinematic.h CameraShake3D) on a FireOn condition
 //   CameraShake2D   trauma screen shake on a Camera2DComponent entity (render::shake_offset)
 //   CameraFollow2D  a 2D camera following an entity: offset, dead zone, smoothing, look-ahead, bounds
-//   CameraFollow3D  a 3D camera orbiting an entity: distance, yaw/pitch, smoothing, look-input orbit
+//   CameraFollow3D  a 3D camera orbiting an entity: distance, yaw/pitch, smoothing, look-input orbit,
+//                   a spring arm, look-ahead, first person and lock-on (M-MOVE3D 2)
 //   PhysicsEvents   the entity's last trigger (2D and 3D) and 2D contact pairs and counts (engine-written)
 //   NavGridSource   the NavGrid PathAgents walk on: from a tilemap layer and/or static colliders
 //
@@ -125,6 +126,11 @@ MCE_COMPONENT(CameraFollow2D, (target, Help{"the entity to follow"}), offset,
 // Places this entity (a 3D camera) on an orbit around `target`: the pivot is the target's position
 // plus `offset`; the camera sits `distance` behind it at `yaw` / `pitch` and looks at it. With
 // orbit_speed > 0 the Look input (InputState.look) turns the orbit.
+// M-MOVE3D 2 (each off by default): `collide` makes the boom a spring arm that a sphere cast pulls in
+// front of static and kinematic geometry and that grows back at `return_speed`; `look_ahead` leads the
+// pivot by that many seconds of the target's ground velocity; `first_person` puts the camera at the
+// pivot, looking along yaw / pitch; `lock_on` turns the yaw (at `lock_on_rate`) so the camera frames
+// the target in front of that entity.
 struct CameraFollow3D {
     Entity target;
     math::vec3 offset{0.0f, 1.5f, 0.0f};
@@ -137,13 +143,28 @@ struct CameraFollow3D {
     f32 orbit_speed = 0.0f;         // radians per second at full Look input; 0 = no input
     math::vec3 pivot;               // engine-written: the smoothed pivot
     bool primed = false;            // engine-written
-    u8 pad_[3] = {};
+    bool collide = false;           // spring arm: keep the camera in front of walls
+    bool first_person = false;      // the camera at the pivot instead of behind it
+    u8 pad_ = 0;
+    f32 collision_radius = 0.2f;    // m: the sphere the arm sweeps
+    f32 return_speed = 4.0f;        // m/s the arm grows back once a wall clears; 0 = at once
+    f32 look_ahead = 0.0f;          // s of the target's ground velocity to lead the pivot by
+    f32 lock_on_rate = 0.0f;        // rad/s the yaw turns towards the lock-on framing; 0 = at once
+    Entity lock_on;                 // frame the target with this entity beyond it; null = free
+    f32 arm = 0.0f;                 // engine-written: the boom length this tick
+    math::vec3 last_goal;           // engine-written: the unsmoothed pivot last tick (for look_ahead)
 };
 MCE_COMPONENT(CameraFollow3D, (target, Help{"the entity to orbit"}), (offset, Help{"pivot above the target"}),
               (distance, Range{0.1f, 1000}), (yaw, Help{"radians about +Y"}), (pitch, Help{"radians above the horizon"}),
               min_pitch, max_pitch, (smoothing, Range{0, 60}, Help{"1/s; 0 = snap"}),
               (orbit_speed, Range{0, 20}, Help{"radians/s at full Look input; 0 = fixed"}), (pivot, ReadOnly, Transient),
-              (primed, ReadOnly, Transient))
+              (primed, ReadOnly, Transient), (collide, Help{"spring arm: walls pull the camera in, it eases back out"}),
+              (first_person, Help{"the camera at the pivot, looking along yaw and pitch"}),
+              (collision_radius, Range{0.01f, 5}), (return_speed, Range{0, 100}, Help{"m/s the arm grows back; 0 = at once"}),
+              (look_ahead, Range{0, 2}, Help{"seconds of target ground velocity to lead the pivot by"}),
+              (lock_on_rate, Range{0, 50}, Help{"rad/s the yaw turns to the lock-on framing; 0 = at once"}),
+              (lock_on, Help{"keep this entity framed beyond the target; empty = free orbit"}), (arm, ReadOnly, Transient),
+              (last_goal, ReadOnly, Transient))
 
 // Engine-written record of the 2D physics events naming this entity (add the component to
 // see them; readable by data, sequences and run_headless inspect).

@@ -48,6 +48,7 @@ reach all of its non-transient fields.
 | `SequencePlayer` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `PathAgent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `WorldSettings` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/02-projects.md |
+| `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md |
 | `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
@@ -129,6 +130,7 @@ reach all of its non-transient fields.
 | Video | .mpg / .mpeg (MPEG-1 + MP2) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/13-sequences-fsm-saves.md |
 | BehaviorTree | `.mcbt` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | Skeleton2D | `.mcskel2d` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
+| Script | .luau (Luau source, compiled at cook; MCE_WITH_SCRIPT) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/27-scripting.md |
 
 ## MCP tools
 
