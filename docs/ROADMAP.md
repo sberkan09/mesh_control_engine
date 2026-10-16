@@ -108,6 +108,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-MOVE3D | [M-MOVE3D.md](milestones/M-MOVE3D.md) (Linear SBA-134 … SBA-139, added 2026-10-16) | active (step 1 done: character feel, acceleration, coyote time, jump buffer and cut, air jumps, sprint, crouch, `Landed3D`; step 2 done: the camera, spring arm, look-ahead, first person, lock-on; step 3 done: vehicle feel, anti-roll, downforce, gears as data, skids, self-righting; step 4 done: `VehicleDriver3D` AI drivers on `Waypoint3D` paths, corner braking, laps; step 5 done: `Locomotion3D` feeds movement to animation graphs, foot IK tested on slopes and stairs) | step 6, the demo and the gates |
 | M-ANIM2D | [M-ANIM2D.md](milestones/M-ANIM2D.md) (Linear SBA-140 … SBA-146, added 2026-10-16) | active (step 1 done: `.mcskel2d` cooked to `CHNK_SKEL2D`, the `Skeleton2D` world pose, slots drawn through the sprite extraction, `Bone2DFollow`; step 2 done: bone clips with linear, stepped and bezier keys, `Skeleton2DAnimator` crossfades, the `.mcanim` state graph shared with 3D, events; step 3 done: slot attachments, skinned meshes drawn as batch triangles, slot color / attachment keys and deform keys, `Skeleton2DSlots`; step 4 done: two-bone and CCD IK constraints as data, bone or `IKTarget2D` entity targets, keyed and overridable mix in `Skeleton2DIK`) | steps 5–6 (the editor panel and MCP tools, the demo and the gates) |
 | M-SCRIPT | [M-SCRIPT.md](milestones/M-SCRIPT.md) (Linear SBA-147 … SBA-152, added 2026-10-16; ADR-0041) | active (steps 1–4 done) | steps 5–6, the demo and the gates |
+| M-COVER | [M-COVER.md](milestones/M-COVER.md) (Linear SBA-157 … SBA-160, added 2026-10-16) | active (step 1 done: the sample coverage gate in the walls stage, `scripts/ci/sample_coverage.allow`) | steps 2–4, the three tour samples |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -453,6 +454,19 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 - A Vorbis clip stays within a set error of its source.
 - `local_ci.sh` green on every step.
 
+
+### M-COVER — Docs and sample coverage · **size S (rough guess, ≈ 20–35 h engineering)** · tier: off-tier, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free. The capability table fails when a component has no document, but 39 of 101 components appear in no sample, project or template. Needs no device or engine code.*
+
+**Builds, in order:**
+1. A walls-stage check that every component is shown in a sample, project or template, or listed with a reason in `scripts/ci/sample_coverage.allow`, and that the list only shrinks.
+2. A 3D tour sample covering 18 of the listed components.
+3. A 2D and gameplay tour sample covering 14.
+4. A systems tour sample (net, script, dialogue) covering 5; the list ends with the two state-only components.
+
+**Demo:** the three tours play headless and hash the same twice; the capability table's "Shown in" column has no `none`.
+**Gates:** `local_ci.sh` green on every step; the allow-list ends with only runtime-state components.
 ### M-AI — Game AI as data · **size L (rough guess, ≈ 100–150 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 3
 
 *Reason: added 2026-10-16 under the project's standing instruction to extend the roadmap when no milestone is free (every active milestone has an owner, and M-LIVEOPS' remaining work needs devices). Game AI was the gap left in the engine comparison (`assessments/motor-kiyaslama-eksikler.md`) after M-GAMEPLAY3D: navmesh, sensors and the FSM helper exist, but every enemy past a few states is a hand-written C++ cascade that an agent or designer cannot edit as data. Unreal ships behavior trees with a blackboard and Unity a Behavior package. Needs no device: every step gates headless.*

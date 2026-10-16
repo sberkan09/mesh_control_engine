@@ -30,6 +30,13 @@ REGISTRIES = {
 }
 DOC_DIRS = [ROOT / "docs/user-guide", ROOT / "docs/engine"]
 
+# Where a game shows a component in use (M-COVER): scenes, prefabs, timelines and the code of the
+# samples, the sample projects and the project templates. A component none of them names is listed
+# with its reason in SAMPLE_ALLOW, or the check fails.
+SAMPLE_ROOTS = [ROOT / "samples", ROOT / "projects", ROOT / "templates"]
+SAMPLE_SUFFIXES = {".mcscene", ".mcprefab", ".mctimeline", ".mcseq", ".mcbt", ".mcui", ".mctest", ".cpp", ".h", ".luau", ".py", ".json"}
+SAMPLE_ALLOW = ROOT / "scripts/ci/sample_coverage.allow"
+
 # Chunk types that are not assets a game authors: pack plumbing and runtime-only payloads.
 INTERNAL_CHUNKS = {
     "Manifest": "pack index",
@@ -103,6 +110,33 @@ def docs():
     return found
 
 
+def sample_corpus():
+    found = {}
+    for root in SAMPLE_ROOTS:
+        for p in sorted(root.rglob("*")):
+            if p.suffix not in SAMPLE_SUFFIXES or not p.is_file() or "build" in p.relative_to(ROOT).parts:
+                continue
+            found[p.relative_to(ROOT).as_posix()] = read(p)
+    return found
+
+
+def sample_allow():
+    """`Name | reason` lines; a name without a reason is an error."""
+    allowed, problems = {}, []
+    if not SAMPLE_ALLOW.exists():
+        return allowed, problems
+    for n, line in enumerate(read(SAMPLE_ALLOW).splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, _, reason = (x.strip() for x in line.partition("|"))
+        if not name or not reason:
+            problems.append(f"{SAMPLE_ALLOW.relative_to(ROOT)}:{n}: expected `Component | reason`")
+        else:
+            allowed[name] = reason
+    return allowed, problems
+
+
 def where(name, corpus, pattern=None):
     rx = re.compile(pattern or (r"`" + re.escape(name) + r"[`.\s({]"))
     for path, text in corpus.items():
@@ -116,6 +150,10 @@ def main():
     gaps = []
     corpus = docs()
     regs = {k: read(v) for k, v in REGISTRIES.items()}
+    samples = sample_corpus()
+    allowed, allow_problems = sample_allow()
+    gaps += allow_problems
+    known = {name for name, _ in components()}
 
     lines = [
         "# Engine capabilities",
@@ -129,8 +167,11 @@ def main():
         "Every reflected component: the scene file, the editor inspector and MCP's `component_*` tools",
         "reach all of its non-transient fields.",
         "",
-        "| Component | Header | Editor | MCP | Cook | Documented in |",
-        "|---|---|---|---|---|---|",
+        "A sample is a file under `samples/`, `projects/` or `templates/` that names the component. A component",
+        "none of them names is listed in `scripts/ci/sample_coverage.allow` with the reason.",
+        "",
+        "| Component | Header | Editor | MCP | Cook | Documented in | Shown in |",
+        "|---|---|---|---|---|---|---|",
     ]
     for name, header in components():
         inc = include_path(header)
@@ -143,7 +184,15 @@ def main():
         doc = where(name, corpus)
         if not doc:
             gaps.append(f"component {name}: no document under docs/user-guide or docs/engine names `{name}`")
-        lines.append(f"| `{name}` | `{inc}` | {' | '.join(marks)} | {doc or '**none**'} |")
+        shown = where(name, samples, r"\b" + re.escape(name) + r"\b")
+        if shown and name in allowed:
+            gaps.append(f"component {name}: {shown} now shows it; remove it from {SAMPLE_ALLOW.relative_to(ROOT)}")
+        if not shown and name not in allowed:
+            gaps.append(f"component {name}: no sample, project or template names it (show it in one, or add `{name} | reason` to {SAMPLE_ALLOW.relative_to(ROOT)})")
+        lines.append(f"| `{name}` | `{inc}` | {' | '.join(marks)} | {doc or '**none**'} | {shown or ('allowed: ' + allowed[name] if name in allowed else '**none**')} |")
+
+    for name in sorted(set(allowed) - known):
+        gaps.append(f"{SAMPLE_ALLOW.relative_to(ROOT)}: {name} is not a component")
 
     kinds = mcp_kinds()
     lines += [
