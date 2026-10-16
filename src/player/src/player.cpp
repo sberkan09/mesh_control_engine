@@ -85,6 +85,7 @@
 #include "mce/input/input_system.h"
 #include "mce/input/script.h"
 #include "mce/kit/captions.h"
+#include "mce/kit/coop.h"
 #include "mce/kit/presence.h"
 #include "mce/kit/stock.h"
 #if MCE_HAS_SCRIPT
@@ -606,6 +607,7 @@ public:
             input::publish(world_, *t.actions);
         }
         publish_view_info();
+        input_.set_join_slots(0, kit::coop_join_slots(world_));  // a scene with a CoopGame lets pads join (M-VIEWS 5)
         scene::pump_streaming(world_);
         if (!monetize_test_.empty()) monetize_test_requests();
         if (!game_services_test_.empty()) game_services_test_requests();

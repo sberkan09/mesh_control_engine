@@ -4,12 +4,9 @@
 
 Blackboard | state the engine writes and games read; nothing to author
 SceneChunkStatus | state the engine writes and games read; nothing to author
-CameraView | tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (split-screen)
-RenderTexture | tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap)
-ShowRenderTexture | tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap)
 ProcLevel | tested in tests/kit/test_proclevel.cpp; M-PROCGEN step 5 shows it in samples/10_dungeon
 ProcLevelOwned | state the engine writes and games read; nothing to author
 ProcMarker | state the engine writes and games read; nothing to author
-SplitScreen | tested in tests/kit; M-VIEWS step 5 shows it in samples/09_coop (four-way split)
-UiScreenView | wired in the stock player; M-VIEWS step 5 shows it in samples/09_coop (a HUD per player)
+UiScreenView | wired in the stock player and tested in tests/kit; a per-player HUD needs art, 09_coop has none
 AudioListenerMix | tested in tests/audio; M-VIEWS step 5 shows it in samples/09_coop (a listener per player)
+SharedCamera2D | tested in tests/kit/test_coop.cpp; 09_coop uses one camera per player (PlayerCamera), the shared frame is the other co-op style

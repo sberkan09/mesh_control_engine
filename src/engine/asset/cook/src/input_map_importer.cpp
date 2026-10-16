@@ -5,7 +5,7 @@
 // {
 //   "format": "mce-input", "version": 1, "guid": "<uuid>",
 //   "maps": [
-//     { "name": "Gameplay", "blocks_below": false,
+//     { "name": "Gameplay", "blocks_below": false, "player": 1,   // player 1..4 (default 1: the plain map stack)
 //       "actions": [
 //         { "name": "Move", "type": "axis2d",       // button (default) | axis1d | axis2d
 //           "bindings": [
@@ -18,6 +18,10 @@
 //           ] } ] } ]
 // }
 //
+// "player" (M-VIEWS 5): a map of player 2..4 is always active (never on the stack) and publishes its actions
+// as that local player's (input::player_action_id(player - 1, name); a script spells P2/Move); its gamepad
+// bindings read the pad assigned to that player. Player 1 (the default) is the stack as always.
+//
 // Touch (M-MOBILE): zones are [x0, y0, x1, y1] over the window, 0..1, y down. touch_zone and
 // touch_tap name their zone; touch_stick and touch_swipe name the source axis (like mouse_delta)
 // and take an optional "zone" (default: the whole window).
@@ -27,6 +31,7 @@
 // names are the SDL standard-layout ones in platform::GamepadButton / GamepadAxis. The first map
 // is the one the stack starts with.
 
+#include <cmath>
 #include "importer_common.h"
 #include "mce/asset/formats.h"
 #include "mce/input/input_map.h"
@@ -337,7 +342,7 @@ public:
                 error(diags, file, map, "a map must be an object");
                 continue;
             }
-            if (!detail::check_keys(map, {"name", "blocks_below", "actions"}, file, kStage, diags)) continue;
+            if (!detail::check_keys(map, {"name", "blocks_below", "player", "actions"}, file, kStage, diags)) continue;
             const JsonValue name = map.get("name");
             if (!name.is_string() || name.as_string().empty()) {
                 error(diags, file, name.valid() ? name : map, "a map needs a non-empty \"name\"");
@@ -348,6 +353,13 @@ public:
             bool blocks = false;
             detail::read_bool(map, "blocks_below", false, blocks, file, kStage, diags);
             if (blocks) def.flags |= input::MapFlag::BlocksBelow;
+            f64 player = 1;
+            detail::read_number(map, "player", 1, player, file, kStage, diags);
+            if (map.get("player").valid() && (player < 1 || player > input::kMaxLocalPlayers || player != std::floor(player))) {
+                error(diags, file, map.get("player"), "\"player\" must be 1..4");
+            } else {
+                def.flags |= input::map_player_flags(static_cast<u32>(player) - 1);
+            }
             def.first_action = static_cast<u16>(set.actions.size());
             const JsonValue actions = map.get("actions");
             if (actions.valid() && !actions.is_array()) error(diags, file, actions, "'actions' must be an array");
