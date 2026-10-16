@@ -586,14 +586,17 @@ bool bt_live(EditorSession& session, const BtEditor& ed, Entity brain, BtLive& o
     // The running tree matches the document when it has the same nodes in the same order.
     if (def && def->nodes.size() == d.nodes.size()) {
         out.current = true;
-        for (u32 i = 0; i < def->nodes.size() && out.current; ++i) {
+        const Span<const char* const> names = cook::bt_kind_names();
+        for (u32 i = 0; i < def->nodes.size(); ++i) {
             const u32 n = ed.node_at(i);
-            out.current = n != kNoBtNode && static_cast<u32>(def->nodes[i].kind) == [&] {
-                const Span<const char* const> names = cook::bt_kind_names();
+            u32 kind = ~0u;
+            if (n != kNoBtNode)
                 for (u32 k = 0; k < names.size(); ++k)
-                    if (d.nodes[n].kind.view() == names[k]) return k;
-                return ~0u;
-            }();
+                    if (d.nodes[n].kind.view() == names[k]) kind = k;
+            if (static_cast<u32>(def->nodes[i].kind) != kind) {
+                out.current = false;
+                break;
+            }
         }
     }
     if (out.current) {
@@ -612,14 +615,17 @@ bool bt_live(EditorSession& session, const BtEditor& ed, Entity brain, BtLive& o
         const StringView t = k.type.view();
         if (t == "vec3") {
             math::vec3 v;
-            if ((lk.set = kit::bb_vector(*w, brain, k.name.view(), v)))
+            lk.set = kit::bb_vector(*w, brain, k.name.view(), v);
+            if (lk.set)
                 cook::appendf(lk.value, "(%.2f, %.2f, %.2f)", static_cast<double>(v.x), static_cast<double>(v.y), static_cast<double>(v.z));
         } else if (t == "entity") {
             Entity e;
-            if ((lk.set = kit::bb_entity(*w, brain, k.name.view(), e))) cook::appendf(lk.value, "#%u", e.index);
+            lk.set = kit::bb_entity(*w, brain, k.name.view(), e);
+            if (lk.set) cook::appendf(lk.value, "#%u", e.index);
         } else {
             f32 v = 0.0f;
-            if ((lk.set = kit::bb_number(*w, brain, k.name.view(), v))) {
+            lk.set = kit::bb_number(*w, brain, k.name.view(), v);
+            if (lk.set) {
                 if (t == "bool") lk.value.assign(v != 0.0f ? "true" : "false");
                 else if (t == "int") cook::appendf(lk.value, "%d", static_cast<int>(v));
                 else cook::appendf(lk.value, "%g", static_cast<double>(v));
