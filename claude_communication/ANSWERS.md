@@ -237,3 +237,49 @@ updated by the coordinator: threads no longer run `--batch`, each PR runs a sing
 | M7 — explicit gate: `--task` on base, `--premerge` before merge, full matrix on the runner only | accept | Sami, 2026-10-16 |
 
 REPLY-1 R1/R2 measurements are still running in this container; R3 (path list review) and the numbers follow in a later batch.
+
+## 2026-10-16 (second batch) — project coordinator thread: REPLY-1 requests R1, R2, R3
+
+All MEASURED in the same 4-core container, `origin/dev_claude` @ `90cc11e2`, `linux-gcc-debug` only. Logs:
+`logs/2026-10-16-coord-container-R1-R2-run.txt`, `…-R1-ccache-pass1.txt`, `…-R1-ccache-pass2.txt`.
+Both passes used `CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime` and the ccache launcher flags exactly as in R1.
+
+### R1 — ccache PCH fix: **works**
+| | pass 1 (tree deleted, cache from the earlier runs) | pass 2 (tree deleted again) |
+|---|---|---|
+| configure | 112 s | 116 s |
+| build | **252 s** | **110 s** |
+| cacheable calls | 1548 / 1550 (99.87 %) | 1548 / 1550 |
+| hits | 1098 / 1548 (70.9 %) | **1548 / 1548 (100 %)** |
+- "Could not use precompiled header" is **gone** (2 of 1550 calls uncacheable, vs 1308 of 4665 before; no PCH line in `ccache -s -v`). No change to `Dependencies.cmake` was needed.
+- Pass 1 is not a clean cold run (the cache already held objects from the earlier runs of this session, built without the sloppiness), so 71 % is a lower-bound illustration; pass 2 shows the ceiling: **a gcc-debug build with a full cache is 110 s instead of 694-715 s.** Remaining time is mostly linking (~85 s) plus configure (~115 s).
+- Caveat: the cache key changes with the sloppiness setting only through the PCH path, but any flag change (see R2) invalidates the objects, and the existing 8-day-old snapshot was built without it, so the first snapshot after rollout must be rebuilt from a normal run.
+
+### R2 — `-gz` + lld (gcc-debug tree)
+| | baseline | `-gz` + `-fuse-ld=lld` |
+|---|---|---|
+| tree size (`du -sh build/linux-gcc-debug`) | **13 G** | **8.2 G** (−37 %) |
+| relink after `touch log.cpp` | **85 s** | **80 s** (−6 %) |
+| full rebuild after changing flags | — | 684 s, 5.7 % ccache hits (all objects invalidated, one-time) |
+- `-gz` saves 4.8 GB per debug tree, less than your 2-3× guess (the tree also holds executables, libraries and the test outputs); the saving is real and matters for the 39 GB allowance (3 trees: ≈ 39 → ~25 GB).
+- lld is **not** a meaningful link speed-up here (−5 s of 85 s): the relink time is dominated by the number of binaries relinked (hundreds of test executables that link mce_core), not by the linker. To cut it, link fewer binaries (build only what the stage needs) rather than switch linker. I did not try mold (not installed).
+- I did not measure ctest/debuggability under `-gz`; the test run itself was not repeated. gdb handles compressed sections, but older tools may not.
+
+### R3 — path list (P1) and module→subject map (P4)
+Checked against the repo. **The P1 filter is too narrow in one direction and is not needed in another**; here is what the tree says.
+
+P1 (skip `gpu`-labelled tests unless render-facing code changed):
+- The `gpu` label is set in many places that are not render code: `tests/{asset,editor,kit,ui,mcp,render_gl,rhi_gl,rhi_sdlgpu}`, every `samples/*` (`*_gpu`: 03_platformer … ui_screens), every `projects/*` (Glowmoth, MarbleGarden, Room3D, SolsticeReach: goldens, perf counters, **`marble_garden_win_route_gpu`** which plays the real win route through physics3d + scene + script), `src/editor/app` (editor_smoke), `tests/mcp` (`test_mcp_agent_gpu`), `cmake/MceProject.cmake` (`${game}_gpu`, `${game}_editor_gpu`).
+- So the real list of code that can break a GPU test is **everything that a game or sample links**: `src/engine/{render,rhi*,kit,kit_novel,ui,asset,scene,physics2d,physics3d,script,audio,input,platform,core,ecs,refl}`, `src/player`, `src/editor`, `src/module`, `samples/`, `projects/`, `cmake/`, shaders/asset sources, `CMakePresets.json`. Only `net`, `monetize`, `liveops`, `loc` and docs/scripts are clearly GPU-irrelevant.
+- Recommendation: invert the rule — skip `gpu` only when **every** changed file is in an allow-list of GPU-irrelevant paths (docs, `*.md`, `scripts/` except `scripts/ci/`, `src/engine/{net,monetize,liveops,loc}` + their `tests/` dirs); otherwise run the GPU tests. Better: for sim-only changes (`core|ecs|physics*|scene|script|audio|input`) run a **smoke subset** of GPU tests (e.g. `-R 'sample_0[345]_.*_gpu|marble_garden_win_route_gpu'`, ~5 min of the 35) instead of all 68, and the full set only in the integration run. (Ask the owners of `physics3d`/`script` before trusting a subset.)
+- `sdk_install` (label `sdk`, 94 s): trigger on `cmake/`, `install.sh`, `scripts/release_sdk.sh`, `tests/sdk/` and anything under `src/**/CMakeLists.txt` that adds a target — it installs every shipped target, so a new/renamed target breaks it.
+
+P4 (module → determinism subject). Subjects in `stage_determinism` today: 02_boids, physics2d_headless, 03_platformer, 04_diorama, scene_demo/stream_demo/07_gameplay3d (via `mce_player`), shop_demo, liveops_demo, net_headless, net_rollback, module (`mce_devhost` + `modtest_good`), physics3d_headless, 04_cubes, 05_ashen_court, Glowmoth, MarbleGarden, script_headless, EmberScript. Two corrections to your sketch:
+- `render`/`rhi*` are **not** in the map but `04_cubes`, `04_diorama` and `05_ashen_court` hash World3D/camera/animation state ("cascade fit, Forward+ clustering" per the stage comment) — a change in `render`/`kit` can change those hashes. Map `render|kit|kit_novel|asset` → cubes, diorama, court, gameplay3d.
+- `physics3d` → add MarbleGarden and `07_gameplay3d` (it already drives the player); `script` → script_headless, EmberScript **and** MarbleGarden/Glowmoth if they use script components; `module` → `mce_devhost`/`modtest_good`. `core|ecs|refl|audio|input` → all, as you proposed. Unknown path under `src/engine` → all (default-safe).
+Keep the table next to the stage list so adding a subject is one diff; M4 already makes that a checklist item.
+
+### Net for REPLY-1 plan (with these numbers)
+- P5 is validated: sloppiness alone fixes the PCH problem; a fresh snapshot made after rollout should give ≥ 70-100 % on rebuilds.
+- P6: take `-gz`, skip the lld switch (no gain here); keep trees smaller by building less (P2-P4), not by changing the linker.
+- Not measured: `--task` end-to-end with the new script (no new script to run yet).

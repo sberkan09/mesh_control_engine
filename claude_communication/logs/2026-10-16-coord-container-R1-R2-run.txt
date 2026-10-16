@@ -1,0 +1,24 @@
+/dev/vda        252G   12G   28G  30% /
+== R1 pass 1 (sloppiness, empty-ish stats)
+[112s rc=0] cmake --preset linux-gcc-debug -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+[252s rc=0] cmake --build --preset linux-gcc-debug
+Cacheable calls:                       1548 / 1550 (99.87%)
+  Hits:                                1098 / 1548 (70.93%)
+  Hits:                                1098 / 1548 (70.93%)
+== R1 pass 2 (tree deleted, ccache warm)
+[116s rc=0] cmake --preset linux-gcc-debug -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+[110s rc=0] cmake --build --preset linux-gcc-debug
+Cacheable calls:                       1548 / 1550 (99.87%)
+  Hits:                                1548 / 1548 (100.0%)
+  Hits:                                1548 / 1548 (100.0%)
+== R2 baseline
+13G	build/linux-gcc-debug
+[85s rc=0] cmake --build --preset linux-gcc-debug
+== R2 -gz + lld (no ccache launcher change; reconfigure in place)
+[8s rc=0] cmake --preset linux-gcc-debug -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_FLAGS=-gz -DCMAKE_C_FLAGS
+[684s rc=0] cmake --build --preset linux-gcc-debug
+  Hits:              88 / 1548 ( 5.68%)
+  Hits:              88 / 1548 ( 5.68%)
+8.2G	build/linux-gcc-debug
+[80s rc=0] cmake --build --preset linux-gcc-debug
+DONE
