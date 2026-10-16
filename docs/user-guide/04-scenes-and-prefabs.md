@@ -74,7 +74,7 @@ will use most:
 | `ChildOf` | here | parent entity; the engine composes `WorldTransform` |
 | `Sprite`, `TextLabel`, `Camera2DComponent`, `Parallax`, `Light2D`, `Post2DComponent`, `TilemapLayer`, `ParticleEmitter` | 7 | the 2D drawing kit |
 | `RigidBody2D`, `Collider2D`, `CharacterController2D` | 9 | 2D physics |
-| `AudioSource`, `AudioSpatial`, `AudioListener`, `AudioBusEffects`, `AudioReverb`, `AudioLimiter`, `AudioDuck`, `AudioSnapshot`, `AudioOcclusion`, `AudioDoppler` | 10 | sound and its mix |
+| `AudioSource`, `AudioSpatial`, `AudioListener`, `AudioListenerMix`, `AudioBusEffects`, `AudioReverb`, `AudioLimiter`, `AudioDuck`, `AudioSnapshot`, `AudioOcclusion`, `AudioDoppler` | 10 | sound and its mix |
 | `PathAgent` | 7 | walks to a target around walls (grid pathfinding) |
 | `SequencePlayer` | 13 | scripted action lists |
 | `SaveKey` | 13 | stable identity for save games |

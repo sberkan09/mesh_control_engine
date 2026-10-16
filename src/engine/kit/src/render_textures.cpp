@@ -8,8 +8,8 @@ static_assert(sizeof(RenderTexture) == 56);
 static_assert(sizeof(ShowRenderTexture) == 16);
 
 namespace {
-// The whole texture, upright: a drawn texture holds its top row at v = 1 (uploaded art at v = 0).
-constexpr render::SpriteRegion kWhole{0, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f};
+// The whole texture (record_views writes it upright, its top row at v = 0 like uploaded art).
+constexpr render::SpriteRegion kWhole{0, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 }  // namespace
 
 void RenderTextures::drop(Entry& e) {

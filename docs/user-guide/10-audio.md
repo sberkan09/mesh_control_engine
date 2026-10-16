@@ -91,6 +91,11 @@ it on a live voice, say for an engine's revs). Between samples the mixer interpo
   entity's position every tick. Curve 1 is an inverse-distance curve by default; a custom host can
   define curves 1..31 (id 0 is reserved for plain 2D) (`AudioDevice::set_attenuation`) with inverse, linear or exponential
   falloff and min/max distances.
+- Split-screen (M-VIEWS 4): put an `AudioListener` on each player's camera and one
+  `AudioListenerMix` in the scene. `mix` 1 (the default) hears each 3D sound from the listener
+  nearest to it; 2 takes the loudest listener's volume and blends the pans by volume; 0 keeps the
+  first listener only, as without the component. Up to four listeners count; Doppler and
+  occlusion follow the first.
 - 2D games can ignore all of this; a source without `AudioSpatial` is plain stereo.
 
 **Occlusion.** Add `AudioOcclusion` to a 3D source and walls between it and the ear muffle it. Every

@@ -13,6 +13,7 @@
 #include "mce/input/actions.h"
 #include "mce/kit/render_textures.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/kit/views.h"
 #include "mce/ui/options_panel.h"
 #include "mce/ui/screen_link.h"
 #include "mce/ui/ui.h"
@@ -41,7 +42,12 @@ public:
 
     // Before the tick's systems: the raised actions into the snapshot.
     void apply_actions(input::InputState& state, f32 dt) { relay_.apply(state, dt); }
+    // Per rendered frame, before update: where each screen with a UiScreenView lays out — its
+    // camera's window view in `views` (none: the whole window). `display_scale` and `user_scale`
+    // pick a view's UI scale as compute_ui_scale does for the window.
+    void set_views(World& world, Span<const kit::ViewEntry> views, f32 display_scale, f32 user_scale);
     // Per rendered frame: visibility from the components, pending bindings, update, events -> actions.
+    // A screen in a view lays out in its rect: the pointer is moved into it and reaches it only inside.
     void update(World& world, const ui::UpdateContext& ctx);
     // A visible modal screen: the host switches input to the "UI" map while one is up.
     bool modal_visible() const;
@@ -51,8 +57,13 @@ public:
     // Per rendered frame, before submit: image widgets named like a RenderTexture's `ui_image` show
     // that texture (M-VIEWS 3); a name whose texture is gone falls back to the skin's image.
     void bind_render_textures(const kit::RenderTextures& rts);
-    // Each screen on its own layers below `base`, by order (two layers + two per open modal).
+    // Each full-window screen on its own layers below `base`, by order (two layers + two per open modal).
     void submit(render::SpriteBatch& batch, i16 base) const;
+    // The visible screens laid out in a view: the host draws each in a pass whose viewport is its
+    // rect, into a batch begun with compute_screen_view(rect size), under the window's screens.
+    u32 view_screen_count() const;
+    rhi::Rect2D view_screen_rect(u32 i) const;
+    void submit_view_screen(u32 i, render::SpriteBatch& batch, i16 layer) const;
 
 private:
     struct Screen;
@@ -66,9 +77,13 @@ private:
         bool modal = false;
         bool bindings_pending = true;
         bool always_visible = false;  // a preview: no UiScreen component behind it
+        bool in_view = false;         // laid out in `rect` (UiScreenView), not the whole window
+        rhi::Rect2D rect;
+        f32 view_ui_scale = 1.0f;
         ui::Document* doc = nullptr;  // null headless
         ui::OptionsPanel* options = nullptr;  // a document with a remap list (the stock options screen)
     };
+    const Screen* view_screen(u32 i) const;  // the i-th visible screen laid out in a view
     Array<Screen> screens_;
     Array<Entity> entities_;
     Array<FixedString<32>> rt_images_;  // the ui_image names bound last frame
