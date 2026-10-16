@@ -31,6 +31,13 @@ std::string colors_of(const Client::Tool& t) {
     return s;
 }
 
+// Joins pieces into one string (tool arguments built from variables).
+std::string cat(std::initializer_list<std::string_view> parts) {
+    std::string out;
+    for (std::string_view p : parts) out += p;
+    return out;
+}
+
 bool listed(Client& c, const std::string& path) {
     auto list = c.ok("asset_list");
     const cook::JsonValue assets = list.v().get("assets");
@@ -220,6 +227,53 @@ TEST_CASE("library_search and library_add: CC0 models with their texture, OFL fo
     CHECK(c.fails("library_add", R"({"id":"kenney-coin"})").find("already exists") != std::string::npos);
     CHECK(c.fails("library_add", R"({"id":"nope"})").find("library_search") != std::string::npos);
     CHECK(c.fails("library_add", R"({"id":"kenney-coin","path":"x.png"})").find("extension") != std::string::npos);
+}
+
+TEST_CASE("gen_mesh: a skinned humanoid walks, carries a prop on a bone and goes limp as a ragdoll") {
+    const std::string root = demo_project("mcp_content_humanoid");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    auto t = c.ok("gen_mesh", R"({"shape":"humanoid","color":"#c05030","save":"models/grunt.glb"})");
+    REQUIRE(t.images.size() == 1);
+    CHECK(t.v().get("bones").size() == 13);
+    CHECK(str(t.v().get("clips").at(1)) == "Walk");
+    CHECK(t.v().get("size").at(1).as_number() == doctest::Approx(1.8));
+    const std::string mesh = str(t.v().get("saved").get("guid"));
+    const std::string glb = read_file(root + "/assets/models/grunt.glb");
+    u32 json_len = 0;
+    std::memcpy(&json_len, glb.data() + 12, 4);
+    auto doc = parse(glb.substr(20, json_len));
+    CHECK(doc->root().get("skins").at(0).get("joints").size() == 13);
+    CHECK(doc->root().get("animations").size() == 2);
+    REQUIRE(c.ok("cook_run").v().get("ok").as_bool());
+
+    c.ok("scene_new", R"({"name":"figure"})");
+    c.ok("entity_create", R"({"name":"Floor","components":{"LocalTransform":{"position":[0,-0.5,0]},"BoxCollider3D":{"half":[20,0.5,20]}}})");
+    const int grunt = static_cast<int>(c.ok("entity_create", cat({R"({"name":"Grunt","components":{"LocalTransform":{"position":[0,0.9,0]},"MeshRef":{"mesh":")",
+                                                                     mesh, R"("},"Animator":{"clip":"Walk"},"Ragdoll3D":{}}})"}))
+                                           .v().get("id").as_number());
+    c.ok("entity_create", cat({R"({"name":"Hand","components":{"LocalTransform":{},"AttachToBone":{"target":"$)", std::to_string(grunt),
+                               R"(","bone":"forearm_l"}}})"}));
+    c.ok("scene_save", R"({"path":"scenes/figure.mcscene"})");
+    const char* args = R"({"ticks":60,"log_lines":0,"inspect":{"entities":["Grunt","Hand"],"show":["Animator","Ragdoll3D","AttachToBone","LocalTransform"]}})";
+    auto run = c.ok("run_headless", args);
+    cook::JsonValue ents = run.v().get("inspect").get("entities");
+    CHECK(ents.at(0).get("components").get("Animator").get("time").as_number() > 0.0);
+    CHECK(ents.at(1).get("components").get("AttachToBone").get("found").as_number() == 1);
+    // The forearm hangs from the left shoulder: left of and below the shoulder (0.9 m above the origin + 0.54 m).
+    const cook::JsonValue hand = ents.at(1).get("components").get("LocalTransform").get("position");
+    CHECK(hand.at(0).as_number() == doctest::Approx(0.25).epsilon(0.05));
+    CHECK(hand.at(1).as_number() < 0.9 + 0.3 * 1.8);
+    CHECK(run.v().get("log").get("errors").as_number() == 0);
+
+    c.ok("component_set", cat({R"({"entity":)", std::to_string(grunt), R"(,"component":"Ragdoll3D","path":"active","value":1})"}));
+    c.ok("scene_save");
+    run = c.ok("run_headless", R"({"ticks":240,"log_lines":0,"inspect":{"entities":["Grunt"],"show":["Ragdoll3D"]}})");
+    const cook::JsonValue rag = run.v().get("inspect").get("entities").at(0).get("components").get("Ragdoll3D");
+    CHECK(rag.get("parts").as_number() >= 11);
+    CHECK(rag.get("root_position").at(1).as_number() < 0.5);  // fallen over
+    CHECK(run.v().get("log").get("errors").as_number() == 0);
 }
 
 TEST_CASE("gen_mesh: primitives as .glb that cook, faces wound outwards, a shaded preview") {

@@ -151,9 +151,13 @@ const ToolDef kAgentTools[] = {
     {"gen_mesh",
      "Make a simple 3D mesh for blocking out a level or a toy-like game: a box, plane, sphere, cylinder, cone, disc or "
      "ramp (a wedge rising towards +X), centred on the origin with Y up, 'size' its full extent in metres, in one "
-     "'color' with 'roughness'. Returns its vertex and triangle counts and a shaded preview; 'save' writes it as a .glb "
-     "(with its material inline) and a CREDITS.md row. Place it with the 3D kit's MeshRef (and MeshCollider3D).",
-     R"j({"type":"object","properties":{"shape":{"type":"string","enum":["box","plane","sphere","cylinder","cone","disc","ramp"],"default":"box"},)j"
+     "'color' with 'roughness'. 'humanoid' is a skinned figure (size [shoulder width, height, depth], default "
+     "[0.5, 1.8, 0.28], facing -Z, feet at -height/2 so a CharacterController3D's capsule centre is its origin) with "
+     "13 bones (hips, spine, head, upper_arm_l/r, forearm_l/r, thigh_l/r, shin_l/r, foot_l/r) and the clips Idle and "
+     "Walk: an Animator plays them, Ragdoll3D makes it go limp, AttachToBone pins props to its bones. Returns its "
+     "vertex and triangle counts and a shaded preview; 'save' writes it as a .glb (with its material inline) and a "
+     "CREDITS.md row. Place it with the 3D kit's MeshRef (and MeshCollider3D).",
+     R"j({"type":"object","properties":{"shape":{"type":"string","enum":["box","plane","sphere","cylinder","cone","disc","ramp","humanoid"],"default":"box"},)j"
      R"j("size":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3,"description":"[x, y, z] in metres (default [1, 1, 1])"},)j"
      R"j("segments":{"type":"integer","minimum":3,"maximum":128,"default":24,"description":"Around a round shape"},)j"
      R"j("color":{"type":"string","description":"\"#rrggbb\" or \"#rrggbbaa\" (default light grey)"},)j"

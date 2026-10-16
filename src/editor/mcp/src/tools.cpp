@@ -19,6 +19,7 @@
 #include "mce/input/script.h"
 #include "mce/log.h"
 #include "mce/mcp/headless_run.h"
+#include "mce/kit/nav3d.h"
 #include "mce/mcp/values.h"
 
 namespace mce::mcp {
@@ -667,6 +668,42 @@ bool scene_save(ToolCall& c) {
     file.base.clear();
     (void)cook::fs::read_text(abs.view(), file.base);
     write_scene_summary(c);
+    return true;
+}
+
+// The scene's first NavMeshSurface3D baked into assets/navmesh/<scene>/nav_<id>.mcnav (the editor's
+// File > Bake navmesh): the surface's `baked` points at it; scene_save keeps that reference.
+bool navmesh_bake(ToolCall& c) {
+    if (!need_project(c)) return false;
+    editor::EditorSession& session = c.server.session();
+    const Result<physics::NavBakeStats3D> r = session.bake_navmesh();
+    if (!r) {
+        FixedString<512> msg;
+        format_error(r.error(), msg);
+        return fail(c, msg.view());
+    }
+    asset::Guid guid;
+    session.scene().world().query<const kit::NavMeshSurface3D>().each([&](Entity, const kit::NavMeshSurface3D& s) {
+        if (guid.is_null()) guid = s.baked.guid;
+    });
+    const editor::ProjectAsset* a = session.project().find(guid);
+    const physics::NavBakeStats3D& st = r.value();
+    c.out.begin_object();
+    c.out.key("asset").str(asset::to_string(guid).view());
+    if (a) {
+        cook::String path("assets/");
+        path += a->path.view();
+        c.out.key("path").str(path.view());
+        cook::String hash;
+        cook::appendf(hash, "%016llx", static_cast<unsigned long long>(file_content_hash(session.project().asset_path(a->path.view()).view())));
+        c.out.key("content_hash").str(hash.view());
+    }
+    c.out.key("tiles_x").num_u(st.tiles_x);
+    c.out.key("tiles_z").num_u(st.tiles_z);
+    c.out.key("layers").num_u(st.layers);
+    c.out.key("triangles").num_u(st.triangles);
+    c.out.key("bytes").num_u(st.bytes);
+    c.out.end_object();
     return true;
 }
 
@@ -1382,6 +1419,13 @@ const ToolDef kTools[] = {
      "(entity 0 is the root; prefab_create_from makes one from an entity).",
      R"({"type":"object","properties":{"path":{"type":"string"},"name":{"type":"string","description":"New scene name"},"force":{"type":"boolean"},)"
      R"("resolve":{"type":"string","enum":["ours","theirs"],"description":"How merge conflicts are settled"}}})", scene_save},
+    {"navmesh_bake",
+     "Bake the scene's first NavMeshSurface3D into assets/navmesh/<scene>/nav_<entity id>.mcnav from the colliders "
+     "(and, with include_meshes, the meshes) on its layer_mask, with its NavArea3D volumes and NavLink3D links, and "
+     "point the surface's 'baked' at it (scene_save keeps that). Re-baking overwrites the same file and GUID. Returns "
+     "the asset, its content_hash (the same scene bakes byte-identical), the tile grid, layers, input triangles and "
+     "bytes. Without a baked asset the surface is baked when the scene starts.",
+     kNoArgs, navmesh_bake},
     {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
      scene_undo},
     {"scene_redo", "Redo the last undone scene edit.", kNoArgs, scene_redo},
