@@ -63,6 +63,8 @@ file name when the number alone is ambiguous.
 | [0041](0041-luau-scripting-spike.md) | spike (off-tier) | Luau scripting spike: sandboxed scripts as systems over reflected components (Proposed) |
 | [0042](0042-steamworks-runtime-loading.md) | M-STEAM | Steam through the Steamworks flat API loaded at run time; no SDK in the repo or the build |
 | [0043](0043-video-pl-mpeg.md) | M-CINEMA | Video playback over pl_mpeg (MPEG-1): sound decoded at cook, the playhead as sim state, one texture per player |
+| [0044](0044-ogg-vorbis-clips.md) | M-AUDIO2 | Compressed clips: Ogg Vorbis encoded by libvorbis in the cook, decoded by stb_vorbis at load or in the stream pages |
+| [0045](0045-behavior-trees.md) | M-AI | Behavior trees as data: `.mcbt` cooked to a flat node array, run state and blackboard in components, tasks by name |
 
 Some records amend earlier ones in dated "Amendment" sections at the end
 of the file (0017, 0018, 0021, 0022, 0029, 0032) or are superseded in part by later ADRs (0022 §7 and 0023 by 0036).

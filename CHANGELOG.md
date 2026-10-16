@@ -5,6 +5,37 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Behavior trees, M-AI step 1 (SBA-128, ADR-0045): `.mcbt` files describe an AI's decisions as data (sequence,
+  selector, parallel, invert, succeed, fail, repeat, retry, cooldown, timeout, guard, check, wait, set, emit and
+  task nodes) over typed blackboard keys, and cook to `CHNK_BT` with errors at file:line:col. An `AiBrain`
+  component runs one per entity every fixed tick, and a `Blackboard` component holds the keys. All run state is in
+  the two components, so trees are deterministic, hashed, replayed and saved. Games register tasks by name
+  (`kit::BtRegistry::register_task`) and read and write keys by name (`kit::bb_*`). User guide 13.8.
+- Sound sets and pitch, M-AUDIO2 step 2 (SBA-119). A `.mcsound` names several clips and picks one per play (random
+  with no immediate repeat, or in sequence) with a pitch and gain range; it is an Sfx asset, so `AudioSource`,
+  `SfxTrigger`, `PlaySfx`, sequences and timelines take it as they are. Picks come from the tick, so replays repeat.
+  `PlayParams::pitch` and `AudioDevice::set_handle_pitch` play any clip at a rate (0.25..4). MCP `asset_create`
+  makes a `SoundSet`. User guide 10.3 is new; the audio chapter's later sections move up one number.
+- Material extensions, M-VISUAL2 step 4 (SBA-104): clear coat, sheen, anisotropy and transmission. `.mcmat`
+  gains `clearcoat`, `clearcoat_roughness`, `sheen_color`, `sheen_roughness`, `anisotropy`,
+  `anisotropy_rotation`, `transmission` and `ior`; glTF files bring the same from `KHR_materials_clearcoat`,
+  `_sheen`, `_anisotropy`, `_transmission` and `_ior` (factors only). Transmissive materials show the opaque
+  scene behind them, tinted and slightly refracted. Materials without them draw exactly as before. User guide
+  5.7 and 8.5.
+- Steam demo and guide, M-STEAM step 6 (SBA-111): `samples/steam_demo` plays on Steam through the stock player;
+  `ctest -R sample_steam_demo` runs it against the stand-in `steam_api` (Steam Input, the overlay, rich presence,
+  achievements, a leaderboard, Steam Cloud, the same state hash with and without Steam, the depot started like
+  Steam starts it). New user guide chapter 26 (Steam) with a release checklist.
+- `ship --steam`, M-STEAM step 5 (SBA-110): `scripts/ship.py --steam <app id>` and `mce ship --steam` lay out the
+  desktop build's Steam depot (`steam_api` beside the executable, no `steam_appid.txt`) and the steamcmd app and
+  depot build scripts in `dist/<Name>-steam/`; shipping on each OS into the same folder adds its depot. Nothing is
+  uploaded. The MCP tool `ship_build` takes `steam_app_id`. A game started by Steam signs in from `SteamAppId`
+  without `-steam.app_id` (`-1` keeps Steam off). Covered by ctest `steam_depot`. User guide 15.7.
+- Compressed audio clips, M-AUDIO2 step 1 (SBA-118, ADR-0044). `.ogg` files import (importer `ogg`), and a
+  `.wav` sidecar's `"compress": "vorbis"` stores the clip as Ogg Vorbis, about a tenth of float PCM
+  (`"quality"`, default 0.4). A compressed clip decodes when it loads; on the Music bus its stream pages decode
+  as they fill. libvorbis encodes in the cook, stb_vorbis decodes at run time. The WAV importer's version is
+  now 2, so clips re-cook once.
 - Timelines over MCP and the cinema demo, M-CINEMA step 6 (SBA-81): `timeline_create`, `timeline_add_track` and
   `timeline_add_key` write `.mctimeline` files checked by the cook, and `timeline_preview` draws the scene with every
   timeline held at a given second (the player's `-timeline.scrub`). `samples/cinema_demo` opens on a splash film and
@@ -15,7 +46,7 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   stock player, `ui_preview` and the editor's UI Document panel (style `sprite_region` and 9-slice `slice` index
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
-  User guide 12.2.
+  User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
 - Spectators and clock sync, M-NET3 step 2 (SBA-124): a `RollbackSession` with `.spectator = true` watches
   without playing, fed confirmed inputs by one player (`write_spectator_packet`), and checks its hashes. With
   `time_sync` (on by default) a rollback peer whose clock runs ahead skips a tick now and then instead of

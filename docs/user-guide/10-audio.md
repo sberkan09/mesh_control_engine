@@ -16,7 +16,7 @@ convars for the bus volumes.
 
 | Field | Meaning |
 |---|---|
-| `clip` | the `.wav` asset |
+| `clip` | the `.wav` or `.ogg` asset |
 | `gain_db`, `pan` | −60..12 dB, −1..1 |
 | `priority` | 0..255; louder and higher priority voices survive when voices run out |
 | `bus` | `Master`, `Music`, `SFX` (default) or `UI` (`audio::AudioBus`; scenes written with the number, `"bus": 1`, still load). `Music` streams the clip in 100 ms pages instead of holding it decoded (two music streams at a time; a third plays from memory) |
@@ -50,10 +50,40 @@ Keep the sound references as `AssetRef<Sfx>` fields on your components (`jump_so
 
 Without code, `SfxTrigger` on an entity plays its `clip` once: `gain_db`, `gain_jitter_db` (each
 play adds a value in ± that many dB, drawn from the entity and play count, so replays match), `pan`
-and `bus` (`Master`, `Music`, `SFX`, `UI`). `on` picks when it fires: `Manual` when its `fire` flag is set (by data, a sequence field track or MCP `entity_set_component`; the engine clears it), `Start` on the first tick, `TriggerEnter` / `ContactBegin` when a 2D physics event names the entity (as the sensor, the other body or either contact body). `fired` counts the plays. It plays as a `PlaySfx` on the next
-tick. There is no pitch control: the mixer does not resample.
+and `bus` (`Master`, `Music`, `SFX`, `UI`). `on` picks when it fires: `Manual` when its `fire` flag is set (by data, a sequence field track or MCP `entity_set_component`; the engine clears it), `Start` on the first tick, `TriggerEnter` / `ContactBegin` when a 2D physics event names the entity (as the sensor, the other body or either contact body), `Landed` when a 3D character on the entity touches down. `fired` counts the plays. It plays as a `PlaySfx` on the next
+tick. For a different clip or pitch on each play, name a sound set (10.3) as its `clip`.
 
-## 10.3 3D sound
+## 10.3 Sound sets and pitch
+
+A footstep that plays the same sample every time sounds mechanical. A **sound set** (`.mcsound`)
+names several clips and picks one on each play, with a pitch and gain inside a range:
+
+```json
+{ "format": "mce-sound", "version": 1, "guid": "<uuid>",
+  "clips": ["guid:<step1.wav>", "guid:<step2.wav>", "guid:<step3.wav>"],
+  "pick": "random", "no_repeat": true, "pitch": [0.92, 1.08], "gain_db": [-3, 0] }
+```
+
+| Key | Meaning |
+|---|---|
+| `clips` | the sounds to pick from (`.wav` or `.ogg` assets; not other sets) |
+| `pick` | `random` (default) or `sequence` (in order, then round again) |
+| `no_repeat` | `random` never picks the clip it picked last (default true) |
+| `pitch` | playback rate range, 0.25..4: 2 is an octave up and twice as fast, 1.06 about a semitone |
+| `gain_db` | added to the play's own gain |
+
+A sound set is an Sfx asset, so it goes wherever a sound does: `AudioSource.clip`,
+`SfxTrigger.clip`, `PlaySfx.clip`, and sequence and timeline sound keys. The pick comes from the tick
+and the source (the entity, or the event's place in the tick), never from a clock or a global random
+number, so a replay of the same ticks picks the same clips and the sim hash does not move. A
+`sequence` set advances on each play. An `AudioSource` picks when it starts and keeps that clip
+while it loops. MCP `asset_create` makes one (`"path": "sfx/steps.mcsound"`).
+
+From code, `PlayParams::pitch` plays any clip at a rate (`AudioDevice::set_handle_pitch` changes
+it on a live voice, say for an engine's revs). Between samples the mixer interpolates linearly; at
+1 it reads the samples as they are. Streamed clips (the `Music` bus) always play at 1.
+
+## 10.4 3D sound
 
 - `AudioListener` on the camera entity (the first in ECS order is the ear; its transform gives
   position and orientation, and its `gain_db`, −60..12, scales everything it hears).
@@ -63,7 +93,7 @@ tick. There is no pitch control: the mixer does not resample.
   falloff and min/max distances.
 - 2D games can ignore all of this; a source without `AudioSpatial` is plain stereo.
 
-## 10.4 Volume and buses
+## 10.5 Volume and buses
 
 Four saved convars drive the named buses: `audio.master_db`, `audio.music_db`, `audio.sfx_db`,
 `audio.ui_db`. Set them from the console (`audio.music_db -12`), the command line, or bind them to
@@ -73,7 +103,7 @@ mutes the master bus until focus comes back (`-pause_on_focus_loss 0` turns both
 phone, the app going to the background pauses the audio device itself (`AudioDevice::set_paused`):
 voices keep their place and pick up where they stopped when the app comes back.
 
-## 10.5 How it behaves under pressure
+## 10.6 How it behaves under pressure
 
 - 48 real voices; beyond that, the quietest and lowest-priority voices go virtual and come back
   when a voice frees. Voices below the protected priority (32) are stolen only by their peers,
@@ -85,15 +115,26 @@ voices keep their place and pick up where they stopped when the app comes back.
 - Audio commands are produced by the deterministic sim, so a replay produces the same sound
   commands; the harness hashes them.
 
-## 10.6 Content notes
+## 10.7 Content notes
 
-- WAV only (PCM); the cook resamples to 48 kHz and peak-normalizes to −1 dBFS unless
-  `"normalize": false`.
+- Sources are `.wav` (PCM) or `.ogg` (Ogg Vorbis). The cook resamples to 48 kHz and peak-normalizes
+  to −1 dBFS unless `"normalize": false`.
+- `"compress": "vorbis"` in the sidecar's settings stores the clip as Ogg Vorbis, about a tenth of the
+  size; `"pcm"` stores float samples. A `.wav` defaults to `pcm` and an `.ogg` to `vorbis`. `"quality"`
+  (−0.1..1, default 0.4) trades size for fidelity:
+
+  ```json
+  { "guid": "...", "importer": "wav", "importer_version": 2, "settings": { "compress": "vorbis", "quality": 0.4 } }
+  ```
+
+  A compressed clip decodes once when it loads. On the `Music` bus it stays compressed and its stream
+  pages decode as they fill, so a long track costs its Ogg size in memory. Compress music and long
+  ambiences; short, frequent one-shots can stay `pcm` to load faster.
 - Mono clips pan; stereo clips keep their image. Music should be stereo at 48 kHz to skip
   resampling at cook.
-- Reverb sends, per-voice pitch and device hot-swap are not built.
+- Reverb sends and device hot-swap are not built (M-AUDIO2).
 
-## 10.7 Subtitles and sound captions
+## 10.8 Subtitles and sound captions
 
 The stock player draws subtitles at the bottom of the screen, one box per line, newest at the
 bottom, under the menus. Lines come from three places:

@@ -22,6 +22,8 @@ const IImporter* ImporterRegistry::for_extension(StringView lower_ext) const {
 void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_texture_importer());
     reg.add(make_wav_importer());
+    reg.add(make_ogg_importer());
+    reg.add(make_sound_set_importer());
     reg.add(make_video_importer());
     reg.add(make_font_importer());
     reg.add(make_material_importer());
@@ -34,6 +36,7 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_particle_importer());
     reg.add(make_sequence_importer());
     reg.add(make_timeline_importer());
+    reg.add(make_bt_importer());
     reg.add(make_shader_importer());
     reg.add(make_input_map_importer());
     reg.add(make_store_importer());

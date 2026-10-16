@@ -13,14 +13,16 @@ namespace mce::asset {
 // Schema majors (TocEntry::chunk_version high byte) this build reads and writes.
 inline constexpr u8 MANIFEST_VERSION = 1;
 inline constexpr u8 TEXTURE_VERSION = 1;
-inline constexpr u8 SFX_VERSION = 1;
+inline constexpr u8 SFX_VERSION = 1;  // minor 1: SfxFlags::Vorbis payloads (M-AUDIO2 1); minor 2: sound sets (M-AUDIO2 2)
 inline constexpr u8 FONT_VERSION = 1;
 inline constexpr u8 MATERIAL_VERSION = 1;
+inline constexpr u8 MATERIAL_MINOR_EXT = 1;  // minor of a material chunk followed by a MaterialExt
 inline constexpr u8 SCENE_VERSION = 1;
 inline constexpr u8 MESH_VERSION = 1;
 inline constexpr u8 MESH_MINOR_SKIN = 1;  // minor of a chunk with MeshFlags::Skinned
 inline constexpr u8 MESH_MINOR_LODS = 2;  // minor of a chunk with MeshFlags::Lods (skinned or not)
 inline constexpr u8 MESH_MINOR_RAGDOLL = 3;  // minor of a chunk with MeshFlags::Ragdoll
+inline constexpr u8 MESH_MINOR_MATERIALS = 4;  // minor of a chunk with MeshFlags::Materials
 inline constexpr u8 TILEMAP_VERSION = 1;  // CHNK_TILE: one tile layer (v0.5, FR-R2D-115)
 inline constexpr u8 PARTICLE_VERSION = 1;  // CHNK_PART: one particle emitter preset (v0.5, FR-R2D-070)
 inline constexpr u8 SEQUENCE_VERSION = 1;  // CHNK_SEQ: one action-list sequence (v0.5, FR-ENT-100)
@@ -39,6 +41,7 @@ inline constexpr u8 UI_THEME_VERSION = 1;     // CHNK_UITHEME: a UI theme (M-UI-
 inline constexpr u8 TERRAIN_VERSION = 1;      // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1)
 inline constexpr u8 NAVMESH_VERSION = 1;     // CHNK_NAV: the .mcnav bytes as baked (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
 inline constexpr u8 VIDEO_VERSION = 1;       // CHNK_VID: an MPEG-1 program stream + its audio as PCM (M-CINEMA 5)
+inline constexpr u8 BEHAVIOR_TREE_VERSION = 1;  // CHNK_BT: one behavior tree (M-AI 1; mce/kit/ai.h)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -148,8 +151,30 @@ void write_texture(TextureFormat format, u32 layers, u32 flags, Span<const Textu
 namespace SfxFlags {
 enum : u32 {
     Looping = 1u << 0,
+    Vorbis = 1u << 1,  // data_offset holds a u64 byte count and an Ogg Vorbis stream (M-AUDIO2 1)
+    Set = 1u << 2,     // a sound set (.mcsound, M-AUDIO2 2): data_offset holds a SoundSetHeader and its clips
 };
 }
+
+// A sound set: clips picked per play, with a pitch and gain range. It cooks into an Sfx chunk so
+// everything that names an Sfx (AudioSource, SfxTrigger, PlaySfx, timeline sound keys) can name a
+// set; audio::ClipBank does the picking. The header's frame_count is 0.
+enum class SoundSetPick : u32 { Random = 0, Sequence = 1 };
+namespace SoundSetFlags {
+enum : u32 {
+    NoRepeat = 1u << 0,  // Random never picks the clip it picked last (with two or more clips)
+};
+}
+struct SoundSetHeader {
+    u32 clip_count;  // 0..4096 (an empty set plays nothing)
+    SoundSetPick pick;
+    f32 pitch_min, pitch_max;      // playback rate, 1 = as recorded
+    f32 gain_min_db, gain_max_db;  // added to the play's own gain
+    u32 flags;                     // SoundSetFlags
+    u32 reserved;
+    // followed by clip_count Guids (the member Sfx assets)
+};
+static_assert(sizeof(SoundSetHeader) == 32);
 
 struct SfxHeader {
     u32 sample_rate;   // 48000 after cook
@@ -159,16 +184,23 @@ struct SfxHeader {
     u64 loop_end;
     u32 flags;         // SfxFlags
     f32 gain;          // normalization gain the cook applied (informational)
-    u64 data_offset;   // float32 interleaved samples
+    u64 data_offset;   // float32 interleaved samples, or (Vorbis) a u64 byte count then the stream
 };
 static_assert(sizeof(SfxHeader) == 48);
 
 struct SfxView {
     const SfxHeader* header = nullptr;
-    Span<const f32> samples;  // frame_count * channels
+    Span<const f32> samples;  // frame_count * channels (empty for Vorbis)
+    Span<const byte> vorbis;  // the Ogg Vorbis stream (Vorbis only); it decodes to frame_count frames
+    const SoundSetHeader* set = nullptr;  // a sound set (SfxFlags::Set) and its member clips
+    Span<const Guid> set_clips;
     static Result<SfxView> read(Span<const byte> payload);
 };
 void write_sfx(const SfxHeader& header, Span<const f32> samples, Array<byte>& out);
+// A Vorbis clip: `header` without SfxFlags::Vorbis is fine, the writer sets it.
+void write_sfx_vorbis(const SfxHeader& header, Span<const byte> stream, Array<byte>& out);
+// A sound set (an Sfx chunk with SfxFlags::Set and frame_count 0).
+void write_sound_set(const SoundSetHeader& set, Span<const Guid> clips, Array<byte>& out);
 
 // ------------------------------------------------------------------ video (CHNK_VID)
 // The .mpg's bytes as imported (an MPEG-1 program stream; the runtime decodes its video with
@@ -285,6 +317,30 @@ struct MaterialChunk {  // the whole payload: fixed-width param block + texture 
     static Result<const MaterialChunk*> read(Span<const byte> payload);
 };
 static_assert(sizeof(MaterialChunk) == 112);
+
+// M-VISUAL2 4: the lobes glTF's KHR_materials_clearcoat, _sheen, _anisotropy, _transmission and _ior
+// add, factors only (their textures are not cooked). A .mcmat chunk carries one after its
+// MaterialChunk (chunk minor MATERIAL_MINOR_EXT); a mesh, one per submesh (MeshFlags::Materials).
+// All zero is the plain material: nothing changes in how it draws.
+struct MaterialExt {
+    f32 clearcoat;            // 0..1: a clear varnish layer over the base
+    f32 clearcoat_roughness;  // the varnish's own roughness
+    f32 sheen_color[3];       // linear; 0 = no sheen (cloth's soft glow at grazing angles)
+    f32 sheen_roughness;
+    f32 anisotropy;           // -1..1: highlights stretched along the UV tangent (> 0) or bitangent (< 0)
+    f32 anisotropy_rotation;  // radians around the normal, from the UV tangent
+    f32 transmission;         // 0..1: light passes through, bending the opaque frame behind
+    f32 ior;                  // index of refraction; 0 = 1.5 (the dielectric F0 of 0.04)
+    u32 reserved[6];
+
+    bool any() const {
+        return clearcoat > 0.0f || sheen_color[0] > 0.0f || sheen_color[1] > 0.0f || sheen_color[2] > 0.0f || anisotropy != 0.0f ||
+               transmission > 0.0f || ior > 0.0f;
+    }
+    // The extension after a material chunk's MaterialChunk, or all zero without one.
+    static MaterialExt of_material(Span<const byte> payload);
+};
+static_assert(sizeof(MaterialExt) == 64);
 
 // ------------------------------------------------------------------ tilemap (CHNK_TILE)
 // One tile layer (FR-R2D-115, ADR-0030 §8): a width x height grid of tile indices, row 0 at the
@@ -772,6 +828,109 @@ struct TimelineView {
     static Result<TimelineView> read(Span<const byte> payload);
 };
 
+// ------------------------------------------------------------------ behavior tree (CHNK_BT)
+// One behavior tree (M-AI 1, ADR-0045): its nodes in pre-order and the blackboard keys they read
+// and write. An AiBrain component (kit/ai.h) runs it against the fixed tick. Payload layout:
+//   BtHeader | BtKey[key_count] | BtNode[node_count] | string pool
+// Node 0 is the root. A node's children follow it: the first is node i + 1, each next one starts at
+// the previous one's `end`, and the last one's `end` is the parent's. Strings (key and node names,
+// task names) are NUL-terminated offsets into the pool; kBtNoString means none.
+enum class BtNodeKind : u8 {
+    Sequence,  // composites: children in order
+    Selector,
+    Parallel,  // every child each tick; `op` is the BtPolicy
+    Invert,    // decorators: exactly one child
+    Succeed,
+    Fail,
+    Repeat,    // the child again after each success, `a` times in all (0: forever)
+    Retry,     // the child again after each failure, `a` attempts in all (0: forever)
+    Cooldown,  // fails without running the child for `a` seconds after the child finished
+    Timeout,   // fails (and halts the child) when the child runs `a` seconds
+    Guard,     // runs the child only when its condition holds on entry
+    Check,     // leaves: the condition as a result
+    Wait,      // runs `a` seconds, then succeeds
+    Set,       // writes a blackboard key, succeeds
+    Emit,      // raises kit::BtSignal `id`, succeeds
+    Task,      // a task registered by name (kit::BtRegistry::register_task)
+};
+
+enum class BtKeyType : u8 { Bool, Int, Float, Vec3, Entity };
+
+// Check / Guard: the key against `a` (Bool, Int and Float keys) or whether it is set.
+enum class BtOp : u8 { IsSet, NotSet, Eq, Ne, Lt, Le, Gt, Ge };
+
+// Set: `a` (numbers) or `v` (Vec3) assigned, `a` added, the key cleared, `key2` copied, or the
+// running entity (Entity keys).
+enum class BtSetOp : u8 { Assign, Add, Clear, Copy, Self };
+
+// Parallel: All succeeds when every child has and fails on the first failure; One succeeds on the
+// first success and fails when every child has.
+enum class BtPolicy : u8 { All, One };
+
+inline constexpr u32 kBtMaxNodes = 128;  // kit::AiBrain::nodes
+inline constexpr u32 kBtMaxSlots = 32;   // kit::AiBrain::slots: one per Repeat, Retry, Cooldown, Timeout, Wait and Task node
+inline constexpr u32 kBtMaxChildren = 63;
+inline constexpr u32 kBtMaxDepth = 32;
+inline constexpr u32 kBtNumbers = 16;   // kit::Blackboard: Bool, Int and Float keys share these
+inline constexpr u32 kBtVectors = 8;
+inline constexpr u32 kBtEntities = 8;
+inline constexpr u32 kBtMaxKeys = kBtNumbers + kBtVectors + kBtEntities;
+inline constexpr u16 kBtNoKey = 0xFFFF;
+inline constexpr u8 kBtNoSlot = 0xFF;
+inline constexpr u32 kBtNoString = ~0u;
+
+struct BtKey {
+    u64 id;            // StringId of the name
+    u32 name;          // the name in the pool
+    BtKeyType type;
+    u8 slot;           // index into the Blackboard array of its type
+    u8 has_default;    // 1: `value` is written when the brain starts and the key is not set yet
+    u8 pad_;
+    f32 value[3];      // the default (numbers in value[0])
+    u32 pad2_;
+};
+static_assert(sizeof(BtKey) == 32);
+
+struct BtNode {
+    BtNodeKind kind;
+    u8 child_count;
+    u8 slot;           // the node's AiBrain slot or kBtNoSlot
+    u8 op;             // BtOp (Check, Guard), BtSetOp (Set) or BtPolicy (Parallel)
+    u16 end;           // one past the node's last descendant
+    u16 key;           // Check, Guard, Set, Task: a blackboard key index or kBtNoKey
+    f32 a;             // seconds, a count, or the number compared, assigned or added
+    f32 v[3];          // Set: the Vec3 assigned; Task: its vector argument
+    u64 id;            // Emit: the signal; Task: the task (StringId)
+    u32 name;          // the node's name for the debugger, or kBtNoString
+    u32 text;          // Emit / Task: the signal's or task's name
+    u16 key2;          // Set (Copy): the key copied
+    u8 pad_[6];
+};
+static_assert(sizeof(BtNode) == 48);
+
+struct BtHeader {
+    char name[32];     // NUL-padded
+    u32 node_count;    // 1 to kBtMaxNodes
+    u32 key_count;
+    u32 slot_count;
+    u32 string_bytes;
+    u32 reserved[4];
+};
+static_assert(sizeof(BtHeader) == 64);
+
+struct BtView {
+    const BtHeader* header = nullptr;
+    Span<const BtKey> keys;
+    Span<const BtNode> nodes;
+    Span<const char> strings;
+    StringView name() const;
+    StringView string(u32 offset) const;  // empty for kBtNoString
+    // Checks the tree's shape too: child links inside the array, depth, slots and key types.
+    static Result<BtView> read(Span<const byte> payload);
+};
+void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<const BtNode> nodes, Span<const char> strings,
+                         Array<byte>& out);
+
 // ------------------------------------------------------------------ shader (CHNK_SHD)
 // One GLSL 4.5 stage (assets.md §5.2, FR-AST-060): the validated source text, the variant table
 // (every combination of the boolean defines its `// @variant NAME` header lines declare), and per
@@ -866,6 +1025,7 @@ enum : u32 {
     Skinned = 1u << 1,  // a MeshSkinHeader at MeshHeader::skin_offset (chunk minor 1)
     Lods = 1u << 2,     // a MeshLod table after the strings (chunk minor 2)
     Ragdoll = 1u << 3,  // MeshJoint's ragdoll fields hold the sidecar's per-bone overrides (chunk minor 3)
+    Materials = 1u << 4,  // a MaterialExt per submesh, at MeshSubmesh::reserved2[0] (chunk minor 4)
 };
 }
 
@@ -914,7 +1074,7 @@ struct MeshSubmesh {
     f32 uv_offset[2];
     f32 uv_scale[2];
     MaterialChunk material;  // inline glTF material (texture refs by GUID)
-    u32 reserved2[2];
+    u32 reserved2[2];        // [0]: with MeshFlags::Materials, the payload offset of this submesh's MaterialExt
 };
 static_assert(sizeof(MeshSubmesh) == 192);
 
@@ -1043,6 +1203,9 @@ struct MeshView {
     Span<const i32> submesh_skins;
     // LOD table (empty unless MeshFlags::Lods).
     Span<const MeshLod> lods;
+    // One per submesh with MeshFlags::Materials, else empty.
+    Span<const MaterialExt> materials;
+    MaterialExt material_ext(u32 s) const { return materials.empty() ? MaterialExt{} : materials[s]; }
 
     bool skinned() const { return header && (header->flags & MeshFlags::Skinned); }
     // The coarser levels of submesh `s` (empty: none).
@@ -1081,6 +1244,8 @@ struct MeshData {
     // Optional LOD table: written (and MeshFlags::Lods set) when non-empty; submeshes name their
     // range of it in reserved[0] (count) and reserved[1] (first).
     Span<const MeshLod> lods;
+    // Optional material extensions: written (and MeshFlags::Materials set) when non-empty, one per submesh.
+    Span<const MaterialExt> materials;
     u32 flags = 0;
     f32 bounds_min[3] = {0, 0, 0};
     f32 bounds_max[3] = {0, 0, 0};

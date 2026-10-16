@@ -22,7 +22,8 @@ enum class AudioBus : u8 { Master = Bus_Master, Music = Bus_Music, SFX = Bus_SFX
 MCE_ENUM(AudioBus, Master, Music, SFX, UI)
 
 struct AudioSource {
-    // The cooked Sfx asset; the bridge resolves it through the ClipBank when the source starts.
+    // The cooked Sfx asset, or a sound set (.mcsound: a clip, pitch and gain picked on each start);
+    // the bridge resolves it through the ClipBank when the source starts.
     asset::AssetRef<asset::Sfx> clip;
     f32 gain_db = 0.f;
     f32 pan = 0.f;
@@ -34,7 +35,8 @@ struct AudioSource {
     ClipHandle clip_handle;
     // ---- engine-written, not serialized ----
     bool started = false;
-    u8 pad_[3] = {};  // explicit and zeroed: World::state_hash hashes component bytes (ADR-0007)
+    i8 pick_gain = 0;  // a sound set's gain for this play, in 0.5 dB steps (0 for a plain clip)
+    u8 pad_[2] = {};   // explicit and zeroed: World::state_hash hashes component bytes (ADR-0007)
     AudioHandle handle;
     ClipHandle playing_clip;  // what `handle` plays; a hot reload swaps it and restarts loops
     f32 applied_gain_db = 0.f;

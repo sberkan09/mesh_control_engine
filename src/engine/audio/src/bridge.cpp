@@ -10,16 +10,33 @@ namespace {
 // A fading voice starts this far below its gain and ramps up in dB, one step per tick.
 constexpr f32 kFadeFloorDb = -60.f;
 
-ClipHandle resolve(ClipBank* bank, asset::Guid guid, ClipHandle direct, bool stream = false) {
-    if (!guid.is_null()) return bank ? bank->acquire(guid, stream) : ClipHandle{};
-    return direct;
+// A play's seed: the tick, which source (an entity, or an event's place in the tick) and the asset.
+// Sound sets pick from it, so a replay of the same ticks picks the same clips (M-AUDIO2 2).
+u64 play_seed(u64 tick, u64 source, asset::Guid guid) {
+    return tick * 0x9E3779B97F4A7C15ull ^ (source + 1) * 0xC2B2AE3D27D4EB4Full ^ guid.hi ^ (guid.lo << 1);
 }
 
-f32 faded_gain(const AudioSource& s) { return s.fade_s > 0.f && s.fade_t < 1.f ? s.gain_db + kFadeFloorDb * (1.f - s.fade_t) : s.gain_db; }
+ClipPick resolve(ClipBank* bank, asset::Guid guid, ClipHandle direct, u64 seed, bool stream = false) {
+    if (!guid.is_null()) return bank ? bank->pick(guid, seed, stream) : ClipPick{};
+    ClipPick p;
+    p.clip = direct;
+    return p;
+}
 
-AudioHandle start(AudioDevice& dev, AudioSource& s, AudioSpatial* sp, ClipHandle clip, math::vec3 position) {
+f32 base_gain(const AudioSource& s) { return s.gain_db + 0.5f * static_cast<f32>(s.pick_gain); }
+f32 faded_gain(const AudioSource& s) { return s.fade_s > 0.f && s.fade_t < 1.f ? base_gain(s) + kFadeFloorDb * (1.f - s.fade_t) : base_gain(s); }
+
+i8 half_db(f32 db) {
+    const f32 h = db * 2.f;
+    return static_cast<i8>(h < -127.f ? -127.f : h > 127.f ? 127.f : (h < 0.f ? h - 0.5f : h + 0.5f));
+}
+
+AudioHandle start(AudioDevice& dev, AudioSource& s, AudioSpatial* sp, const ClipPick& pick, math::vec3 position) {
+    const ClipHandle clip = pick.clip;
     s.fade_t = s.fade_s > 0.f ? 0.f : 1.f;
+    s.pick_gain = half_db(pick.gain_db);
     PlayParams p;
+    p.pitch = pick.pitch;
     p.gain_db = faded_gain(s);
     p.pan = s.pan;
     p.priority = s.priority;
@@ -76,16 +93,18 @@ void audio_bridge(Frame& f) {
             dev->set_listener(l);
     });
 
+    u64 nth = 0;
     for (const PlaySfx& ev : f.events().read<PlaySfx>()) {
+        const ClipPick pick = resolve(ref.clips, ev.clip, ev.clip_handle, play_seed(f.tick, nth++ | (1ull << 40), ev.clip));
         PlayParams p;
-        p.gain_db = ev.gain_db;
+        p.gain_db = ev.gain_db + pick.gain_db;
+        p.pitch = pick.pitch;
         p.pan = ev.pan;
         p.priority = ev.priority;
         p.bus = ev.bus;
         p.attenuation_id = ev.attenuation_id;
         p.position = ev.position;
-        const ClipHandle clip = resolve(ref.clips, ev.clip, ev.clip_handle);
-        if (!clip.is_null()) dev->play(clip, p);
+        if (!pick.clip.is_null()) dev->play(pick.clip, p);
     }
 
     f.query<AudioSource&>().each([&](Entity e, AudioSource& s) {
@@ -95,21 +114,24 @@ void audio_bridge(Frame& f) {
             if (const LocalTransform* t = f.world().try_get<LocalTransform>(e)) pos = t->position;
         if (!s.started) {
             if (!s.play_on_start) return;
-            const ClipHandle clip = resolve(ref.clips, s.clip.guid, s.clip_handle, s.bus == AudioBus::Music);
+            const ClipPick pick = resolve(ref.clips, s.clip.guid, s.clip_handle, play_seed(f.tick, e.index, s.clip.guid), s.bus == AudioBus::Music);
             // The previous scene's source of the same music still fades out: start when it is done.
-            if (!clip.is_null() && dev->stream_busy(clip)) return;
-            s.handle = start(*dev, s, sp, clip, pos);
+            if (!pick.clip.is_null() && dev->stream_busy(pick.clip)) return;
+            s.handle = start(*dev, s, sp, pick, pos);
             s.started = true;
             return;
         }
         if (s.handle.is_null()) return;
         // A hot-reloaded asset re-registers as a new clip and the old voice is stopped: a looping
         // source carries on with the new sound.
-        if (s.loop && !s.clip.guid.is_null() && ref.clips) {
+        // (A sound set keeps the member it picked: the set's own clip is null.)
+        if (s.loop && !s.clip.guid.is_null() && ref.clips && !ref.clips->is_set(s.clip.guid)) {
             const ClipHandle now = ref.clips->find(s.clip.guid);
             if (!(now == s.playing_clip)) {
                 dev->stop(s.handle);
-                s.handle = start(*dev, s, sp, now, pos);
+                ClipPick again;
+                again.clip = now;
+                s.handle = start(*dev, s, sp, again, pos);
                 return;
             }
         }

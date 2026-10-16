@@ -25,6 +25,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/material_importer.cpp
         src/mod_project.cpp
         src/particle_importer.cpp
+        src/sound_set_importer.cpp
         src/spritesheet_importer.cpp
         src/animgraph_importer.cpp
         src/terrain_importer.cpp
@@ -33,6 +34,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/scene_writer.cpp
         src/sequence_importer.cpp
         src/timeline_importer.cpp
+        src/bt_importer.cpp
         src/shader_importer.cpp
         src/store_importer.cpp
         src/config_importer.cpp
@@ -43,6 +45,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/tilemap_importer.cpp
         src/ui_importer.cpp
         src/video_importer.cpp
+        src/vorbis_encode.cpp
         src/wav_importer.cpp
     PUBLIC_DEPS
         mce::mce_asset
@@ -55,5 +58,6 @@ mce_add_library(mce_asset_cook UMBRELLA
         mce_stb
         mce_meshopt
         mce_astcenc
+        mce_vorbisenc
         glslang::glslang
         glslang::glslang-default-resource-limits)

@@ -44,6 +44,7 @@ struct GpuSubmesh {
     math::aabb3 bounds;     // node-local
     math::vec4 uv_rect;     // offset.xy, scale.xy
     asset::MaterialChunk material;
+    asset::MaterialExt material_ext{};  // clear coat, sheen, anisotropy, transmission (M-VISUAL2 4); zero = none
     u32 albedo_key = ~0u;   // texture key of the base color map (~0u = none: white)
     u32 normal_key = ~0u;   // tangent-space normal map (~0u = none: the vertex normal)
     u32 orm_key = ~0u;      // occlusion (R, when OcclusionInMR) / roughness (G) / metallic (B)

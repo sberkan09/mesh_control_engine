@@ -20,6 +20,8 @@ inline constexpr u32 kMaxRealVoices = 48;  // v0.5 tier (A7: 8 at MVP — a cons
 inline constexpr u32 kMaxVirtualVoices = 208;
 inline constexpr u32 kMaxHandles = kMaxRealVoices + kMaxVirtualVoices;
 inline constexpr u32 kMaxClips = 1024;
+inline constexpr f32 kMinPitch = 0.25f;
+inline constexpr f32 kMaxPitch = 4.f;
 inline constexpr u32 kMaxStreams = 2;           // concurrent streamed clips (music, ambience)
 inline constexpr u32 kStreamPageFrames = 4800;  // 100 ms
 inline constexpr u32 kStreamPages = 4;          // 400 ms ring per stream
@@ -44,6 +46,10 @@ struct ClipPayload {
     u32 channels = 1;            // 1 or 2
     u32 sample_rate = kSampleRate;
     u32 loop_start = 0;          // frame a looping voice wraps back to (intro + loop body)
+    // An Ogg Vorbis stream in place of `frames` (M-AUDIO2 1): only register_stream takes one, and its
+    // pages decode it as they fill. frame_count/loop_start still count decoded frames.
+    const byte* encoded = nullptr;
+    u32 encoded_bytes = 0;
 };
 
 struct PlayParams {
@@ -52,6 +58,9 @@ struct PlayParams {
     bool loop = false;
     u8 priority = 128;    // 0 = most important; steal order is priority, then quieter, then older
     BusId bus = Bus_SFX;
+    // Playback rate (M-AUDIO2 2): 2 is an octave up and twice as fast, 0.5 an octave down. Clamped
+    // to [kMinPitch, kMaxPitch]. Streamed clips (register_stream) always play at 1.
+    f32 pitch = 1.f;
     // 3D (FR-AUD-050): a non-zero id spatializes the voice against the listener with that
     // attenuation curve; `position` is the source in world space.
     u16 attenuation_id = 0;
@@ -184,6 +193,8 @@ public:
     void stop(AudioHandle voice, f32 fade_s = 0.f);  // always ramps (≥ 2 ms): no click
     void set_handle_gain(AudioHandle voice, f32 gain_db);
     void set_handle_pan(AudioHandle voice, f32 pan);  // 2D voices; a 3D voice's pan is spatial
+    // Playback rate of a live voice (PlayParams::pitch); takes effect at the next block, no ramp.
+    void set_handle_pitch(AudioHandle voice, f32 pitch);
     // Moves a 3D voice; gain/pan are recomputed and sent only when they change.
     void set_handle_position(AudioHandle voice, math::vec3 position);
     // True until the mixer reports the voice finished (one-shot end, stop, steal); updated by

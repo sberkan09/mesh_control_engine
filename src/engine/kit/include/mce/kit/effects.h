@@ -15,7 +15,8 @@
 // FireOn: Manual fires when `fire` is set (by data, a sequence's field track or MCP
 // entity_set_component; the engine clears it), Start on the first tick the entity is seen,
 // TriggerEnter / ContactBegin when a TriggerEnter (2D), TriggerEnter3D (bodies3d.h) or ContactBegin2D
-// event names the entity (as the sensor or trigger, or the other body; as either contact body). `fired` counts the plays.
+// event names the entity (as the sensor or trigger, or the other body; as either contact body), Landed when
+// a Landed3D names it (a CharacterController3D touching down). `fired` counts the plays.
 //
 // Systems ("kit_effects" in FixedUpdate_Post, after physics so this tick's events are read;
 // "kit_camera_follow" in FixedUpdate_Post after it; "kit_nav_grid" in FixedUpdate_Pre before
@@ -39,8 +40,8 @@ class AssetSystem;
 
 namespace mce::kit {
 
-enum class FireOn : u8 { Manual, Start, TriggerEnter, ContactBegin };
-MCE_ENUM(FireOn, Manual, Start, TriggerEnter, ContactBegin)
+enum class FireOn : u8 { Manual, Start, TriggerEnter, ContactBegin, Landed };
+MCE_ENUM(FireOn, Manual, Start, TriggerEnter, ContactBegin, Landed)
 
 // A one-shot sound. 2D (centred, `pan`); the mixer has no resampling, so there is no pitch.
 struct SfxTrigger {

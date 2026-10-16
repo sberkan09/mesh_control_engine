@@ -24,7 +24,7 @@ code as built and why; this guide links to them where you may want the full deta
 | 10 | [Audio](10-audio.md) | Sound sources, one-shots, buses, 3D audio, music streams |
 | 11 | [Input](11-input.md) | The action snapshot, the default map, gamepads, rebinding |
 | 12 | [UI and the console](12-ui-and-console.md) | HUD text, runtime menus, the developer console, convars |
-| 13 | [Sequences, state machines and saves](13-sequences-fsm-saves.md) | Scripted action lists, timelines, FSM helper, save games, replays |
+| 13 | [Sequences, state machines and saves](13-sequences-fsm-saves.md) | Scripted action lists, timelines, FSM helper, behavior trees, save games, replays |
 | 14 | [Working with an AI agent (MCP)](14-mcp-ai-workflow.md) | The project MCP server, its tools, a proven workflow, pitfalls |
 | 15 | [Shipping](15-shipping.md) | The ship zip, symbols, crash reports, version metadata, cheats |
 | 16 | [Command-line reference](16-command-line.md) | Flags and convars of the player, the editor, the MCP server and the cook |
@@ -38,6 +38,7 @@ code as built and why; this guide links to them where you may want the full deta
 | 23 | [Live services (optional)](23-live-services.md) | Analytics events, crash reports sent on the next launch, remote config, game services (achievements, leaderboards, cloud saves), the demo and vendor setup |
 | 24 | [Accessibility](24-accessibility.md) | Subtitles, color filters, text size, remapping and screen readers: what players get, what a game does, what `project_check` flags |
 | 25 | [Performance](25-performance.md) | Record a capture, budgets per target, measure and compare over MCP, read captures in the editor, a counter gate in CI |
+| 26 | [Steam](26-steam.md) | Sign-in, achievements, leaderboards and Steam Cloud, the overlay, rich presence, Steam Input, depots for steamcmd, the demo and a release checklist |
 
 ## Conventions used in this guide
 
