@@ -25,6 +25,7 @@ mce_add_test(test_kit UMBRELLA
         test_particles.cpp
         test_pathfinding.cpp
         test_sequence.cpp
+        test_skeleton2d.cpp
         test_sprite_anim.cpp
         test_timeline.cpp
         test_cinematic.cpp

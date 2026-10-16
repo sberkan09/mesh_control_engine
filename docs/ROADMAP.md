@@ -104,6 +104,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-NET3 | [M-NET3.md](milestones/M-NET3.md) (Linear SBA-123 … SBA-127, added 2026-10-16) | active (steps 1–2 done: per-client delta snapshots, `NetRelevance`, acknowledgements, about a third of the snapshot bytes; rollback and replication spectators, rollback clock sync) | steps 3–5, the demo and the gates |
 | M-AI | [M-AI.md](milestones/M-AI.md), ADR-0045 (Linear SBA-128 … SBA-133, added 2026-10-16) | active (steps 1–2 done: `.mcbt` behavior trees cooked to `CHNK_BT`, `AiBrain` and `Blackboard` in `mce/kit/ai.h`, tasks by name; stock tasks, guard aborts and `samples/ai_demo` on the stock player) | steps 3–6 and the gates |
 | M-MOVE3D | [M-MOVE3D.md](milestones/M-MOVE3D.md) (Linear SBA-134 … SBA-139, added 2026-10-16) | active (step 1 done: character feel, acceleration, coyote time, jump buffer and cut, air jumps, sprint, crouch, `Landed3D`) | steps 2–6, the demo and the gates |
+| M-MOVE3D | [M-MOVE3D.md](milestones/M-MOVE3D.md) (Linear SBA-134 … SBA-139, added 2026-10-16) | active (step 1 done: `.mcskel2d` cooked to `CHNK_SKEL2D`, the `Skeleton2D` world pose, slots drawn through the sprite extraction, `Bone2DFollow`) | steps 2–6, the demo and the gates |
 | M-ANIM2D | [M-ANIM2D.md](milestones/M-ANIM2D.md) (Linear SBA-140 … SBA-146, added 2026-10-16) | active (step 1 in progress) | steps 1–6, the demo and the gates |
 | M-SCRIPT | — (added 2026-10-16; ADR-0041) | planned (the spike is built: `mce_script`, PR #262) | steps 1–6, the demo and the gates |
 
