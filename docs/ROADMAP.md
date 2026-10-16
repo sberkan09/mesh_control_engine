@@ -51,6 +51,7 @@ flowchart LR
     MVIS --> MVIS2["M-VISUAL2 SSR, spatial upscaler<br/>and sharpening, contact shadows,<br/>clear coat, sheen, transmission"]
     MWEB -.web transport.-> MNET2
     MAGENT --> MPERF["M-PERF captures, budgets per target,<br/>perf_run over MCP, counter gate"]
+    M6 --> MAUDIO2["M-AUDIO2 Ogg Vorbis clips, pitch and sound sets,<br/>bus effects, ducking, snapshots, occlusion"]
 ```
 
 Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because Artifact A is the earliest shippable artifact and the cut ladder's final rung reduces the MVE to Artifact A alone — Artifact B is structured as an **addition, not a dependency** (REQUIREMENTS cut-ladder rung 7). The cook pipeline precedes everything that loads content; the determinism harness precedes everything that could break it.
@@ -77,7 +78,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M9 (v1.0 gate) | [M9-ucd.md](milestones/M9-ucd.md) | done (`projects/Kindle`) | non-programmer double-click test, timed UC-C session, LRN gates, memory reconciliation, 60 fps on hardware |
 | M-SKIN | [M-SKIN.md](milestones/M-SKIN.md), ADR-0036 | done | — |
 | M-NET | ADR-0035 | done | — |
-| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (Linear SBA-82 … SBA-88) | active (step 1 done: `SimNetwork` with simulated latency, jitter and loss, `net::Transport`, `Host::set_conditions`, the headless multi-client runner in `local_ci.sh`, the `NET` line in the stats overlay; step 2 done: snapshot interpolation with an adaptive jitter buffer and an extrapolation limit; step 3 done: `net::Predictor` / `net::InputReceiver` client-side prediction with server reconciliation and smoothed corrections; step 4 done: `net::LagCompensator` rewinds `HitBox`es to the tick a client drew for hit checks; step 5 done: `net::RollbackSession` rollback and lockstep with desync detection by state hash, `samples/net_rollback`; step 6 done: `mce_relay` rooms with codes over UDP and WebSocket, `net::RelayClient`, `net::WebSocketHost` (WebRTC not built)) | step 7, the demo |
+| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (Linear SBA-82 … SBA-88) | done (step 1: `SimNetwork` with simulated latency, jitter and loss, `net::Transport`, `Host::set_conditions`, the headless multi-client runner in `local_ci.sh`, the `NET` line in the stats overlay; step 2 done: snapshot interpolation with an adaptive jitter buffer and an extrapolation limit; step 3 done: `net::Predictor` / `net::InputReceiver` client-side prediction with server reconciliation and smoothed corrections; step 4 done: `net::LagCompensator` rewinds `HitBox`es to the tick a client drew for hit checks; step 5 done: `net::RollbackSession` rollback and lockstep with desync detection by state hash, `samples/net_rollback`; step 6 done: `mce_relay` rooms with codes over UDP and WebSocket, `net::RelayClient`, `net::WebSocketHost` (WebRTC not built); step 7 done: replication as data, `NetReplicated` / `NetOwner`, `Replicated` field flags, over MCP) | — |
 | Scene streaming / data mods | [scene-streaming.md](milestones/scene-streaming.md), ADR-0037 / ADR-0034 | done | — |
 | M-NOVEL | [M-NOVEL.md](milestones/M-NOVEL.md) (issues #115, #154) | done | letters are not translated yet (lines, options and names are, M-MOBILE 11e) |
 | M-KIT3D | [M-KIT3D.md](milestones/M-KIT3D.md) (issues #129, #158, #126) | done | — (follow-ups listed in the record) |
@@ -91,12 +92,13 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-WEB | — (added 2026-10-15) | active: steps 1–6 done (ADR-0039, `docs/milestones/M-WEB.md`) | step 7 and the demo |
 | M-GAMEPLAY3D | [M-GAMEPLAY3D.md](milestones/M-GAMEPLAY3D.md), ADR-0040 (Linear SBA-69 … SBA-75) | active (step 1 done: Recast & Detour navmesh in `mce/physics3d/navmesh3d.h`, `.mcnav` assets, `NavMeshSurface3D` / `NavArea3D` / `NavLink3D` / `NavObstacle3D` / `NavAgent3D` in `mce/kit/nav3d.h`, the editor's Bake navmesh and preview; step 2 done: `Joint3D` fixed, hinge, slider, distance, cone and six-DOF joints with limits, motors and break forces in `mce/kit/joints3d.h`; step 3 done: `Ragdoll3D` ragdolls built from a skinned mesh's skeleton with per-bone sidecar overrides and a blend back to the animation, in `mce/kit/ragdolls3d.h`; step 4 done: `Vehicle3D` cars over Jolt's wheeled vehicle, driven by inputs or the player's actions, in `mce/kit/vehicles3d.h`; step 5 done: `.mcanim` version 2 with 2D blend spaces, layers with bone masks and additive clips, root motion, and two-bone, look-at and foot IK on `IKTarget3D` goals; step 6 done: `Raycast3D` and `Overlap3D` sensors in `mce/kit/sensors3d.h` raising trigger events, `World3D` sphere and box overlaps and character-aware queries) | step 7, the demo |
 | M-CINEMA | [M-CINEMA.md](milestones/M-CINEMA.md) (Linear SBA-76 … SBA-81) | active (steps 1–5 done: `.mctimeline`, `TimelinePlayer`, the Timeline and Animation panels, cutscenes and cinematic cameras, video over pl_mpeg) | step 6, the demo and the gates |
-| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (added 2026-10-15) | active (steps 1–6 done) | step 7, the demo |
-| M-TERRAIN | — (added 2026-10-15) | in progress: steps 1–5 done (`docs/milestones/M-TERRAIN.md`) | step 6, demo |
+| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (added 2026-10-15) | done (steps 1–7) | — |
+| M-TERRAIN | [M-TERRAIN.md](milestones/M-TERRAIN.md) (Linear SBA-89 … SBA-94) | done (steps 1–6 and the demo: SolsticeReach's island is a painted `Terrain3D`) | Metal untested |
 | M-ACCESS | [M-ACCESS.md](milestones/M-ACCESS.md) (Linear SBA-95 … SBA-99) | done on the desktop (steps 1–5, the demo and the gates) | the screen reader on a phone and on each desktop OS |
 | M-VISUAL2 | [M-VISUAL2.md](milestones/M-VISUAL2.md) (Linear SBA-101 … SBA-105) | active (step 1 done: screen-space reflections, `Environment3D.ssr`, `r.ssr`; step 2 done: spatial upsample and sharpening, `Environment3D.upscaler` / `sharpen`, `r.upscaler`, `r.sharpen`; step 3 done for the sun: contact shadows, `Environment3D.contact_shadows`, `r.contact_shadows`) | steps 4–5, local-light contact shadows, the demo and the gates |
-| M-PERF | [M-PERF.md](milestones/M-PERF.md) (Linear SBA-113 … SBA-117, added 2026-10-15) | active (steps 1–4 done) | step 5 |
+| M-PERF | [M-PERF.md](milestones/M-PERF.md) (Linear SBA-113 … SBA-117, added 2026-10-15) | done on the desktop (steps 1–5, the demo and the gates) | a capture on a phone and in a browser |
 | M-STEAM | [M-STEAM.md](milestones/M-STEAM.md), ADR-0042 (Linear SBA-106 … SBA-112) | active (step 1 done: the Steamworks flat API opened at run time, `mce/platform/steam.h`, the player's `-steam.app_id`; step 2 done: Steam achievements, leaderboards and Steam Cloud saves as the game services backend, `.mcservices` `steam` names; step 3 done: the overlay holds the game, `RichPresence`, `OpenOverlay`; step 4 done: Steam Input feeds the input map's actions, `-steam.write_input_config` writes the action manifest and controller defaults) | steps 5–6, the real-client run (needs the user's Steamworks account) |
+| M-AUDIO2 | [M-AUDIO2.md](milestones/M-AUDIO2.md) (Linear SBA-118 … SBA-122, added 2026-10-16) | active (no step done yet) | steps 1–5, the demo and the gates |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -395,6 +397,25 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Builds, in order:** (1) `.mcperf` captures from the stock player (`-perf_capture <file>`): per frame the CPU stages, sim phases and the costliest systems, GPU passes from timestamp queries, render counters (draws, triangles, instances, texture and buffer bytes), frame-allocator high water and asset memory; a summary with p50/p95/p99/max and the spike frames with what was slow; observation only, never in the sim hash · (2) budgets per target (`desktop`, `mobile`, `web`) in the `.mceproj` (frame, sim, draws, triangles, texture MB, pack MB) with a verdict in each capture, and static `project_check` rules from cooked data (texture sizes, triangles per scene, pack size against the target) · (3) MCP `perf_run` (a scene in the player, offscreen, N ticks, an optional input script or bot; returns the summary, the verdict and the top systems, passes and spikes) and `perf_compare` (two captures, the deltas that matter) · (4) the editor's Profiler panel opens captures and records play-in-editor ones: a frame strip with spikes, a frame's breakdown (phases, systems, passes), two captures compared · (5) a `perf` counter stage in `local_ci.sh` against stored baselines for the samples, a user guide chapter, and the demo.
 **Demo:** an agent, over MCP alone, finds and fixes a planted CPU hotspot and a draw-call blow-up in a sample with `perf_run`, and shows `perf_compare` before and after inside the mobile budget.
 **Gates:** a capture never changes the sim hash; counters are identical across machines for the same run; a seeded over-budget scene fails the verdict; the counter stage catches a seeded draw-call regression; `local_ci.sh` green on every step.
+
+### M-AUDIO2 — Audio a shipped game needs · **size M (rough guess, ≈ 60–100 h engineering)** · tier: off-tier, opt-in per feature, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the project's standing instruction to extend the roadmap when no milestone is free (M-LIVEOPS' remaining work needs devices; M-UI-DATA is taken). The user guide lists the gaps (10.6: WAV only; no reverb sends or per-voice pitch), and the engine comparison (`assessments/motor-kiyaslama-eksikler.md`) has every other engine shipping effects and compressed audio. A 48 kHz float pack is the largest part of a phone or web download. Needs no device: the mixer renders offline, so every step gates on rendered samples.*
+
+**Builds, in order:**
+1. Compressed clips: `.ogg` Vorbis imports and `"compress": "vorbis"` on WAV, decoded at load or in the stream pages (stb_vorbis, already fetched with stb).
+2. Per-voice pitch and sound sets (`.mcsound`: random or sequence picks, with pitch and volume ranges), seeded from the sim.
+3. Bus effects: biquad filters, a reverb send and a master limiter, as project data with convar and component control.
+4. Sidechain ducking between buses, and named mixer snapshots blended in over a fade (the pause, game events).
+5. 3D occlusion by physics rays, Doppler, the user guide, MCP reach and the demo.
+
+**Demo:** a listener walks through rooms. A footstep set varies in pitch, a cave adds reverb, music ducks under a voice line, the pause muffles the world and a wall occludes a source. An offline render of the scripted run is the record, and the Ogg pack is smaller than the WAV one.
+**Gates:**
+- Offline renders of fixed scripts hash the same across runs and machines.
+- The sim hash is unchanged.
+- Nothing allocates or locks on the audio thread.
+- A Vorbis clip stays within a set error of its source.
+- `local_ci.sh` green on every step.
 
 ### M-STEAM — Steamworks · **size M (rough guess, ≈ 60–100 h engineering)** · tier: off-tier platform track, opt-in, gates nothing · priority 2
 

@@ -42,6 +42,12 @@ if(MCE_BUILD_TESTS AND NOT MCE_SDK AND TARGET marble_garden_mcp)
                  COMMAND ${Python3_EXECUTABLE} "${demo_gate}" --mcp $<TARGET_FILE:marble_garden_mcp> --project "${CMAKE_CURRENT_SOURCE_DIR}"
                          --work "${CMAKE_CURRENT_BINARY_DIR}/gate_goldens" --goldens)
         set_tests_properties(marble_garden_goldens_gpu PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "gate: pass" RESOURCE_LOCK marble_garden_module)
+        # M-PERF counter gate: perf/counters.json's draws, triangles, sprites, ... may not grow.
+        set(perf_gate "${PROJECT_SOURCE_DIR}/scripts/ci/perf_gate.py")
+        add_test(NAME marble_garden_perf_counters
+                 COMMAND ${Python3_EXECUTABLE} "${perf_gate}" --mcp $<TARGET_FILE:marble_garden_mcp> --project "${CMAKE_CURRENT_SOURCE_DIR}"
+                         --work "${CMAKE_CURRENT_BINARY_DIR}/perf_gate")
+        set_tests_properties(marble_garden_perf_counters PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "gate: pass" RESOURCE_LOCK marble_garden_module)
     endif()
 endif()
 

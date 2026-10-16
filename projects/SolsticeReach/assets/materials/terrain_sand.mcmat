@@ -1,0 +1,19 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "07d43074-2fff-5ec9-b8e8-fc578186311d",
+  "name": "terrain sand",
+  "base_color": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "metallic": 0,
+  "roughness": 1,
+  "textures": {
+    "base_color": "guid:c858369d-db50-5ccd-a94a-0c083745befb",
+    "normal": "guid:540264fb-4c83-5cf6-ae27-14f07757f1fd",
+    "metallic_roughness": "guid:03dab7e2-c079-5819-b864-08919628b92c"
+  }
+}

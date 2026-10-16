@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+
+#include "mce/hash.h"
 
 namespace mce::net {
 namespace {
@@ -34,10 +37,66 @@ LocalTransform read_transform(ByteReader& r) {
     return t;
 }
 
-// Smallest possible entry: id + kind varints, a 40-byte transform, an empty extra blob.
-constexpr usize kMinEntryBytes = 1 + 1 + 40 + 1;
+// Smallest possible entry: id + kind varints, a 40-byte transform, empty extra and field blobs.
+constexpr usize kMinEntryBytes = 1 + 1 + 40 + 1 + 1;
+
+bool replicated(const refl::FieldRecord& f) { return f.has(refl::FieldFlags::Replicated); }
+
+// Writes e's Replicated fields: varu32 component count, then per component its type id, layout
+// and the field bytes (length-prefixed). Entity fields go as the target's NetId (0: none).
+void write_fields(World& world, Entity e, ByteWriter& out, ByteWriter& one) {
+    ByteWriter blocks;
+    u32 count = 0;
+    for (usize ci = 0; ci < world.component_count(); ++ci) {
+        const auto c = static_cast<ecs::ComponentId>(ci);
+        const ecs::ComponentInfo& info = world.component(c);
+        if (info.refl_id == 0 || info.is_tag) continue;
+        const void* row = world.get_raw(e, c);
+        if (!row) continue;
+        const refl::TypeRecord* type = refl::find_type(StringId(info.refl_id));
+        const u32 layout = type ? replicated_layout(*type) : 0u;
+        if (layout == 0) continue;
+        one.clear();
+        for (const refl::FieldRecord& f : type->fields) {
+            if (!replicated(f)) continue;
+            const u8* at = static_cast<const u8*>(row) + f.offset;
+            if (f.kind == refl::FieldKind::EntityRef) {
+                for (u32 i = 0; i < f.count; ++i) {
+                    Entity target;
+                    std::memcpy(&target, at + usize(i) * f.size, sizeof(Entity));
+                    const NetId* id = world.alive(target) ? world.try_get<NetId>(target) : nullptr;
+                    one.write_varu32(id ? id->id : 0u);
+                }
+            } else {
+                one.append(Span<const u8>(at, usize(f.size) * f.count));
+            }
+        }
+        blocks.write_u64(info.refl_id);
+        blocks.write_u32(layout);
+        blocks.write_bytes(one.data());
+        ++count;
+    }
+    out.write_varu32(count);
+    out.append(blocks.data());
+}
 
 }  // namespace
+
+u32 replicated_layout(const refl::TypeRecord& type) {
+    Hasher64 h;
+    u32 n = 0;
+    for (const refl::FieldRecord& f : type.fields) {
+        if (!replicated(f)) continue;
+        h.u64v(f.name.value);
+        h.u32v(static_cast<u32>(f.kind));
+        h.u32v(f.size);
+        h.u32v(f.count);
+        ++n;
+    }
+    if (n == 0) return 0;
+    const u32 v = static_cast<u32>(h.value());
+    return v ? v : 1u;
+}
 
 // ---- server ---------------------------------------------------------------------------------
 
@@ -51,6 +110,25 @@ u32 ReplicationServer::assign(World& world, Entity e, u32 kind) {
     const u32 id = next_id_++;
     world.add(e, NetId{id, kind});
     return id;
+}
+
+u32 ReplicationServer::assign_tagged(World& world) {
+    Array<Entity> todo;
+    world.query<const NetReplicated>().each([&](Entity e, const NetReplicated&) {
+        if (!world.has<NetId>(e)) todo.push_back(e);
+    });
+    for (Entity e : todo) assign(world, e, world.try_get<NetReplicated>(e)->kind);
+    return static_cast<u32>(todo.size());
+}
+
+u32 ReplicationServer::assign_tagged(Commands& cmd, World& world) {
+    u32 n = 0;
+    world.query<const NetReplicated>().each([&](Entity e, const NetReplicated& r) {
+        if (world.has<NetId>(e)) return;
+        assign(cmd, e, r.kind);
+        ++n;
+    });
+    return n;
 }
 
 void ReplicationServer::write_snapshot(World& world, u32 tick, ByteWriter& out) const {
@@ -67,7 +145,7 @@ void ReplicationServer::write_snapshot(World& world, u32 tick, ByteWriter& out) 
     out.write_u8(kSnapshotVersion);
     out.write_u32(tick);
     out.write_varu32(static_cast<u32>(items.size()));
-    ByteWriter extra;
+    ByteWriter extra, one;
     for (const Item& it : items) {
         const NetId& id = *world.try_get<NetId>(it.e);
         out.write_varu32(id.id);
@@ -75,6 +153,9 @@ void ReplicationServer::write_snapshot(World& world, u32 tick, ByteWriter& out) 
         write_transform(out, *world.try_get<LocalTransform>(it.e));
         extra.clear();
         if (hooks_.write_extra) hooks_.write_extra(hooks_.user, world, it.e, extra);
+        out.write_bytes(extra.data());
+        extra.clear();
+        write_fields(world, it.e, extra, one);
         out.write_bytes(extra.data());
     }
 }
@@ -107,6 +188,7 @@ ApplyResult ReplicationClient::apply(Commands& cmd, const World& world, Span<con
         en.id.kind = r.read_varu32();
         en.transform = read_transform(r);
         en.extra = r.read_bytes();
+        en.fields = r.read_bytes();
         if (!r.ok() || en.id.id == 0) return result;
         entries_.push_back(en);
     }
@@ -157,6 +239,10 @@ ApplyResult ReplicationClient::apply(Commands& cmd, const World& world, Span<con
             hooks_.read_extra(hooks_.user, cmd, m->entity, extra);
         }
     }
+    // Pass 3: Replicated fields, once every mirror exists (an Entity field may name one spawned
+    // by this snapshot).
+    for (const Entry& en : entries_)
+        if (!en.fields.empty()) apply_fields(cmd, world, entities_.find(en.id.id)->entity, en.fields, result);
     // Everything the snapshot no longer lists is gone on the server.
     Array<u32> gone;
     for (auto&& [net_id, m] : entities_) {
@@ -176,6 +262,64 @@ ApplyResult ReplicationClient::apply(Commands& cmd, const World& world, Span<con
     has_tick_ = true;
     result.ok = true;
     return result;
+}
+
+void ReplicationClient::apply_fields(Commands& cmd, const World& world, Entity e, Span<const u8> fields,
+                                     ApplyResult& result) {
+    ByteReader r(fields);
+    const u32 count = r.read_varu32();
+    for (u32 i = 0; i < count && r.ok(); ++i) {
+        const u64 refl_id = r.read_u64();
+        const u32 layout = r.read_u32();
+        const Span<const u8> bytes = r.read_bytes();
+        if (!r.ok()) break;
+        const refl::TypeRecord* type = refl::find_type(StringId(refl_id));
+        if (!type || type->size == 0 || replicated_layout(*type) != layout) {
+            ++result.skipped_components;
+            continue;
+        }
+        ecs::ComponentId c = world.find_component(type->type_hash);
+        if (c == ecs::kInvalidComponent) {
+            // First sight of this type here: registering it is not a change to any entity.
+            ecs::ComponentInfo info;
+            info.type_hash = type->type_hash;
+            info.name = StringView(type->name);
+            info.refl_id = type->id.value;
+            info.size = type->size;
+            info.align = type->align;
+            c = const_cast<World&>(world).register_component_info(info);
+        }
+        // Start from the mirror's own value, so fields that are not replicated keep theirs.
+        scratch_.resize(type->size);
+        if (const void* now = world.alive(e) ? world.get_raw(e, c) : nullptr) {
+            std::memcpy(scratch_.data(), now, type->size);
+        } else {
+            std::memset(scratch_.data(), 0, type->size);
+            if (type->construct_default) type->construct_default(scratch_.data());
+        }
+        ByteReader in(bytes);
+        for (const refl::FieldRecord& f : type->fields) {
+            if (!f.has(refl::FieldFlags::Replicated)) continue;
+            u8* at = scratch_.data() + f.offset;
+            if (f.kind == refl::FieldKind::EntityRef) {
+                for (u32 k = 0; k < f.count; ++k) {
+                    const u32 net_id = in.read_varu32();
+                    const Mirror* target = net_id ? entities_.find(net_id) : nullptr;
+                    const Entity mapped = target ? target->entity : Entity::null;
+                    std::memcpy(at + usize(k) * f.size, &mapped, sizeof(Entity));
+                }
+            } else {
+                const Span<const u8> raw = in.read_raw(usize(f.size) * f.count);
+                if (in.ok()) std::memcpy(at, raw.data(), raw.size());
+            }
+        }
+        if (!in.ok() || !in.at_end()) {
+            ++result.skipped_components;
+            continue;
+        }
+        cmd.set_raw(e, c, scratch_.data());
+        ++result.components;
+    }
 }
 
 void ReplicationClient::set_predicted(u32 net_id, bool predicted) {
