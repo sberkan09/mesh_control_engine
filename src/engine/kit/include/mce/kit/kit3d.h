@@ -281,6 +281,8 @@ struct Environment3D {
     f32 ssr_max_roughness = 0.5f;  // rougher surfaces keep the probes only
     f32 ssr_roughness_fade = 0.2f; // roughness range below the maximum over which reflections fade
     f32 ssr_intensity = 1.0f;
+    u32 ssr_steps = 32;            // march steps per ray (4..128): more find thinner things, cost more
+    f32 ssr_edge_fade = 0.1f;      // fraction of the screen at its borders over which reflections fade
     // M-VISUAL2 2. When the quality tier draws below the output size (Low, Medium) without TAA: 1 =
     // the edge-adaptive spatial upsample, 0 = bilinear. `sharpen` (0..1) sharpens the final frame.
     // r.upscaler and r.sharpen override both per player.
@@ -293,6 +295,8 @@ struct Environment3D {
     f32 contact_length = 0.35f;     // world meters the ray travels toward the sun
     f32 contact_thickness = 0.1f;   // meters behind a surface a sample may be and still occlude
     f32 contact_intensity = 1.0f;   // 0..1: how much of the sun an occluded pixel loses
+    u32 contact_steps = 12;         // march steps per ray (4..64)
+    u32 pad_ = 0;
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -321,10 +325,12 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (ssr, Help{"1: screen-space reflections on smooth surfaces (over the probes and the sky)"}),
               (ssr_max_distance, Range{0.1f, 200}), (ssr_thickness, Range{0.01f, 5}), (ssr_max_roughness, Range{0, 1}),
               (ssr_roughness_fade, Range{0.01f, 1}), (ssr_intensity, Range{0, 4}),
+              (ssr_steps, Range{4, 128}), (ssr_edge_fade, Range{0, 0.5f}),
               (upscaler, Range{0, 1}, Help{"below output size: 1 = edge-adaptive spatial upsample, 0 = bilinear"}),
               (sharpen, Range{0, 1}, Help{"contrast-adaptive sharpening of the final frame (0 = off)"}),
               (contact_shadows, Help{"1: short screen-space sun shadows in creases and under small details"}),
-              (contact_length, Range{0.01f, 5}), (contact_thickness, Range{0.005f, 2}), (contact_intensity, Range{0, 1}))
+              (contact_length, Range{0.01f, 5}), (contact_thickness, Range{0.005f, 2}), (contact_intensity, Range{0, 1}),
+              (contact_steps, Range{4, 64}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 

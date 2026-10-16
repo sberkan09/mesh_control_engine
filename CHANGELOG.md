@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- M-VISUAL2 is done (step 5, SBA-105). `Environment3D` gains `ssr_steps`, `ssr_edge_fade` and
+  `contact_steps`, and MCP's Material schema lists the clear coat, sheen, anisotropy, transmission and ior
+  keys. `samples/06_showcase` shows reflections, contact shadows, sharpening, glass, lacquer and brushed
+  metal on its High profile, and `-profile highbase` draws High without them for the on/off sheet in the
+  milestone record.
 - AI perception, M-AI step 3 (SBA-130): a `Perceiver` sees every `Stimulus` of another team inside its cone and
   range with a clear line of sight (rays through the 3D or the 2D physics world), remembers a lost target for
   `forget` seconds and hears `kit::Noise` events (the tree's `make_noise` task makes one). It writes `target`,
