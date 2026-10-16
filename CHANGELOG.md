@@ -47,6 +47,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
   User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
+- Spectators and clock sync, M-NET3 step 2 (SBA-124): a `RollbackSession` with `.spectator = true` watches
+  without playing, fed confirmed inputs by one player (`write_spectator_packet`), and checks its hashes. With
+  `time_sync` (on by default) a rollback peer whose clock runs ahead skips a tick now and then instead of
+  stalling in bursts: in `sample_net_rollback -drift 30` the fast peer stalls 10 times instead of 40. Rollback
+  packets are now version 2. `ReplicationServer::set_view` / `set_sees_all` give replication spectators a
+  camera or every entity. User guide 20.7 and 20.10.
 - Per-client delta snapshots, M-NET3 step 1 (SBA-123): `ReplicationServer::write_snapshot_for` writes each client
   only the entities relevant to it (`NetRelevance { radius }` around the entities it owns) and codes them against
   the newest snapshot it acknowledged (`write_ack` / `read_ack`): a still entity costs two bytes. `apply` reads

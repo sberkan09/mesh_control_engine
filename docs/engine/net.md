@@ -79,6 +79,9 @@ later read returns zero.
   (`missing_baseline`), and the rebuilt content must match the hash the server wrote.
   `client_stats(peer)` counts snapshots, full ones, entities and bytes. `write_snapshot` (the
   broadcast) returns the same content hash, and `ReplicationClient::content_hash()` gives the applied one.
+- Spectators (M-NET3 step 2): `set_view(peer, &point)` adds a point relevance is measured from for
+  that peer (a camera; null removes it), `set_sees_all(peer, true)` makes every entity relevant to it.
+  Both create the per-client record; `forget_client` drops them with the history.
 
 `websocket.h` — `WebSocketHost` (M-NET2 step 6), a `Transport` over WebSocket with Host's shape:
 `listen(WebSocketDesc)` / `open_client()` + `connect(host, port, user_data, path)`. Native builds speak
@@ -87,6 +90,23 @@ RFC 6455 over non-blocking TCP (plain `ws://`); a web build's client uses the br
 Delivery is reliable and ordered (TCP). Pings give `stats()` its RTT and drop silent peers after
 `timeout_ms`; a close frame carries the `disconnect` user_data; a message over `max_message` closes
 the connection.
+
+`rollback.h` — `RollbackSession` (M-NET2 step 5): peers that each run the whole game exchange inputs,
+predict missing ones, roll back on a wrong guess and compare confirmed-state hashes. "MRB" packet
+(version 2): sender, input size, ack, the sender's frame and clock-sync advantage (u8 valid + f32),
+first frame, count, inputs, then up to 16 (frame, hash) pairs. M-NET3 step 2 adds:
+
+- Spectators: `RollbackDesc::spectator` (local_player is then its index 0..7) runs only frames whose
+  every input is known, up to 4 per `advance()`, never predicting. A player feeds it with
+  `write_spectator_packet(s, out)` ("MRS": every player's confirmed inputs from what the spectator
+  acknowledged, at most 32 frames or 1 KiB, plus hashes); the spectator's `write_packet(player)` is its
+  acknowledgement ("MRA": index, frames it has). It checks the feeding player's hashes, so a spectator
+  that computes something else is reported. A spectator further behind than the input ring (256
+  frames) can no longer be fed (`write_spectator_packet` returns false).
+- Clock sync (`RollbackDesc::time_sync`, on by default): each side's advantage (its frame minus the
+  sender's frame when a packet arrived, smoothed over packets) travels back; half the difference
+  between ours and theirs is how far ahead we run, latency cancelled. At most once every 10
+  `advance()` calls a peer more than one frame ahead of anyone skips one (`stats().sync_waits`).
 
 `relay.h` — rooms through a relay (M-NET2 step 6):
 
@@ -146,7 +166,13 @@ loopback, a client-driven player, and the bit-for-bit check.
   layout is skipped while the rest applies, `assign_tagged` in and out of a phase, `NetOwner` travels.
   Delta snapshots: smaller after the first acknowledgement and mirroring exactly, spawns and despawns
   through deltas, loss and late acknowledgements, a reset client and `forget_client`, the same tick
-  written twice, every truncation and a flipped byte rejected, `NetRelevance` in and out of range.
+  written twice, every truncation and a flipped byte rejected, `NetRelevance` in and out of range,
+  a spectator's view point and `set_sees_all`. Rollback: rollbacks and hashes agree with the game run
+  in one place, lockstep, an injected desync; a spectator matches the players' hashes and catches
+  its own desync; clock sync halves a 5%-fast peer's stalls and leaves peers on one clock alone;
+  spectator packets are refused where they do not belong.
+- `sample_net_rollback` (and `_drift`: a fast peer and two spectators), `sample_net_headless_spectators`
+  (two watching clients mirror everything over 75 ms with loss).
 - `sample_net_headless_300`: 300 ticks of a server and client; the client's mirror must match the
   server bit for bit and the client-driven player must have moved.
 - The SDK contract test (`tests/sdk`) builds a template project with `DEPS mce::mce_net` against the
