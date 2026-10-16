@@ -1,0 +1,2 @@
+# 07_gameplay3d: drive the cart straight ahead for five seconds (Move y throttles), then coast.
+1-300 Move=0,1

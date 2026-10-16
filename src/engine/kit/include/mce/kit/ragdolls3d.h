@@ -5,6 +5,10 @@
 //
 //   Ragdoll3D  on an entity with a skinned MeshRef (and usually an Animator)
 //
+// With `on_trigger`, a TriggerEnter3D naming the entity (a Trigger3D it walks into, a Raycast3D or
+// Overlap3D that touches it, or its own sensor touching something) sets `active` and clears its
+// NavAgent3D's `move_to`: death by a cart, a trap or a fall, with no code.
+//
 // Setting `active` builds the ragdoll from skin 0's skeleton as the mesh is posed at that moment,
 // moving as the animation was moving (and as the entity's own body, if it has one): one body per
 // bone, a capsule from the bone to its children, a box for a bone with several children (a pelvis,
@@ -60,6 +64,8 @@ struct Ragdoll3D {
     f32 blend = 0.0f;              // engine-written: 1 = the physics poses the mesh, 0 = the animation
     math::vec3 root_position;      // engine-written: the root bone's world position
     u32 settled = 0;               // engine-written: 1 once every part has come to rest
+    u8 on_trigger = 0;             // 1: goes limp (active = 1) when a TriggerEnter3D names this entity
+    u8 pad_[3] = {};
 };
 MCE_COMPONENT(Ragdoll3D, (active, Help{"1: limp, the physics poses the mesh; 0: blend back to the animation"}),
               (layer, Range{0, 15}), (mask, Help{"the layers the parts collide with"}), (mass, Range{0.1f, 100000}, Help{"kg"}),
@@ -69,7 +75,8 @@ MCE_COMPONENT(Ragdoll3D, (active, Help{"1: limp, the physics poses the mesh; 0: 
               (damping, Range{0, 1}, Help{"angular damping"}), (joint_friction, Range{0, 100000}, Help{"N*m"}),
               (impulse, Help{"N*s, applied once and cleared"}), (impulse_bone, Help{"empty = the whole body"}),
               (parts, ReadOnly, Transient), (blend, ReadOnly, Transient), (root_position, ReadOnly, Transient),
-              (settled, ReadOnly, Transient))
+              (settled, ReadOnly, Transient),
+              (on_trigger, Help{"1: goes limp when a trigger or sensor event names it (a hit, a fall); stops its NavAgent3D"}))
 
 // Registers Ragdoll3D and adds the systems (after install_bodies3d, which it calls). Idempotent.
 void install_ragdolls3d(World& world, asset::AssetSystem* assets);
