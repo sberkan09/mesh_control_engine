@@ -59,7 +59,7 @@ const char* const kMenu = R"({ "format": "mce-ui", "version": 1, "guid": "5703e0
     { "name": "bg", "fill": true, "style": { "tint": [0, 0, 0, 0.6] } },
     { "name": "menu", "kind": "Stack", "at": [0.5, 0.45, 320, 0], "stack": { "spacing": 12, "align": "Center" },
       "children": [
-        { "name": "title", "kind": "Text", "text": "UNDERTOW", "font_role": "Title", "style": { "text_size": 32, "text_color": [1, 0.8, 0.4, 1], "text_outline": 2, "text_shadow": [2, 3] },
+        { "name": "title", "kind": "Text", "text": "UNDERTOW", "font_role": "Title", "text_align": "Center", "style": { "text_size": 32, "text_color": [1, 0.8, 0.4, 1], "text_outline": 2, "text_shadow": [2, 3] },
           "bind": "Score/points", "format": "BEST %.0f" },
         { "name": "play", "kind": "Button", "text": "PLAY", "default_focus": true, "action": "Play",
           "styles": { "Hover": { "tint": [0.3, 0.3, 0.4, 1], "slice": { "left": 4, "right": 4 } } },
@@ -93,6 +93,8 @@ TEST_CASE("ui: .mcui cooks to CHNK_UIDOC, decodes and builds a Document") {
     CHECK(d.widgets[d.find("menu/title")].styles[0].text_outline == 2.0f);
     CHECK(d.widgets[d.find("menu/title")].font_role == ui::FontRole::Title);
     CHECK(d.widgets[play].font_role == ui::FontRole::Auto);
+    CHECK(d.widgets[d.find("menu/title")].text_align == ui::TextAlign::Center);
+    CHECK(d.widgets[play].text_align == ui::TextAlign::Left);
     CHECK(d.widgets[d.find("menu/title")].styles[4].text_shadow.y == 3.0f);
     CHECK(d.find("menu/options/bar/video") != ui::kNoWidgetIndex);
     CHECK_FALSE(d.widgets[d.find("menu/options/pages/audio")].visible);
@@ -105,6 +107,7 @@ TEST_CASE("ui: .mcui cooks to CHNK_UIDOC, decodes and builds a Document") {
     REQUIRE(doc.valid(w));
     CHECK(doc.kind(w) == ui::WidgetKind::Button);
     CHECK(doc.text(w) == "PLAY");
+    CHECK(doc.text_align(doc.find("menu/title")) == ui::TextAlign::Center);
     CHECK(doc.default_focus() == w);
     CHECK(doc.nav(w).down == doc.find("menu/volume"));
     CHECK(doc.convar(doc.find("menu/volume")) == "test.ui_volume");
@@ -210,6 +213,7 @@ TEST_CASE("ui: authoring mistakes fail the cook with file and line") {
         {R"([ { "name": "a", "kind": "Text", "bind": "points" } ])", "<Component>/<field>"},
         {R"([ { "name": "a", "kind": "Button", "action": "" } ])", "action name"},
         {R"([ { "name": "a", "kind": "Text", "font_role": "Heading" } ])", "UiFontRole"},
+        {R"([ { "name": "a", "kind": "Text", "text_align": "Middle" } ])", "UiTextAlign"},
     };
     for (const Bad& b : bad) {
         CAPTURE(b.widgets);

@@ -24,6 +24,9 @@ inline constexpr const char* kTimelinePanel = "Timeline";
 // The Animation panel (animation_panel.cpp): an .mcanim graph, its inspector and a clip / graph preview.
 void add_animation_panel(EditorShell& shell);
 inline constexpr const char* kAnimationPanel = "Animation";
+// The Behavior Tree panel (bt_panel.cpp): an .mcbt tree, its inspector and blackboard, and the play debugger.
+void add_bt_panel(EditorShell& shell);
+inline constexpr const char* kBtPanel = "Behavior Tree";
 // Drag-drop payload of the asset browser: the asset's Guid.
 inline constexpr const char* kAssetPayload = "MCE_ASSET";
 // Destroys every selected entity (Del in the Hierarchy and the Viewport).
