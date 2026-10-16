@@ -22,7 +22,7 @@ public:
         if (n) std::memcpy(buf_, s.data(), n);
         len_ = static_cast<u32>(n);
         buf_[n] = '\0';
-        truncated_ = n < s.size() ? 1u : 0u;
+        truncated_ = n < s.size();
     }
 
     void append(StringView s) {
@@ -31,19 +31,19 @@ public:
         if (n) std::memcpy(buf_ + len_, s.data(), n);
         len_ += static_cast<u32>(n);
         buf_[len_] = '\0';
-        truncated_ = truncated_ != 0 || n < s.size() ? 1u : 0u;
+        truncated_ = truncated_ || n < s.size();
     }
 
     void clear() {
         len_ = 0;
         buf_[0] = '\0';
-        truncated_ = 0;
+        truncated_ = false;
     }
 
     static constexpr usize capacity() { return N - 1; }
     usize size() const { return len_; }
     bool empty() const { return len_ == 0; }
-    bool truncated() const { return truncated_ != 0; }
+    bool truncated() const { return truncated_; }
     const char* c_str() const { return buf_; }
     StringView view() const { return StringView(buf_, len_); }
     operator StringView() const { return view(); }  // NOLINT(google-explicit-constructor)
@@ -51,12 +51,13 @@ public:
     friend bool operator==(const FixedString& a, StringView b) { return a.view() == b; }
 
 private:
-    // No padding bytes (the buffer rounds up to 4, the flag is a u32): components holding a FixedString
-    // are hashed and saved as raw bytes, so every byte must be written. The size is what N, u32 and bool
-    // took before.
-    char buf_[(N + 3) / 4 * 4] = {};
+    // Components holding a FixedString are hashed as raw bytes, so the bytes after the flag are named
+    // and zeroed rather than left as padding (the size is unchanged). Keep N a multiple of 4 in
+    // components: a buffer of another size leaves padding before len_.
+    char buf_[N] = {};
     u32 len_ = 0;
-    u32 truncated_ = 0;
+    bool truncated_ = false;
+    u8 pad_[3] = {};
 };
 
 }  // namespace mce
