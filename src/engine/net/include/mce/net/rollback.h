@@ -27,6 +27,22 @@
 // bytes for the same state, since they are hashed), load() puts it back, advance() runs one frame
 // with every player's input. advance() also runs during a rollback, so it must not play sounds or
 // spawn effects for real; do that from the newest frame's state after advance() returns.
+//
+// Spectators (M-NET3 step 2) watch without playing: a session with `spectator` set has no input
+// of its own and runs only frames whose every input is known, so it never predicts or rolls back.
+// One player feeds it: write_spectator_packet() carries every player's confirmed inputs, and the
+// spectator's write_packet() acknowledges them. It checks the feeding player's hashes like a player
+// would, so a spectator that computed something else is reported too.
+//
+//   player:     for each spectator s it feeds: if (session.write_spectator_packet(s, w)) send(...);
+//   spectator:  session.init({.players = 2, .local_player = s, .input_size = ..., .spectator = true}, ...);
+//               every tick: session.advance(); if (session.write_packet(feeder, w)) send(...);
+//
+// Clock sync: peers that tick at slightly different rates, or started apart, drift until the one
+// ahead keeps hitting max_prediction and stalls, and the one behind keeps rolling back deep. With
+// `time_sync` each packet carries the sender's frame and how far ahead it sees us; a peer that
+// finds itself more than a frame ahead of another skips one tick now and then (stats().sync_waits),
+// so the gap closes before it costs stalls.
 
 #include "mce/containers/array.h"
 #include "mce/net/bytes.h"
@@ -35,7 +51,10 @@ namespace mce::net {
 
 inline constexpr u32 kRollbackMaxPlayers = 8;
 inline constexpr u8 kRollbackMagic[3] = {'M', 'R', 'B'};
-inline constexpr u8 kRollbackVersion = 1;
+inline constexpr u32 kRollbackMaxSpectators = 8;
+inline constexpr u8 kSpectatorMagic[3] = {'M', 'R', 'S'};     // player -> spectator: confirmed inputs
+inline constexpr u8 kSpectatorAckMagic[3] = {'M', 'R', 'A'};  // spectator -> player: what it has
+inline constexpr u8 kRollbackVersion = 2;
 
 struct RollbackDesc {
     u32 players = 2;         // 1..kRollbackMaxPlayers
@@ -43,6 +62,8 @@ struct RollbackDesc {
     u32 input_size = 0;      // bytes of one player's input for one frame (1..64)
     u32 input_delay = 2;     // frames between reading an input and simulating it
     u32 max_prediction = 8;  // frames the simulation may run past the confirmed frame; 0 = lockstep
+    bool spectator = false;  // watch only: local_player is then the spectator's index (0..7)
+    bool time_sync = true;   // skip a tick now and then when ahead of the other peers
 };
 
 struct RollbackCallbacks {
@@ -63,6 +84,7 @@ struct RollbackStats {
     u32 predicted = 0;        // frames simulated with at least one predicted input
     u32 hashes_compared = 0;  // remote state hashes checked against ours
     u32 desyncs = 0;          // of those, the ones that differed
+    u32 sync_waits = 0;       // advance() calls skipped by clock sync
 };
 
 class RollbackSession {
@@ -80,9 +102,14 @@ public:
 
     // The packet for remote player `player`: the local inputs it has not acknowledged, the ack of
     // its inputs, and the newest confirmed state hashes. False: nothing to send.
+    // A spectator's write_packet(player) is its acknowledgement for the player feeding it.
     bool write_packet(u32 player, ByteWriter& out);
-    // A packet from any remote player (the sender is inside). False: malformed or not for this
-    // session; nothing changed.
+    // The packet for spectator `spectator` (0..kRollbackMaxSpectators-1): every player's confirmed
+    // inputs it has not acknowledged and the newest hashes. False: nothing to send yet, or it fell
+    // so far behind that the inputs it needs are gone (it has to be restarted).
+    bool write_spectator_packet(u32 spectator, ByteWriter& out);
+    // A packet from any remote player or spectator (the sender is inside). False: malformed or
+    // not for this session; nothing changed.
     bool receive(Span<const u8> packet);
 
     u32 frame() const { return frame_; }  // the next frame to simulate
@@ -95,11 +122,17 @@ public:
     i64 desync_frame() const { return desync_frame_; }  // the first frame found to differ
     const RollbackStats& stats() const { return stats_; }
     const RollbackDesc& desc() const { return desc_; }
+    // How many frames ahead of `player` this peer runs, as clock sync estimates it (0 before the
+    // first exchange, and for a spectator).
+    f32 frame_advantage(u32 player) const;
 
 private:
     static constexpr u32 kRing = 256;  // frames of inputs and hashes kept
     static constexpr u32 kMaxPacketInputs = 32;
     static constexpr u32 kPacketHashes = 16;
+    static constexpr u32 kSpectatorPacketBytes = 1024;  // input bytes per spectator packet, at most
+    static constexpr u32 kSpectatorCatchUp = 4;         // frames a spectator runs per advance(), at most
+    static constexpr u32 kSyncInterval = 10;            // advance() calls between two sync waits
 
     struct PlayerInputs {
         Array<u8> bytes;   // kRing * input_size
@@ -122,6 +155,11 @@ private:
     void save_state(u32 frame);
     void hash_confirmed();
     void compare_hash(u32 player, u32 frame, u64 hash);
+    bool advance_spectator();
+    bool receive_spectator(ByteReader& r);
+    bool receive_spectator_ack(ByteReader& r);
+    void write_hashes(ByteWriter& out) const;
+    bool read_hashes(ByteReader& r, u32 sender);
 
     RollbackDesc desc_;
     RollbackCallbacks cb_;
@@ -142,6 +180,12 @@ private:
     u32 remote_hash_frame_[kRollbackMaxPlayers][kRing] = {};
     bool remote_hash_valid_[kRollbackMaxPlayers][kRing] = {};
     i64 desync_frame_ = -1;
+    u32 spectator_acked_[kRollbackMaxSpectators] = {};  // frames each spectator has
+    f32 local_advantage_[kRollbackMaxPlayers] = {};     // our frame minus theirs when it arrived
+    f32 remote_advantage_[kRollbackMaxPlayers] = {};    // the same, as they see us
+    bool advantage_valid_[kRollbackMaxPlayers] = {};
+    bool remote_valid_[kRollbackMaxPlayers] = {};
+    u32 since_wait_ = 0;
     ByteWriter save_buf_;
     RollbackStats stats_;
 };

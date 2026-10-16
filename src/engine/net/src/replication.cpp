@@ -221,12 +221,14 @@ const ReplicationServer::Canonical::Ref* ReplicationServer::Canonical::find(u32 
 }
 
 // The relevant entities for `peer` (all of them for kInvalidPeer), in id order, as canonical entries.
-void ReplicationServer::build(World& world, u32 tick, PeerId peer, Canonical& out) const {
+void ReplicationServer::build(World& world, u32 tick, PeerId peer, const Client* cl, Canonical& out) const {
     struct Item {
         u32 id;
         Entity e;
     };
-    Array<math::vec3> views;  // where the peer's own entities are
+    Array<math::vec3> views;  // where the peer's own entities are, and its camera
+    if (cl && cl->sees_all) peer = kInvalidPeer;
+    if (cl && cl->has_view) views.push_back(cl->view);
     if (peer != kInvalidPeer) {
         world.query<const NetOwner, const LocalTransform>().each([&](const NetOwner& o, const LocalTransform& t) {
             if (o.peer == peer) views.push_back(t.position);
@@ -326,7 +328,7 @@ void write_delta(const ReplicationServer::Canonical& c, const ReplicationServer:
 
 u64 ReplicationServer::write_snapshot(World& world, u32 tick, ByteWriter& out) const {
     Canonical c;
-    build(world, tick, kInvalidPeer, c);
+    build(world, tick, kInvalidPeer, nullptr, c);
     write_full(c, out);
     return c.hash;
 }
@@ -337,16 +339,26 @@ ReplicationServer::Client* ReplicationServer::client(PeerId peer) {
     return nullptr;
 }
 
+ReplicationServer::Client& ReplicationServer::add_client(PeerId peer) {
+    if (Client* cl = client(peer)) return *cl;
+    clients_.push_back(mem::make_unique<Client>(mem::heap()));
+    clients_.back()->peer = peer;
+    return *clients_.back();
+}
+
+void ReplicationServer::set_view(PeerId peer, const math::vec3* point) {
+    Client& cl = add_client(peer);
+    cl.has_view = point != nullptr;
+    if (point) cl.view = *point;
+}
+
+void ReplicationServer::set_sees_all(PeerId peer, bool all) { add_client(peer).sees_all = all; }
+
 u64 ReplicationServer::write_snapshot_for(World& world, u32 tick, PeerId peer, ByteWriter& out) {
-    Client* cl = client(peer);
-    if (!cl) {
-        clients_.push_back(mem::make_unique<Client>(mem::heap()));
-        cl = clients_.back().get();
-        cl->peer = peer;
-    }
+    Client* cl = &add_client(peer);
     Canonical& slot = cl->sent[cl->head];
     if (cl->baseline == static_cast<i32>(cl->head)) cl->baseline = -1;  // about to be overwritten
-    build(world, tick, peer, slot);
+    build(world, tick, peer, cl, slot);
     const usize before = out.size();
     if (cl->baseline >= 0) {
         write_delta(slot, cl->sent[cl->baseline], out);

@@ -1,0 +1,12 @@
+{
+  "format": "mce-bt",
+  "version": 1,
+  "guid": "a1de0000-0000-4000-8000-000000000002",
+  "name": "bell",
+  "root": {"sequence": [
+    {"wait": 6},
+    {"task": "log", "text": "ringing the alarm"},
+    {"task": "raise", "event": "alarm"},
+    {"wait": 1000}
+  ]}
+}
