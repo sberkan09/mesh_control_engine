@@ -92,6 +92,7 @@ each result's `content[0].text` is the tool's JSON).
 | Persist | `scene_new` | `name`, `force?` | fresh GUID, unsaved |
 | | `scene_open` | `path`, `force?` | path under `assets/`; a `.mcprefab` opens the prefab itself (entity 0 is its root) |
 | | `scene_save` | `path?`, `name?`, `force?`, `resolve?` | atomic; a `.mcprefab` path saves a prefab; `name` renames the scene; a file another agent saved meanwhile is merged by entity (conflicts refuse unless `resolve` is `ours` or `theirs`); refuses to overwrite another existing file unless `force` |
+| | `navmesh_bake` | none | bakes the scene's first `NavMeshSurface3D` into `assets/navmesh/<scene>/nav_<id>.mcnav` and points its `baked` at it (save the scene to keep that); returns the asset, its `content_hash` (the same scene bakes byte-identical), tiles, layers, triangles and bytes |
 | Build | `cook_run` | `pack?`, `adopt?` | incremental; `adopt` writes sidecars for new source files |
 | | `cook_errors` | | last diagnostics with file, line, col |
 | | `asset_delete` | `path` | deletes a source file under `assets/`, its `.mceasset` sidecar and its `CREDITS.md` row (a font's license text too, once no row names it; not the open scene) |
@@ -110,7 +111,7 @@ each result's `content[0].text` is the tool's JSON).
 | Content | `gen_palette` | `seed?`, `count?` (6), `scheme?` (analogous, complementary, triad, pastel, earth, neon, mono), `save?` | hex colors dark to light and a swatch image |
 | | `gen_sprite` | `seed?`, `kind?` (creature, character, ship, item, blob), `width?`, `height?` (16), `variants?`, `colors?` or `scheme?`, `save?` | mirrored, outlined, shaded pixel sprites in one row, their rects and an enlarged preview |
 | | `gen_pixels` | `rows` (equal-length strings, one character per pixel), `palette` (character to `#rrggbb[aa]`; `.` and space are clear), `save?`, `overwrite?` | exactly the sprite you drew, as a PNG, with an enlarged preview: a moth, a lantern, two animation frames side by side |
-| | `gen_mesh` | `shape?` (box, plane, sphere, cylinder, cone, disc, ramp), `size?` ([x, y, z] m), `segments?`, `color?`, `roughness?`, `save?` (.glb) | a centred, Y-up mesh with its material inline, its vertex and triangle counts and a shaded preview, for blocking out a 3D level |
+| | `gen_mesh` | `shape?` (box, plane, sphere, cylinder, cone, disc, ramp, humanoid), `size?` ([x, y, z] m), `segments?`, `color?`, `roughness?`, `save?` (.glb) | a centred, Y-up mesh with its material inline, its vertex and triangle counts and a shaded preview, for blocking out a 3D level. `humanoid` is a skinned figure (size [shoulders, height, depth], default [0.5, 1.8, 0.28], facing −Z) with 13 bones and the clips `Idle` and `Walk`: an `Animator` plays them, `Ragdoll3D` makes it go limp, `AttachToBone` pins props to its bones |
 | | `gen_tileset` | `seed?`, `style?` (grass, stone, brick, dirt, sand, snow, water, wood, metal), `tile?` (16), `colors?`, `save?` | eight tiles in one row (fill, fill_2, fill_3, top, top_left, top_right, platform, decoration) with their rects |
 | | `gen_texture` | `seed?`, `kind?` (value, perlin, fbm, ridged, worley, sky), `width?`, `height?`, `scale?`, `octaves?`, `tileable?`, `colors?`, `clouds?`, `stars?`, `save?` | a tileable noise texture through gradient stops, or an equirect sky (width twice the height) |
 | | `gen_sfx` | `seed?`, `preset?` (pickup, laser, explosion, powerup, hit, jump, blip, random), `params?`, `save?` (.wav) | an sfxr sound: the parameters used (change any and call again), length, peak and a waveform image |
@@ -171,7 +172,13 @@ server draws with `mce_player` beside it (with its `--module`), or with the proj
 reports, after the last tick, the live values (`Transient` fields included) of the listed scene
 entities (of the played scene: with `scene`, ids and names name that file's entities) and of every
 entity carrying `GameState`, spawned ones included, up to 64. This is how an
-agent checks "did the player reach the flag" without a window.
+agent checks "did the player reach the flag" without a window. Engine-written fields come back
+too, so the 3D gameplay components read like a debugger: a `NavAgent3D`'s `state`, `target`,
+`distance` and `next_corner`; a `Joint3D`'s `position` (hinge degrees, slider metres), `force`,
+`torque` and `broken`; a `Ragdoll3D`'s `parts`, `root_position` and `settled`; a `Vehicle3D`'s
+`speed`, `rpm`, `gear` and `wheels_on_ground`; a sensor's `hit`, `count` and `enters`.
+`tests/mcp/test_mcp_gameplay3d.cpp` builds `samples/07_gameplay3d` this way, from an empty
+project, and checks it with `inspect`.
 
 `trace` samples fields while the run goes, as series: `{"trace": {"every": 10, "fields":
 [{"entity": "Player", "field": "LocalTransform.position"}, {"entity": "Player", "field":

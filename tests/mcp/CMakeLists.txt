@@ -98,6 +98,17 @@ target_include_directories(test_mcp_content PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/
 target_compile_definitions(test_mcp_content PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_content"
     MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 
+# M-GAMEPLAY3D demo: the samples/07_gameplay3d arena built over MCP alone.
+mce_add_test(test_mcp_gameplay3d UMBRELLA
+    SOURCES
+        test_mcp_gameplay3d.cpp
+    DEPS
+        mce::mce_mcp_core
+        mce::mce_platform)
+target_include_directories(test_mcp_gameplay3d PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_compile_definitions(test_mcp_gameplay3d PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_gameplay3d"
+    MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
 # project_check against planted problems; ship_build's refusals (its zip is checked in tests/sdk).
 mce_add_test(test_mcp_check UMBRELLA
     SOURCES

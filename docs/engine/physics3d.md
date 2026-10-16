@@ -82,6 +82,9 @@ ctest `test_physics3d` (no GPU), sources in `tests/physics3d/`. No test names Jo
 - `test_character.cpp`: ground, walls and sliding, step climbing up to `step_height`, slope limits,
   ceiling, moving-platform carry, pushing props, "same-binary determinism of a scripted walk".
 - `test_mirror.cpp`: "mirror: 2D and 3D worlds share method spelling (compile-time)".
+- `test_budget.cpp` (M-GAMEPLAY3D gate): "budget3d: 2,000 dynamic bodies step within budget" (< 3 ms
+  per step in optimized builds; 0.47 ms in clang Release on the CI container) and "budget3d: a
+  2,000-body pile with hinged pairs stays deterministic".
 
 Also: `sample_physics3d_headless_300`, the determinism stage (3 runs, Debug and Release, of
 `sample_physics3d_headless`), `sample_04_cubes_walk_300`, and the editor's "orbit camera:" cases in

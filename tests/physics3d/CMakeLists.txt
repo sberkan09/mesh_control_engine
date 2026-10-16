@@ -6,6 +6,7 @@ mce_add_test(test_physics3d
     SOURCES
         test_world3d.cpp
         test_queries.cpp
+        test_budget.cpp
         test_character.cpp
         test_mirror.cpp
         test_navmesh.cpp
