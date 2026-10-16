@@ -33,7 +33,8 @@
 //              mce.overlap2d(min, max) -> entities, mce.move_and_collide(e, delta) -> result,
 //              mce.teleport2d(e, position), mce.velocity2d(e), mce.set_velocity2d(e, v), mce.impulse2d(e, v, point?),
 //              mce.force2d, mce.(set_)angular_velocity2d, mce.(set_)awake2d, mce.set_enabled2d,
-//              mce.overlap_point2d, mce.raycast_all2d, mce.circle_cast2d / box_cast2d.
+//              mce.overlap_point2d, mce.raycast_all2d, mce.circle_cast2d / box_cast2d,
+//              mce.find_path(from, to, options?) -> array of vectors or nil (a grid over the static colliders).
 //
 // Sandbox: base, table, string, math, utf8, bit32, buffer and vector libraries only (no os, io,
 // debug, coroutine, print, collectgarbage, getfenv/setfenv, math.random); every script gets a

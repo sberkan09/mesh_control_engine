@@ -196,9 +196,9 @@ LINK_WALLS = [
     # bytecode mce_cook writes; tests/script's player_no_luau_compiler checks the binary too).
     # Luau's targets are linked by mce_script and mce_script_compiler alone.
     ("script opt-in wall", re.compile(r"\bmce_script\b"),
-     ["src/engine/script/", "src/player/", "src/editor/", "samples/script_headless/", "tests/script/"]),
+     ["src/engine/script/", "src/player/", "src/editor/", "samples/script_headless/", "tests/script/", "tests/fuzz/"]),
     ("script compiler wall", re.compile(r"\bmce_script_compiler\b"),
-     ["src/engine/script/", "src/engine/asset/cook/", "src/editor/", "tools/", "samples/script_headless/", "tests/script/"]),
+     ["src/engine/script/", "src/engine/asset/cook/", "src/editor/", "tools/", "samples/script_headless/", "tests/script/", "tests/fuzz/"]),
     ("Luau link wall", re.compile(r"\bLuau\.\w+"), ["src/engine/script/"]),
     # The visual-novel kit is opt-in the same way (M-NOVEL): games, samples and tests link it (its
     # dialogue box, mce_kit_novel_ui, a game's host). The authoring tools (editor, mce_mcp, mce_cook)

@@ -116,6 +116,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-DOCCHECK | [M-DOCCHECK.md](milestones/M-DOCCHECK.md) (Linear SBA-176 … SBA-179, added 2026-10-16) | done (`scripts/ci/check_docs.py` in the walls stage: links and anchors, `#include` lines of `mce/` headers, `mce_player` flags and a test for every sample and project; `scripts/ci/docs.allow`) | none |
 | M-WORKFLOW | [M-WORKFLOW.md](milestones/M-WORKFLOW.md) (Linear SBA-180 … SBA-184, added 2026-10-16) | active (steps 1 to 5 done. Step 5, #381: the guide's 3D particles, SDK shipping, fixed-array and importer text corrected, the sky, decal, `BoxCollider3D` and point-shadow conventions documented, `engine_capabilities` lists UI and scene changes as data, `ui_preview` no longer reads a freed asset record for its reply, a once-only log line when decals are dropped, a two-server scene test. Steps 1 to 4: a capture with no display falls back to the offscreen driver and software GL by itself and says so, the player logs its save folder (user guide 16.8, 2.5); a rotation-only change no longer resets a `CharacterController3D`'s speed (#377); `scene_open` always re-reads and replaces a parked copy, an unmergeable `scene_save` names the entities and takes `overwrite`, `entity_delete` reports the links that become null; step 3 done: the missing-sidecar error names `cook_run {"adopt":true}` / `mce cook --adopt`, `cook_run` `paths` (cooks a subtree into `cooked/`, never the pack) and `skip_errors` (`failed_files`), `mce play` / `mce headless` warn about a stale pack, an unknown component or field names the module to rebuild and the server to restart) | steps 6–7 |
 | M-CONTENT | ROADMAP section (issue #383, added 2026-10-16) | not started | steps 1–3 |
+| M-HARDEN | [M-HARDEN.md](milestones/M-HARDEN.md) (Linear SBA-195 … SBA-197, added 2026-10-16) | active (steps 1 and 2 done: `ui_document_arg` hands out path and GUID by value, every `ProjectAsset*` held across a cook or rescan audited; `run_transcript.py` drives several real `mce_mcp` processes, `two_servers_scene` transcript) | step 3 |
 | M-FUZZ | [M-FUZZ.md](milestones/M-FUZZ.md) (Linear SBA-185 … SBA-188, added 2026-10-16) | active (steps 1–2 done: `tests/fuzz` mutator, 25 chunk types over mutated cooked chunks with the accepted views walked, a survey of every parser of untrusted bytes; 2b nav mesh integrity open) | steps 3–4 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
@@ -651,6 +652,17 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Demo:** the Lantern Keep failures replayed as tests: a sentry crossing 20 m at its speed, two MCP servers saving one scene without losing an entity, a project with one bad file cooking the rest.
 **Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
+
+### M-HARDEN — The MCP server's own lifetime and concurrency bugs · **size S (rough guess, ≈ 15–25 h engineering)** · tier: off-tier, gates nothing
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free. M-WORKFLOW step 5 found that `ui_preview` read a freed `ProjectAsset` (the cook inside it rescans the project and frees the records), and the review asked for the pattern to be removed everywhere. Two real `mce_mcp` processes on one project were also never tested.*
+
+**Builds, in order:**
+1. **Handles by value.** `ui_document_arg` returns the path and GUID (a copy), not a `ProjectAsset*`; the roughly 40 other `ProjectAsset*` uses in `src/editor/mcp` are audited and any that is held across a cook, import or rescan is changed to copy what it needs; a test runs `ui_preview` and `timeline_preview` on two documents back to back.
+2. **Two real servers.** `run_transcript.py` drives several `mce_mcp` processes on one project (a `server` field per step); a transcript in which two processes add different entities and both survive, and a same-field edit is refused naming the entity.
+3. **MCP under ASan and the close.** The MCP and transcript tests run in the ASan stage (or a finding is recorded for each that cannot); what it finds is fixed with regression tests; milestone record closed.
+
+**Gates:** existing replay hashes unchanged; `local_ci.sh` green on every step.
 
 ### M-CONTENT — Cooked-pack size and draw-call visibility · **size M (rough guess, ≈ 30–50 h engineering)** · tier: off-tier, gates nothing
 

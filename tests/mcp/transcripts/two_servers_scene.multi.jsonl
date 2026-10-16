@@ -1,0 +1,26 @@
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "transcript-a", "version": "1"}}}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "method": "notifications/initialized"}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "scene_open", "arguments": {"path": "scenes/demo.mcscene"}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "transcript-b", "version": "1"}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "method": "notifications/initialized"}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "scene_open", "arguments": {"path": "scenes/demo.mcscene"}}}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "entity_create", "arguments": {"name": "Lantern", "components": {"LocalTransform": {"position": [3, 1, 0]}}}}}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "entity_create", "arguments": {"name": "Door"}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "entity_create", "arguments": {"name": "Guard", "components": {"LocalTransform": {"position": [-4, 0, 0]}}}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "entity_create", "arguments": {"name": "Key"}}}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "scene_save", "arguments": {}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "scene_save", "arguments": {}}}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "scene_info", "arguments": {}}}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "scene_list_entities", "arguments": {}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "scene_info", "arguments": {}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "scene_list_entities", "arguments": {}}}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "scene_open", "arguments": {"path": "scenes/demo.mcscene"}}}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "scene_list_entities", "arguments": {}}}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {"name": "component_set", "arguments": {"entity": "Ball", "component": "Collider2D", "path": "restitution", "value": 0.91}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "component_set", "arguments": {"entity": "Ball", "component": "Collider2D", "path": "restitution", "value": 0.37}}}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": {"name": "scene_save", "arguments": {}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "scene_save", "arguments": {}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {"name": "scene_save", "arguments": {"overwrite": true}}}}
+{"server": "a", "msg": {"jsonrpc": "2.0", "id": 12, "method": "tools/call", "params": {"name": "scene_info", "arguments": {}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": {"name": "scene_info", "arguments": {}}}}
+{"server": "b", "msg": {"jsonrpc": "2.0", "id": 12, "method": "tools/call", "params": {"name": "scene_get_entity", "arguments": {"entity": "Ball"}}}}
