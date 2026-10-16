@@ -29,9 +29,10 @@ bool script_check(ToolCall& c) {
     cook::String name("source.luau");
     if (!path.empty()) {
         if (!need_project(c)) return false;
+        if (path.size() > 7 && path.substr(0, 7) == "assets/") path = path.substr(7);  // as the asset_* tools print it
         if (path.size() < 5 || path.substr(path.size() - 5) != ".luau") return fail(c, "argument 'path': not a .luau file");
         if (!cook::fs::read_text(c.server.session().project().asset_path(path).view(), text))
-            return fail(c, "argument 'path': no such file under assets/");
+            return fail(c, "argument 'path': no such file under assets/ (give it relative to assets/, e.g. scripts/player.luau)");
         name = cook::String(path);
         source = text.view();
     }

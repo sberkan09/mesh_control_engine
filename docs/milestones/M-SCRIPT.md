@@ -172,3 +172,14 @@ Step 4 was split: 4a is the checks every host shares, 4b the editor work.
 - Not done: the demo is a smaller game than `samples/03_platformer`, not a port, and that sample has no `.mctest`
   files, so "the same scenarios as the C++ version" does not exist to compare against. The Luau-versus-C++ twin
   stays the bouncing-box sample.
+
+## Step 6b as built (agents)
+
+- The `start_game` prompt (step 3) offers Luau scripts and a script project when the game needs no module;
+  `docs_search` already indexed chapter 27 (`test_mcp_docs` checks it ranks for "ScriptVars script memory luau").
+- Blind test: a Sonnet agent with only the MCP tools and chapters 14 and 27 built a script-only platformer (three
+  coins, a patrolling enemy; scripts, scene, two passing `.mctest`) in about 20 tool calls with no engine bug found.
+  Friction it hit and what changed: `script_check` rejected `assets/scripts/x.luau` (now accepted); the `walk_to` bot
+  ignores y, `mce.quit()` ends every test, kinematic bodies block each other, scripts that move bodies need `Post`
+  (all in the guide, 27.2 and 27.8). Not changed: `cook_run`'s "cooked 0" right after an edit (the tool cooks on
+  demand), `run_headless` `inspect` verbosity.
