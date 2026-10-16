@@ -111,6 +111,35 @@ TEST_CASE("nav3d: an agent steers a character controller") {
     CHECK(s.w.try_get<CharacterController3D>(a)->grounded);
 }
 
+TEST_CASE("nav3d: an agent follows an entity, re-planning only as it moves away") {
+    Scene s(false);
+    const Entity leader = s.w.spawn_with(at(8, 0, 0));
+    NavAgent3D a;
+    a.follow = leader;
+    a.move_to = 1;
+    a.follow_repath = 1.0f;
+    const Entity chaser = s.w.spawn_with(at(-8, 0, 0), a);
+    s.run(1);
+    CHECK(s.nav(chaser).target.x == doctest::Approx(8.0f));
+    s.run(60);
+    CHECK(s.pos(chaser).x > -6.0f);
+
+    // A small move updates the target the agent reports but keeps the plan; a big one re-plans.
+    s.w.try_get_mut<LocalTransform>(leader)->position = {8, 0, 0.5f};
+    s.run(1);
+    CHECK(s.nav(chaser).target.z == doctest::Approx(0.5f));
+    CHECK(s.nav(chaser).next_corner.z == doctest::Approx(0.0f).epsilon(0.05));
+    s.w.try_get_mut<LocalTransform>(leader)->position = {8, 0, 8};
+    for (u32 i = 0; i < 60 * 20 && s.nav(chaser).state != NavAgentState::Arrived; ++i) s.run(1);
+    CHECK(s.nav(chaser).state == NavAgentState::Arrived);
+    CHECK(s.pos(chaser).z == doctest::Approx(8.0f).epsilon(0.1));
+
+    // The leader gone: the agent keeps the last target.
+    s.w.destroy(leader);
+    s.run(2);
+    CHECK(s.nav(chaser).target.z == doctest::Approx(8.0f));
+}
+
 TEST_CASE("nav3d: area costs, links and obstacles") {
     // A costly strip: the agent goes around it.
     {

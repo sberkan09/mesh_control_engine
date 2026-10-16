@@ -1,0 +1,15 @@
+{
+  "guid": "c1e3a000-0000-4000-8000-000000000030",
+  "importer": "font",
+  "importer_version": 1,
+  "settings": {
+    "size": 26,
+    "ranges": [
+      [
+        32,
+        126
+      ]
+    ],
+    "padding": 1
+  }
+}

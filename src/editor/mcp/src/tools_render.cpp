@@ -408,6 +408,43 @@ bool render_frame(ToolCall& c) {
     return attach_image(c, img);
 }
 
+// A cutscene at a moment (M-CINEMA step 6): the player starts with every timeline in the scene
+// paused at `time` seconds (timeline.scrub: the state tracks applied, cameras placed) and the frame
+// after `tick` is captured. The playhead stays put, so the frame is the timeline at `time`.
+bool timeline_preview(ToolCall& c) {
+    RenderRequest rq;
+    const cook::JsonValue tv = arg(c, "time");
+    if (!tv.valid() || !tv.is_number() || tv.as_number() < 0 || tv.as_number() > 3600)
+        return arg_missing(c, "time", "seconds into the timeline, a number in [0, 3600]");
+    u64 tick = 1;
+    if (!arg_uint(c, "tick", tick, 1, kMaxTick, false) || !arg_size(c, "width", "height", rq.width, rq.height) ||
+        !parse_common(c, rq))
+        return false;
+    cook::String value;
+    cook::appendf(value, "%g", tv.as_number());
+    rq.convars.names.push_back(cook::String("timeline.scrub"));
+    rq.convars.values.push_back(static_cast<cook::String&&>(value));
+    StringView save;
+    if (!arg_string(c, "save", save, false)) return false;
+    cook::String save_abs;
+    if (!save.empty() && !project_png_path(c, "save", save, save_abs)) return false;
+    rq.ticks.push_back(tick);
+    Array<cook::Image> frames;
+    bool software = false;
+    if (!render_ticks(c, rq, frames, software)) return false;
+    cook::Image& img = frames[0];
+    if (!save.empty()) {
+        if (Result<void> w = write_png_file(save_abs.view(), img); !w) return fail(c, "cannot write the 'save' PNG");
+    }
+    draw_safe_area(img, rq);
+    c.out.begin_object();
+    write_result_head(c, rq, software);
+    c.out.key("time").num_f(tv.as_number());
+    if (!save.empty()) c.out.key("saved").str(save);
+    c.out.end_object();
+    return attach_image(c, img);
+}
+
 // A UI document alone (M-UI-DATA step 5): the player's -ui_preview over the camera's clear color,
 // at a viewport, safe area and UI scale. Bindings read the scene the player starts (the open one
 // when it is saved, else the project's first scene).

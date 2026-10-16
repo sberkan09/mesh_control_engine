@@ -121,7 +121,7 @@ struct Cutscene {
     bool skippable = true;
     bool active = false;         // engine-written: the timeline is playing
     bool skipped = false;        // engine-written: the player skipped it
-    u8 pad_ = 0;
+    u8 pad_[4] = {};             // explicit: no padding bytes in the state hash
     f32 bars = 0.0f;             // engine-written: 0..1, how far the bars are in
     f32 skip_progress = 0.0f;    // engine-written: 0..1 of skip_hold
 };

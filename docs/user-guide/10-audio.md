@@ -16,7 +16,7 @@ convars for the bus volumes.
 
 | Field | Meaning |
 |---|---|
-| `clip` | the `.wav` asset |
+| `clip` | the `.wav` or `.ogg` asset |
 | `gain_db`, `pan` | −60..12 dB, −1..1 |
 | `priority` | 0..255; louder and higher priority voices survive when voices run out |
 | `bus` | `Master`, `Music`, `SFX` (default) or `UI` (`audio::AudioBus`; scenes written with the number, `"bus": 1`, still load). `Music` streams the clip in 100 ms pages instead of holding it decoded (two music streams at a time; a third plays from memory) |
@@ -87,11 +87,22 @@ voices keep their place and pick up where they stopped when the app comes back.
 
 ## 10.6 Content notes
 
-- WAV only (PCM); the cook resamples to 48 kHz and peak-normalizes to −1 dBFS unless
-  `"normalize": false`.
+- Sources are `.wav` (PCM) or `.ogg` (Ogg Vorbis). The cook resamples to 48 kHz and peak-normalizes
+  to −1 dBFS unless `"normalize": false`.
+- `"compress": "vorbis"` in the sidecar's settings stores the clip as Ogg Vorbis, about a tenth of the
+  size; `"pcm"` stores float samples. A `.wav` defaults to `pcm` and an `.ogg` to `vorbis`. `"quality"`
+  (−0.1..1, default 0.4) trades size for fidelity:
+
+  ```json
+  { "guid": "...", "importer": "wav", "importer_version": 2, "settings": { "compress": "vorbis", "quality": 0.4 } }
+  ```
+
+  A compressed clip decodes once when it loads. On the `Music` bus it stays compressed and its stream
+  pages decode as they fill, so a long track costs its Ogg size in memory. Compress music and long
+  ambiences; short, frequent one-shots can stay `pcm` to load faster.
 - Mono clips pan; stereo clips keep their image. Music should be stereo at 48 kHz to skip
   resampling at cook.
-- Reverb sends, per-voice pitch and device hot-swap are not built.
+- Reverb sends, per-voice pitch and device hot-swap are not built (M-AUDIO2).
 
 ## 10.7 Subtitles and sound captions
 

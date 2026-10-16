@@ -54,7 +54,7 @@ reach all of its non-transient fields.
 | `CameraFollow3D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md |
-| `Joint3D` | `mce/kit/joints3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
+| `Joint3D` | `mce/kit/joints3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `MeshRef` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `PointLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `SpotLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
@@ -75,13 +75,13 @@ reach all of its non-transient fields.
 | `NavArea3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `NavLink3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `NavObstacle3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
-| `NavAgent3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
+| `NavAgent3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `RichPresence` | `mce/kit/presence.h` | yes | yes | yes | docs/user-guide/23-live-services.md |
-| `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
+| `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Overlap3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md |
-| `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
+| `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `VideoPlayer` | `mce/kit/video.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
@@ -146,7 +146,7 @@ reach all of its non-transient fields.
 | `scene_get_entity` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `asset_list` | `tools.cpp` | docs/user-guide/05-assets.md |
 | `asset_set_import_settings` | `tools.cpp` | docs/user-guide/05-assets.md |
-| `entity_create` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_create` | `tools.cpp` | docs/user-guide/08-3d.md |
 | `entity_delete` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_clear` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `entity_duplicate` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
@@ -156,6 +156,7 @@ reach all of its non-transient fields.
 | `scene_new` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_open` | `tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
 | `scene_save` | `tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
+| `navmesh_bake` | `tools.cpp` | docs/user-guide/08-3d.md |
 | `scene_undo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_redo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `cook_run` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
@@ -166,6 +167,7 @@ reach all of its non-transient fields.
 | `console_exec` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `render_frame` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `render_sheet` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `timeline_preview` | `tools_agent.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `image_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `perf_run` | `tools_agent.cpp` | docs/user-guide/03-editor.md |
 | `perf_compare` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
@@ -202,6 +204,9 @@ reach all of its non-transient fields.
 | `terrain_paint` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_import` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_generate` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
+| `timeline_create` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
+| `timeline_add_track` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
+| `timeline_add_key` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `ui_list` | `tools_ui.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `ui_create` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |
 | `ui_widget_add` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |

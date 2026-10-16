@@ -52,8 +52,10 @@ Settings per importer (every key is optional; the defaults are shown):
 | Importer | Settings |
 |---|---|
 | `texture` | `"srgb": true` (colour data; set `false` for normal maps, LUTs and data textures), `"mips": true`, `"filter": "nearest"` (`"linear"` for smooth, non-pixel-art sprites; chapter 7.1) |
-| `wav` | `"normalize": true` (peak to -1 dBFS), `"loop": false`, `"loop_start"`, `"loop_end"` (source-rate frames; default to the file's own loop markers) |
+| `wav` | `"normalize": true` (peak to -1 dBFS), `"loop": false`, `"loop_start"`, `"loop_end"` (source-rate frames; default to the file's own loop markers), `"compress": "pcm"` (`"vorbis"` stores Ogg Vorbis, about a tenth of the size; chapter 10.6), `"quality": 0.4` (Vorbis, -0.1..1) |
+| `ogg` | the same as `wav`, with `"compress": "vorbis"` by default |
 | `font` | `"size": 32` (pixel height), `"ranges": [[32, 126]]` (inclusive codepoint ranges), `"padding": 1`, `"strings": true` (also every character the string tables use), `"sdf": true` (bake a distance field: text drawn well above `size` keeps sharp edges; outlines wider than the field fade), `"spread": 4` (with `sdf`: how many pixels at `size` the field reaches, default `size / 8`, at least 2) |
+| `video` | `"audio": true` (keep the film's MP2 sound), `"normalize": false` (raise the sound to -1 dBFS); the film itself is converted to MPEG-1 beforehand (13.7) |
 | `gltf` | `"scale": 1.0` (applied to every root node), `"max_triangles": 0` (0 = no budget; a budget makes an over-size mesh a cook error), `"skinning": true` (`false` imports skinned meshes as static ones; see Skinning in [chapter 8](08-3d.md#86-rendering-a-frame-yourself)), `"lod_levels": 0` (1..3 generates that many coarser levels), `"lod_ratio": 0.35`, `"lod_error": 0.05` (section 8.4), `"ragdoll": {}` (per-bone ragdoll overrides by bone name; section 9.8) |
 
 Edit settings in the sidecar file, or through MCP's `asset_set_import_settings`. A settings change

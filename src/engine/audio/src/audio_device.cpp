@@ -209,9 +209,11 @@ AudioDevice::~AudioDevice() {
 // ---------------------------------------------------------------------------- clips
 
 namespace {
-Result<void> validate_clip(const ClipPayload& c) {
+Result<void> validate_clip(const ClipPayload& c, bool stream) {
     constexpr const char* kStage = "audio.clip.register";
-    if (!c.frames || c.frame_count == 0) return Error(Errc::InvalidArgument, kStage, "empty clip");
+    const bool encoded = c.encoded && c.encoded_bytes;
+    if (c.frame_count == 0 || (!c.frames && !encoded)) return Error(Errc::InvalidArgument, kStage, "empty clip");
+    if (!c.frames && !stream) return Error(Errc::InvalidArgument, kStage, "an encoded clip streams, or is decoded first (ClipBank)");
     if (c.channels != 1 && c.channels != 2) return Error(Errc::Unsupported, kStage, "channels", c.channels);
     if (c.sample_rate != kSampleRate)
         return Error(Errc::Unsupported, kStage, "clips are cooked to 48 kHz", c.sample_rate);
@@ -221,7 +223,7 @@ Result<void> validate_clip(const ClipPayload& c) {
 }  // namespace
 
 static Result<ClipHandle> register_any(AudioDevice::Impl& impl, const ClipPayload& clip, i8 stream) {
-    MCE_TRY(validate_clip(clip));
+    MCE_TRY(validate_clip(clip, stream >= 0));
     if (impl.free_clip_count == 0) return Error(Errc::OutOfMemory, "audio.clip.register", "clip table full");
     const u32 slot = impl.free_clips[impl.free_clip_count - 1];
     AudioCommand c;

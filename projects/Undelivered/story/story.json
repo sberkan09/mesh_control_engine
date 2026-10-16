@@ -234,6 +234,9 @@
     "static",
     "bell"
   ],
+  "timelines": [
+    "ferry"
+  ],
   "ui_sfx": {
     "page": "page",
     "move": "move",

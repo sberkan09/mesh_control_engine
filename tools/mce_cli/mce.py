@@ -16,7 +16,9 @@
     mce story compile [<project>] [--check] [--werror]   compile story/*.story (story/story.json) into the
                                                 game's C++ header (mce/kit/novel.h) and story/REPORT.md
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
-    mce ship <project> --target web [--smoke]   the browser build, zipped for itch.io (runs the engine
+    mce ship <project> --steam <app id> [--steam-library f]   ... and the Steam depot for this OS with the
+                                                steamcmd build scripts in <out>/<Name>-steam (uploads nothing)
+    mce ship <project> --target web [--smoke] [--smoke-ticks N]   the browser build, zipped for itch.io (runs the engine
                                                 checkout's scripts/ship.py: needs the Emscripten SDK)
     mce serve <zip | folder | project> [--port N] [--lan] [--open]   play a web build locally (the right
                                                 MIME types and headers; browsers do not run file:// pages)
@@ -307,14 +309,18 @@ def cmd_ship_web(args, p):
            "--out", pathlib.Path(args.out or (p.dir / "dist")).resolve()]
     if args.version:
         cmd += ["--version", args.version]
-    if args.smoke:
+    if args.smoke or args.smoke_ticks:
         cmd.append("--smoke")
+    if args.smoke_ticks:
+        cmd += ["--smoke-ticks", str(args.smoke_ticks)]
     return run(cmd, cwd=checkout)
 
 
 def cmd_ship(args):
     p = Project(args.project)
     if args.target == "web":
+        if args.steam:
+            sys.exit("mce: --steam ships the desktop build")
         return cmd_ship_web(args, p)
     p.built()
     if not p.pack.is_file():
@@ -350,6 +356,20 @@ def cmd_ship(args):
         z.writestr(f"{p.name}/VERSION.txt", version_txt)
         z.writestr(f"{p.name}/README.txt", readme)
     print(f"mce: wrote {zip_path} ({zip_path.stat().st_size // 1024} KiB)")
+    if args.steam:
+        import tempfile
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import mce_steam  # installed beside this script
+        library = mce_steam.find_library(os_tag, args.steam_library)
+        with tempfile.TemporaryDirectory(prefix="mce-steam-") as tmp:
+            stage = pathlib.Path(tmp) / p.name
+            stage.mkdir()
+            for name, src in files.items():
+                shutil.copy2(src, stage / name)
+            (stage / "VERSION.txt").write_text(version_txt)
+            (stage / "README.txt").write_text(readme)
+            mce_steam.make_depot(str(stage), str(out_dir / f"{p.name}-steam"), args.steam, os_tag, library, version,
+                                 p.title, args.steam_depot, args.steam_branch)
     return 0
 
 
@@ -614,6 +634,14 @@ def main(argv):
     s.add_argument("--out")
     s.add_argument("--version")
     s.add_argument("--smoke", action="store_true", help="--target web: play it once in headless Chromium")
+    s.add_argument("--smoke-ticks", type=int, default=0,
+                   help="--target web: play N ticks in headless Chromium, screenshot, and check the state hash against "
+                        "a headless browser run")
+    s.add_argument("--steam", type=int, default=0, metavar="APP_ID",
+                   help="also lay out the Steam depot for this OS and the steamcmd build scripts in <out>/<Name>-steam")
+    s.add_argument("--steam-depot", type=int, default=0, help="with --steam: this OS's depot id (default app + 1/2/3)")
+    s.add_argument("--steam-library", help="with --steam: the steam_api to ship (default: from STEAMWORKS_SDK)")
+    s.add_argument("--steam-branch", default="", help="with --steam: set the build live on this branch")
     s.set_defaults(fn=cmd_ship)
 
     s = sub.add_parser("serve", help="play a web build locally: its zip, its folder, or a project's newest one")

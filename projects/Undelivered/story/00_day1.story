@@ -3,6 +3,7 @@
 
 @scene start bg=pier time=evening lut=warm music=harbour ambience=sea
 @set day =1
+@cutscene ferry
 
 The ferry is late, which on Kuzgun means it is on time. You stand at the rail with one bag and
   the smell of diesel and salt, and the island comes up out of the haze the way it always did: the
