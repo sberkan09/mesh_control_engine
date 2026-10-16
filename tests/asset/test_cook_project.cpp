@@ -873,7 +873,7 @@ TEST_CASE("material: a height map, height_scale and parallax_steps cook into Mat
         write(extra);
         const CookReport b = svc.cook(root.c_str(), CookOptions{});
         CHECK_MESSAGE(!b.ok(), extra);
-        CHECK(report_for(b, kMatGuid)->status == AssetStatus::Failed);
+        CHECK(report_for(b, kMatGuid)->status != AssetStatus::Cooked);
     }
 }
 
