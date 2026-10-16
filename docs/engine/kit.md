@@ -50,6 +50,17 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   through the same state machine step as the 3D `Animator` (`src/anim_graph_step.h`, templated on
   the component; layers, root motion and IK are 3D only). Clip and state events raise
   `AnimEvent3D`, which `install_skeleton2d` also registers. Every field is `Save`.
+- Attachments, meshes and `Skeleton2DSlots` (`skeleton2d.h`, M-ANIM2D 3): chunk minor 2 adds
+  per-slot attachment lists (quads, or meshes whose vertices sit in the slot bone's space or carry
+  up to 4 bone weights), slot color and attachment timelines and mesh deform timelines. The pure
+  `skeleton2d_draws` skins meshes on the CPU (weighted sums in listed order, no FMA) and returns
+  quads and triangles in slot order; `SpriteExtract` sends the triangles through
+  `render::SpriteBatch::add_triangle` (a degenerate quad in the sprite stream, so no backend work).
+  The optional `Skeleton2DSlots` component (4.3 KB, `Save`) holds each slot's shown attachment and
+  color; `"kit_skeleton2d"` sets up a fresh one, the animator adds one when the clips key slots and
+  writes only keyed slots (`Skeleton2DBlend::write_slots`). Deform offsets are not stored: the
+  extract samples them with `skeleton2d_animator_sample`, a pure function of the saved animator
+  fields.
 - `Animator` graphs and `AttachToBone` (`anim3d.h`, M-DATA-REACH 7): an `.mcanim` AnimGraph
   (`ChunkType::AnimGraph`, `AnimGraphView`) drives the Animator's clip, 1D blends (`blend_clip`,
   `blend_weight`), transitions and `AnimEvent3D` events; one-shots finish (`loop`, `finished`,

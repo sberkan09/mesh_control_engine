@@ -95,6 +95,7 @@ reach all of its non-transient fields.
 | `Skeleton2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Bone2DFollow` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `Skeleton2DAnimator` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
+| `Skeleton2DSlots` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |

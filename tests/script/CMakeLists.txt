@@ -5,6 +5,7 @@ mce_add_test(test_script UMBRELLA
         test_script.cpp
         test_scene_scripts.cpp
         test_script_api.cpp
+        test_script_state.cpp
     DEPS
         mce::mce_script_compiler
         mce::mce_asset_cook)

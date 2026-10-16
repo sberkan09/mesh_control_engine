@@ -1,6 +1,6 @@
 # M-ANIM2D — 2D skeletal animation (milestone record)
 
-**Status:** active (steps 1 and 2 done; step 3 next).
+**Status:** active (steps 1, 2 and 3 done; step 4 next).
 **Why:** 2D characters animate only by sprite frames today; cut-out rigs (bones, blended clips, skinned meshes, IK) are what Godot's Skeleton2D, Unity's 2D Animation and Spine give 2D games. Added 2026-10-16 under the user's standing instruction to extend the roadmap when no milestone is free.
 **Plan:** ROADMAP § M-ANIM2D.
 **Measured on:** the Linux CI container.
@@ -11,7 +11,7 @@
 |---|---|---|
 | 1. `.mcskel2d` assets, `Skeleton2D` world pose, slots drawn through the sprite extraction | SBA-140 | done |
 | 2. Bone clips and crossfade, driven by the `.mcanim` state graph | SBA-141 | done |
-| 3. Mesh attachments and CPU skinning, deform keys | SBA-142 | — |
+| 3. Mesh attachments and CPU skinning, deform keys (and the slot keys moved from step 2) | SBA-142 | done |
 | 4. Two-bone and CCD IK as data | SBA-143 | — |
 | 5. Editor skeleton panel and MCP `skel2d_*` tools | SBA-144 | — |
 | 6. Demo, user guide, gates | SBA-145 | — |
@@ -54,3 +54,25 @@ Deferred from step 2: slot color and alpha keys and attachment swaps move to ste
 attachments add per-slot runtime state. Rotation offsets blend linearly, not by the shortest arc,
 so a cross-fade between rotations more than half a turn apart turns the long way.
 
+## Step 3: attachments, skinned meshes, slot and deform keys
+
+| Item | Where | Evidence |
+|---|---|---|
+| `.mcskel2d` slots list `"attachments"` (1 to 64; `"type": "quad"` or `"mesh"`) and the one shown first (`"attachment"`, null hides). A slot without the list keeps the step-1 meaning: its own fields are one quad attachment named after the slot. Cooked into `CHNK_SKEL2D` minor 2 (`SKELETON2D_MINOR_ATTACHMENTS`): header flag `Attachments` puts a `Skeleton2DAttachmentHeader` after the header and the attachment, vertex, weight, index, slot-key and value arrays before the string pool; the slot's three reserved words became `first_attachment`, `attachment_count`, `attachment`. Minor 0 and 1 chunks read unchanged, and a skeleton without the new fields cooks byte for byte as before | `src/engine/asset/cook/src/skeleton2d_importer.cpp` (importer version 3), `mce/asset/formats.h` | `test_kit` "skeleton2d mesh: attachments, meshes and slot keys cook into CHNK_SKEL2D minor 2", "a chunk without the attachments flag reads as before and has no attachment fields"; all step-1 and step-2 cases unchanged |
+| Mesh vertices: `uv` plus a position in the slot bone's space, or 1 to 4 `{bone, x, y, weight}` weights (Spine's weighted meshes), normalized to sum 1 by the cook. Limits: 3 to 1024 vertices and 1 to 2048 triangles per mesh, 4096 attachments, 65536 vertices, 262144 weights and 393216 indices per skeleton | same | the cook case reads weights 3 and 1 back as 0.75 and 0.25 |
+| `Skeleton2DView::read` refuses unknown header flags, attachment fields in a chunk without the flag, slot ranges past the attachments or naming another slot, a shown attachment out of range, more than 64 per slot, unknown kinds, meshes under 3 vertices or not whole triangles, indices past the mesh's vertices, vertex and weight ranges, more than 4 weights, weights on missing bones, negative or summing away from 1 (1e-3), non-finite numbers, slot timelines on missing slots, deform on a quad or another slot's mesh, attachment keys out of range or not stepped, key values past the value array | `src/engine/asset/src/formats.cpp` | `test_kit` "skeleton2d mesh: the reader rejects bad attachments, meshes and slot keys" (31 rejects) |
+| Cook errors name the file position, the slot, the attachment and the vertex: an index out of range, too few vertices, an unknown weight bone, all-zero or more than 4 weights, a weighted vertex with `x`, a missing `uv`, quad fields on a slot with attachments, an unknown or duplicate attachment, an unknown `type`; in animations an unknown slot, an unknown attachment key name, unsorted color keys, a short color, deform on a quad, a wrong `offsets` count, an empty key list | same | `test_kit` "skeleton2d mesh: cook errors name the slot, the attachment and the vertex" (20 cases) |
+| CPU skinning: a weighted vertex lands on the sum of weight x bone world x position, summed in listed order with `-ffp-contract=off`, then placed by the entity and the flips; an unweighted vertex rides the slot bone. Deform offsets add to the local positions first, so they turn with the bones | `kit::skeleton2d_draws` in `src/engine/kit/src/skeleton2d.cpp` | `test_kit` "skeleton2d mesh: weighted vertices sum their bones, unweighted ones ride the slot bone" ((1, 1), (1.5, 2.5), (0, 2.25) under two posed bones; (0, 2), (2, 2), (0, 4) on a scaled bone; a pose offset and a mirror) |
+| Drawing: `render::SpriteBatch::add_triangle` (`SpriteTriangle`: per-vertex position, uv across the region and tint) writes a degenerate quad (v3 = v2) into the same vertex stream, sort keys and draw groups as sprites. `Renderer::record_2d` is the only consumer, through the shared quad index buffer, so GL, Metal, SDL GPU and WebGPU need nothing new. Lit sets get the slot bone's angle and mirror in the vertex orientation bits. `SpriteExtract` sends quads and meshes in slot order on the skeleton's layer and order | `mce/render/sprite_batch.h`, `src/engine/render/src/sprite_batch.cpp`, `src/engine/kit/src/sprite_extract.cpp` | `test_render` "render: a triangle is a degenerate quad in the sprite stream (M-ANIM2D 3)" (uvs mapped onto a region, per-vertex colors, one group with a sprite, culling, lit orientation) |
+| Slot keys: `color` (absolute linear RGBA, any curve; alpha 0 hides) and `attachment` (stepped; null hides). Deform keys: per mesh, `offsets` of 2 per vertex, any curve. In a cross-fade colors and offsets blend by weight (a clip not keying a color counts as the slot's tint, not keying a mesh as zero); the attachment comes from the first sample with weight above 0 that keys it (the incoming clip from the tick after the switch) | `Skeleton2DBlend` in `src/engine/kit/src/skeleton2d_anim.cpp`, `asset::skeleton2d_slot_interval` | `test_kit` "skeleton2d mesh: deform keys interpolate, blend by weight and move the vertices" (0.25 and -0.5 at half time, 0.125 at half weight, the bezier's 0.875), "color and attachment keys drive Skeleton2DSlots through the animator", "in a cross-fade the attachment switches and the color blends" (0.46875 / 0.71875 at blend 0.25) |
+| Slot state: the optional `Skeleton2DSlots` component (per slot a u8 attachment index, 255 hides, and a color; 4356 bytes, every field `Save`), set up from the skeleton by `"kit_skeleton2d"` when fresh, added by the animator through `Commands` when the clips key slots, written only for keyed slots. Deform offsets are not stored: the extract samples them with `skeleton2d_animator_sample`, a pure function of the asset and the saved animator fields (the rule is spelled out in `skeleton2d.h`) | `mce/kit/skeleton2d.h`, `skeleton2d.cpp`, `skeleton2d_anim.cpp` | `test_kit` "skeleton2d mesh: Skeleton2DSlots picks attachments and colors; none or alpha 0 hides", "two runs hash the same, and a save mid-fade resumes identically" (the loaded world gets the component, the same deform bits and the same hash for three more ticks) |
+| MCP `asset_schema` / template describe attachments, meshes, slot and deform keys (the template has a weighted cape mesh with a deform key and cooks); the three component registries list `Skeleton2DSlots` through `skeleton2d.h` | `src/editor/mcp/src/asset_tools.cpp`, the `engine_components.cpp` files | ctest `mcp_transcript` (golden regenerated); `scripts/ci/capabilities.py --check` (`Skeleton2DSlots` row) |
+
+No image golden: the repo's golden images (`tests/render_gl/test_golden.cpp`) need a GPU and are
+dev-machine only, so the triangle path is checked through the batch's vertex stream instead.
+
+Limits found in step 3: in a one-shot that holds just under its end, an attachment key at exactly
+the clip's end is not reached (bone keys only approach their last value the same way). A
+`Skeleton2DSlots` added by hand is filled from the skeleton on the next tick, so writes before that
+tick are replaced. Meshes use a slot's whole texture (`uv` 0 to 1); sprite-sheet regions are still
+not built.

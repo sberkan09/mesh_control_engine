@@ -1,6 +1,6 @@
 # M-SCRIPT — Luau scripting for games without a compiler (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–2 done, step 3 next). Plan: ROADMAP §M-SCRIPT; design of record
+**Status:** active (added 2026-10-16; steps 1–3 done, step 4 next). Plan: ROADMAP §M-SCRIPT; design of record
 ADR-0041; Linear SBA-147 … SBA-152.
 
 **Why:** today every game needs a C++ toolchain and, on phones and the web, its own build. A script game is
@@ -15,7 +15,7 @@ FR-RUN-040 at about 29× the C++ cost.
 |---|---|---|---|
 | 1 | Scripts as assets: `.luau` → `CHNK_SCRIPT`, `ScriptSystem` in scenes, the stock hosts run bytecode only | SBA-147 | done |
 | 2 | A complete API: field handles, `Commands`, events, input, resources, physics queries; bench ≤ 0.4 ms | SBA-148 | done |
-| 3 | No hidden state: an AST check for outer-local writes and `pairs` over object keys | SBA-149 | not started |
+| 3 | No hidden state: an AST check for outer-local writes and `pairs` over object keys | SBA-149 | done |
 | 4 | Tooling: `mce.d.luau`, type checking, MCP `script_check`, editor errors, hot reload, Tracy, crash stacks | SBA-150 | not started |
 | 5 | The compiler-free path: `mce new --script`, `mce ship`, phones and web | SBA-151 | not started |
 | 6 | Docs and the demo: user guide, kit recipes, Ember Step in Luau, script-only blind test | SBA-152 | not started |
@@ -70,3 +70,21 @@ FR-RUN-040 at about 29× the C++ cost.
 - Tests: `test_script` (`test_script_api.cpp`: handles, multi-field calls, the Commands round trip, deterministic
   spawning, events and emit, a real 2D contact read by name, signals, input, scene requests, physics queries,
   prefab instantiation, error messages).
+
+## Step 3 as built
+
+- The compiler (`mce_script_compiler`, so the cook, the editor and tests alike) runs a check over Luau's AST after
+  parsing (`compiler/state_check.cpp`). Inside any function it rejects assigning a top-level local, writing into a
+  table rooted at one (index writes, `function t.f()`), and passing one to the mutating library calls
+  (`table.insert/remove/clear/sort/move`, `rawset`, `setmetatable`, `buffer.write*/fill/copy`). The top level
+  itself is free (it runs once at load), and so are `update()`'s own locals and the closures over them.
+  Errors are compile errors at `file:line:col`, so a cook fails like on a syntax error (ADR-0041 open question 2:
+  the check was chosen over freezing top-level tables, which would not catch upvalue assignment).
+- Object keys (open question 3): the check rejects table and function keys the source shows (constructors,
+  index writes, locals bound to a table or a function). At run time `pairs` and `next` are the host's and raise on
+  a table, function, buffer, thread or userdata key; `pairs` starts its loop with a sentinel key so the VM's
+  built-in traversal does not bypass the check. Not caught: a `for k, v in t` loop over such keys (Luau iterates
+  it inside the VM); step 4's type checking is where that closes.
+- Tests: `test_script_state.cpp` (positions, every rejected form, what stays allowed, the run-time `pairs` error,
+  and a fresh VM swapped in mid-run giving the same state hash as an uninterrupted run); the `player_scripts` ctest
+  checks that the cook fails on hidden state at `file:line:col`.
