@@ -283,6 +283,27 @@ TEST_CASE("golden: a half-scale frame through the spatial upsample and the sharp
     check_golden("spatial_sharpen", f);
 }
 
+// ---- M-VISUAL2 3: contact shadows ----------------------------------------------------------------
+
+TEST_CASE("golden: contact shadows alone at the box's foot under a low sun") {
+    Fixture3D f;
+    f.render(0.0f, false, [](Scene3D& s) {  // no cascades: the contact shadow is the only one
+        DirectionalLight sun = s.light();
+        sun.direction = {0.0f, -1.0f, 1.2f};
+        sun.ambient_sky = sun.ambient_ground = {0.0f, 0.0f, 0.0f};
+        s.set_light(sun);
+        Sky sky;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        ContactShadows cs;
+        cs.enabled = true;
+        cs.length = 0.6f;
+        s.set_contact_shadows(cs);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().contact_shadows);
+    check_golden("contact_foot", f);
+}
+
 // ---- M-VISUAL 6: global illumination (the irradiance volume) -----------------------------------
 
 TEST_CASE("golden: a red emissive wall bleeds onto the ground through the irradiance volume") {

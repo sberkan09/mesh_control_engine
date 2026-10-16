@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Contact shadows, M-VISUAL2 step 3 (SBA-103): `Environment3D.contact_shadows` (or `Scene3D::set_contact_shadows`)
+  marches a short screen-space ray toward the sun so creases, feet and small details get the shadows the cascades
+  miss (`contact_length`, `contact_thickness`, `contact_intensity`). Sun only for now; off on the Low tier;
+  `r.contact_shadows 0` turns it off. User guide 8.
 - The editor's Profiler reads captures, M-PERF step 4 (SBA-116). A new **Capture** tab opens a `.mcperf` from
   the player or `perf_run`: the budget verdict for a target, a strip of every frame (spikes red, over-budget
   amber; click one), the chosen frame's phases, GPU stages and counters, the spikes and the slowest systems.

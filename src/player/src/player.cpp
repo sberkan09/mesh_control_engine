@@ -2176,7 +2176,7 @@ private:
         for (usize p = 0; p < kPhaseCount; ++p)
             perf_.phases.push_back(FixedString<32>(phase_name(static_cast<Phase>(p))));
         perf_.render_phases = (1u << static_cast<u32>(Phase::Render_Pre)) | (1u << static_cast<u32>(Phase::Render_Submit));
-        static constexpr const char* kStages[] = {"clusters", "scale", "ssao", "ssr", "shadow", "gi", "volumetrics",
+        static constexpr const char* kStages[] = {"clusters", "scale", "ssao", "ssr", "contact", "shadow", "gi", "volumetrics",
                                                   "main", "resolve", "taa", "post_fx", "bloom", "tonemap", "fxaa"};
         for (const char* name : kStages) perf_.gpu_stages.push_back(FixedString<32>(name));
         perf_.frames.reserve(4096);
@@ -2255,7 +2255,7 @@ private:
         if (!target || target->gpu_ms >= 0.0f) return;
         if (three_d_) {
             const render::Forward3DGpuTimes g = renderer_.forward_3d().gpu_times(ts);
-            const f64 stages[] = {g.clusters, g.scale, g.ssao, g.ssr, g.shadow, g.gi, g.volumetrics,
+            const f64 stages[] = {g.clusters, g.scale, g.ssao, g.ssr, g.contact, g.shadow, g.gi, g.volumetrics,
                                   g.main, g.resolve, g.taa, g.post_fx, g.bloom, g.tonemap, g.fxaa};
             static_assert(sizeof(stages) / sizeof(stages[0]) <= perf::kMaxGpuStages, "perf::Frame::gpu_stage_ms holds every stage");
             for (usize i = 0; i < std::size(stages); ++i)
