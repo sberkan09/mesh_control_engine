@@ -5,6 +5,8 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Tested-sample check, M-DOCCHECK step 3 (SBA-178): `check_docs.py` also fails for a `samples/` or `projects/`
+  directory that no test runs. Every one has a test today except `samples/common` (shared headers).
 - Flag check, M-DOCCHECK step 2 (SBA-177): `check_docs.py` also fails for a `-flag` after `mce_player` in a
   document that no source declares as a console variable. Every documented flag passes today.
 - Docs checks, M-DOCCHECK step 1 (SBA-176): the walls stage runs `scripts/ci/check_docs.py`, which fails for a
