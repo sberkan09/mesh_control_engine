@@ -46,6 +46,7 @@ flowchart LR
     MVIS --> MGP3D["M-GAMEPLAY3D navmesh, joints,<br/>ragdolls, vehicles, IK, blend spaces"]
     M8 --> MCINE["M-CINEMA timeline + curve editor,<br/>animation editing, cutscenes, video"]
     MNET["M-NET (built)"] --> MNET2["M-NET2 interpolation, prediction,<br/>rollback, relay/lobby"]
+    MNET2 --> MNET3["M-NET3 delta snapshots, interest,<br/>matchmaking, host migration, WebRTC, arena"]
     MGP3D -.navmesh.-> MTERR["M-TERRAIN heightmap terrain,<br/>brushes, splat layers, foliage"]
     MCINE -.subtitle tracks.-> MACC["M-ACCESS subtitles, colorblind,<br/>remap screen, screen readers"]
     MVIS --> MVIS2["M-VISUAL2 SSR, spatial upscaler<br/>and sharpening, contact shadows,<br/>clear coat, sheen, transmission"]
@@ -78,7 +79,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M9 (v1.0 gate) | [M9-ucd.md](milestones/M9-ucd.md) | done (`projects/Kindle`) | non-programmer double-click test, timed UC-C session, LRN gates, memory reconciliation, 60 fps on hardware |
 | M-SKIN | [M-SKIN.md](milestones/M-SKIN.md), ADR-0036 | done | — |
 | M-NET | ADR-0035 | done | — |
-| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (Linear SBA-82 … SBA-88) | active (step 1 done: `SimNetwork` with simulated latency, jitter and loss, `net::Transport`, `Host::set_conditions`, the headless multi-client runner in `local_ci.sh`, the `NET` line in the stats overlay; step 2 done: snapshot interpolation with an adaptive jitter buffer and an extrapolation limit; step 3 done: `net::Predictor` / `net::InputReceiver` client-side prediction with server reconciliation and smoothed corrections; step 4 done: `net::LagCompensator` rewinds `HitBox`es to the tick a client drew for hit checks; step 5 done: `net::RollbackSession` rollback and lockstep with desync detection by state hash, `samples/net_rollback`; step 6 done: `mce_relay` rooms with codes over UDP and WebSocket, `net::RelayClient`, `net::WebSocketHost` (WebRTC not built)) | step 7, the demo |
+| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (Linear SBA-82 … SBA-88) | done (step 1: `SimNetwork` with simulated latency, jitter and loss, `net::Transport`, `Host::set_conditions`, the headless multi-client runner in `local_ci.sh`, the `NET` line in the stats overlay; step 2 done: snapshot interpolation with an adaptive jitter buffer and an extrapolation limit; step 3 done: `net::Predictor` / `net::InputReceiver` client-side prediction with server reconciliation and smoothed corrections; step 4 done: `net::LagCompensator` rewinds `HitBox`es to the tick a client drew for hit checks; step 5 done: `net::RollbackSession` rollback and lockstep with desync detection by state hash, `samples/net_rollback`; step 6 done: `mce_relay` rooms with codes over UDP and WebSocket, `net::RelayClient`, `net::WebSocketHost` (WebRTC not built); step 7 done: replication as data, `NetReplicated` / `NetOwner`, `Replicated` field flags, over MCP) | — |
 | Scene streaming / data mods | [scene-streaming.md](milestones/scene-streaming.md), ADR-0037 / ADR-0034 | done | — |
 | M-NOVEL | [M-NOVEL.md](milestones/M-NOVEL.md) (issues #115, #154) | done | letters are not translated yet (lines, options and names are, M-MOBILE 11e) |
 | M-KIT3D | [M-KIT3D.md](milestones/M-KIT3D.md) (issues #129, #158, #126) | done | — (follow-ups listed in the record) |
@@ -92,13 +93,14 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-WEB | — (added 2026-10-15) | active: steps 1–5 done (ADR-0039, `docs/milestones/M-WEB.md`) | steps 6–7 |
 | M-GAMEPLAY3D | [M-GAMEPLAY3D.md](milestones/M-GAMEPLAY3D.md), ADR-0040 (Linear SBA-69 … SBA-75) | active (step 1 done: Recast & Detour navmesh in `mce/physics3d/navmesh3d.h`, `.mcnav` assets, `NavMeshSurface3D` / `NavArea3D` / `NavLink3D` / `NavObstacle3D` / `NavAgent3D` in `mce/kit/nav3d.h`, the editor's Bake navmesh and preview; step 2 done: `Joint3D` fixed, hinge, slider, distance, cone and six-DOF joints with limits, motors and break forces in `mce/kit/joints3d.h`; step 3 done: `Ragdoll3D` ragdolls built from a skinned mesh's skeleton with per-bone sidecar overrides and a blend back to the animation, in `mce/kit/ragdolls3d.h`; step 4 done: `Vehicle3D` cars over Jolt's wheeled vehicle, driven by inputs or the player's actions, in `mce/kit/vehicles3d.h`; step 5 done: `.mcanim` version 2 with 2D blend spaces, layers with bone masks and additive clips, root motion, and two-bone, look-at and foot IK on `IKTarget3D` goals; step 6 done: `Raycast3D` and `Overlap3D` sensors in `mce/kit/sensors3d.h` raising trigger events, `World3D` sphere and box overlaps and character-aware queries) | step 7, the demo |
 | M-CINEMA | [M-CINEMA.md](milestones/M-CINEMA.md) (Linear SBA-76 … SBA-81) | active (steps 1–5 done: `.mctimeline`, `TimelinePlayer`, the Timeline and Animation panels, cutscenes and cinematic cameras, video over pl_mpeg) | step 6, the demo and the gates |
-| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (added 2026-10-15) | active (steps 1–6 done) | step 7, the demo |
+| M-NET2 | [M-NET2.md](milestones/M-NET2.md) (added 2026-10-15) | done (steps 1–7) | — |
 | M-TERRAIN | [M-TERRAIN.md](milestones/M-TERRAIN.md) (Linear SBA-89 … SBA-94) | done (steps 1–6 and the demo: SolsticeReach's island is a painted `Terrain3D`) | Metal untested |
 | M-ACCESS | [M-ACCESS.md](milestones/M-ACCESS.md) (Linear SBA-95 … SBA-99) | done on the desktop (steps 1–5, the demo and the gates) | the screen reader on a phone and on each desktop OS |
 | M-VISUAL2 | [M-VISUAL2.md](milestones/M-VISUAL2.md) (Linear SBA-101 … SBA-105) | active (step 1 done: screen-space reflections, `Environment3D.ssr`, `r.ssr`; step 2 done: spatial upsample and sharpening, `Environment3D.upscaler` / `sharpen`, `r.upscaler`, `r.sharpen`; step 3 done for the sun: contact shadows, `Environment3D.contact_shadows`, `r.contact_shadows`) | steps 4–5, local-light contact shadows, the demo and the gates |
 | M-PERF | [M-PERF.md](milestones/M-PERF.md) (Linear SBA-113 … SBA-117, added 2026-10-15) | done on the desktop (steps 1–5, the demo and the gates) | a capture on a phone and in a browser |
 | M-STEAM | [M-STEAM.md](milestones/M-STEAM.md), ADR-0042 (Linear SBA-106 … SBA-112) | active (step 1 done: the Steamworks flat API opened at run time, `mce/platform/steam.h`, the player's `-steam.app_id`; step 2 done: Steam achievements, leaderboards and Steam Cloud saves as the game services backend, `.mcservices` `steam` names; step 3 done: the overlay holds the game, `RichPresence`, `OpenOverlay`; step 4 done: Steam Input feeds the input map's actions, `-steam.write_input_config` writes the action manifest and controller defaults) | steps 5–6, the real-client run (needs the user's Steamworks account) |
 | M-AUDIO2 | [M-AUDIO2.md](milestones/M-AUDIO2.md) (Linear SBA-118 … SBA-122, added 2026-10-16) | active: step 1 done (Ogg Vorbis clips, ADR-0044) | steps 2–5, the demo and the gates |
+| M-NET3 | [M-NET3.md](milestones/M-NET3.md) (Linear SBA-123 … SBA-127, added 2026-10-16) | active (step 1 done: per-client delta snapshots, `NetRelevance`, acknowledgements; about a third of the snapshot bytes in `sample_net_headless`) | steps 2–5, the demo and the gates |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -365,6 +367,25 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Builds, in order:** (1) a network test harness: simulated latency, jitter and loss, a headless multi-client runner in `local_ci.sh`, net stats in the dev overlay · (2) snapshot interpolation for remote entities with a jitter buffer and extrapolation limits · (3) client-side prediction and server reconciliation for the local player's input, with misprediction smoothing · (4) lag compensation for hit checks (rewound colliders) · (5) a deterministic rollback/lockstep mode for small-player-count games, built on the existing state hash and replay (desync detection by hash) · (6) sessions: a small relay/lobby server (`mce_relay`, room codes, NAT-friendly), host migration out of scope; a WebSocket/WebRTC transport so M-WEB builds can join · (7) replication as data: `NetReplicated` / `NetOwner` components and per-field replication flags over reflection, reachable over MCP, user guide.
 **Demo:** a 2–4 player arena or co-op Ember Step that feels local at 150 ms simulated latency; a rollback fighting-style sample stays in sync at 100 ms; a web build joins a native host through the relay.
 **Gates:** the headless multi-client runs give stable hashes; rollback detects an injected desync; no sim code includes networking headers (the wall holds); `local_ci.sh` green on every step.
+
+### M-NET3 — Multiplayer at scale · **size L (rough guess, ≈ 100–150 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the project's standing instruction to extend the roadmap when no milestone is free (every Backlog issue has an owner; M-LIVEOPS' remaining work needs devices). M-NET2 left these open (user guide 20.10): every client receives every replicated entity in full every tick, there are no spectators, no matchmaking, no host migration and no direct WebRTC connection, and its 150 ms demo ran headless only.*
+
+**Builds, in order:**
+1. Delta snapshots and interest management: per-client snapshots, only the entities relevant to each client (`NetRelevance`), delta-coded against the newest snapshot the client acknowledged.
+2. Spectators (replication and rollback) and bounded clock sync for rollback peers that run ahead.
+3. Matchmaking and host migration in `mce_relay`: quick play by mode and size, a room list, and the host role handed to a member who rebuilds the server from its mirror.
+4. A WebRTC data-channel transport (native over a fetched library, web over `RTCPeerConnection`), signalled through `mce_relay`, with the relay as fallback.
+5. `samples/net_arena`: a windowed 2–4 player arena built from scene data (`NetReplicated`, `NetOwner`, `Replicated` fields), the user guide, MCP reach and the demo.
+
+**Demo:** four arena clients at 150 ms simulated latency, joined by quick play, recorded from an xvfb run; the host leaves and the match goes on; bytes down per client against M-NET2's full snapshots.
+**Gates:**
+- Headless multi-client and arena runs hash the same across runs and Debug/Release.
+- Delta snapshots give the same mirrors as full ones for the relevant entities.
+- Host migration keeps every mirror matching the new host.
+- Two native peers connect over loopback ICE; the browser probe joins a native peer directly.
+- No sim code includes networking headers; `local_ci.sh` green on every step.
 
 ### M-TERRAIN — Terrain · **size M–L (rough guess, ≈ 80–130 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 2
 

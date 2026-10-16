@@ -10,6 +10,17 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   (`"quality"`, default 0.4). A compressed clip decodes when it loads; on the Music bus its stream pages decode
   as they fill. libvorbis encodes in the cook, stb_vorbis decodes at run time. The WAV importer's version is
   now 2, so clips re-cook once.
+- Per-client delta snapshots, M-NET3 step 1 (SBA-123): `ReplicationServer::write_snapshot_for` writes each client
+  only the entities relevant to it (`NetRelevance { radius }` around the entities it owns) and codes them against
+  the newest snapshot it acknowledged (`write_ack` / `read_ack`): a still entity costs two bytes. `apply` reads
+  both forms. `sample_net_headless` now sends about a third of the bytes it did. User guide 20.10.
+- Replication as data, M-NET2 step 7 (SBA-88): mark entities `NetReplicated` in a scene and
+  `ReplicationServer::assign_tagged` gives them their `NetId` with no code. Component fields flagged
+  `Replicated` (`MCE_COMPONENT(Health, (hp, Replicated))`) travel in every snapshot and land in the client's
+  copy; other fields keep the client's value, and `Entity` fields come back as the client's own entities.
+  `NetOwner` names the player that controls an entity. A component built with other flagged fields on the
+  client is skipped and counted, never misread. `refl_describe_component` marks the fields `"replicated"`.
+  Snapshot version 2. User guide 20.9.
 - Performance counter gate and guide, M-PERF step 5 (SBA-117). `scripts/ci/perf_gate.py` runs `perf_run` on
   a copy of a project and fails when draws, passes, dispatches, triangles, meshes, sprites or sprite batches
   grow past the project's `perf/counters.json` (`--update` writes new ones). Glowmoth and Marble Garden run it

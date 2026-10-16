@@ -16,6 +16,9 @@ reach all of its non-transient fields.
 | `AudioListener` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `ChildOf` | `mce/ecs/hierarchy.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `WorldTransform` | `mce/ecs/hierarchy.h` | yes | yes | yes | docs/user-guide/03-editor.md |
+| `NetReplicated` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/20-multiplayer.md |
+| `NetOwner` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/20-multiplayer.md |
+| `NetRelevance` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/20-multiplayer.md |
 | `SaveKey` | `mce/ecs/save.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `LocalTransform` | `mce/ecs/transform.h` | yes | yes | yes | docs/user-guide/03-editor.md |
 | `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |

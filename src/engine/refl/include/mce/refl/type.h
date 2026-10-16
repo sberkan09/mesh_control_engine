@@ -35,6 +35,7 @@ enum : u32 {
     Transient = 1u << 1,    // never serialized into scenes (rebuilt at load)
     Save = 1u << 2,         // included in save games (ecs-gameplay §2.13 [Save] marker)
     EditorRange = 1u << 3,  // editor_min/editor_max are meaningful (set by refl::Range)
+    Replicated = 1u << 4,   // sent from the server to clients by mce_net's snapshots (M-NET2 step 7)
 };
 }
 
