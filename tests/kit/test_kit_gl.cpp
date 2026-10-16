@@ -638,7 +638,7 @@ TEST_CASE("M-VISUAL3 2: a material with a height map gets one [normal, height] a
     ex3.init(f.renderer.meshes(), &assets);
     ex3.set_texture_store(&f.renderer.textures());
     ex3.bind_mesh(kBox, 1);
-    ex3.preload();
+    REQUIRE(ex3.preload().has_value());
     world.spawn_with(LocalTransform{}, kit::Camera3DComponent{});
     const char* guids[] = {good, no_normal, mismatch};
     for (const char* g : guids) {
