@@ -1,6 +1,6 @@
 # M-DOCCHECK — Docs that cannot rot (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–3 done). Plan: ROADMAP §M-DOCCHECK; Linear SBA-176 … SBA-179.
+**Status:** done (added 2026-10-16; steps 1–4 done). Plan: ROADMAP §M-DOCCHECK; Linear SBA-176 … SBA-179.
 
 **Why:** `capabilities.py --check` fails when a component, asset type or tool is named by no document, and
 the sample gate (M-COVER) fails when a component is shown in no sample. Nothing checks what the documents say
@@ -21,7 +21,7 @@ It needs no device and no engine code: the work is scripts in the walls stage an
 | 1 | `scripts/ci/check_docs.py` in the walls stage: relative links and `#anchors` in every Markdown file resolve, `#include` lines of `mce/` headers name a real header; misses are fixed or on `scripts/ci/docs.allow` with a reason, and the list only shrinks | SBA-176 | done |
 | 2 | A command-line flag shown after `mce_player` in a document is a console variable some source declares (the command line sets convars) | SBA-177 | done |
 | 3 | Every `samples/` and `projects/` directory is run by a test, or listed with a reason | SBA-178 | done |
-| 4 | The guide and contributor docs describe the checks; gates and the close | SBA-179 | not started |
+| 4 | The guide and contributor docs describe the checks; gates and the close | SBA-179 | done |
 
 ## Step 1 — Links, anchors and includes (done, SBA-176)
 
@@ -55,3 +55,17 @@ It needs no device and no engine code: the work is scripts in the walls stage an
   reason. Every sample and project already has a test. (A first version that also counted any CMake file
   mentioning the path let `samples/common` through, because other samples add it to their include path.)
 - **Tested.** A seeded `samples/` directory with a `CMakeLists.txt` and no test fails the stage; removed, it passes.
+
+## Step 4 — Guide and the close (done, SBA-179)
+
+- **Docs.** User guide 1.8 ("Before merging engine changes") says what the walls stage checks beyond the
+  capability table and where the accepted misses live.
+- **Gates.** `local_ci.sh` walls fails on a seeded broken link, an unknown `mce_player` flag and an untested
+  sample directory (checked in steps 1–3) and passes on the repo; both allow-lists (`docs.allow`,
+  `sample_coverage.allow`) only shrink. The full batch (walls, gcc-debug, clang-release, tidy, determinism, asan)
+  passed on the closing PR.
+
+## Result
+
+Beyond "every feature is named and shown" (M-DOCCHECK's predecessor M-COVER), a link, an anchor, an include line,
+a player flag and a sample's test can no longer rot without the walls stage failing.
