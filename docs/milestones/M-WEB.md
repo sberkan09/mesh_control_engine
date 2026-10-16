@@ -13,7 +13,7 @@ Chromium run on WebGPU/SwiftShader (`scripts/web/browser_smoke.cjs`).
 | 1 | Graphics decision (ADR-0039): `mce_rhi_webgpu` over emdawnwebgpu, GLSL → WGSL with glslang + Tint, `web-*` presets; `01_triangle` draws in a browser | SBA-62 | done |
 | 2 | Emscripten toolchain for every sample and game: the player's main loop, the job system single-threaded (or pthreads under COOP/COEP), every engine library compiling | SBA-63 | done |
 | 3 | Files and assets: the pack over HTTP with progress, saves in IndexedDB | SBA-64 | done |
-| 4 | Audio and input: WebAudio unlock, touch, gamepad, pointer lock, fullscreen | SBA-65 | not started |
+| 4 | Audio and input: WebAudio unlock, touch, gamepad, pointer lock, fullscreen | SBA-65 | done |
 | 5 | `mce ship --target web`: shell page, itch.io zip, `mce serve` | SBA-66 | not started |
 | 6 | MCP `ship_build {"target":"web"}` and a Playwright smoke returning the state hash and a screenshot | SBA-67 | not started |
 | 7 | A `web` stage in `local_ci.sh` | SBA-68 | not started |
@@ -55,6 +55,17 @@ Numbers (`web-release`, MinSizeRel): `01_triangle.wasm` 8.9 MB, 2.5 MB gzipped; 
 | Pack over HTTP | `samples::resolve_shipped_path` downloads `assets.mce` from next to the page into the virtual file system when it is not there, reporting `Downloading assets.mce... (got/total)` through the page's `Module.setStatus` (the shell's progress bar); `mce_sample_pack` copies the pack next to the `.html` | `04_diorama: mounted /assets.mce`; no `.data` files any more |
 | Saves and settings | IndexedDB (IDBFS, `-lidbfs.js`) backs `/persistent` = `crash::user_data_root()`, mounted and loaded in `platform::init`; `save::write` and `console::save_settings` write it back at once; the page also writes it back every 5 s and on `pagehide` / hidden, which covers the other writers (novel stage, loc, monetize, liveops) | `browser_smoke.cjs --persist`: a probe file under `/persistent` survives a reload |
 | mmap | not needed: the asset system reads packs into heap buffers on every platform | — |
+
+## What shipped (step 4)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Audio unlock | `web::install_audio_unlock` (`core/src/web.cpp`), installed by `platform::init`: the first `pointerdown` / `touchend` / `keydown` resumes SDL's `AudioContext` from inside the handler (Safari's rule), then the listeners drop; `Module.mceAudioState()` reports it | probe: audio starts suspended, the first tap makes it run |
+| Pointer lock and full screen | `Window::set_relative_mouse` / `set_fullscreen` through SDL's emscripten driver, which defers each request to the next click or key press (the browser only grants them there) | probe: the canvas holds the pointer lock and goes full screen; relative moves arrive |
+| Window teardown | `~Window` leaves full screen and lets a pending `fullscreenchange` arrive before `SDL_DestroyWindow`: the page's restore callback holds SDL's window data, and read freed memory when the window went first | without it the probe's exit threw `querySelector: 'Pf' is not a valid selector` |
+| Touch, keys, gamepad | SDL's emscripten pointer events (fingers kept apart from the mouse, as on phones) and the Gamepad API (standard mapping); no engine changes | probe: a tap at 0.25 0.50, key W, a pad's South button and left stick |
+| Input probe | `mce_input_web_probe` (`src/engine/platform/web_probe`), driven by `scripts/web/probe_smoke.cjs <dir> input`: a fake pad behind `navigator.getGamepads`, CDP touches, and the strict autoplay rule (headless Chromium never blocks audio) | 13 checks, PASS |
+| Relay over WebSocket (M-NET2) | `mce_relay_web_probe` (`src/engine/net/web_probe`): two `RelayClient`s over `websocket_web.cpp` against a native `mce_relay`; `probe_smoke.cjs <dir> relay <mce_relay>` | room made, the guest joined, messages crossed both ways: OK |
 
 ## Open items
 

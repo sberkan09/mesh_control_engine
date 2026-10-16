@@ -10,9 +10,27 @@
 #include "mce/log.h"
 #include "mce/platform/platform.h"
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+
+// Leaving full screen restores the canvas from a page callback that holds SDL's window data, so a
+// window destroyed while full screen, or while the browser is still leaving it (Escape exits before
+// the page hears about it), would leave that callback reading freed memory. Leave first, and give a
+// pending fullscreenchange time to arrive.
+EM_ASYNC_JS(void, mce_web_leave_fullscreen, (), {
+    if (document.fullscreenElement) {
+        try { await document.exitFullscreen(); } catch (e) {}
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+});
+#endif
+
 namespace mce::platform {
 namespace {
 SDL_Window* sdl(void* h) { return static_cast<SDL_Window*>(h); }
+#if defined(__EMSCRIPTEN__)
+bool g_fullscreen_used = false;  // the page went (or was asked to go) full screen at some point
+#endif
 }  // namespace
 
 GpuApi gpu_api() {
@@ -89,6 +107,9 @@ Result<mem::UniquePtr<Window>> Window::create(const WindowDesc& desc) {
 
 Window::~Window() {
     detail::unregister_window(this);
+#if defined(__EMSCRIPTEN__)
+    if (handle_ && g_fullscreen_used) mce_web_leave_fullscreen();
+#endif
     if (handle_) SDL_DestroyWindow(sdl(handle_));
 }
 
@@ -156,6 +177,9 @@ bool Window::set_fullscreen(bool on) {
     (void)on;
     return true;  // phones stay full screen
 #else
+#if defined(__EMSCRIPTEN__)
+    if (on) g_fullscreen_used = true;
+#endif
     return SDL_SetWindowFullscreen(sdl(handle_), on);
 #endif
 }

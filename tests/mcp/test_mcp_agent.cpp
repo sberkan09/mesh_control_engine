@@ -27,6 +27,12 @@ std::string demo_project(const char* name) {
     return root;
 }
 
+std::string compact(cook::JsonValue v) {
+    cook::String s;
+    cook::write_json(v, s, true);
+    return std::string(s.view());
+}
+
 mcp::ServerOptions with_player() {
     mcp::ServerOptions opt;
     opt.player = MCE_PLAYER_EXE;
@@ -234,6 +240,54 @@ TEST_CASE("module_build: compiler errors as file:line:col JSON; a good build map
 }
 #endif
 
+TEST_CASE("perf_run headless and perf_compare: the sim alone, judged and compared (M-PERF step 3)") {
+    const std::string root = demo_project("mcp_agent_perf_headless");
+    Client c(with_player());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    CHECK(c.fails("perf_run", R"({"target":"console"})").find("'target'") != std::string::npos);
+    CHECK(c.fails("perf_run", R"({"frames":5})").find("'frames'") != std::string::npos);
+    CHECK(c.fails("perf_run", R"({"save":"../out.mcperf"})").find("'save'") != std::string::npos);
+    CHECK(c.fails("perf_compare", "{}").find("cannot read") != std::string::npos);  // nothing measured yet
+
+    auto r = c.ok("perf_run", R"({"headless":true,"frames":60,"warmup":10,"target":"mobile"})");
+    CHECK(str(r.v().get("file")) == "cooked/.perf/last.mcperf");
+    CHECK(std::filesystem::exists(root + "/cooked/.perf/last.mcperf"));
+    CHECK(r.v().get("frames").as_number() == 60);
+    CHECK(str(r.v().get("backend")) == "headless");
+    CHECK(str(r.v().get("target")) == "mobile");
+    CHECK(r.v().get("gpu_ms").get("measured").as_bool() == false);  // no GPU headless
+    CHECK(r.v().get("counters_max").get("draws").as_number() == 0);
+    const cook::JsonValue lines = r.v().get("verdict").get("lines");
+    REQUIRE(lines.size() >= 1);
+    bool sim_line = false;
+    for (u32 i = 0; i < lines.size(); ++i) sim_line = sim_line || str(lines.at(i).get("metric")) == "sim_ms";
+    CHECK(sim_line);
+    // The physics step runs every tick, so it is among the systems with time.
+    const cook::JsonValue top = r.v().get("top_systems");
+    REQUIRE(top.size() >= 1);
+    bool physics = false;
+    for (u32 i = 0; i < top.size(); ++i) physics = physics || str(top.at(i).get("phase")) == "FixedUpdate_Physics";
+    CHECK(physics);
+
+    // A second run kept under perf/: the compare reads the last two and finds the counters unchanged.
+    auto r2 = c.ok("perf_run", R"({"headless":true,"frames":60,"warmup":10,"save":"perf/again.mcperf"})");
+    CHECK(str(r2.v().get("file")) == "perf/again.mcperf");
+    CHECK(std::filesystem::exists(root + "/perf/again.mcperf"));
+    CHECK(std::filesystem::exists(root + "/cooked/.perf/previous.mcperf"));
+    auto cmp = c.ok("perf_compare", "{}");
+    CHECK(str(cmp.v().get("after")) == "cooked/.perf/last.mcperf");
+    CHECK(cmp.v().get("counters").get("draws").get("change").as_number() == 0);
+    CHECK(cmp.v().get("counters").get("heap_allocations").get("change").as_number() == 0);
+    CHECK(cmp.v().get("systems").size() >= 1);
+    CHECK(cmp.v().get("verdict").get("lines").size() >= 1);
+    auto named = c.ok("perf_compare", R"({"before":"perf/again.mcperf","after":"perf/again.mcperf"})");
+    CHECK(named.v().get("better").size() == 0);
+    CHECK(named.v().get("worse").size() == 0);
+    write_file(root + "/perf/bad.mcperf", "{\"format\": \"mce-scene\"}");
+    CHECK(c.fails("perf_compare", R"({"before":"perf/bad.mcperf"})").find("not a .mcperf capture") != std::string::npos);
+}
+
 TEST_SUITE("gpu") {
 
 TEST_CASE("render_frame: the player's frame at a tick, repeatable, from other cameras, checked against a golden") {
@@ -293,6 +347,49 @@ TEST_CASE("render_sheet: ticks in columns, cameras in rows, one image") {
     REQUIRE(s.images.size() == 1);
     CHECK(s.images[0].width == 3 * 160 + 4 * 4);
     CHECK(s.images[0].height == 2 * 90 + 3 * 4);
+}
+
+TEST_CASE("perf_run: draw counters repeat run to run; three more sprite textures show as more draws (M-PERF step 3)") {
+    const std::string root = demo_project("mcp_agent_perf");
+    Client c(with_player());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    auto a = c.ok("perf_run", R"({"frames":30,"warmup":5,"width":320,"height":180,"save":"perf/before.mcperf"})");
+    const u64 draws = static_cast<u64>(a.v().get("counters_max").get("draws").as_number());
+    CHECK(draws > 0);
+    CHECK(a.v().get("counters_max").get("sprites").as_number() > 0);
+    CHECK(a.v().get("frames").as_number() == 30);
+    auto again = c.ok("perf_run", R"({"frames":30,"warmup":5,"width":320,"height":180})");
+    CHECK(compact(again.v().get("counters_max")) == compact(a.v().get("counters_max")));
+
+    // Three sprites with a texture each: three more batches, so more draws, and perf_compare says so.
+    for (int i = 0; i < 3; ++i) {
+        const std::string guid = "5ce4e000-0000-4000-8000-0000000000c" + std::to_string(i);
+        const std::string name = "textures/extra" + std::to_string(i) + ".png";
+        std::string path = root;
+        path += "/assets/";
+        path += name;
+        write_file(path, make_png(4, 4, std::vector<u8>(64, static_cast<u8>(60 * i + 40))));
+        write_file(path + ".mceasset", sidecar(guid.c_str(), "texture"));
+        std::string args = "{\"name\":\"Extra";
+        args += std::to_string(i);
+        args += "\",\"components\":{\"Sprite\":{\"texture\":\"guid:";
+        args += guid;
+        args += "\"},\"LocalTransform\":{\"position\":[";
+        args += std::to_string(i);
+        args += ",1,0]}}}";
+        c.ok("entity_create", args);
+    }
+    c.ok("scene_save");
+    auto b = c.ok("perf_run", R"({"frames":30,"warmup":5,"width":320,"height":180,"save":"perf/after.mcperf"})");
+    CHECK(b.v().get("counters_max").get("draws").as_number() > static_cast<f64>(draws));
+    auto cmp = c.ok("perf_compare", R"({"before":"perf/before.mcperf","after":"perf/after.mcperf","target":"mobile"})");
+    CHECK(cmp.v().get("counters").get("draws").get("change").as_number() > 0);
+    bool draws_worse = false;
+    const cook::JsonValue worse = cmp.v().get("worse");
+    for (u32 i = 0; i < worse.size(); ++i) draws_worse = draws_worse || str(worse.at(i)) == "draws";
+    CHECK(draws_worse);
+    CHECK(str(cmp.v().get("target")) == "mobile");
 }
 
 }  // TEST_SUITE("gpu")
