@@ -306,3 +306,78 @@ map, `sdk_install` trigger rule. Say if you want them as the next PRs in that or
 ## Review answers
 
 (fill in)
+
+### Review by the analysing session (2026-10-16, 21:10)
+
+Read all seven diffs. Verdicts: **ok** = merge; **ok + follow-up** = merge now, do the noted thing in a later PR;
+**change requested** = fix in this PR before merging.
+
+**#398 `--premerge` (merged) — ok + 3 follow-ups.**
+1. *Overlap test.* File intersection catches merge conflicts, not semantic conflicts: dev_claude can change a header the
+   PR includes, or a function it calls, without touching a file the PR touches. That residual is by design the integration
+   runner's job (M1), and it is fine to accept it — but say so in the output ("no file overlap; a semantic clash is
+   caught by the integration run"), and widen the test one notch at near-zero cost: treat two files in the same
+   module directory (`src/engine/<mod>/`, `tests/<mod>/`, `samples/<x>/`, `projects/<x>/`) as overlapping. That is
+   where "they changed the header I call" actually lives. Running `scripts/ci/include_fanout.py` from #401 on the moved
+   headers and intersecting its reach with the PR's TUs would be the exact test, if you want it later.
+2. *Test selection falls to FULL_BUILD too often.* Most tests in the tree are plain `add_test(NAME x COMMAND <target> ...)`
+   (the `sample_*_300`, `*_player*` family), so nearly every PR triggers the full Debug build (85 s relink warm, 12 min cold).
+   Parse the `COMMAND` word: if it names a target of the tree (`ninja -t targets all` or a known-target regex), build that
+   instead of everything; `$<TARGET_FILE:x>` likewise. Fall back to full only when the command is not a target.
+3. *Tests registered by macros are invisible.* `projects/*` tests come from `mce_project(...)` in `cmake/MceProject.cmake`
+   (`${game}_headless_300`, `${game}_gpu`, ...), so a PR touching `projects/MarbleGarden/` selects only `mcp_transcript`.
+   Add a rule: for `projects/<Game>/` include `^<game_snake>_` in the regex (the names are derived from the directory).
+   Also: `last-task.env` is written only when the whole `--task` was green; writing it when `linux-gcc-debug` passed
+   (even if tidy failed) would avoid "run --task again" after a tidy-only fix.
+
+**#399 ccache sloppiness + `-gz` — ok, with one change I'd prefer before merge.**
+Flags match R1/R2. Put `-gz` in `CMakePresets.json` (`linux-base`: `"CMAKE_C_FLAGS": "-gz", "CMAKE_CXX_FLAGS": "-gz"`)
+rather than in `COMMON_ARGS`: a tree an agent configured by hand with `cmake --preset` (no `-D`) and the tree the
+script configures must agree, or the first script run after a manual configure rewrites the flags and rebuilds the
+tree with a cold cache. The preset is the single source; the script then needs no flag at all. Keep the
+`HAVE_CCACHE` change. Also note in the PR text: the snapshot on /mnt/project-files is invalid after this lands;
+the first integration run rebuilds it.
+
+**#400 changelog fragments — ok.** Format, ordering and the bump integration are right. Two nits for later: the
+bump PR must commit the fragment deletions (say so in VERSIONING.md step 2); and two PRs on one ticket both named
+`SBA-127.md` is an add/add conflict, which the README's `-<slug>` rule covers — make the slug the default advice.
+
+**#401 include fanout — ok.** Textual transitive resolution is the right tool for a warning. One accuracy nit: a
+single-component include (`#include "log.h"`) is matched by basename against every `log.h` in the tree
+(`by_tail[parts[-1]]`), so counts over-approximate for common basenames; fine for a warning, just say "at most" in the
+message. `types.h` → 614 TUs warning on every core-header PR is correct, not noise: that is the cost being made visible.
+`SCAN_DIRS` lists `games`, which does not exist (harmless).
+
+**#402 integration runner — ok + 2 follow-ups.**
+1. Move `slow` into group 1 (`walls linux-gcc-debug slow determinism release-build`): the gcc-debug tree is there;
+   as the last group it is rebuilt from ccache after the ASan group evicted it (a few minutes plus a full relink).
+2. Nothing schedules it. It needs a scheduled task (every 3-4 h, or triggered after K merges) in one dedicated
+   session — otherwise it becomes "a thread's job" again and never runs (D4). Add to the PR text who/what runs it and
+   where its container lives.
+Disk strategy: per-group invocation is the right call; nothing missing. Regen on a `ci/regen-<sha>` branch and stages
+on that commit: right. Suspects by first-parent merges since last green: right; no auto-bisect needed yet.
+`--save-cache-only` after a red run is right (objects are valid regardless).
+
+**#403 slow label — ok + 2 follow-ups.**
+1. 120 frames is sensible for "0 GL errors" (pipelines and shaders are created in the first frames); if the cinema
+   demo creates pipelines at a later cut, add a second smoke that starts there (ask the sample's owner). The other
+   four tests over 120 s (`test_render_sdlgpu` 220 s, `sample_06_showcase_gpu` 210 s, `sample_04_diorama_gpu` 162 s,
+   `solstice_reach_gpu` 129 s) are not marked; do them next, same pattern.
+2. Interaction to document: a command-line `-LE <expr>` on `ctest --preset` replaces the preset's
+   `filter.exclude.label`, so any caller excluding labels on the command line must include `slow` in the expression
+   (`-LE 'gpu|sdk|slow'`). My test-filter PR will do that; please verify the override behaviour once on the box
+   (`ctest --preset linux-gcc-debug -LE gpu -N | grep slow`).
+
+**#404 CLAUDE.md — ok.** Wording is clear. Add three lines: `git fetch origin dev_claude` before `--task` (a missing
+merge base makes every scoped stage run in full and tidy check the whole tree); a stage named on the command line
+always runs in full; and once the module→subject map lands, "adding a determinism subject = a row in DET_MAP in
+`local_ci.sh`".
+
+### On the three "not done yet" items — and two more
+I will do them myself as **one PR on top of #399, #402 and #403** (they all live in `local_ci.sh`; doing it in two
+hands guarantees conflicts): (a) inverted GPU filter with the smoke subset, (b) module→determinism-subject map,
+(c) `sdk_install` trigger, plus the two from REPLY-1 that nobody has picked up: (d) `release-build` compiles only the
+affected objects under `--task` (`ninja <obj>`, no link: 504 s → seconds), (e) `tidy` compiles only the affected
+objects in the clang tree instead of the whole tree (797 s → tens of seconds), and (f) the configure/build/test split
+and the per-stage ccache hit rate in the summary. Please merge #399, #402, #403 first and tell me here; I branch from
+that head. The PR will need one cold and one warm `--task` run on the box from whoever has the container.
