@@ -99,11 +99,11 @@
       "name": "web-base",
       "hidden": true,
       "inherits": "base",
-      "description": "M-WEB: Emscripten (EMSDK in the environment, emsdk 5.0.6) to wasm, WebGPU through mce_rhi_webgpu (ADR-0039); packs cooked by the host's mce_cook (MCE_HOST_COOK)",
+      "description": "M-WEB: Emscripten (EMSDK in the environment, emsdk 5.0.6) to wasm, WebGPU through mce_rhi_webgpu (ADR-0039); packs cooked by the host's mce_cook (MCE_HOST_COOK); mce_net for the WebSocket relay client",
       "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
       "cacheVariables": {
         "MCE_BUILD_TESTS": "OFF", "MCE_BUILD_EDITOR": "OFF", "MCE_BUILD_PROJECTS": "OFF", "MCE_TEMPLATE_PROBE": "OFF",
-        "MCE_WITH_NET": "OFF", "MCE_WITH_SCRIPT": "OFF", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "OFF"
+        "MCE_WITH_NET": "ON", "MCE_WITH_SCRIPT": "OFF", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "OFF"
       },
       "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }
     },

@@ -153,7 +153,18 @@ Browsers do not run the page from a `file://` address; `mce serve` serves a zip,
 newest web zip with the right types (`application/wasm`) and headers (`--lan` lets a phone on the same
 network open it). On itch.io: upload the zip as "HTML", tick "This file will be played in the browser",
 and turn on "Mobile friendly" for touch games. `--smoke` opens the staged page in headless Chromium and
-checks that it runs and draws (it needs Playwright).
+checks that it runs and draws (it needs Playwright). For a game on the stock player (a project),
+`--smoke-ticks N` also runs N ticks drawn and N ticks headless in the browser and prints the state hash;
+the two must match. A browser build hashes differently from a desktop build of the same game (another
+compiler and maths library), so compare web hashes only with web hashes.
+
+Before an upload, `scripts/ci/local_ci.sh web` runs what the engine checks for every web build
+(`scripts/web/web_ci.py`): each sample in headless Chromium, the input and relay probes, Ember Step's
+page at desktop and phone size, Kindle's web state hash against `tests/web/baselines.json`, the zip
+against itch.io's HTML rules (`index.html` at the root, a flat zip, at most 1000 files and 500 MB
+extracted, every file the page loads present), and a cold-load budget: what a browser downloads before
+Ember Step's first frame, gzipped, must stay under `cold_load.budget_bytes`. After a deliberate change
+to a hash or a size, `python3 scripts/web/web_ci.py --skip-build --update` writes the new measurement.
 
 The game needs WebGPU: current Chrome, Edge and Safari, and Firefox 141 and later. Saves and settings
 go to the browser's IndexedDB, so they stay with that browser on that device.

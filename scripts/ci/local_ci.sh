@@ -8,7 +8,7 @@
 #   scripts/ci/local_ci.sh --batch    # every 3rd task and at a milestone's end: everything (same as no stage)
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages
 #
-# Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism. linux-gcc-release
+# Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism, web. linux-gcc-release
 # runs only when named: determinism already builds and runs the gcc Release tree, and linux-clang-release
 # runs the tests in Release.
 # GPU tests run under Xvfb + Mesa llvmpipe (GL) and lavapipe (Vulkan, for mce_rhi_sdlgpu, ADR-0038), in
@@ -20,6 +20,10 @@
 # tidy checks the translation units changed since the merge base with $MCE_TIDY_BASE (default
 # origin/dev_claude), committed or not, plus the ones that include a changed header. It covers the whole
 # tree with --tidy-all, when .clang-tidy changed, or when the base ref is missing.
+# web (M-WEB) builds the samples for the browser and runs them in headless Chromium (scripts/web/web_ci.py:
+# the smokes, the web replay hash, the itch.io zip and the cold-load budget). It is part of the full run
+# and --task adds it when the change touches the web code; without the Emscripten SDK (EMSDK, or
+# ~/emsdk/emsdk_env.sh) or Playwright it reports a skip and passes.
 # Windows/MSVC presets are not covered; build them on a Windows
 # machine when a change touches platform-specific code.
 #
@@ -43,7 +47,7 @@ cd "$ROOT"
 
 export LIBGL_ALWAYS_SOFTWARE=1  # Mesa llvmpipe: GL 4.5 core without a GPU
 
-ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism)
+ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism web)
 declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=OFF [linux-gcc-release]=OFF [linux-asan]=OFF)
 
 stages=()
@@ -57,7 +61,7 @@ for arg in "$@"; do
         --batch) ;;
         --save-cache) save_cache=1 ;;
         --tidy-all) tidy_all=1 ;;
-        -h|--help) sed -n '2,38p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,42p' "$0"; exit 0 ;;
         *) stages+=("$arg") ;;
     esac
 done
@@ -88,6 +92,22 @@ touches_sim() {
 if [[ $task_run -eq 1 ]] && touches_sim; then
     echo "=== --task: the change touches simulation code, determinism runs too"
     stages+=(determinism)
+fi
+
+# --task: a change to the web build (the WebGPU backend, the web glue, the shell and its scripts) also runs web.
+touches_web() {
+    local f
+    while IFS= read -r f; do
+        case "$f" in
+            src/engine/rhi_webgpu/*|scripts/web/*|tests/web/*|*/web_probe/*|src/engine/core/src/web.cpp|\
+                src/engine/core/include/mce/web.h|cmake/MceWeb.cmake|cmake/web/*|CMakePresets.json) return 0 ;;
+        esac
+    done < <(changed_files)
+    return 1
+}
+if [[ $task_run -eq 1 ]] && touches_web; then
+    echo "=== --task: the change touches the web build, web runs too"
+    stages+=(web)
 fi
 
 LOG_DIR="$ROOT/build/local-ci-logs"
@@ -391,12 +411,29 @@ stage_court_determinism() {
             build/linux-gcc-release/samples/05_ashen_court/sample_05_ashen_court
 }
 
+# M-WEB step 7: scripts/web/web_ci.py, when this box has the Emscripten SDK and Playwright.
+stage_web() {
+    if [[ -z "${EMSDK:-}" && -f "$HOME/emsdk/emsdk_env.sh" ]]; then
+        # shellcheck disable=SC1091
+        source "$HOME/emsdk/emsdk_env.sh" > /dev/null 2>&1
+    fi
+    if [[ -z "${EMSDK:-}" ]] || ! command -v emcc > /dev/null; then
+        echo "web: SKIPPED, no Emscripten SDK (source <emsdk>/emsdk_env.sh)"; return 0
+    fi
+    [[ -n "${NODE_PATH:-}" ]] || export NODE_PATH="$(npm root -g 2> /dev/null)"
+    if ! node -e 'require("playwright")' > /dev/null 2>&1; then
+        echo "web: SKIPPED, no Playwright for node (npm i -g playwright)"; return 0
+    fi
+    python3 scripts/web/web_ci.py
+}
+
 run_stage() {
     case "$1" in
         walls) python3 scripts/ci/check_walls.py && python3 scripts/bump_version.py --check && python3 scripts/ci/capabilities.py --check ;;
         linux-*) [[ -n "${GPU_TESTS[$1]:-}" ]] || { echo "unknown preset stage: $1"; return 2; }; stage_preset "$1" ;;
         tidy) stage_tidy ;;
         determinism) stage_determinism ;;
+        web) stage_web ;;
         *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]})"; return 2 ;;
     esac
 }
