@@ -12,6 +12,7 @@
 #include "mce/kit/components.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/nav3d.h"
+#include "mce/kit/perception.h"
 #include "mce/kit/sequence.h"
 #include "mce/log.h"
 
@@ -188,6 +189,20 @@ BtStatus wait_event(BtTaskCall& c) {
     return BtStatus::Running;
 }
 
+// The noise takes the team of the entity's Stimulus (else its Perceiver), so its own side ignores it.
+BtStatus make_noise(BtTaskCall& c) {
+    if (c.halting) return BtStatus::Failure;
+    World& w = c.frame.world();
+    Noise n;
+    n.position = position_of(w, c.entity);
+    n.loudness = c.value() > 0.0f ? c.value() : 10.0f;
+    n.source = c.entity;
+    if (const Stimulus* s = w.try_get<Stimulus>(c.entity)) n.team = s->team;
+    else if (const Perceiver* p = w.try_get<Perceiver>(c.entity)) n.team = p->team;
+    c.frame.events().push(n);
+    return BtStatus::Success;
+}
+
 BtStatus log_text(BtTaskCall& c) {
     if (c.halting) return BtStatus::Failure;
     MCE_LOG_INFO("ai: {} (entity {}): {}", c.tree.name.view(), c.entity.index, c.arg());
@@ -204,6 +219,7 @@ void register_stock_tasks(BtRegistry& reg) {
     reg.register_task("spawn", &spawn);
     reg.register_task("raise", &raise);
     reg.register_task("wait_event", &wait_event);
+    reg.register_task("make_noise", &make_noise);
     reg.register_task("log", &log_text);
 }
 

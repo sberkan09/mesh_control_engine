@@ -5,6 +5,7 @@
 #include "kit3d_internal.h"
 #include "mce/ecs/transform.h"
 #include "mce/hash.h"
+#include "mce/kit/perception.h"
 #include "mce/log.h"
 
 namespace mce::kit {
@@ -446,6 +447,7 @@ void install_ai(World& world, asset::AssetSystem* assets) {
         r->set_assets(assets);
         return;
     }
+    install_perception(world);  // first: "ai_perception" runs ahead of "ai_brains"
     world.register_components<AiBrain, Blackboard>();
     world.register_event<BtSignal>(Phase::FixedUpdate_Pre);
     world.set_resource(BtRegistry(assets));

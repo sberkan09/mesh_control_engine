@@ -38,6 +38,7 @@
 //   {"task": "spawn", "prefab": "guid:<prefab>", "key": "<vec3 or entity key>", "offset": [0, 1, 0]}
 //   {"task": "raise", "event": "alarm"}       {"task": "wait_event", "event": "alarm"}
 //   {"task": "log", "text": "patrolling"}
+//   {"task": "make_noise", "loudness": 8}     (M-AI 3: a kit::Noise perceivers hear)
 
 #include <cstdio>
 #include <cstring>
@@ -71,6 +72,7 @@ constexpr StockTask kStockTasks[] = {
     {"raise", {"event"}, "event", false},
     {"wait_event", {"event"}, "event", false},
     {"log", {"text"}, "text", false},
+    {"make_noise", {"loudness"}, nullptr, false},
 };
 
 const StockTask* stock_task(StringView name) {
@@ -366,11 +368,12 @@ struct Builder {
                 n.arg = intern(s.as_string());
             }
         }
-        for (const char* number : {"radius", "gain_db"})
+        for (const char* number : {"radius", "gain_db", "loudness"})
             if (const JsonValue x = node.get(number); x.valid()) {
-                if (!x.is_number() || (StringView(number) == "radius" && x.as_number() < 0)) {
+                const bool positive = StringView(number) != "gain_db";
+                if (!x.is_number() || (positive && x.as_number() < 0)) {
                     String msg;
-                    appendf(msg, "'%s' must be a number%s", number, StringView(number) == "radius" ? " >= 0" : "");
+                    appendf(msg, "'%s' must be a number%s", number, positive ? " >= 0" : "");
                     error(x, msg);
                 } else {
                     n.a = static_cast<f32>(x.as_number());
