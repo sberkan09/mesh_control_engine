@@ -103,6 +103,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-NET3 | [M-NET3.md](milestones/M-NET3.md) (Linear SBA-123 … SBA-127, added 2026-10-16) | active (step 1 done: per-client delta snapshots, `NetRelevance`, acknowledgements; about a third of the snapshot bytes in `sample_net_headless`) | steps 2–5, the demo and the gates |
 | M-MOVE3D | [M-MOVE3D.md](milestones/M-MOVE3D.md) (Linear SBA-134 … SBA-139, added 2026-10-16) | active (step 1 in progress) | steps 1–6, the demo and the gates |
 | M-ANIM2D | [M-ANIM2D.md](milestones/M-ANIM2D.md) (Linear SBA-140 … SBA-146, added 2026-10-16) | active (step 1 in progress) | steps 1–6, the demo and the gates |
+| M-SCRIPT | — (added 2026-10-16; ADR-0041) | planned (the spike is built: `mce_script`, PR #262) | steps 1–6, the demo and the gates |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -484,6 +485,25 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Gates:**
 - Pose, sampling, skinning and IK each have headless tests with exact numbers.
 - Replay hashes hold across runs and builds; a scene without `Skeleton2D` plays today's hash.
+- `local_ci.sh` green on every step.
+
+### M-SCRIPT — Luau scripting for games without a compiler · **size M–L (rough guess, ≈ 80–140 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 2
+
+*Reason: added 2026-10-16 by the user's decision after the Luau spike (ADR-0041, PR #262). The spike showed that a sandboxed Luau system keeps FR-RUN-040 (the same `state_hash` across runs, in Debug and Release, and the same as its C++ twin) at about 29× the C++ cost (0.82 vs 0.028 ms per tick for 2,000 entities, Release). N2's written trigger (recompile time dominating editor time) was measured and does not hold; the reason is a different one: today every game needs a C++ toolchain and, on phones and the web, its own build, while a script game is data that one stock player runs. This reopens N2 for Luau only (no visual scripting). Code mods (N10) stay a separate decision; this track builds the sandbox they would need.*
+
+**Builds, in order:**
+1. Scripts as assets: `.luau` sources compiled and type-checked by `mce_cook` into a `CHNK_SCRIPT` bytecode chunk; the player and `run_headless` load bytecode only, so the Luau compiler links into the cook and the editor, never the player (a wall). A scene names its scripts and their phases (a `ScriptSystem` list in the scene settings), and the stock player, the editor's play mode and `mce_mcp` run them.
+2. A complete API: cached field handles (`mce.field("Comp", "field")`) in place of per-call name lookups, `spawn` / `destroy` / `add` / `remove` and prefab instancing through `Commands`, events read and written by reflection, `InputState`, resources, 2D and 3D physics queries and `move_and_collide`; budget: the spike's 2,000-entity bench at ≤ 0.4 ms per tick in Release.
+3. No hidden state: a compile-time check over Luau's AST rejects assignments to outer locals and `pairs` over non-string keys (ADR-0041 open questions 2 and 3), so a script's memory is its components; saves, replays and a reload between two ticks keep the hash.
+4. Tooling: Luau type definitions generated from the reflection registry (`mce.d.luau`), MCP `script_check` (diagnostics as `file:line:col`) and script errors in `run_headless` and `test_run`, the editor console with jump-to-line, hot reload during play-in-editor, Tracy zones per script, and script stacks in crash reports.
+5. The compiler-free path: `mce new --script` makes a project with no C++ module, `mce ship` packages it with the stock player, and the same pack plays on Android, iOS and the web player (`MCE_WITH_SCRIPT` on in the mobile and web presets).
+6. Docs and the demo: a user guide chapter, kit recipes in Luau, `docs_search` coverage, and the `start_game` prompt offering a script project.
+
+**Demo:** Ember Step's player controller and an enemy FSM ported to Luau pass the same `.mctest` scenarios as the C++ versions; a fresh agent in a blind test makes a script-only 2D game over MCP with no compiler installed, and its pack plays in the browser.
+**Gates:**
+- The determinism stage covers script games (3 runs, Debug = Release) and the Luau-vs-C++ twin.
+- Sandbox, step-budget and memory-cap tests stay green; the walls keep Luau's headers in `mce_script` and the compiler out of the player.
+- A project without scripts builds and hashes exactly as today.
 - `local_ci.sh` green on every step.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
