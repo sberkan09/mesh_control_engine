@@ -410,6 +410,67 @@ end
     CHECK(r.h().scripts()[0].state == ScriptState::Running);
 }
 
+TEST_CASE("script api: find_path walks around static colliders and follows a level that changes (M-SCRIPT2 2)") {
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        local path = mce.find_path(vector.create(0, 5, 0), vector.create(10, 5, 0), { cell = 0.5, radius = 0.25 })
+        if path == nil then mce.set(e, "Probe", "n", -1) return end
+        local best = 100
+        for _, p in ipairs(path) do
+            if p.x > 3 and p.x < 7 then best = math.min(best, math.abs(p.y)) end   -- how close it came to the gap at y = 0
+        end
+        local last = path[#path]
+        mce.set(e, "Probe", "value", vector.create(best, last.x, last.y))
+        mce.set(e, "Probe", "n", #path)
+        mce.set(e, "Probe", "flag", mce.find_path(vector.create(0, 5, 0), vector.create(5, 5, 0)) == nil)   -- the target is inside a wall
+    end)
+end
+)");
+    physics::RigidBody2D wall_body;
+    wall_body.type = physics::BodyType::Static;
+    physics::Collider2D top, bottom;
+    top.shape = physics::ColliderShape::box({0.5f, 4.5f});     // y from 1 to 10
+    bottom.shape = physics::ColliderShape::box({0.5f, 4.5f});  // y from -10 to -1
+    const auto at = [](f32 x, f32 y) { return LocalTransform{{x, y, 0}, math::quat::identity(), {1, 1, 1}}; };
+    const Entity upper = r.w.spawn_with(at(5, 5.5f), wall_body, top);
+    r.w.spawn_with(at(5, -5.5f), wall_body, bottom);
+    const Entity e = r.w.spawn_with(Probe{});
+    r.step(2);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    const Probe* p = r.w.try_get<Probe>(e);
+    CHECK(p->n >= 3);                      // around the wall, not straight through it
+    CHECK(p->value.x < 1.5f);              // through the gap
+    CHECK(p->value.y == doctest::Approx(10.0f));
+    CHECK(p->value.z == doctest::Approx(5.0f));
+    CHECK(p->flag);
+    // The wall goes away: the next call plans a straight line (the cached grid noticed).
+    r.w.destroy(upper);
+    r.step(1);
+    CHECK(r.w.try_get<Probe>(e)->n >= 1);
+    CHECK(r.w.try_get<Probe>(e)->n <= 3);
+}
+
+TEST_CASE("script api: find_path with no static colliders is the straight walk, and bad options are named") {
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        local path = mce.find_path(vector.create(0, 0, 0), vector.create(3, 4, 0))
+        mce.set(e, "Probe", "n", #path)
+        mce.set(e, "Probe", "value", path[1])
+        mce.find_path(vector.create(0, 0, 0), vector.create(3, 4, 0), { cell = 0 })
+    end)
+end
+)");
+    const Entity e = r.w.spawn_with(Probe{});
+    r.step();
+    CHECK(r.w.try_get<Probe>(e)->n == 1);
+    CHECK(r.w.try_get<Probe>(e)->value.x == doctest::Approx(3.0f));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(error_of(r.h()).find("cell must be from 0.05 to 100") != std::string::npos);
+}
+
 TEST_CASE("script api: teleport2d moves a body, and the physics step keeps it there") {
     Rig r(R"(
 function update()

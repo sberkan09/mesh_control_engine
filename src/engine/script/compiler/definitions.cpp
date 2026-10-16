@@ -26,6 +26,7 @@ type Entity = number
 declare extern type FieldHandle with end
 type Fields = { [string]: any }
 type RayHit = { entity: Entity, point: vector, normal: vector, distance: number }
+type PathOptions = { cell: number?, radius: number?, diagonal: boolean?, smooth: boolean? }
 type ShapeHit = { entity: Entity, point: vector, normal: vector, fraction: number }
 type MoveResult2D = { position: vector, grounded: boolean, ground: Entity?, ceiling: boolean, wall_left: boolean, wall_right: boolean }
 
@@ -70,6 +71,7 @@ declare mce: {
     overlap2d: (min: vector, max: vector, skip: Entity?) -> { Entity },
     move_and_collide: (e: Entity, delta: vector) -> MoveResult2D,
     teleport2d: (e: Entity, position: vector) -> (),
+    find_path: (from: vector, to: vector, options: PathOptions?) -> { vector }?,
     velocity2d: (e: Entity) -> vector,
     set_velocity2d: (e: Entity, velocity: vector) -> (),
     impulse2d: (e: Entity, impulse: vector, point: vector?) -> (),
