@@ -1,6 +1,6 @@
 # M-VIEWS — Several views and local players (milestone record)
 
-**Status:** active (added 2026-10-16; design note written; step 2 in progress). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
+**Status:** active (added 2026-10-16; design note written; steps 1-2 done). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
 
 **Why:** one camera draws into the window. `Renderer::record_3d(cmd, scene, target)` already renders to a
 texture, but only a C++ host can use it. Input has no notion of a second player. A game cannot show a
@@ -61,7 +61,7 @@ global illumination (the probe volume is shared by all views).
 | # | Step | Linear | Model | State |
 |---|---|---|---|---|
 | 1 | Local players and per-slot input: slot maps (`MapFlag` bits 8..11), per-slot pads, join by button, `P2/` script names (the `LocalPlayer` component moves to step 5, where something uses it) | SBA-161 | Sonnet | done |
-| 2 | Camera viewports and targets, several cameras per frame | SBA-162 | Opus | not started |
+| 2 | Camera viewports and targets, several cameras per frame | SBA-162 | Opus | done |
 | 3 | `RenderTexture`: minimap, mirror, monitor, picture-in-picture | SBA-163 | Opus | not started |
 | 4 | Split-screen: layouts, per-view HUD, listener, budgets | SBA-164 | Opus | not started |
 | 5 | The co-op kit and `samples/09_coop` | SBA-165 | Sonnet | not started |
