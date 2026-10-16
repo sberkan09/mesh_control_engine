@@ -453,10 +453,12 @@ bool timeline_preview(ToolCall& c) {
 // every theme, font, sprite sheet and texture named in its text and, in turn, in theirs, copied with
 // their sidecars into cooked/.render/ui_only/assets with an empty scene for the player to start,
 // then cooked there. A broken scene or asset elsewhere in the project cannot block the preview.
-bool cook_ui_only(ToolCall& c, const editor::ProjectAsset& doc, RenderRequest& rq) {
+bool cook_ui_only(ToolCall& c, const UiDocRef& doc, RenderRequest& rq) {
     const editor::EditorProject& project = c.server.session().project();
     Array<const editor::ProjectAsset*> need;
-    need.push_back(&doc);
+    const editor::ProjectAsset* self = project.find(doc.guid);
+    if (!self) return fail(c, "the UI document is no longer in the project");
+    need.push_back(self);
     for (usize i = 0; i < need.size(); ++i) {
         // Only the engine's own text formats (.mcui, .mcuitheme, .mcsheet) name other assets.
         const StringView rel = need[i]->path.view();
@@ -527,9 +529,9 @@ bool ui_preview(ToolCall& c) {
     rq.width = 960;
     rq.height = 540;
     if (!need_project(c) || !arg_size(c, "width", "height", rq.width, rq.height)) return false;
-    const editor::ProjectAsset* doc = nullptr;
+    UiDocRef doc;  // by value: the cook inside render_ticks rescans the project and frees its records
     if (!ui_document_arg(c, doc)) return false;
-    rq.ui_preview = cook::String(asset::to_string(doc->guid).view());
+    rq.ui_preview = cook::String(asset::to_string(doc.guid).view());
     bool only = false;
     if (!arg_bool(c, "document_only", only)) return false;
     const char* why = only ? "document_only was set" : nullptr;
@@ -548,7 +550,7 @@ bool ui_preview(ToolCall& c) {
             }
         if (rq.scene_rel.empty()) why = "the project has no saved scene to start";
     }
-    if (why && !cook_ui_only(c, *doc, rq)) return false;
+    if (why && !cook_ui_only(c, doc, rq)) return false;
     if (const cook::JsonValue sa = arg(c, "safe_area"); sa.valid()) {
         static constexpr const char* kKeys[4] = {"left", "top", "right", "bottom"};
         if (!sa.is_object()) return arg_missing(c, "safe_area", "an object {left, top, right, bottom} in pixels");
@@ -581,7 +583,7 @@ bool ui_preview(ToolCall& c) {
     draw_safe_area(img, rq);
     c.out.begin_object();
     if (!save.empty()) c.out.key("saved").str(save);
-    c.out.key("document").str(doc->path.view()).key("guid").str(asset_guid_ref(doc->guid).view());
+    c.out.key("document").str(doc.path.view()).key("guid").str(asset_guid_ref(doc.guid).view());
     if (why) c.out.key("document_only").str(why);
     write_result_head(c, rq, software);
     c.out.end_object();

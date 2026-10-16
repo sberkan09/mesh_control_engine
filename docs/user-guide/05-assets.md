@@ -64,6 +64,18 @@ Settings per importer (every key is optional; the defaults are shown):
 Edit settings in the sidecar file, or through MCP's `asset_set_import_settings`. A settings change
 re-cooks the asset.
 
+Three importer rules that the error text alone does not make obvious:
+
+- **glTF is one file.** A `.gltf` whose buffers are separate `.bin` files cooks with `external buffers are not supported`.
+  Export a `.glb` (the buffer is inside it), or a `.gltf` with the buffers embedded as base64 `data:` URIs. Textures
+  are different: they stay separate PNG or JPEG files, adopted like any other texture and referenced by the material.
+- **`asset_write` never writes `format`, `version` or `guid`.** The tool sets them and keeps the file's own GUID, in
+  `merge` and in `replace` mode alike, so leave them out of `content`; passing them is refused
+  (`format, version and guid are set by the tool`). `replace` makes the document exactly `content` plus those three.
+- **Data textures need `"srgb": false`.** A texture is read as colour (sRGB) unless its sidecar says otherwise, which
+  brightens a normal, roughness, metallic, occlusion or LUT map and tilts every normal. Adoption writes `srgb: true`;
+  set `false` for those maps before the first cook (`asset_set_import_settings {"settings": {"srgb": false}}` or the sidecar).
+
 ## 5.3 Adding files
 
 1. Copy the file into `assets/` (any subfolder; the layout is yours).

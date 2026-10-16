@@ -349,6 +349,19 @@ struct Exclude {
     }
 };
 
+// A hit as a table: entity, point, normal and `last` (the ray's distance, or a shape cast's swept fraction).
+void push_hit2d(lua_State* L, const physics::RayHit2D& hit, const char* last) {
+    lua_createtable(L, 0, 4);
+    push_entity(L, hit.entity);
+    lua_setfield(L, -2, "entity");
+    push_vec2(L, hit.point);
+    lua_setfield(L, -2, "point");
+    push_vec2(L, hit.normal);
+    lua_setfield(L, -2, "normal");
+    lua_pushnumber(L, hit.t);
+    lua_setfield(L, -2, last);
+}
+
 // mce.raycast2d(origin, dir, max, exclude?) -> {entity, point, normal, distance} or nil
 int l_raycast2d(lua_State* L) {
     physics::World2D& pw = physics2d(L);
@@ -361,15 +374,7 @@ int l_raycast2d(lua_State* L) {
         lua_pushnil(L);
         return 1;
     }
-    lua_createtable(L, 0, 4);
-    push_entity(L, hit->entity);
-    lua_setfield(L, -2, "entity");
-    push_vec2(L, hit->point);
-    lua_setfield(L, -2, "point");
-    push_vec2(L, hit->normal);
-    lua_setfield(L, -2, "normal");
-    lua_pushnumber(L, hit->t);
-    lua_setfield(L, -2, "distance");
+    push_hit2d(L, *hit, "distance");
     return 1;
 }
 
@@ -451,8 +456,119 @@ int l_impulse2d(lua_State* L) {
     const math::vec2 impulse = check_vec2(L, 2);
     physics::BodyState s;
     if (!pw.body_state(e, s)) return 0;
-    pw.apply_impulse(e, impulse, s.position);
+    // mce.impulse2d(e, impulse, point?): at `point` (world space) to spin the body, default its origin
+    pw.apply_impulse(e, impulse, lua_isnoneornil(L, 3) ? s.position : check_vec2(L, 3));
     return 0;
+}
+
+// A body the call needs: a clear error, not a silent no-op.
+Entity body_arg(lua_State* L, physics::World2D& pw, const char* fn) {
+    const Entity e = check_entity(L, 1);
+    if (!pw.has_body(e)) luaL_error(L, "mce.%s: the entity has no 2D body", fn);
+    return e;
+}
+
+// mce.force2d(e, force): a force on the body's origin, kept until the next physics step
+int l_force2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const Entity e = body_arg(L, pw, "force2d");
+    pw.apply_force(e, check_vec2(L, 2));
+    return 0;
+}
+
+// mce.angular_velocity2d(e) -> radians per second
+int l_angular_velocity2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const Entity e = body_arg(L, pw, "angular_velocity2d");
+    physics::BodyState s;
+    pw.body_state(e, s);
+    lua_pushnumber(L, s.angular_velocity);
+    return 1;
+}
+
+int l_set_angular_velocity2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const Entity e = body_arg(L, pw, "set_angular_velocity2d");
+    pw.set_angular_velocity(e, static_cast<f32>(luaL_checknumber(L, 2)));
+    return 0;
+}
+
+// mce.awake2d(e) -> boolean; mce.set_awake2d(e, awake): false puts the body's whole island to sleep
+int l_awake2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    lua_pushboolean(L, pw.is_awake(body_arg(L, pw, "awake2d")));
+    return 1;
+}
+
+int l_set_awake2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const Entity e = body_arg(L, pw, "set_awake2d");
+    luaL_checktype(L, 2, LUA_TBOOLEAN);
+    pw.set_awake(e, lua_toboolean(L, 2) != 0);
+    return 0;
+}
+
+// mce.set_enabled2d(e, enabled): a disabled body neither moves nor collides
+int l_set_enabled2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const Entity e = body_arg(L, pw, "set_enabled2d");
+    luaL_checktype(L, 2, LUA_TBOOLEAN);
+    pw.set_enabled(e, lua_toboolean(L, 2) != 0);
+    return 0;
+}
+
+// mce.overlap_point2d(point, exclude?) -> true when a shape contains the point
+int l_overlap_point2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const math::vec2 p = check_vec2(L, 1);
+    const Exclude ex{opt_entity(L, 2)};
+    lua_pushboolean(L, pw.overlap_point(p, ex.filter2d()));
+    return 1;
+}
+
+// mce.raycast_all2d(origin, dir, max, exclude?) -> every hit along the ray, nearest first
+int l_raycast_all2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const math::vec2 origin = check_vec2(L, 1);
+    const math::vec2 dir = check_vec2(L, 2);
+    const f32 max = static_cast<f32>(luaL_checknumber(L, 3));
+    const Exclude ex{opt_entity(L, 4)};
+    Array<physics::RayHit2D> hits;
+    pw.raycast_all(origin, dir, max, hits, ex.filter2d());
+    lua_createtable(L, static_cast<int>(hits.size()), 0);
+    for (usize i = 0; i < hits.size(); ++i) {
+        push_hit2d(L, hits[i], "distance");
+        lua_rawseti(L, -2, static_cast<int>(i + 1));
+    }
+    return 1;
+}
+
+// mce.circle_cast2d(from, to, radius, exclude?) / mce.box_cast2d(from, to, half_extents, exclude?)
+//   -> {entity, point, normal, fraction} for the first thing the shape hits on its way, or nil
+int shape_cast2d(lua_State* L, const physics::ColliderShape& shape) {
+    physics::World2D& pw = physics2d(L);
+    const math::vec2 from = check_vec2(L, 1);
+    const math::vec2 to = check_vec2(L, 2);
+    const Exclude ex{opt_entity(L, 4)};
+    const std::optional<physics::RayHit2D> hit = pw.shape_cast(shape, from, to, ex.filter2d());
+    if (!hit) {
+        lua_pushnil(L);
+        return 1;
+    }
+    push_hit2d(L, *hit, "fraction");
+    return 1;
+}
+
+int l_circle_cast2d(lua_State* L) {
+    const f32 r = static_cast<f32>(luaL_checknumber(L, 3));
+    if (!(r > 0.0f)) luaL_error(L, "mce.circle_cast2d: the radius must be above 0");
+    return shape_cast2d(L, physics::ColliderShape::circle(r));
+}
+
+int l_box_cast2d(lua_State* L) {
+    const math::vec2 half = check_vec2(L, 3);
+    if (!(half.x > 0.0f && half.y > 0.0f)) luaL_error(L, "mce.box_cast2d: the half extents must be above 0");
+    return shape_cast2d(L, physics::ColliderShape::box(half));
 }
 
 // mce.raycast3d(origin, dir, max, exclude?) -> {entity, point, normal, distance} or nil
@@ -514,6 +630,16 @@ const luaL_Reg kWorldLib[] = {
     {"velocity2d", l_velocity2d},
     {"set_velocity2d", l_set_velocity2d},
     {"impulse2d", l_impulse2d},
+    {"force2d", l_force2d},
+    {"angular_velocity2d", l_angular_velocity2d},
+    {"set_angular_velocity2d", l_set_angular_velocity2d},
+    {"awake2d", l_awake2d},
+    {"set_awake2d", l_set_awake2d},
+    {"set_enabled2d", l_set_enabled2d},
+    {"overlap_point2d", l_overlap_point2d},
+    {"raycast_all2d", l_raycast_all2d},
+    {"circle_cast2d", l_circle_cast2d},
+    {"box_cast2d", l_box_cast2d},
     {"raycast3d", l_raycast3d},
     {nullptr, nullptr},
 };

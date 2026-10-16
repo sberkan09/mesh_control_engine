@@ -114,7 +114,15 @@ map does not define reads as not pressed and zero.
 | `mce.overlap2d(min, max, skip?)` | the entities whose shapes' boxes overlap the box |
 | `mce.move_and_collide(e, delta)` | moves a character body; `{position, grounded, ground, ceiling, wall_left, wall_right}` |
 | `mce.teleport2d(e, position)` | puts a 2D body at `position` with no sweep (a respawn, a level's start); writing `LocalTransform.position` does not move a body, the physics step writes the body's position back over it |
-| `mce.velocity2d(e)`, `mce.set_velocity2d(e, v)`, `mce.impulse2d(e, v)` | a 2D body's velocity, and pushes |
+| `mce.velocity2d(e)`, `mce.set_velocity2d(e, v)`, `mce.impulse2d(e, v, point?)` | a 2D body's velocity, and pushes; with a world-space `point` the impulse spins the body |
+| `mce.force2d(e, f)` | a force on the body's origin, kept until the next physics step (call it every tick for a thruster) |
+| `mce.angular_velocity2d(e)`, `mce.set_angular_velocity2d(e, w)` | radians per second |
+| `mce.awake2d(e)`, `mce.set_awake2d(e, awake)`, `mce.set_enabled2d(e, enabled)` | sleep (needs sleeping on in the physics config) and switching a body off: a disabled body neither moves nor collides |
+| `mce.overlap_point2d(p, skip?)` | is there a shape at the point |
+| `mce.raycast_all2d(origin, dir, max, skip?)` | every hit along the ray, nearest first, each `{entity, point, normal, distance}` |
+| `mce.circle_cast2d(from, to, radius, skip?)`, `mce.box_cast2d(from, to, half, skip?)` | the first thing a circle or box hits on its way, `{entity, point, normal, fraction}` (0 to 1 along the move), or `nil` |
+
+The 2D body functions raise "the entity has no 2D body" for an entity without one (a body exists from the first physics step).
 | `mce.raycast3d(origin, dir, max, skip?)` | the same for the 3D physics world |
 
 **The rest.**

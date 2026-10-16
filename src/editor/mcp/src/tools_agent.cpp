@@ -126,8 +126,10 @@ const ToolDef kAgentTools[] = {
      docs_search},
     {"engine_capabilities",
      "What a game reaches through what: each engine feature with how it is reached today (data: a component; asset: a "
-     "source file type; mcp: a tool; console; code: needs game C++), plus every component, importable asset type, tool "
-     "and the convar count. Read this before planning a game, to keep game code to the rules.",
+     "source file type; mcp: a tool; console; code: needs game C++ or Luau). Scenes, prefabs, UI documents, timelines, "
+     "skeletons, behaviour trees, terrain and scene changes are data you author through the tools; game rules and "
+     "custom components are the code. Also lists every component, importable asset type, tool and the convar count. "
+     "Read this before planning a game, to keep game code to the rules.",
      R"j({"type":"object","properties":{"area":{"type":"string","description":"Only this area's features (2D, 3D, physics, audio, input, ui, gameplay, scenes, agent, ...)"}}})j",
      engine_capabilities},
     {"gen_palette",

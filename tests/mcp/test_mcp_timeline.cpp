@@ -155,4 +155,24 @@ TEST_CASE("timeline_preview: an agent-authored cutscene seen at several moments"
     CHECK(read_file(timeline_file) == timeline_before);
 }
 
+// timeline_preview over two scenes back to back (the cook inside each call rescans the project): each reply names
+// the scene that was drawn.
+TEST_CASE("timeline_preview: two scenes back to back each echo their own scene") {
+    const std::string root = timeline_project("mcp_timeline_preview_pair");
+    Client c([] {
+        mcp::ServerOptions opt;
+        opt.player = MCE_PLAYER_EXE;
+        return opt;
+    }());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    c.ok("scene_save", R"({"path":"scenes/zz_copy.mcscene"})");
+    for (int i = 0; i < 2; ++i) {
+        auto a = c.ok("timeline_preview", R"({"time":0,"scene":"scenes/zz_copy.mcscene","width":160,"height":120,"software":true})");
+        CHECK(str(a.v().get("scene")) == "scenes/zz_copy.mcscene");
+        auto b = c.ok("timeline_preview", R"({"time":0,"scene":"scenes/demo.mcscene","width":160,"height":120,"software":true})");
+        CHECK(str(b.v().get("scene")) == "scenes/demo.mcscene");
+    }
+}
+
 }  // TEST_SUITE("gpu")

@@ -81,9 +81,12 @@ def cmd_overlap(args):
         return 3
     head_base = BASE_REF
     moved = set((git("diff", "--name-only", f"{since}..{head_base}") or "").split())
-    both = sorted(files & moved)
-    mods = {module_of(f) for f in files} - {None}
-    near = sorted({f for f in moved - files if module_of(f) in mods})
+    # Documents (*.md) never need a --task re-run: nothing built, tested or read by scripts changes with them.
+    code_files = {f for f in files if not f.endswith(".md")}
+    moved = {f for f in moved if not f.endswith(".md")}
+    both = sorted(code_files & moved)
+    mods = {module_of(f) for f in code_files} - {None}
+    near = sorted({f for f in moved - code_files if module_of(f) in mods})
     print(f"premerge: PR changes {len(files)} file(s); {BASE_REF} moved {len(moved)} file(s) since the --task base {since[:10]}")
     if both:
         print("premerge: OVERLAP, both sides changed:")

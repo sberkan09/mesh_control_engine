@@ -1,0 +1,54 @@
+# M-HARDEN — The MCP server's own lifetime and concurrency bugs (milestone record)
+
+**Status:** active, step 1 done (added 2026-10-16). Plan: ROADMAP §M-HARDEN; Linear SBA-195 … SBA-197.
+
+**Why:** M-WORKFLOW step 5 (SBA-184) found that `ui_preview` kept a `ProjectAsset*` across `render_ticks`; the cook inside
+rescans the project and frees those records, so the reply read freed memory. The Opus review of that fix confirmed the
+cause and asked for the pattern to be removed for good: `ui_document_arg` should hand out a value (path and GUID), so a
+`ProjectAsset*` is never carried past a rescan. The same step also left two things open: the two-server test uses two
+`Server` objects, not two processes, and nothing runs the MCP tests under a sanitizer, which is how a use-after-free
+survived.
+
+| # | Step | Linear | Model | State |
+|---|---|---|---|---|
+| 1 | Handles by value: `ui_document_arg` and the other `ProjectAsset*` uses audited | SBA-195 | Sonnet | done |
+| 2 | `run_transcript.py` drives several `mce_mcp` processes; two-process scene test | SBA-196 | Sonnet | not started |
+| 3 | MCP and transcript tests in the ASan stage; findings fixed; the close | SBA-197 | Sonnet | not started |
+
+**Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
+
+## Step 1 — handles by value, SBA-195 (done)
+
+**Rule now:** a `ProjectAsset*` (or reference into `project.assets()`) is never kept across a call that can rescan the
+project: `cook_run`, `session().cook(...)` (so `render_ticks`, `run_headless`, `bt_trace`, `perf_run`, `test_run`,
+`project_check`, `ui_preview`, `timeline_preview`, `render_frame`), `asset_validate_and_write` (every JSON asset write),
+`asset_write`/`asset_create`/import/delete, `project.rescan()`. Path and GUID are copied out first.
+
+**Changed**
+- `ui_document_arg` (`tools.h`, `tools_ui.cpp`) returns a `UiDocRef {path, guid}` by value; `ui_preview` holds that and no
+  longer needs the manual copy-and-null of PR #418.
+- `ui_widget_add/set/remove` (`apply_edit`) and `ui_theme_set`: the reply read `a.path`/`a.guid` (and the theme's `path`)
+  after `asset_validate_and_write` had rescanned. Copied before the write. Same defect as #418, not yet hit by a test.
+- `timeline_add_track/add_key` (`save_edit`): same, copied before the write.
+- Terrain tools (`terrain_sculpt/paint/import/generate`): `write_head` read the record after `save_terrain`'s write.
+  `load_terrain` now returns a local `TerrainRef {path, guid}`; no `ProjectAsset*` leaves it.
+- `bt_trace`: `a->path` was read after `session().cook(false)`. Path copied before it.
+
+**Checked, already safe (copy before the rescan, or no rescanning call after the lookup)**
+`asset_write`, `tilemap_paint`, `asset_set_import_settings` (copies before `rescan()`), `skel2d_*` (`SkelFile` by value),
+`bt_add_node/bt_set/save_tree` (`kept` copy; guid by value), `entity_create` (prefab guid copied at once), `navmesh_bake`
+reply, `asset_read`, `asset_list`, `ui_list`, `project_get` (start scene path), `render_frame/render_sheet/timeline_preview`
+via `parse_common` and `perf_run`, `run_headless` and `test_run` (guid copied out of the lookup loop), `project_check`
+(loops re-read `project.assets()` after its own `rescan()`/`cook()`; `run_headless` there does not rescan),
+`check_ui_document` theme/texture lookups (read at once).
+
+**Left:** the `arg_asset`/`arg_document`/`arg_tree`/`arg_timeline` lookups still return a `ProjectAsset*` to their own
+tool body. They are used before any rescanning call now, and a by-value return for each would be churn with no
+remaining hazard; the one that crossed into another file (`ui_document_arg`) is the one that became a value. No
+behaviour change, replay hashes untouched.
+
+**Tests:** `ui edits echo their own document and GUID after the write rescans the project` (`test_mcp_ui.cpp`, ui edits and
+`ui_theme_set` over two documents); gpu suite: `ui_preview: two documents back to back ...` (path and GUID, a write
+between the calls) and `timeline_preview: two scenes back to back ...` (`test_mcp_timeline.cpp`); the terrain test
+checks the echoed path and GUID. A rescan forced *between* lookup and use is not reachable from the tool surface
+(the lookup and the use are one call), so the ASan stage of step 3 is where that class is caught for good.

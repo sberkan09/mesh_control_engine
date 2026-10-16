@@ -765,7 +765,7 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"texture":"guid:5ce4e000-0000-4000-8000-0000000000ff"}})")
               .find("missing reference") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"colour":[1,1,1,1]}})").find("colour") != std::string::npos);
-    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"guid":"x"}})").find("set by the tool") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"guid":"x"}})").find("set by the tool and kept from the file: leave them out of 'content'") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcscene"})").find("scene_new") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"../b.mcpart"})").find("under assets/") != std::string::npos);
     CHECK_FALSE(std::filesystem::exists(root + "/assets/made/b.mcpart"));
@@ -885,6 +885,9 @@ TEST_CASE("mcp tools: terrain_generate, terrain_sculpt, terrain_paint and terrai
     CHECK(num(g.v().get("height").get("max")) <= 12.05);
     CHECK(num(g.v().get("height").get("max")) > 8.0);
     CHECK(num(g.v().get("resolution")) == 65);
+    // The write rescans the project: the reply names the terrain from copies, not from a freed record.
+    CHECK(str(g.v().get("path")) == "terrain/valley.mcterrain");
+    CHECK(str(g.v().get("guid")).rfind("guid:", 0) == 0);
 
     // A valley floor levelled at 3 m along x; a strength-0 smooth only probes.
     auto f = c.ok("terrain_sculpt", R"({"path":"terrain/valley.mcterrain","op":"flatten","target":3,"strength":1,"hardness":1,)"
