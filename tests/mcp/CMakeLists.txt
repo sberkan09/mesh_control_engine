@@ -113,6 +113,17 @@ target_include_directories(test_mcp_gameplay3d PRIVATE ${CMAKE_CURRENT_SOURCE_DI
 target_compile_definitions(test_mcp_gameplay3d PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_gameplay3d"
     MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 
+# M-MOVE3D demo: the samples/08_movement obstacle course and kart race built over MCP alone.
+mce_add_test(test_mcp_move3d UMBRELLA
+    SOURCES
+        test_mcp_move3d.cpp
+    DEPS
+        mce::mce_mcp_core
+        mce::mce_platform)
+target_include_directories(test_mcp_move3d PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_compile_definitions(test_mcp_move3d PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_move3d"
+    MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
 # project_check against planted problems; ship_build's refusals (its zip is checked in tests/sdk).
 mce_add_test(test_mcp_check UMBRELLA
     SOURCES
