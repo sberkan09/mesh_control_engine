@@ -40,7 +40,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `CharacterController3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | projects/MarbleGarden/assets/scenes/garden.mcscene |
-| `SoundCaption` | `mce/kit/captions.h` | yes | yes | yes | docs/user-guide/10-audio.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
+| `SoundCaption` | `mce/kit/captions.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `CameraRail3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/cutscenes/gate_intro.mctimeline |
 | `CameraLookAt3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/scenes/intro.mcscene |
 | `CameraShake3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
@@ -58,17 +58,17 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Light2D` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/extras_2d/assets/scenes/extras.mcscene |
 | `Parallax` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/main.cpp |
 | `SequencePlayer` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
-| `PathAgent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
+| `PathAgent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `WorldSettings` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/02-projects.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | templates/script/assets/scenes/main.mcscene |
-| `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | projects/MarbleGarden/assets/scenes/garden.mcscene |
-| `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `CameraShake2D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
+| `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `CameraShake2D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `CameraFollow2D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | projects/Glowmoth/assets/scenes/level1.mcscene |
 | `CameraFollow3D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
-| `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
+| `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `Joint3D` | `mce/kit/joints3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `MeshRef` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `PointLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/cinema_demo/assets/cutscenes/gate_intro.mctimeline |
@@ -97,12 +97,12 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Overlap3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
-| `Skeleton2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/05-assets.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `Bone2DFollow` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `Skeleton2DAnimator` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `Skeleton2DSlots` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `Skeleton2DIK` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
-| `IKTarget2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample |
+| `Skeleton2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `Bone2DFollow` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `Skeleton2DAnimator` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `Skeleton2DSlots` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `Skeleton2DIK` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `IKTarget2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |

@@ -16,6 +16,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   the stock player, `mce ship` zips the player, the engine library, the pack and a launcher, and the editor and
   MCP server open it without a module. The engine checkout builds such a project for phones and the browser
   (`scripts/ship.py --project`), and the android, ios and web presets build the Luau runtime. User guide 27.7.
+- 2D and gameplay tour sample, M-COVER step 3 (SBA-159): `samples/kit2d_tour` shows 14 more components with no code: a
+  cut-out puppet with animator, slots, IK goal and a bone follower, a sensor gate that counts events and fires a
+  burst, a camera shake and a captioned sound, a path agent over a collider-built nav grid, and a token pool. It
+  plays headless twice for the same hash (`ctest -R kit2d_tour`).
 - Scripts while you work, M-SCRIPT step 4b (SBA-150): a `.luau` file recooked while the game plays in the
   editor takes effect on the next tick; each script's `update()` has a Tracy zone; a crash report names the
   running script and its Luau stack (`crash::add_context` lets other subsystems add sections too); the

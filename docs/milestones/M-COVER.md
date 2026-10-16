@@ -1,6 +1,6 @@
 # M-COVER — Docs and sample coverage (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–2 done). Plan: ROADMAP §M-COVER; Linear SBA-157 … SBA-160.
+**Status:** active (added 2026-10-16; steps 1–3 done). Plan: ROADMAP §M-COVER; Linear SBA-157 … SBA-160.
 
 **Why:** the capability table (M-DATA-REACH) already fails `local_ci.sh` when a component, asset type or MCP
 tool is named by no document. Nothing checks that a component is *shown working*. A user who finds
@@ -20,7 +20,7 @@ It needs no device and no engine code: the work is a gate and data-only samples.
 |---|---|---|---|
 | 1 | The gate: `capabilities.py --check` (in the walls stage) fails for a component that no file under `samples/`, `projects/` or `templates/` names, unless `scripts/ci/sample_coverage.allow` lists it with a reason; it also fails for a listed component a sample now shows, so the list only shrinks. The table gains a "Shown in" column | SBA-157 | done |
 | 2 | A 3D tour sample, data only, played by the stock player: bone attachment, IK, locomotion, camera shake and blends, probes, GI volume, foliage, terrain collider, decal, 3D particles, nav areas, links and obstacles, a sensor ray, a waypoint circuit and a vehicle driver. A ctest runs it headless twice for the same hash | SBA-158 | done |
-| 3 | A 2D and gameplay tour: a 2D skeleton with animator, slots, follow and IK, camera shake and shake triggers, particle bursts, physics events, a nav grid source with path agents, sound captions, a token pool | SBA-159 | not started |
+| 3 | A 2D and gameplay tour: a 2D skeleton with animator, slots, follow and IK, camera shake and shake triggers, particle bursts, physics events, a nav grid source with path agents, sound captions, a token pool | SBA-159 | done |
 | 4 | A systems tour: replicated and owned entities, a script system, dialogue; the allow-list ends with only state the engine writes (`Blackboard`, `SceneChunkStatus`) | SBA-160 | not started |
 
 **Gates:**
@@ -63,3 +63,23 @@ It needs no device and no engine code: the work is a gate and data-only samples.
 - **Found while writing it.** An `$N` entity reference in a scene is the 0-based position in `entities`, not the
   `id` field; a number past the end fails the cook, but a wrong one inside the range points at the wrong entity with no error.
   `found` flags are the way to tell.
+
+## Step 3 — The 2D and gameplay tour (done, SBA-159)
+
+- **Sample.** `samples/kit2d_tour`, assets only (a hand-written `.mcskel2d`, an ember preset and texture from
+  `extras_2d`, one click from `audio_rooms`). 10 entities:
+  - a puppet with `Skeleton2D`, `Skeleton2DAnimator` (a `wave` clip), `Skeleton2DSlots` and `Skeleton2DIK`, a goal
+    entity with `IKTarget2D` for its two-bone `arm` constraint, and a charm with `Bone2DFollow` on the forearm;
+  - a sensor gate that a ball drops through: `PhysicsEvents` counts the enters and contacts, and on the enter a
+    `ParticleBurst`, a `ShakeTrigger` (shaking the camera's `CameraShake2D`) and an `SfxTrigger` with a
+    `SoundCaption` fire;
+  - a `NavGridSource` built from the colliders and a walker with a `PathAgent`;
+  - an `AiTokenPool`.
+- **Checked by running it.** With MCP `run_headless` and `inspect` after 600 ticks: the IK target `found` is 1, the
+  skeleton has 4 bones, 3 slots and 1 constraint, the animator fired its beat 10 times, the gate saw the ball once
+  (burst, shake and sound each fired once), the floor counted 4 contacts, and the walker arrived at its target.
+- **Found while writing it.** The walker's first lane sat on the floor's inflated cells and the path came back
+  `NoPath` with 192 blocked cells; the lane has to clear the colliders by the grid's `inflate` (0.25 m).
+- **Test.** `ctest -R kit2d_tour`: 600 ticks, 10 entities, no `[error]` or `[warn]`, the same hash twice.
+- **List.** 14 components leave `sample_coverage.allow`; 7 remain (net, script, dialogue, and the two engine-written
+  ones).
