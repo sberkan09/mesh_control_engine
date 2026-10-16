@@ -30,7 +30,7 @@ if(MCE_BUILD_TESTS)
     if(MCE_GPU_TESTS)
         # Windowed: the splash film, the dolly and the cut drawn, with the GL debug layer clean.
         add_test(NAME cinema_demo_player_gpu
-                 COMMAND mce_player -pack "${pack}" -capture_tick 600 -platform.error_box 0 -r.vsync 0)
-        set_tests_properties(cinema_demo_player_gpu PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "600 ticks, 0 GL errors")
+                 COMMAND mce_player -pack "${pack}" -frames 600 -platform.error_box 0 -r.vsync 0)
+        set_tests_properties(cinema_demo_player_gpu PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "600 frames, [0-9]+ ticks, 0 GL errors")
     endif()
 endif()
