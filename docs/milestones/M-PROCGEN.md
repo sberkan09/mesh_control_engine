@@ -22,7 +22,7 @@ dungeon editor.
 | # | Step | Linear | Model | State |
 |---|---|---|---|---|
 | 1 | `mce/kit/procgen.h`: streams, BSP rooms, caves, drunkard's walk, noise threshold; connectivity | SBA-171 | Sonnet | done |
-| 2 | Wave function collapse: adjacency from an example tilemap or rules, pinned cells, bounded restarts | SBA-172 | Sonnet | not started |
+| 2 | Wave function collapse: adjacency from an example tilemap or rules, pinned cells, bounded restarts | SBA-172 | Sonnet | done |
 | 3 | `ProcLevel`: the stock hosts build tilemap, colliders and markers from a seed; also from Luau | SBA-173 | Sonnet | not started |
 | 4 | MCP `procgen_run`, the `reachable` assertion in `.mctest`, user guide | SBA-174 | Sonnet | not started |
 | 5 | `samples/10_dungeon`, a script-only variant, the perf budget and the gates | SBA-175 | Sonnet | not started |
@@ -46,3 +46,16 @@ dungeon editor.
   the exit is the farthest cell, parameters shape the level, stream independence, ASCII, bad parameters, and one
   pinned hash per generator.
 - Known limit: caves below about 16 x 16 can fail with the named error (too little floor survives smoothing).
+
+## Step 2 as built
+
+- `WfcRules`, `WfcPin`, `WfcGrid` and `generate_wfc` in `mce/kit/procgen.h` (docs/engine/kit.md). Integer only: the
+  state is a `u64` option mask per cell, the pick is the fewest options (a seeded draw among ties) and a weighted
+  draw, propagation is a stack. Adjacency is east/south pairs stored both ways; `from_example` learns pairs and
+  weights and sorts tiles by id, so renaming or re-ordering the example does not change the rules.
+- A contradiction restarts on the next attempt's stream up to `max_restarts` times; the error names the cause
+  (`procgen.wfc: contradiction ...`, `... pinned cells contradict ...`, more than 64 tiles).
+- Tests (`tests/kit/test_procgen.cpp`, "wfc: ..."): every neighbour pair allowed over 200 seeds, same seed same
+  grid with a pinned hash, learned rules and id order, weights, pins, errors, the 64-tile cap.
+- Not done: tiles with symmetry/rotation variants, overlapping-model WFC, and rules from a `.mctilemap` file (the
+  example is passed as ids; step 3's `ProcLevel` reads the tilemap).
