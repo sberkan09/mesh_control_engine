@@ -1,6 +1,6 @@
 # M-HARDEN — The MCP server's own lifetime and concurrency bugs (milestone record)
 
-**Status:** active, step 1 done (added 2026-10-16). Plan: ROADMAP §M-HARDEN; Linear SBA-195 … SBA-197.
+**Status:** active, steps 1 and 2 done (added 2026-10-16). Plan: ROADMAP §M-HARDEN; Linear SBA-195 … SBA-197.
 
 **Why:** M-WORKFLOW step 5 (SBA-184) found that `ui_preview` kept a `ProjectAsset*` across `render_ticks`; the cook inside
 rescans the project and frees those records, so the reply read freed memory. The Opus review of that fix confirmed the
@@ -12,7 +12,7 @@ survived.
 | # | Step | Linear | Model | State |
 |---|---|---|---|---|
 | 1 | Handles by value: `ui_document_arg` and the other `ProjectAsset*` uses audited | SBA-195 | Sonnet | done |
-| 2 | `run_transcript.py` drives several `mce_mcp` processes; two-process scene test | SBA-196 | Sonnet | not started |
+| 2 | `run_transcript.py` drives several `mce_mcp` processes; two-process scene test | SBA-196 | Sonnet | done |
 | 3 | MCP and transcript tests in the ASan stage; findings fixed; the close | SBA-197 | Sonnet | not started |
 
 **Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
@@ -52,3 +52,21 @@ behaviour change, replay hashes untouched.
 between the calls) and `timeline_preview: two scenes back to back ...` (`test_mcp_timeline.cpp`); the terrain test
 checks the echoed path and GUID. A rescan forced *between* lookup and use is not reachable from the tool surface
 (the lookup and the use are one call), so the ASan stage of step 3 is where that class is caught for good.
+
+## Step 2 — several real servers, SBA-196 (done)
+
+**Changed:** `tests/mcp/run_transcript.py` learned a second transcript kind, `<name>.multi.jsonl`: lines of
+`{"server":"a","msg":{...}}`. It copies `samples/scene_demo` into one project, starts one `mce_mcp` per distinct server
+name, and sends the lines strictly one at a time (a message with an `id` waits for exactly one reply line from that
+server, 60 s timeout; notifications get none), so the cross-process order is fixed. At the end it closes every stdin
+and checks every exit code. The golden `<name>.multi.golden.jsonl` has `{"server","response"}` per request, normalized
+by the same functions as the single-server goldens. Single-server transcripts and `--update` are unchanged; the one
+ctest `mcp_transcript` runs both kinds.
+
+**Transcript `two_servers_scene`:** a and b open the same scene; a adds Lantern and Door, b adds Guard and Key; both
+save (the second save merges by entity); `scene_info`/`scene_list_entities` on both show all four (a's open copy is
+stale, 8 entities, until it reopens, 10 after); then a and b set `Ball` `Collider2D.restitution` differently, a saves,
+b's save is refused naming `entity 5 "Ball" components/Collider2D` ("nothing was written"), and `overwrite:true` saves
+b's copy with the entity count still 10.
+
+**Found:** no concurrency defect; the merge and the refusal behave as in the in-process `test_mcp_team` case.
