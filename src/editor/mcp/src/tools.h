@@ -57,6 +57,8 @@ bool ui_document_arg(ToolCall& c, const editor::ProjectAsset*& out);
 bool ui_preview(ToolCall& c);
 // tools_timeline.cpp (M-CINEMA step 6): timeline_create, timeline_add_track, timeline_add_key.
 Span<const ToolDef> timeline_tool_table();
+// tools_skeleton2d.cpp (M-ANIM2D step 5): skel2d_create, skel2d_add_bone, skel2d_add_slot, skel2d_add_ik, skel2d_key, skel2d_preview.
+Span<const ToolDef> skeleton2d_tool_table();
 // prefab_tools.cpp: prefab_create_from / prefab_apply / prefab_revert.
 Span<const ToolDef> prefab_tool_table();
 // project_tools.cpp: project_get / project_set / scene_settings_get / scene_settings_set.

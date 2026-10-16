@@ -132,6 +132,8 @@ public:
             quad_lines(q, math::Color{1.0f, 1.0f, 1.0f, 0.35f}, 1.0f, lines_);
         for (EntityId id : scene.selection().items())
             if (entity_quad(scene, id, q)) quad_lines(q, math::Color{1.0f, 0.62f, 0.1f, 1.0f}, 2.0f, lines_);
+        // The open 2D skeleton's bones on the selected entities that play it (Skeleton panel).
+        for (EntityId id : scene.selection().items()) skeleton2d_entity_lines(shell.skeleton2d(), scene, id, lines_);
         math::vec2 pivot;
         if (painting_tiles(shell)) {
             tile_lines(shell);
@@ -725,6 +727,7 @@ void add_default_panels(EditorShell& shell) {
     add_timeline_panel(shell);
     add_animation_panel(shell);
     add_bt_panel(shell);
+    add_skeleton_panel(shell);
     add_project_settings_panel(shell);
 }
 

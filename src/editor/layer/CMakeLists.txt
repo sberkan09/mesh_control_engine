@@ -25,6 +25,7 @@ mce_add_library(mce_editor_layer UMBRELLA
         src/profiler_panel.cpp
         src/project_settings_panel.cpp
         src/scene_panels.cpp
+        src/skeleton_panel.cpp
         src/terrain_panel.cpp
         src/tilemap_panel.cpp
         src/timeline_panel.cpp

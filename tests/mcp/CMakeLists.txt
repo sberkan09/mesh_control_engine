@@ -44,6 +44,7 @@ mce_add_test(test_mcp_agent UMBRELLA NO_CTEST
     SOURCES
         test_mcp_agent.cpp
         test_mcp_ui.cpp
+        test_mcp_skeleton2d.cpp
         test_mcp_timeline.cpp
     DEPS
         mce::mce_mcp_core
