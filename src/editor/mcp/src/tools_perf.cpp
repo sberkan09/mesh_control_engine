@@ -214,7 +214,8 @@ bool perf_run(ToolCall& c) {
         return fail(c, "no player to measure with: start the server with --player <mce_player or the game's host>");
     const cook::String cooked = cook::path_join(root, "cooked");
     cook::String gs(asset::to_string(guid).view()), total, warm, window, input_path;
-    cook::appendf(total, "%llu", static_cast<unsigned long long>(frames + warmup));
+    const u64 total_frames = frames + warmup;
+    cook::appendf(total, "%llu", static_cast<unsigned long long>(total_frames));
     cook::appendf(warm, "%llu", static_cast<unsigned long long>(warmup));
     cook::appendf(window, "%llux%llu", static_cast<unsigned long long>(width), static_cast<unsigned long long>(height));
     Array<StringView> args;

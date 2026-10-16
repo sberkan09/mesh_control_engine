@@ -366,10 +366,19 @@ TEST_CASE("perf_run: draw counters repeat run to run; three more sprite textures
     for (int i = 0; i < 3; ++i) {
         const std::string guid = "5ce4e000-0000-4000-8000-0000000000c" + std::to_string(i);
         const std::string name = "textures/extra" + std::to_string(i) + ".png";
-        write_file(root + "/assets/" + name, make_png(4, 4, std::vector<u8>(64, static_cast<u8>(60 * i + 40))));
-        write_file(root + "/assets/" + name + ".mceasset", sidecar(guid.c_str(), "texture"));
-        c.ok("entity_create", "{\"name\":\"Extra" + std::to_string(i) + "\",\"components\":{\"Sprite\":{\"texture\":\"guid:" + guid +
-                                  "\"},\"LocalTransform\":{\"position\":[" + std::to_string(i) + ",1,0]}}}");
+        std::string path = root;
+        path += "/assets/";
+        path += name;
+        write_file(path, make_png(4, 4, std::vector<u8>(64, static_cast<u8>(60 * i + 40))));
+        write_file(path + ".mceasset", sidecar(guid.c_str(), "texture"));
+        std::string args = "{\"name\":\"Extra";
+        args += std::to_string(i);
+        args += "\",\"components\":{\"Sprite\":{\"texture\":\"guid:";
+        args += guid;
+        args += "\"},\"LocalTransform\":{\"position\":[";
+        args += std::to_string(i);
+        args += ",1,0]}}}";
+        c.ok("entity_create", args);
     }
     c.ok("scene_save");
     auto b = c.ok("perf_run", R"({"frames":30,"warmup":5,"width":320,"height":180,"save":"perf/after.mcperf"})");
