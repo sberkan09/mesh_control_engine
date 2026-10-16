@@ -1,6 +1,7 @@
-// mce_script_compiler: Luau's parser for positioned syntax errors, then luau_compile for the
-// bytecode. The Luau C++ libraries throw internally and catch their own exceptions (Parser::parse
-// and luau_compile both do), so this -fno-exceptions TU only sees results.
+// mce_script_compiler: Luau's parser for positioned syntax errors and the hidden-state check
+// (state_check.h), then luau_compile for the bytecode. The Luau C++ libraries throw internally and
+// catch their own exceptions (Parser::parse and luau_compile both do), so this -fno-exceptions TU
+// only sees results.
 
 #include "mce/script/compiler.h"
 
@@ -13,6 +14,7 @@
 #include "Luau/Lexer.h"
 #include "Luau/Parser.h"
 #include "luacode.h"
+#include "state_check.h"
 
 namespace mce::script {
 
@@ -45,6 +47,9 @@ Result<Array<u8>> compile(StringView name, StringView source, CompileError* erro
             const Luau::Location& at = e.getLocation();
             return compile_failure(name, at.begin.line + 1, at.begin.column + 1, StringView(e.getMessage().c_str()), error);
         }
+        // Then the determinism rules: no state outside components (M-SCRIPT 3).
+        detail::StateIssue issue;
+        if (!detail::check_state(parsed.root, issue)) return compile_failure(name, issue.line, issue.col, issue.message.view(), error);
     }
     lua_CompileOptions opts{};
     opts.optimizationLevel = 1;

@@ -97,6 +97,8 @@ reach all of its non-transient fields.
 | `Skeleton2DSlots` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
+| `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
+| `VehicleDriver3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `VideoPlayer` | `mce/kit/video.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |

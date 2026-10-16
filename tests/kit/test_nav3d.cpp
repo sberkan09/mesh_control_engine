@@ -111,6 +111,28 @@ TEST_CASE("nav3d: an agent steers a character controller") {
     CHECK(s.w.try_get<CharacterController3D>(a)->grounded);
 }
 
+TEST_CASE("nav3d: a steered character eases in at its own acceleration (M-MOVE3D 4)") {
+    // The same walk with the character's instant response and with 2 m/s^2: speed after 0.5 s.
+    auto speed_after = [](f32 acceleration) {
+        Scene s(false);
+        const Entity a = s.agent({-10, 0.9f, 0}, {10, 0, 0});
+        CharacterController3D c;
+        c.acceleration = acceleration;
+        c.deceleration = acceleration;
+        s.w.add(a, c);
+        s.run(30);
+        const f32 x0 = s.pos(a).x;
+        s.run(1);
+        const f32 speed = (s.pos(a).x - x0) * 60.0f;
+        for (u32 i = 0; i < 60 * 25 && s.nav(a).state != NavAgentState::Arrived; ++i) s.run(1);
+        CHECK(s.nav(a).state == NavAgentState::Arrived);
+        return speed;
+    };
+    const f32 instant = speed_after(0.0f), eased = speed_after(2.0f);
+    CHECK(instant > 2.0f);
+    CHECK(eased == doctest::Approx(31.0f / 60.0f * 2.0f).epsilon(0.05));
+}
+
 TEST_CASE("nav3d: an agent follows an entity, re-planning only as it moves away") {
     Scene s(false);
     const Entity leader = s.w.spawn_with(at(8, 0, 0));

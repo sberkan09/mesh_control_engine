@@ -619,3 +619,162 @@ TEST_CASE("move3d: a vehicle run with every feature replays to the same hash") {
 }
 
 
+
+// ---- step 4: AI drivers ------------------------------------------------------------------------------
+
+namespace {
+
+// A 40 x 120 m rectangle of waypoints on the road; the start is 10 m ahead of the car, mid-straight.
+struct Track {
+    Road r;
+    Entity start;
+    Entity points[5];
+    u32 laps = 0;
+    explicit Track(f32 corner_speed = 0.0f) {
+        const math::vec3 at_[5] = {{0, 0, -10}, {0, 0, -90}, {-40, 0, -90}, {-40, 0, 30}, {0, 0, 30}};
+        for (u32 i = 0; i < 5; ++i) points[i] = r.w.spawn_with(at(at_[i].x, at_[i].y, at_[i].z));
+        for (u32 i = 0; i < 5; ++i) {
+            Waypoint3D wp;
+            wp.next = points[(i + 1) % 5];
+            wp.speed = corner_speed;
+            r.w.add(points[i], wp);
+        }
+        start = points[0];
+    }
+    Entity car(const VehicleDriver3D& tune = {}) {
+        Vehicle3D v;
+        v.anti_roll = 8000.0f;
+        const Entity c = r.car(v);
+        VehicleDriver3D d = tune;
+        d.path = start;
+        r.w.add(c, d);
+        return c;
+    }
+    f32 lap_times[8] = {};
+    void run(u32 n) {
+        for (u32 i = 0; i < n; ++i) {
+            r.run(1);
+            for (const LapCompleted3D& ev : EventAccess(r.w).read<LapCompleted3D>())
+                if (laps < 8) lap_times[laps++] = ev.time;
+        }
+    }
+    VehicleDriver3D& drv(Entity e) { return *r.w.try_get_mut<VehicleDriver3D>(e); }
+};
+
+}  // namespace
+
+// Runs a driver until it finishes `laps` (or 150 s); the most roll and the top speed on the way.
+struct LapRun {
+    f32 top = 0.0f;
+    f32 roll = 0.0f;
+    f32 wide = 0.0f;  // the farthest the car got outside the track's rectangle, m
+};
+LapRun drive_laps(Track& t, Entity c) {
+    LapRun out;
+    for (u32 i = 0; i < 60 * 150 && !t.drv(c).finished; ++i) {
+        t.run(1);
+        const math::vec3 p = t.r.pose(c).position;
+        out.top = math::max(out.top, t.r.veh(c).speed);
+        out.roll = math::max(out.roll, t.r.roll(c));
+        out.wide = math::max(out.wide, math::max(math::max(p.x, -40.0f - p.x), math::max(-90.0f - p.z, p.z - 30.0f)));
+    }
+    return out;
+}
+
+TEST_CASE("move3d: a VehicleDriver3D laps the track, brakes for the corners and stops after its laps") {
+    Track t;
+    VehicleDriver3D d;
+    d.laps = 4;
+    const Entity c = t.car(d);
+    t.run(1);
+    CHECK(t.drv(c).target == t.start);
+    const LapRun run = drive_laps(t, c);
+    REQUIRE(t.drv(c).finished == 1);
+    CHECK(t.drv(c).laps_done == 4);
+    CHECK(t.laps == 4);
+    // Laps 2-4 start at speed: within 0.5 s of each other; the first starts from rest.
+    for (u32 i = 1; i < 4; ++i) CHECK(std::fabs(t.lap_times[i] - t.lap_times[1]) < 0.5f);
+    CHECK(t.lap_times[0] > t.lap_times[1]);
+    CHECK(t.drv(c).best_lap <= t.lap_times[1]);
+    CHECK(t.drv(c).last_lap == doctest::Approx(t.lap_times[3]));
+    // Flat out on the straights, flat through the corners, never more than 5 m wide of them.
+    CHECK(run.top > 19.0f);
+    CHECK(run.top < 20.5f);
+    CHECK(run.roll < 0.15f);
+    CHECK(run.wide < 5.0f);
+    // Done: it brakes to a stop and holds there.
+    t.run(180);
+    CHECK(std::fabs(t.r.veh(c).speed) < 0.5f);
+    CHECK(t.r.veh(c).brake == 1.0f);
+    CHECK(t.laps == 4);
+}
+
+TEST_CASE("move3d: corner grip, a waypoint's speed cap and max_speed set the pace") {
+    auto best = [](f32 corner_accel, f32 max_speed) {
+        Track t;
+        VehicleDriver3D d;
+        d.laps = 2;
+        d.corner_accel = corner_accel;
+        d.max_speed = max_speed;
+        const Entity c = t.car(d);
+        const LapRun run = drive_laps(t, c);
+        CHECK(run.roll < 0.15f);
+        CHECK(run.top < max_speed + 0.5f);
+        return t.lap_times[1];
+    };
+    const f32 normal = best(6.0f, 20.0f);
+    CHECK(best(3.0f, 20.0f) > normal + 3.0f);   // half the grip: slower corners
+    CHECK(best(6.0f, 12.0f) > normal + 3.0f);   // a lower top speed
+
+    // A 3 m/s cap on the first corner: the slowest the car goes through it, against no cap.
+    auto slowest = [](f32 cap) {
+        Track t;
+        t.r.w.try_get_mut<Waypoint3D>(t.points[1])->speed = cap;
+        const Entity c = t.car();
+        f32 low = 100.0f;
+        for (u32 i = 0; i < 60 * 12; ++i) {
+            t.run(1);
+            if (i > 180) low = math::min(low, t.r.veh(c).speed);
+        }
+        return low;
+    };
+    const f32 free = slowest(0.0f), capped = slowest(3.0f);
+    CHECK(capped < 3.5f);
+    CHECK(free > capped + 1.0f);
+}
+
+TEST_CASE("move3d: a lap fires FireOn::Lap effects; drive = 0 leaves the inputs alone") {
+    Track t;
+    VehicleDriver3D d;
+    d.laps = 1;
+    const Entity c = t.car(d);
+    ParticleBurst burst;
+    burst.on = FireOn::Lap;
+    t.r.w.add(c, burst);
+    drive_laps(t, c);
+    t.run(2);
+    CHECK(t.laps == 1);
+    CHECK(t.r.w.try_get<ParticleBurst>(c)->fired == 1);
+
+    Track u;
+    VehicleDriver3D off;
+    off.drive = 0;
+    const Entity e = u.car(off);
+    u.r.veh(e).throttle = 0.3f;
+    u.run(60);
+    CHECK(u.r.veh(e).throttle == 0.3f);
+    CHECK(u.drv(e).target.is_null());
+    CHECK(u.r.pose(e).position.z < -1.0f);
+}
+
+TEST_CASE("move3d: a driven lap replays to the same hash") {
+    auto play = [] {
+        Track t;
+        VehicleDriver3D d;
+        d.laps = 1;
+        const Entity c = t.car(d);
+        drive_laps(t, c);
+        return t.r.w.state_hash();
+    };
+    CHECK(play() == play());
+}

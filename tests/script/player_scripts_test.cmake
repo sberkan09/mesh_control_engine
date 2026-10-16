@@ -71,4 +71,11 @@ if(NOT LAST_OUTPUT MATCHES "push.luau:2:13")
     message(FATAL_ERROR "the cook error does not name file:line:col:\n${LAST_OUTPUT}")
 endif()
 
+# State kept outside components fails the cook too (M-SCRIPT 3).
+file(WRITE "${WORK_DIR}/game/assets/scripts/push.luau" "local count = 0\nfunction update()\n    count += 1\nend\n")
+run(1 "${MCE_COOK}" "${WORK_DIR}/game" --pack)
+if(NOT LAST_OUTPUT MATCHES "push.luau:3:5: [^\n]*top-level local 'count'")
+    message(FATAL_ERROR "the cook does not reject hidden state at file:line:col:\n${LAST_OUTPUT}")
+endif()
+
 message(STATUS "scene scripts hold: cooked bytecode runs in the player, errors name file and line")

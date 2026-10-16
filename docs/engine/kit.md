@@ -125,7 +125,9 @@ destroy the bodies.
 
 `vehicles3d.h`: `Vehicle3D` (Jolt wheeled car on a `RigidBody3D`; M-MOVE3D 3 feel: `anti_roll` bars,
 `downforce`, `gears` / `first_gear` / `top_gear` and shift rpm as data, `skid_slip` with `Skid3D`
-events and `FireOn::Skid`, `self_right` after `right_after` seconds flipped).
+events and `FireOn::Skid`, `self_right` after `right_after` seconds flipped); `Waypoint3D` and
+`VehicleDriver3D` (M-MOVE3D 4: pure-pursuit AI driver with corner braking and laps, `LapCompleted3D`,
+`FireOn::Lap`), run inside `"kit3d_vehicles"` before the car takes its inputs.
 
 `sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
 `hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the

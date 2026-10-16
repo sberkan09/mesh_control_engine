@@ -28,6 +28,7 @@ target_compile_definitions(mce_script INTERFACE MCE_HAS_SCRIPT=1)
 mce_add_library(mce_script_compiler UMBRELLA
     SOURCES
         compiler/compiler.cpp
+        compiler/state_check.cpp
     PUBLIC_DEPS
         mce::mce_script
     PRIVATE_DEPS
