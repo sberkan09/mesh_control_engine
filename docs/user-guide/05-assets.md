@@ -23,6 +23,7 @@ formats, which is what keeps the shipped game small and safe.
 | String table | `assets/loc/<locale>.csv` | one language's text by key (`StringTable` chunks) | `TextLabel.loc_key`, `loc::Localization` (chapter 21) |
 | Animation graph | `.mcanim` | states over a mesh's clips, 1D blends, transitions, events | `Animator.graph` |
 | Particle preset | `.mcpart` | emitter parameters | `ParticleEmitter` |
+| Sound set | `.mcsound` | clips picked per play, pitch and gain ranges (an Sfx asset) | anywhere a sound goes (chapter 10.3) |
 | Sequence | `.mcseq` | an action list | `SequencePlayer` |
 | Timeline | `.mctimeline` | keyed tracks: transforms, properties, cuts, cues, subtitles | `TimelinePlayer` (chapter 13.5) |
 | Input map | `.mcinput` | action maps and bindings | the player's input (chapter 11) |
@@ -52,7 +53,7 @@ Settings per importer (every key is optional; the defaults are shown):
 | Importer | Settings |
 |---|---|
 | `texture` | `"srgb": true` (colour data; set `false` for normal maps, LUTs and data textures), `"mips": true`, `"filter": "nearest"` (`"linear"` for smooth, non-pixel-art sprites; chapter 7.1) |
-| `wav` | `"normalize": true` (peak to -1 dBFS), `"loop": false`, `"loop_start"`, `"loop_end"` (source-rate frames; default to the file's own loop markers), `"compress": "pcm"` (`"vorbis"` stores Ogg Vorbis, about a tenth of the size; chapter 10.6), `"quality": 0.4` (Vorbis, -0.1..1) |
+| `wav` | `"normalize": true` (peak to -1 dBFS), `"loop": false`, `"loop_start"`, `"loop_end"` (source-rate frames; default to the file's own loop markers), `"compress": "pcm"` (`"vorbis"` stores Ogg Vorbis, about a tenth of the size; chapter 10.7), `"quality": 0.4` (Vorbis, -0.1..1) |
 | `ogg` | the same as `wav`, with `"compress": "vorbis"` by default |
 | `font` | `"size": 32` (pixel height), `"ranges": [[32, 126]]` (inclusive codepoint ranges), `"padding": 1`, `"strings": true` (also every character the string tables use), `"sdf": true` (bake a distance field: text drawn well above `size` keeps sharp edges; outlines wider than the field fade), `"spread": 4` (with `sdf`: how many pixels at `size` the field reaches, default `size / 8`, at least 2) |
 | `video` | `"audio": true` (keep the film's MP2 sound), `"normalize": false` (raise the sound to -1 dBFS); the film itself is converted to MPEG-1 beforehand (13.7) |

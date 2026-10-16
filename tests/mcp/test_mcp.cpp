@@ -712,7 +712,7 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
     // Every type asset_schema lists is created from its template and cooks clean.
     auto listed = c.ok("asset_schema");
     const cook::JsonValue types = listed.v().get("types");
-    REQUIRE(types.size() == 14);
+    REQUIRE(types.size() == 15);
     for (u32 i = 0; i < types.size(); ++i) {
         const std::string type = str(types.at(i).get("type")), ext = str(types.at(i).get("extension"));
         auto schema = c.ok("asset_schema", R"({"type":")" + type + R"("})");
@@ -725,7 +725,8 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
         CHECK(str(made.v().get("guid")).rfind("guid:", 0) == 0);
         CHECK(std::filesystem::exists(cat({root, "/assets/made/a", ext})));
         CHECK_FALSE(std::filesystem::exists(cat({root, "/assets/made/a", ext, ".mceasset"})));  // native: GUID inline
-        CHECK(compact(c.ok("asset_list", R"({"type":")" + type + R"("})").v()).find("made/a" + ext) != std::string::npos);
+        const std::string listed_as = type == "SoundSet" ? "Sfx" : type;  // a sound set is an Sfx asset
+        CHECK(compact(c.ok("asset_list", R"({"type":")" + listed_as + R"("})").v()).find("made/a" + ext) != std::string::npos);
     }
     auto cook = c.ok("cook_run");
     CHECK_MESSAGE(cook.v().get("ok").as_bool(), compact(cook.v().get("diagnostics")));

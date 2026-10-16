@@ -1,5 +1,5 @@
 // Asset authoring tools (ROADMAP M-DATA-REACH step 1): every JSON source asset the cook reads
-// (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, .mcinput, .mcstore, .mcservices, .mcui, .mcconfig, .mcterrain) can be
+// (.mcpart, .mcsound, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, .mcinput, .mcstore, .mcservices, .mcui, .mcconfig, .mcterrain) can be
 // created, read, rewritten and described over MCP, and a tilemap painted, without the client
 // writing files itself. A document is cooked in memory with the project's importer before
 // anything is written (cook_document: the same reference and value checks as cook_run), so a
@@ -80,6 +80,17 @@ constexpr AssetKind kKinds[] = {
 {"name":"color_end","type":"[r, g, b, a]","default":[1,1,1,1]},
 {"name":"blend","type":"\"alpha\" | \"additive\"","default":"alpha"}])json",
      R"json({"name":"particles","texture":null,"rate":20,"burst":0,"max_particles":256,"duration":0,"lifetime":[0.5,1],"speed":[1,2],"direction":90,"spread":30,"gravity":[0,0],"drag":0,"size":[0.25,0.05],"spin":[0,0],"area":[0,0],"color_start":[1,1,1,1],"color_end":[1,1,1,0],"blend":"alpha"})json"},
+    {"SoundSet", ".mcsound", "mce-sound", 1,
+     "A sound set (M-AUDIO2): clips picked on each play, with a pitch and gain range, so footsteps and impacts vary. "
+     "It is an Sfx asset: name it wherever a sound goes (AudioSource.clip, SfxTrigger.clip, PlaySfx, sequence and "
+     "timeline sound keys). Picks follow the tick, so a replay picks the same.",
+     R"json([
+{"name":"clips","type":"array of guid refs","help":"The Sfx assets to pick from (\"guid:<uuid>\"), up to 4096; not other sound sets"},
+{"name":"pick","type":"\"random\" | \"sequence\"","default":"random"},
+{"name":"no_repeat","type":"boolean","default":true,"help":"random: never the same clip twice in a row"},
+{"name":"pitch","type":"[min, max]","default":[1,1],"help":"Playback rate, 0.25-4 (1.06 is about a semitone up)"},
+{"name":"gain_db","type":"[min, max]","default":[0,0],"help":"Added to the play's gain, -60 to 12 dB"}])json",
+     R"json({"clips":[],"pick":"random","no_repeat":true,"pitch":[0.95,1.05],"gain_db":[-2,0]})json"},
     {"Sequence", ".mcseq", "mce-sequence", 1,
      "An action list a SequencePlayer component plays. Every step is an object with exactly one action key; a looping "
      "sequence needs a step that waits (wait > 0, wait_event or move_to).",
@@ -649,9 +660,9 @@ bool tilemap_paint(ToolCall& c) {
 const ToolDef kAssetTools[] = {
     {"asset_schema",
      "Describe a JSON source asset type: its fields (type, default, help) and the template asset_create starts from. "
-     "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, "
+     "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcsound, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, "
      ".mcinput, .mcstore, .mcservices, .mcui, .mcconfig).",
-     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Timeline, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, or the extension"}}})json",
+     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, SoundSet, Sequence, Timeline, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, or the extension"}}})json",
      asset_schema},
     {"asset_create",
      "Create a JSON source asset at 'path' (its extension picks the type) with a fresh GUID: the type's template with "
