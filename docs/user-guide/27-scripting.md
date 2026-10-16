@@ -130,7 +130,23 @@ map does not define reads as not pressed and zero.
 ## 27.4 The rules
 
 - **No state between ticks.** Everything a script remembers lives in components, so the state hash,
-  saves and replays cover it. Globals are read-only after the script's top level runs.
+  saves, replays and a reload cover it. The cook enforces it: inside a function, assigning a top-level
+  local, writing into a table one holds (`t.x = ...`, `t[k] = ...`) or changing one through
+  `table.insert`/`remove`/`clear`/`sort`/`move`, `rawset`, `setmetatable` or `buffer.write*` is an error
+  at `file:line:col`:
+
+  ```
+  assets/scripts/score.luau:3:5: error: a function assigns top-level local 'count', which would keep state between ticks; keep it in a component [cook.script]
+  ```
+
+  The top level itself may build constant tables and field handles (it runs once, when the script
+  loads), and the locals of `update()` and the closures inside it are fine, since they live for one call.
+  Globals are read-only after the top level runs.
+- **Keys with a stable order.** Iterating a table keyed by tables or functions follows their addresses,
+  which differ between runs. The cook rejects such keys where the source shows them (`{[{}] = 1}`,
+  `seen[f] = true` with `local function f`), and `pairs` and `next` raise when they meet one at run time.
+  Key by entity, number or string. One gap remains until type checking arrives (M-SCRIPT step 4): a
+  plain `for k, v in t do` loop over such a table is not caught.
 - **A sandbox.** Only the `table`, `string`, `math`, `utf8`, `bit32`, `buffer` and `vector` libraries
   are there; `os`, `io`, `debug`, `coroutine`, `print` and `math.random` are not.
 - **Budgets.** Each script gets a step budget per tick and the VM a memory cap. A script that errors or

@@ -1,4 +1,5 @@
 // M-NET2 step 6: rooms with codes through a relay, over SimNetwork.
+// M-NET3 step 3: quick play, the room list and host migration.
 
 #include <doctest/doctest.h>
 
@@ -20,7 +21,12 @@ struct Player {
     PeerId last_from = kInvalidPeer;
     u8 last_channel = 0;
     u32 received = 0;
+    Array<i32> log;  // Connected: peer, Disconnected: -1 - peer, host change: 100 + new host
 };
+
+void on_host_change(void* user, PeerId host) {
+    static_cast<Player*>(user)->log.push_back(100 + static_cast<i32>(host));
+}
 
 // A relay on one endpoint and players that each reach it over their own link, 20 ms each way.
 struct Lobby {
@@ -39,7 +45,10 @@ struct Lobby {
         relay.add_transport(*relay_end);
         for (u32 i = 0; i < n; ++i) {
             players[i].link = &network.add_endpoint(1, 2);
-            players[i].room.start(*players[i].link, players[i].link->connect(*relay_end));
+            RelayClientDesc d;
+            d.on_host_change = on_host_change;
+            d.user = &players[i];
+            players[i].room.start(*players[i].link, players[i].link->connect(*relay_end), d);
         }
     }
     void step(u32 ticks = 1) {
@@ -50,6 +59,8 @@ struct Lobby {
                 for (Event ev; p.room.poll(ev);) {
                     if (ev.kind == EventKind::Connected) p.connected.push_back(ev.peer);
                     if (ev.kind == EventKind::Disconnected) p.left.push_back(ev.peer);
+                    if (ev.kind == EventKind::Connected) p.log.push_back(static_cast<i32>(ev.peer));
+                    if (ev.kind == EventKind::Disconnected) p.log.push_back(-1 - static_cast<i32>(ev.peer));
                     if (ev.kind == EventKind::Received) {
                         ++p.received;
                         p.last_from = ev.peer;
@@ -63,8 +74,8 @@ struct Lobby {
         }
     }
     // Player 0 hosts a room for `max` and players 1..joiners join it.
-    void meet(u32 max, u32 joiners) {
-        REQUIRE(players[0].room.create_room(max));
+    void meet(u32 max, u32 joiners, const RelayRoomOptions& options = {}) {
+        REQUIRE(players[0].room.create_room(max, options));
         step(10);
         REQUIRE(players[0].room.state() == RelayClient::State::InRoom);
         for (u32 i = 1; i <= joiners; ++i) REQUIRE(players[i].room.join_room(players[0].room.room_code()));
@@ -235,4 +246,96 @@ TEST_CASE("net relay: snapshot replication runs unchanged through a room") {
     const Entity seen = client.find(id);
     REQUIRE(client_world.alive(seen));
     CHECK(client_world.try_get<LocalTransform>(seen)->position.x > 15.0f);
+}
+
+TEST_CASE("net relay: quick play fills the fullest open room of the mode, then opens another") {
+    Lobby lobby(5);
+    lobby.step(5);
+    REQUIRE(lobby.players[0].room.quick_play("duel", 2));
+    lobby.step(10);
+    CHECK(lobby.players[0].room.is_host());
+    REQUIRE(lobby.players[1].room.quick_play("duel", 2));  // the open duel
+    lobby.step(10);
+    CHECK(lobby.players[1].room.room_code() == lobby.players[0].room.room_code());
+    CHECK(lobby.players[1].room.member_id() == 1);
+    CHECK(lobby.players[1].room.host_id() == 0);
+    REQUIRE(lobby.players[2].room.quick_play("duel", 2));  // full: a new room
+    REQUIRE(lobby.players[3].room.quick_play("brawl", 4));  // another mode
+    lobby.step(10);
+    CHECK(lobby.players[2].room.is_host());
+    CHECK(lobby.players[2].room.room_code() != lobby.players[0].room.room_code());
+    CHECK(lobby.players[3].room.is_host());
+    CHECK(lobby.relay.stats().quick_plays == 4);
+
+    // A private room never shows up, and is never quick-played into.
+    Lobby other(2);
+    other.meet(4, 0);
+    REQUIRE(other.players[1].room.quick_play("", 4));
+    other.step(10);
+    CHECK(other.players[1].room.is_host());
+
+    // The list: listed rooms only, by mode or all.
+    Player& looker = lobby.players[4];
+    REQUIRE(looker.room.list_rooms("duel"));
+    lobby.step(10);
+    REQUIRE(looker.room.rooms_received() == 1);
+    REQUIRE(looker.room.rooms().size() == 2);
+    u32 members = 0;
+    for (const RelayRoomInfo& r : looker.room.rooms()) {
+        CHECK(r.mode.view() == "duel");
+        CHECK(r.max_members == 2);
+        members += r.members;
+    }
+    CHECK(members == 3);
+    REQUIRE(looker.room.list_rooms());
+    lobby.step(10);
+    CHECK(looker.room.rooms().size() == 3);
+    CHECK(looker.room.state() == RelayClient::State::Idle);  // listing joins nothing
+    CHECK_FALSE(looker.room.list_rooms("a mode name far too long"));
+    CHECK_FALSE(looker.room.quick_play("bad\x01mode", 2));
+}
+
+TEST_CASE("net relay: with host migration the lowest member takes over and the room goes on") {
+    Lobby lobby(5);
+    RelayRoomOptions options;
+    options.host_migration = true;
+    lobby.meet(4, 3, options);
+    for (u32 i = 0; i < 4; ++i) lobby.players[i].log.clear();
+    lobby.players[0].room.leave();
+    lobby.step(10);
+    CHECK(lobby.relay.stats().host_migrations == 1);
+    for (u32 i = 1; i < 4; ++i) {
+        const Player& p = lobby.players[i];
+        CHECK(p.room.state() == RelayClient::State::InRoom);
+        CHECK(p.room.host_id() == 1);
+        // The new host is announced before the old one's Disconnected.
+        REQUIRE(p.log.size() == 2);
+        CHECK(p.log[0] == 101);
+        CHECK(p.log[1] == -1);
+    }
+    CHECK(lobby.players[1].room.is_host());
+    CHECK_FALSE(lobby.players[2].room.is_host());
+
+    // Messages flow to the new host, and it can remove a member.
+    lobby.players[2].room.send(1, 0, text("still here"), Delivery::Reliable);
+    lobby.step(5);
+    CHECK(got(lobby.players[1], "still here"));
+    lobby.players[1].room.disconnect(3);
+    lobby.step(5);
+    CHECK(lobby.players[3].room.state() == RelayClient::State::Closed);
+    lobby.players[2].room.disconnect(3);  // not the host: nothing to remove
+
+    // A newcomer takes the lowest free slot, the old host's.
+    REQUIRE(lobby.players[4].room.join_room(lobby.players[1].room.room_code()));
+    lobby.step(10);
+    CHECK(lobby.players[4].room.member_id() == 0);
+    CHECK(lobby.players[4].room.host_id() == 1);
+    CHECK_FALSE(lobby.players[4].room.is_host());
+
+    // Without migration the room closes as before.
+    Lobby plain(2);
+    plain.meet(2, 1);
+    plain.players[0].room.leave();
+    plain.step(10);
+    CHECK(plain.players[1].room.state() == RelayClient::State::Closed);
 }

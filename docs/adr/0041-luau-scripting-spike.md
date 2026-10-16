@@ -93,3 +93,11 @@ Decision 3 changes: `mce_script` (VM host + scene-script runner) is linked by th
 the editor, `mce_mcp`) and stays out of `MCE_ENGINE_LIBS`; the compiler moved to `mce_script_compiler`, which
 the cook, the editor, tools and tests link and the player never does (open question 1: the player loads
 bytecode only). Scenes name scripts with `kit::ScriptSystem`; records in `docs/milestones/M-SCRIPT.md`.
+
+## Amendment 2026-10-16 (M-SCRIPT step 3)
+
+Open questions 2 and 3 are decided: the compiler checks Luau's AST for state kept outside components
+(assignments from a function into top-level locals and their tables) and for object keys the source shows,
+rather than freezing top-level tables after load; `pairs` and `next` refuse object keys at run time. A
+generalized `for k, v in t` loop over object keys stays uncaught until step 4's type checking. Record:
+`docs/milestones/M-SCRIPT.md`.

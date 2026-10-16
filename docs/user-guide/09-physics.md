@@ -229,7 +229,8 @@ A 3D scene gets a navigation mesh (navmesh) and agents that walk it from five co
   around other agents (`avoid_agents`, `separation`). It writes `state` (Idle, Moving, Arrived,
   NoPath, OffMesh), `velocity`, `distance` and `arrivals`. An agent with a `CharacterController3D`
   (with `use_input` off) drives the controller's `move`, so it walks slopes and steps and pushes
-  bodies; otherwise its `LocalTransform` is put on the mesh. `face_motion` turns its local −Z to the
+  bodies, easing in and out at the controller's own `acceleration` and `deceleration` when they are
+  set (8.7); otherwise its `LocalTransform` is put on the mesh. `face_motion` turns its local −Z to the
   way it walks. With `follow` set to an entity (the player, a cart, a leader) the engine writes that
   entity's position into `target` every tick and re-plans once it has moved `follow_repath` metres,
   so an enemy chases without code.
@@ -324,6 +325,15 @@ Front, All).
 - **Self-righting.** `self_right = 1` puts a car that has stayed tilted past about 53° (or upside
   down) and nearly still for `right_after` seconds back on its wheels, a metre up and facing the way
   it did. `rightings` counts the times.
+- **AI drivers.** Chain `Waypoint3D` entities by `next` (the last back to the first for a loop) and
+  give the car a `VehicleDriver3D` whose `path` is the first: it drives the car itself, writing
+  `throttle`, `steer` and `brake`. It steers at a point `look_ahead` metres down the path, and slows
+  for each corner so its sideways pull stays near `corner_accel` (m/s²), braking at `brake_decel`.
+  It tops out at `max_speed`. A waypoint's `speed` caps the car there, and its `radius` sets how
+  close counts as reached. Passing the first waypoint again completes a lap: `laps_done`,
+  `last_lap` and `best_lap` count it, a `LapCompleted3D` event goes out, and effects with `on: Lap`
+  fire. After `laps` laps (0 runs forever) it brakes to a stop and sets `finished`. `drive = 0`
+  hands the car back. A tall car needs `anti_roll` to take the corners flat.
 
 Changing a setting other than the driver's inputs, the wheel entities, `downforce`, `skid_slip` and
 the self-righting rebuilds the vehicle. The
