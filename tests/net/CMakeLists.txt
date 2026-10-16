@@ -12,6 +12,7 @@ mce_add_test(test_net UMBRELLA
         test_replicated_fields.cpp
         test_replication.cpp
         test_rollback.cpp
+        test_rtc.cpp
         test_sim_network.cpp
         test_websocket.cpp
     DEPS

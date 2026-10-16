@@ -404,6 +404,51 @@ if(MCE_WITH_NET)
     endif()
 endif()
 
+# ---- libdatachannel (WebRTC data channels; mce_net only — M-NET3 step 4) -------------------
+# Direct connections between room members (net::RtcHost): ICE (libjuice), DTLS (the system's
+# OpenSSL) and SCTP (usrsctp). Linux desktop builds with OpenSSL only for now; elsewhere RtcHost
+# keeps every pair on the relay (rtc_none.cpp), and a web build uses the browser's RTCPeerConnection.
+# Its objects are folded into mce_net like ENet's, so a game still adds one library (plus OpenSSL);
+# its own install rules are skipped. Built with its own flags (C++17, exceptions inside it); mce_net
+# calls only its C API, from src/engine/net/src/rtc_native.cpp (the WebRTC wall).
+set(_mce_rtc_default OFF)
+if(MCE_WITH_NET AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT MCE_MOBILE AND NOT MCE_WEB)
+    find_package(OpenSSL QUIET)
+    if(OpenSSL_FOUND)
+        set(_mce_rtc_default ON)
+    endif()
+endif()
+option(MCE_WITH_RTC "Native WebRTC data channels in mce_net (libdatachannel; Linux with OpenSSL)" ${_mce_rtc_default})
+if(MCE_WITH_RTC)
+    find_package(OpenSSL REQUIRED)
+    set(NO_MEDIA ON CACHE BOOL "" FORCE)
+    set(NO_WEBSOCKET ON CACHE BOOL "" FORCE)
+    set(NO_EXAMPLES ON CACHE BOOL "" FORCE)
+    set(NO_TESTS ON CACHE BOOL "" FORCE)
+    FetchContent_Declare(libdatachannel
+        GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
+        GIT_TAG        v0.22.6
+        GIT_SHALLOW    TRUE
+        GIT_SUBMODULES deps/libjuice deps/usrsctp deps/plog deps/json
+        EXCLUDE_FROM_ALL)
+    # Its option(BUILD_SHARED_LIBS ON) must not reach the cache: every later dependency would build shared.
+    set(_mce_skip_install ${CMAKE_SKIP_INSTALL_RULES})
+    set(CMAKE_SKIP_INSTALL_RULES TRUE)
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+    set(BUILD_SHARED_LIBS OFF)
+    FetchContent_MakeAvailable(libdatachannel)
+    unset(BUILD_SHARED_LIBS)
+    unset(CMAKE_POLICY_DEFAULT_CMP0077)
+    set(CMAKE_SKIP_INSTALL_RULES ${_mce_skip_install})
+    foreach(t datachannel-static juice-static usrsctp)
+        if(MSVC)
+            target_compile_options(${t} PRIVATE /W0)
+        else()
+            target_compile_options(${t} PRIVATE -w)
+        endif()
+    endforeach()
+endif()
+
 # ---- Luau (scripting spike; mce_script only — ADR-0041) ------------------------------------
 # A sandboxed Luau VM for the M-SCRIPT spike. Only the VM, the compiler and their parts are built
 # (EXCLUDE_FROM_ALL keeps the CLI, analysis and codegen targets out of `all`). Determinism
