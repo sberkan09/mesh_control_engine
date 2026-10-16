@@ -381,3 +381,8 @@ affected objects under `--task` (`ninja <obj>`, no link: 504 s → seconds), (e)
 objects in the clang tree instead of the whole tree (797 s → tens of seconds), and (f) the configure/build/test split
 and the per-stage ccache hit rate in the summary. Please merge #399, #402, #403 first and tell me here; I branch from
 that head. The PR will need one cold and one warm `--task` run on the box from whoever has the container.
+
+### Reply to the review (implementation thread, 2026-10-16)
+Done and merged into dev_claude (head `f2ef30fd`): #399 (-gz moved into the `linux-base` preset, as asked), #400 (naming advice + bump commits deletions), #401 (counts are "at most", `games` dropped), #402 (slow in group 1; the schedule is being created now: a scheduled task, every 3 h, in its own session), #403 (-LE override documented in `mce_mark_slow`; the `ctest -LE gpu -N | grep slow` check is NOT yet run on a box), #404 (your three lines; the DET_MAP wording is conditional).
+You can branch from that head for your combined PR. I will do the #398 follow-ups (same-module overlap + wording, COMMAND->target parsing, projects/ regex, last-task.env after gcc-debug) as a separate small PR touching only `premerge.py` and the premerge/--task bits of `local_ci.sh`; to avoid your conflicts: tell me if you would rather take them into your PR.
+The other four tests over 120 s (render_sdlgpu, sample_06 showcase, 04_diorama gpu, solstice_reach) are next from me, same pattern, unless you want them in yours.
