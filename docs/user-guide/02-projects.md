@@ -152,10 +152,23 @@ run the SDK's tools with the module loaded. The outputs land in `MyGame/build/` 
 
 | What | Where |
 |---|---|
-| Save slots (`-save <slot>`) | `~/.local/share/MCE/<app>/saves/` on Linux and macOS (`$XDG_DATA_HOME` if set), `%LOCALAPPDATA%\MCE\<app>\saves\` on Windows; `-save_dir` overrides |
-| Crash reports | `~/.local/share/MCE/<app>/crashes/` or `%LOCALAPPDATA%\MCE\<app>\crashes\`; `-crash_dir` overrides, `-crash_reports 0` disables |
+| Save slots (`-save <slot>`) | `<data>/MCE/MCE/saves/`, where `<data>` is the per-user folder in the table below; `-save_dir <dir>` replaces the whole folder. The player logs the one it uses at start (`save folder ...`, info level) |
+| Crash reports | `<data>/MCE/<app>/crashes/`; `-crash_dir` overrides, `-crash_reports 0` disables |
 | Editor dock layout | `mce_editor.ini` in the working directory (`-editor.ini` changes it, empty disables) |
 | Editor autosaves | `<Project>/.mce/autosave/<path under assets/>.autosave` |
+
+`<data>` is the per-user data folder:
+
+| OS | `<data>` | Override |
+|---|---|---|
+| Linux, macOS | `$XDG_DATA_HOME` when set and not empty, else `$HOME/.local/share` (`.` when there is no `HOME`) | set `XDG_DATA_HOME`, e.g. `XDG_DATA_HOME=/tmp/mce my_game` in a container where `HOME` is `/root` |
+| Windows | `%LOCALAPPDATA%` | set `LOCALAPPDATA` |
+| Android | the app's private files folder (`/data/data/<package>/files`) | none |
+| iOS | `$HOME/Library/Application Support` inside the app's container | none |
+
+The engine reads these variables itself (it does not use SDL's preference folder, so SDL's own variables
+do not matter). Whatever the OS, `-save_dir <dir>` wins over all of
+this, for the slots and for the other files that live with them (`settings.cfg`, entitlements).
 
 `<app>` is the `app_name` the host passes, which the template sets to the project name.
 

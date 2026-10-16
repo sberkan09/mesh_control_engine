@@ -11,6 +11,10 @@ when a version is cut.
   caves, walk) with an autopilot that follows the new `ProcLevel.path_markers`, and a `.mctest` per generator that clears ten
   seeds. Luau gets `mce.teleport2d(e, position)`: writing `LocalTransform.position` never moved a 2D body (the physics step
   writes it back), so scripts could not respawn one; EmberScript's respawn now works. M-PROCGEN is done.
+- Captures without a display, M-WORKFLOW step 4 (SBA-183, #380): `-capture`, `-capture_tick` and `-capture_ticks` on a machine with
+  no display switch the player to the offscreen driver and software GL by themselves (one line says so; an explicit
+  `-platform.video_driver` is kept), the player logs its save folder at start, and user guide 16.8 and 2.5 give the container
+  screenshot recipe, what `-frames` vs `-capture_tick` capture and the save folder per OS with `XDG_DATA_HOME` and `-save_dir`.
 - Windowed arena sample, M-NET3 step 5 (SBA-127): `samples/net_arena` is a 2–4 player top-down arena built from
   scene data (`NetReplicated` walls and pads, a server-made `NetOwner` player with `Replicated` health fields), with a
   predicted local player, interpolated others, lag-compensated shots and quick play through `mce_relay`. It runs
@@ -25,17 +29,11 @@ when a version is cut.
   runs the asset module's 19 chunk readers over 22,000 mutated payloads of every chunk the samples cook
   (`ctest -R test_fuzz`); none crashes, hangs or asserts. `docs/milestones/M-FUZZ.md` lists every parser of
   untrusted bytes and what covers it.
-- Nav mesh bakes carry an integrity hash and their layers are checked, M-FUZZ step 2b (SBA-186): `test_fuzz` found
-  that a bake with damaged layer bytes crashed Detour's contour builder (division by zero). `.mcnav` version 2
-  ends with an FNV-1a 64 of the bytes before it, and `navmesh_blob_valid` (also behind `NavMesh3D::load`) decodes
-  every tile layer and refuses a bad header, tile coordinates, area id or a connection out of the grid, even when
-  the hash was made right again; the importer refuses a hash mismatch, and a version-1 file asks for a re-bake (the
-  sample's `nav_13.mcnav` was upgraded).
 - Walked views and more decoders, M-FUZZ step 2 (SBA-186): `test_fuzz` follows every offset and range a consumer
   follows over what the 19 readers accept (so the ASan stage sees an out-of-bounds read), and covers the sprite
   sheet, string table, input map, store, remote config and game services catalogs, UI theme and document (with
   `build_document`) and the nav mesh header check: 48,000 mutants over 25 chunk types. It found that
-  `NavMesh3D::load` crashes on a bake with damaged layer bytes; the fix is step 2b above.
+  `NavMesh3D::load` crashes on a bake with damaged layer bytes; the fix follows in step 2b.
 - Docs checks in the guide, M-DOCCHECK step 4 (SBA-179): user guide 1.8 describes what the walls stage checks in the
   documents and where the accepted misses live. M-DOCCHECK is done.
 - Cook errors name the fix, M-WORKFLOW step 3 (SBA-182, #379): the error for a file without a sidecar says

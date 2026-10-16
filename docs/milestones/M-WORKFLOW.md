@@ -1,6 +1,6 @@
 # M-WORKFLOW — What blind test 3 found in agent authoring (milestone record)
 
-**Status:** active (added 2026-10-16; steps 2 and 3 done). Plan: ROADMAP §M-WORKFLOW; Linear SBA-180 … SBA-184.
+**Status:** active (added 2026-10-16; steps 1, 2, 3 and 4 done). Plan: ROADMAP §M-WORKFLOW; Linear SBA-180 … SBA-184.
 
 **Why:** blind test 3 had three agents build a game (Lantern Keep) over MCP from the SDK and filed GitHub #377 to
 #383. #377 to #381 are bugs and workflow holes in code and documents we own; #382 (Luau, UiFlow) belongs to
@@ -12,13 +12,53 @@ M-SCRIPT and M-UI-DATA2, #383 (content, texture compression, draw calls) to M-VI
 
 | # | Step | Linear | Model | State |
 |---|---|---|---|---|
-| 1 | `NavAgent3D` reaches its speed on a `CharacterController3D` with the default acceleration (#377) | SBA-180 | Opus | not started |
+| 1 | `NavAgent3D` reaches its speed on a `CharacterController3D` with the default acceleration (#377) | SBA-180 | Opus | done |
 | 2 | `scene_open` reloads, `scene_save` refuses a changed file, broken links reported (#378) | SBA-181 | Sonnet | done |
 | 3 | Cook errors name the fix; `cook_run` `paths` and `skip_errors`; stale pack warning (#379) | SBA-182 | Sonnet | done |
-| 4 | Headless `-capture` falls back to offscreen; `-capture_tick`; save folder documented (#380) | SBA-183 | Sonnet | not started |
+| 4 | Headless `-capture` falls back to offscreen; `-capture_tick`; save folder documented (#380) | SBA-183 | Sonnet | done |
 | 5 | Stale documents fixed (#381), the two-server test, the close | SBA-184 | Sonnet | not started |
 
+| 6 | Perceiver forward documented and visible over MCP (`perception_debug_lines`), stale baked component defaults, test bots that crouch and act (#391) | not filed | Sonnet | not started |
+| 7 | Luau entity lookup by name, UiFlow reacting to signals and `GameState`, `pause` keeping audio, cutscenes not holding scripts, UI scale, Retry not reloading the title (#382, added on Sami's word 2026-10-16) | not filed | Opus | not started |
+
 **Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
+
+## Step 4 — #380, SBA-183 (done)
+
+- **What was already there** (the issue was filed against SDK build `ffa87c7c`). `-capture_tick N` and
+  `-capture_ticks a,b,c` exist: the sim holds on the tick and the capture is the first frame after it, with
+  `-input` played by sim tick; `-platform.video_driver offscreen` was in the command-line table (16.1) and a
+  one-line hint in the troubleshooting table; the save folder and `-save_dir` were in 2.5 (`$XDG_DATA_HOME` or
+  `~/.local/share`, `%LOCALAPPDATA%`). `save::root()` is `crash::user_data_root()/MCE/MCE/saves`: the engine reads
+  `XDG_DATA_HOME` itself and does not use `SDL_GetPrefPath`, so SDL's variables do not matter.
+- **What was missing and is now done.** (1) `-capture` / `-capture_tick(s)` with no display still ended in "No
+  available video device". Now `player.cpp` (`init_platform_or_offscreen`) retries `platform::init` on the offscreen driver with
+  `LIBGL_ALWAYS_SOFTWARE=1` (a value already set wins) when a capture was asked for and SDL could not open a video
+  device, and prints `no display for the capture: drawing offscreen with software GL`. An explicit
+  `-platform.video_driver` is never replaced. The layer is the player (SDL init), so a project's own host and
+  `mce play` get it; the Python CLI sets nothing. (2) The player logs `save folder <path>` (info) once at start.
+  (3) Docs: user guide 16.8 (the recipe, which frame each flag gives, the title-menu case), 2.5 (the `<data>` table per
+  OS with the override), the 16.1 rows and the troubleshooting row.
+- **`-frames` with `-capture`** is the Nth rendered frame, whatever tick the sim is on: `-frames 30` was tick 2 offscreen
+  here. That is the "does not land on a fixed tick" of the issue; 16.8 says so and points to `-capture_tick`. The
+  behaviour is unchanged (it is the CI smoke the GPU tests use).
+- **`timeline_preview` over a title menu: not changed, documented.** The tool starts the real player on the scene
+  with `timeline.scrub`; a title menu is drawn by the game (its code or UI document) as a normal part of the scene's
+  run, and the engine has nothing that tells it from a HUD, so there is no safe way to leave it out. The tool already
+  takes `input` and `convars` to press it away or switch it off; 16.8 and the guide say so.
+- **Not done:** a convar that hides all game UI for captures; the capture falls back only when init fails, so a
+  display that exists but is dead (`DISPLAY` set to nothing listening) fails as before and needs
+  `-platform.video_driver offscreen`.
+- **Checked by running it.** In this container (no `DISPLAY`, no GPU) on linux-gcc-debug: `mce_player -pack
+  samples/skel2d_demo/project/assets.mce -capture_tick 120 -capture shots/a.ppm` before the change failed with "No
+  available video device"; after it prints the fallback line, writes a 1280x720 PPM (2,764,816 bytes) and exits `0
+  after 120 ticks`; two runs of `-capture_tick 60` are byte-identical (`cmp`); `-capture_ticks 60,120 -capture
+  "t_{tick}.ppm"` writes both; `-frames 30` ends on tick 2; `LIBGL_ALWAYS_SOFTWARE=1 ... -platform.video_driver
+  offscreen` and `xvfb-run -a ... env LIBGL_ALWAYS_SOFTWARE=1 ...` work; `-platform.video_driver x11` still fails with
+  "x11 not available"; `XDG_DATA_HOME=...` and `-save_dir` move the logged folder. New ctest: `player_save_folder`
+  (headless: logged once, XDG, `-save_dir`) and `player_capture_no_display` (GPU label; `DISPLAY`, `WAYLAND_DISPLAY` and
+  `SDL_VIDEODRIVER` unset: fallback line, `exit 0 after 30 ticks`, a 320x180 PPM of 172,815 bytes, explicit driver
+  respected); both pass.
 
 ## Step 3 — #379, SBA-182 (done)
 
@@ -82,3 +122,13 @@ M-SCRIPT and M-UI-DATA2, #383 (content, texture compression, draw calls) to M-VI
   nothing; `scene_open` replaces a parked copy; an unmergeable save is refused naming the entity, `overwrite`
   saves it, `scene_open {force:true}` recovers; deleting `Ball` reports `Camera.CameraFollow2D.target`, a subtree
   delete reports its child and the link to it. The MCP transcript golden was re-blessed (tool descriptions).
+
+## Step 1 — #377 (done)
+
+- **Cause.** Not the nav agent's acceleration: `kit3d_bodies` treated any change of the entity's pose as a
+  teleport and zeroed the controller's velocity. `NavAgent3D` with `face_motion` (the default) turns the entity
+  every tick, so the controller restarted its acceleration ramp every tick and walked at one tick's worth of
+  `acceleration` (about 0.13 m/s of 3.5). With `acceleration` 0 the ramp does not exist, which is why that hid it.
+- **Fix.** A rotation-only change still teleports the capsule but keeps `velocity`; only a moved position resets it.
+- **Tests.** Two cases in `test_nav3d.cpp`: a steady walk reaches the agent's speed at accelerations 8, 20 and 60,
+  and a patrol whose post keeps moving (the agent turns every tick) covers 3 s at nearly full speed. User guide 9.

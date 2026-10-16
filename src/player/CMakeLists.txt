@@ -93,3 +93,19 @@ if(MCE_BUILD_TESTS AND TARGET mce_cook)
                      -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/perf_test
                      -P ${PROJECT_SOURCE_DIR}/tests/perf/player_perf_test.cmake)
 endif()
+
+# Capture without a display and the save folder line (M-WORKFLOW step 4, #380): the save folder is logged once
+# and follows $XDG_DATA_HOME / -save_dir; a capture with no DISPLAY falls back to the offscreen driver by itself.
+if(MCE_BUILD_TESTS AND TARGET mce_cook)
+    add_test(NAME player_save_folder
+             COMMAND ${CMAKE_COMMAND} -DMODE=save -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/save_folder_test
+                     -P ${PROJECT_SOURCE_DIR}/tests/player/player_capture_test.cmake)
+    if(MCE_GPU_TESTS AND UNIX AND NOT APPLE)
+        add_test(NAME player_capture_no_display
+                 COMMAND ${CMAKE_COMMAND} -DMODE=capture -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                         -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/capture_test
+                         -P ${PROJECT_SOURCE_DIR}/tests/player/player_capture_test.cmake)
+        set_tests_properties(player_capture_no_display PROPERTIES LABELS gpu)
+    endif()
+endif()

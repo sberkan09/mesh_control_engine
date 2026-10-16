@@ -113,8 +113,9 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | done 2026-10-16 (`mce import aseprite`, `tiled`, `ldtk`; MCP `asset_import`; `samples/import_demo`) | none |
 | M-PROCGEN | [M-PROCGEN.md](milestones/M-PROCGEN.md) (Linear SBA-171 … SBA-175, added 2026-10-16) | done | steps 1–5 |
 | M-DOCCHECK | [M-DOCCHECK.md](milestones/M-DOCCHECK.md) (Linear SBA-176 … SBA-179, added 2026-10-16) | done (`scripts/ci/check_docs.py` in the walls stage: links and anchors, `#include` lines of `mce/` headers, `mce_player` flags and a test for every sample and project; `scripts/ci/docs.allow`) | none |
-| M-WORKFLOW | [M-WORKFLOW.md](milestones/M-WORKFLOW.md) (Linear SBA-180 … SBA-184, added 2026-10-16) | active (step 2 done: `scene_open` always re-reads and replaces a parked copy, an unmergeable `scene_save` names the entities and takes `overwrite`, `entity_delete` reports the links that become null; step 3 done: the missing-sidecar error names `cook_run {"adopt":true}` / `mce cook --adopt`, `cook_run` `paths` (cooks a subtree into `cooked/`, never the pack) and `skip_errors` (`failed_files`), `mce play` / `mce headless` warn about a stale pack, an unknown component or field names the module to rebuild and the server to restart) | steps 1, 4, 5 |
-| M-FUZZ | [M-FUZZ.md](milestones/M-FUZZ.md) (Linear SBA-185 … SBA-188, added 2026-10-16) | active (steps 1–2 done: `tests/fuzz` mutator, 25 chunk types over mutated cooked chunks with the accepted views walked, a survey of every parser of untrusted bytes; the nav mesh bake got an integrity hash after the fuzz test crashed Detour) | steps 3–4 |
+| M-WORKFLOW | [M-WORKFLOW.md](milestones/M-WORKFLOW.md) (Linear SBA-180 … SBA-184, added 2026-10-16) | active (steps 1, 2 and 4 done: a capture with no display falls back to the offscreen driver and software GL by itself and says so, the player logs its save folder (user guide 16.8, 2.5); a rotation-only change no longer resets a `CharacterController3D`'s speed (#377); `scene_open` always re-reads and replaces a parked copy, an unmergeable `scene_save` names the entities and takes `overwrite`, `entity_delete` reports the links that become null; step 3 done: the missing-sidecar error names `cook_run {"adopt":true}` / `mce cook --adopt`, `cook_run` `paths` (cooks a subtree into `cooked/`, never the pack) and `skip_errors` (`failed_files`), `mce play` / `mce headless` warn about a stale pack, an unknown component or field names the module to rebuild and the server to restart) | steps 5–7 |
+| M-CONTENT | ROADMAP section (issue #383, added 2026-10-16) | not started | steps 1–3 |
+| M-FUZZ | [M-FUZZ.md](milestones/M-FUZZ.md) (Linear SBA-185 … SBA-188, added 2026-10-16) | active (steps 1–2 done: `tests/fuzz` mutator, 25 chunk types over mutated cooked chunks with the accepted views walked, a survey of every parser of untrusted bytes; 2b nav mesh integrity open) | steps 3–4 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -605,7 +606,7 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Builds, in order:**
 1. A deterministic mutator (`tests/fuzz`) and a survey of every parser of untrusted bytes; the asset module's chunk readers over mutated payloads of every cooked sample chunk.
-2. Walk what the readers accept so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); the nav mesh bake gets an integrity trailer (2b, done); each finding gets a regression test.
+2. Walk what the readers accept so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); the nav mesh bake gets an integrity trailer (2b); each finding gets a regression test.
 3. The importers and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders and the Luau compile path.
 4. The targets in the ASan stage under a time budget; a walls check that a new chunk type has a fuzz target; the close.
 
@@ -630,14 +631,28 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 *Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free. Blind test 3 (three agents building Lantern Keep over MCP from the SDK) filed GitHub #377 to #383. The ones that are bugs or workflow holes in code we own, and not content or another milestone's track (#382 Luau and UiFlow belong to M-SCRIPT and M-UI-DATA2, #383 to M-VISUAL2, M-PERF and M-AUDIO2), are this milestone.*
 
 **Builds, in order:**
-1. **#377, Opus.** A `NavAgent3D` on a `CharacterController3D` with the default `acceleration` follows its path at about 7% of its speed. Find the cause, make the agent reach its configured speed, pin it with a 20 m test; existing replay hashes unchanged.
+1. **#377, Opus (done).** A `NavAgent3D` on a `CharacterController3D` with the default `acceleration` follows its path at about 7% of its speed. Find the cause, make the agent reach its configured speed, pin it with a 20 m test; existing replay hashes unchanged.
 2. **#378.** `scene_open` with `force` re-reads the file; `scene_save` refuses when the file changed on disk since it was opened (naming the entities it would drop; `overwrite` to force); deleting an entity others reference reports the links that become null; `project_check` lists null links.
 3. **#379.** The cook error for a file without a sidecar names `cook_run {"adopt":true}`; `cook_run` takes `paths` and `skip_errors`; `mce play` and `mce headless` warn when the pack is older than the assets; an unknown component names the module to rebuild.
 4. **#380.** `mce play -capture` without a display falls back to the offscreen driver and software GL; `-capture_tick N`; the save folder and its override documented and printed.
 5. **#381 and the close.** The document errors #381 lists are fixed; an MCP transcript test in which two servers edit one scene and neither loses work; the milestone record; batch CI.
+6. **#391.** `Perceiver` forward direction documented and `perception_debug_lines` over MCP; a changed component default re-cooks scenes that omit the field; the shipped test bots crouch and press actions.
+7. **#382 (Sami, 2026-10-16).** Luau entity lookup by name, UiFlow reacting to signals and `GameState`, `pause` keeping audio, cutscenes not holding scripts, a UI scale, Retry not reloading the title.
 
 **Demo:** the Lantern Keep failures replayed as tests: a sentry crossing 20 m at its speed, two MCP servers saving one scene without losing an entity, a project with one bad file cooking the rest.
 **Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
+
+### M-CONTENT — Cooked-pack size and draw-call visibility · **size M (rough guess, ≈ 30–50 h engineering)** · tier: off-tier, gates nothing
+
+*Reason: added 2026-10-16 on Sami's word (issue #383, blind test 3). Lantern Keep's cooked pack was 614 MB because textures are stored uncompressed, and its 3,100 draw calls on a 280k-triangle scene had no report that explained them.*
+
+**Builds, in order:**
+1. **Texture compression.** A `compress` import setting (BC7/BC5 on desktop, ASTC on mobile) in the texture cook; the loader and the RHI upload the compressed formats; a size gate on a sample scene.
+2. **Draw-call report.** `perf_run` and `mce perf` list draw calls by cause (material, no instancing, no static batch) so a budget miss names what to merge.
+3. **`perf_run` progress.** Progress lines while it runs; a `frames` argument for a short run.
+
+**Not in scope:** a bundled realistic sound, texture or model library (content, not engine).
+**Gates:** existing replay hashes unchanged; `local_ci.sh` green on every step.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
