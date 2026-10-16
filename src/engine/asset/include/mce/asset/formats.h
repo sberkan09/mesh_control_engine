@@ -41,6 +41,7 @@ inline constexpr u8 UI_THEME_VERSION = 1;     // CHNK_UITHEME: a UI theme (M-UI-
 inline constexpr u8 TERRAIN_VERSION = 1;      // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1)
 inline constexpr u8 NAVMESH_VERSION = 1;     // CHNK_NAV: the .mcnav bytes as baked (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
 inline constexpr u8 VIDEO_VERSION = 1;       // CHNK_VID: an MPEG-1 program stream + its audio as PCM (M-CINEMA 5)
+inline constexpr u8 SCRIPT_VERSION = 1;      // CHNK_SCRIPT: one Luau script's bytecode (M-SCRIPT 1)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -204,6 +205,27 @@ struct VideoView {
     static Result<VideoView> read(Span<const byte> payload);
 };
 void write_video(const VideoHeader& header, Span<const byte> mpeg, Span<const f32> audio, Array<byte>& out);
+
+// ------------------------------------------------------------------ script (CHNK_SCRIPT)
+// One .luau source compiled by mce_cook (M-SCRIPT 1, ADR-0041): the runtime loads the bytecode and
+// never parses Luau text, so the compiler stays out of the player. `name` is the source path
+// relative to assets/ ("scripts/player.luau"): error messages and stacks say "<name>:<line>".
+// ScriptHeader | bytecode.
+
+struct ScriptHeader {
+    char name[112];        // NUL-terminated, truncated to fit
+    u64 bytecode_offset;
+    u64 bytecode_size;
+};
+static_assert(sizeof(ScriptHeader) == 128);
+
+struct ScriptView {
+    const ScriptHeader* header = nullptr;
+    StringView name;
+    Span<const byte> bytecode;
+    static Result<ScriptView> read(Span<const byte> payload);
+};
+void write_script(StringView name, Span<const byte> bytecode, Array<byte>& out);
 
 // ------------------------------------------------------------------ font (CHNK_FONT)
 

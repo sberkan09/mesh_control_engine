@@ -87,6 +87,9 @@
 #include "mce/kit/captions.h"
 #include "mce/kit/presence.h"
 #include "mce/kit/stock.h"
+#if MCE_HAS_SCRIPT
+#include "mce/script/scene_scripts.h"
+#endif
 #include "mce/kit/cinematic.h"
 #include "mce/kit/timeline.h"
 #include "mce/kit/kit3d.h"
@@ -457,6 +460,9 @@ public:
         physics::install_physics2d(world_);
         audio::install(world_, audio_, &clips_);
         kit::install_stock(world_, &assets_);
+#if MCE_HAS_SCRIPT
+        script::install_scene_scripts(world_, &assets_);  // the scene's ScriptSystems (M-SCRIPT 1)
+#endif
         if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());  // the entitlements live there too
         monetize_on_ = desc_.monetize || cv_monetize.get_bool();
         if (monetize_on_) MCE_TRY(init_monetize(cv_store_catalog.get_string()));

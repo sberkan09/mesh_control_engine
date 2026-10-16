@@ -257,6 +257,35 @@ void write_video(const VideoHeader& header, Span<const byte> mpeg, Span<const f3
     b.finish();
 }
 
+// ------------------------------------------------------------------ script
+
+Result<ScriptView> ScriptView::read(Span<const byte> payload) {
+    constexpr const char* kStage = "asset.script.read";
+    const auto* h = header_of<ScriptHeader>(payload);
+    if (!h) return Error(Errc::Truncated, kStage);
+    if (h->bytecode_size == 0) return bad(kStage);
+    usize len = 0;
+    while (len < sizeof(h->name) && h->name[len] != 0) ++len;
+    if (len == sizeof(h->name)) return bad(kStage);
+    ScriptView v;
+    v.header = h;
+    v.name = StringView(h->name, len);
+    if (!span_at(payload, h->bytecode_offset, h->bytecode_size, v.bytecode)) return bad(kStage);
+    return v;
+}
+
+void write_script(StringView name, Span<const byte> bytecode, Array<byte>& out) {
+    PayloadBuilder b(out);
+    ScriptHeader h{};
+    const usize n = name.size() < sizeof(h.name) - 1 ? name.size() : sizeof(h.name) - 1;
+    for (usize i = 0; i < n; ++i) h.name[i] = name[i];
+    const usize at = b.append(&h, sizeof(h));
+    h.bytecode_offset = b.append(bytecode.data(), bytecode.size());
+    h.bytecode_size = bytecode.size();
+    b.patch(at, h);
+    b.finish();
+}
+
 // ------------------------------------------------------------------ font
 
 const FontGlyph* FontView::find(u32 codepoint) const {

@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Luau scripts as assets, M-SCRIPT step 1 (SBA-147, ADR-0041): `.luau` files under `assets/` cook (importer
+  `script`) to a `Script` asset of Luau bytecode, with syntax errors at `file:line:col`. A `ScriptSystem`
+  component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP
+  `run_headless` run the scene's scripts from bytecode where `MCE_WITH_SCRIPT` is on, and the player links no
+  Luau compiler. Scenes without scripts run and hash as before. New user guide chapter 27 (Scripting in Luau).
 - Material extensions, M-VISUAL2 step 4 (SBA-104): clear coat, sheen, anisotropy and transmission. `.mcmat`
   gains `clearcoat`, `clearcoat_roughness`, `sheen_color`, `sheen_roughness`, `anisotropy`,
   `anisotropy_rotation`, `transmission` and `ior`; glTF files bring the same from `KHR_materials_clearcoat`,

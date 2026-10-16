@@ -144,6 +144,7 @@ mem::UniquePtr<IImporter> make_string_importer();    // assets/loc/<locale>.csv 
 mem::UniquePtr<IImporter> make_envmap_importer();  // .mcenv -> CHNK_TEX (M-VISUAL 2: baked reflection probes)
 mem::UniquePtr<IImporter> make_terrain_importer();  // .mcterrain -> CHNK_TERRAIN (M-TERRAIN 1)
 mem::UniquePtr<IImporter> make_navmesh_importer();  // .mcnav -> CHNK_NAV (M-GAMEPLAY3D 1: a baked navmesh)
+mem::UniquePtr<IImporter> make_script_importer();  // .luau -> CHNK_SCRIPT (M-SCRIPT 1; MCE_WITH_SCRIPT builds only)
 mem::UniquePtr<IImporter> make_shader_importer();  // .vert/.frag/.comp.glsl -> CHNK_SHD (v0.5)
 
 // Parses "guid:<canonical>" (the typed asset-reference spelling in native text assets).

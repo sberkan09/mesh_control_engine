@@ -38,6 +38,7 @@ const char* asset_type_name(asset::ChunkType type) {
         case asset::UiTheme::chunk: return asset::UiTheme::name;
         case asset::Terrain::chunk: return asset::Terrain::name;
         case asset::Video::chunk: return asset::Video::name;
+        case asset::Script::chunk: return asset::Script::name;
         case asset::StringTable::chunk: return asset::StringTable::name;
         case asset::StoreCatalog::chunk: return asset::StoreCatalog::name;
         case asset::GameServicesCatalogChunk::chunk: return asset::GameServicesCatalogChunk::name;

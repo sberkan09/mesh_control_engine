@@ -44,3 +44,8 @@ mce_add_library(mce_editor_core UMBRELLA
         mce::mce_physics3d
         mce::mce_audio
         mce::mce_ui)
+
+# Scene scripts (M-SCRIPT 1): kit::ScriptSystem components run in this host where scripting is on.
+if(MCE_WITH_SCRIPT)
+    target_link_libraries(mce_editor_core PRIVATE mce::mce_script)
+endif()

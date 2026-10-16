@@ -86,3 +86,10 @@ stay in C++. The per-call name lookup in `get`/`set` is the likely first cost to
 The user chose to add the M-SCRIPT milestone (ROADMAP) after reading these results; N2 is reopened for Luau
 only (REQUIREMENTS §5). The open questions above become its steps; this record stays the design of record until
 M-SCRIPT's own decisions amend it.
+
+## Amendment 2026-10-16 (M-SCRIPT step 1)
+
+Decision 3 changes: `mce_script` (VM host + scene-script runner) is linked by the stock hosts (`mce_player`,
+the editor, `mce_mcp`) and stays out of `MCE_ENGINE_LIBS`; the compiler moved to `mce_script_compiler`, which
+the cook, the editor, tools and tests link and the player never does (open question 1: the player loads
+bytecode only). Scenes name scripts with `kit::ScriptSystem`; records in `docs/milestones/M-SCRIPT.md`.

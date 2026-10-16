@@ -46,6 +46,9 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_envmap_importer());
     reg.add(make_terrain_importer());
     reg.add(make_navmesh_importer());
+#if MCE_HAS_SCRIPT
+    reg.add(make_script_importer());
+#endif
 }
 
 bool parse_guid_ref(StringView text, Guid& out) {
