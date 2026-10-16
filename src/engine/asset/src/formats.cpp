@@ -323,6 +323,13 @@ u32 MaterialChunk::pack_uv_scale(f32 u, f32 v) {
     return static_cast<u32>(f32_to_half(u)) | static_cast<u32>(f32_to_half(v)) << 16;
 }
 
+MaterialExt MaterialExt::of_material(Span<const byte> payload) {
+    MaterialExt e{};
+    if (payload.size() >= sizeof(MaterialChunk) + sizeof(MaterialExt))
+        std::memcpy(&e, payload.data() + sizeof(MaterialChunk), sizeof(MaterialExt));
+    return e;
+}
+
 Result<const MaterialChunk*> MaterialChunk::read(Span<const byte> payload) {
     const auto* m = header_of<MaterialChunk>(payload);
     if (!m) return Error(Errc::Truncated, "asset.material.read");
@@ -650,7 +657,7 @@ Result<MeshView> MeshView::read(Span<const byte> payload) {
     constexpr const char* kStage = "asset.mesh.read";
     const auto* h = header_of<MeshHeader>(payload);
     if (!h) return Error(Errc::Truncated, kStage);
-    if (h->flags & ~u32(MeshFlags::Index32 | MeshFlags::Skinned | MeshFlags::Lods | MeshFlags::Ragdoll))
+    if (h->flags & ~u32(MeshFlags::Index32 | MeshFlags::Skinned | MeshFlags::Lods | MeshFlags::Ragdoll | MeshFlags::Materials))
         return Error(Errc::ReservedNonZero, kStage);
     if ((h->flags & MeshFlags::Ragdoll) && !(h->flags & MeshFlags::Skinned)) return Error(Errc::ReservedNonZero, kStage);
     if (!(h->flags & MeshFlags::Skinned) && h->skin_offset != 0) return Error(Errc::ReservedNonZero, kStage);
@@ -695,6 +702,12 @@ Result<MeshView> MeshView::read(Span<const byte> payload) {
     } else {
         for (const MeshSubmesh& sm : v.submeshes)
             if (sm.reserved[0] != 0 || sm.reserved[1] != 0) return Error(Errc::ReservedNonZero, kStage);
+    }
+    if ((h->flags & MeshFlags::Materials) && h->submesh_count > 0) {  // consecutive, one per submesh
+        const u64 at = v.submeshes[0].reserved2[0];
+        if (at % alignof(MaterialExt) != 0 || !span_at(payload, at, h->submesh_count, v.materials)) return bad(kStage, 15);
+        for (u32 s = 0; s < h->submesh_count; ++s)
+            if (v.submeshes[s].reserved2[0] != at + u64(s) * sizeof(MaterialExt)) return bad(kStage, 15);
     }
     for (u32 s = 0; s < h->submesh_count; ++s) {
         const MeshSubmesh& sm = v.submeshes[s];
@@ -805,6 +818,16 @@ void write_mesh(const MeshData& d, Array<byte>& out) {
         sh.vertices_offset = b.append_span(d.skin_vertices);
         sh.submesh_skins_offset = b.append_span(d.submesh_skins);
         b.patch(skin_at, sh);
+    }
+    if (!d.materials.empty()) {
+        MCE_ASSERT_MSG(d.materials.size() == d.submeshes.size(), "write_mesh: one material extension per submesh");
+        h.flags |= MeshFlags::Materials;
+        const usize ext_at = b.append_span(d.materials);
+        for (usize s = 0; s < d.submeshes.size(); ++s) {
+            MeshSubmesh sm = d.submeshes[s];
+            sm.reserved2[0] = static_cast<u32>(ext_at + s * sizeof(MaterialExt));
+            b.patch(static_cast<usize>(h.submeshes_offset) + s * sizeof(MeshSubmesh), sm);
+        }
     }
     b.patch(at, h);
     b.finish();

@@ -569,6 +569,46 @@ void set_texture(asset::MaterialChunk& m, asset::MaterialSlot slot, Guid g) {
     m.textures[static_cast<u32>(slot)][1] = g.lo;
 }
 
+// The KHR_materials_clearcoat / _sheen / _anisotropy / _transmission / _ior factors (M-VISUAL2 4).
+// Their textures are not imported: a warning names each one.
+asset::MaterialExt convert_material_ext(Ctx& cx, const Gltf& g, JsonValue mat_index) {
+    asset::MaterialExt e{};
+    const JsonValue mats = g.root.get("materials");
+    if (!mat_index.valid() || !nonneg(mat_index) || !mats.is_array() || mat_index.as_number() >= mats.size()) return e;
+    const JsonValue ext = mats.at(static_cast<u32>(mat_index.as_number())).get("extensions");
+    if (!ext.is_object()) return e;
+    auto number = [](JsonValue o, StringView key, f32 fallback) {
+        const JsonValue v = o.get(key);
+        return v.is_number() ? static_cast<f32>(v.as_number()) : fallback;
+    };
+    auto no_textures = [&](JsonValue o, std::initializer_list<StringView> keys) {
+        for (StringView k : keys)
+            if (o.get(k).valid()) cx.warning(o.get(k), "this material extension's texture is not imported (its factor is)");
+    };
+    if (const JsonValue c = ext.get("KHR_materials_clearcoat"); c.is_object()) {
+        e.clearcoat = number(c, "clearcoatFactor", 0.0f);
+        e.clearcoat_roughness = number(c, "clearcoatRoughnessFactor", 0.0f);
+        no_textures(c, {"clearcoatTexture", "clearcoatRoughnessTexture", "clearcoatNormalTexture"});
+    }
+    if (const JsonValue s = ext.get("KHR_materials_sheen"); s.is_object()) {
+        if (const JsonValue col = s.get("sheenColorFactor"); col.is_array() && col.size() == 3)
+            for (u32 i = 0; i < 3; ++i) e.sheen_color[i] = static_cast<f32>(col.at(i).as_number());
+        e.sheen_roughness = number(s, "sheenRoughnessFactor", 0.0f);
+        no_textures(s, {"sheenColorTexture", "sheenRoughnessTexture"});
+    }
+    if (const JsonValue a = ext.get("KHR_materials_anisotropy"); a.is_object()) {
+        e.anisotropy = number(a, "anisotropyStrength", 0.0f);
+        e.anisotropy_rotation = number(a, "anisotropyRotation", 0.0f);
+        no_textures(a, {"anisotropyTexture"});
+    }
+    if (const JsonValue t = ext.get("KHR_materials_transmission"); t.is_object()) {
+        e.transmission = number(t, "transmissionFactor", 0.0f);
+        no_textures(t, {"transmissionTexture"});
+    }
+    if (const JsonValue i = ext.get("KHR_materials_ior"); i.is_object()) e.ior = number(i, "ior", 1.5f);
+    return e;
+}
+
 asset::MaterialChunk convert_material(Ctx& cx, const Gltf& g, JsonValue mat_index, TextureRef& tex) {
     asset::MaterialChunk m{};
     m.base_color[0] = m.base_color[1] = m.base_color[2] = m.base_color[3] = 1.0f;
@@ -693,6 +733,7 @@ struct Geometry {
     Array<asset::MeshSkinVertex> skin_vertices;  // parallel to `vertices` (zero for rigid ones)
     Array<u32> indices;  // relative to the submesh's base_vertex
     Array<asset::MeshSubmesh> submeshes;
+    Array<asset::MaterialExt> submesh_ext;  // per submesh (M-VISUAL2 4)
     Array<i32> submesh_gltf_skin;           // per submesh: the glTF skin index, -1 = rigid
     Array<Array<JointBox>> joint_boxes;     // per glTF skin, per joint
     Array<Array<asset::MeshLod>> lods;      // per submesh: its coarser levels, finest first
@@ -779,6 +820,7 @@ bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u3
 
     TextureRef tex;
     const asset::MaterialChunk mat = convert_material(cx, g, prim.get("material"), tex);
+    const asset::MaterialExt mat_ext = lod_of ? asset::MaterialExt{} : convert_material_ext(cx, g, prim.get("material"));
     if (cx.errors()) return false;
 
     Array<FatVertex> fat;
@@ -924,6 +966,7 @@ bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u3
     }
     for (u32 i : idx) geo.indices.push_back(i);
     geo.submeshes.push_back(sm);
+    geo.submesh_ext.push_back(mat_ext);
     geo.submesh_gltf_skin.push_back(skin);
     geo.lods.emplace_back();
     return true;
@@ -1637,6 +1680,9 @@ public:
             for (const asset::MeshLod& l : out.geo.lods[si]) lods.push_back(l);
         }
         d.lods = lods.span();
+        bool any_ext = false;
+        for (const asset::MaterialExt& e : out.geo.submesh_ext) any_ext = any_ext || e.any();
+        if (any_ext) d.materials = out.geo.submesh_ext.span();
         d.vertices = out.geo.vertices.span();
         d.submeshes = out.geo.submeshes.span();
         d.nodes = out.nodes.span();
@@ -1655,7 +1701,8 @@ public:
         asset::write_mesh(d, payload);
         asset::ContainerWriter::ChunkDesc desc;
         desc.type = ChunkType::Mesh;
-        desc.version = asset::chunk_version(asset::MESH_VERSION, ragdoll                  ? asset::MESH_MINOR_RAGDOLL
+        desc.version = asset::chunk_version(asset::MESH_VERSION, any_ext                  ? asset::MESH_MINOR_MATERIALS
+                                                                 : ragdoll                ? asset::MESH_MINOR_RAGDOLL
                                                                  : !lods.empty()          ? asset::MESH_MINOR_LODS
                                                                  : skin_out.skins.empty() ? 0
                                                                                           : asset::MESH_MINOR_SKIN);

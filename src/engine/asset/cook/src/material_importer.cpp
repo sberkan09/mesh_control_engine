@@ -8,6 +8,9 @@
 //   "uv_scale": [1, 1],   (how often the textures repeat across the mesh's UVs: [8, 8] tiles a floor)
 //   "alpha_mode": "opaque" | "mask" | "blend", "alpha_cutoff": 0.5,
 //   "double_sided": false, "unlit": false,
+//   (M-VISUAL2 4, all optional, 0 = off) "clearcoat": 0..1, "clearcoat_roughness": 0..1,
+//   "sheen_color": [r, g, b], "sheen_roughness": 0..1, "anisotropy": -1..1, "anisotropy_rotation": radians,
+//   "transmission": 0..1, "ior": 1..3 (default 1.5),
 //   "textures": { "base_color": "guid:<uuid>", "normal": ..., "metallic_roughness": ..., "emissive": ... }
 // }
 
@@ -82,7 +85,9 @@ public:
         const StringView file = in.display_path;
         const u32 errors_before = diags.error_count();
         if (!detail::check_keys(doc, {"format", "version", "guid", "name", "base_color", "metallic", "roughness", "emissive", "alpha_mode",
-                                      "alpha_cutoff", "double_sided", "unlit", "uv_scale", "textures"},
+                                      "alpha_cutoff", "double_sided", "unlit", "uv_scale", "textures", "clearcoat",
+                                      "clearcoat_roughness", "sheen_color", "sheen_roughness", "anisotropy", "anisotropy_rotation",
+                                      "transmission", "ior"},
                                 file, kStage, diags))
             return false;
         const JsonValue fmt = doc.get("format");
@@ -146,13 +151,43 @@ public:
                 }
             }
         }
+        // The extension lobes, each range-checked; written only when one is set.
+        asset::MaterialExt e{};
+        auto ranged = [&](StringView key, f64 lo, f64 hi, f32& dst) {
+            f64 v = 0;
+            if (!doc.get(key).valid()) return;
+            detail::read_number(doc, key, 0, v, file, kStage, diags);
+            if (v < lo || v > hi) {
+                String msg;
+                appendf(msg, "'%.*s' must be within [%g, %g]", static_cast<int>(key.size()), key.data(), lo, hi);
+                detail::error_at(diags, Errc::ParseError, file, doc.get(key), kStage, msg);
+                return;
+            }
+            dst = static_cast<f32>(v);
+        };
+        ranged("clearcoat", 0, 1, e.clearcoat);
+        ranged("clearcoat_roughness", 0, 1, e.clearcoat_roughness);
+        read_vec(doc, "sheen_color", e.sheen_color, 3, file, diags);
+        ranged("sheen_roughness", 0, 1, e.sheen_roughness);
+        ranged("anisotropy", -1, 1, e.anisotropy);
+        ranged("anisotropy_rotation", -6.2832, 6.2832, e.anisotropy_rotation);
+        ranged("transmission", 0, 1, e.transmission);
+        ranged("ior", 1, 3, e.ior);
         if (diags.error_count() != errors_before) return false;
 
         asset::ContainerWriter::ChunkDesc d;
         d.type = ChunkType::Material;
-        d.version = asset::chunk_version(asset::MATERIAL_VERSION, 0);
         d.guid = in.guid;
-        out.add(d, asset::as_bytes_of(m));
+        if (e.any()) {
+            byte payload[sizeof(m) + sizeof(e)];
+            std::memcpy(payload, &m, sizeof(m));
+            std::memcpy(payload + sizeof(m), &e, sizeof(e));
+            d.version = asset::chunk_version(asset::MATERIAL_VERSION, asset::MATERIAL_MINOR_EXT);
+            out.add(d, Span<const byte>(payload, sizeof(payload)));
+        } else {
+            d.version = asset::chunk_version(asset::MATERIAL_VERSION, 0);
+            out.add(d, asset::as_bytes_of(m));
+        }
         return true;
     }
 };

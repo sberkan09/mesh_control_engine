@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Material extensions, M-VISUAL2 step 4 (SBA-104): clear coat, sheen, anisotropy and transmission. `.mcmat`
+  gains `clearcoat`, `clearcoat_roughness`, `sheen_color`, `sheen_roughness`, `anisotropy`,
+  `anisotropy_rotation`, `transmission` and `ior`; glTF files bring the same from `KHR_materials_clearcoat`,
+  `_sheen`, `_anisotropy`, `_transmission` and `_ior` (factors only). Transmissive materials show the opaque
+  scene behind them, tinted and slightly refracted. Materials without them draw exactly as before. User guide
+  5.7 and 8.5.
 - Performance counter gate and guide, M-PERF step 5 (SBA-117). `scripts/ci/perf_gate.py` runs `perf_run` on
   a copy of a project and fails when draws, passes, dispatches, triangles, meshes, sprites or sprite batches
   grow past the project's `perf/counters.json` (`--update` writes new ones). Glowmoth and Marble Garden run it

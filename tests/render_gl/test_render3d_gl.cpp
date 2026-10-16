@@ -989,6 +989,130 @@ TEST_CASE("render3d_gl: -r.contact_shadows 0 creates no contact-shadow pipeline"
     cv->reset();
 }
 
+// ---- material extensions (M-VISUAL2 4) ------------------------------------------------------------
+
+namespace {
+
+// Mesh 1 again (generation `gen`): a box like the fixture's in `grey`, base roughness `rough` and
+// metallic `metal`, with `ext`'s lobes in a material table (`table` false: no table at all).
+void upload_lobed_box(Fixture3D& f, u32 gen, const asset::MaterialExt& ext, bool table = true, f32 rough = 0.8f, f32 metal = 0.0f,
+                      f32 grey = 0.1f) {
+    mesh_fixture::Builder box;
+    box.add_node(-1);
+    mesh_fixture::Box b;
+    b.center = {0, 0.5f, 0};
+    b.half = {0.5f, 0.5f, 0.5f};
+    b.color[0] = b.color[1] = b.color[2] = grey;
+    b.uvs = true;
+    box.add_box(b);
+    box.submeshes.back().material.roughness = rough;
+    box.submeshes.back().material.metallic = metal;
+    if (table) box.materials.push_back(ext);
+    REQUIRE(f.renderer.meshes().upload(1, gen, box.build().span()).has_value());
+}
+
+// No sun: a flat grey ambient and a uniform white sky reflected at full strength, so what a lobe
+// adds under the ambient shows on every face.
+void lobe_light(Scene3D& s) {
+    no_sun(s);
+    DirectionalLight sun = s.light();
+    sun.ambient_sky = sun.ambient_ground = {0.3f, 0.3f, 0.3f};
+    s.set_light(sun);
+    Sky sky = constant_sky(1.0f, false);
+    sky.specular_ambient = 1.0f;
+    s.set_sky(sky);
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: material lobes: all zero draws today's box; clear coat, sheen and anisotropy each change it") {
+    Fixture3D f;
+    const vec3 top{0.0f, 1.0f, 0.0f}, face{0.0f, 0.5f, 0.5f}, open{2.5f, 0.0f, 2.5f};
+    u32 gen = 2;
+    upload_lobed_box(f, gen++, {}, false);
+    f.render(0.0f, true, lobe_light);
+    const Array<u8> plain = f.pixels;
+    const Rgb top0 = f.at_world(top), face0 = f.at_world(face), open0 = f.at_world(open);
+
+    upload_lobed_box(f, gen++, {});  // a table of zeros: the plain path
+    f.render(0.0f, true, lobe_light);
+    CHECK(differing_bytes(plain, f.pixels) == 0);
+
+    asset::MaterialExt coat{};
+    coat.clearcoat = 1.0f;
+    coat.clearcoat_roughness = 0.05f;
+    upload_lobed_box(f, gen++, coat);
+    f.render(0.0f, true, lobe_light);
+    const Rgb top_c = f.at_world(top), face_c = f.at_world(face);
+    INFO("top " << top0.luma() << " -> coat " << top_c.luma() << ", face " << face0.luma() << " -> " << face_c.luma());
+    CHECK(top_c.luma() > top0.luma() + 6);  // the varnish mirrors the white sky, most at the grazing top
+    CHECK(f.at_world(open).luma() == open0.luma());
+
+    asset::MaterialExt sheen{};
+    sheen.sheen_color[0] = sheen.sheen_color[1] = sheen.sheen_color[2] = 1.0f;
+    sheen.sheen_roughness = 0.5f;
+    upload_lobed_box(f, gen++, sheen);
+    f.render(0.0f, true, lobe_light);
+    const Rgb face_s = f.at_world(face);
+    INFO("face " << face0.luma() << " -> sheen " << face_s.luma());
+    CHECK(face_s.luma() > face0.luma() + 6);
+
+    // Anisotropy on a smooth metal under the sun: the highlight and the reflections stretch.
+    upload_lobed_box(f, gen++, {}, false, 0.3f, 1.0f, 0.9f);
+    f.render();
+    const Array<u8> metal = f.pixels;
+    const Rgb open_sun = f.at_world(open);
+    asset::MaterialExt aniso{};
+    aniso.anisotropy = 0.8f;
+    upload_lobed_box(f, gen++, aniso, true, 0.3f, 1.0f, 0.9f);
+    f.render();
+    CHECK(differing_bytes(metal, f.pixels) > 0);
+    CHECK(f.at_world(open).luma() == open_sun.luma());
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a material's ior sets its dielectric reflectance") {
+    Fixture3D f;
+    upload_lobed_box(f, 2, {}, false, 0.2f);
+    f.render(0.0f, true, lobe_light);
+    const Rgb top0 = f.at_world({0.0f, 1.0f, 0.0f});
+    asset::MaterialExt gem{};
+    gem.ior = 2.4f;  // F0 0.17 against the default 0.04
+    upload_lobed_box(f, 3, gem, true, 0.2f);
+    f.render(0.0f, true, lobe_light);
+    const Rgb top1 = f.at_world({0.0f, 1.0f, 0.0f});
+    INFO("top " << top0.luma() << " -> ior 2.4: " << top1.luma());
+    CHECK(top1.luma() > top0.luma() + 6);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a transmissive material shows the opaque frame through it, with or without MSAA") {
+    for (const u32 msaa : {4u, 1u}) {
+        CAPTURE(msaa);
+        Fixture3D f(msaa);
+        const vec3 face{0.0f, 0.5f, 0.5f}, top{0.0f, 1.0f, 0.0f}, open{2.5f, 0.0f, 2.5f};
+        upload_lobed_box(f, 2, {}, false, 0.5f, 0.0f, 0.9f);
+        f.render();
+        const Rgb face0 = f.at_world(face), top0 = f.at_world(top), open0 = f.at_world(open);
+        CHECK(f.renderer.forward_3d().last_stats().transmissive == 0);
+
+        asset::MaterialExt glass{};
+        glass.transmission = 1.0f;
+        upload_lobed_box(f, 3, glass, true, 0.5f, 0.0f, 0.9f);
+        f.render();
+        const Rgb face1 = f.at_world(face), top1 = f.at_world(top);
+        INFO("face " << face0.luma() << " -> glass " << face1.luma() << ", top " << top0.luma() << " -> " << top1.luma()
+                     << ", open ground " << open0.luma());
+        CHECK(f.renderer.forward_3d().last_stats().transmissive == 1);
+        // The white box's own diffuse is gone: its front face now shows what is behind it, the ground in
+        // the box's shadow, and its top the sunlit ground.
+        CHECK(face1.luma() + 40 < face0.luma());
+        CHECK(std::abs(top1.luma() - open0.luma()) < 30);
+        CHECK(f.at_world(open).luma() == open0.luma());
+        CHECK(f.device->validation_error_count() == 0);
+    }
+}
+
 // ---- local-light shadows (M-VISUAL 4) -----------------------------------------------------------------
 
 namespace {
