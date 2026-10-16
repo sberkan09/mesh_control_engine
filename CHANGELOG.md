@@ -15,6 +15,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   editor takes effect on the next tick; each script's `update()` has a Tracy zone; a crash report names the
   running script and its Luau stack (`crash::add_context` lets other subsystems add sections too); the
   Console and Cook panels open the script an error line names. User guide 27.6.
+- 3D tour sample, M-COVER step 2 (SBA-158): `samples/kit3d_tour` shows 18 more 3D components in one scene with no
+  code: look-at IK, bone attachment, locomotion, camera shake and blends, a reflection probe, a GI volume, foliage,
+  a decal, a 3D fire, a terrain collider, navigation areas, obstacles and links, a ray sensor, and a car on a
+  waypoint circuit. It plays headless twice for the same hash (`ctest -R kit3d_tour`).
 - Sample coverage gate, M-COVER step 1 (SBA-157): `local_ci.sh`'s walls stage now fails for a component that no
   sample, project or template names, unless `scripts/ci/sample_coverage.allow` lists it with a reason. 39
   components start on the list; the next steps show them in three tour samples. The capability table gains a
@@ -153,6 +157,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
   User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
+- WebRTC data channels, M-NET3 step 4 (SBA-126): `net::RtcHost` is a relay room whose members also connect directly
+  over WebRTC, signalled through the relay, so a pair that connects stops paying the relay hop and one that cannot
+  stays on the relay. Native builds use libdatachannel (Linux with OpenSSL; `MCE_WITH_RTC`), a web build the
+  browser's `RTCPeerConnection`, so a browser and a native player connect directly. `mce_relay -echo_mode` runs a
+  native echo member for the headless Chromium probe. User guide 20.8.
 - Matchmaking and host migration, M-NET3 step 3 (SBA-125): `RelayClient::quick_play(mode, size)` puts a player in
   an open room of that mode or makes one, and `list_rooms` fetches listed rooms for a lobby. A room made with
   `host_migration` survives its host: the relay hands it to the lowest member, `on_host_change` tells every member,

@@ -20,7 +20,7 @@ defines `mce::mce_net`. Configure with `-DMCE_WITH_NET=OFF` to leave the module 
 
 ## Public surface
 
-`mce/net/net.h` includes the three headers below.
+`mce/net/net.h` includes the three headers below (and relay.h, rtc.h, rollback.h, websocket.h, covered in the user guide).
 
 `host.h` — `Host`, one UDP endpoint:
 
@@ -211,9 +211,10 @@ loopback, a client-driven player, and the bit-for-bit check.
 
 - No client-side prediction, reconciliation or interpolation buffer: a client shows the newest
   snapshot as-is (smooth enough on a LAN at 60 Hz; visible steps at high latency).
-- Full snapshots only: no delta compression, no interest management (every client gets every entity).
 - No encryption or authentication (put a TLS proxy in front of `mce_relay`'s WebSocket port for `wss://`); no
-  matchmaking, host migration or WebRTC. Players who cannot accept connections meet through `mce_relay`.
+  TURN. Players who cannot accept connections meet through `mce_relay`; `RtcHost` (WebRTC data channels, signalled
+  through it) takes the relay hop out for the pairs that connect.
 - The editor does not run multiplayer sessions: play-in-editor is one world. Test with a server host
   and a client host (or one process, as the sample does).
-- A shipped game that links `mce_net` must carry ENet's MIT notice in its credits.
+- A shipped game that links `mce_net` must carry ENet's MIT notice in its credits (on Linux also libdatachannel,
+  libjuice, usrsctp and OpenSSL's).
