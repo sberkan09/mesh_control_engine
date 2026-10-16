@@ -117,6 +117,7 @@ void write_tree(ToolCall& c, StringView rel, asset::Guid guid, const cook::BtDoc
 
 // Cooks `d` and writes it canonically; false (nothing written) with the cook's errors otherwise.
 bool save_tree(ToolCall& c, StringView rel, asset::Guid guid, const cook::BtDocument& d, const char* what) {
+    const cook::String kept(rel);
     cook::String text;
     cook::write_behavior_tree_document(d, guid, text);
     cook::JsonDoc json;
@@ -133,8 +134,9 @@ bool save_tree(ToolCall& c, StringView rel, asset::Guid guid, const cook::BtDocu
     cook::BtDocument back;
     if (!read_doc(c, rel, text.view(), back, "internal: the written tree does not read")) return false;
     if (!asset_validate_and_write(c, rel, guid, text.view())) return false;
+    // The write rescans the project, which frees the asset path `rel` may point into.
     c.out.begin_object();
-    write_tree(c, rel, guid, back);
+    write_tree(c, kept.view(), guid, back);
     c.out.end_object();
     return true;
 }
