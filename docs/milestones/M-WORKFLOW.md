@@ -17,7 +17,6 @@ M-SCRIPT and M-UI-DATA2, #383 (content, texture compression, draw calls) to M-VI
 | 3 | Cook errors name the fix; `cook_run` `paths` and `skip_errors`; stale pack warning (#379) | SBA-182 | Sonnet | done |
 | 4 | Headless `-capture` falls back to offscreen; `-capture_tick`; save folder documented (#380) | SBA-183 | Sonnet | done |
 | 5 | Stale documents fixed (#381), the two-server test, the close | SBA-184 | Sonnet | done |
-
 | 6 | Perceiver forward documented and visible over MCP (`perception_debug_lines`), stale baked component defaults, test bots that crouch and act (#391) | not filed | Sonnet | not started |
 | 7 | Luau entity lookup by name, UiFlow reacting to signals and `GameState`, `pause` keeping audio, cutscenes not holding scripts, UI scale, Retry not reloading the title (#382, added on Sami's word 2026-10-16) | not filed | Opus | not started |
 
@@ -195,3 +194,6 @@ Each claim of the issue was checked against the code before a document was touch
 - **Fix.** A rotation-only change still teleports the capsule but keeps `velocity`; only a moved position resets it.
 - **Tests.** Two cases in `test_nav3d.cpp`: a steady walk reaches the agent's speed at accelerations 8, 20 and 60,
   and a patrol whose post keeps moving (the agent turns every tick) covers 3 s at nearly full speed. User guide 9.
+- **The 20 m test (SBA-180 follow-up).** A third case walks the agent the issue's 20 m to arrival in two legs (10 m
+  along +X, then a retarget onto a 10 m diagonal) at `acceleration` 14 and 0: the eased walk keeps over 90% of the
+  agent's speed mid-leg and arrives within 1.5 s of the instant one. Without the fix it takes 11.25 s against 7.57 s.
