@@ -5,6 +5,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- A platformer in Luau, M-SCRIPT step 6a (SBA-152): `projects/EmberScript` is a side-view game of scripts and
+  data (player controller, enemy state machine, goal) with `.mctest` scenarios, and `ScriptVars` gives a
+  script-only game 16 saved numbers per entity to remember things in. User guide 27.8.
 - A game with no C++, M-SCRIPT step 5 (SBA-151): `mce new MyGame --template script` makes a project of Luau
   scripts and data with no `CMakeLists.txt`; `mce build` cooks and checks it, `mce play` / `headless` run it on
   the stock player, `mce ship` zips the player, the engine library, the pack and a launcher, and the editor and
