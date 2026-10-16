@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Steam demo and guide, M-STEAM step 6 (SBA-111): `samples/steam_demo` plays on Steam through the stock player;
+  `ctest -R sample_steam_demo` runs it against the stand-in `steam_api` (Steam Input, the overlay, rich presence,
+  achievements, a leaderboard, Steam Cloud, the same state hash with and without Steam, the depot started like
+  Steam starts it). New user guide chapter 26 (Steam) with a release checklist.
 - `ship --steam`, M-STEAM step 5 (SBA-110): `scripts/ship.py --steam <app id>` and `mce ship --steam` lay out the
   desktop build's Steam depot (`steam_api` beside the executable, no `steam_appid.txt`) and the steamcmd app and
   depot build scripts in `dist/<Name>-steam/`; shipping on each OS into the same folder adds its depot. Nothing is
