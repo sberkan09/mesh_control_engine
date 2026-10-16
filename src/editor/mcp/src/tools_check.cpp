@@ -10,9 +10,11 @@
 #include "mce/cook/fs.h"
 #include "mce/cook/image.h"
 #include "mce/cook/json.h"
+#include "mce/cook/ui_text.h"
 #include "mce/editor/project_settings.h"
 #include "mce/mcp/headless_run.h"
 #include "mce/platform/platform.h"
+#include "mce/ui/document_data.h"
 #include "tool_args.h"
 #include "tools_agent.h"
 
@@ -192,60 +194,79 @@ f32 vec_or(cook::JsonValue o, StringView key, u32 lane, f32 def) {
     return v.is_array() && lane < v.size() && v.at(lane).is_number() ? static_cast<f32>(v.at(lane).as_number()) : def;
 }
 
-// A .mcui widget's own text (a tab's "label" counts) and its style's colours, read from the
-// document as authored: "style" over every state ("styles" per state are not read here).
-struct UiTextCheck {
-    StringView file;
-    f32 min_px;
-    bool themed;  // the document takes its colours from a theme: unstated colours are unknown
-    void (*report)(void* user, StringView file, u32 line, StringView msg, StringView fix);
-    void* user;
-
-    void walk(const cook::JsonValue& widgets, bool have_bg, const f32 bg[3]) const {
-        for (u32 i = 0; widgets.is_array() && i < widgets.size(); ++i) walk_one(widgets.at(i), have_bg, bg);
+// The Text, Button and Toggle labels of a .mcui document as the player draws them (M-UI-DATA2 3): the
+// document read the way the cook reads it (kind defaults, "styles", "own_style"), its theme applied,
+// the Normal state's text size and colour judged against the nearest opaque quad behind the label.
+// False when the document or its theme cannot be read (the cook reports those).
+bool check_ui_document(const cook::JsonValue& root, StringView rel_file, const editor::EditorProject& project, f32 min_px, Report& rep) {
+    ui::DocumentData d;
+    cook::DiagList diags;
+    if (!cook::read_ui_document(root, rel_file, d, diags)) return false;
+    if (!d.theme.is_null()) {
+        const editor::ProjectAsset* a = project.find(d.theme);
+        cook::String text;
+        cook::JsonDoc tdoc;
+        cook::JsonError je;
+        ui::ThemeData theme;
+        cook::DiagList tdiags;
+        if (!a || !cook::fs::read_text(project.asset_path(a->path.view()).view(), text) || !tdoc.parse(text.view(), je) ||
+            !cook::read_ui_theme(tdoc.root(), a->path.view(), theme, tdiags))
+            return false;
+        ui::apply_theme(theme, d);
     }
-    void walk_one(const cook::JsonValue& w, bool have_bg, const f32 parent_bg[3]) const {
-        const cook::JsonValue style = w.get("style");
-        f32 bg[3] = {parent_bg[0], parent_bg[1], parent_bg[2]};
-        bool here_bg = have_bg;
-        // A tint the widget draws opaquely enough to read text against (an image's tint colours the
-        // image, which this does not see).
-        const cook::JsonValue kind = w.get("kind");
-        const bool image = kind.is_string() && (kind.as_string() == "Image" || kind.as_string() == "Text");
-        const cook::JsonValue tint = style.get("tint");
-        if (!image && tint.is_array() && tint.size() >= 3 && (tint.size() < 4 || !tint.at(3).is_number() || tint.at(3).as_number() >= 0.5) &&
-            !(style.get("draw_quad").is_bool() && !style.get("draw_quad").as_bool())) {
-            here_bg = read_color(tint, bg);
+    constexpr u32 kNormal = static_cast<u32>(ui::WidgetState::Normal);
+    // Per widget: the colour an opaque quad at or above it shows, if any.
+    Array<u8> has_bg;
+    Array<f32> bgs;
+    has_bg.resize(d.widgets.size());
+    bgs.resize(d.widgets.size() * 3);
+    for (u32 i = 0; i < d.widgets.size(); ++i) {
+        const ui::WidgetData& w = d.widgets[i];
+        const ui::Style& st = w.styles[kNormal];
+        const bool up = w.parent != ui::kNoWidgetIndex;
+        has_bg[i] = up ? has_bg[w.parent] : 0;
+        for (u32 k = 0; k < 3; ++k) bgs[i * 3 + k] = up ? bgs[w.parent * 3 + k] : 0.0f;
+        // An image's tint colours the image, and a Text draws no quad: neither is a panel to read against.
+        if (w.kind != ui::WidgetKind::Image && w.kind != ui::WidgetKind::Text && st.draw_quad && st.tint.a >= 0.5f) {
+            has_bg[i] = 1;
+            bgs[i * 3] = st.tint.r;
+            bgs[i * 3 + 1] = st.tint.g;
+            bgs[i * 3 + 2] = st.tint.b;
         }
-        const cook::JsonValue text = w.get("text");
-        const cook::JsonValue name = w.get("name");
-        const StringView who = name.is_string() ? name.as_string() : StringView("a widget");
-        if (text.is_string() && !text.as_string().empty()) {
-            if (const cook::JsonValue size = style.get("text_size"); size.is_number() && size.as_number() > 0 && size.as_number() < min_px) {
+        const bool labeled = w.kind == ui::WidgetKind::Text || w.kind == ui::WidgetKind::Button || w.kind == ui::WidgetKind::Toggle;
+        if (!labeled || w.text.empty()) continue;
+        // The widget's path from the root, as ui_list and ui_widget_set name it.
+        cook::String path;
+        {
+            Array<u32> chain;
+            for (u32 n = i; n != ui::kNoWidgetIndex; n = d.widgets[n].parent) chain.push_back(n);
+            for (usize c = chain.size(); c-- > 0;) {
+                if (!path.empty()) path += '/';
+                path += d.widgets[chain[c]].name.view();
+            }
+        }
+        if (st.text_size > 0 && st.text_size < min_px) {
+            cook::String msg;
+            cook::appendf(msg, "%.*s: UI text is %.0f px at UI scale 1 (at least %.0f reads on a phone or TV)",
+                          static_cast<int>(path.size()), path.c_str(), static_cast<f64>(st.text_size), static_cast<f64>(min_px));
+            cook::String fix;
+            cook::appendf(fix, "raise its style.text_size to %.0f or more (players can also raise access.text_scale)", static_cast<f64>(min_px));
+            rep.add(Sev::Warning, "accessibility", rel_file, 0, msg.view(), fix.view());
+        }
+        if (has_bg[i]) {
+            const f32 ratio = contrast(luminance(st.text_color.r, st.text_color.g, st.text_color.b),
+                                       luminance(bgs[i * 3], bgs[i * 3 + 1], bgs[i * 3 + 2]));
+            if (ratio < 4.5f) {
                 cook::String msg;
-                cook::appendf(msg, "%.*s: UI text is %.0f px at UI scale 1 (at least %.0f reads on a phone or TV)",
-                              static_cast<int>(who.size()), who.data(), size.as_number(), static_cast<f64>(min_px));
-                cook::String fix;
-                cook::appendf(fix, "raise its style.text_size to %.0f or more (players can also raise access.text_scale)", static_cast<f64>(min_px));
-                report(user, file, size.line(), msg.view(), fix.view());
-            }
-            f32 fg[3] = {1, 1, 1};
-            const bool stated = read_color(style.get("text_color"), fg);
-            if (here_bg && (stated || !themed)) {
-                const f32 ratio = contrast(luminance(fg[0], fg[1], fg[2]), luminance(bg[0], bg[1], bg[2]));
-                if (ratio < 4.5f) {
-                    cook::String msg;
-                    cook::appendf(msg, "%.*s: UI text contrast against the panel behind it is %.1f:1 (WCAG AA asks 4.5:1)",
-                                  static_cast<int>(who.size()), who.data(), static_cast<f64>(ratio));
-                    report(user, file, w.line(), msg.view(), "a lighter or darker style.text_color, or a darker or lighter panel tint");
-                }
+                cook::appendf(msg, "%.*s: UI text contrast against the panel behind it is %.1f:1 (WCAG AA asks 4.5:1)",
+                              static_cast<int>(path.size()), path.c_str(), static_cast<f64>(ratio));
+                rep.add(Sev::Warning, "accessibility", rel_file, 0, msg.view(),
+                        "a lighter or darker style.text_color, or a darker or lighter panel tint");
             }
         }
-        walk(w.get("children"), here_bg, bg);
-        const cook::JsonValue tabs = w.get("tabs");
-        for (u32 t = 0; tabs.is_array() && t < tabs.size(); ++t) walk(tabs.at(t).get("children"), here_bg, bg);
     }
-};
+    return true;
+}
 
 // The colour a backing panel shows behind a label: the smallest Sprite whose rectangle holds the
 // label's position, its tint times its texture's average colour, blended over `clear` by alpha.
@@ -611,13 +632,7 @@ bool project_check(ToolCall& c) {
             cook::String file("assets/");
             file += rel;
             if (ui_doc) {
-                UiTextCheck check{file.view(), opt.min_text_px, doc.root().get("theme").is_string(),
-                                  [](void* user, StringView f, u32 line, StringView msg, StringView fix) {
-                                      static_cast<Report*>(user)->add(Sev::Warning, "accessibility", f, line, msg, fix);
-                                  },
-                                  &rep};
-                const f32 none[3] = {0, 0, 0};
-                check.walk(doc.root().get("widgets"), false, none);
+                (void)check_ui_document(doc.root(), file.view(), project, opt.min_text_px, rep);
             } else if (timeline) {
                 // Sounds and voices with no line on screen: players who cannot hear them miss them.
                 const cook::JsonValue tracks = doc.root().get("tracks");

@@ -89,14 +89,14 @@ The MCP server's `project_check` (14) has an `accessibility` section:
 |---|---|---|
 | A `TextLabel` smaller than 16 px on a 1280 x 720 screen | warning | raise its `height` |
 | A `TextLabel` below 4.5:1 contrast against its backing sprite or the clear color | warning | change either color |
-| `.mcui` text smaller than 16 px at UI scale 1 | warning | raise `style.text_size` |
-| `.mcui` text below 4.5:1 against the nearest opaque panel behind it | warning | change the text or panel color |
+| `.mcui` Text, Button and Toggle labels smaller than 16 px at UI scale 1 | warning | raise `style.text_size` |
+| `.mcui` labels below 4.5:1 against the nearest opaque panel behind them | warning | change the text or panel color |
 | A `.mctimeline` with an audio track and no subtitle track | warning | add the lines on a `subtitle` track |
 | A scene entity with an `SfxTrigger`, or an `AudioSource` not on the Music bus, and no `SoundCaption` | info | add a `SoundCaption` |
 
-Contrast follows WCAG AA (4.5:1 for normal text). The `.mcui` check reads colors as authored: a
-document with a `theme` takes unstated colors from the theme, so they are not judged, and an image
-behind text is not seen. The scene check sees one backing sprite, so text on a card drawn by a
+Contrast follows WCAG AA (4.5:1 for normal text). The `.mcui` check judges a document as the
+player draws it: the kind's default look and the document's `theme` applied, the Normal state's size and
+color, and the finding names the widget by its path (`menu/buy`). An image behind text is not seen. The scene check sees one backing sprite, so text on a card drawn by a
 sprite the check does not pair with it (Undelivered's letter lines) can be flagged though it reads
 well. Read a finding against the game before changing it.
 
