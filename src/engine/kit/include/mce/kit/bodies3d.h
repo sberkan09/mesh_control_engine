@@ -163,6 +163,8 @@ struct TriggerExit3D {  // also when either entity is destroyed
     Entity trigger;
     Entity other;
 };
+MCE_EVENT(TriggerEnter3D, trigger, other)
+MCE_EVENT(TriggerExit3D, trigger, other)
 
 // Registers the components and events and adds the systems (after install_kit3d, which it calls).
 // Idempotent. `assets` (may be null) loads ConvexMesh hulls.

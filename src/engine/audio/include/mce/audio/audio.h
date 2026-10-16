@@ -7,7 +7,8 @@
 // with a per-bus RBJ biquad EQ, a look-ahead master limiter, sample-accurate play_at on the mixer
 // clock, and 3D spatialization (listener + cooked attenuation curves, computed at command time).
 // M-AUDIO2 3: per-bus low/high-pass filters that glide to new cutoffs, and Freeverb reverb units fed
-// by post-fader bus sends and returned into Master.
+// by post-fader bus sends and returned into Master. M-AUDIO2 4: sidechain ducking of the stock buses
+// and a per-bus trim stage that mixer snapshots blend.
 
 #include "mce/math/math.h"
 #include "mce/memory/allocator.h"
@@ -119,6 +120,20 @@ struct ReverbDesc {
     f32 width = 1.f;       // 0 = mono return, 1 = full stereo
     f32 wet_db = 0.f;      // return level; 0 dB is Freeverb's stock level
     bool operator==(const ReverbDesc&) const = default;
+};
+
+// Sidechain ducking (M-AUDIO2 4): while the key bus is louder than the threshold, the ducked bus's
+// gain falls to depth over the attack and comes back over the release. The key is read before its
+// effects and volume, so turning the voice bus down in the options does not stop the ducking.
+// The ducked bus is Music, SFX or UI; the key is any other bus but Master.
+struct DuckDesc {
+    bool enabled = false;
+    BusId key = Bus_UI;
+    f32 depth_db = -10.f;      // the ducked bus's gain while the key plays
+    f32 threshold_db = -40.f;  // key peak level that starts the duck
+    f32 attack_ms = 20.f;
+    f32 release_ms = 400.f;
+    bool operator==(const DuckDesc&) const = default;
 };
 
 // ---- 3D spatialization (FR-AUD-050) -------------------------------------------------------------
@@ -248,6 +263,12 @@ public:
     f32 bus_send_db(BusId bus, u32 unit) const { return bus < kBusCount && unit < kReverbUnits ? send_db_[bus][unit] : -96.f; }
     Result<void> set_reverb(u32 unit, const ReverbDesc& desc);
     ReverbDesc reverb(u32 unit) const { return unit < kReverbUnits ? reverb_[unit] : ReverbDesc{}; }
+    // A gain stage after the bus gain (M-AUDIO2 4), ramped over 10 ms: what a mixer snapshot turns
+    // down, kept apart from the options-screen volume.
+    void set_bus_trim(BusId bus, f32 trim_db);
+    f32 bus_trim_db(BusId bus) const { return bus < kBusCount ? trim_db_[bus] : 0.f; }
+    Result<void> set_bus_duck(BusId bus, const DuckDesc& desc);
+    DuckDesc bus_duck(BusId bus) const { return bus > Bus_Master && bus < Bus_User0 ? duck_[bus] : DuckDesc{}; }
     // The audio.reverb option (bind_convars): false keeps every unit off, whatever set_reverb asks.
     void set_reverb_allowed(bool allowed);
     bool reverb_allowed() const { return reverb_allowed_; }
@@ -297,6 +318,8 @@ private:
     f32 send_db_[kBusCount][kReverbUnits] = {};
     ReverbDesc reverb_[kReverbUnits];
     LimiterDesc limiter_;
+    f32 trim_db_[kBusCount] = {};
+    DuckDesc duck_[Bus_User0];
     bool reverb_allowed_ = true;
     Listener listener_;
     u64 command_hash_ = 0;

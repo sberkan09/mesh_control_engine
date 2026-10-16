@@ -17,9 +17,10 @@
 
 namespace mce::audio {
 
-// The mixer's stock buses as an enum (the BusId values), for components a scene authors.
-enum class AudioBus : u8 { Master = Bus_Master, Music = Bus_Music, SFX = Bus_SFX, UI = Bus_UI };
-MCE_ENUM(AudioBus, Master, Music, SFX, UI)
+// The mixer's stock buses as an enum (the BusId values), for components a scene authors. Voice is
+// the first user bus, for dialogue lines that other buses duck under (M-AUDIO2 4).
+enum class AudioBus : u8 { Master = Bus_Master, Music = Bus_Music, SFX = Bus_SFX, UI = Bus_UI, Voice = Bus_User0 };
+MCE_ENUM(AudioBus, Master, Music, SFX, UI, Voice)
 
 struct AudioSource {
     // The cooked Sfx asset, or a sound set (.mcsound: a clip, pitch and gain picked on each start);
@@ -113,6 +114,50 @@ struct AudioLimiter {
 };
 MCE_COMPONENT(AudioLimiter, (ceiling_db, Range{-24, 0}), (release_ms, Range{1, 1000}))
 
+// Sidechain ducking (M-AUDIO2 4): `bus` (Music, SFX or UI) drops by depth_db while `key` plays louder
+// than threshold_db, e.g. the music under a voice line. One entity per ducked bus; removing it lets
+// the bus come back.
+struct AudioDuck {
+    AudioBus bus = AudioBus::Music;
+    AudioBus key = AudioBus::Voice;
+    u8 pad_[2] = {};
+    f32 depth_db = -10.f;
+    f32 threshold_db = -40.f;
+    f32 attack_ms = 20.f;
+    f32 release_ms = 400.f;
+};
+MCE_COMPONENT(AudioDuck,
+    (bus, Help{"the bus that ducks: Music, SFX or UI"}),
+    (key, Help{"the bus it ducks under (not Master)"}),
+    (depth_db, Range{-60, 0}),
+    (threshold_db, Range{-96, 0}, Help{"key level that starts the duck"}),
+    (attack_ms, Range{0, 2000}),
+    (release_ms, Range{0, 5000}))
+
+// A mixer snapshot (M-AUDIO2 4): while active, it fades in over fade_s and changes one bus: a gain
+// offset and a low-pass or high-pass (0 = leave as is). Several on the same bus add their gains and
+// the tightest filter wins. `while_paused` makes it the pause snapshot: the stock player turns it on
+// while its pause overlay is up. Gameplay, sequences and timelines turn the rest on through `active`.
+// Fade progress is not sim state: it lives outside the component, so the state hash never moves.
+struct AudioSnapshot {
+    AudioBus bus = AudioBus::Master;
+    bool active = false;
+    bool while_paused = false;
+    u8 pad_ = 0;
+    f32 fade_s = 0.5f;
+    f32 gain_db = 0.f;
+    f32 lowpass_hz = 0.f;
+    f32 highpass_hz = 0.f;
+};
+MCE_COMPONENT(AudioSnapshot,
+    bus,
+    active,
+    (while_paused, Help{"on while the game is paused (the stock player's pause overlay)"}),
+    (fade_s, Range{0, 10}),
+    (gain_db, Range{-60, 12}),
+    (lowpass_hz, Range{0, 20000}, Help{"0 = leave the bus's low-pass as it is"}),
+    (highpass_hz, Range{0, 20000}))
+
 // Fire-and-forget one-shot from gameplay (pickups, hits, footsteps): push in FixedUpdate_Pre;
 // the bridge plays it in FixedUpdate_Post of the same tick.
 struct PlaySfx {
@@ -132,17 +177,35 @@ struct AudioRef {
     AudioDevice* device = nullptr;
     ClipBank* clips = nullptr;
     // ---- bridge-written: what the scene's effect components set last tick, so removing one resets it
-    u16 fx_buses = 0;
+    u16 fx_buses = 0;      // filters (AudioBusEffects or a snapshot)
+    u16 fx_sends = 0;      // AudioBusEffects sends
+    u16 fx_trims = 0;      // snapshot gains
     u8 fx_reverbs = 0;
+    u8 fx_ducks = 0;
     bool fx_limiter = false;
+    // Snapshot fades (0..1) by entity: sound state, kept out of the components the sim hashes.
+    static constexpr u32 kMaxSnapshots = 16;
+    struct SnapshotFade {
+        Entity entity;
+        f32 weight = 0.f;
+    };
+    SnapshotFade snapshots[kMaxSnapshots] = {};
+    u32 snapshot_count = 0;
 };
 
-// Registers AudioSource, AudioSpatial, AudioListener, AudioBusEffects, AudioReverb, AudioLimiter, PlaySfx, the AudioRef resource, the remove hook (stop with a 50 ms
+// Registers AudioSource, AudioSpatial, AudioListener, AudioBusEffects, AudioReverb, AudioLimiter, AudioDuck,
+// AudioSnapshot, PlaySfx, the AudioRef resource, the remove hook (stop with a 50 ms
 // fade) and the audio_bridge system in FixedUpdate_Post. Call after any system named in `after`.
 // The host calls clips->sync() once per frame before the sim ticks.
 void install(World& world, AudioDevice& device, ClipBank* clips = nullptr, const char* after = nullptr);
 
 // The bridge system itself (exposed for tests and custom pipelines).
 void audio_bridge(Frame& f);
+
+// Applies the scene's mix components (AudioBusEffects, AudioReverb, AudioLimiter, AudioDuck,
+// AudioSnapshot) to the device and advances snapshot fades by `dt` seconds. The bridge calls it
+// every tick with paused = false; a host whose sim is paused calls it every frame with paused =
+// true, so the pause snapshot fades in although no tick runs.
+void update_mix(World& world, f32 dt, bool paused);
 
 }  // namespace mce::audio

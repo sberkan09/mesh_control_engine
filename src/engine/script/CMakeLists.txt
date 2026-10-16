@@ -13,6 +13,7 @@
 mce_add_library(mce_script UMBRELLA
     SOURCES
         src/script.cpp
+        src/api_world.cpp
         src/scene_scripts.cpp
     PUBLIC_DEPS
         mce::mce_core

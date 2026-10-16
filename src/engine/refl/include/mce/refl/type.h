@@ -68,6 +68,7 @@ namespace TypeFlags {
 enum : u32 {
     None = 0,
     Component = 1u << 0,  // declared with MCE_COMPONENT (ECS-registrable)
+    Event = 1u << 1,      // declared with MCE_EVENT (an EventQueue<T> payload scripts read and push)
 };
 }
 
@@ -86,6 +87,7 @@ struct TypeRecord {
 
     const FieldRecord* find_field(StringId field_name) const;
     constexpr bool is_component() const { return (flags & TypeFlags::Component) != 0; }
+    constexpr bool is_event() const { return (flags & TypeFlags::Event) != 0; }
 };
 
 struct EnumValue {

@@ -115,7 +115,7 @@ constexpr AssetKind kKinds[] = {
      R"json([
 {"name":"name","type":"string"},
 {"name":"blackboard","type":"object","help":"key: \"bool\" | \"int\" | \"float\" | \"vec3\" | \"entity\", or key: {\"type\", \"default\"}; at most 16 bool/int/float, 8 vec3 and 8 entity keys"},
-{"name":"root","type":"node object","help":"{\"sequence\" | \"selector\": [nodes]} | {\"parallel\": [nodes], \"policy\": \"all\" | \"one\"} | {\"invert\" | \"succeed\" | \"fail\": node} | {\"repeat\" | \"retry\": node, \"count\": n (0 = forever)} | {\"cooldown\" | \"timeout\": node, \"seconds\": s} | {\"guard\": node, \"key\", \"op\", \"value\", \"abort\": \"none\" | \"self\" | \"lower\" | \"both\"} | {\"check\": key, \"op\": \"is_set\" | \"not_set\" | \"==\" | \"!=\" | \"<\" | \"<=\" | \">\" | \">=\", \"value\"} | {\"wait\": s} | {\"set\": key, \"value\" | \"add\" | \"clear\": true | \"from\": key} | {\"emit\": signal} | {\"task\": name, \"key\", \"value\", \"vector\", \"arg\"}; stock tasks: {\"task\": \"move_to\" | \"look_at\", \"key\": vec3 or entity key, \"radius\"} | {\"task\": \"animate\", \"clip\", \"finish\": bool} | {\"task\": \"play_sound\", \"sound\": \"guid:...\", \"gain_db\"} | {\"task\": \"spawn\", \"prefab\": \"guid:...\", \"key\", \"offset\"} | {\"task\": \"raise\" | \"wait_event\", \"event\"} | {\"task\": \"log\", \"text\"}; at most 128 nodes"}])json",
+{"name":"root","type":"node object","help":"{\"sequence\" | \"selector\": [nodes]} | {\"parallel\": [nodes], \"policy\": \"all\" | \"one\"} | {\"invert\" | \"succeed\" | \"fail\": node} | {\"repeat\" | \"retry\": node, \"count\": n (0 = forever)} | {\"cooldown\" | \"timeout\": node, \"seconds\": s} | {\"guard\": node, \"key\", \"op\", \"value\", \"abort\": \"none\" | \"self\" | \"lower\" | \"both\"} | {\"check\": key, \"op\": \"is_set\" | \"not_set\" | \"==\" | \"!=\" | \"<\" | \"<=\" | \">\" | \">=\", \"value\"} | {\"wait\": s} | {\"set\": key, \"value\" | \"add\" | \"clear\": true | \"from\": key} | {\"emit\": signal} | {\"task\": name, \"key\", \"value\", \"vector\", \"arg\"}; stock tasks: {\"task\": \"move_to\" | \"look_at\", \"key\": vec3 or entity key, \"radius\"} | {\"task\": \"animate\", \"clip\", \"finish\": bool} | {\"task\": \"play_sound\", \"sound\": \"guid:...\", \"gain_db\"} | {\"task\": \"spawn\", \"prefab\": \"guid:...\", \"key\", \"offset\"} | {\"task\": \"raise\" | \"wait_event\", \"event\"} | {\"task\": \"log\", \"text\"} | {\"task\": \"make_noise\", \"loudness\"}; at most 128 nodes"}])json",
      R"json({"name":"brain","blackboard":{"alert":{"type":"bool","default":false}},"root":{"selector":[{"sequence":[{"check":"alert","value":true},{"emit":"alarm"},{"set":"alert","value":false}]},{"wait":1}]}})json"},
     {"Tilemap", ".mctilemap", "mce-tilemap", 1,
      "One tile layer over a tileset texture cut into columns x rows cells, drawn by a TilemapLayer component (map: "
@@ -185,6 +185,14 @@ constexpr AssetKind kKinds[] = {
 {"name":"alpha_cutoff","type":"number","default":0.5},
 {"name":"double_sided","type":"boolean","default":false},
 {"name":"unlit","type":"boolean","default":false},
+{"name":"clearcoat","type":"number","default":0,"help":"0..1: a clear varnish layer over the base (lacquer, car paint)"},
+{"name":"clearcoat_roughness","type":"number","default":0,"help":"0..1: the varnish's own roughness"},
+{"name":"sheen_color","type":"[r, g, b]","default":[0,0,0],"help":"cloth and velvet: the grazing-angle sheen's color (0 = none)"},
+{"name":"sheen_roughness","type":"number","default":0,"help":"0..1"},
+{"name":"anisotropy","type":"number","default":0,"help":"-1..1: highlights stretched along the UV tangent (brushed metal)"},
+{"name":"anisotropy_rotation","type":"number","default":0,"help":"radians: turns the stretch direction"},
+{"name":"transmission","type":"number","default":0,"help":"0..1: see-through like glass; the opaque scene behind shows through, tinted by base_color"},
+{"name":"ior","type":"number","default":0,"help":"1..3 index of refraction (0 = 1.5): a dielectric's reflectance and how much transmission bends"},
 {"name":"textures","type":"object","help":"{\"base_color\", \"normal\", \"metallic_roughness\", \"emissive\"}: \"guid:<Texture>\" each, all optional"}])json",
      R"json({"name":"material","base_color":[1,1,1,1],"metallic":0,"roughness":1,"emissive":[0,0,0],"alpha_mode":"opaque","alpha_cutoff":0.5,"double_sided":false,"unlit":false,"textures":{}})json"},
     {"InputMap", ".mcinput", "mce-input", 1,

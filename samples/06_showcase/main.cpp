@@ -10,10 +10,14 @@
 //     door and the lanterns' glow
 //   * SSAO, TAA, auto exposure; a wind-swept grass batch culled on the GPU, a puddle and a sigil decal,
 //     brazier embers as GPU particles
+//   * M-VISUAL2: screen-space reflections in the puddle and the polished floor, contact shadows,
+//     sharpening, a glass block refracting the path, a lacquered crate and a brushed-metal statue
+//     ("highbase" is High without them, for the on/off sheet)
 //
 //   06_showcase                                   run until the window closes (the High profile)
 //   06_showcase -profile current                  the same scene with the M5a frame
 //   06_showcase -profile medium|low               a quality tier (r.quality's knobs)
+//   06_showcase -profile highbase                 High without the M-VISUAL2 effects
 //   06_showcase -shot 1 -hour 12                  another camera / time of day (S cycles the shots)
 //   06_showcase -sheet sheet.ppm                  side by side: every shot under every profile in
 //                                                 -sheet.profiles, each settled for -sheet.frames
@@ -59,7 +63,7 @@ MCE_CVAR(cv_hour, "hour", -1.0f, "Overrides the shot's hour of the day (0..24)",
 MCE_CVAR(cv_grass, "grass", 6000, "Grass tufts scattered over the courtyard", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_sheet, "sheet", "", "Write the side-by-side sheet (.ppm) of every shot under every profile, then quit",
          CVarFlags::None);
-MCE_CVAR(cv_sheet_profiles, "sheet.profiles", "current,high,medium,low", "Columns of the sheet", CVarFlags::None);
+MCE_CVAR(cv_sheet_profiles, "sheet.profiles", "current,highbase,high,medium,low", "Columns of the sheet", CVarFlags::None);
 MCE_CVAR(cv_sheet_frames, "sheet.frames", 48, "Frames each shot settles (TAA, GI, auto exposure) before its capture",
          CVarFlags::None);
 MCE_CVAR(cv_sheet_w, "sheet.w", 480, "Width of one sheet cell", CVarFlags::None);
@@ -67,13 +71,14 @@ MCE_CVAR(cv_sheet_h, "sheet.h", 270, "Height of one sheet cell", CVarFlags::None
 
 // ---- profiles and shots -------------------------------------------------------------------------
 
-enum class Profile : u8 { Current, Low, Medium, High };
+enum class Profile : u8 { Current, Low, Medium, High, HighBase };
 
 bool parse_profile(StringView s, Profile& out) {
     if (s == StringView("current")) out = Profile::Current;
     else if (s == StringView("low")) out = Profile::Low;
     else if (s == StringView("medium")) out = Profile::Medium;
     else if (s == StringView("high")) out = Profile::High;
+    else if (s == StringView("highbase")) out = Profile::HighBase;
     else return false;
     return true;
 }
@@ -84,6 +89,7 @@ const char* profile_name(Profile p) {
         case Profile::Low: return "low";
         case Profile::Medium: return "medium";
         case Profile::High: return "high";
+        case Profile::HighBase: return "highbase";
     }
     return "?";
 }
@@ -192,10 +198,50 @@ struct Content {
 
 constexpr usize kCurrentGrass = 2500;
 
+// M-VISUAL2's materials (step 4): a glass block on the path, a lacquered crate and the statue in
+// brushed metal. Overrides replace the whole submesh material, so each spells out its base.
+MaterialOverride glass_material() {
+    MaterialOverride m;
+    m.params.base_color[0] = 0.55f;
+    m.params.base_color[1] = 0.9f;
+    m.params.base_color[2] = 0.75f;
+    m.params.base_color[3] = 1.0f;
+    m.params.roughness = 0.05f;
+    m.params.metallic = 0.0f;
+    m.ext.transmission = 1.0f;
+    m.ext.ior = 1.5f;
+    return m;
+}
+MaterialOverride lacquer_material() {
+    MaterialOverride m;
+    m.params.base_color[0] = 0.45f;
+    m.params.base_color[1] = 0.05f;
+    m.params.base_color[2] = 0.04f;
+    m.params.base_color[3] = 1.0f;
+    m.params.roughness = 0.6f;
+    m.params.metallic = 0.0f;
+    m.ext.clearcoat = 1.0f;
+    m.ext.clearcoat_roughness = 0.04f;
+    return m;
+}
+MaterialOverride brushed_material() {
+    MaterialOverride m;
+    m.params.base_color[0] = 0.9f;
+    m.params.base_color[1] = 0.72f;
+    m.params.base_color[2] = 0.48f;
+    m.params.base_color[3] = 1.0f;
+    m.params.roughness = 0.3f;
+    m.params.metallic = 1.0f;
+    m.ext.anisotropy = 0.7f;
+    return m;
+}
+
 // The static layout and the grass, shared by every profile.
 struct Layout {
     Array<MeshInstance> statics;
+    Array<MeshInstance> visual2;  // drawn by the M-VISUAL2 profiles only
     Array<mat4> grass;
+    MaterialOverride glass = glass_material(), lacquer = lacquer_material(), brushed = brushed_material();
 
     void build(const Content& c) {
         auto place = [&](Model m, vec3 p, f32 yaw = 0.0f, f32 s = 1.0f) {
@@ -213,6 +259,16 @@ struct Layout {
         place(Crate, {4.4f, 0.0f, 1.8f}, 0.3f);
         place(Brazier, kBrazier);
         for (const LanternSpot& l : kLanterns) place(Lantern, l.position);
+        auto place2 = [&](Model m, vec3 p, f32 yaw, vec3 s, const MaterialOverride* mat) {
+            MeshInstance i;
+            i.mesh = c.keys[m];
+            i.world = trs(p, quat_from_axis_angle({0, 1, 0}, yaw), s);
+            i.material = mat;
+            visual2.push_back(i);
+        };
+        place2(Crate, {-1.0f, 0.0f, 3.6f}, 0.25f, {0.9f, 1.2f, 0.35f}, &glass);  // a glass slab beside the path
+        place2(Crate, {1.25f, 0.0f, 5.2f}, -0.4f, {0.8f, 0.8f, 0.8f}, &lacquer);  // on the path's edge
+        place2(Statue, {1.4f, 0.0f, -1.3f}, 0.0f, {1.0f, 1.0f, 1.0f}, &brushed);  // in place of the plain one
         // Grass: a seeded scatter over the courtyard, kept off the pavilion, the path and the brazier.
         FoliageScatter sc;
         sc.half_extents = {19.0f, 19.0f};
@@ -238,6 +294,7 @@ struct Layout {
 void fill_scene(Scene3D& scene, const Content& c, const Layout& layout, Profile profile, const Shot& shot, f32 hour, f32 yaw_offset,
                 f32 t, f32 dt, rhi::Extent2D viewport) {
     const bool visual = profile != Profile::Current;
+    const bool visual2 = visual && profile != Profile::HighBase;  // M-VISUAL2's effects and materials
     const QualitySettings q = profile_quality(profile);
     Camera3D cam = orbit_camera(shot.target, shot.yaw + yaw_offset, shot.pitch, shot.distance, radians(shot.fov_deg));
     cam.near_z = 0.05f;
@@ -313,11 +370,26 @@ void fill_scene(Scene3D& scene, const Content& c, const Layout& layout, Profile 
         local.max_lights = 8;
         scene.set_local_shadows(local);
     }
+    if (visual2) {
+        ScreenSpaceReflections ssr;
+        ssr.enabled = true;
+        ssr.max_distance = 12.0f;
+        apply_quality(q, ssr);
+        scene.set_reflections(ssr);
+        ContactShadows contact;
+        contact.enabled = true;
+        apply_quality(q, contact);
+        scene.set_contact_shadows(contact);
+        post.sharpen = 0.3f;
+    }
     shadows.resolution = visual ? q.shadow_size : 2048;  // = Forward3DDesc::shadow_size
     scene.set_shadows(shadows);
     scene.set_post(post);
 
-    for (const MeshInstance& i : layout.statics) scene.add(i);
+    for (const MeshInstance& i : layout.statics)
+        if (!visual2 || i.mesh != c.keys[Statue]) scene.add(i);
+    if (visual2)
+        for (const MeshInstance& i : layout.visual2) scene.add(i);
     for (const LanternSpot& l : kLanterns) {
         PointLight pl;
         pl.position = l.position + vec3{0.0f, l.spot ? -0.25f : 0.0f, 0.0f};
@@ -587,7 +659,7 @@ int run_sheet(rhi::RenderDevice& device) {
     Array<u8> px;
     px.resize(usize(w) * h * 4);
     struct Times {
-        f64 clusters = 0, scale = 0, ssao = 0, shadow = 0, gi = 0, vol = 0, main = 0, resolve = 0, taa = 0, post_fx = 0, bloom = 0,
+        f64 clusters = 0, scale = 0, ssao = 0, ssr = 0, contact = 0, shadow = 0, gi = 0, vol = 0, main = 0, resolve = 0, taa = 0, post_fx = 0, bloom = 0,
             tonemap = 0, fxaa = 0, total = 0;
         u32 n = 0;
     };
@@ -641,6 +713,8 @@ int run_sheet(rhi::RenderDevice& device) {
                     tm.clusters += g.clusters;
                     tm.scale += max(g.scale, 0.0);
                     tm.ssao += max(g.ssao, 0.0);
+                    tm.ssr += max(g.ssr, 0.0);
+                    tm.contact += max(g.contact, 0.0);
                     tm.shadow += g.shadow;
                     tm.gi += max(g.gi, 0.0);
                     tm.vol += max(g.volumetrics, 0.0);
@@ -686,6 +760,8 @@ int run_sheet(rhi::RenderDevice& device) {
     row("Forward+ light assignment", &Times::clusters);
     row("scale: occluders, culling, particles", &Times::scale);
     row("SSAO", &Times::ssao);
+    row("SSR", &Times::ssr);
+    row("contact shadows", &Times::contact);
     row("shadows: cascades + local lights", &Times::shadow);
     row("GI volume update", &Times::gi);
     row("volumetric fog", &Times::vol);

@@ -28,6 +28,7 @@ mce_add_library(mce_gameplay_kit
         src/timeline.cpp
         src/ai.cpp
         src/ai_tasks.cpp
+        src/perception.cpp
         src/cinematic.cpp
         src/video.cpp
     PUBLIC_DEPS

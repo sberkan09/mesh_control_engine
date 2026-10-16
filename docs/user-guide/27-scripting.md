@@ -52,16 +52,80 @@ mounted assets between two ticks.
 
 ## 27.3 The `mce` API
 
+Components and events are named by their reflected type name (`"LocalTransform"`, `"TriggerEnter"`); a
+name the engine does not know, or a field a type does not have, is an error that names it. Entities are
+numbers, and `nil` is the null entity.
+
+**Fields**
+
 | Call | Does |
 |---|---|
+| `mce.field("Comp", "field")` | a handle to one field, looked up once; call it at the script's top level |
+| `mce.get(e, h, ...)` | the values of one or more fields (handles, or `"Comp", "field"` pairs) in one call |
+| `mce.set(e, h, v, ...)` | writes one or more fields (`h, v, h2, v2, ...`) and marks the components changed |
 | `mce.each("A", "B", ..., fn)` | calls `fn(e)` for every entity with all the components, in the order a Query visits |
-| `mce.get(e, "Comp", "field")` | a number, boolean or vector (`Vec2`/`Vec3`); `Vec4`, `Quat` and `Color` come back as four numbers |
-| `mce.set(e, "Comp", "field", v...)` | writes the field and marks the component changed |
+
+Field values: numbers, booleans, enums by name (`"Dynamic"`), `Vec2`/`Vec3` as vectors, `Vec4`, `Quat` and
+`Color` as four numbers (or a `{x, y, z, w}` table inside a struct), strings, entities, asset references as
+`"guid:<uuid>"` and nested structs and arrays as tables. Handles are the fast path: the bench's 2,000
+entities read three fields and write two per tick in about 0.35 ms (Release).
+
+```lua
+local POS = mce.field("LocalTransform", "position")
+local VEL = mce.field("Mover", "velocity")
+
+function update()
+    mce.each("LocalTransform", "Mover", function(e)
+        local p, v = mce.get(e, POS, VEL)
+        mce.set(e, POS, p + v * mce.dt)
+    end)
+end
+```
+
+**Entities.** Structural changes are recorded and happen at the next sync point, like `Commands` in C++:
+the new entity is alive at once, its components appear after the phase.
+
+| Call | Does |
+|---|---|
+| `mce.spawn({Comp = {...}, Tag = true})` | a new entity; each component starts from its defaults with the named fields set |
+| `mce.add(e, "Comp", {...})` | adds the component (or updates it, keeping the fields not named) |
+| `mce.remove(e, "Comp")`, `mce.destroy(e)` | removes a component, destroys the entity |
+| `mce.has(e, "Comp")`, `mce.alive(e)` | what the entity has now |
+| `mce.instantiate("guid:<prefab>", pos?)` | spawns a prefab, its root at `pos`; the root entity, or `nil` (logged) |
+
+**Events and signals.** Events are readable from the tick after they were pushed.
+
+| Call | Does |
+|---|---|
+| `mce.events("TriggerEnter")` | this tick's events as an array of tables: `TriggerEnter`/`TriggerExit` (`sensor`, `other`), `ContactBegin2D` (`a`, `b`, `point`, `normal`, `approach_speed`), `ContactEnd2D`, `TriggerEnter3D`/`TriggerExit3D` (`trigger`, `other`), `JointBreak3D` |
+| `mce.emit("Type", {...})` | pushes an event of any reflected event type the world has |
+| `mce.signal("name", e?)` | a named signal that sequences' and behavior trees' wait nodes hear |
+| `mce.signals("name")` | the emitters of this tick's signals of that name (sequences, timelines, behavior trees) |
+| `mce.play_sound("guid:<sfx>", gain_db?)` | a one-shot sound |
+
+**Input.** `mce.pressed(action)`, `mce.held(action)`, `mce.released(action)`, `mce.axis(action)` (a
+number) and `mce.axis2(action)` (a vector) read the input map's actions by name (chapter 11). An action the
+map does not define reads as not pressed and zero.
+
+**Physics.**
+
+| Call | Does |
+|---|---|
+| `mce.raycast2d(origin, dir, max, skip?)` | the first hit, `{entity, point, normal, distance}`, or `nil`; `skip` is an entity to ignore |
+| `mce.overlap2d(min, max, skip?)` | the entities whose shapes' boxes overlap the box |
+| `mce.move_and_collide(e, delta)` | moves a character body; `{position, grounded, ground, ceiling, wall_left, wall_right}` |
+| `mce.velocity2d(e)`, `mce.set_velocity2d(e, v)`, `mce.impulse2d(e, v)` | a 2D body's velocity, and pushes |
+| `mce.raycast3d(origin, dir, max, skip?)` | the same for the 3D physics world |
+
+**The rest.**
+
+| Call | Does |
+|---|---|
 | `mce.dt`, `mce.tick()` | the fixed step in seconds and the current tick (from 0) |
 | `mce.random()` | a number in [0, 1) that depends only on the seed, the tick, the script and the call |
+| `mce.load_scene(target)` | switches scene after this tick (a source path or `"guid:<uuid>"`; section 4.5) |
+| `mce.quit()` | ends the run after this tick, like the window's close button |
 | `mce.log(msg)` | an info line in the engine log, `script: <msg>` |
-
-Spawning, events, input and physics queries arrive in the next M-SCRIPT step.
 
 ## 27.4 The rules
 

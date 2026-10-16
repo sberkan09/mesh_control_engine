@@ -43,6 +43,8 @@
 //   wait_event  Running until a BtSignal or SeqSignal named `event` is raised (readable from the
 //               tick after it was raised), then Success
 //   log         writes `text` to the log at info level, with the entity and the tree; Success
+//   make_noise  a kit::Noise of `loudness` metres at the entity (perception.h), in its Stimulus's
+//               (else its Perceiver's) team; Success
 
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
@@ -177,7 +179,7 @@ struct BtTaskCall {
 // `target` (when given) gets the entity of an Entity key.
 bool bt_key_position(const BtTaskCall& call, math::vec3& out, Entity* target = nullptr);
 
-// Registers AiBrain, Blackboard and BtSignal, sets the BtRegistry resource and adds "ai_brains"
+// Registers AiBrain, Blackboard and BtSignal, installs perception (kit/perception.h), sets the BtRegistry resource and adds "ai_brains"
 // to FixedUpdate_Pre, with the stock tasks registered. Idempotent (re-points the assets).
 void install_ai(World& world, asset::AssetSystem* assets);
 
