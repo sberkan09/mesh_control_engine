@@ -1,6 +1,6 @@
 # M-WORKFLOW — What blind test 3 found in agent authoring (milestone record)
 
-**Status:** active (added 2026-10-16; step 2 done). Plan: ROADMAP §M-WORKFLOW; Linear SBA-180 … SBA-184.
+**Status:** active (added 2026-10-16; steps 2 and 3 done). Plan: ROADMAP §M-WORKFLOW; Linear SBA-180 … SBA-184.
 
 **Why:** blind test 3 had three agents build a game (Lantern Keep) over MCP from the SDK and filed GitHub #377 to
 #383. #377 to #381 are bugs and workflow holes in code and documents we own; #382 (Luau, UiFlow) belongs to
@@ -14,11 +14,50 @@ M-SCRIPT and M-UI-DATA2, #383 (content, texture compression, draw calls) to M-VI
 |---|---|---|---|---|
 | 1 | `NavAgent3D` reaches its speed on a `CharacterController3D` with the default acceleration (#377) | SBA-180 | Opus | not started |
 | 2 | `scene_open` reloads, `scene_save` refuses a changed file, broken links reported (#378) | SBA-181 | Sonnet | done |
-| 3 | Cook errors name the fix; `cook_run` `paths` and `skip_errors`; stale pack warning (#379) | SBA-182 | Sonnet | not started |
+| 3 | Cook errors name the fix; `cook_run` `paths` and `skip_errors`; stale pack warning (#379) | SBA-182 | Sonnet | done |
 | 4 | Headless `-capture` falls back to offscreen; `-capture_tick`; save folder documented (#380) | SBA-183 | Sonnet | not started |
 | 5 | Stale documents fixed (#381), the two-server test, the close | SBA-184 | Sonnet | not started |
 
 **Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
+
+## Step 3 — #379, SBA-182 (done)
+
+- **What was already there.** The cook already isolates failures: a failed or unregistered file blocks only the
+  assets that depend on it, everything else cooks, and a failed asset's last output keeps serving. What an agent
+  met was `ok: false`, a pack that was not written, and, for `run_headless`, `render_frame` and the other tools that
+  cook the whole project first, a refusal over one unrelated file.
+- **The missing-sidecar error names the fix** (`registry.cpp`): `cook_run {"adopt": true}` over MCP,
+  `mce cook <project> --adopt` on the command line (the flag exists; `mce build` stops on the same error).
+- **`cook_run` `paths`** (`CookOptions::paths`, `mce_cook --only`): files or folders under `assets/`. The scan skips
+  the errors of files outside them (and `adopt` does not touch them), the graph keeps the named assets and everything
+  they depend on, the rest get `AssetStatus::Skipped`. Skipped assets stay in the manifest with their last output, so
+  `cooked/` stays whole. **A subset never writes the pack:** the pack must hold one consistent cook of the whole
+  project, so with `paths` it is not rewritten and the report says so (`pack_written: false`, `pack_note`). An entry
+  that matches no asset is an error.
+- **`skip_errors`** (`CookOptions::skip_errors`, `mce_cook --skip-errors`): the cook always cooked what it could; this
+  adds `CookReport::failed_files` (every file with an error and its first message, uncapped, in the tool result as
+  `failed_files`). The pack is still written only by a run with no errors: a pack missing a file the game references
+  would not load, so `skip_errors` does not relax that.
+- **Stale pack warning** (`tools/mce_cli/mce.py`, `stale_pack_warning`): `mce play` and `mce headless` on a game
+  project print, on stderr, that `build/project/assets.mce` is older than the newest file under `assets/` and name
+  `mce build`. Script projects cook before they run and do not need it.
+- **Unknown component or field** (`scene_importer.cpp`, the editor's scene reader): the error adds that the loaded
+  module is probably older than the source, to rebuild it (`mce build` or `module_build`) and restart the MCP server
+  (`mce mcp <project>`) unless it was started with `--module`; `mce cook` loads the module fresh each time.
+- **Docs:** user guide 5.4 "When a cook fails" (the table), 14 "When a cook fails" and the `cook_run` row, 16.4, 17.
+- **Not done:** `run_headless`, `render_frame`, `ui_preview` and `timeline_preview` still cook the whole project and
+  fail on any error; they do not take `paths`. A `paths` entry that names an unadopted file is its own error (adopt
+  first); a file outside the paths that a named asset reaches only by path text is reported as a missing reference.
+- **Checked by running it.** `test_cook` has four new cases: the missing-sidecar text names both fixes and
+  `failed_files` lists it once; `skip_errors` over an unadopted file and a corrupt PNG cooks the five good assets,
+  lists both bad files and writes no pack; `paths: ["materials"]` cooks the material and the texture it needs, skips
+  the wav, font and scene, ignores an unadopted file elsewhere, writes no pack and says so, a full cook afterwards
+  cooks exactly the rest, a later one-file subset keeps the manifest hash, a path that matches nothing is an error;
+  an unknown component and an unknown field both carry the rebuild-and-restart text. `test_mcp` has `cook_run paths
+  and skip_errors` over the tool. `cli_stale_pack` (Python) covers the warning function: no warning for a newer
+  pack, one naming the newest source and `mce build <project>` for an older one, hidden folders ignored. The MCP
+  transcript golden was re-blessed (the `cook_run` description). `ctest -R "mcp|cook|asset|editor|import|cli_stale"`
+  passed on linux-gcc-debug except `ai_demo_editor_bt`, which needs a display and fails the same way without this change.
 
 ## Step 2 — #378, SBA-181 (done)
 

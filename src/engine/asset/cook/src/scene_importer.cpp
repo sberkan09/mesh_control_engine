@@ -112,6 +112,7 @@ public:
                 msg += key;
                 msg += "' on ";
                 msg += type.name;
+                msg += kStaleModuleHint;
                 err(obj.at(i), path, msg);
             } else if (f->has(refl::FieldFlags::Transient)) {
                 err(obj.at(i), path, "transient field is never serialized");
@@ -488,6 +489,7 @@ private:
                 String msg("unknown component type '");
                 msg += tname;
                 msg += t ? "' (reflected, but not an MCE_COMPONENT)" : "' (not registered with mce_refl in this cook)";
+                if (!t) msg += kStaleModuleHint;
                 detail::error_at(diags_, Errc::NotFound, file, comps.at(c), kStage, msg);
                 continue;
             }

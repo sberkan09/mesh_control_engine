@@ -67,7 +67,8 @@ Symptoms, what they mean, what to do.
 |---|---|---|
 | Edits land on the wrong entities | ids restarted after `scene_open` | `scene_list_entities`, then `scene_undo` the batch |
 | `run_headless` refuses | unsaved changes | `scene_save` |
-| The server does not know a new component | its table comes from the build (compiled in, or the loaded module) | rebuild (`my_game_mcp`, or the module for `--module`) and restart it |
+| The server does not know a new component or field (`cook_run`, `run_headless`, `render_frame` fail on the scene) | its table comes from the build (compiled in, or the loaded module) | `module_build` for a server started with `--module`; otherwise rebuild (`mce build` or `my_game_mcp`) and restart it |
+| `cook_run` fails on a new file: "no .mceasset sidecar" | the file has no sidecar yet | `cook_run {"adopt": true}`, or `mce cook <project> --adopt` |
 | `console_exec time_scale 2` refused | cheat convar | start the server with `--allow-cheats` |
 
 ## Shipped builds
