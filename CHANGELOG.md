@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- 2D skeletons, M-ANIM2D step 1 (SBA-140): `.mcskel2d` assets (bones with a rest pose, textured slots in draw
+  order) cook to `CHNK_SKEL2D`. A `Skeleton2D` component poses one on its entity every fixed tick from the rest
+  pose and its per-bone `pose` offsets (up to 64 bones), and the sprite extraction draws its slots with the
+  component's tint, flips, layer and order. `Bone2DFollow` keeps an entity on a named bone. Poses are in the
+  state hash and in saves. MCP `asset_create` makes `.mcskel2d` files. User guide 7.13.
 - Material extensions, M-VISUAL2 step 4 (SBA-104): clear coat, sheen, anisotropy and transmission. `.mcmat`
   gains `clearcoat`, `clearcoat_roughness`, `sheen_color`, `sheen_roughness`, `anisotropy`,
   `anisotropy_rotation`, `transmission` and `ior`; glTF files bring the same from `KHR_materials_clearcoat`,

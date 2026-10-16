@@ -71,6 +71,7 @@ Interchange formats are closed: glTF 2.0 (`.gltf`/`.glb`), PNG/JPG, WAV. MCE-nat
 | Scene | `.mcscene` (editor canonical) | `CHNK_SCENE` | component columns + id remap (§6) | MVP |
 | Prefab | `.mcprefab` | `CHNK_PREFAB` | entity sub-tree template; nested flattened at cook | v0.5 |
 | Timeline | `.mctimeline` | `CHNK_TIMELINE` | track/clip data (FR-ENT-110) | built (M-CINEMA 1; `kit/timeline.h`) |
+| 2D skeleton | `.mcskel2d` | `CHNK_SKEL2D` | bones (rest pose, parents first) + slots (textured quads in draw order) + names | built (M-ANIM2D 1; `kit/skeleton2d.h`) |
 | Input action map | `.mcinput` | `CHNK_INPUT` | named actions, bindings, curves (FR-INP-020) | MVP |
 | Animation clips | glTF node-transform tracks | `CHNK_ANIM` | sampled or keyframed node tracks (MVP: single-node TRS; per-node tracks sampled at runtime by the ECS `AnimationPlayer` — see `ecs-gameplay` §3.8) | MVP (diorama prop) |
 | Particle preset | `.mcpart` (MCE-native) | `CHNK_PART` | emitter parameters + sprite GUID + spawn curves (FR-R2D-050) | v0.5 |

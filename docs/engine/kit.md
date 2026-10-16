@@ -35,6 +35,13 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
 - `AnimatedSprite`: plays a `.mcsheet` clip onto the `Sprite` beside it (`sprite_anim.h`:
   `install_sprite_animation`, `"kit_sprite_animation"` in `FixedUpdate_Post`, `SpriteAnimEvent`
   for frame events) over `render/sprite_animation.h` (M-DATA-REACH 5).
+- `Skeleton2D` and `Bone2DFollow` (`skeleton2d.h`, M-ANIM2D 1): a `.mcskel2d` skeleton
+  (`ChunkType::Skeleton2D`, `Skeleton2DView`) posed from its rest pose plus the component's per-bone
+  `pose` offsets (64 bones, `Save`), written to `world` by `"kit_skeleton2d"` in `FixedUpdate_Post`
+  (`install_skeleton2d`, in `install_stock`). `SpriteExtract` draws the slots in slot order from the
+  pure `skeleton2d_quads`; `Skeleton2DRegistry` copies skeletons out of their chunks (and takes
+  `define`d payloads for tests and tools). `Bone2DFollow` writes a follower's `LocalTransform` from a
+  named bone.
 - `Animator` graphs and `AttachToBone` (`anim3d.h`, M-DATA-REACH 7): an `.mcanim` AnimGraph
   (`ChunkType::AnimGraph`, `AnimGraphView`) drives the Animator's clip, 1D blends (`blend_clip`,
   `blend_weight`), transitions and `AnimEvent3D` events; one-shots finish (`loop`, `finished`,

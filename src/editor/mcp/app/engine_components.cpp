@@ -24,6 +24,7 @@
 #include "mce/kit/novel_components.h"  // StagePart, StoryState, ...
 #include "mce/kit/ragdolls3d.h"        // Ragdoll3D
 #include "mce/kit/sensors3d.h"         // Raycast3D, Overlap3D
+#include "mce/kit/skeleton2d.h"        // Skeleton2D, Bone2DFollow (M-ANIM2D)
 #include "mce/kit/timeline.h"          // TimelinePlayer (M-CINEMA)
 #include "mce/kit/vehicles3d.h"        // Vehicle3D
 #include "mce/physics/components.h"   // RigidBody2D, Collider2D, CharacterController2D, ...

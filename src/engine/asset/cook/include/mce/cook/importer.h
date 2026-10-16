@@ -133,6 +133,7 @@ mem::UniquePtr<IImporter> make_spritesheet_importer();  // .mcsheet -> CHNK_SHEE
 mem::UniquePtr<IImporter> make_animgraph_importer();    // .mcanim -> CHNK_ANIMG (M-DATA-REACH 7)
 mem::UniquePtr<IImporter> make_particle_importer();  // .mcpart -> CHNK_PART (v0.5)
 mem::UniquePtr<IImporter> make_sequence_importer();  // .mcseq -> CHNK_SEQ (v0.5)
+mem::UniquePtr<IImporter> make_skeleton2d_importer();  // .mcskel2d -> CHNK_SKEL2D (M-ANIM2D 1)
 mem::UniquePtr<IImporter> make_timeline_importer();  // .mctimeline -> CHNK_TIMELINE (M-CINEMA 1)
 mem::UniquePtr<IImporter> make_input_map_importer(); // .mcinput -> CHNK_INPUT (FR-INP-020)
 mem::UniquePtr<IImporter> make_store_importer();     // .mcstore -> CHNK_STORE (M-MONETIZE)
