@@ -3,7 +3,8 @@
 A level can come from a number: give the engine a seed and a size and it draws the same dungeon or cave every
 time, on every machine. Because the engine is deterministic, the seed is the level: a bug report or a test says
 "seed 41" and everyone sees the same map. The generators are in `mce/kit/procgen.h` (ROADMAP M-PROCGEN); this
-chapter covers what you can do today: look at a level, check a run of seeds, and bake one into a tilemap.
+chapter covers looking at a level, checking a run of seeds, baking one into a tilemap, and the `ProcLevel`
+component that builds one in a running game.
 
 ## 28.1 The generators
 
@@ -64,7 +65,50 @@ note names the first failing seeds (`seed 17: exit not reachable from start`), w
 `procgen_run`. It takes the same arguments as `procgen_run` (kind, width, height, seed, count and the knobs) and no
 comparison.
 
-## 28.5 Things to know
+## 28.5 A level in the game: `ProcLevel`
+
+Put a `ProcLevel` on an entity (with a `LocalTransform`: its position is the level's bottom-left corner) and the game
+builds the level beside it when the scene loads:
+
+```json
+{ "components": {
+    "LocalTransform": { "position": [0, 0, 0] },
+    "ProcLevel": { "kind": "Caves", "width": 64, "height": 48, "seed": 41, "tile_size": 1 },
+    "SaveKey": { "key": 1 } } }
+```
+
+- Walls become static bodies with box colliders (rows of wall cells merge into rectangles, and equal rectangles in
+  neighbouring rows stack, so a 128x128 cave is a few hundred entities, not 16384). A solid sprite per rectangle and one
+  floor sprite draw it (`wall_color`, `floor_color`, `layer`).
+- Two `ProcMarker` entities, `Start` and `Exit`, stand at the centres of the generator's start and exit cells.
+- `param` overrides one knob of the generator (0 = its default): caves wall fill %, walk coverage %, noise floor %.
+- Everything built carries `ProcLevelOwned`. Only the `ProcLevel` entity is saved (give it a `SaveKey`): loading a scene
+  or a save rebuilds the level from the seed, so a replay gets the same level. Destroying the `ProcLevel` entity
+  destroys what it built.
+- Change `seed`, `kind`, the size or the position and the level is rebuilt on the next tick. `reroll: true` adds one to the
+  seed and clears itself on the next tick.
+- A grid the generator cannot make (caves smaller than 16 cells a side) logs a warning once and builds nothing.
+
+From Luau no new API is needed. A script finds the markers and asks for the next level:
+
+```lua
+function update()
+    local level, exit_at
+    mce.each("ProcLevel", function(e) level = e end)
+    mce.each("ProcMarker", function(m)
+        if mce.get(m, "ProcMarker", "kind") == "Exit" then
+            exit_at = mce.get(m, "LocalTransform", "position")
+        end
+    end)
+    -- when the player is at exit_at: mce.set(level, "ProcLevel", "reroll", true)
+end
+```
+
+The built entities appear at the end of the tick that rebuilds the level (the engine's usual spawn timing), so a script
+sees the new level on the next tick. For pathfinding, `proclevel_nav_grid` (C++) returns a `NavGrid` with the level's
+cell size and origin, so `mark_static_colliders` lines up with the walls.
+
+## 28.6 Things to know
 
 - Changing a generator's code changes every seed's level. The engine pins sample hashes in its tests; a game that
   saves seeds should save the engine version with them.

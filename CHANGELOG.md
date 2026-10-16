@@ -5,6 +5,8 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Procedural levels, M-PROCGEN step 3 (SBA-173): a `ProcLevel` component builds a seeded level in the game (merged wall
+  colliders, floor, Start/Exit markers) and rebuilds it when the seed changes or `reroll` is set, also from Luau; user guide 28.5.
 - Procedural levels, M-PROCGEN step 4 (SBA-174): MCP `procgen_run` shows a seeded level as text (and checks a run of seeds, or
   bakes it into a `.mctilemap`), a `.mctest` can assert `{"reachable": {kind, width, height, seed, count}}`, and user guide
   chapter 28 explains both.
