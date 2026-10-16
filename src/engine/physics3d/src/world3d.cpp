@@ -1200,7 +1200,8 @@ u32 World3D::create_vehicle(const VehicleDesc3D& d) {
         for (JPH::LinearCurve::Point& p : ws->mLateralFriction.mPoints) p.mY *= wd.grip;
         vs.mWheels.push_back(ws);
     }
-    auto* cs = new JPH::WheeledVehicleControllerSettings();
+    // Held by a Ref so the refusals below (bad gears, reverse gear, axles) release it.
+    const JPH::Ref<JPH::WheeledVehicleControllerSettings> cs = new JPH::WheeledVehicleControllerSettings();
     cs->mEngine.mMaxTorque = d.engine_torque;
     cs->mEngine.mMinRPM = d.min_rpm;
     cs->mEngine.mMaxRPM = d.max_rpm;
