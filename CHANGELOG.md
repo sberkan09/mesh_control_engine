@@ -7,9 +7,6 @@ when a version is cut.
 
 ## Unreleased
 
-- Luau 2D physics, M-SCRIPT2 step 1 (SBA-190): `mce.force2d`, angular velocity, `awake2d` / `set_awake2d`, `set_enabled2d`, `overlap_point2d`,
-  `raycast_all2d`, `circle_cast2d` / `box_cast2d`, and `impulse2d` at a point; a test now fails when a registered `mce` function is not
-  declared in `mce.d.luau`.
 - Procedural levels, M-PROCGEN step 5 (SBA-175): `projects/Dungeon`, a script-only top-down crawl over seeded levels (rooms,
   caves, walk) with an autopilot that follows the new `ProcLevel.path_markers`, and a `.mctest` per generator that clears ten
   seeds. Luau gets `mce.teleport2d(e, position)`: writing `LocalTransform.position` never moved a 2D body (the physics step
