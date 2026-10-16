@@ -5,6 +5,17 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Behavior trees, M-AI step 1 (SBA-128, ADR-0045): `.mcbt` files describe an AI's decisions as data (sequence,
+  selector, parallel, invert, succeed, fail, repeat, retry, cooldown, timeout, guard, check, wait, set, emit and
+  task nodes) over typed blackboard keys, and cook to `CHNK_BT` with errors at file:line:col. An `AiBrain`
+  component runs one per entity every fixed tick, and a `Blackboard` component holds the keys. All run state is in
+  the two components, so trees are deterministic, hashed, replayed and saved. Games register tasks by name
+  (`kit::BtRegistry::register_task`) and read and write keys by name (`kit::bb_*`). User guide 13.8.
+- Sound sets and pitch, M-AUDIO2 step 2 (SBA-119). A `.mcsound` names several clips and picks one per play (random
+  with no immediate repeat, or in sequence) with a pitch and gain range; it is an Sfx asset, so `AudioSource`,
+  `SfxTrigger`, `PlaySfx`, sequences and timelines take it as they are. Picks come from the tick, so replays repeat.
+  `PlayParams::pitch` and `AudioDevice::set_handle_pitch` play any clip at a rate (0.25..4). MCP `asset_create`
+  makes a `SoundSet`. User guide 10.3 is new; the audio chapter's later sections move up one number.
 - 2D skeletons, M-ANIM2D step 1 (SBA-140): `.mcskel2d` assets (bones with a rest pose, textured slots in draw
   order) cook to `CHNK_SKEL2D`. A `Skeleton2D` component poses one on its entity every fixed tick from the rest
   pose and its per-bone `pose` offsets (up to 64 bones), and the sprite extraction draws its slots with the

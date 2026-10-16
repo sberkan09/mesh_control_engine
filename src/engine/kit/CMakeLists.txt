@@ -25,6 +25,7 @@ mce_add_library(mce_gameplay_kit
         src/sprite_extract.cpp
         src/stock.cpp
         src/timeline.cpp
+        src/ai.cpp
         src/cinematic.cpp
         src/video.cpp
     PUBLIC_DEPS

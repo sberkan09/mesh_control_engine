@@ -16,10 +16,13 @@ namespace mce::kit {
 
 // Padding-free: World::state_hash hashes component bytes.
 static_assert(sizeof(RigidBody3D) == 112);
-static_assert(sizeof(CharacterController3D) == 68);
+static_assert(sizeof(CharacterController3D) == 116);
 static_assert(sizeof(Trigger3D) == 48);
 
 namespace {
+
+constexpr StringId kSprint{"Sprint"};
+constexpr StringId kCrouch{"Crouch"};
 
 struct Pose {
     math::vec3 position;
@@ -209,22 +212,74 @@ void kit3d_bodies(Frame& f) {
             phys.world.teleport(e, t.position, t.rotation);
             c.velocity = {};
         }
+        // Crouching shrinks the capsule at once; standing back up waits for room overhead.
+        const bool want_crouch = c.crouch_half_height > 0.0f && c.crouch_half_height < c.half_height &&
+                                 (c.crouch || (c.use_input && in && in->has_action(kCrouch) && in->held(kCrouch)));
+        if (want_crouch && !c.crouched) c.crouched = phys.world.set_character_height(e, c.crouch_half_height, params, true);
+        else if (!want_crouch && c.crouched && phys.world.set_character_height(e, c.half_height, params, false)) c.crouched = false;
+
+        const bool sprinting = !c.crouched && (c.sprint || (c.use_input && in && in->has_action(kSprint) && in->held(kSprint)));
+        const f32 speed = c.speed * (c.crouched ? c.crouch_multiplier : sprinting ? c.sprint_multiplier : 1.0f);
         math::vec3 walk{c.move.x, 0.0f, c.move.z};
         bool jump = c.jump;
+        bool release = c.release_jump;
         if (c.use_input && in) {
-            walk = (right * in->move.x + forward * in->move.y) * c.speed;
+            walk = (right * in->move.x + forward * in->move.y) * speed;
             jump = jump || in->jump_pressed;
+            release = release || in->jump_released;
+        } else if (c.crouched || sprinting) {
+            walk = walk * (speed / math::max(c.speed, 1e-6f));
         }
         c.jump = false;
-        math::vec3 v{walk.x, c.velocity.y, walk.z};
+        c.release_jump = false;
+
+        // Horizontal velocity eases towards the wanted one at the acceleration rates (0 = at once).
+        math::vec3 flat{walk.x, 0.0f, walk.z};
+        const bool moving = math::length_sq(flat) > 1e-8f;
+        f32 rate = moving ? c.acceleration : c.deceleration;
+        if (!c.grounded && c.air_acceleration > 0.0f) rate = c.air_acceleration;
+        if (rate > 0.0f) {
+            const math::vec3 now{c.velocity.x, 0.0f, c.velocity.z};
+            const math::vec3 d = flat - now;
+            const f32 step = rate * f.dt, len = math::length(d);
+            flat = len <= step ? flat : now + d * (step / len);
+        }
+
+        // Jumps: a request waits jump_buffer seconds; the ground counts for coyote_time after leaving it.
+        const auto ticks = [&](f32 s) { return static_cast<u16>(math::min(std::floor(s / f.dt + 0.5f), 60000.0f)); };
+        if (jump) c.buffered_ticks = static_cast<u16>(ticks(c.jump_buffer) + 1);
+        const bool on_ground = c.grounded || (!c.jumping && c.airborne_ticks <= ticks(c.coyote_time) && c.airborne_ticks > 0);
+        math::vec3 v{flat.x, c.velocity.y, flat.z};
         if (c.grounded && v.y < 0.0f) v.y = 0.0f;
-        if (jump && c.grounded) v.y = c.jump_speed;
+        if (c.buffered_ticks > 0) {
+            if (on_ground || c.air_jumps_used < c.air_jumps) {
+                if (!on_ground) ++c.air_jumps_used;
+                v.y = c.jump_speed;
+                c.jumping = 1;
+                c.buffered_ticks = 0;
+            } else {
+                --c.buffered_ticks;
+            }
+        }
+        if (release && c.jumping == 1 && v.y > 0.0f) {
+            v.y *= c.jump_cut;
+            c.jumping = 2;  // one cut per jump
+        }
         v = v + gravity * (c.gravity_scale * f.dt);
+        const bool was_grounded = c.grounded;
         const physics::MoveResult3D r = phys.world.move_character(e, v * f.dt, params);
         c.flags = r.flags;
         c.grounded = (r.flags & physics::ControllerFlags3D::Ground) != 0;
         c.velocity = {r.velocity.x, (c.grounded && v.y <= 0.0f) ? 0.0f : r.velocity.y, r.velocity.z};
         if (r.hit_ceiling && c.velocity.y > 0.0f) c.velocity.y = 0.0f;
+        if (c.grounded) {
+            if (!was_grounded && c.airborne_ticks > 0 && v.y <= 0.0f) f.events().push(Landed3D{e, -v.y});
+            c.airborne_ticks = 0;
+            c.air_jumps_used = 0;
+            c.jumping = 0;
+        } else if (c.airborne_ticks < 60000) {
+            ++c.airborne_ticks;
+        }
         t.position = r.position;
         st.poses.insert_or_assign(e, Pose{t.position, t.rotation});
     });
@@ -271,7 +326,8 @@ void kit3d_triggers(Frame& f) {
         candidates.push_back(Candidate{e, t.position, bounding_radius(b, t.scale)});
     });
     w.query<const CharacterController3D, const LocalTransform>().each([&](Entity e, const CharacterController3D& c, const LocalTransform& t) {
-        candidates.push_back(Candidate{e, t.position, c.half_height + c.radius});
+        const f32 hh = c.crouched ? c.crouch_half_height : c.half_height;  // crouched: the capsule hangs lower
+        candidates.push_back(Candidate{e, t.position - math::vec3{0.0f, c.half_height - hh, 0.0f}, hh + c.radius});
     });
 
     Array<Pair> now;
@@ -319,6 +375,7 @@ void install_bodies3d(World& world, asset::AssetSystem* assets) {
     world.register_components<RigidBody3D, CharacterController3D, Trigger3D>();
     world.register_event<TriggerEnter3D>(Phase::FixedUpdate_Physics);
     world.register_event<TriggerExit3D>(Phase::FixedUpdate_Physics);
+    world.register_event<Landed3D>(Phase::FixedUpdate_Pre);
     world.set_hooks<RigidBody3D>(nullptr, &on_body_removed);
     world.set_hooks<CharacterController3D>(nullptr, &on_body_removed);
     world.set_hooks<BoxCollider3D>(nullptr, &on_body_removed);

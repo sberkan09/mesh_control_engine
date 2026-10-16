@@ -96,7 +96,9 @@ play-in-editor and MCP `run_headless`; `install_world_settings` applies the firs
 (`gravity_2d`, `gravity_3d`, in `components.h`) at Startup.
 
 `bodies3d.h` (M-DATA-REACH 6): `RigidBody3D` (dynamic/kinematic; box, sphere, capsule, convex hull
-of a mesh), `CharacterController3D` (capsule walk by `move` or the Move/Jump input), `Trigger3D`
+of a mesh), `CharacterController3D` (capsule walk by `move` or the Move/Jump input; M-MOVE3D 1 feel:
+acceleration, coyote time, jump buffer, jump cut, air jumps, sprint, crouch via
+`World3D::set_character_height`, `Landed3D` events, `FireOn::Landed`), `Trigger3D`
 (box/sphere overlap with `TriggerEnter3D` / `TriggerExit3D`); `install_bodies3d`: `"kit3d_bodies"`
 (`FixedUpdate_Pre`: create, teleport on outside moves, velocities, characters, runtime and moved
 static colliders), `"kit3d_writeback"` and `"kit3d_triggers"` after `"kit3d_physics"`; remove hooks

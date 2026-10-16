@@ -122,6 +122,7 @@ private:
 mem::UniquePtr<IImporter> make_texture_importer();
 mem::UniquePtr<IImporter> make_wav_importer();
 mem::UniquePtr<IImporter> make_ogg_importer();
+mem::UniquePtr<IImporter> make_sound_set_importer();  // .mcsound -> a sound set in CHNK_SFX (M-AUDIO2 2)
 mem::UniquePtr<IImporter> make_video_importer();  // .mpg -> CHNK_VID (M-CINEMA 5)
 mem::UniquePtr<IImporter> make_font_importer();
 mem::UniquePtr<IImporter> make_material_importer();
@@ -135,6 +136,7 @@ mem::UniquePtr<IImporter> make_particle_importer();  // .mcpart -> CHNK_PART (v0
 mem::UniquePtr<IImporter> make_sequence_importer();  // .mcseq -> CHNK_SEQ (v0.5)
 mem::UniquePtr<IImporter> make_skeleton2d_importer();  // .mcskel2d -> CHNK_SKEL2D (M-ANIM2D 1)
 mem::UniquePtr<IImporter> make_timeline_importer();  // .mctimeline -> CHNK_TIMELINE (M-CINEMA 1)
+mem::UniquePtr<IImporter> make_bt_importer();        // .mcbt -> CHNK_BT (M-AI 1)
 mem::UniquePtr<IImporter> make_input_map_importer(); // .mcinput -> CHNK_INPUT (FR-INP-020)
 mem::UniquePtr<IImporter> make_store_importer();     // .mcstore -> CHNK_STORE (M-MONETIZE)
 mem::UniquePtr<IImporter> make_services_importer();  // .mcservices -> CHNK_GSVC (M-LIVEOPS game services)

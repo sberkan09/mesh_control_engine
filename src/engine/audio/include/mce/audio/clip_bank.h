@@ -18,6 +18,13 @@ namespace mce::audio {
 // clip ends at its loop_end and wraps to loop_start; the cook guarantees loop_end > loop_start.
 Result<ClipPayload> clip_payload_from_sfx(Span<const byte> payload);
 
+// One play's choice from ClipBank::pick: the clip, and the gain and pitch a sound set adds.
+struct ClipPick {
+    ClipHandle clip;
+    f32 gain_db = 0.f;
+    f32 pitch = 1.f;
+};
+
 class ClipBank {
 public:
     ClipBank(asset::AssetSystem& assets, AudioDevice& device, mem::IAllocator& a = mem::heap());
@@ -31,7 +38,15 @@ public:
     // streamed clip (AudioDevice::register_stream: music, long ambiences), falling back to an
     // in-memory clip when every stream ring is taken; it applies when the GUID is first acquired.
     // A Vorbis Sfx (M-AUDIO2 1) decodes here, at load, unless it streams: then its pages decode it.
+    // A sound set (.mcsound, M-AUDIO2 2) has no clip of its own: acquire() returns null for it.
     ClipHandle acquire(asset::Guid guid, bool stream = false);
+    // What one play of `guid` sounds like. A plain Sfx is acquire() at its own gain and pitch; a
+    // sound set picks a member (random from `seed`, or the next in sequence) and a gain and pitch
+    // in its ranges from `seed`. The bridge derives `seed` from the tick and the source, so a replay
+    // picks the same; a sequence advances per play.
+    ClipPick pick(asset::Guid guid, u64 seed, bool stream = false);
+    // True for a GUID acquired as a sound set.
+    bool is_set(asset::Guid guid) const;
     // The registered clip, or null when the GUID was never acquired (no load).
     ClipHandle find(asset::Guid guid) const;
     // Releases the clip and the asset retain.
@@ -54,6 +69,12 @@ private:
         ClipHandle clip;
         bool stream = false;
         Array<f32> pcm;  // a Vorbis clip decoded for an in-memory registration
+        // A sound set: its members (loaded on their first pick) and how to pick.
+        bool set = false;
+        asset::SoundSetHeader params{};
+        Array<asset::Guid> members;
+        u32 cursor = 0;            // Sequence: plays so far
+        u32 last = 0xFFFFFFFFu;   // Random + NoRepeat: the member picked last
     };
     // Decoded samples the mixer may still read: freed once the device has dropped the clip.
     struct Retired {

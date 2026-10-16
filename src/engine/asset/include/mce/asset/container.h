@@ -58,6 +58,7 @@ enum class ChunkType : u16 {  // closed set, appended only
     Terrain,         // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN; mce/render/terrain.h)
     NavMesh,         // CHNK_NAV: a baked 3D navmesh, the .mcnav bytes (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
     Video,           // CHNK_VID: an MPEG-1 video and its audio as 48 kHz PCM (M-CINEMA 5; mce/render/video.h)
+    BehaviorTree,    // CHNK_BT: one behavior tree and its blackboard keys (M-AI 1; mce/kit/ai.h)
     Skeleton2D,      // CHNK_SKEL2D: a 2D cut-out skeleton, bones + slots (M-ANIM2D 1; mce/kit/skeleton2d.h)
 };
 

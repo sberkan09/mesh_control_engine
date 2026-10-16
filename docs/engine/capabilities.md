@@ -21,6 +21,8 @@ reach all of its non-transient fields.
 | `NetRelevance` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/20-multiplayer.md |
 | `SaveKey` | `mce/ecs/save.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `LocalTransform` | `mce/ecs/transform.h` | yes | yes | yes | docs/user-guide/03-editor.md |
+| `Blackboard` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |
+| `AiBrain` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `IKTarget3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
@@ -104,7 +106,7 @@ reach all of its non-transient fields.
 | Mesh | .gltf / .glb | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/08-3d.md |
 | Material | `.mcmat` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | Texture | .png / .jpg | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
-| Sfx | .wav | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/10-audio.md |
+| Sfx | .wav / .ogg / .mcsound (sound set) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
 | Font | .ttf | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
 | Scene | .mcscene (scene_* tools) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | Prefab | .mcprefab (prefab_* tools) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/03-editor.md |
@@ -124,6 +126,7 @@ reach all of its non-transient fields.
 | Terrain | `.mcterrain` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/03-editor.md |
 | NavMesh | .mcnav (the editor's Bake navmesh) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/09-physics.md |
 | Video | .mpg / .mpeg (MPEG-1 + MP2) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/13-sequences-fsm-saves.md |
+| BehaviorTree | `.mcbt` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | Skeleton2D | `.mcskel2d` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 
 ## MCP tools

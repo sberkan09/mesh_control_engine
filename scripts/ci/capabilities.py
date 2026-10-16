@@ -43,7 +43,7 @@ INTERNAL_CHUNKS = {
 IMPORTED = {
     "Mesh": ".gltf / .glb",
     "Texture": ".png / .jpg",
-    "Sfx": ".wav",
+    "Sfx": ".wav / .ogg / .mcsound (sound set)",
     "Font": ".ttf",
     "Scene": ".mcscene (scene_* tools)",
     "Prefab": ".mcprefab (prefab_* tools)",

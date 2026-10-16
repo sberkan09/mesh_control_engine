@@ -53,6 +53,7 @@ flowchart LR
     MWEB -.web transport.-> MNET2
     MAGENT --> MPERF["M-PERF captures, budgets per target,<br/>perf_run over MCP, counter gate"]
     M6 --> MAUDIO2["M-AUDIO2 Ogg Vorbis clips, pitch and sound sets,<br/>bus effects, ducking, snapshots, occlusion"]
+    MGP3D -.navmesh, sensors.-> MAI["M-AI behavior trees, blackboard,<br/>perception, utility, tokens, BT panel"]
 ```
 
 Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because Artifact A is the earliest shippable artifact and the cut ladder's final rung reduces the MVE to Artifact A alone — Artifact B is structured as an **addition, not a dependency** (REQUIREMENTS cut-ladder rung 7). The cook pipeline precedes everything that loads content; the determinism harness precedes everything that could break it.
@@ -99,10 +100,13 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-VISUAL2 | [M-VISUAL2.md](milestones/M-VISUAL2.md) (Linear SBA-101 … SBA-105) | active (step 1 done: screen-space reflections, `Environment3D.ssr`, `r.ssr`; step 2 done: spatial upsample and sharpening, `Environment3D.upscaler` / `sharpen`, `r.upscaler`, `r.sharpen`; step 3 done for the sun: contact shadows, `Environment3D.contact_shadows`, `r.contact_shadows`; step 4 done: clear coat, sheen, anisotropy, transmission, `.mcmat` keys and glTF KHR factors) | step 5, local-light contact shadows, the demo and the gates |
 | M-PERF | [M-PERF.md](milestones/M-PERF.md) (Linear SBA-113 … SBA-117, added 2026-10-15) | done on the desktop (steps 1–5, the demo and the gates) | a capture on a phone and in a browser |
 | M-STEAM | [M-STEAM.md](milestones/M-STEAM.md), ADR-0042 (Linear SBA-106 … SBA-112) | done against a stand-in `steam_api` (steps 1–6: the run-time loader, game services, the overlay and rich presence, Steam Input, `ship --steam` depots, `samples/steam_demo` and user guide 26) | the real-client run, SBA-112 (needs the user's Steamworks account) |
-| M-AUDIO2 | [M-AUDIO2.md](milestones/M-AUDIO2.md) (Linear SBA-118 … SBA-122, added 2026-10-16) | active: step 1 done (Ogg Vorbis clips, ADR-0044) | steps 2–5, the demo and the gates |
+| M-AUDIO2 | [M-AUDIO2.md](milestones/M-AUDIO2.md) (Linear SBA-118 … SBA-122, added 2026-10-16) | active: step 1 done (Ogg Vorbis clips, ADR-0044); step 2 done (per-voice pitch, `.mcsound` sound sets) | steps 3–5, the demo and the gates |
 | M-NET3 | [M-NET3.md](milestones/M-NET3.md) (Linear SBA-123 … SBA-127, added 2026-10-16) | active (step 1 done: per-client delta snapshots, `NetRelevance`, acknowledgements; about a third of the snapshot bytes in `sample_net_headless`) | steps 2–5, the demo and the gates |
+| M-AI | [M-AI.md](milestones/M-AI.md), ADR-0045 (Linear SBA-128 … SBA-133, added 2026-10-16) | active (step 1 done: `.mcbt` behavior trees cooked to `CHNK_BT`, `AiBrain` and `Blackboard` in `mce/kit/ai.h`, tasks by name) | steps 2–6, the demo and the gates |
+| M-MOVE3D | [M-MOVE3D.md](milestones/M-MOVE3D.md) (Linear SBA-134 … SBA-139, added 2026-10-16) | active (step 1 done: character feel, acceleration, coyote time, jump buffer and cut, air jumps, sprint, crouch, `Landed3D`) | steps 2–6, the demo and the gates |
 | M-MOVE3D | [M-MOVE3D.md](milestones/M-MOVE3D.md) (Linear SBA-134 … SBA-139, added 2026-10-16) | active (step 1 done: `.mcskel2d` cooked to `CHNK_SKEL2D`, the `Skeleton2D` world pose, slots drawn through the sprite extraction, `Bone2DFollow`) | steps 2–6, the demo and the gates |
 | M-ANIM2D | [M-ANIM2D.md](milestones/M-ANIM2D.md) (Linear SBA-140 … SBA-146, added 2026-10-16) | active (step 1 in progress) | steps 1–6, the demo and the gates |
+| M-SCRIPT | — (added 2026-10-16; ADR-0041) | planned (the spike is built: `mce_script`, PR #262) | steps 1–6, the demo and the gates |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -440,6 +444,25 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 - A Vorbis clip stays within a set error of its source.
 - `local_ci.sh` green on every step.
 
+### M-AI — Game AI as data · **size L (rough guess, ≈ 100–150 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the project's standing instruction to extend the roadmap when no milestone is free (every active milestone has an owner, and M-LIVEOPS' remaining work needs devices). Game AI was the gap left in the engine comparison (`assessments/motor-kiyaslama-eksikler.md`) after M-GAMEPLAY3D: navmesh, sensors and the FSM helper exist, but every enemy past a few states is a hand-written C++ cascade that an agent or designer cannot edit as data. Unreal ships behavior trees with a blackboard and Unity a Behavior package. Needs no device: every step gates headless.*
+
+**Builds, in order:**
+1. Behavior tree runtime (ADR-0045): `.mcbt` cooked to `CHNK_BT`, typed blackboard keys, `AiBrain` and `Blackboard` components holding all run state, tasks registered by name.
+2. Stock data tasks (move on the grid or the navmesh, look, animate, play, spawn, raise and wait for events) and blackboard observer aborts.
+3. Perception: `Perceiver` and `Stimulus`, sight with line of sight in 2D and 3D, hearing, memory into blackboard keys.
+4. A utility selector with response curves, attack token pools, and point queries scored by distance, line of sight and cover.
+5. The editor's Behavior Tree panel, with a live debugger in play-in-editor.
+6. MCP `bt_*` tools with `bt_trace`, the user guide chapter, the demo and the gates.
+
+**Demo:** `samples/ai_demo`. Guards patrol, hear a thrown stone and investigate. When they see the player, they take turns attacking through tokens, and they flee when hurt. A 3D variant runs on the navmesh, and an agent writes a new guard tree over MCP and checks it with `bt_trace`.
+**Gates:**
+- The same replay hash with AI running.
+- A 500-agent per-tick budget.
+- Truth tables for every node, decorator and abort.
+- `local_ci.sh` green on every step.
+
 ### M-STEAM — Steamworks · **size M (rough guess, ≈ 60–100 h engineering)** · tier: off-tier platform track, opt-in, gates nothing · priority 2
 
 *Reason: added 2026-10-15 by the M-MOBILE routine under the user's standing instruction to keep developing the engine once the roadmap's unowned work ran out; item 2 of the engine comparison (`assessments/motor-kiyaslama-eksikler.md`): Steam is the desktop distribution channel, and Godot, Unity and Unreal games reach it through Steamworks.*
@@ -484,6 +507,25 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Gates:**
 - Pose, sampling, skinning and IK each have headless tests with exact numbers.
 - Replay hashes hold across runs and builds; a scene without `Skeleton2D` plays today's hash.
+- `local_ci.sh` green on every step.
+
+### M-SCRIPT — Luau scripting for games without a compiler · **size M–L (rough guess, ≈ 80–140 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 2
+
+*Reason: added 2026-10-16 by the user's decision after the Luau spike (ADR-0041, PR #262). The spike showed that a sandboxed Luau system keeps FR-RUN-040 (the same `state_hash` across runs, in Debug and Release, and the same as its C++ twin) at about 29× the C++ cost (0.82 vs 0.028 ms per tick for 2,000 entities, Release). N2's written trigger (recompile time dominating editor time) was measured and does not hold; the reason is a different one: today every game needs a C++ toolchain and, on phones and the web, its own build, while a script game is data that one stock player runs. This reopens N2 for Luau only (no visual scripting). Code mods (N10) stay a separate decision; this track builds the sandbox they would need.*
+
+**Builds, in order:**
+1. Scripts as assets: `.luau` sources compiled and type-checked by `mce_cook` into a `CHNK_SCRIPT` bytecode chunk; the player and `run_headless` load bytecode only, so the Luau compiler links into the cook and the editor, never the player (a wall). A scene names its scripts and their phases (a `ScriptSystem` list in the scene settings), and the stock player, the editor's play mode and `mce_mcp` run them.
+2. A complete API: cached field handles (`mce.field("Comp", "field")`) in place of per-call name lookups, `spawn` / `destroy` / `add` / `remove` and prefab instancing through `Commands`, events read and written by reflection, `InputState`, resources, 2D and 3D physics queries and `move_and_collide`; budget: the spike's 2,000-entity bench at ≤ 0.4 ms per tick in Release.
+3. No hidden state: a compile-time check over Luau's AST rejects assignments to outer locals and `pairs` over non-string keys (ADR-0041 open questions 2 and 3), so a script's memory is its components; saves, replays and a reload between two ticks keep the hash.
+4. Tooling: Luau type definitions generated from the reflection registry (`mce.d.luau`), MCP `script_check` (diagnostics as `file:line:col`) and script errors in `run_headless` and `test_run`, the editor console with jump-to-line, hot reload during play-in-editor, Tracy zones per script, and script stacks in crash reports.
+5. The compiler-free path: `mce new --script` makes a project with no C++ module, `mce ship` packages it with the stock player, and the same pack plays on Android, iOS and the web player (`MCE_WITH_SCRIPT` on in the mobile and web presets).
+6. Docs and the demo: a user guide chapter, kit recipes in Luau, `docs_search` coverage, and the `start_game` prompt offering a script project.
+
+**Demo:** Ember Step's player controller and an enemy FSM ported to Luau pass the same `.mctest` scenarios as the C++ versions; a fresh agent in a blind test makes a script-only 2D game over MCP with no compiler installed, and its pack plays in the browser.
+**Gates:**
+- The determinism stage covers script games (3 runs, Debug = Release) and the Luau-vs-C++ twin.
+- Sandbox, step-budget and memory-cap tests stay green; the walls keep Luau's headers in `mce_script` and the compiler out of the player.
+- A project without scripts builds and hashes exactly as today.
 - `local_ci.sh` green on every step.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)

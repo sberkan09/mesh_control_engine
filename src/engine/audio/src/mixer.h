@@ -15,6 +15,9 @@ namespace mce::audio::detail {
 
 inline constexpr u32 kBlockFrames = 512;        // internal sub-block; callbacks of any size loop
 inline constexpr u32 kRampFrames = 480;         // parameter ramp (10 ms): click-free gain/pan
+// A voice's step at pitch 1 (32.32 fixed point), and the step for a command's 4.12 rate.
+inline constexpr u64 kUnitStep = 1ull << 32;
+inline constexpr u64 rate_step(u16 rate) { return static_cast<u64>(rate) << 20; }
 inline constexpr u32 kStealFadeFrames = 240;    // 5 ms fade on a stolen voice
 inline constexpr u32 kMinStopFadeFrames = 96;   // 2 ms: stop() never cuts a waveform
 inline constexpr u32 kMaxCommandsPerCallback = 256;
@@ -32,6 +35,8 @@ struct VoiceRT {
     u32 handle_gen = 0;
     u32 clip = 0;
     u64 pos = 0;         // frame cursor in the clip / stream timeline
+    u32 frac = 0;        // fraction of a frame past `pos` (pitched voices, 0.32 fixed point)
+    u64 step = 1ull << 32;  // source frames per output frame, 32.32 fixed point (M-AUDIO2 2)
     u64 order = 0;       // start order (age) for stealing
     u64 start = 0;       // play_at: mixer frame of the first output frame (0 = already started)
     f32 gain = 1.f;      // logical linear gain
