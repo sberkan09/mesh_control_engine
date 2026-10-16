@@ -19,6 +19,24 @@
 //      "events": [{"t": 0.5, "name": "step"}]}]
 // }
 //
+// M-ANIM2D 3 adds attachments, meshes and slot keys (chunk minor 2; a skeleton without them cooks
+// as before):
+//   "slots": [{"name": "arm", "bone": "arm", "tint": [1, 1, 1, 1], "attachment": "arm_mesh" | null,
+//              "attachments": [
+//                {"name": "arm", "type": "quad", "texture": ..., "rect", "size", "pivot", "offset", "rotation"},
+//                {"name": "arm_mesh", "type": "mesh", "texture": ...,
+//                 "vertices": [{"uv": [0, 0], "x": 0, "y": 0},                      // in the slot bone's space
+//                              {"uv": [1, 0], "weights": [{"bone": "arm", "x": 0.4, "y": 0, "weight": 0.5}, ...]}],
+//                 "triangles": [0, 1, 2, ...]}]}]
+//   "animations": [{..., "slots": {"arm": {"color": [{"t": 0, "color": [1, 1, 1, 1], "curve": ...}],
+//                                          "attachment": [{"t": 0, "name": "arm_mesh" | null}]}},
+//                        "deform": {"arm": {"arm_mesh": [{"t": 0, "offsets": [dx0, dy0, dx1, dy1, ...], "curve": ...}]}}}]
+// A slot without "attachments" has one quad attachment named after the slot, made of its own
+// fields (the step-1 meaning); a slot with "attachments" takes no quad fields itself. "attachment"
+// names the one shown at first (default: the first listed; null hides the slot). Weights are
+// normalized to sum to 1. Color keys are absolute linear RGBA; attachment keys are stepped; deform
+// offsets (2 per vertex, default 0) are metres in the space of the bones the vertex follows.
+//
 // Metres and degrees in the text, Y up; the chunk stores radians. A bone's x, y and rotation are
 // its rest pose in its parent's space; "scale" is [sx, sy] or one number. A slot's offset and
 // rotation place the quad's pivot in its bone's space. A null or absent texture draws a solid quad
@@ -121,6 +139,33 @@ struct Animations {
     Array<asset::Skeleton2DTimeline> timelines;
     Array<asset::Skeleton2DKey> keys;
     Array<asset::Skeleton2DEvent> events;
+    Array<asset::Skeleton2DSlotKey> slot_keys;
+    Array<f32> values;
+    bool slot_timelines = false;  // any color, attachment or deform keys (chunk minor 2)
+};
+
+// The attachments of the cooked slots, as the animations look them up by name.
+struct SlotNames {
+    struct Slot {
+        StringView name;
+        u32 first_name = 0;  // into names / global / vertices
+        u32 name_count = 0;
+    };
+    Array<Slot> slots;
+    Array<StringView> names;  // per slot: its attachments' names (a slot's own quad: the slot's name)
+    Array<u32> global;        // the attachment's index in the chunk (~0u: the slot's own quad)
+    Array<u32> vertices;      // a mesh's vertex count, 0 for quads
+    i32 find(StringView slot) const {
+        for (u32 i = 0; i < slots.size(); ++i)
+            if (slots[i].name == slot) return static_cast<i32>(i);
+        return -1;
+    }
+    // The local index of attachment `name` in slot `s`, or -1.
+    i32 find_attachment(u32 s, StringView name) const {
+        for (u32 i = 0; i < slots[s].name_count; ++i)
+            if (names[slots[s].first_name + i] == name) return static_cast<i32>(i);
+        return -1;
+    }
 };
 
 constexpr usize kMaxEventName = 23;  // kit::Skeleton2DAnimator::last_event is a FixedString<24>
@@ -135,7 +180,8 @@ bool anim_fail(Reader& r, JsonValue at, StringView anim, StringView bone, const 
 }
 
 // A key's "curve": absent or "linear", "stepped", or [cx1, cy1, cx2, cy2] with cx in 0..1.
-bool read_curve(Reader& r, JsonValue key, StringView anim, StringView bone, asset::Skeleton2DKey& k) {
+template <class Key>
+bool read_curve(Reader& r, JsonValue key, StringView anim, StringView bone, Key& k) {
     const JsonValue c = key.get("curve");
     k.curve = asset::Skeleton2DCurve::Linear;
     if (!c.valid() || (c.is_string() && c.as_string() == "linear")) return true;
@@ -157,7 +203,11 @@ bool read_curve(Reader& r, JsonValue key, StringView anim, StringView bone, asse
     return true;
 }
 
-bool read_animations(Reader& r, JsonValue list, const Array<StringView>& bone_names, Array<char>& pool, Animations& out) {
+bool read_slot_keys(Reader& r, JsonValue a, StringView name, const SlotNames& slots, Animations& out,
+                    asset::Skeleton2DAnimation& anim, f32& last);
+
+bool read_animations(Reader& r, JsonValue list, const Array<StringView>& bone_names, const SlotNames& slots,
+                     Array<char>& pool, Animations& out) {
     if (!list.valid()) return true;
     if (!list.is_array()) return r.fail(list, "'animations' must be an array");
     if (list.size() > asset::kSkeleton2DMaxAnimations) {
@@ -170,7 +220,9 @@ bool read_animations(Reader& r, JsonValue list, const Array<StringView>& bone_na
         const JsonValue a = list.at(ai);
         if (!a.is_object())
             return r.fail(a, "an animation is {\"name\", \"duration\", \"loop\", \"bones\", \"events\"}");
-        if (!detail::check_keys(a, {"name", "duration", "loop", "bones", "events"}, r.file, kStage, r.diags)) return false;
+        if (!detail::check_keys(a, {"name", "duration", "loop", "bones", "events", "slots", "deform"}, r.file, kStage,
+                                r.diags))
+            return false;
         StringView name;
         if (!r.name(a, "animation", name)) return false;
         for (const StringView& other : names)
@@ -257,6 +309,8 @@ bool read_animations(Reader& r, JsonValue list, const Array<StringView>& bone_na
             }
         }
 
+        if (!read_slot_keys(r, a, name, slots, out, anim, last)) return false;
+
         const JsonValue events = a.get("events");
         if (events.valid() && !events.is_array()) return anim_fail(r, events, name, {}, "'events' must be an array");
         f32 prev = 0.0f;
@@ -292,10 +346,380 @@ bool read_animations(Reader& r, JsonValue list, const Array<StringView>& bone_na
     return true;
 }
 
+bool slot_fail(Reader& r, JsonValue at, StringView anim, StringView slot, StringView attachment, const char* msg) {
+    String text;
+    appendf(text, "animation '%.*s', slot '%.*s'", static_cast<int>(anim.size()), anim.data(), static_cast<int>(slot.size()),
+            slot.data());
+    if (!attachment.empty()) appendf(text, ", attachment '%.*s'", static_cast<int>(attachment.size()), attachment.data());
+    appendf(text, ": %s", msg);
+    return r.fail(at, text.view());
+}
+
+// One slot timeline's key list: times in increasing order; `fill` reads each key's value.
+template <class Fill>
+bool read_slot_timeline(Reader& r, JsonValue keys, StringView anim, StringView slot, StringView att, const char* what,
+                        asset::Skeleton2DChannel channel, u32 slot_index, u32 attachment, Animations& out,
+                        asset::Skeleton2DAnimation& a, f32& last, std::initializer_list<StringView> allowed, Fill&& fill) {
+    if (!keys.is_array() || keys.size() == 0) {
+        String msg;
+        appendf(msg, "'%s' must be an array of at least one key", what);
+        return slot_fail(r, keys, anim, slot, att, msg.c_str());
+    }
+    if (out.slot_keys.size() + keys.size() > asset::kSkeleton2DMaxSlotKeys)
+        return slot_fail(r, keys, anim, slot, att, "the skeleton has too many slot keys");
+    asset::Skeleton2DTimeline tl{};
+    tl.bone = static_cast<u16>(slot_index);
+    tl.channel = channel;
+    tl.first_key = static_cast<u32>(out.slot_keys.size());
+    tl.key_count = keys.size();
+    tl.attachment = attachment;
+    f32 prev = 0.0f;
+    for (u32 ki = 0; ki < keys.size(); ++ki) {
+        const JsonValue key = keys.at(ki);
+        if (!key.is_object()) return slot_fail(r, key, anim, slot, att, "a key is an object with \"t\"");
+        if (!detail::check_keys(key, allowed, r.file, kStage, r.diags)) return false;
+        asset::Skeleton2DSlotKey k{};
+        if (!key.get("t").valid()) return slot_fail(r, key, anim, slot, att, "a key needs a time 't'");
+        if (!r.number(key, "t", 0.0, k.t)) return false;
+        if (k.t < 0.0f) return slot_fail(r, key.get("t"), anim, slot, att, "a key's 't' must be 0 or more");
+        if (ki > 0 && !(k.t > prev)) {
+            String msg;
+            appendf(msg, "%s keys must be in increasing time order (t %g after %g)", what, static_cast<f64>(k.t),
+                    static_cast<f64>(prev));
+            return slot_fail(r, key.get("t"), anim, slot, att, msg.c_str());
+        }
+        prev = k.t;
+        if (!fill(key, k)) return false;
+        out.slot_keys.push_back(k);
+    }
+    if (prev > last) last = prev;
+    if (out.timelines.size() >= asset::kSkeleton2DMaxTimelines)
+        return slot_fail(r, keys, anim, slot, att, "the skeleton has too many timelines");
+    out.timelines.push_back(tl);
+    ++a.timeline_count;
+    out.slot_timelines = true;
+    return true;
+}
+
+bool read_slot_keys(Reader& r, JsonValue a, StringView name, const SlotNames& slots, Animations& out,
+                    asset::Skeleton2DAnimation& anim, f32& last) {
+    const JsonValue list = a.get("slots");
+    if (list.valid() && !list.is_object())
+        return anim_fail(r, list, name, {}, "'slots' must be an object of slot name: {\"color\", \"attachment\"}");
+    for (u32 si = 0; list.valid() && si < list.size(); ++si) {
+        const StringView slot = list.key_at(si);
+        const JsonValue channels = list.at(si);
+        const i32 found = slots.find(slot);
+        if (found < 0) return slot_fail(r, channels, name, slot, {}, "no slot has that name");
+        for (u32 j = 0; j < si; ++j)
+            if (list.key_at(j) == slot) return slot_fail(r, channels, name, slot, {}, "the slot is listed twice");
+        if (!channels.is_object()) return slot_fail(r, channels, name, slot, {}, "a slot's keys are {\"color\", \"attachment\"}");
+        if (!detail::check_keys(channels, {"color", "attachment"}, r.file, kStage, r.diags)) return false;
+        const u32 s = static_cast<u32>(found);
+        if (const JsonValue keys = channels.get("color"); keys.valid()) {
+            auto fill = [&](JsonValue key, asset::Skeleton2DSlotKey& k) {
+                static constexpr f32 kWhite[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+                f32 c[4];
+                if (!r.numbers(key, "color", 4, kWhite, c) || !read_curve(r, key, name, {}, k)) return false;
+                if (out.values.size() + 4 > asset::kSkeleton2DMaxValues)
+                    return slot_fail(r, key, name, slot, {}, "the skeleton has too many key values");
+                k.value = static_cast<u32>(out.values.size());
+                for (f32 x : c) out.values.push_back(x);
+                return true;
+            };
+            if (!read_slot_timeline(r, keys, name, slot, {}, "color", asset::Skeleton2DChannel::Color, s, 0, out, anim, last,
+                                    {"t", "color", "curve"}, fill))
+                return false;
+        }
+        if (const JsonValue keys = channels.get("attachment"); keys.valid()) {
+            auto fill = [&](JsonValue key, asset::Skeleton2DSlotKey& k) {
+                const JsonValue n = key.get("name");
+                k.curve = asset::Skeleton2DCurve::Stepped;
+                if (n.is_null()) {
+                    k.value = asset::kSkeleton2DNoAttachmentKey;
+                    return true;
+                }
+                const i32 at = n.is_string() ? slots.find_attachment(s, n.as_string()) : -1;
+                if (at < 0)
+                    return slot_fail(r, n.valid() ? n : key, name, slot, {},
+                                     "an attachment key's 'name' must name one of the slot's attachments, or be null");
+                k.value = static_cast<u32>(at);
+                return true;
+            };
+            if (!read_slot_timeline(r, keys, name, slot, {}, "attachment", asset::Skeleton2DChannel::Attachment, s, 0, out,
+                                    anim, last, {"t", "name"}, fill))
+                return false;
+        }
+    }
+
+    const JsonValue deform = a.get("deform");
+    if (deform.valid() && !deform.is_object())
+        return anim_fail(r, deform, name, {}, "'deform' must be an object of slot name: {mesh attachment name: keys}");
+    for (u32 si = 0; deform.valid() && si < deform.size(); ++si) {
+        const StringView slot = deform.key_at(si);
+        const JsonValue meshes = deform.at(si);
+        const i32 found = slots.find(slot);
+        if (found < 0) return slot_fail(r, meshes, name, slot, {}, "no slot has that name");
+        for (u32 j = 0; j < si; ++j)
+            if (deform.key_at(j) == slot) return slot_fail(r, meshes, name, slot, {}, "the slot is listed twice");
+        if (!meshes.is_object()) return slot_fail(r, meshes, name, slot, {}, "a slot's deform keys are {mesh attachment name: keys}");
+        const u32 s = static_cast<u32>(found);
+        for (u32 mi = 0; mi < meshes.size(); ++mi) {
+            const StringView att = meshes.key_at(mi);
+            const i32 local = slots.find_attachment(s, att);
+            const u32 entry = local < 0 ? 0u : slots.slots[s].first_name + static_cast<u32>(local);
+            if (local < 0 || slots.vertices[entry] == 0)
+                return slot_fail(r, meshes.at(mi), name, slot, att, "deform keys need a mesh attachment of the slot");
+            for (u32 j = 0; j < mi; ++j)
+                if (meshes.key_at(j) == att) return slot_fail(r, meshes.at(mi), name, slot, att, "the attachment is listed twice");
+            const u32 n = 2 * slots.vertices[entry];
+            auto fill = [&](JsonValue key, asset::Skeleton2DSlotKey& k) {
+                if (!read_curve(r, key, name, {}, k)) return false;
+                if (out.values.size() + n > asset::kSkeleton2DMaxValues)
+                    return slot_fail(r, key, name, slot, att, "the skeleton has too many key values");
+                const JsonValue o = key.get("offsets");
+                bool ok = !o.valid() || (o.is_array() && o.size() == n);
+                for (u32 i = 0; ok && o.valid() && i < n; ++i) ok = o.at(i).is_number() && std::isfinite(o.at(i).as_number());
+                if (!ok) {
+                    String msg;
+                    appendf(msg, "'offsets' must be %u numbers (x, y for each of the mesh's %u vertices)", n, n / 2);
+                    return slot_fail(r, o, name, slot, att, msg.c_str());
+                }
+                k.value = static_cast<u32>(out.values.size());
+                for (u32 i = 0; i < n; ++i) out.values.push_back(o.valid() ? static_cast<f32>(o.at(i).as_number()) : 0.0f);
+                return true;
+            };
+            if (!read_slot_timeline(r, meshes.at(mi), name, slot, att, "deform", asset::Skeleton2DChannel::Deform, s,
+                                    slots.global[entry], out, anim, last, {"t", "offsets", "curve"}, fill))
+                return false;
+        }
+    }
+    return true;
+}
+
+// Meshes and the attachment list the slots cook into (chunk minor 2).
+struct Attachments {
+    Array<asset::Skeleton2DAttachment> attachments;
+    Array<asset::Skeleton2DVertex> vertices;
+    Array<asset::Skeleton2DWeight> weights;
+    Array<u32> indices;
+};
+
+bool att_fail(Reader& r, JsonValue at, StringView slot, StringView att, const char* msg) {
+    String text;
+    appendf(text, "slot '%.*s', attachment '%.*s': %s", static_cast<int>(slot.size()), slot.data(),
+            static_cast<int>(att.size()), att.data(), msg);
+    return r.fail(at, text.view());
+}
+
+// The texture of a slot or an attachment: "guid:<uuid>", null or absent.
+bool read_texture(Reader& r, JsonValue obj, u64 out[2]) {
+    const JsonValue t = obj.get("texture");
+    if (t.is_string()) {
+        Guid g;
+        if (!parse_guid_ref(t.as_string(), g)) return r.fail(t, "'texture' must be \"guid:<uuid>\" or null");
+        out[0] = g.hi;
+        out[1] = g.lo;
+    } else if (t.valid() && !t.is_null()) {
+        return r.fail(t, "'texture' must be \"guid:<uuid>\" or null");
+    }
+    return true;
+}
+
+// The quad fields of a slot or a quad attachment.
+bool read_quad(Reader& r, JsonValue o, f32 rect[4], f32 size[2], f32 pivot[2], f32 offset[2], f32& rotation) {
+    static constexpr f32 kRect[4] = {0.0f, 0.0f, 1.0f, 1.0f};
+    static constexpr f32 kSize[2] = {1.0f, 1.0f};
+    static constexpr f32 kPivot[2] = {0.5f, 0.5f};
+    static constexpr f32 kZero[2] = {0.0f, 0.0f};
+    f32 rot = 0.0f;
+    if (!r.numbers(o, "rect", 4, kRect, rect) || !r.numbers(o, "size", 2, kSize, size) ||
+        !r.numbers(o, "pivot", 2, kPivot, pivot) || !r.numbers(o, "offset", 2, kZero, offset) || !r.number(o, "rotation", 0.0, rot))
+        return false;
+    rotation = static_cast<f32>(rot * kDegToRad);
+    return true;
+}
+
+bool read_mesh(Reader& r, JsonValue o, StringView slot, StringView att, const Array<StringView>& bone_names, Attachments& out,
+               asset::Skeleton2DAttachment& a) {
+    const JsonValue verts = o.get("vertices");
+    if (!verts.is_array() || verts.size() < 3 || verts.size() > asset::kSkeleton2DMaxMeshVertices) {
+        String msg;
+        appendf(msg, "a mesh's 'vertices' must be an array of 3 to %u vertices", asset::kSkeleton2DMaxMeshVertices);
+        return att_fail(r, verts.valid() ? verts : o, slot, att, msg.c_str());
+    }
+    if (out.vertices.size() + verts.size() > asset::kSkeleton2DMaxVertices)
+        return att_fail(r, verts, slot, att, "the skeleton has too many mesh vertices");
+    a.first_vertex = static_cast<u32>(out.vertices.size());
+    a.vertex_count = verts.size();
+    for (u32 vi = 0; vi < verts.size(); ++vi) {
+        const JsonValue v = verts.at(vi);
+        String where;
+        appendf(where, "vertex %u: ", vi);
+        auto vfail = [&](JsonValue at, const char* msg) {
+            String m = where;
+            appendf(m, "%s", msg);
+            return att_fail(r, at, slot, att, m.c_str());
+        };
+        if (!v.is_object()) return vfail(v, "a vertex is {\"uv\", \"x\", \"y\"} or {\"uv\", \"weights\"}");
+        if (!detail::check_keys(v, {"uv", "x", "y", "weights"}, r.file, kStage, r.diags)) return false;
+        asset::Skeleton2DVertex vx{};
+        static constexpr f32 kZero[2] = {0.0f, 0.0f};
+        f32 uv[2];
+        if (!v.get("uv").valid()) return vfail(v, "a vertex needs its texture coordinates 'uv'");
+        if (!r.numbers(v, "uv", 2, kZero, uv)) return false;
+        vx.u = uv[0];
+        vx.v = uv[1];
+        const JsonValue ws = v.get("weights");
+        if (ws.valid()) {
+            if (v.get("x").valid() || v.get("y").valid())
+                return vfail(v, "a weighted vertex has its positions in 'weights', not 'x' and 'y'");
+            if (!ws.is_array() || ws.size() == 0 || ws.size() > asset::kSkeleton2DMaxVertexWeights)
+                return vfail(ws, "'weights' must be an array of 1 to 4 {\"bone\", \"x\", \"y\", \"weight\"}");
+            if (out.weights.size() + ws.size() > asset::kSkeleton2DMaxWeights)
+                return vfail(ws, "the skeleton has too many vertex weights");
+            vx.first_weight = static_cast<u32>(out.weights.size());
+            vx.weight_count = ws.size();
+            f64 sum = 0.0;
+            for (u32 wi = 0; wi < ws.size(); ++wi) {
+                const JsonValue w = ws.at(wi);
+                if (!w.is_object()) return vfail(w, "a weight is {\"bone\", \"x\", \"y\", \"weight\"}");
+                if (!detail::check_keys(w, {"bone", "x", "y", "weight"}, r.file, kStage, r.diags)) return false;
+                asset::Skeleton2DWeight bw{};
+                const JsonValue bn = w.get("bone");
+                i32 found = -1;
+                for (u32 j = 0; bn.is_string() && j < bone_names.size(); ++j)
+                    if (bone_names[j] == bn.as_string()) found = static_cast<i32>(j);
+                if (found < 0) return vfail(bn.valid() ? bn : w, "a weight's 'bone' must name a bone");
+                bw.bone = static_cast<u16>(found);
+                if (!w.get("weight").valid()) return vfail(w, "a weight needs its 'weight'");
+                if (!r.number(w, "x", 0.0, bw.x) || !r.number(w, "y", 0.0, bw.y) || !r.number(w, "weight", 0.0, bw.weight))
+                    return false;
+                if (bw.weight < 0.0f) return vfail(w.get("weight"), "a weight must be 0 or more");
+                sum += static_cast<f64>(bw.weight);
+                out.weights.push_back(bw);
+            }
+            if (!(sum > 0.0)) return vfail(ws, "a vertex's weights must not all be 0");
+            // Normalized so they sum to 1 (the reader checks within 1e-3).
+            for (u32 wi = 0; wi < ws.size(); ++wi) {
+                f32& w = out.weights[vx.first_weight + wi].weight;
+                w = static_cast<f32>(static_cast<f64>(w) / sum);
+            }
+        } else if (!r.number(v, "x", 0.0, vx.x) || !r.number(v, "y", 0.0, vx.y)) {
+            return false;
+        }
+        out.vertices.push_back(vx);
+    }
+    const JsonValue tris = o.get("triangles");
+    if (!tris.is_array() || tris.size() < 3 || tris.size() % 3 != 0 || tris.size() > 3 * asset::kSkeleton2DMaxMeshTriangles) {
+        String msg;
+        appendf(msg, "a mesh's 'triangles' must be vertex indices, three per triangle, 1 to %u triangles",
+                asset::kSkeleton2DMaxMeshTriangles);
+        return att_fail(r, tris.valid() ? tris : o, slot, att, msg.c_str());
+    }
+    if (out.indices.size() + tris.size() > asset::kSkeleton2DMaxIndices)
+        return att_fail(r, tris, slot, att, "the skeleton has too many triangle indices");
+    a.first_index = static_cast<u32>(out.indices.size());
+    a.index_count = tris.size();
+    for (u32 i = 0; i < tris.size(); ++i) {
+        const JsonValue t = tris.at(i);
+        if (!t.is_integer() || t.as_number() < 0.0 || t.as_number() >= static_cast<f64>(a.vertex_count)) {
+            String msg;
+            appendf(msg, "triangle index %u must be a vertex index below %u", i, a.vertex_count);
+            return att_fail(r, t, slot, att, msg.c_str());
+        }
+        out.indices.push_back(static_cast<u32>(t.as_number()));
+    }
+    return true;
+}
+
+// A slot's "attachments" and "attachment". Without "attachments" the slot's own quad is its one
+// attachment, named after it.
+bool read_slot_attachments(Reader& r, JsonValue s, StringView name, u32 slot_index, const Array<StringView>& bone_names,
+                           Array<char>& pool, asset::Skeleton2DSlot& slot, Attachments& out, SlotNames& names,
+                           bool& attached) {
+    SlotNames::Slot info;
+    info.name = name;
+    info.first_name = static_cast<u32>(names.names.size());
+    const JsonValue list = s.get("attachments");
+    const JsonValue shown = s.get("attachment");
+    if (list.valid() || shown.valid()) attached = true;
+    if (!list.valid()) {
+        names.names.push_back(name);
+        names.global.push_back(~0u);
+        names.vertices.push_back(0);
+        info.name_count = 1;
+        names.slots.push_back(info);
+        if (shown.is_null()) slot.attachment = asset::kSkeleton2DNoAttachment;
+        else if (shown.valid() && !(shown.is_string() && shown.as_string() == name))
+            return r.fail(shown, "a slot without 'attachments' shows its own quad: 'attachment' must be its name or null");
+        return true;
+    }
+    for (const char* k : {"texture", "rect", "size", "pivot", "offset", "rotation"})
+        if (s.get(k).valid()) {
+            String msg;
+            appendf(msg, "slot '%.*s' lists 'attachments': put '%s' in an attachment", static_cast<int>(name.size()), name.data(), k);
+            return r.fail(s.get(k), msg.view());
+        }
+    if (!list.is_array() || list.size() == 0 || list.size() > asset::kSkeleton2DMaxSlotAttachments) {
+        String msg;
+        appendf(msg, "'attachments' must be an array of 1 to %u attachments", asset::kSkeleton2DMaxSlotAttachments);
+        return r.fail(list, msg.view());
+    }
+    if (out.attachments.size() + list.size() > asset::kSkeleton2DMaxAttachments) {
+        String msg;
+        appendf(msg, "a skeleton has at most %u attachments", asset::kSkeleton2DMaxAttachments);
+        return r.fail(list, msg.view());
+    }
+    slot.first_attachment = static_cast<u32>(out.attachments.size());
+    slot.attachment_count = static_cast<u16>(list.size());
+    for (u32 i = 0; i < list.size(); ++i) {
+        const JsonValue o = list.at(i);
+        if (!o.is_object()) return r.fail(o, "an attachment is {\"name\", \"type\": \"quad\" | \"mesh\", ...}");
+        StringView an;
+        if (!r.name(o, "attachment", an)) return false;
+        for (u32 j = 0; j < i; ++j)
+            if (names.names[info.first_name + j] == an) return att_fail(r, o.get("name"), name, an, "two attachments of the slot share this name");
+        asset::Skeleton2DAttachment a{};
+        a.slot = static_cast<u16>(slot_index);
+        const JsonValue type = o.get("type");
+        bool mesh = false;
+        if (type.is_string() && type.as_string() == "mesh") mesh = true;
+        else if (type.valid() && !(type.is_string() && type.as_string() == "quad"))
+            return att_fail(r, type, name, an, "'type' must be \"quad\" or \"mesh\"");
+        if (mesh ? !detail::check_keys(o, {"name", "type", "texture", "vertices", "triangles"}, r.file, kStage, r.diags)
+                 : !detail::check_keys(o, {"name", "type", "texture", "rect", "size", "pivot", "offset", "rotation"}, r.file,
+                                       kStage, r.diags))
+            return false;
+        if (!read_texture(r, o, a.texture)) return false;
+        if (!read_quad(r, o, a.rect, a.size, a.pivot, a.offset, a.rotation)) return false;
+        if (mesh) {
+            a.kind = asset::Skeleton2DAttachmentKind::Mesh;
+            if (!read_mesh(r, o, name, an, bone_names, out, a)) return false;
+        }
+        a.name = add_string(pool, an);
+        names.names.push_back(an);
+        names.global.push_back(static_cast<u32>(out.attachments.size()));
+        names.vertices.push_back(mesh ? a.vertex_count : 0u);
+        out.attachments.push_back(a);
+    }
+    info.name_count = list.size();
+    names.slots.push_back(info);
+    slot.attachment = 0;
+    if (shown.is_null()) {
+        slot.attachment = asset::kSkeleton2DNoAttachment;
+    } else if (shown.valid()) {
+        const i32 at = shown.is_string() ? names.find_attachment(static_cast<u32>(names.slots.size() - 1), shown.as_string()) : -1;
+        if (at < 0) return r.fail(shown, "'attachment' must name one of the slot's attachments, or be null");
+        slot.attachment = static_cast<u8>(at);
+    }
+    return true;
+}
+
 class Skeleton2DImporter final : public IImporter {
 public:
     StringView id() const override { return "skeleton2d"; }
-    u32 version() const override { return 2; }  // 2: animations (M-ANIM2D 2)
+    u32 version() const override { return 3; }  // 2: animations (M-ANIM2D 2); 3: attachments, meshes, slot keys (M-ANIM2D 3)
     ChunkType type() const override { return ChunkType::Skeleton2D; }
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ".mcskel2d"; }
@@ -303,24 +727,33 @@ public:
     void scan_dependencies(const ImportInput& in, Array<DepRef>& out, DiagList& diags) const override {
         const JsonValue slots = in.settings.get("slots");
         if (!slots.is_array()) return;
-        for (u32 i = 0; i < slots.size(); ++i) {
-            const JsonValue tex = slots.at(i).is_object() ? slots.at(i).get("texture") : JsonValue();
-            if (!tex.valid() || tex.is_null()) continue;
+        auto dep = [&](JsonValue tex, const char* where) {
+            if (!tex.valid() || tex.is_null()) return;
             Guid g;
             if (!tex.is_string() || !parse_guid_ref(tex.as_string(), g)) {
                 detail::error_at(diags, Errc::ParseError, in.display_path, tex, kStage,
                                  "'texture' must be \"guid:<uuid>\" or null");
-                continue;
+                return;
             }
             DepRef d;
             d.guid = g;
             d.expected = ChunkType::Texture;
             d.line = tex.line();
             d.col = tex.col();
-            char where[64];
-            std::snprintf(where, sizeof(where), "slots[%u].texture", i);
             d.where.assign(where);
             out.push_back(d);
+        };
+        for (u32 i = 0; i < slots.size(); ++i) {
+            if (!slots.at(i).is_object()) continue;
+            char where[64];
+            std::snprintf(where, sizeof(where), "slots[%u].texture", i);
+            dep(slots.at(i).get("texture"), where);
+            const JsonValue list = slots.at(i).get("attachments");
+            for (u32 j = 0; list.is_array() && j < list.size(); ++j) {
+                if (!list.at(j).is_object()) continue;
+                std::snprintf(where, sizeof(where), "slots[%u].attachments[%u].texture", i, j);
+                dep(list.at(j).get("texture"), where);
+            }
         }
     }
 
@@ -418,7 +851,9 @@ public:
         }
 
         Array<Skeleton2DSlot> slots;
-        Array<StringView> slot_names;
+        SlotNames slot_names;
+        Attachments atts;
+        bool attached = false;  // attachments, meshes or slot keys: chunk minor 2
         const JsonValue slot_list = doc.get("slots");
         if (slot_list.valid() && !slot_list.is_array()) return r.fail(slot_list, "'slots' must be an array");
         if (slot_list.valid() && slot_list.size() > asset::kSkeleton2DMaxSlots) {
@@ -431,15 +866,15 @@ public:
             if (!s.is_object())
                 return r.fail(s,
                               "a slot is {\"name\", \"bone\", \"texture\", \"rect\", \"size\", \"pivot\", \"offset\", "
-                              "\"rotation\", \"tint\"}");
+                              "\"rotation\", \"tint\", \"attachments\", \"attachment\"}");
             if (!detail::check_keys(s,
-                                    {"name", "bone", "texture", "rect", "size", "pivot", "offset", "rotation", "tint"},
+                                    {"name", "bone", "texture", "rect", "size", "pivot", "offset", "rotation", "tint",
+                                     "attachments", "attachment"},
                                     r.file, kStage, diags))
                 return false;
             StringView name;
             if (!r.name(s, "slot", name)) return false;
-            for (const StringView& other : slot_names)
-                if (other == name) return r.fail(s.get("name"), "two slots share this name");
+            if (slot_names.find(name) >= 0) return r.fail(s.get("name"), "two slots share this name");
             Skeleton2DSlot slot{};
             slot.kind = asset::Skeleton2DSlotKind::Quad;
             const JsonValue bn = s.get("bone");
@@ -454,32 +889,19 @@ public:
                 return r.fail(bn, msg.view());
             }
             slot.bone = static_cast<u16>(found);
-            if (const JsonValue t = s.get("texture"); t.is_string()) {
-                Guid g;
-                if (!parse_guid_ref(t.as_string(), g)) return r.fail(t, "'texture' must be \"guid:<uuid>\" or null");
-                slot.texture[0] = g.hi;
-                slot.texture[1] = g.lo;
-            } else if (t.valid() && !t.is_null()) {
-                return r.fail(t, "'texture' must be \"guid:<uuid>\" or null");
-            }
-            static constexpr f32 kRect[4] = {0.0f, 0.0f, 1.0f, 1.0f};
-            static constexpr f32 kSize[2] = {1.0f, 1.0f};
-            static constexpr f32 kPivot[2] = {0.5f, 0.5f};
-            static constexpr f32 kZero[2] = {0.0f, 0.0f};
+            if (!read_slot_attachments(r, s, name, i, bone_names, pool, slot, atts, slot_names, attached)) return false;
+            if (!read_texture(r, s, slot.texture)) return false;
             static constexpr f32 kWhite[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-            f32 rot = 0.0f;
-            if (!r.numbers(s, "rect", 4, kRect, slot.rect) || !r.numbers(s, "size", 2, kSize, slot.size) ||
-                !r.numbers(s, "pivot", 2, kPivot, slot.pivot) || !r.numbers(s, "offset", 2, kZero, slot.offset) ||
-                !r.number(s, "rotation", 0.0, rot) || !r.numbers(s, "tint", 4, kWhite, slot.tint))
+            if (!read_quad(r, s, slot.rect, slot.size, slot.pivot, slot.offset, slot.rotation) ||
+                !r.numbers(s, "tint", 4, kWhite, slot.tint))
                 return false;
-            slot.rotation = static_cast<f32>(rot * kDegToRad);
             slot.name = add_string(pool, name);
             slots.push_back(slot);
-            slot_names.push_back(name);
         }
 
         Animations anims;
-        if (!read_animations(r, doc.get("animations"), bone_names, pool, anims)) return false;
+        if (!read_animations(r, doc.get("animations"), bone_names, slot_names, pool, anims)) return false;
+        attached = attached || anims.slot_timelines;
 
         h.bone_count = static_cast<u32>(bones.size());
         h.slot_count = static_cast<u32>(slots.size());
@@ -488,6 +910,16 @@ public:
         h.timeline_count = static_cast<u32>(anims.timelines.size());
         h.key_count = static_cast<u32>(anims.keys.size());
         h.event_count = static_cast<u32>(anims.events.size());
+        asset::Skeleton2DAttachmentHeader ah{};
+        if (attached) {
+            h.flags = asset::Skeleton2DHeaderFlags::Attachments;
+            ah.attachment_count = static_cast<u32>(atts.attachments.size());
+            ah.vertex_count = static_cast<u32>(atts.vertices.size());
+            ah.weight_count = static_cast<u32>(atts.weights.size());
+            ah.index_count = static_cast<u32>(atts.indices.size());
+            ah.slot_key_count = static_cast<u32>(anims.slot_keys.size());
+            ah.value_count = static_cast<u32>(anims.values.size());
+        }
         Array<byte> payload;
         auto append = [&](const void* p, usize n) {
             const usize at = payload.size();
@@ -495,19 +927,31 @@ public:
             if (n) std::memcpy(payload.data() + at, p, n);
         };
         append(&h, sizeof(h));
+        if (attached) append(&ah, sizeof(ah));
         append(bones.data(), bones.size() * sizeof(Skeleton2DBone));
         append(slots.data(), slots.size() * sizeof(Skeleton2DSlot));
         append(anims.animations.data(), anims.animations.size() * sizeof(asset::Skeleton2DAnimation));
         append(anims.timelines.data(), anims.timelines.size() * sizeof(asset::Skeleton2DTimeline));
         append(anims.keys.data(), anims.keys.size() * sizeof(asset::Skeleton2DKey));
         append(anims.events.data(), anims.events.size() * sizeof(asset::Skeleton2DEvent));
+        if (attached) {
+            append(atts.attachments.data(), atts.attachments.size() * sizeof(asset::Skeleton2DAttachment));
+            append(atts.vertices.data(), atts.vertices.size() * sizeof(asset::Skeleton2DVertex));
+            append(atts.weights.data(), atts.weights.size() * sizeof(asset::Skeleton2DWeight));
+            append(atts.indices.data(), atts.indices.size() * sizeof(u32));
+            append(anims.slot_keys.data(), anims.slot_keys.size() * sizeof(asset::Skeleton2DSlotKey));
+            append(anims.values.data(), anims.values.size() * sizeof(f32));
+        }
         append(pool.data(), pool.size());
 
         asset::ContainerWriter::ChunkDesc d;
         d.type = ChunkType::Skeleton2D;
-        // Minor 1 only when there are animations: a skeleton without them cooks byte for byte as before.
+        // Minor 1 only when there are animations, minor 2 only with attachments, meshes or slot keys:
+        // a skeleton without them cooks byte for byte as before.
         d.version = asset::chunk_version(asset::SKELETON2D_VERSION,
-                                         anims.animations.empty() ? 0 : asset::SKELETON2D_MINOR_ANIMATIONS);
+                                         attached                  ? asset::SKELETON2D_MINOR_ATTACHMENTS
+                                         : anims.animations.empty() ? 0
+                                                                    : asset::SKELETON2D_MINOR_ANIMATIONS);
         d.guid = in.guid;
         out.add(d, payload.span());
         return true;

@@ -50,6 +50,17 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   through the same state machine step as the 3D `Animator` (`src/anim_graph_step.h`, templated on
   the component; layers, root motion and IK are 3D only). Clip and state events raise
   `AnimEvent3D`, which `install_skeleton2d` also registers. Every field is `Save`.
+- Attachments, meshes and `Skeleton2DSlots` (`skeleton2d.h`, M-ANIM2D 3): chunk minor 2 adds
+  per-slot attachment lists (quads, or meshes whose vertices sit in the slot bone's space or carry
+  up to 4 bone weights), slot color and attachment timelines and mesh deform timelines. The pure
+  `skeleton2d_draws` skins meshes on the CPU (weighted sums in listed order, no FMA) and returns
+  quads and triangles in slot order; `SpriteExtract` sends the triangles through
+  `render::SpriteBatch::add_triangle` (a degenerate quad in the sprite stream, so no backend work).
+  The optional `Skeleton2DSlots` component (4.3 KB, `Save`) holds each slot's shown attachment and
+  color; `"kit_skeleton2d"` sets up a fresh one, the animator adds one when the clips key slots and
+  writes only keyed slots (`Skeleton2DBlend::write_slots`). Deform offsets are not stored: the
+  extract samples them with `skeleton2d_animator_sample`, a pure function of the saved animator
+  fields.
 - `Animator` graphs and `AttachToBone` (`anim3d.h`, M-DATA-REACH 7): an `.mcanim` AnimGraph
   (`ChunkType::AnimGraph`, `AnimGraphView`) drives the Animator's clip, 1D blends (`blend_clip`,
   `blend_weight`), transitions and `AnimEvent3D` events; one-shots finish (`loop`, `finished`,
@@ -114,7 +125,9 @@ destroy the bodies.
 
 `vehicles3d.h`: `Vehicle3D` (Jolt wheeled car on a `RigidBody3D`; M-MOVE3D 3 feel: `anti_roll` bars,
 `downforce`, `gears` / `first_gear` / `top_gear` and shift rpm as data, `skid_slip` with `Skid3D`
-events and `FireOn::Skid`, `self_right` after `right_after` seconds flipped).
+events and `FireOn::Skid`, `self_right` after `right_after` seconds flipped); `Waypoint3D` and
+`VehicleDriver3D` (M-MOVE3D 4: pure-pursuit AI driver with corner braking and laps, `LapCompleted3D`,
+`FireOn::Lap`), run inside `"kit3d_vehicles"` before the car takes its inputs.
 
 `sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
 `hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the
