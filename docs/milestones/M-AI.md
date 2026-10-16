@@ -1,6 +1,6 @@
 # M-AI — Game AI as data (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1-4 done). Plan: ROADMAP §M-AI; ADR-0045; Linear SBA-128 … SBA-133.
+**Status:** active (added 2026-10-16; steps 1-5 done). Plan: ROADMAP §M-AI; ADR-0045; Linear SBA-128 … SBA-133.
 
 **Why:** MCE has the parts an enemy moves and senses with: grid A* and `PathAgent`, the navmesh and `NavAgent3D`
 (M-GAMEPLAY3D), `Raycast3D` / `Overlap3D` sensors, and the FSM helper. What it lacks is the layer that decides.
@@ -25,7 +25,7 @@ It needs no device. Every step gates headless in `local_ci.sh`.
 | 2 | Stock data tasks (move to a key or entity on the grid or the navmesh, look at, animate, play a sound, spawn, raise and wait for events) and blackboard observer aborts; the stock player runs trees from scenes | SBA-129 | done |
 | 3 | Perception: `Perceiver` (sight cone and range, hearing, forget time) and `Stimulus` (a visible target with a team, noise events), line of sight through 2D and 3D rays, memory into blackboard keys | SBA-130 | done |
 | 4 | A utility selector with response curves and hysteresis, `AiTokenPool` for attack and role tokens, point queries scored by distance, line of sight and cover | SBA-131 | done |
-| 5 | The editor's Behavior Tree panel: tree, inspector, undo, cook validation; in play-in-editor the active path, results and blackboard, and a perception overlay | SBA-132 | not started |
+| 5 | The editor's Behavior Tree panel: tree, inspector, undo, cook validation; in play-in-editor the active path, results and blackboard, and a perception overlay | SBA-132 | done |
 | 6 | MCP `bt_create`, `bt_add_node`, `bt_set`, `bt_trace`; the user guide chapter; the demo and the gates | SBA-133 | not started |
 
 ## Step 1 — the behavior tree runtime (SBA-128)
@@ -126,3 +126,26 @@ It needs no device. Every step gates headless in `local_ci.sh`.
   saved and hashed with the scene; holders that die free their tokens on the next take.
 - **Point queries are a task, not a node kind.** A task can be replaced by name, and `find_point`
   writes a blackboard key like any other task, so `move_to` walks to it.
+
+## Step 5 — the Behavior Tree panel (SBA-132)
+
+| Piece | Where |
+|---|---|
+| `BtDocument`: the `.mcbt` source as data, read (shape only), written canonically; `build_behavior_tree`, the cook itself, for tools | `src/engine/asset/cook/include/mce/cook/bt_text.h`, `bt_importer.cpp` |
+| `BtEditor`: open, create, sync, node edits (add, remove, move, wrap, unwrap, value, members), keys, cooked before kept, undo and redo on disk, `problems()`; the debugger `bt_play_brains`, `bt_live`, `bt_push_to_play` | `src/editor/core/include/mce/editor/bt_editor.h`, `src/editor/core/src/bt_editor.cpp` |
+| The Behavior Tree panel: the outline with live statuses and scores, the inspector, the blackboard with live values, the problems, the brain picker and Run edits | `src/editor/layer/src/bt_panel.cpp` |
+| The perception overlay in the play viewport (`ViewSettings::show_perception`, View > Perception) | `src/editor/layer/src/panels.cpp` |
+| `mce_editor -editor.open ai/guard.mcbt`; Assets opens a `.mcbt` in the panel | `src/editor/app/main.cpp`, `asset_panel.cpp`, `editor_shell.cpp` |
+| Tests: the round trip (text, pre-order, the same cook), every edit and refusal, undo and redo on disk, sync, a tree that does not cook, create, the debugger on a playing brain (statuses, scores, keys, an unsaved edit pushed); `ai_demo_editor_bt` draws the panel over the playing demo | `tests/editor/test_bt_editor.cpp`, `samples/ai_demo/CMakeLists.txt` |
+
+**Design notes.**
+- **The document stays close to the text.** A node is its kind, its value and its members as JSON
+  text, so the panel and MCP edit every node kind, stock task argument and later extra without a
+  field table of their own; the cook is the one place that knows what each means.
+- **Pre-order is the bridge to the running tree.** The cook writes one node per document node in
+  pre-order, so `AiBrain::nodes[i]` is document node `preorder[i]`. The debugger only colours the
+  tree when the running tree has the same kinds in the same order; after an unsaved edit it says so
+  and **Run edits** defines the new tree in the play world (`BtRegistry::define`).
+- **A broken file is still editable.** Edits are refused only when they would break a tree that
+  cooks, so a hand-edited tree that does not cook can be opened and fixed in the panel.
+

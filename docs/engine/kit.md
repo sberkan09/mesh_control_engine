@@ -82,7 +82,10 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   `layer_time`), root motion (`root_motion`, `root_velocity`, `root_turn`) and IK chains (two-bone,
   look-at, foot); `extended_pose` builds that pose in local TRS (`render::sample_local`,
   `compose_local`), and `"kit3d_ik"` gathers the chains' goals (`IKTarget3D`, rays down for feet)
-  into the `AnimIK3D` resource every pose of the tick reads.
+  into the `AnimIK3D` resource every pose of the tick reads. `Locomotion3D` (M-MOVE3D 5, `"kit3d_locomotion"` before
+  `"kit3d_animators"`) writes a mover's motion (controller, nav agent or position change) into its
+  Animator's graph parameters by name (`speed`, `move_x`, `move_y`, `vertical_speed`, `grounded`,
+  `airborne`, `crouch`) and sets the play rate from `stride_speed`.
 - `PathAgent`: walks to `target` over the world's `NavGrid` at `speed`, re-planning every
   `repath_interval` ticks; `status` and the current smoothed path (16 waypoints) are runtime
   fields (#152).

@@ -19,6 +19,7 @@
 #include "mce/ecs/world.h"
 #include "mce/kit/anim3d.h"
 #include "mce/kit/bodies3d.h"
+#include "mce/kit/nav3d.h"
 #include "mce/log.h"
 #include "mce/render/mesh.h"
 #include "mce/string_id.h"
@@ -29,6 +30,7 @@ namespace mce::kit {
 static_assert(sizeof(Animator) == 248);
 static_assert(sizeof(AttachToBone) == 80);
 static_assert(sizeof(IKTarget3D) == 48);
+static_assert(sizeof(Locomotion3D) == 56);
 static_assert(sizeof(AnimEvent3D) == 16);
 
 namespace {
@@ -291,6 +293,64 @@ void advance_layers(Animator& a, const render::GpuMesh* mesh, const asset::AnimG
         if (duration > 0.0f && t >= duration) t = l.loop ? std::fmod(t, duration) : std::nextafter(duration, 0.0f);
         set_vec(a.layer_time, i, math::max(t, 0.0f));
     }
+}
+
+// Locomotion3D: the mover's motion into its Animator's graph parameters, by name.
+void kit3d_locomotion(Frame& f) {
+    const f32 dt = f.dt;
+    World& w = f.world();
+    asset::AssetSystem* assets = kit3d_assets(w);
+    Anim3DAssets& cache = w.resource<Anim3DAssets>();
+    f.query<Locomotion3D&, const LocalTransform>().each([&](Entity e, Locomotion3D& l, const LocalTransform& t) {
+        vec3 pos, scale;
+        quat rot;
+        world_pose(w, e, t, pos, rot, scale);
+        // The motion: the controller's, the agent's, or the position's change.
+        vec3 velocity = l.seen && dt > 0.0f ? (pos - l.last_position) * (1.0f / dt) : vec3{};
+        bool grounded = true, crouched = false;
+        if (const CharacterController3D* c = w.try_get<CharacterController3D>(e)) {
+            velocity = c->velocity;
+            grounded = c->grounded;
+            crouched = c->crouched;
+        } else if (const NavAgent3D* a = w.try_get<NavAgent3D>(e)) {
+            velocity = a->velocity;
+        }
+        l.last_position = pos;
+        l.seen = 1;
+        l.grounded = grounded ? 1 : 0;
+        l.crouched = crouched ? 1 : 0;
+        const vec3 ahead = math::rotate(rot, vec3{0.0f, 0.0f, -1.0f}), right = math::rotate(rot, vec3{1.0f, 0.0f, 0.0f});
+        const vec3 flat{velocity.x, 0.0f, velocity.z};
+        const f32 k = l.smoothing > 0.0f ? 1.0f - std::exp(-dt / l.smoothing) : 1.0f;
+        l.ground_speed += (math::length(flat) - l.ground_speed) * k;
+        l.vertical_speed += (velocity.y - l.vertical_speed) * k;
+        l.local_move.x += (math::dot(flat, right) - l.local_move.x) * k;
+        l.local_move.y += (math::dot(flat, ahead) - l.local_move.y) * k;
+
+        const Entity target = l.animator.is_null() ? e : l.animator;
+        Animator* a = w.try_get_mut<Animator>(target);
+        l.found = 0;
+        if (!a) return;
+        if (l.stride_speed > 0.0f)
+            a->speed = l.ground_speed > 0.05f * l.stride_speed ? math::clamp(l.ground_speed / l.stride_speed, l.min_rate, l.max_rate) : 1.0f;
+        asset::AnimGraphView g;
+        if (a->graph.guid == asset::Guid{} || !cache.graph(assets, a->graph.guid, g)) return;
+        f32* slots[4] = {&a->params.x, &a->params.y, &a->params.z, &a->params.w};
+        for (u32 i = 0; i < g.header->param_count && i < asset::kAnimGraphMaxParams; ++i) {
+            const StringView name = asset::AnimGraphView::text(g.header->params[i], sizeof g.header->params[i]);
+            f32 value;
+            if (name == "speed") value = l.ground_speed;
+            else if (name == "move_x") value = l.local_move.x;
+            else if (name == "move_y") value = l.local_move.y;
+            else if (name == "vertical_speed") value = l.vertical_speed;
+            else if (name == "grounded") value = grounded ? 1.0f : 0.0f;
+            else if (name == "airborne") value = grounded ? 0.0f : 1.0f;
+            else if (name == "crouch") value = crouched ? 1.0f : 0.0f;
+            else continue;
+            *slots[i] = value;
+            ++l.found;
+        }
+    });
 }
 
 // Animator: time advances by dt * speed; a new clip name starts at 0 and cross-fades from the old;
@@ -767,7 +827,7 @@ void animated_pose(World& w, Entity e, const render::GpuMesh& mesh, const Animat
 }
 
 void install_anim3d(World& world) {
-    world.register_components<AttachToBone, IKTarget3D>();
+    world.register_components<AttachToBone, IKTarget3D, Locomotion3D>();
     world.register_event<AnimEvent3D>(Phase::FixedUpdate_Post);
     if (!world.try_resource<AnimIK3D>()) world.set_resource(AnimIK3D{});
     Anim3DAssets a;
@@ -777,9 +837,11 @@ void install_anim3d(World& world) {
 }
 
 void add_anim3d_systems(World& world) {
-    world.add_system(Phase::FixedUpdate_Post, "kit3d_animators", &kit3d_animators);
+    world.add_system(Phase::FixedUpdate_Post, "kit3d_locomotion", &kit3d_locomotion);
+    world.add_system(Phase::FixedUpdate_Post, "kit3d_animators", &kit3d_animators, "kit3d_locomotion");
     world.add_system(Phase::FixedUpdate_Post, "kit3d_ik", &kit3d_ik, "kit3d_animators");
     world.add_system(Phase::FixedUpdate_Post, "kit3d_attach", &kit3d_attach, "kit3d_ik");
+    world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit3d_locomotion");
     world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit3d_animators");
     world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit3d_ik");
     world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit3d_attach");

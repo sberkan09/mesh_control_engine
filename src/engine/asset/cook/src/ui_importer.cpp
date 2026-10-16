@@ -60,6 +60,7 @@ constexpr const char* kEdgeNames[ui::NavEdgeCount] = {"up", "down", "left", "rig
 const refl::EnumRecord& kind_enum() { return ui::mce_refl_enum_record_UiWidgetKind; }
 const refl::EnumRecord& state_enum() { return ui::mce_refl_enum_record_UiWidgetState; }
 const refl::EnumRecord& font_role_enum() { return ui::mce_refl_enum_record_UiFontRole; }
+const refl::EnumRecord& text_align_enum() { return ui::mce_refl_enum_record_UiTextAlign; }
 
 struct PendingNav {
     u32 widget;
@@ -177,7 +178,7 @@ private:
                                     "at",      "style",        "styles",         "text",          "value",   "range",
                                     "visible", "interactable", "blocks_pointer", "default_focus", "stack",   "grid",
                                     "nav",     "convar",       "children",       "tabs",          "action",  "bind",
-                                    "format",  "font_role"},
+                                    "format",  "font_role", "text_align"},
                                 file_, kStage, diags_))
             return;
         const JsonValue name = w.get("name");
@@ -303,6 +304,13 @@ private:
                 error(f, "'font_role' must be a UiFontRole: Auto, Body, Title or Button");
             else
                 d.font_role = static_cast<ui::FontRole>(ev->value);
+        }
+        if (const JsonValue a = w.get("text_align"); a.valid()) {
+            const refl::EnumValue* ev = a.is_string() ? text_align_enum().find(StringId(a.as_string())) : nullptr;
+            if (!ev)
+                error(a, "'text_align' must be a UiTextAlign: Left, Center or Right");
+            else
+                d.text_align = static_cast<ui::TextAlign>(ev->value);
         }
         if (const JsonValue a = w.get("action"); a.valid()) {
             if (!a.is_string() || a.as_string().empty() || a.as_string().size() > 31)
@@ -596,6 +604,11 @@ void write_widget(const ui::DocumentData& d, u32 i, u32 depth, String& out) {
         field("font_role");
         const refl::EnumValue* role = font_role_enum().find(static_cast<i64>(w.font_role));
         append_json_string(out, role ? StringView(role->name_str) : StringView("Auto"));
+    }
+    if (w.text_align != ui::TextAlign::Left) {
+        field("text_align");
+        const refl::EnumValue* al = text_align_enum().find(static_cast<i64>(w.text_align));
+        append_json_string(out, al ? StringView(al->name_str) : StringView("Left"));
     }
     bool any_child = false;
     for (u32 c = i + 1; c < d.widgets.size(); ++c) {

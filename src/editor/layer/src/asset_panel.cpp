@@ -119,6 +119,8 @@ private:
                     if (a->type == asset::ChunkType::Timeline) shell.open_timeline(a->guid);
                     // An animation graph opens in the Animation panel.
                     if (a->type == asset::ChunkType::AnimGraph) shell.open_anim_graph(a->guid);
+                    // A behavior tree opens in the Behavior Tree panel.
+                    if (a->type == asset::ChunkType::BehaviorTree) shell.open_bt(a->guid);
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s  %s\n%s", type, a->path.c_str(), asset::to_string(a->guid).c_str());
                 if (ImGui::BeginDragDropSource()) {
