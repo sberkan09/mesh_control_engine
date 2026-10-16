@@ -46,6 +46,17 @@ EM_JS(void, mce_web_install_audio_unlock, (), {
     events.forEach((e) => document.addEventListener(e, unlock, true));
 });
 
+// The page's last frame stays on screen while this waits (the game is torn down after it): a test
+// takes its screenshot and calls Module.mceRelease(), or the wait times out.
+EM_ASYNC_JS(void, mce_web_linger, (int ms), {
+    Module.mceLingering = true;
+    await new Promise((resolve) => {
+        const timer = setTimeout(resolve, ms);
+        Module.mceRelease = () => { clearTimeout(timer); resolve(); };
+    });
+    Module.mceLingering = false;
+});
+
 EM_JS(void, mce_web_persist, (), {
     if (Module.mcePersist) Module.mcePersist();
 });
@@ -89,12 +100,14 @@ bool active() { return true; }
 void mount_persistent() { mce_web_mount_persistent(); }
 void persist() { mce_web_persist(); }
 void install_audio_unlock() { mce_web_install_audio_unlock(); }
+void linger(u32 ms) { mce_web_linger(static_cast<int>(ms)); }
 bool fetch_file(const char* url, const char* path) { return url && path && mce_web_fetch_file(url, path) != 0; }
 #else
 bool active() { return false; }
 void mount_persistent() {}
 void persist() {}
 void install_audio_unlock() {}
+void linger(u32) {}
 bool fetch_file(const char*, const char*) { return false; }
 #endif
 

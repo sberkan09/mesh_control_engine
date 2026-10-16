@@ -76,6 +76,7 @@
 #include "mce/asset/mods.h"
 #include "mce/audio/components.h"
 #include "mce/core.h"
+#include "mce/web.h"
 #include "mce/ecs/dev_stats.h"
 #include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
@@ -174,6 +175,10 @@ MCE_CVAR(cv_safe_area, "safe_area", "",
 MCE_CVAR(cv_window, "window", "", "Windowed: initial window size as WxH in points, e.g. 1080x2400 to check a phone layout (default 1280x720)",
          CVarFlags::None);
 MCE_CVAR(cv_ticks, "ticks", 600, "Headless: ticks to simulate (windowed runs use -frames)", CVarFlags::None);
+MCE_CVAR(cv_run_ticks, "run_ticks", 0,
+         "Windowed: quit right after this many sim ticks and print the state hash as -headless does, so a drawn run (a "
+         "browser smoke) can be checked against a headless one (0 = off)",
+         CVarFlags::None);
 MCE_CVAR(cv_input, "input", "",
          "Input script file: per-tick action states (\"10-70 Move=1,0 Jump\" per line) published to the game instead of the keyboard",
          CVarFlags::None);
@@ -2849,11 +2854,17 @@ int run_windowed(const player::PlayerDesc& pd) {
     desc.fences = device.value().get();
     PlayerApp::ScriptBySimTick by_sim(app, script.value());
     desc.input_source = script.value() ? static_cast<app::IInputSource*>(&by_sim) : &app.input();
+    if (cv_run_ticks.get_int() > 0) desc.max_ticks = static_cast<u64>(cv_run_ticks.get_int());
     app::RunStats stats;
     int rc = app::run(app, desc, &stats);
     const u32 gl_errors = device.value()->validation_error_count();
     std::printf("%s: %llu frames, %llu ticks, %u GL errors\n", pd.app_name, static_cast<unsigned long long>(stats.frames),
                 static_cast<unsigned long long>(app.ticks()), gl_errors);
+    if (rc == 0 && cv_run_ticks.get_int() > 0)
+        std::printf("%s: %llu ticks, %zu entities, state_hash %016llx\n", pd.app_name, static_cast<unsigned long long>(stats.ticks),
+                    app.entity_count(), static_cast<unsigned long long>(app.state_hash()));
+    // A browser smoke screenshots the last frame before the page tears the game down.
+    if (cv_run_ticks.get_int() > 0) web::linger(10000);
     if (rc == 0 && gl_errors != 0) rc = 2;
     return rc;
 }

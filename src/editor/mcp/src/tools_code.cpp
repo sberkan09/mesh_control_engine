@@ -332,17 +332,86 @@ bool module_test(ToolCall& c) {
     return true;
 }
 
+namespace {
+
+// The value after `key` on the first line of `text` that has it, up to the end of the token.
+StringView after(StringView text, StringView key) {
+    const usize at = text.find(key);
+    if (at == StringView::npos) return {};
+    StringView v = text.substr(at + key.size());
+    usize end = 0;
+    while (end < v.size() && v[end] != ' ' && v[end] != '\n' && v[end] != '\r') ++end;
+    return v.substr(0, end);
+}
+
+// target "web" (M-WEB step 6): `mce ship <project> --target web --smoke-ticks N` builds the browser
+// build from the engine checkout (scripts/ship.py), zips it for itch.io, plays N ticks in headless
+// Chromium and runs the same N ticks headless in the browser. Returns the zip, the state hash, whether
+// the headless run matched, and the screenshot of the last frame.
+bool ship_build_web(ToolCall& c, const cook::String& mce, StringView root, u64 ticks, StringView version, StringView out_rel) {
+    cook::String n, out_dir;
+    cook::appendf(n, "%llu", static_cast<unsigned long long>(ticks));
+    Array<StringView> args;
+    args.push_back(mce.view());
+    args.push_back("ship");
+    args.push_back(root);
+    args.push_back("--target");
+    args.push_back("web");
+    args.push_back("--smoke-ticks");
+    args.push_back(n.view());
+    if (!version.empty()) {
+        args.push_back("--version");
+        args.push_back(version);
+    }
+    if (!out_rel.empty()) {
+        out_dir = cook::path_join(root, out_rel);
+        args.push_back("--out");
+        args.push_back(out_dir.view());
+    }
+    Array<char> out;
+    i32 code = -1;
+    if (!run_captured(c, args.span(), out, code)) return false;
+    const StringView text(out.data(), out.size());
+    c.out.begin_object().key("target").str("web");
+    const StringView zip = after(text, "ship: ");
+    const StringView hash = after(text, "smoke: state_hash ");
+    const StringView headless = after(text, "smoke: headless state_hash ");
+    const StringView shot = after(text, "distinct colours on the canvas, screenshot ");
+    const bool zipped = zip.ends_with(".zip");
+    if (zipped) {
+        u64 size = 0;
+        i64 mtime = 0;
+        (void)cook::fs::stat(zip, size, mtime);
+        c.out.key("zip").str(zip).key("bytes").num_u(size);
+    }
+    if (!hash.empty()) c.out.key("state_hash").str(hash).key("ticks").num_u(ticks);
+    if (!headless.empty()) c.out.key("headless_state_hash").str(headless).key("matches_headless").boolean(headless == hash);
+    if (!shot.empty()) c.out.key("screenshot").str(shot);
+    const bool ok = code == 0 && zipped && !hash.empty() && headless == hash;
+    c.out.key("ok").boolean(ok);
+    if (!ok) {
+        c.out.key("stage").str(!zipped ? "build" : "smoke").key("output_tail");
+        write_tail(c.out, out);
+    }
+    c.out.end_object();
+    return true;
+}
+
+}  // namespace
+
 // The release a player gets (SBA-53): the whole build (host, module and the cooked pack, which the
 // project's CMake build makes), the module mapped again, a smoke run of the host headless, then the
 // SDK's `mce ship` zips host, module, engine library, pack and CREDITS.md. Returns the zip's path.
+// target "web": ship_build_web above.
 bool ship_build(ToolCall& c) {
     BuildTree t;
     u64 ticks = 300;
     bool build = true;
-    StringView version, out_rel;
+    StringView version, out_rel, target;
     if (!arg_uint(c, "ticks", ticks, 1, 36000, false) || !arg_bool(c, "build", build) || !arg_string(c, "version", version, false) ||
-        !arg_string(c, "out", out_rel, false))
+        !arg_string(c, "out", out_rel, false) || !arg_string(c, "target", target, false))
         return false;
+    if (!target.empty() && target != "desktop" && target != "web") return arg_missing(c, "target", "\"desktop\" or \"web\"");
     for (const char ch : version)
         if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '.' || ch == '-' || ch == '_'))
             return arg_missing(c, "version", "a version such as 1.0.2 (letters, digits, '.', '-', '_')");
@@ -356,6 +425,7 @@ bool ship_build(ToolCall& c) {
         return fail(c, "ship_build zips with the SDK's `mce ship`, and there is no mce beside this server: run the server from an installed SDK "
                        "(mce mcp <project>)");
     const StringView root = c.server.session().project().root();
+    if (target == "web") return ship_build_web(c, mce, root, ticks, version, out_rel);
 
     c.out.begin_object();
     // 1. The whole build: the pack is cooked by it, so content edits since the last build ship.

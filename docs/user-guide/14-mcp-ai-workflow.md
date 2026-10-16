@@ -126,7 +126,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `library_search` | `query?`, `kind?` (model, sound, music, font, texture, sprite, recipe), `license?`, `limit?` (20) | entries of the bundled content library with id, license, author and tags |
 | | `library_add` | `id`, `path?`, `overwrite?` | copies the entry into `assets/` (with the files it needs and a font's license text), or runs a recipe's generator (see "Content: generators and the library" below) |
 | Ship | `project_check` | `checks?`, `ticks?` (300), `target?` (desktop), `budget_ms?` (the target's `sim_ms`), `max_findings?` (200) | findings with severity, file, line, message and a fix: cook errors, broken and unused references, missing credits, sRGB on data textures, each scene's ms per tick, images over the target's `texture_size` and scenes over its `sprite_textures`, 2D text size and contrast; `pass` when there is no error |
-| | `ship_build` | `build?` (true), `ticks?` (300), `version?`, `out?` | full build, a headless smoke run of the host, then `mce ship`: each stage's result and the zip's path (needs the SDK's server, `mce mcp`) |
+| | `ship_build` | `target?` (`desktop`, `web`), `build?` (true), `ticks?` (300), `version?`, `out?` | full build, a headless smoke run of the host, then `mce ship`: each stage's result and the zip's path (needs the SDK's server, `mce mcp`). `web`: the itch.io zip from `mce ship --target web` (a project under the engine checkout's `projects/`, chapter 15, section 15.6), `ticks` played in headless Chromium: `state_hash`, `matches_headless` (the same ticks headless in the browser) and `screenshot` of the last frame |
 | Team | `project_watch` | `since?`, `limit?` (50), `others?` | the other agents' writes from `.mce/events.jsonl`: seq, time, agent, tool, path; `next` for the next call |
 | | `asset_lock` / `asset_unlock` / `asset_locks` | `path`, `note?`, `ttl?` (1800 s) / `path`, `force?` / — | while you hold a lock, other agents' writes to that file are refused |
 | | `task_list` / `task_add` / `task_claim` / `task_update` | `status?` / `title`, `notes?`, `depends?`, `files?` / `id?` / `id`, `status?`, `notes?` | the shared `tasks.mctasks`; a claim is never granted twice, and waits for its dependencies |
@@ -231,13 +231,14 @@ other Latin-1 and Latin Extended-A languages:
 
 | Theme | Fonts (body, title) | For |
 |---|---|---|
-| `pixel.mcuitheme` | Pixelify Sans, Press Start 2P | retro and arcade games: dark panels, warm buttons, a hard text shadow |
-| `clean.mcuitheme` | Atkinson Hyperlegible Next, Karla | puzzle, casual and tool-like games: slate panels, blue buttons |
-| `story.mcuitheme` | Crimson Pro, Crimson Pro Bold | novels and quiet games: paper panels, brown buttons, dark ink |
+| `pixel.mcuitheme` | Pixelify Sans, Press Start 2P | retro and arcade games: dark panels, warm bevelled buttons, a hard text shadow |
+| `clean.mcuitheme` | Atkinson Hyperlegible Next, Karla | puzzle, casual and tool-like games: slate panels, rounded blue buttons |
+| `story.mcuitheme` | Crimson Pro, Crimson Pro Bold | novels and quiet games: paper panels with an ink rule, brown buttons, dark ink |
 
 Pick the one that fits the brief and name it as each `.mcui` document's `"theme"` (`ui_theme_set`), or a
 `UiScreen`'s `theme` for one scene; give titles `"font_role": "Title"`. When none fits, copy one to a new
-`.mcuitheme` with a fresh `guid` and change its palette and fonts (`library_add` brings more fonts). Look at the
+`.mcuitheme` with a fresh `guid` and change its palette, fonts and skin (`<theme>_skin.png`, `gen_pixels` can
+redraw it; `library_add` brings more fonts). Look at the
 result with `ui_preview` or `render_frame`, and keep text readable: `project_check` warns about text under 16 px
 or under 4.5:1 contrast. Delete the themes and fonts the game does not use before shipping (`project_check`
 lists them as assets nothing references).

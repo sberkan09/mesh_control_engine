@@ -49,6 +49,11 @@ public:
 
     // Font for a GUID, or null when it cannot be loaded.
     const render::Font* font(asset::Guid guid);
+    // A UI skin's sprite set for a SpriteSheet GUID (M-UI-DATA): the sheet's texture with the sheet's
+    // regions in its order, each sized in texels (a ui::Style's sprite_region indexes them and its
+    // 9-slice insets are texels). Invalid when the sheet, or the texture it names, cannot load;
+    // `region_count` (optional) is the sheet's region count.
+    render::SpriteSetId ui_sheet_set(asset::Guid sheet, u32* region_count = nullptr);
     // Draws a VideoPlayer's Sprite with its film (video.h); null (the default) draws the texture.
     void set_videos(const VideoTextures* videos) { videos_ = videos; }
 
@@ -61,6 +66,12 @@ private:
         asset::AnyHandle normal_handle;
         render::SpriteSetId set;
         Array<render::SpriteRegion> regions;  // [0] = the whole texture; Sprite.region rects after it
+    };
+    struct SheetEntry {
+        asset::Guid guid;
+        asset::AnyHandle texture;
+        render::SpriteSetId set;  // invalid: the sheet or its texture did not load
+        u32 regions = 0;
     };
     struct FontEntry {
         asset::Guid guid;
@@ -95,6 +106,7 @@ private:
     u32 white_key_ = 0;
     Array<TextureEntry> textures_;
     Array<FontEntry> fonts_;
+    Array<SheetEntry> sheets_;
     Array<TilemapEntry> tilemaps_;
 };
 

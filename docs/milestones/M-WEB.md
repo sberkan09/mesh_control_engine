@@ -15,7 +15,7 @@ Chromium run on WebGPU/SwiftShader (`scripts/web/browser_smoke.cjs`).
 | 3 | Files and assets: the pack over HTTP with progress, saves in IndexedDB | SBA-64 | done |
 | 4 | Audio and input: WebAudio unlock, touch, gamepad, pointer lock, fullscreen | SBA-65 | done |
 | 5 | `mce ship --target web`: shell page, itch.io zip, `mce serve` | SBA-66 | done |
-| 6 | MCP `ship_build {"target":"web"}` and a Playwright smoke returning the state hash and a screenshot | SBA-67 | not started |
+| 6 | MCP `ship_build {"target":"web"}` and a Playwright smoke returning the state hash and a screenshot | SBA-67 | done |
 | 7 | A `web` stage in `local_ci.sh` | SBA-68 | not started |
 
 **Demo:** Ember Step, a novel and `04_diorama` in Chrome, Firefox and a mobile browser.
@@ -78,6 +78,17 @@ Numbers (`web-release`, MinSizeRel): `01_triangle.wasm` 8.9 MB, 2.5 MB gzipped; 
 | `mce ship --target web` | runs the engine checkout's `ship.py` (the SDK's own or the one `install.sh` came from) for a project under `projects/` | — |
 | Docs | `docs/user-guide/15-shipping.md` §15.6 | — |
 
+## What shipped (step 6)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Drawn runs end on a tick | `mce_player -run_ticks N`: windowed, quits right after tick N and prints the `state_hash` line `-headless` prints | Undelivered native: windowed (Xvfb) and headless 300 ticks both `901e0417fc3e43e0` |
+| The page's command line | `shell.html` turns the query into arguments: `index.html?run_ticks=600&sim.fast_forward=1` | — |
+| Last frame on screen | `web::linger` (`mce/web.h`): the player holds the page for a screenshot after a `-run_ticks` run, until `Module.mceRelease()` | the smoke's screenshot shows the game, not a cleared canvas |
+| Browser smoke with a hash | `browser_smoke.cjs ... --ticks N`: N ticks drawn and fast-forwarded, screenshot, the hash, then the same build `?headless=1&ticks=N` in a second page; the hashes must match | Undelivered 300 ticks: `156647983e9abc4c` drawn and headless, 1987 colours |
+| Ship and MCP | `ship.py --smoke --smoke-ticks N`, `mce ship --target web --smoke-ticks N`, MCP `ship_build {"target":"web","ticks":N}` → `zip`, `state_hash`, `headless_state_hash`, `matches_headless`, `screenshot` | `ship_build` on Undelivered, 240 ticks: `ok: true`, `matches_headless: true` |
+| Docs | `docs/user-guide/14-mcp-ai-workflow.md` (`ship_build`) | — |
+
 ## Open items
 
 - Size: cook WGSL next to SPIR-V once renderer shaders are cooked assets (drops Tint from the page), narrow
@@ -85,6 +96,12 @@ Numbers (`web-release`, MinSizeRel): `01_triangle.wasm` 8.9 MB, 2.5 MB gzipped; 
 - `mce ship --target web` for a project outside the checkout: the SDK installs no web libraries, so it runs
   `ship.py` in the checkout, which only adds projects under `projects/` (a host build of another tree would need
   its own `MCE_ONLY_PROJECT` run).
+- A browser build's state hash differs from a native build's for the same ticks (Undelivered, 300 ticks:
+  `156647983e9abc4c` on wasm, `901e0417fc3e43e0` on Linux GCC): another compiler and libm. Within one build the
+  drawn and headless runs agree, which is what the smoke checks. Lockstep play between a browser and a desktop
+  would need the deterministic math path on both (M-NET2 replicates state, so it is unaffected).
+- `-run_ticks` is the player's (projects and `mce_player`); the hand-written samples (`03_platformer`, ...) run
+  the plain smoke.
 - Timestamp queries are off (`DeviceCaps::timestamp_queries = false`); the profiler shows CPU times on the web.
 - Pixel parity with GL: checked by eye (orientation, winding) on `01_triangle`; a golden comparison against the GL
   backend comes with the renderer samples in step 2.

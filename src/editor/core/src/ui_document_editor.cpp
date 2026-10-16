@@ -544,6 +544,14 @@ bool UiDocumentPreview::rebuild(PreviewRenderer& preview, const UiDocumentEditor
     if (const render::Font* f = font(!data.font.is_null() ? data.font : theme.font(ui::FontRole::Body))) look.font = f;
     look.title_font = font(theme.font(ui::FontRole::Title));
     look.button_font = font(theme.font(ui::FontRole::Button));
+    if (!data.sprites.is_null()) {
+        u32 regions = 0;
+        const render::SpriteSetId set = preview.sprites().ui_sheet_set(data.sprites, &regions);
+        if (set.valid() && data.white_region < regions) {
+            look.set = set;
+            look.white_region = data.white_region;
+        }
+    }
     doc_ = new ui::Document();
     doc_->set_skin(look);
     if (Result<void> r = ui::build_document(data, *doc_); !r) {
