@@ -194,6 +194,14 @@ Result<SfxView> SfxView::read(Span<const byte> payload) {
     if ((h->flags & SfxFlags::Looping) && !(h->loop_start < h->loop_end && h->loop_end <= h->frame_count)) return bad(kStage);
     SfxView v;
     v.header = h;
+    if (h->flags & SfxFlags::Set) {
+        Span<const SoundSetHeader> sh;
+        if (!span_at(payload, h->data_offset, 1, sh)) return bad(kStage);
+        v.set = sh.data();
+        if (v.set->clip_count > 4096) return bad(kStage);
+        if (!span_at(payload, h->data_offset + sizeof(SoundSetHeader), v.set->clip_count, v.set_clips)) return bad(kStage);
+        return v;
+    }
     if (h->flags & SfxFlags::Vorbis) {
         Span<const u64> size;
         if (!span_at(payload, h->data_offset, 1, size)) return bad(kStage);
@@ -225,6 +233,22 @@ void write_sfx_vorbis(const SfxHeader& header, Span<const byte> stream, Array<by
     std::memcpy(block.data(), &n, sizeof(n));
     if (n) std::memcpy(block.data() + sizeof(u64), stream.data(), stream.size());
     h.data_offset = b.append(block.data(), block.size());
+    b.patch(at, h);
+    b.finish();
+}
+
+void write_sound_set(const SoundSetHeader& set, Span<const Guid> clips, Array<byte>& out) {
+    PayloadBuilder b(out);
+    SfxHeader h{};
+    h.sample_rate = 48000;
+    h.channels = 1;
+    h.flags = SfxFlags::Set;
+    h.gain = 1.0f;
+    const usize at = b.append(&h, sizeof(h));
+    SoundSetHeader s = set;
+    s.clip_count = static_cast<u32>(clips.size());
+    h.data_offset = b.append(&s, sizeof(s));
+    if (!clips.empty()) b.append(clips.data(), clips.size() * sizeof(Guid));
     b.patch(at, h);
     b.finish();
 }
@@ -608,6 +632,142 @@ Result<TimelineView> TimelineView::read(Span<const byte> payload) {
         }
     }
     return v;
+}
+
+// ------------------------------------------------------------------ behavior tree
+
+StringView BtView::name() const {
+    usize n = 0;
+    while (n < sizeof(header->name) && header->name[n] != '\0') ++n;
+    return StringView(header->name, n);
+}
+
+StringView BtView::string(u32 offset) const {
+    if (offset >= strings.size()) return {};
+    usize n = 0;
+    while (offset + n < strings.size() && strings[offset + n] != '\0') ++n;
+    return StringView(strings.data() + offset, n);
+}
+
+namespace {
+
+bool bt_numeric(BtKeyType t) { return t == BtKeyType::Bool || t == BtKeyType::Int || t == BtKeyType::Float; }
+
+bool bt_needs_slot(BtNodeKind k) {
+    return k == BtNodeKind::Repeat || k == BtNodeKind::Retry || k == BtNodeKind::Cooldown || k == BtNodeKind::Timeout ||
+           k == BtNodeKind::Wait || k == BtNodeKind::Task;
+}
+
+// The children a node kind takes: composites one or more, decorators exactly one, leaves none.
+bool bt_children_ok(BtNodeKind k, u32 n) {
+    if (k <= BtNodeKind::Parallel) return n >= 1;
+    if (k <= BtNodeKind::Guard) return n == 1;
+    return n == 0;
+}
+
+bool bt_node_ok(const BtNode& n, const BtHeader& h, Span<const BtKey> keys) {
+    auto str_ok = [&](u32 s) { return s == kBtNoString || s < h.string_bytes; };
+    if (!str_ok(n.name) || !str_ok(n.text)) return false;
+    if (bt_needs_slot(n.kind) ? n.slot >= h.slot_count : n.slot != kBtNoSlot) return false;
+    if (!(n.a == n.a)) return false;  // NaN
+    const BtKey* key = n.key < keys.size() ? &keys[n.key] : nullptr;
+    switch (n.kind) {
+    case BtNodeKind::Parallel: return n.op <= static_cast<u8>(BtPolicy::One);
+    case BtNodeKind::Repeat:
+    case BtNodeKind::Retry:
+    case BtNodeKind::Cooldown:
+    case BtNodeKind::Timeout:
+    case BtNodeKind::Wait: return n.a >= 0.0f;
+    case BtNodeKind::Check:
+    case BtNodeKind::Guard: {
+        if (!key || n.op > static_cast<u8>(BtOp::Ge)) return false;
+        const BtOp op = static_cast<BtOp>(n.op);
+        return op == BtOp::IsSet || op == BtOp::NotSet || bt_numeric(key->type);
+    }
+    case BtNodeKind::Set: {
+        if (!key || n.op > static_cast<u8>(BtSetOp::Self)) return false;
+        switch (static_cast<BtSetOp>(n.op)) {
+        case BtSetOp::Assign: return key->type != BtKeyType::Entity;
+        case BtSetOp::Add: return bt_numeric(key->type);
+        case BtSetOp::Clear: return true;
+        case BtSetOp::Copy: return n.key2 < keys.size() && keys[n.key2].type == key->type;
+        case BtSetOp::Self: return key->type == BtKeyType::Entity;
+        }
+        return false;
+    }
+    case BtNodeKind::Task: return n.key == kBtNoKey || key;
+    default: return true;
+    }
+}
+
+}  // namespace
+
+Result<BtView> BtView::read(Span<const byte> payload) {
+    BtView v;
+    v.header = header_of<BtHeader>(payload);
+    if (!v.header) return Error(Errc::Truncated, "asset.bt.read");
+    const BtHeader& h = *v.header;
+    if (h.node_count == 0 || h.node_count > kBtMaxNodes || h.key_count > kBtMaxKeys || h.slot_count > kBtMaxSlots ||
+        h.string_bytes > (1u << 20))
+        return Error(Errc::InvalidArgument, "asset.bt.read");
+    const u64 bytes = sizeof(BtHeader) + u64(h.key_count) * sizeof(BtKey) + u64(h.node_count) * sizeof(BtNode) + h.string_bytes;
+    if (bytes > payload.size()) return Error(Errc::Truncated, "asset.bt.read");
+    const byte* p = payload.data() + sizeof(BtHeader);
+    v.keys = Span<const BtKey>(reinterpret_cast<const BtKey*>(p), h.key_count);
+    p += usize(h.key_count) * sizeof(BtKey);
+    v.nodes = Span<const BtNode>(reinterpret_cast<const BtNode*>(p), h.node_count);
+    p += usize(h.node_count) * sizeof(BtNode);
+    v.strings = Span<const char>(reinterpret_cast<const char*>(p), h.string_bytes);
+    if (h.string_bytes > 0 && v.strings[h.string_bytes - 1] != '\0') return Error(Errc::InvalidArgument, "asset.bt.strings");
+
+    u32 used[3] = {};  // slot bits per Blackboard array: numbers, vectors, entities
+    for (const BtKey& k : v.keys) {
+        if (k.type > BtKeyType::Entity || k.name >= h.string_bytes) return Error(Errc::InvalidArgument, "asset.bt.key");
+        const u32 arr = bt_numeric(k.type) ? 0 : k.type == BtKeyType::Vec3 ? 1 : 2;
+        const u32 cap = arr == 0 ? kBtNumbers : arr == 1 ? kBtVectors : kBtEntities;
+        if (k.slot >= cap || (used[arr] & (1u << k.slot))) return Error(Errc::InvalidArgument, "asset.bt.key");
+        used[arr] |= 1u << k.slot;
+    }
+
+    // The shape: every node's subtree nests inside its parent's, children counted, depth bounded.
+    if (v.nodes[0].end != h.node_count) return Error(Errc::InvalidArgument, "asset.bt.shape");
+    u16 stack[kBtMaxDepth + 1];
+    u32 depth = 0;
+    for (u32 i = 0; i < h.node_count; ++i) {
+        const BtNode& n = v.nodes[i];
+        if (n.kind > BtNodeKind::Task || n.end <= i || n.end > h.node_count || !bt_node_ok(n, h, v.keys))
+            return Error(Errc::InvalidArgument, "asset.bt.node");
+        while (depth > 0 && i >= stack[depth - 1]) --depth;
+        if (depth > 0 && n.end > stack[depth - 1]) return Error(Errc::InvalidArgument, "asset.bt.shape");
+        u32 children = 0;
+        for (u32 c = i + 1; c < n.end; c = v.nodes[c].end) {
+            if (v.nodes[c].end <= c || v.nodes[c].end > n.end) return Error(Errc::InvalidArgument, "asset.bt.shape");
+            ++children;
+        }
+        if (children != n.child_count || !bt_children_ok(n.kind, children) || children > kBtMaxChildren)
+            return Error(Errc::InvalidArgument, "asset.bt.shape");
+        if (depth == kBtMaxDepth) return Error(Errc::InvalidArgument, "asset.bt.depth");
+        stack[depth++] = n.end;
+    }
+    return v;
+}
+
+void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<const BtNode> nodes, Span<const char> strings,
+                         Array<byte>& out) {
+    BtHeader h = header;
+    h.key_count = static_cast<u32>(keys.size());
+    h.node_count = static_cast<u32>(nodes.size());
+    h.string_bytes = static_cast<u32>(strings.size());
+    out.clear();
+    out.resize(sizeof(BtHeader) + keys.size() * sizeof(BtKey) + nodes.size() * sizeof(BtNode) + strings.size());
+    byte* p = out.data();
+    std::memcpy(p, &h, sizeof(h));
+    p += sizeof(h);
+    if (!keys.empty()) std::memcpy(p, keys.data(), keys.size() * sizeof(BtKey));
+    p += keys.size() * sizeof(BtKey);
+    if (!nodes.empty()) std::memcpy(p, nodes.data(), nodes.size() * sizeof(BtNode));
+    p += nodes.size() * sizeof(BtNode);
+    if (!strings.empty()) std::memcpy(p, strings.data(), strings.size());
 }
 
 // ------------------------------------------------------------------ shader

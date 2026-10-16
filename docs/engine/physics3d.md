@@ -31,6 +31,10 @@ One header, `include/mce/physics3d/world3d.h`, namespace `mce::physics`. It name
   params)` drives a Jolt `CharacterVirtual` and returns `MoveResult3D` with `ControllerFlags3D`
   (`Ground`, `SteepGround`, `Wall`, `Ceiling`, `OnMovingBody`). `controller_state` returns the last
   result. Gravity, jumps and input are folded into `delta` by gameplay.
+- `set_character_height(e, half_height, params, force)` (M-MOVE3D 1) resizes the capsule with its
+  feet kept in place: the shorter capsule hangs below the standing centre, and queries see it
+  there. Without `force` it refuses (false) when the new capsule would overlap geometry, which is how a
+  crouched character stays down under a ceiling.
 - `camera_sweep(from, to, radius)`: sphere sweep along a camera boom against static and kinematic
   geometry. Dynamic props and characters never pull the camera in. Returns `ShapeHit3D`, whose
   `position` is the safe camera centre.

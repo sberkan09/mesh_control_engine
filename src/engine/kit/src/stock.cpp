@@ -17,6 +17,7 @@
 #include "mce/kit/presence.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/timeline.h"
+#include "mce/kit/ai.h"
 #include "mce/kit/video.h"
 #include "mce/kit/sprite_anim.h"
 #include "mce/physics/world2d.h"
@@ -91,6 +92,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_sequences(world, assets);
     install_video(world, assets);  // before the timelines: a video track's playhead wins the tick
     install_timelines(world, assets);  // before kit3d: an animation key starts its clip the same tick
+    install_ai(world, assets);  // before the path and navmesh agents: a move the tree asks for starts the same tick
     install_kit3d(world, assets);
     install_bodies3d(world, assets);
     install_nav3d(world, assets);

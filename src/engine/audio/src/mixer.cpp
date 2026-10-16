@@ -48,6 +48,9 @@ void Mixer::process_commands() {
                     set_targets(*v, v->start > mix_sample_ ? 0 : kRampFrames);
                 }
                 break;
+            case CmdType::VoicePitch:
+                if (VoiceRT* v = find_voice(c.index, c.voice.generation); v && clips_[v->clip].stream < 0) v->step = rate_step(c.voice.rate);
+                break;
             case CmdType::BusParent:
                 if (c.index > 0 && c.index < kBusCount && c.bus < c.index) bus_[c.index].parent = c.bus;
                 break;
@@ -140,6 +143,7 @@ void Mixer::cmd_play(const AudioCommand& c) {
     nv.handle_index = c.index;
     nv.handle_gen = c.voice.generation;
     nv.clip = c.voice.clip;
+    nv.step = rate_step(c.voice.rate);
     nv.gain = c.voice.gain;
     nv.pan = c.voice.pan;
     nv.priority = c.priority;
@@ -158,7 +162,9 @@ void Mixer::cmd_play(const AudioCommand& c) {
         nv.start = c.voice.start_sample;
     } else if (c.voice.start_sample != 0 && clips_[nv.clip].stream < 0) {
         const ClipRT& clip = clips_[nv.clip];
-        const u64 late = mix_sample_ - c.voice.start_sample;
+        // Source frames already played: output frames late, times the rate (16.16 to keep it in 64 bits).
+        const u64 late = nv.step == kUnitStep ? mix_sample_ - c.voice.start_sample
+                                              : ((mix_sample_ - c.voice.start_sample) * (nv.step >> 16)) >> 16;
         if (late < clip.frame_count) {
             nv.pos = late;
         } else if (nv.loop) {
@@ -248,7 +254,9 @@ void Mixer::advance_virtual(VoiceRT& v, u32 frames) {
         frames -= static_cast<u32>(wait);
     }
     v.start = 0;
-    v.pos += frames;
+    const u64 moved = static_cast<u64>(v.frac) + static_cast<u64>(frames) * v.step;
+    v.pos += moved >> 32;
+    v.frac = static_cast<u32>(moved);
     if (clip.stream >= 0) {
         u64 f;
         if (!StreamRing::map_frame(streams_[clip.stream]->source, v.loop, v.pos, f)) {
@@ -291,11 +299,18 @@ void Mixer::mix_voice(VoiceRT& v, f32* dst, u32 frames) {
                 sl = sr = 0.f;  // underrun: silence, keep the timeline
                 if (v.pos % kStreamPageFrames == 0 || i == 0) ++underruns_;
             }
-        } else if (clip.channels == 2) {
-            sl = clip.frames[v.pos * 2];
-            sr = clip.frames[v.pos * 2 + 1];
+        } else if (v.frac == 0) {  // on a frame: the sample itself (every voice at pitch 1)
+            sl = clip.frames[v.pos * clip.channels];
+            sr = clip.frames[v.pos * clip.channels + clip.channels - 1];
         } else {
-            sl = sr = clip.frames[v.pos];
+            // Between two frames: linear interpolation. Past the end the next frame is the loop
+            // start, or the last frame held for a one-shot.
+            const u64 next = v.pos + 1 < clip.frame_count ? v.pos + 1 : (v.loop ? clip.loop_start : v.pos);
+            const f32 t = static_cast<f32>(v.frac) * (1.f / 4294967296.f);
+            const f32* a = clip.frames + v.pos * clip.channels;
+            const f32* b = clip.frames + next * clip.channels;
+            sl = a[0] + (b[0] - a[0]) * t;
+            sr = a[clip.channels - 1] + (b[clip.channels - 1] - a[clip.channels - 1]) * t;
         }
         dst[i * 2] += sl * v.cur_l;
         dst[i * 2 + 1] += sr * v.cur_r;
@@ -312,20 +327,29 @@ void Mixer::mix_voice(VoiceRT& v, f32* dst, u32 frames) {
             }
         }
 
-        ++v.pos;
         if (ring) {
+            ++v.pos;
             if (v.pos % kStreamPageFrames == 0) ring->consumed.store(v.pos / kStreamPageFrames, std::memory_order_release);
             u64 f;
             if (!StreamRing::map_frame(ring->source, v.loop, v.pos, f)) {
                 end_voice(v);
                 return;
             }
-        } else if (v.pos >= clip.frame_count) {
-            if (!v.loop || clip.loop_start >= clip.frame_count) {
-                end_voice(v);
-                return;
+        } else {
+            if (v.step == kUnitStep) {
+                ++v.pos;
+            } else {
+                const u64 moved = static_cast<u64>(v.frac) + v.step;
+                v.pos += moved >> 32;
+                v.frac = static_cast<u32>(moved);
             }
-            v.pos = clip.loop_start;
+            if (v.pos >= clip.frame_count) {
+                if (!v.loop || clip.loop_start >= clip.frame_count) {
+                    end_voice(v);
+                    return;
+                }
+                v.pos = clip.loop_start + (v.pos - clip.frame_count) % (clip.frame_count - clip.loop_start);
+            }
         }
     }
 }

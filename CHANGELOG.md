@@ -10,6 +10,17 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP
   `run_headless` run the scene's scripts from bytecode where `MCE_WITH_SCRIPT` is on, and the player links no
   Luau compiler. Scenes without scripts run and hash as before. New user guide chapter 27 (Scripting in Luau).
+- Behavior trees, M-AI step 1 (SBA-128, ADR-0045): `.mcbt` files describe an AI's decisions as data (sequence,
+  selector, parallel, invert, succeed, fail, repeat, retry, cooldown, timeout, guard, check, wait, set, emit and
+  task nodes) over typed blackboard keys, and cook to `CHNK_BT` with errors at file:line:col. An `AiBrain`
+  component runs one per entity every fixed tick, and a `Blackboard` component holds the keys. All run state is in
+  the two components, so trees are deterministic, hashed, replayed and saved. Games register tasks by name
+  (`kit::BtRegistry::register_task`) and read and write keys by name (`kit::bb_*`). User guide 13.8.
+- Sound sets and pitch, M-AUDIO2 step 2 (SBA-119). A `.mcsound` names several clips and picks one per play (random
+  with no immediate repeat, or in sequence) with a pitch and gain range; it is an Sfx asset, so `AudioSource`,
+  `SfxTrigger`, `PlaySfx`, sequences and timelines take it as they are. Picks come from the tick, so replays repeat.
+  `PlayParams::pitch` and `AudioDevice::set_handle_pitch` play any clip at a rate (0.25..4). MCP `asset_create`
+  makes a `SoundSet`. User guide 10.3 is new; the audio chapter's later sections move up one number.
 - Material extensions, M-VISUAL2 step 4 (SBA-104): clear coat, sheen, anisotropy and transmission. `.mcmat`
   gains `clearcoat`, `clearcoat_roughness`, `sheen_color`, `sheen_roughness`, `anisotropy`,
   `anisotropy_rotation`, `transmission` and `ior`; glTF files bring the same from `KHR_materials_clearcoat`,

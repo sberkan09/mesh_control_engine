@@ -25,6 +25,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/material_importer.cpp
         src/mod_project.cpp
         src/particle_importer.cpp
+        src/sound_set_importer.cpp
         src/spritesheet_importer.cpp
         src/animgraph_importer.cpp
         src/terrain_importer.cpp
@@ -33,6 +34,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/scene_writer.cpp
         src/sequence_importer.cpp
         src/timeline_importer.cpp
+        src/bt_importer.cpp
         src/shader_importer.cpp
         src/store_importer.cpp
         src/config_importer.cpp
