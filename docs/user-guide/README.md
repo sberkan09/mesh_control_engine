@@ -46,7 +46,7 @@ code as built and why; this guide links to them where you may want the full deta
 - Commands are written for a Linux checkout with the `linux-gcc-debug` preset. Substitute your
   preset (`msvc-debug`, `macos-debug`, `linux-clang-release`, ...) and the matching `build/<preset>/`
   directory. On Windows, executables end in `.exe` and the game module is linked into the host
-  (see [Game code](06-game-code.md#platform-notes)).
+  (see [Game code](06-game-code.md#614-platform-notes)).
 - `<Project>` is a project folder under `projects/` (for example `projects/MyGame`) and `<game>`
   is its game id (`my_game`): the C++ namespace, the CMake target and the executable name.
 - Units are metres, seconds and degrees unless a field says otherwise. The world is right-handed,
