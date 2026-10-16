@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Systems tour sample, M-COVER step 4 (SBA-160): `samples/systems_tour` shows `NetReplicated`, `NetOwner`, `Dialogue`
+  and `DialogueInput` on one NPC with a compiled story and runs the conversation to its end
+  (`ctest -R sample_systems_tour`). The sample coverage list now holds only `Blackboard` and `SceneChunkStatus`.
+  M-COVER is done.
 - Behavior tree MCP tools, the squad demo and the gates, M-AI step 6 (SBA-133): `bt_create`, `bt_add_node` and
   `bt_set` write a `.mcbt` the cook checks before anything is written, and `bt_trace` plays a saved scene
   headless and reports one brain's running path and blackboard over time and when each node started.
