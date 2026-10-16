@@ -116,7 +116,8 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-DOCCHECK | [M-DOCCHECK.md](milestones/M-DOCCHECK.md) (Linear SBA-176 … SBA-179, added 2026-10-16) | done (`scripts/ci/check_docs.py` in the walls stage: links and anchors, `#include` lines of `mce/` headers, `mce_player` flags and a test for every sample and project; `scripts/ci/docs.allow`) | none |
 | M-WORKFLOW | [M-WORKFLOW.md](milestones/M-WORKFLOW.md) (Linear SBA-180 … SBA-184, added 2026-10-16) | active (steps 1 to 5 done. Step 5, #381: the guide's 3D particles, SDK shipping, fixed-array and importer text corrected, the sky, decal, `BoxCollider3D` and point-shadow conventions documented, `engine_capabilities` lists UI and scene changes as data, `ui_preview` no longer reads a freed asset record for its reply, a once-only log line when decals are dropped, a two-server scene test. Steps 1 to 4: a capture with no display falls back to the offscreen driver and software GL by itself and says so, the player logs its save folder (user guide 16.8, 2.5); a rotation-only change no longer resets a `CharacterController3D`'s speed (#377); `scene_open` always re-reads and replaces a parked copy, an unmergeable `scene_save` names the entities and takes `overwrite`, `entity_delete` reports the links that become null; step 3 done: the missing-sidecar error names `cook_run {"adopt":true}` / `mce cook --adopt`, `cook_run` `paths` (cooks a subtree into `cooked/`, never the pack) and `skip_errors` (`failed_files`), `mce play` / `mce headless` warn about a stale pack, an unknown component or field names the module to rebuild and the server to restart) | steps 6–7 |
 | M-CONTENT | ROADMAP section (issue #383, added 2026-10-16) | not started | steps 1–3 |
-| M-HARDEN | [M-HARDEN.md](milestones/M-HARDEN.md) (Linear SBA-195 … SBA-197, added 2026-10-16) | active (steps 1 and 2 done: `ui_document_arg` hands out path and GUID by value, every `ProjectAsset*` held across a cook or rescan audited; `run_transcript.py` drives several real `mce_mcp` processes, `two_servers_scene` transcript) | step 3 |
+| M-HARDEN | [M-HARDEN.md](milestones/M-HARDEN.md) (Linear SBA-195 … SBA-197, added 2026-10-16) | done 2026-10-16 (`ProjectAsset*` handles by value; `run_transcript.py` drives several real `mce_mcp` processes; the MCP tests already run in the linux-asan stage, now with fatal UBSan, no finding) | none |
+| M-VISUAL3 | [M-VISUAL3.md](milestones/M-VISUAL3.md) (Linear SBA-199 for step 1, steps 2–6 not filed: Linear free issue limit; added 2026-10-16) | not started | steps 1–6 |
 | M-FUZZ | [M-FUZZ.md](milestones/M-FUZZ.md) (Linear SBA-185 … SBA-188, added 2026-10-16) | active (steps 1–2 done: `tests/fuzz` mutator, 25 chunk types over mutated cooked chunks with the accepted views walked, a survey of every parser of untrusted bytes; 2b nav mesh integrity open) | steps 3–4 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
@@ -663,6 +664,21 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 3. **MCP under ASan and the close.** The MCP and transcript tests run in the ASan stage (or a finding is recorded for each that cannot); what it finds is fixed with regression tests; milestone record closed.
 
 **Gates:** existing replay hashes unchanged; `local_ci.sh` green on every step.
+
+### M-VISUAL3 — What keeps the engine from an AAA look with data alone · **size L (rough guess, ≈ 80–140 h engineering)** · tier: off-tier, gates nothing
+
+*Reason: added 2026-10-16 on the coordinator's word from GitHub #428 (blind test 3, rounds 5 and 6: an art pass with real Poly Haven, Quaternius and Kenney content rated about 4/10 against an AAA bar). The list is what data and MCP could not reach. Texture compression, max size and the shipped size belong to M-CONTENT step 1 and are not repeated here.*
+
+**Builds, in order:**
+1. **Plan and interfaces, Opus.** A design note that checks each item of #428 against the code (what exists, what is missing), fixes the component fields, `.mcmat` keys, MCP arguments and shader cost for steps 2 to 6, and says which need an Opus review. It goes in as its own PR for the coordinator to review before any code.
+2. **Parallax / displacement.** A height map slot on `.mcmat` with parallax occlusion mapping in the PBR shader (steps and a distance fade as quality knobs); a displacement route only if the plan finds one that costs no new geometry stage.
+3. **Filmic post chain.** Vignette, film grain, chromatic aberration and a depth-of-field focus (distance, aperture) on `Environment3D` and as `render_frame` arguments.
+4. **HDR sky.** A `.hdr` / `.exr` importer for the sky and image-based light (#409), cooked to a float cubemap or equirect the existing sky path reads.
+5. **Static merge and instancing.** `MeshRef` copies that share a mesh and material draw instanced, with a static merge for props that never move; the draw count in `perf_run` shows it.
+6. **Foliage and the close.** Per-instance colour variation and a wind check on `Foliage3D` (wind amplitude, frequency and direction already exist: the plan says what is still missing), a demo scene with each feature on and off, gates, the milestone record closed.
+
+**Not in scope:** texture compression (M-CONTENT 1); more than one `GiVolume3D` or 4 reflection probes; retargeting, IK, cloth, hair; subsurface scattering and light shafts; a 3D importer beyond glTF. Each is listed in the plan note with a reason.
+**Gates:** existing replay hashes unchanged with every new feature off by default; each step has a regression test and an on/off render in `samples/06_showcase`; `local_ci.sh` green on every step.
 
 ### M-CONTENT — Cooked-pack size and draw-call visibility · **size M (rough guess, ≈ 30–50 h engineering)** · tier: off-tier, gates nothing
 

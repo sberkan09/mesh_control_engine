@@ -1,6 +1,6 @@
 # M-HARDEN — The MCP server's own lifetime and concurrency bugs (milestone record)
 
-**Status:** active, steps 1 and 2 done (added 2026-10-16). Plan: ROADMAP §M-HARDEN; Linear SBA-195 … SBA-197.
+**Status:** done 2026-10-16 (added 2026-10-16). Plan: ROADMAP §M-HARDEN; Linear SBA-195 … SBA-197.
 
 **Why:** M-WORKFLOW step 5 (SBA-184) found that `ui_preview` kept a `ProjectAsset*` across `render_ticks`; the cook inside
 rescans the project and frees those records, so the reply read freed memory. The Opus review of that fix confirmed the
@@ -13,7 +13,7 @@ survived.
 |---|---|---|---|---|
 | 1 | Handles by value: `ui_document_arg` and the other `ProjectAsset*` uses audited | SBA-195 | Sonnet | done |
 | 2 | `run_transcript.py` drives several `mce_mcp` processes; two-process scene test | SBA-196 | Sonnet | done |
-| 3 | MCP and transcript tests in the ASan stage; findings fixed; the close | SBA-197 | Sonnet | not started |
+| 3 | MCP and transcript tests in the ASan stage; findings fixed; the close | SBA-197 | Sonnet | done |
 
 **Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
 
@@ -70,3 +70,35 @@ b's save is refused naming `entity 5 "Ball" components/Collider2D` ("nothing was
 b's copy with the entity count still 10.
 
 **Found:** no concurrency defect; the merge and the refusal behave as in the in-process `test_mcp_team` case.
+
+## Step 3 — the MCP tests under ASan, SBA-197 (done)
+
+**What runs under ASan now:** nothing had to be added to the stage. `linux-asan` (g++, Debug, `MCE_ASAN=ON`, editor on,
+so `mce_mcp`, `mce_mcp_core` and `mce_player` are built with `-fsanitize=address,undefined`) registers and runs every
+non-`slow` test, and no MCP test is labelled `slow`. So `test_mcp` (with the template-probe module and `test_mcp_script`),
+`mcp_transcript` (the real `mce_mcp` binary, single-server and the `two_servers_scene` pair), `mcp_symbol_wall`,
+`test_mcp_agent` (agent, ui, skeleton2d, import, timeline, bt suites; `-tse=gpu`), `test_mcp_playtest`, `test_mcp_docs`,
+`test_mcp_content`, `test_mcp_gameplay3d`, `test_mcp_check` and `test_mcp_team` were already sanitized in the ASan stage;
+the finding of step 1 simply predates anyone looking. `ctest --preset linux-asan -R mcp -j2`: 10 of 10 pass, about 25 s.
+
+**Changed (two gaps in what a report could do)**
+- UBSan only prints by default, so a report in a `mce_mcp` child of `mcp_transcript` (stderr was `DEVNULL` in the multi-server
+  runner) or in any test would not have failed anything. `tests/mcp/CMakeLists.txt` sets
+  `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1` on every MCP test when `MCE_ASAN` is on (not MSVC), so a report aborts
+  the process and the test fails; the runner now lets the servers' stderr through, so the report reaches the ctest log.
+  ASan itself already aborted.
+
+**Found:** no ASan, UBSan or LeakSanitizer finding in the editor or MCP code, with the default options and again with
+halting UBSan, `detect_stack_use_after_return=1` and leak detection. Nothing to fix, so no new regression test; the
+step 1 tests are what exercises the fixed paths, now under the sanitizer.
+
+**GPU suite (not in the stage, `MCE_GPU_TESTS` is OFF there):** run once by hand in the same tree with
+`-DMCE_GPU_TESTS=ON` under `xvfb-run` and Mesa llvmpipe: `test_mcp_agent_gpu` (`ui_preview`, `timeline_preview`,
+`render_frame`, `render_sheet`, `image_diff`, 9 cases, 732 assertions) passes with no ASan or UBSan error in the test
+process. Every `mce_player` child it starts prints a LeakSanitizer report at exit (2,792 bytes in 3 allocations) from
+Mesa's EGL initialisation reached through `SDL_EGL_InitializeOffscreen` (`SDL_CreateWindow`, `player.cpp:3003`): third
+party, not ours, and not fatal (the test passes), so left alone. This is why the GPU suite is not added to the stage:
+it needs Xvfb and takes 35 s for a tree that otherwise runs no GPU test.
+
+**Not covered:** the GPU suite in the regular stage (above); `test_mcp_agent_gpu` is run under ASan only by hand. Two real
+processes are covered by the transcript. Thread-level races (TSan) were not looked for.
