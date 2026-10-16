@@ -6,6 +6,7 @@
 // app::TickContext (alias app::ActionSnapshot). It is a flat value type so the replay recorder
 // can store and compare it.
 
+#include "mce/hash.h"
 #include "mce/math/math.h"
 #include "mce/string_id.h"
 
@@ -14,6 +15,14 @@ namespace mce::input {
 using math::vec2;
 
 enum class ActionType : u8 { Button, Axis1D, Axis2D };
+
+// Local players (M-VIEWS step 1). Slot 0 is the first player; its actions keep their authored names,
+// so a single-player game, its recordings and its hashes are untouched. Slot N > 0 reads the same
+// authored name under player_action_id(N, name) in the same snapshot.
+inline constexpr u32 kMaxLocalPlayers = 4;  // = platform::kMaxGamepads: a pad each
+constexpr StringId player_action_id(u32 slot, StringId name) {
+    return slot == 0 ? name : StringId(hash_combine(name.value, 0x504C5952ull + slot));  // "PLYR" + slot
+}
 
 inline constexpr u32 kMaxActions = 64;     // evaluated actions per tick, across the map stack
 inline constexpr u32 kMaxTextBytes = 64;   // UTF-8 text accumulated per tick
@@ -57,6 +66,9 @@ struct InputState {
     // log one error (FR-DX-050 taxonomy: safe default + one error, never a crash).
     const ActionState& action(StringId name) const;
     bool has_action(StringId name) const;
+    // A local player's action (slot 0 = action(name)).
+    const ActionState& action(u32 slot, StringId name) const { return action(player_action_id(slot, name)); }
+    bool has_action(u32 slot, StringId name) const { return has_action(player_action_id(slot, name)); }
     bool pressed(StringId name) const { return action(name).pressed; }
     bool released(StringId name) const { return action(name).released; }
     bool held(StringId name) const { return action(name).held; }
