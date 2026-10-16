@@ -93,7 +93,7 @@ it on a live voice, say for an engine's revs). Between samples the mixer interpo
   falloff and min/max distances.
 - 2D games can ignore all of this; a source without `AudioSpatial` is plain stereo.
 
-## 10.5 Volume and buses
+## 10.5 Volume, buses and effects
 
 Four saved convars drive the named buses: `audio.master_db`, `audio.music_db`, `audio.sfx_db`,
 `audio.ui_db`. Set them from the console (`audio.music_db -12`), the command line, or bind them to
@@ -102,6 +102,35 @@ or minimizes, the player pauses the sim (the pause overlay waits for the player 
 mutes the master bus until focus comes back (`-pause_on_focus_loss 0` turns both off). On a
 phone, the app going to the background pauses the audio device itself (`AudioDevice::set_paused`):
 voices keep their place and pick up where they stopped when the app comes back.
+
+**Bus effects.** Three components put effects on the mixer from the scene. Put them on any entity
+(a "Mixer" entity in the level is a good home), and timelines and sequences can key their fields:
+
+| Component | Fields | What it does |
+|---|---|---|
+| `AudioBusEffects` | `bus`, `lowpass_hz`, `highpass_hz`, `reverb_unit`, `reverb_send_db` | A low-pass and a high-pass on one bus (12 dB/octave, 0 = off) and a post-fader send into a reverb unit (-96 = none). Master filters everything and has no send. |
+| `AudioReverb` | `unit` (0 or 1), `room_size`, `damping`, `width`, `wet_db` | A Freeverb reverb. Buses that send to it are heard in it; its return goes into Master. |
+| `AudioLimiter` | `ceiling_db`, `release_ms` | Holds the output under the ceiling, adding 5 ms of latency. |
+
+A cave level that makes its footsteps ring and muffles the music:
+
+```json
+{ "name": "Mixer", "components": {
+    "AudioReverb": { "unit": 0, "room_size": 0.9, "damping": 0.3, "wet_db": -3 },
+    "AudioBusEffects": { "bus": "SFX", "reverb_unit": 0, "reverb_send_db": -6 } } },
+{ "name": "Music mix", "components": {
+    "AudioBusEffects": { "bus": "Music", "lowpass_hz": 1200 } } }
+```
+
+- One entity per bus and per reverb unit counts: the first in ECS order wins. Removing it (or changing
+  scene) puts that bus back to dry and unfiltered, or turns the unit off.
+- A new cutoff glides there by an octave every 512 frames (about 10 ms), so a filter that closes
+  as the player dives underwater sweeps instead of clicking. A filter turned off glides open and then
+  costs nothing.
+- `audio.reverb 0` (saved) turns every reverb off, for players who find it tiring and for slow devices.
+- Code has the same controls on `AudioDevice`: `set_bus_filter`, `set_bus_send`, `set_reverb`,
+  `set_limiter`. The per-bus EQ bands (`set_bus_eq`) and the bus graph (`set_bus_parent`) are
+  code-only.
 
 ## 10.6 How it behaves under pressure
 
@@ -132,7 +161,7 @@ voices keep their place and pick up where they stopped when the app comes back.
   ambiences; short, frequent one-shots can stay `pcm` to load faster.
 - Mono clips pan; stereo clips keep their image. Music should be stereo at 48 kHz to skip
   resampling at cook.
-- Reverb sends and device hot-swap are not built (M-AUDIO2).
+- Device hot-swap is not built.
 
 ## 10.8 Subtitles and sound captions
 
