@@ -17,6 +17,7 @@ the bump's PR merges.
 import datetime
 import pathlib
 import re
+import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -77,6 +78,9 @@ def bump(version):
     if tuple(map(int, version.split("."))) <= tuple(map(int, old.split("."))):
         sys.exit(f"{version} is not newer than {old}")
 
+    # The PRs' changelog.d/ fragments go into `## Unreleased` first, so the release section holds them.
+    if subprocess.run([sys.executable, str(ROOT / "scripts/changelog.py")]).returncode != 0:
+        sys.exit("changelog.d: fragments could not be collected")
     text = CHANGELOG.read_text(encoding="utf-8")
     if UNRELEASED not in text:
         sys.exit(f"{rel(CHANGELOG)}: no `{UNRELEASED}` section to release")
