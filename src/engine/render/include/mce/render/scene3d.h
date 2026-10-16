@@ -313,6 +313,7 @@ struct Cascade {
 // texture-store keys of its maps (~0u = none).
 struct MaterialOverride {
     asset::MaterialChunk params{};
+    asset::MaterialExt ext{};  // M-VISUAL2 4 lobes; zero = none
     u32 albedo_key = ~0u;
     u32 normal_key = ~0u;
     u32 orm_key = ~0u;
@@ -382,6 +383,13 @@ struct MeshInstance {
 // The material a submesh of `inst` draws with, and its map keys (the override's when it has one).
 inline const asset::MaterialChunk& material_of(const MeshInstance& inst, const GpuSubmesh& sm) {
     return inst.material ? inst.material->params : sm.material;
+}
+inline const asset::MaterialExt& material_ext_of(const MeshInstance& inst, const GpuSubmesh& sm) {
+    return inst.material ? inst.material->ext : sm.material_ext;
+}
+// Alpha-blended and transmissive (M-VISUAL2 4) materials draw after the opaques, back to front.
+inline bool drawn_after_opaques(const MeshInstance& inst, const GpuSubmesh& sm) {
+    return (material_of(inst, sm).flags & asset::MaterialFlags::AlphaBlend) || material_ext_of(inst, sm).transmission > 0.0f;
 }
 // A submesh's UV rectangle with the material's repeat (.mcmat uv_scale) folded in.
 inline math::vec4 tiled_uv_rect(const math::vec4& uv_rect, const asset::MaterialChunk& mat) {

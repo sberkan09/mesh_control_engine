@@ -92,6 +92,7 @@ ResultV MeshStore::upload(u32 key, u32 generation, Span<const byte> blob, Textur
         g.bounds = {c - e, c + e};
         g.uv_rect = {s.uv_offset[0], s.uv_offset[1], s.uv_scale[0], s.uv_scale[1]};
         g.material = s.material;
+        g.material_ext = view.material_ext(si);
         auto key_of = [&](asset::MaterialSlot slot) {
             const asset::Guid tex = s.material.texture(slot);
             return tex.hi != 0 || tex.lo != 0 ? textures(tex) : ~0u;

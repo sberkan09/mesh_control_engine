@@ -88,6 +88,9 @@ layout(std140, binding = 3) uniform ObjectU {
     mat4 o_dequant;    // skinned draws: quantized -> bind space (o_model is then the instance's world)
     vec4 o_skin;       // x: first joint in the palette, -1 = rigid; instanced draws: y first visible slot, z time
     vec4 o_inst;       // instanced draws (M-VISUAL 9): x wind amplitude, y wind frequency, zw wind direction (xz)
+    vec4 o_coat;       // M-VISUAL2 4: x clear coat, y its alpha (roughness²), z anisotropy, w its rotation (radians)
+    vec4 o_sheen;      // rgb sheen color, w its alpha (roughness², at least 0.0078)
+    vec4 o_ext;        // x: any of the lobes above on, y: index of refraction (0 = 1.5), z: transmission
 };
 )"
 // clang-format on
@@ -347,6 +350,63 @@ vec3 direct(vec3 n, vec3 v, vec3 l, vec3 diffuse, vec3 f0, float a, vec3 e) {
     vec3 spec = D_GGX(NoH, a) * V_SmithGGXCorrelated(NoV, NoL, a) * F;
     return (diffuse * (1.0 - F) / PI + spec) * (PI * NoL) * e;
 }
+// ---- M-VISUAL2 4 lobes (Filament's forms): anisotropic GGX along the UV tangent frame, the Charlie
+// sheen with Neubelt's visibility (no energy compensation of the base), and a clear coat: a second
+// GGX layer of F0 0.04 over the geometric normal that takes its Fresnel share from the base.
+vec3 g_tangent, g_bitangent, g_coat_n;  // set by main() when o_ext.x is on
+float D_GGX_Aniso(float NoH, float ToH, float BoH, float at, float ab) {
+    float a2 = at * ab;
+    vec3 d = vec3(ab * ToH, at * BoH, a2 * NoH);
+    float b2 = a2 / max(dot(d, d), 1e-12);
+    return a2 * b2 * b2 / PI;
+}
+float V_SmithGGXCorrelated_Aniso(float at, float ab, float ToV, float BoV, float ToL, float BoL, float NoV, float NoL) {
+    float lv = NoL * length(vec3(at * ToV, ab * BoV, NoV));
+    float ll = NoV * length(vec3(at * ToL, ab * BoL, NoL));
+    return 0.5 / max(lv + ll, 1e-5);
+}
+float D_Charlie(float NoH, float a) {
+    float inv = 1.0 / a;
+    float sin2 = max(1.0 - NoH * NoH, 0.0078125);
+    return (2.0 + inv) * pow(sin2, inv * 0.5) / (2.0 * PI);
+}
+float V_Neubelt(float NoV, float NoL) { return clamp(1.0 / (4.0 * (NoL + NoV - NoL * NoV)), 0.0, 1.0); }
+vec3 direct_ext(vec3 n, vec3 v, vec3 l, vec3 diffuse, vec3 f0, float a, vec3 e) {
+    vec3 h = normalize(v + l);
+    float NoL = clamp(dot(n, l), 0.0, 1.0);
+    float NoV = max(dot(n, v), 1e-4);
+    float NoH = clamp(dot(n, h), 0.0, 1.0);
+    float VoH = clamp(dot(v, h), 0.0, 1.0);
+    vec3 c = vec3(0.0);
+    if (NoL > 0.0) {
+        vec3 F = F_Schlick(f0, VoH);
+        vec3 spec;
+        if (o_coat.z != 0.0) {
+            float at = max(a * (1.0 + o_coat.z), 0.002), ab = max(a * (1.0 - o_coat.z), 0.002);
+            spec = D_GGX_Aniso(NoH, dot(g_tangent, h), dot(g_bitangent, h), at, ab) *
+                   V_SmithGGXCorrelated_Aniso(at, ab, dot(g_tangent, v), dot(g_bitangent, v), dot(g_tangent, l), dot(g_bitangent, l), NoV, NoL) * F;
+        } else {
+            spec = D_GGX(NoH, a) * V_SmithGGXCorrelated(NoV, NoL, a) * F;
+        }
+        c = diffuse * (1.0 - F) / PI + spec;
+        if (o_sheen.r + o_sheen.g + o_sheen.b > 0.0) c += o_sheen.rgb * D_Charlie(NoH, o_sheen.w) * V_Neubelt(NoV, NoL);
+        c *= PI * NoL;
+    }
+    if (o_coat.x > 0.0) {
+        float cNoL = clamp(dot(g_coat_n, l), 0.0, 1.0);
+        float Fc = F_Schlick(vec3(0.04), VoH).x * o_coat.x;
+        c *= 1.0 - Fc;
+        if (cNoL > 0.0) {
+            float cNoV = max(dot(g_coat_n, v), 1e-4), cNoH = clamp(dot(g_coat_n, h), 0.0, 1.0);
+            c += vec3(D_GGX(cNoH, o_coat.y) * V_SmithGGXCorrelated(cNoV, cNoL, o_coat.y) * Fc * PI * cNoL);
+        }
+    }
+    return c * e;
+}
+vec3 shade(vec3 n, vec3 v, vec3 l, vec3 diffuse, vec3 f0, float a, vec3 e) {
+    return o_ext.x > 0.5 ? direct_ext(n, v, l, diffuse, f0, a, e) : direct(n, v, l, diffuse, f0, a, e);
+}
+
 // Split-sum environment BRDF, analytic fit (Karis, "Physically Based Shading on Mobile").
 vec3 env_brdf(vec3 f0, float rough, float NoV) {
     const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
@@ -616,18 +676,32 @@ void main() {
         metallic = clamp(metallic, 0.0, 1.0);
         float a = rough * rough;
         vec3 diffuse = base.rgb * (1.0 - metallic);
-        vec3 f0 = mix(vec3(0.04), base.rgb, metallic);
+        float trans = o_ext.w > 0.5 ? o_ext.z * (1.0 - metallic) : 0.0;  // transmission takes the diffuse's place
+        diffuse *= 1.0 - trans;
+        float ior_f0 = o_ext.y > 0.0 ? ((o_ext.y - 1.0) / (o_ext.y + 1.0)) * ((o_ext.y - 1.0) / (o_ext.y + 1.0)) : 0.04;
+        vec3 f0 = mix(vec3(ior_f0), base.rgb, metallic);
         vec3 v = normalize(u_camera_pos.xyz - v_world);
+        if (o_ext.x > 0.5) {  // uniform branch: the tangent frame takes derivatives
+            g_coat_n = normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0);
+            vec3 dp1 = dFdx(v_world), dp2 = dFdy(v_world);
+            vec2 duv1 = dFdx(v_uv), duv2 = dFdy(v_uv);
+            vec3 t = cross(dp2, n) * duv1.x + cross(n, dp1) * duv2.x;
+            t -= n * dot(n, t);
+            t = dot(t, t) > 1e-20 ? normalize(t) : normalize(abs(n.y) < 0.99 ? cross(vec3(0.0, 1.0, 0.0), n) : cross(vec3(1.0, 0.0, 0.0), n));
+            vec3 b = cross(n, t);
+            g_tangent = t * cos(o_coat.w) + b * sin(o_coat.w);
+            g_bitangent = cross(n, g_tangent);
+        }
         float depth = -(u_view * vec4(v_world, 1.0)).z;
 
         // The sun, shadowed.
         vec3 l = -p_light_dir.xyz;
         float sh = dot(n, l) > 0.0 ? shadow_term(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), l, depth) : 0.0;
-        if (p_ao.y > 0.5 && sh > 0.0) {  // contact shadows: what the cascades are too coarse to see
+        if (p_ao.y > 0.5 && o_ext.w < 0.5 && sh > 0.0) {  // contact shadows: what the cascades are too coarse to see
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             sh *= textureLod(u_ao, c.xy / c.w * 0.5 + 0.5, 0.0).g;
         }
-        color = direct(n, v, l, diffuse, f0, a, p_light_color.rgb) * sh;
+        color = shade(n, v, l, diffuse, f0, a, p_light_color.rgb) * sh;
 
         // Forward+ point and spot lights of this fragment's cluster.
         uvec2 range = c_ranges[cluster_of(depth)];
@@ -646,13 +720,18 @@ void main() {
                 att *= local_shadow(L.shadow, L.pos_radius.xyz, v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), ld);
                 if (att <= 0.0) continue;
             }
-            color += direct(n, v, ld, diffuse, f0, a, L.color.rgb * att);
+            color += shade(n, v, ld, diffuse, f0, a, L.color.rgb * att);
         }
 
         // Ambient: hemisphere diffuse + sky reflections through the analytic split-sum, or with
         // image-based lighting the SH9 sky irradiance + the pre-filtered sky through the BRDF LUT.
         float NoV = max(dot(n, v), 1e-4);
         vec3 r = reflect(-v, n);
+        if (o_ext.x > 0.5 && o_coat.z != 0.0) {  // anisotropy bends the reflection toward the stretch (Filament)
+            vec3 dir = o_coat.z >= 0.0 ? g_bitangent : g_tangent;
+            vec3 an = cross(cross(dir, v), dir);
+            r = reflect(-v, normalize(mix(n, an, abs(o_coat.z) * clamp(5.0 * rough, 0.0, 1.0))));
+        }
         float horizon = clamp(1.0 + dot(r, normalize(v_normal)), 0.0, 1.0);
         vec3 amb_diffuse = p_ibl.x > 0.5 ? sh_irradiance(n) * diffuse * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
         vec3 amb_spec, spec_brdf;
@@ -684,13 +763,37 @@ void main() {
             float w = s.a * clamp((p_ssr.y - rough) / p_ssr.z, 0.0, 1.0);
             amb_spec = mix(amb_spec, s.rgb * spec_brdf * p_ssr.w, w);
         }
-        if (p_ao.x > 0.5) {  // SSAO darkens the ambient only; the screen position as the full-screen passes see it
+        if (p_ao.x > 0.5 && o_ext.w < 0.5) {  // SSAO darkens the ambient only; the screen position as the full-screen passes see it
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             ao *= textureLod(u_ao, c.xy / c.w * 0.5 + 0.5, 0.0).r;
         }
         // The sky's flat ambient is darkened away from the sun; the volume's light is not (it saw the shadows).
         float sun_side = mix(mix(0.55, 1.0, sh * clamp(dot(n, l), 0.0, 1.0)), 1.0, gi_w);
+        if (o_ext.x > 0.5) {
+            if (o_sheen.r + o_sheen.g + o_sheen.b > 0.0) {  // the sheen under the ambient: the irradiance times an approximate albedo
+                vec3 irr = p_ibl.x > 0.5 ? sh_irradiance(n) * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5);
+                if (p_gi.x > 0.5) irr = mix(irr, gi_irradiance(v_world, n).rgb * p_gi.y, gi_w);
+                amb_diffuse += irr * o_sheen.rgb * mix(0.1, 0.5, pow(1.0 - NoV, 2.0)) * (1.0 - o_sheen.w * 0.5);
+            }
+            if (o_coat.x > 0.0) {  // the coat reflects the sky (not the probes or SSR); the base below loses its share
+                float cNoV = max(dot(g_coat_n, v), 1e-4);
+                float Fc = (0.04 + 0.96 * pow(1.0 - cNoV, 5.0)) * o_coat.x;
+                vec3 rc = reflect(-v, g_coat_n);
+                float c_rough = sqrt(o_coat.y);
+                vec3 env = p_ibl.x > 0.5 ? prefiltered_sky(rc, c_rough) : sky_radiance(rc, c_rough * 8.0);
+                amb_diffuse *= 1.0 - Fc;  // the direct light took its share in direct_ext
+                amb_spec = amb_spec * (1.0 - Fc) + env * sky_vis * Fc * p_sky_horizon.w;
+            }
+        }
         color += (amb_diffuse * sun_side + amb_spec) * ao;
+        if (trans > 0.0) {  // thin-walled refraction: the opaque frame (bank kAo), shifted by the view normal, tinted
+            vec4 c = u_view_proj * vec4(v_world, 1.0);
+            float ior = o_ext.y > 0.0 ? o_ext.y : 1.5;
+            vec2 shift = (mat3(u_view) * n).xy * (1.0 - 1.0 / ior) * 0.1;
+            vec3 bg = textureLod(u_ao, clamp(c.xy / c.w * 0.5 + 0.5 - shift, 0.0, 1.0), 0.0).rgb;
+            vec3 F = f0 + (1.0 - f0) * pow(1.0 - NoV, 5.0);
+            color += bg * base.rgb * trans * (1.0 - F);
+        }
     }
     vec3 emissive = o_emissive.rgb;
     if (o_emissive.w > 0.5) emissive *= texture(u_emissive, vec3(v_uv, 0.0)).rgb;
@@ -1097,6 +1200,14 @@ void main() {
     }
     o_contact.g = 1.0 - occ * c_params.w;
 }
+)";
+
+// A plain copy of the opaque frame for transmissive draws to refract (M-VISUAL2 4, single-sample targets).
+constexpr const char* kFrameCopyFS = R"(#version 450 core
+layout(binding = 6) uniform sampler2D u_src;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o;
+void main() { o = textureLod(u_src, v_uv, 0.0); }
 )";
 
 constexpr const char* kFullscreenVS = R"(#version 450 core

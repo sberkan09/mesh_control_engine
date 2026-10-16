@@ -158,7 +158,40 @@ checks that it runs and draws (it needs Playwright).
 The game needs WebGPU: current Chrome, Edge and Safari, and Firefox 141 and later. Saves and settings
 go to the browser's IndexedDB, so they stay with that browser on that device.
 
-## 15.7 Checklist before shipping
+## 15.7 Steam
+
+`--steam <app id>` ships the desktop build as usual and also lays out its Steam depot and the steamcmd
+build scripts. Nothing is uploaded.
+
+    python3 scripts/ship.py --project projects/MyGame --steam 1234560 --steam-library <sdk>/redistributable_bin/linux64/libsteam_api.so
+    mce ship projects/MyGame --steam 1234560     # the same from mce (STEAMWORKS_SDK names the Steamworks SDK)
+
+| Option | Meaning |
+|---|---|
+| `--steam <app id>` | the app id from the Steamworks page |
+| `--steam-library <file>` | the `steam_api` to ship; by default the one in `$STEAMWORKS_SDK/redistributable_bin/<platform>/` |
+| `--steam-depot <id>` | this platform's depot (default: app + 1 for Windows, + 2 Linux, + 3 macOS, as Steamworks numbers a new app's depots) |
+| `--steam-branch <name>` | set the build live on this branch once it uploads (default: none, set it live on the Steamworks page) |
+
+Output, in `dist/<Name>-steam/`:
+
+| Path | What |
+|---|---|
+| `content/<os>/` | the shipped folder as players get it, with `steam_api` beside the executable (inside the `.app` on macOS) |
+| `scripts/app_build_<app>.vdf` | the app build, naming each platform's depot |
+| `scripts/depot_build_<depot>.vdf` | one per platform: its `content/<os>/`, debug files left out |
+| `UPLOAD.txt` | the depots and the `steamcmd +login <account> +run_app_build ... +quit` line that uploads them |
+
+Ship on each OS into the same `--out` folder (copy `dist/<Name>-steam/` between machines): each run fills
+its own `content/<os>/` and the app build lists every platform present. No `steam_appid.txt` is shipped:
+Steam starts the game with `SteamAppId` set, and the player signs in with it; run outside Steam, the game
+plays without Steam (`-steam.app_id -1` keeps Steam off even under Steam). On the Steamworks page, put the
+depots in a package and give each platform a launch option that runs its executable.
+
+The MCP tool `ship_build` takes `steam_app_id` (and `steam_library`) and returns the app build script's
+path as `steam_build_script`.
+
+## 15.8 Checklist before shipping
 
 1. Every scene cooks clean (`my_game_cook projects/MyGame --pack` exits 0).
 2. `my_game -headless 1 -ticks 3600` runs a minute without an error in the log.

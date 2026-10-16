@@ -36,6 +36,7 @@ struct Builder {
     Array<asset::MeshSkinVertex> skin_vertices;  // sized by build()
     Array<i32> submesh_skins;                    // sized by build(); -1 = rigid
     Array<Array<asset::MeshLod>> lods;           // per submesh (add_lod), finest first
+    Array<asset::MaterialExt> materials;         // empty, or one per submesh (M-VISUAL2 4 lobes)
 
     // Rest-pose model translation of `node` (fixture nodes only translate).
     math::vec3 rest_position(u32 node) const {
@@ -269,6 +270,11 @@ struct Builder {
             d.submesh_skins = ss.span();
             for (const asset::MeshJoint& j : joints)
                 if (j.ragdoll_flags != 0) d.flags |= asset::MeshFlags::Ragdoll;
+        }
+        Array<asset::MaterialExt> ext = materials;
+        if (!ext.empty()) {
+            ext.resize(submeshes.size(), asset::MaterialExt{});
+            d.materials = ext.span();
         }
         bool any = false;
         for (const asset::MeshSubmesh& s : submeshes)

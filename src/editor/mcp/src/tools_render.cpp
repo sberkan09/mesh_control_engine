@@ -101,7 +101,7 @@ constexpr usize kMaxSheetCameras = 4;
 constexpr u32 kSafeAreaColor = 0x3FD0FFFFu;
 
 struct RenderRequest {
-    StringView scene_rel;    // played scene, path under assets/
+    cook::String scene_rel;  // played scene, path under assets/ (a copy: the cook a render runs rescans the project's assets)
     asset::Guid scene_guid;
     u32 width = 960, height = 540;
     Array<u64> ticks;        // ascending
@@ -195,7 +195,7 @@ bool parse_common(ToolCall& c, RenderRequest& rq) {
     StringView other;
     if (!arg_string(c, "scene", other, false)) return false;
     const Server::SceneFile& file = c.server.scene_file();
-    rq.scene_rel = file.rel.view();
+    rq.scene_rel = cook::String(file.rel.view());
     rq.scene_guid = scene(c).doc().guid();
     if (!other.empty() && other != file.rel.view()) {
         cook::String abs;
@@ -204,14 +204,14 @@ bool parse_common(ToolCall& c, RenderRequest& rq) {
         for (const editor::ProjectAsset& a : c.server.session().project().assets())
             if (a.type == asset::ChunkType::Scene && a.path.view() == other) found = &a;
         if (!found) return fail(c, "argument 'scene': no such scene in the project (asset_list with type Scene lists them)");
-        rq.scene_rel = other;
+        rq.scene_rel = cook::String(other);
         rq.scene_guid = found->guid;
     } else {
         if (file.rel.empty()) return fail(c, "the scene was never saved: scene_save it (with a path under assets/) first");
         if (scene(c).dirty()) return fail(c, "the scene has unsaved changes: scene_save first (the frame is drawn from the cooked file)");
     }
     if (!arg_input(c, rq.script) || !arg_convars(c, rq.convars)) return false;
-    if (!parse_camera(c, arg(c, "camera"), rq.scene_rel == file.rel.view(), rq)) return false;
+    if (!parse_camera(c, arg(c, "camera"), rq.scene_rel.view() == file.rel.view(), rq)) return false;
     if (const cook::JsonValue sa = arg(c, "safe_area"); sa.valid()) {
         static constexpr const char* kKeys[4] = {"left", "top", "right", "bottom"};
         if (!sa.is_object()) return arg_missing(c, "safe_area", "an object {left, top, right, bottom} in pixels");
@@ -374,7 +374,7 @@ bool project_png_path(ToolCall& c, const char* name, StringView rel, cook::Strin
 }
 
 void write_result_head(ToolCall& c, const RenderRequest& rq, bool software) {
-    c.out.key("scene").str(rq.scene_rel);
+    c.out.key("scene").str(rq.scene_rel.view());
     c.out.key("width").num_u(rq.width).key("height").num_u(rq.height);
     c.out.key("renderer").str(software ? "software (offscreen, Mesa llvmpipe)" : "gpu (a window)");
 }
@@ -458,12 +458,12 @@ bool ui_preview(ToolCall& c) {
     rq.ui_preview = cook::String(asset::to_string(doc->guid).view());
     const Server::SceneFile& file = c.server.scene_file();
     if (!file.rel.empty() && !scene(c).dirty()) {
-        rq.scene_rel = file.rel.view();
+        rq.scene_rel = cook::String(file.rel.view());
         rq.scene_guid = scene(c).doc().guid();
     } else {
         for (const editor::ProjectAsset& a : c.server.session().project().assets())
-            if (a.type == asset::ChunkType::Scene && (rq.scene_rel.empty() || a.path.view() < rq.scene_rel)) {
-                rq.scene_rel = a.path.view();
+            if (a.type == asset::ChunkType::Scene && (rq.scene_rel.empty() || a.path.view() < rq.scene_rel.view())) {
+                rq.scene_rel = cook::String(a.path.view());
                 rq.scene_guid = a.guid;
             }
         if (rq.scene_rel.empty()) return fail(c, "the project has no saved scene for the player to start (scene_save one)");
@@ -533,7 +533,7 @@ bool render_sheet(ToolCall& c) {
     bool software = false;
     for (u32 row = 0; row < rows; ++row) {
         RenderRequest rq;
-        rq.scene_rel = base.scene_rel;
+        rq.scene_rel = cook::String(base.scene_rel.view());
         rq.scene_guid = base.scene_guid;
         rq.width = base.width;
         rq.height = base.height;
@@ -545,7 +545,7 @@ bool render_sheet(ToolCall& c) {
             rq.convars.names.push_back(cook::String(base.convars.names[i].view()));
             rq.convars.values.push_back(cook::String(base.convars.values[i].view()));
         }
-        if (cams.valid() && !parse_camera(c, cams.at(row), base.scene_rel == c.server.scene_file().rel.view(), rq)) return false;
+        if (cams.valid() && !parse_camera(c, cams.at(row), base.scene_rel.view() == c.server.scene_file().rel.view(), rq)) return false;
         Array<cook::Image> frames;
         if (!render_ticks(c, rq, frames, software)) return false;
         for (u32 col = 0; col < cols; ++col) {

@@ -150,6 +150,12 @@ Besides scenes and prefabs (chapter 4), these text assets are JSON with a `forma
 `uv_scale` repeats the textures across the mesh's UVs: `[8, 8]` on a plane tiles a stone texture
 eight times each way (the samplers repeat), so a 30 m courtyard floor is one mesh, not many slabs.
 
+Optional extension keys add lobes on top of the base (all 0 by default, which is the plain material):
+`clearcoat` and `clearcoat_roughness` (0..1, a varnish layer), `sheen_color` ([r, g, b]) and
+`sheen_roughness` (cloth and velvet), `anisotropy` (-1..1) and `anisotropy_rotation` (radians; brushed
+metal), `transmission` (0..1, see-through like glass; the frame behind shows through, tinted by the base
+color) and `ior` (1..3, 0 = 1.5; sets a dielectric's reflectance). A value out of range is a cook error.
+
 **Terrain** (`.mcterrain`, chapter 8): `resolution` samples per side (2^n+1, 33 to 4097), `chunk` quads
 per LOD node (a power of two, default 32), `size` in metres along x and z, `height_range` mapping sample
 0 and 65535 to metres. `heights` is base64 of `resolution²` little-endian u16 samples, z rows of x
