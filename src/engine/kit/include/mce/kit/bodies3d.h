@@ -90,13 +90,53 @@ struct CharacterController3D {
     u16 pad_ = 0;
     math::vec3 velocity;                // engine-written: after the last move
     u32 flags = 0;                      // engine-written: physics::ControllerFlags3D
+    // Feel (M-MOVE3D 1). The defaults keep the original controller: full speed at once, a jump only
+    // on the tick it is asked for while grounded.
+    f32 acceleration = 0.0f;            // m/s^2 towards the wanted ground velocity; 0 = at once
+    f32 deceleration = 0.0f;            // m/s^2 when there is no Move; 0 = at once
+    f32 air_acceleration = 0.0f;        // m/s^2 in the air, either way; 0 = the ground rates
+    f32 coyote_time = 0.0f;             // s after walking off a ledge that a jump still works
+    f32 jump_buffer = 0.0f;             // s a jump asked for in the air waits for the ground
+    f32 jump_cut = 1.0f;                // rising speed is scaled by this when Jump is let go (1 = off)
+    f32 sprint_multiplier = 1.5f;       // speed scale while sprinting
+    f32 crouch_half_height = 0.0f;      // the cylinder half height crouched; 0 = no crouch
+    f32 crouch_multiplier = 0.5f;       // speed scale while crouched
+    u8 air_jumps = 0;                   // extra jumps before landing
+    bool sprint = false;                // run faster (or the Sprint action, with use_input)
+    bool crouch = false;                // crouch (or the Crouch action held, with use_input)
+    bool release_jump = false;          // set to cut a rising jump (the engine clears it)
+    bool crouched = false;              // engine-written: false again only once there is room to stand
+    u8 air_jumps_used = 0;              // engine-written
+    u16 airborne_ticks = 0;             // engine-written: ticks since the ground (saturates)
+    u16 buffered_ticks = 0;             // engine-written: ticks a buffered jump may still wait
+    u8 jumping = 0;                     // engine-written: left the ground by jumping (1; 2 once cut) until landing
+    u8 pad2_ = 0;
 };
 MCE_COMPONENT(CharacterController3D, (radius, Range{0.05f, 10}), (half_height, Range{0, 10}), (max_slope_deg, Range{0, 89}),
               (step_height, Range{0, 2}), (stick_to_floor, Range{0, 2}), (speed, Range{0, 100}, Help{"m/s at full Move input"}),
               (jump_speed, Range{0, 100}), (gravity_scale, Range{-10, 10}), (move, Help{"m/s along the ground when use_input is off"}),
               (layer, Range{0, 15}), (use_input, Help{"walk by the Move / Jump actions, relative to the 3D camera"}),
               (jump, Help{"set to jump when grounded (the engine clears it)"}), (grounded, ReadOnly, Transient), mask,
-              (velocity, ReadOnly, Transient), (flags, ReadOnly, Transient))
+              (velocity, ReadOnly, Transient), (flags, ReadOnly, Transient),
+              (acceleration, Range{0, 1000}, Help{"m/s^2 towards the wanted ground velocity; 0 = at once"}),
+              (deceleration, Range{0, 1000}, Help{"m/s^2 to a stop with no Move; 0 = at once"}),
+              (air_acceleration, Range{0, 1000}, Help{"m/s^2 in the air; 0 = the ground rates"}),
+              (coyote_time, Range{0, 1}, Help{"seconds after leaving a ledge that a jump still works"}),
+              (jump_buffer, Range{0, 1}, Help{"seconds a jump pressed early waits for the ground"}),
+              (jump_cut, Range{0, 1}, Help{"rising speed scale when Jump is let go (1 = full height always)"}),
+              (sprint_multiplier, Range{0, 10}), (crouch_half_height, Range{0, 10}, Help{"cylinder half height crouched; 0 = no crouch"}),
+              (crouch_multiplier, Range{0, 10}), (air_jumps, Range{0, 10}),
+              (sprint, Help{"run faster (the Sprint action too, with use_input)"}),
+              (crouch, Help{"crouch (the Crouch action too, with use_input); stands only with room overhead"}),
+              (release_jump, Help{"set to cut a rising jump to jump_cut (the engine clears it)"}),
+              (crouched, ReadOnly, Transient), (air_jumps_used, ReadOnly, Transient), (airborne_ticks, ReadOnly, Transient),
+              (buffered_ticks, ReadOnly, Transient), (jumping, ReadOnly, Transient))
+
+// A character touched down (M-MOVE3D 1): FixedUpdate_Pre, from "kit3d_bodies".
+struct Landed3D {
+    Entity entity;
+    f32 impact_speed = 0.0f;  // m/s downward at touchdown
+};
 
 enum class TriggerShape3D : u8 { Box, Sphere };
 MCE_ENUM(TriggerShape3D, Box, Sphere)
