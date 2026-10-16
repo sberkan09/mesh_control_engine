@@ -1,0 +1,7 @@
+# Misses scripts/ci/check_docs.py accepts: `kind | file | target | reason`. The list only shrinks: a line whose
+# miss no longer happens is an error.
+
+include | docs/architecture/scripting.md | mce/core_types.h | design sketch of a future module API, not a shipped header
+include | docs/architecture/scripting.md | mce/ecs.h | design sketch of a future module API, not a shipped header
+include | docs/architecture/scripting.md | mce/starter_kit.h | design sketch of a future module API, not a shipped header
+include | docs/engine/asset.md | mce/cook/... | an ellipsis for "the headers under mce/cook/", not one file
