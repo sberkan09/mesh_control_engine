@@ -10,6 +10,7 @@ mce_add_test(test_editor UMBRELLA
         test_mod_project.cpp
         test_navmesh_bake.cpp
         test_orbit_camera.cpp
+        test_perf_compare.cpp
         test_perf_monitor.cpp
         test_play_session.cpp
         test_prefab_overrides.cpp

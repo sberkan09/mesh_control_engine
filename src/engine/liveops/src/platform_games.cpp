@@ -50,8 +50,14 @@ bool decode_cloud_blob(Span<const byte> blob, u64& version, Span<const byte>& by
 PlatformGameServices::PlatformGameServices(IPlatformGamesBackend& backend, mem::IAllocator& a)
     : backend_(backend), alloc_(a), slots_(a) {}
 
-StringView PlatformGameServices::store_id(StringView ios, StringView android) const {
-    return backend_.ios_ids() ? ios : android;
+template <class Info>
+StringView PlatformGameServices::store_id(const Info& e) const {
+    switch (backend_.store_ids()) {
+        case StoreIds::Ios: return e.ios_id.view();
+        case StoreIds::Android: return e.android_id.view();
+        case StoreIds::Steam: return e.steam_id.empty() ? e.id.view() : e.steam_id.view();
+    }
+    return {};
 }
 
 void PlatformGameServices::start(const ServicesCatalog& catalog, GameServicesSink& sink) {
@@ -75,7 +81,7 @@ void PlatformGameServices::sign_in(bool interactive) {
 
 void PlatformGameServices::report_achievement(u16 achievement, u32 steps) {
     const AchievementInfo& a = catalog_->achievements()[achievement];
-    const StringView id = store_id(a.ios_id.view(), a.android_id.view());
+    const StringView id = store_id(a);
     if (!started_ || id.empty()) {
         if (started_) MCE_LOG_WARN("game_services: achievement '{}' has no {} id", a.id.view(), backend_.name());
         return sink_->achievement_sent(achievement, false);
@@ -85,7 +91,7 @@ void PlatformGameServices::report_achievement(u16 achievement, u32 steps) {
 
 void PlatformGameServices::submit_score(u16 leaderboard, i64 score) {
     const LeaderboardInfo& l = catalog_->leaderboards()[leaderboard];
-    const StringView id = store_id(l.ios_id.view(), l.android_id.view());
+    const StringView id = store_id(l);
     if (!started_ || id.empty()) {
         if (started_) MCE_LOG_WARN("game_services: leaderboard '{}' has no {} id", l.id.view(), backend_.name());
         return sink_->score_sent(leaderboard, false);
@@ -115,7 +121,7 @@ void PlatformGameServices::show_achievements() {
 void PlatformGameServices::show_leaderboard(u16 leaderboard) {
     if (!started_ || leaderboard >= catalog_->leaderboards().size()) return;
     const LeaderboardInfo& l = catalog_->leaderboards()[leaderboard];
-    backend_.show_leaderboard(store_id(l.ios_id.view(), l.android_id.view()));
+    backend_.show_leaderboard(store_id(l));
 }
 
 void PlatformGameServices::platform_signed_in(bool ok) { sink_->signed_in(ok); }

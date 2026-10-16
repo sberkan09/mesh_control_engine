@@ -156,7 +156,7 @@ value at start and after each apply. A failed fetch keeps the values in force.
 ## 23.6 Game services
 
 Achievements, leaderboards and cloud saves through one API. Game Center and iCloud on iOS, Play Games
-Services on Android, and a local folder on desktop and in CI. List them in one `.mcservices` file in
+Services on Android, Steam on desktop while it runs (23.10), and a local folder on desktop and in CI. List them in one `.mcservices` file in
 the project's assets:
 
 ```json
@@ -167,7 +167,8 @@ the project's assets:
   "cloud_saves": [ "progress" ] }
 ```
 
-Game code names everything by `id`. The store ids stay in this file. `steps` greater than 1 makes an
+Game code names everything by `id`. The store ids stay in this file. An entry's `steam` is its
+Steamworks API name when that differs from `id`; Steam uses `id` otherwise. `steps` greater than 1 makes an
 achievement incremental. A leaderboard's `order` is `higher_is_better` (the default) or
 `lower_is_better`, for times. `cloud_saves` lists the saves (`save::write` names) that may sync.
 
@@ -337,6 +338,42 @@ mce_player -pack assets.mce -steam.app_id 480
 
 The log says `Steam on (app 480, <player name>)`, or `no Steam (<reason>)` and the game goes on
 without it: no library, Steam not running, a client older than the library. Steam never changes the
-simulation. Achievements, leaderboards and cloud saves through Steam, the overlay, Steam Input and
-`ship --steam` come in the next M-STEAM steps; until they land, Steam is signed in and nothing more.
+simulation.
+
+**Game services on Steam.** While Steam runs and no `liveops.provider` is named, Steam is the game
+services backend (23.6), so the same `unlock`, `add_progress`, `submit_score` and cloud saves reach it:
+
+- an achievement unlocks under its `steam` name (or its `id`) once its steps are reached; progress
+  below that shows Steam's progress toast. Define the achievements on the app's Steamworks page;
+- a score goes to the leaderboard of that name with "keep best": set each board's sort order on the
+  Steamworks page to match `order`. Steam scores are 32-bit, so larger ones are clamped;
+- a cloud save is a Steam Cloud file named after the save. Give the app enough Steam Cloud quota.
+
+`show_achievements()` opens the overlay's achievements page and `show_leaderboard()` its stats page.
+
+**The overlay** (Shift+Tab) holds the game like a lost focus: the sim pauses with the pause overlay
+up, the master bus mutes, and with `-save` the slot is written. Closing it unmutes; the player
+resumes from the pause overlay as after any focus loss.
+
+A game opens overlay pages with the `OpenOverlay` event (`mce/kit/presence.h`), from any
+FixedUpdate system:
+
+```cpp
+f.events().push(mce::kit::OpenOverlay{mce::kit::OverlayPage::Store, {}});  // this game's store page
+```
+
+Pages are `Friends`, `Achievements`, `Stats`, `Community`, `Settings`, `Store` and `Web` (with `url`).
+Without Steam the request is dropped.
+
+**Rich presence** is data: a `RichPresence` component on any entity (a level's root, say) says what
+friends see. The first enabled one by entity order is shown; none clears it. Its fields:
+
+| Field | Steam key | Meaning |
+|---|---|---|
+| `status` | `status` | plain text in the friends list's game info |
+| `steam_display` | `steam_display` | a token of the app's rich presence localization file, `#StatusInLevel` |
+| `key1` / `value1`, `key2` / `value2` | the key | substitutions the token uses: `level` = `Ashen Court` fills `%level%` |
+
+The player sends it when it changes, never every frame. Neither the overlay requests nor the
+presence change the state hash. Steam Input and `ship --steam` come in the next M-STEAM steps.
 

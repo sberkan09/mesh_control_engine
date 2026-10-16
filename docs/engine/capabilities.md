@@ -73,6 +73,7 @@ reach all of its non-transient fields.
 | `NavLink3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `NavObstacle3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `NavAgent3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
+| `RichPresence` | `mce/kit/presence.h` | yes | yes | yes | docs/user-guide/23-live-services.md |
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
 | `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `Overlap3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
@@ -163,6 +164,8 @@ reach all of its non-transient fields.
 | `render_frame` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `render_sheet` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `image_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `perf_run` | `tools_agent.cpp` | docs/user-guide/03-editor.md |
+| `perf_compare` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `module_build` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `module_test` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `test_run` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |

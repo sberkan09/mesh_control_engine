@@ -1,6 +1,6 @@
 // The GameServicesCatalog chunk (M-LIVEOPS step 2; mce/liveops/game_services.h).
 //
-// Layout v1 (little-endian):
+// Layout v2 (little-endian; v2 added the Steam id, M-STEAM step 2):
 //   ServicesHeader | ServicesEntry[achievements + leaderboards + cloud saves] | string blob
 
 #include <cstring>
@@ -31,10 +31,11 @@ struct ServicesEntry {
     StrRef id;
     StrRef ios;
     StrRef android;
+    StrRef steam;
     u32 value;  // achievements: steps; leaderboards: 1 = lower is better; cloud saves: 0
     u32 reserved;
 };
-static_assert(sizeof(ServicesEntry) == 32);
+static_assert(sizeof(ServicesEntry) == 40);
 
 StrRef add_string(Array<byte>& blob, StringView s) {
     const StrRef r{static_cast<u32>(blob.size()), static_cast<u32>(s.size())};
@@ -107,6 +108,7 @@ void encode_services_catalog(const ServicesCatalog& c, Array<byte>& out) {
         e.id = add_string(blob, a.id.view());
         e.ios = add_string(blob, a.ios_id.view());
         e.android = add_string(blob, a.android_id.view());
+        e.steam = add_string(blob, a.steam_id.view());
         e.value = a.steps;
         entries.push_back(e);
     }
@@ -115,6 +117,7 @@ void encode_services_catalog(const ServicesCatalog& c, Array<byte>& out) {
         e.id = add_string(blob, l.id.view());
         e.ios = add_string(blob, l.ios_id.view());
         e.android = add_string(blob, l.android_id.view());
+        e.steam = add_string(blob, l.steam_id.view());
         e.value = l.lower_is_better ? 1 : 0;
         entries.push_back(e);
     }
@@ -123,6 +126,7 @@ void encode_services_catalog(const ServicesCatalog& c, Array<byte>& out) {
         e.id = add_string(blob, s.view());
         e.ios = add_string(blob, {});
         e.android = add_string(blob, {});
+        e.steam = add_string(blob, {});
         entries.push_back(e);
     }
     ServicesHeader h{};
@@ -153,9 +157,9 @@ Result<void> decode_services_catalog(Span<const byte> payload, ServicesCatalog& 
         ServicesEntry e;
         std::memcpy(&e, entries + i * sizeof(ServicesEntry), sizeof(e));
         if (e.reserved != 0) return Error(Errc::ReservedNonZero, kStage, {}, static_cast<u32>(i));
-        StringView id, ios, android;
+        StringView id, ios, android, steam;
         if (!read_string(blob, h.strings_size, e.id, id) || !read_string(blob, h.strings_size, e.ios, ios) ||
-            !read_string(blob, h.strings_size, e.android, android))
+            !read_string(blob, h.strings_size, e.android, android) || !read_string(blob, h.strings_size, e.steam, steam))
             return Error(Errc::OutOfBounds, kStage, {}, static_cast<u32>(i));
         bool added = false;
         if (i < h.achievement_count) {
@@ -163,18 +167,22 @@ Result<void> decode_services_catalog(Span<const byte> payload, ServicesCatalog& 
             a.id = id;
             a.ios_id = ios;
             a.android_id = android;
+            a.steam_id = steam;
             a.steps = e.value;
-            added = !a.id.truncated() && !a.ios_id.truncated() && !a.android_id.truncated() && out.add_achievement(a);
+            added = !a.id.truncated() && !a.ios_id.truncated() && !a.android_id.truncated() && !a.steam_id.truncated() &&
+                    out.add_achievement(a);
         } else if (i < u64(h.achievement_count) + h.leaderboard_count) {
             if (e.value > 1) return Error(Errc::InvalidArgument, kStage, id, static_cast<u32>(i));
             LeaderboardInfo l;
             l.id = id;
             l.ios_id = ios;
             l.android_id = android;
+            l.steam_id = steam;
             l.lower_is_better = e.value == 1;
-            added = !l.id.truncated() && !l.ios_id.truncated() && !l.android_id.truncated() && out.add_leaderboard(l);
+            added = !l.id.truncated() && !l.ios_id.truncated() && !l.android_id.truncated() && !l.steam_id.truncated() &&
+                    out.add_leaderboard(l);
         } else {
-            if (e.value != 0 || !ios.empty() || !android.empty())
+            if (e.value != 0 || !ios.empty() || !android.empty() || !steam.empty())
                 return Error(Errc::InvalidArgument, kStage, id, static_cast<u32>(i));
             added = out.add_cloud_save(id);
         }

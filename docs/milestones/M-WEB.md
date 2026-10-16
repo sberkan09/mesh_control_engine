@@ -13,8 +13,8 @@ Chromium run on WebGPU/SwiftShader (`scripts/web/browser_smoke.cjs`).
 | 1 | Graphics decision (ADR-0039): `mce_rhi_webgpu` over emdawnwebgpu, GLSL → WGSL with glslang + Tint, `web-*` presets; `01_triangle` draws in a browser | SBA-62 | done |
 | 2 | Emscripten toolchain for every sample and game: the player's main loop, the job system single-threaded (or pthreads under COOP/COEP), every engine library compiling | SBA-63 | done |
 | 3 | Files and assets: the pack over HTTP with progress, saves in IndexedDB | SBA-64 | done |
-| 4 | Audio and input: WebAudio unlock, touch, gamepad, pointer lock, fullscreen | SBA-65 | not started |
-| 5 | `mce ship --target web`: shell page, itch.io zip, `mce serve` | SBA-66 | not started |
+| 4 | Audio and input: WebAudio unlock, touch, gamepad, pointer lock, fullscreen | SBA-65 | done |
+| 5 | `mce ship --target web`: shell page, itch.io zip, `mce serve` | SBA-66 | done |
 | 6 | MCP `ship_build {"target":"web"}` and a Playwright smoke returning the state hash and a screenshot | SBA-67 | not started |
 | 7 | A `web` stage in `local_ci.sh` | SBA-68 | not started |
 
@@ -56,10 +56,35 @@ Numbers (`web-release`, MinSizeRel): `01_triangle.wasm` 8.9 MB, 2.5 MB gzipped; 
 | Saves and settings | IndexedDB (IDBFS, `-lidbfs.js`) backs `/persistent` = `crash::user_data_root()`, mounted and loaded in `platform::init`; `save::write` and `console::save_settings` write it back at once; the page also writes it back every 5 s and on `pagehide` / hidden, which covers the other writers (novel stage, loc, monetize, liveops) | `browser_smoke.cjs --persist`: a probe file under `/persistent` survives a reload |
 | mmap | not needed: the asset system reads packs into heap buffers on every platform | — |
 
+## What shipped (step 4)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Audio unlock | `web::install_audio_unlock` (`core/src/web.cpp`), installed by `platform::init`: the first `pointerdown` / `touchend` / `keydown` resumes SDL's `AudioContext` from inside the handler (Safari's rule), then the listeners drop; `Module.mceAudioState()` reports it | probe: audio starts suspended, the first tap makes it run |
+| Pointer lock and full screen | `Window::set_relative_mouse` / `set_fullscreen` through SDL's emscripten driver, which defers each request to the next click or key press (the browser only grants them there) | probe: the canvas holds the pointer lock and goes full screen; relative moves arrive |
+| Window teardown | `~Window` leaves full screen and lets a pending `fullscreenchange` arrive before `SDL_DestroyWindow`: the page's restore callback holds SDL's window data, and read freed memory when the window went first | without it the probe's exit threw `querySelector: 'Pf' is not a valid selector` |
+| Touch, keys, gamepad | SDL's emscripten pointer events (fingers kept apart from the mouse, as on phones) and the Gamepad API (standard mapping); no engine changes | probe: a tap at 0.25 0.50, key W, a pad's South button and left stick |
+| Input probe | `mce_input_web_probe` (`src/engine/platform/web_probe`), driven by `scripts/web/probe_smoke.cjs <dir> input`: a fake pad behind `navigator.getGamepads`, CDP touches, and the strict autoplay rule (headless Chromium never blocks audio) | 13 checks, PASS |
+| Relay over WebSocket (M-NET2) | `mce_relay_web_probe` (`src/engine/net/web_probe`): two `RelayClient`s over `websocket_web.cpp` against a native `mce_relay`; `probe_smoke.cjs <dir> relay <mce_relay>` | room made, the guest joined, messages crossed both ways: OK |
+
+## What shipped (step 5)
+
+| Item | Where | Evidence |
+|---|---|---|
+| `ship.py --target web` | `scripts/ship.py` (the cross path of the phone builds: host cook first, then the `web-release` preset with `MCE_HOST_COOK` / `MCE_ONLY_PROJECT`), `scripts/web/web_package.py` | `Ember-Step-<v>-web.zip` 2.8 MiB (wasm 8.9 MiB, 2.5 MiB gzipped) and the visual novel `--project projects/Undelivered` 46 MiB (mostly its pack; wasm 3.6 MiB gzipped); `--smoke` PASS on both |
+| Shell page | `scripts/web/shell.html`: loading bar fed by the pack download, icon, "Click/Tap to play" (the gesture that starts audio), full-screen button, WebGPU check, `[critical]` shown on the page; the canvas fills the page through CSS, which SDL follows (resizable window) | `probe_smoke.cjs <stage> shell`: desktop and phone (390x844 at 3x, touch) both show the cover once the game runs, the click or tap hides it and audio runs, the canvas fills the page and follows a resize and rotation |
+| itch.io zip | flat, `index.html` at the root; `VERSION.txt` is fetched at start, so a web build is a shipped build (cheats locked) | `03_platformer 0.9.0+… web-release …, cheats locked` |
+| `mce serve` | `tools/mce_cli/mce.py serve <zip | folder | project>`: `application/wasm`, COOP/COEP, no-cache, `--lan` for a phone, `--open` | headers checked with curl |
+| `mce ship --target web` | runs the engine checkout's `ship.py` (the SDK's own or the one `install.sh` came from) for a project under `projects/` | — |
+| Docs | `docs/user-guide/15-shipping.md` §15.6 | — |
+
 ## Open items
 
 - Size: cook WGSL next to SPIR-V once renderer shaders are cooked assets (drops Tint from the page), narrow
   ASYNCIFY to the frame yield and the device waits.
+- `mce ship --target web` for a project outside the checkout: the SDK installs no web libraries, so it runs
+  `ship.py` in the checkout, which only adds projects under `projects/` (a host build of another tree would need
+  its own `MCE_ONLY_PROJECT` run).
 - Timestamp queries are off (`DeviceCaps::timestamp_queries = false`); the profiler shows CPU times on the web.
 - Pixel parity with GL: checked by eye (orientation, winding) on `01_triangle`; a golden comparison against the GL
   backend comes with the renderer samples in step 2.

@@ -11,6 +11,7 @@
 #include "mce/kit/components.h"       // Sprite, TextLabel, Camera2DComponent, TilemapLayer, ParticleEmitter,
                                       // Light2D, Parallax, Post2DComponent, SequencePlayer, PathAgent
 #include "mce/kit/captions.h"         // SoundCaption (M-ACCESS)
+#include "mce/kit/presence.h"         // RichPresence (M-STEAM 3)
 #include "mce/kit/cinematic.h"        // CameraRail3D, CameraLookAt3D, CameraShake3D, CameraBlend3D, Cutscene (M-CINEMA)
 #include "mce/kit/video.h"            // VideoPlayer (M-CINEMA 5)
 #include "mce/kit/effects.h"          // SfxTrigger, ParticleBurst, ShakeTrigger, CameraShake2D, CameraFollow2D/3D,
