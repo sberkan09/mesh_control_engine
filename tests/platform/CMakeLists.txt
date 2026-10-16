@@ -19,6 +19,13 @@ if(NOT IOS AND NOT ANDROID)
         set_tests_properties(scene_demo_player_steam PROPERTIES
             PASS_REGULAR_EXPRESSION "Steam on \\(app 480, Stub Player\\).*600 ticks, 6 entities, state_hash [0-9a-f]+")
     endif()
+    # Steam as the game services backend (M-STEAM step 2): the player's -game_services_test on the stand-in.
+    if(TARGET mce_player AND TARGET mce_cook)
+        add_test(NAME player_game_services_steam
+                 COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                         -DSTEAM_STUB=$<TARGET_FILE:mce_steam_stub> -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/steam_games_test
+                         -P ${CMAKE_CURRENT_SOURCE_DIR}/player_steam_games_test.cmake)
+    endif()
 endif()
 
 # The Android sides of the review prompt and haptics (cmake/mobile/android_app.py stamping MceReview and

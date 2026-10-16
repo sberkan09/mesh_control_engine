@@ -30,7 +30,8 @@ TEST_CASE("game services: .mcservices cooks to CHNK_GSVC and decodes") {
     const std::string root = fresh_dir("services_cook");
     write_file(root + "/assets/game.mcservices", R"({ "format": "mce-services", "version": 1,
         "guid": "5703e000-0000-4000-8000-0000000000d1",
-        "achievements": [ { "id": "first_win", "ios": "com.studio.first_win", "android": "CgkIfirst" },
+        "achievements": [ { "id": "first_win", "ios": "com.studio.first_win", "android": "CgkIfirst",
+                            "steam": "ACH_FIRST_WIN" },
                           { "id": "win_10", "steps": 10 } ],
         "leaderboards": [ { "id": "best_time", "order": "lower_is_better", "android": "CgkIbest" },
                           { "id": "score" } ],
@@ -53,6 +54,8 @@ TEST_CASE("game services: .mcservices cooks to CHNK_GSVC and decodes") {
     REQUIRE(liveops::decode_services_catalog(assets.resolve(h.value()), c));
     REQUIRE(c.achievements().size() == 2);
     CHECK(c.achievements()[0].ios_id.view() == "com.studio.first_win");
+    CHECK(c.achievements()[0].steam_id.view() == "ACH_FIRST_WIN");
+    CHECK(c.achievements()[1].steam_id.empty());
     CHECK(c.achievements()[0].steps == 1);
     CHECK(c.achievements()[1].steps == 10);
     REQUIRE(c.leaderboards().size() == 2);
