@@ -1,6 +1,6 @@
 # M-AI — Game AI as data (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1-2 done). Plan: ROADMAP §M-AI; ADR-0045; Linear SBA-128 … SBA-133.
+**Status:** active (added 2026-10-16; steps 1-3 done). Plan: ROADMAP §M-AI; ADR-0045; Linear SBA-128 … SBA-133.
 
 **Why:** MCE has the parts an enemy moves and senses with: grid A* and `PathAgent`, the navmesh and `NavAgent3D`
 (M-GAMEPLAY3D), `Raycast3D` / `Overlap3D` sensors, and the FSM helper. What it lacks is the layer that decides.
@@ -23,7 +23,7 @@ It needs no device. Every step gates headless in `local_ci.sh`.
 |---|---|---|---|
 | 1 | Behavior tree runtime: `.mcbt` cooked to `CHNK_BT`, typed blackboard keys, `AiBrain` and `Blackboard` components holding all run state, tasks by name (ADR-0045) | SBA-128 | done |
 | 2 | Stock data tasks (move to a key or entity on the grid or the navmesh, look at, animate, play a sound, spawn, raise and wait for events) and blackboard observer aborts; the stock player runs trees from scenes | SBA-129 | done |
-| 3 | Perception: `Perceiver` (sight cone and range, hearing, forget time) and `Stimulus` (a visible target with a team, noise events), line of sight through 2D and 3D rays, memory into blackboard keys | SBA-130 | not started |
+| 3 | Perception: `Perceiver` (sight cone and range, hearing, forget time) and `Stimulus` (a visible target with a team, noise events), line of sight through 2D and 3D rays, memory into blackboard keys | SBA-130 | done |
 | 4 | A utility selector with response curves and hysteresis, `AiTokenPool` for attack and role tokens, point queries scored by distance, line of sight and cover | SBA-131 | not started |
 | 5 | The editor's Behavior Tree panel: tree, inspector, undo, cook validation; in play-in-editor the active path, results and blackboard, and a perception overlay | SBA-132 | not started |
 | 6 | MCP `bt_create`, `bt_add_node`, `bt_set`, `bt_trace`; the user guide chapter; the demo and the gates | SBA-133 | not started |
@@ -83,3 +83,25 @@ It needs no device. Every step gates headless in `local_ci.sh`.
   `follow` (a `PathAgent` goes inactive).
 - **raise reaches the sequences.** It pushes a `BtSignal` and a `SeqSignal`, so a cutscene's
   `wait_event` can wait on an AI beat; `wait_event` hears both.
+
+## Step 3 — perception (SBA-130)
+
+| Piece | Where |
+|---|---|
+| `Perceiver` (sight cone and range, eye, hearing, forget, team, blocking layers, check interval, the key names; the memory as runtime fields), `Stimulus`, the `Noise` event, `PerceptionStats` | `src/engine/kit/include/mce/kit/perception.h` |
+| "ai_perception": sight through World3D or World2D rays, the nearest target, the memory, hearing, the blackboard writes; `perception_debug_lines` | `src/engine/kit/src/perception.cpp` |
+| `install_ai` installs it ahead of "ai_brains"; the stock task `make_noise`; the editor, MCP and cook know the components | `ai.cpp`, `ai_tasks.cpp`, `bt_importer.cpp`, `engine_components.cpp` (three hosts) |
+| `samples/ai_demo`: the guard spots the thief with its `Perceiver` | `samples/ai_demo` |
+| Tests: sight in 3D (range, cone, teams, nearest, visibility) and in 2D, walls in both, forgetting, hearing, a staggered crowd, the debug lines, two runs hash the same, a save resumes | `tests/kit/test_ai_perception.cpp` |
+
+**Design notes.**
+- **Perception writes the blackboard, the tree decides.** A perceiver only notices; the keys it writes
+  are the tree's to act on, and with a lower-aborting guard on `target` the tree reacts on the tick
+  of the sighting.
+- **The nearest stimulus wins.** No threat scores yet; step 4's utility selector is where choosing
+  between targets belongs.
+- **Staggered checks bound the cost.** A check costs a ray per stimulus inside the cone and range.
+  `interval` spreads a crowd's checks over ticks by entity index, which is deterministic. Memory and
+  hearing still update every tick.
+- **Line of sight ends at the target.** A ray that hits the stimulus's own collider counts as clear,
+  so a target with a body is seen, and one without is seen if nothing else is in the way.

@@ -59,6 +59,10 @@ queries are step 4. The editor panel is step 5, and the MCP tools are step 6. Su
 files and randomness in nodes are left out until a game needs them. Randomness will come from the sim RNG so
 replays stay exact.
 
+**Step 3 (SBA-130).** Perception is a separate system ("ai_perception", ahead of "ai_brains") that writes
+blackboard keys named by the `Perceiver`; trees never query the world for what they see. Its memory lives in the
+`Perceiver`'s runtime fields, so it is hashed and saved like the brain.
+
 **Step 2 (SBA-129).**
 - **Observers.** `BtNode::abort` on a guard (CHNK_BT v2) makes it an observer that re-checks its condition every
   tick. `self` halts the guard's running child when the condition fails. `lower`, allowed only on a selector's
