@@ -1,6 +1,6 @@
 # M-ANIM2D — 2D skeletal animation (milestone record)
 
-**Status:** active (steps 1, 2, 3 and 4 done; step 5 next).
+**Status:** active (steps 1 to 5 done; step 6 next).
 **Why:** 2D characters animate only by sprite frames today; cut-out rigs (bones, blended clips, skinned meshes, IK) are what Godot's Skeleton2D, Unity's 2D Animation and Spine give 2D games. Added 2026-10-16 under the user's standing instruction to extend the roadmap when no milestone is free.
 **Plan:** ROADMAP § M-ANIM2D.
 **Measured on:** the Linux CI container.
@@ -13,7 +13,7 @@
 | 2. Bone clips and crossfade, driven by the `.mcanim` state graph | SBA-141 | done |
 | 3. Mesh attachments and CPU skinning, deform keys (and the slot keys moved from step 2) | SBA-142 | done |
 | 4. Two-bone and CCD IK as data | SBA-143 | done |
-| 5. Editor skeleton panel and MCP `skel2d_*` tools | SBA-144 | — |
+| 5. Editor skeleton panel and MCP `skel2d_*` tools | SBA-144 | done |
 | 6. Demo, user guide, gates | SBA-145 | — |
 | Later: Spine / DragonBones JSON import | SBA-146 | not scheduled |
 
@@ -95,3 +95,22 @@ Limits found in step 4: a two-bone solve is exact only without non-uniform scale
 its parents (with it the tip lands close). There is no `"stretch"` option: bones keep their
 lengths. A `.mcanim` graph's IK chains still apply to 3D only; 2D IK comes from the skeleton. With
 two `IKTarget2D` entities on one constraint the later in query order wins.
+
+## Step 5: the Skeleton panel and the MCP `skel2d_*` tools
+
+| Item | Where | Evidence |
+|---|---|---|
+| One document layer for both front ends: `editor::skel2d::new_text`, `add_bone`, `set_bone_rest`, `add_slot`, `add_ik`, `key` take the `.mcskel2d` text and return it edited in the indented form. They only change the JSON (a small mutable tree over the cook's reader); the importer is the validator, so there is no second rule set. `key` creates the animation and the channel list, keeps keys sorted and replaces a key at the same time | `src/editor/core/src/skeleton2d_editor.cpp`, `mce/editor/skeleton2d_editor.h` | `test_editor` "skeleton2d editor: create, edit, save; the file cooks and reopens to the same document" (all six channels, a batch of keys merged by time, a key replaced, the saved file cooked and read back by a second editor) |
+| `Skeleton2DEditor`: open, create, sync from disk, select a bone, pick an animation and time, edits with undo and redo, save with hot reload. Every edit is cooked in memory (`cook_skeleton2d`, a scan of the project cached per open) and kept only if it cooks; the cooked definition stays current for the preview | same | "the importer refuses bad edits with file:line text and nothing changes" (unknown parent, duplicate name, unknown slot bone, missing texture, a bad chain, a key on an unknown bone, not-JSON; text and revision unchanged), "undo and redo land on disk, a run of edits is one step", "sync picks up a change made on disk, and not over unsaved edits" |
+| Pose preview: `skeleton2d_pose` blends the named animation at a time with `Skeleton2DBlend` (the animator's own code), sets the IK mixes the clip keys, applies IK targets and calls `skeleton2d_solve_pose`. No solver code is copied | same | "the pose preview equals the runtime's pose functions": the rest pose of a skeleton without IK is bit equal to `skeleton2d_pose_offsets`; an animation at 0.5 s is bit equal to `skeleton2d_solve_pose` over the same offsets; an IK target puts the tip on the point within 1e-4; unknown animation and constraint names report |
+| Viewport overlay: `skeleton2d_bone_lines` and `skeleton2d_entity_lines` turn the previewed pose into `OverlayLine`s (the hook the selection quads and gizmo use), placed by the entity's transform and flips. The viewport panel adds them for selected entities that play the open skeleton | same, `src/editor/layer/src/panels.cpp` | "the viewport overlay places the previewed bones on the entity" (a mirrored entity at (3, 1): the root stub, the arm origin and tip, the selected bone wider, a non-skeleton entity gives nothing) |
+| The Skeleton panel (bone tree, slot list, IK list; rest-pose fields; world transform readout; animation combo, time slider, play; IK aim points; key buttons; add bone, slot and animation; undo and redo; autosave when no field is held). Assets double-click opens it; View menu lists it | `src/editor/layer/src/skeleton_panel.cpp`, `editor_shell.cpp`, `asset_panel.cpp` | builds and links on Linux; the ImGui drawing needs a display and is not run in CI |
+| MCP tools: `skel2d_create`, `skel2d_add_bone`, `skel2d_add_slot`, `skel2d_add_ik`, `skel2d_key` (one key or `keys`), `skel2d_preview` (bone transforms as JSON plus a PNG). Each edit goes through the document layer, then `asset_validate_and_write`, so a bad call returns the importer's `file:line:col` text and writes nothing | `src/editor/mcp/src/tools_skeleton2d.cpp` | `test_mcp_agent` "skel2d tools: build a rig and an animation; the file stays valid at every step" (bones, a textured slot, a solid slot, mesh attachments, IK, every channel, replaced key, refused calls with the file unchanged), "skel2d_preview returns the pose and a drawing" (rest numbers, image sizes, an animation at 0.5 s equal to `skeleton2d_pose_offsets` for all 3 bones, a looping wrap, an IK target) |
+| Docs and gates | user guide 7.13 "Editing", 14 (tool table), `editor-mcp.md`, `capabilities.md` | `scripts/ci/capabilities.py --check` (six new tool rows), `scripts/ci/check_walls.py`, ctest `mcp_transcript` (golden regenerated: six more tools) |
+
+Limits found in step 5: the `skel2d_preview` image is a CPU line drawing of bones and quad slots (mesh
+attachments are not drawn, no textures); a textured render needs a scene and `render_frame`. There is
+no bone drag gizmo in the viewport: bones are lines, and rest poses are edited in the panel's fields.
+The viewport sprites show the scene's saved pose while the overlay shows the panel's previewed pose.
+The panel cannot remove or rename a bone, slot or constraint yet (MCP has no tool for it either; edit
+the text with `asset_write`). `skel2d_preview` has no `save` argument for the PNG.

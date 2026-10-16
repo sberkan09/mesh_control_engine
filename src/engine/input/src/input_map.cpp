@@ -63,6 +63,8 @@ Result<void> decode_input_map(Span<const byte> chunk, InputMapSet& out) {
         const ActionMapDef& m = out.maps[i];
         if (u32(m.first_action) + m.action_count > h.action_count)
             return Error(Errc::InvalidArgument, kStage, "map action range out of bounds", static_cast<u32>(i));
+        if (map_player(m.flags) >= kMaxLocalPlayers)
+            return Error(Errc::InvalidArgument, kStage, "map player slot out of range", static_cast<u32>(i));
         if (m.action_count > kMaxActions)
             return Error(Errc::InvalidArgument, kStage, "map has more than kMaxActions actions", static_cast<u32>(i));
         for (usize j = 0; j < i; ++j)

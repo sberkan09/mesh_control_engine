@@ -117,7 +117,11 @@ Result<void> InputSystem::load_map(Span<const byte> chunk) {
     apply_overrides();  // the player's persisted rebinds survive a map (re)load
     if (rebind_.state == RebindState::Waiting) rebind_.state = RebindState::Cancelled;
     stack_size_ = 0;
-    stack_[stack_size_++] = 0;
+    for (u32 i = 0; i < set_.maps.size(); ++i)  // the first map of the first player; player maps are never on the stack
+        if (map_player(set_.maps[i].flags) == 0) {
+            stack_[stack_size_++] = i;
+            break;
+        }
     // Hot reload resets held state: a one-tick grace instead of stale edges.
     reset_devices();
     prev_ = InputState{};
@@ -128,6 +132,10 @@ Result<void> InputSystem::load_map(Span<const byte> chunk) {
 bool InputSystem::push_map(StringId name) {
     for (u32 i = 0; i < set_.maps.size(); ++i) {
         if (set_.maps[i].name != name) continue;
+        if (map_player(set_.maps[i].flags) != 0) {
+            MCE_LOG_ERROR("input: push_map of a player {} map; player maps are always active", map_player(set_.maps[i].flags));
+            return false;
+        }
         if (stack_size_ == kMaxMapStack) {
             MCE_LOG_ERROR("input: map stack full ({} maps)", kMaxMapStack);
             return false;
@@ -514,6 +522,9 @@ void InputSystem::fold(const Event& e) {
             if (slot < platform::kMaxGamepads) {
                 pads_[slot] = PadState{};  // a plugged/unplugged pad reads neutral
                 pads_[slot].connected = e.type == EventType::GamepadAdded;
+                if (e.type == EventType::GamepadRemoved)
+                    for (i32& p : slot_pad_)
+                        if (p == static_cast<i32>(slot)) p = -1;  // the player's pad left: the slot is free to rejoin
             }
             break;
         case EventType::GamepadButtonDown:
@@ -660,6 +671,7 @@ const InputState* InputSystem::sample_for_tick(u64 tick, u64 close_us) {
     }
 
     if (rebind_.state == RebindState::Waiting && tick >= rebind_.deadline_tick) rebind_.state = RebindState::TimedOut;
+    poll_joins();
 
     prev_ = cur_;
     if (replayer_) {
@@ -679,7 +691,7 @@ const InputState* InputSystem::sample_for_tick(u64 tick, u64 close_us) {
     return &cur_;
 }
 
-f32 InputSystem::binding_value(const BindingDef& b) const {
+f32 InputSystem::binding_value(const BindingDef& b, u32 pads) const {
     f32 v = 0.f;
     switch (b.device) {
         case Device::Keyboard: v = (b.code < kKeyCount && keys_.test(b.code)) ? 1.f : 0.f; break;
@@ -688,8 +700,8 @@ f32 InputSystem::binding_value(const BindingDef& b) const {
         case Device::MouseDelta: v = b.axis == 0 ? tick_delta_.x : tick_delta_.y; break;
         case Device::GamepadButton:
             if (b.code < kPadButtons)
-                for (const PadState& p : pads_)
-                    if (p.buttons.test(b.code)) v = 1.f;
+                for (u32 pi = 0; pi < platform::kMaxGamepads; ++pi)
+                    if ((pads >> pi & 1u) && pads_[pi].buttons.test(b.code)) v = 1.f;
             break;
         case Device::GamepadAxis:
             // The largest deflection across pads wins. The magnitude lives in its own variable:
@@ -697,8 +709,9 @@ f32 InputSystem::binding_value(const BindingDef& b) const {
             // (arm64) while every Linux build and sanitizer passed.
             if (b.code < kPadAxes) {
                 f32 best_mag = 0.f;
-                for (const PadState& p : pads_) {
-                    const f32 a = p.axes[b.code];
+                for (u32 pi = 0; pi < platform::kMaxGamepads; ++pi) {
+                    if (!(pads >> pi & 1u)) continue;
+                    const f32 a = pads_[pi].axes[b.code];
                     const f32 mag = a < 0.f ? -a : a;
                     if (mag > best_mag) {
                         best_mag = mag;
@@ -758,7 +771,86 @@ void InputSystem::set_action_feeds(Span<const ActionFeed> feeds) {
 void InputSystem::evaluate(InputState& out, const InputState& prev) const {
     const f32 dt = 1.f / static_cast<f32>(tick_hz_);
 
+    // One action into the snapshot under `out_name` (the authored name for slot 0, player_action_id
+    // above). `pads` is the bitmask of physical pads its gamepad bindings may read.
+    auto emit = [&](const ActionDef& def, StringId out_name, u32 pads, bool feeds) {
+        f32 x = 0.f, y = 0.f;
+        bool all_bounded = true;
+        for (u32 bi = 0; bi < def.binding_count; ++bi) {
+            const BindingDef& b = set_.bindings[def.first_binding + bi];
+            all_bounded = all_bounded && bounded(b.device);
+            const f32 v = binding_value(b, pads);
+            if (def.type == ActionType::Axis2D && b.axis == 1) y += v;
+            else x += v;
+        }
+        if (feeds)
+            for (const ActionFeed& f : feeds_)
+                if (f.action == def.name) {
+                    x += f.x;
+                    if (def.type == ActionType::Axis2D) y += f.y;
+                }
+
+        ActionState st;
+        switch (def.type) {
+            case ActionType::Button:
+                st.held = std::fabs(x) >= 0.5f;
+                if (!toggles_.empty() && is_toggle(out_name)) {
+                    // Hold-to-toggle: a raw press flips the latch the previous tick left.
+                    usize raw_at = toggle_raw_held_.size();
+                    for (usize r = 0; r < toggle_raw_held_.size(); ++r)
+                        if (toggle_raw_held_[r] == out_name) raw_at = r;
+                    const bool raw_was = raw_at < toggle_raw_held_.size();
+                    const bool raw_pressed = st.held && !raw_was;
+                    if (st.held && !raw_was) toggle_raw_held_.push_back(out_name);
+                    if (!st.held && raw_was) toggle_raw_held_.erase(raw_at);
+                    bool latched = false;
+                    for (u32 p = 0; p < prev.action_count; ++p)
+                        if (prev.action_names[p] == out_name) latched = prev.actions[p].held;
+                    st.held = raw_pressed ? !latched : latched;
+                }
+                st.x = st.held ? 1.f : 0.f;
+                break;
+            case ActionType::Axis1D:
+                if (all_bounded) x = math::clamp(x, -1.f, 1.f);
+                st.x = x;
+                st.held = x != 0.f;
+                break;
+            case ActionType::Axis2D: {
+                // Opposing keys cancel; diagonals clamp to the unit circle (WASD speed).
+                if (all_bounded) {
+                    const f32 len2 = x * x + y * y;
+                    if (len2 > 1.f) {
+                        const f32 inv = 1.f / std::sqrt(len2);
+                        x *= inv;
+                        y *= inv;
+                    }
+                }
+                st.x = x;
+                st.y = y;
+                st.held = x != 0.f || y != 0.f;
+                break;
+            }
+        }
+        if (look_sensitivity_ != 1.f && def.name == MCE_SID("Look")) {
+            st.x *= look_sensitivity_;
+            st.y *= look_sensitivity_;
+        }
+
+        const ActionState* before = nullptr;
+        for (u32 p = 0; p < prev.action_count; ++p)
+            if (prev.action_names[p] == out_name) before = &prev.actions[p];
+        const bool was_held = before && before->held;
+        st.pressed = st.held && !was_held;
+        st.released = !st.held && was_held;
+        st.held_time = st.held ? (was_held ? before->held_time + dt : dt) : 0.f;
+
+        out.action_names[out.action_count] = out_name;
+        out.actions[out.action_count] = st;
+        ++out.action_count;
+    };
+
     // Top of the stack first: a name already produced by a higher map is shadowed below.
+    const u32 slot0_pads = pad_mask_for_slot(0);
     for (u32 s = stack_size_; s-- > 0;) {
         const ActionMapDef& m = set_.maps[stack_[s]];
         for (u32 ai = 0; ai < m.action_count; ++ai) {
@@ -768,81 +860,27 @@ void InputSystem::evaluate(InputState& out, const InputState& prev) const {
                 MCE_ASSERT_MSG(false, "input: more than kMaxActions actions across the map stack");
                 break;
             }
-
-            f32 x = 0.f, y = 0.f;
-            bool all_bounded = true;
-            for (u32 bi = 0; bi < def.binding_count; ++bi) {
-                const BindingDef& b = set_.bindings[def.first_binding + bi];
-                all_bounded = all_bounded && bounded(b.device);
-                const f32 v = binding_value(b);
-                if (def.type == ActionType::Axis2D && b.axis == 1) y += v;
-                else x += v;
-            }
-            for (const ActionFeed& f : feeds_)
-                if (f.action == def.name) {
-                    x += f.x;
-                    if (def.type == ActionType::Axis2D) y += f.y;
-                }
-
-            ActionState st;
-            switch (def.type) {
-                case ActionType::Button:
-                    st.held = std::fabs(x) >= 0.5f;
-                    if (!toggles_.empty() && is_toggle(def.name)) {
-                        // Hold-to-toggle: a raw press flips the latch the previous tick left.
-                        usize raw_at = toggle_raw_held_.size();
-                        for (usize r = 0; r < toggle_raw_held_.size(); ++r)
-                            if (toggle_raw_held_[r] == def.name) raw_at = r;
-                        const bool raw_was = raw_at < toggle_raw_held_.size();
-                        const bool raw_pressed = st.held && !raw_was;
-                        if (st.held && !raw_was) toggle_raw_held_.push_back(def.name);
-                        if (!st.held && raw_was) toggle_raw_held_.erase(raw_at);
-                        bool latched = false;
-                        for (u32 p = 0; p < prev.action_count; ++p)
-                            if (prev.action_names[p] == def.name) latched = prev.actions[p].held;
-                        st.held = raw_pressed ? !latched : latched;
-                    }
-                    st.x = st.held ? 1.f : 0.f;
-                    break;
-                case ActionType::Axis1D:
-                    if (all_bounded) x = math::clamp(x, -1.f, 1.f);
-                    st.x = x;
-                    st.held = x != 0.f;
-                    break;
-                case ActionType::Axis2D: {
-                    // Opposing keys cancel; diagonals clamp to the unit circle (WASD speed).
-                    if (all_bounded) {
-                        const f32 len2 = x * x + y * y;
-                        if (len2 > 1.f) {
-                            const f32 inv = 1.f / std::sqrt(len2);
-                            x *= inv;
-                            y *= inv;
-                        }
-                    }
-                    st.x = x;
-                    st.y = y;
-                    st.held = x != 0.f || y != 0.f;
-                    break;
-                }
-            }
-            if (look_sensitivity_ != 1.f && def.name == MCE_SID("Look")) {
-                st.x *= look_sensitivity_;
-                st.y *= look_sensitivity_;
-            }
-
-            const ActionState* before = nullptr;
-            for (u32 p = 0; p < prev.action_count; ++p)
-                if (prev.action_names[p] == def.name) before = &prev.actions[p];
-            const bool was_held = before && before->held;
-            st.pressed = st.held && !was_held;
-            st.released = !st.held && was_held;
-            st.held_time = st.held ? (was_held ? before->held_time + dt : dt) : 0.f;
-
-            out.action_names[out.action_count] = def.name;
-            out.actions[out.action_count] = st;
-            ++out.action_count;
+            emit(def, def.name, slot0_pads, true);
         }
         if (m.flags & MapFlag::BlocksBelow) break;
+    }
+
+    // Local players 1..3 (M-VIEWS): their maps are always active, each under its own names.
+    for (u32 mi = 0; mi < set_.maps.size(); ++mi) {
+        const ActionMapDef& m = set_.maps[mi];
+        const u32 slot = map_player(m.flags);
+        if (slot == 0) continue;
+        const u32 pads = pad_mask_for_slot(slot);
+        for (u32 ai = 0; ai < m.action_count; ++ai) {
+            const ActionDef& def = set_.actions[m.first_action + ai];
+            const StringId id = player_action_id(slot, def.name);
+            if (out.has_action(id)) continue;
+            if (out.action_count == kMaxActions) {
+                MCE_ASSERT_MSG(false, "input: more than kMaxActions actions across the local players");
+                break;
+            }
+            emit(def, id, pads, false);
+        }
     }
 
     // Fixed fast-path fields (§3.1): the starter kit's universal actions by name.
@@ -913,6 +951,60 @@ f32 InputSystem::gamepad_axis(u32 slot, platform::GamepadAxis a) const {
 bool InputSystem::mouse_held(platform::MouseButton b) const {
     const u32 c = static_cast<u32>(b);
     return c < kMouseButtons && buttons_.test(c);
+}
+
+}  // namespace mce::input
+
+// ---- local players (M-VIEWS step 1) ------------------------------------------------------------
+
+namespace mce::input {
+
+bool InputSystem::assign_pad(u32 slot, u32 pad) {
+    if (slot >= kMaxLocalPlayers || pad >= platform::kMaxGamepads) return false;
+    for (i32& p : slot_pad_)
+        if (p == static_cast<i32>(pad)) p = -1;  // a pad belongs to one player
+    slot_pad_[slot] = static_cast<i32>(pad);
+    return true;
+}
+
+void InputSystem::release_pad(u32 slot) {
+    if (slot < kMaxLocalPlayers) slot_pad_[slot] = -1;
+}
+
+i32 InputSystem::pad_of(u32 slot) const { return slot < kMaxLocalPlayers ? slot_pad_[slot] : -1; }
+
+void InputSystem::set_join_slots(u32 first, u32 end) {
+    join_first_ = first < kMaxLocalPlayers ? first : kMaxLocalPlayers;
+    join_end_ = end < kMaxLocalPlayers ? end : kMaxLocalPlayers;
+}
+
+u32 InputSystem::pad_mask_for_slot(u32 slot) const {
+    if (slot < kMaxLocalPlayers && slot_pad_[slot] >= 0) return 1u << slot_pad_[slot];
+    if (slot != 0) return 0;
+    // Player 0 without a pad of its own keeps "any pad", except the pads other players hold.
+    u32 mask = (1u << platform::kMaxGamepads) - 1u;
+    for (u32 s = 1; s < kMaxLocalPlayers; ++s)
+        if (slot_pad_[s] >= 0) mask &= ~(1u << slot_pad_[s]);
+    return mask;
+}
+
+void InputSystem::poll_joins() {
+    if (join_first_ >= join_end_) return;
+    for (u32 pad = 0; pad < platform::kMaxGamepads; ++pad) {
+        const PadState& p = pads_[pad];
+        if (!p.connected) continue;
+        const u32 south = static_cast<u32>(platform::GamepadButton::South);
+        const u32 start = static_cast<u32>(platform::GamepadButton::Start);
+        if (!p.tapped.test(south) && !p.tapped.test(start)) continue;
+        bool owned = false;
+        for (i32 s : slot_pad_) owned = owned || s == static_cast<i32>(pad);
+        if (owned) continue;
+        for (u32 slot = join_first_; slot < join_end_; ++slot)
+            if (slot_pad_[slot] < 0) {
+                slot_pad_[slot] = static_cast<i32>(pad);
+                break;
+            }
+    }
 }
 
 }  // namespace mce::input

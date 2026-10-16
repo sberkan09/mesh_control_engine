@@ -125,6 +125,22 @@ turns it into an input-map chunk. The player loads the first one in the pack by 
 A custom host can also build a map in code with `InputMapBuilder` (see
 `samples/03_platformer/main.cpp` and `05_ashen_court/main.cpp`).
 
+### Local players (several people on one machine)
+
+Up to four players share one `InputSystem` (M-VIEWS). A map built with `map_player_flags(n)` (code) belongs
+to local player `n` (1..3; the first player is slot 0, the plain map stack, and is unchanged). Player maps
+are always active, never pushed or popped, and publish their actions under per-player names:
+`state.action(1, MCE_SID("Jump"))` is the second player's Jump (`action(0, name)` is the plain one).
+
+- **Pads.** A gamepad binding in a player map reads only the pad assigned to that player
+  (`assign_pad(slot, pad)`). A pad belongs to one player. Player 0, until it holds a pad of its own,
+  keeps reading any pad nobody else has claimed, so a single-player game behaves as before.
+- **Joining.** `set_join_slots(first, end)` lets a connected, unassigned pad that taps South or Start
+  take the lowest free slot in `[first, end)`; a pad that disconnects frees its slot. `(0, 0)` turns
+  joining off. Keyboard players need no assignment: give each player's map different keys.
+- **Headless.** In an `-input` file, `P2/Move=1,0` is the second player's Move; `P1/Move` is the plain
+  `Move`. Recordings carry the per-player names like any other action, so replays and hashes are unchanged.
+
 ## 11.4 Rebinding
 
 The input system supports capture rebinding (`begin_rebind` swallows the next press and binds it),
