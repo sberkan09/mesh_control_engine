@@ -18,6 +18,8 @@
                                                 game's C++ header (mce/kit/novel.h) and story/REPORT.md
     mce import aseprite <export.json> [--out f.mcsheet] [--werror]   Aseprite's JSON export + PNG into a .mcsheet
                                                 (frames, tags as clips, slices; unsupported features warn)
+    mce import spine|dragonbones <export.json> [--out f.mcskel2d] [--ppm 100] [--atlas a] [--texture png] [--strict]
+                                                Spine 3.8/4.x JSON or DragonBones 5.x JSON into a .mcskel2d
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
     mce ship <project> --steam <app id> [--steam-library f]   ... and the Steam depot for this OS with the
                                                 steamcmd build scripts in <out>/<Name>-steam (uploads nothing)
@@ -311,6 +313,9 @@ def cmd_story(args):
 
 
 def cmd_import(args):
+    if args.rest and args.rest[0] in ("spine", "dragonbones"):
+        import mce_import_skel  # Spine / DragonBones skeletons (SBA-146), installed beside this script
+        return mce_import_skel.main(args.rest)
     import mce_import  # installed beside this script
     return mce_import.main(args.rest)
 
@@ -703,7 +708,7 @@ def main(argv):
     s.set_defaults(fn=cmd_story)
 
     s = sub.add_parser("import", help="2D authoring-tool exports into native assets (mce import aseprite <export.json>)")
-    s.add_argument("rest", nargs=argparse.REMAINDER, help="aseprite <export.json> [--out f] [--name n] [--werror]")
+    s.add_argument("rest", nargs=argparse.REMAINDER, help="aseprite|spine|dragonbones <export.json> [--out f] [--name n] [--werror|--strict]")
     s.set_defaults(fn=cmd_import)
 
     s = sub.add_parser("mcp-config", help="register the project's MCP server with Claude Code (.mcp.json) "

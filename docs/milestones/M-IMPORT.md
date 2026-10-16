@@ -25,6 +25,7 @@ infinite maps, isometric and hex maps, Tiled/LDtk live reload in the editor, wri
 | 2 | `mce import tiled`: tile layers, flips, animated tiles, object layers | SBA-168 | Sonnet | not started |
 | 3 | `mce import ldtk`: levels as scenes, IntGrid colliders, entity layers | SBA-169 | Sonnet | not started |
 | 4 | MCP `asset_import`, guide, sample, gates | SBA-170 | Sonnet | not started |
+| + | `mce import spine` / `mce import dragonbones`: 2D skeletons into `.mcskel2d` (`tools/mce_cli/mce_import_skel.py`, `tests/import/test_import_skel.py`; user guide 7.13; recorded in M-ANIM2D) | SBA-146 | Sonnet | done |
 
 **Gates:**
 - Converters give the same bytes out twice and keep an existing GUID.
