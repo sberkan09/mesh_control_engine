@@ -195,6 +195,10 @@ reach all of its non-transient fields.
 | `scene_switch` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_documents` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `report_friction` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `terrain_sculpt` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
+| `terrain_paint` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
+| `terrain_import` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
+| `terrain_generate` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `ui_list` | `tools_ui.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `ui_create` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |
 | `ui_widget_add` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |

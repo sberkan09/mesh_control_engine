@@ -1,0 +1,19 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "1bf13be2-0b48-50c6-a957-e0e1d0dfb58e",
+  "name": "terrain rock",
+  "base_color": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "metallic": 0,
+  "roughness": 1,
+  "textures": {
+    "base_color": "guid:2963a2a6-804c-5d97-a8dc-934ced2f7388",
+    "normal": "guid:4c7f4379-e363-5d93-9350-a514639cfe7d",
+    "metallic_roughness": "guid:e454b2b1-464c-5948-8010-b072ee22bb82"
+  }
+}

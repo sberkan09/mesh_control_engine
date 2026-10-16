@@ -5,8 +5,9 @@
 
 Deterministic: re-running reproduces the committed bytes (no randomness, no clocks; NumPy for the
 large textures, Pillow to encode them). The glTF writer and the small geometry helpers are the
-sample generators' (samples/04_cubes/tools, samples/05_ashen_court/tools); the terrain is
-tools/island.py's height field, the one the game module ports for its collider.
+sample generators' (samples/04_cubes/tools, samples/05_ashen_court/tools); the island is a
+Terrain3D written by tools/gen_terrain.py from tools/island.py's height field, the one the game
+module ports for its collider.
 
 CC0 kits are unreachable from the build container (docs/design/solstice-reach.md §4.3), so every
 model is procedural. Each model's sidecar carries its triangle budget (`max_triangles`, checked
@@ -34,13 +35,13 @@ _spec.loader.exec_module(ashen)
 Geo, lathe, disc, rock, stone_textures, column_geo = ashen.Geo, ashen.lathe, ashen.disc, ashen.rock, ashen.stone_textures, ashen.column_geo
 
 sys.path.insert(0, str(HERE))
+import gen_terrain  # noqa: E402
 import island  # noqa: E402
 
 ROOT = HERE.parent / "assets"
 NS = uuid.UUID("6d63652d-736f-6c73-7469-636572656163")  # fixed namespace: stable GUIDs per path
 
 BUDGETS = {
-    **{"island_%02d.glb" % i: 5200 for i in range(16)},
     "sea.glb": 600,
     "vault.glb": 9000,
     "dais.glb": 1200,
@@ -247,51 +248,6 @@ def flower_mask(n=128):
 
 
 # -------------------------------------------------------------------------------------------- terrain
-def terrain_chunks():
-    """16 chunks of 50 m at 1 m, each split into sand / grass / dry grass / rock primitives."""
-    half, cells = island.HALF, 200
-    xs = [-half + 2 * half * i / cells for i in range(cells + 1)]
-    hs = [[island.height(x, z) for x in xs] for z in xs]
-    chunks = {}
-    for cj in range(4):
-        for ci in range(4):
-            pos, nrm, uv = [], [], []
-            idx_by = {"sand": [], "grass": [], "dry_grass": [], "rock": []}
-            i0, j0 = ci * 50, cj * 50
-            for j in range(51):
-                for i in range(51):
-                    gi, gj = i0 + i, j0 + j
-                    x, z, y = xs[gi], xs[gj], hs[gj][gi]
-                    pos += [r6(x), r6(y), r6(z)]
-                    hl = hs[gj][max(gi - 1, 0)]
-                    hr = hs[gj][min(gi + 1, cells)]
-                    hd = hs[max(gj - 1, 0)][gi]
-                    hu = hs[min(gj + 1, cells)][gi]
-                    n = (-(hr - hl) * 0.5, 1.0, -(hu - hd) * 0.5)
-                    l = math.sqrt(n[0] ** 2 + n[1] ** 2 + n[2] ** 2)
-                    nrm += [r6(n[0] / l), r6(n[1] / l), r6(n[2] / l)]
-                    uv += [r6(x * 0.25), r6(z * 0.25)]
-            for j in range(50):
-                for i in range(50):
-                    a, b = j * 51 + i, (j + 1) * 51 + i
-                    for tri in ((a, b, a + 1), (a + 1, b, b + 1)):
-                        cy = sum(pos[3 * t + 1] for t in tri) / 3.0
-                        ny = sum(nrm[3 * t + 1] for t in tri) / 3.0
-                        cx = sum(pos[3 * t] for t in tri) / 3.0
-                        cz = sum(pos[3 * t + 2] for t in tri) / 3.0
-                        if cy < 1.3:
-                            kind = "sand"
-                        elif ny < 0.80:
-                            kind = "rock"
-                        elif cy > 34.0 or island.vnoise(cx * 0.03 + 50, cz * 0.03 + 50, 77) > 0.68:
-                            kind = "dry_grass"
-                        else:
-                            kind = "grass"
-                        idx_by[kind] += list(tri)
-            chunks["island_%02d.glb" % (cj * 4 + ci)] = (pos, nrm, uv, idx_by)
-    return chunks
-
-
 def rings_disc(radius, rings, y=0.0, uv_scale=0.02):
     pos, nrm, uv, idx = [0, r6(y), 0], [0, 1, 0], [0, 0], []
     seg = 48
@@ -401,21 +357,7 @@ def cone(radius, y0, y1, seg):
 def build_models():
     models = {}
 
-    # ---- terrain chunks and the sea
-    for name, (pos, nrm, uv, idx_by) in terrain_chunks().items():
-        g = Gltf()
-        mats = {k: tex_mat(g, k, k) for k in idx_by}
-        acc_geo = g.geometry((pos, nrm, uv, [0, 0, 0]))  # positions shared; indices per primitive below
-        prims = []
-        for kind, idx in idx_by.items():
-            if not idx:
-                continue
-            prims.append({"attributes": dict(acc_geo["attributes"]),
-                          "indices": g.accessor(idx, 1, 5123 if max(idx) < 65536 else 5125, target=34963),
-                          "material": mats[kind]})
-        g.doc["meshes"].append({"name": name[:-4], "primitives": prims})
-        g.node({"name": name[:-4], "mesh": len(g.doc["meshes"]) - 1}, root=True)
-        models[name] = g
+    # ---- the sea (the island itself is a terrain: tools/gen_terrain.py)
     # The terrain stops at [-HALF, HALF]^2; without a floor under the rest of the disc the translucent water
     # shows the seabed inside that square and the clear colour outside it (a hard square edge). The seabed
     # disc sits just under the terrain's sea floor and carries the terrain's sand.
@@ -767,6 +709,7 @@ def main():
         total += tris
         print("  %-18s %6d / %6d" % (name, tris, budget))
     print("SolsticeReach assets written to %s (%d triangles in the kit)" % (ROOT, total))
+    gen_terrain.main()
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/kit3d_extract.h"
+#include "mce/kit/nav3d.h"
 #include "mce/memory/frame_slots.h"
 #include "mce/refl/type.h"
 #include "cook_test_util.h"
@@ -45,6 +46,22 @@ const asset::Guid kBox{0x3d00000000000001ull, 0x8000000000000001ull};
 const asset::Guid kSpinner{0x3d00000000000002ull, 0x8000000000000001ull};
 
 LocalTransform at(vec3 p, quat r = quat::identity()) { return LocalTransform{p, r, {1, 1, 1}}; }
+
+std::string base64_of(const std::string& in) {
+    static const char* k = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    size_t i = 0;
+    for (; i + 2 < in.size(); i += 3) {
+        const u32 v = (u32(u8(in[i])) << 16) | (u32(u8(in[i + 1])) << 8) | u8(in[i + 2]);
+        for (int s = 18; s >= 0; s -= 6) out.push_back(k[(v >> s) & 63]);
+    }
+    if (i < in.size()) {
+        u32 v = u32(u8(in[i])) << 16;
+        if (i + 1 < in.size()) v |= u32(u8(in[i + 1])) << 8;
+        out += {k[(v >> 18) & 63], k[(v >> 12) & 63], i + 1 < in.size() ? k[(v >> 6) & 63] : '=', '='};
+    }
+    return out;
+}
 
 struct Fixture {
     render::MeshStore store;
@@ -966,4 +983,95 @@ TEST_CASE("kit3d: TerrainFoliage3D stands its copies on its own or its parent's 
         CHECK(scene.batches().empty());
         CHECK(f.extract.stats().foliage == 0);
     }
+}
+
+TEST_CASE("kit3d: a navmesh bakes from a TerrainCollider3D and leaves its holes open (M-TERRAIN 6)") {
+    const std::string src = cook_test::fresh_dir("kit3d_terrain_nav");
+    // A 65-sample, 64 x 64 m terrain of low swells (0..3 m) with a hole of samples 28..36 square in the middle
+    // (x and z from -4 to 4 m).
+    constexpr u32 kRes = 65;
+    std::string bytes;
+    for (u32 z = 0; z < kRes; ++z)
+        for (u32 x = 0; x < kRes; ++x) {
+            const f32 h = 0.5f + 0.3f * std::sin(static_cast<f32>(x) * 0.12f) * std::cos(static_cast<f32>(z) * 0.09f);
+            cook_test::put16le(bytes, static_cast<u16>(h * 65535.0f));
+        }
+    std::string mask((kRes * kRes + 7) / 8, '\0');
+    for (u32 z = 28; z <= 36; ++z)
+        for (u32 x = 28; x <= 36; ++x) {
+            const u32 i = z * kRes + x;
+            mask[i / 8] = static_cast<char>(u8(mask[i / 8]) | (1u << (i % 8)));
+        }
+    cook_test::write_file(src + "/assets/swells.mcterrain", R"({ "format": "mce-terrain", "version": 1,
+        "guid": "7e7a0000-0000-4000-8000-0000000000d1", "resolution": 65, "chunk": 16, "size": [64, 64],
+        "height_range": [0, 6], "heights": ")" + base64_of(bytes) + R"(", "holes": ")" + base64_of(mask) + "\" }");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(src.c_str()), cook::CookOptions{}).ok());
+    asset::AssetSystem assets;
+    const std::string cooked = src + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    const asset::Guid guid = asset::parse_guid("7e7a0000-0000-4000-8000-0000000000d1").value();
+    auto th = assets.load_sync<asset::Terrain>(guid);
+    REQUIRE(th);
+    auto tv = asset::TerrainView::read(assets.resolve(th.value()));
+    REQUIRE(tv);
+    const asset::TerrainView& view = tv.value();
+
+    World w;
+    kit::install_nav3d(w, &assets);
+    kit::Terrain3D terrain;
+    terrain.terrain.guid = guid;
+    constexpr f32 kLift = 1.5f;  // the terrain entity stands 1.5 m up
+    w.spawn_with(at({0.0f, kLift, 0.0f}), terrain, kit::TerrainCollider3D{});
+    kit::NavMeshSurface3D surf;
+    surf.cell_size = 0.25f;
+    surf.tile_size = 64;
+    const Entity surface = w.spawn_with(at({0, 0, 0}), surf);
+
+    Array<byte> blob;
+    physics::NavBakeStats3D stats;
+    REQUIRE(kit::bake_scene_navmesh(w, surface, &assets, blob, &stats));
+    // 64 x 64 quads, two triangles each, less the 8 x 8 quads of the hole and the 4 x 8 + 4 corner
+    // triangles its rim loses (a hole sample opens every triangle touching it).
+    CHECK(stats.triangles < 2u * 64u * 64u);
+    CHECK(stats.triangles > 2u * 64u * 64u - 2u * 10u * 10u);
+    physics::NavMesh3D mesh;
+    REQUIRE(mesh.load(blob.span()));
+
+    // The mesh covers the terrain everywhere off the hole, on its surface: the runtime mesh (a tile cache)
+    // keeps no detail mesh, so its polygons follow these 3 m swells to within a metre.
+    u32 checked = 0;
+    for (f32 z = -26.0f; z <= 26.0f; z += 6.5f)
+        for (f32 x = -26.0f; x <= 26.0f; x += 6.5f) {
+            if (std::fabs(x) < 7.0f && std::fabs(z) < 7.0f) continue;
+            const f32 y = kLift + view.surface_at(x, z);
+            const auto p = mesh.nearest_point({x, y + 0.5f, z}, {0.2f, 2.0f, 0.2f});
+            INFO(x, " ", z);
+            REQUIRE(p.has_value());
+            CHECK(std::fabs(p->y - y) < 1.0f);
+            CHECK(std::fabs(p->x - x) < 0.3f);
+            CHECK(std::fabs(p->z - z) < 0.3f);
+            ++checked;
+        }
+    CHECK(checked > 50);
+
+    // Nothing to stand on in the hole; a path across goes around it.
+    const f32 hy = kLift + view.surface_at(0.0f, 0.0f);
+    if (const auto p = mesh.nearest_point({0.0f, hy, 0.0f}, {1.0f, 3.0f, 1.0f}))
+        CHECK(std::fmax(std::fabs(p->x), std::fabs(p->z)) >= 4.0f);  // the nearest ground is past the hole's rim
+    Array<vec3> corners;
+    const f32 y0 = kLift + view.surface_at(-12.0f, 0.0f), y1 = kLift + view.surface_at(12.0f, 0.0f);
+    CHECK(mesh.find_path({-12.0f, y0, 0.0f}, {12.0f, y1, 0.0f}, corners) == physics::NavPath3D::Complete);
+    REQUIRE(corners.size() >= 3);
+    f32 detour = 0.0f;
+    for (const vec3& c : corners) detour = std::fmax(detour, std::fabs(c.z));
+    CHECK(detour >= 4.0f);
+    // Every leg stays off the hole.
+    for (usize i = 0; i + 1 < corners.size(); ++i)
+        for (f32 t = 0.0f; t <= 1.0f; t += 0.05f) {
+            const f32 x = corners[i].x + (corners[i + 1].x - corners[i].x) * t, z = corners[i].z + (corners[i + 1].z - corners[i].z) * t;
+            CHECK_FALSE((std::fabs(x) < 3.5f && std::fabs(z) < 3.5f));
+        }
+    assets.release(asset::AnyHandle(th.value()));
 }
