@@ -1,6 +1,6 @@
 # M-WORKFLOW — What blind test 3 found in agent authoring (milestone record)
 
-**Status:** active (added 2026-10-16; steps 2 and 3 done). Plan: ROADMAP §M-WORKFLOW; Linear SBA-180 … SBA-184.
+**Status:** active (added 2026-10-16; steps 1, 2 and 3 done). Plan: ROADMAP §M-WORKFLOW; Linear SBA-180 … SBA-184.
 
 **Why:** blind test 3 had three agents build a game (Lantern Keep) over MCP from the SDK and filed GitHub #377 to
 #383. #377 to #381 are bugs and workflow holes in code and documents we own; #382 (Luau, UiFlow) belongs to
@@ -12,13 +12,29 @@ M-SCRIPT and M-UI-DATA2, #383 (content, texture compression, draw calls) to M-VI
 
 | # | Step | Linear | Model | State |
 |---|---|---|---|---|
-| 1 | `NavAgent3D` reaches its speed on a `CharacterController3D` with the default acceleration (#377) | SBA-180 | Opus | not started |
+| 1 | `NavAgent3D` reaches its speed on a `CharacterController3D` with the default acceleration (#377) | SBA-180 | Opus | done |
 | 2 | `scene_open` reloads, `scene_save` refuses a changed file, broken links reported (#378) | SBA-181 | Sonnet | done |
 | 3 | Cook errors name the fix; `cook_run` `paths` and `skip_errors`; stale pack warning (#379) | SBA-182 | Sonnet | done |
 | 4 | Headless `-capture` falls back to offscreen; `-capture_tick`; save folder documented (#380) | SBA-183 | Sonnet | not started |
 | 5 | Stale documents fixed (#381), the two-server test, the close | SBA-184 | Sonnet | not started |
 
 **Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
+
+## Step 1 — #377, SBA-180 (done)
+
+- **The cause.** The `CharacterController3D` system (`bodies3d.cpp`) treated any change of the entity's pose
+  outside the physics step as a teleport and zeroed `velocity`, rotation included. `NavAgent3D.face_motion`
+  rotates the entity every tick the steering bends, so on each turning tick the controller's ramp restarted from
+  zero and the character moved one tick of `acceleration` (0.23 m/s at 14 m/s^2). Straight legs did not rotate,
+  which hid it; a facing script on the root did the same. Neither the crowd's velocity nor the stop distance was
+  involved: `NavAgent3D.velocity` and `move` were right all along.
+- **The fix.** A pose change still teleports the Jolt character (which takes the new rotation), but only a
+  position change zeroes the controller's velocity. User guide 9.7 says a turn keeps the speed.
+- **Checked by running it.** `test_nav3d` "a steered character with acceleration reaches the agent's speed through
+  turns": 20 m in two legs (10 m along +X, a retarget onto a 10 m diagonal) with `acceleration` 14 and 0; the eased
+  walk keeps over 90% of the agent's speed mid-leg and arrives within 1.5 s of the instant one. Without the fix it
+  fails (11.25 s against 7.57 s). `local_ci.sh --task` green (walls, linux-gcc-debug, determinism, release, tidy):
+  existing replay hashes unchanged.
 
 ## Step 3 — #379, SBA-182 (done)
 
