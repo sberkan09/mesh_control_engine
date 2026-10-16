@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- No hidden state in Luau scripts, M-SCRIPT step 3 (SBA-149): the cook rejects, at `file:line:col`, a function
+  that assigns a top-level local or changes a table one holds, and table or function keys the source shows;
+  `pairs` and `next` raise on such keys at run time. A script's memory is its components, so a reload between
+  two ticks keeps the state hash. User guide 27.4.
 - The Luau script API, M-SCRIPT step 2 (SBA-148): scripts spawn, change and destroy entities (through
   `Commands`), instantiate prefabs, read and emit events by name (`MCE_EVENT` reflects an event type; the
   physics trigger and contact events have it), send and hear the kit's named signals, play sounds, read input
