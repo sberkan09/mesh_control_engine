@@ -84,7 +84,7 @@ bool is_text_asset(StringView rel) {
 // Media that needs a credits row (code-made data files do not).
 bool is_media(StringView rel) {
     const cook::String ext = cook::lower_extension(rel);
-    for (const char* e : {".png", ".jpg", ".jpeg", ".wav", ".ogg", ".mp3", ".flac", ".ttf", ".otf", ".glb", ".gltf", ".hdr"})
+    for (const char* e : {".png", ".jpg", ".jpeg", ".wav", ".ogg", ".mp3", ".flac", ".ttf", ".otf", ".glb", ".gltf", ".hdr", ".exr"})
         if (ext.view() == e) return true;
     return false;
 }
@@ -513,6 +513,8 @@ bool project_check(ToolCall& c) {
     if (opt.enabled("srgb")) {
         for (const editor::ProjectAsset& a : project.assets()) {
             if (StringView(editor::asset_type_name(a.type)) != "Texture") continue;
+            const cook::String ext = cook::lower_extension(a.path.view());
+            if (ext.view() == ".hdr" || ext.view() == ".exr") continue;  // linear float data, never sRGB
             cook::String side = project.asset_path(a.path.view());
             side += ".mceasset";
             cook::String side_text;

@@ -55,6 +55,10 @@ WALLS = [
     # astc-encoder (M-MOBILE step 8) is cook-time only: the texture importer writes ASTC blocks, runtimes upload them.
     ("astcenc wall", re.compile(r"[<\"]astcenc\.h|\bastcenc_\w+\("), ["src/engine/asset/cook/src/texture_importer.cpp"],
      ["src/", "samples/", "games/", "tests/", "tools/"]),
+    # tinyexr (M-VISUAL3 step 4) is cook-time only: the texture importer reads .exr into RGBA16F, runtimes upload it.
+    ("tinyexr wall", re.compile(r"[<\"]tinyexr\.h|\b(Load|Parse|Free|Init|Is)EXR\w*\s*\("),
+     ["src/engine/asset/cook/src/texture_importer.cpp", "src/engine/asset/cook/src/tinyexr_impl.cpp"],
+     ["src/", "samples/", "games/", "tests/", "tools/"]),
     # The store wall (M-MONETIZE steps 3-4, M-MOBILE 11c): StoreKit, Play Billing, Play In-App Review,
     # Google Mobile Ads, UMP, ATT, Firebase (M-LIVEOPS step 1), GameKit and Play Games (step 2) and JNI only
     # behind mce/platform/store.h, ads.h, review.h, firebase.h and game_services.h.

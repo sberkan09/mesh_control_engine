@@ -6,7 +6,9 @@
 #include <doctest/doctest.h>
 
 #include <cstdio>
+#include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 
 #include "../render/mesh_fixture.h"
@@ -223,6 +225,133 @@ inline void gi_wall_scene(Scene3D& s, bool gi) {
     m.mesh = 8;
     s.add(m);
     if (gi) s.set_gi_volume(room_gi());
+}
+
+// ---- M-VISUAL3 4: HDR sky ------------------------------------------------------------------------
+
+// IEEE half from a finite, non-negative float below 65520, round to nearest even.
+inline u16 to_half_bits(f32 f) {
+    u32 x;
+    std::memcpy(&x, &f, 4);
+    const i32 e = i32((x >> 23) & 0xFFu) - 127 + 15;
+    u32 m = x & 0x7FFFFFu;
+    if (e <= 0) {
+        if (e < -10) return 0;
+        m |= 0x800000u;
+        const u32 shift = u32(14 - e);
+        return u16((m + (1u << (shift - 1)) - 1 + ((m >> shift) & 1u)) >> shift);
+    }
+    const u32 h = (u32(e) << 10) | (m >> 13);
+    return u16(h + ((m & 0x1FFFu) > 0x1000u || ((m & 0x1FFFu) == 0x1000u && (h & 1u)) ? 1u : 0u));
+}
+
+// The grey 64x32 equirect of the HDR sky cases: `base` everywhere and a 8x4 patch of `hot` on the horizon
+// at u = 0.5 (world +X before any rotation; equirect u = atan(z, x) / 2pi + 0.5), solid angle ~0.31 sr.
+inline Array<f32> hot_sky_texels(f32 base, f32 hot, u32 hot_center_x = 32) {
+    Array<f32> t;
+    t.resize(64 * 32, base);
+    for (u32 y = 14; y < 18; ++y)
+        for (u32 x = hot_center_x - 4; x < hot_center_x + 4; ++x) t[y * 64 + x] = hot;
+    return t;
+}
+
+// Uploads the grey map with a full box-filtered mip chain (averaged in float): as RGBA16F when `hdr`, else as an
+// RGBA8 copy clamped to 1 (what an 8-bit sky can hold). Returns the TextureStore key.
+inline u32 upload_grey_sky(Fixture3D& f, const Array<f32>& grey, bool hdr) {
+    Array<Array<u8>> bytes;
+    Array<TextureMipUpload> mips;
+    Array<f32> cur = grey;
+    for (u32 w = 64, h = 32;;) {
+        Array<u8>& b = bytes.emplace_back();
+        for (u32 i = 0; i < w * h; ++i) {
+            const f32 v = cur[i];
+            if (hdr) {
+                const u16 q = to_half_bits(v), one = to_half_bits(1.0f);
+                for (u16 c : {q, q, q, one}) {
+                    b.push_back(u8(c & 0xFF));
+                    b.push_back(u8(c >> 8));
+                }
+            } else {
+                const u8 q = u8(math::min(v, 1.0f) * 255.0f + 0.5f);
+                for (u8 c : {q, q, q, u8(255)}) b.push_back(c);
+            }
+        }
+        if (w == 1 && h == 1) break;
+        const u32 nw = w > 1 ? w / 2 : 1, nh = h > 1 ? h / 2 : 1;
+        Array<f32> next;
+        next.resize(nw * nh);
+        for (u32 y = 0; y < nh; ++y)
+            for (u32 x = 0; x < nw; ++x) {
+                const u32 x0 = math::min(x * 2, w - 1), x1 = math::min(x * 2 + 1, w - 1);
+                const u32 y0 = math::min(y * 2, h - 1), y1 = math::min(y * 2 + 1, h - 1);
+                next[y * nw + x] = (cur[y0 * w + x0] + cur[y0 * w + x1] + cur[y1 * w + x0] + cur[y1 * w + x1]) * 0.25f;
+            }
+        cur = next;
+        w = nw;
+        h = nh;
+    }
+    u32 w = 64, h = 32;
+    for (const Array<u8>& b : bytes) {
+        mips.push_back(TextureMipUpload{w, h, std::as_bytes(b.span())});
+        w = w > 1 ? w / 2 : 1;
+        h = h > 1 ? h / 2 : 1;
+    }
+    TextureUpload up;
+    up.format = hdr ? rhi::TextureFormat::RGBA16F : rhi::TextureFormat::RGBA8_UNorm;
+    up.mips = mips.span();
+    up.debug_name = hdr ? "test.hdr_sky" : "test.ldr_sky";
+    const u32 key = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(key, 1, up).has_value());
+    return key;
+}
+
+// A white matte UV sphere as mesh `key`: `center`, `radius` baked into the submesh.
+inline void upload_sphere(Fixture3D& f, u32 key, vec3 center, f32 radius, f32 metallic = 0.0f, f32 roughness = 0.8f) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    asset::MeshSubmesh sm{};
+    sm.first_index = 0;
+    sm.base_vertex = 0;
+    sm.node = 0;
+    sm.center[0] = center.x;
+    sm.center[1] = center.y;
+    sm.center[2] = center.z;
+    sm.extent[0] = sm.extent[1] = sm.extent[2] = radius;
+    sm.uv_scale[0] = sm.uv_scale[1] = 1.0f;
+    for (int i = 0; i < 4; ++i) sm.material.base_color[i] = 1.0f;
+    sm.material.roughness = roughness;
+    sm.material.metallic = metallic;
+    constexpr u32 kSeg = 32, kRings = 16;
+    for (u32 r = 0; r <= kRings; ++r) {
+        const f32 th = math::kPi * f32(r) / f32(kRings);
+        for (u32 s = 0; s <= kSeg; ++s) {
+            const f32 ph = 2.0f * math::kPi * f32(s) / f32(kSeg);
+            const vec3 n{std::sin(th) * std::cos(ph), std::cos(th), std::sin(th) * std::sin(ph)};
+            asset::MeshVertex q{};
+            q.position[0] = mesh_fixture::Builder::snorm(n.x);
+            q.position[1] = mesh_fixture::Builder::snorm(n.y);
+            q.position[2] = mesh_fixture::Builder::snorm(n.z);
+            const f32 inv = 1.0f / (std::fabs(n.x) + std::fabs(n.y) + std::fabs(n.z));
+            f32 ox = n.x * inv, oy = n.y * inv;
+            if (n.z < 0) {
+                const f32 tx = (1.0f - std::fabs(oy)) * (ox >= 0 ? 1.0f : -1.0f), ty = (1.0f - std::fabs(ox)) * (oy >= 0 ? 1.0f : -1.0f);
+                ox = tx;
+                oy = ty;
+            }
+            q.normal[0] = mesh_fixture::Builder::snorm(ox);
+            q.normal[1] = mesh_fixture::Builder::snorm(oy);
+            b.vertices.push_back(q);
+        }
+    }
+    for (u32 r = 0; r < kRings; ++r)
+        for (u32 s = 0; s < kSeg; ++s) {
+            const u16 a = u16(r * (kSeg + 1) + s), c = u16(a + kSeg + 1);
+            for (u16 i : {a, u16(a + 1), c, u16(a + 1), u16(c + 1), c}) b.indices.push_back(i);
+        }
+    sm.vertex_count = u32(b.vertices.size());
+    sm.index_count = u32(b.indices.size());
+    b.submeshes.push_back(sm);
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
 }
 
 }  // namespace mce::render_test

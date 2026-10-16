@@ -11,6 +11,7 @@ formats, which is what keeps the shipped game small and safe.
 | You author | Extension | Cooked into | Used by |
 |---|---|---|---|
 | Image | `.png`, `.jpg`, `.jpeg` | texture (RGBA8, optional mips, sRGB flag) | `Sprite`, materials, tilesets, particles, LUTs, normal maps |
+| HDR image | `.hdr`, `.exr` | texture (RGBA16F: linear half floats, mips, `max_size`, `exposure`) | `Environment3D.sky_texture` and `ibl_texture` (chapter 8) |
 | Sound | `.wav` | 48 kHz float clip with loop points | `AudioSource`, `PlaySfx`, sequences |
 | Font | `.ttf`, `.otf` | glyph atlas plus metrics | `TextLabel` |
 | Model | `.gltf`, `.glb` | mesh: quantized streams, node tree, inline materials, animation clips, optional skins | 3D rendering (chapter 8) |
@@ -54,7 +55,7 @@ Settings per importer (every key is optional; the defaults are shown):
 
 | Importer | Settings |
 |---|---|
-| `texture` | `"srgb": true` (colour data; set `false` for normal maps, LUTs and data textures), `"mips": true`, `"filter": "nearest"` (`"linear"` for smooth, non-pixel-art sprites; chapter 7.1) |
+| `texture` | `"srgb": true` (colour data; set `false` for normal maps, LUTs and data textures), `"mips": true`, `"filter": "nearest"` (`"linear"` for smooth, non-pixel-art sprites; chapter 7.1). For `.hdr` and `.exr`: `"mips": true`, `"max_size": 2048` (largest side, a power of two: the image is halved until it fits), `"exposure": 0` (EV applied at cook); `"srgb": true` is an error (see the HDR rule below) |
 | `wav` | `"normalize": true` (peak to -1 dBFS), `"loop": false`, `"loop_start"`, `"loop_end"` (source-rate frames; default to the file's own loop markers), `"compress": "pcm"` (`"vorbis"` stores Ogg Vorbis, about a tenth of the size; chapter 10.7), `"quality": 0.4` (Vorbis, -0.1..1) |
 | `ogg` | the same as `wav`, with `"compress": "vorbis"` by default |
 | `font` | `"size": 32` (pixel height), `"ranges": [[32, 126]]` (inclusive codepoint ranges), `"padding": 1`, `"strings": true` (also every character the string tables use), `"sdf": true` (bake a distance field: text drawn well above `size` keeps sharp edges; outlines wider than the field fade), `"spread": 4` (with `sdf`: how many pixels at `size` the field reaches, default `size / 8`, at least 2) |
@@ -72,6 +73,15 @@ Three importer rules that the error text alone does not make obvious:
 - **`asset_write` never writes `format`, `version` or `guid`.** The tool sets them and keeps the file's own GUID, in
   `merge` and in `replace` mode alike, so leave them out of `content`; passing them is refused
   (`format, version and guid are set by the tool`). `replace` makes the document exactly `content` plus those three.
+- **HDR skies are linear floats.** A `.hdr` (Radiance) or `.exr` (OpenEXR: uncompressed, ZIP or PIZ, the first RGB(A)
+  layer) cooks to a linear RGBA16F texture that keeps values far above 1 (a sun can be 5000 times the sky), so it is
+  never sRGB: `"srgb": true` on one is a cook error (`remove "srgb" from the sidecar or set it to false`; an adopted
+  `.hdr` or `.exr` has no `srgb` key to begin with). Values clamp to the half-float range (0 .. 65504), NaN and Inf become 0, and the
+  mips are averaged in float. A float sky costs 8 bytes a texel, so `max_size` (default 2048, a power of two) halves the
+  image until its largest side fits; a 2048 × 1024 sky with mips is about 22 MB of GPU memory, four times an 8-bit one.
+  `exposure` shifts the whole image by EV at cook (`2` is four times brighter); `sky_texture_intensity` on
+  `Environment3D` is the exposure you can still change at run time. The phone cook (`--textures astc`) keeps these
+  in RGBA16F. Point `Environment3D.sky_texture` (and `ibl_texture`, with `sky_ibl`) at the asset; chapter 8 has the sky.
 - **Data textures need `"srgb": false`.** A texture is read as colour (sRGB) unless its sidecar says otherwise, which
   brightens a normal, roughness, metallic, occlusion or LUT map and tilts every normal. Adoption writes `srgb: true`;
   set `false` for those maps before the first cook (`asset_set_import_settings {"settings": {"srgb": false}}` or the sidecar).
