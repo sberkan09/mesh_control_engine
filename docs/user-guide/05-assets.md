@@ -79,6 +79,11 @@ re-cooks the asset.
 
 Adopted textures default to `srgb: true`; fix the sidecar for a normal map or a LUT before using it.
 
+Art and levels drawn in Aseprite, Tiled or LDtk are not copied in as they are: their exports are
+converted into the engine's own assets (`.mcsheet`, `.mcscene`, `.mctilemap`) by `mce import`, or by the
+MCP tool `asset_import`; section 7.3 describes each tool's settings and limits. The converter also gives
+the tileset or sheet PNG its sidecar, so no adoption is needed for those.
+
 ## 5.4 The cook
 
 ```sh

@@ -1,0 +1,142 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "72656bd6-46e0-4c28-b180-2eacc2ce060e",
+  "name": "world_Level_2",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Floor collision 0",
+      "components": {
+        "Collider2D": {
+          "shape": {
+            "half": [
+              1,
+              0.5
+            ]
+          },
+          "density": 0
+        },
+        "RigidBody2D": {},
+        "LocalTransform": {
+          "position": [
+            3,
+            2.5,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Floor collision 1",
+      "components": {
+        "Collider2D": {
+          "shape": {
+            "half": [
+              1,
+              0.5
+            ]
+          },
+          "density": 0
+        },
+        "RigidBody2D": {},
+        "LocalTransform": {
+          "position": [
+            8,
+            2.5,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Floor collision 2",
+      "components": {
+        "Collider2D": {
+          "shape": {
+            "half": [
+              6,
+              0.5
+            ]
+          },
+          "density": 0
+        },
+        "RigidBody2D": {},
+        "LocalTransform": {
+          "position": [
+            6,
+            0.5,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Floor",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "TilemapLayer": {
+          "map": "guid:acfc3959-9550-47d9-98ce-3ef727acfa7c",
+          "order": 1
+        }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Coin",
+      "components": {
+        "Collider2D": {
+          "shape": {
+            "half": [
+              0.25,
+              0.25
+            ]
+          },
+          "density": 0,
+          "is_sensor": true
+        },
+        "RigidBody2D": {},
+        "LocalTransform": {
+          "position": [
+            3.5,
+            6.5,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Coin 2",
+      "components": {
+        "Collider2D": {
+          "shape": {
+            "half": [
+              0.25,
+              0.25
+            ]
+          },
+          "density": 0,
+          "is_sensor": true
+        },
+        "RigidBody2D": {},
+        "LocalTransform": {
+          "position": [
+            9.5,
+            6.5,
+            0
+          ]
+        }
+      }
+    }
+  ]
+}
