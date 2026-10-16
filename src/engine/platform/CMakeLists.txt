@@ -174,3 +174,7 @@ if(IOS AND MCE_FIREBASE)
     target_link_libraries(mce_platform PRIVATE sqlite3 z "-framework StoreKit" "-framework SystemConfiguration"
         "-framework UIKit")
 endif()
+
+if(MCE_WEB)
+    add_subdirectory(web_probe)
+endif()
