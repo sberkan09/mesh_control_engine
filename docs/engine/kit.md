@@ -132,6 +132,12 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   noise, fixed point). Each returns a `ProcGrid` (`kWall` / `kFloor`, row 0 on top) with a wall border, one
   4-connected floor region, a `start` and the farthest `exit`; a draw that misses the floor target is
   retried on the next attempt's stream (at most 16), then the call fails with a stage naming the generator.
+- `WfcRules` + `generate_wfc` (M-PROCGEN 2): wave function collapse on a 64-bit option mask per cell.
+  Rules by `add_pair(a, dir, b)` or learned from an example (`from_example`: neighbouring pairs allowed,
+  weights = how often a tile occurs; at most 64 tiles, ids kept in ascending order). The fewest-options cell
+  is collapsed by weight from the `"wfc"` stream and the neighbours are narrowed; a contradiction restarts on
+  the next attempt's stream (`max_restarts`, default 32), then the call fails with a named stage. `WfcPin`
+  cells are set first; pins that disagree with each other or the rules fail at once.
 - `ProcGrid::hash`, `floor_count`, `to_ascii`. Tests pin one hash per generator: a generator change
   changes every saved seed, so those lines move only on purpose.
 

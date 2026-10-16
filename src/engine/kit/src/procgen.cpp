@@ -3,6 +3,8 @@
 
 #include "mce/kit/procgen.h"
 
+#include <bit>
+
 namespace mce::kit::procgen {
 
 u32 ProcGrid::floor_count() const {
@@ -336,6 +338,228 @@ Result<ProcGrid> generate_noise(u32 width, u32 height, u64 seed, const NoisePara
         if (finalize(g, seed, attempt, p.min_floor_percent)) return g;
     }
     return fail("procgen.noise: no draw reached min_floor_percent; raise floor_percent");
+}
+
+
+// ---- wave function collapse --------------------------------------------------------------------
+
+namespace {
+
+constexpr WfcDir opposite(WfcDir d) {
+    switch (d) {
+        case WfcDir::East: return WfcDir::West;
+        case WfcDir::West: return WfcDir::East;
+        case WfcDir::South: return WfcDir::North;
+        default: return WfcDir::South;
+    }
+}
+
+constexpr i32 kDx[4] = {1, -1, 0, 0};
+constexpr i32 kDy[4] = {0, 0, 1, -1};
+
+}  // namespace
+
+i32 WfcRules::index_of(u32 id) const {
+    // ids_ is ascending: binary search.
+    usize lo = 0, hi = ids_.size();
+    while (lo < hi) {
+        const usize mid = (lo + hi) / 2;
+        if (ids_[mid] < id) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo < ids_.size() && ids_[lo] == id ? static_cast<i32>(lo) : -1;
+}
+
+Result<u32> WfcRules::intern(u32 id) {
+    const i32 found = index_of(id);
+    if (found >= 0) return static_cast<u32>(found);
+    if (ids_.size() >= kWfcMaxTiles) return Error(Errc::InvalidArgument, "procgen.wfc: more than 64 distinct tiles");
+    // Insert keeping ids ascending; masks of later indices shift up by one bit, so rebuild them.
+    usize at = 0;
+    while (at < ids_.size() && ids_[at] < id) ++at;
+    const u32 pos = static_cast<u32>(at);
+    auto widen = [pos](u64 m) {
+        const u64 low = pos == 0 ? 0 : (m & ((1ull << pos) - 1));
+        const u64 high = m >> pos;
+        return low | (high << (pos + 1));
+    };
+    Array<u32> ids2;
+    Array<u32> w2;
+    for (usize i = 0; i < ids_.size(); ++i) {
+        if (i == at) {
+            ids2.push_back(id);
+            w2.push_back(1);
+        }
+        ids2.push_back(ids_[i]);
+        w2.push_back(weight_[i]);
+    }
+    if (at == ids_.size()) {
+        ids2.push_back(id);
+        w2.push_back(1);
+    }
+    for (u32 d = 0; d < 4; ++d) {
+        Array<u64> a2;
+        for (usize i = 0; i < ids2.size(); ++i) {
+            if (i == at) a2.push_back(0);
+            else a2.push_back(widen(allow_[d][i < at ? i : i - 1]));
+        }
+        allow_[d] = static_cast<Array<u64>&&>(a2);
+    }
+    ids_ = static_cast<Array<u32>&&>(ids2);
+    weight_ = static_cast<Array<u32>&&>(w2);
+    return pos;
+}
+
+Result<void> WfcRules::add_pair(u32 a, WfcDir dir, u32 b) {
+    MCE_TRY_ASSIGN(const u32 ia0, intern(a));
+    MCE_TRY_ASSIGN(const u32 ib0, intern(b));
+    (void)ia0;
+    (void)ib0;
+    const u32 ia = static_cast<u32>(index_of(a)), ib = static_cast<u32>(index_of(b));  // indices may have moved
+    allow_[static_cast<u32>(dir)][ia] |= 1ull << ib;
+    allow_[static_cast<u32>(opposite(dir))][ib] |= 1ull << ia;
+    return {};
+}
+
+Result<void> WfcRules::set_weight(u32 tile, u32 weight) {
+    MCE_TRY_ASSIGN(const u32 i0, intern(tile));
+    (void)i0;
+    weight_[static_cast<u32>(index_of(tile))] = weight == 0 ? 1 : weight;
+    return {};
+}
+
+bool WfcRules::allows(u32 a_id, WfcDir dir, u32 b_id) const {
+    const i32 a = index_of(a_id), b = index_of(b_id);
+    return a >= 0 && b >= 0 && ((allow_[static_cast<u32>(dir)][static_cast<usize>(a)] >> b) & 1ull);
+}
+
+Result<WfcRules> WfcRules::from_example(std::span<const u32> tiles, u32 width, u32 height) {
+    if (width == 0 || height == 0 || tiles.size() != static_cast<usize>(width) * height)
+        return Error(Errc::InvalidArgument, "procgen.wfc: the example needs width * height tile ids");
+    WfcRules r;
+    // First every distinct tile, so the dense order is the ascending id order whatever the layout.
+    for (u32 id : tiles) {
+        MCE_TRY_ASSIGN(const u32 i, r.intern(id));
+        (void)i;
+    }
+    for (u32 i = 0; i < r.weight_.size(); ++i) r.weight_[i] = 0;
+    for (u32 id : tiles) ++r.weight_[static_cast<u32>(r.index_of(id))];
+    for (u32 y = 0; y < height; ++y)
+        for (u32 x = 0; x < width; ++x) {
+            const u32 here = tiles[static_cast<usize>(y) * width + x];
+            if (x + 1 < width) MCE_TRY(r.add_pair(here, WfcDir::East, tiles[static_cast<usize>(y) * width + x + 1]));
+            if (y + 1 < height) MCE_TRY(r.add_pair(here, WfcDir::South, tiles[static_cast<usize>(y + 1) * width + x]));
+        }
+    return r;
+}
+
+u64 WfcGrid::hash() const {
+    Hasher64 h;
+    h.u32v(width);
+    h.u32v(height);
+    for (usize i = 0; i < tiles.size(); ++i) h.u32v(tiles[i]);
+    return h.value();
+}
+
+namespace {
+
+// Narrows the neighbours of the cells on `stack` until nothing changes. False: a cell ran out of options.
+bool propagate(const WfcRules& rules, u32 w, u32 h, Array<u64>& possible, Array<u32>& stack) {
+    while (!stack.empty()) {
+        const u32 cur = stack.back();
+        stack.pop_back();
+        const i32 cx = static_cast<i32>(cur % w), cy = static_cast<i32>(cur / w);
+        for (u32 d = 0; d < 4; ++d) {
+            const i32 nx = cx + kDx[d], ny = cy + kDy[d];
+            if (nx < 0 || ny < 0 || nx >= static_cast<i32>(w) || ny >= static_cast<i32>(h)) continue;
+            u64 allowed = 0;
+            for (u64 m = possible[cur]; m; m &= m - 1) allowed |= rules.allow_mask(static_cast<WfcDir>(d), static_cast<u32>(std::countr_zero(m)));
+            const u32 ni = static_cast<u32>(ny) * w + static_cast<u32>(nx);
+            const u64 narrowed = possible[ni] & allowed;
+            if (narrowed == possible[ni]) continue;
+            if (narrowed == 0) return false;
+            possible[ni] = narrowed;
+            stack.push_back(ni);
+        }
+    }
+    return true;
+}
+
+}  // namespace
+
+Result<WfcGrid> generate_wfc(u32 width, u32 height, u64 seed, const WfcRules& rules, std::span<const WfcPin> pins, u32 max_restarts) {
+    if (width == 0 || height == 0 || width > kMaxSize || height > kMaxSize) return Error(Errc::InvalidArgument, "procgen.wfc: size must be 1..512 on each side");
+    const u32 n = rules.tile_count();
+    if (n == 0) return Error(Errc::InvalidArgument, "procgen.wfc: the rules have no tiles");
+    for (const WfcPin& p : pins) {
+        if (p.x < 0 || p.y < 0 || p.x >= static_cast<i32>(width) || p.y >= static_cast<i32>(height))
+            return Error(Errc::InvalidArgument, "procgen.wfc: a pinned cell lies outside the grid");
+        if (rules.index_of(p.tile) < 0) return Error(Errc::InvalidArgument, "procgen.wfc: a pinned cell names a tile the rules do not have");
+    }
+    const u64 all = n == 64 ? ~0ull : ((1ull << n) - 1);
+    const usize cells = static_cast<usize>(width) * height;
+    for (u32 attempt = 0; attempt <= max_restarts; ++attempt) {
+        Rng rng = Rng::child(seed, "wfc", attempt);
+        Array<u64> possible;
+        possible.resize(cells);
+        for (usize i = 0; i < cells; ++i) possible[i] = all;
+        Array<u32> stack;
+        bool ok = true;
+        for (const WfcPin& p : pins) {
+            const usize i = static_cast<usize>(p.y) * width + static_cast<usize>(p.x);
+            const u64 bit = 1ull << rules.index_of(p.tile);
+            if (!(possible[i] & bit)) {
+                // Two pins on one cell with different tiles: no draw can fix that.
+                return Error(Errc::InvalidArgument, "procgen.wfc: two pins disagree on one cell");
+            }
+            possible[i] = bit;
+            stack.push_back(static_cast<u32>(i));
+        }
+        // Pins may already contradict each other (or the rules); that is the same for every attempt.
+        if (!propagate(rules, width, height, possible, stack)) return Error(Errc::InvalidArgument, "procgen.wfc: the pinned cells contradict the rules");
+        Array<u32> ties;
+        while (ok) {
+            u32 best = 65;
+            ties.clear();
+            for (usize i = 0; i < cells; ++i) {
+                const u32 c = static_cast<u32>(std::popcount(possible[i]));
+                if (c <= 1) continue;
+                if (c < best) {
+                    best = c;
+                    ties.clear();
+                }
+                if (c == best) ties.push_back(static_cast<u32>(i));
+            }
+            if (ties.empty()) break;  // every cell has exactly one tile
+            const u32 cell = ties[rng.below(static_cast<u32>(ties.size()))];
+            u64 total = 0;
+            for (u64 m = possible[cell]; m; m &= m - 1) total += rules.weight_of(static_cast<u32>(std::countr_zero(m)));
+            u64 pick = rng.next_u64() % total;
+            u32 chosen = 0;
+            for (u64 m = possible[cell]; m; m &= m - 1) {
+                const u32 t = static_cast<u32>(std::countr_zero(m));
+                const u32 wgt = rules.weight_of(t);
+                if (pick < wgt) {
+                    chosen = t;
+                    break;
+                }
+                pick -= wgt;
+            }
+            possible[cell] = 1ull << chosen;
+            stack.clear();
+            stack.push_back(cell);
+            ok = propagate(rules, width, height, possible, stack);
+        }
+        if (!ok) continue;  // a contradiction: restart on the next attempt's stream
+        WfcGrid g;
+        g.width = width;
+        g.height = height;
+        g.restarts = attempt;
+        g.tiles.resize(cells);
+        for (usize i = 0; i < cells; ++i) g.tiles[i] = rules.id_of(static_cast<u32>(std::countr_zero(possible[i])));
+        return g;
+    }
+    return Error(Errc::InvalidArgument, "procgen.wfc: contradiction on every attempt; loosen the rules, drop a pin or raise max_restarts");
 }
 
 }  // namespace mce::kit::procgen
