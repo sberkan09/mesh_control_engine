@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <type_traits>
 
 namespace mce::asset {
 
@@ -655,22 +656,38 @@ i32 Skeleton2DView::find_bone(StringView n) const {
     return -1;
 }
 
+i32 Skeleton2DView::find_animation(StringView n) const {
+    for (usize i = 0; i < animations.size(); ++i)
+        if (string(animations[i].name) == n) return static_cast<i32>(i);
+    return -1;
+}
+
 Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
     Skeleton2DView v;
     v.header = header_of<Skeleton2DHeader>(payload);
     if (!v.header) return Error(Errc::Truncated, "asset.skeleton2d.read");
     const Skeleton2DHeader& h = *v.header;
     if (h.bone_count == 0 || h.bone_count > kSkeleton2DMaxBones || h.slot_count > kSkeleton2DMaxSlots ||
-        h.string_bytes > (1u << 20))
+        h.string_bytes > (1u << 20) || h.animation_count > kSkeleton2DMaxAnimations ||
+        h.timeline_count > kSkeleton2DMaxTimelines || h.key_count > kSkeleton2DMaxKeys || h.event_count > kSkeleton2DMaxEvents)
         return Error(Errc::InvalidArgument, "asset.skeleton2d.read");
     const u64 bytes = sizeof(Skeleton2DHeader) + u64(h.bone_count) * sizeof(Skeleton2DBone) +
-                      u64(h.slot_count) * sizeof(Skeleton2DSlot) + h.string_bytes;
+                      u64(h.slot_count) * sizeof(Skeleton2DSlot) + u64(h.animation_count) * sizeof(Skeleton2DAnimation) +
+                      u64(h.timeline_count) * sizeof(Skeleton2DTimeline) + u64(h.key_count) * sizeof(Skeleton2DKey) +
+                      u64(h.event_count) * sizeof(Skeleton2DEvent) + h.string_bytes;
     if (bytes > payload.size()) return Error(Errc::Truncated, "asset.skeleton2d.read");
     const byte* p = payload.data() + sizeof(Skeleton2DHeader);
-    v.bones = Span<const Skeleton2DBone>(reinterpret_cast<const Skeleton2DBone*>(p), h.bone_count);
-    p += usize(h.bone_count) * sizeof(Skeleton2DBone);
-    v.slots = Span<const Skeleton2DSlot>(reinterpret_cast<const Skeleton2DSlot*>(p), h.slot_count);
-    p += usize(h.slot_count) * sizeof(Skeleton2DSlot);
+    auto take = [&p](auto& span, u32 count) {
+        using T = typename std::remove_reference_t<decltype(span)>::value_type;
+        span = Span<const T>(reinterpret_cast<const T*>(p), count);
+        p += usize(count) * sizeof(T);
+    };
+    take(v.bones, h.bone_count);
+    take(v.slots, h.slot_count);
+    take(v.animations, h.animation_count);
+    take(v.timelines, h.timeline_count);
+    take(v.keys, h.key_count);
+    take(v.events, h.event_count);
     v.strings = Span<const char>(reinterpret_cast<const char*>(p), h.string_bytes);
     if (h.string_bytes == 0 || v.strings[h.string_bytes - 1] != '\0') return Error(Errc::InvalidArgument, "asset.skeleton2d.strings");
     auto finite = [](const f32* f, usize n) {
@@ -691,7 +708,83 @@ Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
             !finite(s.size, 2) || !finite(s.pivot, 2) || !finite(s.offset, 2) || !finite(&s.rotation, 1) || !finite(s.tint, 4))
             return Error(Errc::InvalidArgument, "asset.skeleton2d.slot");
     }
+    for (const Skeleton2DAnimation& a : v.animations) {
+        if (a.name >= h.string_bytes || !std::isfinite(a.duration) || !(a.duration >= 0.0f) ||
+            u64(a.first_timeline) + a.timeline_count > h.timeline_count || u64(a.first_event) + a.event_count > h.event_count ||
+            (a.flags & ~u32(Skeleton2DAnimationFlags::Loop)) != 0)
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.animation");
+        f32 prev = 0.0f;
+        for (u32 i = 0; i < a.event_count; ++i) {
+            const Skeleton2DEvent& e = v.events[a.first_event + i];
+            if (e.name >= h.string_bytes || !std::isfinite(e.t) || !(e.t >= prev))
+                return Error(Errc::InvalidArgument, "asset.skeleton2d.event");
+            prev = e.t;
+        }
+    }
+    for (const Skeleton2DTimeline& t : v.timelines) {
+        if (t.bone >= h.bone_count || t.channel > Skeleton2DChannel::Scale || t.key_count == 0 ||
+            u64(t.first_key) + t.key_count > h.key_count)
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.timeline");
+        for (u32 i = 0; i < t.key_count; ++i) {
+            const Skeleton2DKey& k = v.keys[t.first_key + i];
+            const bool bezier_ok = k.curve != Skeleton2DCurve::Bezier ||
+                                   (finite(k.bezier, 4) && k.bezier[0] >= 0.0f && k.bezier[0] <= 1.0f && k.bezier[2] >= 0.0f &&
+                                    k.bezier[2] <= 1.0f);
+            if (!std::isfinite(k.t) || !(k.t >= 0.0f) || (i > 0 && !(k.t > v.keys[t.first_key + i - 1].t)) ||
+                !finite(k.value, 2) || k.curve > Skeleton2DCurve::Bezier || !bezier_ok)
+                return Error(Errc::InvalidArgument, "asset.skeleton2d.key");
+        }
+    }
     return v;
+}
+
+f32 skeleton2d_bezier(const f32 c[4], f32 u) {
+    // B(s) = 3(1-s)^2 s P1 + 3(1-s) s^2 P2 + s^3 (P0 = 0, P3 = 1). x(s) is monotonic for cx in
+    // 0..1: bisect for x(s) = u in a fixed 24 steps (no tolerance exit), then read y(s).
+    auto at = [](f32 p1, f32 p2, f32 s) {
+        const f32 r = 1.0f - s;
+        return 3.0f * r * r * s * p1 + 3.0f * r * s * s * p2 + s * s * s;
+    };
+    if (!(u > 0.0f)) return 0.0f;
+    if (!(u < 1.0f)) return 1.0f;
+    f32 lo = 0.0f, hi = 1.0f;
+    for (u32 i = 0; i < 24; ++i) {
+        const f32 mid = 0.5f * (lo + hi);
+        if (at(c[0], c[2], mid) < u) lo = mid;
+        else hi = mid;
+    }
+    return at(c[1], c[3], 0.5f * (lo + hi));
+}
+
+void skeleton2d_sample(Span<const Skeleton2DKey> keys, f32 t, f32 out[2]) {
+    out[0] = out[1] = 0.0f;
+    if (keys.empty()) return;
+    if (!(t > keys[0].t)) {
+        out[0] = keys[0].value[0];
+        out[1] = keys[0].value[1];
+        return;
+    }
+    const Skeleton2DKey& last = keys[keys.size() - 1];
+    if (t >= last.t) {
+        out[0] = last.value[0];
+        out[1] = last.value[1];
+        return;
+    }
+    // The interval [keys[i].t, keys[i + 1].t) holding t (binary search: keys are sorted).
+    usize lo = 0, hi = keys.size() - 1;
+    while (hi - lo > 1) {
+        const usize mid = (lo + hi) / 2;
+        if (keys[mid].t <= t) lo = mid;
+        else hi = mid;
+    }
+    const Skeleton2DKey& a = keys[lo];
+    const Skeleton2DKey& b = keys[lo + 1];
+    const f32 u = (t - a.t) / (b.t - a.t);
+    f32 f = u;
+    if (a.curve == Skeleton2DCurve::Stepped) f = 0.0f;
+    else if (a.curve == Skeleton2DCurve::Bezier) f = skeleton2d_bezier(a.bezier, u);
+    out[0] = a.value[0] + (b.value[0] - a.value[0]) * f;
+    out[1] = a.value[1] + (b.value[1] - a.value[1]) * f;
 }
 
 // ------------------------------------------------------------------ behavior tree

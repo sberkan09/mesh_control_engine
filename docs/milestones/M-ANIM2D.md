@@ -1,6 +1,6 @@
 # M-ANIM2D — 2D skeletal animation (milestone record)
 
-**Status:** active (step 1 done; step 2 next).
+**Status:** active (steps 1 and 2 done; step 3 next).
 **Why:** 2D characters animate only by sprite frames today; cut-out rigs (bones, blended clips, skinned meshes, IK) are what Godot's Skeleton2D, Unity's 2D Animation and Spine give 2D games. Added 2026-10-16 under the user's standing instruction to extend the roadmap when no milestone is free.
 **Plan:** ROADMAP § M-ANIM2D.
 **Measured on:** the Linux CI container.
@@ -10,7 +10,7 @@
 | Step | Linear | State |
 |---|---|---|
 | 1. `.mcskel2d` assets, `Skeleton2D` world pose, slots drawn through the sprite extraction | SBA-140 | done |
-| 2. Bone clips and crossfade, driven by the `.mcanim` state graph | SBA-141 | — |
+| 2. Bone clips and crossfade, driven by the `.mcanim` state graph | SBA-141 | done |
 | 3. Mesh attachments and CPU skinning, deform keys | SBA-142 | — |
 | 4. Two-bone and CCD IK as data | SBA-143 | — |
 | 5. Editor skeleton panel and MCP `skel2d_*` tools | SBA-144 | — |
@@ -35,4 +35,22 @@ Limits found in step 1: within one sorting layer the 2D batch orders quads by te
 slot under a rotated child of a non-uniformly scaled bone loses the shear. A `.mcscene` lists all
 64 `pose` entries (the scene codec reads fixed arrays whole). Slots naming a sprite-sheet region are
 not built; a slot takes the sheet's texture and a `rect`.
+
+## Step 2: bone clips, crossfade and the state graph
+
+| Item | Where | Evidence |
+|---|---|---|
+| `.mcskel2d` `"animations"`: named clips of per-bone `rotate` / `translate` / `scale` keys (offsets from the rest pose: degrees and metres add, scale multiplies), `"duration"` (default: the last key or event), `"loop"` (default true) and `"events"`. Cooked into the same `CHNK_SKEL2D` as minor 1 (`SKELETON2D_MINOR_ANIMATIONS`): the header's four reserved words became the animation, timeline, key and event counts, so a minor-0 chunk reads unchanged and a skeleton without animations cooks byte for byte as before | `src/engine/asset/cook/src/skeleton2d_importer.cpp`, `mce/asset/formats.h` | `test_kit` "skeleton2d anim: animations cook into CHNK_SKEL2D minor 1" |
+| Curves: `"linear"`, `"stepped"`, or a cubic bezier `[cx1, cy1, cx2, cy2]` in the normalized key interval (Spine's convention), solved by a fixed 24-step bisection (no tolerance exit) | `asset::skeleton2d_sample`, `asset::skeleton2d_bezier` in `src/engine/asset/src/formats.cpp` | `test_kit` "skeleton2d anim: linear, stepped and bezier keys sample exactly" (a linear midpoint, a step, x(s) = s giving 0.875, CSS ease at 0.5 = 0.8024034) |
+| `Skeleton2DView::read` refuses keys out of order or at the same time, negative or non-finite times and values, timelines on a missing bone, unknown channels and curves, a bezier cx outside 0..1, empty or overrunning key, timeline and event ranges, bad names, unknown flags and too many animations; a minor-0 payload reads | `src/engine/asset/src/formats.cpp` | `test_kit` "skeleton2d anim: the reader rejects bad animation data and reads a minor-0 payload" |
+| Cook errors name the file position, the animation and the bone: unsorted keys, an unknown bone, a bad curve, a bezier cx out of range, a key without `t`, an empty key list, duplicate animation names, events out of order, a long event name, a negative duration, an unknown key | same | `test_kit` "skeleton2d anim: cook errors name the animation and the bone" |
+| `Skeleton2DAnimator` (clip, speed, fade, time, loop, finished, restart; previous clip, its time and the blend weight as runtime fields; graph, params, state). `"kit_skeleton2d_animators"` runs just before `"kit_skeleton2d"` in `FixedUpdate_Post` and writes the blended channels into `Skeleton2D.pose`. Only channels the sampled clips key are written; others keep gameplay's writes | `mce/kit/skeleton2d.h`, `src/engine/kit/src/skeleton2d_anim.cpp` | `test_kit` "skeleton2d anim: a looping clip wraps and fires each event once per crossing", "a cross-fade blends by weight and a one-shot holds its end" (rotation, translation and scale at blend 0.5: 1.5 for a 2 against the rest), "the animators run before the skeletons in FixedUpdate_Post" |
+| The `.mcanim` graph drives 2D clips through the 3D Animator's state machine step, moved unchanged into a template shared by both (`src/engine/kit/src/anim_graph_step.h`): parameter transitions, one-shot finish, fades, 1D and 2D blend states, state events. Layers, root motion and IK stay 3D only | `src/engine/kit/src/anim_graph_step.h`, `src/engine/kit/src/anim3d.cpp` | `test_kit` "skeleton2d anim: an AnimGraph drives 2D clips on a parameter and on a one-shot's end"; all `anim3d:` and `kit3d:` cases and the `scene_demo` / `07_gameplay3d` hash tests unchanged |
+| Events: clip and state events raise `AnimEvent3D{entity, StringId}` once per crossing, again across a loop wrap, and at a one-shot's end | `skeleton2d_anim.cpp` | "a looping clip wraps and fires each event once per crossing" (the read order start, tick, start, tick, start) |
+| Determinism and saves: every animator field is `Save`; two runs hash the same; a save in the middle of a cross-fade resumes with the same pose and the same hash on the next tick | `test_kit` | "skeleton2d anim: two runs hash the same, and a save mid-fade resumes identically" |
+| MCP `asset_schema` / template describe `"animations"`; the three component registries list `Skeleton2DAnimator` | `src/editor/mcp/src/asset_tools.cpp`, the `engine_components.cpp` files | ctest `mcp_transcript` (golden regenerated: one more component); `scripts/ci/capabilities.py --check` |
+
+Deferred from step 2: slot color and alpha keys and attachment swaps move to step 3, where mesh
+attachments add per-slot runtime state. Rotation offsets blend linearly, not by the shortest arc,
+so a cross-fade between rotations more than half a turn apart turns the long way.
 

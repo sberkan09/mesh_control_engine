@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- The Luau script API, M-SCRIPT step 2 (SBA-148): scripts spawn, change and destroy entities (through
+  `Commands`), instantiate prefabs, read and emit events by name (`MCE_EVENT` reflects an event type; the
+  physics trigger and contact events have it), send and hear the kit's named signals, play sounds, read input
+  actions, change scene, quit, and query 2D and 3D physics. `mce.field` handles and multi-field `get` / `set`
+  halve the per-entity cost: the 2,000-entity bench runs in about 0.35 ms per tick. User guide 27.3 lists it all.
 - Ducking and mixer snapshots, M-AUDIO2 step 4 (SBA-121): `AudioDuck` turns Music, SFX or UI down while
   another bus plays (the music under a voice line). `AudioSnapshot` fades a gain offset and a low-pass or
   high-pass onto a bus while it is active, or while the game is paused (`while_paused`: the stock player's
@@ -15,6 +20,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP
   `run_headless` run the scene's scripts from bytecode where `MCE_WITH_SCRIPT` is on, and the player links no
   Luau compiler. Scenes without scripts run and hash as before. New user guide chapter 27 (Scripting in Luau).
+- 2D bone animation, M-ANIM2D step 2 (SBA-141): a `.mcskel2d` holds `"animations"`, clips of per-bone rotate,
+  translate and scale keys (offsets from the rest pose) with linear, stepped or bezier curves and timed events.
+  A `Skeleton2DAnimator` plays them on the entity's `Skeleton2D`, cross-fades on a clip change and writes only
+  the channels the clips key, so gameplay keeps the rest. An `.mcanim` graph drives it with the same state
+  machine as the 3D `Animator`. Events raise `AnimEvent3D`. State is saved and hashed. User guide 7.13.
 - Behavior tree stock tasks and aborts, M-AI step 2 (SBA-129): trees reach the kit with no code. `move_to` walks
   a `NavAgent3D` or a `PathAgent` to a vec3 key or after an entity key, `look_at` turns the entity, `animate`
   plays a sprite or Animator clip (and can wait for it), `play_sound`, `spawn`, `raise` and `wait_event` (which
