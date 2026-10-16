@@ -143,11 +143,130 @@ def test_errors(work):
     check(code == 1, "a missing file fails")
 
 
+# ---- Tiled ------------------------------------------------------------------------------------------
+
+def tiled_map(**over):
+    doc = {
+        "type": "map", "orientation": "orthogonal", "infinite": False, "width": 4, "height": 3,
+        "tilewidth": 16, "tileheight": 16,
+        "tilesets": [{"firstgid": 1, "name": "terrain", "image": "terrain.png", "imagewidth": 64, "imageheight": 32,
+                      "tilewidth": 16, "tileheight": 16, "tilecount": 8, "columns": 4, "margin": 0, "spacing": 0,
+                      "tiles": [{"id": 1, "properties": [{"name": "solid", "type": "bool", "value": True}]}]}],
+        "layers": [
+            {"type": "tilelayer", "name": "Ground", "width": 4, "height": 3, "visible": True, "opacity": 1,
+             "data": [0, 0, 0, 0,
+                      0, 3, 0, 0,
+                      2, 2, 1, 1]},
+            {"type": "objectgroup", "name": "Things", "objects": [
+                {"id": 1, "name": "Door", "x": 16, "y": 16, "width": 16, "height": 32, "properties": [
+                    {"name": "sensor", "type": "bool", "value": True}]},
+                {"id": 2, "name": "Start", "x": 8, "y": 40, "point": True},
+                {"id": 3, "name": "Blob", "x": 0, "y": 0, "width": 8, "height": 8, "ellipse": True}]}],
+    }
+    doc.update(over)
+    return doc
+
+
+def tiled_setup(work, name, doc):
+    d = os.path.join(work, name)
+    os.makedirs(d)
+    with open(os.path.join(d, "terrain.png"), "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n")
+    path = os.path.join(d, "level.tmj")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(doc, f)
+    return d, path
+
+
+def read(d, name):
+    with open(os.path.join(d, name), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def test_tiled_basic(work):
+    d, path = tiled_setup(work, "tbasic", tiled_map())
+    code, err = run(["tiled", path])
+    check(code == 0, "a plain map converts: " + err)
+    check("ellipse" in err, "an ellipse object warns")
+    tm = read(d, "level_Ground.mctilemap")
+    check(tm["format"] == "mce-tilemap" and tm["width"] == 4 and tm["height"] == 3 and tm["columns"] == 4 and tm["rows"] == 2,
+          "tilemap header")
+    check(tm["tiles"] == [2, 2, 1, 1,   0, 3, 0, 0,   0, 0, 0, 0],
+          "rows are flipped (engine row 0 is the bottom) and ids are local id + 1: %r" % tm["tiles"])
+    side = read(d, "terrain.png.mceasset")
+    check(tm["tileset"] == "guid:" + side["guid"], "the tilemap names the tileset image's GUID")
+    sc = read(d, "level.mcscene")
+    by = {e["name"]: e for e in sc["entities"]}
+    check(sc["format"] == "mce-scene" and "Ground" in by, "a scene with a layer entity")
+    check(by["Ground"]["components"]["TilemapLayer"]["map"] == "guid:" + tm["guid"], "the layer entity names its tilemap")
+    door = by["Door"]["components"]
+    check(door["Collider2D"]["shape"] == {"half": [0.5, 1]} and door["Collider2D"]["is_sensor"] is True, "a rectangle is a sensor box")
+    check(door["LocalTransform"]["position"] == [1.5, 1.0, 0], "rectangle position: centre, y up: %r" % door["LocalTransform"]["position"])
+    check(by["Start"]["components"]["LocalTransform"]["position"] == [0.5, 0.5, 0], "a point is a marker entity")
+    boxes = [e for e in sc["entities"] if e["name"].startswith("Ground collision")]
+    check(len(boxes) == 1 and boxes[0]["components"]["Collider2D"]["shape"] == {"half": [1, 0.5]},
+          "solid tiles (local id 1: the two 2s of the bottom row) merge into one box: %r" % [b["components"] for b in boxes])
+    check(boxes[0]["components"]["LocalTransform"]["position"] == [1, 0.5, 0], "...on the bottom row, columns 0-1")
+
+
+def test_tiled_idempotent(work):
+    d, path = tiled_setup(work, "tagain", tiled_map())
+    run(["tiled", path])
+    first = {f: open(os.path.join(d, f), "rb").read() for f in sorted(os.listdir(d)) if f.startswith("level")}
+    run(["tiled", path])
+    second = {f: open(os.path.join(d, f), "rb").read() for f in sorted(os.listdir(d)) if f.startswith("level")}
+    check(first == second and len(first) >= 3, "a re-import gives the same bytes (GUIDs kept)")
+
+
+def test_tiled_encodings_and_errors(work):
+    import base64
+    import struct
+    import zlib
+    gids = [0, 0, 0, 0, 0, 3, 0, 0, 2, 2, 1, 1]
+    raw = struct.pack("<12I", *gids)
+    for tag, comp, blob in (("b64", "", raw), ("zlib", "zlib", zlib.compress(raw))):
+        lyr = tiled_map()["layers"][0]
+        lyr.update({"data": base64.b64encode(blob).decode(), "encoding": "base64"})
+        if comp:
+            lyr["compression"] = comp
+        d, path = tiled_setup(work, "t" + tag, tiled_map(layers=[lyr]))
+        code, err = run(["tiled", path])
+        tm = read(d, "level_Ground.mctilemap") if code == 0 else {}
+        check(code == 0 and tm.get("tiles", [0] * 12)[:4] == [2, 2, 1, 1], f"base64 {comp or 'raw'} data decodes: {err}")
+    for what, doc, needle in (
+            ("infinite", tiled_map(infinite=True), "infinite"),
+            ("isometric", tiled_map(orientation="isometric"), "isometric"),
+            ("spacing", tiled_map(tilesets=[dict(tiled_map()["tilesets"][0], spacing=2)]), "margin or spacing")):
+        d, path = tiled_setup(work, "terr_" + what, doc)
+        code, err = run(["tiled", path])
+        check(code == 1 and needle in err, f"{what} map is an error: {err}")
+    # flipped tiles warn
+    lyr = tiled_map()["layers"][0]
+    lyr["data"][5] = 3 | 0x80000000
+    d, path = tiled_setup(work, "tflip", tiled_map(layers=[lyr]))
+    code, err = run(["tiled", path])
+    check(code == 0 and "flipped" in err, "flipped tiles warn: " + err)
+    d, path = tiled_setup(work, "tflip2", tiled_map(layers=[lyr]))
+    code, err = run(["tiled", path, "--werror"])
+    check(code == 1 and not os.path.exists(os.path.join(d, "level.mcscene")), "--werror writes nothing")
+    # external tileset, collide layer property, two tilesets
+    d, path = tiled_setup(work, "text", tiled_map(tilesets=[{"firstgid": 1, "source": "terrain.tsj"}]))
+    ts = dict(tiled_map()["tilesets"][0])
+    ts.pop("firstgid"), ts.pop("tiles")
+    json.dump(ts, open(os.path.join(d, "terrain.tsj"), "w"))
+    code, err = run(["tiled", path])
+    check(code == 0, "an external .tsj tileset loads: " + err)
+    d, path = tiled_setup(work, "txml", tiled_map(tilesets=[{"firstgid": 1, "source": "terrain.tsx"}]))
+    code, err = run(["tiled", path])
+    check(code == 1 and ".tsx" in err, "an XML tileset is a clear error: " + err)
+
+
 def main():
     work = sys.argv[1]
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(work)
-    for t in (test_basic, test_idempotent, test_hash_frames_and_default_clip, test_warnings, test_errors):
+    for t in (test_basic, test_idempotent, test_hash_frames_and_default_clip, test_warnings, test_errors,
+              test_tiled_basic, test_tiled_idempotent, test_tiled_encodings_and_errors):
         t(work)
     if failures:
         print(f"{len(failures)} check(s) failed")
