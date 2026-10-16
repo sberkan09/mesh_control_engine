@@ -72,6 +72,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
   User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
+- Matchmaking and host migration, M-NET3 step 3 (SBA-125): `RelayClient::quick_play(mode, size)` puts a player in
+  an open room of that mode or makes one, and `list_rooms` fetches listed rooms for a lobby. A room made with
+  `host_migration` survives its host: the relay hands it to the lowest member, `on_host_change` tells every member,
+  and `ReplicationServer::adopt` turns the new host's mirror into the server world. `sample_net_headless -relay 1
+  -host_leaves 300` loses its host halfway and every client keeps matching the new one. The relay protocol is now
+  version 2. User guide 20.8.
 - Spectators and clock sync, M-NET3 step 2 (SBA-124): a `RollbackSession` with `.spectator = true` watches
   without playing, fed confirmed inputs by one player (`write_spectator_packet`), and checks its hashes. With
   `time_sync` (on by default) a rollback peer whose clock runs ahead skips a tick now and then instead of
