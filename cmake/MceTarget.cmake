@@ -124,7 +124,8 @@ endfunction()
 # A test that takes over 60 s (M4) is labelled `slow` and ships a smoke variant for --task: fewer ticks or frames,
 # one scene, the same checks. The presets' ctest runs skip `slow` (CMakePresets.json filter.exclude); the integration
 # run executes them with local_ci.sh's `slow` stage (ctest preset linux-gcc-debug-slow). Keeps the other labels
-# (gpu, ...). Usage:  mce_mark_slow(my_test_gpu)  and  add_test(NAME my_test_gpu_smoke ...) with the shorter run.
+# (gpu, ...). Note: a command-line `-LE <expr>` on `ctest --preset` replaces the preset's exclude, so such a
+# caller must list slow itself (-LE 'gpu|slow'). Usage:  mce_mark_slow(my_test_gpu)  and  add_test(NAME my_test_gpu_smoke ...) with the shorter run.
 function(mce_mark_slow test)
     get_test_property(${test} LABELS _labels)
     if(_labels STREQUAL "NOTFOUND")
