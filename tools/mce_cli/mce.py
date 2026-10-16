@@ -17,9 +17,9 @@
     mce story compile [<project>] [--check] [--werror]   compile story/*.story (story/story.json) into the
                                                 game's C++ header (mce/kit/novel.h) and story/REPORT.md
     mce import aseprite <export.json> [--out f.mcsheet] [--werror]   Aseprite's JSON export + PNG into a .mcsheet
+                                                (frames, tags as clips, slices; unsupported features warn)
     mce import tiled <map.tmj> [--out-dir d] [--tile-size m] [--werror]   Tiled map into a .mcscene + .mctilemap per layer
     mce import ldtk <project.ldtk> [--level L] [--out-dir d] [--tile-size m] [--werror]   LDtk levels into scenes + tilemaps
-                                                (frames, tags as clips, slices; unsupported features warn)
     mce import spine|dragonbones <export.json> [--out f.mcskel2d] [--ppm 100] [--atlas a] [--texture png] [--strict]
                                                 Spine 3.8/4.x JSON or DragonBones 5.x JSON into a .mcskel2d
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
