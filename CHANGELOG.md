@@ -5,6 +5,8 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Docs checks in the guide, M-DOCCHECK step 4 (SBA-179): user guide 1.8 describes what the walls stage checks in the
+  documents and where the accepted misses live. M-DOCCHECK is done.
 - Tested-sample check, M-DOCCHECK step 3 (SBA-178): `check_docs.py` also fails for a `samples/` or `projects/`
   directory that no test runs. Every one has a test today except `samples/common` (shared headers).
 - Flag check, M-DOCCHECK step 2 (SBA-177): `check_docs.py` also fails for a `-flag` after `mce_player` in a
