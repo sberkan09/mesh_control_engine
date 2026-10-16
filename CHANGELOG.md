@@ -19,10 +19,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   runs the asset module's 19 chunk readers over 22,000 mutated payloads of every chunk the samples cook
   (`ctest -R test_fuzz`); none crashes, hangs or asserts. `docs/milestones/M-FUZZ.md` lists every parser of
   untrusted bytes and what covers it.
-- Nav mesh bakes carry an integrity hash, M-FUZZ step 2b (SBA-186): `test_fuzz` found that a bake with damaged layer
-  bytes crashed Detour's contour builder (division by zero). `.mcnav` version 2 ends with an FNV-1a 64 of the
-  bytes before it; `navmesh_blob_valid`, `NavMesh3D::load` and the importer refuse a mismatch, and a version-1
-  file must be re-baked (the sample's `nav_13.mcnav` was upgraded).
+- Nav mesh bakes carry an integrity hash and their layers are checked, M-FUZZ step 2b (SBA-186): `test_fuzz` found
+  that a bake with damaged layer bytes crashed Detour's contour builder (division by zero). `.mcnav` version 2
+  ends with an FNV-1a 64 of the bytes before it, and `navmesh_blob_valid` (also behind `NavMesh3D::load`) decodes
+  every tile layer and refuses a bad header, tile coordinates, area id or a connection out of the grid, even when
+  the hash was made right again; the importer refuses a hash mismatch, and a version-1 file asks for a re-bake (the
+  sample's `nav_13.mcnav` was upgraded).
 - Walked views and more decoders, M-FUZZ step 2 (SBA-186): `test_fuzz` follows every offset and range a consumer
   follows over what the 19 readers accept (so the ASan stage sees an out-of-bounds read), and covers the sprite
   sheet, string table, input map, store, remote config and game services catalogs, UI theme and document (with

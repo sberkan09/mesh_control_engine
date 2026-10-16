@@ -20,6 +20,7 @@ mce_add_test(test_cook UMBRELLA
         test_cook_gltf.cpp
         test_cook_lod.cpp
         test_cook_input.cpp
+        test_cook_navmesh.cpp
         test_cook_json_audio.cpp
         test_cook_mod.cpp
         test_cook_project.cpp
@@ -40,6 +41,7 @@ mce_add_test(test_cook UMBRELLA
         mce::mce_monetize
         mce::mce_liveops
         mce::mce_loc
+        mce::mce_physics3d
         mce::mce_ui)
 target_include_directories(test_cook PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_compile_definitions(test_cook PRIVATE ${MCE_ASSET_TEST_DEFS})

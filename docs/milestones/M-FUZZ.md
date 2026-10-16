@@ -67,15 +67,24 @@ It needs no device: a deterministic mutator, ctest targets and fixes with regres
 with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then divided by zero inside
 `simplifyContour` (found by the nav chunk in `test_fuzz`, SIGFPE).
 
-- **Fix.** Blob version 2 ends with an FNV-1a 64 of every byte before it. `navmesh_blob_valid`, `load` and the
+- **Hash.** Blob version 2 ends with an FNV-1a 64 of every byte before it. `navmesh_blob_valid`, `load` and the
   `.mcnav` importer refuse a blob whose hash does not match; `NAVMESH_VERSION` and the importer version are 2
   (cooked caches rebuild), and `samples/07_gameplay3d/.../nav_13.mcnav` was upgraded in place (version field
   and trailer; the bake is otherwise the same bytes). A version-1 file is refused with "re-bake the navmesh".
-- **Limit.** The hash catches damage, not a forger: anyone who can write the file can write a matching hash. A
-  mod is trusted code anyway (it can ship a module); the hash is for truncation, bit rot and bad downloads.
-- **Test.** `test_navmesh.cpp` flips a byte in the header, the middle layers and the trailer and expects
-  a refusal from `navmesh_blob_valid` and `load`; `test_fuzz` now runs `load` and three queries on every
-  mutant of the sample bake (all refused or loaded cleanly).
+  The hash catches truncation, bit rot and bad downloads, not a forger who re-hashes.
+- **Layer checks (review of the first version).** The hash alone leaves the root cause: a re-hashed blob still
+  reaches Detour. `navmesh_blob_valid` therefore decodes every layer the way the tile cache will and refuses
+  it unless its header is Detour's (magic, version), its size and usable window are consistent, its tile
+  coordinates and layer index are inside the blob's grid, every area id is below 64, and no connection bit
+  points out of the grid (the case where the contour walker reads past its region array and then finds a
+  region with no edge). A layer that passes is one the builder can walk.
+- **Test.** `test_navmesh.cpp` flips bytes in the header, the layers and the trailer, edits the layer header
+  (magic, version, tile x and y, width, window) and the decoded grid (a connection toward x − 1 at x = 0, an
+  area id 200) with the hash made right again, and expects a refusal from `navmesh_blob_valid` and `load`; the
+  committed sample bake loads; a version-1 file is refused with the re-bake message. `test_cook_navmesh.cpp`
+  covers the importer: a good bake cooks; a flipped byte, a version-1 file, a 12-byte fragment and a wrong magic
+  stop with a message. `test_fuzz` re-hashes half of the nav mutants (4,000 per chunk) and loads and queries
+  them; with the layer checks removed that run crashes with SIGFPE, with them it is clean (also at 40,000).
 
 ### Survey: parsers of untrusted bytes
 
@@ -86,7 +95,7 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
 | UI document, theme | `ui/document_data.h` `decode_ui_document`, `decode_ui_theme` | packs | mutated, then `build_document` (`test_fuzz`) | done |
 | String tables | `loc/string_table.h` `decode_table` | packs, mods | mutated (no sample pack has one yet; `test_fuzz` reads it when present) | done |
 | Store, remote config, game services catalogs; input map | `monetize/catalog.h`, `liveops/remote_config.h`, `liveops/game_services.h`, `input/input_map.h` | packs | mutated (`test_fuzz`) | done |
-| Nav mesh | `physics3d` `.mcnav` bytes | packs | mutated, `load` and queries (`test_fuzz`); damaged layers refused by the trailing hash | done |
+| Nav mesh | `physics3d` `.mcnav` bytes | packs | mutated, `load` and queries, half re-hashed (`test_fuzz`); damage refused by the hash, layers by the layer checks | done |
 | Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | none (the view's rows and fixups are walked) | 3 |
 | PNG, glTF, Ogg Vorbis, MPEG-1 | `cook/image.h` `decode_png`; cook glTF; `asset/vorbis.h` `decode_vorbis`; video | importing source files | Vorbis stream inside a sound chunk only | 3 |
 | Text assets (`.mcscene`, `.mcprefab`, `.mcanim`, `.mcskel2d`, `.mcterrain`, `.mcbt`, `.mcui`, timelines, `.mcsound`) | cook JSON reader and per-type validators | project sources, agents | none | 3 |

@@ -125,7 +125,8 @@ struct PackBits final : dtTileCacheCompressor {
 };
 
 // ---- the blob (.mcnav) ----------------------------------------------------------------------------
-// Little-endian fields written one by one (no struct padding reaches the bytes):
+// Little-endian fields written one by one (no struct padding reaches the bytes; the writer and reader copy
+// native values, so the format is little-endian on every platform the engine targets, which all are):
 //   "MCNV" u32 version, the settings, bmin[3] bmax[3], i32 tiles_x tiles_z, u32 layers, u32 links,
 //   links (start[3] end[3] radius, u8 area, u8 bidirectional, u16 0, u32 user_id),
 //   layers (u32 size, size bytes, zero padding to 4).
@@ -640,21 +641,66 @@ bool bake_navmesh(const NavGeometry3D& g, const NavBakeSettings3D& s, Array<byte
     return true;
 }
 
+namespace {
+
+// One tile layer as the tile cache will read it. Detour's builder trusts a layer: a connection bit that points
+// outside the grid makes the contour walker read past its region array, and a region that looks like it has no
+// edge makes simplifyContour divide by zero (found by test_fuzz). The hash over the blob only catches damage;
+// this is what makes a layer someone re-hashed safe to hand over.
+bool layer_valid(const byte* src, u32 size, const BlobHeader& h) {
+    install_allocators();
+    auto* copy = static_cast<unsigned char*>(dtAlloc(size, DT_ALLOC_TEMP));  // Detour reads it as a header: aligned
+    if (!copy) return false;
+    std::memcpy(copy, src, size);
+    const auto* lh = reinterpret_cast<const dtTileCacheLayerHeader*>(copy);
+    bool ok = lh->magic == DT_TILECACHE_MAGIC && lh->version == DT_TILECACHE_VERSION && lh->width > 0 && lh->height > 0 &&
+              lh->minx <= lh->maxx && lh->maxx < lh->width && lh->miny <= lh->maxy && lh->maxy < lh->height &&
+              lh->tx >= 0 && lh->tx < h.tiles_x && lh->ty >= 0 && lh->ty < h.tiles_z && lh->tlayer >= 0 &&
+              lh->tlayer < kMaxLayersPerTile;
+    dtTileCacheLayer* layer = nullptr;
+    dtTileCacheAlloc alloc;
+    PackBits comp;
+    if (ok) ok = dtStatusSucceed(dtDecompressTileCacheLayer(&alloc, &comp, copy, int(size), &layer)) && layer != nullptr;
+    if (ok) {
+        const int w = lh->width, ht = lh->height;
+        static constexpr int kDx[4] = {-1, 0, 1, 0}, kDy[4] = {0, 1, 0, -1};  // Detour's direction order
+        for (int y = 0; ok && y < ht; ++y) {
+            for (int x = 0; ok && x < w; ++x) {
+                const int i = x + y * w;
+                if (layer->areas[i] >= 64) ok = false;  // Detour's area ids (the bake maps them to ours)
+                for (int d = 0; ok && d < 4; ++d) {
+                    if (!((layer->cons[i] & 0xf) & (1 << d))) continue;
+                    const int nx = x + kDx[d], ny = y + kDy[d];
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= ht) ok = false;  // a connection out of the grid
+                }
+            }
+        }
+    }
+    if (layer) dtFreeTileCacheLayer(&alloc, layer);
+    dtFree(copy);
+    return ok;
+}
+
+}  // namespace
+
 bool navmesh_blob_valid(Span<const byte> blob) {
     Reader r(blob);
     BlobHeader h;
     if (!read_header(r, h, nullptr)) return false;
+    // The layers, then the trailer. The hash is checked first: it is cheap and settles damage before any of
+    // the layer decoding below.
+    if (blob.size() < kTrailerBytes) return false;
+    u64 stored = 0;
+    std::memcpy(&stored, blob.data() + blob.size() - kTrailerBytes, kTrailerBytes);
+    if (stored != fnv1a64(blob.data(), blob.size() - kTrailerBytes)) return false;
     for (u32 i = 0; i < h.layers; ++i) {
         const u32 size = r.u32v();
-        if (size < u32(sizeof(dtTileCacheLayerHeader)) || !r.take(size)) return false;
+        if (size < u32(sizeof(dtTileCacheLayerHeader))) return false;
+        const byte* layer = r.take(size);
+        if (!layer || !layer_valid(layer, size, h)) return false;
         r.pad4();
     }
-    if (!r.ok() || r.pos() + kTrailerBytes != blob.size()) return false;
-    // The tile layers go to Detour's tile cache, which trusts them: a damaged byte there is a division by
-    // zero inside the contour builder. The trailer turns damage into a refusal.
-    u64 stored = 0;
-    std::memcpy(&stored, blob.data() + r.pos(), kTrailerBytes);
-    return stored == fnv1a64(blob.data(), r.pos());
+    return r.ok() && r.pos() + kTrailerBytes == blob.size();
 }
 
 // ---- NavMesh3D ------------------------------------------------------------------------------------------
@@ -761,7 +807,12 @@ bool NavMesh3D::load(Span<const byte> blob, u32 max_agents) {
     m.release();
 
     if (!navmesh_blob_valid(blob)) {
-        MCE_LOG_WARN("navmesh: not a navmesh bake, or a damaged one");
+        u32 version = 0;
+        if (blob.size() >= 8 && std::memcmp(blob.data(), kMagic, 4) == 0) std::memcpy(&version, blob.data() + 4, 4);
+        if (version != 0 && version != kVersion)
+            MCE_LOG_WARN("navmesh: bake version {} is not supported (this build reads {}); re-bake the navmesh", version, kVersion);
+        else
+            MCE_LOG_WARN("navmesh: not a navmesh bake, or a damaged one");
         return false;
     }
     Reader r(blob);
