@@ -1,0 +1,261 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "5ce4e000-0000-4000-8000-0000000a2e4a",
+  "name": "arena",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Wall N",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            10.5,
+            0
+          ],
+          "scale": [
+            34,
+            1,
+            1
+          ]
+        },
+        "NetReplicated": {
+          "kind": 2
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Wall S",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            -10.5,
+            0
+          ],
+          "scale": [
+            34,
+            1,
+            1
+          ]
+        },
+        "NetReplicated": {
+          "kind": 2
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Wall W",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -16.5,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            22,
+            1
+          ]
+        },
+        "NetReplicated": {
+          "kind": 2
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Wall E",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            16.5,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            22,
+            1
+          ]
+        },
+        "NetReplicated": {
+          "kind": 2
+        }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Pillar 1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -6,
+            4,
+            0
+          ],
+          "scale": [
+            2,
+            2,
+            1
+          ]
+        },
+        "NetReplicated": {
+          "kind": 2
+        }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Pillar 2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            6,
+            4,
+            0
+          ],
+          "scale": [
+            2,
+            2,
+            1
+          ]
+        },
+        "NetReplicated": {
+          "kind": 2
+        }
+      }
+    },
+    {
+      "id": 7,
+      "name": "Pillar 3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -6,
+            -4,
+            0
+          ],
+          "scale": [
+            2,
+            2,
+            1
+          ]
+        },
+        "NetReplicated": {
+          "kind": 2
+        }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Pillar 4",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            6,
+            -4,
+            0
+          ],
+          "scale": [
+            2,
+            2,
+            1
+          ]
+        },
+        "NetReplicated": {
+          "kind": 2
+        }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Barrier",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.5,
+            5,
+            1
+          ]
+        },
+        "NetReplicated": {
+          "kind": 2
+        }
+      }
+    },
+    {
+      "id": 10,
+      "name": "Pad 1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -13,
+            7,
+            0
+          ]
+        },
+        "NetReplicated": {
+          "kind": 3
+        }
+      }
+    },
+    {
+      "id": 11,
+      "name": "Pad 2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            13,
+            7,
+            0
+          ]
+        },
+        "NetReplicated": {
+          "kind": 3
+        }
+      }
+    },
+    {
+      "id": 12,
+      "name": "Pad 3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -13,
+            -7,
+            0
+          ]
+        },
+        "NetReplicated": {
+          "kind": 3
+        }
+      }
+    },
+    {
+      "id": 13,
+      "name": "Pad 4",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            13,
+            -7,
+            0
+          ]
+        },
+        "NetReplicated": {
+          "kind": 3
+        }
+      }
+    }
+  ]
+}

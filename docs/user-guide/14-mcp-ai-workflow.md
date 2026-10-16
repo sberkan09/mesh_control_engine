@@ -68,6 +68,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `asset_create` | `path`, `content?` | a new `.mcpart`, `.mcseq`, `.mctilemap`, `.mcsheet`, `.mcanim`, `.mcmat`, `.mcinput`, `.mcstore`, `.mcservices`, `.mcui` or `.mcconfig` (the extension picks the type) with a fresh GUID: the template with `content`'s fields over it. Returns `guid:<uuid>` |
 | | `asset_write` | `path` or `guid`, `content`, `mode?` | `merge` (default) replaces the named fields and keeps the rest, `replace` writes exactly `content`; the GUID stays |
 | | `asset_read` | `path` or `guid` | the parsed document of a JSON source asset (scenes and prefabs too) |
+| | `asset_import` | `tool` (`aseprite`, `tiled`, `ldtk`), `file` (a path inside the project), `out_dir?` (under `assets/`), `name?`, `level?` (ldtk), `tile_size?`, `werror?` | converts an Aseprite, Tiled or LDtk export into `.mcsheet` / `.mcscene` + `.mctilemap` assets with the `mce import` converters (user guide 7.3), keeps GUIDs on a re-import, registers the result at once. Unsupported features are listed as warnings in `output`; `werror` makes them a failure that writes nothing. Needs Python 3 |
 | | `tilemap_paint` | `path` or `guid`, `clear?`, `cells?`, `rects?`, `fills?`, `preview?` | `[x, y, tile]` cells, `[x0, y0, x1, y1, tile]` rectangles and `[x, y, tile]` flood fills, applied in that order; (0, 0) is bottom-left, tile 0 erases, n draws tileset cell n-1. `preview` returns the map as text rows |
 | Terrain | `terrain_sculpt` | `path` or `guid`, `op`, `points`, `radius?`, `strength?`, `hardness?`, `target?`, `seed?`, `stroke?`, `repeat?` | the Terrain panel's brushes on a `.mcterrain`: `raise`, `lower`, `smooth`, `flatten` (to `target` metres) or `noise`, a dab at each `[x, z]` point (metres from the terrain's centre) or along them with `stroke`. Returns the samples changed, the height range and the height under each point after the change (`strength` 0 only measures) |
 | | `terrain_paint` | `path` or `guid`, `points`, `mode?` (`layer`, `hole`, `fill`), `layer?`, `radius?`, `strength?`, `hardness?`, `stroke?`, `repeat?` | paints a splat layer (its `TerrainFoliage3D` grows there), cuts holes or closes them. Returns each layer's share of the paint in percent and the hole samples |
@@ -338,7 +339,8 @@ Markdown backlog, blocking notes first and each area by how often it came up, fo
    sidecars, `asset_list` to get their GUIDs, `asset_set_import_settings` for normal maps and LUTs.
    Particle presets, sequences, tilemaps, materials, input maps and the store, services and config
    catalogs are made with `asset_create` (`asset_schema` shows their fields), never written by hand;
-   lay a level out with `asset_create` on a `.mctilemap` and `tilemap_paint`.
+   lay a level out with `asset_create` on a `.mctilemap` and `tilemap_paint`, or take it from Tiled or
+   LDtk with `asset_import` (art from Aseprite the same way).
 4. **Author.** `scene_open`, then `entity_create` with a components object per entity;
    `entity_duplicate` plus `component_set LocalTransform position` to lay out repeated tiles;
    `component_set` to tune. Name entities.

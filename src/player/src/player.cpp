@@ -703,6 +703,14 @@ public:
         update_ui_map(cutscene && cutscene_.active);
         update_subtitles(bb);
         speak_focus();
+        // M-VIEWS: with a CameraView in the scene every view draws into its rect (record_views);
+        // the debug view overrides (-view.*), the UI preview and a fullscreen film keep the single
+        // view. The views are known before the UI updates: a UiScreenView lays out in its view.
+        if (!ui_preview_) render_textures_.sync(world_, capture_due() ? 1.0f / 60.0f : static_cast<f32>(rc.frame_dt));
+        const bool have_views = !ui_preview_ && view_entity().is_null() && view_free_.empty() &&
+                                kit::collect_views(world_, bb, views_, &kit::render_texture_size, &render_textures_);
+        if (!have_views) views_.clear();
+        screens_.set_views(world_, views_.span(), window_->display_scale(), cv_ui_scale.get_float());
         update_ui_screens(bb);
         // Video pictures step to their players' playheads before the extracts draw them.
         if (!ui_preview_) videos_.update(world_);
@@ -727,11 +735,7 @@ public:
         if (three_d_ && !ui_preview_) draw_3d = view_override_3d(alpha, cam3) || draw_3d;
         update_mouse_look(draw_3d && cam3_info.mouse_look != 0);
         rhi::CommandBuffer cmd(mem::frame());
-        // M-VIEWS: with a CameraView in the scene every view draws into its rect (render_views);
-        // the debug view overrides (-view.*) and the UI preview keep the single view.
-        if (!ui_preview_) render_textures_.sync(world_, capture_due() ? 1.0f / 60.0f : static_cast<f32>(rc.frame_dt));
-        const bool multi = !ui_preview_ && !film_ && view_entity().is_null() && view_free_.empty() &&
-                           kit::collect_views(world_, bb, views_, &kit::render_texture_size, &render_textures_);
+        const bool multi = have_views && !film_;
         if (!multi && !ui_preview_) render_textures_.clear_new(cmd);
         if (multi) {
             kit::ViewRecordContext vc;
@@ -752,6 +756,7 @@ public:
                 drew_3d_ = true;
             }
             batch_stats_ = vs.first_2d;
+            record_view_screens(cmd);
             if (overlay) {
                 rhi::PassAttachment over;
                 over.load = rhi::LoadOp::Load;
@@ -1788,6 +1793,30 @@ private:
         }
         ui_pointer_.pressed = ui_pointer_.released = false;
         screens_.update(world_, ctx);
+    }
+
+    // The UI screens laid out in a view (UiScreenView, M-VIEWS 4): each in a pass on its rect,
+    // under the window-wide overlay (the pause veil and the console cover them).
+    void record_view_screens(rhi::CommandBuffer& cmd) {
+        const u32 n = screens_.view_screen_count();
+        if (n == 0) return;
+        screens_.bind_render_textures(render_textures_);
+        for (u32 i = 0; i < n; ++i) {
+            const rhi::Rect2D r = screens_.view_screen_rect(i);
+            render::SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
+            hud.begin(render::compute_screen_view({r.width, r.height}), render::PassId::Screen2D);
+            screens_.submit_view_screen(i, hud, -120);
+            hud.build();
+            rhi::PassAttachment c;
+            c.load = rhi::LoadOp::Load;
+            rhi::RenderPassDesc p;
+            p.colors = Span<const rhi::PassAttachment>(&c, 1);
+            p.viewport = r;
+            p.debug_name = "player.view_ui";
+            cmd.begin_pass(p);
+            renderer_.record_2d(cmd, hud);
+            cmd.end_pass();
+        }
     }
 
     void record_overlay(rhi::CommandBuffer& cmd, rhi::Extent2D bb) {

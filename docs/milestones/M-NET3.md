@@ -1,6 +1,6 @@
 # M-NET3 — Multiplayer at scale (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–4 done). Plan: ROADMAP §M-NET3; Linear SBA-123 … SBA-127.
+**Status:** active (added 2026-10-16; steps 1–5 done). Plan: ROADMAP §M-NET3; Linear SBA-123 … SBA-127.
 
 **Why:** M-NET2 made multiplayer that feels local, but it leaves gaps that a shipped game hits (user guide 20.10):
 
@@ -25,7 +25,7 @@ chat, anti-cheat beyond server authority.
 | 2 | Spectators in replication and rollback sessions; bounded clock sync for rollback peers that run ahead | SBA-124 | done |
 | 3 | Matchmaking and host migration in `mce_relay`: quick play by mode and size, a room list, the host role handed on and the server rebuilt from the new host's mirror | SBA-125 | done |
 | 4 | WebRTC data channels (native over a fetched library, web over `RTCPeerConnection`), signalled through `mce_relay`, the relay as fallback | SBA-126 | done |
-| 5 | `samples/net_arena`: a windowed 2–4 player arena from scene data, the user guide, MCP reach and the demo | SBA-127 | not started |
+| 5 | `samples/net_arena`: a windowed 2–4 player arena from scene data, the user guide, MCP reach and the demo | SBA-127 | done |
 
 **Demo:** four arena clients at 150 ms simulated latency, joined by quick play and recorded from an xvfb run.
 The host leaves and the match goes on. Bytes down per client are measured against M-NET2's full snapshots.
@@ -126,3 +126,31 @@ Notes:
 - Chromium hides its host address behind an mDNS name; the probe starts it with
   `--disable-features=WebRtcHideLocalIpsWithMdns` so the native peer can reach it.
 - `RtcStats` counts messages sent and received each way (`direct_*`, `relay_*`), `direct_opened` and `fallbacks`.
+
+## Step 5 — the arena sample
+
+| Item | Where | Evidence |
+|---|---|---|
+| `samples/net_arena`: rules shared by server, prediction and bots (`arena.h`: `step_player`, `Map`, `ArenaHealth` with `Replicated` fields), the server (`server.h`: scene load, `assign_tagged`, `HitBox` walls, `LagCompensator`, per-client delta snapshots at 30 Hz), the client (`client.h`: `ReplicationClient` interpolation, `Predictor`, shots stamped with `drawn_tick`) and a whole match over `SimNetwork` through a relay (`session.h`) | `samples/net_arena/` | `sample_net_arena_sim` (4 players, 150 ms, 20 ms jitter, 3 % loss), `sample_net_arena_two` |
+| The arena is `assets/scenes/arena.mcscene` (4 border walls, 5 pillars, 4 pads; `NetReplicated` kinds 2 and 3), cooked into the sample's pack and loaded by the server only; clients get it in snapshots | `samples/net_arena/assets/` | the match report: each client's 17 replicated entities and 4 health records match the server's bit for bit |
+| Quick play: the server hosts a listed "arena" room, players `quick_play("arena", n)` | `session.h` | the report: 4 quick plays into one room |
+| Windowed (local play against three bots over a simulated link, `-autoplay` for recordings, `-serve` and `-connect` for real sockets) and headless | `main.cpp` | an xvfb run draws the arena, 0 GL errors (`sample_net_arena_gpu`) |
+| `local_ci.sh` net determinism: the match hashes the same three times, in Debug and Release, for two settings | `scripts/ci/local_ci.sh` (`stage_net_determinism`) | the stage |
+| User guide 20.11; MCP reach: `NetReplicated` and `NetOwner` are ordinary reflected components, so `entity_create` and `component_add` edit the arena scene and `run_headless`/`cook_run` work on it | `docs/user-guide/20-multiplayer.md`, `docs/engine/capabilities.md` | — |
+
+![the arena, four players, from an xvfb run](img/M-NET3-arena.png)
+
+Measured (headless, 4 players, 150 ms, 20 ms jitter, 3 % loss, 900 ticks, seed 1): snapshot bytes down to the
+players are about 37 % of what full broadcasts would have cost. Shots: of 133, 68 hit where the shooter drew
+the target, 33 where the target stands at the server's present.
+
+Notes:
+- Through the relay every message pays two hops, so 150 ms is 300 ms one way. At 60 Hz snapshots the 32 delta
+  baselines (about half a second) ran out before the acknowledgement came back and every snapshot was full; the
+  arena sends at 30 Hz, and rewinds up to a second (`kRewindSeconds`).
+- Dead players keep turning on the server too (it applies their aim with movement zeroed), the same as the client's
+  prediction; without that their mirror differed from the server's rotation.
+- Not done: host migration in the arena (the server is not rebuilt from a client's mirror; step 3 shows the
+  mechanism in `sample_net_headless`), split-screen local play, and a recorded run of players over real
+  `RtcHost` sockets (real sockets are not deterministic). The demo's frames are one view of an xvfb run.
+

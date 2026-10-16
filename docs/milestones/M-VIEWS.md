@@ -1,6 +1,6 @@
 # M-VIEWS — Several views and local players (milestone record)
 
-**Status:** active (added 2026-10-16; design note written; steps 1-3 done). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
+**Status:** active (added 2026-10-16; design note written; steps 1-4 done). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
 
 **Why:** one camera draws into the window. `Renderer::record_3d(cmd, scene, target)` already renders to a
 texture, but only a C++ host can use it. Input has no notion of a second player. A game cannot show a
@@ -35,7 +35,7 @@ global illumination (the probe volume is shared by all views).
   untouched (the golden gate). With one: every camera with an enabled CameraView is a view, plus each
   primary camera without one (full window, order 0), so a minimap needs only its own CameraView.
 - `kit::collect_views(world, window, out, target_size?)` -> `ViewEntry {camera, target, rect (pixels),
-  order, is_3d}` sorted by (texture targets first, target, order, 3D before 2D, entity index). Rects round
+  order, is_3d}` sorted by (texture targets first, target, order, 3D before 2D, split player (step 4), entity index). Rects round
   their edges, so split halves share an edge exactly.
 - `kit::record_views(cmd, world, views, ViewRecordContext)`: clears the target once, then per view: 3D =
   its own `Scene3D` (`Kit3DExtract::extract` for the first view, `extract_view` for the rest: no second
@@ -75,14 +75,42 @@ global illumination (the probe volume is shared by all views).
   `record_2d(..., linear_output)` (no sRGB encode; a 2D camera's clear color is linearized so it shows as
   in the window), then the window's views. A texture no view has drawn yet is cleared black once
   (`RenderTextures::clear_new`, which the single-view paths call too).
-- Orientation: a drawn texture holds its top row at v = 1 (uploaded art at v = 0) on both backends; the
-  sprite region is flipped and the screen material gets `uv_scale` v = -1 (the material sampler repeats).
+- Orientation (fixed in step 4): a render texture is written upright, its top row at v = 0 like uploaded
+  art, so sprites, materials (every map of the screen material) and UI sample it unchanged. A drawn frame
+  lands with its top row at v = 1 on both backends, so `Renderer::record_3d` with `linear_output` draws
+  the 3D view into the view slot's staging texture and copies it into the rect with a v-flipped quad (one
+  RGBA16F staging per slot, freed with the slot); a 2D view into a texture mirrors its clip-space y.
 - *No `project_check` cycle error: a view never samples the texture it draws (that surface falls back to
   its own look), and two textures that show each other show each other's previous frame.
 - Known limits (step 3): the anti-aliasing filter of a 3D view into a texture runs on linear values (edges
-  differ by a few levels from the window); the v flip of a screen material also flips its normal and ORM
-  maps; on the single-view debug paths (`-view.*` overrides, `-ui_preview`) textures keep their last
+  differ by a few levels from the window, about 1 % of the pixels); on the single-view debug paths (`-view.*` overrides, `-ui_preview`) textures keep their last
   picture; the editor counts `update_hz` at 60 frames a second.
+
+**Step 4 — split-screen** (kit/views.h, audio/components.h, player/ui_screens.h):
+- `CameraView.split` (u32, 1..4; the component grows to 48 bytes with explicit zeroed padding): the
+  window view of player n. The cells are the distinct `split` values in use, ascending, so the layout
+  follows the players present (1 and 3 present: halves; one leaves: the rest reflow). `viewport` is a
+  part of the cell, so a per-player HUD or minimap camera shares the player's `split` with a higher
+  `order`. `ViewEntry` gains `split` and `cell`; views sort by split player after 3D-before-2D.
+- `kit::SplitScreen {layout (Auto, Columns, Rows, Grid), divider px}`, one per scene; `kit::split_cell
+  (layout, count, index, aspect)`. Auto: two side by side (stacked on a portrait window), three with
+  player 1 on top, four in a 2 x 2 grid.
+- Budgets: `kit::scale_view_quality(scene, area)` runs in `record_views` (ViewRecordContext::scale_quality,
+  on by default): a view of at most half the window draws two shadow cascades at most; at most about a
+  third also drops SSR, contact shadows, volumetrics, DOF and motion blur. Full-window views are untouched
+  (the golden gate). On llvmpipe a four-way split of kit3d_tour took 1.3x the wall time of one view for
+  120 frames (startup included); a real-GPU budget waits on a device session (untested).
+- Per-view HUD: `kit::UiScreenView {camera}` beside a `UiScreen`. The player collects the views before the
+  UI update (`UiScreens::set_views`), lays the document out in that camera's window rect at
+  `compute_ui_scale(rect)`, keeps the safe insets only on window edges, moves the pointer into the rect
+  (outside it reaches nothing) and draws each such screen in its own pass under the window-wide overlay.
+- Audio: `audio::AudioListenerMix {mix}` with an `AudioListener` per player camera: `ListenerMix::Nearest`
+  spatializes each 3D voice against the nearest listener, `Mixed` takes the loudest gain and the
+  gain-weighted pan; `AudioDevice::set_listeners` (up to `kMaxListeners` = 4). No component (or mix 0)
+  keeps one listener and the old command stream.
+- Known limits (step 4): the editor's play view lays UiScreenView screens over the whole view (the
+  editor does not draw UiScreens per view); Doppler and occlusion follow the first listener; three
+  players in the Grid layout leave the fourth cell to the window's clear color.
 
 ## Steps
 
@@ -91,7 +119,7 @@ global illumination (the probe volume is shared by all views).
 | 1 | Local players and per-slot input: slot maps (`MapFlag` bits 8..11), per-slot pads, join by button, `P2/` script names (the `LocalPlayer` component moves to step 5, where something uses it) | SBA-161 | Sonnet | done |
 | 2 | Camera viewports and targets, several cameras per frame | SBA-162 | Opus | done |
 | 3 | `RenderTexture`: minimap, mirror, monitor, picture-in-picture | SBA-163 | Opus | done |
-| 4 | Split-screen: layouts, per-view HUD, listener, budgets | SBA-164 | Opus | not started |
+| 4 | Split-screen: layouts, per-view HUD, listener, budgets | SBA-164 | Opus | done |
 | 5 | The co-op kit and `samples/09_coop` | SBA-165 | Sonnet | not started |
 | 6 | MCP `view_*` / `player_*`, `render_frame` view argument, guide and gates | SBA-166 | Sonnet | not started |
 

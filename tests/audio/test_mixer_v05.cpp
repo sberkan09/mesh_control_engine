@@ -422,3 +422,55 @@ TEST_CASE("audio_bridge: AudioListener follows its transform and 3D sources foll
     CHECK(out[900 * 2] == doctest::Approx(0.5f * 0.25f).epsilon(1e-3));
     CHECK(out[900 * 2 + 1] == doctest::Approx(0.f).epsilon(1e-5));
 }
+
+TEST_CASE("M-VIEWS 4: several listeners hear a 3D voice from the nearest one, or mixed") {
+    AttenuationCurve lin;
+    lin.model = AttenuationCurve::Model::Linear;
+    lin.min_distance = 1.f;
+    lin.max_distance = 21.f;
+    Listener ears[2];
+    ears[1].position = {100.f, 0.f, 0.f};  // the second player, far to the right
+    const Span<const Listener> both(ears, 2);
+    // A sound 5 m right of the first ear: the first ear is nearest, it pans hard right.
+    const Spatial near1 = spatialize(both, ListenerMix::Nearest, lin, {5.f, 0.f, 0.f});
+    CHECK(near1.gain == doctest::Approx(0.8f));
+    CHECK(near1.pan == doctest::Approx(1.f));
+    // 3 m left of the second ear: the second hears it, panned left.
+    const Spatial near2 = spatialize(both, ListenerMix::Nearest, lin, {97.f, 0.f, 0.f});
+    CHECK(near2.gain == doctest::Approx(0.9f));
+    CHECK(near2.pan == doctest::Approx(-1.f));
+    CHECK(spatialize(both, ListenerMix::First, lin, {97.f, 0.f, 0.f}).gain == doctest::Approx(0.f));
+    // Mixed, between two ears 10 m apart: the louder ear's gain, the pans weighted by gain.
+    ears[1].position = {10.f, 0.f, 0.f};
+    const Spatial mixed = spatialize(both, ListenerMix::Mixed, lin, {3.f, 0.f, 0.f});
+    CHECK(mixed.gain == doctest::Approx(0.9f));  // 3 m from the first ear (7 m from the second: 0.7)
+    CHECK(mixed.pan == doctest::Approx((0.9f * 1.f + 0.7f * -1.f) / 1.6f));
+    CHECK(spatialize(Span<const Listener>{}, ListenerMix::Mixed, lin, {}).gain == doctest::Approx(1.f));
+}
+
+TEST_CASE("audio_bridge: AudioListenerMix makes every AudioListener an ear") {
+    auto dev = test::offline_device();
+    World w;
+    install(w, *dev);
+    w.register_components<LocalTransform>();
+    LocalTransform a, b;
+    a.position = {-5.f, 0.f, 0.f};
+    b.position = {5.f, 0.f, 0.f};
+    w.spawn_with(AudioListener{}, a);
+    w.spawn_with(AudioListener{}, b);
+    w.tick(1.0 / 60.0, 1);
+    CHECK(dev->listeners().size() == 1);  // no AudioListenerMix: the first listener only
+    CHECK(dev->listener().position.x == doctest::Approx(-5.f));
+    const Entity mix = w.spawn_with(AudioListenerMix{});
+    w.tick(1.0 / 60.0, 1);
+    REQUIRE(dev->listeners().size() == 2);
+    CHECK(dev->listener_mix() == ListenerMix::Nearest);
+    CHECK(dev->listeners()[1].position.x == doctest::Approx(5.f));
+    w.try_get_mut<AudioListenerMix>(mix)->mix = 2;
+    w.tick(1.0 / 60.0, 1);
+    CHECK(dev->listener_mix() == ListenerMix::Mixed);
+    w.destroy(mix);
+    w.tick(1.0 / 60.0, 1);
+    CHECK(dev->listeners().size() == 1);
+    CHECK(dev->listener_mix() == ListenerMix::First);
+}

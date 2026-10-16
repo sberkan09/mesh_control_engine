@@ -1,0 +1,10 @@
+{
+  "guid": "2e7ec8c3-4925-4ae4-8f3c-604cb8967d21",
+  "importer": "texture",
+  "importer_version": 1,
+  "settings": {
+    "srgb": true,
+    "mips": false,
+    "filter": "nearest"
+  }
+}

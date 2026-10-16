@@ -5,8 +5,18 @@
 #   scripts/ci/local_ci.sh --quick    # walls + linux-gcc-debug (with GPU tests)
 #   scripts/ci/local_ci.sh --tidy-all # everything, with clang-tidy over the whole tree
 #   scripts/ci/local_ci.sh --task     # after each task: walls + linux-gcc-debug + tidy (+ determinism, below)
-#   scripts/ci/local_ci.sh --batch    # every 3rd task and at a milestone's end: everything (same as no stage)
+#   scripts/ci/local_ci.sh --premerge # right before merging, if dev_claude moved: walls + the PR's own tests (below)
+#   scripts/ci/local_ci.sh --batch    # the full matrix; the integration runner's job, threads do not run it
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages
+#
+# --premerge (the M7 gate, ~1-3 min) is for after dev_claude was merged into the branch: a PR goes green with ONE
+# --task on its own base and is not re-run. It runs walls (capabilities --check included), then builds mce_mcp
+# and the tests defined next to the files the PR changed (scripts/ci/premerge.py tests) and runs those plus the
+# MCP transcript golden (`ctest -R`). It also prints whether dev_claude changed files the PR also changes since
+# the last green --task (the base is recorded in build/local-ci-logs/last-task.env; MCE_PREMERGE_SINCE=<sha>
+# overrides): only then is a --task re-run needed. Generated files that went stale after the
+# merge (capabilities.md, transcript goldens, the sample coverage allow list) are the integration runner's to
+# regenerate; a failure in the golden check on a file the PR did not touch is not a reason for --task.
 #
 # Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism, release-build, web.
 # release-build compiles the whole gcc Release tree (the SDK's) without running it: determinism builds only
@@ -66,10 +76,11 @@ for arg in "$@"; do
     case "$arg" in
         --quick) stages+=(walls linux-gcc-debug) ;;
         --task) stages+=(walls linux-gcc-debug tidy); task_run=1 ;;
+        --premerge) stages+=(walls premerge) ;;
         --batch) ;;
         --save-cache) save_cache=1 ;;
         --tidy-all) tidy_all=1 ;;
-        -h|--help) sed -n '2,42p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,52p' "$0"; exit 0 ;;
         *) stages+=("$arg") ;;
     esac
 done
@@ -138,7 +149,7 @@ mkdir -p "$LOG_DIR"
 # sit together (the gcc trees: tests, determinism, the Release build), so a tree is finished with before
 # the next one starts and can be dropped when the disk is short (reclaim_space). Unknown names go last
 # and fail in run_stage with the list of known ones.
-CANON_ORDER=(walls linux-gcc-debug determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
+CANON_ORDER=(walls premerge linux-gcc-debug determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
 order_stages() {
     local -A seen=()
     local c s sorted=()
@@ -156,6 +167,7 @@ order_stages
 stage_trees() {
     case "$1" in
         linux-*) echo "$1" ;;
+        premerge) echo linux-gcc-debug ;;
         tidy) echo linux-clang-debug ;;
         determinism) echo "linux-gcc-debug linux-gcc-release" ;;
         release-build) echo linux-gcc-release ;;
@@ -302,6 +314,7 @@ preconfigure() {
     for s in "${stages[@]}"; do
         case "$s" in
             linux-*) [[ -n "${GPU_TESTS[$s]:-}" ]] && want[$s]=1 ;;
+            premerge) want[linux-gcc-debug]=1 ;;
             tidy) want[linux-clang-debug]=1 ;;
             determinism) want[linux-gcc-debug]=1; want[linux-gcc-release]=1 ;;
             release-build) want[linux-gcc-release]=1 ;;
@@ -330,6 +343,29 @@ stage_preset() {
     configure "$preset" &&
         cmake --build --preset "$preset" &&
         run_tests "$preset"
+}
+
+# --premerge: report whether a --task re-run is needed, build the PR's own tests and run them with the
+# transcript golden. An overlap makes the stage fail so the summary says so.
+stage_premerge() {
+    local since="${MCE_PREMERGE_SINCE:-}" rc=0 out regex targets full
+    python3 scripts/ci/premerge.py overlap ${since:+--since "$since"} || rc=$?
+    out="$(python3 scripts/ci/premerge.py tests)"
+    regex="$(sed -n 's/^REGEX=//p' <<< "$out")"
+    targets="$(sed -n 's/^TARGETS=//p' <<< "$out")"
+    full="$(sed -n 's/^FULL_BUILD=//p' <<< "$out")"
+    echo "premerge: tests $regex"
+    configure linux-gcc-debug || return 1
+    if [[ "$full" == 1 ]]; then
+        cmake --build --preset linux-gcc-debug || return 1
+    else
+        # shellcheck disable=SC2086
+        cmake --build --preset linux-gcc-debug --target $targets || return 1
+    fi
+    xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" ctest --preset linux-gcc-debug -j "$JOBS" -R "$regex" || return 1
+    [[ $rc -eq 0 ]] && return 0
+    echo "premerge: tests pass, but a --task re-run is needed (see the overlap above, or no --task base is recorded)"
+    return 1
 }
 
 # Prints the run-clang-tidy file regexes: one per changed translation unit, or the whole tree.
@@ -418,9 +454,9 @@ stage_release_build() {
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
     configure linux-gcc-debug &&
-        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content stream_demo_content gameplay3d_content sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback &&
+        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content stream_demo_content gameplay3d_content sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback sample_net_arena &&
         configure linux-gcc-release &&
-        cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback &&
+        cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback sample_net_arena &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1000 -boids 20000" \
             build/linux-gcc-debug/samples/02_boids/sample_02_boids \
             build/linux-gcc-release/samples/02_boids/sample_02_boids &&
@@ -496,7 +532,13 @@ stage_net_determinism() {
             build/linux-gcc-release/samples/net_rollback/sample_net_rollback &&
         python3 scripts/ci/determinism.py --runs 3 --args "-peers 2 -prediction 0 -frames 300" \
             build/linux-gcc-debug/samples/net_rollback/sample_net_rollback \
-            build/linux-gcc-release/samples/net_rollback/sample_net_rollback
+            build/linux-gcc-release/samples/net_rollback/sample_net_rollback &&
+        python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -clients 4 -latency 150 -jitter 20 -loss 0.03 -ticks 900" \
+            build/linux-gcc-debug/samples/net_arena/sample_net_arena \
+            build/linux-gcc-release/samples/net_arena/sample_net_arena &&
+        python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -clients 3 -latency 60 -jitter 10 -loss 0.1 -seed 9 -ticks 600" \
+            build/linux-gcc-debug/samples/net_arena/sample_net_arena \
+            build/linux-gcc-release/samples/net_arena/sample_net_arena
 }
 
 # M5a: 04_cubes (cascade fit, Forward+ clustering, node animation) across runs and Debug/Release;
@@ -546,7 +588,8 @@ run_stage() {
         determinism) stage_determinism ;;
         release-build) stage_release_build ;;
         web) stage_web ;;
-        *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]})"; return 2 ;;
+        premerge) stage_premerge ;;
+        *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]} premerge)"; return 2 ;;
     esac
 }
 
@@ -580,5 +623,11 @@ if [[ ${#COMMON_ARGS[@]} -gt 0 ]]; then
     ccache --show-stats 2> /dev/null | grep -E '^(Cacheable calls|  Hits|  Misses)' | awk '!seen[$0]++' |
         sed 's/^/  ccache: /'
     [[ $failed -eq 0 ]] && save_cache_snapshot
+fi
+# A green --task records the base it ran on, so --premerge can tell later whether dev_claude moved onto the
+# PR's files (scripts/ci/premerge.py overlap).
+if [[ $task_run -eq 1 && $failed -eq 0 ]]; then
+    printf 'BASE=%s\nHEAD=%s\n' "$(git merge-base HEAD "${MCE_TIDY_BASE:-origin/dev_claude}" 2>/dev/null)" \
+        "$(git rev-parse HEAD)" > "$LOG_DIR/last-task.env"
 fi
 exit $failed
