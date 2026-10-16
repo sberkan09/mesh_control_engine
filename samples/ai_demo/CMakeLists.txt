@@ -25,4 +25,12 @@ if(MCE_BUILD_TESTS)
     add_test(NAME ai_demo_player
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack}
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/player_test.cmake)
+    if(TARGET mce_editor)
+        # The Behavior Tree panel over the guard's tree while the scene plays: the tree, the live
+        # statuses, the blackboard and the perception overlay drawn for 120 frames without a GL error.
+        add_test(NAME ai_demo_editor_bt
+                 COMMAND mce_editor -project "${project_dir}" -editor.play 1 -editor.open ai/guard.mcbt -editor.panel "Behavior Tree"
+                         -frames 120 -editor.ini "" -platform.error_box 0 -r.vsync 0)
+        set_tests_properties(ai_demo_editor_bt PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "120 frames, [0-9]+ ticks, 0 GL errors")
+    endif()
 endif()

@@ -464,3 +464,88 @@ lower branches:
 Perception runs just before the trees in each tick, and its state is in the `Perceiver`, so it is
 deterministic and saved. `kit::perception_debug_lines` returns each perceiver's cone and a line to its
 target, for a debug overlay.
+
+### Choosing by score, sharing tokens, finding a spot
+
+Three more pieces let a tree weigh options instead of only checking them in order.
+
+**Utility.** A `utility` node's children are `score` nodes. Each tick every score is computed, and
+the child with the highest one runs (on a tie, the first). A score is `base` plus, for each
+consideration in `by`, `weight` times a response curve of a blackboard key:
+
+- The key's value is mapped from `from`…`to` onto 0…1 and clamped. A bool or vector key counts 1
+  when set and 0 when not. `invert: true` turns 0…1 around.
+- `curve` shapes it: `linear` (the default), `power` (to the `exponent`, 2 by default), `logistic`
+  (an S around 0.5, steepness `exponent`, 10 by default) or `step` (1 at or above `exponent`, 0.5 by
+  default).
+
+A running child keeps running until another one scores more than `hysteresis` above it, so an AI
+does not flicker between two close options. When no child scores above 0 the node fails.
+
+```json
+{"utility": [
+  {"score": {"task": "attack"}, "base": 0.1,
+   "by": [{"key": "health", "from": 0, "to": 100, "curve": "power", "exponent": 2}]},
+  {"score": {"task": "move_to", "key": "cover"}, "by": [{"key": "health", "to": 100, "invert": true}]}
+], "hysteresis": 0.1}
+```
+
+**Tokens.** An `AiTokenPool` component (a `name` and a `capacity`, up to 8) hands out a limited
+number of tokens, so only two of ten enemies attack at once. A `token` node takes one when it starts
+and fails if none is free; it gives it back when its child finishes or is halted, and a dead holder's
+token is freed. The pool is the one on the entity in `key` (an entity key) or, without `key`, the
+first pool in the scene with that `pool` name:
+
+```json
+{"selector": [
+  {"token": {"task": "attack"}, "pool": "attackers"},
+  {"task": "move_to", "key": "flank"}
+]}
+```
+
+**Point queries.** The stock task `find_point` tries points on `rings` rings (1–8, 2 by default) of
+`count` points each (1–32, 8 by default) out to `radius` (5 by default) around the entity, or
+around the `around` key. Points off the navmesh, or on a blocked `NavGrid` cell, are skipped. With
+`from` (a vec3 or entity key, such as a threat), `need: "visible"` or `"hidden"` keeps only the
+points with or without a clear line of sight from it. `prefer` picks among the rest: `near` the
+entity (the default), `far` from `from`, or `close` to it. The best point goes into the `store` vec3
+key and the task succeeds; with none, it fails. Hiding from the player and moving there:
+
+```json
+{"sequence": [
+  {"task": "find_point", "store": "cover", "from": "target", "need": "hidden", "radius": 8},
+  {"task": "move_to", "key": "cover"}
+]}
+```
+
+`kit::bt_utility_scores` returns a utility node's current scores, for a debug view.
+
+### Editing and debugging trees in the editor
+
+The **Behavior Tree** panel edits a `.mcbt` (double-click one in Assets, or **New...** in the
+panel; a new tree is a selector over a one-second wait). The tree is drawn as an outline: each line
+is a node's kind, its value (a task's name, a check's key, a wait's seconds) and its `name`.
+
+- **Right-click a node** to add a child of any kind (a composite or decorator comes with a `wait 0`
+  placeholder child, a check or set names the first key), wrap it in a decorator or composite,
+  unwrap it, move it up or down among its siblings, or remove it with its subtree.
+- **The inspector** shows the selected node's value and members as JSON (`"text"`, `2`, `true`,
+  `[0, 1, 0]`). Edit one and press Enter; **x** removes a member; **+ Field** adds one (`abort`,
+  `radius`, `by`...).
+- **The blackboard** lists the keys with their type and default. Renaming a key renames it in the
+  nodes that name it; a key a node still uses cannot be removed.
+- **Problems** lists what the cook says about the tree, with line and column. Every edit is cooked
+  before it is kept, and one that breaks a tree that cooks is refused with the cook's message. A
+  tree that does not cook when you open it (a hand edit) can be edited until it does.
+
+Edits are saved as soon as you let go, so the file on disk is always the tree the panel shows. The
+panel has its own **Undo** and **Redo**, and reads a change an MCP tool or a text editor wrote
+while nothing is unsaved.
+
+**While playing**, the panel debugs a brain running the tree (pick it from the list when several
+do). Each node is coloured by its status: green while it runs (the active path), blue when it last
+succeeded, red when it last failed, grey when it has not run. A utility node's children show their
+current scores in brackets, and the blackboard shows each key's live value. **Run edits** runs the
+tree as it is now in the play world (its brains start again) without saving. The viewport draws
+each `Perceiver`'s sight cone and a line to the target it sees (green) or last saw (yellow); turn it
+off with **Perception** in the panel or the View menu.

@@ -103,6 +103,10 @@ ui::build_document(data, doc);                          // the skin (data.font, 
 - `"fill": true` and `"at": [x, y, width, height]` are `Builder::fill` and `Builder::at`. A Panel
   with `"modal": true` is `Builder::modal`'s veil; a Tabs widget's `"tabs"` are `Builder::tab`
   pages and its `"value"` is the page shown.
+- A Text widget's `"text_align"` (`Left`, the default, `Center` or `Right`) places its lines
+  across its own rect, so a centered title needs no wrapping Stack: give it the full width
+  (`"anchors"` or `"at"` with a width) and `"text_align": "Center"`. In C++ it is
+  `Document::set_text_align`. Buttons always center their label.
 - Names are unique among siblings; `"nav"` edges and `Document::find` take paths of names.
 - The cook rejects a document the runtime would misread (an unknown kind or field, a duplicate
   name, a nav path that leads nowhere, a value outside its range) with `file:line:col`.

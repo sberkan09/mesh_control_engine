@@ -93,6 +93,8 @@ struct ReplicationHooks {
     void (*on_despawn)(void* user, Commands& cmd, Entity e, const NetId& id) = nullptr;
 };
 
+class ReplicationClient;
+
 class ReplicationServer {
 public:
     // Tags `e` for replication with the next free id; returns the id. Works inside a phase.
@@ -133,6 +135,14 @@ public:
     static constexpr u32 kBaselines = 32;
 
     void set_hooks(const ReplicationHooks& hooks) { hooks_ = hooks; }
+
+    // Host migration (M-NET3 step 3, relay.h): `client`'s mirror in `world` becomes this server's
+    // world. Every mirrored entity keeps its NetId and gets the transform of the newest snapshot
+    // (not the interpolated or predicted one); `client` forgets them without destroying them, and
+    // new ids continue after the highest. Per-client history starts over, so every client's next
+    // snapshot is full. Outside a phase. Returns the newest snapshot's tick: continue from there.
+    // Server-only state the snapshots did not carry is the game's to rebuild.
+    u32 adopt(World& world, ReplicationClient& client);
 
     // The canonical entry bytes of one snapshot and where each entity's entry starts (by id).
     struct Canonical {
@@ -240,6 +250,14 @@ public:
     u64 content_hash() const { return content_hash_; }
     // The acknowledgement of the newest applied snapshot, for the server's read_ack (12 bytes).
     void write_ack(ByteWriter& out) const;
+    // Forgets every mirrored entity without destroying it: the entities and their NetIds stay in
+    // the world, the client starts over (ReplicationServer::adopt uses it).
+    struct Released {
+        Entity entity;
+        NetId id;
+        LocalTransform latest;  // from the newest applied snapshot
+    };
+    void release(Array<Released>& out);
     // Forgets every mirrored entity, destroying them (call it on disconnect); the next snapshot,
     // from any server session, rebuilds the mirror. Predicted ids are forgotten too.
     void reset(Commands& cmd, const World& world);

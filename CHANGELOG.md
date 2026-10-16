@@ -5,6 +5,31 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- The editor's Behavior Tree panel, M-AI step 5 (SBA-132): open a `.mcbt` from Assets and edit it as an outline
+  (add, wrap, unwrap, move and remove nodes, edit values and members as JSON, blackboard keys), with every edit
+  cooked before it is kept, undo, and the cook's problems listed. While playing it colours each node by its
+  status, shows utility scores and live blackboard values, runs unsaved edits in the play world, and the viewport
+  draws perceivers' sight cones. User guide 13.8.
+- Text alignment in UI documents, M-UI-DATA2 step 1 (SBA-153): a `.mcui` Text widget takes
+  `"text_align": "Center"` (or `Right`) to place its text across its own rect, so a centered title no
+  longer needs a wrapping Stack. The editor's inspector and MCP's `ui_widget_set` reach it. User guide 12.
+- 2D IK as data, M-ANIM2D step 4 (SBA-143): a `.mcskel2d` lists `"ik"` constraints. Two-bone chains solve
+  exactly (law of cosines, a bend side, a straight arm at an out-of-reach target); longer chains use CCD for a
+  fixed number of passes, so every run gives the same bits. A target is a bone, or any entity with an
+  `IKTarget2D` (a cursor, a raycast hit). Animations key a constraint's mix and cross-fades blend it; an
+  optional `Skeleton2DIK` component holds the mix in use and a gameplay override. IK runs every tick after
+  the pose and before `Bone2DFollow`, and the sprite extract draws the same solve. Skeletons without IK cook
+  byte for byte as before. User guide 7.13.
+- No hidden state in Luau scripts, M-SCRIPT step 3 (SBA-149): the cook rejects, at `file:line:col`, a function
+  that assigns a top-level local or changes a table one holds, and table or function keys the source shows;
+  `pairs` and `next` raise on such keys at run time. A script's memory is its components, so a reload between
+  two ticks keeps the state hash. User guide 27.4.
+- Utility AI, attack tokens and point queries, M-AI step 4 (SBA-131): a `utility` node runs the child whose
+  `score` (a base plus weighted linear, power, logistic or step curves of blackboard keys) is highest, and
+  keeps a running child until another beats it by `hysteresis`. An `AiTokenPool` hands out a few tokens and a
+  `token` node takes one or fails, so only some enemies attack at once. The stock task `find_point` stores the
+  best point on rings around the entity: on the navmesh or grid, visible or hidden from a key, near, far or
+  close. `.mcbt` cooks to `CHNK_BT` v3. User guide 13.8.
 - M-VISUAL2 is done (step 5, SBA-105). `Environment3D` gains `ssr_steps`, `ssr_edge_fade` and
   `contact_steps`, and MCP's Material schema lists the clear coat, sheen, anisotropy, transmission and ior
   keys. `samples/06_showcase` shows reflections, contact shadows, sharpening, glass, lacquer and brushed
@@ -31,6 +56,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   high-pass onto a bus while it is active, or while the game is paused (`while_paused`: the stock player's
   pause overlay muffles the world). The new `Voice` bus is for dialogue, with a saved `audio.voice_db`.
   `AudioDevice::set_bus_duck`, `set_bus_trim` and `audio::update_mix` do the same from code. User guide 10.5.
+- 2D meshes and slot keys, M-ANIM2D step 3 (SBA-142): a `.mcskel2d` slot can list several `"attachments"` and
+  show one at a time, quads or meshes. A mesh is textured triangles whose vertices sit on the slot's bone or are
+  weighted to up to 4 bones (skinned on the CPU, the same bits everywhere). Animations key slot colors (alpha 0
+  hides), attachment swaps (stepped) and per-vertex mesh deforms. Slot state lives in an optional
+  `Skeleton2DSlots` component, saved and hashed. Meshes draw through the sprite batch as triangles
+  (`SpriteBatch::add_triangle`) on every backend. Old skeletons read and draw as before. User guide 7.13.
 - Luau scripts as assets, M-SCRIPT step 1 (SBA-147, ADR-0041): `.luau` files under `assets/` cook (importer
   `script`) to a `Script` asset of Luau bytecode, with syntax errors at `file:line:col`. A `ScriptSystem`
   component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP
@@ -98,6 +129,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
   User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
+- Matchmaking and host migration, M-NET3 step 3 (SBA-125): `RelayClient::quick_play(mode, size)` puts a player in
+  an open room of that mode or makes one, and `list_rooms` fetches listed rooms for a lobby. A room made with
+  `host_migration` survives its host: the relay hands it to the lowest member, `on_host_change` tells every member,
+  and `ReplicationServer::adopt` turns the new host's mirror into the server world. `sample_net_headless -relay 1
+  -host_leaves 300` loses its host halfway and every client keeps matching the new one. The relay protocol is now
+  version 2. User guide 20.8.
 - Spectators and clock sync, M-NET3 step 2 (SBA-124): a `RollbackSession` with `.spectator = true` watches
   without playing, fed confirmed inputs by one player (`write_spectator_packet`), and checks its hashes. With
   `time_sync` (on by default) a rollback peer whose clock runs ahead skips a tick now and then instead of

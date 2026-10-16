@@ -59,6 +59,7 @@ struct Named {
     Array<Entity> contact;
     Array<Entity> landed;  // characters that touched down (Landed3D)
     Array<Entity> skid;    // vehicles a wheel of which started to skid (Skid3D)
+    Array<Entity> lap;     // vehicles whose driver completed a lap (LapCompleted3D)
 };
 
 void add_unique(Array<Entity>& list, Entity e) {
@@ -84,6 +85,7 @@ bool should_fire(FireOn on, bool& fire, u32 fired, Entity e, const Named& n) {
     case FireOn::ContactBegin: go = go || named(n.contact, e); break;
     case FireOn::Landed: go = go || named(n.landed, e); break;
     case FireOn::Skid: go = go || named(n.skid, e); break;
+    case FireOn::Lap: go = go || named(n.lap, e); break;
     }
     return go;
 }
@@ -140,6 +142,8 @@ void record_physics_events(Frame& f, Named& n) {
     }
     if (w.event_queue<Skid3D>())
         for (const Skid3D& ev : events.read<Skid3D>()) add_unique(n.skid, ev.vehicle);
+    if (w.event_queue<LapCompleted3D>())
+        for (const LapCompleted3D& ev : events.read<LapCompleted3D>()) add_unique(n.lap, ev.vehicle);
     if (w.event_queue<Landed3D>())
         for (const Landed3D& ev : events.read<Landed3D>()) add_unique(n.landed, ev.entity);
     if (w.event_queue<TriggerEnter3D>()) {

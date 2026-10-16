@@ -30,8 +30,10 @@ reach all of its non-transient fields.
 | `LocalTransform` | `mce/ecs/transform.h` | yes | yes | yes | docs/user-guide/03-editor.md |
 | `Blackboard` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |
 | `AiBrain` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/05-assets.md |
+| `AiTokenPool` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |
 | `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `IKTarget3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `Locomotion3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `CharacterController3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
@@ -95,8 +97,13 @@ reach all of its non-transient fields.
 | `Skeleton2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Bone2DFollow` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `Skeleton2DAnimator` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
+| `Skeleton2DSlots` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
+| `Skeleton2DIK` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
+| `IKTarget2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
+| `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md |
+| `VehicleDriver3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md |
 | `VideoPlayer` | `mce/kit/video.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md |

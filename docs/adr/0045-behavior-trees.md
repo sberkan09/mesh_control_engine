@@ -59,6 +59,16 @@ queries are step 4. The editor panel is step 5, and the MCP tools are step 6. Su
 files and randomness in nodes are left out until a game needs them. Randomness will come from the sim RNG so
 replays stay exact.
 
+**Step 5 (SBA-132).** Tools edit `.mcbt` through `cook::BtDocument` (`bt_text.h`): nodes keep their members as
+JSON text, and `build_behavior_tree` (the importer's cook) decides validity. The editor maps the running tree back
+to the document by pre-order, which the cook's one-node-per-document-node layout guarantees.
+
+**Step 4 (SBA-131).** Utility selection is a node kind whose children are `Score` nodes; considerations are a
+table after the nodes in `CHNK_BT` v3, each a blackboard key, a response curve and a weight. The selector
+recomputes every score each tick and switches only when another child beats the running one by `hysteresis`.
+Tokens are an `AiTokenPool` component that brains share by name or by an entity key. Point queries are the
+stock task `find_point`, not a node kind, so a game can replace it.
+
 **Step 3 (SBA-130).** Perception is a separate system ("ai_perception", ahead of "ai_brains") that writes
 blackboard keys named by the `Perceiver`; trees never query the world for what they see. Its memory lives in the
 `Perceiver`'s runtime fields, so it is hashed and saved like the brain.

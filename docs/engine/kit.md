@@ -50,6 +50,28 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   through the same state machine step as the 3D `Animator` (`src/anim_graph_step.h`, templated on
   the component; layers, root motion and IK are 3D only). Clip and state events raise
   `AnimEvent3D`, which `install_skeleton2d` also registers. Every field is `Save`.
+- Attachments, meshes and `Skeleton2DSlots` (`skeleton2d.h`, M-ANIM2D 3): chunk minor 2 adds
+  per-slot attachment lists (quads, or meshes whose vertices sit in the slot bone's space or carry
+  up to 4 bone weights), slot color and attachment timelines and mesh deform timelines. The pure
+  `skeleton2d_draws` skins meshes on the CPU (weighted sums in listed order, no FMA) and returns
+  quads and triangles in slot order; `SpriteExtract` sends the triangles through
+  `render::SpriteBatch::add_triangle` (a degenerate quad in the sprite stream, so no backend work).
+  The optional `Skeleton2DSlots` component (4.3 KB, `Save`) holds each slot's shown attachment and
+  color; `"kit_skeleton2d"` sets up a fresh one, the animator adds one when the clips key slots and
+  writes only keyed slots (`Skeleton2DBlend::write_slots`). Deform offsets are not stored: the
+  extract samples them with `skeleton2d_animator_sample`, a pure function of the saved animator
+  fields.
+- 2D IK, `Skeleton2DIK` and `IKTarget2D` (`skeleton2d.h`, `src/skeleton2d_ik.cpp`, M-ANIM2D 4):
+  chunk minor 3 adds up to 16 constraints (two-bone or CCD; a chain is its last bone and that
+  bone's nearest ancestors) sorted by `order`, and `IKMix` timelines that key a constraint's mix.
+  The pure `skeleton2d_solve_pose` poses the bones, then solves each constraint in the skeleton's
+  space: it turns bones by aiming in their parent's space, writes local rotations back and
+  recomputes the bones after them. Two-bone is analytic (law of cosines, a straight chain out of
+  reach, no stretch); CCD runs a fixed pass count with no tolerance exit. `"kit_skeleton2d"` and
+  `SpriteExtract` both call it, with the targets of `skeleton2d_ik_targets` (`IKTarget2D`
+  entities taken into the skeleton's space) and the mixes of `skeleton2d_ik_state` (the optional
+  `Skeleton2DIK`: keyed mixes plus a gameplay `override_mix`; before the animator's `Commands` add
+  one, the keyed mixes sampled from the animator). Followers move after the solve.
 - `Animator` graphs and `AttachToBone` (`anim3d.h`, M-DATA-REACH 7): an `.mcanim` AnimGraph
   (`ChunkType::AnimGraph`, `AnimGraphView`) drives the Animator's clip, 1D blends (`blend_clip`,
   `blend_weight`), transitions and `AnimEvent3D` events; one-shots finish (`loop`, `finished`,
@@ -60,7 +82,10 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   `layer_time`), root motion (`root_motion`, `root_velocity`, `root_turn`) and IK chains (two-bone,
   look-at, foot); `extended_pose` builds that pose in local TRS (`render::sample_local`,
   `compose_local`), and `"kit3d_ik"` gathers the chains' goals (`IKTarget3D`, rays down for feet)
-  into the `AnimIK3D` resource every pose of the tick reads.
+  into the `AnimIK3D` resource every pose of the tick reads. `Locomotion3D` (M-MOVE3D 5, `"kit3d_locomotion"` before
+  `"kit3d_animators"`) writes a mover's motion (controller, nav agent or position change) into its
+  Animator's graph parameters by name (`speed`, `move_x`, `move_y`, `vertical_speed`, `grounded`,
+  `airborne`, `crouch`) and sets the play rate from `stride_speed`.
 - `PathAgent`: walks to `target` over the world's `NavGrid` at `speed`, re-planning every
   `repath_interval` ticks; `status` and the current smoothed path (16 waypoints) are runtime
   fields (#152).
@@ -114,7 +139,9 @@ destroy the bodies.
 
 `vehicles3d.h`: `Vehicle3D` (Jolt wheeled car on a `RigidBody3D`; M-MOVE3D 3 feel: `anti_roll` bars,
 `downforce`, `gears` / `first_gear` / `top_gear` and shift rpm as data, `skid_slip` with `Skid3D`
-events and `FireOn::Skid`, `self_right` after `right_after` seconds flipped).
+events and `FireOn::Skid`, `self_right` after `right_after` seconds flipped); `Waypoint3D` and
+`VehicleDriver3D` (M-MOVE3D 4: pure-pursuit AI driver with corner braking and laps, `LapCompleted3D`,
+`FireOn::Lap`), run inside `"kit3d_vehicles"` before the car takes its inputs.
 
 `sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
 `hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the

@@ -658,3 +658,76 @@ TEST_CASE("FR-R2D-090: lit quads carry their orientation in the reserved vertex 
     CHECK((b.vertices()[4].packed >> 24) == vertex_flags::kLit);
     CHECK(((b.vertices()[4].packed >> 8) & 0x3FFFu) == pack_orientation(1.0f, false, false));
 }
+
+TEST_CASE("render: a triangle is a degenerate quad in the sprite stream (M-ANIM2D 3)") {
+    BatchFixture f;
+    SpriteBatch batch(f.sets, mem::heap());
+    batch.begin(f.view);
+    batch.add(f.sprite(f.a, vec2(-3, 0)));  // a sprite first: the triangle keeps submission order after it
+    SpriteTriangle t;
+    t.set = f.a;
+    t.region = 1;  // u 0.5..1, v 0.5..1, array layer 3
+    t.v[0] = {vec2(0, 0), vec2(0, 1), math::Color{1, 0, 0, 1}};
+    t.v[1] = {vec2(1, 0), vec2(1, 1), math::Color{0, 1, 0, 1}};
+    t.v[2] = {vec2(0, 1), vec2(0.5f, 0), math::Color{0, 0, 1, 0.5f}};
+    batch.add_triangle(t);
+    batch.build();
+    CHECK(batch.stats().triangles == 1);
+    CHECK(batch.stats().quads == 2);
+    REQUIRE(batch.groups().size() == 1);  // same set and blend: one group, one draw
+    REQUIRE(batch.vertices().size() == 8);
+    const SpriteVertex* v = batch.vertices().data() + 4;
+    CHECK(v[0].x == 0.0f);
+    CHECK(v[1].x == 1.0f);
+    CHECK(v[2].y == 1.0f);
+    CHECK(v[0].u == 0.5f);  // uv 0..1 maps onto the region
+    CHECK(v[0].v == 1.0f);
+    CHECK(v[1].u == 1.0f);
+    CHECK(v[2].u == 0.75f);
+    CHECK(v[2].v == 0.5f);
+    CHECK(v[0].color == 0xFF'0000FFu);  // per-vertex tints
+    CHECK(v[1].color == 0xFF'00FF00u);
+    CHECK(v[2].color == 0x80'FF0000u);
+    CHECK((v[0].packed & 0xFFu) == 3u);
+    // v3 = v2, so the shared index pattern's second triangle (2, 3, 0) has no area.
+    CHECK(v[3].x == v[2].x);
+    CHECK(v[3].y == v[2].y);
+    CHECK(v[3].u == v[2].u);
+    CHECK(v[3].v == v[2].v);
+    CHECK(v[3].color == v[2].color);
+    CHECK(v[3].packed == v[2].packed);
+    CHECK(batch.draw_args()[0].index_count == 2 * 6);
+
+    // Culled when its bounds miss the view; an invalid set is culled too.
+    batch.begin(f.view);
+    for (SpriteTriangle::Vertex& x : t.v) x.position.x += 100.0f;
+    batch.add_triangle(t);
+    t.set = SpriteSetId{999};
+    batch.add_triangle(t);
+    batch.build();
+    CHECK(batch.stats().culled == 2);
+    CHECK(batch.vertices().empty());
+
+    // A lit set orients the triangle's normals like a sprite's.
+    SpriteSets sets;
+    SpriteRegion r;
+    SpriteSetDesc d;
+    d.regions = Span<const SpriteRegion>(&r, 1);
+    d.lit = true;
+    d.normal_key = 9;
+    const SpriteSetId lit = sets.create(d);
+    SpriteBatch b(sets, mem::heap());
+    Camera2D cam;
+    b.begin(compute_view_2d(cam, {256, 256}, 16.0f));
+    SpriteTriangle l;
+    l.set = lit;
+    l.v[1].position = {1, 0};
+    l.v[2].position = {0, 1};
+    l.rotation = 1.0f;
+    l.flip_y = true;
+    b.add_triangle(l);
+    b.build();
+    REQUIRE(b.vertices().size() == 4);
+    CHECK((b.vertices()[0].packed >> 24) == vertex_flags::kLit);
+    CHECK(((b.vertices()[0].packed >> 8) & 0xFFFFu) == pack_orientation(1.0f, false, true));
+}

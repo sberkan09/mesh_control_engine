@@ -202,6 +202,8 @@ bool EditorShell::open_project(StringView root) {
     timeline_.close();
     if (anim_graph_.dirty()) (void)anim_graph_.save(session_);
     anim_graph_.close();
+    if (bt_.dirty()) (void)bt_.save(session_);
+    bt_.close();
     if (Result<void> r = session_.open_project(root); !r) {
         FixedString<512> msg;
         format_error(r.error(), msg);
@@ -242,6 +244,16 @@ void EditorShell::open_anim_graph(asset::Guid guid) {
     }
     if (IEditorPanel* p = find_panel("Animation")) p->open = true;
     focus_panel("Animation");
+}
+
+void EditorShell::open_bt(asset::Guid guid) {
+    if (bt_.dirty() && guid != bt_.guid()) (void)bt_.save(session_);
+    if (!bt_.open(session_, guid)) {
+        MCE_LOG_ERROR("editor: cannot open the behavior tree: {}", bt_.last_error());
+        return;
+    }
+    if (IEditorPanel* p = find_panel("Behavior Tree")) p->open = true;
+    focus_panel("Behavior Tree");
 }
 
 bool EditorShell::open_scene(StringView path) {
@@ -695,6 +707,7 @@ void EditorShell::draw_menu_bar() {
         ImGui::Separator();
         if (ImGui::MenuItem("Reset layout")) reset_layout();
         ImGui::MenuItem("Grid", nullptr, &view_.show_grid, scene_mode());
+        ImGui::MenuItem("Perception (while playing)", nullptr, &view_.show_perception, scene_mode());
         ImGui::MenuItem("Game camera while playing", nullptr, &view_.play_camera, scene_mode());
         if (ImGui::MenuItem("3D orbit view", "O", &view_.orbit_view, scene_mode()) && view_.orbit_view) frame_scene();
         ImGui::MenuItem("Orbit camera collision", nullptr, &view_.orbit_collision, scene_mode() && view_.orbit_view);
@@ -762,6 +775,7 @@ void EditorShell::draw_dockspace() {
         ImGui::DockBuilderDockWindow("Terrain", right);
         ImGui::DockBuilderDockWindow("Timeline", bottom);
         ImGui::DockBuilderDockWindow("Animation", bottom);
+        ImGui::DockBuilderDockWindow("Behavior Tree", bottom);
         ImGui::DockBuilderFinish(id);
         for (auto& p : panels_) p->open = true;
     }

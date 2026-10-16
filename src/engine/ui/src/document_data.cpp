@@ -59,7 +59,8 @@ struct UiWidgetRecord {
     u8 stack_axis;
     u8 stack_align;
     u8 font_role;  // v3: FontRole
-    u8 pad[2];
+    u8 text_align;  // TextAlign (M-UI-DATA2 1; was padding: older payloads read Left)
+    u8 pad;
     f32 anchors[10];  // min, max, offset_min, offset_max, pivot
     StyleRecord styles[kWidgetStateCount];
     f32 value, lo, hi, step;
@@ -372,6 +373,7 @@ void encode_ui_document(const DocumentData& d, Array<byte>& out) {
         put_vec(r.anchors + 8, w.anchors.pivot);
         for (u32 s = 0; s < kWidgetStateCount; ++s) put_style(r.styles[s], w.styles[s]);
         r.font_role = static_cast<u8>(w.font_role);
+        r.text_align = static_cast<u8>(w.text_align);
         r.value = w.value;
         r.lo = w.lo;
         r.hi = w.hi;
@@ -431,7 +433,7 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
             out.clear();
             return Error(code, kStage, {}, i);
         };
-        bool pad_ok = r.pad[0] == 0 && r.pad[1] == 0;
+        bool pad_ok = r.pad == 0;
         for (const StyleRecord& s : r.styles) pad_ok = pad_ok && s.pad[0] == 0 && s.pad[1] == 0 && s.pad[2] == 0;
         if (!pad_ok || (r.flags & ~u8(WidgetFlag::Visible | WidgetFlag::Interactable | WidgetFlag::BlocksPointer)) != 0)
             return fail(Errc::ReservedNonZero);
@@ -445,7 +447,7 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
         if (r.parent != kNoWidgetIndex && r.parent >= i) return fail(Errc::OutOfBounds);  // parents come first
         if (r.kind > static_cast<u8>(WidgetKind::Tabs) || r.anchor_to > static_cast<u8>(AnchorTo::Screen) ||
             r.stack_axis > static_cast<u8>(Axis::Horizontal) || r.stack_align > static_cast<u8>(Align::Stretch) ||
-            r.font_role > static_cast<u8>(FontRole::Button))
+            r.font_role > static_cast<u8>(FontRole::Button) || r.text_align > static_cast<u8>(TextAlign::Right))
             return fail(Errc::InvalidArgument);
         for (u32 e = 0; e < NavEdgeCount; ++e)
             if (r.nav[e] != kNoWidgetIndex && r.nav[e] >= h.widget_count) return fail(Errc::OutOfBounds);
@@ -475,6 +477,7 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
         w.anchors.to = static_cast<AnchorTo>(r.anchor_to);
         for (u32 s = 0; s < kWidgetStateCount; ++s) get_style(r.styles[s], w.styles[s]);
         w.font_role = static_cast<FontRole>(r.font_role);
+        w.text_align = static_cast<TextAlign>(r.text_align);
         w.value = r.value;
         w.lo = r.lo;
         w.hi = r.hi;
