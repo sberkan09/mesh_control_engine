@@ -42,6 +42,18 @@ if(TARGET mce_net)
 else()
     set(MCE_SDK_NET_FILE "")
 endif()
+# Scene scripts (M-SCRIPT): the player runtime links the bytecode runner and Luau's VM (never its
+# compiler), so a project host built against the SDK runs ScriptSystems like mce_player.
+if(TARGET mce_script)
+    install(TARGETS mce_script Luau.VM ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    set(MCE_SDK_SCRIPT_FILE "$<TARGET_FILE_NAME:mce_script>")
+    set(MCE_SDK_LUAU_VM_FILE "$<TARGET_FILE_NAME:Luau.VM>")
+    set(MCE_SDK_RUNTIME_LINKS "mce::mce_script;mce::mce_engine")
+else()
+    set(MCE_SDK_SCRIPT_FILE "")
+    set(MCE_SDK_LUAU_VM_FILE "")
+    set(MCE_SDK_RUNTIME_LINKS "mce::mce_engine")
+endif()
 # The opt-in visual-novel kit (M-NOVEL), the same way.
 install(TARGETS mce_kit_novel mce_kit_novel_ui ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 set(MCE_SDK_NOVEL_FILE "$<TARGET_FILE_NAME:mce_kit_novel>")

@@ -149,8 +149,13 @@ public:
     virtual void swap() = 0;
     virtual usize back_size() const = 0;
     virtual usize front_size() const = 0;
+    // Type-erased access (scripts, by reflection): one event of elem_size bytes in, and the
+    // readable events as front_size() records of elem_size bytes each.
+    virtual void push_raw(const void* ev) = 0;
+    virtual const void* front_data() const = 0;
 
     StringView name;
+    u32 elem_size = 0;
     Phase producer_phase = Phase::FixedUpdate_Pre;
     u64 total_pushed = 0;
     SmallVector<u16, 4> producers;  // system indices that pushed
@@ -172,6 +177,12 @@ public:
     }
     usize back_size() const override { return back_.size(); }
     usize front_size() const override { return front_.size(); }
+    void push_raw(const void* ev) override {
+        T v;
+        std::memcpy(&v, ev, sizeof(T));
+        push(v);
+    }
+    const void* front_data() const override { return front_.data(); }
 
 private:
     Array<T> front_;
@@ -206,6 +217,8 @@ public:
     // Type-erased set (component known by id): copies component(c).size bytes from `value` at
     // record time; adds the component when missing. Replication of reflected fields uses it.
     void set_raw(Entity e, ecs::ComponentId c, const void* value);
+    // Type-erased remove (component known by id).
+    void remove_raw(Entity e, ecs::ComponentId c) { record(Op::Remove, e, c, 0); }
 
     u32 pending() const { return count_; }
     bool empty() const { return count_ == 0; }
@@ -492,6 +505,13 @@ public:
     void register_event(Phase producer_phase);
     template <class T>
     ecs::detail::EventQueue<T>* event_queue();
+    // The queue of the event type whose kTypeHash is `type_hash` (refl::TypeRecord::type_hash);
+    // null when unregistered. Type-erased pushes and reads go through push_raw / front_data, after
+    // note_event_access like EventAccess does.
+    ecs::detail::EventQueueBase* event_queue_raw(u64 type_hash) {
+        auto* slot = events_.find(type_hash);
+        return slot ? slot->get() : nullptr;
+    }
     void event_registry(Array<EventInfo>& out) const;
 
     // ---- resources (singletons; not entities) ---------------------------------
@@ -707,6 +727,7 @@ void World::register_event(Phase producer_phase) {
     if (!inserted) return;
     auto* q = mem::make<ecs::detail::EventQueue<T>>(alloc_, alloc_);
     q->name = type_name<T>();
+    q->elem_size = static_cast<u32>(sizeof(T));
     q->producer_phase = producer_phase;
     *slot = mem::UniquePtr<ecs::detail::EventQueueBase>(alloc_, q);
     events_by_phase_[static_cast<usize>(producer_phase)].push_back(q);

@@ -70,6 +70,49 @@ struct AudioListener {
 };
 MCE_COMPONENT(AudioListener, (gain_db, Range{-60, 12}))
 
+// Bus effects from the scene (M-AUDIO2 3): a bus's low-pass and high-pass, and how much of it feeds
+// a reverb unit. One entity per bus (the first in query order wins); removing it puts the bus back
+// to dry and unfiltered. Timelines and sequences can key the fields like any component's, e.g. a
+// low-pass that closes while the player is underwater.
+struct AudioBusEffects {
+    AudioBus bus = AudioBus::SFX;
+    u8 reverb_unit = 0;
+    u8 pad_[2] = {};  // explicit and zeroed: World::state_hash hashes component bytes (ADR-0007)
+    f32 lowpass_hz = 0.f;
+    f32 highpass_hz = 0.f;
+    f32 reverb_send_db = -96.f;
+};
+MCE_COMPONENT(AudioBusEffects,
+    (bus, Help{"the bus these effects run on (Master filters everything; it has no send)"}),
+    (lowpass_hz, Range{0, 20000}, Help{"cut above this frequency, 12 dB/octave; 0 = off. Changes glide"}),
+    (highpass_hz, Range{0, 20000}, Help{"cut below this frequency, 12 dB/octave; 0 = off"}),
+    (reverb_unit, Range{0, 1}, Help{"which AudioReverb the send feeds"}),
+    (reverb_send_db, Range{-96, 12}, Help{"post-fader send into the reverb; -96 = none"}))
+
+// A reverb unit (Freeverb) that buses send to with AudioBusEffects; its return goes into Master.
+// One entity per unit; removing it turns the unit off.
+struct AudioReverb {
+    u8 unit = 0;
+    u8 pad_[3] = {};
+    f32 room_size = 0.5f;
+    f32 damping = 0.5f;
+    f32 width = 1.f;
+    f32 wet_db = 0.f;
+};
+MCE_COMPONENT(AudioReverb,
+    (unit, Range{0, 1}),
+    (room_size, Range{0, 1}, Help{"decay length: 0.5 is a room, 0.9 a cave or hall"}),
+    (damping, Range{0, 1}, Help{"how fast high frequencies die away"}),
+    (width, Range{0, 1}, Help{"0 = mono return, 1 = full stereo"}),
+    (wet_db, Range{-96, 12}, Help{"return level"}))
+
+// The master limiter: while one exists, no output sample exceeds the ceiling (5 ms of added latency).
+struct AudioLimiter {
+    f32 ceiling_db = -1.f;
+    f32 release_ms = 80.f;
+};
+MCE_COMPONENT(AudioLimiter, (ceiling_db, Range{-24, 0}), (release_ms, Range{1, 1000}))
+
 // Fire-and-forget one-shot from gameplay (pickups, hits, footsteps): push in FixedUpdate_Pre;
 // the bridge plays it in FixedUpdate_Post of the same tick.
 struct PlaySfx {
@@ -88,9 +131,13 @@ struct PlaySfx {
 struct AudioRef {
     AudioDevice* device = nullptr;
     ClipBank* clips = nullptr;
+    // ---- bridge-written: what the scene's effect components set last tick, so removing one resets it
+    u16 fx_buses = 0;
+    u8 fx_reverbs = 0;
+    bool fx_limiter = false;
 };
 
-// Registers AudioSource, AudioSpatial, AudioListener, PlaySfx, the AudioRef resource, the remove hook (stop with a 50 ms
+// Registers AudioSource, AudioSpatial, AudioListener, AudioBusEffects, AudioReverb, AudioLimiter, PlaySfx, the AudioRef resource, the remove hook (stop with a 50 ms
 // fade) and the audio_bridge system in FixedUpdate_Post. Call after any system named in `after`.
 // The host calls clips->sync() once per frame before the sim ticks.
 void install(World& world, AudioDevice& device, ClipBank* clips = nullptr, const char* after = nullptr);

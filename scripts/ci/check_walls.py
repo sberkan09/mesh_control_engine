@@ -131,11 +131,18 @@ WALLS = [
         ["src/engine/net/src/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
-    # Luau (ADR-0041 spike): the VM and compiler headers stay inside mce_script's sources.
+    # Luau (ADR-0041, M-SCRIPT): the VM headers stay inside mce_script's sources, the compiler's
+    # (luacode.h, Luau/*.h) inside mce_script_compiler's.
     (
         "Luau wall",
-        re.compile(r"#\s*include\s*[<\"](lua|lualib|luacode|luaconf)\.h[>\"]"),
+        re.compile(r"#\s*include\s*[<\"](lua|lualib|luaconf)\.h[>\"]"),
         ["src/engine/script/src/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
+    (
+        "Luau compiler wall",
+        re.compile(r"#\s*include\s*[<\"](luacode\.h|Luau/)"),
+        ["src/engine/script/compiler/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
     # Editor MCP server (ADR-0027, N7): stdio is its only transport, no socket API in its code.
@@ -173,9 +180,15 @@ LINK_WALLS = [
     ("Recast link wall", re.compile(r"\bmce_recast\b"), ["src/engine/physics3d/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
     ("libvorbis link wall", re.compile(r"\bmce_vorbisenc\b"), ["src/engine/asset/cook/"]),
-    # The Luau scripting spike (ADR-0041) is opt-in: its test and its headless sample link it, no
-    # engine library, host or tool does; Luau's targets are linked by mce_script alone.
-    ("script opt-in wall", re.compile(r"\bmce_script\b"), ["src/engine/script/", "samples/script_headless/", "tests/script/"]),
+    # Luau scripting (ADR-0041, M-SCRIPT) is opt-in: no engine library links mce_script (it is not
+    # in MCE_ENGINE_LIBS); the stock hosts (player, editor, mce_mcp), its sample and tests do. The
+    # compiler links into the cook, the editor, tools and tests, never the player (it loads the
+    # bytecode mce_cook writes; tests/script's player_no_luau_compiler checks the binary too).
+    # Luau's targets are linked by mce_script and mce_script_compiler alone.
+    ("script opt-in wall", re.compile(r"\bmce_script\b"),
+     ["src/engine/script/", "src/player/", "src/editor/", "samples/script_headless/", "tests/script/"]),
+    ("script compiler wall", re.compile(r"\bmce_script_compiler\b"),
+     ["src/engine/script/", "src/engine/asset/cook/", "src/editor/", "tools/", "samples/script_headless/", "tests/script/"]),
     ("Luau link wall", re.compile(r"\bLuau\.\w+"), ["src/engine/script/"]),
     # The visual-novel kit is opt-in the same way (M-NOVEL): games, samples and tests link it (its
     # dialogue box, mce_kit_novel_ui, a game's host). The authoring tools (editor, mce_mcp, mce_cook)

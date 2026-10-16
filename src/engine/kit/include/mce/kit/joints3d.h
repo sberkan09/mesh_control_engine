@@ -94,6 +94,7 @@ struct JointBreak3D {
     Entity joint;      // the Joint3D's entity
     Entity connected;  // its `connected` (null: the world)
 };
+MCE_EVENT(JointBreak3D, joint, connected)
 
 // Registers Joint3D and JointBreak3D and adds the systems (after install_bodies3d, which it calls).
 // Idempotent.

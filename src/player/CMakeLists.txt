@@ -20,6 +20,10 @@ else()
         mce::mce_ui mce::mce_input mce::mce_module_host mce::mce_rhi_default mce::mce_loc)
 endif()
 mce_apply_compile_policy(mce_player_runtime)
+# Scene scripts (M-SCRIPT 1): the bytecode runner only; the Luau compiler never links here.
+if(MCE_WITH_SCRIPT)
+    target_link_libraries(mce_player_runtime PRIVATE mce::mce_script)
+endif()
 
 mce_add_executable(mce_player SOURCES main.cpp DEPS mce::mce_player_runtime)
 

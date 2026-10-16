@@ -13,7 +13,7 @@
 #include <cstring>
 
 #include "mce/refl/macros.h"
-#include "mce/script/script.h"
+#include "mce/script/compiler.h"
 
 using namespace mce;
 using mce::math::vec3;
@@ -33,20 +33,20 @@ namespace {
 constexpr const char* kScript = R"(
 local LO = vector.create(0, 0, 0)
 local HI = vector.create(40, 20, 40)
+local POS = mce.field("Ball", "position")  -- handles: the field is looked up once, not per call
+local VEL = mce.field("Ball", "velocity")
+local BOUNCE = mce.field("Ball", "bounce")
 
 function update()
     local dt = mce.dt
     mce.each("Ball", function(e)
-        local p = mce.get(e, "Ball", "position")
-        local v = mce.get(e, "Ball", "velocity")
+        local p, v, k = mce.get(e, POS, VEL, BOUNCE)
         v = vector.create(v.x, v.y - 9.81 * dt, v.z)
         p = p + v * dt
-        local k = mce.get(e, "Ball", "bounce")
         if p.x < LO.x or p.x > HI.x then v = vector.create(-v.x * k, v.y, v.z) end
         if p.y < LO.y then v = vector.create(v.x, -v.y * k, v.z); p = vector.create(p.x, LO.y, p.z) end
         if p.z < LO.z or p.z > HI.z then v = vector.create(v.x, v.y, -v.z * k) end
-        mce.set(e, "Ball", "position", p)
-        mce.set(e, "Ball", "velocity", v)
+        mce.set(e, POS, p, VEL, v)
     end)
 end
 )";
@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
 
     script::ScriptHost host;
     if (lua) {
-        auto added = host.add("balls", kScript);
+        auto added = script::add_source(host, "balls", kScript);
         if (!added) {
             std::fprintf(stderr, "script_headless: %s\n", added.error().path.c_str());
             return 1;

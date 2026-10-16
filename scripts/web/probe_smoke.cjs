@@ -129,7 +129,8 @@ async function shellChecks(chromium, exe, url) {
       const audioAfter = await tab.evaluate(() => (Module.mceAudioState ? Module.mceAudioState() : 'none'));
       // (Before it, headless Chromium may already count the page as activated; the input probe checks the
       // suspended start on its own.)
-      check(`${d.label}: the audio runs after the ${d.gesture} (${audioBefore} -> ${audioAfter})`, audioAfter === 'running');
+      if (audioBefore === 'none' && audioAfter === 'none') console.log(`probe: --   ${d.label}: no audio (the game opens no audio device)`);
+      else check(`${d.label}: the audio runs after the ${d.gesture} (${audioBefore} -> ${audioAfter})`, audioAfter === 'running');
       const size = () => tab.evaluate(() => {
         const c = document.getElementById('canvas');
         return { css: [c.clientWidth, c.clientHeight], px: [c.width, c.height], view: [innerWidth, innerHeight], dpr: devicePixelRatio };
