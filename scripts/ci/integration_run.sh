@@ -9,8 +9,8 @@
 #    below run on that commit, so a stale golden never turns the run red.
 # 2. runs the stages group by group, one local_ci.sh call each, so the disk strategy (finished build trees are
 #    deleted when space runs short, the ccache never is) works per group and one red group does not hide the
-#    rest: walls + gcc debug (+ GPU tests) + determinism + release build, clang release, ASan, tidy + web, then
-#    the `slow` tests when local_ci.sh has that stage.
+#    rest: walls + gcc debug (+ GPU tests) + the `slow` tests (when local_ci.sh has that stage) + determinism +
+#    release build, clang release, ASan, tidy + web.
 # 3. refreshes the ccache snapshot (/mnt/project-files/.cache) after the run, green or not.
 # 4. writes build/local-ci-logs/integration-report.md and prints it: result per group, and on red the
 #    suspect PRs, i.e. the first-parent merges on dev_claude since the last green integration run
@@ -80,8 +80,13 @@ fi
 echo "integration: $regen_note"
 
 # --- 2. the stages, group by group -----------------------------------------------------------------
-GROUPS_RUN=("walls linux-gcc-debug determinism release-build" "linux-clang-release" "linux-asan" "tidy web")
-grep -q '^ALL_STAGES=.*\bslow\b' scripts/ci/local_ci.sh && GROUPS_RUN+=("slow")
+# `slow` (M4) shares the gcc debug tree, so it runs in group 1; the script has it once the slow-label change landed.
+if grep -q '^ALL_STAGES=.*\bslow\b' scripts/ci/local_ci.sh; then
+    GROUPS_RUN=("walls linux-gcc-debug slow determinism release-build")
+else
+    GROUPS_RUN=("walls linux-gcc-debug determinism release-build")
+fi
+GROUPS_RUN+=("linux-clang-release" "linux-asan" "tidy web")
 failed=()
 declare -A RESULT
 i=0
