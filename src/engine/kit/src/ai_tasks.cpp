@@ -12,6 +12,7 @@
 #include "mce/kit/components.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/nav3d.h"
+#include "mce/kit/pathfinding.h"
 #include "mce/kit/perception.h"
 #include "mce/kit/sequence.h"
 #include "mce/log.h"
@@ -203,6 +204,65 @@ BtStatus make_noise(BtTaskCall& c) {
     return BtStatus::Success;
 }
 
+// find_point (the flags and fields are the importer's: see bt_importer.cpp).
+BtStatus find_point(BtTaskCall& c) {
+    if (c.halting) return BtStatus::Failure;
+    World& w = c.frame.world();
+    const asset::BtNode& n = c.node;
+    if (n.key2 >= c.tree.keys.size() || !c.blackboard) return BtStatus::Failure;
+    const math::vec3 self = position_of(w, c.entity);
+    math::vec3 center = self;
+    if (n.key != asset::kBtNoKey && !bt_key_position(c, center)) return BtStatus::Failure;
+    math::vec3 from;
+    Entity from_entity;
+    const bool has_from = n.key3 != asset::kBtNoKey && bt_key_position(c, n.key3, from, &from_entity);
+    const u32 prefer = n.flags & 3u, need = (n.flags >> 2) & 3u;
+    if ((need != 0 || prefer == 2) && !has_from) return BtStatus::Failure;
+    const bool plane = flat(w, c.entity);
+    const PerceptionSpace space = plane ? PerceptionSpace::Plane2D : PerceptionSpace::Space3D;
+    const Nav3D* nav = plane ? nullptr : w.try_resource<Nav3D>();
+    const bool on_mesh = nav && nav->mesh.loaded();
+    const NavGrid* grid = plane ? w.try_resource<NavGrid>() : nullptr;
+    const math::vec3 up = plane ? math::vec3{} : math::vec3{0.0f, 1.0f, 0.0f};  // rays a metre above the ground
+
+    const u32 rings = n.b >= 1.0f ? static_cast<u32>(n.b) : 1u;
+    const u32 count = n.c >= 1.0f ? static_cast<u32>(n.c) : 1u;
+    bool found = false;
+    f32 best = 0.0f;
+    math::vec3 pick;
+    for (u32 r = 1; r <= rings; ++r) {
+        const f32 radius = n.a * static_cast<f32>(r) / static_cast<f32>(rings);
+        for (u32 j = 0; j < count; ++j) {
+            const f32 angle = 6.2831853f * (static_cast<f32>(j) + 0.5f * static_cast<f32>(r % 2)) / static_cast<f32>(count);
+            math::vec3 p = plane ? center + math::vec3{std::cos(angle) * radius, std::sin(angle) * radius, 0.0f}
+                                 : center + math::vec3{std::cos(angle) * radius, 0.0f, std::sin(angle) * radius};
+            if (on_mesh) {
+                const std::optional<math::vec3> on = nav->mesh.nearest_point(p, {0.5f, 2.0f, 0.5f});
+                if (!on) continue;
+                p = *on;
+            } else if (grid && !grid->walkable(grid->cell_at({p.x, p.y}))) {
+                continue;
+            }
+            if (need != 0) {
+                const bool clear = line_of_sight(c.frame, space, from + up, p + up, 0xFFFF, c.entity, from_entity);
+                if (clear != (need == 1)) continue;
+            }
+            const f32 score = prefer == 0 ? -math::length(p - self) : prefer == 1 ? math::length(p - (has_from ? from : center))
+                                                                                    : -math::length(p - from);
+            if (!found || score > best) {
+                found = true;
+                best = score;
+                pick = p;
+            }
+        }
+    }
+    if (!found) return BtStatus::Failure;
+    const asset::BtKey& store = c.tree.keys[n.key2];
+    c.blackboard->vectors[store.slot] = pick;
+    c.blackboard->set |= 1u << (asset::kBtNumbers + store.slot);
+    return BtStatus::Success;
+}
+
 BtStatus log_text(BtTaskCall& c) {
     if (c.halting) return BtStatus::Failure;
     MCE_LOG_INFO("ai: {} (entity {}): {}", c.tree.name.view(), c.entity.index, c.arg());
@@ -220,6 +280,7 @@ void register_stock_tasks(BtRegistry& reg) {
     reg.register_task("raise", &raise);
     reg.register_task("wait_event", &wait_event);
     reg.register_task("make_noise", &make_noise);
+    reg.register_task("find_point", &find_point);
     reg.register_task("log", &log_text);
 }
 

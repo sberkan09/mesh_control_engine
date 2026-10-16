@@ -41,27 +41,8 @@ void eye_of(const Perceiver& p, const Pose& pose, math::vec3& eye, math::vec3& f
 
 // Whether a ray from `eye` reaches `target` (an entity at `to`) before anything in `mask`.
 bool clear_line(Frame& f, const Perceiver& p, Entity self, Entity target, math::vec3 eye, math::vec3 to, PerceptionStats& stats) {
-    const math::vec3 d = to - eye;
-    const f32 dist = math::length(d);
-    if (dist < 1e-4f) return true;
     ++stats.rays;
-    if (p.space == PerceptionSpace::Plane2D) {
-        const physics::World2D* w2 = f.try_resource<physics::World2D>();
-        if (!w2) return true;
-        physics::QueryFilter q;
-        q.layer_mask = p.mask;
-        q.exclude = Span<const Entity>(&self, 1);
-        const std::optional<physics::RayHit2D> h = w2->raycast({eye.x, eye.y}, {d.x / dist, d.y / dist}, dist, q);
-        return !h || h->entity == target;
-    }
-    const Physics3D* w3 = f.try_resource<Physics3D>();
-    if (!w3) return true;
-    physics::QueryFilter3D q;
-    q.layer_mask = p.mask;
-    q.exclude = Span<const Entity>(&self, 1);
-    q.include_characters = true;
-    const std::optional<physics::RayHit3D> h = w3->world.raycast(eye, d * (1.0f / dist), dist, q);
-    return !h || h->entity == target;
+    return line_of_sight(f, p.space, eye, to, p.mask, self, target);
 }
 
 struct Seen {
@@ -71,6 +52,29 @@ struct Seen {
 };
 
 }  // namespace
+
+bool line_of_sight(Frame& f, PerceptionSpace space, math::vec3 from, math::vec3 to, u16 mask, Entity ignore, Entity target) {
+    const math::vec3 d = to - from;
+    const f32 dist = math::length(d);
+    if (dist < 1e-4f) return true;
+    if (space == PerceptionSpace::Plane2D) {
+        const physics::World2D* w2 = f.try_resource<physics::World2D>();
+        if (!w2) return true;
+        physics::QueryFilter q;
+        q.layer_mask = mask;
+        if (!ignore.is_null()) q.exclude = Span<const Entity>(&ignore, 1);
+        const std::optional<physics::RayHit2D> h = w2->raycast({from.x, from.y}, {d.x / dist, d.y / dist}, dist, q);
+        return !h || (!target.is_null() && h->entity == target);
+    }
+    const Physics3D* w3 = f.try_resource<Physics3D>();
+    if (!w3) return true;
+    physics::QueryFilter3D q;
+    q.layer_mask = mask;
+    if (!ignore.is_null()) q.exclude = Span<const Entity>(&ignore, 1);
+    q.include_characters = true;
+    const std::optional<physics::RayHit3D> h = w3->world.raycast(from, d * (1.0f / dist), dist, q);
+    return !h || (!target.is_null() && h->entity == target);
+}
 
 void ai_perception(Frame& f) {
     World& w = f.world();

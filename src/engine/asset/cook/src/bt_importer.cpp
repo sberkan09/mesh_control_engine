@@ -39,6 +39,18 @@
 //   {"task": "raise", "event": "alarm"}       {"task": "wait_event", "event": "alarm"}
 //   {"task": "log", "text": "patrolling"}
 //   {"task": "make_noise", "loudness": 8}     (M-AI 3: a kit::Noise perceivers hear)
+//   {"task": "find_point", "store": "<vec3 key>", "around": "<key>", "from": "<key>", "radius": 6,
+//    "rings": 2, "count": 8, "prefer": "near" | "far" | "close", "need": "visible" | "hidden"}
+//
+// M-AI 4: a utility node runs the best of its score children, switching only for a score that beats
+// the running one's by "hysteresis":
+//   {"utility": [
+//     {"score": {"task": "attack"}, "base": 0.1,
+//      "by": [{"key": "health", "from": 0, "to": 100, "curve": "power", "exponent": 2, "weight": 1}]},
+//     {"score": {"task": "flee"}, "by": [{"key": "health", "to": 100, "invert": true}]}
+//   ], "hysteresis": 0.1}
+// and a token node runs its child holding one of an AiTokenPool's tokens (failing when none is free):
+//   {"token": {"task": "attack"}, "pool": "attack", "key": "<entity key holding the pool>"}
 
 #include <cstdio>
 #include <cstring>
@@ -58,7 +70,7 @@ constexpr u32 kBtFormatVersion = 1;
 // "gain_db" and "finish" to `a`; "offset" to `v`; the one string argument to `arg`.
 struct StockTask {
     const char* name;
-    const char* fields[3];
+    const char* fields[8];
     const char* string;    // the field stored in `arg` (required), or null
     bool needs_key;        // "key" is required (a vec3 or entity key)
 };
@@ -73,6 +85,7 @@ constexpr StockTask kStockTasks[] = {
     {"wait_event", {"event"}, "event", false},
     {"log", {"text"}, "text", false},
     {"make_noise", {"loudness"}, nullptr, false},
+    {"find_point", {"store", "around", "from", "radius", "rings", "count", "prefer", "need"}, nullptr, false},
 };
 
 const StockTask* stock_task(StringView name) {
@@ -113,6 +126,9 @@ constexpr Kind kKinds[] = {
     {"set", BtNodeKind::Set, {"value", "add", "clear", "from"}},
     {"emit", BtNodeKind::Emit, {}},
     {"task", BtNodeKind::Task, {"key", "value", "vector", "arg"}},  // a stock task: its own fields
+    {"utility", BtNodeKind::Utility, {"hysteresis"}},
+    {"score", BtNodeKind::Score, {"base", "by"}},
+    {"token", BtNodeKind::Token, {"pool", "key"}},
 };
 
 constexpr const char* kOps[] = {"is_set", "not_set", "==", "!=", "<", "<=", ">", ">="};
@@ -123,6 +139,7 @@ struct Builder {
     Array<BtKey> keys;
     Array<FixedString<64>> key_names;
     Array<BtNode> nodes;
+    Array<asset::BtConsideration> considerations;
     Array<char> strings;
     u32 slots = 0;
 
@@ -263,7 +280,7 @@ struct Builder {
         if (!found) {
             error(node,
                   "unknown node: expected sequence, selector, parallel, invert, succeed, fail, repeat, retry, cooldown, timeout, "
-                  "guard, check, wait, set, emit or task");
+                  "guard, check, wait, set, emit, task, utility, score or token");
             return nullptr;
         }
         const JsonValue task = node.get("task");
@@ -333,6 +350,131 @@ struct Builder {
             return;
         }
         n.a = static_cast<f32>(v.as_number());
+    }
+
+    // A vec3 or entity key for a place, or kBtNoKey after an error.
+    u16 place_key(JsonValue v, const char* what) {
+        const u16 k = key_of(v);
+        if (k != asset::kBtNoKey && keys[k].type != BtKeyType::Vec3 && keys[k].type != BtKeyType::Entity) {
+            String msg;
+            appendf(msg, "'%s' is a vec3 or entity key (a place or a target)", what);
+            error(v, msg);
+            return asset::kBtNoKey;
+        }
+        return k;
+    }
+
+    // find_point: key = around, key2 = store, key3 = from, a = radius, b = rings, c = count,
+    // flags = prefer (bits 0-1: near, far, close) | need << 2 (none, visible, hidden).
+    void find_point_args(JsonValue node, BtNode& n) {
+        const JsonValue store = node.get("store");
+        if (!store.valid()) {
+            error(node, "the find_point task needs 'store' (a vec3 key)");
+        } else {
+            n.key2 = key_of(store);
+            if (n.key2 != asset::kBtNoKey && keys[n.key2].type != BtKeyType::Vec3) error(store, "'store' is a vec3 key");
+        }
+        if (const JsonValue v = node.get("around"); v.valid()) n.key = place_key(v, "around");
+        if (const JsonValue v = node.get("from"); v.valid()) n.key3 = place_key(v, "from");
+        n.a = 5.0f;
+        n.b = 2.0f;
+        n.c = 8.0f;
+        if (const JsonValue v = node.get("radius"); v.valid()) {
+            if (!v.is_number() || v.as_number() <= 0) error(v, "'radius' must be a number > 0");
+            else n.a = static_cast<f32>(v.as_number());
+        }
+        if (const JsonValue v = node.get("rings"); v.valid()) {
+            if (!v.is_integer() || v.as_number() < 1 || v.as_number() > 8) error(v, "'rings' must be an integer from 1 to 8");
+            else n.b = static_cast<f32>(v.as_number());
+        }
+        if (const JsonValue v = node.get("count"); v.valid()) {
+            if (!v.is_integer() || v.as_number() < 1 || v.as_number() > 32) error(v, "'count' must be an integer from 1 to 32");
+            else n.c = static_cast<f32>(v.as_number());
+        }
+        u32 prefer = 0, need = 0;
+        if (const JsonValue v = node.get("prefer"); v.valid()) {
+            const StringView p = v.is_string() ? v.as_string() : StringView();
+            if (p == "near") prefer = 0;
+            else if (p == "far") prefer = 1;
+            else if (p == "close") prefer = 2;
+            else error(v, "'prefer' is \"near\" (to the entity), \"far\" (from 'from') or \"close\" (to 'from')");
+            if (prefer == 2 && !node.get("from").valid()) error(v, "\"close\" needs 'from'");
+        }
+        if (const JsonValue v = node.get("need"); v.valid()) {
+            const StringView p = v.is_string() ? v.as_string() : StringView();
+            if (p == "visible") need = 1;
+            else if (p == "hidden") need = 2;
+            else error(v, "'need' is \"visible\" or \"hidden\" (from 'from')");
+            if (!node.get("from").valid()) error(v, "'need' needs 'from'");
+        }
+        n.flags = prefer | (need << 2);
+    }
+
+    // Score: "base" and the considerations in "by".
+    void score_args(JsonValue node, BtNode& n) {
+        if (const JsonValue base = node.get("base"); base.valid()) {
+            if (!base.is_number()) error(base, "'base' must be a number");
+            else n.a = static_cast<f32>(base.as_number());
+        }
+        n.key2 = static_cast<u16>(considerations.size() < 0xFFFF ? considerations.size() : 0xFFFF);
+        const JsonValue by = node.get("by");
+        if (!by.valid()) return;
+        if (!by.is_array() || by.size() > 16) {
+            error(by, "'by' must be an array of at most 16 considerations");
+            return;
+        }
+        for (u32 i = 0; i < by.size(); ++i) {
+            const JsonValue c = by.at(i);
+            if (!c.is_object()) {
+                error(c, "a consideration is an object with a 'key'");
+                continue;
+            }
+            for (u32 j = 0; j < c.size(); ++j) {
+                const StringView f = c.key_at(j);
+                if (f != "key" && f != "curve" && f != "from" && f != "to" && f != "invert" && f != "exponent" && f != "weight") {
+                    String msg;
+                    appendf(msg, "'%.*s' is not a key of a consideration", static_cast<int>(f.size()), f.data());
+                    error(c.at(j), msg);
+                }
+            }
+            asset::BtConsideration k{};
+            k.key = c.get("key").valid() ? key_of(c.get("key")) : asset::kBtNoKey;
+            if (!c.get("key").valid()) error(c, "a consideration needs 'key'");
+            k.curve = asset::BtCurve::Linear;
+            k.to = 1.0f;
+            k.weight = 1.0f;
+            if (const JsonValue cv = c.get("curve"); cv.valid()) {
+                const StringView name = cv.is_string() ? cv.as_string() : StringView();
+                if (name == "linear") k.curve = asset::BtCurve::Linear;
+                else if (name == "power") k.curve = asset::BtCurve::Power;
+                else if (name == "logistic") k.curve = asset::BtCurve::Logistic;
+                else if (name == "step") k.curve = asset::BtCurve::Step;
+                else error(cv, "'curve' is \"linear\", \"power\", \"logistic\" or \"step\"");
+            }
+            k.exponent = k.curve == asset::BtCurve::Power ? 2.0f : k.curve == asset::BtCurve::Logistic ? 10.0f : 0.5f;
+            for (const char* f : {"from", "to", "exponent", "weight"}) {
+                const JsonValue x = c.get(f);
+                if (!x.valid()) continue;
+                if (!x.is_number()) {
+                    String msg;
+                    appendf(msg, "'%s' must be a number", f);
+                    error(x, msg);
+                    continue;
+                }
+                const f32 val = static_cast<f32>(x.as_number());
+                const StringView fv(f);
+                if (fv == "from") k.from = val;
+                else if (fv == "to") k.to = val;
+                else if (fv == "exponent") k.exponent = val;
+                else k.weight = val;
+            }
+            if (const JsonValue inv = c.get("invert"); inv.valid()) {
+                if (!inv.is_bool()) error(inv, "'invert' is true or false");
+                else k.invert = inv.as_bool() ? 1 : 0;
+            }
+            if (k.key != asset::kBtNoKey) considerations.push_back(k);
+        }
+        n.op = static_cast<u8>(considerations.size() - n.key2);
     }
 
     // A stock task's named arguments (kStockTasks).
@@ -406,7 +548,7 @@ struct Builder {
         BtNode n{};
         n.kind = k->kind;
         n.slot = asset::kBtNoSlot;
-        n.key = n.key2 = asset::kBtNoKey;
+        n.key = n.key2 = n.key3 = n.key4 = asset::kBtNoKey;
         n.name = n.text = n.arg = asset::kBtNoString;
         if (const JsonValue name = node.get("name"); name.valid()) {
             if (!name.is_string() || name.as_string().empty()) error(name, "'name' must be a non-empty string");
@@ -506,6 +648,10 @@ struct Builder {
             n.id = StringId(v.as_string()).value;
             n.text = intern(v.as_string());
             if (n.kind == BtNodeKind::Task) {
+                if (v.as_string() == "find_point") {
+                    find_point_args(node, n);
+                    break;
+                }
                 if (const StockTask* stock = stock_task(v.as_string())) {
                     stock_args(node, *stock, n);
                     break;
@@ -522,13 +668,30 @@ struct Builder {
                 }
             }
             break;
+        case BtNodeKind::Utility:
+            if (const JsonValue h = node.get("hysteresis"); h.valid()) {
+                if (!h.is_number() || h.as_number() < 0) error(h, "'hysteresis' must be a number >= 0");
+                else n.a = static_cast<f32>(h.as_number());
+            }
+            break;
+        case BtNodeKind::Score: score_args(node, n); break;
+        case BtNodeKind::Token: {
+            const JsonValue pool = node.get("pool");
+            if (!pool.is_string() || pool.as_string().empty()) error(pool.valid() ? pool : node, "a token node needs 'pool' (a pool's name)");
+            else n.arg = intern(pool.as_string());
+            if (const JsonValue key = node.get("key"); key.valid()) {
+                n.key = key_of(key);
+                if (n.key != asset::kBtNoKey && keys[n.key].type != BtKeyType::Entity) error(key, "a token node's 'key' is an entity key");
+            }
+            break;
+        }
         default: break;
         }
         nodes.push_back(n);
 
         // Children: composites take an array, decorators one node.
         u32 children = 0;
-        if (n.kind <= BtNodeKind::Parallel) {
+        if (n.kind <= BtNodeKind::Parallel || n.kind == BtNodeKind::Utility) {
             if (!v.is_array() || v.size() == 0) {
                 String msg;
                 appendf(msg, "'%s' must be an array of 1 to %u nodes", k->key, asset::kBtMaxChildren);
@@ -542,10 +705,14 @@ struct Builder {
                 return false;
             }
             for (u32 i = 0; i < v.size(); ++i) {
+                if (n.kind == BtNodeKind::Utility && !(v.at(i).is_object() && v.at(i).get("score").valid())) {
+                    error(v.at(i), "a utility node's children are score nodes");
+                    return false;
+                }
                 if (!emit(v.at(i), depth + 1, n.kind == BtNodeKind::Selector)) return false;
                 ++children;
             }
-        } else if (n.kind <= BtNodeKind::Guard) {
+        } else if (n.kind <= BtNodeKind::Guard || n.kind == BtNodeKind::Score || n.kind == BtNodeKind::Token) {
             if (!emit(v, depth + 1, false)) return false;
             children = 1;
         }
@@ -558,7 +725,7 @@ struct Builder {
 class BtImporter final : public IImporter {
 public:
     StringView id() const override { return "bt"; }
-    u32 version() const override { return 2; }
+    u32 version() const override { return 3; }
     ChunkType type() const override { return ChunkType::BehaviorTree; }
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ".mcbt"; }
@@ -612,7 +779,7 @@ public:
                 detail::error_at(diags, Errc::ParseError, file, name, kStage, "'name' must be a string of at most 31 bytes");
             else std::memcpy(header.name, name.as_string().data(), name.as_string().size());
         }
-        Builder b{file, diags, {}, {}, {}, {}, 0};
+        Builder b{file, diags, {}, {}, {}, {}, {}, 0};
         b.read_blackboard(doc.get("blackboard"));
         const JsonValue root = doc.get("root");
         if (!root.valid()) {
@@ -624,7 +791,7 @@ public:
 
         header.slot_count = b.slots;
         Array<byte> payload;
-        asset::write_behavior_tree(header, b.keys.span(), b.nodes.span(), b.strings.span(), payload);
+        asset::write_behavior_tree(header, b.keys.span(), b.nodes.span(), b.considerations.span(), b.strings.span(), payload);
         if (Result<asset::BtView> check = asset::BtView::read(payload.span()); !check) {
             detail::error_at(diags, Errc::InvalidArgument, file, doc, kStage, "internal: the cooked tree does not read back");
             return false;

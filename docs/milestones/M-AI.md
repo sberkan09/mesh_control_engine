@@ -1,6 +1,6 @@
 # M-AI — Game AI as data (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1-3 done). Plan: ROADMAP §M-AI; ADR-0045; Linear SBA-128 … SBA-133.
+**Status:** active (added 2026-10-16; steps 1-4 done). Plan: ROADMAP §M-AI; ADR-0045; Linear SBA-128 … SBA-133.
 
 **Why:** MCE has the parts an enemy moves and senses with: grid A* and `PathAgent`, the navmesh and `NavAgent3D`
 (M-GAMEPLAY3D), `Raycast3D` / `Overlap3D` sensors, and the FSM helper. What it lacks is the layer that decides.
@@ -24,7 +24,7 @@ It needs no device. Every step gates headless in `local_ci.sh`.
 | 1 | Behavior tree runtime: `.mcbt` cooked to `CHNK_BT`, typed blackboard keys, `AiBrain` and `Blackboard` components holding all run state, tasks by name (ADR-0045) | SBA-128 | done |
 | 2 | Stock data tasks (move to a key or entity on the grid or the navmesh, look at, animate, play a sound, spawn, raise and wait for events) and blackboard observer aborts; the stock player runs trees from scenes | SBA-129 | done |
 | 3 | Perception: `Perceiver` (sight cone and range, hearing, forget time) and `Stimulus` (a visible target with a team, noise events), line of sight through 2D and 3D rays, memory into blackboard keys | SBA-130 | done |
-| 4 | A utility selector with response curves and hysteresis, `AiTokenPool` for attack and role tokens, point queries scored by distance, line of sight and cover | SBA-131 | not started |
+| 4 | A utility selector with response curves and hysteresis, `AiTokenPool` for attack and role tokens, point queries scored by distance, line of sight and cover | SBA-131 | done |
 | 5 | The editor's Behavior Tree panel: tree, inspector, undo, cook validation; in play-in-editor the active path, results and blackboard, and a perception overlay | SBA-132 | not started |
 | 6 | MCP `bt_create`, `bt_add_node`, `bt_set`, `bt_trace`; the user guide chapter; the demo and the gates | SBA-133 | not started |
 
@@ -105,3 +105,24 @@ It needs no device. Every step gates headless in `local_ci.sh`.
   hearing still update every tick.
 - **Line of sight ends at the target.** A ray that hits the stimulus's own collider counts as clear,
   so a target with a body is seen, and one without is seen if nothing else is in the way.
+
+## Step 4 — utility, tokens, point queries (SBA-131)
+
+| Piece | Where |
+|---|---|
+| `CHNK_BT` v3: the `Utility`, `Score` and `Token` kinds, `BtCurve`, `BtConsideration` (a table after the nodes), and `key3`, `b`, `c`, `flags` on a node | `src/engine/asset/include/mce/asset/formats.h`, `formats.cpp` |
+| The importer: `utility`, `score` (`base`, `by`), `token` (`pool`, `key`) and `find_point` | `src/engine/asset/cook/src/bt_importer.cpp` |
+| The utility selector with hysteresis, `AiTokenPool` and the token node, `bt_utility_scores`, the `bt_key_position` overload for a node's key | `src/engine/kit/include/mce/kit/ai.h`, `src/engine/kit/src/ai.cpp` |
+| `find_point`: rings of points, navmesh or grid projection, line of sight through `line_of_sight` (now public in `perception.h`), scored by distance | `src/engine/kit/src/ai_tasks.cpp`, `perception.cpp` |
+| Tests: the highest score runs, hysteresis, the four curves, a failing node, tokens (capacity, release on halt, dead holders, pools by key and by name), `find_point` on the grid, behind a wall and away from a threat, two runs hash the same, cook errors | `tests/kit/test_ai_utility.cpp` |
+
+**Design notes.**
+- **Scores are recomputed every tick, and only switching costs.** Hysteresis is the one piece of
+  state: the running child keeps its place until another beats it by the margin, so an AI commits
+  without the tree storing a decision.
+- **A consideration reads only the blackboard.** Perception and game code write the keys, the curve
+  shapes them. Asking the world inside a score would make a score's cost unbounded.
+- **Tokens live on a component, not in the brain.** A pool is shared by every brain that names it,
+  saved and hashed with the scene; holders that die free their tokens on the next take.
+- **Point queries are a task, not a node kind.** A task can be replaced by name, and `find_point`
+  writes a blackboard key like any other task, so `move_to` walks to it.

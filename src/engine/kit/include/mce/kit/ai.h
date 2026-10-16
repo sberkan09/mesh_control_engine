@@ -45,6 +45,18 @@
 //   log         writes `text` to the log at info level, with the entity and the tree; Success
 //   make_noise  a kit::Noise of `loudness` metres at the entity (perception.h), in its Stimulus's
 //               (else its Perceiver's) team; Success
+//   find_point  a point query (M-AI 4): `rings` x `count` points around `around` (or the entity)
+//               out to `radius`, kept on the navmesh (3D, when there is one) or on walkable grid
+//               cells (2D), optionally only those `visible` or `hidden` from `from`; the one nearest
+//               the entity ("near"), farthest from `from` ("far") or nearest to it ("close") goes to
+//               `store`; Failure when no point passes
+//
+// Utility (M-AI 4): a utility node scores each of its score children every tick (`base` plus, per
+// consideration, `weight` x a curve of a blackboard key) and runs the best; while one runs, another
+// takes over only by beating its score by more than `hysteresis`, so the choice does not flicker. A
+// child whose score is 0 or less is not picked. A token node takes a token of the AiTokenPool it
+// names when it starts (failing when the pool is full) and gives it back when its child finishes or
+// is halted, so at most `capacity` brains run that branch at once.
 
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
@@ -93,6 +105,20 @@ MCE_COMPONENT(AiBrain, tree, (active, Save, Help{"cleared: the tree pauses where
               (result, Save, ReadOnly), (runs, Save, ReadOnly), (time, Save, ReadOnly), (tree_hash, Save, ReadOnly),
               (nodes, Save, ReadOnly), (slots, Save, ReadOnly))
 
+// Tokens for token nodes (M-AI 4): at most `capacity` (up to kMaxHolders) brains hold one at a
+// time. A token node finds its pool on the entity its key names (a target that limits its own
+// attackers), else the first pool with its name in ECS order (a squad-wide limit). Holders that
+// were destroyed are dropped when a brain next asks.
+struct AiTokenPool {
+    static constexpr u32 kMaxHolders = 8;
+    FixedString<24> name;
+    u32 capacity = 1;
+    u32 held = 0;                 // engine-written
+    Entity holders[kMaxHolders];  // engine-written
+};
+MCE_COMPONENT(AiTokenPool, (name, Help{"what token nodes ask for: \"attack\""}), (capacity, Range{0, 8}, Help{"brains holding a token at once"}),
+              (held, Save, ReadOnly), (holders, Save, ReadOnly))
+
 // An emit node: `id` is the signal, `entity` the brain's. Readable from the next tick.
 struct BtSignal {
     StringId id;
@@ -118,6 +144,7 @@ public:
         u32 slot_count = 0;
         Array<asset::BtKey> keys;
         Array<asset::BtNode> nodes;
+        Array<asset::BtConsideration> considerations;
         Array<char> strings;
         StringView string(u32 offset) const;
         // The key named `name`, or asset::kBtNoKey.
@@ -178,8 +205,14 @@ struct BtTaskCall {
 // False when the node has no key, the key is unset or of another type, or the entity is gone;
 // `target` (when given) gets the entity of an Entity key.
 bool bt_key_position(const BtTaskCall& call, math::vec3& out, Entity* target = nullptr);
+// The same for any of the node's keys (`key2`, `key3`).
+bool bt_key_position(const BtTaskCall& call, u16 key, math::vec3& out, Entity* target = nullptr);
 
-// Registers AiBrain, Blackboard and BtSignal, installs perception (kit/perception.h), sets the BtRegistry resource and adds "ai_brains"
+// A utility node's children's scores as the runner computes them (the debugger's view); `out` gets
+// one per child. False when `node` is not a utility node of `e`'s tree.
+bool bt_utility_scores(World& w, Entity e, u32 node, Array<f32>& out);
+
+// Registers AiBrain, Blackboard, AiTokenPool and BtSignal, installs perception (kit/perception.h), sets the BtRegistry resource and adds "ai_brains"
 // to FixedUpdate_Pre, with the stock tasks registered. Idempotent (re-points the assets).
 void install_ai(World& world, asset::AssetSystem* assets);
 

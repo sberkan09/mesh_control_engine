@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Utility AI, attack tokens and point queries, M-AI step 4 (SBA-131): a `utility` node runs the child whose
+  `score` (a base plus weighted linear, power, logistic or step curves of blackboard keys) is highest, and
+  keeps a running child until another beats it by `hysteresis`. An `AiTokenPool` hands out a few tokens and a
+  `token` node takes one or fails, so only some enemies attack at once. The stock task `find_point` stores the
+  best point on rings around the entity: on the navmesh or grid, visible or hidden from a key, near, far or
+  close. `.mcbt` cooks to `CHNK_BT` v3. User guide 13.8.
 - M-VISUAL2 is done (step 5, SBA-105). `Environment3D` gains `ssr_steps`, `ssr_edge_fade` and
   `contact_steps`, and MCP's Material schema lists the clear coat, sheen, anisotropy, transmission and ior
   keys. `samples/06_showcase` shows reflections, contact shadows, sharpening, glass, lacquer and brushed
