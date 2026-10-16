@@ -150,7 +150,8 @@ if(MCE_BUILD_SAMPLES)
     add_subdirectory(samples)
 endif()
 
-# Projects made with scripts/new_project.py (assets.md §4.4): every projects/<name>/ with a CMakeLists.txt.
+# Projects made with scripts/new_project.py (assets.md §4.4): every projects/<name>/ with a CMakeLists.txt, or a
+# script project (empty "games" in its .mceproj).
 # MCE_ONLY_PROJECT=<dir> adds that one project and no other, whatever MCE_BUILD_PROJECTS says: the phone
 # presets leave projects off, and scripts/ship.py --target android|ios --project sets it for the one it ships.
 set(MCE_ONLY_PROJECT "" CACHE PATH "Add only this project directory (scripts/ship.py --project on phones)")
@@ -163,6 +164,20 @@ endif()
 foreach(_dir IN LISTS _mce_projects)
     if(EXISTS "${_dir}/CMakeLists.txt")
         add_subdirectory("${_dir}")
+    else()
+        # A script project (mce new --template script) has no CMakeLists.txt: an empty "games" list in
+        # its .mceproj says so, and the engine builds it with the stock player (mce_add_script_project).
+        file(GLOB _mceproj "${_dir}/*.mceproj")
+        if(_mceproj)
+            list(GET _mceproj 0 _mceproj)
+            file(READ "${_mceproj}" _mceproj_text)
+            string(JSON _games_count ERROR_VARIABLE _games_error LENGTH "${_mceproj_text}" games)
+            if(NOT _games_error AND _games_count EQUAL 0)
+                get_filename_component(_dir_name "${_dir}" NAME)
+                set(MCE_SCRIPT_PROJECT_DIR "${_dir}")
+                add_subdirectory("${PROJECT_SOURCE_DIR}/cmake/ScriptProject" "${PROJECT_BINARY_DIR}/projects/${_dir_name}")
+            endif()
+        endif()
     endif()
 endforeach()
 
@@ -189,6 +204,20 @@ if(MCE_TEMPLATE_PROBE AND MCE_BUILD_TESTS)
         string(TOLOWER "${_probe_name}" _probe_dir)
         add_subdirectory("${_probe_root}/${_probe_name}" "${CMAKE_BINARY_DIR}/${_probe_dir}_build")
     endforeach()
+    if(MCE_WITH_SCRIPT)
+        # The script template (M-SCRIPT 5): no C++, built with the stock player, whose script moves the hero.
+        execute_process(
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/new_project.py" ScriptProbe --dest "${_probe_root}"
+                    --template script --seed 1 --force
+            RESULT_VARIABLE _probe_rc OUTPUT_QUIET)
+        if(NOT _probe_rc EQUAL 0)
+            message(FATAL_ERROR "scripts/new_project.py failed to stamp the script template probe")
+        endif()
+        set(MCE_SCRIPT_PROJECT_DIR "${_probe_root}/ScriptProbe")
+        add_subdirectory("${PROJECT_SOURCE_DIR}/cmake/ScriptProject" "${CMAKE_BINARY_DIR}/scriptprobe_build")
+        add_test(NAME script_probe_runs_scripts COMMAND script_probe -headless 1 -ticks 130)
+        set_tests_properties(script_probe_runs_scripts PROPERTIES PASS_REGULAR_EXPRESSION "script: hero at x=3[.][0-9]+.*130 ticks, 3 entities")
+    endif()
     if(TARGET novel_probe)
         add_test(NAME novel_probe_plays_to_end COMMAND novel_probe -headless 1 -ticks 2000 -novel.autoplay 1)
         set_tests_properties(novel_probe_plays_to_end PROPERTIES PASS_REGULAR_EXPRESSION "novel: @end"

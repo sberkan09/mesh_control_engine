@@ -1,6 +1,6 @@
 # M-AI — Game AI as data (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1-5 done). Plan: ROADMAP §M-AI; ADR-0045; Linear SBA-128 … SBA-133.
+**Status:** done (added 2026-10-16; steps 1-6 done; the gates below pass in `local_ci.sh`). Plan: ROADMAP §M-AI; ADR-0045; Linear SBA-128 … SBA-133.
 
 **Why:** MCE has the parts an enemy moves and senses with: grid A* and `PathAgent`, the navmesh and `NavAgent3D`
 (M-GAMEPLAY3D), `Raycast3D` / `Overlap3D` sensors, and the FSM helper. What it lacks is the layer that decides.
@@ -26,7 +26,7 @@ It needs no device. Every step gates headless in `local_ci.sh`.
 | 3 | Perception: `Perceiver` (sight cone and range, hearing, forget time) and `Stimulus` (a visible target with a team, noise events), line of sight through 2D and 3D rays, memory into blackboard keys | SBA-130 | done |
 | 4 | A utility selector with response curves and hysteresis, `AiTokenPool` for attack and role tokens, point queries scored by distance, line of sight and cover | SBA-131 | done |
 | 5 | The editor's Behavior Tree panel: tree, inspector, undo, cook validation; in play-in-editor the active path, results and blackboard, and a perception overlay | SBA-132 | done |
-| 6 | MCP `bt_create`, `bt_add_node`, `bt_set`, `bt_trace`; the user guide chapter; the demo and the gates | SBA-133 | not started |
+| 6 | MCP `bt_create`, `bt_add_node`, `bt_set`, `bt_trace`; the user guide chapter; the demo and the gates | SBA-133 | done |
 
 ## Step 1 — the behavior tree runtime (SBA-128)
 
@@ -149,3 +149,21 @@ It needs no device. Every step gates headless in `local_ci.sh`.
 - **A broken file is still editable.** Edits are refused only when they would break a tree that
   cooks, so a hand-edited tree that does not cook can be opened and fixed in the panel.
 
+
+## Step 6 — MCP tools, the demo and the gates (SBA-133)
+
+| Piece | Where |
+|---|---|
+| `bt_create`, `bt_add_node`, `bt_set`: the tree as outline lines numbered in pre-order; each write cooked first, a failure writes nothing | `src/editor/mcp/src/tools_bt.cpp` |
+| `bt_trace`: `run_headless` sampling one brain (running path, result, blackboard every N ticks, when each node started); deterministic | `src/editor/mcp/src/tools_bt.cpp` |
+| The squad demo: two guards on one utility tree (`squad.mcbt`) hear a stone, take turns attacking through the thief's `AiTokenPool`, fall back to a `find_point` spot when hurt; the thief (`brawler.mcbt`) strikes back | `samples/ai_demo/assets/scenes/yard_squad.mcscene`, `assets/ai/*.mcbt`, `player_test.cmake` |
+| Tests: the tools (create, outline, refusals that leave the file, remove and replace, trace twice the same); the squad scene logs the turn-taking and hashes the same twice; 500 brains with perception | `tests/mcp/test_mcp_bt.cpp`, `samples/ai_demo/player_test.cmake`, `tests/kit/test_ai_budget.cpp` |
+| User guide 13.8 (MCP and the demo), chapter 14 tool table | `docs/user-guide/` |
+
+**Gates.**
+- *The same replay hash with AI running:* `ai_demo_player` plays both scenes twice and compares the state hash; `test_ai`, `test_ai_tasks`, `test_ai_perception`, `test_ai_utility` and `test_ai_budget` hash two runs every tick, and saves resume mid-tree.
+- *A 500-agent per-tick budget:* `test_ai_budget.cpp` ticks 500 brains (observer aborts, a utility choice, a token pool) with 500 perceivers on a staggered schedule within 2 ms in optimized builds (about 0.45 ms in Debug on the CI machine).
+- *Truth tables for every node, decorator and abort:* `test_ai.cpp` (composites, decorators, leaves), `test_ai_tasks.cpp` (guard aborts self, lower, both), `test_ai_utility.cpp` (utility and token nodes).
+- *`local_ci.sh` green on every step:* each step's PR passed `--task`; the milestone's batch (clang-release, ASan, determinism) ran at the end.
+
+**Not done.** The brain's own `render_sheet` view of a guard (the roadmap's "checks it with bt_trace and render_sheet") is covered by `bt_trace`'s text; no image tool reads a tree.

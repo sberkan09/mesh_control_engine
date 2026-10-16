@@ -6,6 +6,7 @@ that compiles, cooks and ships through the one-command pipeline.
     python3 scripts/new_project.py MyGame --game hero --title "My Game"
     python3 scripts/new_project.py Probe --dest build/x    # anywhere (the build's template probe)
     python3 scripts/new_project.py MyNovel --template novel  # a visual novel on mce_kit_novel
+    python3 scripts/new_project.py MyScripts --template script  # Luau scripts and data: no C++, no compiler
 
 The engine's CMake adds every projects/<name>/ directory, so after `cmake --preset <preset>` the
 targets <game> (host), <game>_game (module) and <game>_cook exist. Ship with
@@ -28,8 +29,8 @@ import zlib
 # with the SDK: share/mce/scripts/new_project.py beside share/mce/templates/project and VERSION.
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "templates"
-# A template other than "project" is an overlay: templates/project first, then its own files over it.
-TEMPLATE_CHOICES = ("project", "novel")
+# "script" stands alone (Luau scripts and data, no C++ and no CMake); any other is an overlay: templates/project first, then its own files over it.
+TEMPLATE_CHOICES = ("project", "novel", "script")
 IN_ENGINE_TREE = (ROOT / "CMakeLists.txt").is_file()
 TEXT_SUFFIXES = {".txt", ".md", ".cpp", ".h", ".mceproj", ".mcscene", ".mceasset", ".gitignore", ".json", ".mcuitheme", ".mcui", ".mcsheet"}
 
@@ -202,7 +203,8 @@ def main():
     ap.add_argument("--game", help="game id (default: the name in snake_case)")
     ap.add_argument("--title", help="window title (default: the name)")
     ap.add_argument("--template", choices=TEMPLATE_CHOICES, default="project",
-                    help="project: the 2D starter (default); novel: a visual novel on the novel kit")
+                    help="project: the 2D starter (default); novel: a visual novel on the novel kit; "
+                         "script: a game of Luau scripts and data, no C++ and no compiler")
     ap.add_argument("--dest", default=str(ROOT / "projects") if IN_ENGINE_TREE else os.getcwd(),
                     help="parent directory (default: projects/ in the engine tree, the current directory with the SDK)")
     ap.add_argument("--seed", type=int, help="derive the GUIDs from this seed (reproducible output)")
@@ -233,6 +235,7 @@ def main():
         "@GUID_TEX_BLOCK@": new_guid(),
         "@GUID_TEX_GROUND@": new_guid(),
         "@GUID_FONT@": new_guid(),
+        "@GUID_SCRIPT@": new_guid(),
         "@GUID_UI_OPTIONS@": new_guid(),  # assets/ui/options.mcui, the stock options screen (M-ACCESS)
     }
     # The starter themes (M-UI-DATA step 7): assets/ui/themes/{pixel,clean,story}.mcuitheme and their fonts.
@@ -247,7 +250,9 @@ def main():
         return text
 
     files = {}  # relative path -> source; an overlay's file replaces the base template's
-    for template in ["project"] + ([args.template] if args.template != "project" else []):
+    script_project = args.template == "script"
+    bases = ["script"] if script_project else ["project"] + ([args.template] if args.template != "project" else [])
+    for template in bases:
         root = TEMPLATES / template
         if not root.is_dir():
             print(f"new_project: the {template} template is missing ({root})", file=sys.stderr)
@@ -266,6 +271,17 @@ def main():
         written += 1
 
     tex = out / "assets" / "textures"
+    if script_project:
+        tex.mkdir(parents=True, exist_ok=True)
+        (tex / "block.png").write_bytes(png(16, 16, block_pixel))
+        (tex / "block.png.mceasset").write_text(sidecar(tokens["@GUID_TEX_BLOCK@"]), encoding="utf-8", newline="\n")
+        written += 2
+        print(f"new_project: {args.name} (a script game) -> {out} ({written} files)")
+        if IN_ENGINE_TREE:
+            print(f"  cook: build/<preset>/tools/cook/mce_cook {out} --pack    play: mce_player -pack {out}/assets.mce")
+        else:
+            print(f"  build: mce build {out}    play: mce play {out}    edit: mce editor {out}")
+        return 0
     tex.mkdir(parents=True, exist_ok=True)
     if args.template == "novel":
         # The novel's art by the kit's path conventions: a background layer and the guide's sprite.

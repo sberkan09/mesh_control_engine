@@ -5,6 +5,17 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Behavior tree MCP tools, the squad demo and the gates, M-AI step 6 (SBA-133): `bt_create`, `bt_add_node` and
+  `bt_set` write a `.mcbt` the cook checks before anything is written, and `bt_trace` plays a saved scene
+  headless and reports one brain's running path and blackboard over time and when each node started.
+  `samples/ai_demo` gains `scenes/yard_squad.mcscene`: two guards investigate a thrown stone, take turns
+  attacking through one attack token and fall back when hurt. A 500-brain tick stays within 2 ms in optimized
+  builds. User guide 13.8 and 14. M-AI is done.
+- A game with no C++, M-SCRIPT step 5 (SBA-151): `mce new MyGame --template script` makes a project of Luau
+  scripts and data with no `CMakeLists.txt`; `mce build` cooks and checks it, `mce play` / `headless` run it on
+  the stock player, `mce ship` zips the player, the engine library, the pack and a launcher, and the editor and
+  MCP server open it without a module. The engine checkout builds such a project for phones and the browser
+  (`scripts/ship.py --project`), and the android, ios and web presets build the Luau runtime. User guide 27.7.
 - 2D and gameplay tour sample, M-COVER step 3 (SBA-159): `samples/kit2d_tour` shows 14 more components with no code: a
   cut-out puppet with animator, slots, IK goal and a bone follower, a sensor gate that counts events and fires a
   burst, a camera shake and a captioned sound, a path agent over a collider-built nav grid, and a token pool. It
