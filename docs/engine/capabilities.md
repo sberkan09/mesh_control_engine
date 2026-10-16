@@ -95,6 +95,9 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Perceiver` | `mce/kit/perception.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `Stimulus` | `mce/kit/perception.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `RichPresence` | `mce/kit/presence.h` | yes | yes | yes | docs/user-guide/26-steam.md | samples/steam_demo/assets/scenes/main.mcscene |
+| `ProcLevel` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | allowed: tested in tests/kit/test_proclevel.cpp; M-PROCGEN step 5 shows it in samples/10_dungeon |
+| `ProcLevelOwned` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | allowed: state the engine writes and games read; nothing to author |
+| `ProcMarker` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | allowed: state the engine writes and games read; nothing to author |
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `RenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap) |
 | `ShowRenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap) |
