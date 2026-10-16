@@ -134,7 +134,12 @@ bool record_view(rhi::CommandBuffer& cmd, World& world, Span<const ViewEntry> vi
         bool on_3d = false;
         for (usize j = 0; j < i; ++j) on_3d = on_3d || (views[j].is_3d && views[j].target == v.target && covers(views[j].rect, v.rect));
         render::SpriteBatch batch(renderer.sprite_sets(), mem::frame());
-        batch.begin(render::compute_view_2d(cam, size, ppm));
+        render::View2D view = render::compute_view_2d(cam, size, ppm);
+        // A render texture is written upright (its top row at v = 0, like uploaded art; see
+        // Renderer::record_3d): mirror the clip space's y (sprites are not culled by winding).
+        if (linear)
+            for (auto& col : view.view_proj.c) col[1] = -col[1];
+        batch.begin(view);
         ctx.extract2d->extract(world, batch);
         batch.build();
         if (!linear && st.window_2d++ == 0) st.first_2d = batch.stats();

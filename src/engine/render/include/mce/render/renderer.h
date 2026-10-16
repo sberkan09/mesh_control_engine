@@ -119,7 +119,10 @@ public:
     // backbuffer). Outside any pass; init_3d() first.
     void record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target = {});
     // M-VIEWS: one view of a frame with several (Forward3D::ViewOutput: its slot, its rect of the
-    // target, whether it is the frame's first 3D record).
+    // target, whether it is the frame's first 3D record). With `linear_output` (a render texture
+    // that sprites, materials and UI sample) the frame is written upright, its top row at v = 0
+    // like uploaded art: Forward3D draws into the slot's own staging texture, which a v-flipped
+    // quad then copies into the rect (the staging lives as long as the slot).
     void record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target, const Forward3D::ViewOutput& out);
 
     // ---- views (M-VIEWS): stable Forward3D view slots for the views a host draws, by a key of its
@@ -172,6 +175,15 @@ private:
         bool asked = false; // view_slot() named it since the last end_views()
     };
     ViewSlot view_slots_[Forward3D::kMaxViews];
+    // record_3d's upright copies (linear_output), one per view slot.
+    struct Staging {
+        rhi::TextureHandle texture;
+        rhi::Extent2D size;
+        u32 key = 0;
+        SpriteSetId set;
+    };
+    Staging staging_[Forward3D::kMaxViews];
+    void release_staging(u32 slot);
 };
 
 }  // namespace mce::render
