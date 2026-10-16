@@ -390,8 +390,9 @@ stage_premerge() {
     if [[ "$full" == 1 ]]; then
         cmake --build --preset linux-gcc-debug || return 1
     else
+        # A target premerge.py guessed wrong (a test command that is not a target) falls back to the full build.
         # shellcheck disable=SC2086
-        cmake --build --preset linux-gcc-debug --target $targets || return 1
+        cmake --build --preset linux-gcc-debug --target $targets || cmake --build --preset linux-gcc-debug || return 1
     fi
     xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" ctest --preset linux-gcc-debug -j "$JOBS" -R "$regex" || return 1
     [[ $rc -eq 0 ]] && return 0
@@ -658,9 +659,9 @@ if [[ $HAVE_CCACHE -eq 1 ]]; then
         sed 's/^/  ccache: /'
     [[ $failed -eq 0 ]] && save_cache_snapshot
 fi
-# A green --task records the base it ran on, so --premerge can tell later whether dev_claude moved onto the
+# A --task whose walls and gcc-debug tests passed records the base it ran on (a tidy-only fix needs no re-run), so --premerge can tell later whether dev_claude moved onto the
 # PR's files (scripts/ci/premerge.py overlap).
-if [[ $task_run -eq 1 && $failed -eq 0 ]]; then
+if [[ $task_run -eq 1 && "${RESULT[walls]:-}" == PASS* && "${RESULT[linux-gcc-debug]:-}" == PASS* ]]; then
     printf 'BASE=%s\nHEAD=%s\n' "$(git merge-base HEAD "${MCE_TIDY_BASE:-origin/dev_claude}" 2>/dev/null)" \
         "$(git rev-parse HEAD)" > "$LOG_DIR/last-task.env"
 fi
