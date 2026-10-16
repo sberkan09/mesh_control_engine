@@ -209,12 +209,20 @@ reclaim_space() {  # $1: index in stages of the stage about to run; returns 1 wh
 
 JOBS="$(nproc 2>/dev/null || echo 4)"
 
-# Extra configure arguments shared by every preset.
-COMMON_ARGS=()
+# Extra configure arguments shared by every preset. -gz compresses the debug sections: a gcc-debug tree shrinks
+# from 13 GB to 8.2 GB (claude_communication R2), which matters for the ~40 GB allowance. Changing the flags
+# invalidates every cached object once, so the first run after this lands is cold and the next snapshot is rebuilt.
+COMMON_ARGS=(-DCMAKE_C_FLAGS=-gz -DCMAKE_CXX_FLAGS=-gz)
 SNAPSHOT=""
+HAVE_CCACHE=0
 if command -v ccache > /dev/null; then
+    HAVE_CCACHE=1
     export CCACHE_BASEDIR="$ROOT" CCACHE_NOHASHDIR=1  # hits survive a different checkout path
     export CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}" CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-3G}"
+    # Without these ccache cannot cache a TU that uses a precompiled header (SDL3's): 1308 of 4665 calls were
+    # uncacheable, a gcc-debug build with a full cache took 700 s; with them it hits 100 % and takes 110 s
+    # (claude_communication R1).
+    export CCACHE_SLOPPINESS="${CCACHE_SLOPPINESS:-pch_defines,time_macros,include_file_mtime,include_file_ctime}"
     COMMON_ARGS+=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
     if [[ -d /mnt/project-files/ ]] && command -v zstd > /dev/null; then
         SNAPSHOT="${MCE_CCACHE_SNAPSHOT-/mnt/project-files/.cache/ccache-linux.tar.zst}"
@@ -557,7 +565,7 @@ run_stage() {
 }
 
 restore_cache
-[[ ${#COMMON_ARGS[@]} -gt 0 ]] && ccache --zero-stats > /dev/null
+[[ $HAVE_CCACHE -eq 1 ]] && ccache --zero-stats > /dev/null
 preconfigure
 
 declare -A RESULT
@@ -582,7 +590,7 @@ done
 echo
 echo "=== Summary ($(git rev-parse --short HEAD 2>/dev/null))"
 for s in "${stages[@]}"; do printf '  %-22s %s\n' "$s" "${RESULT[$s]}"; done
-if [[ ${#COMMON_ARGS[@]} -gt 0 ]]; then
+if [[ $HAVE_CCACHE -eq 1 ]]; then
     ccache --show-stats 2> /dev/null | grep -E '^(Cacheable calls|  Hits|  Misses)' | awk '!seen[$0]++' |
         sed 's/^/  ccache: /'
     [[ $failed -eq 0 ]] && save_cache_snapshot
