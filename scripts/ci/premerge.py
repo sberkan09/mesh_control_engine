@@ -144,8 +144,20 @@ def test_targets(text, known):
     return out
 
 
+def extra_targets(text):
+    """add_test blocks -> {test: every $<TARGET_FILE:t> in the statement}: a test that passes a second binary as
+    -D<ARG>=$<TARGET_FILE:t> (mce_cook_module hands template_probe_game to mce_cook) needs it built too."""
+    out = {}
+    for body in ADD_TEST_BLOCK.findall(text):
+        words = body.split()
+        if len(words) >= 3 and words[0] == "NAME":
+            out[words[1]] = set(TARGET_FILE.findall(body))
+    return out
+
+
 def cmd_tests(_args):
     files = pr_files() or set()
+    extra = {}  # name -> targets named by $<TARGET_FILE:> anywhere in its add_test
     tests = {}  # name -> True (mce_add_test: the target has the test's name), a target name, or False (unknown)
     prefixes = set()
     for f in sorted(files):
@@ -161,6 +173,8 @@ def cmd_tests(_args):
         for n in MCE_ADD_TEST.findall(text):
             tests[n] = True
         known = set(ADD_TARGET.findall(text)) | set(MCE_ADD_TEST.findall(text))
+        for n, ts in extra_targets(text).items():
+            extra.setdefault(n, set()).update(ts)
         for n, target in test_targets(text, known).items():
             if n not in tests:
                 tests[n] = target if target else False
@@ -178,6 +192,8 @@ def cmd_tests(_args):
             targets.add(n)
         elif t:
             targets.add(t)
+    for n in tests:
+        targets |= extra.get(n, set())
     targets = sorted(targets)
     # A test whose target we cannot name makes the shell build everything; a project's tests (prefix rule) need
     # the game and its content, which the full build covers.
