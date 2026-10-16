@@ -1,6 +1,6 @@
 # M-NET3 — Multiplayer at scale (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–2 done). Plan: ROADMAP §M-NET3; Linear SBA-123 … SBA-127.
+**Status:** active (added 2026-10-16; steps 1–3 done). Plan: ROADMAP §M-NET3; Linear SBA-123 … SBA-127.
 
 **Why:** M-NET2 made multiplayer that feels local, but it leaves gaps that a shipped game hits (user guide 20.10):
 
@@ -23,7 +23,7 @@ chat, anti-cheat beyond server authority.
 |---|---|---|---|
 | 1 | Delta snapshots and interest management: per-client snapshots, `NetRelevance` (radius around the client's owned entity; always relevant), delta coding against the newest acknowledged snapshot, per-client bandwidth counters | SBA-123 | done |
 | 2 | Spectators in replication and rollback sessions; bounded clock sync for rollback peers that run ahead | SBA-124 | done |
-| 3 | Matchmaking and host migration in `mce_relay`: quick play by mode and size, a room list, the host role handed on and the server rebuilt from the new host's mirror | SBA-125 | not started |
+| 3 | Matchmaking and host migration in `mce_relay`: quick play by mode and size, a room list, the host role handed on and the server rebuilt from the new host's mirror | SBA-125 | done |
 | 4 | WebRTC data channels (native over a fetched library, web over `RTCPeerConnection`), signalled through `mce_relay`, the relay as fallback | SBA-126 | not started |
 | 5 | `samples/net_arena`: a windowed 2–4 player arena from scene data, the user guide, MCP reach and the demo | SBA-127 | not started |
 
@@ -87,4 +87,22 @@ Notes:
   a state snapshot first, which is not done here.
 - With the same clock on every peer the sample's 4 peers still skip a few ticks (1–5 each) because jitter and
   loss move the estimate; two peers on a clean link skip none (the test).
+
+## Step 3 — matchmaking and host migration
+
+| Item | Where | Evidence |
+|---|---|---|
+| Relay protocol version 2: CREATE carries flags (listed, host migration) and a mode name; JOINED carries the host | `mce/net/relay.h`, `relay.cpp` | `test_net` relay cases (the M-NET2 ones unchanged) |
+| Quick play: `RelayClient::quick_play(mode, max)` joins the fullest listed room of the mode and size with space (lowest code among equals), or opens a listed, migrating one as host; `RelayStats::quick_plays` | same | "quick play fills the fullest open room of the mode, then opens another" (a full room gives a new one, another mode its own, a private room is never matched) |
+| Room list: `list_rooms(mode)` in any state, `rooms()` / `rooms_received()`: up to 32 listed rooms (code, mode, members, max), sorted by code | same | same test (by mode, all modes, too long a mode refused) |
+| Host migration: a migrating room's leaving host hands it to the lowest member; HOST_CHANGED goes before MEMBER_LEFT, `RelayClientDesc::on_host_change` runs from `poll()` in that order; `host_id()`, kicks by the current host, a joiner takes the lowest free slot; `RelayStats::host_migrations` | same | "with host migration the lowest member takes over and the room goes on" (and a plain room still closes) |
+| `ReplicationServer::adopt(world, client)`: the mirror becomes the server world (NetIds kept, the newest snapshot's transforms, ids continue, per-client history reset); `ReplicationClient::release` | `mce/net/replication.h`, `replication.cpp` | "adopt turns a client's mirror into the server world" (not the interpolated transform; another client mirrors the new server with no reset) |
+| `sample_net_headless -relay 1 -host_leaves T`: the host leaves; the named client adopts its mirror, rebuilds the drifters' orbits, hit boxes and its own player; the others JOIN with their player's id and get it back | `samples/net_headless/main.cpp` | ctest `sample_net_headless_migration` (3 clients, 40 ms ± 10, 5% loss, host leaves at tick 300 of 600): both remaining clients match the new host bit for bit, 2 players rebound |
+| `mce_relay` logs quick plays and host migrations | `src/engine/net/relay/main.cpp` | `mce_relay -selftest 1` (ctest) |
+
+Notes:
+- What only the old host knew is lost: the sample rebuilds the drifters' orbit from their position and the new host's own
+  player from its client state. A game puts what it needs in `Replicated` fields or rebuilds it the same way.
+- Inputs the old host had applied but not yet acknowledged are lost; the players' prediction reconciles that.
+- No skill rating, region or party matching: quick play matches by mode and size.
 

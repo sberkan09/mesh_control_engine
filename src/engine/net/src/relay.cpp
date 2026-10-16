@@ -1,5 +1,6 @@
 #include "mce/net/relay.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "mce/log.h"
@@ -8,19 +9,26 @@ namespace mce::net {
 namespace {
 
 // Client to relay.
-constexpr u8 kCreate = 0x01;  // version, max_members
+constexpr u8 kCreate = 0x01;  // version, max_members, flags, mode length, mode
 constexpr u8 kJoin = 0x02;    // version, code[6]
 constexpr u8 kLeave = 0x03;
 constexpr u8 kData = 0x04;  // to (member, 0xFF = everyone else), channel, delivery, payload
 constexpr u8 kKick = 0x05;  // member (host only)
+constexpr u8 kQuickPlay = 0x06;  // version, max_members, mode length, mode
+constexpr u8 kList = 0x07;       // version, mode length, mode (0: every mode)
 // Relay to client.
 constexpr u8 kCreated = 0x81;       // member, code[6]
-constexpr u8 kJoined = 0x82;        // member, code[6], members present (bit mask)
+constexpr u8 kJoined = 0x82;        // member, code[6], members present (bit mask), host
 constexpr u8 kRefused = 0x83;       // reason
 constexpr u8 kMemberJoined = 0x84;  // member
 constexpr u8 kMemberLeft = 0x85;    // member
 constexpr u8 kDataFrom = 0x86;      // from, channel, payload
 constexpr u8 kClosed = 0x87;        // the room is gone (the host left, or this client was removed)
+constexpr u8 kRoomList = 0x88;      // count, then per room: code[6], members, max, mode length, mode
+constexpr u8 kHostChanged = 0x89;   // member: the room's new host (sent before the old one's MemberLeft)
+
+constexpr u8 kFlagListed = 1;
+constexpr u8 kFlagMigrate = 2;
 
 constexpr u8 kEveryone = 0xFF;
 constexpr usize kDataHeader = 4;
@@ -48,6 +56,14 @@ void unpack_code(u64 code, char out[kRelayCodeLength]) {
     for (usize i = 0; i < kRelayCodeLength; ++i) out[i] = static_cast<char>((code >> (8 * (kRelayCodeLength - 1 - i))) & 0xFF);
 }
 
+// A mode name: printable ASCII, no longer than kRelayModeLength.
+bool valid_mode(const u8* text, usize size) {
+    if (size > kRelayModeLength) return false;
+    for (usize i = 0; i < size; ++i)
+        if (text[i] < 0x20 || text[i] > 0x7E) return false;
+    return true;
+}
+
 u8 link_channel(Delivery d) { return d == Delivery::Reliable ? 0 : 1; }
 
 void append(Array<u8>& out, const void* data, usize size) {
@@ -68,6 +84,12 @@ StringView relay_refusal_name(RelayRefusal r) {
         case RelayRefusal::TooManyRooms: return "too many rooms";
     }
     return "unknown";
+}
+
+u32 RelayServer::Room::count() const {
+    u32 n = 0;
+    for (u64 m : members) n += m ? 1u : 0u;
+    return n;
 }
 
 // ---- RelayServer --------------------------------------------------------------------------------
@@ -119,9 +141,7 @@ void RelayServer::update() {
 bool RelayServer::room_members(StringView code, u32& members) const {
     const Room* room = rooms_.find(pack_code(code.data(), code.size()));
     if (!room) return false;
-    members = 0;
-    for (u64 m : room->members)
-        if (m) ++members;
+    members = room->count();
     return true;
 }
 
@@ -159,10 +179,13 @@ void RelayServer::receive(u64 key, Span<const u8> data) {
         case kJoin: join(key, data); break;
         case kLeave: leave(key, true); break;
         case kData: forward(key, data); break;
+        case kQuickPlay: quick_play(key, data); break;
+        case kList: list(key, data); break;
         case kKick: {
             const Client* c = clients_.find(key);
             Room* room = c && c->room ? rooms_.find(c->room) : nullptr;
-            if (!room || c->member != 0 || data.size() != 2 || data[1] == 0 || data[1] >= kRelayMaxMembers || !room->members[data[1]]) {
+            if (!room || c->member != room->host || data.size() != 2 || data[1] == room->host ||
+                data[1] >= kRelayMaxMembers || !room->members[data[1]]) {
                 ++stats_.dropped;
                 break;
             }
@@ -174,14 +197,15 @@ void RelayServer::receive(u64 key, Span<const u8> data) {
     }
 }
 
-void RelayServer::create(u64 key, Span<const u8> data) {
+void RelayServer::open_room(u64 key, u8 max_members, bool listed, bool migrate, StringView mode) {
     Client* c = clients_.find(key);
-    if (data.size() != 3 || data[1] != kRelayVersion || data[2] < 2 || data[2] > kRelayMaxMembers) return refuse(key, RelayRefusal::BadRequest);
-    if (c->room) return refuse(key, RelayRefusal::AlreadyInRoom);
     if (rooms_.size() >= desc_.max_rooms) return refuse(key, RelayRefusal::TooManyRooms);
     Room room;
     room.code = new_code();
-    room.max_members = data[2];
+    room.max_members = max_members;
+    room.listed = listed;
+    room.migrate = migrate;
+    room.mode.assign(mode);
     room.members[0] = key;
     rooms_.insert_or_assign(room.code, room);
     c->room = room.code;
@@ -193,6 +217,17 @@ void RelayServer::create(u64 key, Span<const u8> data) {
     send_to(key, 0, Span<const u8>(msg, sizeof(msg)), Delivery::Reliable);
 }
 
+void RelayServer::create(u64 key, Span<const u8> data) {
+    Client* c = clients_.find(key);
+    if (data.size() < 5 || data[1] != kRelayVersion || data[2] < 2 || data[2] > kRelayMaxMembers ||
+        data.size() != 5u + data[4] || !valid_mode(data.data() + 5, data[4])) {
+        return refuse(key, RelayRefusal::BadRequest);
+    }
+    if (c->room) return refuse(key, RelayRefusal::AlreadyInRoom);
+    open_room(key, data[2], (data[3] & kFlagListed) != 0, (data[3] & kFlagMigrate) != 0,
+              StringView(reinterpret_cast<const char*>(data.data() + 5), data[4]));
+}
+
 void RelayServer::join(u64 key, Span<const u8> data) {
     Client* c = clients_.find(key);
     if (data.size() != 2 + kRelayCodeLength || data[1] != kRelayVersion) return refuse(key, RelayRefusal::BadRequest);
@@ -200,24 +235,80 @@ void RelayServer::join(u64 key, Span<const u8> data) {
     const u64 code = pack_code(reinterpret_cast<const char*>(data.data() + 2), kRelayCodeLength);
     Room* room = code ? rooms_.find(code) : nullptr;
     if (!room) return refuse(key, RelayRefusal::NoSuchRoom);
-    u8 member = 0;
-    u8 present = 0;
-    for (u8 i = 0; i < room->max_members; ++i) {
-        if (room->members[i]) present = static_cast<u8>(present | (1u << i));
-        else if (member == 0) member = i;
+    if (room->count() >= room->max_members) return refuse(key, RelayRefusal::RoomFull);
+    enter(key, *room);
+}
+
+// The fullest listed room of this mode and size with space (the lowest code among equals), or a new one.
+void RelayServer::quick_play(u64 key, Span<const u8> data) {
+    Client* c = clients_.find(key);
+    if (data.size() < 4 || data[1] != kRelayVersion || data[2] < 2 || data[2] > kRelayMaxMembers ||
+        data.size() != 4u + data[3] || !valid_mode(data.data() + 4, data[3])) {
+        return refuse(key, RelayRefusal::BadRequest);
     }
-    if (member == 0) return refuse(key, RelayRefusal::RoomFull);
-    room->members[member] = key;
-    c->room = code;
+    if (c->room) return refuse(key, RelayRefusal::AlreadyInRoom);
+    const StringView mode(reinterpret_cast<const char*>(data.data() + 4), data[3]);
+    Room* best = nullptr;
+    for (auto&& [code, room] : rooms_) {
+        if (!room.listed || room.max_members != data[2] || room.mode.view() != mode) continue;
+        const u32 n = room.count();
+        if (n >= room.max_members) continue;
+        if (!best || n > best->count() || (n == best->count() && code < best->code)) best = &room;
+    }
+    ++stats_.quick_plays;
+    if (best) return enter(key, *best);
+    open_room(key, data[2], true, true, mode);
+}
+
+void RelayServer::list(u64 key, Span<const u8> data) {
+    if (data.size() < 3 || data[1] != kRelayVersion || data.size() != 3u + data[2] ||
+        !valid_mode(data.data() + 3, data[2])) {
+        ++stats_.dropped;
+        return;
+    }
+    const StringView mode(reinterpret_cast<const char*>(data.data() + 3), data[2]);
+    Array<const Room*> found;
+    for (auto&& [code, room] : rooms_) {
+        (void)code;
+        if (room.listed && (mode.empty() || room.mode.view() == mode)) found.push_back(&room);
+    }
+    std::sort(found.begin(), found.end(), [](const Room* a, const Room* b) { return a->code < b->code; });
+    if (found.size() > kRelayMaxListed) found.resize(kRelayMaxListed);
+    scratch_.clear();
+    const u8 head[2] = {kRoomList, static_cast<u8>(found.size())};
+    append(scratch_, head, 2);
+    for (const Room* room : found) {
+        char code[kRelayCodeLength];
+        unpack_code(room->code, code);
+        append(scratch_, code, kRelayCodeLength);
+        const u8 sizes[3] = {static_cast<u8>(room->count()), room->max_members, static_cast<u8>(room->mode.size())};
+        append(scratch_, sizes, 3);
+        append(scratch_, room->mode.c_str(), room->mode.size());
+    }
+    send_to(key, 0, Span<const u8>(scratch_.data(), scratch_.size()), Delivery::Reliable);
+}
+
+// Puts the client in the room's lowest free member slot (the room has space).
+void RelayServer::enter(u64 key, Room& room) {
+    Client* c = clients_.find(key);
+    u8 member = 0xFF;
+    u8 present = 0;
+    for (u8 i = 0; i < room.max_members; ++i) {
+        if (room.members[i]) present = static_cast<u8>(present | (1u << i));
+        else if (member == 0xFF) member = i;
+    }
+    room.members[member] = key;
+    c->room = room.code;
     c->member = member;
     ++stats_.joins;
-    u8 msg[3 + kRelayCodeLength] = {kJoined, member};
-    unpack_code(code, reinterpret_cast<char*>(msg + 2));
+    u8 msg[4 + kRelayCodeLength] = {kJoined, member};
+    unpack_code(room.code, reinterpret_cast<char*>(msg + 2));
     msg[2 + kRelayCodeLength] = present;
+    msg[3 + kRelayCodeLength] = room.host;
     send_to(key, 0, Span<const u8>(msg, sizeof(msg)), Delivery::Reliable);
     const u8 note[2] = {kMemberJoined, member};
     for (u8 i = 0; i < kRelayMaxMembers; ++i)
-        if (room->members[i] && i != member) send_to(room->members[i], 0, Span<const u8>(note, 2), Delivery::Reliable);
+        if (room.members[i] && i != member) send_to(room.members[i], 0, Span<const u8>(note, 2), Delivery::Reliable);
 }
 
 void RelayServer::leave(u64 key, bool notify_self) {
@@ -234,7 +325,16 @@ void RelayServer::leave(u64 key, bool notify_self) {
     }
     if (!room) return;
     room->members[member] = 0;
-    if (member == 0) {
+    if (member == room->host && room->migrate && room->count() > 0) {
+        // The host left a room with host migration: the lowest member still in it takes over.
+        u8 heir = 0;
+        while (!room->members[heir]) ++heir;
+        room->host = heir;
+        ++stats_.host_migrations;
+        const u8 change[2] = {kHostChanged, heir};
+        for (u64 other : room->members)
+            if (other) send_to(other, 0, Span<const u8>(change, 2), Delivery::Reliable);
+    } else if (member == room->host) {
         // The host left: the room closes.
         for (u64 other : room->members) {
             if (!other) continue;
@@ -285,6 +385,11 @@ void RelayClient::start(Transport& link, PeerId relay, const RelayClientDesc& de
     link_ = &link;
     relay_ = relay;
     channels_ = desc.channels ? desc.channels : 1;
+    desc_ = desc;
+    host_ = 0;
+    rooms_.clear();
+    rooms_received_ = 0;
+    list_request_.clear();
     state_ = State::Idle;
     refusal_ = RelayRefusal::None;
     code_.clear();
@@ -297,21 +402,50 @@ void RelayClient::start(Transport& link, PeerId relay, const RelayClientDesc& de
 }
 
 bool RelayClient::send_request() {
-    if (request_.empty() || request_sent_ || !link_ || !link_->is_connected(relay_)) return false;
+    if (!link_ || !link_->is_connected(relay_)) return false;
+    if (!list_request_.empty()) {
+        link_->send(relay_, 0, Span<const u8>(list_request_.data(), list_request_.size()), Delivery::Reliable);
+        list_request_.clear();
+    }
+    if (request_.empty() || request_sent_) return false;
     link_->send(relay_, 0, Span<const u8>(request_.data(), request_.size()), Delivery::Reliable);
     request_sent_ = true;
     return true;
 }
 
-bool RelayClient::create_room(u32 max_members) {
+bool RelayClient::request_room(u8 op, u32 max_members, u8 flags, StringView mode) {
     if (!link_ || state_ == State::InRoom || state_ == State::Requesting) return false;
     if (max_members < 2 || max_members > kRelayMaxMembers) return false;
+    if (!valid_mode(reinterpret_cast<const u8*>(mode.data()), mode.size())) return false;
     request_.clear();
-    const u8 msg[3] = {kCreate, kRelayVersion, static_cast<u8>(max_members)};
-    append(request_, msg, sizeof(msg));
+    const u8 head[3] = {op, kRelayVersion, static_cast<u8>(max_members)};
+    append(request_, head, sizeof(head));
+    if (op == kCreate) append(request_, &flags, 1);
+    const u8 len = static_cast<u8>(mode.size());
+    append(request_, &len, 1);
+    append(request_, mode.data(), mode.size());
     request_sent_ = false;
     state_ = State::Requesting;
     refusal_ = RelayRefusal::None;
+    send_request();
+    return true;
+}
+
+bool RelayClient::create_room(u32 max_members, const RelayRoomOptions& options) {
+    const u8 flags = static_cast<u8>((options.listed ? kFlagListed : 0) | (options.host_migration ? kFlagMigrate : 0));
+    return request_room(kCreate, max_members, flags, options.mode);
+}
+
+bool RelayClient::quick_play(StringView mode, u32 max_members) {
+    return request_room(kQuickPlay, max_members, 0, mode);
+}
+
+bool RelayClient::list_rooms(StringView mode) {
+    if (!link_ || !valid_mode(reinterpret_cast<const u8*>(mode.data()), mode.size())) return false;
+    list_request_.clear();
+    const u8 head[3] = {kList, kRelayVersion, static_cast<u8>(mode.size())};
+    append(list_request_, head, sizeof(head));
+    append(list_request_, mode.data(), mode.size());
     send_request();
     return true;
 }
@@ -356,6 +490,7 @@ void RelayClient::close_room(State next) {
     for (PeerId p = 0; p < kRelayMaxMembers; ++p) member_left(p);
     state_ = next;
     member_ = kInvalidPeer;
+    host_ = 0;
     request_.clear();
     request_sent_ = false;
 }
@@ -374,9 +509,11 @@ void RelayClient::handle(Span<const u8> d) {
     switch (d[0]) {
         case kCreated:
         case kJoined: {
-            const usize need = d[0] == kCreated ? 2 + kRelayCodeLength : 3 + kRelayCodeLength;
+            const usize need = d[0] == kCreated ? 2 + kRelayCodeLength : 4 + kRelayCodeLength;
             if (d.size() != need || state_ != State::Requesting || d[1] >= kRelayMaxMembers) return;
+            if (d[0] == kJoined && d[3 + kRelayCodeLength] >= kRelayMaxMembers) return;
             member_ = d[1];
+            host_ = d[0] == kCreated ? member_ : d[3 + kRelayCodeLength];
             code_.assign(StringView(reinterpret_cast<const char*>(d.data() + 2), kRelayCodeLength));
             state_ = State::InRoom;
             request_.clear();
@@ -412,6 +549,40 @@ void RelayClient::handle(Span<const u8> d) {
         case kClosed:
             if (state_ == State::InRoom) close_room(State::Closed);
             break;
+        case kHostChanged: {
+            if (d.size() != 2 || state_ != State::InRoom || d[1] >= kRelayMaxMembers) return;
+            if (d[1] != member_ && !present_[d[1]]) return;
+            host_ = d[1];
+            Queued q;
+            q.event.peer = d[1];
+            q.host_change = true;
+            inbox_.push_back(std::move(q));
+            break;
+        }
+        case kRoomList: {
+            // Parsed whole before anything changes.
+            if (d.size() < 2) return;
+            Array<RelayRoomInfo> found;
+            usize at = 2;
+            for (u32 i = 0; i < d[1]; ++i) {
+                if (at + kRelayCodeLength + 3 > d.size()) return;
+                RelayRoomInfo info;
+                info.code.assign(StringView(reinterpret_cast<const char*>(d.data() + at), kRelayCodeLength));
+                at += kRelayCodeLength;
+                info.members = d[at];
+                info.max_members = d[at + 1];
+                const u8 len = d[at + 2];
+                at += 3;
+                if (len > kRelayModeLength || at + len > d.size() || !valid_mode(d.data() + at, len)) return;
+                info.mode.assign(StringView(reinterpret_cast<const char*>(d.data() + at), len));
+                at += len;
+                found.push_back(info);
+            }
+            if (at != d.size()) return;
+            rooms_ = std::move(found);
+            ++rooms_received_;
+            break;
+        }
         default: break;
     }
 }
@@ -437,6 +608,10 @@ bool RelayClient::poll(Event& out) {
         if (inbox_.empty()) return false;
     }
     Queued& q = inbox_[inbox_head_++];
+    if (q.host_change) {
+        if (desc_.on_host_change) desc_.on_host_change(desc_.user, q.event.peer);
+        return poll(out);
+    }
     current_ = std::move(q.bytes);
     out = q.event;
     out.data = Span<const u8>(current_.data(), current_.size());
@@ -479,11 +654,11 @@ void RelayClient::flush() {
 
 void RelayClient::disconnect(PeerId peer, u32) {
     if (!is_connected(peer)) return;
-    if (member_ == 0) {
+    if (member_ == host_) {
         const u8 msg[2] = {kKick, static_cast<u8>(peer)};
         link_->send(relay_, 0, Span<const u8>(msg, 2), Delivery::Reliable);
         member_left(peer);
-    } else if (peer == 0) {
+    } else if (peer == host_) {
         leave();
     }
 }

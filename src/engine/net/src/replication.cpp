@@ -704,6 +704,40 @@ Entity ReplicationClient::find(u32 net_id) const {
     return m ? m->entity : Entity::null;
 }
 
+void ReplicationClient::release(Array<Released>& out) {
+    out.clear();
+    for (auto&& [net_id, m] : entities_) {
+        (void)net_id;
+        out.push_back(Released{m.entity, m.id, m.latest});
+    }
+    std::sort(out.begin(), out.end(), [](const Released& a, const Released& b) { return a.id.id < b.id.id; });
+    entities_.clear();
+    predicted_.clear();
+    history_count_ = 0;
+    history_head_ = 0;
+    content_hash_ = 0;
+    has_tick_ = false;
+    last_tick_ = 0;
+    has_offset_ = false;
+    has_render_ = false;
+    jitter_s_ = 0.0;
+    interval_s_ = 0.0;
+}
+
+u32 ReplicationServer::adopt(World& world, ReplicationClient& client) {
+    const u32 tick = client.last_tick();
+    Array<ReplicationClient::Released> mirrors;
+    client.release(mirrors);
+    for (const auto& m : mirrors) {
+        if (!world.alive(m.entity)) continue;
+        world.set(m.entity, m.latest);
+        if (!world.has<NetId>(m.entity)) world.add(m.entity, m.id);
+        next_id_ = std::max(next_id_, m.id.id + 1);
+    }
+    clients_.clear();
+    return tick;
+}
+
 void ReplicationClient::reset(Commands& cmd, const World& world) {
     for (auto&& [net_id, m] : entities_) {
         (void)net_id;
