@@ -43,6 +43,7 @@ inline constexpr u8 NAVMESH_VERSION = 1;     // CHNK_NAV: the .mcnav bytes as ba
 inline constexpr u8 VIDEO_VERSION = 1;       // CHNK_VID: an MPEG-1 program stream + its audio as PCM (M-CINEMA 5)
 inline constexpr u8 BEHAVIOR_TREE_VERSION = 2;  // CHNK_BT: one behavior tree (M-AI 1; mce/kit/ai.h); 2: guard aborts, task arguments (M-AI 2)
 inline constexpr u8 SKELETON2D_VERSION = 1;  // CHNK_SKEL2D: a 2D cut-out skeleton, bones + slots (M-ANIM2D 1)
+inline constexpr u8 SKELETON2D_MINOR_ANIMATIONS = 1;  // minor of a CHNK_SKEL2D with animations (M-ANIM2D 2)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -943,14 +944,25 @@ void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<co
 // ------------------------------------------------------------------ 2D skeleton (CHNK_SKEL2D)
 // A 2D cut-out skeleton (M-ANIM2D 1): a bone tree and the slots (textured quads) drawn on its
 // bones. kit::Skeleton2D (kit/skeleton2d.h) poses and draws one. Payload layout:
-//   Skeleton2DHeader | Skeleton2DBone[bone_count] | Skeleton2DSlot[slot_count] | string pool
+//   Skeleton2DHeader | Skeleton2DBone[bone_count] | Skeleton2DSlot[slot_count]
+//   | Skeleton2DAnimation[animation_count] | Skeleton2DTimeline[timeline_count]
+//   | Skeleton2DKey[key_count] | Skeleton2DEvent[event_count] | string pool
 // Bones are topologically ordered: a bone's parent comes before it (bone 0 is a root). Slots are
 // in draw order (the first is drawn first, behind the rest). Units: metres and radians, Y up.
-// Names are NUL-terminated offsets into the pool. Reserved fields are zero in version 1; later
-// steps (clips, mesh skinning, IK) extend the format through them and the minor version.
+// Names are NUL-terminated offsets into the pool.
+//
+// Animations (M-ANIM2D 2, chunk minor 1): named clips of per-bone timelines. A timeline keys one
+// channel of one bone (rotate, translate or scale) as offsets from the rest pose, like
+// kit::Skeleton2D::pose: rotation and translation add, scale multiplies. A key's curve shapes the
+// interval up to the next key. A minor-0 chunk has zero animation counts (the header's former
+// reserved words), so it reads unchanged.
 inline constexpr u32 kSkeleton2DMaxBones = 64;   // kit::Skeleton2D holds one pose per bone
 inline constexpr u32 kSkeleton2DMaxSlots = 256;
 inline constexpr u16 kSkeleton2DNoParent = 0xFFFF;
+inline constexpr u32 kSkeleton2DMaxAnimations = 256;
+inline constexpr u32 kSkeleton2DMaxTimelines = 16384;    // all animations together
+inline constexpr u32 kSkeleton2DMaxKeys = 1u << 20;      // all timelines together
+inline constexpr u32 kSkeleton2DMaxEvents = 16384;       // all animations together
 
 enum class Skeleton2DSlotKind : u8 {
     Quad,  // a texture rect stretched to `size` (version 1's only kind; meshes come later)
@@ -991,22 +1003,96 @@ struct Skeleton2DHeader {
     u32 slot_count;  // 0 to kSkeleton2DMaxSlots
     u32 string_bytes;
     u32 flags;       // reserved (0)
-    u32 reserved[4];
+    u32 animation_count;  // minor 1 (zero in minor 0)
+    u32 timeline_count;
+    u32 key_count;
+    u32 event_count;
 };
 static_assert(sizeof(Skeleton2DHeader) == 64);
+
+namespace Skeleton2DAnimationFlags {
+enum : u32 {
+    Loop = 1u << 0,  // the clip loops (an Animator without a graph plays it once otherwise)
+};
+}
+
+struct Skeleton2DAnimation {
+    u32 name;            // string pool offset; unique within the skeleton
+    f32 duration;        // seconds (0 or more)
+    u32 first_timeline;  // its timelines: [first_timeline, first_timeline + timeline_count)
+    u32 timeline_count;
+    u32 first_event;     // its events, in time order
+    u32 event_count;
+    u32 flags;           // Skeleton2DAnimationFlags
+    u32 reserved;
+};
+static_assert(sizeof(Skeleton2DAnimation) == 32);
+
+enum class Skeleton2DChannel : u8 {
+    Rotate,     // value[0]: radians added to the rest rotation
+    Translate,  // value[0], value[1]: metres added to the rest x, y
+    Scale,      // value[0], value[1]: factors multiplying the rest scale
+};
+
+enum class Skeleton2DCurve : u8 {
+    Linear,
+    Stepped,  // holds the key's value until the next key
+    Bezier,   // bezier[4] = cx1, cy1, cx2, cy2 in the normalized key interval (cx in 0..1)
+};
+
+struct Skeleton2DTimeline {
+    u16 bone;
+    Skeleton2DChannel channel;
+    u8 reserved0;
+    u32 first_key;  // its keys: [first_key, first_key + key_count), strictly increasing in time
+    u32 key_count;  // 1 or more
+    u32 reserved1;
+};
+static_assert(sizeof(Skeleton2DTimeline) == 16);
+
+struct Skeleton2DKey {
+    f32 t;  // seconds, 0 or more
+    f32 value[2];
+    Skeleton2DCurve curve;  // shapes the interval up to the next key
+    u8 reserved0[3];
+    f32 bezier[4];
+};
+static_assert(sizeof(Skeleton2DKey) == 32);
+
+struct Skeleton2DEvent {
+    f32 t;     // seconds into the animation
+    u32 name;  // string pool offset (1 to 23 characters)
+    u64 id;    // StringId (fnv1a64) of the name, as kit::AnimEvent3D carries it
+};
+static_assert(sizeof(Skeleton2DEvent) == 16);
 
 struct Skeleton2DView {
     const Skeleton2DHeader* header = nullptr;
     Span<const Skeleton2DBone> bones;
     Span<const Skeleton2DSlot> slots;
+    Span<const Skeleton2DAnimation> animations;
+    Span<const Skeleton2DTimeline> timelines;
+    Span<const Skeleton2DKey> keys;
+    Span<const Skeleton2DEvent> events;
     Span<const char> strings;
     StringView name() const;
     StringView string(u32 offset) const;
     // The index of the bone named `name`, or -1.
     i32 find_bone(StringView name) const;
-    // Checks counts, parent order, slot bones, string offsets and that every number is finite.
+    // The index of the animation named `name`, or -1.
+    i32 find_animation(StringView name) const;
+    // Checks counts, parent order, slot bones, string offsets, that every number is finite, and
+    // for animations: timeline and event ranges, bone indices, channels, curves (bezier cx in
+    // 0..1), and keys and events in time order.
     static Result<Skeleton2DView> read(Span<const byte> payload);
 };
+
+// The value of `keys` (one timeline, strictly increasing in time) at time t: the first key's value
+// before it, the last's after it, between keys their interpolation by the left key's curve.
+// Deterministic: a bezier is solved by a fixed 24-step bisection.
+void skeleton2d_sample(Span<const Skeleton2DKey> keys, f32 t, f32 out[2]);
+// The eased fraction of a bezier curve (cx1, cy1, cx2, cy2) at x = u in 0..1.
+f32 skeleton2d_bezier(const f32 c[4], f32 u);
 
 // ------------------------------------------------------------------ shader (CHNK_SHD)
 // One GLSL 4.5 stage (assets.md §5.2, FR-AST-060): the validated source text, the variant table

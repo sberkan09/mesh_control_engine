@@ -42,6 +42,14 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   pure `skeleton2d_quads`; `Skeleton2DRegistry` copies skeletons out of their chunks (and takes
   `define`d payloads for tests and tools). `Bone2DFollow` writes a follower's `LocalTransform` from a
   named bone.
+- `Skeleton2DAnimator` (`skeleton2d.h`, M-ANIM2D 2): plays the skeleton's animations (chunk minor 1:
+  per-bone rotate / translate / scale timelines with linear, stepped or bezier keys, and events;
+  `asset::skeleton2d_sample`) and cross-fades them. `"kit_skeleton2d_animators"` runs just before
+  `"kit_skeleton2d"` in `FixedUpdate_Post` and writes, through `Skeleton2DBlend`, only the `pose`
+  channels the sampled clips key; other channels keep gameplay's writes. An `.mcanim` graph runs
+  through the same state machine step as the 3D `Animator` (`src/anim_graph_step.h`, templated on
+  the component; layers, root motion and IK are 3D only). Clip and state events raise
+  `AnimEvent3D`, which `install_skeleton2d` also registers. Every field is `Save`.
 - `Animator` graphs and `AttachToBone` (`anim3d.h`, M-DATA-REACH 7): an `.mcanim` AnimGraph
   (`ChunkType::AnimGraph`, `AnimGraphView`) drives the Animator's clip, 1D blends (`blend_clip`,
   `blend_weight`), transitions and `AnimEvent3D` events; one-shots finish (`loop`, `finished`,
