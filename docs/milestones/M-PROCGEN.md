@@ -24,7 +24,7 @@ dungeon editor.
 | 1 | `mce/kit/procgen.h`: streams, BSP rooms, caves, drunkard's walk, noise threshold; connectivity | SBA-171 | Sonnet | done |
 | 2 | Wave function collapse: adjacency from an example tilemap or rules, pinned cells, bounded restarts | SBA-172 | Sonnet | done |
 | 3 | `ProcLevel`: the stock hosts build tilemap, colliders and markers from a seed; also from Luau | SBA-173 | Sonnet | not started |
-| 4 | MCP `procgen_run`, the `reachable` assertion in `.mctest`, user guide | SBA-174 | Sonnet | not started |
+| 4 | MCP `procgen_run`, the `reachable` assertion in `.mctest`, user guide | SBA-174 | Sonnet | done |
 | 5 | `samples/10_dungeon`, a script-only variant, the perf budget and the gates | SBA-175 | Sonnet | not started |
 
 **Gates:**
@@ -98,3 +98,13 @@ corrections that bind step 3:
 - `tile_size` and the pathfinding cell size are aligned.
 - The system is a kit system the game registers itself, not code inside the stock hosts.
 - Later, not now: runtime tilemap drawing without an asset could extend `draw_tilemap` (`sprite_extract.cpp:511`).
+
+## Step 4 as built
+
+- `procgen_run` (`tools_procgen.cpp`): kind, width, height, seed and the generators' knobs; returns text rows, the hash, floor
+  count, start, exit and `reachable` (an independent flood fill). `count` runs consecutive seeds and lists failures only (at
+  most 1000). `bake` paints into an existing `.mctilemap` (grid row 0 = map top row) with `floor_tile` / `wall_tile`.
+- `.mctest` check `{"reachable": {kind, width, height, seed, count, ...}}` (`agent_sim.cpp`): passes when no seed fails; the
+  note names up to five failing seeds. Shared argument parsing in `procgen_check.{h,cpp}`.
+- User guide chapter 28. Tests: `test_mcp` (procgen_run), `test_mcp_playtest` (reachable).
+- Not done: the check reads the generators, not a running `ProcLevel` (step 3); `procgen_run` has no WFC.

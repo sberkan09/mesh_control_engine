@@ -5,6 +5,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Procedural levels, M-PROCGEN step 4 (SBA-174): MCP `procgen_run` shows a seeded level as text (and checks a run of seeds, or
+  bakes it into a `.mctilemap`), a `.mctest` can assert `{"reachable": {kind, width, height, seed, count}}`, and user guide
+  chapter 28 explains both.
 - Tested-sample check, M-DOCCHECK step 3 (SBA-178): `check_docs.py` also fails for a `samples/` or `projects/`
   directory that no test runs. Every one has a test today except `samples/common` (shared headers).
 - Flag check, M-DOCCHECK step 2 (SBA-177): `check_docs.py` also fails for a `-flag` after `mce_player` in a

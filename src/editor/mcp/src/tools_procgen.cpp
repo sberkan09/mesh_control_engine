@@ -6,6 +6,7 @@
 #include "mce/cook/fs.h"
 #include "mce/editor/tilemap_editor.h"
 #include "mce/kit/procgen.h"
+#include "procgen_check.h"
 #include "tool_args.h"
 #include "tools.h"
 
@@ -15,81 +16,9 @@ namespace {
 
 namespace pg = kit::procgen;
 
-constexpr u64 kMaxCount = 1000;
-
-struct RunArgs {
-    StringView kind;
-    u32 width = 0, height = 0;
-    u64 seed = 1;
-    u64 count = 1;
-    pg::RoomsParams rooms;
-    pg::CavesParams caves;
-    pg::WalkParams walk;
-    pg::NoiseParams noise;
-};
-
-bool arg_param(ToolCall& c, const char* name, u32& out, u64 hi) {
-    if (!arg(c, name).valid()) return true;
-    u64 v = out;
-    if (!arg_uint(c, name, v, 0, hi, false)) return false;
-    out = static_cast<u32>(v);
-    return true;
-}
-
-Result<pg::ProcGrid> generate(const RunArgs& a, u64 seed) {
-    if (a.kind == "rooms") return pg::generate_rooms(a.width, a.height, seed, a.rooms);
-    if (a.kind == "caves") return pg::generate_caves(a.width, a.height, seed, a.caves);
-    if (a.kind == "walk") return pg::generate_walk(a.width, a.height, seed, a.walk);
-    return pg::generate_noise(a.width, a.height, seed, a.noise);
-}
-
-// Breadth-first from the start over floor cells (4-neighbours): is the exit reached? An independent check of
-// the generators' own connectivity guarantee.
-bool exit_reachable(const pg::ProcGrid& g) {
-    Array<u8> seen;
-    seen.resize(static_cast<usize>(g.width) * g.height);
-    for (u8& s : seen) s = 0;
-    Array<u32> stack;
-    const auto idx = [&](i32 x, i32 y) { return static_cast<u32>(y) * g.width + static_cast<u32>(x); };
-    seen[idx(g.start.x, g.start.y)] = 1;
-    stack.push_back(idx(g.start.x, g.start.y));
-    while (!stack.empty()) {
-        const u32 i = stack.back();
-        stack.pop_back();
-        const i32 x = static_cast<i32>(i % g.width), y = static_cast<i32>(i / g.width);
-        const i32 dx[4] = {1, -1, 0, 0}, dy[4] = {0, 0, 1, -1};
-        for (u32 d = 0; d < 4; ++d) {
-            const i32 nx = x + dx[d], ny = y + dy[d];
-            if (nx < 0 || ny < 0 || nx >= static_cast<i32>(g.width) || ny >= static_cast<i32>(g.height)) continue;
-            if (g.at(static_cast<u32>(nx), static_cast<u32>(ny)) != pg::kFloor || seen[idx(nx, ny)]) continue;
-            seen[idx(nx, ny)] = 1;
-            stack.push_back(idx(nx, ny));
-        }
-    }
-    return seen[idx(g.exit.x, g.exit.y)] != 0;
-}
-
 bool procgen_run(ToolCall& c) {
-    RunArgs a;
-    u64 w = 0, h = 0;
-    if (!arg_string(c, "kind", a.kind, true)) return false;
-    if (a.kind != "rooms" && a.kind != "caves" && a.kind != "walk" && a.kind != "noise")
-        return fail(c, "argument 'kind' must be rooms, caves, walk or noise");
-    if (!arg_uint(c, "width", w, pg::kMinSize, pg::kMaxSize, true) || !arg_uint(c, "height", h, pg::kMinSize, pg::kMaxSize, true) ||
-        !arg_uint(c, "seed", a.seed, 0, ~u64{0}, false) || !arg_uint(c, "count", a.count, 1, kMaxCount, false))
-        return false;
-    a.width = static_cast<u32>(w);
-    a.height = static_cast<u32>(h);
-    if (!arg_param(c, "leaf_min", a.rooms.leaf_min, 64) || !arg_param(c, "room_min", a.rooms.room_min, 64) ||
-        !arg_param(c, "corridor", a.rooms.corridor, 2) || !arg_param(c, "fill_percent", a.caves.fill_percent, 100) ||
-        !arg_param(c, "iterations", a.caves.iterations, 20) || !arg_param(c, "coverage_percent", a.walk.coverage_percent, 100) ||
-        !arg_param(c, "turn_percent", a.walk.turn_percent, 100) || !arg_param(c, "scale", a.noise.scale, 256) ||
-        !arg_param(c, "octaves", a.noise.octaves, 6) || !arg_param(c, "floor_percent", a.noise.floor_percent, 100))
-        return false;
-    u32 min_floor = 0;
-    const bool has_min_floor = arg(c, "min_floor_percent").valid();
-    if (!arg_param(c, "min_floor_percent", min_floor, 100)) return false;
-    if (has_min_floor) a.rooms.min_floor_percent = a.caves.min_floor_percent = a.noise.min_floor_percent = min_floor;
+    ProcgenRun a;
+    if (!parse_procgen_run(c.args, a, c.error)) return false;
     bool want_ascii = true;
     if (arg(c, "ascii").valid() && !arg_bool(c, "ascii", want_ascii)) return false;
     StringView bake;
@@ -100,14 +29,14 @@ bool procgen_run(ToolCall& c) {
         // A run of seeds: only the failures are listed.
         u64 ok = 0;
         c.out.begin_object();
-        c.out.key("kind").str(a.kind).key("first_seed").num_u(a.seed).key("count").num_u(a.count);
+        c.out.key("kind").str(a.kind.view()).key("first_seed").num_u(a.seed).key("count").num_u(a.count);
         c.out.key("failures").begin_array();
         for (u64 i = 0; i < a.count; ++i) {
             const u64 seed = a.seed + i;
-            Result<pg::ProcGrid> r = generate(a, seed);
+            Result<pg::ProcGrid> r = procgen_generate(a, seed);
             const char* why = nullptr;
             if (!r.has_value()) why = "generator error";
-            else if (!exit_reachable(r.value())) why = "exit not reachable from start";
+            else if (!procgen_exit_reachable(r.value())) why = "exit not reachable from start";
             if (!why) {
                 ++ok;
                 continue;
@@ -122,7 +51,7 @@ bool procgen_run(ToolCall& c) {
         return true;
     }
 
-    Result<pg::ProcGrid> r = generate(a, a.seed);
+    Result<pg::ProcGrid> r = procgen_generate(a, a.seed);
     if (!r.has_value()) return fail(c, r.error().stage);
     const pg::ProcGrid& g = r.value();
 
@@ -132,7 +61,8 @@ bool procgen_run(ToolCall& c) {
         const cook::JsonValue ft = arg(c, "floor_tile"), wt = arg(c, "wall_tile");
         if (!ft.valid() || !wt.valid()) return fail(c, "'bake' needs 'floor_tile' and 'wall_tile' (tileset cells: 0 empty, n draws cell n-1)");
         if (!arg_uint(c, "floor_tile", floor_tile, 0, 1u << 20, true) || !arg_uint(c, "wall_tile", wall_tile, 0, 1u << 20, true)) return false;
-        const cook::String rel(bake.data(), bake.size());
+        cook::String rel;
+        rel.assign(bake);
         editor::TilemapDocument d;
         const cook::String abs = c.server.session().project().asset_path(rel.view());
         cook::String text;
@@ -157,14 +87,14 @@ bool procgen_run(ToolCall& c) {
     }
 
     c.out.begin_object();
-    c.out.key("kind").str(a.kind).key("seed").num_u(a.seed).key("width").num_u(g.width).key("height").num_u(g.height);
+    c.out.key("kind").str(a.kind.view()).key("seed").num_u(a.seed).key("width").num_u(g.width).key("height").num_u(g.height);
     cook::String hash;
     cook::appendf(hash, "%016llx", static_cast<unsigned long long>(g.hash()));
     c.out.key("hash").str(hash.view());
     c.out.key("floor_cells").num_u(g.floor_count());
     c.out.key("start").begin_array().num_i(g.start.x).num_i(g.start.y).end_array();
     c.out.key("exit").begin_array().num_i(g.exit.x).num_i(g.exit.y).end_array();
-    c.out.key("reachable").boolean(exit_reachable(g));
+    c.out.key("reachable").boolean(procgen_exit_reachable(g));
     if (!bake.empty()) c.out.key("baked").begin_object().key("path").str(bake).key("painted").num_u(painted).key("outside").num_u(outside).end_object();
     if (want_ascii) {
         Array<char> text;
