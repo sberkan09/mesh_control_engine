@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- AI perception, M-AI step 3 (SBA-130): a `Perceiver` sees every `Stimulus` of another team inside its cone and
+  range with a clear line of sight (rays through the 3D or the 2D physics world), remembers a lost target for
+  `forget` seconds and hears `kit::Noise` events (the tree's `make_noise` task makes one). It writes `target`,
+  `sees`, `last_seen` and `heard_at` into its tree's blackboard. `interval` staggers a crowd's checks over the
+  ticks. In `ai_demo` the guard now spots the thief. User guide 13.8.
 - Behavior tree stock tasks and aborts, M-AI step 2 (SBA-129): trees reach the kit with no code. `move_to` walks
   a `NavAgent3D` or a `PathAgent` to a vec3 key or after an entity key, `look_at` turns the entity, `animate`
   plays a sprite or Animator clip (and can wait for it), `play_sound`, `spawn`, `raise` and `wait_event` (which
