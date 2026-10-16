@@ -885,6 +885,9 @@ TEST_CASE("mcp tools: terrain_generate, terrain_sculpt, terrain_paint and terrai
     CHECK(num(g.v().get("height").get("max")) <= 12.05);
     CHECK(num(g.v().get("height").get("max")) > 8.0);
     CHECK(num(g.v().get("resolution")) == 65);
+    // The write rescans the project: the reply names the terrain from copies, not from a freed record.
+    CHECK(str(g.v().get("path")) == "terrain/valley.mcterrain");
+    CHECK(str(g.v().get("guid")).rfind("guid:", 0) == 0);
 
     // A valley floor levelled at 3 m along x; a strength-0 smooth only probes.
     auto f = c.ok("terrain_sculpt", R"({"path":"terrain/valley.mcterrain","op":"flatten","target":3,"strength":1,"hardness":1,)"
