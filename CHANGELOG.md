@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Resetting a themed value in UI documents, M-UI-DATA2 step 2 (SBA-154): a `.mcui` widget's
+  `"own_style": ["tint", ...]` keeps those style fields at the kind's default look over a theme, where an
+  equal value used to read as unset and the theme's won. Old documents cook and draw the same. The editor's
+  inspector and MCP's `ui_widget_set` reach it. User guide 12.
 - Text alignment in UI documents, M-UI-DATA2 step 1 (SBA-153): a `.mcui` Text widget takes
   `"text_align": "Center"` (or `Right`) to place its text across its own rect, so a centered title no
   longer needs a wrapping Stack. The editor's inspector and MCP's `ui_widget_set` reach it. User guide 12.

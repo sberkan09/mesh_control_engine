@@ -59,6 +59,7 @@ struct WidgetData {
     FixedString<32> format;
     FontRole font_role = FontRole::Auto;  // which of the skin's fonts the text uses
     TextAlign text_align = TextAlign::Left;  // a Text widget's lines across its rect
+    u8 own_style = 0;  // StyleOwn bits: style fields apply_theme leaves alone though they equal the default
 };
 
 struct DocumentData {
@@ -130,7 +131,8 @@ const ThemeData& high_contrast_theme();
 // `st` with `kind`/`state`'s high-contrast colors and a black text outline; its sprite, slice, text
 // size and spacing are kept.
 Style high_contrast_style(WidgetKind kind, WidgetState state, const Style& st);
-// Each widget style field of `d` that equals its kind's default look takes `theme`'s value.
+// Each widget style field of `d` that equals its kind's default look takes `theme`'s value, unless
+// the widget keeps it (WidgetData::own_style).
 void apply_theme(const ThemeData& theme, DocumentData& d);
 // The font role a widget's text uses: `role`, or for Auto the kind's (Button for buttons, toggles,
 // sliders; Body otherwise).
