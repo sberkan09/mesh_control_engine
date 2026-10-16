@@ -46,6 +46,7 @@ flowchart LR
     MVIS --> MGP3D["M-GAMEPLAY3D navmesh, joints,<br/>ragdolls, vehicles, IK, blend spaces"]
     M8 --> MCINE["M-CINEMA timeline + curve editor,<br/>animation editing, cutscenes, video"]
     MNET["M-NET (built)"] --> MNET2["M-NET2 interpolation, prediction,<br/>rollback, relay/lobby"]
+    MNET2 --> MNET3["M-NET3 delta snapshots, interest,<br/>matchmaking, host migration, WebRTC, arena"]
     MGP3D -.navmesh.-> MTERR["M-TERRAIN heightmap terrain,<br/>brushes, splat layers, foliage"]
     MCINE -.subtitle tracks.-> MACC["M-ACCESS subtitles, colorblind,<br/>remap screen, screen readers"]
     MVIS --> MVIS2["M-VISUAL2 SSR, spatial upscaler<br/>and sharpening, contact shadows,<br/>clear coat, sheen, transmission"]
@@ -99,6 +100,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-PERF | [M-PERF.md](milestones/M-PERF.md) (Linear SBA-113 … SBA-117, added 2026-10-15) | done on the desktop (steps 1–5, the demo and the gates) | a capture on a phone and in a browser |
 | M-STEAM | [M-STEAM.md](milestones/M-STEAM.md), ADR-0042 (Linear SBA-106 … SBA-112) | active (step 1 done: the Steamworks flat API opened at run time, `mce/platform/steam.h`, the player's `-steam.app_id`; step 2 done: Steam achievements, leaderboards and Steam Cloud saves as the game services backend, `.mcservices` `steam` names; step 3 done: the overlay holds the game, `RichPresence`, `OpenOverlay`; step 4 done: Steam Input feeds the input map's actions, `-steam.write_input_config` writes the action manifest and controller defaults) | steps 5–6, the real-client run (needs the user's Steamworks account) |
 | M-AUDIO2 | [M-AUDIO2.md](milestones/M-AUDIO2.md) (Linear SBA-118 … SBA-122, added 2026-10-16) | active (no step done yet) | steps 1–5, the demo and the gates |
+| M-NET3 | [M-NET3.md](milestones/M-NET3.md) (Linear SBA-123 … SBA-127, added 2026-10-16) | active (step 1 done: per-client delta snapshots, `NetRelevance`, acknowledgements; about a third of the snapshot bytes in `sample_net_headless`) | steps 2–5, the demo and the gates |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -365,6 +367,25 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Builds, in order:** (1) a network test harness: simulated latency, jitter and loss, a headless multi-client runner in `local_ci.sh`, net stats in the dev overlay · (2) snapshot interpolation for remote entities with a jitter buffer and extrapolation limits · (3) client-side prediction and server reconciliation for the local player's input, with misprediction smoothing · (4) lag compensation for hit checks (rewound colliders) · (5) a deterministic rollback/lockstep mode for small-player-count games, built on the existing state hash and replay (desync detection by hash) · (6) sessions: a small relay/lobby server (`mce_relay`, room codes, NAT-friendly), host migration out of scope; a WebSocket/WebRTC transport so M-WEB builds can join · (7) replication as data: `NetReplicated` / `NetOwner` components and per-field replication flags over reflection, reachable over MCP, user guide.
 **Demo:** a 2–4 player arena or co-op Ember Step that feels local at 150 ms simulated latency; a rollback fighting-style sample stays in sync at 100 ms; a web build joins a native host through the relay.
 **Gates:** the headless multi-client runs give stable hashes; rollback detects an injected desync; no sim code includes networking headers (the wall holds); `local_ci.sh` green on every step.
+
+### M-NET3 — Multiplayer at scale · **size L (rough guess, ≈ 100–150 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the project's standing instruction to extend the roadmap when no milestone is free (every Backlog issue has an owner; M-LIVEOPS' remaining work needs devices). M-NET2 left these open (user guide 20.10): every client receives every replicated entity in full every tick, there are no spectators, no matchmaking, no host migration and no direct WebRTC connection, and its 150 ms demo ran headless only.*
+
+**Builds, in order:**
+1. Delta snapshots and interest management: per-client snapshots, only the entities relevant to each client (`NetRelevance`), delta-coded against the newest snapshot the client acknowledged.
+2. Spectators (replication and rollback) and bounded clock sync for rollback peers that run ahead.
+3. Matchmaking and host migration in `mce_relay`: quick play by mode and size, a room list, and the host role handed to a member who rebuilds the server from its mirror.
+4. A WebRTC data-channel transport (native over a fetched library, web over `RTCPeerConnection`), signalled through `mce_relay`, with the relay as fallback.
+5. `samples/net_arena`: a windowed 2–4 player arena built from scene data (`NetReplicated`, `NetOwner`, `Replicated` fields), the user guide, MCP reach and the demo.
+
+**Demo:** four arena clients at 150 ms simulated latency, joined by quick play, recorded from an xvfb run; the host leaves and the match goes on; bytes down per client against M-NET2's full snapshots.
+**Gates:**
+- Headless multi-client and arena runs hash the same across runs and Debug/Release.
+- Delta snapshots give the same mirrors as full ones for the relevant entities.
+- Host migration keeps every mirror matching the new host.
+- Two native peers connect over loopback ICE; the browser probe joins a native peer directly.
+- No sim code includes networking headers; `local_ci.sh` green on every step.
 
 ### M-TERRAIN — Terrain · **size M–L (rough guess, ≈ 80–130 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 2
 

@@ -10,5 +10,8 @@ if(TARGET mce_net)
                  -loss 0.05 -ticks 600)
         add_test(NAME sample_net_headless_relay COMMAND sample_net_headless -sim 1 -relay 1 -clients 3 -latency 40
                  -jitter 10 -loss 0.05 -ticks 600)
+        # M-NET3 step 1: the default sends per-client delta snapshots; this keeps the one-broadcast path.
+        add_test(NAME sample_net_headless_broadcast COMMAND sample_net_headless -sim 1 -delta 0 -clients 4
+                 -latency 75 -jitter 20 -loss 0.05 -ticks 600)
     endif()
 endif()

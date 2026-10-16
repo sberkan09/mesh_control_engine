@@ -406,11 +406,41 @@ applies. Flagged fields cost bytes in every snapshot for every entity, so flag w
 show, not the whole component. `refl_describe_component` over MCP marks these fields
 `"replicated": true`, so an agent can see and set up replication without reading code.
 
-## 20.10 What it does not do yet
+## 20.10 Send each client less
+
+A broadcast snapshot sends every replicated entity in full to every client, every tick. With
+per-client snapshots the server writes each client its own, and two things shrink it. First, only the
+entities that client needs are listed. Second, each entity is coded against the last snapshot that
+client confirmed: an entity that did not change costs two bytes, and a moving one only the parts of
+its transform that changed. In `sample_net_headless` that cuts the snapshot traffic to about a third.
+
+```cpp
+// server, every send tick, instead of broadcast:
+for (net::PeerId peer : players) {     // your connected peers
+    writer.clear();
+    rep.write_snapshot_for(world, u32(tick), peer, writer);
+    server.send(peer, 1, writer.data(), net::Delivery::Sequenced);
+}
+// server, when a client's acknowledgement arrives (and forget_client(peer) on disconnect):
+rep.read_ack(peer, reader);
+// client, with its inputs every tick:
+client_rep.write_ack(writer);
+```
+
+`client_rep.apply(...)` reads both kinds. Until the first acknowledgement arrives, and whenever the
+last one is too old, the client gets a full snapshot. If a client resets, its next acknowledgement
+says so and the server starts over with a full snapshot.
+
+To keep far-away entities off a client, give them `NetRelevance { radius }`. Such an entity goes only
+to clients that own an entity (`NetOwner`) within that radius, and always to the client that owns it.
+Entities without `NetRelevance`, or with radius 0, go to everyone. An entity that leaves a client's
+range disappears from that client's world and comes back when it is in range again. An `Entity`
+field that points at an entity the client does not have arrives as null.
+
+## 20.11 What it does not do yet
 
 Rollback sessions do not adjust for a peer whose clock runs ahead (it simply waits more), and
-spectators are not supported. Every client receives every
-replicated entity, and traffic is not encrypted: the relay and WebSocket speak plain `ws://`, so put a
+spectators are not supported. Traffic is not encrypted: the relay and WebSocket speak plain `ws://`, so put a
 TLS proxy in front of `mce_relay` for pages served over `https://`. There is no matchmaking, no host
 migration (the room closes with its host), and no WebRTC or direct peer-to-peer connection: through a
 relay every message passes through it. If you ship a game that links `mce_net`, list ENet (MIT
