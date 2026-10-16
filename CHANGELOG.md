@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Windowed arena sample, M-NET3 step 5 (SBA-127): `samples/net_arena` is a 2–4 player top-down arena built from
+  scene data (`NetReplicated` walls and pads, a server-made `NetOwner` player with `Replicated` health fields), with a
+  predicted local player, interpolated others, lag-compensated shots and quick play through `mce_relay`. It runs
+  windowed (local play against bots, `-serve` plus `-connect` per player) and headless; the headless match hashes the
+  same across runs and Debug/Release in `local_ci.sh`. User guide 20.11.
 - Scripts while you work, M-SCRIPT step 4b (SBA-150): a `.luau` file recooked while the game plays in the
   editor takes effect on the next tick; each script's `update()` has a Tracy zone; a crash report names the
   running script and its Luau stack (`crash::add_context` lets other subsystems add sections too); the

@@ -26,8 +26,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `AudioSnapshot` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `ChildOf` | `mce/ecs/hierarchy.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `WorldTransform` | `mce/ecs/hierarchy.h` | yes | yes | yes | docs/user-guide/03-editor.md | projects/MarbleGarden/games/marble_garden/module/marble_garden.cpp |
-| `NetReplicated` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/20-multiplayer.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 4 shows it in a systems tour sample (net, script, dialogue) |
-| `NetOwner` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/20-multiplayer.md | allowed: tested in tests/ but no sample scene uses it yet; M-COVER step 4 shows it in a systems tour sample (net, script, dialogue) |
+| `NetReplicated` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/20-multiplayer.md | samples/net_arena/assets/scenes/arena.mcscene |
+| `NetOwner` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/20-multiplayer.md | samples/net_arena/assets/scenes/arena.mcscene |
 | `NetRelevance` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/20-multiplayer.md | samples/net_headless/main.cpp |
 | `SaveKey` | `mce/ecs/save.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/game/platformer.cpp |
 | `LocalTransform` | `mce/ecs/transform.h` | yes | yes | yes | docs/user-guide/03-editor.md | samples/03_platformer/game/platformer.cpp |
