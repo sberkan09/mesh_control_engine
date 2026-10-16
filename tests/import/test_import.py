@@ -132,6 +132,13 @@ def test_warnings(work):
           "--werror writes nothing: %r" % sorted(os.listdir(d2)))
 
 
+def test_out_in_a_new_folder(work):
+    d, path = setup(work, "newdir", export([frame(0, 0)], [{"name": "a", "from": 0, "to": 0}]))
+    out = os.path.join(d, "deep", "er", "hero.mcsheet")
+    code, err = run(["aseprite", path, "--out", out])
+    check(code == 0 and os.path.isfile(out), "--out into a folder that does not exist yet creates it: " + err)
+
+
 def test_errors(work):
     d, path = setup(work, "bad", export([frame(60, 0)], size=(64, 16)))  # 60 + 16 > 64
     code, err = run(["aseprite", path])
@@ -356,7 +363,7 @@ def main():
     work = sys.argv[1]
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(work)
-    for t in (test_basic, test_idempotent, test_hash_frames_and_default_clip, test_warnings, test_errors,
+    for t in (test_basic, test_idempotent, test_hash_frames_and_default_clip, test_warnings, test_out_in_a_new_folder, test_errors,
               test_tiled_basic, test_tiled_idempotent, test_tiled_encodings_and_errors,
               test_ldtk_basic, test_ldtk_idempotent_levels_and_errors):
         t(work)

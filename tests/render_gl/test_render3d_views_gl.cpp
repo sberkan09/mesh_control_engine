@@ -187,13 +187,18 @@ u32 make_render_texture(Fixture3D& f, rhi::Extent2D size, rhi::TextureHandle& ou
 }
 
 // Draws region 0 of `set` over the whole of `target` (a 1 m square sprite fitted to the view).
+// `linear`: `target` is a render texture, written upright as kit::record_views writes a 2D view
+// into one (clip-space y mirrored, no sRGB encode).
 void draw_full(Fixture3D& f, rhi::CommandBuffer& cmd, rhi::TextureHandle target, rhi::Extent2D size, SpriteSetId set,
                bool linear) {
     Camera2D cam;
     cam.fit_width = 1.0f;
     cam.fit_height = static_cast<f32>(size.height) / static_cast<f32>(size.width);
     SpriteBatch batch(f.renderer.sprite_sets(), mem::heap());
-    batch.begin(compute_view_2d(cam, size, 48.0f));
+    View2D view = compute_view_2d(cam, size, 48.0f);
+    if (linear)
+        for (auto& col : view.view_proj.c) col[1] = -col[1];
+    batch.begin(view);
     SpriteInstance s;
     s.set = set;
     s.scale = {1.0f, cam.fit_height};
@@ -214,11 +219,11 @@ TEST_CASE("render3d_views_gl: a view drawn into a linear render texture shows li
     Fixture3D f;
     rhi::TextureHandle rt;
     const u32 key = make_render_texture(f, {kW, kH}, rt);
-    // The whole texture, upright: a drawn texture holds its top row at v = 1.
-    const SpriteRegion upright{0, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f};
+    // The whole texture as any uploaded art: record_3d writes a linear view upright.
+    const SpriteRegion whole{};
     SpriteSetDesc sd;
     sd.texture_key = key;
-    sd.regions = Span<const SpriteRegion>(&upright, 1);
+    sd.regions = Span<const SpriteRegion>(&whole, 1);
     const SpriteSetId set = f.renderer.create_sprite_set(sd);
 
     // The view into the texture (linear, slot 1), shown full screen through a sprite.
@@ -298,7 +303,7 @@ TEST_CASE("render3d_views_gl: a mesh shows a render texture upright, as it shows
     rhi::TextureHandle rt;
     const u32 rt_key = make_render_texture(f, {2, 2}, rt);
 
-    auto frame = [&](u32 emissive_key, bool flip) {
+    auto frame = [&](u32 emissive_key) {
         f.device->begin_frame(f.frame++);
         rhi::CommandBuffer cmd;
         draw_full(f, cmd, rt, {2, 2}, art_set, true);
@@ -306,7 +311,6 @@ TEST_CASE("render3d_views_gl: a mesh shows a render texture upright, as it shows
         mo.params.base_color[3] = 1.0f;  // black base: the emission is all that shows
         mo.params.roughness = 1.0f;
         mo.params.emissive[0] = mo.params.emissive[1] = mo.params.emissive[2] = 1.0f;
-        mo.params.uv_scale_half = flip ? asset::MaterialChunk::pack_uv_scale(1.0f, -1.0f) : 0u;
         mo.emissive_key = emissive_key;
         const Camera3D cam = orbit_camera({0, 0, 0}, 0.0f, math::radians(60.0f), 6.0f);
         Scene3D scene(f.renderer.meshes(), mem::heap());
@@ -323,9 +327,9 @@ TEST_CASE("render3d_views_gl: a mesh shows a render texture upright, as it shows
         REQUIRE(f.device->read_pixels(f.target, rhi::Rect2D{0, 0, kW, kH}, f.pixels.span()).has_value());
         f.device->end_frame();
     };
-    frame(art_key, false);
+    frame(art_key);
     const Array<u8> art_view = Array<u8>(f.pixels);
-    frame(rt_key, true);  // what Kit3DExtract gives a ShowRenderTexture mesh
+    frame(rt_key);  // what Kit3DExtract gives a ShowRenderTexture mesh: no flip of its own
 
     // Both colors show, in the same places.
     usize red = 0, green = 0, differ = 0;

@@ -165,6 +165,15 @@ struct Spatial {
 // passing through the listener does not flip sides.
 Spatial spatialize(const Listener& l, const AttenuationCurve& c, math::vec3 source);
 
+// Several ears at once (split-screen, M-VIEWS 4): how a 3D voice is heard by up to kMaxListeners.
+enum class ListenerMix : u8 {
+    First,    // the first listener only (one player; the default)
+    Nearest,  // each voice against the listener nearest to it
+    Mixed,    // the loudest listener's gain; the pan is the listeners' pans weighted by their gains
+};
+inline constexpr u32 kMaxListeners = 4;
+Spatial spatialize(Span<const Listener> listeners, ListenerMix mix, const AttenuationCurve& c, math::vec3 source);
+
 enum class Backend : u8 {
     Device,   // the platform audio output (SDL3 callback thread)
     Offline,  // no device: the caller pulls blocks with render_offline (tests, offline renders)
@@ -279,9 +288,13 @@ public:
     // ---- 3D -------------------------------------------------------------------------------------
     // Curves 1..kMaxAttenuationCurves-1 (cooked ids); every id starts as the default curve.
     Result<void> set_attenuation(u16 id, const AttenuationCurve& curve);
-    // Re-spatializes every live 3D voice (sending only what changed).
+    // Re-spatializes every live 3D voice (sending only what changed). One listener (ListenerMix::First).
     void set_listener(const Listener& listener);
-    const Listener& listener() const { return listener_; }
+    // Up to kMaxListeners (more are ignored; none keeps the current ones), heard as `mix` says.
+    void set_listeners(Span<const Listener> listeners, ListenerMix mix);
+    const Listener& listener() const { return listeners_[0]; }
+    Span<const Listener> listeners() const { return Span<const Listener>(listeners_, listener_count_); }
+    ListenerMix listener_mix() const { return listener_mix_; }
 
     // The mixer clock: frames mixed since open. play_at schedules against it.
     u64 mix_clock() const;
@@ -324,7 +337,9 @@ private:
     f32 trim_db_[kBusCount] = {};
     DuckDesc duck_[Bus_User0];
     bool reverb_allowed_ = true;
-    Listener listener_;
+    Listener listeners_[kMaxListeners];
+    u32 listener_count_ = 1;
+    ListenerMix listener_mix_ = ListenerMix::First;
     u64 command_hash_ = 0;
     u32 free_handle_count_ = kMaxHandles;
 };

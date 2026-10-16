@@ -5,9 +5,25 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Windowed arena sample, M-NET3 step 5 (SBA-127): `samples/net_arena` is a 2–4 player top-down arena built from
+  scene data (`NetReplicated` walls and pads, a server-made `NetOwner` player with `Replicated` health fields), with a
+  predicted local player, interpolated others, lag-compensated shots and quick play through `mce_relay`. It runs
+  windowed (local play against bots, `-serve` plus `-connect` per player) and headless; the headless match hashes the
+  same across runs and Debug/Release in `local_ci.sh`. User guide 20.11.
+- Procedural levels, M-PROCGEN step 3 (SBA-173): a `ProcLevel` component builds a seeded level in the game (merged wall
+  colliders, floor, Start/Exit markers) and rebuilds it when the seed changes or `reroll` is set, also from Luau; user guide 28.5.
 - Procedural levels, M-PROCGEN step 4 (SBA-174): MCP `procgen_run` shows a seeded level as text (and checks a run of seeds, or
   bakes it into a `.mctilemap`), a `.mctest` can assert `{"reachable": {kind, width, height, seed, count}}`, and user guide
   chapter 28 explains both.
+- Mutation tests for the chunk readers, M-FUZZ step 1 (SBA-185): `tests/fuzz` has a deterministic byte mutator and
+  runs the asset module's 19 chunk readers over 22,000 mutated payloads of every chunk the samples cook
+  (`ctest -R test_fuzz`); none crashes, hangs or asserts. `docs/milestones/M-FUZZ.md` lists every parser of
+  untrusted bytes and what covers it.
+- Walked views and more decoders, M-FUZZ step 2 (SBA-186): `test_fuzz` follows every offset and range a consumer
+  follows over what the 19 readers accept (so the ASan stage sees an out-of-bounds read), and covers the sprite
+  sheet, string table, input map, store, remote config and game services catalogs, UI theme and document (with
+  `build_document`) and the nav mesh header check: 48,000 mutants over 25 chunk types. It found that
+  `NavMesh3D::load` crashes on a bake with damaged layer bytes; the fix follows in step 2b.
 - Docs checks in the guide, M-DOCCHECK step 4 (SBA-179): user guide 1.8 describes what the walls stage checks in the
   documents and where the accepted misses live. M-DOCCHECK is done.
 - Cook errors name the fix, M-WORKFLOW step 3 (SBA-182, #379): the error for a file without a sidecar says

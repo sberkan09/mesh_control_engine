@@ -738,11 +738,6 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                 } else {
                     o.albedo_key = rt;
                 }
-                // A drawn texture holds its top row at v = 1 (uploaded art at v = 0): the repeat's
-                // negative v flips it upright (the material sampler repeats).
-                f32 uv[2];
-                o.params.uv_scale(uv);
-                o.params.uv_scale_half = asset::MaterialChunk::pack_uv_scale(uv[0], -uv[1]);
                 screen_materials_.push_back(o);
                 inst.material = &screen_materials_.back();
             }

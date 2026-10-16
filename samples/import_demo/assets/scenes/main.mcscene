@@ -1,0 +1,72 @@
+{
+ "entities": [
+  {
+   "components": {
+    "Camera2DComponent": {
+     "clear_color": [
+      0.55,
+      0.72,
+      0.9,
+      1
+     ],
+     "fit_height": 8,
+     "pixel_snap": false
+    },
+    "LocalTransform": {
+     "position": [
+      6,
+      4,
+      0
+     ]
+    }
+   },
+   "id": 1,
+   "name": "Camera"
+  },
+  {
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ]
+    },
+    "TilemapLayer": {
+     "map": "guid:8ce96132-37b8-46df-9e84-32b44f4bebf7",
+     "order": 1
+    }
+   },
+   "id": 2,
+   "name": "Ground"
+  },
+  {
+   "components": {
+    "AnimatedSprite": {
+     "clip": "run",
+     "sheet": "guid:8820bdee-4cb9-4766-bf3e-dc1c91756923"
+    },
+    "LocalTransform": {
+     "position": [
+      3,
+      2.5,
+      0
+     ]
+    },
+    "Sprite": {
+     "layer": 2,
+     "size": [
+      1,
+      1
+     ]
+    }
+   },
+   "id": 3,
+   "name": "Hero"
+  }
+ ],
+ "format": "mce-scene",
+ "guid": "1e1f0000-0000-4000-8000-000000000001",
+ "name": "main",
+ "version": 1
+}
