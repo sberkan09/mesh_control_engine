@@ -1,7 +1,7 @@
 # changelog.d
 
 One fragment per PR that changes what a user of the engine sees: `changelog.d/<ticket>.md`
-(`SBA-127.md`; `<ticket>-<slug>.md` when one ticket ships several PRs). The file holds the same
+(`SBA-127-<slug>.md` is the safe default: two PRs on one ticket named `SBA-127.md` conflict on add/add; `SBA-127.md` is fine when the ticket ships one PR). The file holds the same
 entry you would have added under `## Unreleased` in `CHANGELOG.md`: a `- ` bullet, continuation lines
 indented by two spaces.
 
