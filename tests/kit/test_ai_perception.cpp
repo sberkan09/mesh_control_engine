@@ -265,7 +265,8 @@ TEST_CASE("perception: a crowd staggers its checks; the debug lines") {
     Stage s;
     Perceiver p = eyes(30.0f, 360.0f);
     p.interval = 4;
-    for (u32 i = 0; i < 400; ++i) s.world.spawn_with(at(static_cast<f32>(i % 20), 0, static_cast<f32>(i / 20)), p);
+    for (u32 row = 0; row < 20; ++row)
+        for (u32 col = 0; col < 20; ++col) s.world.spawn_with(at(static_cast<f32>(col), 0, static_cast<f32>(row)), p);
     for (u32 i = 0; i < 10; ++i) s.world.spawn_with(at(static_cast<f32>(i), 0, -3), shown());
     for (u32 i = 0; i < 8; ++i) {
         s.run(1);
