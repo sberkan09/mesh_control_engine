@@ -2,6 +2,7 @@
 //
 //   NODE_PATH=$(npm root -g) node scripts/web/probe_smoke.cjs <dir> input
 //   NODE_PATH=$(npm root -g) node scripts/web/probe_smoke.cjs <dir> relay <path/to/native/mce_relay>
+//   NODE_PATH=$(npm root -g) node scripts/web/probe_smoke.cjs <dir> rtc <path/to/native/mce_relay>
 //   NODE_PATH=$(npm root -g) node scripts/web/probe_smoke.cjs <dir> shell
 //
 // input: mce_input_web_probe (src/engine/platform/web_probe). Audio must start suspended (the
@@ -9,6 +10,9 @@
 //   key press, a tap and a gamepad (a fake one behind navigator.getGamepads) must reach the engine.
 // relay: starts the native mce_relay on a free WebSocket port and opens mce_relay_web_probe, whose
 //   two browser RelayClients make a room, join it and swap a message (M-NET2 over WebSocket).
+// rtc: starts the native mce_relay with its echo member (-echo_mode rtc_probe, a native RtcHost on
+//   libdatachannel) and opens mce_rtc_web_probe, whose browser RtcHost joins it and connects
+//   directly over RTCPeerConnection (M-NET3 step 4); messages must come back over the direct link.
 // shell: a shipped web folder (scripts/ship.py --target web): on a desktop-sized page and on a phone-sized
 //   touch one, the cover shows the icon and "Click/Tap to play" once the game runs, the click or tap
 //   hides it and starts the audio, and the canvas fills the page and follows a resize.
@@ -22,8 +26,8 @@ const { spawn } = require('child_process');
 const { chromium } = require('playwright');
 
 const [dir, mode, relayExe] = process.argv.slice(2);
-if (!dir || !['input', 'relay', 'shell'].includes(mode) || (mode === 'relay' && !relayExe)) {
-  console.error('usage: probe_smoke.cjs <dir> input | relay <mce_relay> | shell');
+if (!dir || !['input', 'relay', 'rtc', 'shell'].includes(mode) || (['relay', 'rtc'].includes(mode) && !relayExe)) {
+  console.error('usage: probe_smoke.cjs <dir> input | relay <mce_relay> | rtc <mce_relay> | shell');
   process.exit(2);
 }
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
@@ -160,7 +164,8 @@ async function shellChecks(chromium, exe, url) {
   const exe = fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined;
   const browser = await chromium.launch({
     executablePath: exe,
-    args: ['--headless=new'],
+    // Host candidates as addresses, not mDNS names: the native peer resolves no .local names.
+    args: ['--headless=new', '--disable-features=WebRtcHideLocalIpsWithMdns'],
   });
   const lines = [];
   let failed = false;
@@ -188,16 +193,20 @@ async function shellChecks(chromium, exe, url) {
     tab.on('console', (m) => { lines.push(m.text()); console.log(m.text()); });
     tab.on("pageerror", (e) => { console.log(`pageerror: ${e.message}\n${e.stack}`); failed = true; });
     const base = `http://127.0.0.1:${server.address().port}`;
-    if (mode === 'relay') {
+    if (mode === 'relay' || mode === 'rtc') {
       const port = await freePort();
-      relay = spawn(relayExe, ['-bind', '127.0.0.1', '-udp_port', '0', '-ws_port', String(port), '-seconds', '120'],
-                    { stdio: ['ignore', 'pipe', 'pipe'] });
+      const args = ['-bind', '127.0.0.1', '-udp_port', '0', '-ws_port', String(port), '-seconds', '120'];
+      // The echo member reaches the relay over UDP (a free port), and connects to the page over WebRTC.
+      if (mode === 'rtc') args.splice(2, 2, '-udp_port', String(await freePort()), '-echo_mode', 'rtc_probe');
+      relay = spawn(relayExe, args, { stdio: ['ignore', 'pipe', 'pipe'] });
       relay.stdout.on('data', (d) => process.stdout.write(`relay| ${d}`));
       relay.stderr.on('data', (d) => process.stdout.write(`relay| ${d}`));
       await new Promise((r) => setTimeout(r, 500));
-      await tab.goto(`${base}/mce_relay_web_probe.html?port=${port}`);
-      check('relay web probe reports OK', await waitFor(tab, /relay web probe: (OK|FAILED)/, 30000) &&
-                                          lines.some((l) => /relay web probe: OK/.test(l)));
+      const probe = mode === 'rtc' ? 'rtc' : 'relay';
+      await tab.goto(`${base}/mce_${probe}_web_probe.html?port=${port}`);
+      const done = new RegExp(`${probe} web probe: (OK|FAILED)`);
+      check(`${probe} web probe reports OK`, await waitFor(tab, done, 40000) &&
+                                            lines.some((l) => new RegExp(`${probe} web probe: OK`).test(l)));
     } else {
       await tab.addInitScript(fakeGamepad);
       await tab.addInitScript(strictAutoplay);

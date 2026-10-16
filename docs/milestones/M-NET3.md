@@ -1,6 +1,6 @@
 # M-NET3 — Multiplayer at scale (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–3 done). Plan: ROADMAP §M-NET3; Linear SBA-123 … SBA-127.
+**Status:** active (added 2026-10-16; steps 1–4 done). Plan: ROADMAP §M-NET3; Linear SBA-123 … SBA-127.
 
 **Why:** M-NET2 made multiplayer that feels local, but it leaves gaps that a shipped game hits (user guide 20.10):
 
@@ -24,7 +24,7 @@ chat, anti-cheat beyond server authority.
 | 1 | Delta snapshots and interest management: per-client snapshots, `NetRelevance` (radius around the client's owned entity; always relevant), delta coding against the newest acknowledged snapshot, per-client bandwidth counters | SBA-123 | done |
 | 2 | Spectators in replication and rollback sessions; bounded clock sync for rollback peers that run ahead | SBA-124 | done |
 | 3 | Matchmaking and host migration in `mce_relay`: quick play by mode and size, a room list, the host role handed on and the server rebuilt from the new host's mirror | SBA-125 | done |
-| 4 | WebRTC data channels (native over a fetched library, web over `RTCPeerConnection`), signalled through `mce_relay`, the relay as fallback | SBA-126 | not started |
+| 4 | WebRTC data channels (native over a fetched library, web over `RTCPeerConnection`), signalled through `mce_relay`, the relay as fallback | SBA-126 | done |
 | 5 | `samples/net_arena`: a windowed 2–4 player arena from scene data, the user guide, MCP reach and the demo | SBA-127 | not started |
 
 **Demo:** four arena clients at 150 ms simulated latency, joined by quick play and recorded from an xvfb run.
@@ -106,3 +106,23 @@ Notes:
 - Inputs the old host had applied but not yet acknowledged are lost; the players' prediction reconciles that.
 - No skill rating, region or party matching: quick play matches by mode and size.
 
+## Step 4 — WebRTC data channels
+
+| Item | Where | Evidence |
+|---|---|---|
+| `net::RtcHost` (`mce/net/rtc.h`): a `RelayClient` room whose members also connect directly, a `Transport` either way. The lower member id offers; the offer, answer and ICE candidates travel to the other member as relay messages (`[3][type]...`, so a relay at protocol version 2 needs no change). `path(peer)` is `Relay`, `Connecting` or `Direct`; a pair that is refused, fails or takes longer than `connect_timeout_ms` stays on the relay | `mce/net/rtc.h`, `src/rtc.cpp` | `test_net` "two members go direct over loopback ICE", "three members, every pair direct", "a member without direct connections keeps its pairs on the relay" |
+| Two channels per pair: Reliable on an ordered, reliable one; Sequenced and Unreliable on an unordered one with no retransmits. Sequenced messages carry a number, so one older than a message already delivered is dropped whichever way each came | same | same tests (20 Sequenced and 20 Unreliable messages direct, none through the relay; a 50,000-byte Reliable message whole) |
+| Reliable order across the switch: a pair marks the switch on the relay when its channels open; the receiver holds direct Reliable messages until that mark arrives, so none overtakes one still on the relay | same | the first test sends one Reliable message per step from before the switch to after it: all arrive, in order, both ways |
+| A direct connection that closes later falls back to the relay (`RtcStats::fallbacks`); Reliable messages in flight on it are lost then | same | "a member leaving closes its pairs" (the others keep theirs) |
+| Native: libdatachannel v0.22.6 (libjuice ICE, usrsctp SCTP, the system OpenSSL for DTLS), fetched by `cmake/Dependencies.cmake` and folded into `mce_net` like ENet. On where `MCE_WITH_RTC` is on (Linux with OpenSSL; `-DMCE_WITH_RTC=OFF` to skip); elsewhere `rtc_none.cpp` leaves every pair on the relay. Its headers stay in `rtc_native.cpp` (WebRTC wall, `check_walls.py`) | `src/rtc_native.cpp`, `rtc_none.cpp`, `cmake/Dependencies.cmake` | `check_walls.py`; `RtcHost::direct_supported()` |
+| Web: the browser's `RTCPeerConnection` and `RTCDataChannel`, one promise chain per link so candidates follow their description | `src/rtc_web.cpp` | `mce_rtc_web_probe` |
+| `mce_relay -echo_mode <mode>`: also a native `RtcHost` member that quick-plays rooms of that mode for 2, and echoes every message back with "direct:" or "relay:" in front | `src/engine/net/relay/main.cpp` | the browser probe |
+| Browser gate: `mce_rtc_web_probe` (headless Chromium, `probe_smoke.cjs <dir> rtc`) joins the relay over WebSocket, quick-plays into the echo member's room, goes direct to it over WebRTC, and gets a Reliable and an Unreliable message back "direct:" | `src/engine/net/web_probe/rtc_probe.cpp`, `scripts/web/probe_smoke.cjs`, `web_ci.py` | `local_ci.sh` web stage (where the Emscripten SDK is installed) |
+
+Notes:
+- Loopback ICE: with no STUN server only host candidates are gathered, which is enough on one machine or a
+  LAN. Across the internet pass `RtcDesc::ice_server` ("stun:host:port"). There is no TURN: a pair that no
+  STUN-assisted path connects stays on the relay.
+- Chromium hides its host address behind an mDNS name; the probe starts it with
+  `--disable-features=WebRtcHideLocalIpsWithMdns` so the native peer can reach it.
+- `RtcStats` counts messages sent and received each way (`direct_*`, `relay_*`), `direct_opened` and `fallbacks`.

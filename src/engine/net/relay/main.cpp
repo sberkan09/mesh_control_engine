@@ -4,6 +4,9 @@
 //   mce_relay -udp_port 9000 -ws_port 0         no WebSocket
 //   mce_relay -bind 127.0.0.1 -seconds 60       loopback only, for a minute
 //   mce_relay -selftest 1                       a native and a WebSocket client meet in a room, then exit
+//   mce_relay -echo_mode rtc_probe              also a member that quick-plays "rtc_probe" rooms for 2,
+//                                               connects to whoever joins over WebRTC and echoes back
+//                                               what it gets (the browser probe's native peer, M-NET3)
 //
 // Every -stats seconds it logs clients, rooms and traffic. It holds no game state: a room lives as
 // long as its host is connected, or, made with host migration, as long as anyone is in it.
@@ -28,6 +31,7 @@ MCE_CVAR(cv_max_clients, "max_clients", 256, "Connections per transport at most"
 MCE_CVAR(cv_seconds, "seconds", 0, "Stop after this long (0 = run until killed)", CVarFlags::None);
 MCE_CVAR(cv_stats, "stats", 30, "Log the counters every this many seconds (0 = never)", CVarFlags::None);
 MCE_CVAR(cv_selftest, "selftest", 0, "Run a loopback room with a native and a WebSocket client, then exit", CVarFlags::None);
+MCE_CVAR(cv_echo_mode, "echo_mode", "", "Also run an echoing RtcHost member in quick-play rooms of this mode", CVarFlags::None);
 
 using Clock = std::chrono::steady_clock;
 
@@ -128,6 +132,48 @@ int selftest() {
     return ok ? 0 : 1;
 }
 
+// The -echo_mode member: an RtcHost over UDP to this relay that holds a quick-play room for 2 and
+// sends every message back to its sender, on the channel it came on (channel 0 reliable, others
+// unreliable), prefixed with how it arrived ("direct:" or "relay:").
+struct EchoMember {
+    net::Host link;
+    net::RtcHost room;
+    net::RtcPath paths[net::kRelayMaxMembers] = {};
+    FixedString<net::kRelayModeLength + 1> mode;
+    Array<u8> reply;
+
+    bool start(u16 port, StringView m) {
+        mode.assign(m);
+        if (!link.open_client()) return false;
+        room.start(link, link.connect("127.0.0.1", port));
+        return room.room().quick_play(mode.view(), 2);
+    }
+    void pump() {
+        for (net::Event ev; room.poll(ev);) {
+            if (ev.kind == net::EventKind::Connected) MCE_LOG_INFO("relay: echo member: member {} joined", ev.peer);
+            if (ev.kind == net::EventKind::Disconnected) MCE_LOG_INFO("relay: echo member: member {} left", ev.peer);
+            if (ev.kind != net::EventKind::Received) continue;
+            const bool direct = room.path(ev.peer) == net::RtcPath::Direct;
+            const StringView how = direct ? StringView("direct:") : StringView("relay:");
+            reply.resize(how.size() + ev.data.size());
+            std::memcpy(reply.data(), how.data(), how.size());
+            if (!ev.data.empty()) std::memcpy(reply.data() + how.size(), ev.data.data(), ev.data.size());
+            room.send(ev.peer, ev.channel, Span<const u8>(reply.data(), reply.size()),
+                      ev.channel == 0 ? net::Delivery::Reliable : net::Delivery::Unreliable);
+        }
+        for (net::PeerId p = 0; p < net::kRelayMaxMembers; ++p) {
+            const net::RtcPath now = room.path(p);
+            if (now != paths[p]) MCE_LOG_INFO("relay: echo member: member {} is {}", p, net::rtc_path_name(now));
+            paths[p] = now;
+        }
+        // Back in a room when the last one closed (a host left it) or a request was refused.
+        const auto state = room.room().state();
+        if (state == net::RelayClient::State::Refused || state == net::RelayClient::State::Closed)
+            room.room().quick_play(mode.view(), 2);
+        room.flush();
+    }
+};
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -165,6 +211,16 @@ int main(int argc, char** argv) {
         return 2;
     }
     MCE_LOG_INFO("relay: ready (UDP {}, WebSocket {})", udp.bound_port(), ws.bound_port());
+    EchoMember echo;
+    const bool echoing = !cv_echo_mode.get_string().empty();
+    if (echoing) {
+        if (!udp.is_open() || !echo.start(udp.bound_port(), cv_echo_mode.get_string())) {
+            MCE_LOG_ERROR("relay: the echo member needs the UDP port and a valid mode");
+            return 2;
+        }
+        MCE_LOG_INFO("relay: echo member in \"{}\" rooms (WebRTC {})", cv_echo_mode.get_string(),
+                     net::RtcHost::direct_supported() ? "on" : "off: relay only");
+    }
 
     const auto start = Clock::now();
     auto last_stats = start;
@@ -172,6 +228,7 @@ int main(int argc, char** argv) {
     const f64 every = static_cast<f64>(std::max(0, cv_stats.get_int()));
     while (limit == 0.0 || seconds_since(start) < limit) {
         relay.update();
+        if (echoing) echo.pump();
         if (every > 0.0 && seconds_since(last_stats) >= every) {
             log_stats(relay.stats());
             last_stats = Clock::now();

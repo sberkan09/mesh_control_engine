@@ -131,6 +131,14 @@ WALLS = [
         ["src/engine/net/src/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
+    # WebRTC (M-NET3 step 4): libdatachannel's C API is private to rtc_native.cpp (the browser's
+    # RTCPeerConnection to rtc_web.cpp). Everything else reaches a direct link through net::RtcHost.
+    (
+        "WebRTC wall",
+        re.compile(r"[<\"](rtc|juice)/|\brtc(Create|Set|Delete|Send|Add|Init|Cleanup|Preload|Get|Is)[A-Z]?\w*\s*\("),
+        ["src/engine/net/src/rtc_native.cpp"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
     # Luau (ADR-0041, M-SCRIPT): the VM headers stay inside mce_script's sources, the compiler's
     # (luacode.h, Luau/*.h) inside mce_script_compiler's.
     (
@@ -179,6 +187,7 @@ LINK_WALLS = [
     ("net opt-in wall", re.compile(r"\bmce_net\b"), ["src/engine/net/", "samples/", "games/", "projects/", "templates/", "tests/"]),
     ("Recast link wall", re.compile(r"\bmce_recast\b"), ["src/engine/physics3d/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
+    ("libdatachannel link wall", re.compile(r"\b(datachannel-static|juice-static|usrsctp)\b"), ["src/engine/net/"]),
     ("libvorbis link wall", re.compile(r"\bmce_vorbisenc\b"), ["src/engine/asset/cook/"]),
     # Luau scripting (ADR-0041, M-SCRIPT) is opt-in: no engine library links mce_script (it is not
     # in MCE_ENGINE_LIBS); the stock hosts (player, editor, mce_mcp), its sample and tests do. The
