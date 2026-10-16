@@ -326,6 +326,29 @@ every peer ends with the same hash. `-prediction 0` shows lockstep at the same l
 about a third of the frames, waiting the rest of the time. `-desync_at 300` makes one peer compute
 something else at frame 300, and every peer reports a desync at frame 300.
 
+**Spectators.** Someone who only watches runs a session with `.spectator = true` (and their spectator
+number, 0 to 7, as `local_player`). A spectator has no input and never guesses: it plays a frame
+once every player's input for it is known, a little behind the players. One player feeds it:
+
+```cpp
+// the feeding player, every tick, for each spectator s it feeds:
+if (session.write_spectator_packet(s, w)) host.send(spectator_peer[s], 0, w.data(), net::Delivery::Unreliable);
+// the spectator, every tick:
+watcher.advance();
+if (watcher.write_packet(feeding_player, w)) host.send(player_peer, 0, w.data(), net::Delivery::Unreliable);
+```
+
+The spectator checks the player's state hashes like a player would, so `desynced()` works for it too.
+The sample adds one spectator by default; `-spectators N` adds more.
+
+**Clocks that drift.** Two machines never tick at exactly the same rate. Without help, the faster
+peer keeps running into `max_prediction` and stalls in bursts, and the other keeps rolling back deep.
+With `time_sync` (on by default) the packets carry how far ahead each peer sees the other, and a peer
+that is more than a frame ahead skips a tick now and then (`stats().sync_waits`), so the gap closes
+in small steps. `-drift 30` makes the sample's peer 0 play an extra frame every 30 ticks. With
+`-sync 0` it stalls 40 times; with clock sync it skips 33 ticks spread over the run and stalls 10
+times, and every peer replays fewer frames.
+
 ## 20.8 Rooms through a relay, and web players
 
 Players at home usually cannot accept connections: their router does not forward a port to them,
@@ -437,10 +460,15 @@ Entities without `NetRelevance`, or with radius 0, go to everyone. An entity tha
 range disappears from that client's world and comes back when it is in range again. An `Entity`
 field that points at an entity the client does not have arrives as null.
 
+A spectator owns nothing, so it would see only the entities without `NetRelevance`. Give it a camera
+with `rep.set_view(peer, &camera_position)` (call it again as the camera moves) or let it see
+everything with `rep.set_sees_all(peer, true)`, for a caster or a replay recorder. It then gets
+per-client snapshots like a player and acknowledges them the same way.
+`sample_net_headless -sim 1 -clients 3 -spectators 2` adds two clients that watch without playing.
+
 ## 20.11 What it does not do yet
 
-Rollback sessions do not adjust for a peer whose clock runs ahead (it simply waits more), and
-spectators are not supported. Traffic is not encrypted: the relay and WebSocket speak plain `ws://`, so put a
+Traffic is not encrypted: the relay and WebSocket speak plain `ws://`, so put a
 TLS proxy in front of `mce_relay` for pages served over `https://`. There is no matchmaking, no host
 migration (the room closes with its host), and no WebRTC or direct peer-to-peer connection: through a
 relay every message passes through it. If you ship a game that links `mce_net`, list ENet (MIT

@@ -13,5 +13,8 @@ if(TARGET mce_net)
         # M-NET3 step 1: the default sends per-client delta snapshots; this keeps the one-broadcast path.
         add_test(NAME sample_net_headless_broadcast COMMAND sample_net_headless -sim 1 -delta 0 -clients 4
                  -latency 75 -jitter 20 -loss 0.05 -ticks 600)
+        # M-NET3 step 2: spectators get per-client snapshots of everything and must mirror it.
+        add_test(NAME sample_net_headless_spectators COMMAND sample_net_headless -sim 1 -clients 3 -spectators 2
+                 -latency 75 -jitter 20 -loss 0.05 -ticks 600)
     endif()
 endif()
