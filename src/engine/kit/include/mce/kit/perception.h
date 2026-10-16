@@ -109,6 +109,12 @@ void install_perception(World& world);
 // The system itself (exposed for tests and custom pipelines).
 void ai_perception(Frame& f);
 
+// Whether a ray from `from` reaches `to` with nothing in the `mask` layers in between (through
+// World2D for Plane2D, Physics3D's World3D for Space3D; true without the physics world). `ignore`
+// is never a blocker, and hitting `target` counts as reaching it.
+bool line_of_sight(Frame& f, PerceptionSpace space, math::vec3 from, math::vec3 to, u16 mask = 0xFFFF, Entity ignore = {},
+                   Entity target = {});
+
 // Debug lines (the editor's perception overlay): each perceiver's cone edges and range arc, and a
 // line to the target it sees (green) or to where it last saw it (yellow).
 struct PerceptionLine {

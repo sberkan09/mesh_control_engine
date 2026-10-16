@@ -114,9 +114,25 @@ first frame, count, inputs, then up to 16 (frame, hash) pairs. M-NET3 step 2 add
   WebSocket at once), `update()` each loop, `stats()`.
 - `RelayClient` is a `Transport` whose peers are a room's members: `start(link, relay_peer, {channels})`,
   `create_room(max)` / `join_room(code)`, `state()` (Idle, Requesting, InRoom, Refused, Closed),
-  `room_code()`, `member_id()` (the host is 0), `refusal()`, `leave()`. It polls the link itself.
+  `room_code()`, `member_id()`, `host_id()` (0 at first), `refusal()`, `leave()`. It polls the link itself.
 - Wire: one request or notice per message on the link's channel 0, data forwarded with the sender's
-  Delivery (channel 0 reliable, channel 1 otherwise). The relay never reads game data.
+  Delivery (channel 0 reliable, channel 1 otherwise). The relay never reads game data. Protocol
+  version 2 (M-NET3 step 3): CREATE carries flags (listed, host migration) and a mode name (printable
+  ASCII, 16 bytes at most); JOINED carries the host's member id.
+- Matchmaking (M-NET3 step 3): `quick_play(mode, max)` joins the listed room of that mode and size
+  with the most members and space (the lowest code among equals) or opens one (listed, migrating);
+  `list_rooms(mode)` answers with up to 32 listed rooms (code, members, max, mode), sorted by code,
+  into `rooms()` / `rooms_received()`. `create_room(max, RelayRoomOptions{listed, host_migration, mode})`.
+- Host migration: when the host of a migrating room leaves and anyone is left, the lowest member
+  becomes host. The relay sends HOST_CHANGED before MEMBER_LEFT, and the client runs
+  `RelayClientDesc::on_host_change(user, new_host)` when that point of its event queue is polled, so
+  the game switches servers before the old host's `Disconnected`. Kicks follow the current host; a
+  joiner takes the lowest free slot, which can be the old host's. `RelayStats` counts `quick_plays` and
+  `host_migrations`.
+- `ReplicationServer::adopt(world, client)` turns a client's mirror into the server world: every
+  mirrored entity keeps its `NetId` and gets the newest snapshot's transform
+  (`ReplicationClient::release` forgets the mirrors without destroying them), new ids continue after
+  the highest, and per-client history starts over. It returns the newest tick.
 
 ## A minimal game loop
 
@@ -171,6 +187,13 @@ loopback, a client-driven player, and the bit-for-bit check.
   in one place, lockstep, an injected desync; a spectator matches the players' hashes and catches
   its own desync; clock sync halves a 5%-fast peer's stalls and leaves peers on one clock alone;
   spectator packets are refused where they do not belong.
+- Relay: quick play fills the fullest room of the mode and opens another when full, private rooms
+  are never listed or matched, the list by mode and in full; with host migration the lowest member
+  takes over (announced before the old host's Disconnected), messages and kicks follow the new host,
+  a newcomer takes the free slot, and a room without migration still closes. Replication: `adopt`
+  restores the newest snapshot's transforms, ids continue, another client mirrors the new server.
+- `sample_net_headless_migration`: the host leaves at tick 300 of 600 over a 40 ms relay with loss;
+  a client takes over and both others match it bit for bit.
 - `sample_net_rollback` (and `_drift`: a fast peer and two spectators), `sample_net_headless_spectators`
   (two watching clients mirror everything over 75 ms with loss).
 - `sample_net_headless_300`: 300 ticks of a server and client; the client's mirror must match the

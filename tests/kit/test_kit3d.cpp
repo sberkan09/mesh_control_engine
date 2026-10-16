@@ -160,10 +160,13 @@ TEST_CASE("kit3d: the scene's Environment3D becomes the resource at Startup") {
     f.world.resource<kit::Environment3D>().ssr = 1;
     f.world.resource<kit::Environment3D>().ssr_max_distance = 12.0f;
     f.world.resource<kit::Environment3D>().ssr_max_roughness = 0.3f;
+    f.world.resource<kit::Environment3D>().ssr_steps = 48;
+    f.world.resource<kit::Environment3D>().ssr_edge_fade = 0.2f;
     f.world.resource<kit::Environment3D>().sharpen = 0.4f;
     f.world.resource<kit::Environment3D>().contact_shadows = 1;
     f.world.resource<kit::Environment3D>().contact_length = 0.5f;
     f.world.resource<kit::Environment3D>().contact_intensity = 0.7f;
+    f.world.resource<kit::Environment3D>().contact_steps = 20;
     f.camera();
     render::Camera3D cam;
     REQUIRE(f.extract.camera(f.world, 1.0f, cam));
@@ -179,10 +182,13 @@ TEST_CASE("kit3d: the scene's Environment3D becomes the resource at Startup") {
     CHECK(scene.reflections().enabled);
     CHECK(scene.reflections().max_distance == doctest::Approx(12.0f));
     CHECK(scene.reflections().max_roughness == doctest::Approx(0.3f));
+    CHECK(scene.reflections().steps == 48);
+    CHECK(scene.reflections().edge_fade == doctest::Approx(0.2f));
     CHECK(scene.post().upscaler == render::Upscaler::Spatial);  // the kit's default
     CHECK(scene.post().sharpen == doctest::Approx(0.4f));
     CHECK(scene.contact_shadows().enabled);
     CHECK(scene.contact_shadows().length == doctest::Approx(0.5f));
+    CHECK(scene.contact_shadows().steps == 20);
     CHECK(scene.contact_shadows().thickness == doctest::Approx(0.1f));
     CHECK(scene.contact_shadows().intensity == doctest::Approx(0.7f));
 

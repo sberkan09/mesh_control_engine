@@ -464,3 +464,58 @@ lower branches:
 Perception runs just before the trees in each tick, and its state is in the `Perceiver`, so it is
 deterministic and saved. `kit::perception_debug_lines` returns each perceiver's cone and a line to its
 target, for a debug overlay.
+
+### Choosing by score, sharing tokens, finding a spot
+
+Three more pieces let a tree weigh options instead of only checking them in order.
+
+**Utility.** A `utility` node's children are `score` nodes. Each tick every score is computed, and
+the child with the highest one runs (on a tie, the first). A score is `base` plus, for each
+consideration in `by`, `weight` times a response curve of a blackboard key:
+
+- The key's value is mapped from `from`…`to` onto 0…1 and clamped. A bool or vector key counts 1
+  when set and 0 when not. `invert: true` turns 0…1 around.
+- `curve` shapes it: `linear` (the default), `power` (to the `exponent`, 2 by default), `logistic`
+  (an S around 0.5, steepness `exponent`, 10 by default) or `step` (1 at or above `exponent`, 0.5 by
+  default).
+
+A running child keeps running until another one scores more than `hysteresis` above it, so an AI
+does not flicker between two close options. When no child scores above 0 the node fails.
+
+```json
+{"utility": [
+  {"score": {"task": "attack"}, "base": 0.1,
+   "by": [{"key": "health", "from": 0, "to": 100, "curve": "power", "exponent": 2}]},
+  {"score": {"task": "move_to", "key": "cover"}, "by": [{"key": "health", "to": 100, "invert": true}]}
+], "hysteresis": 0.1}
+```
+
+**Tokens.** An `AiTokenPool` component (a `name` and a `capacity`, up to 8) hands out a limited
+number of tokens, so only two of ten enemies attack at once. A `token` node takes one when it starts
+and fails if none is free; it gives it back when its child finishes or is halted, and a dead holder's
+token is freed. The pool is the one on the entity in `key` (an entity key) or, without `key`, the
+first pool in the scene with that `pool` name:
+
+```json
+{"selector": [
+  {"token": {"task": "attack"}, "pool": "attackers"},
+  {"task": "move_to", "key": "flank"}
+]}
+```
+
+**Point queries.** The stock task `find_point` tries points on `rings` rings (1–8, 2 by default) of
+`count` points each (1–32, 8 by default) out to `radius` (5 by default) around the entity, or
+around the `around` key. Points off the navmesh, or on a blocked `NavGrid` cell, are skipped. With
+`from` (a vec3 or entity key, such as a threat), `need: "visible"` or `"hidden"` keeps only the
+points with or without a clear line of sight from it. `prefer` picks among the rest: `near` the
+entity (the default), `far` from `from`, or `close` to it. The best point goes into the `store` vec3
+key and the task succeeds; with none, it fails. Hiding from the player and moving there:
+
+```json
+{"sequence": [
+  {"task": "find_point", "store": "cover", "from": "target", "need": "hidden", "radius": 8},
+  {"task": "move_to", "key": "cover"}
+]}
+```
+
+`kit::bt_utility_scores` returns a utility node's current scores, for a debug view.

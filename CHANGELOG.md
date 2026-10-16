@@ -5,6 +5,17 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Utility AI, attack tokens and point queries, M-AI step 4 (SBA-131): a `utility` node runs the child whose
+  `score` (a base plus weighted linear, power, logistic or step curves of blackboard keys) is highest, and
+  keeps a running child until another beats it by `hysteresis`. An `AiTokenPool` hands out a few tokens and a
+  `token` node takes one or fails, so only some enemies attack at once. The stock task `find_point` stores the
+  best point on rings around the entity: on the navmesh or grid, visible or hidden from a key, near, far or
+  close. `.mcbt` cooks to `CHNK_BT` v3. User guide 13.8.
+- M-VISUAL2 is done (step 5, SBA-105). `Environment3D` gains `ssr_steps`, `ssr_edge_fade` and
+  `contact_steps`, and MCP's Material schema lists the clear coat, sheen, anisotropy, transmission and ior
+  keys. `samples/06_showcase` shows reflections, contact shadows, sharpening, glass, lacquer and brushed
+  metal on its High profile, and `-profile highbase` draws High without them for the on/off sheet in the
+  milestone record.
 - AI perception, M-AI step 3 (SBA-130): a `Perceiver` sees every `Stimulus` of another team inside its cone and
   range with a clear line of sight (rays through the 3D or the 2D physics world), remembers a lost target for
   `forget` seconds and hears `kit::Noise` events (the tree's `make_noise` task makes one). It writes `target`,
@@ -87,6 +98,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   the sheet's regions; a sheet that does not load falls back to the built-in skin with a warning). The `pixel`,
   `clean` and `story` starter themes of `mce new` carry a skin each (bevelled, rounded, paper with an ink rule).
   User guide 12.2. `ui_preview`'s `"scene"` result no longer reads freed memory.
+- Matchmaking and host migration, M-NET3 step 3 (SBA-125): `RelayClient::quick_play(mode, size)` puts a player in
+  an open room of that mode or makes one, and `list_rooms` fetches listed rooms for a lobby. A room made with
+  `host_migration` survives its host: the relay hands it to the lowest member, `on_host_change` tells every member,
+  and `ReplicationServer::adopt` turns the new host's mirror into the server world. `sample_net_headless -relay 1
+  -host_leaves 300` loses its host halfway and every client keeps matching the new one. The relay protocol is now
+  version 2. User guide 20.8.
 - Spectators and clock sync, M-NET3 step 2 (SBA-124): a `RollbackSession` with `.spectator = true` watches
   without playing, fed confirmed inputs by one player (`write_spectator_packet`), and checks its hashes. With
   `time_sync` (on by default) a rollback peer whose clock runs ahead skips a tick now and then instead of

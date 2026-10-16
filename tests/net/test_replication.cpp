@@ -179,3 +179,54 @@ TEST_CASE("net replication: apply inside a system takes effect at the phase's sy
     CHECK(cw.entity_count() == 1);
     CHECK(cw.try_get<LocalTransform>(client.find(1))->position.x == 7.0f);
 }
+
+TEST_CASE("net replication: adopt turns a client's mirror into the server world") {
+    World sw, heir_world, other_world;
+    ReplicationServer server;
+    ReplicationClient heir, other;
+    heir.set_interpolation({});
+    Entity es[3];
+    for (u32 i = 0; i < 3; ++i) {
+        LocalTransform t;
+        t.position = {static_cast<f32>(i), 0.0f, 0.0f};
+        es[i] = sw.spawn_with(t);
+        server.assign(sw, es[i], 7);
+    }
+    for (u32 tick = 1; tick <= 10; ++tick) {
+        for (u32 i = 0; i < 3; ++i) sw.try_get_mut<LocalTransform>(es[i])->position.y = static_cast<f32>(tick);
+        ByteWriter w;
+        server.write_snapshot(sw, tick, w);
+        REQUIRE(heir.apply(heir_world.commands(), heir_world, w.data()).ok);
+        heir_world.sync(Phase::FixedUpdate_Pre);
+        REQUIRE(other.apply(other_world.commands(), other_world, w.data()).ok);
+        other_world.sync(Phase::FixedUpdate_Pre);
+        heir.update(heir_world.commands(), heir_world, 1.0 / 60.0);  // interpolated: behind the snapshot
+        heir_world.sync(Phase::FixedUpdate_Pre);
+    }
+
+    ReplicationServer next;
+    CHECK(next.adopt(heir_world, heir) == 10);
+    CHECK(heir.size() == 0);
+    u32 at_newest = 0;
+    heir_world.query<const NetId, const LocalTransform>().each([&](const NetId& id, const LocalTransform& t) {
+        if (id.kind == 7 && t.position.y == 10.0f) ++at_newest;
+    });
+    CHECK(at_newest == 3);  // the snapshot's transform, not the interpolated one
+    const Entity spawned = heir_world.spawn_with(LocalTransform{});
+    CHECK(next.assign(heir_world, spawned, 8) == 4);  // new ids after the adopted ones
+
+    // The other client goes on mirroring the new server, with no reset.
+    heir_world.query<const NetId, LocalTransform>().each([](const NetId&, LocalTransform& t) { t.position.z = 5.0f; });
+    ByteWriter w;
+    next.write_snapshot(heir_world, 11, w);
+    const ApplyResult r = other.apply(other_world.commands(), other_world, w.data());
+    other_world.sync(Phase::FixedUpdate_Pre);
+    REQUIRE(r.ok);
+    CHECK(r.spawned == 1);
+    CHECK(r.updated == 3);
+    for (u32 i = 0; i < 3; ++i) {
+        const Entity m = other.find(i + 1);
+        REQUIRE(other_world.alive(m));
+        CHECK(other_world.try_get<LocalTransform>(m)->position.z == 5.0f);
+    }
+}

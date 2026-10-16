@@ -380,8 +380,9 @@ room.join_room("K7TQ2M");              // everybody else, with the code the host
 for (net::Event ev; room.poll(ev);) { /* Connected / Received / Disconnected, per member */ }
 ```
 
-Members are peers: the host is always peer 0, and joiners get the lowest free number from 1 to 7.
-A client therefore sends to peer 0 where it used to send to the server. When a member leaves, the
+Members are peers: the host starts as peer 0, and joiners get the lowest free number.
+A client therefore sends to the host (`room.host_id()`, peer 0 unless the host changed) where it used
+to send to the server. When a member leaves, the
 others see it disconnect. When the host leaves, the room closes and `state()` becomes `Closed`.
 A wrong code, a full room or a relay with too many rooms gives `Refused`, and `refusal()` says
 which.
@@ -393,6 +394,50 @@ ordered, because it runs on TCP.
 `sample_net_headless -sim 1 -relay 1` plays the server and its clients through a relay room over the
 simulated network. Each message takes two trips (to the relay and from it), so `-latency` counts
 twice.
+
+**Quick play and the room list.** Players who have no code can ask the relay for a game. `quick_play`
+puts the player in the fullest open room of that mode and size, or makes one with the player as host.
+`list_rooms` fetches the rooms a lobby screen can show:
+
+```cpp
+room.quick_play("arena", 4);           // then the same states as create_room / join_room
+room.list_rooms("arena");              // an empty mode lists every mode
+// once room.rooms_received() has gone up:
+for (const net::RelayRoomInfo& r : room.rooms()) { /* r.code, r.mode, r.members, r.max_members */ }
+// a room of your own that others can find:
+room.create_room(4, {.listed = true, .host_migration = true, .mode = "arena"});
+```
+
+Only listed rooms show up in the list or take quick-play players. A room made with a code stays
+private.
+
+**When the host leaves.** Normally the room closes with its host. A room made with `host_migration`
+(and every quick-play room) goes on instead: the relay names the lowest member still in it the new
+host. Every member's `on_host_change` callback runs from inside `poll()`, before the old host's
+`Disconnected` arrives:
+
+```cpp
+net::RelayClientDesc desc;
+desc.channels = 3;
+desc.on_host_change = [](void* user, net::PeerId new_host) { static_cast<Game*>(user)->host_changed(new_host); };
+desc.user = &game;
+room.start(link, relay_peer, desc);
+
+// in host_changed: if new_host == room.member_id(), this machine is the server now:
+server_rep.adopt(world, client_rep);   // the mirror becomes the server world; returns the last tick
+// ...then add back what the snapshots did not carry (server-only components, AI, timers).
+// Everybody else: send to new_host from now on, and tell it which player entity was yours.
+```
+
+`adopt` keeps every entity's `NetId`, puts back the transform of the newest snapshot, and continues
+the ids after the highest one. The other clients' mirrors carry on: their next snapshots from the
+new host are full, then deltas again. Anything only the old host knew and never sent is lost, so put
+what matters in the snapshot (`Replicated` fields) or rebuild it from what is there.
+
+`sample_net_headless -sim 1 -relay 1 -host_leaves 300` shows it. The host leaves at tick 300, and
+the relay hands the room to a client. That client's mirror becomes the server, the others get their
+players back with a JOIN that names them, and at the end every remaining client matches the new host
+bit for bit.
 
 ## 20.9 Replication as data
 
@@ -469,7 +514,7 @@ per-client snapshots like a player and acknowledges them the same way.
 ## 20.11 What it does not do yet
 
 Traffic is not encrypted: the relay and WebSocket speak plain `ws://`, so put a
-TLS proxy in front of `mce_relay` for pages served over `https://`. There is no matchmaking, no host
-migration (the room closes with its host), and no WebRTC or direct peer-to-peer connection: through a
-relay every message passes through it. If you ship a game that links `mce_net`, list ENet (MIT
+TLS proxy in front of `mce_relay` for pages served over `https://`. Quick play matches by mode and
+size only, with no skill rating or region. There is no WebRTC or direct peer-to-peer connection:
+through a relay every message passes through it. If you ship a game that links `mce_net`, list ENet (MIT
 licence) in your `CREDITS.md`.
