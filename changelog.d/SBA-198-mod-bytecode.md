@@ -1,2 +1,3 @@
-- Security: mod packs can no longer carry Luau bytecode. Script entries of a pack mounted with `allow_code = false` (the player
-  mounts mods that way) are dropped with a warning, so hostile bytecode never reaches `luau_load`.
+- Security: Luau bytecode is trusted only from the game's own pack. `MountOptions::allow_code` defaults to false (Script entries
+  are dropped at mount with a warning); the player's game pack and the project's own cook ask for true, mods, base packs and
+  fetched config do not.

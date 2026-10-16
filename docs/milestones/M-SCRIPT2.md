@@ -57,10 +57,10 @@ release: out-of-bounds constant read). The pack CRC only detects corruption.
 the game's own build cooked it.
 
 **Design.**
-- `asset::MountOptions::allow_code` (default true). A root mounted with `allow_code = false` has its `Script` manifest entries
+- `asset::MountOptions::allow_code` (default **false**, so a new mount site is safe by default). A root mounted without it has its `Script` manifest entries
   dropped at mount, with a warning: they neither load nor override the game's script of the same GUID.
-- The player mounts mod packs with `allow_code = false` (mods are data, ADR-0034). The game pack and dev cooked directories
-  keep the default.
+- Trusted (`allow_code = true`): the player's game pack, the editor project's own cook, `run_headless`'s `pack` (every caller
+  passes the project's cooked folder). Data-only: mod packs (ADR-0034), base packs (a mod project's game), liveops fetched config.
 - `add_bytecode` documents that it trusts its input; `compile()` / `add_source` is the path for anything else.
 - Not done on purpose: compiling user or mod *source* at load time. The shipped player has no compiler by design
   (`player_no_luau_compiler`), so a mod that wants scripts needs that decision first (a separate milestone).

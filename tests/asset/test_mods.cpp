@@ -256,21 +256,26 @@ TEST_CASE("mods: a mod pack cannot carry script bytecode, new or overriding (M-S
     const std::string mod = make_mod(dir, "mod.mce", "evil", "",
                                      {{kScript, ChunkType::Script, 0}, {kAddedScript, ChunkType::Script, 0}, {kTex, ChunkType::Texture, 0x99}});
 
+    CHECK_FALSE(MountOptions{}.allow_code);  // the default is data-only: code is something a mount asks for
+    MountOptions own;
+    own.allow_code = true;
+
     AssetSystem as;
-    MountOptions data_only;
-    data_only.allow_code = false;
     const StringView mod_root[] = {mod};
-    REQUIRE(as.mount(Span<const StringView>(mod_root, 1), data_only));
+    REQUIRE(as.mount(Span<const StringView>(mod_root, 1)));  // default options
     const StringView game_root[] = {game};
-    REQUIRE(as.mount(Span<const StringView>(game_root, 1)));
+    REQUIRE(as.mount(Span<const StringView>(game_root, 1), own));
     CHECK(as.find(kAddedScript) == kInvalidAssetKey);  // the mod's new script never entered the table
     REQUIRE(as.find(kScript) != kInvalidAssetKey);
     CHECK(as.info(as.find(kScript)).path == "x");
     CHECK(as.info(as.find(kScript)).type == ChunkType::Script);
     CHECK(texture_shade(as, kTex) == 0x99);  // its data still loads
 
-    // The game's own pack still takes scripts (the default).
+    // The same pack mounted without asking for code has no scripts either.
+    AssetSystem plain;
+    REQUIRE(plain.mount(Span<const StringView>(game_root, 1)));
+    CHECK(plain.find(kScript) == kInvalidAssetKey);
     AssetSystem trusted;
-    REQUIRE(trusted.mount(Span<const StringView>(game_root, 1)));
+    REQUIRE(trusted.mount(Span<const StringView>(game_root, 1), own));
     CHECK(trusted.find(kScript) != kInvalidAssetKey);
 }
