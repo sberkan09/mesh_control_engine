@@ -77,9 +77,46 @@ void merge_walls(const pg::ProcGrid& g, Array<Rect>& out) {
     }
 }
 
+// A shortest 4-neighbour walk over floor from start to exit: the cells after the start up to and including the exit.
+// Breadth-first with a fixed neighbour order, so the same grid always gives the same path.
+void shortest_path(const pg::ProcGrid& g, Array<pg::Cell>& out) {
+    out.clear();
+    const usize n = static_cast<usize>(g.width) * g.height;
+    Array<i32> from;  // index of the cell we came from; -2 unseen, -1 the start
+    from.resize(n);
+    for (i32& f : from) f = -2;
+    Array<u32> queue;
+    const auto idx = [&](i32 x, i32 y) { return static_cast<u32>(y) * g.width + static_cast<u32>(x); };
+    const u32 s = idx(g.start.x, g.start.y), e = idx(g.exit.x, g.exit.y);
+    from[s] = -1;
+    queue.push_back(s);
+    const i32 dx[4] = {1, -1, 0, 0}, dy[4] = {0, 0, 1, -1};
+    for (usize head = 0; head < queue.size() && from[e] == -2; ++head) {
+        const u32 i = queue[head];
+        const i32 x = static_cast<i32>(i % g.width), y = static_cast<i32>(i / g.width);
+        for (u32 d = 0; d < 4; ++d) {
+            const i32 nx = x + dx[d], ny = y + dy[d];
+            if (nx < 0 || ny < 0 || nx >= static_cast<i32>(g.width) || ny >= static_cast<i32>(g.height)) continue;
+            const u32 j = idx(nx, ny);
+            if (g.at(static_cast<u32>(nx), static_cast<u32>(ny)) != pg::kFloor || from[j] != -2) continue;
+            from[j] = static_cast<i32>(i);
+            queue.push_back(j);
+        }
+    }
+    if (from[e] == -2) return;  // the generators guarantee a walk; no path markers if one ever fails
+    for (i32 i = static_cast<i32>(e); i != static_cast<i32>(s); i = from[static_cast<u32>(i)])
+        out.push_back(pg::Cell{static_cast<i32>(static_cast<u32>(i) % g.width), static_cast<i32>(static_cast<u32>(i) / g.width)});
+    for (usize a = 0, b = out.size(); a + 1 < b; ++a, --b) {  // reverse: start side first
+        const pg::Cell tmp = out[a];
+        out[a] = out[b - 1];
+        out[b - 1] = tmp;
+    }
+}
+
 u64 level_hash(const ProcLevel& l, math::vec3 pos) {
     Hasher64 h;
     h.u32v(static_cast<u32>(l.kind));
+    h.u32v(l.path_markers ? 1 : 0);
     h.u32v(l.width);
     h.u32v(l.height);
     h.u32v(l.seed);
@@ -154,7 +191,21 @@ void build(Frame& f, Entity owner, const ProcLevel& l, math::vec3 pos, const pg:
     for (u32 i = 0; i < 2; ++i) {
         LocalTransform t;
         t.position = {cell_x(static_cast<f32>(marks[i].x) + 0.5f), cell_y(static_cast<f32>(marks[i].y) + 0.5f), pos.z};
-        cmd.spawn(t, ProcMarker{i == 0 ? ProcMarkerKind::Start : ProcMarkerKind::Exit}, ProcLevelOwned{owner});
+        ProcMarker m;
+        m.kind = i == 0 ? ProcMarkerKind::Start : ProcMarkerKind::Exit;
+        cmd.spawn(t, m, ProcLevelOwned{owner});
+    }
+
+    if (!l.path_markers) return;
+    Array<pg::Cell> path;
+    shortest_path(g, path);
+    for (usize i = 0; i < path.size(); ++i) {
+        LocalTransform t;
+        t.position = {cell_x(static_cast<f32>(path[i].x) + 0.5f), cell_y(static_cast<f32>(path[i].y) + 0.5f), pos.z};
+        ProcMarker m;
+        m.kind = ProcMarkerKind::Path;
+        m.index = static_cast<u32>(i + 1);
+        cmd.spawn(t, m, ProcLevelOwned{owner});
     }
 }
 

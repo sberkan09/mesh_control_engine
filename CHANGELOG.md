@@ -1,10 +1,16 @@
 # Changelog
 
 Engine versions and what each one added. How and when the version moves: [docs/VERSIONING.md](docs/VERSIONING.md).
-Every PR that changes what a user of the engine sees adds one line under **Unreleased**.
+Every PR that changes what a user of the engine sees adds a fragment file `changelog.d/<ticket>.md` instead of editing
+this file ([changelog.d/README.md](changelog.d/README.md)); `scripts/changelog.py` appends the fragments under **Unreleased**
+when a version is cut.
 
 ## Unreleased
 
+- Procedural levels, M-PROCGEN step 5 (SBA-175): `projects/Dungeon`, a script-only top-down crawl over seeded levels (rooms,
+  caves, walk) with an autopilot that follows the new `ProcLevel.path_markers`, and a `.mctest` per generator that clears ten
+  seeds. Luau gets `mce.teleport2d(e, position)`: writing `LocalTransform.position` never moved a 2D body (the physics step
+  writes it back), so scripts could not respawn one; EmberScript's respawn now works. M-PROCGEN is done.
 - Windowed arena sample, M-NET3 step 5 (SBA-127): `samples/net_arena` is a 2–4 player top-down arena built from
   scene data (`NetReplicated` walls and pads, a server-made `NetOwner` player with `Replicated` health fields), with a
   predicted local player, interpolated others, lag-compensated shots and quick play through `mce_relay`. It runs
