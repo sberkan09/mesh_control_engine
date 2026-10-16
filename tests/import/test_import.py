@@ -261,12 +261,104 @@ def test_tiled_encodings_and_errors(work):
     check(code == 1 and ".tsx" in err, "an XML tileset is a clear error: " + err)
 
 
+# ---- LDtk ------------------------------------------------------------------------------------------
+
+def ldtk_project(**over):
+    ts = {"uid": 7, "identifier": "Terrain", "relPath": "terrain.png", "pxWid": 64, "pxHei": 32, "tileGridSize": 16,
+          "padding": 0, "spacing": 0}
+    ground = {"__identifier": "Ground", "__type": "Tiles", "__cWid": 4, "__cHei": 3, "__gridSize": 16, "__opacity": 1,
+              "__tilesetDefUid": 7, "__pxTotalOffsetX": 0, "__pxTotalOffsetY": 0, "visible": True,
+              "gridTiles": [{"px": [0, 32], "src": [16, 0], "f": 0, "t": 1},
+                            {"px": [16, 32], "src": [32, 16], "f": 0, "t": 1},
+                            {"px": [16, 16], "src": [0, 0], "f": 0, "t": 0}]}
+    coll = {"__identifier": "Collision", "__type": "IntGrid", "__cWid": 4, "__cHei": 3, "__gridSize": 16, "__opacity": 1,
+            "__pxTotalOffsetX": 0, "__pxTotalOffsetY": 0, "visible": True,
+            "intGridCsv": [0, 0, 0, 0,
+                           0, 0, 0, 0,
+                           1, 1, 1, 0]}
+    ents = {"__identifier": "Things", "__type": "Entities", "__cWid": 4, "__cHei": 3, "__gridSize": 16,
+            "__pxTotalOffsetX": 0, "__pxTotalOffsetY": 0, "visible": True,
+            "entityInstances": [
+                {"__identifier": "Spawn", "px": [8, 24], "width": 16, "height": 16, "__pivot": [0.5, 0.5], "__tags": [],
+                 "fieldInstances": []},
+                {"__identifier": "Door", "px": [48, 16], "width": 16, "height": 32, "__pivot": [0, 0], "__tags": ["sensor"],
+                 "fieldInstances": []}]}
+    doc = {"__header__": {"fileType": "LDtk Project JSON"}, "jsonVersion": "1.5.3", "defaultGridSize": 16,
+           "defs": {"tilesets": [ts]},
+           "levels": [{"identifier": "Cave_1", "pxWid": 64, "pxHei": 48, "layerInstances": [ents, ground, coll]}]}
+    doc.update(over)
+    return doc
+
+
+def ldtk_setup(work, name, doc):
+    d = os.path.join(work, name)
+    os.makedirs(d)
+    with open(os.path.join(d, "terrain.png"), "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n")
+    path = os.path.join(d, "world.ldtk")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(doc, f)
+    return d, path
+
+
+def test_ldtk_basic(work):
+    d, path = ldtk_setup(work, "lbasic", ldtk_project())
+    code, err = run(["ldtk", path])
+    check(code == 0, "a plain project converts: " + err)
+    tm = read(d, "world_Cave_1_Ground.mctilemap")
+    check(tm["columns"] == 4 and tm["rows"] == 2 and tm["width"] == 4 and tm["height"] == 3 and tm["tile_size"] == 1,
+          "tilemap header: %r" % {k: v for k, v in tm.items() if k != "tiles"})
+    check(tm["tiles"] == [2, 7, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "tile ids from the source cell (column + row * columns + 1), bottom row first: %r" % tm["tiles"])
+    sc = read(d, "world_Cave_1.mcscene")
+    by = {e["name"]: e for e in sc["entities"]}
+    check(by["Ground"]["components"]["TilemapLayer"]["map"] == "guid:" + tm["guid"], "the layer entity names its tilemap")
+    check(by["Ground"]["components"]["TilemapLayer"]["order"] == 2 and "Collision" not in by, "order counts from the bottom layer")
+    box = by["Collision collision 0"]["components"]
+    check(box["Collider2D"]["shape"] == {"half": [1.5, 0.5]} and box["LocalTransform"]["position"] == [1.5, 0.5, 0],
+          "IntGrid cells merge into one box on the bottom row: %r" % box)
+    check(by["Spawn"]["components"]["LocalTransform"]["position"] == [0.5, 1.5, 0], "an entity is a marker at its pivot, y up")
+    door = by["Door"]["components"]
+    check(door["Collider2D"]["is_sensor"] is True and door["Collider2D"]["shape"] == {"half": [0.5, 1]}
+          and door["LocalTransform"]["position"] == [3.5, 1.0, 0], "a 'sensor' entity is a sensor box about its centre: %r" % door)
+
+
+def test_ldtk_idempotent_levels_and_errors(work):
+    d, path = ldtk_setup(work, "lagain", ldtk_project())
+    run(["ldtk", path])
+    first = {f: open(os.path.join(d, f), "rb").read() for f in sorted(os.listdir(d)) if f.startswith("world")}
+    run(["ldtk", path])
+    second = {f: open(os.path.join(d, f), "rb").read() for f in sorted(os.listdir(d)) if f.startswith("world")}
+    check(first == second and len(first) >= 3, "a re-import gives the same bytes (GUIDs kept)")
+    proj = ldtk_project()
+    proj["levels"].append(dict(proj["levels"][0], identifier="Cave_2"))
+    d, path = ldtk_setup(work, "llevels", proj)
+    code, err = run(["ldtk", path, "--level", "Cave_2"])
+    check(code == 0 and os.path.exists(os.path.join(d, "world_Cave_2.mcscene"))
+          and not os.path.exists(os.path.join(d, "world_Cave_1.mcscene")), "--level picks one level: " + err)
+    code, err = run(["ldtk", path, "--level", "Nope"])
+    check(code == 1 and "Cave_1" in err, "an unknown level lists the real ones: " + err)
+    ts = ldtk_project()["defs"]["tilesets"][0]
+    d, path = ldtk_setup(work, "lpad", ldtk_project(defs={"tilesets": [dict(ts, padding=1)]}))
+    code, err = run(["ldtk", path])
+    check(code == 1 and "padding" in err, "padding is an error: " + err)
+    flipped = ldtk_project()
+    flipped["levels"][0]["layerInstances"][1]["gridTiles"][0]["f"] = 1
+    d, path = ldtk_setup(work, "lflip", flipped)
+    code, err = run(["ldtk", path])
+    check(code == 0 and "flipped" in err, "flipped tiles warn: " + err)
+    d, path = ldtk_setup(work, "lflip2", flipped)
+    code, err = run(["ldtk", path, "--werror"])
+    check(code == 1 and not os.path.exists(os.path.join(d, "world_Cave_1.mcscene")), "--werror writes nothing")
+
+
 def main():
     work = sys.argv[1]
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(work)
     for t in (test_basic, test_idempotent, test_hash_frames_and_default_clip, test_warnings, test_errors,
-              test_tiled_basic, test_tiled_idempotent, test_tiled_encodings_and_errors):
+              test_tiled_basic, test_tiled_idempotent, test_tiled_encodings_and_errors,
+              test_ldtk_basic, test_ldtk_idempotent_levels_and_errors):
         t(work)
     if failures:
         print(f"{len(failures)} check(s) failed")
