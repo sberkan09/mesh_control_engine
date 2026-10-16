@@ -208,6 +208,34 @@ void write_sfx(const SfxHeader& header, Span<const f32> samples, Array<byte>& ou
     b.finish();
 }
 
+// ------------------------------------------------------------------ video
+
+Result<VideoView> VideoView::read(Span<const byte> payload) {
+    constexpr const char* kStage = "asset.video.read";
+    const auto* h = header_of<VideoHeader>(payload);
+    if (!h) return Error(Errc::Truncated, kStage);
+    if (h->width == 0 || h->height == 0 || h->width > 4096 || h->height > 4096) return bad(kStage);
+    if (!(h->frame_rate > 0.0f) || !(h->duration >= 0.0f) || h->mpeg_size == 0) return bad(kStage);
+    if (h->audio_channels != 0 && h->audio_channels != 2) return bad(kStage);
+    VideoView v;
+    v.header = h;
+    if (!span_at(payload, h->mpeg_offset, h->mpeg_size, v.mpeg)) return bad(kStage);
+    if (!span_at(payload, h->audio_offset, u64(h->audio_frames) * h->audio_channels, v.audio)) return bad(kStage);
+    return v;
+}
+
+void write_video(const VideoHeader& header, Span<const byte> mpeg, Span<const f32> audio, Array<byte>& out) {
+    MCE_ASSERT(audio.size() == u64(header.audio_frames) * header.audio_channels);
+    PayloadBuilder b(out);
+    VideoHeader h = header;
+    const usize at = b.append(&h, sizeof(h));
+    h.mpeg_offset = b.append(mpeg.data(), mpeg.size());
+    h.mpeg_size = mpeg.size();
+    h.audio_offset = b.append_span(audio);
+    b.patch(at, h);
+    b.finish();
+}
+
 // ------------------------------------------------------------------ font
 
 const FontGlyph* FontView::find(u32 codepoint) const {
@@ -391,10 +419,41 @@ Result<AnimGraphView> AnimGraphView::read(Span<const byte> payload) {
     v.blend_points = Span<const AnimGraphBlendPoint>(reinterpret_cast<const AnimGraphBlendPoint*>(p), h.blend_point_count);
     p += usize(h.blend_point_count) * sizeof(AnimGraphBlendPoint);
     v.events = Span<const AnimGraphEvent>(reinterpret_cast<const AnimGraphEvent*>(p), h.event_count);
-    for (const AnimGraphState& s : v.states)
-        if (u64(s.first_blend) + s.blend_count > h.blend_point_count || u64(s.first_event) + s.event_count > h.event_count ||
-            (s.blend_count > 0 && s.blend_param >= h.param_count))
+    if (h.flags & ~kAnimGraphExtended) return Error(Errc::InvalidArgument, "asset.animgraph.read");
+    if (h.flags & kAnimGraphExtended) {
+        p += usize(h.event_count) * sizeof(AnimGraphEvent);
+        if (bytes + sizeof(AnimGraphExtension) > payload.size()) return Error(Errc::Truncated, "asset.animgraph.read");
+        v.extension = reinterpret_cast<const AnimGraphExtension*>(p);
+        const AnimGraphExtension& x = *v.extension;
+        if (x.blend2d_count > kMax || x.layer_count > kAnimGraphMaxLayers || x.mask_count > kMax || x.ik_count > kAnimGraphMaxIK)
+            return Error(Errc::InvalidArgument, "asset.animgraph.read");
+        const u64 more = sizeof(AnimGraphExtension) + u64(x.blend2d_count) * sizeof(AnimGraphBlendPoint2D) +
+                         u64(x.layer_count) * sizeof(AnimGraphLayer) + u64(x.mask_count) * sizeof(AnimGraphMaskBone) +
+                         u64(x.ik_count) * sizeof(AnimGraphIK);
+        if (bytes + more > payload.size()) return Error(Errc::Truncated, "asset.animgraph.read");
+        p += sizeof(AnimGraphExtension);
+        v.blend2d = Span<const AnimGraphBlendPoint2D>(reinterpret_cast<const AnimGraphBlendPoint2D*>(p), x.blend2d_count);
+        p += usize(x.blend2d_count) * sizeof(AnimGraphBlendPoint2D);
+        v.layers = Span<const AnimGraphLayer>(reinterpret_cast<const AnimGraphLayer*>(p), x.layer_count);
+        p += usize(x.layer_count) * sizeof(AnimGraphLayer);
+        v.mask_bones = Span<const AnimGraphMaskBone>(reinterpret_cast<const AnimGraphMaskBone*>(p), x.mask_count);
+        p += usize(x.mask_count) * sizeof(AnimGraphMaskBone);
+        v.ik = Span<const AnimGraphIK>(reinterpret_cast<const AnimGraphIK*>(p), x.ik_count);
+        for (const AnimGraphLayer& l : v.layers)
+            if (u64(l.first_mask) + l.mask_count > x.mask_count || (l.weight_param != kAnimNoParam && l.weight_param >= h.param_count))
+                return Error(Errc::InvalidArgument, "asset.animgraph.layer");
+        for (const AnimGraphIK& k : v.ik)
+            if (static_cast<u8>(k.kind) > static_cast<u8>(AnimIKKind::Foot) ||
+                (k.weight_param != kAnimNoParam && k.weight_param >= h.param_count))
+                return Error(Errc::InvalidArgument, "asset.animgraph.ik");
+    }
+    for (const AnimGraphState& s : v.states) {
+        const u64 points = s.blend_2d ? v.blend2d.size() : h.blend_point_count;
+        if (u64(s.first_blend) + s.blend_count > points || u64(s.first_event) + s.event_count > h.event_count ||
+            (s.blend_count > 0 && s.blend_param >= h.param_count) || s.blend_2d > 1 ||
+            (s.blend_2d && (s.blend_count == 0 || s.blend_count > kAnimGraphMaxBlend2D || s.blend_param_y >= h.param_count)))
             return Error(Errc::InvalidArgument, "asset.animgraph.state");
+    }
     for (const AnimGraphTransition& t : v.transitions)
         if ((t.from != kAnimAnyState && t.from >= h.state_count) || t.to >= h.state_count ||
             u64(t.first_condition) + t.condition_count > h.condition_count)
@@ -475,7 +534,7 @@ Result<TimelineView> TimelineView::read(Span<const byte> payload) {
     v.strings = Span<const char>(reinterpret_cast<const char*>(p), h.string_bytes);
     if (h.string_bytes > 0 && v.strings[h.string_bytes - 1] != '\0') return Error(Errc::InvalidArgument, "asset.timeline.strings");
     for (const TimelineTrack& t : v.tracks) {
-        if (t.kind > TimelineTrackKind::Subtitle || u64(t.first_key) + t.key_count > h.key_count ||
+        if (t.kind > TimelineTrackKind::Video || u64(t.first_key) + t.key_count > h.key_count ||
             (t.target != kTimelineSelf && t.target >= kTimelineBindings))
             return Error(Errc::InvalidArgument, "asset.timeline.track");
         const bool pathed = t.kind == TimelineTrackKind::Property || t.kind == TimelineTrackKind::Activation;

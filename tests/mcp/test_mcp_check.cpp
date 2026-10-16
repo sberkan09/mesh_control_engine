@@ -97,6 +97,52 @@ TEST_CASE("project_check: a clean project passes; credits, unused and the per-ti
     CHECK(c.fails("project_check", R"({"budget_ms":0})").find("'budget_ms'") != std::string::npos);
 }
 
+TEST_CASE("M-PERF budgets: per target in the .mceproj, checked by project_set, judged by project_check") {
+    const std::string root = demo_project("mcp_check_budgets");
+    write_file(root + "/Demo.mceproj",
+               R"({"format": "mce-project", "version": 1, "name": "Demo", "games": [], "plugins": []})"
+               "\n");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    // The defaults: a phone gets fewer draws and smaller textures than a desktop.
+    auto p = c.ok("project_get");
+    const cook::JsonValue force = p.v().get("budgets_in_force");
+    CHECK(force.get("mobile").get("draws").as_number() == 400);
+    CHECK(force.get("desktop").get("draws").as_number() == 3000);
+    CHECK(force.get("mobile").get("frame_ms").as_number() == doctest::Approx(33.3));
+    CHECK(force.get("web").get("texture_size").as_number() == 4096);
+
+    // The project's own limits replace those it names; the rest keep the defaults.
+    p = c.ok("project_set", R"({"values":{"budgets":{"mobile":{"draws":300,"sprite_textures":1,"texture_size":16}}}})");
+    CHECK(p.v().get("budgets_in_force").get("mobile").get("draws").as_number() == 300);
+    CHECK(p.v().get("budgets_in_force").get("mobile").get("triangles").as_number() == 500000);
+    CHECK(p.v().get("budgets_in_force").get("desktop").get("draws").as_number() == 3000);
+    CHECK(parse(read_file(root + "/Demo.mceproj"))->root().get("budgets").get("mobile").get("draws").as_number() == 300);
+    const std::string before = read_file(root + "/Demo.mceproj");
+    CHECK(c.fails("project_set", R"({"values":{"budgets":{"console":{"draws":1}}}})").find("'console' is not a target") != std::string::npos);
+    CHECK(c.fails("project_set", R"({"values":{"budgets":{"mobile":{"fps":60}}}})").find("'fps' is not a budget") != std::string::npos);
+    CHECK(c.fails("project_set", R"({"values":{"budgets":{"mobile":{"draws":1.5}}}})").find("whole number") != std::string::npos);
+    CHECK(c.fails("project_set", R"({"values":{"budgets":{"mobile":{"frame_ms":-1}}}})").find("milliseconds") != std::string::npos);
+    CHECK(read_file(root + "/Demo.mceproj") == before);
+
+    // Judged for mobile: the 32-pixel textures are over 16, and the scene's three sprite textures over 1.
+    auto m = c.ok("project_check", R"({"checks":["performance"],"ticks":5,"target":"mobile"})");
+    const std::string mf = findings(m, "performance");
+    CHECK(mf.find("warning assets/textures/ball.png: the image is 32x32; the mobile budget allows 16 pixels a side (texture_size)") !=
+          std::string::npos);
+    CHECK(mf.find("warning assets/scenes/demo.mcscene: sprites here use 3 different textures, and each one is a separate draw batch; "
+                  "the mobile budget allows 1 (sprite_textures)") != std::string::npos);
+    CHECK(str(m.v().get("target")) == "mobile");
+    CHECK(m.v().get("budget").get("draws").as_number() == 300);
+    CHECK(m.v().get("budget_ms").as_number() == doctest::Approx(4.0));  // the target's sim_ms
+    // The desktop defaults take them.
+    auto d = c.ok("project_check", R"({"checks":["performance"],"ticks":5})");
+    CHECK(findings(d, "performance").empty());
+    CHECK(str(d.v().get("target")) == "desktop");
+    CHECK(c.fails("project_check", R"({"target":"console"})").find("'target'") != std::string::npos);
+}
+
 TEST_CASE("project_check: broken references fail it; sRGB data textures and unreadable text are flagged with a fix") {
     const std::string root = demo_project("mcp_check_problems");
     // A scene whose sprite names a texture that does not exist, small low-contrast text, a normal map imported as sRGB.

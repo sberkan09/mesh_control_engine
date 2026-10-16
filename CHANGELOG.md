@@ -5,7 +5,19 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Steam game services, M-STEAM step 2 (SBA-107): while Steam runs, it is the desktop game services backend, so
+  `GameServices` unlocks, progress, scores and cloud saves reach Steam achievements, leaderboards (found once,
+  uploaded keep-best) and Steam Cloud files. `.mcservices` entries take an optional `steam` name (the catalog id
+  otherwise); the catalog chunk is v2, so packs re-cook. `steam::await_call` waits for Steam's asynchronous call
+  results. The stand-in `steam_api` covers it all in CI (`test_platform`, `player_game_services_steam`).
 - Steam, M-STEAM step 1 (SBA-106, ADR-0042): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
+- Performance budgets per target, M-PERF step 2 (SBA-114). The `.mceproj` takes `"budgets"` for desktop, mobile
+  and web: frame, sim, render and GPU milliseconds, draws, triangles, sprites, upload bytes, heap allocations,
+  sprite textures per scene and the largest texture edge. Fields left out keep the engine defaults. `project_set`
+  checks the limits, and `project_get` shows each target's budget in force. `project_check` takes a `target` and
+  flags images over its `texture_size` and scenes over its `sprite_textures`, with the target's `sim_ms` as the
+  per-tick budget. `perf::judge` gives a capture's verdict against a budget. User guide 2.2 and 14.
+- Steam, M-STEAM step 1 (SBA-106, ADR-0043): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
   talks to it through the Steamworks flat API, so neither the repository nor the build needs the SDK and a game
   without Steam loads nothing. The stock player signs in with `-steam.app_id <id>` (`-steam.library`,
   `-steam.restart` for release builds Steam relaunches) and pumps Steam's callbacks every frame; the sim hash is
@@ -33,6 +45,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   rows through the screen reader, and a control in a labelled row says the label first ("Move Right, D, button").
   The player takes `-access_log <file>` and no longer drops menu presses when it draws fewer frames than it runs
   ticks. Kindle and Undelivered get the stock options screen, and Kindle captions its sounds. User guide chapter 24.
+- Video, M-CINEMA step 5 (SBA-80, ADR-0043): `.mpg` files (MPEG-1 with MP2 sound; ffmpeg converts anything)
+  import as videos, and a `VideoPlayer` plays one on its entity's `Sprite` or over the whole screen as a splash,
+  with its sound in step (play, pause, loop, restart, seek, `finished` at the end). A timeline `video` track plays
+  a film as a cutscene beat. User guide 13.7.
 - Round-3 friction fixes (SBA-61): reloading a game module drops its old convars; an input script's `=0`
   presses an action with value 0; a Text in a horizontal Stack no longer wraps below UI scale 1; game code can
   quit the app (`scene::request_quit`, `UiFlow::quit_on` for a Quit button); `render_frame`, `render_sheet` and

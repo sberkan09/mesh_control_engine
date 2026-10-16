@@ -60,6 +60,25 @@ Rules that keep the layout working:
 at configure time, so after changing it, reconfigure. `games` lists the game ids the project
 builds (one today). `plugins` is reserved.
 
+`budgets` (optional) sets the performance limits per target: `desktop`, `mobile` and `web`. A limit the
+file leaves out keeps the engine's default, and 0 means no limit.
+
+```json
+"budgets": { "mobile": { "draws": 300, "frame_ms": 33.3, "texture_size": 2048 } }
+```
+
+The fields are:
+- Times in milliseconds, judged on a capture's p95: `frame_ms`, `sim_ms`, `render_ms`, `gpu_ms`.
+- Counters, judged on a capture's worst frame: `draws`, `triangles`, `sprites`, `upload_bytes`, `heap_allocations`.
+- Static limits, read from the files: `sprite_textures` (distinct sprite textures in one scene; each is its own
+  draw batch) and `texture_size` (the largest image edge).
+
+The defaults are 60 fps on desktop and web and 30 fps on a phone, with 3000, 1000 and 400 draws, and
+largest images of 8192, 4096 and 2048 pixels. Over MCP, `project_get` shows each target's budget in force
+(`budgets_in_force`), `project_set` checks the limits before writing them, and `project_check` with
+`"target": "mobile"` judges the project against that target's budget (chapter 14). Times come from the
+machine that measured them; counters carry across machines.
+
 The editor's **Project Settings** panel edits the title and the start scene (a combo of the
 project's scenes) and saves the file; over MCP, `project_get` / `project_set` do the same and check
 the values before writing (chapter 14). The same panel edits the open scene's **World Settings**:

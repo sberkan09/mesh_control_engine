@@ -3,6 +3,7 @@
 // glTF importer quantizes, plus an optional one-node rotation clip and optional skins.
 
 #include <cmath>
+#include <vector>
 #include <initializer_list>
 
 #include "mce/asset/formats.h"
@@ -205,6 +206,37 @@ struct Builder {
             keys.push_back(q.w);
         }
         channels.push_back(ch);
+        clips.push_back(c);
+    }
+
+    // One keyed channel of a clip: `values` holds 3 floats per key (4 for a rotation), linear.
+    struct Track {
+        u32 node;
+        asset::AnimPath path;
+        std::vector<f32> times;
+        std::vector<f32> values;
+    };
+    // A clip of `tracks` lasting `duration` seconds.
+    void add_clip(const char* name, f32 duration, std::initializer_list<Track> tracks) {
+        asset::MeshClip c{};
+        c.name_offset = static_cast<u32>(strings.size());
+        for (const char* p = name; *p; ++p) strings.push_back(*p);
+        c.name_size = static_cast<u32>(strings.size()) - c.name_offset;
+        c.duration = duration;
+        c.first_channel = static_cast<u32>(channels.size());
+        for (const Track& t : tracks) {
+            asset::MeshChannel ch{};
+            ch.node = t.node;
+            ch.path = t.path;
+            ch.interp = asset::AnimInterp::Linear;
+            ch.key_count = static_cast<u32>(t.times.size());
+            ch.times_offset = static_cast<u32>(keys.size());
+            for (f32 v : t.times) keys.push_back(v);
+            ch.values_offset = static_cast<u32>(keys.size());
+            for (f32 v : t.values) keys.push_back(v);
+            channels.push_back(ch);
+        }
+        c.channel_count = static_cast<u32>(tracks.size());
         clips.push_back(c);
     }
 

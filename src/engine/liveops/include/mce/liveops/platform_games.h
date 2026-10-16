@@ -1,11 +1,12 @@
 #pragma once
-// Game Center / Play Games behind game services (M-LIVEOPS step 2): PlatformGameServices is the
+// Game Center / Play Games / Steam behind game services (M-LIVEOPS step 2, M-STEAM step 2): PlatformGameServices is the
 // IGameServicesProvider for a phone's own game services. It speaks to them through
 // IPlatformGamesBackend, the platform's calls with nothing engine-specific in them: the player
 // implements it over mce/platform/game_services.h, tests over a fake.
 //
 // What it adds on top of the platform:
-// - the store ids: the catalog's "ios" or "android" id for each achievement and leaderboard;
+// - the store ids: the catalog's "ios", "android" or "steam" id for each achievement and leaderboard
+//   (Steam falls back to the catalog id);
 // - versioned cloud saves. Game Center saved games and Play Games snapshots keep one blob per name and
 //   no version, so the blob carries one (encode_cloud_blob): cloud_save reads the blob, answers
 //   Conflict when another device moved it past base_version, and otherwise writes base_version + 1.
@@ -27,6 +28,9 @@ bool decode_cloud_blob(Span<const byte> blob, u64& version, Span<const byte>& by
 
 enum class BlobRead : u8 { Ok, Missing, Failed };
 
+// Which of the catalog's store ids a platform knows.
+enum class StoreIds : u8 { Ios, Android, Steam };
+
 // What the platform answers, from any thread, once per call of IPlatformGamesBackend. `tag` is the
 // achievement, leaderboard or cloud save index the call carried.
 class PlatformGamesSink {
@@ -45,8 +49,8 @@ protected:
 class IPlatformGamesBackend {
 public:
     virtual ~IPlatformGamesBackend() = default;
-    virtual const char* name() const = 0;  // "game_center", "play_games"
-    virtual bool ios_ids() const = 0;      // which catalog ids the platform knows
+    virtual const char* name() const = 0;  // "game_center", "play_games", "steam"
+    virtual StoreIds store_ids() const = 0;
     // False: the platform cannot start (no services here); every call then fails.
     virtual bool start(PlatformGamesSink& sink) = 0;
     virtual void stop() {}
@@ -90,7 +94,8 @@ private:
         Array<byte> blob;  // Save: what is written once the read says base is current
     };
 
-    StringView store_id(StringView ios, StringView android) const;
+    template <class Info>
+    StringView store_id(const Info& e) const;
 
     IPlatformGamesBackend& backend_;
     mem::IAllocator& alloc_;

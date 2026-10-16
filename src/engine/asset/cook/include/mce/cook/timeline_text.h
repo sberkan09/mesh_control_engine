@@ -17,8 +17,8 @@ namespace mce::cook {
 
 inline constexpr u32 kTimelineFormatVersion = 1;
 
-enum class TimelineDocTrackType : u8 { Transform, Property, Activation, Animation, Audio, Camera, Event, Subtitle };
-inline constexpr u32 kTimelineDocTrackTypes = 8;
+enum class TimelineDocTrackType : u8 { Transform, Property, Activation, Animation, Audio, Camera, Event, Subtitle, Video };
+inline constexpr u32 kTimelineDocTrackTypes = 9;
 const char* timeline_track_type_name(TimelineDocTrackType t);  // "transform", ...
 const char* timeline_ease_name(asset::TimelineEase e);         // "linear", ...
 
@@ -31,7 +31,7 @@ inline constexpr u8 Scale = 1u << 2;
 // One key. Which fields mean something depends on the track type.
 struct TimelineDocKey {
     f32 t = 0.0f;         // seconds (Activation: the range's start)
-    f32 duration = 0.0f;  // Activation: the range's length; Subtitle: the line's
+    f32 duration = 0.0f;  // Activation: the range's length; Subtitle: the line's; Video: how long it shows (0: to its end)
     asset::TimelineEase ease = asset::TimelineEase::Linear;  // Transform / Property
     f32 value[4] = {};    // Property (value_count floats)
     u8 channels = 0;      // Transform: TimelineChannel bits set by this key
@@ -43,7 +43,8 @@ struct TimelineDocKey {
     bool loop = false;    // Animation
     f32 fade = -1.0f;     // Animation: < 0 keeps the Animator's fade
     asset::Guid sound;    // Audio
-    f32 gain_db = 0.0f;   // Audio
+    f32 gain_db = 0.0f;   // Audio, Video
+    asset::Guid video;    // Video
     u8 camera = asset::kTimelineSelf;  // Camera: the cut's camera
     f32 blend = 0.0f;                  // Camera: seconds the view eases over from the previous cut's camera
 };

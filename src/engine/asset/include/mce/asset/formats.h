@@ -31,13 +31,14 @@ inline constexpr u8 MOD_INFO_VERSION = 1;  // CHNK_MOD: a mod pack's identity (F
 inline constexpr u8 INPUT_MAP_VERSION = 1;  // CHNK_INPUT: a project's action maps (FR-INP-020; mce/input/input_map.h)
 inline constexpr u8 STRING_TABLE_VERSION = 1;  // CHNK_STR: one locale's string table (M-MOBILE 11a; mce/loc/string_table.h)
 inline constexpr u8 STORE_CATALOG_VERSION = 1;  // CHNK_STORE: products and ad placements (M-MONETIZE; mce/monetize/catalog.h)
-inline constexpr u8 GAME_SERVICES_CATALOG_VERSION = 1;  // CHNK_GSVC: game services catalog (M-LIVEOPS; mce/liveops/game_services.h)
+inline constexpr u8 GAME_SERVICES_CATALOG_VERSION = 2;  // CHNK_GSVC: game services catalog (M-LIVEOPS; v2 Steam ids, M-STEAM 2; mce/liveops/game_services.h)
 inline constexpr u8 ANIMGRAPH_VERSION = 1;  // CHNK_ANIMG: a 3D animation state graph (M-DATA-REACH 7)
 inline constexpr u8 SPRITESHEET_VERSION = 1;  // CHNK_SHEET: texture regions + flipbook clips (M-DATA-REACH 5)
 inline constexpr u8 UI_DOCUMENT_VERSION = 3;  // CHNK_UIDOC: one UI widget tree (M-UI-DATA 1; v2 actions + bindings; v3 theme + font roles; mce/ui/document_data.h)
 inline constexpr u8 UI_THEME_VERSION = 1;     // CHNK_UITHEME: a UI theme (M-UI-DATA 3; mce/ui/document_data.h)
 inline constexpr u8 TERRAIN_VERSION = 1;      // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1)
 inline constexpr u8 NAVMESH_VERSION = 1;     // CHNK_NAV: the .mcnav bytes as baked (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
+inline constexpr u8 VIDEO_VERSION = 1;       // CHNK_VID: an MPEG-1 program stream + its audio as PCM (M-CINEMA 5)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -168,6 +169,35 @@ struct SfxView {
     static Result<SfxView> read(Span<const byte> payload);
 };
 void write_sfx(const SfxHeader& header, Span<const f32> samples, Array<byte>& out);
+
+// ------------------------------------------------------------------ video (CHNK_VID)
+// The .mpg's bytes as imported (an MPEG-1 program stream; the runtime decodes its video with
+// render::VideoDecoder) and its audio decoded once at cook time to 48 kHz f32, so the mixer plays
+// it like any clip (ADR-0043). VideoHeader | mpeg bytes | f32 samples (audio_frames * audio_channels).
+
+struct VideoHeader {
+    u32 width;           // display size in pixels
+    u32 height;
+    f32 frame_rate;      // frames per second
+    f32 duration;        // seconds of video
+    u32 flags;           // 0 (reserved)
+    u32 audio_channels;  // 0 = silent, else 2 (interleaved)
+    u32 audio_frames;    // 48 kHz frames
+    f32 audio_gain;      // linear gain the cook applied (informational)
+    u64 mpeg_offset;
+    u64 mpeg_size;
+    u64 audio_offset;    // f32 interleaved samples
+    u32 reserved[2];
+};
+static_assert(sizeof(VideoHeader) == 64);
+
+struct VideoView {
+    const VideoHeader* header = nullptr;
+    Span<const byte> mpeg;
+    Span<const f32> audio;  // audio_frames * audio_channels
+    static Result<VideoView> read(Span<const byte> payload);
+};
+void write_video(const VideoHeader& header, Span<const byte> mpeg, Span<const f32> audio, Array<byte>& out);
 
 // ------------------------------------------------------------------ font (CHNK_FONT)
 
@@ -336,12 +366,21 @@ struct SpriteSheetView {
 
 // ------------------------------------------------------------------ animation graph (CHNK_ANIMG)
 // A 3D animation state graph (M-DATA-REACH 7) the kit's Animator runs over its MeshRef's clips:
-// states (one clip, or a 1D blend of clips along a parameter), transitions on parameter
+// states (one clip, or a 1D or 2D blend of clips along parameters), transitions on parameter
 // conditions or a one-shot's end, and timed events per state. Layout: the header, then
 // state_count states, transition_count transitions, condition_count conditions,
 // blend_point_count blend points and event_count events; every index is checked by read().
+//
+// M-GAMEPLAY3D step 5 extends it (header.flags & kAnimGraphExtended, chunk minor 1): after the
+// events, an AnimGraphExtension, then its 2D blend points, layers, mask bones and IK chains. A
+// graph that uses none of them is written without the extension, byte for byte as before.
 inline constexpr u32 kAnimGraphMaxParams = 4;
 inline constexpr u32 kAnimAnyState = 0xFFFFFFFFu;
+inline constexpr u32 kAnimGraphExtended = 1u;  // AnimGraphHeader::flags
+inline constexpr u32 kAnimGraphMaxLayers = 4;  // Animator.layer_time holds one playhead per layer
+inline constexpr u32 kAnimGraphMaxIK = 8;
+inline constexpr u32 kAnimGraphMaxBlend2D = 8;  // points of one 2D blend state
+inline constexpr u8 kAnimNoParam = 0xFF;        // a layer's or IK chain's weight_param: none
 
 struct AnimGraphHeader {
     u32 param_count;
@@ -351,7 +390,7 @@ struct AnimGraphHeader {
     u32 blend_point_count;
     u32 event_count;
     u32 start_state;
-    u32 reserved;
+    u32 flags;  // kAnimGraphExtended
     char params[kAnimGraphMaxParams][24];  // NUL-padded names; Animator.params holds their values in this order
 };
 static_assert(sizeof(AnimGraphHeader) == 128);
@@ -365,8 +404,9 @@ struct AnimGraphState {
     u32 event_count;
     f32 speed;
     u8 loop;            // 0: plays once and holds its last pose (Animator.finished)
-    u8 blend_param;     // parameter index of the 1D blend
-    u8 reserved[2];
+    u8 blend_param;     // parameter index of the 1D blend (a 2D blend: its x parameter)
+    u8 blend_2d;        // 1: first_blend / blend_count index the extension's 2D points
+    u8 blend_param_y;   // a 2D blend: its y parameter
 };
 static_assert(sizeof(AnimGraphState) == 88);
 
@@ -406,6 +446,66 @@ struct AnimGraphEvent {
 };
 static_assert(sizeof(AnimGraphEvent) == 40);
 
+// The extension block (header.flags & kAnimGraphExtended).
+struct AnimGraphExtension {
+    u32 blend2d_count;
+    u32 layer_count;   // <= kAnimGraphMaxLayers
+    u32 mask_count;
+    u32 ik_count;      // <= kAnimGraphMaxIK
+    char root_bone[32];  // root motion: the node whose ground motion moves the entity (empty: none)
+    u32 reserved[4];
+};
+static_assert(sizeof(AnimGraphExtension) == 64);
+
+struct AnimGraphBlendPoint2D {
+    char clip[32];
+    f32 x, y;  // parameter values where this clip has full weight
+};
+static_assert(sizeof(AnimGraphBlendPoint2D) == 40);
+
+// A clip played over the state machine's pose, on the bones of its mask (every bone without one):
+// an override layer replaces them by its weight, an additive layer adds the clip's motion away
+// from its first frame.
+struct AnimGraphLayer {
+    char name[24];
+    char clip[32];
+    u32 first_mask;
+    u32 mask_count;    // mask bones: each takes its whole subtree; 0 = every bone
+    f32 weight;        // times the weight parameter's value when there is one
+    f32 speed;
+    u8 weight_param;   // kAnimNoParam: none
+    u8 additive;
+    u8 loop;
+    u8 reserved[5];
+};
+static_assert(sizeof(AnimGraphLayer) == 80);
+
+struct AnimGraphMaskBone {
+    char bone[32];
+};
+static_assert(sizeof(AnimGraphMaskBone) == 32);
+
+enum class AnimIKKind : u8 { TwoBone, LookAt, Foot };
+
+// Inverse kinematics applied after the layers. TwoBone and Foot bend `bone`'s parent and
+// grandparent (a hand: elbow and shoulder; a foot: knee and hip) so `bone` reaches its goal;
+// LookAt turns `bone` so its `axis` points at its goal. A TwoBone or LookAt goal comes from an
+// IKTarget3D entity naming the chain; a Foot goal from the ground below the animated foot.
+struct AnimGraphIK {
+    char name[24];
+    char bone[32];
+    char pelvis[32];   // Foot: lowered so the lower foot reaches its ground (empty: none)
+    AnimIKKind kind;
+    u8 weight_param;   // kAnimNoParam: none
+    u8 reserved[2];
+    f32 weight;
+    f32 axis[3];       // LookAt: the bone-space forward; TwoBone / Foot: the knee's model-space bend direction (0: keep the animated bend)
+    f32 limit_deg;     // LookAt: largest turn away from the animated pose
+    f32 reach;         // Foot: metres the ground may be above or below the animated foot
+    u32 reserved2[3];
+};
+static_assert(sizeof(AnimGraphIK) == 128);
+
 struct AnimGraphView {
     const AnimGraphHeader* header = nullptr;
     Span<const AnimGraphState> states;
@@ -413,6 +513,12 @@ struct AnimGraphView {
     Span<const AnimGraphCondition> conditions;
     Span<const AnimGraphBlendPoint> blend_points;
     Span<const AnimGraphEvent> events;
+    const AnimGraphExtension* extension = nullptr;  // null: a graph without the step-5 extras
+    Span<const AnimGraphBlendPoint2D> blend2d;
+    Span<const AnimGraphLayer> layers;
+    Span<const AnimGraphMaskBone> mask_bones;
+    Span<const AnimGraphIK> ik;
+    StringView root_bone() const { return extension ? text(extension->root_bone, sizeof extension->root_bone) : StringView(); }
     static Result<AnimGraphView> read(Span<const byte> payload);
     u32 find_state(StringView name) const;  // states.size() when absent
     static StringView text(const char* s, usize cap);  // a NUL-padded name
@@ -605,6 +711,7 @@ enum class TimelineTrackKind : u8 {
     Camera,      // camera cuts: the key's target camera is primary from its time until the next key
     Event,       // raises TimelineSignal (and a sequence SeqSignal) when the playhead crosses a key
     Subtitle,    // the line shown during [t, t + duration)
+    Video,       // the target's VideoPlayer plays the key's video during [t, t + duration) (0: to its end)
 };
 
 enum class TimelineEase : u8 { Linear, Step, Smooth, EaseIn, EaseOut };
@@ -632,9 +739,9 @@ struct TimelineKey {
     f32 t;             // seconds from the start
     f32 duration;      // Activation / Subtitle: the range's length
     f32 v[4];          // Property: the value; Animation: v[0] loop (0/1), v[1] fade (< 0 keeps the Animator's); Audio: v[0] gain dB;
-                       // Camera: v[0] blend seconds from the previous cut's camera (0 = a hard cut)
+                       // Camera: v[0] blend seconds from the previous cut's camera (0 = a hard cut); Video: v[0] gain dB
     u64 id;            // Animation: StringId of the clip; Event: StringId of the signal
-    u64 guid[2];       // Audio: the Sfx {hi, lo}
+    u64 guid[2];       // Audio: the Sfx {hi, lo}; Video: the Video
     u32 text;          // Animation: the clip name; Subtitle: the line
     u32 text2;         // Subtitle: the speaker (kTimelineNoString when none)
     TimelineEase ease; // Property: the curve from this key to the next

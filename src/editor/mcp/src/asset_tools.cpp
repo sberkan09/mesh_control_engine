@@ -163,8 +163,8 @@ constexpr AssetKind kKinds[] = {
     {"GameServicesCatalog", ".mcservices", "mce-services", 1,
      "The project's achievements, leaderboards and cloud saves (M-LIVEOPS).",
      R"json([
-{"name":"achievements","type":"array","help":"[{\"id\", \"steps\": 1-1000000, \"ios\", \"android\"}]"},
-{"name":"leaderboards","type":"array","help":"[{\"id\", \"order\": \"higher_is_better\" | \"lower_is_better\", \"ios\", \"android\"}]"},
+{"name":"achievements","type":"array","help":"[{\"id\", \"steps\": 1-1000000, \"ios\", \"android\", \"steam\" (Steamworks API name; default: id)}]"},
+{"name":"leaderboards","type":"array","help":"[{\"id\", \"order\": \"higher_is_better\" | \"lower_is_better\", \"ios\", \"android\", \"steam\" (default: id)}]"},
 {"name":"cloud_saves","type":"array of strings","help":"save::write names synced to the cloud"}])json",
      R"json({"achievements":[],"leaderboards":[],"cloud_saves":[]})json"},
     {"UiDocument", ".mcui", "mce-ui", 1,

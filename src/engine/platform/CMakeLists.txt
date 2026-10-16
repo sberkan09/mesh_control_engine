@@ -19,6 +19,7 @@ mce_add_library(mce_platform
         src/power.cpp
         src/screen_reader.cpp
         src/steam.cpp
+        src/steam_games.cpp
     PUBLIC_DEPS
         mce::mce_core
     PRIVATE_DEPS

@@ -48,7 +48,7 @@ constexpr Snap kSnaps[] = {{"Snap: off", 0.0f}, {"Snap: 1/30 s", 1.0f / 30.0f}, 
 
 bool uses_target(T t) { return t != T::Camera && t != T::Subtitle && t != T::Event; }
 bool has_curve(const TimelineDocTrack& t) { return t.type == T::Property || t.type == T::Transform; }
-bool has_range(T t) { return t == T::Activation || t == T::Subtitle; }
+bool has_range(T t) { return t == T::Activation || t == T::Subtitle || t == T::Video; }
 
 void copy_text(char* dst, usize cap, StringView s) {
     const usize n = std::min(cap - 1, s.size());
@@ -320,25 +320,29 @@ private:
             ImGui::InputTextWithHint("Field", add_type_ == T::Property ? "Camera3DComponent.fov_deg" : "MeshRef.visible",
                                      add_path_, sizeof(add_path_));
         }
-        if (add_type_ == T::Audio) {
+        if (add_type_ == T::Audio || add_type_ == T::Video) {
+            const bool video = add_type_ == T::Video;
+            const asset::ChunkType want = video ? asset::ChunkType::Video : asset::ChunkType::Sfx;
             const ProjectAsset* cur = shell.session().project().find(add_sound_);
-            if (ImGui::BeginCombo("Sound", cur ? cur->path.c_str() : "(choose a sound)")) {
+            if (cur && cur->type != want) cur = nullptr;
+            if (ImGui::BeginCombo(video ? "Video" : "Sound", cur ? cur->path.c_str() : (video ? "(choose a video)" : "(choose a sound)"))) {
                 for (const ProjectAsset& a : shell.session().project().assets())
-                    if (a.type == asset::ChunkType::Sfx && ImGui::Selectable(a.path.c_str(), a.guid == add_sound_)) add_sound_ = a.guid;
+                    if (a.type == want && ImGui::Selectable(a.path.c_str(), a.guid == add_sound_)) add_sound_ = a.guid;
                 ImGui::EndCombo();
             }
         }
         if (ImGui::Button("Add")) {
             bool ok = false;
-            if (add_type_ == T::Audio) {
-                // An audio key needs its sound up front (an empty track does not read back).
+            if (add_type_ == T::Audio || add_type_ == T::Video) {
+                // An audio or video key needs its asset up front (an empty track does not read back).
                 cook::TimelineDocument next = ed.doc();
                 TimelineDocTrack t;
-                t.type = T::Audio;
+                t.type = add_type_;
                 t.target = add_target_;
                 TimelineDocKey k;
                 k.t = ed.playhead();
-                k.sound = add_sound_;
+                if (add_type_ == T::Video) k.video = add_sound_;
+                else k.sound = add_sound_;
                 t.keys.push_back(k);
                 next.tracks.push_back(t);
                 ok = ed.apply(next);
@@ -752,6 +756,22 @@ private:
                         }
                     ImGui::EndCombo();
                 }
+                ImGui::DragFloat("Gain (dB)", &key_.gain_db, 0.1f, -60.0f, 12.0f, "%.1f");
+                commit |= done();
+                break;
+            }
+            case T::Video: {
+                const ProjectAsset* cur = shell.session().project().find(key_.video);
+                if (ImGui::BeginCombo("Video", cur ? cur->path.c_str() : "(missing)")) {
+                    for (const ProjectAsset& a : shell.session().project().assets())
+                        if (a.type == asset::ChunkType::Video && ImGui::Selectable(a.path.c_str(), a.guid == key_.video)) {
+                            key_.video = a.guid;
+                            commit = true;
+                        }
+                    ImGui::EndCombo();
+                }
+                ImGui::DragFloat("Length (s)", &key_.duration, 0.01f, 0.0f, 3600.0f, key_.duration > 0.0f ? "%.3f" : "to the end");
+                commit |= done();
                 ImGui::DragFloat("Gain (dB)", &key_.gain_db, 0.1f, -60.0f, 12.0f, "%.1f");
                 commit |= done();
                 break;

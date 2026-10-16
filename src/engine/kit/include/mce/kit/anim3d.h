@@ -6,8 +6,10 @@
 //   world.events().read<kit::AnimEvent3D>()   // in FixedUpdate_Pre of the next tick, or later
 //
 // "kit3d_animators" (FixedUpdate_Post) pushes an AnimEvent3D for every event of the playing graph
-// state the playhead crosses; "kit3d_attach" (FixedUpdate_Post, after it) writes each
-// AttachToBone entity's LocalTransform from the target's pose and the bone's animated matrix.
+// state the playhead crosses and moves root-motion entities; "kit3d_ik" (after it) gathers the
+// goals of the graphs' IK chains (IKTarget3D entities, the ground under foot chains);
+// "kit3d_attach" (after that) writes each AttachToBone entity's LocalTransform from the target's
+// pose and the bone's animated matrix.
 
 #include "mce/ecs/entity.h"
 #include "mce/fixed_string.h"
@@ -35,5 +37,17 @@ struct AttachToBone {
 MCE_COMPONENT(AttachToBone, (target, Help{"the entity with the animated MeshRef"}),
               (bone, Help{"node name in the mesh (a joint, a socket)"}), (offset, Help{"in the bone's space"}),
               (rotation, Help{"in the bone's space"}), (found, ReadOnly, Transient))
+
+// The goal of IK chain `chain` ("two_bone" or "look_at", by its name in the graph) of `animator`'s
+// Animator: this entity's world position, every tick (M-GAMEPLAY3D 5). A hand on a ledge, a head
+// following the player. `weight` (0..1) fades the chain in and out, times the chain's own weight.
+struct IKTarget3D {
+    Entity animator;
+    FixedString<24> chain;
+    f32 weight = 1.0f;
+    u32 found = 0;  // engine-written: 1 while the chain resolves
+};
+MCE_COMPONENT(IKTarget3D, (animator, Help{"the entity whose Animator graph has the chain"}),
+              (chain, Help{"the IK chain's name in the graph"}), (weight, Range{0, 1}), (found, ReadOnly, Transient))
 
 }  // namespace mce::kit
