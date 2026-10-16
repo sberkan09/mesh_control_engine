@@ -339,7 +339,8 @@ int main(int argc, char** argv) {
     if (injected >= 0) {
         // Every peer must have caught it, at exactly the injected frame.
         ok = true;
-        for (u32 p = 0; p < total; ++p) ok = ok && peers[p].session.desync_frame() == injected;
+        // Spectators compare with the player feeding them, which computed the same: none of them sees it.
+        for (u32 p = 0; p < count; ++p) ok = ok && peers[p].session.desync_frame() == injected;
         std::printf("  injected desync at frame %lld: %s\n", static_cast<long long>(injected),
                     ok ? "caught by every peer" : "MISSED");
     } else {
