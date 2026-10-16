@@ -1,6 +1,6 @@
 # M-MOVE3D — 3D movement that feels shipped (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–3 done). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
+**Status:** active (added 2026-10-16; steps 1–4 done). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
 
 **Why:** M-GAMEPLAY3D gave 3D games their systems: navmesh agents, joints, ragdolls, vehicles and sensors.
 What a player feels is still raw:
@@ -24,7 +24,7 @@ It needs no device. Every step gates on headless runs and replay hashes in `loca
 | 1 | Character feel: acceleration, deceleration and air control; coyote time, jump buffer, jump cut and air jumps; sprint and crouch; `Landed3D` | SBA-134 | done |
 | 2 | Camera: spring arm, look-ahead, first person, lock-on | SBA-135 | done |
 | 3 | Vehicle feel: anti-roll, downforce, wheel slip and skid events, self-righting, gears as data | SBA-136 | done |
-| 4 | AI drivers: `VehicleDriver3D` on a waypoint path, laps; agents with acceleration | SBA-137 | not started |
+| 4 | AI drivers: `VehicleDriver3D` on a waypoint path, laps; agents with acceleration | SBA-137 | done |
 | 5 | Animation from movement: `Locomotion3D`, foot IK on slopes and stairs | SBA-138 | not started |
 | 6 | MCP and docs; the demo `samples/08_movement` | SBA-139 | not started |
 
@@ -134,3 +134,42 @@ them drives exactly as before.
 - a car dropped on its roof is set upright after 0.5 s facing its old heading, and stays tilted
   without `self_right`;
 - a replay with every feature hashes the same.
+
+## Step 4 — AI drivers
+
+- **`Waypoint3D`** (`mce/kit/vehicles3d.h`): a point on a path, chained by `next`. Its `speed` caps
+  the car there, and `radius` sets how close counts as reached; passing the point along the leg into
+  it counts too.
+- **`VehicleDriver3D`**, on the car, writes its inputs inside `kit3d_vehicles` before they are
+  applied.
+  - **Steering:** pure pursuit at a point `look_ahead` metres (at least 0.6 s) down the path. The
+    heading error is measured in yaw alone, so a leaning body cannot bend it. The wheel angle is
+    capped so the sideways pull stays under 1.5× `corner_accel` at the current speed. Steering at
+    the waypoint itself, or with no cap, ran the test car wide and onto two wheels.
+  - **Speed:** the lowest of `max_speed` and three limits:
+    - each of the next two corners, braking at `brake_decel` (4 m/s², what the stock brakes deliver
+      at low speed) down to sqrt(`corner_accel` × r), with r from the turn angle and the shorter
+      half-leg, capped by the waypoint's `speed`;
+    - the point where the next waypoint counts as reached;
+    - the arc to the aim point.
+  - **Laps:** the first time the car reaches `path`, lap timing starts. Each time after, it counts a
+    lap and pushes `LapCompleted3D` (`FixedUpdate_Pre`, read by `FireOn::Lap`). After `laps` laps it
+    brakes to a stop.
+- **Navmesh agents:** an agent steering a `CharacterController3D` already writes its `move`, so step
+  1's `acceleration` and `deceleration` apply to it with no new code. A test now pins this.
+
+**Tests:** `tests/kit/test_move3d.cpp` runs a 40 × 120 m rectangle of five waypoints with an
+8,000 N/m anti-roll car:
+
+- four laps end in `finished`, with four `LapCompleted3D` events. Laps 2–4 fall within 0.5 s of
+  each other (about 24.9 s), and the first lap, from rest, is slower.
+- the top speed is 19–20.5 m/s, the roll stays under 0.15 rad, and the car never runs more than 5 m
+  outside the rectangle. After the last lap it stops and holds.
+- half the `corner_accel` costs more than 3 s a lap, and so does a `max_speed` of 12.
+- a 3 m/s cap on the first corner takes the car through it under 3.5 m/s, more than 1 m/s slower
+  than with no cap.
+- `FireOn::Lap` fires once per lap, and `drive = 0` leaves the inputs alone.
+- a driven lap replays to the same hash.
+
+`tests/kit/test_nav3d.cpp`: an agent steering a character with 2 m/s² reaches 31/60 × 2 m/s after
+31 ticks, while the instant controller is past 2 m/s.
