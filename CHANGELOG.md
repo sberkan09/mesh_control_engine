@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Behavior trees, M-AI step 1 (SBA-128, ADR-0045): `.mcbt` files describe an AI's decisions as data (sequence,
+  selector, parallel, invert, succeed, fail, repeat, retry, cooldown, timeout, guard, check, wait, set, emit and
+  task nodes) over typed blackboard keys, and cook to `CHNK_BT` with errors at file:line:col. An `AiBrain`
+  component runs one per entity every fixed tick, and a `Blackboard` component holds the keys. All run state is in
+  the two components, so trees are deterministic, hashed, replayed and saved. Games register tasks by name
+  (`kit::BtRegistry::register_task`) and read and write keys by name (`kit::bb_*`). User guide 13.8.
 - `ship --steam`, M-STEAM step 5 (SBA-110): `scripts/ship.py --steam <app id>` and `mce ship --steam` lay out the
   desktop build's Steam depot (`steam_api` beside the executable, no `steam_appid.txt`) and the steamcmd app and
   depot build scripts in `dist/<Name>-steam/`; shipping on each OS into the same folder adds its depot. Nothing is

@@ -6,6 +6,7 @@
 # animation graphs v2 (5).
 mce_add_test(test_kit UMBRELLA
     SOURCES
+        test_ai.cpp
         test_bodies3d.cpp
         test_captions.cpp
         test_presence.cpp

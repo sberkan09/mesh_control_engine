@@ -53,6 +53,7 @@ flowchart LR
     MWEB -.web transport.-> MNET2
     MAGENT --> MPERF["M-PERF captures, budgets per target,<br/>perf_run over MCP, counter gate"]
     M6 --> MAUDIO2["M-AUDIO2 Ogg Vorbis clips, pitch and sound sets,<br/>bus effects, ducking, snapshots, occlusion"]
+    MGP3D -.navmesh, sensors.-> MAI["M-AI behavior trees, blackboard,<br/>perception, utility, tokens, BT panel"]
 ```
 
 Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because Artifact A is the earliest shippable artifact and the cut ladder's final rung reduces the MVE to Artifact A alone — Artifact B is structured as an **addition, not a dependency** (REQUIREMENTS cut-ladder rung 7). The cook pipeline precedes everything that loads content; the determinism harness precedes everything that could break it.
@@ -101,6 +102,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-STEAM | [M-STEAM.md](milestones/M-STEAM.md), ADR-0042 (Linear SBA-106 … SBA-112) | active (step 1 done: the Steamworks flat API opened at run time, `mce/platform/steam.h`, the player's `-steam.app_id`; step 2 done: Steam achievements, leaderboards and Steam Cloud saves as the game services backend, `.mcservices` `steam` names; step 3 done: the overlay holds the game, `RichPresence`, `OpenOverlay`; step 4 done: Steam Input feeds the input map's actions, `-steam.write_input_config` writes the action manifest and controller defaults; step 5 done: `ship --steam` lays out the depots and steamcmd build scripts) | step 6, the real-client run (needs the user's Steamworks account) |
 | M-AUDIO2 | [M-AUDIO2.md](milestones/M-AUDIO2.md) (Linear SBA-118 … SBA-122, added 2026-10-16) | active: step 1 done (Ogg Vorbis clips, ADR-0044) | steps 2–5, the demo and the gates |
 | M-NET3 | [M-NET3.md](milestones/M-NET3.md) (Linear SBA-123 … SBA-127, added 2026-10-16) | active (step 1 done: per-client delta snapshots, `NetRelevance`, acknowledgements; about a third of the snapshot bytes in `sample_net_headless`) | steps 2–5, the demo and the gates |
+| M-AI | [M-AI.md](milestones/M-AI.md), ADR-0045 (Linear SBA-128 … SBA-133, added 2026-10-16) | active (step 1 done: `.mcbt` behavior trees cooked to `CHNK_BT`, `AiBrain` and `Blackboard` in `mce/kit/ai.h`, tasks by name) | steps 2–6, the demo and the gates |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -436,6 +438,25 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 - The sim hash is unchanged.
 - Nothing allocates or locks on the audio thread.
 - A Vorbis clip stays within a set error of its source.
+- `local_ci.sh` green on every step.
+
+### M-AI — Game AI as data · **size L (rough guess, ≈ 100–150 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the project's standing instruction to extend the roadmap when no milestone is free (every active milestone has an owner, and M-LIVEOPS' remaining work needs devices). Game AI was the gap left in the engine comparison (`assessments/motor-kiyaslama-eksikler.md`) after M-GAMEPLAY3D: navmesh, sensors and the FSM helper exist, but every enemy past a few states is a hand-written C++ cascade that an agent or designer cannot edit as data. Unreal ships behavior trees with a blackboard and Unity a Behavior package. Needs no device: every step gates headless.*
+
+**Builds, in order:**
+1. Behavior tree runtime (ADR-0045): `.mcbt` cooked to `CHNK_BT`, typed blackboard keys, `AiBrain` and `Blackboard` components holding all run state, tasks registered by name.
+2. Stock data tasks (move on the grid or the navmesh, look, animate, play, spawn, raise and wait for events) and blackboard observer aborts.
+3. Perception: `Perceiver` and `Stimulus`, sight with line of sight in 2D and 3D, hearing, memory into blackboard keys.
+4. A utility selector with response curves, attack token pools, and point queries scored by distance, line of sight and cover.
+5. The editor's Behavior Tree panel, with a live debugger in play-in-editor.
+6. MCP `bt_*` tools with `bt_trace`, the user guide chapter, the demo and the gates.
+
+**Demo:** `samples/ai_demo`. Guards patrol, hear a thrown stone and investigate. When they see the player, they take turns attacking through tokens, and they flee when hurt. A 3D variant runs on the navmesh, and an agent writes a new guard tree over MCP and checks it with `bt_trace`.
+**Gates:**
+- The same replay hash with AI running.
+- A 500-agent per-tick budget.
+- Truth tables for every node, decorator and abort.
 - `local_ci.sh` green on every step.
 
 ### M-STEAM — Steamworks · **size M (rough guess, ≈ 60–100 h engineering)** · tier: off-tier platform track, opt-in, gates nothing · priority 2

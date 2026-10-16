@@ -97,6 +97,15 @@ constexpr AssetKind kKinds[] = {
 {"name":"duration","type":"number","help":"Seconds; default: the last key's end"},
 {"name":"tracks","type":"array of track objects","help":"{\"type\": \"transform\", \"target\", \"keys\": [{\"t\", \"position\": [x, y, z], \"rotation\": [x, y, z, w], \"scale\": [x, y, z], \"ease\"}]} | {\"type\": \"property\", \"target\", \"path\": \"Component.field\", \"keys\": [{\"t\", \"value\": number or [..], \"ease\"}]} | {\"type\": \"activation\", \"target\", \"path\": \"Component.bool_field\", \"ranges\": [{\"from\", \"to\"}]} | {\"type\": \"animation\", \"target\", \"keys\": [{\"t\", \"clip\", \"loop\", \"fade\"}]} | {\"type\": \"audio\", \"keys\": [{\"t\", \"sound\": \"guid:<Sfx>\", \"gain_db\"}]} | {\"type\": \"camera\", \"cuts\": [{\"t\", \"camera\": \"self\" | 0-7, \"blend\": seconds eased from the previous cut}]} | {\"type\": \"event\", \"keys\": [{\"t\", \"emit\": id}]} | {\"type\": \"subtitle\", \"lines\": [{\"t\", \"duration\", \"text\", \"speaker\"}]}"}])json",
      R"json({"name":"timeline","duration":1,"tracks":[{"type":"event","keys":[{"t":0,"emit":"start"}]}]})json"},
+    {"BehaviorTree", ".mcbt", "mce-bt", 1,
+     "A behavior tree an AiBrain component runs against the fixed tick, reading and writing its entity's Blackboard. "
+     "Every node is an object with exactly one kind key (plus that kind's extras and an optional \"name\"). A running "
+     "node resumes on the next tick; a finished root starts again on the tick after.",
+     R"json([
+{"name":"name","type":"string"},
+{"name":"blackboard","type":"object","help":"key: \"bool\" | \"int\" | \"float\" | \"vec3\" | \"entity\", or key: {\"type\", \"default\"}; at most 16 bool/int/float, 8 vec3 and 8 entity keys"},
+{"name":"root","type":"node object","help":"{\"sequence\" | \"selector\": [nodes]} | {\"parallel\": [nodes], \"policy\": \"all\" | \"one\"} | {\"invert\" | \"succeed\" | \"fail\": node} | {\"repeat\" | \"retry\": node, \"count\": n (0 = forever)} | {\"cooldown\" | \"timeout\": node, \"seconds\": s} | {\"guard\": node, \"key\", \"op\", \"value\"} | {\"check\": key, \"op\": \"is_set\" | \"not_set\" | \"==\" | \"!=\" | \"<\" | \"<=\" | \">\" | \">=\", \"value\"} | {\"wait\": s} | {\"set\": key, \"value\" | \"add\" | \"clear\": true | \"from\": key} | {\"emit\": signal} | {\"task\": name, \"key\", \"value\", \"vector\"}; at most 128 nodes"}])json",
+     R"json({"name":"brain","blackboard":{"alert":{"type":"bool","default":false}},"root":{"selector":[{"sequence":[{"check":"alert","value":true},{"emit":"alarm"},{"set":"alert","value":false}]},{"wait":1}]}})json"},
     {"Tilemap", ".mctilemap", "mce-tilemap", 1,
      "One tile layer over a tileset texture cut into columns x rows cells, drawn by a TilemapLayer component (map: "
      "\"guid:...\"). tiles: width x height indices, row 0 = bottom; 0 = empty, n = cell n-1 (cells count left to right, "
@@ -651,7 +660,7 @@ const ToolDef kAssetTools[] = {
      "Describe a JSON source asset type: its fields (type, default, help) and the template asset_create starts from. "
      "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcseq, .mctilemap, .mcsheet, .mcanim, .mcmat, "
      ".mcinput, .mcstore, .mcservices, .mcui, .mcconfig).",
-     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Timeline, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, or the extension"}}})json",
+     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, Sequence, Timeline, BehaviorTree, Tilemap, SpriteSheet, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, or the extension"}}})json",
      asset_schema},
     {"asset_create",
      "Create a JSON source asset at 'path' (its extension picks the type) with a fresh GUID: the type's template with "
