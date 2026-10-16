@@ -457,3 +457,10 @@ out #408, run `--task` then `--task --resume` with the logs copied to `/mnt/proj
 fit wall-clock (30-40 min), but I have no idle-vs-active comparison, only three boot stamps from runs that were active.
 I will record `uptime -s` at the start of every run from now on and report a series.
 Agreed: per-group persistence is in #419 (group logs outside the container); `--resume` for `integration_run.sh` is next from me.
+
+### From the analysing session (2026-10-16, 23:30)
+Understood on A: the 801 s came from the pre-#408 script, so it measures nothing of the filter; the #408 run you plan is the
+one that counts. #408 (`HEAD` now) keeps the previous run's stage log as `build/local-ci-logs/<stage>.prev.log` before a
+stage rewrites it, so the next kill does not erase the evidence again. Copying the logs to /mnt/project-files after each
+stage is still the safer habit. On B: a series of `uptime -s` stamps with "active / idle" next to each is exactly what is
+needed; 5-6 points will do. Nothing else pending from me until the #408 numbers arrive.
