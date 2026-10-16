@@ -18,7 +18,7 @@ expect_exit(0 ${CMAKE_COMMAND} --install "${BUILD_DIR}" --prefix "${PREFIX}")
 foreach(f bin/mce bin/mce_player bin/mce_editor bin/mce_mcp bin/mce_cook lib/cmake/MCE/MCEConfig.cmake
           include/mce/gameplay.h include/mce/engine_version.h include/spdlog/spdlog.h include/mce/net/net.h
           share/mce/templates/project/CMakeLists.txt share/mce/templates/project/assets/fonts/ProggyClean.ttf
-          share/mce/templates/novel/story/story.json share/mce/scripts/story_compile.py include/mce/kit/novel.h
+          share/mce/templates/novel/story/story.json share/mce/templates/script/assets/scripts/hero.luau share/mce/scripts/story_compile.py include/mce/kit/novel.h
           include/mce/kit/novel_ui.h
           share/mce/scripts/new_project.py share/mce/VERSION share/mce/examples/Kindle/CMakeLists.txt
           share/doc/mce/user-guide/README.md share/doc/mce/engine/modules.md share/doc/mce/ARCHITECTURE.md
@@ -271,4 +271,53 @@ expect_exit(0 ${MCE} headless "${example3d}" --ticks 300)
 if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
     message(FATAL_ERROR "mce headless (Room3D):\n${LAST_OUTPUT}")
 endif()
-message(STATUS "SDK contract holds: install, new, build, headless, mcp, cook, ship, net, example, novel, 3D example")
+# 7. A script project (M-SCRIPT 5): Luau scripts and data, no C++ and no compiler. build cooks (and
+# checks the scripts), headless plays it on the stock player, a typo in a script fails the build with
+# file:line:col and a suggestion, and the shipped folder runs from its launcher.
+expect_exit(0 ${MCE} new ScriptSdk --dest "${WORK_DIR}" --template script)
+set(script_project "${WORK_DIR}/ScriptSdk")
+if(EXISTS "${script_project}/CMakeLists.txt" OR EXISTS "${script_project}/games")
+    message(FATAL_ERROR "a script project must have no C++ or CMake")
+endif()
+expect_exit(0 ${MCE} build "${script_project}")
+foreach(f assets.mce cooked/mce.d.luau)
+    if(NOT EXISTS "${script_project}/${f}")
+        message(FATAL_ERROR "mce build (script project) left no ${f}:\n${LAST_OUTPUT}")
+    endif()
+endforeach()
+expect_exit(0 ${MCE} headless "${script_project}" --ticks 130)
+if(NOT LAST_OUTPUT MATCHES "script: hero at x=3\\.[0-9]+" OR NOT LAST_OUTPUT MATCHES "130 ticks, 3 entities, state_hash")
+    message(FATAL_ERROR "mce headless (script project):\n${LAST_OUTPUT}")
+endif()
+string(REGEX MATCH "state_hash [0-9a-f]+" script_hash_1 "${LAST_OUTPUT}")
+expect_exit(0 ${MCE} headless "${script_project}" --ticks 130)
+string(REGEX MATCH "state_hash [0-9a-f]+" script_hash_2 "${LAST_OUTPUT}")
+if(NOT script_hash_1 STREQUAL script_hash_2)
+    message(FATAL_ERROR "the script project hashes differently on two runs: ${script_hash_1} vs ${script_hash_2}")
+endif()
+expect_exit(0 ${MCE} ship "${script_project}" --version 0.3.0)
+file(GLOB script_zips "${script_project}/dist/ScriptSdk-0.3.0-*.zip")
+if(NOT script_zips)
+    message(FATAL_ERROR "mce ship (script project) wrote no zip:\n${LAST_OUTPUT}")
+endif()
+file(ARCHIVE_EXTRACT INPUT ${script_zips} DESTINATION "${WORK_DIR}/shipped_script")
+if(WIN32)
+    set(script_launcher "${WORK_DIR}/shipped_script/ScriptSdk/ScriptSdk.bat")
+else()
+    set(script_launcher "${WORK_DIR}/shipped_script/ScriptSdk/ScriptSdk.sh")
+endif()
+expect_exit(0 "${script_launcher}" -headless 1 -ticks 130)
+if(NOT LAST_OUTPUT MATCHES "130 ticks, 3 entities, state_hash")
+    message(FATAL_ERROR "the shipped script project:\n${LAST_OUTPUT}")
+endif()
+string(REGEX MATCH "state_hash [0-9a-f]+" shipped_script_hash "${LAST_OUTPUT}")
+if(NOT shipped_script_hash STREQUAL script_hash_1)
+    message(FATAL_ERROR "the shipped script project hashes differently: ${shipped_script_hash} vs ${script_hash_1}")
+endif()
+file(APPEND "${script_project}/assets/scripts/hero.luau" "\nfunction typo() mce.each(\"Sprit\", function(e) end) end\n")
+expect_exit(1 ${MCE} build "${script_project}")
+if(NOT LAST_OUTPUT MATCHES "hero.luau:[0-9]+:[0-9]+: [^\n]*unknown component 'Sprit' \\(did you mean 'Sprite'\\?\\)")
+    message(FATAL_ERROR "mce build (script project with a typo):\n${LAST_OUTPUT}")
+endif()
+
+message(STATUS "SDK contract holds: install, new, build, headless, mcp, cook, ship, net, example, novel, 3D example, script project")

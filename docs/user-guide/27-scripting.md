@@ -5,8 +5,7 @@ the cook compiles it to bytecode, a scene names it, and the stock player runs it
 and no C++ compiler. The track is being built (ROADMAP M-SCRIPT, ADR-0041); this chapter describes what
 works today and grows with it.
 
-Scripting needs a build with `MCE_WITH_SCRIPT` (on in the desktop presets). Phones and the web turn it
-on in a later M-SCRIPT step.
+Scripting needs a build with `MCE_WITH_SCRIPT` (on in the desktop, phone and web presets).
 
 ## 27.1 A script
 
@@ -198,4 +197,29 @@ script does not pass.
 - **Profiler.** In a Tracy build each script's `update()` has its own zone, named after the script.
 - **Crash reports.** When the game crashes while a script runs, the `.crash` report has a `context:` section
   with the script's name and its Luau call stack (`at scripts/spin.luau:2 in spin`).
+
+## 27.7 A game with no C++
+
+`mce new MyGame --template script` makes a project of scripts and data: `MyGame.mceproj` (with an empty
+`"games"` list, which is what marks it), `assets/scenes/main.mcscene`, a first script and a texture.
+There is no `CMakeLists.txt` and no `games/` folder, and nothing needs a C++ compiler.
+
+    mce build MyGame                 # cook assets/ (checks every script) into MyGame/cooked and MyGame/assets.mce
+    mce play MyGame                  # the stock mce_player plays that pack and the project's start scene
+    mce headless MyGame --ticks 300  # no window; prints the state hash
+    mce editor MyGame                # the editor, with no game module to load
+    mce mcp MyGame                   # the MCP server for an agent; script_check checks one script
+    mce ship MyGame --version 1.0    # MyGame/dist/MyGame-1.0-<os>.zip
+
+`mce play` and `mce headless` cook first (incremental), so a saved script is what runs. The zip holds
+`mce_player`, the engine library, `assets.mce` and a launcher, `MyGame.sh` (`MyGame.bat` on Windows), that
+starts the player on the pack and the start scene; arguments after the launcher's name go to the player.
+Keep the files together.
+
+**Phones and the browser.** The phone and web presets build the Luau runtime too (`MCE_WITH_SCRIPT` is on),
+and the same project builds from the engine checkout: copy it to `projects/MyGame/` and run
+`python3 scripts/ship.py --project projects/MyGame --target android|ios|web` (or `mce ship MyGame --target web`
+from there). The engine's CMake gives such a project a host that is the stock player with the project's pack
+(`mce_add_script_project`), and the host build's `mce_cook` cooks the pack. The phone and web toolchains (the
+Android NDK, Xcode, the Emscripten SDK) are the ones the other projects use.
 

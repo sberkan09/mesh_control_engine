@@ -1,0 +1,28 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "@GUID_SCENE@",
+  "name": "main",
+  "entities": [
+    {
+      "name": "Camera",
+      "components": {
+        "Camera2DComponent": { "pixels_per_meter": 48 },
+        "LocalTransform": { "position": [0, 0, 0] }
+      }
+    },
+    {
+      "name": "Hero",
+      "components": {
+        "LocalTransform": { "position": [0, 0, 0] },
+        "Sprite": { "texture": "guid:@GUID_TEX_BLOCK@", "size": [2, 2] }
+      }
+    },
+    {
+      "name": "Script: hero",
+      "components": {
+        "ScriptSystem": { "script": "guid:@GUID_SCRIPT@", "order": 0 }
+      }
+    }
+  ]
+}
