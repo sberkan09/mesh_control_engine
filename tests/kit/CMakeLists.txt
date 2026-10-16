@@ -38,6 +38,7 @@ mce_add_test(test_kit UMBRELLA
         test_cinematic.cpp
         test_video.cpp
         test_view_info.cpp
+        test_views.cpp
     DEPS
         mce::mce_gameplay_kit
         mce::mce_scene

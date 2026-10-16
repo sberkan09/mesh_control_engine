@@ -626,8 +626,10 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     pending_entity_.clear();
     pose_first_.clear();
     // TAA velocity: this frame's world matrices go to worlds_[parity]; last frame's are in the other.
-    world_parity_ ^= 1u;
-    ++frame_stamp_;
+    if (!extra_view_) {
+        world_parity_ ^= 1u;
+        ++frame_stamp_;
+    }
 
     // The irradiance volume first: while it captures at runtime, meshes and lights near it stay in the
     // scene off-screen too, so its probes see the same room whichever way the camera looks.
@@ -697,6 +699,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (mesh->lod_levels > 1 && lod_states_.size() <= e.index) lod_states_.resize(e.index + 1, 0);
         if (world_stamp_.size() <= e.index) {
             world_stamp_.resize(e.index + 1, ~0u);  // never drawn: ~0u + 1 matches no stamp
+            prev_ok_.resize(e.index + 1, 0);
             for (Array<mat4>& w : worlds_) w.resize(e.index + 1, mat4::identity());
         }
         inst.tint = m.tint;
@@ -742,9 +745,12 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (meshes_->get(inst.mesh)->lod_levels > 1) inst.lod_state = &lod_states_[ent];
         // Drawn last frame too: its world then (the entity index may have been reused; the TAA
         // neighborhood clip absorbs that one frame).
-        if (world_stamp_[ent] + 1 == frame_stamp_) inst.prev_world = &worlds_[world_parity_ ^ 1u][ent];
+        // Another view drew it this frame already (extract_view): that draw knew whether last frame's was there.
+        const bool prev = world_stamp_[ent] == frame_stamp_ ? prev_ok_[ent] != 0 : world_stamp_[ent] + 1 == frame_stamp_;
+        if (prev) inst.prev_world = &worlds_[world_parity_ ^ 1u][ent];
         worlds_[world_parity_][ent] = inst.world;
         world_stamp_[ent] = frame_stamp_;
+        prev_ok_[ent] = prev ? 1 : 0;
         scene.add(inst);
     }
     extract_terrains(world, scene);
@@ -803,7 +809,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     });
 
     // Scale (M-VISUAL 9): foliage batches, decals, GPU particles on the scene's clock.
-    if (!bake_mode_) time_ += max(frame_dt_, 0.0f);
+    if (!bake_mode_ && !extra_view_) time_ += max(frame_dt_, 0.0f);
     scene.set_time(time_, bake_mode_ ? 0.0f : max(frame_dt_, 0.0f));
     world.query<const Foliage3D&>().each([&](Entity e, const Foliage3D& f) {
         if (!f.enabled || f.count == 0) return;
