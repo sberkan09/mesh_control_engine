@@ -8,6 +8,7 @@ mce_add_library(mce_gameplay_kit
         src/anim3d.cpp
         src/bodies3d.cpp
         src/captions.cpp
+        src/presence.cpp
         src/effects.cpp
         src/kit3d.cpp
         src/kit3d_extract.cpp
@@ -15,6 +16,7 @@ mce_add_library(mce_gameplay_kit
         src/joints3d.cpp
         src/ragdolls3d.cpp
         src/vehicles3d.cpp
+        src/sensors3d.cpp
         src/particles.cpp
         src/pathfinding.cpp
         src/sequence.cpp

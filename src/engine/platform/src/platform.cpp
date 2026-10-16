@@ -190,6 +190,7 @@ ResultV init(const PlatformDesc& desc) {
         return Error(Errc::PlatformInit, "platform.init", SDL_GetError());
     }
     web::mount_persistent();  // a browser: saves and settings live in IndexedDB (no-op elsewhere)
+    web::install_audio_unlock();  // a browser: the first click, tap or key press starts audio
     // Gamepads are optional: a missing joystick backend leaves the game keyboard/mouse-only.
     if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) MCE_LOG_WARN("platform: no gamepad support: {}", SDL_GetError());
     SDL_AddEventWatch(&lifecycle_watch, nullptr);

@@ -11,6 +11,7 @@ mce_add_library(mce_input
         src/ecs_bridge.cpp
         src/bindings.cpp
         src/binding_names.cpp
+        src/steam_config.cpp
     PUBLIC_DEPS
         mce::mce_core
         mce::mce_platform

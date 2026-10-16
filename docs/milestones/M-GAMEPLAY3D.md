@@ -9,8 +9,8 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
 | 2. Joints over Jolt | SBA-70 | done |
 | 3. Ragdolls | SBA-71 | done |
 | 4. Vehicles | SBA-72 | done |
-| 5. Animation (blend spaces, layers, IK, root motion) | SBA-73 | not started |
-| 6. Sensor queries as data | SBA-74 | not started |
+| 5. Animation (blend spaces, layers, IK, root motion) | SBA-73 | done |
+| 6. Sensor queries as data | SBA-74 | done |
 | 7. MCP and docs | SBA-75 | not started |
 | Demo `samples/07_gameplay3d` | — | not started |
 
@@ -126,3 +126,67 @@ step. Off-tier, opt-in, gates nothing. **Measured on:** the Linux CI container, 
   engine torque curves as data.
 - Vehicles with other than four wheels from the component (the physics layer takes any number).
 
+## Step 5 — animation (SBA-73)
+
+| Item | Where | Evidence |
+|---|---|---|
+| `.mcanim` version 2: `blend2d` states, `root_motion`, `layers` (mask, weight, param, additive, loop, speed), `ik` chains (`two_bone`, `look_at`, `foot`); version 1 files read and write as before | `mce/cook/animgraph_text.h`, `animgraph_importer.cpp` (importer version 2) | `test_kit` "version 2 graphs round-trip": text and chunk identical after a write and read, eight refusals; a plain graph stays version 1 with no extension |
+| CHNK_ANIMG extension (minor 1): `AnimGraphExtension`, 2D points, layers, mask bones, IK chains; every index checked | `mce/asset/formats.h`, `AnimGraphView::read` | the same case: the view's spans, a cut chunk refused |
+| Local-pose sampling for the pose stack | `render::sample_local`, `sample_node`, `compose_local` (`mce/render/mesh.h`) | single-clip sampling matches `pose_nodes`; `test_render3d` unchanged |
+| 2D blend spaces (gradient-band weights, same phase) | `extended_pose`, `run_graph` (`kit/src/anim3d.cpp`) | "a 2D blend space": on a point, between two, between three (a third each) |
+| Layers: override and additive, bone masks with subtrees, only the bones the clip animates, weight by parameter, own playheads (`Animator.layer_time`) | `extended_pose` | "layers": the head pitches under a spine mask while the hips stay, half weight gives half the pitch, the additive bob adds its motion; the extract poses through the same path |
+| Root motion: the bone's ground motion and turn move the entity, a `CharacterController3D`'s `move`, or are only reported (`root_motion`, `root_velocity`, `root_turn`); the pose keeps the clip's first position and heading | `apply_root_motion`, the root lock in `extended_pose` | "root motion": 2 m/s across a loop, a turned entity walks its forward, report-only and off, a controller carried, a 45 degree turn in half a second |
+| IK: two-bone (law of cosines, swing, pole twist, weight), look-at (axis, limit), foot placement (rays down, ground tilt, pelvis drop); `IKTarget3D` goals; system `kit3d_ik` before `kit3d_attach` | `mce/kit/anim3d.h`, `solve_two_bone`, `solve_look_at`, `kit3d_ik` | "two-bone IK": the hand on its goal with 0.4 m bones kept, the elbow on the pole's side, out of reach straight, half weight halfway, an unknown chain; look-at inside and past its 60 degree limit; "foot IK": a 0.2 m step up and down (pelvis 0.2 m lower) |
+| Determinism | goals rebuilt every tick in query order | "replay": root motion, a controller, foot and hand IK, same state hash twice |
+| Editor | the Animation panel shows 2D blend states and the graph's layers and chains (read-only), and parameter removal keeps their indices | `test_editor` animgraph cases unchanged |
+| Docs | user guide 8.9 "Blend spaces, layers, root motion and IK", `docs/engine/kit.md`, `docs/engine/asset.md`, `docs/engine/capabilities.md` | `capabilities.py --check` |
+
+### Design notes
+
+- **Old graphs, old bytes.** A graph without the extras writes version 1 text and the same
+  CHNK_ANIMG bytes as before, and an Animator on it takes the old pose path, so existing scenes
+  and hashes do not move.
+- **One pose for everyone.** `animated_pose` (AttachToBone, ragdolls) and the extract both go
+  through `extended_pose`, so a prop attached to a hand follows the IK the renderer draws.
+- **Goals are model space, once per tick.** `kit3d_ik` turns IKTarget3D positions and foot rays
+  into model-space goals after the animators; the extract's interpolated entity pose reuses them.
+- **Feet against the entity's origin.** A foot chain's goal is the animated foot moved by the
+  ground's height under it relative to the entity's origin (a character stands on its origin).
+
+### Not built (step 5)
+
+- Editing 2D blend points, layers and IK chains in the Animation panel (they are edited in the
+  file; the panel shows them).
+- Layers with their own state machines, sync groups, IK chains longer than two bones (FABRIK),
+  foot locking during the stance phase, root motion on the vertical axis.
+
+## Step 6 — sensor queries as data (SBA-74)
+
+| Item | Where | Evidence |
+|---|---|---|
+| `World3D::overlap_sphere` / `overlap_box` (turned): every touching body in creation order, the full count past the span's end, filtered like the other queries | `mce/physics3d/world3d.h`, `world3d.cpp` (Jolt `CollideShape`) | `test_physics3d` "queries: sphere and box overlaps list every touching body in creation order": two side boxes, the floor and the short-span count, dynamic, exclude and layer filters, a 45 degree box, a flat box refused |
+| Characters in rays and overlaps (`QueryFilter3D::include_characters`, off by default): capsules tested directly since a `CharacterVirtual` is not a body; a body wins a tie | `ray_capsule`, `character_capsule`, `overlap_shape` | "queries: characters show in rays and overlaps only when asked": the capsule's side at 4.6 m and its top cap, a closer wall winning, sphere and box overlaps on both sides of the edge, excluded |
+| `Raycast3D`: a ray or a sphere cast from the entity (entity-space offset and direction), `hit`, `point`, `normal`, `hit_distance`, `hits` | `mce/kit/sensors3d.h`, system `kit3d_sensors` (after `kit3d_triggers`), installed by `install_stock` | `test_kit` "a Raycast3D reports the closest hit…": the hit and its events, turned away, too short, switched off; "a sphere cast hits beside the ray's line…": the cast, a character on the line, `characters: 0` |
+| `Overlap3D`: a sphere or a box turned and scaled with the entity, `count`, `enters`, `last_other` | the same | "an Overlap3D counts what touches it…": a crate falling through (one enter, one exit, `PhysicsEvents` on both), a plate seeing the floor, a crate and a character, turned and scaled, removal letting everything out |
+| Events: `TriggerEnter3D` / `TriggerExit3D` with the sensor as `trigger`, so `PhysicsEvents` and `FireOn::TriggerEnter` effects see sensors with no new event type | `diff` in `sensors3d.cpp` | "an effect fires on a sensor's entry; a replay hashes the same": a `ParticleBurst` fires once, identical state hash twice |
+| A sensor never sees its own entity or its `ChildOf` ancestors | `self_and_parents` | "a sensor never sees itself or what it hangs under": a ray down through its parent hits the floor at 1 m, an overlap inside its parent counts nothing |
+| Docs | user guide 8.7 (the two rows and the events) and 9.5 (the 3D queries), `docs/engine/kit.md`, `docs/engine/physics3d.md`, `docs/engine/capabilities.md` | `capabilities.py --check` |
+
+### Design notes
+
+- **Trigger events, not new ones.** A sensor's change is the same `TriggerEnter3D` /
+  `TriggerExit3D` a `Trigger3D` pushes, so everything that already listens (`PhysicsEvents`, the
+  effect components, game code) works on sensors unchanged.
+- **Characters by hand.** Jolt's narrow-phase queries never see a `CharacterVirtual`, so rays and
+  overlaps test the capsules analytically (a ray against the cylinder and caps, a sphere by
+  segment distance, a box by a ternary search along the capsule's axis). Sphere casts stay bodies
+  only.
+- **World poses lag one tick.** Sensors read `WorldTransform`, which `transform_propagate` writes
+  in `FixedUpdate_Post`; a `LocalTransform` edit reaches the sensor on the next tick, like the
+  other kit3d systems.
+
+### Not built (step 6)
+
+- Sphere casts against characters, capsule and box casts, all hits along a ray (`raycast_all` in
+  3D), and contact points for overlaps.
+- More than 64 entities in one `Overlap3D` (the rest are not tracked).

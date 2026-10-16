@@ -42,5 +42,16 @@ if(MCE_BUILD_TESTS AND NOT MCE_SDK AND TARGET glowmoth_mcp)
                  COMMAND ${Python3_EXECUTABLE} "${demo_gate}" --mcp $<TARGET_FILE:glowmoth_mcp> --project "${CMAKE_CURRENT_SOURCE_DIR}"
                          --work "${CMAKE_CURRENT_BINARY_DIR}/gate_goldens" --goldens)
         set_tests_properties(glowmoth_goldens_gpu PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "gate: pass" RESOURCE_LOCK glowmoth_module)
+        # M-PERF counter gate: perf/counters.json's draws, triangles, sprites, ... may not grow.
+        set(perf_gate "${PROJECT_SOURCE_DIR}/scripts/ci/perf_gate.py")
+        add_test(NAME glowmoth_perf_counters
+                 COMMAND ${Python3_EXECUTABLE} "${perf_gate}" --mcp $<TARGET_FILE:glowmoth_mcp> --project "${CMAKE_CURRENT_SOURCE_DIR}"
+                         --work "${CMAKE_CURRENT_BINARY_DIR}/perf_gate")
+        set_tests_properties(glowmoth_perf_counters PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "gate: pass" RESOURCE_LOCK glowmoth_module)
+        # ... and it catches a planted regression (three sprites with a texture each).
+        add_test(NAME glowmoth_perf_counters_seeded
+                 COMMAND ${Python3_EXECUTABLE} "${perf_gate}" --mcp $<TARGET_FILE:glowmoth_mcp> --project "${CMAKE_CURRENT_SOURCE_DIR}"
+                         --work "${CMAKE_CURRENT_BINARY_DIR}/perf_gate_seeded" --seed)
+        set_tests_properties(glowmoth_perf_counters_seeded PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "gate: pass" RESOURCE_LOCK glowmoth_module)
     endif()
 endif()

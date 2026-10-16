@@ -101,12 +101,12 @@ bool build(World& w, Physics3D& phys, Entity e, const Ragdoll3D& r, const render
     Array<mat4> now, before;
     now.resize(nodes);
     before.resize(nodes);
-    animated_pose(mesh, a, now.span());
+    animated_pose(w, e, mesh, a, now.span());
     if (a) {
         Animator back = *a;
         back.time = math::max(0.0f, back.time - dt * back.speed);
         back.previous_time = math::max(0.0f, back.previous_time - dt * back.speed);
-        animated_pose(mesh, &back, before.span());
+        animated_pose(w, e, mesh, &back, before.span());
     } else {
         before = now;
     }

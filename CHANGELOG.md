@@ -11,6 +11,55 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   plays a cutscene with a camera dolly, a rising gate, music, subtitles and a blended cut, all as data.
   Undelivered opens on a ferry cutscene. A `Cutscene` no longer hashes three undefined padding bytes, and the
   fullscreen video is no longer drawn upside down.
+- Replication as data, M-NET2 step 7 (SBA-88): mark entities `NetReplicated` in a scene and
+  `ReplicationServer::assign_tagged` gives them their `NetId` with no code. Component fields flagged
+  `Replicated` (`MCE_COMPONENT(Health, (hp, Replicated))`) travel in every snapshot and land in the client's
+  copy; other fields keep the client's value, and `Entity` fields come back as the client's own entities.
+  `NetOwner` names the player that controls an entity. A component built with other flagged fields on the
+  client is skipped and counted, never misread. `refl_describe_component` marks the fields `"replicated"`.
+  Snapshot version 2. User guide 20.9.
+- Performance counter gate and guide, M-PERF step 5 (SBA-117). `scripts/ci/perf_gate.py` runs `perf_run` on
+  a copy of a project and fails when draws, passes, dispatches, triangles, meshes, sprites or sprite batches
+  grow past the project's `perf/counters.json` (`--update` writes new ones). Glowmoth and Marble Garden run it
+  in `local_ci.sh` (`*_perf_counters`), and `glowmoth_perf_counters_seeded` proves it catches a planted draw
+  regression. New user guide chapter 25, "Performance". M-PERF is done on the desktop.
+- Steam Input, M-STEAM step 4 (SBA-109): while Steam runs, Steam reads every controller as the input map's actions
+  and the player feeds them in by name next to the map's own bindings (`InputSystem::set_action_feeds`). The options
+  screen names gamepad bindings by Steam's own names. `mce_player -steam.write_input_config <dir>` writes the action
+  manifest and the Steam Deck, Xbox, PlayStation and Switch Pro default configurations from the pack's input map;
+  `-steam.input 0` turns it off. Headless hashes are unchanged. Covered on the stand-in by `test_input`,
+  `test_platform` and `player_steam_input`. User guide 23.10.
+- Contact shadows, M-VISUAL2 step 3 (SBA-103): `Environment3D.contact_shadows` (or `Scene3D::set_contact_shadows`)
+  marches a short screen-space ray toward the sun so creases, feet and small details get the shadows the cascades
+  miss (`contact_length`, `contact_thickness`, `contact_intensity`). Sun only for now; off on the Low tier;
+  `r.contact_shadows 0` turns it off. User guide 8.
+- The editor's Profiler reads captures, M-PERF step 4 (SBA-116). A new **Capture** tab opens a `.mcperf` from
+  the player or `perf_run`: the budget verdict for a target, a strip of every frame (spikes red, over-budget
+  amber; click one), the chosen frame's phases, GPU stages and counters, the spikes and the slowest systems.
+  **Compare with** adds a second capture's before/after tables. `mce_editor -editor.perf_capture <file>` opens
+  one at start-up. The comparison is now shared editor code (`mce/editor/perf_compare.h`) that MCP's
+  `perf_compare` uses too. User guide 3 and 14.
+- Steam overlay and rich presence, M-STEAM step 3 (SBA-108): the Steam overlay holds the game like a lost focus
+  (pause, mute, the focus-loss save). A `RichPresence` component says what friends see (status, a localization
+  token and two substitutions), sent only when it changes. The `OpenOverlay` event opens the friends,
+  achievements, stats, community, settings, store or web page (`mce/kit/presence.h`). Neither changes the state
+  hash. Covered on the stand-in by `test_kit`, `test_platform` and `player_steam_overlay`.
+- `perf_run` and `perf_compare` over MCP, M-PERF step 3 (SBA-115). `perf_run` measures a scene with the real player,
+  one sim tick per frame, so its counters repeat run to run. It judges the result against a target's budget, with
+  advice for each limit it is over. It also returns frame, sim, render and GPU times, draws, triangles and sprites,
+  the slowest systems, the GPU stages and spike frames, and it keeps the `.mcperf` capture. `perf_compare` compares
+  two captures (by default the last two runs) and says what got better or worse. User guide 14.
+- Steam game services, M-STEAM step 2 (SBA-107): while Steam runs, it is the desktop game services backend, so
+  `GameServices` unlocks, progress, scores and cloud saves reach Steam achievements, leaderboards (found once,
+  uploaded keep-best) and Steam Cloud files. `.mcservices` entries take an optional `steam` name (the catalog id
+  otherwise); the catalog chunk is v2, so packs re-cook. `steam::await_call` waits for Steam's asynchronous call
+  results. The stand-in `steam_api` covers it all in CI (`test_platform`, `player_game_services_steam`).
+- Performance budgets per target, M-PERF step 2 (SBA-114). The `.mceproj` takes `"budgets"` for desktop, mobile
+  and web: frame, sim, render and GPU milliseconds, draws, triangles, sprites, upload bytes, heap allocations,
+  sprite textures per scene and the largest texture edge. Fields left out keep the engine defaults. `project_set`
+  checks the limits, and `project_get` shows each target's budget in force. `project_check` takes a `target` and
+  flags images over its `texture_size` and scenes over its `sprite_textures`, with the target's `sim_ms` as the
+  per-tick budget. `perf::judge` gives a capture's verdict against a budget. User guide 2.2 and 14.
 - Steam, M-STEAM step 1 (SBA-106, ADR-0042): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
   talks to it through the Steamworks flat API, so neither the repository nor the build needs the SDK and a game
   without Steam loads nothing. The stock player signs in with `-steam.app_id <id>` (`-steam.library`,

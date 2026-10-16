@@ -46,6 +46,8 @@ struct DirectionalLight {
     math::vec3 ambient_sky{0.35f, 0.42f, 0.55f};
     math::vec3 ambient_ground{0.20f, 0.18f, 0.16f};
     bool shadows = true;
+    bool contact_shadows = true;  // with ContactShadows::enabled, a short screen-space ray adds the
+                                  // small contact shadows the cascades are too coarse to draw (M-VISUAL2 3)
 };
 
 struct Fog {
@@ -194,6 +196,18 @@ struct ScreenSpaceReflections {
     f32 roughness_fade = 0.2f;   // the reflection fades out over this roughness range below max_roughness
     f32 edge_fade = 0.1f;        // fraction of the screen at its borders over which hits fade out
     f32 intensity = 1.0f;        // scales the reflected light
+};
+
+// Contact shadows (M-VISUAL2 3): each pixel of the half-resolution prepass marches a short ray toward
+// the sun through the depth buffer; a surface it passes behind darkens the sun's light there. Fills in
+// the creases, feet and small details the cascades are too coarse to shadow. The sun only
+// (DirectionalLight::contact_shadows); point and spot lights keep their shadow maps.
+struct ContactShadows {
+    bool enabled = false;
+    f32 length = 0.35f;     // world meters the ray travels toward the sun
+    f32 thickness = 0.1f;   // how far behind the depth buffer a sample may be and still occlude (meters)
+    u32 steps = 12;         // march steps (4..64)
+    f32 intensity = 1.0f;   // 0..1: how much of the sun an occluded pixel loses
 };
 
 // Cascaded shadow maps for the sun (FR-R3D-040).
@@ -566,6 +580,7 @@ public:
     void set_post(const PostFx& post) { post_ = post; }
     void set_ambient_occlusion(const AmbientOcclusion& ao) { ao_ = ao; }
     void set_reflections(const ScreenSpaceReflections& ssr) { ssr_ = ssr; }
+    void set_contact_shadows(const ContactShadows& c) { contact_ = c; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -616,6 +631,7 @@ public:
     const PostFx& post() const { return post_; }
     const AmbientOcclusion& ambient_occlusion() const { return ao_; }
     const ScreenSpaceReflections& reflections() const { return ssr_; }
+    const ContactShadows& contact_shadows() const { return contact_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -675,6 +691,7 @@ private:
     PostFx post_;
     AmbientOcclusion ao_;
     ScreenSpaceReflections ssr_;
+    ContactShadows contact_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;

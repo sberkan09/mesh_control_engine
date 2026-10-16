@@ -20,6 +20,8 @@ mce_add_library(mce_mcp_core UMBRELLA
         src/tools_agent.cpp
         src/tools_check.cpp
         src/tools_team.cpp
+        src/tools_terrain.cpp
+        src/tools_perf.cpp
         src/tools_ui.cpp
         src/tools_timeline.cpp
         src/tools_friction.cpp

@@ -84,6 +84,7 @@
 #include "mce/input/input_system.h"
 #include "mce/input/script.h"
 #include "mce/kit/captions.h"
+#include "mce/kit/presence.h"
 #include "mce/kit/stock.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/timeline.h"
@@ -108,6 +109,9 @@
 #include "mce/platform/firebase.h"
 #include "mce/platform/game_services.h"
 #include "mce/platform/steam.h"
+#include "mce/platform/steam_input.h"
+#include "mce/input/binding_names.h"
+#include "mce/input/steam_config.h"
 #include "mce/platform/haptics.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -215,6 +219,13 @@ MCE_CVAR(cv_steam_library, "steam.library", "", "Steam: the steam_api library to
          CVarFlags::None);
 MCE_CVAR(cv_steam_restart, "steam.restart", false,
          "Steam: a run started outside Steam asks Steam to relaunch it and quits (release builds on Steam)", CVarFlags::None);
+MCE_CVAR(cv_steam_input, "steam.input", true,
+         "Steam: read controllers through Steam Input as the input map's actions (action set \"Game\") while Steam runs",
+         CVarFlags::None);
+MCE_CVAR(cv_steam_write_input_config, "steam.write_input_config", "",
+         "Steam: write the Steam Input action manifest (game_actions_<steam.app_id>.vdf) and the default controller "
+         "configurations for the input map into this folder, then run as usual",
+         CVarFlags::None);
 MCE_CVAR(cv_language, "language", "",
          "Play in this language (\"tr\", \"pt-BR\") for this run instead of the saved choice and the device languages",
          CVarFlags::None);
@@ -338,13 +349,17 @@ private:
     liveops::ConfigFetchSink* sink_ = nullptr;
 };
 
-// Game Center / Play Games (platform/game_services.h) for liveops::PlatformGameServices: the game
-// services provider on a phone build that has them.
+// Game Center / Play Games / Steam (platform/game_services.h) for liveops::PlatformGameServices: the
+// game services provider on a phone build that has them, or on desktop while Steam runs.
 class PlatformGamesBridge final : public liveops::IPlatformGamesBackend {
 public:
     const char* name() const override { return platform::game_services::backend_name(platform::game_services::backend()); }
-    bool ios_ids() const override {
-        return platform::game_services::backend() == platform::game_services::Backend::GameCenter;
+    liveops::StoreIds store_ids() const override {
+        switch (platform::game_services::backend()) {
+            case platform::game_services::Backend::GameCenter: return liveops::StoreIds::Ios;
+            case platform::game_services::Backend::Steam: return liveops::StoreIds::Steam;
+            default: return liveops::StoreIds::Android;
+        }
     }
     bool start(liveops::PlatformGamesSink& sink) override {
         sink_ = &sink;
@@ -509,7 +524,12 @@ public:
             const platform::PixelSize fb = window_->framebuffer_size();
             input_.set_view_size(static_cast<f32>(fb.width), static_cast<f32>(fb.height));  // touch distances
             window_->set_event_handler(&PlayerApp::on_event, this);
+        } else if (platform::steam::running() || !cv_steam_write_input_config.get_string().empty()) {
+            // Headless plays scripted input, never the map: loaded only for Steam's view of it.
+            MCE_TRY(load_input_map(cv_input_map.get_string()));
         }
+        MCE_TRY(write_steam_input_config());
+        start_steam_input();
         // Scene streaming (FR-ENT-120) is inert unless the scene places SceneChunks. Headless runs
         // load chunks inside the pump that wants them, so -headless hashes stay deterministic.
         scene::StreamingConfig streaming;
@@ -545,7 +565,7 @@ public:
             update_ad_pause();
         }
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
-        if (platform::steam::running()) platform::steam::run_callbacks(nullptr, nullptr);  // M-STEAM step 2 routes them
+        if (platform::steam::running()) update_steam();
         if (t.actions) {  // the UI screens navigate with the newest snapshot (edges once: ui_fresh_)
             const input::InputState pending = ui_actions_;
             ui_actions_ = *t.actions;
@@ -757,6 +777,10 @@ public:
         if (perf_on_) write_perf_capture();
         if (liveops_on_) liveops_.shutdown();
         if (game_services_on_) game_services_.shutdown();
+        if (platform::steam::input::running()) {
+            input::set_gamepad_namer(nullptr, nullptr);
+            platform::steam::input::stop();
+        }
         platform::steam::shutdown();
         if (three_d_) {  // the last frame's 3D load (tests and LOD measurements read it)
             const u32* lt = stats3d_.lod_triangles;
@@ -1144,7 +1168,7 @@ private:
         } else if (mode == "none") {
             provider = nullptr;
         } else if (!provider && platform::game_services::backend() != platform::game_services::Backend::None) {
-            // The phone's own: Game Center or Play Games, when the build has them.
+            // The platform's own: Game Center or Play Games when the build has them, Steam while it runs.
             platform_games_.emplace(platform_games_bridge_);
             provider = &*platform_games_;
             MCE_LOG_INFO("{}: game services on {}", desc_.app_name, platform_games_bridge_.name());
@@ -2125,6 +2149,145 @@ private:
         }
     }
 
+    // Steam, once a frame (M-STEAM steps 2-3): its callbacks (game services' answers, the overlay), the
+    // overlay holding the game like a lost focus, the scene's RichPresence and the game's OpenOverlay
+    // requests. Nothing here touches the sim.
+    void update_steam() {
+        platform::steam::run_callbacks(nullptr, nullptr);
+        if (platform::steam::input::running()) feed_steam_input();
+        const bool overlay = platform::steam::overlay_active();
+        if (overlay != steam_overlay_) {
+            steam_overlay_ = overlay;
+            MCE_LOG_INFO("{}: Steam overlay {}", desc_.app_name, overlay ? "open: the game holds" : "closed");
+            set_background(overlay || window_background_);
+        }
+        kit::RichPresence p;
+        const bool any = kit::current_presence(world_, p);
+        auto same = [](const kit::RichPresence& a, const kit::RichPresence& b) {
+            return a.status.view() == b.status.view() && a.steam_display.view() == b.steam_display.view() &&
+                   a.key1.view() == b.key1.view() && a.value1.view() == b.value1.view() &&
+                   a.key2.view() == b.key2.view() && a.value2.view() == b.value2.view();
+        };
+        if (any != presence_on_ || (any && !same(p, presence_))) {
+            platform::steam::clear_rich_presence();
+            auto set = [](const char* key, StringView value) {
+                if (!value.empty()) (void)platform::steam::set_rich_presence(key, FixedString<64>(value).c_str());
+            };
+            if (any) {
+                set("status", p.status.view());
+                set("steam_display", p.steam_display.view());
+                if (!p.key1.empty()) set(p.key1.c_str(), p.value1.view());
+                if (!p.key2.empty()) set(p.key2.c_str(), p.value2.view());
+            }
+            presence_on_ = any;
+            presence_ = p;
+        }
+        kit::take_overlay_requests(world_, overlay_requests_);
+        for (const kit::OpenOverlay& o : overlay_requests_) {
+            if (o.page == kit::OverlayPage::Store) platform::steam::show_store_page();
+            else if (o.page == kit::OverlayPage::Web) platform::steam::show_web_page(o.url.c_str());
+            else platform::steam::show_overlay(kit::overlay_page_name(o.page));
+        }
+    }
+
+    // Steam Input (M-STEAM step 4): every action of the input map with an authored name, digital for a
+    // Button and analog otherwise, in the one action set "Game" of the generated action manifest
+    // (-steam.write_input_config). Steam's analog y is up; an action whose map reads a stick's y down
+    // (LeftY scaled +1) gets it flipped. The options screen names a gamepad binding by Steam's own
+    // input for the action.
+    void start_steam_input() {
+        if (!cv_steam_input.get_bool() || !platform::steam::running() || !platform::steam::input::start()) return;
+        const input::InputMapSet& set = input_.maps();
+        steam_in_actions_.clear();
+        steam_in_ids_.clear();
+        steam_in_ysign_.clear();
+        for (usize i = 0; i < set.actions.size(); ++i) {
+            const StringView label = set.label(i);
+            const input::ActionDef& a = set.actions[i];
+            bool known = label.empty();
+            for (const StringId id : steam_in_ids_) known = known || id == a.name;
+            if (known) continue;
+            platform::steam::input::Action sa;
+            sa.name.assign(label);
+            sa.kind = a.type == input::ActionType::Button ? platform::steam::input::Kind::Digital
+                                                          : platform::steam::input::Kind::Analog;
+            f32 y_sign = 1.f;
+            for (u32 b = 0; b < a.binding_count; ++b) {
+                const input::BindingDef& d = set.bindings[a.first_binding + b];
+                if (d.device != input::Device::GamepadAxis || d.axis != 1) continue;
+                const bool negative = (d.scale < 0.f) != ((d.flags & input::BindingFlag::Invert) != 0);
+                y_sign = negative ? 1.f : -1.f;
+                break;
+            }
+            steam_in_actions_.push_back(sa);
+            steam_in_ids_.push_back(a.name);
+            steam_in_ysign_.push_back(y_sign);
+        }
+        steam_in_values_.resize(steam_in_actions_.size());
+        input::set_gamepad_namer(&PlayerApp::steam_input_name, this);
+        MCE_LOG_INFO("{}: Steam Input on ({} actions in the set \"Game\")", desc_.app_name, steam_in_actions_.size());
+    }
+
+    // -steam.write_input_config <dir>: the files Steam needs to know the input map's actions.
+    Result<void> write_steam_input_config() {
+        const StringView dir = cv_steam_write_input_config.get_string();
+        if (dir.empty()) return ok();
+        if (cv_steam_app_id.get_int() <= 0)
+            return Error(Errc::InvalidArgument, "player: -steam.write_input_config needs -steam.app_id (the manifest is named by it)");
+        (void)platform::create_directories(dir);
+        Array<char> text, name;
+        auto write = [&](StringView file) -> Result<void> {
+            FixedString<1024> path(dir);
+            path.append("/");
+            path.append(file);
+            std::FILE* f = std::fopen(path.c_str(), "wb");
+            if (!f) return Error(Errc::IoError, "player: cannot write", path.view());
+            const bool wrote = std::fwrite(text.data(), 1, text.size(), f) == text.size();
+            const bool closed = std::fclose(f) == 0;
+            if (!wrote || !closed) return Error(Errc::IoError, "player: cannot write", path.view());
+            MCE_LOG_INFO("{}: wrote {}", desc_.app_name, path.c_str());
+            return ok();
+        };
+        const StringView title(desc_.app_name);
+        input::steam_action_manifest(input_.maps(), title, text);
+        input::steam_manifest_file(static_cast<u32>(cv_steam_app_id.get_int()), name);
+        MCE_TRY(write(StringView(name.data(), name.size())));
+        for (u32 c = 0; c < input::kSteamControllerCount; ++c) {
+            const auto ct = static_cast<input::SteamController>(c);
+            input::steam_controller_config(input_.maps(), ct, title, text);
+            MCE_TRY(write(StringView(input::steam_controller_file(ct))));
+        }
+        return ok();
+    }
+
+    void feed_steam_input() {
+        const u32 pads = platform::steam::input::frame("Game", steam_in_actions_.span(), steam_in_values_.span());
+        if (pads != steam_in_pads_) {
+            steam_in_pads_ = pads;
+            MCE_LOG_INFO("{}: Steam Input reads {} controller(s)", desc_.app_name, pads);
+        }
+        steam_in_feeds_.clear();
+        for (usize i = 0; i < steam_in_values_.size(); ++i) {
+            const platform::steam::input::Value& v = steam_in_values_[i];
+            if (!v.active || (v.x == 0.f && v.y == 0.f)) continue;
+            steam_in_feeds_.push_back(input::InputSystem::ActionFeed{steam_in_ids_[i], v.x, v.y * steam_in_ysign_[i]});
+        }
+        input_.set_action_feeds(steam_in_feeds_.span());
+    }
+
+    static bool steam_input_name(void* user, StringId action, input::BindingName& out) {
+        const PlayerApp& self = *static_cast<const PlayerApp*>(user);
+        for (usize i = 0; i < self.steam_in_ids_.size(); ++i) {
+            if (self.steam_in_ids_[i] != action) continue;
+            FixedString<64> name;
+            FixedString<256> glyph;
+            if (!platform::steam::input::origin("Game", self.steam_in_actions_[i], name, glyph)) return false;
+            out.assign(name.view());
+            return true;
+        }
+        return false;
+    }
+
     // Unfocused / minimized: pause (the overlay waits for the player) and mute the master bus.
     void set_background(bool background) {
         // A desktop has no background event before a kill or a sleep: the focus loss saves (#177).
@@ -2150,7 +2313,7 @@ private:
         for (usize p = 0; p < kPhaseCount; ++p)
             perf_.phases.push_back(FixedString<32>(phase_name(static_cast<Phase>(p))));
         perf_.render_phases = (1u << static_cast<u32>(Phase::Render_Pre)) | (1u << static_cast<u32>(Phase::Render_Submit));
-        static constexpr const char* kStages[] = {"clusters", "scale", "ssao", "ssr", "shadow", "gi", "volumetrics",
+        static constexpr const char* kStages[] = {"clusters", "scale", "ssao", "ssr", "contact", "shadow", "gi", "volumetrics",
                                                   "main", "resolve", "taa", "post_fx", "bloom", "tonemap", "fxaa"};
         for (const char* name : kStages) perf_.gpu_stages.push_back(FixedString<32>(name));
         perf_.frames.reserve(4096);
@@ -2229,7 +2392,7 @@ private:
         if (!target || target->gpu_ms >= 0.0f) return;
         if (three_d_) {
             const render::Forward3DGpuTimes g = renderer_.forward_3d().gpu_times(ts);
-            const f64 stages[] = {g.clusters, g.scale, g.ssao, g.ssr, g.shadow, g.gi, g.volumetrics,
+            const f64 stages[] = {g.clusters, g.scale, g.ssao, g.ssr, g.contact, g.shadow, g.gi, g.volumetrics,
                                   g.main, g.resolve, g.taa, g.post_fx, g.bloom, g.tonemap, g.fxaa};
             static_assert(sizeof(stages) / sizeof(stages[0]) <= perf::kMaxGpuStages, "perf::Frame::gpu_stage_ms holds every stage");
             for (usize i = 0; i < std::size(stages); ++i)
@@ -2357,9 +2520,15 @@ private:
             self->input_.push_event(e);
         switch (e.type) {
             case platform::EventType::FocusOut:
-            case platform::EventType::Minimized: self->set_background(true); return;
+            case platform::EventType::Minimized:
+                self->window_background_ = true;
+                self->set_background(true);
+                return;
             case platform::EventType::FocusIn:
-            case platform::EventType::Restored: self->set_background(false); return;
+            case platform::EventType::Restored:
+                self->window_background_ = false;
+                self->set_background(self->steam_overlay_);
+                return;
             default: break;
         }
         if (self->console_.is_open()) {  // the console owns the keyboard while open
@@ -2549,7 +2718,18 @@ private:
         u32 slot = 0;
         bool touch = false, down = false, pressed = false, released = false;
     } ui_pointer_;
-    bool background_ = false;  // unfocused or minimized
+    bool background_ = false;  // unfocused or minimized (or the Steam overlay up)
+    bool window_background_ = false;  // the window itself is unfocused or minimized
+    bool steam_overlay_ = false;      // the Steam overlay is up (M-STEAM step 3)
+    bool presence_on_ = false;        // presence_ was sent to Steam
+    kit::RichPresence presence_;
+    Array<kit::OpenOverlay> overlay_requests_;
+    Array<platform::steam::input::Action> steam_in_actions_;  // Steam Input (M-STEAM step 4)
+    Array<platform::steam::input::Value> steam_in_values_;
+    Array<StringId> steam_in_ids_;
+    Array<f32> steam_in_ysign_;
+    Array<input::InputSystem::ActionFeed> steam_in_feeds_;
+    u32 steam_in_pads_ = 0;
     bool unfocused_ = false;   // the window lost focus (or minimized); the focus-loss save ran
     bool fullscreen_ = false;  // what cv_fullscreen last applied
     u64 last_frame_us_ = 0;    // -r.frame_report: the previous rendered frame

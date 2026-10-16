@@ -69,6 +69,10 @@ each result's `content[0].text` is the tool's JSON).
 | | `asset_write` | `path` or `guid`, `content`, `mode?` | `merge` (default) replaces the named fields and keeps the rest, `replace` writes exactly `content`; the GUID stays |
 | | `asset_read` | `path` or `guid` | the parsed document of a JSON source asset (scenes and prefabs too) |
 | | `tilemap_paint` | `path` or `guid`, `clear?`, `cells?`, `rects?`, `fills?`, `preview?` | `[x, y, tile]` cells, `[x0, y0, x1, y1, tile]` rectangles and `[x, y, tile]` flood fills, applied in that order; (0, 0) is bottom-left, tile 0 erases, n draws tileset cell n-1. `preview` returns the map as text rows |
+| Terrain | `terrain_sculpt` | `path` or `guid`, `op`, `points`, `radius?`, `strength?`, `hardness?`, `target?`, `seed?`, `stroke?`, `repeat?` | the Terrain panel's brushes on a `.mcterrain`: `raise`, `lower`, `smooth`, `flatten` (to `target` metres) or `noise`, a dab at each `[x, z]` point (metres from the terrain's centre) or along them with `stroke`. Returns the samples changed, the height range and the height under each point after the change (`strength` 0 only measures) |
+| | `terrain_paint` | `path` or `guid`, `points`, `mode?` (`layer`, `hole`, `fill`), `layer?`, `radius?`, `strength?`, `hardness?`, `stroke?`, `repeat?` | paints a splat layer (its `TerrainFoliage3D` grows there), cuts holes or closes them. Returns each layer's share of the paint in percent and the hole samples |
+| | `terrain_import` | `path` or `guid`, `file`, `range?`, `raw_bits?`, `raw_width?` | a heightmap under `assets/` (`.png`, `.r16`/`.raw`, `.r8`) into the heights, resampled to the resolution (chapter 5.7) |
+| | `terrain_generate` | `path` or `guid`, `seed?`, `feature?`, `octaves?`, `lacunarity?`, `gain?`, `ridged?`, `low?`, `high?`, `island?`, `thermal?`, `talus_deg?`, `droplets?` | fBm hills, an island falloff and erosion-lite into the heights; deterministic in `seed` (chapter 5.7) |
 | UI | `ui_list` | `document?` | without `document`: every `.mcui` with its widget count and the input actions it raises; with one (path or `guid:<uuid>`): its widgets as paths (`menu/play`) with kind, text, action, bind, convar |
 | | `ui_create` | `path`, `modal?` (true), `font?`, `widgets?` | a new `.mcui` with a fresh GUID; `widgets` in the `.mcui` widget format (`asset_schema` type `UiDocument`) |
 | | `ui_widget_add` | `document`, `widget`, `parent?` (root), `index?` (last) | adds a `.mcui` widget object (with its children) |
@@ -89,7 +93,7 @@ each result's `content[0].text` is the tool's JSON).
 | Prefabs | `prefab_create_from` | `entity`, `path`, `replace?` | the entity and its `ChildOf` subtree as a new `.mcprefab`; by default the subtree becomes an instance of it (one undo step) |
 | | `prefab_apply` | `entity`, `component?` | writes an instance's overrides into its prefab (every instance sees them) |
 | | `prefab_revert` | `entity`, `component?` | drops an instance's overrides |
-| Project | `project_get`, `project_set` | `values` (set) | the `.mceproj` members (title, start scene, games), checked before the file is written (chapter 2) |
+| Project | `project_get`, `project_set` | `values` (set) | the `.mceproj` members (title, start scene, games, performance `budgets` per target), checked before the file is written, and each target's budget in force (chapter 2) |
 | | `scene_settings_get`, `scene_settings_set` | `values` (set) | the open scene's `WorldSettings` (2D and 3D gravity); set creates the "World Settings" entity when the scene has none |
 | Undo | `scene_undo`, `scene_redo` | | one `tools/call` is one step; shared with the editor's history |
 | Persist | `scene_new` | `name`, `force?` | fresh GUID, unsaved |
@@ -103,6 +107,8 @@ each result's `content[0].text` is the tool's JSON).
 | | `timeline_preview` | `time`, and `render_frame`'s other arguments | the frame with every timeline in the scene held at `time` seconds: state tracks applied, cinematic cameras placed, a cutscene's letterbox and subtitle showing. Look at a cutscene at its beats without playing it through |
 | | `render_sheet` | `ticks` (1-16), `cameras?` (1-4), `cell_width?`, `cell_height?`, and `render_frame`'s `scene`, `input`, `safe_area`, `software` | one image: ticks in columns, cameras in rows, each cell labelled |
 | | `image_diff` | `golden`, `image` or `render`, `threshold?` (8), `max_score?` (0.01), `update?` | compares with a golden PNG in the project: `score` (mean channel difference, 0..1), `changed_fraction`, `pass`, and a heat map image; a missing golden is written |
+| Measure | `perf_run` | `scene?`, `frames?` (300), `warmup?` (30), `target?` (desktop), `width?`, `height?`, `headless?`, `software?`, `input?`, `convars?`, `save?`, `top?` (8) | runs the real player for N frames at one sim tick per frame, so counters repeat run to run. Returns the verdict against the target's budget, with advice for each limit it is over; frame, sim, render and GPU ms (p50/p95/p99/max); draws, triangles, sprites and other counters; the slowest systems; the GPU stages; and spike frames with their cause. Keeps the `.mcperf` (`cooked/.perf/last.mcperf`, or `save`) |
+| | `perf_compare` | `before?`, `after?` (default: `perf_run`'s last two), `target?`, `top?` | two captures side by side: p50/p95 times, the worst frame's counters, the systems that moved most, `better` and `worse`, and the after capture's verdict |
 | Code | `module_build` | `reload?` (true), `warnings?`, `target?` | rebuilds the game module with the project's CMake tree (the one the loaded module came from) and maps the new build into the server: new components and systems are live for the next call, no restart; compiler errors come back as `{severity, file, line, col, message}` |
 | | `module_test` | `filter?` (default `^<game>_`) | `ctest` in the module's build tree: each test's result, the output's end when one failed |
 | Playtest | `test_run` | `path?` (a `.mctest` file or folder, default `tests/`), `test?` (one inline) | plays each scenario headless with scripted input or a bot and evaluates its checks (section 14.3.1) |
@@ -119,7 +125,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `gen_music` | `seed?`, `bpm?` (120), `bars?` (8), `root?` (0 = C), `scale?` (major, minor, dorian, pentatonic, blues), `drums?`, `save?` (.wav) | a seamless loop of exactly `bars` bars (bass, chords, melody, drums), at most 60 s |
 | | `library_search` | `query?`, `kind?` (model, sound, music, font, texture, sprite, recipe), `license?`, `limit?` (20) | entries of the bundled content library with id, license, author and tags |
 | | `library_add` | `id`, `path?`, `overwrite?` | copies the entry into `assets/` (with the files it needs and a font's license text), or runs a recipe's generator (see "Content: generators and the library" below) |
-| Ship | `project_check` | `checks?`, `ticks?` (300), `budget_ms?` (4), `max_findings?` (200) | findings with severity, file, line, message and a fix: cook errors, broken and unused references, missing credits, sRGB on data textures, each scene's ms per tick against the budget, 2D text size and contrast; `pass` when there is no error |
+| Ship | `project_check` | `checks?`, `ticks?` (300), `target?` (desktop), `budget_ms?` (the target's `sim_ms`), `max_findings?` (200) | findings with severity, file, line, message and a fix: cook errors, broken and unused references, missing credits, sRGB on data textures, each scene's ms per tick, images over the target's `texture_size` and scenes over its `sprite_textures`, 2D text size and contrast; `pass` when there is no error |
 | | `ship_build` | `build?` (true), `ticks?` (300), `version?`, `out?` | full build, a headless smoke run of the host, then `mce ship`: each stage's result and the zip's path (needs the SDK's server, `mce mcp`) |
 | Team | `project_watch` | `since?`, `limit?` (50), `others?` | the other agents' writes from `.mce/events.jsonl`: seq, time, agent, tool, path; `next` for the next call |
 | | `asset_lock` / `asset_unlock` / `asset_locks` | `path`, `note?`, `ttl?` (1800 s) / `path`, `force?` / — | while you hold a lock, other agents' writes to that file are refused |
@@ -236,12 +242,31 @@ result with `ui_preview` or `render_frame`, and keep text readable: `project_che
 or under 4.5:1 contrast. Delete the themes and fonts the game does not use before shipping (`project_check`
 lists them as assets nothing references).
 
+### Is it fast enough?
+
+`perf_run` answers it for a target: `{"target": "mobile"}` judges the scene against the project's mobile budget
+(chapter 2.2) and lists, for each limit it is over, what to try. Change one thing, run again, and
+`perf_compare` with no arguments compares the last two runs. Each frame runs exactly one sim tick, so the
+counters are the same on every machine and every run, and a change in draws or triangles is the scene's.
+Times are the machine's own: on a box without a GPU, `gpu_ms` is the software rasterizer's, so read the
+counters first. `headless: true` measures the simulation alone (no window), which is the quickest way to
+find a slow system.
+
+A person reads the same captures in the editor: the Profiler panel's **Capture** tab opens a `.mcperf`
+(`cooked/.perf/last.mcperf` by default, or `mce_editor -editor.perf_capture <file>`). It shows the verdict
+for the chosen target, every frame as a bar (spikes red, frames over the frame budget amber), the frame you
+click taken apart into sim and render phases, GPU stages and counters, the spikes with their cause, and the
+slowest systems. **Compare with** a second capture (`previous.mcperf` by default) adds the `perf_compare`
+tables, with what got better in green and what got worse in red. Chapter 25 covers captures, budgets and
+the counter gate in full.
+
 ### Before shipping
 
 `project_check` is the review a person would do before a release, as data. Errors (an asset or scene that
 does not cook, a GUID no asset has, a scene that does not run) make `pass` false; warnings (a media file
 with no `CREDITS.md` row, a `CREDITS.md` row for a file the project no longer has, a normal map or mask
-imported as sRGB, a scene over the per-tick budget, text under 16 px on a 1280x720 screen or under 4.5:1
+imported as sRGB, a scene over the per-tick budget, an image larger than the target's `texture_size` or a
+scene whose sprites use more textures than its `sprite_textures`, text under 16 px on a 1280x720 screen or under 4.5:1
 contrast against what is behind it: the backing `Sprite` panel under the label, else the camera's clear
 colour) and infos (an asset nothing references; scenes and input maps are entry points) do not. Each finding names the file and, where it can, the call that fixes it. Timing
 comes from the machine the server runs on, so treat the budget as a trend, not a gate. `ship_build` then

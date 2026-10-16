@@ -2,6 +2,7 @@
 // The M-AGENT tools (ROADMAP M-AGENT: human-free development), one function per tool. Their table
 // is agent_tool_table() in tools_agent.cpp; tool_table() lists them after the MVP tools.
 
+#include "mce/input/script.h"
 #include "tools.h"
 
 namespace mce::mcp {
@@ -12,6 +13,17 @@ bool render_sheet(ToolCall& c);
 bool image_diff(ToolCall& c);
 // ... and a timeline paused at a time (M-CINEMA step 6).
 bool timeline_preview(ToolCall& c);
+// ... and what they share with perf_run: the player to run, whether there is a display, an input
+// script as -input text, and one run of the player to its exit (with Mesa's software rasterizer).
+bool find_player(const Server& server, cook::String& out);
+bool headless_display();
+void script_text(const input::InputScript& s, cook::String& out);
+bool spawn_player(ToolCall& c, StringView player, Span<const StringView> args, bool software, Array<char>& output, i32& code);
+
+// tools_perf.cpp (M-PERF step 3): a performance capture of a scene, judged against a target's budget,
+// and two captures compared.
+bool perf_run(ToolCall& c);
+bool perf_compare(ToolCall& c);
 
 // tools_code.cpp (SBA-49): rebuild + hot reload of the game module, its ctest tests.
 bool module_build(ToolCall& c);

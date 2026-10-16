@@ -37,6 +37,7 @@ struct QualitySettings {
     u32 volumetric_slices = 64;  // Volumetrics::slices, at most
     bool dof_motion_blur = true; // PostFx::dof and PostFx::motion_blur are honored
     bool ssr = true;             // ScreenSpaceReflections::enabled is honored (M-VISUAL2 1)
+    bool contact_shadows = true; // ContactShadows::enabled is honored (M-VISUAL2 3)
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
@@ -62,5 +63,7 @@ void apply_quality(const QualitySettings& q, GiVolume& gi);
 void apply_quality(const QualitySettings& q, Volumetrics& v);
 // Screen-space reflections: off on Low (the probes and the sky remain).
 void apply_quality(const QualitySettings& q, ScreenSpaceReflections& ssr);
+// Contact shadows: off on Low (the cascades remain).
+void apply_quality(const QualitySettings& q, ContactShadows& c);
 
 }  // namespace mce::render

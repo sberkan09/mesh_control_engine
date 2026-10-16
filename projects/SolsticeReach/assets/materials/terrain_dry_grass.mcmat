@@ -1,0 +1,19 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "1ec4d7ae-3188-55c4-b476-d45d145f0820",
+  "name": "terrain dry_grass",
+  "base_color": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "metallic": 0,
+  "roughness": 1,
+  "textures": {
+    "base_color": "guid:1be1d180-ad9b-5dad-8ab9-3150fb740c8b",
+    "normal": "guid:8b77d93b-f99f-5918-8daf-01bbdcb061b7",
+    "metallic_roughness": "guid:1c398801-0043-5be7-b83a-392e950b254a"
+  }
+}

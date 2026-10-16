@@ -55,6 +55,30 @@ const ToolDef kAgentTools[] = {
      R"j("threshold":{"type":"integer","minimum":0,"maximum":255,"default":8,"description":"Channel difference a pixel may have and still count as unchanged"},)j"
      R"j("max_score":{"type":"number","minimum":0,"maximum":1,"default":0.01},"update":{"type":"boolean","description":"Write the image as the new golden"}},"required":["golden"]})j",
      image_diff},
+    {"perf_run",
+     "Measure a scene with the real player: N frames at one sim tick per frame (counters repeat run to run), "
+     "judged against a target's performance budget (project_get budgets_in_force). Returns the verdict with advice "
+     "for each limit over, frame/sim/render/GPU ms (p50/p95/p99/max), draws, triangles, sprites and other counters, "
+     "the slowest systems, the GPU stages, and spike frames with their cause. The .mcperf capture is kept "
+     "(cooked/.perf/last.mcperf, or 'save'); perf_compare compares two. Works without a GPU (software rendering; "
+     "times are then the CPU's). headless: true measures the sim alone.",
+     R"j({"type":"object","properties":{"scene":{"type":"string","description":"Scene path under assets/ (default: the open scene, saved)"},)j"
+     R"j("frames":{"type":"integer","minimum":10,"maximum":3600,"default":300},"warmup":{"type":"integer","minimum":0,"maximum":3600,"default":30,"description":"Frames run first and left out (loading, first uploads)"},)j"
+     R"j("target":{"type":"string","enum":["desktop","mobile","web"],"default":"desktop"},)j"
+     R"j("width":{"type":"integer","minimum":64,"maximum":3840,"default":960},"height":{"type":"integer","minimum":64,"maximum":3840,"default":540},)j"
+     R"j("headless":{"type":"boolean","default":false},"software":{"type":"boolean","default":false,"description":"Force the software rasterizer"},)j"
+     R"j("top":{"type":"integer","minimum":1,"maximum":64,"default":8,"description":"Systems listed"},)j"
+     MCE_RC1 MCE_RC5 ","
+     R"j("save":{"type":"string","description":"Also keep the capture at this path in the project folder, e.g. perf/before.mcperf"}}})j",
+     perf_run},
+    {"perf_compare",
+     "Compare two .mcperf captures (default: perf_run's last two): p50/p95 of frame, sim, render and GPU ms, the "
+     "worst frame's counters, the systems whose ms per frame moved most, which metrics got better or worse, and the "
+     "after capture's verdict against the target's budget.",
+     R"j({"type":"object","properties":{"before":{"type":"string","description":"Path in the project folder (default cooked/.perf/previous.mcperf)"},)j"
+     R"j("after":{"type":"string","description":"Default cooked/.perf/last.mcperf"},"target":{"type":"string","enum":["desktop","mobile","web"],"default":"desktop"},)j"
+     R"j("top":{"type":"integer","minimum":1,"maximum":64,"default":8}}})j",
+     perf_compare},
     {"module_build",
      "Rebuild the game module with the project's CMake build (the tree the loaded module came from) and map the new build "
      "into this server: new and changed components and systems are live for the next tool call, no restart. Returns the "
@@ -194,11 +218,13 @@ const ToolDef kAgentTools[] = {
      "Check the project before shipping and get findings to act on, each with severity, file, line, message and a fix: "
      "cook (assets and scenes that fail to import), references (GUIDs no asset has), unused (assets nothing references), "
      "credits (media files with no CREDITS.md row), srgb (data textures imported as sRGB, colour textures as linear), "
-     "performance (each scene run headless: ms per tick against budget_ms) and accessibility (2D text height in pixels "
+     "performance (against the target's budget: each scene run headless for ms per tick, images larger than "
+     "texture_size, scenes whose sprites use more textures than sprite_textures) and accessibility (2D text height in pixels "
      "on a 1280x720 screen and its contrast against the background). pass is true when there is no error.",
      R"j({"type":"object","properties":{"checks":{"type":"array","items":{"type":"string","enum":["cook","references","unused","credits","srgb","performance","accessibility"]},"description":"Run only these (default all)"},)j"
      R"j("ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300,"description":"Ticks per scene for the performance check"},)j"
-     R"j("budget_ms":{"type":"number","exclusiveMinimum":0,"maximum":1000,"default":4,"description":"Average sim milliseconds per tick allowed"},)j"
+     R"j("budget_ms":{"type":"number","exclusiveMinimum":0,"maximum":1000,"description":"Average sim milliseconds per tick allowed (default: the target budget's sim_ms)"},)j"
+     R"j("target":{"type":"string","enum":["desktop","mobile","web"],"default":"desktop","description":"Whose performance budget (project_get budgets_in_force)"},)j"
      R"j("max_findings":{"type":"integer","minimum":1,"maximum":2000,"default":200}}})j",
      project_check},
     {"ship_build",

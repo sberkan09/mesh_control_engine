@@ -19,17 +19,13 @@ namespace mce::mcp {
 
 namespace {
 
-constexpr u64 kMaxTick = 36000;
-constexpr u64 kMaxSide = 3840;
-constexpr usize kMaxSheetTicks = 16;
-constexpr usize kMaxSheetCameras = 4;
-constexpr u32 kSafeAreaColor = 0x3FD0FFFFu;
-
 #if defined(_WIN32)
 constexpr const char* kPlayerExe = "mce_player.exe";
 #else
 constexpr const char* kPlayerExe = "mce_player";
 #endif
+
+}  // namespace
 
 // The player the frames come from: --player, else the project host the server was built with, else
 // mce_player beside the server (installed SDK) or in the build tree.
@@ -58,6 +54,51 @@ bool headless_display() {
     return false;
 #endif
 }
+
+void script_text(const input::InputScript& s, cook::String& out) {
+    for (const input::ScriptSegment& seg : s.segments()) {
+        cook::appendf(out, "%llu", static_cast<unsigned long long>(seg.from));
+        if (seg.to == ~u64(0)) out += "-";
+        else if (seg.to != seg.from) cook::appendf(out, "-%llu", static_cast<unsigned long long>(seg.to));
+        out += ' ';
+        out += seg.name.view();
+        if (seg.held) cook::appendf(out, "=%g,%g\n", static_cast<f64>(seg.x), static_cast<f64>(seg.y));
+        else out += "=false\n";  // named, not held ("=0" would press it with value 0)
+    }
+}
+
+// Runs the player to its exit with Mesa's software switch set around the spawn when `software`
+// (the child inherits the environment). False with c.error set when it cannot start.
+bool spawn_player(ToolCall& c, StringView player, Span<const StringView> args, bool software, Array<char>& output, i32& code) {
+    const char* had = std::getenv("LIBGL_ALWAYS_SOFTWARE");
+    cook::String saved(had ? had : "");
+#if !defined(_WIN32)
+    if (software) setenv("LIBGL_ALWAYS_SOFTWARE", "1", 1);
+#endif
+    platform::Process proc;
+    Result<void> started = proc.start(args, true);
+#if !defined(_WIN32)
+    if (software) {
+        if (had) setenv("LIBGL_ALWAYS_SOFTWARE", saved.c_str(), 1);
+        else unsetenv("LIBGL_ALWAYS_SOFTWARE");
+    }
+#endif
+    if (!started) {
+        c.error += "cannot start the player ";
+        c.error += player;
+        return false;
+    }
+    code = proc.wait(&output);
+    return true;
+}
+
+namespace {
+
+constexpr u64 kMaxTick = 36000;
+constexpr u64 kMaxSide = 3840;
+constexpr usize kMaxSheetTicks = 16;
+constexpr usize kMaxSheetCameras = 4;
+constexpr u32 kSafeAreaColor = 0x3FD0FFFFu;
 
 struct RenderRequest {
     StringView scene_rel;    // played scene, path under assets/
@@ -188,18 +229,6 @@ bool parse_common(ToolCall& c, RenderRequest& rq) {
     return arg_bool(c, "software", rq.software);
 }
 
-void script_text(const input::InputScript& s, cook::String& out) {
-    for (const input::ScriptSegment& seg : s.segments()) {
-        cook::appendf(out, "%llu", static_cast<unsigned long long>(seg.from));
-        if (seg.to == ~u64(0)) out += "-";
-        else if (seg.to != seg.from) cook::appendf(out, "-%llu", static_cast<unsigned long long>(seg.to));
-        out += ' ';
-        out += seg.name.view();
-        if (seg.held) cook::appendf(out, "=%g,%g\n", static_cast<f64>(seg.x), static_cast<f64>(seg.y));
-        else out += "=false\n";  // named, not held ("=0" would press it with value 0)
-    }
-}
-
 // Cooks the project, runs the player once and reads one frame per requested tick.
 bool render_ticks(ToolCall& c, RenderRequest& rq, Array<cook::Image>& frames, bool& used_software) {
     const cook::CookReport& r = c.server.session().cook(false);
@@ -284,27 +313,9 @@ bool render_ticks(ToolCall& c, RenderRequest& rq, Array<cook::Image>& frames, bo
         args.push_back("offscreen");
     }
 
-    // The child inherits the environment: set Mesa's software switch around the spawn only.
-    const char* had = std::getenv("LIBGL_ALWAYS_SOFTWARE");
-    cook::String saved(had ? had : "");
-#if !defined(_WIN32)
-    if (used_software) setenv("LIBGL_ALWAYS_SOFTWARE", "1", 1);
-#endif
-    platform::Process proc;
-    Result<void> started = proc.start(args.span(), true);
-#if !defined(_WIN32)
-    if (used_software) {
-        if (had) setenv("LIBGL_ALWAYS_SOFTWARE", saved.c_str(), 1);
-        else unsetenv("LIBGL_ALWAYS_SOFTWARE");
-    }
-#endif
-    if (!started) {
-        c.error += "cannot start the player ";
-        c.error += player.view();
-        return false;
-    }
     Array<char> output;
-    const i32 code = proc.wait(&output);
+    i32 code = 0;
+    if (!spawn_player(c, player.view(), args.span(), used_software, output, code)) return false;
     frames.clear();
     for (u64 t : rq.ticks) {
         cook::String path = cook::path_join(work.view(), "frame_");

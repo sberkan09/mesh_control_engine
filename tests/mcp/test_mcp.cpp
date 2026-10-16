@@ -15,6 +15,7 @@
 
 #include "cook_test_util.h"
 #include "mce/convar.h"
+#include "mce/cook/image.h"
 #include "mce/audio/components.h"
 #include "mce/editor/play_session.h"
 #include "mce/input/ecs.h"
@@ -267,6 +268,11 @@ TEST_CASE("mcp tools: discover components from mce_refl") {
     auto probe = c.ok("refl_describe_component", R"({"name":"McpProbe"})");
     CHECK(probe.v().get("fields").at(1).get("read_only").as_bool());
     CHECK(probe.v().get("fields").at(4).get("count").as_number() == 3);
+    // Replication as data (M-NET2 step 7): the stock components, with their Replicated fields.
+    auto owner = c.ok("refl_describe_component", R"({"name":"NetOwner"})");
+    CHECK(owner.v().get("fields").at(0).get("replicated").as_bool());
+    auto marked = c.ok("refl_describe_component", R"({"name":"NetReplicated"})");
+    CHECK_FALSE(marked.v().get("fields").at(0).get("replicated").valid());
 
     // Reflected value types describe the same way: the runtime UI's anchors (M-MOBILE 11b).
     auto anchors = c.ok("refl_describe_component", R"({"name":"UiAnchors"})");
@@ -789,6 +795,81 @@ TEST_CASE("mcp tools: tilemap_paint paints cells, rects and flood fills in one c
     p = c.ok("tilemap_paint", R"({"path":"maps/level.mctilemap","clear":0,"preview":true})");
     CHECK(compact(p.v().get("preview")) == R"(["......","......","......"])");
     CHECK(c.ok("cook_run").v().get("ok").as_bool());
+}
+
+TEST_CASE("mcp tools: terrain_generate, terrain_sculpt, terrain_paint and terrain_import shape a terrain (M-TERRAIN 6)") {
+    const std::string root = demo_project("mcp_terrain");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    c.ok("asset_create", R"({"path":"terrain/valley.mcterrain","content":{"resolution":65,"chunk":16,"size":[64,64],)"
+                         R"("height_range":[0,20],"fill":4,"layers":[{"tile":3},{"tile":3}]}})");
+    const auto num = [](const cook::JsonValue& v) { return v.as_number(); };
+
+    // A generated island: between 10 % and 60 % of the range, sunk at the edges.
+    auto g = c.ok("terrain_generate", R"({"path":"terrain/valley.mcterrain","seed":3,"low":0.1,"high":0.6,"island":0.4,"thermal":4,"droplets":500})");
+    CHECK(num(g.v().get("height").get("min")) <= 2.0 + 1e-3);  // the edges, less what the rain carved
+    CHECK(num(g.v().get("height").get("min")) > 1.0);
+    CHECK(num(g.v().get("height").get("max")) <= 12.05);
+    CHECK(num(g.v().get("height").get("max")) > 8.0);
+    CHECK(num(g.v().get("resolution")) == 65);
+
+    // A valley floor levelled at 3 m along x; a strength-0 smooth only probes.
+    auto f = c.ok("terrain_sculpt", R"({"path":"terrain/valley.mcterrain","op":"flatten","target":3,"strength":1,"hardness":1,)"
+                                    R"("radius":5,"stroke":true,"points":[[-20,0],[20,0]]})");
+    CHECK(num(f.v().get("dabs")) > 10);
+    CHECK(num(f.v().get("changed")) > 100);
+    CHECK(num(f.v().get("probes").at(0)) == doctest::Approx(3.0).epsilon(0.01));
+    auto probe = c.ok("terrain_sculpt", R"({"path":"terrain/valley.mcterrain","op":"smooth","strength":0,"points":[[0,0],[10,0],[0,20]]})");
+    CHECK(num(probe.v().get("changed")) == 0);
+    CHECK(num(probe.v().get("probes").at(0)) == doctest::Approx(3.0).epsilon(0.01));
+    CHECK(num(probe.v().get("probes").at(1)) == doctest::Approx(3.0).epsilon(0.01));
+    const f64 hill = num(probe.v().get("probes").at(2));
+    // Raised twice by 2 m at the centre of a hard brush.
+    auto r = c.ok("terrain_sculpt", R"({"path":"terrain/valley.mcterrain","op":"raise","strength":2,"hardness":1,"radius":3,"repeat":2,"points":[[0,20]]})");
+    CHECK(num(r.v().get("dabs")) == 2);
+    CHECK(num(r.v().get("probes").at(0)) == doctest::Approx(std::fmin(hill + 4.0, 20.0)).epsilon(0.01));
+
+    // Paint the valley with layer 1, cut a hole and close it again.
+    auto p = c.ok("terrain_paint", R"({"path":"terrain/valley.mcterrain","layer":1,"radius":4,"stroke":true,"points":[[-20,0],[20,0]]})");
+    CHECK(num(p.v().get("changed")) > 100);
+    CHECK(num(p.v().get("coverage").at(1)) > 5.0);
+    CHECK(num(p.v().get("coverage").at(0)) + num(p.v().get("coverage").at(1)) == doctest::Approx(100.0).epsilon(0.01));
+    p = c.ok("terrain_paint", R"({"path":"terrain/valley.mcterrain","mode":"hole","radius":2,"points":[[10,10]]})");
+    CHECK(num(p.v().get("hole_samples")) > 4);
+    p = c.ok("terrain_paint", R"({"path":"terrain/valley.mcterrain","mode":"fill","radius":3,"points":[[10,10]]})");
+    CHECK(num(p.v().get("hole_samples")) == 0);
+    CHECK(c.ok("cook_run").v().get("ok").as_bool());
+    CHECK(read_file(root + "/assets/terrain/valley.mcterrain").find("\"splat\"") != std::string::npos);
+
+    // Refusals change nothing.
+    const std::string before = read_file(root + "/assets/terrain/valley.mcterrain");
+    CHECK(c.fails("terrain_sculpt", R"({"path":"terrain/valley.mcterrain","op":"flatten","points":[[0,0]]})").find("target") != std::string::npos);
+    CHECK(c.fails("terrain_sculpt", R"({"path":"terrain/valley.mcterrain","op":"dig","points":[[0,0]]})").find("'op'") != std::string::npos);
+    CHECK(c.fails("terrain_sculpt", R"({"path":"terrain/valley.mcterrain","op":"raise","points":[[0]]})").find("[x, z]") != std::string::npos);
+    CHECK(c.fails("terrain_paint", R"({"path":"terrain/valley.mcterrain","layer":2,"points":[[0,0]]})").find("'layer'") != std::string::npos);
+    CHECK(c.fails("terrain_paint", R"({"path":"textures/ball.png","layer":0,"points":[[0,0]]})").find("not a terrain") != std::string::npos);
+    CHECK(c.fails("terrain_generate", R"({"path":"terrain/valley.mcterrain","low":0.8,"high":0.2})").find("low") != std::string::npos);
+    CHECK(read_file(root + "/assets/terrain/valley.mcterrain") == before);
+
+    // A heightmap: a 9 x 9 PNG brightening down its rows (toward +z), mapped to 0..10 m.
+    Array<u8> rgba;
+    for (u32 y = 0; y < 9; ++y)
+        for (u32 x = 0; x < 9; ++x)
+            for (u8 v : {u8(y * 30), u8(y * 30), u8(y * 30), u8(255)}) rgba.push_back(v);
+    Array<byte> png;
+    REQUIRE(cook::encode_png(9, 9, rgba.span(), png).has_value());
+    write_file(root + "/assets/terrain/ramp.png", std::string(reinterpret_cast<const char*>(png.data()), png.size()));
+    auto im = c.ok("terrain_import", R"({"path":"terrain/valley.mcterrain","file":"terrain/ramp.png","range":[0,10]})");
+    CHECK(num(im.v().get("height").get("min")) == doctest::Approx(0.0).epsilon(0.01));
+    CHECK(num(im.v().get("height").get("max")) == doctest::Approx(240.0 / 255.0 * 10.0).epsilon(0.01));
+    probe = c.ok("terrain_sculpt", R"({"path":"terrain/valley.mcterrain","op":"smooth","strength":0,"points":[[-32,-32],[0,0],[17,32]]})");
+    CHECK(num(probe.v().get("probes").at(0)) == doctest::Approx(0.0).epsilon(0.01));
+    CHECK(num(probe.v().get("probes").at(1)) == doctest::Approx(120.0 / 255.0 * 10.0).epsilon(0.01));
+    CHECK(num(probe.v().get("probes").at(2)) == doctest::Approx(240.0 / 255.0 * 10.0).epsilon(0.01));
+    CHECK(c.fails("terrain_import", R"({"path":"terrain/valley.mcterrain","file":"terrain/ramp.tga"})").find(".png") != std::string::npos);
+    CHECK(c.fails("terrain_import", R"({"path":"terrain/valley.mcterrain","file":"terrain/none.png"})").find("cannot be read") != std::string::npos);
+    CHECK(c.ok("cook_run", R"({"adopt":true})").v().get("ok").as_bool());  // adopt: the heightmap PNG is new
 }
 
 TEST_CASE("mcp tools: prefabs over MCP: create from an entity, place instances, apply, revert, edit (M-DATA-REACH 2)") {

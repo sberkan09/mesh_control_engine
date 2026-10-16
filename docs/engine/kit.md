@@ -40,7 +40,12 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   `blend_weight`), transitions and `AnimEvent3D` events; one-shots finish (`loop`, `finished`,
   `restart`). Clip lengths and bone poses come from a device-less `render::MeshStore` copy of the
   mesh loaded through `install_kit3d`'s asset system. `kit3d_extract` poses up to three weighted
-  samples (the playing clip, the blend's second clip, the clip fading out).
+  samples (the playing clip, the blend's second clip, the clip fading out). A version 2 graph
+  (M-GAMEPLAY3D 5) adds 2D blend spaces, layers (bone masks, additive clips; playheads in
+  `layer_time`), root motion (`root_motion`, `root_velocity`, `root_turn`) and IK chains (two-bone,
+  look-at, foot); `extended_pose` builds that pose in local TRS (`render::sample_local`,
+  `compose_local`), and `"kit3d_ik"` gathers the chains' goals (`IKTarget3D`, rays down for feet)
+  into the `AnimIK3D` resource every pose of the tick reads.
 - `PathAgent`: walks to `target` over the world's `NavGrid` at `speed`, re-planning every
   `repath_interval` ticks; `status` and the current smoothed path (16 waypoints) are runtime
   fields (#152).
@@ -89,6 +94,14 @@ of a mesh), `CharacterController3D` (capsule walk by `move` or the Move/Jump inp
 (`FixedUpdate_Pre`: create, teleport on outside moves, velocities, characters, runtime and moved
 static colliders), `"kit3d_writeback"` and `"kit3d_triggers"` after `"kit3d_physics"`; remove hooks
 destroy the bodies.
+
+`sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
+`hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the
+entity: `count`, `enters`, `last_other`), both pushing `TriggerEnter3D` / `TriggerExit3D` with the
+sensor as `trigger`, so `PhysicsEvents` and `FireOn::TriggerEnter` see them. A sensor skips its own
+entity and its `ChildOf` ancestors; switching it off, removing it or destroying it lets everything
+out. `install_sensors3d` (from `install_stock`, after `install_bodies3d`): `"kit3d_sensors"` after
+`"kit3d_triggers"`. Tests: `tests/kit/test_sensors3d.cpp`.
 
 `effects.h` (M-DATA-REACH 4): `FireOn` (`Manual` via the `fire` flag, `Start`, `TriggerEnter`,
 `ContactBegin`); `SfxTrigger` (a `PlaySfx` with dB jitter, `audio::AudioBus`), `ParticleBurst`,

@@ -5,135 +5,24 @@
   "name": "main",
   "entities": [
     {
-      "id": 1,
-      "name": "Island chunk",
+      "id": 438,
+      "name": "Island",
       "components": {
         "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:9d1b8825-ee0b-5d40-a7c5-01ce3139277e" }
+        "Terrain3D": { "terrain": "guid:5d2547cc-959c-5dd9-b4bc-70b1f81bb3f9" }
       }
     },
     {
-      "id": 2,
-      "name": "Island chunk 2",
+      "id": 439,
+      "name": "Island grass",
       "components": {
+        "ChildOf": { "parent": "$0" },
         "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:ec24ac91-6019-5e7f-a077-535cc8f83b08" }
+        "TerrainFoliage3D": { "mesh": "guid:692f473b-b7f5-5aa2-b0a8-502b09766d06", "layer": 1, "density": 0.8, "max_count": 40000, "seed": 11, "scale_min": 0.7, "scale_max": 1.4, "max_slope_deg": 38, "wind_amplitude": 0.06, "cull_distance": 70 }
       }
     },
     {
-      "id": 3,
-      "name": "Island chunk 3",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:2f66d0e4-0d2d-503a-9c8e-4b0e394e47d3" }
-      }
-    },
-    {
-      "id": 4,
-      "name": "Island chunk 4",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:0b2b74d0-288e-542e-9ea5-41fd1d9d6614" }
-      }
-    },
-    {
-      "id": 5,
-      "name": "Island chunk 5",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:cb2474c6-0291-53b9-b857-7738f439b032" }
-      }
-    },
-    {
-      "id": 6,
-      "name": "Island chunk 6",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:63b588a6-fc31-5099-94bf-49222947792d" }
-      }
-    },
-    {
-      "id": 7,
-      "name": "Island chunk 7",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:1175cbed-64e2-5b80-8ff6-3242b85ea07f" }
-      }
-    },
-    {
-      "id": 8,
-      "name": "Island chunk 8",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:44ee6cbe-ed04-5a2f-b326-cffda81a8195" }
-      }
-    },
-    {
-      "id": 9,
-      "name": "Island chunk 9",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:90d3224f-c39a-50fd-ae60-751cba1ee143" }
-      }
-    },
-    {
-      "id": 10,
-      "name": "Island chunk 10",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:60dce55e-b875-5892-8251-4b61cabc0121" }
-      }
-    },
-    {
-      "id": 11,
-      "name": "Island chunk 11",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:8f8fb35b-1650-5c40-aee8-0df32fe1ef54" }
-      }
-    },
-    {
-      "id": 12,
-      "name": "Island chunk 12",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:49440ca4-a707-516c-8be1-06d3c401ba47" }
-      }
-    },
-    {
-      "id": 13,
-      "name": "Island chunk 13",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:c0deb10c-fba9-5f11-9850-8e34b9f42490" }
-      }
-    },
-    {
-      "id": 14,
-      "name": "Island chunk 14",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:00be9dd1-8214-5be0-8d71-7f01d61b81ad" }
-      }
-    },
-    {
-      "id": 15,
-      "name": "Island chunk 15",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:1a689eba-8f07-54c6-8c59-1652591c5e33" }
-      }
-    },
-    {
-      "id": 16,
-      "name": "Island chunk 16",
-      "components": {
-        "LocalTransform": {},
-        "MeshRef": { "mesh": "guid:80b23581-93c2-5161-b588-4ba149be1b70" }
-      }
-    },
-    {
-      "id": 17,
+      "id": 440,
       "name": "Sea",
       "components": {
         "LocalTransform": {},
@@ -141,7 +30,7 @@
       }
     },
     {
-      "id": 18,
+      "id": 441,
       "name": "Progress",
       "components": {
         "LocalTransform": {},
@@ -150,7 +39,7 @@
       }
     },
     {
-      "id": 19,
+      "id": 442,
       "name": "Keeper Spawn",
       "components": {
         "KeeperSpawn": { "yaw": 3.14159 },
@@ -159,7 +48,7 @@
       }
     },
     {
-      "id": 20,
+      "id": 443,
       "name": "Camera",
       "components": {
         "Camera3DComponent": { "fov_deg": 62, "near_z": 0.08, "far_z": 600, "mouse_look": 1 },
@@ -167,7 +56,7 @@
       }
     },
     {
-      "id": 21,
+      "id": 444,
       "name": "Sky",
       "components": {
         "Environment3D": { "sky_texture": "guid:db375939-9551-58c5-be22-f303997296ac", "sun_direction": [0.89, -0.37, -0.24], "sun_intensity": 3.4, "sun_color": [1, 0.92, 0.78], "ambient_sky": [0.42, 0.52, 0.72], "ambient_ground": [0.3, 0.28, 0.22], "fog_density": 0.002, "fog_color": [0.74, 0.8, 0.92], "sky_zenith": [0.17, 0.36, 0.76], "sky_horizon": [0.72, 0.8, 0.92], "sky_ground": [0.24, 0.23, 0.21], "sky_texture_intensity": 0, "shadow_splits": [0.06, 0.18, 0.45, 1], "sky_texture_additive": 1, "shadow_cascades": 4, "shadow_distance": 140 },
@@ -175,7 +64,7 @@
       }
     },
     {
-      "id": 22,
+      "id": 445,
       "name": "Keeper",
       "components": {
         "Animator": { "clip": "idle" },
@@ -186,7 +75,7 @@
       }
     },
     {
-      "id": 23,
+      "id": 446,
       "name": "Beam",
       "components": {
         "Beam": {},
@@ -196,7 +85,7 @@
       }
     },
     {
-      "id": 24,
+      "id": 447,
       "name": "Beam 2",
       "components": {
         "Beam": { "mirror": 1 },
@@ -206,7 +95,7 @@
       }
     },
     {
-      "id": 25,
+      "id": 448,
       "name": "Beam 3",
       "components": {
         "Beam": { "mirror": 2 },
@@ -216,7 +105,7 @@
       }
     },
     {
-      "id": 26,
+      "id": 449,
       "name": "Beam 4",
       "components": {
         "Beam": { "mirror": 3 },
@@ -226,7 +115,7 @@
       }
     },
     {
-      "id": 27,
+      "id": 450,
       "name": "Beam 5",
       "components": {
         "Beam": { "mirror": 4 },
@@ -236,7 +125,7 @@
       }
     },
     {
-      "id": 28,
+      "id": 451,
       "name": "Beam 6",
       "components": {
         "Beam": { "mirror": 5 },
@@ -246,7 +135,7 @@
       }
     },
     {
-      "id": 29,
+      "id": 452,
       "name": "Beam 7",
       "components": {
         "Beam": { "mirror": 6 },
@@ -256,7 +145,7 @@
       }
     },
     {
-      "id": 30,
+      "id": 453,
       "name": "Finale shaft",
       "components": {
         "Beam": { "mirror": 7 },
@@ -266,7 +155,7 @@
       }
     },
     {
-      "id": 31,
+      "id": 454,
       "name": "Sounds",
       "components": {
         "LocalTransform": {},
@@ -274,7 +163,7 @@
       }
     },
     {
-      "id": 32,
+      "id": 455,
       "name": "Screen",
       "components": {
         "Camera2DComponent": { "pixels_per_meter": 1, "pixel_snap": false },
@@ -282,7 +171,7 @@
       }
     },
     {
-      "id": 33,
+      "id": 456,
       "name": "HUD status",
       "components": {
         "HudText": {},
@@ -291,7 +180,7 @@
       }
     },
     {
-      "id": 34,
+      "id": 457,
       "name": "HUD status 2",
       "components": {
         "HudText": { "line": 1 },
@@ -300,7 +189,7 @@
       }
     },
     {
-      "id": 35,
+      "id": 458,
       "name": "HUD journal",
       "components": {
         "HudText": { "kind": "Journal" },
@@ -309,7 +198,7 @@
       }
     },
     {
-      "id": 36,
+      "id": 459,
       "name": "HUD journal 2",
       "components": {
         "HudText": { "kind": "Journal", "line": 1 },
@@ -318,7 +207,7 @@
       }
     },
     {
-      "id": 37,
+      "id": 460,
       "name": "HUD prompt",
       "components": {
         "HudText": { "kind": "Prompt" },
@@ -327,7 +216,7 @@
       }
     },
     {
-      "id": 38,
+      "id": 461,
       "name": "HUD banner",
       "components": {
         "HudText": { "kind": "Banner" },
@@ -336,7 +225,7 @@
       }
     },
     {
-      "id": 39,
+      "id": 462,
       "name": "HUD banner 2",
       "components": {
         "HudText": { "kind": "Banner", "line": 1 },
@@ -345,7 +234,7 @@
       }
     },
     {
-      "id": 40,
+      "id": 463,
       "name": "HUD banner 3",
       "components": {
         "HudText": { "kind": "Banner", "line": 2 },
@@ -354,7 +243,7 @@
       }
     },
     {
-      "id": 41,
+      "id": 464,
       "name": "Pier",
       "components": {
         "BoxCollider3D": { "half": [2, 0.2, 12], "offset": [0, 1.3, 0] },
@@ -363,7 +252,7 @@
       }
     },
     {
-      "id": 42,
+      "id": 465,
       "name": "Boat",
       "components": {
         "LocalTransform": { "position": [8.5, -0.3, 103], "rotation": [0, 0.247404, 0, 0.968912] },
@@ -371,7 +260,7 @@
       }
     },
     {
-      "id": 43,
+      "id": 466,
       "name": "Boat 2",
       "components": {
         "LocalTransform": { "position": [-10, -0.3, 98], "rotation": [0, -0.198669, 0, 0.980067] },
@@ -379,7 +268,7 @@
       }
     },
     {
-      "id": 44,
+      "id": 467,
       "name": "Boat 3",
       "components": {
         "LocalTransform": { "position": [-6, 0.9, 84], "rotation": [0, 0.605186, 0, 0.796084] },
@@ -387,7 +276,7 @@
       }
     },
     {
-      "id": 45,
+      "id": 468,
       "name": "Boulder",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -396,7 +285,7 @@
       }
     },
     {
-      "id": 46,
+      "id": 469,
       "name": "Boulder 2",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -405,7 +294,7 @@
       }
     },
     {
-      "id": 47,
+      "id": 470,
       "name": "Boulder 3",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -414,7 +303,7 @@
       }
     },
     {
-      "id": 48,
+      "id": 471,
       "name": "Boulder 4",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -423,7 +312,7 @@
       }
     },
     {
-      "id": 49,
+      "id": 472,
       "name": "Boulder 5",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -432,7 +321,7 @@
       }
     },
     {
-      "id": 50,
+      "id": 473,
       "name": "Olive",
       "components": {
         "LocalTransform": { "position": [-14, -0.434, 78], "scale": [0.9, 0.9, 0.9] },
@@ -440,7 +329,7 @@
       }
     },
     {
-      "id": 51,
+      "id": 474,
       "name": "Olive 2",
       "components": {
         "LocalTransform": { "position": [14, -0.884, 77], "rotation": [0, 0.931858, 0, 0.362824], "scale": [1.124, 1.124, 1.124] },
@@ -448,7 +337,7 @@
       }
     },
     {
-      "id": 52,
+      "id": 475,
       "name": "Olive 3",
       "components": {
         "LocalTransform": { "position": [11, 0.482, 66], "rotation": [0, 0.6762, 0, -0.736718], "scale": [0.997, 0.997, 0.997] },
@@ -456,7 +345,7 @@
       }
     },
     {
-      "id": 53,
+      "id": 476,
       "name": "Olive 4",
       "components": {
         "LocalTransform": { "position": [-12, 0.603, 66], "rotation": [0, 0.441175, 0, 0.897421], "scale": [1.221, 1.221, 1.221] },
@@ -464,7 +353,7 @@
       }
     },
     {
-      "id": 54,
+      "id": 477,
       "name": "Gulls over the cove",
       "components": {
         "Animator": { "clip": "glide" },
@@ -474,7 +363,7 @@
       }
     },
     {
-      "id": 55,
+      "id": 478,
       "name": "Gulls over the cove 2",
       "components": {
         "Animator": { "clip": "glide", "phase": 3.4 },
@@ -484,7 +373,7 @@
       }
     },
     {
-      "id": 56,
+      "id": 479,
       "name": "Wall",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -493,7 +382,7 @@
       }
     },
     {
-      "id": 57,
+      "id": 480,
       "name": "Wall 2",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -502,7 +391,7 @@
       }
     },
     {
-      "id": 58,
+      "id": 481,
       "name": "Wall 3",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -511,7 +400,7 @@
       }
     },
     {
-      "id": 59,
+      "id": 482,
       "name": "Wall 4",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -520,7 +409,7 @@
       }
     },
     {
-      "id": 60,
+      "id": 483,
       "name": "Wall 5",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -529,7 +418,7 @@
       }
     },
     {
-      "id": 61,
+      "id": 484,
       "name": "Olive 5",
       "components": {
         "LocalTransform": { "position": [4, 8.869, 46], "scale": [0.9, 0.9, 0.9] },
@@ -537,7 +426,7 @@
       }
     },
     {
-      "id": 62,
+      "id": 485,
       "name": "Olive 6",
       "components": {
         "LocalTransform": { "position": [15, 8.85, 47], "rotation": [0, 0.931858, 0, 0.362824], "scale": [1.124, 1.124, 1.124] },
@@ -545,7 +434,7 @@
       }
     },
     {
-      "id": 63,
+      "id": 486,
       "name": "Olive 7",
       "components": {
         "LocalTransform": { "position": [12, 8.85, 39], "rotation": [0, 0.6762, 0, -0.736718], "scale": [0.997, 0.997, 0.997] },
@@ -553,7 +442,7 @@
       }
     },
     {
-      "id": 64,
+      "id": 487,
       "name": "Olive 8",
       "components": {
         "LocalTransform": { "position": [6, 8.85, 40], "rotation": [0, 0.441175, 0, 0.897421], "scale": [1.221, 1.221, 1.221] },
@@ -561,7 +450,7 @@
       }
     },
     {
-      "id": 65,
+      "id": 488,
       "name": "Olive 9",
       "components": {
         "LocalTransform": { "position": [16, 8.85, 44], "rotation": [0, 0.996338, 0, -0.085506], "scale": [1.095, 1.095, 1.095] },
@@ -569,7 +458,7 @@
       }
     },
     {
-      "id": 66,
+      "id": 489,
       "name": "Wall 6",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -578,7 +467,7 @@
       }
     },
     {
-      "id": 67,
+      "id": 490,
       "name": "Wall 7",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -587,7 +476,7 @@
       }
     },
     {
-      "id": 68,
+      "id": 491,
       "name": "Wall 8",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -596,7 +485,7 @@
       }
     },
     {
-      "id": 69,
+      "id": 492,
       "name": "Wall 9",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -605,7 +494,7 @@
       }
     },
     {
-      "id": 70,
+      "id": 493,
       "name": "Wall 10",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -614,7 +503,7 @@
       }
     },
     {
-      "id": 71,
+      "id": 494,
       "name": "Wall 11",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -623,7 +512,7 @@
       }
     },
     {
-      "id": 72,
+      "id": 495,
       "name": "Wall 12",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -632,7 +521,7 @@
       }
     },
     {
-      "id": 73,
+      "id": 496,
       "name": "Wall 13",
       "components": {
         "BoxCollider3D": { "half": [2, 0.5, 0.3], "offset": [0, 0.5, 0] },
@@ -641,7 +530,7 @@
       }
     },
     {
-      "id": 74,
+      "id": 497,
       "name": "Windmill",
       "components": {
         "Animator": { "clip": "turn", "speed": 0.55 },
@@ -651,7 +540,7 @@
       }
     },
     {
-      "id": 75,
+      "id": 498,
       "name": "Olive 10",
       "components": {
         "LocalTransform": { "position": [-26, 13.85, 47], "scale": [0.9, 0.9, 0.9] },
@@ -659,7 +548,7 @@
       }
     },
     {
-      "id": 76,
+      "id": 499,
       "name": "Olive 11",
       "components": {
         "LocalTransform": { "position": [-18, 13.74, 37], "rotation": [0, 0.931858, 0, 0.362824], "scale": [1.124, 1.124, 1.124] },
@@ -667,7 +556,7 @@
       }
     },
     {
-      "id": 77,
+      "id": 500,
       "name": "Olive 12",
       "components": {
         "LocalTransform": { "position": [-34, 13.85, 34], "rotation": [0, 0.6762, 0, -0.736718], "scale": [0.997, 0.997, 0.997] },
@@ -675,7 +564,7 @@
       }
     },
     {
-      "id": 78,
+      "id": 501,
       "name": "Olive 13",
       "components": {
         "LocalTransform": { "position": [-36, 13.85, 42], "rotation": [0, 0.441175, 0, 0.897421], "scale": [1.221, 1.221, 1.221] },
@@ -683,7 +572,7 @@
       }
     },
     {
-      "id": 79,
+      "id": 502,
       "name": "Olive 14",
       "components": {
         "LocalTransform": { "position": [-30, 13.85, 31], "rotation": [0, 0.996338, 0, -0.085506], "scale": [1.095, 1.095, 1.095] },
@@ -691,7 +580,7 @@
       }
     },
     {
-      "id": 80,
+      "id": 503,
       "name": "Olive 15",
       "components": {
         "LocalTransform": { "position": [-16, 11.609, 47], "rotation": [0, 0.281815, 0, -0.959469], "scale": [0.969, 0.969, 0.969] },
@@ -699,7 +588,7 @@
       }
     },
     {
-      "id": 81,
+      "id": 504,
       "name": "Olive 16",
       "components": {
         "LocalTransform": { "position": [-40, 13.18, 40], "rotation": [0, 0.791839, 0, 0.61073], "scale": [1.192, 1.192, 1.192] },
@@ -707,7 +596,7 @@
       }
     },
     {
-      "id": 82,
+      "id": 505,
       "name": "Cistern",
       "components": {
         "BoxCollider3D": { "half": [5, 0.6, 0.3], "offset": [0, 0.6, 4.7] },
@@ -716,7 +605,7 @@
       }
     },
     {
-      "id": 83,
+      "id": 506,
       "name": "Cistern wall",
       "components": {
         "BoxCollider3D": { "half": [5, 0.6, 0.3], "offset": [0, 0.6, -4.7] },
@@ -724,7 +613,7 @@
       }
     },
     {
-      "id": 84,
+      "id": 507,
       "name": "Cistern wall 2",
       "components": {
         "BoxCollider3D": { "half": [0.3, 0.6, 5], "offset": [4.7, 0.6, 0] },
@@ -732,7 +621,7 @@
       }
     },
     {
-      "id": 85,
+      "id": 508,
       "name": "Cistern wall 3",
       "components": {
         "BoxCollider3D": { "half": [0.3, 0.6, 5], "offset": [-4.7, 0.6, 0] },
@@ -740,7 +629,7 @@
       }
     },
     {
-      "id": 86,
+      "id": 509,
       "name": "Cypress",
       "components": {
         "LocalTransform": { "position": [44, 13.85, -2], "scale": [0.85, 0.85, 0.85] },
@@ -748,7 +637,7 @@
       }
     },
     {
-      "id": 87,
+      "id": 510,
       "name": "Cypress 2",
       "components": {
         "LocalTransform": { "position": [44, 13.85, 3], "rotation": [0, 0.931858, 0, 0.362824], "scale": [1.042, 1.042, 1.042] },
@@ -756,7 +645,7 @@
       }
     },
     {
-      "id": 88,
+      "id": 511,
       "name": "Cypress 3",
       "components": {
         "LocalTransform": { "position": [44, 13.85, 8], "rotation": [0, 0.6762, 0, -0.736718], "scale": [0.934, 0.934, 0.934] },
@@ -764,7 +653,7 @@
       }
     },
     {
-      "id": 89,
+      "id": 512,
       "name": "Cypress 4",
       "components": {
         "LocalTransform": { "position": [44, 13.85, 13], "rotation": [0, 0.441175, 0, 0.897421], "scale": [1.125, 1.125, 1.125] },
@@ -772,7 +661,7 @@
       }
     },
     {
-      "id": 90,
+      "id": 513,
       "name": "Cypress 5",
       "components": {
         "LocalTransform": { "position": [44, 13.72, 18], "rotation": [0, 0.996338, 0, -0.085506], "scale": [1.017, 1.017, 1.017] },
@@ -780,7 +669,7 @@
       }
     },
     {
-      "id": 91,
+      "id": 514,
       "name": "Cypress 6",
       "components": {
         "LocalTransform": { "position": [64, 13.85, -2], "rotation": [0, 0.281815, 0, -0.959469], "scale": [0.909, 0.909, 0.909] },
@@ -788,7 +677,7 @@
       }
     },
     {
-      "id": 92,
+      "id": 515,
       "name": "Cypress 7",
       "components": {
         "LocalTransform": { "position": [64, 13.85, 3], "rotation": [0, 0.791839, 0, 0.61073], "scale": [1.101, 1.101, 1.101] },
@@ -796,7 +685,7 @@
       }
     },
     {
-      "id": 93,
+      "id": 516,
       "name": "Cypress 8",
       "components": {
         "LocalTransform": { "position": [64, 13.85, 8], "rotation": [0, 0.856411, 0, -0.516294], "scale": [0.992, 0.992, 0.992] },
@@ -804,7 +693,7 @@
       }
     },
     {
-      "id": 94,
+      "id": 517,
       "name": "Cypress 9",
       "components": {
         "LocalTransform": { "position": [64, 13.85, 13], "rotation": [0, 0.170387, 0, 0.985377], "scale": [0.884, 0.884, 0.884] },
@@ -812,7 +701,7 @@
       }
     },
     {
-      "id": 95,
+      "id": 518,
       "name": "Cypress 10",
       "components": {
         "LocalTransform": { "position": [64, 13.85, 18], "rotation": [0, 0.980052, 0, 0.198742], "scale": [1.076, 1.076, 1.076] },
@@ -820,7 +709,7 @@
       }
     },
     {
-      "id": 96,
+      "id": 519,
       "name": "Olive 17",
       "components": {
         "LocalTransform": { "position": [48, 14.442, -6], "scale": [0.9, 0.9, 0.9] },
@@ -828,7 +717,7 @@
       }
     },
     {
-      "id": 97,
+      "id": 520,
       "name": "Olive 18",
       "components": {
         "LocalTransform": { "position": [60, 13.85, -6], "rotation": [0, 0.931858, 0, 0.362824], "scale": [1.124, 1.124, 1.124] },
@@ -836,7 +725,7 @@
       }
     },
     {
-      "id": 98,
+      "id": 521,
       "name": "Olive 19",
       "components": {
         "LocalTransform": { "position": [62, 13.85, 20], "rotation": [0, 0.6762, 0, -0.736718], "scale": [0.997, 0.997, 0.997] },
@@ -844,7 +733,7 @@
       }
     },
     {
-      "id": 99,
+      "id": 522,
       "name": "Firefly",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -854,7 +743,7 @@
       }
     },
     {
-      "id": 100,
+      "id": 523,
       "name": "Firefly 2",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -864,7 +753,7 @@
       }
     },
     {
-      "id": 101,
+      "id": 524,
       "name": "Firefly 3",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -874,7 +763,7 @@
       }
     },
     {
-      "id": 102,
+      "id": 525,
       "name": "Firefly 4",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -884,7 +773,7 @@
       }
     },
     {
-      "id": 103,
+      "id": 526,
       "name": "Firefly 5",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -894,7 +783,7 @@
       }
     },
     {
-      "id": 104,
+      "id": 527,
       "name": "Firefly 6",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -904,7 +793,7 @@
       }
     },
     {
-      "id": 105,
+      "id": 528,
       "name": "Firefly 7",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -914,7 +803,7 @@
       }
     },
     {
-      "id": 106,
+      "id": 529,
       "name": "Firefly 8",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -924,7 +813,7 @@
       }
     },
     {
-      "id": 107,
+      "id": 530,
       "name": "Firefly 9",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -934,7 +823,7 @@
       }
     },
     {
-      "id": 108,
+      "id": 531,
       "name": "Firefly 10",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -944,7 +833,7 @@
       }
     },
     {
-      "id": 109,
+      "id": 532,
       "name": "Firefly 11",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -954,7 +843,7 @@
       }
     },
     {
-      "id": 110,
+      "id": 533,
       "name": "Firefly 12",
       "components": {
         "Glow": { "intensity": 1.4, "flicker": 0.6, "kind": "Firefly" },
@@ -964,7 +853,7 @@
       }
     },
     {
-      "id": 111,
+      "id": 534,
       "name": "Stair flight",
       "components": {
         "LocalTransform": { "position": [53, 13.95, -4], "rotation": [0, -0.998759, 0, 0.049814], "scale": [1, 0.622, 1] },
@@ -972,7 +861,7 @@
       }
     },
     {
-      "id": 112,
+      "id": 535,
       "name": "Stair flight 2",
       "components": {
         "LocalTransform": { "position": [52.571, 15.816, -8.286], "rotation": [0, -0.998759, 0, 0.049814], "scale": [1, 0.762, 1] },
@@ -980,7 +869,7 @@
       }
     },
     {
-      "id": 113,
+      "id": 536,
       "name": "Stair flight 3",
       "components": {
         "LocalTransform": { "position": [52.143, 18.102, -12.571], "rotation": [0, -0.998759, 0, 0.049814], "scale": [1, 0.846, 1] },
@@ -988,7 +877,7 @@
       }
     },
     {
-      "id": 114,
+      "id": 537,
       "name": "Stair flight 4",
       "components": {
         "LocalTransform": { "position": [51.714, 20.639, -16.857], "rotation": [0, -0.998759, 0, 0.049814], "scale": [1, 0.874, 1] },
@@ -996,7 +885,7 @@
       }
     },
     {
-      "id": 115,
+      "id": 538,
       "name": "Stair flight 5",
       "components": {
         "LocalTransform": { "position": [51.286, 23.261, -21.143], "rotation": [0, -0.998759, 0, 0.049814], "scale": [1, 0.846, 1] },
@@ -1004,7 +893,7 @@
       }
     },
     {
-      "id": 116,
+      "id": 539,
       "name": "Stair flight 6",
       "components": {
         "LocalTransform": { "position": [50.857, 25.798, -25.429], "rotation": [0, -0.998759, 0, 0.049814], "scale": [1, 0.762, 1] },
@@ -1012,7 +901,7 @@
       }
     },
     {
-      "id": 117,
+      "id": 540,
       "name": "Stair flight 7",
       "components": {
         "LocalTransform": { "position": [50.429, 28.084, -29.714], "rotation": [0, -0.998759, 0, 0.049814], "scale": [1, 0.622, 1] },
@@ -1020,7 +909,7 @@
       }
     },
     {
-      "id": 118,
+      "id": 541,
       "name": "Boulder 6",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1029,7 +918,7 @@
       }
     },
     {
-      "id": 119,
+      "id": 542,
       "name": "Boulder 7",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1038,7 +927,7 @@
       }
     },
     {
-      "id": 120,
+      "id": 543,
       "name": "Boulder 8",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1047,7 +936,7 @@
       }
     },
     {
-      "id": 121,
+      "id": 544,
       "name": "Boulder 9",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1056,7 +945,7 @@
       }
     },
     {
-      "id": 122,
+      "id": 545,
       "name": "Boulder 10",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1065,7 +954,7 @@
       }
     },
     {
-      "id": 123,
+      "id": 546,
       "name": "Boulder 11",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1074,7 +963,7 @@
       }
     },
     {
-      "id": 124,
+      "id": 547,
       "name": "Boulder 12",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1083,7 +972,7 @@
       }
     },
     {
-      "id": 125,
+      "id": 548,
       "name": "Boulder 13",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1092,7 +981,7 @@
       }
     },
     {
-      "id": 126,
+      "id": 549,
       "name": "Boulder 14",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1101,7 +990,7 @@
       }
     },
     {
-      "id": 127,
+      "id": 550,
       "name": "Boulder 15",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1110,7 +999,7 @@
       }
     },
     {
-      "id": 128,
+      "id": 551,
       "name": "Boulder 16",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1119,7 +1008,7 @@
       }
     },
     {
-      "id": 129,
+      "id": 552,
       "name": "Boulder 17",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1128,7 +1017,7 @@
       }
     },
     {
-      "id": 130,
+      "id": 553,
       "name": "Boulder 18",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1137,7 +1026,7 @@
       }
     },
     {
-      "id": 131,
+      "id": 554,
       "name": "Boulder 19",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1146,7 +1035,7 @@
       }
     },
     {
-      "id": 132,
+      "id": 555,
       "name": "Boulder 20",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1155,7 +1044,7 @@
       }
     },
     {
-      "id": 133,
+      "id": 556,
       "name": "Pine",
       "components": {
         "LocalTransform": { "position": [60, 29.301, -36], "scale": [0.9, 0.9, 0.9] },
@@ -1163,7 +1052,7 @@
       }
     },
     {
-      "id": 134,
+      "id": 557,
       "name": "Pine 2",
       "components": {
         "LocalTransform": { "position": [62, 29.166, -46], "rotation": [0, 0.931858, 0, 0.362824], "scale": [1.124, 1.124, 1.124] },
@@ -1171,7 +1060,7 @@
       }
     },
     {
-      "id": 135,
+      "id": 558,
       "name": "Pine 3",
       "components": {
         "LocalTransform": { "position": [36, 32.353, -56], "rotation": [0, 0.6762, 0, -0.736718], "scale": [0.997, 0.997, 0.997] },
@@ -1179,7 +1068,7 @@
       }
     },
     {
-      "id": 136,
+      "id": 559,
       "name": "Pine 4",
       "components": {
         "LocalTransform": { "position": [58, 25.935, -56], "rotation": [0, 0.441175, 0, 0.897421], "scale": [1.221, 1.221, 1.221] },
@@ -1187,7 +1076,7 @@
       }
     },
     {
-      "id": 137,
+      "id": 560,
       "name": "Gulls over the quarry",
       "components": {
         "Animator": { "clip": "glide", "phase": 1.7 },
@@ -1197,7 +1086,7 @@
       }
     },
     {
-      "id": 138,
+      "id": 561,
       "name": "Column",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1206,7 +1095,7 @@
       }
     },
     {
-      "id": 139,
+      "id": 562,
       "name": "Arch",
       "components": {
         "LocalTransform": { "position": [-14, 41.9, -66], "rotation": [0, 0.707107, 0, 0.707107] },
@@ -1214,7 +1103,7 @@
       }
     },
     {
-      "id": 140,
+      "id": 563,
       "name": "Column 2",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1223,7 +1112,7 @@
       }
     },
     {
-      "id": 141,
+      "id": 564,
       "name": "Column 3",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1232,7 +1121,7 @@
       }
     },
     {
-      "id": 142,
+      "id": 565,
       "name": "Arch 2",
       "components": {
         "LocalTransform": { "position": [-6, 41.9, -66], "rotation": [0, 0.707107, 0, 0.707107] },
@@ -1240,7 +1129,7 @@
       }
     },
     {
-      "id": 143,
+      "id": 566,
       "name": "Column 4",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1249,7 +1138,7 @@
       }
     },
     {
-      "id": 144,
+      "id": 567,
       "name": "Column 5",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1258,7 +1147,7 @@
       }
     },
     {
-      "id": 145,
+      "id": 568,
       "name": "Arch 3",
       "components": {
         "LocalTransform": { "position": [2, 41.9, -66], "rotation": [0, 0.707107, 0, 0.707107] },
@@ -1266,7 +1155,7 @@
       }
     },
     {
-      "id": 146,
+      "id": 569,
       "name": "Column 6",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1275,7 +1164,7 @@
       }
     },
     {
-      "id": 147,
+      "id": 570,
       "name": "Column 7",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1284,7 +1173,7 @@
       }
     },
     {
-      "id": 148,
+      "id": 571,
       "name": "Column 8",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1293,7 +1182,7 @@
       }
     },
     {
-      "id": 149,
+      "id": 572,
       "name": "Arch 4",
       "components": {
         "LocalTransform": { "position": [-14, 41.9, -58], "rotation": [0, 0.707107, 0, 0.707107] },
@@ -1301,7 +1190,7 @@
       }
     },
     {
-      "id": 150,
+      "id": 573,
       "name": "Column 9",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1310,7 +1199,7 @@
       }
     },
     {
-      "id": 151,
+      "id": 574,
       "name": "Column 10",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1319,7 +1208,7 @@
       }
     },
     {
-      "id": 152,
+      "id": 575,
       "name": "Arch 5",
       "components": {
         "LocalTransform": { "position": [-6, 41.9, -58], "rotation": [0, 0.707107, 0, 0.707107] },
@@ -1327,7 +1216,7 @@
       }
     },
     {
-      "id": 153,
+      "id": 576,
       "name": "Column 11",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1336,7 +1225,7 @@
       }
     },
     {
-      "id": 154,
+      "id": 577,
       "name": "Column 12",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1345,7 +1234,7 @@
       }
     },
     {
-      "id": 155,
+      "id": 578,
       "name": "Arch 6",
       "components": {
         "LocalTransform": { "position": [2, 41.9, -58], "rotation": [0, 0.707107, 0, 0.707107] },
@@ -1353,7 +1242,7 @@
       }
     },
     {
-      "id": 156,
+      "id": 579,
       "name": "Column 13",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1362,7 +1251,7 @@
       }
     },
     {
-      "id": 157,
+      "id": 580,
       "name": "Column 14",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1371,7 +1260,7 @@
       }
     },
     {
-      "id": 158,
+      "id": 581,
       "name": "Banner",
       "components": {
         "Animator": { "clip": "flutter" },
@@ -1380,7 +1269,7 @@
       }
     },
     {
-      "id": 159,
+      "id": 582,
       "name": "Banner 2",
       "components": {
         "Animator": { "clip": "flutter", "phase": 1.3 },
@@ -1389,7 +1278,7 @@
       }
     },
     {
-      "id": 160,
+      "id": 583,
       "name": "Banner 3",
       "components": {
         "Animator": { "clip": "gust", "phase": 0.7 },
@@ -1398,7 +1287,7 @@
       }
     },
     {
-      "id": 161,
+      "id": 584,
       "name": "Banner 4",
       "components": {
         "Animator": { "clip": "gust", "phase": 2 },
@@ -1407,7 +1296,7 @@
       }
     },
     {
-      "id": 162,
+      "id": 585,
       "name": "Banner 5",
       "components": {
         "Animator": { "clip": "flutter", "phase": 1.4 },
@@ -1416,7 +1305,7 @@
       }
     },
     {
-      "id": 163,
+      "id": 586,
       "name": "Banner 6",
       "components": {
         "Animator": { "clip": "flutter", "phase": 2.7 },
@@ -1425,7 +1314,7 @@
       }
     },
     {
-      "id": 164,
+      "id": 587,
       "name": "Banner 7",
       "components": {
         "Animator": { "clip": "gust", "phase": 2.1 },
@@ -1434,7 +1323,7 @@
       }
     },
     {
-      "id": 165,
+      "id": 588,
       "name": "Banner 8",
       "components": {
         "Animator": { "clip": "gust", "phase": 3.4 },
@@ -1443,7 +1332,7 @@
       }
     },
     {
-      "id": 166,
+      "id": 589,
       "name": "Pine 5",
       "components": {
         "LocalTransform": { "position": [-20, 41.113, -70], "scale": [0.9, 0.9, 0.9] },
@@ -1451,7 +1340,7 @@
       }
     },
     {
-      "id": 167,
+      "id": 590,
       "name": "Pine 6",
       "components": {
         "LocalTransform": { "position": [4, 41.85, -74], "rotation": [0, 0.931858, 0, 0.362824], "scale": [1.124, 1.124, 1.124] },
@@ -1459,7 +1348,7 @@
       }
     },
     {
-      "id": 168,
+      "id": 591,
       "name": "Pine 7",
       "components": {
         "LocalTransform": { "position": [16, 28.599, -70], "rotation": [0, 0.6762, 0, -0.736718], "scale": [0.997, 0.997, 0.997] },
@@ -1467,7 +1356,7 @@
       }
     },
     {
-      "id": 169,
+      "id": 592,
       "name": "Pine 8",
       "components": {
         "LocalTransform": { "position": [-10, 41.85, -76], "rotation": [0, 0.441175, 0, 0.897421], "scale": [1.221, 1.221, 1.221] },
@@ -1475,7 +1364,7 @@
       }
     },
     {
-      "id": 170,
+      "id": 593,
       "name": "Pine 9",
       "components": {
         "LocalTransform": { "position": [20, 30.681, -64], "rotation": [0, 0.996338, 0, -0.085506], "scale": [1.095, 1.095, 1.095] },
@@ -1483,7 +1372,7 @@
       }
     },
     {
-      "id": 171,
+      "id": 594,
       "name": "Stair flight 8",
       "components": {
         "LocalTransform": { "position": [-10, 41.95, -49], "rotation": [0, 0.052414, 0, 0.998625], "scale": [1, 0.592, 1] },
@@ -1491,7 +1380,7 @@
       }
     },
     {
-      "id": 172,
+      "id": 595,
       "name": "Stair flight 9",
       "components": {
         "LocalTransform": { "position": [-9.5, 43.725, -44.25], "rotation": [0, 0.052414, 0, 0.998625], "scale": [1, 0.742, 1] },
@@ -1499,7 +1388,7 @@
       }
     },
     {
-      "id": 173,
+      "id": 596,
       "name": "Stair flight 10",
       "components": {
         "LocalTransform": { "position": [-9, 45.95, -39.5], "rotation": [0, 0.052414, 0, 0.998625], "scale": [1, 0.742, 1] },
@@ -1507,7 +1396,7 @@
       }
     },
     {
-      "id": 174,
+      "id": 597,
       "name": "Stair flight 11",
       "components": {
         "LocalTransform": { "position": [-8.5, 48.175, -34.75], "rotation": [0, 0.052414, 0, 0.998625], "scale": [1, 0.592, 1] },
@@ -1515,7 +1404,7 @@
       }
     },
     {
-      "id": 175,
+      "id": 598,
       "name": "Pine 10",
       "components": {
         "LocalTransform": { "position": [-62, 31.371, -46], "scale": [0.9, 0.9, 0.9] },
@@ -1523,7 +1412,7 @@
       }
     },
     {
-      "id": 176,
+      "id": 599,
       "name": "Pine 11",
       "components": {
         "LocalTransform": { "position": [-56, 29.342, -52], "rotation": [0, 0.931858, 0, 0.362824], "scale": [1.124, 1.124, 1.124] },
@@ -1531,7 +1420,7 @@
       }
     },
     {
-      "id": 177,
+      "id": 600,
       "name": "Pine 12",
       "components": {
         "LocalTransform": { "position": [-44, 35.345, -36], "rotation": [0, 0.6762, 0, -0.736718], "scale": [0.997, 0.997, 0.997] },
@@ -1539,7 +1428,7 @@
       }
     },
     {
-      "id": 178,
+      "id": 601,
       "name": "Stair flight 12",
       "components": {
         "LocalTransform": { "position": [-65, 27.95, -13], "rotation": [0, 0.977002, 0, 0.213231], "scale": [1, 0.556, 1] },
@@ -1547,7 +1436,7 @@
       }
     },
     {
-      "id": 179,
+      "id": 602,
       "name": "Stair flight 13",
       "components": {
         "LocalTransform": { "position": [-63.167, 29.617, -17], "rotation": [0, 0.977002, 0, 0.213231], "scale": [1, 0.689, 1] },
@@ -1555,7 +1444,7 @@
       }
     },
     {
-      "id": 180,
+      "id": 603,
       "name": "Stair flight 14",
       "components": {
         "LocalTransform": { "position": [-61.333, 31.683, -21], "rotation": [0, 0.977002, 0, 0.213231], "scale": [1, 0.756, 1] },
@@ -1563,7 +1452,7 @@
       }
     },
     {
-      "id": 181,
+      "id": 604,
       "name": "Stair flight 15",
       "components": {
         "LocalTransform": { "position": [-59.5, 33.95, -25], "rotation": [0, 0.977002, 0, 0.213231], "scale": [1, 0.756, 1] },
@@ -1571,7 +1460,7 @@
       }
     },
     {
-      "id": 182,
+      "id": 605,
       "name": "Stair flight 16",
       "components": {
         "LocalTransform": { "position": [-57.667, 36.217, -29], "rotation": [0, 0.977002, 0, 0.213231], "scale": [1, 0.689, 1] },
@@ -1579,7 +1468,7 @@
       }
     },
     {
-      "id": 183,
+      "id": 606,
       "name": "Stair flight 17",
       "components": {
         "LocalTransform": { "position": [-55.833, 38.283, -33], "rotation": [0, 0.977002, 0, 0.213231], "scale": [1, 0.556, 1] },
@@ -1587,7 +1476,7 @@
       }
     },
     {
-      "id": 184,
+      "id": 607,
       "name": "Stair flight 18",
       "components": {
         "LocalTransform": { "position": [-57, 11.95, 21], "rotation": [0, -0.989646, 0, 0.14353], "scale": [1, 0.622, 1] },
@@ -1595,7 +1484,7 @@
       }
     },
     {
-      "id": 185,
+      "id": 608,
       "name": "Stair flight 19",
       "components": {
         "LocalTransform": { "position": [-58.143, 13.816, 17.143], "rotation": [0, -0.989646, 0, 0.14353], "scale": [1, 0.762, 1] },
@@ -1603,7 +1492,7 @@
       }
     },
     {
-      "id": 186,
+      "id": 609,
       "name": "Stair flight 20",
       "components": {
         "LocalTransform": { "position": [-59.286, 16.102, 13.286], "rotation": [0, -0.989646, 0, 0.14353], "scale": [1, 0.846, 1] },
@@ -1611,7 +1500,7 @@
       }
     },
     {
-      "id": 187,
+      "id": 610,
       "name": "Stair flight 21",
       "components": {
         "LocalTransform": { "position": [-60.429, 18.639, 9.429], "rotation": [0, -0.989646, 0, 0.14353], "scale": [1, 0.874, 1] },
@@ -1619,7 +1508,7 @@
       }
     },
     {
-      "id": 188,
+      "id": 611,
       "name": "Stair flight 22",
       "components": {
         "LocalTransform": { "position": [-61.571, 21.261, 5.571], "rotation": [0, -0.989646, 0, 0.14353], "scale": [1, 0.846, 1] },
@@ -1627,7 +1516,7 @@
       }
     },
     {
-      "id": 189,
+      "id": 612,
       "name": "Stair flight 23",
       "components": {
         "LocalTransform": { "position": [-62.714, 23.798, 1.714], "rotation": [0, -0.989646, 0, 0.14353], "scale": [1, 0.762, 1] },
@@ -1635,7 +1524,7 @@
       }
     },
     {
-      "id": 190,
+      "id": 613,
       "name": "Stair flight 24",
       "components": {
         "LocalTransform": { "position": [-63.857, 26.084, -2.143], "rotation": [0, -0.989646, 0, 0.14353], "scale": [1, 0.622, 1] },
@@ -1643,7 +1532,7 @@
       }
     },
     {
-      "id": 191,
+      "id": 614,
       "name": "Boulder 21",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1652,7 +1541,7 @@
       }
     },
     {
-      "id": 192,
+      "id": 615,
       "name": "Boulder 22",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1661,7 +1550,7 @@
       }
     },
     {
-      "id": 193,
+      "id": 616,
       "name": "Boulder 23",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1670,7 +1559,7 @@
       }
     },
     {
-      "id": 194,
+      "id": 617,
       "name": "Boulder 24",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1679,7 +1568,7 @@
       }
     },
     {
-      "id": 195,
+      "id": 618,
       "name": "Boulder 25",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1688,7 +1577,7 @@
       }
     },
     {
-      "id": 196,
+      "id": 619,
       "name": "Boulder 26",
       "components": {
         "BoxCollider3D": { "half": [0.7, 0.6, 0.7], "offset": [0, 0.5, 0] },
@@ -1697,7 +1586,7 @@
       }
     },
     {
-      "id": 197,
+      "id": 620,
       "name": "Gulls over the cliff",
       "components": {
         "Animator": { "clip": "glide", "phase": 0.85 },
@@ -1707,7 +1596,7 @@
       }
     },
     {
-      "id": 198,
+      "id": 621,
       "name": "Stair flight 25",
       "components": {
         "LocalTransform": { "position": [-22, 13.95, 32], "rotation": [0, -0.963715, 0, 0.266934], "scale": [1, 0.833, 1] },
@@ -1715,7 +1604,7 @@
       }
     },
     {
-      "id": 199,
+      "id": 622,
       "name": "Stair flight 26",
       "components": {
         "LocalTransform": { "position": [-24.25, 16.45, 28.25], "rotation": [0, -0.963715, 0, 0.266934], "scale": [1, 1.033, 1] },
@@ -1723,7 +1612,7 @@
       }
     },
     {
-      "id": 200,
+      "id": 623,
       "name": "Stair flight 27",
       "components": {
         "LocalTransform": { "position": [-26.5, 19.55, 24.5], "rotation": [0, -0.963715, 0, 0.266934], "scale": [1, 1.133, 1] },
@@ -1731,7 +1620,7 @@
       }
     },
     {
-      "id": 201,
+      "id": 624,
       "name": "Stair flight 28",
       "components": {
         "LocalTransform": { "position": [-28.75, 22.95, 20.75], "rotation": [0, -0.963715, 0, 0.266934], "scale": [1, 1.133, 1] },
@@ -1739,7 +1628,7 @@
       }
     },
     {
-      "id": 202,
+      "id": 625,
       "name": "Stair flight 29",
       "components": {
         "LocalTransform": { "position": [-31, 26.35, 17], "rotation": [0, -0.963715, 0, 0.266934], "scale": [1, 1.033, 1] },
@@ -1747,7 +1636,7 @@
       }
     },
     {
-      "id": 203,
+      "id": 626,
       "name": "Stair flight 30",
       "components": {
         "LocalTransform": { "position": [-33.25, 29.45, 13.25], "rotation": [0, -0.963715, 0, 0.266934], "scale": [1, 0.833, 1] },
@@ -1755,7 +1644,7 @@
       }
     },
     {
-      "id": 204,
+      "id": 627,
       "name": "Stair flight 31",
       "components": {
         "LocalTransform": { "position": [-40, 31.95, 3], "rotation": [0, 0.842945, 0, 0.538], "scale": [1, 0.7, 1] },
@@ -1763,7 +1652,7 @@
       }
     },
     {
-      "id": 205,
+      "id": 628,
       "name": "Stair flight 32",
       "components": {
         "LocalTransform": { "position": [-36, 34.049, 1.143], "rotation": [0, 0.842945, 0, 0.538], "scale": [1, 0.857, 1] },
@@ -1771,7 +1660,7 @@
       }
     },
     {
-      "id": 206,
+      "id": 629,
       "name": "Stair flight 33",
       "components": {
         "LocalTransform": { "position": [-32, 36.621, -0.714], "rotation": [0, 0.842945, 0, 0.538], "scale": [1, 0.952, 1] },
@@ -1779,7 +1668,7 @@
       }
     },
     {
-      "id": 207,
+      "id": 630,
       "name": "Stair flight 34",
       "components": {
         "LocalTransform": { "position": [-28, 39.475, -2.571], "rotation": [0, 0.842945, 0, 0.538], "scale": [1, 0.983, 1] },
@@ -1787,7 +1676,7 @@
       }
     },
     {
-      "id": 208,
+      "id": 631,
       "name": "Stair flight 35",
       "components": {
         "LocalTransform": { "position": [-24, 42.425, -4.429], "rotation": [0, 0.842945, 0, 0.538], "scale": [1, 0.952, 1] },
@@ -1795,7 +1684,7 @@
       }
     },
     {
-      "id": 209,
+      "id": 632,
       "name": "Stair flight 36",
       "components": {
         "LocalTransform": { "position": [-20, 45.279, -6.286], "rotation": [0, 0.842945, 0, 0.538], "scale": [1, 0.857, 1] },
@@ -1803,7 +1692,7 @@
       }
     },
     {
-      "id": 210,
+      "id": 633,
       "name": "Stair flight 37",
       "components": {
         "LocalTransform": { "position": [-16, 47.851, -8.143], "rotation": [0, 0.842945, 0, 0.538], "scale": [1, 0.7, 1] },
@@ -1811,7 +1700,7 @@
       }
     },
     {
-      "id": 211,
+      "id": 634,
       "name": "Vault",
       "components": {
         "LocalTransform": { "position": [-6, 49.3, -20] },
@@ -1819,7 +1708,7 @@
       }
     },
     {
-      "id": 212,
+      "id": 635,
       "name": "Vault column",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1828,7 +1717,7 @@
       }
     },
     {
-      "id": 213,
+      "id": 636,
       "name": "Vault column 2",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1837,7 +1726,7 @@
       }
     },
     {
-      "id": 214,
+      "id": 637,
       "name": "Sconce",
       "components": {
         "Glow": { "intensity": 2.4, "flicker": 0.35, "kind": "Sconce" },
@@ -1846,7 +1735,7 @@
       }
     },
     {
-      "id": 215,
+      "id": 638,
       "name": "Vault column 3",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1855,7 +1744,7 @@
       }
     },
     {
-      "id": 216,
+      "id": 639,
       "name": "Vault column 4",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1864,7 +1753,7 @@
       }
     },
     {
-      "id": 217,
+      "id": 640,
       "name": "Sconce 2",
       "components": {
         "Glow": { "intensity": 2.4, "flicker": 0.35, "kind": "Sconce" },
@@ -1873,7 +1762,7 @@
       }
     },
     {
-      "id": 218,
+      "id": 641,
       "name": "Vault column 5",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1882,7 +1771,7 @@
       }
     },
     {
-      "id": 219,
+      "id": 642,
       "name": "Vault column 6",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1891,7 +1780,7 @@
       }
     },
     {
-      "id": 220,
+      "id": 643,
       "name": "Sconce 3",
       "components": {
         "Glow": { "intensity": 2.4, "flicker": 0.35, "kind": "Sconce" },
@@ -1900,7 +1789,7 @@
       }
     },
     {
-      "id": 221,
+      "id": 644,
       "name": "Vault column 7",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1909,7 +1798,7 @@
       }
     },
     {
-      "id": 222,
+      "id": 645,
       "name": "Vault column 8",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1918,7 +1807,7 @@
       }
     },
     {
-      "id": 223,
+      "id": 646,
       "name": "Sconce 4",
       "components": {
         "Glow": { "intensity": 2.4, "flicker": 0.35, "kind": "Sconce" },
@@ -1927,7 +1816,7 @@
       }
     },
     {
-      "id": 224,
+      "id": 647,
       "name": "Vault column 9",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1936,7 +1825,7 @@
       }
     },
     {
-      "id": 225,
+      "id": 648,
       "name": "Vault column 10",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1945,7 +1834,7 @@
       }
     },
     {
-      "id": 226,
+      "id": 649,
       "name": "Sconce 5",
       "components": {
         "Glow": { "intensity": 2.4, "flicker": 0.35, "kind": "Sconce" },
@@ -1954,7 +1843,7 @@
       }
     },
     {
-      "id": 227,
+      "id": 650,
       "name": "Vault column 11",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1963,7 +1852,7 @@
       }
     },
     {
-      "id": 228,
+      "id": 651,
       "name": "Vault column 12",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1972,7 +1861,7 @@
       }
     },
     {
-      "id": 229,
+      "id": 652,
       "name": "Sconce 6",
       "components": {
         "Glow": { "intensity": 2.4, "flicker": 0.35, "kind": "Sconce" },
@@ -1981,7 +1870,7 @@
       }
     },
     {
-      "id": 230,
+      "id": 653,
       "name": "Vault column 13",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1990,7 +1879,7 @@
       }
     },
     {
-      "id": 231,
+      "id": 654,
       "name": "Vault column 14",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -1999,7 +1888,7 @@
       }
     },
     {
-      "id": 232,
+      "id": 655,
       "name": "Sconce 7",
       "components": {
         "Glow": { "intensity": 2.4, "flicker": 0.35, "kind": "Sconce" },
@@ -2008,7 +1897,7 @@
       }
     },
     {
-      "id": 233,
+      "id": 656,
       "name": "Vault column 15",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -2017,7 +1906,7 @@
       }
     },
     {
-      "id": 234,
+      "id": 657,
       "name": "Vault column 16",
       "components": {
         "BoxCollider3D": { "half": [0.45, 2.6, 0.45], "offset": [0, 2.5, 0] },
@@ -2026,7 +1915,7 @@
       }
     },
     {
-      "id": 235,
+      "id": 658,
       "name": "Sconce 8",
       "components": {
         "Glow": { "intensity": 2.4, "flicker": 0.35, "kind": "Sconce" },
@@ -2035,7 +1924,7 @@
       }
     },
     {
-      "id": 236,
+      "id": 659,
       "name": "Dais",
       "components": {
         "LocalTransform": { "position": [-6, 50, -20] },
@@ -2043,7 +1932,7 @@
       }
     },
     {
-      "id": 237,
+      "id": 660,
       "name": "Pine 13",
       "components": {
         "LocalTransform": { "position": [-20, 35.93, -28], "scale": [0.9, 0.9, 0.9] },
@@ -2051,7 +1940,7 @@
       }
     },
     {
-      "id": 238,
+      "id": 661,
       "name": "Pine 14",
       "components": {
         "LocalTransform": { "position": [8, 30.302, -30], "rotation": [0, 0.931858, 0, 0.362824], "scale": [1.124, 1.124, 1.124] },
@@ -2059,7 +1948,7 @@
       }
     },
     {
-      "id": 239,
+      "id": 662,
       "name": "Pine 15",
       "components": {
         "LocalTransform": { "position": [-18, 44.903, -12], "rotation": [0, 0.6762, 0, -0.736718], "scale": [0.997, 0.997, 0.997] },
@@ -2067,7 +1956,7 @@
       }
     },
     {
-      "id": 240,
+      "id": 663,
       "name": "Pine 16",
       "components": {
         "LocalTransform": { "position": [8, 25.213, -10], "rotation": [0, 0.441175, 0, 0.897421], "scale": [1.221, 1.221, 1.221] },
@@ -2075,7 +1964,7 @@
       }
     },
     {
-      "id": 241,
+      "id": 664,
       "name": "Pine 17",
       "components": {
         "LocalTransform": { "position": [0, 32.056, -36], "rotation": [0, 0.996338, 0, -0.085506], "scale": [1.095, 1.095, 1.095] },
@@ -2083,18 +1972,18 @@
       }
     },
     {
-      "id": 242,
+      "id": 665,
       "name": "Heliostat 1",
       "components": {
         "BoxCollider3D": { "half": [0.6, 0.9, 0.6], "offset": [0, 0.9, 0] },
-        "Heliostat": { "dish": "$242", "next": "$243" },
+        "Heliostat": { "dish": "$228", "next": "$229" },
         "LocalTransform": { "position": [-24, 14, 36], "rotation": [0, 0.767028, 0, 0.641614] },
         "MeshRef": { "mesh": "guid:72630548-d438-5ed6-bb5f-a63035e1d6be" },
         "SaveKey": { "key": 9100 }
       }
     },
     {
-      "id": 243,
+      "id": 666,
       "name": "Heliostat 1 dish",
       "components": {
         "LocalTransform": { "position": [-24, 15.9, 36], "rotation": [0, 0.767028, 0, 0.641614] },
@@ -2102,18 +1991,18 @@
       }
     },
     {
-      "id": 244,
+      "id": 667,
       "name": "Heliostat 2",
       "components": {
         "BoxCollider3D": { "half": [0.6, 0.9, 0.6], "offset": [0, 0.9, 0] },
-        "Heliostat": { "dish": "$244", "next": "$245", "index": 1 },
+        "Heliostat": { "dish": "$230", "next": "$231", "index": 1 },
         "LocalTransform": { "position": [54, 14, 22], "rotation": [0, -0.996805, 0, 0.079871] },
         "MeshRef": { "mesh": "guid:72630548-d438-5ed6-bb5f-a63035e1d6be" },
         "SaveKey": { "key": 9101 }
       }
     },
     {
-      "id": 245,
+      "id": 668,
       "name": "Heliostat 2 dish",
       "components": {
         "LocalTransform": { "position": [54, 15.9, 22], "rotation": [0, -0.996805, 0, 0.079871] },
@@ -2121,18 +2010,18 @@
       }
     },
     {
-      "id": 246,
+      "id": 669,
       "name": "Heliostat 3",
       "components": {
         "BoxCollider3D": { "half": [0.6, 0.9, 0.6], "offset": [0, 0.9, 0] },
-        "Heliostat": { "dish": "$246", "next": "$247", "index": 2 },
+        "Heliostat": { "dish": "$232", "next": "$233", "index": 2 },
         "LocalTransform": { "position": [44, 30, -40], "rotation": [0, -0.850651, 0, 0.525731] },
         "MeshRef": { "mesh": "guid:72630548-d438-5ed6-bb5f-a63035e1d6be" },
         "SaveKey": { "key": 9102 }
       }
     },
     {
-      "id": 247,
+      "id": 670,
       "name": "Heliostat 3 dish",
       "components": {
         "LocalTransform": { "position": [44, 31.9, -40], "rotation": [0, -0.850651, 0, 0.525731] },
@@ -2140,18 +2029,18 @@
       }
     },
     {
-      "id": 248,
+      "id": 671,
       "name": "Heliostat 4",
       "components": {
         "BoxCollider3D": { "half": [0.6, 0.9, 0.6], "offset": [0, 0.9, 0] },
-        "Heliostat": { "dish": "$248", "next": "$249", "index": 3 },
+        "Heliostat": { "dish": "$234", "next": "$235", "index": 3 },
         "LocalTransform": { "position": [0, 42, -62], "rotation": [0, -0.566136, 0, 0.824312] },
         "MeshRef": { "mesh": "guid:72630548-d438-5ed6-bb5f-a63035e1d6be" },
         "SaveKey": { "key": 9103 }
       }
     },
     {
-      "id": 249,
+      "id": 672,
       "name": "Heliostat 4 dish",
       "components": {
         "LocalTransform": { "position": [0, 43.9, -62], "rotation": [0, -0.566136, 0, 0.824312] },
@@ -2159,18 +2048,18 @@
       }
     },
     {
-      "id": 250,
+      "id": 673,
       "name": "Heliostat 5",
       "components": {
         "BoxCollider3D": { "half": [0.6, 0.9, 0.6], "offset": [0, 0.9, 0] },
-        "Heliostat": { "dish": "$250", "next": "$251", "index": 4 },
+        "Heliostat": { "dish": "$236", "next": "$237", "index": 4 },
         "LocalTransform": { "position": [-52, 40, -42], "rotation": [0, -0.204747, 0, 0.978815] },
         "MeshRef": { "mesh": "guid:72630548-d438-5ed6-bb5f-a63035e1d6be" },
         "SaveKey": { "key": 9104 }
       }
     },
     {
-      "id": 251,
+      "id": 674,
       "name": "Heliostat 5 dish",
       "components": {
         "LocalTransform": { "position": [-52, 41.9, -42], "rotation": [0, -0.204747, 0, 0.978815] },
@@ -2178,18 +2067,18 @@
       }
     },
     {
-      "id": 252,
+      "id": 675,
       "name": "Heliostat 6",
       "components": {
         "BoxCollider3D": { "half": [0.6, 0.9, 0.6], "offset": [0, 0.9, 0] },
-        "Heliostat": { "dish": "$252", "next": "$253", "index": 5 },
+        "Heliostat": { "dish": "$238", "next": "$239", "index": 5 },
         "LocalTransform": { "position": [-66, 28, -10], "rotation": [0, 0.76302, 0, 0.646375] },
         "MeshRef": { "mesh": "guid:72630548-d438-5ed6-bb5f-a63035e1d6be" },
         "SaveKey": { "key": 9105 }
       }
     },
     {
-      "id": 253,
+      "id": 676,
       "name": "Heliostat 6 dish",
       "components": {
         "LocalTransform": { "position": [-66, 29.9, -10], "rotation": [0, 0.76302, 0, 0.646375] },
@@ -2197,18 +2086,18 @@
       }
     },
     {
-      "id": 254,
+      "id": 677,
       "name": "Heliostat 7",
       "components": {
         "BoxCollider3D": { "half": [0.6, 0.9, 0.6], "offset": [0, 0.9, 0] },
-        "Heliostat": { "dish": "$254", "index": 6 },
+        "Heliostat": { "dish": "$240", "index": 6 },
         "LocalTransform": { "position": [-6, 50, -20] },
         "MeshRef": { "mesh": "guid:72630548-d438-5ed6-bb5f-a63035e1d6be" },
         "SaveKey": { "key": 9106 }
       }
     },
     {
-      "id": 255,
+      "id": 678,
       "name": "Heliostat 7 dish",
       "components": {
         "LocalTransform": { "position": [-6, 51.9, -20] },
@@ -2216,7 +2105,7 @@
       }
     },
     {
-      "id": 256,
+      "id": 679,
       "name": "Lantern",
       "components": {
         "Glow": {},
@@ -2226,7 +2115,7 @@
       }
     },
     {
-      "id": 257,
+      "id": 680,
       "name": "Lantern 2",
       "components": {
         "Glow": {},
@@ -2236,7 +2125,7 @@
       }
     },
     {
-      "id": 258,
+      "id": 681,
       "name": "Lantern 3",
       "components": {
         "Glow": {},
@@ -2246,7 +2135,7 @@
       }
     },
     {
-      "id": 259,
+      "id": 682,
       "name": "Lantern 4",
       "components": {
         "Glow": {},
@@ -2256,7 +2145,7 @@
       }
     },
     {
-      "id": 260,
+      "id": 683,
       "name": "Lantern 5",
       "components": {
         "Glow": {},
@@ -2266,7 +2155,7 @@
       }
     },
     {
-      "id": 261,
+      "id": 684,
       "name": "Lantern 6",
       "components": {
         "Glow": {},
@@ -2276,7 +2165,7 @@
       }
     },
     {
-      "id": 262,
+      "id": 685,
       "name": "Lantern 7",
       "components": {
         "Glow": {},
@@ -2286,7 +2175,7 @@
       }
     },
     {
-      "id": 263,
+      "id": 686,
       "name": "Lantern 8",
       "components": {
         "Glow": {},
@@ -2296,7 +2185,7 @@
       }
     },
     {
-      "id": 264,
+      "id": 687,
       "name": "Lantern 9",
       "components": {
         "Glow": {},
@@ -2306,7 +2195,7 @@
       }
     },
     {
-      "id": 265,
+      "id": 688,
       "name": "Lantern 10",
       "components": {
         "Glow": {},
@@ -2316,7 +2205,7 @@
       }
     },
     {
-      "id": 266,
+      "id": 689,
       "name": "Lantern 11",
       "components": {
         "Glow": {},
@@ -2326,7 +2215,7 @@
       }
     },
     {
-      "id": 267,
+      "id": 690,
       "name": "Lantern 12",
       "components": {
         "Glow": {},
@@ -2336,7 +2225,7 @@
       }
     },
     {
-      "id": 268,
+      "id": 691,
       "name": "Lantern 13",
       "components": {
         "Glow": {},
@@ -2346,7 +2235,7 @@
       }
     },
     {
-      "id": 269,
+      "id": 692,
       "name": "Lantern 14",
       "components": {
         "Glow": {},
@@ -2356,7 +2245,7 @@
       }
     },
     {
-      "id": 270,
+      "id": 693,
       "name": "Lantern 15",
       "components": {
         "Glow": {},
@@ -2366,7 +2255,7 @@
       }
     },
     {
-      "id": 271,
+      "id": 694,
       "name": "Lantern 16",
       "components": {
         "Glow": {},
@@ -2376,7 +2265,7 @@
       }
     },
     {
-      "id": 272,
+      "id": 695,
       "name": "Lantern 17",
       "components": {
         "Glow": {},
@@ -2386,7 +2275,7 @@
       }
     },
     {
-      "id": 273,
+      "id": 696,
       "name": "Lantern 18",
       "components": {
         "Glow": {},
@@ -2396,7 +2285,7 @@
       }
     },
     {
-      "id": 274,
+      "id": 697,
       "name": "Lantern 19",
       "components": {
         "Glow": {},
@@ -2406,7 +2295,7 @@
       }
     },
     {
-      "id": 275,
+      "id": 698,
       "name": "Lantern 20",
       "components": {
         "Glow": {},
@@ -2416,7 +2305,7 @@
       }
     },
     {
-      "id": 276,
+      "id": 699,
       "name": "Lantern 21",
       "components": {
         "Glow": {},
@@ -2426,7 +2315,7 @@
       }
     },
     {
-      "id": 277,
+      "id": 700,
       "name": "Lantern 22",
       "components": {
         "Glow": {},
@@ -2436,7 +2325,7 @@
       }
     },
     {
-      "id": 278,
+      "id": 701,
       "name": "Lantern 23",
       "components": {
         "Glow": {},
@@ -2446,7 +2335,7 @@
       }
     },
     {
-      "id": 279,
+      "id": 702,
       "name": "Lantern 24",
       "components": {
         "Glow": {},
@@ -2456,7 +2345,7 @@
       }
     },
     {
-      "id": 280,
+      "id": 703,
       "name": "Lantern 25",
       "components": {
         "Glow": {},
@@ -2466,7 +2355,7 @@
       }
     },
     {
-      "id": 281,
+      "id": 704,
       "name": "Lantern 26",
       "components": {
         "Glow": {},
@@ -2476,7 +2365,7 @@
       }
     },
     {
-      "id": 282,
+      "id": 705,
       "name": "Lantern 27",
       "components": {
         "Glow": {},
@@ -2486,7 +2375,7 @@
       }
     },
     {
-      "id": 283,
+      "id": 706,
       "name": "Lantern 28",
       "components": {
         "Glow": {},
@@ -2496,7 +2385,7 @@
       }
     },
     {
-      "id": 284,
+      "id": 707,
       "name": "Lantern 29",
       "components": {
         "Glow": {},
@@ -2506,7 +2395,7 @@
       }
     },
     {
-      "id": 285,
+      "id": 708,
       "name": "Lantern 30",
       "components": {
         "Glow": {},
@@ -2516,7 +2405,7 @@
       }
     },
     {
-      "id": 286,
+      "id": 709,
       "name": "Lantern 31",
       "components": {
         "Glow": {},
@@ -2526,7 +2415,7 @@
       }
     },
     {
-      "id": 287,
+      "id": 710,
       "name": "Lantern 32",
       "components": {
         "Glow": {},
@@ -2536,7 +2425,7 @@
       }
     },
     {
-      "id": 288,
+      "id": 711,
       "name": "Lantern 33",
       "components": {
         "Glow": {},
@@ -2546,7 +2435,7 @@
       }
     },
     {
-      "id": 289,
+      "id": 712,
       "name": "Lantern 34",
       "components": {
         "Glow": {},
@@ -2556,7 +2445,7 @@
       }
     },
     {
-      "id": 290,
+      "id": 713,
       "name": "Lantern 35",
       "components": {
         "Glow": {},
@@ -2566,7 +2455,7 @@
       }
     },
     {
-      "id": 291,
+      "id": 714,
       "name": "Lantern 36",
       "components": {
         "Glow": {},
@@ -2576,7 +2465,7 @@
       }
     },
     {
-      "id": 292,
+      "id": 715,
       "name": "Lantern 37",
       "components": {
         "Glow": {},
@@ -2586,7 +2475,7 @@
       }
     },
     {
-      "id": 293,
+      "id": 716,
       "name": "Lantern 38",
       "components": {
         "Glow": {},
@@ -2596,7 +2485,7 @@
       }
     },
     {
-      "id": 294,
+      "id": 717,
       "name": "Lantern 39",
       "components": {
         "Glow": {},
@@ -2606,7 +2495,7 @@
       }
     },
     {
-      "id": 295,
+      "id": 718,
       "name": "Lantern 40",
       "components": {
         "Glow": {},
@@ -2616,7 +2505,7 @@
       }
     },
     {
-      "id": 296,
+      "id": 719,
       "name": "Lantern 41",
       "components": {
         "Glow": {},
@@ -2626,7 +2515,7 @@
       }
     },
     {
-      "id": 297,
+      "id": 720,
       "name": "Lantern 42",
       "components": {
         "Glow": {},
@@ -2636,7 +2525,7 @@
       }
     },
     {
-      "id": 298,
+      "id": 721,
       "name": "Lantern 43",
       "components": {
         "Glow": {},
@@ -2646,7 +2535,7 @@
       }
     },
     {
-      "id": 299,
+      "id": 722,
       "name": "Lantern 44",
       "components": {
         "Glow": {},
@@ -2656,7 +2545,7 @@
       }
     },
     {
-      "id": 300,
+      "id": 723,
       "name": "Lantern 45",
       "components": {
         "Glow": {},
@@ -2666,7 +2555,7 @@
       }
     },
     {
-      "id": 301,
+      "id": 724,
       "name": "Lantern 46",
       "components": {
         "Glow": {},
@@ -2676,7 +2565,7 @@
       }
     },
     {
-      "id": 302,
+      "id": 725,
       "name": "Lantern 47",
       "components": {
         "Glow": {},
@@ -2686,7 +2575,7 @@
       }
     },
     {
-      "id": 303,
+      "id": 726,
       "name": "Lantern 48",
       "components": {
         "Glow": {},
@@ -2696,7 +2585,7 @@
       }
     },
     {
-      "id": 304,
+      "id": 727,
       "name": "Lantern 49",
       "components": {
         "Glow": {},
@@ -2706,7 +2595,7 @@
       }
     },
     {
-      "id": 305,
+      "id": 728,
       "name": "Lantern 50",
       "components": {
         "Glow": {},
@@ -2716,7 +2605,7 @@
       }
     },
     {
-      "id": 306,
+      "id": 729,
       "name": "Lantern 51",
       "components": {
         "Glow": {},
@@ -2726,7 +2615,7 @@
       }
     },
     {
-      "id": 307,
+      "id": 730,
       "name": "Lantern 52",
       "components": {
         "Glow": {},
@@ -2736,7 +2625,7 @@
       }
     },
     {
-      "id": 308,
+      "id": 731,
       "name": "Lantern 53",
       "components": {
         "Glow": {},
@@ -2746,7 +2635,7 @@
       }
     },
     {
-      "id": 309,
+      "id": 732,
       "name": "Lantern 54",
       "components": {
         "Glow": {},
@@ -2756,7 +2645,7 @@
       }
     },
     {
-      "id": 310,
+      "id": 733,
       "name": "Lantern 55",
       "components": {
         "Glow": {},
@@ -2766,7 +2655,7 @@
       }
     },
     {
-      "id": 311,
+      "id": 734,
       "name": "Lantern 56",
       "components": {
         "Glow": {},
@@ -2776,7 +2665,7 @@
       }
     },
     {
-      "id": 312,
+      "id": 735,
       "name": "Lantern 57",
       "components": {
         "Glow": {},
@@ -2786,7 +2675,7 @@
       }
     },
     {
-      "id": 313,
+      "id": 736,
       "name": "Lantern 58",
       "components": {
         "Glow": {},
@@ -2796,7 +2685,7 @@
       }
     },
     {
-      "id": 314,
+      "id": 737,
       "name": "Lantern 59",
       "components": {
         "Glow": {},
@@ -2806,7 +2695,7 @@
       }
     },
     {
-      "id": 315,
+      "id": 738,
       "name": "Lantern 60",
       "components": {
         "Glow": {},
@@ -2816,7 +2705,7 @@
       }
     },
     {
-      "id": 316,
+      "id": 739,
       "name": "Lantern 61",
       "components": {
         "Glow": {},
@@ -2826,7 +2715,7 @@
       }
     },
     {
-      "id": 317,
+      "id": 740,
       "name": "Lantern 62",
       "components": {
         "Glow": {},
@@ -2836,7 +2725,7 @@
       }
     },
     {
-      "id": 318,
+      "id": 741,
       "name": "Lantern 63",
       "components": {
         "Glow": {},
@@ -2846,7 +2735,7 @@
       }
     },
     {
-      "id": 319,
+      "id": 742,
       "name": "Lantern 64",
       "components": {
         "Glow": {},
@@ -2856,7 +2745,7 @@
       }
     },
     {
-      "id": 320,
+      "id": 743,
       "name": "Lantern 65",
       "components": {
         "Glow": {},
@@ -2866,7 +2755,7 @@
       }
     },
     {
-      "id": 321,
+      "id": 744,
       "name": "Lantern 66",
       "components": {
         "Glow": {},
@@ -2876,7 +2765,7 @@
       }
     },
     {
-      "id": 322,
+      "id": 745,
       "name": "Lantern 67",
       "components": {
         "Glow": {},
@@ -2886,7 +2775,7 @@
       }
     },
     {
-      "id": 323,
+      "id": 746,
       "name": "Lantern 68",
       "components": {
         "Glow": {},
@@ -2896,7 +2785,7 @@
       }
     },
     {
-      "id": 324,
+      "id": 747,
       "name": "Lantern 69",
       "components": {
         "Glow": {},
@@ -2906,7 +2795,7 @@
       }
     },
     {
-      "id": 325,
+      "id": 748,
       "name": "Lantern 70",
       "components": {
         "Glow": {},
@@ -2916,7 +2805,7 @@
       }
     },
     {
-      "id": 326,
+      "id": 749,
       "name": "Lantern 71",
       "components": {
         "Glow": {},
@@ -2926,7 +2815,7 @@
       }
     },
     {
-      "id": 327,
+      "id": 750,
       "name": "Lantern 72",
       "components": {
         "Glow": {},
@@ -2936,7 +2825,7 @@
       }
     },
     {
-      "id": 328,
+      "id": 751,
       "name": "Lantern 73",
       "components": {
         "Glow": {},
@@ -2946,7 +2835,7 @@
       }
     },
     {
-      "id": 329,
+      "id": 752,
       "name": "Lantern 74",
       "components": {
         "Glow": {},
@@ -2956,7 +2845,7 @@
       }
     },
     {
-      "id": 330,
+      "id": 753,
       "name": "Lantern 75",
       "components": {
         "Glow": {},
@@ -2966,7 +2855,7 @@
       }
     },
     {
-      "id": 331,
+      "id": 754,
       "name": "Lantern 76",
       "components": {
         "Glow": {},
@@ -2976,7 +2865,7 @@
       }
     },
     {
-      "id": 332,
+      "id": 755,
       "name": "Lantern 77",
       "components": {
         "Glow": {},
@@ -2986,7 +2875,7 @@
       }
     },
     {
-      "id": 333,
+      "id": 756,
       "name": "Lantern 78",
       "components": {
         "Glow": {},
@@ -2996,7 +2885,7 @@
       }
     },
     {
-      "id": 334,
+      "id": 757,
       "name": "Lantern 79",
       "components": {
         "Glow": {},
@@ -3006,7 +2895,7 @@
       }
     },
     {
-      "id": 335,
+      "id": 758,
       "name": "Lantern 80",
       "components": {
         "Glow": {},
@@ -3016,7 +2905,7 @@
       }
     },
     {
-      "id": 336,
+      "id": 759,
       "name": "Lantern 81",
       "components": {
         "Glow": {},
@@ -3026,7 +2915,7 @@
       }
     },
     {
-      "id": 337,
+      "id": 760,
       "name": "Lantern 82",
       "components": {
         "Glow": {},
@@ -3036,7 +2925,7 @@
       }
     },
     {
-      "id": 338,
+      "id": 761,
       "name": "Lantern 83",
       "components": {
         "Glow": {},
@@ -3046,7 +2935,7 @@
       }
     },
     {
-      "id": 339,
+      "id": 762,
       "name": "Lantern 84",
       "components": {
         "Glow": {},
@@ -3056,7 +2945,7 @@
       }
     },
     {
-      "id": 340,
+      "id": 763,
       "name": "Lantern 85",
       "components": {
         "Glow": {},
@@ -3066,7 +2955,7 @@
       }
     },
     {
-      "id": 341,
+      "id": 764,
       "name": "Lantern 86",
       "components": {
         "Glow": {},
@@ -3076,7 +2965,7 @@
       }
     },
     {
-      "id": 342,
+      "id": 765,
       "name": "Lantern 87",
       "components": {
         "Glow": {},
@@ -3086,7 +2975,7 @@
       }
     },
     {
-      "id": 343,
+      "id": 766,
       "name": "Sunshard",
       "components": {
         "LocalTransform": { "position": [4, 2.05, 80] },
@@ -3096,7 +2985,7 @@
       }
     },
     {
-      "id": 344,
+      "id": 767,
       "name": "Sunshard 2",
       "components": {
         "LocalTransform": { "position": [-8, 2.05, 76], "rotation": [0, 0.434966, 0, 0.900447] },
@@ -3106,7 +2995,7 @@
       }
     },
     {
-      "id": 345,
+      "id": 768,
       "name": "Sunshard 3",
       "components": {
         "LocalTransform": { "position": [0, -5.2, 108], "rotation": [0, 0.783327, 0, 0.62161] },
@@ -3116,7 +3005,7 @@
       }
     },
     {
-      "id": 346,
+      "id": 769,
       "name": "Sunshard 4",
       "components": {
         "LocalTransform": { "position": [2, 3.792, 61], "rotation": [0, 0.975723, 0, 0.219007] },
@@ -3126,7 +3015,7 @@
       }
     },
     {
-      "id": 347,
+      "id": 770,
       "name": "Sunshard 5",
       "components": {
         "LocalTransform": { "position": [10, 9.45, 44], "rotation": [0, 0.973848, 0, -0.227202] },
@@ -3136,7 +3025,7 @@
       }
     },
     {
-      "id": 348,
+      "id": 771,
       "name": "Sunshard 6",
       "components": {
         "LocalTransform": { "position": [14, 9.45, 48], "rotation": [0, 0.778073, 0, -0.628174] },
@@ -3146,7 +3035,7 @@
       }
     },
     {
-      "id": 349,
+      "id": 772,
       "name": "Sunshard 7",
       "components": {
         "LocalTransform": { "position": [5, 9.45, 41], "rotation": [0, 0.42738, 0, -0.904072] },
@@ -3156,7 +3045,7 @@
       }
     },
     {
-      "id": 350,
+      "id": 773,
       "name": "Sunshard 8",
       "components": {
         "LocalTransform": { "position": [-28, 14.45, 40], "rotation": [0, 0.008407, 0, 0.999965] },
@@ -3166,7 +3055,7 @@
       }
     },
     {
-      "id": 351,
+      "id": 774,
       "name": "Sunshard 9",
       "components": {
         "LocalTransform": { "position": [-24, 14.45, 46], "rotation": [0, 0.44252, 0, 0.896758] },
@@ -3176,7 +3065,7 @@
       }
     },
     {
-      "id": 352,
+      "id": 775,
       "name": "Sunshard 10",
       "components": {
         "LocalTransform": { "position": [-36, 14.45, 46], "rotation": [0, 0.788525, 0, 0.615002] },
@@ -3186,7 +3075,7 @@
       }
     },
     {
-      "id": 353,
+      "id": 776,
       "name": "Sunshard 11",
       "components": {
         "LocalTransform": { "position": [-31, 14.45, 35], "rotation": [0, 0.97753, 0, 0.210796] },
@@ -3196,7 +3085,7 @@
       }
     },
     {
-      "id": 354,
+      "id": 777,
       "name": "Sunshard 12",
       "components": {
         "LocalTransform": { "position": [-18, 14.081, 39], "rotation": [0, 0.971903, 0, -0.235381] },
@@ -3206,7 +3095,7 @@
       }
     },
     {
-      "id": 355,
+      "id": 778,
       "name": "Sunshard 13",
       "components": {
         "LocalTransform": { "position": [30, 11.95, 28.5], "rotation": [0, 0.772764, 0, -0.634693] },
@@ -3216,7 +3105,7 @@
       }
     },
     {
-      "id": 356,
+      "id": 779,
       "name": "Sunshard 14",
       "components": {
         "LocalTransform": { "position": [50, 14.45, 20], "rotation": [0, 0.419764, 0, -0.907633] },
@@ -3226,7 +3115,7 @@
       }
     },
     {
-      "id": 357,
+      "id": 780,
       "name": "Sunshard 15",
       "components": {
         "LocalTransform": { "position": [58, 14.45, 20], "rotation": [0, 0.016814, 0, 0.999859] },
@@ -3236,7 +3125,7 @@
       }
     },
     {
-      "id": 358,
+      "id": 781,
       "name": "Sunshard 16",
       "components": {
         "LocalTransform": { "position": [46, 14.45, 8], "rotation": [0, 0.450044, 0, 0.893006] },
@@ -3246,7 +3135,7 @@
       }
     },
     {
-      "id": 359,
+      "id": 782,
       "name": "Sunshard 17",
       "components": {
         "LocalTransform": { "position": [62, 14.45, 8], "rotation": [0, 0.793668, 0, 0.608351] },
@@ -3256,7 +3145,7 @@
       }
     },
     {
-      "id": 360,
+      "id": 783,
       "name": "Sunshard 18",
       "components": {
         "LocalTransform": { "position": [54, 14.45, -4], "rotation": [0, 0.979268, 0, 0.20257] },
@@ -3266,7 +3155,7 @@
       }
     },
     {
-      "id": 361,
+      "id": 784,
       "name": "Sunshard 19",
       "components": {
         "LocalTransform": { "position": [57, 14.45, 16], "rotation": [0, 0.96989, 0, -0.243544] },
@@ -3276,7 +3165,7 @@
       }
     },
     {
-      "id": 362,
+      "id": 785,
       "name": "Sunshard 20",
       "components": {
         "LocalTransform": { "position": [50, 30.065, -33], "rotation": [0, 0.767401, 0, -0.641167] },
@@ -3286,7 +3175,7 @@
       }
     },
     {
-      "id": 363,
+      "id": 786,
       "name": "Sunshard 21",
       "components": {
         "LocalTransform": { "position": [49, 30.35, -44], "rotation": [0, 0.412118, 0, -0.91113] },
@@ -3296,7 +3185,7 @@
       }
     },
     {
-      "id": 364,
+      "id": 787,
       "name": "Sunshard 22",
       "components": {
         "LocalTransform": { "position": [51, 30.35, -47], "rotation": [0, 0.025219, 0, 0.999682] },
@@ -3306,7 +3195,7 @@
       }
     },
     {
-      "id": 365,
+      "id": 788,
       "name": "Sunshard 23",
       "components": {
         "LocalTransform": { "position": [46, 30.35, -46.5], "rotation": [0, 0.457536, 0, 0.889191] },
@@ -3316,7 +3205,7 @@
       }
     },
     {
-      "id": 366,
+      "id": 789,
       "name": "Sunshard 24",
       "components": {
         "LocalTransform": { "position": [53, 30.35, -41], "rotation": [0, 0.798754, 0, 0.601657] },
@@ -3326,7 +3215,7 @@
       }
     },
     {
-      "id": 367,
+      "id": 790,
       "name": "Sunshard 25",
       "components": {
         "LocalTransform": { "position": [47, 30.35, -41], "rotation": [0, 0.980936, 0, 0.19433] },
@@ -3336,7 +3225,7 @@
       }
     },
     {
-      "id": 368,
+      "id": 791,
       "name": "Sunshard 26",
       "components": {
         "LocalTransform": { "position": [44, 30.35, -50], "rotation": [0, 0.967808, 0, -0.25169] },
@@ -3346,7 +3235,7 @@
       }
     },
     {
-      "id": 369,
+      "id": 792,
       "name": "Sunshard 27",
       "components": {
         "LocalTransform": { "position": [55, 30.35, -46], "rotation": [0, 0.761984, 0, -0.647596] },
@@ -3356,7 +3245,7 @@
       }
     },
     {
-      "id": 370,
+      "id": 793,
       "name": "Sunshard 28",
       "components": {
         "LocalTransform": { "position": [50, 30.35, -51], "rotation": [0, 0.404444, 0, -0.914563] },
@@ -3366,7 +3255,7 @@
       }
     },
     {
-      "id": 371,
+      "id": 794,
       "name": "Sunshard 29",
       "components": {
         "LocalTransform": { "position": [42, 30.35, -45], "rotation": [0, 0.033623, 0, 0.999435] },
@@ -3376,7 +3265,7 @@
       }
     },
     {
-      "id": 372,
+      "id": 795,
       "name": "Sunshard 30",
       "components": {
         "LocalTransform": { "position": [57, 30.35, -43], "rotation": [0, 0.464995, 0, 0.885313] },
@@ -3386,7 +3275,7 @@
       }
     },
     {
-      "id": 373,
+      "id": 796,
       "name": "Sunshard 31",
       "components": {
         "LocalTransform": { "position": [12, 41.788, -61], "rotation": [0, 0.803784, 0, 0.594921] },
@@ -3396,7 +3285,7 @@
       }
     },
     {
-      "id": 374,
+      "id": 797,
       "name": "Sunshard 32",
       "components": {
         "LocalTransform": { "position": [-10, 42.45, -62], "rotation": [0, 0.982535, 0, 0.186076] },
@@ -3406,7 +3295,7 @@
       }
     },
     {
-      "id": 375,
+      "id": 798,
       "name": "Sunshard 33",
       "components": {
         "LocalTransform": { "position": [4, 42.45, -62], "rotation": [0, 0.965658, 0, -0.259817] },
@@ -3416,7 +3305,7 @@
       }
     },
     {
-      "id": 376,
+      "id": 799,
       "name": "Sunshard 34",
       "components": {
         "LocalTransform": { "position": [-6, 42.45, -68], "rotation": [0, 0.756512, 0, -0.65398] },
@@ -3426,7 +3315,7 @@
       }
     },
     {
-      "id": 377,
+      "id": 800,
       "name": "Sunshard 35",
       "components": {
         "LocalTransform": { "position": [8, 42.433, -56], "rotation": [0, 0.396741, 0, -0.917931] },
@@ -3436,7 +3325,7 @@
       }
     },
     {
-      "id": 378,
+      "id": 801,
       "name": "Sunshard 36",
       "components": {
         "LocalTransform": { "position": [-16, 42.45, -56], "rotation": [0, 0.042024, 0, 0.999117] },
@@ -3446,7 +3335,7 @@
       }
     },
     {
-      "id": 379,
+      "id": 802,
       "name": "Sunshard 37",
       "components": {
         "LocalTransform": { "position": [-45, 40.557, -46], "rotation": [0, 0.472422, 0, 0.881372] },
@@ -3456,7 +3345,7 @@
       }
     },
     {
-      "id": 380,
+      "id": 803,
       "name": "Sunshard 38",
       "components": {
         "LocalTransform": { "position": [-60, 33.866, -24], "rotation": [0, 0.808758, 0, 0.588142] },
@@ -3466,7 +3355,7 @@
       }
     },
     {
-      "id": 381,
+      "id": 804,
       "name": "Sunshard 39",
       "components": {
         "LocalTransform": { "position": [-69, 28.45, -8], "rotation": [0, 0.984065, 0, 0.177809] },
@@ -3476,7 +3365,7 @@
       }
     },
     {
-      "id": 382,
+      "id": 805,
       "name": "Sunshard 40",
       "components": {
         "LocalTransform": { "position": [-63, 28.726, -13], "rotation": [0, 0.963439, 0, -0.267927] },
@@ -3486,7 +3375,7 @@
       }
     },
     {
-      "id": 383,
+      "id": 806,
       "name": "Sunshard 41",
       "components": {
         "LocalTransform": { "position": [-61, 20.137, 8], "rotation": [0, 0.750987, 0, -0.660317] },
@@ -3496,7 +3385,7 @@
       }
     },
     {
-      "id": 384,
+      "id": 807,
       "name": "Sunshard 42",
       "components": {
         "LocalTransform": { "position": [-56, 12.45, 26], "rotation": [0, 0.389009, 0, -0.921234] },
@@ -3506,7 +3395,7 @@
       }
     },
     {
-      "id": 385,
+      "id": 808,
       "name": "Sunshard 43",
       "components": {
         "LocalTransform": { "position": [-52, 12.45, 23], "rotation": [0, 0.050423, 0, 0.998728] },
@@ -3516,7 +3405,7 @@
       }
     },
     {
-      "id": 386,
+      "id": 809,
       "name": "Sunshard 44",
       "components": {
         "LocalTransform": { "position": [-37, 32.555, 7], "rotation": [0, 0.479815, 0, 0.87737] },
@@ -3526,7 +3415,7 @@
       }
     },
     {
-      "id": 387,
+      "id": 810,
       "name": "Sunshard 45",
       "components": {
         "LocalTransform": { "position": [-26, 41.45, -3.5], "rotation": [0, 0.813674, 0, 0.581322] },
@@ -3536,7 +3425,7 @@
       }
     },
     {
-      "id": 388,
+      "id": 811,
       "name": "Sunshard 46",
       "components": {
         "LocalTransform": { "position": [-30, 25.135, 19], "rotation": [0, 0.985525, 0, 0.16953] },
@@ -3546,7 +3435,7 @@
       }
     },
     {
-      "id": 389,
+      "id": 812,
       "name": "Sunshard 47",
       "components": {
         "LocalTransform": { "position": [-6, 50.45, -28], "rotation": [0, 0.961153, 0, -0.276017] },
@@ -3556,7 +3445,7 @@
       }
     },
     {
-      "id": 390,
+      "id": 813,
       "name": "Sunshard 48",
       "components": {
         "LocalTransform": { "position": [-14, 50.45, -22], "rotation": [0, 0.745409, 0, -0.666607] },
@@ -3566,7 +3455,7 @@
       }
     },
     {
-      "id": 391,
+      "id": 814,
       "name": "Sunshard 49",
       "components": {
         "LocalTransform": { "position": [2, 50.45, -18], "rotation": [0, 0.38125, 0, -0.924472] },
@@ -3576,7 +3465,7 @@
       }
     },
     {
-      "id": 392,
+      "id": 815,
       "name": "Waypoint",
       "components": {
         "LocalTransform": { "position": [2, 3.342, 61] },
@@ -3584,7 +3473,7 @@
       }
     },
     {
-      "id": 393,
+      "id": 816,
       "name": "Waypoint 2",
       "components": {
         "LocalTransform": { "position": [10, 9, 45] },
@@ -3592,7 +3481,7 @@
       }
     },
     {
-      "id": 394,
+      "id": 817,
       "name": "Waypoint 3",
       "components": {
         "LocalTransform": { "position": [-8, 11.5, 41.5] },
@@ -3600,7 +3489,7 @@
       }
     },
     {
-      "id": 395,
+      "id": 818,
       "name": "Waypoint 4",
       "components": {
         "LocalTransform": { "position": [-22.5, 14, 36] },
@@ -3608,7 +3497,7 @@
       }
     },
     {
-      "id": 396,
+      "id": 819,
       "name": "Waypoint 5",
       "components": {
         "LocalTransform": { "position": [-8, 11.5, 41.5] },
@@ -3616,7 +3505,7 @@
       }
     },
     {
-      "id": 397,
+      "id": 820,
       "name": "Waypoint 6",
       "components": {
         "LocalTransform": { "position": [12, 9, 42] },
@@ -3624,7 +3513,7 @@
       }
     },
     {
-      "id": 398,
+      "id": 821,
       "name": "Waypoint 7",
       "components": {
         "LocalTransform": { "position": [30, 11.5, 28.5] },
@@ -3632,7 +3521,7 @@
       }
     },
     {
-      "id": 399,
+      "id": 822,
       "name": "Waypoint 8",
       "components": {
         "LocalTransform": { "position": [46, 14, 18] },
@@ -3640,7 +3529,7 @@
       }
     },
     {
-      "id": 400,
+      "id": 823,
       "name": "Waypoint 9",
       "components": {
         "LocalTransform": { "position": [52.5, 14, 22] },
@@ -3648,7 +3537,7 @@
       }
     },
     {
-      "id": 401,
+      "id": 824,
       "name": "Waypoint 10",
       "components": {
         "LocalTransform": { "position": [53, 14, -3] },
@@ -3656,7 +3545,7 @@
       }
     },
     {
-      "id": 402,
+      "id": 825,
       "name": "Waypoint 11",
       "components": {
         "LocalTransform": { "position": [50, 29.615, -33] },
@@ -3664,7 +3553,7 @@
       }
     },
     {
-      "id": 403,
+      "id": 826,
       "name": "Waypoint 12",
       "components": {
         "LocalTransform": { "position": [45.5, 30, -39.6] },
@@ -3672,7 +3561,7 @@
       }
     },
     {
-      "id": 404,
+      "id": 827,
       "name": "Waypoint 13",
       "components": {
         "LocalTransform": { "position": [37, 30.318, -49.5] },
@@ -3680,7 +3569,7 @@
       }
     },
     {
-      "id": 405,
+      "id": 828,
       "name": "Waypoint 14",
       "components": {
         "LocalTransform": { "position": [12, 41.338, -61] },
@@ -3688,7 +3577,7 @@
       }
     },
     {
-      "id": 406,
+      "id": 829,
       "name": "Waypoint 15",
       "components": {
         "LocalTransform": { "position": [1.5, 42, -62] },
@@ -3696,7 +3585,7 @@
       }
     },
     {
-      "id": 407,
+      "id": 830,
       "name": "Waypoint 16",
       "components": {
         "LocalTransform": { "position": [-20, 41.893, -57] },
@@ -3704,7 +3593,7 @@
       }
     },
     {
-      "id": 408,
+      "id": 831,
       "name": "Waypoint 17",
       "components": {
         "LocalTransform": { "position": [-45, 40.107, -46] },
@@ -3712,7 +3601,7 @@
       }
     },
     {
-      "id": 409,
+      "id": 832,
       "name": "Waypoint 18",
       "components": {
         "LocalTransform": { "position": [-50.5, 40, -41.6] },
@@ -3720,7 +3609,7 @@
       }
     },
     {
-      "id": 410,
+      "id": 833,
       "name": "Waypoint 19",
       "components": {
         "LocalTransform": { "position": [-55, 39.552, -36] },
@@ -3728,7 +3617,7 @@
       }
     },
     {
-      "id": 411,
+      "id": 834,
       "name": "Waypoint 20",
       "components": {
         "LocalTransform": { "position": [-64, 28.448, -14] },
@@ -3736,7 +3625,7 @@
       }
     },
     {
-      "id": 412,
+      "id": 835,
       "name": "Waypoint 21",
       "components": {
         "LocalTransform": { "position": [-64.5, 28, -9.6] },
@@ -3744,7 +3633,7 @@
       }
     },
     {
-      "id": 413,
+      "id": 836,
       "name": "Waypoint 22",
       "components": {
         "LocalTransform": { "position": [-65, 27.602, -5] },
@@ -3752,7 +3641,7 @@
       }
     },
     {
-      "id": 414,
+      "id": 837,
       "name": "Waypoint 23",
       "components": {
         "LocalTransform": { "position": [-58, 12.522, 20] },
@@ -3760,7 +3649,7 @@
       }
     },
     {
-      "id": 415,
+      "id": 838,
       "name": "Waypoint 24",
       "components": {
         "LocalTransform": { "position": [-56, 12, 26] },
@@ -3768,7 +3657,7 @@
       }
     },
     {
-      "id": 416,
+      "id": 839,
       "name": "Waypoint 25",
       "components": {
         "LocalTransform": { "position": [-50, 12.206, 29] },
@@ -3776,7 +3665,7 @@
       }
     },
     {
-      "id": 417,
+      "id": 840,
       "name": "Waypoint 26",
       "components": {
         "LocalTransform": { "position": [-36, 14, 35] },
@@ -3784,7 +3673,7 @@
       }
     },
     {
-      "id": 418,
+      "id": 841,
       "name": "Waypoint 27",
       "components": {
         "LocalTransform": { "position": [-24, 14, 34] },
@@ -3792,7 +3681,7 @@
       }
     },
     {
-      "id": 419,
+      "id": 842,
       "name": "Waypoint 28",
       "components": {
         "LocalTransform": { "position": [-28, 21.852, 22] },
@@ -3800,7 +3689,7 @@
       }
     },
     {
-      "id": 420,
+      "id": 843,
       "name": "Waypoint 29",
       "components": {
         "LocalTransform": { "position": [-38, 32.41, 5] },
@@ -3808,7 +3697,7 @@
       }
     },
     {
-      "id": 421,
+      "id": 844,
       "name": "Waypoint 30",
       "components": {
         "LocalTransform": { "position": [-34, 35.341, 0.2] },
@@ -3816,7 +3705,7 @@
       }
     },
     {
-      "id": 422,
+      "id": 845,
       "name": "Waypoint 31",
       "components": {
         "LocalTransform": { "position": [-26, 41, -3.5] },
@@ -3824,7 +3713,7 @@
       }
     },
     {
-      "id": 423,
+      "id": 846,
       "name": "Waypoint 32",
       "components": {
         "LocalTransform": { "position": [-13, 49.523, -9.5] },
@@ -3832,7 +3721,7 @@
       }
     },
     {
-      "id": 424,
+      "id": 847,
       "name": "Waypoint 33",
       "components": {
         "LocalTransform": { "position": [-7, 50, -12] },
@@ -3840,7 +3729,7 @@
       }
     },
     {
-      "id": 425,
+      "id": 848,
       "name": "Waypoint 34",
       "components": {
         "LocalTransform": { "position": [-4.4, 50, -19.4] },
@@ -3848,39 +3737,7 @@
       }
     },
     {
-      "id": 426,
-      "name": "Grass south",
-      "components": {
-        "LocalTransform": { "position": [0, 4.311, 50] },
-        "Scatter": { "mesh": "guid:692f473b-b7f5-5aa2-b0a8-502b09766d06", "half_extent": [62, 40], "density": 0.55, "min_scale": 0.7, "max_scale": 1.4, "max_slope_deg": 38, "min_height": 1.2, "seed": 11 }
-      }
-    },
-    {
-      "id": 427,
-      "name": "Grass north",
-      "components": {
-        "LocalTransform": { "position": [0, 41.096, -45] },
-        "Scatter": { "mesh": "guid:692f473b-b7f5-5aa2-b0a8-502b09766d06", "half_extent": [72, 42], "density": 0.42, "min_scale": 0.7, "max_scale": 1.4, "max_slope_deg": 38, "min_height": 1.2, "max_height": 48.5, "seed": 12 }
-      }
-    },
-    {
-      "id": 428,
-      "name": "Grass east",
-      "components": {
-        "LocalTransform": { "position": [62, 14.348, -8] },
-        "Scatter": { "mesh": "guid:692f473b-b7f5-5aa2-b0a8-502b09766d06", "half_extent": [34, 44], "density": 0.42, "min_scale": 0.7, "max_scale": 1.4, "max_slope_deg": 38, "min_height": 1.2, "seed": 13 }
-      }
-    },
-    {
-      "id": 429,
-      "name": "Grass west",
-      "components": {
-        "LocalTransform": { "position": [-64, 23.904, 2] },
-        "Scatter": { "mesh": "guid:692f473b-b7f5-5aa2-b0a8-502b09766d06", "half_extent": [30, 44], "density": 0.36, "min_scale": 0.7, "max_scale": 1.4, "max_slope_deg": 38, "min_height": 1.2, "seed": 14 }
-      }
-    },
-    {
-      "id": 430,
+      "id": 849,
       "name": "Flowers terraces",
       "components": {
         "LocalTransform": { "position": [-8, 11.515, 42] },
@@ -3888,7 +3745,7 @@
       }
     },
     {
-      "id": 431,
+      "id": 850,
       "name": "Flowers garden",
       "components": {
         "LocalTransform": { "position": [54, 14, 8] },
@@ -3896,7 +3753,7 @@
       }
     },
     {
-      "id": 432,
+      "id": 851,
       "name": "Flowers summit",
       "components": {
         "LocalTransform": { "position": [-6, 48.652, -34] },
@@ -3904,7 +3761,7 @@
       }
     },
     {
-      "id": 433,
+      "id": 852,
       "name": "Olive groves",
       "components": {
         "LocalTransform": { "position": [-8, -1.709, 48] },
@@ -3912,7 +3769,7 @@
       }
     },
     {
-      "id": 434,
+      "id": 853,
       "name": "Pines north",
       "components": {
         "LocalTransform": { "position": [-10, 42, -60] },
@@ -3920,7 +3777,7 @@
       }
     },
     {
-      "id": 435,
+      "id": 854,
       "name": "Pines west",
       "components": {
         "LocalTransform": { "position": [-62, 31.148, -20] },
@@ -3928,7 +3785,7 @@
       }
     },
     {
-      "id": 436,
+      "id": 855,
       "name": "Stones",
       "components": {
         "LocalTransform": { "position": [0, 12.465, 0] },
@@ -3936,7 +3793,7 @@
       }
     },
     {
-      "id": 437,
+      "id": 856,
       "name": "Shore stones",
       "components": {
         "LocalTransform": { "position": [0, 12.465, 0] },

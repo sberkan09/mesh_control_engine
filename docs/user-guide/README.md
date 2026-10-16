@@ -37,6 +37,7 @@ code as built and why; this guide links to them where you may want the full deta
 | — | [Recipes](recipes/README.md) | One job each, start to finish: a level a bot can finish, screens that stay right, a new component live |
 | 23 | [Live services (optional)](23-live-services.md) | Analytics events, crash reports sent on the next launch, remote config, game services (achievements, leaderboards, cloud saves), the demo and vendor setup |
 | 24 | [Accessibility](24-accessibility.md) | Subtitles, color filters, text size, remapping and screen readers: what players get, what a game does, what `project_check` flags |
+| 25 | [Performance](25-performance.md) | Record a capture, budgets per target, measure and compare over MCP, read captures in the editor, a counter gate in CI |
 
 ## Conventions used in this guide
 

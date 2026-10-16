@@ -29,6 +29,23 @@ EM_ASYNC_JS(void, mce_web_mount_persistent, (), {
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") sync(); });
 });
 
+// Browsers start an AudioContext suspended until the page gets a click, tap or key press, and Safari
+// only resumes one from inside such an event handler. These listeners resume SDL's context there and
+// drop themselves once it runs; `Module.mceAudioState()` reports it ("none" before audio opens).
+EM_JS(void, mce_web_install_audio_unlock, (), {
+    if (Module.mceAudioState) return;
+    const context = () => Module["SDL3"] ? Module["SDL3"].audioContext : undefined;
+    Module.mceAudioState = () => { const c = context(); return c ? c.state : "none"; };
+    const events = ["pointerdown", "touchend", "keydown", "mousedown"];
+    const unlock = () => {
+        const c = context();
+        if (!c) return;
+        if (c.state === "suspended") c.resume();
+        if (c.state !== "suspended") events.forEach((e) => document.removeEventListener(e, unlock, true));
+    };
+    events.forEach((e) => document.addEventListener(e, unlock, true));
+});
+
 EM_JS(void, mce_web_persist, (), {
     if (Module.mcePersist) Module.mcePersist();
 });
@@ -71,11 +88,13 @@ namespace mce::web {
 bool active() { return true; }
 void mount_persistent() { mce_web_mount_persistent(); }
 void persist() { mce_web_persist(); }
+void install_audio_unlock() { mce_web_install_audio_unlock(); }
 bool fetch_file(const char* url, const char* path) { return url && path && mce_web_fetch_file(url, path) != 0; }
 #else
 bool active() { return false; }
 void mount_persistent() {}
 void persist() {}
+void install_audio_unlock() {}
 bool fetch_file(const char*, const char*) { return false; }
 #endif
 

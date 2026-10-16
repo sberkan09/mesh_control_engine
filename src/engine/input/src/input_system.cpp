@@ -747,6 +747,14 @@ f32 InputSystem::binding_value(const BindingDef& b) const {
     return v * b.scale;
 }
 
+void InputSystem::set_action_feeds(Span<const ActionFeed> feeds) {
+    feeds_.clear();
+    for (const ActionFeed& f : feeds) {
+        if (feeds_.size() >= kMaxFeeds) break;
+        feeds_.push_back(f);
+    }
+}
+
 void InputSystem::evaluate(InputState& out, const InputState& prev) const {
     const f32 dt = 1.f / static_cast<f32>(tick_hz_);
 
@@ -770,6 +778,11 @@ void InputSystem::evaluate(InputState& out, const InputState& prev) const {
                 if (def.type == ActionType::Axis2D && b.axis == 1) y += v;
                 else x += v;
             }
+            for (const ActionFeed& f : feeds_)
+                if (f.action == def.name) {
+                    x += f.x;
+                    if (def.type == ActionType::Axis2D) y += f.y;
+                }
 
             ActionState st;
             switch (def.type) {
