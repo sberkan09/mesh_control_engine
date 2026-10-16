@@ -5,6 +5,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- 2D IK as data, M-ANIM2D step 4 (SBA-143): a `.mcskel2d` lists `"ik"` constraints. Two-bone chains solve
+  exactly (law of cosines, a bend side, a straight arm at an out-of-reach target); longer chains use CCD for a
+  fixed number of passes, so every run gives the same bits. A target is a bone, or any entity with an
+  `IKTarget2D` (a cursor, a raycast hit). Animations key a constraint's mix and cross-fades blend it; an
+  optional `Skeleton2DIK` component holds the mix in use and a gameplay override. IK runs every tick after
+  the pose and before `Bone2DFollow`, and the sprite extract draws the same solve. Skeletons without IK cook
+  byte for byte as before. User guide 7.13.
 - No hidden state in Luau scripts, M-SCRIPT step 3 (SBA-149): the cook rejects, at `file:line:col`, a function
   that assigns a top-level local or changes a table one holds, and table or function keys the source shows;
   `pairs` and `next` raise on such keys at run time. A script's memory is its components, so a reload between

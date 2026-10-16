@@ -46,6 +46,7 @@ inline constexpr u8 SKELETON2D_VERSION = 1;  // CHNK_SKEL2D: a 2D cut-out skelet
 inline constexpr u8 SCRIPT_VERSION = 1;      // CHNK_SCRIPT: one Luau script's bytecode (M-SCRIPT 1)
 inline constexpr u8 SKELETON2D_MINOR_ANIMATIONS = 1;  // minor of a CHNK_SKEL2D with animations (M-ANIM2D 2)
 inline constexpr u8 SKELETON2D_MINOR_ATTACHMENTS = 2;  // minor of a CHNK_SKEL2D with Skeleton2DHeaderFlags::Attachments (M-ANIM2D 3)
+inline constexpr u8 SKELETON2D_MINOR_IK = 3;  // minor of a CHNK_SKEL2D with Skeleton2DHeaderFlags::IK (M-ANIM2D 4)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -998,11 +999,11 @@ inline void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, 
 // ------------------------------------------------------------------ 2D skeleton (CHNK_SKEL2D)
 // A 2D cut-out skeleton (M-ANIM2D 1): a bone tree and the slots (textured quads) drawn on its
 // bones. kit::Skeleton2D (kit/skeleton2d.h) poses and draws one. Payload layout:
-//   Skeleton2DHeader | [Skeleton2DAttachmentHeader] | Skeleton2DBone[bone_count]
+//   Skeleton2DHeader | [Skeleton2DAttachmentHeader] | [Skeleton2DIKHeader] | Skeleton2DBone[bone_count]
 //   | Skeleton2DSlot[slot_count] | Skeleton2DAnimation[animation_count]
 //   | Skeleton2DTimeline[timeline_count] | Skeleton2DKey[key_count] | Skeleton2DEvent[event_count]
 //   | [Skeleton2DAttachment[] | Skeleton2DVertex[] | Skeleton2DWeight[] | u32 index[]
-//      | Skeleton2DSlotKey[] | f32 value[]] | string pool
+//      | Skeleton2DSlotKey[] | f32 value[]] | [Skeleton2DIKConstraint[]] | string pool
 // Bones are topologically ordered: a bone's parent comes before it (bone 0 is a root). Slots are
 // in draw order (the first is drawn first, behind the rest). Units: metres and radians, Y up.
 // Names are NUL-terminated offsets into the pool.
@@ -1022,6 +1023,13 @@ inline void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, 
 // before. Limits: 64 attachments per slot, 4096 in all; a mesh has 3 to 1024 vertices and 1 to
 // 2048 triangles; 65536 vertices, 262144 weights and 393216 indices in all; a vertex has at most 4
 // weights, which sum to 1 (within 1e-3; the cook normalizes them).
+//
+// IK (M-ANIM2D 4, chunk minor 3, header flag IK): a Skeleton2DIKHeader (after the attachment header
+// when both flags are set) counts the Skeleton2DIKConstraints stored just before the string pool,
+// in the order they apply. A constraint turns a chain of bones (its last bone and that bone's
+// nearest ancestors) so the chain's tip reaches a target: a bone of the skeleton, or an entity
+// (kit::IKTarget2D). IKMix timelines key a constraint's mix with Skeleton2DKeys (value[0], 0..1).
+// Limits: 16 constraints, chains of 1 to 32 bones, CCD runs 1 to 64 iterations.
 inline constexpr u32 kSkeleton2DMaxBones = 64;   // kit::Skeleton2D holds one pose per bone
 inline constexpr u32 kSkeleton2DMaxSlots = 256;
 inline constexpr u16 kSkeleton2DNoParent = 0xFFFF;
@@ -1041,6 +1049,10 @@ inline constexpr u32 kSkeleton2DMaxSlotKeys = 1u << 20;  // all slot timelines t
 inline constexpr u32 kSkeleton2DMaxValues = 1u << 22;    // color and deform key values together
 inline constexpr u8 kSkeleton2DNoAttachment = 0xFF;      // Skeleton2DSlot::attachment: none shown
 inline constexpr u32 kSkeleton2DNoAttachmentKey = ~0u;   // an Attachment key's value: hide the slot
+inline constexpr u32 kSkeleton2DMaxIK = 16;               // constraints per skeleton (kit::Skeleton2DIK holds 16 mixes)
+inline constexpr u32 kSkeleton2DMaxIKChain = 32;          // bones per chain
+inline constexpr u32 kSkeleton2DMaxIKIterations = 64;     // CCD passes
+inline constexpr u16 kSkeleton2DNoTarget = 0xFFFF;        // Skeleton2DIKConstraint::target: only an entity target
 
 enum class Skeleton2DSlotKind : u8 {
     Quad,  // the slot's own fields: a texture rect stretched to `size` (meshes are attachments, minor 2)
@@ -1049,6 +1061,7 @@ enum class Skeleton2DSlotKind : u8 {
 namespace Skeleton2DHeaderFlags {
 enum : u32 {
     Attachments = 1u << 0,  // minor 2: a Skeleton2DAttachmentHeader follows the header
+    IK = 1u << 1,           // minor 3: a Skeleton2DIKHeader follows (after the attachment header)
 };
 }
 
@@ -1111,6 +1124,39 @@ struct Skeleton2DAttachmentHeader {
     u32 reserved[2];
 };
 static_assert(sizeof(Skeleton2DAttachmentHeader) == 32);
+
+// Minor 3: follows the header (and the attachment header) when its flags have IK.
+struct Skeleton2DIKHeader {
+    u32 constraint_count;  // 1 to kSkeleton2DMaxIK
+    u32 reserved[3];
+};
+static_assert(sizeof(Skeleton2DIKHeader) == 16);
+
+enum class Skeleton2DIKKind : u8 {
+    TwoBone,  // two bones, solved exactly by the law of cosines
+    CCD,      // 1 to kSkeleton2DMaxIKChain bones, cyclic coordinate descent for a fixed iteration count
+};
+
+namespace Skeleton2DIKFlags {
+enum : u8 {
+    BendNegative = 1u << 0,  // two-bone: the elbow bends clockwise (default counter-clockwise)
+};
+}
+
+// One IK constraint. The chain is `bone` and its bone_count - 1 nearest ancestors, root-most first.
+struct Skeleton2DIKConstraint {
+    u32 name;          // string pool offset; unique within the skeleton
+    u16 bone;          // the chain's last bone: its tip (x = length in its space) reaches the target
+    u16 bone_count;    // TwoBone: 2; CCD: 1 to kSkeleton2DMaxIKChain
+    u16 target;        // the target bone (not in the chain, not under its first bone), or kSkeleton2DNoTarget
+    Skeleton2DIKKind kind;
+    u8 flags;          // Skeleton2DIKFlags
+    f32 mix;           // 0..1: how far the solve moves the chain from its pose
+    u32 iterations;    // CCD: 1 to kSkeleton2DMaxIKIterations; TwoBone: 0
+    i32 order;         // the authored application order; constraints are stored sorted by it
+    u32 reserved[2];
+};
+static_assert(sizeof(Skeleton2DIKConstraint) == 32);
 
 enum class Skeleton2DAttachmentKind : u8 {
     Quad,  // a texture rect stretched to `size`, placed like a minor-0 slot
@@ -1183,6 +1229,7 @@ enum class Skeleton2DChannel : u8 {
     Color,       // minor 2, slot keys: the slot's color (linear RGBA, absolute)
     Attachment,  // minor 2, slot keys: the attachment shown (stepped)
     Deform,      // minor 2, slot keys: per-vertex offsets of one mesh attachment
+    IKMix,       // minor 3, bone keys: value[0] is IK constraint `bone`'s mix (0..1, absolute)
 };
 
 enum class Skeleton2DCurve : u8 {
@@ -1192,7 +1239,7 @@ enum class Skeleton2DCurve : u8 {
 };
 
 struct Skeleton2DTimeline {
-    u16 bone;  // the bone; for Color, Attachment and Deform the slot
+    u16 bone;  // the bone; for Color, Attachment and Deform the slot; for IKMix the IK constraint
     Skeleton2DChannel channel;
     u8 reserved0;
     // Its keys: [first_key, first_key + key_count), strictly increasing in time. Bone channels
@@ -1247,6 +1294,8 @@ struct Skeleton2DView {
     Span<const u32> indices;
     Span<const Skeleton2DSlotKey> slot_keys;
     Span<const f32> values;
+    // Minor 3 (empty before): in application order.
+    Span<const Skeleton2DIKConstraint> ik;
     Span<const char> strings;
     StringView name() const;
     StringView string(u32 offset) const;
@@ -1261,6 +1310,8 @@ struct Skeleton2DView {
     // 0..1), and keys and events in time order. Minor 2: attachment ranges per slot, mesh vertex,
     // weight and index ranges (indices below the mesh's vertex count, weights on real bones and
     // summing to 1 within 1e-3), slot timelines on real slots and meshes, key value ranges.
+    // Minor 3: constraint kinds and counts, chains of real parent-child bones, targets outside
+    // and not under the chain, mixes in 0..1, sorted orders, IKMix timelines on real constraints.
     static Result<Skeleton2DView> read(Span<const byte> payload);
 };
 
