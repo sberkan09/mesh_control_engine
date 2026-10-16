@@ -268,6 +268,11 @@ TEST_CASE("mcp tools: discover components from mce_refl") {
     auto probe = c.ok("refl_describe_component", R"({"name":"McpProbe"})");
     CHECK(probe.v().get("fields").at(1).get("read_only").as_bool());
     CHECK(probe.v().get("fields").at(4).get("count").as_number() == 3);
+    // Replication as data (M-NET2 step 7): the stock components, with their Replicated fields.
+    auto owner = c.ok("refl_describe_component", R"({"name":"NetOwner"})");
+    CHECK(owner.v().get("fields").at(0).get("replicated").as_bool());
+    auto marked = c.ok("refl_describe_component", R"({"name":"NetReplicated"})");
+    CHECK_FALSE(marked.v().get("fields").at(0).get("replicated").valid());
 
     // Reflected value types describe the same way: the runtime UI's anchors (M-MOBILE 11b).
     auto anchors = c.ok("refl_describe_component", R"({"name":"UiAnchors"})");
