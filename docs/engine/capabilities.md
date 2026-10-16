@@ -63,11 +63,11 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `WorldSettings` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/02-projects.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/Dungeon/assets/scenes/caves.mcscene |
 | `ScriptVars` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/Dungeon/assets/scenes/caves.mcscene |
-| `CoopGame` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | samples/09_coop/assets/scenes/arena.mcscene |
-| `PlayerSpawn` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | samples/09_coop/assets/scenes/arena.mcscene |
-| `LocalPlayer` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | samples/09_coop/assets/prefabs/player.mcprefab |
-| `PlayerCamera` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | samples/09_coop/assets/scenes/arena.mcscene |
-| `SharedCamera2D` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | allowed: tested in tests/kit/test_coop.cpp; 09_coop uses one camera per player (PlayerCamera), the shared frame is the other co-op style |
+| `CoopGame` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `PlayerSpawn` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `LocalPlayer` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/prefabs/player.mcprefab |
+| `PlayerCamera` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `SharedCamera2D` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit/test_coop.cpp; 09_coop uses one camera per player (PlayerCamera), the shared frame is the other co-op style |
 | `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
@@ -270,3 +270,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `ui_widget_remove` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |
 | `ui_theme_set` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |
 | `ui_preview` | `tools_ui.cpp` | docs/user-guide/12-ui-and-console.md |
+| `view_list` | `tools_views.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `view_add` | `tools_views.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `player_list` | `tools_views.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `player_setup` | `tools_views.cpp` | docs/user-guide/08-3d.md |

@@ -69,11 +69,11 @@ def scene():
     add("Minimap camera", {
         "Camera2DComponent": {"primary": False, "pixel_snap": False, "fit_width": 26, "fit_height": 18,
                               "clear_color": [0.04, 0.05, 0.07, 1]},
-        "CameraView": {"target": "$%d" % tex},
+        "CameraView": {"target": "$%d" % (tex - 1)},
         "LocalTransform": {}})
     add("Monitor", {
         "Sprite": {"size": [5.2, 3.9], "layer": -1, "tint": [1, 1, 1, 1]},
-        "ShowRenderTexture": {"source": "$%d" % tex},
+        "ShowRenderTexture": {"source": "$%d" % (tex - 1)},
         "LocalTransform": {"position": [0, 5.5, 0]}})
     add("Floor", {"Sprite": {"size": [24, 16], "layer": -3, "tint": [0.16, 0.18, 0.2, 1]},
                   "LocalTransform": {}})

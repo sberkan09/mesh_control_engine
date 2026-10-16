@@ -13,6 +13,8 @@
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/process.h"
+#include "mce/kit/coop.h"
+#include "mce/kit/views.h"
 #include "tool_args.h"
 #include "tools_agent.h"
 
@@ -134,6 +136,63 @@ bool numbers(const cook::JsonValue& v, usize n, f64* out) {
     return true;
 }
 
+// Views the scene entity `id` (a camera) alone: -view.entity takes its index in file order.
+bool set_entity_view(ToolCall& c, const char* what, const char* index_arg, editor::EntityId id, RenderRequest& rq) {
+    u64 index = 0;
+    for (const editor::DocEntity& e : scene(c).doc().entities()) {
+        if (e.id == id) break;
+        if (!e.prefab.is_null()) {
+            c.error += what;
+            c.error += ": a prefab instance comes before it in the file, so its run index differs; give ";
+            c.error += index_arg;
+            return false;
+        }
+        ++index;
+    }
+    rq.view_args = cook::String();
+    cook::appendf(rq.view_args, "%llu", static_cast<unsigned long long>(index));
+    rq.view_flag = "-view.entity";
+    return true;
+}
+
+// `view`: {"player": 1..4} (the camera of that local player: the entity with a PlayerCamera for them, else the one whose
+// CameraView.split is that number) or {"texture": entity} (the camera drawing into that RenderTexture). The frame is that
+// camera alone, full size; join the players with `input` ("5 P2/Join") so their cameras follow them.
+bool parse_view(ToolCall& c, const cook::JsonValue& view, bool open_scene, RenderRequest& rq) {
+    if (!view.valid()) return true;
+    if (arg(c, "camera").valid()) return fail(c, "give either 'camera' or 'view', not both");
+    if (!view.is_object() || (view.get("player").valid() == view.get("texture").valid()))
+        return arg_missing(c, "view", "an object with one of {player: 1..4} or {texture: entity id or name}");
+    if (!open_scene) return fail(c, "'view' looks at the open scene's cameras: leave 'scene' out, or give camera.index");
+    const editor::SceneDocument& doc = scene(c).doc();
+    editor::EntityId found = editor::kNoEntity;
+    if (const cook::JsonValue pv = view.get("player"); pv.valid()) {
+        if (!pv.is_integer() || pv.as_number() < 1 || pv.as_number() > 4) return arg_missing(c, "view.player", "a player number 1..4");
+        const u32 player = static_cast<u32>(pv.as_number());
+        for (const editor::DocEntity& e : doc.entities()) {
+            const editor::DocComponent* pc = e.find(refl::type_of<kit::PlayerCamera>());
+            if (pc && static_cast<const kit::PlayerCamera*>(pc->data())->player == player) {
+                found = e.id;
+                break;
+            }
+        }
+        for (const editor::DocEntity& e : doc.entities()) {
+            const editor::DocComponent* cv = found == editor::kNoEntity ? e.find(refl::type_of<kit::CameraView>()) : nullptr;
+            if (cv && static_cast<const kit::CameraView*>(cv->data())->split == player) found = e.id;
+        }
+        if (found == editor::kNoEntity) return fail(c, "view.player: no camera follows that player (no PlayerCamera and no CameraView with that split; player_list shows the rig)");
+    } else {
+        editor::EntityId tex = editor::kNoEntity;
+        if (!resolve_entity(c, "view.texture", view.get("texture"), tex)) return false;
+        for (const editor::DocEntity& e : doc.entities()) {
+            const editor::DocComponent* cv = e.find(refl::type_of<kit::CameraView>());
+            if (found == editor::kNoEntity && cv && editor::doc_entity_id(static_cast<const kit::CameraView*>(cv->data())->target) == tex) found = e.id;
+        }
+        if (found == editor::kNoEntity) return fail(c, "view.texture: no camera draws into that entity (view_list shows the textures and their cameras)");
+    }
+    return set_entity_view(c, "view", "camera.index", found, rq);
+}
+
 // `camera`: {"entity": id|name} (a camera entity of the open scene), {"index": n} (scene entity
 // index in file order), {"position": [x,y,z], "target": [x,y,z], "fov": deg} (a free 3D camera) or
 // {"center": [x,y], "zoom": z} (a free 2D camera).
@@ -146,17 +205,7 @@ bool parse_camera(ToolCall& c, const cook::JsonValue& cam, bool open_scene, Rend
         if (!open_scene) return fail(c, "camera.entity names an entity of the open scene; with 'scene' use camera.index");
         editor::EntityId id = editor::kNoEntity;
         if (!resolve_entity(c, "camera.entity", ent, id)) return false;
-        const Span<const editor::DocEntity> all = scene(c).doc().entities();
-        u64 index = 0;
-        for (const editor::DocEntity& e : all) {
-            if (e.id == id) break;
-            if (!e.prefab.is_null())
-                return fail(c, "camera.entity: a prefab instance comes before it in the file, so its run index differs; give camera.index");
-            ++index;
-        }
-        cook::appendf(rq.view_args, "%llu", static_cast<unsigned long long>(index));
-        rq.view_flag = "-view.entity";
-        return true;
+        return set_entity_view(c, "camera.entity", "camera.index", id, rq);
     }
     if (idx.valid()) {
         if (!idx.is_integer() || idx.as_number() < 0 || idx.as_number() > 1e6) return arg_missing(c, "camera.index", "an entity index >= 0");
@@ -214,6 +263,7 @@ bool parse_common(ToolCall& c, RenderRequest& rq) {
     }
     if (!arg_input(c, rq.script) || !arg_convars(c, rq.convars)) return false;
     if (!parse_camera(c, arg(c, "camera"), rq.scene_rel.view() == file.rel.view(), rq)) return false;
+    if (!parse_view(c, arg(c, "view"), rq.scene_rel.view() == file.rel.view(), rq)) return false;
     if (const cook::JsonValue sa = arg(c, "safe_area"); sa.valid()) {
         static constexpr const char* kKeys[4] = {"left", "top", "right", "bottom"};
         if (!sa.is_object()) return arg_missing(c, "safe_area", "an object {left, top, right, bottom} in pixels");

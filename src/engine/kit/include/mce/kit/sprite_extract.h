@@ -41,6 +41,9 @@ public:
     void reset(asset::AssetSystem* assets);
 
     void extract(World& world, render::SpriteBatch& batch);
+    // A solid quad of `tint` (linear color) under everything the batch's view sees: the background of a
+    // view that does not own its whole target (a split-screen cell), where a clear would wipe the others.
+    void add_fill(render::SpriteBatch& batch, const math::Color& tint);
 
     // Sprite set for a texture GUID (solid white for a null GUID, magenta for a missing one). With
     // a normal map GUID the set is lit (FR-R2D-090); a normal map that cannot load leaves it unlit.

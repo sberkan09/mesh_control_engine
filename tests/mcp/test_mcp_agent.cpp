@@ -393,3 +393,51 @@ TEST_CASE("perf_run: draw counters repeat run to run; three more sprite textures
 }
 
 }  // TEST_SUITE("gpu")
+
+// M-VIEWS 6: the co-op arena's four-way split reaches the frame (every cell draws, none is wiped by a
+// later cell's clear), render_frame's `view` shows one player's camera or the minimap's, and the
+// frame is the same twice.
+TEST_CASE("render_frame: a four-way split screen, one player's view and a render texture's camera") {
+    const std::string root = fresh_dir("mcp_agent_coop");
+    std::filesystem::copy(std::string(MCE_SOURCE_DIR) + "/samples/09_coop/assets", root + "/assets", std::filesystem::copy_options::recursive);
+    Client c(with_player());
+    REQUIRE(c.server.open_project(sv(root), "scenes/arena.mcscene"));
+    c.init();
+    const char* join = R"("input":"5 P2/Join\n8 P3/Join\n11 P4/Join\n20-60 P2/Move=-1,0")";
+    const std::string args = std::string(R"({"tick":90,"width":320,"height":180,"software":true,)") + join + "}";
+    auto all = c.ok("render_frame", args);
+    REQUIRE(all.images.size() == 1);
+    auto again = c.ok("render_frame", args);
+    CHECK(same_pixels(all.images[0], again.images[0]));
+
+    // Every quarter holds more than one color: a floor, walls, a player (a wiped cell is one clear color).
+    const cook::Image& img = all.images[0];
+    auto colors = [&](u32 x0, u32 y0) {
+        std::vector<u32> seen;
+        for (u32 y = y0; y < y0 + 90; ++y)
+            for (u32 x = x0; x < x0 + 160; ++x) {
+                const usize i = (usize(y) * img.width + x) * 4;
+                const u32 rgb = img.rgba[i] | (img.rgba[i + 1] << 8) | (img.rgba[i + 2] << 16);
+                if (std::find(seen.begin(), seen.end(), rgb) == seen.end()) seen.push_back(rgb);
+            }
+        return seen.size();
+    };
+    CHECK(colors(0, 0) > 2);
+    CHECK(colors(160, 0) > 2);
+    CHECK(colors(0, 90) > 2);
+    CHECK(colors(160, 90) > 2);
+
+    // One player's camera, full size: not the split frame, and not another player's.
+    const std::string p1 = std::string(R"({"tick":90,"width":320,"height":180,"software":true,"view":{"player":1},)") + join + "}";
+    const std::string p2 = std::string(R"({"tick":90,"width":320,"height":180,"software":true,"view":{"player":2},)") + join + "}";
+    auto v1 = c.ok("render_frame", p1);
+    auto v2 = c.ok("render_frame", p2);
+    REQUIRE(v1.images.size() == 1);
+    CHECK_FALSE(same_pixels(v1.images[0], all.images[0]));
+    CHECK_FALSE(same_pixels(v1.images[0], v2.images[0]));
+
+    // The minimap camera's own picture (the texture the monitor shows).
+    auto mini = c.ok("render_frame", std::string(R"({"tick":90,"width":256,"height":192,"software":true,"view":{"texture":"Minimap texture"},)") + join + "}");
+    CHECK(mini.images.size() == 1);
+    CHECK_FALSE(same_pixels(mini.images[0], v1.images[0]));
+}
