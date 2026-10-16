@@ -129,6 +129,7 @@ struct Forward3DStats {
     bool fxaa = false;
     bool upscaled = false;           // the spatial upsample drew the output (M-VISUAL2 2)
     bool sharpened = false;          // the contrast-adaptive sharpen drew the output
+    u32 transmissive = 0;            // draws that refracted the opaque frame (M-VISUAL2 4)
 };
 
 // Milliseconds per stage of one completed frame; -1 = not measured.
@@ -299,11 +300,13 @@ private:
         rhi::PipelineHandle pipe;
         const GpuMesh* mesh = nullptr;
         u32 tex[4] = {~0u - 1, ~0u - 1, ~0u - 1, ~0u - 1};
+        bool frame_at_ao = false;  // bank kAo holds the opaque frame's copy (a transmissive draw's)
     };
     // draws[begin, end) of the bound frame/pass state; indices >= opaque_end take the blend
-    // pipelines. `main` counts them in the stats; `prepass` draws them all with the SSAO prepass.
+    // pipelines. `main` counts them in the stats; `prepass` draws them all with the SSAO prepass;
+    // `frame`: trans_src_ holds the opaque frame, so transmissive draws refract it (bank kAo).
     void draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin, u32 end,
-                     u32 opaque_end, DrawCache& cache, bool main, bool prepass = false);
+                     u32 opaque_end, DrawCache& cache, bool main, bool prepass = false, bool frame = false);
     // ---- scale (M-VISUAL 9, forward3d_scale.cpp)
     ResultV create_scale_pipelines();
     void destroy_scale();
@@ -359,6 +362,9 @@ private:
     math::mat4 ssr_prev_vp_ = math::mat4::identity();  // last frame's jittered view-proj
     bool ssr_prev_valid_ = false;        // hdr_ holds a frame drawn with ssr_prev_vp_
     rhi::PipelineHandle contact_pipe_;   // null when Forward3DDesc::contact_shadows is off; writes ao_b_
+    rhi::PipelineHandle frame_copy_;     // the opaque frame into trans_src_ when the target is not multisampled
+    rhi::TextureHandle trans_src_;       // the opaque frame transmissive draws refract (M-VISUAL2 4)
+    rhi::TextureHandle ao_bound_;        // what the main pass bound at bank::kAo (restored after a transmissive draw)
     rhi::PipelineHandle ibl_prefilter_;  // null when Forward3DDesc::ibl is off
     rhi::PipelineHandle ibl_sh_pipe_;
     rhi::PipelineHandle ibl_brdf_;

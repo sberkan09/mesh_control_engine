@@ -234,6 +234,7 @@ const render::MaterialOverride* Kit3DExtract::material(asset::Guid guid) {
             e.value = mem::make_unique<render::MaterialOverride>(mem::heap());
             render::MaterialOverride& m = *e.value;
             m.params = *chunk.value();
+            m.ext = asset::MaterialExt::of_material(assets_->resolve(h.value()));
             m.albedo_key = texture_key(m.params.texture(asset::MaterialSlot::BaseColor));
             m.normal_key = texture_key(m.params.texture(asset::MaterialSlot::Normal));
             m.orm_key = texture_key(m.params.texture(asset::MaterialSlot::MetallicRoughness));
