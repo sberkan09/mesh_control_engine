@@ -41,7 +41,8 @@ inline constexpr u8 UI_THEME_VERSION = 1;     // CHNK_UITHEME: a UI theme (M-UI-
 inline constexpr u8 TERRAIN_VERSION = 1;      // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1)
 inline constexpr u8 NAVMESH_VERSION = 1;     // CHNK_NAV: the .mcnav bytes as baked (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
 inline constexpr u8 VIDEO_VERSION = 1;       // CHNK_VID: an MPEG-1 program stream + its audio as PCM (M-CINEMA 5)
-inline constexpr u8 BEHAVIOR_TREE_VERSION = 1;  // CHNK_BT: one behavior tree (M-AI 1; mce/kit/ai.h)
+inline constexpr u8 BEHAVIOR_TREE_VERSION = 2;  // CHNK_BT: one behavior tree (M-AI 1; mce/kit/ai.h); 2: guard aborts, task arguments (M-AI 2)
+inline constexpr u8 SKELETON2D_VERSION = 1;  // CHNK_SKEL2D: a 2D cut-out skeleton, bones + slots (M-ANIM2D 1)
 inline constexpr u8 SCRIPT_VERSION = 1;      // CHNK_SCRIPT: one Luau script's bytecode (M-SCRIPT 1)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
@@ -868,7 +869,7 @@ enum class BtNodeKind : u8 {
     Retry,     // the child again after each failure, `a` attempts in all (0: forever)
     Cooldown,  // fails without running the child for `a` seconds after the child finished
     Timeout,   // fails (and halts the child) when the child runs `a` seconds
-    Guard,     // runs the child only when its condition holds on entry
+    Guard,     // runs the child only when its condition holds on entry (and, with `abort`, while it runs)
     Check,     // leaves: the condition as a result
     Wait,      // runs `a` seconds, then succeeds
     Set,       // writes a blackboard key, succeeds
@@ -884,6 +885,12 @@ enum class BtOp : u8 { IsSet, NotSet, Eq, Ne, Lt, Le, Gt, Ge };
 // Set: `a` (numbers) or `v` (Vec3) assigned, `a` added, the key cleared, `key2` copied, or the
 // running entity (Entity keys).
 enum class BtSetOp : u8 { Assign, Add, Clear, Copy, Self };
+
+// Guard observers (M-AI 2): the condition is checked again every tick, not only on entry. Self
+// halts the guard's running child when the condition stops holding (the guard fails); Lower, on a
+// guard that is a selector's child, halts the selector's running later child when it starts to
+// hold, and the selector runs the guard instead. Both does the two.
+enum class BtAbort : u8 { None, Self, Lower, Both };
 
 // Parallel: All succeeds when every child has and fails on the first failure; One succeeds on the
 // first success and fails when every child has.
@@ -926,7 +933,9 @@ struct BtNode {
     u32 name;          // the node's name for the debugger, or kBtNoString
     u32 text;          // Emit / Task: the signal's or task's name
     u16 key2;          // Set (Copy): the key copied
-    u8 pad_[6];
+    u8 abort;          // Guard: a BtAbort (0 elsewhere)
+    u8 pad_;
+    u32 arg;           // Task: its string argument (a clip, a guid, an event, a text), or kBtNoString
 };
 static_assert(sizeof(BtNode) == 48);
 
@@ -952,6 +961,74 @@ struct BtView {
 };
 void write_behavior_tree(const BtHeader& header, Span<const BtKey> keys, Span<const BtNode> nodes, Span<const char> strings,
                          Array<byte>& out);
+
+// ------------------------------------------------------------------ 2D skeleton (CHNK_SKEL2D)
+// A 2D cut-out skeleton (M-ANIM2D 1): a bone tree and the slots (textured quads) drawn on its
+// bones. kit::Skeleton2D (kit/skeleton2d.h) poses and draws one. Payload layout:
+//   Skeleton2DHeader | Skeleton2DBone[bone_count] | Skeleton2DSlot[slot_count] | string pool
+// Bones are topologically ordered: a bone's parent comes before it (bone 0 is a root). Slots are
+// in draw order (the first is drawn first, behind the rest). Units: metres and radians, Y up.
+// Names are NUL-terminated offsets into the pool. Reserved fields are zero in version 1; later
+// steps (clips, mesh skinning, IK) extend the format through them and the minor version.
+inline constexpr u32 kSkeleton2DMaxBones = 64;   // kit::Skeleton2D holds one pose per bone
+inline constexpr u32 kSkeleton2DMaxSlots = 256;
+inline constexpr u16 kSkeleton2DNoParent = 0xFFFF;
+
+enum class Skeleton2DSlotKind : u8 {
+    Quad,  // a texture rect stretched to `size` (version 1's only kind; meshes come later)
+};
+
+struct Skeleton2DBone {
+    u32 name;          // string pool offset
+    u16 parent;        // a lower bone index, or kSkeleton2DNoParent
+    u16 flags;         // reserved (0)
+    f32 x, y;          // rest pose: metres in the parent bone's space
+    f32 rotation;      // rest pose: radians, counter-clockwise
+    f32 scale_x, scale_y;
+    f32 length;        // metres along the bone's +x (gizmos, IK)
+    u32 reserved[4];
+};
+static_assert(sizeof(Skeleton2DBone) == 48);
+
+struct Skeleton2DSlot {
+    u32 name;               // string pool offset
+    u16 bone;               // the bone it rides
+    Skeleton2DSlotKind kind;
+    u8 flags;               // reserved (0)
+    u64 texture[2];         // texture GUID {hi, lo}; zero = a solid quad in `tint`
+    f32 rect[4];            // u0, v0, u1, v1 of the texture; v0 = top edge
+    f32 size[2];            // metres
+    f32 pivot[2];           // normalized; (0, 0) = bottom-left
+    f32 offset[2];          // metres in the bone's space: where the pivot sits
+    f32 rotation;           // radians in the bone's space
+    f32 tint[4];            // linear RGBA
+    u32 reserved[3];
+    Guid texture_guid() const { return Guid{texture[0], texture[1]}; }
+};
+static_assert(sizeof(Skeleton2DSlot) == 96);
+
+struct Skeleton2DHeader {
+    char name[32];  // NUL-padded
+    u32 bone_count;  // 1 to kSkeleton2DMaxBones
+    u32 slot_count;  // 0 to kSkeleton2DMaxSlots
+    u32 string_bytes;
+    u32 flags;       // reserved (0)
+    u32 reserved[4];
+};
+static_assert(sizeof(Skeleton2DHeader) == 64);
+
+struct Skeleton2DView {
+    const Skeleton2DHeader* header = nullptr;
+    Span<const Skeleton2DBone> bones;
+    Span<const Skeleton2DSlot> slots;
+    Span<const char> strings;
+    StringView name() const;
+    StringView string(u32 offset) const;
+    // The index of the bone named `name`, or -1.
+    i32 find_bone(StringView name) const;
+    // Checks counts, parent order, slot bones, string offsets and that every number is finite.
+    static Result<Skeleton2DView> read(Span<const byte> payload);
+};
 
 // ------------------------------------------------------------------ shader (CHNK_SHD)
 // One GLSL 4.5 stage (assets.md §5.2, FR-AST-060): the validated source text, the variant table

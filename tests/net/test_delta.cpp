@@ -244,3 +244,35 @@ TEST_CASE("net delta: NetRelevance sends an entity only to clients with an owned
     World w;
     CHECK(everyone.apply(w.commands(), w, all.data()).spawned == 3);
 }
+
+TEST_CASE("net delta: a spectator sees what its camera sees, or everything") {
+    Session s;  // kPeer owns nothing here: a spectator
+    const Entity a = s.sw.spawn_with(at(0, 0), NetOwner{kPeer + 1}, NetRelevance{10.0f});
+    const Entity b = s.sw.spawn_with(at(100, 0), NetOwner{kPeer + 2}, NetRelevance{10.0f});
+    const Entity sign = s.sw.spawn_with(at(500, 0));
+    const u32 a_id = s.server.assign(s.sw, a, 0);
+    const u32 b_id = s.server.assign(s.sw, b, 0);
+    s.server.assign(s.sw, sign, 1);
+
+    REQUIRE(s.send(1).ok);
+    CHECK(s.server.client_stats(kPeer)->entities == 1);  // owning nothing, it sees only the sign
+
+    const math::vec3 camera{98.0f, 0.0f, 0.0f};
+    s.server.set_view(kPeer, &camera);
+    REQUIRE(s.send(2).ok);
+    CHECK(s.client.find(a_id).is_null());
+    CHECK(s.cw.alive(s.client.find(b_id)));
+
+    s.server.set_sees_all(kPeer, true);
+    REQUIRE(s.send(3).ok);
+    CHECK(s.server.client_stats(kPeer)->entities == 3);
+    CHECK(s.mirrors());
+
+    s.server.set_sees_all(kPeer, false);
+    s.server.set_view(kPeer, nullptr);
+    const ApplyResult r = s.send(4);
+    REQUIRE(r.ok);
+    CHECK(r.despawned == 2);
+    s.server.forget_client(kPeer);
+    CHECK(s.server.client_stats(kPeer) == nullptr);
+}

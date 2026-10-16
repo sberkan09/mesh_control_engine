@@ -53,6 +53,12 @@
 //   server, on a client message:          rep.read_ack(peer, reader);
 //   client, in each input message:        client.write_ack(w);
 //   server, on disconnect:                rep.forget_client(peer);
+//
+// Spectators (M-NET3 step 2): a client that owns no entity sees only the entities without a
+// NetRelevance radius. Give it a camera with set_view() (relevance is then measured from there as
+// well) or set_sees_all() for a caster or a replay recorder that must get everything.
+//
+//   server, when a spectator joins:       rep.set_sees_all(peer, true);   // or every tick: rep.set_view(peer, &camera)
 
 #include "mce/containers/hash_map.h"
 #include "mce/ecs/replicated.h"
@@ -108,15 +114,19 @@ public:
     u64 write_snapshot_for(World& world, u32 tick, PeerId peer, ByteWriter& out);
     // Reads what ReplicationClient::write_ack wrote. False (and nothing changes) when malformed.
     bool read_ack(PeerId peer, ByteReader& in);
-    // Drops the client's history: its next snapshot is full. Call on disconnect.
+    // Drops the client's history (its next snapshot is full) and its view. Call on disconnect.
     void forget_client(PeerId peer);
+    // An extra point relevance is measured from for `peer`, besides its own entities (null: none).
+    void set_view(PeerId peer, const math::vec3* point);
+    // Every entity is relevant to `peer`, whatever its NetRelevance.
+    void set_sees_all(PeerId peer, bool all);
     struct ClientStats {
         u32 snapshots = 0;  // written by write_snapshot_for
         u32 full = 0;       // of those, full (no usable acknowledgement)
         u32 entities = 0;   // relevant entities in the newest one
         u64 bytes = 0;      // total written
     };
-    // Null for a peer write_snapshot_for has not written to.
+    // Null for a peer neither write_snapshot_for nor set_view / set_sees_all has seen.
     const ClientStats* client_stats(PeerId peer) const;
     // Snapshots kept per client (and applied ones kept by the client) to code against: an
     // acknowledgement older than this many sends gets a full snapshot.
@@ -146,9 +156,13 @@ private:
         u32 count = 0;
         i32 baseline = -1;           // slot of the newest acknowledged one still kept
         ClientStats stats;
+        bool has_view = false;  // set_view
+        math::vec3 view{};
+        bool sees_all = false;  // set_sees_all
     };
     Client* client(PeerId peer);
-    void build(World& world, u32 tick, PeerId peer, Canonical& out) const;
+    Client& add_client(PeerId peer);
+    void build(World& world, u32 tick, PeerId peer, const Client* cl, Canonical& out) const;
 
     ReplicationHooks hooks_;
     u32 next_id_ = 1;

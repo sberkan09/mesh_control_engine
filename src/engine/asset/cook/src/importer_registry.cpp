@@ -37,6 +37,7 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_sequence_importer());
     reg.add(make_timeline_importer());
     reg.add(make_bt_importer());
+    reg.add(make_skeleton2d_importer());
     reg.add(make_shader_importer());
     reg.add(make_input_map_importer());
     reg.add(make_store_importer());

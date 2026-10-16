@@ -22,6 +22,27 @@
 // Retry start their child again on the next tick, never the same one, so no tree loops in a tick.
 // Everything a brain knows is in its two components, so a tree is deterministic, in the state hash
 // and replays, and a save resumes it on the same node.
+//
+// Guard observers (M-AI 2, asset::BtAbort): a guard with "abort" re-checks its condition every tick.
+// "self" stops its running child the tick the condition fails (the guard fails); "lower", on a
+// selector's child, stops the selector's running later branch the tick it holds, and the selector
+// runs the guard's branch instead; "both" does the two. The halted tasks hear it as any halt.
+//
+// Stock tasks (M-AI 2): install_ai registers these names, so a tree reaches the kit with no code
+// (a game may register its own function under a name to replace one):
+//   move_to     walks to a vec3 key or an entity key (chased while it moves) with the entity's
+//               NavAgent3D (navmesh) or PathAgent (grid); Running until it arrives (or comes
+//               within `radius`), Failure on no path or no agent; a halt stops the agent
+//   look_at     turns the entity to a vec3 or entity key: about +Z with a PathAgent, Sprite or
+//               AnimatedSprite (the 2D plane, +X forward), else about +Y (-Z forward); Success
+//   animate     plays `clip` on the entity's AnimatedSprite, or on its Animator without a graph;
+//               with `finish`, Running until the clip finishes (a Once clip); Failure without one
+//   play_sound  an audio::PlaySfx of `sound` at `gain_db` (needs audio installed); Success
+//   spawn       instantiates `prefab` at a vec3 or entity key, or at the entity, plus `offset`
+//   raise       a BtSignal and a kit::SeqSignal named `event` (sequences' wait_event sees it)
+//   wait_event  Running until a BtSignal or SeqSignal named `event` is raised (readable from the
+//               tick after it was raised), then Success
+//   log         writes `text` to the log at info level, with the entity and the tree; Success
 
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
@@ -76,25 +97,7 @@ struct BtSignal {
     Entity entity;
 };
 
-class BtRegistry;
-
-// What a task node's function gets. `memory` is the node's own slot (zero when it enters);
-// `entering` is set on the tick the node starts, `halting` when a parent ends it while it runs
-// (the result is then ignored). The node's arguments are `key` (a blackboard key index or
-// asset::kBtNoKey), `value` and `vector`.
-struct BtTaskCall {
-    Frame& frame;
-    Entity entity;
-    Blackboard* blackboard;  // null when the tree has no keys
-    const asset::BtNode& node;
-    f32& memory;
-    bool entering = false;
-    bool halting = false;
-
-    u16 key() const { return node.key; }
-    f32 value() const { return node.a; }
-    math::vec3 vector() const { return {node.v[0], node.v[1], node.v[2]}; }
-};
+struct BtTaskCall;
 using BtTaskFn = BtStatus (*)(BtTaskCall& call);
 
 class BtRegistry {
@@ -149,8 +152,33 @@ private:
     Array<StringId> warned_tasks_;
 };
 
+// What a task node's function gets. `memory` is the node's own slot (zero when it enters);
+// `entering` is set on the tick the node starts, `halting` when a parent ends it while it runs
+// (the result is then ignored). The node's arguments are `key` (a blackboard key index into
+// `tree.keys`, or asset::kBtNoKey), `value`, `vector` and `arg` (a string; empty when none).
+struct BtTaskCall {
+    Frame& frame;
+    Entity entity;
+    Blackboard* blackboard;  // null when the tree has no keys
+    const BtRegistry::Def& tree;
+    const asset::BtNode& node;
+    f32& memory;
+    bool entering = false;
+    bool halting = false;
+
+    u16 key() const { return node.key; }
+    f32 value() const { return node.a; }
+    math::vec3 vector() const { return {node.v[0], node.v[1], node.v[2]}; }
+    StringView arg() const { return node.arg == asset::kBtNoString ? StringView() : tree.string(node.arg); }
+};
+
+// The place a task's key names: a set Vec3 key's value, or a live Entity key's world position.
+// False when the node has no key, the key is unset or of another type, or the entity is gone;
+// `target` (when given) gets the entity of an Entity key.
+bool bt_key_position(const BtTaskCall& call, math::vec3& out, Entity* target = nullptr);
+
 // Registers AiBrain, Blackboard and BtSignal, sets the BtRegistry resource and adds "ai_brains"
-// to FixedUpdate_Pre. Idempotent (re-points the assets).
+// to FixedUpdate_Pre, with the stock tasks registered. Idempotent (re-points the assets).
 void install_ai(World& world, asset::AssetSystem* assets);
 
 // The system itself (exposed for tests and custom pipelines).
