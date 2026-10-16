@@ -147,6 +147,9 @@ each result's `content[0].text` is the tool's JSON).
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
 
+
+For a local-multiplayer game (chapter 11.3), name the second player's actions `P2/<Action>` in `input` (`P3/`, `P4/` likewise); `P1/<Action>` is the plain `<Action>`.
+
 The `ui_*` tools edit a document through the cook's own reader and writer: each edit is read back
 as a whole document (so a duplicate name or a nav path to a removed widget fails with the cook's
 `file:line` message and nothing is written), then saved in the canonical `.mcui` form (every widget
