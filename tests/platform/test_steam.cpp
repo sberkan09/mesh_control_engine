@@ -294,3 +294,46 @@ TEST_CASE("steam: game services on Steam: sign-in, achievements, leaderboards, S
     CHECK_FALSE(after.ok[0]);
     gs::stop();
 }
+
+TEST_CASE("steam: the overlay's state from its callback, its pages, and rich presence") {
+    StubControls stub;
+    CHECK_FALSE(steam::overlay_active());
+    CHECK_FALSE(steam::set_rich_presence("status", "x"));  // Steam is off
+    REQUIRE(steam::init(stub_config(480)) == steam::InitResult::Ok);
+    const auto overlay = stub.get<const char* (*)()>("MceSteamStub_Overlay");
+    const auto presence = stub.get<const char* (*)(const char*)>("MceSteamStub_Presence");
+    const auto count = stub.get<int (*)()>("MceSteamStub_PresenceCount");
+
+    const u8 open[12] = {1, 1};
+    const u8 closed[12] = {0, 1};
+    stub.push(331, open, sizeof(open));
+    steam::run_callbacks(nullptr, nullptr);
+    CHECK(steam::overlay_active());
+    stub.push(331, closed, sizeof(closed));
+    steam::run_callbacks(nullptr, nullptr);
+    CHECK_FALSE(steam::overlay_active());
+
+    steam::show_overlay("friends");
+    CHECK(StringView(overlay()) == "friends");
+    steam::show_store_page();
+    CHECK(StringView(overlay()) == "store:480");
+    steam::show_web_page("https://example.org/news");
+    CHECK(StringView(overlay()) == "web:https://example.org/news");
+
+    CHECK(steam::set_rich_presence("steam_display", "#StatusInLevel"));
+    CHECK(steam::set_rich_presence("level", "Ashen Court"));
+    CHECK(StringView(presence("level")) == "Ashen Court");
+    CHECK(count() == 2);
+    CHECK(steam::set_rich_presence("level", ""));  // removes the key
+    CHECK(count() == 1);
+    steam::clear_rich_presence();
+    CHECK(count() == 0);
+
+    stub.push(331, open, sizeof(open));
+    steam::run_callbacks(nullptr, nullptr);
+    steam::shutdown();
+    CHECK_FALSE(steam::overlay_active());  // a new run starts with it closed
+    REQUIRE(steam::init(stub_config(480)) == steam::InitResult::Ok);
+    CHECK_FALSE(steam::overlay_active());
+    steam::shutdown();
+}

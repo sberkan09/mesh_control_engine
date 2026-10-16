@@ -350,5 +350,30 @@ services backend (23.6), so the same `unlock`, `add_progress`, `submit_score` an
 - a cloud save is a Steam Cloud file named after the save. Give the app enough Steam Cloud quota.
 
 `show_achievements()` opens the overlay's achievements page and `show_leaderboard()` its stats page.
-The overlay pausing the game, Steam Input and `ship --steam` come in the next M-STEAM steps.
+
+**The overlay** (Shift+Tab) holds the game like a lost focus: the sim pauses with the pause overlay
+up, the master bus mutes, and with `-save` the slot is written. Closing it unmutes; the player
+resumes from the pause overlay as after any focus loss.
+
+A game opens overlay pages with the `OpenOverlay` event (`mce/kit/presence.h`), from any
+FixedUpdate system:
+
+```cpp
+f.events().push(mce::kit::OpenOverlay{mce::kit::OverlayPage::Store, {}});  // this game's store page
+```
+
+Pages are `Friends`, `Achievements`, `Stats`, `Community`, `Settings`, `Store` and `Web` (with `url`).
+Without Steam the request is dropped.
+
+**Rich presence** is data: a `RichPresence` component on any entity (a level's root, say) says what
+friends see. The first enabled one by entity order is shown; none clears it. Its fields:
+
+| Field | Steam key | Meaning |
+|---|---|---|
+| `status` | `status` | plain text in the friends list's game info |
+| `steam_display` | `steam_display` | a token of the app's rich presence localization file, `#StatusInLevel` |
+| `key1` / `value1`, `key2` / `value2` | the key | substitutions the token uses: `level` = `Ashen Court` fills `%level%` |
+
+The player sends it when it changes, never every frame. Neither the overlay requests nor the
+presence change the state hash. Steam Input and `ship --steam` come in the next M-STEAM steps.
 

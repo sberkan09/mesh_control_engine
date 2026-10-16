@@ -84,6 +84,7 @@
 #include "mce/input/input_system.h"
 #include "mce/input/script.h"
 #include "mce/kit/captions.h"
+#include "mce/kit/presence.h"
 #include "mce/kit/stock.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/timeline.h"
@@ -545,7 +546,7 @@ public:
             update_ad_pause();
         }
         if (liveops_on_) update_liveops();  // also while paused: nothing here touches the sim
-        if (platform::steam::running()) platform::steam::run_callbacks(nullptr, nullptr);  // M-STEAM step 2 routes them
+        if (platform::steam::running()) update_steam();
         if (t.actions) {  // the UI screens navigate with the newest snapshot (edges once: ui_fresh_)
             const input::InputState pending = ui_actions_;
             ui_actions_ = *t.actions;
@@ -2110,6 +2111,46 @@ private:
         }
     }
 
+    // Steam, once a frame (M-STEAM steps 2-3): its callbacks (game services' answers, the overlay), the
+    // overlay holding the game like a lost focus, the scene's RichPresence and the game's OpenOverlay
+    // requests. Nothing here touches the sim.
+    void update_steam() {
+        platform::steam::run_callbacks(nullptr, nullptr);
+        const bool overlay = platform::steam::overlay_active();
+        if (overlay != steam_overlay_) {
+            steam_overlay_ = overlay;
+            MCE_LOG_INFO("{}: Steam overlay {}", desc_.app_name, overlay ? "open: the game holds" : "closed");
+            set_background(overlay || window_background_);
+        }
+        kit::RichPresence p;
+        const bool any = kit::current_presence(world_, p);
+        auto same = [](const kit::RichPresence& a, const kit::RichPresence& b) {
+            return a.status.view() == b.status.view() && a.steam_display.view() == b.steam_display.view() &&
+                   a.key1.view() == b.key1.view() && a.value1.view() == b.value1.view() &&
+                   a.key2.view() == b.key2.view() && a.value2.view() == b.value2.view();
+        };
+        if (any != presence_on_ || (any && !same(p, presence_))) {
+            platform::steam::clear_rich_presence();
+            auto set = [](const char* key, StringView value) {
+                if (!value.empty()) (void)platform::steam::set_rich_presence(key, FixedString<64>(value).c_str());
+            };
+            if (any) {
+                set("status", p.status.view());
+                set("steam_display", p.steam_display.view());
+                if (!p.key1.empty()) set(p.key1.c_str(), p.value1.view());
+                if (!p.key2.empty()) set(p.key2.c_str(), p.value2.view());
+            }
+            presence_on_ = any;
+            presence_ = p;
+        }
+        kit::take_overlay_requests(world_, overlay_requests_);
+        for (const kit::OpenOverlay& o : overlay_requests_) {
+            if (o.page == kit::OverlayPage::Store) platform::steam::show_store_page();
+            else if (o.page == kit::OverlayPage::Web) platform::steam::show_web_page(o.url.c_str());
+            else platform::steam::show_overlay(kit::overlay_page_name(o.page));
+        }
+    }
+
     // Unfocused / minimized: pause (the overlay waits for the player) and mute the master bus.
     void set_background(bool background) {
         // A desktop has no background event before a kill or a sleep: the focus loss saves (#177).
@@ -2342,9 +2383,15 @@ private:
             self->input_.push_event(e);
         switch (e.type) {
             case platform::EventType::FocusOut:
-            case platform::EventType::Minimized: self->set_background(true); return;
+            case platform::EventType::Minimized:
+                self->window_background_ = true;
+                self->set_background(true);
+                return;
             case platform::EventType::FocusIn:
-            case platform::EventType::Restored: self->set_background(false); return;
+            case platform::EventType::Restored:
+                self->window_background_ = false;
+                self->set_background(self->steam_overlay_);
+                return;
             default: break;
         }
         if (self->console_.is_open()) {  // the console owns the keyboard while open
@@ -2534,7 +2581,12 @@ private:
         u32 slot = 0;
         bool touch = false, down = false, pressed = false, released = false;
     } ui_pointer_;
-    bool background_ = false;  // unfocused or minimized
+    bool background_ = false;  // unfocused or minimized (or the Steam overlay up)
+    bool window_background_ = false;  // the window itself is unfocused or minimized
+    bool steam_overlay_ = false;      // the Steam overlay is up (M-STEAM step 3)
+    bool presence_on_ = false;        // presence_ was sent to Steam
+    kit::RichPresence presence_;
+    Array<kit::OpenOverlay> overlay_requests_;
     bool unfocused_ = false;   // the window lost focus (or minimized); the focus-loss save ran
     bool fullscreen_ = false;  // what cv_fullscreen last applied
     u64 last_frame_us_ = 0;    // -r.frame_report: the previous rendered frame
