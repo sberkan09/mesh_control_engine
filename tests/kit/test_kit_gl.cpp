@@ -11,6 +11,8 @@
 #include "mce/cook/cook.h"
 #include "mce/core.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/kit3d.h"
+#include "mce/kit/kit3d_extract.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/render_textures.h"
 #include "mce/kit/sprite_extract.h"
@@ -21,7 +23,9 @@
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
 #include "mce/render/renderer.h"
+#include "mce/render/scene3d.h"
 #include "mce/rhi/default_device.h"
+#include "mesh_fixture.h"
 
 using namespace mce;
 using math::vec2;
@@ -580,4 +584,90 @@ TEST_CASE("M-VIEWS 5: two 2D cameras in a split screen each keep their own cell 
     INFO("cell clears " << int(a.r) << "," << int(a.g) << "," << int(a.b) << " and " << int(b.r) << "," << int(b.g) << "," << int(b.b));
     CHECK((a.b > a.r && b.r > b.b));  // each cell shows its own camera's background
     CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("M-VISUAL3 2: a material with a height map gets one [normal, height] array; a mismatch draws without parallax") {
+    using namespace cook_test;
+    const std::string root = fresh_dir("kit_parallax");
+    const std::vector<u8> grey(4 * 4 * 4, 128), small(2 * 2 * 4, 128);
+    for (const char* n : {"n", "h", "s"}) {
+        const std::string name = std::string(root + "/assets/") + n + ".png";
+        write_file(name, make_png(n[0] == 's' ? 2 : 4, n[0] == 's' ? 2 : 4, n[0] == 's' ? small : grey));
+    }
+    const char* guid_n = "7a270000-0000-4000-8000-000000000001";
+    const char* guid_h = "7a270000-0000-4000-8000-000000000002";
+    const char* guid_s = "7a270000-0000-4000-8000-000000000003";
+    const char* opts = R"({ "srgb": false, "mips": false })";
+    write_file(root + "/assets/n.png.mceasset", sidecar(guid_n, "texture", opts));
+    write_file(root + "/assets/h.png.mceasset", sidecar(guid_h, "texture", opts));
+    write_file(root + "/assets/s.png.mceasset", sidecar(guid_s, "texture", opts));
+    auto mat = [&](const char* guid, const std::string& textures) {
+        write_file(std::string(root + "/assets/") + guid + ".mcmat",
+                   std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + guid + R"(", "height_scale": 0.05, "textures": )" + textures + " }");
+    };
+    const char* good = "7a270000-0000-4000-8000-000000000010";
+    const char* no_normal = "7a270000-0000-4000-8000-000000000011";
+    const char* mismatch = "7a270000-0000-4000-8000-000000000012";
+    mat(good, std::string(R"({ "normal": "guid:)") + guid_n + R"(", "height": "guid:)" + guid_h + R"(" })");
+    mat(no_normal, std::string(R"({ "height": "guid:)") + guid_h + R"(" })");
+    mat(mismatch, std::string(R"({ "normal": "guid:)") + guid_n + R"(", "height": "guid:)" + guid_s + R"(" })");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+
+    Fixture f;
+    asset::AssetSystem assets;
+    render::AssetUploadSink sink(f.renderer, assets);
+    assets.set_upload_sink(&sink);
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    f.extract.reset(&assets);
+
+    mesh_fixture::Builder box;
+    box.add_node(-1);
+    mesh_fixture::Box b;
+    b.half = {0.5f, 0.5f, 0.5f};
+    box.add_box(b);
+    const Array<byte> blob = box.build();
+    REQUIRE(f.renderer.meshes().upload(1, 1, blob.span()).has_value());
+    const asset::Guid kBox{0x3d00000000000011ull, 0x8000000000000011ull};
+
+    World world;
+    kit::install_kit3d(world, nullptr);
+    kit::Kit3DExtract ex3;
+    ex3.init(f.renderer.meshes(), &assets);
+    ex3.set_texture_store(&f.renderer.textures());
+    ex3.bind_mesh(kBox, 1);
+    ex3.preload();
+    world.spawn_with(LocalTransform{}, kit::Camera3DComponent{});
+    const char* guids[] = {good, no_normal, mismatch};
+    for (const char* g : guids) {
+        kit::MeshRef m;
+        m.mesh.guid = kBox;
+        m.material.guid = asset::parse_guid(g).value();
+        world.spawn_with(LocalTransform{{0, 0, -5}, math::quat::identity(), {1, 1, 1}}, m);
+    }
+    world.tick(1.0f / 60.0f, 0);
+    render::Camera3D cam;
+    REQUIRE(ex3.camera(world, 1.0f, cam));
+    render::Scene3D scene(f.renderer.meshes(), mem::heap());
+    scene.begin(cam, {64, 64});
+    ex3.extract(world, scene, 1.0f);
+    REQUIRE(scene.instances().size() == 3);
+    const render::MaterialOverride *a = scene.instances()[0].material, *n = scene.instances()[1].material, *x = scene.instances()[2].material;
+    REQUIRE((a && n && x));
+    CHECK(a->parallax);
+    CHECK(a->parallax_normal);
+    CHECK(a->ext.parallax());
+    CHECK(a->normal_key >= render::TextureStore::kFirstLocalKey);
+    CHECK(f.renderer.textures().contains(a->normal_key));
+    CHECK(n->parallax);
+    CHECK_FALSE(n->parallax_normal);
+    CHECK(n->normal_key != a->normal_key);
+    // 2x2 height against a 4x4 normal map: no parallax, the plain normal map stays.
+    CHECK_FALSE(x->parallax);
+    CHECK(x->ext.height_scale == 0.0f);
+    CHECK(x->normal_key < render::TextureStore::kFirstLocalKey);
+    ex3.shutdown();
+    f.extract.reset(nullptr);
 }

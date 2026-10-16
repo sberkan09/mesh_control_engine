@@ -196,6 +196,14 @@ Optional extension keys add lobes on top of the base (all 0 by default, which is
 metal), `transmission` (0..1, see-through like glass; the frame behind shows through, tinted by the base
 color) and `ior` (1..3, 0 = 1.5; sets a dielectric's reflectance). A value out of range is a cook error.
 
+**Height map (parallax, M-VISUAL3 2).** `textures.height` names a grey image (white is high; import it with
+`"srgb": false`) and `height_scale` (0..0.5, in texture repeats; 0.02..0.1 is typical) turns it on, with
+`parallax_steps` (`[min, max]`, 4..64, default `[8, 32]`) as the march budget looking straight on and at a
+grazing angle. `height_scale` without `textures.height` is a cook error. The height map has to match the normal
+map in size, mip count and format (the player packs the two into one array): when it does not, or no texture
+store exists, the engine logs one warning naming the material and draws it without parallax. Only `.mcmat`
+materials carry a height map.
+
 **Terrain** (`.mcterrain`, chapter 8): `resolution` samples per side (2^n+1, 33 to 4097), `chunk` quads
 per LOD node (a power of two, default 32), `size` in metres along x and z, `height_range` mapping sample
 0 and 65535 to metres. `heights` is base64 of `resolution²` little-endian u16 samples, z rows of x

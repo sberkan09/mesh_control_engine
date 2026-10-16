@@ -157,6 +157,7 @@ private:
         asset::Guid guid;
         asset::AnyHandle handle;
         mem::UniquePtr<render::MaterialOverride> value;  // null: failed
+        u32 parallax_key = ~0u;                          // the [normal, height] array this material owns (M-VISUAL3 2)
     };
     struct Tracked {  // per entity index: the transforms at the last two ticks seen
         u32 generation = 0;
@@ -167,6 +168,7 @@ private:
     };
     void track(Entity e, const math::vec3& pos, const math::quat& rot, const math::vec3& scale, u64 tick);
     void interpolated(Entity e, f32 alpha, math::vec3& pos, math::quat& rot, math::vec3& scale) const;
+    u32 build_parallax_array(render::MaterialOverride& m, asset::Guid material_guid);
     void release_handles();
     void release_terrains();
     void extract_terrains(World& world, render::Scene3D& scene);

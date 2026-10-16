@@ -836,6 +836,47 @@ TEST_CASE("material uv_scale packs into two halves; unset means [1, 1]") {
     CHECK(uv[1] == doctest::Approx(120.0f).epsilon(0.001));
 }
 
+TEST_CASE("material: a height map, height_scale and parallax_steps cook into MaterialExt (M-VISUAL3 2); bad keys fail") {
+    const std::string root = make_project("cook_material_height");
+    auto write = [&](const std::string& extra) {
+        write_file(root + "/assets/materials/hero.mcmat",
+                   std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid + R"(", )" + extra + " }");
+    };
+    write(std::string(R"("height_scale": 0.04, "parallax_steps": [6, 40], "textures": { "base_color": "guid:)") + kTexGuid +
+          R"(", "height": "guid:)" + kTexGuid + R"(" })");
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(r.ok());
+    AssetSystem as;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(as.mount(Span<const StringView>(roots, 1)).has_value());
+    auto mh = as.load_sync<Material>(G(kMatGuid));
+    REQUIRE(mh);
+    const Span<const byte> payload = as.resolve(mh.value());
+    const MaterialExt e = MaterialExt::of_material(payload);
+    CHECK(e.parallax());
+    CHECK(e.height() == G(kTexGuid));
+    CHECK(e.height_scale == doctest::Approx(0.04f));
+    CHECK(e.parallax_steps == (6u | 40u << 16));
+    CHECK_FALSE(e.any());  // parallax is not a lobe
+    CHECK(MaterialChunk::read(payload).value()->texture(MaterialSlot::BaseColor) == G(kTexGuid));  // 'height' is not a chunk slot
+    as.release(AnyHandle(mh.value()));
+
+    const char* bad[] = {
+        R"("height_scale": 0.04)",                                                        // no height map to scale
+        R"("height_scale": 0.9, "textures": { "height": "guid:a1a1a1a1-0000-4000-8000-000000000001" })",  // out of range
+        R"("parallax_steps": [2, 40])", R"("parallax_steps": [40, 8])", R"("parallax_steps": 8)",
+        R"("textures": { "height": "guid:a1a1a1a1-0000-4000-8000-000000000004" })",     // a material, not a texture
+    };
+    for (const char* extra : bad) {
+        write(extra);
+        const CookReport b = svc.cook(root.c_str(), CookOptions{});
+        CHECK_MESSAGE(!b.ok(), extra);
+        CHECK(report_for(b, kMatGuid)->status == AssetStatus::Failed);
+    }
+}
+
 TEST_CASE("material: the M-VISUAL2 4 lobes cook after the base block; a plain material has none; bad ranges fail") {
     const std::string root = make_project("cook_material_ext");
     write_file(root + "/assets/materials/hero.mcmat",
