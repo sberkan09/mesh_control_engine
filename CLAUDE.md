@@ -25,6 +25,8 @@ There is no hosted CI. `scripts/ci/local_ci.sh` is the CI; the gate has three le
 ### Container discipline
 
 - Run `scripts/ci/setup_env.sh` before the first CI call (cloud sessions do it on start).
+- `git fetch origin dev_claude` before `--task`: without the merge base every scoped stage runs in full and tidy
+  checks the whole tree. A stage named on the command line always runs in full.
 - Run `--task` detached and poll, never as a foreground command:
   `nohup scripts/ci/local_ci.sh --task > build/local-ci-logs/run.log 2>&1 &`, then wait for `=== Summary` in the log.
 - Never delete or shrink the ccache (`ccache -C`, `-M`); the script's `reclaim_space` frees disk by removing
@@ -40,6 +42,7 @@ There is no hosted CI. `scripts/ci/local_ci.sh` is the CI; the gate has three le
   umbrella headers. Check with `scripts/ci/include_fanout.py`.
 - **Slow tests:** a new test over 60 s ships a smoke variant (fewer ticks or frames, one scene) that `--task` runs,
   and the full version is labelled `slow` with `mce_mark_slow(<test>)` (`cmake/MceTarget.cmake`); the integration
-  run executes it (`local_ci.sh slow`). Adding a determinism subject means adding it to the module-to-subject map.
+  run executes it (`local_ci.sh slow`). Adding a determinism subject means adding it to the module-to-subject map (once that map exists in
+  `local_ci.sh`, a row in it). A caller that passes `-LE <expr>` to `ctest --preset` must include `slow` in it.
 - **Task shape:** concurrent threads work on disjoint modules; a task that touches three modules is split; stack PRs
   (seam, then feature, then polish).
