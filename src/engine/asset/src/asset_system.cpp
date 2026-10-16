@@ -28,6 +28,7 @@ bool chunk_type_for_asset_name(StringView name, ChunkType& out) {
         {Terrain::name, Terrain::chunk},
         {NavMesh::name, NavMesh::chunk},
         {Video::name, Video::chunk},
+        {BehaviorTree::name, BehaviorTree::chunk},
     };
     for (const Pair& p : kTable) {
         if (name == p.name) {
@@ -77,6 +78,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::Terrain: return TERRAIN_VERSION;
         case ChunkType::NavMesh: return NAVMESH_VERSION;
         case ChunkType::Video: return VIDEO_VERSION;
+        case ChunkType::BehaviorTree: return BEHAVIOR_TREE_VERSION;
         default: return 0;
     }
 }

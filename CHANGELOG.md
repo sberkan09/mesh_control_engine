@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Behavior trees, M-AI step 1 (SBA-128, ADR-0045): `.mcbt` files describe an AI's decisions as data (sequence,
+  selector, parallel, invert, succeed, fail, repeat, retry, cooldown, timeout, guard, check, wait, set, emit and
+  task nodes) over typed blackboard keys, and cook to `CHNK_BT` with errors at file:line:col. An `AiBrain`
+  component runs one per entity every fixed tick, and a `Blackboard` component holds the keys. All run state is in
+  the two components, so trees are deterministic, hashed, replayed and saved. Games register tasks by name
+  (`kit::BtRegistry::register_task`) and read and write keys by name (`kit::bb_*`). User guide 13.8.
 - Material extensions, M-VISUAL2 step 4 (SBA-104): clear coat, sheen, anisotropy and transmission. `.mcmat`
   gains `clearcoat`, `clearcoat_roughness`, `sheen_color`, `sheen_roughness`, `anisotropy`,
   `anisotropy_rotation`, `transmission` and `ior`; glTF files bring the same from `KHR_materials_clearcoat`,
