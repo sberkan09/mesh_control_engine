@@ -21,6 +21,9 @@
 // Skid3D events (FireOn::Skid on the vehicle's effects) past skid_slip; self_right puts a flipped car
 // that has nearly stopped back on its wheels after right_after seconds, a metre up, facing the way it did.
 //
+// M-MOVE3D 4: VehicleDriver3D drives the car around a chain of Waypoint3D entities and counts laps
+// (LapCompleted3D, FireOn::Lap).
+//
 // Systems: "kit3d_vehicles" (FixedUpdate_Pre, after "kit3d_bodies": build, rebuild, the driver) and
 // "kit3d_vehicle_state" (FixedUpdate_Physics, after "kit3d_writeback": speed, rpm, gear, wheels).
 
@@ -120,7 +123,61 @@ MCE_COMPONENT(Vehicle3D, (use_input, Help{"1: Move (throttle, steer), Jump (hand
               (skidding, ReadOnly, Transient), (lateral_slip, ReadOnly, Transient), (flipped_ticks, ReadOnly, Transient),
               (rightings, ReadOnly, Transient))
 
-// Registers Vehicle3D and adds the systems (after install_bodies3d, which it calls). Idempotent.
+// One point of a path a VehicleDriver3D follows (M-MOVE3D 4). Waypoints chain by `next`; the last
+// pointing back at the first makes a lap. The entity's position is the point.
+struct Waypoint3D {
+    Entity next;            // the following waypoint; null ends the path
+    f32 speed = 0.0f;       // m/s cap at this point; 0 = from the corner's sharpness
+    f32 radius = 4.0f;      // reached within this many metres, or once passed
+};
+MCE_COMPONENT(Waypoint3D, (next, Help{"the following waypoint; the last pointing back at the first makes a lap"}),
+              (speed, Range{0, 200}, Help{"m/s cap here; 0 = from the corner"}), (radius, Range{0.1f, 100}, Help{"metres: reached within this"}))
+
+// An AI driver for the Vehicle3D on the same entity (M-MOVE3D 4). Each tick before the car takes its
+// inputs, it writes throttle, steer, brake and handbrake to follow the path from `path`. It steers by
+// pure pursuit at a point look_ahead metres down the path, no sharper than 1.5x corner_accel allows at
+// its speed. It plans its speed so it can brake at brake_decel to each of the next two corners in
+// time (a corner allows sqrt(corner_accel * radius), the radius from the turn's angle and the legs
+// beside it, capped by the waypoint's speed) and no faster than the arc to its aim point allows.
+// Reaching `path` again completes a lap: LapCompleted3D, FireOn::Lap; after `laps` laps (0 = never)
+// it brakes the car to a stop. A tall car needs anti_roll to take the corners flat.
+struct VehicleDriver3D {
+    Entity path;                // the first waypoint: the start and finish line
+    f32 max_speed = 20.0f;      // m/s
+    f32 corner_accel = 6.0f;    // m/s^2 sideways it allows in a corner
+    f32 brake_decel = 4.0f;     // m/s^2 it plans to brake at
+    f32 steer_gain = 1.0f;      // scales the pure-pursuit wheel angle
+    f32 look_ahead = 6.0f;      // m down the path it steers at (at least 0.6 s of travel)
+    u16 laps = 0;               // laps before it stops; 0 = never
+    u8 drive = 1;               // 0: lets go of the car (inputs left as they are)
+    u8 pad_ = 0;
+    Entity target;              // engine-written: the waypoint it heads for
+    Entity previous;            // engine-written: the one it reached last
+    f32 target_speed = 0.0f;    // engine-written: m/s it wants now
+    f32 lap_time = 0.0f;        // engine-written: s into the current lap
+    f32 last_lap = 0.0f;        // engine-written: s
+    f32 best_lap = 0.0f;        // engine-written: s, 0 before the first lap
+    u16 laps_done = 0;          // engine-written
+    u8 finished = 0;            // engine-written: 1 once laps are done
+    u8 started = 0;             // engine-written: 1 once it crossed the start
+};
+MCE_COMPONENT(VehicleDriver3D, (path, Help{"the first waypoint: the start and finish line"}), (max_speed, Range{0, 200}, Help{"m/s"}),
+              (corner_accel, Range{0.1f, 100}, Help{"m/s^2 sideways allowed in a corner"}),
+              (brake_decel, Range{0.1f, 100}, Help{"m/s^2 it plans to brake at"}), (steer_gain, Range{0, 20}),
+              (look_ahead, Range{0.5f, 100}, Help{"metres down the path it steers at (at least 0.6 s of travel)"}),
+              (laps, Help{"laps before it stops; 0 = never"}), (drive, Help{"0: lets go of the car"}), (target, ReadOnly, Transient),
+              (previous, ReadOnly, Transient), (target_speed, ReadOnly, Transient), (lap_time, ReadOnly, Transient),
+              (last_lap, ReadOnly, Transient), (best_lap, ReadOnly, Transient), (laps_done, ReadOnly, Transient),
+              (finished, ReadOnly, Transient), (started, ReadOnly, Transient))
+
+// A VehicleDriver3D crossed its start again (M-MOVE3D 4): FixedUpdate_Pre, from "kit3d_vehicles".
+struct LapCompleted3D {
+    Entity vehicle;
+    u32 lap = 0;            // 1 for the first
+    f32 time = 0.0f;        // s
+};
+
+// Registers Vehicle3D, Waypoint3D and VehicleDriver3D and adds the systems (after install_bodies3d, which it calls). Idempotent.
 void install_vehicles3d(World& world, asset::AssetSystem* assets);
 
 }  // namespace mce::kit
