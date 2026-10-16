@@ -1,0 +1,385 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "5d1e0000-0000-4000-8000-000000000005",
+  "name": "courier",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Camera",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            1.45,
+            0
+          ]
+        },
+        "Camera2DComponent": {
+          "fit_height": 3.8,
+          "clear_color": [
+            0.55,
+            0.72,
+            0.88,
+            1
+          ],
+          "pixel_snap": false
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Courier",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -2,
+            0,
+            0
+          ]
+        },
+        "Skeleton2D": {
+          "skeleton": "guid:5d1e0000-0000-4000-8000-000000000002",
+          "layer": 2
+        },
+        "Skeleton2DAnimator": {
+          "graph": "guid:5d1e0000-0000-4000-8000-000000000003"
+        },
+        "Skeleton2DSlots": {},
+        "Skeleton2DIK": {}
+      }
+    },
+    {
+      "id": 3,
+      "name": "FootNear",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0.14,
+            0,
+            0
+          ]
+        },
+        "ChildOf": {
+          "parent": "$1"
+        },
+        "IKTarget2D": {
+          "skeleton": "$1",
+          "constraint": "leg_near"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "FootFar",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -0.14,
+            0,
+            0
+          ]
+        },
+        "ChildOf": {
+          "parent": "$1"
+        },
+        "IKTarget2D": {
+          "skeleton": "$1",
+          "constraint": "leg_far"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Lantern",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "Bone2DFollow": {
+          "skeleton": "$1",
+          "bone": "arm_near_low",
+          "offset": [
+            0.3,
+            -0.04
+          ]
+        },
+        "Sprite": {
+          "tint": [
+            1,
+            0.85,
+            0.35,
+            1
+          ],
+          "size": [
+            0.1,
+            0.14
+          ],
+          "layer": 3
+        }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Ground",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "Sprite": {
+          "tint": [
+            0.28,
+            0.4,
+            0.24,
+            1
+          ],
+          "size": [
+            16,
+            1.2
+          ],
+          "pivot": [
+            0.5,
+            1
+          ],
+          "layer": -2
+        }
+      }
+    },
+    {
+      "id": 7,
+      "name": "Mark0",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -6.5,
+            -0.15,
+            0
+          ]
+        },
+        "Sprite": {
+          "tint": [
+            0.2,
+            0.3,
+            0.18,
+            1
+          ],
+          "size": [
+            0.5,
+            0.08
+          ],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Mark1",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -4.5,
+            -0.15,
+            0
+          ]
+        },
+        "Sprite": {
+          "tint": [
+            0.2,
+            0.3,
+            0.18,
+            1
+          ],
+          "size": [
+            0.5,
+            0.08
+          ],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Mark2",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -2.5,
+            -0.15,
+            0
+          ]
+        },
+        "Sprite": {
+          "tint": [
+            0.2,
+            0.3,
+            0.18,
+            1
+          ],
+          "size": [
+            0.5,
+            0.08
+          ],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": 10,
+      "name": "Mark3",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            -0.5,
+            -0.15,
+            0
+          ]
+        },
+        "Sprite": {
+          "tint": [
+            0.2,
+            0.3,
+            0.18,
+            1
+          ],
+          "size": [
+            0.5,
+            0.08
+          ],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": 11,
+      "name": "Mark4",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            1.5,
+            -0.15,
+            0
+          ]
+        },
+        "Sprite": {
+          "tint": [
+            0.2,
+            0.3,
+            0.18,
+            1
+          ],
+          "size": [
+            0.5,
+            0.08
+          ],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": 12,
+      "name": "Mark5",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            3.5,
+            -0.15,
+            0
+          ]
+        },
+        "Sprite": {
+          "tint": [
+            0.2,
+            0.3,
+            0.18,
+            1
+          ],
+          "size": [
+            0.5,
+            0.08
+          ],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": 13,
+      "name": "Mark6",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            5.5,
+            -0.15,
+            0
+          ]
+        },
+        "Sprite": {
+          "tint": [
+            0.2,
+            0.3,
+            0.18,
+            1
+          ],
+          "size": [
+            0.5,
+            0.08
+          ],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": 14,
+      "name": "Mark7",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            7.5,
+            -0.15,
+            0
+          ]
+        },
+        "Sprite": {
+          "tint": [
+            0.2,
+            0.3,
+            0.18,
+            1
+          ],
+          "size": [
+            0.5,
+            0.08
+          ],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": 20,
+      "name": "Director",
+      "components": {
+        "TimelinePlayer": {
+          "timeline": "guid:5d1e0000-0000-4000-8000-000000000004",
+          "bindings": [
+            "$1",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "loop": true
+        }
+      }
+    }
+  ]
+}

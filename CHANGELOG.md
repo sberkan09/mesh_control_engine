@@ -5,6 +5,38 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Procedural levels, M-PROCGEN step 4 (SBA-174): MCP `procgen_run` shows a seeded level as text (and checks a run of seeds, or
+  bakes it into a `.mctilemap`), a `.mctest` can assert `{"reachable": {kind, width, height, seed, count}}`, and user guide
+  chapter 28 explains both.
+- Mutation tests for the chunk readers, M-FUZZ step 1 (SBA-185): `tests/fuzz` has a deterministic byte mutator and
+  runs the asset module's 19 chunk readers over 22,000 mutated payloads of every chunk the samples cook
+  (`ctest -R test_fuzz`); none crashes, hangs or asserts. `docs/milestones/M-FUZZ.md` lists every parser of
+  untrusted bytes and what covers it.
+- Docs checks in the guide, M-DOCCHECK step 4 (SBA-179): user guide 1.8 describes what the walls stage checks in the
+  documents and where the accepted misses live. M-DOCCHECK is done.
+- Several agents on one scene, M-WORKFLOW step 2 (SBA-181, #378): `scene_open` always re-reads the file and
+  replaces a copy `scene_switch` parked; a `scene_save` that cannot merge a teammate's save is refused naming
+  the entities on disk it lacks, and `overwrite: true` saves anyway; `entity_delete` reports the entity
+  references that become null (`nulled_links`: entity, component, field).
+- Tested-sample check, M-DOCCHECK step 3 (SBA-178): `check_docs.py` also fails for a `samples/` or `projects/`
+  directory that no test runs. Every one has a test today except `samples/common` (shared headers).
+- Flag check, M-DOCCHECK step 2 (SBA-177): `check_docs.py` also fails for a `-flag` after `mce_player` in a
+  document that no source declares as a console variable. Every documented flag passes today.
+- Docs checks, M-DOCCHECK step 1 (SBA-176): the walls stage runs `scripts/ci/check_docs.py`, which fails for a
+  relative link or `#anchor` in a document that points nowhere and for an `#include` line of an `mce/` header that names no
+  header (`scripts/ci/docs.allow` lists the four accepted sketches). The guide index's broken platform-notes link
+  is fixed.
+- Spine and DragonBones import, M-ANIM2D (SBA-146): `mce import spine <file.json>` and `mce import dragonbones <file>`
+  convert Spine 3.8/4.x JSON and DragonBones 5.x JSON rigs into a `.mcskel2d` (bones, slots, region and weighted mesh
+  attachments, rotate / translate / scale / color / attachment / deform keys with bezier curves, events, IK with keyed
+  mix). Path, transform and physics constraints, shear, other skins and the like are dropped with a warning
+  (`--strict` fails on one); only the open JSON is read and no Spine runtime code is used. User guide 7.13.
+- Accessibility checks on themed UI documents, M-UI-DATA2 step 3 (SBA-155): `project_check` judges the Text,
+  Button and Toggle labels of a `.mcui` document with the kind's default look and its theme applied (before,
+  themed colors were skipped and unstated sizes unseen), and names the widget by its path. User guide 24.5.
+- Wave function collapse, M-PROCGEN step 2 (SBA-172): `kit::procgen::generate_wfc` fills a grid with tiles from adjacency rules written by hand or learned from an example map, with pinned cells, weights and bounded restarts.
+- Procedural levels, M-PROCGEN step 1 (SBA-171): `mce/kit/procgen.h` makes a connected level from a seed, deterministically: BSP rooms, cellular caves, a drunkard's walk and thresholded noise, each with a start and a farthest exit.
+- Planned: M-PROCGEN (SBA-171 … SBA-175), deterministic procedural levels as data (docs/milestones/M-PROCGEN.md).
 - Luau recipes (a countdown, a state machine, spawning, physics events), user guide 27.9; M-SCRIPT is done.
 - Script games for agents, M-SCRIPT step 6b (SBA-152): the `start_game` prompt offers a script-only game, `docs_search`
   finds chapter 27, `script_check` takes `assets/scripts/x.luau` as well as `scripts/x.luau`, and the guide lists the
@@ -12,6 +44,16 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 - A platformer in Luau, M-SCRIPT step 6a (SBA-152): `projects/EmberScript` is a side-view game of scripts and
   data (player controller, enemy state machine, goal) with `.mctest` scenarios, and `ScriptVars` gives a
   script-only game 16 saved numbers per entity to remember things in. User guide 27.8.
+- 2D skeleton demo and gates, M-ANIM2D step 6 (SBA-145): `samples/skel2d_demo` is a cut-out courier with no code: a
+  15-bone `.mcskel2d` on one generated atlas, idle, walk and jump clips under a `.mcanim` graph that a timeline
+  drives, a weighted cape mesh with deform keys, a face attachment swap, IK legs that keep the feet on `IKTarget2D`
+  entities, and a lantern on a hand bone. It plays headless twice for the same hash (`ctest -R skel2d_demo`) and
+  `test_kit` checks its poses. The six 2D skeleton components leave `scripts/ci/sample_coverage.allow`. User
+  guide 7.13.
+- Systems tour sample, M-COVER step 4 (SBA-160): `samples/systems_tour` shows `NetReplicated`, `NetOwner`, `Dialogue`
+  and `DialogueInput` on one NPC with a compiled story and runs the conversation to its end
+  (`ctest -R sample_systems_tour`). The sample coverage list now holds only `Blackboard` and `SceneChunkStatus`.
+  M-COVER is done.
 - Behavior tree MCP tools, the squad demo and the gates, M-AI step 6 (SBA-133): `bt_create`, `bt_add_node` and
   `bt_set` write a `.mcbt` the cook checks before anything is written, and `bt_trace` plays a saved scene
   headless and reports one brain's running path and blackboard over time and when each node started.

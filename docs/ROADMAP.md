@@ -99,18 +99,22 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-TERRAIN | [M-TERRAIN.md](milestones/M-TERRAIN.md) (Linear SBA-89 … SBA-94) | done (steps 1–6 and the demo: SolsticeReach's island is a painted `Terrain3D`) | Metal untested |
 | M-ACCESS | [M-ACCESS.md](milestones/M-ACCESS.md) (Linear SBA-95 … SBA-99) | done on the desktop (steps 1–5, the demo and the gates) | the screen reader on a phone and on each desktop OS |
 | M-VISUAL2 | [M-VISUAL2.md](milestones/M-VISUAL2.md) (Linear SBA-101 … SBA-105) | done in the cloud (steps 1–5 and the demo, 2026-10-16: screen-space reflections, spatial upsample and sharpening, contact shadows for the sun, clear coat, sheen, anisotropy and transmission; every knob on `Environment3D`, `.mcmat` and over MCP; `samples/06_showcase` on/off sheet) | local-light contact shadows, extension textures, real-GPU budgets and Metal pixels |
-| M-UI-DATA2 | [M-UI-DATA2.md](milestones/M-UI-DATA2.md) (Linear SBA-153 … SBA-156) | active (steps 1–2 done: a Text widget's `text_align`; `"own_style"` keeps a default over a theme) | steps 3–4 |
+| M-UI-DATA2 | [M-UI-DATA2.md](milestones/M-UI-DATA2.md) (Linear SBA-153 … SBA-156) | active (steps 1–3 done: a Text widget's `text_align`; `"own_style"` keeps a default over a theme; `project_check` judges `.mcui` labels with their theme) | step 4 |
 | M-PERF | [M-PERF.md](milestones/M-PERF.md) (Linear SBA-113 … SBA-117, added 2026-10-15) | done on the desktop (steps 1–5, the demo and the gates) | a capture on a phone and in a browser |
 | M-STEAM | [M-STEAM.md](milestones/M-STEAM.md), ADR-0042 (Linear SBA-106 … SBA-112) | done against a stand-in `steam_api` (steps 1–6: the run-time loader, game services, the overlay and rich presence, Steam Input, `ship --steam` depots, `samples/steam_demo` and user guide 26) | the real-client run, SBA-112 (needs the user's Steamworks account) |
 | M-AUDIO2 | [M-AUDIO2.md](milestones/M-AUDIO2.md) (Linear SBA-118 … SBA-122, added 2026-10-16) | done: Ogg Vorbis clips (ADR-0044), per-voice pitch and `.mcsound` sound sets, bus filters, reverb sends and the limiter as scene components, ducking and mixer snapshots, occlusion and Doppler, `mce_player -audio_record`, the `audio_rooms` demo | — |
 | M-NET3 | [M-NET3.md](milestones/M-NET3.md) (Linear SBA-123 … SBA-127, added 2026-10-16) | active (steps 1–4 done: per-client delta snapshots, `NetRelevance`, acknowledgements, about a third of the snapshot bytes; rollback and replication spectators, rollback clock sync; quick play, room list, host migration with `ReplicationServer::adopt`; WebRTC data channels, `RtcHost`, native and web, the relay as fallback) | step 5, the demo and the gates |
 | M-AI | [M-AI.md](milestones/M-AI.md), ADR-0045 (Linear SBA-128 … SBA-133, added 2026-10-16) | done (steps 1–6: `.mcbt` behavior trees cooked to `CHNK_BT`, `AiBrain` and `Blackboard` in `mce/kit/ai.h`, tasks by name; stock tasks, guard aborts and `samples/ai_demo` on the stock player; `Perceiver` and `Stimulus` sight, hearing and memory in `mce/kit/perception.h`; utility nodes, `AiTokenPool` tokens and the `find_point` query; the editor's Behavior Tree panel with a live debugger; `bt_*` MCP tools with `bt_trace`; the squad demo and the gates) | none |
 | M-MOVE3D | [M-MOVE3D.md](milestones/M-MOVE3D.md) (Linear SBA-134 … SBA-139, added 2026-10-16) | active (step 1 done: character feel, acceleration, coyote time, jump buffer and cut, air jumps, sprint, crouch, `Landed3D`; step 2 done: the camera, spring arm, look-ahead, first person, lock-on; step 3 done: vehicle feel, anti-roll, downforce, gears as data, skids, self-righting; step 4 done: `VehicleDriver3D` AI drivers on `Waypoint3D` paths, corner braking, laps; step 5 done: `Locomotion3D` feeds movement to animation graphs, foot IK tested on slopes and stairs) | step 6, the demo and the gates |
-| M-ANIM2D | [M-ANIM2D.md](milestones/M-ANIM2D.md) (Linear SBA-140 … SBA-146, added 2026-10-16) | active (step 1 done: `.mcskel2d` cooked to `CHNK_SKEL2D`, the `Skeleton2D` world pose, slots drawn through the sprite extraction, `Bone2DFollow`; step 2 done: bone clips with linear, stepped and bezier keys, `Skeleton2DAnimator` crossfades, the `.mcanim` state graph shared with 3D, events; step 3 done: slot attachments, skinned meshes drawn as batch triangles, slot color / attachment keys and deform keys, `Skeleton2DSlots`; step 4 done: two-bone and CCD IK constraints as data, bone or `IKTarget2D` entity targets, keyed and overridable mix in `Skeleton2DIK`; step 5 done: the editor Skeleton panel (bone tree, rest-pose fields, animation scrubber, IK aim points, keying, bone overlay lines in the viewport) and MCP `skel2d_create` / `add_bone` / `add_slot` / `add_ik` / `key` / `preview`, all through one document layer that the importer validates) | step 6 (the demo and the gates) |
+| M-ANIM2D | [M-ANIM2D.md](milestones/M-ANIM2D.md) (Linear SBA-140 … SBA-146, added 2026-10-16) | done (steps 1–6; SBA-146 done: `mce import spine` / `mce import dragonbones` convert Spine 3.8/4.x JSON and DragonBones 5.x JSON into `.mcskel2d`) (step 1 done: `.mcskel2d` cooked to `CHNK_SKEL2D`, the `Skeleton2D` world pose, slots drawn through the sprite extraction, `Bone2DFollow`; step 2 done: bone clips with linear, stepped and bezier keys, `Skeleton2DAnimator` crossfades, the `.mcanim` state graph shared with 3D, events; step 3 done: slot attachments, skinned meshes drawn as batch triangles, slot color / attachment keys and deform keys, `Skeleton2DSlots`; step 4 done: two-bone and CCD IK constraints as data, bone or `IKTarget2D` entity targets, keyed and overridable mix in `Skeleton2DIK`; step 6 done: `samples/skel2d_demo`, a rigged courier with idle / walk / jump under a state graph, a skinned cape and IK feet, user guide 7.13, the sample coverage gate for the six 2D skeleton components) | step 5 (the editor panel and MCP tools) |
 | M-SCRIPT | [M-SCRIPT.md](milestones/M-SCRIPT.md) (Linear SBA-147 … SBA-152, added 2026-10-16; ADR-0041) | done (steps 1–6; the phone and web builds with Luau unverified here: no NDK, Xcode or emsdk) | run the Android, iOS and web builds with `MCE_WITH_SCRIPT` on a machine with those toolchains |
-| M-COVER | [M-COVER.md](milestones/M-COVER.md) (Linear SBA-157 … SBA-160, added 2026-10-16) | active (step 1 done: the sample coverage gate in the walls stage, `scripts/ci/sample_coverage.allow`; steps 2–3 done: `samples/kit3d_tour`, `samples/kit2d_tour`) | step 4, the systems tour |
+| M-COVER | [M-COVER.md](milestones/M-COVER.md) (Linear SBA-157 … SBA-160, added 2026-10-16) | done (the sample coverage gate in the walls stage, `scripts/ci/sample_coverage.allow`; `samples/kit3d_tour`, `samples/kit2d_tour`, `samples/systems_tour`; only engine-written state is listed) | none |
 | M-VIEWS | [M-VIEWS.md](milestones/M-VIEWS.md) (Linear SBA-161 … SBA-166, added 2026-10-16) | active (step 1 done: local players, per-slot maps and pads, join by button, `P2/` script names) | steps 1–6 |
-| M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | active (step 1 done: `mce import aseprite`) | steps 2–4 |
+| M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | active (steps 1–3 done: `mce import aseprite`, `tiled`, `ldtk`) | step 4 |
+| M-PROCGEN | [M-PROCGEN.md](milestones/M-PROCGEN.md) (Linear SBA-171 … SBA-175, added 2026-10-16) | active (not started) | steps 1–5 |
+| M-DOCCHECK | [M-DOCCHECK.md](milestones/M-DOCCHECK.md) (Linear SBA-176 … SBA-179, added 2026-10-16) | done (`scripts/ci/check_docs.py` in the walls stage: links and anchors, `#include` lines of `mce/` headers, `mce_player` flags and a test for every sample and project; `scripts/ci/docs.allow`) | none |
+| M-WORKFLOW | [M-WORKFLOW.md](milestones/M-WORKFLOW.md) (Linear SBA-180 … SBA-184, added 2026-10-16) | active (step 2 done: `scene_open` always re-reads and replaces a parked copy, an unmergeable `scene_save` names the entities and takes `overwrite`, `entity_delete` reports the links that become null) | steps 1, 3–5 |
+| M-FUZZ | [M-FUZZ.md](milestones/M-FUZZ.md) (Linear SBA-185 … SBA-188, added 2026-10-16) | active (step 1 done: `tests/fuzz` mutator and the asset module's 19 chunk readers over mutated cooked sample chunks, a survey of every parser of untrusted bytes) | steps 2–4 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -580,6 +584,60 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Demo:** a sample project whose sprites, map and second level come only from exported files, played headless twice for the same hash.
 **Gates:** converters are pure functions of their inputs (same bytes out twice); unknown or unsupported features are warnings that name the feature, never silent; the cooked output of an imported sheet equals the hand-written one for the same data; `local_ci.sh` green on every step.
+
+### M-PROCGEN — Deterministic procedural levels, as data · **size M (rough guess, ≈ 50–80 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free (the owner of M-SCRIPT finished and every other milestone has an owner). Roguelikes, endless runners and "a new level every run" games are a large share of indie 2D, and the engine has the pieces (`.mctilemap`, `NavGrid`, `Collider2D`, a deterministic `World::state_hash`) but nothing that makes a level from a seed. `terrain_generate` covers heightfields only. A generator that is a pure function of (kind, parameters, seed) fits the determinism contract (FR-RUN-040) better than hand-written game code does, needs no device, and gives agents and script-only games (M-SCRIPT) a level source with no C++.*
+
+**Builds, in order:**
+1. `mce/kit/procgen.h`: named seeded random streams (a child stream per name, so adding a generator step does not shift the others) and four grid generators with a fixed output, a `ProcGrid` of cells: BSP rooms with corridors, cellular-automata caves, a drunkard's walk and a noise threshold. Every generator can promise connectivity (flood fill from the first floor cell; unreachable floor is filled or joined) and returns the start and exit cells. Tests: same seed gives the same bytes, Debug = Release, connectivity holds over a thousand seeds.
+2. Wave function collapse over tiles: adjacency learned from an example `.mctilemap` or given as rules, bounded restarts on contradiction, pinned cells (a start room the generator must keep), a seed, and a named warning when it gives up instead of a hang.
+3. `ProcLevel` component (kind, parameters, seed, tileset mapping, wall/floor tiles): the stock hosts build the `.mctilemap` layer in memory, the `Collider2D` of the walls and the marker entities (`Start`, `Exit`, spawn points) at scene load, with no game code; the seed is saved, so a save or a replay rebuilds the same level; a `reroll` flag and a `seed` field are the whole API, also from Luau.
+4. MCP and tooling: `procgen_run` returns the grid as ASCII and, with `bake`, writes the `.mctilemap` and the scene fragment so the editor and `render_frame` can look at it; `.mctest` gets a `reachable` assertion (the walk_to bot's target is reachable on every seed of a list); user guide chapter.
+5. Demo and gates: `samples/10_dungeon`, a top-down crawl whose three levels are `ProcLevel` entities with different generators (a script-only variant in Luau), one `.mctest` per generator that a bot finishes on ten seeds; generation of a 128 x 128 level under a budget in the perf gate.
+
+**Demo:** the dungeon sample played headless on three seeds gives the same hash across runs and builds, and a different level per seed.
+**Gates:** every generator is a pure function of its inputs (same bytes out twice, Debug = Release); connectivity holds on every tested seed; a project without `ProcLevel` builds and hashes as today; `local_ci.sh` green on every step.
+
+### M-FUZZ — Hostile input: loaders and parsers never crash · **size S–M (rough guess, ≈ 30–50 h engineering)** · tier: off-tier, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free. Only the `.mce` container and the MCP request path have a mutation test; every other reader of packs, saves, recordings, mods and packets trusts its input after a header check. Needs no device.*
+
+**Builds, in order:**
+1. A deterministic mutator (`tests/fuzz`) and a survey of every parser of untrusted bytes; the asset module's chunk readers over mutated payloads of every cooked sample chunk.
+2. Walk what the readers accept so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, nav mesh) and the importers; fix each finding with a regression test.
+3. Saves, replays, input recordings, `.mcperf`, net packet decoders and the Luau compile path.
+4. The targets in the ASan stage under a time budget; a walls check that a new chunk type has a fuzz target; the close.
+
+**Demo:** `ctest -R fuzz` replays a failure from (pack, chunk, iteration) alone; the survey table has no parser marked "none".
+**Gates:** `local_ci.sh` green on every step, ASan clean; a fix in shared loader, allocator or net code gets an Opus review.
+
+### M-DOCCHECK — Docs that cannot rot · **size S (rough guess, ≈ 20–30 h engineering)** · tier: off-tier, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free. The capability table and the sample gate show that every feature is named and shown, but nothing checks the rest of what the documents say: a link, a heading anchor, an `#include` line, a command-line flag. Needs no device or engine code: scripts and documents only.*
+
+**Builds, in order:**
+1. `scripts/ci/check_docs.py` in the walls stage: relative links and `#anchors` in every Markdown file resolve, and `#include` lines of `mce/` headers name a real header; existing misses are fixed or on `scripts/ci/docs.allow` with a reason.
+2. The same for command-line flags: a flag shown after `mce_player` in a document is a console variable the source declares.
+3. Every `samples/` and `projects/` directory is run by a test, or listed with a reason.
+4. The guide and contributor docs describe the checks; the gates run.
+
+**Demo:** the walls stage fails on a seeded broken link, flag and untested sample, and passes on the repo.
+**Gates:** `local_ci.sh` green on every step; each allow-list only shrinks.
+
+### M-WORKFLOW — What blind test 3 found in agent authoring · **size S–M (rough guess, ≈ 30–50 h engineering)** · tier: off-tier, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free. Blind test 3 (three agents building Lantern Keep over MCP from the SDK) filed GitHub #377 to #383. The ones that are bugs or workflow holes in code we own, and not content or another milestone's track (#382 Luau and UiFlow belong to M-SCRIPT and M-UI-DATA2, #383 to M-VISUAL2, M-PERF and M-AUDIO2), are this milestone.*
+
+**Builds, in order:**
+1. **#377, Opus.** A `NavAgent3D` on a `CharacterController3D` with the default `acceleration` follows its path at about 7% of its speed. Find the cause, make the agent reach its configured speed, pin it with a 20 m test; existing replay hashes unchanged.
+2. **#378.** `scene_open` with `force` re-reads the file; `scene_save` refuses when the file changed on disk since it was opened (naming the entities it would drop; `overwrite` to force); deleting an entity others reference reports the links that become null; `project_check` lists null links.
+3. **#379.** The cook error for a file without a sidecar names `cook_run {"adopt":true}`; `cook_run` takes `paths` and `skip_errors`; `mce play` and `mce headless` warn when the pack is older than the assets; an unknown component names the module to rebuild.
+4. **#380.** `mce play -capture` without a display falls back to the offscreen driver and software GL; `-capture_tick N`; the save folder and its override documented and printed.
+5. **#381 and the close.** The document errors #381 lists are fixed; an MCP transcript test in which two servers edit one scene and neither loses work; the milestone record; batch CI.
+
+**Demo:** the Lantern Keep failures replayed as tests: a sentry crossing 20 m at its speed, two MCP servers saving one scene without losing an entity, a project with one bad file cooking the rest.
+**Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 

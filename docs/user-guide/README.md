@@ -40,13 +40,14 @@ code as built and why; this guide links to them where you may want the full deta
 | 25 | [Performance](25-performance.md) | Record a capture, budgets per target, measure and compare over MCP, read captures in the editor, a counter gate in CI |
 | 26 | [Steam](26-steam.md) | Sign-in, achievements, leaderboards and Steam Cloud, the overlay, rich presence, Steam Input, depots for steamcmd, the demo and a release checklist |
 | 27 | [Scripting in Luau](27-scripting.md) | Luau scripts as cooked assets, ScriptSystem in a scene, the `mce` API, the sandbox and its rules |
+| 28 | [Procedural levels](28-procedural-levels.md) | Seeded level generators (rooms, caves, walk, noise, WFC), `procgen_run`, baking into a tilemap, the `reachable` test check |
 
 ## Conventions used in this guide
 
 - Commands are written for a Linux checkout with the `linux-gcc-debug` preset. Substitute your
   preset (`msvc-debug`, `macos-debug`, `linux-clang-release`, ...) and the matching `build/<preset>/`
   directory. On Windows, executables end in `.exe` and the game module is linked into the host
-  (see [Game code](06-game-code.md#platform-notes)).
+  (see [Game code](06-game-code.md#614-platform-notes)).
 - `<Project>` is a project folder under `projects/` (for example `projects/MyGame`) and `<game>`
   is its game id (`my_game`): the C++ namespace, the CMake target and the executable name.
 - Units are metres, seconds and degrees unless a field says otherwise. The world is right-handed,

@@ -28,9 +28,11 @@ mce_add_test(test_kit UMBRELLA
         test_vehicles3d.cpp
         test_particles.cpp
         test_pathfinding.cpp
+        test_procgen.cpp
         test_sequence.cpp
         test_skeleton2d.cpp
         test_skeleton2d_anim.cpp
+        test_skeleton2d_demo.cpp
         test_skeleton2d_ik.cpp
         test_skeleton2d_mesh.cpp
         test_sprite_anim.cpp
@@ -44,7 +46,7 @@ mce_add_test(test_kit UMBRELLA
         mce::mce_scene
         mce::mce_asset_cook)
 target_include_directories(test_kit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset ${CMAKE_CURRENT_SOURCE_DIR}/../render)
-target_compile_definitions(test_kit PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp"
+target_compile_definitions(test_kit PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp" MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
                            MCE_TEST_VIDEO="${PROJECT_SOURCE_DIR}/tests/asset/data/video/red_blue.mpg")
 
 # The kit extract on a real GL 4.5 driver (CI: Xvfb + Mesa llvmpipe). Always builds; registers only

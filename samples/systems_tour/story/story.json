@@ -1,0 +1,13 @@
+{
+  "format": "mce-story", "version": 1,
+  "namespace": "systems_tour",
+  "output": "systems_tour_story.h",
+  "title": "Systems tour",
+  "characters": ["guide"],
+  "expressions": ["neutral", "warm"],
+  "endings": ["done"],
+  "tags": ["hello"],
+  "flags": ["asked_server"],
+  "counters": [{"name": "talks", "min": 0, "max": 9}],
+  "localize": {"base": "en"}
+}

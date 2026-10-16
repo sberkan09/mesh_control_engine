@@ -183,6 +183,17 @@ scripts/ci/local_ci.sh             # every stage: walls, four Linux presets, cla
 scripts/ci/local_ci_macos.sh --quick   # on a Mac: walls + macos-debug with GPU tests (no flag: every stage)
 ```
 
+The first stage, `walls`, is quick and also checks the documents against the repository:
+
+- the capability table (`docs/engine/capabilities.md`) lists every component, asset type and tool, and a
+  component that no guide chapter names, or that no sample, project or template shows, fails it unless
+  `scripts/ci/sample_coverage.allow` lists it with a reason;
+- `scripts/ci/check_docs.py` fails for a relative link or `#anchor` in any Markdown file that points nowhere, an
+  `#include` line of an `mce/` header that names no header, a `-flag` after `mce_player` that no source declares
+  as a console variable, and a `samples/` or `projects/` directory that no test runs. Its accepted misses are in
+  `scripts/ci/docs.allow` as `kind | file | target | reason`; a line whose miss has gone is itself an error, so the
+  lists only shrink. `python3 scripts/ci/check_docs.py --list` prints the current misses in that format.
+
 ## 1.9 The installed SDK
 
 The SDK is the engine as a normal, installed engine: no source checkout, no engine build on your
