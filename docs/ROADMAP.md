@@ -111,6 +111,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-COVER | [M-COVER.md](milestones/M-COVER.md) (Linear SBA-157 … SBA-160, added 2026-10-16) | active (step 1 done: the sample coverage gate in the walls stage, `scripts/ci/sample_coverage.allow`; steps 2–3 done: `samples/kit3d_tour`, `samples/kit2d_tour`) | step 4, the systems tour |
 | M-VIEWS | [M-VIEWS.md](milestones/M-VIEWS.md) (Linear SBA-161 … SBA-166, added 2026-10-16) | active (step 1 done: local players, per-slot maps and pads, join by button, `P2/` script names) | steps 1–6 |
 | M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | active (step 1 done: `mce import aseprite`) | steps 2–4 |
+| M-PROCGEN | [M-PROCGEN.md](milestones/M-PROCGEN.md) (Linear SBA-171 … SBA-175, added 2026-10-16) | active (not started) | steps 1–5 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -580,6 +581,20 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Demo:** a sample project whose sprites, map and second level come only from exported files, played headless twice for the same hash.
 **Gates:** converters are pure functions of their inputs (same bytes out twice); unknown or unsupported features are warnings that name the feature, never silent; the cooked output of an imported sheet equals the hand-written one for the same data; `local_ci.sh` green on every step.
+
+### M-PROCGEN — Deterministic procedural levels, as data · **size M (rough guess, ≈ 50–80 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free (the owner of M-SCRIPT finished and every other milestone has an owner). Roguelikes, endless runners and "a new level every run" games are a large share of indie 2D, and the engine has the pieces (`.mctilemap`, `NavGrid`, `Collider2D`, a deterministic `World::state_hash`) but nothing that makes a level from a seed. `terrain_generate` covers heightfields only. A generator that is a pure function of (kind, parameters, seed) fits the determinism contract (FR-RUN-040) better than hand-written game code does, needs no device, and gives agents and script-only games (M-SCRIPT) a level source with no C++.*
+
+**Builds, in order:**
+1. `mce/kit/procgen.h`: named seeded random streams (a child stream per name, so adding a generator step does not shift the others) and four grid generators with a fixed output, a `ProcGrid` of cells: BSP rooms with corridors, cellular-automata caves, a drunkard's walk and a noise threshold. Every generator can promise connectivity (flood fill from the first floor cell; unreachable floor is filled or joined) and returns the start and exit cells. Tests: same seed gives the same bytes, Debug = Release, connectivity holds over a thousand seeds.
+2. Wave function collapse over tiles: adjacency learned from an example `.mctilemap` or given as rules, bounded restarts on contradiction, pinned cells (a start room the generator must keep), a seed, and a named warning when it gives up instead of a hang.
+3. `ProcLevel` component (kind, parameters, seed, tileset mapping, wall/floor tiles): the stock hosts build the `.mctilemap` layer in memory, the `Collider2D` of the walls and the marker entities (`Start`, `Exit`, spawn points) at scene load, with no game code; the seed is saved, so a save or a replay rebuilds the same level; a `reroll` flag and a `seed` field are the whole API, also from Luau.
+4. MCP and tooling: `procgen_run` returns the grid as ASCII and, with `bake`, writes the `.mctilemap` and the scene fragment so the editor and `render_frame` can look at it; `.mctest` gets a `reachable` assertion (the walk_to bot's target is reachable on every seed of a list); user guide chapter.
+5. Demo and gates: `samples/10_dungeon`, a top-down crawl whose three levels are `ProcLevel` entities with different generators (a script-only variant in Luau), one `.mctest` per generator that a bot finishes on ten seeds; generation of a 128 x 128 level under a budget in the perf gate.
+
+**Demo:** the dungeon sample played headless on three seeds gives the same hash across runs and builds, and a different level per seed.
+**Gates:** every generator is a pure function of its inputs (same bytes out twice, Debug = Release); connectivity holds on every tested seed; a project without `ProcLevel` builds and hashes as today; `local_ci.sh` green on every step.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
