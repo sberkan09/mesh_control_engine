@@ -9,6 +9,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   editor takes effect on the next tick; each script's `update()` has a Tracy zone; a crash report names the
   running script and its Luau stack (`crash::add_context` lets other subsystems add sections too); the
   Console and Cook panels open the script an error line names. User guide 27.6.
+- Resetting a themed value in UI documents, M-UI-DATA2 step 2 (SBA-154): a `.mcui` widget's
+  `"own_style": ["tint", ...]` keeps those style fields at the kind's default look over a theme, where an
+  equal value used to read as unset and the theme's won. Old documents cook and draw the same. The editor's
+  inspector and MCP's `ui_widget_set` reach it. User guide 12.
 - Luau scripts are checked before they run, M-SCRIPT step 4a (SBA-150): the cook reports every unknown
   component, event or field a script names, with the closest name (`unknown component 'Movr' (did you mean
   'Mover'?)`), removed globals with what to use instead, and Luau type errors against the `mce` API, each at
@@ -45,6 +49,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   keys. `samples/06_showcase` shows reflections, contact shadows, sharpening, glass, lacquer and brushed
   metal on its High profile, and `-profile highbase` draws High without them for the on/off sheet in the
   milestone record.
+- Occlusion and Doppler, M-AUDIO2 step 5 (SBA-122): `AudioOcclusion` on a 3D source fades it down and closes
+  a low-pass while a physics ray from the listener hits a wall, and `AudioDoppler` bends its pitch with how fast
+  it and the listener close. `mce_player -headless 1 -audio_record run.wav` renders a run's mix offline and
+  prints a hash of its samples. The stock player now applies the `audio.*_db` and `audio.reverb` options; before,
+  they did nothing there. New sample `audio_rooms` walks a listener through every M-AUDIO2 feature. User guide
+  10.4 and 10.6.
 - AI perception, M-AI step 3 (SBA-130): a `Perceiver` sees every `Stimulus` of another team inside its cone and
   range with a clear line of sight (rays through the 3D or the 2D physics world), remembers a lost target for
   `forget` seconds and hears `kit::Noise` events (the tree's `make_noise` task makes one). It writes `target`,

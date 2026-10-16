@@ -202,8 +202,15 @@ them drives exactly as before.
 - A character walking 2 m/s beside a 0.15 m stair keeps one foot on the step and one on the floor
   within 1 cm (measured: 0.1 mm) on every tick of a 90-tick walk.
 
-**Known gap (affects step 6):** `ecs::install_hierarchy` registers `"transform_propagate"` when it
-is called. A shipped scene with a `ChildOf` gets it at `scene::load`, after `kit::install_stock`,
-so in `FixedUpdate_Post` it runs after the kit's animators, IK and `AttachToBone`. A model hanging
-as a child of its mover is posed and its feet are cast from last tick's `WorldTransform`, one tick
-late. The stair test installs the hierarchy first, which is the order a fix would make standard.
+**Hierarchy order (fixed in step 6b):** `ecs::install_hierarchy` used to register
+`"transform_propagate"` only where it was called. A shipped scene with a `ChildOf` gets it at
+`scene::load`, after `kit::install_stock`, so in `FixedUpdate_Post` it ran after the kit's animators,
+IK and `AttachToBone`, and a model hanging as a child of its mover was posed and foot-cast from last
+tick's `WorldTransform`. The hierarchy now also registers `"transform_propagate_early"` at the front
+of `FixedUpdate_Post` (`World::add_system_first`), so every Post reader sees this tick's moves; the
+late pass stays where install was called and only redoes what Post systems moved after the early
+one. The stair test installs the hierarchy after the kit, the shipped order. Replay impact: of the
+headless sample hashes only `07_gameplay3d` changes (`ee6bfe319ca8e23b` -> `cc49e872cae6cadd` at 600
+ticks). A per-entity dump of both runs differs in one entity only, the camera: `kit_camera_follow`
+(`FixedUpdate_Post`) used to read the cart's `WorldTransform` from last tick and now follows this
+tick's pose. The cart, grunts, ragdolls, door and bridge are byte-identical at every tick checked.
