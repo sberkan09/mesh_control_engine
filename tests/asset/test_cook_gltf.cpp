@@ -350,6 +350,47 @@ TEST_CASE("gltf: import scale applies to the root nodes and their animation trac
     CHECK(m.keys[tr.values_offset + 3 + 1] == doctest::Approx(1.5f));
 }
 
+TEST_CASE("gltf: KHR_materials clearcoat, sheen, anisotropy, transmission and ior factors reach the submesh") {
+    const Fixture f = build_buffer();
+    std::string j = json_doc(f, embedded_buffer(f));
+    const std::string from = "\"doubleSided\":true}";
+    const size_t at = j.find(from);
+    REQUIRE(at != std::string::npos);
+    j.replace(at, from.size(),
+              "\"doubleSided\":true,\"extensions\":{\"KHR_materials_clearcoat\":{\"clearcoatFactor\":0.8,\"clearcoatRoughnessFactor\":0.2,"
+              "\"clearcoatTexture\":{\"index\":0}},\"KHR_materials_sheen\":{\"sheenColorFactor\":[0.3,0.2,0.1],\"sheenRoughnessFactor\":0.4},"
+              "\"KHR_materials_anisotropy\":{\"anisotropyStrength\":0.6,\"anisotropyRotation\":0.5},"
+              "\"KHR_materials_transmission\":{\"transmissionFactor\":1},\"KHR_materials_ior\":{\"ior\":1.45}}}");
+    const std::string root = make_project("gltf_material_ext", j, false);
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    INFO(diag_text(r));
+    REQUIRE(r.ok());
+    CHECK(diag_text(r).find("texture is not imported") != std::string::npos);  // the clearcoat texture
+    const std::vector<byte> a = cooked_mesh(root, kGltfGuid);
+    const MeshView m = MeshView::read(Span<const byte>(a.data(), a.size())).value();
+    REQUIRE(m.materials.size() == m.submeshes.size());
+    const MaterialExt e = m.material_ext(0);
+    CHECK(e.clearcoat == doctest::Approx(0.8f));
+    CHECK(e.clearcoat_roughness == doctest::Approx(0.2f));
+    CHECK(e.sheen_color[0] == doctest::Approx(0.3f));
+    CHECK(e.sheen_roughness == doctest::Approx(0.4f));
+    CHECK(e.anisotropy == doctest::Approx(0.6f));
+    CHECK(e.anisotropy_rotation == doctest::Approx(0.5f));
+    CHECK(e.transmission == doctest::Approx(1.0f));
+    CHECK(e.ior == doctest::Approx(1.45f));
+    CHECK_FALSE(m.material_ext(1).any());  // the triangle has no material
+
+    // Without the extensions the mesh carries no table (and reads all zero).
+    const std::string plain = make_project("gltf_material_plain", json_doc(f, embedded_buffer(f)), false);
+    REQUIRE(svc.cook(plain.c_str(), CookOptions{}).ok());
+    const std::vector<byte> b = cooked_mesh(plain, kGltfGuid);
+    const MeshView pm = MeshView::read(Span<const byte>(b.data(), b.size())).value();
+    CHECK(pm.materials.empty());
+    CHECK((pm.header->flags & MeshFlags::Materials) == 0);
+    CHECK_FALSE(pm.material_ext(0).any());
+}
+
 TEST_CASE("gltf: normal, metallic-roughness, occlusion and emissive maps; CUBICSPLINE tracks") {
     Fixture f = build_buffer();
     // Cubic translation keys for node 1 at t = 0, 2: {in, value, out} per key.

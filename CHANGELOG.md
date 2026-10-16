@@ -11,6 +11,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   component runs one per entity every fixed tick, and a `Blackboard` component holds the keys. All run state is in
   the two components, so trees are deterministic, hashed, replayed and saved. Games register tasks by name
   (`kit::BtRegistry::register_task`) and read and write keys by name (`kit::bb_*`). User guide 13.8.
+- Material extensions, M-VISUAL2 step 4 (SBA-104): clear coat, sheen, anisotropy and transmission. `.mcmat`
+  gains `clearcoat`, `clearcoat_roughness`, `sheen_color`, `sheen_roughness`, `anisotropy`,
+  `anisotropy_rotation`, `transmission` and `ior`; glTF files bring the same from `KHR_materials_clearcoat`,
+  `_sheen`, `_anisotropy`, `_transmission` and `_ior` (factors only). Transmissive materials show the opaque
+  scene behind them, tinted and slightly refracted. Materials without them draw exactly as before. User guide
+  5.7 and 8.5.
 - Steam demo and guide, M-STEAM step 6 (SBA-111): `samples/steam_demo` plays on Steam through the stock player;
   `ctest -R sample_steam_demo` runs it against the stand-in `steam_api` (Steam Input, the overlay, rich presence,
   achievements, a leaderboard, Steam Cloud, the same state hash with and without Steam, the depot started like

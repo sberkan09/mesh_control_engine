@@ -13,7 +13,7 @@ and Metal pixels wait on the Mac/device session, as for M-VISUAL.
 | 1 | Screen-space reflections | SBA-101 | done: GL and SDL GPU (gated + goldens), Low tier drops it; Metal untested |
 | 2 | Spatial upscaler and contrast-adaptive sharpening | SBA-102 | done: GL and SDL GPU (gated + golden), saved player convars; Metal untested |
 | 3 | Contact shadows | SBA-103 | done for the sun: GL and SDL GPU (gated + golden), Low tier drops it; local lights keep their shadow maps (see below); Metal untested |
-| 4 | Material extensions: clear coat, sheen, anisotropy, transmission | SBA-104 | not started (replaced Hi-Z occlusion culling, which M-VISUAL step 9 already ships) |
+| 4 | Material extensions: clear coat, sheen, anisotropy, transmission | SBA-104 | done: `.mcmat` keys and glTF KHR factors, GL and SDL GPU (gated + goldens); textures of the extensions not imported; Metal untested |
 | 5 | Kit/MCP reach, `samples/06_showcase`, docs and goldens | SBA-105 | not started |
 
 ## Step 1 — screen-space reflections
@@ -103,3 +103,39 @@ levels; off, or a sun with `contact_shadows` false, is byte-identical to the fra
 the target's r is byte-identical to the SSAO's own visibility and one prepass serves both;
 `r.contact_shadows 0` creates no pipeline. Golden `contact_foot` on both backends; every earlier golden is
 unchanged.
+
+## Step 4 — material extensions
+
+**What.** `asset::MaterialExt` (64 bytes): `clearcoat`, `clearcoat_roughness`, `sheen_color`,
+`sheen_roughness`, `anisotropy`, `anisotropy_rotation`, `transmission`, `ior`. A `.mcmat` with any of them
+set appends it after its `MaterialChunk` (minor `MATERIAL_MINOR_EXT`); a mesh whose glTF materials use
+`KHR_materials_clearcoat`, `_sheen`, `_anisotropy`, `_transmission` or `_ior` carries a per-submesh table
+(`MeshFlags::Materials`, minor `MESH_MINOR_MATERIALS`; `MeshSubmesh::reserved2[0]` points at the submesh's
+entry). Only the factors are imported; the extensions' textures are warned about. Old payloads read as all
+zero, and an all-zero material draws byte-identically to today's.
+
+**How.** `ObjectU` gains `coat`, `sheen` and `ext`. With any lobe on, `shade()` takes `direct_ext`:
+anisotropic GGX (Filament's stretched roughness, the tangent frame from screen derivatives rotated by
+`anisotropy_rotation`), a Charlie sheen with the Neubelt visibility, and a clear coat on the geometric
+normal (GGX, F0 0.04) whose Fresnel takes its share from the base. The ambient bends anisotropic
+reflections toward the stretch (Filament's bent normal), adds the sheen under the irradiance with an
+approximate albedo, and mirrors the sky in the coat. `ior` sets the dielectric F0.
+
+Transmission: draws with `transmission > 0` sort after the opaques with the blended ones. When a frame has
+one, the main pass ends after the sky, the opaque frame is copied (an MSAA resolve, or `kFrameCopyFS` on a
+single-sample target) to `trans_src_`, and the pass resumes with its color and depth loaded. Each
+transmissive draw binds the copy in the SSAO slot (`o_ext.w` tells the shader, which then skips SSAO and
+contact shadows for it), replaces its diffuse by the copy seen through it, shifted by the view normal and
+`1 − 1/ior` and tinted by the base color, weighted by `1 − F`. `Forward3DStats::transmissive` counts them.
+
+**Not done.** Extension textures; sheen energy compensation; the coat ignores the probes and SSR;
+transmission is thin-walled (no volume, thickness or attenuation), does not blur with roughness, sees
+neither other transmissive draws nor particles, casts an opaque shadow, and does not refract inside
+instanced batches.
+
+**Gates.** `test_cook_project` (the `.mcmat` keys, ranges, a plain material reads zero) and `test_cook_gltf`
+(the KHR factors reach the submesh, the texture warning, a plain mesh has no table). `render3d_gl` (GL and
+SDL GPU): an all-zero table draws byte-identically to no table; clear coat and sheen each brighten the box
+under a white sky, anisotropy changes a metal box; ior 2.4 brightens a dielectric; a transmissive box shows
+the ground behind it with 4× MSAA and without, open ground unchanged, `transmissive` counts it. Goldens
+`material_lobes` and `material_glass` on both backends; every earlier golden is unchanged.

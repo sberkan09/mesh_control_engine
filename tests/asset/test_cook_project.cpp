@@ -725,3 +725,44 @@ TEST_CASE("material uv_scale packs into two halves; unset means [1, 1]") {
     CHECK(uv[0] == doctest::Approx(3.3f).epsilon(0.001));
     CHECK(uv[1] == doctest::Approx(120.0f).epsilon(0.001));
 }
+
+TEST_CASE("material: the M-VISUAL2 4 lobes cook after the base block; a plain material has none; bad ranges fail") {
+    const std::string root = make_project("cook_material_ext");
+    write_file(root + "/assets/materials/hero.mcmat",
+               std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid +
+                   R"(", "roughness": 0.6, "clearcoat": 1, "clearcoat_roughness": 0.1, "sheen_color": [0.8, 0.7, 0.9],
+  "sheen_roughness": 0.5, "anisotropy": -0.5, "anisotropy_rotation": 1.25, "transmission": 0.75, "ior": 1.33 })");
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(r.ok());
+    AssetSystem as;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(as.mount(Span<const StringView>(roots, 1)).has_value());
+    auto mh = as.load_sync<Material>(G(kMatGuid));
+    REQUIRE(mh);
+    const Span<const byte> payload = as.resolve(mh.value());
+    REQUIRE(MaterialChunk::read(payload));
+    CHECK(MaterialChunk::read(payload).value()->roughness == doctest::Approx(0.6f));
+    const MaterialExt e = MaterialExt::of_material(payload);
+    CHECK(e.any());
+    CHECK(e.clearcoat == 1.0f);
+    CHECK(e.clearcoat_roughness == doctest::Approx(0.1f));
+    CHECK(e.sheen_color[2] == doctest::Approx(0.9f));
+    CHECK(e.sheen_roughness == doctest::Approx(0.5f));
+    CHECK(e.anisotropy == doctest::Approx(-0.5f));
+    CHECK(e.anisotropy_rotation == doctest::Approx(1.25f));
+    CHECK(e.transmission == doctest::Approx(0.75f));
+    CHECK(e.ior == doctest::Approx(1.33f));
+    as.release(AnyHandle(mh.value()));
+
+    // The plain block alone: no extension follows, and it reads as all zero.
+    MaterialChunk plain{};
+    CHECK_FALSE(MaterialExt::of_material(as_bytes_of(plain)).any());
+
+    write_file(root + "/assets/materials/hero.mcmat", std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid +
+                                                          R"(", "clearcoat": 2, "ior": 0.5 })");
+    const CookReport bad = svc.cook(root.c_str(), CookOptions{});
+    CHECK(!bad.ok());
+    CHECK(report_for(bad, kMatGuid)->status == AssetStatus::Failed);
+}
