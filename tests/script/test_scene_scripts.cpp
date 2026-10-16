@@ -8,6 +8,7 @@
 #include <string>
 
 #include "asset/cook_test_util.h"
+#include "mce/asset/file_io.h"
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
 #include "mce/cook/cook.h"
@@ -187,4 +188,37 @@ TEST_CASE("scene scripts: the same scene gives the same state hash (FR-RUN-040)"
         return w.state_hash();
     };
     CHECK(run() == run());
+}
+
+TEST_CASE("scene scripts: a script recooked while the scene runs takes effect on the next tick") {
+    Cooked c;
+    cook_scripts(c);
+    World w;
+    w.register_components<LocalTransform, kit::ScriptSystem>();
+    const Entity mover = w.spawn_with(LocalTransform{});
+    add_script(w, kPush, 0);
+    script::install_scene_scripts(w, &c.assets);
+    w.tick(1.0 / 60, 1);
+    CHECK(x_of(w, mover) == doctest::Approx(1.0f));
+
+    // What the editor's hot reload does: edit the source, recook, swap the container in place.
+    const std::string root = c.dir.substr(0, c.dir.size() - std::string("/cooked").size());
+    write_file(root + "/assets/scripts/push.luau", std::string(kPushSource).replace(std::string(kPushSource).find("1, 0, 0"), 7, "10, 0, 0"));
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+    REQUIRE(r.ok());
+    u32 swapped = 0;
+    for (const cook::AssetReport& a : r.assets) {
+        if (a.status != cook::AssetStatus::Cooked) continue;
+        const FixedString<40> hex = asset::to_hex(a.guid);
+        char name[128];
+        std::snprintf(name, sizeof(name), "/cooked/%.2s/%s/%016llx.mce", hex.c_str(), hex.c_str(), static_cast<unsigned long long>(a.output_hash));
+        Array<byte> bytes;
+        REQUIRE(asset::read_file(StringView((root + name).c_str()), bytes));
+        REQUIRE(c.assets.commit_reload(a.guid, bytes.span()));
+        ++swapped;
+    }
+    CHECK(swapped == 1);
+    w.tick(1.0 / 60, 2);
+    CHECK(x_of(w, mover) == doctest::Approx(11.0f));  // 1 + the recooked script's 10
 }

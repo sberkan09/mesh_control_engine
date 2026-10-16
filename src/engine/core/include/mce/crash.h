@@ -31,6 +31,16 @@ struct CrashDesc {
 bool install(const CrashDesc& desc);
 bool installed();
 
+// Extra report sections. A subsystem registers a writer; when a crash is reported, every writer is
+// called and the text it passes to `put` appears under "context:" (the script host writes the Luau
+// stack of the script that was running). A writer runs inside the signal handler: it may read
+// memory but must not allocate, lock or call into the engine. Up to 4 writers; add_context returns
+// false when they are taken. remove_context(user) before `user` is destroyed.
+using ContextPut = void (*)(void* sink, const char* text);
+using ContextFn = void (*)(void* user, ContextPut put, void* sink);
+bool add_context(ContextFn fn, void* user);
+void remove_context(void* user);
+
 // The directory reports go to (empty until install()).
 StringView dump_dir();
 
