@@ -1,0 +1,64 @@
+{
+  "format": "mce-spritesheet",
+  "version": 1,
+  "guid": "8820bdee-4cb9-4766-bf3e-dc1c91756923",
+  "name": "hero",
+  "texture": "guid:2e7ec8c3-4925-4ae4-8f3c-604cb8967d21",
+  "image_size": [
+    64,
+    16
+  ],
+  "regions": [
+    {
+      "rect": [
+        0,
+        0,
+        16,
+        16
+      ]
+    },
+    {
+      "rect": [
+        16,
+        0,
+        16,
+        16
+      ]
+    },
+    {
+      "rect": [
+        32,
+        0,
+        16,
+        16
+      ]
+    },
+    {
+      "rect": [
+        48,
+        0,
+        16,
+        16
+      ]
+    }
+  ],
+  "clips": [
+    {
+      "name": "idle",
+      "frames": [
+        0,
+        1
+      ],
+      "fps": 6.667,
+      "mode": "PingPong"
+    },
+    {
+      "name": "run",
+      "frames": [
+        2,
+        3
+      ],
+      "fps": 10.0
+    }
+  ]
+}

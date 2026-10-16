@@ -1,0 +1,119 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "c7738885-95f7-4250-ae0c-d09a0576a9b2",
+  "name": "world_Level_1",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Floor collision 0",
+      "components": {
+        "Collider2D": {
+          "shape": {
+            "half": [
+              1.5,
+              0.5
+            ]
+          },
+          "density": 0
+        },
+        "RigidBody2D": {},
+        "LocalTransform": {
+          "position": [
+            4.5,
+            2.5,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Floor collision 1",
+      "components": {
+        "Collider2D": {
+          "shape": {
+            "half": [
+              6,
+              0.5
+            ]
+          },
+          "density": 0
+        },
+        "RigidBody2D": {},
+        "LocalTransform": {
+          "position": [
+            6,
+            0.5,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Floor",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "TilemapLayer": {
+          "map": "guid:38355cb2-33c2-4690-afa0-7b67557f1d3a",
+          "order": 1
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Coin",
+      "components": {
+        "Collider2D": {
+          "shape": {
+            "half": [
+              0.25,
+              0.25
+            ]
+          },
+          "density": 0,
+          "is_sensor": true
+        },
+        "RigidBody2D": {},
+        "LocalTransform": {
+          "position": [
+            4.5,
+            6.5,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Coin 2",
+      "components": {
+        "Collider2D": {
+          "shape": {
+            "half": [
+              0.25,
+              0.25
+            ]
+          },
+          "density": 0,
+          "is_sensor": true
+        },
+        "RigidBody2D": {},
+        "LocalTransform": {
+          "position": [
+            8.5,
+            6.5,
+            0
+          ]
+        }
+      }
+    }
+  ]
+}

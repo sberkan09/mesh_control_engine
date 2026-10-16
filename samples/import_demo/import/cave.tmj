@@ -1,0 +1,194 @@
+{
+ "height": 8,
+ "infinite": false,
+ "layers": [
+  {
+   "data": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    3,
+    3,
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "height": 8,
+   "name": "Ground",
+   "opacity": 1,
+   "type": "tilelayer",
+   "visible": true,
+   "width": 12
+  },
+  {
+   "name": "Things",
+   "objects": [
+    {
+     "id": 1,
+     "name": "Start",
+     "point": true,
+     "x": 24,
+     "y": 96
+    },
+    {
+     "height": 32,
+     "id": 2,
+     "name": "Exit",
+     "properties": [
+      {
+       "name": "sensor",
+       "type": "bool",
+       "value": true
+      }
+     ],
+     "width": 16,
+     "x": 160,
+     "y": 64
+    }
+   ],
+   "type": "objectgroup"
+  }
+ ],
+ "orientation": "orthogonal",
+ "renderorder": "right-down",
+ "tileheight": 16,
+ "tilesets": [
+  {
+   "columns": 4,
+   "firstgid": 1,
+   "image": "../assets/textures/tiles.png",
+   "imageheight": 32,
+   "imagewidth": 64,
+   "margin": 0,
+   "name": "tiles",
+   "spacing": 0,
+   "tilecount": 8,
+   "tileheight": 16,
+   "tiles": [
+    {
+     "id": 0,
+     "properties": [
+      {
+       "name": "solid",
+       "type": "bool",
+       "value": true
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "properties": [
+      {
+       "name": "solid",
+       "type": "bool",
+       "value": true
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "properties": [
+      {
+       "name": "solid",
+       "type": "bool",
+       "value": true
+      }
+     ]
+    }
+   ],
+   "tilewidth": 16
+  }
+ ],
+ "tilewidth": 16,
+ "type": "map",
+ "version": "1.10",
+ "width": 12
+}
