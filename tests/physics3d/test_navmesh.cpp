@@ -56,6 +56,28 @@ f32 max_z(const Array<vec3>& p) {
 
 }  // namespace
 
+TEST_CASE("navmesh3d: a damaged bake is refused, not handed to Detour (M-FUZZ 2b)") {
+    // Found by test_fuzz: a mutated layer byte passed the header and size checks, and Detour's contour
+    // builder then divided by zero. Every byte of the blob is now covered by the trailing hash.
+    Array<byte> a;
+    REQUIRE(bake_navmesh(level(), settings(), a));
+    REQUIRE(navmesh_blob_valid(a.span()));
+    const usize layer_bytes_from = a.size() / 2;  // well inside the compressed tile layers
+    for (usize at : {layer_bytes_from, layer_bytes_from + 1, a.size() - 9, a.size() - 8, a.size() - 1, usize(60)}) {
+        Array<byte> bad = a;
+        bad[at] = static_cast<byte>(static_cast<unsigned>(bad[at]) ^ 0x5Au);
+        CHECK_FALSE(navmesh_blob_valid(bad.span()));
+        NavMesh3D nav;
+        CHECK_FALSE(nav.load(bad.span()));
+        CHECK_FALSE(nav.loaded());
+    }
+    // A version-1 file (no trailer) is refused too: re-bake it.
+    Array<byte> old = a;
+    old.resize(old.size() - 8);
+    old[4] = byte{1};
+    CHECK_FALSE(navmesh_blob_valid(old.span()));
+}
+
 TEST_CASE("navmesh3d: the bake is byte-identical run to run and validates") {
     const NavGeometry3D g = level();
     Array<byte> a, b;

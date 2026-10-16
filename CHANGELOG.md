@@ -12,11 +12,15 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   runs the asset module's 19 chunk readers over 22,000 mutated payloads of every chunk the samples cook
   (`ctest -R test_fuzz`); none crashes, hangs or asserts. `docs/milestones/M-FUZZ.md` lists every parser of
   untrusted bytes and what covers it.
+- Nav mesh bakes carry an integrity hash, M-FUZZ step 2b (SBA-186): `test_fuzz` found that a bake with damaged layer
+  bytes crashed Detour's contour builder (division by zero). `.mcnav` version 2 ends with an FNV-1a 64 of the
+  bytes before it; `navmesh_blob_valid`, `NavMesh3D::load` and the importer refuse a mismatch, and a version-1
+  file must be re-baked (the sample's `nav_13.mcnav` was upgraded).
 - Walked views and more decoders, M-FUZZ step 2 (SBA-186): `test_fuzz` follows every offset and range a consumer
   follows over what the 19 readers accept (so the ASan stage sees an out-of-bounds read), and covers the sprite
   sheet, string table, input map, store, remote config and game services catalogs, UI theme and document (with
   `build_document`) and the nav mesh header check: 48,000 mutants over 25 chunk types. It found that
-  `NavMesh3D::load` crashes on a bake with damaged layer bytes; the fix follows in step 2b.
+  `NavMesh3D::load` crashes on a bake with damaged layer bytes; the fix is step 2b above.
 - Docs checks in the guide, M-DOCCHECK step 4 (SBA-179): user guide 1.8 describes what the walls stage checks in the
   documents and where the accepted misses live. M-DOCCHECK is done.
 - Several agents on one scene, M-WORKFLOW step 2 (SBA-181, #378): `scene_open` always re-reads the file and

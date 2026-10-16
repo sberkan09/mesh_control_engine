@@ -1,6 +1,6 @@
 # M-FUZZ — Hostile input: loaders and parsers never crash (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1 and 2 done except the nav mesh load, see step 2). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
+**Status:** active (added 2026-10-16; steps 1 and 2 done). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
 
 **Why:** a shipped game opens packs, saves, recordings and downloaded mods it did not write, and the editor and
 MCP server open files agents wrote. Today two parsers have a mutation test (the `.mce` container, 1,000 byte
@@ -18,7 +18,7 @@ It needs no device: a deterministic mutator, ctest targets and fixes with regres
 | # | Step | Linear | State |
 |---|---|---|---|
 | 1 | The mutator and a survey of every parser of untrusted bytes; the asset module's 19 chunk readers over mutated payloads of every cooked sample chunk | SBA-185 | done |
-| 2 | Walk what the readers accept (every view's arrays and offsets) so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); fix the findings. The nav mesh load: fixed in 2b (integrity hash) | SBA-186 | 2 done, 2b open |
+| 2 | Walk what the readers accept (every view's arrays and offsets) so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); fix the findings. The nav mesh load: fixed in 2b (integrity hash) | SBA-186 | done |
 | 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | not started |
 | 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | not started |
 
@@ -55,18 +55,27 @@ It needs no device: a deterministic mutator, ctest targets and fixes with regres
   `build_document`, as the runtime does) and the nav mesh header check. The corpus is every `.mce` under the
   build tree's `samples/`, `projects/` and `template_probe/`: 604 files, 25 chunk types, 48,000 mutants,
   about 64% accepted.
-- **Result.** ASan clean, no crash in the readers or the walkers. One finding: the nav mesh `load` is not safe on
-  a damaged bake (see 2b), so the test calls only the header check for now. A first walker crashed on a
+- **Result.** ASan clean, no crash in the readers or the walkers. One finding: the nav mesh `load` crashed on a
+  damaged bake; fixed in 2b below. A first walker crashed on a
   non-mesh skeleton attachment; that was the walker's mistake (only a mesh attachment owns vertices), not the
   reader's, and is commented in the walker.
 - **Not covered yet.** A harness check that an injected bug is found; the importers and scene instantiate (step 3).
 
-### Step 2b — Nav mesh bake integrity
+### Step 2b — Nav mesh bake integrity (done)
 
 `NavMesh3D::load` hands the compressed tile layers of a bake to Detour's tile cache, which trusts them: a bake
-with damaged layer bytes passes `navmesh_blob_valid` (header and sizes) and then divides by zero inside
-`simplifyContour` (found by the nav chunk in `test_fuzz`, SIGFPE). The fix is an integrity trailer on the blob
-(see the PR); a damaged file is refused instead of loaded.
+with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then divided by zero inside
+`simplifyContour` (found by the nav chunk in `test_fuzz`, SIGFPE).
+
+- **Fix.** Blob version 2 ends with an FNV-1a 64 of every byte before it. `navmesh_blob_valid`, `load` and the
+  `.mcnav` importer refuse a blob whose hash does not match; `NAVMESH_VERSION` and the importer version are 2
+  (cooked caches rebuild), and `samples/07_gameplay3d/.../nav_13.mcnav` was upgraded in place (version field
+  and trailer; the bake is otherwise the same bytes). A version-1 file is refused with "re-bake the navmesh".
+- **Limit.** The hash catches damage, not a forger: anyone who can write the file can write a matching hash. A
+  mod is trusted code anyway (it can ship a module); the hash is for truncation, bit rot and bad downloads.
+- **Test.** `test_navmesh.cpp` flips a byte in the header, the middle layers and the trailer and expects
+  a refusal from `navmesh_blob_valid` and `load`; `test_fuzz` now runs `load` and three queries on every
+  mutant of the sample bake (all refused or loaded cleanly).
 
 ### Survey: parsers of untrusted bytes
 
@@ -77,7 +86,7 @@ with damaged layer bytes passes `navmesh_blob_valid` (header and sizes) and then
 | UI document, theme | `ui/document_data.h` `decode_ui_document`, `decode_ui_theme` | packs | mutated, then `build_document` (`test_fuzz`) | done |
 | String tables | `loc/string_table.h` `decode_table` | packs, mods | mutated (no sample pack has one yet; `test_fuzz` reads it when present) | done |
 | Store, remote config, game services catalogs; input map | `monetize/catalog.h`, `liveops/remote_config.h`, `liveops/game_services.h`, `input/input_map.h` | packs | mutated (`test_fuzz`) | done |
-| Nav mesh | `physics3d` `.mcnav` bytes | packs | header check mutated; `load` crashes on damaged layers: fixed in 2b | 2b |
+| Nav mesh | `physics3d` `.mcnav` bytes | packs | mutated, `load` and queries (`test_fuzz`); damaged layers refused by the trailing hash | done |
 | Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | none (the view's rows and fixups are walked) | 3 |
 | PNG, glTF, Ogg Vorbis, MPEG-1 | `cook/image.h` `decode_png`; cook glTF; `asset/vorbis.h` `decode_vorbis`; video | importing source files | Vorbis stream inside a sound chunk only | 3 |
 | Text assets (`.mcscene`, `.mcprefab`, `.mcanim`, `.mcskel2d`, `.mcterrain`, `.mcbt`, `.mcui`, timelines, `.mcsound`) | cook JSON reader and per-type validators | project sources, agents | none | 3 |

@@ -131,7 +131,8 @@ struct PackBits final : dtTileCacheCompressor {
 //   layers (u32 size, size bytes, zero padding to 4).
 
 constexpr char kMagic[4] = {'M', 'C', 'N', 'V'};
-constexpr u32 kVersion = 1;
+constexpr u32 kVersion = 2;  // 2: a trailing FNV-1a 64 of every byte before it (Detour trusts the tile layers)
+constexpr usize kTrailerBytes = 8;
 
 class Writer {
 public:
@@ -626,6 +627,8 @@ bool bake_navmesh(const NavGeometry3D& g, const NavBakeSettings3D& s, Array<byte
         }
     }
     std::memcpy(out.data() + layers_at, &layers, 4);
+    const u64 trailer = fnv1a64(out.data(), out.size());
+    w.raw(&trailer, kTrailerBytes);
 
     if (stats) {
         stats->tiles_x = u32(tw);
@@ -646,7 +649,12 @@ bool navmesh_blob_valid(Span<const byte> blob) {
         if (size < u32(sizeof(dtTileCacheLayerHeader)) || !r.take(size)) return false;
         r.pad4();
     }
-    return r.ok() && r.pos() == blob.size();
+    if (!r.ok() || r.pos() + kTrailerBytes != blob.size()) return false;
+    // The tile layers go to Detour's tile cache, which trusts them: a damaged byte there is a division by
+    // zero inside the contour builder. The trailer turns damage into a refusal.
+    u64 stored = 0;
+    std::memcpy(&stored, blob.data() + r.pos(), kTrailerBytes);
+    return stored == fnv1a64(blob.data(), r.pos());
 }
 
 // ---- NavMesh3D ------------------------------------------------------------------------------------------
@@ -752,6 +760,10 @@ bool NavMesh3D::load(Span<const byte> blob, u32 max_agents) {
     Impl& m = *impl_;
     m.release();
 
+    if (!navmesh_blob_valid(blob)) {
+        MCE_LOG_WARN("navmesh: not a navmesh bake, or a damaged one");
+        return false;
+    }
     Reader r(blob);
     BlobHeader h;
     Array<NavLinkDesc3D> links;

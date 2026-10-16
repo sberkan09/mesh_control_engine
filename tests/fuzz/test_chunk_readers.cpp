@@ -88,7 +88,16 @@ bool read_chunk(ChunkType t, Span<const byte> p) {
             (void)ui::build_document(o, doc);
             return true;
         }
-        case ChunkType::NavMesh: return physics::navmesh_blob_valid(p);
+        case ChunkType::NavMesh: {
+            physics::NavMesh3D nav;
+            if (!nav.load(p, 4)) return false;
+            Array<math::vec3> path;
+            const math::aabb3 b = nav.bounds();
+            nav.find_path(b.min, b.max, path);
+            (void)nav.nearest_point(b.max);
+            (void)nav.raycast(b.min, b.max);
+            return true;
+        }
         default: return true;
     }
 }

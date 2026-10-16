@@ -114,7 +114,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-PROCGEN | [M-PROCGEN.md](milestones/M-PROCGEN.md) (Linear SBA-171 … SBA-175, added 2026-10-16) | active (not started) | steps 1–5 |
 | M-DOCCHECK | [M-DOCCHECK.md](milestones/M-DOCCHECK.md) (Linear SBA-176 … SBA-179, added 2026-10-16) | done (`scripts/ci/check_docs.py` in the walls stage: links and anchors, `#include` lines of `mce/` headers, `mce_player` flags and a test for every sample and project; `scripts/ci/docs.allow`) | none |
 | M-WORKFLOW | [M-WORKFLOW.md](milestones/M-WORKFLOW.md) (Linear SBA-180 … SBA-184, added 2026-10-16) | active (step 2 done: `scene_open` always re-reads and replaces a parked copy, an unmergeable `scene_save` names the entities and takes `overwrite`, `entity_delete` reports the links that become null) | steps 1, 3–5 |
-| M-FUZZ | [M-FUZZ.md](milestones/M-FUZZ.md) (Linear SBA-185 … SBA-188, added 2026-10-16) | active (steps 1–2 done: `tests/fuzz` mutator, 25 chunk types over mutated cooked chunks with the accepted views walked, a survey of every parser of untrusted bytes; 2b nav mesh integrity open) | steps 3–4 |
+| M-FUZZ | [M-FUZZ.md](milestones/M-FUZZ.md) (Linear SBA-185 … SBA-188, added 2026-10-16) | active (steps 1–2 done: `tests/fuzz` mutator, 25 chunk types over mutated cooked chunks with the accepted views walked, a survey of every parser of untrusted bytes; the nav mesh bake got an integrity hash after the fuzz test crashed Detour) | steps 3–4 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -605,7 +605,7 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Builds, in order:**
 1. A deterministic mutator (`tests/fuzz`) and a survey of every parser of untrusted bytes; the asset module's chunk readers over mutated payloads of every cooked sample chunk.
-2. Walk what the readers accept so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); the nav mesh bake gets an integrity trailer (2b); each finding gets a regression test.
+2. Walk what the readers accept so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); the nav mesh bake gets an integrity trailer (2b, done); each finding gets a regression test.
 3. The importers and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders and the Luau compile path.
 4. The targets in the ASan stage under a time budget; a walls check that a new chunk type has a fuzz target; the close.
 
