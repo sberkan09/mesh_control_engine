@@ -1,0 +1,117 @@
+{
+ "frames": [
+  {
+   "duration": 150,
+   "filename": "hero 0.aseprite",
+   "frame": {
+    "h": 16,
+    "w": 16,
+    "x": 0,
+    "y": 0
+   },
+   "rotated": false,
+   "sourceSize": {
+    "h": 16,
+    "w": 16
+   },
+   "spriteSourceSize": {
+    "h": 16,
+    "w": 16,
+    "x": 0,
+    "y": 0
+   },
+   "trimmed": false
+  },
+  {
+   "duration": 150,
+   "filename": "hero 1.aseprite",
+   "frame": {
+    "h": 16,
+    "w": 16,
+    "x": 16,
+    "y": 0
+   },
+   "rotated": false,
+   "sourceSize": {
+    "h": 16,
+    "w": 16
+   },
+   "spriteSourceSize": {
+    "h": 16,
+    "w": 16,
+    "x": 0,
+    "y": 0
+   },
+   "trimmed": false
+  },
+  {
+   "duration": 100,
+   "filename": "hero 2.aseprite",
+   "frame": {
+    "h": 16,
+    "w": 16,
+    "x": 32,
+    "y": 0
+   },
+   "rotated": false,
+   "sourceSize": {
+    "h": 16,
+    "w": 16
+   },
+   "spriteSourceSize": {
+    "h": 16,
+    "w": 16,
+    "x": 0,
+    "y": 0
+   },
+   "trimmed": false
+  },
+  {
+   "duration": 100,
+   "filename": "hero 3.aseprite",
+   "frame": {
+    "h": 16,
+    "w": 16,
+    "x": 48,
+    "y": 0
+   },
+   "rotated": false,
+   "sourceSize": {
+    "h": 16,
+    "w": 16
+   },
+   "spriteSourceSize": {
+    "h": 16,
+    "w": 16,
+    "x": 0,
+    "y": 0
+   },
+   "trimmed": false
+  }
+ ],
+ "meta": {
+  "app": "https://www.aseprite.org/",
+  "format": "RGBA8888",
+  "frameTags": [
+   {
+    "direction": "pingpong",
+    "from": 0,
+    "name": "idle",
+    "to": 1
+   },
+   {
+    "direction": "forward",
+    "from": 2,
+    "name": "run",
+    "to": 3
+   }
+  ],
+  "image": "../assets/textures/hero.png",
+  "scale": "1",
+  "size": {
+   "h": 16,
+   "w": 64
+  },
+  "version": "1.3"
+ }
+}

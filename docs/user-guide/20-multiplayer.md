@@ -536,7 +536,50 @@ everything with `rep.set_sees_all(peer, true)`, for a caster or a replay recorde
 per-client snapshots like a player and acknowledges them the same way.
 `sample_net_headless -sim 1 -clients 3 -spectators 2` adds two clients that watch without playing.
 
-## 20.11 What it does not do yet
+## 20.11 A whole game: net_arena
+
+`samples/net_arena` is a 2–4 player top-down arena that uses most of this chapter at once: the arena
+is a scene, players find each other by quick play, each client predicts its own player and interpolates
+the others, and shots are lag compensated.
+
+```
+sample_net_arena                       you (WASD, mouse aim, Space or click fires) against three bots,
+                                       over a simulated 150 ms link through a relay
+sample_net_arena -serve 1 -port 27015  a dedicated server (UDP)
+sample_net_arena -connect host:27015   one windowed player; start one process per player
+sample_net_arena -headless 1 -clients 4 -latency 150 -jitter 20 -loss 0.03 -ticks 900
+                                       a whole match without a window; prints a verdict and a hash
+```
+
+How it is put together (read `samples/net_arena/arena.h`, `server.h`, `client.h`, `session.h`):
+
+- **The arena is data.** `assets/scenes/arena.mcscene` has walls and spawn pads as entities with a
+  `LocalTransform` and `NetReplicated { kind }` (kind 2 is a wall, 3 a pad; the wall's scale is its size).
+  The server loads it with `scene::load`, gives hit boxes to the walls, and calls `assign_tagged`. Edit the
+  scene in the editor, or add a pillar with MCP (`entity_create`, `component_add NetReplicated`): the
+  next match has it, and clients get it in their first snapshot, so they never load the scene.
+- **Players are made by the server** with a `NetOwner { peer }`, a `HitBox` and `ArenaHealth`, whose fields
+  are `Replicated` (`hp`, `frags`, `deaths`, `shots`). A client's copy of those fields needs no code.
+  Clients draw a shot's beam from the shooter when its `shots` counter goes up.
+- **One movement step, two places.** `step_player` is the only code that moves a player. The server runs it for
+  each input it receives; the client runs it for the input it presses and again when it replays the unacknowledged
+  ones (`Predictor`).
+- **Shots are lag compensated.** A client sends the tick it was drawing the others at (`drawn_tick`); the server
+  checks the ray against the hit boxes of that tick (`LagCompensator`). The match report counts shots that hit
+  where the shooter saw the target against shots that would hit where the target is now.
+- **Quick play.** The server is the host of a listed "arena" room; the players call `quick_play("arena", n)`.
+  Through the room the server is the room's host, so the arena runs on `RelayClient` or `RtcHost` alike
+  (the headless run uses a relay over `SimNetwork`).
+- **Snapshots go out at 30 Hz.** Through a relay every message pays two hops, so a 150 ms link is a 300 ms
+  one; the 32 delta baselines a server keeps then last a full second at 30 Hz, and most snapshots are deltas.
+  The match report prints the bytes against full broadcasts (about 35–40 % at 150 ms).
+
+The headless run is a CI gate: its hash is the same across runs and Debug/Release, every client's world matches
+the server's bit for bit once the match settles, and shots rewound at least as often as they hit at the present.
+There is no host migration in the arena: if the server goes, the match ends. Split-screen local play is not
+there either; the window shows one client's view (`-autoplay 1` lets a bot drive it).
+
+## 20.12 What it does not do yet
 
 Traffic is not encrypted: the relay and WebSocket speak plain `ws://`, so put a
 TLS proxy in front of `mce_relay` for pages served over `https://`. Quick play matches by mode and

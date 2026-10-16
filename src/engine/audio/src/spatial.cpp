@@ -101,4 +101,32 @@ Spatial spatialize(const Listener& l, const AttenuationCurve& c, math::vec3 sour
     return s;
 }
 
+Spatial spatialize(Span<const Listener> listeners, ListenerMix mix, const AttenuationCurve& c, math::vec3 source) {
+    if (listeners.empty()) return {};
+    if (mix == ListenerMix::First || listeners.size() == 1) return spatialize(listeners[0], c, source);
+    if (mix == ListenerMix::Nearest) {
+        usize best = 0;
+        f32 best_d = math::dot(source - listeners[0].position, source - listeners[0].position);
+        for (usize i = 1; i < listeners.size(); ++i) {
+            const f32 d = math::dot(source - listeners[i].position, source - listeners[i].position);
+            if (d < best_d) {
+                best_d = d;
+                best = i;
+            }
+        }
+        return spatialize(listeners[best], c, source);
+    }
+    Spatial out;
+    out.gain = 0.f;
+    f32 weight = 0.f, pan = 0.f;
+    for (const Listener& l : listeners) {
+        const Spatial s = spatialize(l, c, source);
+        out.gain = s.gain > out.gain ? s.gain : out.gain;
+        weight += s.gain;
+        pan += s.gain * s.pan;
+    }
+    out.pan = weight > 1e-6f ? math::clamp(pan / weight, -1.f, 1.f) : 0.f;
+    return out;
+}
+
 }  // namespace mce::audio

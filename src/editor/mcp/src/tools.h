@@ -47,6 +47,8 @@ bool asset_tool_arg(ToolCall& c, const editor::ProjectAsset*& out);
 bool asset_rel_valid(StringView rel);
 cook::String asset_guid_ref(asset::Guid g);
 bool asset_validate_and_write(ToolCall& c, StringView rel, asset::Guid guid, StringView text);
+// tools_import.cpp (M-IMPORT step 4): asset_import.
+Span<const ToolDef> import_tool_table();
 // tools_terrain.cpp (M-TERRAIN 6): terrain_sculpt, terrain_paint, terrain_import, terrain_generate.
 Span<const ToolDef> terrain_tool_table();
 

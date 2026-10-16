@@ -38,7 +38,11 @@ public:
     // Enumerates assets/ (sorted, hidden entries skipped), loads sidecars, verifies one GUID per
     // file. Missing sidecars, duplicate GUIDs and malformed sidecars are reported as a batch.
     // With `adopt`, unregistered sources get a fresh sidecar instead of an error.
-    bool scan(StringView project_root, const ImporterRegistry& importers, bool adopt, DiagList& diags);
+    // `scope` (normalized with normalize_scope_path; empty = the whole tree): a source outside it that
+    // cannot be registered (no sidecar, unreadable, malformed) is left out silently, and `adopt` does
+    // not touch it. It is still registered when it can be, so references into it resolve.
+    bool scan(StringView project_root, const ImporterRegistry& importers, bool adopt, DiagList& diags,
+              Span<const String> scope = {});
 
     usize size() const { return records_.size(); }
     AssetRecord& at(usize i) { return records_[i]; }
@@ -70,6 +74,7 @@ enum class AssetStatus : u8 {
     UpToDate,  // cook DB hit, output reused
     Failed,    // importer error (previous output, if any, keeps serving)
     Blocked,   // depends on a failed/missing asset or sits in a cycle
+    Skipped,   // outside CookOptions::paths and what they depend on: untouched, its last output keeps serving
 };
 
 struct AssetReport {
@@ -80,12 +85,26 @@ struct AssetReport {
     u64 output_hash = 0;  // content hash of the cooked container (0 if none)
 };
 
+// One file the cook could not take: the first error that names it (more are in CookReport::diags).
+struct FailedFile {
+    String file;  // as the diagnostics name it: "assets/textures/extra.png"
+    Errc code = Errc::Unknown;
+    u32 line = 0;
+    u32 col = 0;
+    u32 errors = 0;  // how many errors name this file
+    String message;
+};
+
 struct CookReport {
     Array<AssetReport> assets;  // in cook (topological) order
     DiagList diags;
+    Array<FailedFile> failed_files;  // every file with an error, in diagnostic order (not capped)
     u32 cooked = 0;
     u32 up_to_date = 0;
     u32 failed = 0;
+    u32 skipped = 0;        // assets outside CookOptions::paths (their last output keeps serving)
+    bool subset = false;    // CookOptions::paths was set: cooked/ and its manifest were updated, the pack never
+    bool pack_written = false;  // assets.mce was (re)written this run
     u64 manifest_hash = 0;  // xxh64 of cooked/manifest.mce
     u64 pack_hash = 0;      // xxh64 of assets.mce when --pack
     bool mod = false;       // the project has a mod.json (its pack carries a ModInfo chunk)
@@ -99,6 +118,16 @@ struct CookOptions {
     bool force = false;  // ignore the cook DB, re-cook everything
     bool pack = false;   // also write <project>/assets.mce (FR-SHP-010)
     bool adopt = false;  // create sidecars for unregistered sources
+    // Cook only these assets and what they depend on. Entries are paths relative to assets/ (a file,
+    // or a directory for everything under it; a leading "assets/" and a ".mceasset" suffix are
+    // accepted). Everything else is left as it was: not scanned for errors, not re-cooked, still in
+    // the manifest with its last output. An entry that matches no asset is an error. A subset never
+    // writes the pack (a pack must hold every asset of one consistent cook); `pack` is ignored then.
+    Array<String> paths;
+    // Keep going past files that cannot be cooked: the run still cooks everything it can and the
+    // report lists every failing file in CookReport::failed_files. The pack is still written only
+    // by a run with no errors (a pack missing an asset the game references would not load).
+    bool skip_errors = false;
     // Packs (or cooked dirs) this project builds on, added to a mod.json's "base" (ADR-0034):
     // references may name their assets, and a project asset with one of their GUIDs overrides it.
     Array<String> base_packs;
@@ -120,6 +149,7 @@ public:
     CookReport cook(StringView project_root, const CookOptions& opt);
 
 private:
+    CookReport run(StringView project_root, const CookOptions& opt);
     ImporterRegistry importers_;
 };
 
@@ -129,6 +159,13 @@ private:
 // (with diagnostics) when the text does not parse or the importer refuses it.
 bool cook_document(const AssetRegistry& registry, const IImporter& importer, Guid guid, StringView source_rel_path,
                    StringView text, Array<byte>& out, DiagList& diags);
+
+// A CookOptions::paths entry as the cook compares it: forward slashes, no leading "assets/" or "./",
+// no trailing "/", no ".mceasset" suffix.
+String normalize_scope_path(StringView p);
+// True when `rel` (relative to assets/) is one of `scope`'s files or lies under one of its
+// directories; an empty `scope` holds everything.
+bool in_scope(StringView rel, Span<const String> scope);
 
 // Fresh UUIDv4 (sidecar creation only — the cook never needs deterministic GUIDs, only stable ones).
 Guid generate_guid();

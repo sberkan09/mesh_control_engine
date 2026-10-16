@@ -48,6 +48,7 @@ mce_add_test(test_mcp_agent UMBRELLA NO_CTEST
         test_mcp_agent.cpp
         test_mcp_ui.cpp
         test_mcp_skeleton2d.cpp
+        test_mcp_import.cpp
         test_mcp_timeline.cpp
         test_mcp_bt.cpp
     DEPS

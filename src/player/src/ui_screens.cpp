@@ -148,6 +148,21 @@ const ui::Document* UiScreens::focus_document() const {
     return top;
 }
 
+void UiScreens::set_views(World& world, Span<const kit::ViewEntry> views, f32 display_scale, f32 user_scale) {
+    for (Screen& s : screens_) {
+        s.in_view = false;
+        const kit::UiScreenView* sv = s.always_visible ? nullptr : world.try_get<kit::UiScreenView>(s.entity);
+        if (!sv) continue;
+        for (const kit::ViewEntry& v : views) {
+            if (v.camera != sv->camera || !v.target.is_null()) continue;
+            s.in_view = true;
+            s.rect = v.rect;
+            s.view_ui_scale = ui::compute_ui_scale({v.rect.width, v.rect.height}, display_scale, user_scale);
+            break;
+        }
+    }
+}
+
 void UiScreens::update(World& world, const ui::UpdateContext& ctx) {
     // Pointer and focus go to the topmost visible modal only; a HUD below it still updates its bindings.
     const Screen* top_modal = nullptr;
@@ -162,6 +177,21 @@ void UiScreens::update(World& world, const ui::UpdateContext& ctx) {
         if (!s.doc) continue;
         if (s.bindings_pending) s.bindings_pending = ui::bind_document(*s.doc, world, s.entity, entities_.span()) != 0;
         ui::UpdateContext c = ctx;
+        if (s.in_view) {
+            // The view's rect: its own size and scale, the safe area only on the window's edges.
+            const i32 w = static_cast<i32>(ctx.viewport.width), h = static_cast<i32>(ctx.viewport.height);
+            const rhi::Rect2D& r = s.rect;
+            c.viewport = {r.width, r.height};
+            c.ui_scale = s.view_ui_scale;
+            c.safe_insets.left = r.x <= 0 ? ctx.safe_insets.left : 0.0f;
+            c.safe_insets.top = r.y <= 0 ? ctx.safe_insets.top : 0.0f;
+            c.safe_insets.right = r.x + static_cast<i32>(r.width) >= w ? ctx.safe_insets.right : 0.0f;
+            c.safe_insets.bottom = r.y + static_cast<i32>(r.height) >= h ? ctx.safe_insets.bottom : 0.0f;
+            const math::vec2 p{ctx.pointer.x - static_cast<f32>(r.x), ctx.pointer.y - static_cast<f32>(r.y)};
+            const bool inside = p.x >= 0.0f && p.y >= 0.0f && p.x < static_cast<f32>(r.width) && p.y < static_cast<f32>(r.height);
+            c.pointer = inside ? p : math::vec2{-1.0f, -1.0f};
+            if (!inside) c.pointer_pressed = false;
+        }
         if (!s.visible || (top_modal && &s != top_modal)) {
             c.actions = nullptr;
             c.pointer = {-1, -1};
@@ -187,10 +217,31 @@ void UiScreens::bind_render_textures(const kit::RenderTextures& rts) {
     }
 }
 
+u32 UiScreens::view_screen_count() const {
+    u32 n = 0;
+    for (const Screen& s : screens_) n += s.doc && s.visible && s.in_view ? 1u : 0u;
+    return n;
+}
+
+const UiScreens::Screen* UiScreens::view_screen(u32 i) const {
+    for (const Screen& s : screens_)
+        if (s.doc && s.visible && s.in_view && i-- == 0) return &s;
+    return nullptr;
+}
+
+rhi::Rect2D UiScreens::view_screen_rect(u32 i) const {
+    const Screen* s = view_screen(i);
+    return s ? s->rect : rhi::Rect2D{};
+}
+
+void UiScreens::submit_view_screen(u32 i, render::SpriteBatch& batch, i16 layer) const {
+    if (const Screen* s = view_screen(i)) s->doc->submit(batch, layer);
+}
+
 void UiScreens::submit(render::SpriteBatch& batch, i16 base) const {
     i32 layer = base;
     for (const Screen& s : screens_) {
-        if (!s.doc || !s.visible) continue;
+        if (!s.doc || !s.visible || s.in_view) continue;
         s.doc->submit(batch, static_cast<i16>(layer));
         layer += 6;  // quads + text, and one open modal's two layers above them, plus a spare pair
     }

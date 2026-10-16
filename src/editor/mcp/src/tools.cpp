@@ -822,16 +822,45 @@ void write_report(JsonWriter& w, const cook::CookReport& r) {
 }
 
 bool cook_run(ToolCall& c) {
-    bool pack = false, adopt = false;
-    if (!need_project(c) || !arg_bool(c, "pack", pack) || !arg_bool(c, "adopt", adopt)) return false;
+    bool pack = false, adopt = false, skip_errors = false;
+    if (!need_project(c) || !arg_bool(c, "pack", pack) || !arg_bool(c, "adopt", adopt) || !arg_bool(c, "skip_errors", skip_errors))
+        return false;
+    Array<cook::String> paths;
+    if (const cook::JsonValue pv = arg(c, "paths"); pv.valid()) {
+        if (!pv.is_array()) return arg_missing(c, "paths", "an array of project-relative asset paths (files or folders under assets/)");
+        for (u32 i = 0; i < pv.size(); ++i) {
+            if (!pv.at(i).is_string() || pv.at(i).as_string().empty())
+                return arg_missing(c, "paths", "an array of non-empty strings (asset files or folders, relative to assets/)");
+            paths.push_back(cook::String(pv.at(i).as_string()));
+        }
+    }
     progress(c.server, c.progress_token, 0, 1);
-    const cook::CookReport& r = c.server.session().cook(pack, adopt);
+    const cook::CookReport& r = c.server.session().cook(pack, adopt, paths.span(), skip_errors);
     progress(c.server, c.progress_token, 1, 1);
     c.out.begin_object();
     write_report(c.out, r);
+    if (r.subset) {
+        c.out.key("skipped").num_u(r.skipped);
+        c.out.key("subset").boolean(true);
+    }
+    if (skip_errors) {
+        // Every failing file (the diagnostics above are capped), with the first error that names it.
+        c.out.key("failed_files").begin_array();
+        for (const cook::FailedFile& f : r.failed_files) {
+            c.out.begin_object();
+            c.out.key("file").str(f.file.view());
+            if (f.line) c.out.key("line").num_u(f.line);
+            c.out.key("errors").num_u(f.errors);
+            c.out.key("message").str(f.message.view());
+            c.out.end_object();
+        }
+        c.out.end_array();
+    }
     // Output locations, relative to the project folder the server was started with.
     c.out.key("cooked_dir").str("cooked");
-    if (pack) c.out.key("pack").str("assets.mce");
+    c.out.key("pack_written").boolean(r.pack_written);
+    if (r.pack_written) c.out.key("pack").str("assets.mce");
+    else if (pack) c.out.key("pack_note").str(r.subset ? "not rewritten: paths cooks into cooked/ only, a pack must hold the whole project" : "not written: the cook has errors (fix them, or adopt new files, then cook with pack again)");
     c.out.end_object();
     return true;
 }
@@ -1539,11 +1568,20 @@ const ToolDef kTools[] = {
     {"scene_redo", "Redo the last undone scene edit.", kNoArgs, scene_redo},
     {"cook_run",
      "Cook the project (incremental) into <project>/cooked. pack: also write <project>/assets.mce (a host built "
-     "from the project plays its own build-tree pack unless started with -pack <that file or the cooked dir>). "
-     "adopt: give new source files (a PNG, WAV or TTF added under assets/ with no .mceasset sidecar) a sidecar "
-     "with a fresh GUID instead of a cook error. Returns counts, diagnostics with file:line and the output paths "
-     "(relative to the project folder).",
-     R"({"type":"object","properties":{"pack":{"type":"boolean","default":false},"adopt":{"type":"boolean","default":false}}})",
+     "from the project plays its own build-tree pack unless started with -pack <that file or the cooked dir>; `mce "
+     "play` and `mce headless` run build/project/assets.mce, which only `mce build` refreshes). "
+     "adopt: give new source files (a PNG, WAV, TTF or .luau added under assets/ with no .mceasset sidecar) a sidecar "
+     "with a fresh GUID instead of a cook error (the error for such a file says to call this with adopt: true). "
+     "paths: project-relative asset files or folders under assets/ (e.g. [\"scenes/level_02.mcscene\", \"textures/\"]); "
+     "cook only those and what they depend on, check nothing else, and leave the rest as it was; it cooks into "
+     "cooked/ only and never rewrites the pack (a pack must hold the whole project), so pack is ignored with paths; "
+     "an entry that matches no asset is an error. skip_errors: also return failed_files, every file that "
+     "could not be cooked with its first error (assets that depend on a failed one are blocked); the rest still "
+     "cooks, as it does without skip_errors, but the pack is written only by a run with no errors. A scene "
+     "component or field the loaded module does not know fails the cook: rebuild the module (module_build, or `mce "
+     "build`) and restart the server if it was not started with --module. Returns counts, diagnostics with "
+     "file:line and the output paths (relative to the project folder).",
+     R"({"type":"object","properties":{"pack":{"type":"boolean","default":false},"adopt":{"type":"boolean","default":false},"paths":{"type":"array","items":{"type":"string"}},"skip_errors":{"type":"boolean","default":false}}})",
      cook_run},
     {"cook_errors", "Diagnostics of the last cook (file, line, col, stage, message).", kNoArgs, cook_errors},
     {"asset_delete", "Delete a source file under assets/ together with its .mceasset sidecar and its CREDITS.md row (a font's "
@@ -1576,7 +1614,7 @@ Span<const ToolDef> tool_table() {
     static const Array<ToolDef> all = [] {
         Array<ToolDef> a;
         for (const ToolDef& t : kTools) a.push_back(t);
-        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table(), prefab_tool_table(), project_tool_table(), ui_tool_table(), terrain_tool_table(), procgen_tool_table(), timeline_tool_table(), bt_tool_table(), script_tool_table(), skeleton2d_tool_table()})
+        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table(), prefab_tool_table(), project_tool_table(), ui_tool_table(), terrain_tool_table(), procgen_tool_table(), timeline_tool_table(), bt_tool_table(), script_tool_table(), skeleton2d_tool_table(), import_tool_table()})
             for (const ToolDef& t : group) a.push_back(t);
         return a;
     }();

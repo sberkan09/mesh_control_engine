@@ -23,7 +23,7 @@ dungeon editor.
 |---|---|---|---|---|
 | 1 | `mce/kit/procgen.h`: streams, BSP rooms, caves, drunkard's walk, noise threshold; connectivity | SBA-171 | Sonnet | done |
 | 2 | Wave function collapse: adjacency from an example tilemap or rules, pinned cells, bounded restarts | SBA-172 | Sonnet | done |
-| 3 | `ProcLevel`: the stock hosts build tilemap, colliders and markers from a seed; also from Luau | SBA-173 | Sonnet | not started |
+| 3 | `ProcLevel`: a kit system builds colliders, sprites and markers from a seed; also from Luau | SBA-173 | Sonnet | done |
 | 4 | MCP `procgen_run`, the `reachable` assertion in `.mctest`, user guide | SBA-174 | Sonnet | done |
 | 5 | `samples/10_dungeon`, a script-only variant, the perf budget and the gates | SBA-175 | Sonnet | not started |
 
@@ -108,3 +108,17 @@ corrections that bind step 3:
   note names up to five failing seeds. Shared argument parsing in `procgen_check.{h,cpp}`.
 - User guide chapter 28. Tests: `test_mcp` (procgen_run), `test_mcp_playtest` (reachable).
 - Not done: the check reads the generators, not a running `ProcLevel` (step 3); `procgen_run` has no WFC.
+
+## Step 3 as built
+
+- `mce/kit/proclevel.h`, `src/proclevel.cpp`: `ProcLevel`, `ProcLevelOwned`, `ProcMarker`, `install_proclevel` (called by
+  `install_stock`, so the three hosts and a Luau-only project get it, and the hosts contain no code of it), `kit_proclevel`
+  in `FixedUpdate_Pre`.
+- Option A as decided: 2-D merged wall rectangles (Static `RigidBody2D` + box `Collider2D` + solid `Sprite`), one floor
+  sprite, `Start` / `Exit` markers. `proclevel_max_wall_rects` is the pinned upper bound; the test also holds 128x128 of
+  every kind under cells / 6.
+- Review corrections: `built` (the hash of kind, size, seed, param, tile size, position and colours) is a plain member, not
+  reflected, so it is neither saved nor hashed and a load rebuilds; `reroll` is read and cleared at the start of the next
+  run; a destroy hook removes the owned entities; `proclevel_nav_grid` makes the pathfinding grid with the level's cell size
+  and origin. The `ProcLevel` entity carries the `SaveKey` (the author adds it); built entities carry none.
+- Not done: tile art (option B stays open), spawn points beyond Start/Exit, a Luau-driven sample (step 5).

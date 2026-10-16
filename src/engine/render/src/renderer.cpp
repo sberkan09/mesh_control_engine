@@ -1,6 +1,7 @@
 #include "mce/render/renderer.h"
 
 #include "mce/log.h"
+#include "mce/memory/frame_slots.h"
 #include "shaders_cvd.h"
 
 namespace mce::render {
@@ -220,6 +221,7 @@ ResultV Renderer::create_pipelines() {
 
 void Renderer::shutdown() {
     if (!device_) return;
+    for (u32 i = 0; i < Forward3D::kMaxViews; ++i) release_staging(i);
     forward_.shutdown();
     meshes_.shutdown();
     for (TilemapSlot& t : tilemaps_)
@@ -349,7 +351,70 @@ void Renderer::record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Tex
 void Renderer::record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target, const Forward3D::ViewOutput& out) {
     MCE_ASSERT_MSG(forward_.initialized(), "record_3d before init_3d");
     if (!forward_.initialized()) return;
-    forward_.record(cmd, scene, target, out);
+    if (!out.linear_output || out.slot >= Forward3D::kMaxViews) {
+        forward_.record(cmd, scene, target, out);
+        return;
+    }
+    // A drawn frame holds its top row at v = 1: draw it into the slot's staging, then copy it into
+    // the rect through a v-flipped region with clip-space y mirrored, so the render texture reads
+    // like uploaded art (top row at v = 0).
+    const rhi::Extent2D size = scene.view().viewport;
+    Staging& st = staging_[out.slot];
+    if (st.texture.is_null() || !(st.size == size)) {
+        release_staging(out.slot);
+        rhi::TextureDesc d;
+        d.size = size;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.dimension = rhi::TextureDimension::Tex2DArray;
+        d.debug_name = "mce.view_staging";
+        st.texture = device_->create_texture(d);
+        if (st.texture.is_null()) return;
+        st.size = size;
+        st.key = textures_.allocate_key();
+        textures_.adopt(st.key, 1, st.texture);
+        const SpriteRegion flipped{0, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f};
+        SpriteSetDesc sd;
+        sd.texture_key = st.key;
+        sd.regions = Span<const SpriteRegion>(&flipped, 1);
+        sd.debug_name = "mce.view_staging";
+        st.set = sets_.create(sd);
+    }
+    Forward3D::ViewOutput inner = out;
+    inner.rect = {};
+    forward_.record(cmd, scene, st.texture, inner);
+
+    Camera2D cam;  // fits the 1 m sprite to the rect exactly
+    cam.fit_width = 1.0f;
+    cam.fit_height = static_cast<f32>(size.height) / static_cast<f32>(size.width);
+    SpriteBatch batch(sets_, mem::has_frame_arena() ? mem::frame() : mem::heap());
+    View2D view = compute_view_2d(cam, size);
+    // Drawing lands top-at-v-1 too: the quad's own clip-space y is mirrored, so the copy (a
+    // second flip) reads upright.
+    for (auto& col : view.view_proj.c) col[1] = -col[1];
+    batch.begin(view);
+    SpriteInstance s;
+    s.set = st.set;
+    s.scale = {1.0f, cam.fit_height};
+    batch.add(s);
+    batch.build();
+    rhi::PassAttachment c;
+    c.texture = target;
+    c.load = rhi::LoadOp::Load;
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&c, 1);
+    p.viewport = out.rect;
+    p.debug_name = "mce.view_upright";
+    cmd.begin_pass(p);
+    record_2d(cmd, batch, true);
+    cmd.end_pass();
+}
+
+void Renderer::release_staging(u32 slot) {
+    Staging& st = staging_[slot];
+    if (st.set.valid()) sets_.destroy(st.set);
+    if (st.key != 0) textures_.release(st.key);  // destroys the texture past the frames in flight
+    st = {};
 }
 
 u32 Renderer::view_slot(u64 key) {
@@ -372,6 +437,7 @@ void Renderer::end_views() {
         ViewSlot& v = view_slots_[i];
         if (v.held && !v.asked) {
             if (i > 0) forward_.release_view(i);
+            release_staging(i);
             v = {};
         }
         v.asked = false;
@@ -381,6 +447,7 @@ void Renderer::end_views() {
 void Renderer::release_views() {
     for (u32 i = 0; i < Forward3D::kMaxViews; ++i) {
         if (i > 0 && view_slots_[i].held) forward_.release_view(i);
+        release_staging(i);
         view_slots_[i] = {};
     }
 }
