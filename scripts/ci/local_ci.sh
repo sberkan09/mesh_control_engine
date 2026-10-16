@@ -8,6 +8,11 @@
 #   scripts/ci/local_ci.sh --premerge # right before merging, if dev_claude moved: walls + the PR's own tests (below)
 #   scripts/ci/local_ci.sh --batch    # the full matrix; the integration runner's job, threads do not run it
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages
+#   scripts/ci/local_ci.sh regen      # integration runner only: regenerate the generated files (below)
+#   scripts/ci/local_ci.sh --save-cache-only   # integration runner only: refresh the ccache snapshot
+#
+# regen builds mce_mcp in the gcc debug tree and runs scripts/ci/regen_generated.py: capabilities.md, the sample
+# coverage allow list and the transcript golden. scripts/ci/integration_run.sh commits the result; threads do not.
 #
 # --premerge (the M7 gate, ~1-3 min) is for after dev_claude was merged into the branch: a PR goes green with ONE
 # --task on its own base and is not re-run. It runs walls (capabilities --check included), then builds mce_mcp
@@ -70,6 +75,7 @@ declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=OFF [linux-gcc-
 
 stages=()
 save_cache=0
+save_only=0
 tidy_all=0
 task_run=0
 for arg in "$@"; do
@@ -79,13 +85,14 @@ for arg in "$@"; do
         --premerge) stages+=(walls premerge) ;;
         --batch) ;;
         --save-cache) save_cache=1 ;;
+        --save-cache-only) save_cache=1; save_only=1 ;;
         --tidy-all) tidy_all=1 ;;
         -h|--help) sed -n '2,52p' "$0"; exit 0 ;;
         *) stages+=("$arg") ;;
     esac
 done
 full_run=0
-[[ ${#stages[@]} -eq 0 ]] && { stages=("${ALL_STAGES[@]}"); full_run=1; }
+[[ ${#stages[@]} -eq 0 && $save_only -eq 0 ]] && { stages=("${ALL_STAGES[@]}"); full_run=1; }
 
 # Files changed since the merge base with $MCE_TIDY_BASE (default origin/dev_claude), committed or
 # not; prints nothing when the base ref is missing.
@@ -149,7 +156,7 @@ mkdir -p "$LOG_DIR"
 # sit together (the gcc trees: tests, determinism, the Release build), so a tree is finished with before
 # the next one starts and can be dropped when the disk is short (reclaim_space). Unknown names go last
 # and fail in run_stage with the list of known ones.
-CANON_ORDER=(walls premerge linux-gcc-debug determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
+CANON_ORDER=(walls regen premerge linux-gcc-debug determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
 order_stages() {
     local -A seen=()
     local c s sorted=()
@@ -167,7 +174,7 @@ order_stages
 stage_trees() {
     case "$1" in
         linux-*) echo "$1" ;;
-        premerge) echo linux-gcc-debug ;;
+        premerge|regen) echo linux-gcc-debug ;;
         tidy) echo linux-clang-debug ;;
         determinism) echo "linux-gcc-debug linux-gcc-release" ;;
         release-build) echo linux-gcc-release ;;
@@ -323,7 +330,7 @@ preconfigure() {
     for s in "${stages[@]}"; do
         case "$s" in
             linux-*) [[ -n "${GPU_TESTS[$s]:-}" ]] && want[$s]=1 ;;
-            premerge) want[linux-gcc-debug]=1 ;;
+            premerge|regen) want[linux-gcc-debug]=1 ;;
             tidy) want[linux-clang-debug]=1 ;;
             determinism) want[linux-gcc-debug]=1; want[linux-gcc-release]=1 ;;
             release-build) want[linux-gcc-release]=1 ;;
@@ -352,6 +359,13 @@ stage_preset() {
     configure "$preset" &&
         cmake --build --preset "$preset" &&
         run_tests "$preset"
+}
+
+# regen: the generated files, rebuilt from the code (integration runner). mce_mcp is the transcript golden's server.
+stage_regen() {
+    configure linux-gcc-debug &&
+        cmake --build --preset linux-gcc-debug --target mce_mcp &&
+        python3 scripts/ci/regen_generated.py --exe build/linux-gcc-debug/src/editor/mcp/mce_mcp
 }
 
 # --premerge: report whether a --task re-run is needed, build the PR's own tests and run them with the
@@ -598,11 +612,13 @@ run_stage() {
         release-build) stage_release_build ;;
         web) stage_web ;;
         premerge) stage_premerge ;;
-        *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]} premerge)"; return 2 ;;
+        regen) stage_regen ;;
+        *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]} premerge regen)"; return 2 ;;
     esac
 }
 
 restore_cache
+if [[ $save_only -eq 1 ]]; then save_cache_snapshot; exit 0; fi
 [[ $HAVE_CCACHE -eq 1 ]] && ccache --zero-stats > /dev/null
 preconfigure
 
