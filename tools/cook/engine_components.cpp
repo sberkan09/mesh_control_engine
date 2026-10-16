@@ -18,6 +18,7 @@
 #include "mce/kit/presence.h"         // RichPresence (M-STEAM 3)
 #include "mce/kit/cinematic.h"        // CameraRail3D, CameraLookAt3D, CameraShake3D, CameraBlend3D, Cutscene (M-CINEMA)
 #include "mce/kit/video.h"            // VideoPlayer (M-CINEMA 5)
+#include "mce/kit/views.h"            // CameraView (M-VIEWS)
 #include "mce/kit/effects.h"          // SfxTrigger, ParticleBurst, ShakeTrigger, CameraShake2D, CameraFollow2D/3D,
                                       // PhysicsEvents, NavGridSource
 #include "mce/kit/joints3d.h"          // Joint3D

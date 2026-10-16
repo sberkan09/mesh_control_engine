@@ -163,9 +163,31 @@ public:
     void shutdown();
     bool initialized() const { return device_ != nullptr; }
 
+    // M-VIEWS: several views a frame. Each view slot keeps its own size-dependent targets and its
+    // temporal state (TAA and SSR history, the velocity prepass's previous view, auto exposure,
+    // the occlusion pyramid); pipelines, meshes, IBL, probes, the GI volume, the shadow atlas and
+    // the particle rings are shared. Slot 0 is the main view (the single-camera path).
+    static constexpr u32 kMaxViews = 8;
+    struct ViewOutput {
+        u32 slot = 0;        // < kMaxViews
+        // Pixels of the target the finished frame goes to (top-left origin); zero size = the whole
+        // target. A sub-rect loads what the target holds (LoadOp::Load) instead of discarding it,
+        // so the caller clears the target once before its first view.
+        rhi::Rect2D rect{};
+        // The frame's first record(): it runs the once-a-frame work (the particle simulation, the
+        // GI volume's rolling update). Later views of the same frame only draw.
+        bool first = true;
+    };
+
     // Records every pass for a built scene. Outside any pass; `target` null = backbuffer.
     // Leaves the target holding the final frame (2D/HUD passes may follow with LoadOp::Load).
-    void record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target = {});
+    // The scene's viewport is the output size (out.rect's size when it has one).
+    void record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target = {}) { record(cmd, scene, target, ViewOutput{}); }
+    void record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target, const ViewOutput& out);
+    // Destroys a view slot's targets and history (the next record() into it starts afresh). The
+    // RHI retires the textures past the frames in flight.
+    void release_view(u32 slot);
+    bool view_alive(u32 slot) const { return slot == 0 || (slot < kMaxViews && views_[slot - 1].alive); }
 
     // Per-stage GPU times from the device's newest completed timestamps.
     Forward3DGpuTimes gpu_times(const rhi::GpuTimestamps& ts) const;
@@ -263,6 +285,10 @@ public:
     rhi::BufferHandle particle_buffer(u32 emitter_id) const;
 
 private:
+    struct ViewState;
+    void record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target, const ViewOutput& out);
+    void swap_view(ViewState& v);
+    void destroy_view_resources();
     ResultV create_pipelines();
     void ensure_targets(rhi::Extent2D size);
     void destroy_targets();
@@ -473,9 +499,11 @@ private:
         u32 count = 0;
         u32 capacity = 0;
         rhi::BufferHandle transforms;
+        u32 frame = 0;                   // batch_frame_ of the last record() that drew it
         bool seen = false;
     };
     Array<BatchGpu> batch_gpu_;
+    u32 batch_frame_ = 0;                // frames recorded (first views)
     struct BatchView {                   // a (view, batch) of this frame
         u32 first_command = ~0u;         // GPU path: the commands of level 0, submesh 0
         u32 slot[asset::kMaxMeshLods] = {};   // first visible slot of each level
@@ -525,6 +553,25 @@ private:
     math::mat4 gi_shadow_vp_ = math::mat4::identity();
     f32 gi_shadow_texel_ = 0.0f;
     Forward3DStats stats_;
+    ViewOutput out_;                     // the record() in progress
+
+    // M-VIEWS: the members above that belong to one view. Slot 0's live in the members themselves;
+    // record() swaps another slot's into them for the duration of its frame (handles and a few
+    // matrices, no allocation), so the passes read one set of names whichever view they draw.
+#define MCE_FORWARD3D_VIEW_STATE(X)                                                                              \
+    X(hdr_msaa_) X(depth_) X(hdr_) X(ldr_) X(fin_src_) X(fin_up_) X(fin_src_size_) X(fin_up_size_) X(bloom_)    \
+    X(bloom_size_) X(bloom_levels_) X(size_) X(ao_gbuf_) X(ao_depth_) X(ao_a_) X(ao_b_) X(ssr_) X(ssr_prev_vp_) \
+    X(ssr_prev_valid_) X(trans_src_) X(vol_media_) X(vol_light_) X(velocity_) X(velocity_depth_) X(history_)    \
+    X(history_size_) X(history_index_) X(history_valid_) X(taa_frame_) X(prev_view_proj_) X(velocity_prev_valid_) \
+    X(velocity_prev_vp_used_) X(exposure_buf_) X(exposure_reset_) X(fx_) X(fx_size_) X(fx_next_) X(occ_color_)  \
+    X(occ_depth_) X(hiz_) X(hiz_size_)
+#define MCE_FORWARD3D_VIEW_FIELD(m) decltype(Forward3D::m) m{};
+    struct ViewState {
+        MCE_FORWARD3D_VIEW_STATE(MCE_FORWARD3D_VIEW_FIELD)
+        bool alive = false;
+    };
+#undef MCE_FORWARD3D_VIEW_FIELD
+    ViewState views_[kMaxViews - 1];     // slots 1 .. kMaxViews - 1
 };
 
 }  // namespace mce::render

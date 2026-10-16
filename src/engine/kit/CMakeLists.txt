@@ -32,6 +32,7 @@ mce_add_library(mce_gameplay_kit
         src/perception.cpp
         src/cinematic.cpp
         src/video.cpp
+        src/views.cpp
     PUBLIC_DEPS
         mce::mce_ecs
         mce::mce_refl
