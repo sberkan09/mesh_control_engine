@@ -239,9 +239,12 @@ const ToolDef kAgentTools[] = {
      "build for itch.io instead (`mce ship --target web`, from the engine checkout the SDK came from, for a project under "
      "its projects/; needs the Emscripten SDK and Playwright): it plays 'ticks' ticks in headless Chromium and returns "
      "the zip, the state_hash, matches_headless (the same ticks run headless in the browser) and a screenshot of the "
-     "last frame.",
+     "last frame. Desktop with steam_app_id: also the Steam depot for this OS and the steamcmd build scripts "
+     "(<out>/<Name>-steam; nothing is uploaded).",
      R"j({"type":"object","properties":{"target":{"type":"string","enum":["desktop","web"],"default":"desktop"},"ticks":{"type":"integer","minimum":1,"maximum":36000,"default":300},"build":{"type":"boolean","default":true,"description":"Run the full build first (false: ship what is built; desktop only)"},)j"
-     R"j("version":{"type":"string","description":"Version in the zip's name (default: the .mceproj's, else the SDK's)"},"out":{"type":"string","description":"Folder inside the project for the zip (default dist/)"}}})j",
+     R"j("version":{"type":"string","description":"Version in the zip's name (default: the .mceproj's, else the SDK's)"},"out":{"type":"string","description":"Folder inside the project for the zip (default dist/)"},)j"
+     R"j("steam_app_id":{"type":"integer","minimum":1,"maximum":4294967295,"description":"Desktop: also make the Steam depot and build scripts for this app"},)j"
+     R"j("steam_library":{"type":"string","description":"With steam_app_id: the steam_api to ship (default: from the server's STEAMWORKS_SDK)"}}})j",
      ship_build},
     {"project_watch",
      "What the other agents on this project did: the event feed (.mce/events.jsonl), one event per write with agent, "

@@ -217,8 +217,8 @@ MCE_CVAR(cv_remote_config_file, "remote_config.file", "",
 MCE_CVAR(cv_remote_config_dump, "remote_config.dump", false,
          "Remote config: print every value at start and after each apply", CVarFlags::None);
 MCE_CVAR(cv_steam_app_id, "steam.app_id", 0,
-         "Steam (M-STEAM): open steam_api and sign in for this app id (0 = no Steam); a run outside Steam names it "
-         "to the client the way steam_appid.txt does",
+         "Steam (M-STEAM): open steam_api and sign in for this app id (0: the SteamAppId Steam starts the game with, "
+         "else no Steam; -1: never); a run outside Steam names it to the client the way steam_appid.txt does",
          CVarFlags::None);
 MCE_CVAR(cv_steam_library, "steam.library", "", "Steam: the steam_api library to open (empty: next to the executable)",
          CVarFlags::None);
@@ -433,7 +433,7 @@ public:
 
     ResultV on_init(app::Context&) override {
         // Steam first: when it relaunches the game through itself, this run loads and saves nothing.
-        if (cv_steam_app_id.get_int() > 0 && !init_steam()) {
+        if (steam_app_id() != 0 && !init_steam()) {
             relaunching_ = true;
             return ok();
         }
@@ -1034,11 +1034,23 @@ private:
     // Every string table in the pack (assets/loc/<locale>.csv) goes into one Localization resource:
     // the saved choice first, then -language for this run, then the device languages, then
     // -default_language. A choice the game makes later (Localization::set_locale) is saved at once.
+    // -steam.app_id, else the SteamAppId Steam launches a game with (a shipped depot has no
+    // steam_appid.txt and no command line of ours, M-STEAM step 5); 0: no Steam.
+    static u32 steam_app_id() {
+        const i64 id = cv_steam_app_id.get_int();
+        if (id != 0) return id > 0 && id <= 0xffffffffll ? static_cast<u32>(id) : 0;
+        const char* env = std::getenv("SteamAppId");
+        if (!env || !*env) return 0;
+        char* end = nullptr;
+        const unsigned long long v = std::strtoull(env, &end, 10);
+        return end && *end == 0 && v <= 0xffffffffull ? static_cast<u32>(v) : 0;
+    }
+
     // Steam (M-STEAM step 1, ADR-0042): an app id opens steam_api; anything but a relaunch leaves the
     // game running without Steam. False: Steam relaunches the game, so this run quits at once.
     bool init_steam() {
         platform::steam::Config sc;
-        sc.app_id = static_cast<u32>(cv_steam_app_id.get_int());
+        sc.app_id = steam_app_id();
         sc.library_path = cv_steam_library.get_string();
         sc.restart_if_necessary = cv_steam_restart.get_bool();
         FixedString<256> why;

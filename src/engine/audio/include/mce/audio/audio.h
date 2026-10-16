@@ -44,6 +44,10 @@ struct ClipPayload {
     u32 channels = 1;            // 1 or 2
     u32 sample_rate = kSampleRate;
     u32 loop_start = 0;          // frame a looping voice wraps back to (intro + loop body)
+    // An Ogg Vorbis stream in place of `frames` (M-AUDIO2 1): only register_stream takes one, and its
+    // pages decode it as they fill. frame_count/loop_start still count decoded frames.
+    const byte* encoded = nullptr;
+    u32 encoded_bytes = 0;
 };
 
 struct PlayParams {

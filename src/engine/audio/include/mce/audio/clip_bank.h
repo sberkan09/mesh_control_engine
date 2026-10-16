@@ -30,6 +30,7 @@ public:
     // not retried until release() (FR-DX-050: silence, never a crash). `stream` registers it as a
     // streamed clip (AudioDevice::register_stream: music, long ambiences), falling back to an
     // in-memory clip when every stream ring is taken; it applies when the GUID is first acquired.
+    // A Vorbis Sfx (M-AUDIO2 1) decodes here, at load, unless it streams: then its pages decode it.
     ClipHandle acquire(asset::Guid guid, bool stream = false);
     // The registered clip, or null when the GUID was never acquired (no load).
     ClipHandle find(asset::Guid guid) const;
@@ -52,13 +53,22 @@ private:
         u32 generation = 0;
         ClipHandle clip;
         bool stream = false;
+        Array<f32> pcm;  // a Vorbis clip decoded for an in-memory registration
+    };
+    // Decoded samples the mixer may still read: freed once the device has dropped the clip.
+    struct Retired {
+        ClipHandle clip;
+        Array<f32> pcm;
     };
     ClipHandle register_entry(Entry& e);
     void drop(Entry& e);
+    void retire(Entry& e);
+    void sweep();
 
     asset::AssetSystem* assets_;
     AudioDevice* device_;
     HashMap<asset::Guid, Entry> entries_;
+    Array<Retired> retired_;
 };
 
 }  // namespace mce::audio

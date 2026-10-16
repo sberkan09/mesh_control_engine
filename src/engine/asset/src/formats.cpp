@@ -194,6 +194,12 @@ Result<SfxView> SfxView::read(Span<const byte> payload) {
     if ((h->flags & SfxFlags::Looping) && !(h->loop_start < h->loop_end && h->loop_end <= h->frame_count)) return bad(kStage);
     SfxView v;
     v.header = h;
+    if (h->flags & SfxFlags::Vorbis) {
+        Span<const u64> size;
+        if (!span_at(payload, h->data_offset, 1, size)) return bad(kStage);
+        if (!span_at(payload, h->data_offset + sizeof(u64), size[0], v.vorbis) || v.vorbis.empty()) return bad(kStage);
+        return v;
+    }
     if (!span_at(payload, h->data_offset, h->frame_count * h->channels, v.samples)) return bad(kStage);
     return v;
 }
@@ -204,6 +210,21 @@ void write_sfx(const SfxHeader& header, Span<const f32> samples, Array<byte>& ou
     SfxHeader h = header;
     const usize at = b.append(&h, sizeof(h));
     h.data_offset = b.append_span(samples);
+    b.patch(at, h);
+    b.finish();
+}
+
+void write_sfx_vorbis(const SfxHeader& header, Span<const byte> stream, Array<byte>& out) {
+    PayloadBuilder b(out);
+    SfxHeader h = header;
+    h.flags |= SfxFlags::Vorbis;
+    const usize at = b.append(&h, sizeof(h));
+    Array<byte> block;
+    block.resize(sizeof(u64) + stream.size());
+    const u64 n = stream.size();
+    std::memcpy(block.data(), &n, sizeof(n));
+    if (n) std::memcpy(block.data() + sizeof(u64), stream.data(), stream.size());
+    h.data_offset = b.append(block.data(), block.size());
     b.patch(at, h);
     b.finish();
 }
