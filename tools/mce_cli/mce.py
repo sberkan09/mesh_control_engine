@@ -16,7 +16,7 @@
     mce story compile [<project>] [--check] [--werror]   compile story/*.story (story/story.json) into the
                                                 game's C++ header (mce/kit/novel.h) and story/REPORT.md
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
-    mce ship <project> --target web [--smoke]   the browser build, zipped for itch.io (runs the engine
+    mce ship <project> --target web [--smoke] [--smoke-ticks N]   the browser build, zipped for itch.io (runs the engine
                                                 checkout's scripts/ship.py: needs the Emscripten SDK)
     mce serve <zip | folder | project> [--port N] [--lan] [--open]   play a web build locally (the right
                                                 MIME types and headers; browsers do not run file:// pages)
@@ -307,8 +307,10 @@ def cmd_ship_web(args, p):
            "--out", pathlib.Path(args.out or (p.dir / "dist")).resolve()]
     if args.version:
         cmd += ["--version", args.version]
-    if args.smoke:
+    if args.smoke or args.smoke_ticks:
         cmd.append("--smoke")
+    if args.smoke_ticks:
+        cmd += ["--smoke-ticks", str(args.smoke_ticks)]
     return run(cmd, cwd=checkout)
 
 
@@ -614,6 +616,9 @@ def main(argv):
     s.add_argument("--out")
     s.add_argument("--version")
     s.add_argument("--smoke", action="store_true", help="--target web: play it once in headless Chromium")
+    s.add_argument("--smoke-ticks", type=int, default=0,
+                   help="--target web: play N ticks in headless Chromium, screenshot, and check the state hash against "
+                        "a headless browser run")
     s.set_defaults(fn=cmd_ship)
 
     s = sub.add_parser("serve", help="play a web build locally: its zip, its folder, or a project's newest one")
