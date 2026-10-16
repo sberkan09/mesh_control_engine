@@ -101,6 +101,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-STEAM | [M-STEAM.md](milestones/M-STEAM.md), ADR-0042 (Linear SBA-106 … SBA-112) | done against a stand-in `steam_api` (steps 1–6: the run-time loader, game services, the overlay and rich presence, Steam Input, `ship --steam` depots, `samples/steam_demo` and user guide 26) | the real-client run, SBA-112 (needs the user's Steamworks account) |
 | M-AUDIO2 | [M-AUDIO2.md](milestones/M-AUDIO2.md) (Linear SBA-118 … SBA-122, added 2026-10-16) | active: step 1 done (Ogg Vorbis clips, ADR-0044) | steps 2–5, the demo and the gates |
 | M-NET3 | [M-NET3.md](milestones/M-NET3.md) (Linear SBA-123 … SBA-127, added 2026-10-16) | active (step 1 done: per-client delta snapshots, `NetRelevance`, acknowledgements; about a third of the snapshot bytes in `sample_net_headless`) | steps 2–5, the demo and the gates |
+| M-MOVE3D | [M-MOVE3D.md](milestones/M-MOVE3D.md) (Linear SBA-134 … SBA-139, added 2026-10-16) | active (step 1 in progress) | steps 1–6, the demo and the gates |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -445,6 +446,26 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Builds, in order:** (1) ADR-0042 and a run-time loader for the Steamworks flat API (`mce/platform/steam.h`): no SDK in the repo or the build, init with manual dispatch, the stock player's `-steam.app_id`, a stand-in `steam_api` for CI, the Steam wall · (2) achievements, stats, leaderboards and cloud saves as `Backend::Steam` of `platform::game_services`, so `liveops::PlatformGameServices` and the `.mcservices` catalog work unchanged with Steam ids · (3) the overlay holds the world like a lost focus; rich presence as a data component; overlay helpers · (4) Steam Input: an action manifest generated from the cooked input map, glyphs for the remap screen, Steam Deck defaults · (5) `ship --steam`: per-platform depots with `steam_api` beside the binary, generated steamcmd build scripts, MCP `ship_build {"steam": true}`; no upload · (6) the demo, the user guide and the gates.
 **Demo:** `samples/steam_demo` unlocks an achievement, posts a score, restores a cloud save and holds on the overlay against the stand-in in CI; the same build against the real client on the user's account (SBA-112).
 **Gates:** a game without Steam loads nothing and plays today's hash; with Steam on the sim hash is unchanged; the stand-in tests run in `local_ci.sh`; Steamworks names stay behind the Steam wall.
+
+### M-MOVE3D — 3D movement that feels shipped · **size M (rough guess, ≈ 60–90 h engineering)** · tier: off-tier, opt-in per field, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the user's standing instruction to keep developing the engine when no milestone is free (every gap track is done or owned). M-GAMEPLAY3D gave 3D games their systems: navmesh agents, joints, ragdolls, vehicles and sensors. What a player feels is still raw. `CharacterController3D` moves at full speed on the first tick and has no coyote time, jump buffer, variable jump, crouch or landing event. `CameraFollow3D` passes through walls. `Vehicle3D` has no anti-roll, downforce, slip outputs or recovery, and nothing drives a vehicle but the player. Godot, Unity and Unreal ship these in their character, camera and vehicle templates. Needs no device: every step gates on headless runs and replay hashes.*
+
+**Builds, in order:**
+1. Character feel: acceleration, deceleration and air control; coyote time, jump buffer, jump cut (variable height) and extra air jumps; sprint and crouch (the capsule shrinks, and standing up is refused under a ceiling); a `Landed3D` event with the impact speed for effects.
+2. Camera: `CameraFollow3D` gains a spring arm (a sphere cast pulls the camera in front of walls and eases it back out), look-ahead along the target's velocity, a first-person mode and lock-on framing of a second entity.
+3. Vehicle feel: anti-roll bars, downforce, per-wheel slip and a skid event for effects, self-righting after a flip, and the gear count and shift points as data.
+4. AI drivers: `VehicleDriver3D` drives a vehicle around a path of waypoint entities, slowing for corners from their curvature and counting laps. Navmesh agents steer with step 1's acceleration.
+5. Animation from movement: `Locomotion3D` feeds the controller's speed, grounded, crouch and airborne state to the AnimGraph parameters without code, and foot IK on slopes and stairs uses the existing IK.
+6. MCP reach and docs, and the demo `samples/08_movement`.
+
+**Demo:** `samples/08_movement`, built over MCP alone. A humanoid runs an obstacle course: coyote jumps, a crouch tunnel, a moving lift and a camera that stays out of the walls. A cart races two AI karts around a short track, with skid events firing on the corners. A scripted input replays to the same hash in Debug and Release.
+**Gates:**
+- Each feel parameter has a headless test with exact numbers (the coyote and buffer windows in ticks, the jump heights, the camera's distance from a wall).
+- Replay hashes hold across runs and builds.
+- 64 characters and 8 vehicles step within a stated budget.
+- Defaults keep existing scenes moving as before (the same positions after a fixed run).
+- `local_ci.sh` green on every step.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
