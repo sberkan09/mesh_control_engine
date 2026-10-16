@@ -483,12 +483,15 @@ const ToolDef kUiTools[] = {
     {"ui_preview",
      "See a UI document alone: the real player draws it over a plain background at a viewport size, safe area and UI "
      "scale, and the frame comes back as a PNG (offscreen software rendering when there is no display). Bound fields "
-     "read the open (saved) scene, else the project's first scene. 'save' also writes the PNG for image_diff.",
+     "read the open (saved) scene, else the project's first scene. A project that does not cook (a broken scene) "
+     "or has no saved scene is previewed from the document and what it references alone, with nothing bound "
+     "('document_only' forces that and skips the project cook). 'save' also writes the PNG for image_diff.",
      R"j({"type":"object","properties":{)j" MCE_UI_DOC
      R"j(,"width":{"type":"integer","minimum":64,"maximum":3840,"default":960},"height":{"type":"integer","minimum":64,"maximum":3840,"default":540},)j"
      R"j("safe_area":{"type":"object","description":"Insets in pixels {left, top, right, bottom}: the UI lays out inside them; the image outlines them"},)j"
      R"j("ui_scale":{"type":"number","minimum":0.25,"maximum":4,"description":"The player's -ui_scale (default 1)"},)j"
      R"j("save":{"type":"string","description":"Also write the PNG inside the project folder, e.g. shots/hud.png"},)j"
+     R"j("document_only":{"type":"boolean","description":"Cook only the document, its theme, fonts and sheets, and start an empty scene (bound fields show nothing)"},)j"
      R"j("software":{"type":"boolean","description":"Force the offscreen software renderer"}},"required":["document"]})j",
      ui_preview},
 };

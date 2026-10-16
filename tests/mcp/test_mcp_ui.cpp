@@ -254,6 +254,43 @@ TEST_CASE("ui_preview: a document alone at a viewport, safe area and scale, chec
     CHECK_MESSAGE(d.v().get("pass").as_bool(), "ui_preview drifted from tests/mcp/goldens/ui_preview_menu.png: " << d.text);
 }
 
+TEST_CASE("ui_preview: a project that does not cook still previews a document, from the document alone") {
+    const std::string root = ui_project("mcp_ui_preview_alone");
+    Client c([] {
+        mcp::ServerOptions opt;
+        opt.player = MCE_PLAYER_EXE;
+        return opt;
+    }());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    c.ok("ui_create", std::string(R"({"path":"ui/menu.mcui","widgets":)") + kMenuWidgets + "}");
+    c.ok("asset_create", R"({"path":"ui/warm.mcuitheme","content":{"palette":{"button":[0.85,0.35,0.1,1],"text":[1,0.95,0.8,1]}}})");
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/warm.mcuitheme"})");
+    const char* const shot = R"({"document":"ui/menu.mcui","width":320,"height":240})";
+    auto whole = c.ok("ui_preview", shot);
+    CHECK_FALSE(whole.v().get("document_only").valid());  // the project cooks: its scene starts, bindings read it
+
+    // A scene the cook rejects used to block every UI preview.
+    write_file(root + "/assets/scenes/broken.mcscene", "{ this is not a scene");
+    auto alone = c.ok("ui_preview", shot);
+    REQUIRE(alone.images.size() == 1);
+    CHECK(str(alone.v().get("document_only")).find("does not cook") != std::string::npos);
+    CHECK(alone.images[0].width == 320);
+    // The theme travelled with the document: the frame has the warm buttons, not the default look.
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":null})");
+    auto plain = c.ok("ui_preview", shot);
+    const auto same = [](const auto& a, const auto& b) {
+        return a.rgba.size() == b.rgba.size() && std::equal(a.rgba.begin(), a.rgba.end(), b.rgba.begin());
+    };
+    CHECK_FALSE(same(alone.images[0], plain.images[0]));
+    // Asked for, it skips the project cook even when the project is fine.
+    std::filesystem::remove(root + "/assets/scenes/broken.mcscene");
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/warm.mcuitheme"})");
+    auto forced = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":320,"height":240,"document_only":true})");
+    CHECK(str(forced.v().get("document_only")) == "document_only was set");
+    CHECK(same(forced.images[0], alone.images[0]));
+}
+
 TEST_CASE("ui_preview: one document under two themes draws two different frames") {
     const std::string root = ui_project("mcp_ui_preview_theme");
     Client c([] {
