@@ -5,6 +5,8 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Flag check, M-DOCCHECK step 2 (SBA-177): `check_docs.py` also fails for a `-flag` after `mce_player` in a
+  document that no source declares as a console variable. Every documented flag passes today.
 - Docs checks, M-DOCCHECK step 1 (SBA-176): the walls stage runs `scripts/ci/check_docs.py`, which fails for a
   relative link or `#anchor` in a document that points nowhere and for an `#include` line of an `mce/` header that names no
   header (`scripts/ci/docs.allow` lists the four accepted sketches). The guide index's broken platform-notes link
