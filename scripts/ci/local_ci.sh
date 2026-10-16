@@ -418,9 +418,9 @@ stage_release_build() {
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
     configure linux-gcc-debug &&
-        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content stream_demo_content gameplay3d_content sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback &&
+        cmake --build --preset linux-gcc-debug --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player scene_demo_content stream_demo_content gameplay3d_content sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback sample_net_arena &&
         configure linux-gcc-release &&
-        cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback &&
+        cmake --build --preset linux-gcc-release --target sample_02_boids sample_physics2d_headless mce_devhost modtest_good sample_03_platformer sample_04_diorama mce_player sample_shop_demo sample_liveops_demo sample_net_headless sample_net_rollback sample_net_arena &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1000 -boids 20000" \
             build/linux-gcc-debug/samples/02_boids/sample_02_boids \
             build/linux-gcc-release/samples/02_boids/sample_02_boids &&
@@ -496,7 +496,13 @@ stage_net_determinism() {
             build/linux-gcc-release/samples/net_rollback/sample_net_rollback &&
         python3 scripts/ci/determinism.py --runs 3 --args "-peers 2 -prediction 0 -frames 300" \
             build/linux-gcc-debug/samples/net_rollback/sample_net_rollback \
-            build/linux-gcc-release/samples/net_rollback/sample_net_rollback
+            build/linux-gcc-release/samples/net_rollback/sample_net_rollback &&
+        python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -clients 4 -latency 150 -jitter 20 -loss 0.03 -ticks 900" \
+            build/linux-gcc-debug/samples/net_arena/sample_net_arena \
+            build/linux-gcc-release/samples/net_arena/sample_net_arena &&
+        python3 scripts/ci/determinism.py --runs 3 --args="-headless 1 -clients 3 -latency 60 -jitter 10 -loss 0.1 -seed 9 -ticks 600" \
+            build/linux-gcc-debug/samples/net_arena/sample_net_arena \
+            build/linux-gcc-release/samples/net_arena/sample_net_arena
 }
 
 # M5a: 04_cubes (cascade fit, Forward+ clustering, node animation) across runs and Debug/Release;

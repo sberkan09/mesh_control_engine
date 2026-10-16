@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Windowed arena sample, M-NET3 step 5 (SBA-127): `samples/net_arena` is a 2–4 player top-down arena built from
+  scene data (`NetReplicated` walls and pads, a server-made `NetOwner` player with `Replicated` health fields), with a
+  predicted local player, interpolated others, lag-compensated shots and quick play through `mce_relay`. It runs
+  windowed (local play against bots, `-serve` plus `-connect` per player) and headless; the headless match hashes the
+  same across runs and Debug/Release in `local_ci.sh`. User guide 20.11.
 - Procedural levels, M-PROCGEN step 3 (SBA-173): a `ProcLevel` component builds a seeded level in the game (merged wall
   colliders, floor, Start/Exit markers) and rebuilds it when the seed changes or `reroll` is set, also from Luau; user guide 28.5.
 - Procedural levels, M-PROCGEN step 4 (SBA-174): MCP `procgen_run` shows a seeded level as text (and checks a run of seeds, or
