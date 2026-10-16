@@ -20,7 +20,7 @@ calls it. A function that would need state between ticks is not added: the answe
 | # | Step | Model | State |
 |---|---|---|---|
 | 1 | 2D physics completeness: forces and torque, angular velocity, circle / shape overlap and shape casts, gravity and sleep controls | Sonnet | done |
-| 2 | Navigation from Luau: `mce.find_path` over a grid built from the static colliders (cached per scene change), line of sight | Sonnet | not started |
+| 2 | Navigation from Luau: `mce.find_path` over a grid built from the static colliders (cached per scene change), line of sight | Sonnet | done |
 | 3 | Game plumbing: save / load a slot, time scale, stop and fade sounds, camera shake, one-shot particles | Sonnet | not started |
 | 4 | 3D bodies: overlap, move_and_collide and velocity for 3D, navmesh path | Sonnet (Opus review of anything that touches the physics step) | not started |
 | 5 | Demo and gates: Dungeon gets chasing enemies (find_path), a 3D script-only blind test, guide recipes | Sonnet | not started |
@@ -36,3 +36,14 @@ against the definitions, so one cannot be added without the other); `local_ci.sh
 - The gate the milestone promised: `test_script_api` walks the real `mce` table inside a script and compares it, both ways, with the
   names `mce.d.luau` declares, so a function can no longer be registered without a typed declaration.
 - Not done: gravity scale per body is data (`RigidBody2D.gravity_scale`), so no function; `World2D` joints stay C++ only.
+
+## Step 2 as built
+
+- `mce.find_path(from, to, options?)` in `api_world.cpp`: a `kit::NavGrid` over the bounds of the static colliders plus a free margin,
+  marked with `kit::mark_static_colliders`, searched with `kit::Pathfinder`. Options `cell`, `radius`, `diagonal`, `smooth`; bad values are
+  named errors, and a grid over 4 million cells asks for a bigger `cell`.
+- The grid is a world resource keyed by `kit::static_colliders_hash` (new, in `pathfinding.cpp`) plus cell and radius, so a level that
+  changes (a door destroyed, a ProcLevel reroll) is noticed on the next call and nothing else rebuilds it.
+- Points outside the grid are open ground: the search runs from the nearest edge cell and the real point is added at that end.
+- Line of sight needs no new call: `mce.raycast2d` / `circle_cast2d` already answer it, and `smooth = true` already drops the waypoints
+  a straight walk does not need.

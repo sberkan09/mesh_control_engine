@@ -12,10 +12,12 @@
 #include "mce/asset/guid.h"
 #include "mce/audio/components.h"
 #include "mce/ecs/transform.h"
+#include "mce/hash.h"
 #include "mce/ecs/prefab.h"
 #include "mce/input/actions.h"
 #include "mce/kit/ai.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/pathfinding.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/timeline.h"
 #include "mce/log.h"
@@ -436,6 +438,94 @@ int l_teleport2d(lua_State* L) {
     return 0;
 }
 
+// mce.find_path(from, to, options?) -> array of waypoints (vectors, z = 0) after `from`, ending at `to`; nil when `to`
+// is blocked or cannot be reached. The grid is made from the world's static colliders (the same ones
+// kit::mark_static_colliders reads), so it follows a level that was rebuilt; the last one is kept in the world and
+// reused while the colliders, `cell` and `radius` stay the same. options: cell (grid size in metres, default 0.5),
+// radius (clearance kept from walls, default 0.25), diagonal (default true), smooth (default true).
+struct ScriptNavCache {
+    u64 key = 0;
+    bool valid = false;
+    kit::NavGrid grid;
+    kit::Pathfinder finder;
+};
+
+int l_find_path(lua_State* L) {
+    World& w = world_of(L);
+    const math::vec2 from = check_vec2(L, 1);
+    const math::vec2 to = check_vec2(L, 2);
+    f32 cell = 0.5f, radius = 0.25f;
+    kit::PathOptions opt;
+    if (!lua_isnoneornil(L, 3)) {
+        luaL_checktype(L, 3, LUA_TTABLE);
+        lua_getfield(L, 3, "cell");
+        if (!lua_isnil(L, -1)) cell = static_cast<f32>(luaL_checknumber(L, -1));
+        lua_pop(L, 1);
+        lua_getfield(L, 3, "radius");
+        if (!lua_isnil(L, -1)) radius = static_cast<f32>(luaL_checknumber(L, -1));
+        lua_pop(L, 1);
+        lua_getfield(L, 3, "diagonal");
+        if (!lua_isnil(L, -1)) opt.diagonal = lua_toboolean(L, -1) != 0;
+        lua_pop(L, 1);
+        lua_getfield(L, 3, "smooth");
+        if (!lua_isnil(L, -1)) opt.smooth = lua_toboolean(L, -1) != 0;
+        lua_pop(L, 1);
+    }
+    if (!(cell >= 0.05f && cell <= 100.0f)) luaL_error(L, "mce.find_path: cell must be from 0.05 to 100 metres");
+    if (!(radius >= 0.0f && radius <= 100.0f)) luaL_error(L, "mce.find_path: radius must be from 0 to 100 metres");
+
+    const math::aabb2 bounds = kit::static_collider_bounds(w);
+    Array<math::vec2> path;
+    lua_createtable(L, 0, 0);
+    if (bounds.min.x > bounds.max.x) {  // nothing to walk around
+        push_vec2(L, to);
+        lua_rawseti(L, -2, 1);
+        return 1;
+    }
+    Hasher64 h;
+    h.u64v(kit::static_colliders_hash(w));
+    h.f32v(cell);
+    h.f32v(radius);
+    ScriptNavCache* cache = w.try_resource<ScriptNavCache>();
+    if (!cache) {
+        w.set_resource(ScriptNavCache{});
+        cache = w.try_resource<ScriptNavCache>();
+    }
+    if (!cache->valid || cache->key != h.value()) {
+        const f32 margin = cell * 4.0f + radius;
+        const math::vec2 lo = bounds.min - math::vec2(margin), hi = bounds.max + math::vec2(margin);
+        const f64 cols = std::ceil(static_cast<f64>(hi.x - lo.x) / static_cast<f64>(cell));
+        const f64 rows = std::ceil(static_cast<f64>(hi.y - lo.y) / static_cast<f64>(cell));
+        if (cols * rows > 4.0e6) luaL_error(L, "mce.find_path: the level needs a %.0f x %.0f grid at cell %g; raise 'cell'", cols, rows, static_cast<double>(cell));
+        cache->grid = kit::NavGrid(static_cast<u32>(cols), static_cast<u32>(rows), cell, lo, 1);
+        kit::mark_static_colliders(cache->grid, w, radius);
+        cache->key = h.value();
+        cache->valid = true;
+    }
+    // The grid covers the walls plus a free margin. Anything outside it is open ground: walk to the
+    // nearest edge cell, and tack the real point on at that end.
+    const math::vec2 glo = cache->grid.origin();
+    const math::vec2 ghi = glo + math::vec2(static_cast<f32>(cache->grid.width()), static_cast<f32>(cache->grid.height())) * cache->grid.cell_size();
+    const f32 inset = cache->grid.cell_size() * 0.5f;
+    const auto clamp_in = [&](math::vec2 p) {
+        return math::vec2(std::min(std::max(p.x, glo.x + inset), ghi.x - inset), std::min(std::max(p.y, glo.y + inset), ghi.y - inset));
+    };
+    const math::vec2 cfrom = clamp_in(from), cto = clamp_in(to);
+    const bool from_out = cfrom.x != from.x || cfrom.y != from.y, to_out = cto.x != to.x || cto.y != to.y;
+    if (!cache->finder.find_path(cache->grid, cfrom, cto, opt, path)) {
+        lua_pop(L, 1);
+        lua_pushnil(L);
+        return 1;
+    }
+    if (from_out) path.insert(0, from);
+    if (to_out) path.push_back(to);
+    for (usize i = 0; i < path.size(); ++i) {
+        push_vec2(L, path[i]);
+        lua_rawseti(L, -2, static_cast<int>(i + 1));
+    }
+    return 1;
+}
+
 int l_velocity2d(lua_State* L) {
     physics::World2D& pw = physics2d(L);
     push_vec2(L, pw.linear_velocity(check_entity(L, 1)));
@@ -627,6 +717,7 @@ const luaL_Reg kWorldLib[] = {
     {"overlap2d", l_overlap2d},
     {"move_and_collide", l_move_and_collide},
     {"teleport2d", l_teleport2d},
+    {"find_path", l_find_path},
     {"velocity2d", l_velocity2d},
     {"set_velocity2d", l_set_velocity2d},
     {"impulse2d", l_impulse2d},
