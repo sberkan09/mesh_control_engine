@@ -113,6 +113,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | active (steps 1–2 done: `mce import aseprite`, `mce import tiled`) | steps 3–4 |
 | M-PROCGEN | [M-PROCGEN.md](milestones/M-PROCGEN.md) (Linear SBA-171 … SBA-175, added 2026-10-16) | active (not started) | steps 1–5 |
 | M-DOCCHECK | [M-DOCCHECK.md](milestones/M-DOCCHECK.md) (Linear SBA-176 … SBA-179, added 2026-10-16) | active (step 1 done: `scripts/ci/check_docs.py` in the walls stage checks relative links, anchors and `#include` lines of `mce/` headers in every document, with `scripts/ci/docs.allow`; steps 2–3 done: `mce_player` flags in documents are console variables the source declares; every sample and project has a test) | step 4 |
+| M-WORKFLOW | [M-WORKFLOW.md](milestones/M-WORKFLOW.md) (Linear SBA-180 … SBA-184, added 2026-10-16) | planned | steps 1–5 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -609,6 +610,20 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Demo:** the walls stage fails on a seeded broken link, flag and untested sample, and passes on the repo.
 **Gates:** `local_ci.sh` green on every step; each allow-list only shrinks.
+
+### M-WORKFLOW — What blind test 3 found in agent authoring · **size S–M (rough guess, ≈ 30–50 h engineering)** · tier: off-tier, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free. Blind test 3 (three agents building Lantern Keep over MCP from the SDK) filed GitHub #377 to #383. The ones that are bugs or workflow holes in code we own, and not content or another milestone's track (#382 Luau and UiFlow belong to M-SCRIPT and M-UI-DATA2, #383 to M-VISUAL2, M-PERF and M-AUDIO2), are this milestone.*
+
+**Builds, in order:**
+1. **#377, Opus.** A `NavAgent3D` on a `CharacterController3D` with the default `acceleration` follows its path at about 7% of its speed. Find the cause, make the agent reach its configured speed, pin it with a 20 m test; existing replay hashes unchanged.
+2. **#378.** `scene_open` with `force` re-reads the file; `scene_save` refuses when the file changed on disk since it was opened (naming the entities it would drop; `overwrite` to force); deleting an entity others reference reports the links that become null; `project_check` lists null links.
+3. **#379.** The cook error for a file without a sidecar names `cook_run {"adopt":true}`; `cook_run` takes `paths` and `skip_errors`; `mce play` and `mce headless` warn when the pack is older than the assets; an unknown component names the module to rebuild.
+4. **#380.** `mce play -capture` without a display falls back to the offscreen driver and software GL; `-capture_tick N`; the save folder and its override documented and printed.
+5. **#381 and the close.** The document errors #381 lists are fixed; an MCP transcript test in which two servers edit one scene and neither loses work; the milestone record; batch CI.
+
+**Demo:** the Lantern Keep failures replayed as tests: a sentry crossing 20 m at its speed, two MCP servers saving one scene without losing an entity, a project with one bad file cooking the rest.
+**Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
