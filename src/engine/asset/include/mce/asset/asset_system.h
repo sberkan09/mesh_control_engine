@@ -53,6 +53,10 @@ struct MountOptions {
     // Dev mounts verify every container's payload CRC on load. A shipped pack is verified once at
     // mount and trusted afterwards (assets.md §3, the < 1 s boot budget).
     bool verify_payload_crc = true;
+    // Script chunks are Luau *bytecode*, and Luau's loader trusts its input (M-FUZZ finding): only the
+    // game's own cooked content may carry it. A root mounted with allow_code = false (a mod pack) has its
+    // Script entries dropped at mount time with a warning, so they neither load nor override the game's.
+    bool allow_code = true;
 };
 
 class AssetSystem {

@@ -962,7 +962,9 @@ private:
         for (usize i = found.mods.size(); i-- > 0;) {
             const asset::ModEntry& m = found.mods[i];
             const StringView root[1] = {m.path.view()};
-            if (Result<void> r = assets_.mount(Span<const StringView>(root, 1)); !r) {
+            asset::MountOptions mod_opt;
+            mod_opt.allow_code = false;  // a mod is data: no bytecode (M-SCRIPT2 0)
+            if (Result<void> r = assets_.mount(Span<const StringView>(root, 1), mod_opt); !r) {
                 FixedString<512> msg;
                 format_error(r.error(), msg);
                 MCE_LOG_WARN("{}: mod skipped: {} (cannot mount: {})", desc_.app_name, m.path.view(), msg.view());

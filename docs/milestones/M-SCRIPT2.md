@@ -47,3 +47,24 @@ against the definitions, so one cannot be added without the other); `local_ci.sh
 - Points outside the grid are open ground: the search runs from the nearest edge cell and the real point is added at that end.
 - Line of sight needs no new call: `mce.raycast2d` / `circle_cast2d` already answer it, and `smooth = true` already drops the waypoints
   a straight walk does not need.
+
+## Step 0: the bytecode trust boundary (SBA-198)
+
+**Finding (M-FUZZ 3):** `luau_load` / `ScriptHost::add_bytecode` do not survive hostile bytecode (debug: `lvmload.cpp:691` assert;
+release: out-of-bounds constant read). The pack CRC only detects corruption.
+
+**Decision (coordinator):** no verifier of our own (upstream Luau treats bytecode as trusted too). Bytecode is trusted only when
+the game's own build cooked it.
+
+**Design.**
+- `asset::MountOptions::allow_code` (default true). A root mounted with `allow_code = false` has its `Script` manifest entries
+  dropped at mount, with a warning: they neither load nor override the game's script of the same GUID.
+- The player mounts mod packs with `allow_code = false` (mods are data, ADR-0034). The game pack and dev cooked directories
+  keep the default.
+- `add_bytecode` documents that it trusts its input; `compile()` / `add_source` is the path for anything else.
+- Not done on purpose: compiling user or mod *source* at load time. The shipped player has no compiler by design
+  (`player_no_luau_compiler`), so a mod that wants scripts needs that decision first (a separate milestone).
+
+**Test:** `tests/asset/test_mods.cpp` "a mod pack cannot carry script bytecode": a mod's new and overriding Script entries never
+enter the table. The `MCE_FUZZ_BYTECODE=1` case calls `add_bytecode` directly (a trusted caller) and stays opt-in; the
+mutated-bytecode route that matters in the product is now closed before it reaches `luau_load`.
