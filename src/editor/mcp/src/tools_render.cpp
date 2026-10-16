@@ -453,13 +453,9 @@ bool ui_preview(ToolCall& c) {
     rq.width = 960;
     rq.height = 540;
     if (!need_project(c) || !arg_size(c, "width", "height", rq.width, rq.height)) return false;
-    const editor::ProjectAsset* doc = nullptr;
+    UiDocRef doc;  // by value: the cook inside render_ticks rescans the project and frees its records
     if (!ui_document_arg(c, doc)) return false;
-    rq.ui_preview = cook::String(asset::to_string(doc->guid).view());
-    // The cook inside render_ticks rescans the project and frees `doc`: keep what the reply echoes.
-    const cook::String doc_path(doc->path.view());
-    const asset::Guid doc_guid = doc->guid;
-    doc = nullptr;
+    rq.ui_preview = cook::String(asset::to_string(doc.guid).view());
     const Server::SceneFile& file = c.server.scene_file();
     if (!file.rel.empty() && !scene(c).dirty()) {
         rq.scene_rel = cook::String(file.rel.view());
@@ -504,7 +500,7 @@ bool ui_preview(ToolCall& c) {
     draw_safe_area(img, rq);
     c.out.begin_object();
     if (!save.empty()) c.out.key("saved").str(save);
-    c.out.key("document").str(doc_path.view()).key("guid").str(asset_guid_ref(doc_guid).view());
+    c.out.key("document").str(doc.path.view()).key("guid").str(asset_guid_ref(doc.guid).view());
     write_result_head(c, rq, software);
     c.out.end_object();
     return attach_image(c, img);
