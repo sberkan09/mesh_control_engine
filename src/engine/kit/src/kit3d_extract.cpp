@@ -586,6 +586,8 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     ssr.max_roughness = env.ssr_max_roughness;
     ssr.roughness_fade = env.ssr_roughness_fade;
     ssr.intensity = env.ssr_intensity;
+    ssr.steps = env.ssr_steps;
+    ssr.edge_fade = env.ssr_edge_fade;
     render::apply_quality(quality_, ssr);
     scene.set_reflections(ssr);
     render::ContactShadows contact;
@@ -593,6 +595,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     contact.length = env.contact_length;
     contact.thickness = env.contact_thickness;
     contact.intensity = env.contact_intensity;
+    contact.steps = env.contact_steps;
     render::apply_quality(quality_, contact);
     scene.set_contact_shadows(contact);
     render::ShadowSettings shadows;

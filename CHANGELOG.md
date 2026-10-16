@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- M-VISUAL2 is done (step 5, SBA-105). `Environment3D` gains `ssr_steps`, `ssr_edge_fade` and
+  `contact_steps`, and MCP's Material schema lists the clear coat, sheen, anisotropy, transmission and ior
+  keys. `samples/06_showcase` shows reflections, contact shadows, sharpening, glass, lacquer and brushed
+  metal on its High profile, and `-profile highbase` draws High without them for the on/off sheet in the
+  milestone record.
 - Behavior tree stock tasks and aborts, M-AI step 2 (SBA-129): trees reach the kit with no code. `move_to` walks
   a `NavAgent3D` or a `PathAgent` to a vec3 key or after an entity key, `look_at` turns the entity, `animate`
   plays a sprite or Animator clip (and can wait for it), `play_sound`, `spawn`, `raise` and `wait_event` (which
