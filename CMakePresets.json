@@ -33,6 +33,7 @@
       "name": "linux-base",
       "hidden": true,
       "inherits": "base",
+      "cacheVariables": { "CMAKE_C_FLAGS": "-gz", "CMAKE_CXX_FLAGS": "-gz" },
       "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }
     },
     { "name": "linux-gcc-debug",     "inherits": "linux-base", "cacheVariables": { "CMAKE_CXX_COMPILER": "g++",     "CMAKE_C_COMPILER": "gcc",   "CMAKE_BUILD_TYPE": "Debug" } },
