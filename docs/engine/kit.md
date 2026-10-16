@@ -116,7 +116,7 @@ out. `install_sensors3d` (from `install_stock`, after `install_bodies3d`): `"kit
 `ContactBegin`); `SfxTrigger` (a `PlaySfx` with dB jitter, `audio::AudioBus`), `ParticleBurst`,
 `ShakeTrigger`, `CameraShake2D` (added to the view by `primary_camera`), `CameraFollow2D` (offset,
 dead zone, smoothing, look-ahead, bounds), `CameraFollow3D` (orbit with yaw/pitch, Look-input
-orbit), `PhysicsEvents` (engine-written last 2D trigger/contact pairs and counts), `NavGridSource`
+orbit; M-MOVE3D 2: a spring arm over `World3D::camera_sweep`, look-ahead, first person, lock-on), `PhysicsEvents` (engine-written last 2D trigger/contact pairs and counts), `NavGridSource`
 (the `NavGrid` from a tilemap layer and/or static colliders; automatic from colliders when absent).
 `install_effects(world, assets)`: `"kit_nav_grid"` (`FixedUpdate_Pre`, before `"path_agents"`,
 which it installs), `"kit_effects"` and `"kit_camera_follow"` (`FixedUpdate_Post`).
