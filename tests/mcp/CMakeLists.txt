@@ -138,3 +138,16 @@ mce_add_test(test_mcp_team UMBRELLA
 target_include_directories(test_mcp_team PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset ${PROJECT_SOURCE_DIR}/src/editor/mcp/src)
 target_compile_definitions(test_mcp_team PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_team"
     MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
+# M-HARDEN step 3 (SBA-197): the whole MCP set runs in the ASan stage (linux-asan builds the editor and
+# runs every non-slow test; the GPU suites are the only ones it skips: MCE_GPU_TESTS is OFF there).
+# UBSan only prints by default and mcp_transcript's children would swallow that, so make it fatal:
+# a report then fails the test (and the transcript runner checks every server's exit code).
+if(MCE_ASAN AND NOT MSVC)
+    foreach(t test_mcp mcp_transcript test_mcp_agent test_mcp_agent_gpu test_mcp_playtest test_mcp_docs
+              test_mcp_content test_mcp_gameplay3d test_mcp_check test_mcp_team)
+        if(TEST ${t})
+            set_property(TEST ${t} APPEND PROPERTY ENVIRONMENT "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
+        endif()
+    endforeach()
+endif()

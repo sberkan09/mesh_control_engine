@@ -104,7 +104,7 @@ def run_multi(exe, transcript, work, update):
             if step["server"] not in procs:
                 procs[step["server"]] = subprocess.Popen(
                     [str(exe), "--project", str(project), "--docs", str(work / "no_docs")],
-                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)  # stderr inherited: a sanitizer report shows in the ctest log
                 bufs[step["server"]] = bytearray()
         for n, step in enumerate(steps, 1):
             srv, msg = step["server"], step["msg"]
