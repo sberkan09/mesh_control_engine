@@ -51,6 +51,33 @@ struct VoiceRT {
     bool ending = false;  // fading out; ends when the ramp completes
 };
 
+// A post-fader send level, ramped like a bus gain (M-AUDIO2 3).
+struct SendRamp {
+    f32 cur = 0.f, target = 0.f, inc = 0.f;
+    u32 left = 0;
+    void set(f32 t) {
+        target = t;
+        left = kRampFrames;
+        inc = (target - cur) / static_cast<f32>(kRampFrames);
+    }
+    f32 next() {
+        const f32 v = cur;
+        if (left) {
+            cur += inc;
+            if (--left == 0) cur = target;
+        }
+        return v;
+    }
+    bool silent() const { return cur == 0.f && left == 0; }
+};
+
+// A bus low-pass or high-pass that glides to its target cutoff (M-AUDIO2 3).
+struct BusFilterRT {
+    SvfRT q;
+    f32 cur_hz = 0.f, target_hz = 0.f;  // 0 = off (gliding to the band's open end)
+    u32 fade_in = 0;  // frames into the dry-to-filtered crossfade of a band just switched on
+};
+
 class Mixer {
 public:
     Mixer(RingBuffer<AudioCommand>& commands, RingBuffer<AudioReply>& replies, StreamRing* const* streams);
@@ -81,7 +108,8 @@ private:
     // Mixes `frames` of `v` into `dst` (stereo interleaved); ends the voice when it finishes.
     void mix_voice(VoiceRT& v, f32* dst, u32 frames);
     void promote_virtual();
-    // Sums bus `b` (EQ'd) into its parent with b's ramped gain.
+    // Sums bus `b` (filtered, EQ'd) into its parent with b's ramped gain, and into the reverb
+    // inputs it sends to.
     void fold_bus(u32 b, u32 frames);
     void publish_stats(f32 peak, f32 limiter_gain);
 
@@ -101,11 +129,15 @@ private:
         f32 cur = 1.f, target = 1.f, inc = 0.f;
         u32 ramp_left = 0;
         u8 parent = Bus_Master;
+        BusFilterRT highpass, lowpass;
         BiquadRT eq[kEqBands];
+        SendRamp send[kReverbUnits];
     } bus_[kBusCount];
     LimiterRT limiter_;
+    ReverbRT reverb_[kReverbUnits];
 
     f32 bus_buf_[kBusCount][kBlockFrames * kChannels];
+    f32 reverb_buf_[kReverbUnits][kBlockFrames * kChannels];
     Atomics stats_;
 };
 
