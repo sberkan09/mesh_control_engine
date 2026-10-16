@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- `perf_run` and `perf_compare` over MCP, M-PERF step 3 (SBA-115). `perf_run` measures a scene with the real player,
+  one sim tick per frame, so its counters repeat run to run. It judges the result against a target's budget, with
+  advice for each limit it is over. It also returns frame, sim, render and GPU times, draws, triangles and sprites,
+  the slowest systems, the GPU stages and spike frames, and it keeps the `.mcperf` capture. `perf_compare` compares
+  two captures (by default the last two runs) and says what got better or worse. User guide 14.
 - Steam game services, M-STEAM step 2 (SBA-107): while Steam runs, it is the desktop game services backend, so
   `GameServices` unlocks, progress, scores and cloud saves reach Steam achievements, leaderboards (found once,
   uploaded keep-best) and Steam Cloud files. `.mcservices` entries take an optional `steam` name (the catalog id
