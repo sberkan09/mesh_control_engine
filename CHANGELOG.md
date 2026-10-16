@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Behavior trees, M-AI step 1 (SBA-128, ADR-0045): `.mcbt` files describe an AI's decisions as data (sequence,
+  selector, parallel, invert, succeed, fail, repeat, retry, cooldown, timeout, guard, check, wait, set, emit and
+  task nodes) over typed blackboard keys, and cook to `CHNK_BT` with errors at file:line:col. An `AiBrain`
+  component runs one per entity every fixed tick, and a `Blackboard` component holds the keys. All run state is in
+  the two components, so trees are deterministic, hashed, replayed and saved. Games register tasks by name
+  (`kit::BtRegistry::register_task`) and read and write keys by name (`kit::bb_*`). User guide 13.8.
 - Sound sets and pitch, M-AUDIO2 step 2 (SBA-119). A `.mcsound` names several clips and picks one per play (random
   with no immediate repeat, or in sequence) with a pitch and gain range; it is an Sfx asset, so `AudioSource`,
   `SfxTrigger`, `PlaySfx`, sequences and timelines take it as they are. Picks come from the tick, so replays repeat.

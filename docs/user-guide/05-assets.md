@@ -26,6 +26,7 @@ formats, which is what keeps the shipped game small and safe.
 | Sound set | `.mcsound` | clips picked per play, pitch and gain ranges (an Sfx asset) | anywhere a sound goes (chapter 10.3) |
 | Sequence | `.mcseq` | an action list | `SequencePlayer` |
 | Timeline | `.mctimeline` | keyed tracks: transforms, properties, cuts, cues, subtitles | `TimelinePlayer` (chapter 13.5) |
+| Behavior tree | `.mcbt` | an AI's decisions: composites, decorators, conditions, tasks, typed blackboard keys | `AiBrain` (chapter 13.8) |
 | Input map | `.mcinput` | action maps and bindings | the player's input (chapter 11) |
 | UI document | `.mcui` | a widget tree: anchors, per-state styles, layouts, the skin by reference | `ui::build_document` (chapter 12.2) |
 | Shader | `.vert.glsl`, `.frag.glsl`, `.comp.glsl` | validated GLSL, variants, SPIR-V reflection | custom shaders (not yet reachable from a project) |

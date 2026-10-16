@@ -2,7 +2,7 @@
 
 Engine facilities that save you from writing the same gameplay plumbing: scripted action lists for
 timed events, keyed timelines for cutscenes (13.5), a validated finite-state-machine helper for AI,
-and save games and replays built on reflection.
+behavior trees for AI as data (13.8), and save games and replays built on reflection.
 
 ## 13.1 Sequences
 
@@ -305,3 +305,86 @@ plays the same on every run. The pictures are decoded each frame for what is sho
 `video` track plays a film as one beat of a cutscene (13.5): skipping or scrubbing the cutscene shows
 the right frame. To leave a splash when it ends, watch `finished` in a sequence or your own system.
 
+
+## 13.8 Behavior trees
+
+A behavior tree (`.mcbt`) decides what an enemy or an NPC does next, as data. An `AiBrain` component
+runs one on its entity every fixed tick, and a `Blackboard` component holds the values the tree reads
+and writes. Behavior trees are the next step up from a state machine (13.2): a tree reads as a plan,
+and a designer or an agent can change it without touching code.
+
+```json
+{ "format": "mce-bt", "version": 1, "guid": "<uuid>", "name": "guard",
+  "blackboard": { "alert": {"type": "bool", "default": false}, "alarms": {"type": "int", "default": 0},
+                  "target": "entity" },
+  "root": {"selector": [
+    {"sequence": [{"check": "alert", "value": true}, {"emit": "alarm"}, {"set": "alarms", "add": 1},
+                  {"set": "alert", "value": false}], "name": "alarm"},
+    {"sequence": [{"wait": 2}, {"task": "step_patrol"}], "name": "patrol"}
+  ]} }
+```
+
+```json
+"Guard": { "SaveKey": { "key": 7 }, "LocalTransform": {}, "AiBrain": { "tree": "guid:<guard.mcbt>" } }
+```
+
+Every node is an object with exactly one kind key, plus that kind's options and an optional `name`
+that the debugger shows:
+
+| Node | Does |
+|---|---|
+| `sequence: [..]` | runs its children in order; fails at the first failure, succeeds when all have |
+| `selector: [..]` | runs its children in order; succeeds at the first success, fails when all have |
+| `parallel: [..]`, `policy` | runs every child each tick. `"all"` (the default) succeeds when all have and fails at the first failure; `"one"` succeeds at the first success |
+| `invert`, `succeed`, `fail: node` | flips the child's result, or forces it once the child finishes |
+| `repeat`, `retry: node`, `count` | runs the child again after each success (repeat) or failure (retry), `count` times in all; 0 means forever |
+| `cooldown: node`, `seconds` | after the child finishes, fails without running it for `seconds` |
+| `timeout: node`, `seconds` | fails, and stops the child, when it runs longer than `seconds` |
+| `guard: node`, `key`, `op`, `value` | runs the child only when the condition holds as it starts |
+| `check: key`, `op`, `value` | the condition as a result. Ops are `is_set`, `not_set`, `==`, `!=`, `<`, `<=`, `>` and `>=`; the default is `==` with a `value`, else `is_set` |
+| `wait: seconds` | runs that long, then succeeds |
+| `set: key` with `value`, `add`, `clear: true` or `from: key` | writes the key, then succeeds. An entity key's value is `"self"` |
+| `emit: signal` | raises a `kit::BtSignal`, readable on the next tick |
+| `task: name`, `key`, `value`, `vector` | a function your game registers by name |
+
+Keys are `bool`, `int`, `float`, `vec3` or `entity`, with an optional `default`. A tree has at most 16
+bool, int and float keys, 8 vec3 keys and 8 entity keys. Only numbers compare; a vec3 or entity key
+tests `is_set`, and an entity key that names a destroyed entity counts as unset. From game code, read
+and write keys by name:
+
+```cpp
+kit::bb_set_entity(world, guard, "target", player);
+f32 alarms = 0;
+if (kit::bb_number(world, guard, "alarms", alarms)) { ... }
+```
+
+Tasks are the code hook. A task gets the entity, its blackboard, the node's arguments and a float of
+memory of its own. It returns `Running` until it is done, and it is called once more with `halting`
+set when a parent stops it early:
+
+```cpp
+BtStatus step_patrol(kit::BtTaskCall& t) {
+    if (t.entering) t.memory = 0;  // the waypoint index lives in the node's memory
+    ...
+    return arrived ? BtStatus::Success : BtStatus::Running;
+}
+world.resource<kit::BtRegistry>().register_task("step_patrol", &step_patrol);
+```
+
+How a tree runs:
+- A running node carries on next tick where it was. A sequence or selector resumes at its running
+  child and does not look at the earlier ones again until the tree starts over. In the guard above,
+  an alert raised mid-patrol is noticed when the patrol finishes.
+- When the root finishes, `AiBrain.result` and `runs` record it, and the tree starts again on the
+  next tick. Repeat and retry also restart their child on the next tick, so a tree never loops
+  within one tick.
+- Timing is tick math, as with sequences: `wait` 0.5 s completes on its 30th tick at 60 Hz.
+- `AiBrain.active` off pauses the tree where it is; `restart` starts it again from scratch.
+- A brain whose entity has no `Blackboard` gets one on its first tick and starts on the next. Key
+  defaults are written when the brain starts, unless the key is already set.
+
+Everything a tree knows is in `AiBrain` and `Blackboard`. Trees are deterministic, they are in the
+state hash and in replays, and a save (give the entity a `SaveKey`) resumes them on the same node.
+`BtRegistry::validate_tasks()` names a task that a loaded tree uses but your game never registered;
+such a node fails and is logged once. The design is ADR-0045. Perception, stock movement tasks,
+utility choices and the editor's tree panel come in the next steps of M-AI.
