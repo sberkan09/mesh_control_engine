@@ -3,7 +3,9 @@
 // focus into view), 9-slice images, modals and tabs, and the reflected authoring structs. CPU only;
 // test_ui_gl draws the same layouts at three screen sizes.
 
+#include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include <doctest/doctest.h>
 
@@ -361,6 +363,49 @@ TEST_CASE("layout: a 9-sliced image keeps its corners and stretches the rest") {
     draw(1.0f, v);
     CHECK(v.size() == 6 * 4);
     CHECK(v[1].x == doctest::Approx(7.5f));
+}
+
+TEST_CASE("layout: set_image_texture shows another sprite set in an image widget (M-VIEWS 3)") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    b.image("minimap", f.frame_region).anchors(Anchors{{0, 0}, {0, 0}, {0, 0}, {100, 100}});
+    b.image("other", f.frame_region).anchors(Anchors{{0, 0}, {0, 0}, {200, 0}, {300, 100}});
+    // A render texture's set: one upright region over the whole texture (top row at v = 1).
+    const render::SpriteRegion whole{0, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f};
+    render::SpriteSetDesc rd;
+    rd.regions = Span<const render::SpriteRegion>(&whole, 1);
+    const render::SpriteSetId rt = f.sets.create(rd);
+    // The u range of the image whose left edge is at `x` (quads may sort by set, not by widget).
+    auto u_range = [&](f32 x) {
+        d.update(frame());
+        render::SpriteBatch batch(f.sets, mem::heap());
+        batch.begin(render::compute_screen_view(rhi::Extent2D{1280, 720}), render::PassId::Screen2D);
+        d.submit(batch);
+        batch.build();
+        const Span<const render::SpriteVertex> v = batch.vertices();
+        REQUIRE(v.size() == 8);
+        for (usize q = 0; q < 2; ++q) {
+            f32 min_x = 1e9f, lo = 2.0f, hi = -1.0f;
+            for (usize i = q * 4; i < q * 4 + 4; ++i) {
+                min_x = std::min(min_x, v[i].x);
+                lo = std::min(lo, v[i].u);
+                hi = std::max(hi, v[i].u);
+            }
+            if (min_x == x) return std::pair<f32, f32>{lo, hi};
+        }
+        FAIL("no image at x " << x);
+        return std::pair<f32, f32>{};
+    };
+    CHECK(u_range(0.0f).first == doctest::Approx(0.5f));  // the skin's region (u 0.5 .. 0.8)
+    CHECK(d.set_image_texture("minimap", rt) == 1);
+    CHECK(d.set_image_texture("missing", rt) == 0);
+    CHECK(u_range(0.0f).first == doctest::Approx(0.0f));  // the whole texture
+    CHECK(u_range(0.0f).second == doctest::Approx(1.0f));
+    CHECK(u_range(200.0f).first == doctest::Approx(0.5f));  // the other image keeps the skin
+    CHECK(d.set_image_texture("minimap", {}) == 1);
+    CHECK(u_range(0.0f).first == doctest::Approx(0.5f));
 }
 
 TEST_CASE("layout: a modal keeps focus, navigation and the pointer until it closes") {
