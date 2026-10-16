@@ -98,6 +98,7 @@ private:
     static void interrupt_fn(lua_State* L, int gc);
     void fail(u32 index, const char* message);
     void run_scripts(Frame& f, bool all, u8 group);
+    static void crash_context(void* user, void (*put)(void* sink, const char* text), void* sink);
 
     lua_State* L_ = nullptr;
     ScriptBudget budget_;
@@ -122,6 +123,7 @@ private:
     u32 current_ = 0;
     u32 steps_ = 0;
     u32 random_calls_ = 0;
+    bool in_update_ = false;  // a script's update() is on the stack (the crash report writes its stack)
 };
 
 }  // namespace mce::script

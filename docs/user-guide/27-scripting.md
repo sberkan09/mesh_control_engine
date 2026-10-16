@@ -145,12 +145,57 @@ map does not define reads as not pressed and zero.
 - **Keys with a stable order.** Iterating a table keyed by tables or functions follows their addresses,
   which differ between runs. The cook rejects such keys where the source shows them (`{[{}] = 1}`,
   `seen[f] = true` with `local function f`), and `pairs` and `next` raise when they meet one at run time.
-  Key by entity, number or string. One gap remains until type checking arrives (M-SCRIPT step 4): a
-  plain `for k, v in t do` loop over such a table is not caught.
+  Key by entity, number or string. One gap remains: a plain `for k, v in t do` loop over such a table
+  is not caught (Luau runs that loop inside the VM, and the type check does not track key types).
 - **A sandbox.** Only the `table`, `string`, `math`, `utf8`, `bit32`, `buffer` and `vector` libraries
-  are there; `os`, `io`, `debug`, `coroutine`, `print` and `math.random` are not.
+  are there; `os`, `io`, `debug`, `coroutine`, `print` and `math.random` are not, and the cook says what
+  to use instead (`'print' is not available in scripts; use mce.log`).
 - **Budgets.** Each script gets a step budget per tick and the VM a memory cap. A script that errors or
   runs over is disabled, its error logged as `script <name>: <file>:<line>: message`, and the other
   scripts keep running.
 - **Deterministic.** The same scene and input give the same state hash on every run, in Debug and
   Release.
+
+## 27.5 Checks before the game runs
+
+The cook checks every script before it compiles it, and reports every problem it finds, each at
+`file:line:col`:
+
+- **Names.** A component, event or field a script spells out (`mce.field("Mover", "velocity")`,
+  `mce.each("Mover", ...)`, `mce.has`, `mce.add`, `mce.remove`, `mce.spawn`, `mce.events`, `mce.emit`, and
+  the keys of the tables passed to them) must exist in the engine's registry. A typo comes with the closest
+  name:
+
+  ```
+  assets/scripts/mover.luau:1:21: error: unknown component 'Movr' (did you mean 'Mover'?) [cook.script]
+  assets/scripts/mover.luau:2:30: error: 'Mover' has no field 'velocty' (did you mean 'velocity'?) [cook.script]
+  ```
+
+  A name built at run time (`mce.get(e, kind, "hp")`) is checked when that line runs instead.
+- **Types.** Luau's type checker runs against the `mce` API: a misspelt function (`mce.spwan`), a missing
+  argument or an unknown global is an error. Scripts are checked in Luau's nonstrict mode; a first line
+  `--!strict` asks for strict typing of that script.
+
+The API the scripts are checked against is written to `cooked/mce.d.luau` whenever the project has
+scripts: every `mce` function with its signature, the `ComponentName` and `EventName` unions, and each
+component's and event's fields. Point an editor's Luau language server (luau-lsp) at it as a definitions
+file to get completion and the same type errors while you type.
+
+An agent checks a script without cooking with the MCP tool `script_check` (`path` of a `.luau` under
+`assets/`, or the `source` text; `definitions: true` also returns `mce.d.luau`). It returns
+`{ok, problems: [{line, col, message}]}`. When a script fails while the game runs, `run_headless` and
+`test_run` return it under `script_errors` (`{script, error}` with `file:line`), and a test with a failed
+script does not pass.
+
+## 27.6 While you work
+
+- **Hot reload.** Edit a `.luau` file while the game plays in the editor: the editor recooks it and the
+  next tick runs the new code. Scripts keep no state between ticks, so nothing is lost, and a script
+  that had failed runs again once the fix cooks.
+- **Errors in the editor.** A script error in the Console or the Cook panel names the script and line.
+  Double-click the Console line to open the script in the system's editor (the `scripts/x.luau:3` text
+  is copied for its "go to line"); the Cook panel's context menu has "Open script".
+- **Profiler.** In a Tracy build each script's `update()` has its own zone, named after the script.
+- **Crash reports.** When the game crashes while a script runs, the `.crash` report has a `context:` section
+  with the script's name and its Luau call stack (`at scripts/spin.luau:2 in spin`).
+

@@ -11,6 +11,7 @@ mce_add_test(test_kit UMBRELLA
         test_ai_perception.cpp
         test_ai_utility.cpp
         test_ai_budget.cpp
+        test_audio_occlusion.cpp
         test_bodies3d.cpp
         test_move3d.cpp
         test_captions.cpp
@@ -30,6 +31,7 @@ mce_add_test(test_kit UMBRELLA
         test_sequence.cpp
         test_skeleton2d.cpp
         test_skeleton2d_anim.cpp
+        test_skeleton2d_ik.cpp
         test_skeleton2d_mesh.cpp
         test_sprite_anim.cpp
         test_timeline.cpp

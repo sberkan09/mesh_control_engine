@@ -119,10 +119,16 @@ void skeleton2d_slots_setup(const Skeleton2DRegistry::Def& def, Skeleton2DSlots&
 
 void skeleton2d_draws(const Skeleton2DRegistry::Def& def, const Skeleton2D& sk, const Skeleton2DSlots* slots,
                       const Skeleton2DDeform* deform, const Bone2DTransform& entity, Skeleton2DDraws& out) {
+    skeleton2d_draws(def, sk, slots, deform, nullptr, nullptr, entity, out);
+}
+
+void skeleton2d_draws(const Skeleton2DRegistry::Def& def, const Skeleton2D& sk, const Skeleton2DSlots* slots,
+                      const Skeleton2DDeform* deform, const Skeleton2DIK* ik, const Skeleton2DIKTargets* targets,
+                      const Bone2DTransform& entity, Skeleton2DDraws& out) {
     if (!sk.visible) return;
     Bone2DTransform world[kSkeleton2DBones];
-    skeleton2d_pose_offsets(def.bones.span(), Span<const Bone2DPose>(sk.pose, kSkeleton2DBones),
-                            Span<Bone2DTransform>(world, kSkeleton2DBones));
+    skeleton2d_solve_pose(def, Span<const Bone2DPose>(sk.pose, kSkeleton2DBones), ik, targets,
+                          Span<Bone2DTransform>(world, kSkeleton2DBones));
     // Flips mirror the skeleton about the entity's origin.
     const Bone2DTransform placed =
         entity * Bone2DTransform::trs({}, 0.0f, {sk.flip_x ? -1.0f : 1.0f, sk.flip_y ? -1.0f : 1.0f});
@@ -260,6 +266,8 @@ Result<void> copy_def(Skeleton2DRegistry::Def& d, asset::Guid guid, Span<const b
     d.slot_keys.clear();
     d.values.clear();
     d.slot_timelines = false;
+    d.ik.clear();
+    d.ik_timelines = false;
     for (const asset::Skeleton2DBone& b : v.bones) d.bones.push_back(b);
     for (const asset::Skeleton2DSlot& s : v.slots) d.slots.push_back(s);
     for (const asset::Skeleton2DAnimation& a : v.animations) {
@@ -269,7 +277,9 @@ Result<void> copy_def(Skeleton2DRegistry::Def& d, asset::Guid guid, Span<const b
     for (const asset::Skeleton2DTimeline& t : v.timelines) {
         d.timelines.push_back(t);
         d.slot_timelines |= t.channel == asset::Skeleton2DChannel::Color || t.channel == asset::Skeleton2DChannel::Attachment;
+        d.ik_timelines |= t.channel == asset::Skeleton2DChannel::IKMix;
     }
+    for (const asset::Skeleton2DIKConstraint& c : v.ik) d.ik.push_back(c);
     for (const asset::Skeleton2DKey& k : v.keys) d.keys.push_back(k);
     for (const asset::Skeleton2DEvent& e : v.events) d.events.push_back(e);
     for (const asset::Skeleton2DAttachment& a : v.attachments) d.attachments.push_back(a);
@@ -377,14 +387,43 @@ bool placement_2d(World& w, Entity e, Bone2DTransform& out) {
 void kit_skeleton2d(Frame& f) {
     Skeleton2DRegistry* reg = f.try_resource<Skeleton2DRegistry>();
     if (!reg) return;
-    f.query<Skeleton2D>().each([&](Entity, Skeleton2D& sk) {
+    World& w = f.world();
+    // IK mix state set up from the skeleton when fresh or when its constraint count changed.
+    f.query<const Skeleton2D, Skeleton2DIK>().each([&](Entity, const Skeleton2D& sk, Skeleton2DIK& ik) {
+        const Skeleton2DRegistry::Def* def = reg->resolve(sk.skeleton.guid);
+        const u32 n = def ? static_cast<u32>(def->ik.size() < kSkeleton2DIKCount ? def->ik.size() : kSkeleton2DIKCount) : 0u;
+        if (def && n != 0 && ik.constraint_count != n) skeleton2d_ik_setup(*def, ik);
+    });
+    // IKTarget2D::found: the skeleton resolves and has the constraint (written only when it changes).
+    {
+        Array<Entity> flip;
+        f.query<const IKTarget2D>().each([&](Entity te, const IKTarget2D& t) {
+            const Skeleton2D* sk = w.alive(t.skeleton) ? w.try_get<Skeleton2D>(t.skeleton) : nullptr;
+            const Skeleton2DRegistry::Def* def = sk ? reg->resolve(sk->skeleton.guid) : nullptr;
+            const i32 ci = def ? def->find_ik(t.constraint.view()) : -1;
+            const u32 found = ci >= 0 && static_cast<u32>(ci) < kSkeleton2DIKCount ? 1u : 0u;
+            if (found != t.found) flip.push_back(te);
+        });
+        for (Entity te : flip)
+            if (IKTarget2D* t = w.try_get_mut<IKTarget2D>(te)) t->found = t->found ? 0u : 1u;
+    }
+    f.query<Skeleton2D>().each([&](Entity e, Skeleton2D& sk) {
         const Skeleton2DRegistry::Def* def = reg->resolve(sk.skeleton.guid);
         const u32 n =
             def ? static_cast<u32>(def->bones.size() < kSkeleton2DBones ? def->bones.size() : kSkeleton2DBones) : 0u;
         Bone2DTransform world[kSkeleton2DBones];
-        if (def)
-            skeleton2d_pose_offsets(def->bones.span(), Span<const Bone2DPose>(sk.pose, kSkeleton2DBones),
-                                    Span<Bone2DTransform>(world, kSkeleton2DBones));
+        if (def) {
+            // The pose, then the IK constraints (skeleton2d_solve_pose, as the extract draws it).
+            Skeleton2DIKTargets targets;
+            Skeleton2DIK scratch;
+            const Skeleton2DIK* ik = nullptr;
+            if (!def->ik.empty()) {
+                skeleton2d_ik_targets(w, e, *def, sk, targets);
+                ik = skeleton2d_ik_state(w, e, *def, *reg, scratch);
+            }
+            skeleton2d_solve_pose(*def, Span<const Bone2DPose>(sk.pose, kSkeleton2DBones), ik, &targets,
+                                  Span<Bone2DTransform>(world, kSkeleton2DBones));
+        }
         for (u32 i = n; i < kSkeleton2DBones; ++i) world[i] = Bone2DTransform{};
         sk.bone_count = n;
         std::memcpy(sk.world, world, sizeof(world));
@@ -403,7 +442,6 @@ void kit_skeleton2d(Frame& f) {
     Array<Follow> follows;
     f.query<const Bone2DFollow, const LocalTransform>().each(
         [&](Entity e, const Bone2DFollow& b, const LocalTransform&) { follows.push_back(Follow{e, b}); });
-    World& w = f.world();
     for (const Follow& fl : follows) {
         Bone2DTransform bone;
         if (!w.alive(fl.f.skeleton) || !skeleton2d_bone(w, fl.f.skeleton, fl.f.bone.view(), bone)) continue;
@@ -446,7 +484,7 @@ void install_skeleton2d(World& world, asset::AssetSystem* assets) {
         r->set_assets(assets);
         return;
     }
-    world.register_components<Skeleton2D, Bone2DFollow, Skeleton2DAnimator, Skeleton2DSlots>();
+    world.register_components<Skeleton2D, Bone2DFollow, Skeleton2DAnimator, Skeleton2DSlots, Skeleton2DIK, IKTarget2D>();
     world.register_event<AnimEvent3D>(Phase::FixedUpdate_Post);  // shared with kit3d's Animator (idempotent)
     world.set_resource(Skeleton2DRegistry(assets));
     // The animators write `pose` before the skeletons turn it into world transforms.

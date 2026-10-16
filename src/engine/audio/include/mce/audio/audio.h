@@ -235,6 +235,9 @@ public:
     void set_handle_pan(AudioHandle voice, f32 pan);  // 2D voices; a 3D voice's pan is spatial
     // Playback rate of a live voice (PlayParams::pitch); takes effect at the next block, no ramp.
     void set_handle_pitch(AudioHandle voice, f32 pitch);
+    // A low-pass on one voice (M-AUDIO2 5: occlusion): 20..20000 Hz, 0 = off. It glides like a bus
+    // filter; the voice costs a filter only while one is set. Sent only when it changes.
+    void set_handle_lowpass(AudioHandle voice, f32 cutoff_hz);
     // Moves a 3D voice; gain/pan are recomputed and sent only when they change.
     void set_handle_position(AudioHandle voice, math::vec3 position);
     // True until the mixer reports the voice finished (one-shot end, stop, steal); updated by

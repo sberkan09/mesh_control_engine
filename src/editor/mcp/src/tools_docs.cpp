@@ -431,6 +431,8 @@ constexpr Feature kFeatures[] = {
     {"audio", "varied one-shots (sound sets, pitch)", "asset", ".mcsound named as the clip; PlayParams::pitch from code"},
     {"audio", "bus filters, reverb, limiter", "data", "AudioBusEffects, AudioReverb, AudioLimiter"},
     {"audio", "ducking, mixer snapshots, a pause mix", "data", "AudioDuck, AudioSnapshot (while_paused)"},
+    {"audio", "occlusion through walls, Doppler", "data", "AudioOcclusion, AudioDoppler next to a 3D AudioSource"},
+    {"audio", "an offline render of a run", "data", "mce_player -headless 1 -audio_record run.wav"},
     {"input", "actions, bindings, touch controls", "asset", ".mcinput"},
     {"ui", "HUD and menus", "code", "mce::ui from code; .mcui is M-UI-DATA"},
     {"3D", "meshes, materials, lights, sky", "data", "the 3D kit's components, glTF, .mcmat, .mcenv"},

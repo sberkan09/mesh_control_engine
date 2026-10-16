@@ -1,6 +1,6 @@
 # M-SCRIPT — Luau scripting for games without a compiler (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–3 done, step 4 next). Plan: ROADMAP §M-SCRIPT; design of record
+**Status:** active (added 2026-10-16; steps 1–3 and 4 done, 5 next). Plan: ROADMAP §M-SCRIPT; design of record
 ADR-0041; Linear SBA-147 … SBA-152.
 
 **Why:** today every game needs a C++ toolchain and, on phones and the web, its own build. A script game is
@@ -16,7 +16,8 @@ FR-RUN-040 at about 29× the C++ cost.
 | 1 | Scripts as assets: `.luau` → `CHNK_SCRIPT`, `ScriptSystem` in scenes, the stock hosts run bytecode only | SBA-147 | done |
 | 2 | A complete API: field handles, `Commands`, events, input, resources, physics queries; bench ≤ 0.4 ms | SBA-148 | done |
 | 3 | No hidden state: an AST check for outer-local writes and `pairs` over object keys | SBA-149 | done |
-| 4 | Tooling: `mce.d.luau`, type checking, MCP `script_check`, editor errors, hot reload, Tracy, crash stacks | SBA-150 | not started |
+| 4a | Checks: `mce.d.luau`, names with "did you mean", type checking, MCP `script_check`, script errors in `run_headless` | SBA-150 | done |
+| 4b | The editor: errors that open the script, hot reload in play-in-editor, a Tracy zone per script, script stacks in crash reports | SBA-150 | done |
 | 5 | The compiler-free path: `mce new --script`, `mce ship`, phones and web | SBA-151 | not started |
 | 6 | Docs and the demo: user guide, kit recipes, Ember Step in Luau, script-only blind test | SBA-152 | not started |
 
@@ -84,7 +85,54 @@ FR-RUN-040 at about 29× the C++ cost.
   index writes, locals bound to a table or a function). At run time `pairs` and `next` are the host's and raise on
   a table, function, buffer, thread or userdata key; `pairs` starts its loop with a sentinel key so the VM's
   built-in traversal does not bypass the check. Not caught: a `for k, v in t` loop over such keys (Luau iterates
-  it inside the VM); step 4's type checking is where that closes.
+  it inside the VM). Step 4's type check does not close it either (it does not track key types), so it stays a
+  documented gap (user guide 27.4).
 - Tests: `test_script_state.cpp` (positions, every rejected form, what stays allowed, the run-time `pairs` error,
   and a fresh VM swapped in mid-run giving the same state hash as an uninterrupted run); the `player_scripts` ctest
   checks that the cook fails on hidden state at `file:line:col`.
+
+## Step 4a as built
+
+Step 4 was split: 4a is the checks every host shares, 4b the editor work.
+
+- `script::check(name, source, out)` (`mce_script_compiler`) returns every problem, sorted by position: a syntax
+  error alone, else step 3's state check, the name check and Luau's type check. `compile()` fails on the first;
+  the cook's `script` importer (version 2, so cached scripts are checked again) reports them all.
+- Names (`compiler/names_check.cpp`): string literals in `mce.field/get/set/each/has/add/remove/spawn/events/emit`
+  and the record keys of the tables passed to them are looked up in the reflection registry; a miss gets the
+  closest name by case-insensitive edit distance (reach 1–3 with the name's length). Globals the sandbox removes
+  (`print`, `os`, `io`, `debug`, `coroutine`, `require`, `collectgarbage`, `getfenv`/`setfenv`, `math.random`)
+  name what to use instead.
+- Types (`compiler/typecheck.cpp`): `Luau::Frontend` with the old solver, nonstrict by default (`--!strict` opts
+  in), against `mce.d.luau` loaded as a definition file. Luau.Analysis throws, so this one file builds with
+  exceptions and catches everything at its edge; the rest of the library stays `-fno-exceptions`.
+- `mce.d.luau` (`compiler/definitions.cpp`, `script::write_definitions`): the fixed API signatures, then
+  `ComponentName`/`EventName` unions and a field list per type from the registry, sorted, byte-identical between
+  runs. Function parameters take `string`, not the unions, so a name built at run time is not a false positive;
+  the engine's own name check catches literal typos with a suggestion. The cook writes it to
+  `cooked/mce.d.luau` when the project has scripts.
+- MCP `script_check` (`tools_script.cpp`): a file under `assets/` or source text, every problem with line and
+  col, `definitions` returns the file. `run_headless` and `test_run` return `script_errors` for scene scripts
+  that failed; a failed script fails a test.
+- Tests: `test_script_check.cpp` (positions and suggestions, removed globals, type errors, a clean script,
+  `--!strict`, syntax errors first, the compile message, `mce.d.luau` content and determinism),
+  `test_mcp_script.cpp` (`script_check`, `script_errors`, `cooked/mce.d.luau`), and the `player_scripts` ctest
+  (the cook writes `mce.d.luau` and reports two name problems in one file).
+
+## Step 4b as built
+
+- Hot reload: the editor already swaps a recooked asset in place (`commit_reload` bumps its generation) and keeps
+  playing. `scene_scripts.cpp` now mixes each script's asset generation into the signature of the loaded list, so
+  the next tick rebuilds the `ScriptHost` from the new bytecode. Scripts keep no state, so a rebuild changes none.
+  Test: `scene scripts: a script recooked while the scene runs takes effect on the next tick`.
+- Tracy: `ScriptHost::run_scripts` opens a `ZoneTransientN` named after the script (compiled out without `TRACY_ENABLE`).
+- Crash reports: `crash::add_context(fn, user)` (`mce/crash.h`) lets a subsystem add text to the report's
+  `context:` section; the host registers one that, when a script's `update()` is on the stack, writes the script
+  name and up to 12 Luau frames (`lua_getinfo` only reads). Test: `test_script_crash.cpp` aborts a child process
+  spinning in a script and reads the report.
+- Editor: `find_script_location` (`console_model.h`) reads `path.luau:line` out of a log or cook line. The Console
+  draws such lines as selectable rows: double-click opens the script in the system's default application
+  (`SDL_OpenURL`) and copies `scripts/x.luau:3`; the Cook panel's context menu has "Open script". The editor
+  has no text editor of its own, so there is no jump to the line itself. The UI part is not covered by a test
+  beyond the parser (`test_console_model.cpp`).
+

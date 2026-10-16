@@ -59,6 +59,8 @@ bool ui_preview(ToolCall& c);
 Span<const ToolDef> timeline_tool_table();
 // tools_bt.cpp (M-AI step 6): bt_create, bt_add_node, bt_set, bt_trace.
 Span<const ToolDef> bt_tool_table();
+// tools_script.cpp (M-SCRIPT 4): script_check; empty where the build has no scripting.
+Span<const ToolDef> script_tool_table();
 // prefab_tools.cpp: prefab_create_from / prefab_apply / prefab_revert.
 Span<const ToolDef> prefab_tool_table();
 // project_tools.cpp: project_get / project_set / scene_settings_get / scene_settings_set.

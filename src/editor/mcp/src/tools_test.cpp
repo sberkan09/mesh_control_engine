@@ -215,6 +215,7 @@ bool run_spec(ToolCall& c, TestSpec& t, StringView cooked, bool& passed) {
         passed = passed && cond.checked && cond.ok;
     }
     const HeadlessRun& h = run.value();
+    passed = passed && h.script_errors.empty();  // a script that failed fails the test
     c.out.key("ok").boolean(passed);
     c.out.key("ticks").num_u(h.ticks);
     c.out.key("stopped_early").boolean(sim.stopped_early);
@@ -225,6 +226,7 @@ bool run_spec(ToolCall& c, TestSpec& t, StringView cooked, bool& passed) {
     c.out.key("checks").begin_array();
     for (const Condition& cond : t.checks) write_condition(c.out, cond);
     c.out.end_array();
+    write_script_errors(c.out, h);
     if (t.has_actor) {
         c.out.key("feel");
         feel.write(c.out, h.ticks);

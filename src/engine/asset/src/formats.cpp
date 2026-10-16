@@ -676,7 +676,7 @@ Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
     if (h.bone_count == 0 || h.bone_count > kSkeleton2DMaxBones || h.slot_count > kSkeleton2DMaxSlots ||
         h.string_bytes > (1u << 20) || h.animation_count > kSkeleton2DMaxAnimations ||
         h.timeline_count > kSkeleton2DMaxTimelines || h.key_count > kSkeleton2DMaxKeys || h.event_count > kSkeleton2DMaxEvents ||
-        (h.flags & ~u32(Skeleton2DHeaderFlags::Attachments)) != 0)
+        (h.flags & ~u32(Skeleton2DHeaderFlags::Attachments | Skeleton2DHeaderFlags::IK)) != 0)
         return Error(Errc::InvalidArgument, "asset.skeleton2d.read");
     // Minor 2: the attachment header follows the header.
     Skeleton2DAttachmentHeader ah{};
@@ -690,15 +690,26 @@ Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
             ah.slot_key_count > kSkeleton2DMaxSlotKeys || ah.value_count > kSkeleton2DMaxValues)
             return Error(Errc::InvalidArgument, "asset.skeleton2d.read");
     }
-    const u64 bytes = sizeof(Skeleton2DHeader) + (attached ? sizeof(Skeleton2DAttachmentHeader) : 0u) +
+    // Minor 3: the IK header follows (after the attachment header).
+    Skeleton2DIKHeader ih{};
+    const bool has_ik = (h.flags & Skeleton2DHeaderFlags::IK) != 0;
+    const usize heads = sizeof(Skeleton2DHeader) + (attached ? sizeof(Skeleton2DAttachmentHeader) : 0u);
+    if (has_ik) {
+        if (payload.size() < heads + sizeof(Skeleton2DIKHeader)) return Error(Errc::Truncated, "asset.skeleton2d.read");
+        std::memcpy(&ih, payload.data() + heads, sizeof ih);
+        if (ih.constraint_count == 0 || ih.constraint_count > kSkeleton2DMaxIK)
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.read");
+    }
+    const u64 bytes = heads + (has_ik ? sizeof(Skeleton2DIKHeader) : 0u) +
                       u64(h.bone_count) * sizeof(Skeleton2DBone) + u64(h.slot_count) * sizeof(Skeleton2DSlot) +
                       u64(h.animation_count) * sizeof(Skeleton2DAnimation) + u64(h.timeline_count) * sizeof(Skeleton2DTimeline) +
                       u64(h.key_count) * sizeof(Skeleton2DKey) + u64(h.event_count) * sizeof(Skeleton2DEvent) +
                       u64(ah.attachment_count) * sizeof(Skeleton2DAttachment) + u64(ah.vertex_count) * sizeof(Skeleton2DVertex) +
                       u64(ah.weight_count) * sizeof(Skeleton2DWeight) + u64(ah.index_count) * sizeof(u32) +
-                      u64(ah.slot_key_count) * sizeof(Skeleton2DSlotKey) + u64(ah.value_count) * sizeof(f32) + h.string_bytes;
+                      u64(ah.slot_key_count) * sizeof(Skeleton2DSlotKey) + u64(ah.value_count) * sizeof(f32) +
+                      u64(ih.constraint_count) * sizeof(Skeleton2DIKConstraint) + h.string_bytes;
     if (bytes > payload.size()) return Error(Errc::Truncated, "asset.skeleton2d.read");
-    const byte* p = payload.data() + sizeof(Skeleton2DHeader) + (attached ? sizeof(Skeleton2DAttachmentHeader) : 0u);
+    const byte* p = payload.data() + heads + (has_ik ? sizeof(Skeleton2DIKHeader) : 0u);
     auto take = [&p](auto& span, u32 count) {
         using T = typename std::remove_reference_t<decltype(span)>::value_type;
         span = Span<const T>(reinterpret_cast<const T*>(p), count);
@@ -716,6 +727,7 @@ Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
     take(v.indices, ah.index_count);
     take(v.slot_keys, ah.slot_key_count);
     take(v.values, ah.value_count);
+    take(v.ik, ih.constraint_count);
     v.strings = Span<const char>(reinterpret_cast<const char*>(p), h.string_bytes);
     if (h.string_bytes == 0 || v.strings[h.string_bytes - 1] != '\0') return Error(Errc::InvalidArgument, "asset.skeleton2d.strings");
     auto finite = [](const f32* f, usize n) {
@@ -792,16 +804,42 @@ Result<Skeleton2DView> Skeleton2DView::read(Span<const byte> payload) {
         return c <= Skeleton2DCurve::Bezier &&
                (c != Skeleton2DCurve::Bezier || (finite(bz, 4) && bz[0] >= 0.0f && bz[0] <= 1.0f && bz[2] >= 0.0f && bz[2] <= 1.0f));
     };
+    // IK constraints: a chain of real parent-child bones, a target outside the chain and not under
+    // its first bone (it would move with the solve), sorted by order.
+    for (u32 ci = 0; ci < ih.constraint_count; ++ci) {
+        const Skeleton2DIKConstraint& c = v.ik[ci];
+        const bool two = c.kind == Skeleton2DIKKind::TwoBone;
+        if (c.name >= h.string_bytes || c.kind > Skeleton2DIKKind::CCD || c.bone >= h.bone_count ||
+            (two ? (c.bone_count != 2 || c.iterations != 0)
+                 : (c.bone_count == 0 || c.bone_count > kSkeleton2DMaxIKChain || c.iterations == 0 ||
+                    c.iterations > kSkeleton2DMaxIKIterations)) ||
+            (c.flags & ~(two ? u32(Skeleton2DIKFlags::BendNegative) : 0u)) != 0 || !std::isfinite(c.mix) || !(c.mix >= 0.0f) ||
+            !(c.mix <= 1.0f) || (ci > 0 && c.order < v.ik[ci - 1].order))
+            return Error(Errc::InvalidArgument, "asset.skeleton2d.ik");
+        u32 first = c.bone;
+        for (u32 i = 1; i < c.bone_count; ++i) {
+            if (v.bones[first].parent == kSkeleton2DNoParent) return Error(Errc::InvalidArgument, "asset.skeleton2d.ik");
+            first = v.bones[first].parent;
+        }
+        if (c.target != kSkeleton2DNoTarget) {
+            if (c.target >= h.bone_count) return Error(Errc::InvalidArgument, "asset.skeleton2d.ik");
+            for (u32 b = c.target; b != kSkeleton2DNoParent; b = v.bones[b].parent)
+                if (b == first) return Error(Errc::InvalidArgument, "asset.skeleton2d.ik");
+        }
+    }
     for (const Skeleton2DTimeline& t : v.timelines) {
-        if (t.channel > Skeleton2DChannel::Deform || t.key_count == 0)
+        if (t.channel > Skeleton2DChannel::IKMix || t.key_count == 0)
             return Error(Errc::InvalidArgument, "asset.skeleton2d.timeline");
-        if (t.channel <= Skeleton2DChannel::Scale) {
-            if (t.bone >= h.bone_count || u64(t.first_key) + t.key_count > h.key_count || t.attachment != 0)
+        const bool mix = t.channel == Skeleton2DChannel::IKMix;
+        if (t.channel <= Skeleton2DChannel::Scale || mix) {
+            if (t.bone >= (mix ? ih.constraint_count : h.bone_count) || u64(t.first_key) + t.key_count > h.key_count ||
+                t.attachment != 0)
                 return Error(Errc::InvalidArgument, "asset.skeleton2d.timeline");
             for (u32 i = 0; i < t.key_count; ++i) {
                 const Skeleton2DKey& k = v.keys[t.first_key + i];
                 if (!std::isfinite(k.t) || !(k.t >= 0.0f) || (i > 0 && !(k.t > v.keys[t.first_key + i - 1].t)) ||
-                    !finite(k.value, 2) || !curve_ok(k.curve, k.bezier))
+                    !finite(k.value, 2) || !curve_ok(k.curve, k.bezier) ||
+                    (mix && (!(k.value[0] >= 0.0f) || !(k.value[0] <= 1.0f) || k.value[1] != 0.0f)))
                     return Error(Errc::InvalidArgument, "asset.skeleton2d.key");
             }
             continue;

@@ -214,6 +214,8 @@ TEST_CASE("ui: authoring mistakes fail the cook with file and line") {
         {R"([ { "name": "a", "kind": "Button", "action": "" } ])", "action name"},
         {R"([ { "name": "a", "kind": "Text", "font_role": "Heading" } ])", "UiFontRole"},
         {R"([ { "name": "a", "kind": "Text", "text_align": "Middle" } ])", "UiTextAlign"},
+        {R"([ { "name": "a", "own_style": ["colour"] } ])", "own_style"},
+        {R"([ { "name": "a", "own_style": "tint" } ])", "own_style"},
     };
     for (const Bad& b : bad) {
         CAPTURE(b.widgets);
@@ -260,7 +262,8 @@ const char* const kThemedMenu = R"({ "format": "mce-ui", "version": 1, "guid": "
     { "name": "bg", "fill": true },
     { "name": "title", "kind": "Text", "text": "TITLE", "font_role": "Title" },
     { "name": "play", "kind": "Button", "text": "PLAY" },
-    { "name": "quit", "kind": "Button", "text": "QUIT", "style": { "tint": [0, 0, 1, 1] } } ] })";
+    { "name": "quit", "kind": "Button", "text": "QUIT", "style": { "tint": [0, 0, 1, 1] } },
+    { "name": "keep", "kind": "Button", "text": "KEEP", "own_style": ["tint", "text_size"] } ] })";
 
 struct ThemeProject {
     std::string root;
@@ -331,6 +334,19 @@ TEST_CASE("ui theme: .mcuitheme cooks; a theme restyles what a document leaves a
     CHECK(d.widgets[d.find("quit")].styles[kNormal].tint.b == 1.0f);  // the document's own tint stays
     CHECK(d.widgets[d.find("quit")].styles[kNormal].tint.r == 0.0f);
     CHECK(d.widgets[d.find("quit")].styles[kNormal].text_size == 20.0f);  // a field it left alone does not
+    // "own_style" resets a field to the kind's default over the theme: the default tint and text size
+    // stay in every state.
+    ui::WidgetData plain;
+    ui::builder_defaults(ui::WidgetKind::Button, plain);
+    const ui::WidgetData& keep = d.widgets[d.find("keep")];
+    CHECK(keep.own_style == (ui::OwnTint | ui::OwnTextSize));
+    CHECK(keep.styles[kNormal].tint.r == plain.styles[kNormal].tint.r);
+    CHECK(keep.styles[kNormal].tint.r != 0.8f);
+    CHECK(keep.styles[kNormal].text_size == plain.styles[kNormal].text_size);
+    CHECK(keep.styles[kNormal].text_size != 20.0f);
+    CHECK(keep.styles[kHover].tint.g == plain.styles[kHover].tint.g);  // every state, not only Normal
+    CHECK(keep.styles[kHover].tint.g != 0.5f);
+    CHECK(d.widgets[d.find("play")].own_style == 0);
 
     // The theme reference and font roles survive writing the document back.
     ui::DocumentData again;
@@ -339,6 +355,7 @@ TEST_CASE("ui theme: .mcuitheme cooks; a theme restyles what a document leaves a
     cook::write_ui_document(again, asset::parse_guid(kGuid).value(), text);
     CHECK(std::string(text.c_str()).find("\"theme\": \"guid:5703e000-0000-4000-8000-0000000000f1\"") != std::string::npos);
     CHECK(std::string(text.c_str()).find("\"font_role\": \"Title\"") != std::string::npos);
+    CHECK(std::string(text.c_str()).find("\"own_style\": [\"tint\", \"text_size\"]") != std::string::npos);
 
     // A truncated chunk does not decode.
     const Span<const byte> bytes = p.assets.resolve(th.value());

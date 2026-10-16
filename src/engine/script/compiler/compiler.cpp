@@ -1,7 +1,6 @@
-// mce_script_compiler: Luau's parser for positioned syntax errors and the hidden-state check
-// (state_check.h), then luau_compile for the bytecode. The Luau C++ libraries throw internally and
-// catch their own exceptions (Parser::parse and luau_compile both do), so this -fno-exceptions TU
-// only sees results.
+// mce_script_compiler: check() (Luau's parser for positioned syntax errors, the hidden-state,
+// name and type checks), then luau_compile for the bytecode. Parser::parse and luau_compile throw
+// internally and catch their own exceptions, so this -fno-exceptions TU only sees results.
 
 #include "mce/script/compiler.h"
 
@@ -14,7 +13,9 @@
 #include "Luau/Lexer.h"
 #include "Luau/Parser.h"
 #include "luacode.h"
+#include "names_check.h"
 #include "state_check.h"
+#include "typecheck.h"
 
 namespace mce::script {
 
@@ -37,20 +38,51 @@ Error compile_failure(StringView name, u32 line, u32 col, StringView message, Co
 
 }  // namespace
 
-Result<Array<u8>> compile(StringView name, StringView source, CompileError* error) {
-    {  // Syntax first: the parser knows the column, luau_compile's message only the line.
+void check(StringView name, StringView source, Array<CompileError>& out) {
+    out.clear();
+    Array<detail::NameIssue> issues;
+    {
         Luau::Allocator allocator;
         Luau::AstNameTable names(allocator);
         const Luau::ParseResult parsed = Luau::Parser::parse(source.data(), source.size(), names, allocator);
-        if (!parsed.errors.empty()) {
+        if (!parsed.errors.empty()) {  // the parser knows the column; luau_compile's message only the line
             const Luau::ParseError& e = parsed.errors.front();
             const Luau::Location& at = e.getLocation();
-            return compile_failure(name, at.begin.line + 1, at.begin.column + 1, StringView(e.getMessage().c_str()), error);
+            CompileError c;
+            c.line = at.begin.line + 1;
+            c.col = at.begin.column + 1;
+            c.message.assign(StringView(e.getMessage().c_str()));
+            out.push_back(c);
+            return;
         }
-        // Then the determinism rules: no state outside components (M-SCRIPT 3).
-        detail::StateIssue issue;
-        if (!detail::check_state(parsed.root, issue)) return compile_failure(name, issue.line, issue.col, issue.message.view(), error);
+        detail::StateIssue state;
+        if (!detail::check_state(parsed.root, state)) issues.push_back(state);
+        detail::check_names(parsed.root, issues);
     }
+    detail::check_types(name, source, issues);
+    // Source order; at one position the first reported (the engine's checks before Luau's) wins.
+    for (usize i = 1; i < issues.size(); ++i)
+        for (usize j = i; j > 0 && (issues[j].line < issues[j - 1].line ||
+                                    (issues[j].line == issues[j - 1].line && issues[j].col < issues[j - 1].col));
+             --j) {
+            const detail::NameIssue tmp = issues[j];
+            issues[j] = issues[j - 1];
+            issues[j - 1] = tmp;
+        }
+    for (const detail::NameIssue& i : issues) {
+        if (!out.empty() && out.back().line == i.line && out.back().col == i.col) continue;
+        CompileError c;
+        c.line = i.line;
+        c.col = i.col;
+        c.message = i.message;
+        out.push_back(c);
+    }
+}
+
+namespace {
+
+// luau_compile; its errors carry only the line.
+Result<Array<u8>> bytecode(StringView name, StringView source, CompileError* error) {
     lua_CompileOptions opts{};
     opts.optimizationLevel = 1;
     opts.debugLevel = 1;  // line info for error messages
@@ -78,6 +110,20 @@ Result<Array<u8>> compile(StringView name, StringView source, CompileError* erro
     std::free(bc);
     return out;
 }
+
+}  // namespace
+
+Result<Array<u8>> compile(StringView name, StringView source, CompileError* error) {
+    {
+        Array<CompileError> problems;
+        check(name, source, problems);
+        if (!problems.empty())
+            return compile_failure(name, problems[0].line, problems[0].col, problems[0].message.view(), error);
+    }
+    return bytecode(name, source, error);
+}
+
+Result<Array<u8>> compile_unchecked(StringView name, StringView source) { return bytecode(name, source, nullptr); }
 
 Result<u32> add_source(ScriptHost& host, StringView name, StringView source, u8 group) {
     auto bc = compile(name, source);

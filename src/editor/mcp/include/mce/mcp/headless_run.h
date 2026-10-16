@@ -14,11 +14,18 @@
 
 namespace mce::mcp {
 
+// A scene script that failed during the run (M-SCRIPT 4): it was disabled at that tick.
+struct ScriptFailure {
+    FixedString<64> name;
+    FixedString<256> error;  // "<file>:<line>: message"
+};
+
 struct HeadlessRun {
     u64 ticks = 0;
     usize entities = 0;  // spawned by the scene
     u64 state_hash = 0;
     WorldMetrics metrics;
+    Array<ScriptFailure> script_errors;  // the scene's scripts that failed, in load order
 };
 
 // Called every `kProgressTicks` ticks and after the last one.

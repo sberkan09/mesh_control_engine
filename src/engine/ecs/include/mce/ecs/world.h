@@ -391,6 +391,13 @@ public:
     // Runs for every entity about to be destroyed, before its component on_remove hooks and before
     // its row goes (the hierarchy uses it to destroy children first). May destroy other entities.
     void add_destroy_hook(HookFn fn) { destroy_hooks_.push_back(fn); }
+    // Runs from clamp_change_ticks for state that keeps change ticks of its own (the hierarchy's
+    // last propagation runs): the hook ages each one with clamp_tick, like the systems' last runs.
+    using TickClampFn = void (*)(World& w);
+    void add_tick_clamp_hook(TickClampFn fn) { tick_clamp_hooks_.push_back(fn); }
+    void clamp_tick(u32& tick) const {
+        if (u32(change_tick_ - tick) > ecs::detail::kMaxChangeAge) tick = change_tick_ - ecs::detail::kMaxChangeAge;
+    }
     // The registered component whose mce_refl type name hashes to `refl_id`, or kInvalidComponent.
     ecs::ComponentId find_component_by_refl(u64 refl_id) const;
 
@@ -463,6 +470,11 @@ public:
     // Registration order within a phase IS execution order. `after` (optional) names a system
     // that must already be registered in the same phase — asserted, never reordered.
     void add_system(Phase phase, const char* name, SystemFn fn, const char* after = nullptr);
+    // Registers `name` ahead of every system already in `phase`: for a system installed late that
+    // must still run before the rest (the hierarchy's early propagation, installed at scene load).
+    // The systems already there keep their order among themselves, so no `after` given to them is
+    // broken; several "first" systems run newest first. `name` must not be in `phase` yet.
+    void add_system_first(Phase phase, const char* name, SystemFn fn);
     // Held ticks (a pause screen, M-UI-DATA demo): while held, the fixed phases run only the
     // systems marked run_when_held (the one that releases the hold, say); the tick index,
     // commands and events still advance, Startup and the render phases are unaffected. The hold
@@ -604,6 +616,7 @@ private:
     u16 current_slot_ = 0;       // index into systems_[current_phase_]
 
     Array<HookFn> destroy_hooks_;
+    Array<TickClampFn> tick_clamp_hooks_;
     u32 change_tick_ = 1;        // 0 is reserved for "never"
     u32 stamp_tick_ = 0;         // write tick while stamping_ (system run / sync)
     bool stamping_ = false;
