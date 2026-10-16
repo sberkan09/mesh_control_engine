@@ -4,6 +4,9 @@
 
 #include <doctest/doctest.h>
 
+#include <chrono>
+#include <cmath>
+
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/components.h"
@@ -164,4 +167,76 @@ TEST_CASE("ProcLevel: proclevel_nav_grid lines up with the level") {
     const ProcLevel l = level(ProcKind::Rooms, 40, 30, 1);
     const NavGrid g = proclevel_nav_grid(l, {10.0f, 20.0f});
     CHECK(g.cell_count() == 40u * 30u);
+}
+
+TEST_CASE("ProcLevel: path markers walk from Start to Exit one cell at a time") {
+    const ProcKind kinds[] = {ProcKind::Rooms, ProcKind::Caves, ProcKind::Walk, ProcKind::Noise};
+    for (ProcKind kind : kinds) {
+        LevelWorld w;
+        ProcLevel l = level(kind, 48, 32, 4);
+        l.path_markers = true;
+        w.add(l);
+        w.run(2);
+        Array<math::vec3> path;
+        path.resize(4096);
+        u32 n = 0;
+        w.world.query<const ProcMarker, const LocalTransform>().each([&](Entity, const ProcMarker& m, const LocalTransform& t) {
+            if (m.kind != ProcMarkerKind::Path) return;
+            CHECK(m.index >= 1);
+            CHECK(m.index < 4096);
+            if (m.index < 4096) path[m.index - 1] = t.position;
+            ++n;
+        });
+        CAPTURE(static_cast<int>(kind));
+        REQUIRE(n >= 1);
+        const math::vec3 start = w.marker(ProcMarkerKind::Start), exit = w.marker(ProcMarkerKind::Exit);
+        const auto step = [](math::vec3 a, math::vec3 b) { return std::abs(a.x - b.x) + std::abs(a.y - b.y); };
+        CHECK(step(start, path[0]) == doctest::Approx(1.0f));
+        for (u32 i = 1; i < n; ++i) CHECK(step(path[i - 1], path[i]) == doctest::Approx(1.0f));
+        CHECK(path[n - 1].x == exit.x);
+        CHECK(path[n - 1].y == exit.y);
+        // Off by default: no Path marker at all.
+        LevelWorld off;
+        off.add(level(kind, 48, 32, 4));
+        off.run(2);
+        u32 paths = 0;
+        off.world.query<const ProcMarker>().each([&](Entity, const ProcMarker& m) { paths += m.kind == ProcMarkerKind::Path; });
+        CHECK(paths == 0);
+    }
+}
+
+TEST_CASE("ProcLevel: with no ProcLevel in the scene the system changes nothing, tick after tick") {
+    LevelWorld w;
+    for (u32 i = 0; i < 50; ++i) w.world.spawn_with(LocalTransform{});
+    u32 before = 0;
+    w.world.query<const LocalTransform>().each([&](Entity, const LocalTransform&) { ++before; });
+    w.run(30);
+    u32 after = 0;
+    w.world.query<const LocalTransform>().each([&](Entity, const LocalTransform&) { ++after; });
+    CHECK(before == 50);
+    CHECK(after == before);
+    CHECK(w.owned() == 0);
+}
+
+// The generation budget (M-PROCGEN 5): a 128 x 128 level of every kind builds in a few milliseconds in a release
+// build. The bound here is two orders of magnitude looser (it must hold in Debug on a loaded machine) so it
+// catches an accidental O(n^2), not a slow day; the entity count is the deterministic half of the budget.
+TEST_CASE("ProcLevel: a 128 x 128 level of every kind builds within budget") {
+    const ProcKind kinds[] = {ProcKind::Rooms, ProcKind::Caves, ProcKind::Walk, ProcKind::Noise};
+    u32 levels = 0;
+    const auto t0 = std::chrono::steady_clock::now();
+    for (ProcKind k : kinds)
+        for (u32 seed = 1; seed <= 10; ++seed) {
+            LevelWorld w;
+            ProcLevel l = level(k, 128, 128, seed);
+            l.path_markers = true;
+            w.add(l);
+            w.run(2);
+            CHECK(w.owned() > 3);
+            CHECK(w.owned() < 128 * 128 / 4);
+            ++levels;
+        }
+    const f64 ms = std::chrono::duration<f64, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    MESSAGE(levels << " levels in " << ms << " ms");
+    CHECK(ms < 20000.0);
 }

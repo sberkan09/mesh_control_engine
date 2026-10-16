@@ -22,7 +22,7 @@ local function approach(v, target, step)
 end
 
 local function respawn(e, v)
-    mce.set(e, POS, SPAWN)
+    mce.teleport2d(e, SPAWN)
     v[1] = 0
     v[2] = 0
     v[3] = 0
