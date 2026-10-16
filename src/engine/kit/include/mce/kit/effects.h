@@ -57,7 +57,7 @@ struct SfxTrigger {
 };
 MCE_COMPONENT(SfxTrigger, clip, (gain_db, Range{-60, 12}, Help{"gain in dB"}),
               (gain_jitter_db, Range{0, 24}, Help{"random +/- dB per play"}), (pan, Range{-1, 1}), bus,
-              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: 2D physics events naming this entity"}),
+              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors)"}),
               (fire, Help{"set to play once (the engine clears it)"}), (fired, ReadOnly, Transient))
 
 // A burst of particles from the ParticleEmitter on the same entity.
@@ -69,7 +69,7 @@ struct ParticleBurst {
     u32 fired = 0;
 };
 MCE_COMPONENT(ParticleBurst, (count, Range{1, 4096}, Help{"particles per burst"}),
-              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: 2D physics events naming this entity"}),
+              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors)"}),
               (fire, Help{"set to burst once (the engine clears it)"}), (fired, ReadOnly, Transient))
 
 // Adds trauma to every CameraShake2D and CameraShake3D (kit/cinematic.h).
@@ -81,7 +81,7 @@ struct ShakeTrigger {
     u32 fired = 0;
 };
 MCE_COMPONENT(ShakeTrigger, (trauma, Range{0, 1}, Help{"trauma added (0..1; the shake grows with its square)"}),
-              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: 2D physics events naming this entity"}),
+              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors)"}),
               (fire, Help{"set to shake once (the engine clears it)"}), (fired, ReadOnly, Transient))
 
 // Trauma screen shake (render::ScreenShake's model) on a Camera2DComponent entity: kit::primary_camera

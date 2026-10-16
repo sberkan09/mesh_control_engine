@@ -12,6 +12,7 @@
 #include <Jolt/Physics/Body/BodyLock.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/CollideShape.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/Collision/GroupFilter.h>
 #include <Jolt/Physics/Collision/RayCast.h>
@@ -1199,7 +1200,8 @@ u32 World3D::create_vehicle(const VehicleDesc3D& d) {
         for (JPH::LinearCurve::Point& p : ws->mLateralFriction.mPoints) p.mY *= wd.grip;
         vs.mWheels.push_back(ws);
     }
-    auto* cs = new JPH::WheeledVehicleControllerSettings();
+    // Held by a Ref so the refusals below (bad gears, reverse gear, axles) release it.
+    const JPH::Ref<JPH::WheeledVehicleControllerSettings> cs = new JPH::WheeledVehicleControllerSettings();
     cs->mEngine.mMaxTorque = d.engine_torque;
     cs->mEngine.mMinRPM = d.min_rpm;
     cs->mEngine.mMaxRPM = d.max_rpm;
@@ -1317,10 +1319,114 @@ std::optional<ShapeHit3D> World3D::camera_sweep(vec3 from, vec3 to, f32 sphere_r
     return shape_cast(sphere_radius, from, to, f);
 }
 
+namespace {
+
+// A character's upright capsule: its centre, cylinder half height and radius.
+struct Capsule3D {
+    vec3 center;
+    f32 half_height = 0.0f;
+    f32 radius = 0.0f;
+};
+
+bool character_capsule(const JPH::CharacterVirtual& ch, Capsule3D& out) {
+    const JPH::Shape* shape = ch.GetShape();
+    if (!shape || shape->GetSubType() != JPH::EShapeSubType::Capsule) return false;
+    const auto* capsule = static_cast<const JPH::CapsuleShape*>(shape);
+    out.center = to_mce(ch.GetPosition());
+    out.half_height = capsule->GetHalfHeightOfCylinder();
+    out.radius = capsule->GetRadius();
+    return true;
+}
+
+// Whether the query may see this character: its layer, the exclusions.
+bool character_passes(const Entity e, JPH::ObjectLayer layer, const QueryFilter3D& f) {
+    if (!f.include_characters || (layer_bit(layer) & f.layer_mask) == 0) return false;
+    for (const Entity x : f.exclude)
+        if (x == e) return false;
+    return true;
+}
+
+// The closest point of the capsule's segment to `p`.
+vec3 segment_point(const Capsule3D& c, vec3 p) {
+    return {c.center.x, math::clamp(p.y, c.center.y - c.half_height, c.center.y + c.half_height), c.center.z};
+}
+
+// Distance from `p` to the box (half extents `half`, centred at the origin of its own frame).
+f32 box_distance(vec3 p, vec3 half) {
+    const vec3 q{math::max(std::fabs(p.x) - half.x, 0.0f), math::max(std::fabs(p.y) - half.y, 0.0f),
+                 math::max(std::fabs(p.z) - half.z, 0.0f)};
+    return math::length(q);
+}
+
+// The first hit of a ray (unit `d`, up to `max_dist`) on an upright capsule: t and the normal.
+bool ray_capsule(const Capsule3D& c, vec3 o, vec3 d, f32 max_dist, f32& t_out, vec3& normal) {
+    f32 best = max_dist;
+    bool hit = false;
+    const f32 r2 = c.radius * c.radius;
+    const f32 lo = c.center.y - c.half_height, hi = c.center.y + c.half_height;
+    if (const vec3 near = segment_point(c, o); math::length_sq(o - near) <= r2) {  // starts inside
+        t_out = 0.0f;
+        normal = math::length_sq(o - near) > 0.0f ? math::normalize(o - near) : vec3{0.0f, 1.0f, 0.0f};
+        return true;
+    }
+    // The cylinder's side.
+    const f32 ox = o.x - c.center.x, oz = o.z - c.center.z;
+    const f32 a = d.x * d.x + d.z * d.z, b = ox * d.x + oz * d.z, cc = ox * ox + oz * oz - r2;
+    if (a > 0.0f && b * b - a * cc >= 0.0f) {
+        const f32 t = (-b - std::sqrt(b * b - a * cc)) / a;
+        const f32 y = o.y + d.y * t;
+        if (t >= 0.0f && t < best && y >= lo && y <= hi) {
+            best = t;
+            normal = math::normalize(vec3{ox + d.x * t, 0.0f, oz + d.z * t});
+            hit = true;
+        }
+    }
+    // The end caps.
+    for (const f32 y : {lo, hi}) {
+        const vec3 m = o - vec3{c.center.x, y, c.center.z};
+        const f32 bb = math::dot(m, d), c2 = math::dot(m, m) - r2, disc = bb * bb - c2;
+        if (disc < 0.0f) continue;
+        const f32 t = -bb - std::sqrt(disc);
+        if (t >= 0.0f && t < best) {
+            best = t;
+            normal = math::normalize(m + d * t);
+            hit = true;
+        }
+    }
+    if (hit) t_out = best;
+    return hit;
+}
+
+}  // namespace
+
 std::optional<RayHit3D> World3D::raycast(vec3 origin, vec3 dir, f32 max_dist, const QueryFilter3D& f) const {
     const Impl& w = *impl_;
     const vec3 d = math::normalize(dir);
     if (!(max_dist > 0.0f) || math::length_sq(d) == 0.0f) return std::nullopt;
+
+    // Characters first: a body hit at the same distance wins (bodies come first in creation order
+    // only by accident, so a strict "closer" keeps the result independent of it).
+    std::optional<RayHit3D> character;
+    if (f.include_characters && w.characters > 0) {
+        for (const Impl::Slot& s : w.slots) {
+            Capsule3D c;
+            f32 t = 0.0f;
+            vec3 n;
+            if (!s.alive || !s.character || !character_passes(s.entity, s.character_layer, f) || !character_capsule(*s.character, c) ||
+                !ray_capsule(c, origin, d, character ? character->t : max_dist, t, n))
+                continue;
+            if (character && !(t < character->t)) continue;
+            character = RayHit3D{s.entity, origin + d * t, n, t};
+        }
+    }
+    std::optional<RayHit3D> body = raycast_bodies(origin, d, character ? character->t : max_dist, f);
+    if (body && (!character || body->t <= character->t)) return body;
+    return character;
+}
+
+std::optional<RayHit3D> World3D::raycast_bodies(vec3 origin, vec3 d, f32 max_dist, const QueryFilter3D& f) const {
+    const Impl& w = *impl_;
+    if (!(max_dist > 0.0f)) return std::nullopt;
 
     const JPH::RRayCast ray(to_jph(origin), to_jph(d * max_dist));
     JPH::RayCastSettings settings;
@@ -1385,6 +1491,76 @@ std::optional<ShapeHit3D> World3D::shape_cast(f32 sphere_radius, vec3 from, vec3
     r.t = best->mFraction;
     r.position = from + motion * best->mFraction;
     return r;
+}
+
+namespace {
+
+// The bodies (sorted by creation slot, each once) a CollideShape query touched.
+template <typename Slots>
+void collect_slots(const JPH::BodyInterface& bi, const Slots& slot_index, const JPH::AllHitCollisionCollector<JPH::CollideShapeCollector>& hits,
+                   Array<u32>& out) {
+    for (const JPH::CollideShapeResult& h : hits.mHits) {
+        const u32 slot = slot_index(unpack(bi.GetUserData(h.mBodyID2)));
+        bool seen = false;
+        for (const u32 x : out) seen = seen || x == slot;
+        if (!seen) out.push_back(slot);
+    }
+}
+
+}  // namespace
+
+u32 World3D::overlap_sphere(vec3 center, f32 radius, Span<Entity> out, const QueryFilter3D& f) const {
+    if (!positive(radius)) return 0;
+    const JPH::SphereShape sphere(radius);
+    return overlap_shape(&sphere, center, quat::identity(), out, f, [&](const Capsule3D& c) {
+        return math::length_sq(center - segment_point(c, center)) <= (radius + c.radius) * (radius + c.radius);
+    });
+}
+
+u32 World3D::overlap_box(vec3 center, vec3 half, quat rotation, Span<Entity> out, const QueryFilter3D& f) const {
+    if (!positive(half.x) || !positive(half.y) || !positive(half.z)) return 0;
+    const JPH::BoxShape box(to_jph(half), 0.0f);
+    const quat rot = math::normalize(rotation);
+    return overlap_shape(&box, center, rot, out, f, [&](const Capsule3D& c) {
+        // The segment's distance to the box, a convex function of where along it: a ternary search.
+        const quat inv = math::conjugate(rot);
+        const vec3 a = math::rotate(inv, vec3{c.center.x, c.center.y - c.half_height, c.center.z} - center);
+        const vec3 b = math::rotate(inv, vec3{c.center.x, c.center.y + c.half_height, c.center.z} - center);
+        f32 lo = 0.0f, hi = 1.0f;
+        for (int i = 0; i < 48; ++i) {
+            const f32 m1 = lo + (hi - lo) / 3.0f, m2 = hi - (hi - lo) / 3.0f;
+            if (box_distance(a + (b - a) * m1, half) <= box_distance(a + (b - a) * m2, half)) hi = m2;
+            else lo = m1;
+        }
+        return box_distance(a + (b - a) * ((lo + hi) * 0.5f), half) <= c.radius;
+    });
+}
+
+template <typename CharacterTest>
+u32 World3D::overlap_shape(const void* shape, vec3 center, quat rotation, Span<Entity> out, const QueryFilter3D& f,
+                           CharacterTest&& touches) const {
+    const Impl& w = *impl_;
+    JPH::CollideShapeSettings settings;
+    JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> hits;
+    const LayerFilter layers(f.layer_mask);
+    const EntityFilter bodies(f);
+    const JPH::RMat44 at = JPH::RMat44::sRotationTranslation(JPH::Quat(rotation.x, rotation.y, rotation.z, rotation.w), to_jph(center));
+    w.system.GetNarrowPhaseQueryNoLock().CollideShape(static_cast<const JPH::Shape*>(shape), JPH::Vec3::sOne(), at, settings,
+                                                       JPH::RVec3::sZero(), hits, {}, layers, bodies);
+    Array<u32> slots;
+    collect_slots(w.system.GetBodyInterfaceNoLock(), [&](Entity e) { return w.slot_index(e); }, hits, slots);
+    if (f.include_characters && w.characters > 0)
+        for (u32 i = 0; i < w.slots.size(); ++i) {
+            const Impl::Slot& s = w.slots[i];
+            Capsule3D c;
+            if (s.alive && s.character && character_passes(s.entity, s.character_layer, f) && character_capsule(*s.character, c) &&
+                touches(c))
+                slots.push_back(i);
+        }
+    for (u32 i = 1; i < slots.size(); ++i)  // creation order (insertion sort: a handful of entries)
+        for (u32 j = i; j > 0 && slots[j] < slots[j - 1]; --j) std::swap(slots[j], slots[j - 1]);
+    for (u32 i = 0; i < slots.size() && i < out.size(); ++i) out[i] = w.slots[slots[i]].entity;
+    return static_cast<u32>(slots.size());
 }
 
 u64 World3D::hash_state(u64 seed) const {
