@@ -414,10 +414,13 @@ bool bt_trace(ToolCall& c) {
     const asset::Guid tree = static_cast<const kit::AiBrain*>(bc->data())->tree.guid;
     const editor::ProjectAsset* a = c.server.session().project().find(tree);
     if (!a || a->type != asset::ChunkType::BehaviorTree) return fail(c, "the entity's AiBrain names no behavior tree of the project");
+    // session().cook(false) below rescans the project and frees `a`: keep the path by value.
+    const cook::String tree_path(a->path);
+    a = nullptr;
     cook::String text;
     cook::BtDocument d;
-    if (!cook::fs::read_text(c.server.session().project().asset_path(a->path.view()).view(), text) ||
-        !read_doc(c, a->path.view(), text.view(), d, "the tree does not read"))
+    if (!cook::fs::read_text(c.server.session().project().asset_path(tree_path.view()).view(), text) ||
+        !read_doc(c, tree_path.view(), text.view(), d, "the tree does not read"))
         return false;
 
     TraceRun t;
@@ -456,7 +459,7 @@ bool bt_trace(ToolCall& c) {
     if (t.brain.is_null()) return fail(c, "the entity was not spawned by the run");
     if (t.lost) return fail(c, "the brain did not run this tree (cook_errors shows why)");
     c.out.begin_object();
-    c.out.key("tree").str(a->path.view()).key("ticks").num_u(run.value().ticks);
+    c.out.key("tree").str(tree_path.view()).key("ticks").num_u(run.value().ticks);
     c.out.key("rows").begin_array();
     for (const TraceRun::Row& row : t.rows) {
         c.out.begin_object();
