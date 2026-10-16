@@ -5,6 +5,14 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Tested-sample check, M-DOCCHECK step 3 (SBA-178): `check_docs.py` also fails for a `samples/` or `projects/`
+  directory that no test runs. Every one has a test today except `samples/common` (shared headers).
+- Flag check, M-DOCCHECK step 2 (SBA-177): `check_docs.py` also fails for a `-flag` after `mce_player` in a
+  document that no source declares as a console variable. Every documented flag passes today.
+- Docs checks, M-DOCCHECK step 1 (SBA-176): the walls stage runs `scripts/ci/check_docs.py`, which fails for a
+  relative link or `#anchor` in a document that points nowhere and for an `#include` line of an `mce/` header that names no
+  header (`scripts/ci/docs.allow` lists the four accepted sketches). The guide index's broken platform-notes link
+  is fixed.
 - Spine and DragonBones import, M-ANIM2D (SBA-146): `mce import spine <file.json>` and `mce import dragonbones <file>`
   convert Spine 3.8/4.x JSON and DragonBones 5.x JSON rigs into a `.mcskel2d` (bones, slots, region and weighted mesh
   attachments, rotate / translate / scale / color / attachment / deform keys with bezier curves, events, IK with keyed
@@ -13,6 +21,7 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 - Accessibility checks on themed UI documents, M-UI-DATA2 step 3 (SBA-155): `project_check` judges the Text,
   Button and Toggle labels of a `.mcui` document with the kind's default look and its theme applied (before,
   themed colors were skipped and unstated sizes unseen), and names the widget by its path. User guide 24.5.
+- Procedural levels, M-PROCGEN step 1 (SBA-171): `mce/kit/procgen.h` makes a connected level from a seed, deterministically: BSP rooms, cellular caves, a drunkard's walk and thresholded noise, each with a start and a farthest exit.
 - Planned: M-PROCGEN (SBA-171 … SBA-175), deterministic procedural levels as data (docs/milestones/M-PROCGEN.md).
 - Luau recipes (a countdown, a state machine, spawning, physics events), user guide 27.9; M-SCRIPT is done.
 - Script games for agents, M-SCRIPT step 6b (SBA-152): the `start_game` prompt offers a script-only game, `docs_search`

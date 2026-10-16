@@ -15,6 +15,18 @@ aseprite: Aseprite's JSON export (File > Export Sprite Sheet, "JSON Data", array
           The PNG gets a texture sidecar when it has none; re-importing keeps the sheet's GUID. The output
           is a pure function of the inputs: same bytes in, same bytes out.
 
+tiled:    a Tiled map exported as JSON (.tmj; tilesets embedded or external .tsj) becomes
+            <name>.mcscene plus one <name>_<layer>.mctilemap per tile layer and tileset:
+              tile layers     rows flipped to the engine's bottom-up order, ids kept; CSV and base64
+                              (raw, zlib, gzip) data; opacity as tint; hidden layers skipped
+              collision       a layer property collide=true, or tileset tiles with a bool property
+                              solid=true, become static boxes (neighbouring tiles merged)
+              object layers   rectangles are static boxes (bool properties sensor, one_way); points are
+                              marker entities; other shapes warn
+            The tileset images get texture sidecars; re-importing keeps every GUID. One metre per tile
+            unless --tile-size says otherwise. Infinite, isometric and hex maps, margins and spacing in a
+            tileset and XML tilesets are errors with the way out; flips and animated tiles are warnings.
+
 Unsupported features are warnings that name the feature (stderr); --werror turns them into a failure and
 nothing is written.
 """
@@ -22,6 +34,7 @@ nothing is written.
 import argparse
 import json
 import os
+import re
 import sys
 import uuid
 
@@ -51,6 +64,15 @@ def existing_guid(path):
         return g if isinstance(g, str) and g else None
     except (OSError, ValueError, AttributeError):
         return None
+
+
+def dumps(doc):
+    return json.dumps(doc, indent=2)
+
+
+def write_json(path, doc):
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(dumps(doc) + "\n")
 
 
 def frame_list(doc):
@@ -198,11 +220,317 @@ def cmd_aseprite(args):
         doc_side = {"guid": tex_guid, "importer": "texture", "importer_version": 1,
                     "settings": {"srgb": True, "mips": False, "filter": "nearest"}}
         with open(side, "w", encoding="utf-8", newline="\n") as f:
-            f.write(json.dumps(doc_side, indent=2) + "\n")
+            f.write(dumps(doc_side) + "\n")
         print(f"wrote {side}")
     with open(out, "w", encoding="utf-8", newline="\n") as f:
-        f.write(json.dumps(sheet, indent=2) + "\n")
+        f.write(dumps(sheet) + "\n")
     print(f"wrote {out} ({len(sheet['regions'])} regions, {len(sheet['clips'])} clips)")
+    return 0
+
+
+# ---- Tiled ------------------------------------------------------------------------------------------
+
+FLIP_MASK = 0xF0000000  # horizontal, vertical, diagonal and hexagonal-rotation flags in a tile id
+GID_MASK = 0x0FFFFFFF
+
+
+def safe_name(s):
+    out = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(s)).strip("_")
+    return out or "layer"
+
+
+def props_of(o):
+    """A Tiled object's or layer's custom properties as {name: value} (both the 1.9+ list and the old dict)."""
+    p = o.get("properties")
+    if isinstance(p, list):
+        return {x.get("name"): x.get("value") for x in p if isinstance(x, dict)}
+    return p if isinstance(p, dict) else {}
+
+
+def decode_tile_data(layer, imp):
+    """A tile layer's cells as a flat list of u32 gids (row 0 first, as Tiled stores them)."""
+    data = layer.get("data")
+    w, h = int(layer.get("width", 0)), int(layer.get("height", 0))
+    if isinstance(data, list):
+        gids = [int(v) & 0xFFFFFFFF for v in data]
+    elif isinstance(data, str):
+        import base64
+        import struct
+        import zlib
+        raw = base64.b64decode(data)
+        comp = layer.get("compression", "")
+        if comp == "zlib":
+            raw = zlib.decompress(raw)
+        elif comp == "gzip":
+            raw = zlib.decompress(raw, 16 + zlib.MAX_WBITS)
+        elif comp:
+            raise ValueError(f"layer '{layer.get('name')}': '{comp}' compression is not supported; "
+                             "use CSV, or base64 with zlib or gzip (Map properties > Tile Layer Format)")
+        gids = list(struct.unpack(f"<{len(raw) // 4}I", raw[:len(raw) // 4 * 4]))
+    else:
+        raise ValueError(f"layer '{layer.get('name')}' has no tile data")
+    if len(gids) != w * h:
+        raise ValueError(f"layer '{layer.get('name')}' has {len(gids)} cells, expected {w}x{h}")
+    return gids
+
+
+def load_tilesets(doc, base_dir, imp):
+    """[{firstgid, name, image(abs path), columns, rows, tilecount, solid(set of local ids), tw, th}]"""
+    out = []
+    for ts in doc.get("tilesets") or []:
+        first = int(ts.get("firstgid", 1))
+        d = base_dir
+        if "source" in ts:
+            src = os.path.normpath(os.path.join(base_dir, ts["source"]))
+            if src.lower().endswith(".tsx"):
+                raise ValueError(f"tileset '{ts['source']}' is XML (.tsx); in Tiled use File > Export As > JSON "
+                                 "(.tsj) or embed the tileset in the map")
+            ts = read_json(src)
+            d = os.path.dirname(src)
+        name = str(ts.get("name", "tileset"))
+        if not ts.get("image"):
+            imp.warn(f"tileset '{name}' is a collection of images, which is not supported; its tiles are skipped")
+            continue
+        tw, th = int(ts["tilewidth"]), int(ts["tileheight"])
+        cols, count = int(ts["columns"]), int(ts["tilecount"])
+        if int(ts.get("margin", 0)) or int(ts.get("spacing", 0)):
+            raise ValueError(f"tileset '{name}' has margin or spacing; the engine cuts a tileset into equal "
+                             "cells with none. Re-export the tileset image without them")
+        rows = (count + cols - 1) // cols
+        iw, ih = int(ts.get("imagewidth", cols * tw)), int(ts.get("imageheight", rows * th))
+        if iw != cols * tw or ih != rows * th:
+            raise ValueError(f"tileset '{name}': the {iw}x{ih} image is not {cols}x{rows} cells of {tw}x{th}")
+        solid, animated = set(), False
+        for t in ts.get("tiles") or []:
+            if props_of(t).get("solid") is True:
+                solid.add(int(t["id"]))
+            animated = animated or bool(t.get("animation"))
+        if animated:
+            imp.warn(f"tileset '{name}' has animated tiles; they draw as their first frame")
+        image = os.path.normpath(os.path.join(d, ts["image"]))
+        if not os.path.isfile(image):
+            raise ValueError(f"tileset '{name}': the image '{ts['image']}' was not found ({image})")
+        out.append({"firstgid": first, "name": safe_name(name), "image": image, "columns": cols, "rows": rows,
+                    "count": count, "solid": solid, "tw": tw, "th": th})
+    out.sort(key=lambda t: t["firstgid"])
+    return out
+
+
+def tileset_of(gid, tilesets):
+    for t in reversed(tilesets):
+        if gid >= t["firstgid"]:
+            return t if gid < t["firstgid"] + t["count"] else None
+    return None
+
+
+def merge_rects(cells, w, h):
+    """Greedy rectangles over a set of (col, row) cells: row runs merged downward. Returns [(c, r, cw, rh)]."""
+    cellset = set(cells)
+    used = set()
+    out = []
+    for r in range(h):
+        c = 0
+        while c < w:
+            if (c, r) in cellset and (c, r) not in used:
+                c2 = c
+                while c2 + 1 < w and (c2 + 1, r) in cellset and (c2 + 1, r) not in used:
+                    c2 += 1
+                r2 = r
+                while r2 + 1 < h and all((x, r2 + 1) in cellset and (x, r2 + 1) not in used for x in range(c, c2 + 1)):
+                    r2 += 1
+                for rr in range(r, r2 + 1):
+                    for x in range(c, c2 + 1):
+                        used.add((x, rr))
+                out.append((c, r, c2 - c + 1, r2 - r + 1))
+                c = c2 + 1
+            else:
+                c += 1
+    return out
+
+
+def num(v):
+    """A JSON number without float noise."""
+    v = round(float(v), 4)
+    return int(v) if v == int(v) else v
+
+
+def convert_tiled(doc, map_dir, name, out_dir, existing, tile_size, imp):
+    """{file name: JSON doc}: the scene and one tilemap per layer and tileset. Pure; GUIDs come from `existing`.
+    A tilemap's tileset and a layer entity's map are placeholders (("png", path), ("map", file)) the caller resolves."""
+    if doc.get("infinite"):
+        raise ValueError("infinite maps are not supported; in Tiled turn off Infinite (Map properties)")
+    if doc.get("orientation", "orthogonal") != "orthogonal":
+        raise ValueError(f"'{doc.get('orientation')}' maps are not supported (orthogonal only)")
+    mw, mh = int(doc["width"]), int(doc["height"])
+    tw, th = int(doc["tilewidth"]), int(doc["tileheight"])
+    tilesets = load_tilesets(doc, map_dir, imp)
+    sx, sy = tile_size / tw, tile_size / th  # metres per Tiled pixel
+    files = {}
+    entities = []
+
+    def new_id():
+        return len(entities) + 1
+
+    def guid_of(fname):
+        return existing.get(fname) or str(uuid.uuid4())
+
+    def add_collider_boxes(label, rects, sensor=False, one_way=False):
+        for i, (c, r, cw, rh) in enumerate(rects):
+            col = {"shape": {"half": [num(cw * tile_size / 2), num(rh * tile_size / 2)]}, "density": 0}
+            if sensor:
+                col["is_sensor"] = True
+            if one_way:
+                col["one_way"] = True
+            entities.append({"id": new_id(), "name": f"{label} {i}", "components": {
+                "Collider2D": col,
+                "LocalTransform": {"position": [num((c + cw / 2) * tile_size), num((mh - r - rh / 2) * tile_size), 0]},
+                "RigidBody2D": {}}})
+
+    layer_n = 0
+
+    def walk(layers, prefix=""):
+        nonlocal layer_n
+        for lyr in layers:
+            kind = lyr.get("type")
+            lname = prefix + str(lyr.get("name", "layer"))
+            if kind == "group":
+                walk(lyr.get("layers") or [], lname + "/")
+                continue
+            props = props_of(lyr)
+            ox, oy = float(lyr.get("offsetx", 0)), float(lyr.get("offsety", 0))
+            if kind == "tilelayer":
+                layer_n += 1
+                gids = decode_tile_data(lyr, imp)
+                flipped = any(g & FLIP_MASK for g in gids)
+                if flipped:
+                    imp.warn(f"layer '{lname}' has flipped or rotated tiles; they draw unflipped")
+                groups = {}
+                for i, g in enumerate(gids):
+                    g &= GID_MASK
+                    if g == 0:
+                        continue
+                    ts = tileset_of(g, tilesets)
+                    if ts is None:
+                        imp.warn(f"layer '{lname}' uses tile id {g}, which no tileset holds; skipped")
+                        continue
+                    groups.setdefault(ts["firstgid"], (ts, []))[1].append((i % mw, i // mw, g - ts["firstgid"]))
+                collide_all = props.get("collide") is True
+                solid_cells = [(c, r) for ts, cells in groups.values() for c, r, lid in cells
+                               if collide_all or lid in ts["solid"]]
+                visible = lyr.get("visible", True)
+                if not visible and not solid_cells:
+                    imp.warn(f"layer '{lname}' is hidden and has no collision; skipped")
+                    continue
+                if visible:
+                    for ts, cells in sorted(groups.values(), key=lambda g: g[0]["firstgid"]):
+                        suffix = "" if len(groups) == 1 else "_" + ts["name"]
+                        fname = f"{name}_{safe_name(lname)}{suffix}.mctilemap"
+                        tiles = [0] * (mw * mh)
+                        for c, r, lid in cells:
+                            tiles[(mh - 1 - r) * mw + c] = lid + 1  # the engine's row 0 is the bottom
+                        files[fname] = {"format": "mce-tilemap", "version": 1, "guid": guid_of(fname),
+                                        "name": fname[:-len(".mctilemap")], "tileset": ("png", ts["image"]),
+                                        "columns": ts["columns"], "rows": ts["rows"], "width": mw, "height": mh,
+                                        "tile_size": num(tile_size), "tiles": tiles}
+                        comp = {"map": ("map", fname), "order": layer_n}
+                        if float(lyr.get("opacity", 1)) != 1:
+                            comp["tint"] = [1, 1, 1, num(lyr["opacity"])]
+                        entities.append({"id": new_id(), "name": lname + suffix, "components": {
+                            "LocalTransform": {"position": [num(ox * sx), num(-oy * sy), 0]},
+                            "TilemapLayer": comp}})
+                if solid_cells:
+                    add_collider_boxes(f"{lname} collision", merge_rects(solid_cells, mw, mh))
+            elif kind == "objectgroup":
+                for o in lyr.get("objects") or []:
+                    oname = str(o.get("name") or f"{lname}_{o.get('id')}")
+                    p = props_of(o)
+                    x, y = float(o.get("x", 0)), float(o.get("y", 0))
+                    if o.get("rotation"):
+                        imp.warn(f"object '{oname}' is rotated; the rotation is ignored")
+                    if any(k in o for k in ("ellipse", "polygon", "polyline", "text", "gid")):
+                        kindname = next(k for k in ("ellipse", "polygon", "polyline", "text", "gid") if k in o)
+                        imp.warn(f"object '{oname}' is a {'tile' if kindname == 'gid' else kindname}, which is not "
+                                 "imported; use a rectangle or a point")
+                        continue
+                    if o.get("point"):
+                        entities.append({"id": new_id(), "name": oname, "components": {
+                            "LocalTransform": {"position": [num(x * sx), num((mh * th - y) * sy), 0]}}})
+                        continue
+                    w, h = float(o.get("width", 0)), float(o.get("height", 0))
+                    if w <= 0 or h <= 0:
+                        imp.warn(f"object '{oname}' has no size; skipped")
+                        continue
+                    col = {"shape": {"half": [num(w * sx / 2), num(h * sy / 2)]}, "density": 0}
+                    if p.get("sensor") is True:
+                        col["is_sensor"] = True
+                    if p.get("one_way") is True:
+                        col["one_way"] = True
+                    entities.append({"id": new_id(), "name": oname, "components": {
+                        "Collider2D": col,
+                        "LocalTransform": {"position": [num((x + w / 2) * sx), num((mh * th - y - h / 2) * sy), 0]},
+                        "RigidBody2D": {}}})
+            else:
+                imp.warn(f"layer '{lname}' is a {kind} layer, which is not imported")
+
+    walk(doc.get("layers") or [])
+    scene_name = f"{name}.mcscene"
+    files[scene_name] = {"format": "mce-scene", "version": 1, "guid": guid_of(scene_name), "name": name,
+                         "entities": entities}
+    return files
+
+
+def cmd_tiled(args):
+    imp = Importer("tiled")
+    src = args.file
+    try:
+        doc = read_json(src)
+        map_dir = os.path.dirname(os.path.abspath(src))
+        out_dir = args.out_dir or map_dir
+        name = safe_name(args.name or os.path.splitext(os.path.basename(src))[0])
+        existing = {}
+        for f in os.listdir(out_dir) if os.path.isdir(out_dir) else []:
+            if f.startswith(name) and f.endswith((".mcscene", ".mctilemap")):
+                g = existing_guid(os.path.join(out_dir, f))
+                if g:
+                    existing[f] = g
+        files = convert_tiled(doc, map_dir, name, out_dir, existing, args.tile_size, imp)
+        # Textures: one sidecar GUID per tileset image.
+        tex_guid = {}
+        new_sidecars = []
+        for fdoc in files.values():
+            ts = fdoc.get("tileset")
+            if isinstance(ts, tuple) and ts[1] not in tex_guid:
+                side = ts[1] + ".mceasset"
+                g = existing_guid(side)
+                if not g:
+                    g = str(uuid.uuid4())
+                    new_sidecars.append((side, g))
+                tex_guid[ts[1]] = g
+        fname_guid = {f: d["guid"] for f, d in files.items()}
+        for fdoc in files.values():
+            ts = fdoc.get("tileset")
+            if isinstance(ts, tuple):
+                fdoc["tileset"] = "guid:" + tex_guid[ts[1]]
+            for e in fdoc.get("entities", []):
+                tl = e["components"].get("TilemapLayer")
+                if tl:
+                    tl["map"] = "guid:" + fname_guid[tl["map"][1]]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        print(f"mce import tiled: {src}: {e}", file=sys.stderr)
+        return 1
+    if imp.warnings and args.werror:
+        print("mce import tiled: --werror: nothing written", file=sys.stderr)
+        return 1
+    os.makedirs(out_dir, exist_ok=True)
+    for side, g in new_sidecars:
+        write_json(side, {"guid": g, "importer": "texture", "importer_version": 1,
+                          "settings": {"srgb": True, "mips": False, "filter": "nearest"}})
+        print(f"wrote {side}")
+    for f in sorted(files):
+        write_json(os.path.join(out_dir, f), files[f])
+    maps = sum(1 for f in files if f.endswith(".mctilemap"))
+    ents = len(files[f"{name}.mcscene"]["entities"])
+    print(f"wrote {out_dir}{os.sep}{name}.mcscene ({ents} entities) and {maps} tilemap(s)")
     return 0
 
 
@@ -215,6 +543,13 @@ def main(argv=None):
     s.add_argument("--name", help="the sheet's name (default: the file name)")
     s.add_argument("--werror", action="store_true", help="a warning is a failure; nothing is written")
     s.set_defaults(fn=cmd_aseprite)
+    s = sub.add_parser("tiled", help="Tiled .tmj map (+ .tsj tilesets) into tilemaps and a scene")
+    s.add_argument("file", help="the exported .tmj / .json map")
+    s.add_argument("--out-dir", help="where to write (default: beside the map)")
+    s.add_argument("--name", help="base name of the files written (default: the map's file name)")
+    s.add_argument("--tile-size", type=float, default=1.0, help="metres per tile (default 1)")
+    s.add_argument("--werror", action="store_true", help="a warning is a failure; nothing is written")
+    s.set_defaults(fn=cmd_tiled)
     args = ap.parse_args(argv)
     return args.fn(args)
 

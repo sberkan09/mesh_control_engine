@@ -110,8 +110,9 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-SCRIPT | [M-SCRIPT.md](milestones/M-SCRIPT.md) (Linear SBA-147 … SBA-152, added 2026-10-16; ADR-0041) | done (steps 1–6; the phone and web builds with Luau unverified here: no NDK, Xcode or emsdk) | run the Android, iOS and web builds with `MCE_WITH_SCRIPT` on a machine with those toolchains |
 | M-COVER | [M-COVER.md](milestones/M-COVER.md) (Linear SBA-157 … SBA-160, added 2026-10-16) | done (the sample coverage gate in the walls stage, `scripts/ci/sample_coverage.allow`; `samples/kit3d_tour`, `samples/kit2d_tour`, `samples/systems_tour`; only engine-written state is listed) | none |
 | M-VIEWS | [M-VIEWS.md](milestones/M-VIEWS.md) (Linear SBA-161 … SBA-166, added 2026-10-16) | active (step 1 done: local players, per-slot maps and pads, join by button, `P2/` script names) | steps 1–6 |
-| M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | active (step 1 done: `mce import aseprite`) | steps 2–4 |
+| M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | active (steps 1–2 done: `mce import aseprite`, `mce import tiled`) | steps 3–4 |
 | M-PROCGEN | [M-PROCGEN.md](milestones/M-PROCGEN.md) (Linear SBA-171 … SBA-175, added 2026-10-16) | active (not started) | steps 1–5 |
+| M-DOCCHECK | [M-DOCCHECK.md](milestones/M-DOCCHECK.md) (Linear SBA-176 … SBA-179, added 2026-10-16) | active (step 1 done: `scripts/ci/check_docs.py` in the walls stage checks relative links, anchors and `#include` lines of `mce/` headers in every document, with `scripts/ci/docs.allow`; steps 2–3 done: `mce_player` flags in documents are console variables the source declares; every sample and project has a test) | step 4 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -595,6 +596,19 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Demo:** the dungeon sample played headless on three seeds gives the same hash across runs and builds, and a different level per seed.
 **Gates:** every generator is a pure function of its inputs (same bytes out twice, Debug = Release); connectivity holds on every tested seed; a project without `ProcLevel` builds and hashes as today; `local_ci.sh` green on every step.
+
+### M-DOCCHECK — Docs that cannot rot · **size S (rough guess, ≈ 20–30 h engineering)** · tier: off-tier, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free. The capability table and the sample gate show that every feature is named and shown, but nothing checks the rest of what the documents say: a link, a heading anchor, an `#include` line, a command-line flag. Needs no device or engine code: scripts and documents only.*
+
+**Builds, in order:**
+1. `scripts/ci/check_docs.py` in the walls stage: relative links and `#anchors` in every Markdown file resolve, and `#include` lines of `mce/` headers name a real header; existing misses are fixed or on `scripts/ci/docs.allow` with a reason.
+2. The same for command-line flags: a flag shown after `mce_player` in a document is a console variable the source declares.
+3. Every `samples/` and `projects/` directory is run by a test, or listed with a reason.
+4. The guide and contributor docs describe the checks; the gates run.
+
+**Demo:** the walls stage fails on a seeded broken link, flag and untested sample, and passes on the repo.
+**Gates:** `local_ci.sh` green on every step; each allow-list only shrinks.
 
 ### M10+ — Explicitly deferred (named so they cannot sneak in)
 
