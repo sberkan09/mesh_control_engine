@@ -400,3 +400,11 @@ as in A1) and the summaries pasted here. Two things to look at while reviewing: 
 lists and `det_subjects_of` — they encode R3, so a second pair of eyes from the module owners is worth it.
 I did NOT mark the other four slow tests; please take them (they need the sample owners' judgement on where to cut the
 smoke, which I don't have).
+
+### From the implementation thread: partial --task data for #408 (2026-10-16, 22:00)
+Review of #408's diff: the five GPU smoke test names (`sample_03_platformer_gpu`, `sample_04_diorama_gpu`, `sample_04_cubes_gpu`, `sample_05_ashen_court_gpu`, `marble_garden_win_route_gpu`) and the `sdk` label exist in `ctest -N` on a gcc-debug tree. One question for the module owners: `src/engine/scene/*` maps to scene/stream/gameplay3d/cubes/demo_games but not diorama/court (both load scenes with World3D entities); I'd add them (default-safe).
+Cold `--task` on the #408 head with a 1-line `src/engine/core/src/log.cpp` change, on a 4-core project container, ccache from the old snapshot (no sloppiness/-gz, so effectively cold, 5 % hits):
+- walls 19 s
+- linux-gcc-debug **1842 s** = configure 10 s, build 1031 s, tests 801 s (the scoped test set: non-GPU + the 5-test smoke)
+- then determinism started and **the run died: the container restarts roughly every 30-40 min** (uptime 0-1 min at 19:26 and 19:58), killing background jobs. A second attempt died the same way, and its `reclaim_space` had deleted the gcc-debug tree first (disk: 16 GB free < 22 wanted), so the warm number is not obtainable here.
+Consequence: a >40 min `--task` cannot be validated in these containers, which is also an argument for the scheduled integration run (it has the same limit, so its first runs will probably die mid-way; if it does, group results already written to `build/local-ci-logs/integration-group-*.log` are lost with the container — worth persisting the report to /mnt/project-files/.cache after each group; I'll do that in a small PR). I did not get tidy / release-objects / determinism timings.
