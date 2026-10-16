@@ -59,6 +59,10 @@ queries are step 4. The editor panel is step 5, and the MCP tools are step 6. Su
 files and randomness in nodes are left out until a game needs them. Randomness will come from the sim RNG so
 replays stay exact.
 
+**Step 5 (SBA-132).** Tools edit `.mcbt` through `cook::BtDocument` (`bt_text.h`): nodes keep their members as
+JSON text, and `build_behavior_tree` (the importer's cook) decides validity. The editor maps the running tree back
+to the document by pre-order, which the cook's one-node-per-document-node layout guarantees.
+
 **Step 4 (SBA-131).** Utility selection is a node kind whose children are `Score` nodes; considerations are a
 table after the nodes in `CHNK_BT` v3, each a blackboard key, a response curve and a weight. The selector
 recomputes every score each tick and switches only when another child beats the running one by `hysteresis`.

@@ -39,7 +39,7 @@ MCE_CVAR(cv_scene, "scene", "", "Scene to open, relative to assets/ (default: th
 MCE_CVAR(cv_select, "editor.select", "", "Select the entity with this name after opening the scene", CVarFlags::None);
 MCE_CVAR(cv_play, "editor.play", false, "Enter play-in-editor after opening the scene (the -selftest checks it)",
          CVarFlags::None);
-MCE_CVAR(cv_open, "editor.open", "", "Open this asset (relative to assets/) in its panel: a .mcui, .mctimeline or .mcanim",
+MCE_CVAR(cv_open, "editor.open", "", "Open this asset (relative to assets/) in its panel: a .mcui, .mctimeline, .mcanim or .mcbt",
          CVarFlags::None);
 MCE_CVAR(cv_perf_capture, "editor.perf_capture", "", "Open this .mcperf capture in the Profiler's Capture tab at startup",
          CVarFlags::None);
@@ -78,6 +78,7 @@ public:
                 if (a->type == asset::ChunkType::UiDocument) shell_.open_ui_document(a->guid);
                 if (a->type == asset::ChunkType::Timeline) shell_.open_timeline(a->guid);
                 if (a->type == asset::ChunkType::AnimGraph) shell_.open_anim_graph(a->guid);
+                if (a->type == asset::ChunkType::BehaviorTree) shell_.open_bt(a->guid);
             }
             if (cv_play.get_bool() && !shell_.play_in_editor()) return Error(Errc::InvalidArgument, "mce_editor", "play");
         }
