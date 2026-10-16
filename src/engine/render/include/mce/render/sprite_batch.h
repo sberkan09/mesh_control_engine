@@ -158,10 +158,33 @@ struct RectQuad {
     const math::aabb2* clip = nullptr;
 };
 
+// A textured triangle (skinned 2D meshes, M-ANIM2D 3). Positions are in view units like a sprite's;
+// `uv` is 0..1 across the region (v = 0 at the region's top) and each vertex has its own tint. It
+// is drawn as a degenerate quad (v3 = v2) in the same vertex stream and draw groups as sprites, so
+// every backend draws it with no extra path. On a lit set, `rotation` and `flip_x` / `flip_y`
+// turn its normals as they do a sprite's.
+struct SpriteTriangle {
+    struct Vertex {
+        math::vec2 position;
+        math::vec2 uv;
+        math::Color tint = math::Color::white();
+    };
+    SpriteSetId set;
+    u32 region = 0;
+    Vertex v[3];
+    i16 sort_layer = 0;
+    i32 sort_order = 0;
+    SpriteBlend blend = SpriteBlend::Alpha;
+    f32 rotation = 0.0f;
+    bool flip_x = false;
+    bool flip_y = false;
+};
+
 struct BatchStats {
     u32 submitted = 0;  // sprites + glyphs + tilemap chunks offered
     u32 culled = 0;
-    u32 quads = 0;      // dynamic quads written this frame
+    u32 quads = 0;      // dynamic quads written this frame (a triangle counts as one)
+    u32 triangles = 0;  // triangles queued (each a degenerate quad)
     u32 tile_quads = 0; // static tile quads drawn
     u32 groups = 0;     // = MDI submits
     u32 commands = 0;   // indirect commands across all groups
@@ -197,6 +220,8 @@ public:
     void reserve(usize quads);
     void add(const SpriteInstance& sprite);
     void add_rect(const RectQuad& quad);
+    // One triangle; culled when its bounds miss the view. Equal sort keys keep submission order.
+    void add_triangle(const SpriteTriangle& tri);
     void add_text(const Font& font, const TextLayout& layout, const TextPlacement& placement);
     // Culls the layer's chunks against the view and queues the visible ones as one item. `offset`
     // translates the baked layer at draw time (parallax) without re-baking it.
