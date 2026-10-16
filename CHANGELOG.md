@@ -5,6 +5,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- A platformer in Luau, M-SCRIPT step 6a (SBA-152): `projects/EmberScript` is a side-view game of scripts and
+  data (player controller, enemy state machine, goal) with `.mctest` scenarios, and `ScriptVars` gives a
+  script-only game 16 saved numbers per entity to remember things in. User guide 27.8.
 - Behavior tree MCP tools, the squad demo and the gates, M-AI step 6 (SBA-133): `bt_create`, `bt_add_node` and
   `bt_set` write a `.mcbt` the cook checks before anything is written, and `bt_trace` plays a saved scene
   headless and reports one brain's running path and blackboard over time and when each node started.

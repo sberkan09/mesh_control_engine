@@ -157,3 +157,18 @@ Step 4 was split: 4a is the checks every host shares, 4b the editor work.
   Emscripten SDK here), so the Luau VM on those targets is untested; `ship.py --project` for a script project was
   checked for its paths only, not run to a zip.
 
+
+## Step 6a as built (the demo)
+
+- `kit::ScriptVars` (`mce/kit/components.h`): 16 saved numbers per entity, the memory of a script in a game with no
+  C++ (a script keeps nothing between ticks and cannot define components). Arrays come through `mce.get` /
+  `mce.set` as tables; user guide 27.8.
+- `projects/EmberScript`: a script project (no C++) with a side-view level, `player.luau` (run, coyote time, jump
+  buffer, short hop, respawn), `enemy.luau` (patrol / chase / return, stomp or hurt) and `goal.luau`. Scripts that
+  move bodies run in the `Post` phase: the 2D bodies do not exist before the first physics step.
+- Gates: three `.mctest` scenarios (`reach_goal` by the `walk_to` bot, `hurt_by_walker`, `stomp_walker` by an input
+  script) run by ctest `EmberScript_mctests` (the demo gate on the stock `mce_mcp`, `cmake/ScriptProject`); the
+  determinism stage plays `ember_script -input tests/run_right.input` three times, Debug = Release.
+- Not done: the demo is a smaller game than `samples/03_platformer`, not a port, and that sample has no `.mctest`
+  files, so "the same scenarios as the C++ version" does not exist to compare against. The Luau-versus-C++ twin
+  stays the bouncing-box sample.
